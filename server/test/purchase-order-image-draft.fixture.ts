@@ -19,6 +19,8 @@ import { MediaAssetRetentionService } from '../src/modules/media/media-retention
 import { PurchaseOrderImageDraftService } from '../src/modules/purchase-orders/order-images/purchase-order-image-draft.service'
 import type { PurchaseOrderImageRenderer } from '../src/modules/purchase-orders/order-images/purchase-order-image-renderer'
 import { PurchaseOrderMutationService } from '../src/modules/purchase-orders/purchase-order-mutation.service'
+import { PurchasePayableService } from '../src/modules/purchase-orders/payables/purchase-payable.service'
+import { FundPostingApplicationService } from '../src/modules/fund-accounts/application/fund-posting.service'
 import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
 import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
 import type { AtomicityFixture } from './purchase-shipping-mark-atomicity.fixture'
@@ -57,6 +59,7 @@ export async function createPurchaseOrderImageFixture(fixture: AtomicityFixture)
   const buildMutations = (imageDrafts = drafts, audit: AuditService = fixture.audit) => new PurchaseOrderMutationService(
     fixture.prisma, audit, lookup, media, query, fixture.salesProgress, fixture.numbering, fixture.resolver,
     new PurchaseOrderWarehouseReceiptService(fixture.prisma, audit, query), imageDrafts,
+    new PurchasePayableService(new FundPostingApplicationService(fixture.prisma, audit), fixture.access),
   )
   return {
     storage, media, delivery, references, retention, query, png, renderer, drafts, buildDrafts, buildMutations,

@@ -32,7 +32,7 @@ export const financeWorkbench: RouteRecordMainRaw = {
         {
           path: 'purchase-payments',
           name: 'qsFinanceRealtimePurchasePayments',
-          component: () => import('@/views/workbenches/placeholder.vue'),
+          component: () => import('@/views/workbenches/purchase-payments/index.vue'),
           meta: {
             title: 'workbench.purchasePayments',
             icon: 'qs-purchase-payments',

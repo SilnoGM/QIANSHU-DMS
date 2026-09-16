@@ -7,6 +7,7 @@ import {
   DictionaryLookupService,
 } from '../dictionaries/dictionary-lookup.service'
 import { normalizeDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
+import { formatPurchaseOrderAmountUnits, normalizePurchaseOrderReferenceAmount, parsePurchaseOrderAmountUnits } from './domain/purchase-order-decimal'
 import {
   PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS,
   type PurchaseOrderSourceSalesOrderView,
@@ -361,7 +362,7 @@ export class PurchaseOrderSourceQueryService {
           name: row.name,
           attributes: attributes(row.attributes),
           supplierValue: row.supplierValue as string,
-          referencePurchaseUnitPriceAmount: fixed4(row.purchaseCostAmount),
+          referencePurchaseUnitPriceAmount: normalizePurchaseOrderReferenceAmount(fixed4(row.purchaseCostAmount)),
           currencyCode: 'CNY' as const,
           mainImage: mainImage === undefined
             ? null
@@ -627,9 +628,9 @@ export class PurchaseOrderSourceQueryService {
           referencePurchaseUnitPriceAmount:
             fixed4(purchasedLine.referencePurchaseUnitPriceAmount),
           actualPurchaseUnitPriceAmount:
-            fixed4(purchasedLine.actualPurchaseUnitPriceAmount),
+            formatPurchaseOrderAmountUnits(parsePurchaseOrderAmountUnits(fixed4(purchasedLine.actualPurchaseUnitPriceAmount))),
           quantity: purchasedLine.quantity,
-          lineTotalAmount: fixed4(purchasedLine.lineTotalAmount),
+          lineTotalAmount: formatPurchaseOrderAmountUnits(parsePurchaseOrderAmountUnits(fixed4(purchasedLine.lineTotalAmount))),
           description: purchasedLine.descriptionSnapshot,
         })),
       }

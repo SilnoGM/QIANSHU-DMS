@@ -16,6 +16,7 @@ import {
 } from '../dictionaries/dictionary-lookup.service'
 import {
   formatPurchaseOrderAmountUnits,
+  normalizePurchaseOrderSnapshotAmount,
   parsePurchaseOrderAmountUnits,
 } from './domain/purchase-order-decimal'
 import type { PurchaseOrderPendingTask, PurchaseOrderReviewView } from './dto/purchase-order-query.dto'
@@ -357,6 +358,10 @@ function decimalToFixed4(value: { toFixed(decimalPlaces: number): string }): str
   return value.toFixed(4)
 }
 
+function decimalToFixed2(value: { toFixed(decimalPlaces: number): string }): string {
+  return formatPurchaseOrderAmountUnits(parsePurchaseOrderAmountUnits(value.toFixed(4)))
+}
+
 export function purchaseOrderSupplierFromSources(
   sources: {
     readonly supplierValue: string | null
@@ -404,18 +409,18 @@ function paidUnits(value: { toFixed(decimalPlaces: number): string } | null): bi
   return value === null ? 0n : parsePurchaseOrderAmountUnits(decimalToFixed4(value))
 }
 
-function referenceSubtotalUnits(lines: readonly {
+function referenceSubtotalAmount(lines: readonly {
   readonly quantity: number
   readonly referencePurchaseUnitPriceAmount: {
     toFixed(decimalPlaces: number): string
   }
-}[]): bigint {
-  return lines.reduce(
-    (sum, line) => sum + parsePurchaseOrderAmountUnits(
-      decimalToFixed4(line.referencePurchaseUnitPriceAmount),
-    ) * BigInt(line.quantity),
-    0n,
-  )
+}[]): string {
+  // 历史参考价只是成本快照，保留原四位汇总；不得把它当作两位实际应付重新舍入。
+  const total = lines.reduce((sum, line) => {
+    const [integer, fraction] = normalizePurchaseOrderSnapshotAmount(decimalToFixed4(line.referencePurchaseUnitPriceAmount)).split('.')
+    return sum + (BigInt(integer) * 10_000n + BigInt(fraction)) * BigInt(line.quantity)
+  }, 0n)
+  return normalizePurchaseOrderSnapshotAmount(`${total / 10_000n}.${(total % 10_000n).toString().padStart(4, '0')}`)
 }
 
 function mapCurrencySummary(
@@ -451,9 +456,7 @@ function mapCurrencySummary(
   return {
     currencyCode: 'CNY',
     orderCount: orderAggregate._count._all,
-    referenceSubtotalAmount: formatPurchaseOrderAmountUnits(
-      referenceSubtotalUnits(referencePriceLines),
-    ),
+    referenceSubtotalAmount: referenceSubtotalAmount(referencePriceLines),
     purchaseTotalAmount: formatPurchaseOrderAmountUnits(purchaseTotalUnits),
     depositDueAmount: formatPurchaseOrderAmountUnits(
       paidUnits(orderAggregate._sum.depositDueAmount),
@@ -563,7 +566,7 @@ function mapListItem(
   const records = summarizePurchaseOrderRecords(row)
   const activePaidUnits = parsePurchaseOrderAmountUnits(records.paidAmount)
   const totalUnits = parsePurchaseOrderAmountUnits(
-    decimalToFixed4(row.purchaseTotalAmount),
+    decimalToFixed2(row.purchaseTotalAmount),
   )
   return {
     ...records,
@@ -585,8 +588,8 @@ function mapListItem(
     orderDate: row.orderDate.toISOString().slice(0, 10),
     currencyCode: row.currencyCode,
     purchaseTotalAmount: formatPurchaseOrderAmountUnits(totalUnits),
-    depositDueAmount: decimalToFixed4(row.depositDueAmount),
-    balanceDueAmount: decimalToFixed4(row.balanceDueAmount),
+    depositDueAmount: decimalToFixed2(row.depositDueAmount),
+    balanceDueAmount: decimalToFixed2(row.balanceDueAmount),
     paidAmount: formatPurchaseOrderAmountUnits(activePaidUnits),
     outstandingAmount: formatPurchaseOrderAmountUnits(totalUnits - activePaidUnits),
     orderStatus: row.orderStatus,
@@ -861,7 +864,7 @@ export class PurchaseOrderQueryService {
     )
     const activePaidUnits = parsePurchaseOrderAmountUnits(summary.paidAmount)
     const totalUnits = parsePurchaseOrderAmountUnits(
-      decimalToFixed4(row.purchaseTotalAmount),
+      decimalToFixed2(row.purchaseTotalAmount),
     )
     return {
       ...summary,
@@ -887,10 +890,10 @@ export class PurchaseOrderQueryService {
       })),
       shippingMarkText: row.shippingMarkText,
       amounts: {
-        lineSubtotalAmount: decimalToFixed4(row.lineSubtotalAmount),
+        lineSubtotalAmount: decimalToFixed2(row.lineSubtotalAmount),
         purchaseTotalAmount: formatPurchaseOrderAmountUnits(totalUnits),
-        depositDueAmount: decimalToFixed4(row.depositDueAmount),
-        balanceDueAmount: decimalToFixed4(row.balanceDueAmount),
+        depositDueAmount: decimalToFixed2(row.depositDueAmount),
+        balanceDueAmount: decimalToFixed2(row.balanceDueAmount),
         paidAmount: formatPurchaseOrderAmountUnits(activePaidUnits),
         outstandingAmount: formatPurchaseOrderAmountUnits(
           totalUnits - activePaidUnits,
@@ -909,16 +912,16 @@ export class PurchaseOrderQueryService {
         referencePurchaseUnitPriceAmount: decimalToFixed4(
           line.referencePurchaseUnitPriceAmount,
         ),
-        actualPurchaseUnitPriceAmount: decimalToFixed4(
+        actualPurchaseUnitPriceAmount: decimalToFixed2(
           line.actualPurchaseUnitPriceAmount,
         ),
         quantity: line.quantity,
-        lineTotalAmount: decimalToFixed4(line.lineTotalAmount),
+        lineTotalAmount: decimalToFixed2(line.lineTotalAmount),
       })),
       payments: row.payments.map(payment => ({
         id: payment.id,
         paymentType: payment.paymentType,
-        amount: decimalToFixed4(payment.amount),
+        amount: decimalToFixed2(payment.amount),
         paidAt: payment.paidAt.toISOString(),
         paymentMethod: payment.paymentMethod,
         remark: payment.remark,

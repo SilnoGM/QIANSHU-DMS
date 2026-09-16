@@ -588,3 +588,54 @@ describe('sales receipt full reversal', () => {
     expect(mockedLockAccounts).toHaveBeenCalledWith(transaction, [target === 'USER' ? USER_ACCOUNT_ID : COMPANY_ACCOUNT_ID])
   })
 })
+
+
+describe('purchase payment controlled full reversal', () => {
+  const context = { ...CONTEXT, sourceCode: 'PURCHASE_PAYMENT', consumerCode: 'PURCHASE_PAYMENT.VOID' }
+  beforeEach(() => {
+    jest.resetAllMocks()
+    configureSuccessfulReversal({ batch: { ...originalBatch({ category: 'COST', postingTypeCode: 'PURCHASE_PAYMENT' }), businessSourceCode: 'PURCHASE_PAYMENT' }, entries: splitEntries('DEBIT') })
+  })
+
+  it('rejects administrator reversal of a purchase payment', async () => {
+    const { service } = fixture()
+    await expect(service.reversePostingBatch(CONTEXT, input('100'))).rejects.toMatchObject({ code: 'FUND_REVERSAL_TARGET_INVALID' })
+    expect(mockedInsertReversal).not.toHaveBeenCalled()
+  })
+
+  it('restores the original issuer and company accounts in the caller transaction', async () => {
+    const { service, transaction, prisma } = fixture()
+    const result = await service.reverseBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, context, input('100'))
+    expect(result.entries.map(entry => [entry.accountTarget, entry.direction, entry.amount])).toEqual([['USER', 'CREDIT', '30.00'], ['COMPANY', 'CREDIT', '70.00']])
+    expect(mockedInsertReversal).toHaveBeenCalledWith(transaction, expect.objectContaining({ consumerCode: 'PURCHASE_PAYMENT.VOID', originalBatchId: ORIGINAL_BATCH_ID }))
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('restores a company-only stock payment without resolving a user account', async () => {
+    mockedLockOriginal.mockResolvedValue({ ...originalBatch({ category: 'COST', postingTypeCode: 'PURCHASE_PAYMENT' }), businessSourceCode: 'PURCHASE_PAYMENT', userId: null, userShareRateSnapshot: '0.00', companyShareRateSnapshot: '100.00' })
+    mockedReadEntries.mockResolvedValue({ entries: [{ originalLineNo: 1, accountId: COMPANY_ACCOUNT_ID, accountTarget: 'COMPANY', direction: 'DEBIT', amountStrategy: 'COMPANY_REMAINDER', amount: '100.00', reversedAmount: '0.00' }], cumulativeReversedBusinessAmount: '0.00', cumulativeReversedEntryAmount: '0.00' })
+    mockedLockAccounts.mockResolvedValue([companyAccount()])
+    const { service, transaction } = fixture()
+    const result = await service.reverseBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, context, input('100'))
+    expect(result.entries).toEqual([expect.objectContaining({ accountTarget: 'COMPANY', direction: 'CREDIT', amount: '100.00' })])
+    expect(mockedLockAccounts).toHaveBeenCalledWith(transaction, [COMPANY_ACCOUNT_ID])
+  })
+
+  it('rejects partial purchase reversal and previously reversed payments', async () => {
+    const { service, transaction } = fixture()
+    const tx = transaction as unknown as Prisma.TransactionClient
+    await expect(service.reverseBusinessEventInTransaction(tx, context, input('40'))).rejects.toMatchObject({ code: 'FUND_REVERSAL_STATE_CHANGED' })
+    const prior = splitEntries('DEBIT', ['3.00', '7.00'])
+    mockedReadEntries.mockResolvedValue({ ...prior, cumulativeReversedBusinessAmount: '10.00', cumulativeReversedEntryAmount: '10.00' })
+    await expect(service.reverseBusinessEventInTransaction(tx, context, input('100'))).rejects.toMatchObject({ code: 'FUND_REVERSAL_STATE_CHANGED' })
+    expect(mockedInsertReversal).not.toHaveBeenCalled()
+  })
+
+  it('rejects a receipt batch on the purchase void port before replay or writes', async () => {
+    mockedReadIdentity.mockResolvedValue({ id: ORIGINAL_BATCH_ID, businessSourceCode: 'SALES_RECEIPT' })
+    const { service, transaction } = fixture()
+    await expect(service.reverseBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, context, input('100'))).rejects.toMatchObject({ code: 'FUND_REVERSAL_TARGET_INVALID' })
+    expect(mockedReplay).not.toHaveBeenCalled()
+    expect(mockedInsertReversal).not.toHaveBeenCalled()
+  })
+})

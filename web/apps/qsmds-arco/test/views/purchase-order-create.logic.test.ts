@@ -13,6 +13,7 @@ import {
   adaptPurchaseOrderProductPage,
   beginPurchaseOrderSubmission,
   buildPurchaseOrderCreateRequest,
+  calculatePurchaseOrderDraftTotal,
   createPurchaseOrderEditingState,
   getPurchaseOrderMutationFailure,
   hasPurchasablePurchaseOrderSourceLines,
@@ -571,6 +572,70 @@ test('自定义备货采购只提交文本供应商并校验 CUSTOM 双价格', 
   if (!invalid.valid) {
     assert.equal(invalid.fieldErrors['lines.0.actualUnitPriceAmount'], '临时产品的采购定价必须与本单采购价相等')
   }
+})
+
+test('采购可编辑金额均拒绝超过两位小数，草稿总额与提交金额按分精确计算', () => {
+  const line: OrderProductLineModel = {
+    key: 'precision-custom',
+    lineType: 'CUSTOM',
+    productId: null,
+    productNo: null,
+    name: '精度测试产品',
+    description: '',
+    standardUnitPriceAmount: '0.1',
+    actualUnitPriceAmount: '0.1',
+    quantity: '3',
+    mainImage: null,
+  }
+  const source = {
+    lines: [line],
+    parts: [{ key: '33333333-3333-4333-8333-333333333333', items: [{ productKey: line.key, quantity: 3 }] }],
+    balanceDueAmount: '0.2',
+    depositDueAmount: '0.1',
+    customSupplierName: '精度测试供应商',
+    maximumQuantityByKey: {},
+    orderDate: '2026-09-16',
+    productMode: 'CUSTOM',
+    purchaseType: 'STOCK',
+    remark: '',
+    salesOrderId: null,
+    expectedShippingMarkResolution: 'a'.repeat(64),
+    sourceSalesOrderLineIdByKey: {},
+    supplierValue: null,
+    today: '2026-09-16',
+  } as const
+  const built = buildPurchaseOrderCreateRequest(source)
+  assert.equal(built.valid, true)
+  assert.equal(calculatePurchaseOrderDraftTotal(source.lines), '0.30')
+  if (built.valid) {
+    assert.equal(built.request.purchaseTotalAmount, '0.30')
+    assert.equal(built.request.depositDueAmount, '0.10')
+    assert.equal(built.request.balanceDueAmount, '0.20')
+    assert.equal(built.request.lines[0]?.actualPurchaseUnitPriceAmount, '0.10')
+    assert.equal(built.request.lines[0]?.referencePurchaseUnitPriceAmount, '0.10')
+  }
+  for (const invalidAmount of ['0.001', '0.0001', '1.0000']) {
+    for (const field of ['actualUnitPriceAmount', 'standardUnitPriceAmount'] as const) {
+      const invalid = buildPurchaseOrderCreateRequest({ ...source, lines: [{ ...line, [field]: invalidAmount }] })
+      assert.equal(invalid.valid, false)
+      if (!invalid.valid) {
+        assert.ok(invalid.fieldErrors[`lines.0.${field}`])
+      }
+    }
+    for (const field of ['depositDueAmount', 'balanceDueAmount'] as const) {
+      const invalid = buildPurchaseOrderCreateRequest({ ...source, [field]: invalidAmount })
+      assert.equal(invalid.valid, false)
+      if (!invalid.valid) {
+        assert.ok(invalid.fieldErrors[field])
+      }
+    }
+    assert.equal(calculatePurchaseOrderDraftTotal([{ ...line, actualUnitPriceAmount: invalidAmount }]), null)
+  }
+  assert.equal(calculatePurchaseOrderDraftTotal([{
+    ...line,
+    actualUnitPriceAmount: '9007199254740993.01',
+    quantity: '2',
+  }]), '18014398509481986.02')
 })
 
 test('未知创建结果冻结请求并使用原幂等 Key 安全重放', () => {

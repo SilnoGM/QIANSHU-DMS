@@ -5,7 +5,7 @@ import { applyTransactionTimeouts } from '../../infrastructure/database/transact
 import { hasPersistenceCode, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
-import { PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION, PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION, PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION } from './purchase-order-create-fingerprint'
+import { PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION, PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION, PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION, PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION } from './purchase-order-create-fingerprint'
 import { purchaseReviewSourceBlockReason } from './purchase-order-review-source'
 
 @Injectable()
@@ -36,7 +36,7 @@ export class PurchaseOrderReviewContextService {
         }
         // 已生成图片时派发的唛头及历史唛头均保留，不因当前规则停用而重新取号。
         if (order.createRequestFingerprintVersion === PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION || order.createRequestFingerprintVersion === PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION) return { available: true, message: null }
-        if (order.createRequestFingerprintVersion !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION || order.productMode === 'MIXED'
+        if ((order.createRequestFingerprintVersion !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION && order.createRequestFingerprintVersion !== PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION) || order.productMode === 'MIXED'
           || (order.shippingMarkText === null) !== (order.shippingMarkIssuanceId === null) || order._count.parts < 1) return blocked('采购货件或唛头配置不完整，请联系管理员核实后再审核')
         if (order.shippingMarkText !== null) return { available: true, message: null }
         const resolution = await this.shippingMarks.resolve(transaction, { productMode: order.productMode, supplierValue: order.supplierValue }, false)

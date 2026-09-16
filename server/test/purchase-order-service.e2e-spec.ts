@@ -26,6 +26,7 @@ import { PurchaseOrderCommandService } from '../src/modules/purchase-orders/purc
 import { PurchaseOrderCreateDependencyService } from '../src/modules/purchase-orders/purchase-order-create-dependency.service'
 import { PurchaseOrderFactoryShipmentService } from '../src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment.service'
 import { PurchaseOrderMutationService } from '../src/modules/purchase-orders/purchase-order-mutation.service'
+import { PurchasePayableService } from '../src/modules/purchase-orders/payables/purchase-payable.service'
 import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
 import { PurchaseOrderSourceQueryService } from '../src/modules/purchase-orders/purchase-order-source-query.service'
 import { SalesOrderPurchaseCoverageService } from '../src/modules/purchase-orders/sales-order-purchase-coverage.service'
@@ -405,6 +406,10 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       markResolver,
       new PurchaseOrderWarehouseReceiptService(prisma, new AuditService(), queries),
       createImageReviewService(prisma, queries, new AuditService()),
+      new PurchasePayableService(new FundPostingApplicationService(prisma, new AuditService()), {
+        getPermissionCodesInTransaction: () => Promise.resolve(['purchase-orders:payment']),
+        hasAll: (granted: readonly string[], required: readonly string[]) => required.every(code => granted.includes(code)),
+      } as unknown as AccessControlService),
       { now: () => new Date('2026-08-27T12:00:00.000Z') },
     )
   })
@@ -565,7 +570,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       lines: [{
         lineType: 'CUSTOM',
         referencePurchaseUnitPriceAmount: '25.0000',
-        actualPurchaseUnitPriceAmount: '25.0000',
+        actualPurchaseUnitPriceAmount: '25.00',
       }],
     })
 
@@ -624,23 +629,23 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     })
     expect(paid).toMatchObject({
       paymentStatus: 'PAID',
-      amounts: { paidAmount: '25.0000', outstandingAmount: '0.0000' },
+      amounts: { paidAmount: '25.00', outstandingAmount: '0.00' },
       paymentRecordSummary: { totalCount: 2, count: 2, byType: [
-        { paymentType: 'DEPOSIT', count: 1, amount: '10.0000' },
-        { paymentType: 'BALANCE', count: 1, amount: '15.0000' },
-        { paymentType: 'OTHER', count: 0, amount: '0.0000' },
+        { paymentType: 'DEPOSIT', count: 1, amount: '10.00' },
+        { paymentType: 'BALANCE', count: 1, amount: '15.00' },
+        { paymentType: 'OTHER', count: 0, amount: '0.00' },
       ] },
     })
     const paidPage = await queries.list({ view: 'all', keyword: created.orderNo, pageSize: 1 })
     expect(paidPage.items).toHaveLength(1)
     expect(paidPage.items[0]).toMatchObject({
-      id: createdId, paidAmount: '25.0000',
+      id: createdId, paidAmount: '25.00',
       paymentRecordSummary: paid.paymentRecordSummary,
       documentSummary: { count: 1 },
       changeSummary: paid.changeSummary,
     })
     expect(paidPage.items[0]?.changeSummary.latest?.kind).toBe('STATUS')
-    expect(paidPage.items[0]?.changeSummary.latest?.reason).toContain('25.0000')
+    expect(paidPage.items[0]?.changeSummary.latest?.reason).toContain('25.00')
     await expect(queries.list({ view: 'all', keyword: created.orderNo, page: 2, pageSize: 1 }))
       .resolves.toMatchObject({ total: 1, items: [] })
     await expect(mutations.updateOrderStatus({
@@ -665,15 +670,15 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     }, createdId, balance.id, { reason: 'E2E 作废尾款' })
     expect(voided).toMatchObject({
       paymentStatus: 'PARTIALLY_PAID',
-      amounts: { paidAmount: '10.0000', outstandingAmount: '15.0000' },
+      amounts: { paidAmount: '10.00', outstandingAmount: '15.00' },
     })
     await expect(queries.list({
       view: 'pending', keyword: created.orderNo,
     })).resolves.toMatchObject({ total: 1, items: [{
-      paidAmount: '10.0000', paymentRecordSummary: { totalCount: 2, count: 1, byType: [
-        { paymentType: 'DEPOSIT', count: 1, amount: '10.0000' },
-        { paymentType: 'BALANCE', count: 0, amount: '0.0000' },
-        { paymentType: 'OTHER', count: 0, amount: '0.0000' },
+      paidAmount: '10.00', paymentRecordSummary: { totalCount: 2, count: 1, byType: [
+        { paymentType: 'DEPOSIT', count: 1, amount: '10.00' },
+        { paymentType: 'BALANCE', count: 0, amount: '0.00' },
+        { paymentType: 'OTHER', count: 0, amount: '0.00' },
       ] },
       changeSummary: voided.changeSummary,
     }] })
@@ -697,8 +702,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     })
     const { orderNo } = await queries.getById(orderId)
     await mutations.review(context(), orderId, await imageReviewInput(orderId))
-    for (const [paymentType, label] of [
-      ['DEPOSIT', '定金凭证'], ['BALANCE', '尾款凭证'], ['OTHER', '其他付款凭证'],
+    for (const [paymentType, label, amount] of [
+      ['DEPOSIT', '定金凭证', '30'], ['BALANCE', '尾款凭证', '70'],
     ] as const) {
       const originalFilename = `original-${paymentType}.pdf`
       const asset = await prisma.mediaAsset.create({
@@ -711,7 +716,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       })
       purchaseVoucherMediaAssetIds.push(asset.id)
       const input = {
-        paymentType, amount: '10', paidAt: '2026-08-27T11:00:00.000Z',
+        paymentType, amount, paidAt: '2026-08-27T11:00:00.000Z',
         paymentMethod: 'BANK_TRANSFER', voucher: { mediaAssetId: asset.id },
       }
       const detail = await mutations.recordPayment(context(), orderId, input)
@@ -721,16 +726,20 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         where: { purchaseOrderId: orderId, mediaAssetId: asset.id },
         select: { title: true, mediaAsset: { select: { originalFilename: true } } },
       })).resolves.toEqual({ title: `${orderNo}-${label}`, mediaAsset: { originalFilename } })
-      // 延续现有上传归属/状态校验；重复使用已激活的附件不能新增付款或凭证。
+      // 已付阶段不能重复付款；定金附件也不能用于尚未支付的尾款。
       await expect(mutations.recordPayment(context(), orderId, input))
-        .rejects.toMatchObject({ code: 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE' })
+        .rejects.toMatchObject({ code: 'PURCHASE_PAYABLE_STATE_CHANGED' })
+      if (paymentType === 'DEPOSIT') {
+        await expect(mutations.recordPayment(context(), orderId, { ...input, paymentType: 'BALANCE', amount: '70' }))
+          .rejects.toMatchObject({ code: 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE' })
+      }
     }
     await expect(prisma.purchaseOrderPayment.count({ where: { purchaseOrderId: orderId } }))
-      .resolves.toBe(3)
+      .resolves.toBe(2)
     await expect(prisma.purchaseOrderDocument.count({ where: { purchaseOrderId: orderId } }))
-      .resolves.toBe(4)
+      .resolves.toBe(3)
     await expect(queries.getById(orderId)).resolves.toMatchObject({
-      paymentStatus: 'PARTIALLY_PAID', amounts: { paidAmount: '30.0000', outstandingAmount: '70.0000' },
+      paymentStatus: 'PAID', amounts: { paidAmount: '100.00', outstandingAmount: '0.00' },
     })
   })
 

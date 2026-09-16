@@ -494,6 +494,8 @@ enum FundPostingBatchKind {
 }
 
 model User {
+  purchasePayablesOwned PurchaseOrderPayable[] @relation("PurchasePayableOwner")
+  purchasePayablesCreated PurchaseOrderPayable[] @relation("PurchasePayableCreatedBy")
   packagingCostsOwned PackagingCostRequest[] @relation("PackagingCostOwner")
   packagingCostsSubmitted PackagingCostRequest[] @relation("PackagingCostSubmitter")
   packagingCostsPaid PackagingCostRequest[] @relation("PackagingCostPayer")
@@ -1071,7 +1073,7 @@ model PurchaseOrder {
   orderNo                      String                         @unique(map: "purchase_orders_order_no_key") @map("order_no") @db.VarChar(64)
   createIdempotencyKeyHash     Bytes                          @unique(map: "purchase_orders_create_idempotency_key_hash_key") @map("create_idempotency_key_hash") @db.ByteA
   createRequestFingerprintHash Bytes                          @map("create_request_fingerprint_hash") @db.ByteA
-  createRequestFingerprintVersion String                     @default("purchase-order.create.v5") @map("create_request_fingerprint_version") @db.VarChar(32)
+  createRequestFingerprintVersion String                     @default("purchase-order.create.v6") @map("create_request_fingerprint_version") @db.VarChar(32)
   partConfigurationSealed      Boolean                        @default(false) @map("part_configuration_sealed")
   purchaseType                 PurchaseOrderType              @map("purchase_type")
   productMode                  PurchaseOrderProductMode       @map("product_mode")
@@ -1082,10 +1084,10 @@ model PurchaseOrder {
   currencyCode                 String                         @default("CNY") @map("currency_code") @db.Char(3)
   shippingMarkText             String?                        @map("shipping_mark_text") @db.VarChar(2000)
   shippingMarkIssuanceId       String?                        @unique(map: "purchase_orders_shipping_mark_issuance_id_key") @map("shipping_mark_issuance_id") @db.Uuid
-  lineSubtotalAmount           Decimal                        @map("line_subtotal_amount") @db.Decimal(30, 4)
-  purchaseTotalAmount          Decimal                        @map("purchase_total_amount") @db.Decimal(30, 4)
-  depositDueAmount             Decimal                        @map("deposit_due_amount") @db.Decimal(30, 4)
-  balanceDueAmount             Decimal                        @map("balance_due_amount") @db.Decimal(30, 4)
+  lineSubtotalAmount           Decimal                        @map("line_subtotal_amount") @db.Decimal(30, 2)
+  purchaseTotalAmount          Decimal                        @map("purchase_total_amount") @db.Decimal(30, 2)
+  depositDueAmount             Decimal                        @map("deposit_due_amount") @db.Decimal(30, 2)
+  balanceDueAmount             Decimal                        @map("balance_due_amount") @db.Decimal(30, 2)
   orderStatus                  PurchaseOrderStatus            @default(PENDING_REVIEW) @map("order_status")
   fulfillmentStatus            PurchaseOrderFulfillmentStatus @default(ORDERED) @map("fulfillment_status")
   paymentStatus                PurchaseOrderPaymentStatus     @default(UNPAID) @map("payment_status")
@@ -1101,6 +1103,7 @@ model PurchaseOrder {
   createdBy    User                         @relation("PurchaseOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   lines        PurchaseOrderLine[]
   parts        PurchaseOrderPart[]
+  payables     PurchaseOrderPayable[]
   payments     PurchaseOrderPayment[]
   documents    PurchaseOrderDocument[]
   imageDrafts  PurchaseOrderImageDraft[]
@@ -1127,9 +1130,9 @@ model PurchaseOrderLine {
   productAttributesSnapshot        Json                  @default("[]") @map("product_attributes_snapshot") @db.JsonB
   descriptionSnapshot              String?               @map("description_snapshot") @db.VarChar(1000)
   referencePurchaseUnitPriceAmount Decimal                @map("reference_purchase_unit_price_amount") @db.Decimal(30, 4)
-  actualPurchaseUnitPriceAmount    Decimal                @map("actual_purchase_unit_price_amount") @db.Decimal(30, 4)
+  actualPurchaseUnitPriceAmount    Decimal                @map("actual_purchase_unit_price_amount") @db.Decimal(30, 2)
   quantity                         Int
-  lineTotalAmount                  Decimal                @map("line_total_amount") @db.Decimal(30, 4)
+  lineTotalAmount                  Decimal                @map("line_total_amount") @db.Decimal(30, 2)
   createdAt                        DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
 
   purchaseOrder        PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
@@ -1204,11 +1207,38 @@ model PurchaseOrderPartItem {
   @@map("purchase_order_part_items")
 }
 
+model PurchaseOrderPayable {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseOrderId String @map("purchase_order_id") @db.Uuid
+  paymentType PurchaseOrderPaymentType @map("payment_type")
+  dueAmount Decimal @map("due_amount") @db.Decimal(30, 2)
+  accountOwnerType FundAccountOwnerType @map("account_owner_type")
+  ownerUserId String? @map("owner_user_id") @db.Uuid
+  createdByUserId String @map("created_by_user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  closedAt DateTime? @map("closed_at") @db.Timestamptz(6)
+  version Int @default(1)
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  owner User? @relation("PurchasePayableOwner", fields: [ownerUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy User @relation("PurchasePayableCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  payments PurchaseOrderPayment[]
+  @@unique([purchaseOrderId, paymentType], map: "purchase_order_payables_order_type_key")
+  @@map("purchase_order_payables")
+}
+
 model PurchaseOrderPayment {
+  payableId String? @map("payable_id") @db.Uuid
+  fundPostingBatchId String? @unique(map: "purchase_order_payments_posting_batch_key") @map("fund_posting_batch_id") @db.Uuid
+  fundReversalBatchId String? @unique(map: "purchase_order_payments_reversal_batch_key") @map("fund_reversal_batch_id") @db.Uuid
+  idempotencyKeyHash Bytes? @unique(map: "purchase_order_payments_idempotency_key") @map("idempotency_key_hash") @db.ByteA
+  requestFingerprintHash Bytes? @map("request_fingerprint_hash") @db.ByteA
+  payable PurchaseOrderPayable? @relation(fields: [payableId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fundPostingBatch FundPostingBatch? @relation("PurchasePaymentPostingBatch", fields: [fundPostingBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fundReversalBatch FundPostingBatch? @relation("PurchasePaymentReversalBatch", fields: [fundReversalBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   purchaseOrderId String                   @map("purchase_order_id") @db.Uuid
   paymentType     PurchaseOrderPaymentType @map("payment_type")
-  amount          Decimal                  @db.Decimal(30, 4)
+  amount          Decimal                  @db.Decimal(30, 2)
   paidAt          DateTime                 @map("paid_at") @db.Timestamptz(6)
   paymentMethod   String                   @map("payment_method") @db.VarChar(64)
   remark          String?                  @db.VarChar(500)
@@ -1565,6 +1595,8 @@ model FundBusinessSourcePostingType {
 
 /// 一次业务动账、管理员调账或冲账的不可变聚合及完整业务快照。
 model FundPostingBatch {
+  purchasePayment PurchaseOrderPayment? @relation("PurchasePaymentPostingBatch")
+  purchaseVoidedPayment PurchaseOrderPayment? @relation("PurchasePaymentReversalBatch")
   id                         String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   batchNo                    String               @unique(map: "fund_posting_batches_batch_no_key") @map("batch_no") @db.VarChar(64)
   kind                       FundPostingBatchKind

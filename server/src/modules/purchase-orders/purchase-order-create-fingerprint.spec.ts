@@ -5,6 +5,7 @@ import {
   PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION,
   PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION,
   PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION,
+  PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION,
   PURCHASE_ORDER_NUMBERING_CONSUMER_CODE,
   PURCHASE_ORDER_NUMBERING_RULE_CODE,
 } from './purchase-order-create-fingerprint'
@@ -48,7 +49,12 @@ describe('purchase order create fingerprint', () => {
       .toBe('d33df2c1e6619d1c14b1b55b151ad529627dd0e3a6e44041c86a8159cb4ca820')
   })
 
-  it('changes v5 when part identity, order or allocation changes', () => {
+  it('preserves the exact committed v5 fingerprint bytes after cents normalization', () => {
+    expect(calculatePurchaseOrderCreateFingerprint(ACTOR_ID, payload(), PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION))
+      .toBe('1fcfb48e809791043e7e07ada77eaa2e516498055050650afd4264c9bfd3ecd1')
+  })
+
+  it('changes v6 when part identity, order or allocation changes', () => {
     const first = payload({ parts: [{ key: ACTOR_ID, items: [{ lineNumber: 1, quantity: 2 }] }] })
     const split = payload({ parts: [
       { key: ACTOR_ID, items: [{ lineNumber: 1, quantity: 1 }] },
@@ -57,9 +63,9 @@ describe('purchase order create fingerprint', () => {
     const reversed = { ...split, parts: [...split.parts].reverse() }
     expect(new Set([first, split, reversed].map(value => calculatePurchaseOrderCreateFingerprint(ACTOR_ID, value))).size).toBe(3)
   })
-  it('uses the approved numbering scope and one stable SHA-256 v5 contract', () => {
+  it('uses the approved numbering scope and one stable SHA-256 v6 contract', () => {
     expect(PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION)
-      .toBe('purchase-order.create.v5')
+      .toBe('purchase-order.create.v6')
     expect(PURCHASE_ORDER_NUMBERING_RULE_CODE).toBe('PURCHASE_ORDER')
     expect(PURCHASE_ORDER_NUMBERING_CONSUMER_CODE).toBe('PURCHASE_ORDER.CREATE')
     expect(calculatePurchaseOrderCreateFingerprint(ACTOR_ID, payload()))

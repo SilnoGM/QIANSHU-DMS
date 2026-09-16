@@ -11,7 +11,7 @@ import { AuditService } from '../src/modules/audit/audit.service'
 import type { IsolatedNumberingDatabase } from './numbering-e2e-database'
 
 /** 永久派发账本不能逐行清理；完整业务回归使用临时 schema，结束时整体释放。 */
-export async function createPurchaseShippingMarkDatabase(deferPartsMigration = false, deferReviewMigration = false, deferShipmentNumbers = false, deferWarehouseReceipt = false): Promise<IsolatedNumberingDatabase & { applyPartsMigration(): Promise<void>, applyReviewMigration(): Promise<void>, applyShipmentNumbers(): Promise<void>, applyWarehouseReceipt(): Promise<void> }> {
+export async function createPurchaseShippingMarkDatabase(deferPartsMigration = false, deferReviewMigration = false, deferShipmentNumbers = false, deferWarehouseReceipt = false, deferPayablesMigration = false): Promise<IsolatedNumberingDatabase & { applyPartsMigration(): Promise<void>, applyReviewMigration(): Promise<void>, applyShipmentNumbers(): Promise<void>, applyWarehouseReceipt(): Promise<void>, applyPayablesMigration(): Promise<void> }> {
   const baseDatabaseUrl = process.env.DATABASE_URL
   if (!baseDatabaseUrl) throw new Error('Isolated database is required')
   const url = new URL(baseDatabaseUrl)
@@ -32,6 +32,7 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
     await client.query(`SET search_path TO ${quoted}, public`)
     const directory = resolve(__dirname, '../prisma/migrations')
     for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name)).sort()) {
+      if (deferPayablesMigration && migration >= '20260916160000_purchase_order_payables') continue
       if (deferShipmentNumbers && migration >= '20260914091234_purchase_shipment_number') continue
       if (deferWarehouseReceipt && migration >= '20260915020459_purchase_shipment_warehouse_receipt') continue
       if (deferPartsMigration && migration >= '20260907120000_purchase_order_parts') continue
@@ -68,6 +69,15 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
       for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name) && name >= '20260914091234_purchase_shipment_number').sort()) {
         await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
       }
+    },
+    async applyPayablesMigration() {
+      const directory = resolve(__dirname, '../prisma/migrations')
+      try {
+        for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name) && name >= '20260916160000_purchase_order_payables').sort()) {
+          await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
+        }
+      }
+      catch (error) { await client.query('ROLLBACK'); throw error }
     },
     async applyWarehouseReceipt() {
       const directory = resolve(__dirname, '../prisma/migrations')

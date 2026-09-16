@@ -1,3 +1,7 @@
+import { FundAccountsModule } from '../fund-accounts/fund-accounts.module'
+import { PurchasePayableService } from './payables/purchase-payable.service'
+import { PurchasePayableQueryService } from './payables/purchase-payable-query.service'
+import { PurchasePayableController } from './payables/purchase-payable.controller'
 import { Module } from '@nestjs/common'
 
 import { PrismaModule } from '../../infrastructure/database/prisma.module'
@@ -38,6 +42,7 @@ import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purch
 
 @Module({
   imports: [
+    FundAccountsModule,
     PrismaModule,
     AuthModule,
     DictionaryModule,
@@ -47,6 +52,7 @@ import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purch
     PurchaseShippingMarksModule,
   ],
   controllers: [
+    PurchasePayableController,
     PurchaseOrdersController,
     PurchaseOrderImageDraftController,
     PurchaseOrderReviewContextController,
@@ -56,6 +62,8 @@ import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purch
     PurchaseOrderWarehouseReceiptController,
   ],
   providers: [
+    PurchasePayableService,
+    PurchasePayableQueryService,
     PurchaseOrderQueryService,
     PurchaseOrderReviewContextService,
     PurchaseOrderSourceQueryService,

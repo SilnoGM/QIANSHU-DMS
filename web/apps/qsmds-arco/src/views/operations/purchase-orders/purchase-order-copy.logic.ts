@@ -1,4 +1,5 @@
 import type { PurchaseOrderDetailDto } from '../../../api/generated/types.gen'
+import Decimal from 'decimal.js'
 import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 
 type Translate = (key: string, values?: Record<string, string | number>) => string
@@ -10,9 +11,8 @@ export function buildPurchaseOrderCopyText(detail: PurchaseOrderDetailDto, t: Tr
     if (!result.valid || result.normalizedValue === null) {
       return t('purchaseReview.copy.notRecorded')
     }
-    // 保留实际单价的四位有效精度，金额全程使用十进制字符串，避免大额转浮点数丢精度。
-    const [integer, fraction = ''] = result.normalizedValue.split('.')
-    return `${integer}.${fraction.replace(/0+$/u, '').padEnd(2, '0')}`
+    // 历史四位读值也按采购金额两位展示；不转 Number，避免大额丢失有效位。
+    return new Decimal(result.normalizedValue).toFixed(2, Decimal.ROUND_HALF_UP)
   }
   const lines = [...detail.lines].sort((a, b) => a.lineNumber - b.lineNumber)
   const products = new Map(lines.map(line => [line.id, text(line.productName)]))

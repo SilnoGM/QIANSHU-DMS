@@ -627,8 +627,10 @@ export class PurchaseOrdersController {
     resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
     errors: [
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 409, codes: ['PURCHASE_PAYABLE_STATE_CHANGED', 'PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT'] },
       { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] },
       { status: 422, codes: [
+        'PURCHASE_PAYABLE_NOT_AVAILABLE', 'PURCHASE_PAYABLE_POSTING_UNAVAILABLE',
         'PURCHASE_ORDER_CANCELLED',
         'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE',
         'PURCHASE_ORDER_PAYMENT_AMOUNT_INVALID',
@@ -658,10 +660,12 @@ export class PurchaseOrdersController {
     resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
     errors: [
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 409, codes: ['PURCHASE_PAYABLE_STATE_CHANGED', 'PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT'] },
       { status: 404, codes: [
         'PURCHASE_ORDER_NOT_FOUND', 'PURCHASE_ORDER_PAYMENT_NOT_FOUND',
       ] },
       { status: 422, codes: [
+        'PURCHASE_PAYABLE_NOT_AVAILABLE', 'PURCHASE_PAYABLE_POSTING_UNAVAILABLE',
         'PURCHASE_ORDER_PAYMENT_ALREADY_VOIDED', 'VALIDATION_FAILED',
       ] },
     ],

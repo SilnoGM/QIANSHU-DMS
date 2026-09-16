@@ -39,12 +39,12 @@ export class PurchaseOrderSupplierDto {
 }
 
 export class PurchaseOrderAmountsDto {
-  @ApiProperty({ type: 'string' }) readonly lineSubtotalAmount!: string
-  @ApiProperty({ type: 'string' }) readonly purchaseTotalAmount!: string
-  @ApiProperty({ type: 'string' }) readonly depositDueAmount!: string
-  @ApiProperty({ type: 'string' }) readonly balanceDueAmount!: string
-  @ApiProperty({ type: 'string' }) readonly paidAmount!: string
-  @ApiProperty({ type: 'string' }) readonly outstandingAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly lineSubtotalAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly purchaseTotalAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly depositDueAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly balanceDueAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly paidAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly outstandingAmount!: string
 }
 
 export class PurchaseOrderSourceSalesOrderDto {
@@ -65,17 +65,17 @@ export class PurchaseOrderLineDto {
   @ApiProperty({ type: 'array', items: { type: 'object', additionalProperties: true } })
   readonly productAttributes!: readonly Record<string, unknown>[]
   @ApiProperty({ type: 'string', nullable: true }) readonly description!: string | null
-  @ApiProperty({ type: 'string' }) readonly referencePurchaseUnitPriceAmount!: string
-  @ApiProperty({ type: 'string' }) readonly actualPurchaseUnitPriceAmount!: string
+  @ApiProperty({ type: 'string', description: '参考成本快照；历史记录可能保留四位小数' }) readonly referencePurchaseUnitPriceAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly actualPurchaseUnitPriceAmount!: string
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly quantity!: number
-  @ApiProperty({ type: 'string' }) readonly lineTotalAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly lineTotalAmount!: string
 }
 
 export class PurchaseOrderPaymentDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ enum: PurchaseOrderPaymentType })
   readonly paymentType!: PurchaseOrderPaymentType
-  @ApiProperty({ type: 'string' }) readonly amount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly amount!: string
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly paidAt!: string
   @ApiProperty({ type: 'string' }) readonly paymentMethod!: string
   @ApiProperty({ type: 'string', nullable: true }) readonly remark!: string | null
@@ -179,11 +179,11 @@ export class PurchaseOrderListItemDto {
   readonly lineSummary!: PurchaseOrderLineSummaryDto
   @ApiProperty({ type: 'string', format: 'date' }) readonly orderDate!: string
   @ApiProperty({ enum: ['CNY'] }) readonly currencyCode!: 'CNY'
-  @ApiProperty({ type: 'string' }) readonly purchaseTotalAmount!: string
-  @ApiProperty({ type: 'string' }) readonly depositDueAmount!: string
-  @ApiProperty({ type: 'string' }) readonly balanceDueAmount!: string
-  @ApiProperty({ type: 'string' }) readonly paidAmount!: string
-  @ApiProperty({ type: 'string' }) readonly outstandingAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly purchaseTotalAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly depositDueAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly balanceDueAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly paidAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly outstandingAmount!: string
   @ApiProperty({ enum: PurchaseOrderStatus }) readonly orderStatus!: PurchaseOrderStatus
   @ApiProperty({ enum: PurchaseOrderFulfillmentStatus })
   readonly fulfillmentStatus!: PurchaseOrderFulfillmentStatus
@@ -251,11 +251,11 @@ export class PurchaseOrderCurrencySummaryDto {
   @ApiProperty({ enum: ['CNY'] }) readonly currencyCode!: 'CNY'
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly orderCount!: number
   @ApiProperty({ type: 'string' }) readonly referenceSubtotalAmount!: string
-  @ApiProperty({ type: 'string' }) readonly purchaseTotalAmount!: string
-  @ApiProperty({ type: 'string' }) readonly depositDueAmount!: string
-  @ApiProperty({ type: 'string' }) readonly balanceDueAmount!: string
-  @ApiProperty({ type: 'string' }) readonly paidAmount!: string
-  @ApiProperty({ type: 'string' }) readonly outstandingAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly purchaseTotalAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly depositDueAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly balanceDueAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly paidAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly outstandingAmount!: string
 }
 
 export class PurchaseOrderPageDto {
@@ -308,7 +308,7 @@ export class PurchaseOrderProductOptionDto {
   @ApiProperty({ type: 'array', items: { type: 'object', additionalProperties: true } })
   readonly attributes!: readonly Record<string, unknown>[]
   @ApiProperty({ type: 'string' }) readonly supplierValue!: string
-  @ApiProperty({ type: 'string' }) readonly referencePurchaseUnitPriceAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '产品成本按四舍五入转为两位采购参考价' }) readonly referencePurchaseUnitPriceAmount!: string
   @ApiProperty({ enum: ['CNY'] }) readonly currencyCode!: 'CNY'
   @ApiProperty({ type: () => PurchaseOrderProductImageDto, nullable: true })
   readonly mainImage!: PurchaseOrderProductImageDto | null
@@ -385,10 +385,10 @@ export class PurchaseOrderSourceSalesOrdersDto {
  */
 export class PurchaseOrderSourcePurchasedLineDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
-  @ApiProperty({ type: 'string' }) readonly referencePurchaseUnitPriceAmount!: string
-  @ApiProperty({ type: 'string' }) readonly actualPurchaseUnitPriceAmount!: string
+  @ApiProperty({ type: 'string', description: '参考成本快照；历史记录可能保留四位小数' }) readonly referencePurchaseUnitPriceAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly actualPurchaseUnitPriceAmount!: string
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly quantity!: number
-  @ApiProperty({ type: 'string' }) readonly lineTotalAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) readonly lineTotalAmount!: string
   @ApiProperty({ type: 'string', nullable: true }) readonly description!: string | null
 }
 

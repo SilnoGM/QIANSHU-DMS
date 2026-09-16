@@ -39140,6 +39140,547 @@
         }
       }
     },
+    "/api/purchase-order-payables": {
+      "get": {
+        "operationId": "purchase_payables_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 200,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchasePayableOrderPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "purchase-order-payables"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "PURCHASE_PAYABLE_NOT_AVAILABLE",
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/purchase-order-payables/{id}/pay": {
+      "post": {
+        "operationId": "purchase_payables_pay",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchasePayablePayDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchasePayableOrderDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "purchase-order-payables"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "PURCHASE_ORDER_NOT_FOUND",
+                "PURCHASE_PAYABLE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT",
+                "PURCHASE_PAYABLE_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "PURCHASE_ORDER_AMOUNT_INVALID",
+                "PURCHASE_ORDER_CANCELLED",
+                "PURCHASE_ORDER_PAYMENT_AMOUNT_INVALID",
+                "PURCHASE_ORDER_PAYMENT_METHOD_UNAVAILABLE",
+                "PURCHASE_ORDER_STATUS_TRANSITION_INVALID",
+                "PURCHASE_PAYABLE_NOT_AVAILABLE",
+                "PURCHASE_PAYABLE_POSTING_UNAVAILABLE",
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "/api/purchase-orders": {
       "get": {
         "operationId": "purchase_orders_list",
@@ -46692,6 +47233,13 @@
               ]
             },
             {
+              "status": 409,
+              "codes": [
+                "PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT",
+                "PURCHASE_PAYABLE_STATE_CHANGED"
+              ]
+            },
+            {
               "status": 422,
               "codes": [
                 "PURCHASE_ORDER_CANCELLED",
@@ -46700,6 +47248,8 @@
                 "PURCHASE_ORDER_PAYMENT_EXCEEDS_TOTAL",
                 "PURCHASE_ORDER_PAYMENT_METHOD_UNAVAILABLE",
                 "PURCHASE_ORDER_STATUS_TRANSITION_INVALID",
+                "PURCHASE_PAYABLE_NOT_AVAILABLE",
+                "PURCHASE_PAYABLE_POSTING_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             }
@@ -46997,9 +47547,18 @@
               ]
             },
             {
+              "status": 409,
+              "codes": [
+                "PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT",
+                "PURCHASE_PAYABLE_STATE_CHANGED"
+              ]
+            },
+            {
               "status": 422,
               "codes": [
                 "PURCHASE_ORDER_PAYMENT_ALREADY_VOIDED",
+                "PURCHASE_PAYABLE_NOT_AVAILABLE",
+                "PURCHASE_PAYABLE_POSTING_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             }
@@ -62495,6 +63054,213 @@
           "voucher"
         ]
       },
+      "PurchasePayablePersonDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "PurchasePayableDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "paymentType": {
+            "type": "string",
+            "enum": [
+              "DEPOSIT",
+              "BALANCE"
+            ]
+          },
+          "dueAmount": {
+            "type": "string",
+            "description": "CNY amount with two decimal places."
+          },
+          "paidAmount": {
+            "type": "string",
+            "description": "CNY amount with two decimal places."
+          },
+          "remainingAmount": {
+            "type": "string",
+            "description": "CNY amount with two decimal places."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_PAYMENT",
+              "PAID",
+              "NO_PAYMENT",
+              "CANCELLED"
+            ]
+          },
+          "version": {
+            "type": "number"
+          },
+          "paidAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "paidBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchasePayablePersonDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "paymentType",
+          "dueAmount",
+          "paidAmount",
+          "remainingAmount",
+          "status",
+          "version",
+          "paidAt",
+          "paidBy"
+        ]
+      },
+      "PurchasePayableOrderDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "orderDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "purchaseType": {
+            "type": "string",
+            "enum": [
+              "SALES_LINKED",
+              "STOCK"
+            ]
+          },
+          "supplierName": {
+            "type": "string"
+          },
+          "salesOrderNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "purchaseTotalAmount": {
+            "type": "string",
+            "description": "CNY amount with two decimal places."
+          },
+          "currencyCode": {
+            "type": "string",
+            "enum": [
+              "CNY"
+            ]
+          },
+          "accountOwnerType": {
+            "type": "string",
+            "enum": [
+              "USER",
+              "COMPANY"
+            ]
+          },
+          "owner": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchasePayablePersonDto"
+              }
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchasePayableDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "orderNo",
+          "orderDate",
+          "purchaseType",
+          "supplierName",
+          "salesOrderNo",
+          "purchaseTotalAmount",
+          "currencyCode",
+          "accountOwnerType",
+          "owner",
+          "items"
+        ]
+      },
+      "PurchasePayableOrderPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchasePayableOrderDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "Total purchase order groups, not installment rows."
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "PurchasePayablePayDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "paymentMethod": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Effective payment.method dictionary value."
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "paymentMethod"
+        ]
+      },
       "PurchaseOrderActorDto": {
         "type": "object",
         "properties": {
@@ -62549,7 +63315,8 @@
           },
           "amount": {
             "type": "string",
-            "description": "该类型有效付款合计，四位小数十进制字符串"
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "该类型有效付款合计，两位小数十进制字符串"
           }
         },
         "required": [
@@ -62852,19 +63619,29 @@
             ]
           },
           "purchaseTotalAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "depositDueAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "balanceDueAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "paidAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "outstandingAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "orderStatus": {
             "type": "string",
@@ -62998,19 +63775,29 @@
             "type": "string"
           },
           "purchaseTotalAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "depositDueAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "balanceDueAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "paidAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "outstandingAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           }
         },
         "required": [
@@ -63229,7 +64016,9 @@
             "type": "string"
           },
           "referencePurchaseUnitPriceAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "产品成本按四舍五入转为两位采购参考价"
           },
           "currencyCode": {
             "type": "string",
@@ -63508,17 +64297,22 @@
             "format": "uuid"
           },
           "referencePurchaseUnitPriceAmount": {
-            "type": "string"
+            "type": "string",
+            "description": "参考成本快照；历史记录可能保留四位小数"
           },
           "actualPurchaseUnitPriceAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "quantity": {
             "type": "integer",
             "minimum": 1
           },
           "lineTotalAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "description": {
             "type": "string",
@@ -64014,22 +64808,34 @@
         "type": "object",
         "properties": {
           "lineSubtotalAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "purchaseTotalAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "depositDueAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "balanceDueAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "paidAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "outstandingAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           }
         },
         "required": [
@@ -64087,17 +64893,22 @@
             "nullable": true
           },
           "referencePurchaseUnitPriceAmount": {
-            "type": "string"
+            "type": "string",
+            "description": "参考成本快照；历史记录可能保留四位小数"
           },
           "actualPurchaseUnitPriceAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "quantity": {
             "type": "integer",
             "minimum": 1
           },
           "lineTotalAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           }
         },
         "required": [
@@ -64132,7 +64943,9 @@
             ]
           },
           "amount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "paidAt": {
             "type": "string",
@@ -64451,19 +65264,29 @@
             ]
           },
           "purchaseTotalAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "depositDueAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "balanceDueAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "paidAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "outstandingAmount": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
           },
           "orderStatus": {
             "type": "string",

@@ -94,10 +94,10 @@ function setup() {
           productNameSnapshot: '销售快照产品',
           productAttributesSnapshot: [],
           descriptionSnapshot: null,
-          referencePurchaseUnitPriceAmount: '12.3456',
-          actualPurchaseUnitPriceAmount: '10.0000',
+          referencePurchaseUnitPriceAmount: '12.35',
+          actualPurchaseUnitPriceAmount: '10.00',
           quantity: 2,
-          lineTotalAmount: '20.0000',
+          lineTotalAmount: '20.00',
         }],
       }),
   }
@@ -157,12 +157,12 @@ describe('PurchaseOrderCommandService', () => {
     expect(fixture.numbering.generateScopedInTransaction).not.toHaveBeenCalled()
   })
 
-  it('creates v5 with sealed allocation inputs and null marks without consuming a shipping issuance', async () => {
+  it('creates v6 with sealed allocation inputs and null marks without consuming a shipping issuance', async () => {
     const fixture = setup()
     await fixture.service.create(context, input())
     expect(fixture.numbering.generateScopedInTransaction).not.toHaveBeenCalled()
     expect(fixture.transaction.purchaseOrder.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ createRequestFingerprintVersion: 'purchase-order.create.v5', shippingMarkText: null, shippingMarkIssuanceId: null }) as unknown,
+      data: expect.objectContaining({ createRequestFingerprintVersion: 'purchase-order.create.v6', shippingMarkText: null, shippingMarkIssuanceId: null }) as unknown,
     }))
     expect(fixture.transaction.purchaseOrderPart.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({
       purchaseOrderId: ORDER_ID, key: ACTOR_ID, partNumber: 1, status: 'PENDING_REVIEW',
@@ -271,10 +271,10 @@ describe('PurchaseOrderCommandService', () => {
         currencyCode: 'CNY',
       shippingMarkText: null,
       shippingMarkIssuanceId: null,
-        lineSubtotalAmount: '20.0000',
-        purchaseTotalAmount: '20.0000',
-        depositDueAmount: '5.0000',
-        balanceDueAmount: '15.0000',
+        lineSubtotalAmount: '20.00',
+        purchaseTotalAmount: '20.00',
+        depositDueAmount: '5.00',
+        balanceDueAmount: '15.00',
         orderStatus: 'PENDING_REVIEW',
         fulfillmentStatus: 'ORDERED',
         paymentStatus: 'UNPAID',
@@ -286,8 +286,8 @@ describe('PurchaseOrderCommandService', () => {
         purchaseOrderId: ORDER_ID,
         productNoSnapshot: 'P-001',
         productNameSnapshot: '销售快照产品',
-        referencePurchaseUnitPriceAmount: '12.3456',
-        actualPurchaseUnitPriceAmount: '10.0000',
+        referencePurchaseUnitPriceAmount: '12.35',
+        actualPurchaseUnitPriceAmount: '10.00',
       })],
     })
     const auditInput = fixture.audit.record.mock.calls[0]?.[1]
@@ -317,10 +317,10 @@ describe('PurchaseOrderCommandService', () => {
       productNameSnapshot: '赠品包装',
       productAttributesSnapshot: [],
       descriptionSnapshot: null,
-      referencePurchaseUnitPriceAmount: '0.0000',
-      actualPurchaseUnitPriceAmount: '0.0000',
+      referencePurchaseUnitPriceAmount: '0.00',
+      actualPurchaseUnitPriceAmount: '0.00',
       quantity: 1,
-      lineTotalAmount: '0.0000',
+      lineTotalAmount: '0.00',
     }] })
     await fixture.service.create({
       actorUserId: ACTOR_ID,

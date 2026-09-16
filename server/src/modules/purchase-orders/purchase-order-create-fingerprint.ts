@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 
+import { normalizePurchaseOrderSnapshotAmount } from './domain/purchase-order-decimal'
 import { purchaseOrderValidationFailure } from './domain/purchase-order-errors'
 import {
   isCanonicalPurchaseOrderActorId,
@@ -7,9 +8,10 @@ import {
 } from './purchase-order-command.normalizer'
 
 export const PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION =
-  'purchase-order.create.v5' as const
+  'purchase-order.create.v6' as const
 export const PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION = 'purchase-order.create.v3' as const
 export const PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION = 'purchase-order.create.v4' as const
+export const PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION = 'purchase-order.create.v5' as const
 export const PURCHASE_ORDER_NUMBERING_RULE_CODE = 'PURCHASE_ORDER' as const
 export const PURCHASE_ORDER_NUMBERING_CONSUMER_CODE =
   'PURCHASE_ORDER.CREATE' as const
@@ -19,6 +21,10 @@ function serializePurchaseOrderCreateFingerprint(
   payload: NormalizedPurchaseOrderCreateCommand,
   version: string,
 ): string {
+  // 已提交 v3/v4/v5 身份按原四位字节恢复，不能用 v6 两位格式重写永久指纹。
+  const amount = (value: string) => version === PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION
+    ? value
+    : normalizePurchaseOrderSnapshotAmount(value)
   // 逐字段构造稳定序列，避免对象 key 顺序或未来非业务字段影响幂等语义。
   return JSON.stringify({
     version,
@@ -45,9 +51,9 @@ function serializePurchaseOrderCreateFingerprint(
             lineType: line.lineType,
             productId: line.productId,
             sourceSalesOrderLineId: line.sourceSalesOrderLineId,
-            actualPurchaseUnitPriceAmount: line.actualPurchaseUnitPriceAmount,
+            actualPurchaseUnitPriceAmount: amount(line.actualPurchaseUnitPriceAmount),
             quantity: line.quantity,
-            lineTotalAmount: line.lineTotalAmount,
+            lineTotalAmount: amount(line.lineTotalAmount),
           }
         : {
             lineNumber: line.lineNumber,
@@ -56,15 +62,15 @@ function serializePurchaseOrderCreateFingerprint(
             name: line.name ?? null,
             description: line.description ?? null,
             referencePurchaseUnitPriceAmount:
-              line.referencePurchaseUnitPriceAmount,
-            actualPurchaseUnitPriceAmount: line.actualPurchaseUnitPriceAmount,
+              amount(line.referencePurchaseUnitPriceAmount),
+            actualPurchaseUnitPriceAmount: amount(line.actualPurchaseUnitPriceAmount),
             quantity: line.quantity,
-            lineTotalAmount: line.lineTotalAmount,
+            lineTotalAmount: amount(line.lineTotalAmount),
           }),
-      lineSubtotalAmount: payload.lineSubtotalAmount,
-      purchaseTotalAmount: payload.purchaseTotalAmount,
-      depositDueAmount: payload.depositDueAmount,
-      balanceDueAmount: payload.balanceDueAmount,
+      lineSubtotalAmount: amount(payload.lineSubtotalAmount),
+      purchaseTotalAmount: amount(payload.purchaseTotalAmount),
+      depositDueAmount: amount(payload.depositDueAmount),
+      balanceDueAmount: amount(payload.balanceDueAmount),
       remark: payload.remark,
     },
   })

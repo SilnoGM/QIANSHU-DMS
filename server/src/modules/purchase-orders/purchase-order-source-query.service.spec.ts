@@ -176,7 +176,7 @@ describe('PurchaseOrderSourceQueryService', () => {
         name: '采购产品',
         attributes: [],
         supplierValue: 'SUPPLIER_A',
-        referencePurchaseUnitPriceAmount: '12.3400',
+        referencePurchaseUnitPriceAmount: '12.34',
         currencyCode: 'CNY',
         mainImage: {
           id: 'product-media-id',
@@ -454,9 +454,9 @@ describe('PurchaseOrderSourceQueryService', () => {
         purchasedLines: [{
           id: 'purchase-line-id',
           referencePurchaseUnitPriceAmount: '12.3400',
-          actualPurchaseUnitPriceAmount: '11.5000',
+          actualPurchaseUnitPriceAmount: '11.50',
           quantity: 2,
-          lineTotalAmount: '23.0000',
+          lineTotalAmount: '23.00',
           description: '历史采购备注',
         }],
       })],

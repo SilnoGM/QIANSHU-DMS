@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
-import { nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { normalizePurchaseOrderStatusSelection } from '../../src/views/operations/purchase-orders/purchase-order-list.logic'
 
 const ROOT = new URL('../../src/views/operations/purchase-orders/', import.meta.url)
@@ -45,15 +45,50 @@ test('审核先取最新详情，二次确认才提交；失败重查并保留�
   assert.match(details, /actualPurchaseUnitPriceAmount/u)
 })
 
-test('审核中付款及凭证入口均有提交前防御，新建成功明确等待审核', async () => {
+test('审核中不能进入采购付款及凭证入口，新建成功明确等待审核', async () => {
   const [actions, document, drawer, create] = await Promise.all([
     'purchase-order-detail-actions.vue',
     'purchase-order-document-modal.vue',
     'purchase-order-detail-drawer.vue',
     'create.vue',
   ].map(read))
-  assert.match(actions, /function submitPayment\(\): void \{\s+if \(!canRecordPayment\.value\)/u)
-  assert.match(actions, /props\.detail\.orderStatus === 'CONFIRMED'/u)
+  const permission = actions.match(/const canRecordPayment = computed\(\(\) => \([\s\S]*?\n\)\)/u)?.[0]
+  const openPayment = actions.match(/function openPaymentDialog\(\): void \{[\s\S]*?\n\}/u)?.[0]
+  assert.ok(permission)
+  assert.ok(openPayment)
+  const detail = reactive({ orderNo: 'PO/20260916-00016', orderStatus: 'PENDING_REVIEW', paymentStatus: 'UNPAID' })
+  const canManagePayment = ref(true)
+  const actionLocked = ref(false)
+  const destinations: unknown[] = []
+  const open = runInNewContext(ts.transpileModule(`${permission}\n${openPayment}\nopenPaymentDialog`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText, {
+    computed,
+    props: { detail },
+    canManagePayment,
+    actionLocked,
+    router: { push: async (destination: unknown) => { destinations.push(destination) } },
+  }) as () => void
+  for (const status of ['PENDING_REVIEW', 'CANCELLED']) {
+    detail.orderStatus = status
+    open()
+  }
+  assert.equal(destinations.length, 0)
+  detail.orderStatus = 'CONFIRMED'
+  open()
+  assert.equal(JSON.stringify(destinations), JSON.stringify([{
+    name: 'qsFinanceRealtimePurchasePayments',
+    query: { keyword: detail.orderNo },
+  }]))
+  detail.paymentStatus = 'PAID'
+  open()
+  detail.paymentStatus = 'UNPAID'
+  canManagePayment.value = false
+  open()
+  canManagePayment.value = true
+  actionLocked.value = true
+  open()
+  assert.equal(destinations.length, 1)
   assert.match(document, /busy\.value \|\| !visible\.value \|\| props\.detail\.orderStatus === 'PENDING_REVIEW'/u)
   assert.match(drawer, /detail\.value\.orderStatus !== 'PENDING_REVIEW'/u)
   assert.match(create, /创建成功，已进入采购审核中/u)

@@ -101,7 +101,7 @@ function setup() {
             productNameSnapshot: '产品甲',
             productAttributesSnapshot: [],
             descriptionSnapshot: null,
-            referencePurchaseUnitPriceAmount: decimal('12.34'),
+            referencePurchaseUnitPriceAmount: decimal('12.3456'),
             actualPurchaseUnitPriceAmount: decimal('10'),
             quantity: 10,
             lineTotalAmount: decimal('100'),
@@ -291,11 +291,11 @@ describe('PurchaseOrderQueryService', () => {
     })])
     const page = await fixture.service.list({ view: 'all' })
     expect(page.items[0]).toMatchObject({
-      paidAmount: '0.0000',
+      paidAmount: '0.00',
       paymentRecordSummary: { totalCount: 0, count: 0, byType: [
-        { paymentType: 'DEPOSIT', count: 0, amount: '0.0000' },
-        { paymentType: 'BALANCE', count: 0, amount: '0.0000' },
-        { paymentType: 'OTHER', count: 0, amount: '0.0000' },
+        { paymentType: 'DEPOSIT', count: 0, amount: '0.00' },
+        { paymentType: 'BALANCE', count: 0, amount: '0.00' },
+        { paymentType: 'OTHER', count: 0, amount: '0.00' },
       ] },
       documentSummary: { count: 0, byType: [
         { documentType: 'ORDER_ISSUANCE_VOUCHER', count: 0 },
@@ -310,12 +310,12 @@ describe('PurchaseOrderQueryService', () => {
     const fixture = setup()
     const changedAt = new Date('2026-09-06T03:00:00.000Z')
     fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
-      purchaseTotalAmount: { toFixed: () => '9007199254740993.9999' },
+      purchaseTotalAmount: { toFixed: () => '9007199254740993.99' },
       payments: [
-        { paymentType: 'DEPOSIT', amount: { toFixed: () => '9007199254740993.0001' }, voidedAt: null },
-        { paymentType: 'BALANCE', amount: { toFixed: () => '0.0002' }, voidedAt: null },
-        { paymentType: 'OTHER', amount: { toFixed: () => '0.0003' }, voidedAt: null },
-        { paymentType: 'OTHER', amount: { toFixed: () => '0.0004' }, voidedAt: null },
+        { paymentType: 'DEPOSIT', amount: { toFixed: () => '9007199254740993.01' }, voidedAt: null },
+        { paymentType: 'BALANCE', amount: { toFixed: () => '0.02' }, voidedAt: null },
+        { paymentType: 'OTHER', amount: { toFixed: () => '0.03' }, voidedAt: null },
+        { paymentType: 'OTHER', amount: { toFixed: () => '0.04' }, voidedAt: null },
         { paymentType: 'DEPOSIT', amount: decimal('100'), voidedAt: changedAt },
       ],
       documents: [
@@ -331,11 +331,11 @@ describe('PurchaseOrderQueryService', () => {
     })])
     const page = await fixture.service.list({ view: 'all', page: 2, pageSize: 5 })
     expect(page.items[0]).toMatchObject({
-      paidAmount: '9007199254740993.0010', outstandingAmount: '0.9989',
+      paidAmount: '9007199254740993.10', outstandingAmount: '0.89',
       paymentRecordSummary: { totalCount: 5, count: 4, byType: [
-        { paymentType: 'DEPOSIT', count: 1, amount: '9007199254740993.0001' },
-        { paymentType: 'BALANCE', count: 1, amount: '0.0002' },
-        { paymentType: 'OTHER', count: 2, amount: '0.0007' },
+        { paymentType: 'DEPOSIT', count: 1, amount: '9007199254740993.01' },
+        { paymentType: 'BALANCE', count: 1, amount: '0.02' },
+        { paymentType: 'OTHER', count: 2, amount: '0.07' },
       ] },
       documentSummary: { count: 4, byType: [
         { documentType: 'ORDER_ISSUANCE_VOUCHER', count: 1 },
@@ -383,7 +383,7 @@ describe('PurchaseOrderQueryService', () => {
     })])
     const page = await fixture.service.list({ view: 'all' })
     expect(page.items[0]).toMatchObject({
-      paidAmount: '0.0000', outstandingAmount: '100.0000',
+      paidAmount: '0.00', outstandingAmount: '100.00',
       paymentRecordSummary: { totalCount: 2, count: 0 },
     })
   })
@@ -449,13 +449,13 @@ describe('PurchaseOrderQueryService', () => {
       page: 1,
       pageSize: 20,
       summariesByCurrency: [{
-        balanceDueAmount: '70.0000',
+        balanceDueAmount: '70.00',
         currencyCode: 'CNY',
-        depositDueAmount: '30.0000',
+        depositDueAmount: '30.00',
         orderCount: 1,
-        outstandingAmount: '70.0000',
-        paidAmount: '30.0000',
-        purchaseTotalAmount: '100.0000',
+        outstandingAmount: '70.00',
+        paidAmount: '30.00',
+        purchaseTotalAmount: '100.00',
         referenceSubtotalAmount: '40.0000',
       }],
       total: 1,
@@ -475,9 +475,9 @@ describe('PurchaseOrderQueryService', () => {
         known: true,
       },
       createdBy: { id: 'actor-id', displayName: '采购员' },
-      purchaseTotalAmount: '100.0000',
-      paidAmount: '30.0000',
-      outstandingAmount: '70.0000',
+      purchaseTotalAmount: '100.00',
+      paidAmount: '30.00',
+      outstandingAmount: '70.00',
       lineSummary: {
         lineCount: 6,
         totalQuantity: 27,
@@ -666,20 +666,20 @@ describe('PurchaseOrderQueryService', () => {
         customerName: '客户甲',
       },
       amounts: {
-        lineSubtotalAmount: '100.0000',
-        purchaseTotalAmount: '100.0000',
-        paidAmount: '30.0000',
-        outstandingAmount: '70.0000',
+        lineSubtotalAmount: '100.00',
+        purchaseTotalAmount: '100.00',
+        paidAmount: '30.00',
+        outstandingAmount: '70.00',
       },
       lines: [expect.objectContaining({
-        referencePurchaseUnitPriceAmount: '12.3400',
-        actualPurchaseUnitPriceAmount: '10.0000',
+        referencePurchaseUnitPriceAmount: '12.3456',
+        actualPurchaseUnitPriceAmount: '10.00',
       })],
-      payments: [expect.objectContaining({ amount: '30.0000' })],
+      payments: [expect.objectContaining({ amount: '30.00' })],
       paymentRecordSummary: { count: 1, byType: [
-        { paymentType: 'DEPOSIT', count: 1, amount: '30.0000' },
-        { paymentType: 'BALANCE', count: 0, amount: '0.0000' },
-        { paymentType: 'OTHER', count: 0, amount: '0.0000' },
+        { paymentType: 'DEPOSIT', count: 1, amount: '30.00' },
+        { paymentType: 'BALANCE', count: 0, amount: '0.00' },
+        { paymentType: 'OTHER', count: 0, amount: '0.00' },
       ] },
     })
   })

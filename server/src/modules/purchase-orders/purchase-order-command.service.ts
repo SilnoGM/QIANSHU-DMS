@@ -41,6 +41,7 @@ import {
   PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION,
   PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION,
   PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION,
+  PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION,
   PURCHASE_ORDER_NUMBERING_CONSUMER_CODE,
   PURCHASE_ORDER_NUMBERING_RULE_CODE,
 } from './purchase-order-create-fingerprint'
@@ -231,7 +232,7 @@ export class PurchaseOrderCommandService {
     const idempotencyKeyHash = hashPurchaseOrderIdempotencyKey(trusted.idempotencyKey)
     const existing = await this.findExisting(idempotencyKeyHash)
     const version = existing?.createRequestFingerprintVersion ?? PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION
-    if (version !== PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION) {
+    if (version !== PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION) {
       throw idempotencyConflict()
     }
     // 仅已持久化 v3 请求允许旧快照恢复；新请求不能凭缺少 parts 回退旧创建路径。

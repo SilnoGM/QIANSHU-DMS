@@ -52,13 +52,13 @@ test('完整复制模板按采购行和货件顺序输出，以真实行 ID 关�
   assert.equal(JSON.stringify(detail), before)
 })
 
-test('大额与四位单价保留精度，零约定金额不作为缺失', () => {
+test('大额金额不转浮点数，历史四位金额按采购两位精度展示，零金额不作为缺失', () => {
   const detail = fixture()
   detail.lines[0]!.actualPurchaseUnitPriceAmount = '9007199254740993.1234'
   detail.lines[0]!.lineTotalAmount = '18014398509481986.2468'
   detail.amounts.depositDueAmount = '0.0000'
   const text = buildPurchaseOrderCopyText(detail, t)
-  assert.ok(text.includes('金额小计：9007199254740993.1234*2=18014398509481986.2468'))
+  assert.ok(text.includes('金额小计：9007199254740993.12*2=18014398509481986.25'))
   assert.ok(text.includes('订金：0.00'))
 })
 

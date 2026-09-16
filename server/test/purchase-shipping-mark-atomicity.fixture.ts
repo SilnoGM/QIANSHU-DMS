@@ -16,6 +16,8 @@ import { NumberingQueryService } from '../src/modules/numbering/numbering-query.
 import { PurchaseOrderCommandService } from '../src/modules/purchase-orders/purchase-order-command.service'
 import { PurchaseOrderCreateDependencyService } from '../src/modules/purchase-orders/purchase-order-create-dependency.service'
 import { PurchaseOrderMutationService } from '../src/modules/purchase-orders/purchase-order-mutation.service'
+import { PurchasePayableService } from '../src/modules/purchase-orders/payables/purchase-payable.service'
+import { FundPostingApplicationService } from '../src/modules/fund-accounts/application/fund-posting.service'
 import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
 import type { MediaAssetService } from '../src/modules/media/media-asset.service'
 import { SalesOrderPurchaseCoverageService } from '../src/modules/purchase-orders/sales-order-purchase-coverage.service'
@@ -65,7 +67,7 @@ export async function createAtomicityFixture(deferPartsMigration = false, deferR
     const bindings = new PurchaseShippingMarksService(prisma, lookup, audit)
     const fixture = {
       prisma, actor, audit, numberingCommands, configContext, customRule,
-      resolver, numbering, dependencies, salesProgress, bindings,
+      resolver, numbering, dependencies, salesProgress, bindings, access,
       migrateParts: database.applyPartsMigration,
       migrateReview: database.applyReviewMigration,
       migrateShipmentNumbers: database.applyShipmentNumbers,
@@ -111,6 +113,7 @@ export function createCommands(
 export function createReviewMutations(fixture: AtomicityFixture, wrap?: (transaction: Prisma.TransactionClient) => Prisma.TransactionClient) {
   const lookup = new DictionaryLookupService(fixture.prisma)
   const prisma = wrap === undefined ? fixture.prisma : {
+    purchaseOrderPayable: fixture.prisma.purchaseOrderPayable,
     $transaction: <T>(action: (transaction: Prisma.TransactionClient) => Promise<T>) => fixture.prisma.$transaction(transaction => action(wrap(transaction))),
   } as unknown as PrismaService
   return new PurchaseOrderMutationService(
@@ -119,6 +122,7 @@ export function createReviewMutations(fixture: AtomicityFixture, wrap?: (transac
     fixture.numbering, fixture.resolver,
     new PurchaseOrderWarehouseReceiptService(prisma, fixture.audit, new PurchaseOrderQueryService(fixture.prisma, lookup)),
     createImageReviewService(fixture.prisma, new PurchaseOrderQueryService(fixture.prisma, lookup), fixture.audit),
+    new PurchasePayableService(new FundPostingApplicationService(prisma, fixture.audit), fixture.access),
   )
 }
 

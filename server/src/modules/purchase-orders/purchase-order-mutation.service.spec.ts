@@ -11,15 +11,35 @@ import type { PurchaseShippingMarkResolverService } from '../purchase-shipping-m
 import { PurchaseOrderMutationService } from './purchase-order-mutation.service'
 import type { PurchaseOrderQueryService } from './purchase-order-query.service'
 import type { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
+import { Prisma } from '../../generated/prisma/client'
+import type { PurchaseOrderPaymentType } from '../../generated/prisma/enums'
+import type { PreparedPayablePayment, PurchasePayableService } from './payables/purchase-payable.service'
 
 const ACTOR_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const ORDER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const PAYMENT_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const MEDIA_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 const SOURCE_LINE_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+const PAYABLE_ID = '11111111-1111-4111-8111-111111111111'
+const FUND_BATCH_ID = '22222222-2222-4222-8222-222222222222'
 
 function decimal(value: string) {
-  return { toFixed: () => Number(value).toFixed(4) }
+  return new Prisma.Decimal(value)
+}
+
+function preparedPayment(amount: string, replay = false, paymentType: PurchaseOrderPaymentType = 'DEPOSIT'): PreparedPayablePayment {
+  return {
+    replay,
+    amount,
+    paymentId: PAYMENT_ID,
+    idempotencyKeyHash: Buffer.alloc(32, 1),
+    requestFingerprintHash: Buffer.alloc(32, 2),
+    payable: replay ? null : {
+      id: PAYABLE_ID, purchaseOrderId: ORDER_ID, paymentType,
+      dueAmount: decimal(amount), accountOwnerType: 'USER', ownerUserId: ACTOR_ID,
+      createdByUserId: ACTOR_ID, createdAt: new Date('2026-08-27T10:00:00Z'), closedAt: null, version: 1,
+    },
+  }
 }
 
 function setup() {
@@ -118,6 +138,18 @@ function setup() {
   }
   const warehouseReceipts = { receiveAll: jest.fn().mockResolvedValue(detail) }
   const imageDrafts = { attachForReview: jest.fn().mockResolvedValue(undefined), invalidateForOrder: jest.fn().mockResolvedValue(undefined) }
+  const payables = {
+    createForReview: jest.fn<Promise<void>, Parameters<PurchasePayableService['createForReview']>>().mockResolvedValue(undefined),
+    closeForCancellation: jest.fn<Promise<void>, Parameters<PurchasePayableService['closeForCancellation']>>().mockResolvedValue(undefined),
+    preparePayment: jest.fn<Promise<PreparedPayablePayment>, Parameters<PurchasePayableService['preparePayment']>>()
+      .mockImplementation((_tx, _context, _orderId, input) => Promise.resolve(preparedPayment(input.amount, false, input.paymentType as PurchaseOrderPaymentType))),
+    postPayment: jest.fn<ReturnType<PurchasePayableService['postPayment']>, Parameters<PurchasePayableService['postPayment']>>()
+      .mockImplementation((_tx, _context, prepared) => Promise.resolve({
+        id: prepared.paymentId, payableId: PAYABLE_ID, fundPostingBatchId: FUND_BATCH_ID,
+        idempotencyKeyHash: prepared.idempotencyKeyHash, requestFingerprintHash: prepared.requestFingerprintHash,
+      })),
+    reversePayment: jest.fn<ReturnType<PurchasePayableService['reversePayment']>, Parameters<PurchasePayableService['reversePayment']>>().mockResolvedValue(null),
+  }
   const service = new PurchaseOrderMutationService(
     prisma as unknown as PrismaService,
     audit as unknown as AuditService,
@@ -129,6 +161,7 @@ function setup() {
     resolver as unknown as PurchaseShippingMarkResolverService,
     warehouseReceipts as unknown as PurchaseOrderWarehouseReceiptService,
     imageDrafts as unknown as PurchaseOrderImageDraftService,
+    payables as unknown as PurchasePayableService,
     { now: () => new Date('2026-08-27T12:00:00.000Z') },
   )
   return {
@@ -142,6 +175,7 @@ function setup() {
     resolver,
     warehouseReceipts,
     imageDrafts,
+    payables,
     query,
     service,
     transaction,
@@ -167,6 +201,7 @@ describe('PurchaseOrderMutationService', () => {
       where: { purchaseOrderId: ORDER_ID, status: 'PENDING_REVIEW' },
       data: { status: 'ACTIVE' },
     })
+    expect(fixture.payables.createForReview).toHaveBeenCalledWith(fixture.transaction, context, ORDER_ID)
   })
 
   it.each(['PENDING_REVIEW', 'CONFIRMED'])('cancels %s parts while preserving marks and allocations', async status => {
@@ -177,6 +212,18 @@ describe('PurchaseOrderMutationService', () => {
       where: { purchaseOrderId: ORDER_ID, status: { not: 'CANCELLED' } },
       data: { status: 'CANCELLED' },
     })
+    expect(fixture.payables.closeForCancellation).toHaveBeenCalledWith(fixture.transaction, ORDER_ID)
+  })
+
+  it('propagates payable creation failure from the review transaction before returning success', async () => {
+    const fixture = setup()
+    fixture.order.orderStatus = 'PENDING_REVIEW'
+    fixture.payables.createForReview.mockRejectedValue(new ApiException(409, 'PURCHASE_ORDER_STATE_CHANGED', '采购应付款创建失败'))
+    await expect(fixture.service.review(context, ORDER_ID, { imageDraftId: MEDIA_ID, expectedVersion: 1 }))
+      .rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATE_CHANGED' })
+    expect(fixture.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
+    expect(fixture.coverage.advanceWhenFullyCovered).not.toHaveBeenCalled()
+    expect(fixture.query.getById).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -201,10 +248,10 @@ describe('PurchaseOrderMutationService', () => {
     expect(fixture.query.getById).not.toHaveBeenCalled()
   })
 
-  it('issues and persists one base mark while keeping a v5 order pending review', async () => {
+  it.each(['purchase-order.create.v5', 'purchase-order.create.v6'])('issues and persists one base mark while keeping a %s order pending review', async version => {
     const fixture = setup()
     fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({
-      ...fixture.order, orderStatus: 'PENDING_REVIEW', createRequestFingerprintVersion: 'purchase-order.create.v5',
+      ...fixture.order, orderStatus: 'PENDING_REVIEW', createRequestFingerprintVersion: version,
       createRequestFingerprintHash: Buffer.alloc(32, 1), productMode: 'CUSTOM', supplierValue: null,
       shippingMarkText: null, shippingMarkIssuanceId: null, _count: { parts: 1 },
     })
@@ -389,7 +436,7 @@ describe('PurchaseOrderMutationService', () => {
       data: { orderStatus: 'CONFIRMED', paymentStatus: 'PAID', version: { increment: 1 } },
     })
     expect(fixture.transaction.purchaseOrderStatusHistory.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      reason: expect.stringContaining('累计有效付款 100.0000 CNY') as unknown,
+      reason: expect.stringContaining('累计有效付款 100.00 CNY') as unknown,
     }) as unknown })
   })
   it('cancels only without active payments and records immutable history', async () => {
@@ -435,6 +482,7 @@ describe('PurchaseOrderMutationService', () => {
       { toStatus: 'CANCELLED' },
     )).rejects.toMatchObject({ code: 'PURCHASE_ORDER_CANCEL_HAS_PAYMENTS' })
     expect(paid.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+    expect(paid.payables.closeForCancellation).not.toHaveBeenCalled()
   })
 
   it('does not recalculate sales coverage when cancelling a stock purchase', async () => {
@@ -527,7 +575,7 @@ describe('PurchaseOrderMutationService', () => {
       data: {
         purchaseOrderId: ORDER_ID,
         paymentType: 'DEPOSIT',
-        amount: '30.0000',
+        amount: '30.00',
         paymentMethod: 'BANK',
       },
       select: { id: true },
@@ -546,12 +594,56 @@ describe('PurchaseOrderMutationService', () => {
         dimension: 'PAYMENT',
         fromStatus: 'UNPAID',
         toStatus: 'PARTIALLY_PAID',
-        reason: expect.stringContaining('新增付款 30.0000 CNY') as unknown,
+        reason: expect.stringContaining('新增付款 30.00 CNY') as unknown,
         changedByUserId: ACTOR_ID,
       },
     }]])
     expect(fixture.transaction.purchaseOrderDocument.create).not.toHaveBeenCalled()
     expect(fixture.media.activate).not.toHaveBeenCalled()
+  })
+
+  it('uses the locked payable remaining amount for funds, payment persistence and status calculation', async () => {
+    const fixture = setup()
+    const prepared = preparedPayment('25.00')
+    fixture.payables.preparePayment.mockResolvedValueOnce(prepared)
+    const confirmation = { payableId: PAYABLE_ID, expectedVersion: 1, idempotencyKey: MEDIA_ID }
+    await fixture.service.recordPayment(context, ORDER_ID, {
+      paymentType: 'DEPOSIT', amount: '30', paidAt: '2026-08-27T11:00:00.000Z', paymentMethod: 'BANK',
+    }, confirmation)
+    expect(fixture.payables.preparePayment).toHaveBeenCalledWith(fixture.transaction, context, ORDER_ID,
+      { paymentType: 'DEPOSIT', amount: '30.00', paidAt: new Date('2026-08-27T11:00:00Z'), paymentMethod: 'BANK', remark: null, mediaAssetId: null }, confirmation)
+    expect(fixture.payables.postPayment).toHaveBeenCalledWith(fixture.transaction, context, prepared, fixture.order.orderNo)
+    expect(fixture.transaction.purchaseOrderPayment.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      id: PAYMENT_ID, payableId: PAYABLE_ID, fundPostingBatchId: FUND_BATCH_ID, amount: '25.00',
+    }) as unknown }))
+    expect(fixture.transaction.purchaseOrderStatusHistory.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      reason: expect.stringContaining('新增付款 25.00 CNY，累计有效付款 25.00 CNY') as unknown,
+    }) as unknown })
+    expect(fixture.payables.postPayment.mock.invocationCallOrder[0]).toBeLessThan(fixture.transaction.purchaseOrderPayment.create.mock.invocationCallOrder[0])
+  })
+
+  it('returns the existing result on a payable replay without charging or recording payment again', async () => {
+    const fixture = setup()
+    fixture.payables.preparePayment.mockResolvedValueOnce(preparedPayment('30.00', true))
+    await expect(fixture.service.recordPayment(context, ORDER_ID, {
+      paymentType: 'DEPOSIT', amount: '30', paidAt: '2026-08-27T11:00:00.000Z', paymentMethod: 'BANK',
+    })).resolves.toBe(fixture.detail)
+    expect(fixture.payables.postPayment).not.toHaveBeenCalled()
+    expect(fixture.dictionaryLookup.requireEffectiveValue).not.toHaveBeenCalled()
+    expect(fixture.transaction.purchaseOrderPayment.create).not.toHaveBeenCalled()
+    expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+  })
+
+  it('propagates fund posting failure before writing payment or returning success', async () => {
+    const fixture = setup()
+    fixture.payables.postPayment.mockRejectedValueOnce(new ApiException(422, 'PURCHASE_PAYABLE_POSTING_UNAVAILABLE', '资金记账失败'))
+    await expect(fixture.service.recordPayment(context, ORDER_ID, {
+      paymentType: 'DEPOSIT', amount: '30', paidAt: '2026-08-27T11:00:00.000Z', paymentMethod: 'BANK',
+    })).rejects.toMatchObject({ code: 'PURCHASE_PAYABLE_POSTING_UNAVAILABLE' })
+    expect(fixture.transaction.purchaseOrderPayment.create).not.toHaveBeenCalled()
+    expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+    expect(fixture.query.getById).not.toHaveBeenCalled()
   })
 
   it('atomically completes a signed order when payment reaches PAID', async () => {
@@ -691,6 +783,7 @@ describe('PurchaseOrderMutationService', () => {
     expect(fixture.transaction.purchaseOrderPayment.update).toHaveBeenCalledWith({
       where: { id: PAYMENT_ID },
       data: {
+        fundReversalBatchId: null,
         voidedAt: new Date('2026-08-27T12:00:00.000Z'),
         voidedByUserId: ACTOR_ID,
         voidReason: '重复录入',
@@ -755,5 +848,26 @@ describe('PurchaseOrderMutationService', () => {
         },
       }),
     )
+  })
+
+  it('requires the linked fund reversal before persisting payment voiding', async () => {
+    const fixture = setup()
+    const payment = { id: PAYMENT_ID, amount: decimal('30'), voidedAt: null, payableId: PAYABLE_ID, fundPostingBatchId: FUND_BATCH_ID }
+    fixture.transaction.purchaseOrderPayment.findFirst.mockResolvedValue(payment)
+    fixture.transaction.purchaseOrderPayment.aggregate.mockResolvedValue({ _sum: { amount: decimal('30') } })
+    fixture.payables.reversePayment.mockResolvedValueOnce(MEDIA_ID)
+    await fixture.service.voidPayment(context, ORDER_ID, PAYMENT_ID, { reason: '重复付款' })
+    expect(fixture.payables.reversePayment).toHaveBeenCalledWith(fixture.transaction, context, payment, '重复付款')
+    expect(fixture.transaction.purchaseOrderPayment.update).toHaveBeenCalledWith({ where: { id: PAYMENT_ID }, data: {
+      fundReversalBatchId: MEDIA_ID, voidedAt: new Date('2026-08-27T12:00:00Z'), voidedByUserId: ACTOR_ID, voidReason: '重复付款',
+    } })
+    expect(fixture.payables.reversePayment.mock.invocationCallOrder[0]).toBeLessThan(fixture.transaction.purchaseOrderPayment.update.mock.invocationCallOrder[0])
+    fixture.payables.reversePayment.mockRejectedValueOnce(new ApiException(422, 'PURCHASE_PAYABLE_POSTING_UNAVAILABLE', '资金冲正失败'))
+    fixture.transaction.purchaseOrderPayment.update.mockClear()
+    fixture.query.getById.mockClear()
+    await expect(fixture.service.voidPayment(context, ORDER_ID, PAYMENT_ID, { reason: '再次核对' }))
+      .rejects.toMatchObject({ code: 'PURCHASE_PAYABLE_POSTING_UNAVAILABLE' })
+    expect(fixture.transaction.purchaseOrderPayment.update).not.toHaveBeenCalled()
+    expect(fixture.query.getById).not.toHaveBeenCalled()
   })
 })

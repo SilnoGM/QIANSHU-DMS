@@ -22,15 +22,17 @@ function setup() {
 }
 
 describe('PurchaseOrderReviewContextService', () => {
-  it('checks current rule read-only without issuance and uses one consistent snapshot', async () => {
+  it.each(['purchase-order.create.v5', 'purchase-order.create.v6'])('checks current rule read-only for %s without issuance and uses one consistent snapshot', async version => {
     const fixture = setup()
+    fixture.order.createRequestFingerprintVersion = version
     await expect(fixture.service.read('order-id')).resolves.toEqual({ available: true, message: null })
     expect(fixture.resolver.resolve).toHaveBeenCalledWith(fixture.transaction, { productMode: 'CATALOG', supplierValue: 'SUPPLIER_A' }, false)
     expect(fixture.prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'RepeatableRead' })
   })
 
-  it('reuses issued marks even when their rule is later disabled', async () => {
+  it.each(['purchase-order.create.v5', 'purchase-order.create.v6'])('reuses %s issued marks even when their rule is later disabled', async version => {
     const fixture = setup()
+    fixture.order.createRequestFingerprintVersion = version
     fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({ ...fixture.order, shippingMarkText: 'MARK0001', shippingMarkIssuanceId: 'issuance-id' })
     fixture.resolver.resolve.mockResolvedValue({ availability: 'DISABLED', message: '停用' })
     await expect(fixture.service.read('order-id')).resolves.toEqual({ available: true, message: null })
@@ -66,8 +68,9 @@ describe('PurchaseOrderReviewContextService', () => {
     expect(fixture.resolver.resolve).not.toHaveBeenCalled()
   })
 
-  it('blocks incomplete v5 part configuration and missing source, and permits stock without source', async () => {
+  it.each(['purchase-order.create.v5', 'purchase-order.create.v6'])('blocks incomplete %s part configuration and missing source, and permits stock without source', async version => {
     const fixture = setup()
+    fixture.order.createRequestFingerprintVersion = version
     fixture.order._count.parts = 0
     expect((await fixture.service.read('order-id')).available).toBe(false)
     fixture.order._count.parts = 1

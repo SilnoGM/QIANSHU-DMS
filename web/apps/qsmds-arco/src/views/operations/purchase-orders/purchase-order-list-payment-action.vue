@@ -35,7 +35,7 @@ function reset(): void {
   busy.value = false
 }
 
-/** 列表只选择目标订单；付款状态、金额和表单始终使用最新详情与抽屉共用的实现。 */
+/** 列表读取最新订单状态后，通过共用入口跳转财务采购付款页核对分项应付。 */
 async function open(orderId: string): Promise<void> {
   if (!canOpen.value || loadingOrderId.value !== null || busy.value) {
     return
@@ -81,7 +81,7 @@ function applyUpdatedDetail(updated: PurchaseOrderDetailDto): void {
   emit('detailUpdated', updated)
 }
 
-// 离开待付款视图、身份或权限变化时卸载付款表单，取消旧请求和临时凭证预览。
+// 离开待付款视图、身份或权限变化时，取消旧详情请求并清空目标订单。
 watch(() => [props.active, account.authEpoch, canOpen.value] as const, reset)
 onDeactivated(reset)
 onBeforeUnmount(reset)

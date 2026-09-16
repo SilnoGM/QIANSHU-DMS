@@ -1,3 +1,7 @@
+import { PurchasePayableService, type PayableConfirmation } from './payables/purchase-payable.service'
+import type { PurchasePayablePayDto } from './payables/purchase-payable.dto'
+import { payableFailure } from './payables/purchase-payable.logic'
+import { parsePurchaseOrderIdempotencyKey } from './purchase-order-command.normalizer'
 import { HttpStatus, Inject, Injectable, Optional } from '@nestjs/common'
 
 import { Prisma } from '../../generated/prisma/client'
@@ -53,7 +57,7 @@ import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-covera
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { NumberingGenerationError } from '../numbering/numbering.errors'
 import { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
-import { PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION, PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION, PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION } from './purchase-order-create-fingerprint'
+import { PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION, PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION, PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION, PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION } from './purchase-order-create-fingerprint'
 import { mapShippingMarkGenerationError, PURCHASE_SHIPPING_MARK_CONSUMER, requirePurchaseShippingMark } from './purchase-order-shipping-mark'
 
 const PAYMENT_METHOD_DICTIONARY_CODE = 'payment.method'
@@ -181,8 +185,8 @@ function optionalText(
     : requireText(value, field, maximum)
 }
 
-function fixed4(value: { toFixed(decimalPlaces: number): string }): string {
-  return value.toFixed(4)
+function fixed2(value: { toFixed(decimalPlaces: number): string }): string {
+  return value.toFixed(2)
 }
 
 function effectivePaidAmount(
@@ -192,7 +196,7 @@ function effectivePaidAmount(
     }
   },
 ): string {
-  return aggregate._sum.amount === null ? '0.0000' : fixed4(aggregate._sum.amount)
+  return aggregate._sum.amount === null ? '0.00' : fixed2(aggregate._sum.amount)
 }
 
 @Injectable()
@@ -210,6 +214,7 @@ export class PurchaseOrderMutationService {
     private readonly shippingMarks: PurchaseShippingMarkResolverService,
     private readonly warehouseReceipts: PurchaseOrderWarehouseReceiptService,
     private readonly imageDrafts: PurchaseOrderImageDraftService,
+    private readonly payables: PurchasePayableService,
     @Optional()
     @Inject(PURCHASE_ORDER_MUTATION_DEPENDENCIES)
     dependencyOverrides: Partial<PurchaseOrderMutationDependencies> = {},
@@ -319,6 +324,7 @@ export class PurchaseOrderMutationService {
           version: { increment: 1 },
         },
       })
+      await this.payables.createForReview(transaction, trusted, purchaseOrderId)
       // 与图片归档、审核共用事务，避免尚未通过的预定义货件被实际作业使用。
       await transaction.purchaseOrderPart.updateMany({
         where: { purchaseOrderId, status: 'PENDING_REVIEW' },
@@ -369,10 +375,10 @@ export class PurchaseOrderMutationService {
   }
 
   private async issueReviewShippingMark(transaction: Prisma.TransactionClient, order: MutablePurchaseOrder) {
-    // v3/v4 的真实历史派发不可覆盖。只有新 v5 订单在生成审核图片前首次派发。
+    // v3/v4 的真实历史派发不可覆盖。v5/v6 在生成审核图片前首次派发。
     if (order.createRequestFingerprintVersion === PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION
       || order.createRequestFingerprintVersion === PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION) return null
-    if (order.createRequestFingerprintVersion !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION
+    if ((order.createRequestFingerprintVersion !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION && order.createRequestFingerprintVersion !== PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION)
       || order.productMode === 'MIXED' || (order.shippingMarkText === null) !== (order.shippingMarkIssuanceId === null) || order._count.parts < 1) {
       throw new ApiException(HttpStatus.CONFLICT, 'PURCHASE_ORDER_STATE_CHANGED', '采购货件或唛头状态已变化，请刷新核对')
     }
@@ -423,6 +429,7 @@ export class PurchaseOrderMutationService {
         where: { purchaseOrderId, status: { not: 'CANCELLED' } },
         data: { status: 'CANCELLED' },
       })
+      await this.payables.closeForCancellation(transaction, purchaseOrderId)
       await this.imageDrafts.invalidateForOrder(transaction, purchaseOrderId)
       await transaction.purchaseOrderStatusHistory.create({ data: {
         purchaseOrderId,
@@ -526,10 +533,26 @@ export class PurchaseOrderMutationService {
     return this.query.getById(purchaseOrderId)
   }
 
+  async payPayable(context: PurchaseOrderMutationContext, rawId: string, input: PurchasePayablePayDto, rawKey: unknown): Promise<string> {
+    const id = requireUuid(rawId, 'id')
+    const idempotencyKey = parsePurchaseOrderIdempotencyKey(rawKey)
+    const body = requireRecord(input)
+    rejectUnknownKeys(body, ['expectedVersion', 'paymentMethod', 'remark'])
+    if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) return purchaseOrderValidationFailure('expectedVersion')
+    const payable = await this.prisma.purchaseOrderPayable.findUnique({ where: { id } })
+    if (!payable) return payableFailure('PURCHASE_PAYABLE_NOT_FOUND', '采购应付款不存在', 404)
+    await this.recordPayment(context, payable.purchaseOrderId, {
+      paymentType: payable.paymentType, amount: payable.dueAmount.toFixed(2),
+      paidAt: this.dependencies.now().toISOString(), paymentMethod: input.paymentMethod, remark: input.remark,
+    }, { payableId: id, expectedVersion: input.expectedVersion, idempotencyKey })
+    return payable.purchaseOrderId
+  }
+
   async recordPayment(
     context: PurchaseOrderMutationContext,
     rawPurchaseOrderId: unknown,
     input: unknown,
+    confirmation?: PayableConfirmation,
   ): Promise<PurchaseOrderDetail> {
     const trusted = validateContext(context)
     const purchaseOrderId = requireUuid(rawPurchaseOrderId, 'purchaseOrderId')
@@ -549,7 +572,7 @@ export class PurchaseOrderMutationService {
       return purchaseOrderValidationFailure('paymentType')
     }
     const paymentType = body.paymentType as PurchaseOrderPaymentType
-    const amount = normalizePositivePurchaseOrderAmount(body.amount)
+    let amount = normalizePositivePurchaseOrderAmount(body.amount)
     const now = this.dependencies.now()
     const paidAt = this.normalizePaidAt(body.paidAt, now)
     let paymentMethod: string
@@ -579,6 +602,10 @@ export class PurchaseOrderMutationService {
             '已取消的采购订单不能记录付款',
           )
         }
+        const prepared = await this.payables.preparePayment(transaction, trusted, purchaseOrderId,
+          { paymentType, amount, paidAt, paymentMethod, remark, mediaAssetId }, confirmation)
+        if (prepared.replay) return
+        amount = prepared.amount
         const method = await this.dictionaryLookup.requireEffectiveValue(
           transaction,
           { dictionaryCode: PAYMENT_METHOD_DICTIONARY_CODE, value: paymentMethod },
@@ -611,11 +638,13 @@ export class PurchaseOrderMutationService {
           + parsePurchaseOrderAmountUnits(amount),
         )
         const newStatus = derivePurchaseOrderPaymentStatus(
-          fixed4(order.purchaseTotalAmount),
+          fixed2(order.purchaseTotalAmount),
           newPaidAmount,
         )
+        const fundLink = await this.payables.postPayment(transaction, trusted, prepared, order.orderNo)
         const payment = await transaction.purchaseOrderPayment.create({
           data: {
+            ...fundLink,
             purchaseOrderId,
             paymentType,
             amount,
@@ -653,12 +682,12 @@ export class PurchaseOrderMutationService {
           trusted,
           order,
           newStatus,
-          `新增付款 ${amount} CNY，累计有效付款 ${newPaidAmount} CNY；采购总价 ${fixed4(order.purchaseTotalAmount)} CNY`,
+          `新增付款 ${amount} CNY，累计有效付款 ${newPaidAmount} CNY；采购总价 ${fixed2(order.purchaseTotalAmount)} CNY`,
         )
         await this.recordAudit(transaction, trusted, {
           eventType: AuditEventType.PURCHASE_ORDER_PAYMENT_RECORDED,
           targetId: payment.id,
-          metadata: { purchaseOrderId, paymentType },
+          metadata: { purchaseOrderId, paymentType, fundPostingBatchId: fundLink.fundPostingBatchId },
         })
       })
     }
@@ -700,7 +729,7 @@ export class PurchaseOrderMutationService {
       const order = await this.lockOrder(transaction, purchaseOrderId)
       const payment = await transaction.purchaseOrderPayment.findFirst({
         where: { id: paymentId, purchaseOrderId },
-        select: { id: true, amount: true, voidedAt: true },
+        select: { id: true, amount: true, voidedAt: true, payableId: true, fundPostingBatchId: true },
       })
       if (payment === null) {
         throw new ApiException(
@@ -721,15 +750,17 @@ export class PurchaseOrderMutationService {
       )
       const newPaidAmount = formatPurchaseOrderAmountUnits(
         parsePurchaseOrderAmountUnits(oldPaidAmount)
-        - parsePurchaseOrderAmountUnits(fixed4(payment.amount)),
+        - parsePurchaseOrderAmountUnits(fixed2(payment.amount)),
       )
       const newStatus = derivePurchaseOrderPaymentStatus(
-        fixed4(order.purchaseTotalAmount),
+        fixed2(order.purchaseTotalAmount),
         newPaidAmount,
       )
+      const fundReversalBatchId = await this.payables.reversePayment(transaction, trusted, payment, reason)
       await transaction.purchaseOrderPayment.update({
         where: { id: paymentId },
         data: {
+          fundReversalBatchId,
           voidedAt: now,
           voidedByUserId: trusted.actorUserId,
           voidReason: reason,
@@ -740,7 +771,7 @@ export class PurchaseOrderMutationService {
         trusted,
         order,
         newStatus,
-        `作废付款 ${fixed4(payment.amount)} CNY，重算累计有效付款 ${newPaidAmount} CNY；采购总价 ${fixed4(order.purchaseTotalAmount)} CNY`,
+        `作废付款 ${fixed2(payment.amount)} CNY，重算累计有效付款 ${newPaidAmount} CNY；采购总价 ${fixed2(order.purchaseTotalAmount)} CNY`,
       )
       await this.recordAudit(transaction, trusted, {
         eventType: AuditEventType.PURCHASE_ORDER_PAYMENT_VOIDED,

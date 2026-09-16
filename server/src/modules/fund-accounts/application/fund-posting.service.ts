@@ -64,6 +64,13 @@ import type {
 } from './fund-posting.contract'
 import { FundPostingService } from './fund-posting.contract'
 import {
+  PURCHASE_PAYMENT_FUND_SOURCE,
+  PURCHASE_PAYMENT_PAY_CONSUMER,
+  PURCHASE_PAYMENT_POSTING_TYPE,
+  PURCHASE_PAYMENT_STOCK_PAY_CONSUMER,
+  PURCHASE_PAYMENT_VOID_CONSUMER,
+} from './fund-purchase-payment'
+import {
   isFundIdempotencyUniqueViolation,
   mapFundPersistenceError,
 } from './fund-persistence-error.mapper'
@@ -98,6 +105,12 @@ interface PlannedLedgerEntry {
   readonly result: FundPostingResultEntry
   readonly account: FundLockedAccountRecord
   readonly balanceAfter: string
+}
+
+interface ControlledBusinessReversal {
+  readonly sourceCode: string
+  readonly consumerCode: string
+  readonly postingTypeCode: string
 }
 
 function postingError(
@@ -441,8 +454,8 @@ export class FundPostingApplicationService extends FundPostingService {
     rawInput: PostBusinessEventInput,
   ): Promise<FundPostingResult> {
     const request = normalizePostBusinessEventRequest(rawContext, rawInput)
-    // 收款和包装付款必须与各自业务状态共用事务，不能独立动账后再补写状态。
-    if ([SALES_RECEIPT_SOURCE_CODE, PACKAGING_COST_SOURCE_CODE].includes(request.context.sourceCode)) {
+    // 受控业务必须与业务状态共用事务，不能独立动账后再补写状态。
+    if ([SALES_RECEIPT_SOURCE_CODE, PACKAGING_COST_SOURCE_CODE, PURCHASE_PAYMENT_FUND_SOURCE].includes(request.context.sourceCode)) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     try {
@@ -466,7 +479,11 @@ export class FundPostingApplicationService extends FundPostingService {
       && context.consumerCode === (action === 'POST' ? SALES_RECEIPT_APPROVE_CONSUMER_CODE : SALES_RECEIPT_VOID_CONSUMER_CODE)
     const packagingPayment = action === 'POST' && context.sourceCode === PACKAGING_COST_SOURCE_CODE
       && context.consumerCode === PACKAGING_COST_PAY_CONSUMER_CODE
-    if (!salesReceipt && !packagingPayment) {
+    const purchasePayment = context.sourceCode === PURCHASE_PAYMENT_FUND_SOURCE
+      && (action === 'POST'
+        ? [PURCHASE_PAYMENT_PAY_CONSUMER, PURCHASE_PAYMENT_STOCK_PAY_CONSUMER].includes(context.consumerCode)
+        : context.consumerCode === PURCHASE_PAYMENT_VOID_CONSUMER)
+    if (!salesReceipt && !packagingPayment && !purchasePayment) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     return normalizeFundAccountCommandContext({
@@ -477,7 +494,9 @@ export class FundPostingApplicationService extends FundPostingService {
   }
 
   private normalizeBusinessRequest(context: FundBusinessTransactionContext, input: PostBusinessEventInput) {
-    const postingTypeCode = context.sourceCode === PACKAGING_COST_SOURCE_CODE ? 'WOODEN_PACKING_COST' : 'ORDER_SETTLEMENT'
+    const postingTypeCode = context.sourceCode === PURCHASE_PAYMENT_FUND_SOURCE
+      ? PURCHASE_PAYMENT_POSTING_TYPE
+      : context.sourceCode === PACKAGING_COST_SOURCE_CODE ? 'WOODEN_PACKING_COST' : 'ORDER_SETTLEMENT'
     if (input.postingTypeCode !== postingTypeCode) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
@@ -527,7 +546,11 @@ export class FundPostingApplicationService extends FundPostingService {
     input: FundReversalInput,
   ): Promise<FundPostingResult> {
     const actor = this.normalizeBusinessContext(context, 'REVERSE')
-    return this.reverseInTransaction(transaction, actor, normalizeFundReversalRequest(input), true)
+    return this.reverseInTransaction(transaction, actor, normalizeFundReversalRequest(input), {
+      sourceCode: context.sourceCode,
+      consumerCode: context.consumerCode,
+      postingTypeCode: context.sourceCode === PURCHASE_PAYMENT_FUND_SOURCE ? PURCHASE_PAYMENT_POSTING_TYPE : 'ORDER_SETTLEMENT',
+    })
   }
 
   /**
@@ -779,7 +802,7 @@ export class FundPostingApplicationService extends FundPostingService {
     transaction: Prisma.TransactionClient,
     context: FundAccountCommandContext,
     request: NormalizedFundReversalRequest,
-    salesReceipt = false,
+    business?: ControlledBusinessReversal,
   ): Promise<FundPostingResult> {
     await applyTransactionTimeouts(transaction)
     const asOf = await readFundPostingTransactionTimestamp(transaction)
@@ -789,8 +812,13 @@ export class FundPostingApplicationService extends FundPostingService {
         request.input.originalBatchId,
       ),
     )
+    // 采购作废必须由采购域持有业务锁；身份在幂等重放之前也要验证，避免跨域重放。
+    if ((business !== undefined && identity.businessSourceCode !== business.sourceCode)
+      || (business === undefined && identity.businessSourceCode === PURCHASE_PAYMENT_FUND_SOURCE)) {
+      throw postingError(FUND_POSTING_ERROR_CODES.REVERSAL_TARGET_INVALID)
+    }
     const replayInput = {
-      consumerCode: salesReceipt ? SALES_RECEIPT_VOID_CONSUMER_CODE : ADMIN_REVERSAL_CONSUMER_CODE,
+      consumerCode: business?.consumerCode ?? ADMIN_REVERSAL_CONSUMER_CODE,
       sourceCode: identity.businessSourceCode,
       idempotencyKeyHash: request.idempotencyKeyHash,
     } as const
@@ -807,14 +835,16 @@ export class FundPostingApplicationService extends FundPostingService {
       ),
       identity,
     )
-    // 来源固定属于收款域；原批次锁内拒绝通用冲正，不能让账本先于收款作废。
-    if (!salesReceipt && original.businessSourceCode === SALES_RECEIPT_SOURCE_CODE) {
+    // 原批次锁内继续校验业务身份；账本不能先于收款或采购付款作废。
+    if (business === undefined && original.businessSourceCode === SALES_RECEIPT_SOURCE_CODE) {
       throw postingError(FUND_POSTING_ERROR_CODES.REVERSAL_REQUIRES_RECEIPT_VOID)
     }
-    if (salesReceipt && (
-      original.businessSourceCode !== SALES_RECEIPT_SOURCE_CODE
-      || original.postingTypeCode !== 'ORDER_SETTLEMENT'
+    if (business !== undefined && (
+      original.businessSourceCode !== business.sourceCode
+      || original.postingTypeCode !== business.postingTypeCode
       || original.kind !== 'BUSINESS'
+      || (business.sourceCode === PURCHASE_PAYMENT_FUND_SOURCE
+        && (original.businessCategory !== 'COST' || parseFundAmountMinor(original.businessAmount) <= 0n))
     )) {
       throw postingError(FUND_POSTING_ERROR_CODES.REVERSAL_TARGET_INVALID)
     }
@@ -831,7 +861,7 @@ export class FundPostingApplicationService extends FundPostingService {
       original.id,
     )
     requireConsistentReversalHistory(originalEntries)
-    if (salesReceipt && (
+    if (business !== undefined && (
       parseFundAmountMinor(originalEntries.cumulativeReversedBusinessAmount) !== 0n
       || parseFundAmountMinor(request.input.amount) !== parseFundAmountMinor(original.businessAmount)
     )) {
@@ -872,7 +902,7 @@ export class FundPostingApplicationService extends FundPostingService {
       batchNo: batchIdentity.batchNo,
       originalBatchId: original.id,
       businessAmount: plan.reversalBusinessAmount,
-      consumerCode: salesReceipt ? SALES_RECEIPT_VOID_CONSUMER_CODE : ADMIN_REVERSAL_CONSUMER_CODE,
+      consumerCode: business?.consumerCode ?? ADMIN_REVERSAL_CONSUMER_CODE,
       idempotencyKeyHash: request.idempotencyKeyHash,
       requestFingerprintHash: request.requestFingerprintHash,
       reason: request.input.reason,
@@ -986,19 +1016,37 @@ export class FundPostingApplicationService extends FundPostingService {
     )) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
-    requireConditionalUser(postingType, request.input.userId)
+    const stockPurchase = request.context.sourceCode === PURCHASE_PAYMENT_FUND_SOURCE
+      && request.context.consumerCode === PURCHASE_PAYMENT_STOCK_PAY_CONSUMER
+    if (stockPurchase) {
+      if (request.input.userId !== null) {
+        throw postingError(FUND_POSTING_ERROR_CODES.VALIDATION_FAILED, 'userId')
+      }
+      // 备货仍使用已发布的同一分摊规则，仅有效比例固定为 0/100。不能把不兼容
+      // 的配置改写成临时公司规则，否则批次记录的规则版本将与实际计算不一致。
+      const legs = postingType.ruleVersion.legs
+      if (!postingType.requiresUser || legs.length !== 2
+        || !legs.some(leg => leg.accountTarget === 'USER' && leg.amountStrategy === 'USER_SHARE')
+        || !legs.some(leg => leg.accountTarget === 'COMPANY' && leg.amountStrategy === 'COMPANY_REMAINDER')) {
+        throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
+      }
+    }
+    else {
+      requireConditionalUser(postingType, request.input.userId)
+    }
 
     const requireCompanyAccount = postingType.ruleVersion.legs.some(
       leg => leg.accountTarget === 'COMPANY',
     )
+    const requireUserAccount = postingType.requiresUser && !stockPurchase
     const identities = await readFundAccountIdentitiesForPosting(transaction, {
       userId: request.input.userId,
-      requireUserAccount: postingType.requiresUser,
+      requireUserAccount,
       requireCompanyAccount,
     })
     const accountIds = requireAccountIds(
       identities,
-      postingType.requiresUser,
+      requireUserAccount,
       requireCompanyAccount,
     )
     const accounts = await lockFundAccountsForPosting(transaction, accountIds)
@@ -1008,7 +1056,8 @@ export class FundPostingApplicationService extends FundPostingService {
       request.input.userId,
     )
 
-    const userShareRate = targetAccounts.USER?.userShareRate ?? undefined
+    // 不读取或锁定任何用户账户，也不借用付款人的比例；零额 USER 分录由引擎省略。
+    const userShareRate = stockPurchase ? '0.00' : targetAccounts.USER?.userShareRate ?? undefined
     const plan = calculateFundPostingPlan({
       rule: buildRule(postingType),
       amount: request.input.amount,
@@ -1024,7 +1073,7 @@ export class FundPostingApplicationService extends FundPostingService {
     }
     // 包装费用可调整分摊规则，但必须仍是归属人的成本支出，不能变为收入或仅公司业务。
     // 用户比例为零时引擎会省略零额分录，因此按规则分录校验 USER 目标。
-    if (request.context.sourceCode === PACKAGING_COST_SOURCE_CODE && (
+    if ([PACKAGING_COST_SOURCE_CODE, PURCHASE_PAYMENT_FUND_SOURCE].includes(request.context.sourceCode) && (
       postingType.businessCategory !== 'COST'
       || !postingType.requiresUser
       || !postingType.ruleVersion.legs.some(leg => leg.accountTarget === 'USER')
