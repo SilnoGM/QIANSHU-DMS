@@ -40,6 +40,8 @@ export class PurchasePaymentStatementError extends Error {
 }
 
 const WIDTH = 1200
+// A4 竖版按 210:297 保留最小画布；订单超过一页时只增加高度，保持字号和宽度一致。
+const MIN_HEIGHT = Math.ceil(WIDTH * 297 / 210)
 const MARGIN = 48
 const MAX_HEIGHT = 12000
 const MAX_ORDERS = 100
@@ -237,7 +239,7 @@ export async function renderPurchasePaymentStatement(statement: PurchasePaymentS
     const totalHeight = Math.max(...totalCells.map(value => value.lines.length * 30)) + 36
     const note = cell(labels.note, contentWidth, sans(400, 18), 'left', muted)
     const footerY = tableY + headerHeight + groups.reduce((sum, group) => sum + group.height, 0) + totalHeight + 30
-    const height = footerY + note.lines.length * 28 + MARGIN
+    const height = Math.max(MIN_HEIGHT, footerY + note.lines.length * 28 + MARGIN)
     if (height > MAX_HEIGHT) {
       throw new PurchasePaymentStatementError('STATEMENT_TOO_LARGE')
     }
