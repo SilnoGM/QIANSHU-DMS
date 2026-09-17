@@ -149,13 +149,13 @@ onBeforeUnmount(() => emit('lockChange', false))
       </section>
     </section>
 
-    <section :aria-label="t('purchasePayment.recipientInformation')" class="p-5 border-t border-border min-w-0 space-y-5 lg:p-6 xl:border-l xl:border-t-0">
+    <section :aria-label="t('purchasePayment.recipientInformation')" class="p-5 border-t border-border gap-6 grid min-w-0 content-start lg:p-6 xl:border-l xl:border-t-0">
       <h2 class="qs-type-component-title m-0">
         {{ t('purchasePayment.recipientInformation') }}
       </h2>
       <template v-if="payable">
         <FaAlert v-if="!recipientOptions.length" :title="t('purchasePayment.noRecipient')" :description="t('purchasePayment.noRecipientHint')" />
-        <div v-else class="space-y-2">
+        <div v-else class="gap-3 grid">
           <label for="purchase-payment-recipient" class="qs-type-body-medium">{{ t('purchasePayment.paymentMethod') }} <span class="text-destructive">*</span></label>
           <FaSelect id="purchase-payment-recipient" v-model="recipientAccountId" :options="recipientOptions" :disabled="fieldsLocked" :placeholder="t('purchasePayment.choosePaymentMethod')" class="w-full" />
           <p v-if="fieldError === 'recipientAccountId'" role="alert" class="qs-type-meta text-destructive m-0">
