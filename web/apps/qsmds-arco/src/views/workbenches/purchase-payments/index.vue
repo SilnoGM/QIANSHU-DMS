@@ -128,11 +128,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="min-w-0">
-    <FaPageHeader :title="t('workbench.purchasePayments')" :description="t('purchasePayment.intro')">
-      <FaButton v-if="canPay" variant="outline" :loading="loading" @click="load">
-        <FaIcon name="i-lucide:refresh-cw" aria-hidden="true" />{{ t('purchasePayment.refresh') }}
-      </FaButton>
-    </FaPageHeader>
+    <FaPageHeader :title="t('workbench.purchasePayments')" :description="t('purchasePayment.intro')" />
     <FaPageMain class="min-w-0">
       <FaEmpty v-if="!canPay" icon="i-lucide:shield-alert" :title="t('purchasePayment.noPermission')" class="py-12" />
       <QsGenericTable
