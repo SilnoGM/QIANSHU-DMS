@@ -90,7 +90,7 @@ test('打开先读取最新定金尾款，明确选择后复制对应款项链�
   assert.deepEqual(f.copied, [])
   f.state.selectedId.value = 'deposit'
   await f.state.copy()
-  assert.deepEqual(f.copied, ['【采购付款申请】\n\n采购订单：PO/20260916-00016\n供应商：最新供应商\n本次申请支付 [定金]：80.50 元。\n\n付款链接： https://dms.example/dms/#/qs-finance/realtime-payments/purchase-payments/deposit'])
+  assert.deepEqual(f.copied, ['【采购付款申请】\n\n采购订单：PO/20260916-00016\n供应商：最新供应商\n本次申请支付 [定金]：80.50 元。\n\n付款链接：\nhttps://dms.example/dms/#/qs-finance/realtime-payments/purchase-payments/deposit'])
   assert.deepEqual(f.navigation, [])
   assert.equal(f.messages.at(-1), 'purchaseOrderList.payment.copied')
   assert.equal(f.state.visible.value, false)

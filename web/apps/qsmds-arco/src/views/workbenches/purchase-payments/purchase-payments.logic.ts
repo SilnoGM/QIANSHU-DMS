@@ -20,7 +20,7 @@ export function buildPurchasePayableLinkText(order: Pick<PurchaseOrderListItemDt
   const supplierName = order.supplier.label.trim() || '—'
   const paymentType = item.paymentType === 'DEPOSIT' ? '定金' : '尾款'
   const amount = validateMoneyString(item.remainingAmount, { precision: 2 }).normalizedValue
-  return `【采购付款申请】\n\n采购订单：${order.orderNo}\n供应商：${supplierName}\n本次申请支付 [${paymentType}]：${amount} 元。\n\n付款链接： ${new URL(resolvedHref, currentUrl).href}`
+  return `【采购付款申请】\n\n采购订单：${order.orderNo}\n供应商：${supplierName}\n本次申请支付 [${paymentType}]：${amount} 元。\n\n付款链接：\n${new URL(resolvedHref, currentUrl).href}`
 }
 
 export function canPayPurchasePayable(item: PurchasePayableDto): boolean {
