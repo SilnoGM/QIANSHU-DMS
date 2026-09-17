@@ -15,8 +15,9 @@ export function createPurchaseOrderPayablesApi(client: AxiosInstance) {
     getByOrder: (id: string, signal: AbortSignal) => client.get<PurchasePayableOrderDto>(`purchase-order-payables/orders/${encodeURIComponent(id)}`, { errorPresentation: 'local', signal }),
     uploadVoucher: (id: string, file: File, signal: AbortSignal) => {
       const data = new FormData()
-      data.append('file', file)
+      // 流式上传先声明媒体类型，后端收到文件时才能执行对应校验。
       data.append('mediaType', 'IMAGE')
+      data.append('file', file)
       return client.post<PurchasePayableVoucherUploadDto>(`purchase-order-payables/${encodeURIComponent(id)}/voucher-uploads`, data, { errorPresentation: 'local', retry: false, signal })
     },
     voucherContentBlob: (id: string, documentId: string, signal: AbortSignal) => client.get<Blob>(`purchase-order-payables/${encodeURIComponent(id)}/vouchers/${encodeURIComponent(documentId)}/content`, { errorPresentation: 'local', responseType: 'blob', signal }),

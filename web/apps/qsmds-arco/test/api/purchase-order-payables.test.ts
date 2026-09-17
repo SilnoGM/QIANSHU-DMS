@@ -39,6 +39,8 @@ test('付款截图使用付款专用上传和认证 Blob 读取路径', async ()
   await api.uploadVoucher('payable/id', file, signal)
   await api.voucherContentBlob('payable/id', 'document/id', signal)
   assert.equal(calls[0]?.[0], 'purchase-order-payables/payable%2Fid/voucher-uploads')
+  // 后端流式解析要求先读到媒体类型，再接收文件内容。
+  assert.deepEqual([...(calls[0]?.[1] as FormData).keys()], ['mediaType', 'file'])
   assert.equal((calls[0]?.[1] as FormData).get('mediaType'), 'IMAGE')
   assert.equal((calls[0]?.[1] as FormData).get('file'), file)
   assert.deepEqual(calls[0]?.[2], { errorPresentation: 'local', retry: false, signal })
