@@ -55,7 +55,7 @@
       "productUnavailable": "产品信息不可用",
       "noParts": "暂无预定义货件",
       "header": "【{orderNo}】\n供应商：{supplier}\n采购日期：{orderDate}",
-      "productsTitle": "[ 采购产品明细]",
+      "productsTitle": "[采购产品明细]",
       "line": "产品名：{productName}*{quantity}\n金额小计：{unitPrice}*{quantity}={subtotal}",
       "amounts": "总价：{total}\n订金：{deposit}\n尾款：{balance}",
       "shippingTitle": "出货请贴货物唛头：",
