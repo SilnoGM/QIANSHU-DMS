@@ -9,7 +9,7 @@ import { computed, effectScope, reactive, ref, shallowRef, watch } from 'vue'
 import { buildPurchasePayableLinkText, canPayPurchasePayable } from '../../src/views/workbenches/purchase-payments/purchase-payments.logic'
 
 const ROOT = new URL('../../src/views/operations/purchase-orders/', import.meta.url)
-const order = { id: '11111111-1111-4111-8111-111111111111', orderNo: 'PO/20260916-00016', customerName: '客户甲', purchaseType: 'SALES_LINKED', orderStatus: 'CONFIRMED', paymentStatus: 'UNPAID' } as PurchaseOrderListItemDto
+const order = { id: '11111111-1111-4111-8111-111111111111', orderNo: 'PO/20260916-00016', customerName: '客户甲', supplier: { label: '测试供应商' }, purchaseType: 'SALES_LINKED', orderStatus: 'CONFIRMED', paymentStatus: 'UNPAID' } as PurchaseOrderListItemDto
 const payableOrder = { id: order.id, orderNo: order.orderNo, items: [
   { id: 'deposit', paymentType: 'DEPOSIT', status: 'PENDING_PAYMENT', dueAmount: '100.00', remainingAmount: '80.50' },
   { id: 'balance', paymentType: 'BALANCE', status: 'PENDING_PAYMENT', dueAmount: '200.00', remainingAmount: '200.00' },
@@ -80,7 +80,7 @@ async function fixture() {
 test('打开先读取最新定金尾款，明确选择后复制对应款项链接与待付金额，不跳转或付款', async (context) => {
   const f = await fixture()
   context.after(f.dispose)
-  f.setDetail({ ...order, customerName: '最新客户' })
+  f.setDetail({ ...order, supplier: { ...order.supplier, label: '最新供应商' } })
   await f.state.open(order)
   assert.equal(f.state.visible.value, true)
   assert.equal(f.state.selectedId.value, undefined)
@@ -90,7 +90,7 @@ test('打开先读取最新定金尾款，明确选择后复制对应款项链�
   assert.deepEqual(f.copied, [])
   f.state.selectedId.value = 'deposit'
   await f.state.copy()
-  assert.deepEqual(f.copied, ['我需要为【最新客户】的订单【PO/20260916-00016】付【定金】：80.50 元。\n\n付款链接：\nhttps://dms.example/dms/#/qs-finance/realtime-payments/purchase-payments/deposit'])
+  assert.deepEqual(f.copied, ['【采购付款申请】\n\n采购订单：PO/20260916-00016\n供应商：最新供应商\n本次申请支付 [定金]：80.50 元。\n\n付款链接： https://dms.example/dms/#/qs-finance/realtime-payments/purchase-payments/deposit'])
   assert.deepEqual(f.navigation, [])
   assert.equal(f.messages.at(-1), 'purchaseOrderList.payment.copied')
   assert.equal(f.state.visible.value, false)
@@ -100,7 +100,7 @@ test('打开先读取最新定金尾款，明确选择后复制对应款项链�
   assert.equal(f.state.selectedId.value, undefined)
   f.state.selectedId.value = 'balance'
   await f.state.copy()
-  assert.match(f.copied[1]!, /付【尾款】：200\.00 元。/)
+  assert.match(f.copied[1]!, /本次申请支付 \[尾款\]：200\.00 元。/)
   assert.match(f.copied[1]!, /\/balance$/)
 })
 
