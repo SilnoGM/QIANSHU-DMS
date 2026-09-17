@@ -1,3 +1,5 @@
+import type { PaymentRecipientAccountInputDto } from '../payment-recipients/payment-recipient.dto'
+import { normalizePaymentRecipientAccounts } from '../payment-recipients/payment-recipient.normalizer'
 import type {
   PurchaseOrderLineType,
   PurchaseOrderProductMode,
@@ -57,6 +59,7 @@ export interface NormalizedPurchaseOrderCreateCommand {
   readonly salesOrderId: string | null
   readonly supplierValue: string | null
   readonly customSupplierName: string | null
+  readonly paymentAccounts: readonly PaymentRecipientAccountInputDto[]
   readonly orderDate: string
   readonly currencyCode: 'CNY'
   readonly expectedShippingMarkResolution: string
@@ -357,6 +360,7 @@ export function normalizePurchaseOrderCreateCommand(
   input: unknown,
   businessToday: string,
   legacyReplay = false,
+  legacyRecipientsReplay = false,
 ): NormalizedPurchaseOrderCreateCommand {
   const body = requireRecord(input, 'body')
   rejectUnknownKeys(body, [
@@ -365,6 +369,7 @@ export function normalizePurchaseOrderCreateCommand(
     'salesOrderId',
     'supplierValue',
     'customSupplierName',
+    'paymentAccounts',
     'orderDate',
     'expectedShippingMarkResolution',
     'lines',
@@ -381,6 +386,13 @@ export function normalizePurchaseOrderCreateCommand(
   }
   const productMode = normalizeProductMode(body.productMode)
   const supplier = normalizeSupplierSource(body, productMode)
+  // 已提交旧请求可以重放；新请求不得借旧版本绕过本单收款资料。
+  if ((productMode === 'CATALOG' || legacyRecipientsReplay) && body.paymentAccounts !== undefined) {
+    return purchaseOrderValidationFailure('paymentAccounts')
+  }
+  const paymentAccounts = productMode === 'CUSTOM' && !legacyRecipientsReplay
+    ? normalizePaymentRecipientAccounts(body.paymentAccounts, 1)
+    : []
   const salesOrderId = purchaseType === 'SALES_LINKED'
     ? normalizeUuid(body.salesOrderId, 'salesOrderId')
     : null
@@ -420,6 +432,7 @@ export function normalizePurchaseOrderCreateCommand(
     productMode,
     salesOrderId,
     ...supplier,
+    paymentAccounts,
     orderDate,
     currencyCode: 'CNY',
     expectedShippingMarkResolution: body.expectedShippingMarkResolution,

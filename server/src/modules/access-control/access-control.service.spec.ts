@@ -97,8 +97,10 @@ describe('permission constants', () => {
       'packaging-costs:create',
       'packaging-costs:read',
       'packaging-costs:pay',
+      'supplier-payment-profiles:read',
+      'supplier-payment-profiles:update',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 66)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 68)
   })
 })
 

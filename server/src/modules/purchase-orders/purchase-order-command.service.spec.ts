@@ -1,3 +1,4 @@
+import type { PaymentRecipientService } from '../payment-recipients/payment-recipient.service'
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
@@ -114,6 +115,7 @@ function setup() {
     dependencies as unknown as PurchaseOrderCreateDependencyService,
     resolver as unknown as PurchaseShippingMarkResolverService,
     shipmentNumbers as unknown as PurchaseShipmentNumberingService,
+    { createForOrder: jest.fn().mockResolvedValue(undefined) } as unknown as PaymentRecipientService,
     { businessToday: () => '2026-08-27' },
   )
   return {
@@ -162,7 +164,7 @@ describe('PurchaseOrderCommandService', () => {
     await fixture.service.create(context, input())
     expect(fixture.numbering.generateScopedInTransaction).not.toHaveBeenCalled()
     expect(fixture.transaction.purchaseOrder.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ createRequestFingerprintVersion: 'purchase-order.create.v6', shippingMarkText: null, shippingMarkIssuanceId: null }) as unknown,
+      data: expect.objectContaining({ createRequestFingerprintVersion: 'purchase-order.create.v7', shippingMarkText: null, shippingMarkIssuanceId: null }) as unknown,
     }))
     expect(fixture.transaction.purchaseOrderPart.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({
       purchaseOrderId: ORDER_ID, key: ACTOR_ID, partNumber: 1, status: 'PENDING_REVIEW',
@@ -330,6 +332,7 @@ describe('PurchaseOrderCommandService', () => {
       parts: [{ key: ACTOR_ID, items: [{ lineNumber: 1, quantity: 1 }] }],
       purchaseType: 'STOCK',
       productMode: 'CUSTOM',
+      paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: 'Supplier', bankName: 'Bank', bankAccount: '123' }],
       customSupplierName: '礼品供应商',
       orderDate: '2026-08-27',
       expectedShippingMarkResolution: 'a'.repeat(64),

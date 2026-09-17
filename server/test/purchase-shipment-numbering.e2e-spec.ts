@@ -1,8 +1,7 @@
-import { reviewHistoricalPurchase, shipHistoricalPurchase } from './purchase-order-historical-review.fixture'
+import { createHistoricalCustomPurchase, reviewHistoricalPurchase, shipHistoricalPurchase } from './purchase-order-historical-review.fixture'
 import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 
-import type { Prisma } from '../src/generated/prisma/client'
 import { AuditService } from '../src/modules/audit/audit.service'
 import { PurchaseShipmentNumberBackfillService } from '../src/modules/purchase-orders/shipments/purchase-shipment-number-backfill.service'
 import { PurchaseShipmentNumberingService } from '../src/modules/purchase-orders/shipments/purchase-shipment-numbering.service'
@@ -113,20 +112,9 @@ describe('historical shipment numbering migration and backfill', () => {
   it('preserves historical status, marks, allocation and shipment facts; dry-run and reruns do not issue numbers', async () => {
     const fixture = await createAtomicityFixture(false, false, true)
     try {
-      // 在新迁移之前重放此前创建方式：只剔除当时尚不存在的两列，不绕过旧数据库守卫。
-      const generate = jest.spyOn(fixture.numbering, 'generateScopedBatchInTransaction').mockResolvedValue([{ number: 'NOT-PERSISTED', issuanceId: randomUUID(), ruleCode: 'SHIPMENT_NO', ruleRevision: 1, issuedAt: new Date().toISOString(), idempotentReplay: false }])
-      const legacy = createCommands(fixture, transaction => new Proxy(transaction, { get(target, property): unknown {
-        if (property !== 'purchaseOrderPart') return Reflect.get(target, property)
-        return { ...transaction.purchaseOrderPart, createMany: (args: Prisma.PurchaseOrderPartCreateManyArgs) => {
-          const values = Array.isArray(args.data) ? args.data : [args.data]
-          return transaction.purchaseOrderPart.createMany({ ...args, data: values.map(value => {
-            const copied = { ...value }; delete copied.shipmentNo; delete copied.numberingIssuanceId; return copied
-          }) })
-        } }
-      } }))
+      // 按历史列和 v5 指纹创建；编号列迁移尚未执行，不虚构未持久化的派号结果。
       const ids: string[] = []
-      for (let index = 0; index < 3; index += 1) ids.push(await legacy.create(fixture.context(), await customInput(fixture)))
-      generate.mockRestore()
+      for (let index = 0; index < 3; index += 1) ids.push(await createHistoricalCustomPurchase(fixture))
       await reviewHistoricalPurchase(fixture, ids[1])
       await shipHistoricalPurchase(fixture, ids[1])
       await fixture.migrateShipmentNumbers()

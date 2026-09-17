@@ -1,3 +1,5 @@
+import { PaymentRecipientService } from '../../payment-recipients/payment-recipient.service'
+import type { PaymentRecipientAccountDto } from '../../payment-recipients/payment-recipient.dto'
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
@@ -8,25 +10,32 @@ import { payableFailure, summarizePayable } from './purchase-payable.logic'
 const person = { select: { id: true, displayName: true } }
 const include = {
   salesOrder: { select: { orderNo: true } },
-  payables: { include: { owner: person, payments: { where: { voidedAt: null }, include: { createdBy: person }, orderBy: [{ paidAt: 'desc' as const }, { id: 'desc' as const }] } } },
+  payables: { include: { owner: person, payments: { where: { voidedAt: null }, include: { createdBy: person, documents: { where: { detachedAt: null, documentType: 'PAYMENT_VOUCHER' }, take: 1 } }, orderBy: [{ paidAt: 'desc' as const }, { id: 'desc' as const }] } } },
 } satisfies Prisma.PurchaseOrderInclude
 type Order = Prisma.PurchaseOrderGetPayload<{ include: typeof include }>
 @Injectable()
 export class PurchasePayableQueryService {
-  constructor(private readonly prisma: PrismaService, private readonly dictionary: DictionaryLookupService) {}
+  constructor(private readonly prisma: PrismaService, private readonly dictionary: DictionaryLookupService, private readonly recipients: PaymentRecipientService) {}
   private async map(tx: Prisma.TransactionClient, row: Order): Promise<PurchasePayableOrderDto> {
     const payables = [...row.payables].sort((a, b) => a.paymentType === b.paymentType ? 0 : a.paymentType === 'DEPOSIT' ? -1 : 1)
     const owner = payables[0]
     if (!owner || payables.length !== 2) return payableFailure('PURCHASE_PAYABLE_NOT_AVAILABLE', '采购应付款记录不完整，请核对')
     const supplier = row.supplierValue ? await this.dictionary.resolveStoredValueInTransaction(tx, { dictionaryCode: 'service_provider.supplier', value: row.supplierValue }) : null
     return {
+      paymentRecipientProfile: await this.recipients.getForOrder(tx, row),
       id: row.id, orderNo: row.orderNo, orderDate: row.orderDate.toISOString().slice(0, 10), purchaseType: row.purchaseType,
       supplierName: row.customSupplierName ?? (supplier?.known ? supplier.label : row.supplierValue ?? '—'),
       salesOrderNo: row.salesOrder?.orderNo ?? null, purchaseTotalAmount: row.purchaseTotalAmount.toFixed(2), currencyCode: 'CNY',
       accountOwnerType: owner.accountOwnerType, owner: owner.owner ? { id: owner.owner.id, name: owner.owner.displayName } : null,
       items: payables.map(payable => {
         const last = payable.payments[0]
-        return { id: payable.id, paymentType: payable.paymentType as 'DEPOSIT' | 'BALANCE', dueAmount: payable.dueAmount.toFixed(2),
+        const document = last?.documents[0]
+        const recipient = last?.recipientSnapshot as unknown as PaymentRecipientAccountDto | null
+        return { paymentReceipt: last ? { recipient: recipient ?? null, voucher: document ? {
+            id: document.id, mediaAssetId: document.mediaAssetId, title: document.title,
+            contentUrl: `/purchase-order-payables/${payable.id}/vouchers/${document.id}/content`,
+          } : null } : null,
+          id: payable.id, paymentType: payable.paymentType as 'DEPOSIT' | 'BALANCE', dueAmount: payable.dueAmount.toFixed(2),
           ...summarizePayable(payable.dueAmount.toFixed(2), payable.payments.map(payment => payment.amount.toFixed(2)), payable.closedAt !== null),
           version: payable.version, paidAt: last?.paidAt.toISOString() ?? null,
           paidBy: last ? { id: last.createdBy.id, name: last.createdBy.displayName } : null }

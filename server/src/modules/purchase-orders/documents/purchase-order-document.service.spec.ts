@@ -162,6 +162,13 @@ describe('PurchaseOrderDocumentService', () => {
     )
   })
 
+  it('retains a voucher linked to an actual payment', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrderDocument.findFirst.mockResolvedValue({ id: DOCUMENT_ID, documentType: 'PAYMENT_VOUCHER', mediaAssetId: MEDIA_ID, paymentId: 'payment' })
+    await expect(fixture.service.detach(context, ORDER_ID, DOCUMENT_ID)).rejects.toMatchObject({ code: 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE' })
+    expect(fixture.transaction.purchaseOrderDocument.update).not.toHaveBeenCalled()
+  })
+
   it('soft-detaches a payment voucher and preserves the payment record', async () => {
     const fixture = setup()
     await expect(fixture.service.detach(

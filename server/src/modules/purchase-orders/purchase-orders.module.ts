@@ -1,3 +1,5 @@
+import { PurchasePayableVoucherService } from './payables/purchase-payable-voucher.service'
+import { PaymentRecipientsModule } from '../payment-recipients/payment-recipients.module'
 import { FundAccountsModule } from '../fund-accounts/fund-accounts.module'
 import { PurchasePayableService } from './payables/purchase-payable.service'
 import { PurchasePayableQueryService } from './payables/purchase-payable-query.service'
@@ -42,6 +44,7 @@ import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purch
 
 @Module({
   imports: [
+    PaymentRecipientsModule,
     FundAccountsModule,
     PrismaModule,
     AuthModule,
@@ -62,6 +65,7 @@ import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purch
     PurchaseOrderWarehouseReceiptController,
   ],
   providers: [
+    PurchasePayableVoucherService,
     PurchasePayableService,
     PurchasePayableQueryService,
     PurchaseOrderQueryService,

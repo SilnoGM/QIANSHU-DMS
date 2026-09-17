@@ -1,3 +1,5 @@
+import { withDatabaseBusinessClock } from './fixtures/database-business-clock.fixture'
+import { createPaymentRecipientFixture } from './fixtures/payment-recipient.fixture'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -71,7 +73,7 @@ export async function createPackagingCostHarness(options: { nativeImageProbe?: b
       } })
       regions.push(region.id)
     }
-    const query = new PurchaseOrderQueryService(prisma, new DictionaryLookupService(prisma))
+    const query = new PurchaseOrderQueryService(prisma, new DictionaryLookupService(prisma), createPaymentRecipientFixture(prisma))
 
     async function browserWithPermissions(codes = packagingPermissions) {
       const username = `packaging_http_${randomUUID()}`
@@ -114,8 +116,8 @@ export async function createPackagingCostHarness(options: { nativeImageProbe?: b
       await createReviewMutations(fixture).review(fixture.context(), id, await prepareImageReview(fixture, id))
       const order = await prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { parts: true } })
       const partIds = order.parts.map(part => part.id)
-      await new PurchaseOrderFactoryShipmentService(prisma, fixture.audit, fixture.salesProgress, new DictionaryLookupService(prisma))
-        .shipPurchaseOrder(fixture.context(), id, { expectedVersion: order.version, partIds, destinationWarehouses: destinationWarehouses(partIds) })
+      await withDatabaseBusinessClock(fixture.prisma, async () => new PurchaseOrderFactoryShipmentService(prisma, fixture.audit, fixture.salesProgress, new DictionaryLookupService(prisma))
+        .shipPurchaseOrder(fixture.context(), id, { expectedVersion: order.version, partIds, destinationWarehouses: destinationWarehouses(partIds) }))
       if (options.received !== false) {
         await new PurchaseOrderWarehouseReceiptService(prisma, fixture.audit, query)
           .receive(fixture.context(), id, { expectedVersion: (await query.getById(id)).version, partIds })

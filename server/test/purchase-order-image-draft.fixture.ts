@@ -1,3 +1,4 @@
+import { createPaymentRecipientFixture } from './fixtures/payment-recipient.fixture'
 import { mkdtemp, mkdir, open, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -51,7 +52,7 @@ export async function createPurchaseOrderImageFixture(fixture: AtomicityFixture)
   const persistence = new MediaReconciliationPersistence(fixture.prisma)
   const retention = new MediaAssetRetentionService(persistence, references, storage, configuration)
   const lookup = new DictionaryLookupService(fixture.prisma)
-  const query = new PurchaseOrderQueryService(fixture.prisma, lookup)
+  const query = new PurchaseOrderQueryService(fixture.prisma, lookup, createPaymentRecipientFixture(fixture.prisma))
   const png = await sharp({ create: { width: 64, height: 64, channels: 3, background: '#ffffff' } }).png().toBuffer()
   const renderer = { render: jest.fn<Promise<Buffer>, [unknown, unknown]>().mockResolvedValue(png) }
   const buildDrafts = (audit: AuditService = fixture.audit) => new PurchaseOrderImageDraftService(fixture.prisma, query, renderer as unknown as PurchaseOrderImageRenderer, media, delivery, retention, audit)
@@ -59,7 +60,7 @@ export async function createPurchaseOrderImageFixture(fixture: AtomicityFixture)
   const buildMutations = (imageDrafts = drafts, audit: AuditService = fixture.audit) => new PurchaseOrderMutationService(
     fixture.prisma, audit, lookup, media, query, fixture.salesProgress, fixture.numbering, fixture.resolver,
     new PurchaseOrderWarehouseReceiptService(fixture.prisma, audit, query), imageDrafts,
-    new PurchasePayableService(new FundPostingApplicationService(fixture.prisma, audit), fixture.access),
+    new PurchasePayableService(new FundPostingApplicationService(fixture.prisma, audit), fixture.access, createPaymentRecipientFixture(fixture.prisma)),
   )
   return {
     storage, media, delivery, references, retention, query, png, renderer, drafts, buildDrafts, buildMutations,

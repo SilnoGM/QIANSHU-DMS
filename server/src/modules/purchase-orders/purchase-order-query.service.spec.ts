@@ -1,3 +1,4 @@
+import type { PaymentRecipientService } from '../payment-recipients/payment-recipient.service'
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import type { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
 import { PurchaseOrderQueryService } from './purchase-order-query.service'
@@ -175,6 +176,7 @@ function setup() {
   const service = new PurchaseOrderQueryService(
     prisma as unknown as PrismaService,
     dictionaryLookup as unknown as DictionaryLookupService,
+    { getForOrder: jest.fn().mockResolvedValue(null) } as unknown as PaymentRecipientService,
   )
   return { dictionaryLookup, prisma, service }
 }
@@ -771,7 +773,7 @@ describe('PurchaseOrderQueryService status counts', () => {
     } as unknown as PrismaService, {
       resolveStoredValues: jest.fn(),
       resolveStoredValue: jest.fn(),
-    } as unknown as DictionaryLookupService)
+    } as unknown as DictionaryLookupService, { getForOrder: jest.fn().mockResolvedValue(null) } as unknown as PaymentRecipientService)
     return { purchaseOrder, service, transaction }
   }
 

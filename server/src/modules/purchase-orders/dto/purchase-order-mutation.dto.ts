@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import {
   IsEnum,
+  IsDefined,
   IsIn,
   IsInt,
   IsOptional,
@@ -79,6 +80,9 @@ export class PurchaseOrderPaymentVoucherInputDto {
 }
 
 export class PurchaseOrderPaymentRequestDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) @IsUUID('4') recipientAccountId!: string
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER }) @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) recipientProfileVersion!: number
+
   @ApiProperty({ enum: PurchaseOrderPaymentType })
   @IsEnum(PurchaseOrderPaymentType)
   paymentType!: PurchaseOrderPaymentType
@@ -104,13 +108,11 @@ export class PurchaseOrderPaymentRequestDto {
 
   @ApiProperty({
     type: () => PurchaseOrderPaymentVoucherInputDto,
-    nullable: true,
-    required: false,
   })
-  @IsOptional()
+  @IsDefined()
   @ValidateNested()
   @Type(() => PurchaseOrderPaymentVoucherInputDto)
-  voucher?: PurchaseOrderPaymentVoucherInputDto | null
+  voucher!: PurchaseOrderPaymentVoucherInputDto
 }
 
 export class PurchaseOrderPaymentVoidRequestDto {

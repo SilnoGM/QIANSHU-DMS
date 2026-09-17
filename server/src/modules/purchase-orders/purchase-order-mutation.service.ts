@@ -57,7 +57,7 @@ import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-covera
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { NumberingGenerationError } from '../numbering/numbering.errors'
 import { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
-import { PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION, PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION, PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION, PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION } from './purchase-order-create-fingerprint'
+import { PURCHASE_ORDER_CENTS_FINGERPRINT_VERSION, PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION, PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION, PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION, PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION } from './purchase-order-create-fingerprint'
 import { mapShippingMarkGenerationError, PURCHASE_SHIPPING_MARK_CONSUMER, requirePurchaseShippingMark } from './purchase-order-shipping-mark'
 
 const PAYMENT_METHOD_DICTIONARY_CODE = 'payment.method'
@@ -378,7 +378,7 @@ export class PurchaseOrderMutationService {
     // v3/v4 的真实历史派发不可覆盖。v5/v6 在生成审核图片前首次派发。
     if (order.createRequestFingerprintVersion === PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION
       || order.createRequestFingerprintVersion === PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION) return null
-    if ((order.createRequestFingerprintVersion !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION && order.createRequestFingerprintVersion !== PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION)
+    if ((order.createRequestFingerprintVersion !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION && order.createRequestFingerprintVersion !== PURCHASE_ORDER_CENTS_FINGERPRINT_VERSION && order.createRequestFingerprintVersion !== PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION)
       || order.productMode === 'MIXED' || (order.shippingMarkText === null) !== (order.shippingMarkIssuanceId === null) || order._count.parts < 1) {
       throw new ApiException(HttpStatus.CONFLICT, 'PURCHASE_ORDER_STATE_CHANGED', '采购货件或唛头状态已变化，请刷新核对')
     }
@@ -537,13 +537,14 @@ export class PurchaseOrderMutationService {
     const id = requireUuid(rawId, 'id')
     const idempotencyKey = parsePurchaseOrderIdempotencyKey(rawKey)
     const body = requireRecord(input)
-    rejectUnknownKeys(body, ['expectedVersion', 'paymentMethod', 'remark'])
+    rejectUnknownKeys(body, ['expectedVersion', 'paymentMethod', 'remark', 'recipientAccountId', 'recipientProfileVersion', 'voucher'])
     if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) return purchaseOrderValidationFailure('expectedVersion')
     const payable = await this.prisma.purchaseOrderPayable.findUnique({ where: { id } })
     if (!payable) return payableFailure('PURCHASE_PAYABLE_NOT_FOUND', '采购应付款不存在', 404)
     await this.recordPayment(context, payable.purchaseOrderId, {
       paymentType: payable.paymentType, amount: payable.dueAmount.toFixed(2),
       paidAt: this.dependencies.now().toISOString(), paymentMethod: input.paymentMethod, remark: input.remark,
+      recipientAccountId: input.recipientAccountId, recipientProfileVersion: input.recipientProfileVersion, voucher: input.voucher,
     }, { payableId: id, expectedVersion: input.expectedVersion, idempotencyKey })
     return payable.purchaseOrderId
   }
@@ -564,6 +565,8 @@ export class PurchaseOrderMutationService {
       'paymentMethod',
       'remark',
       'voucher',
+      'recipientAccountId',
+      'recipientProfileVersion',
     ])
     if (
       typeof body.paymentType !== 'string'
@@ -583,6 +586,9 @@ export class PurchaseOrderMutationService {
       return purchaseOrderValidationFailure('paymentMethod')
     }
     const remark = optionalText(body.remark, 'remark', 500)
+    const recipientAccountId = requireUuid(body.recipientAccountId, 'recipientAccountId')
+    const recipientProfileVersion = body.recipientProfileVersion
+    if (typeof recipientProfileVersion !== 'number' || !Number.isSafeInteger(recipientProfileVersion) || recipientProfileVersion < 1) return purchaseOrderValidationFailure('recipientProfileVersion')
     const mediaAssetId = body.voucher === undefined || body.voucher === null
       ? null
       : this.normalizeVoucher(body.voucher)
@@ -603,7 +609,7 @@ export class PurchaseOrderMutationService {
           )
         }
         const prepared = await this.payables.preparePayment(transaction, trusted, purchaseOrderId,
-          { paymentType, amount, paidAt, paymentMethod, remark, mediaAssetId }, confirmation)
+          { paymentType, amount, paidAt, paymentMethod, remark, mediaAssetId, recipientAccountId, recipientProfileVersion }, confirmation)
         if (prepared.replay) return
         amount = prepared.amount
         const method = await this.dictionaryLookup.requireEffectiveValue(
@@ -611,12 +617,17 @@ export class PurchaseOrderMutationService {
           { dictionaryCode: PAYMENT_METHOD_DICTIONARY_CODE, value: paymentMethod },
         )
         if (mediaAssetId !== null) {
+          // 临时截图只能消费一次；不同款项并发使用同一图片时，后到者必须重新上传。
+          await transaction.$queryRaw(Prisma.sql`SELECT id FROM media_assets WHERE id = ${mediaAssetId}::uuid FOR UPDATE`)
           const asset = await transaction.mediaAsset.findFirst({
             where: {
               id: mediaAssetId,
               createdByUserId: trusted.actorUserId,
               status: 'UPLOADING',
-              mediaType: { in: ['IMAGE', 'DOCUMENT'] },
+              mediaType: 'IMAGE',
+              uploadPurpose: 'PURCHASE_PAYMENT_VOUCHER',
+              purchasePayableUploadId: prepared.payable!.id,
+              uploadExpiresAt: { gt: now },
               deletedAt: null,
               objectKey: { not: null },
             },

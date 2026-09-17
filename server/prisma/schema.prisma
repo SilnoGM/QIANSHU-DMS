@@ -84,6 +84,7 @@ enum AuditEventType {
   NUMBERING_RULE_DISABLED
   SHIPPING_MARK_BINDING_CREATED
   SHIPPING_MARK_BINDING_UPDATED
+  SUPPLIER_PAYMENT_PROFILE_SAVED
   DICTIONARY_TYPE_CREATED
   DICTIONARY_TYPE_UPDATED
   DICTIONARY_TYPE_ENABLED
@@ -494,6 +495,8 @@ enum FundPostingBatchKind {
 }
 
 model User {
+  paymentRecipientProfilesCreated PaymentRecipientProfile[] @relation("PaymentRecipientProfileCreator")
+  paymentRecipientProfilesUpdated PaymentRecipientProfile[] @relation("PaymentRecipientProfileUpdater")
   purchasePayablesOwned PurchaseOrderPayable[] @relation("PurchasePayableOwner")
   purchasePayablesCreated PurchaseOrderPayable[] @relation("PurchasePayableCreatedBy")
   packagingCostsOwned PackagingCostRequest[] @relation("PackagingCostOwner")
@@ -829,6 +832,13 @@ enum PackagingCostVendor {
 }
 
 model MediaAsset {
+  // 付款截图准备时绑定具体定金/尾款阶段，不能被另一阶段消费。
+  purchasePayableUploadId String? @map("purchase_payable_upload_id") @db.Uuid
+  purchasePayableUpload PurchaseOrderPayable? @relation("PurchasePayableVoucherUpload", fields: [purchasePayableUploadId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "media_assets_purchase_payable_upload_fkey")
+  // 仅专用收款码/付款截图上传标记用途，消费方不能互相复用临时文件。
+  uploadPurpose String? @map("upload_purpose") @db.VarChar(64)
+  paymentRecipientAccounts PaymentRecipientAccount[]
+  paymentRecipientSnapshots PurchaseOrderPayment[] @relation("PurchasePaymentRecipientQr")
   id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   mediaType        MediaType        @map("media_type")
   status           MediaAssetStatus @default(UPLOADING)
@@ -862,6 +872,7 @@ model MediaAsset {
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
   @@index([status, retentionUntil, id], map: "media_assets_status_retention_until_id_idx")
+  @@index([purchasePayableUploadId], map: "media_assets_purchase_payable_upload_idx")
   @@map("media_assets")
 }
 
@@ -1068,12 +1079,13 @@ model SalesOrderAmountRevision {
 }
 
 model PurchaseOrder {
+  paymentRecipientProfile PaymentRecipientProfile?
   packagingCosts PackagingCostRequest[]
   id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   orderNo                      String                         @unique(map: "purchase_orders_order_no_key") @map("order_no") @db.VarChar(64)
   createIdempotencyKeyHash     Bytes                          @unique(map: "purchase_orders_create_idempotency_key_hash_key") @map("create_idempotency_key_hash") @db.ByteA
   createRequestFingerprintHash Bytes                          @map("create_request_fingerprint_hash") @db.ByteA
-  createRequestFingerprintVersion String                     @default("purchase-order.create.v6") @map("create_request_fingerprint_version") @db.VarChar(32)
+  createRequestFingerprintVersion String                     @default("purchase-order.create.v7") @map("create_request_fingerprint_version") @db.VarChar(32)
   partConfigurationSealed      Boolean                        @default(false) @map("part_configuration_sealed")
   purchaseType                 PurchaseOrderType              @map("purchase_type")
   productMode                  PurchaseOrderProductMode       @map("product_mode")
@@ -1208,6 +1220,7 @@ model PurchaseOrderPartItem {
 }
 
 model PurchaseOrderPayable {
+  voucherUploads MediaAsset[] @relation("PurchasePayableVoucherUpload")
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   purchaseOrderId String @map("purchase_order_id") @db.Uuid
   paymentType PurchaseOrderPaymentType @map("payment_type")
@@ -1227,6 +1240,9 @@ model PurchaseOrderPayable {
 }
 
 model PurchaseOrderPayment {
+  recipientSnapshot Json? @map("recipient_snapshot") @db.JsonB
+  recipientQrMediaAssetId String? @map("recipient_qr_media_asset_id") @db.Uuid
+  recipientQrMediaAsset MediaAsset? @relation("PurchasePaymentRecipientQr", fields: [recipientQrMediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   payableId String? @map("payable_id") @db.Uuid
   fundPostingBatchId String? @unique(map: "purchase_order_payments_posting_batch_key") @map("fund_posting_batch_id") @db.Uuid
   fundReversalBatchId String? @unique(map: "purchase_order_payments_reversal_batch_key") @map("fund_reversal_batch_id") @db.Uuid
@@ -1254,6 +1270,7 @@ model PurchaseOrderPayment {
   documents     PurchaseOrderDocument[]
 
   @@index([purchaseOrderId, voidedAt, paidAt(sort: Desc), id(sort: Desc)], map: "purchase_order_payments_order_voided_paid_idx")
+  @@index([recipientQrMediaAssetId], map: "purchase_order_payments_recipient_qr_idx")
   @@map("purchase_order_payments")
 }
 
@@ -1280,6 +1297,42 @@ model PurchaseOrderDocument {
   @@index([mediaAssetId, detachedAt], map: "purchase_order_documents_asset_detached_idx")
   @@index([paymentId, detachedAt], map: "purchase_order_documents_payment_detached_idx")
   @@map("purchase_order_documents")
+}
+
+// 供应商仍是字典稳定 value；自定义供应商资料仅属于本张采购单。
+model PaymentRecipientProfile {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supplierValue String? @unique(map: "payment_recipient_profiles_supplier_key") @map("supplier_value") @db.VarChar(64)
+  purchaseOrderId String? @unique(map: "payment_recipient_profiles_order_key") @map("purchase_order_id") @db.Uuid
+  version Int @default(1)
+  createdByUserId String @map("created_by_user_id") @db.Uuid
+  updatedByUserId String @map("updated_by_user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy User @relation("PaymentRecipientProfileCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedBy User @relation("PaymentRecipientProfileUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  accounts PaymentRecipientAccount[]
+  @@map("payment_recipient_profiles")
+}
+
+model PaymentRecipientAccount {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  profileId String @map("profile_id") @db.Uuid
+  paymentMethod String @map("payment_method") @db.VarChar(64)
+  recipientName String @map("recipient_name") @db.VarChar(128)
+  qrMediaAssetId String? @map("qr_media_asset_id") @db.Uuid
+  bankName String? @map("bank_name") @db.VarChar(128)
+  bankAccount String? @map("bank_account") @db.VarChar(128)
+  bankBranch String? @map("bank_branch") @db.VarChar(128)
+  enabled Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  profile PaymentRecipientProfile @relation(fields: [profileId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  qrMediaAsset MediaAsset? @relation(fields: [qrMediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([profileId, paymentMethod], map: "payment_recipient_accounts_profile_method_key")
+  @@index([qrMediaAssetId], map: "payment_recipient_accounts_qr_asset_idx")
+  @@map("payment_recipient_accounts")
 }
 
 // 采购单图片是独立于正式凭证的持久审核草稿，关闭弹窗不会解除媒体引用。

@@ -1,3 +1,5 @@
+import { PaymentRecipientService } from '../../payment-recipients/payment-recipient.service'
+import type { PaymentRecipientAccountDto } from '../../payment-recipients/payment-recipient.dto'
 import { createHash, randomUUID } from 'node:crypto'
 import { Injectable } from '@nestjs/common'
 import type { Prisma, PurchaseOrderPayment, PurchaseOrderPayable } from '../../../generated/prisma/client'
@@ -12,6 +14,8 @@ import { payableFailure, payableStateChanged, resolvePayableOwner, summarizePaya
 
 export interface PayableConfirmation { readonly payableId: string, readonly expectedVersion: number, readonly idempotencyKey: string }
 export interface PreparedPayablePayment {
+  readonly recipientSnapshot: PaymentRecipientAccountDto | null
+  readonly recipientQrMediaAssetId: string | null
   readonly replay: boolean
   readonly payable: PurchaseOrderPayable | null
   readonly amount: string
@@ -23,7 +27,7 @@ const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(valu
 
 @Injectable()
 export class PurchasePayableService {
-  constructor(private readonly funds: FundPostingService, private readonly access: AccessControlService) {}
+  constructor(private readonly funds: FundPostingService, private readonly access: AccessControlService, private readonly recipients: PaymentRecipientService) {}
 
   async createForReview(tx: Prisma.TransactionClient, context: PurchaseOrderMutationContext, orderId: string): Promise<void> {
     const order = await tx.purchaseOrder.findUniqueOrThrow({ where: { id: orderId }, include: { salesOrder: { select: { issuerUserId: true } } } })
@@ -45,20 +49,21 @@ export class PurchasePayableService {
     if (user?.status !== 'ACTIVE' || !this.access.hasAll(granted, ['purchase-orders:payment'])) return payableFailure('FORBIDDEN', '权限不足', 403)
   }
   async preparePayment(tx: Prisma.TransactionClient, context: PurchaseOrderMutationContext, orderId: string,
-    input: { paymentType: string, amount: string, paymentMethod: string, remark: string | null, paidAt: Date, mediaAssetId: string | null }, confirmation?: PayableConfirmation): Promise<PreparedPayablePayment> {
+    input: { paymentType: string, amount: string, paymentMethod: string, remark: string | null, paidAt: Date, mediaAssetId: string | null, recipientAccountId: string, recipientProfileVersion: number }, confirmation?: PayableConfirmation): Promise<PreparedPayablePayment> {
     await this.authorize(tx, context)
     const idempotencyKeyHash = hash([context.actorUserId, confirmation?.idempotencyKey ?? randomUUID()])
     // 财务页面的付款时间由服务端产生，不进入用户请求指纹；重试不会因时钟推进而改变身份。
     const requestFingerprintHash = hash(confirmation
-      ? { payableId: confirmation.payableId, expectedVersion: confirmation.expectedVersion, paymentMethod: input.paymentMethod, remark: input.remark }
+      ? { payableId: confirmation.payableId, expectedVersion: confirmation.expectedVersion, paymentMethod: input.paymentMethod, remark: input.remark, mediaAssetId: input.mediaAssetId, recipientAccountId: input.recipientAccountId, recipientProfileVersion: input.recipientProfileVersion }
       : { orderId, ...input })
     const previous = await tx.purchaseOrderPayment.findUnique({ where: { idempotencyKeyHash } })
     if (previous) {
       if (!previous.requestFingerprintHash || !Buffer.from(previous.requestFingerprintHash).equals(requestFingerprintHash)) {
         return payableFailure('PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT', '该提交标识已用于不同的付款内容', 409)
       }
-      return { replay: true, payable: null, amount: previous.amount.toFixed(2), paymentId: previous.id, idempotencyKeyHash, requestFingerprintHash }
+      return { recipientSnapshot: null, recipientQrMediaAssetId: null, replay: true, payable: null, amount: previous.amount.toFixed(2), paymentId: previous.id, idempotencyKeyHash, requestFingerprintHash }
     }
+    if (!input.mediaAssetId) return payableFailure('PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', '请先上传付款截图')
     const payable = await tx.purchaseOrderPayable.findFirst({ where: { purchaseOrderId: orderId, paymentType: input.paymentType as 'DEPOSIT' | 'BALANCE' } })
     if (!payable || (confirmation && payable.id !== confirmation.payableId)) return payableFailure('PURCHASE_PAYABLE_NOT_AVAILABLE', '该采购单没有可支付的应付款，请在采购付款页面核对')
     // 所有审核、付款、作废及取消先锁父采购单；无需倒序锁销售单或用户账户。
@@ -67,7 +72,9 @@ export class PurchasePayableService {
     const summary = summarizePayable(payable.dueAmount.toFixed(2), payments.map(payment => payment.amount.toFixed(2)), false)
     if (summary.status !== 'PENDING_PAYMENT') return payableStateChanged()
     if (!confirmation && input.amount !== summary.remainingAmount) return payableFailure('PURCHASE_PAYABLE_NOT_AVAILABLE', '请按该阶段剩余应付金额一次完成付款')
-    return { replay: false, payable, amount: summary.remainingAmount, paymentId: randomUUID(), idempotencyKeyHash, requestFingerprintHash }
+    const order = await tx.purchaseOrder.findUniqueOrThrow({ where: { id: orderId }, select: { id: true, productMode: true, supplierValue: true } })
+    const recipient = await this.recipients.resolveForPayment(tx, order, input)
+    return { recipientSnapshot: recipient.snapshot, recipientQrMediaAssetId: recipient.qrMediaAssetId, replay: false, payable, amount: summary.remainingAmount, paymentId: randomUUID(), idempotencyKeyHash, requestFingerprintHash }
   }
   async postPayment(tx: Prisma.TransactionClient, context: PurchaseOrderMutationContext, prepared: PreparedPayablePayment, orderNo: string) {
     const payable = prepared.payable!
@@ -81,7 +88,7 @@ export class PurchasePayableService {
       const preview = await this.funds.previewBusinessEventInTransaction(tx, fundContext, input)
       const posting = await this.funds.postBusinessEventInTransaction(tx, fundContext, input, preview)
       await tx.purchaseOrderPayable.update({ where: { id: payable.id }, data: { version: { increment: 1 } } })
-      return { id: prepared.paymentId, payableId: payable.id, fundPostingBatchId: posting.batchId,
+      return { recipientSnapshot: prepared.recipientSnapshot as unknown as Prisma.InputJsonObject, recipientQrMediaAssetId: prepared.recipientQrMediaAssetId, id: prepared.paymentId, payableId: payable.id, fundPostingBatchId: posting.batchId,
         idempotencyKeyHash: prepared.idempotencyKeyHash, requestFingerprintHash: prepared.requestFingerprintHash }
     } catch (error) { return this.mapFundError(error) }
   }

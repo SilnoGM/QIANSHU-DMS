@@ -1,3 +1,4 @@
+import { PurchasePayableVoucherService } from './purchase-payable-voucher.service'
 import { Module } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { plainToInstance } from 'class-transformer'
@@ -11,7 +12,7 @@ import { PurchasePayableController } from './purchase-payable.controller'
 import { PurchasePayableQueryService } from './purchase-payable-query.service'
 import { PurchasePayableIdDto, PurchasePayableListQueryDto, PurchasePayablePayDto } from './purchase-payable.dto'
 
-@Module({ controllers: [PurchasePayableController], providers: [PurchasePayableQueryService, PurchaseOrderMutationService].map(provide => ({ provide, useValue: {} })) })
+@Module({ controllers: [PurchasePayableController], providers: [PurchasePayableQueryService, PurchaseOrderMutationService, PurchasePayableVoucherService].map(provide => ({ provide, useValue: {} })) })
 class ContractModule {}
 describe('PurchasePayableController', () => {
   it.each([
@@ -35,12 +36,12 @@ describe('PurchasePayableController', () => {
   })
   it('requires finance payment permission for listing, detail and payment', () => {
     const reflector = new Reflector()
-    for (const method of ['list', 'detail', 'orderDetail', 'pay'] as const) expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PurchasePayableController.prototype[method])).toEqual(['purchase-orders:payment'])
+    for (const method of ['list', 'detail', 'orderDetail', 'pay', 'uploadVoucher', 'voucherContent'] as const) expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PurchasePayableController.prototype[method])).toEqual(['purchase-orders:payment'])
   })
   it('forwards the order link to the exact order lookup without searching the list or interpreting it as a payable', async () => {
     const group = { id: 'order', items: [{ id: 'deposit', paymentType: 'DEPOSIT' }, { id: 'balance', paymentType: 'BALANCE' }] }
     const queries = { getOrder: jest.fn().mockResolvedValue(group), list: jest.fn(), getByPayableId: jest.fn() }
-    const controller = new PurchasePayableController(queries as unknown as PurchasePayableQueryService, {} as PurchaseOrderMutationService)
+    const controller = new PurchasePayableController(queries as unknown as PurchasePayableQueryService, {} as PurchaseOrderMutationService, {} as PurchasePayableVoucherService)
     await expect(controller.orderDetail({ id: 'order' })).resolves.toEqual(group)
     expect(queries.getOrder).toHaveBeenCalledWith('order')
     expect(queries.list).not.toHaveBeenCalled()
@@ -48,7 +49,7 @@ describe('PurchasePayableController', () => {
   })
   it('forwards detail to the exact payable lookup without consulting the outstanding list', async () => {
     const queries = { getByPayableId: jest.fn().mockResolvedValue({ id: 'order', items: [{ id: 'payable', status: 'PAID' }] }), list: jest.fn(), getOrder: jest.fn() }
-    const controller = new PurchasePayableController(queries as unknown as PurchasePayableQueryService, {} as PurchaseOrderMutationService)
+    const controller = new PurchasePayableController(queries as unknown as PurchasePayableQueryService, {} as PurchaseOrderMutationService, {} as PurchasePayableVoucherService)
     await expect(controller.detail({ id: 'payable' })).resolves.toEqual({ id: 'order', items: [{ id: 'payable', status: 'PAID' }] })
     expect(queries.getByPayableId).toHaveBeenCalledWith('payable')
     expect(queries.list).not.toHaveBeenCalled()
@@ -65,15 +66,15 @@ describe('PurchasePayableController', () => {
         { status: 422, codes: expect.arrayContaining(['PURCHASE_PAYABLE_POSTING_UNAVAILABLE']) as unknown },
       ]) as unknown } })
     const schema = document.components?.schemas?.PurchasePayablePayDto
-    expect(schema).toMatchObject({ required: ['expectedVersion', 'paymentMethod'] })
+    expect(schema).toMatchObject({ required: ['recipientAccountId', 'recipientProfileVersion', 'voucher', 'expectedVersion', 'paymentMethod'] })
     expect(schema).not.toHaveProperty('properties.amount')
     expect(schema).not.toHaveProperty('properties.ownerUserId')
   })
   it('validates identifiers and pagination and rejects forged amount or account owner', async () => {
     const options = { whitelist: true, forbidNonWhitelisted: true }
-    expect(await validate(plainToInstance(PurchasePayablePayDto, { expectedVersion: 1, paymentMethod: 'BANK', remark: null }), options)).toEqual([])
+    expect(await validate(plainToInstance(PurchasePayablePayDto, { recipientAccountId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', recipientProfileVersion: 1, voucher: { mediaAssetId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }, expectedVersion: 1, paymentMethod: 'BANK', remark: null }), options)).toEqual([])
     for (const field of ['amount', 'ownerUserId', 'accountOwnerType']) {
-      const errors = await validate(plainToInstance(PurchasePayablePayDto, { expectedVersion: 1, paymentMethod: 'BANK', [field]: 'FORGED' }), options)
+      const errors = await validate(plainToInstance(PurchasePayablePayDto, { recipientAccountId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', recipientProfileVersion: 1, voucher: { mediaAssetId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }, expectedVersion: 1, paymentMethod: 'BANK', [field]: 'FORGED' }), options)
       expect(errors.map(error => error.property)).toContain(field)
     }
     for (const expectedVersion of [0, 1.5, Number.MAX_SAFE_INTEGER + 1]) expect((await validate(plainToInstance(PurchasePayablePayDto, { expectedVersion, paymentMethod: 'BANK' }), options)).length).toBeGreaterThan(0)
@@ -83,12 +84,12 @@ describe('PurchasePayableController', () => {
   it('uses trusted request identity and returns the refreshed complete order group after payment', async () => {
     const queries = { list: jest.fn(), getOrder: jest.fn().mockResolvedValue({ id: 'order', items: [] }) }
     const mutations = { payPayable: jest.fn().mockResolvedValue('order') }
-    const controller = new PurchasePayableController(queries as unknown as PurchasePayableQueryService, mutations as unknown as PurchaseOrderMutationService)
+    const controller = new PurchasePayableController(queries as unknown as PurchasePayableQueryService, mutations as unknown as PurchaseOrderMutationService, {} as PurchasePayableVoucherService)
     const request = {}
     const date = new Date('2026-09-16')
     attachRequestAuthContext(request, { id: 'session', userId: 'finance', username: 'finance', displayName: 'Finance', mustChangePassword: false, createdAt: date, lastActivityAt: date, idleExpiresAt: date, absoluteExpiresAt: date })
     requestIdMiddleware(request, { setHeader: jest.fn() }, jest.fn())
-    const input = { expectedVersion: 1, paymentMethod: 'BANK' }
+    const input = { recipientAccountId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', recipientProfileVersion: 1, voucher: { mediaAssetId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }, expectedVersion: 1, paymentMethod: 'BANK' }
     await expect(controller.pay({ id: 'payable' }, input, 'idempotency-key', request)).resolves.toEqual({ id: 'order', items: [] })
     expect(mutations.payPayable).toHaveBeenCalledWith({ actorUserId: 'finance', requestId: expect.stringMatching(/^req_/) as unknown }, 'payable', input, 'idempotency-key')
     expect(queries.getOrder).toHaveBeenCalledWith('order')

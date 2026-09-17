@@ -1,3 +1,5 @@
+import { withDatabaseBusinessClock } from './fixtures/database-business-clock.fixture'
+import { createPaymentRecipientFixture, paymentRecipientBankAccounts } from './fixtures/payment-recipient.fixture'
 import { destinationWarehouses, ensureDestinationWarehouseDictionary, TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
 import { createImageReviewDraft, createImageReviewService } from './purchase-order-image-review.fixture'
 import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
@@ -224,18 +226,19 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     })).id
 
     const media = {
-      activate: jest.fn((transaction: Prisma.TransactionClient, id: string) => (
-        transaction.mediaAsset.update({
+      activate: jest.fn(async (transaction: Prisma.TransactionClient, id: string) => {
+        const asset = await transaction.mediaAsset.findUniqueOrThrow({ where: { id }, select: { mediaType: true } })
+        return transaction.mediaAsset.update({
           where: { id },
           data: {
             status: 'READY',
-            mimeType: 'application/pdf',
+            mimeType: asset.mediaType === 'IMAGE' ? 'image/png' : 'application/pdf',
             sizeBytes: 1n,
             checksumSha256: '0'.repeat(64),
             uploadExpiresAt: null,
           },
         }).then(() => undefined)
-      )),
+      }),
     } as unknown as MediaAssetService
     const salesQuery = new SalesOrderQueryService(prisma)
     const salesCommands = new SalesOrderCommandService(
@@ -367,7 +370,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         idempotentReplay: false,
       })),
     } as unknown as NumberingGeneratorService
-    queries = new PurchaseOrderQueryService(prisma, dictionaryLookup)
+    queries = new PurchaseOrderQueryService(prisma, dictionaryLookup, createPaymentRecipientFixture(prisma))
     sourceQueries = new PurchaseOrderSourceQueryService(prisma, dictionaryLookup)
     productEdits = new SalesOrderProductEditService(prisma, new AuditService())
     productEditQueries = new SalesOrderProductEditQueryService(prisma)
@@ -386,7 +389,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       new AuditService(),
       new PurchaseOrderCreateDependencyService(dictionaryLookup, accessControl),
       markResolver,
-      new PurchaseShipmentNumberingService(numbering),
+      new PurchaseShipmentNumberingService(numbering), createPaymentRecipientFixture(prisma),
       { businessToday: () => '2026-08-27' },
     )
     factoryShipments = new PurchaseOrderFactoryShipmentService(
@@ -409,7 +412,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       new PurchasePayableService(new FundPostingApplicationService(prisma, new AuditService()), {
         getPermissionCodesInTransaction: () => Promise.resolve(['purchase-orders:payment']),
         hasAll: (granted: readonly string[], required: readonly string[]) => required.every(code => granted.includes(code)),
-      } as unknown as AccessControlService),
+      } as unknown as AccessControlService, createPaymentRecipientFixture(prisma)),
       { now: () => new Date('2026-08-27T12:00:00.000Z') },
     )
   })
@@ -425,6 +428,22 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       idempotencyKey,
       requestId: `purchase-e2e-${randomUUID()}`,
     }
+  }
+
+  async function paymentRecipientContext(orderId: string) {
+    const profile = await prisma.paymentRecipientProfile.findUniqueOrThrow({ where: { purchaseOrderId: orderId }, include: { accounts: true } })
+    return { recipientAccountId: profile.accounts[0].id, recipientProfileVersion: profile.version }
+  }
+
+  async function paymentVoucherInput(orderId: string, paymentType: 'DEPOSIT' | 'BALANCE' = 'DEPOSIT') {
+    const payable = await prisma.purchaseOrderPayable.findFirst({ where: { purchaseOrderId: orderId, paymentType }, select: { id: true } })
+    const asset = await prisma.mediaAsset.create({ data: {
+      mediaType: 'IMAGE', uploadPurpose: 'PURCHASE_PAYMENT_VOUCHER', status: 'UPLOADING', purchasePayableUploadId: payable?.id ?? null,
+      objectKey: `assets/purchase-service-payment-${randomUUID()}.png`, originalFilename: 'payment.png',
+      mimeType: 'image/png', sizeBytes: 1n, checksumSha256: '0'.repeat(64), width: 1, height: 1,
+      uploadExpiresAt: new Date('2099-01-01T00:00:00.000Z'), createdByUserId: actorUserId,
+    } })
+    return { ...await paymentRecipientContext(orderId), voucher: { mediaAssetId: asset.id } }
   }
 
   async function imageReviewInput(id: string) {
@@ -466,6 +485,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       expectedShippingMarkResolution: customResolution,
       salesOrderId,
       customSupplierName: 'E2E 临时供应商',
+      paymentAccounts: paymentRecipientBankAccounts(),
       orderDate: '2026-08-27',
       lines: [{
         lineType: 'CUSTOM',
@@ -532,6 +552,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       purchaseType: 'STOCK',
       productMode: 'CUSTOM',
       customSupplierName: 'E2E 备货供应商',
+      paymentAccounts: paymentRecipientBankAccounts(),
       orderDate: '2026-08-27',
       expectedShippingMarkResolution: customResolution,
       lines: [{
@@ -582,6 +603,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     }
     await expect(mutations.recordPayment(context(), createdId, {
       paymentType: 'DEPOSIT', amount: '10', paidAt: '2026-08-27T10:00:00.000Z', paymentMethod: 'BANK_TRANSFER',
+      ...await paymentVoucherInput(createdId),
     })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
     await expect(mutations.updateFulfillmentStatus(context(), createdId, { toStatus: 'PREPARING' }))
       .rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
@@ -618,6 +640,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       amount: '10',
       paidAt: '2026-08-27T10:00:00.000Z',
       paymentMethod: 'BANK_TRANSFER',
+      ...await paymentVoucherInput(createdId),
     })
     const paid = await mutations.recordPayment({
       actorUserId, requestId: `purchase-balance-${suffix}`,
@@ -626,6 +649,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       amount: '15',
       paidAt: '2026-08-27T11:00:00.000Z',
       paymentMethod: 'BANK_TRANSFER',
+      ...await paymentVoucherInput(createdId, 'BALANCE'),
     })
     expect(paid).toMatchObject({
       paymentStatus: 'PAID',
@@ -641,7 +665,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     expect(paidPage.items[0]).toMatchObject({
       id: createdId, paidAmount: '25.00',
       paymentRecordSummary: paid.paymentRecordSummary,
-      documentSummary: { count: 1 },
+      documentSummary: { count: 3 },
       changeSummary: paid.changeSummary,
     })
     expect(paidPage.items[0]?.changeSummary.latest?.kind).toBe('STATUS')
@@ -652,9 +676,9 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       actorUserId, requestId: `purchase-cancel-paid-${suffix}`,
     }, createdId, { toStatus: 'CANCELLED' }))
       .rejects.toMatchObject({ code: 'PURCHASE_ORDER_CANCEL_HAS_PAYMENTS' })
-    await factoryShipments.shipPurchaseOrder({
+    await withDatabaseBusinessClock(prisma, () => factoryShipments.shipPurchaseOrder({
       actorUserId, requestId: `purchase-SHIPPED-${suffix}`,
-    }, createdId, { expectedVersion: paid.version, partIds: paid.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(paid.parts.map(part => part.id)) })
+    }, createdId, { expectedVersion: paid.version, partIds: paid.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(paid.parts.map(part => part.id)) }))
     await mutations.updateFulfillmentStatus({
       actorUserId, requestId: `purchase-SIGNED-${suffix}`,
     }, createdId, { toStatus: 'SIGNED' })
@@ -692,6 +716,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     const orderId = await commands.create(context(), {
       parts: [{ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] }],
       purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: '凭证命名测试供应商',
+      paymentAccounts: paymentRecipientBankAccounts(),
       expectedShippingMarkResolution: customResolution,
       orderDate: '2026-08-27',
       lines: [{
@@ -705,11 +730,13 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     for (const [paymentType, label, amount] of [
       ['DEPOSIT', '定金凭证', '30'], ['BALANCE', '尾款凭证', '70'],
     ] as const) {
-      const originalFilename = `original-${paymentType}.pdf`
+      const originalFilename = `original-${paymentType}.png`
+      const payable = await prisma.purchaseOrderPayable.findFirstOrThrow({ where: { purchaseOrderId: orderId, paymentType }, select: { id: true } })
       const asset = await prisma.mediaAsset.create({
         data: {
-          mediaType: 'DOCUMENT', status: 'UPLOADING', originalFilename,
-          objectKey: `assets/purchase-voucher-${suffix}-${paymentType}.pdf`,
+          mediaType: 'IMAGE', uploadPurpose: 'PURCHASE_PAYMENT_VOUCHER', status: 'UPLOADING', originalFilename, purchasePayableUploadId: payable.id,
+          mimeType: 'image/png', sizeBytes: 1n, checksumSha256: '0'.repeat(64), width: 1, height: 1,
+          objectKey: `assets/purchase-voucher-${suffix}-${paymentType}.png`,
           uploadExpiresAt: new Date('2099-01-01T00:00:00.000Z'), createdByUserId: actorUserId,
         },
         select: { id: true },
@@ -718,6 +745,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       const input = {
         paymentType, amount, paidAt: '2026-08-27T11:00:00.000Z',
         paymentMethod: 'BANK_TRANSFER', voucher: { mediaAssetId: asset.id },
+        ...await paymentRecipientContext(orderId),
       }
       const detail = await mutations.recordPayment(context(), orderId, input)
       expect(detail.documents.find(document => document.mediaAssetId === asset.id))
@@ -1356,14 +1384,14 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     expect(salesShippedParts.length).toBeGreaterThan(0)
     expect(salesShippedParts.every(part => part.destinationWarehouseValue === TEST_DESTINATION_WAREHOUSE)).toBe(true)
 
-    const completed = await factoryShipments.shipPurchaseOrder({
+    const completed = await withDatabaseBusinessClock(prisma, () => factoryShipments.shipPurchaseOrder({
       actorUserId,
       requestId: `purchase-factory-final-${suffix}`,
     }, finalTarget.id, {
       expectedVersion: finalTarget.version,
       partIds: finalTarget.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(finalTarget.parts.map(part => part.id)),
       reason: 'E2E 最后一张采购发货',
-    })
+    }))
     expect(completed).toMatchObject({
       changedPurchaseOrderCount: 1,
       remainingPendingShipmentCount: 0,

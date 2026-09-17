@@ -1,3 +1,4 @@
+import { paymentRecipientBankAccounts } from './fixtures/payment-recipient.fixture'
 import { randomUUID } from 'node:crypto'
 
 import { type INestApplication, Module } from '@nestjs/common'
@@ -318,7 +319,7 @@ describe('PurchaseOrder HTTP API contract', () => {
     const payload = {
       purchaseType: 'STOCK',
       productMode: 'CUSTOM',
-      customSupplierName: 'Records Supplier',
+      customSupplierName: 'Records Supplier', paymentAccounts: paymentRecipientBankAccounts(),
       expectedShippingMarkResolution: RESOLUTION_TOKEN,
       orderDate: '2026-08-27',
       lines: [{
@@ -363,7 +364,7 @@ describe('PurchaseOrder HTTP API contract', () => {
 
   it('accepts 1000 two-item parts over 100 KiB only on purchase creation and keeps a fixed 1 MiB boundary', async () => {
     const line = { lineType: 'CUSTOM', name: 'Item', referencePurchaseUnitPriceAmount: '1', actualPurchaseUnitPriceAmount: '1', quantity: 1000 }
-    const payload = { purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: 'Capacity supplier',
+    const payload = { purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: 'Capacity supplier', paymentAccounts: paymentRecipientBankAccounts(),
       expectedShippingMarkResolution: RESOLUTION_TOKEN, orderDate: '2026-08-27',
       lines: [line, line], parts: Array.from({ length: 1000 }, () => ({ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }, { lineNumber: 2, quantity: 1 }] })),
       purchaseTotalAmount: '2000', depositDueAmount: '0', balanceDueAmount: '2000',
@@ -417,7 +418,7 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
   const mutationHeaders = { Origin: 'http://127.0.0.1:9000', 'X-Qianshu-CSRF': '1', 'Sec-Fetch-Site': 'same-origin' }
   const payload = {
     purchaseType: 'SALES_LINKED', productMode: 'CUSTOM', salesOrderId: SALES_ORDER_ID,
-    customSupplierName: 'Permission Supplier', orderDate: '2026-08-27',
+    customSupplierName: 'Permission Supplier', paymentAccounts: paymentRecipientBankAccounts(), orderDate: '2026-08-27',
     expectedShippingMarkResolution: RESOLUTION_TOKEN,
     lines: [{ lineType: 'CUSTOM', sourceSalesOrderLineId: SALES_ORDER_LINE_ID, referencePurchaseUnitPriceAmount: '10', actualPurchaseUnitPriceAmount: '10', quantity: 1 }],
     purchaseTotalAmount: '10', depositDueAmount: '0', balanceDueAmount: '10',

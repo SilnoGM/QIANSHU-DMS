@@ -1,3 +1,5 @@
+import { createPaymentRecipientFixture } from './fixtures/payment-recipient.fixture'
+import type { PurchasePayablePayDto } from '../src/modules/purchase-orders/payables/purchase-payable.dto'
 import { randomBytes, randomUUID } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import { readPersistenceErrorFacts } from '../src/infrastructure/database/persistence-error-facts'
@@ -18,12 +20,9 @@ describe('Purchase payables with isolated PostgreSQL', () => {
     h = await createAtomicityFixture()
     const user = await h.prisma.user.create({ data: { username: 'purchase-finance', usernameNormalized: 'purchase-finance', displayName: 'Purchase finance', passwordHash: 'isolated-test-only', passwordChangedAt: new Date() } })
     payerId = user.id
-    const methodType = await h.prisma.dictionaryType.create({ data: { code: 'payment.method', name: '付款方式', enabled: false } })
-    const method = await h.prisma.dictionaryItem.create({ data: { dictionaryTypeId: methodType.id, value: 'PURCHASE_TEST_BANK', label: 'Purchase test bank', enabled: true } })
-    await h.prisma.dictionaryType.update({ where: { id: methodType.id }, data: { enabled: true } })
-    paymentMethod = method.value
+    paymentMethod = 'BANK_TRANSFER'
     await new FundAccountCommandService(h.prisma, h.audit).createUserAccount({ actorUserId: h.actor.id, requestId: randomUUID() }, { userId: h.actor.id, userShareRate: '30' })
-    queries = new PurchasePayableQueryService(h.prisma, new DictionaryLookupService(h.prisma))
+    queries = new PurchasePayableQueryService(h.prisma, new DictionaryLookupService(h.prisma), createPaymentRecipientFixture(h.prisma))
   })
   afterAll(async () => { await h?.dispose() })
   const finance = () => ({ actorUserId: payerId, requestId: randomUUID() })
@@ -35,7 +34,23 @@ describe('Purchase payables with isolated PostgreSQL', () => {
     await createReviewMutations(h).review(h.context(), id, await prepareImageReview(h, id))
     return queries.getOrder(id)
   }
-  const pay = (id: string, expectedVersion = 1, key = randomUUID()) => createReviewMutations(h).payPayable(finance(), id, { expectedVersion, paymentMethod }, key)
+  async function paymentInput(id: string, expectedVersion = 1): Promise<PurchasePayablePayDto> {
+    const order = await queries.getByPayableId(id)
+    const profile = order.paymentRecipientProfile!
+    const image = await h.prisma.mediaAsset.create({ data: {
+      mediaType: 'IMAGE', status: 'UPLOADING', uploadPurpose: 'PURCHASE_PAYMENT_VOUCHER', purchasePayableUploadId: id,
+      objectKey: `assets/${randomUUID()}.png`, originalFilename: 'payment.png', mimeType: 'image/png',
+      sizeBytes: 1n, checksumSha256: '0'.repeat(64), width: 1, height: 1, createdByUserId: payerId,
+      uploadExpiresAt: new Date(Date.now() + 3_600_000),
+    } })
+    return { expectedVersion, paymentMethod, recipientAccountId: profile.accounts[0].id, recipientProfileVersion: profile.version, voucher: { mediaAssetId: image.id } }
+  }
+  // 同一 key 的并发/未知结果重试必须复用原截图与收款版本，验证真实幂等语义。
+  const submissions = new Map<string, Promise<PurchasePayablePayDto>>()
+  async function pay(id: string, expectedVersion = 1, key = randomUUID()) {
+    if (!submissions.has(key)) submissions.set(key, paymentInput(id, expectedVersion))
+    return createReviewMutations(h).payPayable(finance(), id, await submissions.get(key)!, key)
+  }
   async function expectDatabaseConstraint(action: Promise<unknown>) {
     const result = await action.then(() => null, (error: unknown) => error)
     // 证明由数据库业务约束拒绝，而不是拼错委托、外键或测试客户端异常造成假阳性。
@@ -236,14 +251,50 @@ describe('Purchase payables with isolated PostgreSQL', () => {
       } }
       return Reflect.get(target, property, receiver) as unknown
     } }))
-    await expect(mutations.payPayable(finance(), group.items[0].id, { expectedVersion: 1, paymentMethod }, randomUUID())).rejects.toMatchObject({ code: 'AUDIT_WRITE_FAILED' })
+    await expect(mutations.payPayable(finance(), group.items[0].id, await paymentInput(group.items[0].id), randomUUID())).rejects.toMatchObject({ code: 'AUDIT_WRITE_FAILED' })
     expect(observedPosting).toBe(true)
     expect(await financialFacts(group.id)).toEqual(before)
   })
 
+  it('requires an owned payment screenshot and the current recipient before posting, and archives the exact image', async () => {
+    const group = await reviewed(), id = group.items[0].id
+    const input = await paymentInput(id)
+    const before = await financialFacts(group.id)
+    const mutations = createReviewMutations(h)
+    await expect(mutations.payPayable(finance(), id, { ...input, voucher: null } as unknown as PurchasePayablePayDto, randomUUID())).rejects.toMatchObject({ code: 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE' })
+    await expect(mutations.payPayable(finance(), id, { ...input, recipientProfileVersion: 99 }, randomUUID())).rejects.toMatchObject({ code: 'PAYMENT_RECIPIENT_STATE_CHANGED' })
+    await expect(mutations.payPayable(finance(), id, { ...input, recipientAccountId: randomUUID() }, randomUUID())).rejects.toMatchObject({ code: 'PAYMENT_RECIPIENT_UNAVAILABLE' })
+    await expect(mutations.payPayable(finance(), group.items[1].id, input, randomUUID())).rejects.toMatchObject({ code: 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE' })
+    expect(await financialFacts(group.id)).toEqual(before)
+    const key = randomUUID()
+    await mutations.payPayable(finance(), id, input, key)
+    const paid = (await queries.getByPayableId(id)).items[0]
+    expect(paid.paymentReceipt).toMatchObject({ recipient: group.paymentRecipientProfile!.accounts[0], voucher: { mediaAssetId: input.voucher.mediaAssetId } })
+    const document = await h.prisma.purchaseOrderDocument.findUniqueOrThrow({ where: { id: paid.paymentReceipt!.voucher!.id } })
+    expect(document).toMatchObject({ purchaseOrderId: group.id, documentType: 'PAYMENT_VOUCHER', detachedAt: null })
+    expect((await h.prisma.mediaAsset.findUniqueOrThrow({ where: { id: input.voucher.mediaAssetId } })).status).toBe('READY')
+    await expect(mutations.payPayable(finance(), id, input, key)).resolves.toBe(group.id)
+    await expect(mutations.payPayable(finance(), id, { ...input, voucher: { mediaAssetId: randomUUID() } }, key)).rejects.toMatchObject({ code: 'PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT' })
+    await expectDatabaseConstraint(h.prisma.purchaseOrderDocument.update({ where: { id: document.id }, data: { detachedAt: new Date(), detachedByUserId: payerId } }))
+  })
+
+  it('rolls back the complete payment if its screenshot is not archived at commit', async () => {
+    const group = await reviewed(), input = await paymentInput(group.items[0].id)
+    const before = await financialFacts(group.id)
+    const mutations = createReviewMutations(h, tx => new Proxy(tx, { get(target, property, receiver) {
+      if (property === 'purchaseOrderDocument') return { ...target.purchaseOrderDocument, create: () => Promise.resolve({ id: randomUUID() }) }
+      return Reflect.get(target, property, receiver) as unknown
+    } }))
+    await expectDatabaseConstraint(mutations.payPayable(finance(), group.items[0].id, input, randomUUID()))
+    expect(await financialFacts(group.id)).toEqual(before)
+    expect((await h.prisma.mediaAsset.findUniqueOrThrow({ where: { id: input.voucher.mediaAssetId } })).status).toBe('UPLOADING')
+  })
+
   it('constrains the old payment endpoint to exactly the outstanding stage', async () => {
     const group = await reviewed()
-    const input = { paidAt: new Date().toISOString(), paymentMethod, paymentType: 'DEPOSIT', amount: '2.00' }
+    const { expectedVersion: _version, ...recipient } = await paymentInput(group.items[0].id)
+    void _version
+    const input = { ...recipient, paidAt: new Date().toISOString(), paymentType: 'DEPOSIT', amount: '2.00' }
     await expect(createReviewMutations(h).recordPayment(finance(), group.id, input)).rejects.toMatchObject({ code: 'PURCHASE_PAYABLE_NOT_AVAILABLE' })
     await expect(createReviewMutations(h).recordPayment(finance(), group.id, { ...input, paymentType: 'OTHER' })).rejects.toMatchObject({ code: 'PURCHASE_PAYABLE_NOT_AVAILABLE' })
     await createReviewMutations(h).recordPayment(finance(), group.id, { ...input, amount: '3.00' })
@@ -281,6 +332,7 @@ describe('Purchase payables with isolated PostgreSQL', () => {
     const group = await reviewed()
     const before = await financialFacts(group.id)
     const funds = new FundPostingApplicationService(h.prisma, h.audit)
+    const recipientSnapshot = group.paymentRecipientProfile!.accounts[0]
     await expectDatabaseConstraint(h.prisma.$transaction(async tx => {
       const paymentId = randomUUID()
       const context = { ...finance(), sourceCode: 'PURCHASE_PAYMENT', consumerCode: 'PURCHASE_PAYMENT.STOCK_PAY' }
@@ -288,6 +340,7 @@ describe('Purchase payables with isolated PostgreSQL', () => {
       const preview = await funds.previewBusinessEventInTransaction(tx, context, input)
       const batch = await funds.postBusinessEventInTransaction(tx, context, input, preview)
       await tx.purchaseOrderPayment.create({ data: {
+        recipientSnapshot: recipientSnapshot as unknown as Prisma.InputJsonObject,
         id: paymentId, purchaseOrderId: group.id, payableId: group.items[0].id,
         fundPostingBatchId: batch.batchId, idempotencyKeyHash: randomBytes(32), requestFingerprintHash: randomBytes(32),
         paymentType: forged === 'stage' ? 'BALANCE' : 'DEPOSIT', amount: forged === 'amount' ? '2.00' : '3.00',

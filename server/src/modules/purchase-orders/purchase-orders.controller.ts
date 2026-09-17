@@ -462,6 +462,7 @@ export class PurchaseOrdersController {
         'PURCHASE_ORDER_STATE_CHANGED',
       ] },
       { status: 422, codes: [
+        'PAYMENT_RECIPIENT_INVALID', 'PAYMENT_RECIPIENT_IMAGE_UNAVAILABLE',
         'PURCHASE_ORDER_CURRENCY_UNAVAILABLE',
         'PURCHASE_ORDER_CUSTOM_PRICES_INVALID',
         'PURCHASE_ORDER_CUSTOM_SUPPLIER_INVALID',
@@ -480,6 +481,7 @@ export class PurchaseOrdersController {
         'PURCHASE_ORDER_TOTAL_MISMATCH',
         'VALIDATION_FAILED',
       ] },
+      { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },
     ],
   })
   async create(
@@ -627,9 +629,10 @@ export class PurchaseOrdersController {
     resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
     errors: [
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
-      { status: 409, codes: ['PURCHASE_PAYABLE_STATE_CHANGED', 'PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT'] },
+      { status: 409, codes: ['PURCHASE_PAYABLE_STATE_CHANGED', 'PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT', 'PAYMENT_RECIPIENT_STATE_CHANGED'] },
       { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] },
       { status: 422, codes: [
+        'PAYMENT_RECIPIENT_UNAVAILABLE', 'PAYMENT_RECIPIENT_IMAGE_UNAVAILABLE',
         'PURCHASE_PAYABLE_NOT_AVAILABLE', 'PURCHASE_PAYABLE_POSTING_UNAVAILABLE',
         'PURCHASE_ORDER_CANCELLED',
         'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE',

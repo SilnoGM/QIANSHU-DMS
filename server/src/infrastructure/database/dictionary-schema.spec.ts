@@ -267,7 +267,8 @@ describe('dictionary management database schema', () => {
     }
     // 产品、资金、销售订单、销售加购与采购订单领域会在后续 append-only migration 扩展审计类型；
     // 字典测试锁定当前全量基线，同时只要求字典 migration 对自身八个类型负责。
-    expect(auditEventTypes).toHaveLength(84)
+    expect(auditEventTypes).toHaveLength(85)
+    expect(auditEventTypes).toContain('SUPPLIER_PAYMENT_PROFILE_SAVED')
     expect(auditEventTypes).toEqual(expect.arrayContaining(['PACKAGING_COST_SUBMITTED', 'PACKAGING_COST_PAID']))
     expect(auditEventTypes).toContain('PURCHASE_SHIPMENT_NUMBER_ASSIGNED')
     expect(auditEventTypes.filter(eventType => eventType.startsWith('SHIPPING_MARK_BINDING_'))).toEqual([

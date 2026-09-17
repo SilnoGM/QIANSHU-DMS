@@ -8,7 +8,8 @@ import {
 } from './purchase-order-command.normalizer'
 
 export const PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION =
-  'purchase-order.create.v6' as const
+  'purchase-order.create.v7' as const
+export const PURCHASE_ORDER_CENTS_FINGERPRINT_VERSION = 'purchase-order.create.v6' as const
 export const PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION = 'purchase-order.create.v3' as const
 export const PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION = 'purchase-order.create.v4' as const
 export const PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION = 'purchase-order.create.v5' as const
@@ -22,7 +23,7 @@ function serializePurchaseOrderCreateFingerprint(
   version: string,
 ): string {
   // 已提交 v3/v4/v5 身份按原四位字节恢复，不能用 v6 两位格式重写永久指纹。
-  const amount = (value: string) => version === PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION
+  const amount = (value: string) => (version === PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION || version === PURCHASE_ORDER_CENTS_FINGERPRINT_VERSION)
     ? value
     : normalizePurchaseOrderSnapshotAmount(value)
   // 逐字段构造稳定序列，避免对象 key 顺序或未来非业务字段影响幂等语义。
@@ -37,6 +38,7 @@ function serializePurchaseOrderCreateFingerprint(
       salesOrderId: payload.salesOrderId,
       supplierValue: payload.supplierValue,
       customSupplierName: payload.customSupplierName,
+      ...(version === PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION ? { paymentAccounts: payload.paymentAccounts } : {}),
       orderDate: payload.orderDate,
       currencyCode: payload.currencyCode,
       expectedShippingMarkResolution: payload.expectedShippingMarkResolution,

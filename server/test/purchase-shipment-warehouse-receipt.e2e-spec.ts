@@ -1,6 +1,8 @@
+import { withDatabaseBusinessClock } from './fixtures/database-business-clock.fixture'
+import { createPaymentRecipientFixture, createPaymentVoucherFixture } from './fixtures/payment-recipient.fixture'
 import { destinationWarehouses, TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
 import { prepareImageReview } from './purchase-shipping-mark-atomicity.fixture'
-import { reviewHistoricalPurchase, shipHistoricalPurchase } from './purchase-order-historical-review.fixture'
+import { createHistoricalCustomPurchase, reviewHistoricalPurchase, shipHistoricalPurchase } from './purchase-order-historical-review.fixture'
 import { randomUUID } from 'node:crypto'
 
 import { Prisma } from '../src/generated/prisma/client'
@@ -12,7 +14,7 @@ import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-or
 import { createAtomicityFixture, createCommands, createReviewMutations, customInput, type AtomicityFixture } from './purchase-shipping-mark-atomicity.fixture'
 
 function receiptService(fixture: AtomicityFixture, audit = fixture.audit) {
-  return new PurchaseOrderWarehouseReceiptService(fixture.prisma, audit, new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma)))
+  return new PurchaseOrderWarehouseReceiptService(fixture.prisma, audit, new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma), createPaymentRecipientFixture(fixture.prisma)))
 }
 
 async function prepare(fixture: AtomicityFixture, count = 3) {
@@ -28,7 +30,7 @@ async function prepare(fixture: AtomicityFixture, count = 3) {
 
 async function ship(fixture: AtomicityFixture, id: string, partIds: string[]) {
   const order = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id } })
-  await new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress, new DictionaryLookupService(fixture.prisma)).shipPurchaseOrder(fixture.context(), id, { expectedVersion: order.version, partIds, destinationWarehouses: destinationWarehouses(partIds) })
+  await withDatabaseBusinessClock(fixture.prisma, async () => new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress, new DictionaryLookupService(fixture.prisma)).shipPurchaseOrder(fixture.context(), id, { expectedVersion: order.version, partIds, destinationWarehouses: destinationWarehouses(partIds) }))
   return fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id } })
 }
 
@@ -46,7 +48,6 @@ describe('purchase shipment warehouse receipt with isolated PostgreSQL', () => {
   let fixture: AtomicityFixture
   beforeAll(async () => {
     fixture = await createAtomicityFixture()
-    await fixture.prisma.dictionaryType.create({ data: { code: 'payment.method', name: '付款方式', items: { create: { value: 'BANK_TRANSFER', label: '银行转账', enabled: true } } } })
     await fixture.prisma.dictionaryType.update({ where: { code: 'payment.method' }, data: { enabled: true } })
   })
   afterAll(async () => { await fixture?.dispose() })
@@ -67,7 +68,7 @@ describe('purchase shipment warehouse receipt with isolated PostgreSQL', () => {
     expect(final.parts.every(part => part.warehouseReceivedAt !== null && part.warehouseReceivedById === fixture.actor.id && part.warehouseRecordedAt !== null)).toBe(true)
     await receipts.receive(fixture.context(), order.id, firstRequest)
     expect(await facts(fixture, order.id)).toEqual(final)
-    await createReviewMutations(fixture).recordPayment(fixture.context(), order.id, { paymentType: 'BALANCE', amount: '30', paidAt: new Date().toISOString(), paymentMethod: 'BANK_TRANSFER' })
+    await createReviewMutations(fixture).recordPayment(fixture.context(), order.id, { paymentType: 'BALANCE', amount: '30', paidAt: new Date().toISOString(), paymentMethod: 'BANK_TRANSFER', ...await createPaymentVoucherFixture(fixture.prisma, order.id, fixture.actor.id, 'BALANCE') })
     expect((await facts(fixture, order.id)).order.orderStatus).toBe('COMPLETED')
   })
 
@@ -144,7 +145,7 @@ describe('purchase shipment warehouse receipt with isolated PostgreSQL', () => {
     const order = await prepare(fixture, 1)
     await ship(fixture, order.id, order.parts.map(part => part.id))
     const mutation = createReviewMutations(fixture)
-    await mutation.recordPayment(fixture.context(), order.id, { paymentType: 'BALANCE', amount: '10', paidAt: new Date().toISOString(), paymentMethod: 'BANK_TRANSFER' })
+    await mutation.recordPayment(fixture.context(), order.id, { paymentType: 'BALANCE', amount: '10', paidAt: new Date().toISOString(), paymentMethod: 'BANK_TRANSFER', ...await createPaymentVoucherFixture(fixture.prisma, order.id, fixture.actor.id, 'BALANCE') })
     await mutation.updateFulfillmentStatus(fixture.context(), order.id, { toStatus: 'SIGNED', reason: '仓库签收' })
     const final = await facts(fixture, order.id)
     expect(final.order).toMatchObject({ orderStatus: 'COMPLETED', fulfillmentStatus: 'SIGNED' })
@@ -171,7 +172,7 @@ describe('purchase shipment warehouse receipt with isolated PostgreSQL', () => {
   it('blocks migration of historic SIGNED orders and preserves their real historical data', async () => {
     const legacy = await createAtomicityFixture(false, false, false, true)
     try {
-      const id = await createCommands(legacy).create(legacy.context(), await customInput(legacy))
+      const id = await createHistoricalCustomPurchase(legacy)
       // 按旧 schema 原有审核、发货写入构造历史事实；新图片生成器不能运行在旧 schema。
       await reviewHistoricalPurchase(legacy, id)
       await shipHistoricalPurchase(legacy, id)

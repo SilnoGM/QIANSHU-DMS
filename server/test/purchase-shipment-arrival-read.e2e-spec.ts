@@ -1,3 +1,5 @@
+import { withDatabaseBusinessClock } from './fixtures/database-business-clock.fixture'
+import { createPaymentRecipientFixture } from './fixtures/payment-recipient.fixture'
 import { randomUUID } from 'node:crypto'
 
 import type { INestApplication } from '@nestjs/common'
@@ -14,7 +16,7 @@ import type { PurchaseShipmentFilterDto, PurchaseShipmentPageDto, PurchaseShipme
 import { PurchaseShipmentQueryService } from '../src/modules/purchase-orders/shipments/purchase-shipment-query.service'
 import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
 import { destinationWarehouses, OTHER_DESTINATION_WAREHOUSE, TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
-import { reviewHistoricalPurchase, shipHistoricalPurchase } from './purchase-order-historical-review.fixture'
+import { createHistoricalCustomPurchase, reviewHistoricalPurchase, shipHistoricalPurchase } from './purchase-order-historical-review.fixture'
 import { atomicFacts, createAtomicityFixture, createCommands, createReviewMutations, customInput, prepareImageReview, type AtomicityFixture } from './purchase-shipping-mark-atomicity.fixture'
 
 const UNKNOWN_WAREHOUSE = 'HISTORICAL-UNKNOWN'
@@ -45,19 +47,19 @@ describe('arrival shipment filters and stable ordering over isolated PostgreSQL'
 
   beforeAll(async () => {
     fixture = await createAtomicityFixture(false, false, false, true)
-    const legacyOrderId = await createCommands(fixture).create(fixture.context(), await customInput(fixture))
+    const legacyOrderId = await createHistoricalCustomPurchase(fixture)
     await reviewHistoricalPurchase(fixture, legacyOrderId)
     await shipHistoricalPurchase(fixture, legacyOrderId)
     await fixture.migrateWarehouseReceipt()
     legacyId = (await fixture.prisma.purchaseOrderPart.findFirstOrThrow({ where: { purchaseOrderId: legacyOrderId }, select: { id: true } })).id
 
     const lookup = new DictionaryLookupService(fixture.prisma)
-    const orders = new PurchaseOrderQueryService(fixture.prisma, lookup)
+    const orders = new PurchaseOrderQueryService(fixture.prisma, lookup, createPaymentRecipientFixture(fixture.prisma))
     const shipping = new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress, lookup)
     const receipts = new PurchaseOrderWarehouseReceiptService(fixture.prisma, fixture.audit, orders)
     const order = await reviewedOrder(fixture, 5)
     parts = order.parts.map(part => part.id)
-    await shipping.shipPurchaseOrder(fixture.context(), order.id, {
+    await withDatabaseBusinessClock(fixture.prisma, async () => shipping.shipPurchaseOrder(fixture.context(), order.id, {
       expectedVersion: order.version, partIds: parts.slice(0, 3),
       destinationWarehouses: [
         ...destinationWarehouses(parts.slice(0, 2)),
@@ -68,12 +70,12 @@ describe('arrival shipment filters and stable ordering over isolated PostgreSQL'
         { partId: parts[1], trackingNo: 'ARRIVE-SF-SHARED-02' },
         { partId: parts[2], trackingNo: 'ARRIVE-YT-03' },
       ],
-    })
-    await shipping.shipPurchaseOrder(fixture.context(), order.id, {
+    }))
+    await withDatabaseBusinessClock(fixture.prisma, async () => shipping.shipPurchaseOrder(fixture.context(), order.id, {
       expectedVersion: (await orders.getById(order.id)).version, partIds: [parts[3]],
       destinationWarehouses: destinationWarehouses([parts[3]]),
       trackingNumbers: [{ partId: parts[3], trackingNo: 'ＳＦ-123' }],
-    })
+    }))
     await receipts.receive(fixture.context(), order.id, {
       expectedVersion: (await orders.getById(order.id)).version, partIds: [parts[0], parts[2]],
     })

@@ -1,3 +1,4 @@
+import type { PaymentRecipientService } from '../../payment-recipients/payment-recipient.service'
 import { Prisma } from '../../../generated/prisma/client'
 import type { PrismaService } from '../../../infrastructure/database/prisma.service'
 import type { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
@@ -9,7 +10,7 @@ function row() {
     supplierValue: 'SUPPLIER', customSupplierName: null, salesOrder: { orderNo: 'SO/1' }, purchaseTotalAmount: new Prisma.Decimal('100'),
     payables: [
       { id: 'balance', paymentType: 'BALANCE', dueAmount: new Prisma.Decimal('70'), accountOwnerType: 'USER', owner: { id: 'issuer', displayName: '销售出单人' }, version: 2, closedAt: null,
-        payments: [{ amount: new Prisma.Decimal('70'), paidAt: new Date('2026-09-16T12:00:00Z'), createdBy: { id: 'payer', displayName: '财务' } }] },
+        payments: [{ amount: new Prisma.Decimal('70'), paidAt: new Date('2026-09-16T12:00:00Z'), documents: [], createdBy: { id: 'payer', displayName: '财务' } }] },
       { id: 'deposit', paymentType: 'DEPOSIT', dueAmount: new Prisma.Decimal('30'), accountOwnerType: 'USER', owner: { id: 'issuer', displayName: '销售出单人' }, version: 1, closedAt: null, payments: [] },
     ],
   }
@@ -22,7 +23,7 @@ function setup() {
   }
   const prisma = { $transaction: jest.fn((action: (tx: unknown) => Promise<unknown>) => action(tx)) }
   const dictionary = { resolveStoredValueInTransaction: jest.fn().mockResolvedValue({ known: true, label: '已停用历史供应商' }) }
-  return { order, tx, prisma, dictionary, service: new PurchasePayableQueryService(prisma as unknown as PrismaService, dictionary as unknown as DictionaryLookupService) }
+  return { order, tx, prisma, dictionary, service: new PurchasePayableQueryService(prisma as unknown as PrismaService, dictionary as unknown as DictionaryLookupService, { getForOrder: jest.fn().mockResolvedValue(null) } as unknown as PaymentRecipientService) }
 }
 describe('PurchasePayableQueryService', () => {
   it('looks up the specific payable and maps its complete parent in the same repeatable-read transaction', async () => {
@@ -44,7 +45,7 @@ describe('PurchasePayableQueryService', () => {
     const order = { ...h.order, payables: h.order.payables.map(item => ({ ...item,
       closedAt: status === 'CANCELLED' ? new Date('2026-09-17') : null,
       dueAmount: status === 'NO_PAYMENT' ? new Prisma.Decimal(0) : item.dueAmount,
-      payments: status === 'PAID' ? [{ amount: item.dueAmount, paidAt: new Date('2026-09-16'), createdBy: { id: 'payer', displayName: '财务' } }] : [],
+      payments: status === 'PAID' ? [{ amount: item.dueAmount, paidAt: new Date('2026-09-16'), documents: [], createdBy: { id: 'payer', displayName: '财务' } }] : [],
     })) }
     h.tx.purchaseOrderPayable.findUnique.mockResolvedValue({ purchaseOrder: order })
     expect((await h.service.getByPayableId('balance')).items.map(item => item.status)).toEqual([status, status])
@@ -68,7 +69,7 @@ describe('PurchasePayableQueryService', () => {
     expect(h.tx.purchaseOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 2, take: 2, where: {
       orderStatus: 'CONFIRMED', paymentStatus: { not: 'PAID' }, payables: { some: { closedAt: null, dueAmount: { gt: 0 } } }, OR: [
       { orderNo: { contains: 'PO/2026', mode: 'insensitive' } }, { customSupplierName: { contains: 'PO/2026', mode: 'insensitive' } }, { salesOrder: { orderNo: { contains: 'PO/2026', mode: 'insensitive' } } },
-    ] }, include: expect.objectContaining({ payables: { include: expect.objectContaining({ payments: { where: { voidedAt: null }, include: { createdBy: { select: { id: true, displayName: true } } }, orderBy: [{ paidAt: 'desc' }, { id: 'desc' }] } }) as unknown } }) as unknown }))
+    ] }, include: expect.objectContaining({ payables: { include: expect.objectContaining({ payments: { where: { voidedAt: null }, include: { documents: { where: { detachedAt: null, documentType: 'PAYMENT_VOUCHER' }, take: 1 }, createdBy: { select: { id: true, displayName: true } } }, orderBy: [{ paidAt: 'desc' }, { id: 'desc' }] } }) as unknown } }) as unknown }))
     expect(h.tx.purchaseOrder.count).toHaveBeenCalledWith({ where: (h.tx.purchaseOrder.findMany.mock.calls[0] as [{ where: unknown }])[0].where })
     expect(h.order.payables[0].id).toBe('balance')
   })

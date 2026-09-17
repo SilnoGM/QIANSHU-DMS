@@ -42,6 +42,7 @@ function stockCommand() {
     purchaseType: 'STOCK',
     expectedShippingMarkResolution: 'a'.repeat(64),
     productMode: 'CUSTOM',
+    paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: 'Supplier', bankName: 'Bank', bankAccount: '123' }],
     customSupplierName: '备货供应商',
     orderDate: '2026-08-27',
     lines: [{
@@ -187,6 +188,7 @@ describe('PurchaseOrderCreateDependencyService', () => {
       referencePurchaseUnitPriceAmount: '10',
     }, {
       productMode: 'CUSTOM',
+    paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: 'Supplier', bankName: 'Bank', bankAccount: '123' }],
       supplierValue: undefined,
       customSupplierName: '临时供应商',
     })

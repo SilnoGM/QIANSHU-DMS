@@ -1,3 +1,4 @@
+import type { PaymentRecipientService } from '../../payment-recipients/payment-recipient.service'
 import { createHash } from 'node:crypto'
 import { Prisma } from '../../../generated/prisma/client'
 import type { AccessControlService } from '../../access-control/access-control.service'
@@ -8,7 +9,7 @@ import { PurchasePayableService } from './purchase-payable.service'
 
 const context = { actorUserId: 'finance-user', requestId: 'req-payable-test' }
 const confirmation = { payableId: 'payable', expectedVersion: 1, idempotencyKey: 'request-key' }
-const input = { paymentType: 'DEPOSIT', amount: '30.00', paymentMethod: 'BANK', remark: null, paidAt: new Date('2026-09-16T01:00:00Z'), mediaAssetId: null }
+const input = { paymentType: 'DEPOSIT', amount: '30.00', paymentMethod: 'BANK', remark: null, paidAt: new Date('2026-09-16T01:00:00Z'), mediaAssetId: 'voucher', recipientAccountId: 'recipient', recipientProfileVersion: 1 }
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest()
 function setup() {
   const payable = { id: 'payable', purchaseOrderId: 'order', paymentType: 'DEPOSIT', dueAmount: new Prisma.Decimal('30'), accountOwnerType: 'USER', ownerUserId: 'sales-issuer', closedAt: null, version: 1 }
@@ -20,10 +21,15 @@ function setup() {
   }
   const funds = { previewBusinessEventInTransaction: jest.fn().mockResolvedValue({ token: 'preview' }), postBusinessEventInTransaction: jest.fn().mockResolvedValue({ batchId: 'batch' }), reverseBusinessEventInTransaction: jest.fn().mockResolvedValue({ batchId: 'reversal' }) }
   const access = { getPermissionCodesInTransaction: jest.fn().mockResolvedValue(['purchase-orders:payment']), hasAll: jest.fn((granted: string[], required: string[]) => required.every(code => granted.includes(code))) }
-  return { tx, transaction: tx as unknown as Prisma.TransactionClient, payable, funds, access, service: new PurchasePayableService(funds as unknown as FundPostingService, access as unknown as AccessControlService) }
+  return { tx, transaction: tx as unknown as Prisma.TransactionClient, payable, funds, access, service: new PurchasePayableService(funds as unknown as FundPostingService, access as unknown as AccessControlService, { resolveForPayment: jest.fn().mockResolvedValue({ snapshot: { id: 'recipient', paymentMethod: 'BANK_TRANSFER', recipientName: 'Supplier', bankName: 'Bank', bankAccount: '123', bankBranch: null, qrMediaAssetId: null, qrContentUrl: null }, qrMediaAssetId: null }) } as unknown as PaymentRecipientService) }
 }
 
 describe('PurchasePayableService', () => {
+  it('refuses a new payment without its screenshot before any fund posting', async () => {
+    const h = setup()
+    await expect(h.service.preparePayment(h.transaction, context, 'order', { ...input, mediaAssetId: null }, confirmation)).rejects.toMatchObject({ code: 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE' })
+    expect(h.funds.postBusinessEventInTransaction).not.toHaveBeenCalled()
+  })
   it('creates both review stages including zero, owned by the sales issuer rather than payer', async () => {
     const h = setup()
     await h.service.createForReview(h.transaction, context, 'order')
@@ -69,7 +75,9 @@ describe('PurchasePayableService', () => {
     expect(replay).toMatchObject({ replay: true, paymentId: first.paymentId, amount: '30.00', payable: null })
     expect(replay.idempotencyKeyHash).toEqual(hash([context.actorUserId, confirmation.idempotencyKey]))
     expect(h.tx.purchaseOrderPayable.findFirst).toHaveBeenCalledTimes(1)
-    await expect(h.service.preparePayment(h.transaction, context, 'order', { ...input, remark: 'changed' }, confirmation)).rejects.toMatchObject({ code: 'PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT' })
+    for (const changed of [{ remark: 'changed' }, { mediaAssetId: 'other-voucher' }, { recipientAccountId: 'other-recipient' }, { recipientProfileVersion: 2 }]) {
+      await expect(h.service.preparePayment(h.transaction, context, 'order', { ...input, ...changed }, confirmation)).rejects.toMatchObject({ code: 'PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT' })
+    }
   })
   it.each([
     ['missing', null, [], 'PURCHASE_PAYABLE_NOT_AVAILABLE'],

@@ -120,18 +120,26 @@ export class PurchaseOrderDocumentService {
   uploadTemporary(
     context: PurchaseOrderMutationContext,
     request: PurchaseOrderDocumentMultipartRequest,
+    paymentUpload?: { purpose: 'PURCHASE_PAYMENT_VOUCHER', payableId: string },
   ): Promise<PurchaseOrderTemporaryDocument> {
     requireContext(context)
     return this.multipart.parse(request, async input => {
       try {
         const prepared = await this.mediaAsset.prepare({
           actorUserId: context.actorUserId,
-          allowedTypes: ['IMAGE', 'DOCUMENT'],
+          allowedTypes: paymentUpload ? ['IMAGE'] : ['IMAGE', 'DOCUMENT'],
           declaredMimeType: input.declaredMimeType,
           originalFilename: input.originalFilename,
           requestedType: input.mediaType,
           stream: input.stream,
         })
+        if (paymentUpload) {
+          const marked = await this.prisma.mediaAsset.updateMany({
+            where: { id: prepared.id, status: 'UPLOADING', createdByUserId: context.actorUserId, uploadPurpose: null, purchasePayableUploadId: null },
+            data: { uploadPurpose: paymentUpload.purpose, purchasePayableUploadId: paymentUpload.payableId },
+          })
+          if (marked.count !== 1) return purchaseOrderRuleFailure('PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', '付款截图状态已变化，请重新上传')
+        }
         return {
           mediaAssetId: prepared.id,
           mediaType: prepared.mediaType as 'IMAGE' | 'DOCUMENT',
@@ -254,7 +262,7 @@ export class PurchaseOrderDocumentService {
       }
       const document = await transaction.purchaseOrderDocument.findFirst({
         where: { id: documentId, purchaseOrderId, detachedAt: null },
-        select: { id: true, documentType: true, mediaAssetId: true },
+        select: { id: true, documentType: true, mediaAssetId: true, paymentId: true },
       })
       if (document === null) {
         throw new ApiException(
@@ -263,7 +271,10 @@ export class PurchaseOrderDocumentService {
           '采购订单凭证不存在',
         )
       }
-      // 凭证与付款事实分离：解除只隐藏附件，不作废或改写实际付款记录。
+      if (document.documentType === 'PAYMENT_VOUCHER' && document.paymentId) {
+        return purchaseOrderRuleFailure('PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', '付款凭证须随付款记录保留，不能单独移除')
+      }
+      // 普通凭证解除只隐藏附件，不改写采购业务事实。
       await transaction.purchaseOrderDocument.update({
         where: { id: documentId },
         data: {

@@ -1,3 +1,4 @@
+import { createPaymentRecipientFixture } from './fixtures/payment-recipient.fixture'
 import { randomUUID } from 'node:crypto'
 
 import type { Prisma } from '../src/generated/prisma/client'
@@ -46,7 +47,7 @@ describe('purchase review mark issuance with isolated PostgreSQL', () => {
         reviewedAt: expect.any(String) as unknown,
         reason: '核对货件与采购价格无误',
       })
-      const query = new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma))
+      const query = new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma), createPaymentRecipientFixture(fixture.prisma))
       const page = await query.list({ view: 'all', orderStatus: 'CONFIRMED' })
       expect(page.items.find(item => item.id === id)?.reviewSummary).toEqual(detail.reviewSummary)
       expect(await precheck.read(id)).toMatchObject({ available: false, message: expect.stringContaining('已审核通过') as unknown })

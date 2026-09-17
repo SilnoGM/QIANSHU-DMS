@@ -1,3 +1,5 @@
+import { PaymentRecipientService } from '../payment-recipients/payment-recipient.service'
+import type { PaymentRecipientProfileDto } from '../payment-recipients/payment-recipient.dto'
 import { HttpStatus, Injectable } from '@nestjs/common'
 
 import { Prisma } from '../../generated/prisma/client'
@@ -313,6 +315,7 @@ export interface PurchaseOrderStatusCounts {
 }
 
 export interface PurchaseOrderDetail extends PurchaseOrderListItem {
+  readonly paymentRecipientProfile: PaymentRecipientProfileDto | null
   readonly parts: readonly {
     readonly id: string
     readonly shipmentNo: string | null
@@ -609,6 +612,7 @@ export class PurchaseOrderQueryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly dictionaryLookup: DictionaryLookupService,
+    private readonly recipients: PaymentRecipientService,
   ) {}
 
   async list(input: PurchaseOrderListQueryInput): Promise<PurchaseOrderPage> {
@@ -868,6 +872,7 @@ export class PurchaseOrderQueryService {
     )
     return {
       ...summary,
+      paymentRecipientProfile: await this.recipients.getForOrder(transaction ?? this.prisma, row),
       sourceSalesOrder: row.salesOrder,
       parts: row.parts.map(part => ({
         id: part.id, shipmentNo: part.shipmentNo, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,

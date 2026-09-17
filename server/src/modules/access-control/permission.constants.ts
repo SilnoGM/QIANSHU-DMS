@@ -86,6 +86,11 @@ export const PACKAGING_COST_PERMISSION_CODES = [
   'packaging-costs:pay',
 ] as const
 
+export const SUPPLIER_PAYMENT_PROFILE_PERMISSION_CODES = [
+  'supplier-payment-profiles:read',
+  'supplier-payment-profiles:update',
+] as const
+
 /**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
@@ -137,6 +142,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...SALES_RECEIPT_PERMISSION_CODES,
   ...PURCHASE_ORDER_PERMISSION_CODES,
   ...PACKAGING_COST_PERMISSION_CODES,
+  ...SUPPLIER_PAYMENT_PROFILE_PERMISSION_CODES,
 ] as const
 
 export type ManagementPermissionCode =

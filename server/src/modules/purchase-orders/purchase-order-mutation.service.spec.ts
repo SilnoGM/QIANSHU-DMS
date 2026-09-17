@@ -30,7 +30,7 @@ function decimal(value: string) {
 function preparedPayment(amount: string, replay = false, paymentType: PurchaseOrderPaymentType = 'DEPOSIT'): PreparedPayablePayment {
   return {
     replay,
-    amount,
+    recipientSnapshot: null, recipientQrMediaAssetId: null,    amount,
     paymentId: PAYMENT_ID,
     idempotencyKeyHash: Buffer.alloc(32, 1),
     requestFingerprintHash: Buffer.alloc(32, 2),
@@ -145,6 +145,7 @@ function setup() {
       .mockImplementation((_tx, _context, _orderId, input) => Promise.resolve(preparedPayment(input.amount, false, input.paymentType as PurchaseOrderPaymentType))),
     postPayment: jest.fn<ReturnType<PurchasePayableService['postPayment']>, Parameters<PurchasePayableService['postPayment']>>()
       .mockImplementation((_tx, _context, prepared) => Promise.resolve({
+        recipientSnapshot: {}, recipientQrMediaAssetId: null,
         id: prepared.paymentId, payableId: PAYABLE_ID, fundPostingBatchId: FUND_BATCH_ID,
         idempotencyKeyHash: prepared.idempotencyKeyHash, requestFingerprintHash: prepared.requestFingerprintHash,
       })),
@@ -410,6 +411,7 @@ describe('PurchaseOrderMutationService', () => {
     const fixture = setup()
     fixture.order.orderStatus = 'PENDING_REVIEW'
     await expect(fixture.service.recordPayment(context, ORDER_ID, {
+      recipientAccountId: ACTOR_ID, recipientProfileVersion: 1,
       paymentType: 'DEPOSIT', amount: '30', paidAt: '2026-08-27T11:00:00.000Z', paymentMethod: 'BANK',
     })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
     await expect(fixture.service.updateFulfillmentStatus(context, ORDER_ID, { toStatus: 'PREPARING' }))
@@ -426,6 +428,7 @@ describe('PurchaseOrderMutationService', () => {
     const fixture = setup()
     fixture.transaction.purchaseOrderPayment.aggregate.mockResolvedValue({ _sum: { amount: decimal('70') } })
     await fixture.service.recordPayment(context, ORDER_ID, {
+      recipientAccountId: ACTOR_ID, recipientProfileVersion: 1,
       paymentType: 'OTHER', amount: '30', paidAt: '2026-08-27T11:00:00.000Z', paymentMethod: 'BANK',
     })
     expect(fixture.transaction.purchaseOrderPayment.aggregate).toHaveBeenCalledWith({
@@ -559,6 +562,7 @@ describe('PurchaseOrderMutationService', () => {
   it('records payment without requiring a voucher and derives PARTIALLY_PAID', async () => {
     const fixture = setup()
     await fixture.service.recordPayment(context, ORDER_ID, {
+      recipientAccountId: ACTOR_ID, recipientProfileVersion: 1,
       paymentType: 'DEPOSIT',
       amount: '30',
       paidAt: '2026-08-27T11:00:00.000Z',
@@ -608,10 +612,11 @@ describe('PurchaseOrderMutationService', () => {
     fixture.payables.preparePayment.mockResolvedValueOnce(prepared)
     const confirmation = { payableId: PAYABLE_ID, expectedVersion: 1, idempotencyKey: MEDIA_ID }
     await fixture.service.recordPayment(context, ORDER_ID, {
+      recipientAccountId: ACTOR_ID, recipientProfileVersion: 1,
       paymentType: 'DEPOSIT', amount: '30', paidAt: '2026-08-27T11:00:00.000Z', paymentMethod: 'BANK',
     }, confirmation)
     expect(fixture.payables.preparePayment).toHaveBeenCalledWith(fixture.transaction, context, ORDER_ID,
-      { paymentType: 'DEPOSIT', amount: '30.00', paidAt: new Date('2026-08-27T11:00:00Z'), paymentMethod: 'BANK', remark: null, mediaAssetId: null }, confirmation)
+      { paymentType: 'DEPOSIT', amount: '30.00', paidAt: new Date('2026-08-27T11:00:00Z'), paymentMethod: 'BANK', remark: null, mediaAssetId: null, recipientAccountId: ACTOR_ID, recipientProfileVersion: 1 }, confirmation)
     expect(fixture.payables.postPayment).toHaveBeenCalledWith(fixture.transaction, context, prepared, fixture.order.orderNo)
     expect(fixture.transaction.purchaseOrderPayment.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
       id: PAYMENT_ID, payableId: PAYABLE_ID, fundPostingBatchId: FUND_BATCH_ID, amount: '25.00',
@@ -626,6 +631,7 @@ describe('PurchaseOrderMutationService', () => {
     const fixture = setup()
     fixture.payables.preparePayment.mockResolvedValueOnce(preparedPayment('30.00', true))
     await expect(fixture.service.recordPayment(context, ORDER_ID, {
+      recipientAccountId: ACTOR_ID, recipientProfileVersion: 1,
       paymentType: 'DEPOSIT', amount: '30', paidAt: '2026-08-27T11:00:00.000Z', paymentMethod: 'BANK',
     })).resolves.toBe(fixture.detail)
     expect(fixture.payables.postPayment).not.toHaveBeenCalled()
@@ -639,6 +645,7 @@ describe('PurchaseOrderMutationService', () => {
     const fixture = setup()
     fixture.payables.postPayment.mockRejectedValueOnce(new ApiException(422, 'PURCHASE_PAYABLE_POSTING_UNAVAILABLE', '资金记账失败'))
     await expect(fixture.service.recordPayment(context, ORDER_ID, {
+      recipientAccountId: ACTOR_ID, recipientProfileVersion: 1,
       paymentType: 'DEPOSIT', amount: '30', paidAt: '2026-08-27T11:00:00.000Z', paymentMethod: 'BANK',
     })).rejects.toMatchObject({ code: 'PURCHASE_PAYABLE_POSTING_UNAVAILABLE' })
     expect(fixture.transaction.purchaseOrderPayment.create).not.toHaveBeenCalled()
@@ -658,6 +665,7 @@ describe('PurchaseOrderMutationService', () => {
     })
 
     await fixture.service.recordPayment(context, ORDER_ID, {
+      recipientAccountId: ACTOR_ID, recipientProfileVersion: 1,
       paymentType: 'BALANCE',
       amount: '30',
       paidAt: '2026-08-27T11:00:00.000Z',
@@ -703,6 +711,7 @@ describe('PurchaseOrderMutationService', () => {
   ])('names the %s voucher from the persisted order number in the payment transaction', async (paymentType, label) => {
     const fixture = setup()
     await fixture.service.recordPayment(context, ORDER_ID, {
+      recipientAccountId: ACTOR_ID, recipientProfileVersion: 1,
       paymentType,
       amount: '30',
       paidAt: '2026-08-27T11:00:00.000Z',
@@ -733,6 +742,7 @@ describe('PurchaseOrderMutationService', () => {
   ])('rejects client overrides of the voucher naming source', async (overrides) => {
     const fixture = setup()
     await expect(fixture.service.recordPayment(context, ORDER_ID, {
+      recipientAccountId: ACTOR_ID, recipientProfileVersion: 1,
       paymentType: 'DEPOSIT', amount: '30', paidAt: '2026-08-27T11:00:00.000Z',
       paymentMethod: 'BANK', voucher: { mediaAssetId: MEDIA_ID }, ...overrides,
     })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
@@ -746,6 +756,7 @@ describe('PurchaseOrderMutationService', () => {
       _sum: { amount: decimal('80') },
     })
     await expect(overpaid.service.recordPayment(context, ORDER_ID, {
+      recipientAccountId: ACTOR_ID, recipientProfileVersion: 1,
       paymentType: 'BALANCE',
       amount: '30',
       paidAt: '2026-08-27T11:00:00.000Z',
@@ -758,6 +769,7 @@ describe('PurchaseOrderMutationService', () => {
       orderStatus: 'CANCELLED',
     })
     await expect(cancelled.service.recordPayment(context, ORDER_ID, {
+      recipientAccountId: ACTOR_ID, recipientProfileVersion: 1,
       paymentType: 'DEPOSIT',
       amount: '30',
       paidAt: '2026-08-27T11:00:00.000Z',

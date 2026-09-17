@@ -7,6 +7,11 @@ import {
 const ASSET_ID = '00000000-0000-4000-8000-000000000321'
 
 describe('MediaAssetReferenceRepository', () => {
+  it.each(['paymentRecipientAccount', 'purchaseOrderPayment'])('retains recipient code through %s even after configuration changes', async target => {
+    const reader = Object.fromEntries(['productMedia', 'salesOrderDocument', 'purchaseOrderDocument', 'salesReceiptRequest', 'purchaseOrderImageDraft', 'packagingCostRequest', 'paymentRecipientAccount', 'purchaseOrderPayment']
+      .map(name => [name, { findFirst: jest.fn().mockResolvedValue(name === target ? { id: 'reference' } : null) }])) as unknown as Prisma.TransactionClient
+    await expect(new MediaAssetReferenceRepository().hasActiveReferences(reader, ASSET_ID)).resolves.toBe(true)
+  })
   it('protects a current purchase image draft after the review modal is closed', async () => {
     const draft = jest.fn().mockResolvedValue({ id: 'draft' })
     const reader = {
@@ -52,6 +57,8 @@ describe('MediaAssetReferenceRepository', () => {
       'sales_receipt_requests',
       'purchase_order_image_drafts',
       'packaging_cost_requests',
+      'payment_recipient_accounts',
+      'purchase_order_payments',
     ])
     expect(productMediaFindFirst).toHaveBeenCalledWith({
       where: {
@@ -94,6 +101,8 @@ describe('MediaAssetReferenceRepository', () => {
       salesReceiptRequest: { findFirst: jest.fn().mockResolvedValue(null) },
       purchaseOrderImageDraft: { findFirst: jest.fn().mockResolvedValue(null) },
       packagingCostRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      paymentRecipientAccount: { findFirst: jest.fn().mockResolvedValue(null) },
+      purchaseOrderPayment: { findFirst: jest.fn().mockResolvedValue(null) },
     } as unknown as Prisma.TransactionClient
 
     await expect(

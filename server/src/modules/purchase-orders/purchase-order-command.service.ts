@@ -1,3 +1,4 @@
+import { PaymentRecipientService } from '../payment-recipients/payment-recipient.service'
 import { randomUUID } from 'node:crypto'
 
 import { HttpStatus, Inject, Injectable, Optional } from '@nestjs/common'
@@ -39,6 +40,7 @@ import {
   calculatePurchaseOrderCreateFingerprint,
   hashPurchaseOrderIdempotencyKey,
   PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION,
+  PURCHASE_ORDER_CENTS_FINGERPRINT_VERSION,
   PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION,
   PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION,
   PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION,
@@ -214,6 +216,7 @@ export class PurchaseOrderCommandService {
     private readonly createDependencies: PurchaseOrderCreateDependencyService,
     private readonly shippingMarks: PurchaseShippingMarkResolverService,
     private readonly shipmentNumbers: PurchaseShipmentNumberingService,
+    private readonly recipients: PaymentRecipientService,
     @Optional()
     @Inject(PURCHASE_ORDER_COMMAND_DEPENDENCIES)
     dependencyOverrides: Partial<PurchaseOrderCommandServiceDependencies> = {},
@@ -232,7 +235,7 @@ export class PurchaseOrderCommandService {
     const idempotencyKeyHash = hashPurchaseOrderIdempotencyKey(trusted.idempotencyKey)
     const existing = await this.findExisting(idempotencyKeyHash)
     const version = existing?.createRequestFingerprintVersion ?? PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION
-    if (version !== PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION) {
+    if (version !== PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_CENTS_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION) {
       throw idempotencyConflict()
     }
     // 仅已持久化 v3 请求允许旧快照恢复；新请求不能凭缺少 parts 回退旧创建路径。
@@ -241,6 +244,7 @@ export class PurchaseOrderCommandService {
       input,
       this.dependencies.businessToday(),
       legacyReplay,
+      !!existing && version !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION,
     )
     const fingerprint = calculatePurchaseOrderCreateFingerprint(
       trusted.actorUserId,
@@ -332,6 +336,9 @@ export class PurchaseOrderCommandService {
           },
           select: { id: true },
         })
+        if (command.productMode === 'CUSTOM') {
+          await this.recipients.createForOrder(transaction, trusted.actorUserId, created.id, [...command.paymentAccounts])
+        }
         await transaction.purchaseOrderLine.createMany({
           data: effective.lines.map(line => lineData(created.id, line)),
         })

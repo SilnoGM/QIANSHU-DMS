@@ -1,3 +1,5 @@
+import { withDatabaseBusinessClock } from './fixtures/database-business-clock.fixture'
+import { createPaymentRecipientFixture } from './fixtures/payment-recipient.fixture'
 import { destinationWarehouses } from './purchase-destination-warehouse.fixture'
 import { prepareImageReview } from './purchase-shipping-mark-atomicity.fixture'
 import { randomUUID } from 'node:crypto'
@@ -60,9 +62,9 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
     shippedPartId = active.parts[1].id
     unshippedPartId = active.parts[2].id
     const shipping = new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress, new DictionaryLookupService(fixture.prisma))
-    await shipping.shipPurchaseOrder(fixture.context(), activeId, { expectedVersion: active.version, partIds: [receivedPartId, shippedPartId], destinationWarehouses: destinationWarehouses([receivedPartId, shippedPartId]), reason: 'First shipment' })
+    await withDatabaseBusinessClock(fixture.prisma, () => shipping.shipPurchaseOrder(fixture.context(), activeId, { expectedVersion: active.version, partIds: [receivedPartId, shippedPartId], destinationWarehouses: destinationWarehouses([receivedPartId, shippedPartId]), reason: 'First shipment' }))
     const lookup = new DictionaryLookupService(fixture.prisma)
-    orders = new PurchaseOrderQueryService(fixture.prisma, lookup)
+    orders = new PurchaseOrderQueryService(fixture.prisma, lookup, createPaymentRecipientFixture(fixture.prisma))
     receipts = new PurchaseOrderWarehouseReceiptService(fixture.prisma, fixture.audit, orders)
     const beforeReceipt = await orders.getById(activeId)
     const received = await receipts.receive(fixture.context(), activeId, { expectedVersion: beforeReceipt.version, partIds: [receivedPartId], remark: 'Warehouse checked first part' })
@@ -281,10 +283,10 @@ describe('maximum shipment warehouse receipt and read consistency', () => {
         purchaseTotalAmount: '100000', balanceDueAmount: '100000',
       })
       await createReviewMutations(fixture).review(fixture.context(), orderId, await prepareImageReview(fixture, orderId))
-      const orders = new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma))
+      const orders = new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma), createPaymentRecipientFixture(fixture.prisma))
       const beforeShipment = await orders.getById(orderId)
       const partIds = beforeShipment.parts.map(part => part.id)
-      await new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress, new DictionaryLookupService(fixture.prisma)).shipPurchaseOrder(fixture.context(), orderId, { expectedVersion: beforeShipment.version, partIds, destinationWarehouses: destinationWarehouses(partIds), reason: 'Maximum warehouse fixture shipment' })
+      await withDatabaseBusinessClock(fixture.prisma, () => new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress, new DictionaryLookupService(fixture.prisma)).shipPurchaseOrder(fixture.context(), orderId, { expectedVersion: beforeShipment.version, partIds, destinationWarehouses: destinationWarehouses(partIds), reason: 'Maximum warehouse fixture shipment' }))
       const beforeReceipt = await orders.getById(orderId)
       const receipts = new PurchaseOrderWarehouseReceiptService(fixture.prisma, fixture.audit, orders)
       const started = performance.now()

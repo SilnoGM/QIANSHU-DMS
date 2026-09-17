@@ -1,3 +1,7 @@
+import { randomUUID } from 'node:crypto'
+import { normalizePurchaseOrderCreateCommand } from '../src/modules/purchase-orders/purchase-order-command.normalizer'
+import { calculatePurchaseOrderCreateFingerprint, hashPurchaseOrderIdempotencyKey, PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION } from '../src/modules/purchase-orders/purchase-order-create-fingerprint'
+import { PurchaseShipmentNumberingService } from '../src/modules/purchase-orders/shipments/purchase-shipment-numbering.service'
 import { Prisma } from '../src/generated/prisma/client'
 import type { AtomicityFixture } from './purchase-shipping-mark-atomicity.fixture'
 
@@ -64,5 +68,46 @@ export async function shipHistoricalPurchase(fixture: AtomicityFixture, purchase
       purchaseOrderId, dimension: 'FULFILLMENT', fromStatus: 'PREPARING', toStatus: 'SHIPPED',
       changedByUserId: fixture.actor.id, reason: 'Preserved actual shipment',
     } })
+  })
+}
+
+/** 迁移测试准备当时真实的 v5 创建事实；不让最新 Command 写尚不存在的收款资料表。 */
+export async function createHistoricalCustomPurchase(fixture: AtomicityFixture): Promise<string> {
+  const context = fixture.context()
+  const resolution = await fixture.resolver.read({ productMode: 'CUSTOM' })
+  const partKey = randomUUID()
+  const input = { purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: 'Custom supplier',
+    orderDate: '2026-09-07', expectedShippingMarkResolution: resolution.resolutionToken,
+    lines: [{ lineType: 'CUSTOM', name: 'Custom item', referencePurchaseUnitPriceAmount: '10', actualPurchaseUnitPriceAmount: '10', quantity: 1 }],
+    parts: [{ key: partKey, items: [{ lineNumber: 1, quantity: 1 }] }], purchaseTotalAmount: '10', depositDueAmount: '0', balanceDueAmount: '10' }
+  const command = normalizePurchaseOrderCreateCommand(input, '2026-09-07', false, true)
+  const fingerprint = calculatePurchaseOrderCreateFingerprint(context.actorUserId, command, PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION)
+  const keyHash = hashPurchaseOrderIdempotencyKey(context.idempotencyKey)
+  return fixture.prisma.$transaction(async tx => {
+    await requireHistoricalSchema(tx)
+    const id = randomUUID(), partId = randomUUID()
+    await tx.$executeRaw`INSERT INTO purchase_orders (
+      id, order_no, create_idempotency_key_hash, create_request_fingerprint_hash, create_request_fingerprint_version,
+      purchase_type, product_mode, custom_supplier_name, order_date, currency_code, line_subtotal_amount,
+      purchase_total_amount, deposit_due_amount, balance_due_amount, created_by_user_id
+    ) VALUES (${id}::uuid, ${`LEGACY-${id}`}, ${keyHash}, ${Buffer.from(fingerprint, 'hex')}, 'purchase-order.create.v5',
+      'STOCK', 'CUSTOM', 'Custom supplier', ${new Date('2026-09-07')}, 'CNY', 10, 10, 0, 10, ${fixture.actor.id}::uuid)`
+    const line = await tx.purchaseOrderLine.create({ data: {
+      purchaseOrderId: id, lineNumber: 1, lineType: 'CUSTOM', productNameSnapshot: 'Custom item', productAttributesSnapshot: [],
+      referencePurchaseUnitPriceAmount: '10', actualPurchaseUnitPriceAmount: '10', quantity: 1, lineTotalAmount: '10',
+    } })
+    const [columns] = await tx.$queryRaw<{ numbered: boolean }[]>`SELECT EXISTS (SELECT 1 FROM information_schema.columns
+      WHERE table_schema = current_schema() AND table_name = 'purchase_order_parts' AND column_name = 'shipment_no') AS numbered`
+    if (columns.numbered) {
+      const [number] = await new PurchaseShipmentNumberingService(fixture.numbering).issue(tx, [{ id: partId, purchaseOrderId: id, key: partKey }])
+      await tx.$executeRaw`INSERT INTO purchase_order_parts (id, purchase_order_id, key, part_number, shipment_no, numbering_issuance_id)
+        VALUES (${partId}::uuid, ${id}::uuid, ${partKey}::uuid, 1, ${number.shipmentNo}, ${number.numberingIssuanceId}::uuid)`
+    }
+    else {
+      await tx.$executeRaw`INSERT INTO purchase_order_parts (id, purchase_order_id, key, part_number)
+        VALUES (${partId}::uuid, ${id}::uuid, ${partKey}::uuid, 1)`
+    }
+    await tx.purchaseOrderPartItem.create({ data: { purchaseOrderId: id, purchaseOrderPartId: partId, purchaseOrderLineId: line.id, quantity: 1 } })
+    return id
   })
 }

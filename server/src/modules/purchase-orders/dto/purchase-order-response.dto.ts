@@ -1,3 +1,4 @@
+import { PaymentRecipientProfileDto } from '../../payment-recipients/payment-recipient.dto'
 import { ApiProperty } from '@nestjs/swagger'
 
 import {
@@ -232,6 +233,7 @@ export class PurchaseOrderPartDto {
 }
 
 export class PurchaseOrderDetailDto extends PurchaseOrderListItemDto {
+  @ApiProperty({ type: () => PaymentRecipientProfileDto, nullable: true }) readonly paymentRecipientProfile!: PaymentRecipientProfileDto | null
   @ApiProperty({ type: () => [PurchaseOrderPartDto] }) readonly parts!: readonly PurchaseOrderPartDto[]
   @ApiProperty({ type: () => PurchaseOrderSourceSalesOrderDto, nullable: true })
   readonly sourceSalesOrder!: PurchaseOrderSourceSalesOrderDto | null

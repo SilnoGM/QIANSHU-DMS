@@ -40,6 +40,7 @@ function stockInput(): Record<string, unknown> {
     parts: [{ key: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', items: [{ lineNumber: 1, quantity: 2 }] }],
     purchaseType: 'STOCK',
     productMode: 'CUSTOM',
+    paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '供应商', bankName: '测试银行', bankAccount: '622200001234' }],
     customSupplierName: ' ＡＢＣ 供应商 ',
     orderDate: TODAY,
     expectedShippingMarkResolution: 'a'.repeat(64),
@@ -71,6 +72,11 @@ function captureApiException(action: () => unknown): ApiException {
 }
 
 describe('normalizePurchaseOrderCreateCommand', () => {
+  it('requires at least one complete recipient for a new custom order and retains bank details', () => {
+    expect(() => normalizePurchaseOrderCreateCommand({ ...stockInput(), paymentAccounts: undefined }, TODAY)).toThrow()
+    const accounts = [{ paymentMethod: 'BANK_TRANSFER', recipientName: '供应商', bankName: '测试银行', bankAccount: '622200001234' }]
+    expect(normalizePurchaseOrderCreateCommand({ ...stockInput(), paymentAccounts: accounts }, TODAY)).toMatchObject({ paymentAccounts: accounts })
+  })
   it('accepts the DTO class instance produced by the global ValidationPipe', () => {
     const transformed = plainToInstance(
       CreatePurchaseOrderRequestDto,
@@ -82,6 +88,7 @@ describe('normalizePurchaseOrderCreateCommand', () => {
 
   it('normalizes a sales-linked command and computes trusted totals', () => {
     expect(normalizePurchaseOrderCreateCommand(linkedInput(), TODAY)).toEqual({
+      paymentAccounts: [],
       parts: [{ key: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', items: [{ lineNumber: 1, quantity: 2 }] }],
       purchaseType: 'SALES_LINKED',
       productMode: 'CATALOG',
