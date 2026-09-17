@@ -13,6 +13,11 @@ import type { PurchaseOrderMutationContext } from '../purchase-order-mutation.se
 import { payableFailure, payableStateChanged, resolvePayableOwner, summarizePayable } from './purchase-payable.logic'
 
 export interface PayableConfirmation { readonly payableId: string, readonly expectedVersion: number, readonly idempotencyKey: string }
+export interface PurchasePayablePaymentInput {
+  paymentType: 'DEPOSIT' | 'BALANCE' | 'OTHER', amount: string, paymentMethod: string, remark: string | null, paidAt: Date,
+  mediaAssetId: string | null, recipientAccountId: string, recipientProfileVersion: number
+}
+export interface PayableRequestIdentity { readonly idempotencyKeyHash: Buffer<ArrayBuffer>, readonly requestFingerprintHash: Buffer<ArrayBuffer> }
 export interface PreparedPayablePayment {
   readonly recipientSnapshot: PaymentRecipientAccountDto | null
   readonly recipientQrMediaAssetId: string | null
@@ -41,7 +46,7 @@ export class PurchasePayableService {
   async closeForCancellation(tx: Prisma.TransactionClient, orderId: string): Promise<void> {
     await tx.purchaseOrderPayable.updateMany({ where: { purchaseOrderId: orderId, closedAt: null }, data: { closedAt: new Date(), version: { increment: 1 } } })
   }
-  private async authorize(tx: Prisma.TransactionClient, context: PurchaseOrderMutationContext) {
+  async authorize(tx: Prisma.TransactionClient, context: PurchaseOrderMutationContext) {
     const [user, granted] = await Promise.all([
       tx.user.findUnique({ where: { id: context.actorUserId }, select: { status: true } }),
       this.access.getPermissionCodesInTransaction(tx, context.actorUserId),
@@ -49,11 +54,11 @@ export class PurchasePayableService {
     if (user?.status !== 'ACTIVE' || !this.access.hasAll(granted, ['purchase-orders:payment'])) return payableFailure('FORBIDDEN', '权限不足', 403)
   }
   async preparePayment(tx: Prisma.TransactionClient, context: PurchaseOrderMutationContext, orderId: string,
-    input: { paymentType: string, amount: string, paymentMethod: string, remark: string | null, paidAt: Date, mediaAssetId: string | null, recipientAccountId: string, recipientProfileVersion: number }, confirmation?: PayableConfirmation): Promise<PreparedPayablePayment> {
+    input: { paymentType: string, amount: string, paymentMethod: string, remark: string | null, paidAt: Date, mediaAssetId: string | null, recipientAccountId: string, recipientProfileVersion: number }, confirmation?: PayableConfirmation, batchIdentity?: PayableRequestIdentity): Promise<PreparedPayablePayment> {
     await this.authorize(tx, context)
-    const idempotencyKeyHash = hash([context.actorUserId, confirmation?.idempotencyKey ?? randomUUID()])
+    const idempotencyKeyHash = batchIdentity?.idempotencyKeyHash ?? hash([context.actorUserId, confirmation?.idempotencyKey ?? randomUUID()])
     // 财务页面的付款时间由服务端产生，不进入用户请求指纹；重试不会因时钟推进而改变身份。
-    const requestFingerprintHash = hash(confirmation
+    const requestFingerprintHash = batchIdentity?.requestFingerprintHash ?? hash(confirmation
       ? { payableId: confirmation.payableId, expectedVersion: confirmation.expectedVersion, paymentMethod: input.paymentMethod, remark: input.remark, mediaAssetId: input.mediaAssetId, recipientAccountId: input.recipientAccountId, recipientProfileVersion: input.recipientProfileVersion }
       : { orderId, ...input })
     const previous = await tx.purchaseOrderPayment.findUnique({ where: { idempotencyKeyHash } })
@@ -76,14 +81,22 @@ export class PurchasePayableService {
     const recipient = await this.recipients.resolveForPayment(tx, order, input)
     return { recipientSnapshot: recipient.snapshot, recipientQrMediaAssetId: recipient.qrMediaAssetId, replay: false, payable, amount: summary.remainingAmount, paymentId: randomUUID(), idempotencyKeyHash, requestFingerprintHash }
   }
+  async lockPaymentAccounts(tx: Prisma.TransactionClient, context: PurchaseOrderMutationContext, entries: readonly { prepared: PreparedPayablePayment, orderNo: string }[]) {
+    try {
+      await this.funds.lockBusinessEventAccountsInTransaction(tx, entries.map(entry => this.paymentFundRequest(context, entry.prepared, entry.orderNo)))
+    } catch (error) { return this.mapFundError(error) }
+  }
+  private paymentFundRequest(context: PurchaseOrderMutationContext, prepared: PreparedPayablePayment, orderNo: string) {
+    const payable = prepared.payable!
+    return { context: { ...context, sourceCode: PURCHASE_PAYMENT_FUND_SOURCE,
+      consumerCode: payable.accountOwnerType === 'COMPANY' ? PURCHASE_PAYMENT_STOCK_PAY_CONSUMER : PURCHASE_PAYMENT_PAY_CONSUMER },
+    input: { postingTypeCode: PURCHASE_PAYMENT_POSTING_TYPE, ...(payable.ownerUserId ? { userId: payable.ownerUserId } : {}), amount: prepared.amount,
+      businessId: prepared.paymentId, businessNo: orderNo, summary: `采购${payable.paymentType === 'DEPOSIT' ? '定金' : '尾款'}付款`, idempotencyKey: prepared.paymentId,
+      metadata: { purchaseOrderId: payable.purchaseOrderId, payableId: payable.id, paymentType: payable.paymentType } } }
+  }
   async postPayment(tx: Prisma.TransactionClient, context: PurchaseOrderMutationContext, prepared: PreparedPayablePayment, orderNo: string) {
     const payable = prepared.payable!
-    const fundContext = { ...context, sourceCode: PURCHASE_PAYMENT_FUND_SOURCE,
-      consumerCode: payable.accountOwnerType === 'COMPANY' ? PURCHASE_PAYMENT_STOCK_PAY_CONSUMER : PURCHASE_PAYMENT_PAY_CONSUMER }
-    const input = { postingTypeCode: PURCHASE_PAYMENT_POSTING_TYPE,
-      ...(payable.ownerUserId ? { userId: payable.ownerUserId } : {}), amount: prepared.amount,
-      businessId: prepared.paymentId, businessNo: orderNo, summary: `采购${payable.paymentType === 'DEPOSIT' ? '定金' : '尾款'}付款`, idempotencyKey: prepared.paymentId,
-      metadata: { purchaseOrderId: payable.purchaseOrderId, payableId: payable.id, paymentType: payable.paymentType } }
+    const { context: fundContext, input } = this.paymentFundRequest(context, prepared, orderNo)
     try {
       const preview = await this.funds.previewBusinessEventInTransaction(tx, fundContext, input)
       const posting = await this.funds.postBusinessEventInTransaction(tx, fundContext, input, preview)

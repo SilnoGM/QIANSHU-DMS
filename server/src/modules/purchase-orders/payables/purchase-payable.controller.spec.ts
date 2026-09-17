@@ -10,7 +10,7 @@ import { REQUIRED_PERMISSIONS_METADATA } from '../../auth/decorators/auth.decora
 import { PurchaseOrderMutationService } from '../purchase-order-mutation.service'
 import { PurchasePayableController } from './purchase-payable.controller'
 import { PurchasePayableQueryService } from './purchase-payable-query.service'
-import { PurchasePayableIdDto, PurchasePayableListQueryDto, PurchasePayablePayDto } from './purchase-payable.dto'
+import { PurchasePayableBatchPayDto, PurchasePayableIdDto, PurchasePayableListQueryDto, PurchasePayablePayDto } from './purchase-payable.dto'
 
 @Module({ controllers: [PurchasePayableController], providers: [PurchasePayableQueryService, PurchaseOrderMutationService, PurchasePayableVoucherService].map(provide => ({ provide, useValue: {} })) })
 class ContractModule {}
@@ -36,7 +36,23 @@ describe('PurchasePayableController', () => {
   })
   it('requires finance payment permission for listing, detail and payment', () => {
     const reflector = new Reflector()
-    for (const method of ['list', 'detail', 'orderDetail', 'pay', 'uploadVoucher', 'voucherContent'] as const) expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PurchasePayableController.prototype[method])).toEqual(['purchase-orders:payment'])
+    for (const method of ['list', 'detail', 'orderDetail', 'pay', 'uploadVoucher', 'voucherContent', 'batchSuppliers', 'batchOrders', 'batchPay'] as const) expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PurchasePayableController.prototype[method])).toEqual(['purchase-orders:payment'])
+  })
+  it('documents batch read and atomic write contracts with CSRF, idempotency and no client money or owner input', async () => {
+    const document = await createOpenApiDocument(ContractModule)
+    const root = '/api/purchase-order-payables/batch'
+    expect(document.paths[`${root}/suppliers`].get?.operationId).toBe('purchase_payables_batch_suppliers')
+    expect(document.paths[`${root}/orders`].get).toMatchObject({ operationId: 'purchase_payables_batch_orders', parameters: expect.arrayContaining([expect.objectContaining({ name: 'supplierValue', in: 'query', required: true })]) as unknown })
+    expect(document.paths[`${root}/pay`].post).toMatchObject({ operationId: 'purchase_payables_batch_pay',
+      parameters: expect.arrayContaining([{ name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', format: 'uuid' } }]) as unknown,
+      responses: { 200: { content: { 'application/json': { schema: { $ref: '#/components/schemas/PurchasePayableBatchResultDto' } } } } },
+      'x-qianshu-contract': { errors: expect.arrayContaining([{ status: 403, codes: expect.arrayContaining(['CSRF_REJECTED']) as unknown }]) as unknown } })
+    const input = { supplierValue: 'SUPPLIER', recipientAccountId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', recipientProfileVersion: 1, paymentMethod: 'BANK_TRANSFER', items: [{ payableId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', expectedVersion: 1, voucher: { mediaAssetId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' } }] }
+    const options = { whitelist: true, forbidNonWhitelisted: true }
+    expect(await validate(plainToInstance(PurchasePayableBatchPayDto, input), options)).toEqual([])
+    for (const invalid of [{ ...input, items: [] }, { ...input, amount: '0.01' }, { ...input, ownerUserId: input.recipientAccountId }, { ...input, items: [{ ...input.items[0], expectedVersion: 0 }] }]) {
+      expect((await validate(plainToInstance(PurchasePayableBatchPayDto, invalid), options)).length).toBeGreaterThan(0)
+    }
   })
   it('forwards the order link to the exact order lookup without searching the list or interpreting it as a payable', async () => {
     const group = { id: 'order', items: [{ id: 'deposit', paymentType: 'DEPOSIT' }, { id: 'balance', paymentType: 'BALANCE' }] }

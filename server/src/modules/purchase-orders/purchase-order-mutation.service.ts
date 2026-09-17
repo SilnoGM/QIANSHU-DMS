@@ -1,6 +1,8 @@
-import { PurchasePayableService, type PayableConfirmation } from './payables/purchase-payable.service'
-import type { PurchasePayablePayDto } from './payables/purchase-payable.dto'
-import { payableFailure } from './payables/purchase-payable.logic'
+import { executeBatchPayment } from './payables/purchase-payable-batch.transaction'
+import { normalizeBatchPayment } from './payables/purchase-payable-batch.logic'
+import { PurchasePayableService, type PayableConfirmation, type PreparedPayablePayment, type PurchasePayablePaymentInput } from './payables/purchase-payable.service'
+import type { PurchasePayableBatchPayDto, PurchasePayableBatchResultDto, PurchasePayablePayDto } from './payables/purchase-payable.dto'
+import { payableFailure, payableStateChanged } from './payables/purchase-payable.logic'
 import { parsePurchaseOrderIdempotencyKey } from './purchase-order-command.normalizer'
 import { HttpStatus, Inject, Injectable, Optional } from '@nestjs/common'
 
@@ -533,6 +535,30 @@ export class PurchaseOrderMutationService {
     return this.query.getById(purchaseOrderId)
   }
 
+  async payBatch(context: PurchaseOrderMutationContext, rawInput: PurchasePayableBatchPayDto, rawKey: unknown): Promise<PurchasePayableBatchResultDto> {
+    const trusted = validateContext(context)
+    const input = normalizeBatchPayment(rawInput)
+    const key = parsePurchaseOrderIdempotencyKey(rawKey)
+    try {
+      return await this.prisma.$transaction(async transaction => {
+        await applyTransactionTimeouts(transaction)
+        return executeBatchPayment(transaction, trusted, input, key, this.payables, {
+          now: this.dependencies.now(),
+          validatePaymentMethod: () => this.dictionaryLookup.requireEffectiveValue(transaction, { dictionaryCode: PAYMENT_METHOD_DICTIONARY_CODE, value: input.paymentMethod }),
+          lockOrder: id => this.lockOrder(transaction, id),
+          writePayment: (order, paymentInput, confirmation, prepared) => this.writePaymentInTransaction(transaction, trusted, order, paymentInput, confirmation, prepared),
+        })
+      }, { timeout: 60_000 })
+    } catch (error) {
+      if (error instanceof ApiException) throw error
+      if (error instanceof DictionaryValueUnavailableError) return purchaseOrderRuleFailure('PURCHASE_ORDER_PAYMENT_METHOD_UNAVAILABLE', '付款方式当前不可用', 'paymentMethod')
+      if (error instanceof MediaAssetLifecycleError) return purchaseOrderRuleFailure('PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', '所选付款凭证当前不可用')
+      const facts = readPersistenceErrorFacts(error)
+      if (['40P01', '55P03', '57014', '40001', 'P2034', 'P2028'].some(code => hasPersistenceCode(facts, code))) return payableStateChanged()
+      throw error
+    }
+  }
+
   async payPayable(context: PurchaseOrderMutationContext, rawId: string, input: PurchasePayablePayDto, rawKey: unknown): Promise<string> {
     const id = requireUuid(rawId, 'id')
     const idempotencyKey = parsePurchaseOrderIdempotencyKey(rawKey)
@@ -575,7 +601,7 @@ export class PurchaseOrderMutationService {
       return purchaseOrderValidationFailure('paymentType')
     }
     const paymentType = body.paymentType as PurchaseOrderPaymentType
-    let amount = normalizePositivePurchaseOrderAmount(body.amount)
+    const amount = normalizePositivePurchaseOrderAmount(body.amount)
     const now = this.dependencies.now()
     const paidAt = this.normalizePaidAt(body.paidAt, now)
     let paymentMethod: string
@@ -596,110 +622,8 @@ export class PurchaseOrderMutationService {
       await this.prisma.$transaction(async transaction => {
         await applyTransactionTimeouts(transaction)
         const order = await this.lockOrder(transaction, purchaseOrderId)
-        if (order.orderStatus === 'PENDING_REVIEW') {
-          return purchaseOrderRuleFailure(
-            'PURCHASE_ORDER_STATUS_TRANSITION_INVALID',
-            '采购订单审核通过后才能记录付款',
-          )
-        }
-        if (order.orderStatus === 'CANCELLED') {
-          return purchaseOrderRuleFailure(
-            'PURCHASE_ORDER_CANCELLED',
-            '已取消的采购订单不能记录付款',
-          )
-        }
-        const prepared = await this.payables.preparePayment(transaction, trusted, purchaseOrderId,
+        await this.writePaymentInTransaction(transaction, trusted, order,
           { paymentType, amount, paidAt, paymentMethod, remark, mediaAssetId, recipientAccountId, recipientProfileVersion }, confirmation)
-        if (prepared.replay) return
-        amount = prepared.amount
-        const method = await this.dictionaryLookup.requireEffectiveValue(
-          transaction,
-          { dictionaryCode: PAYMENT_METHOD_DICTIONARY_CODE, value: paymentMethod },
-        )
-        if (mediaAssetId !== null) {
-          // 临时截图只能消费一次；不同款项并发使用同一图片时，后到者必须重新上传。
-          await transaction.$queryRaw(Prisma.sql`SELECT id FROM media_assets WHERE id = ${mediaAssetId}::uuid FOR UPDATE`)
-          const asset = await transaction.mediaAsset.findFirst({
-            where: {
-              id: mediaAssetId,
-              createdByUserId: trusted.actorUserId,
-              status: 'UPLOADING',
-              mediaType: 'IMAGE',
-              uploadPurpose: 'PURCHASE_PAYMENT_VOUCHER',
-              purchasePayableUploadId: prepared.payable!.id,
-              uploadExpiresAt: { gt: now },
-              deletedAt: null,
-              objectKey: { not: null },
-            },
-            select: { id: true },
-          })
-          if (asset === null) {
-            return purchaseOrderRuleFailure(
-              'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE',
-              '所选付款凭证当前不可用',
-            )
-          }
-        }
-        const oldPaidAmount = await this.readPaidAmount(
-          transaction,
-          purchaseOrderId,
-        )
-        const newPaidAmount = formatPurchaseOrderAmountUnits(
-          parsePurchaseOrderAmountUnits(oldPaidAmount)
-          + parsePurchaseOrderAmountUnits(amount),
-        )
-        const newStatus = derivePurchaseOrderPaymentStatus(
-          fixed2(order.purchaseTotalAmount),
-          newPaidAmount,
-        )
-        const fundLink = await this.payables.postPayment(transaction, trusted, prepared, order.orderNo)
-        const payment = await transaction.purchaseOrderPayment.create({
-          data: {
-            ...fundLink,
-            purchaseOrderId,
-            paymentType,
-            amount,
-            paidAt,
-            paymentMethod: method.value,
-            remark,
-            createdByUserId: trusted.actorUserId,
-          },
-          select: { id: true },
-        })
-        if (mediaAssetId !== null) {
-          await this.mediaAsset.activate(transaction, mediaAssetId)
-          const document = await transaction.purchaseOrderDocument.create({
-            data: {
-              purchaseOrderId,
-              mediaAssetId,
-              paymentId: payment.id,
-              documentType: 'PAYMENT_VOUCHER',
-              // 凭证展示名只在创建时由已锁定订单的真实编号和付款类型生成；
-              // 不改媒体原始文件名，也不在查询时重写历史凭证标题。
-              title: `${order.orderNo}-${PAYMENT_VOUCHER_TITLE_LABELS[paymentType]}`,
-              remark: null,
-              createdByUserId: trusted.actorUserId,
-            },
-            select: { id: true },
-          })
-          await this.recordAudit(transaction, trusted, {
-            eventType: AuditEventType.PURCHASE_ORDER_DOCUMENT_ATTACHED,
-            targetId: document.id,
-            metadata: { purchaseOrderId, documentType: 'PAYMENT_VOUCHER' },
-          })
-        }
-        await this.writePaymentAndOrderStatus(
-          transaction,
-          trusted,
-          order,
-          newStatus,
-          `新增付款 ${amount} CNY，累计有效付款 ${newPaidAmount} CNY；采购总价 ${fixed2(order.purchaseTotalAmount)} CNY`,
-        )
-        await this.recordAudit(transaction, trusted, {
-          eventType: AuditEventType.PURCHASE_ORDER_PAYMENT_RECORDED,
-          targetId: payment.id,
-          metadata: { purchaseOrderId, paymentType, fundPostingBatchId: fundLink.fundPostingBatchId },
-        })
       })
     }
     catch (error) {
@@ -720,6 +644,124 @@ export class PurchaseOrderMutationService {
       throw error
     }
     return this.query.getById(purchaseOrderId)
+  }
+
+  private async writePaymentInTransaction(
+    transaction: Prisma.TransactionClient,
+    trusted: PurchaseOrderMutationContext,
+    order: MutablePurchaseOrder,
+    input: PurchasePayablePaymentInput,
+    confirmation?: PayableConfirmation,
+    suppliedPreparation?: PreparedPayablePayment,
+  ): Promise<void> {
+    const purchaseOrderId = order.id
+    const { paymentType, paidAt, paymentMethod, remark, mediaAssetId, recipientAccountId, recipientProfileVersion } = input
+    let { amount } = input
+    const now = this.dependencies.now()
+    if (order.orderStatus === 'PENDING_REVIEW') {
+      return purchaseOrderRuleFailure(
+        'PURCHASE_ORDER_STATUS_TRANSITION_INVALID',
+        '采购订单审核通过后才能记录付款',
+      )
+    }
+    if (order.orderStatus === 'CANCELLED') {
+      return purchaseOrderRuleFailure(
+        'PURCHASE_ORDER_CANCELLED',
+        '已取消的采购订单不能记录付款',
+      )
+    }
+    const prepared = suppliedPreparation ?? await this.payables.preparePayment(transaction, trusted, purchaseOrderId,
+      { paymentType, amount, paidAt, paymentMethod, remark, mediaAssetId, recipientAccountId, recipientProfileVersion }, confirmation)
+    if (prepared.replay) return
+    amount = prepared.amount
+    const method = await this.dictionaryLookup.requireEffectiveValue(
+      transaction,
+      { dictionaryCode: PAYMENT_METHOD_DICTIONARY_CODE, value: paymentMethod },
+    )
+    if (mediaAssetId !== null) {
+      // 临时截图只能消费一次；不同款项并发使用同一图片时，后到者必须重新上传。
+      await transaction.$queryRaw(Prisma.sql`SELECT id FROM media_assets WHERE id = ${mediaAssetId}::uuid FOR UPDATE`)
+      const asset = await transaction.mediaAsset.findFirst({
+        where: {
+          id: mediaAssetId,
+          createdByUserId: trusted.actorUserId,
+          status: 'UPLOADING',
+          mediaType: 'IMAGE',
+          uploadPurpose: 'PURCHASE_PAYMENT_VOUCHER',
+          purchasePayableUploadId: prepared.payable!.id,
+          uploadExpiresAt: { gt: now },
+          deletedAt: null,
+          objectKey: { not: null },
+        },
+        select: { id: true },
+      })
+      if (asset === null) {
+        return purchaseOrderRuleFailure(
+          'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE',
+          '所选付款凭证当前不可用',
+        )
+      }
+    }
+    const oldPaidAmount = await this.readPaidAmount(
+      transaction,
+      purchaseOrderId,
+    )
+    const newPaidAmount = formatPurchaseOrderAmountUnits(
+      parsePurchaseOrderAmountUnits(oldPaidAmount)
+      + parsePurchaseOrderAmountUnits(amount),
+    )
+    const newStatus = derivePurchaseOrderPaymentStatus(
+      fixed2(order.purchaseTotalAmount),
+      newPaidAmount,
+    )
+    const fundLink = await this.payables.postPayment(transaction, trusted, prepared, order.orderNo)
+    const payment = await transaction.purchaseOrderPayment.create({
+      data: {
+        ...fundLink,
+        purchaseOrderId,
+        paymentType,
+        amount,
+        paidAt,
+        paymentMethod: method.value,
+        remark,
+        createdByUserId: trusted.actorUserId,
+      },
+      select: { id: true },
+    })
+    if (mediaAssetId !== null) {
+      await this.mediaAsset.activate(transaction, mediaAssetId)
+      const document = await transaction.purchaseOrderDocument.create({
+        data: {
+          purchaseOrderId,
+          mediaAssetId,
+          paymentId: payment.id,
+          documentType: 'PAYMENT_VOUCHER',
+          // 凭证展示名只在创建时由已锁定订单的真实编号和付款类型生成；
+          // 不改媒体原始文件名，也不在查询时重写历史凭证标题。
+          title: `${order.orderNo}-${PAYMENT_VOUCHER_TITLE_LABELS[paymentType]}`,
+          remark: null,
+          createdByUserId: trusted.actorUserId,
+        },
+        select: { id: true },
+      })
+      await this.recordAudit(transaction, trusted, {
+        eventType: AuditEventType.PURCHASE_ORDER_DOCUMENT_ATTACHED,
+        targetId: document.id,
+        metadata: { purchaseOrderId, documentType: 'PAYMENT_VOUCHER' },
+      })
+    }
+    await this.writePaymentAndOrderStatus(
+      transaction,
+      trusted,
+      order,
+      newStatus,
+      `新增付款 ${amount} CNY，累计有效付款 ${newPaidAmount} CNY；采购总价 ${fixed2(order.purchaseTotalAmount)} CNY`,
+    )
+    await this.recordAudit(transaction, trusted, {
+      eventType: AuditEventType.PURCHASE_ORDER_PAYMENT_RECORDED,
+      targetId: payment.id,
+      metadata: { purchaseOrderId, paymentType, fundPostingBatchId: fundLink.fundPostingBatchId },
+    })
   }
 
   async voidPayment(

@@ -93,6 +93,11 @@ function search() {
   page.value = 1
   void load()
 }
+function openBatchPayment() {
+  if (enabled.value && !loading.value) {
+    void router.push({ name: 'qsFinanceRealtimePurchaseBatchPayment' })
+  }
+}
 function openPayment(row: PurchasePayableRow) {
   if (!enabled.value || loading.value || !row.payable || !canPayPurchasePayable(row.payable)) {
     return
@@ -128,7 +133,11 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="min-w-0">
-    <FaPageHeader :title="t('workbench.purchasePayments')" :description="t('purchasePayment.intro')" />
+    <FaPageHeader :title="t('workbench.purchasePayments')" :description="t('purchasePayment.intro')">
+      <FaButton v-if="canPay" :disabled="!enabled || loading" @click="openBatchPayment">
+        <FaIcon name="i-lucide:wallet-cards" aria-hidden="true" />{{ t('purchasePayment.batch.title') }}
+      </FaButton>
+    </FaPageHeader>
     <FaPageMain class="min-w-0">
       <FaEmpty v-if="!canPay" icon="i-lucide:shield-alert" :title="t('purchasePayment.noPermission')" class="py-12" />
       <QsGenericTable

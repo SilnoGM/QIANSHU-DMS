@@ -26,6 +26,22 @@ function setup() {
   return { order, tx, prisma, dictionary, service: new PurchasePayableQueryService(prisma as unknown as PrismaService, dictionary as unknown as DictionaryLookupService, { getForOrder: jest.fn().mockResolvedValue(null) } as unknown as PaymentRecipientService) }
 }
 describe('PurchasePayableQueryService', () => {
+  it('lists historical outstanding dictionary supplier values and excludes custom suppliers', async () => {
+    const h = setup()
+    h.tx.purchaseOrder.findMany.mockResolvedValue([{ supplierValue: 'SUPPLIER' }])
+    expect(await h.service.batchSuppliers()).toEqual({ items: [{ value: 'SUPPLIER', label: '已停用历史供应商' }] })
+    expect(h.tx.purchaseOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      distinct: ['supplierValue'], where: expect.objectContaining({ productMode: 'CATALOG', supplierValue: { not: null }, paymentStatus: { not: 'PAID' } }) as unknown,
+    }))
+  })
+  it('returns every outstanding order for the exact stable supplier with complete installments', async () => {
+    const h = setup()
+    expect((await h.service.batchOrders('SUPPLIER')).items[0].items).toHaveLength(2)
+    const args = h.tx.purchaseOrder.findMany.mock.calls[0] as [{ where: unknown, skip?: unknown, take?: unknown }]
+    expect(args[0].where).toMatchObject({ productMode: 'CATALOG', supplierValue: 'SUPPLIER', orderStatus: 'CONFIRMED', paymentStatus: { not: 'PAID' } })
+    expect(args[0]).not.toHaveProperty('skip')
+    expect(args[0]).not.toHaveProperty('take')
+  })
   it('looks up the specific payable and maps its complete parent in the same repeatable-read transaction', async () => {
     const h = setup()
     const result = await h.service.getByPayableId('balance')

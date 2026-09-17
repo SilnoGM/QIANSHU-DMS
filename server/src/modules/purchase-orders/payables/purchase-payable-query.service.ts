@@ -4,8 +4,9 @@ import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
-import type { PurchasePayableListQueryDto, PurchasePayableOrderDto, PurchasePayableOrderPageDto } from './purchase-payable.dto'
+import type { PurchasePayableBatchOrdersDto, PurchasePayableBatchSuppliersDto, PurchasePayableListQueryDto, PurchasePayableOrderDto, PurchasePayableOrderPageDto } from './purchase-payable.dto'
 import { payableFailure, summarizePayable } from './purchase-payable.logic'
+import { normalizeBatchSupplier } from './purchase-payable-batch.logic'
 
 const person = { select: { id: true, displayName: true } }
 const include = {
@@ -13,9 +14,33 @@ const include = {
   payables: { include: { owner: person, payments: { where: { voidedAt: null }, include: { createdBy: person, documents: { where: { detachedAt: null, documentType: 'PAYMENT_VOUCHER' }, take: 1 } }, orderBy: [{ paidAt: 'desc' as const }, { id: 'desc' as const }] } } },
 } satisfies Prisma.PurchaseOrderInclude
 type Order = Prisma.PurchaseOrderGetPayload<{ include: typeof include }>
+const outstandingOrders = {
+  orderStatus: 'CONFIRMED', paymentStatus: { not: 'PAID' }, payables: { some: { closedAt: null, dueAmount: { gt: 0 } } },
+} satisfies Prisma.PurchaseOrderWhereInput
 @Injectable()
 export class PurchasePayableQueryService {
   constructor(private readonly prisma: PrismaService, private readonly dictionary: DictionaryLookupService, private readonly recipients: PaymentRecipientService) {}
+  async batchSuppliers(): Promise<PurchasePayableBatchSuppliersDto> {
+    return this.prisma.$transaction(async tx => {
+      // 待结清历史供应商仍需付款，不能用当前有效字典选项过滤掉已停用条目。
+      const rows = await tx.purchaseOrder.findMany({ where: { ...outstandingOrders, productMode: 'CATALOG', supplierValue: { not: null } },
+        distinct: ['supplierValue'], select: { supplierValue: true }, orderBy: { supplierValue: 'asc' } })
+      const items = await Promise.all(rows.map(async row => {
+        const value = row.supplierValue!
+        const supplier = await this.dictionary.resolveStoredValueInTransaction(tx, { dictionaryCode: 'service_provider.supplier', value })
+        return { value, label: supplier.known ? supplier.label : value }
+      }))
+      return { items }
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
+  }
+  async batchOrders(rawSupplier: string): Promise<PurchasePayableBatchOrdersDto> {
+    const supplierValue = normalizeBatchSupplier(rawSupplier)
+    return this.prisma.$transaction(async tx => {
+      const rows = await tx.purchaseOrder.findMany({ where: { ...outstandingOrders, productMode: 'CATALOG', supplierValue }, include,
+        orderBy: [{ orderDate: 'desc' }, { id: 'desc' }] })
+      return { items: await Promise.all(rows.map(row => this.map(tx, row))) }
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
+  }
   private async map(tx: Prisma.TransactionClient, row: Order): Promise<PurchasePayableOrderDto> {
     const payables = [...row.payables].sort((a, b) => a.paymentType === b.paymentType ? 0 : a.paymentType === 'DEPOSIT' ? -1 : 1)
     const owner = payables[0]
@@ -62,7 +87,7 @@ export class PurchasePayableQueryService {
     // 付款状态由有效付款汇总维护，并由数据库约束核对；零总额同样为 PAID。
     // 先排除已处理采购单再分页，让组数、页码和付款作废后的重新出现保持一致。
     const where: Prisma.PurchaseOrderWhereInput = {
-      orderStatus: 'CONFIRMED', paymentStatus: { not: 'PAID' }, payables: { some: { closedAt: null, dueAmount: { gt: 0 } } },
+      ...outstandingOrders,
       ...(keyword ? { OR: [
         { orderNo: { contains: keyword, mode: 'insensitive' } }, { customSupplierName: { contains: keyword, mode: 'insensitive' } },
         { salesOrder: { orderNo: { contains: keyword, mode: 'insensitive' } } },

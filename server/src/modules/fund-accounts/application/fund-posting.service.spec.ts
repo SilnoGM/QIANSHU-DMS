@@ -783,6 +783,23 @@ describe('purchase payment transaction ports', () => {
     mockedLockAccounts.mockResolvedValue([companyAccount()])
   }
 
+  it('locks the complete sorted account union before a mixed-owner batch without posting any entry', async () => {
+    const { service, transaction, prisma } = fixture()
+    const tx = transaction as unknown as Prisma.TransactionClient
+    const otherAccount = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+    mockedReadIdentities.mockResolvedValueOnce({ userAccountId: otherAccount, companyAccountId: COMPANY_ACCOUNT_ID })
+      .mockResolvedValueOnce({ userAccountId: null, companyAccountId: COMPANY_ACCOUNT_ID })
+      .mockResolvedValueOnce({ userAccountId: USER_ACCOUNT_ID, companyAccountId: COMPANY_ACCOUNT_ID })
+    await service.lockBusinessEventAccountsInTransaction(tx, [
+      { context, input: input() }, { context: stockContext, input: stockInput() }, { context, input: input() },
+    ])
+    expect(mockedLockAccounts).toHaveBeenCalledTimes(1)
+    expect(mockedLockAccounts).toHaveBeenCalledWith(tx, [otherAccount, USER_ACCOUNT_ID, COMPANY_ACCOUNT_ID].sort())
+    expect(mockedInsertBatch).not.toHaveBeenCalled()
+    expect(mockedUpdateAccount).not.toHaveBeenCalled()
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
   it('posts sales-linked costs to the issuer and company using the configured share', async () => {
     const { service, transaction, prisma } = fixture()
     const tx = transaction as unknown as Prisma.TransactionClient

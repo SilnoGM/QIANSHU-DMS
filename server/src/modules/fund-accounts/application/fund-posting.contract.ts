@@ -90,6 +90,11 @@ export interface FundPostingResult {
  * 采购 VOID 仅允许全额冲正原始批次，由调用方同步作废对应的实际付款记录。
  */
 export abstract class FundPostingService {
+  abstract lockBusinessEventAccountsInTransaction(
+    transaction: Prisma.TransactionClient,
+    entries: readonly { context: FundBusinessTransactionContext, input: PostBusinessEventInput }[],
+  ): Promise<void>
+
   abstract previewBusinessEventInTransaction(
     transaction: Prisma.TransactionClient,
     context: FundBusinessTransactionContext,

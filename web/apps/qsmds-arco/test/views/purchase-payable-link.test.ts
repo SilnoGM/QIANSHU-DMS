@@ -26,6 +26,17 @@ test('付款链接定位具体款项，隐藏菜单且要求采购付款权限',
   assert.equal(route.meta.activeMenu, '/qs-finance/realtime-payments/purchase-payments')
 })
 
+test('批量付款独立路由优先于款项ID路由，登录及付款权限继续受控', () => {
+  const router = createRouter({ history: createMemoryHistory(), routes: financeWorkbench.children.map(withoutViews) })
+  const route = router.resolve('/qs-finance/realtime-payments/purchase-payments/batch')
+  assert.equal(route.name, 'qsFinanceRealtimePurchaseBatchPayment')
+  assert.equal(route.meta.menu, false)
+  assert.equal(route.meta.auth, 'purchase-orders:payment')
+  assert.equal(route.meta.whiteList, undefined)
+  assert.equal(route.meta.activeMenu, '/qs-finance/realtime-payments/purchase-payments')
+  assert.deepEqual(resolveAuthRetryNavigation('anonymous', route.fullPath, '/'), { name: 'login', query: { redirect: route.fullPath } })
+})
+
 test('采购付款申请包含供应商、采购单号和所选待付金额，网址单独换行并保留部署目录及 hash', () => {
   assert.equal(buildPurchasePayableLinkText(order, payable, `/dms/#${path}`, 'https://dms.example/dms/#/old?keyword=x'), `【采购付款申请】\n\n采购订单：PO/20260916-00016\n供应商：测试供应商\n本次申请支付 [定金]：80.50 元。\n\n付款链接：\nhttps://dms.example/dms/#${path}`)
   assert.equal(buildPurchasePayableLinkText(order, { ...payable, paymentType: 'BALANCE', remainingAmount: '0.5' }, path, 'http://localhost:9000/#/old'), `【采购付款申请】\n\n采购订单：PO/20260916-00016\n供应商：测试供应商\n本次申请支付 [尾款]：0.50 元。\n\n付款链接：\nhttp://localhost:9000${path}`)

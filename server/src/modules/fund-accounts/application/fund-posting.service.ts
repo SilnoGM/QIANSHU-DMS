@@ -508,6 +508,23 @@ export class FundPostingApplicationService extends FundPostingService {
     }, input)
   }
 
+  async lockBusinessEventAccountsInTransaction(
+    transaction: Prisma.TransactionClient,
+    entries: readonly { context: FundBusinessTransactionContext, input: PostBusinessEventInput }[],
+  ): Promise<void> {
+    try {
+      const accountIds = new Set<string>()
+      for (const entry of entries) {
+        this.normalizeBusinessContext(entry.context, 'POST')
+        const request = this.normalizeBusinessRequest(entry.context, entry.input)
+        const resolved = await this.resolveBusinessPlanAccounts(transaction, request)
+        for (const id of resolved.accountIds) accountIds.add(id)
+      }
+      // 跨用户批量付款先取得完整账户集合并统一排序；逐笔锁公司/用户组合可能形成反序等待。
+      if (accountIds.size) await lockFundAccountsForPosting(transaction, [...accountIds].sort())
+    } catch (error) { throw toPostingError(error) }
+  }
+
   async previewBusinessEventInTransaction(
     transaction: Prisma.TransactionClient,
     context: FundBusinessTransactionContext,
@@ -997,7 +1014,7 @@ export class FundPostingApplicationService extends FundPostingService {
     return replay
   }
 
-  private async prepareBusinessPlan(
+  private async resolveBusinessPlanAccounts(
     transaction: Prisma.TransactionClient,
     request: NormalizedPostBusinessEventRequest,
   ) {
@@ -1049,6 +1066,11 @@ export class FundPostingApplicationService extends FundPostingService {
       requireUserAccount,
       requireCompanyAccount,
     )
+    return { source, postingType, stockPurchase, identities, accountIds }
+  }
+
+  private async prepareBusinessPlan(transaction: Prisma.TransactionClient, request: NormalizedPostBusinessEventRequest) {
+    const { source, postingType, stockPurchase, identities, accountIds } = await this.resolveBusinessPlanAccounts(transaction, request)
     const accounts = await lockFundAccountsForPosting(transaction, accountIds)
     const targetAccounts = mapTargetAccounts(
       accounts,

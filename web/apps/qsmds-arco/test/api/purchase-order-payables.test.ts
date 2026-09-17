@@ -4,6 +4,27 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createPurchaseOrderPayablesApi } from '../../src/api/modules/purchase-order-payables'
 
+test('批量查询使用供应商稳定值，批量确认保留完整请求和幂等键并禁止自动重试', async () => {
+  const calls: unknown[][] = []
+  const invoke = (...args: unknown[]) => {
+    calls.push(args)
+    return Promise.resolve({ data: {} })
+  }
+  const api = createPurchaseOrderPayablesApi({ get: invoke, post: invoke } as unknown as AxiosInstance)
+  const signal = new AbortController().signal
+  const body = { supplierValue: 'supplier/1', recipientAccountId: 'bank', recipientProfileVersion: 2, paymentMethod: 'BANK_TRANSFER', items: [
+    { payableId: 'balance', expectedVersion: 1, voucher: { mediaAssetId: 'voucher' } },
+  ] }
+  await api.batchSuppliers(signal)
+  await api.batchOrders('supplier/1', signal)
+  await api.payBatch(body, 'batch-key', signal)
+  assert.deepEqual(calls, [
+    ['purchase-order-payables/batch/suppliers', { errorPresentation: 'local', signal }],
+    ['purchase-order-payables/batch/orders', { errorPresentation: 'local', params: { supplierValue: 'supplier/1' }, signal }],
+    ['purchase-order-payables/batch/pay', body, { errorPresentation: 'local', headers: { 'Idempotency-Key': 'batch-key' }, retry: false, signal }],
+  ])
+})
+
 test('列表按采购单分页，付款保留幂等键与版本且不自动重试', async () => {
   const calls: unknown[][] = []
   const invoke = (...args: unknown[]) => {

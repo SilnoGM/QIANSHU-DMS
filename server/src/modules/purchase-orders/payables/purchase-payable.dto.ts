@@ -2,7 +2,7 @@ import { PaymentRecipientAccountDto, PaymentRecipientProfileDto } from '../../pa
 import { PurchaseOrderPaymentVoucherInputDto } from '../dto/purchase-order-mutation.dto'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
-import { IsInt, IsOptional, IsString, IsUUID, Max, Min, ValidateNested, IsDefined } from 'class-validator'
+import { IsInt, IsOptional, IsString, IsUUID, Max, Min, ValidateNested, IsDefined, IsArray, ArrayMinSize } from 'class-validator'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 
 export class PurchasePayableIdDto {
@@ -81,4 +81,33 @@ export class PurchasePayableVoucherUploadDto {
   @ApiProperty() mimeType!: string
   @ApiProperty() sizeBytes!: string
   @ApiProperty() originalFilename!: string
+}
+
+export class PurchasePayableBatchSupplierDto {
+  @ApiProperty() value!: string
+  @ApiProperty() label!: string
+}
+export class PurchasePayableBatchSuppliersDto {
+  @ApiProperty({ type: [PurchasePayableBatchSupplierDto] }) items!: PurchasePayableBatchSupplierDto[]
+}
+export class PurchasePayableBatchOrdersQueryDto {
+  @ApiProperty({ maxLength: 64 }) @IsString() @IsUnicodeCodePointLength(1, 64) supplierValue!: string
+}
+export class PurchasePayableBatchOrdersDto {
+  @ApiProperty({ type: [PurchasePayableOrderDto] }) items!: PurchasePayableOrderDto[]
+}
+export class PurchasePayableBatchItemDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID('4') payableId!: string
+  @ApiProperty({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }) @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) expectedVersion!: number
+  @ApiProperty({ type: () => PurchaseOrderPaymentVoucherInputDto }) @IsDefined() @ValidateNested() @Type(() => PurchaseOrderPaymentVoucherInputDto) voucher!: PurchaseOrderPaymentVoucherInputDto
+}
+export class PurchasePayableBatchPayDto extends PurchasePayableBatchOrdersQueryDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID('4') recipientAccountId!: string
+  @ApiProperty({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }) @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) recipientProfileVersion!: number
+  @ApiProperty({ maxLength: 64 }) @IsString() @IsUnicodeCodePointLength(1, 64) paymentMethod!: string
+  @ApiProperty({ type: [PurchasePayableBatchItemDto], minItems: 1 }) @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => PurchasePayableBatchItemDto) items!: PurchasePayableBatchItemDto[]
+}
+export class PurchasePayableBatchResultDto {
+  @ApiProperty({ type: [String], format: 'uuid' }) orderIds!: string[]
+  @ApiProperty({ minimum: 1 }) paymentCount!: number
 }

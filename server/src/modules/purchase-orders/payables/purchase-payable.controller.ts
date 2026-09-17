@@ -11,6 +11,7 @@ import { RequirePermissions } from '../../auth/decorators/auth.decorators'
 import { PurchaseOrderMutationService } from '../purchase-order-mutation.service'
 import { PurchasePayableQueryService } from './purchase-payable-query.service'
 import { PurchasePayableIdDto, PurchasePayableListQueryDto, PurchasePayableOrderDto, PurchasePayableOrderPageDto, PurchasePayablePayDto } from './purchase-payable.dto'
+import { PurchasePayableBatchSuppliersDto, PurchasePayableBatchOrdersDto, PurchasePayableBatchOrdersQueryDto, PurchasePayableBatchPayDto, PurchasePayableBatchResultDto } from './purchase-payable.dto'
 
 @ApiTags('purchase-order-payables')
 @Controller('purchase-order-payables')
@@ -22,6 +23,30 @@ export class PurchasePayableController {
   @ApiApplicationContract({ operationId: 'purchase_payables_list', session: 'required', authorization: true, badRequest: true, validation: true, privateNoStore: true,
     errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] }, { status: 422, codes: ['VALIDATION_FAILED', 'PURCHASE_PAYABLE_NOT_AVAILABLE'] }] })
   list(@Query() query: PurchasePayableListQueryDto) { return this.queries.list(query) }
+  @Get('batch/suppliers')
+  @RequirePermissions('purchase-orders:payment')
+  @ApiContractResponse({ status: 200, type: PurchasePayableBatchSuppliersDto })
+  @ApiApplicationContract({ operationId: 'purchase_payables_batch_suppliers', session: 'required', authorization: true, badRequest: true, privateNoStore: true,
+    errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] }] })
+  batchSuppliers() { return this.queries.batchSuppliers() }
+  @Get('batch/orders')
+  @RequirePermissions('purchase-orders:payment')
+  @ApiContractResponse({ status: 200, type: PurchasePayableBatchOrdersDto })
+  @ApiApplicationContract({ operationId: 'purchase_payables_batch_orders', session: 'required', authorization: true, badRequest: true, validation: true, privateNoStore: true,
+    errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] }, { status: 422, codes: ['VALIDATION_FAILED', 'PURCHASE_PAYABLE_NOT_AVAILABLE'] }] })
+  batchOrders(@Query() query: PurchasePayableBatchOrdersQueryDto) { return this.queries.batchOrders(query.supplierValue) }
+  @Post('batch/pay') @HttpCode(200)
+  @RequirePermissions('purchase-orders:payment')
+  @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } })
+  @ApiContractResponse({ status: 200, type: PurchasePayableBatchResultDto })
+  @ApiApplicationContract({ operationId: 'purchase_payables_batch_pay', session: 'required', authorization: true, csrf: true, badRequest: true, validation: true, privateNoStore: true,
+    errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED', 'CSRF_REJECTED'] },
+      { status: 404, codes: ['PURCHASE_PAYABLE_NOT_FOUND', 'PURCHASE_ORDER_NOT_FOUND'] },
+      { status: 409, codes: ['PURCHASE_PAYABLE_STATE_CHANGED', 'PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT', 'PAYMENT_RECIPIENT_STATE_CHANGED'] },
+      { status: 422, codes: ['VALIDATION_FAILED', 'PURCHASE_PAYABLE_NOT_AVAILABLE', 'PURCHASE_PAYABLE_POSTING_UNAVAILABLE', 'PURCHASE_ORDER_PAYMENT_METHOD_UNAVAILABLE', 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID', 'PURCHASE_ORDER_CANCELLED', 'PURCHASE_ORDER_PAYMENT_AMOUNT_INVALID', 'PURCHASE_ORDER_AMOUNT_INVALID', 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', 'PAYMENT_RECIPIENT_UNAVAILABLE', 'PAYMENT_RECIPIENT_IMAGE_UNAVAILABLE', 'PAYMENT_RECIPIENT_INVALID'] }] })
+  batchPay(@Body() input: PurchasePayableBatchPayDto, @Headers('idempotency-key') key: unknown, @Req() request: object) {
+    return this.mutations.payBatch({ actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) }, input, key)
+  }
   @Get('orders/:id')
   @RequirePermissions('purchase-orders:payment')
   @ApiContractResponse({ status: 200, type: PurchasePayableOrderDto })

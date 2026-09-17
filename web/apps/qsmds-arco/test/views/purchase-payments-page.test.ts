@@ -24,7 +24,7 @@ async function fixture() {
   const callbacks: Record<string, () => void> = {}
   let execute = async () => ({ data: { items: [], total: 0 } })
   const scope = effectScope()
-  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ load, openPayment, orders, groups, summaryValues, total, loading, error, page })`, {
+  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ load, openPayment, openBatchPayment, orders, groups, summaryValues, total, loading, error, page })`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
   }).outputText, {
     AbortController,
@@ -67,6 +67,7 @@ async function fixture() {
   })) as {
     load: () => Promise<void>
     openPayment: (row: PurchasePayableRow) => void
+    openBatchPayment: () => void
     orders: { value: unknown[] }
     total: { value: number }
     error: { value: string }
@@ -93,6 +94,23 @@ async function fixture() {
   }
 }
 const flush = () => new Promise(resolve => setImmediate(resolve))
+
+test('批量付款入口只在当前页面有权限且已加载时进入独立批量页面', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  f.state.openBatchPayment()
+  assert.equal(f.navigation.length, 0)
+  f.callbacks.mount!()
+  await flush()
+  f.state.openBatchPayment()
+  assert.deepEqual(JSON.parse(JSON.stringify(f.navigation)), [{ name: 'qsFinanceRealtimePurchaseBatchPayment' }])
+  f.state.loading.value = true
+  f.state.openBatchPayment()
+  f.state.loading.value = false
+  f.permissions.pay = false
+  f.state.openBatchPayment()
+  assert.equal(f.navigation.length, 1)
+})
 
 test('采购付款读取路由搜索词，API 分页按采购单且金额汇总只计算子行', async (context) => {
   const f = await fixture()
