@@ -18,7 +18,6 @@ const props = defineProps<{
   error: string | null
   actionError: string
   busy: boolean
-  canManagePayment: boolean
   canAttachDocument?: boolean
   canReceiveWarehouse?: boolean
 }>()
@@ -26,7 +25,6 @@ const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   'reload': []
   'closed': []
-  'recordPayment': []
   'attachDocument': []
   'receiveWarehouse': []
 }>()
@@ -114,10 +112,7 @@ function onClosed() {
             <FaAlert v-if="actionError" :title="t('purchaseOrderDrawer.actionFailed')" :description="actionError" variant="destructive" />
             <OrderInformation :detail="detail" :currencies="currencies" />
             <PurchaseOrderPaymentRecipients :accounts="detail.paymentRecipientProfile?.accounts ?? []" />
-            <OrderRecords
-              :detail="detail" :currencies="currencies" :busy="busy" :can-manage-payment="canManagePayment"
-              @record-payment="emit('recordPayment')"
-            />
+            <OrderRecords :detail="detail" :currencies="currencies" />
             <OrderDocuments :detail="detail" :busy="busy" :can-attach-document="Boolean(canAttachDocument)" @attach-document="emit('attachDocument')" />
           </div>
         </template>

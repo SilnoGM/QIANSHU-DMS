@@ -334,7 +334,7 @@ onBeforeUnmount(() => {
     <QsPurchaseOrderDrawer
       v-model="detailVisible" :order="selectedOrder" :detail="detail" :currencies="currencyCatalog.currencies.value"
       :loading="detailLoading" :error="detailError" action-error="" :busy="false"
-      :can-manage-payment="false" :can-attach-document="false" @reload="loadDetail"
+      :can-attach-document="false" @reload="loadDetail"
     />
   </div>
 </template>

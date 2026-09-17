@@ -1532,7 +1532,6 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderRecords.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue"
     ]
   },

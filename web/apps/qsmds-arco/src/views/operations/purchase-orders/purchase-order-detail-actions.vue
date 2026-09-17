@@ -43,7 +43,6 @@ const emit = defineEmits<{
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
 const toast = useQsToast()
-const router = useRouter()
 const warehouseActionRef = useTemplateRef<InstanceType<typeof PurchaseWarehouseReceiptAction>>('warehouseActionRef')
 const warehouseBusy = ref(false)
 const submitting = ref(false)
@@ -60,11 +59,6 @@ const canManagePayment = computed(() => auth('purchase-orders:payment'))
 const canManageDocument = computed(() => auth('purchase-orders:document'))
 const actionLocked = computed(() => submitting.value || warehouseBusy.value)
 const nextFulfillmentStatus = computed(() => nextPurchaseOrderFulfillmentStatus(props.detail))
-const canRecordPayment = computed(() => (
-  canManagePayment.value
-  && props.detail.orderStatus === 'CONFIRMED'
-  && props.detail.paymentStatus !== 'PAID'
-))
 
 function clearActionState(): void {
   actionError.value = ''
@@ -87,13 +81,6 @@ function applyUpdatedDetail(updated: PurchaseOrderDetailDto, message: string): v
   activeDialog.value = null
   clearActionState()
   toast.success(message)
-}
-
-function openPaymentDialog(): void {
-  if (!canRecordPayment.value || actionLocked.value) {
-    return
-  }
-  void router.push({ name: 'qsFinanceRealtimePurchasePayments', query: { keyword: props.detail.orderNo } })
 }
 
 function openWarehouseDialog(): void {
@@ -341,7 +328,6 @@ defineExpose({
   openDetachDialog,
   openFulfillmentDialog,
   openWarehouseDialog,
-  openPaymentDialog,
   openVoidDialog,
 })
 </script>

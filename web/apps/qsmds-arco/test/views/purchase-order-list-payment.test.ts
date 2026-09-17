@@ -235,28 +235,3 @@ test('待办付款将当前采购单传给复制入口，发货保留原入口',
   handle({ key: 'SHIPMENT' }, order)
   assert.deepEqual(shipments, [order.id])
 })
-
-test('采购详情付款入口按订单号跳转财务页，权限或忙碌时不跳转', async () => {
-  const source = await readFile(new URL('purchase-order-detail-actions.vue', ROOT), 'utf8')
-  const start = source.indexOf('function openPaymentDialog()')
-  const script = source.slice(start, source.indexOf('\nfunction openWarehouseDialog', start))
-  const navigations: unknown[] = []
-  const canRecordPayment = { value: true }
-  const actionLocked = { value: false }
-  const open = runInNewContext(ts.transpileModule(`${script}; openPaymentDialog`, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022 },
-  }).outputText, {
-    props: { detail: { orderNo: 'PO/20260916-00016' } },
-    router: { push: (location: unknown) => navigations.push(location) },
-    canRecordPayment,
-    actionLocked,
-  }) as () => void
-  open()
-  assert.deepEqual(JSON.parse(JSON.stringify(navigations)), [{ name: 'qsFinanceRealtimePurchasePayments', query: { keyword: 'PO/20260916-00016' } }])
-  canRecordPayment.value = false
-  open()
-  canRecordPayment.value = true
-  actionLocked.value = true
-  open()
-  assert.equal(navigations.length, 1)
-})

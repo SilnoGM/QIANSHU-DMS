@@ -410,6 +410,6 @@ onBeforeUnmount(() => {
     </FaPageMain>
     <PurchaseWarehouseReceiptAction ref="warehouseActionRef" :active="enabled" @detail-updated="warehouseUpdated" />
     <ShipmentDetailDrawer v-model="shipmentVisible" :detail="detail" :loading="detailLoading" :error="detailError" @reload="loadDetail" @view-order="viewOrderFromShipment" @closed="shipmentClosed" />
-    <QsPurchaseOrderDrawer v-model="orderVisible" :order="null" :detail="orderDetail" :currencies="currencyCatalog.currencies.value" :loading="detailLoading" :error="detailError" action-error="" :busy="false" :can-manage-payment="false" :can-attach-document="false" @reload="loadDetail" />
+    <QsPurchaseOrderDrawer v-model="orderVisible" :order="null" :detail="orderDetail" :currencies="currencyCatalog.currencies.value" :loading="detailLoading" :error="detailError" action-error="" :busy="false" :can-attach-document="false" @reload="loadDetail" />
   </div>
 </template>

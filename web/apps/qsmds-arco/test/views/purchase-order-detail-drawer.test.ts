@@ -12,14 +12,14 @@ const ACTIONS_SOURCE = new URL(
   import.meta.url,
 )
 
-test('采购查看入口使用独立抽屉，保留请求取消和记录付款入口', async () => {
+test('采购查看入口使用独立抽屉，保留请求取消且不提供付款入口', async () => {
   const source = await readFile(SOURCE, 'utf8')
 
   assert.match(source, /<QsPurchaseOrderDrawer/u)
   assert.match(source, /purchaseOrdersApi\.getById/u)
   assert.doesNotMatch(source, /QsPurchaseOrderDesc|QsGenericDrawer/u)
   assert.match(source, /detailAbortController\?\.abort\(\)/u)
-  assert.match(source, /@record-payment="openPaymentDialog"/u)
+  assert.doesNotMatch(source, /record-payment|openPaymentDialog|canManagePayment/u)
   assert.doesNotMatch(source, /openVoidDialog|openDetachDialog|downloadDocument/u)
 })
 
@@ -40,7 +40,7 @@ test('专用采购抽屉继承销售布局及动画，不引入销售业务字�
   assert.doesNotMatch(information, /referencePurchaseUnitPriceAmount|actualUnitPriceAmount/u)
   assert.equal((records.match(/v-if="!open" key="thumbnail"/gu) ?? []).length, 1)
   assert.match(records, /prefers-reduced-motion: reduce/u)
-  assert.match(records, /canManagePayment/u)
+  assert.doesNotMatch(records, /canManagePayment|recordPayment/u)
   assert.match(document, /detachedAt === null/u)
   assert.match(document, /<ImageGroup/u)
   assert.match(history, /buildPurchaseOrderTimeline/u)
@@ -96,7 +96,7 @@ test('采购抽屉移除作废、下载和解除入口，保留图片预览及�
   assert.match(document, /v-if="document\.detachedAt"/u)
   assert.match(records, /v-if="payment\.voidedAt"/u)
   assert.match(records, /payment\.voidReason/u)
-  assert.match(records, /@click="emit\('recordPayment'\)"/u)
+  assert.doesNotMatch(records, /recordPayment/u)
 })
 
 test('采购详情动作精确受 update、payment 和 document 权限控制', async () => {
@@ -108,8 +108,7 @@ test('采购详情动作精确受 update、payment 和 document 权限控制', a
   assert.match(source, /purchaseOrdersApi\.updateOrderStatus/u)
   assert.match(source, /purchaseOrdersApi\.updateFulfillmentStatus/u)
   assert.doesNotMatch(source, /purchaseOrdersApi\.recordPayment|submitPayment\(|activeDialog === 'payment'/u)
-  assert.match(source, /name: 'qsFinanceRealtimePurchasePayments'/u)
-  assert.match(source, /query: \{ keyword: props\.detail\.orderNo \}/u)
+  assert.doesNotMatch(source, /openPaymentDialog|qsFinanceRealtimePurchasePayments/u)
   assert.match(source, /purchaseOrdersApi\.voidPayment/u)
   assert.match(source, /purchaseOrdersApi\.detachDocument/u)
   assert.match(source, /purchaseOrdersApi\.getDocumentContent/u)

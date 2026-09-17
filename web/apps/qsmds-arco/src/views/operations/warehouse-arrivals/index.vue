@@ -222,7 +222,7 @@ onBeforeUnmount(() => activated.value = false)
       </template>
     </FaPageMain>
     <ShipmentDetailDrawer v-model="shipmentVisible" :detail="detail" :loading="detailLoading" :error="detailError" @reload="loadDetail" @view-order="viewOrderFromShipment" @closed="shipmentClosed" />
-    <QsPurchaseOrderDrawer v-model="orderVisible" :order="null" :detail="orderDetail" :currencies="currencyCatalog.currencies.value" :loading="detailLoading" :error="detailError" action-error="" :busy="false" :can-manage-payment="false" :can-attach-document="false" @reload="loadDetail" />
+    <QsPurchaseOrderDrawer v-model="orderVisible" :order="null" :detail="orderDetail" :currencies="currencyCatalog.currencies.value" :loading="detailLoading" :error="detailError" action-error="" :busy="false" :can-attach-document="false" @reload="loadDetail" />
     <PackagingCostAction v-if="packagingShipment" :shipment="packagingShipment" :enabled="enabled && canCreatePackaging" @close="packagingShipment = null" @submitted="refresh" />
   </div>
 </template>

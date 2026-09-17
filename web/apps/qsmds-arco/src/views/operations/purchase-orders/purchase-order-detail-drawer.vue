@@ -42,7 +42,6 @@ const drawerVisible = computed({
   set: value => emit('update:modelValue', value),
 })
 const canReceiveWarehouse = computed(() => auth('purchase-orders:update') && !!detail.value && eligibleWarehouseParts(detail.value).length > 0)
-const canManagePayment = computed(() => auth('purchase-orders:payment'))
 const canAttachDocument = computed(() => auth('purchase-orders:document') && detail.value !== null && detail.value.orderStatus !== 'PENDING_REVIEW')
 function cancelDetailRequest(): void {
   requestVersion += 1
@@ -98,11 +97,6 @@ async function loadDetail(): Promise<void> {
   }
 }
 
-function openPaymentDialog(): void {
-  actionError.value = ''
-  detailActionsRef.value?.openPaymentDialog()
-}
-
 watch(
   () => [props.modelValue, props.order?.id] as const,
   ([visible, orderId]) => {
@@ -145,12 +139,10 @@ onBeforeUnmount(() => {
     :error="loadError"
     :action-error="actionError"
     :busy="actionLocked"
-    :can-manage-payment="canManagePayment"
     :can-attach-document="canAttachDocument"
     :can-receive-warehouse="canReceiveWarehouse"
     @receive-warehouse="detailActionsRef?.openWarehouseDialog()"
     @reload="loadDetail"
-    @record-payment="openPaymentDialog"
     @attach-document="documentModalVisible = canAttachDocument && !actionLocked"
   />
 
