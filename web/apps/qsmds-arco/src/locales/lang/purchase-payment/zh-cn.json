@@ -100,6 +100,8 @@
     "uploadVoucher": "上传付款截图",
     "replaceVoucher": "替换截图",
     "removeVoucher": "移除",
+    "voucherUploaded": "截图已上传",
+    "previewVoucher": "点击图片查看大图",
     "voucherRequired": "请先上传一张付款截图",
     "voucherHint": "每笔付款上传 1 张截图",
     "voucherArchiveHint": "确认成功后，截图归档到本张采购订单的凭证中。",
