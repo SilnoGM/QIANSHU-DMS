@@ -34,7 +34,7 @@ onBeforeUnmount(() => active.value = false)
         </FaButton>
       </div>
     </FaPageHeader>
-    <div class="mx-auto max-w-6xl min-w-0">
+    <div class="min-w-0">
       <FaPageMain main-class="p-0" :aria-busy="loading">
         <FaEmpty v-if="!canPay" icon="i-lucide:shield-alert" :title="t('purchasePayment.noPermission')" class="py-12" />
         <div v-else-if="loading" role="status" class="text-muted-foreground py-12 flex gap-3 items-center justify-center">
