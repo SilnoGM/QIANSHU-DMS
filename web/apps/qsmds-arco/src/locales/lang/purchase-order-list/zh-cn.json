@@ -9,7 +9,7 @@
       "chooseType": "选择付款款项",
       "selectionHint": "选择定金或尾款后复制付款信息。已付清或无需付款的款项不可选。",
       "copy": "复制付款信息",
-      "copied": "付款信息已复制",
+      "copied": "复制成功",
       "unavailable": "采购订单已付清或状态已变化，当前无法复制付款信息，已刷新列表。"
     },
     "shipmentProgress": {

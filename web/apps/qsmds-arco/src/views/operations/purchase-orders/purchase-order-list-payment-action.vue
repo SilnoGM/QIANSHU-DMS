@@ -125,6 +125,7 @@ async function copy(): Promise<void> {
     // 数据预先加载，点击时直接写剪贴板以保留用户手势；付款页仍会重新校验登录、权限及最新应付。
     await navigator.clipboard.writeText(buildPurchasePayableLinkText(detail.value, selected.value, href, window.location.href))
     if (attempt === currentAttempt && canOpen.value) {
+      reset()
       toast.success(t('purchaseOrderList.payment.copied'))
     }
   }

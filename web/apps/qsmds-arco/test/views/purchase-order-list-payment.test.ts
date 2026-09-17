@@ -93,6 +93,11 @@ test('打开先读取最新定金尾款，明确选择后复制对应款项链�
   assert.deepEqual(f.copied, ['我需要为【最新客户】的订单【PO/20260916-00016】付【定金】：80.50 元。\n\n付款链接：\nhttps://dms.example/dms/#/qs-finance/realtime-payments/purchase-payments/deposit'])
   assert.deepEqual(f.navigation, [])
   assert.equal(f.messages.at(-1), 'purchaseOrderList.payment.copied')
+  assert.equal(f.state.visible.value, false)
+  assert.equal(f.state.selectedId.value, undefined)
+  assert.equal(f.state.copying.value, false)
+  await f.state.open(order)
+  assert.equal(f.state.selectedId.value, undefined)
   f.state.selectedId.value = 'balance'
   await f.state.copy()
   assert.match(f.copied[1]!, /付【尾款】：200\.00 元。/)
@@ -109,17 +114,23 @@ test('复制期间防止双击，失败后仍可重试原选择', async (context
   const pending = f.state.copy()
   await f.state.copy()
   assert.equal(f.copied.length, 1)
+  assert.equal(f.state.visible.value, true)
   finish()
   await pending
+  assert.equal(f.state.visible.value, false)
+  await f.state.open(order)
+  f.state.selectedId.value = 'deposit'
   f.setWrite(async () => {
     throw new Error('Clipboard denied')
   })
   await f.state.copy()
   assert.equal(f.messages.at(-1), 'purchasePayment.copyFailed')
+  assert.equal(f.state.visible.value, true)
   assert.equal(f.state.selectedId.value, 'deposit')
   f.setWrite(async () => {})
   await f.state.copy()
   assert.equal(f.messages.at(-1), 'purchaseOrderList.payment.copied')
+  assert.equal(f.state.visible.value, false)
 })
 
 test('已付清、零应付、已取消或伪造的款项不能复制，读取失败可以重新加载', async (context) => {

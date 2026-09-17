@@ -204,7 +204,7 @@ test('待办采购操作严格只返回当前任务对应的唯一处理动作',
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_PAYMENT', {
     orderStatus: 'CONFIRMED',
     paymentStatus: 'PARTIALLY_PAID',
-  }).map(item => item.label), ['付款'])
+  }).map(item => item.label), ['申请付款'])
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_PAYMENT', {
     orderStatus: 'CONFIRMED',
     paymentStatus: 'PAID',
