@@ -15,13 +15,21 @@
     "orderTotal": "采购总额",
     "orderNo": "采购订单",
     "paymentType": "款项",
-    "types": { "DEPOSIT": "定金", "BALANCE": "尾款" },
+    "types": {
+      "DEPOSIT": "定金",
+      "BALANCE": "尾款"
+    },
     "dueAmount": "应付金额",
     "paidAmount": "已付金额",
     "remainingAmount": "待付金额",
     "statusLabel": "状态",
     "paidInfo": "付款信息",
-    "status": { "PENDING_PAYMENT": "待付款", "PAID": "已付清", "NO_PAYMENT": "无需付款", "CANCELLED": "已取消" },
+    "status": {
+      "PENDING_PAYMENT": "待付款",
+      "PAID": "已付清",
+      "NO_PAYMENT": "无需付款",
+      "CANCELLED": "已取消"
+    },
     "pay": "付款",
     "payLabel": "支付 {orderNo} 的{paymentType}",
     "payTitle": "确认采购付款",
@@ -40,7 +48,7 @@
     "stale": "款项状态已变化，请重新核对后再付款。",
     "close": "关闭",
     "cancel": "取消",
-    "confirmPay": "确认付款",
+    "confirmPay": "确认已付款",
     "retryPay": "重试确认",
     "paySuccess": "采购付款已确认",
     "linkCopied": "付款链接已复制，打开链接即可进入付款页面",
@@ -48,7 +56,10 @@
     "paymentInformation": "付款信息",
     "orderInformation": "采购单信息",
     "purchaseType": "采购类型",
-    "purchaseTypes": { "SALES_LINKED": "销售关联采购", "STOCK": "独立备货采购" },
+    "purchaseTypes": {
+      "SALES_LINKED": "销售关联采购",
+      "STOCK": "独立备货采购"
+    },
     "salesOrderNo": "销售来源",
     "noSalesSource": "无销售来源",
     "installments": "款项明细",
@@ -58,9 +69,9 @@
     "currentInstallment": "当前款项",
     "paidAt": "付款时间",
     "paidBy": "付款人",
-    "confirmHint": "确认后将登记付款并更新归属账户。",
+    "confirmHint": "确认后将登记付款、归档截图并更新归属账户。",
     "selectInstallment": "选择付款项",
-    "pageDescription": "核对款项和归属账户后确认付款。",
+    "pageDescription": "核对收款资料，完成转账并上传付款截图后确认。",
     "backToList": "返回采购付款",
     "loading": "正在读取付款信息…",
     "invalidLink": "付款链接无效",
@@ -72,6 +83,27 @@
       "PAID": "该笔款项已付清，无需重复付款。",
       "NO_PAYMENT": "该笔款项无需付款。",
       "CANCELLED": "该采购单已取消，无法继续付款。"
-    }
+    },
+    "recipientInformation": "收款资料",
+    "customRecipients": "本单收款方式",
+    "customRecipientsHint": "收款资料仅用于本张采购单。",
+    "methods": {
+      "ALIPAY": "支付宝收款",
+      "WECHAT": "微信收款",
+      "BANK_TRANSFER": "银行账户转账"
+    },
+    "noRecipient": "尚未配置收款资料",
+    "noRecipientHint": "请先补齐供应商或本单收款资料，再刷新页面继续付款。",
+    "selectRecipientHint": "选择一种收款方式后，核对收款人和收款码或银行账户。",
+    "noHistoricalRecipient": "此历史付款未记录收款账户资料。",
+    "paymentVoucher": "付款截图",
+    "uploadVoucher": "上传付款截图",
+    "replaceVoucher": "替换截图",
+    "removeVoucher": "移除",
+    "voucherRequired": "请先上传一张付款截图",
+    "voucherHint": "每笔付款上传 1 张截图",
+    "voucherArchiveHint": "确认成功后，截图归档到本张采购订单的凭证中。",
+    "uploading": "正在上传，请稍候…",
+    "imageOnly": "请选择 JPG、PNG 或 WebP 图片"
   }
 }

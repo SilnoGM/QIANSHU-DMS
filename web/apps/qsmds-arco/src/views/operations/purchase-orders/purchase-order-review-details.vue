@@ -7,6 +7,7 @@ import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { getPurchaseProductImages } from '@/components/business/QsPurchaseOrderDrawer/logic'
+import PurchaseOrderPaymentRecipients from './purchase-order-payment-recipients.vue'
 
 const props = defineProps<{
   detail: PurchaseOrderDetailDto
@@ -102,6 +103,8 @@ const amounts = computed(() => [
         </div>
       </dl>
     </FaCard>
+
+    <PurchaseOrderPaymentRecipients :accounts="detail.paymentRecipientProfile?.accounts ?? []" />
 
     <section data-slot="purchase-review-products" :aria-label="t('purchaseReview.detail.products')" class="min-w-0">
       <div class="mb-3 flex flex-wrap gap-x-3 gap-y-1 items-center justify-between">

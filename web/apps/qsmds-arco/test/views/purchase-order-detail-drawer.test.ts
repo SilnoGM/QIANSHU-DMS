@@ -48,7 +48,7 @@ test('专用采购抽屉继承销售布局及动画，不引入销售业务字�
   assert.match(history, /reasonNotRecorded/u)
 })
 
-test('付款凭证仅在对应付款记录内展示，保留空态', async () => {
+test('付款记录展示对应凭证，保留未上传的历史空态', async () => {
   const records = await readFile(new URL('../../src/components/business/QsPurchaseOrderDrawer/OrderRecords.vue', import.meta.url), 'utf8')
 
   assert.doesNotMatch(records, /<section :aria-label="t\('purchaseOrderDrawer\.documents'\)"/u)

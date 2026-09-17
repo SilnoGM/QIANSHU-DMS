@@ -30,6 +30,7 @@ function order(status: PurchasePayableDto['status'] = 'PENDING_PAYMENT'): Purcha
     version: 1,
     paidAt: null,
     paidBy: null,
+    paymentReceipt: null,
   })
   return {
     id: 'order',
@@ -42,6 +43,7 @@ function order(status: PurchasePayableDto['status'] = 'PENDING_PAYMENT'): Purcha
     currencyCode: 'CNY',
     accountOwnerType: 'USER',
     owner: { id: 'owner', name: '销售出单人' },
+    paymentRecipientProfile: { id: 'profile', version: 2, accounts: [{ id: 'bank', paymentMethod: 'BANK_TRANSFER', recipientName: '供应商', bankName: '银行', bankAccount: '123', bankBranch: null, qrMediaAssetId: null, qrContentUrl: null }] },
     items: [item('deposit', 'DEPOSIT', '30.00'), item('balance', 'BALANCE', '70.00')],
   }
 }
@@ -99,7 +101,7 @@ function fixture(status: PurchasePayableDto['status'] = 'PENDING_PAYMENT') {
         return { useCurrencyCatalog: () => ({ currencies: ref([]) }) }
       }
       if (specifier.endsWith('.vue')) {
-        return { __esModule: true, default: element(specifier.includes('QsDictionarySelect') ? 'select' : 'span') }
+        return { __esModule: true, default: element(specifier.includes('payment-voucher-upload') ? 'voucher-upload' : 'span') }
       }
       throw new Error(`Unexpected payment form dependency: ${specifier}`)
     },
@@ -140,7 +142,7 @@ function fixture(status: PurchasePayableDto['status'] = 'PENDING_PAYMENT') {
     onLockChange: (locked: boolean) => locks.push(locked),
     onRefresh: () => refreshes.push(true),
   }) }))
-  for (const [name, tag] of Object.entries({ FaButton: 'button', FaIcon: 'span', FaTag: 'span', FaAlert: 'aside', FaCard: 'section', FaForm: 'fieldset', FaFormItem: 'label', FaTextarea: 'textarea' })) {
+  for (const [name, tag] of Object.entries({ FaButton: 'button', FaIcon: 'span', FaTag: 'span', FaAlert: 'aside', FaCard: 'section', FaForm: 'fieldset', FaFormItem: 'label', FaTextarea: 'textarea', FaSelect: 'select' })) {
     app.component(name, element(tag))
   }
   app.mount(root)
@@ -152,7 +154,7 @@ function fixture(status: PurchasePayableDto['status'] = 'PENDING_PAYMENT') {
     assert.ok(found, `应显示按钮 ${key}`)
     return found
   }
-  const fields = () => nodes().filter(item => item.tag === 'select' || item.tag === 'textarea')
+  const fields = () => nodes().filter(item => ['select', 'textarea', 'voucher-upload'].includes(item.tag))
   const update = (tag: string, value: string) => {
     const field = nodes().find(item => item.tag === tag)
     assert.ok(field, `应显示 ${tag} 输入控件`)
@@ -188,14 +190,15 @@ test('订单款项选择只通知父页，具体款项与停用页面不能切�
 test('提交中锁住字段和款项切换，重复点击只发一笔，成功通知父页并变为只读', async (context) => {
   const f = fixture()
   context.after(f.dispose)
-  f.update('select', 'BANK_TRANSFER')
+  f.update('select', 'bank')
+  f.update('voucher-upload', 'voucher')
   f.update('textarea', '  采购定金  ')
   let finish!: (value: { data: PurchasePayableOrderDto }) => void
   f.setExecute(() => new Promise(resolve => finish = resolve))
   const pending = f.button('purchasePayment.confirmPay').props.onClick()
   await nextTick()
   assert.equal(f.locks.at(-1), true)
-  assert.equal(f.fields().length, 2)
+  assert.equal(f.fields().length, 3)
   assert.ok(f.fields().every(item => item.props.disabled === true))
   assert.ok(f.installments().every(item => item.props.disabled === true))
   assert.equal(f.button('purchasePayment.confirmPay').props.disabled, true)
@@ -203,7 +206,7 @@ test('提交中锁住字段和款项切换，重复点击只发一笔，成功�
   await f.button('purchasePayment.confirmPay').props.onClick()
   assert.deepEqual(f.selected, [])
   assert.equal(f.calls.length, 1)
-  assert.deepEqual(f.calls[0]?.body, { expectedVersion: 1, paymentMethod: 'BANK_TRANSFER', remark: '采购定金' })
+  assert.deepEqual(f.calls[0]?.body, { expectedVersion: 1, paymentMethod: 'BANK_TRANSFER', recipientAccountId: 'bank', recipientProfileVersion: 2, voucher: { mediaAssetId: 'voucher' }, remark: '采购定金' })
   finish({ data: order('PAID') })
   await pending
   await nextTick()
@@ -218,7 +221,8 @@ test('提交中锁住字段和款项切换，重复点击只发一笔，成功�
 test('未知结果锁住字段与切换，仅重试原输入和幂等键，重试成功只通知一次', async (context) => {
   const f = fixture()
   context.after(f.dispose)
-  f.update('select', 'CASH')
+  f.update('select', 'bank')
+  f.update('voucher-upload', 'voucher')
   f.update('textarea', '原始备注')
   f.setExecute(async () => {
     throw Object.assign(new Error('连接中断'), { kind: 'network' })
@@ -232,7 +236,8 @@ test('未知结果锁住字段与切换，仅重试原输入和幂等键，重�
   f.button('purchasePayment.types.BALANCE').props.onClick()
   assert.deepEqual(f.selected, [])
   // 即使已有控件事件迟到，重试也不能读取变化后的输入或创建第二个请求键。
-  f.update('select', 'BANK_TRANSFER')
+  f.update('select', 'bank')
+  f.update('voucher-upload', 'voucher')
   f.update('textarea', '迟到的输入')
   f.setExecute(async () => ({ data: order('PAID') }))
   await f.button('purchasePayment.retryPay').props.onClick()
@@ -261,7 +266,8 @@ test('404 或版本冲突后禁用输入，只提供重新核对且不会再次�
   for (const status of [404, 409]) {
     const f = fixture()
     context.after(f.dispose)
-    f.update('select', 'CASH')
+    f.update('select', 'bank')
+    f.update('voucher-upload', 'voucher')
     f.setExecute(async () => {
       throw Object.assign(new Error('状态已更新'), { status })
     })

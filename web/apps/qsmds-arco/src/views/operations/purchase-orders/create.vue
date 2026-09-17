@@ -14,6 +14,7 @@ import type {
   PurchaseOrderSourceSalesOrderLineDto,
   PurchaseOrderSourceSalesOrderListItemDto,
 } from '@/api/generated/types.gen'
+import type { PaymentRecipientAccountInputDto } from '@/api/modules/payment-recipients'
 import type { PurchaseOrderSourceSalesOrdersQuery } from '@/api/modules/purchase-orders'
 import type {
   OrderProductLineLabels,
@@ -21,13 +22,13 @@ import type {
   OrderProductLineReadOnlyModel,
 } from '@/components/business/QsOrderProductLineEditor/types'
 import type { PartConfiguration } from '@/components/business/QsPartConfigurator/types'
-import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
 
+import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
 import { Popover as APopover } from '@arco-design/web-vue'
 import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
 import { onKeyStroke, useMediaQuery } from '@vueuse/core'
-import { useId } from 'vue'
 
+import { useId } from 'vue'
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
@@ -36,11 +37,12 @@ import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsOrderProductLineEditor from '@/components/business/QsOrderProductLineEditor/index.vue'
 import QsPartConfigurator from '@/components/business/QsPartConfigurator/index.vue'
+import QsPaymentRecipientEditor from '@/components/business/QsPaymentRecipientEditor/index.vue'
 import QsPurchaseOrderDesc from '@/components/business/QsPurchaseOrderDesc/index.vue'
+import { clearPurchaseRecipientDraft, loadPurchaseRecipientDraft } from '@/components/business/QsPurchaseStartModal/recipient-draft'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import { formatNumberingRuleStructure, numberingResetPolicyLabel } from '../../system/basic-data/numbering/numbering-list.logic'
-
 import {
   adaptPurchaseOrderProductPage,
   beginPurchaseOrderSubmission,
@@ -59,6 +61,7 @@ import {
   synchronizePurchaseOrderSourceLines,
   validatePurchaseOrderCreateStep,
 } from './purchase-order-create.logic'
+
 import {
   mapPurchaseOrderCreateToDesc,
   resolvePurchaseOrderIssuerLabel,
@@ -69,6 +72,7 @@ import {
 } from './purchase-order-list.logic'
 import PurchaseOrderPartsReview from './purchase-order-parts-review.vue'
 import { freezePurchaseOrderPartReview, mapPurchaseOrderPartProducts, reconcilePurchaseOrderParts } from './purchase-order-parts.logic'
+import PurchaseOrderPaymentRecipients from './purchase-order-payment-recipients.vue'
 import PurchaseOrderPaymentTerms from './purchase-order-payment-terms.vue'
 import PurchaseOrderShippingMarkSummary from './purchase-order-shipping-mark-summary.vue'
 import {
@@ -139,6 +143,11 @@ const formModel = reactive({
   supplierValue: createContext?.supplierValue ?? null,
   customSupplierName: createContext?.customSupplierName ?? null,
 })
+const paymentAccounts = ref<PaymentRecipientAccountInputDto[]>(productMode === 'CUSTOM'
+  ? loadPurchaseRecipientDraft(route.query.paymentDraftKey, `${appAccountStore.userId}:${appAccountStore.authContext?.session.createdAt ?? ''}`) ?? []
+  : [])
+const initialPaymentAccounts = JSON.stringify(paymentAccounts.value)
+const recipientUploading = ref(false)
 const customSupplierDraft = ref(createContext?.customSupplierName ?? '')
 const partConfigurations = shallowRef<readonly PartConfiguration[]>([])
 const frozenPartReview = shallowRef<ReturnType<typeof freezePurchaseOrderPartReview> | null>(null)
@@ -259,6 +268,8 @@ const shouldConfirmDiscard = computed(() => (
     formModel.supplierValue !== (createContext?.supplierValue ?? null)
     || formModel.customSupplierName !== (createContext?.customSupplierName ?? null)
     || customSupplierDraft.value !== (createContext?.customSupplierName ?? '')
+    || JSON.stringify(paymentAccounts.value) !== initialPaymentAccounts
+    || recipientUploading.value
     || formModel.lines.length > 0
     || formModel.depositDueAmount !== null
     || formModel.balanceDueAmount !== null
@@ -290,6 +301,7 @@ const submitReady = computed(() => (
   createSurface.value === 'review'
   && submission.value.phase === 'editing'
   && !currencyUnavailable.value
+  && !recipientUploading.value
   && shippingMarkAvailable.value
   && furthestReachedStep.value === PURCHASE_ORDER_CREATE_REVIEW_STEP
 ))
@@ -693,11 +705,15 @@ function buildCurrentSource() {
     sourceSalesOrderLineIdByKey: sourceSalesOrderLineIdByKey.value,
     supplierValue: formModel.supplierValue,
     customSupplierName: formModel.customSupplierName,
+    paymentAccounts: paymentAccounts.value,
     today: todayIso,
   } as const
 }
 
 function buildCurrentRequest() {
+  if (recipientUploading.value) {
+    return { valid: false as const, fieldErrors: { paymentAccounts: t('purchasePayment.uploading') }, purchaseTotalAmount: purchaseTotalAmount.value }
+  }
   const source = buildCurrentSource()
   return source === null ? null : buildPurchaseOrderCreateRequest(source)
 }
@@ -924,6 +940,7 @@ async function executeSubmission(state: PurchaseOrderSubmittingState): Promise<v
       return
     }
     submission.value = resolvePurchaseOrderSubmissionSuccess(state, response.data)
+    clearPurchaseRecipientDraft(route.query.paymentDraftKey)
     submitConfirmVisible.value = false
     toast.success(`采购订单 ${response.data.orderNo} 创建成功，已进入采购审核中`)
     void router.push({ name: 'qsOperationsPurchaseOrders' })
@@ -1058,6 +1075,8 @@ onBeforeRouteLeave(() => {
 })
 
 watch(() => appAccountStore.authEpoch, () => {
+  clearPurchaseRecipientDraft(route.query.paymentDraftKey)
+  paymentAccounts.value = []
   shippingMarkResolver.reset()
   shortcutAbortController?.abort()
   sourceAbortController?.abort()
@@ -1268,6 +1287,13 @@ onBeforeUnmount(() => {
                       {{ fieldErrors.customSupplierName }}
                     </p>
                   </FaFormItem>
+                </FaCard>
+
+                <FaCard v-if="productMode === 'CUSTOM'" :title="t('purchasePayment.customRecipients')" :description="t('purchasePayment.customRecipientsHint')">
+                  <QsPaymentRecipientEditor v-model="paymentAccounts" :minimum="1" :disabled="editingLocked" @busy-change="recipientUploading = $event" />
+                  <p v-if="fieldErrors.paymentAccounts" class="text-xs text-destructive mt-2" role="alert">
+                    {{ fieldErrors.paymentAccounts }}
+                  </p>
                 </FaCard>
 
                 <FaCard
@@ -1626,6 +1652,7 @@ onBeforeUnmount(() => {
                   />
                 </template>
               </QsPurchaseOrderDesc>
+              <PurchaseOrderPaymentRecipients v-if="productMode === 'CUSTOM' && createSurface === 'review'" :accounts="paymentAccounts" class="p-5 bg-card" />
             </div>
 
             <Transition name="purchase-order-submit-bar">

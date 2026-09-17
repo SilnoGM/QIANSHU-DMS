@@ -174,6 +174,9 @@ test('采购创建与所有 mutation 禁止自动重试并保持幂等 Key 生�
     balanceDueAmount: '10.00',
   } satisfies CreatePurchaseOrderRequestDto
   const payment = {
+    recipientAccountId: '33333333-3333-4333-8333-333333333333',
+    recipientProfileVersion: 1,
+    voucher: { mediaAssetId: '44444444-4444-4444-8444-444444444444' },
     paymentType: 'BALANCE',
     amount: '10.00',
     paidAt: '2026-08-28T08:00:00.000Z',

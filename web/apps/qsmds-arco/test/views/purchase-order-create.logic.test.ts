@@ -8,6 +8,7 @@ import type { OrderProductLineModel } from '../../src/components/business/QsOrde
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 采购创建纯逻辑使用 Node.js 内置 runner。
 import test from 'node:test'
+import { reactive } from 'vue'
 
 import {
   adaptPurchaseOrderProductPage,
@@ -522,6 +523,7 @@ test('自定义备货采购只提交文本供应商并校验 CUSTOM 双价格', 
     maximumQuantityByKey: {},
     orderDate: '2026-08-28',
     productMode: 'CUSTOM',
+    paymentAccounts: reactive([{ paymentMethod: 'BANK_TRANSFER' as const, recipientName: '供应商', bankName: '银行', bankAccount: '12345678' }]),
     purchaseType: 'STOCK',
     remark: '',
     salesOrderId: null,
@@ -560,6 +562,7 @@ test('自定义备货采购只提交文本供应商并校验 CUSTOM 双价格', 
     maximumQuantityByKey: {},
     orderDate: '2026-08-28',
     productMode: 'CUSTOM',
+    paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '供应商', bankName: '银行', bankAccount: '12345678' }],
     purchaseType: 'STOCK',
     remark: '',
     salesOrderId: null,
@@ -596,6 +599,7 @@ test('采购可编辑金额均拒绝超过两位小数，草稿总额与提交�
     maximumQuantityByKey: {},
     orderDate: '2026-09-16',
     productMode: 'CUSTOM',
+    paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '供应商', bankName: '银行', bankAccount: '12345678' }],
     purchaseType: 'STOCK',
     remark: '',
     salesOrderId: null,
@@ -659,6 +663,7 @@ test('未知创建结果冻结请求并使用原幂等 Key 安全重放', () => 
     maximumQuantityByKey: {},
     orderDate: '2026-08-28',
     productMode: 'CUSTOM',
+    paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '供应商', bankName: '银行', bankAccount: '12345678' }],
     purchaseType: 'STOCK',
     remark: '',
     salesOrderId: null,
@@ -717,6 +722,7 @@ test('唛头匹配未完成或摘要非法时第三步不能进入核对', () =>
       maximumQuantityByKey: {},
       orderDate: '2026-09-07',
       productMode: 'CUSTOM',
+      paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '供应商', bankName: '银行', bankAccount: '12345678' }],
       purchaseType: 'STOCK',
       remark: '',
       salesOrderId: null,
@@ -746,4 +752,32 @@ test('唛头上下文变化和不可用均定位第三步，且不属于未知�
     assert.equal(failure.refreshShippingMarkResolution, true)
     assert.equal(resolvePurchaseOrderCreateStepForErrors(failure.fieldErrors), 2)
   }
+})
+
+test('自定义采购基础步骤至少需要一种完整收款资料，错误留在第一步', () => {
+  const source: Parameters<typeof buildPurchaseOrderCreateRequest>[0] = {
+    balanceDueAmount: null,
+    depositDueAmount: null,
+    lines: [],
+    parts: [],
+    maximumQuantityByKey: {},
+    orderDate: '2026-09-17',
+    productMode: 'CUSTOM',
+    purchaseType: 'STOCK',
+    remark: '',
+    salesOrderId: null,
+    expectedShippingMarkResolution: null,
+    sourceSalesOrderLineIdByKey: {},
+    supplierValue: null,
+    customSupplierName: '自定义供应商',
+    today: '2026-09-17',
+  }
+  const missing = validatePurchaseOrderCreateStep(source, 0)
+  assert.equal(missing.valid, false)
+  if (!missing.valid) {
+    assert.ok(missing.fieldErrors.paymentAccounts)
+  }
+  assert.equal(resolvePurchaseOrderCreateStepForField('paymentAccounts.0.bankName'), 0)
+  assert.equal(validatePurchaseOrderCreateStep({ ...source, paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '收款人', bankName: '银行', bankAccount: '1234' }] }, 0).valid, true)
+  assert.equal(validatePurchaseOrderCreateStep({ ...source, paymentAccounts: [{ paymentMethod: 'WECHAT', recipientName: '收款人' }] }, 0).valid, false)
 })

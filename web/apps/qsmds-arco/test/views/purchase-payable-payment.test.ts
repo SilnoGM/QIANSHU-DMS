@@ -6,8 +6,8 @@ import { effectScope, ref, shallowRef } from 'vue'
 import { canPayPurchasePayable, createPurchasePayableGroups } from '../../src/views/workbenches/purchase-payments/purchase-payments.logic'
 import { usePurchasePayablePayment } from '../../src/views/workbenches/purchase-payments/use-purchase-payable-payment'
 
-const payable = (overrides: Partial<PurchasePayableDto> = {}): PurchasePayableDto => ({ id: 'deposit', paymentType: 'DEPOSIT', dueAmount: '30.00', paidAmount: '0.00', remainingAmount: '30.00', status: 'PENDING_PAYMENT', version: 1, paidAt: null, paidBy: null, ...overrides })
-const order = (): PurchasePayableOrderDto => ({ id: 'order', orderNo: 'PO/20260916-00016', orderDate: '2026-09-16', purchaseType: 'SALES_LINKED', supplierName: '供应商', salesOrderNo: 'SO/20260916-00001', purchaseTotalAmount: '100.00', currencyCode: 'CNY', accountOwnerType: 'USER', owner: { id: 'user', name: '张三' }, items: [payable({ id: 'balance', paymentType: 'BALANCE', dueAmount: '70.00', remainingAmount: '70.00' }), payable()] })
+const payable = (overrides: Partial<PurchasePayableDto> = {}): PurchasePayableDto => ({ id: 'deposit', paymentType: 'DEPOSIT', dueAmount: '30.00', paidAmount: '0.00', remainingAmount: '30.00', status: 'PENDING_PAYMENT', version: 1, paidAt: null, paidBy: null, paymentReceipt: null, ...overrides })
+const order = (): PurchasePayableOrderDto => ({ id: 'order', orderNo: 'PO/20260916-00016', orderDate: '2026-09-16', purchaseType: 'SALES_LINKED', supplierName: '供应商', salesOrderNo: 'SO/20260916-00001', purchaseTotalAmount: '100.00', currencyCode: 'CNY', accountOwnerType: 'USER', owner: { id: 'user', name: '张三' }, paymentRecipientProfile: { id: 'profile', version: 3, accounts: [{ id: 'bank', paymentMethod: 'BANK_TRANSFER', recipientName: '供应商', bankName: '银行', bankAccount: '123', bankBranch: null, qrMediaAssetId: null, qrContentUrl: null }] }, items: [payable({ id: 'balance', paymentType: 'BALANCE', dueAmount: '70.00', remainingAmount: '70.00' }), payable()] })
 
 function fixture() {
   const enabled = ref(true)
@@ -45,20 +45,21 @@ test('仅待付款且余额为正的有效两位金额可付款', () => {
   }
 })
 
-test('付款方式必填；确认只传版本、字典值与备注，重复点击只发一笔', async (context) => {
+test('收款方式与付款截图必填，确认传原资料版本和截图，重复点击只发一笔', async (context) => {
   const f = fixture()
   context.after(f.dispose)
   assert.equal(await f.state.submit(), null)
-  assert.equal(f.state.fieldError.value, 'paymentMethod')
+  assert.equal(f.state.fieldError.value, 'recipientAccountId')
   assert.equal(f.calls.length, 0)
-  f.state.paymentMethod.value = 'BANK_TRANSFER'
+  f.state.recipientAccountId.value = 'bank'
+  f.state.voucherMediaAssetId.value = 'voucher'
   f.state.remark.value = '  采购定金  '
   let finish!: (value: { data: PurchasePayableOrderDto }) => void
   f.setExecute(() => new Promise(resolve => finish = resolve))
   const first = f.state.submit()
   assert.equal(await f.state.submit(), null)
   assert.equal(f.calls.length, 1)
-  assert.deepEqual(f.calls[0]?.body, { expectedVersion: 1, paymentMethod: 'BANK_TRANSFER', remark: '采购定金' })
+  assert.deepEqual(f.calls[0]?.body, { expectedVersion: 1, paymentMethod: 'BANK_TRANSFER', recipientAccountId: 'bank', recipientProfileVersion: 3, voucher: { mediaAssetId: 'voucher' }, remark: '采购定金' })
   finish({ data: order() })
   assert.deepEqual(await first, order())
 })
@@ -66,13 +67,15 @@ test('付款方式必填；确认只传版本、字典值与备注，重复点�
 test('未知付款结果固定原幂等键和输入快照，重试不会变成第二笔付款', async (context) => {
   const f = fixture()
   context.after(f.dispose)
-  f.state.paymentMethod.value = 'CASH'
+  f.state.recipientAccountId.value = 'bank'
+  f.state.voucherMediaAssetId.value = 'voucher'
   f.setExecute(async () => {
     throw Object.assign(new Error('连接中断'), { kind: 'network' })
   })
   assert.equal(await f.state.submit(), null)
   assert.equal(f.state.unknown.value, true)
-  f.state.paymentMethod.value = 'BANK_TRANSFER'
+  f.state.recipientAccountId.value = 'bank'
+  f.state.voucherMediaAssetId.value = 'voucher'
   f.state.remark.value = '变更后的输入'
   f.setExecute(async () => ({ data: order() }))
   await f.state.submit()
@@ -84,7 +87,8 @@ test('权限或账号变化中止请求并忽略晚到成功，版本冲突阻�
   for (const change of ['permission', 'account']) {
     const f = fixture()
     context.after(f.dispose)
-    f.state.paymentMethod.value = 'CASH'
+    f.state.recipientAccountId.value = 'bank'
+    f.state.voucherMediaAssetId.value = 'voucher'
     let finish!: (value: { data: PurchasePayableOrderDto }) => void
     f.setExecute(() => new Promise(resolve => finish = resolve))
     const pending = f.state.submit()
@@ -100,7 +104,8 @@ test('权限或账号变化中止请求并忽略晚到成功，版本冲突阻�
   }
   const f = fixture()
   context.after(f.dispose)
-  f.state.paymentMethod.value = 'CASH'
+  f.state.recipientAccountId.value = 'bank'
+  f.state.voucherMediaAssetId.value = 'voucher'
   f.setExecute(async () => {
     throw Object.assign(new Error('状态已更新'), { status: 409 })
   })
@@ -109,4 +114,24 @@ test('权限或账号变化中止请求并忽略晚到成功，版本冲突阻�
   assert.equal(f.state.stale.value, true)
   assert.equal(await f.state.submit(), null)
   assert.equal(f.calls.length, 1)
+})
+
+test('没有收款资料或截图时不付款，切换定金尾款清空图片并重新选择账户', async (context) => {
+  const f = fixture()
+  context.after(f.dispose)
+  f.state.recipientAccountId.value = 'bank'
+  assert.equal(f.state.canSubmit.value, false)
+  assert.equal(await f.state.submit(), null)
+  assert.equal(f.state.fieldError.value, 'voucher')
+  assert.equal(f.calls.length, 0)
+  f.state.voucherMediaAssetId.value = 'voucher'
+  assert.equal(f.state.canSubmit.value, true)
+  f.selection.value = { order: order(), item: payable({ id: 'balance', paymentType: 'BALANCE' }) }
+  assert.equal(f.state.voucherMediaAssetId.value, null)
+  assert.equal(f.state.recipientAccountId.value, null)
+  f.selection.value.order.paymentRecipientProfile = null
+  f.state.recipientAccountId.value = 'bank'
+  f.state.voucherMediaAssetId.value = 'voucher'
+  assert.equal(await f.state.submit(), null)
+  assert.equal(f.calls.length, 0)
 })

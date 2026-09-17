@@ -6,7 +6,7 @@ export function getPaymentDocuments(documents: readonly PurchaseOrderDocumentDto
 }
 
 export function getOrderDocuments(documents: readonly PurchaseOrderDocumentDto[]): PurchaseOrderDocumentDto[] {
-  return documents.filter(document => document.documentType !== 'PAYMENT_VOUCHER' && document.detachedAt === null)
+  return documents.filter(document => document.detachedAt === null)
 }
 
 export type PurchaseOrderTimelineEntry

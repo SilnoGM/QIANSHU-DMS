@@ -27,14 +27,14 @@ test('采购状态与金额历史合并倒序，稳定区分同 ID 且不修改�
   assert.deepEqual(buildPurchaseOrderTimeline({ statusHistory: [], amountRevisions: [] }), [])
 })
 
-test('独立订单凭证只显示有效采购单和签收单，不重复显示付款凭证', () => {
+test('采购凭证包含有效付款截图，付款记录引用同一份凭证', () => {
   const documents = [
     { id: 'order', documentType: 'ORDER_ISSUANCE_VOUCHER', paymentId: null, detachedAt: null },
     { id: 'receipt', documentType: 'DELIVERY_RECEIPT', paymentId: null, detachedAt: null },
     { id: 'payment', documentType: 'PAYMENT_VOUCHER', paymentId: 'p', detachedAt: null },
     { id: 'detached', documentType: 'DELIVERY_RECEIPT', paymentId: null, detachedAt: '2026-09-06' },
   ] as PurchaseOrderDocumentDto[]
-  assert.deepEqual(getOrderDocuments(documents).map(item => item.id), ['order', 'receipt'])
+  assert.deepEqual(getOrderDocuments(documents).map(item => item.id), ['order', 'receipt', 'payment'])
   assert.deepEqual(getPaymentDocuments(documents, 'p').map(item => item.id), ['payment'])
 })
 

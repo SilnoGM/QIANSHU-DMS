@@ -14,6 +14,7 @@ import ProductManagement, {
   PRODUCT_MANAGEMENT_PERMISSIONS,
 } from './modules/product.management'
 import { financeWorkbench, purchaseWorkbench } from './modules/role.workbenches'
+import SupplierPaymentProfiles, { SUPPLIER_PAYMENT_PROFILE_PERMISSIONS } from './modules/supplier.payment.profiles'
 import SystemManagement, {
   MANAGEMENT_READ_PERMISSIONS,
 } from './modules/system.management'
@@ -102,10 +103,12 @@ const asyncRoutes: RouteRecordMainRaw[] = [
       icon: 'qs-workbench-admin',
       auth: [
         ...PRODUCT_MANAGEMENT_PERMISSIONS,
+        ...SUPPLIER_PAYMENT_PROFILE_PERMISSIONS,
       ],
     },
     children: [
       ProductManagement,
+      SupplierPaymentProfiles,
     ],
   },
   {

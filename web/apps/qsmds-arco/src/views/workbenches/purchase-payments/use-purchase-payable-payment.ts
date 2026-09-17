@@ -13,34 +13,42 @@ export function usePurchasePayablePayment(
   api: Pick<typeof purchaseOrderPayablesApi, 'pay'> = purchaseOrderPayablesApi,
   createKey: () => string = () => crypto.randomUUID(),
 ) {
-  const paymentMethod = ref<string | null>(null)
+  const recipientAccountId = ref<string | null>(null)
+  const voucherMediaAssetId = ref<string | null>(null)
+  const recipient = computed(() => selection.value?.order.paymentRecipientProfile?.accounts.find(item => item.id === recipientAccountId.value) ?? null)
   const remark = ref('')
   const busy = ref(false)
   const unknown = ref(false)
   const stale = ref(false)
   const completed = ref(false)
   const error = ref('')
-  const fieldError = ref<'paymentMethod' | 'remark' | null>(null)
+  const fieldError = ref<'recipientAccountId' | 'voucher' | 'remark' | null>(null)
   let controller: AbortController | null = null
   let attempt: { key: string, body: PurchasePayablePayDto } | null = null
-  const canSubmit = computed(() => enabled.value && !busy.value && !stale.value && !completed.value && selection.value !== null && canPayPurchasePayable(selection.value.item))
+  const eligible = computed(() => enabled.value && !busy.value && !stale.value && !completed.value && selection.value !== null && canPayPurchasePayable(selection.value.item))
+  const canSubmit = computed(() => eligible.value && (unknown.value || (recipient.value !== null && Boolean(voucherMediaAssetId.value))))
 
   async function submit(): Promise<PurchasePayableOrderDto | null> {
-    if (!canSubmit.value || selection.value === null) {
+    if (!eligible.value || selection.value === null) {
       return null
     }
     fieldError.value = null
     if (attempt === null) {
-      const method = paymentMethod.value?.trim() ?? ''
-      if (!method || Array.from(method).length > 64) {
-        fieldError.value = 'paymentMethod'
+      const profile = selection.value.order.paymentRecipientProfile
+      const account = recipient.value
+      if (!account || !profile) {
+        fieldError.value = 'recipientAccountId'
+        return null
+      }
+      if (!voucherMediaAssetId.value) {
+        fieldError.value = 'voucher'
         return null
       }
       if (Array.from(remark.value.trim()).length > 500) {
         fieldError.value = 'remark'
         return null
       }
-      attempt = { key: createKey(), body: { expectedVersion: selection.value.item.version, paymentMethod: method, remark: remark.value.trim() || null } }
+      attempt = { key: createKey(), body: { expectedVersion: selection.value.item.version, paymentMethod: account.paymentMethod, recipientAccountId: account.id, recipientProfileVersion: profile.version, voucher: { mediaAssetId: voucherMediaAssetId.value }, remark: remark.value.trim() || null } }
     }
     const record = selection.value
     const requestEpoch = epoch.value
@@ -84,7 +92,8 @@ export function usePurchasePayablePayment(
     controller?.abort()
     controller = null
     attempt = null
-    paymentMethod.value = null
+    recipientAccountId.value = null
+    voucherMediaAssetId.value = null
     remark.value = ''
     busy.value = false
     unknown.value = false
@@ -95,5 +104,5 @@ export function usePurchasePayablePayment(
   }
   watch([enabled, epoch, selection], reset, { flush: 'sync' })
   onScopeDispose(reset)
-  return { paymentMethod, remark, busy, unknown, stale, error, fieldError, canSubmit, submit }
+  return { recipientAccountId, recipient, voucherMediaAssetId, remark, busy, unknown, stale, error, fieldError, canSubmit, submit }
 }

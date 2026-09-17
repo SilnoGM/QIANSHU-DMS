@@ -15,6 +15,8 @@ import { canCancelPurchaseOrderFromList, nextPurchaseOrderFulfillmentStatus } fr
 
 export interface PurchaseOrderPaymentDraft {
   readonly amount: string | null
+  readonly recipientAccountId: string
+  readonly recipientProfileVersion: number
   readonly mediaAssetId: string | null
   readonly now: Date
   readonly outstandingAmount: string
@@ -124,7 +126,10 @@ export function buildPurchaseOrderPaymentRequest(
   if (remark !== null && codePointLength(remark) > 500) {
     fieldErrors.remark = '付款备注最多 500 个字符'
   }
-  if (draft.mediaAssetId !== null && !UUID_V4_PATTERN.test(draft.mediaAssetId)) {
+  if (!UUID_V4_PATTERN.test(draft.recipientAccountId) || !Number.isSafeInteger(draft.recipientProfileVersion) || draft.recipientProfileVersion < 1) {
+    fieldErrors.recipientAccountId = '收款资料当前不可用，请重新核对'
+  }
+  if (draft.mediaAssetId === null || !UUID_V4_PATTERN.test(draft.mediaAssetId)) {
     fieldErrors.voucher = '付款凭证当前不可用，请重新上传'
   }
   if (Object.keys(fieldErrors).length > 0 || amount === null) {
@@ -138,9 +143,9 @@ export function buildPurchaseOrderPaymentRequest(
       paymentMethod,
       paymentType: draft.paymentType,
       remark,
-      ...(draft.mediaAssetId === null
-        ? {}
-        : { voucher: { mediaAssetId: draft.mediaAssetId } }),
+      recipientAccountId: draft.recipientAccountId,
+      recipientProfileVersion: draft.recipientProfileVersion,
+      voucher: { mediaAssetId: draft.mediaAssetId! },
     },
     valid: true,
   }

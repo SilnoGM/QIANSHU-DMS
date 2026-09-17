@@ -94,3 +94,9 @@ test('切换产品模式会清空两个供应商草稿，避免旧来源串入�
     customSupplierName: '',
   }), { valid: false, message: '请选择供应商' })
 })
+
+test('自定义采购路由仅传递随机收款草稿键，不携带账户或图片', () => {
+  const query = buildPurchaseStartRouteQuery({ purchaseType: 'STOCK', productMode: 'CUSTOM', supplierValue: null, customSupplierName: '本单供应商', paymentDraftKey: 'random-draft-key' })
+  assert.equal(query.paymentDraftKey, 'random-draft-key')
+  assert.deepEqual(Object.keys(query).sort(), ['customSupplierName', 'paymentDraftKey', 'productMode', 'type'])
+})

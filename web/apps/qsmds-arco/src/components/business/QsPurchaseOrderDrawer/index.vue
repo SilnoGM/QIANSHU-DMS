@@ -2,6 +2,7 @@
 import type { PurchaseOrderDetailDto, PurchaseOrderListItemDto } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import PurchaseOrderPaymentRecipients from '@/views/operations/purchase-orders/purchase-order-payment-recipients.vue'
 import OrderDocuments from './OrderDocuments.vue'
 import OrderHistory from './OrderHistory.vue'
 import OrderInformation from './OrderInformation.vue'
@@ -112,6 +113,7 @@ function onClosed() {
           <div class="pb-2 space-y-6">
             <FaAlert v-if="actionError" :title="t('purchaseOrderDrawer.actionFailed')" :description="actionError" variant="destructive" />
             <OrderInformation :detail="detail" :currencies="currencies" />
+            <PurchaseOrderPaymentRecipients :accounts="detail.paymentRecipientProfile?.accounts ?? []" />
             <OrderRecords
               :detail="detail" :currencies="currencies" :busy="busy" :can-manage-payment="canManagePayment"
               @record-payment="emit('recordPayment')"

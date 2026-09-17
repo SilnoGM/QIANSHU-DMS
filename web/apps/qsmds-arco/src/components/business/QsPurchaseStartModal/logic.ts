@@ -98,7 +98,7 @@ export function buildPurchaseStartRouteQuery(
     productMode: selection.productMode,
     ...(selection.productMode === 'CATALOG'
       ? { supplierValue: selection.supplierValue! }
-      : { customSupplierName: selection.customSupplierName! }),
+      : { customSupplierName: selection.customSupplierName!, ...(selection.paymentDraftKey ? { paymentDraftKey: selection.paymentDraftKey } : {}) }),
     ...(presetSalesOrder === null
       ? {}
       : {
