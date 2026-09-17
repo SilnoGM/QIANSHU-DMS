@@ -1,4 +1,4 @@
-import type { PurchasePayableDto, PurchasePayableOrderDto } from '../../../api/generated/types.gen'
+import type { PurchaseOrderListItemDto, PurchasePayableDto, PurchasePayableOrderDto } from '../../../api/generated/types.gen'
 import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 
 export interface PurchasePayableRow {
@@ -13,8 +13,14 @@ export interface PurchasePayableSelection {
   item: PurchasePayableDto
 }
 
-export function buildPurchasePayableLinkText(orderNo: string, resolvedHref: string, currentUrl: string): string {
-  return `【${orderNo}付款】${new URL(resolvedHref, currentUrl).href}`
+export function buildPurchasePayableLinkText(order: Pick<PurchaseOrderListItemDto, 'orderNo' | 'customerName' | 'purchaseType'>, item: PurchasePayableDto, resolvedHref: string, currentUrl: string): string {
+  if (!canPayPurchasePayable(item)) {
+    throw new Error('Purchase payable is unavailable')
+  }
+  const customerName = order.customerName?.trim() || (order.purchaseType === 'STOCK' ? '公司备货' : '未记录客户')
+  const paymentType = item.paymentType === 'DEPOSIT' ? '定金' : '尾款'
+  const amount = validateMoneyString(item.remainingAmount, { precision: 2 }).normalizedValue
+  return `我需要为【${customerName}】的订单【${order.orderNo}】付【${paymentType}】：${amount} 元。\n\n付款链接：\n${new URL(resolvedHref, currentUrl).href}`
 }
 
 export function canPayPurchasePayable(item: PurchasePayableDto): boolean {

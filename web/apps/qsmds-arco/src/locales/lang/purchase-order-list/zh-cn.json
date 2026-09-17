@@ -1,7 +1,16 @@
 {
   "purchaseOrderList": {
     "payment": {
-      "unavailable": "采购订单已付清或状态已变化，当前无法记录付款，已刷新列表。"
+      "title": "复制采购付款信息",
+      "description": "选择本次付款款项，复制金额和对应的付款链接。",
+      "customer": "客户",
+      "stockCustomer": "公司备货",
+      "missingCustomer": "未记录客户",
+      "chooseType": "选择付款款项",
+      "selectionHint": "选择定金或尾款后复制付款信息。已付清或无需付款的款项不可选。",
+      "copy": "复制付款信息",
+      "copied": "付款信息已复制",
+      "unavailable": "采购订单已付清或状态已变化，当前无法复制付款信息，已刷新列表。"
     },
     "shipmentProgress": {
       "title": "货件进度",

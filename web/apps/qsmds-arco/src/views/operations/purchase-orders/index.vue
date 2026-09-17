@@ -765,7 +765,7 @@ async function retryPurchaseFactoryShipment(): Promise<void> {
   }
 }
 
-/** 待办付款只复制链接；发货与入仓进入对应业务入口。 */
+/** 待办付款先选择定金或尾款，再复制对应付款信息；发货与入仓进入对应业务入口。 */
 function handlePendingAction(
   action: PurchaseOrderPendingActionItem,
   order: PurchaseOrderListItemDto,

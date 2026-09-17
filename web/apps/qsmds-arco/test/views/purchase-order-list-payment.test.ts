@@ -1,15 +1,19 @@
-import type { PurchaseOrderListItemDto } from '../../src/api/generated/types.gen'
+import type { PurchaseOrderListItemDto, PurchasePayableOrderDto } from '../../src/api/generated/types.gen'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-// eslint-disable-next-line test/no-import-node-test -- 执行实际待办采购付款入口，区分复制与财务导航。
+// eslint-disable-next-line test/no-import-node-test -- 执行真实弹窗状态，验证读取最新款项、显式选择与剪贴板副作用。
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
-import { computed, effectScope, reactive, ref, watch } from 'vue'
-import { buildPurchasePayableLinkText } from '../../src/views/workbenches/purchase-payments/purchase-payments.logic'
+import { computed, effectScope, reactive, ref, shallowRef, watch } from 'vue'
+import { buildPurchasePayableLinkText, canPayPurchasePayable } from '../../src/views/workbenches/purchase-payments/purchase-payments.logic'
 
 const ROOT = new URL('../../src/views/operations/purchase-orders/', import.meta.url)
-const order = { id: '11111111-1111-4111-8111-111111111111', orderNo: 'PO/20260916-00016', orderStatus: 'CONFIRMED', paymentStatus: 'UNPAID' } as PurchaseOrderListItemDto
+const order = { id: '11111111-1111-4111-8111-111111111111', orderNo: 'PO/20260916-00016', customerName: '客户甲', purchaseType: 'SALES_LINKED', orderStatus: 'CONFIRMED', paymentStatus: 'UNPAID' } as PurchaseOrderListItemDto
+const payableOrder = { id: order.id, orderNo: order.orderNo, items: [
+  { id: 'deposit', paymentType: 'DEPOSIT', status: 'PENDING_PAYMENT', dueAmount: '100.00', remainingAmount: '80.50' },
+  { id: 'balance', paymentType: 'BALANCE', status: 'PENDING_PAYMENT', dueAmount: '200.00', remainingAmount: '200.00' },
+] } as PurchasePayableOrderDto
 async function fixture() {
   const source = await readFile(new URL('purchase-order-list-payment-action.vue', ROOT), 'utf8')
   const script = source.split('<script setup lang="ts">')[1]!.split('</script>')[0]!.replace(/^import[\s\S]*?from ['"][^'"]+['"]\s*$/gm, '')
@@ -20,23 +24,36 @@ async function fixture() {
   const copied: string[] = []
   const messages: string[] = []
   const navigation: unknown[] = []
+  const reads: { id: string, signal: AbortSignal }[] = []
   const lifecycle: Record<string, () => void> = {}
   let write = async () => {}
-  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}; ({ open, loadingOrderId })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
+  let read = async () => ({ data: structuredClone(payableOrder) })
+  let detail = { ...order }
+  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}; ({ open, reload, copy, reset, visible, selectedId, loadingOrderId, copying, error })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
     computed,
     ref,
+    shallowRef,
     watch,
+    AbortController,
     defineProps: () => props,
     defineEmits: () => (name: string) => messages.push(name),
     defineExpose: () => {},
     useI18n: () => ({ t: (key: string) => key }),
     useAppAuth: () => ({ auth: () => permission.allowed }),
     useAppAccountStore: () => account,
+    useCurrencyCatalog: () => ({ currencies: ref([]) }),
     useQsToast: () => ({ success: (message: string) => messages.push(message), warning: (message: string) => messages.push(message), error: (message: string) => messages.push(message) }),
     useRouter: () => ({ resolve: (location: { name: string, params: { id: string } }) => {
-      assert.equal(location.name, 'qsFinanceRealtimePurchaseOrderPayment')
-      return { href: `/dms/#/qs-finance/realtime-payments/purchase-payments/orders/${location.params.id}` }
+      assert.equal(location.name, 'qsFinanceRealtimePurchasePayablePayment')
+      return { href: `/dms/#/qs-finance/realtime-payments/purchase-payments/${location.params.id}` }
     }, push: (value: unknown) => navigation.push(value) }),
+    purchaseOrderPayablesApi: { getByOrder: (id: string, signal: AbortSignal) => {
+      reads.push({ id, signal })
+      return read()
+    } },
+    purchaseOrdersApi: { getById: async () => ({ data: detail }) },
+    getPurchaseOrderApiFailure: (error: Error) => ({ message: error.message }),
+    isPurchaseOrderAbortError: (error: Error) => error.name === 'AbortError',
     navigator: { clipboard: { writeText: (text: string) => {
       copied.push(text)
       return write()
@@ -45,37 +62,92 @@ async function fixture() {
     onDeactivated: (fn: () => void) => lifecycle.deactivate = fn,
     onBeforeUnmount: (fn: () => void) => lifecycle.unmount = fn,
     buildPurchasePayableLinkText,
-  })) as { open: (order: PurchaseOrderListItemDto) => Promise<void>, loadingOrderId: { value: string | null } }
-  return { state, props, account, permission, copied, messages, navigation, lifecycle, setWrite: (fn: typeof write) => write = fn, dispose: () => scope.stop() }
+    canPayPurchasePayable,
+  })) as {
+    open: (order: PurchaseOrderListItemDto) => Promise<void>
+    reload: () => Promise<void>
+    copy: () => Promise<void>
+    reset: () => void
+    loadingOrderId: { value: string | null }
+    visible: { value: boolean }
+    selectedId: { value: string | undefined }
+    copying: { value: boolean }
+    error: { value: string | null }
+  }
+  return { state, props, account, permission, copied, reads, messages, navigation, lifecycle, setRead: (fn: typeof read) => read = fn, setDetail: (value: typeof detail) => detail = value, setWrite: (fn: typeof write) => write = fn, dispose: () => scope.stop() }
 }
 
-test('待办采购付款只复制采购单链接，不导航或读取付款接口，重复点击仅复制一次', async (context) => {
+test('打开先读取最新定金尾款，明确选择后复制对应款项链接与待付金额，不跳转或付款', async (context) => {
   const f = await fixture()
   context.after(f.dispose)
-  let finish!: () => void
-  f.setWrite(() => new Promise(resolve => finish = resolve))
-  const pending = f.state.open(order)
-  assert.equal(f.state.loadingOrderId.value, order.id)
+  f.setDetail({ ...order, customerName: '最新客户' })
   await f.state.open(order)
-  finish()
-  await pending
-  assert.deepEqual(f.copied, [`【PO/20260916-00016付款】https://dms.example/dms/#/qs-finance/realtime-payments/purchase-payments/orders/${order.id}`])
+  assert.equal(f.state.visible.value, true)
+  assert.equal(f.state.selectedId.value, undefined)
+  assert.equal(f.reads.length, 1)
+  assert.deepEqual(f.copied, [])
+  await f.state.copy()
+  assert.deepEqual(f.copied, [])
+  f.state.selectedId.value = 'deposit'
+  await f.state.copy()
+  assert.deepEqual(f.copied, ['我需要为【最新客户】的订单【PO/20260916-00016】付【定金】：80.50 元。\n\n付款链接：\nhttps://dms.example/dms/#/qs-finance/realtime-payments/purchase-payments/deposit'])
   assert.deepEqual(f.navigation, [])
-  assert.equal(f.messages.at(-1), 'purchasePayment.linkCopied')
-  assert.equal(f.state.loadingOrderId.value, null)
+  assert.equal(f.messages.at(-1), 'purchaseOrderList.payment.copied')
+  f.state.selectedId.value = 'balance'
+  await f.state.copy()
+  assert.match(f.copied[1]!, /付【尾款】：200\.00 元。/)
+  assert.match(f.copied[1]!, /\/balance$/)
 })
 
-test('剪贴板失败可重试，未激活、无权限、未审核和已付清均不能复制', async (context) => {
+test('复制期间防止双击，失败后仍可重试原选择', async (context) => {
   const f = await fixture()
   context.after(f.dispose)
+  await f.state.open(order)
+  f.state.selectedId.value = 'deposit'
+  let finish!: () => void
+  f.setWrite(() => new Promise(resolve => finish = resolve))
+  const pending = f.state.copy()
+  await f.state.copy()
+  assert.equal(f.copied.length, 1)
+  finish()
+  await pending
   f.setWrite(async () => {
     throw new Error('Clipboard denied')
   })
-  await f.state.open(order)
+  await f.state.copy()
   assert.equal(f.messages.at(-1), 'purchasePayment.copyFailed')
+  assert.equal(f.state.selectedId.value, 'deposit')
   f.setWrite(async () => {})
+  await f.state.copy()
+  assert.equal(f.messages.at(-1), 'purchaseOrderList.payment.copied')
+})
+
+test('已付清、零应付、已取消或伪造的款项不能复制，读取失败可以重新加载', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  f.setRead(async () => {
+    throw new Error('读取失败')
+  })
   await f.state.open(order)
-  assert.equal(f.messages.at(-1), 'purchasePayment.linkCopied')
+  assert.equal(f.state.error.value, '读取失败')
+  await f.state.copy()
+  for (const status of ['PAID', 'NO_PAYMENT', 'CANCELLED'] as const) {
+    f.setRead(async () => ({ data: { ...payableOrder, items: payableOrder.items.map(item => ({ ...item, status, remainingAmount: '0.00' })) } }))
+    await f.state.reload()
+    f.state.selectedId.value = 'deposit'
+    await f.state.copy()
+  }
+  f.setRead(async () => ({ data: structuredClone(payableOrder) }))
+  await f.state.reload()
+  assert.equal(f.state.error.value, null)
+  f.state.selectedId.value = 'foreign-payable'
+  await f.state.copy()
+  assert.deepEqual(f.copied, [])
+})
+
+test('未激活、无权限、未审核或已付清行均不读取付款资料', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
   f.permission.allowed = false
   await f.state.open(order)
   f.permission.allowed = true
@@ -86,17 +158,21 @@ test('剪贴板失败可重试，未激活、无权限、未审核和已付清�
     await f.state.open({ ...order, orderStatus })
   }
   await f.state.open({ ...order, paymentStatus: 'PAID' })
-  assert.equal(f.copied.length, 2)
+  assert.equal(f.reads.length, 0)
+  assert.deepEqual(f.copied, [])
 })
 
-test('身份、权限或页面生命周期变化后不显示迟到复制结果', async (context) => {
-  for (const change of ['identity', 'permission', 'view', 'deactivate', 'unmount']) {
+test('关闭、身份、权限及页面变化时中断读取，不让迟到数据重新打开弹窗', async (context) => {
+  for (const change of ['close', 'identity', 'permission', 'view', 'deactivate', 'unmount']) {
     const f = await fixture()
     context.after(f.dispose)
-    let finish!: () => void
-    f.setWrite(() => new Promise(resolve => finish = resolve))
+    let finish!: (value: { data: PurchasePayableOrderDto }) => void
+    f.setRead(() => new Promise(resolve => finish = resolve))
     const pending = f.state.open(order)
-    if (change === 'identity') {
+    if (change === 'close') {
+      f.state.reset()
+    }
+    else if (change === 'identity') {
       f.account.authEpoch++
     }
     else if (change === 'permission') {
@@ -106,11 +182,28 @@ test('身份、权限或页面生命周期变化后不显示迟到复制结果',
       f.props.active = false
     }
     else { f.lifecycle[change]!() }
-    finish()
+    assert.equal(f.reads[0]!.signal.aborted, true)
+    finish({ data: payableOrder })
     await pending
-    assert.deepEqual(f.messages, [])
+    assert.equal(f.state.visible.value, false)
     assert.equal(f.state.loadingOrderId.value, null)
+    assert.deepEqual(f.copied, [])
   }
+})
+
+test('身份变化后丢弃迟到剪贴板反馈', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  await f.state.open(order)
+  f.state.selectedId.value = 'deposit'
+  let finish!: () => void
+  f.setWrite(() => new Promise(resolve => finish = resolve))
+  const pending = f.state.copy()
+  f.account.authEpoch++
+  finish()
+  await pending
+  assert.equal(f.state.visible.value, false)
+  assert.deepEqual(f.messages, [])
 })
 
 test('待办付款将当前采购单传给复制入口，发货保留原入口', async () => {
