@@ -63,7 +63,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="min-w-0 space-y-2">
+  <div class="min-w-0 space-y-3">
     <div v-if="loading" role="status" class="text-muted-foreground rounded-lg bg-muted/30 flex h-48 items-center justify-center">
       <FaIcon name="i-lucide:loader-circle" class="mr-2 animate-spin" />{{ t('paymentRecipient.imageLoading') }}
     </div>
@@ -74,7 +74,10 @@ onBeforeUnmount(() => {
       </FaButton>
     </div>
     <template v-else-if="url">
-      <FaImagePreview :src="url" :aria-label="t('paymentRecipient.qrCode')" class="recipient-qr mx-auto p-3 border border-border rounded-lg bg-white max-w-full w-64 aspect-square" />
+      <!-- FaImagePreview 的 class 作用于图片，宽度和居中须由外层容器控制；白底保留收款码对比度。 -->
+      <div class="flex min-w-0 justify-center">
+        <FaImagePreview :src="url" :aria-label="t('paymentRecipient.qrCode')" class="p-3 bg-white h-auto max-h-144 w-full block object-contain group-hover/image-preview:scale-100" :style="{ width: 'min(100%, var(--recipient-qr-width, 16rem))' }" />
+      </div>
       <div class="flex justify-center">
         <FaButton variant="outline" size="sm" as-child>
           <a :href="url" download="payment-recipient-qr.png">{{ t('paymentRecipient.downloadQr') }}</a>
@@ -83,10 +86,3 @@ onBeforeUnmount(() => {
     </template>
   </div>
 </template>
-
-<style scoped>
-/* 收款码完整展示；白底是扫码内容画布，避免深色主题改变二维码识别对比。 */
-.recipient-qr :deep(img) {
-  object-fit: contain;
-}
-</style>

@@ -167,7 +167,7 @@ onBeforeUnmount(() => emit('lockChange', false))
         <p v-if="!payable" class="qs-type-body-medium m-0">
           {{ t(`purchasePayment.methods.${displayedRecipient.paymentMethod}`) }}
         </p>
-        <PaymentRecipientDetails :account="displayedRecipient" />
+        <PaymentRecipientDetails :account="displayedRecipient" class="purchase-payment-recipient" :class="{ 'text-center': displayedRecipient.paymentMethod !== 'BANK_TRANSFER' }" />
       </div>
       <p v-else-if="payable && recipientOptions.length" class="qs-type-meta text-muted-foreground m-0">
         {{ t('purchasePayment.selectRecipientHint') }}
@@ -252,6 +252,10 @@ onBeforeUnmount(() => emit('lockChange', false))
 </template>
 
 <style scoped>
+.purchase-payment-recipient {
+  --recipient-qr-width: 28rem;
+}
+
 .purchase-payment-amount :deep([data-currency]) {
   font-size: var(--qs-type-size-3xl);
   font-weight: var(--qs-type-weight-semibold);
