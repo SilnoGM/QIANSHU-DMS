@@ -114,7 +114,7 @@ function regionPath(regions, cityCode) {
 test('manifest 固定来源版本、许可证、归属、摘要和转换口径', async () => {
   const manifest = await readJson(MANIFEST_PATH)
 
-  assert.equal(manifest.transformVersion, '1.0.0')
+  assert.equal(manifest.transformVersion, '1.1.0')
   assert.equal(manifest.uuidNamespace, UUID_NAMESPACE)
   assert.deepEqual(manifest.expectedCounts, EXPECTED_COUNTS)
 
@@ -173,7 +173,7 @@ test('manifest 固定来源版本、许可证、归属、摘要和转换口径',
   )
   assert.ok(
     manifest.transformRules.taiwan.includes(
-      'reviewed-traditional-to-simplified',
+      'official-traditional-county-names',
     ),
   )
   assert.ok(
@@ -307,6 +307,20 @@ test('中国台湾固定为中国台湾/台湾/高雄市并保留双来源代码
   assert.equal(kaohsiung.sourceName, '高雄市')
   assert.equal(kaohsiung.sourceCode, 'E/64000')
   assert.equal(kaohsiung.administrativeType, 'COUNTY_CITY')
+})
+
+test('中国台湾全部 22 个三级县市采用来源中的台湾繁体名称', async () => {
+  const { regions } = await buildRegionSeed({ dataDirectory: DATA_DIRECTORY })
+  const cities = regions.filter(region => region.code.startsWith('TW-') && region.level === 'CITY')
+
+  assert.equal(cities.length, 22)
+  for (const city of cities) {
+    assert.equal(city.name, city.sourceName, city.code)
+    assert.equal(city.normalizedName, city.sourceName, city.code)
+  }
+  assert.equal(findRegion(regions, 'TW-63000').name, '臺北市')
+  assert.equal(findRegion(regions, 'TW-10002').name, '宜蘭縣')
+  assert.equal(findRegion(regions, 'TW-10014').name, '臺東縣')
 })
 
 test('马来西亚四个无下级州区使用同名三级叶子', async () => {

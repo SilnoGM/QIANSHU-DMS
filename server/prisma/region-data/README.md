@@ -45,11 +45,18 @@ Unicode NFC、空白折叠、固定 `en-US` 小写规则、三级转换、确定
 - SHA-256：
   `5e9dfa16d989e569179f02375775ac5f0036d866305a4e11456e989ff59504f1`
 
-项目固定合成“中国台湾 / 台湾”两级，并将官方 22 个县市转换为 `CITY`。默认简体
-显示名来自 `manifest.json` 中逐项审校映射，不使用机器翻译或自动繁简转换。
+项目固定合成“中国台湾 / 台湾”两级，并将官方 22 个县市转换为 `CITY`。从转换版本
+`1.1.0` 起，三级县市显示名使用官方台湾繁体原文（例如臺北市、宜蘭縣、桃園市），
+`manifest.json` 中逐项审校映射与来源原文一致，不使用机器翻译或自动繁简转换。
 `sourceName` 保留官方繁体原文；`sourceCode` 以
 `<countycode>/<countycode01>` 可逆保存。关键路径固定为
 `中国台湾 → 台湾 → 高雄市`，高雄市代码为 `TW-64000`，来源代码为 `E/64000`。
+
+已提交的 `20260727100000_regions_seed` 保持不变。新增向前数据迁移
+`20260917020000_taiwan_traditional_region_names` 只更新这 22 个三级节点的
+`name`、`normalized_name` 和实际改名节点的 `updated_at`；编号、父级、排序、
+启用状态、其他地区和销售订单历史地址快照均保留。名称原本相同的 4 个节点不写入。
+迁移先检查 22 个节点的父级链；节点缺失或同级名称冲突时整笔回滚。
 
 ### 马来西亚
 
@@ -85,6 +92,9 @@ node server/scripts/region-data/generate-region-seed.mjs
 node server/scripts/region-data/generate-region-seed.mjs --check
 node --test server/scripts/region-data/generate-region-seed.test.mjs
 ```
+
+`--check` 同时验证当前 canonical 数据、新的繁体名称迁移和冻结的历史 seed 摘要。
+`--migration` 只用于首次生成本次向前迁移，并拒绝覆盖已有文件。
 
 地区 ID 使用固定 namespace
 `9acbca9a-32e2-4d7c-b00f-26a2e0dc5c1e`，按 RFC 4122 UUIDv5 对规范化后的
