@@ -107,6 +107,24 @@
     "voucherArchiveHint": "确认成功后，截图归档到本张采购订单的凭证中。",
     "uploading": "正在上传，请稍候…",
     "imageOnly": "请选择 JPG、PNG 或 WebP 图片",
+    "statement": {
+      "generate": "生成对账单（已选{count}单）",
+      "title": "采购对账单",
+      "description": "已按所选采购单的最新付款详情生成，复制后可直接粘贴图片。",
+      "copy": "复制到剪贴板",
+      "copied": "对账单图片已复制到剪贴板",
+      "copyFailed": "图片复制失败，请重试",
+      "copyFailedHint": "请允许浏览器访问剪贴板后重试，当前对账单已保留。",
+      "clipboardUnavailable": "当前浏览器不支持复制图片，请使用支持图片剪贴板的浏览器并通过 HTTPS 访问。",
+      "generationFailed": "对账单生成失败，请重新核对订单后重试",
+      "tooLarge": "所选订单过多，无法生成一张清晰图片，请减少选择数量后重试。",
+      "steps": { "fetch": "获取已选订单付款详情", "calculate": "计算应付款金额", "render": "生成对账单" },
+      "image": {
+        "title": "采购对账单", "supplier": "供应商", "generatedAt": "生成时间（北京时间）", "selectedOrders": "采购单数", "unpaidTotal": "本次应付合计",
+        "order": "采购订单 / 日期", "stage": "款项", "due": "应付金额", "paid": "已付金额", "remaining": "未付金额", "status": "付款状态",
+        "total": "合计", "currency": "元（CNY）", "note": "本对账单仅供金额核对，付款状态以系统最新记录为准。"
+      }
+    },
     "batch": {
       "title": "批量付款",
       "pageTitle": "批量采购付款",

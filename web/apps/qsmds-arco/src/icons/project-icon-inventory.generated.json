@@ -1679,6 +1679,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list-payment-action.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-marks-cell.vue",
+      "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-payment-statement-action.vue",
       "packages/components/src/pro/code/index.vue"
     ]
   },
@@ -1795,6 +1796,15 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:file-image",
+    "label": "i-lucide:file-image",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-payment-statement-action.vue"
     ]
   },
   {

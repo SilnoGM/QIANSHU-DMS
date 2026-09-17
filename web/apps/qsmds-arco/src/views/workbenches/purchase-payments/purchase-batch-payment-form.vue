@@ -6,6 +6,7 @@ import PaymentRecipientDetails from '@/components/business/QsPaymentRecipientEdi
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import PurchaseBatchPaymentOrders from './purchase-batch-payment-orders.vue'
 import PurchaseBatchPaymentVoucher from './purchase-batch-payment-voucher.vue'
+import PurchasePaymentStatementAction from './purchase-payment-statement-action.vue'
 import { canPayPurchasePayable } from './purchase-payments.logic'
 
 const props = defineProps<{
@@ -31,7 +32,8 @@ const currencyCatalog = useCurrencyCatalog()
 const selectedIds = ref<string[]>([])
 const recipientAccountId = ref('')
 const voucher = shallowRef<File | null>(null)
-const fieldsLocked = computed(() => !props.enabled || props.busy || props.unknown || props.stale)
+const statementGenerating = ref(false)
+const fieldsLocked = computed(() => !props.enabled || props.busy || props.unknown || props.stale || statementGenerating.value)
 const selectedOrders = computed(() => props.orders.filter(order => selectedIds.value.includes(order.id)))
 const total = computed(() => sumMoneyValues(selectedOrders.value.flatMap(order => order.items.filter(canPayPurchasePayable).map(item => item.remainingAmount)), { precision: 2 }))
 const profile = computed(() => {
@@ -96,7 +98,10 @@ watch(() => props.enabled, (enabled) => {
       </h2>
       <div class="gap-3 grid">
         <label for="purchase-batch-supplier" class="qs-type-body-medium block">{{ t('purchasePayment.batch.supplier') }}</label>
-        <FaSelect id="purchase-batch-supplier" :model-value="supplierValue" :options="suppliers" :placeholder="t(suppliersLoading ? 'purchasePayment.batch.loadingSuppliers' : 'purchasePayment.batch.chooseSupplier')" :disabled="fieldsLocked || suppliersLoading" class="w-full" @update:model-value="changeSupplier" />
+        <div class="flex flex-wrap gap-3 min-w-0 items-center">
+          <FaSelect id="purchase-batch-supplier" :model-value="supplierValue" :options="suppliers" :placeholder="t(suppliersLoading ? 'purchasePayment.batch.loadingSuppliers' : 'purchasePayment.batch.chooseSupplier')" :disabled="fieldsLocked || suppliersLoading" class="flex-1 min-w-40" @update:model-value="changeSupplier" />
+          <PurchasePaymentStatementAction :orders="selectedOrders" :supplier-name="suppliers.find(item => item.value === supplierValue)?.label ?? ''" :enabled="enabled && !busy && !unknown && !stale && !loading" @busy-change="statementGenerating = $event" />
+        </div>
         <p v-if="!suppliersLoading && !suppliers.length" class="qs-type-meta text-muted-foreground m-0">
           {{ t('purchasePayment.batch.noSuppliers') }}
         </p>

@@ -56,6 +56,7 @@ async function execute<T>(name: string, props: object, expose: string[], onEvent
   } }
 }
 interface FormState {
+  statementGenerating: Ref<boolean>
   selectedIds: Ref<string[]>
   recipientAccountId: Ref<string>
   voucher: Ref<File | null>
@@ -67,7 +68,7 @@ interface FormState {
 }
 async function formFixture(enabled = true) {
   const props = reactive({ supplierValue: null as string | null, orders: [order('a'), order('b')], suppliers: [{ value: 'supplier-a', label: '供应商甲' }], suppliersLoading: false, loading: false, error: '', busy: false, unknown: false, stale: false, enabled })
-  const f = await execute<FormState>('purchase-batch-payment-form.vue', props, ['selectedIds', 'recipientAccountId', 'voucher', 'total', 'canSubmit', 'changeSupplier', 'selectOrders', 'submit'], (name, value) => {
+  const f = await execute<FormState>('purchase-batch-payment-form.vue', props, ['statementGenerating', 'selectedIds', 'recipientAccountId', 'voucher', 'total', 'canSubmit', 'changeSupplier', 'selectOrders', 'submit'], (name, value) => {
     if (name === 'supplierChange') {
       props.supplierValue = value as string | null
     }
@@ -88,6 +89,22 @@ function assertCleared(state: FormState) {
   assert.equal(state.voucher.value, null)
   assert.equal(state.canSubmit.value, false)
 }
+
+test('生成对账单期间保留选择但锁定付款和改选，生成结束恢复原表单', async (context) => {
+  const f = await formFixture()
+  context.after(f.dispose)
+  await f.fill()
+  f.state.statementGenerating.value = true
+  f.state.selectOrders([])
+  f.state.changeSupplier(null)
+  f.state.submit()
+  assert.equal(f.state.canSubmit.value, false)
+  assert.deepEqual([...f.state.selectedIds.value], ['a'])
+  assert.equal(f.props.supplierValue, 'supplier-a')
+  assert.equal(submissions(f.events).length, 0)
+  f.state.statementGenerating.value = false
+  assert.equal(f.state.canSubmit.value, true)
+})
 
 test('汇总仅包含所选订单尚未支付阶段，使用两位十进制精确加总', async (context) => {
   const f = await formFixture()
