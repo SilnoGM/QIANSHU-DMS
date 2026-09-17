@@ -143,9 +143,7 @@ test('采购创建草稿映射为独立详情模型并保留产品主图', () =>
     salesOrderNo: 'SO/20260827-00008',
   })
   assert.deepEqual(result.statuses, [
-    { key: 'ORDER', label: '订单状态', tone: 'warning', value: '采购审核中' },
-    { key: 'FULFILLMENT', label: '履约状态', tone: 'info', value: '已下单' },
-    { key: 'PAYMENT', label: '付款状态', tone: 'danger', value: '未付款' },
+    { key: 'ORDER', label: '订单状态', tone: 'neutral', value: '待提交' },
   ])
   assert.equal(result.orderNo, null)
   assert.equal(result.purchaseTypeLabel, '销售关联采购')
@@ -180,15 +178,13 @@ test('正式采购详情映射状态、付款进度和采购语义产品字段',
   assert.equal(result.updatedAt, '2026-08-28T02:00:00.000Z')
 })
 
-test('采购创建预览按零实付与当前总价派生付款状态，空值和非法金额不当作零', () => {
-  for (const [purchaseTotalAmount, expectedValue, expectedTone] of [
-    ['0', '已付清', 'success'],
-    ['0.00', '已付清', 'success'],
-    ['0.0000', '已付清', 'success'],
-    ['20.00', '未付款', 'danger'],
-    ['0.0001', '未付款', 'danger'],
-    [null, '未付款', 'danger'],
-    ['invalid', '未付款', 'danger'],
+test('采购创建预览始终仅显示待提交，不能按草稿金额推断正式业务状态', () => {
+  for (const purchaseTotalAmount of [
+    '0',
+    '0.00',
+    '20.00',
+    null,
+    'invalid',
   ] as const) {
     const result = mapPurchaseOrderCreateToDesc({
       balanceDueAmount: purchaseTotalAmount,
@@ -203,13 +199,24 @@ test('采购创建预览按零实付与当前总价派生付款状态，空值�
       shippingMarkText: '',
       supplierLabel: '供应商',
     })
-    assert.deepEqual(result.statuses.find(status => status.key === 'PAYMENT'), {
-      key: 'PAYMENT',
-      label: '付款状态',
-      tone: expectedTone,
-      value: expectedValue,
-    }, `总价 ${purchaseTotalAmount}`)
+    assert.deepEqual(result.statuses, [
+      { key: 'ORDER', label: '订单状态', tone: 'neutral', value: '待提交' },
+    ], `总价 ${purchaseTotalAmount}`)
   }
+})
+
+test('已提交的采购详情仍展示服务端返回的审核、履约和付款状态', () => {
+  const result = mapPurchaseOrderDetailToDesc(createDetail({
+    orderStatus: 'PENDING_REVIEW',
+    fulfillmentStatus: 'ORDERED',
+    paymentStatus: 'UNPAID',
+  }))
+
+  assert.deepEqual(result.statuses, [
+    { key: 'ORDER', label: '订单状态', tone: 'warning', value: '采购审核中' },
+    { key: 'FULFILLMENT', label: '履约状态', tone: 'info', value: '已下单' },
+    { key: 'PAYMENT', label: '付款状态', tone: 'danger', value: '未付款' },
+  ])
 })
 
 test('已完成采购详情使用成功语义展示订单状态', () => {
