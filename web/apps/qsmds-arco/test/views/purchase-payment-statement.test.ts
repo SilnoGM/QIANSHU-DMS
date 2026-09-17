@@ -18,12 +18,10 @@ function fixture() {
   const orders = shallowRef([order()])
   const supplier = ref('供应商')
   const calls: string[] = []
-  const waits: number[] = []
   const revoked: string[] = []
   const copies: Blob[] = []
   const rendered: PurchasePaymentStatement[] = []
   const png = new Blob(['png'], { type: 'image/png' })
-  let clock = 0
   let read = async (id: string) => order(id)
   let write = async () => {}
   const scope = effectScope()
@@ -36,11 +34,6 @@ function fixture() {
     render: async (statement) => {
       rendered.push(statement)
       return png
-    },
-    now: () => clock,
-    wait: async (ms) => {
-      waits.push(ms)
-      clock += ms
     },
     createUrl: () => 'blob:statement',
     revokeUrl: url => revoked.push(url),
@@ -57,10 +50,10 @@ function fixture() {
     state.complete()
     state.markLoaded(state.previewUrl.value!)
   }
-  return { state, enabled, epoch, orders, supplier, calls, waits, revoked, copies, rendered, png, start, finish, setRead: (fn: typeof read) => read = fn, setWrite: (fn: typeof write) => write = fn, dispose: () => scope.stop() }
+  return { state, enabled, epoch, orders, supplier, calls, revoked, copies, rendered, png, start, finish, setRead: (fn: typeof read) => read = fn, setWrite: (fn: typeof write) => write = fn, dispose: () => scope.stop() }
 }
 
-test('三步读取所选订单最新详情并计算，两秒后打开单张图片预览，复制成功保持打开', async (context) => {
+test('三步读取所选订单最新详情并计算，加载器完成后打开单张图片预览，复制成功保持打开', async (context) => {
   const f = fixture()
   context.after(f.dispose)
   f.setRead(async () => {
@@ -75,7 +68,6 @@ test('三步读取所选订单最新详情并计算，两秒后打开单张图�
   await f.finish()
   assert.deepEqual(f.calls, ['a'])
   assert.equal(f.rendered[0]?.totals.remainingAmount, '50.00')
-  assert.ok(f.waits.reduce((sum, ms) => sum + ms, 0) >= 2000)
   assert.equal(f.state.visible.value, true)
   assert.equal(await f.state.copy(), true)
   assert.equal(f.copies[0], f.png)

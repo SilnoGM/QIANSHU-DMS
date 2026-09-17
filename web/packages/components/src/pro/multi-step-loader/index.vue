@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onScopeDispose, ref, watch } from 'vue'
 import Icon from '../../basic/icon/index.vue'
 
 defineOptions({
@@ -33,55 +33,71 @@ export type StepContext = Record<string, any>
 
 const currentState = ref(0)
 const isLastStepComplete = ref(false)
-const stepResults = ref<StepContext>({}) // 存储每个步骤的返回值
+const MIN_DURATION = 2000
+let generation = 0
+let cancelWait: (() => void) | undefined
 
-async function executeStepAction(step: Step) {
-  if (typeof step.action === 'function') {
+function stop() {
+  generation++
+  cancelWait?.()
+}
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    let timer: ReturnType<typeof setTimeout>
+    const finish = () => {
+      clearTimeout(timer)
+      cancelWait = undefined
+      resolve()
+    }
+    timer = setTimeout(finish, ms)
+    cancelWait = finish
+  })
+}
+
+async function processSteps() {
+  const run = generation
+  const steps = [...props.steps]
+  const results: StepContext = {}
+  const startedAt = performance.now()
+  const isCurrent = () => run === generation && props.loading
+  for (const [index, step] of steps.entries()) {
+    if (!isCurrent()) {
+      return
+    }
     try {
-      const result = await step.action(stepResults.value)
-      if (step.name) {
-        stepResults.value[step.name] = result
+      const result = await step.action?.(results)
+      if (!isCurrent()) {
+        return
       }
-      return true
+      if (step.name) {
+        results[step.name] = result
+      }
+      // 总计至少两秒，按步骤均分展示进度；实际工作耗时计入总时长，慢请求无需再补固定延时。
+      const remaining = Math.ceil(MIN_DURATION * (index + 1) / steps.length - (performance.now() - startedAt))
+      if (remaining > 0) {
+        await wait(remaining)
+      }
+      // 关闭、重新打开或卸载后，旧请求和计时器都不能推进下一步或通知新流程完成。
+      if (!isCurrent()) {
+        return
+      }
+      if (index < steps.length - 1) {
+        currentState.value = index + 1
+        emit('stateChange', currentState.value)
+      }
+      else {
+        isLastStepComplete.value = true
+        emit('complete')
+      }
     }
     catch (error) {
-      emit('error', error as Error, currentState.value)
-      return false
+      if (isCurrent()) {
+        emit('error', error as Error, index)
+      }
+      return
     }
   }
-  return true
-}
-
-async function proceedToNextStep() {
-  const currentStep = props.steps[currentState.value]
-  if (!currentStep) {
-    return
-  }
-
-  // Execute the current step's action
-  const success = await executeStepAction(currentStep)
-  if (!success) {
-    return // 如果执行失败，终止流程
-  }
-
-  if (currentState.value < props.steps.length - 1) {
-    currentState.value++
-    emit('stateChange', currentState.value)
-    processCurrentStep()
-  }
-  else {
-    isLastStepComplete.value = true
-    emit('complete')
-  }
-}
-
-async function processCurrentStep() {
-  const currentStep = props.steps[currentState.value]
-  if (!currentStep) {
-    return
-  }
-
-  await proceedToNextStep()
 }
 
 function close() {
@@ -91,14 +107,16 @@ function close() {
 watch(
   () => props.loading,
   (newLoading) => {
+    stop()
     if (newLoading) {
       currentState.value = 0
       isLastStepComplete.value = false
-      stepResults.value = {} // 重置步骤结果
-      processCurrentStep()
+      void processSteps()
     }
   },
+  { immediate: true },
 )
+onScopeDispose(stop)
 </script>
 
 <template>

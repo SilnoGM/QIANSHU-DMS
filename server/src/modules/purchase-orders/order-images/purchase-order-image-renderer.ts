@@ -10,10 +10,12 @@ const WIDTH = 1600
 const PAGE_WIDTH = 2100
 const PAGE_HEIGHT = 2970
 const PAGE_DENSITY = 254
+const MAX_PAGE_HEIGHT = 16_384
 const MARGIN = 64
 const CONTENT_WIDTH = WIDTH - MARGIN * 2
-// 210:297 对应 A4 竖版；保持现有排版字号，超页拒绝生成，不缩小文字或截断内容。
-const MAX_HEIGHT = Math.floor(WIDTH * PAGE_HEIGHT / PAGE_WIDTH)
+// A4 是最小画布；超页只延长高度。按媒体校验的最大边长限制最终长图，
+// 2100 × 16384 也小于媒体 40M 像素上限，不缩小字号或截断内容。
+const MAX_HEIGHT = Math.floor(WIDTH * MAX_PAGE_HEIGHT / PAGE_WIDTH)
 const MIN_LINE_HEIGHT = 132
 const FONT_DIRECTORY = resolve(__dirname, '../../../../deploy/fonts/noto-sans-sc')
 const FONT_FILE = resolve(FONT_DIRECTORY, 'NotoSansSC.ttf')
@@ -164,10 +166,11 @@ class PurchaseOrderImageCanvas {
     const height = Math.max(900, Math.ceil(this.y + MARGIN))
     if (height > MAX_HEIGHT) throw new PurchaseOrderImageError('PURCHASE_ORDER_IMAGE_TOO_LARGE')
     const background = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${height}"><rect width="100%" height="100%" fill="white"/>${this.shapes.join('')}</svg>`)
-    // 先合成排版，再等比放到 A4 画布上。短单据仅补白，避免拉伸产品图片和文字。
+    // 按固定宽度等比输出，短单据补白到 A4，高于 A4 的内容保留完整高度。
     const content = await sharp(background).composite(this.overlays).flatten({ background: COLORS.white }).removeAlpha().png().toBuffer()
+    const outputHeight = Math.max(PAGE_HEIGHT, Math.ceil(height * PAGE_WIDTH / WIDTH))
     const output = await sharp(content)
-      .resize(PAGE_WIDTH, PAGE_HEIGHT, { fit: 'contain', position: 'north', background: COLORS.white })
+      .resize(PAGE_WIDTH, outputHeight, { fit: 'contain', position: 'north', background: COLORS.white })
       .withMetadata({ density: PAGE_DENSITY })
       .png({ compressionLevel: 9 }).toBuffer()
     if (BigInt(output.byteLength) > MEDIA_CONTENT_SIZE_LIMITS.IMAGE) throw new PurchaseOrderImageError('PURCHASE_ORDER_IMAGE_TOO_LARGE')

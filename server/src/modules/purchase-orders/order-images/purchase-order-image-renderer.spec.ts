@@ -81,8 +81,26 @@ describe('PurchaseOrderImageRenderer', () => {
     await expect(renderer.render(input, new Map([['photo-1', Buffer.from('invalid')]]))).rejects.toMatchObject({ code: 'PURCHASE_ORDER_IMAGE_PRODUCT_IMAGE_UNAVAILABLE' })
   })
 
-  it('rejects content beyond one A4 page without cropping or shrinking the text', async () => {
-    await expect(renderer.render({ ...snapshot(), remark: '一行采购说明\n'.repeat(60) })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_IMAGE_TOO_LARGE' })
+  it('extends long documents below A4 at the same width without cropping or shrinking text', async () => {
+    const short = await renderer.render(snapshot())
+    const long = await renderer.render({ ...snapshot(), remark: '一行采购说明\n'.repeat(60) })
+    const metadata = await sharp(long).metadata()
+    expect(metadata).toMatchObject({ format: 'png', width: 2100, density: 254, hasAlpha: false })
+    expect(metadata.height).toBeGreaterThan(2970)
+    // 单据变长不改变顶部字号和缩放；A4 之后仍有完整内容而不是空白延长。
+    const header = { left: 0, top: 0, width: 2100, height: 300 }
+    const longHeader = await sharp(long).extract(header).raw().toBuffer()
+    expect(longHeader.equals(await sharp(short).extract(header).raw().toBuffer())).toBe(true)
+    const continuation = await sharp(long).extract({ left: 0, top: 2970, width: 2100, height: metadata.height - 2970 }).raw().toBuffer()
+    expect(continuation.some(value => value < 200)).toBe(true)
+  })
+
+  it('grows for additional product rows while retaining an A4 minimum width', async () => {
+    const input = snapshot()
+    const image = await renderer.render({ ...input, lines: Array.from({ length: 15 }, (_, index) => ({ ...input.lines[0], id: `line-${index + 1}`, lineNumber: index + 1 })) })
+    const metadata = await sharp(image).metadata()
+    expect(metadata.width).toBe(2100)
+    expect(metadata.height).toBeGreaterThan(2970)
   })
 
   it('rejects oversized documents instead of truncating rows or shrinking them unreadably', async () => {

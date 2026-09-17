@@ -14,8 +14,6 @@ interface Options {
 interface Dependencies {
   readOrder: (id: string, signal: AbortSignal) => Promise<PurchasePayableOrderDto>
   render: typeof renderPurchasePaymentStatement
-  now: () => number
-  wait: (ms: number, signal: AbortSignal) => Promise<void>
   createUrl: (blob: Blob) => string
   revokeUrl: (url: string) => void
   writeClipboard: (blob: Blob) => Promise<void>
@@ -23,29 +21,9 @@ interface Dependencies {
 function aborted() {
   return new DOMException('Statement generation aborted', 'AbortError')
 }
-function wait(ms: number, signal: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    if (signal.aborted) {
-      reject(aborted())
-      return
-    }
-    let timer: ReturnType<typeof setTimeout>
-    const cancel = () => {
-      clearTimeout(timer)
-      reject(aborted())
-    }
-    timer = setTimeout(() => {
-      signal.removeEventListener('abort', cancel)
-      resolve()
-    }, ms)
-    signal.addEventListener('abort', cancel, { once: true })
-  })
-}
 const defaults: Dependencies = {
   readOrder: async (id, signal) => (await purchaseOrderPayablesApi.getByOrder(id, signal)).data,
   render: renderPurchasePaymentStatement,
-  now: () => performance.now(),
-  wait,
   createUrl: blob => URL.createObjectURL(blob),
   revokeUrl: url => URL.revokeObjectURL(url),
   writeClipboard: (blob) => {
@@ -107,12 +85,8 @@ export function usePurchasePaymentStatement(options: Options, dependencies: Depe
     let statement: PurchasePaymentStatement
     const step = (action: () => Promise<void>) => async () => {
       current()
-      const startedAt = dependencies.now()
       try {
         await action()
-        current()
-        // 三步各至少 700ms，总时长不低于 2.1 秒；请求较慢时不额外叠加固定延迟。
-        await dependencies.wait(Math.max(0, 700 - (dependencies.now() - startedAt)), request.signal)
         current()
       }
       catch (error) {
