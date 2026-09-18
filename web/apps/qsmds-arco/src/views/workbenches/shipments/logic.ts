@@ -36,6 +36,10 @@ export function parseShipmentQuery(raw: Record<string, unknown>): ShipmentListQu
     page: typeof raw.page === 'string' && /^[1-9]\d*$/u.test(raw.page) && Number.isSafeInteger(Number(raw.page)) ? Number(raw.page) : 1,
     pageSize: ['20', '50', '100'].includes(String(raw.pageSize)) ? Number(raw.pageSize) : 20,
   }
+  const warehouseValue = text(raw.destinationWarehouseValue)
+  if (result.view === 'WAREHOUSE_RECEIVED' && warehouseValue) {
+    result.destinationWarehouseValue = warehouseValue
+  }
   const keyword = text(raw.keyword)
   const supplierValue = text(raw.supplierValue)
   const createdByUserId = text(raw.createdByUserId)

@@ -17,11 +17,12 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import PurchaseWarehouseReceiptAction from '@/views/operations/purchase-orders/purchase-warehouse-receipt-action.vue'
+import { buildWarehouseFilterOptions, warehouseFilterFromQuery, warehouseFilterToQuery } from '../../operations/warehouse-arrivals/logic'
+import { useWarehouseArrivalData } from '../../operations/warehouse-arrivals/use-warehouse-arrival-data'
 import { buildShipmentRouteQuery, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentPlaceholderAction, shipmentStatusClass } from './logic'
 import ShipmentDetailDrawer from './shipment-detail-drawer.vue'
 import { getShipmentSourceEmptyKey } from './shipment-detail.logic'
 import ShipmentProducts from './shipment-products.vue'
-import { useShipmentData } from './use-shipment-data'
 
 defineOptions({ name: 'QsPurchaseTransportShipments' })
 const route = useRoute()
@@ -32,6 +33,7 @@ const { auth } = useAppAuth()
 const account = useAppAccountStore()
 const currencyCatalog = useCurrencyCatalog()
 const supplierCatalog = useDictionaryCatalog('service_provider.supplier')
+const warehouseCatalog = useDictionaryCatalog('mainland.warehouse')
 const warehouseActionRef = useTemplateRef<InstanceType<typeof PurchaseWarehouseReceiptAction>>('warehouseActionRef')
 const canReceive = computed(() => auth('purchase-orders:update'))
 const canRead = computed(() => auth('purchase-orders:read'))
@@ -41,6 +43,16 @@ const activated = ref(false)
 const enabled = computed(() => activated.value && canRead.value && route.name === 'qsPurchaseTransportShipments' && route.fullPath === instancePath)
 const query = computed(() => parseShipmentQuery(route.query))
 const activeView = computed(() => query.value.view ?? 'AWAITING_SHIPMENT')
+const showWarehouseFilter = computed(() => activeView.value === 'WAREHOUSE_RECEIVED')
+const activeWarehouse = computed(() => warehouseFilterFromQuery(query.value))
+const warehouseOptions = computed(() => buildWarehouseFilterOptions(warehouseCatalog.catalog.value, query.value.destinationWarehouseValue, t))
+// 仓库统计只供已到仓视图使用，其他视图继续只读取状态总数。
+const warehouseValues = computed(() => showWarehouseFilter.value
+  ? warehouseOptions.value.flatMap((item) => {
+      const { destinationWarehouseValue } = warehouseFilterToQuery(item.value)
+      return destinationWarehouseValue === undefined ? [] : [destinationWarehouseValue]
+    })
+  : [])
 const keyword = ref(query.value.keyword ?? '')
 const filters = ref<QsGenericTableFilterValues>({
   supplierValue: query.value.supplierValue,
@@ -62,6 +74,8 @@ const {
   error,
   counts,
   countsError,
+  warehouseCounts,
+  warehouseCountsError,
   buyerOptions,
   detail,
   orderDetail,
@@ -73,7 +87,7 @@ const {
   loadDetail,
   openShipment,
   openOrder,
-} = useShipmentData(enabled, computed(() => account.authEpoch), query, value => navigate({ ...query.value, page: value }, true))
+} = useWarehouseArrivalData(enabled, computed(() => account.authEpoch), query, value => navigate({ ...query.value, page: value }, true), warehouseValues)
 function navigate(next: ShipmentListQuery, replace = false): void {
   if (!enabled.value) {
     return
@@ -96,6 +110,14 @@ const tabs = computed(() => SHIPMENT_VIEWS.map(value => ({
   label: t(`purchaseShipments.${value}`),
   count: countsError.value || counts.value.length === 0 ? undefined : counts.value.find(item => item.value === value)?.count ?? 0,
 })))
+const warehouseTabs = computed(() => warehouseOptions.value.map((item) => {
+  const { destinationWarehouseValue } = warehouseFilterToQuery(item.value)
+  const statusCounts = destinationWarehouseValue === undefined
+    ? countsError.value || counts.value.length === 0 ? undefined : counts.value
+    : warehouseCounts.value.find(warehouse => warehouse.value === destinationWarehouseValue)?.items
+  // 请求失败或未完成时保持未知，不能以零冒充当前仓库数量。
+  return { ...item, count: statusCounts === undefined ? undefined : statusCounts.find(status => status.value === 'WAREHOUSE_RECEIVED')?.count ?? 0 }
+}))
 const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
   { key: 'supplierValue', label: t('purchaseShipments.supplier'), options: (supplierCatalog.catalog.value?.items ?? []).map(item => ({ value: item.value, label: item.effectiveEnabled ? item.label : `${item.label}（${t('purchaseShipments.disabled')}）` })) },
   { key: 'supplierSource', label: t('purchaseShipments.supplierSource'), options: [{ value: 'DICTIONARY', label: t('purchaseShipments.dictionarySupplier') }, { value: 'CUSTOM_TEXT', label: t('purchaseShipments.customSupplier') }] },
@@ -137,8 +159,17 @@ function handleTransportAction(row: { viewStatus: Exclude<ShipmentView, 'ALL'> }
 
 function selectTab(value: string | number): void {
   if (SHIPMENT_VIEWS.includes(value as typeof SHIPMENT_VIEWS[number])) {
-    navigate({ ...query.value, view: value as typeof SHIPMENT_VIEWS[number], page: 1 })
+    const { destinationWarehouseValue: _warehouse, ...current } = query.value
+    navigate({ ...current, view: value as typeof SHIPMENT_VIEWS[number], page: 1 })
   }
+}
+
+function selectWarehouse(value: string): void {
+  if (!showWarehouseFilter.value || !warehouseTabs.value.some(item => item.value === value)) {
+    return
+  }
+  const { destinationWarehouseValue: _warehouse, ...current } = query.value
+  navigate({ ...current, ...warehouseFilterToQuery(value), page: 1 })
 }
 
 function search(): void {
@@ -248,6 +279,30 @@ onBeforeUnmount(() => {
           </template>
         </FaAlert>
         <QsStatusSwitchToolbar :model-value="activeView" :items="tabs" :aria-label="t('workbench.shipments')" class="mb-4" @update:model-value="selectTab" />
+        <template v-if="showWarehouseFilter">
+          <FaAlert v-if="warehouseCatalog.error.value" :title="t('warehouseArrivals.warehouseError')" variant="destructive" class="mb-4">
+            <template #description>
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span>{{ t('warehouseArrivals.warehouseErrorDescription') }}</span>
+                <FaButton variant="outline" size="sm" class="shrink-0 min-h-11 sm:min-h-8" @click="warehouseCatalog.retry()">
+                  {{ t('purchaseShipments.retry') }}
+                </FaButton>
+              </div>
+            </template>
+          </FaAlert>
+          <FaAlert v-else-if="warehouseCatalog.missing.value" :title="t('warehouseArrivals.warehouseMissing')" :description="t('warehouseArrivals.warehouseMissingDescription')" class="mb-4" />
+          <FaAlert v-if="warehouseCountsError" :title="t('warehouseArrivals.warehouseCountsError')" variant="destructive" class="mb-4">
+            <template #description>
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span>{{ t('warehouseArrivals.warehouseCountsErrorDescription') }}</span>
+                <FaButton variant="outline" size="sm" class="shrink-0 min-h-11 sm:min-h-8" @click="loadCounts">
+                  {{ t('purchaseShipments.retry') }}
+                </FaButton>
+              </div>
+            </template>
+          </FaAlert>
+          <QsStatusSwitchToolbar :model-value="activeWarehouse" :items="warehouseTabs" :aria-label="t('purchaseShipments.destinationWarehouse')" class="mb-4" @update:model-value="selectWarehouse" />
+        </template>
         <QsGenericTable
           v-model:page="page" v-model:page-size="pageSize" v-model:search="keyword" v-model:filters="filters"
           row-key="id" :show-row-number="false" :columns="columns" :data="rows" :total="total"

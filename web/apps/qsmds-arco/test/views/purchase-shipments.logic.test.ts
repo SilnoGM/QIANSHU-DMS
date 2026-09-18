@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm'
 import { parseDate } from '@internationalized/date'
 import ts from 'typescript'
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
+import { buildWarehouseFilterOptions, warehouseFilterFromQuery, warehouseFilterToQuery } from '../../src/views/operations/warehouse-arrivals/logic'
 import { buildShipmentRouteQuery, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentCountsQuery, shipmentPlaceholderAction, shipmentStatusClass } from '../../src/views/workbenches/shipments/logic'
 
 test('货件默认待发货；非法 URL 参数不进入查询', () => {
@@ -18,6 +19,18 @@ test('Tab 切换保留公共筛选并归一到第一页，数量查询排除视�
   const route = buildShipmentRouteQuery({ ...query, view: 'SHIPPED', page: 1 })
   assert.deepEqual(parseShipmentQuery(route), { ...query, view: 'SHIPPED', page: 1 })
   assert.deepEqual(shipmentCountsQuery(query), { keyword: '唛头', supplierValue: 'supplier-1', purchaseType: 'STOCK', orderDateFrom: '2026-09-01', orderDateTo: '2026-09-14' })
+})
+
+test('仓库筛选仅在已到仓视图生效，URL 可恢复且非法仓库参数被忽略', () => {
+  const query = parseShipmentQuery({ view: 'WAREHOUSE_RECEIVED', destinationWarehouseValue: 'QITA', keyword: '货件', page: '3' })
+  assert.equal(query.destinationWarehouseValue, 'QITA')
+  assert.deepEqual(parseShipmentQuery(buildShipmentRouteQuery(query)), query)
+  for (const view of SHIPMENT_VIEWS.filter(value => value !== 'WAREHOUSE_RECEIVED')) {
+    assert.equal(parseShipmentQuery({ view, destinationWarehouseValue: 'QITA' }).destinationWarehouseValue, undefined)
+  }
+  for (const value of ['', '  ', ['QITA'], true]) {
+    assert.equal(parseShipmentQuery({ view: 'WAREHOUSE_RECEIVED', destinationWarehouseValue: value }).destinationWarehouseValue, undefined)
+  }
 })
 
 test('货件序号不截断，状态绿色采用主题 primary', () => {
@@ -73,7 +86,9 @@ async function pageFixture() {
     total: ref(0),
     loading: ref(false),
     error: ref(''),
-    counts: ref([]),
+    counts: ref([{ value: 'WAREHOUSE_RECEIVED', count: 7 }, { value: 'SHIPPED', count: 3 }]),
+    warehouseCounts: ref([{ value: 'north', items: [{ value: 'WAREHOUSE_RECEIVED', count: 2 }] }, { value: 'QITA', items: [{ value: 'WAREHOUSE_RECEIVED', count: 5 }] }]),
+    warehouseCountsError: ref(false),
     countsError: ref(false),
     buyerOptions: ref([]),
     detail: ref(null),
@@ -87,7 +102,7 @@ async function pageFixture() {
     openShipment: () => {},
     openOrder: () => {},
   }
-  const state = runInNewContext(ts.transpileModule(`${script}\n;({ keyword, filters, dateRange, page, pageSize, search, columns, handleTransportAction })`, {
+  const state = runInNewContext(ts.transpileModule(`${script}\n;({ keyword, filters, dateRange, page, pageSize, search, columns, handleTransportAction, selectTab, selectWarehouse, activeWarehouse, showWarehouseFilter, warehouseValues, warehouseTabs, tabs })`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
   }).outputText, {
     computed,
@@ -109,8 +124,16 @@ async function pageFixture() {
     useAppAccountStore: () => account,
     useQsToast: () => ({ info: (message: string) => info.push(message) }),
     useCurrencyCatalog: () => ({ currencies: ref([]) }),
-    useDictionaryCatalog: () => ({ catalog: ref({ items: [] }), error: ref(null) }),
-    useShipmentData: () => data,
+    useDictionaryCatalog: (code: string) => ({ catalog: ref({ items: code === 'mainland.warehouse'
+      ? [
+          { value: 'north', label: '北仓', effectiveEnabled: true },
+          { value: 'QITA', label: '其他', effectiveEnabled: true },
+        ]
+      : [] }), error: ref(null) }),
+    useWarehouseArrivalData: () => data,
+    buildWarehouseFilterOptions,
+    warehouseFilterFromQuery,
+    warehouseFilterToQuery,
     buildShipmentRouteQuery,
     formatDestinationWarehouse,
     formatShipmentNumber,
@@ -130,11 +153,18 @@ async function pageFixture() {
     page: { value: number }
     pageSize: { value: number }
     search: () => void
+    selectTab: (value: string) => void
+    selectWarehouse: (value: string) => void
+    activeWarehouse: { value: string }
+    showWarehouseFilter: { value: boolean }
+    warehouseValues: { value: string[] }
+    warehouseTabs: { value: Array<{ value: string, count?: number }> }
+    tabs: { value: Array<{ value: string, count?: number }> }
     handleTransportAction: (row: { viewStatus: string }) => void
     columns: { value: Array<{ id: string, fixed?: string, accessorKey?: string }> }
   }
   lifecycle.mount!()
-  return { state, route, initialPath, initialQuery, permission, navigations, info, lifecycle, dispose: () => stops.forEach(stop => stop()) }
+  return { state, data, route, initialPath, initialQuery, permission, navigations, info, lifecycle, dispose: () => stops.forEach(stop => stop()) }
 }
 
 test('装柜和签收仅轻提示，撤权或页面停用不响应', async (context) => {
@@ -220,4 +250,49 @@ test('目的地仓库列默认展示，历史空值、有效、停用与未知�
   assert.equal(formatDestinationWarehouse({ destinationWarehouseValue: 'OLD-WH', destinationWarehouse: { value: 'OLD-WH', label: null, known: false, effectiveEnabled: false } }, t), 'OLD-WH（未知仓库）')
   assert.equal(formatDestinationWarehouse({ destinationWarehouseValue: 'WH-01', destinationWarehouse: { value: 'WH-01', label: '长沙仓', known: true, effectiveEnabled: true } }, t), '长沙仓')
   assert.equal(formatDestinationWarehouse({ destinationWarehouseValue: 'WH-01', destinationWarehouse: { value: 'WH-01', label: '长沙仓', known: true, effectiveEnabled: false } }, t), '长沙仓（已停用）')
+})
+
+test('已到仓显示两层数量，切仓保留查询并回第一页；其他视图不读取仓库统计', async (context) => {
+  const f = await pageFixture()
+  context.after(f.dispose)
+  assert.equal(f.state.showWarehouseFilter.value, false)
+  assert.deepEqual(Array.from(f.state.warehouseValues.value), [])
+  f.state.selectWarehouse('warehouse:north')
+  assert.equal(f.navigations.length, 0)
+  f.route.query = { view: 'WAREHOUSE_RECEIVED', page: '3', pageSize: '50', keyword: '柜子', supplierValue: 'supplier-1', orderDateFrom: '2026-09-01' } as typeof f.route.query
+  assert.equal(f.state.showWarehouseFilter.value, true)
+  assert.deepEqual(Array.from(f.state.warehouseValues.value), ['north', 'QITA'])
+  assert.deepEqual(Array.from(f.state.warehouseTabs.value, item => item.count), [7, 2, 5])
+  f.state.selectWarehouse('warehouse:north')
+  assert.deepEqual({ ...f.navigations.at(-1) }, { ...f.route.query, page: '1', destinationWarehouseValue: 'north' })
+  f.route.query = { ...f.route.query, destinationWarehouseValue: 'north' } as typeof f.route.query
+  assert.equal(f.state.activeWarehouse.value, 'warehouse:north')
+  assert.equal(f.state.tabs.value.find(item => item.value === 'WAREHOUSE_RECEIVED')?.count, 7)
+  f.state.search()
+  assert.equal(f.navigations.at(-1)?.destinationWarehouseValue, 'north')
+  f.state.selectWarehouse('__all__')
+  assert.equal(f.navigations.at(-1)?.destinationWarehouseValue, undefined)
+  f.state.selectTab('SHIPPED')
+  assert.equal(f.navigations.at(-1)?.destinationWarehouseValue, undefined)
+  assert.equal(f.navigations.at(-1)?.page, '1')
+  f.route.query = { ...f.route.query, view: 'SHIPPED' }
+  assert.equal(f.state.showWarehouseFilter.value, false)
+  assert.deepEqual(Array.from(f.state.warehouseValues.value), [])
+})
+
+test('未知选择不导航，仓库统计未完成或失败时不伪造零；失活及撤权不允许切换', async (context) => {
+  const f = await pageFixture()
+  context.after(f.dispose)
+  f.route.query.view = 'WAREHOUSE_RECEIVED'
+  f.data.warehouseCounts.value = []
+  assert.deepEqual(Array.from(f.state.warehouseTabs.value, item => item.count), [7, undefined, undefined])
+  f.data.countsError.value = true
+  assert.equal(f.state.warehouseTabs.value[0]?.count, undefined)
+  f.state.selectWarehouse('warehouse:non-existent')
+  f.permission.value = false
+  f.state.selectWarehouse('warehouse:north')
+  f.permission.value = true
+  f.lifecycle.deactivate!()
+  f.state.selectWarehouse('warehouse:north')
+  assert.equal(f.navigations.length, 0)
 })
