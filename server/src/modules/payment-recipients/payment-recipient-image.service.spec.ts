@@ -8,7 +8,7 @@ import { PaymentRecipientImageService } from './payment-recipient-image.service'
 function fixture(permissions: string[], overrides: Record<string, unknown> = {}) {
   const asset = { id: 'image', createdByUserId: 'actor', uploadPurpose: 'PAYMENT_RECIPIENT_QR', status: 'UPLOADING', uploadExpiresAt: new Date(Date.now() + 10000),
     deletedAt: null, mediaType: 'IMAGE', mimeType: 'image/png', objectKey: 'assets/qr.png', checksumSha256: 'a'.repeat(64), originalFilename: 'qr.png',
-    paymentRecipientAccounts: [], paymentRecipientSnapshots: [], ...overrides }
+    packagingRecipientSnapshots: [], paymentRecipientAccounts: [], paymentRecipientSnapshots: [], ...overrides }
   const prisma = { user: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) }, mediaAsset: { findUnique: jest.fn().mockResolvedValue(asset) }, purchaseOrder: { findFirst: jest.fn().mockResolvedValue({ id: 'catalog-order' }) } }
   const delivery = { stat: jest.fn().mockResolvedValue({ sizeBytes: 100n }), mode: 'stream' }
   const media = { prepare: jest.fn() }
@@ -45,5 +45,16 @@ describe('Payment recipient image authorization', () => {
     const h = fixture(['purchase-orders:payment'])
     await expect(h.service.upload('actor', {} as SalesOrderDocumentMultipartRequest)).rejects.toMatchObject({ code: 'FORBIDDEN' })
     expect(h.media.prepare).not.toHaveBeenCalled()
+  })
+})
+
+describe('Packaging recipient QR isolation', () => {
+  it('allows packaging creators to preview CHENGXIN while denying procurement finance', async () => {
+    const overrides = { status: 'READY', paymentRecipientAccounts: [{ profile: { packagingVendor: 'CHENGXIN' } }] }
+    await expect(fixture(['packaging-costs:create'], overrides).service.content('actor', 'image', undefined, 'HEAD')).resolves.toMatchObject({ status: 200 })
+    await expect(fixture(['purchase-orders:payment'], overrides).service.content('actor', 'image', undefined, 'HEAD')).rejects.toMatchObject({ code: 'PAYMENT_RECIPIENT_IMAGE_NOT_FOUND' })
+  })
+  it('retains historical packaging QR access after administrator replacement', async () => {
+    await expect(fixture(['packaging-costs:read'], { status: 'READY', packagingRecipientSnapshots: [{ id: 'paid' }] }).service.content('actor', 'image', undefined, 'HEAD')).resolves.toMatchObject({ status: 200 })
   })
 })

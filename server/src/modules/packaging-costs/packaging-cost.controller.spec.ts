@@ -32,7 +32,7 @@ describe('PackagingCostController contract', () => {
         { status: 422, codes: expect.arrayContaining(['PACKAGING_COST_POSTING_UNAVAILABLE']) as unknown },
       ]) as unknown },
     })
-    expect(document.components?.schemas?.PackagingCostRequestPayDto).toMatchObject({ required: ['expectedVersion'], properties: { expectedVersion: expect.any(Object) as unknown } })
+    expect(document.components?.schemas?.PackagingCostRequestPayDto).toMatchObject({ required: ['recipientAccountId', 'recipientProfileVersion', 'paymentMethod', 'voucher', 'expectedVersion'], properties: { expectedVersion: expect.any(Object) as unknown } })
     expect(document.components?.schemas?.PackagingCostRequestPayDto).not.toHaveProperty('properties.amount')
     for (const method of ['get', 'head'] as const) expect(document.paths[`${root}/{id}/images/{kind}`][method]?.responses).toHaveProperty('304')
     expect(document.paths[`${root}/{id}/images/{kind}`].get?.responses[200]).toMatchObject({ content: { 'image/jpeg': { schema: { type: 'string', format: 'binary' } }, 'image/png': expect.any(Object) as unknown, 'image/webp': expect.any(Object) as unknown } })
@@ -41,7 +41,7 @@ describe('PackagingCostController contract', () => {
     const id = '00000000-0000-4000-8000-000000000001'
     const options = { whitelist: true, forbidNonWhitelisted: true }
     expect((await validate(plainToInstance(PackagingCostRequestCreateDto, { shipmentId: id, packagingType: 'WOODEN_BOX', packagingVendor: 'OTHER', amount: '2.00', packagingImageMediaAssetId: id, quotationImageMediaAssetId: id, ownerUserId: id }), options)).map(error => error.property)).toContain('ownerUserId')
-    expect((await validate(plainToInstance(PackagingCostRequestPayDto, { expectedVersion: 1, amount: '1' }), options)).map(error => error.property)).toEqual(['amount'])
+    expect((await validate(plainToInstance(PackagingCostRequestPayDto, { expectedVersion: 1, recipientAccountId: id, recipientProfileVersion: 1, paymentMethod: 'ALIPAY', voucher: { mediaAssetId: id }, amount: '1' }), options)).map(error => error.property)).toEqual(['amount'])
     for (const input of [{ page: 0 }, { pageSize: 101 }, { status: 'APPROVED' }, { keyword: 'x'.repeat(129) }]) expect((await validate(plainToInstance(PackagingCostListQueryDto, input), options)).length).toBeGreaterThan(0)
   })
 })

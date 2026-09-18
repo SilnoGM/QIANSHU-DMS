@@ -11,12 +11,10 @@ describe('Purchase payable detail HTTP with isolated PostgreSQL', () => {
   let finance: Awaited<ReturnType<PackagingCostHarness['browserWithPermissions']>>
   let forbidden: Awaited<ReturnType<PackagingCostHarness['browserWithPermissions']>>
   beforeAll(async () => {
-    h = await createPackagingCostHarness()
+    h = await createPackagingCostHarness({ nativeImageProbe: true })
     finance = await h.browserWithPermissions(['purchase-orders:payment'])
     forbidden = await h.browserWithPermissions([])
-    const type = await h.prisma.dictionaryType.create({ data: { code: 'payment.method', name: '付款方式', enabled: false,
-      items: { create: { value: 'DETAIL_TEST_BANK', label: '测试银行', enabled: true } } } })
-    await h.prisma.dictionaryType.update({ where: { id: type.id }, data: { enabled: true } })
+    // payment.method 由正式迁移提供；沿用已配置的 BANK_TRANSFER，不重复创建字典。
   })
   afterAll(async () => { await h?.dispose() })
 
@@ -88,8 +86,12 @@ describe('Purchase payable detail HTTP with isolated PostgreSQL', () => {
     const cancelled = await reviewed()
     const zero = await reviewed(true)
     const balance = paid.items.find(item => item.paymentType === 'BALANCE')!
+    const profile = (await finance.browser.get(path(balance.id)).expect(200)).body as PurchasePayableOrderDto
+    const recipient = profile.paymentRecipientProfile!
+    const voucherId = await h.upload(finance.browser, 'png', `${path(balance.id)}/voucher-uploads`)
+    // 历史详情测试也通过正式支付上传并归档真实凭证，不能跳过现在的收款资料校验。
     await finance.browser.post(`${path(balance.id)}/pay`).set(packagingHeaders).set('Idempotency-Key', randomUUID())
-      .send({ expectedVersion: 1, paymentMethod: 'DETAIL_TEST_BANK' }).expect(200)
+      .send({ expectedVersion: balance.version, paymentMethod: 'BANK_TRANSFER', recipientAccountId: recipient.accounts[0].id, recipientProfileVersion: recipient.version, voucher: { mediaAssetId: voucherId } }).expect(200)
     await createReviewMutations(h.fixture).updateOrderStatus(h.fixture.context(), cancelled.id, { toStatus: 'CANCELLED', reason: 'Detail link cancellation' })
     const pending = await finance.browser.get('/api/purchase-order-payables').expect(200)
     const pendingIds = (pending.body as { items: PurchasePayableOrderDto[] }).items.map(group => group.id)

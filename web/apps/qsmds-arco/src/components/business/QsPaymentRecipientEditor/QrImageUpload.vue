@@ -3,7 +3,7 @@ import api from '@/api/modules/payment-recipients'
 import { paymentRecipientErrorMessage, validateRecipientImage } from './logic'
 import RecipientImage from './RecipientImage.vue'
 
-const props = defineProps<{ mediaAssetId?: string | null, disabled?: boolean }>()
+const props = defineProps<{ mediaAssetId?: string | null, disabled?: boolean, compact?: boolean }>()
 const emit = defineEmits<{
   'update:mediaAssetId': [value: string | null]
   'busyChange': [value: boolean]
@@ -14,7 +14,7 @@ const { auth } = useAppAuth()
 const busy = ref(false)
 const error = ref('')
 const images = ref<string[]>([])
-const uploadAllowed = computed(() => account.isLogin && (auth('supplier-payment-profiles:update') || auth('purchase-orders:create')))
+const uploadAllowed = computed(() => account.isLogin && (auth('supplier-payment-profiles:update') || auth('purchase-orders:create') || auth('packaging-costs:create')))
 let controller: AbortController | undefined
 let disposed = false
 function reset() {
@@ -26,7 +26,7 @@ function reset() {
   emit('busyChange', false)
 }
 function beforeUpload(file: File) {
-  if (props.disabled || busy.value || props.mediaAssetId || !uploadAllowed.value) {
+  if (props.disabled || busy.value || (!props.compact && props.mediaAssetId) || !uploadAllowed.value) {
     return false
   }
   const failure = validateRecipientImage(file)
@@ -39,9 +39,11 @@ async function upload({ file }: { file: File }) {
   }
   const request = controller = new AbortController()
   const epoch = account.authEpoch
+  const previousId = props.mediaAssetId
   busy.value = true
   emit('busyChange', true)
-  const current = () => !disposed && !request.signal.aborted && epoch === account.authEpoch && uploadAllowed.value && !props.mediaAssetId
+  // 替换成功前保留原二维码；取消、失败或调用方切换目标均不能覆盖当前资料。
+  const current = () => !disposed && !request.signal.aborted && epoch === account.authEpoch && uploadAllowed.value && props.mediaAssetId === previousId
   try {
     const response = await api.upload(file, request.signal)
     if (current()) {
@@ -72,19 +74,33 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="space-y-2">
-    <template v-if="mediaAssetId">
+    <div v-if="mediaAssetId && compact" class="flex flex-wrap gap-3 items-center">
+      <RecipientImage :media-asset-id="mediaAssetId" thumbnail :thumbnail-size="96" />
+      <div class="flex flex-col gap-2 items-start">
+        <FaImageUpload v-model="images" :disabled="disabled || busy || !uploadAllowed" :max="1" :width="120" :height="32" :before-upload="beforeUpload" :http-request="upload">
+          <span class="text-sm px-3 border border-border rounded-md flex gap-2 size-full items-center justify-center">
+            <FaIcon v-if="busy" name="i-lucide:loader-circle" class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+            {{ t(busy ? 'paymentRecipient.uploading' : 'paymentRecipient.replaceQr') }}
+          </span>
+        </FaImageUpload>
+        <FaButton type="button" variant="ghost" size="sm" :disabled="disabled || busy || !uploadAllowed" @click="emit('update:mediaAssetId', null)">
+          {{ t('paymentRecipient.removeQr') }}
+        </FaButton>
+      </div>
+    </div>
+    <template v-else-if="mediaAssetId">
       <RecipientImage :media-asset-id="mediaAssetId" />
       <FaButton type="button" variant="outline" size="sm" :disabled="disabled || busy" @click="emit('update:mediaAssetId', null)">
         {{ t('paymentRecipient.replaceQr') }}
       </FaButton>
     </template>
-    <FaImageUpload v-else v-model="images" :disabled="disabled || busy || !uploadAllowed" :max="1" :width="112" :height="112" :before-upload="beforeUpload" :http-request="upload">
+    <FaImageUpload v-else v-model="images" :disabled="disabled || busy || !uploadAllowed" :max="1" :width="compact ? 96 : 112" :height="compact ? 96 : 112" :before-upload="beforeUpload" :http-request="upload">
       <span class="text-sm text-muted-foreground border-2 border-border rounded-lg border-dashed flex flex-col gap-2 size-full items-center justify-center">
         <FaIcon :name="busy ? 'i-lucide:loader-circle' : 'i-lucide:image-plus'" :class="{ 'animate-spin': busy }" class="size-6" aria-hidden="true" />
         {{ t(busy ? 'paymentRecipient.uploading' : 'paymentRecipient.uploadQr') }}
       </span>
     </FaImageUpload>
-    <p class="text-xs text-muted-foreground">
+    <p class="text-xs text-muted-foreground" :class="{ 'max-w-64': compact }">
       {{ t('paymentRecipient.imageHint') }}
     </p>
     <p v-if="error" role="alert" class="text-sm text-destructive">

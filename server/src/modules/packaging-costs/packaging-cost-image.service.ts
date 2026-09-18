@@ -16,12 +16,22 @@ export interface PackagingCostImageContent { status: number, headers: Record<str
 export class PackagingCostImageService {
   private readonly multipart = new SalesOrderDocumentMultipartParser()
   constructor(private readonly prisma: PrismaService, private readonly media: MediaAssetService, private readonly delivery: MediaContentDeliveryService) {}
-  async upload(context: PackagingCostContext, request: SalesOrderDocumentMultipartRequest): Promise<PackagingCostImageUploadDto> {
+  async upload(context: PackagingCostContext, request: SalesOrderDocumentMultipartRequest, packagingCostId?: string): Promise<PackagingCostImageUploadDto> {
+    if (packagingCostId) {
+      const row = await this.prisma.packagingCostRequest.findUnique({ where: { id: packagingCostId }, select: { status: true } })
+      if (!row) return packagingCostFailure('PACKAGING_COST_NOT_FOUND', '打木架提报不存在', 404)
+      if (row.status !== 'PENDING_PAYMENT') return packagingCostFailure('PACKAGING_COST_STATE_CHANGED', '提报已付款，请刷新', 409)
+    }
     try {
       // 共用已有单文件流式解析器；完整 framing 确认后才会激活准备流程的 EOF。
       return await this.multipart.parse(request, async input => {
         if (input.mediaType !== 'IMAGE' || !MIME_TYPES.includes(input.declaredMimeType ?? '')) return packagingCostFailure('PACKAGING_COST_IMAGE_INVALID', '仅支持 JPEG、PNG、WebP 图片')
         const asset = await this.media.prepare({ actorUserId: context.actorUserId, allowedTypes: ['IMAGE'], requestedType: 'IMAGE', declaredMimeType: input.declaredMimeType, originalFilename: input.originalFilename, stream: input.stream })
+        // 付款凭证限定当前提报和上传者，不能挪用普通包装截图或其他提报的附件。
+        if (packagingCostId) {
+          const marked = await this.prisma.mediaAsset.updateMany({ where: { id: asset.id, status: 'UPLOADING', createdByUserId: context.actorUserId, uploadPurpose: null }, data: { uploadPurpose: 'PACKAGING_PAYMENT_VOUCHER', packagingCostUploadId: packagingCostId } })
+          if (marked.count !== 1) return packagingCostFailure('PACKAGING_COST_IMAGE_UNAVAILABLE', '付款截图上传状态已变化，请重新上传')
+        }
         const row = await this.prisma.mediaAsset.findUniqueOrThrow({ where: { id: asset.id }, select: { originalFilename: true } })
         return { mediaAssetId: asset.id, mediaType: 'IMAGE', mimeType: asset.trustedMetadata.mimeType, sizeBytes: asset.trustedMetadata.sizeBytes.toString(), originalFilename: row.originalFilename }
       })
@@ -40,8 +50,8 @@ export class PackagingCostImageService {
     }
   }
   async content(id: string, kind: PackagingCostImageKindDto, ifNoneMatch: unknown, method: 'GET' | 'HEAD'): Promise<PackagingCostImageContent> {
-    const row = await this.prisma.packagingCostRequest.findUnique({ where: { id }, include: { packagingImage: true, quotationImage: true } })
-    const asset = kind === PackagingCostImageKindDto.PACKAGING ? row?.packagingImage : row?.quotationImage
+    const row = await this.prisma.packagingCostRequest.findUnique({ where: { id }, include: { packagingImage: true, quotationImage: true, paymentVoucher: true } })
+    const asset = kind === PackagingCostImageKindDto.PACKAGING ? row?.packagingImage : kind === PackagingCostImageKindDto.PAYMENT ? row?.paymentVoucher : row?.quotationImage
     if (!asset || asset.status !== 'READY' || asset.deletedAt || !asset.objectKey || !asset.checksumSha256 || !asset.mimeType || !MIME_TYPES.includes(asset.mimeType)) return packagingCostFailure('PACKAGING_COST_IMAGE_NOT_FOUND', '截图凭证不存在', 404)
     const key = requireMediaObjectKeyNamespace(asset.objectKey, 'assets')
     const etag = `"sha256-${createHash('sha256').update(`packaging-cost:${asset.checksumSha256}`).digest('base64url')}"`

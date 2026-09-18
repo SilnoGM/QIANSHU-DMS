@@ -7,6 +7,7 @@ import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsPaymentRecipientEditor from '@/components/business/QsPaymentRecipientEditor/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
+import PackagingPaymentProfile from './packaging-payment-profile.vue'
 import { useSupplierPaymentProfiles } from './use-supplier-payment-profiles'
 
 defineOptions({ name: 'AdminSupplierPaymentProfiles' })
@@ -20,6 +21,12 @@ const { rows, page, pageSize, total, search, loading, error, selected, draft, sa
 const uploading = ref(false)
 const discardVisible = ref(false)
 const busy = computed(() => saving.value || refreshing.value || uploading.value)
+const activeTab = ref('suppliers')
+const packagingLocked = ref(false)
+const tabs = computed(() => [
+  { value: 'suppliers', label: t('supplierPaymentProfile.tabs.suppliers') },
+  { value: 'packaging', label: t('supplierPaymentProfile.tabs.packaging') },
+])
 let pendingLeave: ((value: boolean) => void) | undefined
 const columns = computed<QsGenericTableColumn<SupplierPaymentProfileDto>[]>(() => [
   { id: 'supplier', accessorKey: 'supplierName', title: t('supplierPaymentProfile.supplier'), minWidth: 180 },
@@ -92,43 +99,49 @@ onBeforeUnmount(keepEditing)
           {{ t('supplierPaymentProfile.title') }}
         </h1>
       </template>
-      <FaButton v-if="canRead" variant="outline" :disabled="loading || Boolean(selected)" @click="load">
+      <FaButton v-if="canRead && activeTab === 'suppliers'" variant="outline" :disabled="loading || Boolean(selected)" @click="load">
         <FaIcon name="i-lucide:refresh-cw" />{{ t('paymentRecipient.refresh') }}
       </FaButton>
     </FaPageHeader>
     <FaPageMain>
       <FaEmpty v-if="!canRead" icon="i-lucide:shield-alert" :title="t('supplierPaymentProfile.noPermission')" class="min-h-64" />
-      <QsGenericTable
-        v-else v-model:page="page" v-model:page-size="pageSize" v-model:search="search"
-        row-key="supplierValue" :columns="columns" :data="rows" :total="total" :loading="loading" :error="error || undefined"
-        :addable="false" :show-column-settings="false" :action-column="{ width: 120, align: 'right' }"
-        :search-placeholder="t('supplierPaymentProfile.search')" :empty-title="t('supplierPaymentProfile.empty')" :empty-description="t('supplierPaymentProfile.emptyHint')"
-        @search="query" @pagination-change="load" @retry="load"
-      >
-        <template #cell-supplier="{ row }">
-          <span class="font-medium">{{ row.original.supplierName }}</span>
-          <span v-if="!row.original.supplierEnabled" class="text-xs text-muted-foreground ml-2">{{ t('supplierPaymentProfile.disabled') }}</span>
-        </template>
-        <template #cell-methods="{ row }">
-          <div class="flex flex-wrap gap-2">
-            <FaTag v-for="item in row.original.accounts" :key="item.paymentMethod" class="text-primary border-primary/20 bg-primary/5">
-              {{ t(`paymentRecipient.methods.${item.paymentMethod}`) }}
-            </FaTag>
-            <span v-if="!row.original.accounts.length" class="text-sm text-muted-foreground">{{ t('supplierPaymentProfile.unconfigured') }}</span>
-          </div>
-        </template>
-        <template #cell-updatedBy="{ row }">
-          <QsPersonDisplay v-if="row.original.updatedBy" :display-name="row.original.updatedBy.name" size="sm" /><span v-else class="text-muted-foreground">—</span>
-        </template>
-        <template #cell-updatedAt="{ row }">
-          <DateTimeDisplay v-if="row.original.updatedAt" :value="row.original.updatedAt" /><span v-else class="text-muted-foreground">—</span>
-        </template>
-        <template #actions="{ row }">
-          <FaButton variant="outline" size="sm" @click="open(row)">
-            {{ t(canWrite && row.supplierEnabled ? 'supplierPaymentProfile.configure' : 'supplierPaymentProfile.view') }}
-          </FaButton>
-        </template>
-      </QsGenericTable>
+      <template v-else>
+        <div class="mb-5" :inert="busy || Boolean(selected) || packagingLocked">
+          <FaTabs v-model="activeTab" :list="tabs" list-class="w-full sm:w-80" />
+        </div>
+        <PackagingPaymentProfile v-if="activeTab === 'packaging'" @locked-change="packagingLocked = $event" />
+        <QsGenericTable
+          v-else v-model:page="page" v-model:page-size="pageSize" v-model:search="search"
+          row-key="supplierValue" :columns="columns" :data="rows" :total="total" :loading="loading" :error="error || undefined"
+          :addable="false" :show-column-settings="false" :action-column="{ width: 120, align: 'right' }"
+          :search-placeholder="t('supplierPaymentProfile.search')" :empty-title="t('supplierPaymentProfile.empty')" :empty-description="t('supplierPaymentProfile.emptyHint')"
+          @search="query" @pagination-change="load" @retry="load"
+        >
+          <template #cell-supplier="{ row }">
+            <span class="font-medium">{{ row.original.supplierName }}</span>
+            <span v-if="!row.original.supplierEnabled" class="text-xs text-muted-foreground ml-2">{{ t('supplierPaymentProfile.disabled') }}</span>
+          </template>
+          <template #cell-methods="{ row }">
+            <div class="flex flex-wrap gap-2">
+              <FaTag v-for="item in row.original.accounts" :key="item.paymentMethod" class="text-primary border-primary/20 bg-primary/5">
+                {{ t(`paymentRecipient.methods.${item.paymentMethod}`) }}
+              </FaTag>
+              <span v-if="!row.original.accounts.length" class="text-sm text-muted-foreground">{{ t('supplierPaymentProfile.unconfigured') }}</span>
+            </div>
+          </template>
+          <template #cell-updatedBy="{ row }">
+            <QsPersonDisplay v-if="row.original.updatedBy" :display-name="row.original.updatedBy.name" size="sm" /><span v-else class="text-muted-foreground">—</span>
+          </template>
+          <template #cell-updatedAt="{ row }">
+            <DateTimeDisplay v-if="row.original.updatedAt" :value="row.original.updatedAt" /><span v-else class="text-muted-foreground">—</span>
+          </template>
+          <template #actions="{ row }">
+            <FaButton variant="outline" size="sm" @click="open(row)">
+              {{ t(canWrite && row.supplierEnabled ? 'supplierPaymentProfile.configure' : 'supplierPaymentProfile.view') }}
+            </FaButton>
+          </template>
+        </QsGenericTable>
+      </template>
     </FaPageMain>
     <QsGenericModal :model-value="Boolean(selected)" :title="t('supplierPaymentProfile.configureTitle')" :description="selected?.supplierName" size="lg" :submitting="busy" :before-close="closeGuard" @update:model-value="!$event && resetEditor()">
       <template #header-leading>

@@ -3,7 +3,7 @@ import api from '@/api/modules/payment-recipients'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { paymentRecipientErrorMessage } from './logic'
 
-const props = defineProps<{ mediaAssetId: string, thumbnail?: boolean }>()
+const props = withDefaults(defineProps<{ mediaAssetId: string, thumbnail?: boolean, thumbnailSize?: 64 | 96 }>(), { thumbnailSize: 64 })
 const { t } = useI18n()
 const account = useAppAccountStore()
 const url = ref('')
@@ -65,12 +65,12 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-if="thumbnail" class="flex shrink-0 gap-2 items-center">
-    <div v-if="loading" role="status" class="text-muted-foreground border border-border rounded-lg bg-muted/30 flex size-16 items-center justify-center">
+    <div v-if="loading" role="status" class="text-muted-foreground border border-border rounded-lg bg-muted/30 flex items-center justify-center" :style="{ width: `${thumbnailSize}px`, height: `${thumbnailSize}px` }">
       <FaIcon name="i-lucide:loader-circle" class="size-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
       <span class="sr-only">{{ t('paymentRecipient.imageLoading') }}</span>
     </div>
     <FaTooltip v-else-if="error">
-      <FaButton variant="outline" type="button" class="text-destructive size-16" :aria-label="`${error} ${t('paymentRecipient.retry')}`" @click="load">
+      <FaButton variant="outline" type="button" class="text-destructive" :style="{ width: `${thumbnailSize}px`, height: `${thumbnailSize}px` }" :aria-label="`${error} ${t('paymentRecipient.retry')}`" @click="load">
         <FaIcon name="i-lucide:refresh-cw" class="size-5" aria-hidden="true" />
       </FaButton>
       <template #content>
@@ -78,8 +78,8 @@ onBeforeUnmount(() => {
       </template>
     </FaTooltip>
     <template v-else-if="url">
-      <!-- 固定图片的内边界（64px 减去两侧边框），避免长图撑开内部网格而被裁切。 -->
-      <ImageGroup :items="[{ src: url, alt: t('paymentRecipient.qrCode') }]" :size="64" :max-count="1" :tooltip="false" fit="contain" class="[&_img]:size-15.5!" />
+      <!-- 固定图片内边界并减去两侧边框，避免长图撑开内部网格而被裁切。 -->
+      <ImageGroup :items="[{ src: url, alt: t('paymentRecipient.qrCode') }]" :size="thumbnailSize" :max-count="1" :tooltip="false" fit="contain" :class="thumbnailSize === 96 ? '[&_img]:size-23.5!' : '[&_img]:size-15.5!'" />
       <FaTooltip>
         <FaButton variant="ghost" size="icon" class="text-muted-foreground size-7" as-child>
           <a :href="url" download="payment-recipient-qr.png" :aria-label="t('paymentRecipient.downloadQr')">

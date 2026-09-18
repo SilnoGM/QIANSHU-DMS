@@ -12,7 +12,7 @@ export function normalizePaymentRecipientAccounts(accounts: readonly PaymentReci
     bankBranch: account.paymentMethod === 'BANK_TRANSFER' ? account.bankBranch?.trim() || null : null,
   }))
 }
-export function validatePaymentRecipientAccounts(accounts: readonly PaymentRecipientAccountInputDto[], minimum: 0 | 1 = 0): string | null {
+export function validatePaymentRecipientAccounts(accounts: readonly PaymentRecipientAccountInputDto[], minimum: 0 | 1 = 0, methods: readonly PaymentRecipientMethod[] = PAYMENT_RECIPIENT_METHODS): string | null {
   if (accounts.length < minimum) {
     return 'paymentRecipient.errors.required'
   }
@@ -20,7 +20,7 @@ export function validatePaymentRecipientAccounts(accounts: readonly PaymentRecip
     return 'paymentRecipient.errors.duplicate'
   }
   for (const account of accounts) {
-    if (!PAYMENT_RECIPIENT_METHODS.includes(account.paymentMethod)) {
+    if (!methods.includes(account.paymentMethod)) {
       return 'paymentRecipient.errors.method'
     }
     if (!account.recipientName.trim() || account.recipientName.trim().length > 128) {

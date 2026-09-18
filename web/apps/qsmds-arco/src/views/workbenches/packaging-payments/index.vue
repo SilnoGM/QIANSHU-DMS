@@ -13,13 +13,13 @@ import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getPurchaseOrderApiFailure } from '../../operations/purchase-orders/purchase-order-list.logic'
 import PackagingMobileRow from './mobile-row.vue'
 import PackagingProof from './packaging-proof.vue'
-import PaymentModal from './payment-modal.vue'
 
 defineOptions({ name: 'QsPackagingPayments' })
 const { t } = useI18n()
 const { auth } = useAppAuth()
 const account = useAppAccountStore()
 const route = useRoute()
+const router = useRouter()
 const currencyCatalog = useCurrencyCatalog()
 const canRead = computed(() => auth('packaging-costs:read'))
 const canPay = computed(() => canRead.value && auth('packaging-costs:pay'))
@@ -34,7 +34,6 @@ const total = ref(0)
 const counts = ref({ PENDING_PAYMENT: 0, PAID: 0 })
 const loading = ref(false)
 const error = ref('')
-const selectedId = ref<string | null>(null)
 let controller: AbortController | null = null
 const tabs = computed(() => (['PENDING_PAYMENT', 'PAID'] as const).map(value => ({ value, label: t(`packagingPayment.status.${value}`), count: counts.value[value] })))
 const columns = computed<QsGenericTableColumn<PackagingCostRequestDto>[]>(() => [
@@ -97,21 +96,20 @@ function selectStatus(value: string | number) {
 }
 function openPayment(record: PackagingCostRequestDto) {
   if (enabled.value && canPay.value && record.status === 'PENDING_PAYMENT') {
-    selectedId.value = record.id
+    void router.push({ name: 'qsFinanceRealtimePackagingPayment', params: { requestId: record.id } })
+  }
+}
+function openPaidDetail(record: PackagingCostRequestDto) {
+  if (enabled.value && record.status === 'PAID') {
+    void router.push({ name: 'qsFinanceRealtimePackagingPayment', params: { requestId: record.id } })
   }
 }
 watch([enabled, () => account.authEpoch], () => {
   items.value = []
   total.value = 0
   counts.value = { PENDING_PAYMENT: 0, PAID: 0 }
-  selectedId.value = null
   void load()
 }, { immediate: true, flush: 'sync' })
-watch(canPay, (value) => {
-  if (!value) {
-    selectedId.value = null
-  }
-}, { flush: 'sync' })
 onMounted(() => active.value = true)
 onActivated(() => active.value = true)
 onDeactivated(() => active.value = false)
@@ -198,6 +196,9 @@ onBeforeUnmount(() => {
             <FaButton v-if="canPay && row.status === 'PENDING_PAYMENT'" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.shipmentNo}：${t('packagingPayment.pay')}`" @click="openPayment(row)">
               <FaIcon name="i-lucide:wallet" aria-hidden="true" />{{ t('packagingPayment.pay') }}
             </FaButton>
+            <FaButton v-else-if="row.status === 'PAID'" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.shipmentNo}：${t('packagingPayment.view')}`" @click="openPaidDetail(row)">
+              <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('packagingPayment.view') }}
+            </FaButton>
             <span v-else class="text-muted-foreground">—</span>
           </template>
           <template #mobile-row="{ row }">
@@ -206,6 +207,5 @@ onBeforeUnmount(() => {
         </QsGenericTable>
       </template>
     </FaPageMain>
-    <PaymentModal v-if="selectedId" :request-id="selectedId" :enabled="enabled" @close="selectedId = null" @changed="load" />
   </div>
 </template>

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import request from 'supertest'
+import sharp from 'sharp'
 
 import type { PackagingCostRequestDto, PackagingCostRequestPageDto } from '../src/modules/packaging-costs/packaging-cost.dto'
 import { AuditService } from '../src/modules/audit/audit.service'
@@ -25,8 +26,27 @@ describe('packaging cost submission and payment over isolated PostgreSQL and rea
   function submit(browser: ReturnType<typeof request.agent>, input: object, key = randomUUID()) {
     return browser.post('/api/packaging-cost-requests').set(packagingHeaders).set('Idempotency-Key', key).send(input)
   }
+  const payments = new WeakMap<ReturnType<typeof request.agent>, Map<string, object>>()
   function pay(browser: ReturnType<typeof request.agent>, id: string, expectedVersion = 1) {
-    return browser.post(`/api/packaging-cost-requests/${id}/pay`).set(packagingHeaders).send({ expectedVersion })
+    async function execute() {
+      let cache = payments.get(browser)
+      if (!cache) { cache = new Map(); payments.set(browser, cache) }
+      let payment = cache.get(id)
+      if (!payment) {
+        const response = await browser.get(`/api/packaging-cost-requests/${id}`)
+        const row = response.body as PackagingCostRequestDto
+        const account = row.paymentRecipientProfile?.accounts[0]
+        const buffer = await sharp({ create: { width: 3, height: 3, channels: 3, background: '#112233' } }).png().toBuffer()
+        const upload = await browser.post(`/api/packaging-cost-requests/${id}/voucher-uploads`).set(packagingHeaders).field('mediaType', 'IMAGE').attach('file', buffer, { filename: 'payment.png', contentType: 'image/png' })
+        payment = { recipientAccountId: account?.id ?? randomUUID(), recipientProfileVersion: row.paymentRecipientProfile?.version ?? 1, paymentMethod: 'ALIPAY', voucher: { mediaAssetId: (upload.body as { mediaAssetId?: string }).mediaAssetId ?? randomUUID() } }
+        cache.set(id, payment)
+      }
+      return browser.post(`/api/packaging-cost-requests/${id}/pay`).set(packagingHeaders).send({ ...payment, expectedVersion })
+    }
+    return {
+      async expect(status: number) { const response = await execute(); expect({ status: response.status, code: (response.body as { code?: string }).code }).toEqual({ status, code: (response.body as { code?: string }).code }); return response },
+      then: (resolve: (value: request.Response) => unknown, reject: (reason: unknown) => unknown) => execute().then(resolve, reject),
+    }
   }
   async function imagesAreStaged(ids: string[]) {
     expect(await h.prisma.mediaAsset.count({ where: { id: { in: ids }, status: 'UPLOADING' } })).toBe(ids.length)
@@ -324,12 +344,17 @@ describe('packaging cost submission and payment over isolated PostgreSQL and rea
     const payer = await h.browserWithPermissions()
     const shipment = await h.shipment()
     const created = (await submit(payer.browser, await h.input(payer.browser, shipment.part.id)).expect(201)).body as PackagingCostRequestDto
-    // 仅在隔离库模拟旧版付款事实；保留正式不可变触发器，不为历史付款补造资金批次。
-    await h.prisma.packagingCostRequest.update({ where: { id: created.id }, data: { status: 'PAID', version: 2, paidByUserId: payer.user.id, paidAt: new Date() } })
+    // 仅在隔离测试库模拟迁移前已付款且没有新证据的旧记录；恢复触发器后仍不补造资金批次。
+    await h.prisma.$transaction(async tx => {
+      await tx.$executeRawUnsafe('ALTER TABLE packaging_cost_requests DISABLE TRIGGER packaging_cost_requests_identity_trigger')
+      await tx.packagingCostRequest.update({ where: { id: created.id }, data: { status: 'PAID', version: 2, paidByUserId: payer.user.id, paidAt: new Date() } })
+      await tx.$executeRawUnsafe('SET CONSTRAINTS ALL IMMEDIATE')
+      await tx.$executeRawUnsafe('ALTER TABLE packaging_cost_requests ENABLE TRIGGER packaging_cost_requests_identity_trigger')
+    })
     const before = await fundFacts(created.id)
     expect(before.batches).toEqual([])
     await payer.browser.get(`/api/packaging-cost-requests/${created.id}`).expect(200)
-    await pay(payer.browser, created.id).expect(200)
+    await pay(payer.browser, created.id).expect(409)
     expect(await fundFacts(created.id)).toEqual(before)
   })
 

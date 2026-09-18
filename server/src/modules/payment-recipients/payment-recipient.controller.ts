@@ -7,7 +7,8 @@ import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequireAuthenticatedSession, RequirePermissions } from '../auth/decorators/auth.decorators'
 import type { SalesOrderDocumentMultipartRequest } from '../sales-orders/documents/sales-order-document-multipart.parser'
-import { PaymentRecipientImageParamDto, PaymentRecipientImageUploadDto, SupplierPaymentProfileDto, SupplierPaymentProfilePageDto, SupplierPaymentProfileParamDto, SupplierPaymentProfileQueryDto, SupplierPaymentProfileSaveDto } from './payment-recipient.dto'
+import { PackagingPaymentProfileDto, PaymentRecipientImageParamDto, PaymentRecipientImageUploadDto, SupplierPaymentProfileDto, SupplierPaymentProfilePageDto, SupplierPaymentProfileParamDto, SupplierPaymentProfileQueryDto, SupplierPaymentProfileSaveDto } from './payment-recipient.dto'
+import { PackagingPaymentProfileService } from './packaging-payment-profile.service'
 import { PaymentRecipientService } from './payment-recipient.service'
 import { PaymentRecipientImageService, type PaymentRecipientImageContent } from './payment-recipient-image.service'
 
@@ -53,4 +54,18 @@ export class PaymentRecipientImageController {
   async image(@Param() params: PaymentRecipientImageParamDto, @Headers('if-none-match') tag: unknown, @Req() request: object, @Res({ passthrough: true }) response: ContentResponse) { return deliver(await this.images.content(getRequestAuthContext(request).userId, params.id, tag, 'GET'), response) }
   @Head(':id/content') @RequireAuthenticatedSession() @imageContract('payment_recipient_images_head_content', true)
   async headImage(@Param() params: PaymentRecipientImageParamDto, @Headers('if-none-match') tag: unknown, @Req() request: object, @Res({ passthrough: true }) response: ContentResponse) { deliver(await this.images.content(getRequestAuthContext(request).userId, params.id, tag, 'HEAD'), response) }
+}
+
+@ApiTags('packaging-payment-profiles')
+@Controller('packaging-payment-profiles')
+export class PackagingPaymentProfileController {
+  constructor(private readonly profiles: PackagingPaymentProfileService) {}
+  @Get('CHENGXIN') @RequireAuthenticatedSession() @ApiContractResponse({ status: 200, type: PackagingPaymentProfileDto }) @contract('packaging_payment_profiles_get')
+  read(@Req() request: object) { return this.profiles.read(getRequestAuthContext(request).userId) }
+  @Put('CHENGXIN') @RequirePermissions('supplier-payment-profiles:read', 'supplier-payment-profiles:update')
+  @ApiContractResponse({ status: 200, type: PackagingPaymentProfileDto })
+  @contract('packaging_payment_profiles_save', true, [{ status: 409, codes: ['PAYMENT_RECIPIENT_STATE_CHANGED'] }, { status: 422, codes: ['VALIDATION_FAILED', 'PAYMENT_RECIPIENT_INVALID', 'PAYMENT_RECIPIENT_IMAGE_UNAVAILABLE'] }, { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] }])
+  save(@Body() input: SupplierPaymentProfileSaveDto, @Req() request: object) {
+    return this.profiles.save({ actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) }, input)
+  }
 }

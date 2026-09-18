@@ -69,3 +69,12 @@ export class PaymentRecipientImageUploadDto {
   @ApiProperty() sizeBytes!: string
   @ApiProperty() originalFilename!: string
 }
+
+export class PackagingPaymentProfileDto {
+  @ApiProperty({ enum: ['CHENGXIN'] }) vendor!: 'CHENGXIN'
+  @ApiProperty() vendorName!: string
+  @ApiProperty() version!: number
+  @ApiProperty({ type: [PaymentRecipientAccountDto] }) accounts!: PaymentRecipientAccountDto[]
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) updatedAt!: string | null
+  @ApiProperty({ type: () => PaymentRecipientPersonDto, nullable: true }) updatedBy!: PaymentRecipientPersonDto | null
+}

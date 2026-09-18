@@ -69,7 +69,7 @@ export class MediaAssetReferenceRepository {
     })
     if (imageDraftReference !== null) return true
     const packagingReference = await reader.packagingCostRequest.findFirst({
-      where: { OR: [{ packagingImageMediaAssetId: assetId }, { quotationImageMediaAssetId: assetId }] },
+      where: { OR: [{ packagingImageMediaAssetId: assetId }, { quotationImageMediaAssetId: assetId }, { paymentVoucherMediaAssetId: assetId }, { recipientQrMediaAssetId: assetId }] },
       select: { id: true },
     })
     if (packagingReference !== null) return true

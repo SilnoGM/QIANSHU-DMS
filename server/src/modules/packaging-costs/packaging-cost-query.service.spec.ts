@@ -1,3 +1,4 @@
+import type { PackagingPaymentProfileService } from '../payment-recipients/packaging-payment-profile.service'
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import { PackagingCostQueryService } from './packaging-cost-query.service'
 
@@ -8,7 +9,7 @@ const shipment = {
 }
 function query(row: unknown) {
   const prisma = { purchaseOrderPart: { findUnique: jest.fn().mockResolvedValue(row) } } as unknown as PrismaService
-  return new PackagingCostQueryService(prisma)
+  return new PackagingCostQueryService(prisma, {} as PackagingPaymentProfileService)
 }
 describe('PackagingCostQueryService shipment context', () => {
   it('returns only the minimal shipment identity and true sales issuer', async () => {

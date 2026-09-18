@@ -34,3 +34,10 @@ test('保存冲突或未知结果先核对，不盲重试旧版本；校验错�
   assert.equal(paymentRecipientSaveFailure({ kind: 'http', status: 409 }), 'refresh')
   assert.equal(paymentRecipientSaveFailure({ kind: 'http', status: 422 }), 'editable')
 })
+
+test('包装仅允许支付宝与微信，采购默认仍然允许银行账户', () => {
+  const methods = ['ALIPAY', 'WECHAT'] as const
+  assert.equal(validatePaymentRecipientAccounts([bank], 0, methods), 'paymentRecipient.errors.method')
+  assert.equal(validatePaymentRecipientAccounts([qr], 1, methods), null)
+  assert.equal(validatePaymentRecipientAccounts([bank], 0), null)
+})

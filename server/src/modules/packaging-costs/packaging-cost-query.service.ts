@@ -1,16 +1,19 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { PackagingPaymentProfileService } from '../payment-recipients/packaging-payment-profile.service'
+import type { PaymentRecipientAccountDto } from '../payment-recipients/payment-recipient.dto'
 import { PackagingCostStatusDto, PackagingCostVendorDto, type PackagingCostShipmentContextDto, type PackagingCostListQueryDto, type PackagingCostRequestDto, type PackagingCostRequestPageDto } from './packaging-cost.dto'
 import { packagingCostFailure } from './packaging-cost.normalizer'
 
 const person = { select: { id: true, displayName: true } }
 const image = { select: { id: true, mimeType: true, originalFilename: true } }
-const include = { owner: person, submittedBy: person, paidBy: person, packagingImage: image, quotationImage: image } satisfies Prisma.PackagingCostRequestInclude
+const include = { owner: person, submittedBy: person, paidBy: person, packagingImage: image, quotationImage: image, paymentVoucher: image } satisfies Prisma.PackagingCostRequestInclude
 function map(row: Prisma.PackagingCostRequestGetPayload<{ include: typeof include }>): PackagingCostRequestDto {
   const who = (value: { id: string, displayName: string }) => ({ id: value.id, name: value.displayName })
   const evidence = (value: { id: string, mimeType: string | null, originalFilename: string }) => ({ mediaAssetId: value.id, mimeType: value.mimeType!, originalFilename: value.originalFilename })
   return {
+    paymentRecipientProfile: null, paymentReceipt: row.status === 'PAID' ? { recipient: row.recipientSnapshot as unknown as PaymentRecipientAccountDto | null, voucher: row.paymentVoucher ? evidence(row.paymentVoucher) : null, remark: row.paymentRemark } : null,
     id: row.id, shipmentId: row.shipmentId, shipmentNo: row.shipmentNo, shippingMarkText: row.shippingMarkText,
     purchaseOrderId: row.purchaseOrderId, purchaseOrderNo: row.purchaseOrderNo, salesOrderId: row.salesOrderId, salesOrderNo: row.salesOrderNo,
     owner: who(row.owner), packagingType: row.packagingType, packagingTypeName: row.packagingTypeName, packagingVendor: row.packagingVendor as PackagingCostVendorDto,
@@ -21,7 +24,7 @@ function map(row: Prisma.PackagingCostRequestGetPayload<{ include: typeof includ
 }
 @Injectable()
 export class PackagingCostQueryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly recipients: PackagingPaymentProfileService) {}
   async shipmentContext(shipmentId: string): Promise<PackagingCostShipmentContextDto> {
     const shipment = await this.prisma.purchaseOrderPart.findUnique({ where: { id: shipmentId }, select: {
       shipmentNo: true, shippingMarkText: true, status: true, shippedAt: true, warehouseReceivedAt: true,
@@ -36,7 +39,7 @@ export class PackagingCostQueryService {
   async getById(id: string): Promise<PackagingCostRequestDto> {
     const row = await this.prisma.packagingCostRequest.findUnique({ where: { id }, include })
     if (!row) return packagingCostFailure('PACKAGING_COST_NOT_FOUND', '打木架提报不存在', 404)
-    return map(row)
+    return { ...map(row), paymentRecipientProfile: await this.recipients.getForRequest(this.prisma, row) }
   }
   async list(input: PackagingCostListQueryDto): Promise<PackagingCostRequestPageDto> {
     const page = input.page ?? 1, pageSize = input.pageSize ?? 20, keyword = input.keyword?.trim()
@@ -50,7 +53,7 @@ export class PackagingCostQueryService {
         tx.packagingCostRequest.count({ where: { ...common, status: 'PENDING_PAYMENT' } }),
         tx.packagingCostRequest.count({ where: { ...common, status: 'PAID' } }),
       ])
-      return { items: rows.map(map), total, page, pageSize, statusCounts: { PENDING_PAYMENT: pending, PAID: paid } }
+      return { items: await Promise.all(rows.map(async row => ({ ...map(row), paymentRecipientProfile: await this.recipients.getForRequest(tx, row) }))), total, page, pageSize, statusCounts: { PENDING_PAYMENT: pending, PAID: paid } }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
   }
 }

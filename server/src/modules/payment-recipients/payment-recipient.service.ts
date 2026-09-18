@@ -16,7 +16,7 @@ import { PAYMENT_RECIPIENT_METHODS } from './payment-recipient.dto'
 import { normalizePaymentRecipientAccounts, recipientFailure, recipientStateChanged, type NormalizedPaymentRecipientAccount } from './payment-recipient.normalizer'
 
 export interface PaymentRecipientOrder { readonly id: string, readonly supplierValue: string | null, readonly productMode: string }
-const profileInclude = { accounts: true, updatedBy: { select: { id: true, displayName: true } } } satisfies Prisma.PaymentRecipientProfileInclude
+export const profileInclude = { accounts: true, updatedBy: { select: { id: true, displayName: true } } } satisfies Prisma.PaymentRecipientProfileInclude
 type Profile = Prisma.PaymentRecipientProfileGetPayload<{ include: typeof profileInclude }>
 export const recipientContentUrl = (id: string) => `/api/payment-recipient-images/${id}/content`
 export function mapRecipientAccount(row: Pick<PaymentRecipientAccount, 'id' | 'paymentMethod' | 'recipientName' | 'qrMediaAssetId' | 'bankName' | 'bankAccount' | 'bankBranch'>): PaymentRecipientAccountDto {
@@ -24,7 +24,7 @@ export function mapRecipientAccount(row: Pick<PaymentRecipientAccount, 'id' | 'p
     qrMediaAssetId: row.qrMediaAssetId, qrContentUrl: row.qrMediaAssetId ? recipientContentUrl(row.qrMediaAssetId) : null,
     bankName: row.bankName, bankAccount: row.bankAccount, bankBranch: row.bankBranch }
 }
-function mapProfile(row: Profile): PaymentRecipientProfileDto {
+export function mapProfile(row: Profile): PaymentRecipientProfileDto {
   return { id: row.id, version: row.version, accounts: row.accounts.filter(account => account.enabled)
     .sort((a, b) => PAYMENT_RECIPIENT_METHODS.indexOf(a.paymentMethod as PaymentRecipientAccountDto['paymentMethod']) - PAYMENT_RECIPIENT_METHODS.indexOf(b.paymentMethod as PaymentRecipientAccountDto['paymentMethod']))
     .map(mapRecipientAccount) }
@@ -128,12 +128,12 @@ export class PaymentRecipientService {
     return { supplierValue, supplierName, supplierEnabled, version: profile?.version ?? 0, accounts: profile ? mapProfile(profile).accounts : [],
       updatedAt: profile?.updatedAt.toISOString() ?? null, updatedBy: profile ? { id: profile.updatedBy.id, name: profile.updatedBy.displayName } : null }
   }
-  private async writeAccounts(tx: Prisma.TransactionClient, profileId: string, accounts: NormalizedPaymentRecipientAccount[]) {
+  async writeAccounts(tx: Prisma.TransactionClient, profileId: string, accounts: NormalizedPaymentRecipientAccount[]) {
     await tx.paymentRecipientAccount.updateMany({ where: { profileId }, data: { enabled: false } })
     for (const account of accounts) await tx.paymentRecipientAccount.upsert({ where: { profileId_paymentMethod: { profileId, paymentMethod: account.paymentMethod } },
       create: { profileId, ...account }, update: { ...account, enabled: true } })
   }
-  private async prepareImages(tx: Prisma.TransactionClient, actorUserId: string, accounts: NormalizedPaymentRecipientAccount[], previous: PaymentRecipientAccount[]) {
+  async prepareImages(tx: Prisma.TransactionClient, actorUserId: string, accounts: NormalizedPaymentRecipientAccount[], previous: PaymentRecipientAccount[]) {
     const ids = [...new Set(accounts.flatMap(row => row.qrMediaAssetId ? [row.qrMediaAssetId] : []))].sort()
     if (!ids.length) return
     await tx.$queryRaw(Prisma.sql`SELECT id FROM media_assets WHERE id IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR UPDATE`)

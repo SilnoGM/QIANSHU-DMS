@@ -4,7 +4,7 @@ import test from 'node:test'
 import { effectScope, ref } from 'vue'
 import { usePackagingCostSubmission } from '../../src/views/operations/warehouse-arrivals/use-packaging-cost-submission'
 
-const draft = () => ({ packagingTypeValue: 'WOODEN_BOX', vendor: 'OTHER' as const, amount: '12.30', currency: 'CNY' as const, packagingImages: [new File(['p'], 'packaging.png', { type: 'image/png' })], quotationImages: [new File(['q'], 'quote.png', { type: 'image/png' })], remark: null })
+const draft = () => ({ packagingTypeValue: 'WOODEN_BOX', vendor: 'OTHER' as const, amount: '12.30', currency: 'CNY' as const, packagingImages: [new File(['p'], 'packaging.png', { type: 'image/png' })], quotationImages: [new File(['q'], 'quote.png', { type: 'image/png' })], remark: null, paymentRecipients: [{ paymentMethod: 'ALIPAY' as const, recipientName: '收款人', qrMediaAssetId: 'qr' }] })
 function fixture() {
   const enabled = ref(true)
   const epoch = ref(1)
@@ -43,11 +43,13 @@ test('连续点击仅提交一次，附件成功后未知结果重试复用原�
   assert.equal(await first, null)
   assert.equal(f.state.pending.value, true)
   input.amount = '999.00'
+  input.paymentRecipients[0]!.recipientName = '被修改的收款人'
   f.setWrite(async () => ({ data: { id: 'created' } }))
   assert.equal((await f.state.submit())?.id, 'created')
   assert.equal(f.uploads.length, 2)
   assert.deepEqual(f.writes[1], f.writes[0])
   assert.equal((f.writes[1]?.body as { amount: string }).amount, '12.30')
+  assert.equal((f.writes[1]?.body as { paymentRecipients: Array<{ recipientName: string }> }).paymentRecipients[0]?.recipientName, '收款人')
 })
 
 test('明确拒绝保留已上传附件，允许修正草稿后用新键提交', async (context) => {

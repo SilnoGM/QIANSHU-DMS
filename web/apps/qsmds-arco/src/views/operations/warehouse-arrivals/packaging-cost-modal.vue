@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import type { PackagingCostContext, PackagingCostDraft, PackagingCostField, PackagingImageError } from './packaging-cost.logic'
+import type { PaymentRecipientAccountInputDto } from '@/api/generated/types.gen'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsPaymentRecipientEditor from '@/components/business/QsPaymentRecipientEditor/index.vue'
+import { validatePaymentRecipientAccounts } from '@/components/business/QsPaymentRecipientEditor/logic'
+import RecipientImage from '@/components/business/QsPaymentRecipientEditor/RecipientImage.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
-import { PACKAGING_DEFAULT_VENDOR, PACKAGING_IMAGE_LIMIT, validatePackagingCost } from './packaging-cost.logic'
+import { PACKAGING_DEFAULT_VENDOR, PACKAGING_IMAGE_LIMIT, PACKAGING_RECIPIENT_METHODS, validatePackagingCost } from './packaging-cost.logic'
 import { createPackagingImagePreview } from './packaging-image-preview'
+import { usePackagingVendorProfile } from './use-packaging-vendor-profile'
 
 const props = withDefaults(defineProps<{
   modelValue: boolean
@@ -34,6 +39,14 @@ const form = useTemplateRef<{ validate: () => Promise<{ valid: boolean }>, setFi
 const formKey = ref(0)
 const validating = ref(false)
 const fields = ref(emptyFields())
+const recipientBusy = ref(false)
+const account = useAppAccountStore()
+const vendorProfile = usePackagingVendorProfile(
+  computed(() => props.modelValue && !props.submitDisabled && Boolean(props.context)),
+  computed(() => account.authEpoch),
+  computed(() => fields.value.vendor),
+)
+const recipientsReady = computed(() => !recipientBusy.value && (fields.value.vendor !== 'CHENGXIN' || vendorProfile.ready.value))
 const imageGroups = ['packagingImages', 'quotationImages'] as const
 type ImageGroup = typeof imageGroups[number]
 const imageUrls = ref<Record<ImageGroup, string[]>>({ packagingImages: [], quotationImages: [] })
@@ -48,19 +61,23 @@ const details = computed(() => ['shipmentNo', 'shippingMarkText', 'purchaseOrder
   value: props.context?.[key as keyof PackagingCostContext] || t(key === 'salesOrderNo' ? 'warehousePackagingCost.noSalesSource' : 'warehousePackagingCost.notRecorded'),
 })))
 // FaForm 会同步其 model；传入独立快照，避免字段注册或卸载改写图片会话及业务草稿。
-const formModel = computed(() => ({ ...fields.value, packagingImages: [...imageUrls.value.packagingImages], quotationImages: [...imageUrls.value.quotationImages] }))
+const formModel = computed(() => ({ ...fields.value, paymentRecipients: fields.value.paymentRecipients.map(item => ({ ...item })), packagingImages: [...imageUrls.value.packagingImages], quotationImages: [...imageUrls.value.quotationImages] }))
 const validation = computed(() => validatePackagingCost({
   ...fields.value,
   packagingImages: previews.value.packagingImages.files(imageUrls.value.packagingImages),
   quotationImages: previews.value.quotationImages.files(imageUrls.value.quotationImages),
 }, cny.value?.minorUnit ?? 2))
-const rules = Object.fromEntries(['packagingTypeValue', 'vendor', 'amount', ...imageGroups, 'remark'].map(field => [field, () => {
+const rules = Object.fromEntries(['packagingTypeValue', 'vendor', 'amount', ...imageGroups, 'remark', 'paymentRecipients'].map(field => [field, () => {
+  if (field === 'paymentRecipients') {
+    const error = fields.value.vendor === 'OTHER' ? validatePaymentRecipientAccounts(fields.value.paymentRecipients, 1, PACKAGING_RECIPIENT_METHODS) : null
+    return error ? t(error) : true
+  }
   const error = uploadErrors.value[field as ImageGroup] ?? validation.value.errors[field as PackagingCostField]
   return error ? t(`warehousePackagingCost.errors.${error}`) : true
 }]))
 
 function emptyFields() {
-  return { packagingTypeValue: null as string | null, vendor: null as string | null, amount: null as string | null, remark: '' }
+  return { packagingTypeValue: null as string | null, vendor: null as string | null, amount: null as string | null, remark: '', paymentRecipients: [] as PaymentRecipientAccountInputDto[] }
 }
 
 function createPreviews() {
@@ -87,6 +104,7 @@ function resetDraft() {
   // 更换实例隔离 FaImageUpload 在 await afterUpload 后的旧 model 写入。
   formKey.value += 1
   validating.value = false
+  recipientBusy.value = false
 }
 
 function updateVendor(value: unknown) {
@@ -102,11 +120,14 @@ async function submit() {
     emit('retrySubmit')
     return
   }
+  if (!recipientsReady.value) {
+    return
+  }
   const key = formKey.value
   validating.value = true
   try {
     const result = await form.value?.validate()
-    if (key !== formKey.value || !props.modelValue || !props.context || props.loading || props.error || props.submitDisabled || props.submitting || !result?.valid || !currencyReady.value) {
+    if (key !== formKey.value || !props.modelValue || !props.context || props.loading || props.error || props.submitDisabled || props.submitting || !result?.valid || !currencyReady.value || !recipientsReady.value) {
       return
     }
     const draft = validation.value.draft
@@ -124,6 +145,9 @@ async function submit() {
 // 图片控件排序会先 splice 再赋值，需等完整交换结束再释放移除项，不能消费重复 URL 的中间态。
 watch(imageUrls, value => imageGroups.forEach(group => previews.value[group].sync(value[group])), { deep: true, flush: 'post' })
 watch(() => [props.modelValue, props.context?.shipmentId], resetDraft, { flush: 'sync' })
+watch(() => fields.value.vendor, () => {
+  recipientBusy.value = false
+}, { flush: 'sync' })
 onBeforeUnmount(releasePreviews)
 </script>
 
@@ -203,6 +227,46 @@ onBeforeUnmount(releasePreviews)
             </template>
           </FaAlert>
         </section>
+        <section v-if="fields.vendor" :aria-label="t('warehousePackagingCost.recipientSection')" class="pt-4 border-t border-border">
+          <h3 class="qs-type-component-title m-0 mb-1">
+            {{ t('warehousePackagingCost.recipientSection') }}
+          </h3>
+          <template v-if="fields.vendor === 'CHENGXIN'">
+            <p class="qs-type-meta text-muted-foreground mb-3">
+              {{ t('warehousePackagingCost.fixedRecipientHint') }}
+            </p>
+            <p v-if="vendorProfile.loading.value" role="status" class="qs-type-meta text-muted-foreground py-3">
+              {{ t('warehousePackagingCost.recipientLoading') }}
+            </p>
+            <FaAlert v-else-if="vendorProfile.error.value || !vendorProfile.ready.value" :title="t('warehousePackagingCost.recipientUnavailable')" :description="vendorProfile.error.value || t('warehousePackagingCost.recipientUnconfigured')" variant="destructive">
+              <template #description>
+                <p>{{ vendorProfile.error.value || t('warehousePackagingCost.recipientUnconfigured') }}</p>
+                <FaButton type="button" variant="outline" size="sm" :disabled="submitting || draftLocked" @click="vendorProfile.reload">
+                  {{ t('warehousePackagingCost.retry') }}
+                </FaButton>
+              </template>
+            </FaAlert>
+            <div v-else class="gap-3 grid sm:grid-cols-2">
+              <div v-for="recipient in vendorProfile.profile.value?.accounts" :key="recipient.id" class="p-3 border border-border rounded-lg flex gap-3 min-w-0 items-center">
+                <RecipientImage v-if="recipient.qrMediaAssetId" :media-asset-id="recipient.qrMediaAssetId" thumbnail :thumbnail-size="96" />
+                <div class="min-w-0 space-y-1">
+                  <p class="qs-type-label">
+                    {{ t(`paymentRecipient.methods.${recipient.paymentMethod}`) }}
+                  </p>
+                  <p class="qs-type-meta text-muted-foreground break-words">
+                    {{ recipient.recipientName }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </template>
+          <FaFormItem v-else name="paymentRecipients" :rules="rules.paymentRecipients" :auto-bind="false">
+            <p class="qs-type-meta text-muted-foreground mb-3">
+              {{ t('warehousePackagingCost.otherRecipientHint') }}
+            </p>
+            <QsPaymentRecipientEditor v-model="fields.paymentRecipients" :methods="PACKAGING_RECIPIENT_METHODS" :minimum="1" compact :disabled="submitting || draftLocked" @busy-change="recipientBusy = $event" />
+          </FaFormItem>
+        </section>
         <section :aria-label="t('warehousePackagingCost.imagesSection')" class="pt-4 border-t border-border">
           <h3 class="qs-type-component-title m-0">
             {{ t('warehousePackagingCost.imagesSection') }}
@@ -248,7 +312,7 @@ onBeforeUnmount(releasePreviews)
           <FaButton type="button" variant="outline" :disabled="submitting || draftLocked" @click="emit('update:modelValue', false)">
             {{ t('warehousePackagingCost.cancel') }}
           </FaButton>
-          <FaButton type="button" :disabled="submitDisabled || loading || Boolean(error) || !context || (!draftLocked && !currencyReady)" :loading="submitting || validating" @click="submit">
+          <FaButton type="button" :disabled="submitDisabled || loading || Boolean(error) || !context || (!draftLocked && (!currencyReady || !recipientsReady))" :loading="submitting || validating" @click="submit">
             {{ t(draftLocked ? 'warehousePackagingCost.retrySubmission' : 'warehousePackagingCost.submit') }}
           </FaButton>
         </div>

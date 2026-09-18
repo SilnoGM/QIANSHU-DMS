@@ -1,11 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
-import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min } from 'class-validator'
+import { ArrayMaxSize, IsArray, IsDefined, IsIn, ValidateNested, IsEnum, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min } from 'class-validator'
+import { PaymentRecipientAccountDto, PaymentRecipientAccountInputDto, PaymentRecipientProfileDto } from '../payment-recipients/payment-recipient.dto'
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
 
 export enum PackagingCostStatusDto { PENDING_PAYMENT = 'PENDING_PAYMENT', PAID = 'PAID' }
 export enum PackagingCostVendorDto { CHENGXIN = 'CHENGXIN', OTHER = 'OTHER' }
-export enum PackagingCostImageKindDto { PACKAGING = 'PACKAGING', QUOTATION = 'QUOTATION' }
+export enum PackagingCostImageKindDto { PACKAGING = 'PACKAGING', QUOTATION = 'QUOTATION', PAYMENT = 'PAYMENT' }
 export class PackagingCostIdDto {
   @ApiProperty({ format: 'uuid' }) @IsUUID('4') id!: string
 }
@@ -19,6 +20,7 @@ export class PackagingCostListQueryDto {
   @ApiPropertyOptional({ maxLength: 128 }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 128) keyword?: string
 }
 export class PackagingCostRequestCreateDto {
+  @ApiPropertyOptional({ type: [PaymentRecipientAccountInputDto], minItems: 1, maxItems: 2, description: 'Required for OTHER; ALIPAY or WECHAT only. Omit for CHENGXIN.' }) @IsOptional() @IsArray() @ArrayMaxSize(2) @ValidateNested({ each: true }) @Type(() => PaymentRecipientAccountInputDto) paymentRecipients?: PaymentRecipientAccountInputDto[]
   @ApiProperty({ format: 'uuid' }) @IsUUID('4') shipmentId!: string
   @ApiProperty({ maxLength: 64, description: 'Effective value from warehouse.packaging_type.' }) @IsString() @IsUnicodeCodePointLength(1, 64) packagingType!: string
   @ApiProperty({ enum: PackagingCostVendorDto }) @IsEnum(PackagingCostVendorDto) packagingVendor!: PackagingCostVendorDto
@@ -27,7 +29,15 @@ export class PackagingCostRequestCreateDto {
   @ApiProperty({ format: 'uuid' }) @IsUUID('4') quotationImageMediaAssetId!: string
   @ApiPropertyOptional({ type: 'string', nullable: true, maxLength: 500 }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 500) remark?: string | null
 }
+export class PackagingCostPaymentVoucherDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID('4') mediaAssetId!: string
+}
 export class PackagingCostRequestPayDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID('4') recipientAccountId!: string
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) recipientProfileVersion!: number
+  @ApiProperty({ enum: ['ALIPAY', 'WECHAT'] }) @IsIn(['ALIPAY', 'WECHAT']) paymentMethod!: 'ALIPAY' | 'WECHAT'
+  @ApiProperty({ type: () => PackagingCostPaymentVoucherDto }) @IsDefined() @ValidateNested() @Type(() => PackagingCostPaymentVoucherDto) voucher!: PackagingCostPaymentVoucherDto
+  @ApiPropertyOptional({ type: 'string', nullable: true, maxLength: 500 }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 500) remark?: string | null
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number
 }
 export class PackagingCostPersonDto {
@@ -43,7 +53,14 @@ export class PackagingCostImageUploadDto extends PackagingCostImageDto {
   @ApiProperty({ enum: ['IMAGE'] }) mediaType!: 'IMAGE'
   @ApiProperty({ type: 'string', description: 'Byte size as an integer string.' }) sizeBytes!: string
 }
+export class PackagingCostPaymentReceiptDto {
+  @ApiProperty({ type: () => PaymentRecipientAccountDto, nullable: true }) recipient!: PaymentRecipientAccountDto | null
+  @ApiProperty({ type: () => PackagingCostImageDto, nullable: true }) voucher!: PackagingCostImageDto | null
+  @ApiProperty({ type: 'string', nullable: true }) remark!: string | null
+}
 export class PackagingCostRequestDto {
+  @ApiProperty({ type: () => PaymentRecipientProfileDto, nullable: true }) paymentRecipientProfile!: PaymentRecipientProfileDto | null
+  @ApiProperty({ type: () => PackagingCostPaymentReceiptDto, nullable: true }) paymentReceipt!: PackagingCostPaymentReceiptDto | null
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty({ format: 'uuid' }) shipmentId!: string
   @ApiProperty() shipmentNo!: string

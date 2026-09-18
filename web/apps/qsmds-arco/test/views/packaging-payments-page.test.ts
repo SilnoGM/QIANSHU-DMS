@@ -15,12 +15,13 @@ async function fixture() {
   const pay = ref(false)
   const calls: Array<{ query: Record<string, unknown>, signal: AbortSignal }> = []
   const lifecycle: Record<string, () => void> = {}
+  const navigations: unknown[] = []
   const api = { list: async (query: Record<string, unknown>, signal: AbortSignal): Promise<any> => {
     calls.push({ query, signal })
     return { data: { items: [{ id: 'request', status: query.status }], total: 1, statusCounts: { PENDING_PAYMENT: 1, PAID: 0 } } }
   } }
   const scope = effectScope()
-  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ enabled, status, page, keyword, items, selectedId, selectStatus, search, openPayment, load })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
+  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ enabled, status, page, keyword, items, selectStatus, search, openPayment, openPaidDetail, load })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
     AbortController,
     computed,
     ref,
@@ -30,6 +31,7 @@ async function fixture() {
     useAppAuth: () => ({ auth: (permission: string) => permission === 'packaging-costs:read' ? read.value : pay.value }),
     useAppAccountStore: () => account,
     useRoute: () => route,
+    useRouter: () => ({ push: (location: unknown) => navigations.push(location) }),
     useCurrencyCatalog: () => ({ currencies: ref([]) }),
     packagingCostsApi: api,
     getPurchaseOrderApiFailure: (error: Error) => error,
@@ -44,15 +46,15 @@ async function fixture() {
     page: { value: number }
     keyword: { value: string }
     items: { value: unknown[] }
-    selectedId: { value: string | null }
     selectStatus: (value: string) => void
     search: () => void
     openPayment: (record: { id: string, status: string }) => void
+    openPaidDetail: (record: { id: string, status: string }) => void
     load: () => Promise<void>
   }
   lifecycle.mount!()
   await nextTick()
-  return { state, account, route, read, pay, calls, lifecycle, api, dispose: () => {
+  return { state, account, route, read, pay, calls, navigations, lifecycle, api, dispose: () => {
     lifecycle.unmount!()
     scope.stop()
   } }
@@ -69,14 +71,17 @@ test('默认待付款，已付款视图和搜索均回到第一页；只读权�
   assert.equal(f.calls.at(-1)?.query.page, 1)
   assert.equal(f.calls.at(-1)?.query.keyword, 'PKG')
   f.state.openPayment({ id: 'request', status: 'PENDING_PAYMENT' })
-  assert.equal(f.state.selectedId.value, null)
+  assert.equal(f.navigations.length, 0)
   f.pay.value = true
   f.state.openPayment({ id: 'request', status: 'PAID' })
-  assert.equal(f.state.selectedId.value, null)
+  assert.equal(f.navigations.length, 0)
   f.state.openPayment({ id: 'request', status: 'PENDING_PAYMENT' })
-  assert.equal(f.state.selectedId.value, 'request')
+  assert.deepEqual(JSON.parse(JSON.stringify(f.navigations)), [{ name: 'qsFinanceRealtimePackagingPayment', params: { requestId: 'request' } }])
   f.pay.value = false
-  assert.equal(f.state.selectedId.value, null)
+  f.state.openPayment({ id: 'request', status: 'PENDING_PAYMENT' })
+  assert.equal(f.navigations.length, 1)
+  f.state.openPaidDetail({ id: 'paid-request', status: 'PAID' })
+  assert.deepEqual(JSON.parse(JSON.stringify(f.navigations.at(-1))), { name: 'qsFinanceRealtimePackagingPayment', params: { requestId: 'paid-request' } })
 })
 
 test('切页、撤权、换账号后清空数据并拒绝迟到列表响应', async (context) => {

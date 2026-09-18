@@ -125,9 +125,9 @@ export async function createPackagingCostHarness(options: { nativeImageProbe?: b
       return { part: await prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: partIds[0] } }), order, source }
     }
 
-    async function upload(browser: ReturnType<typeof request.agent>, extension: 'png' | 'jpeg' | 'webp' = 'png') {
+    async function upload(browser: ReturnType<typeof request.agent>, extension: 'png' | 'jpeg' | 'webp' = 'png', url = '/api/packaging-cost-requests/images') {
       const buffer = await sharp({ create: { width: 3, height: 3, channels: 3, background: '#c9b39b' } }).toFormat(extension).toBuffer()
-      const response = await browser.post('/api/packaging-cost-requests/images').set(packagingHeaders)
+      const response = await browser.post(url).set(packagingHeaders)
         .field('mediaType', 'IMAGE').attach('file', buffer, { filename: `evidence.${extension}`, contentType: `image/${extension}` })
       if (response.status !== 201) {
         const error = response.body as { code?: string }
@@ -139,7 +139,18 @@ export async function createPackagingCostHarness(options: { nativeImageProbe?: b
       return body.mediaAssetId
     }
 
+    let profileSetup: Promise<void> | undefined
+    function ensureProfile() {
+      profileSetup ??= (async () => {
+        const admin = await browserWithPermissions(['supplier-payment-profiles:read', 'supplier-payment-profiles:update'])
+        const qr = await upload(admin.browser, 'png', '/api/payment-recipient-images')
+        await admin.browser.put('/api/packaging-payment-profiles/CHENGXIN').set(packagingHeaders).send({ expectedVersion: 0, accounts: [{ paymentMethod: 'ALIPAY', recipientName: '诚信木箱', qrMediaAssetId: qr }] }).expect(200)
+      })()
+      return profileSetup
+    }
+
     async function input(browser: ReturnType<typeof request.agent>, shipmentId: string) {
+      await ensureProfile()
       return {
         shipmentId, packagingType: 'WOODEN_BOX', packagingVendor: 'CHENGXIN' as const, amount: '280.50',
         packagingImageMediaAssetId: await upload(browser), quotationImageMediaAssetId: await upload(browser, 'webp'),
@@ -175,7 +186,7 @@ export async function createPackagingCostHarness(options: { nativeImageProbe?: b
       return { ownerAccount, postingType }
     }
 
-    return { app, prisma, fixture, mediaRoot, browserWithPermissions, shipment, upload, input, setupFunds,
+    return { app, prisma, fixture, mediaRoot, browserWithPermissions, shipment, upload, input, setupFunds, ensureProfile,
       async dispose() { await app.close(); await fixture.dispose(); await rm(mediaRoot, { recursive: true, force: true }) },
     }
   } catch (error) {

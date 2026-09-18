@@ -1,7 +1,10 @@
 {
   "packagingPayment": {
     "intro": "查看仓储包装费用提报，确认付款金额并记录付款状态。",
-    "status": { "PENDING_PAYMENT": "待付款", "PAID": "已付款" },
+    "status": {
+      "PENDING_PAYMENT": "待付款",
+      "PAID": "已付款"
+    },
     "shipmentNo": "货件编号",
     "shippingMarkText": "货件唛头",
     "source": "关联单据",
@@ -16,13 +19,25 @@
     "paid": "付款信息",
     "remark": "备注",
     "imagesTitle": "截图凭证",
-    "images": { "PACKAGING": "包装完成截图", "QUOTATION": "报价截图" },
-    "imageShort": { "PACKAGING": "包装完成", "QUOTATION": "报价" },
+    "images": {
+      "PACKAGING": "包装完成截图",
+      "QUOTATION": "报价截图"
+    },
+    "imageShort": {
+      "PACKAGING": "包装完成",
+      "QUOTATION": "报价"
+    },
     "vendorLabel": "包装厂商",
-    "vendor": { "CHENGXIN": "沙井·诚信木箱", "OTHER": "其他" },
+    "vendor": {
+      "CHENGXIN": "沙井·诚信木箱",
+      "OTHER": "其他"
+    },
     "search": "搜索货件编号、唛头、采购或销售订单编号",
     "empty": "暂无打木架费用提报",
-    "emptyDescription": { "PENDING_PAYMENT": "仓储提交的包装费用将显示在这里，等待确认付款。", "PAID": "确认付款后的费用记录将显示在这里。" },
+    "emptyDescription": {
+      "PENDING_PAYMENT": "仓储提交的包装费用将显示在这里，等待确认付款。",
+      "PAID": "确认付款后的费用记录将显示在这里。"
+    },
     "noPermission": "暂无打木架付款查看权限",
     "refresh": "刷新",
     "retry": "重新加载",
@@ -30,11 +45,54 @@
     "payTitle": "打木架付款",
     "paymentAmount": "付款金额（人民币）",
     "amountHint": "以提报金额按资金业务配置记账，确认后记录为已付款。",
-    "confirmPay": "确认付款",
+    "confirmPay": "确认已付款",
     "paySuccess": "已确认付款",
     "payFailed": "付款未完成",
     "alreadyPaid": "该费用已付款，请勿重复操作。",
     "cancel": "取消",
-    "close": "关闭"
+    "close": "关闭",
+    "pageDescription": "核对提报、收款资料与付款截图，确认已完成付款。",
+    "backToList": "返回打木架付款",
+    "requestInformation": "提报信息",
+    "recipientInformation": "收款资料",
+    "paymentInformation": "付款确认",
+    "paymentMethod": "付款方式",
+    "choosePaymentMethod": "选择付款方式",
+    "loading": "正在加载",
+    "invalidLink": "付款链接无效",
+    "loadFailed": "付款资料加载失败",
+    "noPayPermission": "暂无打木架付款操作权限",
+    "noRecipient": "暂无可用收款方式",
+    "noRecipientHint": "请管理员在收款资料配置中补齐沙井·诚信木箱的支付宝或微信收款码，然后重新加载。",
+    "noCustomRecipientHint": "这笔历史提报没有收款资料，暂不能付款。请联系提报人核对处理。",
+    "invalidRecipient": "请选择有收款码的支付宝或微信账户",
+    "selectRecipientHint": "选择付款方式后，将显示对应收款人和收款码。",
+    "noHistoricalRecipient": "该历史付款未记录收款资料。",
+    "paymentVoucher": "付款截图",
+    "invalidVoucher": "请上传一张有效的付款截图，支持 JPG、PNG、WebP，最大 10 MB。",
+    "paymentRemark": "付款备注",
+    "remarkPlaceholder": "填写付款备注（选填）",
+    "invalidRemark": "付款备注不能超过 500 字",
+    "unknownTitle": "付款结果待确认",
+    "unknownHint": "请保留此页面并点击重试核对，将使用原付款资料确认结果，不会重复上传截图。",
+    "retryPay": "重试核对付款结果",
+    "staleTitle": "付款资料已变化",
+    "staleHint": "请重新加载并核对最新状态及收款资料后再确认。",
+    "recheck": "重新核对付款资料",
+    "paidAt": "付款时间",
+    "paidBy": "付款人",
+    "confirmHint": "请确认已向所选收款账户支付上述金额，付款截图将归档至本次打木架提报。",
+    "leaveBlocked": "正在付款或结果待确认，请先完成当前付款核对。",
+    "voucher": {
+      "imageOnly": "仅支持 JPG、PNG、WebP 图片",
+      "imageEmpty": "图片内容不能为空",
+      "imageTooLarge": "图片不能超过 10 MB",
+      "previewVoucher": "点击缩略图查看大图",
+      "uploadVoucher": "上传付款截图",
+      "replaceVoucher": "替换截图",
+      "removeVoucher": "移除",
+      "voucherHint": "仅需一张，确认付款后归档至本次打木架提报。"
+    },
+    "view": "查看"
   }
 }

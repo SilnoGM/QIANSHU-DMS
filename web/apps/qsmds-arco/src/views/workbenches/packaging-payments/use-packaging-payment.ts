@@ -1,7 +1,8 @@
 import type { Ref } from 'vue'
-import type { PackagingCostRequestDto } from '@/api/generated/types.gen'
+import type { PackagingCostRequestDto, PackagingCostRequestPayDto } from '@/api/generated/types.gen'
 import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 import packagingCostsApi from '../../../api/modules/packaging-costs'
+import { getPurchaseOrderMutationFailure } from '../../operations/purchase-orders/purchase-order-create.logic'
 import { getPurchaseOrderApiFailure } from '../../operations/purchase-orders/purchase-order-list.logic'
 
 export function usePackagingPayment(
@@ -9,19 +10,43 @@ export function usePackagingPayment(
   canPay: Readonly<Ref<boolean>>,
   epoch: Readonly<Ref<number>>,
   requestId: Readonly<Ref<string | null>>,
-  api: Pick<typeof packagingCostsApi, 'detail' | 'pay'> = packagingCostsApi,
+  api: Pick<typeof packagingCostsApi, 'detail' | 'pay' | 'uploadVoucher'> = packagingCostsApi,
 ) {
   const detail = shallowRef<PackagingCostRequestDto | null>(null)
   const loading = ref(false)
   const busy = ref(false)
+  const unknown = ref(false)
+  const stale = ref(false)
   const loadError = ref('')
   const actionError = ref('')
+  const recipientAccountId = ref<string | null>(null)
+  const voucherFile = shallowRef<File | null>(null)
+  const remark = ref('')
+  const fieldError = ref<'recipient' | 'voucher' | 'remark' | null>(null)
   let controller: AbortController | null = null
   let payment: AbortController | null = null
-  const payable = computed(() => enabled.value && canPay.value && !loading.value && !loadError.value && !busy.value && detail.value?.status === 'PENDING_PAYMENT')
+  let attempt: PackagingCostRequestPayDto | null = null
+  const recipient = computed(() => detail.value?.paymentRecipientProfile?.accounts.find(item => item.id === recipientAccountId.value && ['ALIPAY', 'WECHAT'].includes(item.paymentMethod)) ?? null)
+  const eligible = computed(() => enabled.value && canPay.value && !loading.value && !loadError.value && !busy.value && !stale.value && detail.value?.status === 'PENDING_PAYMENT')
+  const payable = computed(() => eligible.value && (unknown.value || (recipient.value !== null && voucherFile.value !== null)))
 
+  function clearFields() {
+    attempt = null
+    recipientAccountId.value = null
+    voucherFile.value = null
+    remark.value = ''
+    unknown.value = false
+    stale.value = false
+    actionError.value = ''
+    fieldError.value = null
+  }
   async function load() {
+    // 未知结果必须保留原收款资料、凭证和版本，不能刷新后构造第二次财务请求。
+    if (busy.value || unknown.value) {
+      return
+    }
     controller?.abort()
+    clearFields()
     if (!enabled.value || !requestId.value) {
       detail.value = null
       loading.value = false
@@ -42,6 +67,7 @@ export function usePackagingPayment(
     }
     catch (failure) {
       if (current()) {
+        detail.value = null
         loadError.value = getPurchaseOrderApiFailure(failure).message
       }
     }
@@ -53,29 +79,69 @@ export function usePackagingPayment(
   }
 
   async function confirm(): Promise<boolean> {
-    if (!payable.value || !detail.value) {
+    if (!eligible.value || !detail.value) {
       return false
     }
     const record = detail.value
+    const profile = record.paymentRecipientProfile
+    const selected = recipient.value
+    const file = voucherFile.value
+    const paymentRemark = remark.value.trim()
+    fieldError.value = null
+    if (!attempt) {
+      if (!profile || !selected || !selected.qrMediaAssetId) {
+        fieldError.value = 'recipient'
+        return false
+      }
+      if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || !file.size || file.size > 10 * 1024 * 1024) {
+        fieldError.value = 'voucher'
+        return false
+      }
+      if (Array.from(paymentRemark).length > 500) {
+        fieldError.value = 'remark'
+        return false
+      }
+    }
     const requestEpoch = epoch.value
     const request = new AbortController()
     payment = request
     busy.value = true
     actionError.value = ''
+    let confirming = false
     const current = () => payment === request && !request.signal.aborted && enabled.value && canPay.value && epoch.value === requestEpoch && requestId.value === record.id
     try {
-      const result = await api.pay(record.id, { expectedVersion: record.version }, request.signal)
+      if (!attempt && selected && profile && file && selected.paymentMethod !== 'BANK_TRANSFER') {
+        const uploaded = await api.uploadVoucher(record.id, file, request.signal)
+        if (!current()) {
+          return false
+        }
+        attempt = { expectedVersion: record.version, recipientAccountId: selected.id, recipientProfileVersion: profile.version, paymentMethod: selected.paymentMethod, voucher: { mediaAssetId: uploaded.data.mediaAssetId }, remark: paymentRemark || null }
+      }
+      if (!current() || !attempt) {
+        return false
+      }
+      confirming = true
+      const result = await api.pay(record.id, attempt, request.signal)
       if (!current()) {
         return false
       }
       detail.value = result.data
+      unknown.value = false
+      attempt = null
+      voucherFile.value = null
       return true
     }
     catch (failure) {
       if (current()) {
-        actionError.value = getPurchaseOrderApiFailure(failure).message
-        // 并发付款、网络中断均先查询服务端事实，避免继续确认旧状态。
-        await load()
+        const normalized = getPurchaseOrderMutationFailure(failure)
+        actionError.value = normalized.message
+        // 上传失败尚未记账；只有财务确认结果未知才冻结原请求并允许相同参数重试。
+        unknown.value = confirming && normalized.unknownResult
+        const status = typeof failure === 'object' && failure !== null && 'status' in failure ? failure.status : undefined
+        stale.value = status === 409 || status === 404
+        if (!unknown.value) {
+          attempt = null
+        }
       }
       return false
     }
@@ -95,7 +161,7 @@ export function usePackagingPayment(
     loading.value = false
     busy.value = false
     loadError.value = ''
-    actionError.value = ''
+    clearFields()
   }
   watch([enabled, epoch, requestId], () => {
     reset()
@@ -104,9 +170,11 @@ export function usePackagingPayment(
   watch(canPay, (value) => {
     if (!value) {
       payment?.abort()
+      payment = null
       busy.value = false
+      clearFields()
     }
   }, { flush: 'sync' })
   onScopeDispose(reset)
-  return { detail, loading, busy, loadError, actionError, payable, load, confirm }
+  return { detail, loading, busy, unknown, stale, loadError, actionError, recipientAccountId, recipient, voucherFile, remark, fieldError, payable, load, confirm }
 }

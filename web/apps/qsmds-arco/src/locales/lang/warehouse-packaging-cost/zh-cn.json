@@ -40,11 +40,18 @@
       "invalidImageType": "仅支持 JPEG、PNG、WebP 图片",
       "imageTooLarge": "单张图片不能超过 10 MiB",
       "previewFailed": "图片预览失败，请重新选择图片",
-      "remarkTooLong": "备注不能超过 500 字"
+      "remarkTooLong": "备注不能超过 500 字",
+      "invalidRecipients": "请填写收款人并上传至少一种收款码"
     },
     "submitSuccess": "费用提报成功，已进入打木架付款",
     "submitFailed": "费用提报未完成",
     "resultUnknown": "提交结果暂未确认。已保留原提报，请重试确认后再关闭弹窗，避免重复提报。",
-    "retrySubmission": "重试确认"
+    "retrySubmission": "重试确认",
+    "recipientSection": "收款资料",
+    "fixedRecipientHint": "使用管理员配置的诚信木箱收款方式，点击缩略图查看收款码。",
+    "otherRecipientHint": "每种方式上传一张收款码，仅用于本次提报。",
+    "recipientLoading": "正在加载诚信木箱收款资料…",
+    "recipientUnavailable": "收款资料暂不可用",
+    "recipientUnconfigured": "诚信木箱尚未配置收款方式，请管理员在收款资料配置中补充。"
   }
 }

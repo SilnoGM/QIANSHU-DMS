@@ -18,6 +18,13 @@ export function createPackagingCostsApi(client: AxiosInstance) {
     submit: (data: PackagingCostRequestCreateDto, idempotencyKey: string, signal: AbortSignal) => client.post<PackagingCostRequestDto>('packaging-cost-requests', data, { errorPresentation: 'local', headers: { 'Idempotency-Key': idempotencyKey }, retry: false, signal }),
     list: (query: PackagingCostListQuery, signal: AbortSignal) => client.get<PackagingCostRequestPageDto>('packaging-cost-requests', { errorPresentation: 'local', params: query, signal }),
     detail: (id: string, signal: AbortSignal) => client.get<PackagingCostRequestDto>(path(id), { errorPresentation: 'local', signal }),
+    uploadVoucher: (id: string, file: File, signal: AbortSignal) => {
+      const body = new FormData()
+      body.append('mediaType', 'IMAGE')
+      body.append('file', file)
+      return client.post<PackagingCostImageUploadDto>(`${path(id)}/voucher-uploads`, body, { errorPresentation: 'local', retry: false, signal })
+    },
+    imageBlob: (id: string, kind: 'PACKAGING' | 'QUOTATION' | 'PAYMENT', signal: AbortSignal) => client.get<Blob>(`${path(id)}/images/${kind}`, { responseType: 'blob', errorPresentation: 'local', signal }),
     pay: (id: string, data: PackagingCostRequestPayDto, signal: AbortSignal) => client.post<PackagingCostRequestDto>(`${path(id)}/pay`, data, { errorPresentation: 'local', retry: false, signal }),
   }
 }

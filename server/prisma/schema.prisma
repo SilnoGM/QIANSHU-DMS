@@ -84,6 +84,7 @@ enum AuditEventType {
   NUMBERING_RULE_DISABLED
   SHIPPING_MARK_BINDING_CREATED
   SHIPPING_MARK_BINDING_UPDATED
+  PACKAGING_PAYMENT_PROFILE_SAVED
   SUPPLIER_PAYMENT_PROFILE_SAVED
   DICTIONARY_TYPE_CREATED
   DICTIONARY_TYPE_UPDATED
@@ -833,6 +834,8 @@ enum PackagingCostVendor {
 
 model MediaAsset {
   // 付款截图准备时绑定具体定金/尾款阶段，不能被另一阶段消费。
+  packagingCostUploadId String? @map("packaging_cost_upload_id") @db.Uuid
+  packagingCostUpload PackagingCostRequest? @relation("PackagingCostVoucherUpload", fields: [packagingCostUploadId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   purchasePayableUploadId String? @map("purchase_payable_upload_id") @db.Uuid
   purchasePayableUpload PurchaseOrderPayable? @relation("PurchasePayableVoucherUpload", fields: [purchasePayableUploadId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "media_assets_purchase_payable_upload_fkey")
   // 仅专用收款码/付款截图上传标记用途，消费方不能互相复用临时文件。
@@ -863,6 +866,8 @@ model MediaAsset {
 
   createdBy           User                 @relation("MediaAssetCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   packagingCostImages PackagingCostRequest[] @relation("PackagingCostImage")
+  packagingPaymentImages PackagingCostRequest[] @relation("PackagingPaymentImage")
+  packagingRecipientSnapshots PackagingCostRequest[] @relation("PackagingPaymentRecipientQr")
   packagingQuotationImages PackagingCostRequest[] @relation("PackagingQuotationImage")
   receiptRequests SalesReceiptRequest[]
   productMedia        ProductMedia[]
@@ -872,6 +877,7 @@ model MediaAsset {
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
   @@index([status, retentionUntil, id], map: "media_assets_status_retention_until_id_idx")
+  @@index([packagingCostUploadId], map: "media_assets_packaging_cost_upload_idx")
   @@index([purchasePayableUploadId], map: "media_assets_purchase_payable_upload_idx")
   @@map("media_assets")
 }
@@ -1302,6 +1308,9 @@ model PurchaseOrderDocument {
 // 供应商仍是字典稳定 value；自定义供应商资料仅属于本张采购单。
 model PaymentRecipientProfile {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  packagingVendor String? @unique(map: "payment_recipient_profiles_packaging_vendor_key") @map("packaging_vendor") @db.VarChar(64)
+  packagingRequestId String? @unique(map: "payment_recipient_profiles_packaging_request_key") @map("packaging_request_id") @db.Uuid
+  packagingRequest PackagingCostRequest? @relation(fields: [packagingRequestId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   supplierValue String? @unique(map: "payment_recipient_profiles_supplier_key") @map("supplier_value") @db.VarChar(64)
   purchaseOrderId String? @unique(map: "payment_recipient_profiles_order_key") @map("purchase_order_id") @db.Uuid
   version Int @default(1)
@@ -1813,6 +1822,17 @@ model PackagingCostRequest {
   paidBy User? @relation("PackagingCostPayer", fields: [paidByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   packagingImage MediaAsset @relation("PackagingCostImage", fields: [packagingImageMediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   quotationImage MediaAsset @relation("PackagingQuotationImage", fields: [quotationImageMediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  paymentRecipientProfile PaymentRecipientProfile?
+  voucherUploads MediaAsset[] @relation("PackagingCostVoucherUpload")
+  paymentVoucherMediaAssetId String? @unique(map: "packaging_cost_requests_payment_voucher_key") @map("payment_voucher_media_asset_id") @db.Uuid
+  paymentVoucher MediaAsset? @relation("PackagingPaymentImage", fields: [paymentVoucherMediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  recipientQrMediaAssetId String? @map("recipient_qr_media_asset_id") @db.Uuid
+  recipientQr MediaAsset? @relation("PackagingPaymentRecipientQr", fields: [recipientQrMediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  recipientSnapshot Json? @map("recipient_snapshot") @db.JsonB
+  paymentRemark String? @map("payment_remark") @db.VarChar(500)
+  paymentFingerprintHash Bytes? @map("payment_fingerprint_hash") @db.ByteA
+
+  @@index([recipientQrMediaAssetId], map: "packaging_cost_requests_recipient_qr_idx")
 
   @@unique([submittedByUserId, idempotencyKeyHash], map: "packaging_cost_requests_submitter_idempotency_key")
   @@index([status, submittedAt(sort: Desc), id(sort: Desc)], map: "packaging_cost_requests_status_submitted_idx")

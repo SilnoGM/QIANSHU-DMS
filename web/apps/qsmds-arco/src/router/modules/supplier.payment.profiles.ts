@@ -6,7 +6,7 @@ const routes: RouteRecordRaw = {
   name: 'adminSupplierPaymentProfiles',
   component: () => import('@/views/admin/supplier-payment-profiles/index.vue'),
   meta: {
-    title: '供应商收款配置',
+    title: '收款资料配置',
     icon: 'qs-fund-accounts',
     auth: [...SUPPLIER_PAYMENT_PROFILE_PERMISSIONS],
     singleMenu: true,

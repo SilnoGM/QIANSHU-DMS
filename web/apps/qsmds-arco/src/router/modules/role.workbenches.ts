@@ -85,6 +85,18 @@ export const financeWorkbench: RouteRecordMainRaw = {
             auth: 'packaging-costs:read',
           },
         },
+        {
+          path: 'packaging-payments/:requestId/payment',
+          name: 'qsFinanceRealtimePackagingPayment',
+          component: () => import('@/views/workbenches/packaging-payments/payment-page.vue'),
+          meta: {
+            title: 'packagingPayment.payTitle',
+            icon: 'qs-packaging-payments',
+            menu: false,
+            activeMenu: '/qs-finance/realtime-payments/packaging-payments',
+            auth: 'packaging-costs:read',
+          },
+        },
       ],
     },
     FundAccountManagement,

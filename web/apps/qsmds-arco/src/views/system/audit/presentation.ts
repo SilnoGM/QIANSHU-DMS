@@ -48,6 +48,7 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   SHIPPING_MARK_BINDING_CREATED: '供应商唛头规则已绑定',
   SHIPPING_MARK_BINDING_UPDATED: '供应商唛头规则已改绑',
   SUPPLIER_PAYMENT_PROFILE_SAVED: '供应商收款资料已保存',
+  PACKAGING_PAYMENT_PROFILE_SAVED: '包装厂商收款资料已保存',
   DICTIONARY_TYPE_CREATED: '字典类型已创建',
   DICTIONARY_TYPE_UPDATED: '字典类型已更新',
   DICTIONARY_TYPE_ENABLED: '字典类型已启用',

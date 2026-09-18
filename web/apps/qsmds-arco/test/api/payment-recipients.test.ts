@@ -29,3 +29,20 @@ test('收款配置使用认证客户端，读图片为Blob，副作用不自动�
   assert.equal(body.get('mediaType'), 'IMAGE')
   assert.deepEqual(calls[3]![3], { signal, errorPresentation: 'local', retry: false })
 })
+
+test('包装厂商读取和版本化保存使用独立路径，保存不自动重试', async () => {
+  const calls: unknown[][] = []
+  const response = { data: {} }
+  const client = Object.fromEntries(['get', 'put'].map(method => [method, (...args: unknown[]) => {
+    calls.push([method, ...args])
+    return Promise.resolve(response)
+  }])) as unknown as AxiosInstance
+  const api = createPaymentRecipientsApi(client)
+  const signal = new AbortController().signal
+  assert.equal(await api.getPackagingProfile('CHENGXIN', signal), response)
+  assert.equal(await api.savePackagingProfile('CHENGXIN', { expectedVersion: 2, accounts: [] }, signal), response)
+  assert.deepEqual(calls, [
+    ['get', 'packaging-payment-profiles/CHENGXIN', { signal, errorPresentation: 'local' }],
+    ['put', 'packaging-payment-profiles/CHENGXIN', { expectedVersion: 2, accounts: [] }, { signal, errorPresentation: 'local', retry: false }],
+  ])
+})

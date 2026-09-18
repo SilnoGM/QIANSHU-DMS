@@ -6,13 +6,14 @@ import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import { computed, effectScope, nextTick, reactive, ref, shallowRef, watch } from 'vue'
+import { validatePaymentRecipientAccounts } from '../../src/components/business/QsPaymentRecipientEditor/logic'
 import * as logic from '../../src/views/operations/warehouse-arrivals/packaging-cost.logic'
 import { createPackagingImagePreview } from '../../src/views/operations/warehouse-arrivals/packaging-image-preview'
 
 const shipment: PackagingCostContext = { shipmentId: 'part-1', shipmentNo: 'SHP-1', shippingMarkText: 'MARK', purchaseOrderNo: 'PO-1', salesOrderNo: 'SO-1', ownerName: '出单人' }
 type Group = 'packagingImages' | 'quotationImages'
 interface ModalState {
-  fields: { value: { packagingTypeValue: string | null, vendor: string | null, amount: string | null, remark: string } }
+  fields: { value: { packagingTypeValue: string | null, vendor: string | null, amount: string | null, remark: string, paymentRecipients: Array<{ paymentMethod: 'ALIPAY', recipientName: string, qrMediaAssetId: string }> } }
   imageUrls: { value: Record<Group, string[]> }
   previews: { value: Record<Group, ReturnType<typeof createPackagingImagePreview>> }
   rules: Record<string, () => string | true>
@@ -27,6 +28,7 @@ async function fixture() {
   const revoked: string[] = []
   const fieldErrors: Record<string, string | undefined> = {}
   const currencyError = ref<string | null>(null)
+  const profileReady = ref(true)
   let pendingValidation: Promise<{ valid: boolean }> | null = null
   let sequence = 0
   let unmount = () => {}
@@ -35,6 +37,9 @@ async function fixture() {
     ...logic,
     computed,
     createPackagingImagePreview,
+    validatePaymentRecipientAccounts,
+    useAppAccountStore: () => ({ authEpoch: 1 }),
+    usePackagingVendorProfile: () => ({ ready: profileReady, loading: ref(false), error: ref(''), profile: ref(null), reload: () => {} }),
     ref,
     shallowRef,
     watch,
@@ -67,7 +72,7 @@ async function fixture() {
     return { file, url, response, preview }
   }
   function fill() {
-    state.fields.value = { packagingTypeValue: 'WOODEN_FRAME', vendor: 'OTHER', amount: '99.5', remark: '  备注  ' }
+    state.fields.value = { packagingTypeValue: 'WOODEN_FRAME', vendor: 'OTHER', amount: '99.5', remark: '  备注  ', paymentRecipients: [{ paymentMethod: 'ALIPAY', recipientName: '收款人', qrMediaAssetId: 'qr' }] }
     return [addImage('packagingImages'), addImage('quotationImages')]
   }
   return {
@@ -76,6 +81,7 @@ async function fixture() {
     events,
     fieldErrors,
     currencyError,
+    profileReady,
     revoked,
     addImage,
     fill,
@@ -194,4 +200,22 @@ test('未知结果重试不受币种加载失败阻挡，直接请求父层重�
   await f.state.submit()
   assert.equal(f.events.length, 1)
   assert.equal(f.events[0]?.[0], 'retrySubmit')
+})
+
+test('其他厂商缺收款码及固定厂商配置未就绪时均不能提交', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  f.fill()
+  f.state.fields.value.paymentRecipients = []
+  await f.state.submit()
+  assert.equal(f.events.length, 0)
+  assert.ok(f.fieldErrors.paymentRecipients)
+  f.state.fields.value.vendor = 'CHENGXIN'
+  f.profileReady.value = false
+  await f.state.submit()
+  assert.equal(f.events.length, 0)
+  f.profileReady.value = true
+  await f.state.submit()
+  assert.equal(f.events.length, 1)
+  assert.equal(f.events[0]?.[1].paymentRecipients, undefined)
 })

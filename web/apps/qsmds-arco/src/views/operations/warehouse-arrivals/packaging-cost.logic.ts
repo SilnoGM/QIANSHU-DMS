@@ -1,4 +1,6 @@
+import type { PaymentRecipientAccountInputDto } from '@/api/generated/types.gen'
 import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
+import { normalizePaymentRecipientAccounts, validatePaymentRecipientAccounts } from '../../../components/business/QsPaymentRecipientEditor/logic'
 
 export interface PackagingCostContext {
   shipmentId: string
@@ -16,6 +18,7 @@ export interface PackagingCostInput {
   packagingImages: File[]
   quotationImages: File[]
   remark: string
+  paymentRecipients?: PaymentRecipientAccountInputDto[]
 }
 
 export interface PackagingCostDraft {
@@ -26,14 +29,16 @@ export interface PackagingCostDraft {
   packagingImages: File[]
   quotationImages: File[]
   remark: string | null
+  paymentRecipients?: PaymentRecipientAccountInputDto[]
 }
 
 export type PackagingCostField = keyof PackagingCostInput
 export type PackagingImageError = 'invalidImageType' | 'imageTooLarge' | 'tooManyImages' | 'previewFailed'
-export type PackagingCostError = PackagingImageError | 'requiredPackagingType' | 'requiredVendor' | 'requiredAmount' | 'invalidAmount' | 'requiredImages' | 'remarkTooLong'
+export type PackagingCostError = PackagingImageError | 'requiredPackagingType' | 'requiredVendor' | 'requiredAmount' | 'invalidAmount' | 'requiredImages' | 'remarkTooLong' | 'invalidRecipients'
 export const PACKAGING_IMAGE_LIMIT = 1
 export const PACKAGING_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 export const PACKAGING_DEFAULT_VENDOR = '沙井·诚信木箱'
+export const PACKAGING_RECIPIENT_METHODS = ['ALIPAY', 'WECHAT'] as const
 
 export function validatePackagingImage(file: File): PackagingImageError | null {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
@@ -78,6 +83,9 @@ export function validatePackagingCost(input: PackagingCostInput, precision = 2):
   if (input.remark.length > 500) {
     errors.remark = 'remarkTooLong'
   }
+  if (input.vendor === 'OTHER' && validatePaymentRecipientAccounts(input.paymentRecipients ?? [], 1, PACKAGING_RECIPIENT_METHODS)) {
+    errors.paymentRecipients = 'invalidRecipients'
+  }
   if (Object.keys(errors).length || !amount.valid || amount.normalizedValue === null) {
     return { errors, draft: null }
   }
@@ -91,6 +99,7 @@ export function validatePackagingCost(input: PackagingCostInput, precision = 2):
       packagingImages: [...input.packagingImages],
       quotationImages: [...input.quotationImages],
       remark: input.remark.trim() || null,
+      ...(input.vendor === 'OTHER' ? { paymentRecipients: normalizePaymentRecipientAccounts(input.paymentRecipients ?? []) } : {}),
     },
   }
 }

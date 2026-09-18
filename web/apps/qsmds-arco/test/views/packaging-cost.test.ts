@@ -25,10 +25,16 @@ test('提交规范化金额、厂商、备注，保留原始 File 和顺序，�
   assert.equal(validatePackagingCost({ ...input, remark: ' ' }).draft?.remark, null)
 })
 
-test('其他厂商不要求额外名称，可直接生成费用草稿', () => {
-  const result = validatePackagingCost({ ...validInput(), vendor: 'OTHER' })
+test('其他厂商至少提供一种扫码收款资料，不要求厂商名称', () => {
+  const paymentRecipients = [{ paymentMethod: 'ALIPAY' as const, recipientName: '  包装收款人 ', qrMediaAssetId: 'qr' }]
+  assert.equal(validatePackagingCost({ ...validInput(), vendor: 'OTHER' }).errors.paymentRecipients, 'invalidRecipients')
+  assert.equal(validatePackagingCost({ ...validInput(), vendor: 'OTHER', paymentRecipients: [{ ...paymentRecipients[0]!, qrMediaAssetId: null }] }).draft, null)
+  assert.equal(validatePackagingCost({ ...validInput(), vendor: 'OTHER', paymentRecipients: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '收款人', bankName: '银行', bankAccount: '123' }] }).draft, null)
+  const result = validatePackagingCost({ ...validInput(), vendor: 'OTHER', paymentRecipients })
   assert.deepEqual(result.errors, {})
   assert.equal(result.draft?.vendor, 'OTHER')
+  assert.equal(result.draft?.paymentRecipients?.[0]?.recipientName, '包装收款人')
+  assert.equal(validatePackagingCost({ ...validInput(), paymentRecipients }).draft?.paymentRecipients, undefined)
 })
 
 test('两组截图各限 1 张 jpeg/png/webp、10 MiB，备注限制 500 字', () => {

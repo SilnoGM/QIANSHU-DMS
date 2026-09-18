@@ -59,7 +59,7 @@ export function usePackagingCostSubmission(
         }
         frozen = {
           key: createKey(),
-          payload: Object.freeze({ shipmentId: id, packagingType: draft.packagingTypeValue, packagingVendor: draft.vendor, amount: draft.amount, packagingImageMediaAssetId: mediaIds[0]!, quotationImageMediaAssetId: mediaIds[1]!, ...(draft.remark ? { remark: draft.remark } : {}) }),
+          payload: Object.freeze({ shipmentId: id, packagingType: draft.packagingTypeValue, packagingVendor: draft.vendor, amount: draft.amount, packagingImageMediaAssetId: mediaIds[0]!, quotationImageMediaAssetId: mediaIds[1]!, ...(draft.remark ? { remark: draft.remark } : {}), ...(draft.vendor === 'OTHER' ? { paymentRecipients: (draft.paymentRecipients ?? []).map(account => ({ ...account })) } : {}) }),
         }
       }
       const result = await api.submit(frozen!.payload, frozen!.key, request.signal)

@@ -14,8 +14,9 @@ import { FundCalculationError } from '../fund-accounts/domain/fund-calculation.e
 import { MediaAssetService, MediaAssetLifecycleError } from '../media/media-asset.service'
 import { MediaContentDeliveryService } from '../media/media-content-delivery.service'
 import { requireMediaObjectKeyNamespace } from '../media/media-storage'
+import { PackagingPaymentProfileService } from '../payment-recipients/packaging-payment-profile.service'
 import { PackagingCostQueryService } from './packaging-cost-query.service'
-import { normalizePackagingCostCreate, packagingCostFailure, packagingCostIdempotencyKey, packagingCostUuid, type PackagingCostContext } from './packaging-cost.normalizer'
+import { normalizePackagingCostCreate, normalizePackagingPayment, packagingCostFailure, packagingCostIdempotencyKey, packagingCostUuid, type PackagingCostContext } from './packaging-cost.normalizer'
 import type { PackagingCostRequestCreateDto, PackagingCostRequestPayDto } from './packaging-cost.dto'
 
 const hash = (value: string) => createHash('sha256').update(value).digest()
@@ -46,6 +47,7 @@ export class PackagingCostService {
     private readonly access: AccessControlService,
     private readonly audit: AuditService,
     private readonly funds: FundPostingService,
+    private readonly recipients: PackagingPaymentProfileService,
   ) {}
   private async authorize(tx: Prisma.TransactionClient, context: PackagingCostContext, permissions: string[]) {
     const user = await tx.user.findUnique({ where: { id: context.actorUserId }, select: { status: true } })
@@ -79,13 +81,14 @@ export class PackagingCostService {
         const order = shipment?.purchaseOrder, source = order?.salesOrder
         if (!shipment || shipment.status !== 'ACTIVE' || !shipment.warehouseReceivedAt || !shipment.shippedAt || !shipment.shipmentNo || !shipment.shippingMarkText
           || !order || !['CONFIRMED', 'COMPLETED'].includes(order.orderStatus) || !source) return packagingCostFailure('PACKAGING_COST_NOT_ALLOWED', '仅已到仓且有销售来源的有效货件可以提报')
+        if (normalized.packagingVendor === 'CHENGXIN') await this.recipients.requireConfigured(tx)
         const packagingType = await this.dictionary.requireEffectiveValue(tx, { dictionaryCode: 'warehouse.packaging_type', value: normalized.packagingType })
         const assetIds = [normalized.packagingImageMediaAssetId, normalized.quotationImageMediaAssetId].sort()
         await tx.$queryRaw(Prisma.sql`SELECT id FROM media_assets WHERE id IN (${Prisma.join(assetIds.map(value => Prisma.sql`${value}::uuid`))}) ORDER BY id FOR UPDATE`)
         const assets = await tx.mediaAsset.findMany({ where: {
           id: { in: assetIds }, createdByUserId: context.actorUserId, status: 'UPLOADING', uploadExpiresAt: { gt: new Date() },
           mediaType: 'IMAGE', mimeType: { in: ['image/jpeg', 'image/png', 'image/webp'] }, sizeBytes: { gt: 0n, lte: 10n * 1024n * 1024n },
-          objectKey: { not: null }, checksumSha256: { not: null }, deletedAt: null,
+          objectKey: { not: null }, checksumSha256: { not: null }, deletedAt: null, uploadPurpose: null,
         } })
         if (assets.length !== 2) return imageFailure()
         for (const asset of assets) {
@@ -98,12 +101,14 @@ export class PackagingCostService {
           }
           await this.media.activate(tx, asset.id)
         }
+        const { paymentRecipients, ...submission } = normalized
         const row = await tx.packagingCostRequest.create({ data: {
-          ...normalized, packagingVendor: normalized.packagingVendor as 'CHENGXIN' | 'OTHER', packagingTypeName: packagingType.label,
+          ...submission, packagingVendor: normalized.packagingVendor as 'CHENGXIN' | 'OTHER', packagingTypeName: packagingType.label,
           shipmentNo: shipment.shipmentNo, shippingMarkText: shipment.shippingMarkText, purchaseOrderId: order.id, purchaseOrderNo: order.orderNo,
           salesOrderId: source.id, salesOrderNo: source.orderNo, ownerUserId: source.issuerUserId,
           currencyCode: 'CNY', submittedByUserId: context.actorUserId, idempotencyKeyHash, requestFingerprintHash,
         } })
+        if (paymentRecipients) await this.recipients.createForRequest(tx, context.actorUserId, row.id, paymentRecipients)
         await this.audit.record(tx, { eventType: 'PACKAGING_COST_SUBMITTED', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PACKAGING_COST_REQUEST', targetId: row.id, metadata: { shipmentId: row.shipmentId, amount: row.amount.toFixed(4), currencyCode: 'CNY' } })
         return row.id
       }, { timeout: 30_000 })
@@ -119,7 +124,8 @@ export class PackagingCostService {
   }
   async pay(context: PackagingCostContext, rawId: string, input: PackagingCostRequestPayDto) {
     const id = packagingCostUuid(rawId)
-    if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1 || Object.keys(input).some(key => key !== 'expectedVersion')) return packagingCostFailure('VALIDATION_FAILED', '付款确认版本无效')
+    const payment = normalizePackagingPayment(input)
+    const fingerprint = hash(JSON.stringify({ format: 'packaging-cost.pay.v2', ...payment }))
     try {
       await this.prisma.$transaction(async tx => {
         await applyTransactionTimeouts(tx)
@@ -128,8 +134,22 @@ export class PackagingCostService {
         const row = await tx.packagingCostRequest.findUnique({ where: { id } })
         if (!row) return packagingCostFailure('PACKAGING_COST_NOT_FOUND', '打木架提报不存在', 404)
         // 同一付款人对同一版本的网络重试可重放；其他付款人或不同版本不能覆盖已付款事实。
-        if (row.status === 'PAID' && row.paidByUserId === context.actorUserId && row.version === input.expectedVersion + 1) return
-        if (row.status !== 'PENDING_PAYMENT' || row.version !== input.expectedVersion) return stateChanged()
+        if (row.status === 'PAID' && row.paidByUserId === context.actorUserId && row.version === payment.expectedVersion + 1 && row.paymentFingerprintHash && Buffer.from(row.paymentFingerprintHash).equals(fingerprint)) return
+        if (row.status !== 'PENDING_PAYMENT' || row.version !== payment.expectedVersion) return stateChanged()
+        const recipient = await this.recipients.resolveForPayment(tx, row, payment)
+        await tx.$queryRaw(Prisma.sql`SELECT id FROM media_assets WHERE id = ${payment.voucher.mediaAssetId}::uuid FOR UPDATE`)
+        const voucher = await tx.mediaAsset.findFirst({ where: { id: payment.voucher.mediaAssetId, status: 'UPLOADING', createdByUserId: context.actorUserId, uploadExpiresAt: { gt: new Date() },
+          uploadPurpose: 'PACKAGING_PAYMENT_VOUCHER', packagingCostUploadId: id, mediaType: 'IMAGE', mimeType: { in: ['image/jpeg', 'image/png', 'image/webp'] }, sizeBytes: { gt: 0n, lte: 10485760n },
+          deletedAt: null, objectKey: { not: null }, checksumSha256: { not: null } } })
+        if (!voucher?.objectKey) return imageFailure()
+        try {
+          const stored = await this.delivery.stat(requireMediaObjectKeyNamespace(voucher.objectKey, 'assets'))
+          if (!stored || stored.sizeBytes !== voucher.sizeBytes) return imageFailure()
+        } catch (error) {
+          if (error instanceof ApiException) throw error
+          return packagingCostFailure('MEDIA_STORAGE_UNAVAILABLE', '付款截图存储暂时不可用', 503)
+        }
+        await this.media.activate(tx, voucher.id)
         const fundContext = { ...context, sourceCode: 'PACKAGING_COST', consumerCode: 'PACKAGING_COST.PAY' }
         const postingInput = {
           postingTypeCode: 'WOODEN_PACKING_COST', userId: row.ownerUserId, amount: row.amount.toFixed(2),
@@ -140,7 +160,7 @@ export class PackagingCostService {
         const preview = await this.funds.previewBusinessEventInTransaction(tx, fundContext, postingInput)
         const posting = await this.funds.postBusinessEventInTransaction(tx, fundContext, postingInput, preview)
         const [{ now }] = await tx.$queryRaw<[{ now: Date }]>(Prisma.sql`SELECT clock_timestamp() AS now`)
-        await tx.packagingCostRequest.update({ where: { id }, data: { status: 'PAID', paidByUserId: context.actorUserId, paidAt: now, version: { increment: 1 } } })
+        await tx.packagingCostRequest.update({ where: { id }, data: { paymentVoucherMediaAssetId: voucher.id, recipientQrMediaAssetId: recipient.qrMediaAssetId, recipientSnapshot: recipient.snapshot as unknown as Prisma.InputJsonObject, paymentRemark: payment.remark, paymentFingerprintHash: fingerprint, status: 'PAID', paidByUserId: context.actorUserId, paidAt: now, version: { increment: 1 } } })
         await this.audit.record(tx, { eventType: 'PACKAGING_COST_PAID', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PACKAGING_COST_REQUEST', targetId: id, metadata: { amount: row.amount.toFixed(4), currencyCode: 'CNY', fundPostingBatchId: posting.batchId } })
       }, { timeout: 30_000 })
     } catch (error) { return mapError(error) }
