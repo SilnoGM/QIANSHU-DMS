@@ -108,7 +108,7 @@ function createFakeClient(
         }
       }
 
-      if (normalizedSql.startsWith('DELETE FROM')) {
+      if (normalizedSql.includes('DELETE FROM')) {
         deleteCount += 1
         if (deleteCount === options.failDeleteAt) {
           throw new Error('delete failure with SQL parameter canary')
@@ -295,15 +295,15 @@ describe('cleanupAuthenticationData', () => {
     const sessionDelete = queriesContaining(
       fixture.observedQueries,
       '"auth_sessions"',
-    ).find(({ text }) => text.startsWith('DELETE FROM'))
+    ).find(({ text }) => text.includes('DELETE FROM'))
     const rateLimitDelete = queriesContaining(
       fixture.observedQueries,
       '"auth_rate_limits"',
-    ).find(({ text }) => text.startsWith('DELETE FROM'))
+    ).find(({ text }) => text.includes('DELETE FROM'))
     const auditDelete = queriesContaining(
       fixture.observedQueries,
       '"audit_events"',
-    ).find(({ text }) => text.startsWith('DELETE FROM'))
+    ).find(({ text }) => text.includes('DELETE FROM'))
 
     expect(sessionDelete?.text).toMatch(
       /LEAST\(\s*"idle_expires_at", "absolute_expires_at", COALESCE\("revoked_at", 'infinity'::timestamptz\)\s*\)/,

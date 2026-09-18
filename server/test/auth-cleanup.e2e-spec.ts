@@ -63,6 +63,7 @@ interface CleanupClientHooks {
   readonly beforeSessionDelete?: (invocation: number) => Promise<void>
   readonly observedDeleteCutoffs?: Date[]
   readonly observedStatementTimeouts?: string[]
+  readonly observedSessionDeleteCounts?: (number | null)[]
   readonly statementTimeoutOverride?: string
 }
 
@@ -111,7 +112,7 @@ class HookedCleanupClient implements AuthCleanupPgClient {
     }
 
     if (
-      normalizedSql.startsWith('DELETE FROM "auth_sessions"') &&
+      normalizedSql.includes('DELETE FROM "auth_sessions"') &&
       this.hooks.beforeSessionDelete
     ) {
       this.sessionDeleteInvocation += 1
@@ -119,8 +120,11 @@ class HookedCleanupClient implements AuthCleanupPgClient {
     }
 
     const result = await this.client.query<Row>(text, forwardedValues)
+    if (normalizedSql.includes('DELETE FROM "auth_sessions"')) {
+      this.hooks.observedSessionDeleteCounts?.push(result.rowCount)
+    }
 
-    if (normalizedSql.startsWith('DELETE FROM')) {
+    if (normalizedSql.includes('DELETE FROM')) {
       const cutoff = values[0]
       if (cutoff instanceof Date) {
         this.hooks.observedDeleteCutoffs?.push(cutoff)
@@ -544,13 +548,13 @@ describe('auth cleanup against isolated PostgreSQL', () => {
     ).resolves.toEqual([recentAuditId])
   })
 
-  it('commits full batches, releases the lock after failure and continues on retry', async () => {
+  it('commits bounded batches on sparse tables, releases the lock after failure and continues on retry', async () => {
     const userId = await createUser('batch-failure')
     const tokenSeed = randomUUID()
     const deleteInvocations: number[] = []
     const observedStatementTimeouts: string[] = []
-    await controlClient.query(
-      `
+    const observedSessionDeleteCounts: (number | null)[] = []
+    const expiredSessionsSql = `
         INSERT INTO auth_sessions (
           user_id,
           token_hash,
@@ -570,9 +574,14 @@ describe('auth cleanup against isolated PostgreSQL', () => {
           clock_timestamp() - INTERVAL '31 days',
           clock_timestamp() - INTERVAL '30 days 12 hours'
         FROM generate_series(1, $3::integer) AS "generated"("sequence")
-      `,
-      [userId, tokenSeed, AUTH_CLEANUP_BATCH_SIZE + 1],
-    )
+      `
+    const batchValues = [userId, tokenSeed, AUTH_CLEANUP_BATCH_SIZE + 1]
+    await controlClient.query(expiredSessionsSql, batchValues)
+    await controlClient.query('DELETE FROM auth_sessions WHERE user_id = $1', [userId])
+    // 保留已有页但重置存活行统计，稳定重现候选子查询被 Nested Loop Semi Join 重扫的计划。
+    // 只在隔离测试库中准备物理统计；生产 SQL 必须自行保证每批最多 500 条。
+    await controlClient.query('VACUUM (ANALYZE, TRUNCATE false) auth_sessions')
+    await controlClient.query(expiredSessionsSql, batchValues)
 
     const failure = await cleanupAuthenticationData({
       connectionString: databaseUrl,
@@ -589,10 +598,12 @@ describe('auth cleanup against isolated PostgreSQL', () => {
             return Promise.resolve()
           },
           observedStatementTimeouts,
+          observedSessionDeleteCounts,
           statementTimeoutOverride: BATCH_FAILURE_STATEMENT_TIMEOUT,
         }),
     }).catch((error: unknown) => error)
 
+    expect(observedSessionDeleteCounts).toEqual([AUTH_CLEANUP_BATCH_SIZE])
     expect(deleteInvocations).toEqual([1, 2])
     expect(observedStatementTimeouts).toEqual([
       BATCH_FAILURE_STATEMENT_TIMEOUT,
