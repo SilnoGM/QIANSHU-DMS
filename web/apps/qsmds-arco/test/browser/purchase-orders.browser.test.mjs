@@ -1,6 +1,8 @@
 /* eslint-disable test/no-import-node-test */
 import assert from 'node:assert/strict'
 import { Buffer } from 'node:buffer'
+import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import process from 'node:process'
 import test from 'node:test'
 
@@ -33,9 +35,12 @@ import {
   clickVisibleButton,
   collectRuntimeIssues,
   loginThroughRealHttp,
+  pressKey,
   readConfiguration,
 } from './regions.browser.helpers.mjs'
 
+const voucherFixtureBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+const customBankAccount = { paymentMethod: 'BANK_TRANSFER', recipientName: 'Browser 自定义收款人', bankName: 'Browser 银行', bankAccount: '6222000000000001' }
 const listRoute = '/qs-operations/purchase/purchase-orders'
 const pendingRoute = '/qs-operations/purchase/pending-purchase-orders'
 const supplierLabel = 'Browser 有效供应商'
@@ -367,8 +372,9 @@ async function expandFirstPaymentRecord(page) {
     const content = document.getElementById(trigger?.getAttribute('aria-controls') ?? '')
     return trigger?.getAttribute('aria-expanded') === 'true'
       && content?.getClientRects().length > 0
-      && content.innerText.includes('Browser 银行转账')
-      && content.innerText.includes('本次付款未关联凭证')
+      && content.innerText.includes('银行转账')
+      && !content.innerText.includes('本次付款未关联凭证')
+      && [...content.querySelectorAll('img')].some(image => image.complete && image.naturalWidth > 0)
   })()`)
 }
 
@@ -534,6 +540,108 @@ async function fillPurchaseStartCustomSupplier(page, value) {
     === ${JSON.stringify(value)}`)
 }
 
+/** 自定义采购必须提供本单收款方式，通过编辑器的公开开关和字段填写。 */
+async function fillCustomBankRecipient(page) {
+  const section = `(() => [...document.querySelectorAll('[role="dialog"] section')]
+    .find(candidate => candidate.getClientRects().length > 0
+      && candidate.querySelector('h3')?.textContent.trim() === '银行账户转账'))()`
+  await page.waitFor(`${section}?.querySelector('[role="switch"]')?.getAttribute('aria-checked') === 'false'`)
+  await page.evaluate(`${section}.querySelector('[role="switch"]').click()`)
+  await fillLabelledControl(page, '开户名称', customBankAccount.recipientName)
+  await fillLabelledControl(page, '银行名称', customBankAccount.bankName)
+  await fillLabelledControl(page, '银行账号', customBankAccount.bankAccount)
+}
+
+/** 已选择货件的仓库是必填项；全选后保留先前已选仓库，逐个补齐新增货件。 */
+async function selectShipmentWarehouses(page) {
+  const inputs = '[data-slot="shipment-destination-warehouse"] input[data-slot="combobox-input"]'
+  await page.waitFor(`document.querySelectorAll(${JSON.stringify(inputs)}).length > 0`)
+  const count = await page.evaluate(`document.querySelectorAll(${JSON.stringify(inputs)}).length`)
+  for (let index = 0; index < count; index++) {
+    const input = `document.querySelectorAll(${JSON.stringify(inputs)})[${index}]`
+    try {
+      await page.waitFor(`${input}?.getClientRects().length > 0 && !${input}.disabled && ${input}.getAttribute('aria-busy') !== 'true'`)
+      if (await page.evaluate(`${input}.value === 'Browser 验收仓库'`)) {
+        continue
+      }
+      await page.evaluate(`${input}.parentElement.querySelector('[data-slot="combobox-trigger"]').click()`)
+      // Teleport 离场动画期间旧选项仍有尺寸；只选择当前控件公开关联的 listbox。
+      const listbox = `document.getElementById(${input}.getAttribute('aria-controls'))`
+      await page.waitFor(`${input}.getAttribute('aria-expanded') === 'true' && ${listbox}?.getAttribute('data-state') === 'open'`)
+      const option = `([...${listbox}.querySelectorAll('[role="option"]')].find(candidate => candidate.getClientRects().length > 0 && candidate.textContent.trim() === 'Browser 验收仓库'))`
+      await page.waitFor(`${option} !== undefined && ${option}.getAttribute('aria-disabled') !== 'true'`)
+      await page.evaluate(`${option}.click()`)
+      await page.waitFor(`${input}.value === 'Browser 验收仓库' && ${input}.getAttribute('aria-expanded') === 'false'`)
+    }
+    catch (error) {
+      const diagnostic = await page.evaluate(`(() => ({
+        inputIndex: ${index},
+        inputs: [...document.querySelectorAll(${JSON.stringify(inputs)})].map((input, index) => ({
+          index, value: input.value, disabled: input.disabled,
+          expanded: input.getAttribute('aria-expanded'), controls: input.getAttribute('aria-controls'),
+          busy: input.getAttribute('aria-busy'), invalid: input.getAttribute('aria-invalid'),
+        })),
+        visibleOptions: [...document.querySelectorAll('[role="option"]')]
+          .filter(option => option.getClientRects().length > 0)
+          .map(option => ({
+            text: option.textContent.trim(), selected: option.getAttribute('aria-selected'),
+            state: option.getAttribute('data-state'), disabled: option.getAttribute('aria-disabled'),
+            listboxId: option.closest('[role="listbox"]')?.id,
+            listboxState: option.closest('[role="listbox"]')?.getAttribute('data-state'),
+          })),
+      }))()`)
+      throw new Error(`Shipment warehouse selection failed: ${JSON.stringify(diagnostic)}`, { cause: error })
+    }
+  }
+  assert.deepEqual(
+    await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(inputs)})].map(input => input.value)`),
+    Array.from({ length: count }).fill('Browser 验收仓库'),
+  )
+}
+
+/** 实际付款走独立页面与正式上传接口，每阶段都归档一张截图并验证已付状态。 */
+async function payPurchaseInstallments(page, configuration, order, installments, voucherFixture) {
+  await page.navigate(appRouteUrl(configuration.baseUrl, `/qs-finance/realtime-payments/purchase-payments/orders/${encodeURIComponent(order.id)}`))
+  await waitForAfterAuthentication(page, `document.querySelector('section[aria-label="采购单信息"]')?.textContent.includes(${JSON.stringify(order.orderNo)})`)
+  for (const installment of installments) {
+    await clickVisibleAriaButton(page, `选择${installment.label}`)
+    const payment = `document.querySelector('section[aria-label="付款信息"]')`
+    const confirm = `([...${payment}.querySelectorAll('button')].find(button => button.textContent.trim() === '确认已付款'))`
+    await page.waitFor(`${payment}?.textContent.includes('本次付款金额') && ${payment}.textContent.includes('${installment.label}') && ${confirm}?.disabled === true`)
+    const recipientTrigger = `document.querySelector('section[aria-label="收款资料"] [data-slot="select-trigger"]')`
+    // Reka Select 的 DOM click 只聚焦，公开键盘契约由 Enter 打开并选中。
+    await page.bringToFront()
+    await page.waitFor(`document.hasFocus() && ${recipientTrigger}?.getClientRects().length > 0 && !${recipientTrigger}.disabled`)
+    await page.evaluate(`${recipientTrigger}.focus({ preventScroll: true })`)
+    await pressKey(page, 'Enter')
+    const option = `([...document.querySelectorAll('[role="option"]')].find(candidate => candidate.getClientRects().length > 0 && candidate.textContent.trim() === '银行账户转账'))`
+    await page.waitFor(`${recipientTrigger}?.getAttribute('aria-expanded') === 'true' && ${option} !== undefined`)
+    await page.evaluate(`${option}.focus({ preventScroll: true })`)
+    await pressKey(page, 'Enter')
+    await page.waitFor(`${recipientTrigger}?.getAttribute('aria-expanded') === 'false'`)
+    await page.waitFor(`document.querySelector('section[aria-label="收款资料"]')?.textContent.includes('Browser 收款人')
+      && document.querySelector('section[aria-label="收款资料"]')?.textContent.includes('6222000000000000')`)
+    assert.equal(await page.evaluate(`${confirm}.disabled`), true, '选择账户后仍须上传付款截图才能确认')
+    await page.setFiles('section[aria-label="付款信息"] input[type="file"]', [voucherFixture])
+    await page.waitFor(`${confirm}?.disabled === false`)
+    await clickVisibleButton(page, '确认已付款')
+    await page.waitFor(`${payment}?.textContent.includes('该笔款项已付清，无需重复付款。')
+      && ${payment}.querySelector('input[type="file"]') === null`)
+    const payable = await page.evaluate(apiExpression(`/api/purchase-order-payables/orders/${encodeURIComponent(order.id)}`))
+    assert.equal(payable.status, 200)
+    const item = payable.body.items.find(item => item.paymentType === installment.type)
+    assert.equal(item.status, 'PAID')
+    assert.equal(item.paidAmount, installment.amount)
+    assert.equal(item.remainingAmount, '0.00')
+    assert.equal(item.paymentReceipt.recipient.paymentMethod, 'BANK_TRANSFER')
+    assert.ok(item.paymentReceipt.voucher.id, '确认付款必须关联已归档的凭证')
+  }
+  await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
+  await waitForPurchaseList(page, order.orderNo)
+  await clickVisibleAriaButton(page, `${order.orderNo}：查看详情`)
+  await page.waitFor(`document.querySelector('[data-testid="purchase-order-detail-drawer"]')?.getClientRects().length > 0`)
+}
+
 /** 供应商和付款方式均通过公开 placeholder、trigger 与 option 契约选择。 */
 async function selectVisibleComboboxOption(page, placeholder, optionText) {
   const serializedPlaceholder = JSON.stringify(placeholder)
@@ -691,10 +799,16 @@ async function waitForStatusToolbarCounts(page, ariaLabel, expectedCounts) {
   })()`)
 }
 
-test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详情付款和响应式主题', {
+test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独立付款和响应式主题', {
   timeout: 600_000,
 }, async (t) => {
   const configuration = readConfiguration(process.env)
+  const fixtureDirectory = process.env.QIANSHU_BROWSER_AUTH_FIXTURE_DIRECTORY
+  assert.equal(typeof fixtureDirectory, 'string')
+  assert.equal(path.isAbsolute(fixtureDirectory), true)
+  await mkdir(fixtureDirectory, { mode: 0o700, recursive: true })
+  const voucherFixture = path.join(fixtureDirectory, 'browser-purchase-payment-voucher.png')
+  await writeFile(voucherFixture, Buffer.from(voucherFixtureBase64, 'base64'), { mode: 0o600 })
   const browser = await launchChrome({
     executable: configuration.chromeExecutable,
     userDataDirectory: `${configuration.profileDirectory}-purchase-orders`,
@@ -1240,11 +1354,11 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
     ))
     assert.match(catalogLinkedOrder?.orderNo ?? '', /^PO-BRW-\d{8}$/u)
     assert.equal(catalogLinkedOrder?.createdBy?.displayName, 'Browser Auth Admin')
-    assert.equal(catalogLinkedOrder?.purchaseTotalAmount, '160.0000')
+    assert.equal(catalogLinkedOrder?.purchaseTotalAmount, '160.00')
     assert.equal(catalogLinkedOrder?.orderStatus, 'PENDING_REVIEW')
     assert.equal(catalogLinkedOrder?.fulfillmentStatus, 'ORDERED')
-    assert.equal(catalogLinkedOrder?.depositDueAmount, '20.0000')
-    assert.equal(catalogLinkedOrder?.balanceDueAmount, '140.0000')
+    assert.equal(catalogLinkedOrder?.depositDueAmount, '20.00')
+    assert.equal(catalogLinkedOrder?.balanceDueAmount, '140.00')
     assert.equal(catalogLinkedOrder?.shippingMarkText, null)
     assert.deepEqual(catalogLinkedOrder?.shippingMarks, [], '提交后只保存货件，待审核才生成唛头')
     assert.deepEqual(await readPurchaseShippingMarkLedger(page), initialShippingMarkLedger, '创建拆分货件不消耗任何唛头流水')
@@ -1262,7 +1376,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
       [{ lineNumber: 1, quantity: 1 }],
       [{ lineNumber: 1, quantity: 1 }],
     ])
-    assert.equal(detail.body.amounts.lineSubtotalAmount, '160.0000', '拆件不得重复计订单金额')
+    assert.equal(detail.body.amounts.lineSubtotalAmount, '160.00', '拆件不得重复计订单金额')
     await clickVisibleAriaButton(page, `${catalogLinkedOrder.orderNo}：查看详情`)
     await assertPurchasePartDetail(page, detail.body, true)
     await clickVisibleAriaButton(page, '关闭抽屉')
@@ -1307,6 +1421,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
       'input[data-slot="combobox-input"][placeholder="选择供应商"]',
     )`)
     await fillPurchaseStartCustomSupplier(page, customSupplierName)
+    await fillCustomBankRecipient(page)
 
     // 与创建页共用同一窄屏验收基线：弹窗不溢出，双面板收敛为单列，
     // Footer 操作仍保持至少 44px 的可触达高度。
@@ -1404,7 +1519,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
     assert.equal(linkedOrder?.supplier?.source, 'CUSTOM_TEXT')
     assert.equal(linkedOrder?.supplier?.value, null)
     assert.equal(linkedOrder?.supplier?.label, customSupplierName)
-    assert.equal(linkedOrder?.purchaseTotalAmount, '30.0000')
+    assert.equal(linkedOrder?.purchaseTotalAmount, '30.00')
     assert.equal(linkedOrder?.orderStatus, 'PENDING_REVIEW')
     assert.equal(linkedOrder?.fulfillmentStatus, 'ORDERED')
     assert.equal(linkedOrder?.shippingMarkText, null)
@@ -1578,9 +1693,9 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
     assert.equal(order?.purchaseType, 'STOCK')
     assert.equal(order?.orderStatus, 'PENDING_REVIEW')
     assert.equal(order?.fulfillmentStatus, 'ORDERED')
-    assert.equal(order?.purchaseTotalAmount, '80.0000')
-    assert.equal(order?.depositDueAmount, '20.0000')
-    assert.equal(order?.balanceDueAmount, '60.0000')
+    assert.equal(order?.purchaseTotalAmount, '80.00')
+    assert.equal(order?.depositDueAmount, '20.00')
+    assert.equal(order?.balanceDueAmount, '60.00')
     assert.equal(order?.shippingMarkText, null)
     assert.deepEqual(order?.shippingMarks, [])
     assert.deepEqual(await readPurchaseShippingMarkLedger(page), initialShippingMarkLedger, '未知结果原键恢复仍不申请唛头')
@@ -1591,6 +1706,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
     await waitForVisibleDialog(page, '选择采购产品类型')
     await selectPurchaseStartMode(page, 'CUSTOM')
     await fillPurchaseStartCustomSupplier(page, customSupplierName)
+    await fillCustomBankRecipient(page)
     await clickDialogButton(page, '选择采购产品类型', '开始采购')
     await waitForAfterAuthentication(page, `(() => {
       const parameters = new URLSearchParams(location.hash.split('?')[1] ?? '')
@@ -1900,27 +2016,24 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
       '[data-testid="purchase-order-detail-drawer"] section[aria-label="订单变更记录"]',
     )?.getClientRects().length > 0`)
     await clickOrderDrawerTab(page, 'purchase-order-detail-drawer', '订单详情信息')
-    // 全部采购列表保留查看；付款从已打开的详情抽屉继续办理。
-    await clickVisibleButton(page, '记录付款')
-    await waitForVisibleDialog(page, '记录实际付款')
-    await fillLabelledControl(page, '付款金额', '80')
-    await selectVisibleComboboxOption(page, '选择付款方式', 'Browser 银行转账')
-    await clickDialogButton(page, '记录实际付款', '确认付款')
-    await waitForNoVisibleDialog(page, '记录实际付款')
-    await page.waitFor(`(() => {
-      const drawer = [...document.querySelectorAll('[role="dialog"]')]
-        .find(candidate => candidate.getClientRects().length > 0
-          && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
-      return drawer?.textContent?.includes('已付清')
-    })()`)
+    // 全部采购详情只读；财务分别结清定金和尾款，每笔必须上传截图。
+    assert.equal(await page.evaluate(`[...document.querySelectorAll('[data-testid="purchase-order-detail-drawer"] button')].some(button => button.textContent.trim() === '记录付款')`), false)
+    await clickVisibleAriaButton(page, '关闭抽屉')
+    await waitForNoVisibleDialog(page, order.orderNo)
+    await payPurchaseInstallments(page, configuration, order, [
+      { type: 'DEPOSIT', label: '定金', amount: '20.00' },
+      { type: 'BALANCE', label: '尾款', amount: '60.00' },
+    ], voucherFixture)
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-detail-drawer"]')?.textContent.includes('已付清')`)
     await expandFirstPaymentRecord(page)
     const paidDetail = await page.evaluate(apiExpression(
       `/api/purchase-orders/${encodeURIComponent(order.id)}`,
     ))
     assert.equal(paidDetail.status, 200)
     assert.equal(paidDetail.body?.paymentStatus, 'PAID')
-    assert.equal(paidDetail.body?.payments?.length, 1)
-    assert.equal(paidDetail.body?.payments?.[0]?.amount, '80.0000')
+    assert.equal(paidDetail.body?.payments?.length, 2)
+    assert.deepEqual(paidDetail.body.payments.map(payment => payment.amount).sort(), ['20.00', '60.00'])
+    assert.equal(paidDetail.body.documents.filter(document => document.documentType === 'PAYMENT_VOUCHER' && document.detachedAt === null).length, 2)
     await clickOrderDrawerTab(page, 'purchase-order-detail-drawer', '订单变更记录')
     await page.waitFor(`(() => {
       const history = document.querySelector(
@@ -1961,6 +2074,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
         && dialog.textContent.includes('待发货')
         && !dialog.textContent.includes('系统将顺序推进采购履约状态')
     })()`)
+    await selectShipmentWarehouses(page)
     await fillLabelledControl(page, '发货说明（可选）', 'Browser 独立备货采购发货')
     // 审核后已经备货中，直接注入公开冲突契约，验证重新加载和二次确认边界。
     await page.enableRequestInterception([{ urlPattern: '*/api/purchase-orders/*/factory-shipments', requestStage: 'Request' }])
@@ -1992,6 +2106,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
         && !dialog.textContent.includes('订单状态已变化，请刷新后重新确认发货范围')
         && !dialog.textContent.includes('系统将顺序推进采购履约状态')
     })()`)
+    await selectShipmentWarehouses(page)
     await fillLabelledControl(page, '发货说明（可选）', 'Browser 冲突刷新后发货')
     await clickDialogButton(page, '确认货件发货', '确认发货（1 件）')
     await waitForNoVisibleDialog(page, '确认货件发货')
@@ -2069,6 +2184,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
         && !section.querySelector('input[type="checkbox"]').checked
     })()`)
     await page.evaluate(`(() => { ${linkedSection}.querySelector('input[type="checkbox"]').click(); return true })()`)
+    await selectShipmentWarehouses(page)
     await page.waitFor(`(() => {
       const section = ${linkedSection}
       const dialog = section.closest('[role="dialog"]')
@@ -2077,6 +2193,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
         && [...dialog.querySelectorAll('button')].some(button => !button.disabled && button.textContent.includes('确认发货（1 件）'))
     })()`)
     await clickDialogButton(page, '确认工厂发货范围', '全选未发货')
+    await selectShipmentWarehouses(page)
     await page.waitFor(`(() => {
       const dialog = ${linkedSection}?.closest('[role="dialog"]')
       const inputs = [...dialog.querySelectorAll('input[type="checkbox"]')]
@@ -2140,18 +2257,12 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
         && catalogImage.complete
         && catalogImage.naturalWidth > 0
     })()`)
-    await clickVisibleButton(page, '记录付款')
-    await waitForVisibleDialog(page, '记录实际付款')
-    await fillLabelledControl(page, '付款金额', '5')
-    await selectVisibleComboboxOption(page, '选择付款方式', 'Browser 银行转账')
-    await clickDialogButton(page, '记录实际付款', '确认付款')
-    await waitForNoVisibleDialog(page, '记录实际付款')
-    await page.waitFor(`(() => {
-      const drawer = [...document.querySelectorAll('[role="dialog"]')]
-        .find(candidate => candidate.getClientRects().length > 0
-          && candidate.textContent?.includes(${JSON.stringify(historicalMixedActiveOrderNo)}))
-      return drawer?.textContent?.includes('部分付款')
-    })()`)
+    await clickVisibleAriaButton(page, '关闭抽屉')
+    await waitForNoVisibleDialog(page, historicalMixedActiveOrderNo)
+    await payPurchaseInstallments(page, configuration, historicalMixedActiveOrder, [
+      { type: 'DEPOSIT', label: '定金', amount: '10.00' },
+    ], voucherFixture)
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-detail-drawer"]')?.textContent.includes('部分付款')`)
     await expandFirstPaymentRecord(page)
     await clickVisibleAriaButton(page, '关闭抽屉')
     await waitForNoVisibleDialog(page, historicalMixedActiveOrderNo)
@@ -2171,6 +2282,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
     const invalidShipment = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(historicalMixedActiveOrder.id)}/factory-shipments`, 'POST', {
       expectedVersion: beforeInvalidShipment.body.version,
       partIds: ['ffffffff-ffff-4fff-8fff-ffffffffffff'],
+      destinationWarehouses: [{ partId: 'ffffffff-ffff-4fff-8fff-ffffffffffff', warehouseValue: 'BROWSER_WAREHOUSE' }],
       reason: 'Browser 无货件禁止发货',
     }))
     assert.equal(invalidShipment.status, 422)
@@ -2211,7 +2323,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
     assert.equal(activeAfter.body?.productMode, 'MIXED')
     assert.equal(activeAfter.body?.fulfillmentStatus, 'ORDERED')
     assert.equal(activeAfter.body?.paymentStatus, 'PARTIALLY_PAID')
-    assert.equal(activeAfter.body?.paidAmount, '5.0000')
+    assert.equal(activeAfter.body?.paidAmount, '10.00')
     assert.deepEqual(
       activeAfter.body?.lines?.map(line => line.lineType),
       ['CATALOG', 'CUSTOM'],
@@ -2237,6 +2349,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详
         headers: { 'Content-Type': 'application/json', 'X-Qianshu-CSRF': '1', 'Idempotency-Key': crypto.randomUUID() },
         body: JSON.stringify({
           purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: 'Browser 待审核取消供应商',
+          paymentAccounts: [${JSON.stringify(customBankAccount)}],
           orderDate: ${JSON.stringify(order.orderDate)}, expectedShippingMarkResolution: ${JSON.stringify(resolution.body.resolutionToken)},
           lines: [{ lineType: 'CUSTOM', name: 'Browser 待审核取消产品', referencePurchaseUnitPriceAmount: '1', actualPurchaseUnitPriceAmount: '1', quantity: 1 }],
           parts: [{ key: crypto.randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] }],
