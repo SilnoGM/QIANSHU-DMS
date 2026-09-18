@@ -136,7 +136,21 @@ const provisionBrowserShippingMarkFixtures = ${provisionBrowserShippingMarkFixtu
       [supplierType.rows[0].id],
     )
 
-    // 采购付款弹窗消费真实字典 Catalog；该类型与条目只写入一次性 Browser 库。
+    // 发货与真实入仓验收共用有效仓库；仍先建条目再启用字典，不绕过数据库守卫。
+    const warehouseType = await client.query(
+      'INSERT INTO dictionary_types (code, name, enabled, sort_order) VALUES ($1, $2, false, 31) RETURNING id',
+      ['mainland.warehouse', '大陆仓库'],
+    )
+    await client.query(
+      'INSERT INTO dictionary_items (dictionary_type_id, value, label, tone, enabled, sort_order) VALUES ($1, $2, $3, $4, true, 10)',
+      [warehouseType.rows[0].id, 'BROWSER_WAREHOUSE', 'Browser 验收仓库', 'PRIMARY'],
+    )
+    await client.query(
+      'UPDATE dictionary_types SET enabled = true, updated_at = clock_timestamp() WHERE id = $1',
+      [warehouseType.rows[0].id],
+    )
+
+    // 采购付款消费真实字典 Catalog；该类型与条目只写入一次性 Browser 库。
     const paymentMethodType = await client.query(
       [
         'INSERT INTO dictionary_types (code, name, enabled, sort_order)',

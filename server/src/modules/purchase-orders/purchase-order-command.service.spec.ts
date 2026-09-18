@@ -1,3 +1,4 @@
+import type { PaymentRecipientService } from '../payment-recipients/payment-recipient.service'
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
@@ -6,6 +7,7 @@ import { NumberingGenerationError } from '../numbering/numbering.errors'
 import type { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import { normalizePurchaseOrderCreateCommand } from './purchase-order-command.normalizer'
 import { PurchaseOrderCommandService } from './purchase-order-command.service'
+import type { PurchaseShipmentNumberingService } from './shipments/purchase-shipment-numbering.service'
 import type {
   PurchaseOrderCreateDependencyService,
 } from './purchase-order-create-dependency.service'
@@ -77,6 +79,7 @@ function setup() {
       idempotentReplay: false,
     }),
   }
+  const shipmentNumbers = { issue: jest.fn().mockResolvedValue([{ shipmentNo: 'SHIP/0001', numberingIssuanceId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' }]) }
   const audit = {
     record: jest.fn<Promise<unknown>, [unknown, unknown]>().mockResolvedValue({}),
   }
@@ -92,10 +95,10 @@ function setup() {
           productNameSnapshot: '销售快照产品',
           productAttributesSnapshot: [],
           descriptionSnapshot: null,
-          referencePurchaseUnitPriceAmount: '12.3456',
-          actualPurchaseUnitPriceAmount: '10.0000',
+          referencePurchaseUnitPriceAmount: '12.35',
+          actualPurchaseUnitPriceAmount: '10.00',
           quantity: 2,
-          lineTotalAmount: '20.0000',
+          lineTotalAmount: '20.00',
         }],
       }),
   }
@@ -111,6 +114,8 @@ function setup() {
     audit as unknown as AuditService,
     dependencies as unknown as PurchaseOrderCreateDependencyService,
     resolver as unknown as PurchaseShippingMarkResolverService,
+    shipmentNumbers as unknown as PurchaseShipmentNumberingService,
+    { createForOrder: jest.fn().mockResolvedValue(undefined) } as unknown as PaymentRecipientService,
     { businessToday: () => '2026-08-27' },
   )
   return {
@@ -119,6 +124,7 @@ function setup() {
     numbering,
     prisma,
     resolver,
+    shipmentNumbers,
     service,
     transaction,
   }
@@ -126,6 +132,15 @@ function setup() {
 
 describe('PurchaseOrderCommandService', () => {
   const context = { actorUserId: ACTOR_ID, requestId: 'mark-create', idempotencyKey: IDEMPOTENCY_KEY }
+
+  it('issues shipment numbers in the business transaction and aborts creation when numbering is unavailable', async () => {
+    const fixture = setup()
+    fixture.shipmentNumbers.issue.mockRejectedValue(new ApiException(409, 'PURCHASE_SHIPMENT_NUMBERING_UNAVAILABLE', 'Unavailable'))
+    await expect(fixture.service.create(context, input())).rejects.toMatchObject({ code: 'PURCHASE_SHIPMENT_NUMBERING_UNAVAILABLE' })
+    expect(fixture.shipmentNumbers.issue).toHaveBeenCalledWith(fixture.transaction, [expect.objectContaining({ purchaseOrderId: ORDER_ID, key: ACTOR_ID })])
+    expect(fixture.transaction.purchaseOrderPart.createMany).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+  })
 
   it.each([
     ['40001', 409, 'PURCHASE_ORDER_STATE_CHANGED'],
@@ -144,15 +159,16 @@ describe('PurchaseOrderCommandService', () => {
     expect(fixture.numbering.generateScopedInTransaction).not.toHaveBeenCalled()
   })
 
-  it('creates v5 with sealed allocation inputs and null marks without consuming a shipping issuance', async () => {
+  it('creates v6 with sealed allocation inputs and null marks without consuming a shipping issuance', async () => {
     const fixture = setup()
     await fixture.service.create(context, input())
     expect(fixture.numbering.generateScopedInTransaction).not.toHaveBeenCalled()
     expect(fixture.transaction.purchaseOrder.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ createRequestFingerprintVersion: 'purchase-order.create.v5', shippingMarkText: null, shippingMarkIssuanceId: null }) as unknown,
+      data: expect.objectContaining({ createRequestFingerprintVersion: 'purchase-order.create.v7', shippingMarkText: null, shippingMarkIssuanceId: null }) as unknown,
     }))
     expect(fixture.transaction.purchaseOrderPart.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({
       purchaseOrderId: ORDER_ID, key: ACTOR_ID, partNumber: 1, status: 'PENDING_REVIEW',
+      shipmentNo: 'SHIP/0001', numberingIssuanceId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
       shippingMarkText: null, shippingMarkIssuanceId: null, shippingMarkKeyHash: null,
     })] })
   })
@@ -257,10 +273,10 @@ describe('PurchaseOrderCommandService', () => {
         currencyCode: 'CNY',
       shippingMarkText: null,
       shippingMarkIssuanceId: null,
-        lineSubtotalAmount: '20.0000',
-        purchaseTotalAmount: '20.0000',
-        depositDueAmount: '5.0000',
-        balanceDueAmount: '15.0000',
+        lineSubtotalAmount: '20.00',
+        purchaseTotalAmount: '20.00',
+        depositDueAmount: '5.00',
+        balanceDueAmount: '15.00',
         orderStatus: 'PENDING_REVIEW',
         fulfillmentStatus: 'ORDERED',
         paymentStatus: 'UNPAID',
@@ -272,8 +288,8 @@ describe('PurchaseOrderCommandService', () => {
         purchaseOrderId: ORDER_ID,
         productNoSnapshot: 'P-001',
         productNameSnapshot: '销售快照产品',
-        referencePurchaseUnitPriceAmount: '12.3456',
-        actualPurchaseUnitPriceAmount: '10.0000',
+        referencePurchaseUnitPriceAmount: '12.35',
+        actualPurchaseUnitPriceAmount: '10.00',
       })],
     })
     const auditInput = fixture.audit.record.mock.calls[0]?.[1]
@@ -303,10 +319,10 @@ describe('PurchaseOrderCommandService', () => {
       productNameSnapshot: '赠品包装',
       productAttributesSnapshot: [],
       descriptionSnapshot: null,
-      referencePurchaseUnitPriceAmount: '0.0000',
-      actualPurchaseUnitPriceAmount: '0.0000',
+      referencePurchaseUnitPriceAmount: '0.00',
+      actualPurchaseUnitPriceAmount: '0.00',
       quantity: 1,
-      lineTotalAmount: '0.0000',
+      lineTotalAmount: '0.00',
     }] })
     await fixture.service.create({
       actorUserId: ACTOR_ID,
@@ -316,6 +332,7 @@ describe('PurchaseOrderCommandService', () => {
       parts: [{ key: ACTOR_ID, items: [{ lineNumber: 1, quantity: 1 }] }],
       purchaseType: 'STOCK',
       productMode: 'CUSTOM',
+      paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: 'Supplier', bankName: 'Bank', bankAccount: '123' }],
       customSupplierName: '礼品供应商',
       orderDate: '2026-08-27',
       expectedShippingMarkResolution: 'a'.repeat(64),

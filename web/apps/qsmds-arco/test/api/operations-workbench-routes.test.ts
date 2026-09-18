@@ -5,6 +5,26 @@ import test from 'node:test'
 
 import operationsWorkbenchRoutes from '../../src/router/modules/operations.workbench'
 
+test('仓储运输提供到仓业务页及两个后续空白页面', () => {
+  const warehouseRoute = operationsWorkbenchRoutes.find(route => route.name === 'qsOperationsWarehouseTransport')
+  assert.equal(warehouseRoute?.path, '/qs-operations/warehouse-transport')
+  assert.equal(warehouseRoute?.meta?.title, '仓储运输')
+  assert.equal(typeof warehouseRoute?.component, 'function')
+  assert.deepEqual(warehouseRoute?.redirect, { name: 'qsOperationsWarehouseArrivals' })
+  assert.deepEqual(warehouseRoute?.children?.map(route => ({ name: route.name, path: route.path, title: route.meta?.title })), [
+    { name: 'qsOperationsWarehouseArrivals', path: 'warehouse-arrivals', title: '到仓货件' },
+    { name: 'qsOperationsOceanContainers', path: 'ocean-containers', title: '海运柜次' },
+    { name: 'qsOperationsOverseasStorage', path: 'overseas-storage', title: '海外寄仓' },
+  ])
+  const arrivals = warehouseRoute?.children?.[0]
+  assert.match(String(arrivals?.component), /operations\/warehouse-arrivals\/index\.vue/u)
+  assert.equal(arrivals?.meta?.auth, 'purchase-orders:read')
+  for (const route of warehouseRoute?.children?.slice(1) ?? []) {
+    assert.match(String(route.component), /workbenches\/placeholder\.vue/u)
+    assert.equal(route.meta?.auth, undefined)
+  }
+})
+
 test('销售订单迁移到销售业务分组，旧路由不再保留', () => {
   const salesRoute = operationsWorkbenchRoutes.find(
     route => route.name === 'qsOperationsSales',

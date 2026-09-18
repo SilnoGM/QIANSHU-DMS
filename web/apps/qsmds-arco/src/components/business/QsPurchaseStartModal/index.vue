@@ -6,13 +6,17 @@ import type {
   PurchaseStartPurchaseType,
   PurchaseStartSelection,
 } from './types'
+import type { PaymentRecipientAccountInputDto } from '@/api/modules/payment-recipients'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsPaymentRecipientEditor from '@/components/business/QsPaymentRecipientEditor/index.vue'
+import { validatePaymentRecipientAccounts } from '@/components/business/QsPaymentRecipientEditor/logic'
 import {
   createPurchaseStartSelection,
   resetPurchaseStartSupplierDraft,
   validatePurchaseStartDraft,
 } from './logic'
+import { savePurchaseRecipientDraft } from './recipient-draft'
 
 defineOptions({ name: 'QsPurchaseStartModal' })
 
@@ -37,7 +41,12 @@ const emit = defineEmits<{
   'validationError': [message: string]
 }>()
 
+const { t } = useI18n()
+const account = useAppAccountStore()
+const paymentAccounts = ref<PaymentRecipientAccountInputDto[]>([])
+const uploading = ref(false)
 const productModeDraft = ref<PurchaseStartProductMode | null>(null)
+const recipientError = computed(() => productModeDraft.value === 'CUSTOM' ? validatePaymentRecipientAccounts(paymentAccounts.value, 1) : null)
 const supplierValueDraft = ref<string | null>(null)
 const customSupplierNameDraft = ref('')
 const customSupplierTouched = ref(false)
@@ -49,9 +58,10 @@ const draftValidation = computed(() => validatePurchaseStartDraft({
   supplierValue: supplierValueDraft.value,
   customSupplierName: customSupplierNameDraft.value,
 }))
-const submissionPending = computed(() => props.submitting || validationPending.value)
+const submissionPending = computed(() => props.submitting || validationPending.value || uploading.value)
 const canConfirm = computed(() => (
   draftValidation.value.valid
+  && recipientError.value === null
   && !props.disabled
   && !submissionPending.value
 ))
@@ -74,6 +84,7 @@ function resetSupplierDraft(): void {
   supplierValueDraft.value = reset.supplierValue
   customSupplierNameDraft.value = reset.customSupplierName
   customSupplierTouched.value = false
+  paymentAccounts.value = []
 }
 
 function resetDraft(): void {
@@ -146,9 +157,12 @@ async function confirm(): Promise<void> {
     if (controller.signal.aborted || validationController.value !== controller) {
       return
     }
+    const paymentDraftKey = selection.productMode === 'CUSTOM'
+      ? savePurchaseRecipientDraft(`${account.userId}:${account.authContext?.session.createdAt ?? ''}`, paymentAccounts.value)
+      : undefined
     validationController.value = null
     validationPending.value = false
-    emit('confirm', selection)
+    emit('confirm', { ...selection, paymentDraftKey })
     resetDraft()
     emit('update:modelValue', false)
   }
@@ -181,6 +195,7 @@ watch(() => props.presetSalesOrder?.id, () => {
   abortValidation()
 })
 
+watch(() => account.authEpoch, resetDraft)
 onBeforeUnmount(abortValidation)
 </script>
 
@@ -220,140 +235,16 @@ onBeforeUnmount(abortValidation)
         <legend class="qs-type-body-medium font-semibold mb-3">
           第一步：选择采购产品类型
         </legend>
-        <div class="gap-4 grid grid-cols-1 sm:grid-cols-2" role="radiogroup" aria-label="采购产品类型">
-          <label
-            class="min-w-0 cursor-pointer relative"
-            :class="(disabled || submissionPending) && 'cursor-not-allowed'"
-          >
-            <input
-              type="radio"
-              name="purchase-start-product-mode"
-              value="CATALOG"
-              :checked="productModeDraft === 'CATALOG'"
-              class="peer sr-only"
-              @change="selectProductMode('CATALOG')"
-            >
-            <span
-              data-testid="purchase-start-product-mode-card"
-              data-product-mode="CATALOG"
-              class="p-5 text-start border rounded-xl bg-background flex flex-col min-h-64 transition-[border-color,background-color,box-shadow] duration-200 ease-out relative overflow-hidden sm:p-6 peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background"
-              :class="disabled || submissionPending
-                ? 'border-border bg-muted/30 opacity-60'
-                : productModeDraft === 'CATALOG'
-                  ? 'border-primary bg-primary/[0.035] shadow-md ring-1 ring-primary/20'
-                  : 'border-border shadow-sm hover:border-primary/40 hover:bg-muted/20 hover:shadow-md'"
-            >
-              <span class="flex gap-4 min-w-0 items-start relative">
-                <span
-                  data-testid="purchase-start-product-mode-emblem"
-                  class="text-emerald-700 rounded-xl bg-emerald-50 flex shrink-0 size-16 ring-2 ring-emerald-200 shadow-sm items-center justify-center dark:text-emerald-300 dark:bg-emerald-950/60 dark:ring-emerald-700/50"
-                  aria-hidden="true"
-                >
-                  <FaIcon name="i-lucide:boxes" class="size-8" />
-                </span>
-                <span class="pt-0.5 flex-1 min-w-0">
-                  <strong class="text-lg leading-7 font-semibold block">产品库产品采购</strong>
-                  <span class="text-xs text-emerald-700 font-medium mt-1.5 px-2 py-0.5 border border-emerald-200 rounded-md bg-emerald-50 inline-flex items-center dark:text-emerald-300 dark:border-emerald-700/50 dark:bg-emerald-950/60">
-                    已建档产品
-                  </span>
-                </span>
-                <FaIcon
-                  v-if="productModeDraft === 'CATALOG'"
-                  name="i-lucide:circle-check-big"
-                  class="text-primary shrink-0 size-7"
-                  aria-hidden="true"
-                />
+        <div class="gap-3 grid grid-cols-1 sm:grid-cols-2" role="radiogroup" aria-label="采购产品类型">
+          <label v-for="mode in (['CATALOG', 'CUSTOM'] as const)" :key="mode" class="cursor-pointer relative">
+            <input type="radio" name="purchase-start-product-mode" :value="mode" :checked="productModeDraft === mode" class="peer sr-only" @change="selectProductMode(mode)">
+            <span data-testid="purchase-start-product-mode-card" :data-product-mode="mode" class="p-4 border rounded-lg flex gap-3 items-center peer-focus-visible:ring-2 peer-focus-visible:ring-primary" :class="productModeDraft === mode ? 'border-primary bg-primary/5' : 'border-border'">
+              <FaIcon :name="mode === 'CATALOG' ? 'i-lucide:boxes' : 'i-lucide:package-plus'" class="text-primary shrink-0 size-6" aria-hidden="true" />
+              <span class="flex-1 min-w-0">
+                <strong class="qs-type-body-medium block">{{ mode === 'CATALOG' ? '产品库产品采购' : '自定义产品采购' }}</strong>
+                <span class="qs-type-meta text-muted-foreground mt-1 block">{{ mode === 'CATALOG' ? '选择供应商的已建档产品' : '填写供应商和本单收款资料' }}</span>
               </span>
-
-              <span class="mt-6 pt-5 border-t border-dashed flex flex-1 flex-col min-w-0 relative">
-                <span class="flex flex-wrap gap-x-3 gap-y-1 min-w-0 items-baseline relative z-10">
-                  <strong class="text-3xl leading-none tracking-wide font-semibold">产品库</strong>
-                  <span class="text-sm text-muted-foreground font-mono">CATALOG</span>
-                </span>
-                <span class="qs-type-meta text-muted-foreground mt-3 max-w-[32rem] relative z-10">
-                  采购已建档产品，并沿用产品档案中的采购成本。
-                </span>
-                <span
-                  class="text-sm font-medium mt-auto pt-6 flex gap-2 items-center relative z-10"
-                  :class="productModeDraft === 'CATALOG' ? 'text-primary' : 'text-muted-foreground'"
-                >
-                  <FaIcon name="i-lucide:mouse-pointer-click" class="size-4" aria-hidden="true" />
-                  {{ productModeDraft === 'CATALOG' ? '已选中' : '点击选择' }}
-                </span>
-                <FaIcon
-                  name="i-lucide:boxes"
-                  class="text-emerald-500/10 size-28 absolute dark:text-emerald-400/10 -bottom-8 -right-5"
-                  aria-hidden="true"
-                />
-              </span>
-            </span>
-          </label>
-
-          <label
-            class="min-w-0 cursor-pointer relative"
-            :class="(disabled || submissionPending) && 'cursor-not-allowed'"
-          >
-            <input
-              type="radio"
-              name="purchase-start-product-mode"
-              value="CUSTOM"
-              :checked="productModeDraft === 'CUSTOM'"
-              class="peer sr-only"
-              @change="selectProductMode('CUSTOM')"
-            >
-            <span
-              data-testid="purchase-start-product-mode-card"
-              data-product-mode="CUSTOM"
-              class="p-5 text-start border rounded-xl bg-background flex flex-col min-h-64 transition-[border-color,background-color,box-shadow] duration-200 ease-out relative overflow-hidden sm:p-6 peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background"
-              :class="disabled || submissionPending
-                ? 'border-border bg-muted/30 opacity-60'
-                : productModeDraft === 'CUSTOM'
-                  ? 'border-primary bg-primary/[0.035] shadow-md ring-1 ring-primary/20'
-                  : 'border-border shadow-sm hover:border-primary/40 hover:bg-muted/20 hover:shadow-md'"
-            >
-              <span class="flex gap-4 min-w-0 items-start relative">
-                <span
-                  data-testid="purchase-start-product-mode-emblem"
-                  class="text-amber-700 rounded-xl bg-amber-50 flex shrink-0 size-16 ring-2 ring-amber-200 shadow-sm items-center justify-center dark:text-amber-300 dark:bg-amber-950/60 dark:ring-amber-700/50"
-                  aria-hidden="true"
-                >
-                  <FaIcon name="i-lucide:package-plus" class="size-8" />
-                </span>
-                <span class="pt-0.5 flex-1 min-w-0">
-                  <strong class="text-lg leading-7 font-semibold block">自定义产品采购</strong>
-                  <span class="text-xs text-amber-700 font-medium mt-1.5 px-2 py-0.5 border border-amber-200 rounded-md bg-amber-50 inline-flex items-center dark:text-amber-300 dark:border-amber-700/50 dark:bg-amber-950/60">
-                    临时产品
-                  </span>
-                </span>
-                <FaIcon
-                  v-if="productModeDraft === 'CUSTOM'"
-                  name="i-lucide:circle-check-big"
-                  class="text-primary shrink-0 size-7"
-                  aria-hidden="true"
-                />
-              </span>
-
-              <span class="mt-6 pt-5 border-t border-dashed flex flex-1 flex-col min-w-0 relative">
-                <span class="flex flex-wrap gap-x-3 gap-y-1 min-w-0 items-baseline relative z-10">
-                  <strong class="text-3xl leading-none tracking-wide font-semibold">自定义</strong>
-                  <span class="text-sm text-muted-foreground font-mono">CUSTOM</span>
-                </span>
-                <span class="qs-type-meta text-muted-foreground mt-3 max-w-[32rem] relative z-10">
-                  采购销售订单中的临时产品，采购价格由用户填写。
-                </span>
-                <span
-                  class="text-sm font-medium mt-auto pt-6 flex gap-2 items-center relative z-10"
-                  :class="productModeDraft === 'CUSTOM' ? 'text-primary' : 'text-muted-foreground'"
-                >
-                  <FaIcon name="i-lucide:mouse-pointer-click" class="size-4" aria-hidden="true" />
-                  {{ productModeDraft === 'CUSTOM' ? '已选中' : '点击选择' }}
-                </span>
-                <FaIcon
-                  name="i-lucide:package-plus"
-                  class="text-amber-500/10 size-28 absolute dark:text-amber-400/10 -bottom-8 -right-5"
-                  aria-hidden="true"
-                />
-              </span>
+              <FaIcon v-if="productModeDraft === mode" name="i-lucide:circle-check" class="text-primary shrink-0 size-5" aria-hidden="true" />
             </span>
           </label>
         </div>
@@ -379,6 +270,7 @@ onBeforeUnmount(abortValidation)
           v-if="productModeDraft === 'CATALOG'"
           v-model="supplierValueDraft"
           dictionary-code="service_provider.supplier"
+          :disabled="disabled || submissionPending"
           placeholder="选择供应商"
           clearable
           required
@@ -401,6 +293,18 @@ onBeforeUnmount(abortValidation)
             {{ customSupplierError }}
           </p>
         </div>
+      </section>
+      <section v-if="productModeDraft === 'CUSTOM'" class="space-y-3">
+        <h3 class="qs-type-component-title m-0">
+          {{ t('purchasePayment.customRecipients') }}
+        </h3>
+        <p class="qs-type-meta text-muted-foreground m-0">
+          {{ t('purchasePayment.customRecipientsHint') }}
+        </p>
+        <QsPaymentRecipientEditor v-model="paymentAccounts" :minimum="1" :disabled="disabled || validationPending || submitting" @busy-change="uploading = $event" />
+        <p v-if="recipientError" class="qs-type-meta text-muted-foreground m-0">
+          {{ t(recipientError) }}
+        </p>
       </section>
     </div>
 

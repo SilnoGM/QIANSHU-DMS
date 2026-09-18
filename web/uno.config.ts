@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { BASE_COLORS, FRAMEWORK_COLORS, THEMES } from '@fantastic-admin/themes'
@@ -15,6 +16,8 @@ import {
 import { presetAnimations } from 'unocss-preset-animations'
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url))
+const iconInventoryPath = path.resolve(projectRoot, 'apps/qsmds-arco/src/icons/project-icon-inventory.generated.json')
+const iconInventory = JSON.parse(readFileSync(iconInventoryPath, 'utf8')) as { name: string, source: string }[]
 type ColorScheme = 'light' | 'dark'
 type ThemeTokens = Record<ColorScheme, Record<string, string>>
 
@@ -86,8 +89,11 @@ export default defineConfig({
       ],
     },
   },
-  // 精确 safelist 让正式构建生成全部语义角色，而不是依赖某个临时消费方触发提取。
-  safelist: Object.keys(qsTypographyShortcuts),
+  // 图标目录以动态名称渲染，构建时固定生成本地 CSS，避免依赖源页面提取或运行时远程加载。
+  safelist: [
+    ...Object.keys(qsTypographyShortcuts),
+    ...iconInventory.filter(icon => icon.source === 'iconify').map(icon => icon.name),
+  ],
   shortcuts: [
     qsTypographyShortcuts,
     [/^flex-?(col)?-(start|end|center|baseline|stretch)-?(start|end|center|between|around|evenly|left|right)?$/, ([, col, items, justify]) => {
@@ -219,5 +225,6 @@ button:not(:disabled),
   ],
   configDeps: [
     path.resolve(projectRoot, 'packages/themes/index.ts'),
+    iconInventoryPath,
   ],
 })

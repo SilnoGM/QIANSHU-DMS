@@ -59,7 +59,7 @@ function iconName(isActive: boolean, icon?: string | [string, string]) {
                     }" @click="switchTo(index)"
                   >
                     <div class="inline-flex flex-1 gap-1 items-center justify-center">
-                      <FaIcon v-if="iconName(index === appMenuStore.actived, item.meta?.icon)" :name="iconName(index === appMenuStore.actived, item.meta?.icon)!" class="menu-item-container-icon transition-transform group-hover-scale-120" />
+                      <FaIcon v-if="iconName(index === appMenuStore.actived, item.meta?.icon)" :name="iconName(index === appMenuStore.actived, item.meta?.icon)!" class="menu-item-container-icon transition-transform group-hover-scale-120" :class="{ 'size-6!': iconName(index === appMenuStore.actived, item.meta?.icon)?.startsWith('qs-') }" />
                       <span class="text-sm flex-1 w-full truncate transition-height transition-opacity transition-width empty:hidden">
                         {{ generateI18nTitle(item.meta?.title) }}
                       </span>

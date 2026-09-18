@@ -8,8 +8,7 @@ import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalo
 import { getPaymentDocuments } from './logic'
 import OrderDocument from './OrderDocument.vue'
 
-const props = defineProps<{ detail: PurchaseOrderDetailDto, currencies: readonly CurrencyDescriptor[], canManagePayment: boolean, busy: boolean }>()
-const emit = defineEmits<{ recordPayment: [] }>()
+const props = defineProps<{ detail: PurchaseOrderDetailDto, currencies: readonly CurrencyDescriptor[] }>()
 const { t } = useI18n()
 const methodCatalog = useDictionaryCatalog('payment.method')
 // 凭证仅在所属付款记录内展示，避免独立小节重复；采购允许无凭证付款。
@@ -18,7 +17,6 @@ const paymentRecords = computed(() => props.detail.payments.map((payment) => {
   const vouchers = getPaymentDocuments(props.detail.documents, payment.id)
   return { payment, vouchers, thumbnail: vouchers.find(item => item.detachedAt === null && item.mediaType === 'IMAGE' && item.contentUrl)?.contentUrl }
 }))
-const canRecordPayment = computed(() => props.canManagePayment && props.detail.orderStatus === 'CONFIRMED' && props.detail.paymentStatus !== 'PAID')
 const expandedPayment = ref<string | null>(null)
 // 每次换单都清空展开状态，避免同一抽屉实例残留上一单的卡片状态。
 watch(() => props.detail.id, () => {
@@ -34,9 +32,6 @@ watch(() => props.detail.id, () => {
         {{ t('purchaseOrderDrawer.payments') }}
         <span class="qs-type-meta px-2 py-0.5 rounded-md bg-muted tabular-nums">{{ detail.payments.length }}</span>
       </h3>
-      <FaButton v-if="canRecordPayment" type="button" size="sm" :disabled="busy" @click="emit('recordPayment')">
-        <FaIcon name="i-lucide:circle-plus" aria-hidden="true" />{{ t('purchaseOrderDrawer.recordPayment') }}
-      </FaButton>
     </div>
     <FaEmpty v-if="!detail.payments.length" :title="t('purchaseOrderDrawer.noPayments')" class="py-6" />
     <div v-else class="space-y-2.5">

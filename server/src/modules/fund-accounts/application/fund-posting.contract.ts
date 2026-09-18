@@ -83,10 +83,18 @@ export interface FundPostingResult {
 }
 
 /**
- * 同一 Server 内业务域唯一可依赖的资金动账端口。销售收款受控端口复用调用方
- * 事务，保证审核、正式收款、资金和审计同时提交；管理员能力留在资金模块。
+ * 同一 Server 内业务域唯一可依赖的资金动账端口。销售收款、包装与采购付款
+ * 复用调用方事务，保证业务状态、资金和审计同时提交；管理员能力留在资金模块。
+ * 采购 STOCK_PAY 不传 userId，资金模块只锁公司账户并按有效 0/100 比例执行
+ * 已发布的 PURCHASE_PAYMENT 分摊规则；PAY 必须传销售出单人的身份快照。
+ * 采购 VOID 仅允许全额冲正原始批次，由调用方同步作废对应的实际付款记录。
  */
 export abstract class FundPostingService {
+  abstract lockBusinessEventAccountsInTransaction(
+    transaction: Prisma.TransactionClient,
+    entries: readonly { context: FundBusinessTransactionContext, input: PostBusinessEventInput }[],
+  ): Promise<void>
+
   abstract previewBusinessEventInTransaction(
     transaction: Prisma.TransactionClient,
     context: FundBusinessTransactionContext,

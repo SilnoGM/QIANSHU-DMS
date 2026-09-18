@@ -12,14 +12,14 @@ const ACTIONS_SOURCE = new URL(
   import.meta.url,
 )
 
-test('采购查看入口使用独立抽屉，保留请求取消和记录付款入口', async () => {
+test('采购查看入口使用独立抽屉，保留请求取消且不提供付款入口', async () => {
   const source = await readFile(SOURCE, 'utf8')
 
   assert.match(source, /<QsPurchaseOrderDrawer/u)
   assert.match(source, /purchaseOrdersApi\.getById/u)
   assert.doesNotMatch(source, /QsPurchaseOrderDesc|QsGenericDrawer/u)
   assert.match(source, /detailAbortController\?\.abort\(\)/u)
-  assert.match(source, /@record-payment="openPaymentDialog"/u)
+  assert.doesNotMatch(source, /record-payment|openPaymentDialog|canManagePayment/u)
   assert.doesNotMatch(source, /openVoidDialog|openDetachDialog|downloadDocument/u)
 })
 
@@ -40,7 +40,7 @@ test('专用采购抽屉继承销售布局及动画，不引入销售业务字�
   assert.doesNotMatch(information, /referencePurchaseUnitPriceAmount|actualUnitPriceAmount/u)
   assert.equal((records.match(/v-if="!open" key="thumbnail"/gu) ?? []).length, 1)
   assert.match(records, /prefers-reduced-motion: reduce/u)
-  assert.match(records, /canManagePayment/u)
+  assert.doesNotMatch(records, /canManagePayment|recordPayment/u)
   assert.match(document, /detachedAt === null/u)
   assert.match(document, /<ImageGroup/u)
   assert.match(history, /buildPurchaseOrderTimeline/u)
@@ -48,7 +48,7 @@ test('专用采购抽屉继承销售布局及动画，不引入销售业务字�
   assert.match(history, /reasonNotRecorded/u)
 })
 
-test('付款凭证仅在对应付款记录内展示，保留空态', async () => {
+test('付款记录展示对应凭证，保留未上传的历史空态', async () => {
   const records = await readFile(new URL('../../src/components/business/QsPurchaseOrderDrawer/OrderRecords.vue', import.meta.url), 'utf8')
 
   assert.doesNotMatch(records, /<section :aria-label="t\('purchaseOrderDrawer\.documents'\)"/u)
@@ -96,7 +96,7 @@ test('采购抽屉移除作废、下载和解除入口，保留图片预览及�
   assert.match(document, /v-if="document\.detachedAt"/u)
   assert.match(records, /v-if="payment\.voidedAt"/u)
   assert.match(records, /payment\.voidReason/u)
-  assert.match(records, /@click="emit\('recordPayment'\)"/u)
+  assert.doesNotMatch(records, /recordPayment/u)
 })
 
 test('采购详情动作精确受 update、payment 和 document 权限控制', async () => {
@@ -105,35 +105,30 @@ test('采购详情动作精确受 update、payment 和 document 权限控制', a
   assert.match(source, /auth\('purchase-orders:update'\)/u)
   assert.match(source, /auth\('purchase-orders:payment'\)/u)
   assert.match(source, /auth\('purchase-orders:document'\)/u)
-  assert.match(source, /purchaseOrdersApi\.updateOrderStatus/u)
+  assert.doesNotMatch(source, /purchaseOrdersApi\.updateOrderStatus|openCancelDialog|submitCancellation/u)
   assert.match(source, /purchaseOrdersApi\.updateFulfillmentStatus/u)
-  assert.match(source, /purchaseOrdersApi\.recordPayment/u)
+  assert.doesNotMatch(source, /purchaseOrdersApi\.recordPayment|submitPayment\(|activeDialog === 'payment'/u)
+  assert.doesNotMatch(source, /openPaymentDialog|qsFinanceRealtimePurchasePayments/u)
   assert.match(source, /purchaseOrdersApi\.voidPayment/u)
-  assert.match(source, /purchaseOrdersApi\.uploadTemporaryDocument/u)
   assert.match(source, /purchaseOrdersApi\.detachDocument/u)
   assert.match(source, /purchaseOrdersApi\.getDocumentContent/u)
-  assert.match(source, /dictionary-code="payment\.method"/u)
-  assert.match(source, /不存在凭证也可记录付款/u)
-  assert.match(source, /props\.detail\.purchaseType === 'SALES_LINKED'/u)
-  assert.match(source, /采购订单已取消，关联销售订单采购覆盖状态已重新计算/u)
-  assert.match(source, /采购订单已取消/u)
+  assert.doesNotMatch(source, /activeDialog === 'cancel'|取消采购订单？/u)
 })
 
-test('采购列表查看使用详情抽屉，取消则独立读取最新详情并直接打开确认弹窗', async () => {
+test('运营采购列表保留详情抽屉，全部及待办视图均不提供取消入口', async () => {
   const source = await readFile(new URL(
     '../../src/views/operations/purchase-orders/index.vue',
     import.meta.url,
   ), 'utf8')
 
   assert.match(source, /<PurchaseOrderDetailDrawer/u)
-  assert.match(source, /<PurchaseOrderDetailActions/u)
+  assert.doesNotMatch(source, /PurchaseOrderDetailActions/u)
   assert.match(source, /:action-column=/u)
   assert.match(source, /<template #actions=/u)
   assert.match(source, /openPurchaseOrderDetail/u)
-  assert.match(source, /loadPurchaseOrderForCancellation/u)
+  assert.doesNotMatch(source, /loadPurchaseOrderForCancellation|cancellationDetail|cancelLoadingOrderId/u)
   assert.match(source, /purchaseOrdersApi\.getById/u)
-  assert.match(source, /cancelActionsRef\.value\?\.openCancelDialog\(\)/u)
-  assert.match(source, /@click="openPurchaseOrderCancellation\(row\)"/u)
+  assert.doesNotMatch(source, /cancelActionsRef|openPurchaseOrderCancellation|canCancelPurchaseOrderFromList/u)
   assert.doesNotMatch(source, /openPurchaseOrderDetail\(row, 'cancel'\)/u)
   assert.doesNotMatch(source, /:initial-action=/u)
   assert.match(source, /@detail-updated=/u)

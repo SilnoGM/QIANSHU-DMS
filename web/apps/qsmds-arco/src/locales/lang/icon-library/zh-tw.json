@@ -1,0 +1,33 @@
+{
+  "iconLibrary": {
+    "title": "圖示範例庫",
+    "description": "尋找專案圖示，查看選單尺寸效果並複製使用程式碼。",
+    "search": "搜尋圖示",
+    "searchPlaceholder": "搜尋名稱、中文用途或業務分組",
+    "size": "圖示尺寸",
+    "background": "選單背景",
+    "preview": { "default": "預設", "selected": "選取" },
+    "typeAll": "全部圖示 ({count})",
+    "typeBrand": "品牌圖示 ({count})",
+    "typeGeneral": "通用圖示 ({count})",
+    "results": "圖示清單",
+    "resultCount": "顯示 {count} / {total} 個圖示",
+    "reset": "清除篩選",
+    "emptyTitle": "沒有符合的圖示",
+    "emptyDescription": "嘗試其他名稱或用途，或清除篩選查看全部圖示。",
+    "detail": "目前圖示",
+    "category": "業務分組",
+    "usages": "用途",
+    "noUsages": "通用介面操作",
+    "code": "使用程式碼",
+    "copyCode": "複製 FaIcon 程式碼",
+    "copyPending": "正在複製",
+    "copy": {
+      "copied": "使用程式碼已複製",
+      "unavailable": "目前環境不支援剪貼簿，請選取上方程式碼手動複製。",
+      "failed": "複製失敗，請重試或選取上方程式碼手動複製。"
+    },
+    "themeHint": "品牌圖示以森林裝飾呼應 LOGO，綠色跟隨系統主題色（--primary）。切換明暗主題可檢查實際選單效果。",
+    "noSelection": "調整篩選條件後，可選取圖示查看用途和使用程式碼。"
+  }
+}

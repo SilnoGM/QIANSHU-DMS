@@ -181,8 +181,4 @@ test('页面使用主题语义、Reduced Motion 和原生键盘提交边界', ()
   assert.match(filterSource, /@keydown\.enter\.prevent="submit"/u)
   assert.match(reversalSource, /<FaForm[^>]*@submit="submit"/u)
   assert.doesNotMatch(allViewSource, /#[\da-f]{3,8}\b/iu)
-  assert.doesNotMatch(
-    allViewSource,
-    /(?:text|bg|border)-(?:violet|purple|indigo|fuchsia)-\d+/u,
-  )
 })

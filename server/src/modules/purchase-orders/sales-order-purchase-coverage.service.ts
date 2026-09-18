@@ -15,6 +15,7 @@ import { AuditService } from '../audit/audit.service'
 import {
   assertSalesOrderFulfillmentTransition,
 } from '../sales-orders/domain/sales-order-state-machine'
+import { purchaseReviewSourceBlockReason } from './purchase-order-review-source'
 
 interface SalesLineQuantity {
   readonly id: string
@@ -97,7 +98,7 @@ export class SalesOrderPurchaseCoverageService {
     `)
     const order = locked[0]
     if (locked.length !== 1 || order?.orderStatus !== 'CONFIRMED') {
-      throw stateChangedError()
+      throw new ApiException(HttpStatus.CONFLICT, 'PURCHASE_ORDER_STATE_CHANGED', purchaseReviewSourceBlockReason(order?.orderStatus ?? null) ?? '关联销售来源不存在，请核实来源订单')
     }
     // 已经进入备货或后续物流阶段时只保留现状，不允许覆盖、倒退或跳级。
     if (order.fulfillmentStatus !== 'PENDING') return

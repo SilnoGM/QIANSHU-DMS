@@ -1,3 +1,4 @@
+import { PaymentRecipientService } from '../payment-recipients/payment-recipient.service'
 import { randomUUID } from 'node:crypto'
 
 import { HttpStatus, Inject, Injectable, Optional } from '@nestjs/common'
@@ -39,11 +40,14 @@ import {
   calculatePurchaseOrderCreateFingerprint,
   hashPurchaseOrderIdempotencyKey,
   PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION,
+  PURCHASE_ORDER_CENTS_FINGERPRINT_VERSION,
   PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION,
   PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION,
+  PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION,
   PURCHASE_ORDER_NUMBERING_CONSUMER_CODE,
   PURCHASE_ORDER_NUMBERING_RULE_CODE,
 } from './purchase-order-create-fingerprint'
+import { PurchaseShipmentNumberingService } from './shipments/purchase-shipment-numbering.service'
 import { requirePurchaseShippingMark } from './purchase-order-shipping-mark'
 
 const REQUEST_ID_MAXIMUM_CODE_POINTS = 64
@@ -211,6 +215,8 @@ export class PurchaseOrderCommandService {
     private readonly audit: AuditService,
     private readonly createDependencies: PurchaseOrderCreateDependencyService,
     private readonly shippingMarks: PurchaseShippingMarkResolverService,
+    private readonly shipmentNumbers: PurchaseShipmentNumberingService,
+    private readonly recipients: PaymentRecipientService,
     @Optional()
     @Inject(PURCHASE_ORDER_COMMAND_DEPENDENCIES)
     dependencyOverrides: Partial<PurchaseOrderCommandServiceDependencies> = {},
@@ -229,7 +235,7 @@ export class PurchaseOrderCommandService {
     const idempotencyKeyHash = hashPurchaseOrderIdempotencyKey(trusted.idempotencyKey)
     const existing = await this.findExisting(idempotencyKeyHash)
     const version = existing?.createRequestFingerprintVersion ?? PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION
-    if (version !== PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION) {
+    if (version !== PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_CENTS_FINGERPRINT_VERSION && version !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION) {
       throw idempotencyConflict()
     }
     // 仅已持久化 v3 请求允许旧快照恢复；新请求不能凭缺少 parts 回退旧创建路径。
@@ -238,6 +244,7 @@ export class PurchaseOrderCommandService {
       input,
       this.dependencies.businessToday(),
       legacyReplay,
+      !!existing && version !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION,
     )
     const fingerprint = calculatePurchaseOrderCreateFingerprint(
       trusted.actorUserId,
@@ -297,7 +304,7 @@ export class PurchaseOrderCommandService {
         )
         const resolution = await this.shippingMarks.resolve(transaction, command, true)
         requirePurchaseShippingMark(resolution, command.expectedShippingMarkResolution)
-        // 创建仅冻结货件分配；基础唛头在审核时按当时规则派发，不预占流水或容量。
+        // 货件编号在创建事务派发；基础唛头仍在审核时派发，两类编号互不替代。
         const persistedParts = command.parts.map((part, index) => ({ id: randomUUID(), part, partNumber: index + 1 }))
         const created = await transaction.purchaseOrder.create({
           data: {
@@ -329,6 +336,9 @@ export class PurchaseOrderCommandService {
           },
           select: { id: true },
         })
+        if (command.productMode === 'CUSTOM') {
+          await this.recipients.createForOrder(transaction, trusted.actorUserId, created.id, [...command.paymentAccounts])
+        }
         await transaction.purchaseOrderLine.createMany({
           data: effective.lines.map(line => lineData(created.id, line)),
         })
@@ -336,9 +346,11 @@ export class PurchaseOrderCommandService {
           where: { purchaseOrderId: created.id }, select: { id: true, lineNumber: true },
         })
         const lineIdByNumber = new Map(persistedLines.map(line => [line.lineNumber, line.id]))
-        await transaction.purchaseOrderPart.createMany({ data: persistedParts.map(({ id, part, partNumber }) => ({
+        const partNumbers = await this.shipmentNumbers.issue(transaction, persistedParts.map(({ id, part }) => ({ id, purchaseOrderId: created.id, key: part.key })))
+        await transaction.purchaseOrderPart.createMany({ data: persistedParts.map(({ id, part, partNumber }, index) => ({
             id,
             purchaseOrderId: created.id, key: part.key, partNumber, status: 'PENDING_REVIEW',
+            shipmentNo: partNumbers[index].shipmentNo, numberingIssuanceId: partNumbers[index].numberingIssuanceId,
             shippingMarkText: null, shippingMarkIssuanceId: null, shippingMarkKeyHash: null,
         })) })
         await transaction.purchaseOrderPartItem.createMany({ data: persistedParts.flatMap(({ id, part }) => (
@@ -348,7 +360,7 @@ export class PurchaseOrderCommandService {
               purchaseOrderLineId: lineIdByNumber.get(item.lineNumber)!, quantity: item.quantity,
           }))
         )) })
-        // 提交只占用销售来源数量并生成订单号；审核事务才派发唛头并推进销售备货。
+        // 创建事件关联本单全部已编号货件；审核事务才派发唛头并推进销售备货。
         await this.audit.record(transaction, {
           eventType: AuditEventType.PURCHASE_ORDER_CREATED,
           outcome: AuditOutcome.SUCCESS,
@@ -369,6 +381,8 @@ export class PurchaseOrderCommandService {
             salesLinked: command.salesOrderId !== null,
             orderStatus: 'PENDING_REVIEW',
             partCount: persistedParts.length,
+            shipmentNumberingRule: 'SHIPMENT_NO',
+            numberedPartCount: partNumbers.length,
           },
         })
         return created.id
@@ -397,6 +411,10 @@ export class PurchaseOrderCommandService {
           return raced.id
         }
         throw idempotencyConflict()
+      }
+      if (hasPersistenceConstraint(facts, 'purchase_order_parts_shipment_no_key')
+        || hasPersistenceConstraint(facts, 'purchase_order_parts_numbering_issuance_id_key')) {
+        throw purchaseOrderException(HttpStatus.CONFLICT, 'PURCHASE_SHIPMENT_NUMBER_CONFLICT', '货件编号或派发记录发生冲突')
       }
       if (hasPersistenceConstraint(facts, 'purchase_orders_order_no_key')) {
         throw purchaseOrderException(

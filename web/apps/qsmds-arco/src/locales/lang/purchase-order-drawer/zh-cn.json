@@ -7,10 +7,14 @@
     "parts": {
       "title": "采购货件",
       "part": "货件-{number}",
+      "shipmentNo": "货件编号",
+      "trackingNo": "物流单号",
+      "trackingNoMissing": "未填写",
+      "unnumbered": "未编号",
       "quantity": "本货件数量",
       "shippingMark": "货件唛头",
       "markValue": "唛头：{value}",
-      "pendingMark": "待审核生成",
+      "pendingMark": "待派发",
       "notGenerated": "未生成",
       "productUnavailable": "产品信息不可用",
       "status": { "PENDING_REVIEW": "待审核", "ACTIVE": "已生效", "CANCELLED": "已取消" }
@@ -57,7 +61,6 @@
     "download": "下载",
     "detach": "解除关联",
     "void": "作废付款",
-    "recordPayment": "记录付款",
     "close": "关闭抽屉",
     "loading": "正在加载订单详情",
     "loadFailed": "加载失败",
@@ -81,7 +84,7 @@
       "PREPARING": "备货中",
       "PARTIALLY_SHIPPED": "部分发货",
       "SHIPPED": "已发货",
-      "SIGNED": "已签收",
+      "SIGNED": "已入仓",
       "UNPAID": "未付款",
       "PARTIALLY_PAID": "部分付款",
       "PAID": "已付清"

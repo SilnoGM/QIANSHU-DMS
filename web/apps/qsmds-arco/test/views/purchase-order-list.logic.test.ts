@@ -126,7 +126,7 @@ test('采购列表标签完整覆盖类型、订单、履约与付款状态', ()
   assert.equal(fulfillmentStatusLabel('ORDERED'), '已下单')
   assert.equal(fulfillmentStatusLabel('PREPARING'), '备货中')
   assert.equal(fulfillmentStatusLabel('SHIPPED'), '已发货')
-  assert.equal(fulfillmentStatusLabel('SIGNED'), '已签收')
+  assert.equal(fulfillmentStatusLabel('SIGNED'), '已入仓')
   assert.equal(paymentStatusLabel('UNPAID'), '未付款')
   assert.equal(paymentStatusLabel('PARTIALLY_PAID'), '部分付款')
   assert.equal(paymentStatusLabel('PAID'), '已付清')
@@ -200,11 +200,11 @@ test('待办采购操作严格只返回当前任务对应的唯一处理动作',
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_WAREHOUSE', {
     orderStatus: 'CONFIRMED',
     paymentStatus: 'PARTIALLY_PAID',
-  }).map(item => item.label), ['到仓'])
+  }).map(item => item.label), ['确认入仓'])
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_PAYMENT', {
     orderStatus: 'CONFIRMED',
     paymentStatus: 'PARTIALLY_PAID',
-  }).map(item => item.label), ['付款'])
+  }).map(item => item.label), ['申请付款'])
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_PAYMENT', {
     orderStatus: 'CONFIRMED',
     paymentStatus: 'PAID',

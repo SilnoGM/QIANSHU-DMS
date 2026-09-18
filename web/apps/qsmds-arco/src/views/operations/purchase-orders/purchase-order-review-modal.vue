@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import type { PurchaseOrderDetailDto } from '@/api/generated/types.gen'
+import type { PurchaseOrderDetailDto, PurchaseOrderReviewContextDto } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
-import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import OrderParts from '@/components/business/QsPurchaseOrderDrawer/OrderParts.vue'
+import { buildPurchaseOrderCopyText } from './purchase-order-copy.logic'
 import { buildPurchaseOrderReviewRequest } from './purchase-order-detail.logic'
 import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError } from './purchase-order-list.logic'
+import PurchaseOrderReviewDetails from './purchase-order-review-details.vue'
+import PurchaseOrderReviewImage from './purchase-order-review-image.vue'
+import PurchaseOrderReviewSummary from './purchase-order-review-summary.vue'
+import { usePurchaseOrderImageGeneration } from './use-purchase-order-image-generation'
 
 const props = defineProps<{
   currencies: readonly CurrencyDescriptor[]
@@ -24,18 +28,43 @@ const { auth } = useAppAuth()
 const account = useAppAccountStore()
 const toast = useQsToast()
 const detail = shallowRef<PurchaseOrderDetailDto | null>(null)
+const reviewContext = shallowRef<PurchaseOrderReviewContextDto | null>(null)
 const reason = ref('')
 const error = ref('')
 const loading = ref(false)
 const submitting = ref(false)
+const copying = ref(false)
+let copySequence = 0
 let loadController: AbortController | null = null
 let mutationController: AbortController | null = null
 
 const canReview = computed(() => auth('purchase-orders:read') && auth('purchase-orders:review'))
 const visible = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
-const canConfirm = computed(() => canReview.value && !loading.value && !submitting.value && detail.value?.orderStatus === 'PENDING_REVIEW')
+const image = usePurchaseOrderImageGeneration({
+  detail,
+  orderId: computed(() => props.orderId),
+  enabled: computed(() => visible.value && canReview.value),
+  epoch: computed(() => account.authEpoch),
+})
+const busy = computed(() => submitting.value || image.generating.value)
+const canCopy = computed(() => visible.value && canReview.value && !loading.value && !busy.value && !copying.value && detail.value !== null && detail.value.id === props.orderId)
+const canGenerate = computed(() => canReview.value && !loading.value && !busy.value && detail.value?.orderStatus === 'PENDING_REVIEW' && reviewContext.value?.available === true)
+const canConfirm = computed(() => canGenerate.value && image.ready.value)
+const generationStep = ref(0)
+const terminalNotice = computed(() => {
+  if (detail.value?.orderStatus === 'CANCELLED') {
+    return t('purchaseReview.recovery.cancelled')
+  }
+  if (detail.value?.orderStatus === 'CONFIRMED' || detail.value?.orderStatus === 'COMPLETED') {
+    return t('purchaseReview.recovery.approved')
+  }
+  return ''
+})
 
 function reset(): void {
+  copySequence += 1
+  copying.value = false
+  image.reset()
   loadController?.abort()
   mutationController?.abort()
   loadController = null
@@ -43,8 +72,37 @@ function reset(): void {
   loading.value = false
   submitting.value = false
   detail.value = null
+  reviewContext.value = null
   reason.value = ''
   error.value = ''
+}
+
+async function copyPurchaseInfo(): Promise<void> {
+  const current = detail.value
+  if (!canCopy.value || current === null) {
+    return
+  }
+  const sequence = ++copySequence
+  const epoch = account.authEpoch
+  const isCurrent = () => sequence === copySequence && epoch === account.authEpoch && visible.value && canReview.value && props.orderId === current.id
+  copying.value = true
+  try {
+    await navigator.clipboard.writeText(buildPurchaseOrderCopyText(current, t))
+    if (isCurrent()) {
+      toast.success(t('purchaseReview.copy.success'))
+    }
+  }
+  catch {
+    if (isCurrent()) {
+      toast.error(t('purchaseReview.copy.failed'))
+    }
+  }
+  finally {
+    // 剪贴板请求不可取消；关闭或切换弹窗后，其迟到结果不能回写新弹窗状态。
+    if (sequence === copySequence) {
+      copying.value = false
+    }
+  }
 }
 
 function failureMessage(failure: unknown): string {
@@ -59,12 +117,14 @@ async function loadDetail(previousFailure = ''): Promise<void> {
     return
   }
   loadController?.abort()
+  image.reset()
   const controller = new AbortController()
   loadController = controller
   const epoch = account.authEpoch
   loading.value = true
   error.value = previousFailure
   detail.value = null
+  reviewContext.value = null
   try {
     const response = await purchaseOrdersApi.getById(orderId, controller.signal)
     if (controller.signal.aborted || epoch !== account.authEpoch || props.orderId !== orderId || !visible.value || !canReview.value) {
@@ -72,15 +132,26 @@ async function loadDetail(previousFailure = ''): Promise<void> {
     }
     detail.value = response.data
     if (response.data.orderStatus !== 'PENDING_REVIEW') {
-      error.value = t('purchaseOrderList.review.statusChanged')
+      // 未知提交结果只报告当前事实，不把其他审核人的操作宣称为本次成功。
+      error.value = ''
       emit('detailUpdated', response.data)
+      return
     }
-    else if (previousFailure) {
-      error.value = `${previousFailure}。${t('purchaseOrderList.review.reconfirm')}`
+    const contextResponse = await purchaseOrdersApi.reviewContext(orderId, controller.signal)
+    if (controller.signal.aborted || epoch !== account.authEpoch || props.orderId !== orderId || !visible.value || !canReview.value) {
+      return
     }
+    reviewContext.value = contextResponse.data
+    await image.restore(response.data, controller.signal)
+    if (controller.signal.aborted || epoch !== account.authEpoch || props.orderId !== orderId || !visible.value || !canReview.value) {
+      return
+    }
+    error.value = !contextResponse.data.available
+      ? contextResponse.data.message || t('purchaseReview.recovery.unavailable')
+      : previousFailure ? `${previousFailure}。${t('purchaseReview.recovery.pending')}` : ''
   }
   catch (failure) {
-    if (!controller.signal.aborted && !isPurchaseOrderAbortError(failure)) {
+    if (!controller.signal.aborted && epoch === account.authEpoch && props.orderId === orderId && visible.value && !isPurchaseOrderAbortError(failure)) {
       error.value = [previousFailure, failureMessage(failure)].filter(Boolean).join('。')
     }
   }
@@ -92,12 +163,32 @@ async function loadDetail(previousFailure = ''): Promise<void> {
   }
 }
 
+function generateImage(regenerate: boolean): void {
+  if (!canGenerate.value) {
+    return
+  }
+  error.value = ''
+  generationStep.value = 0
+  image.start(regenerate, [
+    t('purchaseReview.image.steps.detail'),
+    t('purchaseReview.image.steps.marks'),
+    t('purchaseReview.image.steps.image'),
+  ])
+}
+
+async function generationFailed(failure: unknown): Promise<void> {
+  if (image.fail(failure)) {
+    // 派号或渲染的未知结果必须重取草稿和版本，保留已完成的服务端阶段。
+    await loadDetail(failureMessage(failure))
+  }
+}
+
 async function submit(): Promise<void> {
   const current = detail.value
   if (!canConfirm.value || current === null) {
     return
   }
-  const result = buildPurchaseOrderReviewRequest(current, reason.value)
+  const result = buildPurchaseOrderReviewRequest(current, reason.value, image.draft.value)
   if (!result.valid) {
     error.value = result.fieldError
     return
@@ -119,7 +210,7 @@ async function submit(): Promise<void> {
     visible.value = false
   }
   catch (failure) {
-    if (!controller.signal.aborted && !isPurchaseOrderAbortError(failure)) {
+    if (!controller.signal.aborted && epoch === account.authEpoch && props.orderId === current.id && visible.value && !isPurchaseOrderAbortError(failure)) {
       // 版本冲突或未知提交结果一律重新查询；保留说明，要求核对新摘要后再次确认。
       await loadDetail(failureMessage(failure))
     }
@@ -148,72 +239,71 @@ onBeforeUnmount(reset)
 <template>
   <QsGenericModal
     v-model="visible"
-    :title="t('purchaseOrderList.review.title')"
-    :description="t('purchaseOrderList.review.description')"
-    size="lg"
+    :title="terminalNotice ? t('purchaseReview.detailTitle') : t('purchaseOrderList.review.title')"
+    :description="terminalNotice ? undefined : t('purchaseOrderList.review.description')"
+    size="xl"
     :loading="loading"
-    :submitting="submitting"
+    :submitting="busy"
   >
     <div data-testid="purchase-order-review-confirmation" class="flex flex-col gap-4">
-      <FaAlert v-if="error" :title="t('purchaseOrderList.review.failed')" :description="error" variant="destructive">
-        <template #actions>
-          <FaButton type="button" variant="outline" size="sm" :disabled="loading || submitting || !canReview" @click="loadDetail()">
-            {{ t('purchaseOrderList.review.reload') }}
+      <FaAlert v-if="terminalNotice" :title="terminalNotice" :class="detail?.orderStatus !== 'CANCELLED' ? 'border-primary/30 bg-primary/5 text-primary' : ''" />
+      <FaAlert v-if="error" :title="t('purchaseReview.recovery.checkRequired')" variant="destructive">
+        <template #description>
+          <p class="m-0 whitespace-pre-wrap">
+            {{ error }}
+          </p>
+          <FaButton type="button" variant="outline" size="sm" class="mt-3" :disabled="loading || busy || !canReview" @click="loadDetail()">
+            <FaIcon name="i-lucide:refresh-cw" aria-hidden="true" />{{ t('purchaseOrderList.review.reload') }}
           </FaButton>
         </template>
       </FaAlert>
-      <dl v-if="detail" class="text-sm m-0 p-4 border border-border rounded-xl bg-muted/15 gap-x-5 gap-y-4 grid sm:grid-cols-2">
-        <div>
-          <dt class="text-muted-foreground">
-            {{ t('purchaseOrderList.review.orderNo') }}
-          </dt>
-          <dd class="font-mono m-0 mt-1 break-words">
-            {{ detail.orderNo }}
-          </dd>
-        </div>
-        <div>
-          <dt class="text-muted-foreground">
-            {{ t('purchaseOrderList.review.supplier') }}
-          </dt>
-          <dd class="font-medium m-0 mt-1 break-words">
-            {{ detail.supplier.label }}
-          </dd>
-        </div>
-        <div>
-          <dt class="text-muted-foreground">
-            {{ t('purchaseOrderList.review.amount') }}
-          </dt>
-          <dd class="font-semibold m-0 mt-1">
-            <AmountDisplay :value="detail.purchaseTotalAmount" :currency="detail.currencyCode" :currencies="currencies" />
-          </dd>
-        </div>
-        <div>
-          <dt class="text-muted-foreground">
-            {{ t('purchaseOrderList.review.products') }}
-          </dt>
-          <dd class="m-0 mt-1 tabular-nums">
-            {{ t('purchaseOrderList.review.quantity', { lines: detail.lines.length, quantity: detail.lineSummary.totalQuantity }) }}
-          </dd>
-        </div>
-      </dl>
+      <PurchaseOrderReviewSummary v-if="detail && terminalNotice" :summary="detail.reviewSummary" />
+      <PurchaseOrderReviewDetails v-if="detail" :detail="detail" :currencies="currencies" />
       <template v-if="detail">
         <OrderParts :detail="detail" />
         <p v-if="detail.parts.length === 0" class="qs-type-meta text-muted-foreground m-0">
           {{ t('purchaseOrderList.review.noParts') }}
         </p>
       </template>
-      <label class="flex flex-col gap-2">
+      <PurchaseOrderReviewImage
+        v-if="detail?.orderStatus === 'PENDING_REVIEW'"
+        :draft="image.draft.value"
+        :preview-url="image.previewUrl.value"
+        :image-loaded="image.imageLoaded.value"
+        :image-failed="image.imageFailed.value"
+        :busy="loading || busy"
+        :can-generate="canGenerate"
+        @generate="generateImage"
+        @image-load="image.markLoaded"
+        @image-error="image.markFailed"
+      />
+      <span v-if="image.generating.value" class="sr-only" role="status">{{ image.steps.value[generationStep]?.text }}</span>
+      <label v-if="detail?.orderStatus === 'PENDING_REVIEW'" class="flex flex-col gap-2">
         <span class="qs-type-body-medium">{{ t('purchaseOrderList.review.reason') }}</span>
-        <FaTextarea v-model="reason" maxlength="500" :disabled="loading || submitting || !canReview" input-class="min-h-20" />
+        <FaTextarea v-model="reason" maxlength="500" :disabled="loading || busy || !canReview" input-class="min-h-20" />
       </label>
     </div>
     <template #footer>
-      <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" :disabled="submitting" @click="visible = false">
-        {{ t('purchaseOrderList.review.cancel') }}
-      </FaButton>
-      <FaButton type="button" class="min-h-11 sm:min-h-9" :disabled="!canConfirm" :loading="submitting" @click="submit">
-        {{ t('purchaseOrderList.review.confirm') }}
-      </FaButton>
+      <div class="flex flex-wrap gap-2 w-full items-center justify-end">
+        <FaButton type="button" variant="outline" class="min-h-11 w-full sm:mr-auto sm:min-h-9 sm:w-auto" :disabled="!canCopy" :loading="copying" @click="copyPurchaseInfo">
+          <FaIcon name="i-lucide:copy" aria-hidden="true" />
+          {{ t('purchaseReview.copy.label') }}
+        </FaButton>
+        <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" :disabled="busy" @click="visible = false">
+          {{ t('purchaseReview.image.close') }}
+        </FaButton>
+        <FaButton v-if="detail?.orderStatus === 'PENDING_REVIEW'" type="button" class="min-h-11 sm:min-h-9" :disabled="!canConfirm" :loading="submitting" @click="submit">
+          {{ t('purchaseOrderList.review.confirm') }}
+        </FaButton>
+      </div>
     </template>
   </QsGenericModal>
+  <FaMultiStepLoader
+    :loading="image.generating.value"
+    :steps="image.steps.value"
+    prevent-close
+    @state-change="generationStep = $event"
+    @complete="image.complete"
+    @error="generationFailed"
+  />
 </template>

@@ -72,8 +72,8 @@ test('待审核所有唛头为空时显示待生成，不制造复制文本或�
 test('审核前货件 null 原样保留；审核后的货件独立字段不由基础码或内部序号重算', () => {
   const records = getPurchaseOrderPartRecords({
     parts: [
-      { id: 'pending', partNumber: 100, status: 'PENDING_REVIEW', shippingMarkText: null, items: [] },
-      { id: 'stored', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'STORED-UNCHANGED', items: [] },
+      { id: 'pending', shipmentNo: null, partNumber: 100, status: 'PENDING_REVIEW', shippingMarkText: null, items: [] },
+      { id: 'stored', shipmentNo: null, partNumber: 1, status: 'ACTIVE', shippingMarkText: 'STORED-UNCHANGED', items: [] },
     ],
     lines: [],
     lineSummary: { previews: [] },
@@ -82,6 +82,34 @@ test('审核前货件 null 原样保留；审核后的货件独立字段不由�
   assert.equal(records[1]?.shippingMarkText, null)
   assert.equal(records[0]?.status, 'ACTIVE')
   assert.equal(records[1]?.status, 'PENDING_REVIEW')
+})
+
+test('正式货件编号使用服务端存值，历史未编号货件不以序号或唛头代替', () => {
+  const records = getPurchaseOrderPartRecords({
+    parts: [
+      { id: 'numbered', shipmentNo: 'SHIPMENT/20260914-00001', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'DIFFERENT-MARK', items: [] },
+      { id: 'legacy', shipmentNo: null, partNumber: 1, status: 'ACTIVE', shippingMarkText: 'LEGACY-MARK', items: [] },
+    ],
+    lines: [],
+    lineSummary: { previews: [] },
+  } as unknown as PurchaseOrderDetailDto)
+  assert.equal(records[0]?.shipmentNo, null)
+  assert.equal(records[1]?.shipmentNo, 'SHIPMENT/20260914-00001')
+  assert.equal(records[1]?.partNumber, 2)
+  assert.equal(records[1]?.shippingMarkText, 'DIFFERENT-MARK')
+})
+
+test('货件物流单号按货件原样回显，历史空值不由货件编号或唛头推断', () => {
+  const records = getPurchaseOrderPartRecords({
+    parts: [
+      { id: 'tracked', shipmentNo: 'PKG/01', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK', trackingNo: 'SF1234567890', items: [] },
+      { id: 'legacy', shipmentNo: 'PKG/02', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK/02', trackingNo: null, items: [] },
+    ],
+    lines: [],
+    lineSummary: { previews: [] },
+  } as unknown as PurchaseOrderDetailDto)
+  assert.equal(records[0]?.trackingNo, null)
+  assert.equal(records[1]?.trackingNo, 'SF1234567890')
 })
 
 test('货件按编号排序，产品和图片按采购行 ID 关联，仅使用货件实际分配数量', () => {
@@ -95,8 +123,8 @@ test('货件按编号排序，产品和图片按采购行 ID 关联，仅使用�
       { lineId: 'line-a', mainImage: { contentUrl: '/image-a' } },
     ] },
     parts: [
-      { id: 'part-b', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK-02', shippedAt: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, items: [{ purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 5 }] },
-      { id: 'part-a', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK-01', shippedAt: '2026-09-13T08:00:00Z', shippedBy: { id: 'user-1', displayName: '采购员' }, shipmentRecordedAt: '2026-09-13T08:00:00Z', shipmentRemark: '首批', items: [
+      { id: 'part-b', shipmentNo: null, partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK-02', shippedAt: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, trackingNo: null, warehouseReceivedAt: null, warehouseReceivedBy: null, warehouseRecordedAt: null, warehouseRemark: null, items: [{ purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 5 }] },
+      { id: 'part-a', shipmentNo: null, partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK-01', shippedAt: '2026-09-13T08:00:00Z', shippedBy: { id: 'user-1', displayName: '采购员' }, shipmentRecordedAt: '2026-09-13T08:00:00Z', shipmentRemark: '首批', trackingNo: null, warehouseReceivedAt: '2026-09-15T06:30:00Z', warehouseReceivedBy: { id: 'receiver', displayName: '收货员' }, warehouseRecordedAt: '2026-09-15T06:31:00Z', warehouseRemark: '入仓完好', items: [
         { purchaseOrderLineId: 'line-b', lineNumber: 2, quantity: 3 },
         { purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 3 },
       ] },
@@ -105,11 +133,11 @@ test('货件按编号排序，产品和图片按采购行 ID 关联，仅使用�
   const before = structuredClone(detail)
   const records = getPurchaseOrderPartRecords(detail)
   assert.deepEqual(records, [
-    { id: 'part-a', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK-01', shippedAt: '2026-09-13T08:00:00Z', shippedBy: { id: 'user-1', displayName: '采购员' }, shipmentRecordedAt: '2026-09-13T08:00:00Z', shipmentRemark: '首批', items: [
+    { id: 'part-a', shipmentNo: null, partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK-01', shippedAt: '2026-09-13T08:00:00Z', shippedBy: { id: 'user-1', displayName: '采购员' }, shipmentRecordedAt: '2026-09-13T08:00:00Z', shipmentRemark: '首批', trackingNo: null, warehouseReceivedAt: '2026-09-15T06:30:00Z', warehouseReceivedBy: { id: 'receiver', displayName: '收货员' }, warehouseRecordedAt: '2026-09-15T06:31:00Z', warehouseRemark: '入仓完好', items: [
       { purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 3, productNo: 'SKU-A', productName: '同名产品', description: 'A 备注', imageSrc: '/image-a' },
       { purchaseOrderLineId: 'line-b', lineNumber: 2, quantity: 3, productNo: 'SKU-B', productName: '同名产品', description: 'B 备注', imageSrc: '/image-b' },
     ] },
-    { id: 'part-b', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK-02', shippedAt: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, items: [
+    { id: 'part-b', shipmentNo: null, partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK-02', shippedAt: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, trackingNo: null, warehouseReceivedAt: null, warehouseReceivedBy: null, warehouseRecordedAt: null, warehouseRemark: null, items: [
       { purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 5, productNo: 'SKU-A', productName: '同名产品', description: 'A 备注', imageSrc: '/image-a' },
     ] },
   ])
@@ -121,7 +149,7 @@ test('货件按编号排序，产品和图片按采购行 ID 关联，仅使用�
 test('货件为空时不从原唛头和产品总数合成货件，缺失产品快照不串用其他产品', () => {
   assert.deepEqual(getPurchaseOrderPartRecords({ parts: [], lines: [], lineSummary: { previews: [] }, shippingMarkText: 'OLD' } as unknown as PurchaseOrderDetailDto), [])
   const records = getPurchaseOrderPartRecords({
-    parts: [{ id: 'part', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK', items: [{ purchaseOrderLineId: 'missing', lineNumber: 4, quantity: 2 }] }],
+    parts: [{ id: 'part', shipmentNo: null, partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK', items: [{ purchaseOrderLineId: 'missing', lineNumber: 4, quantity: 2 }] }],
     lines: [],
     lineSummary: { previews: [] },
   } as unknown as PurchaseOrderDetailDto)

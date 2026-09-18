@@ -2,6 +2,7 @@
 import type { PurchaseOrderDetailDto, PurchaseOrderListItemDto } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import PurchaseOrderPaymentRecipients from '@/views/operations/purchase-orders/purchase-order-payment-recipients.vue'
 import OrderDocuments from './OrderDocuments.vue'
 import OrderHistory from './OrderHistory.vue'
 import OrderInformation from './OrderInformation.vue'
@@ -17,15 +18,15 @@ const props = defineProps<{
   error: string | null
   actionError: string
   busy: boolean
-  canManagePayment: boolean
   canAttachDocument?: boolean
+  canReceiveWarehouse?: boolean
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   'reload': []
   'closed': []
-  'recordPayment': []
   'attachDocument': []
+  'receiveWarehouse': []
 }>()
 const { t } = useI18n()
 const toast = useQsToast()
@@ -110,10 +111,8 @@ function onClosed() {
           <div class="pb-2 space-y-6">
             <FaAlert v-if="actionError" :title="t('purchaseOrderDrawer.actionFailed')" :description="actionError" variant="destructive" />
             <OrderInformation :detail="detail" :currencies="currencies" />
-            <OrderRecords
-              :detail="detail" :currencies="currencies" :busy="busy" :can-manage-payment="canManagePayment"
-              @record-payment="emit('recordPayment')"
-            />
+            <PurchaseOrderPaymentRecipients :accounts="detail.paymentRecipientProfile?.accounts ?? []" />
+            <OrderRecords :detail="detail" :currencies="currencies" />
             <OrderDocuments :detail="detail" :busy="busy" :can-attach-document="Boolean(canAttachDocument)" @attach-document="emit('attachDocument')" />
           </div>
         </template>
@@ -123,7 +122,10 @@ function onClosed() {
       </FaTabs>
     </div>
     <template #footer>
-      <div class="flex justify-end">
+      <div class="flex gap-2 justify-end">
+        <FaButton v-if="canReceiveWarehouse" variant="ghost" class="text-primary" :disabled="busy || loading || !detail || Boolean(error)" @click="emit('receiveWarehouse')">
+          <FaIcon name="i-lucide:warehouse" class="size-4" />{{ t('purchaseWarehouseReceipt.action') }}
+        </FaButton>
         <FaButton type="button" variant="outline" size="sm" class="px-3 h-8" :disabled="busy || loading || !detail || Boolean(error)" @click="toast.info(t('purchaseOrderDrawer.printNotice'))">
           <FaIcon name="i-lucide:printer" class="size-4" aria-hidden="true" />{{ t('purchaseOrderDrawer.print') }}
         </FaButton>

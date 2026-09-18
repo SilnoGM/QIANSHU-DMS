@@ -1,3 +1,4 @@
+import { PaymentRecipientAccountInputDto } from '../../payment-recipients/payment-recipient.dto'
 import { ApiProperty } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import {
@@ -112,6 +113,10 @@ export class PurchaseOrderPartInputDto {
 }
 
 export class CreatePurchaseOrderRequestDto {
+  @ApiProperty({ type: [PaymentRecipientAccountInputDto], required: false, maxItems: 3, description: 'Required for CUSTOM purchases; forbidden for CATALOG purchases.' })
+  @IsOptional() @IsArray() @ArrayMaxSize(3) @ValidateNested({ each: true }) @Type(() => PaymentRecipientAccountInputDto)
+  paymentAccounts?: PaymentRecipientAccountInputDto[]
+
   @ApiProperty({ enum: PurchaseOrderType })
   @IsEnum(PurchaseOrderType)
   purchaseType!: PurchaseOrderType

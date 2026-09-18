@@ -49,9 +49,12 @@ const CONTEXT_PURCHASE_ORDER_SELECT = {
   parts: {
     orderBy: { partNumber: 'asc' },
     select: {
-      id: true, partNumber: true, status: true, shippingMarkText: true,
-      shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true,
+      id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true,
+      shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true, destinationWarehouseValue: true,
       shippedBy: { select: { id: true, displayName: true } },
+      warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true,
+      warehouseReceivedBy: { select: { id: true, displayName: true } },
+
       items: { orderBy: { line: { lineNumber: 'asc' } }, select: {
         purchaseOrderLineId: true, quantity: true, line: { select: { lineNumber: true } },
       } },
@@ -223,12 +226,19 @@ export class PurchaseOrderFactoryShipmentQueryService {
       version: row.version,
       shippingMarkText: row.shippingMarkText,
       parts: row.parts.map(part => ({
-        id: part.id, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
+        id: part.id, shipmentNo: part.shipmentNo, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
         shippedAt: part.shippedAt?.toISOString() ?? null,
         shippedById: part.shippedById,
         shippedBy: part.shippedBy,
         shipmentRecordedAt: part.shipmentRecordedAt?.toISOString() ?? null,
         shipmentRemark: part.shipmentRemark,
+        trackingNo: part.trackingNo ?? null,
+        destinationWarehouseValue: part.destinationWarehouseValue ?? null,
+        warehouseReceivedAt: part.warehouseReceivedAt?.toISOString() ?? null,
+        warehouseReceivedById: part.warehouseReceivedById,
+        warehouseRecordedAt: part.warehouseRecordedAt?.toISOString() ?? null,
+        warehouseRemark: part.warehouseRemark,
+        warehouseReceivedBy: part.warehouseReceivedBy,
         items: part.items.map(item => ({ purchaseOrderLineId: item.purchaseOrderLineId, lineNumber: item.line.lineNumber, quantity: item.quantity })),
       })),
       lineSummary: {

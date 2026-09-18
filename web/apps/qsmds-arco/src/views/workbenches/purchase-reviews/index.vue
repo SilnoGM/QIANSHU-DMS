@@ -5,8 +5,10 @@ import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
+import { formatDateTime } from '@/components/base/DateTimeDisplay/format'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
+import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
@@ -16,9 +18,10 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getPurchaseOrderApiFailure, orderStatusLabel, orderStatusTagClass, purchaseTypeLabel } from '../../operations/purchase-orders/purchase-order-list.logic'
 import PurchaseOrderReviewModal from '../../operations/purchase-orders/purchase-order-review-modal.vue'
+import PurchaseCancellationModal from './cancellation-modal.vue'
 import { buildReviewQuery, countReviewViews } from './logic'
 
-defineOptions({ name: 'QsPurchaseReviews' })
+defineOptions({ name: 'QsPurchaseTransportReviews' })
 const { t } = useI18n()
 const { auth } = useAppAuth()
 const account = useAppAccountStore()
@@ -37,6 +40,8 @@ const error = ref('')
 const countsError = ref(false)
 const reviewVisible = ref(false)
 const reviewId = ref<string | null>(null)
+const cancellationVisible = ref(false)
+const cancellationId = ref<string | null>(null)
 const detailVisible = ref(false)
 const selectedOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
 const detail = shallowRef<PurchaseOrderDetailDto | null>(null)
@@ -56,6 +61,16 @@ const columns = computed<QsGenericTableColumn<PurchaseOrderListItemDto>[]>(() =>
   { id: 'amount', accessorKey: 'purchaseTotalAmount', title: t('purchaseReview.amount'), minWidth: 185, align: 'right' },
   { id: 'terms', accessorKey: 'depositDueAmount', title: t('purchaseReview.terms'), minWidth: 220, align: 'right' },
   { id: 'date', accessorKey: 'createdAt', title: t('purchaseReview.date'), minWidth: 190 },
+  ...(status.value === 'PENDING_REVIEW'
+    ? []
+    : [{
+        id: 'reviewSummary',
+        title: t('purchaseReview.summary.title'),
+        minWidth: 360,
+        accessorFn: (row: PurchaseOrderListItemDto) => row.reviewSummary
+          ? `${row.reviewSummary.reviewedBy.displayName} · ${formatDateTime(row.reviewSummary.reviewedAt)} · ${t('purchaseReview.summary.reason')}：${row.reviewSummary.reason || t('purchaseReview.summary.notRecorded')}`
+          : t('purchaseReview.summary.notRecorded'),
+      }]),
   { id: 'status', accessorKey: 'orderStatus', title: t('purchaseReview.status'), minWidth: 130 },
 ])
 function images(row: PurchaseOrderListItemDto): ImageGroupItem[] {
@@ -141,6 +156,12 @@ function openReview(row: PurchaseOrderListItemDto): void {
   reviewId.value = row.id
   reviewVisible.value = true
 }
+function openCancellation(row: PurchaseOrderListItemDto): void {
+  if (canRead.value && canReview.value && status.value === 'APPROVED') {
+    cancellationId.value = row.id
+    cancellationVisible.value = true
+  }
+}
 async function loadDetail(): Promise<void> {
   detailController?.abort()
   const orderId = selectedOrder.value?.id
@@ -187,6 +208,8 @@ watch(() => [canRead.value, canReview.value, account.authEpoch], () => {
   detailController?.abort()
   reviewVisible.value = false
   reviewId.value = null
+  cancellationVisible.value = false
+  cancellationId.value = null
   detailVisible.value = false
   selectedOrder.value = null
   detail.value = null
@@ -221,7 +244,7 @@ onBeforeUnmount(() => {
         row-key="id" :show-row-number="false" :columns="columns" :data="items"
         :loading="loading" :error="error || undefined" :total="total" :addable="false"
         :search-placeholder="t('purchaseReview.search')" :empty-title="t('purchaseReview.empty')"
-        :page-size-options="[20, 50, 100]" :action-column="{ fixed: 'right', minWidth: 145 }"
+        :page-size-options="[20, 50, 100]" :action-column="{ fixed: 'right', minWidth: status === 'APPROVED' && canReview ? 230 : 145 }"
         @search="search" @pagination-change="load" @retry="refresh"
       >
         <template #cell-orderNo="{ row }">
@@ -235,9 +258,16 @@ onBeforeUnmount(() => {
           </QsTableStackedCell>
         </template>
         <template #cell-source="{ row }">
-          <QsTableStackedCell>
+          <QsTableStackedCell class="group">
             <QsTableStackedLine content-class="qs-type-data-emphasis font-mono">
               {{ row.original.salesOrderNo ?? t('purchaseReview.stock') }}
+              <template #suffix>
+                <CopyCellButton
+                  v-if="row.original.salesOrderNo"
+                  :label="t('purchaseReview.source')"
+                  :text="row.original.salesOrderNo"
+                />
+              </template>
             </QsTableStackedLine>
             <QsTableStackedLine v-if="row.original.customerName" tone="muted">
               {{ row.original.customerName }}
@@ -287,21 +317,39 @@ onBeforeUnmount(() => {
             {{ orderStatusLabel(row.original.orderStatus) }}
           </FaTag>
         </template>
+        <template #cell-reviewSummary="{ row }">
+          <QsTableStackedCell v-if="row.original.reviewSummary" class="max-w-96 w-full">
+            <div class="flex gap-3 min-w-0 whitespace-nowrap items-center">
+              <QsPersonDisplay :display-name="row.original.reviewSummary.reviewedBy.displayName" size="sm" class="max-w-32" />
+              <DateTimeDisplay :value="row.original.reviewSummary.reviewedAt" class="text-muted-foreground shrink-0" />
+            </div>
+            <QsTableStackedLine :label="t('purchaseReview.summary.reason')" nowrap content-class="flex-1 overflow-hidden">
+              <FaTooltip :text="row.original.reviewSummary.reason || t('purchaseReview.summary.notRecorded')">
+                <span class="block truncate">{{ row.original.reviewSummary.reason || t('purchaseReview.summary.notRecorded') }}</span>
+              </FaTooltip>
+            </QsTableStackedLine>
+          </QsTableStackedCell>
+          <span v-else class="qs-type-meta">{{ t('purchaseReview.summary.notRecorded') }}</span>
+        </template>
         <template #actions="{ row }">
           <FaButton v-if="row.orderStatus === 'PENDING_REVIEW' && canReview" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" @click="openReview(row)">
             <FaIcon name="i-lucide:clipboard-check" aria-hidden="true" />{{ t('purchaseReview.review') }}
           </FaButton>
-          <FaButton v-else variant="outline" size="sm" @click="view(row)">
-            {{ t('purchaseReview.view') }}
+          <FaButton v-else variant="ghost" size="sm" class="min-h-11 sm:min-h-8" @click="view(row)">
+            <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('purchaseReview.view') }}
+          </FaButton>
+          <FaButton v-if="status === 'APPROVED' && canReview" variant="ghost" size="sm" class="text-destructive min-h-11 sm:min-h-8" :aria-label="`${row.orderNo}：${t('purchaseReview.cancellation.action')}`" @click="openCancellation(row)">
+            <FaIcon name="i-lucide:circle-x" aria-hidden="true" />{{ t('purchaseReview.cancellation.action') }}
           </FaButton>
         </template>
       </QsGenericTable>
     </FaPageMain>
     <PurchaseOrderReviewModal v-model="reviewVisible" :order-id="reviewId" :currencies="currencyCatalog.currencies.value" @detail-updated="refresh" />
+    <PurchaseCancellationModal v-model="cancellationVisible" :order-id="cancellationId" @cancelled="refresh" />
     <QsPurchaseOrderDrawer
       v-model="detailVisible" :order="selectedOrder" :detail="detail" :currencies="currencyCatalog.currencies.value"
       :loading="detailLoading" :error="detailError" action-error="" :busy="false"
-      :can-manage-payment="false" :can-attach-document="false" @reload="loadDetail"
+      :can-attach-document="false" @reload="loadDetail"
     />
   </div>
 </template>

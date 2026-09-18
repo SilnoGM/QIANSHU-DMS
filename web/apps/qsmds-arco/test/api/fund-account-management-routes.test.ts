@@ -15,7 +15,7 @@ test('财务工作台注册账户管理分组及两个资金账户入口', () =>
   assert.equal(fundAccountManagementRoutes.path, '/qs-finance/fund-accounts')
   assert.equal(fundAccountManagementRoutes.name, 'qsFinanceFundAccountManagement')
   assert.equal(fundAccountManagementRoutes.meta?.title, '账户管理')
-  assert.equal(fundAccountManagementRoutes.meta?.icon, 'i-lucide:wallet-cards')
+  assert.equal(fundAccountManagementRoutes.meta?.icon, 'qs-fund-accounts')
   assert.deepEqual(
     fundAccountManagementRoutes.meta?.auth,
     ['fund-accounts:read'],

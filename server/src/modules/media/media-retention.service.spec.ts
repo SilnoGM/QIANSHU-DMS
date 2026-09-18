@@ -92,6 +92,21 @@ function createFixture(overrides: {
 describe('MediaAssetRetentionService', () => {
   const transaction = {} as Prisma.TransactionClient
 
+  it('queues unreferenced draft content for retention without moving files before commit', async () => {
+    const fixture = createFixture()
+    await expect(fixture.service.markUnreferencedForTrash(transaction, ASSET_ID)).resolves.toBe('TRASHED')
+    expect(fixture.events).toEqual(['lock-asset', 'check-references', 'mark-trashed'])
+    expect(fixture.markTrashed).toHaveBeenCalledWith(transaction, ASSET_ID, NOW, RETENTION_UNTIL)
+    expect(fixture.moveToTrash).not.toHaveBeenCalled()
+    expect(fixture.stat).not.toHaveBeenCalled()
+  })
+
+  it('keeps an image referenced by another domain when invalidating its draft', async () => {
+    const fixture = createFixture({ referenced: true })
+    await expect(fixture.service.markUnreferencedForTrash(transaction, ASSET_ID)).resolves.toBe('ACTIVE_REFERENCE')
+    expect(fixture.markTrashed).not.toHaveBeenCalled()
+  })
+
   it('locks MediaAsset, checks all references, moves content and starts seven-day retention', async () => {
     const fixture = createFixture()
 

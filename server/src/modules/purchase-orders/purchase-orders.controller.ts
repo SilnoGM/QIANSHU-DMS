@@ -48,6 +48,7 @@ import {
   PurchaseOrderPaymentRequestDto,
   PurchaseOrderPaymentVoidRequestDto,
   PurchaseOrderReviewRequestDto,
+  PurchaseOrderPrepareReviewShippingMarksRequestDto,
   PurchaseOrderStatusRequestDto,
 } from './dto/purchase-order-mutation.dto'
 import {
@@ -454,11 +455,14 @@ export class PurchaseOrdersController {
         'PURCHASE_ORDER_CREATE_IDEMPOTENCY_CONFLICT',
         'PURCHASE_ORDER_NUMBER_CONFLICT',
         'PURCHASE_ORDER_NUMBERING_UNAVAILABLE',
+        'PURCHASE_SHIPMENT_NUMBER_CONFLICT',
+        'PURCHASE_SHIPMENT_NUMBERING_UNAVAILABLE',
         'PURCHASE_ORDER_SHIPPING_MARK_CONTEXT_CHANGED',
         'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE',
         'PURCHASE_ORDER_STATE_CHANGED',
       ] },
       { status: 422, codes: [
+        'PAYMENT_RECIPIENT_INVALID', 'PAYMENT_RECIPIENT_IMAGE_UNAVAILABLE',
         'PURCHASE_ORDER_CURRENCY_UNAVAILABLE',
         'PURCHASE_ORDER_CUSTOM_PRICES_INVALID',
         'PURCHASE_ORDER_CUSTOM_SUPPLIER_INVALID',
@@ -477,6 +481,7 @@ export class PurchaseOrdersController {
         'PURCHASE_ORDER_TOTAL_MISMATCH',
         'VALIDATION_FAILED',
       ] },
+      { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },
     ],
   })
   async create(
@@ -508,6 +513,29 @@ export class PurchaseOrdersController {
     return this.queries.getById(params.purchaseOrderId)
   }
 
+  @Post(':purchaseOrderId/prepare-review-shipping-marks')
+  @RequirePermissions('purchase-orders:review')
+  @HttpCode(HttpStatus.OK)
+  @ApiContractResponse({ status: HttpStatus.OK, type: PurchaseOrderDetailDto })
+  @ApiApplicationContract({
+    operationId: 'purchase_orders_prepare_review_shipping_marks',
+    session: 'required', authorization: true, csrf: true, badRequest: true,
+    resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] },
+      { status: 409, codes: ['PURCHASE_ORDER_STATE_CHANGED', 'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  prepareReviewShippingMarks(
+    @Param() params: PurchaseOrderIdParamDto,
+    @Body() dto: PurchaseOrderPrepareReviewShippingMarksRequestDto,
+    @Req() request: object,
+  ): Promise<PurchaseOrderDetail> {
+    return this.mutations.prepareReviewShippingMarks(mutationContext(request), params.purchaseOrderId, dto)
+  }
+
   @Post(':purchaseOrderId/review')
   @RequirePermissions('purchase-orders:review')
   @HttpCode(HttpStatus.OK)
@@ -520,7 +548,8 @@ export class PurchaseOrdersController {
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
       { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] },
       { status: 409, codes: ['PURCHASE_ORDER_STATE_CHANGED', 'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE'] },
-      { status: 422, codes: ['VALIDATION_FAILED'] },
+      { status: 422, codes: ['VALIDATION_FAILED', 'PURCHASE_ORDER_IMAGE_REQUIRED', 'PURCHASE_ORDER_IMAGE_STALE', 'PURCHASE_ORDER_IMAGE_UNAVAILABLE', 'PURCHASE_ORDER_DOCUMENT_ALREADY_EXISTS', 'PURCHASE_ORDER_IMAGE_NOT_ALLOWED', 'PURCHASE_ORDER_IMAGE_MARKS_REQUIRED'] },
+      { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },
     ],
   })
   review(
@@ -532,7 +561,7 @@ export class PurchaseOrdersController {
   }
 
   @Patch(':purchaseOrderId/order-status')
-  @RequirePermissions('purchase-orders:update')
+  @RequirePermissions('purchase-orders:review')
   @ApiContractResponse({ status: HttpStatus.OK, type: PurchaseOrderDetailDto })
   @ApiApplicationContract({
     operationId: 'purchase_orders_update_order_status',
@@ -568,7 +597,11 @@ export class PurchaseOrdersController {
     errors: [
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
       { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] },
+      { status: 409, codes: ['PURCHASE_WAREHOUSE_RECEIPT_STATE_CHANGED'] },
       { status: 422, codes: [
+        'PURCHASE_WAREHOUSE_RECEIPT_NOT_ALLOWED',
+        'PURCHASE_WAREHOUSE_RECEIPT_TARGET_INVALID',
+        'PURCHASE_WAREHOUSE_RECEIPT_TIME_INVALID',
         'PURCHASE_ORDER_CANCELLED',
         'PURCHASE_ORDER_FULFILLMENT_TRANSITION_INVALID',
         'PURCHASE_ORDER_STATUS_TRANSITION_INVALID',
@@ -596,8 +629,11 @@ export class PurchaseOrdersController {
     resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
     errors: [
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 409, codes: ['PURCHASE_PAYABLE_STATE_CHANGED', 'PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT', 'PAYMENT_RECIPIENT_STATE_CHANGED'] },
       { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] },
       { status: 422, codes: [
+        'PAYMENT_RECIPIENT_UNAVAILABLE', 'PAYMENT_RECIPIENT_IMAGE_UNAVAILABLE',
+        'PURCHASE_PAYABLE_NOT_AVAILABLE', 'PURCHASE_PAYABLE_POSTING_UNAVAILABLE',
         'PURCHASE_ORDER_CANCELLED',
         'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE',
         'PURCHASE_ORDER_PAYMENT_AMOUNT_INVALID',
@@ -627,10 +663,12 @@ export class PurchaseOrdersController {
     resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
     errors: [
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 409, codes: ['PURCHASE_PAYABLE_STATE_CHANGED', 'PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT'] },
       { status: 404, codes: [
         'PURCHASE_ORDER_NOT_FOUND', 'PURCHASE_ORDER_PAYMENT_NOT_FOUND',
       ] },
       { status: 422, codes: [
+        'PURCHASE_PAYABLE_NOT_AVAILABLE', 'PURCHASE_PAYABLE_POSTING_UNAVAILABLE',
         'PURCHASE_ORDER_PAYMENT_ALREADY_VOIDED', 'VALIDATION_FAILED',
       ] },
     ],
@@ -681,7 +719,7 @@ export class PurchaseOrdersController {
       { status: 404, codes: [
         'PURCHASE_ORDER_DOCUMENT_NOT_FOUND', 'PURCHASE_ORDER_NOT_FOUND',
       ] },
-      { status: 422, codes: ['VALIDATION_FAILED'] },
+      { status: 422, codes: ['VALIDATION_FAILED', 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE'] },
     ],
   })
   detachDocument(

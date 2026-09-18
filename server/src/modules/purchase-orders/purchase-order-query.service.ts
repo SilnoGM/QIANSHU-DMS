@@ -1,3 +1,5 @@
+import { PaymentRecipientService } from '../payment-recipients/payment-recipient.service'
+import type { PaymentRecipientProfileDto } from '../payment-recipients/payment-recipient.dto'
 import { HttpStatus, Injectable } from '@nestjs/common'
 
 import { Prisma } from '../../generated/prisma/client'
@@ -16,6 +18,7 @@ import {
 } from '../dictionaries/dictionary-lookup.service'
 import {
   formatPurchaseOrderAmountUnits,
+  normalizePurchaseOrderSnapshotAmount,
   parsePurchaseOrderAmountUnits,
 } from './domain/purchase-order-decimal'
 import type { PurchaseOrderPendingTask, PurchaseOrderReviewView } from './dto/purchase-order-query.dto'
@@ -80,7 +83,7 @@ const PURCHASE_ORDER_LIST_SELECT = {
   fulfillmentStatus: true,
   paymentStatus: true,
   shippingMarkText: true,
-  parts: { orderBy: { partNumber: 'asc' }, select: { shippingMarkText: true, shippedAt: true, status: true } },
+  parts: { orderBy: { partNumber: 'asc' }, select: { shippingMarkText: true, shippedAt: true, warehouseReceivedAt: true, status: true } },
   remark: true,
   version: true,
   createdAt: true,
@@ -95,14 +98,22 @@ const PURCHASE_ORDER_LIST_SELECT = {
   },
 } as const satisfies Prisma.PurchaseOrderSelect
 
+// 待入仓按货件事实判断；部分发货且已发子集均已入仓的采购单不再计入此待办。
+const AWAITING_WAREHOUSE_WHERE = {
+  orderStatus: 'CONFIRMED', parts: { some: { status: 'ACTIVE', shippedAt: { not: null }, warehouseReceivedAt: null } },
+} as const satisfies Prisma.PurchaseOrderWhereInput
+
 const PURCHASE_ORDER_DETAIL_SELECT = {
   ...PURCHASE_ORDER_LIST_SELECT,
   parts: {
     orderBy: { partNumber: 'asc' },
     select: {
-      id: true, partNumber: true, status: true, shippingMarkText: true,
-      shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true,
+      id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true,
+      shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true, destinationWarehouseValue: true,
       shippedBy: { select: { id: true, displayName: true } },
+      warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true,
+      warehouseReceivedBy: { select: { id: true, displayName: true } },
+
       items: { orderBy: { line: { lineNumber: 'asc' } }, select: {
         purchaseOrderLineId: true, quantity: true, line: { select: { lineNumber: true } },
       } },
@@ -215,7 +226,14 @@ export interface PurchaseOrderSupplier {
   readonly effectiveEnabled: boolean | null
 }
 
+export interface PurchaseOrderReviewSummary {
+  readonly reviewedAt: string
+  readonly reviewedBy: { readonly id: string, readonly displayName: string }
+  readonly reason: string | null
+}
+
 export interface PurchaseOrderListItem extends PurchaseOrderRecordSummaries {
+  readonly reviewSummary: PurchaseOrderReviewSummary | null
   readonly id: string
   readonly orderNo: string
   readonly purchaseType: PurchaseOrderType
@@ -251,6 +269,8 @@ export interface PurchaseOrderListItem extends PurchaseOrderRecordSummaries {
   readonly partCount: number
   readonly shippedPartCount: number
   readonly pendingPartCount: number
+  readonly warehouseReceivedPartCount: number
+  readonly pendingWarehousePartCount: number
   readonly remark: string | null
   readonly version: number
   readonly createdAt: string
@@ -295,8 +315,10 @@ export interface PurchaseOrderStatusCounts {
 }
 
 export interface PurchaseOrderDetail extends PurchaseOrderListItem {
+  readonly paymentRecipientProfile: PaymentRecipientProfileDto | null
   readonly parts: readonly {
     readonly id: string
+    readonly shipmentNo: string | null
     readonly partNumber: number
     readonly status: 'PENDING_REVIEW' | 'ACTIVE' | 'CANCELLED'
     readonly shippingMarkText: string | null
@@ -304,7 +326,14 @@ export interface PurchaseOrderDetail extends PurchaseOrderListItem {
     readonly shippedById: string | null
     readonly shipmentRecordedAt: string | null
     readonly shipmentRemark: string | null
+    readonly trackingNo: string | null
+    readonly destinationWarehouseValue: string | null
     readonly shippedBy: { readonly id: string, readonly displayName: string } | null
+    readonly warehouseReceivedAt: string | null
+    readonly warehouseReceivedById: string | null
+    readonly warehouseRecordedAt: string | null
+    readonly warehouseRemark: string | null
+    readonly warehouseReceivedBy: { readonly id: string, readonly displayName: string } | null
     readonly items: readonly { readonly purchaseOrderLineId: string, readonly lineNumber: number, readonly quantity: number }[]
   }[]
   readonly sourceSalesOrder: {
@@ -330,6 +359,10 @@ export interface PurchaseOrderDetail extends PurchaseOrderListItem {
 
 function decimalToFixed4(value: { toFixed(decimalPlaces: number): string }): string {
   return value.toFixed(4)
+}
+
+function decimalToFixed2(value: { toFixed(decimalPlaces: number): string }): string {
+  return formatPurchaseOrderAmountUnits(parsePurchaseOrderAmountUnits(value.toFixed(4)))
 }
 
 export function purchaseOrderSupplierFromSources(
@@ -379,18 +412,18 @@ function paidUnits(value: { toFixed(decimalPlaces: number): string } | null): bi
   return value === null ? 0n : parsePurchaseOrderAmountUnits(decimalToFixed4(value))
 }
 
-function referenceSubtotalUnits(lines: readonly {
+function referenceSubtotalAmount(lines: readonly {
   readonly quantity: number
   readonly referencePurchaseUnitPriceAmount: {
     toFixed(decimalPlaces: number): string
   }
-}[]): bigint {
-  return lines.reduce(
-    (sum, line) => sum + parsePurchaseOrderAmountUnits(
-      decimalToFixed4(line.referencePurchaseUnitPriceAmount),
-    ) * BigInt(line.quantity),
-    0n,
-  )
+}[]): string {
+  // 历史参考价只是成本快照，保留原四位汇总；不得把它当作两位实际应付重新舍入。
+  const total = lines.reduce((sum, line) => {
+    const [integer, fraction] = normalizePurchaseOrderSnapshotAmount(decimalToFixed4(line.referencePurchaseUnitPriceAmount)).split('.')
+    return sum + (BigInt(integer) * 10_000n + BigInt(fraction)) * BigInt(line.quantity)
+  }, 0n)
+  return normalizePurchaseOrderSnapshotAmount(`${total / 10_000n}.${(total % 10_000n).toString().padStart(4, '0')}`)
 }
 
 function mapCurrencySummary(
@@ -426,9 +459,7 @@ function mapCurrencySummary(
   return {
     currencyCode: 'CNY',
     orderCount: orderAggregate._count._all,
-    referenceSubtotalAmount: formatPurchaseOrderAmountUnits(
-      referenceSubtotalUnits(referencePriceLines),
-    ),
+    referenceSubtotalAmount: referenceSubtotalAmount(referencePriceLines),
     purchaseTotalAmount: formatPurchaseOrderAmountUnits(purchaseTotalUnits),
     depositDueAmount: formatPurchaseOrderAmountUnits(
       paidUnits(orderAggregate._sum.depositDueAmount),
@@ -518,17 +549,31 @@ function mapLineSummary(
   }
 }
 
+function mapReviewSummary(history: {
+  readonly changedAt: Date
+  readonly changedBy: { readonly id: string, readonly displayName: string }
+  readonly reason: string | null
+} | undefined): PurchaseOrderReviewSummary | null {
+  return history === undefined ? null : {
+    reviewedAt: history.changedAt.toISOString(),
+    reviewedBy: history.changedBy,
+    reason: history.reason,
+  }
+}
+
 function mapListItem(
   row: PurchaseOrderListRow,
   supplier: PurchaseOrderSupplier,
+  reviewSummary: PurchaseOrderReviewSummary | null,
 ): PurchaseOrderListItem {
   const records = summarizePurchaseOrderRecords(row)
   const activePaidUnits = parsePurchaseOrderAmountUnits(records.paidAmount)
   const totalUnits = parsePurchaseOrderAmountUnits(
-    decimalToFixed4(row.purchaseTotalAmount),
+    decimalToFixed2(row.purchaseTotalAmount),
   )
   return {
     ...records,
+    reviewSummary,
     id: row.id,
     orderNo: row.orderNo,
     purchaseType: row.purchaseType,
@@ -541,11 +586,13 @@ function mapListItem(
     partCount: row._count.parts,
     shippedPartCount: row.parts.filter(part => part.shippedAt != null).length,
     pendingPartCount: row.parts.filter(part => part.status === 'ACTIVE' && part.shippedAt == null).length,
+    warehouseReceivedPartCount: row.parts.filter(part => part.status === 'ACTIVE' && part.warehouseReceivedAt != null).length,
+    pendingWarehousePartCount: row.parts.filter(part => part.status === 'ACTIVE' && part.shippedAt != null && part.warehouseReceivedAt == null).length,
     orderDate: row.orderDate.toISOString().slice(0, 10),
     currencyCode: row.currencyCode,
     purchaseTotalAmount: formatPurchaseOrderAmountUnits(totalUnits),
-    depositDueAmount: decimalToFixed4(row.depositDueAmount),
-    balanceDueAmount: decimalToFixed4(row.balanceDueAmount),
+    depositDueAmount: decimalToFixed2(row.depositDueAmount),
+    balanceDueAmount: decimalToFixed2(row.balanceDueAmount),
     paidAmount: formatPurchaseOrderAmountUnits(activePaidUnits),
     outstandingAmount: formatPurchaseOrderAmountUnits(totalUnits - activePaidUnits),
     orderStatus: row.orderStatus,
@@ -565,6 +612,7 @@ export class PurchaseOrderQueryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly dictionaryLookup: DictionaryLookupService,
+    private readonly recipients: PaymentRecipientService,
   ) {}
 
   async list(input: PurchaseOrderListQueryInput): Promise<PurchaseOrderPage> {
@@ -584,7 +632,7 @@ export class PurchaseOrderQueryService {
         orderStatus: 'CONFIRMED',
         fulfillmentStatus: { in: ['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED'] },
       },
-      AWAITING_WAREHOUSE: { orderStatus: 'CONFIRMED', fulfillmentStatus: { in: ['PARTIALLY_SHIPPED', 'SHIPPED'] } },
+      AWAITING_WAREHOUSE: AWAITING_WAREHOUSE_WHERE,
     }
     const pendingClause: Prisma.PurchaseOrderWhereInput | undefined =
       input.view !== 'pending'
@@ -615,45 +663,59 @@ export class PurchaseOrderQueryService {
     // 列表数量、当前页与金额汇总必须共享同一份筛选谓词，并在一个事务快照内读取，
     // 显式使用 RepeatableRead，避免默认 ReadCommitted 下并发付款或订单变更
     // 令“共 N 张”、分类付款与金额矩阵读到不同快照而出现瞬时错位。
-    const [
-      total,
-      rows,
-      orderAggregate,
-      referencePriceLines,
-      paymentAggregate,
-    ] = await this.prisma.$transaction([
-      this.prisma.purchaseOrder.count({ where }),
-      this.prisma.purchaseOrder.findMany({
-        where,
-        orderBy: [{ orderDate: 'desc' }, { id: 'desc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        select: PURCHASE_ORDER_LIST_SELECT,
-      }),
-      this.prisma.purchaseOrder.aggregate({
-        where,
-        _count: { _all: true },
-        _sum: {
-          purchaseTotalAmount: true,
-          depositDueAmount: true,
-          balanceDueAmount: true,
-        },
-      }),
-      this.prisma.purchaseOrderLine.findMany({
-        where: { purchaseOrder: { is: where } },
-        select: {
-          referencePurchaseUnitPriceAmount: true,
-          quantity: true,
-        },
-      }),
-      this.prisma.purchaseOrderPayment.aggregate({
-        where: {
-          voidedAt: null,
-          purchaseOrder: { is: where },
-        },
-        _sum: { amount: true },
-      }),
-    ], { isolationLevel: 'RepeatableRead' })
+    const [total, rows, orderAggregate, referencePriceLines, paymentAggregate, reviewByOrderId]
+      = await this.prisma.$transaction(async transaction => {
+        const [total, rows, orderAggregate, referencePriceLines, paymentAggregate] = await Promise.all([
+          transaction.purchaseOrder.count({ where }),
+          transaction.purchaseOrder.findMany({
+            where,
+            orderBy: [{ orderDate: 'desc' }, { id: 'desc' }],
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+            select: PURCHASE_ORDER_LIST_SELECT,
+          }),
+          transaction.purchaseOrder.aggregate({
+            where,
+            _count: { _all: true },
+            _sum: {
+              purchaseTotalAmount: true,
+              depositDueAmount: true,
+              balanceDueAmount: true,
+            },
+          }),
+          transaction.purchaseOrderLine.findMany({
+            where: { purchaseOrder: { is: where } },
+            select: {
+              referencePurchaseUnitPriceAmount: true,
+              quantity: true,
+            },
+          }),
+          transaction.purchaseOrderPayment.aggregate({
+            where: {
+              voidedAt: null,
+              purchaseOrder: { is: where },
+            },
+            _sum: { amount: true },
+          }),
+        ])
+        // 最新变更与审核事实是两种记录：保留原 take:1 摘要，仅批量查询当前页的
+        // 精确审核转换；同一事务快照防止列表状态与审核结果读到不同时间点。
+        const reviewHistory = rows.length === 0 ? [] : await transaction.purchaseOrderStatusHistory.findMany({
+          where: {
+            purchaseOrderId: { in: rows.map(row => row.id) },
+            dimension: 'ORDER', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED',
+          },
+          orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+          distinct: ['purchaseOrderId'],
+          select: {
+            purchaseOrderId: true, changedAt: true, reason: true,
+            changedBy: { select: { id: true, displayName: true } },
+          },
+        })
+        return [total, rows, orderAggregate, referencePriceLines, paymentAggregate,
+          new Map(reviewHistory.map(history => [history.purchaseOrderId, mapReviewSummary(history)])),
+        ] as const
+      }, { isolationLevel: 'RepeatableRead' })
     const dictionarySupplierRows = rows.filter(
       (row): row is typeof row & { readonly supplierValue: string } =>
         row.supplierValue !== null,
@@ -675,6 +737,7 @@ export class PurchaseOrderQueryService {
       items: rows.map(row => mapListItem(
         row,
         supplierByOrderId.get(row.id) ?? purchaseOrderSupplierFromSources(row, undefined),
+        reviewByOrderId.get(row.id) ?? null,
       )),
       summariesByCurrency: currencySummary === null ? [] : [currencySummary],
       page,
@@ -712,11 +775,14 @@ export class PurchaseOrderQueryService {
     const pendingBaseWhere: Prisma.PurchaseOrderWhereInput = {
       AND: [baseWhere, { orderStatus: 'CONFIRMED' }],
     }
-    const { reviewCount, fulfillmentRows, paymentRows } = await this.prisma.$transaction(
+    const { reviewCount, warehouseCount, fulfillmentRows, paymentRows } = await this.prisma.$transaction(
       async (transaction) => {
         // 审核中仍属待办，但必须与可发货、可付款的已确认订单分开统计。
         const reviewCount = await transaction.purchaseOrder.count({
           where: { AND: [baseWhere, { orderStatus: 'PENDING_REVIEW' }] },
+        })
+        const warehouseCount = await transaction.purchaseOrder.count({
+          where: { AND: [baseWhere, AWAITING_WAREHOUSE_WHERE] },
         })
         const fulfillmentRows = await transaction.purchaseOrder.groupBy({
           by: ['fulfillmentStatus'],
@@ -728,7 +794,7 @@ export class PurchaseOrderQueryService {
           where: pendingBaseWhere,
           _count: { _all: true },
         })
-        return { reviewCount, fulfillmentRows, paymentRows }
+        return { reviewCount, warehouseCount, fulfillmentRows, paymentRows }
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     )
@@ -761,7 +827,7 @@ export class PurchaseOrderQueryService {
           + (fulfillmentCounts.get('PARTIALLY_SHIPPED') ?? 0),
       }, {
         value: 'AWAITING_WAREHOUSE',
-        count: (fulfillmentCounts.get('SHIPPED') ?? 0) + (fulfillmentCounts.get('PARTIALLY_SHIPPED') ?? 0),
+        count: warehouseCount,
       }, {
         value: 'AWAITING_PAYMENT',
         count: paymentStatuses.reduce(
@@ -772,8 +838,8 @@ export class PurchaseOrderQueryService {
     }
   }
 
-  async getById(purchaseOrderId: string): Promise<PurchaseOrderDetail> {
-    const row = await this.prisma.purchaseOrder.findUnique({
+  async getById(purchaseOrderId: string, transaction?: Prisma.TransactionClient): Promise<PurchaseOrderDetail> {
+    const row = await (transaction ?? this.prisma).purchaseOrder.findUnique({
       where: { id: purchaseOrderId },
       select: PURCHASE_ORDER_DETAIL_SELECT,
     })
@@ -786,38 +852,53 @@ export class PurchaseOrderQueryService {
     }
     const resolution = row.supplierValue === null
       ? undefined
-      : await this.dictionaryLookup.resolveStoredValue({
+      : await (transaction
+          ? this.dictionaryLookup.resolveStoredValueInTransaction(transaction, {
+              dictionaryCode: SUPPLIER_DICTIONARY_CODE, value: row.supplierValue,
+            })
+          : this.dictionaryLookup.resolveStoredValue({
           dictionaryCode: SUPPLIER_DICTIONARY_CODE,
           value: row.supplierValue,
-        })
+        }))
     const summary = mapListItem(
       row,
       purchaseOrderSupplierFromSources(row, resolution),
+      mapReviewSummary(row.statusHistory.find(history => history.dimension === 'ORDER'
+        && history.fromStatus === 'PENDING_REVIEW' && history.toStatus === 'CONFIRMED')),
     )
     const activePaidUnits = parsePurchaseOrderAmountUnits(summary.paidAmount)
     const totalUnits = parsePurchaseOrderAmountUnits(
-      decimalToFixed4(row.purchaseTotalAmount),
+      decimalToFixed2(row.purchaseTotalAmount),
     )
     return {
       ...summary,
+      paymentRecipientProfile: await this.recipients.getForOrder(transaction ?? this.prisma, row),
       sourceSalesOrder: row.salesOrder,
       parts: row.parts.map(part => ({
-        id: part.id, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
+        id: part.id, shipmentNo: part.shipmentNo, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
         shippedAt: part.shippedAt?.toISOString() ?? null,
         shippedById: part.shippedById ?? null,
         shipmentRecordedAt: part.shipmentRecordedAt?.toISOString() ?? null,
         shipmentRemark: part.shipmentRemark ?? null,
+        trackingNo: part.trackingNo ?? null,
+        destinationWarehouseValue: part.destinationWarehouseValue ?? null,
         shippedBy: part.shippedBy ?? null,
+        warehouseReceivedAt: part.warehouseReceivedAt?.toISOString() ?? null,
+        warehouseReceivedById: part.warehouseReceivedById ?? null,
+        warehouseRecordedAt: part.warehouseRecordedAt?.toISOString() ?? null,
+        warehouseRemark: part.warehouseRemark ?? null,
+        warehouseReceivedBy: part.warehouseReceivedBy ?? null,
+
         items: part.items.map(item => ({
           purchaseOrderLineId: item.purchaseOrderLineId, lineNumber: item.line.lineNumber, quantity: item.quantity,
         })),
       })),
       shippingMarkText: row.shippingMarkText,
       amounts: {
-        lineSubtotalAmount: decimalToFixed4(row.lineSubtotalAmount),
+        lineSubtotalAmount: decimalToFixed2(row.lineSubtotalAmount),
         purchaseTotalAmount: formatPurchaseOrderAmountUnits(totalUnits),
-        depositDueAmount: decimalToFixed4(row.depositDueAmount),
-        balanceDueAmount: decimalToFixed4(row.balanceDueAmount),
+        depositDueAmount: decimalToFixed2(row.depositDueAmount),
+        balanceDueAmount: decimalToFixed2(row.balanceDueAmount),
         paidAmount: formatPurchaseOrderAmountUnits(activePaidUnits),
         outstandingAmount: formatPurchaseOrderAmountUnits(
           totalUnits - activePaidUnits,
@@ -836,16 +917,16 @@ export class PurchaseOrderQueryService {
         referencePurchaseUnitPriceAmount: decimalToFixed4(
           line.referencePurchaseUnitPriceAmount,
         ),
-        actualPurchaseUnitPriceAmount: decimalToFixed4(
+        actualPurchaseUnitPriceAmount: decimalToFixed2(
           line.actualPurchaseUnitPriceAmount,
         ),
         quantity: line.quantity,
-        lineTotalAmount: decimalToFixed4(line.lineTotalAmount),
+        lineTotalAmount: decimalToFixed2(line.lineTotalAmount),
       })),
       payments: row.payments.map(payment => ({
         id: payment.id,
         paymentType: payment.paymentType,
-        amount: decimalToFixed4(payment.amount),
+        amount: decimalToFixed2(payment.amount),
         paidAt: payment.paidAt.toISOString(),
         paymentMethod: payment.paymentMethod,
         remark: payment.remark,

@@ -71,7 +71,7 @@ function shipmentTargets(input: {
   readonly mode: FactoryShipmentSelectionMode
   readonly orders: readonly FactoryShipmentModalPurchaseOrder[]
   readonly selectedIds: readonly string[]
-}): FactoryShipmentIntent['targets'] {
+}): Omit<FactoryShipmentIntent['targets'][number], 'destinationWarehouses'>[] {
   const selected = new Set(input.selectedIds)
   return input.orders.filter(isPendingFactoryShipment)
     .map(order => ({
@@ -91,13 +91,51 @@ export function buildFactoryShipmentIntent(input: {
   readonly orders: readonly FactoryShipmentModalPurchaseOrder[]
   readonly selectedIds: readonly string[]
   readonly reason: string
+  readonly trackingNumbersByPart?: Readonly<Record<string, string>>
+  readonly destinationWarehousesByPart: Readonly<Record<string, string | null>>
 }): FactoryShipmentIntent {
   const reason = input.reason.trim().normalize('NFKC')
   return {
     mode: input.mode,
-    targets: shipmentTargets(input),
+    targets: shipmentTargets(input).map((target) => {
+      // 草稿随勾选保留，只提交本次实际发出的货件，避免附带已取消选择的物流信息。
+      const trackingNumbers = target.partIds.flatMap((partId) => {
+        const value = input.trackingNumbersByPart?.[partId] ?? ''
+        const error = validateShipmentTrackingNo(value)
+        if (error) {
+          throw new Error(error)
+        }
+        const trackingNo = value.trim()
+        return trackingNo ? [{ partId, trackingNo }] : []
+      })
+      const destinationWarehouses = target.partIds.map((partId) => {
+        const warehouseValue = input.destinationWarehousesByPart[partId]
+        if (warehouseValue === null || warehouseValue === undefined || warehouseValue.length === 0) {
+          throw new Error('warehouseRequired')
+        }
+        return { partId, warehouseValue }
+      })
+      return trackingNumbers.length ? { ...target, destinationWarehouses, trackingNumbers } : { ...target, destinationWarehouses }
+    }),
     reason: reason.length === 0 ? null : reason,
   }
+}
+
+export function validateDestinationWarehouse(
+  value: string | null | undefined,
+  selectableValues: readonly string[],
+): 'required' | 'unavailable' | null {
+  if (value === null || value === undefined || value.length === 0) {
+    return 'required'
+  }
+  return selectableValues.includes(value) ? null : 'unavailable'
+}
+
+export function validateShipmentTrackingNo(value: string): 'tooLong' | 'controlCharacters' | null {
+  if (/\p{Cc}/u.test(value)) {
+    return 'controlCharacters'
+  }
+  return [...value.trim()].length > 100 ? 'tooLong' : null
 }
 
 export function calculateFactoryShipmentImpact(input: {

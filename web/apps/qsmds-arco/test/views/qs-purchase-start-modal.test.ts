@@ -13,7 +13,7 @@ const TYPES = new URL(
   import.meta.url,
 )
 
-test('采购开始弹窗复用公共弹窗与供应商字典且不直接读取 API 或 Store', async () => {
+test('采购开始弹窗复用公共弹窗与供应商字典并绑定登录草稿', async () => {
   const [source, types] = await Promise.all([
     readFile(SOURCE, 'utf8'),
     readFile(TYPES, 'utf8'),
@@ -24,7 +24,9 @@ test('采购开始弹窗复用公共弹窗与供应商字典且不直接读取 A
   assert.match(source, /dictionary-code="service_provider\.supplier"/u)
   assert.match(types, /export type PurchaseStartProductMode = 'CATALOG' \| 'CUSTOM'/u)
   assert.match(types, /signal: AbortSignal/u)
-  assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)
+  assert.match(source, /savePurchaseRecipientDraft/u)
+  assert.match(source, /account.userId/u)
+  assert.match(source, /recipientError.value === null/u)
 })
 
 test('采购开始弹窗提供双面板、条件供应商步骤与可访问选择语义', async () => {
@@ -34,17 +36,11 @@ test('采购开始弹窗提供双面板、条件供应商步骤与可访问选�
   assert.match(source, /下拉选择供应商/u)
   assert.match(source, /填写供应商名称/u)
   assert.match(source, /role="radiogroup"/u)
-  assert.equal(source.match(/type="radio"/gu)?.length, 2)
+  assert.match(source, /v-for="mode in/u)
   assert.match(source, /grid-cols-1 sm:grid-cols-2/u)
   assert.match(source, /peer-focus-visible:ring-2/u)
-  assert.equal(source.match(/data-testid="purchase-start-product-mode-card"/gu)?.length, 2)
-  assert.equal(source.match(/data-testid="purchase-start-product-mode-emblem"/gu)?.length, 2)
-  assert.match(source, /min-h-64/u)
-  assert.match(source, /size-16/u)
-  assert.match(source, />CATALOG</u)
-  assert.match(source, />CUSTOM</u)
-  assert.match(source, /i-lucide:mouse-pointer-click/u)
-  assert.match(source, /已选中/u)
+  assert.match(source, /QsPaymentRecipientEditor/u)
+  assert.match(source, /:minimum="1"/u)
   assert.match(source, /min-h-11/u)
   assert.match(source, /class="min-h-11 w-full"/u)
   assert.match(source, /开始采购/u)

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <g transform="translate(2 2) scale(.9375)">
+    <path d="M16 8Q36 7 55 9Q58 9 58 13V53Q58 57 54 57H15Q11 56 11 52V13Q11 8 16 8Z" fill="#F7F8F4" stroke="#27312B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M12 10H56V21H12Z" fill="oklch(var(--primary))" stroke="none" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M12 21H57" fill="none" stroke="#27312B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M17 28H27V49H17Z" fill="color-mix(in srgb, oklch(var(--primary)) 18%, #F7F8F4)" stroke="#27312B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M33 28H50V37H33Z" fill="color-mix(in srgb, oklch(var(--primary)) 18%, #F7F8F4)" stroke="#27312B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M34 44H50M34 49H46" fill="none" stroke="#27312B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M7 38Q8 27 6 20" fill="none" stroke="#27312B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M7 29Q2 24 5 16Q13 18 7 29Z" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M7 28L6 20" fill="none" stroke="#27312B" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M8 36Q10 28 17 29Q16 37 8 36Z" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M9 35L14 31" fill="none" stroke="#27312B" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

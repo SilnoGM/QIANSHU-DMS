@@ -40,6 +40,7 @@ function stockInput(): Record<string, unknown> {
     parts: [{ key: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', items: [{ lineNumber: 1, quantity: 2 }] }],
     purchaseType: 'STOCK',
     productMode: 'CUSTOM',
+    paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '供应商', bankName: '测试银行', bankAccount: '622200001234' }],
     customSupplierName: ' ＡＢＣ 供应商 ',
     orderDate: TODAY,
     expectedShippingMarkResolution: 'a'.repeat(64),
@@ -71,6 +72,11 @@ function captureApiException(action: () => unknown): ApiException {
 }
 
 describe('normalizePurchaseOrderCreateCommand', () => {
+  it('requires at least one complete recipient for a new custom order and retains bank details', () => {
+    expect(() => normalizePurchaseOrderCreateCommand({ ...stockInput(), paymentAccounts: undefined }, TODAY)).toThrow()
+    const accounts = [{ paymentMethod: 'BANK_TRANSFER', recipientName: '供应商', bankName: '测试银行', bankAccount: '622200001234' }]
+    expect(normalizePurchaseOrderCreateCommand({ ...stockInput(), paymentAccounts: accounts }, TODAY)).toMatchObject({ paymentAccounts: accounts })
+  })
   it('accepts the DTO class instance produced by the global ValidationPipe', () => {
     const transformed = plainToInstance(
       CreatePurchaseOrderRequestDto,
@@ -82,6 +88,7 @@ describe('normalizePurchaseOrderCreateCommand', () => {
 
   it('normalizes a sales-linked command and computes trusted totals', () => {
     expect(normalizePurchaseOrderCreateCommand(linkedInput(), TODAY)).toEqual({
+      paymentAccounts: [],
       parts: [{ key: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', items: [{ lineNumber: 1, quantity: 2 }] }],
       purchaseType: 'SALES_LINKED',
       productMode: 'CATALOG',
@@ -97,15 +104,15 @@ describe('normalizePurchaseOrderCreateCommand', () => {
           lineType: 'CATALOG',
           productId: '22222222-2222-4222-8222-222222222222',
           sourceSalesOrderLineId: '33333333-3333-4333-8333-333333333333',
-          actualPurchaseUnitPriceAmount: '20.0000',
+          actualPurchaseUnitPriceAmount: '20.00',
           quantity: 2,
-          lineTotalAmount: '40.0000',
+          lineTotalAmount: '40.00',
         },
       ],
-      lineSubtotalAmount: '40.0000',
-      purchaseTotalAmount: '40.0000',
-      depositDueAmount: '10.0000',
-      balanceDueAmount: '30.0000',
+      lineSubtotalAmount: '40.00',
+      purchaseTotalAmount: '40.00',
+      depositDueAmount: '10.00',
+      balanceDueAmount: '30.00',
       remark: '采购备注',
     })
   })
@@ -124,9 +131,9 @@ describe('normalizePurchaseOrderCreateCommand', () => {
         sourceSalesOrderLineId: null,
         name: '临时包装',
         description: '手工备货',
-        referencePurchaseUnitPriceAmount: '12.3000',
-        actualPurchaseUnitPriceAmount: '12.3000',
-        lineTotalAmount: '24.6000',
+        referencePurchaseUnitPriceAmount: '12.30',
+        actualPurchaseUnitPriceAmount: '12.30',
+        lineTotalAmount: '24.60',
       }],
     })
     expect(Object.isFrozen(normalized)).toBe(true)

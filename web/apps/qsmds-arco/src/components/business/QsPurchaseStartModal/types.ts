@@ -11,6 +11,7 @@ export interface PurchaseStartSelection {
   readonly productMode: PurchaseStartProductMode
   readonly supplierValue: string | null
   readonly customSupplierName: string | null
+  readonly paymentDraftKey?: string
 }
 
 export interface PurchaseStartPresetValidationResult {

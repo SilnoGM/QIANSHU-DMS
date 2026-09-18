@@ -17,9 +17,11 @@ import {
   MediaAssetLifecycleError,
   MediaAssetService,
 } from '../../media/media-asset.service'
+import { MediaAssetRetentionService } from '../../media/media-retention.service'
 import { MediaContentDeliveryService } from '../../media/media-content-delivery.service'
 import { requireMediaObjectKeyNamespace } from '../../media/media-storage'
 import { purchaseOrderRuleFailure, purchaseOrderValidationFailure } from '../domain/purchase-order-errors'
+import { deliverCancelledPurchaseOrderImage } from '../order-images/purchase-order-image-cancellation'
 import { isCanonicalPurchaseOrderActorId } from '../purchase-order-command.normalizer'
 import type { PurchaseOrderMutationContext } from '../purchase-order-mutation.service'
 import {
@@ -113,23 +115,32 @@ export class PurchaseOrderDocumentService {
     private readonly audit: AuditService,
     private readonly query: PurchaseOrderQueryService,
     private readonly multipart: PurchaseOrderDocumentMultipartParser,
+    private readonly retention: MediaAssetRetentionService,
   ) {}
 
   uploadTemporary(
     context: PurchaseOrderMutationContext,
     request: PurchaseOrderDocumentMultipartRequest,
+    paymentUpload?: { purpose: 'PURCHASE_PAYMENT_VOUCHER', payableId: string },
   ): Promise<PurchaseOrderTemporaryDocument> {
     requireContext(context)
     return this.multipart.parse(request, async input => {
       try {
         const prepared = await this.mediaAsset.prepare({
           actorUserId: context.actorUserId,
-          allowedTypes: ['IMAGE', 'DOCUMENT'],
+          allowedTypes: paymentUpload ? ['IMAGE'] : ['IMAGE', 'DOCUMENT'],
           declaredMimeType: input.declaredMimeType,
           originalFilename: input.originalFilename,
           requestedType: input.mediaType,
           stream: input.stream,
         })
+        if (paymentUpload) {
+          const marked = await this.prisma.mediaAsset.updateMany({
+            where: { id: prepared.id, status: 'UPLOADING', createdByUserId: context.actorUserId, uploadPurpose: null, purchasePayableUploadId: null },
+            data: { uploadPurpose: paymentUpload.purpose, purchasePayableUploadId: paymentUpload.payableId },
+          })
+          if (marked.count !== 1) return purchaseOrderRuleFailure('PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', '付款截图状态已变化，请重新上传')
+        }
         return {
           mediaAssetId: prepared.id,
           mediaType: prepared.mediaType as 'IMAGE' | 'DOCUMENT',
@@ -252,7 +263,7 @@ export class PurchaseOrderDocumentService {
       }
       const document = await transaction.purchaseOrderDocument.findFirst({
         where: { id: documentId, purchaseOrderId, detachedAt: null },
-        select: { id: true, documentType: true },
+        select: { id: true, documentType: true, mediaAssetId: true, paymentId: true },
       })
       if (document === null) {
         throw new ApiException(
@@ -261,7 +272,10 @@ export class PurchaseOrderDocumentService {
           '采购订单凭证不存在',
         )
       }
-      // 凭证与付款事实分离：解除只隐藏附件，不作废或改写实际付款记录。
+      if (document.documentType === 'PAYMENT_VOUCHER' && document.paymentId) {
+        return purchaseOrderRuleFailure('PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', '付款凭证须随付款记录保留，不能单独移除')
+      }
+      // 普通凭证解除只隐藏附件，不改写采购业务事实。
       await transaction.purchaseOrderDocument.update({
         where: { id: documentId },
         data: {
@@ -269,6 +283,12 @@ export class PurchaseOrderDocumentService {
           detachedByUserId: context.actorUserId,
         },
       })
+      // 解除正式凭证后，已归档草稿不再充当有效媒体引用；同事务标记回收，
+      // 保留磁盘原文件直到保留期届满，避免事务回滚却丢失凭证内容。
+      const retained = await this.retention.markUnreferencedForTrash(transaction, document.mediaAssetId)
+      if (retained !== 'TRASHED' && retained !== 'ACTIVE_REFERENCE') {
+        return purchaseOrderRuleFailure('PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', '采购订单凭证状态已变更，请刷新后重试')
+      }
       await transaction.purchaseOrder.update({
         where: { id: purchaseOrderId },
         data: { version: { increment: 1 } },
@@ -301,11 +321,14 @@ export class PurchaseOrderDocumentService {
         mediaAsset: { status: 'READY', deletedAt: null },
       },
       select: {
+        documentType: true,
+        purchaseOrder: { select: { orderStatus: true } },
         mediaAsset: { select: {
           checksumSha256: true,
           mimeType: true,
           objectKey: true,
           originalFilename: true,
+          sizeBytes: true,
         } },
       },
     })
@@ -320,6 +343,14 @@ export class PurchaseOrderDocumentService {
         'PURCHASE_ORDER_DOCUMENT_NOT_FOUND',
         '采购订单凭证不存在',
       )
+    }
+    // 作废状态由关联订单决定；读取时生成标记，保留归档原文件和其他类型凭证。
+    if (
+      row.purchaseOrder.orderStatus === 'CANCELLED'
+      && row.documentType === 'ORDER_ISSUANCE_VOUCHER'
+      && ['image/png', 'image/jpeg', 'image/webp'].includes(row.mediaAsset.mimeType)
+    ) {
+      return deliverCancelledPurchaseOrderImage(this.delivery, row.mediaAsset, documentId, ifNoneMatch, method, row.mediaAsset.mimeType)
     }
     const objectKey = requireMediaObjectKeyNamespace(
       row.mediaAsset.objectKey,

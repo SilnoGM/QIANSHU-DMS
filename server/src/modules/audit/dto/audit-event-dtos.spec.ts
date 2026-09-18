@@ -52,6 +52,11 @@ describe('AuditEventListQueryDto', () => {
     })
   })
 
+  it('接受包装费用改价审计事件筛选', async () => {
+    const input = plainToInstance(AuditEventListQueryDto, { eventType: 'PACKAGING_COST_AMOUNT_UPDATED' })
+    await expect(validate(input)).resolves.toEqual([])
+  })
+
   it('按 Unicode code point 接受 64 个双码元字符的 requestId', async () => {
     const input = plainToInstance(AuditEventListQueryDto, {
       requestId: '😀'.repeat(64),

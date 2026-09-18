@@ -15,6 +15,8 @@ import { PurchaseOrderCommandService } from './purchase-order-command.service'
 import { PurchaseOrderMutationService } from './purchase-order-mutation.service'
 import { PurchaseOrderProductImageService } from './products/purchase-order-product-image.service'
 import { PurchaseOrderQueryService } from './purchase-order-query.service'
+import { PurchaseOrderReviewContextController } from './purchase-order-review-context.controller'
+import { PurchaseOrderReviewContextService } from './purchase-order-review-context.service'
 import { PurchaseOrderSourceQueryService } from './purchase-order-source-query.service'
 import { PurchaseOrdersController } from './purchase-orders.controller'
 
@@ -42,6 +44,9 @@ function createRequest(): object {
 }
 
 const providers = [{
+  provide: PurchaseOrderReviewContextService,
+  useValue: { read: jest.fn() },
+}, {
   provide: PurchaseShippingMarkResolverService,
   useValue: { read: jest.fn() },
 }, {
@@ -76,10 +81,38 @@ const providers = [{
   },
 }]
 
-@Module({ controllers: [PurchaseOrdersController], providers })
+@Module({ controllers: [PurchaseOrdersController, PurchaseOrderReviewContextController], providers })
 class PurchaseOrdersContractModule {}
 
 describe('PurchaseOrdersController', () => {
+  it('reserves purchase cancellation for reviewers and accepts an omitted reason', async () => {
+    const updateOrderStatus = jest.fn().mockResolvedValue({ id: ORDER_ID, orderStatus: 'CANCELLED' })
+    const controller = new PurchaseOrdersController(
+      {} as PurchaseOrderQueryService,
+      {} as PurchaseOrderSourceQueryService,
+      {} as PurchaseOrderCommandService,
+      { updateOrderStatus } as unknown as PurchaseOrderMutationService,
+      {} as PurchaseOrderDocumentService,
+      {} as PurchaseOrderProductImageService,
+      {} as PurchaseShippingMarkResolverService,
+    )
+    const input = { toStatus: 'CANCELLED' as const }
+
+    await expect(controller.updateOrderStatus({ purchaseOrderId: ORDER_ID }, input, createRequest()))
+      .resolves.toEqual({ id: ORDER_ID, orderStatus: 'CANCELLED' })
+    expect(updateOrderStatus).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, input)
+    expect(new Reflector().get(REQUIRED_PERMISSIONS_METADATA, PurchaseOrdersController.prototype.updateOrderStatus))
+      .toEqual(['purchase-orders:review'])
+  })
+
+  it('requires review permission for the read-only eligibility check', async () => {
+    const read = jest.fn().mockResolvedValue({ available: true, message: null })
+    const controller = new PurchaseOrderReviewContextController({ read } as unknown as PurchaseOrderReviewContextService)
+    await expect(controller.read({ purchaseOrderId: ORDER_ID })).resolves.toEqual({ available: true, message: null })
+    expect(read).toHaveBeenCalledWith(ORDER_ID)
+    expect(new Reflector().get(REQUIRED_PERMISSIONS_METADATA, PurchaseOrderReviewContextController.prototype.read))
+      .toEqual(['purchase-orders:review'])
+  })
   it('requires the independent review permission and delegates the versioned approval', async () => {
     const review = jest.fn().mockResolvedValue({ id: ORDER_ID })
     const controller = new PurchaseOrdersController(
@@ -91,7 +124,7 @@ describe('PurchaseOrdersController', () => {
       {} as PurchaseOrderProductImageService,
       {} as PurchaseShippingMarkResolverService,
     )
-    const input = { expectedVersion: 2, reason: '审核通过' }
+    const input = { expectedVersion: 2, imageDraftId: ORDER_ID, reason: '审核通过' }
     await expect(controller.review({ purchaseOrderId: ORDER_ID }, input, createRequest()))
       .resolves.toEqual({ id: ORDER_ID })
     expect(review).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, input)
@@ -420,6 +453,26 @@ describe('PurchaseOrdersController OpenAPI', () => {
     document = await createOpenApiDocument(PurchaseOrdersContractModule)
   })
 
+  it('publishes a private read-only review precheck and nullable historical review summary', () => {
+    const operation: ContractOperation | undefined = document.paths['/api/purchase-orders/{purchaseOrderId}/review-context']?.get
+    expect(operation).toMatchObject({
+      operationId: 'purchase_orders_review_context',
+      security: [{ sessionCookie: [] }],
+      'x-qianshu-contract': { authorization: true, validation: true, privateNoStore: true },
+      responses: { 200: { content: { 'application/json': { schema: { $ref: '#/components/schemas/PurchaseOrderReviewContextDto' } } } } },
+    })
+    expect(operation?.['x-qianshu-contract']).not.toMatchObject({ csrf: true })
+    expect(document.components?.schemas?.PurchaseOrderReviewContextDto).toMatchObject({
+      required: ['available', 'message'],
+      properties: { available: { type: 'boolean' }, message: { type: 'string', nullable: true } },
+    })
+    for (const name of ['PurchaseOrderDetailDto', 'PurchaseOrderListItemDto']) {
+      expect(document.components?.schemas?.[name]).toMatchObject({
+        properties: { reviewSummary: { nullable: true } },
+      })
+    }
+  })
+
   it('publishes the review route with version, detail response, CSRF and state-conflict contract', () => {
     const review: ContractOperation | undefined = document.paths[
       '/api/purchase-orders/{purchaseOrderId}/review'
@@ -438,14 +491,27 @@ describe('PurchaseOrdersController OpenAPI', () => {
       } }, headers: { 'X-Request-Id': expect.any(Object) as unknown } } },
     })
     expect(document.components?.schemas?.PurchaseOrderReviewRequestDto).toMatchObject({
-      required: ['expectedVersion'],
+      required: ['imageDraftId', 'expectedVersion'],
       properties: {
+        imageDraftId: { type: 'string', format: 'uuid' },
         expectedVersion: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
         reason: { type: 'string', minLength: 1, maxLength: 500 },
       },
     })
     expect(document.components?.schemas?.PurchaseOrderPartDto).toMatchObject({
-      properties: { shippingMarkText: { type: 'string', nullable: true, maxLength: 72 } },
+      required: expect.arrayContaining(['shipmentNo', 'warehouseReceivedAt', 'warehouseReceivedById', 'warehouseRecordedAt', 'warehouseRemark', 'warehouseReceivedBy']) as unknown,
+      properties: { shipmentNo: { type: 'string', nullable: true, maxLength: 64 }, shippingMarkText: { type: 'string', nullable: true, maxLength: 72 } },
+    })
+  })
+
+  it('publishes warehouse receipt conflicts on the legacy fulfillment signing endpoint', () => {
+    expect(document.paths['/api/purchase-orders/{purchaseOrderId}/fulfillment-status']?.patch).toMatchObject({
+      'x-qianshu-contract': { conflict: true, errors: expect.arrayContaining([
+        { status: 409, codes: ['PURCHASE_WAREHOUSE_RECEIPT_STATE_CHANGED'] },
+        expect.objectContaining({ status: 422, codes: expect.arrayContaining([
+          'PURCHASE_WAREHOUSE_RECEIPT_NOT_ALLOWED', 'PURCHASE_WAREHOUSE_RECEIPT_TARGET_INVALID', 'PURCHASE_WAREHOUSE_RECEIPT_TIME_INVALID',
+        ]) as unknown }),
+      ]) as unknown },
     })
   })
 

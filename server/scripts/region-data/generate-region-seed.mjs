@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { serializeTaiwanTraditionalNamesMigration } from './taiwan-traditional-names.mjs'
 
 export const UUID_NAMESPACE = '9acbca9a-32e2-4d7c-b00f-26a2e0dc5c1e'
 
@@ -22,6 +23,10 @@ const DEFAULT_DATA_DIRECTORY = resolve(
 const DEFAULT_SEED_MIGRATION_PATH = resolve(
   SCRIPT_DIRECTORY,
   '../../prisma/migrations/20260727100000_regions_seed/migration.sql',
+)
+const TAIWAN_NAMES_MIGRATION_PATH = resolve(
+  SCRIPT_DIRECTORY,
+  '../../prisma/migrations/20260917020000_taiwan_traditional_region_names/migration.sql',
 )
 const LEVEL_ORDER = Object.freeze({
   COUNTRY_REGION: 0,
@@ -372,6 +377,7 @@ function transformTaiwan(rawSource, reviewedMappings) {
       typeof displayName === 'string',
       `中国台湾缺少人工审校映射：${county.countyname}`,
     )
+    invariant(displayName === county.countyname, '台湾县市显示名必须使用官方繁体原文')
 
     return createRegion({
       code: `TW-${county.countycode01}`,
@@ -558,8 +564,8 @@ function countRegions(regions) {
 
 function validateManifest(manifest) {
   invariant(
-    manifest.transformVersion === '1.0.0',
-    'manifest transformVersion 必须为 1.0.0',
+    manifest.transformVersion === '1.1.0',
+    'manifest transformVersion 必须为 1.1.0',
   )
   invariant(
     manifest.uuidNamespace === UUID_NAMESPACE,
@@ -818,6 +824,7 @@ function serializePathAssertion({
  * 已经能读取父级；末尾断言让任何额外行、缺行或关键路径漂移整笔事务回滚。
  */
 export function serializeRegionSeedMigration(seed) {
+  invariant(seed.transformVersion === '1.0.0', '历史 seed migration 已冻结，不得用新转换版本重写')
   invariant(
     JSON.stringify(seed.counts) === JSON.stringify(EXPECTED_COUNTS),
     '只有固定 602 节点 canonical seed 可以生成 migration',
@@ -909,7 +916,7 @@ async function runCli(arguments_) {
   const seed = await buildRegionSeed()
   const serialized = serializeRegionSeed(seed)
   const outputPath = resolve(DEFAULT_DATA_DIRECTORY, 'regions.seed.json')
-  const migration = serializeRegionSeedMigration(seed)
+  const migration = serializeTaiwanTraditionalNamesMigration(seed)
 
   if (arguments_.includes('--check')) {
     const checkedIn = await readFile(outputPath, 'utf8')
@@ -922,8 +929,12 @@ async function runCli(arguments_) {
       'utf8',
     )
     invariant(
-      checkedInMigration === migration,
-      '地区 seed migration 不是 canonical 输出，请重新生成',
+      sha256(checkedInMigration) === 'c508cdfc9a44176552a537085bded370d930618ae978a5d41375418b0c75453e',
+      '历史地区 seed migration 已发生变化，必须保留已提交的原始版本',
+    )
+    invariant(
+      await readFile(TAIWAN_NAMES_MIGRATION_PATH, 'utf8') === migration,
+      '台湾繁体名称 migration 与当前 canonical 输出不一致',
     )
     console.log(
       `Region seed and migration are up to date (${seed.counts.total} nodes).`,
@@ -937,10 +948,11 @@ async function runCli(arguments_) {
       checkedIn === serialized,
       '生成 migration 前必须先提交当前 canonical regions.seed.json',
     )
-    await mkdir(dirname(DEFAULT_SEED_MIGRATION_PATH), { recursive: true })
-    await writeFile(DEFAULT_SEED_MIGRATION_PATH, migration, 'utf8')
+    // 已提交的 migration 不可变；只允许首次生成新的向前数据迁移。
+    await mkdir(dirname(TAIWAN_NAMES_MIGRATION_PATH), { recursive: true })
+    await writeFile(TAIWAN_NAMES_MIGRATION_PATH, migration, { encoding: 'utf8', flag: 'wx' })
     console.log(
-      `Generated ${DEFAULT_SEED_MIGRATION_PATH} (${seed.counts.total} nodes).`,
+      `Generated ${TAIWAN_NAMES_MIGRATION_PATH} (22 Taiwan cities).`,
     )
     return
   }

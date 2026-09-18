@@ -10,9 +10,11 @@ const AUTH_CLEANUP_LOCK_KEY = '7449355537723376177'
 const AUTH_CLEANUP_STATEMENT_TIMEOUT = '5s'
 const AUTH_CLEANUP_FAILURE_MESSAGE = 'Authentication cleanup failed'
 
+// 候选集合必须先物化再删除。否则 PostgreSQL 可在 Nested Loop Semi Join 中
+// 多次执行含 FOR UPDATE SKIP LOCKED 的 LIMIT 子查询，导致单批实际删除超过上限。
+// 三类清理共用这一边界；排序、行锁、截止时间和每批事务语义保持一致。
 const DELETE_EXPIRED_SESSIONS_SQL = `
-  DELETE FROM "auth_sessions" AS "target"
-  WHERE "target"."id" IN (
+  WITH "candidates" AS MATERIALIZED (
     SELECT "id"
     FROM "auth_sessions"
     WHERE LEAST(
@@ -30,11 +32,13 @@ const DELETE_EXPIRED_SESSIONS_SQL = `
     LIMIT $2
     FOR UPDATE SKIP LOCKED
   )
+  DELETE FROM "auth_sessions" AS "target"
+  USING "candidates"
+  WHERE "target"."id" = "candidates"."id"
 `
 
 const DELETE_STALE_RATE_LIMITS_SQL = `
-  DELETE FROM "auth_rate_limits" AS "target"
-  WHERE ("target"."scope", "target"."subject_key_hash") IN (
+  WITH "candidates" AS MATERIALIZED (
     SELECT "scope", "subject_key_hash"
     FROM "auth_rate_limits"
     WHERE "updated_at" <= $1::timestamptz - INTERVAL '7 days'
@@ -46,11 +50,14 @@ const DELETE_STALE_RATE_LIMITS_SQL = `
     LIMIT $2
     FOR UPDATE SKIP LOCKED
   )
+  DELETE FROM "auth_rate_limits" AS "target"
+  USING "candidates"
+  WHERE "target"."scope" = "candidates"."scope"
+    AND "target"."subject_key_hash" = "candidates"."subject_key_hash"
 `
 
 const DELETE_EXPIRED_AUDIT_EVENTS_SQL = `
-  DELETE FROM "audit_events" AS "target"
-  WHERE "target"."id" IN (
+  WITH "candidates" AS MATERIALIZED (
     SELECT "id"
     FROM "audit_events"
     WHERE "occurred_at" <= $1::timestamptz - INTERVAL '365 days'
@@ -58,6 +65,9 @@ const DELETE_EXPIRED_AUDIT_EVENTS_SQL = `
     LIMIT $2
     FOR UPDATE SKIP LOCKED
   )
+  DELETE FROM "audit_events" AS "target"
+  USING "candidates"
+  WHERE "target"."id" = "candidates"."id"
 `
 
 export interface AuthCleanupCounts {

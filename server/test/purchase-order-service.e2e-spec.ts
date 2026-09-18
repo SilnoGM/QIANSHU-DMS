@@ -1,3 +1,10 @@
+import { withDatabaseBusinessClock } from './fixtures/database-business-clock.fixture'
+import { createPaymentRecipientFixture, paymentRecipientBankAccounts } from './fixtures/payment-recipient.fixture'
+import { destinationWarehouses, ensureDestinationWarehouseDictionary, TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
+import { createImageReviewDraft, createImageReviewService } from './purchase-order-image-review.fixture'
+import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
+import { ensureShipmentNumberingRule } from './purchase-shipment-numbering.fixture'
+import { PurchaseShipmentNumberingService } from '../src/modules/purchase-orders/shipments/purchase-shipment-numbering.service'
 import { ensureReceiptNumberingRule } from './fixtures/sales-receipt-numbering-service.fixture'
 import { SalesReceiptService } from '../src/modules/sales-orders/receipts/sales-receipt.service'
 import { SalesReceiptQueryService } from '../src/modules/sales-orders/receipts/sales-receipt-query.service'
@@ -21,6 +28,7 @@ import { PurchaseOrderCommandService } from '../src/modules/purchase-orders/purc
 import { PurchaseOrderCreateDependencyService } from '../src/modules/purchase-orders/purchase-order-create-dependency.service'
 import { PurchaseOrderFactoryShipmentService } from '../src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment.service'
 import { PurchaseOrderMutationService } from '../src/modules/purchase-orders/purchase-order-mutation.service'
+import { PurchasePayableService } from '../src/modules/purchase-orders/payables/purchase-payable.service'
 import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
 import { PurchaseOrderSourceQueryService } from '../src/modules/purchase-orders/purchase-order-source-query.service'
 import { SalesOrderPurchaseCoverageService } from '../src/modules/purchase-orders/sales-order-purchase-coverage.service'
@@ -101,6 +109,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     database = await createPurchaseShippingMarkDatabase()
     prisma = new IsolatedNumberingPrismaService(database) as unknown as PrismaService
     await prisma.onModuleInit()
+    await ensureDestinationWarehouseDictionary(prisma)
 
     const [twd] = await Promise.all([
       prisma.currency.findUniqueOrThrow({
@@ -217,18 +226,19 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     })).id
 
     const media = {
-      activate: jest.fn((transaction: Prisma.TransactionClient, id: string) => (
-        transaction.mediaAsset.update({
+      activate: jest.fn(async (transaction: Prisma.TransactionClient, id: string) => {
+        const asset = await transaction.mediaAsset.findUniqueOrThrow({ where: { id }, select: { mediaType: true } })
+        return transaction.mediaAsset.update({
           where: { id },
           data: {
             status: 'READY',
-            mimeType: 'application/pdf',
+            mimeType: asset.mediaType === 'IMAGE' ? 'image/png' : 'application/pdf',
             sizeBytes: 1n,
             checksumSha256: '0'.repeat(64),
             uploadExpiresAt: null,
           },
         }).then(() => undefined)
-      )),
+      }),
     } as unknown as MediaAssetService
     const salesQuery = new SalesOrderQueryService(prisma)
     const salesCommands = new SalesOrderCommandService(
@@ -323,6 +333,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         tone: 'DEFAULT',
         value: input.value,
       })),
+      resolveStoredValueInTransaction: jest.fn((_tx: unknown, input: { value: string }) => Promise.resolve({ value: input.value, label: '采购 E2E 供应商', tone: 'DEFAULT', known: true, effectiveEnabled: true })),
       resolveStoredValue: jest.fn((
         input: { dictionaryCode: string, value: string },
       ) => Promise.resolve({
@@ -353,16 +364,18 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     } as unknown as AccessControlService
     const numbering = {
       generateScopedInTransaction: new NumberingGeneratorService(prisma).generateScopedInTransaction.bind(new NumberingGeneratorService(prisma)),
+      generateScopedBatchInTransaction: new NumberingGeneratorService(prisma).generateScopedBatchInTransaction.bind(new NumberingGeneratorService(prisma)),
       generateScoped: jest.fn(() => Promise.resolve({
         number: `PO-E2E-${suffix}-${++purchaseNumber}`,
         idempotentReplay: false,
       })),
     } as unknown as NumberingGeneratorService
-    queries = new PurchaseOrderQueryService(prisma, dictionaryLookup)
+    queries = new PurchaseOrderQueryService(prisma, dictionaryLookup, createPaymentRecipientFixture(prisma))
     sourceQueries = new PurchaseOrderSourceQueryService(prisma, dictionaryLookup)
     productEdits = new SalesOrderProductEditService(prisma, new AuditService())
     productEditQueries = new SalesOrderProductEditQueryService(prisma)
     await ensureReceiptNumberingRule(prisma, actorUserId)
+    await ensureShipmentNumberingRule(prisma, actorUserId)
     salesReceipts = new SalesReceiptService(prisma, new SalesReceiptQueryService(prisma), dictionaryLookup, media,
       new FundPostingApplicationService(prisma, new AuditService()), new AuditService(), new SalesOrderAutomaticStateService(new AuditService()),
       { getPermissionCodesInTransaction: () => Promise.resolve(['sales-orders:payment', 'sales-orders:document', 'sales-receipts:review']), hasAll: () => true } as unknown as AccessControlService,
@@ -376,12 +389,14 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       new AuditService(),
       new PurchaseOrderCreateDependencyService(dictionaryLookup, accessControl),
       markResolver,
+      new PurchaseShipmentNumberingService(numbering), createPaymentRecipientFixture(prisma),
       { businessToday: () => '2026-08-27' },
     )
     factoryShipments = new PurchaseOrderFactoryShipmentService(
       prisma,
       new AuditService(),
       new SalesOrderPurchaseCoverageService(new AuditService()),
+      new DictionaryLookupService(prisma),
     )
     mutations = new PurchaseOrderMutationService(
       prisma,
@@ -392,6 +407,12 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       new SalesOrderPurchaseCoverageService(new AuditService()),
       numbering,
       markResolver,
+      new PurchaseOrderWarehouseReceiptService(prisma, new AuditService(), queries),
+      createImageReviewService(prisma, queries, new AuditService()),
+      new PurchasePayableService(new FundPostingApplicationService(prisma, new AuditService()), {
+        getPermissionCodesInTransaction: () => Promise.resolve(['purchase-orders:payment']),
+        hasAll: (granted: readonly string[], required: readonly string[]) => required.every(code => granted.includes(code)),
+      } as unknown as AccessControlService, createPaymentRecipientFixture(prisma)),
       { now: () => new Date('2026-08-27T12:00:00.000Z') },
     )
   })
@@ -407,6 +428,28 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       idempotencyKey,
       requestId: `purchase-e2e-${randomUUID()}`,
     }
+  }
+
+  async function paymentRecipientContext(orderId: string) {
+    const profile = await prisma.paymentRecipientProfile.findUniqueOrThrow({ where: { purchaseOrderId: orderId }, include: { accounts: true } })
+    return { recipientAccountId: profile.accounts[0].id, recipientProfileVersion: profile.version }
+  }
+
+  async function paymentVoucherInput(orderId: string, paymentType: 'DEPOSIT' | 'BALANCE' = 'DEPOSIT') {
+    const payable = await prisma.purchaseOrderPayable.findFirst({ where: { purchaseOrderId: orderId, paymentType }, select: { id: true } })
+    const asset = await prisma.mediaAsset.create({ data: {
+      mediaType: 'IMAGE', uploadPurpose: 'PURCHASE_PAYMENT_VOUCHER', status: 'UPLOADING', purchasePayableUploadId: payable?.id ?? null,
+      objectKey: `assets/purchase-service-payment-${randomUUID()}.png`, originalFilename: 'payment.png',
+      mimeType: 'image/png', sizeBytes: 1n, checksumSha256: '0'.repeat(64), width: 1, height: 1,
+      uploadExpiresAt: new Date('2099-01-01T00:00:00.000Z'), createdByUserId: actorUserId,
+    } })
+    return { ...await paymentRecipientContext(orderId), voucher: { mediaAssetId: asset.id } }
+  }
+
+  async function imageReviewInput(id: string) {
+    const detail = await queries.getById(id)
+    await mutations.prepareReviewShippingMarks(context(), id, { expectedVersion: detail.version })
+    return createImageReviewDraft(prisma, queries, actorUserId, id)
   }
 
   function linkedInput(sourceSalesOrderLineId: string, quantity: number) {
@@ -442,6 +485,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       expectedShippingMarkResolution: customResolution,
       salesOrderId,
       customSupplierName: 'E2E 临时供应商',
+      paymentAccounts: paymentRecipientBankAccounts(),
       orderDate: '2026-08-27',
       lines: [{
         lineType: 'CUSTOM',
@@ -508,6 +552,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       purchaseType: 'STOCK',
       productMode: 'CUSTOM',
       customSupplierName: 'E2E 备货供应商',
+      paymentAccounts: paymentRecipientBankAccounts(),
       orderDate: '2026-08-27',
       expectedShippingMarkResolution: customResolution,
       lines: [{
@@ -546,7 +591,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       lines: [{
         lineType: 'CUSTOM',
         referencePurchaseUnitPriceAmount: '25.0000',
-        actualPurchaseUnitPriceAmount: '25.0000',
+        actualPurchaseUnitPriceAmount: '25.00',
       }],
     })
 
@@ -558,14 +603,16 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     }
     await expect(mutations.recordPayment(context(), createdId, {
       paymentType: 'DEPOSIT', amount: '10', paidAt: '2026-08-27T10:00:00.000Z', paymentMethod: 'BANK_TRANSFER',
+      ...await paymentVoucherInput(createdId),
     })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
     await expect(mutations.updateFulfillmentStatus(context(), createdId, { toStatus: 'PREPARING' }))
       .rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
-    await expect(factoryShipments.shipPurchaseOrder(context(), createdId, { expectedVersion: created.version, partIds: created.parts.map(part => part.id) }))
+    await expect(factoryShipments.shipPurchaseOrder(context(), createdId, { expectedVersion: created.version, partIds: created.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(created.parts.map(part => part.id)) }))
       .rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_NOT_ALLOWED' })
+    const imageReview = await imageReviewInput(createdId)
     const reviewResults = await Promise.allSettled([
-      mutations.review(context(), createdId, { expectedVersion: created.version }),
-      mutations.review(context(), createdId, { expectedVersion: created.version }),
+      mutations.review(context(), createdId, imageReview),
+      mutations.review(context(), createdId, imageReview),
     ])
     expect(reviewResults.filter(result => result.status === 'fulfilled')).toHaveLength(1)
     expect(reviewResults.find(result => result.status === 'rejected')).toMatchObject({
@@ -575,7 +622,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING',
       shippingMarkText: expect.stringMatching(/^MARK\d{8}$/u) as unknown,
       shippingMarks: [expect.stringMatching(/^MARK\d{8}$/u) as unknown],
-      orderNo: created.orderNo, version: created.version + 1,
+      orderNo: created.orderNo, version: created.version + 2,
     })
     await expect(prisma.purchaseOrderStatusHistory.count({ where: { purchaseOrderId: createdId } }))
       .resolves.toBe(2)
@@ -593,6 +640,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       amount: '10',
       paidAt: '2026-08-27T10:00:00.000Z',
       paymentMethod: 'BANK_TRANSFER',
+      ...await paymentVoucherInput(createdId),
     })
     const paid = await mutations.recordPayment({
       actorUserId, requestId: `purchase-balance-${suffix}`,
@@ -601,35 +649,36 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       amount: '15',
       paidAt: '2026-08-27T11:00:00.000Z',
       paymentMethod: 'BANK_TRANSFER',
+      ...await paymentVoucherInput(createdId, 'BALANCE'),
     })
     expect(paid).toMatchObject({
       paymentStatus: 'PAID',
-      amounts: { paidAmount: '25.0000', outstandingAmount: '0.0000' },
+      amounts: { paidAmount: '25.00', outstandingAmount: '0.00' },
       paymentRecordSummary: { totalCount: 2, count: 2, byType: [
-        { paymentType: 'DEPOSIT', count: 1, amount: '10.0000' },
-        { paymentType: 'BALANCE', count: 1, amount: '15.0000' },
-        { paymentType: 'OTHER', count: 0, amount: '0.0000' },
+        { paymentType: 'DEPOSIT', count: 1, amount: '10.00' },
+        { paymentType: 'BALANCE', count: 1, amount: '15.00' },
+        { paymentType: 'OTHER', count: 0, amount: '0.00' },
       ] },
     })
     const paidPage = await queries.list({ view: 'all', keyword: created.orderNo, pageSize: 1 })
     expect(paidPage.items).toHaveLength(1)
     expect(paidPage.items[0]).toMatchObject({
-      id: createdId, paidAmount: '25.0000',
+      id: createdId, paidAmount: '25.00',
       paymentRecordSummary: paid.paymentRecordSummary,
-      documentSummary: { count: 0 },
+      documentSummary: { count: 3 },
       changeSummary: paid.changeSummary,
     })
     expect(paidPage.items[0]?.changeSummary.latest?.kind).toBe('STATUS')
-    expect(paidPage.items[0]?.changeSummary.latest?.reason).toContain('25.0000')
+    expect(paidPage.items[0]?.changeSummary.latest?.reason).toContain('25.00')
     await expect(queries.list({ view: 'all', keyword: created.orderNo, page: 2, pageSize: 1 }))
       .resolves.toMatchObject({ total: 1, items: [] })
     await expect(mutations.updateOrderStatus({
       actorUserId, requestId: `purchase-cancel-paid-${suffix}`,
     }, createdId, { toStatus: 'CANCELLED' }))
       .rejects.toMatchObject({ code: 'PURCHASE_ORDER_CANCEL_HAS_PAYMENTS' })
-    await factoryShipments.shipPurchaseOrder({
+    await withDatabaseBusinessClock(prisma, () => factoryShipments.shipPurchaseOrder({
       actorUserId, requestId: `purchase-SHIPPED-${suffix}`,
-    }, createdId, { expectedVersion: paid.version, partIds: paid.parts.map(part => part.id) })
+    }, createdId, { expectedVersion: paid.version, partIds: paid.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(paid.parts.map(part => part.id)) }))
     await mutations.updateFulfillmentStatus({
       actorUserId, requestId: `purchase-SIGNED-${suffix}`,
     }, createdId, { toStatus: 'SIGNED' })
@@ -645,15 +694,15 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     }, createdId, balance.id, { reason: 'E2E 作废尾款' })
     expect(voided).toMatchObject({
       paymentStatus: 'PARTIALLY_PAID',
-      amounts: { paidAmount: '10.0000', outstandingAmount: '15.0000' },
+      amounts: { paidAmount: '10.00', outstandingAmount: '15.00' },
     })
     await expect(queries.list({
       view: 'pending', keyword: created.orderNo,
     })).resolves.toMatchObject({ total: 1, items: [{
-      paidAmount: '10.0000', paymentRecordSummary: { totalCount: 2, count: 1, byType: [
-        { paymentType: 'DEPOSIT', count: 1, amount: '10.0000' },
-        { paymentType: 'BALANCE', count: 0, amount: '0.0000' },
-        { paymentType: 'OTHER', count: 0, amount: '0.0000' },
+      paidAmount: '10.00', paymentRecordSummary: { totalCount: 2, count: 1, byType: [
+        { paymentType: 'DEPOSIT', count: 1, amount: '10.00' },
+        { paymentType: 'BALANCE', count: 0, amount: '0.00' },
+        { paymentType: 'OTHER', count: 0, amount: '0.00' },
       ] },
       changeSummary: voided.changeSummary,
     }] })
@@ -667,6 +716,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     const orderId = await commands.create(context(), {
       parts: [{ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] }],
       purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: '凭证命名测试供应商',
+      paymentAccounts: paymentRecipientBankAccounts(),
       expectedShippingMarkResolution: customResolution,
       orderDate: '2026-08-27',
       lines: [{
@@ -675,24 +725,27 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       }],
       purchaseTotalAmount: '100', depositDueAmount: '30', balanceDueAmount: '70',
     })
-    const { orderNo, version } = await queries.getById(orderId)
-    await mutations.review(context(), orderId, { expectedVersion: version })
-    for (const [paymentType, label] of [
-      ['DEPOSIT', '定金凭证'], ['BALANCE', '尾款凭证'], ['OTHER', '其他付款凭证'],
+    const { orderNo } = await queries.getById(orderId)
+    await mutations.review(context(), orderId, await imageReviewInput(orderId))
+    for (const [paymentType, label, amount] of [
+      ['DEPOSIT', '定金凭证', '30'], ['BALANCE', '尾款凭证', '70'],
     ] as const) {
-      const originalFilename = `original-${paymentType}.pdf`
+      const originalFilename = `original-${paymentType}.png`
+      const payable = await prisma.purchaseOrderPayable.findFirstOrThrow({ where: { purchaseOrderId: orderId, paymentType }, select: { id: true } })
       const asset = await prisma.mediaAsset.create({
         data: {
-          mediaType: 'DOCUMENT', status: 'UPLOADING', originalFilename,
-          objectKey: `assets/purchase-voucher-${suffix}-${paymentType}.pdf`,
+          mediaType: 'IMAGE', uploadPurpose: 'PURCHASE_PAYMENT_VOUCHER', status: 'UPLOADING', originalFilename, purchasePayableUploadId: payable.id,
+          mimeType: 'image/png', sizeBytes: 1n, checksumSha256: '0'.repeat(64), width: 1, height: 1,
+          objectKey: `assets/purchase-voucher-${suffix}-${paymentType}.png`,
           uploadExpiresAt: new Date('2099-01-01T00:00:00.000Z'), createdByUserId: actorUserId,
         },
         select: { id: true },
       })
       purchaseVoucherMediaAssetIds.push(asset.id)
       const input = {
-        paymentType, amount: '10', paidAt: '2026-08-27T11:00:00.000Z',
+        paymentType, amount, paidAt: '2026-08-27T11:00:00.000Z',
         paymentMethod: 'BANK_TRANSFER', voucher: { mediaAssetId: asset.id },
+        ...await paymentRecipientContext(orderId),
       }
       const detail = await mutations.recordPayment(context(), orderId, input)
       expect(detail.documents.find(document => document.mediaAssetId === asset.id))
@@ -701,16 +754,20 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         where: { purchaseOrderId: orderId, mediaAssetId: asset.id },
         select: { title: true, mediaAsset: { select: { originalFilename: true } } },
       })).resolves.toEqual({ title: `${orderNo}-${label}`, mediaAsset: { originalFilename } })
-      // 延续现有上传归属/状态校验；重复使用已激活的附件不能新增付款或凭证。
+      // 已付阶段不能重复付款；定金附件也不能用于尚未支付的尾款。
       await expect(mutations.recordPayment(context(), orderId, input))
-        .rejects.toMatchObject({ code: 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE' })
+        .rejects.toMatchObject({ code: 'PURCHASE_PAYABLE_STATE_CHANGED' })
+      if (paymentType === 'DEPOSIT') {
+        await expect(mutations.recordPayment(context(), orderId, { ...input, paymentType: 'BALANCE', amount: '70' }))
+          .rejects.toMatchObject({ code: 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE' })
+      }
     }
     await expect(prisma.purchaseOrderPayment.count({ where: { purchaseOrderId: orderId } }))
-      .resolves.toBe(3)
+      .resolves.toBe(2)
     await expect(prisma.purchaseOrderDocument.count({ where: { purchaseOrderId: orderId } }))
       .resolves.toBe(3)
     await expect(queries.getById(orderId)).resolves.toMatchObject({
-      paymentStatus: 'PARTIALLY_PAID', amounts: { paidAmount: '30.0000', outstandingAmount: '70.0000' },
+      paymentStatus: 'PAID', amounts: { paidAmount: '100.00', outstandingAmount: '0.00' },
     })
   })
 
@@ -832,7 +889,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       orderBy: { id: 'asc' }, select: { id: true, version: true },
     })
     for (const [index, order] of pendingOrders.entries()) {
-      await mutations.review(context(), order.id, { expectedVersion: order.version })
+      await mutations.review(context(), order.id, await imageReviewInput(order.id))
       if (index < pendingOrders.length - 1) {
         await expect(prisma.salesOrder.findUniqueOrThrow({
           where: { id: salesOrderId }, select: { fulfillmentStatus: true },
@@ -1097,8 +1154,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       where: { id: salesOrderId }, select: { fulfillmentStatus: true },
     })).resolves.toEqual({ fulfillmentStatus: 'PENDING' })
     for (const orderId of [addedCatalogId, addedCustomId]) {
-      const order = await queries.getById(orderId)
-      await mutations.review(context(), orderId, { expectedVersion: order.version })
+      await mutations.review(context(), orderId, await imageReviewInput(orderId))
     }
     await expect(prisma.salesOrder.findUniqueOrThrow({
       where: { id: salesOrderId },
@@ -1184,7 +1240,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         requestId: `purchase-factory-concurrent-a-${suffix}`,
       }, concurrentTarget.id, {
         expectedVersion: concurrentTarget.version,
-        partIds: concurrentTarget.parts.map(part => part.id),
+        partIds: concurrentTarget.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(concurrentTarget.parts.map(part => part.id)),
         reason: 'E2E 并发发货',
       }),
       factoryShipments.shipPurchaseOrder({
@@ -1192,7 +1248,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         requestId: `purchase-factory-concurrent-b-${suffix}`,
       }, concurrentTarget.id, {
         expectedVersion: concurrentTarget.version,
-        partIds: concurrentTarget.parts.map(part => part.id),
+        partIds: concurrentTarget.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(concurrentTarget.parts.map(part => part.id)),
         reason: 'E2E 并发发货',
       }),
     ])
@@ -1275,12 +1331,31 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       requestId: `purchase-factory-stale-${suffix}`,
     }, staleTarget.id, {
       expectedVersion: staleTarget.version + 1,
-      partIds: staleTarget.parts.map(part => part.id),
+      partIds: staleTarget.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(staleTarget.parts.map(part => part.id)),
       reason: null,
     })).rejects.toMatchObject({
       status: 409,
       code: 'FACTORY_SHIPMENT_STATE_CHANGED',
     })
+
+    const beforeInvalidWarehouse = async () => ({
+      orders: await prisma.purchaseOrder.findMany({ where: { id: { in: pendingOrders.map(order => order.id) } }, orderBy: { id: 'asc' } }),
+      parts: await prisma.purchaseOrderPart.findMany({ where: { purchaseOrderId: { in: pendingOrders.map(order => order.id) } }, orderBy: { id: 'asc' } }),
+      histories: await prisma.purchaseOrderStatusHistory.count(),
+      audits: await prisma.auditEvent.count(),
+      sales: await prisma.salesOrder.findUniqueOrThrow({ where: { id: salesOrderId } }),
+    })
+    const beforeWarehouseFailure = await beforeInvalidWarehouse()
+    // 最后一张采购单选中无效仓库时，前面已合法校验的采购单也不能留下发货或销售推进事实。
+    await expect(factoryShipments.shipSalesOrder(context(), salesOrderId, {
+      mode: 'SELECTED',
+      targets: pendingOrders.map((target, index) => ({
+        purchaseOrderId: target.id, expectedVersion: target.version,
+        partIds: target.parts.map(part => part.id),
+        destinationWarehouses: destinationWarehouses(target.parts.map(part => part.id), index === pendingOrders.length - 1 ? 'UNKNOWN-WAREHOUSE' : undefined),
+      })),
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(await beforeInvalidWarehouse()).toEqual(beforeWarehouseFailure)
 
     const partial = await factoryShipments.shipSalesOrder({
       actorUserId,
@@ -1290,7 +1365,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       targets: selectedTargets.map(target => ({
         purchaseOrderId: target.id,
         expectedVersion: target.version,
-        partIds: target.parts.map(part => part.id),
+        partIds: target.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(target.parts.map(part => part.id)),
       })),
       reason: 'E2E 销售分批发货',
     })
@@ -1302,15 +1377,21 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         advancedToLandTransit: false,
       },
     })
+    const salesShippedParts = await prisma.purchaseOrderPart.findMany({
+      where: { purchaseOrderId: { in: selectedTargets.map(target => target.id) } },
+      select: { destinationWarehouseValue: true },
+    })
+    expect(salesShippedParts.length).toBeGreaterThan(0)
+    expect(salesShippedParts.every(part => part.destinationWarehouseValue === TEST_DESTINATION_WAREHOUSE)).toBe(true)
 
-    const completed = await factoryShipments.shipPurchaseOrder({
+    const completed = await withDatabaseBusinessClock(prisma, () => factoryShipments.shipPurchaseOrder({
       actorUserId,
       requestId: `purchase-factory-final-${suffix}`,
     }, finalTarget.id, {
       expectedVersion: finalTarget.version,
-      partIds: finalTarget.parts.map(part => part.id),
+      partIds: finalTarget.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(finalTarget.parts.map(part => part.id)),
       reason: 'E2E 最后一张采购发货',
-    })
+    }))
     expect(completed).toMatchObject({
       changedPurchaseOrderCount: 1,
       remainingPendingShipmentCount: 0,
@@ -1369,7 +1450,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       requestId: `purchase-factory-retry-${suffix}`,
     }, finalTarget.id, {
       expectedVersion: finalTarget.version,
-      partIds: finalTarget.parts.map(part => part.id),
+      partIds: finalTarget.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(finalTarget.parts.map(part => part.id)),
       reason: 'E2E 安全重试不得重复写历史',
     })).resolves.toMatchObject({
       changedPurchaseOrderCount: 0,

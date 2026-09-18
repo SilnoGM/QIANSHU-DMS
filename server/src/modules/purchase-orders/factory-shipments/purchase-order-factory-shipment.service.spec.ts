@@ -1,4 +1,5 @@
 import type { PrismaService } from '../../../infrastructure/database/prisma.service'
+import { DictionaryValueUnavailableError, type DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
 import type { AuditService } from '../../audit/audit.service'
 import type { SalesOrderPurchaseCoverageService } from '../sales-order-purchase-coverage.service'
 import { PurchaseOrderFactoryShipmentService } from './purchase-order-factory-shipment.service'
@@ -66,21 +67,97 @@ function setup(overrides: Record<string, unknown> = {}) {
         fulfillmentStatus: 'PREPARING',
       }),
   }
+  const dictionary = { requireEffectiveValue: jest.fn((_transaction: unknown, input: { value: string }) => Promise.resolve({ value: input.value })) }
   const service = new PurchaseOrderFactoryShipmentService(
     prisma as unknown as PrismaService,
     audit as unknown as AuditService,
     coverage as unknown as SalesOrderPurchaseCoverageService,
+    dictionary as unknown as DictionaryLookupService,
   )
-  return { audit, coverage, first, orders, prisma, service, transaction }
+  return { audit, coverage, dictionary, first, orders, prisma, service, transaction }
 }
 
 const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
 
 describe('PurchaseOrderFactoryShipmentService', () => {
+  it('writes warehouses per shipment even when both shipments share a tracking number', async () => {
+    const fixture = setup({ fulfillmentStatus: 'PREPARING', parts: [
+      { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: null },
+      { id: SECOND_PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 2, shippedAt: null },
+    ] })
+    await fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
+      expectedVersion: 3, partIds: [PURCHASE_ORDER_ID, SECOND_PURCHASE_ORDER_ID],
+      trackingNumbers: [PURCHASE_ORDER_ID, SECOND_PURCHASE_ORDER_ID].map(partId => ({ partId, trackingNo: 'SF123' })),
+      destinationWarehouses: [
+        { partId: PURCHASE_ORDER_ID, warehouseValue: 'cn-a' },
+        { partId: SECOND_PURCHASE_ORDER_ID, warehouseValue: 'CN-B' },
+      ],
+    })
+    expect(fixture.dictionary.requireEffectiveValue).toHaveBeenCalledTimes(2)
+    for (const [partId, warehouseValue] of [[PURCHASE_ORDER_ID, 'CN-A'], [SECOND_PURCHASE_ORDER_ID, 'CN-B']]) {
+      expect(fixture.dictionary.requireEffectiveValue).toHaveBeenCalledWith(fixture.transaction, { dictionaryCode: 'mainland.warehouse', value: warehouseValue })
+      expect(fixture.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledWith({
+        where: { purchaseOrderId: PURCHASE_ORDER_ID, id: { in: [partId] }, status: 'ACTIVE', shippedAt: null },
+        data: expect.objectContaining({ trackingNo: 'SF123', destinationWarehouseValue: warehouseValue, shippedAt: expect.any(Date) as unknown }) as unknown,
+      })
+    }
+  })
+
+  it.each(['DICTIONARY_TYPE_NOT_FOUND', 'DICTIONARY_TYPE_DISABLED', 'DICTIONARY_ITEM_NOT_FOUND', 'DICTIONARY_ITEM_DISABLED'] as const)(
+    'rejects unavailable warehouses before all shipment writes: %s', async reason => {
+      const fixture = setup()
+      fixture.dictionary.requireEffectiveValue.mockRejectedValue(new DictionaryValueUnavailableError(reason))
+      await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
+        expectedVersion: 3, partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [{ partId: PURCHASE_ORDER_ID, warehouseValue: 'CN-A' }],
+      })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+      expect(fixture.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
+      expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+    },
+  )
+
+  it('deduplicates warehouse validation and stores the effective lookup value', async () => {
+    const fixture = setup({ fulfillmentStatus: 'PREPARING', parts: [
+      { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: null },
+      { id: SECOND_PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 2, shippedAt: null },
+    ] })
+    fixture.dictionary.requireEffectiveValue.mockResolvedValue({ value: 'CANONICAL' })
+    fixture.transaction.purchaseOrderPart.updateMany.mockResolvedValue({ count: 2 })
+    await fixture.service.shipSalesOrder(context, SALES_ORDER_ID, { mode: 'SELECTED', targets: [{
+      purchaseOrderId: PURCHASE_ORDER_ID, expectedVersion: 3, partIds: [PURCHASE_ORDER_ID, SECOND_PURCHASE_ORDER_ID],
+      destinationWarehouses: [PURCHASE_ORDER_ID, SECOND_PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })),
+    }] })
+    expect(fixture.dictionary.requireEffectiveValue).toHaveBeenCalledTimes(1)
+    expect(fixture.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ destinationWarehouseValue: 'CANONICAL' }) as unknown,
+    }))
+  })
+
+  it('accepts an identical warehouse replay without revalidating a retired dictionary value', async () => {
+    const fixture = setup({ fulfillmentStatus: 'SHIPPED', parts: [
+      { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: new Date(), destinationWarehouseValue: 'CN-A' },
+    ] })
+    fixture.dictionary.requireEffectiveValue.mockRejectedValue(new DictionaryValueUnavailableError('DICTIONARY_ITEM_DISABLED'))
+    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
+      expectedVersion: 3, partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [{ partId: PURCHASE_ORDER_ID, warehouseValue: 'CN-A' }],
+    })).resolves.toMatchObject({ changedPurchaseOrderCount: 0 })
+    expect(fixture.dictionary.requireEffectiveValue).not.toHaveBeenCalled()
+    expect(fixture.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
+  })
+
+  it.each([null, 'CN-B'])('rejects warehouse changes on shipped replay, including historical null: %s', async destinationWarehouseValue => {
+    const fixture = setup({ fulfillmentStatus: 'SHIPPED', parts: [
+      { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: new Date(), destinationWarehouseValue },
+    ] })
+    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
+      expectedVersion: 3, partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [{ partId: PURCHASE_ORDER_ID, warehouseValue: 'CN-A' }],
+    })).rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_STATE_CHANGED' })
+    expect(fixture.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
+  })
+
   it('rejects pending-review stock purchases before shipment writes', async () => {
     const fixture = setup({ purchaseType: 'STOCK', salesOrderId: null, orderStatus: 'PENDING_REVIEW' })
     await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
-      partIds: [PURCHASE_ORDER_ID], expectedVersion: 3,
+      partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3,
     })).rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_NOT_ALLOWED' })
     expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
   })
@@ -90,7 +167,7 @@ describe('PurchaseOrderFactoryShipmentService', () => {
     async (fulfillmentStatus) => {
       const fixture = setup({ orderStatus: 'PENDING_REVIEW', fulfillmentStatus })
       await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
-        partIds: [PURCHASE_ORDER_ID], expectedVersion: 3,
+        partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3,
       })).rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_NOT_ALLOWED' })
       expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
       expect(fixture.coverage.advanceWhenAllPurchasesShipped).not.toHaveBeenCalled()
@@ -105,7 +182,7 @@ describe('PurchaseOrderFactoryShipmentService', () => {
 
     await expect(fixture.service.shipSalesOrder(context, SALES_ORDER_ID, {
       mode: 'ALL_PENDING',
-      targets: [{ purchaseOrderId: PURCHASE_ORDER_ID, partIds: [PURCHASE_ORDER_ID], expectedVersion: 3 }],
+      targets: [{ purchaseOrderId: PURCHASE_ORDER_ID, partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3 }],
     })).resolves.toMatchObject({
       changedPurchaseOrderCount: 1, remainingPendingShipmentCount: 0,
       purchaseOrders: [{ id: PURCHASE_ORDER_ID, changed: true }],
@@ -128,8 +205,8 @@ describe('PurchaseOrderFactoryShipmentService', () => {
       await expect(fixture.service.shipSalesOrder(context, SALES_ORDER_ID, {
         mode,
         targets: [
-          { purchaseOrderId: PURCHASE_ORDER_ID, partIds: [PURCHASE_ORDER_ID], expectedVersion: 3 },
-          { purchaseOrderId: SECOND_PURCHASE_ORDER_ID, partIds: [PURCHASE_ORDER_ID], expectedVersion: 3 },
+          { purchaseOrderId: PURCHASE_ORDER_ID, partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3 },
+          { purchaseOrderId: SECOND_PURCHASE_ORDER_ID, partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3 },
         ],
       })).rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_NOT_ALLOWED' })
       expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
@@ -140,7 +217,7 @@ describe('PurchaseOrderFactoryShipmentService', () => {
     const fixture = setup({ purchaseType: 'STOCK', salesOrderId: null })
 
     await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
-      partIds: [PURCHASE_ORDER_ID], expectedVersion: 3,
+      partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3,
       reason: '工厂已交货',
     })).resolves.toMatchObject({
       changedPurchaseOrderCount: 1,
@@ -182,15 +259,15 @@ describe('PurchaseOrderFactoryShipmentService', () => {
   it('rejects a stale pending purchase order before writing', async () => {
     const fixture = setup({ fulfillmentStatus: 'PREPARING', version: 4 })
     await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
-      partIds: [PURCHASE_ORDER_ID], expectedVersion: 3,
+      partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3,
     })).rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_STATE_CHANGED' })
     expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
   })
 
   it('treats SHIPPED as an idempotent satisfied target', async () => {
-    const fixture = setup({ fulfillmentStatus: 'SHIPPED', version: 9, parts: [{ id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: new Date() }] })
+    const fixture = setup({ fulfillmentStatus: 'SHIPPED', version: 9, parts: [{ id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: new Date(), destinationWarehouseValue: 'CN-A' }] })
     await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
-      partIds: [PURCHASE_ORDER_ID], expectedVersion: 3,
+      partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3,
     })).resolves.toMatchObject({
       changedPurchaseOrderCount: 0,
       alreadySatisfiedCount: 1,
@@ -204,7 +281,7 @@ describe('PurchaseOrderFactoryShipmentService', () => {
       { id: SECOND_PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 2, shippedAt: null },
     ] })
     await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
-      partIds: [PURCHASE_ORDER_ID], expectedVersion: 3,
+      partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3,
     })).resolves.toMatchObject({
       remainingPendingShipmentCount: 1,
       purchaseOrders: [{ fulfillmentStatus: 'PARTIALLY_SHIPPED' }],
@@ -215,13 +292,82 @@ describe('PurchaseOrderFactoryShipmentService', () => {
     }))
   })
 
+  it('records each selected part tracking number in the same conditional shipment write', async () => {
+    const fixture = setup({ fulfillmentStatus: 'PREPARING', parts: [
+      { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: null, trackingNo: null },
+      { id: SECOND_PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 2, shippedAt: null, trackingNo: null },
+      { id: SALES_LINE_ID, status: 'ACTIVE', partNumber: 3, shippedAt: null, trackingNo: null },
+    ] })
+    await fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
+      partIds: [PURCHASE_ORDER_ID, SECOND_PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID, SECOND_PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3,
+      trackingNumbers: [
+        { partId: PURCHASE_ORDER_ID, trackingNo: '  SF123  ' },
+        { partId: SECOND_PURCHASE_ORDER_ID, trackingNo: 'YT456' },
+      ],
+    })
+    expect(fixture.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledTimes(2)
+    for (const [partId, trackingNo] of [[PURCHASE_ORDER_ID, 'SF123'], [SECOND_PURCHASE_ORDER_ID, 'YT456']]) {
+      expect(fixture.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledWith({
+        where: { purchaseOrderId: PURCHASE_ORDER_ID, id: { in: [partId] }, status: 'ACTIVE', shippedAt: null },
+        data: expect.objectContaining({ trackingNo, shippedAt: expect.any(Date) as unknown }) as unknown,
+      })
+    }
+  })
+
+  it('records tracking numbers from sales shipment targets', async () => {
+    const fixture = setup({ fulfillmentStatus: 'PREPARING' })
+    await fixture.service.shipSalesOrder(context, SALES_ORDER_ID, {
+      mode: 'SELECTED', targets: [{
+        purchaseOrderId: PURCHASE_ORDER_ID, partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3,
+        trackingNumbers: [{ partId: PURCHASE_ORDER_ID, trackingNo: 'SF123' }],
+      }],
+    })
+    expect(fixture.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ trackingNo: 'SF123' }) as unknown,
+    }))
+  })
+
+  it.each([null, '', '   '])('does not clear an existing tracking number when blank %#', async (trackingNo) => {
+    const fixture = setup({ fulfillmentStatus: 'PREPARING', parts: [
+      { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: null, trackingNo: 'SF123' },
+    ] })
+    await fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
+      partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3,
+      trackingNumbers: [{ partId: PURCHASE_ORDER_ID, trackingNo }],
+    })
+    const write = fixture.transaction.purchaseOrderPart.updateMany.mock.calls[0]?.[0] as { data: unknown }
+    expect(write.data).not.toHaveProperty('trackingNo')
+  })
+
+  it.each(['SF123', null, ''])('accepts identical or omitted tracking numbers on shipped replay %#', async (trackingNo) => {
+    const fixture = setup({ fulfillmentStatus: 'SHIPPED', version: 9, parts: [
+      { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: new Date(), destinationWarehouseValue: 'CN-A', trackingNo: 'SF123' },
+    ] })
+    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
+      partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3,
+      trackingNumbers: [{ partId: PURCHASE_ORDER_ID, trackingNo }],
+    })).resolves.toMatchObject({ changedPurchaseOrderCount: 0 })
+    expect(fixture.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
+  })
+
+  it.each([null, 'SF123'])('rejects replay with a different tracking number instead of overwriting %#', async (trackingNo) => {
+    const fixture = setup({ fulfillmentStatus: 'SHIPPED', version: 9, parts: [
+      { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: new Date(), destinationWarehouseValue: 'CN-A', trackingNo },
+    ] })
+    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
+      partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3,
+      trackingNumbers: [{ partId: PURCHASE_ORDER_ID, trackingNo: 'YT456' }],
+    })).rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_STATE_CHANGED' })
+    expect(fixture.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
+  })
+
   it('records another partial shipment even when the status stays unchanged', async () => {
     const fixture = setup({ fulfillmentStatus: 'PARTIALLY_SHIPPED', parts: [
       { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: null },
       { id: SECOND_PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 2, shippedAt: null },
-      { id: SALES_LINE_ID, status: 'ACTIVE', partNumber: 3, shippedAt: new Date() },
+      { id: SALES_LINE_ID, status: 'ACTIVE', partNumber: 3, shippedAt: new Date(), destinationWarehouseValue: 'CN-A' },
     ] })
-    await fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, { partIds: [PURCHASE_ORDER_ID], expectedVersion: 3 })
+    await fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, { partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3 })
     expect(fixture.transaction.purchaseOrderStatusHistory.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       fromStatus: 'PARTIALLY_SHIPPED', toStatus: 'PARTIALLY_SHIPPED', reason: expect.stringContaining('货件-01') as unknown,
     }) as unknown })
@@ -229,17 +375,17 @@ describe('PurchaseOrderFactoryShipmentService', () => {
 
   it.each([[], [{ id: PURCHASE_ORDER_ID, status: 'PENDING_REVIEW', partNumber: 1, shippedAt: null }], [{ id: SECOND_PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 2, shippedAt: null }]])('rejects missing, inactive or foreign parts without writes %#', async (...parts) => {
     const fixture = setup({ fulfillmentStatus: 'PREPARING', parts })
-    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, { partIds: [PURCHASE_ORDER_ID], expectedVersion: 3 }))
+    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, { partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3 }))
       .rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_TARGET_INVALID' })
     expect(fixture.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
   })
 
   it('rejects a mixed shipped and unshipped selection atomically', async () => {
     const fixture = setup({ fulfillmentStatus: 'PARTIALLY_SHIPPED', parts: [
-      { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: new Date() },
+      { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: new Date(), destinationWarehouseValue: 'CN-A' },
       { id: SECOND_PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 2, shippedAt: null },
     ] })
-    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, { partIds: [PURCHASE_ORDER_ID, SECOND_PURCHASE_ORDER_ID], expectedVersion: 3 }))
+    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, { partIds: [PURCHASE_ORDER_ID, SECOND_PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID, SECOND_PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3 }))
       .rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_STATE_CHANGED' })
     expect(fixture.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
   })
@@ -250,7 +396,7 @@ describe('PurchaseOrderFactoryShipmentService', () => {
       { id: SECOND_PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 2, shippedAt: null },
     ] })
     await expect(fixture.service.shipSalesOrder(context, SALES_ORDER_ID, {
-      mode: 'ALL_PENDING', targets: [{ purchaseOrderId: PURCHASE_ORDER_ID, expectedVersion: 3, partIds: [PURCHASE_ORDER_ID] }],
+      mode: 'ALL_PENDING', targets: [{ purchaseOrderId: PURCHASE_ORDER_ID, expectedVersion: 3, partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })) }],
     })).rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_STATE_CHANGED' })
     expect(fixture.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
   })
@@ -258,7 +404,7 @@ describe('PurchaseOrderFactoryShipmentService', () => {
   it('rejects an unsuccessful conditional part update', async () => {
     const fixture = setup({ fulfillmentStatus: 'PREPARING' })
     fixture.transaction.purchaseOrderPart.updateMany.mockResolvedValue({ count: 0 })
-    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, { partIds: [PURCHASE_ORDER_ID], expectedVersion: 3 }))
+    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, { partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3 }))
       .rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_STATE_CHANGED' })
     expect(fixture.transaction.purchaseOrderStatusHistory.create).not.toHaveBeenCalled()
   })
@@ -266,10 +412,10 @@ describe('PurchaseOrderFactoryShipmentService', () => {
   it('ships the last pending part and preserves full remarks without overflowing history', async () => {
     const fixture = setup({ fulfillmentStatus: 'PARTIALLY_SHIPPED', parts: [
       { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: null },
-      { id: SECOND_PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 2, shippedAt: new Date() },
+      { id: SECOND_PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 2, shippedAt: new Date(), destinationWarehouseValue: 'CN-A' },
     ] })
     const reason = '发'.repeat(500)
-    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, { partIds: [PURCHASE_ORDER_ID], expectedVersion: 3, reason }))
+    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, { partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3, reason }))
       .resolves.toMatchObject({ purchaseOrders: [{ fulfillmentStatus: 'SHIPPED' }] })
     expect(fixture.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ shipmentRemark: reason }) as unknown }))
     const history = fixture.transaction.purchaseOrderStatusHistory.create.mock.calls[0]?.[0] as { data: { reason: string } }
@@ -292,10 +438,10 @@ describe('PurchaseOrderFactoryShipmentService', () => {
     await expect(fixture.service.shipSalesOrder(context, SALES_ORDER_ID, {
       mode: 'SELECTED',
       targets: [
-        { purchaseOrderId: PURCHASE_ORDER_ID, partIds: [PURCHASE_ORDER_ID], expectedVersion: 3 },
+        { purchaseOrderId: PURCHASE_ORDER_ID, partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 3 },
         {
           purchaseOrderId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-          partIds: [PURCHASE_ORDER_ID], expectedVersion: 1,
+          partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 1,
         },
       ],
     })).rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_TARGET_INVALID' })

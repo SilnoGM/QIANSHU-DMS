@@ -48,6 +48,7 @@ export function summarizePurchaseOrderRecords(source: RecordSource): PurchaseOrd
   const payments = source.payments.filter(payment => payment.voidedAt === null)
   const byPaymentType = PAYMENT_TYPES.map(paymentType => {
     const matching = payments.filter(payment => payment.paymentType === paymentType)
+    // 读取四位原值后校验分精度，避免 toFixed(2) 掩盖未迁移的非零厘/毫。
     const amount = matching.reduce((sum, payment) => sum + parsePurchaseOrderAmountUnits(payment.amount.toFixed(4)), 0n)
     return { paymentType, count: matching.length, amount: formatPurchaseOrderAmountUnits(amount) }
   })

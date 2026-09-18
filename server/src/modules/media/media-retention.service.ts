@@ -107,6 +107,17 @@ export class MediaAssetRetentionService {
     return changed ? 'TRASHED' : 'STATE_CONFLICT'
   }
 
+  /** 草稿替换/取消只提交逻辑回收状态。文件留在原位，避免后续事务回滚却丢失旧预览；
+   * 既有清理 worker 能同时处理 assets 和 trash 路径，保留期到期后再实际移除文件。 */
+  async markUnreferencedForTrash(transaction: Prisma.TransactionClient, assetId: string): Promise<MediaAssetRetentionResult> {
+    const asset = await this.persistence.lockAsset(transaction, assetId)
+    if (!asset || asset.status !== MediaAssetStatus.READY || asset.objectKey === null || asset.sizeBytes === null) return 'NOT_ELIGIBLE'
+    if (await this.references.hasActiveReferences(transaction, assetId)) return 'ACTIVE_REFERENCE'
+    const now = this.dependencies.now()
+    const retentionUntil = new Date(now.getTime() + this.configuration.trashRetentionDays * 86_400_000)
+    return await this.persistence.markTrashed(transaction, assetId, now, retentionUntil) ? 'TRASHED' : 'STATE_CONFLICT'
+  }
+
   async restoreForReference(
     transaction: Prisma.TransactionClient,
     assetId: string,

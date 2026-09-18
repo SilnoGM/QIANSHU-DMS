@@ -7,7 +7,7 @@ import OrderDocument from './OrderDocument.vue'
 const props = defineProps<{ detail: PurchaseOrderDetailDto, canAttachDocument: boolean, busy: boolean }>()
 const emit = defineEmits<{ attachDocument: [] }>()
 const { t } = useI18n()
-// PAYMENT_VOUCHER 始终随实际付款展示，独立凭证小节不重复收纳。
+// 付款截图归档在订单凭证中；实际付款记录也引用同一份媒体，不重复保存。
 const documents = computed(() => getOrderDocuments(props.detail.documents))
 const expandedDocument = ref<string | null>(null)
 watch(() => props.detail.id, () => {

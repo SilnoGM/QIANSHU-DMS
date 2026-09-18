@@ -44,6 +44,38 @@ async function expectInternal(promise: Promise<unknown>): Promise<void> {
 }
 
 describe('fund reversal persistence', () => {
+  it('reads the controlled stock purchase company-only 0/100 snapshot for reversal', async () => {
+    const transaction = fixture()
+    transaction.queryRaw.mockResolvedValue([{
+      id: ORIGINAL_BATCH_ID, kind: 'BUSINESS', postingTypeId: TYPE_ID,
+      postingTypeCode: 'PURCHASE_PAYMENT', businessCategory: 'COST', businessSourceId: SOURCE_ID,
+      businessSourceCode: 'PURCHASE_PAYMENT', consumerCode: 'PURCHASE_PAYMENT.STOCK_PAY', ruleVersionId: RULE_ID,
+      userId: null, businessAmount: new Prisma.Decimal('100'),
+      userShareRateSnapshot: new Prisma.Decimal('0'), companyShareRateSnapshot: new Prisma.Decimal('100'), adjustmentMode: null,
+    }])
+    await expect(lockFundOriginalBatchForReversal(transaction.client, ORIGINAL_BATCH_ID)).resolves.toMatchObject({
+      userId: null, userShareRateSnapshot: '0.00', companyShareRateSnapshot: '100.00', businessAmount: '100.00',
+    })
+    expect(sqlText(transaction)).toContain('"consumer_code" AS "consumerCode"')
+  })
+
+  it.each([
+    { businessSourceCode: 'OTHER' }, { postingTypeCode: 'OTHER' }, { consumerCode: 'PURCHASE_PAYMENT.PAY' },
+    { businessCategory: 'REVENUE' }, { kind: 'MANUAL_ADJUSTMENT' },
+    { userShareRateSnapshot: new Prisma.Decimal('30'), companyShareRateSnapshot: new Prisma.Decimal('70') },
+  ])('does not broaden company-only reversal snapshots beyond controlled stock purchase: %s', async overrides => {
+    const transaction = fixture()
+    transaction.queryRaw.mockResolvedValue([{
+      id: ORIGINAL_BATCH_ID, kind: 'BUSINESS', postingTypeId: TYPE_ID,
+      postingTypeCode: 'PURCHASE_PAYMENT', businessCategory: 'COST', businessSourceId: SOURCE_ID,
+      businessSourceCode: 'PURCHASE_PAYMENT', consumerCode: 'PURCHASE_PAYMENT.STOCK_PAY', ruleVersionId: RULE_ID,
+      userId: null, businessAmount: new Prisma.Decimal('100'),
+      userShareRateSnapshot: new Prisma.Decimal('0'), companyShareRateSnapshot: new Prisma.Decimal('100'), adjustmentMode: null,
+      ...overrides,
+    }])
+    await expectInternal(lockFundOriginalBatchForReversal(transaction.client, ORIGINAL_BATCH_ID))
+  })
+
   it('reads the immutable source identity without taking the target lock', async () => {
     const transaction = fixture()
     transaction.queryRaw.mockResolvedValue([{

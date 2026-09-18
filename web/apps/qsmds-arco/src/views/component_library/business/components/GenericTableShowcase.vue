@@ -20,6 +20,7 @@ import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import { SHOWCASE_CURRENCIES } from '../../shared/currency.fixture'
+import GenericTableGroupShowcase from './GenericTableGroupShowcase.vue'
 
 defineOptions({ name: 'GenericTableShowcase' })
 
@@ -585,5 +586,6 @@ function handleDateRangeClear() {
         </template>
       </QsGenericTable>
     </div>
+    <GenericTableGroupShowcase />
   </section>
 </template>

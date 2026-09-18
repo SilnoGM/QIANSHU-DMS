@@ -17,13 +17,17 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../../infrastructure/http/api.exception'
 import { AuditService } from '../../audit/audit.service'
+import { DictionaryLookupService, DictionaryValueUnavailableError } from '../../dictionaries/dictionary-lookup.service'
+import { purchaseOrderValidationFailure } from '../domain/purchase-order-errors'
 import {
   assertPurchaseOrderFulfillmentTransition,
 } from '../domain/purchase-order-state-machine'
 import { SalesOrderPurchaseCoverageService } from '../sales-order-purchase-coverage.service'
 import {
+  type FactoryShipmentDestinationWarehouse,
   type FactoryShipmentMutationContext,
   type FactoryShipmentTarget,
+  type FactoryShipmentTrackingNumber,
   normalizeFactoryShipmentContext,
   normalizePurchaseOrderFactoryShipmentRequest,
   normalizeSalesOrderFactoryShipmentRequest,
@@ -49,7 +53,7 @@ interface FactoryShipmentPurchaseOrder {
   readonly purchaseType: PurchaseOrderType
   readonly salesOrderId: string | null
   readonly version: number
-  readonly parts: readonly { readonly id: string; readonly partNumber: number; readonly status: string; readonly shippedAt: Date | null }[]
+  readonly parts: readonly { readonly id: string; readonly partNumber: number; readonly status: string; readonly shippedAt: Date | null; readonly trackingNo: string | null; readonly destinationWarehouseValue: string | null }[]
 }
 
 interface FactoryShipmentSalesOrder {
@@ -131,6 +135,7 @@ export class PurchaseOrderFactoryShipmentService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly salesOrderCoverage: SalesOrderPurchaseCoverageService,
+    private readonly dictionaryLookup: DictionaryLookupService,
   ) {}
 
   async shipPurchaseOrder(
@@ -175,7 +180,7 @@ export class PurchaseOrderFactoryShipmentService {
       if (order === undefined) return shipmentNotAllowed('采购订单已取消或不再有效')
       this.validatePendingTargetVersion(order, input.expectedVersion)
       this.validateShipmentTargetState(order)
-      this.validateParts(order, input.partIds)
+      this.validateParts(order, input.partIds, input.destinationWarehouses, input.trackingNumbers)
 
       const result = await this.advancePurchaseOrder(
         transaction,
@@ -184,6 +189,8 @@ export class PurchaseOrderFactoryShipmentService {
         input.partIds,
         input.reason,
         'PURCHASE_ORDER',
+        input.destinationWarehouses,
+        input.trackingNumbers,
       )
       const statusById = new Map(scope.filter(item => item.orderStatus === 'CONFIRMED').map(item => [
         item.id,
@@ -233,7 +240,7 @@ export class PurchaseOrderFactoryShipmentService {
       const targetOrders = targets.map((target) => {
         const order = orderById.get(target.purchaseOrderId)
         if (order === undefined) return targetInvalid()
-        return { order, expectedVersion: target.expectedVersion, partIds: target.partIds }
+        return { order, expectedVersion: target.expectedVersion, partIds: target.partIds, destinationWarehouses: target.destinationWarehouses, trackingNumbers: target.trackingNumbers }
       })
 
       if (input.mode === 'ALL_PENDING') {
@@ -242,7 +249,7 @@ export class PurchaseOrderFactoryShipmentService {
       for (const target of targetOrders) {
         this.validatePendingTargetVersion(target.order, target.expectedVersion)
         this.validateShipmentTargetState(target.order)
-        this.validateParts(target.order, target.partIds)
+        this.validateParts(target.order, target.partIds, target.destinationWarehouses, target.trackingNumbers)
       }
       const hasPendingTarget = targetOrders.some(target => (
         isPendingShipment(target.order.fulfillmentStatus)
@@ -266,6 +273,8 @@ export class PurchaseOrderFactoryShipmentService {
           target.partIds,
           input.reason,
           'SALES_ORDER',
+          target.destinationWarehouses,
+          target.trackingNumbers,
         ))
       }
       const statusById = new Map(orders
@@ -310,13 +319,28 @@ export class PurchaseOrderFactoryShipmentService {
     }
   }
 
-  private validateParts(order: FactoryShipmentPurchaseOrder, partIds: readonly string[]): void {
+  private validateParts(
+    order: FactoryShipmentPurchaseOrder,
+    partIds: readonly string[],
+    destinationWarehouses: readonly FactoryShipmentDestinationWarehouse[],
+    trackingNumbers: readonly FactoryShipmentTrackingNumber[] = [],
+  ): void {
     if (order.parts.length === 0) return targetInvalid()
     const selected = partIds.map(id => order.parts.find(part => part.id === id))
     if (selected.some(part => part === undefined || part.status !== 'ACTIVE')) return targetInvalid()
     const shippedCount = selected.filter(part => part!.shippedAt !== null).length
     if (shippedCount > 0 && shippedCount < selected.length) return stateChanged()
     if (shippedCount === 0 && isShipmentSatisfied(order.fulfillmentStatus)) return stateChanged()
+    // 已发货仓库属于冻结事实；历史空值也不可通过重放补填。
+    for (const entry of destinationWarehouses) {
+      const part = selected.find(item => item!.id === entry.partId)!
+      if (part.shippedAt !== null && part.destinationWarehouseValue !== entry.warehouseValue) return stateChanged()
+    }
+    // 已发货重放只可确认既有事实，不能借幂等路径补填或更换物流单号。
+    for (const entry of trackingNumbers) {
+      const part = selected.find(item => item!.id === entry.partId)!
+      if (part.shippedAt !== null && entry.trackingNo !== null && part.trackingNo !== entry.trackingNo) return stateChanged()
+    }
   }
 
   private assertCompletePendingTargetSet(
@@ -344,6 +368,8 @@ export class PurchaseOrderFactoryShipmentService {
     partIds: readonly string[],
     reason: string | null,
     source: 'PURCHASE_ORDER' | 'SALES_ORDER',
+    destinationWarehouses: readonly FactoryShipmentDestinationWarehouse[],
+    trackingNumbers: readonly FactoryShipmentTrackingNumber[] = [],
   ): Promise<FactoryShipmentResult['purchaseOrders'][number]> {
     if (partIds.every(id => order.parts.some(part => part.id === id && part.shippedAt !== null))) {
       return {
@@ -351,6 +377,20 @@ export class PurchaseOrderFactoryShipmentService {
         orderNo: order.orderNo,
         fulfillmentStatus: order.fulfillmentStatus as 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'SIGNED',
         changed: false,
+      }
+    }
+    // 只对本次新发货校验字典；相同事实的重放允许读取后来停用的历史仓库。
+    const effectiveWarehouseValues = new Map<string, string>()
+    for (const warehouseValue of [...new Set(destinationWarehouses.map(entry => entry.warehouseValue))].sort()) {
+      try {
+        const effective = await this.dictionaryLookup.requireEffectiveValue(transaction, { dictionaryCode: 'mainland.warehouse', value: warehouseValue })
+        effectiveWarehouseValues.set(warehouseValue, effective.value)
+      }
+      catch (error) {
+        if (error instanceof DictionaryValueUnavailableError) {
+          return purchaseOrderValidationFailure('destinationWarehouses', '目的地仓库当前不可用，请重新选择')
+        }
+        throw error
       }
     }
     let fromStatus = order.fulfillmentStatus
@@ -371,11 +411,30 @@ export class PurchaseOrderFactoryShipmentService {
       fromStatus = 'PREPARING'
     }
     const shippedAt = new Date()
-    const updated = await transaction.purchaseOrderPart.updateMany({
-      where: { purchaseOrderId: order.id, id: { in: [...partIds] }, status: 'ACTIVE', shippedAt: null },
-      data: { shippedAt, shippedById: context.actorUserId, shipmentRecordedAt: shippedAt, shipmentRemark: reason },
-    })
-    if (updated.count !== partIds.length) return stateChanged()
+    const trackingByPartId = new Map(trackingNumbers.map(entry => [entry.partId, entry.trackingNo]))
+    const warehouseByPartId = new Map(destinationWarehouses.map(entry => [entry.partId, effectiveWarehouseValues.get(entry.warehouseValue)!]))
+    const groups = new Map<string, { trackingNo: string | null; warehouseValue: string; ids: string[] }>()
+    for (const partId of partIds) {
+      const trackingNo = trackingByPartId.get(partId) ?? null
+      const warehouseValue = warehouseByPartId.get(partId)!
+      const key = JSON.stringify([trackingNo, warehouseValue])
+      const group = groups.get(key) ?? { trackingNo, warehouseValue, ids: [] }
+      group.ids.push(partId)
+      groups.set(key, group)
+    }
+    // 按单号与仓库组合分组，在同次条件更新中冻结全部发货事实。
+    // 未填单号不清空原值，任一组竞争失败都让外层事务回滚全部发货。
+    for (const { trackingNo, warehouseValue, ids } of groups.values()) {
+      const updated = await transaction.purchaseOrderPart.updateMany({
+        where: { purchaseOrderId: order.id, id: { in: ids }, status: 'ACTIVE', shippedAt: null },
+        data: {
+          shippedAt, shippedById: context.actorUserId, shipmentRecordedAt: shippedAt, shipmentRemark: reason,
+          destinationWarehouseValue: warehouseValue,
+          ...(trackingNo === null ? {} : { trackingNo }),
+        },
+      })
+      if (updated.count !== ids.length) return stateChanged()
+    }
     const toStatus = order.parts.filter(part => part.status === 'ACTIVE')
       .every(part => part.shippedAt !== null || partIds.includes(part.id)) ? 'SHIPPED' : 'PARTIALLY_SHIPPED'
     if (fromStatus !== toStatus) assertPurchaseOrderFulfillmentTransition(fromStatus, toStatus, {
@@ -476,7 +535,7 @@ export class PurchaseOrderFactoryShipmentService {
         purchaseType: true,
         salesOrderId: true,
         version: true,
-        parts: { select: { id: true, partNumber: true, status: true, shippedAt: true } },
+        parts: { select: { id: true, partNumber: true, status: true, shippedAt: true, trackingNo: true, destinationWarehouseValue: true } },
       },
     })
   }
@@ -500,7 +559,7 @@ export class PurchaseOrderFactoryShipmentService {
         purchaseType: true,
         salesOrderId: true,
         version: true,
-        parts: { select: { id: true, partNumber: true, status: true, shippedAt: true } },
+        parts: { select: { id: true, partNumber: true, status: true, shippedAt: true, trackingNo: true, destinationWarehouseValue: true } },
       },
     })
   }

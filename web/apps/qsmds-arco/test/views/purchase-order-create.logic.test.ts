@@ -8,11 +8,13 @@ import type { OrderProductLineModel } from '../../src/components/business/QsOrde
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 采购创建纯逻辑使用 Node.js 内置 runner。
 import test from 'node:test'
+import { reactive } from 'vue'
 
 import {
   adaptPurchaseOrderProductPage,
   beginPurchaseOrderSubmission,
   buildPurchaseOrderCreateRequest,
+  calculatePurchaseOrderDraftTotal,
   createPurchaseOrderEditingState,
   getPurchaseOrderMutationFailure,
   hasPurchasablePurchaseOrderSourceLines,
@@ -521,6 +523,7 @@ test('自定义备货采购只提交文本供应商并校验 CUSTOM 双价格', 
     maximumQuantityByKey: {},
     orderDate: '2026-08-28',
     productMode: 'CUSTOM',
+    paymentAccounts: reactive([{ paymentMethod: 'BANK_TRANSFER' as const, recipientName: '供应商', bankName: '银行', bankAccount: '12345678' }]),
     purchaseType: 'STOCK',
     remark: '',
     salesOrderId: null,
@@ -559,6 +562,7 @@ test('自定义备货采购只提交文本供应商并校验 CUSTOM 双价格', 
     maximumQuantityByKey: {},
     orderDate: '2026-08-28',
     productMode: 'CUSTOM',
+    paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '供应商', bankName: '银行', bankAccount: '12345678' }],
     purchaseType: 'STOCK',
     remark: '',
     salesOrderId: null,
@@ -571,6 +575,71 @@ test('自定义备货采购只提交文本供应商并校验 CUSTOM 双价格', 
   if (!invalid.valid) {
     assert.equal(invalid.fieldErrors['lines.0.actualUnitPriceAmount'], '临时产品的采购定价必须与本单采购价相等')
   }
+})
+
+test('采购可编辑金额均拒绝超过两位小数，草稿总额与提交金额按分精确计算', () => {
+  const line: OrderProductLineModel = {
+    key: 'precision-custom',
+    lineType: 'CUSTOM',
+    productId: null,
+    productNo: null,
+    name: '精度测试产品',
+    description: '',
+    standardUnitPriceAmount: '0.1',
+    actualUnitPriceAmount: '0.1',
+    quantity: '3',
+    mainImage: null,
+  }
+  const source = {
+    lines: [line],
+    parts: [{ key: '33333333-3333-4333-8333-333333333333', items: [{ productKey: line.key, quantity: 3 }] }],
+    balanceDueAmount: '0.2',
+    depositDueAmount: '0.1',
+    customSupplierName: '精度测试供应商',
+    maximumQuantityByKey: {},
+    orderDate: '2026-09-16',
+    productMode: 'CUSTOM',
+    paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '供应商', bankName: '银行', bankAccount: '12345678' }],
+    purchaseType: 'STOCK',
+    remark: '',
+    salesOrderId: null,
+    expectedShippingMarkResolution: 'a'.repeat(64),
+    sourceSalesOrderLineIdByKey: {},
+    supplierValue: null,
+    today: '2026-09-16',
+  } as const
+  const built = buildPurchaseOrderCreateRequest(source)
+  assert.equal(built.valid, true)
+  assert.equal(calculatePurchaseOrderDraftTotal(source.lines), '0.30')
+  if (built.valid) {
+    assert.equal(built.request.purchaseTotalAmount, '0.30')
+    assert.equal(built.request.depositDueAmount, '0.10')
+    assert.equal(built.request.balanceDueAmount, '0.20')
+    assert.equal(built.request.lines[0]?.actualPurchaseUnitPriceAmount, '0.10')
+    assert.equal(built.request.lines[0]?.referencePurchaseUnitPriceAmount, '0.10')
+  }
+  for (const invalidAmount of ['0.001', '0.0001', '1.0000']) {
+    for (const field of ['actualUnitPriceAmount', 'standardUnitPriceAmount'] as const) {
+      const invalid = buildPurchaseOrderCreateRequest({ ...source, lines: [{ ...line, [field]: invalidAmount }] })
+      assert.equal(invalid.valid, false)
+      if (!invalid.valid) {
+        assert.ok(invalid.fieldErrors[`lines.0.${field}`])
+      }
+    }
+    for (const field of ['depositDueAmount', 'balanceDueAmount'] as const) {
+      const invalid = buildPurchaseOrderCreateRequest({ ...source, [field]: invalidAmount })
+      assert.equal(invalid.valid, false)
+      if (!invalid.valid) {
+        assert.ok(invalid.fieldErrors[field])
+      }
+    }
+    assert.equal(calculatePurchaseOrderDraftTotal([{ ...line, actualUnitPriceAmount: invalidAmount }]), null)
+  }
+  assert.equal(calculatePurchaseOrderDraftTotal([{
+    ...line,
+    actualUnitPriceAmount: '9007199254740993.01',
+    quantity: '2',
+  }]), '18014398509481986.02')
 })
 
 test('未知创建结果冻结请求并使用原幂等 Key 安全重放', () => {
@@ -594,6 +663,7 @@ test('未知创建结果冻结请求并使用原幂等 Key 安全重放', () => 
     maximumQuantityByKey: {},
     orderDate: '2026-08-28',
     productMode: 'CUSTOM',
+    paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '供应商', bankName: '银行', bankAccount: '12345678' }],
     purchaseType: 'STOCK',
     remark: '',
     salesOrderId: null,
@@ -652,6 +722,7 @@ test('唛头匹配未完成或摘要非法时第三步不能进入核对', () =>
       maximumQuantityByKey: {},
       orderDate: '2026-09-07',
       productMode: 'CUSTOM',
+      paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '供应商', bankName: '银行', bankAccount: '12345678' }],
       purchaseType: 'STOCK',
       remark: '',
       salesOrderId: null,
@@ -681,4 +752,32 @@ test('唛头上下文变化和不可用均定位第三步，且不属于未知�
     assert.equal(failure.refreshShippingMarkResolution, true)
     assert.equal(resolvePurchaseOrderCreateStepForErrors(failure.fieldErrors), 2)
   }
+})
+
+test('自定义采购基础步骤至少需要一种完整收款资料，错误留在第一步', () => {
+  const source: Parameters<typeof buildPurchaseOrderCreateRequest>[0] = {
+    balanceDueAmount: null,
+    depositDueAmount: null,
+    lines: [],
+    parts: [],
+    maximumQuantityByKey: {},
+    orderDate: '2026-09-17',
+    productMode: 'CUSTOM',
+    purchaseType: 'STOCK',
+    remark: '',
+    salesOrderId: null,
+    expectedShippingMarkResolution: null,
+    sourceSalesOrderLineIdByKey: {},
+    supplierValue: null,
+    customSupplierName: '自定义供应商',
+    today: '2026-09-17',
+  }
+  const missing = validatePurchaseOrderCreateStep(source, 0)
+  assert.equal(missing.valid, false)
+  if (!missing.valid) {
+    assert.ok(missing.fieldErrors.paymentAccounts)
+  }
+  assert.equal(resolvePurchaseOrderCreateStepForField('paymentAccounts.0.bankName'), 0)
+  assert.equal(validatePurchaseOrderCreateStep({ ...source, paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '收款人', bankName: '银行', bankAccount: '1234' }] }, 0).valid, true)
+  assert.equal(validatePurchaseOrderCreateStep({ ...source, paymentAccounts: [{ paymentMethod: 'WECHAT', recipientName: '收款人' }] }, 0).valid, false)
 })

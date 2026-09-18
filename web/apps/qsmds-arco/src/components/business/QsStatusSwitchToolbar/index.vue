@@ -131,7 +131,7 @@ onMounted(async () => {
           :ref="element => setItemElement(item.value, element)"
           type="button"
           data-slot="qs-status-switch-item"
-          class="group px-3.5 rounded-lg inline-flex gap-2 h-10 min-w-24 w-35 transition-colors items-center justify-center relative focus-visible:outline-none disabled:opacity-45 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          class="group px-3.5 rounded-lg inline-flex shrink-0 gap-2 h-10 min-w-35 w-max transition-colors items-center justify-center relative focus-visible:outline-none disabled:opacity-45 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           :class="modelValue === item.value
             ? 'text-primary bg-primary/8'
             : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'"

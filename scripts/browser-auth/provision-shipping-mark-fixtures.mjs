@@ -4,11 +4,11 @@
  */
 export async function provisionBrowserShippingMarkFixtures(client, actorUserId) {
   const { createHash } = await import('node:crypto')
-  async function createRule(ruleCode, name, segments) {
+  async function createRule(ruleCode, name, segments, purpose = 'SHIPPING_MARK') {
     const rule = await client.query(`
       INSERT INTO numbering_rules (rule_code, name, purpose)
-      VALUES ($1, $2, 'SHIPPING_MARK') RETURNING id
-    `, [ruleCode, name])
+      VALUES ($1, $2, $3) RETURNING id
+    `, [ruleCode, name, purpose])
     const ruleId = rule.rows[0].id
     const configFingerprint = createHash('sha256').update(JSON.stringify({
       resetPolicy: 'NEVER', timezone: 'Asia/Shanghai', segments,
@@ -53,6 +53,14 @@ export async function provisionBrowserShippingMarkFixtures(client, actorUserId) 
     { type: 'SEPARATOR', value: '-' },
     { type: 'SEQUENCE', width: 8, startValue: '1', step: '1' },
   ])
+  // 新建采购会同时派发货件号；沿用正式发布流程，仅写入隔离 Browser 数据库。
+  await createRule('SHIPMENT_NO', 'Browser Shipment Rule', [
+    { type: 'FIXED', value: 'PKG' },
+    { type: 'SEPARATOR', value: '-' },
+    { type: 'FIXED', value: 'BRW' },
+    { type: 'SEPARATOR', value: '-' },
+    { type: 'SEQUENCE', width: 8, startValue: '1', step: '1' },
+  ], 'BUSINESS')
   await client.query(`
     INSERT INTO supplier_shipping_mark_rule_bindings (
       supplier_value, rule_id, created_by_user_id, updated_by_user_id

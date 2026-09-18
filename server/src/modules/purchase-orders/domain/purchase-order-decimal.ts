@@ -1,9 +1,10 @@
 import type { PurchaseOrderPaymentStatus } from '../../../generated/prisma/enums'
 import { purchaseOrderRuleFailure } from './purchase-order-errors'
 
-const PURCHASE_ORDER_DECIMAL_SCALE = 10_000n
-const PURCHASE_ORDER_MAX_AMOUNT_UNITS = 10n ** 30n - 1n
+const PURCHASE_ORDER_DECIMAL_SCALE = 100n
+const PURCHASE_ORDER_MAX_AMOUNT_UNITS = 10n ** 28n - 1n
 const PURCHASE_ORDER_USER_AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,2})?$/u
+const PURCHASE_ORDER_STORED_AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,2}0{0,2})?$/u
 const PURCHASE_ORDER_SNAPSHOT_AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,4})?$/u
 const POSTGRES_INTEGER_MAX = 2_147_483_647
 
@@ -18,17 +19,17 @@ function parseAmountUnits(value: unknown, pattern: RegExp): bigint {
   if (typeof value !== 'string' || !pattern.test(value)) return invalidAmount()
   const [integerPart = '', fractionPart = ''] = value.split('.')
   const units = BigInt(integerPart) * PURCHASE_ORDER_DECIMAL_SCALE
-    + BigInt(fractionPart.padEnd(4, '0'))
+    + BigInt(fractionPart.padEnd(2, '0').slice(0, 2))
   if (units > PURCHASE_ORDER_MAX_AMOUNT_UNITS) return invalidAmount()
   return units
 }
 
 /**
- * 所有运算都使用四位最小单位。用户写入边界限制两位小数，避免数据库的四位
- * 存储能力被误解为页面可以录入四位；产品档案成本快照单独走受信任入口。
+ * 采购实际金额统一使用分，兼容旧存储补齐的零尾数但拒绝非零厘/毫。
+ * 不对真实应付或实付静默舍入；产品参考成本与归档快照各走独立入口。
  */
 export function parsePurchaseOrderAmountUnits(value: unknown): bigint {
-  return parseAmountUnits(value, PURCHASE_ORDER_SNAPSHOT_AMOUNT_PATTERN)
+  return parseAmountUnits(value, PURCHASE_ORDER_STORED_AMOUNT_PATTERN)
 }
 
 export function formatPurchaseOrderAmountUnits(value: bigint): string {
@@ -38,7 +39,7 @@ export function formatPurchaseOrderAmountUnits(value: bigint): string {
   const integerPart = value / PURCHASE_ORDER_DECIMAL_SCALE
   const fractionPart = (value % PURCHASE_ORDER_DECIMAL_SCALE)
     .toString()
-    .padStart(4, '0')
+    .padStart(2, '0')
   return `${integerPart}.${fractionPart}`
 }
 
@@ -49,7 +50,17 @@ export function normalizePurchaseOrderAmount(value: unknown): string {
 }
 
 export function normalizePurchaseOrderSnapshotAmount(value: unknown): string {
-  return formatPurchaseOrderAmountUnits(parsePurchaseOrderAmountUnits(value))
+  if (typeof value !== 'string' || !PURCHASE_ORDER_SNAPSHOT_AMOUNT_PATTERN.test(value)) return invalidAmount()
+  const [integerPart, fractionPart = ''] = value.split('.')
+  // 已归档图片 hash 使用四位规范化，不能因当前采购精度变更而重算旧身份。
+  return `${integerPart}.${fractionPart.padEnd(4, '0')}`
+}
+
+/** 产品领域仍保留四位；仅新采购引用成本时按 HALF_UP 形成两位参考快照。 */
+export function normalizePurchaseOrderReferenceAmount(value: unknown): string {
+  const [integerPart, fractionPart] = normalizePurchaseOrderSnapshotAmount(value).split('.')
+  const tenThousandths = BigInt(integerPart) * 10_000n + BigInt(fractionPart)
+  return formatPurchaseOrderAmountUnits((tenThousandths + 50n) / 100n)
 }
 
 export function normalizePositivePurchaseOrderAmount(value: unknown): string {

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <g transform="translate(2 2) scale(.9375)">
+    <path d="M10 20H54Q59 20 59 25V45Q59 49 55 49H10Q6 49 6 44V25Q6 21 10 20Z" fill="#F7F8F4" stroke="#27312B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="19" cy="34" r="9.5" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.5"/>
+    <path d="M16 29L19 33L22 29M16 34H22M16 37H22M19 33V40" fill="none" stroke="#F7F8F4" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M34 36H40" fill="none" stroke="#27312B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M47 27V42M44 27H50M44 42H50" fill="none" stroke="oklch(var(--primary))" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M15 21Q13 16 12 10" fill="none" stroke="#27312B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M13 15Q5 15 6 7Q14 8 13 15Z" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M12 14L9 10" fill="none" stroke="#27312B" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M15 18Q17 10 24 11Q24 19 15 18Z" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M17 17L21 13" fill="none" stroke="#27312B" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

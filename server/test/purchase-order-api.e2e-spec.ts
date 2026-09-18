@@ -1,3 +1,4 @@
+import { paymentRecipientBankAccounts } from './fixtures/payment-recipient.fixture'
 import { randomUUID } from 'node:crypto'
 
 import { type INestApplication, Module } from '@nestjs/common'
@@ -51,6 +52,8 @@ const create = jest.fn<Promise<string>, [unknown, unknown]>()
   .mockResolvedValue(ORDER_ID)
 const review = jest.fn<Promise<unknown>, [unknown, unknown, unknown]>()
   .mockResolvedValue({ id: ORDER_ID, orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING', version: 2 })
+const updateOrderStatus = jest.fn<Promise<unknown>, [unknown, unknown, unknown]>()
+  .mockResolvedValue({ id: ORDER_ID, orderStatus: 'CANCELLED', version: 3 })
 const attach = jest.fn<Promise<unknown>, [unknown, unknown, unknown]>()
   .mockResolvedValue({ id: ORDER_ID, amountRevisions: [] })
 const salesOrderLines = jest.fn().mockResolvedValue({
@@ -94,7 +97,7 @@ const readShippingMarkResolution = jest.fn().mockResolvedValue(resolutionRespons
     provide: PurchaseOrderMutationService,
     useValue: {
       review,
-      updateOrderStatus: jest.fn(),
+      updateOrderStatus,
       updateFulfillmentStatus: jest.fn(),
       recordPayment: jest.fn(),
       voidPayment: jest.fn(),
@@ -179,14 +182,14 @@ describe('PurchaseOrder HTTP API contract', () => {
     review.mockClear()
     const response = await request(requireApplication().getHttpServer())
       .post(`/api/purchase-orders/${ORDER_ID}/review`)
-      .send({ expectedVersion: 1, reason: '核对通过' }).expect(200)
+      .send({ expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID, reason: '核对通过' }).expect(200)
     expect(responseBody(response)).toEqual({
       id: ORDER_ID, orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING', version: 2,
     })
     expect(response.headers['cache-control']).toContain('no-store')
     expect(response.headers['x-request-id']).toBeTruthy()
     expect(review).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }),
-      ORDER_ID, { expectedVersion: 1, reason: '核对通过' })
+      ORDER_ID, { expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID, reason: '核对通过' })
   })
 
   it.each([
@@ -195,7 +198,7 @@ describe('PurchaseOrder HTTP API contract', () => {
     { expectedVersion: 1, reason: null }, { expectedVersion: 1, reason: '' },
     { expectedVersion: 1, reason: 'x'.repeat(501) },
     { expectedVersion: 1, toStatus: 'CONFIRMED' },
-  ])('rejects invalid review input %j before invoking the service', async body => {
+  ].map(body => ({ imageDraftId: PRODUCT_MEDIA_ID, ...body })))('rejects invalid review input %j before invoking the service', async body => {
     review.mockClear()
     const response = await request(requireApplication().getHttpServer())
       .post(`/api/purchase-orders/${ORDER_ID}/review`).send(body).expect(422)
@@ -203,12 +206,18 @@ describe('PurchaseOrder HTTP API contract', () => {
     expect(review).not.toHaveBeenCalled()
   })
 
+  it.each([{ expectedVersion: 1 }, { expectedVersion: 1, imageDraftId: 'not-a-uuid' }])('requires a valid generated image id before approval: %j', async body => {
+    review.mockClear()
+    await request(requireApplication().getHttpServer()).post(`/api/purchase-orders/${ORDER_ID}/review`).send(body).expect(422)
+    expect(review).not.toHaveBeenCalled()
+  })
+
   it('maps review state conflicts to 409 and accepts an omitted reason', async () => {
     review.mockRejectedValueOnce(new ApiException(409, 'PURCHASE_ORDER_STATE_CHANGED', '采购订单已变化'))
     const response = await request(requireApplication().getHttpServer())
-      .post(`/api/purchase-orders/${ORDER_ID}/review`).send({ expectedVersion: 1 }).expect(409)
+      .post(`/api/purchase-orders/${ORDER_ID}/review`).send({ expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID }).expect(409)
     expect(responseBody(response)).toMatchObject({ code: 'PURCHASE_ORDER_STATE_CHANGED' })
-    expect(review).toHaveBeenLastCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, { expectedVersion: 1 })
+    expect(review).toHaveBeenLastCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, { expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID })
   })
 
   it('transforms the explicit list view and pagination query', async () => {
@@ -312,7 +321,7 @@ describe('PurchaseOrder HTTP API contract', () => {
     const payload = {
       purchaseType: 'STOCK',
       productMode: 'CUSTOM',
-      customSupplierName: 'Records Supplier',
+      customSupplierName: 'Records Supplier', paymentAccounts: paymentRecipientBankAccounts(),
       expectedShippingMarkResolution: RESOLUTION_TOKEN,
       orderDate: '2026-08-27',
       lines: [{
@@ -357,7 +366,7 @@ describe('PurchaseOrder HTTP API contract', () => {
 
   it('accepts 1000 two-item parts over 100 KiB only on purchase creation and keeps a fixed 1 MiB boundary', async () => {
     const line = { lineType: 'CUSTOM', name: 'Item', referencePurchaseUnitPriceAmount: '1', actualPurchaseUnitPriceAmount: '1', quantity: 1000 }
-    const payload = { purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: 'Capacity supplier',
+    const payload = { purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: 'Capacity supplier', paymentAccounts: paymentRecipientBankAccounts(),
       expectedShippingMarkResolution: RESOLUTION_TOKEN, orderDate: '2026-08-27',
       lines: [line, line], parts: Array.from({ length: 1000 }, () => ({ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }, { lineNumber: 2, quantity: 1 }] })),
       purchaseTotalAmount: '2000', depositDueAmount: '0', balanceDueAmount: '2000',
@@ -411,7 +420,7 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
   const mutationHeaders = { Origin: 'http://127.0.0.1:9000', 'X-Qianshu-CSRF': '1', 'Sec-Fetch-Site': 'same-origin' }
   const payload = {
     purchaseType: 'SALES_LINKED', productMode: 'CUSTOM', salesOrderId: SALES_ORDER_ID,
-    customSupplierName: 'Permission Supplier', orderDate: '2026-08-27',
+    customSupplierName: 'Permission Supplier', paymentAccounts: paymentRecipientBankAccounts(), orderDate: '2026-08-27',
     expectedShippingMarkResolution: RESOLUTION_TOKEN,
     lines: [{ lineType: 'CUSTOM', sourceSalesOrderLineId: SALES_ORDER_LINE_ID, referencePurchaseUnitPriceAmount: '10', actualPurchaseUnitPriceAmount: '10', quantity: 1 }],
     purchaseTotalAmount: '10', depositDueAmount: '0', balanceDueAmount: '10',
@@ -442,17 +451,50 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
     session.mockClear()
     create.mockClear()
     review.mockClear()
+    updateOrderStatus.mockClear()
     readShippingMarkResolution.mockClear()
   })
 
   afterAll(async () => { await application?.close() })
+
+  it('rejects cancellation from an operations updater before the mutation service runs', async () => {
+    grantedPermissions = ['purchase-orders:read', 'purchase-orders:update']
+    const response = await request(application.getHttpServer())
+      .patch(`/api/purchase-orders/${ORDER_ID}/order-status`).set(mutationHeaders).set('Cookie', cookie)
+      .send({ toStatus: 'CANCELLED' }).expect(403)
+    expect(responseBody(response)).toMatchObject({ code: 'FORBIDDEN' })
+    expect(updateOrderStatus).not.toHaveBeenCalled()
+  })
+
+  it('allows reviewer cancellation without a reason and applies permission revocation immediately', async () => {
+    grantedPermissions = ['purchase-orders:review']
+    const submit = () => request(application.getHttpServer())
+      .patch(`/api/purchase-orders/${ORDER_ID}/order-status`).set(mutationHeaders).set('Cookie', cookie)
+      .send({ toStatus: 'CANCELLED' })
+    const response = await submit().expect(200)
+    expect(responseBody(response)).toMatchObject({ id: ORDER_ID, orderStatus: 'CANCELLED' })
+    expect(updateOrderStatus).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, { toStatus: 'CANCELLED' })
+    grantedPermissions = ['purchase-orders:update']
+    await submit().expect(403)
+    expect(updateOrderStatus).toHaveBeenCalledTimes(1)
+    expect(roleRows).toHaveBeenCalledTimes(2)
+  })
+
+  it('enforces session and CSRF before reviewer cancellation', async () => {
+    grantedPermissions = ['purchase-orders:review']
+    await request(application.getHttpServer()).patch(`/api/purchase-orders/${ORDER_ID}/order-status`)
+      .set(mutationHeaders).send({ toStatus: 'CANCELLED' }).expect(401)
+    await request(application.getHttpServer()).patch(`/api/purchase-orders/${ORDER_ID}/order-status`)
+      .set('Cookie', cookie).send({ toStatus: 'CANCELLED' }).expect(403)
+    expect(updateOrderStatus).not.toHaveBeenCalled()
+  })
 
   it('requires the independent review permission even when all other purchase capabilities are granted', async () => {
     grantedPermissions = ['purchase-orders:read', 'purchase-orders:create', 'purchase-orders:create-stock',
       'purchase-orders:update', 'purchase-orders:payment', 'purchase-orders:document']
     const response = await request(application.getHttpServer())
       .post(`/api/purchase-orders/${ORDER_ID}/review`).set(mutationHeaders).set('Cookie', cookie)
-      .send({ expectedVersion: 1 }).expect(403)
+      .send({ expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID }).expect(403)
     expect(responseBody(response)).toMatchObject({ code: 'FORBIDDEN' })
     expect(review).not.toHaveBeenCalled()
   })
@@ -461,7 +503,7 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
     grantedPermissions = ['purchase-orders:review']
     const submit = () => request(application.getHttpServer())
       .post(`/api/purchase-orders/${ORDER_ID}/review`).set(mutationHeaders).set('Cookie', cookie)
-      .send({ expectedVersion: 1 })
+      .send({ expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID })
     await submit().expect(200)
     grantedPermissions = ['purchase-orders:update']
     await submit().expect(403)
@@ -472,9 +514,9 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
   it('enforces session and CSRF before review', async () => {
     grantedPermissions = ['purchase-orders:review']
     await request(application.getHttpServer()).post(`/api/purchase-orders/${ORDER_ID}/review`)
-      .set(mutationHeaders).send({ expectedVersion: 1 }).expect(401)
+      .set(mutationHeaders).send({ expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID }).expect(401)
     await request(application.getHttpServer()).post(`/api/purchase-orders/${ORDER_ID}/review`)
-      .set('Cookie', cookie).send({ expectedVersion: 1 }).expect(403)
+      .set('Cookie', cookie).send({ expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID }).expect(403)
     expect(review).not.toHaveBeenCalled()
   })
 

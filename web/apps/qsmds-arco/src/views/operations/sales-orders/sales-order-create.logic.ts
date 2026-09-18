@@ -359,7 +359,7 @@ function formatAmountUnitsForPrecision(value: bigint, precision: number): string
 function isBlankCatalogLine(line: SalesOrderLineFormModel): boolean {
   return line.lineType === 'CATALOG'
     && line.productId === null
-    && line.actualUnitPriceAmount === '0.00'
+    && line.actualUnitPriceAmount === null
     && line.quantity === '1'
 }
 
@@ -374,7 +374,7 @@ export function createCatalogSalesOrderLine(
     name: '',
     description: '',
     standardUnitPriceAmount: null,
-    actualUnitPriceAmount: '0.00',
+    actualUnitPriceAmount: null,
     quantity: '1',
     mainImage: null,
   }

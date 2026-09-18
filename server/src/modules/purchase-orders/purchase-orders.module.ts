@@ -1,3 +1,9 @@
+import { PurchasePayableVoucherService } from './payables/purchase-payable-voucher.service'
+import { PaymentRecipientsModule } from '../payment-recipients/payment-recipients.module'
+import { FundAccountsModule } from '../fund-accounts/fund-accounts.module'
+import { PurchasePayableService } from './payables/purchase-payable.service'
+import { PurchasePayableQueryService } from './payables/purchase-payable-query.service'
+import { PurchasePayableController } from './payables/purchase-payable.controller'
 import { Module } from '@nestjs/common'
 
 import { PrismaModule } from '../../infrastructure/database/prisma.module'
@@ -9,6 +15,9 @@ import { ProductsModule } from '../products/products.module'
 import { PurchaseShippingMarksModule } from '../purchase-shipping-marks/purchase-shipping-marks.module'
 import { PurchaseOrderDocumentMultipartParser } from './documents/purchase-order-document-multipart.parser'
 import { PurchaseOrderDocumentService } from './documents/purchase-order-document.service'
+import { PurchaseOrderImageDraftController } from './order-images/purchase-order-image-draft.controller'
+import { PurchaseOrderImageDraftService } from './order-images/purchase-order-image-draft.service'
+import { PurchaseOrderImageRenderer } from './order-images/purchase-order-image-renderer'
 import {
   PurchaseOrderFactoryShipmentController,
   SalesOrderFactoryShipmentController,
@@ -21,11 +30,22 @@ import { PurchaseOrderMutationService } from './purchase-order-mutation.service'
 import { PurchaseOrderProductImageService } from './products/purchase-order-product-image.service'
 import { PurchaseOrderQueryService } from './purchase-order-query.service'
 import { PurchaseOrderSourceQueryService } from './purchase-order-source-query.service'
+import { PurchaseOrderReviewContextService } from './purchase-order-review-context.service'
+import { PurchaseOrderReviewContextController } from './purchase-order-review-context.controller'
 import { PurchaseOrdersController } from './purchase-orders.controller'
 import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
+import { PurchaseShipmentNumberingService } from './shipments/purchase-shipment-numbering.service'
+import { PurchaseShipmentNumberBackfillService } from './shipments/purchase-shipment-number-backfill.service'
+import { PurchaseShipmentController } from './shipments/purchase-shipment.controller'
+import { PurchaseShipmentQueryService } from './shipments/purchase-shipment-query.service'
+
+import { PurchaseOrderWarehouseReceiptController } from './warehouse-receipts/purchase-order-warehouse-receipt.controller'
+import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purchase-order-warehouse-receipt.service'
 
 @Module({
   imports: [
+    PaymentRecipientsModule,
+    FundAccountsModule,
     PrismaModule,
     AuthModule,
     DictionaryModule,
@@ -35,12 +55,21 @@ import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-covera
     PurchaseShippingMarksModule,
   ],
   controllers: [
+    PurchasePayableController,
     PurchaseOrdersController,
+    PurchaseOrderImageDraftController,
+    PurchaseOrderReviewContextController,
     PurchaseOrderFactoryShipmentController,
     SalesOrderFactoryShipmentController,
+    PurchaseShipmentController,
+    PurchaseOrderWarehouseReceiptController,
   ],
   providers: [
+    PurchasePayableVoucherService,
+    PurchasePayableService,
+    PurchasePayableQueryService,
     PurchaseOrderQueryService,
+    PurchaseOrderReviewContextService,
     PurchaseOrderSourceQueryService,
     PurchaseOrderCreateDependencyService,
     SalesOrderPurchaseCoverageService,
@@ -49,7 +78,13 @@ import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-covera
     PurchaseOrderCommandService,
     PurchaseOrderMutationService,
     PurchaseOrderDocumentService,
+    PurchaseOrderImageDraftService,
+    PurchaseOrderImageRenderer,
     PurchaseOrderProductImageService,
+    PurchaseShipmentQueryService,
+    PurchaseShipmentNumberingService,
+    PurchaseShipmentNumberBackfillService,
+    PurchaseOrderWarehouseReceiptService,
     {
       provide: PurchaseOrderDocumentMultipartParser,
       useFactory: (): PurchaseOrderDocumentMultipartParser =>

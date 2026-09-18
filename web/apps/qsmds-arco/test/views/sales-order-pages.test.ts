@@ -605,6 +605,8 @@ test('产品明细由薄销售适配层接入通用编辑器，不保留行内�
   ), 'utf8')
 
   assert.match(adapter, /<QsOrderProductLineEditor/u)
+  assert.match(adapter, /:catalog-line-initial-actual-unit-price-amount="null"/u)
+  assert.match(adapter, /:temporary-line-initial-actual-unit-price-amount="null"/u)
   assert.match(adapter, /show-discount-rate/u)
   assert.match(adapter, /loadProducts: ProductPageLoader/u)
   assert.match(adapter, /本单售价/u)

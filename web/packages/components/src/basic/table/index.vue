@@ -51,9 +51,10 @@ const TABLE_HEADER_ROW_HEIGHT = 40
 
 type ColumnSlotName = `cell-${string}` | `header-${string}` | `footer-${string}`
 type TableSlots<TData extends RowData> = {
-  caption?: () => any
-  empty?: (props: TableEmptySlotProps<TData>) => any
-  toolbar?: (props: TableToolbarSlotProps<TData>) => any
+  'caption'?: () => any
+  'empty'?: (props: TableEmptySlotProps<TData>) => any
+  'group-header'?: (props: TableGroupHeaderSlotProps<TData>) => any
+  'toolbar'?: (props: TableToolbarSlotProps<TData>) => any
 } & {
   [key: `cell-${string}`]: ((props: TableCellSlotProps<TData, any>) => any) | undefined
 } & {
@@ -115,6 +116,15 @@ export interface TableHeaderSlotProps<TData extends RowData = RowData, TValue = 
   table: TanStackTable<TData>
 }
 
+export interface TableGroupHeaderSlotProps<TData extends RowData = RowData> {
+  colspan: number
+  expanded: boolean
+  index: number
+  row: Row<TData>
+  table: TanStackTable<TData>
+  toggle: () => void
+}
+
 export interface TableFooterSlotProps<TData extends RowData = RowData, TValue = unknown> {
   column: Column<TData, TValue>
   header: Header<TData, TValue>
@@ -145,6 +155,7 @@ export interface TableProps<TData extends RowData = RowData> {
   expanded?: ExpandedState
   getRowId?: TableOptions<TData>['getRowId']
   getSubRows?: TableOptions<TData>['getSubRows']
+  groupRow?: (row: Row<TData>) => boolean
   headerClass?: HTMLAttributes['class']
   headerRowClass?: HTMLAttributes['class']
   indentSize?: number
@@ -644,6 +655,17 @@ function getCellSlotProps(cell: Cell<TData, unknown>, row: Row<TData>): any {
   }
 }
 
+function getGroupHeaderSlotProps(row: Row<TData>): TableGroupHeaderSlotProps<TData> {
+  return {
+    colspan: visibleColumnCount.value,
+    expanded: row.getIsExpanded(),
+    index: row.index,
+    row,
+    table,
+    toggle: () => row.toggleExpanded(),
+  }
+}
+
 function shouldRenderTreeCell(cell: Cell<TData, unknown>, row: Row<TData>) {
   if (!props.tree || isSelectionColumn(cell.column)) {
     return false
@@ -1091,31 +1113,69 @@ defineExpose({
               @click="handleRowClick(row, $event)"
             >
               <TableCell
-                v-for="cell in row.getVisibleCells()"
-                :key="cell.id"
-                :class="getCellClass(cell)"
-                :style="getColumnStyle(cell.column)"
-                :data-pinned="cell.column.getIsPinned() || undefined"
-                :data-pinned-edge="getPinnedEdge(cell.column)"
-                :data-sorted="cell.column.getIsSorted() || undefined"
+                v-if="props.groupRow?.(row)"
+                :colspan="visibleColumnCount"
+                class="text-foreground bg-muted/50"
               >
-                <div
-                  v-if="shouldRenderTreeCell(cell, row)"
-                  class="flex gap-1.5 min-w-0 items-center"
-                  :style="getTreeCellIndentStyle(row)"
+                <slot name="group-header" v-bind="getGroupHeaderSlotProps(row)" />
+              </TableCell>
+              <template v-else>
+                <TableCell
+                  v-for="cell in row.getVisibleCells()"
+                  :key="cell.id"
+                  :class="getCellClass(cell)"
+                  :style="getColumnStyle(cell.column)"
+                  :data-pinned="cell.column.getIsPinned() || undefined"
+                  :data-pinned-edge="getPinnedEdge(cell.column)"
+                  :data-sorted="cell.column.getIsSorted() || undefined"
                 >
-                  <Button
-                    v-if="row.getCanExpand()"
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    class="shrink-0 size-6"
-                    @click.stop="handleToggleRowExpanded(row)"
+                  <div
+                    v-if="shouldRenderTreeCell(cell, row)"
+                    class="flex gap-1.5 min-w-0 items-center"
+                    :style="getTreeCellIndentStyle(row)"
                   >
-                    <Icon :name="getTreeToggleIconName(row)" class="size-3.5" />
-                  </Button>
-                  <span v-else class="shrink-0 size-6" aria-hidden="true" />
-                  <div class="flex-1 min-w-0">
+                    <Button
+                      v-if="row.getCanExpand()"
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      class="shrink-0 size-6"
+                      @click.stop="handleToggleRowExpanded(row)"
+                    >
+                      <Icon :name="getTreeToggleIconName(row)" class="size-3.5" />
+                    </Button>
+                    <span v-else class="shrink-0 size-6" aria-hidden="true" />
+                    <div class="flex-1 min-w-0">
+                      <slot
+                        v-if="hasColumnSlot(getCellSlotName(cell))"
+                        :name="getCellSlotName(cell)"
+                        v-bind="getCellSlotProps(cell, row)"
+                      />
+                      <template v-else-if="isSelectionColumn(cell.column) && selectable">
+                        <Checkbox
+                          v-if="multiple"
+                          :model-value="row.getIsSelected()"
+                          :disabled="!row.getCanSelect()"
+                          class="translate-y-[2px]"
+                          @click.stop
+                          @update:model-value="value => handleToggleRow(row, value)"
+                        />
+                        <RadioGroupItem
+                          v-else
+                          :value="row.id"
+                          :disabled="!row.getCanSelect()"
+                          class="translate-y-[2px]"
+                          @click.stop
+                        />
+                      </template>
+                      <FlexRender
+                        v-else
+                        :render="cell.column.columnDef.cell"
+                        :props="cell.getContext()"
+                      />
+                    </div>
+                  </div>
+                  <template v-else>
                     <slot
                       v-if="hasColumnSlot(getCellSlotName(cell))"
                       :name="getCellSlotName(cell)"
@@ -1143,38 +1203,9 @@ defineExpose({
                       :render="cell.column.columnDef.cell"
                       :props="cell.getContext()"
                     />
-                  </div>
-                </div>
-                <template v-else>
-                  <slot
-                    v-if="hasColumnSlot(getCellSlotName(cell))"
-                    :name="getCellSlotName(cell)"
-                    v-bind="getCellSlotProps(cell, row)"
-                  />
-                  <template v-else-if="isSelectionColumn(cell.column) && selectable">
-                    <Checkbox
-                      v-if="multiple"
-                      :model-value="row.getIsSelected()"
-                      :disabled="!row.getCanSelect()"
-                      class="translate-y-[2px]"
-                      @click.stop
-                      @update:model-value="value => handleToggleRow(row, value)"
-                    />
-                    <RadioGroupItem
-                      v-else
-                      :value="row.id"
-                      :disabled="!row.getCanSelect()"
-                      class="translate-y-[2px]"
-                      @click.stop
-                    />
                   </template>
-                  <FlexRender
-                    v-else
-                    :render="cell.column.columnDef.cell"
-                    :props="cell.getContext()"
-                  />
-                </template>
-              </TableCell>
+                </TableCell>
+              </template>
             </TableRow>
           </template>
           <TableEmpty v-else :colspan="visibleColumnCount">

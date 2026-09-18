@@ -17,6 +17,7 @@ import {
   type FundReversibleBatchKind,
 } from '../domain'
 import { FUND_POSTING_ERROR_CODES, FundPostingError } from './fund-posting.errors'
+import { PURCHASE_PAYMENT_FUND_SOURCE, PURCHASE_PAYMENT_POSTING_TYPE, PURCHASE_PAYMENT_STOCK_PAY_CONSUMER } from './fund-purchase-payment'
 
 const FUND_REVERSIBLE_BATCH_KINDS = [
   'BUSINESS',
@@ -89,6 +90,7 @@ interface OriginalBatchDatabaseRow {
   readonly businessCategory: unknown
   readonly businessSourceId: unknown
   readonly businessSourceCode: unknown
+  readonly consumerCode: unknown
   readonly ruleVersionId: unknown
   readonly userId: unknown
   readonly businessAmount: unknown
@@ -202,6 +204,7 @@ export async function lockFundOriginalBatchForReversal(
         batch."business_category_snapshot"::text AS "businessCategory",
         batch."business_source_id" AS "businessSourceId",
         batch."business_source_code_snapshot" AS "businessSourceCode",
+        batch."consumer_code" AS "consumerCode",
         batch."rule_version_id" AS "ruleVersionId",
         batch."user_id" AS "userId",
         batch."business_amount" AS "businessAmount",
@@ -235,9 +238,16 @@ export async function lockFundOriginalBatchForReversal(
   const companyShareRateSnapshot = nullableShareRate(
     row.companyShareRateSnapshot,
   )
+  // 备货采购没有用户身份，但须保留有效 0/100 快照才能按原分录冲正；只开放该受控原批次。
+  const companyOnlyPurchase = row.kind === 'BUSINESS'
+    && row.businessSourceCode === PURCHASE_PAYMENT_FUND_SOURCE
+    && row.postingTypeCode === PURCHASE_PAYMENT_POSTING_TYPE
+    && row.businessCategory === 'COST'
+    && row.consumerCode === PURCHASE_PAYMENT_STOCK_PAY_CONSUMER
+    && row.userId === null && userShareRateSnapshot === '0.00' && companyShareRateSnapshot === '100.00'
   if (
     (userShareRateSnapshot === null) !== (companyShareRateSnapshot === null)
-    || (row.userId === null) !== (userShareRateSnapshot === null)
+    || (!companyOnlyPurchase && (row.userId === null) !== (userShareRateSnapshot === null))
     || (row.kind === 'MANUAL_ADJUSTMENT') !== (row.adjustmentMode !== null)
   ) {
     return persistenceInvariant()

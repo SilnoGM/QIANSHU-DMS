@@ -6,14 +6,16 @@ import {
   normalizePurchaseOrderAmount,
   normalizePurchaseOrderQuantity,
   normalizePurchaseOrderSnapshotAmount,
+  normalizePurchaseOrderReferenceAmount,
+  parsePurchaseOrderAmountUnits,
   validatePurchaseOrderAgreedAmounts,
 } from './purchase-order-decimal'
 
 describe('purchase order decimal rules', () => {
   it.each([
-    ['0', '0.0000'],
-    ['1.2', '1.2000'],
-    ['99999999999999999999999999.99', '99999999999999999999999999.9900'],
+    ['0', '0.00'],
+    ['1.2', '1.20'],
+    ['99999999999999999999999999.99', '99999999999999999999999999.99'],
   ])('normalizes the user amount %s', (input, expected) => {
     expect(normalizePurchaseOrderAmount(input)).toBe(expected)
   })
@@ -39,11 +41,24 @@ describe('purchase order decimal rules', () => {
     )
   })
 
-  it('accepts four-decimal product cost snapshots only at the trusted boundary', () => {
+  it('preserves four-decimal archived image snapshot normalization', () => {
     expect(normalizePurchaseOrderSnapshotAmount('1.2345')).toBe('1.2345')
     expect(() => normalizePurchaseOrderSnapshotAmount('1.23456')).toThrow(
       expect.objectContaining({ code: 'PURCHASE_ORDER_AMOUNT_INVALID' }),
     )
+  })
+
+  it('rounds new catalog reference snapshots to cents while keeping historical snapshot normalization stable', () => {
+    expect(normalizePurchaseOrderReferenceAmount('1.2345')).toBe('1.23')
+    expect(normalizePurchaseOrderReferenceAmount('1.2350')).toBe('1.24')
+    expect(normalizePurchaseOrderReferenceAmount('9007199254740993.9950')).toBe('9007199254740994.00')
+    expect(normalizePurchaseOrderSnapshotAmount('1.2350')).toBe('1.2350')
+  })
+
+  it('uses cents and rejects nonzero sub-cent operational amounts without rounding', () => {
+    expect(parsePurchaseOrderAmountUnits('12.34')).toBe(1234n)
+    expect(parsePurchaseOrderAmountUnits('12.3400')).toBe(1234n)
+    expect(() => parsePurchaseOrderAmountUnits('12.3450')).toThrow(expect.objectContaining({ code: 'PURCHASE_ORDER_AMOUNT_INVALID' }))
   })
 
   it('accepts only positive PostgreSQL integers for quantity', () => {
@@ -58,8 +73,9 @@ describe('purchase order decimal rules', () => {
   })
 
   it('calculates line totals without IEEE-754 arithmetic', () => {
-    expect(calculatePurchaseOrderLineTotal('19.9900', 3)).toBe('59.9700')
-    expect(calculatePurchaseOrderLineTotal('0.0001', 3)).toBe('0.0003')
+    expect(calculatePurchaseOrderLineTotal('19.9900', 3)).toBe('59.97')
+    expect(calculatePurchaseOrderLineTotal('0.01', 3)).toBe('0.03')
+    expect(() => calculatePurchaseOrderLineTotal('0.0001', 3)).toThrow()
   })
 
   it('hard-blocks both purchase amount equations', () => {
@@ -69,10 +85,10 @@ describe('purchase order decimal rules', () => {
       depositDueAmount: '30',
       balanceDueAmount: '70',
     })).toEqual({
-      lineSubtotalAmount: '100.0000',
-      purchaseTotalAmount: '100.0000',
-      depositDueAmount: '30.0000',
-      balanceDueAmount: '70.0000',
+      lineSubtotalAmount: '100.00',
+      purchaseTotalAmount: '100.00',
+      depositDueAmount: '30.00',
+      balanceDueAmount: '70.00',
     })
 
     expect(() => validatePurchaseOrderAgreedAmounts({
@@ -93,8 +109,8 @@ describe('purchase order decimal rules', () => {
 
   it('requires both CUSTOM prices to be user-entered and equal', () => {
     expect(assertCustomPurchasePrices('12.3', '12.30')).toEqual({
-      referencePurchaseUnitPriceAmount: '12.3000',
-      actualPurchaseUnitPriceAmount: '12.3000',
+      referencePurchaseUnitPriceAmount: '12.30',
+      actualPurchaseUnitPriceAmount: '12.30',
     })
     for (const prices of [[undefined, '1'], ['1', undefined], ['1', '1.01']]) {
       expect(() => assertCustomPurchasePrices(prices[0], prices[1])).toThrow(
@@ -114,7 +130,7 @@ describe('purchase order decimal rules', () => {
   })
 
   it('requires an actual payment amount greater than zero', () => {
-    expect(normalizePositivePurchaseOrderAmount('0.01')).toBe('0.0100')
+    expect(normalizePositivePurchaseOrderAmount('0.01')).toBe('0.01')
     expect(() => normalizePositivePurchaseOrderAmount('0')).toThrow(
       expect.objectContaining({ code: 'PURCHASE_ORDER_PAYMENT_AMOUNT_INVALID' }),
     )

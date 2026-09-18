@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <g transform="translate(2 2) scale(.9375)">
+    <path d="M7 10H27V17Q33 13 36 18Q40 24 33 27H27V37H8Z" fill="color-mix(in srgb, oklch(var(--primary)) 18%, #F7F8F4)" stroke="#27312B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M35 10H55V29H46Q49 35 44 38Q38 40 35 34V29H27V23Q35 26 36 20Q36 15 29 17V10Z" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M12 37H27V30Q33 33 37 28Q41 34 35 38V44H54V56H12Z" fill="#F7F8F4" stroke="#27312B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M45 57Q53 55 56 46" fill="none" stroke="#27312B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M53 52Q46 52 46 46Q53 45 53 52Z" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M52 51L48 48" fill="none" stroke="#27312B" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="57" cy="44" r="3" fill="#9B805F" stroke="#27312B" stroke-width="2.1"/>
+  </g>
+</svg>

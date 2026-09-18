@@ -6,7 +6,7 @@ export function getPaymentDocuments(documents: readonly PurchaseOrderDocumentDto
 }
 
 export function getOrderDocuments(documents: readonly PurchaseOrderDocumentDto[]): PurchaseOrderDocumentDto[] {
-  return documents.filter(document => document.documentType !== 'PAYMENT_VOUCHER' && document.detachedAt === null)
+  return documents.filter(document => document.detachedAt === null)
 }
 
 export type PurchaseOrderTimelineEntry
@@ -45,6 +45,7 @@ export function getPurchaseOrderPartRecords(detail: Pick<PurchaseOrderDetailDto,
   const imagesByLine = getPurchaseProductImages(detail)
   return [...detail.parts].sort((a, b) => a.partNumber - b.partNumber).map(part => ({
     id: part.id,
+    shipmentNo: part.shipmentNo,
     partNumber: part.partNumber,
     status: part.status,
     shippingMarkText: part.shippingMarkText,
@@ -52,6 +53,11 @@ export function getPurchaseOrderPartRecords(detail: Pick<PurchaseOrderDetailDto,
     shippedBy: part.shippedBy,
     shipmentRecordedAt: part.shipmentRecordedAt,
     shipmentRemark: part.shipmentRemark,
+    trackingNo: part.trackingNo ?? null,
+    warehouseReceivedAt: part.warehouseReceivedAt,
+    warehouseReceivedBy: part.warehouseReceivedBy,
+    warehouseRecordedAt: part.warehouseRecordedAt,
+    warehouseRemark: part.warehouseRemark,
     items: [...part.items].sort((a, b) => a.lineNumber - b.lineNumber).map((item) => {
       const line = linesById.get(item.purchaseOrderLineId)
       return {

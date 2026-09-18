@@ -39,6 +39,36 @@ const page = defineModel<number>('page', { required: true })
 const pageSize = defineModel<number>('pageSize', { required: true })
 const sorting = defineModel<TableSortingState>('sorting', { required: true })
 
+const tagToneClasses = {
+  blue: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:border-sky-500/30! dark:bg-sky-500/10! dark:text-sky-300',
+  green: 'border-primary/30 bg-primary/10 text-primary dark:border-green-500/30! dark:bg-green-500/10! dark:text-green-300',
+  purple: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:border-violet-500/30! dark:bg-violet-500/10! dark:text-violet-300',
+  orange: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:border-orange-500/30! dark:bg-orange-500/10! dark:text-orange-300',
+  amber: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:border-amber-500/30! dark:bg-amber-500/10! dark:text-amber-300',
+  red: 'border-destructive/30 bg-destructive/10 text-destructive dark:border-destructive/30! dark:bg-destructive/10!',
+  slate: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:border-slate-500/30! dark:bg-slate-500/10! dark:text-slate-300',
+}
+
+const batchKindTagClasses: Record<FundTransactionDto['batchKind'], string> = {
+  BUSINESS: tagToneClasses.blue,
+  MANUAL_ADJUSTMENT: tagToneClasses.purple,
+  REVERSAL: tagToneClasses.orange,
+}
+
+const reversalStatusTagClasses: Record<FundTransactionDto['reversalStatus'], string> = {
+  FULL: tagToneClasses.red,
+  NONE: tagToneClasses.green,
+  NOT_APPLICABLE: tagToneClasses.orange,
+  PARTIAL: tagToneClasses.amber,
+}
+
+const businessCategoryTagClasses: Record<FundTransactionDto['businessCategory'], string> = {
+  ADJUSTMENT: tagToneClasses.purple,
+  COST: tagToneClasses.red,
+  NEUTRAL: tagToneClasses.slate,
+  REVENUE: tagToneClasses.green,
+}
+
 const columns: QsGenericTableColumn<FundTransactionDto>[] = [
   { accessorKey: 'batchNo', fixed: 'left', id: 'batch', minWidth: 210, title: '批次' },
   {
@@ -47,7 +77,7 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
     minWidth: 210,
     title: '账户主体',
   },
-  { accessorKey: 'postingTypeName', id: 'typeCategory', minWidth: 210, title: '类型 / 分类' },
+  { accessorKey: 'postingTypeName', id: 'typeCategory', minWidth: 280, title: '类型 / 分类' },
   { accessorKey: 'businessSourceName', id: 'source', minWidth: 190, title: '业务来源' },
   {
     accessorKey: 'amount',
@@ -124,10 +154,10 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
           {{ row.original.batchNo }}
         </div>
         <div class="mt-1 flex flex-wrap gap-1.5 items-center">
-          <FaTag variant="outline" class="qs-type-status-tag">
+          <FaTag variant="outline" class="qs-type-status-tag" :class="batchKindTagClasses[row.original.batchKind]">
             {{ getFundBatchKindLabel(row.original.batchKind) }}
           </FaTag>
-          <FaTag variant="outline" class="qs-type-status-tag">
+          <FaTag v-if="row.original.reversalStatus !== 'NOT_APPLICABLE'" variant="outline" class="qs-type-status-tag" :class="reversalStatusTagClasses[row.original.reversalStatus]">
             {{ getFundReversalStatusLabel(row.original.reversalStatus) }}
           </FaTag>
         </div>
@@ -152,7 +182,7 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
         </div>
         <div class="mt-1 flex flex-wrap gap-2 items-center">
           <code class="qs-type-meta break-all">{{ row.original.postingTypeCode }}</code>
-          <FaTag variant="outline" class="qs-type-status-tag">
+          <FaTag variant="outline" class="qs-type-status-tag" :class="businessCategoryTagClasses[row.original.businessCategory]">
             {{ getFundBusinessCategoryLabel(row.original.businessCategory) }}
           </FaTag>
         </div>
@@ -224,10 +254,10 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
               {{ row.batchNo }}
             </div>
             <div class="mt-1 flex flex-wrap gap-1.5 items-center">
-              <FaTag variant="outline" class="qs-type-status-tag">
+              <FaTag variant="outline" class="qs-type-status-tag" :class="batchKindTagClasses[row.batchKind]">
                 {{ getFundBatchKindLabel(row.batchKind) }}
               </FaTag>
-              <FaTag variant="outline" class="qs-type-status-tag">
+              <FaTag v-if="row.reversalStatus !== 'NOT_APPLICABLE'" variant="outline" class="qs-type-status-tag" :class="reversalStatusTagClasses[row.reversalStatus]">
                 {{ getFundReversalStatusLabel(row.reversalStatus) }}
               </FaTag>
             </div>
@@ -255,7 +285,12 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
             <dt class="qs-type-compact-label mb-1">
               类型 / 分类
             </dt><dd class="m-0">
-              <span>{{ row.postingTypeName }}</span><span class="qs-type-meta mt-1 block">{{ getFundBusinessCategoryLabel(row.businessCategory) }}</span>
+              <span>{{ row.postingTypeName }}</span>
+              <div class="mt-1">
+                <FaTag variant="outline" class="qs-type-status-tag" :class="businessCategoryTagClasses[row.businessCategory]">
+                  {{ getFundBusinessCategoryLabel(row.businessCategory) }}
+                </FaTag>
+              </div>
             </dd>
           </div>
           <div>

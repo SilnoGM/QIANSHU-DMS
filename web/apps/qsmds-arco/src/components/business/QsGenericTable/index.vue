@@ -1,18 +1,26 @@
 <script setup lang="ts" generic="TData extends object = Record<string, unknown>">
 import type {
   TableAlign,
+  TableCellSlotProps,
   TableColumn,
   TableColumnFixed,
+  TableExpandedState,
+  TableGroupHeaderSlotProps,
+  TableHeaderSlotProps,
   TableProps,
   TableSortingState,
 } from '@fantastic-admin/components'
 import type { Component } from 'vue'
-import type { QsGenericTableActionColumn, QsGenericTableColumn, QsGenericTableColumnSettingItem, QsGenericTableColumnSettings, QsGenericTableFilterDefinition, QsGenericTableFilterValue, QsGenericTableFilterValues, QsGenericTableSummaryValue } from './logic'
+import type { QsGenericTableGrouping } from './grouping'
 
+import type { QsGenericTableActionColumn, QsGenericTableColumn, QsGenericTableColumnSettingItem, QsGenericTableColumnSettings, QsGenericTableFilterDefinition, QsGenericTableFilterValue, QsGenericTableFilterValues, QsGenericTableSummaryValue } from './logic'
 import { useMediaQuery, useResizeObserver } from '@vueuse/core'
 import ColumnSettingsPanel from './ColumnSettingsPanel.vue'
 import CopyCellButton from './CopyCellButton.vue'
 import FilterPanel from './FilterPanel.vue'
+import GroupedMobileRows from './GroupedMobileRows.vue'
+import GroupHeader from './GroupHeader.vue'
+import { buildTableGroups, getGroupedRowId, getTableGroupId, isTableGroupExpanded, resolveGroupedRowKey, toggleTableGroup } from './grouping'
 import {
   calculateColumnSummary,
   createActionColumn,
@@ -42,7 +50,9 @@ const props = withDefaults(defineProps<{
   emptyTitle?: string
   error?: string
   filterDefinitions?: QsGenericTableFilterDefinition[]
+  grouping?: QsGenericTableGrouping<TData>
   loading?: boolean
+  paginationUnit?: string
   pageSizeOptions?: number[]
   rowKey?: TableProps<TData>['rowKey']
   searchable?: boolean
@@ -63,7 +73,9 @@ const props = withDefaults(defineProps<{
   emptyTitle: '暂无数据',
   error: undefined,
   filterDefinitions: () => [],
+  grouping: undefined,
   loading: false,
+  paginationUnit: undefined,
   pageSizeOptions: () => [20, 50, 100, 200],
   rowKey: undefined,
   searchable: true,
@@ -81,21 +93,90 @@ const emit = defineEmits<{
   add: []
   columnSettingsChange: [settings: QsGenericTableColumnSettings]
   filterChange: [filters: QsGenericTableFilterValues]
+  expandedChange: [expanded: TableExpandedState]
   paginationChange: [pagination: { page: number, pageSize: number }]
   retry: []
   search: [keyword: string]
   sortingChange: [sorting: TableSortingState]
 }>()
 
+const slots = defineSlots<{
+  'actions'?: (props: { row: TData, index: number, rowNumber: number, group?: TData, groupIndex?: number, groupKey?: string }) => any
+  'mobile-row'?: (props: { row: TData, index: number, rowNumber: number, columns: QsGenericTableColumn<TData>[], group?: TData, groupIndex?: number, groupKey?: string }) => any
+  'group-header'?: (props: { row: TData, rows: TData[], groupKey: string, index: number, rowNumber: number, expanded: boolean }) => any
+  'query-leading'?: () => any
+  'summary'?: () => any
+  [name: `cell-${string}`]: ((props: TableCellSlotProps<TData, any>) => any) | undefined
+  [name: `header-${string}`]: ((props: TableHeaderSlotProps<TData, any>) => any) | undefined
+  [name: `summary-${string}`]: ((props: { column: QsGenericTableColumn<TData>, label: string, value: QsGenericTableSummaryValue }) => any) | undefined
+}>()
 const page = defineModel<number>('page', { default: 1 })
 const pageSize = defineModel<number>('pageSize', { default: DEFAULT_PAGE_SIZE })
 const search = defineModel<string>('search', { default: '' })
 const filters = defineModel<QsGenericTableFilterValues>('filters', { default: () => ({}) })
 const sorting = defineModel<TableSortingState>('sorting', { default: () => [] })
+const expanded = defineModel<TableExpandedState>('expanded', { default: true })
+const { t: groupT } = useI18n({
+  useScope: 'local',
+  messages: { 'zh-cn': { rowUnit: '条', groupUnit: '组', total: '共 {count} {unit}', size: '{count} {unit}/页', before: '前往', after: '页' } },
+})
+
+const groups = computed(() => props.grouping ? buildTableGroups(props.data, props.grouping, props.rowKey) : [])
+const groupByKey = computed(() => new Map(groups.value.map(group => [group.key, group])))
+const groupByTableId = computed(() => new Map(groups.value.map(group => [getTableGroupId(group.key), group])))
+const groupByRow = computed(() => new Map(groups.value.map(group => [group.row, group])))
+const summaryRows = computed(() => props.grouping ? groups.value.flatMap(group => group.rows) : props.data)
+const groupedSubRows: NonNullable<TableProps<TData>['getSubRows']> = row => groupByRow.value.get(row)?.rows
+const groupedRowId: NonNullable<TableProps<TData>['getRowId']> = (row, index, parent) => {
+  const key = resolveGroupedRowKey(row, index, props.rowKey)
+  return parent ? getGroupedRowId(parent.id, key) : getTableGroupId(key)
+}
+// 内核行 ID 隔离父子命名空间；公开展开状态仍以调用方的业务组键管理。
+const tableExpanded = computed<TableExpandedState>(() => expanded.value === true ? true : Object.fromEntries(groups.value.map(group => [getTableGroupId(group.key), isTableGroupExpanded(expanded.value, group.key)])))
+const isGroupRow = (row: TableGroupHeaderSlotProps<TData>['row']) => row.depth === 0
+const paginationTextTemplates = computed(() => {
+  const unit = props.paginationUnit ?? groupT(props.grouping ? 'groupUnit' : 'rowUnit')
+  return {
+    total: (count: number) => groupT('total', { count, unit }),
+    sizes: (count: number) => groupT('size', { count, unit }),
+    jumper: { before: groupT('before'), after: groupT('after') },
+  }
+})
+
+function updateExpanded(next: TableExpandedState) {
+  expanded.value = next
+  emit('expandedChange', next)
+}
+
+function toggleGroup(key: string) {
+  updateExpanded(toggleTableGroup(expanded.value, key, groups.value.map(group => group.key)))
+}
+
+function updateTableExpanded(next: TableExpandedState) {
+  updateExpanded(next === true
+    ? true
+    : {
+        ...(expanded.value === true ? {} : expanded.value),
+        ...Object.fromEntries(groups.value.map(group => [group.key, isTableGroupExpanded(next, getTableGroupId(group.key))])),
+      })
+}
+
+function getGroupScope(key: string) {
+  const group = groupByKey.value.get(key)!
+  return { row: group.row, rows: group.rows, groupKey: key, index: group.index, rowNumber: getContinuousRowNumber(page.value, pageSize.value, group.index), expanded: isTableGroupExpanded(expanded.value, key) }
+}
+
+function getRowGroupScope(row: TableGroupHeaderSlotProps<TData>['row']) {
+  const group = row.parentId === undefined ? undefined : groupByTableId.value.get(row.parentId)
+  return { group: group?.row, groupIndex: group?.index, groupKey: group?.key }
+}
+
+function getTableRowNumber(row: TableGroupHeaderSlotProps<TData>['row']) {
+  return getContinuousRowNumber(page.value, pageSize.value, getRowGroupScope(row).groupIndex ?? row.index)
+}
 
 const TABLE_SCROLL_EDGE_TOLERANCE = 1
 
-const slots = useSlots()
 const actionCellSlotName = `cell-${QS_GENERIC_TABLE_ACTION_COLUMN_ID}`
 const isNarrow = useMediaQuery('(max-width: 767px)')
 const desktopTableRoot = ref<HTMLElement>()
@@ -172,7 +253,7 @@ const tableColumns = computed<TableColumn<TData, any>[]>(() => {
   }
 
   return [
-    ...(props.showRowNumber ? [rowNumberColumn] : []),
+    ...(props.showRowNumber && !props.grouping ? [rowNumberColumn] : []),
     ...visibleBusinessColumns.value.map(column => ({
       ...column,
       // FaTable 只有发现 footer 声明或 footer-* 插槽时才生成表尾。
@@ -351,7 +432,7 @@ function getSummaryValue(column: QsGenericTableColumn<TData>) {
   if (Object.hasOwn(props.summaryValues, column.id)) {
     return props.summaryValues[column.id] ?? null
   }
-  return calculateColumnSummary(props.data, column)
+  return calculateColumnSummary(summaryRows.value, column)
 }
 
 function getSummaryRenderer(column: QsGenericTableColumn<TData>): Component | undefined {
@@ -446,6 +527,13 @@ watch(search, (nextSearch) => {
 
 watch(filters, (nextFilters) => {
   filterDraft.value = { ...nextFilters }
+}, { deep: true })
+
+// 分页与查询加载的是新的整组数据，恢复默认展开；同页更新或排序保留稳定组 ID 的折叠状态。
+watch([page, pageSize, search, filters], () => {
+  if (props.grouping) {
+    updateExpanded(true)
+  }
 }, { deep: true })
 
 watch([tableColumns, isNarrow], () => {
@@ -596,6 +684,11 @@ watch([tableColumns, isNarrow], () => {
         :columns="tableColumns"
         :data="data"
         :row-key="rowKey"
+        :tree="Boolean(grouping)"
+        :group-row="grouping ? isGroupRow : undefined"
+        :get-sub-rows="grouping ? groupedSubRows : undefined"
+        :get-row-id="grouping ? groupedRowId : undefined"
+        :expanded="grouping ? tableExpanded : undefined"
         :sortable="true"
         :sorting="sorting"
         :stripe="stripe"
@@ -603,7 +696,18 @@ watch([tableColumns, isNarrow], () => {
         table-root-class="overflow-x-auto"
         :class="loading && data.length ? 'pointer-events-none opacity-60' : undefined"
         @sorting-change="handleSortingChange"
+        @expanded-change="updateTableExpanded"
       >
+        <template v-if="grouping" #group-header="scope">
+          <GroupHeader
+            :label="groupByTableId.get(scope.row.id)!.label" :expanded="scope.expanded" :disabled="loading"
+            @toggle="toggleGroup(groupByTableId.get(scope.row.id)!.key)"
+          >
+            <slot name="group-header" v-bind="getGroupScope(groupByTableId.get(scope.row.id)!.key)">
+              {{ groupByTableId.get(scope.row.id)!.label }}
+            </slot>
+          </GroupHeader>
+        </template>
         <template
           v-for="column in slottedHeaderColumns"
           :key="`header-${column.id}`"
@@ -634,13 +738,14 @@ watch([tableColumns, isNarrow], () => {
         <template v-if="hasActionColumn" #[actionCellSlotName]="scope">
           <div
             :class="getActionContentClass()"
-            :aria-label="`第 ${getContinuousRowNumber(page, pageSize, scope.row.index)} 行操作`"
+            :aria-label="`第 ${getTableRowNumber(scope.row)} 行操作`"
           >
             <slot
               name="actions"
               :index="scope.row.index"
               :row="scope.row.original"
-              :row-number="getContinuousRowNumber(page, pageSize, scope.row.index)"
+              :row-number="getTableRowNumber(scope.row)"
+              v-bind="getRowGroupScope(scope.row)"
             />
           </div>
         </template>
@@ -713,59 +818,82 @@ watch([tableColumns, isNarrow], () => {
       </div>
 
       <template v-else>
-        <div
-          v-for="(row, index) in data"
-          :key="getMobileRowKey(row, index)"
-          class="p-4 border border-border rounded-lg bg-background"
-          :class="loading ? 'pointer-events-none opacity-60' : undefined"
+        <GroupedMobileRows
+          v-if="grouping" :groups="groups" :columns="visibleColumnDefinitions" :expanded="expanded"
+          :loading="loading" :row-key="rowKey" :page="page" :page-size="pageSize"
+          :action-column="actionColumn" :has-actions="hasActionColumn" @toggle="toggleGroup"
         >
-          <slot
-            name="mobile-row"
-            :columns="visibleColumnDefinitions"
-            :index="index"
-            :row="row"
-            :row-number="getContinuousRowNumber(page, pageSize, index)"
-          >
-            <div v-if="showRowNumber" class="mb-3 pb-3 border-b border-border flex items-center justify-between">
-              <span class="qs-type-meta tabular-nums">
-                #{{ getContinuousRowNumber(page, pageSize, index) }}
-              </span>
-            </div>
-            <dl class="m-0 gap-3 grid sm-grid-cols-2">
-              <div v-for="column in visibleColumnDefinitions" :key="column.id" class="min-w-0">
-                <dt class="qs-type-compact-label mb-1">
-                  {{ column.title }}
-                </dt>
-                <dd class="qs-type-body m-0 break-words">
-                  <div :class="getCopyCellClass(column)">
-                    <span>{{ getMobileValue(row, column, index) }}</span>
-                    <CopyCellButton
-                      v-if="column.copyable"
-                      always-visible
-                      :label="column.title"
-                      :text="getMobileValue(row, column, index)"
-                    />
-                  </div>
-                </dd>
-              </div>
-            </dl>
-          </slot>
+          <template v-if="slots['group-header']" #group-header="scope">
+            <slot name="group-header" v-bind="scope" />
+          </template>
+          <template v-if="slots['mobile-row']" #mobile-row="scope">
+            <slot name="mobile-row" v-bind="scope" />
+          </template>
+          <template v-if="hasActionColumn" #actions="scope">
+            <slot name="actions" v-bind="scope" />
+          </template>
+        </GroupedMobileRows>
+        <template v-else>
           <div
-            v-if="hasActionColumn"
-            data-slot="qs-generic-table-mobile-actions"
-            class="mt-3 pt-3 border-t border-border"
-            :aria-label="`第 ${getContinuousRowNumber(page, pageSize, index)} 行操作`"
+            v-for="(row, index) in data"
+            :key="getMobileRowKey(row, index)"
+            class="p-4 border border-border rounded-lg bg-background"
+            :class="loading ? 'pointer-events-none opacity-60' : undefined"
           >
-            <div :class="getActionContentClass()">
-              <slot
-                name="actions"
-                :index="index"
-                :row="row"
-                :row-number="getContinuousRowNumber(page, pageSize, index)"
-              />
+            <slot
+              name="mobile-row"
+              :columns="visibleColumnDefinitions"
+              :index="index"
+              :row="row"
+              :row-number="getContinuousRowNumber(page, pageSize, index)"
+              :group="undefined"
+              :group-index="undefined"
+              :group-key="undefined"
+            >
+              <div v-if="showRowNumber" class="mb-3 pb-3 border-b border-border flex items-center justify-between">
+                <span class="qs-type-meta tabular-nums">
+                  #{{ getContinuousRowNumber(page, pageSize, index) }}
+                </span>
+              </div>
+              <dl class="m-0 gap-3 grid sm-grid-cols-2">
+                <div v-for="column in visibleColumnDefinitions" :key="column.id" class="min-w-0">
+                  <dt class="qs-type-compact-label mb-1">
+                    {{ column.title }}
+                  </dt>
+                  <dd class="qs-type-body m-0 break-words">
+                    <div :class="getCopyCellClass(column)">
+                      <span>{{ getMobileValue(row, column, index) }}</span>
+                      <CopyCellButton
+                        v-if="column.copyable"
+                        always-visible
+                        :label="column.title"
+                        :text="getMobileValue(row, column, index)"
+                      />
+                    </div>
+                  </dd>
+                </div>
+              </dl>
+            </slot>
+            <div
+              v-if="hasActionColumn"
+              data-slot="qs-generic-table-mobile-actions"
+              class="mt-3 pt-3 border-t border-border"
+              :aria-label="`第 ${getContinuousRowNumber(page, pageSize, index)} 行操作`"
+            >
+              <div :class="getActionContentClass()">
+                <slot
+                  name="actions"
+                  :index="index"
+                  :row="row"
+                  :row-number="getContinuousRowNumber(page, pageSize, index)"
+                  :group="undefined"
+                  :group-index="undefined"
+                  :group-key="undefined"
+                />
+              </div>
             </div>
           </div>
-        </div>
+        </template>
 
         <div v-if="summaryColumns.length" class="p-4 border-t-2 border-border bg-muted/20">
           <div class="qs-type-compact-title mb-3">
@@ -809,6 +937,7 @@ watch([tableColumns, isNarrow], () => {
         :total="totalRows"
         :sizes="pageSizeOptions"
         :layout="paginationLayout"
+        :text-templates="paginationTextTemplates"
         class="min-w-max"
       />
     </div>

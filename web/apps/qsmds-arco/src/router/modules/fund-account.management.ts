@@ -18,7 +18,7 @@ const routes: RouteRecordRaw = {
   component: Layout,
   meta: {
     title: '账户管理',
-    icon: 'i-lucide:wallet-cards',
+    icon: 'qs-fund-accounts',
     auth: [...FUND_ACCOUNT_MANAGEMENT_PERMISSIONS],
   },
   children: [
@@ -28,7 +28,7 @@ const routes: RouteRecordRaw = {
       component: () => import('@/views/admin/fund-account-management/list/index.vue'),
       meta: {
         title: '资金账户列表',
-        icon: 'i-lucide:landmark',
+        icon: 'qs-fund-account-list',
         auth: 'fund-accounts:read',
       },
     },
@@ -38,7 +38,7 @@ const routes: RouteRecordRaw = {
       component: () => import('@/views/admin/fund-account-management/transactions/index.vue'),
       meta: {
         title: '资金账户流水',
-        icon: 'i-lucide:scroll-text',
+        icon: 'qs-fund-transactions',
         auth: 'fund-accounts:read',
       },
     },

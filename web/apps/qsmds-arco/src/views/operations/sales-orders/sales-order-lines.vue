@@ -56,6 +56,8 @@ function handleUpdate(value: readonly OrderProductLineModel[]): void {
     :field-errors="fieldErrors"
     :labels="labels"
     :load-products="loadProducts"
+    :catalog-line-initial-actual-unit-price-amount="null"
+    :temporary-line-initial-actual-unit-price-amount="null"
     show-discount-rate
     @update:model-value="handleUpdate"
   />

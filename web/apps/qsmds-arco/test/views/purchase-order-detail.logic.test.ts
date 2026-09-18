@@ -64,7 +64,7 @@ function createDetail(
   }
 }
 
-test('付款草稿规范化本地时间、两位金额、字典值和可选凭证', () => {
+test('付款草稿规范化本地时间、两位金额、收款资料与必填凭证', () => {
   const result = buildPurchaseOrderPaymentRequest({
     amount: '12.5',
     mediaAssetId: '44444444-4444-4444-8444-444444444444',
@@ -73,6 +73,8 @@ test('付款草稿规范化本地时间、两位金额、字典值和可选凭�
     outstandingAmount: '80.0000',
     paidAtLocal: '2026-08-28T18:30',
     paymentMethod: 'BANK_TRANSFER',
+    recipientAccountId: '33333333-3333-4333-8333-333333333333',
+    recipientProfileVersion: 1,
     paymentType: 'DEPOSIT',
     remark: '  供应商定金 ',
   })
@@ -85,6 +87,8 @@ test('付款草稿规范化本地时间、两位金额、字典值和可选凭�
     amount: '12.50',
     paidAt: new Date('2026-08-28T18:30').toISOString(),
     paymentMethod: 'BANK_TRANSFER',
+    recipientAccountId: '33333333-3333-4333-8333-333333333333',
+    recipientProfileVersion: 1,
     paymentType: 'DEPOSIT',
     remark: '供应商定金',
     voucher: { mediaAssetId: '44444444-4444-4444-8444-444444444444' },
@@ -99,6 +103,8 @@ test('付款硬拦截零金额、超额、未来时间和缺失付款方式', ()
     outstandingAmount: '80.0000',
     paidAtLocal: '2026-08-29T18:30',
     paymentMethod: '',
+    recipientAccountId: '',
+    recipientProfileVersion: 0,
     paymentType: 'OTHER',
     remark: '',
   })
@@ -120,11 +126,13 @@ test('付款时间允许早于或等于当前时间，仅拒绝晚于当前时�
   ] as const) {
     const result = buildPurchaseOrderPaymentRequest({
       amount: '12.50',
-      mediaAssetId: null,
+      mediaAssetId: '44444444-4444-4444-8444-444444444444',
       now: new Date('2026-08-28T20:00'),
       outstandingAmount: '80.0000',
       paidAtLocal,
       paymentMethod: 'BANK_TRANSFER',
+      recipientAccountId: '33333333-3333-4333-8333-333333333333',
+      recipientProfileVersion: 1,
       paymentType: 'DEPOSIT',
       remark: '',
     })
@@ -187,17 +195,22 @@ test('本地付款时间格式供 datetime-local 稳定回显', () => {
 
 test('审核提交绑定最新版本，限定审核中状态并规范化审核说明', () => {
   const detail = createDetail({ orderStatus: 'PENDING_REVIEW', paidAmount: '0.0000', version: 7 })
-  assert.deepEqual(buildPurchaseOrderReviewRequest(detail, '  已核对  '), {
+  const image = { id: 'draft-1', purchaseOrderId: detail.id, orderVersion: 7, isCurrent: true }
+  assert.deepEqual(buildPurchaseOrderReviewRequest(detail, '  已核对  ', image), {
     valid: true,
-    request: { expectedVersion: 7, reason: '已核对' },
+    request: { expectedVersion: 7, imageDraftId: 'draft-1', reason: '已核对' },
   })
-  assert.deepEqual(buildPurchaseOrderReviewRequest(detail, ''), {
+  assert.deepEqual(buildPurchaseOrderReviewRequest(detail, '', image), {
     valid: true,
-    request: { expectedVersion: 7 },
+    request: { expectedVersion: 7, imageDraftId: 'draft-1' },
   })
-  assert.equal(buildPurchaseOrderReviewRequest(createDetail(), '').valid, false)
-  assert.equal(buildPurchaseOrderReviewRequest(detail, 'x'.repeat(501)).valid, false)
-  assert.equal(buildPurchaseOrderReviewRequest({ ...detail, version: 0 }, '').valid, false)
+  assert.equal(buildPurchaseOrderReviewRequest(createDetail(), '', image).valid, false)
+  assert.equal(buildPurchaseOrderReviewRequest(detail, 'x'.repeat(501), image).valid, false)
+  assert.equal(buildPurchaseOrderReviewRequest({ ...detail, version: 0 }, '', image).valid, false)
+  assert.equal(buildPurchaseOrderReviewRequest(detail, '', null).valid, false)
+  assert.equal(buildPurchaseOrderReviewRequest(detail, '', { ...image, orderVersion: 6 }).valid, false)
+  assert.equal(buildPurchaseOrderReviewRequest(detail, '', { ...image, isCurrent: false }).valid, false)
+  assert.equal(buildPurchaseOrderReviewRequest(detail, '', { ...image, purchaseOrderId: 'other-order' }).valid, false)
   assert.equal(buildPurchaseOrderCancellationRequest(detail, '').valid, true)
   assert.equal(purchaseOrderStatusHistoryValueLabel('PENDING_REVIEW'), '采购审核中')
 })

@@ -10,7 +10,9 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator'
 
@@ -26,6 +28,30 @@ import {
   PurchaseOrderSupplierDto,
 } from '../dto/purchase-order-response.dto'
 
+export class FactoryShipmentTrackingNumberDto {
+  @ApiProperty({ type: 'string', format: 'uuid', description: '本次已选中的货件 ID，同一请求不得重复' })
+  @IsUUID('4')
+  partId!: string
+
+  @ApiProperty({ type: 'string', maxLength: 100, nullable: true, description: '物流单号；空白或 null 表示未填写，不改写已有单号' })
+  @ValidateIf((_object, value: unknown) => value !== null)
+  @IsString()
+  @IsUnicodeCodePointLength(0, 100)
+  @Matches(/^[^\p{Cc}]*$/u)
+  trackingNo!: string | null
+}
+
+export class FactoryShipmentDestinationWarehouseDto {
+  @ApiProperty({ type: 'string', format: 'uuid', description: '本次已选中的货件 ID，与 partIds 一一对应且不得重复' })
+  @IsUUID('4')
+  partId!: string
+
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 64, description: 'mainland.warehouse 中当前有效的字典项稳定 value' })
+  @IsString()
+  @IsUnicodeCodePointLength(1, 64)
+  warehouseValue!: string
+}
+
 export class PurchaseOrderFactoryShipmentRequestDto {
   @ApiProperty({ type: [String], minItems: 1, maxItems: 1000, uniqueItems: true })
   @IsArray()
@@ -34,6 +60,22 @@ export class PurchaseOrderFactoryShipmentRequestDto {
   @ArrayUnique()
   @IsUUID('4', { each: true })
   partIds!: string[]
+
+  @ApiProperty({ type: () => [FactoryShipmentDestinationWarehouseDto], minItems: 1, maxItems: 1000, description: '每个已选货件必须提供目的地仓库，与 partIds 完全对应' })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  @ValidateNested({ each: true })
+  @Type(() => FactoryShipmentDestinationWarehouseDto)
+  destinationWarehouses!: FactoryShipmentDestinationWarehouseDto[]
+
+  @ApiProperty({ type: () => [FactoryShipmentTrackingNumberDto], required: false, maxItems: 1000 })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(1000)
+  @ValidateNested({ each: true })
+  @Type(() => FactoryShipmentTrackingNumberDto)
+  trackingNumbers?: FactoryShipmentTrackingNumberDto[]
 
   @ApiProperty({ type: 'integer', minimum: 1 })
   @IsInt()
@@ -55,6 +97,22 @@ export class SalesOrderFactoryShipmentTargetDto {
   @ArrayUnique()
   @IsUUID('4', { each: true })
   partIds!: string[]
+
+  @ApiProperty({ type: () => [FactoryShipmentDestinationWarehouseDto], minItems: 1, maxItems: 1000, description: '每个已选货件必须提供目的地仓库，与 partIds 完全对应' })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  @ValidateNested({ each: true })
+  @Type(() => FactoryShipmentDestinationWarehouseDto)
+  destinationWarehouses!: FactoryShipmentDestinationWarehouseDto[]
+
+  @ApiProperty({ type: () => [FactoryShipmentTrackingNumberDto], required: false, maxItems: 1000 })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(1000)
+  @ValidateNested({ each: true })
+  @Type(() => FactoryShipmentTrackingNumberDto)
+  trackingNumbers?: FactoryShipmentTrackingNumberDto[]
 
   @ApiProperty({ type: 'string', format: 'uuid' })
   @IsUUID('4')

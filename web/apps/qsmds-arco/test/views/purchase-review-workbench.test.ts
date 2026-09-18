@@ -20,9 +20,16 @@ test('工作台审核完成刷新列表与计数，详情抽屉不提供资金�
   assert.match(source, /auth\('purchase-orders:read'\)/u)
   assert.match(source, /auth\('purchase-orders:review'\)/u)
   assert.match(source, /<PurchaseOrderReviewModal[\s\S]*?@detail-updated="refresh"/u)
-  assert.match(source, /:can-manage-payment="false"/u)
+  assert.doesNotMatch(source, /recordPayment|voidPayment/u)
   assert.match(source, /:can-attach-document="false"/u)
   assert.match(source, /epoch !== account.authEpoch/u)
+})
+
+test('取消采购只在审核已通过视图对审核人员提供，完成后刷新列表和计数', async () => {
+  const source = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
+  assert.match(source, /v-if="status === 'APPROVED' && canReview"/u)
+  assert.match(source, /@click="openCancellation\(row\)"/u)
+  assert.match(source, /<PurchaseCancellationModal[^>]*@cancelled="refresh"/u)
 })
 
 test('旧身份的列表响应不回写，最后一页审核后自动回到有效页', async () => {

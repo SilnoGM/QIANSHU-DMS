@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <g transform="translate(2 2) scale(.9375)">
+    <path d="M19 19H45Q58 20 58 33Q57 46 44 46H19Q6 45 6 32Q7 20 19 19Z" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="44" cy="32.5" r="10" fill="#F7F8F4" stroke="#27312B" stroke-width="2.5"/>
+    <path d="M15 32H26" fill="none" stroke="#F7F8F4" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M13 20Q10 16 11 10" fill="none" stroke="#27312B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M12 15Q4 14 6 7Q14 8 12 15Z" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M11 14L8 10" fill="none" stroke="#27312B" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M15 19Q15 12 22 11Q25 18 15 19Z" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M16 18L20 14" fill="none" stroke="#27312B" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

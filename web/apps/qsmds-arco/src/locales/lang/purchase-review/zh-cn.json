@@ -18,6 +18,26 @@
     "status": "订单状态",
     "review": "审核采购",
     "view": "查看",
+    "cancellation": {
+      "action": "取消采购单",
+      "title": "确认取消采购单？",
+      "description": "取消后停止履约和付款，并复制以下取消信息。",
+      "confirm": "确认取消并复制",
+      "back": "返回",
+      "close": "关闭",
+      "retryCopy": "复制取消信息",
+      "success": "采购单已取消，取消信息已复制",
+      "copyFailed": "采购单已取消，但复制失败。请点击“复制取消信息”重试。",
+      "failed": "采购单取消失败",
+      "status": "当前采购单不在已确认状态，不能取消。",
+      "shipped": "该采购单已有货件发出，不能整单取消。",
+      "paid": "该采购单已有有效付款，不能直接取消。",
+      "amount": "付款金额不可用，请刷新后重新核对。",
+      "copyHeader": "【订单取消：{orderNo}】\n供应商：{supplier}\n采购日期：{orderDate}",
+      "copyProducts": "[采购产品明细]\n产品名：{products}",
+      "copyAmounts": "总价：{total}\n已支付：{paid}\n未支付：{unpaid}"
+    },
+    "detailTitle": "采购审核详情",
     "search": "搜索采购单号、销售单号、客户或唛头",
     "empty": "暂无符合条件的采购订单",
     "noPermission": "无权读取采购订单",
@@ -26,6 +46,73 @@
     "lineSummary": "{lines} 项产品 · 数量 {quantity}",
     "partCount": "{count} 个货件",
     "countsFailed": "视图数量加载失败，请重试",
-    "retry": "重试"
+    "retry": "重试",
+    "detail": {
+      "title": "采购信息",
+      "purchaseType": "采购类型",
+      "customer": "客户",
+      "noCustomer": "未关联客户",
+      "orderDate": "采购日期",
+      "remark": "订单备注",
+      "noRemark": "未填写",
+      "products": "采购产品明细",
+      "noProducts": "暂无采购产品明细",
+      "lineRemark": "行说明",
+      "unitPrice": "实际采购单价",
+      "quantity": "数量",
+      "lineTotal": "小计",
+      "lineSubtotal": "产品合计",
+      "paymentTerms": "采购金额与付款约定"
+    },
+    "copy": {
+      "label": "复制采购信息",
+      "success": "采购信息已复制",
+      "failed": "复制失败，请重试",
+      "notRecorded": "未记录",
+      "partLabel": "货件-{number}",
+      "pendingMark": "待派发",
+      "productUnavailable": "产品信息不可用",
+      "noParts": "暂无预定义货件",
+      "header": "【{orderNo}】\n供应商：{supplier}\n采购日期：{orderDate}",
+      "productsTitle": "[采购产品明细]",
+      "line": "产品名：{productName}*{quantity}\n金额小计：{unitPrice}*{quantity}={subtotal}",
+      "amounts": "总价：{total}\n订金：{deposit}\n尾款：{balance}",
+      "shippingTitle": "出货请贴货物唛头：",
+      "part": "{partLabel}：{products}\n此货件唛头：{shippingMark}"
+    },
+    "summary": {
+      "title": "审核结果",
+      "reviewer": "审核人",
+      "reviewedAt": "审核时间",
+      "reason": "审核说明",
+      "notRecorded": "未记录"
+    },
+    "recovery": {
+      "pending": "当前仍待审核，已重新加载最新订单，请再次核对后确认审核。",
+      "approved": "当前采购订单已审核通过，无需再次审核",
+      "cancelled": "当前采购订单已取消，不能继续审核",
+      "unavailable": "当前审核条件不可用，请重新检查或联系管理员",
+      "checkRequired": "请先处理审核提示"
+    },
+    "image": {
+      "title": "采购单图片",
+      "generate": "生成采购单图片",
+      "regenerate": "重新生成",
+      "preview": "点击预览采购单图片",
+      "required": "请先生成采购单图片，核对后确认审核。",
+      "retained": "关闭后保留唛头与图片草稿，可稍后继续审核。",
+      "stale": "采购单内容已变化，请重新生成图片后再确认审核。",
+      "ready": "待确认",
+      "outdated": "已过期",
+      "loading": "图片加载中",
+      "loadFailed": "图片加载失败，请重新加载后核对。",
+      "createdBy": "生成于 {time} · {name}",
+      "close": "关闭",
+      "steps": {
+        "detail": "加载采购单详情",
+        "marks": "申请与派发唛头",
+        "image": "生成采购单图片"
+      }
+    }
   }
 }

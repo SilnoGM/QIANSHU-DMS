@@ -1,3 +1,4 @@
+import type { PaymentRecipientService } from '../payment-recipients/payment-recipient.service'
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import type { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
 import { PurchaseOrderQueryService } from './purchase-order-query.service'
@@ -101,7 +102,7 @@ function setup() {
             productNameSnapshot: '产品甲',
             productAttributesSnapshot: [],
             descriptionSnapshot: null,
-            referencePurchaseUnitPriceAmount: decimal('12.34'),
+            referencePurchaseUnitPriceAmount: decimal('12.3456'),
             actualPurchaseUnitPriceAmount: decimal('10'),
             quantity: 10,
             lineTotalAmount: decimal('100'),
@@ -120,6 +121,9 @@ function setup() {
             voidedBy: null,
           }],
         })),
+    },
+    purchaseOrderStatusHistory: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
     },
     purchaseOrderLine: {
       findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
@@ -141,7 +145,8 @@ function setup() {
         }]),
     },
     $transaction: jest.fn().mockImplementation(
-      (operations: readonly Promise<unknown>[]) => Promise.all(operations),
+      (operations: readonly Promise<unknown>[] | ((client: unknown) => Promise<unknown>)) =>
+        typeof operations === 'function' ? operations(prisma) : Promise.all(operations),
     ),
   }
   const dictionaryLookup = {
@@ -171,21 +176,115 @@ function setup() {
   const service = new PurchaseOrderQueryService(
     prisma as unknown as PrismaService,
     dictionaryLookup as unknown as DictionaryLookupService,
+    { getForOrder: jest.fn().mockResolvedValue(null) } as unknown as PaymentRecipientService,
   )
   return { dictionaryLookup, prisma, service }
 }
 
 describe('PurchaseOrderQueryService', () => {
-  it('keeps pending part marks null and excludes them from the summary mark list', async () => {
+  it('returns a batched approval summary without replacing the latest status change', async () => {
+    const fixture = setup()
+    const reviewedAt = new Date('2026-09-13T03:00:00.000Z')
+    const laterChangedAt = new Date('2026-09-14T03:00:00.000Z')
+    const reviewedBy = { id: 'reviewer-id', displayName: '采购主管' }
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([
+      orderRow({
+        id: 'approved-order',
+        statusHistory: [{ id: 'shipment', changedAt: laterChangedAt, reason: '货件已发出' }],
+        _count: { parts: 0, payments: 0, statusHistory: 3, amountRevisions: 0 },
+      }),
+      orderRow({ id: 'pending-order', orderStatus: 'PENDING_REVIEW' }),
+      orderRow({ id: 'legacy-order', orderStatus: 'CONFIRMED' }),
+    ])
+    fixture.prisma.purchaseOrderStatusHistory.findMany.mockResolvedValue([{
+      purchaseOrderId: 'approved-order', changedAt: reviewedAt,
+      changedBy: reviewedBy, reason: '价格和货件核对通过',
+    }])
+
+    const page = await fixture.service.list({ view: 'all' })
+
+    expect(page.items[0]).toMatchObject({
+      reviewSummary: { reviewedAt: reviewedAt.toISOString(), reviewedBy, reason: '价格和货件核对通过' },
+      changeSummary: { latest: { kind: 'STATUS', changedAt: laterChangedAt.toISOString(), reason: '货件已发出' } },
+    })
+    expect(page.items[1]).toHaveProperty('reviewSummary', null)
+    expect(page.items[2]).toHaveProperty('reviewSummary', null)
+    expect(fixture.prisma.purchaseOrderStatusHistory.findMany).toHaveBeenCalledTimes(1)
+    expect(fixture.prisma.purchaseOrderStatusHistory.findMany).toHaveBeenCalledWith({
+      where: {
+        purchaseOrderId: { in: ['approved-order', 'pending-order', 'legacy-order'] },
+        dimension: 'ORDER', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED',
+      },
+      orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+      distinct: ['purchaseOrderId'],
+      select: {
+        purchaseOrderId: true, changedAt: true, reason: true,
+        changedBy: { select: { id: true, displayName: true } },
+      },
+    })
+    expect(fixture.prisma.purchaseOrder.findUnique).not.toHaveBeenCalled()
+    expect(fixture.prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'RepeatableRead' })
+  })
+
+  it('skips the review-history lookup for an empty page', async () => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([])
+    expect((await fixture.service.list({ view: 'all' })).items).toEqual([])
+    expect(fixture.prisma.purchaseOrderStatusHistory.findMany).not.toHaveBeenCalled()
+  })
+
+  it('derives detail review facts only from the exact persisted approval transition', async () => {
+    const fixture = setup()
+    const reviewedAt = new Date('2026-09-13T03:00:00.000Z')
+    const reviewedBy = { id: 'reviewer-id', displayName: '采购主管' }
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
+      statusHistory: [
+        { id: 'cancel', dimension: 'ORDER', fromStatus: 'CONFIRMED', toStatus: 'CANCELLED', changedAt: new Date('2026-09-14T03:00:00Z'), changedBy: reviewedBy, reason: '后续取消' },
+        { id: 'wrong-dimension', dimension: 'FULFILLMENT', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED', changedAt: reviewedAt, changedBy: reviewedBy, reason: '其他维度' },
+        { id: 'wrong-from', dimension: 'ORDER', fromStatus: null, toStatus: 'CONFIRMED', changedAt: reviewedAt, changedBy: reviewedBy, reason: '历史初始化' },
+        { id: 'approval', dimension: 'ORDER', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED', changedAt: reviewedAt, changedBy: reviewedBy, reason: null },
+      ],
+    }))
+    const detail = await fixture.service.getById('order-id')
+    expect(detail).toHaveProperty('reviewSummary', { reviewedAt: reviewedAt.toISOString(), reviewedBy, reason: null })
+    expect(fixture.prisma.purchaseOrderStatusHistory.findMany).not.toHaveBeenCalled()
+
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({ orderStatus: 'CONFIRMED', updatedAt: reviewedAt }))
+    expect(await fixture.service.getById('order-id')).toHaveProperty('reviewSummary', null)
+  })
+
+  it.each(['PKG/20260914-00001', null])('keeps pending shipment number %s independent from unissued marks', async shipmentNo => {
     const fixture = setup()
     fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
       shippingMarkText: null, orderStatus: 'PENDING_REVIEW',
-      parts: [{ id: 'part-1', partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, items: [] }],
+      parts: [{ id: 'part-1', shipmentNo, partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, items: [] }],
     }))
     const detail = await fixture.service.getById('order-id')
     expect(detail.shippingMarkText).toBeNull()
     expect(detail.shippingMarks).toEqual([])
-    expect(detail.parts).toEqual([{ id: 'part-1', partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, shippedAt: null, shippedById: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, items: [] }])
+    expect(detail.parts).toEqual([{ id: 'part-1', shipmentNo, partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, trackingNo: null, destinationWarehouseValue: null, shippedAt: null, shippedById: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, warehouseReceivedAt: null, warehouseReceivedById: null, warehouseRecordedAt: null, warehouseRemark: null, warehouseReceivedBy: null, items: [] }])
+  })
+
+  it.each(['CN-A', null])('returns destination warehouse %s in order details', async destinationWarehouseValue => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
+      parts: [{ id: 'part-1', shipmentNo: 'PKG/01', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK/01', destinationWarehouseValue, items: [] }],
+    }))
+    expect((await fixture.service.getById('order-id')).parts[0]).toHaveProperty('destinationWarehouseValue', destinationWarehouseValue)
+    expect(fixture.prisma.purchaseOrder.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ parts: expect.objectContaining({ select: expect.objectContaining({ destinationWarehouseValue: true }) as unknown }) as unknown }) as unknown,
+    }))
+  })
+
+  it.each(['SF1234567890', null])('returns shipment tracking number %s in order details', async trackingNo => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
+      parts: [{ id: 'part-1', shipmentNo: 'PKG/01', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK/01', trackingNo, items: [] }],
+    }))
+    expect((await fixture.service.getById('order-id')).parts[0]).toHaveProperty('trackingNo', trackingNo)
+    expect(fixture.prisma.purchaseOrder.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ parts: expect.objectContaining({ select: expect.objectContaining({ trackingNo: true }) as unknown }) as unknown }) as unknown,
+    }))
   })
   it('returns empty record summaries without inventing records or latest changes', async () => {
     const fixture = setup()
@@ -194,11 +293,11 @@ describe('PurchaseOrderQueryService', () => {
     })])
     const page = await fixture.service.list({ view: 'all' })
     expect(page.items[0]).toMatchObject({
-      paidAmount: '0.0000',
+      paidAmount: '0.00',
       paymentRecordSummary: { totalCount: 0, count: 0, byType: [
-        { paymentType: 'DEPOSIT', count: 0, amount: '0.0000' },
-        { paymentType: 'BALANCE', count: 0, amount: '0.0000' },
-        { paymentType: 'OTHER', count: 0, amount: '0.0000' },
+        { paymentType: 'DEPOSIT', count: 0, amount: '0.00' },
+        { paymentType: 'BALANCE', count: 0, amount: '0.00' },
+        { paymentType: 'OTHER', count: 0, amount: '0.00' },
       ] },
       documentSummary: { count: 0, byType: [
         { documentType: 'ORDER_ISSUANCE_VOUCHER', count: 0 },
@@ -213,12 +312,12 @@ describe('PurchaseOrderQueryService', () => {
     const fixture = setup()
     const changedAt = new Date('2026-09-06T03:00:00.000Z')
     fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
-      purchaseTotalAmount: { toFixed: () => '9007199254740993.9999' },
+      purchaseTotalAmount: { toFixed: () => '9007199254740993.99' },
       payments: [
-        { paymentType: 'DEPOSIT', amount: { toFixed: () => '9007199254740993.0001' }, voidedAt: null },
-        { paymentType: 'BALANCE', amount: { toFixed: () => '0.0002' }, voidedAt: null },
-        { paymentType: 'OTHER', amount: { toFixed: () => '0.0003' }, voidedAt: null },
-        { paymentType: 'OTHER', amount: { toFixed: () => '0.0004' }, voidedAt: null },
+        { paymentType: 'DEPOSIT', amount: { toFixed: () => '9007199254740993.01' }, voidedAt: null },
+        { paymentType: 'BALANCE', amount: { toFixed: () => '0.02' }, voidedAt: null },
+        { paymentType: 'OTHER', amount: { toFixed: () => '0.03' }, voidedAt: null },
+        { paymentType: 'OTHER', amount: { toFixed: () => '0.04' }, voidedAt: null },
         { paymentType: 'DEPOSIT', amount: decimal('100'), voidedAt: changedAt },
       ],
       documents: [
@@ -234,11 +333,11 @@ describe('PurchaseOrderQueryService', () => {
     })])
     const page = await fixture.service.list({ view: 'all', page: 2, pageSize: 5 })
     expect(page.items[0]).toMatchObject({
-      paidAmount: '9007199254740993.0010', outstandingAmount: '0.9989',
+      paidAmount: '9007199254740993.10', outstandingAmount: '0.89',
       paymentRecordSummary: { totalCount: 5, count: 4, byType: [
-        { paymentType: 'DEPOSIT', count: 1, amount: '9007199254740993.0001' },
-        { paymentType: 'BALANCE', count: 1, amount: '0.0002' },
-        { paymentType: 'OTHER', count: 2, amount: '0.0007' },
+        { paymentType: 'DEPOSIT', count: 1, amount: '9007199254740993.01' },
+        { paymentType: 'BALANCE', count: 1, amount: '0.02' },
+        { paymentType: 'OTHER', count: 2, amount: '0.07' },
       ] },
       documentSummary: { count: 4, byType: [
         { documentType: 'ORDER_ISSUANCE_VOUCHER', count: 1 },
@@ -261,7 +360,7 @@ describe('PurchaseOrderQueryService', () => {
         _count: { select: { payments: true, statusHistory: true, amountRevisions: true, parts: true } },
       }) as unknown,
     }))
-    expect(fixture.prisma.$transaction).toHaveBeenCalledWith(expect.any(Array), { isolationLevel: 'RepeatableRead' })
+    expect(fixture.prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'RepeatableRead' })
   })
 
   it('uses a stable kind-qualified key for equal change times and preserves a missing historical reason', async () => {
@@ -286,7 +385,7 @@ describe('PurchaseOrderQueryService', () => {
     })])
     const page = await fixture.service.list({ view: 'all' })
     expect(page.items[0]).toMatchObject({
-      paidAmount: '0.0000', outstandingAmount: '100.0000',
+      paidAmount: '0.00', outstandingAmount: '100.00',
       paymentRecordSummary: { totalCount: 2, count: 0 },
     })
   })
@@ -352,13 +451,13 @@ describe('PurchaseOrderQueryService', () => {
       page: 1,
       pageSize: 20,
       summariesByCurrency: [{
-        balanceDueAmount: '70.0000',
+        balanceDueAmount: '70.00',
         currencyCode: 'CNY',
-        depositDueAmount: '30.0000',
+        depositDueAmount: '30.00',
         orderCount: 1,
-        outstandingAmount: '70.0000',
-        paidAmount: '30.0000',
-        purchaseTotalAmount: '100.0000',
+        outstandingAmount: '70.00',
+        paidAmount: '30.00',
+        purchaseTotalAmount: '100.00',
         referenceSubtotalAmount: '40.0000',
       }],
       total: 1,
@@ -378,9 +477,9 @@ describe('PurchaseOrderQueryService', () => {
         known: true,
       },
       createdBy: { id: 'actor-id', displayName: '采购员' },
-      purchaseTotalAmount: '100.0000',
-      paidAmount: '30.0000',
-      outstandingAmount: '70.0000',
+      purchaseTotalAmount: '100.00',
+      paidAmount: '30.00',
+      outstandingAmount: '70.00',
       lineSummary: {
         lineCount: 6,
         totalQuantity: 27,
@@ -475,7 +574,7 @@ describe('PurchaseOrderQueryService', () => {
   it.each([
     ['AWAITING_REVIEW', { orderStatus: 'PENDING_REVIEW' }],
     ['AWAITING_SHIPMENT', { orderStatus: 'CONFIRMED', fulfillmentStatus: { in: ['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED'] } }],
-    ['AWAITING_WAREHOUSE', { orderStatus: 'CONFIRMED', fulfillmentStatus: { in: ['PARTIALLY_SHIPPED', 'SHIPPED'] } }],
+    ['AWAITING_WAREHOUSE', { orderStatus: 'CONFIRMED', parts: { some: { status: 'ACTIVE', shippedAt: { not: null }, warehouseReceivedAt: null } } }],
     ['AWAITING_PAYMENT', { orderStatus: 'CONFIRMED', paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] } }],
   ] as const)('builds the %s pending task predicate', async (pendingTask, taskClause) => {
     const fixture = setup()
@@ -526,6 +625,39 @@ describe('PurchaseOrderQueryService', () => {
     expect(result.items[0]).toMatchObject({ partCount: 2, shippingMarks: [] })
   })
 
+  it('counts warehouse receipt facts separately from shipping and excludes cancelled parts', async () => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
+      parts: [
+        { status: 'ACTIVE', shippedAt: new Date(), warehouseReceivedAt: new Date() },
+        { status: 'ACTIVE', shippedAt: new Date(), warehouseReceivedAt: null },
+        { status: 'ACTIVE', shippedAt: null, warehouseReceivedAt: null },
+        { status: 'CANCELLED', shippedAt: new Date(), warehouseReceivedAt: new Date() },
+      ], _count: { parts: 4, payments: 0, statusHistory: 0, amountRevisions: 0 },
+    })])
+    const result = await fixture.service.list({ view: 'all' })
+    expect(result.items[0]).toMatchObject({ partCount: 4, pendingPartCount: 1, warehouseReceivedPartCount: 1, pendingWarehousePartCount: 1 })
+  })
+
+  it('returns receipt actor and both receipt timestamps in purchase order detail', async () => {
+    const fixture = setup()
+    const warehouseReceivedAt = new Date('2026-09-15T02:00:00.000Z')
+    const warehouseRecordedAt = new Date('2026-09-15T03:00:00.000Z')
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
+      lines: [], payments: [], parts: [{
+        id: 'part-received', partNumber: 1, shipmentNo: 'PKG/001', status: 'ACTIVE', shippingMarkText: 'MARK/1',
+        shippedAt: new Date('2026-09-15T01:00:00.000Z'), warehouseReceivedAt, warehouseRecordedAt,
+        warehouseReceivedById: 'receiver-1', warehouseReceivedBy: { id: 'receiver-1', displayName: '仓库确认人' },
+        warehouseRemark: '包装完好', items: [],
+      }], _count: { parts: 1, payments: 0, statusHistory: 0, amountRevisions: 0 },
+    }))
+    const result = await fixture.service.getById('order-id')
+    expect(result).toMatchObject({ warehouseReceivedPartCount: 1, pendingWarehousePartCount: 0, parts: [{
+      warehouseReceivedAt: warehouseReceivedAt.toISOString(), warehouseRecordedAt: warehouseRecordedAt.toISOString(),
+      warehouseReceivedById: 'receiver-1', warehouseReceivedBy: { id: 'receiver-1', displayName: '仓库确认人' }, warehouseRemark: '包装完好',
+    }] })
+  })
+
   it('returns detail customer through SalesOrder and derives active payment totals', async () => {
     const fixture = setup()
     await expect(fixture.service.getById('order-id')).resolves.toMatchObject({
@@ -536,20 +668,20 @@ describe('PurchaseOrderQueryService', () => {
         customerName: '客户甲',
       },
       amounts: {
-        lineSubtotalAmount: '100.0000',
-        purchaseTotalAmount: '100.0000',
-        paidAmount: '30.0000',
-        outstandingAmount: '70.0000',
+        lineSubtotalAmount: '100.00',
+        purchaseTotalAmount: '100.00',
+        paidAmount: '30.00',
+        outstandingAmount: '70.00',
       },
       lines: [expect.objectContaining({
-        referencePurchaseUnitPriceAmount: '12.3400',
-        actualPurchaseUnitPriceAmount: '10.0000',
+        referencePurchaseUnitPriceAmount: '12.3456',
+        actualPurchaseUnitPriceAmount: '10.00',
       })],
-      payments: [expect.objectContaining({ amount: '30.0000' })],
+      payments: [expect.objectContaining({ amount: '30.00' })],
       paymentRecordSummary: { count: 1, byType: [
-        { paymentType: 'DEPOSIT', count: 1, amount: '30.0000' },
-        { paymentType: 'BALANCE', count: 0, amount: '0.0000' },
-        { paymentType: 'OTHER', count: 0, amount: '0.0000' },
+        { paymentType: 'DEPOSIT', count: 1, amount: '30.00' },
+        { paymentType: 'BALANCE', count: 0, amount: '0.00' },
+        { paymentType: 'OTHER', count: 0, amount: '0.00' },
       ] },
     })
   })
@@ -641,7 +773,7 @@ describe('PurchaseOrderQueryService status counts', () => {
     } as unknown as PrismaService, {
       resolveStoredValues: jest.fn(),
       resolveStoredValue: jest.fn(),
-    } as unknown as DictionaryLookupService)
+    } as unknown as DictionaryLookupService, { getForOrder: jest.fn().mockResolvedValue(null) } as unknown as PaymentRecipientService)
     return { purchaseOrder, service, transaction }
   }
 
@@ -711,6 +843,7 @@ describe('PurchaseOrderQueryService status counts', () => {
 
   it('counts overlapping pending categories in one repeatable-read snapshot', async () => {
     const fixture = createStatusCountsFixture()
+    fixture.purchaseOrder.count.mockResolvedValueOnce(3).mockResolvedValueOnce(1)
     fixture.purchaseOrder.groupBy
       .mockResolvedValueOnce([
         { fulfillmentStatus: 'ORDERED', _count: { _all: 4 } },
@@ -728,7 +861,7 @@ describe('PurchaseOrderQueryService status counts', () => {
       items: [
         { value: 'AWAITING_REVIEW', count: 3 },
         { value: 'AWAITING_SHIPMENT', count: 9 },
-        { value: 'AWAITING_WAREHOUSE', count: 4 },
+        { value: 'AWAITING_WAREHOUSE', count: 1 },
         { value: 'AWAITING_PAYMENT', count: 6 },
       ],
     })
@@ -759,6 +892,11 @@ describe('PurchaseOrderQueryService status counts', () => {
       where: {
         AND: [pendingBaseWhere.AND[0], { orderStatus: 'PENDING_REVIEW' }],
       },
+    })
+    expect(fixture.purchaseOrder.count).toHaveBeenCalledWith({
+      where: { AND: [pendingBaseWhere.AND[0], { orderStatus: 'CONFIRMED', parts: { some: {
+        status: 'ACTIVE', shippedAt: { not: null }, warehouseReceivedAt: null,
+      } } }] },
     })
     expect(fixture.transaction).toHaveBeenCalledWith(
       expect.any(Function),

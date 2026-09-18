@@ -147,7 +147,8 @@ defineExpose({
           >
             <FaIcon
               v-if="icon" :name="icon" :class="cn('menu-item-container-icon', {
-                'size-5': rootMenu.props.variant !== 'panel',
+                'size-5': rootMenu.props.variant !== 'panel' && !icon.startsWith('qs-'),
+                'size-6!': icon.startsWith('qs-'),
                 'transition-transform group-hover-scale-120': rootMenu.isMenuPopup || !alwaysExpand,
               })"
             />

@@ -1,3 +1,9 @@
+import { createPaymentMediaFixture, createPaymentRecipientFixture, paymentRecipientBankAccounts } from './fixtures/payment-recipient.fixture'
+import { ensureDestinationWarehouseDictionary } from './purchase-destination-warehouse.fixture'
+import { createImageReviewDraft, createImageReviewService } from './purchase-order-image-review.fixture'
+import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
+import { ensureShipmentNumberingRule } from './purchase-shipment-numbering.fixture'
+import { PurchaseShipmentNumberingService } from '../src/modules/purchase-orders/shipments/purchase-shipment-numbering.service'
 import { randomBytes, randomUUID } from 'node:crypto'
 
 import type { Prisma } from '../src/generated/prisma/client'
@@ -11,8 +17,9 @@ import { NumberingQueryService } from '../src/modules/numbering/numbering-query.
 import { PurchaseOrderCommandService } from '../src/modules/purchase-orders/purchase-order-command.service'
 import { PurchaseOrderCreateDependencyService } from '../src/modules/purchase-orders/purchase-order-create-dependency.service'
 import { PurchaseOrderMutationService } from '../src/modules/purchase-orders/purchase-order-mutation.service'
+import { PurchasePayableService } from '../src/modules/purchase-orders/payables/purchase-payable.service'
+import { FundPostingApplicationService } from '../src/modules/fund-accounts/application/fund-posting.service'
 import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
-import type { MediaAssetService } from '../src/modules/media/media-asset.service'
 import { SalesOrderPurchaseCoverageService } from '../src/modules/purchase-orders/sales-order-purchase-coverage.service'
 import { PurchaseShippingMarkResolverService } from '../src/modules/purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import { PurchaseShippingMarksService } from '../src/modules/purchase-shipping-marks/purchase-shipping-marks.service'
@@ -21,17 +28,19 @@ import { createPurchaseShippingMarkDatabase, createTestShippingMarkRule } from '
 
 export const MARK_CONSUMER = 'PURCHASE_ORDER.REVIEW_SHIPPING_MARK'
 
-export async function createAtomicityFixture(deferPartsMigration = false, deferReviewMigration = false) {
-  const database = await createPurchaseShippingMarkDatabase(deferPartsMigration, deferReviewMigration)
+export async function createAtomicityFixture(deferPartsMigration = false, deferReviewMigration = false, deferShipmentNumbers = false, deferWarehouseReceipt = false) {
+  const database = await createPurchaseShippingMarkDatabase(deferPartsMigration, deferReviewMigration, deferShipmentNumbers, deferWarehouseReceipt)
   const prisma = new IsolatedNumberingPrismaService(database) as unknown as PrismaService
   try {
     await prisma.onModuleInit()
+    await ensureDestinationWarehouseDictionary(prisma)
     const actor = await prisma.user.create({ data: {
       username: 'mark-atomicity', usernameNormalized: 'mark-atomicity',
       displayName: 'Mark atomicity', passwordChangedAt: new Date(),
       passwordHash: 'e2e-only-not-a-real-password-hash',
     } })
     await prisma.currency.updateMany({ where: { code: 'CNY' }, data: { enabled: true } })
+    await ensureShipmentNumberingRule(prisma, actor.id)
     const audit = new AuditService()
     const numberingCommands = new NumberingCommandService(prisma, audit, new NumberingQueryService(prisma))
     const configContext = { actorUserId: actor.id, requestId: randomUUID() }
@@ -58,9 +67,11 @@ export async function createAtomicityFixture(deferPartsMigration = false, deferR
     const bindings = new PurchaseShippingMarksService(prisma, lookup, audit)
     const fixture = {
       prisma, actor, audit, numberingCommands, configContext, customRule,
-      resolver, numbering, dependencies, salesProgress, bindings,
+      resolver, numbering, dependencies, salesProgress, bindings, access,
       migrateParts: database.applyPartsMigration,
       migrateReview: database.applyReviewMigration,
+      migrateShipmentNumbers: database.applyShipmentNumbers,
+      migrateWarehouseReceipt: database.applyWarehouseReceipt,
       context: (idempotencyKey = randomUUID()) => ({
         actorUserId: actor.id, idempotencyKey, requestId: randomUUID(),
       }),
@@ -95,19 +106,23 @@ export function createCommands(
   } as unknown as PrismaService
   return new PurchaseOrderCommandService(
     prisma, fixture.numbering, fixture.audit, fixture.dependencies,
-    fixture.resolver, { businessToday: () => '2026-09-07' },
+    fixture.resolver, new PurchaseShipmentNumberingService(fixture.numbering), createPaymentRecipientFixture(prisma), { businessToday: () => '2026-09-07' },
   )
 }
 
 export function createReviewMutations(fixture: AtomicityFixture, wrap?: (transaction: Prisma.TransactionClient) => Prisma.TransactionClient) {
   const lookup = new DictionaryLookupService(fixture.prisma)
   const prisma = wrap === undefined ? fixture.prisma : {
+    purchaseOrderPayable: fixture.prisma.purchaseOrderPayable,
     $transaction: <T>(action: (transaction: Prisma.TransactionClient) => Promise<T>) => fixture.prisma.$transaction(transaction => action(wrap(transaction))),
   } as unknown as PrismaService
   return new PurchaseOrderMutationService(
-    prisma, fixture.audit, lookup, {} as MediaAssetService,
-    new PurchaseOrderQueryService(fixture.prisma, lookup), fixture.salesProgress,
+    prisma, fixture.audit, lookup, createPaymentMediaFixture(prisma),
+    new PurchaseOrderQueryService(fixture.prisma, lookup, createPaymentRecipientFixture(fixture.prisma)), fixture.salesProgress,
     fixture.numbering, fixture.resolver,
+    new PurchaseOrderWarehouseReceiptService(prisma, fixture.audit, new PurchaseOrderQueryService(fixture.prisma, lookup, createPaymentRecipientFixture(fixture.prisma))),
+    createImageReviewService(fixture.prisma, new PurchaseOrderQueryService(fixture.prisma, lookup, createPaymentRecipientFixture(fixture.prisma)), fixture.audit),
+    new PurchasePayableService(new FundPostingApplicationService(prisma, fixture.audit), fixture.access, createPaymentRecipientFixture(prisma)),
   )
 }
 
@@ -117,6 +132,7 @@ export async function customInput(fixture: AtomicityFixture) {
   return {
     parts: [{ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] }],
     purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: 'Custom supplier',
+    paymentAccounts: paymentRecipientBankAccounts(),
     orderDate: '2026-09-07', expectedShippingMarkResolution: resolution.resolutionToken,
     lines: [{ lineType: 'CUSTOM', name: 'Custom item', referencePurchaseUnitPriceAmount: '10',
       actualPurchaseUnitPriceAmount: '10', quantity: 1 }],
@@ -191,4 +207,11 @@ export async function prepareSalesSource(fixture: AtomicityFixture) {
     input: { ...request, purchaseType: 'SALES_LINKED', salesOrderId: source.id,
       lines: [{ ...request.lines[0], sourceSalesOrderLineId: source.lines[0].id }] },
   }
+}
+
+export async function prepareImageReview(fixture: AtomicityFixture, id: string, mutations = createReviewMutations(fixture)) {
+  const query = new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma), createPaymentRecipientFixture(fixture.prisma))
+  const detail = await query.getById(id)
+  await mutations.prepareReviewShippingMarks(fixture.context(), id, { expectedVersion: detail.version })
+  return createImageReviewDraft(fixture.prisma, query, fixture.actor.id, id)
 }

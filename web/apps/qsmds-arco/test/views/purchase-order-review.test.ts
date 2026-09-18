@@ -10,12 +10,12 @@ import { normalizePurchaseOrderStatusSelection } from '../../src/views/operation
 const ROOT = new URL('../../src/views/operations/purchase-orders/', import.meta.url)
 const read = (file: string) => readFile(new URL(file, ROOT), 'utf8')
 
-test('采购工作台独立承担审核，运营两视图保留查看取消并刷新计数', async () => {
+test('采运工作台独立承担审核，运营两视图保留查看且不提供取消入口', async () => {
   const source = await read('index.vue')
   const workbench = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
   assert.doesNotMatch(source, /PurchaseOrderReviewModal|auth\('purchase-orders:review'\)/u)
-  assert.match(source, /canCancelPurchaseOrderFromList\(row\)/u)
-  assert.match(source, /props\.viewMode === 'all' \|\| row\.orderStatus === 'PENDING_REVIEW'/u)
+  assert.match(source, /@click="openPurchaseOrderDetail\(row\)"/u)
+  assert.doesNotMatch(source, /canCancelPurchaseOrderFromList|openPurchaseOrderCancellation/u)
   assert.match(workbench, /auth\('purchase-orders:review'\)/u)
   assert.match(workbench, /row\.orderStatus === 'PENDING_REVIEW' && canReview/u)
   assert.match(workbench, /<PurchaseOrderReviewModal[\s\S]*?@detail-updated="refresh"/u)
@@ -25,8 +25,11 @@ test('采购工作台独立承担审核，运营两视图保留查看取消并�
 test('审核先取最新详情，二次确认才提交；失败重查并保留说明，换单或退出取消旧请求', async () => {
   const source = await read('purchase-order-review-modal.vue')
   assert.match(source, /<QsGenericModal/u)
+  assert.match(source, /<FaMultiStepLoader[\s\S]*?:steps="image\.steps\.value"[\s\S]*?@error="generationFailed"/u)
+  assert.match(source, /canGenerate\.value && image\.ready\.value/u)
+  assert.match(source, /<PurchaseOrderReviewImage/u)
   assert.match(source, /purchaseOrdersApi\.getById\(orderId, controller\.signal\)/u)
-  assert.match(source, /buildPurchaseOrderReviewRequest\(current, reason\.value\)/u)
+  assert.match(source, /buildPurchaseOrderReviewRequest\(current, reason\.value, image\.draft\.value\)/u)
   assert.match(source, /purchaseOrdersApi\.review\(current\.id, result\.request, controller\.signal\)/u)
   assert.match(source, /if \(!canConfirm\.value \|\| current === null\)/u)
   assert.match(source, /:disabled="!canConfirm"[\s\S]*?@click="submit"/u)
@@ -34,21 +37,22 @@ test('审核先取最新详情，二次确认才提交；失败重查并保留�
   assert.match(source, /loadController\?\.abort\(\)/u)
   assert.match(source, /mutationController\?\.abort\(\)/u)
   assert.match(source, /account\.authEpoch, canReview\.value/u)
-  assert.match(source, /detail\.orderNo/u)
-  assert.match(source, /detail\.supplier\.label/u)
-  assert.match(source, /detail\.purchaseTotalAmount/u)
-  assert.match(source, /detail\.lineSummary\.totalQuantity/u)
+  const details = await read('purchase-order-review-details.vue')
+  assert.match(source, /<PurchaseOrderReviewDetails[^>]*:detail="detail"/u)
+  assert.match(details, /detail\.orderNo/u)
+  assert.match(details, /detail\.supplier\.label/u)
+  assert.match(details, /purchaseTotalAmount/u)
+  assert.match(details, /actualPurchaseUnitPriceAmount/u)
 })
 
-test('审核中付款及凭证入口均有提交前防御，新建成功明确等待审核', async () => {
+test('采购详情不提供付款入口，审核中不能归档凭证，新建成功明确等待审核', async () => {
   const [actions, document, drawer, create] = await Promise.all([
     'purchase-order-detail-actions.vue',
     'purchase-order-document-modal.vue',
     'purchase-order-detail-drawer.vue',
     'create.vue',
   ].map(read))
-  assert.match(actions, /function submitPayment\(\): void \{\s+if \(!canRecordPayment\.value\)/u)
-  assert.match(actions, /props\.detail\.orderStatus === 'CONFIRMED'/u)
+  assert.doesNotMatch(actions, /openPaymentDialog|canRecordPayment/u)
   assert.match(document, /busy\.value \|\| !visible\.value \|\| props\.detail\.orderStatus === 'PENDING_REVIEW'/u)
   assert.match(drawer, /detail\.value\.orderStatus !== 'PENDING_REVIEW'/u)
   assert.match(create, /创建成功，已进入采购审核中/u)

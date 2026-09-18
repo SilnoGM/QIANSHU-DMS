@@ -186,7 +186,7 @@ test('UnoCSS 提供完整语义角色并为应用 Token 设置静态 fallback', 
     }
   }
 
-  assert.match(unoConfig, /safelist:\s*Object\.keys\(qsTypographyShortcuts\)/u)
+  assert.match(unoConfig, /safelist:\s*\[\s*\.\.\.Object\.keys\(qsTypographyShortcuts\)/u)
   assert.match(
     unoConfig,
     /sans:\s*'var\(--qs-font-sans,\s*"Noto Sans SC"\)'/u,

@@ -174,6 +174,9 @@ test('采购创建与所有 mutation 禁止自动重试并保持幂等 Key 生�
     balanceDueAmount: '10.00',
   } satisfies CreatePurchaseOrderRequestDto
   const payment = {
+    recipientAccountId: '33333333-3333-4333-8333-333333333333',
+    recipientProfileVersion: 1,
+    voucher: { mediaAssetId: '44444444-4444-4444-8444-444444444444' },
     paymentType: 'BALANCE',
     amount: '10.00',
     paidAt: '2026-08-28T08:00:00.000Z',
@@ -181,12 +184,14 @@ test('采购创建与所有 mutation 禁止自动重试并保持幂等 Key 生�
   } satisfies PurchaseOrderPaymentRequestDto
 
   await api.create(request, '3e076569-95f2-4fce-8341-70bad4013da6', controller.signal)
-  await api.review('purchase/id', { expectedVersion: 3, reason: '核对无误' }, controller.signal)
+  await api.review('purchase/id', { expectedVersion: 3, imageDraftId: 'image-draft-1', reason: '核对无误' }, controller.signal)
   await api.updateOrderStatus('purchase/id', { toStatus: 'CANCELLED', reason: '终止采购' }, controller.signal)
   await api.updateFulfillmentStatus('purchase/id', { toStatus: 'ORDERED' }, controller.signal)
   await api.factoryShipment('purchase/id', {
     expectedVersion: 3,
     reason: '第一批出厂',
+    partIds: ['33333333-3333-4333-8333-333333333333'],
+    destinationWarehouses: [{ partId: '33333333-3333-4333-8333-333333333333', warehouseValue: 'CN-WH-01' }],
   }, controller.signal)
   await api.recordPayment('purchase/id', payment, controller.signal)
   await api.voidPayment('purchase/id', 'payment/id', { reason: '录入错误' }, controller.signal)
@@ -208,7 +213,8 @@ test('采购创建与所有 mutation 禁止自动重试并保持幂等 Key 生�
     retry: false,
     signal: controller.signal,
   })
-  assert.deepEqual(calls[1]?.data, { expectedVersion: 3, reason: '核对无误' })
+  assert.deepEqual(calls[1]?.data, { expectedVersion: 3, imageDraftId: 'image-draft-1', reason: '核对无误' })
+  assert.deepEqual((calls[4]?.data as { destinationWarehouses: unknown }).destinationWarehouses, [{ partId: '33333333-3333-4333-8333-333333333333', warehouseValue: 'CN-WH-01' }])
   for (const call of calls.slice(1)) {
     assert.deepEqual(call.config, {
       errorPresentation: 'local',
@@ -240,9 +246,18 @@ test('详情与审核响应保留基础码、可空货件码和服务端货件�
   } satisfies Pick<PurchaseOrderDetailDto, 'orderStatus' | 'shippingMarkText' | 'shippingMarks' | 'parts'>
   const calls: Call[] = []
   const reviewedApi = createPurchaseOrdersApi(createRecorder(calls, reviewed))
-  assert.deepEqual((await reviewedApi.review('pending', { expectedVersion: 1 }, signal)).data, reviewed)
-  assert.deepEqual(calls[0]?.data, { expectedVersion: 1 })
+  assert.deepEqual((await reviewedApi.review('pending', { expectedVersion: 1, imageDraftId: 'image-draft-1' }, signal)).data, reviewed)
+  assert.deepEqual(calls[0]?.data, { expectedVersion: 1, imageDraftId: 'image-draft-1' })
   assert.equal(Object.hasOwn(calls[0]?.data ?? {}, 'shippingMarkText'), false)
+})
+
+test('审核条件检查只读、保留取消信号并返回具体阻断原因', async () => {
+  const calls: Call[] = []
+  const context = { available: false, message: '供应商唛头规则未启用' }
+  const api = createPurchaseOrdersApi(createRecorder(calls, context))
+  const signal = new AbortController().signal
+  assert.deepEqual((await api.reviewContext('purchase/id', signal)).data, context)
+  assert.deepEqual(calls, [{ method: 'get', url: 'purchase-orders/purchase%2Fid/review-context', config: { errorPresentation: 'local', signal } }])
 })
 
 test('唛头匹配只读且仅传当前场景，不创建幂等键', async () => {
@@ -291,4 +306,35 @@ test('采购凭证上传和私有内容读取覆盖剩余公共操作', async ()
     method: 'get',
     url: 'purchase-orders/purchase%2Fid/documents/document%2Fid/content',
   }])
+})
+
+test('逐件入仓使用独立 POST，保留版本与范围，禁止自动重试并返回完整详情', async () => {
+  const calls: Call[] = []
+  const updated = { id: 'order', warehouseReceivedPartCount: 1 }
+  const api = createPurchaseOrdersApi(createRecorder(calls, updated))
+  const signal = new AbortController().signal
+  const data = { expectedVersion: 3, partIds: ['part-1'], receivedAt: '2026-09-15T06:30:00.000Z', remark: '到仓' }
+  const result = await api.recordWarehouseReceipt('purchase/order', data, signal)
+  assert.equal(result.data, updated)
+  assert.deepEqual(calls, [{ method: 'post', url: 'purchase-orders/purchase%2Forder/warehouse-receipts', data, config: { errorPresentation: 'local', retry: false, signal } }])
+})
+
+test('采购单图片接口保留权限Blob、编码ID与显式重生成，派号和生成禁止自动重试', async () => {
+  const calls: Call[] = []
+  const api = createPurchaseOrdersApi(createRecorder(calls))
+  const signal = new AbortController().signal
+  await api.orderImageDraft('purchase/id', signal)
+  await api.prepareReviewShippingMarks('purchase/id', { expectedVersion: 3 }, signal)
+  await api.generateOrderImageDraft('purchase/id', { expectedVersion: 4, regenerate: true }, signal)
+  await api.getOrderImageDraftContent('purchase/id', 'draft/id', signal)
+  assert.deepEqual(calls.map(call => [call.method, call.url]), [
+    ['get', 'purchase-orders/purchase%2Fid/order-image-draft'],
+    ['post', 'purchase-orders/purchase%2Fid/prepare-review-shipping-marks'],
+    ['post', 'purchase-orders/purchase%2Fid/order-image-drafts'],
+    ['get', 'purchase-orders/purchase%2Fid/order-image-drafts/draft%2Fid/content'],
+  ])
+  assert.equal(calls[1]?.config?.retry, false)
+  assert.equal(calls[2]?.config?.retry, false)
+  assert.deepEqual(calls[3]?.config, { errorPresentation: 'local', responseType: 'blob', signal })
+  assert.ok(calls.every(call => call.config?.signal === signal && call.config.errorPresentation === 'local'))
 })

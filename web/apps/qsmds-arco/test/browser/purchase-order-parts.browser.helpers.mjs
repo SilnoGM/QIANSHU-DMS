@@ -131,7 +131,7 @@ export async function assertPartConfiguratorMergeShowcase(page) {
     })
   })()`)
   assert.deepEqual(await readItems(), products.map(({ name, quantity }) => ({ name, nameVisible: true, quantity })))
-  assert.deepEqual(await readPending(), [{ key: products[0].key, remaining: 3, draft: '3' }])
+  assert.deepEqual(await readPending(), [{ key: products[0].key, remaining: 3, draft: '1' }])
   await saveNumberingScreenshot(page, 'purchase-parts-merge-showcase')
 
   const removeLabel = `从货件-01移除${products[1].name}`
@@ -142,8 +142,8 @@ export async function assertPartConfiguratorMergeShowcase(page) {
   assert.equal(await page.evaluate(`${card}.getAttribute('data-part-key')`), key, '移除单项必须保留货件身份')
   assert.deepEqual(await readItems(), [{ name: products[0].name, nameVisible: true, quantity: 2 }])
   assert.deepEqual(await readPending(), [
-    { key: products[0].key, remaining: 3, draft: '3' },
-    { key: products[1].key, remaining: 3, draft: '3' },
+    { key: products[0].key, remaining: 3, draft: '1' },
+    { key: products[1].key, remaining: 3, draft: '1' },
   ])
   assert.equal(await page.evaluate(`${card}.textContent.includes('1 种产品 · 数量 2')`), true)
   await saveNumberingScreenshot(page, 'purchase-parts-merge-item-removed')
@@ -343,10 +343,13 @@ export async function assertPurchasePartDetail(page, detail, screenshots = false
         })()`)
       }
     }
-    assert.equal(await page.evaluate(`${article}.textContent.includes(${JSON.stringify(part.shippingMarkText ?? '待审核生成')})`), true)
-    if (part.shippingMarkText === null) {
-      assert.equal(await page.evaluate(`${article}.querySelector('button[aria-label*="复制"]') === null`), true)
-    }
+    const markText = part.shippingMarkText ?? (detail.orderStatus === 'PENDING_REVIEW' ? '待派发' : '未生成')
+    const markCopyLabel = `复制货件-${String(part.partNumber).padStart(2, '0')}货件唛头`
+    assert.equal(await page.evaluate(`${article}.textContent.includes(${JSON.stringify(markText)})`), true)
+    // 货件编号在创建时已派发，可独立复制；尚未派发唛头时只禁止复制唛头。
+    assert.equal(await page.evaluate(`${article}.querySelector(${JSON.stringify(`button[aria-label="${markCopyLabel}"]`)}) !== null`), Boolean(part.shippingMarkText))
+    assert.equal(await page.evaluate(`${article}.textContent.includes(${JSON.stringify(part.shipmentNo ?? '未编号')})`), true)
+    assert.equal(await page.evaluate(`${article}.querySelector('button[aria-label="复制货件编号"]') !== null`), Boolean(part.shipmentNo))
   }
   if (screenshots) {
     for (const [theme, mobile] of [['light', false], ['dark', false], ['dark', true]]) {

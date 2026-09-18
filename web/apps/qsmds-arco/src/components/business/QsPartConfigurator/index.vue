@@ -49,7 +49,7 @@ function remaining(key: string): number {
 }
 
 function quantityDraft(key: string): string {
-  return quantities.value[key] ?? String(remaining(key))
+  return quantities.value[key] ?? '1'
 }
 
 function quantityInvalid(key: string): boolean {

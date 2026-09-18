@@ -719,3 +719,174 @@ describe('sales receipt transaction ports', () => {
     expect(audit.record).toHaveBeenCalledWith(transaction, expect.objectContaining({ actorUserId: SOURCE_ID, actorType: 'USER' }))
   })
 })
+
+
+describe('packaging cost transaction ports', () => {
+  const context = { ...CONTEXT, sourceCode: 'PACKAGING_COST', consumerCode: 'PACKAGING_COST.PAY', actorUserId: SOURCE_ID }
+  const input = () => ({ ...businessInput('WOODEN_PACKING_COST'), summary: '打木架费用付款' })
+  const rule = (): FundPostingRule => ({ ...requireInitialRule('PURCHASE_PAYMENT'), postingTypeCode: 'WOODEN_PACKING_COST' })
+  beforeEach(() => {
+    jest.resetAllMocks()
+    configureSuccessfulPosting(rule())
+    mockedLockSource.mockResolvedValue({ id: SOURCE_ID, code: 'PACKAGING_COST', name: '打木架付款', enabled: true })
+  })
+  it('applies the configured owner share and company remainder in the caller transaction', async () => {
+    const { service, transaction, prisma, audit } = fixture()
+    const tx = transaction as unknown as Prisma.TransactionClient
+    const preview = await service.previewBusinessEventInTransaction(tx, context, input())
+    expect(preview.entries).toEqual([
+      { accountTarget: 'USER', direction: 'DEBIT', amount: '30.00' },
+      { accountTarget: 'COMPANY', direction: 'DEBIT', amount: '70.00' },
+    ])
+    await service.postBusinessEventInTransaction(tx, context, input(), preview)
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+    expect(mockedInsertBatch).toHaveBeenCalledWith(tx, expect.objectContaining({ userId: USER_ID, actorUserId: SOURCE_ID, postingTypeCodeSnapshot: 'WOODEN_PACKING_COST', businessSourceCodeSnapshot: 'PACKAGING_COST' }))
+    expect(mockedUpdateAccount).toHaveBeenCalledWith(tx, expect.objectContaining({ accountId: USER_ACCOUNT_ID, balanceAfter: '-20.00' }))
+    expect(audit.record).toHaveBeenCalledWith(tx, expect.objectContaining({ actorUserId: SOURCE_ID, actorType: 'USER' }))
+  })
+  it('cannot post independently of packaging payment', async () => {
+    const { service, prisma } = fixture()
+    await expect(service.postBusinessEvent({ ...CONTEXT, sourceCode: 'PACKAGING_COST', consumerCode: 'PACKAGING_COST.PAY' }, input())).rejects.toMatchObject({ code: 'FUND_POSTING_TYPE_NOT_ALLOWED' })
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+  it.each([
+    { sourceCode: 'PACKAGING_COST', consumerCode: 'SALES_RECEIPT.APPROVE', postingTypeCode: 'WOODEN_PACKING_COST' },
+    { sourceCode: 'SALES_RECEIPT', consumerCode: 'PACKAGING_COST.PAY', postingTypeCode: 'WOODEN_PACKING_COST' },
+    { sourceCode: 'PACKAGING_COST', consumerCode: 'PACKAGING_COST.PAY', postingTypeCode: 'ORDER_SETTLEMENT' },
+  ])('rejects mismatched business identity %j', async identity => {
+    const { service, transaction } = fixture()
+    await expect(service.previewBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, { ...context, ...identity }, { ...input(), postingTypeCode: identity.postingTypeCode })).rejects.toMatchObject({ code: 'FUND_POSTING_TYPE_NOT_ALLOWED' })
+    expect(mockedLockSource).not.toHaveBeenCalled()
+  })
+  it.each(['CREDIT', 'REVENUE'] as const)('rejects a cost rule changed to %s', async invalid => {
+    const base = rule()
+    mockedLockType.mockResolvedValue(postingTypeRecord(invalid === 'CREDIT' ? { ...base, legs: base.legs.map(leg => ({ ...leg, directionPolicy: 'CREDIT' })) } : { ...base, businessCategory: 'REVENUE' }))
+    const { service, transaction } = fixture()
+    await expect(service.previewBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, context, input())).rejects.toMatchObject({ code: 'FUND_POSTING_RULE_UNAVAILABLE' })
+    expect(mockedInsertBatch).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('purchase payment transaction ports', () => {
+  const context = { ...CONTEXT, sourceCode: 'PURCHASE_PAYMENT', consumerCode: 'PURCHASE_PAYMENT.PAY', actorUserId: SOURCE_ID }
+  const stockContext = { ...context, consumerCode: 'PURCHASE_PAYMENT.STOCK_PAY' }
+  const input = () => ({ ...businessInput('PURCHASE_PAYMENT'), summary: '采购付款' })
+  const stockInput = () => ({ ...input(), userId: undefined })
+  beforeEach(() => {
+    jest.resetAllMocks()
+    configureSuccessfulPosting(requireInitialRule('PURCHASE_PAYMENT'))
+    mockedLockSource.mockResolvedValue({ id: SOURCE_ID, code: 'PURCHASE_PAYMENT', name: '采购付款', enabled: true })
+  })
+  function configureStockAccounts() {
+    mockedReadIdentities.mockResolvedValue({ userAccountId: null, companyAccountId: COMPANY_ACCOUNT_ID })
+    mockedLockAccounts.mockResolvedValue([companyAccount()])
+  }
+
+  it('locks the complete sorted account union before a mixed-owner batch without posting any entry', async () => {
+    const { service, transaction, prisma } = fixture()
+    const tx = transaction as unknown as Prisma.TransactionClient
+    const otherAccount = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+    mockedReadIdentities.mockResolvedValueOnce({ userAccountId: otherAccount, companyAccountId: COMPANY_ACCOUNT_ID })
+      .mockResolvedValueOnce({ userAccountId: null, companyAccountId: COMPANY_ACCOUNT_ID })
+      .mockResolvedValueOnce({ userAccountId: USER_ACCOUNT_ID, companyAccountId: COMPANY_ACCOUNT_ID })
+    await service.lockBusinessEventAccountsInTransaction(tx, [
+      { context, input: input() }, { context: stockContext, input: stockInput() }, { context, input: input() },
+    ])
+    expect(mockedLockAccounts).toHaveBeenCalledTimes(1)
+    expect(mockedLockAccounts).toHaveBeenCalledWith(tx, [otherAccount, USER_ACCOUNT_ID, COMPANY_ACCOUNT_ID].sort())
+    expect(mockedInsertBatch).not.toHaveBeenCalled()
+    expect(mockedUpdateAccount).not.toHaveBeenCalled()
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('posts sales-linked costs to the issuer and company using the configured share', async () => {
+    const { service, transaction, prisma } = fixture()
+    const tx = transaction as unknown as Prisma.TransactionClient
+    const preview = await service.previewBusinessEventInTransaction(tx, context, input())
+    expect(preview.entries).toEqual([
+      { accountTarget: 'USER', direction: 'DEBIT', amount: '30.00' },
+      { accountTarget: 'COMPANY', direction: 'DEBIT', amount: '70.00' },
+    ])
+    await service.postBusinessEventInTransaction(tx, context, input(), preview)
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+    expect(mockedInsertBatch).toHaveBeenCalledWith(tx, expect.objectContaining({ userId: USER_ID, actorUserId: SOURCE_ID, consumerCode: 'PURCHASE_PAYMENT.PAY', postingTypeCodeSnapshot: 'PURCHASE_PAYMENT' }))
+  })
+
+  it('posts stock costs with a zero effective user share and only the company account', async () => {
+    configureStockAccounts()
+    const rule = postingTypeRecord(requireInitialRule('PURCHASE_PAYMENT'))
+    mockedLockType.mockResolvedValue(rule)
+    const originalRule = structuredClone(rule)
+    const { service, transaction, prisma } = fixture()
+    const tx = transaction as unknown as Prisma.TransactionClient
+    const preview = await service.previewBusinessEventInTransaction(tx, stockContext, stockInput())
+    expect(preview).toMatchObject({ ruleVersionId: RULE_ID, userShareRate: '0.00', companyShareRate: '100.00', entries: [{ accountTarget: 'COMPANY', direction: 'DEBIT', amount: '100.00' }] })
+    const posted = await service.postBusinessEventInTransaction(tx, stockContext, stockInput(), preview)
+    expect(posted.entries).toHaveLength(1)
+    expect(mockedReadIdentities).toHaveBeenCalledWith(tx, { userId: null, requireUserAccount: false, requireCompanyAccount: true })
+    expect(mockedLockAccounts).toHaveBeenCalledWith(tx, [COMPANY_ACCOUNT_ID])
+    expect(mockedInsertBatch).toHaveBeenCalledWith(tx, expect.objectContaining({ userId: null, userShareRateSnapshot: '0.00', companyShareRateSnapshot: '100.00', ruleVersionId: RULE_ID, consumerCode: 'PURCHASE_PAYMENT.STOCK_PAY' }))
+    expect(mockedInsertEntries.mock.calls[0]?.[1]).toEqual([expect.objectContaining({ accountTarget: 'COMPANY', amountStrategy: 'COMPANY_REMAINDER', amount: '100.00' })])
+    expect(mockedUpdateAccount).toHaveBeenCalledTimes(1)
+    expect(rule).toEqual(originalRule)
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it.each(['PURCHASE_PAYMENT.PAY', 'PURCHASE_PAYMENT.STOCK_PAY'])('rejects standalone %s without starting a transaction', async consumerCode => {
+    const { service, prisma } = fixture()
+    await expect(service.postBusinessEvent({ ...CONTEXT, sourceCode: 'PURCHASE_PAYMENT', consumerCode }, input())).rejects.toMatchObject({ code: 'FUND_POSTING_TYPE_NOT_ALLOWED' })
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects a missing issuer or an injected stock owner before account resolution', async () => {
+    const { service, transaction } = fixture()
+    const tx = transaction as unknown as Prisma.TransactionClient
+    await expect(service.previewBusinessEventInTransaction(tx, context, stockInput())).rejects.toMatchObject({ code: 'FUND_USER_REQUIRED' })
+    await expect(service.previewBusinessEventInTransaction(tx, stockContext, input())).rejects.toMatchObject({ code: 'FUND_VALIDATION_FAILED', field: 'userId' })
+    expect(mockedReadIdentities).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { sourceCode: 'PURCHASE_PAYMENT', consumerCode: 'PACKAGING_COST.PAY', postingTypeCode: 'PURCHASE_PAYMENT' },
+    { sourceCode: 'PACKAGING_COST', consumerCode: 'PURCHASE_PAYMENT.STOCK_PAY', postingTypeCode: 'PURCHASE_PAYMENT' },
+    { sourceCode: 'PURCHASE_PAYMENT', consumerCode: 'PURCHASE_PAYMENT.STOCK_PAY', postingTypeCode: 'WOODEN_PACKING_COST' },
+  ])('rejects mismatched purchase identity %j', async identity => {
+    const { service, transaction } = fixture()
+    await expect(service.previewBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, { ...stockContext, ...identity }, { ...stockInput(), postingTypeCode: identity.postingTypeCode })).rejects.toMatchObject({ code: 'FUND_POSTING_TYPE_NOT_ALLOWED' })
+    expect(mockedLockSource).not.toHaveBeenCalled()
+  })
+
+  it.each(['credit', 'revenue', 'user-only'] as const)('rejects stock rule %s instead of replacing configured legs', async invalid => {
+    configureStockAccounts()
+    const base = requireInitialRule('PURCHASE_PAYMENT')
+    mockedLockType.mockResolvedValue(postingTypeRecord(invalid === 'credit'
+      ? { ...base, legs: base.legs.map(leg => ({ ...leg, directionPolicy: 'CREDIT' })) }
+      : invalid === 'revenue' ? { ...base, businessCategory: 'REVENUE' }
+        : { ...base, legs: [{ position: 1, accountTarget: 'USER', directionPolicy: 'DEBIT', amountStrategy: 'FULL_AMOUNT' }] }))
+    const { service, transaction } = fixture()
+    await expect(service.previewBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, stockContext, stockInput())).rejects.toMatchObject({ code: 'FUND_POSTING_RULE_UNAVAILABLE' })
+    expect(mockedInsertBatch).not.toHaveBeenCalled()
+  })
+
+  it('requires a company account and rejects stale stock preview without writes', async () => {
+    configureStockAccounts()
+    mockedReadIdentities.mockResolvedValueOnce({ userAccountId: null, companyAccountId: null })
+    const { service, transaction } = fixture()
+    const tx = transaction as unknown as Prisma.TransactionClient
+    await expect(service.previewBusinessEventInTransaction(tx, stockContext, stockInput())).rejects.toMatchObject({ code: 'FUND_COMPANY_ACCOUNT_UNAVAILABLE' })
+    await expect(service.postBusinessEventInTransaction(tx, stockContext, stockInput(), { ruleVersionId: RULE_ID, userShareRate: '30.00' })).rejects.toMatchObject({ code: 'FUND_CONCURRENT_STATE_CHANGED' })
+    expect(mockedInsertBatch).not.toHaveBeenCalled()
+  })
+
+  it('replays the same stock payment without re-resolving accounts or writing', async () => {
+    configureStockAccounts()
+    const normalized = normalizePostBusinessEventRequest({ ...CONTEXT, sourceCode: 'PURCHASE_PAYMENT', consumerCode: 'PURCHASE_PAYMENT.STOCK_PAY' }, stockInput())
+    mockedReadReplay.mockResolvedValue({ ...replayRecord(normalized.requestFingerprintHash, 'PURCHASE_PAYMENT'), businessCategory: 'COST', userShareRateSnapshot: '0.00', companyShareRateSnapshot: '100.00' })
+    const { service, transaction } = fixture()
+    const result = await service.postBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, stockContext, stockInput(), { ruleVersionId: RULE_ID, userShareRate: '0.00' })
+    expect(result.idempotentReplay).toBe(true)
+    expect(mockedReadIdentities).not.toHaveBeenCalled()
+    expect(mockedInsertBatch).not.toHaveBeenCalled()
+  })
+})

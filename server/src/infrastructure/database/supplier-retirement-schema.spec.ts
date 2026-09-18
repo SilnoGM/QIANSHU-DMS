@@ -97,7 +97,7 @@ function extractCreatedEnumValues(
 }
 
 describe('supplier domain retirement database schema', () => {
-  it('keeps legacy retirement immutable and only permits the dictionary-backed binding addition', () => {
+  it('keeps legacy retirement immutable and only permits the dictionary-backed binding and payment-profile additions', () => {
     const legacyMigration = readFileSync(legacyMigrationPath)
     expect(createHash('sha256').update(legacyMigration).digest('hex')).toBe(
       LEGACY_MIGRATION_SHA256,
@@ -114,6 +114,7 @@ describe('supplier domain retirement database schema', () => {
       legacyMigrationDirectory,
       retirementMigrationDirectory,
       bindingMigrationDirectory,
+      '20260917040739_supplier_payment_profiles',
     ])
     expect(readRetirementMigration()).not.toHaveLength(0)
 

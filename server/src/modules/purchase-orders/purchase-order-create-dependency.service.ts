@@ -11,6 +11,7 @@ import type {
   NormalizedPurchaseOrderCatalogLine,
   NormalizedPurchaseOrderCreateCommand,
 } from './purchase-order-command.normalizer'
+import { normalizePurchaseOrderReferenceAmount } from './domain/purchase-order-decimal'
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 const STOCK_CREATE_PERMISSION = 'purchase-orders:create-stock'
@@ -88,7 +89,7 @@ function fixedPurchaseCost(product: ProductSnapshot): string {
     )
   }
   try {
-    return product.purchaseCostAmount.toFixed(4)
+    return normalizePurchaseOrderReferenceAmount(product.purchaseCostAmount.toFixed(4))
   }
   catch {
     return purchaseDependencyFailure(

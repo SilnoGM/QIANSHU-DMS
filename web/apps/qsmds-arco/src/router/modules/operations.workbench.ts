@@ -16,7 +16,7 @@ const routes: RouteRecordRaw[] = [
     redirect: { name: 'qsOperationsPendingSalesOrders' },
     meta: {
       title: '销售订单',
-      icon: 'i-lucide:receipt-text',
+      icon: 'qs-sales-orders',
     },
     children: [
       {
@@ -26,7 +26,7 @@ const routes: RouteRecordRaw[] = [
         props: { viewMode: 'pending' },
         meta: {
           title: '待办订单',
-          icon: 'i-lucide:list-checks',
+          icon: 'qs-pending',
         },
       },
       {
@@ -36,7 +36,7 @@ const routes: RouteRecordRaw[] = [
         props: { viewMode: 'all' },
         meta: {
           title: '全部订单',
-          icon: 'i-lucide:table-properties',
+          icon: 'qs-all-orders',
         },
       },
       {
@@ -58,7 +58,7 @@ const routes: RouteRecordRaw[] = [
     redirect: { name: 'qsOperationsPendingPurchaseOrders' },
     meta: {
       title: '采购订单',
-      icon: 'i-lucide:shopping-cart',
+      icon: 'qs-purchase-orders',
     },
     children: [
       {
@@ -67,7 +67,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/operations/purchase-orders/pending.vue'),
         meta: {
           title: '待办采购',
-          icon: 'i-lucide:list-checks',
+          icon: 'qs-pending',
           auth: 'purchase-orders:read',
         },
       },
@@ -77,7 +77,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/operations/purchase-orders/index.vue'),
         meta: {
           title: '全部采购',
-          icon: 'i-lucide:table-properties',
+          icon: 'qs-all-orders',
           auth: 'purchase-orders:read',
         },
       },
@@ -91,6 +91,36 @@ const routes: RouteRecordRaw[] = [
           activeMenu: '/qs-operations/purchase/purchase-orders',
           menu: false,
         },
+      },
+    ],
+  },
+  {
+    path: '/qs-operations/warehouse-transport',
+    name: 'qsOperationsWarehouseTransport',
+    component: Layout,
+    redirect: { name: 'qsOperationsWarehouseArrivals' },
+    meta: {
+      title: '仓储运输',
+      icon: 'qs-warehouse-transport',
+    },
+    children: [
+      {
+        path: 'warehouse-arrivals',
+        name: 'qsOperationsWarehouseArrivals',
+        component: () => import('@/views/operations/warehouse-arrivals/index.vue'),
+        meta: { title: '到仓货件', icon: 'qs-warehouse-arrivals', auth: 'purchase-orders:read' },
+      },
+      {
+        path: 'ocean-containers',
+        name: 'qsOperationsOceanContainers',
+        component: () => import('@/views/workbenches/placeholder.vue'),
+        meta: { title: '海运柜次', icon: 'qs-ocean-containers' },
+      },
+      {
+        path: 'overseas-storage',
+        name: 'qsOperationsOverseasStorage',
+        component: () => import('@/views/workbenches/placeholder.vue'),
+        meta: { title: '海外寄仓', icon: 'qs-overseas-storage' },
       },
     ],
   },

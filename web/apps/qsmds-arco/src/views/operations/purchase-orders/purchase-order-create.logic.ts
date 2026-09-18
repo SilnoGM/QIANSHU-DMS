@@ -5,12 +5,14 @@ import type {
   PurchaseOrderProductOptionsDto,
   PurchaseOrderSourceSalesOrderLineDto,
 } from '../../../api/generated/types.gen'
+import type { PaymentRecipientAccountInputDto } from '../../../api/modules/payment-recipients'
 import type {
   OrderProductLineModel,
   OrderProductLineReadOnlyModel,
 } from '../../../components/business/QsOrderProductLineEditor/types'
 import type { PartConfiguration } from '../../../components/business/QsPartConfigurator/types'
 import type { ProductSelectorPage } from '../../../components/business/QsProductSelector/types'
+import { normalizePaymentRecipientAccounts, validatePaymentRecipientAccounts } from '../../../components/business/QsPaymentRecipientEditor/logic'
 import { buildPurchaseOrderParts } from './purchase-order-parts.logic'
 
 export type PurchaseOrderCreateType = 'SALES_LINKED' | 'STOCK'
@@ -57,6 +59,7 @@ export interface PurchaseOrderCreateSource {
   readonly supplierValue: string | null
   readonly customSupplierName: string | null
   readonly today: string
+  readonly paymentAccounts?: readonly PaymentRecipientAccountInputDto[]
 }
 
 export type PurchaseOrderCreateBuildResult
@@ -305,6 +308,8 @@ export function resolvePurchaseOrderCreateStepForField(
     path === 'orderDate'
     || path === 'supplierValue'
     || path === 'customSupplierName'
+    || path === 'paymentAccounts'
+    || path.startsWith('paymentAccounts.')
     || path === 'salesOrderId'
   ) {
     return 0
@@ -483,6 +488,9 @@ export function buildPurchaseOrderCreateRequest(
   source: PurchaseOrderCreateSource,
 ): PurchaseOrderCreateBuildResult {
   const fieldErrors: Record<string, string> = {}
+  if (source.productMode === 'CUSTOM' && validatePaymentRecipientAccounts(source.paymentAccounts ?? [], 1)) {
+    fieldErrors.paymentAccounts = '请完整填写至少一种本单收款方式'
+  }
   const supplierValue = source.supplierValue?.trim().normalize('NFKC') ?? null
   const customSupplierName = source.customSupplierName?.trim().normalize('NFKC') ?? null
   if (source.productMode === 'CATALOG' && !supplierValue) {
@@ -654,7 +662,7 @@ export function buildPurchaseOrderCreateRequest(
       expectedShippingMarkResolution: expectedShippingMarkResolution!,
       ...(source.productMode === 'CATALOG'
         ? { supplierValue: supplierValue! }
-        : { customSupplierName: customSupplierName! }),
+        : { customSupplierName: customSupplierName!, paymentAccounts: normalizePaymentRecipientAccounts(source.paymentAccounts ?? []) }),
     },
     valid: true,
   }

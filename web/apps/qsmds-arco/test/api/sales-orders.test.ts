@@ -203,6 +203,8 @@ test('销售工厂发货读取最新上下文并以单次无重试 mutation 提�
     targets: [{
       purchaseOrderId: '22222222-2222-4222-8222-222222222222',
       expectedVersion: 4,
+      partIds: ['33333333-3333-4333-8333-333333333333'],
+      destinationWarehouses: [{ partId: '33333333-3333-4333-8333-333333333333', warehouseValue: 'CN-WH-01' }],
     }],
     reason: '华东工厂第一批',
   }

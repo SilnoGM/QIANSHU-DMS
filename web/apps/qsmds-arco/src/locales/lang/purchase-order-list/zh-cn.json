@@ -1,12 +1,30 @@
 {
   "purchaseOrderList": {
+    "payment": {
+      "title": "复制采购付款信息",
+      "description": "选择本次付款款项，复制金额和对应的付款链接。",
+      "customer": "客户",
+      "stockCustomer": "公司备货",
+      "missingCustomer": "未记录客户",
+      "chooseType": "选择付款款项",
+      "selectionHint": "选择定金或尾款后复制付款信息。已付清或无需付款的款项不可选。",
+      "copy": "复制付款信息",
+      "copied": "复制成功",
+      "unavailable": "采购订单已付清或状态已变化，当前无法复制付款信息，已刷新列表。"
+    },
+    "shipmentProgress": {
+      "title": "货件进度",
+      "shipped": "已发",
+      "received": "入仓",
+      "count": "{count} / {total} 件"
+    },
     "shippingMarks": {
       "label": "货件唛头",
       "baseLabel": "基础唛头",
       "title": "货件唛头（{count} 个）",
       "open": "查看 {count} 个货件唛头",
       "partCount": "{count} 个货件",
-      "pending": "待审核生成",
+      "pending": "待派发",
       "notGenerated": "未生成",
       "more": "另 {count} 个",
       "copyAll": "复制全部",
@@ -22,7 +40,7 @@
       "products": "产品数量",
       "quantity": "{lines} 项产品，共 {quantity} 件",
       "shippingMark": "唛头生成",
-      "generateShippingMark": "审核通过后，本单 {count} 个货件仅申请 1 个基础唛头。单货件与基础唛头相同；多货件各自使用“基础唛头/货件-01”等唛头。",
+      "generateShippingMark": "生成采购单图片时，本单 {count} 个货件仅申请 1 个基础唛头。单货件与基础唛头相同；多货件各自使用“基础唛头/货件-01”等唛头。",
       "noParts": "暂无预定义货件",
       "preserveShippingMarks": "本单已有唛头，审核时保留已记录的基础唛头或货件唛头，不重新编号。",
       "reason": "审核说明（可选）",

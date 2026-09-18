@@ -1,6 +1,8 @@
 import type { TableAlign, TableColumn, TableColumnFixed } from '@fantastic-admin/components'
 import type { Component } from 'vue'
 
+export type { QsGenericTableGrouping } from './grouping'
+
 export const DEFAULT_PAGE_SIZE = 20
 export const DEFAULT_PAGE_SIZE_OPTIONS = [20, 50, 100, 200] as const
 export const QS_GENERIC_TABLE_ALL_FILTER_VALUE = '__qs_generic_table_all_filter__'

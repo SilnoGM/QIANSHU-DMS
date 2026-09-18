@@ -1,0 +1,28 @@
+{
+  "warehouseArrivals": {
+    "title": "到仓货件",
+    "intro": "按目的地仓库查看待到仓及已到仓货件。",
+    "SHIPPED": "待到仓",
+    "WAREHOUSE_RECEIVED": "已到仓",
+    "allWarehouses": "全部仓库",
+    "source": "客户 / 销售来源",
+    "shippedAt": "发货时间",
+    "receivedAt": "到仓时间",
+    "receivedBy": "入仓人",
+    "view": "查看货件",
+    "seaExpress": "海快出货",
+    "seaExpressUnavailable": "海快出货功能暂未开放",
+    "woodenFrame": "打木架",
+    "search": "搜索货件编号、唛头、物流单号、客户、销售单号或产品名称",
+    "empty": "暂无到仓货件",
+    "emptyDescription": "当前视图下暂无符合条件的货件，可调整仓库或关键词筛选。",
+    "countsError": "视图数量加载失败",
+    "countsErrorDescription": "列表仍可查看，可重试恢复待到仓和已到仓数量。",
+    "warehouseCountsError": "部分仓库数量加载失败",
+    "warehouseCountsErrorDescription": "列表和已加载的数量仍可查看，可重试恢复仓库数量。",
+    "warehouseError": "仓库筛选加载失败",
+    "warehouseErrorDescription": "货件列表仍可查看，可重试恢复仓库选项。",
+    "warehouseMissing": "尚未配置目的地仓库字典",
+    "warehouseMissingDescription": "仍可查看全部仓库的货件，或按关键词筛选。"
+  }
+}

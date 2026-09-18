@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import {
   IsEnum,
+  IsDefined,
   IsIn,
   IsInt,
   IsOptional,
@@ -23,6 +24,10 @@ import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-leng
 const AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,2})?$/u
 
 export class PurchaseOrderReviewRequestDto {
+  @ApiProperty({ type: 'string', format: 'uuid', description: '审核前已生成并预览的采购单图片草稿' })
+  @IsUUID('4')
+  imageDraftId!: string
+
   @ApiProperty({ type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER })
   @IsInt()
   @Min(1)
@@ -34,6 +39,14 @@ export class PurchaseOrderReviewRequestDto {
   @IsString()
   @IsUnicodeCodePointLength(1, 500)
   reason?: string
+}
+
+export class PurchaseOrderPrepareReviewShippingMarksRequestDto {
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER })
+  @IsInt()
+  @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
+  expectedVersion!: number
 }
 
 export class PurchaseOrderStatusRequestDto {
@@ -67,6 +80,9 @@ export class PurchaseOrderPaymentVoucherInputDto {
 }
 
 export class PurchaseOrderPaymentRequestDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) @IsUUID('4') recipientAccountId!: string
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER }) @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) recipientProfileVersion!: number
+
   @ApiProperty({ enum: PurchaseOrderPaymentType })
   @IsEnum(PurchaseOrderPaymentType)
   paymentType!: PurchaseOrderPaymentType
@@ -92,13 +108,11 @@ export class PurchaseOrderPaymentRequestDto {
 
   @ApiProperty({
     type: () => PurchaseOrderPaymentVoucherInputDto,
-    nullable: true,
-    required: false,
   })
-  @IsOptional()
+  @IsDefined()
   @ValidateNested()
   @Type(() => PurchaseOrderPaymentVoucherInputDto)
-  voucher?: PurchaseOrderPaymentVoucherInputDto | null
+  voucher!: PurchaseOrderPaymentVoucherInputDto
 }
 
 export class PurchaseOrderPaymentVoidRequestDto {

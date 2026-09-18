@@ -3057,13 +3057,19 @@ test('Fantastic-admin 专业组件实现契约：FaSteps 状态可访问性边�
   )
 })
 
-test('Fantastic-admin 专业组件实现契约：FaMultiStepLoader 显式启动与复位', () => {
+test('Fantastic-admin 专业组件实现契约：FaMultiStepLoader 初始启动、最短时长与复位', () => {
   const proHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.pro)
   const section = readSecondLevelSection(proHandbook, 'FaMultiStepLoader')
   const source = readRequiredFile(fantasticAdminProSourcePaths.multiStepLoader)
 
   for (const requiredPhrase of [
-    'watch 没有 `immediate`',
+    'watch 使用 `immediate: true`',
+    '挂载时初始为 `true` 会启动步骤',
+    '完整成功流程最短展示 2 秒',
+    '真实任务耗时计入总时长',
+    '错误立即触发 `error`',
+    '关闭或卸载会清理计时器',
+    '重新打开后旧请求不能推进新流程或触发完成事件',
     'function run()',
     'running.value = true',
     'function reset()',
@@ -3077,11 +3083,16 @@ test('Fantastic-admin 专业组件实现契约：FaMultiStepLoader 显式启动�
   assert.equal(
     section.includes('const running = ref(true)'),
     false,
-    'FaMultiStepLoader 示例不得依赖初始 true 触发非 immediate watch',
+    'FaMultiStepLoader 交互示例应保持由按钮启动，初始 true 的业务恢复场景另由契约说明',
   )
   assert.match(source, /watch\(\s*\(\) => props\.loading,/u, 'FaMultiStepLoader 真实源码必须继续监听 loading')
-  assert.doesNotMatch(source, /immediate\s*:/u, 'FaMultiStepLoader watch 新增 immediate 后必须复核启动说明')
+  assert.match(source, /immediate\s*:\s*true/u, 'FaMultiStepLoader 必须支持 loading 初始为 true 的恢复场景')
   for (const requiredSource of [
+    'const MIN_DURATION = 2000',
+    'performance.now() - startedAt',
+    'run === generation && props.loading',
+    'cancelWait?.()',
+    'onScopeDispose(stop)',
     'stateChange: [number]',
     'complete: []',
     'close: []',

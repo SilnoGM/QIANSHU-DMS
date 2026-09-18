@@ -13,6 +13,7 @@ import {
   createSalesOrderSubmissionState,
   formatSalesOrderDocumentTitleTimestamp,
   getSalesOrderApiFailure,
+  hasSalesOrderChanges,
   normalizeSalesOrderAddressDetail,
   parseSalesOrderCurrency,
   refreshSalesOrderDocumentAutoTitle,
@@ -85,12 +86,52 @@ test('币种路由只接受单值 TWD/MYR，缺失、数组与其他币种均拒
   assert.equal(parseSalesOrderCurrency('CNY'), null)
 })
 
-test('新增销售订单默认使用空产品明细，用户添加后才创建产品行', () => {
+test('新增销售订单默认使用空明细，普通产品和临时产品的新行售价均待填写', () => {
   const model = createSalesOrderFormModel('TWD', '2026-08-20')
 
   assert.deepEqual(model.lines, [])
-  assert.equal(createCatalogSalesOrderLine('catalog').actualUnitPriceAmount, '0.00')
-  assert.equal(createCustomSalesOrderLine('custom').actualUnitPriceAmount, '0.00')
+  assert.equal(createCatalogSalesOrderLine('catalog').actualUnitPriceAmount, null)
+  assert.equal(createCustomSalesOrderLine('custom').actualUnitPriceAmount, null)
+})
+
+test('尚未填写售价不能通过产品步骤或提交，明确输入零金额仍允许保存', () => {
+  const model = validModel()
+  model.lines = [{
+    ...createCatalogSalesOrderLine('catalog'),
+    productId: IDS.product,
+    productNo: 'P-001',
+    name: '收纳包',
+    standardUnitPriceAmount: '60.00',
+  }, {
+    ...createCustomSalesOrderLine('custom'),
+    name: '本单赠品',
+  }]
+  model.agreedTotalAmount = '0'
+  model.depositDueAmount = '0'
+  model.balanceDueAmount = '0'
+  assert.equal(calculateSalesOrderLineSubtotal(model.lines, 2), null)
+  for (const result of [validateSalesOrderCreateStep(model, 2, 2), buildCreateSalesOrderRequest(model, 2)]) {
+    assert.equal(result.valid, false)
+    if (!result.valid) {
+      assert.equal(result.fieldErrors['lines.0.actualUnitPriceAmount'], '请输入有效的真实售价')
+      assert.equal(result.fieldErrors['lines.1.actualUnitPriceAmount'], '请输入有效的真实售价')
+    }
+  }
+  model.lines[0]!.actualUnitPriceAmount = '0'
+  model.lines[1]!.actualUnitPriceAmount = '0.00'
+  const saved = buildCreateSalesOrderRequest(model, 2)
+  assert.equal(saved.valid, true)
+  if (saved.valid) {
+    assert.deepEqual(saved.request.lines.map(line => line.actualUnitPriceAmount), ['0.00', '0.00'])
+  }
+})
+
+test('空白产品行的售价空值不被视为录入，用户填写的零金额仍算变更', () => {
+  const model = createSalesOrderFormModel('TWD', '2026-08-20')
+  model.lines = [createCatalogSalesOrderLine('blank')]
+  assert.equal(hasSalesOrderChanges(model, '2026-08-20'), false)
+  model.lines[0]!.actualUnitPriceAmount = '0.00'
+  assert.equal(hasSalesOrderChanges(model, '2026-08-20'), true)
 })
 
 test('出单人优先显示当前用户显示名，缺失时回退用户名', () => {

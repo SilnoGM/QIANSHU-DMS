@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FactoryShipmentModalContext } from '@/components/business/QsFactoryShipmentModal/types'
+import type { FactoryShipmentIntent, FactoryShipmentModalContext } from '@/components/business/QsFactoryShipmentModal/types'
 
 import productImageSrc from '@/assets/images/component-library/image-group/product-front.svg?url'
 import QsFactoryShipmentModal from '@/components/business/QsFactoryShipmentModal/index.vue'
@@ -34,6 +34,7 @@ const salesContext: FactoryShipmentModalContext = {
       shippingMarkText: 'DEMO/20260904-00002',
       parts: [{
         id: '21111111-6111-4111-8111-111111111111',
+        shipmentNo: 'SHIPMENT/20260904-00001',
         partNumber: 1,
         status: 'ACTIVE',
         shippingMarkText: 'DEMO/20260904-00002/01',
@@ -72,6 +73,7 @@ const salesContext: FactoryShipmentModalContext = {
       shippingMarkText: 'DEMO/20260904-00003',
       parts: [{
         id: '31111111-6111-4111-8111-111111111111',
+        shipmentNo: null,
         partNumber: 1,
         status: 'ACTIVE',
         shippingMarkText: 'DEMO/20260904-00003/01',
@@ -115,6 +117,7 @@ const salesContext: FactoryShipmentModalContext = {
       shippingMarkText: 'DEMO/20260904-00004',
       parts: [{
         id: '41111111-6111-4111-8111-111111111111',
+        shipmentNo: 'SHIPMENT/20260904-00002',
         partNumber: 1,
         status: 'ACTIVE',
         shippingMarkText: 'DEMO/20260904-00004/01',
@@ -122,6 +125,7 @@ const salesContext: FactoryShipmentModalContext = {
         shippedById: null,
         shipmentRecordedAt: '2026-09-04T00:00:00Z',
         shipmentRemark: null,
+        trackingNo: 'SF1234567890123',
         items: [{ purchaseOrderLineId: '41111111-2111-4111-8111-111111111111', lineNumber: 1, quantity: 2 }],
       }],
       lineSummary: {
@@ -162,6 +166,12 @@ function selectState(state: ShowcaseState): void {
 function openModal(): void {
   visible.value = true
   lastEvent.value = `open · ${selectedState.value}`
+}
+
+function recordSubmit(intent: FactoryShipmentIntent): void {
+  const trackingNumbers = intent.targets.flatMap(target => target.trackingNumbers ?? [])
+  const warehouses = intent.targets.flatMap(target => target.destinationWarehouses)
+  lastEvent.value = `submit · ${intent.targets.length} 张采购单 · 物流单号：${trackingNumbers.map(item => item.trackingNo).join('、') || '未填写'} · 目的地仓库：${warehouses.map(item => item.warehouseValue).join('、')}`
 }
 </script>
 
@@ -214,7 +224,7 @@ function openModal(): void {
       :loading="loading"
       :submitting="submitting"
       :error="error"
-      @submit="lastEvent = `submit · ${$event.targets.length} 张采购单`"
+      @submit="recordSubmit"
       @cancel="lastEvent = 'cancel'"
       @retry="selectState('sales')"
     />
@@ -224,7 +234,7 @@ function openModal(): void {
       mode="PURCHASE_ORDER"
       :context="purchaseContext"
       :submitting="submitting"
-      @submit="lastEvent = `submit · ${$event.targets[0]?.purchaseOrderId ?? '-'}`"
+      @submit="recordSubmit"
       @cancel="lastEvent = 'cancel'"
     />
   </section>

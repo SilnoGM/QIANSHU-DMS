@@ -13,13 +13,117 @@ const repositoryRoot = path.resolve(scriptsDirectory, '..')
 
 const supplierResiduePattern = 'supplier|service[._ /-]?provider'
 const supplierResidueAllowlist = Object.freeze([
+  // 收款资料以 service_provider.supplier 的稳定 value 绑定，不新增 Supplier
+  // 主数据。迁移、权限、媒体引用与配置页面仅开放已批准的收款账户维护范围。
+  'scripts/browser-auth/provision-payment-fixtures.mjs',
+  'scripts/browser-payment-fixtures.test.mjs',
+  'server/prisma/migrations/20260917040739_supplier_payment_profiles/migration.sql',
+  'server/prisma/migrations/20260918010000_packaging_payment_recipients/migration.sql',
+  'server/src/infrastructure/database/dictionary-schema.spec.ts',
+  'server/src/modules/access-control/access-control.service.spec.ts',
+  'server/src/modules/access-control/permission.constants.ts',
+  'server/src/modules/media/media-reference.contract.spec.ts',
+  'server/src/modules/payment-recipients/packaging-payment-profile.service.ts',
+  'server/src/modules/payment-recipients/payment-recipient-image.service.spec.ts',
+  'server/src/modules/payment-recipients/payment-recipient-image.service.ts',
+  'server/src/modules/payment-recipients/payment-recipient.controller.ts',
+  'server/src/modules/payment-recipients/payment-recipient.dto.ts',
+  'server/src/modules/payment-recipients/payment-recipient.normalizer.spec.ts',
+  'server/src/modules/payment-recipients/payment-recipient.service.spec.ts',
+  'server/src/modules/payment-recipients/payment-recipient.service.ts',
+  'server/src/modules/payment-recipients/payment-recipients.module.ts',
+  'server/test/auth-api.e2e-spec.ts',
+  'server/test/auth-schema.e2e-spec.ts',
+  'server/test/packaging-cost.fixture.ts',
+  'server/test/packaging-payment-recipients.e2e-spec.ts',
+  'server/test/payment-recipient-profile.e2e-spec.ts',
+  'specs/supplier-payment-profiles/implementation.md',
+  'web/apps/qsmds-arco/src/api/modules/payment-recipients.ts',
+  'web/apps/qsmds-arco/src/components/business/QsPaymentRecipientEditor/QrImageUpload.vue',
+  'web/apps/qsmds-arco/src/icons/project-icon-inventory.generated.json',
+  'web/apps/qsmds-arco/src/locales/lang/payment-recipient/zh-cn.json',
+  'web/apps/qsmds-arco/src/router/modules/supplier.payment.profiles.ts',
+  'web/apps/qsmds-arco/src/router/routes.ts',
+  'web/apps/qsmds-arco/src/views/admin/supplier-payment-profiles/index.vue',
+  'web/apps/qsmds-arco/src/views/admin/supplier-payment-profiles/packaging-payment-profile.vue',
+  'web/apps/qsmds-arco/src/views/admin/supplier-payment-profiles/use-packaging-payment-profile.ts',
+  'web/apps/qsmds-arco/src/views/admin/supplier-payment-profiles/use-supplier-payment-profiles.ts',
+  'web/apps/qsmds-arco/src/views/system/audit/presentation.ts',
+  'web/apps/qsmds-arco/test/api/payment-recipients.test.ts',
+  'web/apps/qsmds-arco/test/views/packaging-payment-profile-page.test.ts',
+  'web/apps/qsmds-arco/test/views/packaging-payment-profile.test.ts',
+  'web/apps/qsmds-arco/test/views/supplier-payment-profiles.test.ts',
+  // 应付与批量付款按采购单已存 supplierValue 选单、解析历史字典标签；
+  // 复制、取消、对账单只展示订单快照或自定义名称，不提供供应商增删改入口。
+  'server/src/modules/purchase-orders/payables/README.md',
+  'server/src/modules/purchase-orders/payables/purchase-payable-batch.logic.spec.ts',
+  'server/src/modules/purchase-orders/payables/purchase-payable-batch.logic.ts',
+  'server/src/modules/purchase-orders/payables/purchase-payable-batch.transaction.ts',
+  'server/src/modules/purchase-orders/payables/purchase-payable-query.service.spec.ts',
+  'server/src/modules/purchase-orders/payables/purchase-payable-query.service.ts',
+  'server/src/modules/purchase-orders/payables/purchase-payable.controller.spec.ts',
+  'server/src/modules/purchase-orders/payables/purchase-payable.controller.ts',
+  'server/src/modules/purchase-orders/payables/purchase-payable.dto.ts',
+  'server/src/modules/purchase-orders/payables/purchase-payable.service.spec.ts',
+  'server/src/modules/purchase-orders/payables/purchase-payable.service.ts',
+  'server/test/purchase-order-historical-review.fixture.ts',
+  'server/test/purchase-payable-batch.e2e-spec.ts',
+  'server/test/purchase-payable.e2e-spec.ts',
+  'web/apps/qsmds-arco/src/api/modules/purchase-order-payables.ts',
+  'web/apps/qsmds-arco/src/locales/lang/purchase-payment/zh-cn.json',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-copy.logic.ts',
+  'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/batch-payment-page.vue',
+  'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/index.vue',
+  'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-form.vue',
+  'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-form.vue',
+  'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-payment-statement-action.vue',
+  'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-payment-statement-image.ts',
+  'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-payments.logic.ts',
+  'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/use-purchase-batch-payment.ts',
+  'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/use-purchase-payment-statement.ts',
+  'web/apps/qsmds-arco/src/views/workbenches/purchase-reviews/cancellation.logic.ts',
+  'web/apps/qsmds-arco/test/api/purchase-order-payables.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-batch-payment-form.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-batch-payment.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-order-copy.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-order-list-payment.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-payable-link.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-payable-payment.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-payment-form.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-payment-statement-image.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-payment-statement.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-review-cancellation.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-review-recovery.test.ts',
   // 审核确认摘要仅展示已存采购供应商，不新增供应商主数据。
   'web/apps/qsmds-arco/src/locales/lang/purchase-order-list/zh-cn.json',
-  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-details.vue',
   'web/apps/qsmds-arco/src/locales/lang/purchase-review/zh-cn.json',
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-shipment-summary.vue',
   'web/apps/qsmds-arco/src/views/workbenches/purchase-reviews/index.vue',
   'web/apps/qsmds-arco/test/views/purchase-order-review.test.ts',
+  // 现有 UI 规范明确记录供应商字典选择契约；货件/入仓只展示采购单已有供应商快照。
+  'docs/前端文档/UI设计规范.md',
+  'server/src/modules/purchase-orders/purchase-order-review-context.service.spec.ts',
+  'server/src/modules/purchase-orders/purchase-order-review-context.service.ts',
+  'server/src/modules/purchase-orders/shipments/purchase-shipment-query.service.spec.ts',
+  'server/src/modules/purchase-orders/shipments/purchase-shipment-query.service.ts',
+  'server/src/modules/purchase-orders/shipments/purchase-shipment.controller.spec.ts',
+  'server/src/modules/purchase-orders/shipments/purchase-shipment.dto.ts',
+  'server/test/purchase-shipment-read.e2e-spec.ts',
+  'web/apps/qsmds-arco/src/components/business/QsWarehouseReceiptModal/index.vue',
+  'web/apps/qsmds-arco/src/locales/lang/purchase-shipment-detail/zh-cn.json',
+  'web/apps/qsmds-arco/src/locales/lang/purchase-shipments/zh-cn.json',
+  'web/apps/qsmds-arco/src/locales/lang/purchase-warehouse-receipt/zh-cn.json',
+  'web/apps/qsmds-arco/src/views/workbenches/shipments/index.vue',
+  'web/apps/qsmds-arco/src/views/workbenches/shipments/logic.ts',
+  'web/apps/qsmds-arco/src/views/workbenches/shipments/shipment-detail-drawer.vue',
+  'web/apps/qsmds-arco/test/views/purchase-shipments.logic.test.ts',
+  // 采购单图片只冻结并渲染订单供应商名称；不新增 Supplier model、查询入口或关系。
+  'server/src/modules/purchase-orders/order-images/purchase-order-image-renderer.spec.ts',
+  'server/src/modules/purchase-orders/order-images/purchase-order-image-renderer.ts',
+  'server/src/modules/purchase-orders/order-images/purchase-order-image-snapshot.spec.ts',
+  'server/src/modules/purchase-orders/order-images/purchase-order-image-snapshot.ts',
+  'server/test/purchase-order-image-draft.e2e-spec.ts',
   // 唛头绑定及采购消费仅引用供应商字典稳定值；此精确边界不恢复 Supplier 主数据。
   'scripts/browser-auth/provision-shipping-mark-fixtures.mjs',
   'scripts/browser-shipping-mark-fixtures.test.mjs',
@@ -203,6 +307,7 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/test/views/purchase-order-pages.test.ts',
   'web/apps/qsmds-arco/test/views/purchase-order-source-selector.test.ts',
   'web/apps/qsmds-arco/test/views/qs-factory-shipment-modal.logic.test.ts',
+  'web/apps/qsmds-arco/test/views/qs-factory-shipment-tracking.test.ts',
   'web/apps/qsmds-arco/test/views/qs-order-product-line-editor.test.ts',
   'web/apps/qsmds-arco/test/views/qs-purchase-start-modal.logic.test.ts',
   'web/apps/qsmds-arco/test/views/qs-purchase-start-modal.test.ts',
@@ -1125,15 +1230,23 @@ test('退役扩展不进入 Regions，编号仅允许已批准的内部事务派
     }),
     [],
   )
-  const generator = await readFile(fromRoot('server/src/modules/numbering/numbering-generator.service.ts'), 'utf8')
-  const originalResult = /export interface GenerateNumberResult \{([^}]+)\}/u.exec(generator)?.[1]
+  // 批量货件派号已把结果类型/独立响应投影抽到 shared；沿真实导入链检查，避免只扫空壳 service。
+  const [generator, shared, batch] = await Promise.all([
+    'numbering-generator.service.ts', 'numbering-generator.shared.ts', 'numbering-generator.batch.ts',
+  ].map(name => readFile(fromRoot('server/src/modules/numbering', name), 'utf8')))
+  const originalResult = /export interface GenerateNumberResult \{([^}]+)\}/u.exec(shared)?.[1]
   assert.ok(originalResult)
   assert.doesNotMatch(originalResult, /issuanceId/u)
-  assert.match(generator, /GenerateNumberInTransactionResult extends GenerateNumberResult/u)
+  assert.match(shared, /GenerateNumberInTransactionResult extends GenerateNumberResult/u)
+  assert.match(generator, /export type \{ GenerateNumberResult, GenerateNumberInTransactionResult \} from '\.\/numbering-generator\.shared'/u)
   assert.match(generator, /async generateScopedInTransaction\(/u)
-  assert.match(generator, /function toIndependentResult\(/u)
+  assert.match(generator, /async generateScopedBatchInTransaction\(/u)
+  assert.match(generator, /return toIndependentResult\(result\)/u)
+  const projection = /export function toIndependentResult\([\s\S]*?\n\}/u.exec(shared)?.[0]
+  assert.ok(projection)
+  assert.doesNotMatch(projection, /issuanceId|\.\.\.result|return result\b/u)
   // 新入口不允许把具体供应商或采购规则匹配搬进通用生成算法。
-  assert.doesNotMatch(generator, /supplier|PurchaseOrder|purchase-shipping-marks/iu)
+  for (const source of [generator, shared, batch]) assert.doesNotMatch(source, /supplier|PurchaseOrder|purchase-shipping-marks/iu)
 })
 
 test('Dictionary production runner 保持无参且无业务工厂注入', async () => {

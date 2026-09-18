@@ -1,3 +1,6 @@
+import { createPaymentRecipientFixture } from './fixtures/payment-recipient.fixture'
+import { prepareImageReview } from './purchase-shipping-mark-atomicity.fixture'
+import { reviewHistoricalPurchase } from './purchase-order-historical-review.fixture'
 import { createHash, randomUUID } from 'node:crypto'
 
 import type { Prisma } from '../src/generated/prisma/client'
@@ -16,7 +19,7 @@ async function withFixture(action: (fixture: AtomicityFixture) => Promise<void>,
 describe('purchase parts with isolated PostgreSQL', () => {
   jest.setTimeout(120_000)
 
-  it('defers all shipping mark issuance until review while persisting pending part allocations', async () => {
+  it('defers all shipping mark issuance until image preparation while persisting pending part allocations', async () => {
     await withFixture(async fixture => {
       const input = await customInput(fixture)
       const before = await fixture.prisma.numberingIssuance.count({ where: { rule: { purpose: 'SHIPPING_MARK' } } })
@@ -50,12 +53,12 @@ describe('purchase parts with isolated PostgreSQL', () => {
       expect(await fixture.prisma.purchaseOrder.findUnique({ where: { id }, select: { partConfigurationSealed: true, version: true, orderStatus: true } }))
         .toEqual({ partConfigurationSealed: true, version: 1, orderStatus: 'PENDING_REVIEW' })
       await expect(fixture.prisma.purchaseOrder.update({ where: { id }, data: { partConfigurationSealed: false } })).rejects.toThrow()
-      const query = new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma))
+      const query = new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma), createPaymentRecipientFixture(fixture.prisma))
       const pending = await query.getById(id)
       expect(pending.shippingMarks).toEqual([])
       expect(pending.parts.map(part => part.shippingMarkText)).toEqual([null, null])
       expect((await atomicFacts(fixture.prisma)).ledger).toEqual([])
-      await createReviewMutations(fixture).review(fixture.context(), id, { expectedVersion: 1 })
+      await createReviewMutations(fixture).review(fixture.context(), id, await prepareImageReview(fixture, id))
       const detail = await query.getById(id)
       expect(detail.shippingMarkText).toMatch(/^MARK\d{8}$/u)
       expect(detail.shippingMarks).toHaveLength(2)
@@ -87,7 +90,7 @@ describe('purchase parts with isolated PostgreSQL', () => {
     })
   })
 
-  it('rolls back the one base mark when review fails immediately after generation', async () => {
+  it('rolls back the one base mark when image preparation fails immediately after issuance', async () => {
     await withFixture(async fixture => {
       const original = await customInput(fixture)
       const input = { ...original, lines: [{ ...original.lines[0], quantity: 2 }], purchaseTotalAmount: '20', balanceDueAmount: '20',
@@ -102,7 +105,7 @@ describe('purchase parts with isolated PostgreSQL', () => {
         throw new Error('Injected review mark failure')
       })
       const before = await atomicFacts(fixture.prisma)
-      await expect(createReviewMutations(fixture).review(fixture.context(), id, { expectedVersion: 1 })).rejects.toThrow()
+      await expect(createReviewMutations(fixture).prepareReviewShippingMarks(fixture.context(), id, { expectedVersion: 1 })).rejects.toThrow()
       expect(calls).toBe(1)
       expect(await atomicFacts(fixture.prisma)).toEqual(before)
       expect(await fixture.prisma.purchaseOrderPart.count({ where: { purchaseOrderId: id, shippingMarkText: null } })).toBe(2)
@@ -179,10 +182,11 @@ describe('purchase parts with isolated PostgreSQL', () => {
 
   it('migrates historical v3 orders without backfill and restores their old submitted snapshot', async () => {
     await withFixture(async fixture => {
-      const { parts: _parts, ...input } = await customInput(fixture)
+      const { parts: _parts, paymentAccounts: _accounts, ...input } = await customInput(fixture)
       void _parts
+      void _accounts
       const context = fixture.context()
-      const command = normalizePurchaseOrderCreateCommand(input, '2026-09-07', true)
+      const command = normalizePurchaseOrderCreateCommand(input, '2026-09-07', true, true)
       const fingerprint = calculatePurchaseOrderCreateFingerprint(context.actorUserId, command, PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION)
       const hash = hashPurchaseOrderIdempotencyKey(context.idempotencyKey)
       const id = await fixture.prisma.$transaction(async transaction => {
@@ -205,6 +209,7 @@ describe('purchase parts with isolated PostgreSQL', () => {
         } })
         return id
       })
+      await reviewHistoricalPurchase(fixture, id)
       const before = await fixture.prisma.numberingIssuance.findMany()
       await fixture.migrateParts()
       expect(await fixture.prisma.numberingIssuance.findMany()).toEqual(before)
@@ -215,25 +220,26 @@ describe('purchase parts with isolated PostgreSQL', () => {
       jest.spyOn(fixture.resolver, 'resolve').mockRejectedValue(new Error('Legacy replay must not resolve current configuration'))
       await expect(createCommands(fixture).create(context, input)).resolves.toBe(id)
       await expect(createCommands(fixture).create(context, { ...input, remark: 'changed' })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_CREATE_IDEMPOTENCY_CONFLICT' })
-      await expect(createCommands(fixture).create(fixture.context(), input)).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
-      const query = new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma))
+      await expect(createCommands(fixture).create(fixture.context(), { ...input, paymentAccounts: _accounts })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+      const query = new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma), createPaymentRecipientFixture(fixture.prisma))
       const detail = await query.getById(id)
       expect(detail.parts).toEqual([])
       expect(detail.shippingMarks).toEqual([])
       expect(detail.shippingMarkText).toBe(before[0].generatedNumber)
       expect(await query.list({ view: 'all', keyword: detail.shippingMarkText! })).toMatchObject({ total: 1 })
-      await createReviewMutations(fixture).review(fixture.context(), id, { expectedVersion: 1 })
+      expect((await query.getById(id)).orderStatus).toBe('CONFIRMED')
       expect((await query.getById(id)).shippingMarkText).toBe(detail.shippingMarkText)
       expect(await fixture.prisma.numberingIssuance.findMany()).toEqual(before)
     }, true)
   })
 
-  it('preserves v4 independent part marks across migration, exact replay and review without new issuance', async () => {
+  it('preserves a historically reviewed v4 order and its independent part marks across migration and replay', async () => {
     const fixture = await createAtomicityFixture(false, true)
     try {
-      const input = await customInput(fixture)
+      const { paymentAccounts: _accounts, ...input } = await customInput(fixture)
+      void _accounts
       const context = fixture.context()
-      const command = normalizePurchaseOrderCreateCommand(input, '2026-09-07')
+      const command = normalizePurchaseOrderCreateCommand(input, '2026-09-07', false, true)
       const fingerprint = calculatePurchaseOrderCreateFingerprint(context.actorUserId, command, PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION)
       const hash = hashPurchaseOrderIdempotencyKey(context.idempotencyKey)
       const id = randomUUID()
@@ -261,6 +267,7 @@ describe('purchase parts with isolated PostgreSQL', () => {
           ${mark.number}, ${mark.issuanceId}::uuid, ${createHash('sha256').update(markKey).digest()})`
         await transaction.purchaseOrderPartItem.create({ data: { purchaseOrderId: id, purchaseOrderPartId: partId, purchaseOrderLineId: line.id, quantity: 1 } })
       })
+      await reviewHistoricalPurchase(fixture, id)
       const historicalParts = { select: {
         id: true, purchaseOrderId: true, key: true, partNumber: true,
         shippingMarkText: true, shippingMarkIssuanceId: true, shippingMarkKeyHash: true,
@@ -274,7 +281,8 @@ describe('purchase parts with isolated PostgreSQL', () => {
       await expect(createCommands(fixture).create(context, input)).resolves.toBe(id)
       await expect(createCommands(fixture).create(context, { ...input, parts: [{ ...input.parts[0], key: randomUUID() }] }))
         .rejects.toMatchObject({ code: 'PURCHASE_ORDER_CREATE_IDEMPOTENCY_CONFLICT' })
-      const reviewed = await createReviewMutations(fixture).review(fixture.context(), id, { expectedVersion: 1 })
+      const reviewed = await new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma), createPaymentRecipientFixture(fixture.prisma)).getById(id)
+      expect(reviewed.orderStatus).toBe('CONFIRMED')
       expect(reviewed.shippingMarkText).toBeNull()
       expect(reviewed.shippingMarks).toEqual(before.parts.map(part => part.shippingMarkText))
       expect(await fixture.prisma.numberingIssuance.findMany()).toEqual(ledger)

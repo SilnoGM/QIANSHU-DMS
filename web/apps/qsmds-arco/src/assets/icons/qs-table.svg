@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <g transform="translate(2 2) scale(.9375)">
+    <path d="M9 11Q31 10 54 12Q57 12 57 16V51Q57 55 53 55H10Q6 55 6 50V16Q6 12 9 11Z" fill="#F7F8F4" stroke="#27312B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M7 13H55V26H7Z" fill="oklch(var(--primary))" stroke="none" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M8 28H22V53H8Z" fill="color-mix(in srgb, oklch(var(--primary)) 18%, #F7F8F4)" stroke="none" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M7 26H56M7 40H55M23 12V54M40 12V54" fill="none" stroke="#27312B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M44 59Q50 57 53 51" fill="none" stroke="#27312B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M49 56Q44 49 41 53Q42 59 49 56Z" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M48 56L44 54" fill="none" stroke="#27312B" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M55 48.5Q51.5 45.5 51.5 51Q47.5 53 51.5 55Q51.5 58.5 55 55.5Q58.5 58.5 58.5 55Q62.5 53 58.5 51Q58.5 45.5 55 48.5Z" fill="#F7F8F4" stroke="#27312B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="55" cy="53" r="1.8" fill="#9B805F" stroke="none" stroke-width="0"/>
+  </g>
+</svg>

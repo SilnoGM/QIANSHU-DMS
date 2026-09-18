@@ -1,0 +1,33 @@
+{
+  "iconLibrary": {
+    "title": "Icon library",
+    "description": "Find project icons, preview menu sizes, and copy usage code.",
+    "search": "Search icons",
+    "searchPlaceholder": "Search names, Chinese usages, or categories",
+    "size": "Icon size",
+    "background": "Menu background",
+    "preview": { "default": "Default", "selected": "Selected" },
+    "typeAll": "All icons ({count})",
+    "typeBrand": "Brand icons ({count})",
+    "typeGeneral": "General icons ({count})",
+    "results": "Icon list",
+    "resultCount": "Showing {count} of {total} icons",
+    "reset": "Clear filters",
+    "emptyTitle": "No matching icons",
+    "emptyDescription": "Try another name or usage, or clear filters to see all icons.",
+    "detail": "Selected icon",
+    "category": "Category",
+    "usages": "Usage",
+    "noUsages": "General interface action",
+    "code": "Usage code",
+    "copyCode": "Copy FaIcon code",
+    "copyPending": "Copying",
+    "copy": {
+      "copied": "Usage code copied",
+      "unavailable": "Clipboard access is unavailable. Select the code above and copy it manually.",
+      "failed": "Copy failed. Try again or select the code above and copy it manually."
+    },
+    "themeHint": "Brand icons echo the logo with forest details. Their green follows the system theme color (--primary). Switch light and dark themes to check the menu appearance.",
+    "noSelection": "Adjust the filters, then choose an icon to view its usage and code."
+  }
+}

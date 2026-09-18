@@ -9,7 +9,8 @@ const TOKEN = 'a'.repeat(64)
 function input() {
   return {
     parts: [{ key: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', items: [{ lineNumber: 1, quantity: 1 }] }],
-    purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: '临时供应商',
+    purchaseType: 'STOCK', productMode: 'CUSTOM',
+    paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: 'Supplier', bankName: 'Bank', bankAccount: '123' }], customSupplierName: '临时供应商',
     orderDate: '2026-09-07', expectedShippingMarkResolution: TOKEN,
     lines: [{ lineType: 'CUSTOM', name: '包装', referencePurchaseUnitPriceAmount: '10', actualPurchaseUnitPriceAmount: '10', quantity: 1 }],
     purchaseTotalAmount: '10', depositDueAmount: '0', balanceDueAmount: '10',

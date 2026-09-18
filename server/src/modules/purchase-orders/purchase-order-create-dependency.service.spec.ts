@@ -42,6 +42,7 @@ function stockCommand() {
     purchaseType: 'STOCK',
     expectedShippingMarkResolution: 'a'.repeat(64),
     productMode: 'CUSTOM',
+    paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: 'Supplier', bankName: 'Bank', bankAccount: '123' }],
     customSupplierName: '备货供应商',
     orderDate: '2026-08-27',
     lines: [{
@@ -141,10 +142,10 @@ describe('PurchaseOrderCreateDependencyService', () => {
       productNameSnapshot: '销售快照产品',
       productAttributesSnapshot: [{ title: '颜色', value: '红' }],
       descriptionSnapshot: '销售行说明',
-      referencePurchaseUnitPriceAmount: '12.3456',
-      actualPurchaseUnitPriceAmount: '10.0000',
+      referencePurchaseUnitPriceAmount: '12.35',
+      actualPurchaseUnitPriceAmount: '10.00',
       quantity: 2,
-      lineTotalAmount: '20.0000',
+      lineTotalAmount: '20.00',
     }])
     expect(fixture.transaction.$queryRaw).toHaveBeenCalledTimes(1)
     expect(String(
@@ -187,6 +188,7 @@ describe('PurchaseOrderCreateDependencyService', () => {
       referencePurchaseUnitPriceAmount: '10',
     }, {
       productMode: 'CUSTOM',
+    paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: 'Supplier', bankName: 'Bank', bankAccount: '123' }],
       supplierValue: undefined,
       customSupplierName: '临时供应商',
     })
@@ -202,8 +204,8 @@ describe('PurchaseOrderCreateDependencyService', () => {
       productNoSnapshot: null,
       productNameSnapshot: '采购侧临时产品',
       descriptionSnapshot: '采购侧临时说明',
-      referencePurchaseUnitPriceAmount: '10.0000',
-      actualPurchaseUnitPriceAmount: '10.0000',
+      referencePurchaseUnitPriceAmount: '10.00',
+      actualPurchaseUnitPriceAmount: '10.00',
     }] })
   })
 
@@ -248,7 +250,7 @@ describe('PurchaseOrderCreateDependencyService', () => {
       attributes: [],
       status: 'ACTIVE',
       supplierValue: 'SUPPLIER_A',
-      purchaseCostAmount: { toFixed: () => '12.0000' },
+      purchaseCostAmount: { toFixed: () => '12.00' },
       purchaseCostCurrency: 'CNY',
       ...override,
     }])

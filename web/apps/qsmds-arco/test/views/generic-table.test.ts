@@ -250,9 +250,9 @@ test('操作列由 actions 插槽按需启用并在桌面与窄屏复用同一�
   assert.match(source, /const hasActionColumn = computed\(\(\) => Boolean\(slots\.actions\)\)/u)
   assert.match(source, /createActionColumn<TData>\(props\.actionColumn, hasSummary\.value\)/u)
   assert.match(source, /const actionCellSlotName = `cell-\$\{QS_GENERIC_TABLE_ACTION_COLUMN_ID\}`/u)
-  assert.equal(source.match(/<slot\s+name="actions"/gu)?.length, 2)
+  assert.equal(source.match(/<slot\s+name="actions"/gu)?.length, 3)
   assert.match(source, /:row="scope\.row\.original"/u)
-  assert.match(source, /:row-number="getContinuousRowNumber\(page, pageSize, scope\.row\.index\)"/u)
+  assert.match(source, /:row-number="getTableRowNumber\(scope\.row\)"/u)
   assert.match(source, /data-slot="qs-generic-table-mobile-actions"/u)
 })
 

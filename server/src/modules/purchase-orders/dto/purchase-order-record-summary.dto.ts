@@ -4,7 +4,7 @@ import { PurchaseOrderDocumentType, PurchaseOrderPaymentType } from '../../../ge
 export class PurchaseOrderPaymentTypeSummaryDto {
   @ApiProperty({ enum: PurchaseOrderPaymentType }) readonly paymentType!: PurchaseOrderPaymentType
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly count!: number
-  @ApiProperty({ type: 'string', description: '该类型有效付款合计，四位小数十进制字符串' }) readonly amount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '该类型有效付款合计，两位小数十进制字符串' }) readonly amount!: string
 }
 
 export class PurchaseOrderPaymentRecordSummaryDto {
