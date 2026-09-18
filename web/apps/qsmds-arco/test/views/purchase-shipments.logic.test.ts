@@ -38,7 +38,7 @@ test('运输预留视图可从 URL 恢复，保留筛选并具有状态颜色', 
     assert.deepEqual(shipmentCountsQuery(query), { keyword: '货件' })
     assert.ok(shipmentStatusClass(view))
   }
-  assert.deepEqual(SHIPMENT_VIEWS.slice(-4), ['CONTAINER_LOADED', 'OVERSEAS_STORAGE', 'DELIVERED', 'CANCELLED'])
+  assert.deepEqual(SHIPMENT_VIEWS.slice(-4), ['CONTAINER_LOADED', 'DELIVERED', 'OVERSEAS_STORAGE', 'CANCELLED'])
 })
 
 test('装柜只出现在已到仓视图，签收只出现在已装柜视图；寄仓及终态暂不增加操作', () => {

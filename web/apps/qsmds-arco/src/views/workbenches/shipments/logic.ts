@@ -1,6 +1,6 @@
 import type { PurchaseShipmentListQuery } from '@/api/modules/purchase-shipments'
 
-export const SHIPMENT_VIEWS = ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CONTAINER_LOADED', 'OVERSEAS_STORAGE', 'DELIVERED', 'CANCELLED'] as const
+export const SHIPMENT_VIEWS = ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CONTAINER_LOADED', 'DELIVERED', 'OVERSEAS_STORAGE', 'CANCELLED'] as const
 export type ShipmentView = typeof SHIPMENT_VIEWS[number]
 export type ShipmentListQuery = Omit<PurchaseShipmentListQuery, 'view'> & { view?: ShipmentView }
 
