@@ -110,12 +110,13 @@ describe('purchase records constraints on isolated PostgreSQL', () => {
 
   it('guards voucher ownership, payment shape and one active voucher per payment', async () => {
     const paymentId = legacyVoucherPaymentId
+    await rejectConstraint(() => addDocument('PAYMENT_VOUCHER', paymentId, secondOrderId), 'purchase_order_documents_payment_order_check')
     await addDocument('PAYMENT_VOUCHER', paymentId, voucherOrderId)
     await client.query('SET CONSTRAINTS ALL IMMEDIATE')
     await rejectConstraint(() => addDocument('PAYMENT_VOUCHER', paymentId, voucherOrderId), 'purchase_order_documents_active_payment_voucher_key', '23505')
     await rejectConstraint(() => addDocument('DELIVERY_RECEIPT', paymentId, voucherOrderId), 'purchase_order_documents_payment_shape_check')
     await rejectConstraint(() => client.query(`UPDATE purchase_order_documents SET purchase_order_id = $1 WHERE payment_id = $2`,
-      [secondOrderId, paymentId]), 'purchase_order_documents_payment_order_check')
+      [secondOrderId, paymentId]), 'purchase_payment_voucher_retained_check')
   })
 
   it('sums DEPOSIT, OTHER and BALANCE and excludes voided payments', async () => {

@@ -5,7 +5,7 @@ import { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-
 import { PurchaseOrderFactoryShipmentService } from '../src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment.service'
 import { PurchaseShipmentQueryService } from '../src/modules/purchase-orders/shipments/purchase-shipment-query.service'
 import { destinationWarehouses, OTHER_DESTINATION_WAREHOUSE, TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
-import { reviewHistoricalPurchase, shipHistoricalPurchase } from './purchase-order-historical-review.fixture'
+import { createHistoricalCustomPurchase, reviewHistoricalPurchase, shipHistoricalPurchase } from './purchase-order-historical-review.fixture'
 import { createAtomicityFixture, createCommands, createReviewMutations, customInput, prepareImageReview, type AtomicityFixture } from './purchase-shipping-mark-atomicity.fixture'
 
 async function createReviewedParts(fixture: AtomicityFixture) {
@@ -133,7 +133,7 @@ describe('purchase shipment destination warehouse with isolated PostgreSQL', () 
   it('migrates real historical shipments without inventing a warehouse and rejects replay that would fill it', async () => {
     const fixture = await createAtomicityFixture(false, false, false, true)
     try {
-      const id = await createCommands(fixture).create(fixture.context(), await customInput(fixture))
+      const id = await createHistoricalCustomPurchase(fixture)
       await reviewHistoricalPurchase(fixture, id)
       await shipHistoricalPurchase(fixture, id)
       const [oldPart] = await fixture.prisma.$queryRaw<{ id: string, shippedAt: Date }[]>(Prisma.sql`
