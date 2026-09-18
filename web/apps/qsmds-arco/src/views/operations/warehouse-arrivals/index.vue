@@ -16,10 +16,10 @@ import { formatDestinationWarehouse } from '../../workbenches/shipments/logic'
 import ShipmentDetailDrawer from '../../workbenches/shipments/shipment-detail-drawer.vue'
 import { getShipmentSourceEmptyKey } from '../../workbenches/shipments/shipment-detail.logic'
 import ShipmentProducts from '../../workbenches/shipments/shipment-products.vue'
-import { useShipmentData } from '../../workbenches/shipments/use-shipment-data'
 import ArrivalMobileRow from './arrival-mobile-row.vue'
 import { buildWarehouseArrivalRouteQuery, buildWarehouseFilterOptions, createWarehouseArrivalColumns, parseWarehouseArrivalQuery, WAREHOUSE_ARRIVAL_VIEWS, warehouseArrivalActions, warehouseFilterFromQuery, warehouseFilterToQuery } from './logic'
 import PackagingCostAction from './packaging-cost-action.vue'
+import { useWarehouseArrivalData } from './use-warehouse-arrival-data'
 
 defineOptions({ name: 'QsWarehouseArrivals' })
 const route = useRoute()
@@ -42,10 +42,22 @@ const activeWarehouse = computed(() => warehouseFilterFromQuery(query.value))
 const page = ref(query.value.page ?? 1)
 const pageSize = ref(query.value.pageSize ?? 20)
 const packagingShipment = shallowRef<PurchaseShipmentListItemDto | null>(null)
-const { rows, total, loading, error, counts, countsError, detail, orderDetail, detailKind, detailLoading, detailError, refresh, loadCounts, loadDetail, openShipment, openOrder } = useShipmentData(enabled, computed(() => account.authEpoch), query, value => navigate({ ...query.value, page: value }, true))
+const warehouseOptions = computed(() => buildWarehouseFilterOptions(warehouseCatalog.catalog.value, query.value.destinationWarehouseValue, t))
+const warehouseValues = computed(() => warehouseOptions.value.flatMap((item) => {
+  const { destinationWarehouseValue } = warehouseFilterToQuery(item.value)
+  return destinationWarehouseValue === undefined ? [] : [destinationWarehouseValue]
+}))
+const { rows, total, loading, error, counts, countsError, warehouseCounts, warehouseCountsError, detail, orderDetail, detailKind, detailLoading, detailError, refresh, loadCounts, loadDetail, openShipment, openOrder } = useWarehouseArrivalData(enabled, computed(() => account.authEpoch), query, value => navigate({ ...query.value, page: value }, true), warehouseValues)
 const tabs = computed(() => WAREHOUSE_ARRIVAL_VIEWS.map(value => ({ value, label: t(`warehouseArrivals.${value}`), count: countsError.value || counts.value.length === 0 ? undefined : counts.value.find(item => item.value === value)?.count ?? 0 })))
 const columns = computed(() => createWarehouseArrivalColumns(activeView.value, t))
-const warehouseTabs = computed(() => buildWarehouseFilterOptions(warehouseCatalog.catalog.value, query.value.destinationWarehouseValue, t))
+const warehouseTabs = computed(() => warehouseOptions.value.map((item) => {
+  const { destinationWarehouseValue } = warehouseFilterToQuery(item.value)
+  const statusCounts = destinationWarehouseValue === undefined
+    ? countsError.value || counts.value.length === 0 ? undefined : counts.value
+    : warehouseCounts.value.find(warehouse => warehouse.value === destinationWarehouseValue)?.items
+  // 加载中或失败不显示虚假的 0；成功响应中的空分组才代表该仓库没有货件。
+  return { ...item, count: statusCounts === undefined ? undefined : statusCounts.find(status => status.value === activeView.value)?.count ?? 0 }
+}))
 
 function navigate(next: PurchaseShipmentListQuery, replace = false): void {
   if (!enabled.value) {
@@ -141,10 +153,10 @@ onBeforeUnmount(() => activated.value = false)
     <FaPageMain class="min-w-0">
       <FaEmpty v-if="!canRead" icon="i-lucide:shield-alert" :title="t('purchaseShipments.noPermission')" :description="t('purchaseShipments.noPermissionDescription')" class="py-12" />
       <template v-else>
-        <FaAlert v-if="countsError" :title="t('warehouseArrivals.countsError')" variant="destructive" class="mb-4">
+        <FaAlert v-if="countsError || warehouseCountsError" :title="t(countsError ? 'warehouseArrivals.countsError' : 'warehouseArrivals.warehouseCountsError')" variant="destructive" class="mb-4">
           <template #description>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <span>{{ t('warehouseArrivals.countsErrorDescription') }}</span>
+              <span>{{ t(countsError ? 'warehouseArrivals.countsErrorDescription' : 'warehouseArrivals.warehouseCountsErrorDescription') }}</span>
               <FaButton variant="outline" size="sm" class="shrink-0 min-h-11 sm:min-h-8" @click="loadCounts">
                 {{ t('purchaseShipments.retry') }}
               </FaButton>

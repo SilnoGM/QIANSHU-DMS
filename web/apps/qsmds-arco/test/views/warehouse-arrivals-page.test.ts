@@ -7,7 +7,7 @@ import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import { compile, computed, createRenderer, defineComponent, effectScope, h, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 import * as arrivalLogic from '../../src/views/operations/warehouse-arrivals/logic'
-import { useShipmentData } from '../../src/views/workbenches/shipments/use-shipment-data'
+import { useWarehouseArrivalData } from '../../src/views/operations/warehouse-arrivals/use-warehouse-arrival-data'
 
 async function fixture(initialQuery: Record<string, string> = {}) {
   const source = await readFile(new URL('../../src/views/operations/warehouse-arrivals/index.vue', import.meta.url), 'utf8')
@@ -25,9 +25,11 @@ async function fixture(initialQuery: Record<string, string> = {}) {
       calls.push({ kind: 'list', query, signal })
       return { data: { items: [{ id: 'part-1', viewStatus: 'WAREHOUSE_RECEIVED' }], total: 1 } }
     },
-    statusCounts: async (query: unknown, signal: AbortSignal): Promise<any> => {
+    statusCounts: async (query: PurchaseShipmentListQuery, signal: AbortSignal): Promise<any> => {
       calls.push({ kind: 'counts', query, signal })
-      return { data: { items: [{ value: 'SHIPPED', count: 2 }, { value: 'WAREHOUSE_RECEIVED', count: 1 }], buyerOptions: [] } }
+      const totals: Record<string, [number, number]> = { 'WH-01': [2, 3], 'WH-02': [3, 4], 'QITA': [0, 0] }
+      const [shipped, received] = query.destinationWarehouseValue ? totals[query.destinationWarehouseValue]! : [5, 7]
+      return { data: { items: [{ value: 'SHIPPED', count: shipped }, { value: 'WAREHOUSE_RECEIVED', count: received }], buyerOptions: [] } }
     },
     getById: async (id: string, signal: AbortSignal): Promise<any> => {
       calls.push({ kind: `detail:${id}`, signal })
@@ -53,7 +55,7 @@ async function fixture(initialQuery: Record<string, string> = {}) {
       { value: 'WH-02', label: '深圳仓', effectiveEnabled: true },
       { value: 'QITA', label: '其他', effectiveEnabled: true },
     ] }), error: ref(null), missing: ref(false) }),
-    useShipmentData: (...args: Parameters<typeof useShipmentData>) => useShipmentData(args[0], args[1], args[2], args[3], api, api),
+    useWarehouseArrivalData: (...args: Parameters<typeof useWarehouseArrivalData>) => useWarehouseArrivalData(args[0], args[1], args[2], args[3], args[4], api, api),
     defineOptions: () => {},
     onMounted: (callback: () => void) => lifecycle.mount = callback,
     onActivated: (callback: () => void) => lifecycle.activate = callback,
@@ -62,8 +64,8 @@ async function fixture(initialQuery: Record<string, string> = {}) {
   })) as {
     enabled: { value: boolean }
     rows: { value: unknown[] }
-    tabs: { value: { value: string }[] }
-    warehouseTabs: { value: { value: string, label: string }[] }
+    tabs: { value: { value: string, count?: number }[] }
+    warehouseTabs: { value: { value: string, label: string, count?: number }[] }
     activeView: { value: string }
     activeWarehouse: { value: string }
     query: { value: PurchaseShipmentListQuery }
@@ -82,6 +84,7 @@ async function fixture(initialQuery: Record<string, string> = {}) {
   }
   lifecycle.mount!()
   await nextTick()
+  await new Promise<void>(resolve => setImmediate(resolve))
   return { state, route, account, api, calls, permission, info, navigations, lifecycle, initialPath, dispose: () => scope.stop() }
 }
 
@@ -100,6 +103,34 @@ test('页面默认已到仓；切换视图归一第一页，并保留关键词�
   f.state.selectWarehouse('__all__')
   assert.equal(f.navigations.at(-1)?.destinationWarehouseMissing, undefined)
   assert.equal(f.navigations.at(-1)?.destinationWarehouseValue, undefined)
+})
+
+test('上方显示全部仓库的状态数量，下方显示当前状态各仓库数量，切换仓库不改变上方数量', async (context) => {
+  for (const view of ['SHIPPED', 'WAREHOUSE_RECEIVED']) {
+    for (const destinationWarehouseValue of [undefined, 'WH-01', 'WH-02', 'QITA']) {
+      const f = await fixture({ view, ...(destinationWarehouseValue ? { destinationWarehouseValue } : {}) })
+      context.after(f.dispose)
+      assert.deepEqual(Array.from(f.state.tabs.value, item => item.count), [5, 7])
+      assert.deepEqual(Array.from(f.state.warehouseTabs.value, item => item.count), view === 'SHIPPED' ? [5, 2, 3, 0] : [7, 3, 4, 0])
+      assert.equal((f.calls.find(call => call.kind === 'list')!.query as PurchaseShipmentListQuery).destinationWarehouseValue, destinationWarehouseValue)
+    }
+  }
+})
+
+test('仓库计数失败不显示假零，全局数量和其他仓库数量保持可用', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  const statusCounts = f.api.statusCounts
+  f.api.statusCounts = async (query, signal) => {
+    if (query.destinationWarehouseValue === 'WH-02') {
+      throw new Error('warehouse counts unavailable')
+    }
+    return statusCounts(query, signal)
+  }
+  f.state.refresh()
+  await new Promise<void>(resolve => setImmediate(resolve))
+  assert.deepEqual(Array.from(f.state.tabs.value, item => item.count), [5, 7])
+  assert.deepEqual(Array.from(f.state.warehouseTabs.value, item => item.count), [7, 3, undefined, 0])
 })
 
 test('第二层仓库切换即时更新筛选，保留到仓视图和搜索并重置页码；无权限或停用页面不跳转', async (context) => {
@@ -200,7 +231,7 @@ test('计数与仓库错误的重试按钮通过真实 FaAlert description 插�
   const page = await readFile(new URL('../../src/views/operations/warehouse-arrivals/index.vue', import.meta.url), 'utf8')
   const alertSource = await readFile(new URL('../../../../packages/components/src/basic/alert/index.vue', import.meta.url), 'utf8')
   const alertTemplate = alertSource.split('<template>')[1]!.split('</template>')[0]!
-  const alerts = [...page.matchAll(/<FaAlert v-if="(?:countsError|warehouseCatalog.error.value)"[\s\S]*?<\/FaAlert>/gu)].map(match => match[0]).join('')
+  const alerts = [...page.matchAll(/<FaAlert v-if="(?:countsError \|\| warehouseCountsError|warehouseCatalog.error.value)"[\s\S]*?<\/FaAlert>/gu)].map(match => match[0]).join('')
   const passthrough = defineComponent({ setup: (_, { slots }) => () => h('div', slots.default?.()) })
   const FaAlert = defineComponent({
     props: ['icon', 'title', 'description', 'variant', 'class'],
@@ -209,9 +240,11 @@ test('计数与仓库错误的重试按钮通过真实 FaAlert description 插�
     render: compile(alertTemplate),
   })
   const calls: string[] = []
+  const countsError = ref(true)
+  const warehouseCountsError = ref(false)
   const Root = defineComponent({
     components: { FaAlert, FaButton: defineComponent({ setup: (_, { attrs, slots }) => () => h('button', attrs, slots.default?.()) }) },
-    setup: () => ({ countsError: true, warehouseCatalog: { error: { value: 'offline' }, retry: () => calls.push('warehouse') }, loadCounts: () => calls.push('counts'), t: (key: string) => key }),
+    setup: () => ({ countsError, warehouseCountsError, warehouseCatalog: { error: { value: 'offline' }, retry: () => calls.push('warehouse') }, loadCounts: () => calls.push('counts'), t: (key: string) => key }),
     render: compile(`<div>${alerts}</div>`),
   })
   interface HostNode { tag: string, parent: HostNode | null, children: HostNode[], props: Record<string, unknown>, text: string }
@@ -245,6 +278,10 @@ test('计数与仓库错误的重试按钮通过真实 FaAlert description 插�
       (button.props.onClick as () => void)()
     }
     assert.deepEqual(calls, ['counts', 'warehouse'])
+    countsError.value = false
+    warehouseCountsError.value = true
+    await nextTick()
+    assert.match(flatten(root).map(item => item.text).join(' '), /warehouseArrivals.warehouseCountsErrorDescription/u)
   }
   finally {
     app.unmount()
