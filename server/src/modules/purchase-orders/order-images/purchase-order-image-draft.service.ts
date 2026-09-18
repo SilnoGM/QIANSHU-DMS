@@ -18,6 +18,7 @@ import type { PurchaseOrderDocumentContentResponse } from '../documents/purchase
 import type { PurchaseOrderMutationContext } from '../purchase-order-mutation.service'
 import { PurchaseOrderQueryService, type PurchaseOrderDetail } from '../purchase-order-query.service'
 import { deliverPurchaseOrderImage, readPurchaseOrderImageThumbnails } from './purchase-order-image-assets'
+import { deliverCancelledPurchaseOrderImage } from './purchase-order-image-cancellation'
 import type { PurchaseOrderImageDraftDto, PurchaseOrderImageDraftResponseDto } from './purchase-order-image-draft.dto'
 import { normalizePurchaseOrderImageDraftInput, requirePurchaseOrderImageContext, requirePurchaseOrderImageUuid } from './purchase-order-image-draft.normalizer'
 import { PurchaseOrderImageRenderer } from './purchase-order-image-renderer'
@@ -27,6 +28,7 @@ const DRAFT_SELECT = {
   id: true, purchaseOrderId: true, mediaAssetId: true, orderVersion: true,
   snapshotHash: true, templateVersion: true, createdAt: true, invalidatedAt: true, archivedAt: true,
   generatedBy: { select: { id: true, displayName: true } },
+  purchaseOrder: { select: { orderStatus: true } },
   mediaAsset: { select: { status: true, deletedAt: true, mimeType: true, objectKey: true, checksumSha256: true, sizeBytes: true } },
 } as const satisfies Prisma.PurchaseOrderImageDraftSelect
 
@@ -210,6 +212,10 @@ export class PurchaseOrderImageDraftService {
       where: { id: requirePurchaseOrderImageUuid(draftId, 'draftId'), purchaseOrderId: requirePurchaseOrderImageUuid(purchaseOrderId, 'purchaseOrderId'), invalidatedAt: null, mediaAsset: { status: 'READY', deletedAt: null, mimeType: 'image/png' } }, select: DRAFT_SELECT,
     })
     if (draft === null) throw new ApiException(HttpStatus.NOT_FOUND, 'PURCHASE_ORDER_IMAGE_DRAFT_NOT_FOUND', '采购单图片不存在')
+    // 审核归档后的旧预览地址仍可读取，同样检查作废状态，避免绕过正式凭证的标记。
+    if (draft.purchaseOrder.orderStatus === 'CANCELLED') {
+      return deliverCancelledPurchaseOrderImage(this.delivery, draft.mediaAsset, draft.id, ifNoneMatch, method)
+    }
     return deliverPurchaseOrderImage(this.delivery, draft.mediaAsset, draft.id, ifNoneMatch, method)
   }
 

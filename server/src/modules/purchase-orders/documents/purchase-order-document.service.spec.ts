@@ -11,6 +11,14 @@ import type {
 } from './purchase-order-document-multipart.parser'
 import { PurchaseOrderDocumentService } from './purchase-order-document.service'
 
+jest.mock('../order-images/purchase-order-image-cancellation', () => ({
+  deliverCancelledPurchaseOrderImage: jest.fn(),
+}))
+
+const cancellation = jest.requireMock<{ deliverCancelledPurchaseOrderImage: jest.Mock }>(
+  '../order-images/purchase-order-image-cancellation',
+)
+
 const ACTOR_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const ORDER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const DOCUMENT_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
@@ -42,11 +50,14 @@ function setup() {
     >(callback => callback(transaction)),
     purchaseOrderDocument: {
       findFirst: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({
+        documentType: 'PAYMENT_VOUCHER',
+        purchaseOrder: { orderStatus: 'CONFIRMED' },
         mediaAsset: {
           checksumSha256: 'a'.repeat(64),
           mimeType: 'application/pdf',
           objectKey: 'assets/2026/08/proof.pdf',
           originalFilename: '付款凭证.pdf',
+          sizeBytes: 100n,
         },
       }),
     },
@@ -101,6 +112,8 @@ function setup() {
 const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
 
 describe('PurchaseOrderDocumentService', () => {
+  beforeEach(() => cancellation.deliverCancelledPurchaseOrderImage.mockReset())
+
   it.each(['ORDER_ISSUANCE_VOUCHER', 'DELIVERY_RECEIPT'])('archives %s without changing fulfillment or payments', async documentType => {
     const fixture = setup()
     fixture.transaction.purchaseOrderDocument.findFirst.mockResolvedValue(null)
@@ -228,5 +241,51 @@ describe('PurchaseOrderDocumentService', () => {
     })
     expect(response.headers.ETag).toMatch(/^"sha256-/u)
     expect(fixture.delivery.open).not.toHaveBeenCalled()
+  })
+
+  it.each(['image/png', 'image/jpeg', 'image/webp'])('marks cancelled purchase order %s images through the protected delivery path', async mimeType => {
+    const fixture = setup()
+    const asset = { objectKey: 'assets/2026/09/order.png', checksumSha256: 'c'.repeat(64), sizeBytes: 100n, mimeType, originalFilename: '采购单.png' }
+    fixture.prisma.purchaseOrderDocument.findFirst.mockResolvedValue({
+      documentType: 'ORDER_ISSUANCE_VOUCHER', purchaseOrder: { orderStatus: 'CANCELLED' }, mediaAsset: asset,
+    })
+    const markedResponse = { status: 200, headers: { 'Content-Type': mimeType, ETag: '"cancelled-image"' }, stream: new PassThrough() }
+    cancellation.deliverCancelledPurchaseOrderImage.mockResolvedValue(markedResponse)
+    await expect(fixture.service.resolveContent(ORDER_ID, DOCUMENT_ID, '"original-image"', 'GET')).resolves.toBe(markedResponse)
+    expect(cancellation.deliverCancelledPurchaseOrderImage).toHaveBeenCalledWith(fixture.delivery, asset, DOCUMENT_ID, '"original-image"', 'GET', mimeType)
+    expect(fixture.prisma.purchaseOrderDocument.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({
+        documentType: true, purchaseOrder: { select: { orderStatus: true } },
+        mediaAsset: { select: expect.objectContaining({ sizeBytes: true }) as unknown },
+      }) as unknown,
+    }))
+    expect(fixture.delivery.open).not.toHaveBeenCalled()
+  })
+
+  it('forwards conditional HEAD requests to the cancellation-aware image delivery', async () => {
+    const fixture = setup()
+    const asset = { objectKey: 'assets/2026/09/order.png', checksumSha256: 'c'.repeat(64), sizeBytes: 100n, mimeType: 'image/png', originalFilename: '采购单.png' }
+    fixture.prisma.purchaseOrderDocument.findFirst.mockResolvedValue({
+      documentType: 'ORDER_ISSUANCE_VOUCHER', purchaseOrder: { orderStatus: 'CANCELLED' }, mediaAsset: asset,
+    })
+    cancellation.deliverCancelledPurchaseOrderImage.mockResolvedValue({ status: 304, headers: { ETag: '"cancelled-image"' } })
+    await expect(fixture.service.resolveContent(ORDER_ID, DOCUMENT_ID, '"cancelled-image"', 'HEAD')).resolves.toMatchObject({ status: 304 })
+    expect(cancellation.deliverCancelledPurchaseOrderImage).toHaveBeenCalledWith(fixture.delivery, asset, DOCUMENT_ID, '"cancelled-image"', 'HEAD', 'image/png')
+  })
+
+  it.each([
+    ['CONFIRMED', 'ORDER_ISSUANCE_VOUCHER', 'image/png'],
+    ['CANCELLED', 'PAYMENT_VOUCHER', 'image/png'],
+    ['CANCELLED', 'DELIVERY_RECEIPT', 'image/png'],
+    ['CANCELLED', 'ORDER_ISSUANCE_VOUCHER', 'application/pdf'],
+  ])('preserves original content for %s / %s / %s', async (orderStatus, documentType, mimeType) => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrderDocument.findFirst.mockResolvedValue({
+      documentType, purchaseOrder: { orderStatus },
+      mediaAsset: { objectKey: 'assets/2026/09/order.png', checksumSha256: 'c'.repeat(64), sizeBytes: 100n, mimeType, originalFilename: '采购单.png' },
+    })
+    await expect(fixture.service.resolveContent(ORDER_ID, DOCUMENT_ID, undefined, 'GET')).resolves.toMatchObject({ status: 200, headers: { 'Content-Type': mimeType } })
+    expect(cancellation.deliverCancelledPurchaseOrderImage).not.toHaveBeenCalled()
+    expect(fixture.delivery.open).toHaveBeenCalledWith('assets/2026/09/order.png')
   })
 })

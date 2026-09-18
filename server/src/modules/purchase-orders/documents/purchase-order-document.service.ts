@@ -21,6 +21,7 @@ import { MediaAssetRetentionService } from '../../media/media-retention.service'
 import { MediaContentDeliveryService } from '../../media/media-content-delivery.service'
 import { requireMediaObjectKeyNamespace } from '../../media/media-storage'
 import { purchaseOrderRuleFailure, purchaseOrderValidationFailure } from '../domain/purchase-order-errors'
+import { deliverCancelledPurchaseOrderImage } from '../order-images/purchase-order-image-cancellation'
 import { isCanonicalPurchaseOrderActorId } from '../purchase-order-command.normalizer'
 import type { PurchaseOrderMutationContext } from '../purchase-order-mutation.service'
 import {
@@ -320,11 +321,14 @@ export class PurchaseOrderDocumentService {
         mediaAsset: { status: 'READY', deletedAt: null },
       },
       select: {
+        documentType: true,
+        purchaseOrder: { select: { orderStatus: true } },
         mediaAsset: { select: {
           checksumSha256: true,
           mimeType: true,
           objectKey: true,
           originalFilename: true,
+          sizeBytes: true,
         } },
       },
     })
@@ -339,6 +343,14 @@ export class PurchaseOrderDocumentService {
         'PURCHASE_ORDER_DOCUMENT_NOT_FOUND',
         '采购订单凭证不存在',
       )
+    }
+    // 作废状态由关联订单决定；读取时生成标记，保留归档原文件和其他类型凭证。
+    if (
+      row.purchaseOrder.orderStatus === 'CANCELLED'
+      && row.documentType === 'ORDER_ISSUANCE_VOUCHER'
+      && ['image/png', 'image/jpeg', 'image/webp'].includes(row.mediaAsset.mimeType)
+    ) {
+      return deliverCancelledPurchaseOrderImage(this.delivery, row.mediaAsset, documentId, ifNoneMatch, method, row.mediaAsset.mimeType)
     }
     const objectKey = requireMediaObjectKeyNamespace(
       row.mediaAsset.objectKey,

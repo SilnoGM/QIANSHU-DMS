@@ -27,6 +27,25 @@ class ReviewAuditFailure extends AuditService {
   }
 }
 
+async function readImageStream(stream: Readable | undefined): Promise<Buffer> {
+  if (stream === undefined) throw new Error('Image stream is required')
+  const chunks: Buffer[] = []
+  for await (const chunk of stream) {
+    if (!Buffer.isBuffer(chunk)) throw new Error('Invalid stream chunk')
+    chunks.push(chunk)
+  }
+  return Buffer.concat(chunks)
+}
+
+async function countRedPixels(bytes: Buffer): Promise<number> {
+  const { data, info } = await sharp(bytes).removeAlpha().raw().toBuffer({ resolveWithObject: true })
+  let count = 0
+  for (let offset = 0; offset < data.length; offset += info.channels) {
+    if (data[offset] > 130 && data[offset] > data[offset + 1] * 1.5 && data[offset] > data[offset + 2] * 1.5) count += 1
+  }
+  return count
+}
+
 describe('purchase order image drafts with isolated PostgreSQL and real storage', () => {
   jest.setTimeout(120_000)
   let fixture: AtomicityFixture
@@ -52,6 +71,9 @@ describe('purchase order image drafts with isolated PostgreSQL and real storage'
     const draft = await images.drafts.generate(fixture.context(), id, { expectedVersion: detail.version })
     const persisted = await fixture.prisma.purchaseOrderImageDraft.findUniqueOrThrow({ where: { id: draft.id }, include: { mediaAsset: true } })
     return { id, detail, draft, persisted }
+  }
+  function documents() {
+    return new PurchaseOrderDocumentService(fixture.prisma, images.media, images.delivery, fixture.audit, images.query, {} as PurchaseOrderDocumentMultipartParser, images.retention)
   }
 
   it('prepares generated PNG through the real media validation and storage lifecycle', async () => {
@@ -157,6 +179,67 @@ describe('purchase order image drafts with isolated PostgreSQL and real storage'
     expect(await fixture.prisma.purchaseOrderImageDraft.findUnique({ where: { id: order.draft.id } })).toMatchObject({ archivedAt: null, invalidatedAt: null })
     expect(await fixture.prisma.purchaseOrderDocument.count({ where: { purchaseOrderId: order.id } })).toBe(0)
     expect(await images.storage.stat(order.persisted.mediaAsset.objectKey!)).not.toBeNull()
+    const content = await images.drafts.resolveContent(order.id, order.draft.id, undefined, 'GET')
+    expect(await readImageStream(content.stream)).toEqual(images.png)
+  })
+
+  it('marks cancelled archived images at both content URLs without replacing the stored original or honoring the old ETag', async () => {
+    const order = await generated()
+    await images.buildMutations().review(fixture.context(), order.id, { expectedVersion: order.detail.version, imageDraftId: order.draft.id })
+    const document = await fixture.prisma.purchaseOrderDocument.findFirstOrThrow({ where: { purchaseOrderId: order.id, documentType: 'ORDER_ISSUANCE_VOUCHER', detachedAt: null } })
+    const service = documents()
+    const originalDocument = await service.resolveContent(order.id, document.id, undefined, 'GET')
+    const originalDraft = await images.drafts.resolveContent(order.id, order.draft.id, undefined, 'GET')
+    expect(await readImageStream(originalDocument.stream)).toEqual(images.png)
+    expect(await readImageStream(originalDraft.stream)).toEqual(images.png)
+    const originalAsset = await fixture.prisma.mediaAsset.findUniqueOrThrow({ where: { id: order.persisted.mediaAssetId } })
+    const assetCount = await fixture.prisma.mediaAsset.count()
+
+    await images.buildMutations().updateOrderStatus(fixture.context(), order.id, { toStatus: 'CANCELLED' })
+
+    const cancelledDocument = await service.resolveContent(order.id, document.id, originalDocument.headers.ETag, 'GET')
+    const cancelledDraft = await images.drafts.resolveContent(order.id, order.draft.id, originalDraft.headers.ETag, 'GET')
+    expect(cancelledDocument.status).toBe(200)
+    expect(cancelledDraft.status).toBe(200)
+    expect(cancelledDocument.headers.ETag).not.toBe(originalDocument.headers.ETag)
+    expect(cancelledDraft.headers.ETag).not.toBe(originalDraft.headers.ETag)
+    const cancelledBytes = await readImageStream(cancelledDocument.stream)
+    expect(cancelledBytes).not.toEqual(images.png)
+    expect(await readImageStream(cancelledDraft.stream)).toEqual(cancelledBytes)
+    expect(await sharp(cancelledBytes).metadata()).toMatchObject({ format: 'png', width: 64, height: 64 })
+    expect(await countRedPixels(cancelledBytes)).toBeGreaterThan(0)
+    const head = await service.resolveContent(order.id, document.id, originalDocument.headers.ETag, 'HEAD')
+    expect(head).toMatchObject({ status: 200, headers: { ETag: cancelledDocument.headers.ETag, 'Content-Length': String(cancelledBytes.length) } })
+    expect(head.stream).toBeUndefined()
+    expect(await service.resolveContent(order.id, document.id, cancelledDocument.headers.ETag, 'GET')).toMatchObject({ status: 304 })
+    expect(await images.drafts.resolveContent(order.id, order.draft.id, cancelledDraft.headers.ETag, 'GET')).toMatchObject({ status: 304 })
+
+    expect(await fixture.prisma.mediaAsset.findUniqueOrThrow({ where: { id: order.persisted.mediaAssetId } })).toEqual(originalAsset)
+    expect(await fixture.prisma.mediaAsset.count()).toBe(assetCount)
+    expect(await fixture.prisma.purchaseOrderDocument.findUniqueOrThrow({ where: { id: document.id } })).toEqual(document)
+    const storedOriginal = await images.storage.open(originalAsset.objectKey!)
+    expect(await readImageStream(storedOriginal.stream)).toEqual(images.png)
+  })
+
+  it('leaves archived images and ETags unchanged when cancellation rolls back', async () => {
+    const order = await generated()
+    await images.buildMutations().review(fixture.context(), order.id, { expectedVersion: order.detail.version, imageDraftId: order.draft.id })
+    const document = await fixture.prisma.purchaseOrderDocument.findFirstOrThrow({ where: { purchaseOrderId: order.id, documentType: 'ORDER_ISSUANCE_VOUCHER', detachedAt: null } })
+    const service = documents()
+    const originalDocument = await service.resolveContent(order.id, document.id, undefined, 'GET')
+    const originalDraft = await images.drafts.resolveContent(order.id, order.draft.id, undefined, 'GET')
+    expect(await readImageStream(originalDocument.stream)).toEqual(images.png)
+    expect(await readImageStream(originalDraft.stream)).toEqual(images.png)
+
+    await expect(images.buildMutations(images.drafts, new ReviewAuditFailure()).updateOrderStatus(fixture.context(), order.id, { toStatus: 'CANCELLED' })).rejects.toBeInstanceOf(AuditWriteFailedError)
+
+    expect((await images.query.getById(order.id)).orderStatus).toBe('CONFIRMED')
+    const unchangedDocument = await service.resolveContent(order.id, document.id, undefined, 'GET')
+    const unchangedDraft = await images.drafts.resolveContent(order.id, order.draft.id, undefined, 'GET')
+    expect(unchangedDocument.headers.ETag).toBe(originalDocument.headers.ETag)
+    expect(unchangedDraft.headers.ETag).toBe(originalDraft.headers.ETag)
+    expect(await readImageStream(unchangedDocument.stream)).toEqual(images.png)
+    expect(await readImageStream(unchangedDraft.stream)).toEqual(images.png)
   })
 
   it('rejects review without an image and rejects direct SQL bypass of the same invariant', async () => {
@@ -185,7 +268,14 @@ describe('purchase order image drafts with isolated PostgreSQL and real storage'
     if (process.env.PURCHASE_ORDER_IMAGE_E2E_OUTPUT === '1') await writeFile('/tmp/qianshu-purchase-order-image-e2e.png', bytes)
     const persisted = await fixture.prisma.purchaseOrderImageDraft.findUniqueOrThrow({ where: { id: image.id } })
     await images.buildMutations().review(fixture.context(), id, { expectedVersion: detail.version, imageDraftId: image.id })
-    expect(await fixture.prisma.purchaseOrderDocument.findFirst({ where: { purchaseOrderId: id, documentType: 'ORDER_ISSUANCE_VOUCHER', detachedAt: null } })).toMatchObject({ mediaAssetId: persisted.mediaAssetId })
+    const document = await fixture.prisma.purchaseOrderDocument.findFirstOrThrow({ where: { purchaseOrderId: id, documentType: 'ORDER_ISSUANCE_VOUCHER', detachedAt: null } })
+    expect(document).toMatchObject({ mediaAssetId: persisted.mediaAssetId })
+    await images.buildMutations().updateOrderStatus(fixture.context(), id, { toStatus: 'CANCELLED' })
+    const cancelled = await documents().resolveContent(id, document.id, undefined, 'GET')
+    const cancelledBytes = await readImageStream(cancelled.stream)
+    expect(await sharp(cancelledBytes).metadata()).toMatchObject({ format: 'png', width: 2100, height: 2970, density: 254 })
+    expect(await countRedPixels(cancelledBytes)).toBeGreaterThan(await countRedPixels(bytes) + 100)
+    if (process.env.PURCHASE_ORDER_IMAGE_E2E_OUTPUT === '1') await writeFile('/tmp/qianshu-purchase-order-cancelled-e2e.png', cancelledBytes)
   })
 
   it('permits the formal purchase voucher lifecycle after the draft has been archived', async () => {

@@ -10,6 +10,14 @@ import type { PurchaseOrderQueryService } from '../purchase-order-query.service'
 import { PurchaseOrderImageDraftService } from './purchase-order-image-draft.service'
 import type { PurchaseOrderImageRenderer } from './purchase-order-image-renderer'
 
+jest.mock('./purchase-order-image-cancellation', () => ({
+  deliverCancelledPurchaseOrderImage: jest.fn(),
+}))
+
+const cancellation = jest.requireMock<{ deliverCancelledPurchaseOrderImage: jest.Mock }>(
+  './purchase-order-image-cancellation',
+)
+
 jest.mock('./purchase-order-image-snapshot', () => ({
   PURCHASE_ORDER_IMAGE_TEMPLATE_VERSION: '1',
   createPurchaseOrderImageSnapshot: (detail: { content: string }) => ({ content: detail.content, lines: [] }),
@@ -26,7 +34,7 @@ const now = new Date('2026-09-15T01:00:00.000Z')
 
 function setup() {
   const detail = { id: ORDER_ID, orderNo: 'PO/20260915-00001', orderStatus: 'PENDING_REVIEW', version: 3, content: 'hash-one', shippingMarkText: 'BASE-1', parts: [{ status: 'PENDING_REVIEW', shipmentNo: 'PKG-1', shippingMarkText: 'BASE-1' }] }
-  const existing = { id: DRAFT_ID, purchaseOrderId: ORDER_ID, mediaAssetId: ASSET_ID, orderVersion: 3, snapshotHash: 'hash-one', templateVersion: '1', generatedByUserId: ACTOR_ID, generatedBy: { id: ACTOR_ID, displayName: '审核人' }, createdAt: now, invalidatedAt: null, archivedAt: null, mediaAsset: { status: 'READY', deletedAt: null, mimeType: 'image/png', objectKey: 'assets/2026/09/image.png', checksumSha256: 'a'.repeat(64), originalFilename: 'purchase.png', sizeBytes: 3n } }
+  const existing = { id: DRAFT_ID, purchaseOrderId: ORDER_ID, purchaseOrder: { orderStatus: 'PENDING_REVIEW' }, mediaAssetId: ASSET_ID, orderVersion: 3, snapshotHash: 'hash-one', templateVersion: '1', generatedByUserId: ACTOR_ID, generatedBy: { id: ACTOR_ID, displayName: '审核人' }, createdAt: now, invalidatedAt: null, archivedAt: null, mediaAsset: { status: 'READY', deletedAt: null, mimeType: 'image/png', objectKey: 'assets/2026/09/image.png', checksumSha256: 'a'.repeat(64), originalFilename: 'purchase.png', sizeBytes: 3n } }
   const transaction = {
     $queryRaw: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue([{ id: ORDER_ID }]),
     purchaseOrderImageDraft: {
@@ -58,6 +66,8 @@ function setup() {
 }
 
 describe('PurchaseOrderImageDraftService', () => {
+  beforeEach(() => cancellation.deliverCancelledPurchaseOrderImage.mockReset())
+
   it('resumes a persisted current draft without rendering or consuming new media', async () => {
     const fixture = setup()
     const result = await fixture.service.generate(context, ORDER_ID, { expectedVersion: 3 })
@@ -169,7 +179,24 @@ describe('PurchaseOrderImageDraftService', () => {
     const fixture = setup()
     const result = await fixture.service.resolveContent(ORDER_ID, DRAFT_ID, undefined, 'GET')
     expect(result).toMatchObject({ status: 200, headers: { 'Content-Type': 'image/png', 'X-Content-Type-Options': 'nosniff' } })
+    expect(cancellation.deliverCancelledPurchaseOrderImage).not.toHaveBeenCalled()
     fixture.prisma.purchaseOrderImageDraft.findFirst.mockResolvedValue(null)
     await expect(fixture.service.resolveContent(ORDER_ID, DRAFT_ID, undefined, 'GET')).rejects.toMatchObject({ code: 'PURCHASE_ORDER_IMAGE_DRAFT_NOT_FOUND' })
+  })
+
+  it.each(['GET', 'HEAD'] as const)('marks cancelled archived drafts on %s so their old preview URLs cannot return an unmarked image', async method => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrderImageDraft.findFirst.mockResolvedValue({
+      ...fixture.existing, archivedAt: now, purchaseOrder: { orderStatus: 'CANCELLED' },
+    })
+    const markedResponse = { status: 200, headers: { 'Content-Type': 'image/png', ETag: '"cancelled-image"' } }
+    cancellation.deliverCancelledPurchaseOrderImage.mockResolvedValue(markedResponse)
+    await expect(fixture.service.resolveContent(ORDER_ID, DRAFT_ID, '"original-image"', method)).resolves.toBe(markedResponse)
+    expect(cancellation.deliverCancelledPurchaseOrderImage).toHaveBeenCalledWith(fixture.delivery, fixture.existing.mediaAsset, DRAFT_ID, '"original-image"', method)
+    expect(fixture.prisma.purchaseOrderImageDraft.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ invalidatedAt: null }) as unknown,
+      select: expect.objectContaining({ purchaseOrder: { select: { orderStatus: true } } }) as unknown,
+    }))
+    expect(fixture.delivery.open).not.toHaveBeenCalled()
   })
 })
