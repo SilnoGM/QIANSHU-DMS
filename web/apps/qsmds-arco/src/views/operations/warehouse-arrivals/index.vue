@@ -71,7 +71,7 @@ function selectWarehouse(value: string): void {
   if (!warehouseTabs.value.some(item => item.value === value)) {
     return
   }
-  const { destinationWarehouseValue: _value, destinationWarehouseMissing: _missing, ...current } = query.value
+  const { destinationWarehouseValue: _value, ...current } = query.value
   navigate({ ...current, ...warehouseFilterToQuery(value), page: 1 })
 }
 function search(): void {

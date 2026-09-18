@@ -7,7 +7,6 @@ import { formatDestinationWarehouse } from '../../workbenches/shipments/logic'
 export const WAREHOUSE_ARRIVAL_VIEWS = ['SHIPPED', 'WAREHOUSE_RECEIVED'] as const
 export type WarehouseArrivalView = typeof WAREHOUSE_ARRIVAL_VIEWS[number]
 export type WarehouseArrivalAction = 'view' | 'woodenFrame'
-const MISSING_WAREHOUSE_FILTER = '__missing__'
 const ALL_WAREHOUSES_FILTER = '__all__'
 const WAREHOUSE_FILTER_PREFIX = 'warehouse:'
 
@@ -23,10 +22,7 @@ export function parseWarehouseArrivalQuery(raw: Record<string, unknown>): Purcha
   if (typeof raw.keyword === 'string' && raw.keyword.trim()) {
     query.keyword = raw.keyword.trim()
   }
-  if (raw.destinationWarehouseMissing === 'true' || raw.destinationWarehouseMissing === true) {
-    query.destinationWarehouseMissing = true
-  }
-  else if (typeof raw.destinationWarehouseValue === 'string' && raw.destinationWarehouseValue.trim()) {
+  if (typeof raw.destinationWarehouseValue === 'string' && raw.destinationWarehouseValue.trim()) {
     query.destinationWarehouseValue = raw.destinationWarehouseValue
   }
   return query
@@ -39,16 +35,11 @@ export function buildWarehouseArrivalRouteQuery(query: PurchaseShipmentListQuery
     .map(([key, value]) => [key, String(value)]))
 }
 
-export function warehouseFilterFromQuery(query: Pick<PurchaseShipmentListQuery, 'destinationWarehouseValue' | 'destinationWarehouseMissing'>): string {
-  return query.destinationWarehouseMissing
-    ? MISSING_WAREHOUSE_FILTER
-    : query.destinationWarehouseValue !== undefined ? `${WAREHOUSE_FILTER_PREFIX}${query.destinationWarehouseValue}` : ALL_WAREHOUSES_FILTER
+export function warehouseFilterFromQuery(query: Pick<PurchaseShipmentListQuery, 'destinationWarehouseValue'>): string {
+  return query.destinationWarehouseValue !== undefined ? `${WAREHOUSE_FILTER_PREFIX}${query.destinationWarehouseValue}` : ALL_WAREHOUSES_FILTER
 }
 
-export function warehouseFilterToQuery(value: unknown): Pick<PurchaseShipmentListQuery, 'destinationWarehouseValue' | 'destinationWarehouseMissing'> {
-  if (value === MISSING_WAREHOUSE_FILTER) {
-    return { destinationWarehouseMissing: true }
-  }
+export function warehouseFilterToQuery(value: unknown): Pick<PurchaseShipmentListQuery, 'destinationWarehouseValue'> {
   return typeof value === 'string' && value.startsWith(WAREHOUSE_FILTER_PREFIX) && value.length > WAREHOUSE_FILTER_PREFIX.length
     ? { destinationWarehouseValue: value.slice(WAREHOUSE_FILTER_PREFIX.length) }
     : {}
@@ -62,7 +53,6 @@ export function buildWarehouseFilterOptions(
   const items = catalog?.items ?? []
   const options: QsStatusSwitchItem[] = [
     { value: ALL_WAREHOUSES_FILTER, label: translate('warehouseArrivals.allWarehouses') },
-    { value: MISSING_WAREHOUSE_FILTER, label: translate('purchaseShipments.warehouseMissing') },
     ...items.map(item => ({
       value: `${WAREHOUSE_FILTER_PREFIX}${item.value}`,
       label: item.effectiveEnabled ? item.label : `${item.label}（${translate('purchaseShipments.disabled')}）`,

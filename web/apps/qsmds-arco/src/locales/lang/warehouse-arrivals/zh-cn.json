@@ -19,6 +19,6 @@
     "warehouseError": "仓库筛选加载失败",
     "warehouseErrorDescription": "货件列表仍可查看，可重试恢复仓库选项。",
     "warehouseMissing": "尚未配置目的地仓库字典",
-    "warehouseMissingDescription": "仍可按关键词或“未记录”筛选历史货件。"
+    "warehouseMissingDescription": "仍可查看全部仓库的货件，或按关键词筛选。"
   }
 }

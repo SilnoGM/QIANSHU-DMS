@@ -51,6 +51,7 @@ async function fixture(initialQuery: Record<string, string> = {}) {
     useDictionaryCatalog: () => ({ catalog: ref({ items: [
       { value: 'WH-01', label: '长沙仓', effectiveEnabled: true },
       { value: 'WH-02', label: '深圳仓', effectiveEnabled: true },
+      { value: 'QITA', label: '其他', effectiveEnabled: true },
     ] }), error: ref(null), missing: ref(false) }),
     useShipmentData: (...args: Parameters<typeof useShipmentData>) => useShipmentData(args[0], args[1], args[2], args[3], api, api),
     defineOptions: () => {},
@@ -93,9 +94,9 @@ test('页面默认已到仓；切换视图归一第一页，并保留关键词�
   assert.equal((f.calls.find(call => call.kind === 'counts')!.query as PurchaseShipmentListQuery).sort, undefined)
   f.state.selectView('SHIPPED')
   assert.equal(JSON.stringify(f.navigations.at(-1)), JSON.stringify({ view: 'SHIPPED', page: '1', pageSize: '50', keyword: 'SF123', destinationWarehouseValue: 'WH-01' }))
-  f.state.selectWarehouse('__missing__')
-  assert.equal(f.navigations.at(-1)?.destinationWarehouseValue, undefined)
-  assert.equal(f.navigations.at(-1)?.destinationWarehouseMissing, 'true')
+  f.state.selectWarehouse('warehouse:QITA')
+  assert.equal(f.navigations.at(-1)?.destinationWarehouseValue, 'QITA')
+  assert.equal(f.navigations.at(-1)?.destinationWarehouseMissing, undefined)
   f.state.selectWarehouse('__all__')
   assert.equal(f.navigations.at(-1)?.destinationWarehouseMissing, undefined)
   assert.equal(f.navigations.at(-1)?.destinationWarehouseValue, undefined)
@@ -105,11 +106,12 @@ test('第二层仓库切换即时更新筛选，保留到仓视图和搜索并�
   for (const view of ['SHIPPED', 'WAREHOUSE_RECEIVED']) {
     const f = await fixture({ view, page: '3', pageSize: '50', keyword: 'SF123', destinationWarehouseMissing: 'true' })
     context.after(f.dispose)
-    assert.equal(f.state.activeWarehouse.value, '__missing__')
-    assert.deepEqual(Array.from(f.state.warehouseTabs.value, item => item.value), ['__all__', '__missing__', 'warehouse:WH-01', 'warehouse:WH-02'])
+    assert.equal(f.state.activeWarehouse.value, '__all__')
+    assert.deepEqual(Array.from(f.state.warehouseTabs.value, item => item.value), ['__all__', 'warehouse:WH-01', 'warehouse:WH-02', 'warehouse:QITA'])
     f.state.selectWarehouse('warehouse:WH-02')
     assert.equal(JSON.stringify(f.navigations.at(-1)), JSON.stringify({ view, page: '1', pageSize: '50', keyword: 'SF123', destinationWarehouseValue: 'WH-02' }))
     f.state.selectWarehouse('warehouse:INVALID')
+    f.state.selectWarehouse('__missing__')
     assert.equal(f.navigations.length, 1)
     f.permission.value = false
     f.state.selectWarehouse('__all__')
@@ -160,7 +162,7 @@ test('已到仓打木架打开对应货件费用弹窗且不修改列表；待�
 })
 
 test('缓存返回按URL重建筛选草稿，撤权及身份变化取消读取并屏蔽迟到数据', async (context) => {
-  const f = await fixture({ keyword: 'original', destinationWarehouseMissing: 'true' })
+  const f = await fixture({ keyword: 'original', destinationWarehouseValue: 'QITA' })
   context.after(f.dispose)
   f.state.keyword.value = 'draft'
   f.state.page.value = 3
@@ -169,7 +171,7 @@ test('缓存返回按URL重建筛选草稿，撤权及身份变化取消读取�
   f.lifecycle.activate!()
   await nextTick()
   assert.equal(f.state.keyword.value, 'original')
-  assert.equal(f.state.activeWarehouse.value, '__missing__')
+  assert.equal(f.state.activeWarehouse.value, 'warehouse:QITA')
   assert.equal(f.state.page.value, 1)
   let finish!: (value: unknown) => void
   let signal!: AbortSignal
