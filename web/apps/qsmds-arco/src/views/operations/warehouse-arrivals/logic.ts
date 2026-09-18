@@ -1,12 +1,14 @@
 import type { PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
 import type { PurchaseShipmentListQuery } from '@/api/modules/purchase-shipments'
-import type { QsGenericTableColumn, QsGenericTableFilterOption } from '@/components/business/QsGenericTable/logic'
+import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
+import type { QsStatusSwitchItem } from '@/components/business/QsStatusSwitchToolbar/types'
 import { formatDestinationWarehouse } from '../../workbenches/shipments/logic'
 
 export const WAREHOUSE_ARRIVAL_VIEWS = ['SHIPPED', 'WAREHOUSE_RECEIVED'] as const
 export type WarehouseArrivalView = typeof WAREHOUSE_ARRIVAL_VIEWS[number]
 export type WarehouseArrivalAction = 'view' | 'woodenFrame'
 const MISSING_WAREHOUSE_FILTER = '__missing__'
+const ALL_WAREHOUSES_FILTER = '__all__'
 const WAREHOUSE_FILTER_PREFIX = 'warehouse:'
 
 /** 此页面只接收两个到仓视图的公共筛选；排序由视图语义决定，不能被 URL 覆盖。 */
@@ -37,10 +39,10 @@ export function buildWarehouseArrivalRouteQuery(query: PurchaseShipmentListQuery
     .map(([key, value]) => [key, String(value)]))
 }
 
-export function warehouseFilterFromQuery(query: Pick<PurchaseShipmentListQuery, 'destinationWarehouseValue' | 'destinationWarehouseMissing'>): string | undefined {
+export function warehouseFilterFromQuery(query: Pick<PurchaseShipmentListQuery, 'destinationWarehouseValue' | 'destinationWarehouseMissing'>): string {
   return query.destinationWarehouseMissing
     ? MISSING_WAREHOUSE_FILTER
-    : query.destinationWarehouseValue !== undefined ? `${WAREHOUSE_FILTER_PREFIX}${query.destinationWarehouseValue}` : undefined
+    : query.destinationWarehouseValue !== undefined ? `${WAREHOUSE_FILTER_PREFIX}${query.destinationWarehouseValue}` : ALL_WAREHOUSES_FILTER
 }
 
 export function warehouseFilterToQuery(value: unknown): Pick<PurchaseShipmentListQuery, 'destinationWarehouseValue' | 'destinationWarehouseMissing'> {
@@ -56,9 +58,10 @@ export function buildWarehouseFilterOptions(
   catalog: { readonly items: readonly { readonly value: string, readonly label: string, readonly effectiveEnabled: boolean }[] } | null,
   selectedValue: string | undefined,
   translate: (key: string) => string,
-): QsGenericTableFilterOption[] {
+): QsStatusSwitchItem[] {
   const items = catalog?.items ?? []
-  const options: QsGenericTableFilterOption[] = [
+  const options: QsStatusSwitchItem[] = [
+    { value: ALL_WAREHOUSES_FILTER, label: translate('warehouseArrivals.allWarehouses') },
     { value: MISSING_WAREHOUSE_FILTER, label: translate('purchaseShipments.warehouseMissing') },
     ...items.map(item => ({
       value: `${WAREHOUSE_FILTER_PREFIX}${item.value}`,

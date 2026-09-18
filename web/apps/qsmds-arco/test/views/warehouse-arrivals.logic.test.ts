@@ -38,12 +38,14 @@ test('仓库筛选保留未记录、停用和未知历史值，选项编码不�
     { value: 'WH-01', label: '长沙仓', effectiveEnabled: true },
     { value: 'WH-OLD', label: '旧仓', effectiveEnabled: false },
   ] }, 'UNKNOWN', translate)
-  assert.deepEqual(options.map(option => option.label), ['purchaseShipments.warehouseMissing', '长沙仓', '旧仓（purchaseShipments.disabled）', 'UNKNOWN（purchaseShipments.warehouseUnknown）'])
-  assert.deepEqual(warehouseFilterToQuery(options[0]!.value), { destinationWarehouseMissing: true })
-  assert.deepEqual(warehouseFilterToQuery(options[1]!.value), { destinationWarehouseValue: 'WH-01' })
+  assert.deepEqual(options.map(option => option.label), ['warehouseArrivals.allWarehouses', 'purchaseShipments.warehouseMissing', '长沙仓', '旧仓（purchaseShipments.disabled）', 'UNKNOWN（purchaseShipments.warehouseUnknown）'])
+  assert.deepEqual(warehouseFilterToQuery(options[0]!.value), {})
+  assert.deepEqual(warehouseFilterToQuery(options[1]!.value), { destinationWarehouseMissing: true })
+  assert.deepEqual(warehouseFilterToQuery(options[2]!.value), { destinationWarehouseValue: 'WH-01' })
+  assert.equal(warehouseFilterFromQuery({}), options[0]!.value)
   assert.deepEqual(warehouseFilterToQuery(warehouseFilterFromQuery({ destinationWarehouseValue: '__missing__' })), { destinationWarehouseValue: '__missing__' })
   assert.deepEqual(warehouseFilterToQuery(undefined), {})
-  assert.equal(buildWarehouseFilterOptions(null, 'UNKNOWN', translate)[1]?.label, 'UNKNOWN')
+  assert.equal(buildWarehouseFilterOptions(null, 'UNKNOWN', translate)[2]?.label, 'UNKNOWN')
 })
 
 test('两个视图只提供指定行操作，列时间遵循当前到仓语义', () => {

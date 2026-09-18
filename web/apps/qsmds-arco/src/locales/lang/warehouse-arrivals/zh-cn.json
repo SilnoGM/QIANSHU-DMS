@@ -4,6 +4,7 @@
     "intro": "按目的地仓库查看待到仓及已到仓货件。",
     "SHIPPED": "待到仓",
     "WAREHOUSE_RECEIVED": "已到仓",
+    "allWarehouses": "全部仓库",
     "source": "客户 / 销售来源",
     "shippedAt": "发货时间",
     "receivedAt": "到仓时间",

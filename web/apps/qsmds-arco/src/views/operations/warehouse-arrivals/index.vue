@@ -2,7 +2,6 @@
 import type { WarehouseArrivalAction, WarehouseArrivalView } from './logic'
 import type { PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
 import type { PurchaseShipmentListQuery } from '@/api/modules/purchase-shipments'
-import type { QsGenericTableFilterDefinition, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
@@ -39,14 +38,14 @@ const enabled = computed(() => activated.value && canRead.value && route.name ==
 const query = computed(() => parseWarehouseArrivalQuery(route.query))
 const activeView = computed<WarehouseArrivalView>(() => query.value.view === 'SHIPPED' ? 'SHIPPED' : 'WAREHOUSE_RECEIVED')
 const keyword = ref(query.value.keyword ?? '')
-const filters = ref<QsGenericTableFilterValues>({ warehouse: warehouseFilterFromQuery(query.value) })
+const activeWarehouse = computed(() => warehouseFilterFromQuery(query.value))
 const page = ref(query.value.page ?? 1)
 const pageSize = ref(query.value.pageSize ?? 20)
 const packagingShipment = shallowRef<PurchaseShipmentListItemDto | null>(null)
 const { rows, total, loading, error, counts, countsError, detail, orderDetail, detailKind, detailLoading, detailError, refresh, loadCounts, loadDetail, openShipment, openOrder } = useShipmentData(enabled, computed(() => account.authEpoch), query, value => navigate({ ...query.value, page: value }, true))
 const tabs = computed(() => WAREHOUSE_ARRIVAL_VIEWS.map(value => ({ value, label: t(`warehouseArrivals.${value}`), count: countsError.value || counts.value.length === 0 ? undefined : counts.value.find(item => item.value === value)?.count ?? 0 })))
 const columns = computed(() => createWarehouseArrivalColumns(activeView.value, t))
-const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [{ key: 'warehouse', label: t('purchaseShipments.destinationWarehouse'), options: buildWarehouseFilterOptions(warehouseCatalog.catalog.value, query.value.destinationWarehouseValue, t) }])
+const warehouseTabs = computed(() => buildWarehouseFilterOptions(warehouseCatalog.catalog.value, query.value.destinationWarehouseValue, t))
 
 function navigate(next: PurchaseShipmentListQuery, replace = false): void {
   if (!enabled.value) {
@@ -68,9 +67,15 @@ function selectView(value: string | number): void {
     navigate({ ...query.value, view: value as WarehouseArrivalView, page: 1 })
   }
 }
-function search(): void {
+function selectWarehouse(value: string): void {
+  if (!warehouseTabs.value.some(item => item.value === value)) {
+    return
+  }
   const { destinationWarehouseValue: _value, destinationWarehouseMissing: _missing, ...current } = query.value
-  navigate({ ...current, ...warehouseFilterToQuery(filters.value.warehouse), keyword: keyword.value.trim() || undefined, page: 1 })
+  navigate({ ...current, ...warehouseFilterToQuery(value), page: 1 })
+}
+function search(): void {
+  navigate({ ...query.value, keyword: keyword.value.trim() || undefined, page: 1 })
 }
 function paginate(value: { page: number, pageSize: number }): void {
   navigate({ ...query.value, ...value })
@@ -112,7 +117,6 @@ function shipmentClosed(): void {
 watch([enabled, query], ([isEnabled]) => {
   if (isEnabled) {
     keyword.value = query.value.keyword ?? ''
-    filters.value = { warehouse: warehouseFilterFromQuery(query.value) }
     page.value = query.value.page ?? 1
     pageSize.value = query.value.pageSize ?? 20
   }
@@ -159,13 +163,14 @@ onBeforeUnmount(() => activated.value = false)
         </FaAlert>
         <FaAlert v-else-if="warehouseCatalog.missing.value" :title="t('warehouseArrivals.warehouseMissing')" :description="t('warehouseArrivals.warehouseMissingDescription')" class="mb-4" />
         <QsStatusSwitchToolbar :model-value="activeView" :items="tabs" :aria-label="t('warehouseArrivals.title')" class="mb-4" @update:model-value="selectView" />
+        <QsStatusSwitchToolbar :model-value="activeWarehouse" :items="warehouseTabs" :aria-label="t('purchaseShipments.destinationWarehouse')" class="mb-4" @update:model-value="selectWarehouse" />
         <QsGenericTable
-          :key="activeView" v-model:page="page" v-model:page-size="pageSize" v-model:search="keyword" v-model:filters="filters"
+          :key="activeView" v-model:page="page" v-model:page-size="pageSize" v-model:search="keyword"
           row-key="id" :show-row-number="false" :columns="columns" :data="rows" :total="total" :loading="loading" :error="error"
-          :addable="false" :page-size-options="[20, 50, 100]" :filter-definitions="filterDefinitions" :search-placeholder="t('warehouseArrivals.search')"
+          :addable="false" :page-size-options="[20, 50, 100]" :search-placeholder="t('warehouseArrivals.search')"
           :empty-title="t('warehouseArrivals.empty')" :empty-description="t('warehouseArrivals.emptyDescription')"
           :action-column="{ fixed: 'right', width: activeView === 'SHIPPED' ? 100 : 210 }" table-class="w-max min-w-full"
-          @search="search" @filter-change="search" @pagination-change="paginate" @retry="refresh"
+          @search="search" @pagination-change="paginate" @retry="refresh"
         >
           <template #cell-shipmentNo="{ row }">
             <div class="group flex gap-2 items-center">

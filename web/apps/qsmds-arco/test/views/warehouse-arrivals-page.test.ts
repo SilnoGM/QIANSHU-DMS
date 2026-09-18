@@ -35,7 +35,7 @@ async function fixture(initialQuery: Record<string, string> = {}) {
     },
   }
   const scope = effectScope()
-  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ enabled, activeView, query, rows, tabs, keyword, filters, page, pageSize, packagingShipment, selectView, search, paginate, handleAction, refresh, viewOrderFromShipment, shipmentClosed })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
+  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ enabled, activeView, activeWarehouse, query, rows, tabs, warehouseTabs, keyword, page, pageSize, packagingShipment, selectView, selectWarehouse, search, paginate, handleAction, refresh, viewOrderFromShipment, shipmentClosed })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
     ...arrivalLogic,
     computed,
     ref,
@@ -48,7 +48,10 @@ async function fixture(initialQuery: Record<string, string> = {}) {
     useAppAccountStore: () => account,
     useQsToast: () => ({ info: (message: string) => info.push(message), success: () => assert.fail('placeholder must not report success') }),
     useCurrencyCatalog: () => ({ currencies: ref([]) }),
-    useDictionaryCatalog: () => ({ catalog: ref({ items: [] }), error: ref(null), missing: ref(false) }),
+    useDictionaryCatalog: () => ({ catalog: ref({ items: [
+      { value: 'WH-01', label: '长沙仓', effectiveEnabled: true },
+      { value: 'WH-02', label: '深圳仓', effectiveEnabled: true },
+    ] }), error: ref(null), missing: ref(false) }),
     useShipmentData: (...args: Parameters<typeof useShipmentData>) => useShipmentData(args[0], args[1], args[2], args[3], api, api),
     defineOptions: () => {},
     onMounted: (callback: () => void) => lifecycle.mount = callback,
@@ -59,14 +62,16 @@ async function fixture(initialQuery: Record<string, string> = {}) {
     enabled: { value: boolean }
     rows: { value: unknown[] }
     tabs: { value: { value: string }[] }
+    warehouseTabs: { value: { value: string, label: string }[] }
     activeView: { value: string }
+    activeWarehouse: { value: string }
     query: { value: PurchaseShipmentListQuery }
     keyword: { value: string }
-    filters: { value: Record<string, string | undefined> }
     page: { value: number }
     pageSize: { value: number }
     packagingShipment: { value: { id: string } | null }
     selectView: (value: string) => void
+    selectWarehouse: (value: string) => void
     search: () => void
     paginate: (value: { page: number, pageSize: number }) => void
     handleAction: (action: string, row: { id: string, viewStatus: string }) => void
@@ -88,13 +93,50 @@ test('页面默认已到仓；切换视图归一第一页，并保留关键词�
   assert.equal((f.calls.find(call => call.kind === 'counts')!.query as PurchaseShipmentListQuery).sort, undefined)
   f.state.selectView('SHIPPED')
   assert.equal(JSON.stringify(f.navigations.at(-1)), JSON.stringify({ view: 'SHIPPED', page: '1', pageSize: '50', keyword: 'SF123', destinationWarehouseValue: 'WH-01' }))
-  f.state.filters.value = { warehouse: '__missing__' }
-  f.state.search()
+  f.state.selectWarehouse('__missing__')
   assert.equal(f.navigations.at(-1)?.destinationWarehouseValue, undefined)
   assert.equal(f.navigations.at(-1)?.destinationWarehouseMissing, 'true')
-  f.state.filters.value = { warehouse: undefined }
-  f.state.search()
+  f.state.selectWarehouse('__all__')
   assert.equal(f.navigations.at(-1)?.destinationWarehouseMissing, undefined)
+  assert.equal(f.navigations.at(-1)?.destinationWarehouseValue, undefined)
+})
+
+test('第二层仓库切换即时更新筛选，保留到仓视图和搜索并重置页码；无权限或停用页面不跳转', async (context) => {
+  for (const view of ['SHIPPED', 'WAREHOUSE_RECEIVED']) {
+    const f = await fixture({ view, page: '3', pageSize: '50', keyword: 'SF123', destinationWarehouseMissing: 'true' })
+    context.after(f.dispose)
+    assert.equal(f.state.activeWarehouse.value, '__missing__')
+    assert.deepEqual(Array.from(f.state.warehouseTabs.value, item => item.value), ['__all__', '__missing__', 'warehouse:WH-01', 'warehouse:WH-02'])
+    f.state.selectWarehouse('warehouse:WH-02')
+    assert.equal(JSON.stringify(f.navigations.at(-1)), JSON.stringify({ view, page: '1', pageSize: '50', keyword: 'SF123', destinationWarehouseValue: 'WH-02' }))
+    f.state.selectWarehouse('warehouse:INVALID')
+    assert.equal(f.navigations.length, 1)
+    f.permission.value = false
+    f.state.selectWarehouse('__all__')
+    assert.equal(f.navigations.length, 1)
+    f.permission.value = true
+    f.lifecycle.deactivate!()
+    f.state.selectWarehouse('__all__')
+    assert.equal(f.navigations.length, 1)
+  }
+})
+
+test('搜索和分页保留仓库筛选，URL 恢复当前仓库，全部仓库不附带仓库条件', async (context) => {
+  const f = await fixture({ destinationWarehouseValue: 'WH-02' })
+  context.after(f.dispose)
+  assert.equal(f.state.activeWarehouse.value, 'warehouse:WH-02')
+  f.state.keyword.value = '  PKG  '
+  f.state.search()
+  assert.equal(f.navigations.at(-1)?.destinationWarehouseValue, 'WH-02')
+  assert.equal(f.navigations.at(-1)?.keyword, 'PKG')
+  f.state.paginate({ page: 2, pageSize: 50 })
+  assert.equal(f.navigations.at(-1)?.destinationWarehouseValue, 'WH-02')
+  assert.equal(f.navigations.at(-1)?.page, '2')
+  const all = await fixture()
+  context.after(all.dispose)
+  assert.equal(all.state.activeWarehouse.value, '__all__')
+  assert.equal(all.state.query.value.destinationWarehouseValue, undefined)
+  assert.equal(all.state.query.value.destinationWarehouseMissing, undefined)
 })
 
 test('已到仓打木架打开对应货件费用弹窗且不修改列表；待到仓不允许该操作', async (context) => {
@@ -121,14 +163,13 @@ test('缓存返回按URL重建筛选草稿，撤权及身份变化取消读取�
   const f = await fixture({ keyword: 'original', destinationWarehouseMissing: 'true' })
   context.after(f.dispose)
   f.state.keyword.value = 'draft'
-  f.state.filters.value = { warehouse: 'warehouse:WH-01' }
   f.state.page.value = 3
   f.lifecycle.deactivate!()
   assert.equal(f.state.enabled.value, false)
   f.lifecycle.activate!()
   await nextTick()
   assert.equal(f.state.keyword.value, 'original')
-  assert.equal(f.state.filters.value.warehouse, '__missing__')
+  assert.equal(f.state.activeWarehouse.value, '__missing__')
   assert.equal(f.state.page.value, 1)
   let finish!: (value: unknown) => void
   let signal!: AbortSignal
