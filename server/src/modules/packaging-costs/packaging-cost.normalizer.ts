@@ -13,6 +13,19 @@ export function packagingCostUuid(value: unknown): string {
 }
 export const packagingCostIdempotencyKey = packagingCostUuid
 export interface PackagingCostContext { actorUserId: string, requestId: string }
+function normalizePackagingAmount(value: unknown) {
+  if (typeof value !== 'string' || !/^(0|[1-9]\d{0,25})(\.\d{1,2})?$/u.test(value)) return packagingCostFailure('VALIDATION_FAILED', '金额必须为最多两位小数的人民币金额')
+  const decimal = new Prisma.Decimal(value)
+  if (decimal.lte(0)) return packagingCostFailure('VALIDATION_FAILED', '金额必须大于零')
+  return decimal.toFixed(4)
+}
+export function normalizePackagingCostAmountUpdate(raw: unknown) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return packagingCostFailure('VALIDATION_FAILED', '金额修改内容无效')
+  const input = raw as Record<string, unknown>
+  if (Object.keys(input).some(key => !['amount', 'expectedVersion'].includes(key))
+    || !Number.isSafeInteger(input.expectedVersion) || Number(input.expectedVersion) < 1) return packagingCostFailure('VALIDATION_FAILED', '金额修改内容无效')
+  return { amount: normalizePackagingAmount(input.amount), expectedVersion: Number(input.expectedVersion) }
+}
 export function normalizePackagingCostCreate(raw: unknown) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return packagingCostFailure('VALIDATION_FAILED', '提报内容无效')
   const input = raw as Record<string, unknown>
@@ -23,13 +36,11 @@ export function normalizePackagingCostCreate(raw: unknown) {
   if (packagingImageMediaAssetId === quotationImageMediaAssetId) return packagingCostFailure('VALIDATION_FAILED', '两项截图凭证必须分别上传')
   if (typeof input.packagingType !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(input.packagingType)) return packagingCostFailure('VALIDATION_FAILED', '包装类型无效')
   if (input.packagingVendor !== 'CHENGXIN' && input.packagingVendor !== 'OTHER') return packagingCostFailure('VALIDATION_FAILED', '包装厂商无效')
-  if (typeof input.amount !== 'string' || !/^(0|[1-9]\d{0,25})(\.\d{1,2})?$/u.test(input.amount)) return packagingCostFailure('VALIDATION_FAILED', '金额必须为最多两位小数的人民币金额')
-  const decimal = new Prisma.Decimal(input.amount)
-  if (decimal.lte(0)) return packagingCostFailure('VALIDATION_FAILED', '金额必须大于零')
+  const amount = normalizePackagingAmount(input.amount)
   if (input.remark != null && (typeof input.remark !== 'string' || [...input.remark].length > 500)) return packagingCostFailure('VALIDATION_FAILED', '备注不得超过500字')
   const paymentRecipients = input.packagingVendor === 'OTHER' ? normalizePackagingRecipients(input.paymentRecipients, 1) : undefined
   if (input.packagingVendor === 'CHENGXIN' && input.paymentRecipients !== undefined) return packagingCostFailure('PAYMENT_RECIPIENT_INVALID', '诚信木箱应使用管理员配置的收款资料')
-  return { ...(paymentRecipients ? { paymentRecipients } : {}), shipmentId, packagingType: input.packagingType, packagingVendor: input.packagingVendor, amount: decimal.toFixed(4), packagingImageMediaAssetId, quotationImageMediaAssetId, remark: typeof input.remark === 'string' ? input.remark.trim() || null : null }
+  return { ...(paymentRecipients ? { paymentRecipients } : {}), shipmentId, packagingType: input.packagingType, packagingVendor: input.packagingVendor, amount, packagingImageMediaAssetId, quotationImageMediaAssetId, remark: typeof input.remark === 'string' ? input.remark.trim() || null : null }
 }
 
 export function normalizePackagingRecipients(input: unknown, minimum: 0 | 1 = 0) {

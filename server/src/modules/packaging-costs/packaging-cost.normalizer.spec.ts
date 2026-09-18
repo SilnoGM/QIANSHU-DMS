@@ -1,4 +1,4 @@
-import { normalizePackagingCostCreate, packagingCostIdempotencyKey } from './packaging-cost.normalizer'
+import { normalizePackagingCostCreate, normalizePackagingCostAmountUpdate, packagingCostIdempotencyKey } from './packaging-cost.normalizer'
 
 const input = {
   shipmentId: '00000000-0000-4000-8000-000000000001', packagingType: 'WOODEN_BOX', packagingVendor: 'CHENGXIN', amount: '120.50',
@@ -34,5 +34,19 @@ describe('packaging payment recipients', () => {
   it('rejects overriding CHENGXIN and bank-transfer packaging recipients', () => {
     expect(() => normalizePackagingCostCreate({ ...input, paymentRecipients: [qr] })).toThrow()
     expect(() => normalizePackagingCostCreate({ ...input, packagingVendor: 'OTHER', paymentRecipients: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '收款人', bankName: '银行', bankAccount: '123' }] })).toThrow()
+  })
+})
+
+
+describe('packaging cost amount correction normalization', () => {
+  it('normalizes two-place CNY with a required integer version', () => {
+    expect(normalizePackagingCostAmountUpdate({ amount: '150.5', expectedVersion: 3 })).toEqual({ amount: '150.5000', expectedVersion: 3 })
+  })
+  it.each([
+    { amount: '0' }, { amount: '-1' }, { amount: '1.234' }, { amount: '1e3' }, { amount: 5 },
+    { amount: '9'.repeat(27) }, { expectedVersion: 0 }, { expectedVersion: 1.5 }, { expectedVersion: '1' },
+    { status: 'PAID' }, { ownerUserId: input.shipmentId },
+  ])('rejects invalid amount/version and immutable field updates %j', change => {
+    expect(() => normalizePackagingCostAmountUpdate({ amount: '150', expectedVersion: 1, ...change })).toThrow()
   })
 })

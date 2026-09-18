@@ -29,6 +29,10 @@ export class PackagingCostRequestCreateDto {
   @ApiProperty({ format: 'uuid' }) @IsUUID('4') quotationImageMediaAssetId!: string
   @ApiPropertyOptional({ type: 'string', nullable: true, maxLength: 500 }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 500) remark?: string | null
 }
+export class PackagingCostRequestUpdateAmountDto {
+  @ApiProperty({ type: 'string', pattern: '^(0|[1-9]\\d{0,25})(\\.\\d{1,2})?$', description: 'Positive CNY amount; at most two decimal places. Editable only while pending payment.' }) @IsString() @Matches(/^(0|[1-9]\d{0,25})(\.\d{1,2})?$/u) amount!: string
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number
+}
 export class PackagingCostPaymentVoucherDto {
   @ApiProperty({ format: 'uuid' }) @IsUUID('4') mediaAssetId!: string
 }
@@ -73,7 +77,7 @@ export class PackagingCostRequestDto {
   @ApiProperty() packagingType!: string
   @ApiProperty() packagingTypeName!: string
   @ApiProperty({ enum: PackagingCostVendorDto }) packagingVendor!: PackagingCostVendorDto
-  @ApiProperty({ description: 'Immutable CNY amount with four decimal places.' }) amount!: string
+  @ApiProperty({ description: 'CNY amount with four decimal places; editable while pending, immutable after payment.' }) amount!: string
   @ApiProperty({ enum: ['CNY'] }) currencyCode!: 'CNY'
   @ApiProperty({ type: 'string', nullable: true }) remark!: string | null
   @ApiProperty({ enum: PackagingCostStatusDto }) status!: PackagingCostStatusDto
@@ -101,10 +105,11 @@ export class PackagingCostShipmentIdDto {
   @ApiProperty({ format: 'uuid' }) @IsUUID('4') shipmentId!: string
 }
 export class PackagingCostRequestSummaryDto {
+  @ApiProperty({ minimum: 1 }) version!: number
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty() packagingTypeName!: string
   @ApiProperty({ enum: PackagingCostVendorDto }) packagingVendor!: PackagingCostVendorDto
-  @ApiProperty({ description: 'Immutable CNY amount with four decimal places.' }) amount!: string
+  @ApiProperty({ description: 'CNY amount with four decimal places; editable while pending, immutable after payment.' }) amount!: string
   @ApiProperty({ enum: ['CNY'] }) currencyCode!: 'CNY'
   @ApiProperty({ enum: PackagingCostStatusDto }) status!: PackagingCostStatusDto
   @ApiProperty({ type: () => PackagingCostPersonDto }) submittedBy!: PackagingCostPersonDto

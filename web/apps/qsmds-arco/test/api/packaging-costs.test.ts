@@ -5,6 +5,18 @@ import test from 'node:test'
 import { createPackagingCostsApi } from '../../src/api/modules/packaging-costs'
 import { permissionResourceLabel } from '../../src/views/system/permissions/catalog'
 
+test('修改提报金额携带版本且禁止自动重试', async () => {
+  const calls: unknown[][] = []
+  const api = createPackagingCostsApi({ patch: (...args: unknown[]) => {
+    calls.push(args)
+    return Promise.resolve({ data: {} })
+  } } as unknown as AxiosInstance)
+  const signal = new AbortController().signal
+  const data = { amount: '200.00', expectedVersion: 2 }
+  await api.updateAmount('request/id', data, signal)
+  assert.deepEqual(calls, [['packaging-cost-requests/request%2Fid/amount', data, { errorPresentation: 'local', retry: false, signal }]])
+})
+
 test('提报和付款写入禁自动重试，原样保留幂等键及确认版本', async () => {
   const calls: unknown[][] = []
   const api = createPackagingCostsApi({ post: (...args: unknown[]) => {

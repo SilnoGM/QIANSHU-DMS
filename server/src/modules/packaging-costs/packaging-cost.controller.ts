@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Head, Headers, HttpCode, Param, Post, Query, Req, Res, StreamableFile, applyDecorators } from '@nestjs/common'
+import { Body, Controller, Get, Head, Headers, HttpCode, Param, Patch, Post, Query, Req, Res, StreamableFile, applyDecorators } from '@nestjs/common'
 import { ApiBody, ApiConsumes, ApiHeader, ApiTags } from '@nestjs/swagger'
 import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
@@ -7,7 +7,7 @@ import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
 import type { SalesOrderDocumentMultipartRequest } from '../sales-orders/documents/sales-order-document-multipart.parser'
-import { PackagingCostShipmentIdDto, PackagingCostShipmentContextDto, PackagingCostIdDto, PackagingCostImageParamsDto, PackagingCostImageUploadDto, PackagingCostListQueryDto, PackagingCostRequestCreateDto, PackagingCostRequestDto, PackagingCostRequestPageDto, PackagingCostRequestPayDto } from './packaging-cost.dto'
+import { PackagingCostShipmentIdDto, PackagingCostShipmentContextDto, PackagingCostIdDto, PackagingCostImageParamsDto, PackagingCostImageUploadDto, PackagingCostListQueryDto, PackagingCostRequestCreateDto, PackagingCostRequestDto, PackagingCostRequestPageDto, PackagingCostRequestPayDto, PackagingCostRequestUpdateAmountDto, PackagingCostRequestSummaryDto } from './packaging-cost.dto'
 import { PackagingCostService } from './packaging-cost.service'
 import { PackagingCostQueryService } from './packaging-cost-query.service'
 import { PackagingCostImageService, type PackagingCostImageContent } from './packaging-cost-image.service'
@@ -42,6 +42,8 @@ export class PackagingCostController {
   detail(@Param() params: PackagingCostIdDto) { return this.queries.getById(params.id) }
   @Post() @HttpCode(201) @RequirePermissions('packaging-costs:create') @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } }) @ApiContractResponse({ status: 201, type: PackagingCostRequestDto }) @contract('packaging_costs_create', true, commandErrors)
   submit(@Body() input: PackagingCostRequestCreateDto, @Headers('idempotency-key') key: unknown, @Req() request: object) { return this.commands.submit(context(request), input, key) }
+  @Patch(':id/amount') @RequirePermissions('packaging-costs:create') @ApiContractResponse({ status: 200, type: PackagingCostRequestSummaryDto }) @contract('packaging_costs_update_amount', true, [notFound, { status: 409, codes: ['PACKAGING_COST_STATE_CHANGED'] }])
+  updateAmount(@Param() params: PackagingCostIdDto, @Body() input: PackagingCostRequestUpdateAmountDto, @Req() request: object) { return this.commands.updateAmount(context(request), params.id, input) }
   @Post(':id/pay') @HttpCode(200) @RequirePermissions('packaging-costs:read', 'packaging-costs:pay') @ApiContractResponse({ status: 200, type: PackagingCostRequestDto }) @contract('packaging_costs_pay', true, [notFound, { status: 409, codes: ['PACKAGING_COST_STATE_CHANGED', 'PAYMENT_RECIPIENT_STATE_CHANGED'] }, { status: 422, codes: ['VALIDATION_FAILED', 'PACKAGING_COST_POSTING_UNAVAILABLE', 'PACKAGING_COST_IMAGE_UNAVAILABLE', 'PAYMENT_RECIPIENT_INVALID', 'PAYMENT_RECIPIENT_UNAVAILABLE', 'PAYMENT_RECIPIENT_IMAGE_UNAVAILABLE'] }, { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] }])
   pay(@Param() params: PackagingCostIdDto, @Body() input: PackagingCostRequestPayDto, @Req() request: object) { return this.commands.pay(context(request), params.id, input) }
   @Post(':id/voucher-uploads') @HttpCode(201) @RequirePermissions('packaging-costs:read', 'packaging-costs:pay') @ApiConsumes('multipart/form-data')

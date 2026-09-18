@@ -16,8 +16,8 @@ import { MediaContentDeliveryService } from '../media/media-content-delivery.ser
 import { requireMediaObjectKeyNamespace } from '../media/media-storage'
 import { PackagingPaymentProfileService } from '../payment-recipients/packaging-payment-profile.service'
 import { PackagingCostQueryService } from './packaging-cost-query.service'
-import { normalizePackagingCostCreate, normalizePackagingPayment, packagingCostFailure, packagingCostIdempotencyKey, packagingCostUuid, type PackagingCostContext } from './packaging-cost.normalizer'
-import type { PackagingCostRequestCreateDto, PackagingCostRequestPayDto } from './packaging-cost.dto'
+import { normalizePackagingCostCreate, normalizePackagingCostAmountUpdate, normalizePackagingPayment, packagingCostFailure, packagingCostIdempotencyKey, packagingCostUuid, type PackagingCostContext } from './packaging-cost.normalizer'
+import type { PackagingCostRequestCreateDto, PackagingCostRequestPayDto, PackagingCostRequestUpdateAmountDto } from './packaging-cost.dto'
 
 const hash = (value: string) => createHash('sha256').update(value).digest()
 const imageFailure = () => packagingCostFailure('PACKAGING_COST_IMAGE_UNAVAILABLE', '所选截图凭证当前不可用，请重新上传')
@@ -121,6 +121,28 @@ export class PackagingCostService {
       return mapError(error)
     }
     return this.queries.getById(id)
+  }
+  async updateAmount(context: PackagingCostContext, rawId: string, input: PackagingCostRequestUpdateAmountDto) {
+    const id = packagingCostUuid(rawId)
+    const correction = normalizePackagingCostAmountUpdate(input)
+    try {
+      return await this.prisma.$transaction(async tx => {
+        await applyTransactionTimeouts(tx)
+        await this.authorize(tx, context, ['packaging-costs:create'])
+        // 修改与付款竞争同一行锁并校验版本：先付款即禁止修改，先修改则旧金额付款必须重新核对。
+        await tx.$queryRaw(Prisma.sql`SELECT id FROM packaging_cost_requests WHERE id = ${id}::uuid FOR UPDATE`)
+        const row = await tx.packagingCostRequest.findUnique({ where: { id } })
+        if (!row) return packagingCostFailure('PACKAGING_COST_NOT_FOUND', '打木架提报不存在', 404)
+        if (row.status !== 'PENDING_PAYMENT' || row.version !== correction.expectedVersion) return stateChanged()
+        if (!row.amount.equals(correction.amount)) {
+          // 原提交指纹保持不变，使原请求的网络重试仍定位同一提报，不产生第二笔费用。
+          await tx.packagingCostRequest.update({ where: { id }, data: { amount: correction.amount, version: { increment: 1 } } })
+          await this.audit.record(tx, { eventType: 'PACKAGING_COST_AMOUNT_UPDATED', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PACKAGING_COST_REQUEST', targetId: id,
+            metadata: { previousAmount: row.amount.toFixed(4), amount: correction.amount, currencyCode: 'CNY', previousVersion: row.version, version: row.version + 1 } })
+        }
+        return this.queries.getSummaryById(id, tx)
+      }, { timeout: 30_000 })
+    } catch (error) { return mapError(error) }
   }
   async pay(context: PackagingCostContext, rawId: string, input: PackagingCostRequestPayDto) {
     const id = packagingCostUuid(rawId)

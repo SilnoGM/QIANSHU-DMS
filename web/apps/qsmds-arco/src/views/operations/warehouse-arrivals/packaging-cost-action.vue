@@ -108,7 +108,7 @@ watch(visible, (value) => {
   <PackagingHistoryModal
     v-if="!formVisible" v-model="visible" :context="context" :records="existingRequests"
     :loading="loading" :error="historyError || null" :continue-disabled="!eligible || !canCreate || !historyChecked"
-    :unavailable-hint="submitDisabledHint" @reload="reload" @continue="confirmContinue"
+    :unavailable-hint="submitDisabledHint" :can-modify="canCreate && historyChecked" @reload="reload" @updated="reload" @continue="confirmContinue"
   />
   <PackagingCostModal
     v-else v-model="visible" :context="context" :loading="loading" :error="error || null"

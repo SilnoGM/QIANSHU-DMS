@@ -3,11 +3,14 @@ import type { PackagingCostContext } from './packaging-cost.logic'
 import type { PackagingCostRequestSummaryDto } from '@/api/generated/types.gen'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import MoneyInput from '@/components/base/MoneyInput/index.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { usePackagingAmountEditor } from './use-packaging-amount-editor'
 
-defineProps<{
+const props = defineProps<{
   modelValue: boolean
   context: PackagingCostContext
   records: PackagingCostRequestSummaryDto[]
@@ -15,17 +18,35 @@ defineProps<{
   error: string | null
   continueDisabled: boolean
   unavailableHint: string
+  canModify: boolean
 }>()
-const emit = defineEmits<{ 'update:modelValue': [value: boolean], 'reload': [], 'continue': [] }>()
+const emit = defineEmits<{ 'update:modelValue': [value: boolean], 'reload': [], 'continue': [], 'updated': [] }>()
 const { t } = useI18n()
 const { currencies } = useCurrencyCatalog()
+const account = useAppAccountStore()
+const toast = useQsToast()
+const { selectedId, selected, editing, amount, busy, error: saveError, invalidAmount, needsReload, canEdit, start, cancel, save } = usePackagingAmountEditor(
+  computed(() => props.records),
+  computed(() => props.modelValue && props.canModify && !props.loading && !props.error),
+  computed(() => account.authEpoch),
+)
+const currencyReady = computed(() => currencies.value.some(currency => currency.code === 'CNY' && currency.minorUnit === 2))
+async function saveAmount() {
+  if (!currencyReady.value) {
+    return
+  }
+  if (await save()) {
+    toast.success(t('warehousePackagingCost.history.amountUpdated'))
+    emit('updated')
+  }
+}
 </script>
 
 <template>
   <QsGenericModal
     :model-value="modelValue" :title="t(loading ? 'warehousePackagingCost.history.checking' : error ? 'warehousePackagingCost.history.checkFailed' : 'warehousePackagingCost.history.title')"
     :description="!loading && !error ? t('warehousePackagingCost.history.description', { count: records.length }) : undefined"
-    size="lg" :loading="loading" :error="error" @update:model-value="emit('update:modelValue', $event)"
+    size="lg" :loading="loading" :error="error" :submitting="busy" @update:model-value="emit('update:modelValue', $event)"
   >
     <template #header-leading>
       <FaIcon name="i-lucide:clipboard-list" class="size-5" aria-hidden="true" />
@@ -48,11 +69,12 @@ const { currencies } = useCurrencyCatalog()
       </dl>
       <FaAlert v-if="unavailableHint" :title="unavailableHint" variant="destructive" />
       <ol class="m-0 p-0 list-none space-y-3">
-        <li v-for="(record, index) in records" :key="record.id" class="p-4 border border-border rounded-lg min-w-0 space-y-3">
+        <li v-for="(record, index) in records" :key="record.id" class="p-4 border rounded-lg min-w-0 space-y-3" :class="selectedId === record.id ? 'border-primary/50 bg-primary/5' : 'border-border'">
           <div class="flex flex-wrap gap-2 items-center justify-between">
-            <h3 class="qs-type-label m-0">
+            <FaButton variant="ghost" size="sm" :aria-pressed="selectedId === record.id" :disabled="busy || editing" @click="selectedId = record.id">
+              <FaIcon :name="selectedId === record.id ? 'i-lucide:circle-check' : 'i-lucide:circle'" class="size-4" :class="selectedId === record.id ? 'text-primary' : 'text-muted-foreground'" aria-hidden="true" />
               {{ t('warehousePackagingCost.history.record', { index: index + 1 }) }}
-            </h3>
+            </FaButton>
             <FaTag variant="outline" class="shrink-0" :class="record.status === 'PAID' ? 'text-primary border-primary/30 bg-primary/10 dark:text-emerald-300' : 'text-amber-700 border-amber-500/30 bg-amber-500/10 dark:text-amber-300'">
               {{ t(`warehousePackagingCost.history.status.${record.status}`) }}
             </FaTag>
@@ -118,12 +140,49 @@ const { currencies } = useCurrencyCatalog()
       </ol>
     </div>
     <template #footer>
-      <FaButton variant="outline" @click="emit('update:modelValue', false)">
-        {{ t('warehousePackagingCost.cancel') }}
-      </FaButton>
-      <FaButton v-if="!loading && !error && records.length" :disabled="continueDisabled" @click="emit('continue')">
-        {{ t('warehousePackagingCost.history.continue') }}
-      </FaButton>
+      <div class="w-full space-y-4">
+        <div v-if="editing" class="space-y-2">
+          <label for="packaging-history-amount" class="qs-type-label">{{ t('warehousePackagingCost.history.newAmount') }}</label>
+          <MoneyInput id="packaging-history-amount" v-model="amount" currency="CNY" :currencies="currencies" :currency-selectable="false" :disabled="busy || needsReload || !currencyReady" min="0.01" :aria-invalid="invalidAmount" />
+          <p v-if="invalidAmount" class="qs-type-meta text-destructive m-0" role="alert">
+            {{ t('warehousePackagingCost.errors.invalidAmount') }}
+          </p>
+          <p v-if="!currencyReady" class="qs-type-meta text-muted-foreground m-0">
+            {{ t('warehousePackagingCost.currencyUnavailable') }}
+          </p>
+        </div>
+        <FaAlert v-if="needsReload && saveError" :title="saveError" :description="t('warehousePackagingCost.history.reloadBeforeEdit')" variant="destructive" />
+        <p v-if="!editing && !loading && !error && records.length" class="qs-type-meta text-muted-foreground m-0">
+          {{ t(selected?.status === 'PAID' ? 'warehousePackagingCost.history.paidLocked' : 'warehousePackagingCost.history.selectHint') }}
+        </p>
+        <div class="flex flex-wrap gap-2 justify-end">
+          <FaButton variant="outline" :disabled="busy" @click="emit('update:modelValue', false)">
+            {{ t('warehousePackagingCost.cancel') }}
+          </FaButton>
+          <template v-if="!loading && !error && records.length">
+            <FaButton v-if="needsReload" variant="outline" :disabled="busy" @click="emit('reload')">
+              {{ t('warehousePackagingCost.retry') }}
+            </FaButton>
+            <template v-else-if="editing">
+              <FaButton variant="outline" :disabled="busy" @click="cancel">
+                {{ t('warehousePackagingCost.history.cancelEdit') }}
+              </FaButton>
+              <FaButton :disabled="!canEdit || !currencyReady" :loading="busy" @click="saveAmount">
+                {{ t('warehousePackagingCost.history.saveAmount') }}
+              </FaButton>
+            </template>
+            <template v-else>
+              <FaButton variant="outline" :disabled="!canEdit" @click="start">
+                <FaIcon name="i-lucide:pencil" class="size-4" aria-hidden="true" />
+                {{ t('warehousePackagingCost.history.editAmount') }}
+              </FaButton>
+              <FaButton :disabled="continueDisabled" @click="emit('continue')">
+                {{ t('warehousePackagingCost.history.continue') }}
+              </FaButton>
+            </template>
+          </template>
+        </div>
+      </div>
     </template>
   </QsGenericModal>
 </template>

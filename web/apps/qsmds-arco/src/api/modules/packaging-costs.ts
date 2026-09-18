@@ -1,5 +1,5 @@
 import type { AxiosInstance } from 'axios'
-import type { PackagingCostImageUploadDto, PackagingCostRequestCreateDto, PackagingCostRequestDto, PackagingCostRequestPageDto, PackagingCostRequestPayDto, PackagingCostShipmentContextDto, PackagingCostsListData } from '../generated/types.gen'
+import type { PackagingCostImageUploadDto, PackagingCostRequestCreateDto, PackagingCostRequestDto, PackagingCostRequestPageDto, PackagingCostRequestPayDto, PackagingCostRequestSummaryDto, PackagingCostRequestUpdateAmountDto, PackagingCostShipmentContextDto, PackagingCostsListData } from '../generated/types.gen'
 import api from '../index'
 
 export type PackagingCostListQuery = NonNullable<PackagingCostsListData['query']>
@@ -18,6 +18,7 @@ export function createPackagingCostsApi(client: AxiosInstance) {
     submit: (data: PackagingCostRequestCreateDto, idempotencyKey: string, signal: AbortSignal) => client.post<PackagingCostRequestDto>('packaging-cost-requests', data, { errorPresentation: 'local', headers: { 'Idempotency-Key': idempotencyKey }, retry: false, signal }),
     list: (query: PackagingCostListQuery, signal: AbortSignal) => client.get<PackagingCostRequestPageDto>('packaging-cost-requests', { errorPresentation: 'local', params: query, signal }),
     detail: (id: string, signal: AbortSignal) => client.get<PackagingCostRequestDto>(path(id), { errorPresentation: 'local', signal }),
+    updateAmount: (id: string, data: PackagingCostRequestUpdateAmountDto, signal: AbortSignal) => client.patch<PackagingCostRequestSummaryDto>(`${path(id)}/amount`, data, { errorPresentation: 'local', retry: false, signal }),
     uploadVoucher: (id: string, file: File, signal: AbortSignal) => {
       const body = new FormData()
       body.append('mediaType', 'IMAGE')

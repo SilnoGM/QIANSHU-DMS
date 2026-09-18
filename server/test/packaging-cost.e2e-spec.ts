@@ -115,6 +115,104 @@ describe('packaging cost submission and payment over isolated PostgreSQL and rea
     expect(audit.metadata).toMatchObject({ fundPostingBatchId: batch.id })
   })
 
+  it('corrects pending amounts for submitters, preserving submission identity and charging only the corrected amount', async () => {
+    const creator = await h.browserWithPermissions(['packaging-costs:create'])
+    const finance = await h.browserWithPermissions(['packaging-costs:read', 'packaging-costs:pay'])
+    const shipment = await h.shipment()
+    const input = await h.input(creator.browser, shipment.part.id)
+    const key = randomUUID()
+    const created = (await submit(creator.browser, input, key).expect(201)).body as PackagingCostRequestDto
+    const url = `/api/packaging-cost-requests/${created.id}/amount`
+    const before = await fundFacts(created.id)
+    await request(h.app.getHttpServer()).patch(url).set(packagingHeaders).send({ amount: '310.25', expectedVersion: 1 }).expect(401)
+    await finance.browser.patch(url).set(packagingHeaders).send({ amount: '310.25', expectedVersion: 1 }).expect(403)
+    await creator.browser.patch(url).send({ amount: '310.25', expectedVersion: 1 }).expect(403)
+    for (const change of [{ amount: '0' }, { amount: '1.234' }, { expectedVersion: 0 }, { status: 'PAID' }]) {
+      await creator.browser.patch(url).set(packagingHeaders).send({ amount: '310.25', expectedVersion: 1, ...change }).expect(422)
+    }
+    await creator.browser.patch(`/api/packaging-cost-requests/${randomUUID()}/amount`).set(packagingHeaders).send({ amount: '310.25', expectedVersion: 1 }).expect(404)
+    const updated = await creator.browser.patch(url).set(packagingHeaders).send({ amount: '310.25', expectedVersion: 1 }).expect(200)
+    expect(updated.body as unknown).toMatchObject({ id: created.id, amount: '310.2500', version: 2, status: 'PENDING_PAYMENT' })
+    expect(updated.body as unknown).not.toHaveProperty('paymentRecipientProfile')
+    expect(updated.headers['cache-control']).toBe('private, no-store')
+    const after = await fundFacts(created.id)
+    expect({ ...after, request: before.request }).toEqual(before)
+    const audit = await h.prisma.auditEvent.findFirstOrThrow({ where: { targetId: created.id, eventType: 'PACKAGING_COST_AMOUNT_UPDATED' } })
+    expect(audit.metadata).toMatchObject({ previousAmount: '280.5000', amount: '310.2500', previousVersion: 1, version: 2 })
+    expect((await submit(creator.browser, input, key).expect(201)).body as unknown).toMatchObject({ id: created.id, amount: '310.2500', version: 2 })
+    await submit(creator.browser, { ...input, amount: '310.25' }, key).expect(409)
+    await creator.browser.patch(url).set(packagingHeaders).send({ amount: '100', expectedVersion: 1 }).expect(409)
+    await creator.browser.patch(url).set(packagingHeaders).send({ amount: '310.25', expectedVersion: 2 }).expect(200)
+    expect(await h.prisma.auditEvent.count({ where: { targetId: created.id, eventType: 'PACKAGING_COST_AMOUNT_UPDATED' } })).toBe(1)
+    const context = (await creator.browser.get(`/api/packaging-cost-requests/shipment-context/${shipment.part.id}`).expect(200)).body as PackagingCostShipmentContextDto
+    expect(context.existingRequests).toMatchObject([{ id: created.id, amount: '310.2500', version: 2 }])
+    await pay(finance.browser, created.id, 1).expect(409)
+    await pay(finance.browser, created.id, 2).expect(200)
+    expect((await h.prisma.fundPostingBatch.findFirstOrThrow({ where: { businessId: created.id } })).businessAmount.toFixed(2)).toBe('310.25')
+    await creator.browser.patch(url).set(packagingHeaders).send({ amount: '100', expectedVersion: 3 }).expect(409)
+    await expect(h.prisma.packagingCostRequest.update({ where: { id: created.id }, data: { amount: '100', version: { increment: 1 } } })).rejects.toThrow()
+  })
+
+  it('allows only amount/version changes while pending at the database boundary', async () => {
+    const actor = await h.browserWithPermissions()
+    const shipment = await h.shipment()
+    const created = (await submit(actor.browser, await h.input(actor.browser, shipment.part.id)).expect(201)).body as PackagingCostRequestDto
+    const before = await h.prisma.packagingCostRequest.findUniqueOrThrow({ where: { id: created.id } })
+    const changes = [
+      { amount: '100' }, { amount: '100', version: 3 }, { amount: '0', version: 2 }, { amount: '1.234', version: 2 },
+      { amount: '100', version: 2, remark: 'changed' }, { amount: '100', version: 2, ownerUserId: actor.user.id },
+      { amount: '100', version: 2, requestFingerprintHash: Buffer.alloc(32) },
+      { amount: '100', version: 2, paymentRemark: 'spoof' },
+    ]
+    for (const data of changes) await expect(h.prisma.packagingCostRequest.update({ where: { id: created.id }, data })).rejects.toThrow()
+    expect(await h.prisma.packagingCostRequest.findUniqueOrThrow({ where: { id: created.id } })).toEqual(before)
+    await expect(h.prisma.packagingCostRequest.delete({ where: { id: created.id } })).rejects.toThrow()
+  })
+
+  it('serializes amount edits against payment so exactly one original-version command wins', async () => {
+    const actor = await h.browserWithPermissions()
+    const shipment = await h.shipment()
+    const created = (await submit(actor.browser, await h.input(actor.browser, shipment.part.id)).expect(201)).body as PackagingCostRequestDto
+    // 先准备凭证，让并发点只覆盖金额修改与实际付款两条事务。
+    await pay(actor.browser, created.id, 999).expect(409)
+    const results = await Promise.all([
+      actor.browser.patch(`/api/packaging-cost-requests/${created.id}/amount`).set(packagingHeaders).send({ amount: '120', expectedVersion: 1 }),
+      pay(actor.browser, created.id, 1),
+    ])
+    expect(results.map(result => result.status).sort()).toEqual([200, 409])
+    const row = await h.prisma.packagingCostRequest.findUniqueOrThrow({ where: { id: created.id } })
+    expect(row.version).toBe(2)
+    if (results[0].status === 200) {
+      expect(row.status).toBe('PENDING_PAYMENT')
+      expect(row.amount.toFixed(2)).toBe('120.00')
+      expect(await h.prisma.fundPostingBatch.count({ where: { businessId: row.id } })).toBe(0)
+      await pay(actor.browser, created.id, 2).expect(200)
+    } else {
+      expect(row.status).toBe('PAID')
+      expect(row.amount.toFixed(2)).toBe('280.50')
+      expect(await h.prisma.auditEvent.count({ where: { targetId: row.id, eventType: 'PACKAGING_COST_AMOUNT_UPDATED' } })).toBe(0)
+    }
+    const batch = await h.prisma.fundPostingBatch.findFirstOrThrow({ where: { businessId: row.id } })
+    expect(batch.businessAmount.toFixed(2)).toBe(row.amount.toFixed(2))
+    expect(await h.prisma.fundPostingBatch.count({ where: { businessId: row.id } })).toBe(1)
+  })
+
+  it('rolls back corrected amounts when the audit write fails', async () => {
+    const actor = await h.browserWithPermissions()
+    const shipment = await h.shipment()
+    const created = (await submit(actor.browser, await h.input(actor.browser, shipment.part.id)).expect(201)).body as PackagingCostRequestDto
+    const before = await h.prisma.packagingCostRequest.findUniqueOrThrow({ where: { id: created.id } })
+    const audit = h.app.get(AuditService)
+    const realRecord = audit.record.bind(audit)
+    const failure = jest.spyOn(audit, 'record').mockImplementation((tx, event) => event.eventType === 'PACKAGING_COST_AMOUNT_UPDATED'
+      ? Promise.reject(new Error('injected amount audit failure')) : realRecord(tx, event))
+    try {
+      await actor.browser.patch(`/api/packaging-cost-requests/${created.id}/amount`).set(packagingHeaders).send({ amount: '100', expectedVersion: 1 }).expect(500)
+    } finally { failure.mockRestore() }
+    expect(await h.prisma.packagingCostRequest.findUniqueOrThrow({ where: { id: created.id } })).toEqual(before)
+    expect(await h.prisma.auditEvent.count({ where: { targetId: created.id, eventType: 'PACKAGING_COST_AMOUNT_UPDATED' } })).toBe(0)
+  })
+
   it('replays concurrent submissions once and rejects a changed amount with the same idempotency key', async () => {
     const actor = await h.browserWithPermissions()
     const shipment = await h.shipment()
@@ -188,7 +286,7 @@ describe('packaging cost submission and payment over isolated PostgreSQL and rea
     const response = await creator.browser.get(url).expect(200)
     const context = response.body as PackagingCostShipmentContextDto
     const summary = (row: PackagingCostRequestDto) => ({
-      id: row.id, packagingTypeName: row.packagingTypeName, packagingVendor: row.packagingVendor, amount: row.amount,
+      id: row.id, version: row.version, packagingTypeName: row.packagingTypeName, packagingVendor: row.packagingVendor, amount: row.amount,
       currencyCode: row.currencyCode, status: row.status, submittedBy: row.submittedBy, submittedAt: row.submittedAt,
       paidBy: row.paidBy, paidAt: row.paidAt, remark: row.remark,
     })

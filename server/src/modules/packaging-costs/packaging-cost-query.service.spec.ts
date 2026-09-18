@@ -10,7 +10,7 @@ const shipment = {
 }
 const submittedAt = new Date('2026-09-18T04:00:00.000Z')
 const history = {
-  id: 'request-1', packagingTypeName: '木箱', packagingVendor: 'CHENGXIN', amount: new Prisma.Decimal('280.5'),
+  id: 'request-1', version: 1, packagingTypeName: '木箱', packagingVendor: 'CHENGXIN', amount: new Prisma.Decimal('280.5'),
   currencyCode: 'CNY', status: 'PENDING_PAYMENT', submittedBy: { id: 'submitter', displayName: '提报人' },
   submittedAt, paidBy: null, paidAt: null, remark: '请确认付款',
 }
@@ -31,7 +31,7 @@ describe('PackagingCostQueryService shipment context', () => {
     await expect(query.shipmentContext(shipmentId)).resolves.toMatchObject({ existingRequests: [summary] })
     expect(findMany).toHaveBeenCalledWith({
       where: { shipmentId }, orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
-      select: { id: true, packagingTypeName: true, packagingVendor: true, amount: true, currencyCode: true, status: true,
+      select: { id: true, version: true, packagingTypeName: true, packagingVendor: true, amount: true, currencyCode: true, status: true,
         submittedBy: { select: { id: true, displayName: true } }, submittedAt: true,
         paidBy: { select: { id: true, displayName: true } }, paidAt: true, remark: true },
     })

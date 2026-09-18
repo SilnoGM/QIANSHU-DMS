@@ -10,12 +10,12 @@ const person = { select: { id: true, displayName: true } }
 const image = { select: { id: true, mimeType: true, originalFilename: true } }
 const include = { owner: person, submittedBy: person, paidBy: person, packagingImage: image, quotationImage: image, paymentVoucher: image } satisfies Prisma.PackagingCostRequestInclude
 const summarySelect = {
-  id: true, packagingTypeName: true, packagingVendor: true, amount: true, currencyCode: true, status: true,
+  id: true, version: true, packagingTypeName: true, packagingVendor: true, amount: true, currencyCode: true, status: true,
   submittedBy: person, submittedAt: true, paidBy: person, paidAt: true, remark: true,
 } satisfies Prisma.PackagingCostRequestSelect
 function mapSummary(row: Prisma.PackagingCostRequestGetPayload<{ select: typeof summarySelect }>): PackagingCostRequestSummaryDto {
   return {
-    id: row.id, packagingTypeName: row.packagingTypeName, packagingVendor: row.packagingVendor as PackagingCostVendorDto,
+    id: row.id, version: row.version, packagingTypeName: row.packagingTypeName, packagingVendor: row.packagingVendor as PackagingCostVendorDto,
     amount: row.amount.toFixed(4), currencyCode: 'CNY', status: row.status as PackagingCostStatusDto,
     submittedBy: { id: row.submittedBy.id, name: row.submittedBy.displayName }, submittedAt: row.submittedAt.toISOString(),
     paidBy: row.paidBy ? { id: row.paidBy.id, name: row.paidBy.displayName } : null, paidAt: row.paidAt?.toISOString() ?? null, remark: row.remark,
@@ -52,6 +52,11 @@ export class PackagingCostQueryService {
     return { shipmentId, shipmentNo: shipment?.shipmentNo ?? null, shippingMarkText: shipment?.shippingMarkText ?? null, purchaseOrderNo: shipment?.purchaseOrder.orderNo ?? null,
       salesOrderNo: sale?.orderNo ?? null, owner: sale ? { id: sale.issuer.id, name: sale.issuer.displayName } : null,
       existingRequests: existingRequests.map(mapSummary), eligible: unavailableReason === null, unavailableReason }
+  }
+  async getSummaryById(id: string, client: Pick<Prisma.TransactionClient, 'packagingCostRequest'> = this.prisma): Promise<PackagingCostRequestSummaryDto> {
+    const row = await client.packagingCostRequest.findUnique({ where: { id }, select: summarySelect })
+    if (!row) return packagingCostFailure('PACKAGING_COST_NOT_FOUND', '打木架提报不存在', 404)
+    return mapSummary(row)
   }
   async getById(id: string): Promise<PackagingCostRequestDto> {
     const row = await this.prisma.packagingCostRequest.findUnique({ where: { id }, include })

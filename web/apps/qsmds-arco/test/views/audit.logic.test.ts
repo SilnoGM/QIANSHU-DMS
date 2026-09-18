@@ -90,6 +90,9 @@ test('审计事件筛选选项覆盖当前公开契约的全部事件类型', ()
     'SYSTEM_ADMIN_RECOVERED',
     'AUTH_RETENTION_PURGED',
     'PRODUCT_CREATED',
+    'PACKAGING_COST_SUBMITTED',
+    'PACKAGING_COST_PAID',
+    'PACKAGING_COST_AMOUNT_UPDATED',
   ])
 })
 
@@ -173,4 +176,9 @@ test('采购订单审计事件使用采购语义中文名称', () => {
     formatAuditEvent('PURCHASE_ORDER_DOCUMENT_DETACHED'),
     '采购订单凭证已解除',
   )
+})
+
+test('包装金额修改事件可筛选并使用中文名称', () => {
+  assert.equal(formatAuditEvent('PACKAGING_COST_AMOUNT_UPDATED'), '打木架费用金额已修改')
+  assert.equal(buildAuditEventListQuery(1, 20, '', 'PACKAGING_COST_AMOUNT_UPDATED', undefined).eventType, 'PACKAGING_COST_AMOUNT_UPDATED')
 })

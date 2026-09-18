@@ -8,7 +8,7 @@ import { PackagingCostController } from './packaging-cost.controller'
 import { PackagingCostService } from './packaging-cost.service'
 import { PackagingCostQueryService } from './packaging-cost-query.service'
 import { PackagingCostImageService } from './packaging-cost-image.service'
-import { PackagingCostListQueryDto, PackagingCostRequestCreateDto, PackagingCostRequestPayDto } from './packaging-cost.dto'
+import { PackagingCostListQueryDto, PackagingCostRequestCreateDto, PackagingCostRequestPayDto, PackagingCostRequestUpdateAmountDto } from './packaging-cost.dto'
 
 @Module({ controllers: [PackagingCostController], providers: [PackagingCostService, PackagingCostQueryService, PackagingCostImageService].map(provide => ({ provide, useValue: {} })) })
 class ContractModule {}
@@ -16,7 +16,7 @@ class ContractModule {}
 describe('PackagingCostController contract', () => {
   it('separates operations submission and finance reading/payment permissions', () => {
     const reflector = new Reflector()
-    for (const method of ['submit', 'upload', 'shipmentContext'] as const) expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PackagingCostController.prototype[method])).toEqual(['packaging-costs:create'])
+    for (const method of ['submit', 'upload', 'shipmentContext', 'updateAmount'] as const) expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PackagingCostController.prototype[method])).toEqual(['packaging-costs:create'])
     for (const method of ['list', 'detail', 'image', 'headImage'] as const) expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PackagingCostController.prototype[method])).toEqual(['packaging-costs:read'])
     expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PackagingCostController.prototype.pay)).toEqual(['packaging-costs:read', 'packaging-costs:pay'])
   })
@@ -31,8 +31,9 @@ describe('PackagingCostController contract', () => {
       properties: { existingRequests: { type: 'array', items: { $ref: '#/components/schemas/PackagingCostRequestSummaryDto' } } },
     })
     expect(document.components?.schemas?.PackagingCostRequestSummaryDto).toHaveProperty('required', [
-      'id', 'packagingTypeName', 'packagingVendor', 'amount', 'currencyCode', 'status', 'submittedBy', 'submittedAt', 'paidBy', 'paidAt', 'remark',
+      'version', 'id', 'packagingTypeName', 'packagingVendor', 'amount', 'currencyCode', 'status', 'submittedBy', 'submittedAt', 'paidBy', 'paidAt', 'remark',
     ])
+    expect(document.paths[`${root}/{id}/amount`].patch).toMatchObject({ operationId: 'packaging_costs_update_amount', responses: { 200: { content: { 'application/json': { schema: { $ref: '#/components/schemas/PackagingCostRequestSummaryDto' } } } }, 409: expect.any(Object) as unknown }, 'x-qianshu-contract': { csrf: true } })
     expect(document.paths[`${root}/{id}/pay`].post).toMatchObject({ operationId: 'packaging_costs_pay', responses: { 200: expect.any(Object) as unknown, 403: expect.any(Object) as unknown, 409: expect.any(Object) as unknown } })
     expect(document.paths[`${root}/{id}/pay`].post).toMatchObject({
       'x-qianshu-contract': { errors: expect.arrayContaining([
@@ -49,6 +50,7 @@ describe('PackagingCostController contract', () => {
     const options = { whitelist: true, forbidNonWhitelisted: true }
     expect((await validate(plainToInstance(PackagingCostRequestCreateDto, { shipmentId: id, packagingType: 'WOODEN_BOX', packagingVendor: 'OTHER', amount: '2.00', packagingImageMediaAssetId: id, quotationImageMediaAssetId: id, ownerUserId: id }), options)).map(error => error.property)).toContain('ownerUserId')
     expect((await validate(plainToInstance(PackagingCostRequestPayDto, { expectedVersion: 1, recipientAccountId: id, recipientProfileVersion: 1, paymentMethod: 'ALIPAY', voucher: { mediaAssetId: id }, amount: '1' }), options)).map(error => error.property)).toEqual(['amount'])
+    for (const input of [{ amount: '1.234', expectedVersion: 1 }, { amount: '1', expectedVersion: 0 }, { amount: '1', expectedVersion: 1, status: 'PAID' }]) expect((await validate(plainToInstance(PackagingCostRequestUpdateAmountDto, input), options)).length).toBeGreaterThan(0)
     for (const input of [{ page: 0 }, { pageSize: 101 }, { status: 'APPROVED' }, { keyword: 'x'.repeat(129) }]) expect((await validate(plainToInstance(PackagingCostListQueryDto, input), options)).length).toBeGreaterThan(0)
   })
 })
