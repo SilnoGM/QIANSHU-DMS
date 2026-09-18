@@ -147,12 +147,12 @@ function warehouseUpdated(): void {
   void loadDetail()
 }
 
-function handleTransportAction(row: { viewStatus: Exclude<ShipmentView, 'ALL'> }): void {
+function handleTransportAction(row: { viewStatus: Exclude<ShipmentView, 'ALL'> }, action: 'loadContainer' | 'seaExpress' | 'sign' | null = shipmentPlaceholderAction(activeView.value, row.viewStatus)): void {
   if (!enabled.value || !canReceive.value) {
     return
   }
-  const action = shipmentPlaceholderAction(activeView.value, row.viewStatus)
-  if (action) {
+  const availableAction = shipmentPlaceholderAction(activeView.value, row.viewStatus)
+  if (action && (action === availableAction || (action === 'seaExpress' && availableAction === 'loadContainer'))) {
     toast.info(t(`purchaseShipments.${action}Unavailable`))
   }
 }
@@ -309,7 +309,7 @@ onBeforeUnmount(() => {
           :loading="loading" :error="error" :addable="false" :page-size-options="[20, 50, 100]"
           :filter-definitions="filterDefinitions" :search-placeholder="t('purchaseShipments.search')"
           :empty-title="t('purchaseShipments.empty')" :empty-description="t('purchaseShipments.emptyDescription')"
-          :action-column="{ fixed: 'right', minWidth: canReceive ? 350 : 245, width: canReceive ? 350 : 245 }" table-class="w-max min-w-full"
+          :action-column="{ fixed: 'right', minWidth: showWarehouseFilter ? 260 : canReceive ? 350 : 245, width: showWarehouseFilter ? 260 : canReceive ? 350 : 245 }" table-class="w-max min-w-full"
           @search="search" @filter-change="search" @pagination-change="paginate" @retry="refresh"
         >
           <template #query-leading>
@@ -398,18 +398,23 @@ onBeforeUnmount(() => {
             </FaTooltip>
           </template>
           <template #actions="{ row }">
-            <FaButton v-if="canReceive && shipmentPlaceholderAction(activeView, row.viewStatus)" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" @click="handleTransportAction(row)">
-              <FaIcon :name="activeView === 'WAREHOUSE_RECEIVED' ? 'i-lucide:container' : 'i-lucide:package-check'" aria-hidden="true" />{{ t(activeView === 'WAREHOUSE_RECEIVED' ? 'purchaseShipments.loadContainer' : 'purchaseShipments.sign') }}
-            </FaButton>
-            <FaButton v-if="canReceive && row.viewStatus === 'SHIPPED'" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" :disabled="!!warehouseActionRef?.loadingOrderId" @click="warehouseActionRef?.open(row.purchaseOrder.id, [row.id])">
-              <FaIcon name="i-lucide:warehouse" aria-hidden="true" />{{ t('purchaseWarehouseReceipt.action') }}
-            </FaButton>
-            <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.purchaseOrder.orderNo} ${formatShipmentNumber(row.partNumber)}：${t('purchaseShipments.view')}`" @click="openShipment(row.id)">
-              <FaIcon name="i-lucide:package-search" aria-hidden="true" />{{ t('purchaseShipments.view') }}
-            </FaButton>
-            <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.purchaseOrder.orderNo}：${t('purchaseShipments.viewOrder')}`" @click="openOrder(row.purchaseOrder.id)">
-              <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('purchaseShipments.viewOrder') }}
-            </FaButton>
+            <div :class="showWarehouseFilter ? 'grid grid-cols-2 gap-1' : 'flex flex-wrap items-center gap-1'">
+              <FaButton v-if="canReceive && shipmentPlaceholderAction(activeView, row.viewStatus)" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" @click="handleTransportAction(row)">
+                <FaIcon :name="activeView === 'WAREHOUSE_RECEIVED' ? 'i-lucide:container' : 'i-lucide:package-check'" aria-hidden="true" />{{ t(activeView === 'WAREHOUSE_RECEIVED' ? 'purchaseShipments.loadContainer' : 'purchaseShipments.sign') }}
+              </FaButton>
+              <FaButton v-if="canReceive && showWarehouseFilter && row.viewStatus === 'WAREHOUSE_RECEIVED'" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" @click="handleTransportAction(row, 'seaExpress')">
+                <FaIcon name="i-lucide:truck" aria-hidden="true" />{{ t('purchaseShipments.seaExpress') }}
+              </FaButton>
+              <FaButton v-if="canReceive && row.viewStatus === 'SHIPPED'" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" :disabled="!!warehouseActionRef?.loadingOrderId" @click="warehouseActionRef?.open(row.purchaseOrder.id, [row.id])">
+                <FaIcon name="i-lucide:warehouse" aria-hidden="true" />{{ t('purchaseWarehouseReceipt.action') }}
+              </FaButton>
+              <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.purchaseOrder.orderNo} ${formatShipmentNumber(row.partNumber)}：${t('purchaseShipments.view')}`" @click="openShipment(row.id)">
+                <FaIcon name="i-lucide:package-search" aria-hidden="true" />{{ t('purchaseShipments.view') }}
+              </FaButton>
+              <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.purchaseOrder.orderNo}：${t('purchaseShipments.viewOrder')}`" @click="openOrder(row.purchaseOrder.id)">
+                <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('purchaseShipments.viewOrder') }}
+              </FaButton>
+            </div>
           </template>
           <template #mobile-row="{ row }">
             <div class="min-w-0 space-y-3">

@@ -160,7 +160,7 @@ async function pageFixture() {
     warehouseValues: { value: string[] }
     warehouseTabs: { value: Array<{ value: string, count?: number }> }
     tabs: { value: Array<{ value: string, count?: number }> }
-    handleTransportAction: (row: { viewStatus: string }) => void
+    handleTransportAction: (row: { viewStatus: string }, action?: string) => void
     columns: { value: Array<{ id: string, fixed?: string, accessorKey?: string }> }
   }
   lifecycle.mount!()
@@ -294,5 +294,24 @@ test('未知选择不导航，仓库统计未完成或失败时不伪造零；�
   f.permission.value = true
   f.lifecycle.deactivate!()
   f.state.selectWarehouse('warehouse:north')
+  assert.equal(f.navigations.length, 0)
+})
+
+test('采运已到仓海快只轻提示，错误视图、货件状态、撤权和停用均不响应', async (context) => {
+  const f = await pageFixture()
+  context.after(f.dispose)
+  f.route.query.view = 'WAREHOUSE_RECEIVED'
+  f.state.handleTransportAction({ viewStatus: 'WAREHOUSE_RECEIVED' }, 'seaExpress')
+  assert.deepEqual(f.info, ['purchaseShipments.seaExpressUnavailable'])
+  f.state.handleTransportAction({ viewStatus: 'SHIPPED' }, 'seaExpress')
+  f.route.query.view = 'CONTAINER_LOADED'
+  f.state.handleTransportAction({ viewStatus: 'CONTAINER_LOADED' }, 'seaExpress')
+  f.route.query.view = 'WAREHOUSE_RECEIVED'
+  f.permission.value = false
+  f.state.handleTransportAction({ viewStatus: 'WAREHOUSE_RECEIVED' }, 'seaExpress')
+  f.permission.value = true
+  f.lifecycle.deactivate!()
+  f.state.handleTransportAction({ viewStatus: 'WAREHOUSE_RECEIVED' }, 'seaExpress')
+  assert.equal(f.info.length, 1)
   assert.equal(f.navigations.length, 0)
 })

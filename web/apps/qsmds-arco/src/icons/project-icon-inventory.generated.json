@@ -3179,6 +3179,8 @@
       "apps/qsmds-arco/src/views/component_library/business/components/FactoryShipmentModalShowcase.vue",
       "apps/qsmds-arco/src/views/component_library/business/factory-shipment-modal.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list.logic.ts",
+      "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/shipments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/shipments/shipment-detail-drawer.vue"
     ]
   },

@@ -301,3 +301,29 @@ test('计数与仓库错误的重试按钮通过真实 FaAlert description 插�
     app.unmount()
   }
 })
+
+test('大熊猫仓已到仓货件的海快出货只轻提示，不读取详情、提报包装或修改货件', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  const row = { id: 'panda-part', viewStatus: 'WAREHOUSE_RECEIVED', destinationWarehouseValue: 'YJ.594540.DGHM.ZTBHCG.B.DXM' }
+  const requestCount = f.calls.length
+  const before = JSON.stringify(f.state.rows.value)
+  f.state.handleAction('seaExpress', row)
+  assert.deepEqual(f.info, ['warehouseArrivals.seaExpressUnavailable'])
+  assert.equal(f.state.packagingShipment.value, null)
+  assert.equal(f.calls.length, requestCount)
+  assert.equal(JSON.stringify(f.state.rows.value), before)
+  for (const destinationWarehouseValue of ['SLH.SZ.BA.SJJD.HSNP.B5', 'SLH.DW.FHSNL.4HGYQ.B', 'QITA', null]) {
+    f.state.handleAction('seaExpress', { ...row, destinationWarehouseValue })
+  }
+  f.state.handleAction('seaExpress', { ...row, viewStatus: 'SHIPPED' })
+  f.route.query.view = 'SHIPPED'
+  f.state.handleAction('seaExpress', row)
+  f.route.query.view = 'WAREHOUSE_RECEIVED'
+  f.permission.value = false
+  f.state.handleAction('seaExpress', row)
+  f.permission.value = true
+  f.lifecycle.deactivate!()
+  f.state.handleAction('seaExpress', row)
+  assert.equal(f.info.length, 1)
+})

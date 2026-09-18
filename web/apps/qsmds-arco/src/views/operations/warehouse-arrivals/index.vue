@@ -3,6 +3,7 @@ import type { WarehouseArrivalAction, WarehouseArrivalView } from './logic'
 import type { PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
 import type { PurchaseShipmentListQuery } from '@/api/modules/purchase-shipments'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
@@ -25,6 +26,7 @@ defineOptions({ name: 'QsWarehouseArrivals' })
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const toast = useQsToast()
 const { auth } = useAppAuth()
 const account = useAppAccountStore()
 const currencyCatalog = useCurrencyCatalog()
@@ -98,6 +100,9 @@ function handleAction(action: WarehouseArrivalAction, row: PurchaseShipmentListI
   }
   if (action === 'view') {
     void openShipment(row.id)
+  }
+  else if (action === 'seaExpress') {
+    toast.info(t('warehouseArrivals.seaExpressUnavailable'))
   }
   else if (canCreatePackaging.value) {
     packagingShipment.value = row
@@ -181,7 +186,7 @@ onBeforeUnmount(() => activated.value = false)
           row-key="id" :show-row-number="false" :columns="columns" :data="rows" :total="total" :loading="loading" :error="error"
           :addable="false" :page-size-options="[20, 50, 100]" :search-placeholder="t('warehouseArrivals.search')"
           :empty-title="t('warehouseArrivals.empty')" :empty-description="t('warehouseArrivals.emptyDescription')"
-          :action-column="{ fixed: 'right', width: activeView === 'SHIPPED' ? 100 : 210 }" table-class="w-max min-w-full"
+          :action-column="{ fixed: 'right', width: activeView === 'SHIPPED' ? 130 : 245 }" table-class="w-max min-w-full"
           @search="search" @pagination-change="paginate" @retry="refresh"
         >
           <template #cell-shipmentNo="{ row }">
@@ -229,7 +234,7 @@ onBeforeUnmount(() => activated.value = false)
           </template>
           <template #actions="{ row }">
             <FaButton v-for="action in warehouseArrivalActions(activeView, row.viewStatus, row.destinationWarehouseValue).filter(value => value !== 'woodenFrame' || canCreatePackaging)" :key="action" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.shipmentNo || t('purchaseShipments.unnumbered')}：${t(`warehouseArrivals.${action}`)}`" @click="handleAction(action, row)">
-              <FaIcon :name="action === 'view' ? 'i-lucide:eye' : 'i-lucide:hammer'" aria-hidden="true" />{{ t(`warehouseArrivals.${action}`) }}
+              <FaIcon :name="action === 'view' ? 'i-lucide:eye' : action === 'seaExpress' ? 'i-lucide:truck' : 'i-lucide:hammer'" aria-hidden="true" />{{ t(`warehouseArrivals.${action}`) }}
             </FaButton>
           </template>
           <template #mobile-row="{ row }">

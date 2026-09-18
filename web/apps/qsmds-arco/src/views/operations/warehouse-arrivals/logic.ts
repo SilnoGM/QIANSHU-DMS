@@ -6,11 +6,12 @@ import { formatDestinationWarehouse } from '../../workbenches/shipments/logic'
 
 export const WAREHOUSE_ARRIVAL_VIEWS = ['SHIPPED', 'WAREHOUSE_RECEIVED'] as const
 export type WarehouseArrivalView = typeof WAREHOUSE_ARRIVAL_VIEWS[number]
-export type WarehouseArrivalAction = 'view' | 'woodenFrame'
+export type WarehouseArrivalAction = 'view' | 'woodenFrame' | 'seaExpress'
 const ALL_WAREHOUSES_FILTER = '__all__'
 const WAREHOUSE_FILTER_PREFIX = 'warehouse:'
 // 打木架仅向深圳南浦科技园 B5 仓开放，以仓库稳定值判断，避免名称调整影响入口。
 const WOODEN_PACKING_WAREHOUSE_VALUE = 'SLH.SZ.BA.SJJD.HSNP.B5'
+const SEA_EXPRESS_WAREHOUSE_VALUE = 'YJ.594540.DGHM.ZTBHCG.B.DXM'
 
 /** 此页面只接收两个到仓视图的公共筛选；排序由视图语义决定，不能被 URL 覆盖。 */
 export function parseWarehouseArrivalQuery(raw: Record<string, unknown>): PurchaseShipmentListQuery {
@@ -67,9 +68,13 @@ export function buildWarehouseFilterOptions(
 }
 
 export function warehouseArrivalActions(view: WarehouseArrivalView, status: PurchaseShipmentListItemDto['viewStatus'], destinationWarehouseValue: string | null): WarehouseArrivalAction[] {
-  return view === 'WAREHOUSE_RECEIVED' && status === 'WAREHOUSE_RECEIVED' && destinationWarehouseValue === WOODEN_PACKING_WAREHOUSE_VALUE
-    ? ['view', 'woodenFrame']
-    : ['view']
+  if (view !== 'WAREHOUSE_RECEIVED' || status !== 'WAREHOUSE_RECEIVED') {
+    return ['view']
+  }
+  if (destinationWarehouseValue === WOODEN_PACKING_WAREHOUSE_VALUE) {
+    return ['view', 'woodenFrame']
+  }
+  return destinationWarehouseValue === SEA_EXPRESS_WAREHOUSE_VALUE ? ['view', 'seaExpress'] : ['view']
 }
 
 export function createWarehouseArrivalColumns(view: WarehouseArrivalView, translate: (key: string) => string): QsGenericTableColumn<PurchaseShipmentListItemDto>[] {
