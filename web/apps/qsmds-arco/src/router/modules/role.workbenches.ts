@@ -103,16 +103,16 @@ export const financeWorkbench: RouteRecordMainRaw = {
   ],
 }
 
-export const purchaseWorkbench: RouteRecordMainRaw = {
+export const purchaseTransportWorkbench: RouteRecordMainRaw = {
   meta: {
-    title: 'workbench.purchase',
+    title: 'workbench.purchaseTransport',
     icon: 'qs-workbench-purchase',
     auth: ['purchase-orders:review', 'purchase-orders:read'],
   },
   children: [
     {
-      path: '/qs-purchase/reviews',
-      name: 'qsPurchaseReviews',
+      path: '/qs-purchase-transport/reviews',
+      name: 'qsPurchaseTransportReviews',
       component: () => import('@/views/workbenches/purchase-reviews/index.vue'),
       meta: {
         title: 'workbench.purchaseReviews',
@@ -122,12 +122,23 @@ export const purchaseWorkbench: RouteRecordMainRaw = {
       },
     },
     {
-      path: '/qs-purchase/shipments',
-      name: 'qsPurchaseShipments',
+      path: '/qs-purchase-transport/shipments',
+      name: 'qsPurchaseTransportShipments',
       component: () => import('@/views/workbenches/shipments/index.vue'),
       meta: {
         title: 'workbench.shipments',
         icon: 'qs-factory-shipment',
+        singleMenu: true,
+        auth: 'purchase-orders:read',
+      },
+    },
+    {
+      path: '/qs-purchase-transport/containers',
+      name: 'qsPurchaseTransportContainers',
+      component: () => import('@/views/workbenches/placeholder.vue'),
+      meta: {
+        title: 'workbench.containers',
+        icon: 'qs-container-management',
         singleMenu: true,
         auth: 'purchase-orders:read',
       },

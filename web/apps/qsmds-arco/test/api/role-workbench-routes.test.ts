@@ -3,11 +3,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { matchesAuthorization } from '../../src/composables/app/auth'
-import { financeWorkbench, purchaseWorkbench } from '../../src/router/modules/role.workbenches'
+import { financeWorkbench, purchaseTransportWorkbench } from '../../src/router/modules/role.workbenches'
 import { filterAccessibleMenus } from '../../src/store/modules/app/menu.logic'
 
-test('财务和采购工作台只展示当前用户有权访问的业务入口', () => {
-  const menus = [financeWorkbench, purchaseWorkbench]
+test('财务和采运工作台只展示当前用户有权访问的业务入口', () => {
+  const menus = [financeWorkbench, purchaseTransportWorkbench]
   const visiblePaths = (permissions: string[]) => filterAccessibleMenus(
     menus,
     value => matchesAuthorization(permissions, value),
@@ -15,24 +15,29 @@ test('财务和采购工作台只展示当前用户有权访问的业务入口',
   ).flatMap(menu => menu.children?.flatMap(child => child.children?.filter(leaf => leaf.meta?.menu !== false).map(leaf => `${child.path}/${leaf.path}`) ?? [child.path]) ?? [])
 
   assert.deepEqual(visiblePaths([]), [])
-  assert.deepEqual(visiblePaths(['sales-orders:read', 'purchase-orders:read']), ['/qs-purchase/shipments'])
+  assert.deepEqual(visiblePaths(['sales-orders:read', 'purchase-orders:read']), ['/qs-purchase-transport/shipments', '/qs-purchase-transport/containers'])
   assert.deepEqual(visiblePaths(['sales-orders:payment']), [])
   assert.deepEqual(visiblePaths(['sales-receipts:read']), ['/qs-finance/realtime-payments/sales-receipts'])
   assert.deepEqual(visiblePaths(['packaging-costs:pay']), [])
   assert.deepEqual(visiblePaths(['packaging-costs:read']), ['/qs-finance/realtime-payments/packaging-payments'])
   assert.deepEqual(visiblePaths(['purchase-orders:payment']), ['/qs-finance/realtime-payments/purchase-payments'])
-  assert.deepEqual(visiblePaths(['purchase-orders:review']), ['/qs-purchase/reviews'])
+  assert.deepEqual(visiblePaths(['purchase-orders:review']), ['/qs-purchase-transport/reviews'])
   assert.deepEqual(visiblePaths([
     'sales-receipts:read',
     'purchase-orders:payment',
     'purchase-orders:review',
-  ]), ['/qs-finance/realtime-payments/sales-receipts', '/qs-finance/realtime-payments/purchase-payments', '/qs-purchase/reviews'])
+  ]), ['/qs-finance/realtime-payments/sales-receipts', '/qs-finance/realtime-payments/purchase-payments', '/qs-purchase-transport/reviews'])
 })
 
-test('采购货件菜单复用采购读取权限，审核菜单继续独立授权', () => {
-  const routes = purchaseWorkbench.children
-  assert.deepEqual(routes.map(route => route.name), ['qsPurchaseReviews', 'qsPurchaseShipments'])
+test('采运工作台货件和柜次菜单复用采购读取权限，审核菜单继续独立授权', () => {
+  const routes = purchaseTransportWorkbench.children
+  assert.deepEqual(routes.map(route => route.name), ['qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers'])
+  assert.equal(purchaseTransportWorkbench.meta?.title, 'workbench.purchaseTransport')
   assert.equal(routes[1]?.meta?.auth, 'purchase-orders:read')
+  assert.equal(routes[2]?.meta?.auth, 'purchase-orders:read')
+  assert.equal(routes[2]?.meta?.title, 'workbench.containers')
+  assert.equal(routes[2]?.meta?.icon, 'qs-container-management')
+  assert.equal(typeof routes[2]?.component, 'function')
   assert.equal(routes[0]?.meta?.auth, 'purchase-orders:review')
 })
 

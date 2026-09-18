@@ -60,7 +60,7 @@ async function pageFixture() {
   const script = source.split('<script setup lang="ts">')[1]!.split('</script>')[0]!
     .replace(/^import[\s\S]*?from ['"][^'"]+['"]\s*$/gm, '')
   const initialQuery = { view: 'ALL', page: '1', pageSize: '20' }
-  const route = reactive({ name: 'qsPurchaseShipments', fullPath: '/qs-purchase/shipments?view=ALL&page=1&pageSize=20', query: { ...initialQuery } })
+  const route = reactive({ name: 'qsPurchaseTransportShipments', fullPath: '/qs-purchase-transport/shipments?view=ALL&page=1&pageSize=20', query: { ...initialQuery } })
   const initialPath = route.fullPath
   const account = reactive({ authEpoch: 1 })
   const permission = ref(true)
@@ -169,7 +169,7 @@ test('缓存页面后退及重新授权后按 URL 恢复筛选、日期和分页
   editControls()
   lifecycle.deactivate!()
   route.query = { view: 'ALL', page: '3', pageSize: '50' }
-  route.fullPath = '/qs-purchase/shipments?view=ALL&page=3&pageSize=50'
+  route.fullPath = '/qs-purchase-transport/shipments?view=ALL&page=3&pageSize=50'
   route.query = { ...fixture.initialQuery }
   route.fullPath = fixture.initialPath
   lifecycle.activate!()

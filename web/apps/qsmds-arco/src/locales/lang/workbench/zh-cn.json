@@ -2,11 +2,12 @@
   "workbench": {
     "realtimePayments": "实收实付",
     "finance": "千树财务工作台",
-    "purchase": "千树采购工作台",
+    "purchaseTransport": "千树采运工作台",
     "salesReceipts": "销售收款",
     "purchasePayments": "采购付款",
     "purchaseReviews": "采购审核",
     "shipments": "货件管理",
+    "containers": "柜次管理",
     "pending": "功能待开放",
     "packagingPayments": "打木架付款"
   }

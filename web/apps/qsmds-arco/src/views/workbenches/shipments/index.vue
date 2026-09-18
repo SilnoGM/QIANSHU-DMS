@@ -23,7 +23,7 @@ import { getShipmentSourceEmptyKey } from './shipment-detail.logic'
 import ShipmentProducts from './shipment-products.vue'
 import { useShipmentData } from './use-shipment-data'
 
-defineOptions({ name: 'QsPurchaseShipments' })
+defineOptions({ name: 'QsPurchaseTransportShipments' })
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
@@ -38,7 +38,7 @@ const canRead = computed(() => auth('purchase-orders:read'))
 const instancePath = route.fullPath
 const activated = ref(false)
 // Shell 按 fullPath 缓存页面。旧实例离开时立即停止读取，返回时再校验当前身份。
-const enabled = computed(() => activated.value && canRead.value && route.name === 'qsPurchaseShipments' && route.fullPath === instancePath)
+const enabled = computed(() => activated.value && canRead.value && route.name === 'qsPurchaseTransportShipments' && route.fullPath === instancePath)
 const query = computed(() => parseShipmentQuery(route.query))
 const activeView = computed(() => query.value.view ?? 'AWAITING_SHIPMENT')
 const keyword = ref(query.value.keyword ?? '')
@@ -229,11 +229,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="min-w-0">
-    <FaPageHeader :title="t('workbench.shipments')" :description="t('purchaseShipments.intro')">
-      <FaButton v-if="canRead" variant="outline" :loading="loading" @click="refresh">
-        <FaIcon name="i-lucide:refresh-cw" aria-hidden="true" />{{ t('purchaseShipments.refresh') }}
-      </FaButton>
-    </FaPageHeader>
+    <FaPageHeader :title="t('workbench.shipments')" :description="t('purchaseShipments.intro')" />
     <FaPageMain class="min-w-0">
       <FaEmpty v-if="!canRead" icon="i-lucide:shield-alert" :title="t('purchaseShipments.noPermission')" :description="t('purchaseShipments.noPermissionDescription')" class="py-12" />
       <template v-else>

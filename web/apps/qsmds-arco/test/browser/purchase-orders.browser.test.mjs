@@ -1695,7 +1695,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
         })()`)
         assert.deepEqual(rowActionLayout, { singleRow: true, reachable: true })
       }
-      await page.navigate(appRouteUrl(configuration.baseUrl, '/qs-purchase/reviews'))
+      await page.navigate(appRouteUrl(configuration.baseUrl, '/qs-purchase-transport/reviews'))
       await waitForStatusToolbarCounts(page, '采购审核', { 待审核: 3 - index, 已通过: 2 + index, 已取消: 0 })
       const before = reviewRequests.length
       const beforeLedger = await readPurchaseShippingMarkLedger(page)

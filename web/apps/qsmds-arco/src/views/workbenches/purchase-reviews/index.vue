@@ -20,7 +20,7 @@ import { getPurchaseOrderApiFailure, orderStatusLabel, orderStatusTagClass, purc
 import PurchaseOrderReviewModal from '../../operations/purchase-orders/purchase-order-review-modal.vue'
 import { buildReviewQuery, countReviewViews } from './logic'
 
-defineOptions({ name: 'QsPurchaseReviews' })
+defineOptions({ name: 'QsPurchaseTransportReviews' })
 const { t } = useI18n()
 const { auth } = useAppAuth()
 const account = useAppAccountStore()

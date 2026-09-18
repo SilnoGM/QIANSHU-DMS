@@ -17,10 +17,10 @@
   },
   {
     "name": "qs-workbench-purchase",
-    "label": "采购工作台",
+    "label": "采运工作台",
     "category": "工作台",
     "usages": [
-      "千树采购工作台"
+      "千树采运工作台"
     ]
   },
   {
@@ -97,6 +97,14 @@
     "category": "仓储运输",
     "usages": [
       "仓储运输 / 海运柜次"
+    ]
+  },
+  {
+    "name": "qs-container-management",
+    "label": "柜次管理",
+    "category": "仓储运输",
+    "usages": [
+      "千树采运工作台 / 柜次管理"
     ]
   },
   {
