@@ -203,12 +203,10 @@ test('全部与待办采购均使用带计数的状态工具栏', async () => {
   assert.match(source, /if \(action\.key === 'WAREHOUSE_RECEIPT'\)/u)
   assert.match(source, /warehouseActionRef\.value\?\.open\(order\.id\)/u)
   assert.match(source, />发货|action\.label/u)
-  assert.match(source, /canCancelPurchaseOrderFromList\(row\)/u)
-  assert.match(source, /openPurchaseOrderCancellation\(row\)/u)
-  assert.match(source, /cancelLoadingOrderId === row\.id/u)
-  assert.match(source, /cancelActionsRef/u)
+  assert.doesNotMatch(source, /canCancelPurchaseOrderFromList|openPurchaseOrderCancellation/u)
+  assert.doesNotMatch(source, /cancelLoadingOrderId|cancelActionsRef/u)
   assert.doesNotMatch(source, /openPurchaseOrderDetail\(row, 'cancel'\)/u)
-  assert.match(source, /i-lucide:circle-x/u)
+  assert.doesNotMatch(source, /i-lucide:circle-x/u)
   assert.doesNotMatch(
     source,
     /v-else-if="canUpdate && nextPurchaseOrderFulfillmentStatus\(row\)"/u,

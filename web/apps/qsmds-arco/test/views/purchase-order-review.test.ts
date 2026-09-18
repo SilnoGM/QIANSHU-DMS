@@ -10,12 +10,12 @@ import { normalizePurchaseOrderStatusSelection } from '../../src/views/operation
 const ROOT = new URL('../../src/views/operations/purchase-orders/', import.meta.url)
 const read = (file: string) => readFile(new URL(file, ROOT), 'utf8')
 
-test('采运工作台独立承担审核，运营两视图保留查看取消并刷新计数', async () => {
+test('采运工作台独立承担审核，运营两视图保留查看且不提供取消入口', async () => {
   const source = await read('index.vue')
   const workbench = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
   assert.doesNotMatch(source, /PurchaseOrderReviewModal|auth\('purchase-orders:review'\)/u)
-  assert.match(source, /canCancelPurchaseOrderFromList\(row\)/u)
-  assert.match(source, /props\.viewMode === 'all' \|\| row\.orderStatus === 'PENDING_REVIEW'/u)
+  assert.match(source, /@click="openPurchaseOrderDetail\(row\)"/u)
+  assert.doesNotMatch(source, /canCancelPurchaseOrderFromList|openPurchaseOrderCancellation/u)
   assert.match(workbench, /auth\('purchase-orders:review'\)/u)
   assert.match(workbench, /row\.orderStatus === 'PENDING_REVIEW' && canReview/u)
   assert.match(workbench, /<PurchaseOrderReviewModal[\s\S]*?@detail-updated="refresh"/u)

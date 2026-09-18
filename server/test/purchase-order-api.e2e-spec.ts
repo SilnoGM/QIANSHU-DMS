@@ -52,6 +52,8 @@ const create = jest.fn<Promise<string>, [unknown, unknown]>()
   .mockResolvedValue(ORDER_ID)
 const review = jest.fn<Promise<unknown>, [unknown, unknown, unknown]>()
   .mockResolvedValue({ id: ORDER_ID, orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING', version: 2 })
+const updateOrderStatus = jest.fn<Promise<unknown>, [unknown, unknown, unknown]>()
+  .mockResolvedValue({ id: ORDER_ID, orderStatus: 'CANCELLED', version: 3 })
 const attach = jest.fn<Promise<unknown>, [unknown, unknown, unknown]>()
   .mockResolvedValue({ id: ORDER_ID, amountRevisions: [] })
 const salesOrderLines = jest.fn().mockResolvedValue({
@@ -95,7 +97,7 @@ const readShippingMarkResolution = jest.fn().mockResolvedValue(resolutionRespons
     provide: PurchaseOrderMutationService,
     useValue: {
       review,
-      updateOrderStatus: jest.fn(),
+      updateOrderStatus,
       updateFulfillmentStatus: jest.fn(),
       recordPayment: jest.fn(),
       voidPayment: jest.fn(),
@@ -449,10 +451,43 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
     session.mockClear()
     create.mockClear()
     review.mockClear()
+    updateOrderStatus.mockClear()
     readShippingMarkResolution.mockClear()
   })
 
   afterAll(async () => { await application?.close() })
+
+  it('rejects cancellation from an operations updater before the mutation service runs', async () => {
+    grantedPermissions = ['purchase-orders:read', 'purchase-orders:update']
+    const response = await request(application.getHttpServer())
+      .patch(`/api/purchase-orders/${ORDER_ID}/order-status`).set(mutationHeaders).set('Cookie', cookie)
+      .send({ toStatus: 'CANCELLED' }).expect(403)
+    expect(responseBody(response)).toMatchObject({ code: 'FORBIDDEN' })
+    expect(updateOrderStatus).not.toHaveBeenCalled()
+  })
+
+  it('allows reviewer cancellation without a reason and applies permission revocation immediately', async () => {
+    grantedPermissions = ['purchase-orders:review']
+    const submit = () => request(application.getHttpServer())
+      .patch(`/api/purchase-orders/${ORDER_ID}/order-status`).set(mutationHeaders).set('Cookie', cookie)
+      .send({ toStatus: 'CANCELLED' })
+    const response = await submit().expect(200)
+    expect(responseBody(response)).toMatchObject({ id: ORDER_ID, orderStatus: 'CANCELLED' })
+    expect(updateOrderStatus).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, { toStatus: 'CANCELLED' })
+    grantedPermissions = ['purchase-orders:update']
+    await submit().expect(403)
+    expect(updateOrderStatus).toHaveBeenCalledTimes(1)
+    expect(roleRows).toHaveBeenCalledTimes(2)
+  })
+
+  it('enforces session and CSRF before reviewer cancellation', async () => {
+    grantedPermissions = ['purchase-orders:review']
+    await request(application.getHttpServer()).patch(`/api/purchase-orders/${ORDER_ID}/order-status`)
+      .set(mutationHeaders).send({ toStatus: 'CANCELLED' }).expect(401)
+    await request(application.getHttpServer()).patch(`/api/purchase-orders/${ORDER_ID}/order-status`)
+      .set('Cookie', cookie).send({ toStatus: 'CANCELLED' }).expect(403)
+    expect(updateOrderStatus).not.toHaveBeenCalled()
+  })
 
   it('requires the independent review permission even when all other purchase capabilities are granted', async () => {
     grantedPermissions = ['purchase-orders:read', 'purchase-orders:create', 'purchase-orders:create-stock',

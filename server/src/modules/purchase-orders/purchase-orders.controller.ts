@@ -561,7 +561,7 @@ export class PurchaseOrdersController {
   }
 
   @Patch(':purchaseOrderId/order-status')
-  @RequirePermissions('purchase-orders:update')
+  @RequirePermissions('purchase-orders:review')
   @ApiContractResponse({ status: HttpStatus.OK, type: PurchaseOrderDetailDto })
   @ApiApplicationContract({
     operationId: 'purchase_orders_update_order_status',

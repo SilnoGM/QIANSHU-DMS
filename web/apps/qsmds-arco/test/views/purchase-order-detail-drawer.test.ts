@@ -105,33 +105,30 @@ test('采购详情动作精确受 update、payment 和 document 权限控制', a
   assert.match(source, /auth\('purchase-orders:update'\)/u)
   assert.match(source, /auth\('purchase-orders:payment'\)/u)
   assert.match(source, /auth\('purchase-orders:document'\)/u)
-  assert.match(source, /purchaseOrdersApi\.updateOrderStatus/u)
+  assert.doesNotMatch(source, /purchaseOrdersApi\.updateOrderStatus|openCancelDialog|submitCancellation/u)
   assert.match(source, /purchaseOrdersApi\.updateFulfillmentStatus/u)
   assert.doesNotMatch(source, /purchaseOrdersApi\.recordPayment|submitPayment\(|activeDialog === 'payment'/u)
   assert.doesNotMatch(source, /openPaymentDialog|qsFinanceRealtimePurchasePayments/u)
   assert.match(source, /purchaseOrdersApi\.voidPayment/u)
   assert.match(source, /purchaseOrdersApi\.detachDocument/u)
   assert.match(source, /purchaseOrdersApi\.getDocumentContent/u)
-  assert.match(source, /props\.detail\.purchaseType === 'SALES_LINKED'/u)
-  assert.match(source, /采购订单已取消，关联销售订单采购覆盖状态已重新计算/u)
-  assert.match(source, /采购订单已取消/u)
+  assert.doesNotMatch(source, /activeDialog === 'cancel'|取消采购订单？/u)
 })
 
-test('采购列表查看使用详情抽屉，取消则独立读取最新详情并直接打开确认弹窗', async () => {
+test('运营采购列表保留详情抽屉，全部及待办视图均不提供取消入口', async () => {
   const source = await readFile(new URL(
     '../../src/views/operations/purchase-orders/index.vue',
     import.meta.url,
   ), 'utf8')
 
   assert.match(source, /<PurchaseOrderDetailDrawer/u)
-  assert.match(source, /<PurchaseOrderDetailActions/u)
+  assert.doesNotMatch(source, /PurchaseOrderDetailActions/u)
   assert.match(source, /:action-column=/u)
   assert.match(source, /<template #actions=/u)
   assert.match(source, /openPurchaseOrderDetail/u)
-  assert.match(source, /loadPurchaseOrderForCancellation/u)
+  assert.doesNotMatch(source, /loadPurchaseOrderForCancellation|cancellationDetail|cancelLoadingOrderId/u)
   assert.match(source, /purchaseOrdersApi\.getById/u)
-  assert.match(source, /cancelActionsRef\.value\?\.openCancelDialog\(\)/u)
-  assert.match(source, /@click="openPurchaseOrderCancellation\(row\)"/u)
+  assert.doesNotMatch(source, /cancelActionsRef|openPurchaseOrderCancellation|canCancelPurchaseOrderFromList/u)
   assert.doesNotMatch(source, /openPurchaseOrderDetail\(row, 'cancel'\)/u)
   assert.doesNotMatch(source, /:initial-action=/u)
   assert.match(source, /@detail-updated=/u)

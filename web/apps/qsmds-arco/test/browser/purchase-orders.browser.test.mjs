@@ -691,7 +691,7 @@ async function waitForStatusToolbarCounts(page, ariaLabel, expectedCounts) {
   })()`)
 }
 
-test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情付款和响应式主题', {
+test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、详情付款和响应式主题', {
   timeout: 600_000,
 }, async (t) => {
   const configuration = readConfiguration(process.env)
@@ -1626,15 +1626,13 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     await waitForPurchaseList(page, order.orderNo)
   })
 
-  await runPurchaseOrderBrowserStep('cancel opens confirmation without detail drawer', async () => {
-    await clickVisibleAriaButton(page, `${order.orderNo}：取消订单`)
-    await waitForVisibleDialog(page, '取消采购订单？')
+  await runPurchaseOrderBrowserStep('operations purchase list does not offer cancellation', async () => {
+    const actionsSource = purchaseOrderActionButtonsSource(order.orderNo)
+    await page.waitFor(`${actionsSource}.length === 1`)
+    assert.deepEqual(await page.evaluate(`${actionsSource}.map(button => button.textContent.trim())`), ['查看'])
     assert.equal(await page.evaluate(`(() => [...document.querySelectorAll(
       '[data-slot="qs-generic-drawer"]',
     )].filter(drawer => drawer.getClientRects().length > 0).length)()`), 0)
-    await clickDialogButton(page, '取消采购订单？', '返回')
-    await waitForNoVisibleDialog(page, '取消采购订单？')
-    await waitForPurchaseList(page, order.orderNo)
   })
 
   await runPurchaseOrderBrowserStep('unreviewed detail is read-only and both review views have counts', async () => {
@@ -1662,8 +1660,8 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
       待付款: 2,
     })
     const pendingActionsSource = purchaseOrderActionButtonsSource(order.orderNo)
-    await page.waitFor(`${pendingActionsSource}.length >= 2`)
-    assert.deepEqual(await page.evaluate(`${pendingActionsSource}.map(button => button.textContent.trim())`), ['查看', '取消'])
+    await page.waitFor(`${pendingActionsSource}.length === 1`)
+    assert.deepEqual(await page.evaluate(`${pendingActionsSource}.map(button => button.textContent.trim())`), ['查看'])
   })
 
   await runPurchaseOrderBrowserStep('review requires confirmation, recovers conflict, and refreshes both views', async () => {
@@ -1679,13 +1677,13 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
           && toolbar.querySelector('[aria-pressed="true"]')?.textContent.includes('采购审核中')))()`)
       if (index === 0) {
         const allActionsSource = purchaseOrderActionButtonsSource(target.orderNo)
-        await page.waitFor(`${allActionsSource}.length >= 2`)
-        assert.deepEqual(await page.evaluate(`${allActionsSource}.map(button => button.textContent.trim())`), ['查看', '取消'])
+        await page.waitFor(`${allActionsSource}.length === 1`)
+        assert.deepEqual(await page.evaluate(`${allActionsSource}.map(button => button.textContent.trim())`), ['查看'])
         const rowActionLayout = await page.evaluate(`(() => {
           const buttons = ${allActionsSource}
           const rects = buttons.map(button => button.getBoundingClientRect())
           return {
-            singleRow: rects.length === 2 && rects.every(rect => Math.abs(rect.top - rects[0].top) <= 1),
+            singleRow: rects.length === 1 && rects.every(rect => Math.abs(rect.top - rects[0].top) <= 1),
             reachable: buttons.every(button => {
               const rect = button.getBoundingClientRect()
               return rect.left >= 0 && rect.right <= innerWidth && !button.disabled
@@ -1902,7 +1900,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
       '[data-testid="purchase-order-detail-drawer"] section[aria-label="订单变更记录"]',
     )?.getClientRects().length > 0`)
     await clickOrderDrawerTab(page, 'purchase-order-detail-drawer', '订单详情信息')
-    // 全部采购列表只保留查看与取消；付款从已打开的详情抽屉继续办理。
+    // 全部采购列表保留查看；付款从已打开的详情抽屉继续办理。
     await clickVisibleButton(page, '记录付款')
     await waitForVisibleDialog(page, '记录实际付款')
     await fillLabelledControl(page, '付款金额', '80')
@@ -2185,15 +2183,26 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     await waitForNoVisibleDialog(page, '确认货件发货')
     await waitForPurchaseList(page, historicalMixedCancelableOrderNo)
 
-    await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
-    await waitForPurchaseList(page, historicalMixedCancelableOrderNo)
-    await clickVisibleAriaButton(page, `${historicalMixedCancelableOrderNo}：取消订单`)
-    await waitForVisibleDialog(page, '取消采购订单？')
-    await clickDialogButton(page, '取消采购订单？', '确认取消')
-    await waitForNoVisibleDialog(page, '取消采购订单？')
+    await page.navigate(appRouteUrl(configuration.baseUrl, '/qs-purchase-transport/reviews'))
+    const approvedTabSource = `(() => [...document.querySelectorAll('[data-slot="qs-status-switch-toolbar"][aria-label="采购审核"] [data-slot="qs-status-switch-item"]')]
+      .find(button => button.getClientRects().length > 0 && button.querySelector('span')?.textContent.trim() === '已通过'))()`
+    await page.waitFor(`${approvedTabSource} !== undefined`)
+    await page.evaluate(`(() => { const button = ${approvedTabSource}; button.focus({ preventScroll: true }); button.click(); return true })()`)
+    // 审核列表没有运营列表的 data-testid，直接等待当前订单的专用取消入口。
+    await clickVisibleAriaButton(page, `${historicalMixedCancelableOrderNo}：取消采购单`)
+    await waitForVisibleDialog(page, '确认取消采购单？')
+    await page.connection.send('Browser.grantPermissions', {
+      origin: new URL(configuration.baseUrl).origin,
+      permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'],
+    })
+    await clickDialogButton(page, '确认取消采购单？', '确认取消并复制')
+    await waitForNoVisibleDialog(page, '确认取消采购单？')
     await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
       .some(toast => toast.getClientRects().length > 0
-        && toast.textContent?.includes('采购订单已取消'))`)
+        && toast.textContent?.includes('采购单已取消'))`)
+    const cancellationText = await page.evaluate('navigator.clipboard.readText()')
+    assert.ok(cancellationText.startsWith(`【订单取消：${historicalMixedCancelableOrderNo}】`))
+    assert.ok(cancellationText.includes('[采购产品明细]'))
 
     const activeAfter = await page.evaluate(apiExpression(
       `/api/purchase-orders/${encodeURIComponent(historicalMixedActiveOrder.id)}`,
@@ -2218,7 +2227,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     assert.equal(cancelledAfter.body?.paymentStatus, 'UNPAID')
   })
 
-  await runPurchaseOrderBrowserStep('cancel an unreviewed purchase without allocating any shipping mark', async () => {
+  await runPurchaseOrderBrowserStep('operations cannot cancel an unreviewed purchase or allocate its shipping mark', async () => {
     const beforeLedger = await readPurchaseShippingMarkLedger(page)
     const resolution = await page.evaluate(apiExpression('/api/purchase-orders/shipping-mark-resolution?productMode=CUSTOM'))
     assert.equal(resolution.status, 200)
@@ -2240,20 +2249,18 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     assert.equal(pending.body.shippingMarkText, null)
     assert.deepEqual(pending.body.shippingMarks, [])
     assert.equal(pending.body.parts[0].shippingMarkText, null)
-    // 数据由 HTTP 准备；同一 hash 路由的原地导航不会重取缓存列表。进入审核中
-    // 视图触发真实查询，确保后续取消操作作用于刚创建的待审核采购单。
+    // 数据由 HTTP 准备；进入审核中视图触发真实查询，确认新订单也没有运营取消入口。
     await page.navigate(appRouteUrl(configuration.baseUrl, `${listRoute}?status=PENDING_REVIEW`))
     await waitForPurchaseList(page, pending.body.orderNo)
-    await clickVisibleAriaButton(page, `${pending.body.orderNo}：取消订单`)
-    await waitForVisibleDialog(page, '取消采购订单？')
-    await clickDialogButton(page, '取消采购订单？', '确认取消')
-    await waitForNoVisibleDialog(page, '取消采购订单？')
-    const cancelled = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(pending.body.id)}`))
-    assert.equal(cancelled.status, 200)
-    assert.equal(cancelled.body.orderStatus, 'CANCELLED')
-    assert.equal(cancelled.body.shippingMarkText, null)
-    assert.deepEqual(cancelled.body.shippingMarks, [])
-    assert.equal(cancelled.body.parts[0].shippingMarkText, null)
+    const pendingActionsSource = purchaseOrderActionButtonsSource(pending.body.orderNo)
+    await page.waitFor(`${pendingActionsSource}.length === 1`)
+    assert.deepEqual(await page.evaluate(`${pendingActionsSource}.map(button => button.textContent.trim())`), ['查看'])
+    const unchanged = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(pending.body.id)}`))
+    assert.equal(unchanged.status, 200)
+    assert.equal(unchanged.body.orderStatus, 'PENDING_REVIEW')
+    assert.equal(unchanged.body.shippingMarkText, null)
+    assert.deepEqual(unchanged.body.shippingMarks, [])
+    assert.equal(unchanged.body.parts[0].shippingMarkText, null)
     assert.deepEqual(await readPurchaseShippingMarkLedger(page), beforeLedger)
   })
 

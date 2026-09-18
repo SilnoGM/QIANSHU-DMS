@@ -18,6 +18,7 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getPurchaseOrderApiFailure, orderStatusLabel, orderStatusTagClass, purchaseTypeLabel } from '../../operations/purchase-orders/purchase-order-list.logic'
 import PurchaseOrderReviewModal from '../../operations/purchase-orders/purchase-order-review-modal.vue'
+import PurchaseCancellationModal from './cancellation-modal.vue'
 import { buildReviewQuery, countReviewViews } from './logic'
 
 defineOptions({ name: 'QsPurchaseTransportReviews' })
@@ -39,6 +40,8 @@ const error = ref('')
 const countsError = ref(false)
 const reviewVisible = ref(false)
 const reviewId = ref<string | null>(null)
+const cancellationVisible = ref(false)
+const cancellationId = ref<string | null>(null)
 const detailVisible = ref(false)
 const selectedOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
 const detail = shallowRef<PurchaseOrderDetailDto | null>(null)
@@ -153,6 +156,12 @@ function openReview(row: PurchaseOrderListItemDto): void {
   reviewId.value = row.id
   reviewVisible.value = true
 }
+function openCancellation(row: PurchaseOrderListItemDto): void {
+  if (canRead.value && canReview.value && status.value === 'APPROVED') {
+    cancellationId.value = row.id
+    cancellationVisible.value = true
+  }
+}
 async function loadDetail(): Promise<void> {
   detailController?.abort()
   const orderId = selectedOrder.value?.id
@@ -199,6 +208,8 @@ watch(() => [canRead.value, canReview.value, account.authEpoch], () => {
   detailController?.abort()
   reviewVisible.value = false
   reviewId.value = null
+  cancellationVisible.value = false
+  cancellationId.value = null
   detailVisible.value = false
   selectedOrder.value = null
   detail.value = null
@@ -233,7 +244,7 @@ onBeforeUnmount(() => {
         row-key="id" :show-row-number="false" :columns="columns" :data="items"
         :loading="loading" :error="error || undefined" :total="total" :addable="false"
         :search-placeholder="t('purchaseReview.search')" :empty-title="t('purchaseReview.empty')"
-        :page-size-options="[20, 50, 100]" :action-column="{ fixed: 'right', minWidth: 145 }"
+        :page-size-options="[20, 50, 100]" :action-column="{ fixed: 'right', minWidth: status === 'APPROVED' && canReview ? 230 : 145 }"
         @search="search" @pagination-change="load" @retry="refresh"
       >
         <template #cell-orderNo="{ row }">
@@ -327,10 +338,14 @@ onBeforeUnmount(() => {
           <FaButton v-else variant="ghost" size="sm" class="min-h-11 sm:min-h-8" @click="view(row)">
             <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('purchaseReview.view') }}
           </FaButton>
+          <FaButton v-if="status === 'APPROVED' && canReview" variant="ghost" size="sm" class="text-destructive min-h-11 sm:min-h-8" :aria-label="`${row.orderNo}：${t('purchaseReview.cancellation.action')}`" @click="openCancellation(row)">
+            <FaIcon name="i-lucide:circle-x" aria-hidden="true" />{{ t('purchaseReview.cancellation.action') }}
+          </FaButton>
         </template>
       </QsGenericTable>
     </FaPageMain>
     <PurchaseOrderReviewModal v-model="reviewVisible" :order-id="reviewId" :currencies="currencyCatalog.currencies.value" @detail-updated="refresh" />
+    <PurchaseCancellationModal v-model="cancellationVisible" :order-id="cancellationId" @cancelled="refresh" />
     <QsPurchaseOrderDrawer
       v-model="detailVisible" :order="selectedOrder" :detail="detail" :currencies="currencyCatalog.currencies.value"
       :loading="detailLoading" :error="detailError" action-error="" :busy="false"

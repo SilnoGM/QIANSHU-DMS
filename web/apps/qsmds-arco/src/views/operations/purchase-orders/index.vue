@@ -51,15 +51,12 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
-import PurchaseOrderDetailActions from './purchase-order-detail-actions.vue'
-
 import PurchaseOrderDetailDrawer from './purchase-order-detail-drawer.vue'
 import PurchaseOrderListPaymentAction from './purchase-order-list-payment-action.vue'
 import {
   buildPurchaseOrderListQuery,
   buildPurchaseOrderStatusCountsQuery,
   calculatePurchaseOrderPaymentProgress,
-  canCancelPurchaseOrderFromList,
   formatPurchaseFactoryShipmentSuccess,
   formatPurchaseOrderSummaryAmount,
   fulfillmentStatusLabel,
@@ -156,10 +153,8 @@ const selectedOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
 const recordsModalVisible = ref(false)
 const recordsModalKind = ref<PurchaseOrderRecordsKind>('payments')
 const recordsModalOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
-const cancellationDetail = shallowRef<PurchaseOrderDetailDto | null>(null)
 const purchaseStartVisible = ref(false)
 const purchaseStartType = ref<PurchaseStartPurchaseType>('SALES_LINKED')
-const cancelLoadingOrderId = ref<string | null>(null)
 const shipmentVisible = ref(false)
 const shipmentContext = shallowRef<FactoryShipmentModalContext | null>(null)
 const shipmentDetail = shallowRef<PurchaseOrderDetailDto | null>(null)
@@ -167,7 +162,6 @@ const shipmentTarget = shallowRef<PurchaseOrderListItemDto | null>(null)
 const shipmentContextLoading = ref(false)
 const shipmentSubmitting = ref(false)
 const shipmentError = ref<string | null>(null)
-const cancelActionsRef = useTemplateRef<InstanceType<typeof PurchaseOrderDetailActions>>('cancelActionsRef')
 const warehouseActionRef = useTemplateRef<InstanceType<typeof PurchaseWarehouseReceiptAction>>('warehouseActionRef')
 watch(() => route.fullPath, () => warehouseActionRef.value?.reset())
 const warehouseLoadingOrderId = computed(() => warehouseActionRef.value?.loadingOrderId ?? null)
@@ -176,10 +170,8 @@ const paymentLoadingOrderId = computed(() => paymentActionRef.value?.loadingOrde
 const todayDate = today(getLocalTimeZone())
 let requestVersion = 0
 let countRequestVersion = 0
-let cancellationRequestVersion = 0
 let listAbortController: AbortController | null = null
 let countAbortController: AbortController | null = null
-let cancellationAbortController: AbortController | null = null
 let shipmentAbortController: AbortController | null = null
 
 const statusItems = computed(() => withStatusSwitchCounts(
@@ -537,71 +529,6 @@ function openPurchaseOrderDetail(order: PurchaseOrderListItemDto): void {
   detailVisible.value = true
 }
 
-function cancelCancellationDetailRequest(): void {
-  cancellationRequestVersion += 1
-  cancellationAbortController?.abort()
-  cancellationAbortController = null
-  cancelLoadingOrderId.value = null
-}
-
-/**
- * 取消入口只借用详情接口取得最新版本和付款状态，不打开详情抽屉。
- * 服务端仍会在真正提交取消时再次校验状态与 version，避免列表缓存成为写入依据。
- */
-async function loadPurchaseOrderForCancellation(order: PurchaseOrderListItemDto): Promise<void> {
-  if (
-    !canUpdate.value
-    || !canCancelPurchaseOrderFromList(order)
-    || cancelLoadingOrderId.value !== null
-  ) {
-    return
-  }
-  cancelCancellationDetailRequest()
-  const version = cancellationRequestVersion
-  const controller = new AbortController()
-  cancellationAbortController = controller
-  const authEpoch = appAccountStore.authEpoch
-  cancelLoadingOrderId.value = order.id
-  try {
-    const response = await purchaseOrdersApi.getById(order.id, controller.signal)
-    if (
-      controller.signal.aborted
-      || version !== cancellationRequestVersion
-      || authEpoch !== appAccountStore.authEpoch
-    ) {
-      return
-    }
-    if (!canUpdate.value || !canCancelPurchaseOrderFromList(response.data)) {
-      toast.warning('采购订单状态已变化，当前无法取消')
-      refreshOrdersAndCounts()
-      return
-    }
-    cancellationDetail.value = response.data
-    await nextTick()
-    cancelActionsRef.value?.openCancelDialog()
-  }
-  catch (error) {
-    if (!controller.signal.aborted && !isPurchaseOrderAbortError(error)) {
-      const failure = getPurchaseOrderApiFailure(error)
-      toast.error(failure.requestId === undefined
-        ? failure.message
-        : `${failure.message}（requestId: ${failure.requestId}）`)
-    }
-  }
-  finally {
-    if (version === cancellationRequestVersion) {
-      cancelLoadingOrderId.value = null
-      if (cancellationAbortController === controller) {
-        cancellationAbortController = null
-      }
-    }
-  }
-}
-
-function openPurchaseOrderCancellation(order: PurchaseOrderListItemDto): void {
-  void loadPurchaseOrderForCancellation(order)
-}
-
 function pendingActions(order: PurchaseOrderListItemDto) {
   return resolvePurchaseOrderPendingActions(
     normalizePurchaseOrderStatusSelection(
@@ -812,17 +739,11 @@ function handleRecordsLoaded(detail: PurchaseOrderDetailDto): void {
     : row)
 }
 
-function handleCancellationUpdated(detail: PurchaseOrderDetailDto): void {
-  cancellationDetail.value = detail
-  refreshOrdersAndCounts()
-}
-
 watch(() => appAccountStore.authEpoch, () => {
   requestVersion += 1
   countRequestVersion += 1
   listAbortController?.abort()
   countAbortController?.abort()
-  cancelCancellationDetailRequest()
   cancelShipmentRequest()
   shipmentVisible.value = false
   shipmentTarget.value = null
@@ -833,7 +754,6 @@ watch(() => appAccountStore.authEpoch, () => {
   recordsModalVisible.value = false
   recordsModalOrder.value = null
   selectedOrder.value = null
-  cancellationDetail.value = null
   purchaseStartVisible.value = false
   rows.value = []
   summariesByCurrency.value = []
@@ -908,9 +828,7 @@ onBeforeUnmount(() => {
   countRequestVersion += 1
   listAbortController?.abort()
   countAbortController?.abort()
-  cancelCancellationDetailRequest()
   cancelShipmentRequest()
-  cancelActionsRef.value?.cancelPendingRequests()
 })
 </script>
 
@@ -1037,19 +955,6 @@ onBeforeUnmount(() => {
             </template>
             <FaButton v-if="props.viewMode === 'all' && canUpdate && row.orderStatus === 'CONFIRMED' && row.pendingWarehousePartCount > 0" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" :loading="warehouseLoadingOrderId === row.id" :disabled="warehouseLoadingOrderId !== null" @click="warehouseActionRef?.open(row.id)">
               <FaIcon name="i-lucide:warehouse" />{{ t('purchaseWarehouseReceipt.action') }}
-            </FaButton>
-            <FaButton
-              v-if="canUpdate && canCancelPurchaseOrderFromList(row) && (props.viewMode === 'all' || row.orderStatus === 'PENDING_REVIEW')"
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="text-destructive min-h-11 sm:min-h-8"
-              :aria-label="`${row.orderNo}：取消订单`"
-              :loading="cancelLoadingOrderId === row.id"
-              :disabled="cancelLoadingOrderId !== null"
-              @click="openPurchaseOrderCancellation(row)"
-            >
-              <FaIcon name="i-lucide:circle-x" aria-hidden="true" />取消
             </FaButton>
           </div>
         </template>
@@ -1617,15 +1522,6 @@ onBeforeUnmount(() => {
       ref="paymentActionRef"
       :active="viewMode === 'pending' && route.name === 'qsOperationsPendingPurchaseOrders' && selectedStatus === 'AWAITING_PAYMENT'"
       @stale="refreshOrdersAndCounts"
-    />
-
-    <PurchaseOrderDetailActions
-      v-if="cancellationDetail"
-      ref="cancelActionsRef"
-      :detail="cancellationDetail"
-      :currencies="currencyCatalog.currencies.value"
-      @detail-updated="handleCancellationUpdated"
-      @failure="toast.error($event)"
     />
 
     <QsFactoryShipmentModal

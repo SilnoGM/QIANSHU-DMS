@@ -85,6 +85,26 @@ const providers = [{
 class PurchaseOrdersContractModule {}
 
 describe('PurchaseOrdersController', () => {
+  it('reserves purchase cancellation for reviewers and accepts an omitted reason', async () => {
+    const updateOrderStatus = jest.fn().mockResolvedValue({ id: ORDER_ID, orderStatus: 'CANCELLED' })
+    const controller = new PurchaseOrdersController(
+      {} as PurchaseOrderQueryService,
+      {} as PurchaseOrderSourceQueryService,
+      {} as PurchaseOrderCommandService,
+      { updateOrderStatus } as unknown as PurchaseOrderMutationService,
+      {} as PurchaseOrderDocumentService,
+      {} as PurchaseOrderProductImageService,
+      {} as PurchaseShippingMarkResolverService,
+    )
+    const input = { toStatus: 'CANCELLED' as const }
+
+    await expect(controller.updateOrderStatus({ purchaseOrderId: ORDER_ID }, input, createRequest()))
+      .resolves.toEqual({ id: ORDER_ID, orderStatus: 'CANCELLED' })
+    expect(updateOrderStatus).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, input)
+    expect(new Reflector().get(REQUIRED_PERMISSIONS_METADATA, PurchaseOrdersController.prototype.updateOrderStatus))
+      .toEqual(['purchase-orders:review'])
+  })
+
   it('requires review permission for the read-only eligibility check', async () => {
     const read = jest.fn().mockResolvedValue({ available: true, message: null })
     const controller = new PurchaseOrderReviewContextController({ read } as unknown as PurchaseOrderReviewContextService)

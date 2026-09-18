@@ -39,12 +39,12 @@ test('采购列表按内容横向展开，编号和金额保留安全列宽，�
   assert.match(source, /:action-column="\{ fixed: 'right', minWidth: actionColumnWidth, title: '操作', width: actionColumnWidth \}"/u)
 })
 
-test('运营采购只保留查看和取消，不再挂载审核入口', async () => {
+test('运营采购保留查看入口，不挂载审核和取消入口', async () => {
   const source = await readFile(new URL('index.vue', root), 'utf8')
   assert.match(source, /const actionColumnWidth = 200/u)
   assert.doesNotMatch(source, /PurchaseOrderReviewModal|openPurchaseOrderReview|canReview/u)
-  assert.match(source, /v-if="canUpdate && canCancelPurchaseOrderFromList\(row\) && \(props.viewMode === 'all' \|\| row.orderStatus === 'PENDING_REVIEW'\)"/u)
-  assert.match(source, /@click="openPurchaseOrderCancellation\(row\)"/u)
+  assert.match(source, /@click="openPurchaseOrderDetail\(row\)"/u)
+  assert.doesNotMatch(source, /canCancelPurchaseOrderFromList|openPurchaseOrderCancellation/u)
 })
 
 test('三列与销售一致使用可点击的图标数量按钮，零记录不禁用', async () => {

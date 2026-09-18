@@ -10,14 +10,12 @@ import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import {
-  buildPurchaseOrderCancellationRequest,
   buildPurchaseOrderFulfillmentRequest,
   buildPurchaseOrderPaymentVoidRequest,
   purchaseOrderPaymentTypeLabel,
 } from './purchase-order-detail.logic'
 
 import {
-  canCancelPurchaseOrderFromList,
   fulfillmentStatusLabel,
   getPurchaseOrderApiFailure,
   isPurchaseOrderAbortError,
@@ -25,7 +23,7 @@ import {
 } from './purchase-order-list.logic'
 import PurchaseWarehouseReceiptAction from './purchase-warehouse-receipt-action.vue'
 
-type ActionDialog = 'cancel' | 'detach' | 'fulfillment' | 'void'
+type ActionDialog = 'detach' | 'fulfillment' | 'void'
 
 defineOptions({ name: 'PurchaseOrderDetailActions' })
 
@@ -100,14 +98,6 @@ function openFulfillmentDialog(): void {
   }
   clearActionState()
   activeDialog.value = 'fulfillment'
-}
-
-function openCancelDialog(): void {
-  if (!canUpdate.value || !canCancelPurchaseOrderFromList(props.detail) || actionLocked.value) {
-    return
-  }
-  clearActionState()
-  activeDialog.value = 'cancel'
 }
 
 function openVoidDialog(payment: PurchaseOrderPaymentDto): void {
@@ -209,27 +199,6 @@ function submitFulfillment(): void {
   }, `履约状态已更新为${fulfillmentStatusLabel(toStatus)}`)
 }
 
-function submitCancellation(): void {
-  if (!canUpdate.value) {
-    return
-  }
-  const result = buildPurchaseOrderCancellationRequest(props.detail, actionReason.value)
-  if (!result.valid) {
-    actionReasonError.value = result.fieldError
-    return
-  }
-  void runDetailMutation(async (current, signal) => {
-    const response = await purchaseOrdersApi.updateOrderStatus(
-      current.id,
-      result.request,
-      signal,
-    )
-    return response.data
-  }, props.detail.purchaseType === 'SALES_LINKED'
-    ? '采购订单已取消，关联销售订单采购覆盖状态已重新计算'
-    : '采购订单已取消')
-}
-
 function submitPaymentVoid(): void {
   if (!canManagePayment.value || props.detail.orderStatus === 'PENDING_REVIEW') {
     return
@@ -324,7 +293,6 @@ onBeforeUnmount(() => {
 defineExpose({
   cancelPendingRequests,
   downloadDocument,
-  openCancelDialog,
   openDetachDialog,
   openFulfillmentDialog,
   openWarehouseDialog,
@@ -353,29 +321,6 @@ defineExpose({
       </FaButton>
       <FaButton type="button" :loading="submitting" @click="submitFulfillment">
         确认推进
-      </FaButton>
-    </template>
-  </QsGenericModal>
-
-  <QsGenericModal
-    :model-value="activeDialog === 'cancel'"
-    title="取消采购订单？"
-    description="取消后不能继续履约或新增付款；已有有效付款时必须先作废。"
-    size="sm"
-    :submitting="submitting"
-    @update:model-value="handleDialogUpdate('cancel', $event)"
-  >
-    <FaAlert v-if="actionError" title="采购订单未取消" :description="actionError" variant="destructive" class="mb-4" />
-    <FaTextarea v-model="actionReason" maxlength="500" placeholder="填写取消原因（可选）" input-class="min-h-24" />
-    <p v-if="actionReasonError" class="text-xs text-destructive m-0 mt-1">
-      {{ actionReasonError }}
-    </p>
-    <template #footer>
-      <FaButton type="button" variant="outline" :disabled="submitting" @click="closeActionDialog">
-        返回
-      </FaButton>
-      <FaButton type="button" variant="destructive" :loading="submitting" @click="submitCancellation">
-        确认取消
       </FaButton>
     </template>
   </QsGenericModal>
