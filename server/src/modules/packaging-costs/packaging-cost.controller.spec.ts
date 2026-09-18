@@ -26,6 +26,13 @@ describe('PackagingCostController contract', () => {
     expect(document.paths[root].post).toMatchObject({ operationId: 'packaging_costs_create', responses: { 201: { headers: { 'X-Request-Id': expect.any(Object) as unknown } }, 409: expect.any(Object) as unknown } })
     expect(document.paths[`${root}/images`].post).toMatchObject({ operationId: 'packaging_costs_upload_image', requestBody: { content: { 'multipart/form-data': { schema: { required: ['mediaType', 'file'] } } } } })
     expect(document.paths[`${root}/shipment-context/{shipmentId}`].get).toMatchObject({ operationId: 'packaging_costs_shipment_context' })
+    expect(document.components?.schemas?.PackagingCostShipmentContextDto).toMatchObject({
+      required: expect.arrayContaining(['existingRequests']) as unknown,
+      properties: { existingRequests: { type: 'array', items: { $ref: '#/components/schemas/PackagingCostRequestSummaryDto' } } },
+    })
+    expect(document.components?.schemas?.PackagingCostRequestSummaryDto).toHaveProperty('required', [
+      'id', 'packagingTypeName', 'packagingVendor', 'amount', 'currencyCode', 'status', 'submittedBy', 'submittedAt', 'paidBy', 'paidAt', 'remark',
+    ])
     expect(document.paths[`${root}/{id}/pay`].post).toMatchObject({ operationId: 'packaging_costs_pay', responses: { 200: expect.any(Object) as unknown, 403: expect.any(Object) as unknown, 409: expect.any(Object) as unknown } })
     expect(document.paths[`${root}/{id}/pay`].post).toMatchObject({
       'x-qianshu-contract': { errors: expect.arrayContaining([

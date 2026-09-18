@@ -100,6 +100,19 @@ export class PackagingCostRequestPageDto {
 export class PackagingCostShipmentIdDto {
   @ApiProperty({ format: 'uuid' }) @IsUUID('4') shipmentId!: string
 }
+export class PackagingCostRequestSummaryDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty() packagingTypeName!: string
+  @ApiProperty({ enum: PackagingCostVendorDto }) packagingVendor!: PackagingCostVendorDto
+  @ApiProperty({ description: 'Immutable CNY amount with four decimal places.' }) amount!: string
+  @ApiProperty({ enum: ['CNY'] }) currencyCode!: 'CNY'
+  @ApiProperty({ enum: PackagingCostStatusDto }) status!: PackagingCostStatusDto
+  @ApiProperty({ type: () => PackagingCostPersonDto }) submittedBy!: PackagingCostPersonDto
+  @ApiProperty({ format: 'date-time' }) submittedAt!: string
+  @ApiProperty({ type: () => PackagingCostPersonDto, nullable: true }) paidBy!: PackagingCostPersonDto | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) paidAt!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) remark!: string | null
+}
 export class PackagingCostShipmentContextDto {
   @ApiProperty({ format: 'uuid' }) shipmentId!: string
   @ApiProperty({ type: 'string', nullable: true }) shipmentNo!: string | null
@@ -107,6 +120,7 @@ export class PackagingCostShipmentContextDto {
   @ApiProperty({ type: 'string', nullable: true }) purchaseOrderNo!: string | null
   @ApiProperty({ type: 'string', nullable: true }) salesOrderNo!: string | null
   @ApiProperty({ type: () => PackagingCostPersonDto, nullable: true }) owner!: PackagingCostPersonDto | null
+  @ApiProperty({ type: [PackagingCostRequestSummaryDto], description: 'Existing requests for this exact shipment, ordered by submittedAt and id descending.' }) existingRequests!: PackagingCostRequestSummaryDto[]
   @ApiProperty() eligible!: boolean
   @ApiProperty({ type: 'string', enum: ['invalidShipment', 'noSalesSource', null], nullable: true }) unavailableReason!: 'invalidShipment' | 'noSalesSource' | null
 }

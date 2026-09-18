@@ -72225,6 +72225,80 @@
           "statusCounts"
         ]
       },
+      "PackagingCostRequestSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "packagingTypeName": {
+            "type": "string"
+          },
+          "packagingVendor": {
+            "type": "string",
+            "enum": [
+              "CHENGXIN",
+              "OTHER"
+            ]
+          },
+          "amount": {
+            "type": "string",
+            "description": "Immutable CNY amount with four decimal places."
+          },
+          "currencyCode": {
+            "type": "string",
+            "enum": [
+              "CNY"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_PAYMENT",
+              "PAID"
+            ]
+          },
+          "submittedBy": {
+            "$ref": "#/components/schemas/PackagingCostPersonDto"
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "paidBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PackagingCostPersonDto"
+              }
+            ]
+          },
+          "paidAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "packagingTypeName",
+          "packagingVendor",
+          "amount",
+          "currencyCode",
+          "status",
+          "submittedBy",
+          "submittedAt",
+          "paidBy",
+          "paidAt",
+          "remark"
+        ]
+      },
       "PackagingCostShipmentContextDto": {
         "type": "object",
         "properties": {
@@ -72257,6 +72331,13 @@
               }
             ]
           },
+          "existingRequests": {
+            "description": "Existing requests for this exact shipment, ordered by submittedAt and id descending.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackagingCostRequestSummaryDto"
+            }
+          },
           "eligible": {
             "type": "boolean"
           },
@@ -72277,6 +72358,7 @@
           "purchaseOrderNo",
           "salesOrderNo",
           "owner",
+          "existingRequests",
           "eligible",
           "unavailableReason"
         ]

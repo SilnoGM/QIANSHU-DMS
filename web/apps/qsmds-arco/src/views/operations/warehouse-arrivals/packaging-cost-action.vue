@@ -4,6 +4,7 @@ import type { PackagingCostRequestDto, PurchaseShipmentListItemDto } from '@/api
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import PackagingCostModal from './packaging-cost-modal.vue'
 import { buildPackagingPaymentRequestText } from './packaging-cost.logic'
+import PackagingHistoryModal from './packaging-history-modal.vue'
 import { usePackagingCostContext } from './use-packaging-cost-context'
 import { usePackagingCostSubmission } from './use-packaging-cost-submission'
 
@@ -34,6 +35,20 @@ const context = computed<PackagingCostContext>(() => ({
 const submitDisabledHint = computed(() => !loading.value && !error.value && unavailableReason.value
   ? t(`warehousePackagingCost.${unavailableReason.value}`)
   : '')
+const historyConfirmed = ref(false)
+const historyChecked = computed(() => source.value !== null && Array.isArray(source.value.existingRequests))
+const existingRequests = computed(() => source.value?.existingRequests ?? [])
+const historyError = computed(() => error.value || (!loading.value && source.value && !historyChecked.value ? t('warehousePackagingCost.history.checkFailed') : ''))
+const formVisible = computed(() => visible.value && canCreate.value && !loading.value && !historyError.value && historyChecked.value && (existingRequests.value.length === 0 || historyConfirmed.value))
+function confirmContinue(): void {
+  if (visible.value && canCreate.value && eligible.value && !loading.value && !historyError.value && historyChecked.value) {
+    historyConfirmed.value = true
+  }
+}
+// 重新查询、换货件或换账号后必须针对新结果确认，不能沿用上一批记录的选择。
+watch([source, () => props.shipment.id, () => account.authEpoch, canCreate], () => {
+  historyConfirmed.value = false
+}, { flush: 'sync' })
 
 const submission = usePackagingCostSubmission(
   computed(() => canCreate.value && visible.value),
@@ -64,7 +79,7 @@ async function copyPaymentRequest(request: PackagingCostRequestDto, epoch: numbe
   }
 }
 async function submit(draft?: PackagingCostDraft): Promise<void> {
-  if (!eligible.value || !visible.value || !canCreate.value || handlingSubmit.value || completed) {
+  if (!eligible.value || !formVisible.value || handlingSubmit.value || completed) {
     return
   }
   const epoch = account.authEpoch
@@ -90,8 +105,13 @@ watch(visible, (value) => {
 </script>
 
 <template>
+  <PackagingHistoryModal
+    v-if="!formVisible" v-model="visible" :context="context" :records="existingRequests"
+    :loading="loading" :error="historyError || null" :continue-disabled="!eligible || !canCreate || !historyChecked"
+    :unavailable-hint="submitDisabledHint" @reload="reload" @continue="confirmContinue"
+  />
   <PackagingCostModal
-    v-model="visible" :context="context" :loading="loading" :error="error || null"
+    v-else v-model="visible" :context="context" :loading="loading" :error="error || null"
     :submitting="submission.busy.value || handlingSubmit" :draft-locked="submission.pending.value" :submit-error="submission.error.value" :submit-disabled="!eligible || !canCreate" :submit-disabled-hint="submitDisabledHint"
     @reload="reload" @submit="submit" @retry-submit="submit()"
   />

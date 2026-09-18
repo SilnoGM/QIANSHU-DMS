@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import request from 'supertest'
 import sharp from 'sharp'
 
-import type { PackagingCostRequestDto, PackagingCostRequestPageDto } from '../src/modules/packaging-costs/packaging-cost.dto'
+import type { PackagingCostRequestDto, PackagingCostRequestPageDto, PackagingCostShipmentContextDto } from '../src/modules/packaging-costs/packaging-cost.dto'
 import { AuditService } from '../src/modules/audit/audit.service'
 import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
 import { MediaAssetReferenceRepository } from '../src/modules/media/media-reference.repository'
@@ -171,6 +171,37 @@ describe('packaging cost submission and payment over isolated PostgreSQL and rea
     await expect(h.prisma.packagingCostRequest.update({ where: { id: created.id }, data: { amount: '1' } })).rejects.toThrow()
     await expect(h.prisma.packagingCostRequest.update({ where: { id: created.id }, data: { status: 'PENDING_PAYMENT', paidByUserId: null, paidAt: null } })).rejects.toThrow()
     await expect(h.prisma.packagingCostRequest.delete({ where: { id: created.id } })).rejects.toThrow()
+  })
+
+  it('lets submitters inspect only the exact shipment history with pending and paid summaries', async () => {
+    const creator = await h.browserWithPermissions(['packaging-costs:create'])
+    const finance = await h.browserWithPermissions(['packaging-costs:read', 'packaging-costs:pay'])
+    const shipment = await h.shipment()
+    const url = `/api/packaging-cost-requests/shipment-context/${shipment.part.id}`
+    expect((await creator.browser.get(url).expect(200)).body as PackagingCostShipmentContextDto).toMatchObject({ existingRequests: [], eligible: true })
+    const first = (await submit(creator.browser, await h.input(creator.browser, shipment.part.id)).expect(201)).body as PackagingCostRequestDto
+    const paid = (await pay(finance.browser, first.id).expect(200)).body as PackagingCostRequestDto
+    const pending = (await submit(creator.browser, { ...await h.input(creator.browser, shipment.part.id), packagingType: 'WOODEN_FRAME', amount: '110.25' }).expect(201)).body as PackagingCostRequestDto
+    const otherShipment = await h.shipment()
+    const unrelated = (await submit(creator.browser, await h.input(creator.browser, otherShipment.part.id)).expect(201)).body as PackagingCostRequestDto
+    const before = await fundFacts(paid.id)
+    const response = await creator.browser.get(url).expect(200)
+    const context = response.body as PackagingCostShipmentContextDto
+    const summary = (row: PackagingCostRequestDto) => ({
+      id: row.id, packagingTypeName: row.packagingTypeName, packagingVendor: row.packagingVendor, amount: row.amount,
+      currencyCode: row.currencyCode, status: row.status, submittedBy: row.submittedBy, submittedAt: row.submittedAt,
+      paidBy: row.paidBy, paidAt: row.paidAt, remark: row.remark,
+    })
+    expect(context.existingRequests).toEqual([summary(pending), summary(paid)])
+    expect(context.eligible).toBe(true)
+    expect(JSON.stringify(context)).not.toContain(unrelated.id)
+    expect(response.headers['cache-control']).toBe('private, no-store')
+    expect(await fundFacts(paid.id)).toEqual(before)
+    await creator.browser.get(`/api/packaging-cost-requests/${paid.id}`).expect(403)
+    await finance.browser.get(url).expect(403)
+    await request(h.app.getHttpServer()).get(url).expect(401)
+    const missing = (await creator.browser.get(`/api/packaging-cost-requests/shipment-context/${randomUUID()}`).expect(200)).body as PackagingCostShipmentContextDto
+    expect(missing).toMatchObject({ existingRequests: [], eligible: false, unavailableReason: 'invalidShipment' })
   })
 
   it('separates create, read and pay permissions and applies revocation on the next request', async () => {
