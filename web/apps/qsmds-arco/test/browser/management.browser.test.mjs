@@ -1004,16 +1004,20 @@ async function verifyProductList(page, baseUrl) {
     await waitForNoVisibleModal(page, '产品属性')
     await page.waitFor(`document.activeElement?.textContent?.trim() === '2 项属性'`)
 
-    await clickVisibleTableRowButton(page, productNo, '2 个视频')
-    await page.waitFor(`(() => {
+    // 固定第一段能力错误的注入时机：夹具真实内容为 404，Linux 快速响应可能
+    // 在两次 CDP 调用之间卸载 video。只暂停媒体请求，注入完成后立即恢复。
+    await page.enableRequestInterception([{ resourceType: 'Media', requestStage: 'Request', urlPattern: '*' }])
+    try {
+      await clickVisibleTableRowButton(page, productNo, '2 个视频')
+      await page.waitFor(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes('产品视频'))
       const link = dialog?.querySelector('a[target="_blank"]')
-      return dialog?.querySelector('video[controls]') !== null
+      return dialog?.querySelector('video[controls]') instanceof HTMLVideoElement
         && link?.getAttribute('rel') === 'noopener noreferrer'
     })()`)
-    await page.evaluate(`(() => {
+      await page.evaluate(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes('产品视频'))
@@ -1028,7 +1032,7 @@ async function verifyProductList(page, baseUrl) {
       video.dispatchEvent(new Event('error'))
       return true
     })()`)
-    await page.waitFor(`(() => {
+      await page.waitFor(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes('产品视频'))
@@ -1036,6 +1040,10 @@ async function verifyProductList(page, baseUrl) {
         && dialog.querySelector('[aria-label="下载视频 browser-management-overview.mp4"]') !== null
         && dialog.querySelector('a[target="_blank"]') !== null
     })()`)
+    }
+    finally {
+      await page.disableRequestInterception()
+    }
     // 历史媒体夹具只有数据库记录，没有物理文件。切换后应等待真实 404 驱动的
     // 用户可见失败态；瞬时 <video> 是否赶在 error 事件前被采样与机器速度有关，
     // 不能作为最终契约。下载入口和安全外链仍必须切换到第二个视频。
