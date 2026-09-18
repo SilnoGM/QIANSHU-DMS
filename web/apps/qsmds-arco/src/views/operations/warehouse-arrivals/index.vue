@@ -93,7 +93,7 @@ function paginate(value: { page: number, pageSize: number }): void {
   navigate({ ...query.value, ...value })
 }
 function handleAction(action: WarehouseArrivalAction, row: PurchaseShipmentListItemDto): void {
-  if (!enabled.value || !warehouseArrivalActions(activeView.value, row.viewStatus).includes(action)) {
+  if (!enabled.value || !warehouseArrivalActions(activeView.value, row.viewStatus, row.destinationWarehouseValue).includes(action)) {
     return
   }
   if (action === 'view') {
@@ -228,7 +228,7 @@ onBeforeUnmount(() => activated.value = false)
             <QsPersonDisplay v-if="row.original.warehouseReceivedBy" :display-name="row.original.warehouseReceivedBy.displayName" size="md" /><span v-else>—</span>
           </template>
           <template #actions="{ row }">
-            <FaButton v-for="action in warehouseArrivalActions(activeView, row.viewStatus).filter(value => value !== 'woodenFrame' || canCreatePackaging)" :key="action" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.shipmentNo || t('purchaseShipments.unnumbered')}：${t(`warehouseArrivals.${action}`)}`" @click="handleAction(action, row)">
+            <FaButton v-for="action in warehouseArrivalActions(activeView, row.viewStatus, row.destinationWarehouseValue).filter(value => value !== 'woodenFrame' || canCreatePackaging)" :key="action" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.shipmentNo || t('purchaseShipments.unnumbered')}：${t(`warehouseArrivals.${action}`)}`" @click="handleAction(action, row)">
               <FaIcon :name="action === 'view' ? 'i-lucide:eye' : 'i-lucide:hammer'" aria-hidden="true" />{{ t(`warehouseArrivals.${action}`) }}
             </FaButton>
           </template>

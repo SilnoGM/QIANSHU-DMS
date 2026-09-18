@@ -28,7 +28,7 @@ async function fixture(initialQuery: Record<string, string> = {}) {
     statusCounts: async (query: PurchaseShipmentListQuery, signal: AbortSignal): Promise<any> => {
       calls.push({ kind: 'counts', query, signal })
       const totals: Record<string, [number, number]> = { 'WH-01': [2, 3], 'WH-02': [3, 4], 'QITA': [0, 0] }
-      const [shipped, received] = query.destinationWarehouseValue ? totals[query.destinationWarehouseValue]! : [5, 7]
+      const [shipped, received] = query.destinationWarehouseValue ? totals[query.destinationWarehouseValue] ?? [0, 0] : [5, 7]
       return { data: { items: [{ value: 'SHIPPED', count: shipped }, { value: 'WAREHOUSE_RECEIVED', count: received }], buyerOptions: [] } }
     },
     getById: async (id: string, signal: AbortSignal): Promise<any> => {
@@ -77,7 +77,7 @@ async function fixture(initialQuery: Record<string, string> = {}) {
     selectWarehouse: (value: string) => void
     search: () => void
     paginate: (value: { page: number, pageSize: number }) => void
-    handleAction: (action: string, row: { id: string, viewStatus: string }) => void
+    handleAction: (action: string, row: { id: string, viewStatus: string, destinationWarehouseValue: string | null }) => void
     refresh: () => void
     viewOrderFromShipment: (id: string) => void
     shipmentClosed: () => void
@@ -177,19 +177,33 @@ test('已到仓打木架打开对应货件费用弹窗且不修改列表；待�
   context.after(f.dispose)
   const requestCount = f.calls.length
   const before = JSON.stringify(f.state.rows.value)
-  f.state.handleAction('woodenFrame', { id: 'part-1', viewStatus: 'WAREHOUSE_RECEIVED' })
+  f.state.handleAction('woodenFrame', { id: 'part-1', viewStatus: 'WAREHOUSE_RECEIVED', destinationWarehouseValue: 'SLH.SZ.BA.SJJD.HSNP.B5' })
   assert.equal(f.state.packagingShipment.value?.id, 'part-1')
   assert.deepEqual(f.info, [])
   assert.equal(f.calls.length, requestCount)
   assert.equal(JSON.stringify(f.state.rows.value), before)
-  f.state.handleAction('view', { id: 'part-1', viewStatus: 'WAREHOUSE_RECEIVED' })
+  f.state.handleAction('view', { id: 'part-1', viewStatus: 'WAREHOUSE_RECEIVED', destinationWarehouseValue: 'SLH.SZ.BA.SJJD.HSNP.B5' })
   await nextTick()
   assert.equal(f.calls.at(-1)?.kind, 'detail:part-1')
   const pending = await fixture({ view: 'SHIPPED' })
   context.after(pending.dispose)
-  pending.state.handleAction('woodenFrame', { id: 'part-1', viewStatus: 'WAREHOUSE_RECEIVED' })
+  pending.state.handleAction('woodenFrame', { id: 'part-1', viewStatus: 'WAREHOUSE_RECEIVED', destinationWarehouseValue: 'SLH.SZ.BA.SJJD.HSNP.B5' })
   assert.equal(pending.state.packagingShipment.value, null)
   assert.deepEqual(pending.info, [])
+})
+
+test('全部仓库及单仓库视图均按货件自身仓库限制打木架，其他仓库和空仓库不能打开弹窗', async (context) => {
+  for (const query of [{}, { destinationWarehouseValue: 'SLH.SZ.BA.SJJD.HSNP.B5' }]) {
+    const f = await fixture(query)
+    context.after(f.dispose)
+    for (const destinationWarehouseValue of ['SLH.DW.FHSNL.4HGYQ.B', 'YJ.594540.DGHM.ZTBHCG.B.DXM', 'QITA', null]) {
+      f.state.handleAction('woodenFrame', { id: 'other-part', viewStatus: 'WAREHOUSE_RECEIVED', destinationWarehouseValue })
+      assert.equal(f.state.packagingShipment.value, null)
+    }
+    f.state.handleAction('view', { id: 'other-part', viewStatus: 'WAREHOUSE_RECEIVED', destinationWarehouseValue: 'QITA' })
+    await nextTick()
+    assert.equal(f.calls.at(-1)?.kind, 'detail:other-part')
+  }
 })
 
 test('缓存返回按URL重建筛选草稿，撤权及身份变化取消读取并屏蔽迟到数据', async (context) => {
@@ -222,7 +236,7 @@ test('缓存返回按URL重建筛选草稿，撤权及身份变化取消读取�
   f.permission.value = false
   assert.equal(currentSignal.aborted, true)
   assert.equal(f.state.enabled.value, false)
-  f.state.handleAction('woodenFrame', { id: 'part-1', viewStatus: 'WAREHOUSE_RECEIVED' })
+  f.state.handleAction('woodenFrame', { id: 'part-1', viewStatus: 'WAREHOUSE_RECEIVED', destinationWarehouseValue: 'SLH.SZ.BA.SJJD.HSNP.B5' })
   assert.deepEqual(f.info, [])
   assert.equal(f.state.packagingShipment.value, null)
 })

@@ -9,6 +9,8 @@ export type WarehouseArrivalView = typeof WAREHOUSE_ARRIVAL_VIEWS[number]
 export type WarehouseArrivalAction = 'view' | 'woodenFrame'
 const ALL_WAREHOUSES_FILTER = '__all__'
 const WAREHOUSE_FILTER_PREFIX = 'warehouse:'
+// 打木架仅向深圳南浦科技园 B5 仓开放，以仓库稳定值判断，避免名称调整影响入口。
+const WOODEN_PACKING_WAREHOUSE_VALUE = 'SLH.SZ.BA.SJJD.HSNP.B5'
 
 /** 此页面只接收两个到仓视图的公共筛选；排序由视图语义决定，不能被 URL 覆盖。 */
 export function parseWarehouseArrivalQuery(raw: Record<string, unknown>): PurchaseShipmentListQuery {
@@ -64,8 +66,10 @@ export function buildWarehouseFilterOptions(
   return options
 }
 
-export function warehouseArrivalActions(view: WarehouseArrivalView, status: PurchaseShipmentListItemDto['viewStatus']): WarehouseArrivalAction[] {
-  return view === 'WAREHOUSE_RECEIVED' && status === 'WAREHOUSE_RECEIVED' ? ['view', 'woodenFrame'] : ['view']
+export function warehouseArrivalActions(view: WarehouseArrivalView, status: PurchaseShipmentListItemDto['viewStatus'], destinationWarehouseValue: string | null): WarehouseArrivalAction[] {
+  return view === 'WAREHOUSE_RECEIVED' && status === 'WAREHOUSE_RECEIVED' && destinationWarehouseValue === WOODEN_PACKING_WAREHOUSE_VALUE
+    ? ['view', 'woodenFrame']
+    : ['view']
 }
 
 export function createWarehouseArrivalColumns(view: WarehouseArrivalView, translate: (key: string) => string): QsGenericTableColumn<PurchaseShipmentListItemDto>[] {

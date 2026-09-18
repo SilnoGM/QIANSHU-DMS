@@ -51,9 +51,14 @@ test('仓库筛选移除未记录，其他按字典稳定值查询，保留停�
 })
 
 test('两个视图只提供指定行操作，列时间遵循当前到仓语义', () => {
-  assert.deepEqual(warehouseArrivalActions('SHIPPED', 'SHIPPED'), ['view'])
-  assert.deepEqual(warehouseArrivalActions('WAREHOUSE_RECEIVED', 'WAREHOUSE_RECEIVED'), ['view', 'woodenFrame'])
-  assert.deepEqual(warehouseArrivalActions('SHIPPED', 'WAREHOUSE_RECEIVED'), ['view'])
+  const warehouse = 'SLH.SZ.BA.SJJD.HSNP.B5'
+  assert.deepEqual(warehouseArrivalActions('SHIPPED', 'SHIPPED', warehouse), ['view'])
+  assert.deepEqual(warehouseArrivalActions('WAREHOUSE_RECEIVED', 'WAREHOUSE_RECEIVED', warehouse), ['view', 'woodenFrame'])
+  assert.deepEqual(warehouseArrivalActions('SHIPPED', 'WAREHOUSE_RECEIVED', warehouse), ['view'])
+  assert.deepEqual(warehouseArrivalActions('WAREHOUSE_RECEIVED', 'SHIPPED', warehouse), ['view'])
+  for (const otherWarehouse of ['SLH.DW.FHSNL.4HGYQ.B', 'YJ.594540.DGHM.ZTBHCG.B.DXM', 'QITA', 'UNKNOWN', null]) {
+    assert.deepEqual(warehouseArrivalActions('WAREHOUSE_RECEIVED', 'WAREHOUSE_RECEIVED', otherWarehouse), ['view'])
+  }
   const pending = createWarehouseArrivalColumns('SHIPPED', translate)
   const arrived = createWarehouseArrivalColumns('WAREHOUSE_RECEIVED', translate)
   assert.deepEqual(pending.map(column => column.id), ['shipmentNo', 'mark', 'destinationWarehouse', 'products', 'source', 'trackingNo', 'shippedAt'])
