@@ -12,6 +12,7 @@ import { derivePurchaseOrderStatus } from '../domain/purchase-order-state-machin
 import { normalizeFactoryShipmentContext, requireFactoryShipmentUuid, type FactoryShipmentMutationContext } from '../factory-shipments/purchase-order-factory-shipment.normalizer'
 import { PurchaseOrderQueryService } from '../purchase-order-query.service'
 import { normalizeWarehouseReceiptRequest, normalizeWarehouseRemark, type WarehouseReceiptInput } from './purchase-order-warehouse-receipt.normalizer'
+import { advanceSalesOrderWhenAllShipmentsReceived } from './sales-order-warehouse-progress'
 
 const ORDER_SELECT = {
   id: true, orderNo: true, purchaseType: true, salesOrderId: true, orderStatus: true, fulfillmentStatus: true, paymentStatus: true, version: true,
@@ -100,6 +101,9 @@ export class PurchaseOrderWarehouseReceiptService {
           await transaction.purchaseOrderStatusHistory.create({ data: { purchaseOrderId: order.id, dimension: 'ORDER', fromStatus: order.orderStatus, toStatus: orderStatus, reason: '全部有效货件已入仓且已付清，系统自动完成采购订单', changedByUserId: context.actorUserId } })
           await this.audit.record(transaction, { eventType: 'PURCHASE_ORDER_ORDER_STATUS_CHANGED', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PURCHASE_ORDER', targetId: order.id, metadata: { automatic: true, fromStatus: order.orderStatus, toStatus: orderStatus, trigger: 'WAREHOUSE_RECEIPT' } })
         }
+        if (order.purchaseType === 'SALES_LINKED' && order.salesOrderId !== null) {
+          await advanceSalesOrderWhenAllShipmentsReceived(transaction, this.audit, { ...context, salesOrderId: order.salesOrderId })
+        }
         await this.audit.record(transaction, {
           eventType: 'PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PURCHASE_ORDER', targetId: order.id,
           metadata: { partIds, requestFingerprint, expectedVersion: input.expectedVersion, source: input.partIds === null ? 'LEGACY_SIGNED' : 'SHIPMENT_SELECTION', receivedAt: receivedAt.toISOString(), recordedAt: recordedAt.toISOString(), remark: input.remark, fromStatus: order.fulfillmentStatus, toStatus: fulfillmentStatus },
@@ -134,11 +138,12 @@ export class PurchaseOrderWarehouseReceiptService {
   private async lockOrder(transaction: Prisma.TransactionClient, orderId: string): Promise<WarehouseOrder> {
     const candidate = await transaction.purchaseOrder.findUnique({ where: { id: orderId }, select: { purchaseType: true, salesOrderId: true } })
     if (candidate === null) throw new ApiException(404, 'PURCHASE_ORDER_NOT_FOUND', '采购订单不存在')
-    // 与工厂发货保持“销售行 -> 同来源有效采购单(排序) -> 货件(排序)”的相同锁序。
-    // 入仓不修改销售单，因此不反向申请销售单锁，也不会持货件锁再等待父单。
+    // 与工厂发货统一为“销售行 -> 同来源有效采购单 -> 销售主行 -> 货件”。
+    // 入仓会同步销售履约，必须在持货件锁前锁销售主行，不能反向申请父锁。
     if (candidate.purchaseType === 'SALES_LINKED' && candidate.salesOrderId !== null) {
       await transaction.$queryRaw(Prisma.sql`SELECT id FROM sales_order_lines WHERE sales_order_id = ${candidate.salesOrderId}::uuid AND removed_at IS NULL ORDER BY id FOR UPDATE`)
       await transaction.$queryRaw(Prisma.sql`SELECT id FROM purchase_orders WHERE id = ${orderId}::uuid OR (sales_order_id = ${candidate.salesOrderId}::uuid AND purchase_type = 'SALES_LINKED' AND order_status <> 'CANCELLED') ORDER BY id FOR UPDATE`)
+      await transaction.$queryRaw(Prisma.sql`SELECT id FROM sales_orders WHERE id = ${candidate.salesOrderId}::uuid FOR UPDATE`)
     }
     else await transaction.$queryRaw(Prisma.sql`SELECT id FROM purchase_orders WHERE id = ${orderId}::uuid FOR UPDATE`)
     await transaction.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE purchase_order_id = ${orderId}::uuid ORDER BY id FOR UPDATE`)
