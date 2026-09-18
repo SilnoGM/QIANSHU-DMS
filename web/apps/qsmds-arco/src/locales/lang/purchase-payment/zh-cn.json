@@ -120,9 +120,20 @@
       "tooLarge": "所选订单过多，无法生成一张清晰图片，请减少选择数量后重试。",
       "steps": { "fetch": "获取已选订单付款详情", "calculate": "计算应付款金额", "render": "生成对账单" },
       "image": {
-        "title": "采购对账单", "supplier": "供应商", "generatedAt": "生成时间（北京时间）", "selectedOrders": "采购单数", "unpaidTotal": "本次应付合计",
-        "order": "采购订单 / 日期", "stage": "款项", "due": "应付金额", "paid": "已付金额", "remaining": "未付金额", "status": "付款状态",
-        "total": "合计", "currency": "元（CNY）", "note": "本对账单仅供金额核对，付款状态以系统最新记录为准。"
+        "title": "采购对账单",
+        "supplier": "供应商",
+        "generatedAt": "生成时间（北京时间）",
+        "selectedOrders": "采购单数",
+        "unpaidTotal": "本次应付合计",
+        "order": "采购订单 / 日期",
+        "stage": "款项",
+        "due": "应付金额",
+        "paid": "已付金额",
+        "remaining": "未付金额",
+        "status": "付款状态",
+        "total": "合计",
+        "currency": "元（CNY）",
+        "note": "本对账单仅供金额核对，付款状态以系统最新记录为准。"
       }
     },
     "batch": {

@@ -44,6 +44,9 @@ function snapshot(): PurchaseOrderImageSnapshot {
 }
 
 describe('PurchaseOrderImageRenderer', () => {
+  // 一项断言包含多次独立进程的真实中文排版；全套并行检查时不使用默认 5 秒限时。
+  // 每次子进程仍保留上方 15 秒硬超时，防止字体或渲染异常无限等待。
+  jest.setTimeout(30_000)
   const renderer = { render }
 
   it('renders a deterministic white PNG with bundled Chinese typography without relying on host fonts', async () => {
