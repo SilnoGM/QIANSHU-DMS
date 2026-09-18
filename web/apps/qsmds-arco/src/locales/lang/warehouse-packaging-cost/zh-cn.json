@@ -44,6 +44,10 @@
       "invalidRecipients": "请填写收款人并上传至少一种收款码"
     },
     "submitSuccess": "费用提报成功，已进入打木架付款",
+    "submitCopied": "费用提报成功，付款申请已复制到剪贴板",
+    "submitCopyFailed": "费用提报已成功，付款申请复制失败",
+    "copyRetryHint": "请重试复制，无需再次提报。",
+    "retryCopy": "重试复制",
     "submitFailed": "费用提报未完成",
     "resultUnknown": "提交结果暂未确认。已保留原提报，请重试确认后再关闭弹窗，避免重复提报。",
     "retrySubmission": "重试确认",

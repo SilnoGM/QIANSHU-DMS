@@ -1,11 +1,25 @@
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 费用草稿校验与本地图片生命周期使用 Node.js runner。
 import test from 'node:test'
-import { validatePackagingCost } from '../../src/views/operations/warehouse-arrivals/packaging-cost.logic'
+import { buildPackagingPaymentRequestText, validatePackagingCost } from '../../src/views/operations/warehouse-arrivals/packaging-cost.logic'
 import { createPackagingImagePreview } from '../../src/views/operations/warehouse-arrivals/packaging-image-preview'
 
 const photo = (type = 'image/png', size = 8) => new File([new Uint8Array(size)], 'proof.png', { type })
 const validInput = () => ({ packagingTypeValue: 'WOODEN_BOX', vendor: 'CHENGXIN', amount: '12.3', packagingImages: [photo()], quotationImages: [photo()], remark: '  已确认  ' })
+
+test('付款申请使用保存后的唛头、厂商和包装类型，金额两位小数，链接与标签同行', () => {
+  const request = { shippingMarkText: 'TEST/20260918-0001/货件-01', packagingVendor: 'CHENGXIN' as const, packagingTypeName: '木箱', amount: '20000.0000' }
+  assert.equal(buildPackagingPaymentRequestText(request, '/qs-finance/realtime-payments/packaging-payments/request-1/payment', 'https://dms.example.com/operations'), [
+    '【打木架/木箱付款申请】',
+    '货件唛头：TEST/20260918-0001/货件-01',
+    '包装厂商：沙井·诚信木箱',
+    '本次申请支付 [木箱]费用：20000.00 元。',
+    '付款链接： https://dms.example.com/qs-finance/realtime-payments/packaging-payments/request-1/payment',
+  ].join('\n'))
+  const other = buildPackagingPaymentRequestText({ ...request, packagingVendor: 'OTHER', packagingTypeName: '木架', amount: '9.5000' }, '/app/#/payment/new', 'https://dms.example.com/app/')
+  assert.ok(other.includes('包装厂商：其他\n本次申请支付 [木架]费用：9.50 元。'))
+  assert.ok(other.endsWith('付款链接： https://dms.example.com/app/#/payment/new'))
+})
 
 test('必填项与金额错误分别定位到字段，不能生成提交草稿', () => {
   const result = validatePackagingCost({ ...validInput(), packagingTypeValue: null, vendor: null, amount: null, packagingImages: [], quotationImages: [] })

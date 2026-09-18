@@ -1,4 +1,5 @@
-import type { PaymentRecipientAccountInputDto } from '@/api/generated/types.gen'
+import type { PackagingCostRequestDto, PaymentRecipientAccountInputDto } from '@/api/generated/types.gen'
+import Decimal from 'decimal.js'
 import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 import { normalizePaymentRecipientAccounts, validatePaymentRecipientAccounts } from '../../../components/business/QsPaymentRecipientEditor/logic'
 
@@ -39,6 +40,12 @@ export const PACKAGING_IMAGE_LIMIT = 1
 export const PACKAGING_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 export const PACKAGING_DEFAULT_VENDOR = '沙井·诚信木箱'
 export const PACKAGING_RECIPIENT_METHODS = ['ALIPAY', 'WECHAT'] as const
+
+export function buildPackagingPaymentRequestText(request: Pick<PackagingCostRequestDto, 'shippingMarkText' | 'packagingVendor' | 'packagingTypeName' | 'amount'>, resolvedHref: string, currentUrl: string): string {
+  const vendor = request.packagingVendor === 'CHENGXIN' ? PACKAGING_DEFAULT_VENDOR : '其他'
+  const amount = new Decimal(request.amount).toFixed(2)
+  return `【打木架/木箱付款申请】\n货件唛头：${request.shippingMarkText}\n包装厂商：${vendor}\n本次申请支付 [${request.packagingTypeName}]费用：${amount} 元。\n付款链接： ${new URL(resolvedHref, currentUrl).href}`
+}
 
 export function validatePackagingImage(file: File): PackagingImageError | null {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
