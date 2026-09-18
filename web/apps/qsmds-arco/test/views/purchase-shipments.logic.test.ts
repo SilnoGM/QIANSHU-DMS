@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm'
 import { parseDate } from '@internationalized/date'
 import ts from 'typescript'
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
-import { buildShipmentRouteQuery, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, shipmentCountsQuery, shipmentStatusClass } from '../../src/views/workbenches/shipments/logic'
+import { buildShipmentRouteQuery, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentCountsQuery, shipmentPlaceholderAction, shipmentStatusClass } from '../../src/views/workbenches/shipments/logic'
 
 test('货件默认待发货；非法 URL 参数不进入查询', () => {
   assert.deepEqual(parseShipmentQuery({}), { view: 'AWAITING_SHIPMENT', page: 1, pageSize: 20 })
@@ -30,6 +30,31 @@ test('货件序号不截断，状态绿色采用主题 primary', () => {
   assert.equal(parseShipmentQuery({ view: 'WAREHOUSE_RECEIVED' }).view, 'WAREHOUSE_RECEIVED')
 })
 
+test('运输预留视图可从 URL 恢复，保留筛选并具有状态颜色', () => {
+  for (const view of ['CONTAINER_LOADED', 'OVERSEAS_STORAGE', 'DELIVERED'] as const) {
+    const query = parseShipmentQuery({ view, keyword: '货件', page: '2' })
+    assert.equal(query.view, view)
+    assert.equal(buildShipmentRouteQuery(query).view, view)
+    assert.deepEqual(shipmentCountsQuery(query), { keyword: '货件' })
+    assert.ok(shipmentStatusClass(view))
+  }
+  assert.deepEqual(SHIPMENT_VIEWS.slice(-4), ['CONTAINER_LOADED', 'OVERSEAS_STORAGE', 'DELIVERED', 'CANCELLED'])
+})
+
+test('装柜只出现在已到仓视图，签收只出现在已装柜视图；寄仓及终态暂不增加操作', () => {
+  assert.equal(shipmentPlaceholderAction('WAREHOUSE_RECEIVED', 'WAREHOUSE_RECEIVED'), 'loadContainer')
+  assert.equal(shipmentPlaceholderAction('CONTAINER_LOADED', 'CONTAINER_LOADED'), 'sign')
+  for (const view of SHIPMENT_VIEWS) {
+    if (view === 'WAREHOUSE_RECEIVED' || view === 'CONTAINER_LOADED') {
+      continue
+    }
+    assert.equal(shipmentPlaceholderAction(view, 'WAREHOUSE_RECEIVED'), null)
+    assert.equal(shipmentPlaceholderAction(view, 'CONTAINER_LOADED'), null)
+  }
+  assert.equal(shipmentPlaceholderAction('WAREHOUSE_RECEIVED', 'SHIPPED'), null)
+  assert.equal(shipmentPlaceholderAction('CONTAINER_LOADED', 'DELIVERED'), null)
+})
+
 async function pageFixture() {
   const source = await readFile(new URL('../../src/views/workbenches/shipments/index.vue', import.meta.url), 'utf8')
   const script = source.split('<script setup lang="ts">')[1]!.split('</script>')[0]!
@@ -40,6 +65,7 @@ async function pageFixture() {
   const account = reactive({ authEpoch: 1 })
   const permission = ref(true)
   const navigations: Array<Record<string, string>> = []
+  const info: string[] = []
   const lifecycle: Record<string, () => void> = {}
   const stops: Array<() => void> = []
   const data = {
@@ -61,7 +87,7 @@ async function pageFixture() {
     openShipment: () => {},
     openOrder: () => {},
   }
-  const state = runInNewContext(ts.transpileModule(`${script}\n;({ keyword, filters, dateRange, page, pageSize, search, columns })`, {
+  const state = runInNewContext(ts.transpileModule(`${script}\n;({ keyword, filters, dateRange, page, pageSize, search, columns, handleTransportAction })`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
   }).outputText, {
     computed,
@@ -81,6 +107,7 @@ async function pageFixture() {
     useI18n: () => ({ t: (key: string) => key }),
     useAppAuth: () => ({ auth: () => permission.value }),
     useAppAccountStore: () => account,
+    useQsToast: () => ({ info: (message: string) => info.push(message) }),
     useCurrencyCatalog: () => ({ currencies: ref([]) }),
     useDictionaryCatalog: () => ({ catalog: ref({ items: [] }), error: ref(null) }),
     useShipmentData: () => data,
@@ -89,7 +116,8 @@ async function pageFixture() {
     formatShipmentNumber,
     parseShipmentQuery,
     shipmentStatusClass,
-    SHIPMENT_VIEWS: ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CANCELLED'],
+    shipmentPlaceholderAction,
+    SHIPMENT_VIEWS,
     getShipmentSourceEmptyKey: () => 'stock',
     onMounted: (callback: () => void) => lifecycle.mount = callback,
     onActivated: (callback: () => void) => lifecycle.activate = callback,
@@ -102,11 +130,30 @@ async function pageFixture() {
     page: { value: number }
     pageSize: { value: number }
     search: () => void
+    handleTransportAction: (row: { viewStatus: string }) => void
     columns: { value: Array<{ id: string, fixed?: string, accessorKey?: string }> }
   }
   lifecycle.mount!()
-  return { state, route, initialPath, initialQuery, permission, navigations, lifecycle, dispose: () => stops.forEach(stop => stop()) }
+  return { state, route, initialPath, initialQuery, permission, navigations, info, lifecycle, dispose: () => stops.forEach(stop => stop()) }
 }
+
+test('装柜和签收仅轻提示，撤权或页面停用不响应', async (context) => {
+  const f = await pageFixture()
+  context.after(f.dispose)
+  for (const [view, message] of [['WAREHOUSE_RECEIVED', 'loadContainer'], ['CONTAINER_LOADED', 'sign']]) {
+    f.route.query.view = view!
+    f.state.handleTransportAction({ viewStatus: view! })
+    assert.equal(f.info.at(-1), `purchaseShipments.${message}Unavailable`)
+  }
+  f.state.handleTransportAction({ viewStatus: 'DELIVERED' })
+  f.permission.value = false
+  f.state.handleTransportAction({ viewStatus: 'CONTAINER_LOADED' })
+  f.permission.value = true
+  f.lifecycle.deactivate!()
+  f.state.handleTransportAction({ viewStatus: 'CONTAINER_LOADED' })
+  assert.equal(f.info.length, 2)
+  assert.equal(f.navigations.length, 0)
+})
 
 test('缓存页面后退及重新授权后按 URL 恢复筛选、日期和分页，不保留上次提交的本地状态', async (context) => {
   const fixture = await pageFixture()

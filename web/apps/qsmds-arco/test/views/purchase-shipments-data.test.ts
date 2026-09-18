@@ -1,3 +1,4 @@
+import type { ShipmentListQuery } from '../../src/views/workbenches/shipments/logic'
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 验证实际读取流程的取消和权限边界。
 import test from 'node:test'
@@ -7,7 +8,7 @@ import { useShipmentData } from '../../src/views/workbenches/shipments/use-shipm
 function fixture() {
   const enabled = ref(false)
   const epoch = ref(1)
-  const query = ref({ view: 'ALL' as const, page: 1, pageSize: 20 })
+  const query = ref<ShipmentListQuery>({ view: 'ALL', page: 1, pageSize: 20 })
   const calls: string[] = []
   const api = {
     list: async (_query: unknown, _signal: AbortSignal): Promise<any> => {
@@ -96,4 +97,33 @@ test('切换货件后忽略旧详情，关闭后取消请求，空尾页归一�
   f.query.value = { ...f.query.value, page: 3 }
   await nextTick()
   assert.deepEqual(f.invalidPages, [2])
+})
+
+test('新运输视图保持空态且不向现有列表接口传未实现状态，迟到旧列表不能混入', async (context) => {
+  const f = fixture()
+  context.after(() => f.scope.stop())
+  let finish!: () => void
+  let signal!: AbortSignal
+  f.api.list = (_query, requestSignal) => new Promise((resolve) => {
+    f.calls.push('list')
+    signal = requestSignal
+    finish = () => resolve({ data: { items: [{ id: 'stale' }], total: 1 } })
+  })
+  f.enabled.value = true
+  const finishOld = finish
+  const oldSignal = signal
+  for (const view of ['CONTAINER_LOADED', 'OVERSEAS_STORAGE', 'DELIVERED'] as const) {
+    f.query.value = { view, page: 1, pageSize: 20 }
+    await nextTick()
+    assert.equal(f.state.rows.value.length, 0)
+    assert.equal(f.state.total.value, 0)
+    assert.equal(f.state.loading.value, false)
+    assert.equal(f.state.error.value, '')
+    assert.equal(f.state.counts.value[0]?.count, 1)
+  }
+  finishOld()
+  await nextTick()
+  assert.equal(oldSignal.aborted, true)
+  assert.equal(f.state.rows.value.length, 0)
+  assert.equal(f.calls.filter(value => value === 'list').length, 1)
 })

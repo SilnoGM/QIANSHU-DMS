@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { CalendarDateRangeValue } from '@fantastic-admin/components'
+import type { ShipmentListQuery, ShipmentView } from './logic'
 import type { PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
-import type { PurchaseShipmentListQuery } from '@/api/modules/purchase-shipments'
 import type { QsGenericTableColumn, QsGenericTableFilterDefinition, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 import { parseDate } from '@internationalized/date'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDateRangeFilter from '@/components/business/QsDateRangeFilter/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
@@ -16,7 +17,7 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import PurchaseWarehouseReceiptAction from '@/views/operations/purchase-orders/purchase-warehouse-receipt-action.vue'
-import { buildShipmentRouteQuery, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentStatusClass } from './logic'
+import { buildShipmentRouteQuery, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentPlaceholderAction, shipmentStatusClass } from './logic'
 import ShipmentDetailDrawer from './shipment-detail-drawer.vue'
 import { getShipmentSourceEmptyKey } from './shipment-detail.logic'
 import ShipmentProducts from './shipment-products.vue'
@@ -26,6 +27,7 @@ defineOptions({ name: 'QsPurchaseShipments' })
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const toast = useQsToast()
 const { auth } = useAppAuth()
 const account = useAppAccountStore()
 const currencyCatalog = useCurrencyCatalog()
@@ -72,7 +74,7 @@ const {
   openShipment,
   openOrder,
 } = useShipmentData(enabled, computed(() => account.authEpoch), query, value => navigate({ ...query.value, page: value }, true))
-function navigate(next: PurchaseShipmentListQuery, replace = false): void {
+function navigate(next: ShipmentListQuery, replace = false): void {
   if (!enabled.value) {
     return
   }
@@ -123,6 +125,16 @@ function warehouseUpdated(): void {
   void loadDetail()
 }
 
+function handleTransportAction(row: { viewStatus: Exclude<ShipmentView, 'ALL'> }): void {
+  if (!enabled.value || !canReceive.value) {
+    return
+  }
+  const action = shipmentPlaceholderAction(activeView.value, row.viewStatus)
+  if (action) {
+    toast.info(t(`purchaseShipments.${action}Unavailable`))
+  }
+}
+
 function selectTab(value: string | number): void {
   if (SHIPMENT_VIEWS.includes(value as typeof SHIPMENT_VIEWS[number])) {
     navigate({ ...query.value, view: value as typeof SHIPMENT_VIEWS[number], page: 1 })
@@ -138,9 +150,9 @@ function search(): void {
     ...query.value,
     keyword: keyword.value.trim() || undefined,
     supplierValue: typeof filters.value.supplierValue === 'string' ? filters.value.supplierValue : undefined,
-    supplierSource: filters.value.supplierSource as PurchaseShipmentListQuery['supplierSource'],
+    supplierSource: filters.value.supplierSource as ShipmentListQuery['supplierSource'],
     createdByUserId: typeof filters.value.createdByUserId === 'string' ? filters.value.createdByUserId : undefined,
-    purchaseType: filters.value.purchaseType as PurchaseShipmentListQuery['purchaseType'],
+    purchaseType: filters.value.purchaseType as ShipmentListQuery['purchaseType'],
     orderDateFrom: dateRange.value.start?.toString(),
     orderDateTo: dateRange.value.end?.toString(),
     page: 1,
@@ -335,6 +347,9 @@ onBeforeUnmount(() => {
             </FaTooltip>
           </template>
           <template #actions="{ row }">
+            <FaButton v-if="canReceive && shipmentPlaceholderAction(activeView, row.viewStatus)" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" @click="handleTransportAction(row)">
+              <FaIcon :name="activeView === 'WAREHOUSE_RECEIVED' ? 'i-lucide:container' : 'i-lucide:package-check'" aria-hidden="true" />{{ t(activeView === 'WAREHOUSE_RECEIVED' ? 'purchaseShipments.loadContainer' : 'purchaseShipments.sign') }}
+            </FaButton>
             <FaButton v-if="canReceive && row.viewStatus === 'SHIPPED'" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" :disabled="!!warehouseActionRef?.loadingOrderId" @click="warehouseActionRef?.open(row.purchaseOrder.id, [row.id])">
               <FaIcon name="i-lucide:warehouse" aria-hidden="true" />{{ t('purchaseWarehouseReceipt.action') }}
             </FaButton>

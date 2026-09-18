@@ -1,17 +1,17 @@
 import type { Ref } from 'vue'
+import type { ShipmentListQuery } from './logic'
 import type { PurchaseOrderDetailDto, PurchaseShipmentDetailDto, PurchaseShipmentListItemDto, PurchaseShipmentStatusCountsDto } from '@/api/generated/types.gen'
-import type { PurchaseShipmentListQuery } from '@/api/modules/purchase-shipments'
 import { onScopeDispose, ref, shallowRef, watch } from 'vue'
 import purchaseOrdersApi from '../../../api/modules/purchase-orders'
 import purchaseShipmentsApi from '../../../api/modules/purchase-shipments'
 import { getPurchaseOrderApiFailure } from '../../operations/purchase-orders/purchase-order-list.logic'
-import { shipmentCountsQuery } from './logic'
+import { isShipmentPlaceholderView, shipmentCountsQuery } from './logic'
 
 /** 所有读取绑定当前视图与身份；列表、计数和详情独立取消，任一失败不遮蔽其他区域。 */
 export function useShipmentData(
   enabled: Readonly<Ref<boolean>>,
   epoch: Readonly<Ref<number>>,
-  query: Readonly<Ref<PurchaseShipmentListQuery>>,
+  query: Readonly<Ref<ShipmentListQuery>>,
   onInvalidPage: (page: number) => void,
   api = purchaseShipmentsApi,
   orders = purchaseOrdersApi,
@@ -42,13 +42,22 @@ export function useShipmentData(
       return
     }
     listController?.abort()
+    const view = query.value.view
+    // 运输业务尚未开放，预留视图不能把到仓数据当作装柜记录，也不能发送服务端尚不支持的筛选。
+    if (isShipmentPlaceholderView(view)) {
+      rows.value = []
+      total.value = 0
+      loading.value = false
+      error.value = ''
+      return
+    }
     const controller = new AbortController()
     listController = controller
     const requestEpoch = epoch.value
     loading.value = true
     error.value = ''
     try {
-      const response = await api.list(query.value, controller.signal)
+      const response = await api.list({ ...query.value, view }, controller.signal)
       if (!current(controller, requestEpoch)) {
         return
       }
