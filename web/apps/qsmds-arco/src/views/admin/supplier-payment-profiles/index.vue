@@ -7,6 +7,7 @@ import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsPaymentRecipientEditor from '@/components/business/QsPaymentRecipientEditor/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import PackagingPaymentProfile from './packaging-payment-profile.vue'
 import { useSupplierPaymentProfiles } from './use-supplier-payment-profiles'
 
@@ -23,10 +24,28 @@ const discardVisible = ref(false)
 const busy = computed(() => saving.value || refreshing.value || uploading.value)
 const activeTab = ref('suppliers')
 const packagingLocked = ref(false)
+const packagingProfile = useTemplateRef<InstanceType<typeof PackagingPaymentProfile>>('packagingProfile')
+const switchLocked = computed(() => busy.value || Boolean(selected.value) || packagingLocked.value)
 const tabs = computed(() => [
-  { value: 'suppliers', label: t('supplierPaymentProfile.tabs.suppliers') },
-  { value: 'packaging', label: t('supplierPaymentProfile.tabs.packaging') },
+  { value: 'suppliers', label: t('supplierPaymentProfile.tabs.suppliers'), disabled: switchLocked.value },
+  { value: 'packaging', label: t('supplierPaymentProfile.tabs.packaging'), disabled: switchLocked.value },
 ])
+function selectTab(value: string) {
+  if (!switchLocked.value && (value === 'suppliers' || value === 'packaging')) {
+    activeTab.value = value
+  }
+}
+async function refresh() {
+  if (switchLocked.value) {
+    return
+  }
+  if (activeTab.value === 'packaging') {
+    await packagingProfile.value?.reload()
+  }
+  else {
+    await load()
+  }
+}
 let pendingLeave: ((value: boolean) => void) | undefined
 const columns = computed<QsGenericTableColumn<SupplierPaymentProfileDto>[]>(() => [
   { id: 'supplier', accessorKey: 'supplierName', title: t('supplierPaymentProfile.supplier'), minWidth: 180 },
@@ -99,17 +118,15 @@ onBeforeUnmount(keepEditing)
           {{ t('supplierPaymentProfile.title') }}
         </h1>
       </template>
-      <FaButton v-if="canRead && activeTab === 'suppliers'" variant="outline" :disabled="loading || Boolean(selected)" @click="load">
+      <FaButton v-if="canRead" variant="outline" :disabled="switchLocked || (activeTab === 'suppliers' && loading)" @click="refresh">
         <FaIcon name="i-lucide:refresh-cw" />{{ t('paymentRecipient.refresh') }}
       </FaButton>
     </FaPageHeader>
     <FaPageMain>
       <FaEmpty v-if="!canRead" icon="i-lucide:shield-alert" :title="t('supplierPaymentProfile.noPermission')" class="min-h-64" />
       <template v-else>
-        <div class="mb-5" :inert="busy || Boolean(selected) || packagingLocked">
-          <FaTabs v-model="activeTab" :list="tabs" list-class="w-full sm:w-80" />
-        </div>
-        <PackagingPaymentProfile v-if="activeTab === 'packaging'" @locked-change="packagingLocked = $event" />
+        <QsStatusSwitchToolbar :model-value="activeTab" :items="tabs" :aria-label="t('supplierPaymentProfile.title')" class="mb-4" @update:model-value="selectTab" />
+        <PackagingPaymentProfile v-if="activeTab === 'packaging'" ref="packagingProfile" @locked-change="packagingLocked = $event" />
         <QsGenericTable
           v-else v-model:page="page" v-model:page-size="pageSize" v-model:search="search"
           row-key="supplierValue" :columns="columns" :data="rows" :total="total" :loading="loading" :error="error || undefined"

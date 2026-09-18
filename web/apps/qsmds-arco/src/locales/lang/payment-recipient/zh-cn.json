@@ -71,6 +71,11 @@
   },
   "packagingPaymentProfile": {
     "vendor": "沙井·诚信木箱",
+    "vendorLabel": "包装厂商",
+    "configureTitle": "包装厂商收款资料",
+    "search": "搜索包装厂商名称或编码",
+    "empty": "暂无匹配的包装厂商",
+    "emptyHint": "请调整搜索条件后重试。",
     "description": "支付宝与微信各配置一个收款账户，供打木架提报和付款时使用。",
     "loading": "正在读取包装厂商收款资料",
     "loadFailed": "读取包装厂商收款资料失败，请重试。",
