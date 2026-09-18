@@ -448,7 +448,8 @@ export function createBrowserRegionsPlan(input) {
   // 固定主图文件只服务认证综合套件中的采购场景；地区及其派生套件不读取产品
   // 媒体，因此保持原有最小准备面，不向这些隔离任务写入无消费方的媒体夹具。
   const prepare = Object.freeze(authPlan.prepare
-    .filter(step => step.name !== 'media-fixture')
+    // 地区及基于它的专项验收不执行采购付款，不能继承认证全套的媒体与付款业务夹具。
+    .filter(step => !['media-fixture', 'payment-fixture'].includes(step.name))
     .map((step) => {
       if (step.name !== 'web-build') {
         return step

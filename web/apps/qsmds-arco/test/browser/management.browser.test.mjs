@@ -1504,7 +1504,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.equal(managedRole?.name, editedRoleName)
 
   /*
-   * 地区、货币、当前汇率、编号规则、唛头绑定和系统字典权限均可分配给普通角色，同时不能让普通
+   * 地区、货币、当前汇率、编号规则、唛头绑定、系统字典、包装费用和收款资料权限均可分配给普通角色，同时不能让普通
    * 角色越权勾选 users/roles/audit 等系统专用权限。保存后以真实 API 结果确认
    * 完整替换已落库。
    */
@@ -1591,6 +1591,9 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'numbering-rules:read',
     'numbering-rules:read-issuances',
     'numbering-rules:update',
+    'packaging-costs:create',
+    'packaging-costs:pay',
+    'packaging-costs:read',
     'product-media:read',
     'products:create',
     'products:read',
@@ -1616,6 +1619,8 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'sales-receipts:read',
     'sales-receipts:review',
     'sales-receipts:void',
+    'supplier-payment-profiles:read',
+    'supplier-payment-profiles:update',
   ])
   assert.equal(Math.round(permissionDrawerState.width), 768)
   assert.ok(permissionDrawerState.rightGap <= 1)

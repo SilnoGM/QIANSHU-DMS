@@ -64,6 +64,8 @@ const MANAGEMENT_PERMISSION_CODES = [
   'sales-receipts:read',
   'sales-receipts:review',
   'sales-receipts:void',
+  'supplier-payment-profiles:read',
+  'supplier-payment-profiles:update',
   'users:assign-roles',
   'users:create',
   'users:disable',

@@ -708,17 +708,33 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       })
       return { status: response.status, body: await response.json() }
     })()`)
-    assert.equal(purchase.status, 201)
+    assert.equal(purchase.status, 201, `采购前置创建失败：${purchase.body?.error?.code ?? purchase.body?.code ?? 'UNKNOWN_ERROR'}`)
     assert.equal(purchase.body?.shippingMarkText, null)
     assert.deepEqual(purchase.body?.shippingMarks, [])
     assert.equal(purchase.body?.parts.length, 1)
     assert.equal(purchase.body?.parts[0]?.shippingMarkText, null)
     assert.equal(purchase.body?.parts[0]?.items[0]?.quantity, sourceLine.quantity)
     assert.equal(purchase.body?.orderStatus, 'PENDING_REVIEW')
+    assert.equal(typeof purchase.body?.parts[0]?.shipmentNo, 'string')
+    // 审核现在必须绑定真实生成的采购单图片；先派发唛头，再按最新版本生成草稿。
+    const preparedPurchase = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(purchase.body.id)}/prepare-review-shipping-marks`,
+      'POST',
+      { expectedVersion: purchase.body.version },
+    ))
+    assert.equal(preparedPurchase.status, 200)
+    assert.equal(preparedPurchase.body?.orderStatus, 'PENDING_REVIEW')
+    const imageDraft = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(purchase.body.id)}/order-image-drafts`,
+      'POST',
+      { expectedVersion: preparedPurchase.body.version },
+    ))
+    assert.equal(imageDraft.status, 200)
+    assert.equal(imageDraft.body?.isCurrent, true)
     const reviewedPurchase = await page.evaluate(apiExpression(
       `/api/purchase-orders/${encodeURIComponent(purchase.body.id)}/review`,
       'POST',
-      { expectedVersion: purchase.body.version, reason: 'Browser 签收流程采购审核' },
+      { expectedVersion: preparedPurchase.body.version, imageDraftId: imageDraft.body.id, reason: 'Browser 签收流程采购审核' },
     ))
     assert.equal(reviewedPurchase.status, 200)
     assert.equal(reviewedPurchase.body?.orderStatus, 'CONFIRMED')
@@ -729,27 +745,43 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       `/api/sales-orders/${encodeURIComponent(order.id)}`,
     ))
     assert.equal(preparedSales.body?.fulfillmentStatus, 'PREPARING')
+    const warehouseCatalog = await page.evaluate(apiExpression('/api/dictionary-catalog/mainland.warehouse'))
+    assert.equal(warehouseCatalog.status, 200)
+    const warehouse = warehouseCatalog.body?.items?.find(item => item.effectiveEnabled)
+    assert.equal(typeof warehouse?.value, 'string')
     const shipment = await page.evaluate(apiExpression(
       `/api/purchase-orders/${encodeURIComponent(purchase.body.id)}/factory-shipments`,
       'POST',
       {
         expectedVersion: reviewedPurchase.body.version,
         partIds: reviewedPurchase.body.parts.map(part => part.id),
+        destinationWarehouses: reviewedPurchase.body.parts.map(part => ({ partId: part.id, warehouseValue: warehouse.value })),
         reason: 'Browser 签收流程采购发货',
       },
     ))
     // 既有发货 POST 使用 Nest 默认的 201；本次不变更该接口响应行为。
     assert.equal(shipment.status, 201)
     assert.equal(shipment.body?.salesOrder?.fulfillmentStatus, 'LAND_TRANSIT')
-    for (const toStatus of ['WAREHOUSE_ARRIVED', 'SEA_TRANSIT']) {
-      const transition = await page.evaluate(apiExpression(
-        `/api/sales-orders/${encodeURIComponent(order.id)}/fulfillment-status`,
-        'PATCH',
-        { toStatus, reason: 'Browser 签收自动推进验收' },
-      ))
-      assert.equal(transition.status, 200)
-      assert.equal(transition.body?.fulfillmentStatus, toStatus)
-    }
+    const shippedPurchase = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(purchase.body.id)}`))
+    assert.equal(shippedPurchase.status, 200)
+    // 通过逐货件入仓形成真实事实，并验证销售状态自动推进，不能手工跳到已到仓。
+    const receipt = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(purchase.body.id)}/warehouse-receipts`,
+      'POST',
+      { expectedVersion: shippedPurchase.body.version, partIds: shippedPurchase.body.parts.map(part => part.id) },
+    ))
+    assert.equal(receipt.status, 200)
+    assert.equal(receipt.body?.fulfillmentStatus, 'SIGNED')
+    const arrivedSales = await page.evaluate(apiExpression(`/api/sales-orders/${encodeURIComponent(order.id)}`))
+    assert.equal(arrivedSales.status, 200)
+    assert.equal(arrivedSales.body?.fulfillmentStatus, 'WAREHOUSE_ARRIVED')
+    const transition = await page.evaluate(apiExpression(
+      `/api/sales-orders/${encodeURIComponent(order.id)}/fulfillment-status`,
+      'PATCH',
+      { toStatus: 'SEA_TRANSIT', reason: 'Browser 签收自动推进验收' },
+    ))
+    assert.equal(transition.status, 200)
+    assert.equal(transition.body?.fulfillmentStatus, 'SEA_TRANSIT')
 
     await page.navigate(appRouteUrl(
       configuration.baseUrl,

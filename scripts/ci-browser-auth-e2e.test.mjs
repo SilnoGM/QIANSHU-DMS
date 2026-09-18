@@ -67,6 +67,7 @@ test('固定计划使用真实构建、双环境 Server、同源代理和外部 
       ['pnpm', ['-C', 'server', 'build']],
       ['pnpm', ['-C', 'web', 'build']],
       [process.execPath, ['./scripts/browser-auth/provision-admin.mjs']],
+      [process.execPath, ['./scripts/browser-auth/provision-payment-fixtures.mjs']],
       [process.execPath, ['./scripts/browser-auth/provision-media-fixtures.mjs']],
       ['openssl', [
         'req', '-x509', '-newkey', 'rsa:2048', '-nodes',

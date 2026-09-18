@@ -12,10 +12,10 @@ test('唛头Browser夹具按发布顺序配置专属规则，绑定稳定供应�
   } }
   const fixture = await provisionBrowserShippingMarkFixtures(client, 'fixture-actor')
   const rules = calls.filter(call => call.sql.startsWith('INSERT INTO numbering_rules '))
-  assert.deepEqual(rules.map(call => call.values[0]), ['BROWSER_MARK', 'CUSTOM_MARK', 'BROWSER_MIXED_FIXTURE'])
-  assert.ok(rules.every(call => call.sql.includes("'SHIPPING_MARK'")))
+  assert.deepEqual(rules.map(call => call.values[0]), ['BROWSER_MARK', 'CUSTOM_MARK', 'SHIPMENT_NO', 'BROWSER_MIXED_FIXTURE'])
+  assert.deepEqual(rules.map(call => call.values[2]), ['SHIPPING_MARK', 'SHIPPING_MARK', 'BUSINESS', 'SHIPPING_MARK'])
   const versions = calls.filter(call => call.sql.startsWith('INSERT INTO numbering_rule_versions '))
-  assert.equal(versions.length, 3)
+  assert.equal(versions.length, 4)
   assert.ok(versions.every(call => /^[0-9a-f]{64}$/u.test(call.values[1])))
   const bindings = calls.filter(call => call.sql.startsWith('INSERT INTO supplier_shipping_mark_rule_bindings '))
   assert.equal(bindings.length, 1)

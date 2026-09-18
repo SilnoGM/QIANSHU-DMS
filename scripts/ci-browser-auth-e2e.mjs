@@ -161,6 +161,13 @@ export function createBrowserAuthPlan(input) {
       }),
     }),
     Object.freeze({
+      // admin-fixture 内部完成历史夹具后的真实全量迁移，付款资料只能在其成功后创建。
+      name: 'payment-fixture',
+      command: process.execPath,
+      args: Object.freeze(['./scripts/browser-auth/provision-payment-fixtures.mjs']),
+      env: prepareEnvironment,
+    }),
+    Object.freeze({
       name: 'media-fixture',
       command: process.execPath,
       args: Object.freeze(['./scripts/browser-auth/provision-media-fixtures.mjs']),
