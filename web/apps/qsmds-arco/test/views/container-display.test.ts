@@ -21,6 +21,8 @@ test('系统材积固定两位小数，未知值保持为空', () => {
   assert.equal(formatContainerMeasurement('3', 2), '3.00')
   assert.equal(formatContainerMeasurement('0', 2), '0.00')
   assert.equal(formatContainerMeasurement(null, 2), null)
+  assert.equal(formatContainerMeasurement('-0.00240280', 2), '0.00')
+  assert.equal(formatContainerMeasurement('-0.005', 2), '-0.01')
 })
 
 test('装柜明细默认展示所有业务列，桌面数值采用指定精度', async () => {
@@ -35,6 +37,7 @@ test('装柜明细默认展示所有业务列，桌面数值采用指定精度',
     useI18n: () => ({ t: (key: string) => key }),
     useAppAuth: () => ({ auth: () => true }),
     useRouter: () => ({}),
+    useCurrencyCatalog: () => ({ currencies: ref([]), errorMessage: ref(null), reload: () => {} }),
   }) as Array<{ id: string, defaultVisible?: boolean, accessorFn?: (row: Record<string, unknown>) => unknown }>
   assert.ok(columns.every(column => column.defaultVisible !== false))
   for (const id of ['reportedVolumeCai', 'volumeDifferenceCai', 'recipient', 'codAmountTwd', 'remark', 'source']) {

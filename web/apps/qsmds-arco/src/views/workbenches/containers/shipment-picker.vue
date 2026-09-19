@@ -3,6 +3,8 @@ import type { PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import shipmentApi from '@/api/modules/purchase-shipments'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
+import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import { useContainerResource } from './use-container-resource'
 
 const props = defineProps<{
@@ -29,14 +31,14 @@ function shipmentLabel(row: PurchaseShipmentListItemDto) {
   return row.shippingMarkText || row.shipmentNo || `${t('containerPage.shipment')}-${String(row.partNumber).padStart(2, '0')}`
 }
 const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(() => [
-  { id: 'shipment', title: t('containerPage.shipment'), accessorFn: shipmentLabel, minWidth: 190 },
-  { id: 'purchase', title: t('containerPage.purchase'), accessorFn: row => row.purchaseOrder.orderNo, minWidth: 210 },
-  { id: 'goods', title: t('containerPage.goods'), accessorFn: row => row.lineSummary.previews.map(item => item.productName).join('、'), minWidth: 150 },
+  { id: 'shipment', title: t('containerManagement.shipmentAndSource'), accessorFn: shipmentLabel, minWidth: 255 },
+  { id: 'goods', title: t('purchaseShipments.products'), accessorFn: row => row.lineSummary.previews.map(item => item.productName).join('、'), minWidth: 150 },
+  { id: 'status', title: t('purchaseShipments.status'), accessorFn: row => t(`purchaseShipments.${row.viewStatus}`), minWidth: 90 },
 ])
 </script>
 
 <template>
-  <section class="mt-4 p-3 border border-border rounded-lg bg-muted/20 min-w-0">
+  <section class="mt-4 pt-4 border-t border-border min-w-0">
     <div class="mb-3 flex gap-3 items-center justify-between">
       <h3 class="qs-type-component-title">
         {{ t('containerPage.shipmentSelect') }}
@@ -48,17 +50,55 @@ const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(()
       {{ t('containerPage.shipmentHint') }}
     </p>
     <FaAlert v-if="!auth('purchase-orders:read')" :title="t('containerPage.shipmentPermission')" />
-    <QsGenericTable v-else v-model:page="page" v-model:search="search" :page-size="10" :page-size-options="[10]" :columns="columns" :data="data?.items ?? []" :total="data?.total ?? 0" :loading="loading" :error="error" :addable="false" :show-column-settings="false" :show-row-number="false" :search-placeholder="t('containerPage.shipmentSearch')" :action-column="{ width: 115 }" @retry="resource.reload">
+    <QsGenericTable v-else v-model:page="page" v-model:search="search" :page-size="10" :page-size-options="[10]" :columns="columns" :data="data?.items ?? []" :total="data?.total ?? 0" :loading="loading" :error="error" :addable="false" :show-column-settings="false" :show-row-number="false" :search-placeholder="t('containerPage.shipmentSearch')" :action-column="{ width: 100 }" @retry="resource.reload">
+      <template #cell-shipment="{ row }">
+        <QsTableStackedCell>
+          <QsTableStackedLine content-class="qs-type-data-emphasis [overflow-wrap:anywhere]">
+            {{ shipmentLabel(row.original) }}
+          </QsTableStackedLine>
+          <QsTableStackedLine v-if="row.original.shipmentNo && row.original.shipmentNo !== shipmentLabel(row.original)" tone="muted" content-class="qs-type-data">
+            {{ row.original.shipmentNo }}
+          </QsTableStackedLine>
+          <QsTableStackedLine :label="t('containerManagement.purchaseSource')" tone="muted" content-class="qs-type-data">
+            {{ row.original.purchaseOrder.orderNo }}
+          </QsTableStackedLine>
+          <QsTableStackedLine v-if="row.original.salesSource" :label="t('containerManagement.salesSource')" tone="muted" content-class="qs-type-data">
+            {{ row.original.salesSource.orderNo }}
+          </QsTableStackedLine>
+        </QsTableStackedCell>
+      </template>
+      <template #cell-goods="{ row }">
+        <span class="[overflow-wrap:anywhere] line-clamp-2" :title="row.original.lineSummary.previews.map(item => item.productName).join('、')">{{ row.original.lineSummary.previews.map(item => item.productName).join('、') || '—' }}</span>
+      </template>
+      <template #cell-status="{ row }">
+        <FaTag variant="outline" class="qs-type-status-tag whitespace-nowrap" :class="row.original.status === 'ACTIVE' ? 'text-primary border-primary/25 bg-primary/5' : 'text-muted-foreground'">
+          {{ t(`purchaseShipments.${row.original.viewStatus}`) }}
+        </FaTag>
+      </template>
       <template #mobile-row="{ row }">
-        <div class="[overflow-wrap:anywhere] space-y-1">
-          <strong>{{ shipmentLabel(row) }}</strong><div class="qs-type-data">
-            {{ row.purchaseOrder.orderNo }}
+        <div class="[overflow-wrap:anywhere] space-y-2">
+          <div class="flex gap-3 items-start justify-between">
+            <strong class="qs-type-data-emphasis min-w-0">{{ shipmentLabel(row) }}</strong>
+            <FaTag variant="outline" class="qs-type-status-tag shrink-0">
+              {{ t(`purchaseShipments.${row.viewStatus}`) }}
+            </FaTag>
           </div>
+          <p class="qs-type-body m-0">
+            {{ row.lineSummary.previews.map(item => item.productName).join('、') || '—' }}
+          </p>
+          <QsTableStackedCell>
+            <QsTableStackedLine :label="t('containerManagement.purchaseSource')" tone="muted" content-class="qs-type-data">
+              {{ row.purchaseOrder.orderNo }}
+            </QsTableStackedLine>
+            <QsTableStackedLine v-if="row.salesSource" :label="t('containerManagement.salesSource')" tone="muted" content-class="qs-type-data">
+              {{ row.salesSource.orderNo }}
+            </QsTableStackedLine>
+          </QsTableStackedCell>
         </div>
       </template>
       <template #actions="{ row }">
         <FaButton type="button" size="sm" variant="outline" :disabled="disabled || row.status !== 'ACTIVE'" @click="emit('select', row)">
-          {{ t('containerPage.select') }}
+          {{ t(row.status === 'ACTIVE' ? 'containerPage.select' : 'containerManagement.shipmentUnavailable') }}
         </FaButton>
       </template>
     </QsGenericTable>

@@ -75,6 +75,15 @@
     "sourceSaved": "来源文件已保存",
     "billed": "已关联账单，暂不可编辑",
     "readOnly": "只读",
-    "relatedBills": "关联海运账单"
+    "relatedBills": "关联海运账单",
+    "batchInfo": "柜次信息",
+    "quantityInfo": "数量信息",
+    "loadSummary": "装载汇总",
+    "warehouseLoading": "仓库资料加载中",
+    "warehouseUnavailable": "仓库资料暂不可用",
+    "warehouseUnknown": "未识别仓库",
+    "warehouseCatalogError": "仓库资料加载失败，部分仓库名称暂时无法显示。",
+    "expandRemark": "展开备注",
+    "collapseRemark": "收起备注"
   }
 }

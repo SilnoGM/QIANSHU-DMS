@@ -4,8 +4,12 @@ import type { QsGenericTableColumn, QsGenericTableFilterValues } from '@/compone
 import containerApi from '@/api/modules/container-batches'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
+import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import ContainerFormModal from './container-form-modal.vue'
+import ContainerRemark from './container-remark.vue'
+import { formatContainerMeasurement } from './display.logic'
 import { useContainerMutation } from './use-container-mutation'
 import { useContainerResource } from './use-container-resource'
 
@@ -32,23 +36,42 @@ const open = ref(false)
 const mutation = useContainerMutation(canCreate, epoch, async (payload: ContainerBatchCreateDto, key, signal) => (await containerApi.create(payload, key, signal)).data)
 const { submitting, retryOnly, error: saveError, fieldErrors } = mutation
 const filterDefinitions = computed(() => [{ key: 'warehouseValue', label: t('containerPage.warehouse'), options: (warehouse.catalog.value?.items ?? []).map(item => ({ value: item.value, label: item.label })) }])
-const label = (value: string) => warehouse.resolve(value)?.label ?? value
-const columns = computed<QsGenericTableColumn<ContainerBatchDto>[]>(() => {
-  const labels = new Map((warehouse.catalog.value?.items ?? []).map(item => [item.value, item.label]))
+function warehouseLabel(value: string) {
+  if (warehouse.loading.value) {
+    return t('containerPage.warehouseLoading')
+  }
+  if (warehouse.error.value || warehouse.missing.value) {
+    return t('containerPage.warehouseUnavailable')
+  }
+  const resolved = warehouse.resolve(value)
+  return resolved && resolved.status !== 'UNKNOWN' ? resolved.displayLabel : t('containerPage.warehouseUnknown')
+}
+const measurement = (value: string | null, places: 0 | 2) => formatContainerMeasurement(value, places) ?? t('containerPage.unknown')
+function quantities(row: ContainerBatchDto) {
   return [
-    { id: 'containerBatchName', title: t('containerPage.name'), accessorKey: 'containerBatchName', minWidth: 160, fixed: 'left' },
-    { id: 'containerBatchNo', title: t('containerPage.number'), accessorKey: 'containerBatchNo', minWidth: 245, copyable: true, cellClass: 'qs-type-data-emphasis' },
-    { id: 'loadingDate', title: t('containerPage.date'), accessorKey: 'loadingDate', minWidth: 140, cellClass: 'qs-type-data' },
-    { id: 'warehouse', title: t('containerPage.warehouse'), accessorFn: row => labels.get(row.warehouseValue) ?? row.warehouseValue, minWidth: 280 },
-    { id: 'itemCount', title: t('containerPage.itemCount'), accessorKey: 'itemCount', minWidth: 100, cellClass: 'qs-type-data', align: 'right' },
-    { id: 'shipmentCount', title: t('containerPage.shipmentCount'), accessorKey: 'shipmentCount', minWidth: 100, cellClass: 'qs-type-data', align: 'right' },
-    { id: 'packageCountTotal', title: t('containerPage.packageCount'), accessorKey: 'packageCountTotal', minWidth: 100, cellClass: 'qs-type-data', align: 'right' },
-    { id: 'grossWeightKgTotal', title: t('containerPage.totalWeight'), accessorFn: row => row.grossWeightKgTotal ?? t('containerPage.unknown'), minWidth: 160, defaultVisible: false, cellClass: 'qs-type-data', align: 'right' },
-    { id: 'volumeCaiTotal', title: t('containerPage.totalVolume'), accessorFn: row => row.volumeCaiTotal ?? t('containerPage.unknown'), minWidth: 180, defaultVisible: false, cellClass: 'qs-type-data', align: 'right' },
-    { id: 'chargeableVolumeCaiTotal', title: t('containerPage.totalChargeable'), accessorFn: row => row.chargeableVolumeCaiTotal ?? t('containerPage.unknown'), minWidth: 140, defaultVisible: false, cellClass: 'qs-type-data', align: 'right' },
-    { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', minWidth: 220, defaultVisible: false },
+    { label: 'itemCount', value: row.itemCount },
+    { label: 'shipmentCount', value: row.shipmentCount },
+    { label: 'packageCount', value: row.packageCountTotal },
   ]
-})
+}
+function totals(row: ContainerBatchDto) {
+  return [
+    { label: 'totalWeight', value: measurement(row.grossWeightKgTotal, 0) },
+    { label: 'totalVolume', value: measurement(row.volumeCaiTotal, 2) },
+    { label: 'totalChargeable', value: row.chargeableVolumeCaiTotal ?? t('containerPage.unknown') },
+  ]
+}
+const columns = computed<QsGenericTableColumn<ContainerBatchDto>[]>(() => [
+  { id: 'batch', title: t('containerPage.batchInfo'), accessorFn: row => `${row.containerBatchNo} ${row.containerBatchName}`, width: 280, minWidth: 280, fixed: 'left' },
+  { id: 'loadingDate', title: t('containerPage.date'), accessorKey: 'loadingDate', width: 132, minWidth: 132, cellClass: 'qs-type-data' },
+  { id: 'warehouse', title: t('containerPage.warehouse'), accessorFn: row => warehouseLabel(row.warehouseValue), width: 275, minWidth: 220 },
+  { id: 'quantities', title: t('containerPage.quantityInfo'), accessorFn: row => quantities(row).map(item => item.value).join(' '), width: 150, minWidth: 150 },
+  { id: 'totals', title: t('containerPage.loadSummary'), accessorFn: row => totals(row).map(item => item.value).join(' '), width: 190, minWidth: 190 },
+  { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', width: 220, minWidth: 220, maxWidth: 220 },
+])
+function viewBatch(id: string) {
+  void router.push({ name: 'qsPurchaseTransportContainerDetail', params: { id } })
+}
 async function create(payload: ContainerBatchCreateDto) {
   const created = await mutation.submit(payload)
   if (!created) {
@@ -84,33 +107,109 @@ onDeactivated(() => {
     </FaPageHeader>
     <FaPageMain>
       <FaEmpty v-if="!enabled" :title="t('containerPage.noAccess')" />
-      <QsGenericTable v-else v-model:page="page" v-model:page-size="pageSize" v-model:search="search" v-model:filters="filters" row-key="id" :data="data?.items ?? []" :total="data?.total ?? 0" :columns="columns" :loading="loading" :error="error" :addable="false" :show-row-number="false" :page-size-options="[20, 50, 100]" :filter-definitions="filterDefinitions" :search-placeholder="t('containerPage.search')" :empty-title="t('containerPage.empty')" :empty-description="t('containerPage.emptyDescription')" @retry="resource.reload">
-        <template #cell-containerBatchName="{ row }">
-          <FaButton variant="link" class="px-0" @click="router.push({ name: 'qsPurchaseTransportContainerDetail', params: { id: row.original.id } })">
-            {{ row.original.containerBatchName }}
+      <template v-else>
+        <div v-if="warehouse.error.value || warehouse.missing.value" class="mb-4 flex flex-wrap gap-2 items-center">
+          <FaAlert class="flex-1" variant="destructive" :title="t('containerPage.warehouseCatalogError')" />
+          <FaButton size="sm" variant="outline" :disabled="warehouse.loading.value" @click="warehouse.retry">
+            {{ t('containerPage.retry') }}
           </FaButton>
-        </template>
-        <template #mobile-row="{ row }">
-          <div class="min-w-0 [overflow-wrap:anywhere] space-y-2">
-            <div class="flex gap-3 items-center justify-between">
-              <strong>{{ row.containerBatchName }}</strong><span class="qs-type-data">{{ row.loadingDate }}</span>
+        </div>
+        <QsGenericTable
+          v-model:page="page" v-model:page-size="pageSize" v-model:search="search" v-model:filters="filters"
+          row-key="id" :data="data?.items ?? []" :total="data?.total ?? 0" :columns="columns"
+          :loading="loading" :error="error" :addable="false" :show-row-number="false"
+          :page-size-options="[20, 50, 100]" :filter-definitions="filterDefinitions"
+          :search-placeholder="t('containerPage.search')" :empty-title="t('containerPage.empty')"
+          :empty-description="t('containerPage.emptyDescription')" :action-column="{ width: 112 }"
+          table-class="w-max min-w-full" @retry="resource.reload"
+        >
+          <template #cell-batch="{ row }">
+            <QsTableStackedCell>
+              <QsTableStackedLine content-class="qs-type-data-emphasis" nowrap>
+                {{ row.original.containerBatchNo }}
+              </QsTableStackedLine>
+              <QsTableStackedLine>
+                <FaButton variant="link" size="sm" class="px-0" @click="viewBatch(row.original.id)">
+                  {{ row.original.containerBatchName }}
+                </FaButton>
+              </QsTableStackedLine>
+            </QsTableStackedCell>
+          </template>
+          <template #cell-warehouse="{ row }">
+            <!-- 字典异步回填直接参与单元格渲染，避免行 accessor 缓存早到的仓库稳定值。 -->
+            <span class="max-w-64 block whitespace-normal [overflow-wrap:anywhere]" :class="(warehouse.loading.value || warehouse.error.value || warehouse.missing.value) && 'text-muted-foreground'">
+              {{ warehouseLabel(row.original.warehouseValue) }}
+            </span>
+          </template>
+          <template #cell-quantities="{ row }">
+            <QsTableStackedCell class="w-full">
+              <QsTableStackedLine v-for="item in quantities(row.original)" :key="item.label" :label="t(`containerPage.${item.label}`)" label-class="text-muted-foreground" content-class="qs-type-data ml-auto" nowrap>
+                {{ item.value }}
+              </QsTableStackedLine>
+            </QsTableStackedCell>
+          </template>
+          <template #cell-totals="{ row }">
+            <QsTableStackedCell class="w-full">
+              <QsTableStackedLine v-for="item in totals(row.original)" :key="item.label" :label="t(`containerPage.${item.label}`)" label-class="text-muted-foreground" content-class="qs-type-data ml-auto" nowrap>
+                {{ item.value }}
+              </QsTableStackedLine>
+            </QsTableStackedCell>
+          </template>
+          <template #cell-remark="{ row }">
+            <ContainerRemark :text="row.original.remark" />
+          </template>
+          <template #mobile-row="{ row }">
+            <div class="min-w-0 [overflow-wrap:anywhere] space-y-3">
+              <QsTableStackedCell class="w-full">
+                <QsTableStackedLine content-class="qs-type-data-emphasis">
+                  {{ row.containerBatchNo }}
+                </QsTableStackedLine>
+                <QsTableStackedLine>
+                  <FaButton variant="link" size="sm" class="px-0 min-h-11" @click="viewBatch(row.id)">
+                    {{ row.containerBatchName }}
+                  </FaButton>
+                </QsTableStackedLine>
+              </QsTableStackedCell>
+              <dl class="space-y-2">
+                <div class="flex gap-3 items-baseline">
+                  <dt class="qs-type-meta text-muted-foreground shrink-0">
+                    {{ t('containerPage.date') }}
+                  </dt><dd class="qs-type-data">
+                    {{ row.loadingDate }}
+                  </dd>
+                </div>
+                <div class="flex gap-3 items-baseline">
+                  <dt class="qs-type-meta text-muted-foreground shrink-0">
+                    {{ t('containerPage.warehouse') }}
+                  </dt><dd>
+                    {{ warehouseLabel(row.warehouseValue) }}
+                  </dd>
+                </div>
+              </dl>
+              <dl class="pt-3 border-t border-border gap-x-4 gap-y-3 grid grid-cols-2">
+                <div v-for="item in [...quantities(row), ...totals(row)]" :key="item.label">
+                  <dt class="qs-type-meta text-muted-foreground">
+                    {{ t(`containerPage.${item.label}`) }}
+                  </dt><dd class="qs-type-data mt-1">
+                    {{ item.value }}
+                  </dd>
+                </div>
+              </dl>
+              <div class="pt-3 border-t border-border space-y-1">
+                <div class="qs-type-meta text-muted-foreground">
+                  {{ t('containerPage.remark') }}
+                </div>
+                <ContainerRemark :text="row.remark" mobile />
+              </div>
             </div>
-            <div class="qs-type-data-emphasis">
-              {{ row.containerBatchNo }}
-            </div><p class="text-muted-foreground">
-              {{ label(row.warehouseValue) }}
-            </p>
-            <div class="text-muted-foreground flex flex-wrap gap-4">
-              <span>{{ t('containerPage.itemCount') }} {{ row.itemCount }}</span><span>{{ t('containerPage.packageCount') }} {{ row.packageCountTotal }}</span>
-            </div>
-          </div>
-        </template>
-        <template #actions="{ row }">
-          <FaButton variant="outline" size="sm" @click="router.push({ name: 'qsPurchaseTransportContainerDetail', params: { id: row.id } })">
-            {{ t('containerPage.view') }}
-          </FaButton>
-        </template>
-      </QsGenericTable>
+          </template>
+          <template #actions="{ row }">
+            <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" @click="viewBatch(row.id)">
+              {{ t('containerPage.view') }}
+            </FaButton>
+          </template>
+        </QsGenericTable>
+      </template>
     </FaPageMain>
     <ContainerFormModal v-model="open" :submitting="submitting" :retry-only="retryOnly" :error="saveError" :field-errors="fieldErrors" @submit="create" />
   </div>

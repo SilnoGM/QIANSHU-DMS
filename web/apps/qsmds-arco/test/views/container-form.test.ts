@@ -87,7 +87,7 @@ async function modalFixture(kind: 'container' | 'loading-item') {
   const props = reactive({ modelValue: true, batch: null as null | { sourceFileId: string, containerBatchName: string, warehouseValue: string }, item: null, shipment: null as null | { id: string, shippingMarkText: string }, submitting: false, retryOnly: false, fieldErrors: {} })
   const events: Array<[string, Record<string, unknown> | boolean]> = []
   const scope = effectScope()
-  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ draft, submit, close, locked, rule })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
+  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ draft, submit, close, locked, rule, codAmount: typeof codAmount === 'undefined' ? null : codAmount, recipientAddress: typeof recipientAddress === 'undefined' ? null : recipientAddress })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
     ...logic,
     computed,
     nextTick,
@@ -97,8 +97,9 @@ async function modalFixture(kind: 'container' | 'loading-item') {
     withDefaults: (value: unknown) => value,
     defineEmits: () => (name: string, payload: Record<string, unknown> | boolean) => events.push([name, payload]),
     useI18n: () => ({ t: (key: string) => key }),
+    useCurrencyCatalog: () => ({ currencies: ref([{ code: 'TWD', enabled: true, minorUnit: 2, name: '新台币', symbol: 'NT$' }]), loading: ref(false), errorMessage: ref(null), reload: async () => {} }),
     useTemplateRef: () => ref({ submit: async () => {}, setFieldError: () => {} }),
-  })) as { draft: { value: Record<string, unknown> }, submit: () => Promise<void>, close: () => void, locked: { value: boolean }, rule: (field: string) => (value: unknown) => string | boolean }
+  })) as { draft: { value: Record<string, unknown> }, submit: () => Promise<void>, close: () => void, locked: { value: boolean }, rule: (field: string) => (value: unknown) => string | boolean, codAmount: { value: string | null }, recipientAddress: { value: string } }
   return { props, state, events, dispose: () => scope.stop() }
 }
 
@@ -134,6 +135,39 @@ test('shipment selection preserves recipient COD and other draft fields', async 
     fixture.state.draft.value.shipmentId = null
     await fixture.state.submit()
     assert.equal((fixture.events[0]?.[1] as Record<string, unknown>).shipmentId, null)
+  }
+  finally { fixture.dispose() }
+})
+
+test('金额控件的空值适配保持未知、明确零值及大金额精度', async () => {
+  const fixture = await modalFixture('loading-item')
+  try {
+    fixture.state.draft.value.goodsName = '产品'
+    assert.equal(fixture.state.codAmount.value, null)
+    fixture.state.codAmount.value = '9999999999999999999999999999.99'
+    assert.equal(fixture.state.draft.value.codAmountTwd, '9999999999999999999999999999.99')
+    fixture.state.codAmount.value = '0.00'
+    await fixture.state.submit()
+    assert.equal((fixture.events[0]?.[1] as Record<string, unknown>).codAmountTwd, '0.00')
+    fixture.state.codAmount.value = null
+    assert.equal(fixture.state.draft.value.codAmountTwd, '')
+    assert.equal(buildLoadingItemSubmission(fixture.state.draft.value as unknown as logic.LoadingItemDraft).codAmountTwd, null)
+  }
+  finally { fixture.dispose() }
+})
+
+test('地址输入将粘贴或键入的换行合并为空格，其他字段及字符原样保留', async () => {
+  const fixture = await modalFixture('loading-item')
+  try {
+    Object.assign(fixture.state.draft.value, { goodsName: '产品', remark: '原始备注', recipientPhone: '0912-345678' })
+    fixture.state.recipientAddress.value = '台湾省\r\n台北市\n信义区\r松仁路 100 号'
+    assert.equal(fixture.state.recipientAddress.value, '台湾省 台北市 信义区 松仁路 100 号')
+    assert.equal(fixture.state.draft.value.recipientPhone, '0912-345678')
+    assert.equal(fixture.state.draft.value.remark, '原始备注')
+    await fixture.state.submit()
+    assert.equal((fixture.events[0]?.[1] as Record<string, unknown>).recipientAddress, '台湾省 台北市 信义区 松仁路 100 号')
+    fixture.state.recipientAddress.value = '地址\t含制表符'
+    assert.notEqual(fixture.state.rule('recipientAddress')(fixture.state.recipientAddress.value), true)
   }
   finally { fixture.dispose() }
 })

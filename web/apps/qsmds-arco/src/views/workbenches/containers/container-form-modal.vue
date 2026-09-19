@@ -78,15 +78,22 @@ async function submit() {
     </template>
     <FaAlert v-if="error" variant="destructive" :title="t('containerManagement.saveFailed')" :description="error" class="mb-5" role="alert" />
     <FaAlert v-if="retryOnly" :title="t('containerManagement.retryHint')" class="mb-5" />
-    <FaForm ref="formRef" :model="draft" :disabled="locked || retryOnly" scroll-to-error class="gap-4" @submit="submit">
-      <FaFormItem name="containerBatchName" :label="t('containerManagement.batchName')" :description="`${t('containerManagement.batchNameHint')} ${t('containerManagement.loadingDatePreview', { date: loadingDatePreview ?? '—' })}`" :rules="rule('containerBatchName')" required>
+    <FaForm ref="formRef" :model="draft" :disabled="locked || retryOnly" scroll-to-error class="gap-3" @submit="submit">
+      <FaFormItem name="containerBatchName" :label="t('containerManagement.batchName')" :description="t('containerManagement.batchNameHint')" :rules="rule('containerBatchName')" required>
         <FaInput v-model="draft.containerBatchName" class="w-full" maxlength="32" :placeholder="t('containerManagement.batchNamePlaceholder')" />
       </FaFormItem>
+      <div class="mb-1 px-3 py-2.5 rounded-md bg-muted/40 flex gap-3 items-center justify-between" aria-live="polite" aria-atomic="true">
+        <span class="qs-type-meta text-muted-foreground flex gap-2 items-center">
+          <FaIcon name="i-lucide:calendar-days" class="size-4" aria-hidden="true" />
+          {{ t('containerManagement.loadingDate') }}
+        </span>
+        <span class="qs-type-data-emphasis">{{ loadingDatePreview ?? '—' }}</span>
+      </div>
       <FaFormItem name="warehouseValue" :label="t('containerManagement.warehouse')" :rules="rule('warehouseValue')" required>
         <QsDictionarySelect v-model="draft.warehouseValue" dictionary-code="mainland.warehouse" :disabled="locked || retryOnly" :placeholder="t('containerManagement.selectWarehouse')" />
       </FaFormItem>
       <FaFormItem name="remark" :label="t('containerManagement.remark')" :rules="rule('remark')">
-        <FaTextarea v-model="draft.remark" :rows="3" maxlength="500" />
+        <FaTextarea v-model="draft.remark" :rows="2" maxlength="500" :placeholder="t('containerManagement.remarkHint')" />
       </FaFormItem>
       <slot name="source-file" />
     </FaForm>
