@@ -103,7 +103,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="min-w-0" :class="preview && rows.length ? 'pb-48 md:pb-28' : ''">
+  <div class="min-w-0">
     <FaPageHeader :title="t('containerImport.title')" :description="t('containerImport.description')">
       <FaButton variant="outline" :disabled="locked" @click="back">
         <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />{{ t('containerImport.back') }}
