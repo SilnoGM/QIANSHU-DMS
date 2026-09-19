@@ -221,8 +221,8 @@ watch(itemData, (result) => {
           <span class="sr-only">{{ t('containerPage.loading') }}</span><div v-for="n in 3" :key="n" class="rounded-lg bg-muted h-10 animate-pulse motion-reduce:animate-none" />
         </div>
       </FaPageMain>
-      <FaPageMain v-else-if="batch">
-        <div class="gap-5 grid xl:gap-8 lg:grid-cols-2">
+      <div v-else-if="batch" class="m-4 gap-4 grid min-w-0 lg:grid-cols-2">
+        <FaPageMain class="m-0 min-w-0">
           <section class="min-w-0" :aria-label="t('containerPage.basicInfo')">
             <div class="mb-4 flex flex-wrap gap-3 min-h-8 items-center justify-between">
               <h2 class="qs-type-component-title m-0 flex gap-2 items-center">
@@ -261,13 +261,19 @@ watch(itemData, (result) => {
               <span class="qs-type-meta text-muted-foreground shrink-0">{{ t('containerPage.remark') }}</span>
               <ContainerRemark :text="batch.remark" mobile class="flex-1" />
             </div>
+            <div class="mt-4 pt-4 border-t border-border">
+              <ContainerSourceFile :batch-id="instanceId" :source-file-id="batch.sourceFileId" :can-edit="canEdit" :loading="sourceSaving" :disabled="batchMutation.submitting.value || itemMutation.submitting.value" @uploaded="attachSource" @busy-change="sourceUploading = $event" />
+              <FaAlert v-if="sourceError" class="mt-3" variant="destructive" :title="sourceError" />
+            </div>
           </section>
-          <section class="pt-4 border-t border-border min-w-0 lg:pl-6 lg:pt-0 xl:pl-8 lg:border-l lg:border-t-0" :aria-label="t('containerPage.loadSummary')">
+        </FaPageMain>
+        <FaPageMain class="m-0 min-w-0">
+          <section class="min-w-0" :aria-label="t('containerPage.loadSummary')">
             <h2 class="qs-type-component-title m-0 mb-4 flex gap-2 min-h-8 items-center">
               <FaIcon name="i-lucide:weight" class="text-muted-foreground size-4" aria-hidden="true" />
               {{ t('containerPage.loadSummary') }}
             </h2>
-            <dl class="m-0 gap-x-5 gap-y-4 grid grid-cols-2 xl:grid-cols-4">
+            <dl class="m-0 gap-x-5 gap-y-4 grid grid-cols-2">
               <div v-for="item in summary" :key="item.label" class="min-w-0">
                 <dt class="qs-type-meta text-muted-foreground">
                   {{ t(`containerPage.${item.label}`) }}
@@ -281,12 +287,8 @@ watch(itemData, (result) => {
               {{ t('containerPage.totalHint') }}
             </p>
           </section>
-        </div>
-        <div class="mt-4 pt-4 border-t border-border">
-          <ContainerSourceFile :batch-id="instanceId" :source-file-id="batch.sourceFileId" :can-edit="canEdit" :loading="sourceSaving" :disabled="batchMutation.submitting.value || itemMutation.submitting.value" @uploaded="attachSource" @busy-change="sourceUploading = $event" />
-          <FaAlert v-if="sourceError" class="mt-3" variant="destructive" :title="sourceError" />
-        </div>
-      </FaPageMain>
+        </FaPageMain>
+      </div>
       <FaPageMain v-if="batch">
         <div class="mb-5 flex flex-wrap gap-3 items-center justify-between">
           <div class="min-w-0">
