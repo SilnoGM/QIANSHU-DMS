@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ContainerLoadingItemDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
+import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
@@ -60,6 +61,9 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
           {{ row.original.goodsName }}
         </QsTableStackedLine><QsTableStackedLine tone="muted" content-class="qs-type-data">
           {{ row.original.oceanShippingMarkText || t('containerPage.none') }}
+          <template #suffix>
+            <CopyCellButton v-if="row.original.oceanShippingMarkText" always-visible :text="row.original.oceanShippingMarkText" :label="t('containerPage.mark')" />
+          </template>
         </QsTableStackedLine>
       </QsTableStackedCell>
     </template>
@@ -84,8 +88,9 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
     </template>
     <template #mobile-row="{ row }">
       <div class="min-w-0 [overflow-wrap:anywhere] space-y-3">
-        <strong>{{ row.goodsName }}</strong><div class="qs-type-data-emphasis">
-          {{ row.oceanShippingMarkText || t('containerPage.none') }}
+        <strong>{{ row.goodsName }}</strong><div class="qs-type-data-emphasis flex gap-2 items-center">
+          <span class="min-w-0">{{ row.oceanShippingMarkText || t('containerPage.none') }}</span>
+          <CopyCellButton v-if="row.oceanShippingMarkText" always-visible :text="row.oceanShippingMarkText" :label="t('containerPage.mark')" />
         </div>
         <dl class="gap-x-4 gap-y-2 grid grid-cols-2">
           <div v-for="entry in [['packageCount', `${row.packageCount} ${row.packageUnit ?? ''}`], ['weight', measurement(row.grossWeightKg)], ['volume', measurement(row.volumeCai, 2)], ['chargeable', value(row.chargeableVolumeCai)]]" :key="entry[0]">
