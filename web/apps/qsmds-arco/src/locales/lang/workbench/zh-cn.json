@@ -12,6 +12,7 @@
     "createContainer": "新建柜次",
     "createContainerPending": "新建柜次功能暂未开放",
     "containerDetail": "柜次详情",
+    "containerImport": "装柜明细解析与匹配",
     "containerDetailDescription": "查看柜次基础资料、装柜明细及关联账单",
     "backToContainers": "返回柜次管理",
     "billReconciliation": "账单对账",

@@ -191,5 +191,18 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
         auth: 'container-batches:read',
       },
     },
+    {
+      path: '/qs-purchase-transport/containers/:id/import',
+      name: 'qsPurchaseTransportContainerImport',
+      component: () => import('@/views/workbenches/containers/import/index.vue'),
+      meta: {
+        title: 'workbench.containerImport',
+        icon: 'qs-container-management',
+        singleMenu: true,
+        menu: false,
+        activeMenu: '/qs-purchase-transport/containers',
+        auth: 'container-batches:update',
+      },
+    },
   ],
 }

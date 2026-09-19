@@ -64,4 +64,18 @@ describe('ContainerSourceFileService', () => {
     await expect(service.content('batch', 'GET')).rejects.toMatchObject({ code: 'MEDIA_STORAGE_UNAVAILABLE' })
     expect(delivery.open).not.toHaveBeenCalled()
   })
+  it('reads attached source bytes for parsing even with internal redirects and rejects truncated streams', async () => {
+    const { service, delivery } = setup()
+    delivery.mode = 'internal_redirect'
+    const result = await service.readForImport('batch')
+    expect(result).toMatchObject({ sourceFileId: 'asset', sourceFilename: '来源.xlsx', bytes: Buffer.from('xlsx') })
+    expect(result.sourceHash).toMatch(/^[a-f0-9]{64}$/u)
+    delivery.open.mockResolvedValueOnce({ stream: Readable.from(['x']) })
+    await expect(service.readForImport('batch')).rejects.toMatchObject({ code: 'MEDIA_STORAGE_UNAVAILABLE' })
+  })
+  it('rejects same-size source replacement by validating the persisted checksum', async () => {
+    const { service, prisma } = setup()
+    prisma.containerBatch.findUnique.mockResolvedValueOnce({ sourceFileId: 'asset', sourceFile: { ...asset, checksumSha256: '0'.repeat(64) } })
+    await expect(service.readForImport('batch')).rejects.toMatchObject({ code: 'MEDIA_STORAGE_UNAVAILABLE' })
+  })
 })

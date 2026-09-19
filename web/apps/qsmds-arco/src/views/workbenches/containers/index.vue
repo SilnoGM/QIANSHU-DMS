@@ -87,7 +87,10 @@ async function create(payload: ContainerSubmission) {
   }
   open.value = false
   toast.success(t('containerPage.created'))
-  await router.push({ name: 'qsPurchaseTransportContainerDetail', params: { id: created.id } })
+  const name = auth('container-batches:update') && auth('purchase-orders:read')
+    ? 'qsPurchaseTransportContainerImport'
+    : 'qsPurchaseTransportContainerDetail'
+  await router.push({ name, params: { id: created.id } })
 }
 watch([enabled, epoch], () => {
   open.value = false

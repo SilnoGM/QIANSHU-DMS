@@ -76,6 +76,7 @@ test('柜次与顺联航账单详情可直接解析，隐藏菜单并保持对�
     routes: [...purchaseTransportWorkbench.children, ...financeWorkbench.children].map(withoutViews),
   })
   for (const [path, name, title, activeMenu, permission] of [
+    ['/qs-purchase-transport/containers/container-123/import', 'qsPurchaseTransportContainerImport', 'workbench.containerImport', '/qs-purchase-transport/containers', 'container-batches:update'],
     ['/qs-purchase-transport/containers/container-123', 'qsPurchaseTransportContainerDetail', 'workbench.containerDetail', '/qs-purchase-transport/containers', 'container-batches:read'],
     ['/qs-finance/bill-reconciliation/shunlianhang-ocean-bills/bill-123', 'qsFinanceShunlianhangOceanBillDetail', 'workbench.shunlianhangOceanBillDetail', '/qs-finance/bill-reconciliation/shunlianhang-ocean-bills', 'purchase-orders:payment'],
   ]) {
@@ -86,7 +87,7 @@ test('柜次与顺联航账单详情可直接解析，隐藏菜单并保持对�
     assert.equal(route.meta.menu, false)
     assert.equal(route.meta.activeMenu, activeMenu)
     assert.equal(route.meta.auth, permission)
-    assert.equal(route.params.id, path.split('/').at(-1))
+    assert.equal(route.params.id, name === 'qsPurchaseTransportContainerImport' ? 'container-123' : path.split('/').at(-1))
     assert.equal(matchesAuthorization([], route.meta.auth!), false)
   }
   await router.push('/qs-finance/bill-reconciliation/shunlianhang-ocean-bills')

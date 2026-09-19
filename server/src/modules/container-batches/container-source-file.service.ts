@@ -1,4 +1,5 @@
 import type { Readable } from 'node:stream'
+import { createHash } from 'node:crypto'
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
@@ -74,6 +75,31 @@ export class ContainerSourceFileService {
   async metadata(batchId: string): Promise<ContainerSourceFileDto> {
     const asset = await this.attached(batchId)
     return { mediaAssetId: asset.id, originalFilename: asset.originalFilename, mimeType: asset.mimeType!, sizeBytes: asset.sizeBytes!.toString() }
+  }
+  async readForImport(batchId: string) {
+    const asset = await this.attached(batchId)
+    try {
+      const key = requireMediaObjectKeyNamespace(asset.objectKey!, 'assets')
+      const stat = await this.delivery.stat(key)
+      if (!stat || stat.sizeBytes !== asset.sizeBytes || stat.sizeBytes <= 0n || stat.sizeBytes > 50n * 1024n * 1024n) fail('MEDIA_STORAGE_UNAVAILABLE', '来源文件暂时无法解析', 503)
+      // 解析由服务端直接读取私有媒体；生产 internal redirect 只影响浏览器下载，不能跳过这里的有界读取。
+      const { stream } = await this.delivery.open(key)
+      const chunks: Buffer[] = []
+      let size = 0
+      for await (const chunk of stream) {
+        const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array)
+        size += bytes.length
+        if (BigInt(size) > stat.sizeBytes) { stream.destroy(); fail('MEDIA_STORAGE_UNAVAILABLE', '来源文件内容已变化', 503) }
+        chunks.push(bytes)
+      }
+      if (BigInt(size) !== stat.sizeBytes) fail('MEDIA_STORAGE_UNAVAILABLE', '来源文件内容不完整', 503)
+      const bytes = Buffer.concat(chunks), sourceHash = createHash('sha256').update(bytes).digest('hex')
+      if (asset.checksumSha256 && sourceHash !== asset.checksumSha256) fail('MEDIA_STORAGE_UNAVAILABLE', '来源文件内容已变化', 503)
+      return { sourceFileId: asset.id, sourceFilename: asset.originalFilename, sourceHash, bytes }
+    } catch (error) {
+      if (error instanceof ApiException) throw error
+      fail('MEDIA_STORAGE_UNAVAILABLE', '来源文件暂时无法解析', 503)
+    }
   }
   async content(batchId: string, method: 'GET' | 'HEAD'): Promise<ContainerSourceContent> {
     const asset = await this.attached(batchId)

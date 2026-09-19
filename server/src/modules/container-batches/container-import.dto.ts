@@ -1,0 +1,76 @@
+import { ApiProperty } from '@nestjs/swagger'
+import { Type } from 'class-transformer'
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsString, IsUUID, Matches, Max, Min, ValidateIf, ValidateNested } from 'class-validator'
+import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
+
+export class ContainerImportCandidateDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ type: String, nullable: true }) shipmentNo!: string | null
+  @ApiProperty({ type: String, nullable: true }) shippingMarkText!: string | null
+  @ApiProperty({ type: String, nullable: true }) trackingNo!: string | null
+  @ApiProperty({ type: String, nullable: true }) warehouseValue!: string | null
+  @ApiProperty() goodsName!: string
+  @ApiProperty({ type: String, nullable: true }) purchaseOrderNo!: string | null
+  @ApiProperty({ type: String, nullable: true }) salesOrderNo!: string | null
+  @ApiProperty() eligible!: boolean
+  @ApiProperty({ type: String, nullable: true }) ineligibleReason!: string | null
+}
+export class ContainerImportRowDto {
+  @ApiProperty() rowKey!: string
+  @ApiProperty() sourceSheetName!: string
+  @ApiProperty() sourceRowNumber!: number
+  @ApiProperty({ type: String, nullable: true }) containerBatchName!: string | null
+  @ApiProperty({ type: String, nullable: true }) warehouseReceiptReference!: string | null
+  @ApiProperty({ type: String, nullable: true }) oceanShippingMarkText!: string | null
+  @ApiProperty() goodsName!: string
+  @ApiProperty() packageCount!: number
+  @ApiProperty({ type: String, nullable: true }) packageUnit!: string | null
+  @ApiProperty({ type: String, nullable: true }) grossWeightKg!: string | null
+  @ApiProperty({ type: String, nullable: true }) lengthCm!: string | null
+  @ApiProperty({ type: String, nullable: true }) widthCm!: string | null
+  @ApiProperty({ type: String, nullable: true }) heightCm!: string | null
+  @ApiProperty({ type: String, nullable: true }) reportedVolumeCai!: string | null
+  @ApiProperty({ type: String, nullable: true }) volumeCai!: string | null
+  @ApiProperty({ type: Number, nullable: true }) chargeableVolumeCai!: number | null
+  @ApiProperty({ type: String, nullable: true }) recipientName!: string | null
+  @ApiProperty({ type: String, nullable: true }) recipientPhone!: string | null
+  @ApiProperty({ type: String, nullable: true }) recipientAddress!: string | null
+  @ApiProperty({ type: String, nullable: true }) codAmountTwd!: string | null
+  @ApiProperty({ type: String, nullable: true }) remark!: string | null
+  @ApiProperty({ type: [String] }) errors!: string[]
+  @ApiProperty({ type: [String] }) warnings!: string[]
+  @ApiProperty({ type: [ContainerImportCandidateDto] }) candidates!: ContainerImportCandidateDto[]
+  @ApiProperty({ type: String, nullable: true, format: 'uuid' }) matchedShipmentId!: string | null
+  @ApiProperty({ enum: ['MATCHED', 'AMBIGUOUS', 'UNMATCHED', 'INVALID'] }) matchStatus!: 'MATCHED' | 'AMBIGUOUS' | 'UNMATCHED' | 'INVALID'
+  @ApiProperty({ type: String, nullable: true }) matchReason!: string | null
+}
+export class ContainerImportPreviewDto {
+  @ApiProperty({ format: 'uuid' }) containerBatchId!: string
+  @ApiProperty() containerBatchName!: string
+  @ApiProperty() containerBatchNo!: string
+  @ApiProperty() warehouseValue!: string
+  @ApiProperty() expectedVersion!: number
+  @ApiProperty({ format: 'uuid' }) sourceFileId!: string
+  @ApiProperty() sourceFilename!: string
+  @ApiProperty() sourceHash!: string
+  @ApiProperty() alreadyImported!: boolean
+  @ApiProperty({ type: [ContainerImportRowDto] }) rows!: ContainerImportRowDto[]
+  @ApiProperty({ type: [String] }) warnings!: string[]
+}
+export class ContainerImportSelectionDto {
+  @ApiProperty({ maxLength: 64 }) @IsString() @IsUnicodeCodePointLength(1, 64) rowKey!: string
+  @ApiProperty({ type: String, format: 'uuid', nullable: true }) @ValidateIf((_object, value) => value !== null) @IsUUID('4') shipmentId!: string | null
+}
+export class ContainerImportConfirmDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) @Max(2_147_483_647) expectedVersion!: number
+  @ApiProperty({ format: 'uuid' }) @IsUUID('4') sourceFileId!: string
+  @ApiProperty({ pattern: '^[a-f0-9]{64}$' }) @IsString() @Matches(/^[a-f0-9]{64}$/u) sourceHash!: string
+  @ApiProperty({ description: 'Explicit acknowledgement that unmatched rows will be imported without shipment associations.' }) @IsBoolean() allowUnmatched!: boolean
+  @ApiProperty({ type: [ContainerImportSelectionDto], minItems: 1, maxItems: 2000 }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(2000) @ValidateNested({ each: true }) @Type(() => ContainerImportSelectionDto) rows!: ContainerImportSelectionDto[]
+}
+export class ContainerImportResultDto {
+  @ApiProperty({ format: 'uuid' }) containerBatchId!: string
+  @ApiProperty() importedCount!: number
+  @ApiProperty() unmatchedCount!: number
+  @ApiProperty() replayed!: boolean
+}

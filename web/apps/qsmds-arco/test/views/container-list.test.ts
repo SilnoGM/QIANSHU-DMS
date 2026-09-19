@@ -13,7 +13,7 @@ import { parse } from 'vue/compiler-sfc'
 import { resolveDictionaryCatalogValue } from '../../src/dictionary-catalog/options'
 import { formatContainerMeasurement } from '../../src/views/workbenches/containers/display.logic'
 
-async function fixture() {
+async function fixture(options: { permissions?: string[], created?: { id: string } | null } = {}) {
   const source = await readFile(new URL('../../src/views/workbenches/containers/index.vue', import.meta.url), 'utf8')
   const script = parse(source).descriptor.scriptSetup!.content.replace(/^import.*$/gm, '')
   const warehouse = {
@@ -24,26 +24,44 @@ async function fixture() {
     resolve: (value: string) => resolveDictionaryCatalogValue(warehouse.catalog.value, value),
   }
   const scope = effectScope()
-  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}; ({ columns })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
+  const navigations: { name: string, params: { id: string } }[] = []
+  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}; ({ columns, create })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
     computed,
     ref,
     watch,
     formatContainerMeasurement,
     defineOptions: () => {},
     useI18n: () => ({ t: (key: string) => key === 'containerManagement.volumeUnit' ? '材' : key }),
-    useAppAuth: () => ({ auth: () => true }),
-    useRouter: () => ({}),
+    useAppAuth: () => ({ auth: (permission: string) => !options.permissions || options.permissions.includes(permission) }),
+    useRouter: () => ({ push: (target: typeof navigations[number]) => navigations.push(target) }),
     useRoute: () => ({ name: 'qsPurchaseTransportContainers' }),
     useAppAccountStore: () => ({ authEpoch: 1 }),
-    useQsToast: () => ({}),
+    useQsToast: () => ({ success: () => {} }),
     useDictionaryCatalog: () => warehouse,
     useContainerResource: () => ({ data: ref(null), loading: ref(false), error: ref('') }),
-    useContainerMutation: () => ({ submitting: ref(false), retryOnly: ref(false), error: ref(''), fieldErrors: ref({}) }),
+    useContainerMutation: () => ({ submitting: ref(false), retryOnly: ref(false), error: ref(''), fieldErrors: ref({}), submit: async () => options.created ?? null }),
     onActivated: () => {},
     onDeactivated: () => {},
-  })) as { columns: ComputedRef<QsGenericTableColumn<ContainerBatchDto>[]> }
-  return { state, warehouse, dispose: () => scope.stop() }
+  })) as { columns: ComputedRef<QsGenericTableColumn<ContainerBatchDto>[]>, create: (payload: unknown) => Promise<void> }
+  return { state, warehouse, navigations, dispose: () => scope.stop() }
 }
+
+test('创建柜次成功后进入解析页，缺少导入权限时回到详情，创建失败不跳转', async (context) => {
+  for (const [options, expected] of [
+    [{ created: { id: 'new-container' } }, 'qsPurchaseTransportContainerImport'],
+    [{ created: { id: 'new-container' }, permissions: ['container-batches:read', 'container-batches:create'] }, 'qsPurchaseTransportContainerDetail'],
+    [{ created: null }, null],
+  ] as const) {
+    const f = await fixture(options)
+    context.after(f.dispose)
+    await f.state.create({ sourceFileId: 'source' })
+    assert.equal(f.navigations.length, expected ? 1 : 0)
+    if (expected) {
+      assert.equal(f.navigations[0]?.name, expected)
+      assert.equal(f.navigations[0]?.params.id, 'new-container')
+    }
+  }
+})
 
 test('柜次仓库在字典后到达时更新中文名称，加载和失败不冒充稳定值为展示名称', async (context) => {
   const f = await fixture()

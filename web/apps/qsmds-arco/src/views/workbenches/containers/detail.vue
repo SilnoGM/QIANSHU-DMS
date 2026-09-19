@@ -34,6 +34,7 @@ onDeactivated(() => {
 })
 const enabled = computed(() => active.value && route.name === 'qsPurchaseTransportContainerDetail' && String(route.params.id) === instanceId && auth('container-batches:read'))
 const canEdit = computed(() => enabled.value && auth('container-batches:update'))
+const canImport = computed(() => canEdit.value && auth('purchase-orders:read'))
 const epoch = computed(() => account.authEpoch)
 const resource = useContainerResource(enabled, epoch, ref(instanceId), async signal => (await containerApi.get(instanceId, signal)).data)
 const { data: batch, loading, error } = resource
@@ -299,9 +300,14 @@ watch(itemData, (result) => {
               {{ t('containerPage.shipmentHint') }}
             </p>
           </div>
-          <FaButton v-if="canEdit" class="w-full sm:w-auto" :disabled="sourceSaving || sourceUploading" @click="openItem()">
-            <FaIcon name="i-lucide:plus" aria-hidden="true" />{{ t('containerPage.addItem') }}
-          </FaButton>
+          <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+            <FaButton v-if="canImport" variant="outline" class="w-full sm:w-auto" :disabled="!batch.sourceFileId || sourceSaving || sourceUploading || batchMutation.submitting.value || itemMutation.submitting.value" @click="router.push({ name: 'qsPurchaseTransportContainerImport', params: { id: instanceId } })">
+              <FaIcon name="i-lucide:file-spreadsheet" aria-hidden="true" />{{ t('containerImport.parseSource') }}
+            </FaButton>
+            <FaButton v-if="canEdit" class="w-full sm:w-auto" :disabled="sourceSaving || sourceUploading" @click="openItem()">
+              <FaIcon name="i-lucide:plus" aria-hidden="true" />{{ t('containerPage.addItem') }}
+            </FaButton>
+          </div>
         </div>
         <ContainerItemTable v-model:page="page" v-model:page-size="pageSize" v-model:search="search" :rows="itemData?.items ?? []" :total="itemData?.total ?? 0" :loading="itemsLoading" :error="itemsError" :can-edit="canEdit && !sourceUploading && !sourceSaving" @edit="openItem" @reference="reference" @retry="itemResource.reload" />
       </FaPageMain>
