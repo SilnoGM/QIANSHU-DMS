@@ -127,7 +127,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
     </template>
     <template #actions="{ row }">
       <div class="flex flex-wrap gap-1.5">
-        <FaButton v-if="canEdit" size="sm" variant="outline" :disabled="row.isBilled" :title="row.isBilled ? t('containerPage.billed') : undefined" @click="emit('edit', row)">
+        <FaButton v-if="canEdit" size="sm" variant="ghost" :disabled="row.isBilled" :title="row.isBilled ? t('containerPage.billed') : undefined" @click="emit('edit', row)">
           {{ t('containerPage.editItem') }}
         </FaButton>
         <FaButton v-if="row.shipmentId && auth('purchase-orders:read')" size="sm" variant="ghost" @click="emit('reference', 'shipment', row.shipmentId)">
