@@ -22,6 +22,15 @@ export class ContainerSourceFileService {
     const batch = await this.prisma.containerBatch.findUnique({ where: { id: batchId }, select: { sourceFileId: true } })
     if (!batch) fail('CONTAINER_BATCH_NOT_FOUND', '柜次不存在', 404)
     if (batch.sourceFileId !== null) fail('CONTAINER_SOURCE_FILE_LOCKED', '来源文件已保存，不能替换')
+    return this.prepareUpload(actorUserId, request)
+  }
+
+  async uploadForCreate(actorUserId: string, request: SalesOrderDocumentMultipartRequest): Promise<ContainerSourceFileDto> {
+    // 新建前仅暂存文件，不创建空柜次；取消弹窗后由现有过期上传清理回收。
+    return this.prepareUpload(actorUserId, request)
+  }
+
+  private async prepareUpload(actorUserId: string, request: SalesOrderDocumentMultipartRequest): Promise<ContainerSourceFileDto> {
     try {
       return await this.multipart.parse(request, async input => {
         if (input.mediaType !== 'DOCUMENT' || input.declaredMimeType !== CONTAINER_SOURCE_MIME || !/\.xlsx$/iu.test(input.originalFilename)) {

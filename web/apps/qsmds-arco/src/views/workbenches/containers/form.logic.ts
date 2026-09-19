@@ -1,6 +1,7 @@
-import type { ContainerBatchCreateDto, ContainerBatchDto, ContainerLoadingItemCreateDto, ContainerLoadingItemDto } from '@/api/generated/types.gen'
+import type { ContainerBatchDto, ContainerBatchUpdateDto, ContainerLoadingItemCreateDto, ContainerLoadingItemDto } from '@/api/generated/types.gen'
 
-export interface ContainerDraft { containerBatchName: string, warehouseValue: string | null, remark: string }
+export interface ContainerDraft { containerBatchName: string, warehouseValue: string | null, remark: string, sourceFileId: string | null }
+export type ContainerSubmission = Omit<ContainerBatchUpdateDto, 'expectedVersion'>
 export interface LoadingItemDraft {
   shipmentId: string | null
   goodsName: string
@@ -26,7 +27,7 @@ const optional = (value: string) => value.trim() || null
 const validText = (value: string, maximum: number) => !/[\p{Cc}\p{Cs}]/u.test(value) && [...value.trim()].length <= maximum
 
 export function createContainerDraft(batch?: ContainerBatchDto | null): ContainerDraft {
-  return { containerBatchName: batch?.containerBatchName ?? '', warehouseValue: batch?.warehouseValue ?? null, remark: batch?.remark ?? '' }
+  return { containerBatchName: batch?.containerBatchName ?? '', warehouseValue: batch?.warehouseValue ?? null, remark: batch?.remark ?? '', sourceFileId: batch?.sourceFileId ?? null }
 }
 export function createLoadingItemDraft(item?: (ContainerLoadingItemDto & RecipientFields) | null): LoadingItemDraft {
   return {
@@ -48,7 +49,7 @@ export function createLoadingItemDraft(item?: (ContainerLoadingItemDto & Recipie
     remark: item?.remark ?? '',
   }
 }
-export function validateContainerDraft(draft: ContainerDraft): FormErrors {
+export function validateContainerDraft(draft: ContainerDraft, requireSource = false): FormErrors {
   const errors: FormErrors = {}
   const match = /^(\d{2})(\d{2})(?:-(\d{2}))?柜子?$/u.exec(draft.containerBatchName.trim())
   // 这里只排除不可能的月日；具体年份和闰年以服务端持久化口径为准。
@@ -58,6 +59,9 @@ export function validateContainerDraft(draft: ContainerDraft): FormErrors {
   }
   if (!draft.warehouseValue) {
     errors.warehouseValue = 'warehouseRequired'
+  }
+  if (requireSource && !draft.sourceFileId?.trim()) {
+    errors.sourceFileId = 'sourceRequired'
   }
   if (!validText(draft.remark, 500)) {
     errors.remark = 'textInvalid'
@@ -106,8 +110,8 @@ export function validateLoadingItemDraft(draft: LoadingItemDraft): FormErrors {
   }
   return errors
 }
-export function buildContainerSubmission(draft: ContainerDraft): ContainerBatchCreateDto {
-  return { containerBatchName: draft.containerBatchName.trim(), warehouseValue: draft.warehouseValue ?? '', remark: optional(draft.remark) }
+export function buildContainerSubmission(draft: ContainerDraft): ContainerSubmission {
+  return { containerBatchName: draft.containerBatchName.trim(), warehouseValue: draft.warehouseValue ?? '', remark: optional(draft.remark), sourceFileId: draft.sourceFileId }
 }
 export function buildLoadingItemSubmission(draft: LoadingItemDraft): LoadingItemSubmission {
   return {

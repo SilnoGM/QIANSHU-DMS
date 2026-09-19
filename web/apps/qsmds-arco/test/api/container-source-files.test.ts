@@ -4,6 +4,23 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createContainerSourceFilesApi } from '../../src/api/modules/container-source-files'
 
+test('creating a batch prepares its source file without an existing batch id', async () => {
+  const calls: unknown[][] = []
+  const api = createContainerSourceFilesApi({ post: (...args: unknown[]) => {
+    calls.push(args)
+    return Promise.resolve({ data: {} })
+  } } as unknown as AxiosInstance)
+  const file = new File(['xlsx'], 'source.xlsx')
+  const signal = new AbortController().signal
+  await api.uploadForCreate(file, signal)
+  assert.equal(calls[0]?.[0], 'container-batches/source-file-uploads')
+  const body = calls[0]?.[1] as FormData
+  assert.deepEqual(Array.from(body.keys()), ['mediaType', 'file'])
+  assert.equal(body.get('mediaType'), 'DOCUMENT')
+  assert.equal(body.get('file'), file)
+  assert.deepEqual(calls[0]?.[2], { errorPresentation: 'local', retry: false, signal })
+})
+
 test('uploads one DOCUMENT before file, escapes batch id and disables upload retry', async () => {
   const calls: unknown[][] = []
   const api = createContainerSourceFilesApi({ post: (...args: unknown[]) => {

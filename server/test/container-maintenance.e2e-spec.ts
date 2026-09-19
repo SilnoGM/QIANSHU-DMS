@@ -14,7 +14,25 @@ describe('container maintenance with isolated PostgreSQL', () => {
   let sequence = 30
   const post = (url: string, body: object) => browser.post(url).set(packagingHeaders).set('Idempotency-Key', randomUUID()).send(body)
   const patch = (url: string, body: object) => browser.patch(url).set(packagingHeaders).send(body)
-  async function batch() { return (await post('/api/container-batches', { containerBatchName: `0919-${++sequence}柜`, warehouseValue: TEST_DESTINATION_WAREHOUSE }).expect(201)).body as ContainerBatchDto }
+  const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  const uploadForCreate = (agent = browser) => agent.post('/api/container-batches/source-file-uploads').set(packagingHeaders)
+    .field('mediaType', 'DOCUMENT').attach('file', createOceanXlsxFixture(), { filename: '装柜资料.xlsx', contentType: mime })
+  async function batch() {
+    const source = (await uploadForCreate().expect(201)).body as ContainerSourceFileDto
+    return (await post('/api/container-batches', { containerBatchName: `0919-${++sequence}柜`, warehouseValue: TEST_DESTINATION_WAREHOUSE, sourceFileId: source.mediaAssetId }).expect(201)).body as ContainerBatchDto
+  }
+  async function legacyBatch() {
+    // 只在隔离测试库种入旧版允许无来源文件的记录，验证新建必填不会锁死历史编辑。
+    const row = await h.prisma.$transaction(async tx => {
+      const key = randomUUID(), fingerprint = 'a'.repeat(64), sequenceInDay = ++sequence
+      const issuance = await h.fixture.numbering.generateScopedInTransaction(tx, { ruleCode: 'CONTAINER_BATCH_NO', consumerCode: 'CONTAINER_BATCH.CREATE', idempotencyKey: key, requestFingerprint: fingerprint })
+      return tx.containerBatch.create({ data: { containerBatchNo: issuance.number, numberingIssuanceId: issuance.issuanceId,
+        containerBatchName: `0919-${sequenceInDay}柜`, loadingDate: new Date('2026-09-19T00:00:00Z'), sequenceInDay,
+        warehouseValue: TEST_DESTINATION_WAREHOUSE, creationRequestKey: key, creationPayloadHash: fingerprint,
+        createdById: h.fixture.actor.id, updatedById: h.fixture.actor.id } })
+    })
+    return (await browser.get(`/api/container-batches/${row.id}`).expect(200)).body as ContainerBatchDto
+  }
   async function item(parent: ContainerBatchDto, extra: object = {}) { return (await post(`/api/container-batches/${parent.id}/items`, { expectedVersion: parent.version, goodsName: '履带', packageCount: 10, ...extra }).expect(201)).body as ContainerLoadingItemDto }
   beforeAll(async () => {
     h = await createPackagingCostHarness({ nativeImageProbe: true })
@@ -30,8 +48,36 @@ describe('container maintenance with isolated PostgreSQL', () => {
   })
   afterAll(async () => { await h?.dispose() })
 
+  it('requires a current-user source upload before creating a batch and protects the pre-upload endpoint', async () => {
+    const path = '/api/container-batches/source-file-uploads'
+    await request(h.app.getHttpServer()).post(path).set(packagingHeaders).field('mediaType', 'DOCUMENT')
+      .attach('file', createOceanXlsxFixture(), { filename: 'source.xlsx', contentType: mime }).expect(401)
+    await uploadForCreate(reader).expect(403)
+    await browser.post(path).field('mediaType', 'DOCUMENT').attach('file', createOceanXlsxFixture(), { filename: 'source.xlsx', contentType: mime }).expect(403)
+    const creator = (await h.browserWithPermissions(['container-batches:create'])).browser
+    const before = await h.prisma.containerBatch.count(), beforeNumbers = await h.prisma.numberingIssuance.count()
+    const source = (await uploadForCreate(creator).expect(201)).body as ContainerSourceFileDto
+    expect(await h.prisma.containerBatch.count()).toBe(before)
+    expect(await h.prisma.numberingIssuance.count()).toBe(beforeNumbers)
+    expect((await h.prisma.mediaAsset.findUniqueOrThrow({ where: { id: source.mediaAssetId } })).status).toBe('UPLOADING')
+    const fields = { containerBatchName: `0919-${++sequence}柜`, warehouseValue: TEST_DESTINATION_WAREHOUSE }
+    for (const sourceFileId of [undefined, null, randomUUID(), source.mediaAssetId]) {
+      await post('/api/container-batches', { ...fields, sourceFileId }).expect(422)
+    }
+    expect(await h.prisma.containerBatch.count()).toBe(before)
+    expect(await h.prisma.numberingIssuance.count()).toBe(beforeNumbers)
+    const key = randomUUID(), input = { ...fields, sourceFileId: source.mediaAssetId }
+    const create = () => creator.post('/api/container-batches').set(packagingHeaders).set('Idempotency-Key', key).send(input)
+    const created = (await create().expect(201)).body as ContainerBatchDto
+    expect(created.sourceFileId).toBe(source.mediaAssetId)
+    expect((await create().expect(201)).body as ContainerBatchDto).toEqual(created)
+    expect((await h.prisma.mediaAsset.findUniqueOrThrow({ where: { id: source.mediaAssetId } })).status).toBe('READY')
+    expect(await h.prisma.containerBatch.count()).toBe(before + 1)
+    expect(await h.prisma.numberingIssuance.count()).toBe(beforeNumbers + 1)
+  })
+
   it('updates the header within its creation year and rejects stale, unauthorized, forged writes', async () => {
-    const parent = await batch(), url = `/api/container-batches/${parent.id}`
+    const parent = await legacyBatch(), url = `/api/container-batches/${parent.id}`
     await h.prisma.containerBatch.update({ where: { id: parent.id }, data: { createdAt: new Date('2024-09-19T00:00:00Z'), loadingDate: new Date('2024-09-19T00:00:00Z') } })
     const input = { expectedVersion: 1, containerBatchName: '0229柜', warehouseValue: parent.warehouseValue, remark: '历史柜次' }
     await request(h.app.getHttpServer()).patch(url).set(packagingHeaders).send(input).expect(401)
@@ -90,7 +136,7 @@ describe('container maintenance with isolated PostgreSQL', () => {
     const denied = await patch(`/api/container-batches/${parent.id}/items/${row.id}`, edit).expect(409)
     expect(denied.body as { code: string }).toMatchObject({ code: 'CONTAINER_ITEM_BILLED' })
     await patch(`/api/container-batches/${parent.id}`, { expectedVersion: 2, containerBatchName: '0920-88柜', warehouseValue: parent.warehouseValue }).expect(409)
-    await patch(`/api/container-batches/${parent.id}`, { expectedVersion: 2, containerBatchName: parent.containerBatchName, warehouseValue: parent.warehouseValue, remark: '仅备注' }).expect(200)
+    await patch(`/api/container-batches/${parent.id}`, { expectedVersion: 2, containerBatchName: parent.containerBatchName, warehouseValue: parent.warehouseValue, sourceFileId: parent.sourceFileId, remark: '仅备注' }).expect(200)
     const full = (await browser.get(`/api/container-batches/${parent.id}/items`).expect(200)).body as { items: ContainerLoadingItemDto[] }
     expect(full.items[0]).toMatchObject({ isBilled: true, billReferences: [{ id: bill.id, billNo: bill.billNo, billName: '账单' }] })
     const limited = (await reader.get(`/api/container-batches/${parent.id}/items`).expect(200)).body as { items: ContainerLoadingItemDto[] }
@@ -98,7 +144,7 @@ describe('container maintenance with isolated PostgreSQL', () => {
   })
 
   it('uploads, attaches and downloads private source files with strict access and immutable attachment', async () => {
-    const parent = await batch(), path = `/api/container-batches/${parent.id}`, bytes = createOceanXlsxFixture()
+    const parent = await legacyBatch(), path = `/api/container-batches/${parent.id}`, bytes = createOceanXlsxFixture()
     const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     const upload = (agent = browser) => agent.post(`${path}/source-file-uploads`).set(packagingHeaders).field('mediaType', 'DOCUMENT').attach('file', bytes, { filename: '装柜资料.xlsx', contentType: mime })
     await reader.get(`${path}/source-file`).expect(404)
@@ -165,7 +211,7 @@ describe('container maintenance with isolated PostgreSQL', () => {
     const parent = await batch(), row = await item(parent), audit = h.app.get(AuditService), original = audit.record.bind(audit)
     const snapshot = async () => ({ batch: await h.prisma.containerBatch.findUnique({ where: { id: parent.id } }), item: await h.prisma.containerLoadingItem.findUnique({ where: { id: row.id } }) })
     for (const operation of [
-      { event: 'CONTAINER_BATCH_UPDATED', path: `/api/container-batches/${parent.id}`, input: { expectedVersion: 2, containerBatchName: parent.containerBatchName, warehouseValue: parent.warehouseValue, remark: 'rollback' } },
+      { event: 'CONTAINER_BATCH_UPDATED', path: `/api/container-batches/${parent.id}`, input: { expectedVersion: 2, containerBatchName: parent.containerBatchName, warehouseValue: parent.warehouseValue, sourceFileId: parent.sourceFileId, remark: 'rollback' } },
       { event: 'CONTAINER_LOADING_ITEM_UPDATED', path: `/api/container-batches/${parent.id}/items/${row.id}`, input: { expectedVersion: 2, itemExpectedVersion: 1, goodsName: 'rollback', packageCount: 3 } },
     ]) {
       const before = await snapshot()

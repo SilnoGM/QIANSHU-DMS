@@ -15,6 +15,7 @@
     "saveFailed": "保存失败",
     "nameInvalid": "请输入有效柜次名称，例如 0917柜 或 0918-01柜。",
     "warehouseRequired": "请选择装柜仓库。",
+    "sourceRequired": "请先上传来源文件，上传成功后才能创建柜次。",
     "textInvalid": "内容包含无效字符或超出长度限制。",
     "addItem": "新增装柜明细",
     "editItem": "编辑装柜明细",

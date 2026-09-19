@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import request from 'supertest'
 import { AuditService } from '../src/modules/audit/audit.service'
 import { FundPostingApplicationService } from '../src/modules/fund-accounts/application/fund-posting.service'
+import type { ContainerSourceFileDto } from '../src/modules/container-batches/container-source-file.dto'
 import type { ContainerBatchDto, ContainerLoadingItemDto } from '../src/modules/container-batches/container-batch.dto'
 import type { OceanFreightBillDto, OceanFreightBillLineDto } from '../src/modules/ocean-freight-bills/ocean-freight-bill.dto'
 import { createPackagingCostHarness, packagingHeaders, type PackagingCostHarness } from './packaging-cost.fixture'
@@ -29,7 +30,12 @@ describe('ocean freight foundation HTTP API with isolated PostgreSQL', () => {
   const post = (url: string, body: object, key = randomUUID()) => browser.post(url).set(headers).set('Idempotency-Key', key).send(body)
   const newContainerInput = () => ({ containerBatchName: `0919-${++sequence}柜`, warehouseValue: TEST_DESTINATION_WAREHOUSE })
   const newBillInput = () => ({ billName: `Reconciliation ${randomUUID()}`, twdPerCny: '4.8' })
-  async function createContainer() { return (await post('/api/container-batches', newContainerInput()).expect(201)).body as ContainerBatchDto }
+  async function uploadedContainerInput() {
+    const source = (await browser.post('/api/container-batches/source-file-uploads').set(headers).field('mediaType', 'DOCUMENT')
+      .attach('file', createOceanXlsxFixture(), { filename: 'manifest.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }).expect(201)).body as ContainerSourceFileDto
+    return { ...newContainerInput(), sourceFileId: source.mediaAssetId }
+  }
+  async function createContainer() { return (await post('/api/container-batches', await uploadedContainerInput()).expect(201)).body as ContainerBatchDto }
   async function createBill() { return (await post('/api/ocean-freight-bills', newBillInput()).expect(201)).body as OceanFreightBillDto }
 
   beforeAll(async () => {
@@ -68,7 +74,7 @@ describe('ocean freight foundation HTTP API with isolated PostgreSQL', () => {
     await reader.get(url).expect(200)
   })
   it('creates each header with one scoped number under concurrent identical requests and rejects key reuse', async () => {
-    const containerInput = newContainerInput(), containerKey = randomUUID()
+    const containerInput = await uploadedContainerInput(), containerKey = randomUUID()
     const containerResponses = await Promise.all([post('/api/container-batches', containerInput, containerKey), post('/api/container-batches', containerInput, containerKey)])
     expect(containerResponses.map(response => response.status)).toEqual([201, 201])
     container = containerResponses[0].body as ContainerBatchDto
@@ -99,7 +105,7 @@ describe('ocean freight foundation HTTP API with isolated PostgreSQL', () => {
   })
   it('validates dictionary and source identifiers before consuming a number', async () => {
     const before = await h.prisma.numberingIssuance.count()
-    await post('/api/container-batches', { ...newContainerInput(), warehouseValue: 'UNKNOWN' }).expect(422)
+    await post('/api/container-batches', { ...await uploadedContainerInput(), warehouseValue: 'UNKNOWN' }).expect(422)
     await post('/api/container-batches', { ...newContainerInput(), sourceFileId: randomUUID() }).expect(422)
     await post('/api/ocean-freight-bills', { ...newBillInput(), twdPerCny: '0' }).expect(422)
     await post('/api/ocean-freight-bills', { ...newBillInput(), sourceFileId: randomUUID() }).expect(422)
@@ -150,7 +156,7 @@ describe('ocean freight foundation HTTP API with isolated PostgreSQL', () => {
   it('rolls back header numbering and row versions when mandatory audit recording fails', async () => {
     const audit = h.app.get(AuditService), realRecord = audit.record.bind(audit)
     const cases = [
-      { event: 'CONTAINER_BATCH_CREATED', url: '/api/container-batches', input: newContainerInput() },
+      { event: 'CONTAINER_BATCH_CREATED', url: '/api/container-batches', input: await uploadedContainerInput() },
       { event: 'OCEAN_FREIGHT_BILL_CREATED', url: '/api/ocean-freight-bills', input: newBillInput() },
       { event: 'CONTAINER_LOADING_ITEM_CREATED', url: `/api/container-batches/${container.id}/items`, input: { expectedVersion: 3, goodsName: 'Rolled back item', packageCount: 1 } },
       { event: 'OCEAN_FREIGHT_BILL_LINE_CREATED', url: `/api/ocean-freight-bills/${bill.id}/lines`, input: { lineType: 'ADJUSTMENT', goodsName: 'Rolled back line' } },

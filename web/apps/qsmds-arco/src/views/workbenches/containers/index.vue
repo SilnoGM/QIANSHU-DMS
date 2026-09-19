@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { ContainerBatchCreateDto, ContainerBatchDto } from '@/api/generated/types.gen'
+import type { ContainerSubmission } from './form.logic'
+import type { ContainerBatchDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 import containerApi from '@/api/modules/container-batches'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
@@ -33,7 +34,12 @@ const query = computed(() => ({ page: page.value, pageSize: pageSize.value, sear
 const resource = useContainerResource(enabled, epoch, query, async signal => (await containerApi.list(query.value, signal)).data)
 const { data, loading, error } = resource
 const open = ref(false)
-const mutation = useContainerMutation(canCreate, epoch, async (payload: ContainerBatchCreateDto, key, signal) => (await containerApi.create(payload, key, signal)).data)
+const mutation = useContainerMutation(canCreate, epoch, async (payload: ContainerSubmission, key, signal) => {
+  if (!payload.sourceFileId) {
+    throw new Error(t('containerManagement.sourceRequired'))
+  }
+  return (await containerApi.create({ ...payload, sourceFileId: payload.sourceFileId }, key, signal)).data
+})
 const { submitting, retryOnly, error: saveError, fieldErrors } = mutation
 const filterDefinitions = computed(() => [{ key: 'warehouseValue', label: t('containerPage.warehouse'), options: (warehouse.catalog.value?.items ?? []).map(item => ({ value: item.value, label: item.label })) }])
 function warehouseLabel(value: string) {
@@ -74,7 +80,7 @@ const columns = computed<QsGenericTableColumn<ContainerBatchDto>[]>(() => [
 function viewBatch(id: string) {
   void router.push({ name: 'qsPurchaseTransportContainerDetail', params: { id } })
 }
-async function create(payload: ContainerBatchCreateDto) {
+async function create(payload: ContainerSubmission) {
   const created = await mutation.submit(payload)
   if (!created) {
     return

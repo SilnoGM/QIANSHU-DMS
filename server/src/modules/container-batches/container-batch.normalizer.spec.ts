@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { ApiException } from '../../infrastructure/http/api.exception'
-import { deriveContainerDate, normalizeContainerCreate, normalizeLoadingItemCreate } from './container-batch.normalizer'
+import { deriveContainerDate, normalizeContainerCreate, normalizeContainerUpdate, normalizeLoadingItemCreate } from './container-batch.normalizer'
 
 describe('container foundation input', () => {
   it('rejects control characters before writing PostgreSQL text', () => {
     for (const value of ['invalid\u0000text', 'invalid\u0007text']) {
-      expect(() => normalizeContainerCreate({ containerBatchName: '0917柜', warehouseValue: 'B5', remark: value })).toThrow(ApiException)
+      expect(() => normalizeContainerCreate({ containerBatchName: '0917柜', warehouseValue: 'B5', sourceFileId: randomUUID(), remark: value })).toThrow(ApiException)
       expect(() => normalizeLoadingItemCreate({ goodsName: value, packageCount: 1 })).toThrow(ApiException)
     }
   })
@@ -34,10 +34,20 @@ describe('container foundation input', () => {
   })
 
   it('normalizes optional fields and rejects caller-owned calculated and identity fields', () => {
-    expect(normalizeContainerCreate({ containerBatchName: ' 0917柜 ', warehouseValue: 'B5', remark: '  ' })).toEqual({ containerBatchName: '0917柜', warehouseValue: 'B5', sourceFileId: null, remark: null })
+    const sourceFileId = randomUUID()
+    expect(normalizeContainerCreate({ containerBatchName: ' 0917柜 ', warehouseValue: 'B5', sourceFileId, remark: '  ' })).toEqual({ containerBatchName: '0917柜', warehouseValue: 'B5', sourceFileId, remark: null })
     for (const extra of [{ containerBatchNo: 'fake' }, { loadingDate: '2026-01-01' }, { version: 1 }]) {
-      expect(() => normalizeContainerCreate({ containerBatchName: '0917柜', warehouseValue: 'B5', ...extra })).toThrow(ApiException)
+      expect(() => normalizeContainerCreate({ containerBatchName: '0917柜', warehouseValue: 'B5', sourceFileId, ...extra })).toThrow(ApiException)
     }
+  })
+
+  it('requires an uploaded source for creation while preserving historical source-free updates', () => {
+    const fields = { containerBatchName: '0917柜', warehouseValue: 'B5' }
+    for (const sourceFileId of [undefined, null, '']) {
+      expect(() => normalizeContainerCreate({ ...fields, sourceFileId })).toThrow(ApiException)
+    }
+    expect(normalizeContainerUpdate({ ...fields, expectedVersion: 1 })).toMatchObject({ sourceFileId: null, expectedVersion: 1 })
+    expect(normalizeContainerUpdate({ ...fields, sourceFileId: null, expectedVersion: 1 })).toMatchObject({ sourceFileId: null })
   })
 
   it('keeps a grouped mark as one item and does not accept client-calculated volume', () => {

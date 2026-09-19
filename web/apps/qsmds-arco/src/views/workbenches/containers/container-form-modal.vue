@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import type { ContainerBatchCreateDto, ContainerBatchDto } from '@/api/generated/types.gen'
+import type { FileItem } from '@fantastic-admin/components'
+import type { ContainerSubmission } from './form.logic'
+import type { ContainerBatchDto } from '@/api/generated/types.gen'
+import sourceFilesApi from '@/api/modules/container-source-files'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { buildContainerSubmission, createContainerDraft, previewContainerDate, validateContainerDraft } from './form.logic'
+import { useContainerCreateSource } from './use-container-create-source'
 
 const props = withDefaults(defineProps<{
   modelValue: boolean
@@ -14,25 +18,44 @@ const props = withDefaults(defineProps<{
 }>(), { batch: null, submitting: false, retryOnly: false, error: null, fieldErrors: () => ({}) })
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  'submit': [data: ContainerBatchCreateDto]
+  'submit': [data: ContainerSubmission]
 }>()
 const { t } = useI18n()
 const draft = ref(createContainerDraft())
 const loadingDatePreview = computed(() => previewContainerDate(draft.value.containerBatchName, props.batch ? new Date(props.batch.createdAt) : new Date()))
-const formRef = useTemplateRef<{ submit: () => Promise<void>, setFieldError: (name: string, message?: string) => void }>('formRef')
+const formRef = useTemplateRef<{ submit: () => Promise<void>, setFieldError: (name: string, message?: string) => void, setFieldValue: (name: string, value: unknown, shouldValidate?: boolean) => void }>('formRef')
 const requested = ref(false)
-const locked = computed(() => props.submitting || requested.value)
+const account = useAppAccountStore()
+const uploadFiles = ref<FileItem[]>([])
+const source = useContainerCreateSource(
+  computed(() => props.modelValue && !props.batch),
+  computed(() => props.submitting || requested.value || props.retryOnly),
+  computed(() => account.authEpoch),
+  async (file, signal) => (await sourceFilesApi.uploadForCreate(file, signal)).data,
+  t,
+)
+const { selectedFile, sourceFile, uploading, error: sourceError } = source
+const locked = computed(() => props.submitting || requested.value || uploading.value)
+watch(sourceFile, (file) => {
+  if (!props.batch) {
+    draft.value.sourceFileId = file?.mediaAssetId ?? null
+    // 上传控件不自动绑定 UUID；主动同步字段并重验，清除此前的必填错误。
+    if (props.modelValue) {
+      formRef.value?.setFieldValue('sourceFileId', file?.mediaAssetId ?? null, true)
+    }
+  }
+}, { flush: 'sync' })
 function rule(field: keyof typeof draft.value) {
   return (value: unknown) => {
     // FaForm 的字段校验可能先于父 model 更新，必须使用本次控件值。
     const current = { ...draft.value }
-    if (field === 'warehouseValue') {
-      current.warehouseValue = typeof value === 'string' ? value : null
+    if (field === 'warehouseValue' || field === 'sourceFileId') {
+      current[field] = typeof value === 'string' ? value : null
     }
     else {
       current[field] = typeof value === 'string' ? value : ''
     }
-    const key = validateContainerDraft(current)[field]
+    const key = validateContainerDraft(current, !props.batch)[field]
     return key ? t(`containerManagement.${key}`) : true
   }
 }
@@ -58,12 +81,12 @@ function close(value = false) {
   }
 }
 async function submit() {
-  if (locked.value || (!props.retryOnly && Object.keys(validateContainerDraft(draft.value)).length)) {
+  if (locked.value || (!props.retryOnly && Object.keys(validateContainerDraft(draft.value, !props.batch)).length)) {
     return
   }
   requested.value = true
-  // 来源附件由页面处理；编辑时必须保留现有绑定，不能因表单未展示附件而清空。
-  emit('submit', { ...buildContainerSubmission(draft.value), ...(props.batch ? { sourceFileId: props.batch.sourceFileId } : {}) })
+  // 创建绑定已上传附件；编辑保留既有绑定；结果未知时仍由父页面重放冻结请求。
+  emit('submit', buildContainerSubmission(draft.value))
   await nextTick()
   if (!props.submitting) {
     requested.value = false
@@ -92,10 +115,40 @@ async function submit() {
       <FaFormItem name="warehouseValue" :label="t('containerManagement.warehouse')" :rules="rule('warehouseValue')" required>
         <QsDictionarySelect v-model="draft.warehouseValue" dictionary-code="mainland.warehouse" :disabled="locked || retryOnly" :placeholder="t('containerManagement.selectWarehouse')" />
       </FaFormItem>
+      <FaFormItem v-if="!batch" name="sourceFileId" :label="t('containerSource.title')" :description="t('containerSource.createHint')" :rules="rule('sourceFileId')" :auto-bind="false" required>
+        <div class="min-w-0 space-y-2" :aria-busy="uploading">
+          <FaFileUpload v-if="!selectedFile" v-model="uploadFiles" :max="1" :disabled="locked || retryOnly" :before-upload="source.selectFile" :description="t('containerSource.upload')" class="[&>button]:px-3 [&>button]:py-4 [&>button]:h-auto [&>button]:min-h-20">
+            <span class="qs-type-body-medium flex gap-2 items-center justify-center">
+              <FaIcon name="i-lucide:upload" class="size-5" aria-hidden="true" />{{ t('containerSource.upload') }}
+            </span>
+          </FaFileUpload>
+          <div v-else class="p-3 border border-border rounded-lg bg-muted/30 flex flex-wrap gap-3 items-center">
+            <FaIcon name="i-lucide:file-spreadsheet" class="text-primary shrink-0 size-7 dark:text-foreground" aria-hidden="true" />
+            <div class="flex-1 min-w-0">
+              <p class="qs-type-body-medium m-0 [overflow-wrap:anywhere]">
+                {{ selectedFile.name }}
+              </p>
+              <p role="status" class="qs-type-meta text-muted-foreground m-0 mt-1">
+                {{ t(uploading ? 'containerSource.uploading' : sourceFile ? 'containerSource.readyForCreate' : 'containerSource.uploadFailed') }}
+              </p>
+            </div>
+            <div class="flex gap-1">
+              <FaButton v-if="!sourceFile && !uploading" variant="outline" size="sm" :disabled="locked || retryOnly" @click="source.retry">
+                {{ t('containerSource.retryUpload') }}
+              </FaButton>
+              <FaButton variant="ghost" size="sm" :disabled="locked || retryOnly" @click="source.remove">
+                {{ t('containerSource.remove') }}
+              </FaButton>
+            </div>
+          </div>
+          <p v-if="sourceError" role="alert" class="qs-type-meta text-destructive m-0">
+            {{ sourceError }}
+          </p>
+        </div>
+      </FaFormItem>
       <FaFormItem name="remark" :label="t('containerManagement.remark')" :rules="rule('remark')">
         <FaTextarea v-model="draft.remark" :rows="2" maxlength="500" :placeholder="t('containerManagement.remarkHint')" />
       </FaFormItem>
-      <slot name="source-file" />
     </FaForm>
     <template #footer>
       <FaButton variant="outline" :disabled="locked" class="w-full sm:w-auto" @click="close()">

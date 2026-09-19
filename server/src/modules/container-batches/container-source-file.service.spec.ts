@@ -26,6 +26,15 @@ describe('ContainerSourceFileService', () => {
     expect(prisma.mediaAsset.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { uploadPurpose: 'OCEAN_FREIGHT_SOURCE_XLSX' } }))
     expect(JSON.stringify(result)).not.toContain('objectKey')
   })
+  it('prepares a source before creation without requiring or creating a parent batch', async () => {
+    const { service, media, prisma } = setup()
+    const result = await service.uploadForCreate('creator', request())
+    expect(result).toMatchObject({ mediaAssetId: 'asset', mimeType: mime })
+    expect(prisma.containerBatch.findUnique).not.toHaveBeenCalled()
+    expect(media.prepare).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: 'creator' }))
+    expect(prisma.mediaAsset.updateMany).toHaveBeenCalledWith({ where: { id: 'asset', status: 'UPLOADING', createdByUserId: 'creator', uploadPurpose: null }, data: { uploadPurpose: 'OCEAN_FREIGHT_SOURCE_XLSX' } })
+    await expect(service.uploadForCreate('creator', request('application/pdf', 'file.pdf'))).rejects.toMatchObject({ code: 'CONTAINER_SOURCE_FILE_INVALID' })
+  })
   it('blocks replacement and rejects non-xlsx before preparation', async () => {
     const { service, media, prisma } = setup()
     prisma.containerBatch.findUnique.mockResolvedValueOnce({ sourceFileId: 'existing', sourceFile: asset })

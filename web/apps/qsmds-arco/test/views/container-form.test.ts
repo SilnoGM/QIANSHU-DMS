@@ -14,6 +14,7 @@ import {
   validateContainerDraft,
   validateLoadingItemDraft,
 } from '../../src/views/workbenches/containers/form.logic'
+import { useContainerCreateSource } from '../../src/views/workbenches/containers/use-container-create-source'
 
 test('new forms retain unknown measurements and default to one package', () => {
   const draft = createLoadingItemDraft()
@@ -59,7 +60,7 @@ test('container names, warehouse and field lengths are validated before submissi
   assert.ok(validateContainerDraft(draft).warehouseValue)
   Object.assign(draft, { containerBatchName: '0918-02柜', warehouseValue: 'b5' })
   assert.deepEqual(validateContainerDraft(draft), {})
-  assert.deepEqual(buildContainerSubmission(draft), { containerBatchName: '0918-02柜', warehouseValue: 'b5', remark: null })
+  assert.deepEqual(buildContainerSubmission(draft), { containerBatchName: '0918-02柜', warehouseValue: 'b5', remark: null, sourceFileId: null })
   for (const value of ['0918-00柜', '1331柜', '0230柜', '0918-100柜', '九月柜']) {
     draft.containerBatchName = value
     assert.ok(validateContainerDraft(draft).containerBatchName, value)
@@ -67,6 +68,45 @@ test('container names, warehouse and field lengths are validated before submissi
   draft.containerBatchName = '0918柜'
   draft.remark = 'a'.repeat(501)
   assert.ok(validateContainerDraft(draft).remark)
+})
+
+test('新建柜次必须绑定上传成功的来源文件，历史柜次编辑允许保留空附件', () => {
+  const draft = createContainerDraft()
+  Object.assign(draft, { containerBatchName: '0919柜', warehouseValue: 'b5' })
+  assert.equal(validateContainerDraft(draft, true).sourceFileId, 'sourceRequired')
+  assert.deepEqual(validateContainerDraft(draft, false), {})
+  draft.sourceFileId = 'uploaded-source'
+  assert.deepEqual(validateContainerDraft(draft, true), {})
+  assert.equal(buildContainerSubmission(draft).sourceFileId, 'uploaded-source')
+})
+
+test('新建弹窗没有成功上传来源文件时不能提交，绑定后随创建请求发送', async () => {
+  const fixture = await modalFixture('container')
+  try {
+    Object.assign(fixture.state.draft.value, { containerBatchName: '0919柜', warehouseValue: 'b5' })
+    await fixture.state.submit()
+    assert.equal(fixture.events.length, 0)
+    fixture.state.draft.value.sourceFileId = 'uploaded-source'
+    await fixture.state.submit()
+    assert.equal((fixture.events[0]?.[1] as Record<string, unknown>).sourceFileId, 'uploaded-source')
+  }
+  finally { fixture.dispose() }
+})
+
+test('上传成功后同步表单字段并重新校验，移除附件恢复必填状态', async () => {
+  const fixture = await modalFixture('container')
+  try {
+    await fixture.state.source!.selectFile(new File(['xlsx'], 'source.xlsx'))
+    await nextTick()
+    assert.equal(fixture.state.source!.error.value, '')
+    assert.equal(fixture.state.source!.sourceFile.value?.mediaAssetId, 'uploaded-source')
+    assert.equal(fixture.state.draft.value.sourceFileId, 'uploaded-source')
+    assert.deepEqual(fixture.fieldUpdates.at(-1), ['sourceFileId', 'uploaded-source', true])
+    fixture.state.source!.remove()
+    await nextTick()
+    assert.deepEqual(fixture.fieldUpdates.at(-1), ['sourceFileId', null, true])
+  }
+  finally { fixture.dispose() }
 })
 
 test('recipient COD remains unknown unless entered explicitly and respects monetary precision', () => {
@@ -86,8 +126,9 @@ async function modalFixture(kind: 'container' | 'loading-item') {
   const script = source.split('<script setup lang="ts">')[1]!.split('</script>')[0]!.replace(/^import[\s\S]*?from ['"][^'"]+['"]\s*$/gm, '')
   const props = reactive({ modelValue: true, batch: null as null | { sourceFileId: string, containerBatchName: string, warehouseValue: string }, item: null, shipment: null as null | { id: string, shippingMarkText: string }, submitting: false, retryOnly: false, fieldErrors: {} })
   const events: Array<[string, Record<string, unknown> | boolean]> = []
+  const fieldUpdates: unknown[][] = []
   const scope = effectScope()
-  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ draft, submit, close, locked, rule, codAmount: typeof codAmount === 'undefined' ? null : codAmount, recipientAddress: typeof recipientAddress === 'undefined' ? null : recipientAddress })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
+  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ draft, submit, close, locked, rule, source: typeof source === 'undefined' ? null : source, codAmount: typeof codAmount === 'undefined' ? null : codAmount, recipientAddress: typeof recipientAddress === 'undefined' ? null : recipientAddress })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
     ...logic,
     computed,
     nextTick,
@@ -97,10 +138,13 @@ async function modalFixture(kind: 'container' | 'loading-item') {
     withDefaults: (value: unknown) => value,
     defineEmits: () => (name: string, payload: Record<string, unknown> | boolean) => events.push([name, payload]),
     useI18n: () => ({ t: (key: string) => key }),
+    useAppAccountStore: () => ({ authEpoch: 1 }),
+    useContainerCreateSource,
+    sourceFilesApi: { uploadForCreate: async () => ({ data: { mediaAssetId: 'uploaded-source' } }) },
     useCurrencyCatalog: () => ({ currencies: ref([{ code: 'TWD', enabled: true, minorUnit: 2, name: '新台币', symbol: 'NT$' }]), loading: ref(false), errorMessage: ref(null), reload: async () => {} }),
-    useTemplateRef: () => ref({ submit: async () => {}, setFieldError: () => {} }),
-  })) as { draft: { value: Record<string, unknown> }, submit: () => Promise<void>, close: () => void, locked: { value: boolean }, rule: (field: string) => (value: unknown) => string | boolean, codAmount: { value: string | null }, recipientAddress: { value: string } }
-  return { props, state, events, dispose: () => scope.stop() }
+    useTemplateRef: () => ref({ submit: async () => {}, setFieldError: () => {}, setFieldValue: (...args: unknown[]) => fieldUpdates.push(args) }),
+  })) as { draft: { value: Record<string, unknown> }, submit: () => Promise<void>, close: () => void, locked: { value: boolean }, rule: (field: string) => (value: unknown) => string | boolean, source: ReturnType<typeof useContainerCreateSource> | null, codAmount: { value: string | null }, recipientAddress: { value: string } }
+  return { props, state, events, fieldUpdates, dispose: () => scope.stop() }
 }
 
 test('modal prevents duplicate submits and closing while parent save is pending', async () => {

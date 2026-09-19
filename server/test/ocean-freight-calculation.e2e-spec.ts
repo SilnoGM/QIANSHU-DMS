@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import request from 'supertest'
+import { createOceanXlsxFixture } from './fixtures/ocean-freight-xlsx.fixture'
+import type { ContainerSourceFileDto } from '../src/modules/container-batches/container-source-file.dto'
 import type { FundAccount, Prisma } from '../src/generated/prisma/client'
 import { AuditService } from '../src/modules/audit/audit.service'
 import type { ContainerBatchDto, ContainerLoadingItemDto } from '../src/modules/container-batches/container-batch.dto'
@@ -21,6 +23,11 @@ describe('ocean freight calculations against isolated PostgreSQL', () => {
   let fundAccountsBefore: FundAccount[]
   let calculator: OceanFreightBillCalculationService
   const post = (url: string, body: object, key = randomUUID()) => browser.post(url).set(packagingHeaders).set('Idempotency-Key', key).send(body)
+  async function sourceFileId() {
+    const result = await browser.post('/api/container-batches/source-file-uploads').set(packagingHeaders).field('mediaType', 'DOCUMENT')
+      .attach('file', createOceanXlsxFixture(), { filename: 'manifest.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }).expect(201)
+    return (result.body as ContainerSourceFileDto).mediaAssetId
+  }
   async function createBill(twdPerCny = '4.8') {
     return (await post('/api/ocean-freight-bills', { billName: `Calculation ${randomUUID()}`, twdPerCny }).expect(201)).body as OceanFreightBillDto
   }
@@ -64,7 +71,7 @@ describe('ocean freight calculations against isolated PostgreSQL', () => {
   })
 
   it('计算装柜整行材积、保留来源差异和整行重量，拒绝伪造派生值及溢出', async () => {
-    const batch = (await post('/api/container-batches', { containerBatchName: '0919柜', warehouseValue: TEST_DESTINATION_WAREHOUSE }).expect(201)).body as ContainerBatchDto
+    const batch = (await post('/api/container-batches', { containerBatchName: '0919柜', warehouseValue: TEST_DESTINATION_WAREHOUSE, sourceFileId: await sourceFileId() }).expect(201)).body as ContainerBatchDto
     const path = `/api/container-batches/${batch.id}/items`
     const item = (await post(path, { expectedVersion: 1, goodsName: 'Grouped cargo', ...dimensions, oceanShippingMarkText: 'L-010831-01~10' }).expect(201)).body as ContainerLoadingItemDto
     expect(item).toMatchObject({ packageCount: 10, volumeCai: '12.88272063', chargeableVolumeCai: 13, volumeDifferenceCai: '0.00272063', reportedVolumeCai: '12.88000000', grossWeightKg: '180.000' })
@@ -184,7 +191,7 @@ describe('ocean freight calculations against isolated PostgreSQL', () => {
 
   it('确认行冻结且无账户、资金流水、采购或销售收款副作用', async () => {
     const bill = await createBill()
-    const batch = (await post('/api/container-batches', { containerBatchName: '0919-02柜', warehouseValue: TEST_DESTINATION_WAREHOUSE }).expect(201)).body as ContainerBatchDto
+    const batch = (await post('/api/container-batches', { containerBatchName: '0919-02柜', warehouseValue: TEST_DESTINATION_WAREHOUSE, sourceFileId: await sourceFileId() }).expect(201)).body as ContainerBatchDto
     const item = (await post(`/api/container-batches/${batch.id}/items`, { expectedVersion: 1, goodsName: 'Confirmed cargo', packageCount: 1 }).expect(201)).body as ContainerLoadingItemDto
     const line = await createLine(bill.id, { codAmountTwd: '0', loadingItemId: item.id })
     await createCharge(line.id)

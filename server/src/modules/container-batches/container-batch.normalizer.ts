@@ -18,12 +18,17 @@ function text(value: unknown, maximum: number, required = false): string | null 
   if (typeof value !== 'string' || /[\p{Cc}\p{Cs}]/u.test(value) || [...value.trim()].length > maximum || (required && !value.trim())) return containerFailure('VALIDATION_FAILED', '文字内容为空、含无效字符或超出长度限制')
   return value.trim() || null
 }
-export function normalizeContainerCreate(raw: unknown) {
+function normalizeContainerFields(raw: unknown) {
   const input = record(raw, ['containerBatchName', 'warehouseValue', 'sourceFileId', 'remark'])
   const containerBatchName = text(input.containerBatchName, 32, true)!
   if (!/^\d{4}(?:-\d{2})?柜(?:子)?$/u.test(containerBatchName)) return containerFailure('VALIDATION_FAILED', '柜次名称应为 0917柜 或 0918-01柜')
   const warehouseValue = text(input.warehouseValue, 64, true)!
   return { containerBatchName, warehouseValue, sourceFileId: input.sourceFileId == null ? null : containerUuid(input.sourceFileId), remark: text(input.remark, 500) }
+}
+export function normalizeContainerCreate(raw: unknown) {
+  const normalized = normalizeContainerFields(raw)
+  if (normalized.sourceFileId === null) return containerFailure('VALIDATION_FAILED', '请先上传柜次来源文件')
+  return { ...normalized, sourceFileId: normalized.sourceFileId }
 }
 /** 创建时推断一次并持久化；请求指纹不含当前年份，使跨年重试仍返回原柜次。 */
 export function deriveContainerDate(name: string, now: Date) {
@@ -62,7 +67,7 @@ export function requireContainerVersion(value: unknown): number {
 export function normalizeContainerUpdate(raw: unknown) {
   const input = record(raw, ['containerBatchName', 'warehouseValue', 'sourceFileId', 'remark', 'expectedVersion'])
   const { expectedVersion, ...fields } = input
-  return { ...normalizeContainerCreate(fields), expectedVersion: requireContainerVersion(expectedVersion) }
+  return { ...normalizeContainerFields(fields), expectedVersion: requireContainerVersion(expectedVersion) }
 }
 export function normalizeLoadingItemUpdate(raw: unknown) {
   const input = record(raw, ['shipmentId', 'oceanShippingMarkText', 'warehouseReceiptReference', 'goodsName', 'packageCount', 'packageUnit', 'remark', 'expectedVersion', 'itemExpectedVersion', 'grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'reportedVolumeCai', 'recipientName', 'recipientPhone', 'recipientAddress', 'codAmountTwd'])

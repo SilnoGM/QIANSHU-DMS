@@ -10,6 +10,7 @@ class ContractModule {}
 describe('Container source file HTTP contract', () => {
   it('requires read/update to prepare uploads and read for attached files', () => {
     const reflector = new Reflector()
+    expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, ContainerSourceFileController.prototype.uploadForCreate)).toEqual(['container-batches:create'])
     expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, ContainerSourceFileController.prototype.upload)).toEqual(['container-batches:read', 'container-batches:update'])
     for (const method of ['metadata', 'download', 'head'] as const) {
       expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, ContainerSourceFileController.prototype[method])).toEqual(['container-batches:read'])
@@ -17,6 +18,7 @@ describe('Container source file HTTP contract', () => {
   })
   it('documents session, csrf, xlsx binary response and safe metadata', async () => {
     const document = await createOpenApiDocument(ContractModule)
+    expect(document.paths['/api/container-batches/source-file-uploads']?.post).toMatchObject({ operationId: 'container_source_files_upload_for_create', 'x-qianshu-contract': { session: 'required', csrf: true }, responses: { 201: expect.any(Object) as unknown } })
     const upload = document.paths['/api/container-batches/{id}/source-file-uploads'].post
     expect(upload).toMatchObject({ operationId: 'container_source_files_upload', 'x-qianshu-contract': { session: 'required', csrf: true } })
     const get = document.paths['/api/container-batches/{id}/source-file/content'].get

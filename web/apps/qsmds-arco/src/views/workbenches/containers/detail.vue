@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { LoadingItemSubmission } from './form.logic'
-import type { ContainerBatchCreateDto, ContainerBatchDto, ContainerLoadingItemDto, PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
+import type { ContainerSubmission, LoadingItemSubmission } from './form.logic'
+import type { ContainerBatchDto, ContainerLoadingItemDto, PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
 import containerApi from '@/api/modules/container-batches'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
@@ -50,7 +50,7 @@ const editingBatch = shallowRef<ContainerBatchDto | null>(null)
 const editingItem = shallowRef<ContainerLoadingItemDto | null>(null)
 const selectedShipment = shallowRef<PurchaseShipmentListItemDto | null>(null)
 const batchMutation = useContainerMutation(canEdit, epoch, async (payload: {
-  body: ContainerBatchCreateDto
+  body: ContainerSubmission
   version: number
 }, _key, signal) => (await containerApi.update(instanceId, { ...payload.body, expectedVersion: payload.version }, signal)).data)
 const itemMutation = useContainerMutation(canEdit, epoch, async (payload: {
@@ -117,7 +117,7 @@ function chooseShipment(shipment: PurchaseShipmentListItemDto) {
   selectedShipment.value = { ...shipment }
   pickerOpen.value = false
 }
-async function saveBatch(body: ContainerBatchCreateDto) {
+async function saveBatch(body: ContainerSubmission) {
   if (!editingBatch.value) {
     return
   }

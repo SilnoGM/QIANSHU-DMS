@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { Module } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { plainToInstance } from 'class-transformer'
@@ -6,7 +7,7 @@ import { createOpenApiDocument } from '../../openapi/openapi-document.factory'
 import { REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
 import { ContainerBatchController } from './container-batch.controller'
 import { ContainerBatchService } from './container-batch.service'
-import { ContainerBatchCreateDto, ContainerLoadingItemCreateDto } from './container-batch.dto'
+import { ContainerBatchCreateDto, ContainerBatchUpdateDto, ContainerLoadingItemCreateDto } from './container-batch.dto'
 
 @Module({ controllers: [ContainerBatchController], providers: [{ provide: ContainerBatchService, useValue: {} }] })
 class ContractModule {}
@@ -34,11 +35,23 @@ describe('ContainerBatchController foundation contract', () => {
   })
   it('rejects client-owned numbering and computed quantities at the HTTP boundary', async () => {
     const options = { whitelist: true, forbidNonWhitelisted: true }
-    const head = await validate(plainToInstance(ContainerBatchCreateDto, { containerBatchName: '0917柜', warehouseValue: 'B5', containerBatchNo: 'FORGED' }), options)
+    const head = await validate(plainToInstance(ContainerBatchCreateDto, { containerBatchName: '0917柜', warehouseValue: 'B5', sourceFileId: randomUUID(), containerBatchNo: 'FORGED' }), options)
     expect(head.map(error => error.property)).toEqual(['containerBatchNo'])
     const item = await validate(plainToInstance(ContainerLoadingItemCreateDto, { expectedVersion: 1, goodsName: 'Machine', packageCount: 10, volumeCai: '12.88' }), options)
     expect(item.map(error => error.property)).toEqual(['volumeCai'])
     expect(await validate(plainToInstance(ContainerLoadingItemCreateDto, { goodsName: 'Machine', packageCount: 1 }), options)).not.toHaveLength(0)
+  })
+  it('requires sourceFileId on create but accepts historical updates without it', async () => {
+    const fields = { containerBatchName: '0917柜', warehouseValue: 'B5' }
+    for (const sourceFileId of [undefined, null]) {
+      const errors = await validate(plainToInstance(ContainerBatchCreateDto, { ...fields, sourceFileId }))
+      expect(errors.map(error => error.property)).toEqual(['sourceFileId'])
+    }
+    expect(await validate(plainToInstance(ContainerBatchCreateDto, { ...fields, sourceFileId: randomUUID() }))).toHaveLength(0)
+    expect(await validate(plainToInstance(ContainerBatchUpdateDto, { ...fields, expectedVersion: 1 }))).toHaveLength(0)
+    const document = await createOpenApiDocument(ContractModule)
+    expect(document.components?.schemas?.ContainerBatchCreateDto).toHaveProperty('required', expect.arrayContaining(['sourceFileId']))
+    expect(document.components?.schemas?.ContainerBatchUpdateDto).not.toHaveProperty('required', expect.arrayContaining(['sourceFileId']))
   })
   it('accepts decimal measurement strings, exposes derived volume and rejects numeric JSON measurements', async () => {
     const base = { expectedVersion: 1, goodsName: 'Machine', packageCount: 10 }

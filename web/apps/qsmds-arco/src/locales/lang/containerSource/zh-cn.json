@@ -10,6 +10,11 @@
     "pending": "文件已上传，正在等待保存到柜次。",
     "retryAttach": "重试保存",
     "saved": "已保存的来源文件",
+    "createHint": "请上传本柜装柜资料，限 1 份 .xlsx，最大 50 MiB。创建后不可替换。",
+    "readyForCreate": "上传成功，创建柜次时保存。",
+    "uploadFailed": "上传未成功，请重试或重新选择。",
+    "retryUpload": "重试上传",
+    "remove": "移除",
     "retryRead": "重新读取",
     "invalidFile": "请选择有效的 .xlsx 文件，大小不超过 50 MiB。",
     "failed": "来源文件操作失败，请重试。"
