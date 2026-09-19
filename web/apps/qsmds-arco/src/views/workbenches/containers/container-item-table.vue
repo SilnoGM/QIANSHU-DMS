@@ -52,7 +52,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
   { id: 'reportedVolumeCai', title: t('containerPage.sourceVolume'), accessorFn: row => measurement(row.reportedVolumeCai, 2), width: 145, minWidth: 145, maxWidth: 145, align: 'right', cellClass: 'qs-type-data' },
   { id: 'volumeDifferenceCai', title: t('containerPage.difference'), accessorFn: row => measurement(row.volumeDifferenceCai, 2), width: 145, minWidth: 145, maxWidth: 145, align: 'right', cellClass: 'qs-type-data' },
   { id: 'recipient', title: t('containerPage.recipientInfo'), accessorFn: row => [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' '), width: 380, minWidth: 380, maxWidth: 380 },
-  { id: 'codAmountTwd', title: t('containerPage.cod'), accessorFn: row => row.codAmountTwd ?? t('containerPage.none'), width: 190, minWidth: 190, maxWidth: 190, align: 'right', cellClass: 'qs-type-data' },
+  { id: 'codAmountTwd', title: t('containerPage.cod'), accessorFn: row => row.codAmountTwd ?? t('containerPage.none'), width: 190, minWidth: 190, maxWidth: 190, align: 'right', fixed: 'right', cellClass: 'qs-type-data' },
   { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', width: 220, minWidth: 220, maxWidth: 220 },
 ])
 </script>
@@ -68,7 +68,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
       </div>
     </template>
   </FaAlert>
-  <QsGenericTable v-model:page="page" v-model:page-size="pageSize" v-model:search="search" row-key="id" :columns="columns" :data="props.rows" :total="total" :loading="loading" :error="error" :addable="false" :page-size-options="[20, 50, 100]" :search-placeholder="t('containerPage.itemSearch')" :empty-title="t('containerPage.emptyItems')" :empty-description="t('containerPage.emptyItemsDescription')" :action-column="{ width: 220, minWidth: 220, maxWidth: 220 }" table-class="w-max min-w-full" @retry="emit('retry')">
+  <QsGenericTable v-model:page="page" v-model:page-size="pageSize" v-model:search="search" row-key="id" :columns="columns" :data="props.rows" :total="total" :loading="loading" :error="error" :addable="false" :page-size-options="[20, 50, 100]" :search-placeholder="t('containerPage.itemSearch')" :empty-title="t('containerPage.emptyItems')" :empty-description="t('containerPage.emptyItemsDescription')" :action-column="{ width: 190, minWidth: 190, maxWidth: 190, fixed: 'right' }" table-class="w-max min-w-full" @retry="emit('retry')">
     <template #cell-goods="{ row }">
       <QsTableStackedCell class="max-w-full">
         <QsTableStackedLine weight="medium" content-class="[overflow-wrap:anywhere]">
@@ -125,7 +125,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
       <span class="qs-type-data whitespace-pre-wrap [overflow-wrap:anywhere]">{{ row.original.warehouseReceiptReference || t('containerPage.none') }}</span>
     </template>
     <template #cell-codAmountTwd="{ row }">
-      <AmountDisplay v-if="row.original.codAmountTwd !== null" :value="row.original.codAmountTwd" currency="TWD" :currencies="currencies" />
+      <AmountDisplay v-if="row.original.codAmountTwd !== null" :value="row.original.codAmountTwd" currency="TWD" :currencies="currencies" class="text-primary" />
       <span v-else class="qs-type-meta text-muted-foreground">{{ t('containerPage.none') }}</span>
     </template>
     <template #cell-remark="{ row }">
@@ -192,7 +192,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
                 {{ t('containerPage.cod') }}
               </dt>
               <dd class="mt-1">
-                <AmountDisplay v-if="row.codAmountTwd !== null" :value="row.codAmountTwd" currency="TWD" :currencies="currencies" />
+                <AmountDisplay v-if="row.codAmountTwd !== null" :value="row.codAmountTwd" currency="TWD" :currencies="currencies" class="text-primary" />
                 <span v-else class="qs-type-meta text-muted-foreground">{{ t('containerPage.none') }}</span>
               </dd>
             </div>

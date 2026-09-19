@@ -32,7 +32,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
   { id: 'measurements', title: t('containerPage.weightDimensions'), accessorFn: row => `${measurement(row.grossWeightKg)} kg ${dimensions(row)}`, width: 240, minWidth: 240, maxWidth: 240 },
   { id: 'volume', title: t('containerPage.volume'), accessorFn: row => measurement(row.volumeCai, 2), width: 185, minWidth: 185, maxWidth: 185 },
   { id: 'recipient', title: t('containerPage.recipientInfo'), accessorFn: row => [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' '), width: 380, minWidth: 380, maxWidth: 380 },
-  { id: 'cod', title: t('containerPage.cod'), accessorKey: 'codAmountTwd', width: 170, minWidth: 170, maxWidth: 170, align: 'right' },
+  { id: 'cod', title: t('containerPage.cod'), accessorKey: 'codAmountTwd', width: 170, minWidth: 170, maxWidth: 170, align: 'right', fixed: 'right' },
   { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', width: 220, minWidth: 220, maxWidth: 220 },
   { id: 'issues', title: t('containerImport.issues'), accessorFn: row => [...row.errors, ...row.warnings].join('；'), width: 250, minWidth: 250, maxWidth: 250 },
 ])
@@ -40,7 +40,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
 
 <template>
   <FaAlert v-if="currencyError" class="mb-4" :title="currencyError" />
-  <QsGenericTable v-model:page="page" v-model:page-size="pageSize" v-model:search="search" row-key="rowKey" :columns="columns" :data="visibleRows" :total="filtered.length" :addable="false" :show-row-number="false" :page-size-options="[20, 50, 100]" :search-placeholder="t('containerImport.search')" :action-column="{ width: 170, minWidth: 170, maxWidth: 170 }" table-class="w-max min-w-full">
+  <QsGenericTable v-model:page="page" v-model:page-size="pageSize" v-model:search="search" row-key="rowKey" :columns="columns" :data="visibleRows" :total="filtered.length" :addable="false" :show-row-number="false" :page-size-options="[20, 50, 100]" :search-placeholder="t('containerImport.search')" :action-column="{ width: 104, minWidth: 104, maxWidth: 104, fixed: 'right' }" table-class="w-max min-w-full">
     <template #cell-goods="{ row }">
       <QsTableStackedCell class="w-full whitespace-normal">
         <QsTableStackedLine weight="medium" content-class="[overflow-wrap:anywhere]">
@@ -102,7 +102,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
       </QsTableStackedCell>
     </template>
     <template #cell-cod="{ row }">
-      <AmountDisplay v-if="row.original.codAmountTwd !== null" :value="row.original.codAmountTwd" currency="TWD" :currencies="currencies" />
+      <AmountDisplay v-if="row.original.codAmountTwd !== null" :value="row.original.codAmountTwd" currency="TWD" :currencies="currencies" class="text-primary" />
       <span v-else class="qs-type-meta text-muted-foreground">{{ t('containerPage.none') }}</span>
     </template>
     <template #cell-remark="{ row }">
@@ -162,7 +162,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
             {{ [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' · ') || '—' }}
           </QsTableStackedLine>
           <QsTableStackedLine :label="t('containerPage.cod')">
-            <AmountDisplay v-if="row.codAmountTwd !== null" :value="row.codAmountTwd" currency="TWD" :currencies="currencies" />
+            <AmountDisplay v-if="row.codAmountTwd !== null" :value="row.codAmountTwd" currency="TWD" :currencies="currencies" class="text-primary" />
             <span v-else class="qs-type-meta text-muted-foreground">{{ t('containerPage.none') }}</span>
           </QsTableStackedLine>
           <QsTableStackedLine v-if="row.remark" :label="t('containerPage.remark')" content-class="whitespace-pre-wrap line-clamp-2">
