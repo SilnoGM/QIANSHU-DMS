@@ -7,6 +7,31 @@ describe('container workbook parser', () => {
     expect(result.rows).toHaveLength(1)
     expect(result.rows[0]).toMatchObject({ rowKey: '1:3', sourceSheetName: '装柜资料', sourceRowNumber: 3, containerBatchName: '0917柜', warehouseReceiptReference: 'MARK/001/货件-01', oceanShippingMarkText: 'L-091700-01~10', packageCount: 10, grossWeightKg: '180', lengthCm: '128', reportedVolumeCai: '12.88272', recipientPhone: '0912345678', codAmountTwd: '20000', errors: [] })
   })
+  it.each([
+    ['测试市测试路1号（派送前联系，自备堆高机卸货）', null, '测试市测试路1号', '派送前联系，自备堆高机卸货'],
+    ['测试市测试路1号(Call before delivery)', '勿倒置', '测试市测试路1号', '勿倒置；Call before delivery'],
+    ['测试路1号（提前联系）2楼(自备叉车)', '工作日送达', '测试路1号2楼', '工作日送达；提前联系；自备叉车'],
+    ['测试路1号（提前联系(至少1天)，自备叉车）', null, '测试路1号', '提前联系(至少1天)，自备叉车'],
+    ['测试路1号(提前联系（至少1天）)', null, '测试路1号', '提前联系（至少1天）'],
+    ['测试路1号（提前联系)', null, '测试路1号', '提前联系'],
+    ['测试路1号（ ）()', '原备注', '测试路1号', '原备注'],
+    ['测试路1号', null, '测试路1号', null],
+    ['测试路1号（未闭合(内层成对)', null, '测试路1号（未闭合(内层成对)', null],
+    ['测试路1号）未成对', null, '测试路1号）未成对', null],
+    ['（仅有送货说明）', null, null, '仅有送货说明'],
+  ])('moves balanced address notes to remarks without losing original source: %s', async (address, existingRemark, expectedAddress, expectedRemark) => {
+    const { rows } = await parseContainerWorkbook(createContainerImportFixture({ sheets: [{ name: '装柜资料', rows: containerImportHeader() + containerImportRow(3, { N: address, R: existingRemark }) }] }))
+    expect(rows[0]).toMatchObject({ recipientAddress: expectedAddress, remark: expectedRemark, errors: [] })
+    expect(rows[0].sourceData.cells.N3.value).toBe(address)
+    if (existingRemark) expect(rows[0].sourceData.cells.R3.value).toBe(existingRemark)
+  })
+  it('validates the combined remark length without silently truncating extracted notes', async () => {
+    const note = '提'.repeat(250), existing = '原'.repeat(250)
+    const { rows } = await parseContainerWorkbook(createContainerImportFixture({ sheets: [{ name: '装柜资料', rows: containerImportHeader() + containerImportRow(3, { N: `测试路1号（${note}）`, R: existing }) }] }))
+    expect(rows[0].recipientAddress).toBe('测试路1号')
+    expect(rows[0].remark).toBe(`${existing}；${note}`)
+    expect(rows[0].errors).toContain('备注内容过长或含无效字符')
+  })
   it('keeps original numeric strings/formulas and warns instead of restoring lost phone zeros', async () => {
     const row = containerImportRow(3).replace(textCell('O3', '0912345678'), numberCell('O3', '912345678')).replace(numberCell('L3', '12.882720'), numberCell('L3', '12.8827201234567', 'I3*J3*K3/28316*E3'))
     const { rows } = await parseContainerWorkbook(createContainerImportFixture({ sheets: [{ name: '装柜资料', rows: containerImportHeader() + row }] }))

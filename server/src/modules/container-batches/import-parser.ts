@@ -43,6 +43,28 @@ function normalizeText(cell: WorkbookCell | undefined, maximum: number, label: s
   if (value && ([...value].length > maximum || /[\p{Cc}\p{Cs}]/u.test(value))) errors.push(`${label}内容过长或含无效字符`)
   return value
 }
+function splitAddressRemarks(value: string | null) {
+  const addressParts: string[] = [], notes: string[] = []
+  if (!value) return { address: null, notes }
+  let depth = 0, start = 0, cursor = 0
+  // 中英文括号等价配对；仅提取闭合的最外层，内层说明保留，未闭合内容留在地址中。
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] === '(' || value[index] === '（') {
+      if (depth === 0) start = index
+      depth++
+    } else if ((value[index] === ')' || value[index] === '）') && depth > 0) {
+      depth--
+      if (depth === 0) {
+        addressParts.push(value.slice(cursor, start))
+        const note = value.slice(start + 1, index).trim()
+        if (note) notes.push(note)
+        cursor = index + 1
+      }
+    }
+  }
+  addressParts.push(value.slice(cursor))
+  return { address: addressParts.join('').replace(/\s{2,}/gu, ' ').trim() || null, notes }
+}
 function parseRow(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, WorkbookCell>, columns: Columns, fallbackBatch: string | null): ParsedContainerRow | null {
   const cell = (field: Field) => columns[field] ? cells.get(columns[field]) : undefined
   const identity = [cell('warehouseReceiptReference'), cell('oceanShippingMarkText'), cell('goodsName')].map(value => value?.value?.trim()).filter(Boolean)
@@ -67,6 +89,9 @@ function parseRow(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, Wo
   }
   const rawBatch = text('containerBatchName', '柜次名称', 128), containerBatchName = batchName(rawBatch) ?? fallbackBatch
   if (rawBatch && !batchName(rawBatch)) errors.push('来源柜次名称无法识别')
+  const { address: recipientAddress, notes } = splitAddressRemarks(text('recipientAddress', '收件地址', 2000))
+  const remark = [text('remark', '备注', 500), ...notes].filter(Boolean).join('；') || null
+  if (remark && [...remark].length > 500 && !errors.includes('备注内容过长或含无效字符')) errors.push('备注内容过长或含无效字符')
   return {
     rowKey: `${sheet.index + 1}:${rowNumber}`, sourceSheetName: sheet.name, sourceRowNumber: rowNumber,
     containerBatchName, warehouseReceiptReference: text('warehouseReceiptReference', '入仓参考', 500), oceanShippingMarkText: text('oceanShippingMarkText', '海运唛头', 128),
@@ -74,8 +99,8 @@ function parseRow(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, Wo
     grossWeightKg: numeric('grossWeightKg', '整行毛重', 3, 18, true), lengthCm: numeric('lengthCm', '每件长度', 3, 18, true),
     widthCm: numeric('widthCm', '每件宽度', 3, 18, true), heightCm: numeric('heightCm', '每件高度', 3, 18, true),
     reportedVolumeCai: numeric('reportedVolumeCai', '来源材积', 8, 24),
-    recipientName: text('recipientName', '收件人', 128), recipientPhone, recipientAddress: text('recipientAddress', '收件地址', 2000),
-    codAmountTwd: numeric('codAmountTwd', '代收金额', 2, 30), remark: text('remark', '备注', 500), sourceData, errors, warnings,
+    recipientName: text('recipientName', '收件人', 128), recipientPhone, recipientAddress,
+    codAmountTwd: numeric('codAmountTwd', '代收金额', 2, 30), remark, sourceData, errors, warnings,
   }
 }
 export async function parseContainerWorkbook(buffer: Buffer): Promise<{ rows: ParsedContainerRow[], warnings: string[] }> {

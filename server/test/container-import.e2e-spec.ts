@@ -63,6 +63,18 @@ describe('container source import with isolated PostgreSQL', () => {
     await post(`${path}/import`, { ...body, rows: [{ ...body.rows[0], goodsName: 'forged' }] }).expect(422)
   })
 
+  it('previews and persists address notes separately while keeping original source cells', async () => {
+    const parent = await batch([{ N: '测试路1号（提前联系，自备叉车）', R: '原有备注' }, { N: '测试路2号(Call first)', R: null }])
+    const data = await preview(parent.id)
+    expect(data.rows.map(row => [row.recipientAddress, row.remark])).toEqual([
+      ['测试路1号', '原有备注；提前联系，自备叉车'], ['测试路2号', 'Call first'],
+    ])
+    await post(`/api/container-batches/${parent.id}/import`, input(data, true)).expect(200)
+    const stored = await h.prisma.containerLoadingItem.findMany({ where: { containerBatchId: parent.id }, orderBy: { lineNumber: 'asc' } })
+    expect(stored.map(row => [row.recipientAddress, row.remark])).toEqual(data.rows.map(row => [row.recipientAddress, row.remark]))
+    expect(stored[0].sourceData).toMatchObject({ source: { cells: { N3: { value: '测试路1号（提前联系，自备叉车）' }, R3: { value: '原有备注' } } } })
+  })
+
   it('imports all selected rows atomically, persists provenance and replays without duplicating or moving shipments/funds', async () => {
     const shipment = await h.shipment(), parent = await batch([{ B: shipment.part.shippingMarkText! }, { B: shipment.part.shipmentNo }])
     const before = await h.prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: shipment.part.id } })

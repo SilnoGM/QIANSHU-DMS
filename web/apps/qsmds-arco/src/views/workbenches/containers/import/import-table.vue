@@ -52,9 +52,6 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
         <QsTableStackedLine tone="muted" content-class="qs-type-meta [overflow-wrap:anywhere]">
           {{ t('containerImport.sheetRow', { sheet: row.original.sourceSheetName, row: row.original.sourceRowNumber }) }}
         </QsTableStackedLine>
-        <QsTableStackedLine v-if="row.original.containerBatchName" :label="t('containerImport.batchName')" tone="muted" content-class="qs-type-meta">
-          {{ row.original.containerBatchName }}
-        </QsTableStackedLine>
       </QsTableStackedCell>
     </template>
     <template #cell-match="{ row }">
@@ -87,9 +84,6 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
         </QsTableStackedLine>
         <QsTableStackedLine :label="t('containerImport.sourceVolume')" content-class="qs-type-data">
           {{ measurement(row.original.reportedVolumeCai, 2) }} {{ t('containerManagement.volumeUnit') }}
-        </QsTableStackedLine>
-        <QsTableStackedLine :label="t('containerImport.chargeableVolume')" tone="muted" content-class="qs-type-data">
-          {{ row.original.chargeableVolumeCai ?? '—' }}
         </QsTableStackedLine>
       </QsTableStackedCell>
     </template>
@@ -128,9 +122,6 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
         </div>
         <ImportMatchSummary :row="row" />
         <QsTableStackedCell class="w-full whitespace-normal">
-          <QsTableStackedLine v-if="row.containerBatchName" :label="t('containerImport.batchName')">
-            {{ row.containerBatchName }}
-          </QsTableStackedLine>
           <QsTableStackedLine :label="t('containerPage.purchase')" content-class="qs-type-data">
             {{ row.selectedShipment?.purchaseOrderNo || '—' }}
           </QsTableStackedLine>
@@ -154,9 +145,6 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
           </QsTableStackedLine>
           <QsTableStackedLine :label="t('containerImport.sourceVolume')" content-class="qs-type-data">
             {{ measurement(row.reportedVolumeCai, 2) }} {{ t('containerManagement.volumeUnit') }}
-          </QsTableStackedLine>
-          <QsTableStackedLine :label="t('containerImport.chargeableVolume')" content-class="qs-type-data">
-            {{ row.chargeableVolumeCai ?? '—' }}
           </QsTableStackedLine>
           <QsTableStackedLine :label="t('containerPage.recipientInfo')">
             {{ [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' · ') || '—' }}
