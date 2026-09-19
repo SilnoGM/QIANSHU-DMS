@@ -62,6 +62,7 @@
     "totalVolume": "总材积（材）",
     "totalChargeable": "总计费材数",
     "recipient": "收货资料",
+    "recipientInfo": "收件人信息",
     "recipientName": "收货人",
     "recipientPhone": "联系电话",
     "recipientAddress": "收货地址",

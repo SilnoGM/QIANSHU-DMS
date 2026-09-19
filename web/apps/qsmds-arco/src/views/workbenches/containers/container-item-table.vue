@@ -45,9 +45,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
   { id: 'chargeableVolumeCai', title: t('containerPage.chargeable'), accessorFn: row => value(row.chargeableVolumeCai), minWidth: 115, align: 'right', cellClass: 'qs-type-data' },
   { id: 'reportedVolumeCai', title: t('containerPage.sourceVolume'), accessorFn: row => measurement(row.reportedVolumeCai, 2), minWidth: 160, align: 'right', cellClass: 'qs-type-data' },
   { id: 'volumeDifferenceCai', title: t('containerPage.difference'), accessorFn: row => measurement(row.volumeDifferenceCai, 2), minWidth: 160, align: 'right', cellClass: 'qs-type-data' },
-  { id: 'recipientName', title: t('containerPage.recipientName'), accessorKey: 'recipientName', minWidth: 130 },
-  { id: 'recipientPhone', title: t('containerPage.recipientPhone'), accessorKey: 'recipientPhone', minWidth: 160 },
-  { id: 'recipientAddress', title: t('containerPage.recipientAddress'), accessorKey: 'recipientAddress', minWidth: 260 },
+  { id: 'recipient', title: t('containerPage.recipientInfo'), accessorFn: row => [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' '), minWidth: 300 },
   { id: 'codAmountTwd', title: t('containerPage.cod'), accessorFn: row => value(row.codAmountTwd), minWidth: 175, align: 'right', cellClass: 'qs-type-data' },
   { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', minWidth: 220 },
 ])
@@ -86,6 +84,17 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
         </QsTableStackedLine>
       </QsTableStackedCell>
     </template>
+    <template #cell-recipient="{ row }">
+      <QsTableStackedCell>
+        <QsTableStackedLine content-class="flex flex-wrap gap-x-3 gap-y-1">
+          <span>{{ row.original.recipientName || t('containerPage.none') }}</span>
+          <span class="qs-type-data whitespace-nowrap">{{ row.original.recipientPhone || t('containerPage.none') }}</span>
+        </QsTableStackedLine>
+        <QsTableStackedLine tone="muted" content-class="whitespace-pre-wrap [overflow-wrap:anywhere]">
+          {{ row.original.recipientAddress || t('containerPage.none') }}
+        </QsTableStackedLine>
+      </QsTableStackedCell>
+    </template>
     <template #mobile-row="{ row }">
       <div class="min-w-0 [overflow-wrap:anywhere] space-y-3">
         <strong>{{ row.goodsName }}</strong><div class="qs-type-data-emphasis flex gap-2 items-center">
@@ -118,12 +127,26 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
                 {{ [row.lengthCm, row.widthCm, row.heightCm].map(item => measurement(item)).join(' × ') }}
               </dd>
             </div>
-            <div v-for="entry in [['receipt', row.warehouseReceiptReference], ['sourceVolume', measurement(row.reportedVolumeCai, 2)], ['difference', measurement(row.volumeDifferenceCai, 2)], ['recipientName', row.recipientName], ['recipientPhone', row.recipientPhone], ['recipientAddress', row.recipientAddress], ['cod', row.codAmountTwd], ['purchase', row.purchaseOrderNo], ['sales', row.salesOrderNo], ['remark', row.remark]]" :key="entry[0] ?? ''" :class="['receipt', 'recipientAddress', 'remark'].includes(entry[0] ?? '') ? 'col-span-2' : ''">
+            <div v-for="entry in [['receipt', row.warehouseReceiptReference], ['sourceVolume', measurement(row.reportedVolumeCai, 2)], ['difference', measurement(row.volumeDifferenceCai, 2)], ['cod', row.codAmountTwd], ['purchase', row.purchaseOrderNo], ['sales', row.salesOrderNo], ['remark', row.remark]]" :key="entry[0] ?? ''" :class="['receipt', 'remark'].includes(entry[0] ?? '') ? 'col-span-2' : ''">
               <dt class="qs-type-meta text-muted-foreground">
                 {{ t(`containerPage.${entry[0]}`) }}
               </dt>
               <dd class="mt-1 whitespace-pre-wrap" :class="['sourceVolume', 'difference', 'cod', 'purchase', 'sales'].includes(entry[0] ?? '') ? 'qs-type-data' : 'qs-type-body'">
                 {{ entry[1] ?? t(['sourceVolume', 'difference', 'cod'].includes(entry[0] ?? '') ? 'containerPage.unknown' : 'containerPage.none') }}
+              </dd>
+            </div>
+            <div class="col-span-2">
+              <dt class="qs-type-meta text-muted-foreground">
+                {{ t('containerPage.recipientInfo') }}
+              </dt>
+              <dd class="mt-1 space-y-1">
+                <div class="flex flex-wrap gap-x-3 gap-y-1">
+                  <span>{{ row.recipientName || t('containerPage.none') }}</span>
+                  <span class="qs-type-data whitespace-nowrap">{{ row.recipientPhone || t('containerPage.none') }}</span>
+                </div>
+                <p class="text-muted-foreground whitespace-pre-wrap">
+                  {{ row.recipientAddress || t('containerPage.none') }}
+                </p>
               </dd>
             </div>
           </dl>

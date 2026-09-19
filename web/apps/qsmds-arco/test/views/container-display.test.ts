@@ -37,7 +37,7 @@ test('装柜明细默认展示所有业务列，桌面数值采用指定精度',
     useRouter: () => ({}),
   }) as Array<{ id: string, defaultVisible?: boolean, accessorFn?: (row: Record<string, unknown>) => unknown }>
   assert.ok(columns.every(column => column.defaultVisible !== false))
-  for (const id of ['reportedVolumeCai', 'volumeDifferenceCai', 'recipientName', 'recipientPhone', 'recipientAddress', 'codAmountTwd', 'remark', 'source']) {
+  for (const id of ['reportedVolumeCai', 'volumeDifferenceCai', 'recipient', 'codAmountTwd', 'remark', 'source']) {
     assert.ok(columns.some(column => column.id === id), id)
   }
   const display = (id: string, row: Record<string, unknown>) => columns.find(column => column.id === id)!.accessorFn!(row)
