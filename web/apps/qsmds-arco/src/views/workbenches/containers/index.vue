@@ -46,7 +46,10 @@ function warehouseLabel(value: string) {
   const resolved = warehouse.resolve(value)
   return resolved && resolved.status !== 'UNKNOWN' ? resolved.displayLabel : t('containerPage.warehouseUnknown')
 }
-const measurement = (value: string | null, places: 0 | 2) => formatContainerMeasurement(value, places) ?? t('containerPage.unknown')
+function measurement(value: string | null, places: 0 | 2, unit: string) {
+  const formatted = formatContainerMeasurement(value, places)
+  return formatted === null ? t('containerPage.unknown') : `${formatted} ${unit}`
+}
 function quantities(row: ContainerBatchDto) {
   return [
     { label: 'itemCount', value: row.itemCount },
@@ -55,8 +58,8 @@ function quantities(row: ContainerBatchDto) {
 }
 function totals(row: ContainerBatchDto) {
   return [
-    { label: 'totalWeight', value: measurement(row.grossWeightKgTotal, 0) },
-    { label: 'totalVolume', value: measurement(row.volumeCaiTotal, 2) },
+    { label: 'totalWeightLabel', value: measurement(row.grossWeightKgTotal, 0, 'kg') },
+    { label: 'totalVolumeLabel', value: measurement(row.volumeCaiTotal, 2, t('containerManagement.volumeUnit')) },
   ]
 }
 const columns = computed<QsGenericTableColumn<ContainerBatchDto>[]>(() => [

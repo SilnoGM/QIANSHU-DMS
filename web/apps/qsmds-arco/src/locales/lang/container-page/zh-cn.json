@@ -63,6 +63,8 @@
     "totalHint": "汇总范围为本柜全部明细；存在缺值时相应汇总显示待完善。",
     "totalWeight": "总毛重（kg）",
     "totalVolume": "总材积（材）",
+    "totalWeightLabel": "总毛重",
+    "totalVolumeLabel": "总材积",
     "totalChargeable": "总计费材数",
     "recipient": "收货资料",
     "recipientInfo": "收件人信息",

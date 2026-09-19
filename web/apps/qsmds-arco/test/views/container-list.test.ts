@@ -30,7 +30,7 @@ async function fixture() {
     watch,
     formatContainerMeasurement,
     defineOptions: () => {},
-    useI18n: () => ({ t: (key: string) => key }),
+    useI18n: () => ({ t: (key: string) => key === 'containerManagement.volumeUnit' ? '材' : key }),
     useAppAuth: () => ({ auth: () => true }),
     useRouter: () => ({}),
     useRoute: () => ({ name: 'qsPurchaseTransportContainers' }),
@@ -74,6 +74,6 @@ test('柜次列表保留指定汇总数据，系统编号不提供复制', async
   assert.notEqual(columns.find(column => column.id === 'containerBatchNo')!.copyable, true)
   const row = { itemCount: 10, shipmentCount: 8, packageCountTotal: 15, grossWeightKgTotal: '1173.400', volumeCaiTotal: '25.135', chargeableVolumeCaiTotal: 27 } as ContainerBatchDto
   assert.equal(columns.find(column => column.id === 'quantities')!.accessorFn!(row, 0), '10 8')
-  assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!(row, 0), '1173 25.14')
+  assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!(row, 0), '1173 kg 25.14 材')
   assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!({ ...row, grossWeightKgTotal: null, volumeCaiTotal: null, chargeableVolumeCaiTotal: null }, 0), 'containerPage.unknown containerPage.unknown')
 })
