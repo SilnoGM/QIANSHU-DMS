@@ -6,11 +6,13 @@ import { MediaModule } from '../media/media.module'
 import { NumberingModule } from '../numbering/numbering.module'
 import { ContainerBatchController } from './container-batch.controller'
 import { ContainerBatchService } from './container-batch.service'
+import { ContainerSourceFileController } from './container-source-file.controller'
+import { ContainerSourceFileService } from './container-source-file.service'
 
 @Module({
   imports: [PrismaModule, AuthModule, DictionaryModule, MediaModule, NumberingModule],
-  controllers: [ContainerBatchController],
-  providers: [ContainerBatchService],
+  controllers: [ContainerBatchController, ContainerSourceFileController],
+  providers: [ContainerBatchService, ContainerSourceFileService],
   exports: [ContainerBatchService],
 })
 export class ContainerBatchModule {}

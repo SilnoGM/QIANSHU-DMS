@@ -3,7 +3,7 @@
 | 项目 | 说明 |
 | --- | --- |
 | 日期 | 2026-09-19 |
-| 状态 | 页面骨架、五表结构、基础接口及阶段 2 计算已落地；完整业务流程仍按阶段推进 |
+| 状态 | 五表结构、基础接口、阶段 2 计算与阶段 3 柜次维护已实现并验收；后续业务流程按阶段推进 |
 | 需求依据 | [需求规格](./requirements.md) |
 | 实施顺序 | [实施任务](./tasks.md) |
 
@@ -15,7 +15,7 @@
 | --- | --- |
 | [Prisma schema](../../server/prisma/schema.prisma) | `PurchaseOrderPart` → `PurchaseOrder` → 可空的 `SalesOrder` 关联 |
 | [编号生成服务](../../server/src/modules/numbering/numbering-generator.service.ts) | 通过内部事务派发入口复用规则、锁与幂等能力 |
-| [柜次页面](../../web/apps/qsmds-arco/src/views/workbenches/containers/index.vue) | 当前只有页头和新建轻提示，后续扩展入口 |
+| [柜次页面](../../web/apps/qsmds-arco/src/views/workbenches/containers/index.vue) | 已接入柜次列表、真实创建和独立详情 |
 | [UI 设计规范](../../docs/前端文档/UI设计规范.md) | 页面、表格、表单、主题与响应式约定 |
 | [接口契约规范](../../docs/后端文档/接口契约规范.md) | Controller/DTO 定义，统一 OpenAPI 同步流程 |
 
@@ -355,11 +355,13 @@ flowchart LR
 - 柜次详情使用独立页面，展示基础信息、装柜明细、来源文件及关联账单；支持明细录入、导入、货件关联及现有详情入口。
 - 页面保存资料不代表确认实物出运，不自动触发现有货件状态流转。
 
+阶段 3 实现说明：重量和材数在详情完整展示，列表作为可选隐藏列；创建人展示暂未提供，不将用户主键作为姓名显示。Excel 导入入口随阶段 5 实现，阶段 3 只上传并保留来源原件。实际维护和验收记录见[阶段 3 实施记录](./phase-3.md)。
+
 ### 8.2 海运账单
 
 用户于 2026-09-19 明确菜单为“千树财务工作台 → 账单对账 → 顺联航海运账单”，详情名为“顺联航海运账单详情”，不显示在侧边栏。
 
-已落地的页面路由骨架如下，均未接入数据接口：
+已落地的页面路由如下；柜次详情已接入数据，账单两页仍为骨架：
 
 | 页面 | 路由名 | 路径 | 菜单规则 |
 | --- | --- | --- | --- |
@@ -397,11 +399,11 @@ flowchart LR
 | `POST` | `/api/ocean-freight-bills/:id/lines/:lineId/reconcile` | 确认核对 |
 | `POST` | `/api/ocean-freight-bills/:id/lines/:lineId/reopen` | 有原因地重新打开核对 |
 
-以上是完整目标范围。阶段 1 已实现两类主表及基础行的创建、列表和详情，共 10 个 operation；其余修改、导入、匹配、核对接口尚未实现，实际契约以 Controller、DTO 与生成的 OpenAPI 为准，见[阶段 1 实施记录](./phase-1.md)。正式导入提交可复用受事务保护的批量创建或维护命令，最终 DTO 中必须明确提交范围及幂等标识；不额外暴露公共编号生成入口。首版不包含物理删除接口，若后续需要删除或作废，另行定义关联和审计规则。
+以上是完整目标范围。阶段 1 实现两类主表及基础行的创建、列表和详情，共 10 个 operation；阶段 3 增加柜次和装柜明细修改，以及来源文件上传、元数据、下载/HEAD。账单修改、Excel 导入、匹配、核对接口尚未实现。实际契约以 Controller、DTO 与生成的 OpenAPI 为准，见[阶段 1 实施记录](./phase-1.md)与[阶段 3 实施记录](./phase-3.md)。正式导入提交可复用受事务保护的批量创建或维护命令，最终 DTO 中必须明确提交范围及幂等标识；不额外暴露公共编号生成入口。首版不包含物理删除接口，若后续需要删除或作废，另行定义关联和审计规则。
 
 ### 9.2 权限建议
 
-页面骨架阶段复用现有权限：柜次详情为 `purchase-orders:read`，账单对账分组及顺联航海运账单两页为 `purchase-orders:payment`。阶段 1 已增加下述专属后端权限，权限迁移默认仅授予 `system_admin`；页面接入业务时再切换对应权限。`reconcile` 当前仅登记权限，尚无核对写入口。
+阶段 3 柜次列表与详情已切换为 `container-batches:read`，创建/编辑分别检查专属写权限；账单对账分组及顺联航海运账单两页仍为骨架，使用 `purchase-orders:payment`。阶段 1 权限迁移默认仅授予 `system_admin`；账单页面接入业务时再切换对应权限。`reconcile` 当前仅登记权限，尚无核对写入口。
 
 - `container-batches:read/create/update`：柜次查询与维护。
 - `ocean-freight-bills:read/create/update/reconcile`：账单查询、维护与核对；重新打开也要求核对权限。

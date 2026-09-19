@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query, Req } from '@nestjs/common'
+import { Body, Controller, Get, Headers, HttpCode, Param, Patch, Post, Query, Req } from '@nestjs/common'
 import { ApiHeader, ApiTags } from '@nestjs/swagger'
 import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
@@ -6,16 +6,16 @@ import type { ApiContractErrorOptions } from '../../openapi/contract-metadata'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
-import { ContainerBatchCreateDto, ContainerBatchDto, ContainerBatchIdDto, ContainerBatchListQueryDto, ContainerBatchPageDto, ContainerLoadingItemCreateDto, ContainerLoadingItemDto, ContainerLoadingItemPageDto } from './container-batch.dto'
+import { ContainerBatchUpdateDto, ContainerLoadingItemUpdateDto, ContainerLoadingItemIdDto, ContainerBatchCreateDto, ContainerBatchDto, ContainerBatchIdDto, ContainerBatchListQueryDto, ContainerBatchPageDto, ContainerLoadingItemCreateDto, ContainerLoadingItemDto, ContainerLoadingItemPageDto } from './container-batch.dto'
 import { ContainerBatchService } from './container-batch.service'
 
 function contract(operationId: string, mutation = false) {
   return ApiApplicationContract({ operationId, session: 'required', authorization: true, csrf: mutation, badRequest: true, validation: true, privateNoStore: true, errors: [
     { status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED', ...(mutation ? ['CSRF_REJECTED'] : [])] },
-    { status: 404, codes: ['CONTAINER_BATCH_NOT_FOUND'] },
+    { status: 404, codes: ['CONTAINER_BATCH_NOT_FOUND', 'CONTAINER_LOADING_ITEM_NOT_FOUND'] },
     ...(mutation ? [
-      { status: 409, codes: ['CONTAINER_STATE_CHANGED', 'CONTAINER_BATCH_CONFLICT', 'CONTAINER_IDEMPOTENCY_CONFLICT', 'CONTAINER_SHIPMENT_ALREADY_ASSIGNED', 'CONTAINER_NUMBERING_UNAVAILABLE'] },
-      { status: 422, codes: ['VALIDATION_FAILED', 'CONTAINER_WAREHOUSE_UNAVAILABLE', 'CONTAINER_SHIPMENT_UNAVAILABLE', 'OCEAN_FREIGHT_SOURCE_FILE_UNAVAILABLE', 'OCEAN_CALCULATION_INVALID', 'OCEAN_CALCULATION_OVERFLOW'] },
+      { status: 409, codes: ['CONTAINER_STATE_CHANGED', 'CONTAINER_BATCH_CONFLICT', 'CONTAINER_IDEMPOTENCY_CONFLICT', 'CONTAINER_SHIPMENT_ALREADY_ASSIGNED', 'CONTAINER_NUMBERING_UNAVAILABLE', 'CONTAINER_ITEM_BILLED'] },
+      { status: 422, codes: ['VALIDATION_FAILED', 'CONTAINER_WAREHOUSE_UNAVAILABLE', 'CONTAINER_SOURCE_FILE_LOCKED', 'CONTAINER_SHIPMENT_UNAVAILABLE', 'OCEAN_FREIGHT_SOURCE_FILE_UNAVAILABLE', 'OCEAN_CALCULATION_INVALID', 'OCEAN_CALCULATION_OVERFLOW'] },
       { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },
     ] as ApiContractErrorOptions[] : []),
   ] })
@@ -34,7 +34,11 @@ export class ContainerBatchController {
   @Get(':id') @RequirePermissions('container-batches:read') @contract('container_batches_get') @ApiContractResponse({ status: 200, type: ContainerBatchDto })
   get(@Param() params: ContainerBatchIdDto) { return this.service.get(params.id) }
   @Get(':id/items') @RequirePermissions('container-batches:read') @contract('container_loading_items_list') @ApiContractResponse({ status: 200, type: ContainerLoadingItemPageDto })
-  items(@Param() params: ContainerBatchIdDto, @Query() query: ContainerBatchListQueryDto) { return this.service.items(params.id, query) }
+  items(@Param() params: ContainerBatchIdDto, @Query() query: ContainerBatchListQueryDto, @Req() request: object) { return this.service.items(params.id, query, context(request).actorUserId) }
   @Post(':id/items') @HttpCode(201) @RequirePermissions('container-batches:update') @contract('container_loading_items_create', true) @keyHeader() @ApiContractResponse({ status: 201, type: ContainerLoadingItemDto })
   createItem(@Param() params: ContainerBatchIdDto, @Body() input: ContainerLoadingItemCreateDto, @Headers('idempotency-key') key: unknown, @Req() request: object) { return this.service.createItem(context(request), params.id, input, key) }
+  @Patch(':id') @RequirePermissions('container-batches:update') @contract('container_batches_update', true) @ApiContractResponse({ status: 200, type: ContainerBatchDto })
+  update(@Param() params: ContainerBatchIdDto, @Body() input: ContainerBatchUpdateDto, @Req() request: object) { return this.service.update(context(request), params.id, input) }
+  @Patch(':id/items/:itemId') @RequirePermissions('container-batches:update') @contract('container_loading_items_update', true) @ApiContractResponse({ status: 200, type: ContainerLoadingItemDto })
+  updateItem(@Param() params: ContainerLoadingItemIdDto, @Body() input: ContainerLoadingItemUpdateDto, @Req() request: object) { return this.service.updateItem(context(request), params.id, params.itemId, input) }
 }

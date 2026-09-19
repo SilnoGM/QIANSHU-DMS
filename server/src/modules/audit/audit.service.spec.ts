@@ -44,7 +44,7 @@ function createTransactionFixture(): TransactionFixture {
 
 describe('AuditService', () => {
   it.each([
-    'CONTAINER_BATCH_CREATED', 'CONTAINER_LOADING_ITEM_CREATED',
+    'CONTAINER_BATCH_CREATED', 'CONTAINER_LOADING_ITEM_CREATED', 'CONTAINER_BATCH_UPDATED', 'CONTAINER_LOADING_ITEM_UPDATED',
     'OCEAN_FREIGHT_BILL_CREATED', 'OCEAN_FREIGHT_BILL_LINE_CREATED',
   ] as const)('records %s with bounded scalar metadata and rejects embedded source documents', async eventName => {
     const { transaction, create } = createTransactionFixture()

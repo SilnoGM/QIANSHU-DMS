@@ -1,0 +1,17 @@
+{
+  "containerSource": {
+    "title": "来源文件",
+    "empty": "尚未上传装柜资料",
+    "upload": "上传装柜资料",
+    "hint": "支持 .xlsx，最大 50 MiB。保存后可下载原文件。",
+    "uploading": "正在上传来源文件…",
+    "loading": "正在读取来源文件…",
+    "download": "下载原文件",
+    "pending": "文件已上传，正在等待保存到柜次。",
+    "retryAttach": "重试保存",
+    "saved": "已保存的来源文件",
+    "retryRead": "重新读取",
+    "invalidFile": "请选择有效的 .xlsx 文件，大小不超过 50 MiB。",
+    "failed": "来源文件操作失败，请重试。"
+  }
+}

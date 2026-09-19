@@ -142,7 +142,7 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
   meta: {
     title: 'workbench.purchaseTransport',
     icon: 'qs-workbench-purchase',
-    auth: ['purchase-orders:review', 'purchase-orders:read'],
+    auth: ['purchase-orders:review', 'purchase-orders:read', 'container-batches:read'],
   },
   children: [
     {
@@ -175,7 +175,7 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
         title: 'workbench.containers',
         icon: 'qs-container-management',
         singleMenu: true,
-        auth: 'purchase-orders:read',
+        auth: 'container-batches:read',
       },
     },
     {
@@ -188,7 +188,7 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
         singleMenu: true,
         menu: false,
         activeMenu: '/qs-purchase-transport/containers',
-        auth: 'purchase-orders:read',
+        auth: 'container-batches:read',
       },
     },
   ],

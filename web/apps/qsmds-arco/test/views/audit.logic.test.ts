@@ -94,6 +94,8 @@ test('审计事件筛选选项覆盖当前公开契约的全部事件类型', ()
     'PACKAGING_COST_PAID',
     'PACKAGING_COST_AMOUNT_UPDATED',
     'CONTAINER_BATCH_CREATED',
+    'CONTAINER_BATCH_UPDATED',
+    'CONTAINER_LOADING_ITEM_UPDATED',
     'CONTAINER_LOADING_ITEM_CREATED',
     'OCEAN_FREIGHT_BILL_CREATED',
     'OCEAN_FREIGHT_BILL_LINE_CREATED',
@@ -190,6 +192,8 @@ test('包装金额修改事件可筛选并使用中文名称', () => {
 test('柜次和海运账单创建事件使用中文名称且支持独立筛选', () => {
   for (const [code, label] of [
     ['CONTAINER_BATCH_CREATED', '柜次已创建'],
+    ['CONTAINER_BATCH_UPDATED', '柜次已修改'],
+    ['CONTAINER_LOADING_ITEM_UPDATED', '装柜明细已修改'],
     ['CONTAINER_LOADING_ITEM_CREATED', '装柜明细已创建'],
     ['OCEAN_FREIGHT_BILL_CREATED', '海运账单已创建'],
     ['OCEAN_FREIGHT_BILL_LINE_CREATED', '海运账单明细已创建'],

@@ -37,9 +37,11 @@ export function deriveContainerDate(name: string, now: Date) {
   return { loadingDate, sequenceInDay }
 }
 export function normalizeLoadingItemCreate(raw: unknown) {
-  const input = record(raw, ['shipmentId', 'oceanShippingMarkText', 'warehouseReceiptReference', 'goodsName', 'packageCount', 'packageUnit', 'remark', 'expectedVersion', 'grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'reportedVolumeCai'])
+  const input = record(raw, ['shipmentId', 'oceanShippingMarkText', 'warehouseReceiptReference', 'goodsName', 'packageCount', 'packageUnit', 'remark', 'expectedVersion', 'grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'reportedVolumeCai', 'recipientName', 'recipientPhone', 'recipientAddress', 'codAmountTwd'])
   if (!Number.isSafeInteger(input.packageCount) || Number(input.packageCount) < 1 || Number(input.packageCount) > 1_000_000) return containerFailure('VALIDATION_FAILED', '包装件数必须为有效正整数')
   return {
+    recipientName: text(input.recipientName, 128), recipientPhone: text(input.recipientPhone, 128), recipientAddress: text(input.recipientAddress, 2000),
+    codAmountTwd: normalizeOceanDecimal(input.codAmountTwd ?? null, 30, 2, 'codAmountTwd'),
     shipmentId: input.shipmentId == null ? null : containerUuid(input.shipmentId),
     oceanShippingMarkText: text(input.oceanShippingMarkText, 128),
     warehouseReceiptReference: text(input.warehouseReceiptReference, 500),
@@ -55,4 +57,15 @@ export function normalizeLoadingItemCreate(raw: unknown) {
 export function requireContainerVersion(value: unknown): number {
   if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > 2_147_483_647) return containerFailure('VALIDATION_FAILED', '版本号无效')
   return Number(value)
+}
+
+export function normalizeContainerUpdate(raw: unknown) {
+  const input = record(raw, ['containerBatchName', 'warehouseValue', 'sourceFileId', 'remark', 'expectedVersion'])
+  const { expectedVersion, ...fields } = input
+  return { ...normalizeContainerCreate(fields), expectedVersion: requireContainerVersion(expectedVersion) }
+}
+export function normalizeLoadingItemUpdate(raw: unknown) {
+  const input = record(raw, ['shipmentId', 'oceanShippingMarkText', 'warehouseReceiptReference', 'goodsName', 'packageCount', 'packageUnit', 'remark', 'expectedVersion', 'itemExpectedVersion', 'grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'reportedVolumeCai', 'recipientName', 'recipientPhone', 'recipientAddress', 'codAmountTwd'])
+  const { itemExpectedVersion, ...fields } = input
+  return { ...normalizeLoadingItemCreate(fields), expectedVersion: requireContainerVersion(input.expectedVersion), itemExpectedVersion: requireContainerVersion(itemExpectedVersion) }
 }

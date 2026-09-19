@@ -17,7 +17,8 @@ test('财务和采运工作台只展示当前用户有权访问的业务入口',
   ).flatMap(menu => menu.children?.filter(child => child.meta?.menu !== false).flatMap(child => child.children?.filter(leaf => leaf.meta?.menu !== false).map(leaf => `${child.path}/${leaf.path}`) ?? [child.path]) ?? [])
 
   assert.deepEqual(visiblePaths([]), [])
-  assert.deepEqual(visiblePaths(['sales-orders:read', 'purchase-orders:read']), ['/qs-purchase-transport/shipments', '/qs-purchase-transport/containers'])
+  assert.deepEqual(visiblePaths(['sales-orders:read', 'purchase-orders:read']), ['/qs-purchase-transport/shipments'])
+  assert.deepEqual(visiblePaths(['container-batches:read']), ['/qs-purchase-transport/containers'])
   assert.deepEqual(visiblePaths(['sales-orders:payment']), [])
   assert.deepEqual(visiblePaths(['sales-receipts:read']), ['/qs-finance/realtime-payments/sales-receipts'])
   assert.deepEqual(visiblePaths(['packaging-costs:pay']), [])
@@ -31,12 +32,12 @@ test('财务和采运工作台只展示当前用户有权访问的业务入口',
   ]), ['/qs-finance/realtime-payments/sales-receipts', '/qs-finance/realtime-payments/purchase-payments', '/qs-finance/bill-reconciliation/shunlianhang-ocean-bills', '/qs-purchase-transport/reviews'])
 })
 
-test('采运工作台货件和柜次菜单复用采购读取权限，审核菜单继续独立授权', () => {
+test('柜次菜单使用独立读取权限，货件与审核菜单保留既有授权', () => {
   const routes = purchaseTransportWorkbench.children
   assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers'])
   assert.equal(purchaseTransportWorkbench.meta?.title, 'workbench.purchaseTransport')
   assert.equal(routes[1]?.meta?.auth, 'purchase-orders:read')
-  assert.equal(routes[2]?.meta?.auth, 'purchase-orders:read')
+  assert.equal(routes[2]?.meta?.auth, 'container-batches:read')
   assert.equal(routes[2]?.meta?.title, 'workbench.containers')
   assert.equal(routes[2]?.meta?.icon, 'qs-container-management')
   assert.equal(typeof routes[2]?.component, 'function')
@@ -75,7 +76,7 @@ test('柜次与顺联航账单详情可直接解析，隐藏菜单并保持对�
     routes: [...purchaseTransportWorkbench.children, ...financeWorkbench.children].map(withoutViews),
   })
   for (const [path, name, title, activeMenu, permission] of [
-    ['/qs-purchase-transport/containers/container-123', 'qsPurchaseTransportContainerDetail', 'workbench.containerDetail', '/qs-purchase-transport/containers', 'purchase-orders:read'],
+    ['/qs-purchase-transport/containers/container-123', 'qsPurchaseTransportContainerDetail', 'workbench.containerDetail', '/qs-purchase-transport/containers', 'container-batches:read'],
     ['/qs-finance/bill-reconciliation/shunlianhang-ocean-bills/bill-123', 'qsFinanceShunlianhangOceanBillDetail', 'workbench.shunlianhangOceanBillDetail', '/qs-finance/bill-reconciliation/shunlianhang-ocean-bills', 'purchase-orders:payment'],
   ]) {
     await router.push(path)

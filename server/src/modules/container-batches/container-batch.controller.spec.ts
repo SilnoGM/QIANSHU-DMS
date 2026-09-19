@@ -20,7 +20,9 @@ describe('ContainerBatchController foundation contract', () => {
   it('publishes authenticated, idempotent foundations without physical shipment actions', async () => {
     const document = await createOpenApiDocument(ContractModule)
     const root = '/api/container-batches'
-    expect(Object.keys(document.paths)).toEqual([root, `${root}/{id}`, `${root}/{id}/items`])
+    expect(Object.keys(document.paths)).toEqual([root, `${root}/{id}`, `${root}/{id}/items`, `${root}/{id}/items/{itemId}`])
+    expect(document.paths[`${root}/{id}`].patch?.operationId).toBe('container_batches_update')
+    expect(document.paths[`${root}/{id}/items/{itemId}`].patch?.operationId).toBe('container_loading_items_update')
     expect(document.paths[root].post).toMatchObject({ operationId: 'container_batches_create', 'x-qianshu-contract': { csrf: true }, responses: { 201: expect.any(Object) as unknown, 409: expect.any(Object) as unknown } })
     expect(document.paths[`${root}/{id}/items`].post?.parameters).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Idempotency-Key', required: true })]))
     expect(document.paths[root].get?.parameters).toEqual(expect.arrayContaining([

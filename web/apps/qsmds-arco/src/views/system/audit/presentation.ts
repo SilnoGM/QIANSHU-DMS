@@ -93,6 +93,8 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   PACKAGING_COST_PAID: '打木架费用已付款',
   PACKAGING_COST_AMOUNT_UPDATED: '打木架费用金额已修改',
   CONTAINER_BATCH_CREATED: '柜次已创建',
+  CONTAINER_BATCH_UPDATED: '柜次已修改',
+  CONTAINER_LOADING_ITEM_UPDATED: '装柜明细已修改',
   CONTAINER_LOADING_ITEM_CREATED: '装柜明细已创建',
   OCEAN_FREIGHT_BILL_CREATED: '海运账单已创建',
   OCEAN_FREIGHT_BILL_LINE_CREATED: '海运账单明细已创建',

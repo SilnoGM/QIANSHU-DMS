@@ -1,0 +1,198 @@
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+// eslint-disable-next-line test/no-import-node-test -- 业务纯函数由现有 node:test 执行。
+import test from 'node:test'
+import { runInNewContext } from 'node:vm'
+import ts from 'typescript'
+import { computed, effectScope, nextTick, reactive, ref, watch } from 'vue'
+import * as logic from '../../src/views/workbenches/containers/form.logic'
+import {
+  buildContainerSubmission,
+  buildLoadingItemSubmission,
+  createContainerDraft,
+  createLoadingItemDraft,
+  validateContainerDraft,
+  validateLoadingItemDraft,
+} from '../../src/views/workbenches/containers/form.logic'
+
+test('new forms retain unknown measurements and default to one package', () => {
+  const draft = createLoadingItemDraft()
+  assert.equal(draft.packageCount, '1')
+  assert.equal(draft.lengthCm, '')
+  draft.goodsName = ' 工业炉 '
+  const submission = buildLoadingItemSubmission(draft)
+  assert.equal(submission.goodsName, '工业炉')
+  assert.equal(submission.lengthCm, null)
+  assert.equal(submission.packageCount, 1)
+  assert.equal(submission.shipmentId, null)
+  assert.ok(!('expectedVersion' in submission))
+  assert.ok(!('volumeCai' in submission))
+})
+
+test('measurements retain exact decimal strings without Number conversion', () => {
+  const draft = createLoadingItemDraft()
+  Object.assign(draft, { goodsName: '炉', grossWeightKg: '999999999999999.999', reportedVolumeCai: '9999999999999999.99999999' })
+  assert.deepEqual(validateLoadingItemDraft(draft), {})
+  const submission = buildLoadingItemSubmission(draft)
+  assert.equal(submission.grossWeightKg, '999999999999999.999')
+  assert.equal(submission.reportedVolumeCai, '9999999999999999.99999999')
+})
+
+test('invalid precision, signs, exponent, zero and quantity are rejected; source zero is allowed', () => {
+  const draft = createLoadingItemDraft()
+  draft.goodsName = '炉'
+  for (const value of ['0', '-1', '1e3', '1.0001', '1000000000000000', 'Infinity']) {
+    draft.lengthCm = value
+    assert.ok(validateLoadingItemDraft(draft).lengthCm, value)
+  }
+  draft.lengthCm = '0.001'
+  draft.reportedVolumeCai = '0'
+  assert.deepEqual(validateLoadingItemDraft(draft), {})
+  for (const value of ['0', '1.5', '1000001', '1e2']) {
+    draft.packageCount = value
+    assert.ok(validateLoadingItemDraft(draft).packageCount, value)
+  }
+})
+
+test('container names, warehouse and field lengths are validated before submission', () => {
+  const draft = createContainerDraft()
+  assert.ok(validateContainerDraft(draft).warehouseValue)
+  Object.assign(draft, { containerBatchName: '0918-02柜', warehouseValue: 'b5' })
+  assert.deepEqual(validateContainerDraft(draft), {})
+  assert.deepEqual(buildContainerSubmission(draft), { containerBatchName: '0918-02柜', warehouseValue: 'b5', remark: null })
+  for (const value of ['0918-00柜', '1331柜', '0230柜', '0918-100柜', '九月柜']) {
+    draft.containerBatchName = value
+    assert.ok(validateContainerDraft(draft).containerBatchName, value)
+  }
+  draft.containerBatchName = '0918柜'
+  draft.remark = 'a'.repeat(501)
+  assert.ok(validateContainerDraft(draft).remark)
+})
+
+test('recipient COD remains unknown unless entered explicitly and respects monetary precision', () => {
+  const draft = createLoadingItemDraft()
+  draft.goodsName = '产品'
+  assert.equal(buildLoadingItemSubmission(draft).codAmountTwd, null)
+  draft.codAmountTwd = '0.00'
+  assert.equal(buildLoadingItemSubmission(draft).codAmountTwd, '0.00')
+  draft.codAmountTwd = '0.001'
+  assert.ok(validateLoadingItemDraft(draft).codAmountTwd)
+  draft.codAmountTwd = '-1'
+  assert.ok(validateLoadingItemDraft(draft).codAmountTwd)
+})
+
+async function modalFixture(kind: 'container' | 'loading-item') {
+  const source = await readFile(new URL(`../../src/views/workbenches/containers/${kind}-form-modal.vue`, import.meta.url), 'utf8')
+  const script = source.split('<script setup lang="ts">')[1]!.split('</script>')[0]!.replace(/^import[\s\S]*?from ['"][^'"]+['"]\s*$/gm, '')
+  const props = reactive({ modelValue: true, batch: null as null | { sourceFileId: string, containerBatchName: string, warehouseValue: string }, item: null, shipment: null as null | { id: string, shippingMarkText: string }, submitting: false, retryOnly: false, fieldErrors: {} })
+  const events: Array<[string, Record<string, unknown> | boolean]> = []
+  const scope = effectScope()
+  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ draft, submit, close, locked, rule })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
+    ...logic,
+    computed,
+    nextTick,
+    ref,
+    watch,
+    defineProps: () => props,
+    withDefaults: (value: unknown) => value,
+    defineEmits: () => (name: string, payload: Record<string, unknown> | boolean) => events.push([name, payload]),
+    useI18n: () => ({ t: (key: string) => key }),
+    useTemplateRef: () => ref({ submit: async () => {}, setFieldError: () => {} }),
+  })) as { draft: { value: Record<string, unknown> }, submit: () => Promise<void>, close: () => void, locked: { value: boolean }, rule: (field: string) => (value: unknown) => string | boolean }
+  return { props, state, events, dispose: () => scope.stop() }
+}
+
+test('modal prevents duplicate submits and closing while parent save is pending', async () => {
+  const fixture = await modalFixture('loading-item')
+  try {
+    fixture.state.draft.value.goodsName = '炉'
+    const first = fixture.state.submit()
+    fixture.props.submitting = true
+    await fixture.state.submit()
+    fixture.state.close()
+    await first
+    assert.equal(fixture.events.length, 1)
+    assert.equal(fixture.events[0]?.[0], 'submit')
+    assert.equal(fixture.state.locked.value, true)
+    fixture.props.submitting = false
+    await nextTick()
+    fixture.state.close()
+    assert.equal(fixture.events.at(-1)?.[0], 'update:modelValue')
+  }
+  finally { fixture.dispose() }
+})
+
+test('shipment selection preserves recipient COD and other draft fields', async () => {
+  const fixture = await modalFixture('loading-item')
+  try {
+    Object.assign(fixture.state.draft.value, { goodsName: '保留产品', codAmountTwd: '520.00' })
+    fixture.props.shipment = { id: 'shipment-a', shippingMarkText: 'MARK-A' }
+    await nextTick()
+    assert.equal(fixture.state.draft.value.shipmentId, 'shipment-a')
+    assert.equal(fixture.state.draft.value.goodsName, '保留产品')
+    assert.equal(fixture.state.draft.value.codAmountTwd, '520.00')
+    fixture.state.draft.value.shipmentId = null
+    await fixture.state.submit()
+    assert.equal((fixture.events[0]?.[1] as Record<string, unknown>).shipmentId, null)
+  }
+  finally { fixture.dispose() }
+})
+
+test('retry-only modal bypasses new draft validation so parent can replay frozen request', async () => {
+  for (const kind of ['container', 'loading-item'] as const) {
+    const fixture = await modalFixture(kind)
+    try {
+      await fixture.state.submit()
+      assert.equal(fixture.events.length, 0)
+      fixture.props.retryOnly = true
+      await fixture.state.submit()
+      assert.equal(fixture.events[0]?.[0], 'submit')
+    }
+    finally { fixture.dispose() }
+  }
+})
+
+test('editing container preserves existing source file binding', async () => {
+  const fixture = await modalFixture('container')
+  try {
+    fixture.props.batch = { sourceFileId: 'source-file', containerBatchName: '0918柜', warehouseValue: 'b5' }
+    await nextTick()
+    await fixture.state.submit()
+    assert.equal((fixture.events[0]?.[1] as Record<string, unknown>).sourceFileId, 'source-file')
+  }
+  finally { fixture.dispose() }
+})
+
+test('editing an existing association displays shipment mark or number, never internal UUID', async () => {
+  assert.equal(logic.resolveShipmentDisplay('internal-id', null, { shipmentId: 'internal-id', shippingMark: 'MARK-01', shipmentNo: 'PKG/01' }), 'MARK-01')
+  assert.equal(logic.resolveShipmentDisplay('internal-id', { id: 'internal-id', shippingMarkText: null, shipmentNo: 'PKG/01' }, null), 'PKG/01')
+  assert.equal(logic.resolveShipmentDisplay('internal-id', null, { shipmentId: 'internal-id', shippingMark: null, shipmentNo: null }), null)
+  assert.equal(logic.resolveShipmentDisplay(null, { id: 'internal-id', shippingMarkText: 'MARK-01', shipmentNo: 'PKG/01' }, null), null)
+})
+
+test('loading date preview uses Shanghai year and preserves the original creation year for edits', () => {
+  assert.equal(logic.previewContainerDate('0918-02柜', new Date('2025-12-31T16:00:00Z')), '2026-09-18')
+  assert.equal(logic.previewContainerDate('0918柜', new Date('2024-06-01T00:00:00Z')), '2024-09-18')
+  assert.equal(logic.previewContainerDate('0229柜', new Date('2024-06-01T00:00:00Z')), '2024-02-29')
+  assert.equal(logic.previewContainerDate('0229柜', new Date('2026-06-01T00:00:00Z')), null)
+  assert.equal(logic.previewContainerDate('0230柜', new Date('2026-06-01T00:00:00Z')), null)
+  assert.equal(logic.previewContainerDate('0918-00柜', new Date('2026-06-01T00:00:00Z')), null)
+})
+
+test('field validation uses the latest input value before model synchronization', async () => {
+  const container = await modalFixture('container')
+  const item = await modalFixture('loading-item')
+  try {
+    assert.equal(container.state.rule('containerBatchName')('0919-01柜'), true)
+    container.state.draft.value.containerBatchName = '0919-01柜'
+    assert.notEqual(container.state.rule('containerBatchName')('invalid'), true)
+    assert.equal(container.state.rule('warehouseValue')('b5'), true)
+    assert.equal(item.state.rule('goodsName')('产品'), true)
+    item.state.draft.value.lengthCm = '1.000'
+    assert.notEqual(item.state.rule('lengthCm')('0'), true)
+  }
+  finally {
+    container.dispose()
+    item.dispose()
+  }
+})

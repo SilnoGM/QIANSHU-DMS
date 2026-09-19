@@ -6,7 +6,12 @@ import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.
 export class ContainerBatchIdDto {
   @ApiProperty({ format: 'uuid' }) @IsUUID('4') id!: string
 }
+export class ContainerLoadingItemIdDto extends ContainerBatchIdDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID('4') itemId!: string
+}
 export class ContainerBatchListQueryDto {
+  @ApiPropertyOptional({ maxLength: 128 }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 128) search?: string
+  @ApiPropertyOptional({ maxLength: 64 }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 64) warehouseValue?: string
   @ApiPropertyOptional({ type: Number, default: 1, minimum: 1, maximum: 1_000_000 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1_000_000) page = 1
   @ApiPropertyOptional({ type: Number, default: 20, minimum: 1, maximum: 100 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize = 20
 }
@@ -16,7 +21,14 @@ export class ContainerBatchCreateDto {
   @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true }) @IsOptional() @IsUUID('4') sourceFileId?: string | null
   @ApiPropertyOptional({ type: String, maxLength: 500, nullable: true }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 500) remark?: string | null
 }
+export class ContainerBatchUpdateDto extends ContainerBatchCreateDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) @Max(2_147_483_647) expectedVersion!: number
+}
 export class ContainerLoadingItemCreateDto {
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 128 }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 128) recipientName?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 128 }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 128) recipientPhone?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 2000 }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 2000) recipientAddress?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 31 }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 31) codAmountTwd?: string | null
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) @Max(2_147_483_647) expectedVersion!: number
   @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true }) @IsOptional() @IsUUID('4') shipmentId?: string | null
   @ApiPropertyOptional({ type: String, maxLength: 128, nullable: true }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 128) oceanShippingMarkText?: string | null
@@ -31,7 +43,17 @@ export class ContainerLoadingItemCreateDto {
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package height in cm; decimal(18,3).' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) heightCm?: string | null
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 25, description: 'Non-negative source row volume; decimal(24,8). Preserved for comparison.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 25) reportedVolumeCai?: string | null
 }
+export class ContainerLoadingItemUpdateDto extends ContainerLoadingItemCreateDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) @Max(2_147_483_647) itemExpectedVersion!: number
+}
 export class ContainerBatchDto {
+  @ApiProperty() itemCount!: number
+  @ApiProperty() shipmentCount!: number
+  @ApiProperty() packageCountTotal!: number
+  @ApiProperty({ type: String, nullable: true }) grossWeightKgTotal!: string | null
+  @ApiProperty({ type: String, nullable: true }) volumeCaiTotal!: string | null
+  @ApiProperty({ type: Number, nullable: true }) chargeableVolumeCaiTotal!: number | null
+  @ApiProperty({ format: 'uuid' }) createdById!: string
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty() containerBatchNo!: string
   @ApiProperty() containerBatchName!: string
@@ -48,7 +70,24 @@ export class ContainerBatchPageDto {
   @ApiProperty({ type: [ContainerBatchDto] }) items!: ContainerBatchDto[]
   @ApiProperty() total!: number
 }
+export class ContainerBillReferenceDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty() billNo!: string
+  @ApiProperty() billName!: string
+}
 export class ContainerLoadingItemDto {
+  @ApiProperty({ type: [ContainerBillReferenceDto] }) billReferences!: ContainerBillReferenceDto[]
+  @ApiProperty({ type: String, nullable: true }) shipmentNo!: string | null
+  @ApiProperty({ type: String, nullable: true }) shippingMark!: string | null
+  @ApiProperty({ type: String, format: 'uuid', nullable: true }) purchaseOrderId!: string | null
+  @ApiProperty({ type: String, nullable: true }) purchaseOrderNo!: string | null
+  @ApiProperty({ type: String, format: 'uuid', nullable: true }) salesOrderId!: string | null
+  @ApiProperty({ type: String, nullable: true }) salesOrderNo!: string | null
+  @ApiProperty({ type: String, nullable: true }) recipientName!: string | null
+  @ApiProperty({ type: String, nullable: true }) recipientPhone!: string | null
+  @ApiProperty({ type: String, nullable: true }) recipientAddress!: string | null
+  @ApiProperty({ type: String, nullable: true }) codAmountTwd!: string | null
+  @ApiProperty({ description: 'Whether a bill references this item; referenced items are read-only until reconciliation reopening is available.' }) isBilled!: boolean
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty({ format: 'uuid' }) containerBatchId!: string
   @ApiProperty({ type: String, format: 'uuid', nullable: true }) shipmentId!: string | null
