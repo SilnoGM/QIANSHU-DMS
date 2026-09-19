@@ -33,14 +33,15 @@ const { auth } = useAppAuth()
 const router = useRouter()
 const value = (input: string | number | null) => input ?? t('containerPage.unknown')
 const measurement = (input: string | null, places: 0 | 2 = 0) => value(formatContainerMeasurement(input, places))
+const weightText = (row: ContainerLoadingItemDto) => row.grossWeightKg === null ? t('containerPage.unknown') : `${measurement(row.grossWeightKg)} kg`
+const dimensionsText = (row: ContainerLoadingItemDto) => `${[row.lengthCm, row.widthCm, row.heightCm].map(item => measurement(item)).join(' × ')} cm`
 const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => [
   { id: 'goods', title: t('containerPage.goods'), accessorFn: row => `${row.goodsName} ${row.oceanShippingMarkText ?? ''}`, minWidth: 245, fixed: 'left' },
   { id: 'shipment', title: t('containerPage.shipment'), accessorFn: row => row.shippingMark || row.shipmentNo || t('containerPage.unmatched'), minWidth: 245 },
   { id: 'source', title: t('containerPage.source'), accessorFn: row => [row.salesOrderNo, row.purchaseOrderNo].filter(Boolean).join(' '), minWidth: 280 },
   { id: 'receipt', title: t('containerPage.receipt'), accessorKey: 'warehouseReceiptReference', minWidth: 200 },
   { id: 'package', title: t('containerPage.packageCount'), accessorFn: row => `${row.packageCount} ${row.packageUnit ?? ''}`, minWidth: 110, align: 'right', cellClass: 'qs-type-data' },
-  { id: 'grossWeightKg', title: t('containerPage.weight'), accessorFn: row => measurement(row.grossWeightKg), minWidth: 140, align: 'right', cellClass: 'qs-type-data' },
-  { id: 'dimensions', title: t('containerPage.measurement'), accessorFn: row => [row.lengthCm, row.widthCm, row.heightCm].map(item => measurement(item)).join(' × '), minWidth: 230, cellClass: 'qs-type-data' },
+  { id: 'weightDimensions', title: t('containerPage.weightDimensions'), accessorFn: row => `${weightText(row)} ${dimensionsText(row)}`, minWidth: 310 },
   { id: 'volumeCai', title: t('containerPage.volume'), accessorFn: row => measurement(row.volumeCai, 2), minWidth: 165, align: 'right', cellClass: 'qs-type-data' },
   { id: 'chargeableVolumeCai', title: t('containerPage.chargeable'), accessorFn: row => value(row.chargeableVolumeCai), minWidth: 115, align: 'right', cellClass: 'qs-type-data' },
   { id: 'reportedVolumeCai', title: t('containerPage.sourceVolume'), accessorFn: row => measurement(row.reportedVolumeCai, 2), minWidth: 160, align: 'right', cellClass: 'qs-type-data' },
@@ -84,6 +85,16 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
         </QsTableStackedLine>
       </QsTableStackedCell>
     </template>
+    <template #cell-weightDimensions="{ row }">
+      <QsTableStackedCell>
+        <QsTableStackedLine :label="t('containerPage.weightLabel')" content-class="qs-type-data">
+          {{ weightText(row.original) }}
+        </QsTableStackedLine>
+        <QsTableStackedLine :label="t('containerPage.dimensionsLabel')" content-class="qs-type-data">
+          {{ dimensionsText(row.original) }}
+        </QsTableStackedLine>
+      </QsTableStackedCell>
+    </template>
     <template #cell-recipient="{ row }">
       <QsTableStackedCell>
         <QsTableStackedLine content-class="flex flex-wrap gap-x-3 gap-y-1">
@@ -102,7 +113,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
           <CopyCellButton v-if="row.oceanShippingMarkText" always-visible :text="row.oceanShippingMarkText" :label="t('containerPage.mark')" />
         </div>
         <dl class="gap-x-4 gap-y-2 grid grid-cols-2">
-          <div v-for="entry in [['packageCount', `${row.packageCount} ${row.packageUnit ?? ''}`], ['weight', measurement(row.grossWeightKg)], ['volume', measurement(row.volumeCai, 2)], ['chargeable', value(row.chargeableVolumeCai)]]" :key="entry[0]">
+          <div v-for="entry in [['packageCount', `${row.packageCount} ${row.packageUnit ?? ''}`], ['volume', measurement(row.volumeCai, 2)], ['chargeable', value(row.chargeableVolumeCai)]]" :key="entry[0]">
             <dt class="qs-type-meta text-muted-foreground">
               {{ t(`containerPage.${entry[0]}`) }}
             </dt><dd class="qs-type-data mt-1">
@@ -121,10 +132,15 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
           <dl class="pb-2 gap-x-4 gap-y-3 grid grid-cols-2">
             <div class="col-span-2">
               <dt class="qs-type-meta text-muted-foreground">
-                {{ t('containerPage.measurement') }}
+                {{ t('containerPage.weightDimensions') }}
               </dt>
-              <dd class="qs-type-data mt-1">
-                {{ [row.lengthCm, row.widthCm, row.heightCm].map(item => measurement(item)).join(' × ') }}
+              <dd class="mt-1 space-y-1">
+                <QsTableStackedLine :label="t('containerPage.weightLabel')" content-class="qs-type-data">
+                  {{ weightText(row) }}
+                </QsTableStackedLine>
+                <QsTableStackedLine :label="t('containerPage.dimensionsLabel')" content-class="qs-type-data">
+                  {{ dimensionsText(row) }}
+                </QsTableStackedLine>
               </dd>
             </div>
             <div v-for="entry in [['receipt', row.warehouseReceiptReference], ['sourceVolume', measurement(row.reportedVolumeCai, 2)], ['difference', measurement(row.volumeDifferenceCai, 2)], ['cod', row.codAmountTwd], ['purchase', row.purchaseOrderNo], ['sales', row.salesOrderNo], ['remark', row.remark]]" :key="entry[0] ?? ''" :class="['receipt', 'remark'].includes(entry[0] ?? '') ? 'col-span-2' : ''">

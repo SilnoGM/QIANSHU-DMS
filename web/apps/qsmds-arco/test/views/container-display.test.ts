@@ -41,8 +41,7 @@ test('装柜明细默认展示所有业务列，桌面数值采用指定精度',
     assert.ok(columns.some(column => column.id === id), id)
   }
   const display = (id: string, row: Record<string, unknown>) => columns.find(column => column.id === id)!.accessorFn!(row)
-  assert.equal(display('grossWeightKg', { grossWeightKg: '180.000' }), '180')
-  assert.equal(display('dimensions', { lengthCm: '128.000', widthCm: '19.000', heightCm: '15.000' }), '128 × 19 × 15')
+  assert.equal(display('weightDimensions', { grossWeightKg: '1173.000', lengthCm: '240.000', widthCm: '164.000', heightCm: '108.000' }), '1173 kg 240 × 164 × 108 cm')
   assert.equal(display('volumeCai', { volumeCai: '12.88272063' }), '12.88')
   assert.equal(display('reportedVolumeCai', { reportedVolumeCai: '12.885' }), '12.89')
   assert.equal(display('volumeDifferenceCai', { volumeDifferenceCai: '-0.125' }), '-0.13')
