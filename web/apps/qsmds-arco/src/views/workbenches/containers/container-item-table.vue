@@ -48,7 +48,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
   { id: 'volumeDifferenceCai', title: t('containerPage.difference'), accessorFn: row => measurement(row.volumeDifferenceCai, 2), minWidth: 160, align: 'right', cellClass: 'qs-type-data' },
   { id: 'recipient', title: t('containerPage.recipientInfo'), accessorFn: row => [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' '), minWidth: 300 },
   { id: 'codAmountTwd', title: t('containerPage.cod'), accessorFn: row => value(row.codAmountTwd), minWidth: 175, align: 'right', cellClass: 'qs-type-data' },
-  { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', minWidth: 220 },
+  { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', width: 220, minWidth: 220, maxWidth: 220 },
 ])
 </script>
 
@@ -106,6 +106,11 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
         </QsTableStackedLine>
       </QsTableStackedCell>
     </template>
+    <template #cell-remark="{ row }">
+      <p class="m-0 max-w-55 whitespace-pre-wrap [overflow-wrap:anywhere] line-clamp-2" :title="row.original.remark || undefined">
+        {{ row.original.remark || t('containerPage.none') }}
+      </p>
+    </template>
     <template #mobile-row="{ row }">
       <div class="min-w-0 [overflow-wrap:anywhere] space-y-3">
         <strong>{{ row.goodsName }}</strong><div class="qs-type-data-emphasis flex gap-2 items-center">
@@ -147,7 +152,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
               <dt class="qs-type-meta text-muted-foreground">
                 {{ t(`containerPage.${entry[0]}`) }}
               </dt>
-              <dd class="mt-1 whitespace-pre-wrap" :class="['sourceVolume', 'difference', 'cod', 'purchase', 'sales'].includes(entry[0] ?? '') ? 'qs-type-data' : 'qs-type-body'">
+              <dd class="mt-1 whitespace-pre-wrap" :class="[['sourceVolume', 'difference', 'cod', 'purchase', 'sales'].includes(entry[0] ?? '') ? 'qs-type-data' : 'qs-type-body', entry[0] === 'remark' && 'line-clamp-2']" :title="entry[0] === 'remark' ? row.remark || undefined : undefined">
                 {{ entry[1] ?? t(['sourceVolume', 'difference', 'cod'].includes(entry[0] ?? '') ? 'containerPage.unknown' : 'containerPage.none') }}
               </dd>
             </div>
