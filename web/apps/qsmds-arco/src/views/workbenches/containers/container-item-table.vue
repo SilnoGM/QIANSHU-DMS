@@ -4,6 +4,7 @@ import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
+import { formatContainerMeasurement } from './display.logic'
 
 const props = defineProps<{
   rows: ContainerLoadingItemDto[]
@@ -30,22 +31,25 @@ const { t } = useI18n()
 const { auth } = useAppAuth()
 const router = useRouter()
 const value = (input: string | number | null) => input ?? t('containerPage.unknown')
+const measurement = (input: string | null, places: 0 | 2 = 0) => value(formatContainerMeasurement(input, places))
 const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => [
   { id: 'goods', title: t('containerPage.goods'), accessorFn: row => `${row.goodsName} ${row.oceanShippingMarkText ?? ''}`, minWidth: 245, fixed: 'left' },
   { id: 'shipment', title: t('containerPage.shipment'), accessorFn: row => row.shippingMark || row.shipmentNo || t('containerPage.unmatched'), minWidth: 245 },
+  { id: 'purchaseOrderNo', title: t('containerPage.purchase'), accessorKey: 'purchaseOrderNo', minWidth: 220, cellClass: 'qs-type-data' },
+  { id: 'salesOrderNo', title: t('containerPage.sales'), accessorKey: 'salesOrderNo', minWidth: 220, cellClass: 'qs-type-data' },
   { id: 'receipt', title: t('containerPage.receipt'), accessorKey: 'warehouseReceiptReference', minWidth: 200 },
   { id: 'package', title: t('containerPage.packageCount'), accessorFn: row => `${row.packageCount} ${row.packageUnit ?? ''}`, minWidth: 110, align: 'right', cellClass: 'qs-type-data' },
-  { id: 'grossWeightKg', title: t('containerPage.weight'), accessorFn: row => value(row.grossWeightKg), minWidth: 140, align: 'right', cellClass: 'qs-type-data' },
-  { id: 'dimensions', title: t('containerPage.measurement'), accessorFn: row => [row.lengthCm, row.widthCm, row.heightCm].map(value).join(' × '), minWidth: 230, cellClass: 'qs-type-data' },
-  { id: 'volumeCai', title: t('containerPage.volume'), accessorFn: row => value(row.volumeCai), minWidth: 165, align: 'right', cellClass: 'qs-type-data' },
+  { id: 'grossWeightKg', title: t('containerPage.weight'), accessorFn: row => measurement(row.grossWeightKg), minWidth: 140, align: 'right', cellClass: 'qs-type-data' },
+  { id: 'dimensions', title: t('containerPage.measurement'), accessorFn: row => [row.lengthCm, row.widthCm, row.heightCm].map(item => measurement(item)).join(' × '), minWidth: 230, cellClass: 'qs-type-data' },
+  { id: 'volumeCai', title: t('containerPage.volume'), accessorFn: row => measurement(row.volumeCai, 2), minWidth: 165, align: 'right', cellClass: 'qs-type-data' },
   { id: 'chargeableVolumeCai', title: t('containerPage.chargeable'), accessorFn: row => value(row.chargeableVolumeCai), minWidth: 115, align: 'right', cellClass: 'qs-type-data' },
-  { id: 'reportedVolumeCai', title: t('containerPage.sourceVolume'), accessorFn: row => value(row.reportedVolumeCai), minWidth: 160, align: 'right', defaultVisible: false, cellClass: 'qs-type-data' },
-  { id: 'volumeDifferenceCai', title: t('containerPage.difference'), accessorFn: row => value(row.volumeDifferenceCai), minWidth: 160, align: 'right', defaultVisible: false, cellClass: 'qs-type-data' },
-  { id: 'recipientName', title: t('containerPage.recipientName'), accessorKey: 'recipientName', minWidth: 130, defaultVisible: false },
-  { id: 'recipientPhone', title: t('containerPage.recipientPhone'), accessorKey: 'recipientPhone', minWidth: 160, defaultVisible: false },
-  { id: 'recipientAddress', title: t('containerPage.recipientAddress'), accessorKey: 'recipientAddress', minWidth: 260, defaultVisible: false },
-  { id: 'codAmountTwd', title: t('containerPage.cod'), accessorFn: row => value(row.codAmountTwd), minWidth: 175, align: 'right', defaultVisible: false, cellClass: 'qs-type-data' },
-  { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', minWidth: 220, defaultVisible: false },
+  { id: 'reportedVolumeCai', title: t('containerPage.sourceVolume'), accessorFn: row => value(row.reportedVolumeCai), minWidth: 160, align: 'right', cellClass: 'qs-type-data' },
+  { id: 'volumeDifferenceCai', title: t('containerPage.difference'), accessorFn: row => value(row.volumeDifferenceCai), minWidth: 160, align: 'right', cellClass: 'qs-type-data' },
+  { id: 'recipientName', title: t('containerPage.recipientName'), accessorKey: 'recipientName', minWidth: 130 },
+  { id: 'recipientPhone', title: t('containerPage.recipientPhone'), accessorKey: 'recipientPhone', minWidth: 160 },
+  { id: 'recipientAddress', title: t('containerPage.recipientAddress'), accessorKey: 'recipientAddress', minWidth: 260 },
+  { id: 'codAmountTwd', title: t('containerPage.cod'), accessorFn: row => value(row.codAmountTwd), minWidth: 175, align: 'right', cellClass: 'qs-type-data' },
+  { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', minWidth: 220 },
 ])
 </script>
 
@@ -65,7 +69,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
         <QsTableStackedLine content-class="qs-type-data">
           {{ row.original.shippingMark || row.original.shipmentNo || t(row.original.shipmentId ? 'containerPage.referenceRestricted' : 'containerPage.unmatched') }}
         </QsTableStackedLine><QsTableStackedLine tone="muted" content-class="qs-type-data">
-          {{ row.original.purchaseOrderNo || '' }}
+          {{ row.original.shippingMark && row.original.shipmentNo !== row.original.shippingMark ? row.original.shipmentNo : '' }}
         </QsTableStackedLine>
       </QsTableStackedCell>
     </template>
@@ -75,7 +79,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
           {{ row.oceanShippingMarkText || t('containerPage.none') }}
         </div>
         <dl class="gap-x-4 gap-y-2 grid grid-cols-2">
-          <div v-for="entry in [['packageCount', `${row.packageCount} ${row.packageUnit ?? ''}`], ['weight', value(row.grossWeightKg)], ['volume', value(row.volumeCai)], ['chargeable', value(row.chargeableVolumeCai)]]" :key="entry[0]">
+          <div v-for="entry in [['packageCount', `${row.packageCount} ${row.packageUnit ?? ''}`], ['weight', measurement(row.grossWeightKg)], ['volume', measurement(row.volumeCai, 2)], ['chargeable', value(row.chargeableVolumeCai)]]" :key="entry[0]">
             <dt class="qs-type-meta text-muted-foreground">
               {{ t(`containerPage.${entry[0]}`) }}
             </dt><dd class="qs-type-data mt-1">
@@ -85,8 +89,9 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
         </dl>
         <p class="qs-type-meta text-muted-foreground">
           {{ row.shippingMark || row.shipmentNo || t(row.shipmentId ? 'containerPage.referenceRestricted' : 'containerPage.unmatched') }}
+          <span v-if="row.shippingMark && row.shipmentNo && row.shippingMark !== row.shipmentNo" class="qs-type-data block">{{ row.shipmentNo }}</span>
         </p>
-        <details class="pt-2 border-t border-border">
+        <details open class="pt-2 border-t border-border">
           <summary class="text-sm text-primary py-3 min-h-11 cursor-pointer focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline">
             {{ t('containerPage.view') }}
           </summary>
@@ -96,7 +101,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
                 {{ t('containerPage.measurement') }}
               </dt>
               <dd class="qs-type-data mt-1">
-                {{ [row.lengthCm, row.widthCm, row.heightCm].map(value).join(' × ') }}
+                {{ [row.lengthCm, row.widthCm, row.heightCm].map(item => measurement(item)).join(' × ') }}
               </dd>
             </div>
             <div v-for="entry in [['receipt', row.warehouseReceiptReference], ['sourceVolume', row.reportedVolumeCai], ['difference', row.volumeDifferenceCai], ['recipientName', row.recipientName], ['recipientPhone', row.recipientPhone], ['recipientAddress', row.recipientAddress], ['cod', row.codAmountTwd], ['purchase', row.purchaseOrderNo], ['sales', row.salesOrderNo], ['remark', row.remark]]" :key="entry[0] ?? ''" :class="['receipt', 'recipientAddress', 'remark'].includes(entry[0] ?? '') ? 'col-span-2' : ''">
