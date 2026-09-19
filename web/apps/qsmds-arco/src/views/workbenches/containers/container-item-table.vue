@@ -73,7 +73,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
       <QsTableStackedCell class="max-w-full">
         <QsTableStackedLine weight="medium" content-class="[overflow-wrap:anywhere]">
           {{ row.original.goodsName }}
-        </QsTableStackedLine><QsTableStackedLine tone="muted" content-class="qs-type-data [overflow-wrap:anywhere]">
+        </QsTableStackedLine><QsTableStackedLine :tone="row.original.oceanShippingMarkText ? 'success' : 'muted'" content-class="qs-type-data [overflow-wrap:anywhere]">
           {{ row.original.oceanShippingMarkText || t('containerPage.none') }}
           <template #suffix>
             <CopyCellButton v-if="row.original.oceanShippingMarkText" always-visible :text="row.original.oceanShippingMarkText" :label="t('containerPage.mark')" />
@@ -134,7 +134,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
     <template #mobile-row="{ row }">
       <div class="min-w-0 [overflow-wrap:anywhere] space-y-3">
         <strong>{{ row.goodsName }}</strong><div class="qs-type-data-emphasis flex gap-2 items-center">
-          <span class="min-w-0">{{ row.oceanShippingMarkText || t('containerPage.none') }}</span>
+          <span class="min-w-0" :class="row.oceanShippingMarkText ? 'text-primary' : 'text-muted-foreground'">{{ row.oceanShippingMarkText || t('containerPage.none') }}</span>
           <CopyCellButton v-if="row.oceanShippingMarkText" always-visible :text="row.oceanShippingMarkText" :label="t('containerPage.mark')" />
         </div>
         <dl class="gap-x-4 gap-y-2 grid grid-cols-2">

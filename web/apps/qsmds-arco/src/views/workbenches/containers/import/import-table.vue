@@ -46,7 +46,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
         <QsTableStackedLine weight="medium" content-class="[overflow-wrap:anywhere]">
           {{ row.original.goodsName || '—' }}
         </QsTableStackedLine>
-        <QsTableStackedLine tone="muted" content-class="qs-type-data [overflow-wrap:anywhere]">
+        <QsTableStackedLine :tone="row.original.oceanShippingMarkText ? 'success' : 'muted'" content-class="qs-type-data [overflow-wrap:anywhere]">
           {{ row.original.oceanShippingMarkText || '—' }}
         </QsTableStackedLine>
         <QsTableStackedLine tone="muted" content-class="qs-type-meta [overflow-wrap:anywhere]">
@@ -120,7 +120,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
     <template #mobile-row="{ row }">
       <div class="min-w-0 [overflow-wrap:anywhere] space-y-3">
         <div>
-          <strong>{{ row.goodsName || '—' }}</strong><p class="qs-type-data m-0 mt-1">
+          <strong>{{ row.goodsName || '—' }}</strong><p class="qs-type-data m-0 mt-1" :class="row.oceanShippingMarkText ? 'text-primary' : 'text-muted-foreground'">
             {{ row.oceanShippingMarkText || '—' }}
           </p><p class="qs-type-meta text-muted-foreground m-0 mt-1">
             {{ t('containerImport.sheetRow', { sheet: row.sourceSheetName, row: row.sourceRowNumber }) }}
