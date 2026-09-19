@@ -10,6 +10,7 @@ const tones = {
   AMBIGUOUS: 'text-amber-700 dark:text-amber-400 border-amber-500/25 bg-amber-500/5',
   UNMATCHED: 'text-muted-foreground border-border bg-muted/40',
   INVALID: 'text-destructive border-destructive/25 bg-destructive/5',
+  SKIPPED: 'text-muted-foreground border-border bg-muted/40',
 }
 </script>
 

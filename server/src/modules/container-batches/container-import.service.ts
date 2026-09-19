@@ -52,15 +52,19 @@ export class ContainerImportService {
         tx.containerLoadingItem.findMany({ where: { containerBatchId: id }, select: { creationRequestKey: true, oceanShippingMarkText: true } }),
       ])
       const importedIdentities = new Set(existing.map(row => row.creationRequestKey))
-      const alreadyImported = parsedRows.some(row => importedIdentities.has(importRowIdentity(source.sourceHash, row)))
+      const existingMarks = new Set(existing.flatMap(row => row.oceanShippingMarkText ? [row.oceanShippingMarkText] : []))
       const rows: ContainerImportRowDto[] = parsedRows.map(parsed => {
         const { sourceData, ...row } = parsed
         void sourceData
+        const imported = importedIdentities.has(importRowIdentity(source.sourceHash, parsed))
+        if (imported || (row.oceanShippingMarkText && existingMarks.has(row.oceanShippingMarkText))) {
+          return { ...row, candidates: [], matchedShipmentId: null, matchStatus: 'SKIPPED',
+            matchReason: imported ? '该来源行已导入，本次跳过，已有明细保持不变' : '当前柜次已存在相同海运唛头的明细，本次跳过，已有明细保持不变' }
+        }
         const match = matchContainerShipment(row.warehouseReceiptReference, shipments)
         const candidates = shipments.filter(candidate => match.candidateIds.includes(candidate.id)).map(candidate => serializeImportCandidate(candidate, id, batch.warehouseValue, codes.includes('sales-orders:read')))
         const eligibleMatch = candidates.find(candidate => candidate.id === match.shipmentId && candidate.eligible)
         const errors = [...row.errors]
-        if (!alreadyImported && row.oceanShippingMarkText && existing.some(item => item.oceanShippingMarkText === row.oceanShippingMarkText)) errors.push('当前柜次已存在相同海运唛头的明细，请核对已有记录')
         const fieldNames = { shippingMarkText: '货件唛头', trackingNo: '物流单号', shipmentNo: '货件编号' }
         const matchReason = eligibleMatch ? [...new Set(match.evidence.filter(evidence => evidence.shipmentId === eligibleMatch.id).map(evidence => fieldNames[evidence.field]))].join('、') + '精确匹配' : candidates.find(candidate => !candidate.eligible)?.ineligibleReason ?? match.reason
         return { ...row, errors, candidates, matchedShipmentId: errors.length ? null : eligibleMatch?.id ?? null,
@@ -69,7 +73,7 @@ export class ContainerImportService {
       })
       return { containerBatchId: id, containerBatchName: batch.containerBatchName, containerBatchNo: batch.containerBatchNo,
         warehouseValue: batch.warehouseValue, expectedVersion: batch.version, sourceFileId: source.sourceFileId, sourceFilename: source.sourceFilename,
-        sourceHash: source.sourceHash, alreadyImported, rows, warnings: source.parsed.warnings }
+        sourceHash: source.sourceHash, alreadyImported: rows.every(row => row.matchStatus === 'SKIPPED'), rows, warnings: source.parsed.warnings }
     }, { isolationLevel: 'RepeatableRead', timeout: 30_000 })
   }
 
@@ -79,9 +83,8 @@ export class ContainerImportService {
     if (source.sourceFileId !== input.sourceFileId || source.sourceHash !== input.sourceHash) return containerFailure('CONTAINER_IMPORT_SOURCE_CHANGED', '来源文件与预览不一致，请重新解析', 409)
     const selection = new Map(input.rows.map(row => [row.rowKey, row.shipmentId]))
     if (selection.size !== source.parsed.rows.length || source.parsed.rows.some(row => !selection.has(row.rowKey))) return containerFailure('CONTAINER_IMPORT_ROWS_INVALID', '必须提交来源文件中的完整明细，不能遗漏或增加行')
-    const unmatchedCount = input.rows.filter(row => row.shipmentId === null).length
-    if (unmatchedCount && !input.allowUnmatched) return containerFailure('CONTAINER_IMPORT_UNMATCHED', '存在未匹配货件的明细，请完成匹配或明确确认不关联货件')
-    const payloadHash = importHash({ format: 'container.import.v1', sourceFileId: input.sourceFileId, sourceHash: input.sourceHash, rows: input.rows, allowUnmatched: input.allowUnmatched })
+    // 新版本预览可能因编辑已有唛头而出现可补导行，须与旧请求的结果重放区分。
+    const payloadHash = importHash({ format: 'container.import.v1', expectedVersion: input.expectedVersion, sourceFileId: input.sourceFileId, sourceHash: input.sourceHash, rows: input.rows, allowUnmatched: input.allowUnmatched })
     try {
       return await this.prisma.$transaction(async tx => {
         await applyTransactionTimeouts(tx)
@@ -90,25 +93,34 @@ export class ContainerImportService {
         const batch = await tx.containerBatch.findUnique({ where: { id } })
         if (!batch) return containerFailure('CONTAINER_BATCH_NOT_FOUND', '柜次不存在', 404)
         if (batch.sourceFileId !== source.sourceFileId) return containerFailure('CONTAINER_IMPORT_SOURCE_CHANGED', '柜次来源文件已变化，请重新解析', 409)
-        const identities = source.parsed.rows.map(row => importRowIdentity(source.sourceHash, row))
-        const previous = await tx.containerLoadingItem.findMany({ where: { containerBatchId: id, creationRequestKey: { in: identities } }, select: { creationPayloadHash: true } })
-        // 稳定来源行身份不依赖客户端随机重试键，换一个请求键也不能重复导入整表。
-        if (previous.length) {
-          if (previous.length !== identities.length) return containerFailure('CONTAINER_IMPORT_ALREADY_IMPORTED', '来源表格已有部分导入记录，请核对柜次明细', 409)
-          if (previous.some(row => row.creationPayloadHash !== payloadHash)) return containerFailure('CONTAINER_IDEMPOTENCY_CONFLICT', '来源表格已按其他匹配结果导入，请编辑已有明细', 409)
-          return { containerBatchId: id, importedCount: previous.length, unmatchedCount, replayed: true }
-        }
-        if (batch.version !== input.expectedVersion) return containerFailure('CONTAINER_STATE_CHANGED', '柜次资料已更新，请重新解析核对后导入', 409)
         const rows = validateParsedRows(source.parsed.rows, batch)
-        if (rows.some(row => row.errors.length)) return containerFailure('CONTAINER_IMPORT_ROWS_INVALID', '来源表格存在数据异常，请修正后再导入')
-        const marks = rows.flatMap(row => row.oceanShippingMarkText ? [row.oceanShippingMarkText] : [])
-        if (marks.length && await tx.containerLoadingItem.findFirst({ where: { containerBatchId: id, oceanShippingMarkText: { in: marks } }, select: { id: true } })) return containerFailure('CONTAINER_IMPORT_MARK_CONFLICT', '当前柜次已存在相同海运唛头的明细，请核对已有记录', 409)
-        await lockImportShipments(tx, input.rows.flatMap(row => row.shipmentId ? [row.shipmentId] : []), id, batch.warehouseValue)
+        const sourceRowKeys = new Map(rows.map(row => [importRowIdentity(source.sourceHash, row), row.rowKey]))
+        const existing = await tx.containerLoadingItem.findMany({ where: { containerBatchId: id }, select: { creationRequestKey: true, creationPayloadHash: true, oceanShippingMarkText: true } })
+        const previous = existing.filter(row => sourceRowKeys.has(row.creationRequestKey))
+        const importedIdentities = new Set(previous.map(row => row.creationRequestKey))
+        const existingMarks = new Set(existing.flatMap(row => row.oceanShippingMarkText ? [row.oceanShippingMarkText] : []))
+        // 跳过范围由锁内现状决定，客户端仍提交完整来源行，不能通过删行绕过校验。
+        const pending = rows.filter(row => !importedIdentities.has(importRowIdentity(source.sourceHash, row)) && !(row.oceanShippingMarkText && existingMarks.has(row.oceanShippingMarkText)))
+        const replayed = previous.filter(row => row.creationPayloadHash === payloadHash)
+        // 只重放本次请求实际新增的行；手工已有行不计入导入数，也不被覆盖。
+        if (replayed.length) {
+          if (pending.length) return containerFailure('CONTAINER_IMPORT_ALREADY_IMPORTED', '原导入结果已变化，请重新解析核对柜次明细', 409)
+          return { containerBatchId: id, importedCount: replayed.length, skippedCount: rows.length - replayed.length,
+            unmatchedCount: replayed.filter(row => selection.get(sourceRowKeys.get(row.creationRequestKey)!) === null).length, replayed: true }
+        }
+        if (!pending.length && previous.length) return containerFailure('CONTAINER_IDEMPOTENCY_CONFLICT', '来源表格已按其他匹配结果导入，请编辑已有明细', 409)
+        if (batch.version !== input.expectedVersion) return containerFailure('CONTAINER_STATE_CHANGED', '柜次资料已更新，请重新解析核对后导入', 409)
+        const skippedCount = rows.length - pending.length
+        if (!pending.length) return { containerBatchId: id, importedCount: 0, skippedCount, unmatchedCount: 0, replayed: false }
+        if (pending.some(row => row.errors.length)) return containerFailure('CONTAINER_IMPORT_ROWS_INVALID', '来源表格存在数据异常，请修正后再导入')
+        const unmatchedCount = pending.filter(row => selection.get(row.rowKey) === null).length
+        if (unmatchedCount && !input.allowUnmatched) return containerFailure('CONTAINER_IMPORT_UNMATCHED', '存在未匹配货件的明细，请完成匹配或明确确认不关联货件')
+        await lockImportShipments(tx, pending.flatMap(row => selection.get(row.rowKey) ? [selection.get(row.rowKey)!] : []), id, batch.warehouseValue)
         const last = await tx.containerLoadingItem.aggregate({ where: { containerBatchId: id }, _max: { lineNumber: true } })
-        for (const [index, row] of rows.entries()) {
+        for (const [index, row] of pending.entries()) {
           const inserted = await tx.containerLoadingItem.create({ data: {
             ...normalizeParsedFields(row), shipmentId: selection.get(row.rowKey)!, volumeCai: row.volumeCai, chargeableVolumeCai: row.chargeableVolumeCai,
-            containerBatchId: id, lineNumber: (last._max.lineNumber ?? 0) + index + 1, creationRequestKey: identities[index], creationPayloadHash: payloadHash,
+            containerBatchId: id, lineNumber: (last._max.lineNumber ?? 0) + index + 1, creationRequestKey: importRowIdentity(source.sourceHash, row), creationPayloadHash: payloadHash,
             sourceSheetName: row.sourceSheetName, sourceRowNumber: row.sourceRowNumber,
             sourceData: { format: 'container.import.v1', sourceFileId: source.sourceFileId, sourceHash: source.sourceHash, requestKey, source: row.sourceData },
             createdById: context.actorUserId, updatedById: context.actorUserId,
@@ -117,7 +129,7 @@ export class ContainerImportService {
             targetType: 'CONTAINER_LOADING_ITEM', targetId: inserted.id, metadata: { containerBatchId: id, shipmentId: inserted.shipmentId, lineNumber: inserted.lineNumber, sourceFileId: source.sourceFileId, sourceHash: source.sourceHash, importRequestKey: requestKey } })
         }
         await tx.containerBatch.update({ where: { id }, data: { version: { increment: 1 }, updatedById: context.actorUserId } })
-        return { containerBatchId: id, importedCount: rows.length, unmatchedCount, replayed: false }
+        return { containerBatchId: id, importedCount: pending.length, skippedCount, unmatchedCount, replayed: false }
       }, { timeout: 30_000 })
     } catch (error) {
       if (error instanceof ApiException) throw error

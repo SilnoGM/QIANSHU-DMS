@@ -12,7 +12,7 @@ export type ImportDisplayRow = ContainerImportRowDto & {
   manuallySelected: boolean
 }
 
-/** 解析结果只作为待确认草稿；提交完整原表行集合，筛选和分页不会改变导入范围。 */
+/** 提交完整原表行集合；已有明细由服务端跳过，筛选和分页不会改变待导入范围。 */
 export function useContainerImport(
   enabled: Readonly<Ref<boolean>>,
   epoch: Readonly<Ref<number>>,
@@ -27,6 +27,10 @@ export function useContainerImport(
   const mutation = useContainerMutation(enabled, epoch, send)
   const locked = computed(() => mutation.submitting.value || mutation.retryOnly.value)
   const rows = computed<ImportDisplayRow[]>(() => (resource.data.value?.rows ?? []).map((row) => {
+    // 已有记录优先于来源数据校验；不允许重新匹配或将原始异常计入待导入校验。
+    if (row.matchStatus === 'SKIPPED') {
+      return { ...row, selectedShipment: null, displayStatus: 'SKIPPED', manuallySelected: false }
+    }
     const manual = Object.hasOwn(selection.value, row.rowKey)
     const selectedShipment = manual ? selection.value[row.rowKey] : row.candidates.find(item => item.id === row.matchedShipmentId && item.eligible) ?? null
     const invalid = row.errors.length > 0 || row.matchStatus === 'INVALID'
@@ -34,12 +38,13 @@ export function useContainerImport(
     return { ...row, selectedShipment, displayStatus, manuallySelected: manual }
   }))
   const counts = computed(() => {
-    const result = { ALL: rows.value.length, MATCHED: 0, AMBIGUOUS: 0, UNMATCHED: 0, INVALID: 0 }
+    const result = { ALL: rows.value.length, MATCHED: 0, AMBIGUOUS: 0, UNMATCHED: 0, INVALID: 0, SKIPPED: 0 }
     rows.value.forEach(row => result[row.displayStatus]++)
     return result
   })
+  const importCount = computed(() => counts.value.ALL - counts.value.SKIPPED)
   const unmatchedCount = computed(() => counts.value.AMBIGUOUS + counts.value.UNMATCHED)
-  const hasUncommitted = computed(() => enabled.value && !completed.value && !resource.data.value?.alreadyImported && rows.value.length > 0)
+  const hasUncommitted = computed(() => enabled.value && !completed.value && !resource.data.value?.alreadyImported && importCount.value > 0)
   const canSubmit = computed(() => hasUncommitted.value && !resource.loading.value && !resource.error.value && !locked.value && counts.value.INVALID === 0 && (unmatchedCount.value === 0 || allowUnmatched.value))
   function resetSelection() {
     selection.value = {}
@@ -49,7 +54,7 @@ export function useContainerImport(
   watch([resource.data, epoch], resetSelection, { flush: 'sync' })
   function select(rowKey: string, shipment: ContainerImportCandidateDto | null) {
     const row = rows.value.find(item => item.rowKey === rowKey)
-    if (!hasUncommitted.value || locked.value || !row || row.displayStatus === 'INVALID' || (shipment && !shipment.eligible)) {
+    if (!hasUncommitted.value || locked.value || !row || row.displayStatus === 'INVALID' || row.displayStatus === 'SKIPPED' || (shipment && !shipment.eligible)) {
       return false
     }
     selection.value = { ...selection.value, [rowKey]: shipment }
@@ -80,5 +85,5 @@ export function useContainerImport(
     mutation.resetFeedback()
     await resource.reload()
   }
-  return { preview: resource.data, loading: resource.loading, loadError: resource.error, reload, rows, counts, unmatchedCount, allowUnmatched, completed, locked, canSubmit, hasUncommitted, select, submit, submitting: mutation.submitting, retryOnly: mutation.retryOnly, error: mutation.error, conflict: mutation.conflict, fieldErrors: mutation.fieldErrors }
+  return { preview: resource.data, loading: resource.loading, loadError: resource.error, reload, rows, counts, importCount, unmatchedCount, allowUnmatched, completed, locked, canSubmit, hasUncommitted, select, submit, submitting: mutation.submitting, retryOnly: mutation.retryOnly, error: mutation.error, conflict: mutation.conflict, fieldErrors: mutation.fieldErrors }
 }

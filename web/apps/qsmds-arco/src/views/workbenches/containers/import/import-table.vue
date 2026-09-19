@@ -109,7 +109,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
       <span class="whitespace-pre-wrap [overflow-wrap:anywhere] line-clamp-2" :title="row.original.remark || ''">{{ row.original.remark || '—' }}</span>
     </template>
     <template #cell-issues="{ row }">
-      <p v-for="(issue, index) in row.original.errors" :key="`error-${index}`" class="text-destructive m-0 whitespace-normal [overflow-wrap:anywhere]">
+      <p v-for="(issue, index) in row.original.errors" :key="`error-${index}`" class="m-0 whitespace-normal [overflow-wrap:anywhere]" :class="row.original.displayStatus === 'SKIPPED' ? 'text-muted-foreground' : 'text-destructive'">
         {{ issue }}
       </p>
       <p v-for="(issue, index) in row.original.warnings" :key="`warning-${index}`" class="text-muted-foreground m-0 whitespace-normal [overflow-wrap:anywhere]">
@@ -169,7 +169,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
             {{ row.remark }}
           </QsTableStackedLine>
         </QsTableStackedCell>
-        <p v-for="(issue, index) in row.errors" :key="`error-${index}`" class="text-destructive m-0">
+        <p v-for="(issue, index) in row.errors" :key="`error-${index}`" class="m-0" :class="row.displayStatus === 'SKIPPED' ? 'text-muted-foreground' : 'text-destructive'">
           {{ issue }}
         </p>
         <p v-for="(issue, index) in row.warnings" :key="`warning-${index}`" class="qs-type-meta text-muted-foreground m-0">
@@ -179,10 +179,10 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
     </template>
     <template #actions="{ row }">
       <div class="flex flex-wrap gap-1">
-        <FaButton size="sm" variant="ghost" :disabled="disabled || row.displayStatus === 'INVALID'" @click="emit('choose', row)">
+        <FaButton size="sm" variant="ghost" :disabled="disabled || row.displayStatus === 'INVALID' || row.displayStatus === 'SKIPPED'" @click="emit('choose', row)">
           {{ t(row.selectedShipment ? 'containerImport.change' : 'containerImport.choose') }}
         </FaButton>
-        <FaButton v-if="row.selectedShipment" size="sm" variant="ghost" :disabled="disabled || row.displayStatus === 'INVALID'" @click="emit('clear', row)">
+        <FaButton v-if="row.selectedShipment" size="sm" variant="ghost" :disabled="disabled || row.displayStatus === 'INVALID' || row.displayStatus === 'SKIPPED'" @click="emit('clear', row)">
           {{ t('containerImport.clear') }}
         </FaButton>
       </div>

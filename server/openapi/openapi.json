@@ -63732,7 +63732,6 @@
               "codes": [
                 "CONTAINER_IDEMPOTENCY_CONFLICT",
                 "CONTAINER_IMPORT_ALREADY_IMPORTED",
-                "CONTAINER_IMPORT_MARK_CONFLICT",
                 "CONTAINER_IMPORT_SOURCE_CHANGED",
                 "CONTAINER_SHIPMENT_ALREADY_ASSIGNED",
                 "CONTAINER_STATE_CHANGED"
@@ -64081,7 +64080,6 @@
               "codes": [
                 "CONTAINER_IDEMPOTENCY_CONFLICT",
                 "CONTAINER_IMPORT_ALREADY_IMPORTED",
-                "CONTAINER_IMPORT_MARK_CONFLICT",
                 "CONTAINER_IMPORT_SOURCE_CHANGED",
                 "CONTAINER_SHIPMENT_ALREADY_ASSIGNED",
                 "CONTAINER_STATE_CHANGED"
@@ -79179,7 +79177,8 @@
               "MATCHED",
               "AMBIGUOUS",
               "UNMATCHED",
-              "INVALID"
+              "INVALID",
+              "SKIPPED"
             ]
           },
           "matchReason": {
@@ -79247,7 +79246,8 @@
             "type": "string"
           },
           "alreadyImported": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "All source rows already exist by source identity or ocean shipping mark."
           },
           "rows": {
             "type": "array",
@@ -79311,7 +79311,7 @@
           },
           "allowUnmatched": {
             "type": "boolean",
-            "description": "Explicit acknowledgement that unmatched rows will be imported without shipment associations."
+            "description": "Explicit acknowledgement that pending unmatched rows will be imported without shipment associations; existing rows are skipped."
           },
           "rows": {
             "minItems": 1,
@@ -79340,6 +79340,9 @@
           "importedCount": {
             "type": "number"
           },
+          "skippedCount": {
+            "type": "number"
+          },
           "unmatchedCount": {
             "type": "number"
           },
@@ -79350,6 +79353,7 @@
         "required": [
           "containerBatchId",
           "importedCount",
+          "skippedCount",
           "unmatchedCount",
           "replayed"
         ]

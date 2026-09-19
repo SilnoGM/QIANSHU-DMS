@@ -20,9 +20,9 @@ const id = computed(() => String(route.params.id ?? ''))
 const canAccess = computed(() => auth('container-batches:read') && auth('container-batches:update') && auth('purchase-orders:read'))
 const enabled = computed(() => active.value && account.authState === 'authenticated' && route.name === 'qsPurchaseTransportContainerImport' && canAccess.value && Boolean(id.value))
 const state = useContainerImport(enabled, computed(() => account.authEpoch), id, async signal => (await containerImportApi.preview(id.value, signal)).data, async (body, key, signal) => (await containerImportApi.confirm(id.value, body, key, signal)).data)
-const { preview, loading, loadError, rows, counts, unmatchedCount, allowUnmatched, locked, canSubmit, retryOnly, submitting, error, conflict, fieldErrors } = state
+const { preview, loading, loadError, rows, counts, importCount, unmatchedCount, allowUnmatched, locked, canSubmit, retryOnly, submitting, error, conflict, fieldErrors } = state
 const status = ref<ImportFilter>('ALL')
-const statuses = computed(() => (['ALL', 'MATCHED', 'AMBIGUOUS', 'UNMATCHED', 'INVALID'] as const).map(value => ({ value, label: t(`containerImport.status.${value}`), count: counts.value[value] })))
+const statuses = computed(() => (['ALL', 'MATCHED', 'AMBIGUOUS', 'UNMATCHED', 'INVALID', 'SKIPPED'] as const).map(value => ({ value, label: t(`containerImport.status.${value}`), count: counts.value[value] })))
 const drawerOpen = ref(false)
 const selectedRowKey = ref('')
 const selectedRow = computed(() => rows.value.find(row => row.rowKey === selectedRowKey.value) ?? null)
@@ -37,7 +37,7 @@ watch([enabled, () => account.authEpoch], () => {
   finishLeave(false)
 })
 function choose(row: ImportDisplayRow) {
-  if (!locked.value && row.displayStatus !== 'INVALID') {
+  if (!locked.value && row.displayStatus !== 'INVALID' && row.displayStatus !== 'SKIPPED') {
     selectedRowKey.value = row.rowKey
     drawerOpen.value = true
   }
@@ -48,7 +48,7 @@ function back() {
 async function submit() {
   const result = await state.submit()
   if (result) {
-    toast.success(t('containerImport.success', { count: result.importedCount }))
+    toast.success(t('containerImport.success', { count: result.importedCount, skipped: result.skippedCount }))
     await back()
   }
 }
@@ -97,7 +97,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="min-w-0" :class="preview && !preview.alreadyImported && rows.length ? 'pb-64 sm:pb-40' : ''">
+  <div class="min-w-0" :class="preview && rows.length ? 'pb-64 sm:pb-40' : ''">
     <FaPageHeader :title="t('containerImport.title')" :description="t('containerImport.description')">
       <FaButton variant="outline" :disabled="locked" @click="back">
         <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />{{ t('containerImport.back') }}
@@ -139,15 +139,9 @@ onBeforeUnmount(() => {
         <FaAlert v-for="(warning, index) in preview.warnings" :key="index" class="mt-4" :title="warning" />
       </FaPageMain>
       <FaPageMain v-if="preview.alreadyImported">
-        <FaEmpty icon="i-lucide:circle-check" :title="t('containerImport.alreadyImported')" :description="t('containerImport.alreadyImportedHint')" class="py-12" />
-        <template v-if="retryOnly">
-          <FaAlert :title="t('containerImport.unknown')" />
-          <FaButton class="mt-4" :loading="submitting" :disabled="submitting" @click="submit">
-            {{ t('containerImport.retryConfirm') }}
-          </FaButton>
-        </template>
+        <FaAlert :title="t('containerImport.alreadyImported')" :description="t('containerImport.alreadyImportedHint')" />
       </FaPageMain>
-      <FaPageMain v-else-if="!rows.length">
+      <FaPageMain v-if="!rows.length">
         <FaEmpty :title="t('containerImport.empty')" :description="t('containerImport.emptyHint')" class="py-12" />
       </FaPageMain>
       <template v-else>
@@ -173,7 +167,7 @@ onBeforeUnmount(() => {
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div class="min-w-0 space-y-2">
                 <p class="qs-type-body-medium m-0" aria-live="polite">
-                  {{ t('containerImport.totalHint', { count: counts.ALL, matched: counts.MATCHED }) }}
+                  {{ t('containerImport.totalHint', { count: counts.ALL, imported: importCount, skipped: counts.SKIPPED, matched: counts.MATCHED }) }}
                 </p><template v-if="unmatchedCount">
                   <p class="qs-type-meta text-muted-foreground m-0">
                     {{ t('containerImport.unmatchedHint', { count: unmatchedCount }) }}

@@ -16,7 +16,7 @@ async function flush() {
   await nextTick()
   await nextTick()
 }
-function setup(data: ContainerImportPreviewDto, send = async (_body: ContainerImportConfirmDto, _key: string, _signal: AbortSignal) => ({ containerBatchId: 'batch', importedCount: data.rows.length, unmatchedCount: 0, replayed: false })) {
+function setup(data: ContainerImportPreviewDto, send = async (_body: ContainerImportConfirmDto, _key: string, _signal: AbortSignal) => ({ containerBatchId: 'batch', importedCount: data.rows.length, skippedCount: 0, unmatchedCount: 0, replayed: false })) {
   const scope = effectScope()
   const enabled = ref(true)
   const epoch = ref(1)
@@ -28,10 +28,10 @@ test('自动匹配与人工修改全量计数，提交不受筛选分页影响',
   const calls: ContainerImportConfirmDto[] = []
   const { scope, state } = setup(preview([row(), row({ rowKey: 'row-2', matchedShipmentId: null, matchStatus: 'AMBIGUOUS' })]), async (body) => {
     calls.push(body)
-    return { containerBatchId: 'batch', importedCount: 2, unmatchedCount: 0, replayed: false }
+    return { containerBatchId: 'batch', importedCount: 2, skippedCount: 0, unmatchedCount: 0, replayed: false }
   })
   await flush()
-  assert.deepEqual(state.counts.value, { ALL: 2, MATCHED: 1, AMBIGUOUS: 1, UNMATCHED: 0, INVALID: 0 })
+  assert.deepEqual(state.counts.value, { ALL: 2, MATCHED: 1, AMBIGUOUS: 1, UNMATCHED: 0, INVALID: 0, SKIPPED: 0 })
   assert.equal(state.canSubmit.value, false)
   assert.equal(state.select('row-2', candidate), true)
   assert.equal(state.counts.value.MATCHED, 2)
@@ -68,7 +68,7 @@ test('结果未知锁定选择，重试使用完全相同的正文和幂等键',
     if (calls.length === 1) {
       throw Object.assign(new Error('offline'), { kind: 'network' })
     }
-    return { containerBatchId: 'batch', importedCount: 1, unmatchedCount: 0, replayed: true }
+    return { containerBatchId: 'batch', importedCount: 1, skippedCount: 0, unmatchedCount: 0, replayed: true }
   })
   await flush()
   await state.submit()
@@ -82,7 +82,7 @@ test('结果未知锁定选择，重试使用完全相同的正文和幂等键',
 })
 
 test('重复点击只提交一次；身份切换清空手动选择并丢弃旧响应', async () => {
-  let resolve!: (value: { containerBatchId: string, importedCount: number, unmatchedCount: number, replayed: boolean }) => void
+  let resolve!: (value: { containerBatchId: string, importedCount: number, skippedCount: number, unmatchedCount: number, replayed: boolean }) => void
   let calls = 0
   const { scope, state, enabled, epoch } = setup(preview(), async () => {
     calls++
@@ -97,7 +97,7 @@ test('重复点击只提交一次；身份切换清空手动选择并丢弃旧�
   epoch.value++
   await flush()
   assert.equal(state.rows.value.length, 0)
-  resolve({ containerBatchId: 'batch', importedCount: 1, unmatchedCount: 0, replayed: false })
+  resolve({ containerBatchId: 'batch', importedCount: 1, skippedCount: 0, unmatchedCount: 0, replayed: false })
   assert.equal(await sending, undefined)
   enabled.value = true
   await flush()
@@ -121,7 +121,7 @@ test('明确保留未匹配时提交 null 关联，歧义候选不会被默认�
   let submitted: ContainerImportConfirmDto | undefined
   const { scope, state } = setup(preview([row({ matchStatus: 'AMBIGUOUS', matchedShipmentId: null })]), async (body) => {
     submitted = body
-    return { containerBatchId: 'batch', importedCount: 1, unmatchedCount: 1, replayed: false }
+    return { containerBatchId: 'batch', importedCount: 1, skippedCount: 0, unmatchedCount: 1, replayed: false }
   })
   await flush()
   assert.equal(state.rows.value[0].selectedShipment, null)
@@ -139,4 +139,60 @@ test('不可关联候选即使被标为自动匹配也不会带入提交', async
   assert.equal(state.counts.value.UNMATCHED, 1)
   assert.equal(state.canSubmit.value, false)
   scope.stop()
+})
+
+test('已有明细优先标为跳过，不阻塞正常行且完整提交行标识', async () => {
+  const calls: ContainerImportConfirmDto[] = []
+  const { scope, state } = setup(preview([
+    row(),
+    row({ rowKey: 'existing', matchStatus: 'SKIPPED', errors: ['尺寸无效'], matchReason: '当前柜次已存在相同海运唛头的明细' }),
+  ]), async (body) => {
+    calls.push(body)
+    return { containerBatchId: 'batch', importedCount: 1, skippedCount: 1, unmatchedCount: 0, replayed: false }
+  })
+  await flush()
+  assert.equal(state.rows.value[1].displayStatus, 'SKIPPED')
+  assert.equal(state.rows.value[1].selectedShipment, null)
+  assert.deepEqual(state.counts.value, { ALL: 2, MATCHED: 1, AMBIGUOUS: 0, UNMATCHED: 0, INVALID: 0, SKIPPED: 1 })
+  assert.equal(state.importCount.value, 1)
+  assert.equal(state.unmatchedCount.value, 0)
+  assert.equal(state.select('existing', candidate), false)
+  assert.equal(state.select('existing', null), false)
+  assert.equal(state.canSubmit.value, true)
+  const result = await state.submit()
+  assert.deepEqual(calls[0].rows, [{ rowKey: 'row-1', shipmentId: 'shipment-1' }, { rowKey: 'existing', shipmentId: null }])
+  assert.equal(calls[0].allowUnmatched, false)
+  assert.equal(result?.skippedCount, 1)
+  scope.stop()
+})
+
+test('全部明细跳过时没有待提交修改，也不会发送空导入', async () => {
+  let calls = 0
+  const { scope, state } = setup(preview([row({ matchStatus: 'SKIPPED' })]), async () => {
+    calls++
+    return { containerBatchId: 'batch', importedCount: 0, skippedCount: 1, unmatchedCount: 0, replayed: false }
+  })
+  await flush()
+  assert.equal(state.importCount.value, 0)
+  assert.equal(state.canSubmit.value, false)
+  assert.equal(state.hasUncommitted.value, false)
+  state.allowUnmatched.value = true
+  await state.submit()
+  assert.equal(calls, 0)
+  scope.stop()
+})
+
+test('跳过已有明细不会豁免待导入行的异常或未匹配确认', async () => {
+  const invalid = setup(preview([row({ matchStatus: 'SKIPPED' }), row({ rowKey: 'invalid', errors: ['尺寸无效'], matchStatus: 'INVALID' })]))
+  await flush()
+  assert.equal(invalid.state.counts.value.INVALID, 1)
+  assert.equal(invalid.state.canSubmit.value, false)
+  invalid.scope.stop()
+  const unmatched = setup(preview([row({ matchStatus: 'SKIPPED' }), row({ rowKey: 'unmatched', candidates: [], matchedShipmentId: null, matchStatus: 'UNMATCHED' })]))
+  await flush()
+  assert.equal(unmatched.state.unmatchedCount.value, 1)
+  assert.equal(unmatched.state.canSubmit.value, false)
+  unmatched.state.allowUnmatched.value = true
+  assert.equal(unmatched.state.canSubmit.value, true)
+  unmatched.scope.stop()
 })

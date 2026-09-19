@@ -41,7 +41,7 @@ export class ContainerImportRowDto {
   @ApiProperty({ type: [String] }) warnings!: string[]
   @ApiProperty({ type: [ContainerImportCandidateDto] }) candidates!: ContainerImportCandidateDto[]
   @ApiProperty({ type: String, nullable: true, format: 'uuid' }) matchedShipmentId!: string | null
-  @ApiProperty({ enum: ['MATCHED', 'AMBIGUOUS', 'UNMATCHED', 'INVALID'] }) matchStatus!: 'MATCHED' | 'AMBIGUOUS' | 'UNMATCHED' | 'INVALID'
+  @ApiProperty({ enum: ['MATCHED', 'AMBIGUOUS', 'UNMATCHED', 'INVALID', 'SKIPPED'] }) matchStatus!: 'MATCHED' | 'AMBIGUOUS' | 'UNMATCHED' | 'INVALID' | 'SKIPPED'
   @ApiProperty({ type: String, nullable: true }) matchReason!: string | null
 }
 export class ContainerImportPreviewDto {
@@ -53,7 +53,7 @@ export class ContainerImportPreviewDto {
   @ApiProperty({ format: 'uuid' }) sourceFileId!: string
   @ApiProperty() sourceFilename!: string
   @ApiProperty() sourceHash!: string
-  @ApiProperty() alreadyImported!: boolean
+  @ApiProperty({ description: 'All source rows already exist by source identity or ocean shipping mark.' }) alreadyImported!: boolean
   @ApiProperty({ type: [ContainerImportRowDto] }) rows!: ContainerImportRowDto[]
   @ApiProperty({ type: [String] }) warnings!: string[]
 }
@@ -65,12 +65,13 @@ export class ContainerImportConfirmDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) @Max(2_147_483_647) expectedVersion!: number
   @ApiProperty({ format: 'uuid' }) @IsUUID('4') sourceFileId!: string
   @ApiProperty({ pattern: '^[a-f0-9]{64}$' }) @IsString() @Matches(/^[a-f0-9]{64}$/u) sourceHash!: string
-  @ApiProperty({ description: 'Explicit acknowledgement that unmatched rows will be imported without shipment associations.' }) @IsBoolean() allowUnmatched!: boolean
+  @ApiProperty({ description: 'Explicit acknowledgement that pending unmatched rows will be imported without shipment associations; existing rows are skipped.' }) @IsBoolean() allowUnmatched!: boolean
   @ApiProperty({ type: [ContainerImportSelectionDto], minItems: 1, maxItems: 2000 }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(2000) @ValidateNested({ each: true }) @Type(() => ContainerImportSelectionDto) rows!: ContainerImportSelectionDto[]
 }
 export class ContainerImportResultDto {
   @ApiProperty({ format: 'uuid' }) containerBatchId!: string
   @ApiProperty() importedCount!: number
+  @ApiProperty() skippedCount!: number
   @ApiProperty() unmatchedCount!: number
   @ApiProperty() replayed!: boolean
 }

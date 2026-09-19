@@ -96,20 +96,87 @@ describe('container source import with isolated PostgreSQL', () => {
     expect(await h.prisma.containerLoadingItem.count({ where: { containerBatchId: parent.id } })).toBe(0)
   })
 
-  it('rejects stale preview versions and existing manually entered ocean marks', async () => {
+  it('rejects stale previews but treats an entirely existing source as a no-op', async () => {
     const parent = await batch(), data = await preview(parent.id), path = `/api/container-batches/${parent.id}`
     await post(`${path}/items`, { expectedVersion: 1, goodsName: '手工明细', packageCount: 1, oceanShippingMarkText: data.rows[0].oceanShippingMarkText }).expect(201)
     await post(`${path}/import`, input(data, true)).expect(409)
     const updated = await preview(parent.id)
-    expect(updated.rows[0]).toMatchObject({ matchStatus: 'INVALID', errors: expect.arrayContaining([expect.stringContaining('相同海运唛头')]) as unknown })
-    expect((await post(`${path}/import`, input(updated, true)).expect(409)).body as { code: string }).toMatchObject({ code: 'CONTAINER_IMPORT_MARK_CONFLICT' })
+    expect(updated).toMatchObject({ alreadyImported: true, rows: [{ matchStatus: 'SKIPPED', matchedShipmentId: null, candidates: [], matchReason: expect.stringContaining('相同海运唛头') as unknown }] })
+    expect((await post(`${path}/import`, input(updated)).expect(200)).body as ContainerImportResultDto).toMatchObject({ importedCount: 0, skippedCount: 1, unmatchedCount: 0 })
     expect(await h.prisma.containerLoadingItem.count({ where: { containerBatchId: parent.id } })).toBe(1)
+    expect((await h.prisma.containerBatch.findUniqueOrThrow({ where: { id: parent.id } })).version).toBe(updated.expectedVersion)
+  })
+
+  it('skips existing ocean marks while importing normal rows, preserving originals and replaying concurrent retries', async () => {
+    const shipment = await h.shipment(), parent = await batch([{ B: 'EXISTING-UNKNOWN' }, { B: shipment.part.shippingMarkText! }]), path = `/api/container-batches/${parent.id}`
+    await post(`${path}/items`, { expectedVersion: 1, goodsName: '保留手工明细', packageCount: 1, oceanShippingMarkText: 'OCEAN-0', codAmountTwd: '99.00' }).expect(201)
+    const original = await h.prisma.containerLoadingItem.findFirstOrThrow({ where: { containerBatchId: parent.id } })
+    const data = await preview(parent.id), body = input(data), key = randomUUID()
+    expect(data.alreadyImported).toBe(false)
+    expect(data.rows.map(row => row.matchStatus)).toEqual(['SKIPPED', 'MATCHED'])
+    expect(data.rows[0]).toMatchObject({ errors: [], matchedShipmentId: null, candidates: [] })
+    const outcomes = await Promise.all([post(`${path}/import`, body, key), post(`${path}/import`, body)])
+    expect(outcomes.map(response => response.status)).toEqual([200, 200])
+    for (const response of outcomes) expect(response.body as ContainerImportResultDto).toMatchObject({ importedCount: 1, skippedCount: 1, unmatchedCount: 0 })
+    expect(outcomes.map(response => (response.body as ContainerImportResultDto).replayed).sort()).toEqual([false, true])
+    expect((await post(`${path}/import`, body, key).expect(200)).body as ContainerImportResultDto).toMatchObject({ importedCount: 1, skippedCount: 1, unmatchedCount: 0, replayed: true })
+    const stored = await h.prisma.containerLoadingItem.findMany({ where: { containerBatchId: parent.id }, orderBy: { lineNumber: 'asc' } })
+    expect(stored[0]).toEqual(original)
+    expect(stored[1]).toMatchObject({ lineNumber: 2, oceanShippingMarkText: 'OCEAN-1', shipmentId: shipment.part.id, sourceRowNumber: 4 })
+    expect(stored).toHaveLength(2)
+    expect((await preview(parent.id)).alreadyImported).toBe(true)
+    await post(`${path}/import`, { ...body, allowUnmatched: true, rows: body.rows.map(row => ({ ...row, shipmentId: null })) }).expect(409)
+  })
+
+  it('still validates unmatched and invalid pending rows after skipping existing marks', async () => {
+    const parent = await batch([{}, { B: 'UNKNOWN' }]), path = `/api/container-batches/${parent.id}`
+    await post(`${path}/items`, { expectedVersion: 1, goodsName: '已有明细', packageCount: 1, oceanShippingMarkText: 'OCEAN-0' }).expect(201)
+    const data = await preview(parent.id)
+    expect(data.rows.map(row => row.matchStatus)).toEqual(['SKIPPED', 'UNMATCHED'])
+    expect((await post(`${path}/import`, input(data)).expect(422)).body as { code: string }).toMatchObject({ code: 'CONTAINER_IMPORT_UNMATCHED' })
+    expect((await post(`${path}/import`, input(data, true)).expect(200)).body as ContainerImportResultDto).toMatchObject({ importedCount: 1, skippedCount: 1, unmatchedCount: 1 })
+    const invalid = await batch([{}, { E: '0' }]), invalidPath = `/api/container-batches/${invalid.id}`
+    await post(`${invalidPath}/items`, { expectedVersion: 1, goodsName: '已有明细', packageCount: 1, oceanShippingMarkText: 'OCEAN-0' }).expect(201)
+    const invalidData = await preview(invalid.id)
+    expect(invalidData.rows.map(row => row.matchStatus)).toEqual(['SKIPPED', 'INVALID'])
+    await post(`${invalidPath}/import`, input(invalidData, true)).expect(422)
+    expect(await h.prisma.containerLoadingItem.count({ where: { containerBatchId: invalid.id } })).toBe(1)
   })
 
   it('shows wrong-warehouse candidates and rejects manually selected unavailable or foreign-warehouse shipments', async () => {
     const shipment = await h.shipment(), parent = await batch([{ B: shipment.part.shippingMarkText! }], OTHER_DESTINATION_WAREHOUSE), data = await preview(parent.id)
     expect(data.rows[0]).toMatchObject({ matchStatus: 'AMBIGUOUS', matchedShipmentId: null, candidates: [expect.objectContaining({ eligible: false, ineligibleReason: expect.stringContaining('仓库') as unknown }) as unknown] })
     for (const shipmentId of [shipment.part.id, randomUUID()]) await post(`/api/container-batches/${parent.id}/import`, { ...input(data), rows: data.rows.map(row => ({ rowKey: row.rowKey, shipmentId })) }).expect(422)
+  })
+
+  it('imports newly available rows from a fresh preview while skipping edited source identities', async () => {
+    // 使用两行来源：首行手工已有，另一行先正常导入；随后编辑唛头再补导首行。
+    const source = await batch([{}, { B: 'SECOND-UNKNOWN' }]), sourcePath = `/api/container-batches/${source.id}`
+    await post(`${sourcePath}/items`, { expectedVersion: 1, goodsName: '手工明细', packageCount: 1, oceanShippingMarkText: 'OCEAN-0' }).expect(201)
+    const firstBody = input(await preview(source.id), true)
+    await post(`${sourcePath}/import`, firstBody).expect(200)
+    const stored = await h.prisma.containerLoadingItem.findMany({ where: { containerBatchId: source.id }, orderBy: { lineNumber: 'asc' } })
+    for (const [index, item] of stored.entries()) {
+      await browser.patch(`${sourcePath}/items/${item.id}`).set(packagingHeaders).send({ expectedVersion: 3 + index, itemExpectedVersion: item.version, goodsName: item.goodsName, packageCount: item.packageCount, oceanShippingMarkText: `EDITED-${index}` }).expect(200)
+    }
+    const data = await preview(source.id), nextBody = input(data, true)
+    expect(data.alreadyImported).toBe(false)
+    expect(data.rows.map(row => row.matchStatus)).toEqual(['UNMATCHED', 'SKIPPED'])
+    expect(nextBody.rows).toEqual(firstBody.rows)
+    expect((await post(`${sourcePath}/import`, nextBody).expect(200)).body as ContainerImportResultDto).toMatchObject({ importedCount: 1, skippedCount: 1, unmatchedCount: 1, replayed: false })
+    expect((await post(`${sourcePath}/import`, nextBody).expect(200)).body as ContainerImportResultDto).toMatchObject({ importedCount: 1, skippedCount: 1, unmatchedCount: 1, replayed: true })
+    expect(await h.prisma.containerLoadingItem.count({ where: { containerBatchId: source.id } })).toBe(3)
+    expect((await preview(source.id)).alreadyImported).toBe(true)
+  })
+
+  it('ignores invalid source fields on skipped rows without blocking valid pending rows', async () => {
+    const parent = await batch([{ E: '0' }, {}]), path = `/api/container-batches/${parent.id}`
+    await post(`${path}/items`, { expectedVersion: 1, goodsName: '已有明细', packageCount: 1, oceanShippingMarkText: 'OCEAN-0' }).expect(201)
+    const data = await preview(parent.id)
+    expect(data.rows[0].matchStatus).toBe('SKIPPED')
+    expect(data.rows[0].errors.length).toBeGreaterThan(0)
+    expect((await post(`${path}/import`, input(data, true)).expect(200)).body as ContainerImportResultDto).toMatchObject({ importedCount: 1, skippedCount: 1, unmatchedCount: 1 })
+    expect(await h.prisma.containerLoadingItem.count({ where: { containerBatchId: parent.id } })).toBe(2)
   })
 
   it('serializes duplicate imports and competing cross-container assignments', async () => {
