@@ -40,6 +40,8 @@ export class OceanFreightBillLineCreateDto {
   @ApiPropertyOptional({ type: 'string', nullable: true, pattern: '^(0|[1-9]\\d{0,14})(\\.\\d{1,3})?$' }) @IsOptional() @IsString() @Matches(/^(0|[1-9]\d{0,14})(\.\d{1,3})?$/u) heightCm?: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true, pattern: '^(0|[1-9]\\d{0,15})(\\.\\d{1,8})?$' }) @IsOptional() @IsString() @Matches(/^(0|[1-9]\d{0,15})(\.\d{1,8})?$/u) reportedVolumeCai?: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true, pattern: '^(0|[1-9]\\d{0,27})(\\.\\d{1,2})?$' }) @IsOptional() @IsString() @Matches(/^(0|[1-9]\d{0,27})(\.\d{1,2})?$/u) codAmountTwd?: string | null
+  @ApiPropertyOptional({ enum: ['CURRENT', 'HISTORICAL_REFERENCE', 'UNRESOLVED'], description: 'Adjustment COD meaning. Positive adjustment COD remains unresolved until explicitly classified.' })
+  @IsOptional() @IsIn(['CURRENT', 'HISTORICAL_REFERENCE', 'UNRESOLVED']) codSourceTreatment?: 'CURRENT' | 'HISTORICAL_REFERENCE' | 'UNRESOLVED'
 }
 export class OceanFreightBillDto {
   @ApiProperty() id!: string
@@ -65,6 +67,8 @@ export class OceanFreightBillDto {
   @ApiProperty() version!: number
 }
 export class OceanFreightBillLineDto extends OceanFreightBillLineCreateDto {
+  @ApiProperty({ type: String, nullable: true }) reportedCodAmountTwd!: string | null
+  @ApiProperty({ type: String, nullable: true }) volumeDifferenceCai!: string | null
   @ApiProperty() id!: string
   @ApiProperty() billId!: string
   @ApiProperty() createdAt!: string

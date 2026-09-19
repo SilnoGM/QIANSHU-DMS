@@ -11,6 +11,8 @@ import { DictionaryLookupService, DictionaryValueUnavailableError } from '../dic
 import { OceanFreightSourceFileService } from '../media/ocean-freight-source-file.service'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { NumberingGenerationError } from '../numbering/numbering.errors'
+import { calculateOceanVolume } from '../ocean-freight-calculation/ocean-freight-calculation'
+import { formatDecimal, parseDecimal } from '../ocean-freight-calculation/ocean-decimal'
 import type { ContainerBatchDto, ContainerBatchListQueryDto, ContainerLoadingItemCreateDto, ContainerLoadingItemDto } from './container-batch.dto'
 import { containerFailure, containerUuid, deriveContainerDate, normalizeContainerCreate, normalizeLoadingItemCreate, requireContainerVersion, type ContainerCommandContext } from './container-batch.normalizer'
 
@@ -19,7 +21,15 @@ function serialize(row: ContainerBatch): ContainerBatchDto {
   return { id: row.id, containerBatchNo: row.containerBatchNo, containerBatchName: row.containerBatchName, loadingDate: row.loadingDate.toISOString().slice(0, 10), sequenceInDay: row.sequenceInDay, warehouseValue: row.warehouseValue, sourceFileId: row.sourceFileId, remark: row.remark, version: row.version, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }
 }
 function serializeItem(row: ContainerLoadingItem): ContainerLoadingItemDto {
-  return { id: row.id, containerBatchId: row.containerBatchId, shipmentId: row.shipmentId, lineNumber: row.lineNumber, oceanShippingMarkText: row.oceanShippingMarkText, warehouseReceiptReference: row.warehouseReceiptReference, goodsName: row.goodsName, packageCount: row.packageCount, packageUnit: row.packageUnit, remark: row.remark, version: row.version }
+  return {
+    id: row.id, containerBatchId: row.containerBatchId, shipmentId: row.shipmentId, lineNumber: row.lineNumber, oceanShippingMarkText: row.oceanShippingMarkText, warehouseReceiptReference: row.warehouseReceiptReference, goodsName: row.goodsName, packageCount: row.packageCount, packageUnit: row.packageUnit, remark: row.remark, version: row.version,
+    grossWeightKg: row.grossWeightKg?.toFixed(3) ?? null,
+    lengthCm: row.lengthCm?.toFixed(3) ?? null, widthCm: row.widthCm?.toFixed(3) ?? null, heightCm: row.heightCm?.toFixed(3) ?? null,
+    volumeCai: row.volumeCai?.toFixed(8) ?? null, chargeableVolumeCai: row.chargeableVolumeCai,
+    reportedVolumeCai: row.reportedVolumeCai?.toFixed(8) ?? null,
+    // 差异也按定点数相减，避免 Decimal 默认有效位数截掉大来源值的小数位。
+    volumeDifferenceCai: row.volumeCai == null || row.reportedVolumeCai == null ? null : formatDecimal(parseDecimal(row.volumeCai.toFixed(8), 24, 8, 'volumeCai') - parseDecimal(row.reportedVolumeCai.toFixed(8), 24, 8, 'reportedVolumeCai'), 24, 8, 'volumeDifferenceCai'),
+  }
 }
 function mapError(error: unknown): never {
   if (error instanceof ApiException) throw error
@@ -100,7 +110,12 @@ export class ContainerBatchService {
   async createItem(context: ContainerCommandContext, rawId: string, input: ContainerLoadingItemCreateDto, key: unknown): Promise<ContainerLoadingItemDto> {
     const id = containerUuid(rawId), creationRequestKey = containerUuid(key)
     const normalized = normalizeLoadingItemCreate(input), expectedVersion = requireContainerVersion(input.expectedVersion)
-    const creationPayloadHash = hash({ format: 'container.item.create.v1', actorUserId: context.actorUserId, ...normalized, expectedVersion })
+    // 新增可空来源字段不改变阶段 1 的请求身份，已创建明细仍可使用原请求重试。
+    const { grossWeightKg, lengthCm, widthCm, heightCm, reportedVolumeCai, ...legacy } = normalized
+    const measurements = Object.fromEntries(Object.entries({ grossWeightKg, lengthCm, widthCm, heightCm, reportedVolumeCai }).filter(([, value]) => value !== null))
+    const creationPayloadHash = hash({ format: 'container.item.create.v1', actorUserId: context.actorUserId, ...legacy, ...measurements, expectedVersion })
+    // 按完整尺寸表达式先乘件数再取整；缺值保留 null，越界在打开事务前拒绝。
+    const { volumeCai, chargeableVolumeCai } = calculateOceanVolume(normalized)
     try {
       return await this.prisma.$transaction(async tx => {
         await applyTransactionTimeouts(tx)
@@ -122,7 +137,7 @@ export class ContainerBatchService {
           if (elsewhere) return containerFailure('CONTAINER_SHIPMENT_ALREADY_ASSIGNED', '该货件已分配到其他柜次，首版不允许跨柜拆分', 409)
         }
         const last = await tx.containerLoadingItem.aggregate({ where: { containerBatchId: id }, _max: { lineNumber: true } })
-        const row = await tx.containerLoadingItem.create({ data: { ...normalized, containerBatchId: id, lineNumber: (last._max.lineNumber ?? 0) + 1, creationRequestKey, creationPayloadHash, createdById: context.actorUserId, updatedById: context.actorUserId } })
+        const row = await tx.containerLoadingItem.create({ data: { ...normalized, volumeCai, chargeableVolumeCai, containerBatchId: id, lineNumber: (last._max.lineNumber ?? 0) + 1, creationRequestKey, creationPayloadHash, createdById: context.actorUserId, updatedById: context.actorUserId } })
         await tx.containerBatch.update({ where: { id }, data: { version: { increment: 1 }, updatedById: context.actorUserId } })
         await this.audit.record(tx, { eventType: 'CONTAINER_LOADING_ITEM_CREATED', outcome: 'SUCCESS', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, targetType: 'CONTAINER_LOADING_ITEM', targetId: row.id, metadata: { containerBatchId: id, shipmentId: row.shipmentId, lineNumber: row.lineNumber } })
         return serializeItem(row)

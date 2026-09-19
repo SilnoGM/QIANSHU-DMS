@@ -1,4 +1,5 @@
 import { ApiException } from '../../infrastructure/http/api.exception'
+import { normalizeOceanDecimal } from '../ocean-freight-calculation/ocean-freight-calculation'
 
 export interface ContainerCommandContext { actorUserId: string, requestId: string }
 export function containerFailure(code: string, message: string, status = 422): never {
@@ -26,6 +27,7 @@ export function normalizeContainerCreate(raw: unknown) {
 }
 /** 创建时推断一次并持久化；请求指纹不含当前年份，使跨年重试仍返回原柜次。 */
 export function deriveContainerDate(name: string, now: Date) {
+  if (!Number.isFinite(now.getTime())) return containerFailure('VALIDATION_FAILED', '柜次创建日期无效')
   const match = /^(\d{2})(\d{2})(?:-(\d{2}))?柜(?:子)?$/u.exec(name)
   if (!match) return containerFailure('VALIDATION_FAILED', '柜次名称无法推断装柜日期')
   const year = Number(new Intl.DateTimeFormat('en', { timeZone: 'Asia/Shanghai', year: 'numeric' }).format(now))
@@ -35,7 +37,7 @@ export function deriveContainerDate(name: string, now: Date) {
   return { loadingDate, sequenceInDay }
 }
 export function normalizeLoadingItemCreate(raw: unknown) {
-  const input = record(raw, ['shipmentId', 'oceanShippingMarkText', 'warehouseReceiptReference', 'goodsName', 'packageCount', 'packageUnit', 'remark', 'expectedVersion'])
+  const input = record(raw, ['shipmentId', 'oceanShippingMarkText', 'warehouseReceiptReference', 'goodsName', 'packageCount', 'packageUnit', 'remark', 'expectedVersion', 'grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'reportedVolumeCai'])
   if (!Number.isSafeInteger(input.packageCount) || Number(input.packageCount) < 1 || Number(input.packageCount) > 1_000_000) return containerFailure('VALIDATION_FAILED', '包装件数必须为有效正整数')
   return {
     shipmentId: input.shipmentId == null ? null : containerUuid(input.shipmentId),
@@ -43,6 +45,11 @@ export function normalizeLoadingItemCreate(raw: unknown) {
     warehouseReceiptReference: text(input.warehouseReceiptReference, 500),
     goodsName: text(input.goodsName, 255, true)!, packageCount: Number(input.packageCount),
     packageUnit: text(input.packageUnit, 32), remark: text(input.remark, 500),
+    grossWeightKg: normalizeOceanDecimal(input.grossWeightKg ?? null, 18, 3, 'grossWeightKg', true),
+    lengthCm: normalizeOceanDecimal(input.lengthCm ?? null, 18, 3, 'lengthCm', true),
+    widthCm: normalizeOceanDecimal(input.widthCm ?? null, 18, 3, 'widthCm', true),
+    heightCm: normalizeOceanDecimal(input.heightCm ?? null, 18, 3, 'heightCm', true),
+    reportedVolumeCai: normalizeOceanDecimal(input.reportedVolumeCai ?? null, 24, 8, 'reportedVolumeCai'),
   }
 }
 export function requireContainerVersion(value: unknown): number {

@@ -34,7 +34,7 @@ export class OceanFreightBillController {
   @Get(':id/lines') @RequirePermissions('ocean-freight-bills:read') @contract('ocean_freight_bill_lines_list', false, [notFound]) @ApiContractResponse({ status: 200, type: OceanFreightBillLinePageDto })
   lines(@Param() params: OceanFreightBillIdDto, @Query() query: OceanFreightBillListQueryDto) { return this.service.lines(params.id, query) }
   @Post(':id/lines') @HttpCode(201) @RequirePermissions('ocean-freight-bills:read', 'ocean-freight-bills:update')
-  @contract('ocean_freight_bill_lines_create', true, [notFound, { status: 409, codes: ['OCEAN_FREIGHT_BILL_IDEMPOTENCY_CONFLICT', 'OCEAN_FREIGHT_BILL_STATE_CHANGED', 'OCEAN_FREIGHT_NORMAL_LINE_EXISTS'] }, { status: 422, codes: ['VALIDATION_FAILED', 'OCEAN_FREIGHT_LINE_REFERENCE_INVALID'] }])
+  @contract('ocean_freight_bill_lines_create', true, [notFound, { status: 409, codes: ['OCEAN_FREIGHT_BILL_IDEMPOTENCY_CONFLICT', 'OCEAN_FREIGHT_BILL_STATE_CHANGED', 'OCEAN_FREIGHT_NORMAL_LINE_EXISTS'] }, { status: 422, codes: ['VALIDATION_FAILED', 'OCEAN_FREIGHT_LINE_REFERENCE_INVALID', 'OCEAN_CALCULATION_INVALID', 'OCEAN_CALCULATION_OVERFLOW'] }])
   @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } }) @ApiContractResponse({ status: 201, type: OceanFreightBillLineDto })
   createLine(@Param() params: OceanFreightBillIdDto, @Body() input: OceanFreightBillLineCreateDto, @Headers('idempotency-key') key: unknown, @Req() request: object) { return this.service.createLine(context(request), params.id, input, key) }
 }

@@ -25,6 +25,11 @@ export class ContainerLoadingItemCreateDto {
   @ApiProperty({ minimum: 1, maximum: 1_000_000 }) @IsInt() @Min(1) @Max(1_000_000) packageCount!: number
   @ApiPropertyOptional({ type: String, maxLength: 32, nullable: true }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 32) packageUnit?: string | null
   @ApiPropertyOptional({ type: String, maxLength: 500, nullable: true }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 500) remark?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive total row weight in kg; decimal(18,3). Never multiplied by packageCount.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) grossWeightKg?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package length in cm; decimal(18,3).' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) lengthCm?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package width in cm; decimal(18,3).' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) widthCm?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package height in cm; decimal(18,3).' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) heightCm?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 25, description: 'Non-negative source row volume; decimal(24,8). Preserved for comparison.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 25) reportedVolumeCai?: string | null
 }
 export class ContainerBatchDto {
   @ApiProperty({ format: 'uuid' }) id!: string
@@ -55,6 +60,14 @@ export class ContainerLoadingItemDto {
   @ApiProperty({ type: String, nullable: true }) packageUnit!: string | null
   @ApiProperty({ type: String, nullable: true }) remark!: string | null
   @ApiProperty() version!: number
+  @ApiProperty({ type: String, nullable: true }) grossWeightKg!: string | null
+  @ApiProperty({ type: String, nullable: true }) lengthCm!: string | null
+  @ApiProperty({ type: String, nullable: true }) widthCm!: string | null
+  @ApiProperty({ type: String, nullable: true }) heightCm!: string | null
+  @ApiProperty({ type: String, nullable: true, description: 'Calculated row volume, rounded to eight decimals; null when dimensions are incomplete.' }) volumeCai!: string | null
+  @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 2_147_483_647, description: 'Ceiling of the full precision row volume, before display rounding.' }) chargeableVolumeCai!: number | null
+  @ApiProperty({ type: String, nullable: true }) reportedVolumeCai!: string | null
+  @ApiProperty({ type: String, nullable: true, description: 'Calculated row volume minus reported source volume; null when either is missing.' }) volumeDifferenceCai!: string | null
 }
 export class ContainerLoadingItemPageDto {
   @ApiProperty({ type: [ContainerLoadingItemDto] }) items!: ContainerLoadingItemDto[]

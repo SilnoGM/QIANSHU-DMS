@@ -12,6 +12,8 @@ import { OceanFreightSourceFileService } from '../media/ocean-freight-source-fil
 import type { OceanFreightBillCreateDto, OceanFreightBillLineCreateDto, OceanFreightBillListQueryDto } from './ocean-freight-bill.dto'
 import { billFailure, fingerprint, normalizeBill, normalizeBillLine, parseCreationKey } from './ocean-freight-bill.normalizer'
 import { serializeBill, serializeBillLine } from './ocean-freight-bill.serializer'
+import { prepareOceanCodSource } from './ocean-freight-cod-source'
+import { OceanFreightBillCalculationService } from './ocean-freight-bill-calculation.service'
 
 export interface OceanFreightBillContext { actorUserId: string; requestId: string }
 function replay<T extends { creationPayloadHash: string }>(row: T | null, hash: string): T | null {
@@ -34,7 +36,8 @@ function mapError(error: unknown): never {
 export class OceanFreightBillService {
   constructor(private readonly prisma: PrismaService, private readonly access: AccessControlService,
     private readonly numbering: NumberingGeneratorService, private readonly audit: AuditService,
-    private readonly sourceFiles: OceanFreightSourceFileService) {}
+    private readonly sourceFiles: OceanFreightSourceFileService,
+    private readonly calculation: OceanFreightBillCalculationService) {}
 
   private async authorize(tx: Prisma.TransactionClient, actorUserId: string, permissions: string[]) {
     const user = await tx.user.findUnique({ where: { id: actorUserId }, select: { status: true } })
@@ -63,7 +66,10 @@ export class OceanFreightBillService {
     } catch (error) { return mapError(error) }
   }
   async createLine(context: OceanFreightBillContext, billId: string, input: OceanFreightBillLineCreateDto, key: unknown) {
-    const command = normalizeBillLine(input), creationRequestKey = parseCreationKey(key), creationPayloadHash = fingerprint({ actorUserId: context.actorUserId, ...command })
+    const command = normalizeBillLine(input), creationRequestKey = parseCreationKey(key)
+    const codSource = prepareOceanCodSource(command.lineType, command.codAmountTwd, input.codSourceTreatment)
+    // 新增判定字段缺省时保留阶段 1 指纹，已经成功的老请求仍可幂等重放。
+    const creationPayloadHash = fingerprint({ actorUserId: context.actorUserId, ...command, ...(input.codSourceTreatment == null ? {} : { codSourceTreatment: input.codSourceTreatment }) })
     try {
       const row = await this.prisma.$transaction(async tx => {
         await applyTransactionTimeouts(tx)
@@ -91,12 +97,13 @@ export class OceanFreightBillService {
           }
         }
         const maximum = await tx.oceanFreightBillLine.aggregate({ where: { billId }, _max: { lineNumber: true } })
-        const created = await tx.oceanFreightBillLine.create({ data: { ...command, billId, lineNumber: (maximum._max.lineNumber ?? 0) + 1,
+        const created = await tx.oceanFreightBillLine.create({ data: { ...command, ...codSource, billId, lineNumber: (maximum._max.lineNumber ?? 0) + 1,
           creationRequestKey, creationPayloadHash, reconciliationStatus: matched ? 'PENDING' : 'UNMATCHED' } })
+        await this.calculation.recalculateInTransaction(tx, billId)
         await tx.oceanFreightBill.update({ where: { id: billId }, data: { version: { increment: 1 }, updatedById: context.actorUserId } })
         await this.audit.record(tx, { eventType: 'OCEAN_FREIGHT_BILL_LINE_CREATED', outcome: 'SUCCESS', actorType: 'USER', actorUserId: context.actorUserId,
           targetType: 'OCEAN_FREIGHT_BILL_LINE', targetId: created.id, requestId: context.requestId, metadata: { billId, lineType: created.lineType, loadingItemId: created.loadingItemId } })
-        return created
+        return tx.oceanFreightBillLine.findUniqueOrThrow({ where: { id: created.id } })
       }, { timeout: 15000 })
       return serializeBillLine(row)
     } catch (error) { return mapError(error) }

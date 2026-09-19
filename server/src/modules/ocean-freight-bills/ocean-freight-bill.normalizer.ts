@@ -41,7 +41,7 @@ export function normalizeBill(input: OceanFreightBillCreateDto) {
   return { billName: text(input.billName, 128, true)!, twdPerCny, billDate: date(input.billDate), sourceFileId: uuid(input.sourceFileId), remark: text(input.remark, 2000) }
 }
 export function normalizeBillLine(input: OceanFreightBillLineCreateDto) {
-  onlyKeys(input, ['lineType', 'goodsName', 'loadingItemId', 'adjustsBillLineId', 'containerBatchName', 'loadingDate', 'packageCount', 'warehouseReceiptReference', 'oceanShippingMarkText', 'packageUnit', 'recipientName', 'recipientPhone', 'recipientAddress', 'recipientInfoRaw', 'cargoCategoryCode', 'remark', 'grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'reportedVolumeCai', 'codAmountTwd'])
+  onlyKeys(input, ['lineType', 'goodsName', 'loadingItemId', 'adjustsBillLineId', 'containerBatchName', 'loadingDate', 'packageCount', 'warehouseReceiptReference', 'oceanShippingMarkText', 'packageUnit', 'recipientName', 'recipientPhone', 'recipientAddress', 'recipientInfoRaw', 'cargoCategoryCode', 'remark', 'grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'reportedVolumeCai', 'codAmountTwd', 'codSourceTreatment'])
   if (!['NORMAL', 'ADJUSTMENT'].includes(input.lineType)) return invalid()
   if (input.packageCount != null && (!Number.isInteger(input.packageCount) || input.packageCount < 1 || input.packageCount > 1000000)) return invalid()
   if (input.lineType === 'NORMAL' && input.adjustsBillLineId) return invalid()

@@ -38,4 +38,16 @@ describe('ContainerBatchController foundation contract', () => {
     expect(item.map(error => error.property)).toEqual(['volumeCai'])
     expect(await validate(plainToInstance(ContainerLoadingItemCreateDto, { goodsName: 'Machine', packageCount: 1 }), options)).not.toHaveLength(0)
   })
+  it('accepts decimal measurement strings, exposes derived volume and rejects numeric JSON measurements', async () => {
+    const base = { expectedVersion: 1, goodsName: 'Machine', packageCount: 10 }
+    const options = { whitelist: true, forbidNonWhitelisted: true }
+    expect(await validate(plainToInstance(ContainerLoadingItemCreateDto, { ...base, lengthCm: '128', widthCm: '19', heightCm: '15', grossWeightKg: '180', reportedVolumeCai: '12.88' }), options)).toHaveLength(0)
+    const invalid = await validate(plainToInstance(ContainerLoadingItemCreateDto, { ...base, lengthCm: 128, chargeableVolumeCai: 13, volumeDifferenceCai: '0' }), options)
+    expect(invalid.map(error => error.property).sort()).toEqual(['chargeableVolumeCai', 'lengthCm', 'volumeDifferenceCai'])
+    const document = await createOpenApiDocument(ContractModule)
+    for (const property of ['grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'reportedVolumeCai', 'volumeCai', 'volumeDifferenceCai']) {
+      expect(document.components?.schemas?.ContainerLoadingItemDto).toHaveProperty(`properties.${property}`, expect.objectContaining({ type: 'string', nullable: true }))
+    }
+    expect(document.components?.schemas?.ContainerLoadingItemDto).toHaveProperty('properties.chargeableVolumeCai', expect.objectContaining({ type: 'number', nullable: true }))
+  })
 })

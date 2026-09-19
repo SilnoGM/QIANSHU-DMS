@@ -1,5 +1,6 @@
 import { OceanFreightBillService } from './ocean-freight-bill.service'
 import { fingerprint, normalizeBill, normalizeBillLine } from './ocean-freight-bill.normalizer'
+import { Prisma } from '../../generated/prisma/client'
 
 const actorUserId = '10000000-0000-4000-8000-000000000001'
 const id = '10000000-0000-4000-8000-000000000002'
@@ -8,8 +9,8 @@ const dates = { createdAt: new Date(), updatedAt: new Date() }
 const input = { billName: 'Bill', twdPerCny: '4.8' }
 function setup() {
   const tx = { $queryRaw: jest.fn().mockResolvedValue([]), user: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
-    oceanFreightBill: { findUnique: jest.fn(), create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id, ...dates, ...data })), update: jest.fn() },
-    oceanFreightBillLine: { findUnique: jest.fn(), findFirst: jest.fn(), aggregate: jest.fn().mockResolvedValue({ _max: { lineNumber: 0 } }), create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id, ...dates, ...data })) },
+    oceanFreightBill: { findUnique: jest.fn(), create: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ id, ...dates, ...data, twdPerCny: new Prisma.Decimal(data.twdPerCny as string) })), update: jest.fn() },
+    oceanFreightBillLine: { findUnique: jest.fn(), findUniqueOrThrow: jest.fn(), findFirst: jest.fn(), aggregate: jest.fn().mockResolvedValue({ _max: { lineNumber: 0 } }), create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id, ...dates, ...data })) },
     containerLoadingItem: { findUnique: jest.fn() },
   }
   const prisma = { $transaction: jest.fn().mockImplementation((fn: (tx: unknown) => unknown) => fn(tx)) }
@@ -17,8 +18,10 @@ function setup() {
   const numbering = { generateScopedInTransaction: jest.fn().mockResolvedValue({ number: 'BILL-1', issuanceId: id }) }
   const audit = { record: jest.fn() }
   const source = { attach: jest.fn() }
-  const service = new OceanFreightBillService(prisma as never, access as never, numbering as never, audit, source as never)
-  return { service, tx, numbering, audit, source, access }
+  const calculation = { recalculateInTransaction: jest.fn() }
+  tx.oceanFreightBillLine.findUniqueOrThrow.mockImplementation(() => tx.oceanFreightBillLine.create.mock.results.at(-1)?.value as unknown)
+  const service = new OceanFreightBillService(prisma as never, access as never, numbering as never, audit, source as never, calculation)
+  return { service, tx, numbering, audit, source, access, calculation }
 }
 describe('OceanFreightBillService commands', () => {
   it('creates the bill, issuance, source binding and audit in one transaction without totals', async () => {
@@ -31,7 +34,7 @@ describe('OceanFreightBillService commands', () => {
   })
   it('replays same normalized input without consuming numbers or reattaching files', async () => {
     const { service, tx, numbering, source } = setup()
-    tx.oceanFreightBill.findUnique.mockResolvedValue({ id, ...dates, twdPerCny: '4.8', creationPayloadHash: fingerprint(normalizeBill(input)) })
+    tx.oceanFreightBill.findUnique.mockResolvedValue({ id, ...dates, twdPerCny: new Prisma.Decimal('4.8'), creationPayloadHash: fingerprint(normalizeBill(input)) })
     await service.create({ actorUserId, requestId: 'test' }, input, key)
     expect(numbering.generateScopedInTransaction).not.toHaveBeenCalled()
     expect(source.attach).not.toHaveBeenCalled()

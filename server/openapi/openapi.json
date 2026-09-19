@@ -60455,6 +60455,8 @@
               "codes": [
                 "CONTAINER_SHIPMENT_UNAVAILABLE",
                 "CONTAINER_WAREHOUSE_UNAVAILABLE",
+                "OCEAN_CALCULATION_INVALID",
+                "OCEAN_CALCULATION_OVERFLOW",
                 "OCEAN_FREIGHT_SOURCE_FILE_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
@@ -61288,6 +61290,8 @@
               "codes": [
                 "CONTAINER_SHIPMENT_UNAVAILABLE",
                 "CONTAINER_WAREHOUSE_UNAVAILABLE",
+                "OCEAN_CALCULATION_INVALID",
+                "OCEAN_CALCULATION_OVERFLOW",
                 "OCEAN_FREIGHT_SOURCE_FILE_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
@@ -62637,6 +62641,8 @@
             {
               "status": 422,
               "codes": [
+                "OCEAN_CALCULATION_INVALID",
+                "OCEAN_CALCULATION_OVERFLOW",
                 "OCEAN_FREIGHT_LINE_REFERENCE_INVALID",
                 "VALIDATION_FAILED"
               ]
@@ -75742,6 +75748,43 @@
           },
           "version": {
             "type": "number"
+          },
+          "grossWeightKg": {
+            "type": "string",
+            "nullable": true
+          },
+          "lengthCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "widthCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "heightCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "volumeCai": {
+            "type": "string",
+            "nullable": true,
+            "description": "Calculated row volume, rounded to eight decimals; null when dimensions are incomplete."
+          },
+          "chargeableVolumeCai": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+            "description": "Ceiling of the full precision row volume, before display rounding."
+          },
+          "reportedVolumeCai": {
+            "type": "string",
+            "nullable": true
+          },
+          "volumeDifferenceCai": {
+            "type": "string",
+            "nullable": true,
+            "description": "Calculated row volume minus reported source volume; null when either is missing."
           }
         },
         "required": [
@@ -75755,7 +75798,15 @@
           "packageCount",
           "packageUnit",
           "remark",
-          "version"
+          "version",
+          "grossWeightKg",
+          "lengthCm",
+          "widthCm",
+          "heightCm",
+          "volumeCai",
+          "chargeableVolumeCai",
+          "reportedVolumeCai",
+          "volumeDifferenceCai"
         ]
       },
       "ContainerLoadingItemPageDto": {
@@ -75816,6 +75867,36 @@
             "type": "string",
             "maxLength": 500,
             "nullable": true
+          },
+          "grossWeightKg": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 19,
+            "description": "Positive total row weight in kg; decimal(18,3). Never multiplied by packageCount."
+          },
+          "lengthCm": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 19,
+            "description": "Positive per-package length in cm; decimal(18,3)."
+          },
+          "widthCm": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 19,
+            "description": "Positive per-package width in cm; decimal(18,3)."
+          },
+          "heightCm": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 19,
+            "description": "Positive per-package height in cm; decimal(18,3)."
+          },
+          "reportedVolumeCai": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 25,
+            "description": "Non-negative source row volume; decimal(24,8). Preserved for comparison."
           }
         },
         "required": [
@@ -76100,6 +76181,23 @@
             "nullable": true,
             "pattern": "^(0|[1-9]\\d{0,27})(\\.\\d{1,2})?$"
           },
+          "codSourceTreatment": {
+            "type": "string",
+            "enum": [
+              "CURRENT",
+              "HISTORICAL_REFERENCE",
+              "UNRESOLVED"
+            ],
+            "description": "Adjustment COD meaning. Positive adjustment COD remains unresolved until explicitly classified."
+          },
+          "reportedCodAmountTwd": {
+            "type": "string",
+            "nullable": true
+          },
+          "volumeDifferenceCai": {
+            "type": "string",
+            "nullable": true
+          },
           "id": {
             "type": "string"
           },
@@ -76167,6 +76265,8 @@
         "required": [
           "lineType",
           "goodsName",
+          "reportedCodAmountTwd",
+          "volumeDifferenceCai",
           "id",
           "billId",
           "createdAt",
@@ -76325,6 +76425,15 @@
             "type": "string",
             "nullable": true,
             "pattern": "^(0|[1-9]\\d{0,27})(\\.\\d{1,2})?$"
+          },
+          "codSourceTreatment": {
+            "type": "string",
+            "enum": [
+              "CURRENT",
+              "HISTORICAL_REFERENCE",
+              "UNRESOLVED"
+            ],
+            "description": "Adjustment COD meaning. Positive adjustment COD remains unresolved until explicitly classified."
           }
         },
         "required": [
