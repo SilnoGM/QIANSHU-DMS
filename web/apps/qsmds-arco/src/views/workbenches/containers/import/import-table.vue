@@ -26,12 +26,12 @@ const dimensions = (row: ImportDisplayRow) => `${[row.lengthCm, row.widthCm, row
 const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
   { id: 'goods', title: t('containerPage.goods'), accessorKey: 'goodsName', width: 250, minWidth: 250, maxWidth: 250, fixed: 'left' },
   { id: 'match', title: t('containerImport.match'), accessorFn: row => row.selectedShipment?.shippingMarkText || row.selectedShipment?.shipmentNo || t(`containerImport.status.${row.displayStatus}`), width: 250, minWidth: 250, maxWidth: 250 },
-  { id: 'receipt', title: t('containerPage.receipt'), accessorKey: 'warehouseReceiptReference', width: 190, minWidth: 190, maxWidth: 190, cellClass: 'qs-type-data whitespace-normal [overflow-wrap:anywhere]' },
+  { id: 'receipt', title: t('containerPage.receipt'), accessorKey: 'warehouseReceiptReference', width: 260, minWidth: 260, maxWidth: 260, cellClass: 'qs-type-data whitespace-normal [overflow-wrap:anywhere]' },
   { id: 'orders', title: t('containerImport.orders'), accessorFn: row => row.selectedShipment?.purchaseOrderNo, width: 230, minWidth: 230, maxWidth: 230 },
   { id: 'package', title: t('containerPage.packageCount'), accessorFn: row => `${row.packageCount} ${row.packageUnit || ''}`, width: 100, minWidth: 100, maxWidth: 100, cellClass: 'qs-type-data', align: 'right' },
-  { id: 'measurements', title: t('containerPage.weightDimensions'), accessorFn: row => `${measurement(row.grossWeightKg)} kg ${dimensions(row)}`, width: 260, minWidth: 260, maxWidth: 260 },
+  { id: 'measurements', title: t('containerPage.weightDimensions'), accessorFn: row => `${measurement(row.grossWeightKg)} kg ${dimensions(row)}`, width: 240, minWidth: 240, maxWidth: 240 },
   { id: 'volume', title: t('containerPage.volume'), accessorFn: row => measurement(row.volumeCai, 2), width: 185, minWidth: 185, maxWidth: 185 },
-  { id: 'recipient', title: t('containerPage.recipientInfo'), accessorFn: row => [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' '), width: 270, minWidth: 270, maxWidth: 270 },
+  { id: 'recipient', title: t('containerPage.recipientInfo'), accessorFn: row => [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' '), width: 380, minWidth: 380, maxWidth: 380 },
   { id: 'cod', title: t('containerPage.cod'), accessorKey: 'codAmountTwd', width: 170, minWidth: 170, maxWidth: 170, align: 'right' },
   { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', width: 220, minWidth: 220, maxWidth: 220 },
   { id: 'issues', title: t('containerImport.issues'), accessorFn: row => [...row.errors, ...row.warnings].join('；'), width: 250, minWidth: 250, maxWidth: 250 },
@@ -102,7 +102,8 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
       </QsTableStackedCell>
     </template>
     <template #cell-cod="{ row }">
-      <AmountDisplay :value="row.original.codAmountTwd" currency="TWD" :currencies="currencies" />
+      <AmountDisplay v-if="row.original.codAmountTwd !== null" :value="row.original.codAmountTwd" currency="TWD" :currencies="currencies" />
+      <span v-else class="qs-type-meta text-muted-foreground">{{ t('containerPage.none') }}</span>
     </template>
     <template #cell-remark="{ row }">
       <span class="whitespace-pre-wrap [overflow-wrap:anywhere] line-clamp-2" :title="row.original.remark || ''">{{ row.original.remark || '—' }}</span>
@@ -161,7 +162,8 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
             {{ [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' · ') || '—' }}
           </QsTableStackedLine>
           <QsTableStackedLine :label="t('containerPage.cod')">
-            <AmountDisplay :value="row.codAmountTwd" currency="TWD" :currencies="currencies" />
+            <AmountDisplay v-if="row.codAmountTwd !== null" :value="row.codAmountTwd" currency="TWD" :currencies="currencies" />
+            <span v-else class="qs-type-meta text-muted-foreground">{{ t('containerPage.none') }}</span>
           </QsTableStackedLine>
           <QsTableStackedLine v-if="row.remark" :label="t('containerPage.remark')" content-class="whitespace-pre-wrap line-clamp-2">
             {{ row.remark }}

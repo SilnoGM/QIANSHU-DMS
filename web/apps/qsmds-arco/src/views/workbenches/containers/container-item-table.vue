@@ -44,15 +44,15 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
   { id: 'goods', title: t('containerPage.goods'), accessorFn: row => `${row.goodsName} ${row.oceanShippingMarkText ?? ''}`, width: 240, minWidth: 240, maxWidth: 240, fixed: 'left' },
   { id: 'shipment', title: t('containerPage.shipment'), accessorFn: row => row.shippingMark || row.shipmentNo || t('containerPage.unmatched'), width: 250, minWidth: 250, maxWidth: 250 },
   { id: 'source', title: t('containerPage.source'), accessorFn: row => [row.salesOrderNo, row.purchaseOrderNo].filter(Boolean).join(' '), width: 275, minWidth: 275, maxWidth: 275 },
-  { id: 'receipt', title: t('containerPage.receipt'), accessorKey: 'warehouseReceiptReference', width: 180, minWidth: 180, maxWidth: 180 },
+  { id: 'receipt', title: t('containerPage.receipt'), accessorKey: 'warehouseReceiptReference', width: 260, minWidth: 260, maxWidth: 260 },
   { id: 'package', title: t('containerPage.packageCount'), accessorFn: row => `${row.packageCount} ${row.packageUnit ?? ''}`, width: 100, minWidth: 100, maxWidth: 100, align: 'right', cellClass: 'qs-type-data' },
-  { id: 'weightDimensions', title: t('containerPage.weightDimensions'), accessorFn: row => `${weightText(row)} ${dimensionsText(row)}`, width: 295, minWidth: 295, maxWidth: 295 },
+  { id: 'weightDimensions', title: t('containerPage.weightDimensions'), accessorFn: row => `${weightText(row)} ${dimensionsText(row)}`, width: 240, minWidth: 240, maxWidth: 240 },
   { id: 'volumeCai', title: t('containerPage.volume'), accessorFn: row => measurement(row.volumeCai, 2), width: 145, minWidth: 145, maxWidth: 145, align: 'right', cellClass: 'qs-type-data' },
   { id: 'chargeableVolumeCai', title: t('containerPage.chargeable'), accessorFn: row => value(row.chargeableVolumeCai), width: 110, minWidth: 110, maxWidth: 110, align: 'right', cellClass: 'qs-type-data' },
   { id: 'reportedVolumeCai', title: t('containerPage.sourceVolume'), accessorFn: row => measurement(row.reportedVolumeCai, 2), width: 145, minWidth: 145, maxWidth: 145, align: 'right', cellClass: 'qs-type-data' },
   { id: 'volumeDifferenceCai', title: t('containerPage.difference'), accessorFn: row => measurement(row.volumeDifferenceCai, 2), width: 145, minWidth: 145, maxWidth: 145, align: 'right', cellClass: 'qs-type-data' },
-  { id: 'recipient', title: t('containerPage.recipientInfo'), accessorFn: row => [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' '), width: 300, minWidth: 300, maxWidth: 300 },
-  { id: 'codAmountTwd', title: t('containerPage.cod'), accessorFn: row => value(row.codAmountTwd), width: 190, minWidth: 190, maxWidth: 190, align: 'right', cellClass: 'qs-type-data' },
+  { id: 'recipient', title: t('containerPage.recipientInfo'), accessorFn: row => [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' '), width: 380, minWidth: 380, maxWidth: 380 },
+  { id: 'codAmountTwd', title: t('containerPage.cod'), accessorFn: row => row.codAmountTwd ?? t('containerPage.none'), width: 190, minWidth: 190, maxWidth: 190, align: 'right', cellClass: 'qs-type-data' },
   { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', width: 220, minWidth: 220, maxWidth: 220 },
 ])
 </script>
@@ -126,7 +126,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
     </template>
     <template #cell-codAmountTwd="{ row }">
       <AmountDisplay v-if="row.original.codAmountTwd !== null" :value="row.original.codAmountTwd" currency="TWD" :currencies="currencies" />
-      <span v-else class="qs-type-meta text-muted-foreground">{{ t('containerPage.unknown') }}</span>
+      <span v-else class="qs-type-meta text-muted-foreground">{{ t('containerPage.none') }}</span>
     </template>
     <template #cell-remark="{ row }">
       <ContainerRemark :text="row.original.remark" />
@@ -193,7 +193,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
               </dt>
               <dd class="mt-1">
                 <AmountDisplay v-if="row.codAmountTwd !== null" :value="row.codAmountTwd" currency="TWD" :currencies="currencies" />
-                <span v-else class="qs-type-meta text-muted-foreground">{{ t('containerPage.unknown') }}</span>
+                <span v-else class="qs-type-meta text-muted-foreground">{{ t('containerPage.none') }}</span>
               </dd>
             </div>
             <div class="col-span-2">
