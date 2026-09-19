@@ -144,11 +144,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="min-w-0 space-y-2" :aria-label="t('containerSource.title')">
     <div class="flex flex-col gap-3 sm:flex-row sm:gap-5 sm:items-center">
-      <h3 class="qs-type-body-medium m-0 flex shrink-0 gap-2 items-center">
-        <FaIcon name="i-lucide:paperclip" class="text-muted-foreground size-4" aria-hidden="true" />
-        {{ t('containerSource.title') }}
-      </h3>
-      <div v-if="metadata || pending" class="p-3 border border-border rounded-lg bg-muted/30 flex flex-1 flex-wrap gap-3 min-w-0 sm:flex-nowrap sm:max-w-2xl sm:items-center">
+      <div v-if="metadata || pending" class="p-3 border border-border rounded-lg bg-muted/30 flex flex-1 flex-wrap gap-3 min-w-0 sm:flex-nowrap sm:items-center">
         <div class="flex flex-1 gap-3 min-w-0 items-center">
           <div class="text-primary rounded-md bg-primary/10 flex shrink-0 size-10 items-center justify-center dark:text-foreground">
             <FaIcon name="i-lucide:file-spreadsheet" class="size-6" aria-hidden="true" />
