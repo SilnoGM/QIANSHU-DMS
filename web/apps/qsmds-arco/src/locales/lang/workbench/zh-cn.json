@@ -11,6 +11,15 @@
     "containersDescription": "统一管理海运货柜柜次和海快发出情况",
     "createContainer": "新建柜次",
     "createContainerPending": "新建柜次功能暂未开放",
+    "containerDetail": "柜次详情",
+    "containerDetailDescription": "查看柜次基础资料、装柜明细及关联账单",
+    "backToContainers": "返回柜次管理",
+    "billReconciliation": "账单对账",
+    "shunlianhangOceanBills": "顺联航海运账单",
+    "shunlianhangOceanBillsDescription": "统一管理顺联航海运账单、费用明细与逐条对账",
+    "shunlianhangOceanBillDetail": "顺联航海运账单详情",
+    "shunlianhangOceanBillDetailDescription": "查看海运账单明细、费用及核对情况",
+    "backToShunlianhangOceanBills": "返回顺联航海运账单",
     "pending": "功能待开放",
     "packagingPayments": "打木架付款"
   }

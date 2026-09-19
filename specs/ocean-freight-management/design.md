@@ -3,7 +3,7 @@
 | 项目 | 说明 |
 | --- | --- |
 | 日期 | 2026-09-19 |
-| 状态 | 待实施的推荐设计，不是已发布契约 |
+| 状态 | 指定页面骨架已落地；数据模型与接口仍为待实施的推荐设计 |
 | 需求依据 | [需求规格](./requirements.md) |
 | 实施顺序 | [实施任务](./tasks.md) |
 
@@ -353,7 +353,15 @@ flowchart LR
 
 ### 8.2 海运账单
 
-建议放在千树财务工作台独立管理；最终菜单位置为页面实施细节。
+用户于 2026-09-19 明确菜单为“千树财务工作台 → 账单对账 → 顺联航海运账单”，详情名为“顺联航海运账单详情”，不显示在侧边栏。
+
+已落地的页面路由骨架如下，均未接入数据接口：
+
+| 页面 | 路由名 | 路径 | 菜单规则 |
+| --- | --- | --- | --- |
+| 柜次详情 | `qsPurchaseTransportContainerDetail` | `/qs-purchase-transport/containers/:id` | 隐藏，`activeMenu` 指向柜次管理 |
+| 顺联航海运账单 | `qsFinanceShunlianhangOceanBills` | `/qs-finance/bill-reconciliation/shunlianhang-ocean-bills` | 显示在账单对账分组 |
+| 顺联航海运账单详情 | `qsFinanceShunlianhangOceanBillDetail` | `/qs-finance/bill-reconciliation/shunlianhang-ocean-bills/:id` | 隐藏，`activeMenu` 指向顺联航海运账单 |
 
 - 列表：账单编号、名称、日期、涉及柜次、明细数量、核对进度、汇率、人民币应付、人民币返款与净返款。
 - 详情上方显示关键金额和原表差异，下方用 `QsStatusSwitchToolbar` 切换全部、未匹配、待核对、有差异、已核对。
@@ -388,6 +396,8 @@ flowchart LR
 以上是接口设计范围，不是已发布 API。正式导入提交可复用受事务保护的批量创建或维护命令，最终 DTO 中必须明确提交范围及幂等标识；不额外暴露公共编号生成入口。首版不包含物理删除接口，若后续需要删除或作废，另行定义关联和审计规则。
 
 ### 9.2 权限建议
+
+页面骨架阶段复用现有权限：柜次详情为 `purchase-orders:read`，账单对账分组及顺联航海运账单两页为 `purchase-orders:payment`。下述专属权限属于后续真实业务实施范围，当前未增加权限数据或后端接口。
 
 - `container-batches:read/create/update`：柜次查询与维护。
 - `ocean-freight-bills:read/create/update/reconcile`：账单查询、维护与核对；重新打开也要求核对权限。
