@@ -65,7 +65,7 @@ test('柜次仓库在字典后到达时更新中文名称，加载和失败不�
   assert.equal(display(), 'containerPage.warehouseUnavailable')
 })
 
-test('柜次列表分组显示全部已有业务数据，系统编号不提供复制', async (context) => {
+test('柜次列表保留指定汇总数据，系统编号不提供复制', async (context) => {
   const f = await fixture()
   context.after(f.dispose)
   const columns = f.state.columns.value
@@ -73,7 +73,7 @@ test('柜次列表分组显示全部已有业务数据，系统编号不提供�
   assert.ok(columns.every(column => column.defaultVisible !== false))
   assert.notEqual(columns.find(column => column.id === 'containerBatchNo')!.copyable, true)
   const row = { itemCount: 10, shipmentCount: 8, packageCountTotal: 15, grossWeightKgTotal: '1173.400', volumeCaiTotal: '25.135', chargeableVolumeCaiTotal: 27 } as ContainerBatchDto
-  assert.equal(columns.find(column => column.id === 'quantities')!.accessorFn!(row, 0), '10 8 15')
-  assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!(row, 0), '1173 25.14 27')
-  assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!({ ...row, grossWeightKgTotal: null, volumeCaiTotal: null, chargeableVolumeCaiTotal: null }, 0), 'containerPage.unknown containerPage.unknown containerPage.unknown')
+  assert.equal(columns.find(column => column.id === 'quantities')!.accessorFn!(row, 0), '10 8')
+  assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!(row, 0), '1173 25.14')
+  assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!({ ...row, grossWeightKgTotal: null, volumeCaiTotal: null, chargeableVolumeCaiTotal: null }, 0), 'containerPage.unknown containerPage.unknown')
 })

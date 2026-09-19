@@ -51,14 +51,12 @@ function quantities(row: ContainerBatchDto) {
   return [
     { label: 'itemCount', value: row.itemCount },
     { label: 'shipmentCount', value: row.shipmentCount },
-    { label: 'packageCount', value: row.packageCountTotal },
   ]
 }
 function totals(row: ContainerBatchDto) {
   return [
     { label: 'totalWeight', value: measurement(row.grossWeightKgTotal, 0) },
     { label: 'totalVolume', value: measurement(row.volumeCaiTotal, 2) },
-    { label: 'totalChargeable', value: row.chargeableVolumeCaiTotal ?? t('containerPage.unknown') },
   ]
 }
 const columns = computed<QsGenericTableColumn<ContainerBatchDto>[]>(() => [
