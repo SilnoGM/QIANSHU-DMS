@@ -5,7 +5,7 @@ import type { ContainerBatchDto } from '@/api/generated/types.gen'
 import sourceFilesApi from '@/api/modules/container-source-files'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
-import { buildContainerSubmission, createContainerDraft, previewContainerDate, validateContainerDraft } from './form.logic'
+import { buildContainerSubmission, createContainerDraft, inferContainerNameFromFilename, previewContainerDate, validateContainerDraft } from './form.logic'
 import { useContainerCreateSource } from './use-container-create-source'
 
 const props = withDefaults(defineProps<{
@@ -43,6 +43,16 @@ watch(sourceFile, (file) => {
     if (props.modelValue) {
       formRef.value?.setFieldValue('sourceFileId', file?.mediaAssetId ?? null, true)
     }
+  }
+}, { flush: 'sync' })
+watch(selectedFile, (file) => {
+  if (!file || props.batch || !props.modelValue || props.retryOnly || draft.value.containerBatchName.trim()) {
+    return
+  }
+  const name = inferContainerNameFromFilename(file.name)
+  if (name) {
+    draft.value.containerBatchName = name
+    formRef.value?.setFieldValue('containerBatchName', name, true)
   }
 }, { flush: 'sync' })
 function rule(field: keyof typeof draft.value) {
@@ -102,7 +112,7 @@ async function submit() {
     <FaAlert v-if="error" variant="destructive" :title="t('containerManagement.saveFailed')" :description="error" class="mb-5" role="alert" />
     <FaAlert v-if="retryOnly" :title="t('containerManagement.retryHint')" class="mb-5" />
     <FaForm ref="formRef" :model="draft" :disabled="locked || retryOnly" scroll-to-error class="gap-3" @submit="submit">
-      <FaFormItem name="containerBatchName" :label="t('containerManagement.batchName')" :description="t('containerManagement.batchNameHint')" :rules="rule('containerBatchName')" required>
+      <FaFormItem name="containerBatchName" :label="t('containerManagement.batchName')" :description="t(batch ? 'containerManagement.batchNameHint' : 'containerManagement.batchNameCreateHint')" :rules="rule('containerBatchName')" required>
         <FaInput v-model="draft.containerBatchName" class="w-full" maxlength="32" :placeholder="t('containerManagement.batchNamePlaceholder')" />
       </FaFormItem>
       <div class="mb-1 px-3 py-2.5 rounded-md bg-muted/40 flex gap-3 items-center justify-between" aria-live="polite" aria-atomic="true">

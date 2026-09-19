@@ -80,6 +80,59 @@ test('新建柜次必须绑定上传成功的来源文件，历史柜次编辑�
   assert.equal(buildContainerSubmission(draft).sourceFileId, 'uploaded-source')
 })
 
+test('从来源文件名识别唯一有效柜次，保留同日柜次序号并排除无效或含混名称', () => {
+  const reference = new Date('2026-09-19T00:00:00Z')
+  for (const [filename, expected] of [
+    ['0917柜装柜明细 - 千树.xlsx', '0917柜'],
+    ['千树-0920-01柜装柜明细.xlsx', '0920-01柜'],
+    ['0918-02柜子装柜明细.xlsx', '0918-02柜'],
+    ['0917櫃裝櫃明細.XLSX', '0917柜'],
+    ['装柜明细.xlsx', null],
+    ['0917柜及0920柜.xlsx', null],
+    ['20260917柜装柜明细.xlsx', null],
+    ['0917-100柜.xlsx', null],
+    ['0917-00柜.xlsx', null],
+    ['1331柜.xlsx', null],
+    ['0230柜.xlsx', null],
+    ['0229柜.xlsx', null],
+  ] as const) {
+    assert.equal(logic.inferContainerNameFromFilename(filename, reference), expected, filename)
+  }
+})
+
+test('选择表格时为空的柜次名称自动填入并重新校验，随后仍可手动修改', async () => {
+  const fixture = await modalFixture('container')
+  try {
+    fixture.state.draft.value.containerBatchName = '  '
+    const upload = fixture.state.source!.selectFile(new File(['xlsx'], '0917柜装柜明细 - 千树.xlsx'))
+    assert.equal(fixture.state.draft.value.containerBatchName, '0917柜')
+    assert.deepEqual(fixture.fieldUpdates[0], ['containerBatchName', '0917柜', true])
+    await upload
+    fixture.state.draft.value.containerBatchName = '0920-01柜'
+    fixture.state.source!.remove()
+    await fixture.state.source!.selectFile(new File(['xlsx'], '0921柜装柜明细.xlsx'))
+    assert.equal(fixture.state.draft.value.containerBatchName, '0920-01柜')
+  }
+  finally { fixture.dispose() }
+})
+
+test('手填名称不被上传覆盖，不能识别的文件或被拒绝的上传不会填入名称', async () => {
+  const fixture = await modalFixture('container')
+  try {
+    fixture.state.draft.value.containerBatchName = '0919-02柜'
+    await fixture.state.source!.selectFile(new File(['xlsx'], '0920柜.xlsx'))
+    assert.equal(fixture.state.draft.value.containerBatchName, '0919-02柜')
+    fixture.state.source!.remove()
+    fixture.state.draft.value.containerBatchName = ''
+    await fixture.state.source!.selectFile(new File(['xlsx'], '装柜明细.xlsx'))
+    assert.equal(fixture.state.draft.value.containerBatchName, '')
+    fixture.state.source!.remove()
+    await fixture.state.source!.selectFile(new File(['pdf'], '0917柜.pdf'))
+    assert.equal(fixture.state.draft.value.containerBatchName, '')
+  }
+  finally { fixture.dispose() }
+})
+
 test('新建弹窗没有成功上传来源文件时不能提交，绑定后随创建请求发送', async () => {
   const fixture = await modalFixture('container')
   try {

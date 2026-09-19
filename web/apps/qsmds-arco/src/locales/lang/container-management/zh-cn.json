@@ -5,6 +5,7 @@
     "batchDescription": "维护柜次名称和装柜仓库，装柜日期由柜次名称推断。",
     "batchName": "柜次名称",
     "batchNameHint": "例如 0917柜、0918-01柜，系统自动识别装柜日期。",
+    "batchNameCreateHint": "可手填，如 0917柜、0918-01柜；留空时尝试从上传文件名自动识别。",
     "batchNamePlaceholder": "例如：0917柜",
     "warehouse": "装柜仓库",
     "selectWarehouse": "请选择仓库",

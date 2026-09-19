@@ -168,3 +168,13 @@ export function previewContainerDate(name: string, referenceDate = new Date()): 
   }
   return `${year}-${match[1]}-${match[2]}`
 }
+
+/** 只采用文件名中唯一且日期有效的柜次，避免误取长编号片段或多柜汇总文件。 */
+export function inferContainerNameFromFilename(filename: string, referenceDate = new Date()): string | null {
+  const matches = [...filename.matchAll(/(?<!\d)(\d{4}(?:-\d{2})?)[柜櫃]子?/gu)]
+  if (matches.length !== 1) {
+    return null
+  }
+  const name = `${matches[0]![1]}柜`
+  return previewContainerDate(name, referenceDate) ? name : null
+}
