@@ -37,11 +37,16 @@ test('装柜明细默认展示所有业务列，桌面数值采用指定精度',
     useRouter: () => ({}),
   }) as Array<{ id: string, defaultVisible?: boolean, accessorFn?: (row: Record<string, unknown>) => unknown }>
   assert.ok(columns.every(column => column.defaultVisible !== false))
-  for (const id of ['reportedVolumeCai', 'volumeDifferenceCai', 'recipientName', 'recipientPhone', 'recipientAddress', 'codAmountTwd', 'remark', 'purchaseOrderNo', 'salesOrderNo']) {
+  for (const id of ['reportedVolumeCai', 'volumeDifferenceCai', 'recipientName', 'recipientPhone', 'recipientAddress', 'codAmountTwd', 'remark', 'source']) {
     assert.ok(columns.some(column => column.id === id), id)
   }
   const display = (id: string, row: Record<string, unknown>) => columns.find(column => column.id === id)!.accessorFn!(row)
   assert.equal(display('grossWeightKg', { grossWeightKg: '180.000' }), '180')
   assert.equal(display('dimensions', { lengthCm: '128.000', widthCm: '19.000', heightCm: '15.000' }), '128 × 19 × 15')
   assert.equal(display('volumeCai', { volumeCai: '12.88272063' }), '12.88')
+  assert.equal(display('reportedVolumeCai', { reportedVolumeCai: '12.885' }), '12.89')
+  assert.equal(display('volumeDifferenceCai', { volumeDifferenceCai: '-0.125' }), '-0.13')
+  assert.equal(display('reportedVolumeCai', { reportedVolumeCai: null }), 'containerPage.unknown')
+  assert.ok(!columns.some(column => ['purchaseOrderNo', 'salesOrderNo'].includes(column.id)))
+  assert.equal(display('source', { salesOrderNo: 'SO/001', purchaseOrderNo: 'PO/001' }), 'SO/001 PO/001')
 })

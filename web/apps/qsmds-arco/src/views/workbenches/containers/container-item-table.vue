@@ -35,16 +35,15 @@ const measurement = (input: string | null, places: 0 | 2 = 0) => value(formatCon
 const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => [
   { id: 'goods', title: t('containerPage.goods'), accessorFn: row => `${row.goodsName} ${row.oceanShippingMarkText ?? ''}`, minWidth: 245, fixed: 'left' },
   { id: 'shipment', title: t('containerPage.shipment'), accessorFn: row => row.shippingMark || row.shipmentNo || t('containerPage.unmatched'), minWidth: 245 },
-  { id: 'purchaseOrderNo', title: t('containerPage.purchase'), accessorKey: 'purchaseOrderNo', minWidth: 220, cellClass: 'qs-type-data' },
-  { id: 'salesOrderNo', title: t('containerPage.sales'), accessorKey: 'salesOrderNo', minWidth: 220, cellClass: 'qs-type-data' },
+  { id: 'source', title: t('containerPage.source'), accessorFn: row => [row.salesOrderNo, row.purchaseOrderNo].filter(Boolean).join(' '), minWidth: 280 },
   { id: 'receipt', title: t('containerPage.receipt'), accessorKey: 'warehouseReceiptReference', minWidth: 200 },
   { id: 'package', title: t('containerPage.packageCount'), accessorFn: row => `${row.packageCount} ${row.packageUnit ?? ''}`, minWidth: 110, align: 'right', cellClass: 'qs-type-data' },
   { id: 'grossWeightKg', title: t('containerPage.weight'), accessorFn: row => measurement(row.grossWeightKg), minWidth: 140, align: 'right', cellClass: 'qs-type-data' },
   { id: 'dimensions', title: t('containerPage.measurement'), accessorFn: row => [row.lengthCm, row.widthCm, row.heightCm].map(item => measurement(item)).join(' × '), minWidth: 230, cellClass: 'qs-type-data' },
   { id: 'volumeCai', title: t('containerPage.volume'), accessorFn: row => measurement(row.volumeCai, 2), minWidth: 165, align: 'right', cellClass: 'qs-type-data' },
   { id: 'chargeableVolumeCai', title: t('containerPage.chargeable'), accessorFn: row => value(row.chargeableVolumeCai), minWidth: 115, align: 'right', cellClass: 'qs-type-data' },
-  { id: 'reportedVolumeCai', title: t('containerPage.sourceVolume'), accessorFn: row => value(row.reportedVolumeCai), minWidth: 160, align: 'right', cellClass: 'qs-type-data' },
-  { id: 'volumeDifferenceCai', title: t('containerPage.difference'), accessorFn: row => value(row.volumeDifferenceCai), minWidth: 160, align: 'right', cellClass: 'qs-type-data' },
+  { id: 'reportedVolumeCai', title: t('containerPage.sourceVolume'), accessorFn: row => measurement(row.reportedVolumeCai, 2), minWidth: 160, align: 'right', cellClass: 'qs-type-data' },
+  { id: 'volumeDifferenceCai', title: t('containerPage.difference'), accessorFn: row => measurement(row.volumeDifferenceCai, 2), minWidth: 160, align: 'right', cellClass: 'qs-type-data' },
   { id: 'recipientName', title: t('containerPage.recipientName'), accessorKey: 'recipientName', minWidth: 130 },
   { id: 'recipientPhone', title: t('containerPage.recipientPhone'), accessorKey: 'recipientPhone', minWidth: 160 },
   { id: 'recipientAddress', title: t('containerPage.recipientAddress'), accessorKey: 'recipientAddress', minWidth: 260 },
@@ -70,6 +69,16 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
           {{ row.original.shippingMark || row.original.shipmentNo || t(row.original.shipmentId ? 'containerPage.referenceRestricted' : 'containerPage.unmatched') }}
         </QsTableStackedLine><QsTableStackedLine tone="muted" content-class="qs-type-data">
           {{ row.original.shippingMark && row.original.shipmentNo !== row.original.shippingMark ? row.original.shipmentNo : '' }}
+        </QsTableStackedLine>
+      </QsTableStackedCell>
+    </template>
+    <template #cell-source="{ row }">
+      <QsTableStackedCell>
+        <QsTableStackedLine :label="t('containerPage.sales')" content-class="qs-type-data">
+          {{ row.original.salesOrderNo || t('containerPage.none') }}
+        </QsTableStackedLine>
+        <QsTableStackedLine :label="t('containerPage.purchase')" content-class="qs-type-data">
+          {{ row.original.purchaseOrderNo || t('containerPage.none') }}
         </QsTableStackedLine>
       </QsTableStackedCell>
     </template>
@@ -104,7 +113,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
                 {{ [row.lengthCm, row.widthCm, row.heightCm].map(item => measurement(item)).join(' × ') }}
               </dd>
             </div>
-            <div v-for="entry in [['receipt', row.warehouseReceiptReference], ['sourceVolume', row.reportedVolumeCai], ['difference', row.volumeDifferenceCai], ['recipientName', row.recipientName], ['recipientPhone', row.recipientPhone], ['recipientAddress', row.recipientAddress], ['cod', row.codAmountTwd], ['purchase', row.purchaseOrderNo], ['sales', row.salesOrderNo], ['remark', row.remark]]" :key="entry[0] ?? ''" :class="['receipt', 'recipientAddress', 'remark'].includes(entry[0] ?? '') ? 'col-span-2' : ''">
+            <div v-for="entry in [['receipt', row.warehouseReceiptReference], ['sourceVolume', measurement(row.reportedVolumeCai, 2)], ['difference', measurement(row.volumeDifferenceCai, 2)], ['recipientName', row.recipientName], ['recipientPhone', row.recipientPhone], ['recipientAddress', row.recipientAddress], ['cod', row.codAmountTwd], ['purchase', row.purchaseOrderNo], ['sales', row.salesOrderNo], ['remark', row.remark]]" :key="entry[0] ?? ''" :class="['receipt', 'recipientAddress', 'remark'].includes(entry[0] ?? '') ? 'col-span-2' : ''">
               <dt class="qs-type-meta text-muted-foreground">
                 {{ t(`containerPage.${entry[0]}`) }}
               </dt>

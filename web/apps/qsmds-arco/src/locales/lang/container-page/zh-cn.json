@@ -41,6 +41,7 @@
     "retry": "重新加载",
     "conflict": "资料已变化，请关闭编辑并重新打开，以最新版本重试。",
     "shipment": "货件",
+    "source": "来源",
     "purchase": "采购来源",
     "sales": "销售来源",
     "viewShipment": "查看货件",
