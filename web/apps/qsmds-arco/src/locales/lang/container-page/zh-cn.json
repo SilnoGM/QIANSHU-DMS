@@ -4,6 +4,7 @@
     "description": "统一管理海运货柜柜次和海快发出情况",
     "create": "新建柜次",
     "detail": "柜次详情",
+    "basicInfo": "基础信息",
     "back": "返回柜次管理",
     "edit": "编辑基础资料",
     "editItem": "编辑明细",

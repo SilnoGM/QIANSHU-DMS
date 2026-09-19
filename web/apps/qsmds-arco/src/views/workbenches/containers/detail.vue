@@ -7,7 +7,9 @@ import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalo
 import ContainerFormModal from './container-form-modal.vue'
 import ContainerItemTable from './container-item-table.vue'
 import ContainerRelatedDrawers from './container-related-drawers.vue'
+import ContainerRemark from './container-remark.vue'
 import ContainerSourceFile from './container-source-file.vue'
+import { formatContainerMeasurement } from './display.logic'
 import LoadingItemFormModal from './loading-item-form-modal.vue'
 import ShipmentPicker from './shipment-picker.vue'
 import { useContainerMutation } from './use-container-mutation'
@@ -68,15 +70,22 @@ const sourceError = ref('')
 let sourceController: AbortController | null = null
 const referenceKind = ref<'shipment' | 'purchase' | 'sales' | null>(null)
 const referenceId = ref('')
-const warehouseLabel = computed(() => batch.value ? warehouse.resolve(batch.value.warehouseValue)?.label ?? batch.value.warehouseValue : '')
+const warehouseLabel = computed(() => {
+  if (warehouse.loading.value) {
+    return t('containerPage.warehouseLoading')
+  }
+  if (warehouse.error.value || warehouse.missing.value) {
+    return t('containerPage.warehouseUnavailable')
+  }
+  const resolved = batch.value ? warehouse.resolve(batch.value.warehouseValue) : null
+  return resolved && resolved.status !== 'UNKNOWN' ? resolved.displayLabel : t('containerPage.warehouseUnknown')
+})
 const summary = computed(() => batch.value
   ? [
-      ['itemCount', batch.value.itemCount],
-      ['shipmentCount', batch.value.shipmentCount],
-      ['packageCount', batch.value.packageCountTotal],
-      ['totalWeight', batch.value.grossWeightKgTotal],
-      ['totalVolume', batch.value.volumeCaiTotal],
-      ['totalChargeable', batch.value.chargeableVolumeCaiTotal],
+      { label: 'itemCount', amount: batch.value.itemCount, unit: '' },
+      { label: 'shipmentCount', amount: batch.value.shipmentCount, unit: '' },
+      { label: 'totalWeightLabel', amount: formatContainerMeasurement(batch.value.grossWeightKgTotal, 0), unit: 'kg' },
+      { label: 'totalVolumeLabel', amount: formatContainerMeasurement(batch.value.volumeCaiTotal, 2), unit: t('containerManagement.volumeUnit') },
     ] as const
   : [])
 async function reload() {
@@ -191,17 +200,12 @@ watch(itemData, (result) => {
 <template>
   <div class="min-w-0">
     <FaPageHeader main-class="min-w-0" default-class="w-full min-w-0 sm:w-auto" :title="batch ? `${batch.containerBatchName} · ${t('containerPage.detail')}` : t('containerPage.detail')" :description="batch?.containerBatchNo ?? t('containerPage.shipmentHint')">
-      <div class="flex flex-wrap gap-2">
-        <FaButton variant="outline" @click="router.push({ name: 'qsPurchaseTransportContainers' })">
-          <FaIcon name="i-lucide:arrow-left" />{{ t('containerPage.back') }}
-        </FaButton>
-        <FaButton v-if="canEdit && batch" variant="outline" :disabled="sourceSaving || sourceUploading" @click="openBatch">
-          {{ t('containerPage.edit') }}
-        </FaButton>
-        <FaButton v-if="canEdit && batch" :disabled="sourceSaving || sourceUploading" @click="openItem()">
-          <FaIcon name="i-lucide:plus" />{{ t('containerPage.addItem') }}
-        </FaButton>
-      </div>
+      <template #description>
+        <span :class="batch ? 'qs-type-data' : 'qs-type-description'">{{ batch?.containerBatchNo ?? t('containerPage.shipmentHint') }}</span>
+      </template>
+      <FaButton variant="outline" class="w-full sm:w-auto" @click="router.push({ name: 'qsPurchaseTransportContainers' })">
+        <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />{{ t('containerPage.back') }}
+      </FaButton>
     </FaPageHeader>
     <FaPageMain v-if="!enabled">
       <FaEmpty :title="t('containerPage.noAccess')" />
@@ -218,55 +222,87 @@ watch(itemData, (result) => {
         </div>
       </FaPageMain>
       <FaPageMain v-else-if="batch">
-        <dl class="gap-5 grid sm:grid-cols-2 xl:grid-cols-4">
-          <div>
-            <dt class="qs-type-meta text-muted-foreground">
-              {{ t('containerPage.name') }}
-            </dt><dd class="font-medium mt-2 [overflow-wrap:anywhere]">
-              {{ batch.containerBatchName }}
-            </dd>
-          </div>
-          <div>
-            <dt class="qs-type-meta text-muted-foreground">
-              {{ t('containerPage.date') }}
-            </dt><dd class="qs-type-data mt-2">
-              {{ batch.loadingDate }}
-            </dd>
-          </div>
-          <div class="sm:col-span-2">
-            <dt class="qs-type-meta text-muted-foreground">
-              {{ t('containerPage.warehouse') }}
-            </dt><dd class="mt-2 [overflow-wrap:anywhere]">
-              {{ warehouseLabel }}
-            </dd>
-          </div>
-        </dl>
-        <div class="mt-5 pt-5 border-t border-border gap-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-          <div v-for="[label, amount] in summary" :key="label">
-            <div class="qs-type-meta text-muted-foreground">
-              {{ t(`containerPage.${label}`) }}
-            </div><div class="qs-type-data-emphasis mt-2 [overflow-wrap:anywhere]">
-              {{ amount ?? t('containerPage.unknown') }}
+        <div class="gap-5 grid xl:gap-8 lg:grid-cols-2">
+          <section class="min-w-0" :aria-label="t('containerPage.basicInfo')">
+            <div class="mb-4 flex flex-wrap gap-3 min-h-8 items-center justify-between">
+              <h2 class="qs-type-component-title m-0 flex gap-2 items-center">
+                <FaIcon name="i-lucide:container" class="text-muted-foreground size-4" aria-hidden="true" />
+                {{ t('containerPage.basicInfo') }}
+              </h2>
+              <FaButton v-if="canEdit" variant="ghost" size="sm" :disabled="sourceSaving || sourceUploading" @click="openBatch">
+                <FaIcon name="i-lucide:pencil" class="size-3.5" aria-hidden="true" />{{ t('containerPage.edit') }}
+              </FaButton>
             </div>
-          </div>
+            <dl class="m-0 gap-4 grid sm:grid-cols-[8rem_minmax(0,1fr)]">
+              <div>
+                <dt class="qs-type-meta text-muted-foreground">
+                  {{ t('containerPage.date') }}
+                </dt>
+                <dd class="qs-type-data m-0 mt-1.5">
+                  {{ batch.loadingDate }}
+                </dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="qs-type-meta text-muted-foreground">
+                  {{ t('containerPage.warehouse') }}
+                </dt>
+                <dd class="qs-type-body m-0 mt-1.5 [overflow-wrap:anywhere]">
+                  {{ warehouseLabel }}
+                </dd>
+              </div>
+            </dl>
+            <div v-if="warehouse.error.value || warehouse.missing.value" class="qs-type-meta text-destructive mt-3 flex flex-wrap gap-2 items-center" role="alert">
+              <span>{{ t('containerPage.warehouseCatalogError') }}</span>
+              <FaButton variant="ghost" size="sm" :disabled="warehouse.loading.value" @click="warehouse.retry">
+                {{ t('containerPage.retry') }}
+              </FaButton>
+            </div>
+            <div v-if="batch.remark" class="mt-4 flex gap-3 items-baseline">
+              <span class="qs-type-meta text-muted-foreground shrink-0">{{ t('containerPage.remark') }}</span>
+              <ContainerRemark :text="batch.remark" mobile class="flex-1" />
+            </div>
+          </section>
+          <section class="pt-4 border-t border-border min-w-0 lg:pl-6 lg:pt-0 xl:pl-8 lg:border-l lg:border-t-0" :aria-label="t('containerPage.loadSummary')">
+            <h2 class="qs-type-component-title m-0 mb-4 flex gap-2 min-h-8 items-center">
+              <FaIcon name="i-lucide:weight" class="text-muted-foreground size-4" aria-hidden="true" />
+              {{ t('containerPage.loadSummary') }}
+            </h2>
+            <dl class="m-0 gap-x-5 gap-y-4 grid grid-cols-2 xl:grid-cols-4">
+              <div v-for="item in summary" :key="item.label" class="min-w-0">
+                <dt class="qs-type-meta text-muted-foreground">
+                  {{ t(`containerPage.${item.label}`) }}
+                </dt>
+                <dd class="qs-type-data-emphasis m-0 mt-1.5 [overflow-wrap:anywhere]">
+                  {{ item.amount ?? t('containerPage.unknown') }}<span v-if="item.amount !== null && item.unit" class="qs-type-meta text-muted-foreground ml-1">{{ item.unit }}</span>
+                </dd>
+              </div>
+            </dl>
+            <p class="qs-type-meta text-muted-foreground m-0 mt-3">
+              {{ t('containerPage.totalHint') }}
+            </p>
+          </section>
         </div>
-        <p class="qs-type-meta text-muted-foreground mt-3">
-          {{ t('containerPage.totalHint') }}
-        </p>
-        <p v-if="batch.remark" class="mt-5 whitespace-pre-wrap [overflow-wrap:anywhere]">
-          {{ batch.remark }}
-        </p>
-        <div class="mt-5 pt-5 border-t border-border">
-          <ContainerSourceFile :batch-id="instanceId" :source-file-id="batch.sourceFileId" :can-edit="canEdit" :loading="sourceSaving" :disabled="batchMutation.submitting.value || itemMutation.submitting.value" @uploaded="attachSource" @busy-change="sourceUploading = $event" /><FaAlert v-if="sourceError" class="mt-3" variant="destructive" :title="sourceError" />
+        <div class="mt-4 pt-4 border-t border-border">
+          <ContainerSourceFile :batch-id="instanceId" :source-file-id="batch.sourceFileId" :can-edit="canEdit" :loading="sourceSaving" :disabled="batchMutation.submitting.value || itemMutation.submitting.value" @uploaded="attachSource" @busy-change="sourceUploading = $event" />
+          <FaAlert v-if="sourceError" class="mt-3" variant="destructive" :title="sourceError" />
         </div>
       </FaPageMain>
       <FaPageMain v-if="batch">
-        <div class="mb-5">
-          <h2 class="qs-type-section-title">
-            {{ t('containerPage.items') }}
-          </h2><p class="qs-type-description text-muted-foreground mt-2">
-            {{ t('containerPage.shipmentHint') }}
-          </p>
+        <div class="mb-5 flex flex-wrap gap-3 items-center justify-between">
+          <div class="min-w-0">
+            <h2 class="qs-type-section-title m-0 flex flex-wrap gap-2 items-center">
+              {{ t('containerPage.items') }}
+              <FaTag variant="secondary" class="qs-type-data">
+                {{ batch.itemCount }}
+              </FaTag>
+            </h2>
+            <p class="qs-type-meta text-muted-foreground m-0 mt-1.5">
+              {{ t('containerPage.shipmentHint') }}
+            </p>
+          </div>
+          <FaButton v-if="canEdit" class="w-full sm:w-auto" :disabled="sourceSaving || sourceUploading" @click="openItem()">
+            <FaIcon name="i-lucide:plus" aria-hidden="true" />{{ t('containerPage.addItem') }}
+          </FaButton>
         </div>
         <ContainerItemTable v-model:page="page" v-model:page-size="pageSize" v-model:search="search" :rows="itemData?.items ?? []" :total="itemData?.total ?? 0" :loading="itemsLoading" :error="itemsError" :can-edit="canEdit && !sourceUploading && !sourceSaving" @edit="openItem" @reference="reference" @retry="itemResource.reload" />
       </FaPageMain>

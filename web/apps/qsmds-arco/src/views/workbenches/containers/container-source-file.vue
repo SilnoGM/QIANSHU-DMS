@@ -142,36 +142,38 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="p-4 border border-border rounded-lg bg-background gap-3 grid min-w-0" :aria-label="t('containerSource.title')">
-    <h3 class="qs-type-body-medium m-0 flex gap-2 items-center">
-      <FaIcon name="i-lucide:file-spreadsheet" class="text-muted-foreground size-4" aria-hidden="true" />
-      {{ t('containerSource.title') }}
-    </h3>
-    <div v-if="metadata || pending" class="flex flex-wrap gap-3 items-center justify-between">
-      <div class="flex-1 min-w-0">
-        <p class="qs-type-body m-0 [overflow-wrap:anywhere]">
-          {{ (metadata || pending)?.originalFilename }}
-        </p>
-        <p class="qs-type-meta text-muted-foreground mb-0 mt-1">
-          {{ t(metadata ? 'containerSource.saved' : 'containerSource.pending') }}
-        </p>
+  <section class="min-w-0 space-y-2" :aria-label="t('containerSource.title')">
+    <div class="flex flex-col gap-3 sm:flex-row sm:gap-5 sm:items-center">
+      <h3 class="qs-type-body-medium m-0 flex shrink-0 gap-2 items-center">
+        <FaIcon name="i-lucide:file-spreadsheet" class="text-muted-foreground size-4" aria-hidden="true" />
+        {{ t('containerSource.title') }}
+      </h3>
+      <div v-if="metadata || pending" class="flex flex-1 flex-wrap gap-3 min-w-0 items-center justify-between">
+        <div class="flex-1 min-w-0">
+          <p class="qs-type-body m-0 [overflow-wrap:anywhere]">
+            {{ (metadata || pending)?.originalFilename }}
+          </p>
+          <p v-if="pending && !metadata" class="qs-type-meta text-muted-foreground m-0 mt-1">
+            {{ t('containerSource.pending') }}
+          </p>
+        </div>
+        <FaButton v-if="metadata" variant="outline" size="sm" class="shrink-0" :disabled="locked" @click="download">
+          <FaIcon name="i-lucide:download" aria-hidden="true" />{{ t('containerSource.download') }}
+        </FaButton>
+        <FaButton v-else-if="pending && canEdit" variant="outline" size="sm" class="shrink-0" :disabled="locked" @click="emit('uploaded', pending.mediaAssetId)">
+          {{ t('containerSource.retryAttach') }}
+        </FaButton>
       </div>
-      <FaButton v-if="metadata" variant="outline" size="sm" :disabled="locked" @click="download">
-        <FaIcon name="i-lucide:download" aria-hidden="true" />{{ t('containerSource.download') }}
-      </FaButton>
-      <FaButton v-else-if="pending && canEdit" variant="outline" size="sm" :disabled="locked" @click="emit('uploaded', pending.mediaAssetId)">
-        {{ t('containerSource.retryAttach') }}
-      </FaButton>
+      <FaFileUpload v-else-if="canEdit && !sourceFileId" v-model="files" :max="1" :disabled="locked" :before-upload="validate" :http-request="upload" :description="t('containerSource.upload')" class="flex-1 min-w-0 [&>button]:px-3 [&>button]:py-2 [&>button]:border [&>button]:h-auto [&>button]:min-h-16">
+        <div class="flex flex-wrap gap-x-3 gap-y-1 items-center justify-center">
+          <span class="qs-type-body-medium flex gap-2 items-center"><FaIcon name="i-lucide:upload" class="size-4" aria-hidden="true" />{{ t('containerSource.upload') }}</span>
+          <span class="qs-type-meta text-muted-foreground">{{ t('containerSource.hint') }}</span>
+        </div>
+      </FaFileUpload>
+      <p v-else-if="!sourceFileId" class="qs-type-meta text-muted-foreground m-0">
+        {{ t('containerSource.empty') }}
+      </p>
     </div>
-    <FaFileUpload v-else-if="canEdit && !sourceFileId" v-model="files" :max="1" :disabled="locked" :before-upload="validate" :http-request="upload" :description="t('containerSource.upload')">
-      <div class="p-4 text-center gap-1 grid">
-        <span class="qs-type-body-medium">{{ t('containerSource.upload') }}</span>
-        <span class="qs-type-meta text-muted-foreground">{{ t('containerSource.hint') }}</span>
-      </div>
-    </FaFileUpload>
-    <p v-else-if="!sourceFileId" class="qs-type-meta text-muted-foreground m-0">
-      {{ t('containerSource.empty') }}
-    </p>
     <p v-if="busy" role="status" class="qs-type-meta text-muted-foreground m-0">
       {{ t(sourceFileId ? 'containerSource.loading' : 'containerSource.uploading') }}
     </p>

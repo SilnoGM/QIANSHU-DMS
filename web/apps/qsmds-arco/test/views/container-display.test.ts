@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
-import { computed, ref } from 'vue'
+import { computed, effectScope, ref, shallowRef, watch } from 'vue'
 import { formatContainerMeasurement } from '../../src/views/workbenches/containers/display.logic'
 
 test('装柜尺寸和重量以整数显示，按十进制四舍五入且不丢失大数精度', () => {
@@ -51,4 +51,43 @@ test('装柜明细默认展示所有业务列，桌面数值采用指定精度',
   assert.equal(display('reportedVolumeCai', { reportedVolumeCai: null }), 'containerPage.unknown')
   assert.ok(!columns.some(column => ['purchaseOrderNo', 'salesOrderNo'].includes(column.id)))
   assert.equal(display('source', { salesOrderNo: 'SO/001', purchaseOrderNo: 'PO/001' }), 'SO/001 PO/001')
+})
+
+test('柜次详情汇总按整数重量和两位材积展示，缺值不会被当成零', async (context) => {
+  const source = await readFile(new URL('../../src/views/workbenches/containers/detail.vue', import.meta.url), 'utf8')
+  const script = source.split('<script setup lang="ts">')[1]!.split('</script>')[0]!.replace(/^import.*$/gm, '')
+  const batch = ref<Record<string, unknown> | null>(null)
+  let resourceCalls = 0
+  const scope = effectScope()
+  context.after(() => scope.stop())
+  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ summary, warehouseLabel })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
+    computed,
+    ref,
+    shallowRef,
+    watch,
+    formatContainerMeasurement,
+    defineOptions: () => {},
+    useI18n: () => ({ t: (key: string) => key === 'containerManagement.volumeUnit' ? '材' : key }),
+    useRouter: () => ({}),
+    useRoute: () => ({ name: 'qsPurchaseTransportContainerDetail', params: { id: 'batch-1' } }),
+    useAppAuth: () => ({ auth: () => true }),
+    useAppAccountStore: () => ({ authEpoch: 1 }),
+    useQsToast: () => ({}),
+    useDictionaryCatalog: () => ({ loading: ref(false), missing: ref(false), error: ref(null), resolve: () => ({ status: 'ENABLED', displayLabel: 'B5仓' }) }),
+    useContainerResource: () => ({ data: resourceCalls++ === 0 ? batch : ref(null), loading: ref(false), error: ref('') }),
+    useContainerMutation: () => ({}),
+    onActivated: () => {},
+    onDeactivated: () => {},
+    onScopeDispose: () => {},
+  })) as { summary: { value: Array<{ label: string, amount: unknown, unit?: string }> }, warehouseLabel: { value: string } }
+  batch.value = { itemCount: 2, shipmentCount: 1, packageCountTotal: 10, grossWeightKgTotal: '1173.000', volumeCaiTotal: '150.11759720', chargeableVolumeCaiTotal: 151, warehouseValue: 'B5' }
+  const amount = (label: string) => state.summary.value.find(item => item.label === label)?.amount
+  assert.equal(amount('totalWeightLabel'), '1173')
+  assert.equal(amount('totalVolumeLabel'), '150.12')
+  assert.equal(state.summary.value.find(item => item.label === 'totalWeightLabel')?.unit, 'kg')
+  assert.equal(state.summary.value.find(item => item.label === 'totalVolumeLabel')?.unit, '材')
+  assert.equal(state.warehouseLabel.value, 'B5仓')
+  batch.value = { ...batch.value, grossWeightKgTotal: null, volumeCaiTotal: null }
+  assert.equal(amount('totalWeightLabel'), null)
+  assert.equal(amount('totalVolumeLabel'), null)
 })
