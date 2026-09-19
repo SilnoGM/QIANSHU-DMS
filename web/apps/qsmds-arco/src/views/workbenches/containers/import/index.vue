@@ -10,6 +10,7 @@ import { useContainerImport } from './use-container-import'
 
 defineOptions({ name: 'QsPurchaseTransportContainerImport' })
 const { t } = useI18n()
+const retainUnmatchedId = useId()
 const route = useRoute()
 const router = useRouter()
 const account = useAppAccountStore()
@@ -102,7 +103,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="min-w-0" :class="preview && rows.length ? 'pb-64 sm:pb-40' : ''">
+  <div class="min-w-0" :class="preview && rows.length ? 'pb-48 md:pb-28' : ''">
     <FaPageHeader :title="t('containerImport.title')" :description="t('containerImport.description')">
       <FaButton variant="outline" :disabled="locked" @click="back">
         <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />{{ t('containerImport.back') }}
@@ -169,9 +170,16 @@ onBeforeUnmount(() => {
                 </div>
               </template>
             </FaAlert>
-            <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div class="flex flex-1 flex-col gap-3 max-w-3xl min-w-0">
-                <dl class="m-0 flex flex-wrap gap-x-5 gap-y-2 items-center" aria-live="polite">
+            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div class="flex flex-1 flex-wrap gap-x-5 gap-y-3 min-w-0 items-center">
+                <div v-if="unmatchedCount" class="flex shrink-0 gap-2 items-center">
+                  <FaSwitch :id="retainUnmatchedId" v-model="allowUnmatched" :disabled="locked" :aria-describedby="`${retainUnmatchedId}-hint`" />
+                  <FaLabel :for="retainUnmatchedId" class="qs-type-body-medium" :class="locked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'">
+                    {{ t('containerImport.retainUnmatched') }}
+                  </FaLabel>
+                  <span :id="`${retainUnmatchedId}-hint`" class="sr-only">{{ t('containerImport.unmatchedHint', { count: unmatchedCount }) }}</span>
+                </div>
+                <dl class="contents" aria-live="polite">
                   <div class="text-primary px-3 py-1.5 rounded-md bg-primary/8 flex gap-2 items-baseline">
                     <dt class="qs-type-body-medium">
                       {{ t('containerImport.summary.toImport') }}
@@ -190,18 +198,6 @@ onBeforeUnmount(() => {
                     </dd>
                   </div>
                 </dl>
-                <FaCheckbox
-                  v-if="unmatchedCount"
-                  v-model="allowUnmatched"
-                  :disabled="locked"
-                  class="p-3 border rounded-lg gap-3 items-start"
-                  :class="allowUnmatched ? 'border-primary/30 bg-primary/5' : 'border-border bg-muted/20'"
-                  item-class="mt-0.5"
-                  label-class="flex-1 flex-col gap-1 min-w-0 items-start"
-                >
-                  <span class="qs-type-body-medium block">{{ t('containerImport.retainUnmatched') }}</span>
-                  <span class="qs-type-meta text-muted-foreground block">{{ t('containerImport.unmatchedHint', { count: unmatchedCount }) }}</span>
-                </FaCheckbox>
               </div>
               <div class="gap-3 grid grid-cols-2 md:flex md:shrink-0">
                 <FaButton variant="outline" :disabled="locked" @click="back">

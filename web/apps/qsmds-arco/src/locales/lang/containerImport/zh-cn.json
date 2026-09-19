@@ -32,8 +32,8 @@
     "sourceVolume": "来源材积",
     "chargeableVolume": "计费材数",
     "issues": "核对提示",
-    "retainUnmatched": "保留未匹配明细，导入后再关联",
-    "unmatchedHint": "尚有 {count} 条明细未关联货件，可继续匹配，也可勾选后先导入。",
+    "retainUnmatched": "保留未匹配",
+    "unmatchedHint": "尚有 {count} 条明细未关联货件，开启后允许先导入，再关联货件。",
     "invalidHint": "有 {count} 条数据异常，暂时不能导入。请根据逐行提示核对来源文件与已有柜次明细。",
     "summary": {
       "toImport": "本次导入",
