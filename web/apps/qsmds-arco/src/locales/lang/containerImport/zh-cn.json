@@ -33,9 +33,13 @@
     "chargeableVolume": "计费材数",
     "issues": "核对提示",
     "retainUnmatched": "保留未匹配明细，导入后再关联",
-    "unmatchedHint": "尚有 {count} 条明细未关联货件；可继续匹配，或明确选择保留未匹配明细。",
+    "unmatchedHint": "尚有 {count} 条明细未关联货件，可继续匹配，也可勾选后先导入。",
     "invalidHint": "有 {count} 条数据异常，暂时不能导入。请根据逐行提示核对来源文件与已有柜次明细。",
-    "totalHint": "解析共 {count} 条 · 本次导入 {imported} 条 · 已跳过 {skipped} 条 · 已匹配 {matched} 条",
+    "summary": {
+      "toImport": "本次导入",
+      "parsed": "解析总数",
+      "unit": "条"
+    },
     "confirm": "确认导入",
     "retryConfirm": "重试确认导入",
     "cancel": "取消",

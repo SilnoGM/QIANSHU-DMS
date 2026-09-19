@@ -23,6 +23,11 @@ const state = useContainerImport(enabled, computed(() => account.authEpoch), id,
 const { preview, loading, loadError, rows, counts, importCount, unmatchedCount, allowUnmatched, locked, canSubmit, retryOnly, submitting, error, conflict, fieldErrors } = state
 const status = ref<ImportFilter>('ALL')
 const statuses = computed(() => (['ALL', 'MATCHED', 'AMBIGUOUS', 'UNMATCHED', 'INVALID', 'SKIPPED'] as const).map(value => ({ value, label: t(`containerImport.status.${value}`), count: counts.value[value] })))
+const summaryItems = computed(() => [
+  { key: 'ALL', label: t('containerImport.summary.parsed'), count: counts.value.ALL },
+  { key: 'SKIPPED', label: t('containerImport.status.SKIPPED'), count: counts.value.SKIPPED },
+  { key: 'MATCHED', label: t('containerImport.status.MATCHED'), count: counts.value.MATCHED },
+])
 const drawerOpen = ref(false)
 const selectedRowKey = ref('')
 const selectedRow = computed(() => rows.value.find(row => row.rowKey === selectedRowKey.value) ?? null)
@@ -164,19 +169,41 @@ onBeforeUnmount(() => {
                 </div>
               </template>
             </FaAlert>
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div class="min-w-0 space-y-2">
-                <p class="qs-type-body-medium m-0" aria-live="polite">
-                  {{ t('containerImport.totalHint', { count: counts.ALL, imported: importCount, skipped: counts.SKIPPED, matched: counts.MATCHED }) }}
-                </p><template v-if="unmatchedCount">
-                  <p class="qs-type-meta text-muted-foreground m-0">
-                    {{ t('containerImport.unmatchedHint', { count: unmatchedCount }) }}
-                  </p><FaCheckbox v-model="allowUnmatched" :disabled="locked">
-                    {{ t('containerImport.retainUnmatched') }}
-                  </FaCheckbox>
-                </template>
+            <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div class="flex flex-1 flex-col gap-3 max-w-3xl min-w-0">
+                <dl class="m-0 flex flex-wrap gap-x-5 gap-y-2 items-center" aria-live="polite">
+                  <div class="text-primary px-3 py-1.5 rounded-md bg-primary/8 flex gap-2 items-baseline">
+                    <dt class="qs-type-body-medium">
+                      {{ t('containerImport.summary.toImport') }}
+                    </dt>
+                    <dd class="m-0 flex gap-1 items-baseline">
+                      <span class="qs-type-data-emphasis">{{ importCount }}</span>
+                      <span class="qs-type-meta">{{ t('containerImport.summary.unit') }}</span>
+                    </dd>
+                  </div>
+                  <div v-for="item in summaryItems" :key="item.key" class="flex gap-2 items-baseline">
+                    <dt class="qs-type-meta text-muted-foreground">
+                      {{ item.label }}
+                    </dt>
+                    <dd class="qs-type-data m-0">
+                      {{ item.count }}
+                    </dd>
+                  </div>
+                </dl>
+                <FaCheckbox
+                  v-if="unmatchedCount"
+                  v-model="allowUnmatched"
+                  :disabled="locked"
+                  class="p-3 border rounded-lg gap-3 items-start"
+                  :class="allowUnmatched ? 'border-primary/30 bg-primary/5' : 'border-border bg-muted/20'"
+                  item-class="mt-0.5"
+                  label-class="flex-1 flex-col gap-1 min-w-0 items-start"
+                >
+                  <span class="qs-type-body-medium block">{{ t('containerImport.retainUnmatched') }}</span>
+                  <span class="qs-type-meta text-muted-foreground block">{{ t('containerImport.unmatchedHint', { count: unmatchedCount }) }}</span>
+                </FaCheckbox>
               </div>
-              <div class="gap-3 grid grid-cols-2 sm:flex sm:shrink-0">
+              <div class="gap-3 grid grid-cols-2 md:flex md:shrink-0">
                 <FaButton variant="outline" :disabled="locked" @click="back">
                   {{ t('containerImport.cancel') }}
                 </FaButton><FaButton :loading="submitting" :disabled="submitting || (!canSubmit && !retryOnly)" @click="submit">
