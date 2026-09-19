@@ -292,9 +292,6 @@ watch(itemData, (result) => {
           <div class="min-w-0">
             <h2 class="qs-type-section-title m-0 flex flex-wrap gap-2 items-center">
               {{ t('containerPage.items') }}
-              <FaTag variant="secondary" class="qs-type-data">
-                {{ batch.itemCount }}
-              </FaTag>
             </h2>
             <p class="qs-type-meta text-muted-foreground m-0 mt-1.5">
               {{ t('containerPage.shipmentHint') }}
