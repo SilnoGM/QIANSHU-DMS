@@ -93,6 +93,10 @@ test('审计事件筛选选项覆盖当前公开契约的全部事件类型', ()
     'PACKAGING_COST_SUBMITTED',
     'PACKAGING_COST_PAID',
     'PACKAGING_COST_AMOUNT_UPDATED',
+    'CONTAINER_BATCH_CREATED',
+    'CONTAINER_LOADING_ITEM_CREATED',
+    'OCEAN_FREIGHT_BILL_CREATED',
+    'OCEAN_FREIGHT_BILL_LINE_CREATED',
   ])
 })
 
@@ -181,4 +185,16 @@ test('采购订单审计事件使用采购语义中文名称', () => {
 test('包装金额修改事件可筛选并使用中文名称', () => {
   assert.equal(formatAuditEvent('PACKAGING_COST_AMOUNT_UPDATED'), '打木架费用金额已修改')
   assert.equal(buildAuditEventListQuery(1, 20, '', 'PACKAGING_COST_AMOUNT_UPDATED', undefined).eventType, 'PACKAGING_COST_AMOUNT_UPDATED')
+})
+
+test('柜次和海运账单创建事件使用中文名称且支持独立筛选', () => {
+  for (const [code, label] of [
+    ['CONTAINER_BATCH_CREATED', '柜次已创建'],
+    ['CONTAINER_LOADING_ITEM_CREATED', '装柜明细已创建'],
+    ['OCEAN_FREIGHT_BILL_CREATED', '海运账单已创建'],
+    ['OCEAN_FREIGHT_BILL_LINE_CREATED', '海运账单明细已创建'],
+  ] as const) {
+    assert.equal(formatAuditEvent(code), label)
+    assert.equal(buildAuditEventListQuery(1, 20, '', code, undefined).eventType, code)
+  }
 })

@@ -15,11 +15,13 @@ export const MEDIA_ASSET_REFERENCE_TABLES = Object.freeze([
   'packaging_cost_requests',
   'payment_recipient_accounts',
   'purchase_order_payments',
+  'container_batches',
+  'ocean_freight_bills',
 ] as const)
 
 type MediaReferenceReader = Pick<
   Prisma.TransactionClient,
-  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest' | 'paymentRecipientAccount' | 'purchaseOrderPayment'
+  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest' | 'paymentRecipientAccount' | 'purchaseOrderPayment' | 'containerBatch' | 'oceanFreightBill'
 >
 
 /**
@@ -76,6 +78,9 @@ export class MediaAssetReferenceRepository {
     // 停用的收款配置仍保留；换码之后，历史付款快照单独持有当时的二维码。
     const recipientReference = await reader.paymentRecipientAccount.findFirst({ where: { qrMediaAssetId: assetId }, select: { id: true } })
     if (recipientReference !== null) return true
-    return await reader.purchaseOrderPayment.findFirst({ where: { recipientQrMediaAssetId: assetId }, select: { id: true } }) !== null
+    if (await reader.purchaseOrderPayment.findFirst({ where: { recipientQrMediaAssetId: assetId }, select: { id: true } }) !== null) return true
+    // 柜次和账单的来源文件是核对依据，即使还没有明细也不能被回收。
+    if (await reader.containerBatch.findFirst({ where: { sourceFileId: assetId }, select: { id: true } }) !== null) return true
+    return await reader.oceanFreightBill.findFirst({ where: { sourceFileId: assetId }, select: { id: true } }) !== null
   }
 }

@@ -3,9 +3,9 @@
 | 项目 | 说明 |
 | --- | --- |
 | 文档日期 | 2026-09-19 |
-| 状态 | 需求与实现方案已整理，三个新增页面骨架已落地；业务功能待实施 |
+| 状态 | 页面骨架与阶段 1 数据结构、基础接口已落地；计算、维护界面、导入及对账待后续阶段 |
 | 工作分支 | `柜次管理开发分支` |
-| 当前授权 | 文档整理及指定的三个页面、菜单与隐藏路由；数据库、接口和具体业务功能待实施 |
+| 当前授权 | 文档、指定页面骨架及“阶段 1：数据结构与基础能力”；本次迁移仅在隔离数据库验证 |
 | 现有入口 | 千树采运工作台 → 柜次管理，`/qs-purchase-transport/containers` |
 
 本规格统一记录装柜信息、海运账单、逐条对账、汇率换算与净返款金额计算。用户明确确认的业务规则以[需求规格](./requirements.md)为准；字段、接口、精度、页面与约束的推荐实现见[技术设计](./design.md)，开发顺序与验收见[实施任务](./tasks.md)。技术建议不表示已经实施，也不扩大已确认业务范围。
@@ -18,7 +18,7 @@
 
 ## 本期范围摘要
 
-- 建议新增 `ContainerBatch`、`ContainerLoadingItem`、`OceanFreightBill`、`OceanFreightBillLine`、`OceanFreightBillCharge` 五张业务表。
+- 已建立 `ContainerBatch`、`ContainerLoadingItem`、`OceanFreightBill`、`OceanFreightBillLine`、`OceanFreightBillCharge` 五张业务表的 Schema 与迁移。
 - 装柜明细关联现有货件 `PurchaseOrderPart`；一个货件可有多个包装明细，首版不可跨柜拆分。
 - 海运账单可包含多个柜次的货物及追加费用；每条账单明细独立核对并计算金额。
 - 货件唛头与海运唛头独立保存；同义字段统一命名、类型与单位，装柜数据和账单数据各自保留快照。
@@ -36,6 +36,6 @@
 | 千树财务工作台 → 账单对账 → 顺联航海运账单 | `/qs-finance/bill-reconciliation/shunlianhang-ocean-bills` | 显示 |
 | 千树财务工作台 → 账单对账 → 顺联航海运账单详情 | `/qs-finance/bill-reconciliation/shunlianhang-ocean-bills/:id` | 隐藏，保持账单列表高亮 |
 
-页面骨架阶段沿用既有权限：柜次详情使用 `purchase-orders:read`，账单分组及两页使用 `purchase-orders:payment`。专属账单权限随真实业务能力实施。本规格中的五张表、真实账单管理、装柜明细和对账流程均为待实施方案；海快业务也不在本期实施范围内。
+页面骨架仍沿用既有权限：柜次详情使用 `purchase-orders:read`，账单分组及两页使用 `purchase-orders:payment`。阶段 1 已建立后端专属权限，页面在后续接入业务接口时同步切换。已完成范围及基础接口边界见[阶段 1 实施记录](./phase-1.md)。计算、完整维护界面、Excel 导入、对账流程和海快业务尚未实现。
 
 项目通用规范继续遵循[开发工作流](../../docs/全局文档/开发工作流.md)、[UI 设计规范](../../docs/前端文档/UI设计规范.md)、[接口契约规范](../../docs/后端文档/接口契约规范.md)及[数据库迁移规范](../../docs/后端文档/数据库迁移规范.md)。

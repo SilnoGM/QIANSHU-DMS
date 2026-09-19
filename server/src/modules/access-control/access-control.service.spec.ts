@@ -99,8 +99,15 @@ describe('permission constants', () => {
       'packaging-costs:pay',
       'supplier-payment-profiles:read',
       'supplier-payment-profiles:update',
+      'container-batches:read',
+      'container-batches:create',
+      'container-batches:update',
+      'ocean-freight-bills:read',
+      'ocean-freight-bills:create',
+      'ocean-freight-bills:update',
+      'ocean-freight-bills:reconcile',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 68)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 75)
   })
 })
 

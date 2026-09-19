@@ -4,6 +4,7 @@ import { PrismaModule } from '../../infrastructure/database/prisma.module'
 import { MediaAssetService } from './media-asset.service'
 import { MediaContentDeliveryService } from './media-content-delivery.service'
 import { MediaModule } from './media.module'
+import { OceanFreightSourceFileService } from './ocean-freight-source-file.service'
 import { MediaAssetRetentionService } from './media-retention.service'
 
 describe('MediaModule metadata', () => {
@@ -14,6 +15,7 @@ describe('MediaModule metadata', () => {
     ])
     expect(Reflect.getMetadata('exports', MediaModule)).toEqual([
       MediaAssetService,
+      OceanFreightSourceFileService,
       MediaContentDeliveryService,
       MediaAssetRetentionService,
     ])

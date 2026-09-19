@@ -43,6 +43,25 @@ function createTransactionFixture(): TransactionFixture {
 }
 
 describe('AuditService', () => {
+  it.each([
+    'CONTAINER_BATCH_CREATED', 'CONTAINER_LOADING_ITEM_CREATED',
+    'OCEAN_FREIGHT_BILL_CREATED', 'OCEAN_FREIGHT_BILL_LINE_CREATED',
+  ] as const)('records %s with bounded scalar metadata and rejects embedded source documents', async eventName => {
+    const { transaction, create } = createTransactionFixture()
+    const service = new AuditService()
+    const input = {
+      actorType: AuditActorType.USER, actorUserId: ACTOR_USER_ID, outcome: AuditOutcome.SUCCESS,
+      eventType: eventName as AuditEventType, targetId: ACTOR_USER_ID,
+      metadata: { parentId: ACTOR_USER_ID, lineNumber: 1, sourceFileId: null },
+    }
+    await expect(service.record(transaction, input)).resolves.toBeDefined()
+    await expect(service.record(transaction, { ...input, metadata: { sourceData: [{ address: 'private' }] } }))
+      .rejects.toBeInstanceOf(AuditEventValidationError)
+    await expect(service.record(transaction, { ...input, metadata: { accessToken: 'secret' } }))
+      .rejects.toBeInstanceOf(AuditEventValidationError)
+    expect(create).toHaveBeenCalledTimes(1)
+  })
+
   it('only permits bounded UUID issuance arrays on purchase creation', async () => {
     const { transaction, create } = createTransactionFixture()
     const service = new AuditService()

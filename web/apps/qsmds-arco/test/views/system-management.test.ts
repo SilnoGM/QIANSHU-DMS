@@ -281,12 +281,14 @@ test('权限目录以中文展示现有业务资源', () => {
   // 资源目录采用精确集合，避免已经退役的领域继续以孤立中文标签残留在权限 UI。
   assert.deepEqual(resourceKeys, [
     'audit',
+    'container-batches',
     'currencies',
     'dictionaries',
     'exchange-rates',
     'fund-accounts',
     'packaging-costs',
     'numbering-rules',
+    'ocean-freight-bills',
     'purchase-shipping-marks',
     'product-media',
     'products',
@@ -294,6 +296,8 @@ test('权限目录以中文展示现有业务资源', () => {
     'roles',
     'users',
   ])
+  assert.equal(permissionResourceLabel('container-batches'), '柜次管理')
+  assert.equal(permissionResourceLabel('ocean-freight-bills'), '海运账单')
   assert.equal(permissionResourceLabel('currencies'), '货币管理')
   assert.equal(permissionResourceLabel('exchange-rates'), '当前汇率')
   assert.equal(permissionResourceLabel('fund-accounts'), '资金账户管理')

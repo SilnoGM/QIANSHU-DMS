@@ -8,12 +8,14 @@ export interface PermissionGroup {
 
 const RESOURCE_LABELS: Readonly<Record<string, string>> = {
   'audit': '安全审计',
+  'container-batches': '柜次管理',
   'currencies': '货币管理',
   'dictionaries': '字典管理',
   'exchange-rates': '当前汇率',
   'fund-accounts': '资金账户管理',
   'packaging-costs': '打木架费用',
   'numbering-rules': '编号规则',
+  'ocean-freight-bills': '海运账单',
   'purchase-shipping-marks': '唛头规则绑定',
   'product-media': '产品媒体',
   'products': '产品管理',

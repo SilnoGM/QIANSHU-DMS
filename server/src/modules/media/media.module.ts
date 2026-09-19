@@ -14,6 +14,7 @@ import { MediaReconciliationService } from './media-reconciliation.service'
 import { MediaAssetReferenceRepository } from './media-reference.repository'
 import { MediaAssetRetentionService } from './media-retention.service'
 import type { MediaStorage } from './media-storage'
+import { OceanFreightSourceFileService } from './ocean-freight-source-file.service'
 
 const MEDIA_CONFIGURATION = Symbol('qianshu.media.configuration')
 const MEDIA_STORAGE = Symbol('qianshu.media.storage')
@@ -117,9 +118,10 @@ const providers = [{
 /** 统一媒体基础设施模块保持业务中立，只向领域模块输出生命周期服务。 */
 @Module({
   imports: [ConfigModule, PrismaModule],
-  providers,
+  providers: [...providers, OceanFreightSourceFileService],
   exports: [
     MediaAssetService,
+    OceanFreightSourceFileService,
     MediaContentDeliveryService,
     MediaAssetRetentionService,
   ],

@@ -30,6 +30,7 @@ describe('media reference extension contract', () => {
       'prisma/migrations/20260827130000_purchase_order_media_reference_extension/migration.sql',
     ), 'utf8')
     const migration = [
+      readFileSync(resolve(serverRoot, 'prisma/migrations/20260919091000_ocean_freight_access_media/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20260917040739_supplier_payment_profiles/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20260916030539_packaging_cost_requests/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20260915040452_purchase_order_image_draft/migration.sql'), 'utf8'),
@@ -40,13 +41,17 @@ describe('media reference extension contract', () => {
       purchaseOrderMediaReferenceMigration,
     ].join('\n')
     const referenceTables = modelBlocks(schema)
-      .filter(block => (/\bmediaAssetId\b/u.test(block) && (/\bdetachedAt\b/u.test(block) || /\binvalidatedAt\b/u.test(block))) || /\bvoucherMediaAssetId\b/u.test(block) || /\bpackagingImageMediaAssetId\b/u.test(block) || /\bqrMediaAssetId\b/u.test(block) || /\brecipientQrMediaAssetId\b/u.test(block))
+      .filter(block => (/\bmediaAssetId\b/u.test(block) && (/\bdetachedAt\b/u.test(block) || /\binvalidatedAt\b/u.test(block))) || /\bvoucherMediaAssetId\b/u.test(block) || /\bpackagingImageMediaAssetId\b/u.test(block) || /\bqrMediaAssetId\b/u.test(block) || /\brecipientQrMediaAssetId\b/u.test(block) || /\bsourceFileId\b/u.test(block))
       .map((block) => block.match(/@@map\("([^"]+)"\)/u)?.[1])
       .filter((value): value is string => value !== undefined)
       .sort()
 
     expect(referenceTables).toEqual([...MEDIA_ASSET_REFERENCE_TABLES].sort())
     for (const table of MEDIA_ASSET_REFERENCE_TABLES) {
+      if (table === 'container_batches' || table === 'ocean_freight_bills') {
+        expect(migration).toContain(`FROM ${table} reference WHERE reference.source_file_id = reference_asset_id`)
+        continue
+      }
       if (table === 'payment_recipient_accounts') {
         expect(migration).toContain('FROM payment_recipient_accounts reference WHERE reference.qr_media_asset_id = reference_asset_id')
         continue

@@ -3,7 +3,7 @@
 | 项目 | 说明 |
 | --- | --- |
 | 日期 | 2026-09-19 |
-| 状态 | 指定页面骨架已落地；数据模型与接口仍为待实施的推荐设计 |
+| 状态 | 页面骨架、五表结构与阶段 1 基础接口已落地；完整业务流程仍按阶段推进 |
 | 需求依据 | [需求规格](./requirements.md) |
 | 实施顺序 | [实施任务](./tasks.md) |
 
@@ -90,7 +90,7 @@ erDiagram
 
 ## 4. 五张业务表
 
-各表沿用项目主键、操作者与时间戳惯例。表中列出的字段是推荐契约，实际 migration 和 DTO 在获得实施授权后建立。
+各表沿用项目主键、操作者与时间戳惯例。阶段 1 已建立五表 migration，以下为完整设计字段；当前 DTO 只开放基础字段，实际已实现范围见[阶段 1 实施记录](./phase-1.md)。
 
 ### 4.1 柜次主表 `ContainerBatch`
 
@@ -393,11 +393,11 @@ flowchart LR
 | `POST` | `/api/ocean-freight-bills/:id/lines/:lineId/reconcile` | 确认核对 |
 | `POST` | `/api/ocean-freight-bills/:id/lines/:lineId/reopen` | 有原因地重新打开核对 |
 
-以上是接口设计范围，不是已发布 API。正式导入提交可复用受事务保护的批量创建或维护命令，最终 DTO 中必须明确提交范围及幂等标识；不额外暴露公共编号生成入口。首版不包含物理删除接口，若后续需要删除或作废，另行定义关联和审计规则。
+以上是完整目标范围。阶段 1 已实现两类主表及基础行的创建、列表和详情，共 10 个 operation；其余修改、导入、匹配、核对接口尚未实现，实际契约以 Controller、DTO 与生成的 OpenAPI 为准，见[阶段 1 实施记录](./phase-1.md)。正式导入提交可复用受事务保护的批量创建或维护命令，最终 DTO 中必须明确提交范围及幂等标识；不额外暴露公共编号生成入口。首版不包含物理删除接口，若后续需要删除或作废，另行定义关联和审计规则。
 
 ### 9.2 权限建议
 
-页面骨架阶段复用现有权限：柜次详情为 `purchase-orders:read`，账单对账分组及顺联航海运账单两页为 `purchase-orders:payment`。下述专属权限属于后续真实业务实施范围，当前未增加权限数据或后端接口。
+页面骨架阶段复用现有权限：柜次详情为 `purchase-orders:read`，账单对账分组及顺联航海运账单两页为 `purchase-orders:payment`。阶段 1 已增加下述专属后端权限，权限迁移默认仅授予 `system_admin`；页面接入业务时再切换对应权限。`reconcile` 当前仅登记权限，尚无核对写入口。
 
 - `container-batches:read/create/update`：柜次查询与维护。
 - `ocean-freight-bills:read/create/update/reconcile`：账单查询、维护与核对；重新打开也要求核对权限。

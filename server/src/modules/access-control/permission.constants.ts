@@ -91,6 +91,20 @@ export const SUPPLIER_PAYMENT_PROFILE_PERMISSION_CODES = [
   'supplier-payment-profiles:update',
 ] as const
 
+/** 柜次资料维护与海运账单核对独立授权，不附带资金账户操作权限。 */
+export const CONTAINER_BATCH_PERMISSION_CODES = [
+  'container-batches:read',
+  'container-batches:create',
+  'container-batches:update',
+] as const
+
+export const OCEAN_FREIGHT_BILL_PERMISSION_CODES = [
+  'ocean-freight-bills:read',
+  'ocean-freight-bills:create',
+  'ocean-freight-bills:update',
+  'ocean-freight-bills:reconcile',
+] as const
+
 /**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
@@ -143,6 +157,8 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...PURCHASE_ORDER_PERMISSION_CODES,
   ...PACKAGING_COST_PERMISSION_CODES,
   ...SUPPLIER_PAYMENT_PROFILE_PERMISSION_CODES,
+  ...CONTAINER_BATCH_PERMISSION_CODES,
+  ...OCEAN_FREIGHT_BILL_PERMISSION_CODES,
 ] as const
 
 export type ManagementPermissionCode =
