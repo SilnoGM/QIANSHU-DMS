@@ -106,3 +106,11 @@ Web 全量用例通过 `pnpm exec tsx --test apps/qsmds-arco/test/api/*.test.ts 
 - 合法柜次名称输入后不再滞留无效提示；仓库字典异步加载后显示中文标签。
 
 运行健康：业务 Web `9000` 返回 HTTP `200`；Server `3000 /api/health` 返回 `status=ok`、`database=up`。Excel 解析导入、完整账单界面、逐条对账和资金入账按后续阶段实施。
+
+## 5. 来源文件误拦修复（2026-09-19）
+
+用户反馈正常 `.xlsx` 提示“来源文件内容无效”。对用户先前提供的装柜明细与海运账单只读复现后，确认两份文件均被 OOXML 校验器误拦：普通 DrawingML 字体主题含有 `script="Hans/Hant"` 属性，原规则将任何独立单词 `script` 都视为脚本。
+
+修复将此项限定为 XML `script` 元素（包含命名空间前缀和大小写变体），保留宏、外部关系、危险文件、ZIP 限额与 CRC 等原有校验。未更改用户文件、业务数据、API 或数据库结构。隔离上传夹具同时加入字体主题，防止最小空白工作簿遗漏真实 Office 结构。
+
+验证：正常 XLSX/DOCX 主题用例先失败后通过；文档校验及来源服务 29 项通过；隔离 PostgreSQL 维护与上传/挂载/下载 7 项通过；两份用户原始文件经正式 `MediaContentValidator` 校验通过；修改范围 ESLint 与 `git diff --check` 通过。首次测试命令额外引用了不存在的 `media-content-validator.spec.ts`，纠正路径后重新运行通过。开发后端已自动加载修复，健康检查 `status=ok`、`database=up`。

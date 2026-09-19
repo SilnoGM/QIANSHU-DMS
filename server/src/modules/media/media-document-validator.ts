@@ -27,7 +27,9 @@ const PDF_DANGEROUS_NAME_PATTERN = /\/(?:AA|EmbeddedFile|JavaScript|JS|Launch|Op
 const OOXML_DANGEROUS_EXTENSION_PATTERN = /\.(?:bat|bin|class|cmd|com|dll|exe|html?|jar|js|msi|ps1|scr|svg)$/iu
 const OOXML_DANGEROUS_PATH_PATTERN = /(?:^|\/)(?:activex|customui|embeddings|webextensions)(?:\/|$)/iu
 const OOXML_XML_ENTRY_PATTERN = /(?:^|\/)[^/]+\.(?:rels|xml)$/iu
-const OOXML_DANGEROUS_XML_PATTERN = /<!DOCTYPE|<!ENTITY|\b(?:javascript|macroEnabled|vbaProject|ActiveX|oleObject|script)\b/iu
+// DrawingML 字体的 script="Hans/Hant" 表示文字体系，是普通 Office 主题资料。
+// 仅对 script XML 元素（包括命名空间前缀）拦截，避免把合法字体属性误判为脚本。
+const OOXML_DANGEROUS_XML_PATTERN = /<!DOCTYPE|<!ENTITY|\b(?:javascript|macroEnabled|vbaProject|ActiveX|oleObject)\b|<\s*\/?\s*(?:[A-Za-z_][\w.-]*:)?script\b/iu
 
 export type OoxmlKind = 'DOCX' | 'XLSX'
 

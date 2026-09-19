@@ -256,6 +256,28 @@ describe('MediaContentValidator DOCUMENT', () => {
     ])
   })
 
+  it.each(['XLSX', 'DOCX'] as const)('accepts %s theme font script attributes', async kind => {
+    const sourcePath = join(sandbox, kind === 'XLSX' ? 'theme.xlsx' : 'theme.docx')
+    const entries = [
+      ...minimalOoxmlEntries(kind),
+      { name: `${kind === 'XLSX' ? 'xl' : 'word'}/theme/theme1.xml`, contents: '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:themeElements><a:fontScheme name="Office"><a:majorFont><a:font script="Hans" typeface="SimSun"/><a:font script="Hant" typeface="MingLiU"/></a:majorFont></a:fontScheme></a:themeElements></a:theme>' },
+    ]
+    await writeFile(sourcePath, createZipFixture(entries))
+    await expect(createDocumentValidator(jest.fn(qpdfSuccess)).validate({
+      declaredMimeType: kind === 'XLSX' ? XLSX_MIME : DOCX_MIME,
+      expectedMediaType: 'DOCUMENT', originalFilename: kind === 'XLSX' ? 'theme.xlsx' : 'theme.docx', sourcePath,
+    })).resolves.toMatchObject({ mediaType: 'DOCUMENT' })
+  })
+
+  it.each(['<script>unsafe</script>', '<a:script/>', '<SCRIPT src="unsafe"/>'])('rejects script elements inside XLSX theme: %s', async contents => {
+    const sourcePath = join(sandbox, 'unsafe-theme.xlsx')
+    await writeFile(sourcePath, createZipFixture([
+      ...minimalOoxmlEntries('XLSX'),
+      { name: 'xl/theme/theme1.xml', contents: `<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">${contents}</a:theme>` },
+    ]))
+    await expect(validateOoxmlPackage(sourcePath, 'XLSX')).rejects.toMatchObject({ code: 'MEDIA_CONTENT_INVALID' })
+  })
+
   it.each([
     ['DOCX', 'document.docx', DOCX_MIME, '.docx'],
     ['XLSX', 'workbook.xlsx', XLSX_MIME, '.xlsx'],
