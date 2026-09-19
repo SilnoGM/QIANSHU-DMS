@@ -62,7 +62,8 @@ function totals(row: ContainerBatchDto) {
   ]
 }
 const columns = computed<QsGenericTableColumn<ContainerBatchDto>[]>(() => [
-  { id: 'batch', title: t('containerPage.batchInfo'), accessorFn: row => `${row.containerBatchNo} ${row.containerBatchName}`, width: 280, minWidth: 280, fixed: 'left' },
+  { id: 'containerBatchNo', title: t('containerPage.number'), accessorKey: 'containerBatchNo', width: 180, minWidth: 180, maxWidth: 180, fixed: 'left', cellClass: 'qs-type-data-emphasis whitespace-nowrap' },
+  { id: 'containerBatchName', title: t('containerPage.name'), accessorKey: 'containerBatchName', width: 160, minWidth: 140 },
   { id: 'loadingDate', title: t('containerPage.date'), accessorKey: 'loadingDate', width: 132, minWidth: 132, cellClass: 'qs-type-data' },
   { id: 'warehouse', title: t('containerPage.warehouse'), accessorFn: row => warehouseLabel(row.warehouseValue), width: 275, minWidth: 220 },
   { id: 'quantities', title: t('containerPage.quantityInfo'), accessorFn: row => quantities(row).map(item => item.value).join(' '), width: 150, minWidth: 150 },
@@ -123,17 +124,10 @@ onDeactivated(() => {
           :empty-description="t('containerPage.emptyDescription')" :action-column="{ width: 112 }"
           table-class="w-max min-w-full" @retry="resource.reload"
         >
-          <template #cell-batch="{ row }">
-            <QsTableStackedCell>
-              <QsTableStackedLine content-class="qs-type-data-emphasis" nowrap>
-                {{ row.original.containerBatchNo }}
-              </QsTableStackedLine>
-              <QsTableStackedLine>
-                <FaButton variant="link" size="sm" class="px-0" @click="viewBatch(row.original.id)">
-                  {{ row.original.containerBatchName }}
-                </FaButton>
-              </QsTableStackedLine>
-            </QsTableStackedCell>
+          <template #cell-containerBatchName="{ row }">
+            <FaButton variant="link" size="sm" class="px-0" @click="viewBatch(row.original.id)">
+              {{ row.original.containerBatchName }}
+            </FaButton>
           </template>
           <template #cell-warehouse="{ row }">
             <!-- 字典异步回填直接参与单元格渲染，避免行 accessor 缓存早到的仓库稳定值。 -->

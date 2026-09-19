@@ -69,9 +69,9 @@ test('柜次列表分组显示全部已有业务数据，系统编号不提供�
   const f = await fixture()
   context.after(f.dispose)
   const columns = f.state.columns.value
-  assert.deepEqual(Array.from(columns, column => column.id), ['batch', 'loadingDate', 'warehouse', 'quantities', 'totals', 'remark'])
+  assert.deepEqual(Array.from(columns, column => column.id), ['containerBatchNo', 'containerBatchName', 'loadingDate', 'warehouse', 'quantities', 'totals', 'remark'])
   assert.ok(columns.every(column => column.defaultVisible !== false))
-  assert.notEqual(columns.find(column => column.id === 'batch')!.copyable, true)
+  assert.notEqual(columns.find(column => column.id === 'containerBatchNo')!.copyable, true)
   const row = { itemCount: 10, shipmentCount: 8, packageCountTotal: 15, grossWeightKgTotal: '1173.400', volumeCaiTotal: '25.135', chargeableVolumeCaiTotal: 27 } as ContainerBatchDto
   assert.equal(columns.find(column => column.id === 'quantities')!.accessorFn!(row, 0), '10 8 15')
   assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!(row, 0), '1173 25.14 27')
