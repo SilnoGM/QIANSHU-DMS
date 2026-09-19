@@ -11,7 +11,7 @@
 | 分类 | 职责 | 当前组件 |
 | --- | --- | --- |
 | 基础组件 | 封装稳定、低业务耦合的输入、展示与反馈规则，不读取业务 Store，不请求领域 API | [金额输入](./基础组件/金额输入.md)、[金额显示](./基础组件/金额显示.md)、[日期显示](./基础组件/日期显示.md)、[轻提示](./基础组件/轻提示.md)、[图片组](./基础组件/图片组.md) |
-| 业务组件 | 组合基础组件和 Fantastic-admin 能力，提供可复用的业务交互骨架，但不内置具体业务动作或数据副作用 | [通用表格](./业务组件/通用表格.md)、[通用抽屉](./业务组件/通用抽屉.md)、[通用模态框](./业务组件/通用模态框.md)、[产品提示](./业务组件/产品提示.md) |
+| 业务组件 | 组合基础组件和 Fantastic-admin 能力，提供可复用的业务交互骨架，但不内置具体业务动作或数据副作用 | [通用表格](./业务组件/通用表格.md)、[通用抽屉](./业务组件/通用抽屉.md)、[通用模态框](./业务组件/通用模态框.md)、[产品提示](./业务组件/产品提示.md)、[海运柜次卡片](./业务组件/海运柜次卡片.md) |
 
 页面模板仍按[组件库建设方案](../../组件库建设方案.md)治理；当前没有需要纳入本分册的稳定页面模板说明书。
 
@@ -30,7 +30,8 @@
     ├── 通用表格.md
     ├── 通用抽屉.md
     ├── 通用模态框.md
-    └── 产品提示.md
+    ├── 产品提示.md
+    └── 海运柜次卡片.md
 ```
 
 代码目录与文档分类保持一致：
@@ -47,7 +48,8 @@ web/apps/qsmds-arco/src/components/
     ├── QsGenericTable/
     ├── QsGenericDrawer/
     ├── QsGenericModal/
-    └── QsGoodTooltip/
+    ├── QsGoodTooltip/
+    └── QsOceanContainerList/
 ```
 
 ## 3. 使用边界
@@ -56,6 +58,7 @@ web/apps/qsmds-arco/src/components/
 - 基础组件只负责已声明的输入、展示或反馈规则。币种口径、时区选择、字段权限、提交策略和数据来源由业务调用方决定。
 - 精确金额使用 `string | null`；输入通过 `MoneyInput` 校验，显示使用 `AmountDisplay`，计算使用 `sumMoneyValues`。
 - `QsGenericTable` 只管理查询与展示状态，不请求 API、不读取 Store，也不自动搜索、筛选、排序或分页切片。
+- `QsOceanContainerList` 展示整柜概览与个人明细，个人数据授权、查询和缓存由调用方负责；组件不在客户端推断销售归属。
 - 操作按钮、权限检查、确认交互、页面跳转和数据写入必须由 `actions` 插槽的调用方负责。
 - `QsGenericDrawer` 只管理任务容器、稳定状态和关闭生命周期；Footer 按钮、表单、权限与数据写入由调用方负责。
 - `QsGenericModal` 只管理聚焦任务容器、稳定状态和关闭生命周期；Footer 按钮、表单、权限与数据写入由调用方负责。
@@ -79,6 +82,7 @@ web/apps/qsmds-arco/src/components/
 | 业务组件 | `QsGenericDrawer` | `/component-library/business/generic-drawer` |
 | 业务组件 | `QsGenericModal` | `/component-library/business/generic-modal` |
 | 业务组件 | `QsGoodTooltip` | `/component-library/business/good-tooltip` |
+| 业务组件 | `QsOceanContainerList` | `/component-library/business/ocean-container-list` |
 
 组件库路由在开发环境自动注册。非开发构建只有在公开布尔变量 `VITE_ENABLE_COMPONENT_LIBRARY=true` 时才注册，生产环境默认不提供该入口。Showcase 用于接口和视觉验收，不代表组件已经接入真实业务页面。
 

@@ -156,6 +156,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'ocean-container-list',
+        name: 'componentLibraryQsOceanContainerList',
+        component: () => import('@/views/component_library/business/ocean-container-list.vue'),
+        meta: {
+          title: '海运柜次卡片',
+          icon: 'qs-ocean-containers',
+        },
+      },
+      {
         path: 'generic-drawer',
         name: 'componentLibraryGenericDrawer',
         component: () => import('@/views/component_library/business/generic-drawer.vue'),
