@@ -52,7 +52,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
   { id: 'reportedVolumeCai', title: t('containerPage.sourceVolume'), accessorFn: row => measurement(row.reportedVolumeCai, 2), width: 145, minWidth: 145, maxWidth: 145, align: 'right', cellClass: 'qs-type-data' },
   { id: 'volumeDifferenceCai', title: t('containerPage.difference'), accessorFn: row => measurement(row.volumeDifferenceCai, 2), width: 145, minWidth: 145, maxWidth: 145, align: 'right', cellClass: 'qs-type-data' },
   { id: 'recipient', title: t('containerPage.recipientInfo'), accessorFn: row => [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' '), width: 380, minWidth: 380, maxWidth: 380 },
-  { id: 'codAmountTwd', title: t('containerPage.cod'), accessorFn: row => row.codAmountTwd ?? t('containerPage.none'), width: 190, minWidth: 190, maxWidth: 190, align: 'right', fixed: 'right', cellClass: 'qs-type-data' },
+  { id: 'codAmountTwd', title: t('containerPage.cod'), accessorFn: row => row.codAmountTwd ?? t('containerPage.none'), width: 190, minWidth: 190, maxWidth: 190, align: 'right', cellClass: 'qs-type-data' },
   { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', width: 220, minWidth: 220, maxWidth: 220 },
 ])
 </script>

@@ -32,7 +32,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
   { id: 'measurements', title: t('containerPage.weightDimensions'), accessorFn: row => `${measurement(row.grossWeightKg)} kg ${dimensions(row)}`, width: 240, minWidth: 240, maxWidth: 240 },
   { id: 'volume', title: t('containerPage.volume'), accessorFn: row => measurement(row.volumeCai, 2), width: 185, minWidth: 185, maxWidth: 185 },
   { id: 'recipient', title: t('containerPage.recipientInfo'), accessorFn: row => [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' '), width: 380, minWidth: 380, maxWidth: 380 },
-  { id: 'cod', title: t('containerPage.cod'), accessorKey: 'codAmountTwd', width: 170, minWidth: 170, maxWidth: 170, align: 'right', fixed: 'right' },
+  { id: 'cod', title: t('containerPage.cod'), accessorKey: 'codAmountTwd', width: 170, minWidth: 170, maxWidth: 170, align: 'right' },
   { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', width: 220, minWidth: 220, maxWidth: 220 },
   { id: 'issues', title: t('containerImport.issues'), accessorFn: row => [...row.errors, ...row.warnings].join('；'), width: 250, minWidth: 250, maxWidth: 250 },
 ])
