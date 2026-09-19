@@ -9,7 +9,7 @@ const toast = useQsToast()
 
 <template>
   <div class="min-w-0">
-    <FaPageHeader :title="t('workbench.containers')">
+    <FaPageHeader :title="t('workbench.containers')" :description="t('workbench.containersDescription')">
       <FaButton @click="toast.info(t('workbench.createContainerPending'))">
         <FaIcon name="i-lucide:plus" aria-hidden="true" />
         {{ t('workbench.createContainer') }}

@@ -8,6 +8,7 @@
     "purchaseReviews": "采购审核",
     "shipments": "货件管理",
     "containers": "柜次管理",
+    "containersDescription": "统一管理海运货柜柜次和海快发出情况",
     "createContainer": "新建柜次",
     "createContainerPending": "新建柜次功能暂未开放",
     "pending": "功能待开放",
