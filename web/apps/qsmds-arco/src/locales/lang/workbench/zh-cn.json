@@ -8,6 +8,8 @@
     "purchaseReviews": "采购审核",
     "shipments": "货件管理",
     "containers": "柜次管理",
+    "createContainer": "新建柜次",
+    "createContainerPending": "新建柜次功能暂未开放",
     "pending": "功能待开放",
     "packagingPayments": "打木架付款"
   }

@@ -135,7 +135,7 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
     {
       path: '/qs-purchase-transport/containers',
       name: 'qsPurchaseTransportContainers',
-      component: () => import('@/views/workbenches/placeholder.vue'),
+      component: () => import('@/views/workbenches/containers/index.vue'),
       meta: {
         title: 'workbench.containers',
         icon: 'qs-container-management',
