@@ -171,7 +171,7 @@ onMounted(() => {
             <span v-else class="ocean-change-accent qs-type-body-medium">{{ t('operationsOcean.change.cancelCod') }}</span>
           </div>
         </div>
-        <p v-if="step === 3" class="qs-type-meta text-muted-foreground m-0" aria-live="off">
+        <p v-if="step === 3" class="qs-type-component-title text-foreground m-0" aria-live="off">
           {{ countdown === null ? t('operationsOcean.change.undoPausedHint') : t('operationsOcean.change.successHint', { seconds: countdown }) }}
         </p>
       </template>
@@ -186,7 +186,7 @@ onMounted(() => {
     <template #footer>
       <div class="ocean-change-footer flex flex-wrap gap-2 w-full justify-end">
         <template v-if="step === 3">
-          <FaButton type="button" variant="outline" :loading="undoing" :disabled="!canUndo" @click="undo">
+          <FaButton type="button" variant="destructive" :loading="undoing" :disabled="!canUndo" @click="undo">
             {{ t('operationsOcean.change.undo') }}
           </FaButton>
           <FaButton type="button" :disabled="busy || undoPending" @click="close">
