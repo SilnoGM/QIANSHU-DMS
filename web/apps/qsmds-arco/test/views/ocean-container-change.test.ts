@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 验证修改确认、剪贴板内容、撤销与未知结果重试。
 import test from 'node:test'
 import { effectScope } from 'vue'
-import { buildOceanChangeText, normalizeOceanChange } from '../../src/views/operations/ocean-containers/change-logic'
+import { buildOceanChangeText, normalizeOceanChange, oceanChangeDiff } from '../../src/views/operations/ocean-containers/change-logic'
 import { useOceanLineChange } from '../../src/views/operations/ocean-containers/change-session'
 
 const source = () => ({ id: 'line-1', version: 3, oceanShippingMarkText: 'L-091726-01', recipientName: '客户', recipientPhone: '123', recipientAddress: '原地址', remark: '原备注', codAmountTwd: '120.00' } as OceanChangeLine)
@@ -116,6 +116,24 @@ test('收件修改忽略空白和换行格式差异，清空字段明确说明',
   const line = { ...source(), recipientName: ' 客户 ', recipientPhone: null, recipientAddress: '原地址\r\n第二行' }
   const after = normalizeOceanChange('RECIPIENT', { ...line, recipientName: '客户', recipientPhone: '', recipientAddress: '原地址\n第二行', remark: '' }).value!
   assert.equal(buildOceanChangeText('0917柜', line, after), '【收件人信息修改】\n柜次：0917柜\n唛头：L-091726-01\n\n备注改为：清空')
+})
+
+test('核对与发送摘要只展示实际修改字段，草稿标记忽略首尾空白和换行格式', () => {
+  const line = { ...source(), recipientName: ' 客户 ', recipientPhone: null, recipientAddress: '原地址\r\n第二行' }
+  const draft = { ...line, kind: 'RECIPIENT' as const, recipientName: '客户', recipientPhone: '', recipientAddress: '原地址\n第二行', remark: ' ' }
+  assert.deepEqual(oceanChangeDiff(line, draft), [{ key: 'remark', before: '原备注', after: null }])
+  assert.deepEqual(oceanChangeDiff(line, { ...draft, remark: '原备注' }), [])
+  assert.deepEqual(oceanChangeDiff(line, { ...draft, recipientName: ' 新客户 ' }), [
+    { key: 'recipientName', before: '客户', after: '新客户' },
+    { key: 'remark', before: '原备注', after: null },
+  ])
+})
+
+test('代收核对区保留零与取消代收，等值金额不产生修改摘要', () => {
+  const line = { ...source(), codAmountTwd: '0' }
+  assert.deepEqual(oceanChangeDiff(line, { kind: 'COD', codAmountTwd: '0.00' }), [])
+  assert.deepEqual(oceanChangeDiff(line, { kind: 'COD', codAmountTwd: null }), [{ key: 'codAmountTwd', before: '0.00', after: null }])
+  assert.deepEqual(oceanChangeDiff({ ...line, codAmountTwd: null }, { kind: 'COD', codAmountTwd: '0.00' }), [{ key: 'codAmountTwd', before: null, after: '0.00' }])
 })
 
 test('代收修改使用原代收和新代收模板，零与取消代收不混淆', () => {

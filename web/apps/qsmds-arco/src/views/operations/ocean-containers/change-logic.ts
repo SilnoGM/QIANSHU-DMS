@@ -43,9 +43,9 @@ export function normalizeOceanChange(kind: OceanChangeKind, draft: OceanChangeDr
 export function oceanChangeDiff(line: OceanChangeLine, next: OceanChangeValue) {
   if (next.kind === 'COD') {
     const original = normalizeOceanChange('COD', line).value
-    return [{ key: 'codAmountTwd', before: original?.kind === 'COD' ? original.codAmountTwd : line.codAmountTwd, after: next.codAmountTwd }]
+    return [{ key: 'codAmountTwd' as const, before: original?.kind === 'COD' ? original.codAmountTwd : line.codAmountTwd, after: next.codAmountTwd }].filter(row => row.before !== row.after)
   }
-  return RECIPIENT_FIELDS.map(key => ({ key, before: normalizeRecipientText(line[key]), after: next[key] }))
+  return RECIPIENT_FIELDS.map(key => ({ key, before: normalizeRecipientText(line[key]), after: normalizeRecipientText(next[key]) })).filter(row => row.before !== row.after)
 }
 
 function normalizeRecipientText(value: string | null): string | null {

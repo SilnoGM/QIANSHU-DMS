@@ -7,7 +7,7 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
-import { OCEAN_COD_MAX, RECIPIENT_FIELDS } from './change-logic'
+import { OCEAN_COD_MAX, oceanChangeDiff, RECIPIENT_FIELDS } from './change-logic'
 import { useOceanLineChange } from './change-session'
 
 const props = defineProps<{
@@ -33,9 +33,11 @@ const state = useOceanLineChange({
     emit('close')
   },
 })
-const { line, draft, step, loading, loadError, error, intent, diff, copying, saving, pending, needsReload, undoing, undoPending, countdown, busy, locked, canSave, canUndo } = state
+const { line, draft, step, loading, loadError, error, intent, diff, copying, saving, pending, needsReload, result, undoing, undoPending, countdown, busy, locked, canSave, canUndo } = state
 const steps = computed(() => ['editStep', 'compareStep', 'confirmStep', 'successStep'].map(id => ({ id, title: t(`operationsOcean.change.${id}`) })))
 const currencyReady = computed(() => props.currencies.some(currency => currency.code === 'TWD' && currency.enabled && currency.minorUnit === 2))
+const changedFields = computed(() => line.value ? oceanChangeDiff(line.value, { ...draft.value, kind: 'RECIPIENT' }).map(row => row.key) : [])
+const displayDiff = computed(() => diff.value.map(row => ({ ...row, after: step.value === 3 && result.value ? result.value.line[row.key] : row.after })))
 const title = computed(() => t(`operationsOcean.change.${props.kind === 'RECIPIENT' ? 'recipientTitle' : 'codTitle'}`))
 function message(value: { key?: string, message?: string } | null) {
   return value?.message || (value?.key ? t(`operationsOcean.change.${value.key}`) : '')
@@ -67,7 +69,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <QsGenericModal v-model="visible" :title="title" :description="containerName" size="lg" :loading="loading" :error="message(loadError) || null" :submitting="busy" :before-close="canClose" :closable="!pending && !undoPending" :dismiss-on-overlay="false">
+  <QsGenericModal v-model="visible" :title="title" :size="kind === 'RECIPIENT' ? 'lg' : 'md'" :loading="loading" :error="message(loadError) || null" :submitting="busy" :before-close="canClose" :closable="!pending && !undoPending" :dismiss-on-overlay="false">
     <template #header-leading>
       <FaIcon :name="kind === 'RECIPIENT' ? 'i-lucide:contact-round' : 'i-lucide:hand-coins'" class="size-5" aria-hidden="true" />
     </template>
@@ -77,88 +79,102 @@ onMounted(() => {
       </FaButton>
     </template>
     <div v-if="line" class="ocean-change-content space-y-5">
-      <FaSteps :model-value="step" :steps="steps" :status="step === 3 ? 'finish' : 'process'" class="w-full" />
-      <div class="px-4 py-3 border border-primary/20 rounded-lg bg-primary/5 flex flex-wrap gap-x-3 gap-y-1 items-baseline">
-        <span class="qs-type-meta text-muted-foreground">{{ t('qsOceanContainer.mark') }}</span>
-        <strong class="ocean-change-accent qs-type-data min-w-0 break-all">{{ line.oceanShippingMarkText || '—' }}</strong>
+      <div class="pb-4 border-b border-border/70 flex flex-wrap gap-x-5 gap-y-2 items-baseline">
+        <span class="qs-type-body-medium">{{ containerName }}</span>
+        <div class="flex flex-wrap gap-x-2 gap-y-1 min-w-0 items-baseline">
+          <span class="qs-type-meta text-muted-foreground">{{ t('qsOceanContainer.mark') }}</span>
+          <strong class="ocean-change-accent qs-type-data-emphasis min-w-0 break-all">{{ line.oceanShippingMarkText || '—' }}</strong>
+        </div>
       </div>
+      <FaSteps :model-value="step" :steps="steps" :status="step === 3 ? 'finish' : 'process'" class="ocean-change-steps w-full" />
       <template v-if="step === 0">
-        <p class="qs-type-meta text-muted-foreground m-0">
-          {{ t('operationsOcean.change.editHint') }}
-        </p>
-        <div v-if="kind === 'RECIPIENT'" class="gap-x-4 gap-y-4 grid sm:grid-cols-2">
+        <div v-if="kind === 'RECIPIENT'" class="gap-4 grid sm:grid-cols-2">
           <div v-for="field in RECIPIENT_FIELDS" :key="field" class="min-w-0 space-y-2" :class="['recipientAddress', 'remark'].includes(field) && 'sm:col-span-2'">
-            <label :for="`${fieldId}-${field}`" class="qs-type-label block">{{ t(`operationsOcean.${field}`) }}</label>
+            <div class="flex gap-2 min-h-5 items-center justify-between">
+              <label :for="`${fieldId}-${field}`" class="qs-type-label">{{ t(`operationsOcean.${field}`) }}</label>
+              <span v-if="changedFields.includes(field)" class="ocean-change-accent qs-type-meta">{{ t('operationsOcean.change.modified') }}</span>
+            </div>
             <FaTextarea
-              v-if="['recipientAddress', 'remark'].includes(field)" :id="`${fieldId}-${field}`" :aria-label="t(`operationsOcean.${field}`)" :model-value="draft[field] || ''" :rows="3" :disabled="locked"
+              v-if="['recipientAddress', 'remark'].includes(field)" :id="`${fieldId}-${field}`" :aria-label="t(`operationsOcean.${field}`)" :model-value="draft[field] || ''" :rows="2" :disabled="locked"
+              input-class="min-h-20 max-h-48 resize-y"
               @update:model-value="draft[field] = $event ?? ''"
             />
-            <FaInput v-else :id="`${fieldId}-${field}`" :model-value="draft[field] || ''" :disabled="locked" @update:model-value="draft[field] = String($event ?? '')" />
+            <FaInput v-else :id="`${fieldId}-${field}`" :model-value="draft[field] || ''" :disabled="locked" class="w-full" @update:model-value="draft[field] = String($event ?? '')" />
           </div>
         </div>
-        <div v-else class="space-y-4">
-          <div class="flex flex-wrap gap-x-3 gap-y-1 items-baseline">
-            <span class="qs-type-meta text-muted-foreground">{{ t('operationsOcean.change.currentCod') }}</span>
-            <AmountDisplay v-if="line.codAmountTwd !== null" :value="line.codAmountTwd" currency="TWD" :currencies="currencies" />
-            <span v-else class="qs-type-body">{{ t('operationsOcean.change.noCod') }}</span>
+        <div v-else class="space-y-5">
+          <div class="px-4 py-3 rounded-lg bg-muted/40 flex flex-wrap gap-x-4 gap-y-2 items-baseline justify-between">
+            <span class="qs-type-body text-muted-foreground">{{ t('operationsOcean.change.currentCod') }}</span>
+            <AmountDisplay v-if="line.codAmountTwd !== null" :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-change-amount" />
+            <span v-else class="qs-type-body-medium">{{ t('operationsOcean.change.noCod') }}</span>
           </div>
           <div class="space-y-2">
             <label :for="`${fieldId}-amount`" class="qs-type-label block">{{ t('operationsOcean.change.newCod') }}</label>
-            <MoneyInput :id="`${fieldId}-amount`" v-model="draft.codAmountTwd" currency="TWD" :currencies="currencies" :currency-selectable="false" :disabled="locked || !currencyReady" min="0" :max="OCEAN_COD_MAX" />
-            <p class="qs-type-meta text-muted-foreground m-0">
+            <MoneyInput :id="`${fieldId}-amount`" v-model="draft.codAmountTwd" currency="TWD" :currencies="currencies" :currency-selectable="false" :disabled="locked || !currencyReady" :aria-describedby="`${fieldId}-amount-hint`" min="0" :max="OCEAN_COD_MAX" />
+            <p :id="`${fieldId}-amount-hint`" class="qs-type-meta text-muted-foreground m-0">
               {{ t('operationsOcean.change.clearCodHint') }}
             </p>
           </div>
           <FaAlert v-if="!currencyReady" :title="t('operationsOcean.change.currencyUnavailable')" variant="destructive" />
         </div>
       </template>
-      <template v-else-if="step === 1 && intent">
-        <FaAlert :title="t('operationsOcean.change.sendHint')" :description="t('operationsOcean.change.compareHint')" />
-        <div class="border border-border rounded-lg overflow-hidden">
-          <div class="qs-type-meta text-muted-foreground px-4 py-2 bg-muted/30 gap-4 hidden sm:grid sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)]">
-            <span>{{ t('operationsOcean.change.field') }}</span><span>{{ t('operationsOcean.change.before') }}</span><span>{{ t('operationsOcean.change.after') }}</span>
+      <template v-else-if="intent">
+        <div v-if="step === 1" class="qs-type-description text-muted-foreground flex gap-2 items-start">
+          <FaIcon name="i-lucide:info" class="mt-0.5 shrink-0 size-4" aria-hidden="true" />
+          <span>{{ t('operationsOcean.change.sendHint') }}</span>
+        </div>
+        <div v-else class="flex gap-3 items-start" :role="step === 3 ? 'status' : undefined">
+          <span class="ocean-change-accent rounded-lg bg-primary/10 flex shrink-0 size-9 items-center justify-center">
+            <FaIcon :name="step === 3 ? 'i-lucide:check' : 'i-lucide:send'" class="size-5" aria-hidden="true" />
+          </span>
+          <div class="min-w-0 space-y-1">
+            <h3 class="qs-type-component-title m-0">
+              {{ t(step === 3 ? 'operationsOcean.change.saved' : 'operationsOcean.change.confirmSent') }}
+            </h3>
+            <p class="qs-type-description text-muted-foreground m-0">
+              {{ t(step === 3 ? 'operationsOcean.change.savedSummary' : 'operationsOcean.change.confirmSentHint') }}
+            </p>
           </div>
-          <div v-for="row in diff" :key="row.key" class="px-4 py-3 border-t border-border gap-x-4 gap-y-2 grid grid-cols-2 sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)]" :class="row.before !== row.after && 'bg-primary/5'">
-            <span class="qs-type-label col-span-2 sm:col-span-1">{{ t(row.key === 'codAmountTwd' ? 'qsOceanContainer.cod' : `operationsOcean.${row.key}`) }}</span>
-            <div class="min-w-0">
+        </div>
+        <div v-if="kind === 'RECIPIENT'" class="border border-border rounded-lg overflow-hidden">
+          <div class="qs-type-meta text-muted-foreground px-4 py-2 bg-muted/30 gap-4 hidden sm:grid" :class="step === 3 ? 'sm:grid-cols-[96px_minmax(0,1fr)]' : 'sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)]'">
+            <span>{{ t('operationsOcean.change.field') }}</span>
+            <span v-if="step !== 3">{{ t('operationsOcean.change.before') }}</span>
+            <span>{{ t('operationsOcean.change.after') }}</span>
+          </div>
+          <div v-for="row in displayDiff" :key="row.key" class="ocean-change-recipient-row px-4 py-3 border-border gap-x-4 gap-y-2 grid sm:border-t" :class="step === 3 ? 'sm:grid-cols-[96px_minmax(0,1fr)]' : 'sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)]'">
+            <span class="qs-type-label">{{ t(`operationsOcean.${row.key}`) }}</span>
+            <div v-if="step !== 3" class="min-w-0">
               <span class="qs-type-meta text-muted-foreground mb-1 block sm:hidden">{{ t('operationsOcean.change.before') }}</span>
-              <AmountDisplay v-if="row.key === 'codAmountTwd' && row.before !== null" :value="row.before" currency="TWD" :currencies="currencies" class="ocean-change-amount" />
-              <p v-else class="qs-type-body text-muted-foreground m-0 whitespace-pre-wrap break-words">
-                {{ row.before || (row.key === 'codAmountTwd' ? t('operationsOcean.change.noCod') : '—') }}
+              <p class="qs-type-body text-muted-foreground m-0 whitespace-pre-wrap break-words">
+                {{ row.before || '—' }}
               </p>
             </div>
             <div class="min-w-0">
               <span class="qs-type-meta text-muted-foreground mb-1 block sm:hidden">{{ t('operationsOcean.change.after') }}</span>
-              <AmountDisplay v-if="row.key === 'codAmountTwd' && row.after !== null" :value="row.after" currency="TWD" :currencies="currencies" class="ocean-change-accent ocean-change-amount" />
-              <p v-else class="qs-type-body-medium m-0 whitespace-pre-wrap break-words">
-                {{ row.after || (row.key === 'codAmountTwd' ? t('operationsOcean.change.cancelCod') : row.before ? t('operationsOcean.change.cleared') : '—') }}
+              <p class="qs-type-body-medium m-0 whitespace-pre-wrap break-words">
+                {{ row.after || t('operationsOcean.change.cleared') }}
               </p>
             </div>
           </div>
         </div>
+        <div v-for="row in displayDiff" v-else :key="row.key" class="ocean-change-cod-comparison gap-3 grid items-center" :class="step !== 3 && 'sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]'">
+          <div v-if="step !== 3" class="px-4 py-3 rounded-lg bg-muted/40 min-w-0 space-y-2">
+            <span class="qs-type-meta text-muted-foreground block">{{ t('operationsOcean.change.before') }}</span>
+            <AmountDisplay v-if="row.before !== null" :value="row.before" currency="TWD" :currencies="currencies" class="ocean-change-amount" />
+            <span v-else class="qs-type-body-medium">{{ t('operationsOcean.change.noCod') }}</span>
+          </div>
+          <FaIcon v-if="step !== 3" name="i-lucide:arrow-right" class="text-muted-foreground size-4 hidden sm:block" aria-hidden="true" />
+          <div class="px-4 py-3 rounded-lg bg-primary/5 min-w-0 space-y-2">
+            <span class="qs-type-meta text-muted-foreground block">{{ t('operationsOcean.change.after') }}</span>
+            <AmountDisplay v-if="row.after !== null" :value="row.after" currency="TWD" :currencies="currencies" class="ocean-change-accent ocean-change-amount" />
+            <span v-else class="ocean-change-accent qs-type-body-medium">{{ t('operationsOcean.change.cancelCod') }}</span>
+          </div>
+        </div>
+        <p v-if="step === 3" class="qs-type-meta text-muted-foreground m-0" aria-live="off">
+          {{ countdown === null ? t('operationsOcean.change.undoPausedHint') : t('operationsOcean.change.successHint', { seconds: countdown }) }}
+        </p>
       </template>
-      <section v-else-if="step === 2" class="px-2 py-6 text-center flex flex-col gap-3 items-center">
-        <span class="ocean-change-accent rounded-full bg-primary/10 flex size-14 items-center justify-center">
-          <FaIcon name="i-lucide:send" class="size-6" aria-hidden="true" />
-        </span>
-        <h3 class="qs-type-section-title m-0">
-          {{ t('operationsOcean.change.confirmSent') }}
-        </h3>
-        <p class="qs-type-description text-muted-foreground m-0 max-w-sm">
-          {{ t('operationsOcean.change.confirmSentHint') }}
-        </p>
-      </section>
-      <section v-else-if="step === 3" class="px-2 py-6 text-center flex flex-col gap-3 items-center" role="status">
-        <span class="ocean-change-accent rounded-full bg-primary/10 flex size-14 items-center justify-center">
-          <FaIcon name="i-lucide:check" class="size-7" aria-hidden="true" />
-        </span>
-        <h3 class="qs-type-section-title m-0">
-          {{ t('operationsOcean.change.saved') }}
-        </h3>
-        <p class="qs-type-description text-muted-foreground m-0 max-w-sm">
-          {{ t(countdown === null ? 'operationsOcean.change.undoPausedHint' : 'operationsOcean.change.successHint') }}
-        </p>
-      </section>
       <FaAlert v-if="error" :title="message(error)" variant="destructive">
         <template v-if="needsReload" #description>
           <FaButton variant="outline" size="sm" :disabled="busy" @click="state.load">
@@ -168,7 +184,7 @@ onMounted(() => {
       </FaAlert>
     </div>
     <template #footer>
-      <div class="flex flex-wrap gap-2 w-full justify-end">
+      <div class="ocean-change-footer flex flex-wrap gap-2 w-full justify-end">
         <template v-if="step === 3">
           <FaButton type="button" variant="outline" :loading="undoing" :disabled="!canUndo" @click="undo">
             {{ t('operationsOcean.change.undo') }}
@@ -220,9 +236,34 @@ onMounted(() => {
 }
 
 .ocean-change-amount {
+  display: block;
   max-width: 100%;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.5;
   text-align: left;
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+.ocean-change-recipient-row:nth-child(2n) {
+  background-color: oklch(var(--primary) / 3%);
+}
+
+.ocean-change-recipient-row + .ocean-change-recipient-row {
+  border-top-width: 1px;
+}
+
+.ocean-change-steps :deep(h4) {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+@media (width < 640px) {
+  .ocean-change-footer > :deep(button) {
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
 }
 </style>
