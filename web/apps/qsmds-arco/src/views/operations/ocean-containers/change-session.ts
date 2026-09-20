@@ -153,7 +153,7 @@ export function useOceanLineChange(options: {
       return false
     }
     if (!oceanChangeDiff(line.value, normalized.value).some(row => row.before !== row.after)) {
-      error.value = { key: 'unchanged' }
+      error.value = { key: options.kind === 'CANCEL_COD' ? 'alreadyNoCod' : 'unchanged' }
       return false
     }
     error.value = null
@@ -169,7 +169,7 @@ export function useOceanLineChange(options: {
     copying.value = true
     error.value = null
     try {
-      await options.copyText(buildOceanChangeText(options.containerName, line.value, intent.value))
+      await options.copyText(buildOceanChangeText(options.containerName, line.value, intent.value, options.kind))
       if (disposed || sequence !== version) {
         return false
       }
@@ -187,6 +187,13 @@ export function useOceanLineChange(options: {
         copying.value = false
       }
     }
+  }
+  async function copyCancellation(): Promise<boolean> {
+    // 取消操作首屏已展示归零对比；复用冻结意图和复制守卫，失败重试仍停留首屏。
+    if (options.kind !== 'CANCEL_COD' || (step.value === 0 && !review())) {
+      return false
+    }
+    return copy()
   }
   function edit() {
     if (disposed || locked.value) {
@@ -278,5 +285,5 @@ export function useOceanLineChange(options: {
     }
   }
   onScopeDispose(dispose)
-  return { line, draft, step, loading, loadError, error, intent, diff, copying, saving, pending, needsReload, result, undoing, undoPending, undoConflict, countdown, busy, locked, canSave, canUndo, load, review, copy, edit, save, undo, close, dispose }
+  return { line, draft, step, loading, loadError, error, intent, diff, copying, saving, pending, needsReload, result, undoing, undoPending, undoConflict, countdown, busy, locked, canSave, canUndo, load, review, copy, copyCancellation, edit, save, undo, close, dispose }
 }

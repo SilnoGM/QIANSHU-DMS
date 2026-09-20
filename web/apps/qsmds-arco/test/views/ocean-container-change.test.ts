@@ -16,7 +16,7 @@ function deferred<T>() {
   })
   return { promise, resolve, reject }
 }
-function setup(kind: 'RECIPIENT' | 'COD' = 'RECIPIENT') {
+function setup(kind: 'RECIPIENT' | 'COD' | 'CANCEL_COD' = 'RECIPIENT') {
   const saves: unknown[] = []
   const undos: { changeId: string, input: unknown }[] = []
   const copies: string[] = []
@@ -107,15 +107,15 @@ test('修改值规范化保留空值和零的区别，严格校验两位非负�
 test('收件修改按模板只复制变化字段，唛头使用海运唛头', () => {
   const line = { ...source(), shippingMark: '货件唛头不可复制' }
   const nameOnly = normalizeOceanChange('RECIPIENT', { ...line, recipientName: '謝崑滄1' }).value!
-  assert.equal(buildOceanChangeText('0917柜', line, nameOnly), '【收件人信息修改】\n柜次：0917柜\n唛头：L-091726-01\n\n客户姓名改为：謝崑滄1')
+  assert.equal(buildOceanChangeText('0917柜', line, nameOnly), '‼️【收件人信息修改】\n柜次：0917柜\n唛头：L-091726-01\n\n客户姓名改为：謝崑滄1')
   const after = normalizeOceanChange('RECIPIENT', { ...source(), recipientAddress: '新地址', remark: '第一行\n第二行' }).value!
-  assert.equal(buildOceanChangeText('0917柜', source(), after), '【收件人信息修改】\n柜次：0917柜\n唛头：L-091726-01\n\n收件地址改为：新地址\n备注改为：第一行\n第二行')
+  assert.equal(buildOceanChangeText('0917柜', source(), after), '‼️【收件人信息修改】\n柜次：0917柜\n唛头：L-091726-01\n\n收件地址改为：新地址\n备注改为：第一行\n第二行')
 })
 
 test('收件修改忽略空白和换行格式差异，清空字段明确说明', () => {
   const line = { ...source(), recipientName: ' 客户 ', recipientPhone: null, recipientAddress: '原地址\r\n第二行' }
   const after = normalizeOceanChange('RECIPIENT', { ...line, recipientName: '客户', recipientPhone: '', recipientAddress: '原地址\n第二行', remark: '' }).value!
-  assert.equal(buildOceanChangeText('0917柜', line, after), '【收件人信息修改】\n柜次：0917柜\n唛头：L-091726-01\n\n备注改为：清空')
+  assert.equal(buildOceanChangeText('0917柜', line, after), '‼️【收件人信息修改】\n柜次：0917柜\n唛头：L-091726-01\n\n备注改为：清空')
 })
 
 test('核对与发送摘要只展示实际修改字段，草稿标记忽略首尾空白和换行格式', () => {
@@ -138,7 +138,7 @@ test('代收核对区保留零与取消代收，等值金额不产生修改摘�
 
 test('代收修改使用原代收和新代收模板，零与取消代收不混淆', () => {
   const line = { ...source(), shippingMark: '货件唛头不可复制' }
-  assert.equal(buildOceanChangeText('0917柜', line, { kind: 'COD', codAmountTwd: '300.00' }), '【代收款修改】\n柜次：0917柜\n唛头：L-091726-01\n\n原代收：NT$ 120\n新代收改为：NT$ 300')
+  assert.equal(buildOceanChangeText('0917柜', line, { kind: 'COD', codAmountTwd: '300.00' }), '‼️【代收款修改】\n柜次：0917柜\n唛头：L-091726-01\n\n原代收：NT$ 120\n新代收改为：NT$ 300')
   assert.match(buildOceanChangeText('0917柜', line, { kind: 'COD', codAmountTwd: '0.00' }), /原代收：NT\$ 120\n新代收改为：NT\$ 0$/u)
   assert.match(buildOceanChangeText('0917柜', line, { kind: 'COD', codAmountTwd: null }), /原代收：NT\$ 120\n新代收改为：取消代收$/u)
   assert.match(buildOceanChangeText('0917柜', { ...line, codAmountTwd: null }, { kind: 'COD', codAmountTwd: '9007199254740993.01' }), /原代收：无代收\n新代收改为：NT\$ 9007199254740993\.01$/u)
@@ -146,7 +146,7 @@ test('代收修改使用原代收和新代收模板，零与取消代收不混�
 
 test('代收复制金额带币种和空格，整数省略小数，非整数保留两位且大金额不丢精度', () => {
   const integer = buildOceanChangeText('0917柜', { ...source(), codAmountTwd: '210000.00' }, { kind: 'COD', codAmountTwd: '200000.00' })
-  assert.equal(integer, '【代收款修改】\n柜次：0917柜\n唛头：L-091726-01\n\n原代收：NT$ 210000\n新代收改为：NT$ 200000')
+  assert.equal(integer, '‼️【代收款修改】\n柜次：0917柜\n唛头：L-091726-01\n\n原代收：NT$ 210000\n新代收改为：NT$ 200000')
   const decimal = buildOceanChangeText('0917柜', { ...source(), codAmountTwd: '210000.50' }, { kind: 'COD', codAmountTwd: '200000.01' })
   assert.ok(decimal.endsWith('原代收：NT$ 210000.50\n新代收改为：NT$ 200000.01'))
   const large = buildOceanChangeText('0917柜', { ...source(), codAmountTwd: '9999999999999999999999999999.00' }, { kind: 'COD', codAmountTwd: '9999999999999999999999999999.99' })
@@ -313,4 +313,63 @@ test('保存冲突必须重读，卸载取消所有计时器及在途撤销回�
   assert.equal(await work, null)
   s.tick()
   assert.equal(s.closes.length, 0)
+})
+
+test('取消代收固定归零并使用独立通知模板，不混入收件信息或修改金额模板', () => {
+  const next = normalizeOceanChange('CANCEL_COD', { ...source(), codAmountTwd: '999' }).value!
+  assert.deepEqual(next, { kind: 'COD', codAmountTwd: '0.00' })
+  assert.equal(buildOceanChangeText('0917柜', source(), next, 'CANCEL_COD'), '‼️【代收款取消】\n柜次：0917柜\n唛头：L-091726-01\n\n原代收：NT$ 120，取消代收')
+  assert.ok(buildOceanChangeText('0917柜', { ...source(), codAmountTwd: '120.50' }, next, 'CANCEL_COD').endsWith('原代收：NT$ 120.50，取消代收'))
+})
+
+test('取消复制成功才进入发送确认，未发送关闭不保存，复制失败可原步骤重试', async () => {
+  const s = setup('CANCEL_COD')
+  await s.state.load()
+  assert.equal(await s.state.save(), null)
+  s.failCopy(true)
+  assert.equal(await s.state.copyCancellation(), false)
+  assert.equal(s.state.canSave.value, false)
+  assert.equal(s.saves.length, 0)
+  s.failCopy(false)
+  assert.equal(await s.state.copyCancellation(), true)
+  assert.equal(s.state.step.value, 2)
+  assert.ok(s.copies[0].startsWith('‼️【代收款取消】'))
+  s.state.close()
+  assert.equal(s.saves.length, 0)
+  s.stop()
+})
+
+test('取消发送确认后复用COD归零与撤销接口，未知结果重试不会改变金额或请求键', async () => {
+  const s = setup('CANCEL_COD')
+  await s.state.load()
+  await s.state.copyCancellation()
+  s.failSave({ kind: 'network' })
+  await s.state.save()
+  assert.equal(s.state.pending.value, true)
+  assert.equal(await s.state.copyCancellation(), false)
+  s.state.draft.value.codAmountTwd = '999'
+  s.failSave(null)
+  await s.state.save()
+  assert.equal(s.saves[0], s.saves[1])
+  assert.deepEqual(s.saves[1], { kind: 'COD', codAmountTwd: '0.00', requestKey: 'key-2', expectedVersion: 3, notificationConfirmed: true })
+  assert.equal(s.state.countdown.value, 5)
+  await s.state.undo()
+  assert.equal(s.state.countdown.value, null)
+  assert.equal(s.undos[0].changeId, 'change-1')
+  s.state.close()
+  assert.equal(s.closes[0]?.codAmountTwd, '120.00')
+  s.stop()
+})
+
+test('已为零的明细不能重复取消，空金额可明确确认为零', async () => {
+  const s = setup('CANCEL_COD')
+  await s.state.load()
+  s.state.line.value = { ...source(), codAmountTwd: '0.00' }
+  assert.equal(await s.state.copyCancellation(), false)
+  assert.equal(s.copies.length, 0)
+  assert.equal(s.state.error.value?.key, 'alreadyNoCod')
+  s.state.line.value = { ...source(), codAmountTwd: null }
+  assert.equal(await s.state.copyCancellation(), true)
+  assert.equal(s.state.intent.value?.kind, 'COD')
+  s.stop()
 })

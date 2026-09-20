@@ -78,7 +78,15 @@
       "invalidText": "收件人信息含有无效控制字符，请移除后重试。",
       "undoPausedHint": "自动关闭已暂停，请根据下方提示处理撤销结果。",
       "modified": "已修改",
-      "savedSummary": "以下资料已更新。"
+      "savedSummary": "以下资料已更新。",
+      "cancelTitle": "取消代收",
+      "cancelReviewStep": "确认取消",
+      "cancelQuestion": "确定要取消代收吗？",
+      "cancelHint": "取消代收会将原代收金额改为 0（无代收）。复制通知并发送到顺联航群，确认已发送后生效。",
+      "cancelAndCopy": "确定取消并复制取消代收信息",
+      "cancelledAmount": "0（无代收）",
+      "cancelSaved": "代收已取消",
+      "alreadyNoCod": "当前代收金额已为 0，无需重复取消。"
     }
   }
 }

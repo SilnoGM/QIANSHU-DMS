@@ -1,7 +1,7 @@
 import type { OperationsOceanContainerLineDto } from '@/api/generated/types.gen'
 import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 
-export type OceanChangeKind = 'RECIPIENT' | 'COD'
+export type OceanChangeKind = 'RECIPIENT' | 'COD' | 'CANCEL_COD'
 export type OceanChangeLine = OperationsOceanContainerLineDto
 export interface OceanChangeDraft {
   recipientName: string | null
@@ -26,6 +26,9 @@ export function oceanChangeDraft(line: OceanChangeDraft): OceanChangeDraft {
 }
 
 export function normalizeOceanChange(kind: OceanChangeKind, draft: OceanChangeDraft): { value?: OceanChangeValue, error?: string } {
+  if (kind === 'CANCEL_COD') {
+    return { value: { kind: 'COD', codAmountTwd: '0.00' } }
+  }
   if (kind === 'COD') {
     const amount = validateMoneyString(draft.codAmountTwd === '' ? null : draft.codAmountTwd, { precision: 2, min: '0', max: OCEAN_COD_MAX })
     return amount.valid ? { value: { kind, codAmountTwd: amount.normalizedValue } } : { error: 'invalidAmount' }
@@ -57,11 +60,15 @@ function formatCodCopyAmount(value: string | null, emptyText: string): string {
   return value === null ? emptyText : `NT$ ${value.replace(/\.0+$/u, '')}`
 }
 
-export function buildOceanChangeText(containerName: string, line: OceanChangeLine, next: OceanChangeValue): string {
-  const heading = [`【${next.kind === 'RECIPIENT' ? '收件人信息' : '代收款'}修改】`, `柜次：${containerName}`, `唛头：${line.oceanShippingMarkText || '—'}`]
+export function buildOceanChangeText(containerName: string, line: OceanChangeLine, next: OceanChangeValue, kind: OceanChangeKind = next.kind): string {
+  const title = kind === 'CANCEL_COD' ? '代收款取消' : `${next.kind === 'RECIPIENT' ? '收件人信息' : '代收款'}修改`
+  const heading = [`‼️【${title}】`, `柜次：${containerName}`, `唛头：${line.oceanShippingMarkText || '—'}`]
   if (next.kind === 'COD') {
     const before = normalizeOceanChange('COD', line).value
     const amount = before?.kind === 'COD' ? before.codAmountTwd : line.codAmountTwd
+    if (kind === 'CANCEL_COD') {
+      return [...heading, '', `原代收：${formatCodCopyAmount(amount, '无代收')}，取消代收`].join('\n')
+    }
     return [...heading, '', `原代收：${formatCodCopyAmount(amount, '无代收')}`, `新代收改为：${formatCodCopyAmount(next.codAmountTwd, '取消代收')}`].join('\n')
   }
   const changes = RECIPIENT_FIELDS

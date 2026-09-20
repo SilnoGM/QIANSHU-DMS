@@ -21,7 +21,7 @@ const emit = defineEmits<{
   pageChange: [page: number]
   viewLine: [line: OceanContainerLine]
   viewSource: [value: { lineId: string, kind: 'sales' | 'purchase' }]
-  changeLine: [value: { lineId: string, kind: 'RECIPIENT' | 'COD' }]
+  changeLine: [value: { lineId: string, kind: 'RECIPIENT' | 'COD' | 'CANCEL_COD' }]
 }>()
 const { t } = useI18n()
 const id = useId()
@@ -139,7 +139,7 @@ function measurement(value: string | null, precision: number) {
         <template v-else>
           <div class="ocean-lines-desktop">
             <table class="qs-type-body text-left w-full border-collapse table-fixed">
-              <colgroup><col class="w-[15%]"><col class="w-[calc(12em+2rem)]"><col><col class="w-[218px]"><col class="w-[calc(6em+2rem)]"><col class="w-[184px]"><col :class="canModify ? 'w-56' : 'w-24'"></colgroup>
+              <colgroup><col class="w-[15%]"><col class="w-[calc(12em+2rem)]"><col><col class="w-[218px]"><col class="w-[calc(6em+2rem)]"><col class="w-[184px]"><col :class="canModify ? 'w-48' : 'w-24'"></colgroup>
               <thead class="qs-type-meta text-muted-foreground bg-muted/10">
                 <tr>
                   <th v-for="key in ['mark', 'goods', 'shippingMark', 'source', 'recipient', 'cod', 'actions']" :key="key" scope="col" class="font-medium px-4 py-3" :class="key === 'cod' && 'text-right'">
@@ -185,9 +185,9 @@ function measurement(value: string | null, precision: number) {
                     <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent ocean-emphasis" />
                   </td>
                   <td class="px-2 py-3">
-                    <div class="flex gap-1 items-center">
+                    <div class="gap-1" :class="canModify ? 'grid grid-cols-2' : 'flex items-center'">
                       <template v-if="canModify">
-                        <FaButton v-for="kind in (['RECIPIENT', 'COD'] as const)" :key="kind" variant="ghost" size="sm" class="text-foreground px-2" :aria-label="t('qsOceanContainer.changeLabel', { action: t(`qsOceanContainer.change${kind}`), mark: line.oceanShippingMarkText ?? line.goodsName })" @click="emit('changeLine', { lineId: line.id, kind })">
+                        <FaButton v-for="kind in (['COD', 'RECIPIENT', 'CANCEL_COD'] as const)" :key="kind" variant="ghost" size="sm" class="text-foreground px-2" :aria-label="t('qsOceanContainer.changeLabel', { action: t(`qsOceanContainer.change${kind}`), mark: line.oceanShippingMarkText ?? line.goodsName })" @click="emit('changeLine', { lineId: line.id, kind })">
                           {{ t(`qsOceanContainer.change${kind}`) }}
                         </FaButton>
                       </template>
@@ -221,15 +221,17 @@ function measurement(value: string | null, precision: number) {
                 <span class="qs-type-body [overflow-wrap:anywhere]">{{ line.recipientName || '—' }}</span>
                 <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent ocean-emphasis" />
               </div>
-              <div class="pt-2 border-t border-border flex gap-1 justify-end">
-                <template v-if="canModify">
-                  <FaButton v-for="kind in (['RECIPIENT', 'COD'] as const)" :key="kind" variant="ghost" size="sm" class="text-foreground px-2 min-h-11" :aria-label="t('qsOceanContainer.changeLabel', { action: t(`qsOceanContainer.change${kind}`), mark: line.oceanShippingMarkText ?? line.goodsName })" @click="emit('changeLine', { lineId: line.id, kind })">
-                    {{ t(`qsOceanContainer.change${kind}`) }}
+              <div class="pt-2 border-t border-border flex justify-end">
+                <div class="gap-1" :class="canModify ? 'grid grid-cols-2' : 'flex'">
+                  <template v-if="canModify">
+                    <FaButton v-for="kind in (['COD', 'RECIPIENT', 'CANCEL_COD'] as const)" :key="kind" variant="ghost" size="sm" class="text-foreground px-2 min-h-11" :aria-label="t('qsOceanContainer.changeLabel', { action: t(`qsOceanContainer.change${kind}`), mark: line.oceanShippingMarkText ?? line.goodsName })" @click="emit('changeLine', { lineId: line.id, kind })">
+                      {{ t(`qsOceanContainer.change${kind}`) }}
+                    </FaButton>
+                  </template>
+                  <FaButton variant="ghost" size="sm" class="text-foreground px-2 min-h-11" :aria-label="t('qsOceanContainer.viewLabel', { name: line.goodsName, mark: line.oceanShippingMarkText ?? '' })" @click="emit('viewLine', line)">
+                    {{ t('qsOceanContainer.view') }}
                   </FaButton>
-                </template>
-                <FaButton variant="ghost" size="sm" class="text-foreground px-2 min-h-11" :aria-label="t('qsOceanContainer.viewLabel', { name: line.goodsName, mark: line.oceanShippingMarkText ?? '' })" @click="emit('viewLine', line)">
-                  {{ t('qsOceanContainer.view') }}
-                </FaButton>
+                </div>
               </div>
             </div>
           </div>

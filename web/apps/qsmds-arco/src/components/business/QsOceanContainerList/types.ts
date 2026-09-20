@@ -53,7 +53,7 @@ export interface OceanContainerSourceRequest {
 export interface OceanContainerChangeRequest {
   containerId: string
   lineId: string
-  kind: 'RECIPIENT' | 'COD'
+  kind: 'RECIPIENT' | 'COD' | 'CANCEL_COD'
 }
 
 export interface OceanContainerListProps {

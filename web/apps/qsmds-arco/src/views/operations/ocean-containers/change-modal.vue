@@ -34,11 +34,18 @@ const state = useOceanLineChange({
   },
 })
 const { line, draft, step, loading, loadError, error, intent, diff, copying, saving, pending, needsReload, result, undoing, undoPending, countdown, busy, locked, canSave, canUndo } = state
-const steps = computed(() => ['editStep', 'compareStep', 'confirmStep', 'successStep'].map(id => ({ id, title: t(`operationsOcean.change.${id}`) })))
+const isCancellation = computed(() => props.kind === 'CANCEL_COD')
+const steps = computed(() => (isCancellation.value ? ['cancelReviewStep', 'confirmStep', 'successStep'] : ['editStep', 'compareStep', 'confirmStep', 'successStep']).map(id => ({ id, title: t(`operationsOcean.change.${id}`) })))
+const displayStep = computed(() => isCancellation.value ? Math.max(0, step.value - 1) : step.value)
 const currencyReady = computed(() => props.currencies.some(currency => currency.code === 'TWD' && currency.enabled && currency.minorUnit === 2))
 const changedFields = computed(() => line.value ? oceanChangeDiff(line.value, { ...draft.value, kind: 'RECIPIENT' }).map(row => row.key) : [])
-const displayDiff = computed(() => diff.value.map(row => ({ ...row, after: step.value === 3 && result.value ? result.value.line[row.key] : row.after })))
-const title = computed(() => t(`operationsOcean.change.${props.kind === 'RECIPIENT' ? 'recipientTitle' : 'codTitle'}`))
+const displayDiff = computed(() => {
+  const rows = isCancellation.value && step.value < 2 && line.value
+    ? [{ key: 'codAmountTwd' as const, before: line.value.codAmountTwd, after: '0.00' }]
+    : diff.value
+  return rows.map(row => ({ ...row, after: step.value === 3 && result.value ? result.value.line[row.key] : row.after }))
+})
+const title = computed(() => t(`operationsOcean.change.${isCancellation.value ? 'cancelTitle' : props.kind === 'RECIPIENT' ? 'recipientTitle' : 'codTitle'}`))
 function message(value: { key?: string, message?: string } | null) {
   return value?.message || (value?.key ? t(`operationsOcean.change.${value.key}`) : '')
 }
@@ -46,7 +53,7 @@ function close() {
   state.close()
 }
 async function copy() {
-  if (await state.copy()) {
+  if (await (isCancellation.value ? state.copyCancellation() : state.copy())) {
     toast.success(t('operationsOcean.change.copied'))
   }
   else if (error.value?.key === 'copyFailed') {
@@ -86,8 +93,8 @@ onMounted(() => {
           <strong class="ocean-change-accent qs-type-data-emphasis min-w-0 break-all">{{ line.oceanShippingMarkText || '—' }}</strong>
         </div>
       </div>
-      <FaSteps :model-value="step" :steps="steps" :status="step === 3 ? 'finish' : 'process'" class="ocean-change-steps w-full" />
-      <template v-if="step === 0">
+      <FaSteps :model-value="displayStep" :steps="steps" :status="step === 3 ? 'finish' : 'process'" class="ocean-change-steps w-full" />
+      <template v-if="step === 0 && !isCancellation">
         <div v-if="kind === 'RECIPIENT'" class="gap-4 grid sm:grid-cols-2">
           <div v-for="field in RECIPIENT_FIELDS" :key="field" class="min-w-0 space-y-2" :class="['recipientAddress', 'remark'].includes(field) && 'sm:col-span-2'">
             <div class="flex gap-2 min-h-5 items-center justify-between">
@@ -118,8 +125,16 @@ onMounted(() => {
           <FaAlert v-if="!currencyReady" :title="t('operationsOcean.change.currencyUnavailable')" variant="destructive" />
         </div>
       </template>
-      <template v-else-if="intent">
-        <div v-if="step === 1" class="qs-type-description text-muted-foreground flex gap-2 items-start">
+      <template v-else-if="intent || isCancellation">
+        <div v-if="isCancellation && step < 2" class="space-y-2">
+          <h3 class="qs-type-component-title m-0">
+            {{ t('operationsOcean.change.cancelQuestion') }}
+          </h3>
+          <p class="qs-type-description text-muted-foreground m-0">
+            {{ t('operationsOcean.change.cancelHint') }}
+          </p>
+        </div>
+        <div v-else-if="step === 1" class="qs-type-description text-muted-foreground flex gap-2 items-start">
           <FaIcon name="i-lucide:info" class="mt-0.5 shrink-0 size-4" aria-hidden="true" />
           <span>{{ t('operationsOcean.change.sendHint') }}</span>
         </div>
@@ -129,7 +144,7 @@ onMounted(() => {
           </span>
           <div class="min-w-0 space-y-1">
             <h3 class="qs-type-component-title m-0">
-              {{ t(step === 3 ? 'operationsOcean.change.saved' : 'operationsOcean.change.confirmSent') }}
+              {{ t(step === 3 ? (isCancellation ? 'operationsOcean.change.cancelSaved' : 'operationsOcean.change.saved') : 'operationsOcean.change.confirmSent') }}
             </h3>
             <p class="qs-type-description text-muted-foreground m-0">
               {{ t(step === 3 ? 'operationsOcean.change.savedSummary' : 'operationsOcean.change.confirmSentHint') }}
@@ -167,7 +182,8 @@ onMounted(() => {
           <FaIcon v-if="step !== 3" name="i-lucide:arrow-right" class="text-muted-foreground size-4 hidden sm:block" aria-hidden="true" />
           <div class="px-4 py-3 rounded-lg bg-primary/5 min-w-0 space-y-2">
             <span class="qs-type-meta text-muted-foreground block">{{ t('operationsOcean.change.after') }}</span>
-            <AmountDisplay v-if="row.after !== null" :value="row.after" currency="TWD" :currencies="currencies" class="ocean-change-accent ocean-change-amount" />
+            <span v-if="isCancellation && row.after === '0.00'" class="ocean-change-accent ocean-change-amount">{{ t('operationsOcean.change.cancelledAmount') }}</span>
+            <AmountDisplay v-else-if="row.after !== null" :value="row.after" currency="TWD" :currencies="currencies" class="ocean-change-accent ocean-change-amount" />
             <span v-else class="ocean-change-accent qs-type-body-medium">{{ t('operationsOcean.change.cancelCod') }}</span>
           </div>
         </div>
@@ -206,10 +222,13 @@ onMounted(() => {
             {{ t('operationsOcean.close') }}
           </FaButton>
           <template v-if="line && !loading && !loadError">
-            <FaButton v-if="step === 1" type="button" variant="outline" :disabled="locked" @click="state.edit">
+            <FaButton v-if="step === 1 && !isCancellation" type="button" variant="outline" :disabled="locked" @click="state.edit">
               {{ t('operationsOcean.change.back') }}
             </FaButton>
-            <FaButton v-if="step === 0" type="button" :disabled="locked || (kind === 'COD' && !currencyReady)" @click="state.review">
+            <FaButton v-if="isCancellation" type="button" :loading="copying" :disabled="locked" @click="copy">
+              <FaIcon name="i-lucide:copy" class="size-4" aria-hidden="true" />{{ t('operationsOcean.change.cancelAndCopy') }}
+            </FaButton>
+            <FaButton v-else-if="step === 0" type="button" :disabled="locked || (kind === 'COD' && !currencyReady)" @click="state.review">
               {{ t('operationsOcean.change.next') }}
             </FaButton>
             <FaButton v-else type="button" :loading="copying" :disabled="locked" @click="copy">
