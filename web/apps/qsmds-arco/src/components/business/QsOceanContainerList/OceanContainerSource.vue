@@ -16,17 +16,17 @@ const sources = computed(() => [
 
 <template>
   <div class="flex flex-col gap-1 min-w-0 items-start">
-    <template v-for="source in sources" :key="source.kind">
+    <FaTooltip v-for="source in sources" :key="source.kind" :text="source.number || source.label">
       <FaButton
         v-if="source.number && source.available" variant="link" size="sm"
         class="ocean-source-link px-0 h-auto max-w-full min-h-6 justify-start"
-        :title="source.number" :aria-label="t('qsOceanContainer.viewSource', { type: source.label, number: source.number })"
+        :aria-label="t('qsOceanContainer.viewSource', { type: source.label, number: source.number })"
         @click="emit('view', source.kind)"
       >
         <span class="qs-type-data truncate">{{ source.number }}</span>
       </FaButton>
-      <span v-else class="qs-type-data text-muted-foreground max-w-full truncate" :title="source.number || source.label">{{ source.number || '—' }}</span>
-    </template>
+      <span v-else class="qs-type-data text-muted-foreground max-w-full truncate" tabindex="0">{{ source.number || '—' }}</span>
+    </FaTooltip>
   </div>
 </template>
 

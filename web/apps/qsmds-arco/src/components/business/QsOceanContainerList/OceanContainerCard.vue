@@ -151,27 +151,35 @@ function measurement(value: string | null, precision: number) {
                 <tr v-for="line in detail.items" :key="line.id" class="group border-t border-border hover:bg-muted/20">
                   <td class="px-4 py-3">
                     <div class="flex gap-1 min-w-0 items-center">
-                      <span class="ocean-accent ocean-emphasis qs-type-data truncate" :title="line.oceanShippingMarkText ?? undefined">{{ line.oceanShippingMarkText || '—' }}</span>
+                      <FaTooltip :text="line.oceanShippingMarkText ?? ''" :disabled="!line.oceanShippingMarkText">
+                        <span class="ocean-accent ocean-emphasis qs-type-data truncate" :tabindex="line.oceanShippingMarkText ? 0 : undefined">{{ line.oceanShippingMarkText || '—' }}</span>
+                      </FaTooltip>
                       <CopyCellButton v-if="line.oceanShippingMarkText" :text="line.oceanShippingMarkText" :label="t('qsOceanContainer.mark')" always-visible />
                     </div>
                   </td>
                   <td class="px-4 py-3">
-                    <div class="truncate" :title="line.goodsName">
-                      {{ line.goodsName }}
-                    </div>
+                    <FaTooltip :text="line.goodsName ?? ''" :disabled="!line.goodsName">
+                      <div class="truncate" :tabindex="line.goodsName ? 0 : undefined">
+                        {{ line.goodsName }}
+                      </div>
+                    </FaTooltip>
                   </td>
                   <td class="px-4 py-3">
-                    <div class="qs-type-data truncate" :title="line.shippingMark ?? undefined">
-                      {{ line.shippingMark || '—' }}
-                    </div>
+                    <FaTooltip :text="line.shippingMark ?? ''" :disabled="!line.shippingMark">
+                      <div class="qs-type-data truncate" :tabindex="line.shippingMark ? 0 : undefined">
+                        {{ line.shippingMark || '—' }}
+                      </div>
+                    </FaTooltip>
                   </td>
                   <td class="px-4 py-3">
                     <OceanContainerSource :line="line" :can-view-sales="canViewSales" :can-view-purchase="canViewPurchase" @view="emit('viewSource', { lineId: line.id, kind: $event })" />
                   </td>
                   <td class="px-4 py-3">
-                    <div class="truncate" :title="line.recipientName ?? undefined">
-                      {{ line.recipientName || '—' }}
-                    </div>
+                    <FaTooltip :text="line.recipientName ?? ''" :disabled="!line.recipientName">
+                      <div class="truncate" :tabindex="line.recipientName ? 0 : undefined">
+                        {{ line.recipientName || '—' }}
+                      </div>
+                    </FaTooltip>
                   </td>
                   <td class="px-4 py-3 text-right">
                     <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent ocean-emphasis" />
@@ -196,7 +204,9 @@ function measurement(value: string | null, precision: number) {
             <div v-for="line in detail.items" :key="line.id" class="p-4 border-b border-border flex flex-col gap-2 last:border-b-0">
               <div class="flex gap-2 min-w-0 items-center justify-between">
                 <div class="flex gap-1 min-w-0 items-center">
-                  <span class="ocean-accent ocean-emphasis qs-type-data truncate" :title="line.oceanShippingMarkText ?? undefined">{{ line.oceanShippingMarkText || '—' }}</span>
+                  <FaTooltip :text="line.oceanShippingMarkText ?? ''" :disabled="!line.oceanShippingMarkText">
+                    <span class="ocean-accent ocean-emphasis qs-type-data truncate" :tabindex="line.oceanShippingMarkText ? 0 : undefined">{{ line.oceanShippingMarkText || '—' }}</span>
+                  </FaTooltip>
                   <CopyCellButton v-if="line.oceanShippingMarkText" :text="line.oceanShippingMarkText" :label="t('qsOceanContainer.mark')" always-visible />
                 </div>
               </div>
