@@ -22,7 +22,7 @@ const visible = defineModel<boolean>({ required: true })
         <h3 class="qs-type-compact-title m-0">
           {{ line.goodsName }}
         </h3>
-        <div class="qs-type-data text-primary mt-3 break-all dark:text-primary-foreground">
+        <div class="ocean-emphasis qs-type-data text-primary mt-3 break-all dark:text-primary-foreground">
           {{ line.oceanShippingMarkText || '—' }}
         </div>
         <dl class="m-0 mt-4 gap-4 grid sm:grid-cols-2">
@@ -86,7 +86,7 @@ const visible = defineModel<boolean>({ required: true })
             代收货款
           </dt>
           <dd class="m-0 mt-1">
-            <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="oceanContainerCurrencies" />
+            <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="oceanContainerCurrencies" class="ocean-emphasis" />
           </dd>
         </div>
       </dl>
@@ -106,3 +106,9 @@ const visible = defineModel<boolean>({ required: true })
     </template>
   </QsGenericDrawer>
 </template>
+
+<style scoped>
+.ocean-emphasis {
+  font-weight: var(--qs-type-weight-bold, 700);
+}
+</style>

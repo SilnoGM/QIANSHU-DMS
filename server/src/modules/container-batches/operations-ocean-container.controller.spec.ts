@@ -33,7 +33,10 @@ describe('operations ocean containers contract', () => {
     for (const field of ['sourceFileId', 'createdById', 'remark', 'items', 'version']) {
       expect(document.components?.schemas?.OperationsOceanContainerDto).not.toHaveProperty(`properties.${field}`)
     }
-    for (const field of ['sourceData', 'billReferences', 'purchaseOrderId', 'salesOrderId', 'shipmentId']) {
+    for (const field of ['salesOrderId', 'salesOrderNo', 'purchaseOrderId', 'purchaseOrderNo']) {
+      expect(document.components?.schemas?.OperationsOceanContainerLineDto).toHaveProperty(`properties.${field}`)
+    }
+    for (const field of ['sourceData', 'billReferences', 'shipmentId']) {
       expect(document.components?.schemas?.OperationsOceanContainerLineDto).not.toHaveProperty(`properties.${field}`)
     }
   })

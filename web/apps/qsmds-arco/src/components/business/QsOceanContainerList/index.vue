@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import type { OceanContainerItemsRequest, OceanContainerLine, OceanContainerListProps } from './types'
+import type { OceanContainerItemsRequest, OceanContainerLine, OceanContainerListProps, OceanContainerSourceRequest } from './types'
 import OceanContainerCard from './OceanContainerCard.vue'
 import { useOceanContainerList } from './use-ocean-container-list'
 
 defineOptions({ name: 'QsOceanContainerList' })
-const props = withDefaults(defineProps<OceanContainerListProps>(), { page: 1, pageSize: 10, loading: false, error: null })
+const props = withDefaults(defineProps<OceanContainerListProps>(), { page: 1, pageSize: 10, loading: false, error: null, canViewSales: false, canViewPurchase: false })
 const emit = defineEmits<{
   requestItems: [request: OceanContainerItemsRequest]
   pageChange: [page: { page: number, pageSize: number }]
   retry: []
   viewLine: [value: { containerId: string, line: OceanContainerLine }]
+  viewSource: [value: OceanContainerSourceRequest]
 }>()
 const expandedIds = defineModel<string[]>('expandedIds', { default: () => [] })
 const { t } = useI18n()
@@ -44,8 +45,10 @@ function changePage(page: number, pageSize = props.pageSize) {
           v-for="item in items" :key="item.id"
           :item="item" :detail="details[item.id]" :currencies="currencies"
           :expanded="expandedIds.includes(item.id)"
+          :can-view-sales="canViewSales" :can-view-purchase="canViewPurchase"
           @toggle="state.toggle(item.id, $event)" @retry="state.retry(item.id)" @page-change="state.paginate(item.id, $event)"
           @view-line="emit('viewLine', { containerId: item.id, line: $event })"
+          @view-source="emit('viewSource', { containerId: item.id, ...$event })"
         />
       </div>
       <nav v-if="total > 0" :aria-label="t('qsOceanContainer.pagination')" class="mt-5 overflow-x-auto">

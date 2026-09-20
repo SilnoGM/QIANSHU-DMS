@@ -18,7 +18,7 @@ function deferred<T>() {
   return { promise, resolve: (data: T) => resolve({ data } as AxiosResponse<T>), reject }
 }
 const summary = (id: string): OperationsOceanContainerDto => ({ id, containerBatchNo: `CONTAINER/${id}`, containerBatchName: '0920柜', loadingDate: '2026-09-20', warehouseName: '测试仓库', warehouseValue: 'test', itemCount: 30, myItemCount: 23, grossWeightKgTotal: '100', volumeCaiTotal: '20.00' })
-const line = (id = 'line-1'): OperationsOceanContainerLineDto => ({ id, containerBatchId: 'first', lineNumber: 1, oceanShippingMarkText: 'L-01~10', goodsName: '测试产品', shippingMark: 'QS/01', salesOrderNo: 'SO/01', recipientName: '收件人', codAmountTwd: null, warehouseReceiptReference: null, recipientPhone: null, recipientAddress: null, packageCount: 10, packageUnit: 'CTN', grossWeightKg: '100', lengthCm: '50', widthCm: '20', heightCm: '30', volumeCai: '20.00', remark: null })
+const line = (id = 'line-1'): OperationsOceanContainerLineDto => ({ id, containerBatchId: 'first', lineNumber: 1, oceanShippingMarkText: 'L-01~10', goodsName: '测试产品', shippingMark: 'QS/01', salesOrderId: 'sales-1', salesOrderNo: 'SO/01', purchaseOrderId: 'purchase-1', purchaseOrderNo: 'PO/01', recipientName: '收件人', codAmountTwd: null, warehouseReceiptReference: null, recipientPhone: null, recipientAddress: null, packageCount: 10, packageUnit: 'CTN', grossWeightKg: '100', lengthCm: '50', widthCm: '20', heightCm: '30', volumeCai: '20.00', remark: null })
 
 function setup() {
   const enabled = ref(true)

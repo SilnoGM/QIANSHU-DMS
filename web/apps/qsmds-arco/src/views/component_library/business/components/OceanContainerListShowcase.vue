@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { DemoOceanContainerLine } from '../fixtures/ocean-container.fixture'
-import type { OceanContainerDetailPage, OceanContainerItemsRequest, OceanContainerLine } from '@/components/business/QsOceanContainerList/types'
+import type { OceanContainerDetailPage, OceanContainerItemsRequest, OceanContainerLine, OceanContainerSourceRequest } from '@/components/business/QsOceanContainerList/types'
 import type { QsStatusSwitchItem } from '@/components/business/QsStatusSwitchToolbar/types'
+import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsOceanContainerList from '@/components/business/QsOceanContainerList/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { oceanContainerCurrencies, oceanContainerDemoLines, oceanContainerDemoSummaries } from '../fixtures/ocean-container.fixture'
@@ -24,6 +25,8 @@ const listRecovered = ref(false)
 const selectedLine = ref<DemoOceanContainerLine | null>(null)
 const selectedContainerName = ref('')
 const drawerVisible = ref(false)
+const sourceVisible = ref(false)
+const sourceKind = ref<'sales' | 'purchase'>('sales')
 const timers = new Set<ReturnType<typeof setTimeout>>()
 const cache = new Map<string, OceanContainerDetailPage>()
 const failedContainers = new Set<string>()
@@ -58,6 +61,7 @@ watch(scenario, () => {
   transientLoading.value = false
   listRecovered.value = false
   drawerVisible.value = false
+  sourceVisible.value = false
 })
 
 onBeforeUnmount(cancelPending)
@@ -105,9 +109,17 @@ function retryList() {
 }
 
 function viewLine(value: { containerId: string, line: OceanContainerLine }) {
+  sourceVisible.value = false
   selectedLine.value = oceanContainerDemoLines[value.containerId]?.find(line => line.id === value.line.id) ?? null
   selectedContainerName.value = oceanContainerDemoSummaries.find(item => item.id === value.containerId)?.containerBatchName ?? ''
   drawerVisible.value = Boolean(selectedLine.value)
+}
+
+function viewSource(value: OceanContainerSourceRequest) {
+  drawerVisible.value = false
+  selectedLine.value = oceanContainerDemoLines[value.containerId]?.find(line => line.id === value.lineId) ?? null
+  sourceKind.value = value.kind
+  sourceVisible.value = Boolean(selectedLine.value)
 }
 </script>
 
@@ -137,11 +149,38 @@ function viewLine(value: { containerId: string, line: OceanContainerLine }) {
       :page-size="pageSize"
       :loading="listLoading"
       :error="listError"
+      can-view-sales can-view-purchase
       @request-items="requestItems"
       @page-change="changePage"
       @retry="retryList"
       @view-line="viewLine"
+      @view-source="viewSource"
     />
     <OceanContainerLineDrawer v-model="drawerVisible" :line="selectedLine" :container-name="selectedContainerName" />
+    <QsGenericDrawer v-model="sourceVisible" :title="sourceKind === 'sales' ? '销售订单（演示）' : '采购订单（演示）'" description="来源单号联动演示，使用独立演示数据。" size="md">
+      <dl v-if="selectedLine" class="m-0 space-y-5">
+        <div>
+          <dt class="qs-type-meta text-muted-foreground">
+            订单编号
+          </dt>
+          <dd class="qs-type-data m-0 mt-1 break-all">
+            {{ sourceKind === 'sales' ? selectedLine.salesOrderNo : selectedLine.purchaseOrderNo }}
+          </dd>
+        </div>
+        <div>
+          <dt class="qs-type-meta text-muted-foreground">
+            关联产品
+          </dt>
+          <dd class="qs-type-body m-0 mt-1 break-words">
+            {{ selectedLine.goodsName }}
+          </dd>
+        </div>
+      </dl>
+      <template #footer>
+        <FaButton variant="outline" @click="sourceVisible = false">
+          关闭
+        </FaButton>
+      </template>
+    </QsGenericDrawer>
   </section>
 </template>

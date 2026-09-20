@@ -12,7 +12,7 @@ const lineSelect = {
   recipientName: true, recipientPhone: true, recipientAddress: true, codAmountTwd: true,
   warehouseReceiptReference: true, packageCount: true, packageUnit: true, grossWeightKg: true,
   lengthCm: true, widthCm: true, heightCm: true, volumeCai: true, remark: true,
-  shipment: { select: { shippingMarkText: true, purchaseOrder: { select: { salesOrder: { select: { orderNo: true } } } } } },
+  shipment: { select: { shippingMarkText: true, purchaseOrder: { select: { id: true, orderNo: true, salesOrder: { select: { id: true, orderNo: true } } } } } },
 } satisfies Prisma.ContainerLoadingItemSelect
 type PersonalLine = Prisma.ContainerLoadingItemGetPayload<{ select: typeof lineSelect }>
 
@@ -25,7 +25,9 @@ function personalWhere(actorUserId: string): Prisma.ContainerLoadingItemWhereInp
 function serializeLine(row: PersonalLine): OperationsOceanContainerLineDto {
   const { shipment, codAmountTwd, grossWeightKg, lengthCm, widthCm, heightCm, volumeCai, ...fields } = row
   return {
-    ...fields, shippingMark: shipment?.shippingMarkText ?? null, salesOrderNo: shipment?.purchaseOrder.salesOrder?.orderNo ?? null,
+    ...fields, shippingMark: shipment?.shippingMarkText ?? null,
+    salesOrderId: shipment?.purchaseOrder.salesOrder?.id ?? null, salesOrderNo: shipment?.purchaseOrder.salesOrder?.orderNo ?? null,
+    purchaseOrderId: shipment?.purchaseOrder.id ?? null, purchaseOrderNo: shipment?.purchaseOrder.orderNo ?? null,
     codAmountTwd: codAmountTwd?.toFixed(2) ?? null, grossWeightKg: grossWeightKg?.toFixed(3) ?? null,
     lengthCm: lengthCm?.toFixed(3) ?? null, widthCm: widthCm?.toFixed(3) ?? null, heightCm: heightCm?.toFixed(3) ?? null,
     volumeCai: volumeCai?.toFixed(8) ?? null,

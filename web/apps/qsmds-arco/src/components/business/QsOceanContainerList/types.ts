@@ -20,7 +20,10 @@ export interface OceanContainerLine {
   oceanShippingMarkText: string | null
   goodsName: string
   shippingMark: string | null
+  salesOrderId: string | null
   salesOrderNo: string | null
+  purchaseOrderId: string | null
+  purchaseOrderNo: string | null
   recipientName: string | null
   codAmountTwd: string | null
 }
@@ -40,6 +43,13 @@ export interface OceanContainerItemsRequest {
   pageSize: number
 }
 
+/** 只通知所点明细与来源类型，调用方复验归属后再读取最新订单引用。 */
+export interface OceanContainerSourceRequest {
+  containerId: string
+  lineId: string
+  kind: 'sales' | 'purchase'
+}
+
 export interface OceanContainerListProps {
   items: readonly OceanContainerSummary[]
   details: Readonly<Record<string, OceanContainerDetailPage | undefined>>
@@ -49,4 +59,6 @@ export interface OceanContainerListProps {
   pageSize?: number
   loading?: boolean
   error?: string | null
+  canViewSales?: boolean
+  canViewPurchase?: boolean
 }

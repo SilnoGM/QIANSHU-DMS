@@ -80172,6 +80172,20 @@
             "type": "string",
             "nullable": true
           },
+          "purchaseOrderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "purchaseOrderNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "salesOrderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
           "salesOrderNo": {
             "type": "string",
             "nullable": true
@@ -80250,6 +80264,9 @@
         },
         "required": [
           "shippingMark",
+          "purchaseOrderId",
+          "purchaseOrderNo",
+          "salesOrderId",
           "salesOrderNo",
           "recipientName",
           "recipientPhone",

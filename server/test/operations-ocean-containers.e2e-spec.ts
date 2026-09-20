@@ -25,14 +25,17 @@ interface PersonalLine {
   oceanShippingMarkText: string | null
   codAmountTwd: string | null
   shippingMark: string | null
+  salesOrderId: string | null
   salesOrderNo: string | null
+  purchaseOrderId: string | null
+  purchaseOrderNo: string | null
 }
 
 interface Page<T> { items: T[], total: number }
 
 const basePath = '/api/operations/ocean-containers'
 const overviewKeys = ['id', 'containerBatchNo', 'containerBatchName', 'loadingDate', 'warehouseValue', 'warehouseName', 'itemCount', 'myItemCount', 'grossWeightKgTotal', 'volumeCaiTotal'].sort()
-const personalLineKeys = ['id', 'containerBatchId', 'lineNumber', 'oceanShippingMarkText', 'goodsName', 'shippingMark', 'salesOrderNo', 'recipientName', 'codAmountTwd', 'warehouseReceiptReference', 'recipientPhone', 'recipientAddress', 'packageCount', 'packageUnit', 'grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'remark'].sort()
+const personalLineKeys = ['id', 'containerBatchId', 'lineNumber', 'oceanShippingMarkText', 'goodsName', 'shippingMark', 'salesOrderId', 'salesOrderNo', 'purchaseOrderId', 'purchaseOrderNo', 'recipientName', 'codAmountTwd', 'warehouseReceiptReference', 'recipientPhone', 'recipientAddress', 'packageCount', 'packageUnit', 'grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'remark'].sort()
 const forbiddenKeys = ['sourceData', 'sourceFileId', 'sourceFile', 'sourceSheetName', 'sourceRowNumber', 'billLines', 'bills', 'creationRequestKey', 'creationPayloadHash', 'createdById', 'updatedById', 'issuerUserId']
 
 describe('operations ocean containers with isolated PostgreSQL', () => {
@@ -162,6 +165,9 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
     for (const item of all.items) {
       expect(Object.keys(item).sort()).toEqual(personalLineKeys)
       expect(item.salesOrderNo).toBe(aliceShipment.source!.orderNo)
+      expect(item.salesOrderId).toBe(aliceShipment.source!.id)
+      expect(item.purchaseOrderNo).toBe(aliceShipment.order.orderNo)
+      expect(item.purchaseOrderId).toBe(aliceShipment.order.id)
       for (const key of forbiddenKeys) expect(item).not.toHaveProperty(key)
     }
     const second = (await alice.browser.get(path).query({ page: 2, pageSize: 2 }).expect(200)).body as Page<PersonalLine>
@@ -193,7 +199,9 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
     const detail = (await alice.browser.get(`${basePath}/${mixedId}/items/${ownIds[0]}`).expect(200)).body as PersonalLine
     expect(detail).toMatchObject({
       id: ownIds[0], shippingMark: aliceShipment.part.shippingMarkText, codAmountTwd: '0.00',
-      salesOrderNo: aliceShipment.source!.orderNo, recipientName: '测试收件人',
+      salesOrderId: aliceShipment.source!.id, salesOrderNo: aliceShipment.source!.orderNo,
+      purchaseOrderId: aliceShipment.order.id, purchaseOrderNo: aliceShipment.order.orderNo,
+      recipientName: '测试收件人',
       recipientPhone: '0900123456', recipientAddress: '测试收件地址', remark: '请提前联系',
     })
     expect(Object.keys(detail).sort()).toEqual(personalLineKeys)

@@ -4,18 +4,22 @@ import type { CurrencyDescriptor } from '@/components/base/currency'
 import { Decimal } from 'decimal.js'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
+import OceanContainerSource from './OceanContainerSource.vue'
 
 const props = defineProps<{
   item: OceanContainerSummary
   detail?: OceanContainerDetailPage
   currencies: readonly CurrencyDescriptor[]
   expanded: boolean
+  canViewSales: boolean
+  canViewPurchase: boolean
 }>()
 const emit = defineEmits<{
   toggle: [open: boolean]
   retry: []
   pageChange: [page: number]
   viewLine: [line: OceanContainerLine]
+  viewSource: [value: { lineId: string, kind: 'sales' | 'purchase' }]
 }>()
 const { t } = useI18n()
 const id = useId()
@@ -133,10 +137,10 @@ function measurement(value: string | null, precision: number) {
         <template v-else>
           <div class="ocean-lines-desktop">
             <table class="qs-type-body text-left w-full border-collapse table-fixed">
-              <colgroup><col class="w-[18%]"><col><col class="w-[24%]"><col class="w-[11%]"><col class="w-[184px]"><col class="w-24"></colgroup>
+              <colgroup><col class="w-[15%]"><col><col class="w-[20%]"><col class="w-[218px]"><col class="w-[100px]"><col class="w-[184px]"><col class="w-24"></colgroup>
               <thead class="qs-type-meta text-muted-foreground bg-muted/10">
                 <tr>
-                  <th v-for="key in ['mark', 'goods', 'source', 'recipient', 'cod', 'actions']" :key="key" scope="col" class="font-medium px-4 py-3" :class="key === 'cod' && 'text-right'">
+                  <th v-for="key in ['mark', 'goods', 'shippingMark', 'source', 'recipient', 'cod', 'actions']" :key="key" scope="col" class="font-medium px-4 py-3" :class="key === 'cod' && 'text-right'">
                     {{ t(`qsOceanContainer.${key}`) }}
                   </th>
                 </tr>
@@ -145,7 +149,7 @@ function measurement(value: string | null, precision: number) {
                 <tr v-for="line in detail.items" :key="line.id" class="group border-t border-border hover:bg-muted/20">
                   <td class="px-4 py-3">
                     <div class="flex gap-1 min-w-0 items-center">
-                      <span class="ocean-accent qs-type-data truncate" :title="line.oceanShippingMarkText ?? undefined">{{ line.oceanShippingMarkText || '—' }}</span>
+                      <span class="ocean-accent ocean-emphasis qs-type-data truncate" :title="line.oceanShippingMarkText ?? undefined">{{ line.oceanShippingMarkText || '—' }}</span>
                       <CopyCellButton v-if="line.oceanShippingMarkText" :text="line.oceanShippingMarkText" :label="t('qsOceanContainer.mark')" always-visible />
                     </div>
                   </td>
@@ -156,11 +160,11 @@ function measurement(value: string | null, precision: number) {
                   </td>
                   <td class="px-4 py-3">
                     <div class="qs-type-data truncate" :title="line.shippingMark ?? undefined">
-                      {{ line.shippingMark || t('qsOceanContainer.unlinked') }}
+                      {{ line.shippingMark || '—' }}
                     </div>
-                    <div class="qs-type-meta text-muted-foreground mt-1 truncate" :title="line.salesOrderNo ?? undefined">
-                      {{ line.salesOrderNo || '—' }}
-                    </div>
+                  </td>
+                  <td class="px-4 py-3">
+                    <OceanContainerSource :line="line" :can-view-sales="canViewSales" :can-view-purchase="canViewPurchase" @view="emit('viewSource', { lineId: line.id, kind: $event })" />
                   </td>
                   <td class="px-4 py-3">
                     <div class="truncate" :title="line.recipientName ?? undefined">
@@ -168,7 +172,7 @@ function measurement(value: string | null, precision: number) {
                     </div>
                   </td>
                   <td class="px-4 py-3 text-right">
-                    <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent" />
+                    <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent ocean-emphasis" />
                   </td>
                   <td class="px-2 py-3">
                     <FaButton variant="link" size="sm" class="ocean-accent" :aria-label="t('qsOceanContainer.viewLabel', { name: line.goodsName, mark: line.oceanShippingMarkText ?? '' })" @click="emit('viewLine', line)">
@@ -183,7 +187,7 @@ function measurement(value: string | null, precision: number) {
             <div v-for="line in detail.items" :key="line.id" class="p-4 border-b border-border flex flex-col gap-2 last:border-b-0">
               <div class="flex gap-2 min-w-0 items-center justify-between">
                 <div class="flex gap-1 min-w-0 items-center">
-                  <span class="ocean-accent qs-type-data truncate" :title="line.oceanShippingMarkText ?? undefined">{{ line.oceanShippingMarkText || '—' }}</span>
+                  <span class="ocean-accent ocean-emphasis qs-type-data truncate" :title="line.oceanShippingMarkText ?? undefined">{{ line.oceanShippingMarkText || '—' }}</span>
                   <CopyCellButton v-if="line.oceanShippingMarkText" :text="line.oceanShippingMarkText" :label="t('qsOceanContainer.mark')" always-visible />
                 </div>
                 <FaButton variant="link" size="sm" class="ocean-accent shrink-0" :aria-label="t('qsOceanContainer.viewLabel', { name: line.goodsName, mark: line.oceanShippingMarkText ?? '' })" @click="emit('viewLine', line)">
@@ -194,11 +198,12 @@ function measurement(value: string | null, precision: number) {
                 {{ line.goodsName }}
               </p>
               <p class="qs-type-meta text-muted-foreground m-0 [overflow-wrap:anywhere]">
-                {{ line.shippingMark || t('qsOceanContainer.unlinked') }} · {{ line.salesOrderNo || '—' }}
+                {{ t('qsOceanContainer.shippingMark') }}：<span class="qs-type-data">{{ line.shippingMark || '—' }}</span>
               </p>
+              <OceanContainerSource :line="line" :can-view-sales="canViewSales" :can-view-purchase="canViewPurchase" @view="emit('viewSource', { lineId: line.id, kind: $event })" />
               <div class="flex flex-wrap gap-2 items-center justify-between">
                 <span class="qs-type-body [overflow-wrap:anywhere]">{{ line.recipientName || '—' }}</span>
-                <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent" />
+                <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent ocean-emphasis" />
               </div>
             </div>
           </div>
@@ -227,11 +232,16 @@ function measurement(value: string | null, precision: number) {
   color: var(--ocean-accent);
 }
 
+/* 唛头与代收金额按业务要求突出，沿用全局粗体字重。 */
+.ocean-emphasis {
+  font-weight: var(--qs-type-weight-bold, 700);
+}
+
 .ocean-lines-mobile {
   display: none;
 }
 
-@container (width < 900px) {
+@container (width < 1100px) {
   .ocean-lines-desktop {
     display: none;
   }

@@ -43,7 +43,7 @@ const dimensions = computed(() => {
           {{ line.goodsName }}
         </h3>
         <div class="mt-3 flex gap-2 items-center">
-          <span class="qs-type-data text-primary min-w-0 break-all dark:text-primary-foreground">{{ line.oceanShippingMarkText || '—' }}</span>
+          <span class="ocean-emphasis qs-type-data text-primary min-w-0 break-all dark:text-primary-foreground">{{ line.oceanShippingMarkText || '—' }}</span>
           <CopyCellButton v-if="line.oceanShippingMarkText" :text="line.oceanShippingMarkText" :label="t('qsOceanContainer.mark')" always-visible />
         </div>
         <dl class="m-0 mt-4 gap-4 grid sm:grid-cols-2">
@@ -123,7 +123,7 @@ const dimensions = computed(() => {
             {{ t('qsOceanContainer.cod') }}
           </dt>
           <dd class="m-0 mt-1">
-            <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="text-primary dark:text-primary-foreground" />
+            <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-emphasis text-primary dark:text-primary-foreground" />
           </dd>
         </div>
       </dl>
@@ -143,3 +143,9 @@ const dimensions = computed(() => {
     </template>
   </QsGenericDrawer>
 </template>
+
+<style scoped>
+.ocean-emphasis {
+  font-weight: var(--qs-type-weight-bold, 700);
+}
+</style>

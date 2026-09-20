@@ -31,7 +31,10 @@ export const oceanContainerDemoLines: Readonly<Record<string, readonly DemoOcean
         ? '大型工业焚烧炉（含自动送料装置、烟气处理设备及全套安装配件）'
         : ['挖掘机履带', '工业垃圾焚烧炉', '电动升降平台', '不锈钢搅拌机'][lineIndex % 4]!,
       shippingMark: `DEMO/202609${String(20 - index).padStart(2, '0')}/货件-${String(lineIndex + 1).padStart(2, '0')}`,
+      salesOrderId: `${containerId}-sales-${lineIndex + 1}`,
       salesOrderNo: `SO/202609${String(20 - index).padStart(2, '0')}-${String(lineIndex + 1).padStart(5, '0')}`,
+      purchaseOrderId: `${containerId}-purchase-${lineIndex + 1}`,
+      purchaseOrderNo: `PO/202609${String(20 - index).padStart(2, '0')}-${String(lineIndex + 1).padStart(5, '0')}`,
       recipientName: ['林先生（演示）', '陳小姐（演示）', '王先生（演示）'][lineIndex % 3]!,
       codAmountTwd: lineIndex === 0 ? null : lineIndex === 1 ? '0.00' : '12800.00',
       recipientPhone: '0900-000-000（演示）',

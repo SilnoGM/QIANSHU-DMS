@@ -9,6 +9,7 @@
     "listError": "柜次列表加载失败，请重试。",
     "itemsError": "本柜次的个人明细加载失败，请重试。",
     "detailError": "明细暂时无法查看，请重试或确认该明细仍归属于本人。",
+    "sourceError": "来源订单暂时无法查看，请重试或确认该明细仍归属于本人且具有订单查看权限。",
     "retry": "重试",
     "detailTitle": "装柜明细",
     "shippingMark": "货件唛头",
