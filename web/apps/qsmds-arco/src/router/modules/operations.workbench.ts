@@ -113,8 +113,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'ocean-containers',
         name: 'qsOperationsOceanContainers',
-        component: () => import('@/views/workbenches/placeholder.vue'),
-        meta: { title: '海运柜次', icon: 'qs-ocean-containers' },
+        component: () => import('@/views/operations/ocean-containers/index.vue'),
+        meta: { title: '海运柜次', icon: 'qs-ocean-containers', auth: 'sales-orders:read' },
       },
       {
         path: 'overseas-storage',

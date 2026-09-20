@@ -10,11 +10,13 @@ import { ContainerSourceFileController } from './container-source-file.controlle
 import { ContainerSourceFileService } from './container-source-file.service'
 import { ContainerImportController } from './container-import.controller'
 import { ContainerImportService } from './container-import.service'
+import { OperationsOceanContainerController } from './operations-ocean-container.controller'
+import { OperationsOceanContainerService } from './operations-ocean-container.service'
 
 @Module({
   imports: [PrismaModule, AuthModule, DictionaryModule, MediaModule, NumberingModule],
-  controllers: [ContainerBatchController, ContainerSourceFileController, ContainerImportController],
-  providers: [ContainerBatchService, ContainerSourceFileService, ContainerImportService],
+  controllers: [ContainerBatchController, ContainerSourceFileController, ContainerImportController, OperationsOceanContainerController],
+  providers: [ContainerBatchService, ContainerSourceFileService, ContainerImportService, OperationsOceanContainerService],
   exports: [ContainerBatchService],
 })
 export class ContainerBatchModule {}

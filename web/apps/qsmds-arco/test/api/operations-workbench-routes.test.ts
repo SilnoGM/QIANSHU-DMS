@@ -3,9 +3,11 @@ import { readFileSync } from 'node:fs'
 // eslint-disable-next-line test/no-import-node-test -- 路由与采购页面入口契约使用 Node.js 内置 runner。
 import test from 'node:test'
 
+import { matchesAuthorization } from '../../src/composables/app/auth'
 import operationsWorkbenchRoutes from '../../src/router/modules/operations.workbench'
+import { filterAccessibleMenus } from '../../src/store/modules/app/menu.logic'
 
-test('仓储运输提供到仓业务页及两个后续空白页面', () => {
+test('仓储运输接入到仓和海运柜次业务页，海外寄仓保留占位', () => {
   const warehouseRoute = operationsWorkbenchRoutes.find(route => route.name === 'qsOperationsWarehouseTransport')
   assert.equal(warehouseRoute?.path, '/qs-operations/warehouse-transport')
   assert.equal(warehouseRoute?.meta?.title, '仓储运输')
@@ -19,10 +21,21 @@ test('仓储运输提供到仓业务页及两个后续空白页面', () => {
   const arrivals = warehouseRoute?.children?.[0]
   assert.match(String(arrivals?.component), /operations\/warehouse-arrivals\/index\.vue/u)
   assert.equal(arrivals?.meta?.auth, 'purchase-orders:read')
-  for (const route of warehouseRoute?.children?.slice(1) ?? []) {
-    assert.match(String(route.component), /workbenches\/placeholder\.vue/u)
-    assert.equal(route.meta?.auth, undefined)
-  }
+  const ocean = warehouseRoute?.children?.[1]
+  assert.match(String(ocean?.component), /operations\/ocean-containers\/index\.vue/u)
+  assert.equal(ocean?.meta?.auth, 'sales-orders:read')
+  const overseas = warehouseRoute?.children?.[2]
+  assert.match(String(overseas?.component), /workbenches\/placeholder\.vue/u)
+  assert.equal(overseas?.meta?.auth, undefined)
+
+  const canSeeOcean = (permissions: string[]) => filterAccessibleMenus(
+    operationsWorkbenchRoutes,
+    value => matchesAuthorization(permissions, value),
+    () => true,
+  ).flatMap(route => route.children ?? []).some(route => route.name === 'qsOperationsOceanContainers')
+  assert.equal(canSeeOcean([]), false)
+  assert.equal(canSeeOcean(['container-batches:read']), false)
+  assert.equal(canSeeOcean(['sales-orders:read']), true)
 })
 
 test('销售订单迁移到销售业务分组，旧路由不再保留', () => {

@@ -1,0 +1,26 @@
+{
+  "operationsOcean": {
+    "title": "海运柜次",
+    "description": "查看整柜装载概览，展开查看本人销售订单关联的装柜明细。",
+    "search": "搜索",
+    "searchPlaceholder": "搜索柜次名称或编号",
+    "noAccess": "暂无查看权限",
+    "noAccessDescription": "请登录具有销售订单查看权限的账户。",
+    "listError": "柜次列表加载失败，请重试。",
+    "itemsError": "本柜次的个人明细加载失败，请重试。",
+    "detailError": "明细暂时无法查看，请重试或确认该明细仍归属于本人。",
+    "retry": "重试",
+    "detailTitle": "装柜明细",
+    "shippingMark": "货件唛头",
+    "salesOrder": "销售订单",
+    "warehouseReceiptReference": "入仓参考",
+    "recipient": "收件人信息",
+    "weight": "整行毛重",
+    "dimensions": "每件尺寸",
+    "packages": "包装件数",
+    "packageUnit": "件",
+    "volume": "系统材积",
+    "remark": "备注",
+    "close": "关闭"
+  }
+}
