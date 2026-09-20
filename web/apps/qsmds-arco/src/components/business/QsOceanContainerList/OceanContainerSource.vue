@@ -16,7 +16,7 @@ const sources = computed(() => [
 
 <template>
   <div class="flex flex-col gap-1 min-w-0 items-start">
-    <FaTooltip v-for="source in sources" :key="source.kind" :text="source.number || source.label">
+    <FaTooltip v-for="source in sources" :key="source.kind" align="center" :text="source.number || source.label">
       <FaButton
         v-if="source.number && source.available" variant="link" size="sm"
         class="ocean-source-link px-0 h-auto max-w-full min-h-6 justify-start"

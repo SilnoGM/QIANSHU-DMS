@@ -4,6 +4,7 @@ import type { CurrencyDescriptor } from '@/components/base/currency'
 import { Decimal } from 'decimal.js'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
+import OceanContainerRecipient from './OceanContainerRecipient.vue'
 import OceanContainerSource from './OceanContainerSource.vue'
 
 const props = defineProps<{
@@ -151,21 +152,21 @@ function measurement(value: string | null, precision: number) {
                 <tr v-for="line in detail.items" :key="line.id" class="group border-t border-border hover:bg-muted/20">
                   <td class="px-4 py-3">
                     <div class="flex gap-1 min-w-0 items-center">
-                      <FaTooltip :text="line.oceanShippingMarkText ?? ''" :disabled="!line.oceanShippingMarkText">
+                      <FaTooltip align="center" :text="line.oceanShippingMarkText ?? ''" :disabled="!line.oceanShippingMarkText">
                         <span class="ocean-accent ocean-emphasis qs-type-data truncate" :tabindex="line.oceanShippingMarkText ? 0 : undefined">{{ line.oceanShippingMarkText || '—' }}</span>
                       </FaTooltip>
                       <CopyCellButton v-if="line.oceanShippingMarkText" :text="line.oceanShippingMarkText" :label="t('qsOceanContainer.mark')" always-visible />
                     </div>
                   </td>
                   <td class="px-4 py-3">
-                    <FaTooltip :text="line.goodsName ?? ''" :disabled="!line.goodsName">
-                      <div class="truncate" :tabindex="line.goodsName ? 0 : undefined">
+                    <FaTooltip align="center" :text="line.goodsName ?? ''" :disabled="!line.goodsName">
+                      <div class="align-middle max-w-full inline-block truncate" :tabindex="line.goodsName ? 0 : undefined">
                         {{ line.goodsName }}
                       </div>
                     </FaTooltip>
                   </td>
                   <td class="px-4 py-3">
-                    <FaTooltip :text="line.shippingMark ?? ''" :disabled="!line.shippingMark">
+                    <FaTooltip align="center" :text="line.shippingMark ?? ''" :disabled="!line.shippingMark">
                       <div class="qs-type-data truncate" :tabindex="line.shippingMark ? 0 : undefined">
                         {{ line.shippingMark || '—' }}
                       </div>
@@ -175,11 +176,7 @@ function measurement(value: string | null, precision: number) {
                     <OceanContainerSource :line="line" :can-view-sales="canViewSales" :can-view-purchase="canViewPurchase" @view="emit('viewSource', { lineId: line.id, kind: $event })" />
                   </td>
                   <td class="px-4 py-3">
-                    <FaTooltip :text="line.recipientName ?? ''" :disabled="!line.recipientName">
-                      <div class="truncate" :tabindex="line.recipientName ? 0 : undefined">
-                        {{ line.recipientName || '—' }}
-                      </div>
-                    </FaTooltip>
+                    <OceanContainerRecipient :line="line" />
                   </td>
                   <td class="px-4 py-3 text-right">
                     <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent ocean-emphasis" />
@@ -204,7 +201,7 @@ function measurement(value: string | null, precision: number) {
             <div v-for="line in detail.items" :key="line.id" class="p-4 border-b border-border flex flex-col gap-2 last:border-b-0">
               <div class="flex gap-2 min-w-0 items-center justify-between">
                 <div class="flex gap-1 min-w-0 items-center">
-                  <FaTooltip :text="line.oceanShippingMarkText ?? ''" :disabled="!line.oceanShippingMarkText">
+                  <FaTooltip align="center" :text="line.oceanShippingMarkText ?? ''" :disabled="!line.oceanShippingMarkText">
                     <span class="ocean-accent ocean-emphasis qs-type-data truncate" :tabindex="line.oceanShippingMarkText ? 0 : undefined">{{ line.oceanShippingMarkText || '—' }}</span>
                   </FaTooltip>
                   <CopyCellButton v-if="line.oceanShippingMarkText" :text="line.oceanShippingMarkText" :label="t('qsOceanContainer.mark')" always-visible />
@@ -218,7 +215,7 @@ function measurement(value: string | null, precision: number) {
               </p>
               <OceanContainerSource :line="line" :can-view-sales="canViewSales" :can-view-purchase="canViewPurchase" @view="emit('viewSource', { lineId: line.id, kind: $event })" />
               <div class="flex flex-wrap gap-2 items-center justify-between">
-                <span class="qs-type-body [overflow-wrap:anywhere]">{{ line.recipientName || '—' }}</span>
+                <OceanContainerRecipient :line="line" />
                 <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent ocean-emphasis" />
               </div>
               <div class="pt-2 border-t border-border flex justify-end">

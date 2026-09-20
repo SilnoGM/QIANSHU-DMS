@@ -25,6 +25,8 @@ export interface OceanContainerLine {
   purchaseOrderId: string | null
   purchaseOrderNo: string | null
   recipientName: string | null
+  recipientPhone: string | null
+  recipientAddress: string | null
   codAmountTwd: string | null
 }
 
