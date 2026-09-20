@@ -174,6 +174,9 @@ function measurement(value: string | null, precision: number) {
                         {{ line.shippingMark || '—' }}
                       </div>
                     </FaTooltip>
+                    <div v-if="line.shipmentNo" class="qs-type-meta text-muted-foreground mt-1 break-all">
+                      {{ line.shipmentNo }}
+                    </div>
                   </td>
                   <td class="px-4 py-3 text-right">
                     <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent ocean-emphasis" />
@@ -213,6 +216,9 @@ function measurement(value: string | null, precision: number) {
               <p class="qs-type-meta text-muted-foreground m-0 [overflow-wrap:anywhere]">
                 {{ t('qsOceanContainer.shippingMark') }}：<span class="qs-type-data">{{ line.shippingMark || '—' }}</span>
               </p>
+              <div v-if="line.shipmentNo" class="qs-type-meta text-muted-foreground break-all">
+                {{ line.shipmentNo }}
+              </div>
               <OceanContainerSource :line="line" :can-view-sales="canViewSales" :can-view-purchase="canViewPurchase" @view="emit('viewSource', { lineId: line.id, kind: $event })" />
               <div class="flex flex-wrap gap-2 items-center justify-between">
                 <OceanContainerRecipient :line="line" />

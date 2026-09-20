@@ -80793,6 +80793,10 @@
       "OperationsOceanContainerLineDto": {
         "type": "object",
         "properties": {
+          "shipmentNo": {
+            "type": "string",
+            "nullable": true
+          },
           "shippingMark": {
             "type": "string",
             "nullable": true
@@ -80891,6 +80895,7 @@
           }
         },
         "required": [
+          "shipmentNo",
           "shippingMark",
           "purchaseOrderId",
           "purchaseOrderNo",

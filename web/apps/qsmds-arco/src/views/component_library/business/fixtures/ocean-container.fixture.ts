@@ -30,6 +30,7 @@ export const oceanContainerDemoLines: Readonly<Record<string, readonly DemoOcean
       goodsName: lineIndex === 1
         ? '大型工业焚烧炉（含自动送料装置、烟气处理设备及全套安装配件）'
         : ['挖掘机履带', '工业垃圾焚烧炉', '电动升降平台', '不锈钢搅拌机'][lineIndex % 4]!,
+      shipmentNo: `PKG/20260917-${String(lineIndex + 1).padStart(5, '0')}`,
       shippingMark: `DEMO/202609${String(20 - index).padStart(2, '0')}/货件-${String(lineIndex + 1).padStart(2, '0')}`,
       salesOrderId: `${containerId}-sales-${lineIndex + 1}`,
       salesOrderNo: `SO/202609${String(20 - index).padStart(2, '0')}-${String(lineIndex + 1).padStart(5, '0')}`,

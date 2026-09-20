@@ -20,7 +20,7 @@ export class OperationsOceanContainerItemsQueryDto extends PickType(ContainerBat
 /** 个人装柜明细的读取白名单；来源订单引用只用于既有权限下的详情读取，不暴露采运维护或账单域。 */
 export class OperationsOceanContainerLineDto extends PickType(ContainerLoadingItemDto, [
   'id', 'containerBatchId', 'version', 'lineNumber', 'oceanShippingMarkText', 'goodsName',
-  'shippingMark', 'salesOrderId', 'salesOrderNo', 'purchaseOrderId', 'purchaseOrderNo', 'recipientName', 'codAmountTwd',
+  'shipmentNo', 'shippingMark', 'salesOrderId', 'salesOrderNo', 'purchaseOrderId', 'purchaseOrderNo', 'recipientName', 'codAmountTwd',
   'warehouseReceiptReference', 'recipientPhone', 'recipientAddress', 'packageCount', 'packageUnit',
   'grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'remark',
 ] as const) {}

@@ -12,7 +12,7 @@ export const operationsOceanLineSelect = {
   recipientName: true, recipientPhone: true, recipientAddress: true, codAmountTwd: true,
   warehouseReceiptReference: true, packageCount: true, packageUnit: true, grossWeightKg: true,
   lengthCm: true, widthCm: true, heightCm: true, volumeCai: true, remark: true,
-  shipment: { select: { shippingMarkText: true, purchaseOrder: { select: { id: true, orderNo: true, salesOrder: { select: { id: true, orderNo: true } } } } } },
+  shipment: { select: { shipmentNo: true, shippingMarkText: true, purchaseOrder: { select: { id: true, orderNo: true, salesOrder: { select: { id: true, orderNo: true } } } } } },
 } satisfies Prisma.ContainerLoadingItemSelect
 const lineSelect = operationsOceanLineSelect
 type PersonalLine = Prisma.ContainerLoadingItemGetPayload<{ select: typeof lineSelect }>
@@ -26,7 +26,7 @@ export function personalOceanLineWhere(actorUserId: string): Prisma.ContainerLoa
 export function serializeOperationsOceanLine(row: PersonalLine): OperationsOceanContainerLineDto {
   const { shipment, codAmountTwd, grossWeightKg, lengthCm, widthCm, heightCm, volumeCai, ...fields } = row
   return {
-    ...fields, shippingMark: shipment?.shippingMarkText ?? null,
+    ...fields, shipmentNo: shipment?.shipmentNo ?? null, shippingMark: shipment?.shippingMarkText ?? null,
     salesOrderId: shipment?.purchaseOrder.salesOrder?.id ?? null, salesOrderNo: shipment?.purchaseOrder.salesOrder?.orderNo ?? null,
     purchaseOrderId: shipment?.purchaseOrder.id ?? null, purchaseOrderNo: shipment?.purchaseOrder.orderNo ?? null,
     codAmountTwd: codAmountTwd?.toFixed(2) ?? null, grossWeightKg: grossWeightKg?.toFixed(3) ?? null,

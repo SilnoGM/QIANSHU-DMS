@@ -19,6 +19,7 @@ export interface OceanContainerLine {
   id: string
   oceanShippingMarkText: string | null
   goodsName: string
+  shipmentNo: string | null
   shippingMark: string | null
   salesOrderId: string | null
   salesOrderNo: string | null
