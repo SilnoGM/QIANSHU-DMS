@@ -138,10 +138,19 @@ test('代收核对区保留零与取消代收，等值金额不产生修改摘�
 
 test('代收修改使用原代收和新代收模板，零与取消代收不混淆', () => {
   const line = { ...source(), shippingMark: '货件唛头不可复制' }
-  assert.equal(buildOceanChangeText('0917柜', line, { kind: 'COD', codAmountTwd: '300.00' }), '【代收款修改】\n柜次：0917柜\n唛头：L-091726-01\n\n原代收：120.00\n新代收改为：300.00')
-  assert.match(buildOceanChangeText('0917柜', line, { kind: 'COD', codAmountTwd: '0.00' }), /原代收：120\.00\n新代收改为：0\.00$/u)
-  assert.match(buildOceanChangeText('0917柜', line, { kind: 'COD', codAmountTwd: null }), /原代收：120\.00\n新代收改为：取消代收$/u)
-  assert.match(buildOceanChangeText('0917柜', { ...line, codAmountTwd: null }, { kind: 'COD', codAmountTwd: '9007199254740993.01' }), /原代收：无代收\n新代收改为：9007199254740993\.01$/u)
+  assert.equal(buildOceanChangeText('0917柜', line, { kind: 'COD', codAmountTwd: '300.00' }), '【代收款修改】\n柜次：0917柜\n唛头：L-091726-01\n\n原代收：NT$ 120\n新代收改为：NT$ 300')
+  assert.match(buildOceanChangeText('0917柜', line, { kind: 'COD', codAmountTwd: '0.00' }), /原代收：NT\$ 120\n新代收改为：NT\$ 0$/u)
+  assert.match(buildOceanChangeText('0917柜', line, { kind: 'COD', codAmountTwd: null }), /原代收：NT\$ 120\n新代收改为：取消代收$/u)
+  assert.match(buildOceanChangeText('0917柜', { ...line, codAmountTwd: null }, { kind: 'COD', codAmountTwd: '9007199254740993.01' }), /原代收：无代收\n新代收改为：NT\$ 9007199254740993\.01$/u)
+})
+
+test('代收复制金额带币种和空格，整数省略小数，非整数保留两位且大金额不丢精度', () => {
+  const integer = buildOceanChangeText('0917柜', { ...source(), codAmountTwd: '210000.00' }, { kind: 'COD', codAmountTwd: '200000.00' })
+  assert.equal(integer, '【代收款修改】\n柜次：0917柜\n唛头：L-091726-01\n\n原代收：NT$ 210000\n新代收改为：NT$ 200000')
+  const decimal = buildOceanChangeText('0917柜', { ...source(), codAmountTwd: '210000.50' }, { kind: 'COD', codAmountTwd: '200000.01' })
+  assert.ok(decimal.endsWith('原代收：NT$ 210000.50\n新代收改为：NT$ 200000.01'))
+  const large = buildOceanChangeText('0917柜', { ...source(), codAmountTwd: '9999999999999999999999999999.00' }, { kind: 'COD', codAmountTwd: '9999999999999999999999999999.99' })
+  assert.ok(large.endsWith('原代收：NT$ 9999999999999999999999999999\n新代收改为：NT$ 9999999999999999999999999999.99'))
 })
 
 test('金额完整支持 Decimal(30,2)，文本以 code point 限长并归一换行', () => {

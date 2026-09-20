@@ -52,12 +52,17 @@ function normalizeRecipientText(value: string | null): string | null {
   return value?.replace(/\r\n?/gu, '\n').trim() || null
 }
 
+function formatCodCopyAmount(value: string | null, emptyText: string): string {
+  // 用字符串去掉全零小数，避免大金额转为浮点数后丢失精度。
+  return value === null ? emptyText : `NT$ ${value.replace(/\.0+$/u, '')}`
+}
+
 export function buildOceanChangeText(containerName: string, line: OceanChangeLine, next: OceanChangeValue): string {
   const heading = [`【${next.kind === 'RECIPIENT' ? '收件人信息' : '代收款'}修改】`, `柜次：${containerName}`, `唛头：${line.oceanShippingMarkText || '—'}`]
   if (next.kind === 'COD') {
     const before = normalizeOceanChange('COD', line).value
     const amount = before?.kind === 'COD' ? before.codAmountTwd : line.codAmountTwd
-    return [...heading, '', `原代收：${amount ?? '无代收'}`, `新代收改为：${next.codAmountTwd ?? '取消代收'}`].join('\n')
+    return [...heading, '', `原代收：${formatCodCopyAmount(amount, '无代收')}`, `新代收改为：${formatCodCopyAmount(next.codAmountTwd, '取消代收')}`].join('\n')
   }
   const changes = RECIPIENT_FIELDS
     .filter(key => normalizeRecipientText(line[key]) !== normalizeRecipientText(next[key]))
