@@ -53,11 +53,14 @@ function normalizeRecipientText(value: string | null): string | null {
 }
 
 export function buildOceanChangeText(containerName: string, line: OceanChangeLine, next: OceanChangeValue): string {
-  const heading = [`【装柜明细${next.kind === 'RECIPIENT' ? '收件人信息' : '代收款'}修改】`, `柜次：${containerName}`, `海运唛头：${line.oceanShippingMarkText || '—'}`]
+  const heading = [`【${next.kind === 'RECIPIENT' ? '收件人信息' : '代收款'}修改】`, `柜次：${containerName}`, `唛头：${line.oceanShippingMarkText || '—'}`]
   if (next.kind === 'COD') {
     const before = normalizeOceanChange('COD', line).value
     const amount = before?.kind === 'COD' ? before.codAmountTwd : line.codAmountTwd
-    return [...heading, '', `修改前：${amount === null ? '无代收' : `${amount} TWD`}`, `修改后：${next.codAmountTwd === null ? '取消代收' : `${next.codAmountTwd} TWD`}`].join('\n')
+    return [...heading, '', `原代收：${amount ?? '无代收'}`, `新代收改为：${next.codAmountTwd ?? '取消代收'}`].join('\n')
   }
-  return [...heading, '', '【修改前】', ...RECIPIENT_FIELDS.map(key => `${labels[key]}：${normalizeRecipientText(line[key]) || '—'}`), '', '【修改后】', ...RECIPIENT_FIELDS.map(key => `${labels[key]}：${next[key] || (normalizeRecipientText(line[key]) ? '—（清空）' : '—')}`)].join('\n')
+  const changes = RECIPIENT_FIELDS
+    .filter(key => normalizeRecipientText(line[key]) !== normalizeRecipientText(next[key]))
+    .map(key => `${labels[key]}改为：${normalizeRecipientText(next[key]) ?? '清空'}`)
+  return [...heading, '', ...changes].join('\n')
 }

@@ -1,6 +1,6 @@
 import type { OceanChangeLine } from '../../src/views/operations/ocean-containers/change-logic'
 import assert from 'node:assert/strict'
-// eslint-disable-next-line test/no-import-node-test -- 验证三步修改的证据门槛、剪贴板内容与未知结果重试。
+// eslint-disable-next-line test/no-import-node-test -- 验证修改确认、剪贴板内容、撤销与未知结果重试。
 import test from 'node:test'
 import { effectScope } from 'vue'
 import { buildOceanChangeText, normalizeOceanChange } from '../../src/views/operations/ocean-containers/change-logic'
@@ -104,10 +104,26 @@ test('修改值规范化保留空值和零的区别，严格校验两位非负�
   }
 })
 
-test('复制包含柜次和海运唛头及完整修改前后信息，取消代收明确标注', () => {
+test('收件修改按模板只复制变化字段，唛头使用海运唛头', () => {
+  const line = { ...source(), shippingMark: '货件唛头不可复制' }
+  const nameOnly = normalizeOceanChange('RECIPIENT', { ...line, recipientName: '謝崑滄1' }).value!
+  assert.equal(buildOceanChangeText('0917柜', line, nameOnly), '【收件人信息修改】\n柜次：0917柜\n唛头：L-091726-01\n\n客户姓名改为：謝崑滄1')
   const after = normalizeOceanChange('RECIPIENT', { ...source(), recipientAddress: '新地址', remark: '第一行\n第二行' }).value!
-  assert.equal(buildOceanChangeText('0917柜', source(), after), '【装柜明细收件人信息修改】\n柜次：0917柜\n海运唛头：L-091726-01\n\n【修改前】\n客户姓名：客户\n客户电话：123\n收件地址：原地址\n备注：原备注\n\n【修改后】\n客户姓名：客户\n客户电话：123\n收件地址：新地址\n备注：第一行\n第二行')
-  assert.match(buildOceanChangeText('0917柜', source(), { kind: 'COD', codAmountTwd: null }), /修改前：120\.00 TWD\n修改后：取消代收/u)
+  assert.equal(buildOceanChangeText('0917柜', source(), after), '【收件人信息修改】\n柜次：0917柜\n唛头：L-091726-01\n\n收件地址改为：新地址\n备注改为：第一行\n第二行')
+})
+
+test('收件修改忽略空白和换行格式差异，清空字段明确说明', () => {
+  const line = { ...source(), recipientName: ' 客户 ', recipientPhone: null, recipientAddress: '原地址\r\n第二行' }
+  const after = normalizeOceanChange('RECIPIENT', { ...line, recipientName: '客户', recipientPhone: '', recipientAddress: '原地址\n第二行', remark: '' }).value!
+  assert.equal(buildOceanChangeText('0917柜', line, after), '【收件人信息修改】\n柜次：0917柜\n唛头：L-091726-01\n\n备注改为：清空')
+})
+
+test('代收修改使用原代收和新代收模板，零与取消代收不混淆', () => {
+  const line = { ...source(), shippingMark: '货件唛头不可复制' }
+  assert.equal(buildOceanChangeText('0917柜', line, { kind: 'COD', codAmountTwd: '300.00' }), '【代收款修改】\n柜次：0917柜\n唛头：L-091726-01\n\n原代收：120.00\n新代收改为：300.00')
+  assert.match(buildOceanChangeText('0917柜', line, { kind: 'COD', codAmountTwd: '0.00' }), /原代收：120\.00\n新代收改为：0\.00$/u)
+  assert.match(buildOceanChangeText('0917柜', line, { kind: 'COD', codAmountTwd: null }), /原代收：120\.00\n新代收改为：取消代收$/u)
+  assert.match(buildOceanChangeText('0917柜', { ...line, codAmountTwd: null }, { kind: 'COD', codAmountTwd: '9007199254740993.01' }), /原代收：无代收\n新代收改为：9007199254740993\.01$/u)
 })
 
 test('金额完整支持 Decimal(30,2)，文本以 code point 限长并归一换行', () => {

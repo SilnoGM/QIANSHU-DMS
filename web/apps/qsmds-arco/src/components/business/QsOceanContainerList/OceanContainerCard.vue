@@ -139,7 +139,7 @@ function measurement(value: string | null, precision: number) {
         <template v-else>
           <div class="ocean-lines-desktop">
             <table class="qs-type-body text-left w-full border-collapse table-fixed">
-              <colgroup><col class="w-[15%]"><col class="w-[calc(12em+2rem)]"><col><col class="w-[218px]"><col class="w-[100px]"><col class="w-[184px]"><col :class="canModify ? 'w-40' : 'w-24'"></colgroup>
+              <colgroup><col class="w-[15%]"><col class="w-[calc(12em+2rem)]"><col><col class="w-[218px]"><col class="w-[100px]"><col class="w-[184px]"><col :class="canModify ? 'w-56' : 'w-24'"></colgroup>
               <thead class="qs-type-meta text-muted-foreground bg-muted/10">
                 <tr>
                   <th v-for="key in ['mark', 'goods', 'shippingMark', 'source', 'recipient', 'cod', 'actions']" :key="key" scope="col" class="font-medium px-4 py-3" :class="key === 'cod' && 'text-right'">
@@ -177,14 +177,16 @@ function measurement(value: string | null, precision: number) {
                     <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent ocean-emphasis" />
                   </td>
                   <td class="px-2 py-3">
-                    <div v-if="canModify" class="flex gap-1">
-                      <FaButton v-for="kind in (['RECIPIENT', 'COD'] as const)" :key="kind" variant="link" size="sm" class="ocean-accent px-2" :aria-label="t('qsOceanContainer.changeLabel', { action: t(`qsOceanContainer.change${kind}`), mark: line.oceanShippingMarkText ?? line.goodsName })" @click="emit('changeLine', { lineId: line.id, kind })">
-                        {{ t(`qsOceanContainer.change${kind}`) }}
+                    <div class="flex gap-1 items-center">
+                      <template v-if="canModify">
+                        <FaButton v-for="kind in (['RECIPIENT', 'COD'] as const)" :key="kind" variant="ghost" size="sm" class="text-foreground px-2" :aria-label="t('qsOceanContainer.changeLabel', { action: t(`qsOceanContainer.change${kind}`), mark: line.oceanShippingMarkText ?? line.goodsName })" @click="emit('changeLine', { lineId: line.id, kind })">
+                          {{ t(`qsOceanContainer.change${kind}`) }}
+                        </FaButton>
+                      </template>
+                      <FaButton variant="ghost" size="sm" class="text-foreground px-2" :aria-label="t('qsOceanContainer.viewLabel', { name: line.goodsName, mark: line.oceanShippingMarkText ?? '' })" @click="emit('viewLine', line)">
+                        {{ t('qsOceanContainer.view') }}
                       </FaButton>
                     </div>
-                    <FaButton variant="link" size="sm" class="ocean-accent" :aria-label="t('qsOceanContainer.viewLabel', { name: line.goodsName, mark: line.oceanShippingMarkText ?? '' })" @click="emit('viewLine', line)">
-                      {{ t('qsOceanContainer.view') }}
-                    </FaButton>
                   </td>
                 </tr>
               </tbody>
@@ -197,9 +199,6 @@ function measurement(value: string | null, precision: number) {
                   <span class="ocean-accent ocean-emphasis qs-type-data truncate" :title="line.oceanShippingMarkText ?? undefined">{{ line.oceanShippingMarkText || '—' }}</span>
                   <CopyCellButton v-if="line.oceanShippingMarkText" :text="line.oceanShippingMarkText" :label="t('qsOceanContainer.mark')" always-visible />
                 </div>
-                <FaButton variant="link" size="sm" class="ocean-accent shrink-0" :aria-label="t('qsOceanContainer.viewLabel', { name: line.goodsName, mark: line.oceanShippingMarkText ?? '' })" @click="emit('viewLine', line)">
-                  {{ t('qsOceanContainer.view') }}
-                </FaButton>
               </div>
               <p class="qs-type-body-medium m-0 [overflow-wrap:anywhere]">
                 {{ line.goodsName }}
@@ -212,9 +211,14 @@ function measurement(value: string | null, precision: number) {
                 <span class="qs-type-body [overflow-wrap:anywhere]">{{ line.recipientName || '—' }}</span>
                 <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent ocean-emphasis" />
               </div>
-              <div v-if="canModify" class="pt-2 border-t border-border flex gap-2 justify-end">
-                <FaButton v-for="kind in (['RECIPIENT', 'COD'] as const)" :key="kind" variant="outline" size="sm" class="min-h-11" :aria-label="t('qsOceanContainer.changeLabel', { action: t(`qsOceanContainer.change${kind}`), mark: line.oceanShippingMarkText ?? line.goodsName })" @click="emit('changeLine', { lineId: line.id, kind })">
-                  {{ t(`qsOceanContainer.change${kind}`) }}
+              <div class="pt-2 border-t border-border flex gap-1 justify-end">
+                <template v-if="canModify">
+                  <FaButton v-for="kind in (['RECIPIENT', 'COD'] as const)" :key="kind" variant="ghost" size="sm" class="text-foreground px-2 min-h-11" :aria-label="t('qsOceanContainer.changeLabel', { action: t(`qsOceanContainer.change${kind}`), mark: line.oceanShippingMarkText ?? line.goodsName })" @click="emit('changeLine', { lineId: line.id, kind })">
+                    {{ t(`qsOceanContainer.change${kind}`) }}
+                  </FaButton>
+                </template>
+                <FaButton variant="ghost" size="sm" class="text-foreground px-2 min-h-11" :aria-label="t('qsOceanContainer.viewLabel', { name: line.goodsName, mark: line.oceanShippingMarkText ?? '' })" @click="emit('viewLine', line)">
+                  {{ t('qsOceanContainer.view') }}
                 </FaButton>
               </div>
             </div>
@@ -253,7 +257,7 @@ function measurement(value: string | null, precision: number) {
   display: none;
 }
 
-@container (width < 1100px) {
+@container (width < 1280px) {
   .ocean-lines-desktop {
     display: none;
   }
