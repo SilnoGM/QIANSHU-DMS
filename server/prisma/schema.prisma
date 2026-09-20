@@ -503,6 +503,7 @@ enum FundPostingBatchKind {
 }
 
 model User {
+  containerLoadingItemChanges ContainerLoadingItemChange[]
   containerBatchesCreated ContainerBatch[] @relation("ContainerBatchCreatedBy")
   containerBatchesUpdated ContainerBatch[] @relation("ContainerBatchUpdatedBy")
   containerLoadingItemsCreated ContainerLoadingItem[] @relation("ContainerLoadingItemCreatedBy")
@@ -1950,6 +1951,7 @@ model ContainerBatch {
 }
 
 model ContainerLoadingItem {
+  changes ContainerLoadingItemChange[]
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   containerBatchId String @map("container_batch_id") @db.Uuid
   shipmentId String? @map("shipment_id") @db.Uuid
@@ -1991,6 +1993,35 @@ model ContainerLoadingItem {
   @@index([shipmentId], map: "container_loading_items_shipment_idx")
   @@index([oceanShippingMarkText], map: "container_loading_items_ocean_mark_idx")
   @@map("container_loading_items")
+}
+
+enum ContainerLoadingItemChangeKind {
+  RECIPIENT
+  COD
+  @@map("container_loading_item_change_kind")
+}
+
+// 用户确认已发送群通知后才生成记录；撤销通过追加逆向记录保留完整历史。
+model ContainerLoadingItemChange {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  loadingItemId String @map("loading_item_id") @db.Uuid
+  kind ContainerLoadingItemChangeKind
+  beforeData Json @map("before_data") @db.JsonB
+  afterData Json @map("after_data") @db.JsonB
+  previousVersion Int @map("previous_version")
+  version Int
+  reversesChangeId String? @unique(map: "container_loading_item_changes_reverses_key") @map("reverses_change_id") @db.Uuid
+  requestKey String @map("request_key") @db.Uuid
+  payloadHash String @map("payload_hash") @db.Char(64)
+  actorUserId String @map("actor_user_id") @db.Uuid
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  loadingItem ContainerLoadingItem @relation(fields: [loadingItemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reversesChange ContainerLoadingItemChange? @relation("ContainerLoadingItemChangeReversal", fields: [reversesChangeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reversedBy ContainerLoadingItemChange? @relation("ContainerLoadingItemChangeReversal")
+  actor User @relation(fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([actorUserId, requestKey], map: "container_loading_item_changes_actor_request_key")
+  @@index([loadingItemId, createdAt], map: "container_loading_item_changes_item_created_idx")
+  @@map("container_loading_item_changes")
 }
 
 model OceanFreightBill {

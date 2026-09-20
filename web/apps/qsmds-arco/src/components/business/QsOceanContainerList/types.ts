@@ -50,6 +50,12 @@ export interface OceanContainerSourceRequest {
   kind: 'sales' | 'purchase'
 }
 
+export interface OceanContainerChangeRequest {
+  containerId: string
+  lineId: string
+  kind: 'RECIPIENT' | 'COD'
+}
+
 export interface OceanContainerListProps {
   items: readonly OceanContainerSummary[]
   details: Readonly<Record<string, OceanContainerDetailPage | undefined>>
@@ -61,4 +67,5 @@ export interface OceanContainerListProps {
   error?: string | null
   canViewSales?: boolean
   canViewPurchase?: boolean
+  canModify?: boolean
 }

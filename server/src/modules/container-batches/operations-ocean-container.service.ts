@@ -7,22 +7,23 @@ import { containerFailure, containerUuid } from './container-batch.normalizer'
 import type { OperationsOceanContainerItemsQueryDto, OperationsOceanContainerLineDto, OperationsOceanContainerLinePageDto, OperationsOceanContainerPageDto } from './operations-ocean-container.dto'
 
 const overviewSelect = { id: true, containerBatchNo: true, containerBatchName: true, loadingDate: true, warehouseValue: true } satisfies Prisma.ContainerBatchSelect
-const lineSelect = {
-  id: true, containerBatchId: true, lineNumber: true, oceanShippingMarkText: true, goodsName: true,
+export const operationsOceanLineSelect = {
+  id: true, containerBatchId: true, version: true, lineNumber: true, oceanShippingMarkText: true, goodsName: true,
   recipientName: true, recipientPhone: true, recipientAddress: true, codAmountTwd: true,
   warehouseReceiptReference: true, packageCount: true, packageUnit: true, grossWeightKg: true,
   lengthCm: true, widthCm: true, heightCm: true, volumeCai: true, remark: true,
   shipment: { select: { shippingMarkText: true, purchaseOrder: { select: { id: true, orderNo: true, salesOrder: { select: { id: true, orderNo: true } } } } } },
 } satisfies Prisma.ContainerLoadingItemSelect
+const lineSelect = operationsOceanLineSelect
 type PersonalLine = Prisma.ContainerLoadingItemGetPayload<{ select: typeof lineSelect }>
 
-function personalWhere(actorUserId: string): Prisma.ContainerLoadingItemWhereInput {
+export function personalOceanLineWhere(actorUserId: string): Prisma.ContainerLoadingItemWhereInput {
   // 归属只取服务器会话身份，不接受查询参数指定人员；管理员也不跳过此限制。
   // 未匹配货件、独立备货和没有销售来源的行自然被关系过滤排除。
   return { shipment: { purchaseOrder: { salesOrder: { issuerUserId: containerUuid(actorUserId) } } } }
 }
 
-function serializeLine(row: PersonalLine): OperationsOceanContainerLineDto {
+export function serializeOperationsOceanLine(row: PersonalLine): OperationsOceanContainerLineDto {
   const { shipment, codAmountTwd, grossWeightKg, lengthCm, widthCm, heightCm, volumeCai, ...fields } = row
   return {
     ...fields, shippingMark: shipment?.shippingMarkText ?? null,
@@ -33,6 +34,9 @@ function serializeLine(row: PersonalLine): OperationsOceanContainerLineDto {
     volumeCai: volumeCai?.toFixed(8) ?? null,
   }
 }
+
+const personalWhere = personalOceanLineWhere
+const serializeLine = serializeOperationsOceanLine
 
 @Injectable()
 export class OperationsOceanContainerService {

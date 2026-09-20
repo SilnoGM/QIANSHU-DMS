@@ -35,7 +35,7 @@ interface Page<T> { items: T[], total: number }
 
 const basePath = '/api/operations/ocean-containers'
 const overviewKeys = ['id', 'containerBatchNo', 'containerBatchName', 'loadingDate', 'warehouseValue', 'warehouseName', 'itemCount', 'myItemCount', 'grossWeightKgTotal', 'volumeCaiTotal'].sort()
-const personalLineKeys = ['id', 'containerBatchId', 'lineNumber', 'oceanShippingMarkText', 'goodsName', 'shippingMark', 'salesOrderId', 'salesOrderNo', 'purchaseOrderId', 'purchaseOrderNo', 'recipientName', 'codAmountTwd', 'warehouseReceiptReference', 'recipientPhone', 'recipientAddress', 'packageCount', 'packageUnit', 'grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'remark'].sort()
+const personalLineKeys = ['id', 'containerBatchId', 'version', 'lineNumber', 'oceanShippingMarkText', 'goodsName', 'shippingMark', 'salesOrderId', 'salesOrderNo', 'purchaseOrderId', 'purchaseOrderNo', 'recipientName', 'codAmountTwd', 'warehouseReceiptReference', 'recipientPhone', 'recipientAddress', 'packageCount', 'packageUnit', 'grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'remark'].sort()
 const forbiddenKeys = ['sourceData', 'sourceFileId', 'sourceFile', 'sourceSheetName', 'sourceRowNumber', 'billLines', 'bills', 'creationRequestKey', 'creationPayloadHash', 'createdById', 'updatedById', 'issuerUserId']
 
 describe('operations ocean containers with isolated PostgreSQL', () => {

@@ -58,6 +58,7 @@ const details = ref<Record<string, OceanContainerDetailPage>>({})
 | `error` | `string \| null` | 无，列表失败说明 |
 | `canViewSales` | `boolean` | `false`，具有对应权限且销售订单 ID、编号齐全时显示来源按钮 |
 | `canViewPurchase` | `boolean` | `false`，具有对应权限且采购订单 ID、编号齐全时显示来源按钮 |
+| `canModify` | `boolean` | `false`，允许显示“改信息 / 改代收”；业务权限与归属由调用方及服务端校验 |
 | `v-model:expanded-ids` | `string[]` | 已展开柜次 ID；允许同时展开多柜 |
 
 类型定义见 [types.ts](./types.ts)。`OceanContainerDetailPage.status` 支持 `idle / loading / ready / error`；每页包含 `items / total / page / pageSize` 及可选的 `error`。默认首次请求个人明细第 1 页、每页 20 条。
@@ -73,6 +74,7 @@ const details = ref<Record<string, OceanContainerDetailPage>>({})
 | `retry` | 无 | 重试外层列表查询 |
 | `view-line` | `{ containerId, line }` | 校验访问权限后打开完整明细容器 |
 | `view-source` | `{ containerId, lineId, kind: 'sales' \| 'purchase' }` | 重新核对本人明细归属，用最新来源 ID 打开订单抽屉 |
+| `change-line` | `{ containerId, lineId, kind: 'RECIPIENT' \| 'COD' }` | 读取最新明细，完成修改、对比复制与发送确认后提交 |
 
 首次展开、个人明细翻页和失败重试通过 `request-items` 通知调用方。已就绪的明细收起后再展开不重复请求；多页缓存由调用方维护。`myItemCount = 0` 的柜次只展示个人空态，不发起明细请求。整柜尚无明细时展示装柜明细空态。
 
@@ -87,6 +89,8 @@ const details = ref<Record<string, OceanContainerDetailPage>>({})
 页面默认每页 10 柜，明细每页 20 条，支持柜次名称/编号搜索和多柜独立展开。已加载的个人明细分页在同一页面查询内缓存；搜索、外层翻页、离开页面、登录身份或权限变化立即取消请求并清空缓存，迟到响应不回写。页面详情使用独立的 `QsGenericDrawer`，不引用组件库 fixture 或演示抽屉。
 
 正式页面的装柜明细抽屉顶部突出海运唛头与代收货款，货件唛头和品名单独标注。收件人区可一键复制当前明细的客户姓名、客户电话、收件地址及备注；缺失字段保留空值，多行内容保持换行，复制成功后保留抽屉。
+
+具有 `sales-orders:update` 的用户可在本人明细操作列选择“改信息”或“改代收”，桌面和手机入口一致。页面使用四步弹窗完成编辑、对比并复制、确认已发送到群、成功提示；取消发送确认不会修改数据库。成功页倒数 5 秒关闭，期间可撤销本次更改，恢复修改前的字段；撤销带版本保护，不能覆盖他人后续修改。写请求使用原始版本和幂等键，未知结果可原样重试。弹窗最终关闭后刷新该柜当前页并失效其所有旧分页缓存，保持柜次展开状态。
 
 ## 组件库验收
 

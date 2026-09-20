@@ -9,7 +9,7 @@ export function useOperationsOceanContainers(
   enabled: Readonly<Ref<boolean>>,
   epoch: Readonly<Ref<number>>,
   query: Readonly<Ref<OperationsOceanContainerQuery>>,
-  api: OperationsOceanContainerApi,
+  api: Pick<OperationsOceanContainerApi, 'list' | 'items' | 'item'>,
   onInvalidPage: (page: number) => void,
   messages: { list: string, items: string, detail: string },
 ) {
@@ -195,6 +195,28 @@ export function useOperationsOceanContainers(
     }
   }
 
+  async function refreshItems(containerId: string): Promise<void> {
+    if (disposed || !enabled.value || loading.value) {
+      return
+    }
+    const previous = details.value[containerId]
+    itemControllers.get(containerId)?.abort()
+    itemControllers.delete(containerId)
+    // 修改后整柜的分页缓存都失效，不能在切回旧页时恢复修改前的收件资料或金额。
+    for (const key of cache.keys()) {
+      if (key.startsWith(`${containerId}:`)) {
+        cache.delete(key)
+      }
+    }
+    delete details.value[containerId]
+    if (selectedTarget?.containerId === containerId) {
+      closeDrawer()
+    }
+    if (previous) {
+      await requestItems({ containerId, page: previous.page, pageSize: previous.pageSize })
+    }
+  }
+
   async function openLine(containerId: string, itemId: string): Promise<void> {
     const container = rows.value.find(row => row.id === containerId)
     if (disposed || !enabled.value || !container || !container.myItemCount) {
@@ -215,5 +237,5 @@ export function useOperationsOceanContainers(
     reset()
   })
 
-  return { rows, total, loading, error, expandedIds, details, drawerOpen, selectedLine, selectedContainerName, detailLoading, detailError, reload, requestItems, openLine, closeDrawer, loadDetail }
+  return { rows, total, loading, error, expandedIds, details, drawerOpen, selectedLine, selectedContainerName, detailLoading, detailError, reload, requestItems, refreshItems, openLine, closeDrawer, loadDetail }
 }

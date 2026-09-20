@@ -12,11 +12,13 @@ import { ContainerImportController } from './container-import.controller'
 import { ContainerImportService } from './container-import.service'
 import { OperationsOceanContainerController } from './operations-ocean-container.controller'
 import { OperationsOceanContainerService } from './operations-ocean-container.service'
+import { OperationsOceanChangeController } from './operations-ocean-change.controller'
+import { OperationsOceanChangeService } from './operations-ocean-change.service'
 
 @Module({
   imports: [PrismaModule, AuthModule, DictionaryModule, MediaModule, NumberingModule],
-  controllers: [ContainerBatchController, ContainerSourceFileController, ContainerImportController, OperationsOceanContainerController],
-  providers: [ContainerBatchService, ContainerSourceFileService, ContainerImportService, OperationsOceanContainerService],
+  controllers: [ContainerBatchController, ContainerSourceFileController, ContainerImportController, OperationsOceanContainerController, OperationsOceanChangeController],
+  providers: [ContainerBatchService, ContainerSourceFileService, ContainerImportService, OperationsOceanContainerService, OperationsOceanChangeService],
   exports: [ContainerBatchService],
 })
 export class ContainerBatchModule {}

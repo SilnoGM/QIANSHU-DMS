@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { OperationsOceanContainerLineDto } from '@/api/generated/types.gen'
 import type { OperationsOceanContainerQuery } from '@/api/modules/operations-ocean-containers'
-import type { OceanContainerLine, OceanContainerSourceRequest } from '@/components/business/QsOceanContainerList/types'
+import type { OceanContainerChangeRequest, OceanContainerLine, OceanContainerSourceRequest } from '@/components/business/QsOceanContainerList/types'
 import operationsOceanApi from '@/api/modules/operations-ocean-containers'
 import purchaseApi from '@/api/modules/purchase-orders'
 import salesApi from '@/api/modules/sales-orders'
@@ -8,6 +9,7 @@ import QsOceanContainerList from '@/components/business/QsOceanContainerList/ind
 import QsPurchaseOrderDrawer from '@/components/business/QsPurchaseOrderDrawer/index.vue'
 import QsSalesOrderDrawer from '@/components/business/QsSalesOrderDrawer/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import OceanContainerChangeModal from './change-modal.vue'
 import OceanContainerLineDrawer from './ocean-container-line-drawer.vue'
 import { buildOceanContainerQuery, parseOceanContainerQuery } from './route-query'
 import { useOceanContainerSource } from './use-ocean-container-source'
@@ -23,6 +25,8 @@ const currencyCatalog = useCurrencyCatalog()
 const active = ref(false)
 const canRead = computed(() => account.isLogin && auth('sales-orders:read'))
 const canViewPurchase = computed(() => account.isLogin && auth('purchase-orders:read'))
+const canModify = computed(() => canRead.value && auth('sales-orders:update'))
+const changeTarget = ref<(OceanContainerChangeRequest & { containerName: string }) | null>(null)
 const instancePath = route.fullPath
 // 布局按 fullPath 保活，旧查询实例一旦失活就清理个人数据，避免身份切换后的缓存复用。
 const enabled = computed(() => active.value && canRead.value && route.name === 'qsOperationsOceanContainers' && route.fullPath === instancePath)
@@ -70,6 +74,25 @@ function viewSource(value: OceanContainerSourceRequest): void {
   state.closeDrawer()
   void source.open(value)
 }
+function changeLine(value: OceanContainerChangeRequest): void {
+  const container = rows.value.find(row => row.id === value.containerId)
+  if (!enabled.value || !canModify.value || !container?.myItemCount) {
+    return
+  }
+  state.closeDrawer()
+  source.close()
+  changeTarget.value = { ...value, containerName: container.containerBatchName }
+}
+function changed(line: OperationsOceanContainerLineDto): void {
+  changeTarget.value = null
+  if (enabled.value && canModify.value) {
+    void state.refreshItems(line.containerBatchId)
+  }
+}
+// 页面保活不保留变更草稿；身份、权限或查询切换后销毁弹窗，终止旧请求和回调。
+watch([enabled, canModify, () => account.authEpoch, query, loading], () => {
+  changeTarget.value = null
+}, { flush: 'sync' })
 // 查询或列表刷新后关闭来源抽屉，避免将上一组筛选的数据留在当前页面。
 watch([query, loading], () => source.close(), { flush: 'sync' })
 
@@ -106,10 +129,11 @@ onBeforeUnmount(() => active.value = false)
         <QsOceanContainerList
           v-model:expanded-ids="expandedIds"
           :items="rows" :details="details" :currencies="currencyCatalog.currencies.value"
-          :can-view-sales="canRead" :can-view-purchase="canViewPurchase"
+          :can-view-sales="canRead" :can-view-purchase="canViewPurchase" :can-modify="canModify"
           :total="total" :page="query.page" :page-size="query.pageSize" :loading="loading" :error="error"
           @request-items="state.requestItems" @page-change="paginate" @retry="state.reload" @view-line="viewLine"
           @view-source="viewSource"
+          @change-line="changeLine"
         />
       </div>
     </FaPageMain>
@@ -117,6 +141,12 @@ onBeforeUnmount(() => active.value = false)
       v-model="drawerVisible" :line="selectedLine" :container-name="selectedContainerName"
       :currencies="currencyCatalog.currencies.value" :loading="detailLoading" :error="detailError"
       @retry="state.loadDetail"
+    />
+    <OceanContainerChangeModal
+      v-if="changeTarget" :key="`${changeTarget.containerId}:${changeTarget.lineId}:${changeTarget.kind}`"
+      :container-id="changeTarget.containerId" :line-id="changeTarget.lineId" :container-name="changeTarget.containerName"
+      :kind="changeTarget.kind" :currencies="currencyCatalog.currencies.value"
+      @close="changeTarget = null" @saved="changed"
     />
     <QsSalesOrderDrawer
       :model-value="source.target.value?.kind === 'sales'" :order="null" :detail="source.salesDetail.value"

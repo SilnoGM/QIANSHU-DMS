@@ -18,7 +18,7 @@ function deferred<T>() {
   return { promise, resolve: (data: T) => resolve({ data } as AxiosResponse<T>), reject }
 }
 const summary = (id: string): OperationsOceanContainerDto => ({ id, containerBatchNo: `CONTAINER/${id}`, containerBatchName: '0920柜', loadingDate: '2026-09-20', warehouseName: '测试仓库', warehouseValue: 'test', itemCount: 30, myItemCount: 23, grossWeightKgTotal: '100', volumeCaiTotal: '20.00' })
-const line = (id = 'line-1'): OperationsOceanContainerLineDto => ({ id, containerBatchId: 'first', lineNumber: 1, oceanShippingMarkText: 'L-01~10', goodsName: '测试产品', shippingMark: 'QS/01', salesOrderId: 'sales-1', salesOrderNo: 'SO/01', purchaseOrderId: 'purchase-1', purchaseOrderNo: 'PO/01', recipientName: '收件人', codAmountTwd: null, warehouseReceiptReference: null, recipientPhone: null, recipientAddress: null, packageCount: 10, packageUnit: 'CTN', grossWeightKg: '100', lengthCm: '50', widthCm: '20', heightCm: '30', volumeCai: '20.00', remark: null })
+const line = (id = 'line-1'): OperationsOceanContainerLineDto => ({ id, containerBatchId: 'first', version: 1, lineNumber: 1, oceanShippingMarkText: 'L-01~10', goodsName: '测试产品', shippingMark: 'QS/01', salesOrderId: 'sales-1', salesOrderNo: 'SO/01', purchaseOrderId: 'purchase-1', purchaseOrderNo: 'PO/01', recipientName: '收件人', codAmountTwd: null, warehouseReceiptReference: null, recipientPhone: null, recipientAddress: null, packageCount: 10, packageUnit: 'CTN', grossWeightKg: '100', lengthCm: '50', widthCm: '20', heightCm: '30', volumeCai: '20.00', remark: null })
 
 function setup() {
   const enabled = ref(true)
@@ -27,7 +27,7 @@ function setup() {
   const lists: { signal: AbortSignal, result: ReturnType<typeof deferred<OperationsOceanContainerPageDto>> }[] = []
   const items: { id: string, page: number, signal: AbortSignal, result: ReturnType<typeof deferred<OperationsOceanContainerLinePageDto>> }[] = []
   const lines: { id: string, signal: AbortSignal, result: ReturnType<typeof deferred<OperationsOceanContainerLineDto>> }[] = []
-  const api: OperationsOceanContainerApi = {
+  const api: Pick<OperationsOceanContainerApi, 'list' | 'items' | 'item'> = {
     list: (_query, signal) => {
       const result = deferred<OperationsOceanContainerPageDto>()
       lists.push({ signal, result })
@@ -75,6 +75,32 @@ test('首次只读概览；明细并行且重复请求合并，往返分页复�
   assert.equal(s.items.length, 3)
   assert.equal(s.state.details.value.first.items[0].id, 'line-1')
   s.stop()
+})
+
+test('修改成功后清除该柜所有分页缓存、取消旧读取并保持展开状态', async () => {
+  const s = setup()
+  await s.ready()
+  s.state.expandedIds.value = ['first', 'second']
+  const first = s.state.requestItems({ containerId: 'first', page: 1, pageSize: 20 })
+  s.items[0].result.resolve({ items: [line()], total: 23 })
+  await first
+  const pending = s.state.requestItems({ containerId: 'first', page: 2, pageSize: 20 })
+  const refreshed = s.state.refreshItems('first')
+  assert.equal(s.items[1].signal.aborted, true)
+  assert.equal(s.items[2].page, 2)
+  s.items[2].result.resolve({ items: [{ ...line('updated'), codAmountTwd: '200.00' }], total: 23 })
+  s.items[1].result.resolve({ items: [line('stale')], total: 23 })
+  await Promise.all([pending, refreshed])
+  assert.equal(s.state.details.value.first.items[0].id, 'updated')
+  assert.deepEqual(s.state.expandedIds.value, ['first', 'second'])
+  const back = s.state.requestItems({ containerId: 'first', page: 1, pageSize: 20 })
+  assert.equal(s.items.length, 4)
+  s.items[3].result.resolve({ items: [{ ...line(), recipientName: '新收件人' }], total: 23 })
+  await back
+  assert.equal(s.state.details.value.first.items[0].recipientName, '新收件人')
+  s.stop()
+  await s.state.refreshItems('first')
+  assert.equal(s.items.length, 4)
 })
 
 test('搜索和翻页立即清空旧缓存，取消旧请求；晚到结果不能覆盖新查询', async () => {
