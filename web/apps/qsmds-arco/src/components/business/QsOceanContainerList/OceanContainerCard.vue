@@ -137,7 +137,7 @@ function measurement(value: string | null, precision: number) {
         <template v-else>
           <div class="ocean-lines-desktop">
             <table class="qs-type-body text-left w-full border-collapse table-fixed">
-              <colgroup><col class="w-[15%]"><col><col class="w-[20%]"><col class="w-[218px]"><col class="w-[100px]"><col class="w-[184px]"><col class="w-24"></colgroup>
+              <colgroup><col class="w-[15%]"><col class="w-[calc(12em+2rem)]"><col><col class="w-[218px]"><col class="w-[100px]"><col class="w-[184px]"><col class="w-24"></colgroup>
               <thead class="qs-type-meta text-muted-foreground bg-muted/10">
                 <tr>
                   <th v-for="key in ['mark', 'goods', 'shippingMark', 'source', 'recipient', 'cod', 'actions']" :key="key" scope="col" class="font-medium px-4 py-3" :class="key === 'cod' && 'text-right'">
