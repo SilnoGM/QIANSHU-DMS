@@ -140,16 +140,19 @@ function measurement(value: string | null, precision: number) {
         <template v-else>
           <div class="ocean-lines-desktop">
             <table class="qs-type-body text-left w-full border-collapse table-fixed">
-              <colgroup><col class="w-[15%]"><col class="w-[calc(12em+2rem)]"><col><col class="w-[218px]"><col class="w-[calc(6em+2rem)]"><col class="w-[184px]"><col :class="canModify ? 'w-48' : 'w-24'"></colgroup>
+              <colgroup><col class="w-[calc(6em+2rem)]"><col class="w-[15%]"><col class="w-[calc(12em+2rem)]"><col><col class="w-[218px]"><col class="w-[184px]"><col :class="canModify ? 'w-48' : 'w-24'"></colgroup>
               <thead class="qs-type-meta text-muted-foreground bg-muted/10">
                 <tr>
-                  <th v-for="key in ['mark', 'goods', 'shippingMark', 'source', 'recipient', 'cod', 'actions']" :key="key" scope="col" class="font-medium px-4 py-3" :class="key === 'cod' && 'text-right'">
+                  <th v-for="key in ['recipient', 'mark', 'goods', 'shippingMark', 'source', 'cod', 'actions']" :key="key" scope="col" class="font-medium px-4 py-3" :class="key === 'cod' && 'text-right'">
                     {{ t(`qsOceanContainer.${key}`) }}
                   </th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="line in detail.items" :key="line.id" class="group border-t border-border hover:bg-muted/20">
+                  <td class="px-4 py-3">
+                    <OceanContainerRecipient :line="line" />
+                  </td>
                   <td class="px-4 py-3">
                     <div class="flex gap-1 min-w-0 items-center">
                       <FaTooltip align="center" :text="line.oceanShippingMarkText ?? ''" :disabled="!line.oceanShippingMarkText">
@@ -174,9 +177,6 @@ function measurement(value: string | null, precision: number) {
                   </td>
                   <td class="px-4 py-3">
                     <OceanContainerSource :line="line" :can-view-sales="canViewSales" :can-view-purchase="canViewPurchase" @view="emit('viewSource', { lineId: line.id, kind: $event })" />
-                  </td>
-                  <td class="px-4 py-3">
-                    <OceanContainerRecipient :line="line" />
                   </td>
                   <td class="px-4 py-3 text-right">
                     <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent ocean-emphasis" />
