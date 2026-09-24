@@ -19,6 +19,7 @@ const supplierResidueAllowlist = Object.freeze([
   'scripts/browser-payment-fixtures.test.mjs',
   'server/prisma/migrations/20260917040739_supplier_payment_profiles/migration.sql',
   'server/prisma/migrations/20260918010000_packaging_payment_recipients/migration.sql',
+  'server/prisma/migrations/20260924150633_ocean_freight_bill_retirement/migration.sql',
   'server/src/infrastructure/database/dictionary-schema.spec.ts',
   'server/src/modules/access-control/access-control.service.spec.ts',
   'server/src/modules/access-control/permission.constants.ts',
