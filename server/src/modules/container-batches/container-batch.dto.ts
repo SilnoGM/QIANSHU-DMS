@@ -73,13 +73,7 @@ export class ContainerBatchPageDto {
   @ApiProperty({ type: [ContainerBatchDto] }) items!: ContainerBatchDto[]
   @ApiProperty() total!: number
 }
-export class ContainerBillReferenceDto {
-  @ApiProperty({ format: 'uuid' }) id!: string
-  @ApiProperty() billNo!: string
-  @ApiProperty() billName!: string
-}
 export class ContainerLoadingItemDto {
-  @ApiProperty({ type: [ContainerBillReferenceDto] }) billReferences!: ContainerBillReferenceDto[]
   @ApiProperty({ type: String, nullable: true }) shipmentNo!: string | null
   @ApiProperty({ type: String, nullable: true }) shippingMark!: string | null
   @ApiProperty({ type: String, format: 'uuid', nullable: true }) purchaseOrderId!: string | null
@@ -90,7 +84,6 @@ export class ContainerLoadingItemDto {
   @ApiProperty({ type: String, nullable: true }) recipientPhone!: string | null
   @ApiProperty({ type: String, nullable: true }) recipientAddress!: string | null
   @ApiProperty({ type: String, nullable: true }) codAmountTwd!: string | null
-  @ApiProperty({ description: 'Whether a bill references this item; referenced items are read-only until reconciliation reopening is available.' }) isBilled!: boolean
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty({ format: 'uuid' }) containerBatchId!: string
   @ApiProperty({ type: String, format: 'uuid', nullable: true }) shipmentId!: string | null

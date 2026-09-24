@@ -48,7 +48,7 @@ describe('media reference extension contract', () => {
 
     expect(referenceTables).toEqual([...MEDIA_ASSET_REFERENCE_TABLES].sort())
     for (const table of MEDIA_ASSET_REFERENCE_TABLES) {
-      if (table === 'container_batches' || table === 'ocean_freight_bills') {
+      if (table === 'container_batches') {
         expect(migration).toContain(`FROM ${table} reference WHERE reference.source_file_id = reference_asset_id`)
         continue
       }

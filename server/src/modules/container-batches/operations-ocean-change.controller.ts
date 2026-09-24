@@ -13,7 +13,7 @@ function contract(operationId: string, undo = false) {
   return ApiApplicationContract({ operationId, session: 'required', authorization: true, csrf: true, resourceLocator: true, badRequest: true, validation: true, privateNoStore: true, errors: [
     { status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED', 'CSRF_REJECTED'] },
     { status: 404, codes: ['CONTAINER_LOADING_ITEM_NOT_FOUND', ...(undo ? ['CONTAINER_CHANGE_NOT_FOUND'] : [])] },
-    { status: 409, codes: ['CONTAINER_ITEM_BILLED', 'CONTAINER_STATE_CHANGED', 'CONTAINER_CHANGE_IDEMPOTENCY_CONFLICT', ...(undo ? ['CONTAINER_CHANGE_ALREADY_UNDONE'] : [])] },
+    { status: 409, codes: ['CONTAINER_STATE_CHANGED', 'CONTAINER_CHANGE_IDEMPOTENCY_CONFLICT', ...(undo ? ['CONTAINER_CHANGE_ALREADY_UNDONE'] : [])] },
     { status: 422, codes: ['VALIDATION_FAILED', ...(!undo ? ['CONTAINER_CHANGE_NOTIFICATION_REQUIRED', 'CONTAINER_CHANGE_NO_DIFFERENCE'] : [])] },
   ] })
 }

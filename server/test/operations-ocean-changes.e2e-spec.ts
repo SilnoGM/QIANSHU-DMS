@@ -21,7 +21,7 @@ describe('confirmed operations ocean changes and undo with isolated PostgreSQL',
     h = await createPackagingCostHarness()
     await h.app.listen(0, '127.0.0.1')
     const rights = ['sales-orders:read', 'sales-orders:update']
-    alice = await h.browserWithPermissions([...rights, 'ocean-freight-bills:read', 'ocean-freight-bills:create', 'ocean-freight-bills:update'])
+    alice = await h.browserWithPermissions([...rights])
     bob = await h.browserWithPermissions(rights)
     reader = await h.browserWithPermissions(['sales-orders:read'])
     admin = await h.browserWithPermissions(rights)
@@ -133,15 +133,6 @@ describe('confirmed operations ocean changes and undo with isolated PostgreSQL',
     expect((await h.prisma.containerLoadingItem.findUniqueOrThrow({ where: { id: row.id } })).version).toBe(2)
     expect(await h.prisma.containerLoadingItemChange.count({ where: { loadingItemId: row.id } })).toBe(1)
     await undo(row.id, changed.changeId, reverseInput).expect(200)
-  })
-
-  it('refuses changes and undo after the line becomes a bill reconciliation reference', async () => {
-    const row = await line(), changed = (await post(row.id, changeInput()).expect(200)).body as { changeId: string }
-    const create = (url: string, input: object) => alice.browser.post(url).set(packagingHeaders).set('Idempotency-Key', randomUUID()).send(input)
-    const bill = (await create('/api/ocean-freight-bills', { billName: '测试锁定账单', twdPerCny: '4.8' }).expect(201)).body as { id: string }
-    await create(`/api/ocean-freight-bills/${bill.id}/lines`, { lineType: 'NORMAL', goodsName: row.goodsName, loadingItemId: row.id, packageCount: 1 }).expect(201)
-    expect(errorCode(await post(row.id, changeInput('10', 2)).expect(409))).toBe('CONTAINER_ITEM_BILLED')
-    expect(errorCode(await undo(row.id, changed.changeId).expect(409))).toBe('CONTAINER_ITEM_BILLED')
   })
 
   it('requires both current ownership and original actor for undo, including retry after reassignment', async () => {

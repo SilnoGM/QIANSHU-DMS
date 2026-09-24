@@ -36,7 +36,7 @@ describe('operations ocean containers contract', () => {
     for (const field of ['salesOrderId', 'salesOrderNo', 'purchaseOrderId', 'purchaseOrderNo']) {
       expect(document.components?.schemas?.OperationsOceanContainerLineDto).toHaveProperty(`properties.${field}`)
     }
-    for (const field of ['sourceData', 'billReferences', 'shipmentId']) {
+    for (const field of ['sourceData', 'shipmentId']) {
       expect(document.components?.schemas?.OperationsOceanContainerLineDto).not.toHaveProperty(`properties.${field}`)
     }
   })

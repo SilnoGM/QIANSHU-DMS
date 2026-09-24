@@ -50,9 +50,6 @@ export class OperationsOceanChangeService {
     if (!row) return fail('CONTAINER_LOADING_ITEM_NOT_FOUND', '装柜明细不存在或无权修改', 404)
     return row
   }
-  private async requireUnbilled(tx: Prisma.TransactionClient, itemId: string) {
-    if (await tx.oceanFreightBillLine.findFirst({ where: { loadingItemId: itemId }, select: { id: true } })) fail('CONTAINER_ITEM_BILLED', '该装柜明细已被账单引用，暂不能修改，请先处理关联账单', 409)
-  }
   private async replay(tx: Prisma.TransactionClient, actorUserId: string, requestKey: string, payloadHash: string) {
     const result = await tx.containerLoadingItemChange.findUnique({ where: { actorUserId_requestKey: { actorUserId, requestKey } } })
     if (result && result.payloadHash !== payloadHash) fail('CONTAINER_CHANGE_IDEMPOTENCY_CONFLICT', '该提交标识已用于不同的修改，请重新操作', 409)
@@ -75,7 +72,6 @@ export class OperationsOceanChangeService {
         const replay = await this.replay(tx, context.actorUserId, input.requestKey, payloadHash)
         if (replay) return { line: serializeOperationsOceanLine(previous), changeId: replay.id }
         if (previous.version !== input.expectedVersion) fail('CONTAINER_STATE_CHANGED', '装柜明细已更新，请重新核对修改内容', 409)
-        await this.requireUnbilled(tx, itemId)
         const current = serializeOperationsOceanLine(previous)
         const beforeData = Object.fromEntries(Object.keys(input.changes).map(field => [field, current[field as keyof typeof input.changes]])) as Record<string, string | null>
         const changes = Object.fromEntries(Object.entries(input.changes)) as Record<string, string | null>
@@ -98,7 +94,6 @@ export class OperationsOceanChangeService {
         if (replay) return { line: serializeOperationsOceanLine(previous), changeId: replay.id }
         if (original.reversedBy) fail('CONTAINER_CHANGE_ALREADY_UNDONE', '本次修改已经撤销', 409)
         if (previous.version !== input.expectedVersion || previous.version !== original.version) fail('CONTAINER_STATE_CHANGED', '装柜明细已有后续修改，无法撤销本次操作，请刷新后核对', 409)
-        await this.requireUnbilled(tx, itemId)
         const current = serializeOperationsOceanLine(previous), fields = original.kind === 'COD' ? ['codAmountTwd'] as const : recipientChangeFields
         const stored = original.beforeData as Record<string, string | null>
         const changes = Object.fromEntries(fields.map(field => [field, stored[field]]))

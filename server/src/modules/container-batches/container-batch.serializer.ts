@@ -5,8 +5,6 @@ import type { ContainerBatchDto, ContainerLoadingItemDto } from './container-bat
 export const containerSummaryInclude = { items: { select: { shipmentId: true, packageCount: true, grossWeightKg: true, volumeCai: true, chargeableVolumeCai: true } } } satisfies Prisma.ContainerBatchInclude
 type SummaryItem = Pick<ContainerLoadingItem, 'shipmentId' | 'packageCount' | 'grossWeightKg' | 'volumeCai' | 'chargeableVolumeCai'>
 interface ItemReferences {
-  _count?: { billLines: number }
-  billLines?: { bill: { id: string, billNo: string, billName: string } }[]
   shipment?: { shipmentNo: string | null, shippingMarkText: string | null, purchaseOrder: { id: string, orderNo: string, salesOrder?: { id: string, orderNo: string } | null } } | null
 }
 function summarize(items: SummaryItem[]) {
@@ -22,13 +20,12 @@ function summarize(items: SummaryItem[]) {
 export function serializeContainerBatch(row: ContainerBatch & { items?: SummaryItem[] }): ContainerBatchDto {
   return { ...summarize(row.items ?? []), createdById: row.createdById, id: row.id, containerBatchNo: row.containerBatchNo, containerBatchName: row.containerBatchName, loadingDate: row.loadingDate.toISOString().slice(0, 10), sequenceInDay: row.sequenceInDay, warehouseValue: row.warehouseValue, sourceFileId: row.sourceFileId, remark: row.remark, version: row.version, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }
 }
-export function serializeContainerItem(row: ContainerLoadingItem & ItemReferences, canPurchase = false, canSales = false, canBill = false): ContainerLoadingItemDto {
+export function serializeContainerItem(row: ContainerLoadingItem & ItemReferences, canPurchase = false, canSales = false): ContainerLoadingItemDto {
   return {
-    billReferences: canBill ? [...new Map((row.billLines ?? []).map(line => [line.bill.id, line.bill])).values()] : [],
     shipmentNo: canPurchase ? row.shipment?.shipmentNo ?? null : null, shippingMark: canPurchase ? row.shipment?.shippingMarkText ?? null : null,
     purchaseOrderId: canPurchase ? row.shipment?.purchaseOrder.id ?? null : null, purchaseOrderNo: canPurchase ? row.shipment?.purchaseOrder.orderNo ?? null : null,
     salesOrderId: canPurchase && canSales ? row.shipment?.purchaseOrder.salesOrder?.id ?? null : null, salesOrderNo: canPurchase && canSales ? row.shipment?.purchaseOrder.salesOrder?.orderNo ?? null : null,
-    recipientName: row.recipientName ?? null, recipientPhone: row.recipientPhone ?? null, recipientAddress: row.recipientAddress ?? null, codAmountTwd: row.codAmountTwd?.toFixed(2) ?? null, isBilled: (row._count?.billLines ?? 0) > 0,
+    recipientName: row.recipientName ?? null, recipientPhone: row.recipientPhone ?? null, recipientAddress: row.recipientAddress ?? null, codAmountTwd: row.codAmountTwd?.toFixed(2) ?? null,
     id: row.id, containerBatchId: row.containerBatchId, shipmentId: row.shipmentId, lineNumber: row.lineNumber, oceanShippingMarkText: row.oceanShippingMarkText, warehouseReceiptReference: row.warehouseReceiptReference, goodsName: row.goodsName, packageCount: row.packageCount, packageUnit: row.packageUnit, remark: row.remark, version: row.version,
     grossWeightKg: row.grossWeightKg?.toFixed(3) ?? null,
     lengthCm: row.lengthCm?.toFixed(3) ?? null, widthCm: row.widthCm?.toFixed(3) ?? null, heightCm: row.heightCm?.toFixed(3) ?? null,

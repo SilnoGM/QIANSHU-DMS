@@ -7,7 +7,7 @@ import type { ContainerBatchDto, ContainerLoadingItemDto } from '../src/modules/
 import { createPackagingCostHarness, packagingHeaders, type PackagingCostHarness } from './packaging-cost.fixture'
 import { TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
 
-const permissions = ['container-batches:read', 'container-batches:create', 'container-batches:update', 'purchase-orders:read', 'sales-orders:read', 'ocean-freight-bills:read', 'ocean-freight-bills:create', 'ocean-freight-bills:update']
+const permissions = ['container-batches:read', 'container-batches:create', 'container-batches:update', 'purchase-orders:read', 'sales-orders:read']
 describe('container maintenance with isolated PostgreSQL', () => {
   jest.setTimeout(120_000)
   let h: PackagingCostHarness, browser: ReturnType<typeof request.agent>, reader: ReturnType<typeof request.agent>
@@ -126,21 +126,6 @@ describe('container maintenance with isolated PostgreSQL', () => {
     const itemId = assigned[0].status === 200 ? firstItem.id : secondItem.id
     const concurrent = await Promise.all([patch(`/api/container-batches/${winner.id}/items/${itemId}`, { ...input, expectedVersion: 4, itemExpectedVersion: 2, goodsName: 'A' }), patch(`/api/container-batches/${winner.id}/items/${itemId}`, { ...input, expectedVersion: 4, itemExpectedVersion: 2, goodsName: 'B' })])
     expect(concurrent.map(result => result.status).sort()).toEqual([200, 409])
-  })
-
-  it('freezes bill-referenced loading data and header identity, with permission-filtered bill links', async () => {
-    const parent = await batch(), row = await item(parent)
-    const bill = (await post('/api/ocean-freight-bills', { billName: '账单', twdPerCny: '4.8' }).expect(201)).body as { id: string, billNo: string }
-    await post(`/api/ocean-freight-bills/${bill.id}/lines`, { lineType: 'NORMAL', goodsName: '履带', loadingItemId: row.id, packageCount: 10 }).expect(201)
-    const edit = { expectedVersion: 2, itemExpectedVersion: 1, goodsName: '不可修改', packageCount: 10 }
-    const denied = await patch(`/api/container-batches/${parent.id}/items/${row.id}`, edit).expect(409)
-    expect(denied.body as { code: string }).toMatchObject({ code: 'CONTAINER_ITEM_BILLED' })
-    await patch(`/api/container-batches/${parent.id}`, { expectedVersion: 2, containerBatchName: '0920-88柜', warehouseValue: parent.warehouseValue }).expect(409)
-    await patch(`/api/container-batches/${parent.id}`, { expectedVersion: 2, containerBatchName: parent.containerBatchName, warehouseValue: parent.warehouseValue, sourceFileId: parent.sourceFileId, remark: '仅备注' }).expect(200)
-    const full = (await browser.get(`/api/container-batches/${parent.id}/items`).expect(200)).body as { items: ContainerLoadingItemDto[] }
-    expect(full.items[0]).toMatchObject({ isBilled: true, billReferences: [{ id: bill.id, billNo: bill.billNo, billName: '账单' }] })
-    const limited = (await reader.get(`/api/container-batches/${parent.id}/items`).expect(200)).body as { items: ContainerLoadingItemDto[] }
-    expect(limited.items[0]).toMatchObject({ isBilled: true, billReferences: [] })
   })
 
   it('uploads, attaches and downloads private source files with strict access and immutable attachment', async () => {

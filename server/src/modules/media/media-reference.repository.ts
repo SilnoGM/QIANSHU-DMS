@@ -16,12 +16,11 @@ export const MEDIA_ASSET_REFERENCE_TABLES = Object.freeze([
   'payment_recipient_accounts',
   'purchase_order_payments',
   'container_batches',
-  'ocean_freight_bills',
 ] as const)
 
 type MediaReferenceReader = Pick<
   Prisma.TransactionClient,
-  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest' | 'paymentRecipientAccount' | 'purchaseOrderPayment' | 'containerBatch' | 'oceanFreightBill'
+  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest' | 'paymentRecipientAccount' | 'purchaseOrderPayment' | 'containerBatch'
 >
 
 /**
@@ -79,8 +78,7 @@ export class MediaAssetReferenceRepository {
     const recipientReference = await reader.paymentRecipientAccount.findFirst({ where: { qrMediaAssetId: assetId }, select: { id: true } })
     if (recipientReference !== null) return true
     if (await reader.purchaseOrderPayment.findFirst({ where: { recipientQrMediaAssetId: assetId }, select: { id: true } }) !== null) return true
-    // 柜次和账单的来源文件是核对依据，即使还没有明细也不能被回收。
-    if (await reader.containerBatch.findFirst({ where: { sourceFileId: assetId }, select: { id: true } }) !== null) return true
-    return await reader.oceanFreightBill.findFirst({ where: { sourceFileId: assetId }, select: { id: true } }) !== null
+    // 柜次的来源文件是核对依据，即使还没有明细也不能被回收。
+    return await reader.containerBatch.findFirst({ where: { sourceFileId: assetId }, select: { id: true } }) !== null
   }
 }

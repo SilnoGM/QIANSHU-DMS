@@ -15,7 +15,7 @@ function harness() {
     $queryRaw: jest.fn().mockResolvedValue([]), user: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
     containerBatch: { findUnique: jest.fn().mockResolvedValue(batch), update: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...batch, ...data, version: 5 })) },
     containerLoadingItem: { findFirst: jest.fn().mockResolvedValue(item), update: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...item, ...data, version: 3, ...Object.fromEntries(['grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'reportedVolumeCai', 'codAmountTwd'].map(field => [field, typeof data[field] === 'string' ? new Prisma.Decimal(data[field]) : null])) })) },
-    oceanFreightBillLine: { findFirst: jest.fn().mockResolvedValue(null) }, purchaseOrderPart: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
+    purchaseOrderPart: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
   }
   const prisma = { $transaction: jest.fn((callback: (value: typeof tx) => unknown) => callback(tx)) }
   const access = { getPermissionCodesInTransaction: jest.fn().mockResolvedValue(['container-batches:update']), hasAll: jest.fn().mockReturnValue(true) }
@@ -33,14 +33,12 @@ describe('Container maintenance commands', () => {
     expect(h.audit.record).toHaveBeenCalledTimes(1)
     expect(h.dictionary.requireEffectiveValue).not.toHaveBeenCalled()
   })
-  it('rejects stale versions, forged computed fields, wrong item identity and billed records', async () => {
+  it('rejects stale versions, forged computed fields and wrong item identity', async () => {
     const h = harness()
     await expect(h.service.updateItem(h.context, h.id, h.itemId, { ...fields, itemExpectedVersion: 1 })).rejects.toMatchObject({ code: 'CONTAINER_STATE_CHANGED' })
     await expect(h.service.updateItem(h.context, h.id, h.itemId, { ...fields, volumeCai: '5' })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
     h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce(null)
     await expect(h.service.updateItem(h.context, h.id, h.itemId, fields)).rejects.toMatchObject({ code: 'CONTAINER_LOADING_ITEM_NOT_FOUND' })
-    h.tx.oceanFreightBillLine.findFirst.mockResolvedValue({ id: randomUUID() })
-    await expect(h.service.updateItem(h.context, h.id, h.itemId, fields)).rejects.toMatchObject({ code: 'CONTAINER_ITEM_BILLED' })
     expect(h.tx.containerLoadingItem.update).not.toHaveBeenCalled()
   })
   it('recalculates measurements and replaces nullable input without progressing shipments', async () => {
@@ -59,12 +57,10 @@ describe('Container maintenance commands', () => {
     await expect(h.service.updateItem(h.context, h.id, h.itemId, { ...fields, shipmentId })).rejects.toMatchObject({ code: 'CONTAINER_SHIPMENT_ALREADY_ASSIGNED' })
     expect(h.tx.containerLoadingItem.update).not.toHaveBeenCalled()
   })
-  it('prevents source detach and billed header changes, but permits a remark change', async () => {
+  it('prevents source detach, but permits a remark change', async () => {
     const h = harness(), sourceFileId = randomUUID()
     h.tx.containerBatch.findUnique.mockResolvedValue({ ...h.batch, sourceFileId })
     await expect(h.service.update(h.context, h.id, { expectedVersion: 4, containerBatchName: '0917柜', warehouseValue: 'B5' })).rejects.toMatchObject({ code: 'CONTAINER_SOURCE_FILE_LOCKED' })
-    h.tx.oceanFreightBillLine.findFirst.mockResolvedValue({ id: randomUUID() })
-    await expect(h.service.update(h.context, h.id, { expectedVersion: 4, containerBatchName: '0918柜', warehouseValue: 'B5', sourceFileId })).rejects.toMatchObject({ code: 'CONTAINER_ITEM_BILLED' })
     await expect(h.service.update(h.context, h.id, { expectedVersion: 4, containerBatchName: '0917柜', warehouseValue: 'B5', sourceFileId, remark: '备注' })).resolves.toMatchObject({ remark: '备注' })
   })
   it('checks current user permissions inside the write transaction', async () => {

@@ -75,12 +75,12 @@ describe('ocean freight source references after full migration replay', () => {
       await client.query('RELEASE SAVEPOINT rejected_source_clear')
     }
   })
-  it('seeds exactly the seven scoped permissions only for system_admin by default', async () => {
-    const permissions = await client.query<{ code: string }>(`SELECT code FROM permissions WHERE code LIKE 'container-batches:%' OR code LIKE 'ocean-freight-bills:%'`)
-    expect(permissions.rows).toHaveLength(7)
+  it('seeds exactly the three scoped permissions only for system_admin by default', async () => {
+    const permissions = await client.query<{ code: string }>(`SELECT code FROM permissions WHERE code LIKE 'container-batches:%'`)
+    expect(permissions.rows).toHaveLength(3)
     const roles = await client.query<{ code: string }>(`SELECT DISTINCT role.code FROM role_permissions binding
       JOIN roles role ON role.id=binding.role_id JOIN permissions permission ON permission.id=binding.permission_id
-      WHERE permission.code LIKE 'container-batches:%' OR permission.code LIKE 'ocean-freight-bills:%'`)
+      WHERE permission.code LIKE 'container-batches:%'`)
     expect(roles.rows).toEqual([{ code: 'system_admin' }])
   })
 })

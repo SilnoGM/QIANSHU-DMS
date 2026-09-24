@@ -88,7 +88,7 @@ export class ContainerBatchService {
   async items(id: string, query: ContainerBatchListQueryDto, actorUserId?: string) {
     await this.get(id)
     const permissions = actorUserId ? await this.access.getPermissionCodes(actorUserId) : []
-    const canPurchase = permissions.includes('purchase-orders:read'), canSales = permissions.includes('sales-orders:read'), canBill = permissions.includes('ocean-freight-bills:read')
+    const canPurchase = permissions.includes('purchase-orders:read'), canSales = permissions.includes('sales-orders:read')
     const search = query.search?.trim()
     const where: Prisma.ContainerLoadingItemWhereInput = { containerBatchId: id, ...(search ? { OR: [
       { goodsName: { contains: search, mode: 'insensitive' } },
@@ -96,10 +96,10 @@ export class ContainerBatchService {
       { warehouseReceiptReference: { contains: search, mode: 'insensitive' } },
     ] } : {}) }
     const [rows, total] = await this.prisma.$transaction([
-      this.prisma.containerLoadingItem.findMany({ where, include: { _count: { select: { billLines: true } }, billLines: { select: { bill: { select: { id: true, billNo: true, billName: true } } } }, shipment: { select: { shipmentNo: true, shippingMarkText: true, purchaseOrder: { select: { id: true, orderNo: true, salesOrder: { select: { id: true, orderNo: true } } } } } } }, skip: (query.page - 1) * query.pageSize, take: query.pageSize, orderBy: { lineNumber: 'asc' } }),
+      this.prisma.containerLoadingItem.findMany({ where, include: { shipment: { select: { shipmentNo: true, shippingMarkText: true, purchaseOrder: { select: { id: true, orderNo: true, salesOrder: { select: { id: true, orderNo: true } } } } } } }, skip: (query.page - 1) * query.pageSize, take: query.pageSize, orderBy: { lineNumber: 'asc' } }),
       this.prisma.containerLoadingItem.count({ where }),
     ], { isolationLevel: 'RepeatableRead' })
-    return { items: rows.map(row => serializeItem(row, canPurchase, canSales, canBill)), total }
+    return { items: rows.map(row => serializeItem(row, canPurchase, canSales)), total }
   }
 
   async createItem(context: ContainerCommandContext, rawId: string, input: ContainerLoadingItemCreateDto, key: unknown): Promise<ContainerLoadingItemDto> {
@@ -152,11 +152,6 @@ export class ContainerBatchService {
         if (previous.version !== expectedVersion) return containerFailure('CONTAINER_STATE_CHANGED', '柜次已更新，请刷新后重试', 409)
         // 编辑沿用首次派发时的年份；跨年修改不应把历史柜次变成本年度柜次。
         const date = deriveContainerDate(normalized.containerBatchName, previous.createdAt)
-        if (previous.containerBatchName !== normalized.containerBatchName || previous.warehouseValue !== normalized.warehouseValue) {
-          // 与账单新建采用相同的明细行锁，使检查期间不能新增引用。
-          await tx.$queryRaw(Prisma.sql`SELECT id FROM container_loading_items WHERE container_batch_id = ${id}::uuid ORDER BY id FOR UPDATE`)
-          if (await tx.oceanFreightBillLine.findFirst({ where: { loadingItem: { containerBatchId: id } }, select: { id: true } })) return containerFailure('CONTAINER_ITEM_BILLED', '柜次已有账单引用，暂不能修改柜次名称或仓库', 409)
-        }
         if (previous.warehouseValue !== normalized.warehouseValue) await this.dictionary.requireEffectiveValue(tx, { dictionaryCode: 'mainland.warehouse', value: normalized.warehouseValue })
         if (previous.sourceFileId !== normalized.sourceFileId) {
           if (previous.sourceFileId !== null) return containerFailure('CONTAINER_SOURCE_FILE_LOCKED', '已有来源文件暂不支持移除或替换，请保留原文件')
@@ -184,8 +179,6 @@ export class ContainerBatchService {
         const previous = await tx.containerLoadingItem.findFirst({ where: { id: itemId, containerBatchId: id } })
         if (!previous) return containerFailure('CONTAINER_LOADING_ITEM_NOT_FOUND', '装柜明细不存在', 404)
         if (batch.version !== expectedVersion || previous.version !== itemExpectedVersion) return containerFailure('CONTAINER_STATE_CHANGED', '柜次或装柜明细已更新，请刷新后重试', 409)
-        // 阶段 6 的重开流程尚未实现，所有被账单引用的明细暂时冻结，不能让核对基础静默失效。
-        if (await tx.oceanFreightBillLine.findFirst({ where: { loadingItemId: itemId }, select: { id: true } })) return containerFailure('CONTAINER_ITEM_BILLED', '该装柜明细已被账单引用，暂不能修改，请先处理关联账单', 409)
         if (normalized.shipmentId) {
           await tx.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id = ${normalized.shipmentId}::uuid FOR UPDATE`)
           const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, select: { status: true } })
