@@ -54,7 +54,7 @@ test('真实 Provider Browser harness 只在显式 test build 注册且不进入
   assert.equal(route?.children?.[0]?.meta?.menu, false)
 })
 
-test('组件库按分类提供二十二个独立组件路由', () => {
+test('组件库按分类提供二十三个独立组件路由', () => {
   const [basicRoute, businessRoute, pageTemplatesRoute] = componentLibraryRoutes
 
   assert.equal(basicRoute?.name, 'componentLibraryBasic')
@@ -122,6 +122,11 @@ test('组件库按分类提供二十二个独立组件路由', () => {
         name: 'componentLibraryGenericTable',
         path: 'generic-table',
         title: '通用表格',
+      },
+      {
+        name: 'componentLibraryQsOceanContainerList',
+        path: 'ocean-container-list',
+        title: '海运柜次卡片',
       },
       {
         name: 'componentLibraryGenericDrawer',
@@ -210,7 +215,7 @@ test('组件库按分类提供二十二个独立组件路由', () => {
     ...(basicRoute?.children ?? []),
     ...(businessRoute?.children ?? []),
   ].map(route => route.name)
-  assert.equal(new Set(componentRouteNames).size, 22)
+  assert.equal(new Set(componentRouteNames).size, 23)
   assert.ok(
     [...(basicRoute?.children ?? []), ...(businessRoute?.children ?? [])]
       .every(route => !route.path.startsWith('/')),
