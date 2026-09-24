@@ -10,3 +10,4 @@
 server/src/generated/prisma/
 web/apps/qsmds-arco/src/api/generated/
 .worktrees/
+.mimosa/
