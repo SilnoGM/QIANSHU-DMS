@@ -99,41 +99,6 @@ export const financeWorkbench: RouteRecordMainRaw = {
         },
       ],
     },
-    {
-      path: '/qs-finance/bill-reconciliation',
-      name: 'qsFinanceBillReconciliation',
-      component: () => import('@/layouts/index.vue'),
-      meta: {
-        title: 'workbench.billReconciliation',
-        icon: 'qs-audit-log',
-        // 页面骨架沿用采购付款访问范围，真实账单能力实施时接入专属权限。
-        auth: 'purchase-orders:payment',
-      },
-      children: [
-        {
-          path: 'shunlianhang-ocean-bills',
-          name: 'qsFinanceShunlianhangOceanBills',
-          component: () => import('@/views/workbenches/shunlianhang-ocean-bills/index.vue'),
-          meta: {
-            title: 'workbench.shunlianhangOceanBills',
-            icon: 'qs-ocean-containers',
-            auth: 'purchase-orders:payment',
-          },
-        },
-        {
-          path: 'shunlianhang-ocean-bills/:id',
-          name: 'qsFinanceShunlianhangOceanBillDetail',
-          component: () => import('@/views/workbenches/shunlianhang-ocean-bills/detail.vue'),
-          meta: {
-            title: 'workbench.shunlianhangOceanBillDetail',
-            icon: 'qs-ocean-containers',
-            menu: false,
-            activeMenu: '/qs-finance/bill-reconciliation/shunlianhang-ocean-bills',
-            auth: 'purchase-orders:payment',
-          },
-        },
-      ],
-    },
     FundAccountManagement,
   ],
 }

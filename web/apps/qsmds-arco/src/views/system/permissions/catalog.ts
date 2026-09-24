@@ -15,7 +15,6 @@ const RESOURCE_LABELS: Readonly<Record<string, string>> = {
   'fund-accounts': '资金账户管理',
   'packaging-costs': '打木架费用',
   'numbering-rules': '编号规则',
-  'ocean-freight-bills': '海运账单',
   'purchase-shipping-marks': '唛头规则绑定',
   'product-media': '产品媒体',
   'products': '产品管理',

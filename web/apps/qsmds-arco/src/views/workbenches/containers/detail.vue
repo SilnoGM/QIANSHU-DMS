@@ -103,7 +103,7 @@ function openBatch() {
   batchOpen.value = true
 }
 function openItem(item: ContainerLoadingItemDto | null = null) {
-  if (!canEdit.value || !batch.value || sourceUploading.value || sourceSaving.value || item?.isBilled) {
+  if (!canEdit.value || !batch.value || sourceUploading.value || sourceSaving.value) {
     return
   }
   if (!itemMutation.retryOnly.value) {

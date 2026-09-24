@@ -96,8 +96,6 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   CONTAINER_BATCH_UPDATED: '柜次已修改',
   CONTAINER_LOADING_ITEM_UPDATED: '装柜明细已修改',
   CONTAINER_LOADING_ITEM_CREATED: '装柜明细已创建',
-  OCEAN_FREIGHT_BILL_CREATED: '海运账单已创建',
-  OCEAN_FREIGHT_BILL_LINE_CREATED: '海运账单明细已创建',
   PURCHASE_ORDER_CREATED: '采购订单已创建',
   PURCHASE_ORDER_REVIEW_MARKS_PREPARED: '采购审核唛头已派发',
   PURCHASE_ORDER_IMAGE_GENERATED: '采购单图片已生成',

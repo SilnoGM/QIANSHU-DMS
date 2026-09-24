@@ -288,7 +288,6 @@ test('权限目录以中文展示现有业务资源', () => {
     'fund-accounts',
     'packaging-costs',
     'numbering-rules',
-    'ocean-freight-bills',
     'purchase-shipping-marks',
     'product-media',
     'products',
@@ -297,7 +296,6 @@ test('权限目录以中文展示现有业务资源', () => {
     'users',
   ])
   assert.equal(permissionResourceLabel('container-batches'), '柜次管理')
-  assert.equal(permissionResourceLabel('ocean-freight-bills'), '海运账单')
   assert.equal(permissionResourceLabel('currencies'), '货币管理')
   assert.equal(permissionResourceLabel('exchange-rates'), '当前汇率')
   assert.equal(permissionResourceLabel('fund-accounts'), '资金账户管理')

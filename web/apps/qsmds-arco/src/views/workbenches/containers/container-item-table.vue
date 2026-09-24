@@ -33,9 +33,7 @@ const pageSize = defineModel<number>('pageSize', { required: true })
 const search = defineModel<string>('search', { required: true })
 const { t } = useI18n()
 const { auth } = useAppAuth()
-const router = useRouter()
 const { currencies, errorMessage: currencyError, reload: reloadCurrencies } = useCurrencyCatalog()
-const billMenu = (row: ContainerLoadingItemDto) => [row.billReferences.map(bill => ({ label: `${bill.billNo} · ${bill.billName}`, handle: () => router.push({ name: 'qsFinanceShunlianhangOceanBillDetail', params: { id: bill.id } }) }))]
 const value = (input: string | number | null) => input ?? t('containerPage.unknown')
 const measurement = (input: string | null, places: 0 | 2 = 0) => value(formatContainerMeasurement(input, places))
 const weightText = (row: ContainerLoadingItemDto) => row.grossWeightKg === null ? t('containerPage.unknown') : `${measurement(row.grossWeightKg)} kg`
@@ -210,7 +208,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
     </template>
     <template #actions="{ row }">
       <div class="gap-1.5 grid grid-cols-2">
-        <FaButton v-if="canEdit" size="sm" variant="ghost" :disabled="row.isBilled" :title="row.isBilled ? t('containerPage.billed') : undefined" @click="emit('edit', row)">
+        <FaButton v-if="canEdit" size="sm" variant="ghost" @click="emit('edit', row)">
           {{ t('containerPage.editItem') }}
         </FaButton>
         <FaButton v-if="row.shipmentId && auth('purchase-orders:read')" size="sm" variant="ghost" @click="emit('reference', 'shipment', row.shipmentId)">
@@ -222,13 +220,6 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
         <FaButton v-if="row.salesOrderId && auth('sales-orders:read')" size="sm" variant="ghost" @click="emit('reference', 'sales', row.salesOrderId)">
           {{ t('containerPage.viewSales') }}
         </FaButton>
-        <span v-if="row.isBilled" class="qs-type-meta text-muted-foreground col-span-2 whitespace-normal">{{ t('containerPage.billed') }}</span>
-        <FaDropdown v-if="row.billReferences.length && auth('ocean-freight-bills:read') && auth('purchase-orders:payment')" :items="billMenu(row)" align="end">
-          <FaButton size="sm" variant="ghost" class="col-span-2">
-            {{ t('containerPage.relatedBills') }} ({{ row.billReferences.length }})
-            <FaIcon name="i-lucide:chevron-down" class="size-3.5" />
-          </FaButton>
-        </FaDropdown>
       </div>
     </template>
   </QsGenericTable>
