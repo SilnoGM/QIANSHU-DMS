@@ -79,6 +79,15 @@ export const PURCHASE_ORDER_PERMISSION_CODES = [
   'purchase-orders:document',
 ] as const
 
+/**
+ * 唛头规则绑定配置与编号维护权限分离：读取可查看供应商绑定，保存同时要求读取与修改。
+ * 该域由 `20260906090104_supplier_shipping_mark_rule_bindings` 建入，补登记以对齐数据库授权目录。
+ */
+export const PURCHASE_SHIPPING_MARK_PERMISSION_CODES = [
+  'purchase-shipping-marks:read',
+  'purchase-shipping-marks:update',
+] as const
+
 /** 包装费用提报、财务读取与付款分别授权，不附带采购或销售整单权限。 */
 export const PACKAGING_COST_PERMISSION_CODES = [
   'packaging-costs:create',
@@ -154,6 +163,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...SALES_ORDER_PERMISSION_CODES,
   ...SALES_RECEIPT_PERMISSION_CODES,
   ...PURCHASE_ORDER_PERMISSION_CODES,
+  ...PURCHASE_SHIPPING_MARK_PERMISSION_CODES,
   ...PACKAGING_COST_PERMISSION_CODES,
   ...SUPPLIER_PAYMENT_PROFILE_PERMISSION_CODES,
   ...CONTAINER_BATCH_PERMISSION_CODES,

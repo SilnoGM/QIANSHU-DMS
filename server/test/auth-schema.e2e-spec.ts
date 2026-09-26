@@ -4,6 +4,9 @@ import { Client } from 'pg'
 
 const MANAGEMENT_PERMISSION_CODES = [
   'audit:read',
+  'container-batches:create',
+  'container-batches:read',
+  'container-batches:update',
   'currencies:create',
   'currencies:disable',
   'currencies:enable',

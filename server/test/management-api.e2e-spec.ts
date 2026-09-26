@@ -30,12 +30,8 @@ const CSRF_HEADERS = {
 const USERNAME_PREFIX = 'management-api-e2e-'
 const ROLE_CODE_PREFIX = 'management_e2e_'
 const PERMISSION_CODE_PREFIX = 'management-e2e:'
-// 后续绑定配置迁移新增两项业务权限；HTTP 目录返回全部迁移结果，须保留精确集合断言。
-const SEEDED_PERMISSION_CODES = [
-  ...MANAGEMENT_PERMISSION_CODES,
-  'purchase-shipping-marks:read',
-  'purchase-shipping-marks:update',
-] as const
+// 权限目录常量已覆盖全部业务迁移结果；HTTP 目录返回全部迁移结果，须保留精确集合断言。
+const SEEDED_PERMISSION_CODES = [...MANAGEMENT_PERMISSION_CODES] as const
 
 interface ApiErrorBody {
   code: string

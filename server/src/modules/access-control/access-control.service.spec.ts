@@ -94,6 +94,8 @@ describe('permission constants', () => {
       'purchase-orders:update',
       'purchase-orders:payment',
       'purchase-orders:document',
+      'purchase-shipping-marks:read',
+      'purchase-shipping-marks:update',
       'packaging-costs:create',
       'packaging-costs:read',
       'packaging-costs:pay',
@@ -105,7 +107,7 @@ describe('permission constants', () => {
       'slh-bills:read',
       'slh-bills:reconcile',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 73)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 75)
   })
 })
 
