@@ -3,9 +3,7 @@ import type { SlhBillDto, SlhBillImportCreateDto, SlhBillImportPreviewDto, SlhBi
 import api from '../index'
 
 export type SlhBillListQuery = NonNullable<SlhBillsListData['query']>
-// OpenAPI 快照把 lines 的路径参数同时写进了 query，这里剔除 id 只保留分页字段，
-// 避免调用方为了发分页请求而重复传一次账单主键。
-export type SlhBillLineQuery = Omit<NonNullable<SlhBillsLinesData['query']>, 'id'>
+export type SlhBillLineQuery = NonNullable<SlhBillsLinesData['query']>
 const path = (id: string) => `slh-bills/${encodeURIComponent(id)}`
 const read = (signal: AbortSignal) => ({ signal, errorPresentation: 'local' as const })
 const write = (signal: AbortSignal) => ({ ...read(signal), retry: false as const })

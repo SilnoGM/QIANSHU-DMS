@@ -30,7 +30,8 @@ export class SlhBillListQueryDto {
   @ApiPropertyOptional({ enum: ['active', 'superseded', 'all'], default: 'active' }) @IsOptional() @IsIn(['active', 'superseded', 'all']) state?: 'active' | 'superseded' | 'all'
 }
 
-export class SlhBillLineListQueryDto extends SlhBillIdDto {
+/** 明细分页查询只带分页字段；账单主键走路径参数，不能继承带必填 id 的 DTO。 */
+export class SlhBillLineListQueryDto {
   @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number
   @ApiPropertyOptional({ default: 50, maximum: 200 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) pageSize?: number
 }
@@ -43,7 +44,7 @@ export class SlhBillStagedFileDto {
 }
 
 export class SlhBillMediaAssetDto {
-  @ApiProperty({ format: 'uuid' }) mediaAssetId!: string
+  @ApiProperty({ format: 'uuid' }) @IsUUID('4') mediaAssetId!: string
 }
 
 export class SlhBillImportCreateDto extends SlhBillMediaAssetDto {

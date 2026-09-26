@@ -50,7 +50,7 @@ export class SlhBillQueryService {
     return serializeSlhBill(row)
   }
 
-  async lines(query: SlhBillLineListQueryDto): Promise<SlhBillLinePageDto> {
+  async lines(query: SlhBillLineListQueryDto & { id: string }): Promise<SlhBillLinePageDto> {
     const id = slhBillUuid(query.id)
     const page = query.page ?? 1
     const pageSize = query.pageSize ?? DEFAULT_LINE_PAGE_SIZE
