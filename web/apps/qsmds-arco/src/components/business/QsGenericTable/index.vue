@@ -96,6 +96,8 @@ const emit = defineEmits<{
   expandedChange: [expanded: TableExpandedState]
   paginationChange: [pagination: { page: number, pageSize: number }]
   retry: []
+  // 行整块可点开的页面（如顺联航账单列表）依赖该事件；不监听的页面行为不变。
+  rowClick: [row: TData, index: number, event: MouseEvent]
   search: [keyword: string]
   sortingChange: [sorting: TableSortingState]
 }>()
@@ -697,6 +699,7 @@ watch([tableColumns, isNarrow], () => {
         :class="loading && data.length ? 'pointer-events-none opacity-60' : undefined"
         @sorting-change="handleSortingChange"
         @expanded-change="updateTableExpanded"
+        @row-click="(row, index, event) => emit('rowClick', row, index, event)"
       >
         <template v-if="grouping" #group-header="scope">
           <GroupHeader
