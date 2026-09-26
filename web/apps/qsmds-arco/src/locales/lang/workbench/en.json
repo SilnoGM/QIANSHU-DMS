@@ -118,8 +118,8 @@
       "packageCount": "Packages",
       "weight": "Weight",
       "dimensions": "Dimensions",
-      "volumeCai": "Volume",
-      "reportedVolumeCai": "Reported volume",
+      "volumeCai": "Calculated volume",
+      "reportedVolumeCai": "Bill volume",
       "volumeDifferenceCai": "Volume difference",
       "categoryCode": "Category",
       "unitPriceAmount": "Unit price",
@@ -177,6 +177,10 @@
     "superseded": "Superseded",
     "supersededAt": "Superseded at",
     "supersededNotice": "This bill has been superseded by a later version and is kept for audit only",
+    "unit": {
+      "cai": "cft",
+      "cm": "CM"
+    },
     "unknown": "Unknown",
     "upload": {
       "label": "Upload Shunlianhang statement",

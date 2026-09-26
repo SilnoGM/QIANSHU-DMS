@@ -21,6 +21,9 @@ import {
 import { buildSlhBillLineColumns } from './line-columns.logic'
 import SlhBillCharges from './slh-bill-charges.vue'
 import SlhBillComparison from './slh-bill-comparison.vue'
+import SlhBillOverflowText from './slh-bill-overflow-text.vue'
+import SlhBillPricingBasisTag from './slh-bill-pricing-basis-tag.vue'
+import SlhBillVolumeDifference from './slh-bill-volume-difference.vue'
 
 defineOptions({ name: 'QsFinanceBillReconciliationSlhBillImport' })
 const { t } = useI18n()
@@ -407,7 +410,7 @@ onBeforeUnmount(() => controller?.abort())
             v-model:page-size="previewPageSize"
             row-key="lineNumber"
             table-class="w-max min-w-full"
-            :show-row-number="false"
+            :show-row-number="true"
             :columns="columns"
             :data="pagedLines"
             :total="previewLines.length"
@@ -418,6 +421,15 @@ onBeforeUnmount(() => controller?.abort())
           >
             <template #cell-charges="{ row }">
               <SlhBillCharges :charges="row.original.charges" />
+            </template>
+            <template #cell-warehouseReceiptReference="{ row }">
+              <SlhBillOverflowText :text="row.original.warehouseReceiptReference ?? t('slhBill.unknown')" />
+            </template>
+            <template #cell-volumeDifferenceCai="{ row }">
+              <SlhBillVolumeDifference :line="row.original" />
+            </template>
+            <template #cell-pricingBasis="{ row }">
+              <SlhBillPricingBasisTag :basis="row.original.pricingBasis ?? null" />
             </template>
           </QsGenericTable>
         </FaPageMain>

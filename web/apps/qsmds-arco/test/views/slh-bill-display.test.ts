@@ -2,7 +2,15 @@ import type { SlhBillLineChargeDto, SlhBillLineDto } from '../../src/api/generat
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 与柜次展示测试保持一致的十进制格式化口径。
 import test from 'node:test'
-import { formatSlhBillDimensions, formatSlhBillRate, formatSlhBillVolume, formatSlhBillWeight, groupSlhBillCharges } from '../../src/views/workbenches/slh-bills/display.logic'
+import {
+  formatSlhBillAmount,
+  formatSlhBillDimensions,
+  formatSlhBillRate,
+  formatSlhBillVolume,
+  formatSlhBillWeight,
+  groupSlhBillCharges,
+  resolveSlhBillVolumeDifference,
+} from '../../src/views/workbenches/slh-bills/display.logic'
 import { buildSlhBillLineColumns } from '../../src/views/workbenches/slh-bills/line-columns.logic'
 
 const charge = (chargeType: SlhBillLineChargeDto['chargeType'], currencyCode: SlhBillLineChargeDto['currencyCode'], amount: string): SlhBillLineChargeDto => ({ amount, chargeType, currencyCode })
@@ -27,8 +35,9 @@ test('尺寸缺边或单位缺失时不用零或猜测单位补位', () => {
   assert.equal(formatSlhBillDimensions({ heightCm: '108.00', lengthCm: '240.00', widthCm: '164.00' }), '240.00 × 164.00 × 108.00')
   assert.equal(formatSlhBillDimensions({ heightCm: null, lengthCm: '240.00', widthCm: '164.00' }), null)
   assert.equal(formatSlhBillDimensions({}), null)
-  assert.equal(formatSlhBillWeight({ grossWeightKg: '1173.000', weightUnit: 'KGS' }), '1173.000 KGS')
-  assert.equal(formatSlhBillWeight({ grossWeightKg: '1173.000' }), '1173.000')
+  // 重量与其它数值列一样收敛到两位小数。
+  assert.equal(formatSlhBillWeight({ grossWeightKg: '1173.000', weightUnit: 'KGS' }), '1173.00 KGS')
+  assert.equal(formatSlhBillWeight({ grossWeightKg: '1173.456' }), '1173.46')
   assert.equal(formatSlhBillWeight({ grossWeightKg: null, weightUnit: 'KGS' }), null)
 })
 
@@ -52,12 +61,19 @@ test('明细列覆盖账单全部字段并统一按两位小数与费别名展�
   }
   assert.ok(columns.every(column => column.defaultVisible !== false))
   const display = (id: string, row: Partial<SlhBillLineDto>) => columns.find(column => column.id === id)!.accessorFn!(row as SlhBillLineDto, 0)
-  assert.equal(display('volumeCai', { volumeCai: '12.88272063' }), '12.88')
-  assert.equal(display('reportedVolumeCai', { reportedVolumeCai: '12.885' }), '12.89')
-  assert.equal(display('volumeDifferenceCai', { volumeDifferenceCai: '-0.125' }), '-0.13')
+  // 材积两列都带单位，差异由「系统计算 − 账单自报」算出而不是读来源字段。
+  assert.equal(display('volumeCai', { volumeCai: '12.88272063' }), '12.88 slhBill.unit.cai')
+  assert.equal(display('reportedVolumeCai', { reportedVolumeCai: '12.885' }), '12.89 slhBill.unit.cai')
+  assert.equal(display('volumeDifferenceCai', { reportedVolumeCai: '13.00', volumeCai: '12.88' }), '-0.12 slhBill.unit.cai')
+  assert.equal(display('volumeDifferenceCai', { reportedVolumeCai: '12.88', volumeCai: '12.88' }), '')
+  assert.equal(display('volumeDifferenceCai', { reportedVolumeCai: null, volumeCai: '12.88' }), '')
   assert.equal(display('reportedVolumeCai', { reportedVolumeCai: null }), 'slhBill.unknown')
-  assert.equal(display('weight', { grossWeightKg: '1173.000', weightUnit: 'KGS' }), '1173.000 KGS')
-  assert.equal(display('dimensions', { heightCm: '108.00', lengthCm: '240.00', widthCm: '164.00' }), '240.00 × 164.00 × 108.00')
+  assert.equal(display('weight', { grossWeightKg: '1173.000', weightUnit: 'KGS' }), '1173.00 KGS')
+  assert.equal(display('dimensions', { heightCm: '108.00', lengthCm: '240.00', widthCm: '164.00' }), '240.00 × 164.00 × 108.00 slhBill.unit.cm')
+  // 金额列统一两位小数：来源字符串会省略小数位。
+  assert.equal(display('freightAmountCny', { freightAmountCny: '4425' }), '4425.00')
+  assert.equal(display('payableAmountCny', { payableAmountCny: '4555.0' }), '4555.00')
+  assert.equal(display('codAmountTwd', { codAmountTwd: null }), 'slhBill.unknown')
   assert.equal(display('pricingBasis', { pricingBasis: 'VOLUME' }), 'slhBill.pricingBasis.VOLUME')
   assert.equal(display('pricingBasis', { pricingBasis: undefined }), 'slhBill.unknown')
   assert.equal(display('packageCount', { packageCount: 12, packageUnit: '件' }), '12 件')
@@ -65,4 +81,45 @@ test('明细列覆盖账单全部字段并统一按两位小数与费别名展�
   // 费用明细的纯文本兜底同时给出币种与费别名，避免移动端只看到金额。
   assert.equal(display('charges', { charges: [charge('FREIGHT', 'CNY', '100.00'), charge('WAITING', 'TWD', '20.00')] }), 'CNY slhBill.chargeType.FREIGHT 100.00；TWD slhBill.chargeType.WAITING 20.00')
   assert.equal(display('charges', { charges: [] }), '')
+})
+
+test('金额统一两位小数，缺值不伪造为零', () => {
+  assert.equal(formatSlhBillAmount('4425'), '4425.00')
+  assert.equal(formatSlhBillAmount('0'), '0.00')
+  assert.equal(formatSlhBillAmount('-87482.5'), '-87482.50')
+  assert.equal(formatSlhBillAmount('900.005'), '900.01')
+  assert.equal(formatSlhBillAmount(null), null)
+  assert.equal(formatSlhBillAmount(''), null)
+})
+
+test('材积差异取系统计算减账单自报，正负各自成态', () => {
+  // 系统算得更多：红色（账单写少了）。
+  assert.deepEqual(
+    resolveSlhBillVolumeDifference({ reportedVolumeCai: '12.00', volumeCai: '13.50' }),
+    { text: '+1.50', tone: 'over' },
+  )
+  // 账单写得更多：绿色。
+  assert.deepEqual(
+    resolveSlhBillVolumeDifference({ reportedVolumeCai: '13.50', volumeCai: '12.00' }),
+    { text: '-1.50', tone: 'under' },
+  )
+  // 一致时不下发数值，由界面显示占位符。
+  assert.deepEqual(
+    resolveSlhBillVolumeDifference({ reportedVolumeCai: '12.88', volumeCai: '12.880' }),
+    { text: '', tone: 'even' },
+  )
+  // 两位小数下相等也视为一致，避免浮点尾巴造出假差异。
+  assert.deepEqual(
+    resolveSlhBillVolumeDifference({ reportedVolumeCai: '12.88', volumeCai: '12.8801' }),
+    { text: '', tone: 'even' },
+  )
+  // 任一侧缺失无法判定。
+  assert.equal(
+    resolveSlhBillVolumeDifference({ reportedVolumeCai: null, volumeCai: '12.88' }),
+    null,
+  )
+  assert.equal(
+    resolveSlhBillVolumeDifference({ reportedVolumeCai: '12.88', volumeCai: null }),
+    null,
+  )
 })

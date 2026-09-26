@@ -118,8 +118,8 @@
       "packageCount": "箱數",
       "weight": "重量",
       "dimensions": "裝箱尺寸",
-      "volumeCai": "材積",
-      "reportedVolumeCai": "帳單材積",
+      "volumeCai": "系統計算材積",
+      "reportedVolumeCai": "帳單自報材積",
       "volumeDifferenceCai": "材積差異",
       "categoryCode": "類別",
       "unitPriceAmount": "單價",
@@ -177,6 +177,10 @@
     "superseded": "已被取代",
     "supersededAt": "取代時間",
     "supersededNotice": "本帳單已被後續版本取代，僅作留痕查詢",
+    "unit": {
+      "cai": "材",
+      "cm": "CM"
+    },
     "unknown": "未知",
     "upload": {
       "label": "上傳順聯航對帳單",

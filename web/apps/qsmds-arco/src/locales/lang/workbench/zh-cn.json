@@ -127,8 +127,8 @@
       "packageCount": "箱数",
       "weight": "重量",
       "dimensions": "装箱尺寸",
-      "volumeCai": "材积",
-      "reportedVolumeCai": "账单材积",
+      "volumeCai": "系统计算材积",
+      "reportedVolumeCai": "账单自报材积",
       "volumeDifferenceCai": "材积差异",
       "categoryCode": "类别",
       "unitPriceAmount": "单价",
@@ -186,6 +186,10 @@
     "superseded": "已被取代",
     "supersededAt": "取代时间",
     "supersededNotice": "本账单已被后续版本取代，仅作留痕查询",
+    "unit": {
+      "cai": "材",
+      "cm": "CM"
+    },
     "unknown": "未知",
     "upload": {
       "label": "上传顺联航对账单",
