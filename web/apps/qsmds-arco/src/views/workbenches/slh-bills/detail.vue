@@ -54,8 +54,7 @@ function jumpToLine(lineNumber: number): void {
   linePage.value = target
   void loadLines()
 }
-// 序号列跨页连续：偏移由当前页与每页条数推出。
-const columns = computed(() => buildSlhBillLineColumns(t, { sequenceOffset: (linePage.value - 1) * linePageSize.value }))
+const columns = computed(() => buildSlhBillLineColumns(t))
 async function load(): Promise<void> {
   billController?.abort()
   if (!canRead.value || instanceId === '') {
@@ -364,7 +363,7 @@ onBeforeUnmount(() => {
             v-model:page-size="linePageSize"
             row-key="lineNumber"
             table-class="w-max min-w-full"
-            :show-row-number="false"
+            :show-row-number="true"
             :columns="columns"
             :data="lines"
             :loading="linesLoading"

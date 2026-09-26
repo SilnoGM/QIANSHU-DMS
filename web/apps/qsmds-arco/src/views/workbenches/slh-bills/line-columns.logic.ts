@@ -12,22 +12,15 @@ import {
 /** 列定义只依赖这个最小翻译签名，用例可以直接断言列取值。 */
 export type SlhBillColumnTranslate = (key: string, params?: Record<string, unknown>) => string
 
-export interface SlhBillLineColumnOptions {
-  /** 当前页第一条记录的全局序号偏移，让序号列跨页连续。 */
-  sequenceOffset?: number
-}
-
 /**
  * 账单明细列在导入预览与详情页共用：两处字段完全一致，预览页只在末尾追加自己的问题列。
  * 泛型参数让预览页能用 SlhBillPreviewLineDto 保持 own 类型，避免把 preview 专属字段丢掉。
  */
 export function buildSlhBillLineColumns<TData extends SlhBillLineDto = SlhBillLineDto>(
   translate: SlhBillColumnTranslate,
-  options: SlhBillLineColumnOptions = {},
 ): QsGenericTableColumn<TData>[] {
   const missing = translate('slhBill.valueMissing')
   const cai = translate('slhBill.unit.cai')
-  const sequenceOffset = Math.max(0, options.sequenceOffset ?? 0)
   const text = (value: string | null | undefined) => value === undefined || value === null || value === '' ? missing : value
   const volume = (value: string | null | undefined) => {
     const formatted = formatSlhBillVolume(value)
@@ -39,18 +32,8 @@ export function buildSlhBillLineColumns<TData extends SlhBillLineDto = SlhBillLi
     .map(group => `${group.currencyCode} ${group.items.map(item => `${translate(`slhBill.chargeType.${item.chargeType}`)} ${amount(item.amount)}`).join(' ')}`)
     .join('；')
   return [
-    // 序号是列表自己的计数（从 1 开始，跨页连续）；行号是原表里的第几行，两者含义不同。
-    {
-      id: 'sequence',
-      title: '#',
-      accessorFn: (_line, index) => sequenceOffset + index + 1,
-      width: 64,
-      minWidth: 64,
-      maxWidth: 64,
-      fixed: 'left',
-      align: 'right',
-      cellClass: 'qs-type-meta tabular-nums',
-    },
+    // 序号由表格内置行号列渲染（表头 #、内容 #1 #2…、跨页连续、左固定）；
+    // 这里的行号是原表里的行号，两者含义不同。
     {
       id: 'lineNumber',
       title: translate('slhBill.line.lineNumber'),

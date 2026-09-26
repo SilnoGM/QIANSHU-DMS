@@ -59,7 +59,7 @@ test('明细列覆盖账单全部字段并统一按两位小数与费别名展�
     ? key
     : `${key}(${Object.values(params).join(',')})`
   const columns = buildSlhBillLineColumns(translate)
-  for (const id of ['sequence', 'lineNumber', 'loadingDate', 'containerBatchName', 'warehouseReceiptReference', 'shippingMark', 'goodsName', 'packageCount', 'weight', 'dimensions', 'volumeCai', 'reportedVolumeCai', 'volumeDifferenceCai', 'categoryCode', 'unitPriceAmount', 'pricingBasis', 'freightAmountCny', 'codHandlingAmountCny', 'surchargeAmountCny', 'payableAmountCny', 'codAmountTwd', 'ntdSurchargeAmountTwd', 'charges', 'recipientInfo', 'remark']) {
+  for (const id of ['lineNumber', 'loadingDate', 'containerBatchName', 'warehouseReceiptReference', 'shippingMark', 'goodsName', 'packageCount', 'weight', 'dimensions', 'volumeCai', 'reportedVolumeCai', 'volumeDifferenceCai', 'categoryCode', 'unitPriceAmount', 'pricingBasis', 'freightAmountCny', 'codHandlingAmountCny', 'surchargeAmountCny', 'payableAmountCny', 'codAmountTwd', 'ntdSurchargeAmountTwd', 'charges', 'recipientInfo', 'remark']) {
     assert.ok(columns.some(column => column.id === id), id)
   }
   assert.ok(columns.every(column => column.defaultVisible !== false))
@@ -72,7 +72,6 @@ test('明细列覆盖账单全部字段并统一按两位小数与费别名展�
   assert.equal(display('volumeDifferenceCai', { reportedVolumeCai: null, volumeCai: '12.88' }), '')
   assert.equal(display('reportedVolumeCai', { reportedVolumeCai: null }), 'slhBill.valueMissing')
   // 序号是列表自己的计数，行号是原表行号；两者含义不同。
-  assert.equal(display('sequence', {}, 4), 5)
   // 行号取原表行号：表头在第 13 行时第一条明细是第 14 行。
   assert.equal(display('lineNumber', { sourceRowNumber: 14 }), 'slhBill.line.lineNumberValue(14)')
   assert.equal(display('weight', { grossWeightKg: '1173.000', weightUnit: 'KGS' }), '1173.00 KGS')
@@ -88,22 +87,6 @@ test('明细列覆盖账单全部字段并统一按两位小数与费别名展�
   // 费用明细的纯文本兜底同时给出币种与费别名，避免移动端只看到金额。
   assert.equal(display('charges', { charges: [charge('FREIGHT', 'CNY', '100.00'), charge('WAITING', 'TWD', '20.00')] }), 'CNY slhBill.chargeType.FREIGHT 100.00；TWD slhBill.chargeType.WAITING 20.00')
   assert.equal(display('charges', { charges: [] }), '')
-})
-
-test('序号从 1 开始并按页偏移递推，跨页连续', () => {
-  const translate = (key: string) => key
-  const firstPage = buildSlhBillLineColumns(translate)
-  const thirdPage = buildSlhBillLineColumns(translate, { sequenceOffset: 40 })
-  const sequence = (columns: ReturnType<typeof buildSlhBillLineColumns>, index: number) =>
-    columns.find(column => column.id === 'sequence')!.accessorFn!({} as SlhBillLineDto, index)
-  assert.equal(sequence(firstPage, 0), 1)
-  assert.equal(sequence(firstPage, 19), 20)
-  assert.equal(sequence(thirdPage, 0), 41)
-  // 负偏移按 0 处理，避免出现 0 或负数序号。
-  assert.equal(
-    sequence(buildSlhBillLineColumns(translate, { sequenceOffset: -10 }), 0),
-    1,
-  )
 })
 
 test('金额统一两位小数，缺值不伪造为零', () => {
