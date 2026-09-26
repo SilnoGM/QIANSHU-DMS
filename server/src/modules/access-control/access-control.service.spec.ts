@@ -104,9 +104,9 @@ describe('permission constants', () => {
       'container-batches:read',
       'container-batches:create',
       'container-batches:update',
+      'slh-bills:create',
       'slh-bills:read',
       'slh-bills:reconcile',
-      'slh-bills:create',
     ])
     expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 76)
   })

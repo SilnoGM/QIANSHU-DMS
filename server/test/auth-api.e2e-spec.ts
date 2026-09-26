@@ -87,6 +87,7 @@ const MANAGEMENT_PERMISSION_CODES = [
   'sales-receipts:read',
   'sales-receipts:review',
   'sales-receipts:void',
+  'slh-bills:create',
   'slh-bills:read',
   'slh-bills:reconcile',
   'supplier-payment-profiles:read',

@@ -107,11 +107,11 @@ export const CONTAINER_BATCH_PERMISSION_CODES = [
   'container-batches:update',
 ] as const
 
-/** 顺联航账单：查看、核对入口，以及导入账单所需的 create 权限。 */
+/** 顺联航账单：导入、查看与核对；顺序与权限目录按 code 的排序一致。 */
 export const SLH_BILL_PERMISSION_CODES = [
+  'slh-bills:create',
   'slh-bills:read',
   'slh-bills:reconcile',
-  'slh-bills:create',
 ] as const
 
 /**
