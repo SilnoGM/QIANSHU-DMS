@@ -123,12 +123,12 @@ function footerValue(cells: Map<number, WorkbookCell>, column: number | undefine
   const raw = column === undefined ? null : cells.get(column)?.value ?? null
   if (raw === null || raw.trim() === '') return null
   try { return slhNormalizeAmount(raw.trim()) }
-  catch { findings.push({ kind: 'SUBTOTAL_MISMATCH', severity: 'warning', lineNumber: null, message: `${label}无法读取数值` }); return null }
+  catch { findings.push(finding('SUBTOTAL_MISMATCH', 'warning', null, `${label}无法读取数值`)); return null }
 }
 
-/** 记账口径的差异与告警都收进同一份 findings，行级视图由 lineNumber 派生。 */
-function finding(kind: SlhBillFindingKind, severity: 'difference' | 'warning', lineNumber: number | null, message: string): SlhBillFinding {
-  return { kind, severity, lineNumber, message }
+/** 记账口径的差异与告警都收进同一份 findings，行级视图由行号派生。 */
+function finding(kind: SlhBillFindingKind, severity: 'difference' | 'warning', lineNumber: number | null, message: string, sourceRowNumber: number | null = null): SlhBillFinding {
+  return { kind, severity, lineNumber, sourceRowNumber, message }
 }
 
 function parseLine(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, WorkbookCell>, columns: Columns, lineNumber: number): { line: ParsedSlhBillLine, findings: SlhBillFinding[] } | null {
@@ -149,7 +149,7 @@ function parseLine(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, W
 
   for (const [field, label] of [['lengthCm', '长'], ['widthCm', '宽'], ['heightCm', '高']] as const) {
     const places = sourceDecimalPlaces(cell(field)?.value ?? null)
-    if (places > 2) findings.push(finding('DIMENSION_PRECISION', 'warning', lineNumber, `${label}在来源里保留 ${places} 位小数，已按 2 位小数取整，材积复算可能有偏差`))
+    if (places > 2) findings.push(finding('DIMENSION_PRECISION', 'warning', lineNumber, `${label}在来源里保留 ${places} 位小数，已按 2 位小数取整，材积复算可能有偏差`, rowNumber))
   }
 
   const grossWeightKg = numeric(cell('grossWeightKg'), sheet, '出货重量', 3, 18, errors)
@@ -172,11 +172,11 @@ function parseLine(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, W
 
   // 复算与账单缓存值逐项比对；差异只提示，不阻断入库。
   const calculatedFreight = calculateSlhFreight({ unitPriceAmount, pricingBasis, grossWeightKg, volumeCai })
-  if (!slhAmountsEqual(calculatedFreight, freightAmountCny)) findings.push(finding('FREIGHT_MISMATCH', 'difference', lineNumber, `运费复算 ${calculatedFreight} 与账单 ${freightAmountCny} 不一致`))
+  if (!slhAmountsEqual(calculatedFreight, freightAmountCny)) findings.push(finding('FREIGHT_MISMATCH', 'difference', lineNumber, `运费复算 ${calculatedFreight} 与账单 ${freightAmountCny} 不一致`, rowNumber))
   const calculatedPayable = calculateSlhPayable(calculatedFreight, codHandlingAmountCny, surchargeAmountCny)
-  if (!slhAmountsEqual(calculatedPayable, payableAmountCny)) findings.push(finding('PAYABLE_MISMATCH', 'difference', lineNumber, `合计应付复算 ${calculatedPayable} 与账单 ${payableAmountCny} 不一致`))
+  if (!slhAmountsEqual(calculatedPayable, payableAmountCny)) findings.push(finding('PAYABLE_MISMATCH', 'difference', lineNumber, `合计应付复算 ${calculatedPayable} 与账单 ${payableAmountCny} 不一致`, rowNumber))
   if (volumeCai !== null && reportedVolumeCai !== null && !slhVolumesEqual(volumeCai, reportedVolumeCai)) {
-    findings.push(finding('VOLUME_MISMATCH', 'difference', lineNumber, `材积复算 ${volumeCai} 与账单 ${reportedVolumeCai} 不一致`))
+    findings.push(finding('VOLUME_MISMATCH', 'difference', lineNumber, `材积复算 ${volumeCai} 与账单 ${reportedVolumeCai} 不一致`, rowNumber))
   }
 
   const remark = text(cell('remark'), '备注', 2000, errors)
@@ -184,11 +184,11 @@ function parseLine(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, W
   if (charges.length > 0) {
     const chargeCny = sumSlhCharges(charges, 'CNY')
     const chargeTwd = sumSlhCharges(charges, 'TWD')
-    if (!slhAmountsEqual(chargeCny, surchargeAmountCny)) findings.push(finding('CHARGE_MISMATCH', 'difference', lineNumber, `备注人民币费用合计 ${chargeCny} 与附加费 ${surchargeAmountCny} 不一致`))
-    if (!slhAmountsEqual(chargeTwd, ntdSurchargeAmountTwd)) findings.push(finding('CHARGE_MISMATCH', 'difference', lineNumber, `备注台币费用合计 ${chargeTwd} 与 NTD 杂费 ${ntdSurchargeAmountTwd} 不一致`))
+    if (!slhAmountsEqual(chargeCny, surchargeAmountCny)) findings.push(finding('CHARGE_MISMATCH', 'difference', lineNumber, `备注人民币费用合计 ${chargeCny} 与附加费 ${surchargeAmountCny} 不一致`, rowNumber))
+    if (!slhAmountsEqual(chargeTwd, ntdSurchargeAmountTwd)) findings.push(finding('CHARGE_MISMATCH', 'difference', lineNumber, `备注台币费用合计 ${chargeTwd} 与 NTD 杂费 ${ntdSurchargeAmountTwd} 不一致`, rowNumber))
   }
   // 没有金额的备注片段不能成为费用行，但要让核对的人知道它被忽略了。
-  for (const note of notes) findings.push(finding('REMARK_NOTE', 'warning', lineNumber, `备注片段「${note}」没有金额，未计入费用明细`))
+  for (const note of notes) findings.push(finding('REMARK_NOTE', 'warning', lineNumber, `备注片段「${note}」没有金额，未计入费用明细`, rowNumber))
 
   const sourceData: ParsedSlhBillLine['sourceData'] = { cells: {} }
   for (const value of cells.values()) {

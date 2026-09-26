@@ -22,8 +22,10 @@ export type SlhBillFindingSeverity = 'difference' | 'warning'
 export interface SlhBillFinding {
   kind: SlhBillFindingKind
   severity: SlhBillFindingSeverity
-  /** 行级出问题时的明细行号；账单级问题为 null。 */
+  /** 行级出问题时的明细行序号（账单内第几行）；账单级问题为 null。 */
   lineNumber: number | null
+  /** 同一行在原表里的行号，与界面上「行号」列一致；账单级问题为 null。 */
+  sourceRowNumber: number | null
   message: string
 }
 

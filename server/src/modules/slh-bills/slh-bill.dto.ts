@@ -22,7 +22,8 @@ export enum SlhBillFindingKindDto {
 export class SlhBillFindingDto {
   @ApiProperty({ enum: SlhBillFindingKindDto }) kind!: SlhBillFindingKindDto
   @ApiProperty({ enum: SlhBillFindingSeverityDto }) severity!: SlhBillFindingSeverityDto
-  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Line number for line-scoped findings.' }) lineNumber!: number | null
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Line ordinal inside the bill; used to locate the row.' }) lineNumber!: number | null
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Row number in the source sheet, matching the line list.' }) sourceRowNumber!: number | null
   @ApiProperty() message!: string
 }
 export enum SlhBillChargeTypeDto {
@@ -85,6 +86,7 @@ export class SlhBillLineChargeDto {
 
 export class SlhBillLineDto {
   @ApiProperty() lineNumber!: number
+  @ApiProperty({ type: Number, description: 'Row number in the source sheet; the first detail row follows the header.' }) sourceRowNumber!: number
   @ApiProperty({ type: 'string', description: 'YYYY-MM-DD' }) loadingDate!: string
   @ApiProperty() containerBatchNameText!: string
   @ApiPropertyOptional({ format: 'uuid', nullable: true }) containerBatchId!: string | null

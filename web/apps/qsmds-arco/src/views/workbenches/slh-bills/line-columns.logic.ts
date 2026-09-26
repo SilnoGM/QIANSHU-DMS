@@ -54,7 +54,8 @@ export function buildSlhBillLineColumns<TData extends SlhBillLineDto = SlhBillLi
     {
       id: 'lineNumber',
       title: translate('slhBill.line.lineNumber'),
-      accessorFn: line => translate('slhBill.line.lineNumberValue', { line: line.lineNumber }),
+      // 行号是原表里的行号（表头行之后的第一条明细通常是第 14 行），不是列表顺序。
+      accessorFn: line => translate('slhBill.line.lineNumberValue', { line: line.sourceRowNumber }),
       width: 110,
       minWidth: 110,
       maxWidth: 110,

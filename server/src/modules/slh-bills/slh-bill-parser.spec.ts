@@ -72,7 +72,8 @@ describe('slh bill workbook parser', () => {
     expect(result.reported.netAmountTwd).toBe('121000.00')
     // 不带除数时该单元格本应等于不折算口径，因此不产生差异；但需要提示补汇率。
     expect(result.findings).toEqual([
-      { kind: 'RATE_MISSING', severity: 'warning', lineNumber: null, message: '账单公式未自带汇率，入库时需读取系统当前汇率或手工填写' },
+      // 账单级问题没有行号，原表行号同样为空。
+      { kind: 'RATE_MISSING', severity: 'warning', lineNumber: null, sourceRowNumber: null, message: '账单公式未自带汇率，入库时需读取系统当前汇率或手工填写' },
     ])
   })
 
@@ -83,9 +84,9 @@ describe('slh bill workbook parser', () => {
     const result = await parseSlhBillWorkbook(createSlhBillFixture({
       rows, subtotal: { payable: '10129', cod: '129000', ntd: '6000' }, netValue: '25625',
     }))
-    // 行级出入项带行号，供前端分组并在明细表里定位。
-    expect(result.findings).toContainEqual({ kind: 'FREIGHT_MISMATCH', severity: 'difference', lineNumber: 1, message: '运费复算 4425.00 与账单 9999 不一致' })
-    expect(result.findings).toContainEqual({ kind: 'PAYABLE_MISMATCH', severity: 'difference', lineNumber: 1, message: '合计应付复算 4555.00 与账单 10129 不一致' })
+    // 行级出入项同时带账单内序号与原表行号：前者用于定位，后者与界面「行号」列一致。
+    expect(result.findings).toContainEqual({ kind: 'FREIGHT_MISMATCH', severity: 'difference', lineNumber: 1, sourceRowNumber: 14, message: '运费复算 4425.00 与账单 9999 不一致' })
+    expect(result.findings).toContainEqual({ kind: 'PAYABLE_MISMATCH', severity: 'difference', lineNumber: 1, sourceRowNumber: 14, message: '合计应付复算 4555.00 与账单 10129 不一致' })
   })
 
   it('flags a dimension carrying more decimals than the record precision', async () => {

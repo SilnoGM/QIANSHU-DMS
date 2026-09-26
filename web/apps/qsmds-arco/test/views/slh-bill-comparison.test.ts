@@ -90,7 +90,15 @@ test('支持项列出账单不提供小计的三项', () => {
   ])
 })
 
-const finding = (kind: SlhBillFindingDto['kind'], severity: SlhBillFindingDto['severity'], lineNumber: number | null, message: string): SlhBillFindingDto => ({ kind, lineNumber, message, severity })
+function finding(
+  kind: SlhBillFindingDto['kind'],
+  severity: SlhBillFindingDto['severity'],
+  lineNumber: number | null,
+  message: string,
+  sourceRowNumber: number | null = lineNumber === null ? null : lineNumber + 13,
+): SlhBillFindingDto {
+  return { kind, lineNumber, message, severity, sourceRowNumber }
+}
 
 test('差异按类型分组，组内按行号排序且账单级排最前', () => {
   const groups = groupSlhBillFindings([
@@ -99,10 +107,11 @@ test('差异按类型分组，组内按行号排序且账单级排最前', () =>
     finding('SUBTOTAL_MISMATCH', 'difference', null, 'bill level'),
     finding('RATE_MISSING', 'warning', null, 'no rate'),
   ])
-  assert.deepEqual(groups.map(group => [group.kind, group.severity, group.items.map(item => item.lineNumber)]), [
-    ['FREIGHT_MISMATCH', 'difference', [2, 7]],
-    ['SUBTOTAL_MISMATCH', 'difference', [null]],
-    ['RATE_MISSING', 'warning', [null]],
+  // 组内按原表行号排序，同时保留内部序号用于跳页。
+  assert.deepEqual(groups.map(group => [group.kind, group.severity, group.items.map(item => [item.lineNumber, item.sourceRowNumber])]), [
+    ['FREIGHT_MISMATCH', 'difference', [[2, 15], [7, 20]]],
+    ['SUBTOTAL_MISMATCH', 'difference', [[null, null]]],
+    ['RATE_MISSING', 'warning', [[null, null]]],
   ])
 })
 

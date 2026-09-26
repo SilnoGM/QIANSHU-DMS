@@ -146,7 +146,13 @@ export function buildSlhBillComparison(input: SlhBillComparisonInput): SlhBillCo
 export interface SlhBillFindingGroup {
   kind: SlhBillFindingDto['kind']
   severity: SlhBillFindingDto['severity']
-  items: Array<{ lineNumber: number | null, message: string }>
+  items: Array<{
+    /** 账单内序号：用于把差异项定位到明细表的具体页。 */
+    lineNumber: number | null
+    /** 原表行号：与明细表「行号」列一致，供人核对。 */
+    sourceRowNumber: number | null
+    message: string
+  }>
 }
 
 /** 按类型分组，便于逐类处理；组内保持行号升序，账单级的排在最前。 */
@@ -155,12 +161,16 @@ export function groupSlhBillFindings(findings: readonly SlhBillFindingDto[]): Sl
   for (const finding of findings) {
     const key = `${finding.severity}:${finding.kind}`
     const group = groups.get(key) ?? { kind: finding.kind, severity: finding.severity, items: [] }
-    group.items.push({ lineNumber: finding.lineNumber ?? null, message: finding.message })
+    group.items.push({
+      lineNumber: finding.lineNumber ?? null,
+      message: finding.message,
+      sourceRowNumber: finding.sourceRowNumber ?? null,
+    })
     groups.set(key, group)
   }
   return [...groups.values()].map(group => ({
     ...group,
-    items: [...group.items].sort((left, right) => (left.lineNumber ?? 0) - (right.lineNumber ?? 0)),
+    items: [...group.items].sort((left, right) => (left.sourceRowNumber ?? 0) - (right.sourceRowNumber ?? 0)),
   }))
 }
 

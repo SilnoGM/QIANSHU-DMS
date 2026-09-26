@@ -169,7 +169,7 @@ function statusLabel(status: string): string {
                 class="qs-type-meta shrink-0 bg-transparent border-0 cursor-pointer underline p-0 text-primary"
                 @click="emit('jumpToLine', item.lineNumber)"
               >
-                {{ t('slhBill.comparison.lineNumber', { line: item.lineNumber }) }}
+                {{ t('slhBill.comparison.lineNumber', { line: item.sourceRowNumber ?? item.lineNumber }) }}
               </button>
               <span class="min-w-0 [overflow-wrap:anywhere]">{{ item.message }}</span>
             </li>

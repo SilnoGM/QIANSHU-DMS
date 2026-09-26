@@ -82093,7 +82093,12 @@
           "lineNumber": {
             "type": "number",
             "nullable": true,
-            "description": "Line number for line-scoped findings."
+            "description": "Line ordinal inside the bill; used to locate the row."
+          },
+          "sourceRowNumber": {
+            "type": "number",
+            "nullable": true,
+            "description": "Row number in the source sheet, matching the line list."
           },
           "message": {
             "type": "string"
@@ -82273,6 +82278,10 @@
           "lineNumber": {
             "type": "number"
           },
+          "sourceRowNumber": {
+            "type": "number",
+            "description": "Row number in the source sheet; the first detail row follows the header."
+          },
           "loadingDate": {
             "type": "string",
             "description": "YYYY-MM-DD"
@@ -82386,6 +82395,7 @@
         },
         "required": [
           "lineNumber",
+          "sourceRowNumber",
           "loadingDate",
           "containerBatchNameText",
           "goodsName",
@@ -82527,6 +82537,10 @@
           "lineNumber": {
             "type": "number"
           },
+          "sourceRowNumber": {
+            "type": "number",
+            "description": "Row number in the source sheet; the first detail row follows the header."
+          },
           "loadingDate": {
             "type": "string",
             "description": "YYYY-MM-DD"
@@ -82652,6 +82666,7 @@
         },
         "required": [
           "lineNumber",
+          "sourceRowNumber",
           "loadingDate",
           "containerBatchNameText",
           "goodsName",

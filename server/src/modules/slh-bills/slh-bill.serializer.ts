@@ -10,6 +10,7 @@ export function toFindingDto(finding: SlhBillFinding): SlhBillFindingDto {
     kind: finding.kind as SlhBillFindingKindDto,
     severity: finding.severity as SlhBillFindingSeverityDto,
     lineNumber: finding.lineNumber,
+    sourceRowNumber: finding.sourceRowNumber,
     message: finding.message,
   }
 }
@@ -24,8 +25,9 @@ export function serializeStoredFindings(value: Prisma.JsonValue): SlhBillFinding
     const severity = record.severity === 'difference' || record.severity === 'warning' ? record.severity : null
     const message = typeof record.message === 'string' ? record.message : null
     const lineNumber = typeof record.lineNumber === 'number' ? record.lineNumber : null
+    const sourceRowNumber = typeof record.sourceRowNumber === 'number' ? record.sourceRowNumber : null
     if (kind === null || severity === null || message === null) return []
-    return [{ kind: kind as SlhBillFindingKindDto, severity: severity as SlhBillFindingSeverityDto, lineNumber, message }]
+    return [{ kind: kind as SlhBillFindingKindDto, severity: severity as SlhBillFindingSeverityDto, lineNumber, sourceRowNumber, message }]
   })
 }
 
@@ -48,6 +50,7 @@ export function serializeSlhBillLine(row: Prisma.SlhBillLineGetPayload<{ include
     : null
   return {
     lineNumber: row.lineNumber,
+    sourceRowNumber: row.sourceRowNumber,
     loadingDate: row.loadingDate.toISOString().slice(0, 10),
     containerBatchNameText: row.containerBatchNameText,
     containerBatchId: row.containerBatchId,
@@ -87,6 +90,7 @@ export function serializeSlhBillLine(row: Prisma.SlhBillLineGetPayload<{ include
 export function serializeSlhBillPreviewLine(line: ParsedSlhBillLine, findings: readonly SlhBillFinding[]): SlhBillPreviewLineDto {
   return {
     lineNumber: line.lineNumber,
+    sourceRowNumber: line.sourceRowNumber,
     loadingDate: line.loadingDate,
     containerBatchNameText: line.containerBatchName,
     containerBatchId: null,

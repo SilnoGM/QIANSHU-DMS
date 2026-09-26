@@ -73,7 +73,8 @@ test('明细列覆盖账单全部字段并统一按两位小数与费别名展�
   assert.equal(display('reportedVolumeCai', { reportedVolumeCai: null }), 'slhBill.valueMissing')
   // 序号是列表自己的计数，行号是原表行号；两者含义不同。
   assert.equal(display('sequence', {}, 4), 5)
-  assert.equal(display('lineNumber', { lineNumber: 7 }), 'slhBill.line.lineNumberValue(7)')
+  // 行号取原表行号：表头在第 13 行时第一条明细是第 14 行。
+  assert.equal(display('lineNumber', { sourceRowNumber: 14 }), 'slhBill.line.lineNumberValue(14)')
   assert.equal(display('weight', { grossWeightKg: '1173.000', weightUnit: 'KGS' }), '1173.00 KGS')
   assert.equal(display('dimensions', { heightCm: '108.00', lengthCm: '240.00', widthCm: '164.00' }), '240.00 × 164.00 × 108.00 slhBill.unit.cm')
   // 金额列统一两位小数：来源字符串会省略小数位。
