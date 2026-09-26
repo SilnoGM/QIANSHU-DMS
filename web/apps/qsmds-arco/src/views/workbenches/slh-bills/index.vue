@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CalendarDateRangeValue } from '@fantastic-admin/components'
-import type { SlhBillAmountBoundError, SlhBillListState } from './list.logic'
+import type { SlhBillListState } from './list.logic'
 import type { SlhBillListItemDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import slhBillsApi from '@/api/modules/slh-bills'
@@ -15,7 +15,7 @@ import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { containerFailure } from '../containers/use-container-resource'
-import { buildSlhBillListQuery, normalizeSlhBillAmountBound, resolveSlhBillAmountRange } from './list.logic'
+import { buildSlhBillListQuery, shouldOpenSlhBillFromRowClick } from './list.logic'
 
 defineOptions({ name: 'QsFinanceBillReconciliationSlhBillManagement' })
 const { t } = useI18n()
@@ -30,11 +30,6 @@ const keyword = ref('')
 const page = ref(1)
 const pageSize = ref(20)
 const dateRange = shallowRef<CalendarDateRangeValue>({ end: undefined, start: undefined })
-const payableMinDraft = ref('')
-const payableMaxDraft = ref('')
-const amountError = ref<SlhBillAmountBoundError>(null)
-// 只有按下查询才把草稿写进查询条件，输入过程中不反复请求。
-const appliedBounds = shallowRef<{ payableMin?: string, payableMax?: string }>({})
 const items = shallowRef<SlhBillListItemDto[]>([])
 const total = ref(0)
 const loading = ref(false)
@@ -48,7 +43,6 @@ const query = computed(() => buildSlhBillListQuery({
   periodFrom: dateRange.value.start?.toString(),
   periodTo: dateRange.value.end?.toString(),
   state: state.value,
-  ...appliedBounds.value,
 }))
 const columns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
   { id: 'slhBillNo', title: t('slhBill.column.slhBillNo'), accessorKey: 'slhBillNo', width: 215, minWidth: 215, fixed: 'left' },
@@ -95,15 +89,6 @@ async function load(): Promise<void> {
   }
 }
 function search(): void {
-  const range = resolveSlhBillAmountRange(
-    normalizeSlhBillAmountBound(payableMinDraft.value),
-    normalizeSlhBillAmountBound(payableMaxDraft.value),
-  )
-  amountError.value = range.error
-  if (range.error !== null) {
-    return
-  }
-  appliedBounds.value = { payableMin: range.payableMin, payableMax: range.payableMax }
   page.value = 1
   void load()
 }
@@ -123,17 +108,14 @@ function openImport(): void {
 }
 // 行内按钮与复制按钮自己处理点击，只有其余区域才算作进入详情，避免一次点击触发两次导航。
 function onRowClick(row: SlhBillListItemDto, _index: number, event: MouseEvent): void {
-  const target = event.target as { closest?: (selector: string) => unknown } | null
-  if (typeof target?.closest === 'function' && target.closest('button, a, input, select, textarea, [role="button"]') !== null) {
-    return
+  if (shouldOpenSlhBillFromRowClick(event.target)) {
+    viewBill(row.id)
   }
-  viewBill(row.id)
 }
 watch(() => [canRead.value, accountStore.authEpoch], () => {
   items.value = []
   total.value = 0
   error.value = ''
-  amountError.value = null
   void load()
 }, { immediate: true })
 onBeforeUnmount(() => controller?.abort())
@@ -175,14 +157,14 @@ onBeforeUnmount(() => controller?.abort())
         @row-click="onRowClick"
       >
         <template #query-leading>
-          <div class="flex flex-wrap gap-3 items-center">
-            <QsDateRangeFilter v-model="dateRange" :calendar-label="t('slhBill.periodRange')" :placeholder="t('slhBill.periodRange')" @complete="search" @clear="search" />
-            <div class="flex flex-wrap gap-2 items-center">
-              <FaInput id="slh-bill-payable-min" v-model="payableMinDraft" type="text" inputmode="decimal" clearable class="w-[150px]" :placeholder="t('slhBill.payableMin')" @clear="search" @keyup.enter="search" />
-              <span class="qs-type-meta text-muted-foreground" aria-hidden="true">~</span>
-              <FaInput id="slh-bill-payable-max" v-model="payableMaxDraft" type="text" inputmode="decimal" clearable class="w-[150px]" :placeholder="t('slhBill.payableMax')" @clear="search" @keyup.enter="search" />
-            </div>
-          </div>
+          <QsDateRangeFilter
+            v-model="dateRange"
+            width-class="w-[360px]"
+            :calendar-label="t('slhBill.periodRange')"
+            :placeholder="t('slhBill.periodRange')"
+            @complete="search"
+            @clear="search"
+          />
         </template>
         <template #cell-slhBillNo="{ row }">
           <QsTableStackedCell>
@@ -318,9 +300,6 @@ onBeforeUnmount(() => controller?.abort())
           </FaButton>
         </template>
       </QsGenericTable>
-      <p v-if="amountError" role="alert" class="qs-type-meta text-destructive m-0 mt-3">
-        {{ t(amountError === 'order' ? 'slhBill.amountOrderError' : 'slhBill.amountFormatError') }}
-      </p>
     </FaPageMain>
   </div>
 </template>

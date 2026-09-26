@@ -1,46 +1,6 @@
 import type { SlhBillListQuery } from '@/api/modules/slh-bills'
-import Decimal from 'decimal.js'
 
 export type SlhBillListState = NonNullable<SlhBillListQuery['state']>
-export type SlhBillAmountBoundError = 'format' | 'order' | null
-// 与 OpenAPI 契约的 payableMin/payableMax 形状一致：非负十进制、最多两位小数、无前导零。
-const AMOUNT_BOUND_PATTERN = /^(?:0|[1-9]\d{0,27})(?:\.\d{1,2})?$/
-
-export interface SlhBillAmountBound {
-  value: string | null
-  valid: boolean
-}
-
-/** 金额区间禁止把非法值送到服务端换回 422，因此先在页面本地收敛形状。 */
-export function normalizeSlhBillAmountBound(raw: string): SlhBillAmountBound {
-  const trimmed = raw.trim()
-  if (trimmed === '') {
-    return { value: null, valid: true }
-  }
-  return AMOUNT_BOUND_PATTERN.test(trimmed)
-    ? { value: trimmed, valid: true }
-    : { value: null, valid: false }
-}
-
-/** 区间只有两端都合法且下限不大于上限时才能进入查询。 */
-export function resolveSlhBillAmountRange(
-  min: SlhBillAmountBound,
-  max: SlhBillAmountBound,
-): { payableMin?: string, payableMax?: string, error: SlhBillAmountBoundError } {
-  if (!min.valid || !max.valid) {
-    return { error: 'format' }
-  }
-  const payableMin = min.value
-  const payableMax = max.value
-  if (payableMin !== null && payableMax !== null && new Decimal(payableMin).greaterThan(payableMax)) {
-    return { error: 'order' }
-  }
-  return {
-    error: null,
-    ...(payableMin === null ? {} : { payableMin }),
-    ...(payableMax === null ? {} : { payableMax }),
-  }
-}
 
 export function buildSlhBillListQuery(input: {
   page: number
@@ -48,8 +8,6 @@ export function buildSlhBillListQuery(input: {
   keyword: string
   periodFrom?: string
   periodTo?: string
-  payableMin?: string
-  payableMax?: string
   state: SlhBillListState
 }): SlhBillListQuery {
   const keyword = input.keyword.trim()
@@ -60,7 +18,19 @@ export function buildSlhBillListQuery(input: {
     ...(keyword === '' ? {} : { keyword }),
     ...(input.periodFrom === undefined ? {} : { periodFrom: input.periodFrom }),
     ...(input.periodTo === undefined ? {} : { periodTo: input.periodTo }),
-    ...(input.payableMin === undefined ? {} : { payableMin: input.payableMin }),
-    ...(input.payableMax === undefined ? {} : { payableMax: input.payableMax }),
   }
+}
+
+/**
+ * 行点击是否应当进入详情。
+ *
+ * 行内按钮、链接与输入控件自己处理点击，只有其余区域才算作"打开这一行"，
+ * 否则点一次复制会同时触发导航。真实事件对象来自浏览器，这里只依赖 closest。
+ */
+export function shouldOpenSlhBillFromRowClick(target: unknown): boolean {
+  const candidate = target as { closest?: (selector: string) => unknown } | null
+  if (typeof candidate?.closest !== 'function') {
+    return true
+  }
+  return candidate.closest('button, a, input, select, textarea, [role="button"]') === null
 }

@@ -12,9 +12,12 @@ const props = withDefaults(defineProps<{
   maxValue?: DateValue
   minValue?: DateValue
   placeholder?: string
+  /** 触发器宽度工具类；筛选栏空间充裕的页面可以调宽。 */
+  widthClass?: string
 }>(), {
   calendarLabel: '日期范围',
   placeholder: '日期范围',
+  widthClass: 'w-[280px]',
 })
 
 const emit = defineEmits<{
@@ -44,7 +47,8 @@ function clear(): void {
 <template>
   <div
     data-slot="qs-date-range-filter"
-    class="group max-w-full w-[280px] relative"
+    class="group max-w-full relative"
+    :class="widthClass"
   >
     <FaCalendarDateRange
       v-model="modelValue"
