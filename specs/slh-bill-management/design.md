@@ -97,8 +97,12 @@
 - 编号身份触发器 `enforce_slh_bill_numbering_identity`：插入/更新时校验编号、派发记录、消费域、规则与 `purpose = 'BUSINESS'` 一致。
 - 来源文件就绪：为 `slh_bills.source_file_id` 增加 `enforce_ready_media_asset_reference` 分支（`DOCUMENT` + `SLH_BILL_SOURCE_XLSX` + xlsx MIME + SHA256 合法 + 大小上限 50 MiB）。
 - `media_assets_upload_purpose_check` 白名单加入 `SLH_BILL_SOURCE_XLSX`。
-- 汇率来源互斥 CHECK 与金额非负 CHECK。
-- 触发器函数需与既有同名函数保持完整定义（`CREATE OR REPLACE` 前先取回现有定义）。
+- 汇率来源互斥 CHECK 与金额勾稽 CHECK。
+- 明细与费用明细不可改不可删；账单头只能被取代一次，不能被改写。
+- 媒体引用仓储 `MEDIA_ASSET_REFERENCE_TABLES` 同步加入 `slh_bills`：账单原件是外部凭证的唯一留痕，不能进入媒体回收路径。
+- 审计事件 `SLH_BILL_IMPORTED`：外部凭证入库是需要留痕的资金相关动作。
+
+迁移分为三条，顺序为 `slh_bill_management` → `slh_bill_reported_amounts` → `slh_bill_audit_event`；后者依赖前者已建的表与枚举。
 
 ## 8. 运维前置条件
 
