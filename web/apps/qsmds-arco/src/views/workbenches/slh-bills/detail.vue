@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import type { SlhBillDto, SlhBillLineDto } from '@/api/generated/types.gen'
+import type { SlhBillDto, SlhBillLineDto, SlhBillTotalsDto } from '@/api/generated/types.gen'
 import slhBillsApi from '@/api/modules/slh-bills'
-import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
-import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { containerFailure } from '../containers/use-container-resource'
-import { formatSlhBillRate, slhBillAmountDelta } from './display.logic'
+import { pageForSlhBillLine } from './comparison.logic'
+import { formatSlhBillRate } from './display.logic'
 import { buildSlhBillLineColumns } from './line-columns.logic'
 import SlhBillCharges from './slh-bill-charges.vue'
+import SlhBillComparison from './slh-bill-comparison.vue'
 
 defineOptions({ name: 'QsFinanceBillReconciliationSlhBillDetail' })
 const { t } = useI18n()
@@ -16,7 +16,6 @@ const router = useRouter()
 const route = useRoute()
 const { auth } = useAppAuth()
 const accountStore = useAppAccountStore()
-const currencyCatalog = useCurrencyCatalog()
 const instanceId = String(route.params.id ?? '')
 const canRead = computed(() => auth('slh-bills:read'))
 const bill = shallowRef<SlhBillDto | null>(null)
@@ -33,34 +32,25 @@ const linesError = ref('')
 let billController: AbortController | null = null
 let linesController: AbortController | null = null
 let downloadController: AbortController | null = null
-const totals = computed(() => bill.value === null
-  ? []
-  : [
-      { amount: bill.value.freightTotalAmountCny, currency: 'CNY', label: 'freight' },
-      { amount: bill.value.codHandlingTotalAmountCny, currency: 'CNY', label: 'codHandling' },
-      { amount: bill.value.surchargeTotalAmountCny, currency: 'CNY', label: 'surcharge' },
-      { amount: bill.value.payableTotalAmountCny, currency: 'CNY', label: 'payable' },
-      { amount: bill.value.codTotalAmountTwd, currency: 'TWD', label: 'codTwd' },
-      { amount: bill.value.ntdSurchargeTotalAmountTwd, currency: 'TWD', label: 'ntdSurcharge' },
-      { amount: bill.value.reportedNetAmountTwd, currency: 'TWD', label: 'reportedNet' },
-    ] as const)
-// 账单自报值按原文呈现并与自算值并列：回写格式化结果会让差异看起来消失。
-const reported = computed(() => bill.value === null
-  ? []
-  : [
-      { label: 'subtotalPayable', value: bill.value.reported.subtotalPayableAmountCny ?? t('slhBill.unknown') },
-      { label: 'payable', value: bill.value.reported.payableAmountCny ?? t('slhBill.unknown') },
-      { label: 'netCell', value: bill.value.reported.netAmountTwd ?? t('slhBill.unknown') },
-      { label: 'netFormula', value: bill.value.reported.netAmountFormula ?? t('slhBill.unknown') },
-      { label: 'netAmount', value: bill.value.reported.reportedNetAmountTwd },
-    ] as const)
-// 只对两侧都有原文的两个口径算差额，缺失值不伪造为 0。
-const deltas = computed(() => bill.value === null
-  ? []
-  : [
-      { label: 'payable', value: slhBillAmountDelta(bill.value.reported.payableAmountCny, bill.value.payableTotalAmountCny) },
-      { label: 'netAmount', value: slhBillAmountDelta(bill.value.reported.netAmountTwd, bill.value.reportedNetAmountTwd) },
-    ] as const)
+// 对比组件吃的是与预览一致的 totals 形状；详情返回的是平铺字段，这里拼一次。
+const comparisonTotals = computed<SlhBillTotalsDto>(() => ({
+  freightTotalAmountCny: bill.value?.freightTotalAmountCny ?? '0',
+  codHandlingTotalAmountCny: bill.value?.codHandlingTotalAmountCny ?? '0',
+  surchargeTotalAmountCny: bill.value?.surchargeTotalAmountCny ?? '0',
+  payableTotalAmountCny: bill.value?.payableTotalAmountCny ?? '0',
+  codTotalAmountTwd: bill.value?.codTotalAmountTwd ?? '0',
+  ntdSurchargeTotalAmountTwd: bill.value?.ntdSurchargeTotalAmountTwd ?? '0',
+  reportedNetAmountTwd: bill.value?.reportedNetAmountTwd ?? '0',
+}))
+/** 差异项按行号跳到明细表对应页；明细分页在服务端，切页会重新加载。 */
+function jumpToLine(lineNumber: number): void {
+  const target = pageForSlhBillLine(lineNumber, linePageSize.value)
+  if (target === linePage.value) {
+    return
+  }
+  linePage.value = target
+  void loadLines()
+}
 const columns = computed(() => buildSlhBillLineColumns(t))
 async function load(): Promise<void> {
   billController?.abort()
@@ -348,62 +338,16 @@ onBeforeUnmount(() => {
             </section>
           </FaPageMain>
         </div>
-        <div class="mx-4 gap-4 grid min-w-0 lg:grid-cols-2">
-          <FaPageMain class="m-0 min-w-0">
-            <section class="min-w-0" :aria-label="t('slhBill.totals.title')">
-              <h2 class="qs-type-component-title m-0 mb-4 flex gap-2 items-center">
-                <FaIcon name="i-lucide:sigma" class="text-muted-foreground size-4" aria-hidden="true" />
-                {{ t('slhBill.totals.title') }}
-              </h2>
-              <dl class="m-0 gap-x-5 gap-y-4 grid grid-cols-2">
-                <div v-for="item in totals" :key="item.label" class="min-w-0">
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t(`slhBill.totals.${item.label}`) }}
-                  </dt>
-                  <dd class="m-0 mt-1.5">
-                    <AmountDisplay :value="item.amount" :currency="item.currency" :currencies="currencyCatalog.currencies.value" />
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          </FaPageMain>
-          <FaPageMain class="m-0 min-w-0">
-            <section class="min-w-0" :aria-label="t('slhBill.reported.title')">
-              <h2 class="qs-type-component-title m-0 mb-4 flex gap-2 items-center">
-                <FaIcon name="i-lucide:file-input" class="text-muted-foreground size-4" aria-hidden="true" />
-                {{ t('slhBill.reported.title') }}
-              </h2>
-              <dl class="m-0 gap-x-5 gap-y-4 grid grid-cols-2">
-                <div v-for="item in reported" :key="item.label" class="min-w-0">
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t(`slhBill.reported.${item.label}`) }}
-                  </dt>
-                  <dd class="qs-type-data m-0 mt-1.5 [overflow-wrap:anywhere]">
-                    {{ item.value }}
-                  </dd>
-                </div>
-              </dl>
-              <div class="mt-4 pt-4 border-t border-border">
-                <p class="qs-type-meta text-muted-foreground m-0 mb-2">
-                  {{ t('slhBill.delta') }}
-                </p>
-                <dl class="m-0 gap-x-5 gap-y-3 grid grid-cols-2">
-                  <div v-for="item in deltas" :key="item.label" class="min-w-0">
-                    <dt class="qs-type-meta text-muted-foreground">
-                      {{ t(`slhBill.deltaLabel.${item.label}`) }}
-                    </dt>
-                    <dd class="qs-type-data-emphasis m-0 mt-1.5 tabular-nums" :class="item.value === null || item.value === '0.00' ? undefined : 'text-destructive'">
-                      {{ item.value ?? t('slhBill.unknown') }}
-                    </dd>
-                  </div>
-                </dl>
-                <p class="qs-type-meta text-muted-foreground m-0 mt-2">
-                  {{ t('slhBill.deltaHint') }}
-                </p>
-              </div>
-            </section>
-          </FaPageMain>
-        </div>
+        <FaPageMain class="min-w-0">
+          <SlhBillComparison
+            :totals="comparisonTotals"
+            :reported="bill.reported"
+            :embedded-foreign-units-per-cny="bill.reported.embeddedForeignUnitsPerCny ?? null"
+            :findings="bill.findings"
+            :line-count="bill.lineCount"
+            @jump-to-line="jumpToLine"
+          />
+        </FaPageMain>
         <FaPageMain>
           <h2 class="qs-type-section-title m-0">
             {{ t('slhBill.lines') }}

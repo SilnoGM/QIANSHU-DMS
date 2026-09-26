@@ -14,7 +14,7 @@ import { slhBillFailure } from './slh-bill-calculation'
 import { parseSlhBillWorkbook, type ParsedSlhBill } from './slh-bill-parser'
 import { SlhBillSourceFileService } from './slh-bill-source-file.service'
 import { normalizeSlhBillImport, slhBillUuid, type SlhBillCommandContext, type SlhBillImportInput } from './slh-bill.normalizer'
-import { serializeSlhBill, serializeSlhBillPreviewLine, slhBillRateInclude } from './slh-bill.serializer'
+import { serializeSlhBill, serializeSlhBillPreviewLine, slhBillRateInclude, toFindingDto } from './slh-bill.serializer'
 import {
   type SlhBillDto, type SlhBillImportPreviewDto, type SlhBillMediaAssetDto,
 } from './slh-bill.dto'
@@ -113,9 +113,12 @@ export class SlhBillService {
       totals: parsed.totals,
       reported: {
         subtotalPayableAmountCny: parsed.reported.subtotalPayableAmountCny,
+        subtotalCodAmountTwd: parsed.reported.subtotalCodAmountTwd,
+        subtotalNtdSurchargeAmountTwd: parsed.reported.subtotalNtdSurchargeAmountTwd,
         payableAmountCny: parsed.reported.payableAmountCny,
         netAmountTwd: parsed.reported.netAmountTwd,
         netAmountFormula: parsed.reported.netAmountFormula,
+        embeddedForeignUnitsPerCny: parsed.reported.embeddedForeignUnitsPerCny,
         reportedNetAmountTwd: parsed.totals.reportedNetAmountTwd,
       },
       systemForeignUnitsPerCny,
@@ -123,9 +126,8 @@ export class SlhBillService {
         billId: duplicate.id, slhBillNo: duplicate.slhBillNo,
         periodStart: isoDate(duplicate.periodStart), periodEnd: isoDate(duplicate.periodEnd),
       },
-      differences: parsed.differences,
-      warnings: parsed.warnings,
-      lines: parsed.lines.map(serializeSlhBillPreviewLine),
+      findings: parsed.findings.map(toFindingDto),
+      lines: parsed.lines.map(line => serializeSlhBillPreviewLine(line, parsed.findings)),
     }
   }
 
@@ -211,6 +213,11 @@ export class SlhBillService {
             reportedPayableAmountCny: parsed.reported.payableAmountCny ?? null,
             reportedNetAmountCell: parsed.reported.netAmountTwd,
             reportedNetAmountFormula: parsed.reported.netAmountFormula,
+            reportedSubtotalPayableAmountCny: parsed.reported.subtotalPayableAmountCny,
+            reportedSubtotalCodAmountTwd: parsed.reported.subtotalCodAmountTwd,
+            reportedSubtotalNtdSurchargeAmountTwd: parsed.reported.subtotalNtdSurchargeAmountTwd,
+            // 差异快照按确认那一刻原样留痕：详情页据此复原当时看到的核对结论。
+            importFindings: parsed.findings.map(toFindingDto) as unknown as Prisma.InputJsonValue,
             rateSource: rate?.source ?? null,
             foreignUnitsPerCnySnapshot: rate?.snapshot ?? null,
             embeddedForeignUnitsPerCny: rate?.embedded ?? null,

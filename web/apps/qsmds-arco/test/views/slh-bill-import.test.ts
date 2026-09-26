@@ -18,17 +18,20 @@ function previewFixture(overrides: Partial<SlhBillImportPreviewDto> = {}): SlhBi
   return {
     containerBatchCount: 1,
     containerBatchNames: ['SLHU1234567'],
-    differences: [],
     duplicate: null,
+    findings: [],
     lineCount: 2,
     lines: [],
     periodEnd: '2026-08-31',
     periodStart: '2026-08-01',
     reported: {
+      embeddedForeignUnitsPerCny: null,
       netAmountFormula: null,
       netAmountTwd: '900.00',
       payableAmountCny: '-130.00',
       reportedNetAmountTwd: '900.00',
+      subtotalCodAmountTwd: '960.00',
+      subtotalNtdSurchargeAmountTwd: '60.00',
       subtotalPayableAmountCny: '130.00',
     },
     systemForeignUnitsPerCny: '4.800000000000',
@@ -41,7 +44,6 @@ function previewFixture(overrides: Partial<SlhBillImportPreviewDto> = {}): SlhBi
       reportedNetAmountTwd: '900.00',
       surchargeTotalAmountCny: '20.00',
     },
-    warnings: [],
     ...overrides,
   }
 }
@@ -52,14 +54,12 @@ function lineFixture(overrides: Partial<SlhBillPreviewLineDto> = {}): SlhBillPre
     codAmountTwd: '0.00',
     codHandlingAmountCny: '0.00',
     containerBatchNameText: 'SLHU1234567',
-    differences: [],
     errors: [],
+    findings: [],
     freightAmountCny: '0.00',
     goodsName: '灯具',
     lineNumber: 1,
-    lineWarnings: [],
     loadingDate: '2026-08-01',
-    notes: [],
     ntdSurchargeAmountTwd: '0.00',
     packageCount: 1,
     payableAmountCny: '0.00',
@@ -111,12 +111,24 @@ test('没有系统汇率时只有存在台币金额的账单才强制手填汇�
 })
 
 test('明细错误逐行回显并阻止入库，重复账单必须先勾选确认', () => {
+  // 行级出入项同时出现在账单级 findings 里，line.findings 只是按行过滤后的子集。
+  const lineFindings = [
+    { kind: 'FREIGHT_MISMATCH', lineNumber: 2, message: '运费复算 1.00 与账单 2.00 不一致', severity: 'difference' },
+    { kind: 'DIMENSION_PRECISION', lineNumber: 2, message: '尺寸精度过高', severity: 'warning' },
+  ] as const
   const lines = [
     lineFixture(),
-    lineFixture({ differences: ['运费复算 1.00 与账单 2.00 不一致'], errors: ['装柜日期无法识别'], lineNumber: 2, lineWarnings: ['尺寸精度过高'] }),
+    lineFixture({ errors: ['装柜日期无法识别'], findings: [...lineFindings], lineNumber: 2 }),
   ]
   assert.deepEqual(collectSlhBillLineErrors(lines), ['第 2 行：装柜日期无法识别'])
-  assert.deepEqual(countSlhBillImportIssues(previewFixture({ differences: ['账单小计应付 130.00 与明细累加 120.00 不一致'], lines, warnings: ['账单公式未自带汇率'] })), {
+  assert.deepEqual(countSlhBillImportIssues(previewFixture({
+    findings: [
+      { kind: 'SUBTOTAL_MISMATCH', lineNumber: null, message: '账单小计应付 130.00 与明细累加 120.00 不一致', severity: 'difference' },
+      { kind: 'RATE_MISSING', lineNumber: null, message: '账单公式未自带汇率', severity: 'warning' },
+      ...lineFindings,
+    ],
+    lines,
+  })), {
     differences: 2,
     lineErrors: 1,
     warnings: 2,

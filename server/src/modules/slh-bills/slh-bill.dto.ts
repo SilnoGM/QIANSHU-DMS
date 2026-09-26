@@ -5,6 +5,26 @@ import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.
 
 export enum SlhBillRateSourceDto { EMBEDDED = 'EMBEDDED', SYSTEM = 'SYSTEM', MANUAL = 'MANUAL' }
 export enum SlhBillPricingBasisDto { WEIGHT = 'WEIGHT', VOLUME = 'VOLUME' }
+export enum SlhBillFindingSeverityDto { DIFFERENCE = 'difference', WARNING = 'warning' }
+export enum SlhBillFindingKindDto {
+  FREIGHT_MISMATCH = 'FREIGHT_MISMATCH',
+  PAYABLE_MISMATCH = 'PAYABLE_MISMATCH',
+  VOLUME_MISMATCH = 'VOLUME_MISMATCH',
+  CHARGE_MISMATCH = 'CHARGE_MISMATCH',
+  SUBTOTAL_MISMATCH = 'SUBTOTAL_MISMATCH',
+  NET_AMOUNT_MISMATCH = 'NET_AMOUNT_MISMATCH',
+  DIMENSION_PRECISION = 'DIMENSION_PRECISION',
+  RATE_MISSING = 'RATE_MISSING',
+  REMARK_NOTE = 'REMARK_NOTE',
+}
+
+/** 复算与账单的出入项；同一份数据既用于账单级分组，也用于明细行的行内提示。 */
+export class SlhBillFindingDto {
+  @ApiProperty({ enum: SlhBillFindingKindDto }) kind!: SlhBillFindingKindDto
+  @ApiProperty({ enum: SlhBillFindingSeverityDto }) severity!: SlhBillFindingSeverityDto
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Line number for line-scoped findings.' }) lineNumber!: number | null
+  @ApiProperty() message!: string
+}
 export enum SlhBillChargeTypeDto {
   FREIGHT = 'FREIGHT', COD_HANDLING = 'COD_HANDLING', HEAVY_CARGO = 'HEAVY_CARGO', DELIVERY = 'DELIVERY',
   REDELIVERY = 'REDELIVERY', TRANSFER_DELIVERY = 'TRANSFER_DELIVERY', REMOTE_AREA = 'REMOTE_AREA',
@@ -136,10 +156,13 @@ export class SlhBillRateDto {
 }
 
 export class SlhBillReportedDto {
-  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'The 小计 row payable amount.' }) subtotalPayableAmountCny!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'The 小计 row payable amount as written by the carrier.' }) subtotalPayableAmountCny!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'The 小计 row COD total.' }) subtotalCodAmountTwd!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'The 小计 row NTD surcharge total.' }) subtotalNtdSurchargeAmountTwd!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'The 合计应付人民币 row amount, negative by the carrier convention.' }) payableAmountCny!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'The 合计应付台币NTD cell value as written by the carrier.' }) netAmountTwd!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) netAmountFormula!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'TWD per CNY embedded in the bill formula; present means the net amount cell is already converted.' }) embeddedForeignUnitsPerCny!: string | null
   @ApiProperty({ type: 'string', description: 'Unconverted net amount: COD total minus NTD surcharge total.' }) reportedNetAmountTwd!: string
 }
 
@@ -160,6 +183,7 @@ export class SlhBillDto {
   @ApiProperty({ type: 'string' }) reportedNetAmountTwd!: string
   @ApiPropertyOptional({ type: () => SlhBillRateDto, nullable: true }) rate!: SlhBillRateDto | null
   @ApiProperty({ type: () => SlhBillReportedDto }) reported!: SlhBillReportedDto
+  @ApiProperty({ type: [SlhBillFindingDto], description: 'Confirm-time snapshot of differences and warnings.' }) findings!: SlhBillFindingDto[]
   @ApiProperty() sourceFileName!: string
   @ApiProperty() sourceFileSha256!: string
   @ApiPropertyOptional({ format: 'uuid', nullable: true }) supersededById!: string | null
@@ -170,9 +194,8 @@ export class SlhBillDto {
 }
 
 export class SlhBillPreviewLineDto extends SlhBillLineDto {
-  @ApiProperty({ type: [String] }) notes!: string[]
-  @ApiProperty({ type: [String] }) differences!: string[]
-  @ApiProperty({ type: [String] }) lineWarnings!: string[]
+  /** 本行的差异与告警；账单级视图用的是同一份数据，只是不做行过滤。 */
+  @ApiProperty({ type: [SlhBillFindingDto] }) findings!: SlhBillFindingDto[]
   @ApiProperty({ type: [String] }) errors!: string[]
 }
 
@@ -204,7 +227,6 @@ export class SlhBillImportPreviewDto {
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'System TWD per CNY rate read for preview; null when the bill embeds its own rate.' })
   systemForeignUnitsPerCny!: string | null
   @ApiPropertyOptional({ type: () => SlhBillDuplicateDto, nullable: true }) duplicate!: SlhBillDuplicateDto | null
-  @ApiProperty({ type: [String] }) differences!: string[]
-  @ApiProperty({ type: [String] }) warnings!: string[]
+  @ApiProperty({ type: [SlhBillFindingDto], description: 'Differences and warnings; unchanged when the bill is stored.' }) findings!: SlhBillFindingDto[]
   @ApiProperty({ type: [SlhBillPreviewLineDto] }) lines!: SlhBillPreviewLineDto[]
 }

@@ -58,8 +58,15 @@ describe('slh bill import with isolated PostgreSQL', () => {
       periodEnd: '2026-01-16',
       lineCount: 3,
       containerBatchCount: 3,
-      differences: [],
+      // 复算与账单一致：没有任何差异或告警。
+      findings: [],
       systemForeignUnitsPerCny: null,
+    })
+    // 小计三值用于与明细累加逐项对比。
+    expect((response.body as { reported: unknown }).reported).toMatchObject({
+      subtotalPayableAmountCny: '5825.00',
+      subtotalCodAmountTwd: '129000.00',
+      subtotalNtdSurchargeAmountTwd: '8000.00',
     })
     expect((response.body as { lines: unknown[] }).lines).toHaveLength(3)
     // 预览不落库。
@@ -83,6 +90,12 @@ describe('slh bill import with isolated PostgreSQL', () => {
     })
     // 账单公式自带除数 4.8，因此汇率来源是嵌入式，不读系统汇率。
     expect(created.rate).toMatchObject({ source: 'EMBEDDED', foreignUnitsPerCny: '4.800000000000' })
+    // 自报值与差异快照都要能读回来，详情页据此做同样的对比。
+    expect(created.reported).toMatchObject({
+      subtotalPayableAmountCny: '5825.00', subtotalCodAmountTwd: '129000.00', subtotalNtdSurchargeAmountTwd: '8000.00',
+      payableAmountCny: '-5825.00', netAmountTwd: '25208.33', netAmountFormula: '=(V17-W17)/4.8',
+    })
+    expect(created.findings).toEqual([])
 
     const lines = (await browser.get(`/api/slh-bills/${created.id}/lines`).expect(200)).body as { items: unknown[], total: number }
     expect(lines.total).toBe(3)

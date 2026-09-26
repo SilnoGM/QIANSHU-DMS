@@ -3,11 +3,10 @@ import type { FileItem } from '@fantastic-admin/components'
 import type { SlhBillImportPreviewDto, SlhBillPreviewLineDto, SlhBillStagedFileDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import slhBillsApi from '@/api/modules/slh-bills'
-import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
-import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { containerFailure } from '../containers/use-container-resource'
+import { pageForSlhBillLine } from './comparison.logic'
 import { formatSlhBillRate } from './display.logic'
 import {
   buildSlhBillImportPayload,
@@ -21,6 +20,7 @@ import {
 } from './import.logic'
 import { buildSlhBillLineColumns } from './line-columns.logic'
 import SlhBillCharges from './slh-bill-charges.vue'
+import SlhBillComparison from './slh-bill-comparison.vue'
 
 defineOptions({ name: 'QsFinanceBillReconciliationSlhBillImport' })
 const { t } = useI18n()
@@ -28,7 +28,6 @@ const router = useRouter()
 const { auth } = useAppAuth()
 const accountStore = useAppAccountStore()
 const toast = useQsToast()
-const currencyCatalog = useCurrencyCatalog()
 const canImport = computed(() => auth('slh-bills:create'))
 const files = ref<FileItem[]>([])
 const staged = shallowRef<SlhBillStagedFileDto | null>(null)
@@ -74,33 +73,17 @@ const blockMessage = computed(() => {
       return ''
   }
 })
-const totals = computed(() => preview.value === null
-  ? []
-  : [
-      { amount: preview.value.totals.freightTotalAmountCny, currency: 'CNY', label: 'freight' },
-      { amount: preview.value.totals.codHandlingTotalAmountCny, currency: 'CNY', label: 'codHandling' },
-      { amount: preview.value.totals.surchargeTotalAmountCny, currency: 'CNY', label: 'surcharge' },
-      { amount: preview.value.totals.payableTotalAmountCny, currency: 'CNY', label: 'payable' },
-      { amount: preview.value.totals.codTotalAmountTwd, currency: 'TWD', label: 'codTwd' },
-      { amount: preview.value.totals.ntdSurchargeTotalAmountTwd, currency: 'TWD', label: 'ntdSurcharge' },
-      { amount: preview.value.totals.reportedNetAmountTwd, currency: 'TWD', label: 'reportedNet' },
-    ] as const)
-// 账单自报值按原文呈现：它要与系统自算值并列核对，不能先被本系统的格式化改写。
-const reported = computed(() => preview.value === null
-  ? []
-  : [
-      { label: 'subtotalPayable', value: preview.value.reported.subtotalPayableAmountCny ?? t('slhBill.unknown') },
-      { label: 'payable', value: preview.value.reported.payableAmountCny ?? t('slhBill.unknown') },
-      { label: 'netCell', value: preview.value.reported.netAmountTwd ?? t('slhBill.unknown') },
-      { label: 'netFormula', value: preview.value.reported.netAmountFormula ?? t('slhBill.unknown') },
-      { label: 'netAmount', value: preview.value.reported.reportedNetAmountTwd },
-    ] as const)
 const previewLines = computed(() => preview.value?.lines ?? [])
 const pagedLines = computed(() => previewLines.value.slice((previewPage.value - 1) * previewPageSize.value, previewPage.value * previewPageSize.value))
 const columns = computed<QsGenericTableColumn<SlhBillPreviewLineDto>[]>(() => [
   ...buildSlhBillLineColumns<SlhBillPreviewLineDto>(t),
-  { id: 'lineIssues', title: t('slhBill.previewIssues'), accessorFn: (line: SlhBillPreviewLineDto) => [...line.errors, ...line.differences, ...line.lineWarnings, ...line.notes].join('；'), minWidth: 280, width: 320 },
+  // 行内提示与账单级分组来自同一份 findings，只是这里按行过滤。
+  { id: 'lineIssues', title: t('slhBill.previewIssues'), accessorFn: (line: SlhBillPreviewLineDto) => [...line.errors, ...line.findings.map(finding => finding.message)].join('；'), minWidth: 280, width: 320 },
 ])
+/** 差异项按行号跳到明细表对应页；预览表是前端分页，直接切页即可。 */
+function jumpToLine(lineNumber: number): void {
+  previewPage.value = pageForSlhBillLine(lineNumber, previewPageSize.value)
+}
 const busy = computed(() => uploading.value || parsing.value || submitting.value)
 function back(): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhBillManagement' })
@@ -369,74 +352,14 @@ onBeforeUnmount(() => controller?.abort())
           </div>
         </FaPageMain>
         <FaPageMain>
-          <div class="gap-6 grid min-w-0 lg:grid-cols-2">
-            <section class="min-w-0" :aria-label="t('slhBill.totals.title')">
-              <h2 class="qs-type-component-title m-0 mb-4">
-                {{ t('slhBill.totals.title') }}
-              </h2>
-              <dl class="m-0 gap-x-5 gap-y-4 grid grid-cols-2">
-                <div v-for="item in totals" :key="item.label" class="min-w-0">
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t(`slhBill.totals.${item.label}`) }}
-                  </dt>
-                  <dd class="m-0 mt-1.5">
-                    <AmountDisplay :value="item.amount" :currency="item.currency" :currencies="currencyCatalog.currencies.value" />
-                  </dd>
-                </div>
-              </dl>
-            </section>
-            <section class="min-w-0" :aria-label="t('slhBill.reported.title')">
-              <h2 class="qs-type-component-title m-0 mb-4">
-                {{ t('slhBill.reported.title') }}
-              </h2>
-              <dl class="m-0 gap-x-5 gap-y-4 grid grid-cols-2">
-                <div v-for="item in reported" :key="item.label" class="min-w-0">
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t(`slhBill.reported.${item.label}`) }}
-                  </dt>
-                  <dd class="qs-type-data m-0 mt-1.5 [overflow-wrap:anywhere]">
-                    {{ item.value }}
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          </div>
-        </FaPageMain>
-        <FaPageMain>
-          <section class="min-w-0" :aria-label="t('slhBill.differences')">
-            <h2 class="qs-type-component-title m-0 mb-3 flex gap-2 items-center">
-              {{ t('slhBill.differences') }}
-              <FaTag v-if="preview.differences.length" variant="outline" class="text-destructive qs-type-status-tag border-destructive/30 bg-destructive/10">
-                {{ preview.differences.length }}
-              </FaTag>
-            </h2>
-            <p v-if="!preview.differences.length" class="qs-type-meta text-muted-foreground m-0">
-              {{ t('slhBill.noDifferences') }}
-            </p>
-            <ul v-else class="m-0 p-0 list-none gap-2 grid">
-              <li v-for="(difference, index) in preview.differences" :key="index" class="qs-type-body text-destructive px-3 py-2 border border-destructive/30 rounded-md bg-destructive/10 flex gap-2 min-w-0 items-start">
-                <FaIcon name="i-lucide:triangle-alert" class="mt-0.5 shrink-0 size-4" aria-hidden="true" />
-                <span class="min-w-0 [overflow-wrap:anywhere]">{{ difference }}</span>
-              </li>
-            </ul>
-          </section>
-          <section class="mt-6 min-w-0" :aria-label="t('slhBill.warnings')">
-            <h2 class="qs-type-component-title m-0 mb-3 flex gap-2 items-center">
-              {{ t('slhBill.warnings') }}
-              <FaTag v-if="preview.warnings.length" variant="outline" class="text-amber-700 qs-type-status-tag border-amber-500/30 bg-amber-500/10 dark:text-amber-300">
-                {{ preview.warnings.length }}
-              </FaTag>
-            </h2>
-            <p v-if="!preview.warnings.length" class="qs-type-meta text-muted-foreground m-0">
-              {{ t('slhBill.noWarnings') }}
-            </p>
-            <ul v-else class="m-0 p-0 list-none gap-2 grid">
-              <li v-for="(warning, index) in preview.warnings" :key="index" class="qs-type-body text-amber-700 px-3 py-2 border border-amber-500/30 rounded-md bg-amber-500/8 flex gap-2 min-w-0 items-start dark:text-amber-300">
-                <FaIcon name="i-lucide:circle-alert" class="mt-0.5 shrink-0 size-4" aria-hidden="true" />
-                <span class="min-w-0 [overflow-wrap:anywhere]">{{ warning }}</span>
-              </li>
-            </ul>
-          </section>
+          <SlhBillComparison
+            :totals="preview.totals"
+            :reported="preview.reported"
+            :embedded-foreign-units-per-cny="preview.reported.embeddedForeignUnitsPerCny ?? null"
+            :findings="preview.findings"
+            :line-count="preview.lineCount"
+            @jump-to-line="jumpToLine"
+          />
           <FaAlert v-if="lineErrors.length" class="mt-6" variant="destructive" :title="t('slhBill.lineErrors')">
             <template #description>
               <ul class="m-0 p-0 list-none gap-1 grid">

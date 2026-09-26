@@ -13,118 +13,8 @@
     "slhBillReconciliation": "Shunlianhang Bill Reconciliation"
   },
   "slhBill": {
-    "intro": "Receive, structure and review the Excel statements issued by Shunlianhang",
-    "noPermission": "You do not have permission to view Shunlianhang bills",
-    "search": "Search bill number, source file name or container batch",
-    "empty": "No bills yet",
-    "emptyDescription": "Import a Shunlianhang statement to review it here",
-    "retry": "Retry",
-    "import": "Import bill",
-    "view": "View",
     "back": "Back to bills",
-    "detailTitle": "Shunlianhang bill detail",
-    "importTitle": "Import Shunlianhang bill",
-    "importDescription": "Upload the statement file, review the parsed result, then store it",
-    "periodRange": "Bill period range",
-    "unknown": "Unknown",
-    "superseded": "Superseded",
-    "supersededAt": "Superseded at",
-    "supersededNotice": "This bill has been superseded by a later version and is kept for audit only",
-    "state": {
-      "active": "Active",
-      "superseded": "Superseded",
-      "all": "All"
-    },
-    "rateSource": {
-      "EMBEDDED": "Embedded in statement",
-      "SYSTEM": "System rate",
-      "MANUAL": "Manually entered"
-    },
-    "column": {
-      "slhBillNo": "Bill number",
-      "period": "Period",
-      "lineCount": "Lines",
-      "containerBatchCount": "Containers",
-      "payableTotalAmountCny": "Total payable (CNY)",
-      "codTotalAmountTwd": "COD total (TWD)",
-      "reportedNetAmountTwd": "Unconverted net amount",
-      "rateSource": "Rate source",
-      "sourceFileName": "Source file",
-      "created": "Created by",
-      "createdAt": "Created at"
-    },
-    "upload": {
-      "label": "Upload Shunlianhang statement",
-      "hint": ".xlsx only, up to 50 MiB per file",
-      "invalidFile": "Select an .xlsx file no larger than 50 MiB",
-      "uploading": "Uploading the source file…",
-      "reupload": "Upload again"
-    },
-    "parsing": "Parsing the statement",
-    "parsingHint": "Check the differences and warnings before storing",
-    "parseFailed": "Failed to parse the statement",
-    "sourceFile": "Source file",
-    "containerBatches": "Container batches",
-    "totals": {
-      "title": "Calculated totals",
-      "freight": "Freight total",
-      "codHandling": "COD handling total",
-      "surcharge": "Surcharge total",
-      "payable": "Total payable (CNY)",
-      "codTwd": "COD total (TWD)",
-      "ntdSurcharge": "NTD surcharge",
-      "reportedNet": "Unconverted net amount"
-    },
-    "reported": {
-      "title": "Reported by carrier",
-      "subtotalPayable": "Subtotal payable (CNY)",
-      "payable": "Total payable (CNY)",
-      "netCell": "TWD NTD cell value",
-      "netFormula": "TWD conversion formula",
-      "netAmount": "Unconverted net amount"
-    },
-    "differences": "Differences",
-    "delta": "Reported minus calculated",
-    "deltaLabel": {
-      "payable": "Total payable (CNY)",
-      "netAmount": "Unconverted net amount"
-    },
-    "deltaHint": "Delta = reported value − calculated value; a non-zero value means the statement disagrees with the recalculation",
-    "warnings": "Warnings",
-    "lineErrors": "Line errors",
-    "lineErrorsBlocked": "{count} lines failed to parse, fix the source file before storing",
-    "previewIssues": "Line issues",
-    "noDifferences": "Recalculation matches the statement",
-    "noWarnings": "No warnings",
-    "duplicate": {
-      "notice": "Period and container set match bill {billNo} ({period})",
-      "confirm": "I confirm this is a different bill and want to continue"
-    },
-    "manualRate": {
-      "label": "Import rate (1 CNY = ? TWD)",
-      "hint": "The statement formula carries no rate; keeping the default freezes the current system rate as \"System rate\"",
-      "required": "The statement has no embedded rate and no system rate is available, enter the import rate manually",
-      "format": "The rate must be greater than zero with at most 12 decimals"
-    },
-    "confirm": "Confirm import",
     "cancel": "Cancel",
-    "submitting": "Storing",
-    "importSuccess": "Bill {billNo} stored",
-    "previewLines": "Line preview",
-    "lines": "Bill lines",
-    "chargesHint": "Charges are listed per line by currency and charge type",
-    "download": "Download source file",
-    "downloadFailed": "Failed to download the source file, please retry",
-    "overview": "Bill summary",
-    "rate": "Exchange rate",
-    "rateValue": "Import rate",
-    "rateEmbedded": "Embedded rate",
-    "rateCapturedAt": "Rate captured at",
-    "noRate": "No rate recorded for this bill",
-    "pricingBasis": {
-      "WEIGHT": "By weight",
-      "VOLUME": "By volume"
-    },
     "chargeType": {
       "FREIGHT": "Freight",
       "COD_HANDLING": "COD handling",
@@ -142,6 +32,82 @@
       "MINIMUM_CHARGE": "Minimum charge",
       "OTHER": "Other"
     },
+    "chargesHint": "Charges are listed per line by currency and charge type",
+    "column": {
+      "slhBillNo": "Bill number",
+      "period": "Period",
+      "lineCount": "Lines",
+      "containerBatchCount": "Containers",
+      "payableTotalAmountCny": "Total payable (CNY)",
+      "codTotalAmountTwd": "COD total (TWD)",
+      "reportedNetAmountTwd": "Unconverted net amount",
+      "rateSource": "Rate source",
+      "sourceFileName": "Source file",
+      "created": "Created by",
+      "createdAt": "Created at"
+    },
+    "comparison": {
+      "title": "Totals comparison",
+      "hint": "Each metric compares our line-item total against the carrier figure on the same basis; a positive difference means the bill states more than the lines add up to.",
+      "column": {
+        "metric": "Metric",
+        "computed": "Line total",
+        "reported": "Bill figure",
+        "difference": "Difference",
+        "conclusion": "Result"
+      },
+      "metric": {
+        "payable": "Payable total (CNY)",
+        "codTwd": "COD total (TWD)",
+        "ntdSurchargeTwd": "NTD surcharges",
+        "netTwd": "Net amount, unconverted"
+      },
+      "match": "Match",
+      "mismatch": "Mismatch",
+      "notProvided": "Not provided by the bill",
+      "notComparable": "Basis cannot be aligned",
+      "foldedTo": "Folded to the same basis: {value} (÷{rate})",
+      "reportedConverted": "Bill value, already converted with its embedded rate",
+      "negativePayableNote": "The bill states {value} on its payable row; the subtotal row is used for comparison.",
+      "supportTitle": "Supporting totals",
+      "supportHint": "Summed from the bill line items; the bill provides no matching subtotal, so these only show whether its own subtotal agrees with its lines.",
+      "support": {
+        "freight": "Freight total",
+        "codHandling": "COD handling total",
+        "surcharge": "Surcharge total"
+      },
+      "findingsTitle": "Differences and warnings",
+      "noFindings": "Line-by-line recomputation matches the bill ({count} lines)",
+      "findingCount": "{count} item(s)",
+      "lineNumber": "Line {line}"
+    },
+    "confirm": "Confirm import",
+    "containerBatches": "Container batches",
+    "detailTitle": "Shunlianhang bill detail",
+    "download": "Download source file",
+    "downloadFailed": "Failed to download the source file, please retry",
+    "duplicate": {
+      "notice": "Period and container set match bill {billNo} ({period})",
+      "confirm": "I confirm this is a different bill and want to continue"
+    },
+    "empty": "No bills yet",
+    "emptyDescription": "Import a Shunlianhang statement to review it here",
+    "finding": {
+      "FREIGHT_MISMATCH": "Freight recomputation differs",
+      "PAYABLE_MISMATCH": "Payable recomputation differs",
+      "VOLUME_MISMATCH": "Volume recomputation differs",
+      "CHARGE_MISMATCH": "Remark charges disagree with the bill columns",
+      "SUBTOTAL_MISMATCH": "Bill subtotal disagrees with line total",
+      "NET_AMOUNT_MISMATCH": "Net TWD amount disagrees with line total",
+      "DIMENSION_PRECISION": "Dimension precision warning",
+      "RATE_MISSING": "Bill embeds no exchange rate",
+      "REMARK_NOTE": "Remark fragment left out of charges"
+    },
+    "import": "Import bill",
+    "importDescription": "Upload the statement file, review the parsed result, then store it",
+    "importSuccess": "Bill {billNo} stored",
+    "importTitle": "Import Shunlianhang bill",
+    "intro": "Receive, structure and review the Excel statements issued by Shunlianhang",
     "line": {
       "lineNumber": "Line",
       "loadingDate": "Loading date",
@@ -167,6 +133,58 @@
       "recipientInfo": "Recipient",
       "remark": "Remark",
       "charges": "Charges"
-    }
+    },
+    "lineErrors": "Line errors",
+    "lineErrorsBlocked": "{count} lines failed to parse, fix the source file before storing",
+    "lines": "Bill lines",
+    "manualRate": {
+      "label": "Import rate (1 CNY = ? TWD)",
+      "hint": "The statement formula carries no rate; keeping the default freezes the current system rate as \"System rate\"",
+      "required": "The statement has no embedded rate and no system rate is available, enter the import rate manually",
+      "format": "The rate must be greater than zero with at most 12 decimals"
+    },
+    "noPermission": "You do not have permission to view Shunlianhang bills",
+    "noRate": "No rate recorded for this bill",
+    "overview": "Bill summary",
+    "parseFailed": "Failed to parse the statement",
+    "parsing": "Parsing the statement",
+    "parsingHint": "Check the differences and warnings before storing",
+    "periodRange": "Bill period range",
+    "previewIssues": "Line issues",
+    "previewLines": "Line preview",
+    "pricingBasis": {
+      "WEIGHT": "By weight",
+      "VOLUME": "By volume"
+    },
+    "rate": "Exchange rate",
+    "rateCapturedAt": "Rate captured at",
+    "rateEmbedded": "Embedded rate",
+    "rateSource": {
+      "EMBEDDED": "Embedded in statement",
+      "SYSTEM": "System rate",
+      "MANUAL": "Manually entered"
+    },
+    "rateValue": "Import rate",
+    "retry": "Retry",
+    "search": "Search bill number, source file name or container batch",
+    "sourceFile": "Source file",
+    "state": {
+      "active": "Active",
+      "superseded": "Superseded",
+      "all": "All"
+    },
+    "submitting": "Storing",
+    "superseded": "Superseded",
+    "supersededAt": "Superseded at",
+    "supersededNotice": "This bill has been superseded by a later version and is kept for audit only",
+    "unknown": "Unknown",
+    "upload": {
+      "label": "Upload Shunlianhang statement",
+      "hint": ".xlsx only, up to 50 MiB per file",
+      "invalidFile": "Select an .xlsx file no larger than 50 MiB",
+      "uploading": "Uploading the source file…",
+      "reupload": "Upload again"
+    },
+    "view": "View"
   }
 }

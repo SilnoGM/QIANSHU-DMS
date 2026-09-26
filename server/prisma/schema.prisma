@@ -2025,6 +2025,12 @@ model SlhBill {
   reportedPayableAmountCny Decimal? @map("reported_payable_amount_cny") @db.Decimal(30, 2)
   reportedNetAmountCell String? @map("reported_net_amount_cell") @db.VarChar(64)
   reportedNetAmountFormula String? @map("reported_net_amount_formula") @db.VarChar(128)
+  /// 账单「小计」行自报值：用于在详情页与明细累加逐项对比。
+  reportedSubtotalPayableAmountCny Decimal? @map("reported_subtotal_payable_amount_cny") @db.Decimal(30, 2)
+  reportedSubtotalCodAmountTwd Decimal? @map("reported_subtotal_cod_amount_twd") @db.Decimal(30, 2)
+  reportedSubtotalNtdSurchargeAmountTwd Decimal? @map("reported_subtotal_ntd_surcharge_amount_twd") @db.Decimal(30, 2)
+  /// 确认入库时看到的差异与告警快照；明细行级差异也在这里，供详情页按类型分组呈现。
+  importFindings Json @map("import_findings") @db.JsonB
   rateSource SlhBillRateSource? @map("rate_source")
   foreignUnitsPerCnySnapshot Decimal? @map("foreign_units_per_cny_snapshot") @db.Decimal(30, 12)
   embeddedForeignUnitsPerCny Decimal? @map("embedded_foreign_units_per_cny") @db.Decimal(30, 12)

@@ -1,5 +1,6 @@
 import type { SlhBillImportCreateDto, SlhBillImportPreviewDto, SlhBillPreviewLineDto } from '@/api/generated/types.gen'
 import Decimal from 'decimal.js'
+import { countSlhBillFindings } from './comparison.logic'
 
 export type SlhBillImportPhase = 'upload' | 'parsing' | 'preview'
 export type SlhBillManualRateError = 'format' | 'required' | null
@@ -73,10 +74,12 @@ export interface SlhBillImportIssueCounts {
   lineErrors: number
 }
 
-export function countSlhBillImportIssues(preview: Pick<SlhBillImportPreviewDto, 'differences' | 'warnings' | 'lines'>): SlhBillImportIssueCounts {
+/** 计数直接取自 findings 的 severity：行级与账单级是同一份数据，不再重复累加。 */
+export function countSlhBillImportIssues(preview: Pick<SlhBillImportPreviewDto, 'findings' | 'lines'>): SlhBillImportIssueCounts {
+  const counts = countSlhBillFindings(preview.findings)
   return {
-    differences: preview.differences.length + preview.lines.reduce((total, line) => total + line.differences.length, 0),
-    warnings: preview.warnings.length + preview.lines.reduce((total, line) => total + line.lineWarnings.length, 0),
+    differences: counts.difference,
+    warnings: counts.warning,
     lineErrors: preview.lines.reduce((total, line) => total + line.errors.length, 0),
   }
 }
@@ -93,7 +96,7 @@ export function resolveSlhBillImportBlock(input: {
   if (input.manualRateError === 'format') {
     return 'manualRateFormat'
   }
-  if (countSlhBillImportIssues({ differences: [], warnings: [], lines: input.preview.lines }).lineErrors > 0) {
+  if (input.preview.lines.some(line => line.errors.length > 0)) {
     return 'lineErrors'
   }
   if (input.preview.duplicate !== null && input.preview.duplicate !== undefined && !input.duplicateAcknowledged) {

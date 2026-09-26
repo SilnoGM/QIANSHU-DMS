@@ -42,6 +42,11 @@ const CHARGE_KEYWORDS: ReadonlyArray<readonly [SlhChargeTypeValue, readonly stri
 ]
 
 const AMOUNT_PATTERN = /\d+(?:\.\d+)?/gu
+/**
+ * 费别之前单独出现的性质标记（"补"表示补收）。它们是费用行的性质说明而不是费别，
+ * 原始文本已经保留在费用行的 sourceRemarkText 里，因此不再单独报成说明片段。
+ */
+const NATURE_MARKERS = new Set(['补', '補', '补收', '補收', '补差', '補差'])
 /** 金额后缀的单位只影响币种判定，不参与金额本身。 */
 const CURRENCY_MARKERS: ReadonlyArray<readonly [SlhChargeCurrency, readonly string[]]> = [
   ['TWD', ['NTD', 'NT$', 'NT', '台币', '台幣', '新台币', '新台幣']],
@@ -97,7 +102,7 @@ export function parseSlhRemarks(remark: string | null): SlhParsedRemarks {
     })
     // 关键词之前的文字（如「补」）是性质说明而不是费别，保留为说明。
     const prefix = segment.slice(0, keyword?.index ?? segment.length).trim()
-    if (prefix) notes.push(prefix)
+    if (prefix && !NATURE_MARKERS.has(prefix)) notes.push(prefix)
     boundary = end + length
   }
 

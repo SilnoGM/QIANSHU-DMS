@@ -2,7 +2,7 @@ import type { SlhBillLineChargeDto, SlhBillLineDto } from '../../src/api/generat
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 与柜次展示测试保持一致的十进制格式化口径。
 import test from 'node:test'
-import { formatSlhBillDimensions, formatSlhBillRate, formatSlhBillVolume, formatSlhBillWeight, groupSlhBillCharges, slhBillAmountDelta } from '../../src/views/workbenches/slh-bills/display.logic'
+import { formatSlhBillDimensions, formatSlhBillRate, formatSlhBillVolume, formatSlhBillWeight, groupSlhBillCharges } from '../../src/views/workbenches/slh-bills/display.logic'
 import { buildSlhBillLineColumns } from '../../src/views/workbenches/slh-bills/line-columns.logic'
 
 const charge = (chargeType: SlhBillLineChargeDto['chargeType'], currencyCode: SlhBillLineChargeDto['currencyCode'], amount: string): SlhBillLineChargeDto => ({ amount, chargeType, currencyCode })
@@ -21,15 +21,6 @@ test('汇率固定两位小数展示，未知值保持为空且不改变原始�
   assert.equal(formatSlhBillVolume('12.88272063'), '12.88')
   assert.equal(formatSlhBillVolume('1.005'), '1.01')
   assert.equal(formatSlhBillVolume(null), null)
-})
-
-test('自报与自算差额按自报减自算展示，缺任一侧时不伪造零差额', () => {
-  assert.equal(slhBillAmountDelta('-130.00', '-120.00'), '-10.00')
-  assert.equal(slhBillAmountDelta('130', '130.00'), '0.00')
-  assert.equal(slhBillAmountDelta('900.005', '900'), '0.01')
-  assert.equal(slhBillAmountDelta('900.004', '900'), '0.00')
-  assert.equal(slhBillAmountDelta(null, '900.00'), null)
-  assert.equal(slhBillAmountDelta('900.00', undefined), null)
 })
 
 test('尺寸缺边或单位缺失时不用零或猜测单位补位', () => {

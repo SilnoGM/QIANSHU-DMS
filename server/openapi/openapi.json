@@ -82026,7 +82026,17 @@
           "subtotalPayableAmountCny": {
             "type": "string",
             "nullable": true,
-            "description": "The 小计 row payable amount."
+            "description": "The 小计 row payable amount as written by the carrier."
+          },
+          "subtotalCodAmountTwd": {
+            "type": "string",
+            "nullable": true,
+            "description": "The 小计 row COD total."
+          },
+          "subtotalNtdSurchargeAmountTwd": {
+            "type": "string",
+            "nullable": true,
+            "description": "The 小计 row NTD surcharge total."
           },
           "payableAmountCny": {
             "type": "string",
@@ -82042,6 +82052,11 @@
             "type": "string",
             "nullable": true
           },
+          "embeddedForeignUnitsPerCny": {
+            "type": "string",
+            "nullable": true,
+            "description": "TWD per CNY embedded in the bill formula; present means the net amount cell is already converted."
+          },
           "reportedNetAmountTwd": {
             "type": "string",
             "description": "Unconverted net amount: COD total minus NTD surcharge total."
@@ -82049,6 +82064,45 @@
         },
         "required": [
           "reportedNetAmountTwd"
+        ]
+      },
+      "SlhBillFindingDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "FREIGHT_MISMATCH",
+              "PAYABLE_MISMATCH",
+              "VOLUME_MISMATCH",
+              "CHARGE_MISMATCH",
+              "SUBTOTAL_MISMATCH",
+              "NET_AMOUNT_MISMATCH",
+              "DIMENSION_PRECISION",
+              "RATE_MISSING",
+              "REMARK_NOTE"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "difference",
+              "warning"
+            ]
+          },
+          "lineNumber": {
+            "type": "number",
+            "nullable": true,
+            "description": "Line number for line-scoped findings."
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "severity",
+          "message"
         ]
       },
       "SlhBillDto": {
@@ -82112,6 +82166,13 @@
           "reported": {
             "$ref": "#/components/schemas/SlhBillReportedDto"
           },
+          "findings": {
+            "description": "Confirm-time snapshot of differences and warnings.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillFindingDto"
+            }
+          },
           "sourceFileName": {
             "type": "string"
           },
@@ -82153,6 +82214,7 @@
           "ntdSurchargeTotalAmountTwd",
           "reportedNetAmountTwd",
           "reported",
+          "findings",
           "sourceFileName",
           "sourceFileSha256",
           "version",
@@ -82575,22 +82637,10 @@
               "$ref": "#/components/schemas/SlhBillLineChargeDto"
             }
           },
-          "notes": {
+          "findings": {
             "type": "array",
             "items": {
-              "type": "string"
-            }
-          },
-          "differences": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "lineWarnings": {
-            "type": "array",
-            "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/SlhBillFindingDto"
             }
           },
           "errors": {
@@ -82613,9 +82663,7 @@
           "codAmountTwd",
           "ntdSurchargeAmountTwd",
           "charges",
-          "notes",
-          "differences",
-          "lineWarnings",
+          "findings",
           "errors"
         ]
       },
@@ -82660,16 +82708,11 @@
               }
             ]
           },
-          "differences": {
+          "findings": {
+            "description": "Differences and warnings; unchanged when the bill is stored.",
             "type": "array",
             "items": {
-              "type": "string"
-            }
-          },
-          "warnings": {
-            "type": "array",
-            "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/SlhBillFindingDto"
             }
           },
           "lines": {
@@ -82687,8 +82730,7 @@
           "containerBatchCount",
           "totals",
           "reported",
-          "differences",
-          "warnings",
+          "findings",
           "lines"
         ]
       },

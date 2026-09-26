@@ -1,9 +1,33 @@
 import { Prisma } from '../../generated/prisma/client'
 import {
-  SlhBillChargeTypeDto, SlhBillPricingBasisDto, SlhBillRateSourceDto,
-  type SlhBillDto, type SlhBillLineDto, type SlhBillListItemDto, type SlhBillPreviewLineDto,
+  SlhBillChargeTypeDto, SlhBillFindingKindDto, SlhBillFindingSeverityDto, SlhBillPricingBasisDto, SlhBillRateSourceDto,
+  type SlhBillDto, type SlhBillFindingDto, type SlhBillLineDto, type SlhBillListItemDto, type SlhBillPreviewLineDto,
 } from './slh-bill.dto'
-import type { ParsedSlhBillLine } from './slh-bill-parser.types'
+import type { ParsedSlhBillLine, SlhBillFinding } from './slh-bill-parser.types'
+
+export function toFindingDto(finding: SlhBillFinding): SlhBillFindingDto {
+  return {
+    kind: finding.kind as SlhBillFindingKindDto,
+    severity: finding.severity as SlhBillFindingSeverityDto,
+    lineNumber: finding.lineNumber,
+    message: finding.message,
+  }
+}
+
+/** 落库的快照是 JSONB，读回来时按字段收敛，避免历史形状漂移直接漏到接口。 */
+export function serializeStoredFindings(value: Prisma.JsonValue): SlhBillFindingDto[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return []
+    const record = entry as Record<string, unknown>
+    const kind = typeof record.kind === 'string' ? record.kind : null
+    const severity = record.severity === 'difference' || record.severity === 'warning' ? record.severity : null
+    const message = typeof record.message === 'string' ? record.message : null
+    const lineNumber = typeof record.lineNumber === 'number' ? record.lineNumber : null
+    if (kind === null || severity === null || message === null) return []
+    return [{ kind: kind as SlhBillFindingKindDto, severity: severity as SlhBillFindingSeverityDto, lineNumber, message }]
+  })
+}
 
 export const slhBillRateInclude = {
   exchangeRate: { select: { id: true, foreignUnitsPerCny: true, version: true } },
@@ -60,7 +84,7 @@ export function serializeSlhBillLine(row: Prisma.SlhBillLineGetPayload<{ include
   }
 }
 
-export function serializeSlhBillPreviewLine(line: ParsedSlhBillLine): SlhBillPreviewLineDto {
+export function serializeSlhBillPreviewLine(line: ParsedSlhBillLine, findings: readonly SlhBillFinding[]): SlhBillPreviewLineDto {
   return {
     lineNumber: line.lineNumber,
     loadingDate: line.loadingDate,
@@ -96,9 +120,8 @@ export function serializeSlhBillPreviewLine(line: ParsedSlhBillLine): SlhBillPre
       amount: charge.amount,
       sourceRemarkText: charge.sourceRemarkText,
     })),
-    notes: line.notes,
-    differences: line.differences,
-    lineWarnings: line.warnings,
+    // 行内提示只取本行的出入项；账单级视图用的是完整快照。
+    findings: findings.filter(finding => finding.lineNumber === line.lineNumber).map(toFindingDto),
     errors: line.errors,
   }
 }
@@ -131,14 +154,18 @@ export function serializeSlhBill(row: SlhBillRow): SlhBillDto {
     ntdSurchargeTotalAmountTwd: row.ntdSurchargeTotalAmountTwd.toFixed(2),
     reportedNetAmountTwd: row.reportedNetAmountTwd.toFixed(2),
     rate: rate(row),
-    // 账单自报值与公式原文原样留痕，详情页据此展示「对方写了什么、我们算出什么」。
+    // 账单自报值与公式原文原样留痕，详情页据此与明细累加逐项对比。
     reported: {
-      subtotalPayableAmountCny: null,
+      subtotalPayableAmountCny: row.reportedSubtotalPayableAmountCny?.toFixed(2) ?? null,
+      subtotalCodAmountTwd: row.reportedSubtotalCodAmountTwd?.toFixed(2) ?? null,
+      subtotalNtdSurchargeAmountTwd: row.reportedSubtotalNtdSurchargeAmountTwd?.toFixed(2) ?? null,
       payableAmountCny: row.reportedPayableAmountCny?.toFixed(2) ?? null,
       netAmountTwd: row.reportedNetAmountCell,
       netAmountFormula: row.reportedNetAmountFormula,
+      embeddedForeignUnitsPerCny: row.embeddedForeignUnitsPerCny?.toFixed(12) ?? null,
       reportedNetAmountTwd: row.reportedNetAmountTwd.toFixed(2),
     },
+    findings: serializeStoredFindings(row.importFindings),
     sourceFileName: row.sourceFileName,
     sourceFileSha256: row.sourceFileSha256,
     supersededById: row.supersededById,

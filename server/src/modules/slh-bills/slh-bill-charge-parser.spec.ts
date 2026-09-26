@@ -33,10 +33,11 @@ describe('slh bill charge parser', () => {
     expect(sumSlhCharges(charges, 'TWD')).toBe('4125.00')
   })
 
-  it('keeps the supplement marker as a note instead of a fee type', () => {
+  it('keeps the supplement marker out of the notes', () => {
     const { charges, notes } = parseSlhRemarks('补 卸货费2000NT')
     expect(charges).toEqual([{ chargeType: 'UNLOADING', currencyCode: 'TWD', amount: '2000.00', sourceRemarkText: '补 卸货费2000NT' }])
-    expect(notes).toEqual(['补'])
+    // 「补」是性质标记，原文已在费用行里保留，不再单独报成说明片段。
+    expect(notes).toEqual([])
   })
 
   it('handles traditional and simplified spellings of the same fee', () => {

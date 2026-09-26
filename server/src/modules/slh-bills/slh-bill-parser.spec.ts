@@ -27,7 +27,8 @@ describe('slh bill workbook parser', () => {
       ['117.55', 'WEIGHT', '4425', '4555'],
       ['39.00', 'VOLUME', '1170', '1270'],
     ])
-    expect(result.differences).toEqual([])
+    // 复算与账单一致时不应有任何差异或告警。
+    expect(result.findings).toEqual([])
   })
 
   it('sums the lines and agrees with the bill subtotal', async () => {
@@ -54,14 +55,15 @@ describe('slh bill workbook parser', () => {
     expect(result.lines[0].charges.map(charge => [charge.chargeType, charge.currencyCode, charge.amount])).toEqual([
       ['UNLOADING', 'TWD', '2000.00'],
     ])
-    expect(result.lines[0].notes).toEqual(['补'])
+    // 「补」作为性质标记保留在费用行的原文里，不再单独成为说明片段。
+    expect(result.lines[0].charges[0].sourceRemarkText).toBe('补 卸货费2000NT')
   })
 
   it('extracts the embedded rate from the net amount formula', async () => {
     const result = await parseSlhBillWorkbook(createSlhBillFixture())
     expect(result.reported.netAmountFormula).toBe('=(V17-W17)/4.8')
     expect(result.reported.embeddedForeignUnitsPerCny).toBe('4.800000000000')
-    expect(result.warnings).toEqual([])
+    expect(result.findings).toEqual([])
   })
 
   it('fall backs to the system rate path when the formula has no divisor', async () => {
@@ -69,8 +71,9 @@ describe('slh bill workbook parser', () => {
     expect(result.reported.embeddedForeignUnitsPerCny).toBeNull()
     expect(result.reported.netAmountTwd).toBe('121000.00')
     // 不带除数时该单元格本应等于不折算口径，因此不产生差异；但需要提示补汇率。
-    expect(result.differences).toEqual([])
-    expect(result.warnings).toEqual(['账单公式未自带汇率，入库时需读取系统当前汇率或手工填写'])
+    expect(result.findings).toEqual([
+      { kind: 'RATE_MISSING', severity: 'warning', lineNumber: null, message: '账单公式未自带汇率，入库时需读取系统当前汇率或手工填写' },
+    ])
   })
 
   it('reports a line whose freight disagrees with the recomputation', async () => {
@@ -80,8 +83,9 @@ describe('slh bill workbook parser', () => {
     const result = await parseSlhBillWorkbook(createSlhBillFixture({
       rows, subtotal: { payable: '10129', cod: '129000', ntd: '6000' }, netValue: '25625',
     }))
-    expect(result.differences).toContain('第 1 行：运费复算 4425.00 与账单 9999 不一致')
-    expect(result.differences).toContain('第 1 行：合计应付复算 4555.00 与账单 10129 不一致')
+    // 行级出入项带行号，供前端分组并在明细表里定位。
+    expect(result.findings).toContainEqual({ kind: 'FREIGHT_MISMATCH', severity: 'difference', lineNumber: 1, message: '运费复算 4425.00 与账单 9999 不一致' })
+    expect(result.findings).toContainEqual({ kind: 'PAYABLE_MISMATCH', severity: 'difference', lineNumber: 1, message: '合计应付复算 4555.00 与账单 10129 不一致' })
   })
 
   it('flags a dimension carrying more decimals than the record precision', async () => {
@@ -91,7 +95,7 @@ describe('slh bill workbook parser', () => {
     const result = await parseSlhBillWorkbook(createSlhBillFixture({
       rows, subtotal: { payable: '4555', cod: '129000', ntd: '6000' }, netValue: '25625',
     }))
-    expect(result.warnings.some(warning => warning.includes('长在来源里保留 3 位小数'))).toBe(true)
+    expect(result.findings.some(finding => finding.kind === 'DIMENSION_PRECISION' && finding.lineNumber === 1)).toBe(true)
   })
 
   it('rejects a workbook without the bill header', async () => {

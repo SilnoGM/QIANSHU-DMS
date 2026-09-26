@@ -2,6 +2,31 @@ import type { SlhParsedCharge } from './slh-bill-charge-parser'
 import type { SlhPricingBasisValue } from './slh-bill-calculation'
 import type { WorkbookCell } from '../container-batches/import-parser.types'
 
+/**
+ * 复算与账单的出入项。差异与告警共用一张表，靠 severity 区分：
+ * difference 表示两边数字对不上，warning 表示来源需要留意但不构成出入。
+ */
+export type SlhBillFindingKind =
+  | 'FREIGHT_MISMATCH'
+  | 'PAYABLE_MISMATCH'
+  | 'VOLUME_MISMATCH'
+  | 'CHARGE_MISMATCH'
+  | 'SUBTOTAL_MISMATCH'
+  | 'NET_AMOUNT_MISMATCH'
+  | 'DIMENSION_PRECISION'
+  | 'RATE_MISSING'
+  | 'REMARK_NOTE'
+
+export type SlhBillFindingSeverity = 'difference' | 'warning'
+
+export interface SlhBillFinding {
+  kind: SlhBillFindingKind
+  severity: SlhBillFindingSeverity
+  /** 行级出问题时的明细行号；账单级问题为 null。 */
+  lineNumber: number | null
+  message: string
+}
+
 export interface ParsedSlhBillLine {
   lineNumber: number
   sourceSheetName: string
@@ -32,13 +57,8 @@ export interface ParsedSlhBillLine {
   recipientInfoRaw: string | null
   remark: string | null
   charges: SlhParsedCharge[]
-  /** 备注里没有金额、不能成为费用行的片段。 */
-  notes: string[]
-  /** 复算值与账单缓存值不一致之处；不阻断入库。 */
-  differences: string[]
   /** 无法按字段长度或格式落库的问题；存在时整张账单拒绝入库。 */
   errors: string[]
-  warnings: string[]
   sourceData: { cells: Record<string, { value: string | null, formula: string | null, type: string, sharedFormulaIndex: string | null, mergedFrom: string | null }> }
 }
 
@@ -58,15 +78,18 @@ export interface ParsedSlhBill {
   containerBatchNames: string[]
   totals: ParsedSlhBillTotals
   reported: {
+    /** 账单「小计」行的应付金额、代收货款与 NTD 杂费；缺失时为空。 */
     subtotalPayableAmountCny: string | null
+    subtotalCodAmountTwd: string | null
+    subtotalNtdSurchargeAmountTwd: string | null
     payableAmountCny: string | null
     netAmountTwd: string | null
     netAmountFormula: string | null
     embeddedForeignUnitsPerCny: string | null
   }
   lines: ParsedSlhBillLine[]
-  differences: string[]
-  warnings: string[]
+  /** 全部差异与告警；行级与账单级视图都由这一份数据派生。 */
+  findings: SlhBillFinding[]
 }
 
 export class SlhBillWorkbookParseError extends Error {

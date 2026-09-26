@@ -1,5 +1,4 @@
 import type { SlhBillLineChargeDto, SlhBillLineDto } from '@/api/generated/types.gen'
-import Decimal from 'decimal.js'
 import { formatContainerMeasurement } from '../containers/display.logic'
 
 /** 汇率与材积一律 2 位小数展示，只格式化不回写，计费继续使用服务端原始精度。 */
@@ -8,17 +7,6 @@ export function formatSlhBillRate(value: string | null | undefined): string | nu
     return null
   }
   return formatContainerMeasurement(value, 2)
-}
-
-/**
- * 账单自报值与系统自算值的差额（自报 − 自算），任一侧缺失时返回 null。
- * 只做展示层的口径提示，账实是否一致仍以服务端落库的差异留痕为准。
- */
-export function slhBillAmountDelta(reported: string | null | undefined, calculated: string | null | undefined): string | null {
-  if (reported === null || reported === undefined || calculated === null || calculated === undefined) {
-    return null
-  }
-  return new Decimal(reported).minus(calculated).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2)
 }
 
 /** 材积留痕按账单口径保存 8 位以上小数，展示统一收敛到 2 位。 */
