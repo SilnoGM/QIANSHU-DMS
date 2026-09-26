@@ -174,8 +174,14 @@ test('recipient COD remains unknown unless entered explicitly and respects monet
   assert.ok(validateLoadingItemDraft(draft).codAmountTwd)
 })
 
-async function modalFixture(kind: 'container' | 'loading-item') {
-  const source = await readFile(new URL(`../../src/views/workbenches/containers/${kind}-form-modal.vue`, import.meta.url), 'utf8')
+// 装柜明细的编辑外壳是通用抽屉，柜次本身仍是模态框；两者都由同一套草稿脚本驱动。
+const formShellFiles = {
+  'container': 'container-form-modal.vue',
+  'loading-item': 'loading-item-form-drawer.vue',
+} as const
+
+async function modalFixture(kind: keyof typeof formShellFiles) {
+  const source = await readFile(new URL(`../../src/views/workbenches/containers/${formShellFiles[kind]}`, import.meta.url), 'utf8')
   const script = source.split('<script setup lang="ts">')[1]!.split('</script>')[0]!.replace(/^import[\s\S]*?from ['"][^'"]+['"]\s*$/gm, '')
   const props = reactive({ modelValue: true, batch: null as null | { sourceFileId: string, containerBatchName: string, warehouseValue: string }, item: null, shipment: null as null | { id: string, shippingMarkText: string }, submitting: false, retryOnly: false, fieldErrors: {} })
   const events: Array<[string, Record<string, unknown> | boolean]> = []
@@ -326,4 +332,24 @@ test('field validation uses the latest input value before model synchronization'
     container.dispose()
     item.dispose()
   }
+})
+
+test('装柜明细编辑外壳使用通用抽屉并同时服务新增与编辑', async () => {
+  const viewRoot = new URL('../../src/views/workbenches/containers/', import.meta.url)
+  const source = await readFile(new URL('loading-item-form-drawer.vue', viewRoot), 'utf8')
+
+  assert.match(source, /import QsGenericDrawer from '@\/components\/business\/QsGenericDrawer\/index\.vue'/u)
+  assert.match(source, /<QsGenericDrawer\b/u)
+  assert.doesNotMatch(source, /<QsGenericModal\b|<FaModal\b/u)
+  // 装柜明细不做未保存修改拦截，因此关闭入口不挂 beforeClose。
+  assert.doesNotMatch(source, /before-close/u)
+  // 抽屉在小于 768px 时占满视口，页脚按钮断点必须跟抽屉走而不是 Modal 的 sm。
+  assert.match(source, /w-full md:w-auto/u)
+  assert.doesNotMatch(source, /w-full sm:w-auto/u)
+  // 新增与编辑共用同一抽屉，标题只能由 item 是否存在决定。
+  assert.match(source, /item \? 'containerManagement\.editItem' : 'containerManagement\.addItem'/u)
+
+  const detail = await readFile(new URL('detail.vue', viewRoot), 'utf8')
+  assert.match(detail, /from '\.\/loading-item-form-drawer\.vue'/u)
+  assert.doesNotMatch(detail, /loading-item-form-modal/u)
 })

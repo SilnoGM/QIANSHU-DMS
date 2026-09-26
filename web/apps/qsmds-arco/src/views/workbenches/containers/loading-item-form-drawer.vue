@@ -2,7 +2,7 @@
 import type { LoadingItemDraft, LoadingItemSubmission } from './form.logic'
 import type { ContainerLoadingItemDto, PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
-import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { buildLoadingItemSubmission, createLoadingItemDraft, resolveShipmentDisplay, validateLoadingItemDraft } from './form.logic'
 
@@ -104,7 +104,7 @@ async function submit() {
 </script>
 
 <template>
-  <QsGenericModal :model-value="modelValue" :title="t(item ? 'containerManagement.editItem' : 'containerManagement.addItem')" :description="t('containerManagement.itemDescription')" size="xl" :submitting="locked" @update:model-value="close">
+  <QsGenericDrawer :model-value="modelValue" :title="t(item ? 'containerManagement.editItem' : 'containerManagement.addItem')" :description="t('containerManagement.itemDescription')" size="xl" :submitting="locked" @update:model-value="close">
     <template #header-leading>
       <FaIcon name="i-lucide:package-plus" class="text-primary size-5" />
     </template>
@@ -231,12 +231,12 @@ async function submit() {
       </section>
     </FaForm>
     <template #footer>
-      <FaButton variant="outline" :disabled="locked" class="w-full sm:w-auto" @click="close()">
+      <FaButton variant="outline" :disabled="locked" class="w-full md:w-auto" @click="close()">
         {{ t('containerManagement.cancel') }}
       </FaButton>
-      <FaButton :loading="locked" :disabled="locked" class="w-full sm:w-auto" @click="retryOnly ? submit() : formRef?.submit()">
+      <FaButton :loading="locked" :disabled="locked" class="w-full md:w-auto" @click="retryOnly ? submit() : formRef?.submit()">
         {{ t(retryOnly ? 'containerManagement.retryConfirm' : 'containerManagement.save') }}
       </FaButton>
     </template>
-  </QsGenericModal>
+  </QsGenericDrawer>
 </template>
