@@ -1,12 +1,21 @@
 import type { RouteRecordMainRaw } from '@fantastic-admin/types'
 import FundAccountManagement, { FUND_ACCOUNT_MANAGEMENT_PERMISSIONS } from './fund-account.management'
 
+/**
+ * 顺联航账单首期只有两个空白入口，权限随迁移授予内置 system_admin。
+ * 父分组与叶子分别声明权限：前者约束菜单过滤，后者约束直接 URL 访问。
+ */
+export const SLH_BILL_PERMISSION_CODES = [
+  'slh-bills:read',
+  'slh-bills:reconcile',
+] as const
+
 // 工作台按独立业务权限展示，不依赖角色名称。
 export const financeWorkbench: RouteRecordMainRaw = {
   meta: {
     title: 'workbench.finance',
     icon: 'qs-workbench-finance',
-    auth: ['sales-receipts:read', 'purchase-orders:payment', 'packaging-costs:read', ...FUND_ACCOUNT_MANAGEMENT_PERMISSIONS],
+    auth: ['sales-receipts:read', 'purchase-orders:payment', 'packaging-costs:read', ...SLH_BILL_PERMISSION_CODES, ...FUND_ACCOUNT_MANAGEMENT_PERMISSIONS],
   },
   children: [
     {
@@ -95,6 +104,38 @@ export const financeWorkbench: RouteRecordMainRaw = {
             menu: false,
             activeMenu: '/qs-finance/realtime-payments/packaging-payments',
             auth: 'packaging-costs:read',
+          },
+        },
+      ],
+    },
+    {
+      path: '/qs-finance/bill-reconciliation',
+      name: 'qsFinanceBillReconciliation',
+      component: () => import('@/layouts/index.vue'),
+      meta: {
+        title: 'workbench.billReconciliation',
+        icon: 'qs-bill-reconciliation',
+        auth: [...SLH_BILL_PERMISSION_CODES],
+      },
+      children: [
+        {
+          path: 'slh-bill-management',
+          name: 'qsFinanceBillReconciliationSlhBillManagement',
+          component: () => import('@/views/workbenches/placeholder.vue'),
+          meta: {
+            title: 'workbench.slhBillManagement',
+            icon: 'qs-bill-management',
+            auth: 'slh-bills:read',
+          },
+        },
+        {
+          path: 'slh-bill-reconciliation',
+          name: 'qsFinanceBillReconciliationSlhBillReconciliation',
+          component: () => import('@/views/workbenches/placeholder.vue'),
+          meta: {
+            title: 'workbench.slhBillReconciliation',
+            icon: 'qs-bill-reconciliation-check',
+            auth: 'slh-bills:reconcile',
           },
         },
       ],

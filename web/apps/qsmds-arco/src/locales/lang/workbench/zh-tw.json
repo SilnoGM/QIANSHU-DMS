@@ -7,6 +7,9 @@
     "purchasePayments": "採購付款",
     "purchaseReviews": "採購審核",
     "shipments": "貨件管理",
-    "pending": "功能待開放"
+    "pending": "功能待開放",
+    "billReconciliation": "帳單對帳",
+    "slhBillManagement": "順聯航帳單管理",
+    "slhBillReconciliation": "順聯航帳單對帳"
   }
 }

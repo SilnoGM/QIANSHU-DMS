@@ -16,6 +16,9 @@
     "containerDetailDescription": "查看柜次基础资料、装柜明细及关联账单",
     "backToContainers": "返回柜次管理",
     "pending": "功能待开放",
-    "packagingPayments": "打木架付款"
+    "packagingPayments": "打木架付款",
+    "billReconciliation": "账单对账",
+    "slhBillManagement": "顺联航账单管理",
+    "slhBillReconciliation": "顺联航账单对账"
   }
 }

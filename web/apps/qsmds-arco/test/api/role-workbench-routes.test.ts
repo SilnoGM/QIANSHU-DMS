@@ -25,11 +25,30 @@ test('财务和采运工作台只展示当前用户有权访问的业务入口',
   assert.deepEqual(visiblePaths(['packaging-costs:read']), ['/qs-finance/realtime-payments/packaging-payments'])
   assert.deepEqual(visiblePaths(['purchase-orders:payment']), ['/qs-finance/realtime-payments/purchase-payments'])
   assert.deepEqual(visiblePaths(['purchase-orders:review']), ['/qs-purchase-transport/reviews'])
-  assert.deepEqual(visiblePaths([
-    'sales-receipts:read',
-    'purchase-orders:payment',
-    'purchase-orders:review',
-  ]), ['/qs-finance/realtime-payments/sales-receipts', '/qs-finance/realtime-payments/purchase-payments', '/qs-purchase-transport/reviews'])
+  assert.deepEqual(visiblePaths(['slh-bills:read']), ['/qs-finance/bill-reconciliation/slh-bill-management'])
+  assert.deepEqual(visiblePaths(['slh-bills:reconcile']), ['/qs-finance/bill-reconciliation/slh-bill-reconciliation'])
+  assert.deepEqual(visiblePaths(['sales-receipts:read', 'purchase-orders:payment', 'purchase-orders:review']), ['/qs-finance/realtime-payments/sales-receipts', '/qs-finance/realtime-payments/purchase-payments', '/qs-purchase-transport/reviews'])
+})
+
+test('顺联航账单入口排在实收实付之后、账户管理之前，两个叶子各用独立权限与占位页', () => {
+  const routes = financeWorkbench.children
+  assert.deepEqual(routes.map(route => route.path), ['/qs-finance/realtime-payments', '/qs-finance/bill-reconciliation', '/qs-finance/fund-accounts'])
+  const group = routes[1]!
+  assert.equal(group.name, 'qsFinanceBillReconciliation')
+  assert.equal(group.meta?.title, 'workbench.billReconciliation')
+  assert.equal(group.meta?.icon, 'qs-bill-reconciliation')
+  assert.deepEqual(group.meta?.auth, ['slh-bills:read', 'slh-bills:reconcile'])
+  assert.equal(typeof group.component, 'function')
+  assert.deepEqual((group.children ?? []).map(leaf => [leaf.path, leaf.name, leaf.meta?.title, leaf.meta?.icon, leaf.meta?.auth]), [
+    ['slh-bill-management', 'qsFinanceBillReconciliationSlhBillManagement', 'workbench.slhBillManagement', 'qs-bill-management', 'slh-bills:read'],
+    ['slh-bill-reconciliation', 'qsFinanceBillReconciliationSlhBillReconciliation', 'workbench.slhBillReconciliation', 'qs-bill-reconciliation-check', 'slh-bills:reconcile'],
+  ])
+  for (const leaf of group.children ?? []) {
+    // 占位页沿用统一组件，功能开放时只替换 component 与新增业务 API。
+    assert.equal(typeof leaf.component, 'function')
+    assert.notEqual(leaf.meta?.menu, false)
+    assert.notEqual(leaf.meta?.singleMenu, true)
+  }
 })
 
 test('柜次菜单使用独立读取权限，货件与审核菜单保留既有授权', () => {
@@ -44,10 +63,10 @@ test('柜次菜单使用独立读取权限，货件与审核菜单保留既有�
   assert.equal(routes[0]?.meta?.auth, 'purchase-orders:review')
 })
 
-test('财务分为实时收付和账户管理，叶子路由保留独立权限', () => {
-  assert.deepEqual(financeWorkbench.children.map(route => route.path), ['/qs-finance/realtime-payments', '/qs-finance/fund-accounts'])
+test('财务分为实时收付、账单对账和账户管理，叶子路由保留独立权限', () => {
+  assert.deepEqual(financeWorkbench.children.map(route => route.path), ['/qs-finance/realtime-payments', '/qs-finance/bill-reconciliation', '/qs-finance/fund-accounts'])
   const routes = financeWorkbench.children.flatMap(route => route.children ?? [])
-  assert.equal(new Set(routes.map(route => route.name)).size, 9)
+  assert.equal(new Set(routes.map(route => route.name)).size, 11)
   const paymentDetail = routes.find(route => route.name === 'qsFinanceRealtimePurchasePayablePayment')
   assert.equal(paymentDetail?.meta?.menu, false)
   assert.equal(paymentDetail?.meta?.auth, 'purchase-orders:payment')

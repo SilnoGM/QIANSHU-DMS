@@ -172,6 +172,30 @@
     ]
   },
   {
+    "name": "qs-bill-reconciliation",
+    "label": "账单对账",
+    "category": "财务",
+    "usages": [
+      "千树财务工作台 / 账单对账"
+    ]
+  },
+  {
+    "name": "qs-bill-management",
+    "label": "账单管理",
+    "category": "财务",
+    "usages": [
+      "账单对账 / 顺联航账单管理"
+    ]
+  },
+  {
+    "name": "qs-bill-reconciliation-check",
+    "label": "账单核对",
+    "category": "财务",
+    "usages": [
+      "账单对账 / 顺联航账单对账"
+    ]
+  },
+  {
     "name": "qs-purchase-review",
     "label": "采购审核",
     "category": "订单",

@@ -7,6 +7,9 @@
     "purchasePayments": "Purchase Payments",
     "purchaseReviews": "Purchase Review",
     "shipments": "Shipment Management",
-    "pending": "Coming soon"
+    "pending": "Coming soon",
+    "billReconciliation": "Bill Reconciliation",
+    "slhBillManagement": "Shunlianhang Bill Management",
+    "slhBillReconciliation": "Shunlianhang Bill Reconciliation"
   }
 }
