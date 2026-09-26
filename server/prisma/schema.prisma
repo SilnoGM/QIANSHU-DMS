@@ -55,6 +55,7 @@ enum AuditEventType {
   CONTAINER_LOADING_ITEM_UPDATED
   CONTAINER_LOADING_ITEM_CREATED
   CONTAINER_BATCH_CREATED
+  SLH_BILL_IMPORTED
   PACKAGING_COST_SUBMITTED
   PACKAGING_COST_PAID
   PACKAGING_COST_AMOUNT_UPDATED
@@ -2020,6 +2021,10 @@ model SlhBill {
   codTotalAmountTwd Decimal @map("cod_total_amount_twd") @db.Decimal(30, 2)
   ntdSurchargeTotalAmountTwd Decimal @map("ntd_surcharge_total_amount_twd") @db.Decimal(30, 2)
   reportedNetAmountTwd Decimal @map("reported_net_amount_twd") @db.Decimal(30, 2)
+  /// 账单自报值留痕：「合计应付人民币」行金额、台币单元格原值与公式原文。
+  reportedPayableAmountCny Decimal? @map("reported_payable_amount_cny") @db.Decimal(30, 2)
+  reportedNetAmountCell String? @map("reported_net_amount_cell") @db.VarChar(64)
+  reportedNetAmountFormula String? @map("reported_net_amount_formula") @db.VarChar(128)
   rateSource SlhBillRateSource? @map("rate_source")
   foreignUnitsPerCnySnapshot Decimal? @map("foreign_units_per_cny_snapshot") @db.Decimal(30, 12)
   embeddedForeignUnitsPerCny Decimal? @map("embedded_foreign_units_per_cny") @db.Decimal(30, 12)

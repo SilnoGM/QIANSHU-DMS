@@ -1,0 +1,170 @@
+import { Prisma } from '../../generated/prisma/client'
+import {
+  SlhBillChargeTypeDto, SlhBillPricingBasisDto, SlhBillRateSourceDto,
+  type SlhBillDto, type SlhBillLineDto, type SlhBillListItemDto, type SlhBillPreviewLineDto,
+} from './slh-bill.dto'
+import type { ParsedSlhBillLine } from './slh-bill-parser.types'
+
+export const slhBillRateInclude = {
+  exchangeRate: { select: { id: true, foreignUnitsPerCny: true, version: true } },
+  createdBy: { select: { id: true, displayName: true } },
+} satisfies Prisma.SlhBillInclude
+
+export const slhBillListInclude = {
+  createdBy: { select: { id: true, displayName: true } },
+} satisfies Prisma.SlhBillInclude
+
+export type SlhBillRow = Prisma.SlhBillGetPayload<{ include: typeof slhBillRateInclude }>
+export type SlhBillListRow = Prisma.SlhBillGetPayload<{ include: typeof slhBillListInclude }>
+
+/** 账单原值的逐行差异在入库后不再重算：账单已冻结，明细只读出已落库的事实。 */
+export function serializeSlhBillLine(row: Prisma.SlhBillLineGetPayload<{ include: { charges: true } }>): SlhBillLineDto {
+  const volumeDifference = row.volumeCai !== null && row.reportedVolumeCai !== null
+    ? row.volumeCai.minus(row.reportedVolumeCai).toFixed(2)
+    : null
+  return {
+    lineNumber: row.lineNumber,
+    loadingDate: row.loadingDate.toISOString().slice(0, 10),
+    containerBatchNameText: row.containerBatchNameText,
+    containerBatchId: row.containerBatchId,
+    warehouseReceiptReference: row.warehouseReceiptReference,
+    shippingMarkText: row.shippingMarkText,
+    goodsName: row.goodsName,
+    packageCount: row.packageCount,
+    packageUnit: row.packageUnit,
+    grossWeightKg: row.grossWeightKg?.toFixed(3) ?? null,
+    weightUnit: row.weightUnit,
+    lengthCm: row.lengthCm?.toFixed(2) ?? null,
+    widthCm: row.widthCm?.toFixed(2) ?? null,
+    heightCm: row.heightCm?.toFixed(2) ?? null,
+    volumeCai: row.volumeCai?.toFixed(2) ?? null,
+    reportedVolumeCai: row.reportedVolumeCai?.toFixed(2) ?? null,
+    volumeDifferenceCai: volumeDifference,
+    categoryCode: row.categoryCode,
+    unitPriceAmount: row.unitPriceAmount?.toFixed(2) ?? null,
+    pricingBasis: row.pricingBasis === null ? null : row.pricingBasis as SlhBillPricingBasisDto,
+    freightAmountCny: row.freightAmountCny.toFixed(2),
+    codHandlingAmountCny: row.codHandlingAmountCny.toFixed(2),
+    surchargeAmountCny: row.surchargeAmountCny.toFixed(2),
+    payableAmountCny: row.payableAmountCny.toFixed(2),
+    codAmountTwd: row.codAmountTwd.toFixed(2),
+    ntdSurchargeAmountTwd: row.ntdSurchargeAmountTwd.toFixed(2),
+    recipientInfoRaw: row.recipientInfoRaw,
+    remark: row.remark,
+    charges: row.charges.map(charge => ({
+      chargeType: charge.chargeType as SlhBillChargeTypeDto,
+      currencyCode: charge.currencyCode,
+      amount: charge.amount.toFixed(2),
+      sourceRemarkText: charge.sourceRemarkText,
+    })),
+  }
+}
+
+export function serializeSlhBillPreviewLine(line: ParsedSlhBillLine): SlhBillPreviewLineDto {
+  return {
+    lineNumber: line.lineNumber,
+    loadingDate: line.loadingDate,
+    containerBatchNameText: line.containerBatchName,
+    containerBatchId: null,
+    warehouseReceiptReference: line.warehouseReceiptReference,
+    shippingMarkText: line.shippingMarkText,
+    goodsName: line.goodsName,
+    packageCount: line.packageCount,
+    packageUnit: line.packageUnit,
+    grossWeightKg: line.grossWeightKg,
+    weightUnit: line.weightUnit,
+    lengthCm: line.lengthCm,
+    widthCm: line.widthCm,
+    heightCm: line.heightCm,
+    volumeCai: line.volumeCai,
+    reportedVolumeCai: line.reportedVolumeCai,
+    volumeDifferenceCai: null,
+    categoryCode: line.categoryCode,
+    unitPriceAmount: line.unitPriceAmount,
+    pricingBasis: line.pricingBasis as SlhBillPricingBasisDto | null,
+    freightAmountCny: line.freightAmountCny,
+    codHandlingAmountCny: line.codHandlingAmountCny,
+    surchargeAmountCny: line.surchargeAmountCny,
+    payableAmountCny: line.payableAmountCny,
+    codAmountTwd: line.codAmountTwd,
+    ntdSurchargeAmountTwd: line.ntdSurchargeAmountTwd,
+    recipientInfoRaw: line.recipientInfoRaw,
+    remark: line.remark,
+    charges: line.charges.map(charge => ({
+      chargeType: charge.chargeType as SlhBillChargeTypeDto,
+      currencyCode: charge.currencyCode,
+      amount: charge.amount,
+      sourceRemarkText: charge.sourceRemarkText,
+    })),
+    notes: line.notes,
+    differences: line.differences,
+    lineWarnings: line.warnings,
+    errors: line.errors,
+  }
+}
+
+function rate(row: SlhBillRow): SlhBillDto['rate'] {
+  if (row.rateSource === null || row.foreignUnitsPerCnySnapshot === null || row.rateCapturedAt === null) return null
+  return {
+    source: row.rateSource as SlhBillRateSourceDto,
+    foreignUnitsPerCny: row.foreignUnitsPerCnySnapshot.toFixed(12),
+    embeddedForeignUnitsPerCny: row.embeddedForeignUnitsPerCny?.toFixed(12) ?? null,
+    exchangeRateId: row.exchangeRateId,
+    capturedAt: row.rateCapturedAt.toISOString(),
+  }
+}
+
+export function serializeSlhBill(row: SlhBillRow): SlhBillDto {
+  return {
+    id: row.id,
+    slhBillNo: row.slhBillNo,
+    periodStart: row.periodStart.toISOString().slice(0, 10),
+    periodEnd: row.periodEnd.toISOString().slice(0, 10),
+    lineCount: row.lineCount,
+    containerBatchCount: row.containerBatchCount,
+    containerBatchNames: row.containerBatchNames.split(',').filter(Boolean),
+    freightTotalAmountCny: row.freightTotalAmountCny.toFixed(2),
+    codHandlingTotalAmountCny: row.codHandlingTotalAmountCny.toFixed(2),
+    surchargeTotalAmountCny: row.surchargeTotalAmountCny.toFixed(2),
+    payableTotalAmountCny: row.payableTotalAmountCny.toFixed(2),
+    codTotalAmountTwd: row.codTotalAmountTwd.toFixed(2),
+    ntdSurchargeTotalAmountTwd: row.ntdSurchargeTotalAmountTwd.toFixed(2),
+    reportedNetAmountTwd: row.reportedNetAmountTwd.toFixed(2),
+    rate: rate(row),
+    // 账单自报值与公式原文原样留痕，详情页据此展示「对方写了什么、我们算出什么」。
+    reported: {
+      subtotalPayableAmountCny: null,
+      payableAmountCny: row.reportedPayableAmountCny?.toFixed(2) ?? null,
+      netAmountTwd: row.reportedNetAmountCell,
+      netAmountFormula: row.reportedNetAmountFormula,
+      reportedNetAmountTwd: row.reportedNetAmountTwd.toFixed(2),
+    },
+    sourceFileName: row.sourceFileName,
+    sourceFileSha256: row.sourceFileSha256,
+    supersededById: row.supersededById,
+    supersededAt: row.supersededAt?.toISOString() ?? null,
+    version: row.version,
+    createdAt: row.createdAt.toISOString(),
+    createdByDisplayName: row.createdBy.displayName,
+  }
+}
+
+export function serializeSlhBillListItem(row: SlhBillListRow): SlhBillListItemDto {
+  return {
+    id: row.id,
+    slhBillNo: row.slhBillNo,
+    periodStart: row.periodStart.toISOString().slice(0, 10),
+    periodEnd: row.periodEnd.toISOString().slice(0, 10),
+    lineCount: row.lineCount,
+    containerBatchCount: row.containerBatchCount,
+    payableTotalAmountCny: row.payableTotalAmountCny.toFixed(2),
+    codTotalAmountTwd: row.codTotalAmountTwd.toFixed(2),
+    ntdSurchargeTotalAmountTwd: row.ntdSurchargeTotalAmountTwd.toFixed(2),
+    reportedNetAmountTwd: row.reportedNetAmountTwd.toFixed(2),
+    rateSource: row.rateSource === null ? null : row.rateSource as SlhBillRateSourceDto,
+    supersededById: row.supersededById,
+    sourceFileName: row.sourceFileName,
+    createdAt: row.createdAt.toISOString(),
+    createdByDisplayName: row.createdBy.displayName,
+  }
+}

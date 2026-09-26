@@ -13,8 +13,9 @@ const readPermissionId = '00000000-0000-4000-8000-000000000166'
 const reconcilePermissionId = '00000000-0000-4000-8000-000000000167'
 
 describe('slh bill permission migration', () => {
-  it('adds both route permissions to the complete catalog without duplicates', () => {
-    expect(SLH_BILL_PERMISSION_CODES).toEqual(['slh-bills:read', 'slh-bills:reconcile'])
+  it('lists every slh bill permission in the complete catalog without duplicates', () => {
+    // read 与 reconcile 由本迁移种下，create 由账单管理迁移补上。
+    expect(SLH_BILL_PERMISSION_CODES).toEqual(['slh-bills:read', 'slh-bills:reconcile', 'slh-bills:create'])
     expect(MANAGEMENT_PERMISSION_CODES).toEqual(
       expect.arrayContaining([...SLH_BILL_PERMISSION_CODES]),
     )

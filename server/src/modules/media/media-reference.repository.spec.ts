@@ -7,8 +7,8 @@ import {
 const ASSET_ID = '00000000-0000-4000-8000-000000000321'
 
 describe('MediaAssetReferenceRepository', () => {
-  it.each(['paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch'])('retains recipient code through %s even after configuration changes', async target => {
-    const reader = Object.fromEntries(['productMedia', 'salesOrderDocument', 'purchaseOrderDocument', 'salesReceiptRequest', 'purchaseOrderImageDraft', 'packagingCostRequest', 'paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch']
+  it.each(['paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill'])('retains recipient code through %s even after configuration changes', async target => {
+    const reader = Object.fromEntries(['productMedia', 'salesOrderDocument', 'purchaseOrderDocument', 'salesReceiptRequest', 'purchaseOrderImageDraft', 'packagingCostRequest', 'paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill']
       .map(name => [name, { findFirst: jest.fn().mockResolvedValue(name === target ? { id: 'reference' } : null) }])) as unknown as Prisma.TransactionClient
     await expect(new MediaAssetReferenceRepository().hasActiveReferences(reader, ASSET_ID)).resolves.toBe(true)
   })
@@ -60,6 +60,7 @@ describe('MediaAssetReferenceRepository', () => {
       'payment_recipient_accounts',
       'purchase_order_payments',
       'container_batches',
+      'slh_bills',
     ])
     expect(productMediaFindFirst).toHaveBeenCalledWith({
       where: {
@@ -105,6 +106,7 @@ describe('MediaAssetReferenceRepository', () => {
       paymentRecipientAccount: { findFirst: jest.fn().mockResolvedValue(null) },
       purchaseOrderPayment: { findFirst: jest.fn().mockResolvedValue(null) },
       containerBatch: { findFirst: jest.fn().mockResolvedValue(null) },
+      slhBill: { findFirst: jest.fn().mockResolvedValue(null) },
     } as unknown as Prisma.TransactionClient
 
     await expect(

@@ -107,10 +107,11 @@ export const CONTAINER_BATCH_PERMISSION_CODES = [
   'container-batches:update',
 ] as const
 
-/** 顺联航账单首期只有两个空白路由入口，业务模型与 API 未进入本阶段。 */
+/** 顺联航账单：查看、核对入口，以及导入账单所需的 create 权限。 */
 export const SLH_BILL_PERMISSION_CODES = [
   'slh-bills:read',
   'slh-bills:reconcile',
+  'slh-bills:create',
 ] as const
 
 /**
