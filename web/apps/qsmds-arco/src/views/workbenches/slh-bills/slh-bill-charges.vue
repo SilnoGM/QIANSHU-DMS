@@ -11,8 +11,9 @@ const amount = (value: string) => formatSlhBillAmount(value) ?? value
 </script>
 
 <template>
-  <div v-if="!groups.length" class="qs-type-meta text-muted-foreground">
-    —
+  <!-- 没有费用行时与其它列一致显示缺值占位符。 -->
+  <div v-if="!groups.length" class="qs-type-data text-muted-foreground">
+    {{ t('slhBill.valueMissing') }}
   </div>
   <div v-else class="space-y-1">
     <!-- 币种分行、费别逐个列出，避免把人民币与台币费用混成一个合计。 -->
