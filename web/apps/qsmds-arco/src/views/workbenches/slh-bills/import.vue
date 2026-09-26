@@ -41,7 +41,8 @@ const submitError = ref('')
 const manualRateDraft = ref('')
 const duplicateAcknowledged = ref(false)
 const previewPage = ref(1)
-const previewPageSize = ref(20)
+// 一张账单通常 30–50 行，默认 50 条一页，避免核对时频繁翻页。
+const previewPageSize = ref(50)
 // 提交请求自己一个 controller；上传与解析的取消由加载器编排负责，两者不再互相打断。
 let controller: AbortController | null = null
 // 幂等键与提交内容配对：内容变化必须换键，结果未知时必须复用同一个键。
