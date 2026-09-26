@@ -46,10 +46,11 @@ async function fixture(options: { permissions?: string[], created?: { id: string
   return { state, warehouse, navigations, dispose: () => scope.stop() }
 }
 
-test('创建柜次成功后进入解析页，缺少导入权限时回到详情，创建失败不跳转', async (context) => {
+test('创建柜次成功后统一进入详情页，创建失败不跳转', async (context) => {
   for (const [options, expected] of [
-    [{ created: { id: 'new-container' } }, 'qsPurchaseTransportContainerImport'],
-    [{ created: { id: 'new-container' }, permissions: ['container-batches:read', 'container-batches:create'] }, 'qsPurchaseTransportContainerDetail'],
+    [{ created: { id: 'new-container' } }, 'qsPurchaseTransportContainerDetail'],
+    // 拥有导入相关权限也不再直接进解析页；解析入口留在详情页内，权限不影响创建后的去向。
+    [{ created: { id: 'new-container' }, permissions: ['container-batches:read', 'container-batches:create', 'container-batches:update', 'purchase-orders:read'] }, 'qsPurchaseTransportContainerDetail'],
     [{ created: null }, null],
   ] as const) {
     const f = await fixture(options)
