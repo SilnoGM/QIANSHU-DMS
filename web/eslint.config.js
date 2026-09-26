@@ -10,6 +10,10 @@ export default antfu(
       '**/public',
       '**/dist*',
       'apps/qsmds-arco/src/api/generated/**',
+      // Mimosa 插件会把会话 hook 状态写进当前工作目录下的 .mimosa，它不是项目源码；
+      // 未忽略时 apps/qsmds-arco 下会出现大量 jsonc 格式错误并让 lint 整体失败。
+      // 忽略口径与根 .gitignore 的 .mimosa/ 保持一致。
+      '**/.mimosa/**',
     ],
   },
   {
