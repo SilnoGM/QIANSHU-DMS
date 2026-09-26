@@ -58,29 +58,55 @@
 
 ### 前端
 
-- [ ] 路由：列表替换占位组件，新增解析预览与详情子路由，导入子路由要求 `slh-bills:create`
-      _Requirements: R6, R7_
-- [ ] `api/modules/slh-bills.ts` 请求模块
-      _Requirements: R6_
-- [ ] 列表页：期间/关键词/金额区间检索与分页
-      _Requirements: R6_
-- [ ] 解析预览页：上传、预览校验与差异展示、确认入库
-      _Requirements: R1, R2, R4_
-- [ ] 详情页：汇总、自报与自算并列、明细与费用明细分页、原件下载
-      _Requirements: R6_
-- [ ] 文案三语（zh-cn / zh-tw / en）与路由清单测试同步
-      _Requirements: R6_
+- [x] 路由：列表替换占位组件，新增解析预览与详情路由，导入路由要求 `slh-bills:create`
+      _Requirements: R6, R7_ _Evidence: commit 69c1875a_
+- [x] `api/modules/slh-bills.ts` 请求模块
+      _Requirements: R6_ _Evidence: commit 69c1875a_
+- [x] 列表页：期间区间/关键词/金额区间检索与分页，行点击进详情
+      _Requirements: R6_ _Evidence: commit 69c1875a_
+- [x] 解析预览页：上传、预览校验与差异/告警展示、手填汇率、重复确认与幂等键、确认入库
+      _Requirements: R1, R2, R4_ _Evidence: commit 69c1875a_
+- [x] 详情页：汇总、自报与自算并列及差额、明细与费用明细分页、原件下载
+      _Requirements: R6_ _Evidence: commit 69c1875a_
+- [x] 文案三语（zh-cn / zh-tw / en）与路由清单测试同步
+      _Requirements: R6_ _Evidence: commit 69c1875a，新增 135 个键三语完全一致_
+
+导入与详情在实现上是同组隐藏兄弟路由，而不是列表页的子路由：路由 Store 的
+`deleteMiddleRouteComponent` 会删掉任何带 children 的路由自身的 component，
+叶子挂子路由会让列表页渲染空白。最终 URL 层级与验收预期一致，做法与采购付款、
+包装付款等页面的既有先例相同。
 
 ### 验证
 
 - [x] 服务端单测（解析器、材积、费别、勾稽）
       _Requirements: R1-R4_ _Evidence: slh-bills 40 项用例；全量 318 套件 3552 用例通过_
-- [x] 类型检查、lint 与契约检查
-      _Requirements: R1-R7_ _Evidence: tsc、eslint、contract:check 均通过_
+- [x] 类型检查、lint、前端用例与生产构建
+      _Requirements: R1-R7_ _Evidence: 服务端 tsc/eslint 通过；前端 typecheck/lint 通过，
+      `test:api` 1615 用例通过，`build` 通过_
+- [x] 契约 `contract:sync` 后 `contract:check` 通过
+      _Requirements: R6_ _Evidence: 两端快照一致，6 个 operationId 入库_
+- [x] 权限目录的 e2e 断言同步
+      _Requirements: R7_ _Evidence: auth-api 与 auth-schema 两个 e2e 共 19 项通过_
 - [x] 账单工作簿用例（自有脱敏 OOXML 夹具）
       _Requirements: R1-R4_ _Evidence: `test/fixtures/slh-bill-xlsx.fixture.ts`_
-- [ ] 浏览器实测列表、导入预览与详情
-      _Requirements: R6_
+- [ ] **浏览器实测列表、导入预览与详情** —— 未执行
+      _Requirements: R6_ _阻塞原因：本地应用要求交互式管理员登录，而仓库明确规定永久密码
+      只能通过隐藏的交互式 TTY 输入、不得写入 argv/环境变量/脚本/文档；内置浏览器当前也没有
+      有效会话（受控与用户标签页均为空），因此无法在不违反该规定的前提下进入页面。
+      人工验证步骤见下方。_
+
+### 人工验证步骤（浏览器）
+
+前提：本地服务与前端已启动，且当前用户拥有 `slh-bills:create`（系统管理员默认有）。
+
+1. 打开 `/qs-finance/bill-reconciliation/slh-bill-management`，确认列表可加载、空态文案正常。
+2. 点「导入账单」，上传一份顺联航对账单 `.xlsx`（可用 `server/test/fixtures/slh-bill-xlsx.fixture.ts`
+   通过 `npx tsx` 生成脱敏样本，不要用真实客户账单做公开演示）。
+3. 预览页应显示识别到的期间、行数、柜号清单、系统自算合计、账单自报值与公式原文；
+   夹具样本应显示 0 条差异；账单公式自带除数时应显示提取到的汇率。
+4. 确认入库后跳转详情：核对账单编号为 `CBILL/<派发月>-NN`、汇率来源为 `EMBEDDED`、
+   自报与自算差额为 0、明细 3 行且费用明细按币种拆开、可下载原件。
+5. 回到列表可查到该账单；再次导入同一文件应提示期间与柜号集合重复并需勾选确认。
 
 ## 备注
 
