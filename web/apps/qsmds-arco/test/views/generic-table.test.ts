@@ -196,6 +196,9 @@ test('QsGenericTable 组合 FaTable 与 FaPagination 并保持默认行号不参
   assert.match(source, /defineOptions\(\{ name: 'QsGenericTable' \}\)/u)
   assert.match(source, /<FaTable/u)
   assert.match(source, /:sortable="true"/u)
+  // 行样式透传：底层 FaTable 支持 rowClass，中间层必须把它放出来，否则业务页无法标记某类行。
+  assert.match(source, /rowClass\?: TableProps<TData>\['rowClass'\]/u)
+  assert.match(source, /:row-class="rowClass"/u)
   assert.match(source, /<FaPagination/u)
   assert.match(source, /\? 'total, sizes, ->, pager'/u)
   assert.match(source, /<FaPopover/u)

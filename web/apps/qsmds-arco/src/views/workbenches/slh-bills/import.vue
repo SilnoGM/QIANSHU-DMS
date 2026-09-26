@@ -6,7 +6,7 @@ import slhBillsApi from '@/api/modules/slh-bills'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import { containerFailure } from '../containers/use-container-resource'
-import { pageForSlhBillLine } from './comparison.logic'
+import { collectSlhBillFlaggedRowNumbers, pageForSlhBillLine, SLH_BILL_FLAGGED_ROW_CLASS } from './comparison.logic'
 import { formatSlhBillRate } from './display.logic'
 import {
   buildSlhBillImportPayload,
@@ -92,6 +92,11 @@ const columns = computed<QsGenericTableColumn<SlhBillPreviewLineDto>[]>(() => [
   { id: 'lineIssues', title: t('slhBill.previewIssues'), accessorFn: (line: SlhBillPreviewLineDto) => [...line.errors, ...line.findings.map(finding => finding.message)].join('；'), minWidth: 280, width: 320 },
 ])
 /** 差异项按行号跳到明细表对应页；预览表是前端分页，直接切页即可。 */
+const flaggedRowNumbers = computed(() => collectSlhBillFlaggedRowNumbers(preview.value?.findings ?? []))
+/** 有差异或告警的明细行标黄，便于在表里直接找到问题行。 */
+function lineRowClass(row: { original: SlhBillPreviewLineDto }): string {
+  return flaggedRowNumbers.value.has(row.original.sourceRowNumber) ? SLH_BILL_FLAGGED_ROW_CLASS : ''
+}
 function jumpToLine(lineNumber: number): void {
   previewPage.value = pageForSlhBillLine(lineNumber, previewPageSize.value)
 }
@@ -391,6 +396,7 @@ onBeforeUnmount(() => controller?.abort())
             v-model:page-size="previewPageSize"
             row-key="lineNumber"
             table-class="w-max min-w-full"
+            :row-class="lineRowClass"
             :show-row-number="true"
             :columns="columns"
             :data="pagedLines"

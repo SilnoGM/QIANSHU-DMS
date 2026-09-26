@@ -186,6 +186,20 @@ export function countSlhBillFindings(findings: readonly SlhBillFindingDto[]): { 
   }, { difference: 0, warning: 0 })
 }
 
+/** 问题行标黄：用单元格级背景，否则固定列与斑马纹的单元格背景会盖住行背景。 */
+export const SLH_BILL_FLAGGED_ROW_CLASS = '[&>td]:bg-amber-50 dark:[&>td]:bg-amber-500/10'
+
+/**
+ * 汇总有差异或告警的原表行号，供明细表按行标黄。
+ * 用原表行号而不是账单内序号：与界面上「行号」列一致，详情页也只有它能把账单级
+ * 差异对应回具体明细行。
+ */
+export function collectSlhBillFlaggedRowNumbers(findings: readonly SlhBillFindingDto[]): Set<number> {
+  return new Set(findings.flatMap(finding =>
+    finding.sourceRowNumber === null || finding.sourceRowNumber === undefined ? [] : [finding.sourceRowNumber],
+  ))
+}
+
 /** 明细行所在页码；用于从差异项跳到明细表对应页。 */
 export function pageForSlhBillLine(lineNumber: number, pageSize: number): number {
   if (!Number.isInteger(lineNumber) || lineNumber < 1 || !Number.isInteger(pageSize) || pageSize < 1) {

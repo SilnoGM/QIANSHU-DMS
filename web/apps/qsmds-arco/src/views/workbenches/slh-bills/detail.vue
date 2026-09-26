@@ -4,7 +4,7 @@ import slhBillsApi from '@/api/modules/slh-bills'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import { containerFailure } from '../containers/use-container-resource'
-import { pageForSlhBillLine } from './comparison.logic'
+import { collectSlhBillFlaggedRowNumbers, pageForSlhBillLine, SLH_BILL_FLAGGED_ROW_CLASS } from './comparison.logic'
 import { formatSlhBillRate } from './display.logic'
 import { buildSlhBillLineColumns } from './line-columns.logic'
 import SlhBillCharges from './slh-bill-charges.vue'
@@ -56,6 +56,11 @@ function jumpToLine(lineNumber: number): void {
   void loadLines()
 }
 const columns = computed(() => buildSlhBillLineColumns(t))
+const flaggedRowNumbers = computed(() => collectSlhBillFlaggedRowNumbers(bill.value?.findings ?? []))
+/** 有差异或告警的明细行标黄；详情页的差异来自落库快照，按原表行号对应。 */
+function lineRowClass(row: { original: SlhBillLineDto }): string {
+  return flaggedRowNumbers.value.has(row.original.sourceRowNumber) ? SLH_BILL_FLAGGED_ROW_CLASS : ''
+}
 async function load(): Promise<void> {
   billController?.abort()
   if (!canRead.value || instanceId === '') {
@@ -364,6 +369,7 @@ onBeforeUnmount(() => {
             v-model:page-size="linePageSize"
             row-key="lineNumber"
             table-class="w-max min-w-full"
+            :row-class="lineRowClass"
             :show-row-number="true"
             :columns="columns"
             :data="lines"

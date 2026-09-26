@@ -55,6 +55,12 @@ const props = withDefaults(defineProps<{
   paginationUnit?: string
   pageSizeOptions?: number[]
   rowKey?: TableProps<TData>['rowKey']
+  /**
+   * 按行追加类名，用于标记某类行（如带差异或告警的账单明细）。
+   * 想改行背景时用单元格级选择器 `[&>td]:bg-...`：表格的斑马纹与固定列是在单元格上
+   * 上色的，只染 <tr> 会让这些单元格看起来"断开"。
+   */
+  rowClass?: TableProps<TData>['rowClass']
   searchable?: boolean
   searchPlaceholder?: string
   showColumnSettings?: boolean
@@ -686,6 +692,7 @@ watch([tableColumns, isNarrow], () => {
         :columns="tableColumns"
         :data="data"
         :row-key="rowKey"
+        :row-class="rowClass"
         :tree="Boolean(grouping)"
         :group-row="grouping ? isGroupRow : undefined"
         :get-sub-rows="grouping ? groupedSubRows : undefined"

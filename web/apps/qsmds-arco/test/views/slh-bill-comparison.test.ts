@@ -2,7 +2,7 @@ import type { SlhBillFindingDto, SlhBillReportedDto, SlhBillTotalsDto } from '..
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 与其它账单用例保持一致，直接断言纯函数。
 import test from 'node:test'
-import { buildSlhBillComparison, countSlhBillFindings, groupSlhBillFindings, pageForSlhBillLine } from '../../src/views/workbenches/slh-bills/comparison.logic'
+import { buildSlhBillComparison, collectSlhBillFlaggedRowNumbers, countSlhBillFindings, groupSlhBillFindings, pageForSlhBillLine } from '../../src/views/workbenches/slh-bills/comparison.logic'
 
 // 真实 1 月账单的数值：876 项对比里两侧应完全一致。
 const totals: SlhBillTotalsDto = {
@@ -131,4 +131,16 @@ test('行号换算成明细页码，非法输入退回第一页', () => {
   assert.equal(pageForSlhBillLine(44, 20), 3)
   assert.equal(pageForSlhBillLine(0, 20), 1)
   assert.equal(pageForSlhBillLine(5, 0), 1)
+})
+
+test('问题行号按原表行号汇总，账单级差异不参与标黄', () => {
+  const flagged = collectSlhBillFlaggedRowNumbers([
+    finding('FREIGHT_MISMATCH', 'difference', 1, 'a'),
+    finding('RATE_MISSING', 'warning', null, 'bill level'),
+    finding('VOLUME_MISMATCH', 'difference', 3, 'c', 16),
+    finding('FREIGHT_MISMATCH', 'difference', 1, 'again'),
+  ])
+  // 账单内序号 1 对应原表第 14 行；同行的多条问题只算一次。
+  assert.deepEqual([...flagged].sort((left, right) => left - right), [14, 16])
+  assert.deepEqual([...collectSlhBillFlaggedRowNumbers([])], [])
 })
