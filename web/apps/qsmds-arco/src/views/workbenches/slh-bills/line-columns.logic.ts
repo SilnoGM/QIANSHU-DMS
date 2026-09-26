@@ -9,29 +9,61 @@ import {
   resolveSlhBillVolumeDifference,
 } from './display.logic'
 
+/** 列定义只依赖这个最小翻译签名，用例可以直接断言列取值。 */
+export type SlhBillColumnTranslate = (key: string, params?: Record<string, unknown>) => string
+
+export interface SlhBillLineColumnOptions {
+  /** 当前页第一条记录的全局序号偏移，让序号列跨页连续。 */
+  sequenceOffset?: number
+}
+
 /**
  * 账单明细列在导入预览与详情页共用：两处字段完全一致，预览页只在末尾追加自己的问题列。
  * 泛型参数让预览页能用 SlhBillPreviewLineDto 保持 own 类型，避免把 preview 专属字段丢掉。
  */
 export function buildSlhBillLineColumns<TData extends SlhBillLineDto = SlhBillLineDto>(
-  translate: (key: string) => string,
+  translate: SlhBillColumnTranslate,
+  options: SlhBillLineColumnOptions = {},
 ): QsGenericTableColumn<TData>[] {
-  const unknown = translate('slhBill.unknown')
+  const missing = translate('slhBill.valueMissing')
   const cai = translate('slhBill.unit.cai')
-  const text = (value: string | null | undefined) => value === undefined || value === null || value === '' ? unknown : value
+  const sequenceOffset = Math.max(0, options.sequenceOffset ?? 0)
+  const text = (value: string | null | undefined) => value === undefined || value === null || value === '' ? missing : value
   const volume = (value: string | null | undefined) => {
     const formatted = formatSlhBillVolume(value)
-    return formatted === null ? unknown : `${formatted} ${cai}`
+    return formatted === null ? missing : `${formatted} ${cai}`
   }
-  const amount = (value: string | null | undefined) => formatSlhBillAmount(value) ?? unknown
+  const amount = (value: string | null | undefined) => formatSlhBillAmount(value) ?? missing
   // 费用明细的纯文本形态同时承担移动端与复制的兜底展示，桌面端由费用明细组件渲染。
   const chargesText = (line: SlhBillLineDto) => groupSlhBillCharges(line.charges)
     .map(group => `${group.currencyCode} ${group.items.map(item => `${translate(`slhBill.chargeType.${item.chargeType}`)} ${amount(item.amount)}`).join(' ')}`)
     .join('；')
   return [
-    { id: 'lineNumber', title: translate('slhBill.line.lineNumber'), accessorKey: 'lineNumber', width: 80, minWidth: 80, maxWidth: 80, fixed: 'left', align: 'right', cellClass: 'qs-type-data tabular-nums' },
+    // 序号是列表自己的计数（从 1 开始，跨页连续）；行号是原表里的第几行，两者含义不同。
+    {
+      id: 'sequence',
+      title: '#',
+      accessorFn: (_line, index) => sequenceOffset + index + 1,
+      width: 64,
+      minWidth: 64,
+      maxWidth: 64,
+      fixed: 'left',
+      align: 'right',
+      cellClass: 'qs-type-meta tabular-nums',
+    },
+    {
+      id: 'lineNumber',
+      title: translate('slhBill.line.lineNumber'),
+      accessorFn: line => translate('slhBill.line.lineNumberValue', { line: line.lineNumber }),
+      width: 110,
+      minWidth: 110,
+      maxWidth: 110,
+      fixed: 'left',
+      align: 'left',
+      cellClass: 'qs-type-data tabular-nums',
+    },
     { id: 'loadingDate', title: translate('slhBill.line.loadingDate'), accessorKey: 'loadingDate', width: 130, minWidth: 130, maxWidth: 130, cellClass: 'qs-type-data whitespace-nowrap' },
-    { id: 'containerBatchName', title: translate('slhBill.line.containerBatchName'), accessorFn: line => text(line.containerBatchNameText), width: 145, minWidth: 145, maxWidth: 145, cellClass: 'qs-type-data' },
+    { id: 'containerBatchName', title: translate('slhBill.line.containerBatchName'), accessorFn: line => text(line.containerBatchNameText), width: 145, minWidth: 145, maxWidth: 145, align: 'right', cellClass: 'qs-type-data' },
     {
       id: 'warehouseReceiptReference',
       title: translate('slhBill.line.warehouseReceiptReference'),
@@ -44,13 +76,13 @@ export function buildSlhBillLineColumns<TData extends SlhBillLineDto = SlhBillLi
     { id: 'shippingMark', title: translate('slhBill.line.shippingMark'), accessorFn: line => text(line.shippingMarkText), width: 200, minWidth: 200, maxWidth: 200 },
     { id: 'goodsName', title: translate('slhBill.line.goodsName'), accessorFn: line => text(line.goodsName), width: 180, minWidth: 180, maxWidth: 180 },
     { id: 'packageCount', title: translate('slhBill.line.packageCount'), accessorFn: line => `${line.packageCount} ${line.packageUnit ?? ''}`.trim(), width: 110, minWidth: 110, maxWidth: 110, align: 'right', cellClass: 'qs-type-data' },
-    { id: 'weight', title: translate('slhBill.line.weight'), accessorFn: line => formatSlhBillWeight(line) ?? unknown, width: 130, minWidth: 130, maxWidth: 130, align: 'right', cellClass: 'qs-type-data tabular-nums' },
+    { id: 'weight', title: translate('slhBill.line.weight'), accessorFn: line => formatSlhBillWeight(line) ?? missing, width: 130, minWidth: 130, maxWidth: 130, align: 'right', cellClass: 'qs-type-data tabular-nums' },
     {
       id: 'dimensions',
       title: translate('slhBill.line.dimensions'),
       accessorFn: (line) => {
         const dimensions = formatSlhBillDimensions(line)
-        return dimensions === null ? unknown : `${dimensions} ${translate('slhBill.unit.cm')}`
+        return dimensions === null ? missing : `${dimensions} ${translate('slhBill.unit.cm')}`
       },
       width: 200,
       minWidth: 200,
@@ -80,7 +112,7 @@ export function buildSlhBillLineColumns<TData extends SlhBillLineDto = SlhBillLi
     {
       id: 'pricingBasis',
       title: translate('slhBill.line.pricingBasis'),
-      accessorFn: line => line.pricingBasis ? translate(`slhBill.pricingBasis.${line.pricingBasis}`) : unknown,
+      accessorFn: line => line.pricingBasis ? translate(`slhBill.pricingBasis.${line.pricingBasis}`) : missing,
       // 计价方式只有两个取值，收窄到约五个中文字宽，颜色标签由页面插槽渲染。
       width: 96,
       minWidth: 96,

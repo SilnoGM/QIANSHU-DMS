@@ -11,7 +11,7 @@ const difference = computed(() => resolveSlhBillVolumeDifference(props.line))
 <template>
   <!-- 差异 = 系统计算材积 − 账单自报材积：正数标红（账单写少了），负数标绿；相等显示占位符。 -->
   <span v-if="difference === null" class="qs-type-data text-muted-foreground tabular-nums">
-    {{ t('slhBill.unknown') }}
+    {{ t('slhBill.valueMissing') }}
   </span>
   <span v-else-if="difference.tone === 'even'" class="qs-type-data text-muted-foreground tabular-nums">
     -

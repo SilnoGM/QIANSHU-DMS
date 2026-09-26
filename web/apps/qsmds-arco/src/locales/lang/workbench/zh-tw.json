@@ -132,7 +132,8 @@
       "ntdSurchargeAmountTwd": "NTD 雜費",
       "recipientInfo": "收貨人資訊",
       "remark": "備註",
-      "charges": "費用明細"
+      "charges": "費用明細",
+      "lineNumberValue": "第 {line} 行"
     },
     "lineErrors": "明細錯誤",
     "lineErrorsBlocked": "有 {count} 條明細存在解析錯誤，修正來源檔案後才能入庫",
@@ -181,7 +182,6 @@
       "cai": "材",
       "cm": "CM"
     },
-    "unknown": "未知",
     "upload": {
       "label": "上傳順聯航對帳單",
       "hint": "僅支援 .xlsx，單檔不超過 50 MiB",
@@ -189,6 +189,7 @@
       "uploading": "正在上傳原件…",
       "reupload": "重新上傳"
     },
+    "valueMissing": "-",
     "view": "查看"
   }
 }

@@ -79,7 +79,8 @@ const blockMessage = computed(() => {
 const previewLines = computed(() => preview.value?.lines ?? [])
 const pagedLines = computed(() => previewLines.value.slice((previewPage.value - 1) * previewPageSize.value, previewPage.value * previewPageSize.value))
 const columns = computed<QsGenericTableColumn<SlhBillPreviewLineDto>[]>(() => [
-  ...buildSlhBillLineColumns<SlhBillPreviewLineDto>(t),
+  // 序号列跨页连续：偏移由当前页与每页条数推出。
+  ...buildSlhBillLineColumns<SlhBillPreviewLineDto>(t, { sequenceOffset: (previewPage.value - 1) * previewPageSize.value }),
   // 行内提示与账单级分组来自同一份 findings，只是这里按行过滤。
   { id: 'lineIssues', title: t('slhBill.previewIssues'), accessorFn: (line: SlhBillPreviewLineDto) => [...line.errors, ...line.findings.map(finding => finding.message)].join('；'), minWidth: 280, width: 320 },
 ])
@@ -410,7 +411,7 @@ onBeforeUnmount(() => controller?.abort())
             v-model:page-size="previewPageSize"
             row-key="lineNumber"
             table-class="w-max min-w-full"
-            :show-row-number="true"
+            :show-row-number="false"
             :columns="columns"
             :data="pagedLines"
             :total="previewLines.length"
@@ -423,7 +424,7 @@ onBeforeUnmount(() => controller?.abort())
               <SlhBillCharges :charges="row.original.charges" />
             </template>
             <template #cell-warehouseReceiptReference="{ row }">
-              <SlhBillOverflowText :text="row.original.warehouseReceiptReference ?? t('slhBill.unknown')" />
+              <SlhBillOverflowText :text="row.original.warehouseReceiptReference ?? t('slhBill.valueMissing')" />
             </template>
             <template #cell-volumeDifferenceCai="{ row }">
               <SlhBillVolumeDifference :line="row.original" />

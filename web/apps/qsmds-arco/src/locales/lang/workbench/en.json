@@ -132,7 +132,8 @@
       "ntdSurchargeAmountTwd": "NTD surcharge",
       "recipientInfo": "Recipient",
       "remark": "Remark",
-      "charges": "Charges"
+      "charges": "Charges",
+      "lineNumberValue": "Line {line}"
     },
     "lineErrors": "Line errors",
     "lineErrorsBlocked": "{count} lines failed to parse, fix the source file before storing",
@@ -181,7 +182,6 @@
       "cai": "cft",
       "cm": "CM"
     },
-    "unknown": "Unknown",
     "upload": {
       "label": "Upload Shunlianhang statement",
       "hint": ".xlsx only, up to 50 MiB per file",
@@ -189,6 +189,7 @@
       "uploading": "Uploading the source file…",
       "reupload": "Upload again"
     },
+    "valueMissing": "-",
     "view": "View"
   }
 }

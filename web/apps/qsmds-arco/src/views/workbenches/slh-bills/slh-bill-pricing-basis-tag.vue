@@ -11,7 +11,7 @@ const tone = computed(() => props.basis === 'VOLUME'
 </script>
 
 <template>
-  <span v-if="!basis" class="qs-type-data text-muted-foreground">{{ t('slhBill.unknown') }}</span>
+  <span v-if="!basis" class="qs-type-data text-muted-foreground">{{ t('slhBill.valueMissing') }}</span>
   <FaTag v-else variant="outline" class="qs-type-status-tag" :class="tone">
     {{ t(`slhBill.pricingBasis.${basis}`) }}
   </FaTag>

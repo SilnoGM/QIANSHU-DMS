@@ -141,7 +141,8 @@
       "ntdSurchargeAmountTwd": "NTD 杂费",
       "recipientInfo": "收货人信息",
       "remark": "备注",
-      "charges": "费用明细"
+      "charges": "费用明细",
+      "lineNumberValue": "第 {line} 行"
     },
     "lineErrors": "明细错误",
     "lineErrorsBlocked": "有 {count} 条明细存在解析错误，修正来源文件后才能入库",
@@ -190,7 +191,6 @@
       "cai": "材",
       "cm": "CM"
     },
-    "unknown": "未知",
     "upload": {
       "label": "上传顺联航对账单",
       "hint": "仅支持 .xlsx，单文件不超过 50 MiB",
@@ -198,6 +198,7 @@
       "uploading": "正在上传原件…",
       "reupload": "重新上传"
     },
+    "valueMissing": "-",
     "view": "查看"
   }
 }

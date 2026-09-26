@@ -54,7 +54,8 @@ function jumpToLine(lineNumber: number): void {
   linePage.value = target
   void loadLines()
 }
-const columns = computed(() => buildSlhBillLineColumns(t))
+// 序号列跨页连续：偏移由当前页与每页条数推出。
+const columns = computed(() => buildSlhBillLineColumns(t, { sequenceOffset: (linePage.value - 1) * linePageSize.value }))
 async function load(): Promise<void> {
   billController?.abort()
   if (!canRead.value || instanceId === '') {
@@ -318,7 +319,7 @@ onBeforeUnmount(() => {
                     {{ t('slhBill.rateValue') }}
                   </dt>
                   <dd class="qs-type-data-emphasis m-0 mt-1.5 tabular-nums">
-                    {{ formatSlhBillRate(bill.rate.foreignUnitsPerCny) ?? t('slhBill.unknown') }}
+                    {{ formatSlhBillRate(bill.rate.foreignUnitsPerCny) ?? t('slhBill.valueMissing') }}
                   </dd>
                 </div>
                 <div v-if="bill.rate.embeddedForeignUnitsPerCny" class="min-w-0">
@@ -326,7 +327,7 @@ onBeforeUnmount(() => {
                     {{ t('slhBill.rateEmbedded') }}
                   </dt>
                   <dd class="qs-type-data m-0 mt-1.5 tabular-nums">
-                    {{ formatSlhBillRate(bill.rate.embeddedForeignUnitsPerCny) ?? t('slhBill.unknown') }}
+                    {{ formatSlhBillRate(bill.rate.embeddedForeignUnitsPerCny) ?? t('slhBill.valueMissing') }}
                   </dd>
                 </div>
                 <div class="min-w-0">
@@ -363,7 +364,7 @@ onBeforeUnmount(() => {
             v-model:page-size="linePageSize"
             row-key="lineNumber"
             table-class="w-max min-w-full"
-            :show-row-number="true"
+            :show-row-number="false"
             :columns="columns"
             :data="lines"
             :loading="linesLoading"
@@ -379,7 +380,7 @@ onBeforeUnmount(() => {
               <SlhBillCharges :charges="row.original.charges" />
             </template>
             <template #cell-warehouseReceiptReference="{ row }">
-              <SlhBillOverflowText :text="row.original.warehouseReceiptReference ?? t('slhBill.unknown')" />
+              <SlhBillOverflowText :text="row.original.warehouseReceiptReference ?? t('slhBill.valueMissing')" />
             </template>
             <template #cell-volumeDifferenceCai="{ row }">
               <SlhBillVolumeDifference :line="row.original" />
