@@ -87,6 +87,12 @@
       _Requirements: R6_ _Evidence: 两端快照一致，6 个 operationId 入库_
 - [x] 权限目录的 e2e 断言同步
       _Requirements: R7_ _Evidence: auth-api 与 auth-schema 两个 e2e 共 19 项通过_
+- [x] 账单导入接口层 e2e：上传 → 解析预览 → 入库
+      _Requirements: R1, R3, R5_ _Evidence: commit e1d1fefa，`server/test/slh-bill-import.e2e-spec.ts`。
+      这层用例是必需的：DTO 漏一个 class-validator 装饰器就会因全局 ValidationPipe 的
+      `whitelist + forbidNonWhitelisted` 被拒，而纯函数单测与契约快照都发现不了（快照只看
+      `@ApiProperty`）。它已经抓到两个必然失败的缺陷：`mediaAssetId` 缺 `@IsUUID`、
+      明细分页查询 DTO 误继承了路径参数的必填 `id`。_
 - [x] 账单工作簿用例（自有脱敏 OOXML 夹具）
       _Requirements: R1-R4_ _Evidence: `test/fixtures/slh-bill-xlsx.fixture.ts`_
 - [ ] **浏览器实测列表、导入预览与详情** —— 未执行
