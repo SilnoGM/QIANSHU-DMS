@@ -76,6 +76,7 @@ test('柜次详情汇总按整数重量和两位材积展示，缺值不会被�
     useDictionaryCatalog: () => ({ loading: ref(false), missing: ref(false), error: ref(null), resolve: () => ({ status: 'ENABLED', displayLabel: 'B5仓' }) }),
     useContainerResource: () => ({ data: resourceCalls++ === 0 ? batch : ref(null), loading: ref(false), error: ref('') }),
     useContainerMutation: () => ({}),
+    useContainerImportParse: () => ({ parsing: ref(false), error: ref(''), steps: ref([]), start: () => {}, complete: () => null, fail: () => false, reset: () => {} }),
     onActivated: () => {},
     onDeactivated: () => {},
     onScopeDispose: () => {},

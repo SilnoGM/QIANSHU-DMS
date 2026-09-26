@@ -4,6 +4,7 @@ import containerImportApi from '@/api/modules/container-import'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
+import { takeImportPreview } from '../container-import-preview-cache'
 import ImportTable from './import-table.vue'
 import ShipmentMatchDrawer from './shipment-match-drawer.vue'
 import { useContainerImport } from './use-container-import'
@@ -20,7 +21,12 @@ const active = ref(true)
 const id = computed(() => String(route.params.id ?? ''))
 const canAccess = computed(() => auth('container-batches:read') && auth('container-batches:update') && auth('purchase-orders:read'))
 const enabled = computed(() => active.value && account.authState === 'authenticated' && route.name === 'qsPurchaseTransportContainerImport' && canAccess.value && Boolean(id.value))
-const state = useContainerImport(enabled, computed(() => account.authEpoch), id, async signal => (await containerImportApi.preview(id.value, signal)).data, async (body, key, signal) => (await containerImportApi.confirm(id.value, body, key, signal)).data)
+// 柜次详情刚解析完就跳转过来时直接复用那次结果，避免同一份表格解析两次；读取即消费，重载走真实请求。
+async function loadPreview(signal: AbortSignal) {
+  const staged = takeImportPreview(id.value)
+  return staged ?? (await containerImportApi.preview(id.value, signal)).data
+}
+const state = useContainerImport(enabled, computed(() => account.authEpoch), id, loadPreview, async (body, key, signal) => (await containerImportApi.confirm(id.value, body, key, signal)).data)
 const { preview, loading, loadError, rows, counts, importCount, unmatchedCount, allowUnmatched, locked, canSubmit, retryOnly, submitting, error, conflict, fieldErrors } = state
 const status = ref<ImportFilter>('ALL')
 const statuses = computed(() => (['ALL', 'MATCHED', 'AMBIGUOUS', 'UNMATCHED', 'INVALID', 'SKIPPED'] as const).map(value => ({ value, label: t(`containerImport.status.${value}`), count: counts.value[value] })))

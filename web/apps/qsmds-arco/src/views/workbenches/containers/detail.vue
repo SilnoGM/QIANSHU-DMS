@@ -2,6 +2,7 @@
 import type { ContainerSubmission, LoadingItemSubmission } from './form.logic'
 import type { ContainerBatchDto, ContainerLoadingItemDto, PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
 import containerApi from '@/api/modules/container-batches'
+import containerImportApi from '@/api/modules/container-import'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import ContainerFormModal from './container-form-modal.vue'
@@ -12,6 +13,7 @@ import ContainerSourceFile from './container-source-file.vue'
 import { formatContainerMeasurement } from './display.logic'
 import LoadingItemFormDrawer from './loading-item-form-drawer.vue'
 import ShipmentPicker from './shipment-picker.vue'
+import { useContainerImportParse } from './use-container-import-parse'
 import { useContainerMutation } from './use-container-mutation'
 import { containerFailure, useContainerResource } from './use-container-resource'
 
@@ -50,6 +52,8 @@ const search = ref('')
 const query = computed(() => ({ page: page.value, pageSize: pageSize.value, search: search.value || undefined }))
 const itemResource = useContainerResource(enabled, epoch, query, async signal => (await containerApi.items(instanceId, query.value, signal)).data)
 const { data: itemData, loading: itemsLoading, error: itemsError } = itemResource
+// 解析与匹配页需要同一次解析结果，因此解析请求由本页在加载器展示期间发起，完成后交接结果再跳转。
+const parse = useContainerImportParse(canImport, epoch, ref(instanceId), async signal => (await containerImportApi.preview(instanceId, signal)).data)
 const batchOpen = ref(false)
 const itemOpen = ref(false)
 const pickerOpen = ref(false)
@@ -188,10 +192,25 @@ function reference(kind: 'shipment' | 'purchase' | 'sales', id: string) {
   referenceId.value = id
   referenceKind.value = kind
 }
+const parseStepLabels = ['containerImport.parseSteps.readSource', 'containerImport.parseSteps.parseRows', 'containerImport.parseSteps.matchShipments'] as const
+function parseSource() {
+  parse.start(parseStepLabels.map(label => t(label)))
+}
+function parseComplete() {
+  const preview = parse.complete()
+  if (!preview) {
+    return
+  }
+  void router.push({ name: 'qsPurchaseTransportContainerImport', params: { id: instanceId } })
+}
+function parseFailed(error: Error) {
+  parse.fail(error)
+}
 watch([enabled, epoch], () => {
   batchOpen.value = false
   itemOpen.value = false
   referenceKind.value = null
+  parse.reset()
   sourceController?.abort()
   sourceSaving.value = false
   sourceError.value = ''
@@ -307,7 +326,7 @@ watch(itemData, (result) => {
             </p>
           </div>
           <div class="flex flex-wrap gap-2 w-full sm:w-auto">
-            <FaButton v-if="canImport" variant="outline" class="w-full sm:w-auto" :disabled="!batch.sourceFileId || sourceSaving || sourceUploading || batchMutation.submitting.value || itemMutation.submitting.value" @click="router.push({ name: 'qsPurchaseTransportContainerImport', params: { id: instanceId } })">
+            <FaButton v-if="canImport" variant="outline" class="w-full sm:w-auto" :disabled="parse.parsing.value || !batch.sourceFileId || sourceSaving || sourceUploading || batchMutation.submitting.value || itemMutation.submitting.value" @click="parseSource">
               <FaIcon name="i-lucide:file-spreadsheet" aria-hidden="true" />{{ t('containerImport.parseSource') }}
             </FaButton>
             <FaButton v-if="canEdit" class="w-full sm:w-auto" :disabled="sourceSaving || sourceUploading" @click="openItem()">
@@ -315,6 +334,7 @@ watch(itemData, (result) => {
             </FaButton>
           </div>
         </div>
+        <FaAlert v-if="parse.error.value" class="mb-5" variant="destructive" :title="parse.error.value" />
         <ContainerItemTable v-model:page="page" v-model:page-size="pageSize" v-model:search="search" :rows="itemData?.items ?? []" :total="itemData?.total ?? 0" :loading="itemsLoading" :error="itemsError" :can-edit="canEdit && !sourceUploading && !sourceSaving" @edit="openItem" @reference="reference" @retry="itemResource.reload" />
       </FaPageMain>
     </template>
@@ -325,5 +345,6 @@ watch(itemData, (result) => {
       </template>
     </LoadingItemFormDrawer>
     <ContainerRelatedDrawers :id="referenceId" :enabled="enabled" :kind="referenceKind" @close="referenceKind = null" @purchase="reference('purchase', $event)" />
+    <FaMultiStepLoader :loading="parse.parsing.value" :steps="parse.steps.value" prevent-close @complete="parseComplete" @error="parseFailed" />
   </div>
 </template>

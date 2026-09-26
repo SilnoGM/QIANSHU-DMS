@@ -64,6 +64,11 @@
     "tracking": "物流单号",
     "unavailable": "货件不可关联",
     "select": "选用此货件",
-    "parseSource": "解析装柜明细表"
+    "parseSource": "解析装柜明细表",
+    "parseSteps": {
+      "readSource": "读取来源文件",
+      "parseRows": "解析表格数据",
+      "matchShipments": "匹配货件"
+    }
   }
 }
