@@ -45,7 +45,8 @@ export function formatSlhBillDimensions(line: Pick<SlhBillLineDto, 'lengthCm' | 
   if (length === null || width === null || height === null) {
     return null
   }
-  return `${length} × ${width} × ${height}`
+  // 三个维度之间不留空格，核对时更紧凑也便于整列扫读。
+  return `${length}×${width}×${height}`
 }
 
 /** 重量与单位同源展示；单位缺失时只显示数值，不猜测单位。数值按 2 位小数展示。 */
