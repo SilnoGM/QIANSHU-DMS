@@ -105,6 +105,11 @@
     },
     "import": "Import bill",
     "importDescription": "Upload the statement file, review the parsed result, then store it",
+    "importSteps": {
+      "upload": "Upload statement file",
+      "parse": "Parse bill structure",
+      "review": "Review amounts and volumes"
+    },
     "importSuccess": "Bill {billNo} stored",
     "importTitle": "Import Shunlianhang bill",
     "intro": "Receive, structure and review the Excel statements issued by Shunlianhang",
@@ -148,8 +153,7 @@
     "noRate": "No rate recorded for this bill",
     "overview": "Bill summary",
     "parseFailed": "Failed to parse the statement",
-    "parsing": "Parsing the statement",
-    "parsingHint": "Check the differences and warnings before storing",
+    "parsingHint": "Review differences and warnings before storing",
     "periodRange": "Bill period range",
     "previewIssues": "Line issues",
     "previewLines": "Line preview",
@@ -186,7 +190,6 @@
       "label": "Upload Shunlianhang statement",
       "hint": ".xlsx only, up to 50 MiB per file",
       "invalidFile": "Select an .xlsx file no larger than 50 MiB",
-      "uploading": "Uploading the source file…",
       "reupload": "Upload again"
     },
     "valueMissing": "-",

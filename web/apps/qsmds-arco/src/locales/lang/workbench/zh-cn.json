@@ -114,6 +114,11 @@
     },
     "import": "导入账单",
     "importDescription": "上传顺联航对账单原件，解析确认后入库留痕",
+    "importSteps": {
+      "upload": "上传对账单原件",
+      "parse": "解析账单结构与金额",
+      "review": "复核金额与材积"
+    },
     "importSuccess": "账单 {billNo} 已入库",
     "importTitle": "导入顺联航账单",
     "intro": "接收、结构化并查阅顺联航提供的 Excel 对账单",
@@ -157,8 +162,7 @@
     "noRate": "本账单未记录汇率",
     "overview": "账单头汇总",
     "parseFailed": "账单解析失败",
-    "parsing": "正在解析账单",
-    "parsingHint": "解析完成后可核对差异与告警再入库",
+    "parsingHint": "核对差异与告警后再确认入库",
     "periodRange": "账单期间范围",
     "previewIssues": "行内问题",
     "previewLines": "明细预览",
@@ -195,7 +199,6 @@
       "label": "上传顺联航对账单",
       "hint": "仅支持 .xlsx，单文件不超过 50 MiB",
       "invalidFile": "请选择不超过 50 MiB 的 .xlsx 文件",
-      "uploading": "正在上传原件…",
       "reupload": "重新上传"
     },
     "valueMissing": "-",

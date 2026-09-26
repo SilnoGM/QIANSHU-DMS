@@ -105,6 +105,11 @@
     },
     "import": "匯入帳單",
     "importDescription": "上傳順聯航對帳單原件，解析確認後入庫留痕",
+    "importSteps": {
+      "upload": "上傳對帳單原件",
+      "parse": "解析帳單結構與金額",
+      "review": "複核金額與材積"
+    },
     "importSuccess": "帳單 {billNo} 已入庫",
     "importTitle": "匯入順聯航帳單",
     "intro": "接收、結構化並查閱順聯航提供的 Excel 對帳單",
@@ -148,8 +153,7 @@
     "noRate": "本帳單未記錄匯率",
     "overview": "帳單頭彙總",
     "parseFailed": "帳單解析失敗",
-    "parsing": "正在解析帳單",
-    "parsingHint": "解析完成後可核對差異與告警再入庫",
+    "parsingHint": "比對差異與告警後再確認入庫",
     "periodRange": "帳單期間範圍",
     "previewIssues": "行內問題",
     "previewLines": "明細預覽",
@@ -186,7 +190,6 @@
       "label": "上傳順聯航對帳單",
       "hint": "僅支援 .xlsx，單檔不超過 50 MiB",
       "invalidFile": "請選擇不超過 50 MiB 的 .xlsx 檔案",
-      "uploading": "正在上傳原件…",
       "reupload": "重新上傳"
     },
     "valueMissing": "-",

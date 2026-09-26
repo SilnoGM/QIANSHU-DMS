@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FileItem } from '@fantastic-admin/components'
-import type { SlhBillImportPreviewDto, SlhBillPreviewLineDto, SlhBillStagedFileDto } from '@/api/generated/types.gen'
+import type { SlhBillImportPreviewDto, SlhBillPreviewLineDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import slhBillsApi from '@/api/modules/slh-bills'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
@@ -24,6 +24,7 @@ import SlhBillComparison from './slh-bill-comparison.vue'
 import SlhBillOverflowText from './slh-bill-overflow-text.vue'
 import SlhBillPricingBasisTag from './slh-bill-pricing-basis-tag.vue'
 import SlhBillVolumeDifference from './slh-bill-volume-difference.vue'
+import { useSlhBillImportRun } from './use-slh-bill-import-run'
 
 defineOptions({ name: 'QsFinanceBillReconciliationSlhBillImport' })
 const { t } = useI18n()
@@ -33,10 +34,7 @@ const accountStore = useAppAccountStore()
 const toast = useQsToast()
 const canImport = computed(() => auth('slh-bills:create'))
 const files = ref<FileItem[]>([])
-const staged = shallowRef<SlhBillStagedFileDto | null>(null)
 const preview = shallowRef<SlhBillImportPreviewDto | null>(null)
-const uploading = ref(false)
-const parsing = ref(false)
 const submitting = ref(false)
 const parseError = ref('')
 const submitError = ref('')
@@ -44,11 +42,20 @@ const manualRateDraft = ref('')
 const duplicateAcknowledged = ref(false)
 const previewPage = ref(1)
 const previewPageSize = ref(20)
+// 提交请求自己一个 controller；上传与解析的取消由加载器编排负责，两者不再互相打断。
 let controller: AbortController | null = null
 // 幂等键与提交内容配对：内容变化必须换键，结果未知时必须复用同一个键。
 let pendingKey: string | null = null
 let pendingSignature: string | null = null
-const phase = computed(() => resolveSlhBillImportPhase({ mediaAssetId: staged.value?.mediaAssetId ?? null, parsing: parsing.value, preview: preview.value }))
+// 等待本次导入结果的文件项；加载器结束时连同结果一起 settle。
+let settleUpload: { reject: (failure: unknown) => void, resolve: () => void } | null = null
+const run = useSlhBillImportRun({
+  epoch: computed(() => accountStore.authEpoch),
+  parse: async (mediaAssetId, signal) => (await slhBillsApi.importPreview({ mediaAssetId }, signal)).data,
+  upload: async (file, signal) => (await slhBillsApi.uploadSourceFile(file, signal)).data,
+})
+const { complete: completeImport, fail: failImport, loading: importLoading, reset: resetImport, staged, start: startImport, startParseOnly, steps: importSteps } = run
+const phase = computed(() => resolveSlhBillImportPhase({ mediaAssetId: staged.value?.mediaAssetId ?? null, parsing: importLoading.value, preview: preview.value }))
 const issues = computed(() => preview.value === null
   ? { differences: 0, lineErrors: 0, warnings: 0 }
   : countSlhBillImportIssues(preview.value))
@@ -87,7 +94,7 @@ const columns = computed<QsGenericTableColumn<SlhBillPreviewLineDto>[]>(() => [
 function jumpToLine(lineNumber: number): void {
   previewPage.value = pageForSlhBillLine(lineNumber, previewPageSize.value)
 }
-const busy = computed(() => uploading.value || parsing.value || submitting.value)
+const busy = computed(() => importLoading.value || submitting.value)
 function back(): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhBillManagement' })
 }
@@ -96,67 +103,51 @@ function validate(file: File): boolean {
   parseError.value = valid ? '' : t('slhBill.upload.invalidFile')
   return valid
 }
-async function parse(mediaAssetId: string): Promise<void> {
-  controller?.abort()
-  const current = new AbortController()
-  controller = current
-  parsing.value = true
-  parseError.value = ''
-  try {
-    const response = await slhBillsApi.importPreview({ mediaAssetId }, current.signal)
-    if (current.signal.aborted) {
-      return
-    }
-    preview.value = response.data
-    previewPage.value = 1
-    duplicateAcknowledged.value = false
-    // 默认填系统汇率的两小数展示值；用户不改动时不提交手填汇率，服务端按 SYSTEM 冻结。
-    manualRateDraft.value = formatSlhBillRate(response.data.systemForeignUnitsPerCny) ?? ''
-  }
-  catch (failure) {
-    if (!current.signal.aborted) {
-      parseError.value = containerFailure(failure).message
-    }
-  }
-  finally {
-    if (controller === current) {
-      parsing.value = false
-    }
+function importLabels() {
+  return {
+    parse: t('slhBill.importSteps.parse'),
+    review: t('slhBill.importSteps.review'),
+    upload: t('slhBill.importSteps.upload'),
   }
 }
-async function upload({ file }: { file: File }): Promise<SlhBillStagedFileDto | null> {
+/** FaFileUpload 的 http-request 契约：整个导入过程结束才 settle，失败时 reject 让它标记该文件失败。 */
+function upload({ file }: { file: File }): Promise<unknown> | null {
   if (busy.value || !validate(file)) {
     return null
   }
-  controller?.abort()
-  const current = new AbortController()
-  controller = current
-  uploading.value = true
   parseError.value = ''
-  try {
-    const response = await slhBillsApi.uploadSourceFile(file, current.signal)
-    if (current.signal.aborted) {
-      return null
-    }
-    staged.value = response.data
-    void parse(response.data.mediaAssetId)
-    return response.data
+  const settled = new Promise((resolve, reject) => {
+    settleUpload = { reject, resolve: () => resolve(undefined) }
+  })
+  startImport({ file, labels: importLabels() })
+  return settled
+}
+/** 加载器完成：把预览落进页面状态。 */
+function importComplete(): void {
+  const result = completeImport()
+  settleUpload?.resolve()
+  settleUpload = null
+  if (result === null) {
+    return
   }
-  catch (failure) {
-    if (!current.signal.aborted) {
-      parseError.value = containerFailure(failure).message
-    }
-    // 交给 FaFileUpload 标记失败状态，错误文案已经在上方统一展示。
-    throw failure
-  }
-  finally {
-    if (controller === current) {
-      uploading.value = false
-    }
+  preview.value = result
+  previewPage.value = 1
+  duplicateAcknowledged.value = false
+  // 默认填系统汇率的两小数展示值；用户不改动时不提交手填汇率，服务端按 SYSTEM 冻结。
+  manualRateDraft.value = formatSlhBillRate(result.systemForeignUnitsPerCny) ?? ''
+}
+/** 加载器失败：关遮罩、报错并留在上传段，用户可重试。失败不等待最短展示时长。 */
+function importFailed(failure: unknown): void {
+  const message = failImport(failure)
+  settleUpload?.reject(failure)
+  settleUpload = null
+  if (message !== null) {
+    parseError.value = message
   }
 }
 function resetUpload(): void {
-  controller?.abort()
+  resetImport()
+  settleUpload = null
   files.value = []
   staged.value = null
   preview.value = null
@@ -169,10 +160,13 @@ function resetUpload(): void {
   pendingSignature = null
 }
 function retryParse(): void {
-  if (staged.value === null) {
+  const current = staged.value
+  if (current === null) {
     return
   }
-  void parse(staged.value.mediaAssetId)
+  // 原件已在服务端暂存，重试不再上传，避免多留一份媒体资产。
+  parseError.value = ''
+  startParseOnly({ labels: importLabels(), mediaAssetId: current.mediaAssetId })
 }
 async function submit(): Promise<void> {
   if (preview.value === null || staged.value === null || submitting.value || blockReason.value !== null) {
@@ -244,7 +238,7 @@ onBeforeUnmount(() => controller?.abort())
       <FaEmpty icon="i-lucide:shield-alert" :title="t('slhBill.noPermission')" class="py-12" />
     </FaPageMain>
     <template v-else>
-      <FaPageMain v-if="phase === 'upload'">
+      <FaPageMain v-if="phase !== 'preview'">
         <div v-if="staged" class="p-4 border border-border rounded-lg bg-muted/20 flex flex-wrap gap-4 items-center justify-between">
           <div class="flex gap-3 min-w-0 items-center">
             <div class="text-primary rounded-md bg-primary/10 flex shrink-0 size-10 items-center justify-center dark:text-foreground">
@@ -285,9 +279,6 @@ onBeforeUnmount(() => controller?.abort())
             <span class="qs-type-meta text-muted-foreground">{{ t('slhBill.upload.hint') }}</span>
           </div>
         </FaFileUpload>
-        <p v-if="uploading" role="status" class="qs-type-meta text-muted-foreground m-0 mt-4">
-          {{ t('slhBill.upload.uploading') }}
-        </p>
         <FaAlert v-if="parseError" class="mt-4" variant="destructive" :title="t('slhBill.parseFailed')">
           <template #description>
             <p class="m-0">
@@ -295,17 +286,6 @@ onBeforeUnmount(() => controller?.abort())
             </p>
           </template>
         </FaAlert>
-      </FaPageMain>
-      <FaPageMain v-else-if="phase === 'parsing'">
-        <div role="status" class="text-muted-foreground py-16 flex-col-center gap-3">
-          <FaIcon name="i-lucide:loader-circle" class="size-8 animate-spin" aria-hidden="true" />
-          <p class="qs-type-section-title m-0">
-            {{ t('slhBill.parsing') }}
-          </p>
-          <p class="qs-type-meta m-0">
-            {{ t('slhBill.parsingHint') }}
-          </p>
-        </div>
       </FaPageMain>
       <template v-else-if="preview">
         <FaPageMain>
@@ -462,5 +442,7 @@ onBeforeUnmount(() => controller?.abort())
         </FaFixedBar>
       </template>
     </template>
+    <!-- 选好文件即开始：加载器自己保证最短展示时长，两个请求挂在对应步骤里。 -->
+    <FaMultiStepLoader :loading="importLoading" :steps="importSteps" prevent-close @complete="importComplete" @error="importFailed" />
   </div>
 </template>
