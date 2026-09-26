@@ -68,6 +68,9 @@
       _Requirements: R1, R2, R4_ _Evidence: commit 69c1875a_
 - [x] 详情页：汇总、自报与自算并列及差额、明细与费用明细分页、原件下载
       _Requirements: R6_ _Evidence: commit 69c1875a_
+- [x] 对比区改为逐项对齐的对比表，预览与详情共用同一组件
+      _Requirements: R2, R6_ _Evidence: commit a4ea9963，迁移 20260926133000 落库小计三值与差异快照，
+      详情页因此具备与预览相同的对比与差异分组能力_
 - [x] 文案三语（zh-cn / zh-tw / en）与路由清单测试同步
       _Requirements: R6_ _Evidence: commit 69c1875a，新增 135 个键三语完全一致_
 
