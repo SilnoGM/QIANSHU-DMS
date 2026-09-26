@@ -89,6 +89,7 @@
 | 通用查询管理页 | `FaPageHeader + FaPageMain + QsGenericTable` | 页面持有 API、数据、权限和领域动作；表格持有查询与展示交互 |
 | 按业务状态处理列表 | 上述组合 + `QsStatusSwitchToolbar` | 状态切换位于数据表格前，计数口径、分页重置和请求由页面负责 |
 | 聚焦式新增 / 编辑 / 确认 | 领域表单 + `QsGenericModal` | 标题、校验、提交和关闭守卫由领域调用方组合 |
+| 多分区长表单的新增 / 编辑 | 领域表单 + `QsGenericDrawer` | 字段多、单屏放不下，或需要边看列表边改时使用；标题、校验、提交与关闭语义与 Modal 相同，仅外壳不同 |
 | 保留列表上下文查看详情 | 领域详情 + `QsGenericDrawer` | 订单优先检查现有 `QsSalesOrderDrawer` / `QsPurchaseOrderDrawer` |
 | 长流程或复杂编辑 | 独立路由 + 分区表单 | 遵循已有页面的信息结构；不强行塞进小弹窗 |
 | 主从配置管理 | 页面头 + 主列表 / 详情区 | 可参考字典管理双栏；窄屏需重排，不作为所有页面的默认布局 |
@@ -201,10 +202,10 @@ Tooltip 只放补充信息，关键产品名称、状态和操作仍须直接可
 | 表面 | 当前默认值与尺寸 | 开发要求 |
 | --- | --- | --- |
 | `QsGenericModal` | 默认 `md`；`sm/md/lg/xl` 最大宽度为 `30/35/45/56rem` | 聚焦任务；窄屏两侧各留 `12px`，正文独立滚动 |
-| `QsGenericDrawer` | 默认右侧、`md`；右侧桌面 `sm/md/lg/xl` 宽度为 `24/30/40/48rem` | 上下文详情或侧滑任务；小于 `768px` 的右侧抽屉占满视口宽度 |
+| `QsGenericDrawer` | 默认右侧、`md`；右侧桌面 `sm/md/lg/xl` 宽度为 `24/30/40/48rem` | 上下文详情或侧滑任务；小于 `768px` 的右侧抽屉占满视口宽度。编辑型实例：[编号规则编辑器](../../web/apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-editor-drawer.vue) 带未保存修改守卫，[柜次装柜明细编辑器](../../web/apps/qsmds-arco/src/views/workbenches/containers/loading-item-form-drawer.vue) 按业务决定不设守卫、关闭即丢弃 |
 | 底部 Drawer | 调用方设置 `placement="bottom"`，最大高度 `calc(100dvh - 1rem)` | 按页面任务用于窄屏；不会仅因屏幕变窄就自动改为底部 |
 
-当前两个 Qs 通用弹出层都只支持 `sm/md/lg/xl`，不传入不存在的 `full`。Modal 桌面最大宽度类从 `sm` 断点生效；Drawer 右侧尺寸类从 `md` 生效。不要把两者尺寸和断点混用。
+当前两个 Qs 通用弹出层都只支持 `sm/md/lg/xl`，不传入不存在的 `full`。Modal 桌面最大宽度类从 `sm` 断点生效；Drawer 右侧尺寸类从 `md` 生效。不要把两者尺寸和断点混用。页脚按钮的断点必须跟随所在表面：Modal 用 `w-full sm:w-auto`，Drawer 用 `w-full md:w-auto`，否则在 `640px–768px` 区间会出现按钮宽度与浮层宽度不匹配。
 
 - 标题始终明确，说明只解释当前任务；保留键盘焦点、Escape 和关闭后的焦点恢复。
 - Header / Footer 保持稳定，正文负责滚动；避免内容再套固定高度滚动区而形成双滚动条。
@@ -264,6 +265,7 @@ Tooltip 只放补充信息，关键产品名称、状态和操作仍须直接可
 | [销售订单](../../web/apps/qsmds-arco/src/views/operations/sales-orders/index.vue) | 状态工具栏、复合单元格、业务详情与条件查询 | 不把订单专属动作和宽度当成通用默认 |
 | [采购订单](../../web/apps/qsmds-arco/src/views/operations/purchase-orders/index.vue) | 待办模式、状态切换、日期条件、领域汇总 | 部分操作仍有建设中提示，不能据此宣称流程已完整实现 |
 | [字典管理](../../web/apps/qsmds-arco/src/views/system/basic-data/dictionaries/index.vue) | 主从配置页、类别与条目分区 | 按数据关系选用双栏，不套用到全部管理页 |
+| [柜次详情](../../web/apps/qsmds-arco/src/views/workbenches/containers/detail.vue) | 详情页内的抽屉编辑表单：抽屉外壳 + 复用领域草稿脚本 + 提交后刷新页面数据 | 同一页面的柜次基本信息仍用 `QsGenericModal`；两种外壳并存是有意选择，不代表遗漏迁移 |
 | [组件库路由](../../web/apps/qsmds-arco/src/router/modules/component.library.ts) | 独立组件 Showcase、边界场景和真实导入方式 | DEV 默认可用；非开发环境需显式开启；仍受应用认证影响 |
 
 组件库中的“页面模板”目前是说明性占位，不是可直接复制的完整 CRUD 模板。组件 Showcase 用于观察组件契约，正式业务页面用于学习领域组合；两者不能互相替代。
