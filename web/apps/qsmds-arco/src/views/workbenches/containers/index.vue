@@ -22,6 +22,7 @@ const { auth } = useAppAuth()
 const account = useAppAccountStore()
 const toast = useQsToast()
 const warehouse = useDictionaryCatalog('mainland.warehouse')
+// 保活标记；当前没有任何路由声明 keepAlive，因此恒为 true，详见下方 onActivated 的说明。
 const active = ref(true)
 const enabled = computed(() => active.value && route.name === 'qsPurchaseTransportContainers' && auth('container-batches:read'))
 const epoch = computed(() => account.authEpoch)
@@ -97,6 +98,10 @@ watch(data, (result) => {
     page.value = Math.max(1, Math.ceil(result.total / pageSize.value))
   }
 })
+// 本页当前没有开启 keepAlive（guards.ts 只在 meta.keepAlive 为真时才把组件加入保活名单），
+// 所以这两个钩子不会触发、active 恒为 true，每次进入都是重新挂载，加载由 useContainerResource 的
+// immediate watcher 承担。将来为本路由开启保活时须注意：active 翻转已足以让 enabled 变化触发 watcher
+// 重新加载，下面这句 reload() 会变成先发一次、随即被 watcher 取消的无效请求，届时应予删除。
 onActivated(() => {
   active.value = true
   void resource.reload()
