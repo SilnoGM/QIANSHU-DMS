@@ -68,6 +68,9 @@
       _Requirements: R1, R2, R4_ _Evidence: commit 69c1875a_
 - [x] 详情页：汇总、自报与自算并列及差额、明细与费用明细分页、原件下载
       _Requirements: R6_ _Evidence: commit 69c1875a_
+- [x] 入库前确认弹窗：收集名称、月份与备注，并展示编号占位与原件元数据
+      _Requirements: R5, R6_ _Evidence: commit 9df04c68（迁移 20260927100000 与接口）
+      / 后续提交（弹窗、列表与详情展示、名称冲突后缀）_
 - [x] 对比区改为逐项对齐的对比表，预览与详情共用同一组件
       _Requirements: R2, R6_ _Evidence: commit a4ea9963，迁移 20260926133000 落库小计三值与差异快照，
       详情页因此具备与预览相同的对比与差异分组能力_
