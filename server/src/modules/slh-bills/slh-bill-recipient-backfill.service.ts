@@ -9,6 +9,7 @@
 import { Injectable } from '@nestjs/common'
 
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { parseSlhBillRecipient } from './slh-bill-recipient-parser'
 
 export interface SlhBillRecipientBackfillOptions {
@@ -89,17 +90,21 @@ export class SlhBillRecipientBackfillService {
       return result
     }
 
-    for (const candidate of candidates) {
-      await this.prisma.slhBillLine.update({
-        data: {
-          recipientAddress: candidate.parsed.recipientAddress,
-          recipientName: candidate.parsed.recipientName,
-          recipientPhones: candidate.parsed.recipientPhones,
-        },
-        where: { id: candidate.id },
-      })
-      result.updated += 1
-    }
+    // 整批一个事务：要么全部写成功，要么一行都不留，避免出现"回填到一半"的中间状态。
+    await this.prisma.$transaction(async (transaction) => {
+      await applyTransactionTimeouts(transaction)
+      for (const candidate of candidates) {
+        await transaction.slhBillLine.update({
+          data: {
+            recipientAddress: candidate.parsed.recipientAddress,
+            recipientName: candidate.parsed.recipientName,
+            recipientPhones: candidate.parsed.recipientPhones,
+          },
+          where: { id: candidate.id },
+        })
+        result.updated += 1
+      }
+    }, { timeout: 60_000 })
     return result
   }
 }
