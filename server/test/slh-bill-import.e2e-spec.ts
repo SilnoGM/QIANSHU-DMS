@@ -124,4 +124,46 @@ describe('slh bill import with isolated PostgreSQL', () => {
     expect(taken.fieldErrors.billName?.length).toBeGreaterThan(0)
     expect(await h.prisma.slhBill.count()).toBe(1)
   })
+
+  /**
+   * 对账状态：明细行二态由该行的对账时刻决定，账单三态由已对账行数汇总派生，
+   * 同时守住「凭证不可改」的窄例外——只有对账时刻能改，别的列与删除仍然被拒。
+   */
+  it('derives the reconciliation status from reconciled lines and keeps the rest of the evidence immutable', async () => {
+    const bill = await h.prisma.slhBill.findFirstOrThrow({ include: { lines: { orderBy: { lineNumber: 'asc' } } } })
+    const firstLine = bill.lines[0]
+    const listStatus = async () => {
+      const page = (await browser.get('/api/slh-bills').expect(200)).body as { items: Array<{ id: string, reconciliationStatus: string }> }
+      return page.items.find(item => item.id === bill.id)?.reconciliationStatus ?? null
+    }
+    const lineStatuses = async () => {
+      const page = (await browser.get(`/api/slh-bills/${bill.id}/lines`).expect(200)).body as { items: Array<{ reconciliationStatus: string }> }
+      return page.items.map(item => item.reconciliationStatus)
+    }
+
+    // 一条都没对：账单未对账，三行明细都是未对账。
+    expect(await listStatus()).toBe('PENDING')
+    expect(await lineStatuses()).toEqual(['PENDING', 'PENDING', 'PENDING'])
+
+    // 只对一行：账单变部分对账，该行变已对账。
+    await h.prisma.slhBillLine.update({ data: { reconciledAt: new Date('2026-09-27T02:00:00.000Z') }, where: { id: firstLine.id } })
+    expect(await listStatus()).toBe('PARTIAL')
+    expect(await lineStatuses()).toEqual(['RECONCILED', 'PENDING', 'PENDING'])
+
+    // 全部对完：对账完成。
+    await h.prisma.slhBillLine.updateMany({ data: { reconciledAt: new Date('2026-09-27T03:00:00.000Z') }, where: { billId: bill.id, reconciledAt: null } })
+    expect(await listStatus()).toBe('COMPLETED')
+
+    // 例外只开对账时刻：改别的列与删除都被触发器拒绝，且拒绝后数据保持原样。
+    await expect(h.prisma.slhBillLine.update({ data: { goodsName: '改过的货名' }, where: { id: firstLine.id } }))
+      .rejects.toThrow(/SLH bill evidence is immutable/u)
+    await expect(h.prisma.slhBillLine.delete({ where: { id: firstLine.id } }))
+      .rejects.toThrow(/SLH bill evidence is immutable/u)
+    const untouched = await h.prisma.slhBillLine.findUniqueOrThrow({ select: { goodsName: true }, where: { id: firstLine.id } })
+    expect(untouched.goodsName).toBe(firstLine.goodsName)
+
+    // 退回未对账：三态完全是派生值，清掉对账时刻就回到未对账。
+    await h.prisma.slhBillLine.updateMany({ data: { reconciledAt: null }, where: { billId: bill.id } })
+    expect(await listStatus()).toBe('PENDING')
+  })
 })
