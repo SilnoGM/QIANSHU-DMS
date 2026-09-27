@@ -76,6 +76,11 @@
       新增纯展示组件 `slh-bill-conclusion.vue`、`slh-bill-info.vue`，配套纯函数
       `resolveSlhBillConclusion`（差异 > 告警 > 一致定级）与 `resolveSlhBillContainerBatchPreview`
       （柜号清单超 12 个才折叠），三语文案新增 13 个键（commit 40017aec）_
+      / 后续修订（2026-09-27，二轮）：台币净额改**折算净额**（按账单内嵌汇率折成人民币，无内嵌
+      汇率时不折算并标注）；自算支持项收敛为应付行明细累加单元格的 `i` 图标 + `FaTooltip`；
+      原件文件改为文件样式 + 图标下载；明细分页新增 `keyword`（入仓单号/唛头/货名/收货人信息
+      模糊搜索）与 `containerBatchName`（柜号精确）服务端过滤，契约快照与前端类型同步重生
+      （commit 88334971）_
 - [x] 入库前确认弹窗：收集名称、月份与备注，并展示编号占位与原件元数据
       _Requirements: R5, R6_ _Evidence: commit 9df04c68（迁移 20260927100000 与接口）
       / 后续提交（弹窗、列表与详情展示、名称冲突后缀）_
