@@ -74,7 +74,6 @@
     "conclusion": {
       "title": "Bill conclusion",
       "twdHint": "The net amount is converted to CNY at the rate embedded in the bill; TWD amounts are never added to CNY",
-    "foldedByRate": "Converted at {rate}",
       "differenceCount": "{count} difference(s)",
       "warningCount": "{count} warning(s)",
       "differenceNotice": "Recomputation differs from the bill; review each item before proceeding",

@@ -1022,13 +1022,18 @@ watch([tableColumns, isNarrow], () => {
   transition: background-color 150ms ease-out, box-shadow 180ms cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-/* 固定列始终使用不透明底色，避免排序色的透明度让滚动内容穿透。 */
 .qs-generic-table :deep([data-slot="table-head"][data-pinned]) {
   background-color: oklch(var(--muted)) !important;
 }
 
+/*
+ * 固定列始终使用不透明底色，避免排序色的透明度让滚动内容穿透。
+ * 这里**不能用 `!important`**：排序列与悬停态各自带 `!important`，本规则只负责"默认不透明"；
+ * 一旦它也 important，行的状态类（`rowClass` 标黄、斑马纹）就再也染不到固定列，
+ * 视觉上会断在左固定列上。
+ */
 .qs-generic-table :deep([data-slot="table-body"] [data-slot="table-cell"][data-pinned]) {
-  background-color: oklch(var(--background)) !important;
+  background-color: oklch(var(--background));
 }
 
 .qs-generic-table :deep([data-slot="table-head"][data-pinned][data-sorted]) {

@@ -83,15 +83,19 @@ function statusLabel(status: string): string {
                       <FaIcon name="i-lucide:info" class="size-3.5" aria-hidden="true" />
                     </button>
                     <template #content>
+                      <!--
+                        FaTooltip 的气泡是「前景色底 + 背景色字」，气泡内部不能再套 qs-type-*：
+                        那组类自带 foreground / muted 前景色，落在深色气泡上就是"看不清内容"。
+                      -->
                       <div class="gap-1 grid w-60">
-                        <p class="qs-type-compact-label m-0">
+                        <p class="text-xs font-semibold m-0">
                           {{ t('slhBill.comparison.supportTitle') }}
                         </p>
                         <p v-for="item in comparison.supportTotals" :key="item.key" class="m-0 flex gap-3 items-baseline justify-between">
-                          <span class="qs-type-meta text-muted-foreground">{{ t(`slhBill.comparison.support.${item.key}`) }}</span>
-                          <AmountDisplay class="!text-xs" :value="item.value" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+                          <span class="text-xs text-background/80">{{ t(`slhBill.comparison.support.${item.key}`) }}</span>
+                          <AmountDisplay class="!text-xs !text-background" :value="item.value" currency="CNY" :currencies="currencyCatalog.currencies.value" />
                         </p>
-                        <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+                        <p class="text-xs text-background/70 m-0 mt-1">
                           {{ t('slhBill.comparison.supportHint') }}
                         </p>
                       </div>

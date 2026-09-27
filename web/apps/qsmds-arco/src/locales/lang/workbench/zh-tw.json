@@ -74,7 +74,6 @@
     "conclusion": {
       "title": "帳單結論",
       "twdHint": "折算淨額按帳單內嵌匯率折成人民幣；台幣金額不與人民幣相加",
-    "foldedByRate": "按 {rate} 折算",
       "differenceCount": "{count} 項差異",
       "warningCount": "{count} 項告警",
       "differenceNotice": "複算結果與帳單存在差異，請逐項核對後再處理",

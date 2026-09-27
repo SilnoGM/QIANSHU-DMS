@@ -201,8 +201,14 @@ export function resolveSlhBillConclusion(counts: { difference: number, warning: 
   return counts.warning > 0 ? 'warning' : 'match'
 }
 
-/** 问题行标黄：用单元格级背景，否则固定列与斑马纹的单元格背景会盖住行背景。 */
-export const SLH_BILL_FLAGGED_ROW_CLASS = '[&>td]:bg-amber-50 dark:[&>td]:bg-amber-500/10'
+/**
+ * 问题行标黄：用单元格级背景，否则固定列与斑马纹的单元格背景会盖住行背景。
+ *
+ * 左固定列的单元格自带宽底（`bg-background`，sticky 定位需要不透明底），且实测比
+ * `[&>td[data-pinned]]` 这条规则更优先，所以固定列那一格必须用 `!` 才盖得住；
+ * 不写 `!` 时左固定列会保持白底、标黄"断开"。
+ */
+export const SLH_BILL_FLAGGED_ROW_CLASS = '[&>td]:bg-amber-50 dark:[&>td]:bg-amber-500/10 [&>td[data-pinned]]:bg-amber-50! dark:[&>td[data-pinned]]:bg-amber-500/10!'
 
 /**
  * 汇总有差异或告警的原表行号，供明细表按行标黄。

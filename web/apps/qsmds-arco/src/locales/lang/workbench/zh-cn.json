@@ -83,7 +83,6 @@
     "conclusion": {
       "title": "账单结论",
       "twdHint": "折算净额按账单内嵌汇率折成人民币；台币金额不与人民币相加",
-    "foldedByRate": "按 {rate} 折算",
       "differenceCount": "{count} 项差异",
       "warningCount": "{count} 项告警",
       "differenceNotice": "复算结果与账单存在差异，请逐项核对后再处理",

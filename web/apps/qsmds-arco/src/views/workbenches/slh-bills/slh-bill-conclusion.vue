@@ -28,10 +28,14 @@ const comparison = computed(() => buildSlhBillComparison({
   embeddedForeignUnitsPerCny: props.embeddedForeignUnitsPerCny,
 }))
 const conclusion = computed(() => resolveSlhBillConclusion(props.counts))
-const payable = computed(() => comparison.value.rows.find(row => row.key === 'payable') ?? null)
-// 次级三项固定按台币两笔 + 折算净额排列：折算净额是人民币，币种由行自己带出来。
-const secondaryKeys: readonly SlhBillComparisonKey[] = ['codTwd', 'ntdSurchargeTwd', 'netTwd']
+// 主数字是折算净额（系统自算净额按账单内嵌汇率折成人民币）；应付合计等三项退到次级区。
+const netAmount = computed(() => comparison.value.rows.find(row => row.key === 'netTwd') ?? null)
+const secondaryKeys: readonly SlhBillComparisonKey[] = ['codTwd', 'ntdSurchargeTwd', 'payable']
 const secondaryRows = computed(() => secondaryKeys.flatMap(key => comparison.value.rows.filter(row => row.key === key)))
+const foldedRateText = computed(() => {
+  const rate = netAmount.value?.foldedFrom?.rate ?? null
+  return rate === null ? null : formatSlhBillRate(rate) ?? rate
+})
 
 function metricLabel(key: SlhBillComparisonKey): string {
   return t(`slhBill.comparison.metric.${key}`)
@@ -42,23 +46,33 @@ function metricLabel(key: SlhBillComparisonKey): string {
   <div class="min-w-0">
     <div class="gap-4 grid min-w-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.95fr)]">
       <!-- 主数字：全页唯一的大号金额，是全页的视觉落点。 -->
-      <div v-if="payable" data-slot="slh-bill-conclusion-payable" class="p-4 border border-primary/30 rounded-xl bg-primary/8 flex flex-col min-w-0">
+      <div v-if="netAmount" data-slot="slh-bill-conclusion-net" class="p-4 border border-primary/30 rounded-xl bg-primary/8 flex flex-col min-w-0">
         <p class="qs-type-compact-label text-primary m-0">
-          {{ t('slhBill.column.payableTotalAmountCny') }} · {{ t('slhBill.comparison.column.computed') }}
+          {{ t('slhBill.comparison.metric.netTwd') }}
         </p>
-        <div tabindex="0" :aria-label="t('slhBill.column.payableTotalAmountCny')" class="mt-1.5 max-w-full overflow-x-auto">
-          <AmountDisplay class="!text-2xl !leading-10 !font-semibold md:!text-3xl" :value="payable.computed" :currency="payable.currency" :currencies="currencyCatalog.currencies.value" />
+        <div tabindex="0" :aria-label="t('slhBill.comparison.metric.netTwd')" class="mt-1.5 max-w-full overflow-x-auto">
+          <AmountDisplay class="!text-2xl !leading-10 !font-semibold md:!text-3xl" :value="netAmount.computed" :currency="netAmount.currency" :currencies="currencyCatalog.currencies.value" />
         </div>
         <!-- 口径注脚贴底：三块等高时留白落在数字与注脚之间，而不是底部空洞。 -->
-        <p class="qs-type-meta text-muted-foreground m-0 mt-auto pt-2 flex flex-wrap gap-x-2 items-baseline">
-          <span>{{ t('slhBill.comparison.column.reported') }}</span>
-          <AmountDisplay class="!text-xs" :value="payable.reported" :currency="payable.reportedCurrency" :currencies="currencyCatalog.currencies.value" />
-          <template v-if="payable.status === 'mismatch'">
-            <span aria-hidden="true">·</span>
-            <span>{{ t('slhBill.comparison.column.difference') }}</span>
-            <AmountDisplay class="!text-xs !text-destructive" :value="payable.difference" :currency="payable.reportedCurrency" :currencies="currencyCatalog.currencies.value" />
-          </template>
-        </p>
+        <div class="qs-type-meta text-muted-foreground mt-auto pt-2 flex flex-col gap-1">
+          <p v-if="netAmount.foldedFrom" class="m-0 flex flex-wrap gap-x-1 items-baseline">
+            <span>{{ t('slhBill.comparison.foldedFrom') }}</span>
+            <AmountDisplay class="!text-xs" :value="netAmount.foldedFrom.value" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+            <span>÷ {{ foldedRateText }}</span>
+          </p>
+          <p v-else class="m-0">
+            {{ t('slhBill.comparison.notFolded') }}
+          </p>
+          <p class="m-0 flex flex-wrap gap-x-2 items-baseline">
+            <span>{{ t('slhBill.comparison.column.reported') }}</span>
+            <AmountDisplay class="!text-xs" :value="netAmount.reported" :currency="netAmount.reportedCurrency" :currencies="currencyCatalog.currencies.value" />
+            <template v-if="netAmount.status === 'mismatch'">
+              <span aria-hidden="true">·</span>
+              <span>{{ t('slhBill.comparison.column.difference') }}</span>
+              <AmountDisplay class="!text-xs !text-destructive" :value="netAmount.difference" :currency="netAmount.reportedCurrency" :currencies="currencyCatalog.currencies.value" />
+            </template>
+          </p>
+        </div>
       </div>
 
       <dl class="m-0 p-4 border border-border rounded-xl gap-x-5 gap-y-2 grid min-w-0 lg:grid-cols-1 sm:grid-cols-3">
@@ -69,10 +83,6 @@ function metricLabel(key: SlhBillComparisonKey): string {
           <dd class="m-0 mt-0.5">
             <AmountDisplay class="!text-lg !font-semibold" :value="row.computed" :currency="row.currency" :currencies="currencyCatalog.currencies.value" />
           </dd>
-          <!-- 折算净额标出所用汇率，避免和旁边的台币金额被当成同一币种读。 -->
-          <p v-if="row.foldedFrom" class="qs-type-meta text-muted-foreground m-0 mt-0.5">
-            {{ t('slhBill.conclusion.foldedByRate', { rate: formatSlhBillRate(row.foldedFrom.rate) ?? row.foldedFrom.rate }) }}
-          </p>
         </div>
       </dl>
 
