@@ -37,25 +37,29 @@ test('明细累加与账单小计逐项对齐，四项都判为一致', () => {
   assert.equal(comparison.rows[0]?.reported, '87482.50')
 })
 
-test('台币净额在账单已折算时折回同一口径再比，并标注折回值', () => {
+test('折算净额：系统自算净额先按内嵌汇率折成人民币，再与账单同口径比', () => {
   const comparison = buildSlhBillComparison({ totals, reported, embeddedForeignUnitsPerCny: '4.800000000000' })
   const net = comparison.rows.find(row => row.key === 'netTwd')!
-  assert.equal(net.computed, '1870579.00')
-  // 1,870,579 ÷ 4.8 = 389,703.96，与账单原值在同精度下相等。
-  assert.equal(net.comparableComputed, '389703.96')
+  // 1,870,579 ÷ 4.8 = 389,703.96：展示值直接是折算后的人民币，不再展示不折算的台币原值。
+  assert.equal(net.computed, '389703.96')
+  assert.equal(net.currency, 'CNY')
   assert.equal(net.reported, '389703.96')
-  assert.equal(net.currency, 'TWD')
   assert.equal(net.reportedCurrency, 'CNY')
+  assert.equal(net.status, 'match')
+  // 折算前的台币原值与所用汇率留给界面标注。
+  assert.deepEqual(net.foldedFrom, { rate: '4.800000000000', value: '1870579.00' })
 })
 
-test('账单没有内嵌汇率时不做折算，直接按台币比', () => {
+test('账单没有内嵌汇率时不折算，按台币原值比较', () => {
   const comparison = buildSlhBillComparison({
     totals,
     reported: { ...reported, netAmountTwd: '1870579.00', netAmountFormula: 'V58-W58', embeddedForeignUnitsPerCny: null },
     embeddedForeignUnitsPerCny: null,
   })
   const net = comparison.rows.find(row => row.key === 'netTwd')!
-  assert.equal(net.comparableComputed, null)
+  assert.equal(net.computed, '1870579.00')
+  assert.equal(net.currency, 'TWD')
+  assert.equal(net.foldedFrom, null)
   assert.equal(net.reportedCurrency, 'TWD')
   assert.equal(net.status, 'match')
 })

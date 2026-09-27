@@ -57,6 +57,8 @@ export class SlhBillListQueryDto {
 export class SlhBillLineListQueryDto {
   @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number
   @ApiPropertyOptional({ default: 50, maximum: 200 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) pageSize?: number
+  @ApiPropertyOptional({ maxLength: 128, description: 'Matches warehouse receipt reference, shipping mark, goods name or recipient info.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 128) keyword?: string
+  @ApiPropertyOptional({ maxLength: 128, description: 'Container batch name exactly as printed on the bill.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 128) containerBatchName?: string
 }
 
 export class SlhBillStagedFileDto {

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { slhBillFailure } from './slh-bill-calculation'
+import { buildSlhBillLineWhere } from './slh-bill-line-filter'
 import { slhBillUuid } from './slh-bill.normalizer'
 import { serializeSlhBill, serializeSlhBillLine, serializeSlhBillListItem, slhBillListInclude, slhBillRateInclude } from './slh-bill.serializer'
 import type { SlhBillDto, SlhBillLineListQueryDto, SlhBillLinePageDto, SlhBillListQueryDto, SlhBillPageDto } from './slh-bill.dto'
@@ -56,9 +57,11 @@ export class SlhBillQueryService {
     const pageSize = query.pageSize ?? DEFAULT_LINE_PAGE_SIZE
     const bill = await this.prisma.slhBill.findUnique({ where: { id }, select: { id: true } })
     if (!bill) slhBillFailure('SLH_BILL_NOT_FOUND', '账单不存在', 404)
+    // 列表与总数必须共用同一份条件，否则筛选后会出现"有数据但总数为 0"。
+    const where = buildSlhBillLineWhere(id, { containerBatchName: query.containerBatchName, keyword: query.keyword })
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.slhBillLine.findMany({ where: { billId: id }, include: { charges: true }, orderBy: { lineNumber: 'asc' }, skip: (page - 1) * pageSize, take: pageSize }),
-      this.prisma.slhBillLine.count({ where: { billId: id } }),
+      this.prisma.slhBillLine.findMany({ where, include: { charges: true }, orderBy: { lineNumber: 'asc' }, skip: (page - 1) * pageSize, take: pageSize }),
+      this.prisma.slhBillLine.count({ where }),
     ])
     return { items: items.map(serializeSlhBillLine), total, page, pageSize }
   }

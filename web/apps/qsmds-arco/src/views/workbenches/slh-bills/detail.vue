@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SlhBillDto, SlhBillLineDto, SlhBillTotalsDto } from '@/api/generated/types.gen'
+import type { QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 import slhBillsApi from '@/api/modules/slh-bills'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
@@ -34,6 +35,15 @@ const lines = shallowRef<SlhBillLineDto[]>([])
 const lineTotal = ref(0)
 const linesLoading = ref(false)
 const linesError = ref('')
+// 明细的检索与柜号筛选都在服务端做：明细分页是服务端的，只过滤当前页会骗人。
+const lineKeyword = ref('')
+const lineFilters = ref<QsGenericTableFilterValues>({})
+const lineContainerBatchName = computed(() => typeof lineFilters.value.containerBatch === 'string' ? lineFilters.value.containerBatch : undefined)
+const lineFilterDefinitions = computed(() => [{
+  key: 'containerBatch',
+  label: t('slhBill.line.containerBatchName'),
+  options: (bill.value?.containerBatchNames ?? []).map(name => ({ label: name, value: name })),
+}])
 let billController: AbortController | null = null
 let linesController: AbortController | null = null
 let downloadController: AbortController | null = null
@@ -47,13 +57,21 @@ const comparisonTotals = computed<SlhBillTotalsDto>(() => ({
   ntdSurchargeTotalAmountTwd: bill.value?.ntdSurchargeTotalAmountTwd ?? '0',
   reportedNetAmountTwd: bill.value?.reportedNetAmountTwd ?? '0',
 }))
-/** 差异项按行号跳到明细表对应页；明细分页在服务端，切页会重新加载。 */
+/** 差异项按行号跳到明细表对应页；行号是整张账单的序号，跳页前必须先清掉筛选与关键字。 */
 function jumpToLine(lineNumber: number): void {
+  const hadQuery = lineKeyword.value.trim() !== '' || lineContainerBatchName.value !== undefined
+  lineKeyword.value = ''
+  lineFilters.value = {}
   const target = pageForSlhBillLine(lineNumber, linePageSize.value)
-  if (target === linePage.value) {
+  if (!hadQuery && target === linePage.value) {
     return
   }
   linePage.value = target
+  void loadLines()
+}
+/** 明细检索与筛选都回到第一页：条件变了还停在第 3 页会直接看到空结果。 */
+function searchLines(): void {
+  linePage.value = 1
   void loadLines()
 }
 const columns = computed(() => buildSlhBillLineColumns(t))
@@ -108,8 +126,14 @@ async function loadLines(): Promise<void> {
   linesController = current
   linesLoading.value = true
   linesError.value = ''
+  const keyword = lineKeyword.value.trim()
   try {
-    const response = await slhBillsApi.lines(instanceId, { page: linePage.value, pageSize: linePageSize.value }, current.signal)
+    const response = await slhBillsApi.lines(instanceId, {
+      page: linePage.value,
+      pageSize: linePageSize.value,
+      ...(keyword === '' ? {} : { keyword }),
+      ...(lineContainerBatchName.value === undefined ? {} : { containerBatchName: lineContainerBatchName.value }),
+    }, current.signal)
     if (current.signal.aborted || !canRead.value) {
       return
     }
@@ -271,6 +295,8 @@ onBeforeUnmount(() => {
           <QsGenericTable
             v-model:page="linePage"
             v-model:page-size="linePageSize"
+            v-model:search="lineKeyword"
+            v-model:filters="lineFilters"
             row-key="lineNumber"
             table-class="w-max min-w-full"
             :row-class="lineRowClass"
@@ -281,9 +307,13 @@ onBeforeUnmount(() => {
             :error="linesError || undefined"
             :total="lineTotal"
             :addable="false"
-            :searchable="false"
+            :searchable="true"
+            :search-placeholder="t('slhBill.lineSearch')"
+            :filter-definitions="lineFilterDefinitions"
             :page-size-options="[20, 50, 100]"
             :empty-title="t('slhBill.empty')"
+            @search="searchLines"
+            @filter-change="searchLines"
             @retry="loadLines"
           >
             <template #cell-charges="{ row }">

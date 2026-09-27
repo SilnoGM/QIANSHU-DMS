@@ -82,7 +82,8 @@
     },
     "conclusion": {
       "title": "账单结论",
-      "twdHint": "台币金额按币种分别列示，不与人民币相加",
+      "twdHint": "折算净额按账单内嵌汇率折成人民币；台币金额不与人民币相加",
+    "foldedByRate": "按 {rate} 折算",
       "differenceCount": "{count} 项差异",
       "warningCount": "{count} 项告警",
       "differenceNotice": "复算结果与账单存在差异，请逐项核对后再处理",
@@ -103,14 +104,15 @@
         "payable": "合计应付人民币",
         "codTwd": "代收货款台币",
         "ntdSurchargeTwd": "NTD 杂费",
-        "netTwd": "不折算净额"
+        "netTwd": "折算净额"
       },
       "match": "一致",
       "mismatch": "不一致",
       "notProvided": "账单未提供",
       "notComparable": "无法对齐口径",
-      "foldedTo": "折回同一口径 {value}（÷{rate}）",
-      "reportedConverted": "账单原值，已按内嵌汇率折算",
+        "reportedConverted": "账单原值，已按内嵌汇率折算",
+    "foldedFrom": "不折算净额",
+    "notFolded": "账单无内嵌汇率，未折算",
       "negativePayableNote": "账单「合计应付人民币」行按应付记为 {value}，对比用「小计」行。",
       "supportTitle": "自算支持项",
       "supportHint": "取自账单明细行累加，账单没有对应小计，仅供核对小计与明细是否自洽。",
@@ -193,6 +195,7 @@
     "lineErrors": "明细错误",
     "lineErrorsBlocked": "有 {count} 条明细存在解析错误，修正来源文件后才能入库",
     "lines": "账单明细",
+    "lineSearch": "搜索入仓单号、唛头、货名或收货人信息",
     "manualRate": {
       "label": "入库汇率（1 人民币 = ? 新台币）",
       "hint": "账单公式未自带汇率；保持默认将冻结系统当前汇率并记为「系统汇率」",

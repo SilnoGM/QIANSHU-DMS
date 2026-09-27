@@ -125,11 +125,26 @@ const visibleBatches = computed(() => batchesExpanded.value ? props.bill.contain
           <dt class="qs-type-meta text-muted-foreground">
             {{ t('slhBill.sourceFile') }}
           </dt>
-          <dd class="m-0 mt-1.5 flex flex-wrap gap-3 items-center">
-            <span class="qs-type-body min-w-0 [overflow-wrap:anywhere]">{{ bill.sourceFileName }}</span>
-            <FaButton variant="outline" size="sm" :disabled="downloading" @click="emit('download')">
-              <FaIcon name="i-lucide:download" aria-hidden="true" />{{ t('slhBill.download') }}
-            </FaButton>
+          <dd class="m-0 mt-1.5">
+            <!-- 原件按"文件"呈现：图标底 + 文件名 + 紧跟其后的图标下载，读起来才知道这是可下载的附件。 -->
+            <div class="p-2 border border-border rounded-lg bg-muted/20 flex gap-3 min-w-0 items-center">
+              <span class="text-primary rounded-md bg-primary/10 flex shrink-0 size-9 items-center justify-center dark:text-foreground">
+                <FaIcon name="i-lucide:file-spreadsheet" class="size-5" aria-hidden="true" />
+              </span>
+              <span class="qs-type-body flex-1 min-w-0 [overflow-wrap:anywhere]">{{ bill.sourceFileName }}</span>
+              <FaTooltip :text="t('slhBill.download')">
+                <FaButton
+                  variant="ghost"
+                  size="icon-sm"
+                  class="shrink-0"
+                  :disabled="downloading"
+                  :aria-label="t('slhBill.download')"
+                  @click="emit('download')"
+                >
+                  <FaIcon name="i-lucide:download" aria-hidden="true" />
+                </FaButton>
+              </FaTooltip>
+            </div>
           </dd>
         </div>
         <div class="min-w-0">

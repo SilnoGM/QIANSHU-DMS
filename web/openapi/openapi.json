@@ -66315,6 +66315,26 @@
               "default": 50,
               "type": "number"
             }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "Matches warehouse receipt reference, shipping mark, goods name or recipient info.",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "name": "containerBatchName",
+            "required": false,
+            "in": "query",
+            "description": "Container batch name exactly as printed on the bill.",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
           }
         ],
         "responses": {

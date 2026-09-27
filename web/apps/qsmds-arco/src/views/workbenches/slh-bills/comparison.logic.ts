@@ -4,9 +4,9 @@ import Decimal from 'decimal.js'
 /**
  * 对比把「明细行累加」与「账单自报」放在同一行、同一口径上，让核对结果一眼可判。
  *
- * 台币净额那一项两边口径可能不同：账单写的可能是折算后的人民币金额。有账单内嵌
- * 汇率时把我们的不折算净额折回同一口径再比（折回值放在 comparableComputed），
- * 而不是把两个不可比的数并排展示。
+ * 台币净额那一项两侧口径可能不同：账单写的通常是折算后的人民币金额。有账单内嵌汇率时，
+ * 系统自算的不折算净额先按同一汇率折成人民币（折算净额）再比，而不是把两个不可比的数
+ * 并排展示；没有内嵌汇率时无法折算，保留台币原值并在界面上说明。
  */
 export type SlhBillComparisonStatus = 'match' | 'mismatch' | 'unavailable'
 
@@ -16,10 +16,10 @@ export interface SlhBillComparisonRow {
   key: SlhBillComparisonKey
   /** computed 的币种。 */
   currency: 'CNY' | 'TWD'
-  /** 明细行累加值。 */
+  /** 明细行累加值；折算净额这一行给的是折算后的人民币值。 */
   computed: string
-  /** 折回账单口径后的累加值；仅当两侧币种不同时有值。 */
-  comparableComputed: string | null
+  /** 折算净额专用：折算前的台币原值与所用汇率，供界面标注口径。 */
+  foldedFrom: { rate: string, value: string } | null
   /** 账单自报值；账单没写这一项时为 null。 */
   reported: string | null
   /** reported 的币种；与 currency 不同表示账单换了口径。 */
@@ -63,26 +63,25 @@ const fixed = (value: Decimal) => value.toFixed(2)
 
 export function buildSlhBillComparison(input: SlhBillComparisonInput): SlhBillComparison {
   const { totals, reported } = input
-  const embeddedRate = amount(input.embeddedForeignUnitsPerCny)
+  const embeddedRateText = input.embeddedForeignUnitsPerCny ?? null
+  const embeddedRate = amount(embeddedRateText)
 
   function row(config: {
     key: SlhBillComparisonKey
     currency: 'CNY' | 'TWD'
     computed: string
+    foldedFrom?: { rate: string, value: string } | null
     /** 生成类型把可空字段标成可选，这里统一收敛成 null。 */
     reported: string | null | undefined
     reportedCurrency?: 'CNY' | 'TWD'
-    /** 折回账单口径后的累加值；给出时才做同口径比较。 */
-    comparableComputed?: Decimal | null
   }): SlhBillComparisonRow {
     const computed = amount(config.computed) ?? new Decimal(0)
     const reportedValue = config.reported == null ? null : amount(config.reported)
-    const comparable = config.comparableComputed ?? computed
     const base: SlhBillComparisonRow = {
       key: config.key,
       currency: config.currency,
       computed: fixed(computed),
-      comparableComputed: config.comparableComputed == null ? null : fixed(config.comparableComputed),
+      foldedFrom: config.foldedFrom ?? null,
       reported: reportedValue === null ? null : fixed(reportedValue),
       reportedCurrency: config.reportedCurrency ?? config.currency,
       difference: null,
@@ -91,7 +90,7 @@ export function buildSlhBillComparison(input: SlhBillComparisonInput): SlhBillCo
     if (reportedValue === null) {
       return base
     }
-    const difference = reportedValue.minus(comparable)
+    const difference = reportedValue.minus(computed)
     return {
       ...base,
       difference: fixed(difference),
@@ -100,9 +99,9 @@ export function buildSlhBillComparison(input: SlhBillComparisonInput): SlhBillCo
     }
   }
 
-  // 账单把台币净额写成折算后的人民币金额时，把我们的不折算净额按同一汇率折回去比。
+  // 账单把台币净额写成折算后的人民币金额时，系统自算的不折算净额按同一汇率折成人民币。
   const netTwd = amount(totals.reportedNetAmountTwd)
-  const foldedNet = embeddedRate !== null && !embeddedRate.isZero() && netTwd !== null
+  const foldedNet = embeddedRateText !== null && embeddedRate !== null && !embeddedRate.isZero() && netTwd !== null
     ? netTwd.dividedBy(embeddedRate).toDecimalPlaces(2)
     : null
 
@@ -128,11 +127,14 @@ export function buildSlhBillComparison(input: SlhBillComparisonInput): SlhBillCo
       }),
       row({
         key: 'netTwd',
-        currency: 'TWD',
-        computed: totals.reportedNetAmountTwd,
+        // 折算净额：无法折算时退回台币原值，界面据此标注「未折算」。
+        currency: foldedNet === null ? 'TWD' : 'CNY',
+        computed: foldedNet === null ? totals.reportedNetAmountTwd : fixed(foldedNet),
+        foldedFrom: foldedNet === null || embeddedRateText === null
+          ? null
+          : { rate: embeddedRateText, value: totals.reportedNetAmountTwd },
         reported: reported.netAmountTwd,
         reportedCurrency: foldedNet === null ? 'TWD' : 'CNY',
-        comparableComputed: foldedNet,
       }),
     ],
     supportTotals: [

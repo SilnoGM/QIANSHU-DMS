@@ -4,11 +4,12 @@ import type { SlhBillReportedDto, SlhBillTotalsDto } from '@/api/generated/types
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { buildSlhBillComparison, resolveSlhBillConclusion } from './comparison.logic'
+import { formatSlhBillRate } from './display.logic'
 
 const props = defineProps<{
   totals: SlhBillTotalsDto
   reported: SlhBillReportedDto
-  /** 账单公式内嵌的汇率；台币净额两侧口径不同时由它折回同一口径。 */
+  /** 账单公式内嵌的汇率；折算净额由它把台币净额折成人民币。 */
   embeddedForeignUnitsPerCny: string | null
   /** 入库确认时落库的差异与告警计数，决定结论等级。 */
   counts: { difference: number, warning: number }
@@ -28,8 +29,9 @@ const comparison = computed(() => buildSlhBillComparison({
 }))
 const conclusion = computed(() => resolveSlhBillConclusion(props.counts))
 const payable = computed(() => comparison.value.rows.find(row => row.key === 'payable') ?? null)
-// 台币三项各自成列：不同币种不合并、不相加。
-const twdRows = computed(() => comparison.value.rows.filter(row => row.currency === 'TWD'))
+// 次级三项固定按台币两笔 + 折算净额排列：折算净额是人民币，币种由行自己带出来。
+const secondaryKeys: readonly SlhBillComparisonKey[] = ['codTwd', 'ntdSurchargeTwd', 'netTwd']
+const secondaryRows = computed(() => secondaryKeys.flatMap(key => comparison.value.rows.filter(row => row.key === key)))
 
 function metricLabel(key: SlhBillComparisonKey): string {
   return t(`slhBill.comparison.metric.${key}`)
@@ -60,13 +62,17 @@ function metricLabel(key: SlhBillComparisonKey): string {
       </div>
 
       <dl class="m-0 p-4 border border-border rounded-xl gap-x-5 gap-y-2 grid min-w-0 lg:grid-cols-1 sm:grid-cols-3">
-        <div v-for="row in twdRows" :key="row.key" class="min-w-0">
+        <div v-for="row in secondaryRows" :key="row.key" class="min-w-0">
           <dt class="qs-type-compact-label text-muted-foreground">
             {{ metricLabel(row.key) }}
           </dt>
           <dd class="m-0 mt-0.5">
             <AmountDisplay class="!text-lg !font-semibold" :value="row.computed" :currency="row.currency" :currencies="currencyCatalog.currencies.value" />
           </dd>
+          <!-- 折算净额标出所用汇率，避免和旁边的台币金额被当成同一币种读。 -->
+          <p v-if="row.foldedFrom" class="qs-type-meta text-muted-foreground m-0 mt-0.5">
+            {{ t('slhBill.conclusion.foldedByRate', { rate: formatSlhBillRate(row.foldedFrom.rate) ?? row.foldedFrom.rate }) }}
+          </p>
         </div>
       </dl>
 

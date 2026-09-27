@@ -73,7 +73,8 @@
     },
     "conclusion": {
       "title": "帳單結論",
-      "twdHint": "台幣金額按幣別分別列示，不與人民幣相加",
+      "twdHint": "折算淨額按帳單內嵌匯率折成人民幣；台幣金額不與人民幣相加",
+    "foldedByRate": "按 {rate} 折算",
       "differenceCount": "{count} 項差異",
       "warningCount": "{count} 項告警",
       "differenceNotice": "複算結果與帳單存在差異，請逐項核對後再處理",
@@ -94,14 +95,15 @@
         "payable": "合計應付人民幣",
         "codTwd": "代收貨款台幣",
         "ntdSurchargeTwd": "NTD 雜費",
-        "netTwd": "不折算淨額"
+        "netTwd": "折算淨額"
       },
       "match": "一致",
       "mismatch": "不一致",
       "notProvided": "帳單未提供",
       "notComparable": "無法對齊口徑",
-      "foldedTo": "折回同一口徑 {value}（÷{rate}）",
-      "reportedConverted": "帳單原值，已按內嵌匯率折算",
+        "reportedConverted": "帳單原值，已按內嵌匯率折算",
+    "foldedFrom": "不折算淨額",
+    "notFolded": "帳單無內嵌匯率，未折算",
       "negativePayableNote": "帳單「合計應付人民幣」行按應付記為 {value}，對比用「小計」行。",
       "supportTitle": "自算支持項",
       "supportHint": "取自帳單明細行累加，帳單沒有對應小計，僅供核對小計與明細是否自洽。",
@@ -184,6 +186,7 @@
     "lineErrors": "明細錯誤",
     "lineErrorsBlocked": "有 {count} 條明細存在解析錯誤，修正來源檔案後才能入庫",
     "lines": "帳單明細",
+    "lineSearch": "搜尋入倉單號、嘜頭、貨名或收貨人資訊",
     "manualRate": {
       "label": "入庫匯率（1 人民幣 = ? 新台幣）",
       "hint": "帳單公式未自帶匯率；保持預設將凍結系統當前匯率並記為「系統匯率」",

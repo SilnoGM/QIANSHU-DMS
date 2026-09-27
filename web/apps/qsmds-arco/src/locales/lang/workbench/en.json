@@ -73,7 +73,8 @@
     },
     "conclusion": {
       "title": "Bill conclusion",
-      "twdHint": "TWD amounts are listed per currency and never added to CNY",
+      "twdHint": "The net amount is converted to CNY at the rate embedded in the bill; TWD amounts are never added to CNY",
+    "foldedByRate": "Converted at {rate}",
       "differenceCount": "{count} difference(s)",
       "warningCount": "{count} warning(s)",
       "differenceNotice": "Recomputation differs from the bill; review each item before proceeding",
@@ -94,14 +95,15 @@
         "payable": "Payable total (CNY)",
         "codTwd": "COD total (TWD)",
         "ntdSurchargeTwd": "NTD surcharges",
-        "netTwd": "Net amount, unconverted"
+        "netTwd": "Net converted to CNY"
       },
       "match": "Match",
       "mismatch": "Mismatch",
       "notProvided": "Not provided by the bill",
       "notComparable": "Basis cannot be aligned",
-      "foldedTo": "Folded to the same basis: {value} (÷{rate})",
-      "reportedConverted": "Bill value, already converted with its embedded rate",
+        "reportedConverted": "Bill value, already converted with its embedded rate",
+    "foldedFrom": "Net before conversion",
+    "notFolded": "The bill has no embedded rate, so this stays unconverted",
       "negativePayableNote": "The bill states {value} on its payable row; the subtotal row is used for comparison.",
       "supportTitle": "Supporting totals",
       "supportHint": "Summed from the bill line items; the bill provides no matching subtotal, so these only show whether its own subtotal agrees with its lines.",
@@ -184,6 +186,7 @@
     "lineErrors": "Line errors",
     "lineErrorsBlocked": "{count} lines failed to parse, fix the source file before storing",
     "lines": "Bill lines",
+    "lineSearch": "Search warehouse receipt no., shipping mark, goods name or recipient",
     "manualRate": {
       "label": "Import rate (1 CNY = ? TWD)",
       "hint": "The statement formula carries no rate; keeping the default freezes the current system rate as \"System rate\"",
