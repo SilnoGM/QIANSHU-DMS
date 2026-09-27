@@ -186,6 +186,19 @@ export function countSlhBillFindings(findings: readonly SlhBillFindingDto[]): { 
   }, { difference: 0, warning: 0 })
 }
 
+export type SlhBillConclusionStatus = 'difference' | 'match' | 'warning'
+
+/**
+ * 结论定级：差异比告警严重，两类都没有才算一致。
+ * 顶部结论层与差异列表共用同一份计数，避免两处对「这张账单到底有没有问题」给出不同答案。
+ */
+export function resolveSlhBillConclusion(counts: { difference: number, warning: number }): SlhBillConclusionStatus {
+  if (counts.difference > 0) {
+    return 'difference'
+  }
+  return counts.warning > 0 ? 'warning' : 'match'
+}
+
 /** 问题行标黄：用单元格级背景，否则固定列与斑马纹的单元格背景会盖住行背景。 */
 export const SLH_BILL_FLAGGED_ROW_CLASS = '[&>td]:bg-amber-50 dark:[&>td]:bg-amber-500/10'
 

@@ -37,6 +37,26 @@ export function groupSlhBillCharges(charges: readonly SlhBillLineChargeDto[]): S
   })
 }
 
+/** 柜号清单默认最多铺 12 个标签；再多就折叠，避免清单把信息卡撑高。 */
+export const SLH_BILL_CONTAINER_BATCH_PREVIEW_LIMIT = 12
+
+export interface SlhBillContainerBatchPreview {
+  visible: string[]
+  hiddenCount: number
+}
+
+/** 超出阈值的柜号不渲染，只报告剩余数量，展开入口由调用方提供。 */
+export function resolveSlhBillContainerBatchPreview(
+  names: readonly string[],
+  limit: number = SLH_BILL_CONTAINER_BATCH_PREVIEW_LIMIT,
+): SlhBillContainerBatchPreview {
+  const normalizedLimit = Math.max(0, Math.trunc(limit))
+  if (names.length <= normalizedLimit) {
+    return { hiddenCount: 0, visible: [...names] }
+  }
+  return { hiddenCount: names.length - normalizedLimit, visible: names.slice(0, normalizedLimit) }
+}
+
 /** 尺寸缺任一边即视为不完整，避免用 0 补位后冒充账单原始尺寸。 */
 export function formatSlhBillDimensions(line: Pick<SlhBillLineDto, 'lengthCm' | 'widthCm' | 'heightCm'>): string | null {
   const length = line.lengthCm ?? null

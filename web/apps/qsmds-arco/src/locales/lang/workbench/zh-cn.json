@@ -80,6 +80,15 @@
       "billMonth": "对账单月份",
       "remark": "备注"
     },
+    "conclusion": {
+      "title": "账单结论",
+      "twdHint": "台币金额按币种分别列示，不与人民币相加",
+      "differenceCount": "{count} 项差异",
+      "warningCount": "{count} 项告警",
+      "differenceNotice": "复算结果与账单存在差异，请逐项核对后再处理",
+      "warningNotice": "复算金额与账单一致，另有需要留意的告警",
+      "viewFindings": "查看差异"
+    },
     "comparison": {
       "title": "合计对比",
       "hint": "同一指标按「明细行累加」与「账单自报」对齐比较；差额为正表示账单写得比明细多。",
@@ -146,6 +155,13 @@
     },
     "importSuccess": "账单 {billNo} 已入库",
     "importTitle": "导入顺联航账单",
+    "info": {
+      "meta": "归属与规模",
+      "rate": "核算参数",
+      "source": "来源与留痕",
+      "expandBatches": "全部 {count} 个",
+      "collapseBatches": "收起"
+    },
     "intro": "接收、结构化并查阅顺联航提供的 Excel 对账单",
     "line": {
       "lineNumber": "行号",
@@ -204,6 +220,7 @@
       "MANUAL": "手工填写"
     },
     "rateValue": "入库汇率",
+    "reconciliation": "对账核对",
     "retry": "重试",
     "search": "搜索账单编号、原件文件名或柜号",
     "sourceFile": "原件文件",

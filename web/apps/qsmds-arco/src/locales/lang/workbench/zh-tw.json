@@ -71,6 +71,15 @@
       "billMonth": "對帳單月份",
       "remark": "備註"
     },
+    "conclusion": {
+      "title": "帳單結論",
+      "twdHint": "台幣金額按幣別分別列示，不與人民幣相加",
+      "differenceCount": "{count} 項差異",
+      "warningCount": "{count} 項告警",
+      "differenceNotice": "複算結果與帳單存在差異，請逐項核對後再處理",
+      "warningNotice": "複算金額與帳單一致，另有需要留意的告警",
+      "viewFindings": "檢視差異"
+    },
     "comparison": {
       "title": "合計對比",
       "hint": "同一指標按「明細行累加」與「帳單自報」對齊比較；差額為正表示帳單寫得比明細多。",
@@ -137,6 +146,13 @@
     },
     "importSuccess": "帳單 {billNo} 已入庫",
     "importTitle": "匯入順聯航帳單",
+    "info": {
+      "meta": "歸屬與規模",
+      "rate": "核算參數",
+      "source": "來源與留存",
+      "expandBatches": "全部 {count} 個",
+      "collapseBatches": "收合"
+    },
     "intro": "接收、結構化並查閱順聯航提供的 Excel 對帳單",
     "line": {
       "lineNumber": "行號",
@@ -195,6 +211,7 @@
       "MANUAL": "手工填寫"
     },
     "rateValue": "入庫匯率",
+    "reconciliation": "對帳核對",
     "retry": "重試",
     "search": "搜尋帳單編號、原件檔案名稱或櫃號",
     "sourceFile": "原件檔案",

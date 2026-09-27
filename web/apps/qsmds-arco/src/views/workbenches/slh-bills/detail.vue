@@ -4,11 +4,12 @@ import slhBillsApi from '@/api/modules/slh-bills'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import { containerFailure } from '../containers/use-container-resource'
-import { collectSlhBillFlaggedRowNumbers, pageForSlhBillLine, SLH_BILL_FLAGGED_ROW_CLASS } from './comparison.logic'
-import { formatSlhBillRate } from './display.logic'
+import { collectSlhBillFlaggedRowNumbers, countSlhBillFindings, pageForSlhBillLine, SLH_BILL_FLAGGED_ROW_CLASS } from './comparison.logic'
 import { buildSlhBillLineColumns } from './line-columns.logic'
 import SlhBillCharges from './slh-bill-charges.vue'
 import SlhBillComparison from './slh-bill-comparison.vue'
+import SlhBillConclusion from './slh-bill-conclusion.vue'
+import SlhBillInfo from './slh-bill-info.vue'
 import SlhBillOverflowText from './slh-bill-overflow-text.vue'
 import SlhBillPricingBasisTag from './slh-bill-pricing-basis-tag.vue'
 import SlhBillVolumeDifference from './slh-bill-volume-difference.vue'
@@ -60,6 +61,12 @@ const flaggedRowNumbers = computed(() => collectSlhBillFlaggedRowNumbers(bill.va
 /** 有差异或告警的明细行标黄；详情页的差异来自落库快照，按原表行号对应。 */
 function lineRowClass(row: { original: SlhBillLineDto }): string {
   return flaggedRowNumbers.value.has(row.original.sourceRowNumber) ? SLH_BILL_FLAGGED_ROW_CLASS : ''
+}
+const findingCounts = computed(() => countSlhBillFindings(bill.value?.findings ?? []))
+const comparisonAnchor = ref<HTMLElement>()
+/** 结论层的「查看差异」只负责定位：滚到对账核对区块，不改动数据与分页状态。 */
+function scrollToFindings(): void {
+  comparisonAnchor.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 async function load(): Promise<void> {
   billController?.abort()
@@ -177,17 +184,13 @@ onBeforeUnmount(() => {
   <div class="min-w-0">
     <FaPageHeader main-class="min-w-0" default-class="w-full min-w-0 sm:w-auto" :title="bill ? `${bill.slhBillNo} · ${t('slhBill.detailTitle')}` : t('slhBill.detailTitle')">
       <template #description>
-        <span v-if="bill" class="qs-type-data">{{ bill.periodStart }} ~ {{ bill.periodEnd }}</span>
+        <!-- 副标题用人类可读的账单名称；编号在标题里，期间由下方信息卡唯一承载。 -->
+        <span v-if="bill" class="qs-type-body-medium">{{ bill.billName }}</span>
         <span v-else class="qs-type-description">{{ t('slhBill.intro') }}</span>
       </template>
-      <div class="flex flex-wrap gap-2 w-full sm:w-auto">
-        <FaButton v-if="bill" variant="outline" class="w-full sm:w-auto" :disabled="downloading" @click="download">
-          <FaIcon name="i-lucide:download" aria-hidden="true" />{{ t('slhBill.download') }}
-        </FaButton>
-        <FaButton variant="outline" class="w-full sm:w-auto" @click="router.push({ name: 'qsFinanceBillReconciliationSlhBillManagement' })">
-          <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />{{ t('slhBill.back') }}
-        </FaButton>
-      </div>
+      <FaButton variant="outline" class="w-full sm:w-auto" @click="router.push({ name: 'qsFinanceBillReconciliationSlhBillManagement' })">
+        <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />{{ t('slhBill.back') }}
+      </FaButton>
     </FaPageHeader>
     <FaPageMain v-if="!canRead">
       <FaEmpty icon="i-lucide:shield-alert" :title="t('slhBill.noPermission')" class="py-12" />
@@ -214,175 +217,52 @@ onBeforeUnmount(() => {
             </template>
           </FaAlert>
         </FaPageMain>
-        <div class="m-4 gap-4 grid min-w-0 lg:grid-cols-2">
-          <FaPageMain class="m-0 min-w-0">
-            <section class="min-w-0" :aria-label="t('slhBill.overview')">
-              <h2 class="qs-type-component-title m-0 mb-4 flex gap-2 items-center">
-                <FaIcon name="i-lucide:receipt-text" class="text-muted-foreground size-4" aria-hidden="true" />
-                {{ t('slhBill.overview') }}
-              </h2>
-              <dl class="m-0 gap-4 grid sm:grid-cols-[8rem_minmax(0,1fr)]">
-                <div>
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t('slhBill.column.billName') }}
-                  </dt>
-                  <dd class="qs-type-data-emphasis m-0 mt-1.5 [overflow-wrap:anywhere]">
-                    {{ bill.billName }}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t('slhBill.column.billMonth') }}
-                  </dt>
-                  <dd class="qs-type-data m-0 mt-1.5">
-                    {{ bill.billMonth }}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t('slhBill.column.slhBillNo') }}
-                  </dt>
-                  <dd class="qs-type-data font-mono m-0 mt-1.5 break-all">
-                    {{ bill.slhBillNo }}
-                  </dd>
-                </div>
-                <div v-if="bill.remark">
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t('slhBill.column.remark') }}
-                  </dt>
-                  <dd class="qs-type-data m-0 mt-1.5 [overflow-wrap:anywhere]">
-                    {{ bill.remark }}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t('slhBill.column.period') }}
-                  </dt>
-                  <dd class="qs-type-data m-0 mt-1.5">
-                    {{ bill.periodStart }} ~ {{ bill.periodEnd }}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t('slhBill.column.lineCount') }}
-                  </dt>
-                  <dd class="qs-type-data m-0 mt-1.5">
-                    {{ bill.lineCount }}
-                  </dd>
-                </div>
-                <div class="min-w-0">
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t('slhBill.column.containerBatchCount') }}
-                  </dt>
-                  <dd class="m-0 mt-1.5">
-                    <span class="qs-type-data">{{ bill.containerBatchCount }}</span>
-                    <div class="mt-3">
-                      <p class="qs-type-meta text-muted-foreground m-0 mb-2">
-                        {{ t('slhBill.containerBatches') }}
-                      </p>
-                      <div class="flex flex-wrap gap-2">
-                        <FaTag v-for="name in bill.containerBatchNames" :key="name" variant="outline" class="qs-type-data max-w-full whitespace-normal break-words">
-                          {{ name }}
-                        </FaTag>
-                      </div>
-                    </div>
-                  </dd>
-                </div>
-                <div class="min-w-0 sm:col-span-2">
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t('slhBill.sourceFile') }}
-                  </dt>
-                  <dd class="qs-type-body m-0 mt-1.5 flex flex-wrap gap-3 items-center">
-                    <span class="min-w-0 [overflow-wrap:anywhere]">{{ bill.sourceFileName }}</span>
-                    <FaButton variant="outline" size="sm" :disabled="downloading" @click="download">
-                      <FaIcon name="i-lucide:download" aria-hidden="true" />{{ t('slhBill.download') }}
-                    </FaButton>
-                  </dd>
-                </div>
-                <div>
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t('slhBill.column.created') }}
-                  </dt>
-                  <dd class="qs-type-body m-0 mt-1.5">
-                    {{ bill.createdByDisplayName }}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t('slhBill.column.createdAt') }}
-                  </dt>
-                  <dd class="m-0 mt-1.5">
-                    <DateTimeDisplay :value="bill.createdAt" />
-                  </dd>
-                </div>
-              </dl>
-              <FaAlert v-if="downloadError" class="mt-3" variant="destructive" :title="t('slhBill.downloadFailed')">
-                <template #description>
-                  {{ downloadError }}
-                </template>
-              </FaAlert>
-            </section>
-          </FaPageMain>
-          <FaPageMain class="m-0 min-w-0">
-            <section class="min-w-0" :aria-label="t('slhBill.rate')">
-              <h2 class="qs-type-component-title m-0 mb-4 flex gap-2 items-center">
-                <FaIcon name="i-lucide:scale" class="text-muted-foreground size-4" aria-hidden="true" />
-                {{ t('slhBill.rate') }}
-              </h2>
-              <p v-if="!bill.rate" class="qs-type-meta text-muted-foreground m-0">
-                {{ t('slhBill.noRate') }}
-              </p>
-              <dl v-else class="m-0 gap-x-5 gap-y-4 grid grid-cols-2">
-                <div class="min-w-0">
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t('slhBill.column.rateSource') }}
-                  </dt>
-                  <dd class="m-0 mt-1.5">
-                    <FaTag variant="outline" class="qs-type-status-tag">
-                      {{ t(`slhBill.rateSource.${bill.rate.source}`) }}
-                    </FaTag>
-                  </dd>
-                </div>
-                <div class="min-w-0">
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t('slhBill.rateValue') }}
-                  </dt>
-                  <dd class="qs-type-data-emphasis m-0 mt-1.5 tabular-nums">
-                    {{ formatSlhBillRate(bill.rate.foreignUnitsPerCny) ?? t('slhBill.valueMissing') }}
-                  </dd>
-                </div>
-                <div v-if="bill.rate.embeddedForeignUnitsPerCny" class="min-w-0">
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t('slhBill.rateEmbedded') }}
-                  </dt>
-                  <dd class="qs-type-data m-0 mt-1.5 tabular-nums">
-                    {{ formatSlhBillRate(bill.rate.embeddedForeignUnitsPerCny) ?? t('slhBill.valueMissing') }}
-                  </dd>
-                </div>
-                <div class="min-w-0">
-                  <dt class="qs-type-meta text-muted-foreground">
-                    {{ t('slhBill.rateCapturedAt') }}
-                  </dt>
-                  <dd class="m-0 mt-1.5">
-                    <DateTimeDisplay :value="bill.rate.capturedAt" />
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          </FaPageMain>
-        </div>
+        <!-- 结论层：金额与对账结论是首屏的视觉落点，元数据整体退到下一区块。 -->
         <FaPageMain class="min-w-0">
-          <SlhBillComparison
+          <h2 class="qs-type-section-title m-0 mb-4 flex gap-2 items-center">
+            <FaIcon name="i-lucide:clipboard-check" class="text-muted-foreground size-4" aria-hidden="true" />
+            {{ t('slhBill.conclusion.title') }}
+          </h2>
+          <SlhBillConclusion
             :totals="comparisonTotals"
             :reported="bill.reported"
             :embedded-foreign-units-per-cny="bill.reported.embeddedForeignUnitsPerCny ?? null"
-            :findings="bill.findings"
+            :counts="findingCounts"
             :line-count="bill.lineCount"
-            @jump-to-line="jumpToLine"
+            @view-findings="scrollToFindings"
           />
         </FaPageMain>
-        <FaPageMain>
-          <h2 class="qs-type-section-title m-0">
+        <FaPageMain class="min-w-0">
+          <h2 class="qs-type-section-title m-0 mb-4 flex gap-2 items-center">
+            <FaIcon name="i-lucide:receipt-text" class="text-muted-foreground size-4" aria-hidden="true" />
+            {{ t('slhBill.overview') }}
+          </h2>
+          <SlhBillInfo :bill="bill" :downloading="downloading" @download="download" />
+          <FaAlert v-if="downloadError" class="mt-4" variant="destructive" :title="t('slhBill.downloadFailed')">
+            <template #description>
+              {{ downloadError }}
+            </template>
+          </FaAlert>
+        </FaPageMain>
+        <FaPageMain class="min-w-0">
+          <div ref="comparisonAnchor" class="min-w-0">
+            <h2 class="qs-type-section-title m-0 mb-4 flex gap-2 items-center">
+              <FaIcon name="i-lucide:scale" class="text-muted-foreground size-4" aria-hidden="true" />
+              {{ t('slhBill.reconciliation') }}
+            </h2>
+            <SlhBillComparison
+              :totals="comparisonTotals"
+              :reported="bill.reported"
+              :embedded-foreign-units-per-cny="bill.reported.embeddedForeignUnitsPerCny ?? null"
+              :findings="bill.findings"
+              :line-count="bill.lineCount"
+              @jump-to-line="jumpToLine"
+            />
+          </div>
+        </FaPageMain>
+        <FaPageMain class="min-w-0">
+          <h2 class="qs-type-section-title m-0 mb-4 flex gap-2 items-center">
+            <FaIcon name="i-lucide:table" class="text-muted-foreground size-4" aria-hidden="true" />
             {{ t('slhBill.lines') }}
           </h2>
           <p class="qs-type-meta text-muted-foreground m-0 mb-4 mt-1.5">

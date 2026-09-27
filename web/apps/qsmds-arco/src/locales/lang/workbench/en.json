@@ -71,6 +71,15 @@
       "billMonth": "Bill month",
       "remark": "Remark"
     },
+    "conclusion": {
+      "title": "Bill conclusion",
+      "twdHint": "TWD amounts are listed per currency and never added to CNY",
+      "differenceCount": "{count} difference(s)",
+      "warningCount": "{count} warning(s)",
+      "differenceNotice": "Recomputation differs from the bill; review each item before proceeding",
+      "warningNotice": "Recomputed amounts match the bill; there are warnings to review",
+      "viewFindings": "View differences"
+    },
     "comparison": {
       "title": "Totals comparison",
       "hint": "Each metric compares our line-item total against the carrier figure on the same basis; a positive difference means the bill states more than the lines add up to.",
@@ -137,6 +146,13 @@
     },
     "importSuccess": "Bill {billNo} stored",
     "importTitle": "Import Shunlianhang bill",
+    "info": {
+      "meta": "Ownership and scope",
+      "rate": "Calculation parameters",
+      "source": "Source and audit trail",
+      "expandBatches": "All {count}",
+      "collapseBatches": "Collapse"
+    },
     "intro": "Receive, structure and review the Excel statements issued by Shunlianhang",
     "line": {
       "lineNumber": "Line",
@@ -195,6 +211,7 @@
       "MANUAL": "Manually entered"
     },
     "rateValue": "Import rate",
+    "reconciliation": "Reconciliation checks",
     "retry": "Retry",
     "search": "Search bill number, source file name or container batch",
     "sourceFile": "Source file",
