@@ -45,9 +45,9 @@ const query = computed(() => buildSlhBillListQuery({
   state: state.value,
 }))
 const columns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
-  // 名称比编号更好认，放在最前；月份紧跟编号，两者都是入库时填的归档信息。
-  { id: 'billName', title: t('slhBill.column.billName'), accessorFn: item => item.billName, width: 240, minWidth: 240, fixed: 'left' },
+  // 编号是账单的唯一标识，固定在最左；名称与月份是入库时填的归档信息，紧随其后不固定。
   { id: 'slhBillNo', title: t('slhBill.column.slhBillNo'), accessorKey: 'slhBillNo', width: 215, minWidth: 215, fixed: 'left' },
+  { id: 'billName', title: t('slhBill.column.billName'), accessorFn: item => item.billName, width: 240, minWidth: 240 },
   { id: 'billMonth', title: t('slhBill.column.billMonth'), accessorFn: item => item.billMonth, width: 130, minWidth: 130 },
   { id: 'period', title: t('slhBill.column.period'), accessorFn: item => `${item.periodStart} ~ ${item.periodEnd}`, minWidth: 205 },
   { id: 'lineCount', title: t('slhBill.column.lineCount'), accessorKey: 'lineCount', minWidth: 110, align: 'right' },
@@ -185,14 +185,7 @@ onBeforeUnmount(() => controller?.abort())
           </QsTableStackedCell>
         </template>
         <template #cell-period="{ row }">
-          <QsTableStackedCell>
-            <QsTableStackedLine content-class="qs-type-data whitespace-nowrap">
-              {{ row.original.periodStart }}
-            </QsTableStackedLine>
-            <QsTableStackedLine tone="muted" content-class="whitespace-nowrap">
-              {{ row.original.periodEnd }}
-            </QsTableStackedLine>
-          </QsTableStackedCell>
+          <span class="qs-type-data whitespace-nowrap">{{ row.original.periodStart }} ~ {{ row.original.periodEnd }}</span>
         </template>
         <template #cell-payable="{ row }">
           <AmountDisplay :value="row.original.payableTotalAmountCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
