@@ -2109,6 +2109,8 @@ model SlhBillLine {
   sourceSheetName String @map("source_sheet_name") @db.VarChar(255)
   sourceRowNumber Int @map("source_row_number")
   sourceData Json @map("source_data") @db.JsonB
+  /// 明细行的对账时刻；为空即未对账。账单级三态由本列汇总派生，不另存列。
+  reconciledAt DateTime? @map("reconciled_at") @db.Timestamptz(6)
   createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
 
   bill SlhBill @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: Restrict)

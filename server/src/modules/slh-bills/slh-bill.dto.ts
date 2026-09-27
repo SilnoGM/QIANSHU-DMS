@@ -5,6 +5,10 @@ import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.
 
 export enum SlhBillRateSourceDto { EMBEDDED = 'EMBEDDED', SYSTEM = 'SYSTEM', MANUAL = 'MANUAL' }
 export enum SlhBillPricingBasisDto { WEIGHT = 'WEIGHT', VOLUME = 'VOLUME' }
+/** 明细行对账状态（二态）；账单级三态见 SlhBillReconciliationStatusDto，由明细行汇总派生。 */
+export enum SlhBillLineReconciliationStatusDto { PENDING = 'PENDING', RECONCILED = 'RECONCILED' }
+/** 账单对账状态（三态）：未对账 / 部分对账 / 对账完成。 */
+export enum SlhBillReconciliationStatusDto { PENDING = 'PENDING', PARTIAL = 'PARTIAL', COMPLETED = 'COMPLETED' }
 export enum SlhBillFindingSeverityDto { DIFFERENCE = 'difference', WARNING = 'warning' }
 export enum SlhBillFindingKindDto {
   FREIGHT_MISMATCH = 'FREIGHT_MISMATCH',
@@ -127,6 +131,7 @@ export class SlhBillLineDto {
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Parsed phone numbers kept in the original writing, one field for all numbers.' }) recipientPhones!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Parsed shipping address.' }) recipientAddress!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) remark!: string | null
+  @ApiProperty({ enum: SlhBillLineReconciliationStatusDto, description: 'Reconciliation state of this line; RECONCILED once it has been reconciled.' }) reconciliationStatus!: SlhBillLineReconciliationStatusDto
   @ApiProperty({ type: [SlhBillLineChargeDto] }) charges!: SlhBillLineChargeDto[]
 }
 
@@ -153,6 +158,7 @@ export class SlhBillListItemDto {
   @ApiProperty({ type: 'string' }) reportedNetAmountTwd!: string
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Rate embedded in the bill formula; the list folds the net amount with it.' }) embeddedForeignUnitsPerCny!: string | null
   @ApiPropertyOptional({ enum: SlhBillRateSourceDto, nullable: true }) rateSource!: SlhBillRateSourceDto | null
+  @ApiProperty({ enum: SlhBillReconciliationStatusDto, description: 'Derived from the lines of this bill: PENDING when none is reconciled, COMPLETED when all are, PARTIAL in between.' }) reconciliationStatus!: SlhBillReconciliationStatusDto
   @ApiPropertyOptional({ format: 'uuid', nullable: true }) supersededById!: string | null
   @ApiProperty() sourceFileName!: string
   @ApiProperty({ type: 'string' }) createdAt!: string

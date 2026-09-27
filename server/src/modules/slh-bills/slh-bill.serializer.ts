@@ -1,8 +1,10 @@
 import { Prisma } from '../../generated/prisma/client'
 import {
   SlhBillChargeTypeDto, SlhBillFindingKindDto, SlhBillFindingSeverityDto, SlhBillPricingBasisDto, SlhBillRateSourceDto,
-  type SlhBillDto, type SlhBillFindingDto, type SlhBillLineDto, type SlhBillListItemDto, type SlhBillPreviewLineDto,
+  type SlhBillDto, type SlhBillFindingDto, type SlhBillLineDto, type SlhBillLineReconciliationStatusDto,
+  type SlhBillListItemDto, type SlhBillPreviewLineDto, type SlhBillReconciliationStatusDto,
 } from './slh-bill.dto'
+import { resolveSlhBillLineReconciliationStatus, resolveSlhBillReconciliationStatus } from './slh-bill-reconciliation'
 import type { ParsedSlhBillLine, SlhBillFinding } from './slh-bill-parser.types'
 
 export function toFindingDto(finding: SlhBillFinding): SlhBillFindingDto {
@@ -38,6 +40,8 @@ export const slhBillRateInclude = {
 
 export const slhBillListInclude = {
   createdBy: { select: { id: true, displayName: true } },
+  // 账单级对账状态由明细行汇总派生，不为它单独存列：这里只数已对账的行数。
+  _count: { select: { lines: { where: { reconciledAt: { not: null } } } } },
 } satisfies Prisma.SlhBillInclude
 
 export type SlhBillRow = Prisma.SlhBillGetPayload<{ include: typeof slhBillRateInclude }>
@@ -81,6 +85,7 @@ export function serializeSlhBillLine(row: Prisma.SlhBillLineGetPayload<{ include
     recipientPhones: row.recipientPhones,
     recipientAddress: row.recipientAddress,
     remark: row.remark,
+    reconciliationStatus: resolveSlhBillLineReconciliationStatus(row.reconciledAt) as SlhBillLineReconciliationStatusDto,
     charges: row.charges.map(charge => ({
       chargeType: charge.chargeType as SlhBillChargeTypeDto,
       currencyCode: charge.currencyCode,
@@ -124,6 +129,8 @@ export function serializeSlhBillPreviewLine(line: ParsedSlhBillLine, findings: r
     recipientPhones: line.recipientPhones,
     recipientAddress: line.recipientAddress,
     remark: line.remark,
+    // 预览行尚未入库，按定义就是未对账；入库后该值改由行的对账时刻决定。
+    reconciliationStatus: 'PENDING' as SlhBillLineReconciliationStatusDto,
     charges: line.charges.map(charge => ({
       chargeType: charge.chargeType as SlhBillChargeTypeDto,
       currencyCode: charge.currencyCode,
@@ -208,6 +215,11 @@ export function serializeSlhBillListItem(row: SlhBillListRow): SlhBillListItemDt
     // 列表要展示「折算净额」，把账单内嵌汇率一并给出，由前端按同一口径折算。
     embeddedForeignUnitsPerCny: row.embeddedForeignUnitsPerCny?.toFixed(12) ?? null,
     rateSource: row.rateSource === null ? null : row.rateSource as SlhBillRateSourceDto,
+    // 三态由已对账行数与账单行数汇总派生，与详情页的逐行二态同源。
+    reconciliationStatus: resolveSlhBillReconciliationStatus({
+      lineCount: row.lineCount,
+      reconciledLineCount: row._count.lines,
+    }) as SlhBillReconciliationStatusDto,
     supersededById: row.supersededById,
     sourceFileName: row.sourceFileName,
     createdAt: row.createdAt.toISOString(),

@@ -81966,6 +81966,15 @@
             ],
             "nullable": true
           },
+          "reconciliationStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "PARTIAL",
+              "COMPLETED"
+            ],
+            "description": "Derived from the lines of this bill: PENDING when none is reconciled, COMPLETED when all are, PARTIAL in between."
+          },
           "supersededById": {
             "type": "object",
             "format": "uuid",
@@ -81995,6 +82004,7 @@
           "codTotalAmountTwd",
           "ntdSurchargeTotalAmountTwd",
           "reportedNetAmountTwd",
+          "reconciliationStatus",
           "sourceFileName",
           "createdAt",
           "createdByDisplayName"
@@ -82454,6 +82464,14 @@
             "type": "string",
             "nullable": true
           },
+          "reconciliationStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "RECONCILED"
+            ],
+            "description": "Reconciliation state of this line; RECONCILED once it has been reconciled."
+          },
           "charges": {
             "type": "array",
             "items": {
@@ -82474,6 +82492,7 @@
           "payableAmountCny",
           "codAmountTwd",
           "ntdSurchargeAmountTwd",
+          "reconciliationStatus",
           "charges"
         ]
       },
@@ -82728,6 +82747,14 @@
             "type": "string",
             "nullable": true
           },
+          "reconciliationStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "RECONCILED"
+            ],
+            "description": "Reconciliation state of this line; RECONCILED once it has been reconciled."
+          },
           "charges": {
             "type": "array",
             "items": {
@@ -82760,6 +82787,7 @@
           "payableAmountCny",
           "codAmountTwd",
           "ntdSurchargeAmountTwd",
+          "reconciliationStatus",
           "charges",
           "findings",
           "errors"
