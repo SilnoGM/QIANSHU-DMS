@@ -114,6 +114,19 @@ test('列表页挂两块工具栏：上排账单状态、下排对账状态，�
   assert.match(source, /counts\.value = null/u)
 })
 
+test('操作列宽度容得下两个按钮并排，不再换行', async () => {
+  const source = await readPageSource()
+  // 实测两个按钮各 100px、单元格左右内边距各 12px、按钮间距 4px ⇒ 至少 228px 才能一行放下。
+  const config = source.match(/const actionColumn = \{([^}]*)\}/u)?.[1] ?? ''
+  const widths = [...config.matchAll(/(?:width|minWidth):\s*(\d+)/gu)].map(match => Number(match[1]))
+  assert.equal(widths.length, 2)
+  for (const width of widths) {
+    assert.ok(width >= 228, `操作列宽度 ${width} 放不下「查看详情 + 开始对账」`)
+  }
+  // 让表格吃这个常量，别再写回内联对象（写成行内属性时宽度容易又被默默改小）。
+  assert.match(source, /:action-column="actionColumn"/u)
+})
+
 test('操作列的对账按钮只做轻提示，不跳转也不改数据', async () => {
   const source = await readPageSource()
   // 按钮按状态出现（完成态 v-if 为假），点击只弹一条 info 提示。

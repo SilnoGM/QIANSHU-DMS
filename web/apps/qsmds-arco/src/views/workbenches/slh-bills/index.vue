@@ -96,6 +96,11 @@ const columns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
   { id: 'sourceFile', title: t('slhBill.column.sourceFileName'), accessorKey: 'sourceFileName', minWidth: 240 },
   { id: 'created', title: t('slhBill.column.createdAt'), accessorKey: 'createdAt', minWidth: 220 },
 ])
+/**
+ * 操作列宽度按「查看详情 + 开始对账」并排算：左右内边距各 12、两个按钮各 100、间距 4，
+ * 合计 228，取 232 留一点余量；不传宽度时组件默认 160 会把两个按钮挤成两行。
+ */
+const actionColumn = { fixed: 'right' as const, minWidth: 232, width: 232 }
 async function load(): Promise<void> {
   controller?.abort()
   if (!canRead.value) {
@@ -232,7 +237,7 @@ onBeforeUnmount(() => {
         :page-size-options="[20, 50, 100]"
         :empty-title="t('slhBill.empty')"
         :empty-description="t('slhBill.emptyDescription')"
-        :action-column="{ fixed: 'right', minWidth: 120 }"
+        :action-column="actionColumn"
         @search="search"
         @pagination-change="load"
         @retry="refresh"
