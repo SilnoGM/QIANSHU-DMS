@@ -183,10 +183,10 @@ describe('slh bill import with isolated PostgreSQL', () => {
       { count: 1, value: 'all' },
     ])
     expect((await counts()).reconciliationStatuses).toEqual([
-      { count: 1, value: 'all' },
       { count: 1, value: 'PENDING' },
       { count: 0, value: 'PARTIAL' },
       { count: 0, value: 'COMPLETED' },
+      { count: 1, value: 'all' },
     ])
     // 选中项的计数与列表 total 一致。
     expect(await total('reconciliationStatus=PENDING')).toBe(1)
@@ -195,10 +195,10 @@ describe('slh bill import with isolated PostgreSQL', () => {
     // 对一行：对账计数把这张从"未对账"挪到"部分对账"，列表筛选同步。
     await h.prisma.slhBillLine.update({ data: { reconciledAt: new Date('2026-09-27T02:00:00.000Z') }, where: { id: bill.lines[0].id } })
     expect((await counts()).reconciliationStatuses).toEqual([
-      { count: 1, value: 'all' },
       { count: 0, value: 'PENDING' },
       { count: 1, value: 'PARTIAL' },
       { count: 0, value: 'COMPLETED' },
+      { count: 1, value: 'all' },
     ])
     expect(await total('reconciliationStatus=PARTIAL')).toBe(1)
     expect(await total('reconciliationStatus=PENDING')).toBe(0)
@@ -211,19 +211,19 @@ describe('slh bill import with isolated PostgreSQL', () => {
     ])
     // 反过来筛账单状态时，对账计数跟着变化（这就是"忽略自己、保留对方"的口径）。
     expect((await counts('?state=superseded')).reconciliationStatuses).toEqual([
-      { count: 0, value: 'all' },
       { count: 0, value: 'PENDING' },
       { count: 0, value: 'PARTIAL' },
       { count: 0, value: 'COMPLETED' },
+      { count: 0, value: 'all' },
     ])
 
     // 全部对完：对账完成。
     await h.prisma.slhBillLine.updateMany({ data: { reconciledAt: new Date('2026-09-27T03:00:00.000Z') }, where: { billId: bill.id, reconciledAt: null } })
     expect((await counts()).reconciliationStatuses).toEqual([
-      { count: 1, value: 'all' },
       { count: 0, value: 'PENDING' },
       { count: 0, value: 'PARTIAL' },
       { count: 1, value: 'COMPLETED' },
+      { count: 1, value: 'all' },
     ])
     expect(await total('reconciliationStatus=COMPLETED')).toBe(1)
 

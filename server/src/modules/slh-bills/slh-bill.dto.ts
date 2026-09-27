@@ -7,10 +7,10 @@ export enum SlhBillRateSourceDto { EMBEDDED = 'EMBEDDED', SYSTEM = 'SYSTEM', MAN
 export enum SlhBillPricingBasisDto { WEIGHT = 'WEIGHT', VOLUME = 'VOLUME' }
 /** 列表与计数工具栏共用的账单状态取值；`all` 表示不加状态条件。 */
 export enum SlhBillListStateDto { ACTIVE = 'active', SUPERSEDED = 'superseded', ALL = 'all' }
-/** 对账状态筛选取值；`all` 表示不加对账条件，其余与账单三态同名。 */
-export enum SlhBillReconciliationFilterDto { ALL = 'all', PENDING = 'PENDING', PARTIAL = 'PARTIAL', COMPLETED = 'COMPLETED' }
+/** 对账状态筛选取值；`all` 表示不加对账条件，其余与账单三态同名（顺序与工具栏一致，`all` 收尾）。 */
+export enum SlhBillReconciliationFilterDto { PENDING = 'PENDING', PARTIAL = 'PARTIAL', COMPLETED = 'COMPLETED', ALL = 'all' }
 const SLH_BILL_LIST_STATE_VALUES = [SlhBillListStateDto.ACTIVE, SlhBillListStateDto.SUPERSEDED, SlhBillListStateDto.ALL] as const
-const SLH_BILL_RECONCILIATION_FILTER_VALUES = [SlhBillReconciliationFilterDto.ALL, SlhBillReconciliationFilterDto.PENDING, SlhBillReconciliationFilterDto.PARTIAL, SlhBillReconciliationFilterDto.COMPLETED] as const
+const SLH_BILL_RECONCILIATION_FILTER_VALUES = [SlhBillReconciliationFilterDto.PENDING, SlhBillReconciliationFilterDto.PARTIAL, SlhBillReconciliationFilterDto.COMPLETED, SlhBillReconciliationFilterDto.ALL] as const
 /** 明细行对账状态（二态）；账单级三态见 SlhBillReconciliationStatusDto，由明细行汇总派生。 */
 export enum SlhBillLineReconciliationStatusDto { PENDING = 'PENDING', RECONCILED = 'RECONCILED' }
 /** 账单对账状态（三态）：未对账 / 部分对账 / 对账完成。 */

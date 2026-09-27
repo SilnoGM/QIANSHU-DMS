@@ -5,7 +5,10 @@ export type SlhBillReconciliationFilter = NonNullable<SlhBillListQuery['reconcil
 
 /** 两块工具栏的取值顺序与文案键都在这里定，页面只负责渲染。 */
 export const SLH_BILL_LIST_STATES = ['active', 'superseded', 'all'] as const
-export const SLH_BILL_RECONCILIATION_FILTERS = ['all', 'PENDING', 'PARTIAL', 'COMPLETED'] as const
+// 「全部」放在最后：它是兜底项，不是常用的工作视图。
+export const SLH_BILL_RECONCILIATION_FILTERS = ['PENDING', 'PARTIAL', 'COMPLETED', 'all'] as const
+/** 进页面先看待对账的账单，这是财务最常处理的一批。 */
+export const SLH_BILL_DEFAULT_RECONCILIATION_FILTER: SlhBillReconciliationFilter = 'PENDING'
 
 export function buildSlhBillListQuery(input: {
   page: number
@@ -60,5 +63,5 @@ export function resolveSlhBillListState(value: string): SlhBillListState {
 }
 
 export function resolveSlhBillReconciliationFilter(value: string): SlhBillReconciliationFilter {
-  return SLH_BILL_RECONCILIATION_FILTERS.find(filter => filter === value) ?? 'all'
+  return SLH_BILL_RECONCILIATION_FILTERS.find(filter => filter === value) ?? SLH_BILL_DEFAULT_RECONCILIATION_FILTER
 }

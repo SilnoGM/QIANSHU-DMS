@@ -22,6 +22,7 @@ import {
   buildSlhBillStatusCountsQuery,
   resolveSlhBillListState,
   resolveSlhBillReconciliationFilter,
+  SLH_BILL_DEFAULT_RECONCILIATION_FILTER,
   SLH_BILL_LIST_STATES,
   SLH_BILL_RECONCILIATION_FILTERS,
 } from './list.logic'
@@ -38,7 +39,8 @@ const currencyCatalog = useCurrencyCatalog()
 const canRead = computed(() => auth('slh-bills:read'))
 const canImport = computed(() => canRead.value && auth('slh-bills:create'))
 const state = ref<SlhBillListState>('active')
-const reconciliationStatus = ref<SlhBillReconciliationFilter>('all')
+// 进页面默认停在未对账：财务打开账单管理时最先要处理的就是这批。
+const reconciliationStatus = ref<SlhBillReconciliationFilter>(SLH_BILL_DEFAULT_RECONCILIATION_FILTER)
 const keyword = ref('')
 const page = ref(1)
 const pageSize = ref(20)

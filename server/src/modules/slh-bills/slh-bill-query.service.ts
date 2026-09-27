@@ -50,10 +50,10 @@ export class SlhBillQueryService {
         { count: all, value: SlhBillListStateDto.ALL },
       ],
       reconciliationStatuses: [
-        { count: reconciliationAll, value: SlhBillReconciliationFilterDto.ALL },
         { count: pending, value: SlhBillReconciliationFilterDto.PENDING },
         { count: partial, value: SlhBillReconciliationFilterDto.PARTIAL },
         { count: completed, value: SlhBillReconciliationFilterDto.COMPLETED },
+        { count: reconciliationAll, value: SlhBillReconciliationFilterDto.ALL },
       ],
     }
   }

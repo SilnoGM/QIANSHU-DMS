@@ -65554,10 +65554,10 @@
               "default": "all",
               "type": "string",
               "enum": [
-                "all",
                 "PENDING",
                 "PARTIAL",
-                "COMPLETED"
+                "COMPLETED",
+                "all"
               ]
             }
           }
@@ -66133,10 +66133,10 @@
               "default": "all",
               "type": "string",
               "enum": [
-                "all",
                 "PENDING",
                 "PARTIAL",
-                "COMPLETED"
+                "COMPLETED",
+                "all"
               ]
             }
           }
@@ -82356,10 +82356,10 @@
           "value": {
             "type": "string",
             "enum": [
-              "all",
               "PENDING",
               "PARTIAL",
-              "COMPLETED"
+              "COMPLETED",
+              "all"
             ]
           },
           "count": {

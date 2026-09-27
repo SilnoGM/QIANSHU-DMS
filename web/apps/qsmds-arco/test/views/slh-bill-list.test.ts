@@ -7,6 +7,8 @@ import {
   buildSlhBillStatusCountsQuery,
   resolveSlhBillListState,
   resolveSlhBillReconciliationFilter,
+  SLH_BILL_DEFAULT_RECONCILIATION_FILTER,
+  SLH_BILL_RECONCILIATION_FILTERS,
 } from '../../src/views/workbenches/slh-bills/list.logic'
 
 async function readPageSource() {
@@ -82,14 +84,19 @@ test('计数查询与列表同筛选但不带分页，两块工具栏的选择�
   })
 })
 
-test('工具栏取值只接受约定编码，非法值退回默认', () => {
+test('工具栏取值只接受约定编码，对账状态缺省停在未对账', () => {
   assert.equal(resolveSlhBillListState('active'), 'active')
   assert.equal(resolveSlhBillListState('superseded'), 'superseded')
   assert.equal(resolveSlhBillListState('COMPLETED'), 'active')
   assert.equal(resolveSlhBillListState(''), 'active')
   assert.equal(resolveSlhBillReconciliationFilter('PARTIAL'), 'PARTIAL')
-  assert.equal(resolveSlhBillReconciliationFilter('RECONCILED'), 'all')
-  assert.equal(resolveSlhBillReconciliationFilter('123'), 'all')
+  // 进页面默认看未对账；非法或缺失的取值也归一到这里。
+  assert.equal(resolveSlhBillReconciliationFilter('RECONCILED'), SLH_BILL_DEFAULT_RECONCILIATION_FILTER)
+  assert.equal(resolveSlhBillReconciliationFilter('123'), 'PENDING')
+  assert.equal(SLH_BILL_DEFAULT_RECONCILIATION_FILTER, 'PENDING')
+  // 「全部」是兜底项，排在最后。
+  assert.equal(SLH_BILL_RECONCILIATION_FILTERS.at(-1), 'all')
+  assert.deepEqual([...SLH_BILL_RECONCILIATION_FILTERS], ['PENDING', 'PARTIAL', 'COMPLETED', 'all'])
 })
 
 test('列表页挂两块工具栏：上排账单状态、下排对账状态，且都带计数', async () => {
