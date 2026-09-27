@@ -82871,7 +82871,7 @@
             "description": "Manual TWD per CNY rate; only allowed when the bill formula has no divisor."
           },
           "supersedesBillId": {
-            "type": "object",
+            "type": "string",
             "format": "uuid",
             "nullable": true,
             "description": "Existing bill this import replaces."

@@ -81,7 +81,7 @@ export class SlhBillImportCreateDto extends SlhBillMediaAssetDto {
   @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 500) remark?: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true, pattern: '^(?:0|[1-9]\\d{0,17})(?:\\.\\d{1,12})?$', description: 'Manual TWD per CNY rate; only allowed when the bill formula has no divisor.' })
   @IsOptional() @IsString() @Matches(RATE_PATTERN) manualForeignUnitsPerCny?: string | null
-  @ApiPropertyOptional({ format: 'uuid', nullable: true, description: 'Existing bill this import replaces.' })
+  @ApiPropertyOptional({ type: 'string', format: 'uuid', nullable: true, description: 'Existing bill this import replaces.' })
   @IsOptional() @IsUUID('4') supersedesBillId?: string | null
   @ApiPropertyOptional({ default: false, description: 'Acknowledge a duplicate period and container set.' })
   @IsOptional() @Type(() => Boolean) @IsIn([true, false]) duplicateAcknowledged?: boolean
