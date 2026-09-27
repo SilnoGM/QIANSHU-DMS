@@ -9,11 +9,31 @@ import {
   formatSlhBillVolume,
   formatSlhBillWeight,
   groupSlhBillCharges,
+  resolveSlhBillFoldedNetAmount,
+  resolveSlhBillNetDisplay,
   resolveSlhBillVolumeDifference,
 } from '../../src/views/workbenches/slh-bills/display.logic'
 import { buildSlhBillLineColumns } from '../../src/views/workbenches/slh-bills/line-columns.logic'
 
 const charge = (chargeType: SlhBillLineChargeDto['chargeType'], currencyCode: SlhBillLineChargeDto['currencyCode'], amount: string): SlhBillLineChargeDto => ({ amount, chargeType, currencyCode })
+
+test('折算净额按账单内嵌汇率折算，缺汇率或缺金额时不折算', () => {
+  // 与详情页对比区同一口径：不折算净额 ÷ 内嵌汇率，2 位小数（half-up）。
+  assert.equal(resolveSlhBillFoldedNetAmount('1870579.00', '4.800000000000'), '389703.96')
+  assert.equal(resolveSlhBillFoldedNetAmount('1870579', '4.8'), '389703.96')
+  assert.equal(resolveSlhBillFoldedNetAmount('100.005', '4'), '25.00')
+  assert.equal(resolveSlhBillFoldedNetAmount('1870579.00', null), null)
+  assert.equal(resolveSlhBillFoldedNetAmount('1870579.00', ''), null)
+  assert.equal(resolveSlhBillFoldedNetAmount(null, '4.8'), null)
+  assert.equal(resolveSlhBillFoldedNetAmount(undefined, '4.8'), null)
+  // 汇率为 0 时不能折算（除零），也不冒充原值。
+  assert.equal(resolveSlhBillFoldedNetAmount('1870579.00', '0'), null)
+})
+
+test('列表「折算净额」列在有内嵌汇率时给人民币，否则退回不折算的台币原值', () => {
+  assert.deepEqual(resolveSlhBillNetDisplay({ embeddedForeignUnitsPerCny: '4.8', reportedNetAmountTwd: '1870579.00' }), { amount: '389703.96', currency: 'CNY' })
+  assert.deepEqual(resolveSlhBillNetDisplay({ embeddedForeignUnitsPerCny: null, reportedNetAmountTwd: '1870579.00' }), { amount: '1870579.00', currency: 'TWD' })
+})
 
 test('汇率固定两位小数展示，未知值保持为空且不改变原始精度', () => {
   assert.equal(formatSlhBillRate('4.8'), '4.80')

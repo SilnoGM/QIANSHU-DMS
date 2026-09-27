@@ -19,11 +19,13 @@ test('筛选栏只保留账单期间，金额区间输入已移除', async () =>
   assert.match(source, /<QsDateRangeFilter[\s\S]*?width-class="w-\[360px\]"/u)
 })
 
-test('柜号数单元格在数字后提供柜号清单浮层', async () => {
+test('柜号数单元格悬停即出柜号清单浮层', async () => {
   const source = await readPageSource()
-  // 柜号清单放在浮层里，数字本身仍留在列中；缺了浮层就只能看到数量、看不到是哪些柜。
+  // 悬停整格就出清单（不再单放 i 图标），数量本身仍留在列里；
+  // 缺了浮层就只能看到数量、看不到是哪些柜。
   assert.match(source, /#cell-containerBatchCount="\{ row \}"/u)
   assert.match(source, /v-for="name in row\.original\.containerBatchNames"/u)
+  assert.equal(source.includes('i-lucide:info'), false)
   // 浮层内不能套 qs-type-*（那组类自带前景色，落在深色气泡上看不清），要用气泡自身的背景色文字。
   assert.match(source, /v-for="name in row\.original\.containerBatchNames"[\s\S]{0,200}text-background/u)
 })

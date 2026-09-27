@@ -151,6 +151,7 @@ export class SlhBillListItemDto {
   @ApiProperty({ type: 'string' }) codTotalAmountTwd!: string
   @ApiProperty({ type: 'string' }) ntdSurchargeTotalAmountTwd!: string
   @ApiProperty({ type: 'string' }) reportedNetAmountTwd!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Rate embedded in the bill formula; the list folds the net amount with it.' }) embeddedForeignUnitsPerCny!: string | null
   @ApiPropertyOptional({ enum: SlhBillRateSourceDto, nullable: true }) rateSource!: SlhBillRateSourceDto | null
   @ApiPropertyOptional({ format: 'uuid', nullable: true }) supersededById!: string | null
   @ApiProperty() sourceFileName!: string

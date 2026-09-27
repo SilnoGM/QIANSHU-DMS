@@ -15,7 +15,9 @@ import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { containerFailure } from '../containers/use-container-resource'
+import { resolveSlhBillNetDisplay } from './display.logic'
 import { buildSlhBillListQuery } from './list.logic'
+import SlhBillRateSourceTag from './slh-bill-rate-source-tag.vue'
 
 defineOptions({ name: 'QsFinanceBillReconciliationSlhBillManagement' })
 const { t } = useI18n()
@@ -51,10 +53,13 @@ const columns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
   { id: 'billMonth', title: t('slhBill.column.billMonth'), accessorFn: item => item.billMonth, width: 130, minWidth: 130 },
   { id: 'period', title: t('slhBill.column.period'), accessorFn: item => `${item.periodStart} ~ ${item.periodEnd}`, minWidth: 205 },
   { id: 'lineCount', title: t('slhBill.column.lineCount'), accessorKey: 'lineCount', minWidth: 110, align: 'right' },
-  { id: 'containerBatchCount', title: t('slhBill.column.containerBatchCount'), accessorKey: 'containerBatchCount', minWidth: 100, align: 'right' },
-  { id: 'payable', title: t('slhBill.column.payableTotalAmountCny'), accessorKey: 'payableTotalAmountCny', minWidth: 175, align: 'right' },
-  { id: 'codTwd', title: t('slhBill.column.codTotalAmountTwd'), accessorKey: 'codTotalAmountTwd', minWidth: 165, align: 'right' },
-  { id: 'reportedNet', title: t('slhBill.column.reportedNetAmountTwd'), accessorKey: 'reportedNetAmountTwd', minWidth: 165, align: 'right' },
+  { id: 'containerBatchCount', title: t('slhBill.column.containerBatchCount'), accessorKey: 'containerBatchCount', minWidth: 110, align: 'right' },
+  // 金额三列按用户要求加宽：金额是核对时的主要对象，列太窄会挤在一起不好扫读。
+  { id: 'payable', title: t('slhBill.column.payableTotalAmountCny'), accessorKey: 'payableTotalAmountCny', minWidth: 195, align: 'right' },
+  { id: 'codTwd', title: t('slhBill.column.codTotalAmountTwd'), accessorKey: 'codTotalAmountTwd', minWidth: 195, align: 'right' },
+  { id: 'ntdSurchargeTwd', title: t('slhBill.column.ntdSurchargeTotalAmountTwd'), accessorKey: 'ntdSurchargeTotalAmountTwd', minWidth: 165, align: 'right' },
+  // 折算净额：有账单内嵌汇率时出折算后的人民币，没有则退回不折算的台币原值。
+  { id: 'foldedNet', title: t('slhBill.column.foldedNetAmount'), accessorFn: item => resolveSlhBillNetDisplay(item).amount, minWidth: 195, align: 'right' },
   { id: 'rate', title: t('slhBill.column.rateSource'), accessorFn: item => item.rateSource ?? '', minWidth: 175 },
   { id: 'sourceFile', title: t('slhBill.column.sourceFileName'), accessorKey: 'sourceFileName', minWidth: 240 },
   { id: 'created', title: t('slhBill.column.createdAt'), accessorKey: 'createdAt', minWidth: 220 },
@@ -181,27 +186,19 @@ onBeforeUnmount(() => controller?.abort())
           <span class="qs-type-data whitespace-nowrap">{{ row.original.periodStart }} ~ {{ row.original.periodEnd }}</span>
         </template>
         <template #cell-containerBatchCount="{ row }">
-          <span class="inline-flex gap-1 items-baseline">
-            {{ row.original.containerBatchCount }}
-            <!-- 柜号清单较长，收进提示里按需查看；数字本身仍保留在列里。 -->
-            <FaTooltip v-if="row.original.containerBatchNames.length > 0">
-              <button
-                type="button"
-                class="text-muted-foreground p-0 border-0 bg-transparent cursor-pointer"
-                :aria-label="t('slhBill.column.containerBatchCount')"
-              >
-                <FaIcon name="i-lucide:info" class="size-3.5" aria-hidden="true" />
-              </button>
-              <template #content>
-                <!-- 气泡内不能套 qs-type-*：那组类自带前景色，落在深色气泡上会看不清。 -->
-                <div class="flex flex-wrap gap-x-3 gap-y-1 max-w-[16rem]">
-                  <span v-for="name in row.original.containerBatchNames" :key="name" class="text-xs text-background">
-                    {{ name }}
-                  </span>
-                </div>
-              </template>
-            </FaTooltip>
-          </span>
+          <!-- 悬停整格即出柜号清单：不再单独放图标，数量本身仍留在列里。 -->
+          <FaTooltip v-if="row.original.containerBatchNames.length > 0">
+            <span class="qs-type-data tabular-nums" tabindex="0">{{ row.original.containerBatchCount }}</span>
+            <template #content>
+              <!-- 气泡内不能套 qs-type-*：那组类自带前景色，落在深色气泡上会看不清。 -->
+              <div class="flex flex-wrap gap-x-3 gap-y-1 max-w-[16rem]">
+                <span v-for="name in row.original.containerBatchNames" :key="name" class="text-xs text-background">
+                  {{ name }}
+                </span>
+              </div>
+            </template>
+          </FaTooltip>
+          <span v-else class="qs-type-data tabular-nums">{{ row.original.containerBatchCount }}</span>
         </template>
         <template #cell-payable="{ row }">
           <AmountDisplay :value="row.original.payableTotalAmountCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
@@ -209,18 +206,22 @@ onBeforeUnmount(() => controller?.abort())
         <template #cell-codTwd="{ row }">
           <AmountDisplay :value="row.original.codTotalAmountTwd" currency="TWD" :currencies="currencyCatalog.currencies.value" />
         </template>
-        <template #cell-reportedNet="{ row }">
-          <AmountDisplay :value="row.original.reportedNetAmountTwd" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+        <template #cell-ntdSurchargeTwd="{ row }">
+          <AmountDisplay :value="row.original.ntdSurchargeTotalAmountTwd" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+        </template>
+        <template #cell-foldedNet="{ row }">
+          <AmountDisplay
+            :value="resolveSlhBillNetDisplay(row.original).amount"
+            :currency="resolveSlhBillNetDisplay(row.original).currency"
+            :currencies="currencyCatalog.currencies.value"
+          />
         </template>
         <template #cell-rate="{ row }">
-          <QsTableStackedCell>
-            <QsTableStackedLine>
-              {{ row.original.rateSource ? t(`slhBill.rateSource.${row.original.rateSource}`) : t('slhBill.noRate') }}
-            </QsTableStackedLine>
-          </QsTableStackedCell>
+          <SlhBillRateSourceTag :source="row.original.rateSource ?? null" />
         </template>
         <template #cell-sourceFile="{ row }">
-          <span class="qs-type-data block break-words">{{ row.original.sourceFileName }}</span>
+          <!-- 只做"这是原件文件名"的视觉标注，不可点击（下载入口在详情页）。 -->
+          <span class="qs-type-data underline underline-offset-2 decoration-dotted block break-words">{{ row.original.sourceFileName }}</span>
         </template>
         <template #cell-created="{ row }">
           <QsTableStackedCell>
@@ -274,10 +275,22 @@ onBeforeUnmount(() => controller?.abort())
               </div>
               <div>
                 <dt class="qs-type-meta text-muted-foreground">
-                  {{ t('slhBill.column.reportedNetAmountTwd') }}
+                  {{ t('slhBill.column.ntdSurchargeTotalAmountTwd') }}
                 </dt>
                 <dd class="m-0 mt-1">
-                  <AmountDisplay :value="row.reportedNetAmountTwd" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+                  <AmountDisplay :value="row.ntdSurchargeTotalAmountTwd" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+                </dd>
+              </div>
+              <div>
+                <dt class="qs-type-meta text-muted-foreground">
+                  {{ t('slhBill.column.foldedNetAmount') }}
+                </dt>
+                <dd class="m-0 mt-1">
+                  <AmountDisplay
+                    :value="resolveSlhBillNetDisplay(row).amount"
+                    :currency="resolveSlhBillNetDisplay(row).currency"
+                    :currencies="currencyCatalog.currencies.value"
+                  />
                 </dd>
               </div>
             </dl>
@@ -292,7 +305,7 @@ onBeforeUnmount(() => controller?.abort())
               <div>
                 <dt class="qs-type-meta text-muted-foreground">
                   {{ t('slhBill.column.sourceFileName') }}
-                </dt><dd class="qs-type-body m-0 break-words">
+                </dt><dd class="qs-type-body m-0 underline underline-offset-2 decoration-dotted break-words">
                   {{ row.sourceFileName }}
                 </dd>
               </div>

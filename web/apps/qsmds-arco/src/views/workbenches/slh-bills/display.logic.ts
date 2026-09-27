@@ -97,7 +97,6 @@ export function formatSlhBillWeight(line: Pick<SlhBillLineDto, 'grossWeightKg' |
 }
 
 export type SlhBillVolumeDifferenceTone = 'over' | 'under' | 'even'
-
 export interface SlhBillVolumeDifference {
   tone: SlhBillVolumeDifferenceTone
   /** 带符号的 2 位小数差值文本；相等时为空串，由界面显示占位符。 */
@@ -122,4 +121,49 @@ export function resolveSlhBillVolumeDifference(line: Pick<SlhBillLineDto, 'volum
     text: `${difference.isPositive() ? '+' : '-'}${difference.abs().toFixed(2)}`,
     tone: difference.isPositive() ? 'over' : 'under',
   }
+}
+
+/** 无法折算时的空值：既缺金额也缺汇率，或汇率是 0（除零）。 */
+function parseDecimalOrNull(value: string | null | undefined): Decimal | null {
+  if (value === null || value === undefined || value.trim() === '') {
+    return null
+  }
+  try {
+    return new Decimal(value)
+  }
+  catch {
+    return null
+  }
+}
+
+/**
+ * 折算净额：把不折算净额按账单内嵌汇率折成人民币，与详情页对比区同一口径（2 位小数、half-up）。
+ * 没有内嵌汇率、金额缺失或汇率为 0 时返回 null——调用方据此退回不折算的台币原值，不要用 0 冒充。
+ */
+export function resolveSlhBillFoldedNetAmount(
+  netTwd: string | null | undefined,
+  embeddedForeignUnitsPerCny: string | null | undefined,
+): string | null {
+  const net = parseDecimalOrNull(netTwd)
+  const rate = parseDecimalOrNull(embeddedForeignUnitsPerCny)
+  if (net === null || rate === null || rate.isZero()) {
+    return null
+  }
+  return net.dividedBy(rate).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2)
+}
+
+export interface SlhBillNetDisplay {
+  amount: string
+  currency: 'CNY' | 'TWD'
+}
+
+/** 列表「折算净额」列：有内嵌汇率时出人民币折算值，否则退回不折算的台币原值（币种随之变化）。 */
+export function resolveSlhBillNetDisplay(item: {
+  reportedNetAmountTwd: string
+  embeddedForeignUnitsPerCny?: string | null
+}): SlhBillNetDisplay {
+  const folded = resolveSlhBillFoldedNetAmount(item.reportedNetAmountTwd, item.embeddedForeignUnitsPerCny ?? null)
+  return folded === null
+    ? { amount: item.reportedNetAmountTwd, currency: 'TWD' }
+    : { amount: folded, currency: 'CNY' }
 }

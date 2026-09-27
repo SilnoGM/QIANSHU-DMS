@@ -205,6 +205,8 @@ export function serializeSlhBillListItem(row: SlhBillListRow): SlhBillListItemDt
     codTotalAmountTwd: row.codTotalAmountTwd.toFixed(2),
     ntdSurchargeTotalAmountTwd: row.ntdSurchargeTotalAmountTwd.toFixed(2),
     reportedNetAmountTwd: row.reportedNetAmountTwd.toFixed(2),
+    // 列表要展示「折算净额」，把账单内嵌汇率一并给出，由前端按同一口径折算。
+    embeddedForeignUnitsPerCny: row.embeddedForeignUnitsPerCny?.toFixed(12) ?? null,
     rateSource: row.rateSource === null ? null : row.rateSource as SlhBillRateSourceDto,
     supersededById: row.supersededById,
     sourceFileName: row.sourceFileName,

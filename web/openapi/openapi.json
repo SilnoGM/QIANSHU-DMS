@@ -81952,6 +81952,11 @@
           "reportedNetAmountTwd": {
             "type": "string"
           },
+          "embeddedForeignUnitsPerCny": {
+            "type": "string",
+            "nullable": true,
+            "description": "Rate embedded in the bill formula; the list folds the net amount with it."
+          },
           "rateSource": {
             "type": "string",
             "enum": [
