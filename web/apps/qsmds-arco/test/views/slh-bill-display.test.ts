@@ -89,7 +89,16 @@ test('明细列覆盖账单全部字段并统一按两位小数与费别名展�
   assert.equal(display('pricingBasis', { pricingBasis: 'VOLUME' }), 'slhBill.pricingBasis.VOLUME')
   assert.equal(display('pricingBasis', { pricingBasis: undefined }), 'slhBill.valueMissing')
   assert.equal(display('packageCount', { packageCount: 12, packageUnit: '件' }), '12 件')
+  // 收货人列：桌面端由组件渲染两行（姓名 + 电话 / 地址），纯文本兜底给同一份信息；
+  // 三项都缺（含空原文）时才显示缺值占位符，仓库自提行只出地址。
   assert.equal(display('recipientInfo', { recipientInfoRaw: '' }), 'slhBill.valueMissing')
+  assert.equal(display('recipientInfo', {
+    recipientAddress: '範例市範例區範例里37-22號',
+    recipientName: '王小明',
+    recipientPhones: '915000000',
+  }), '王小明 915000000 範例市範例區範例里37-22號')
+  assert.equal(display('recipientInfo', { recipientAddress: '測試倉庫', recipientName: null, recipientPhones: null }), '測試倉庫')
+  assert.equal(display('recipientInfo', { recipientAddress: null, recipientName: '王小明', recipientPhones: null }), '王小明')
   // 费用明细的纯文本兜底同时给出币种与费别名，避免移动端只看到金额。
   assert.equal(display('charges', { charges: [charge('FREIGHT', 'CNY', '100.00'), charge('WAITING', 'TWD', '20.00')] }), 'CNY slhBill.chargeType.FREIGHT 100.00；TWD slhBill.chargeType.WAITING 20.00')
   assert.equal(display('charges', { charges: [] }), '')

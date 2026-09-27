@@ -112,7 +112,20 @@ export function buildSlhBillLineColumns<TData extends SlhBillLineDto = SlhBillLi
     // 费用明细按币种逐行列出，实测最宽的一组（`TWD二次派送 1700.00`）只占 157px，
     // 320px 会空出小半列；收到 240px 仍能容纳现有数据，同时给更长的费别名留余量。
     { id: 'charges', title: translate('slhBill.line.charges'), accessorFn: line => chargesText(line), width: 240, minWidth: 200 },
-    { id: 'recipientInfo', title: translate('slhBill.line.recipientInfo'), accessorFn: line => text(line.recipientInfoRaw), width: 320, minWidth: 260 },
+    // 桌面端由收货人组件渲染成两行（姓名 + 电话 / 地址）；这里给移动端卡片与复制等纯文本场景
+    // 提供同一份信息，三项都缺时与其它列一致显示缺值占位符。
+    {
+      id: 'recipientInfo',
+      title: translate('slhBill.line.recipientInfo'),
+      accessorFn: (line) => {
+        const parts = [line.recipientName, line.recipientPhones, line.recipientAddress]
+          .map(value => text(value))
+          .filter(value => value !== missing)
+        return parts.length === 0 ? missing : parts.join(' ')
+      },
+      width: 320,
+      minWidth: 260,
+    },
     { id: 'remark', title: translate('slhBill.line.remark'), accessorFn: line => text(line.remark), width: 220, minWidth: 220, maxWidth: 220 },
   ]
 }
