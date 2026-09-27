@@ -81,6 +81,14 @@
       原件文件改为文件样式 + 图标下载；明细分页新增 `keyword`（入仓单号/唛头/货名/收货人信息
       模糊搜索）与 `containerBatchName`（柜号精确）服务端过滤，契约快照与前端类型同步重生
       （commit 88334971）_
+- [x] 收货人信息拆分为姓名 / 电话 / 地址三字段
+      _Requirements: R6_ _Evidence: 解析器 `slh-bill-recipient-parser.ts` + `slh-bill-recipient.fixture.ts`
+      （78 行同形脱敏夹具，结构自检 0 不一致：样本 53/53 行切分成功、25 行仓库自提按口径落地址）；
+      迁移 `20260927120000_slh_bill_line_recipient_fields` 加三列并已应用；导入链路与明细 DTO 同步
+      （commit aeac3d74、4db4af84）。真实账单实测：服务端解析流程 44+34 行产出 53 行含电话 / 25 行仅地址 / 0 行待确认_
+      _阻塞: 存量回填 —— `slh_bill_lines` 的 `BEFORE UPDATE` 不可变触发器拒绝任何 UPDATE，
+      三列只对新导入生效；`slh-bills:backfill-recipients` 的 dry-run 可用（44 行待写），
+      `--apply` 被拒且整体回滚。解决方向待定：放宽触发器（仅允许这三列变化）/ 不回填存量 / 改为读取时解析_
 - [x] 入库前确认弹窗：收集名称、月份与备注，并展示编号占位与原件元数据
       _Requirements: R5, R6_ _Evidence: commit 9df04c68（迁移 20260927100000 与接口）
       / 后续提交（弹窗、列表与详情展示、名称冲突后缀）_
