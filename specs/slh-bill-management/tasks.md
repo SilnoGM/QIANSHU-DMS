@@ -71,6 +71,11 @@
       _Requirements: R1, R2, R4_ _Evidence: commit 69c1875a_
 - [x] 详情页：汇总、自报与自算并列及差额、明细与费用明细分页、原件下载
       _Requirements: R6_ _Evidence: commit 69c1875a_
+      / 后续修订（2026-09-27）：详情页重排为「结论层 → 账单信息三栏 → 对账核对 → 账单明细」，
+      首屏改为金额与对账结论（实测首屏由元数据改为 30px 主金额 ¥87,482.50 + 结论标签）；
+      新增纯展示组件 `slh-bill-conclusion.vue`、`slh-bill-info.vue`，配套纯函数
+      `resolveSlhBillConclusion`（差异 > 告警 > 一致定级）与 `resolveSlhBillContainerBatchPreview`
+      （柜号清单超 12 个才折叠），三语文案新增 13 个键（commit 40017aec）_
 - [x] 入库前确认弹窗：收集名称、月份与备注，并展示编号占位与原件元数据
       _Requirements: R5, R6_ _Evidence: commit 9df04c68（迁移 20260927100000 与接口）
       / 后续提交（弹窗、列表与详情展示、名称冲突后缀）_
