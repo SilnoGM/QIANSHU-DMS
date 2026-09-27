@@ -234,7 +234,8 @@
       "PENDING": "未对账",
       "PARTIAL": "部分对账",
       "COMPLETED": "对账完成",
-      "RECONCILED": "已对账"
+      "RECONCILED": "已对账",
+      "all": "全部"
     },
     "retry": "重试",
     "search": "搜索账单编号、原件文件名或柜号",
@@ -244,6 +245,7 @@
       "superseded": "已被取代",
       "all": "全部"
     },
+    "stateFilter": "账单状态",
     "submitting": "正在入库",
     "superseded": "已被取代",
     "supersededAt": "取代时间",

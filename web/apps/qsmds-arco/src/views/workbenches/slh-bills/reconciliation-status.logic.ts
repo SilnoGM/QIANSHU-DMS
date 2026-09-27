@@ -10,12 +10,11 @@ export type SlhBillLineReconciliationStatus = SlhBillLineDto['reconciliationStat
 export type SlhBillAnyReconciliationStatus = SlhBillReconciliationStatus | SlhBillLineReconciliationStatus
 
 /**
- * 未对账保持中性（账单刚入库时几乎都是这个状态，铺满颜色反而看不出重点），
- * 部分对账用琥珀提示还有活没干完，对账完成与已对账用绿色收口。
- * 与同列表的汇率来源标签同款：outline 变体 + 着色边框文字，不铺底色。
+ * 未对账用红色（还没开始做的活，需要被看见），部分对账用黄色（做了一半），
+ * 对账完成与已对账用绿色（收口）。与同列表的汇率来源标签同款：outline 变体 + 着色边框文字，不铺底色。
  */
 const TONE_CLASSES: Readonly<Record<SlhBillAnyReconciliationStatus, string>> = {
-  PENDING: 'border-muted-foreground/40 text-muted-foreground',
+  PENDING: 'border-destructive/40 text-destructive',
   PARTIAL: 'border-amber-500/40 text-amber-700 dark:text-amber-300',
   COMPLETED: 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300',
   RECONCILED: 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300',
@@ -25,7 +24,10 @@ export function resolveSlhBillReconciliationTone(status: SlhBillAnyReconciliatio
   return TONE_CLASSES[status]
 }
 
-/** 两个取值集共用同一段文案：PENDING 在两处都是「未对账」。 */
-export function resolveSlhBillReconciliationLabelKey(status: SlhBillAnyReconciliationStatus): string {
+/**
+ * 两个取值集共用同一段文案：PENDING 在两处都是「未对账」。
+ * 筛选工具栏多一个 `all`（不加对账条件），它只用来取文案，没有对应颜色。
+ */
+export function resolveSlhBillReconciliationLabelKey(status: SlhBillAnyReconciliationStatus | 'all'): string {
   return `slhBill.reconciliationStatus.${status}`
 }

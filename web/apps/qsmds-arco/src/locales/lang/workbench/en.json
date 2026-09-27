@@ -225,7 +225,8 @@
       "PENDING": "Not reconciled",
       "PARTIAL": "Partially reconciled",
       "COMPLETED": "Fully reconciled",
-      "RECONCILED": "Reconciled"
+      "RECONCILED": "Reconciled",
+      "all": "All"
     },
     "retry": "Retry",
     "search": "Search bill number, source file name or container batch",
@@ -235,6 +236,7 @@
       "superseded": "Superseded",
       "all": "All"
     },
+    "stateFilter": "Bill state",
     "submitting": "Storing",
     "superseded": "Superseded",
     "supersededAt": "Superseded at",

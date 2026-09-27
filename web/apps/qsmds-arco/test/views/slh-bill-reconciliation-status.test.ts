@@ -9,6 +9,7 @@ import { buildSlhBillLineColumns } from '../../src/views/workbenches/slh-bills/l
 import { resolveSlhBillReconciliationLabelKey, resolveSlhBillReconciliationTone } from '../../src/views/workbenches/slh-bills/reconciliation-status.logic'
 
 const ALL_STATUSES = ['PENDING', 'PARTIAL', 'COMPLETED', 'RECONCILED'] as const
+const ALL_LABEL_VALUES = [...ALL_STATUSES, 'all'] as const
 
 async function readPageSource(name: string) {
   return readFile(new URL(`../../src/views/workbenches/slh-bills/${name}`, import.meta.url), 'utf8')
@@ -16,7 +17,7 @@ async function readPageSource(name: string) {
 
 test('两处取值共用同一份文案映射，且每个取值都有译文', () => {
   const messages = [zhCn, zhTw, en] as const
-  for (const status of ALL_STATUSES) {
+  for (const status of ALL_LABEL_VALUES) {
     const key = resolveSlhBillReconciliationLabelKey(status)
     assert.equal(key, `slhBill.reconciliationStatus.${status}`)
     for (const message of messages) {
@@ -28,14 +29,15 @@ test('两处取值共用同一份文案映射，且每个取值都有译文', ()
   }
 })
 
-test('未对账保持中性，部分对账与完成态各自有颜色，不存在空样式', () => {
+test('状态颜色按需求固定：未对账红、部分对账黄、完成与已对账绿', () => {
   const tones = ALL_STATUSES.map(status => resolveSlhBillReconciliationTone(status))
   for (const tone of tones) {
     assert.notEqual(tone.trim(), '')
   }
-  assert.equal(resolveSlhBillReconciliationTone('PENDING'), 'border-muted-foreground/40 text-muted-foreground')
+  assert.match(resolveSlhBillReconciliationTone('PENDING'), /text-destructive/u)
   assert.match(resolveSlhBillReconciliationTone('PARTIAL'), /text-amber-700/u)
   assert.match(resolveSlhBillReconciliationTone('COMPLETED'), /text-emerald-700/u)
+  assert.match(resolveSlhBillReconciliationTone('RECONCILED'), /text-emerald-700/u)
 })
 
 test('账单列表把服务端派生的三态直接渲染成标签，列紧跟账单期间', async () => {

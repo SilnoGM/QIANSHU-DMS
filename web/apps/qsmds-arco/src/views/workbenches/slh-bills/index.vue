@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CalendarDateRangeValue } from '@fantastic-admin/components'
-import type { SlhBillListState } from './list.logic'
-import type { SlhBillListItemDto } from '@/api/generated/types.gen'
+import type { SlhBillListState, SlhBillReconciliationFilter } from './list.logic'
+import type { SlhBillListItemDto, SlhBillStatusCountsDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import slhBillsApi from '@/api/modules/slh-bills'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
@@ -13,10 +13,19 @@ import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStac
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
+import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { containerFailure } from '../containers/use-container-resource'
 import { resolveSlhBillNetDisplay } from './display.logic'
-import { buildSlhBillListQuery } from './list.logic'
+import {
+  buildSlhBillListQuery,
+  buildSlhBillStatusCountsQuery,
+  resolveSlhBillListState,
+  resolveSlhBillReconciliationFilter,
+  SLH_BILL_LIST_STATES,
+  SLH_BILL_RECONCILIATION_FILTERS,
+} from './list.logic'
+import { resolveSlhBillReconciliationLabelKey } from './reconciliation-status.logic'
 import SlhBillRateSourceTag from './slh-bill-rate-source-tag.vue'
 import SlhBillReconciliationStatusTag from './slh-bill-reconciliation-status-tag.vue'
 
@@ -29,24 +38,40 @@ const currencyCatalog = useCurrencyCatalog()
 const canRead = computed(() => auth('slh-bills:read'))
 const canImport = computed(() => canRead.value && auth('slh-bills:create'))
 const state = ref<SlhBillListState>('active')
+const reconciliationStatus = ref<SlhBillReconciliationFilter>('all')
 const keyword = ref('')
 const page = ref(1)
 const pageSize = ref(20)
 const dateRange = shallowRef<CalendarDateRangeValue>({ end: undefined, start: undefined })
 const items = shallowRef<SlhBillListItemDto[]>([])
 const total = ref(0)
+// 计数快照：列表与计数两个请求共用同一组筛选条件，任一失败都不冒充成功结果。
+const counts = shallowRef<SlhBillStatusCountsDto | null>(null)
 const loading = ref(false)
 const error = ref('')
 let controller: AbortController | null = null
-const stateItems = computed(() => (['active', 'superseded', 'all'] as const).map(value => ({ value, label: t(`slhBill.state.${value}`) })))
-const query = computed(() => buildSlhBillListQuery({
-  page: page.value,
-  pageSize: pageSize.value,
+let countsController: AbortController | null = null
+const stateItems = computed(() => withStatusSwitchCounts(
+  SLH_BILL_LIST_STATES.map(value => ({ value, label: t(`slhBill.state.${value}`) })),
+  (counts.value?.states ?? []).map(item => ({ value: item.value, count: item.count })),
+  // 列表 total 与选中项同源，用它校准，避免两个请求之间的并发变化导致数字与行数不一致。
+  { selectedCount: loading.value ? undefined : total.value, selectedValue: state.value },
+))
+const reconciliationItems = computed(() => withStatusSwitchCounts(
+  SLH_BILL_RECONCILIATION_FILTERS.map(value => ({ value, label: t(resolveSlhBillReconciliationLabelKey(value)) })),
+  (counts.value?.reconciliationStatuses ?? []).map(item => ({ value: item.value, count: item.count })),
+  { selectedCount: loading.value ? undefined : total.value, selectedValue: reconciliationStatus.value },
+))
+/** 两块工具栏共用同一组筛选参数，页面只维护一份状态。 */
+const filter = computed(() => ({
   keyword: keyword.value,
   periodFrom: dateRange.value.start?.toString(),
   periodTo: dateRange.value.end?.toString(),
+  reconciliationStatus: reconciliationStatus.value,
   state: state.value,
 }))
+const query = computed(() => buildSlhBillListQuery({ ...filter.value, page: page.value, pageSize: pageSize.value }))
+const countsQuery = computed(() => buildSlhBillStatusCountsQuery(filter.value))
 const columns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
   // 编号是账单的唯一标识，固定在最左；名称与月份是入库时填的归档信息，紧随其后不固定。
   { id: 'slhBillNo', title: t('slhBill.column.slhBillNo'), accessorKey: 'slhBillNo', width: 215, minWidth: 215, fixed: 'left' },
@@ -101,15 +126,53 @@ async function load(): Promise<void> {
 }
 function search(): void {
   page.value = 1
-  void load()
+  refresh()
 }
 function selectState(value: string): void {
-  if (value !== 'active' && value !== 'superseded' && value !== 'all') {
+  state.value = resolveSlhBillListState(value)
+  page.value = 1
+  refresh()
+}
+function selectReconciliationStatus(value: string): void {
+  reconciliationStatus.value = resolveSlhBillReconciliationFilter(value)
+  page.value = 1
+  refresh()
+}
+/**
+ * 计数与列表一起刷新：两块工具栏的计数互相依赖对方的选择，
+ * 切换任一块都会让对方那一组数字变化，所以状态切换也必须重取计数。
+ */
+function refresh(): void {
+  void load()
+  void loadCounts()
+}
+/** 计数失败不遮蔽列表错误：清空快照让数字回落为 0，不把上一次的结果冒充成本次筛选的结果。 */
+async function loadCounts(): Promise<void> {
+  countsController?.abort()
+  if (!canRead.value) {
+    counts.value = null
     return
   }
-  state.value = value
-  page.value = 1
-  void load()
+  const current = new AbortController()
+  countsController = current
+  try {
+    const response = await slhBillsApi.statusCounts(countsQuery.value, current.signal)
+    if (current.signal.aborted || !canRead.value) {
+      return
+    }
+    counts.value = response.data
+  }
+  catch {
+    // 计数失败不遮蔽列表错误：清空快照让数字回落为 0，不把上一次的结果冒充成本次筛选的结果。
+    if (!current.signal.aborted) {
+      counts.value = null
+    }
+  }
+  finally {
+    if (countsController === current) {
+      countsController = null
+    }
+  }
 }
 function viewBill(id: string): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhBillDetail', params: { id } })
@@ -120,10 +183,14 @@ function openImport(): void {
 watch(() => [canRead.value, accountStore.authEpoch], () => {
   items.value = []
   total.value = 0
+  counts.value = null
   error.value = ''
-  void load()
+  refresh()
 }, { immediate: true })
-onBeforeUnmount(() => controller?.abort())
+onBeforeUnmount(() => {
+  controller?.abort()
+  countsController?.abort()
+})
 </script>
 
 <template>
@@ -137,7 +204,9 @@ onBeforeUnmount(() => controller?.abort())
       <FaEmpty icon="i-lucide:shield-alert" :title="t('slhBill.noPermission')" class="py-12" />
     </FaPageMain>
     <FaPageMain v-else class="min-w-0">
-      <QsStatusSwitchToolbar :model-value="state" :items="stateItems" :aria-label="t('workbench.slhBillManagement')" class="mb-4" @update:model-value="selectState" />
+      <!-- 两块工具栏：上排按账单状态，下排按对账状态（对账状态由明细行汇总派生）。 -->
+      <QsStatusSwitchToolbar :model-value="state" :items="stateItems" :aria-label="t('slhBill.stateFilter')" class="mb-2" @update:model-value="selectState" />
+      <QsStatusSwitchToolbar :model-value="reconciliationStatus" :items="reconciliationItems" :aria-label="t('slhBill.column.reconciliationStatus')" class="mb-4" @update:model-value="selectReconciliationStatus" />
       <QsGenericTable
         v-model:page="page"
         v-model:page-size="pageSize"
@@ -158,7 +227,7 @@ onBeforeUnmount(() => controller?.abort())
         :action-column="{ fixed: 'right', minWidth: 120 }"
         @search="search"
         @pagination-change="load"
-        @retry="load"
+        @retry="refresh"
       >
         <template #query-leading>
           <QsDateRangeFilter

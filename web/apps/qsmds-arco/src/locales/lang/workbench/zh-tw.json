@@ -225,7 +225,8 @@
       "PENDING": "未對帳",
       "PARTIAL": "部分對帳",
       "COMPLETED": "對帳完成",
-      "RECONCILED": "已對帳"
+      "RECONCILED": "已對帳",
+      "all": "全部"
     },
     "retry": "重試",
     "search": "搜尋帳單編號、原件檔案名稱或櫃號",
@@ -235,6 +236,7 @@
       "superseded": "已被取代",
       "all": "全部"
     },
+    "stateFilter": "帳單狀態",
     "submitting": "正在入庫",
     "superseded": "已被取代",
     "supersededAt": "取代時間",

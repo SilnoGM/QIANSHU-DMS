@@ -1,15 +1,18 @@
 import type { AxiosInstance } from 'axios'
-import type { SlhBillDto, SlhBillImportCreateDto, SlhBillImportPreviewDto, SlhBillLinePageDto, SlhBillMediaAssetDto, SlhBillPageDto, SlhBillsLinesData, SlhBillsListData, SlhBillStagedFileDto } from '../generated/types.gen'
+import type { SlhBillDto, SlhBillImportCreateDto, SlhBillImportPreviewDto, SlhBillLinePageDto, SlhBillMediaAssetDto, SlhBillPageDto, SlhBillsLinesData, SlhBillsListData, SlhBillsStatusCountsData, SlhBillStagedFileDto, SlhBillStatusCountsDto } from '../generated/types.gen'
 import api from '../index'
 
 export type SlhBillListQuery = NonNullable<SlhBillsListData['query']>
 export type SlhBillLineQuery = NonNullable<SlhBillsLinesData['query']>
+export type SlhBillStatusCountsQuery = NonNullable<SlhBillsStatusCountsData['query']>
 const path = (id: string) => `slh-bills/${encodeURIComponent(id)}`
 const read = (signal: AbortSignal) => ({ signal, errorPresentation: 'local' as const })
 const write = (signal: AbortSignal) => ({ ...read(signal), retry: false as const })
 export function createSlhBillsApi(client: AxiosInstance) {
   return {
     list: (query: SlhBillListQuery, signal: AbortSignal) => client.get<SlhBillPageDto>('slh-bills', { ...read(signal), params: query }),
+    // 两块工具栏的计数：服务端按"忽略自己那一维、保留对方"的口径各算一组。
+    statusCounts: (query: SlhBillStatusCountsQuery, signal: AbortSignal) => client.get<SlhBillStatusCountsDto>('slh-bills/status-counts', { ...read(signal), params: query }),
     get: (id: string, signal: AbortSignal) => client.get<SlhBillDto>(path(id), read(signal)),
     lines: (id: string, query: SlhBillLineQuery, signal: AbortSignal) => client.get<SlhBillLinePageDto>(`${path(id)}/lines`, { ...read(signal), params: query }),
     uploadSourceFile: (file: File, signal: AbortSignal) => {
