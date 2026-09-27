@@ -13,6 +13,7 @@ import { SlhBillQueryService } from './slh-bill-query.service'
 import {
   SlhBillDto, SlhBillIdDto, SlhBillImportCreateDto, SlhBillImportPreviewDto, SlhBillLineListQueryDto,
   SlhBillLinePageDto, SlhBillListQueryDto, SlhBillMediaAssetDto, SlhBillPageDto, SlhBillStagedFileDto,
+  SlhBillStatusCountsDto, SlhBillStatusCountsQueryDto,
 } from './slh-bill.dto'
 
 function contract(operationId: string, mutation = false, errors: ApiContractErrorOptions[] = []) {
@@ -44,6 +45,10 @@ export class SlhBillController {
 
   @Get() @RequirePermissions('slh-bills:read') @ApiContractResponse({ status: 200, type: SlhBillPageDto }) @contract('slh_bills_list')
   list(@Query() query: SlhBillListQueryDto) { return this.queries.list(query) }
+
+  // 必须排在 `:id` 之前，否则会被当成账单主键。
+  @Get('status-counts') @RequirePermissions('slh-bills:read') @ApiContractResponse({ status: 200, type: SlhBillStatusCountsDto }) @contract('slh_bills_status_counts')
+  statusCounts(@Query() query: SlhBillStatusCountsQueryDto) { return this.queries.statusCounts(query) }
 
   @Get(':id') @RequirePermissions('slh-bills:read') @ApiContractResponse({ status: 200, type: SlhBillDto }) @contract('slh_bills_get', false, [notFound])
   detail(@Param() params: SlhBillIdDto) { return this.queries.get(params.id) }

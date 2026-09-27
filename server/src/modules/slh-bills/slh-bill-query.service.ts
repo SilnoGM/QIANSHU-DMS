@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common'
-import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { slhBillFailure } from './slh-bill-calculation'
 import { buildSlhBillLineWhere } from './slh-bill-line-filter'
+import { buildSlhBillListWhere, withSlhBillReconciliationStatus, withSlhBillState } from './slh-bill-list-filter'
 import { slhBillUuid } from './slh-bill.normalizer'
 import { serializeSlhBill, serializeSlhBillLine, serializeSlhBillListItem, slhBillListInclude, slhBillRateInclude } from './slh-bill.serializer'
-import type { SlhBillDto, SlhBillLineListQueryDto, SlhBillLinePageDto, SlhBillListQueryDto, SlhBillPageDto } from './slh-bill.dto'
+import { SlhBillListStateDto, SlhBillReconciliationFilterDto } from './slh-bill.dto'
+import type { SlhBillDto, SlhBillLineListQueryDto, SlhBillLinePageDto, SlhBillListQueryDto, SlhBillPageDto, SlhBillStatusCountsDto, SlhBillStatusCountsQueryDto } from './slh-bill.dto'
 
 const DEFAULT_PAGE_SIZE = 20
 const DEFAULT_LINE_PAGE_SIZE = 50
@@ -17,32 +18,44 @@ export class SlhBillQueryService {
   async list(query: SlhBillListQueryDto): Promise<SlhBillPageDto> {
     const page = query.page ?? 1
     const pageSize = query.pageSize ?? DEFAULT_PAGE_SIZE
-    const keyword = query.keyword?.trim()
-    const where: Prisma.SlhBillWhereInput = {
-      ...(query.state === 'superseded' ? { supersededById: { not: null } } : {}),
-      ...(query.state === undefined || query.state === 'active' ? { supersededById: null } : {}),
-      ...(query.periodFrom === undefined ? {} : { periodEnd: { gte: new Date(query.periodFrom) } }),
-      ...(query.periodTo === undefined ? {} : { periodStart: { lte: new Date(query.periodTo) } }),
-      ...(keyword === undefined || keyword === '' ? {} : {
-        OR: [
-          { slhBillNo: { contains: keyword, mode: 'insensitive' } },
-          { sourceFileName: { contains: keyword, mode: 'insensitive' } },
-          { containerBatchNames: { contains: keyword, mode: 'insensitive' } },
-        ],
-      }),
-    }
-    // 金额区间在解析精度内比较，避免把用户的两位小数输入当成浮点数。
-    if (query.payableMin !== undefined || query.payableMax !== undefined) {
-      where.AND = [{
-        ...(query.payableMin === undefined ? {} : { payableTotalAmountCny: { gte: new Prisma.Decimal(query.payableMin) } }),
-        ...(query.payableMax === undefined ? {} : { payableTotalAmountCny: { lte: new Prisma.Decimal(query.payableMax) } }),
-      }]
-    }
+    const where = buildSlhBillListWhere(query)
     const [items, total] = await this.prisma.$transaction([
       this.prisma.slhBill.findMany({ where, include: slhBillListInclude, orderBy: [{ periodStart: 'desc' }, { id: 'desc' }], skip: (page - 1) * pageSize, take: pageSize }),
       this.prisma.slhBill.count({ where }),
     ])
     return { items: items.map(serializeSlhBillListItem), total, page, pageSize }
+  }
+
+  /**
+   * 两块工具栏的计数。基准条件是同一份筛选（搜索、期间、金额），
+   * 各自只忽略自己那一维：账单状态计数仍受对账筛选影响，反之亦然，
+   * 这样切换任一工具栏后，另一块工具栏上的数字与点进去看到的行数始终一致。
+   */
+  async statusCounts(query: SlhBillStatusCountsQueryDto): Promise<SlhBillStatusCountsDto> {
+    const forState = buildSlhBillListWhere(query, { omitState: true })
+    const forReconciliation = buildSlhBillListWhere(query, { omitReconciliationStatus: true })
+    const [active, superseded, all, pending, partial, completed, reconciliationAll] = await this.prisma.$transaction([
+      this.prisma.slhBill.count({ where: withSlhBillState(forState, SlhBillListStateDto.ACTIVE) }),
+      this.prisma.slhBill.count({ where: withSlhBillState(forState, SlhBillListStateDto.SUPERSEDED) }),
+      this.prisma.slhBill.count({ where: withSlhBillState(forState, SlhBillListStateDto.ALL) }),
+      this.prisma.slhBill.count({ where: withSlhBillReconciliationStatus(forReconciliation, SlhBillReconciliationFilterDto.PENDING) }),
+      this.prisma.slhBill.count({ where: withSlhBillReconciliationStatus(forReconciliation, SlhBillReconciliationFilterDto.PARTIAL) }),
+      this.prisma.slhBill.count({ where: withSlhBillReconciliationStatus(forReconciliation, SlhBillReconciliationFilterDto.COMPLETED) }),
+      this.prisma.slhBill.count({ where: withSlhBillReconciliationStatus(forReconciliation, SlhBillReconciliationFilterDto.ALL) }),
+    ])
+    return {
+      states: [
+        { count: active, value: SlhBillListStateDto.ACTIVE },
+        { count: superseded, value: SlhBillListStateDto.SUPERSEDED },
+        { count: all, value: SlhBillListStateDto.ALL },
+      ],
+      reconciliationStatuses: [
+        { count: reconciliationAll, value: SlhBillReconciliationFilterDto.ALL },
+        { count: pending, value: SlhBillReconciliationFilterDto.PENDING },
+        { count: partial, value: SlhBillReconciliationFilterDto.PARTIAL },
+        { count: completed, value: SlhBillReconciliationFilterDto.COMPLETED },
+      ],
+    }
   }
 
   async get(id: string): Promise<SlhBillDto> {

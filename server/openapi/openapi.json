@@ -65544,6 +65544,22 @@
                 "all"
               ]
             }
+          },
+          {
+            "name": "reconciliationStatus",
+            "required": false,
+            "in": "query",
+            "description": "Filter by the reconciliation status derived from the lines of this bill.",
+            "schema": {
+              "default": "all",
+              "type": "string",
+              "enum": [
+                "all",
+                "PENDING",
+                "PARTIAL",
+                "COMPLETED"
+              ]
+            }
           }
         ],
         "responses": {
@@ -66036,6 +66052,284 @@
               "status": 503,
               "codes": [
                 "MEDIA_STORAGE_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/slh-bills/status-counts": {
+      "get": {
+        "operationId": "slh_bills_status_counts",
+        "parameters": [
+          {
+            "name": "periodFrom",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive period start lower bound (YYYY-MM-DD).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "periodTo",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive period end upper bound (YYYY-MM-DD).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "Matches bill number, source file name or container batch name.",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "name": "payableMin",
+            "required": false,
+            "in": "query",
+            "description": "Minimum payable amount in CNY.",
+            "schema": {
+              "pattern": "^(?:0|[1-9]\\d{0,27})(?:\\.\\d{1,2})?$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "payableMax",
+            "required": false,
+            "in": "query",
+            "description": "Maximum payable amount in CNY.",
+            "schema": {
+              "pattern": "^(?:0|[1-9]\\d{0,27})(?:\\.\\d{1,2})?$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "active",
+              "type": "string",
+              "enum": [
+                "active",
+                "superseded",
+                "all"
+              ]
+            }
+          },
+          {
+            "name": "reconciliationStatus",
+            "required": false,
+            "in": "query",
+            "description": "Filter by the reconciliation status derived from the lines of this bill.",
+            "schema": {
+              "default": "all",
+              "type": "string",
+              "enum": [
+                "all",
+                "PENDING",
+                "PARTIAL",
+                "COMPLETED"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlhBillStatusCountsDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "slh-bills"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": false,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
               ]
             }
           ]
@@ -82034,6 +82328,70 @@
           "total",
           "page",
           "pageSize"
+        ]
+      },
+      "SlhBillStateCountDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": [
+              "active",
+              "superseded",
+              "all"
+            ]
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ]
+      },
+      "SlhBillReconciliationCountDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": [
+              "all",
+              "PENDING",
+              "PARTIAL",
+              "COMPLETED"
+            ]
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ]
+      },
+      "SlhBillStatusCountsDto": {
+        "type": "object",
+        "properties": {
+          "states": {
+            "description": "Counts per bill state; the current reconciliation filter applies, the state filter does not.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillStateCountDto"
+            }
+          },
+          "reconciliationStatuses": {
+            "description": "Counts per reconciliation status; the current state filter applies, the reconciliation filter does not.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillReconciliationCountDto"
+            }
+          }
+        },
+        "required": [
+          "states",
+          "reconciliationStatuses"
         ]
       },
       "SlhBillRateDto": {

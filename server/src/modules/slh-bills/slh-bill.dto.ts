@@ -1,10 +1,16 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min } from 'class-validator'
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
 
 export enum SlhBillRateSourceDto { EMBEDDED = 'EMBEDDED', SYSTEM = 'SYSTEM', MANUAL = 'MANUAL' }
 export enum SlhBillPricingBasisDto { WEIGHT = 'WEIGHT', VOLUME = 'VOLUME' }
+/** 列表与计数工具栏共用的账单状态取值；`all` 表示不加状态条件。 */
+export enum SlhBillListStateDto { ACTIVE = 'active', SUPERSEDED = 'superseded', ALL = 'all' }
+/** 对账状态筛选取值；`all` 表示不加对账条件，其余与账单三态同名。 */
+export enum SlhBillReconciliationFilterDto { ALL = 'all', PENDING = 'PENDING', PARTIAL = 'PARTIAL', COMPLETED = 'COMPLETED' }
+const SLH_BILL_LIST_STATE_VALUES = [SlhBillListStateDto.ACTIVE, SlhBillListStateDto.SUPERSEDED, SlhBillListStateDto.ALL] as const
+const SLH_BILL_RECONCILIATION_FILTER_VALUES = [SlhBillReconciliationFilterDto.ALL, SlhBillReconciliationFilterDto.PENDING, SlhBillReconciliationFilterDto.PARTIAL, SlhBillReconciliationFilterDto.COMPLETED] as const
 /** 明细行对账状态（二态）；账单级三态见 SlhBillReconciliationStatusDto，由明细行汇总派生。 */
 export enum SlhBillLineReconciliationStatusDto { PENDING = 'PENDING', RECONCILED = 'RECONCILED' }
 /** 账单对账状态（三态）：未对账 / 部分对账 / 对账完成。 */
@@ -54,7 +60,26 @@ export class SlhBillListQueryDto {
   @ApiPropertyOptional({ maxLength: 128, description: 'Matches bill number, source file name or container batch name.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 128) keyword?: string
   @ApiPropertyOptional({ type: 'string', pattern: '^(?:0|[1-9]\\d{0,27})(?:\\.\\d{1,2})?$', description: 'Minimum payable amount in CNY.' }) @IsOptional() @IsString() @Matches(AMOUNT_PATTERN) payableMin?: string
   @ApiPropertyOptional({ type: 'string', pattern: '^(?:0|[1-9]\\d{0,27})(?:\\.\\d{1,2})?$', description: 'Maximum payable amount in CNY.' }) @IsOptional() @IsString() @Matches(AMOUNT_PATTERN) payableMax?: string
-  @ApiPropertyOptional({ enum: ['active', 'superseded', 'all'], default: 'active' }) @IsOptional() @IsIn(['active', 'superseded', 'all']) state?: 'active' | 'superseded' | 'all'
+  @ApiPropertyOptional({ enum: SlhBillListStateDto, default: SlhBillListStateDto.ACTIVE }) @IsOptional() @IsIn(SLH_BILL_LIST_STATE_VALUES) state?: SlhBillListStateDto
+  @ApiPropertyOptional({ enum: SlhBillReconciliationFilterDto, default: SlhBillReconciliationFilterDto.ALL, description: 'Filter by the reconciliation status derived from the lines of this bill.' }) @IsOptional() @IsIn(SLH_BILL_RECONCILIATION_FILTER_VALUES) reconciliationStatus?: SlhBillReconciliationFilterDto
+}
+
+/** 计数查询与列表共用同一组筛选，只去掉分页（计数覆盖完整结果集，不是当前页）。 */
+export class SlhBillStatusCountsQueryDto extends OmitType(SlhBillListQueryDto, ['page', 'pageSize'] as const) {}
+
+export class SlhBillStateCountDto {
+  @ApiProperty({ enum: SlhBillListStateDto }) value!: SlhBillListStateDto
+  @ApiProperty() count!: number
+}
+
+export class SlhBillReconciliationCountDto {
+  @ApiProperty({ enum: SlhBillReconciliationFilterDto }) value!: SlhBillReconciliationFilterDto
+  @ApiProperty() count!: number
+}
+
+export class SlhBillStatusCountsDto {
+  @ApiProperty({ type: [SlhBillStateCountDto], description: 'Counts per bill state; the current reconciliation filter applies, the state filter does not.' }) states!: SlhBillStateCountDto[]
+  @ApiProperty({ type: [SlhBillReconciliationCountDto], description: 'Counts per reconciliation status; the current state filter applies, the reconciliation filter does not.' }) reconciliationStatuses!: SlhBillReconciliationCountDto[]
 }
 
 /** 明细分页查询只带分页字段；账单主键走路径参数，不能继承带必填 id 的 DTO。 */

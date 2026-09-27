@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import request from 'supertest'
-import type { SlhBillDto } from '../src/modules/slh-bills/slh-bill.dto'
+import type { SlhBillDto, SlhBillStatusCountsDto } from '../src/modules/slh-bills/slh-bill.dto'
 import { createSlhBillFixture } from './fixtures/slh-bill-xlsx.fixture'
 import { createPackagingCostHarness, packagingHeaders, type PackagingCostHarness } from './packaging-cost.fixture'
 
@@ -165,5 +165,68 @@ describe('slh bill import with isolated PostgreSQL', () => {
     // 退回未对账：三态完全是派生值，清掉对账时刻就回到未对账。
     await h.prisma.slhBillLine.updateMany({ data: { reconciledAt: null }, where: { billId: bill.id } })
     expect(await listStatus()).toBe('PENDING')
+  })
+
+  /**
+   * 两块工具栏的计数：账单状态与对账状态各一组，各自忽略自己那一维、保留另一维。
+   * 计数与列表必须同源，否则切换工具栏后数字与点进去看到的行数会对不上。
+   */
+  it('counts bills per state and per reconciliation status for both toolbars', async () => {
+    const bill = await h.prisma.slhBill.findFirstOrThrow({ include: { lines: { orderBy: { lineNumber: 'asc' } } } })
+    const counts = async (query = '') => (await browser.get(`/api/slh-bills/status-counts${query}`).expect(200)).body as SlhBillStatusCountsDto
+    const total = async (query: string) => ((await browser.get(`/api/slh-bills?${query}`).expect(200)).body as { total: number }).total
+
+    // 一条都没对：状态计数只有这一张生效中，对账计数只有未对账。
+    expect((await counts()).states).toEqual([
+      { count: 1, value: 'active' },
+      { count: 0, value: 'superseded' },
+      { count: 1, value: 'all' },
+    ])
+    expect((await counts()).reconciliationStatuses).toEqual([
+      { count: 1, value: 'all' },
+      { count: 1, value: 'PENDING' },
+      { count: 0, value: 'PARTIAL' },
+      { count: 0, value: 'COMPLETED' },
+    ])
+    // 选中项的计数与列表 total 一致。
+    expect(await total('reconciliationStatus=PENDING')).toBe(1)
+    expect(await total('reconciliationStatus=COMPLETED')).toBe(0)
+
+    // 对一行：对账计数把这张从"未对账"挪到"部分对账"，列表筛选同步。
+    await h.prisma.slhBillLine.update({ data: { reconciledAt: new Date('2026-09-27T02:00:00.000Z') }, where: { id: bill.lines[0].id } })
+    expect((await counts()).reconciliationStatuses).toEqual([
+      { count: 1, value: 'all' },
+      { count: 0, value: 'PENDING' },
+      { count: 1, value: 'PARTIAL' },
+      { count: 0, value: 'COMPLETED' },
+    ])
+    expect(await total('reconciliationStatus=PARTIAL')).toBe(1)
+    expect(await total('reconciliationStatus=PENDING')).toBe(0)
+
+    // 对面那块工具栏的计数仍然成立：只筛对账状态时，账单状态计数照旧。
+    expect((await counts('?reconciliationStatus=PARTIAL')).states).toEqual([
+      { count: 1, value: 'active' },
+      { count: 0, value: 'superseded' },
+      { count: 1, value: 'all' },
+    ])
+    // 反过来筛账单状态时，对账计数跟着变化（这就是"忽略自己、保留对方"的口径）。
+    expect((await counts('?state=superseded')).reconciliationStatuses).toEqual([
+      { count: 0, value: 'all' },
+      { count: 0, value: 'PENDING' },
+      { count: 0, value: 'PARTIAL' },
+      { count: 0, value: 'COMPLETED' },
+    ])
+
+    // 全部对完：对账完成。
+    await h.prisma.slhBillLine.updateMany({ data: { reconciledAt: new Date('2026-09-27T03:00:00.000Z') }, where: { billId: bill.id, reconciledAt: null } })
+    expect((await counts()).reconciliationStatuses).toEqual([
+      { count: 1, value: 'all' },
+      { count: 0, value: 'PENDING' },
+      { count: 0, value: 'PARTIAL' },
+      { count: 1, value: 'COMPLETED' },
+    ])
+    expect(await total('reconciliationStatus=COMPLETED')).toBe(1)
+
+    await h.prisma.slhBillLine.updateMany({ data: { reconciledAt: null }, where: { billId: bill.id } })
   })
 })
