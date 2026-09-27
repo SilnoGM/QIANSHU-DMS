@@ -79,7 +79,8 @@
       "createdAt": "创建时间",
       "billName": "对账单名称",
       "billMonth": "对账单月份",
-      "remark": "备注"
+      "remark": "备注",
+      "reconciliationStatus": "对账状态"
     },
     "conclusion": {
       "title": "账单结论",
@@ -193,6 +194,7 @@
       "ntdSurchargeAmountTwd": "NTD 杂费",
       "recipientInfo": "收货人信息",
       "remark": "备注",
+      "reconciliationStatus": "对账状态",
       "charges": "费用明细",
       "lineNumberValue": "第 {line} 行"
     },
@@ -228,6 +230,12 @@
     },
     "rateValue": "入库汇率",
     "reconciliation": "对账核对",
+    "reconciliationStatus": {
+      "PENDING": "未对账",
+      "PARTIAL": "部分对账",
+      "COMPLETED": "对账完成",
+      "RECONCILED": "已对账"
+    },
     "retry": "重试",
     "search": "搜索账单编号、原件文件名或柜号",
     "sourceFile": "原件文件",

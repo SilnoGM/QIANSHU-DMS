@@ -70,7 +70,8 @@
       "createdAt": "建立時間",
       "billName": "對帳單名稱",
       "billMonth": "對帳單月份",
-      "remark": "備註"
+      "remark": "備註",
+      "reconciliationStatus": "對帳狀態"
     },
     "conclusion": {
       "title": "帳單結論",
@@ -184,6 +185,7 @@
       "ntdSurchargeAmountTwd": "NTD 雜費",
       "recipientInfo": "收貨人資訊",
       "remark": "備註",
+      "reconciliationStatus": "對帳狀態",
       "charges": "費用明細",
       "lineNumberValue": "第 {line} 行"
     },
@@ -219,6 +221,12 @@
     },
     "rateValue": "入庫匯率",
     "reconciliation": "對帳核對",
+    "reconciliationStatus": {
+      "PENDING": "未對帳",
+      "PARTIAL": "部分對帳",
+      "COMPLETED": "對帳完成",
+      "RECONCILED": "已對帳"
+    },
     "retry": "重試",
     "search": "搜尋帳單編號、原件檔案名稱或櫃號",
     "sourceFile": "原件檔案",

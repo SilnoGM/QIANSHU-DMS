@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { SlhBillDto, SlhBillLineDto, SlhBillTotalsDto } from '@/api/generated/types.gen'
-import type { QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
+import type { QsGenericTableColumn, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 import slhBillsApi from '@/api/modules/slh-bills'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import { containerFailure } from '../containers/use-container-resource'
 import { collectSlhBillFlaggedRowNumbers, countSlhBillFindings, pageForSlhBillLine, SLH_BILL_FLAGGED_ROW_CLASS } from './comparison.logic'
 import { buildSlhBillLineColumns } from './line-columns.logic'
+import { resolveSlhBillReconciliationLabelKey } from './reconciliation-status.logic'
 import SlhBillCharges from './slh-bill-charges.vue'
 import SlhBillComparison from './slh-bill-comparison.vue'
 import SlhBillConclusion from './slh-bill-conclusion.vue'
@@ -14,6 +15,7 @@ import SlhBillInfo from './slh-bill-info.vue'
 import SlhBillOverflowText from './slh-bill-overflow-text.vue'
 import SlhBillPricingBasisTag from './slh-bill-pricing-basis-tag.vue'
 import SlhBillRecipient from './slh-bill-recipient.vue'
+import SlhBillReconciliationStatusTag from './slh-bill-reconciliation-status-tag.vue'
 import SlhBillVolumeDifference from './slh-bill-volume-difference.vue'
 
 defineOptions({ name: 'QsFinanceBillReconciliationSlhBillDetail' })
@@ -75,7 +77,21 @@ function searchLines(): void {
   linePage.value = 1
   void loadLines()
 }
-const columns = computed(() => buildSlhBillLineColumns(t))
+/**
+ * 明细列与导入预览共用，只有详情页追加对账状态：预览行尚未入库，没有对账状态可言。
+ * 列定义本文件只做追加，取值与文案映射统一放在 reconciliation-status.logic。
+ */
+const columns = computed<QsGenericTableColumn<SlhBillLineDto>[]>(() => [
+  ...buildSlhBillLineColumns(t),
+  {
+    id: 'reconciliationStatus',
+    title: t('slhBill.line.reconciliationStatus'),
+    accessorFn: line => t(resolveSlhBillReconciliationLabelKey(line.reconciliationStatus)),
+    width: 130,
+    minWidth: 130,
+    maxWidth: 130,
+  },
+])
 const flaggedRowNumbers = computed(() => collectSlhBillFlaggedRowNumbers(bill.value?.findings ?? []))
 /** 有差异或告警的明细行标黄；详情页的差异来自落库快照，按原表行号对应。 */
 function lineRowClass(row: { original: SlhBillLineDto }): string {
@@ -335,6 +351,9 @@ onBeforeUnmount(() => {
             </template>
             <template #cell-pricingBasis="{ row }">
               <SlhBillPricingBasisTag :basis="row.original.pricingBasis ?? null" />
+            </template>
+            <template #cell-reconciliationStatus="{ row }">
+              <SlhBillReconciliationStatusTag :status="row.original.reconciliationStatus" />
             </template>
           </QsGenericTable>
         </FaPageMain>

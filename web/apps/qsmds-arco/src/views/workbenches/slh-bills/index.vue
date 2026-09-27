@@ -18,6 +18,7 @@ import { containerFailure } from '../containers/use-container-resource'
 import { resolveSlhBillNetDisplay } from './display.logic'
 import { buildSlhBillListQuery } from './list.logic'
 import SlhBillRateSourceTag from './slh-bill-rate-source-tag.vue'
+import SlhBillReconciliationStatusTag from './slh-bill-reconciliation-status-tag.vue'
 
 defineOptions({ name: 'QsFinanceBillReconciliationSlhBillManagement' })
 const { t } = useI18n()
@@ -61,6 +62,8 @@ const columns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
   // 折算净额：有账单内嵌汇率时出折算后的人民币，没有则退回不折算的台币原值。
   { id: 'foldedNet', title: t('slhBill.column.foldedNetAmount'), accessorFn: item => resolveSlhBillNetDisplay(item).amount, minWidth: 195, align: 'right' },
   { id: 'rate', title: t('slhBill.column.rateSource'), accessorFn: item => item.rateSource ?? '', minWidth: 175 },
+  // 对账状态由服务端按明细行汇总派生，与详情页明细行上的状态同源。
+  { id: 'reconciliationStatus', title: t('slhBill.column.reconciliationStatus'), accessorKey: 'reconciliationStatus', minWidth: 140 },
   { id: 'sourceFile', title: t('slhBill.column.sourceFileName'), accessorKey: 'sourceFileName', minWidth: 240 },
   { id: 'created', title: t('slhBill.column.createdAt'), accessorKey: 'createdAt', minWidth: 220 },
 ])
@@ -219,6 +222,9 @@ onBeforeUnmount(() => controller?.abort())
         <template #cell-rate="{ row }">
           <SlhBillRateSourceTag :source="row.original.rateSource ?? null" />
         </template>
+        <template #cell-reconciliationStatus="{ row }">
+          <SlhBillReconciliationStatusTag :status="row.original.reconciliationStatus" />
+        </template>
         <template #cell-sourceFile="{ row }">
           <!-- 只做"这是原件文件名"的视觉标注，不可点击（下载入口在详情页）。 -->
           <span class="qs-type-data underline underline-offset-2 decoration-dotted block break-words">{{ row.original.sourceFileName }}</span>
@@ -295,6 +301,14 @@ onBeforeUnmount(() => controller?.abort())
               </div>
             </dl>
             <dl class="m-0 gap-1 grid">
+              <div>
+                <dt class="qs-type-meta text-muted-foreground">
+                  {{ t('slhBill.column.reconciliationStatus') }}
+                </dt>
+                <dd class="m-0 mt-1">
+                  <SlhBillReconciliationStatusTag :status="row.reconciliationStatus" />
+                </dd>
+              </div>
               <div>
                 <dt class="qs-type-meta text-muted-foreground">
                   {{ t('slhBill.column.rateSource') }}

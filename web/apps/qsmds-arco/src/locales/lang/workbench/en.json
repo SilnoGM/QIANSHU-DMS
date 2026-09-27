@@ -70,7 +70,8 @@
       "createdAt": "Created at",
       "billName": "Bill name",
       "billMonth": "Bill month",
-      "remark": "Remark"
+      "remark": "Remark",
+      "reconciliationStatus": "Reconciliation status"
     },
     "conclusion": {
       "title": "Bill conclusion",
@@ -184,6 +185,7 @@
       "ntdSurchargeAmountTwd": "NTD surcharge",
       "recipientInfo": "Recipient",
       "remark": "Remark",
+      "reconciliationStatus": "Reconciliation status",
       "charges": "Charges",
       "lineNumberValue": "Line {line}"
     },
@@ -219,6 +221,12 @@
     },
     "rateValue": "Import rate",
     "reconciliation": "Reconciliation checks",
+    "reconciliationStatus": {
+      "PENDING": "Not reconciled",
+      "PARTIAL": "Partially reconciled",
+      "COMPLETED": "Fully reconciled",
+      "RECONCILED": "Reconciled"
+    },
     "retry": "Retry",
     "search": "Search bill number, source file name or container batch",
     "sourceFile": "Source file",
