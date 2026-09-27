@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
+import SlhBillOverflowText from './slh-bill-overflow-text.vue'
 
 defineOptions({ name: 'SlhBillRecipient' })
 /**
@@ -23,8 +24,9 @@ const { t } = useI18n()
       <span class="qs-type-data-emphasis">{{ name || t('slhBill.valueMissing') }}</span>
       <span v-if="phones" class="qs-type-data ml-2">{{ phones }}</span>
     </QsTableStackedLine>
+    <!-- 地址可能超出列宽：单行截断，完整内容在浮层里看（与入仓单号同一套处理）。 -->
     <QsTableStackedLine v-if="address" tone="muted">
-      {{ address }}
+      <SlhBillOverflowText :text="address" content-class="qs-type-body" />
     </QsTableStackedLine>
     <QsTableStackedLine v-if="!name && !phones && !address">
       {{ t('slhBill.valueMissing') }}

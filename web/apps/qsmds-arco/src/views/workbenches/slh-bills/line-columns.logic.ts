@@ -123,8 +123,10 @@ export function buildSlhBillLineColumns<TData extends SlhBillLineDto = SlhBillLi
           .filter(value => value !== missing)
         return parts.length === 0 ? missing : parts.join(' ')
       },
-      width: 320,
-      minWidth: 260,
+      // 列宽取 380：实测最长地址自然宽度 416px、多数在 200px 以内，380 让绝大多数地址完整可见，
+      // 只有超出者截断并由浮层给出全文（地址本身在组件里单行截断）。
+      width: 380,
+      minWidth: 320,
     },
     { id: 'remark', title: translate('slhBill.line.remark'), accessorFn: line => text(line.remark), width: 220, minWidth: 220, maxWidth: 220 },
   ]
