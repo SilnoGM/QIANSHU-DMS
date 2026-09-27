@@ -67,7 +67,7 @@
 
 **测试夹具**：`server/test/fixtures/slh-bill-recipient.fixture.ts` 按"先解析真实行确定字段边界 → 同形替换（地名换「範例」、号码只保留决定形态的前三位其余置 0、姓名换合成名）→ 重新解析并比对结构"生成，78 行全部结构一致；另有一组**需求驱动**用例（国际写法、括号区号、>2 号码、英文名/称谓），属于规格而非样本事实。
 
-**⚠️ 存量回填当前被阻塞**：`slh_bill_lines` 上有 `BEFORE UPDATE OR DELETE` 触发器（`enforce_slh_bill_evidence_immutable`，`SLH bill evidence is immutable`），任何 UPDATE 都被拒绝，因此三列**只对新导入生效**，已有的账单明细无法回填。`slh-bills:backfill-recipients` 命令已就绪（dry-run 可报告"将写入 44 行 / 38 行含电话"），`--apply` 会被该触发器拒绝且整体事务回滚、不产生半写状态。解决方向待定：① 放宽触发器（只允许这三列变化，其余列变化仍拒绝）；② 不回填存量；③ 改为读取时解析、不落库。
+**存量回填（2026-09-27 已通）**：`slh_bill_lines` 原本有 `BEFORE UPDATE OR DELETE` 触发器（`enforce_slh_bill_evidence_immutable`）无条件拒绝任何 UPDATE，导致三列只对新导入生效、存量回填被拒。经用户确认，迁移 `20260927130000_slh_bill_line_recipient_columns_mutable` 给它开了一个**受控例外**：仅当"去掉这三列后的行快照与旧值完全相同"时放行，其它任何列的变化、同一语句里夹带其它列、以及两张表的删除**仍然一律拒绝**（错误码 `23514` 与约束名保持不变）。实现用 `to_jsonb(NEW) - 三列 IS NOT DISTINCT FROM to_jsonb(OLD) - 三列`，将来给表加列无需改白名单；例外只对 `slh_bill_lines` 生效，费用明细表不受影响。回填实测：44 行写入成功、重复执行为 0 待处理；不变量回归实测：仅改三列放行、改 `goods_name` 拒绝、同语句混改拒绝、删除拒绝、费用明细更新拒绝（全部在回滚事务内验证，无残留）。
 
 ### 3.3 `slh_bill_line_charges`（费用明细）
 
