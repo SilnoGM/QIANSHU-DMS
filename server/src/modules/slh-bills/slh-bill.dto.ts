@@ -35,6 +35,8 @@ export enum SlhBillChargeTypeDto {
 
 const AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,27})(?:\.\d{1,2})?$/u
 const RATE_PATTERN = /^(?:0|[1-9]\d{0,17})(?:\.\d{1,12})?$/u
+// 账单月份只到月，不存日期，避免出现「月份里带日」的歧义。
+const BILL_MONTH_PATTERN = /^\d{4}-(?:0[1-9]|1[0-2])$/u
 
 export class SlhBillIdDto {
   @ApiProperty({ format: 'uuid' }) @IsUUID('4') id!: string
@@ -69,6 +71,12 @@ export class SlhBillMediaAssetDto {
 }
 
 export class SlhBillImportCreateDto extends SlhBillMediaAssetDto {
+  @ApiProperty({ maxLength: 200, description: 'Bill name shown in the list; unique among bills that are not superseded.' })
+  @IsString() @IsUnicodeCodePointLength(1, 200) billName!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d{4}-(?:0[1-9]|1[0-2])$', description: 'Bill month (YYYY-MM).' })
+  @IsString() @Matches(BILL_MONTH_PATTERN) billMonth!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true, maxLength: 500 })
+  @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 500) remark?: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true, pattern: '^(?:0|[1-9]\\d{0,17})(?:\\.\\d{1,12})?$', description: 'Manual TWD per CNY rate; only allowed when the bill formula has no divisor.' })
   @IsOptional() @IsString() @Matches(RATE_PATTERN) manualForeignUnitsPerCny?: string | null
   @ApiPropertyOptional({ format: 'uuid', nullable: true, description: 'Existing bill this import replaces.' })
@@ -127,6 +135,8 @@ export class SlhBillLinePageDto {
 export class SlhBillListItemDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty() slhBillNo!: string
+  @ApiProperty() billName!: string
+  @ApiProperty({ type: 'string' }) billMonth!: string
   @ApiProperty({ type: 'string' }) periodStart!: string
   @ApiProperty({ type: 'string' }) periodEnd!: string
   @ApiProperty() lineCount!: number
@@ -171,6 +181,9 @@ export class SlhBillReportedDto {
 export class SlhBillDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty() slhBillNo!: string
+  @ApiProperty() billName!: string
+  @ApiProperty({ type: 'string' }) billMonth!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) remark!: string | null
   @ApiProperty({ type: 'string' }) periodStart!: string
   @ApiProperty({ type: 'string' }) periodEnd!: string
   @ApiProperty() lineCount!: number
@@ -219,6 +232,8 @@ export class SlhBillDuplicateDto {
 }
 
 export class SlhBillImportPreviewDto {
+  @ApiProperty({ description: 'Default name derived from the source file name.' }) suggestedBillName!: string
+  @ApiProperty({ description: 'Default bill month derived from the period, falling back to the file name.' }) suggestedBillMonth!: string
   @ApiProperty({ type: 'string' }) periodStart!: string
   @ApiProperty({ type: 'string' }) periodEnd!: string
   @ApiProperty({ type: [String] }) containerBatchNames!: string[]

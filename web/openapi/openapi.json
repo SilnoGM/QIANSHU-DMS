@@ -81895,6 +81895,12 @@
           "slhBillNo": {
             "type": "string"
           },
+          "billName": {
+            "type": "string"
+          },
+          "billMonth": {
+            "type": "string"
+          },
           "periodStart": {
             "type": "string"
           },
@@ -81946,6 +81952,8 @@
         "required": [
           "id",
           "slhBillNo",
+          "billName",
+          "billMonth",
           "periodStart",
           "periodEnd",
           "lineCount",
@@ -82120,6 +82128,16 @@
           "slhBillNo": {
             "type": "string"
           },
+          "billName": {
+            "type": "string"
+          },
+          "billMonth": {
+            "type": "string"
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true
+          },
           "periodStart": {
             "type": "string"
           },
@@ -82206,6 +82224,8 @@
         "required": [
           "id",
           "slhBillNo",
+          "billName",
+          "billMonth",
           "periodStart",
           "periodEnd",
           "lineCount",
@@ -82685,6 +82705,14 @@
       "SlhBillImportPreviewDto": {
         "type": "object",
         "properties": {
+          "suggestedBillName": {
+            "type": "string",
+            "description": "Default name derived from the source file name."
+          },
+          "suggestedBillMonth": {
+            "type": "string",
+            "description": "Default bill month derived from the period, falling back to the file name."
+          },
           "periodStart": {
             "type": "string"
           },
@@ -82738,6 +82766,8 @@
           }
         },
         "required": [
+          "suggestedBillName",
+          "suggestedBillMonth",
           "periodStart",
           "periodEnd",
           "containerBatchNames",
@@ -82755,6 +82785,21 @@
           "mediaAssetId": {
             "type": "string",
             "format": "uuid"
+          },
+          "billName": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Bill name shown in the list; unique among bills that are not superseded."
+          },
+          "billMonth": {
+            "type": "string",
+            "pattern": "^\\d{4}-(?:0[1-9]|1[0-2])$",
+            "description": "Bill month (YYYY-MM)."
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
           },
           "manualForeignUnitsPerCny": {
             "type": "string",
@@ -82775,7 +82820,9 @@
           }
         },
         "required": [
-          "mediaAssetId"
+          "mediaAssetId",
+          "billName",
+          "billMonth"
         ]
       }
     }

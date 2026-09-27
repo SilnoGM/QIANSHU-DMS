@@ -145,6 +145,9 @@ export function serializeSlhBill(row: SlhBillRow): SlhBillDto {
   return {
     id: row.id,
     slhBillNo: row.slhBillNo,
+    billName: row.billName,
+    billMonth: row.billMonth,
+    remark: row.remark,
     periodStart: row.periodStart.toISOString().slice(0, 10),
     periodEnd: row.periodEnd.toISOString().slice(0, 10),
     lineCount: row.lineCount,
@@ -184,6 +187,8 @@ export function serializeSlhBillListItem(row: SlhBillListRow): SlhBillListItemDt
   return {
     id: row.id,
     slhBillNo: row.slhBillNo,
+    billName: row.billName,
+    billMonth: row.billMonth,
     periodStart: row.periodStart.toISOString().slice(0, 10),
     periodEnd: row.periodEnd.toISOString().slice(0, 10),
     lineCount: row.lineCount,

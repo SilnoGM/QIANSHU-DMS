@@ -2009,6 +2009,11 @@ model SlhBill {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   slhBillNo String @map("slh_bill_no") @unique(map: "slh_bills_number_key") @db.VarChar(64)
   numberingIssuanceId String @map("numbering_issuance_id") @unique(map: "slh_bills_issuance_key") @db.Uuid
+  /// 归档信息由入库确认弹窗填写。名称必填，其唯一性只约束未被取代的账单，
+  /// 用部分唯一索引实现（Prisma schema 表达不了 WHERE，因此只存在于迁移里）。
+  billName String @map("bill_name") @db.VarChar(200)
+  /// 账单所属月份（YYYY-MM）；与编号里的派发月是两回事。
+  billMonth String @map("bill_month") @db.Char(7)
   periodStart DateTime @map("period_start") @db.Date
   periodEnd DateTime @map("period_end") @db.Date
   sourceFileId String @map("source_file_id") @db.Uuid
@@ -2040,6 +2045,7 @@ model SlhBill {
   lineCount Int @map("line_count")
   containerBatchCount Int @map("container_batch_count")
   containerBatchNames String @map("container_batch_names") @db.VarChar(2000)
+  remark String? @db.VarChar(500)
   supersededById String? @map("superseded_by_id") @db.Uuid
   supersededAt DateTime? @map("superseded_at") @db.Timestamptz(6)
   version Int @default(1)

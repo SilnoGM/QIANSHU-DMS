@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
-import { hasPersistenceCode, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
+import { hasPersistenceCode, hasPersistenceTarget, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AccessControlService } from '../access-control/access-control.service'
 import { AuditService } from '../audit/audit.service'
@@ -11,6 +11,7 @@ import { NumberingGeneratorService } from '../numbering/numbering-generator.serv
 import { NumberingGenerationError } from '../numbering/numbering.errors'
 import { parseDecimal } from '../ocean-freight-calculation/ocean-decimal'
 import { slhBillFailure } from './slh-bill-calculation'
+import { resolveSlhBillArchiveDefaults } from './slh-bill-archive'
 import { parseSlhBillWorkbook, type ParsedSlhBill } from './slh-bill-parser'
 import { SlhBillSourceFileService } from './slh-bill-source-file.service'
 import { normalizeSlhBillImport, slhBillUuid, type SlhBillCommandContext, type SlhBillImportInput } from './slh-bill.normalizer'
@@ -28,6 +29,13 @@ function mapError(error: unknown): never {
   if (error instanceof ApiException) throw error
   if (error instanceof NumberingGenerationError) return slhBillFailure('SLH_BILL_NUMBERING_UNAVAILABLE', '账单编号暂时无法派发，请检查编号规则 CTN_BILL_NO 后重试', 409)
   const facts = readPersistenceErrorFacts(error)
+  // 名称唯一由部分索引保证，靠冲突涉及的列来识别，因此没有「先查后写」的竞态。
+  // pg 驱动适配器对 23505 只给出从 DETAIL 解析出的列名（constraint.fields），
+  // 不带索引名；索引名分支只在 23503 外键违反时使用，所以这里按列名判定。
+  // bill_name 只属于这一个唯一约束，按它判定不会误伤编号或幂等键的冲突。
+  if (hasPersistenceTarget(facts, 'bill_name')) {
+    throw new ApiException(409, 'SLH_BILL_NAME_TAKEN', '该账单名称已被使用，请换一个名称', { billName: ['该名称已被其它账单使用'] })
+  }
   if (['P2002', '23505'].some(code => hasPersistenceCode(facts, code))) return slhBillFailure('SLH_BILL_CONFLICT', '该账单或编号已经存在', 409)
   if (['P2034', '40001', '40P01', '55P03', '57014'].some(code => hasPersistenceCode(facts, code))) return slhBillFailure('SLH_BILL_STATE_CHANGED', '资料已变化或正在处理，请刷新后重试', 409)
   throw error
@@ -100,7 +108,8 @@ export class SlhBillService {
 
   async preview(context: SlhBillCommandContext, input: SlhBillMediaAssetDto): Promise<SlhBillImportPreviewDto> {
     await this.requireCreate(context.actorUserId)
-    const { parsed } = await this.readAndParse(input.mediaAssetId, context.actorUserId)
+    const { parsed, fileName } = await this.readAndParse(input.mediaAssetId, context.actorUserId)
+    const archive = resolveSlhBillArchiveDefaults({ periodEnd: parsed.periodEnd, sourceFileName: fileName })
     const duplicate = await this.findDuplicate(parsed.periodStart, parsed.periodEnd, parsed.containerBatchNames.join(','))
     // 账单自带汇率时不读系统汇率：此时系统状态与账单无关，不该因为新台币停用而挡住预览。
     const systemForeignUnitsPerCny = parsed.reported.embeddedForeignUnitsPerCny === null ? await this.previewRate() : null
@@ -126,6 +135,8 @@ export class SlhBillService {
         billId: duplicate.id, slhBillNo: duplicate.slhBillNo,
         periodStart: isoDate(duplicate.periodStart), periodEnd: isoDate(duplicate.periodEnd),
       },
+      suggestedBillName: archive.billName,
+      suggestedBillMonth: archive.billMonth,
       findings: parsed.findings.map(toFindingDto),
       lines: parsed.lines.map(line => serializeSlhBillPreviewLine(line, parsed.findings)),
     }
@@ -198,6 +209,9 @@ export class SlhBillService {
           data: {
             slhBillNo: issuance.number,
             numberingIssuanceId: issuance.issuanceId,
+            billName: normalized.billName,
+            billMonth: normalized.billMonth,
+            remark: normalized.remark,
             periodStart: new Date(parsed.periodStart),
             periodEnd: new Date(parsed.periodEnd),
             sourceFileId: normalized.mediaAssetId,

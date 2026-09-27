@@ -69,6 +69,8 @@ describe('slh bill import with isolated PostgreSQL', () => {
       subtotalNtdSurchargeAmountTwd: '8000.00',
     })
     expect((response.body as { lines: unknown[] }).lines).toHaveLength(3)
+    // 默认归档信息由服务端推导：名称取文件名，月份取期间结束月。
+    expect(response.body).toMatchObject({ suggestedBillName: '待签收返款账单', suggestedBillMonth: '2026-01' })
     // 预览不落库。
     expect(await h.prisma.slhBill.count()).toBe(0)
   })
@@ -77,11 +79,21 @@ describe('slh bill import with isolated PostgreSQL', () => {
     await browser.post('/api/slh-bills/import-preview').set(packagingHeaders).send({}).expect(422)
   })
 
+  it('requires a bill name and month on import', async () => {
+    const staged = await upload(createSlhBillFixture())
+    await browser.post('/api/slh-bills').set(packagingHeaders).set('Idempotency-Key', randomUUID())
+      .send({ mediaAssetId: staged.mediaAssetId }).expect(422)
+    await browser.post('/api/slh-bills').set(packagingHeaders).set('Idempotency-Key', randomUUID())
+      .send({ billMonth: '2026-13', billName: '非法月份', mediaAssetId: staged.mediaAssetId }).expect(422)
+  })
+
   it('imports the bill with the dispatched number and a frozen embedded rate', async () => {
     const staged = await upload(createSlhBillFixture())
     const created = (await browser.post('/api/slh-bills').set(packagingHeaders).set('Idempotency-Key', randomUUID())
-      .send({ mediaAssetId: staged.mediaAssetId }).expect(201)).body as SlhBillDto
+      .send({ billMonth: '2026-01', billName: '一月对账单', mediaAssetId: staged.mediaAssetId, remark: '首次导入' }).expect(201)).body as SlhBillDto
     expect(created.slhBillNo).toMatch(/^CBILL\/\d{6}-\d{2}$/u)
+    // 名称与月份是入库时填的归档信息，与编号里的派发月无关。
+    expect(created).toMatchObject({ billName: '一月对账单', billMonth: '2026-01', remark: '首次导入' })
     expect(created).toMatchObject({
       periodStart: '2025-12-11', periodEnd: '2026-01-16', lineCount: 3, containerBatchCount: 3,
       freightTotalAmountCny: '5595.00', codHandlingTotalAmountCny: '30.00', surchargeTotalAmountCny: '200.00',
@@ -100,9 +112,16 @@ describe('slh bill import with isolated PostgreSQL', () => {
     const lines = (await browser.get(`/api/slh-bills/${created.id}/lines`).expect(200)).body as { items: unknown[], total: number }
     expect(lines.total).toBe(3)
 
-    // 明细行在数据库层不可改不可删，重复导入必须命中同一张账单。
-    const replay = (await browser.post('/api/slh-bills').set(packagingHeaders).set('Idempotency-Key', randomUUID())
-      .send({ mediaAssetId: staged.mediaAssetId }).expect(409)).body as { code: string }
-    expect(replay.code).toBe('SLH_BILL_DUPLICATE_PERIOD')
+    // 重复导入先被期间与柜号集合拦下，尚未勾选确认时不应该建第二张账单。
+    const duplicate = (await browser.post('/api/slh-bills').set(packagingHeaders).set('Idempotency-Key', randomUUID())
+      .send({ billMonth: '2026-01', billName: '另一张单', mediaAssetId: staged.mediaAssetId }).expect(409)).body as { code: string }
+    expect(duplicate.code).toBe('SLH_BILL_DUPLICATE_PERIOD')
+
+    // 勾选确认后放行期间重复，但名称仍受唯一约束：返回字段级冲突让弹窗就地提示。
+    const taken = (await browser.post('/api/slh-bills').set(packagingHeaders).set('Idempotency-Key', randomUUID())
+      .send({ billMonth: '2026-01', billName: '一月对账单', duplicateAcknowledged: true, mediaAssetId: staged.mediaAssetId }).expect(409)).body as { code: string, fieldErrors: Record<string, string[]> }
+    expect(taken.code).toBe('SLH_BILL_NAME_TAKEN')
+    expect(taken.fieldErrors.billName?.length).toBeGreaterThan(0)
+    expect(await h.prisma.slhBill.count()).toBe(1)
   })
 })
