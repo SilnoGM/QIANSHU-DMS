@@ -122,6 +122,14 @@
       明细分页查询 DTO 误继承了路径参数的必填 `id`。_
 - [x] 账单工作簿用例（自有脱敏 OOXML 夹具）
       _Requirements: R1-R4_ _Evidence: `test/fixtures/slh-bill-xlsx.fixture.ts`_
+- [x] **对账状态字段：账单三态（未对账 / 部分对账 / 对账完成）与明细行二态（未对账 / 已对账）**
+      _Evidence: commit `9263990b`（数据与接口层）、`bfa39ca4`（展示层）；
+      派生：`server/src/modules/slh-bills/slh-bill-reconciliation.ts` + `.spec.ts`（三态与边界），
+      映射与接线：`web/apps/qsmds-arco/test/views/slh-bill-reconciliation-status.test.ts`。
+      浏览器实测：列表真实账单显示「未对账」、详情 44 行明细全部「未对账」；按真实接口形状
+      注入载荷后，列表三态与明细「已对账」均按预期着色（未对账=中性、部分对账=琥珀、完成/已对账=绿色）。_
+      _未覆盖：PARTIAL / COMPLETED 的端到端写入路径——`slh_bill_lines` 的「凭证不可改」触发器
+      本次刻意未开放 `reconciled_at`（本次只定义与展示，没有写入口），该分支目前只由服务端单测覆盖。_
 - [ ] **浏览器实测列表、导入预览与详情** —— 未执行
       _Requirements: R6_ _阻塞原因：本地应用要求交互式管理员登录，而仓库明确规定永久密码
       只能通过隐藏的交互式 TTY 输入、不得写入 argv/环境变量/脚本/文档；内置浏览器当前也没有
