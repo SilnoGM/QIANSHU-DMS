@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FileItem } from '@fantastic-admin/components'
-import type { SlhBillArchiveDraft } from './import.logic'
+import type { SlhBillArchiveDraft, SlhBillDuplicateResolution } from './import.logic'
 import type { SlhBillImportPreviewDto, SlhBillPreviewLineDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import slhBillsApi from '@/api/modules/slh-bills'
@@ -46,7 +46,8 @@ const archiveFieldErrors = ref<Record<string, string>>({})
 const parseError = ref('')
 const submitError = ref('')
 const manualRateDraft = ref('')
-const duplicateAcknowledged = ref(false)
+// 命中重复时用户必须二选一（并存 / 取代），不预选，避免误把取代当成默认动作。
+const duplicateResolution = ref<SlhBillDuplicateResolution | undefined>(undefined)
 const previewPage = ref(1)
 // 一张账单通常 30–50 行，默认 50 条一页，避免核对时频繁翻页。
 const previewPageSize = ref(50)
@@ -72,9 +73,14 @@ const manualRateNeeded = computed(() => preview.value !== null && needsSlhBillMa
 const manualRate = computed(() => preview.value === null
   ? { error: null, value: null } as const
   : resolveSlhBillManualRate(preview.value, manualRateDraft.value))
+/** 两个选项都必须说清后果：并存会多一张账单，取代会让原账单失效。 */
+const duplicateOptions = computed(() => [
+  { description: t('slhBill.duplicate.acknowledgeHint'), label: t('slhBill.duplicate.acknowledge'), value: 'acknowledge' as const },
+  { description: t('slhBill.duplicate.supersedeHint'), label: t('slhBill.duplicate.supersede'), value: 'supersede' as const },
+])
 const blockReason = computed(() => preview.value === null
   ? null
-  : resolveSlhBillImportBlock({ duplicateAcknowledged: duplicateAcknowledged.value, manualRateError: manualRate.value.error, preview: preview.value }))
+  : resolveSlhBillImportBlock({ duplicateResolution: duplicateResolution.value, manualRateError: manualRate.value.error, preview: preview.value }))
 const blockMessage = computed(() => {
   switch (blockReason.value) {
     case 'manualRateRequired':
@@ -83,7 +89,7 @@ const blockMessage = computed(() => {
       return t('slhBill.manualRate.format')
     case 'lineErrors':
       return t('slhBill.lineErrorsBlocked', { count: issues.value.lineErrors })
-    case 'duplicateUnacknowledged':
+    case 'duplicateUnresolved':
       return preview.value?.duplicate
         ? t('slhBill.duplicate.notice', { billNo: preview.value.duplicate.slhBillNo, period: `${preview.value.duplicate.periodStart} ~ ${preview.value.duplicate.periodEnd}` })
         : ''
@@ -154,7 +160,7 @@ function importComplete(): void {
   }
   preview.value = result
   previewPage.value = 1
-  duplicateAcknowledged.value = false
+  duplicateResolution.value = undefined
   // 默认填系统汇率的两小数展示值；用户不改动时不提交手填汇率，服务端按 SYSTEM 冻结。
   manualRateDraft.value = formatSlhBillRate(result.systemForeignUnitsPerCny) ?? ''
 }
@@ -178,7 +184,7 @@ function resetUpload(): void {
   parseError.value = ''
   submitError.value = ''
   manualRateDraft.value = ''
-  duplicateAcknowledged.value = false
+  duplicateResolution.value = undefined
   previewPage.value = 1
   pendingKey = null
   pendingSignature = null
@@ -198,9 +204,11 @@ async function submit(archive: SlhBillArchiveDraft): Promise<void> {
   }
   const payload = buildSlhBillImportPayload({
     archive,
-    duplicateAcknowledged: duplicateAcknowledged.value,
+    duplicateResolution: duplicateResolution.value,
     manualRate: manualRate.value.value,
     mediaAssetId: staged.value.mediaAssetId,
+    // 只在取代时使用；选并存或没有重复时服务端不会读它。
+    supersedesBillId: preview.value.duplicate?.billId,
   })
   const signature = JSON.stringify(payload)
   if (resolveSlhBillImportKeyAction({ pendingSignature, settled: 'pending', signature }) === 'mine') {
@@ -407,9 +415,17 @@ onBeforeUnmount(() => controller?.abort())
                 {{ t('slhBill.duplicate.notice', { billNo: preview.duplicate.slhBillNo, period: `${preview.duplicate.periodStart} ~ ${preview.duplicate.periodEnd}` }) }}
               </p>
             </div>
-            <FaCheckbox v-model="duplicateAcknowledged" class="mt-3" :disabled="submitting">
-              {{ t('slhBill.duplicate.confirm') }}
-            </FaCheckbox>
+            <p class="qs-type-meta m-0 mb-3 mt-1.5">
+              {{ t('slhBill.duplicate.choose') }}
+            </p>
+            <FaRadioGroup
+              v-model="duplicateResolution"
+              :options="duplicateOptions"
+              :disabled="submitting"
+              :aria-label="t('slhBill.duplicate.choose')"
+              class="gap-2 grid"
+              option-class="min-w-0 rounded-lg border border-border bg-background p-3"
+            />
           </section>
         </FaPageMain>
         <FaPageMain>

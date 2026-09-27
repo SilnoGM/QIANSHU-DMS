@@ -124,7 +124,11 @@
     "downloadFailed": "原件下載失敗，請重試",
     "duplicate": {
       "notice": "帳單期間與櫃號集合與帳單 {billNo}（{period}）相同",
-      "confirm": "我確認這是另一張帳單，繼續匯入"
+      "choose": "請選擇處理方式",
+      "acknowledge": "這是另一張帳單，兩張並存",
+      "acknowledgeHint": "新帳單獨立匯入，原帳單繼續生效",
+      "supersede": "取代該帳單",
+      "supersedeHint": "原帳單標記為已被取代，查閱與核對以新帳單為準"
     },
     "empty": "暫無帳單",
     "emptyDescription": "匯入順聯航對帳單後在此查閱",

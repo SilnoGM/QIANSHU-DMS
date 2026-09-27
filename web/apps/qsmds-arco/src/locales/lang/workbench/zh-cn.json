@@ -133,7 +133,11 @@
     "downloadFailed": "原件下载失败，请重试",
     "duplicate": {
       "notice": "账单期间与柜号集合与账单 {billNo}（{period}）相同",
-      "confirm": "我确认这是另一张账单，继续导入"
+      "choose": "请选择处理方式",
+      "acknowledge": "这是另一张账单，两张并存",
+      "acknowledgeHint": "新账单独立入库，原账单继续生效",
+      "supersede": "取代该账单",
+      "supersedeHint": "原账单标记为已被取代，查阅与核对以新账单为准"
     },
     "empty": "暂无账单",
     "emptyDescription": "导入顺联航对账单后在此查阅",

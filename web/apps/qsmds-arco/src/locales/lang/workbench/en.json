@@ -124,7 +124,11 @@
     "downloadFailed": "Failed to download the source file, please retry",
     "duplicate": {
       "notice": "Period and container set match bill {billNo} ({period})",
-      "confirm": "I confirm this is a different bill and want to continue"
+      "choose": "Choose how to handle it",
+      "acknowledge": "This is a different bill — keep both",
+      "acknowledgeHint": "Import it as a separate bill; the existing bill stays effective",
+      "supersede": "Supersede that bill",
+      "supersedeHint": "Mark the existing bill as superseded; reviews and reconciliations follow the new bill"
     },
     "empty": "No bills yet",
     "emptyDescription": "Import a Shunlianhang statement to review it here",

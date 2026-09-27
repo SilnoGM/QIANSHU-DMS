@@ -4,7 +4,9 @@ import { countSlhBillFindings } from './comparison.logic'
 
 export type SlhBillImportPhase = 'upload' | 'parsing' | 'preview'
 export type SlhBillManualRateError = 'format' | 'required' | null
-export type SlhBillImportBlockReason = 'manualRateRequired' | 'manualRateFormat' | 'lineErrors' | 'duplicateUnacknowledged' | null
+export type SlhBillImportBlockReason = 'manualRateRequired' | 'manualRateFormat' | 'lineErrors' | 'duplicateUnresolved' | null
+/** 命中重复时用户的两种处理方式：并存导入，或取代原账单。 */
+export type SlhBillDuplicateResolution = 'acknowledge' | 'supersede'
 export type SlhBillImportKeyAction = 'mine' | 'keep' | 'drop'
 // 手填汇率与系统汇率同精度：非负、最多 12 位小数、无前导零。
 const MANUAL_RATE_PATTERN = /^(?:0|[1-9]\d{0,27})(?:\.\d{1,12})?$/
@@ -84,11 +86,11 @@ export function countSlhBillImportIssues(preview: Pick<SlhBillImportPreviewDto, 
   }
 }
 
-/** 服务端对同一「期间 + 柜号集合」返回重复提示，用户勾选确认后才允许继续。 */
+/** 服务端对同一「期间 + 柜号集合」返回重复提示，用户选定处理方式后才允许继续。 */
 export function resolveSlhBillImportBlock(input: {
   preview: Pick<SlhBillImportPreviewDto, 'lines' | 'duplicate'>
   manualRateError: SlhBillManualRateError
-  duplicateAcknowledged: boolean
+  duplicateResolution: SlhBillDuplicateResolution | undefined
 }): SlhBillImportBlockReason {
   if (input.manualRateError === 'required') {
     return 'manualRateRequired'
@@ -99,8 +101,8 @@ export function resolveSlhBillImportBlock(input: {
   if (input.preview.lines.some(line => line.errors.length > 0)) {
     return 'lineErrors'
   }
-  if (input.preview.duplicate !== null && input.preview.duplicate !== undefined && !input.duplicateAcknowledged) {
-    return 'duplicateUnacknowledged'
+  if (input.preview.duplicate !== null && input.preview.duplicate !== undefined && input.duplicateResolution === undefined) {
+    return 'duplicateUnresolved'
   }
   return null
 }
@@ -110,7 +112,8 @@ export function buildSlhBillImportPayload(input: {
   mediaAssetId: string
   archive: SlhBillArchiveDraft
   manualRate: string | null
-  duplicateAcknowledged: boolean
+  /** 未选定处理方式时不发重复相关字段，服务端按未确认处理并拒绝入库。 */
+  duplicateResolution: SlhBillDuplicateResolution | undefined
   supersedesBillId?: SlhBillImportCreateDto['supersedesBillId']
 }): SlhBillImportCreateDto {
   return {
@@ -119,8 +122,11 @@ export function buildSlhBillImportPayload(input: {
     billMonth: input.archive.billMonth.trim(),
     // 备注留空时不发该字段，与服务端的「空即缺」口径一致。
     ...(input.archive.remark.trim() === '' ? {} : { remark: input.archive.remark.trim() }),
-    duplicateAcknowledged: input.duplicateAcknowledged,
-    ...(input.supersedesBillId === undefined ? {} : { supersedesBillId: input.supersedesBillId }),
+    // 并存与取代都算确认过重复；区别只在于是否把原账单标记为被取代。
+    duplicateAcknowledged: input.duplicateResolution !== undefined,
+    ...(input.duplicateResolution === 'supersede' && input.supersedesBillId !== undefined
+      ? { supersedesBillId: input.supersedesBillId }
+      : {}),
     ...(input.manualRate === null ? {} : { manualForeignUnitsPerCny: input.manualRate }),
   }
 }

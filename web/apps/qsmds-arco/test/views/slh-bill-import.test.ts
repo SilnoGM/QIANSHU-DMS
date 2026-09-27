@@ -137,19 +137,22 @@ test('明细错误逐行回显并阻止入库，重复账单必须先勾选确�
     warnings: 2,
   })
   const blocked = previewFixture({ lines })
-  assert.equal(resolveSlhBillImportBlock({ duplicateAcknowledged: false, manualRateError: null, preview: blocked }), 'lineErrors')
+  assert.equal(resolveSlhBillImportBlock({ duplicateResolution: undefined, manualRateError: null, preview: blocked }), 'lineErrors')
   const duplicate = previewFixture({ duplicate: { billId: 'bill-1', periodEnd: '2026-08-31', periodStart: '2026-08-01', slhBillNo: 'CBILL/202608-01' } })
-  assert.equal(resolveSlhBillImportBlock({ duplicateAcknowledged: false, manualRateError: null, preview: duplicate }), 'duplicateUnacknowledged')
-  assert.equal(resolveSlhBillImportBlock({ duplicateAcknowledged: true, manualRateError: null, preview: duplicate }), null)
-  assert.equal(resolveSlhBillImportBlock({ duplicateAcknowledged: true, manualRateError: 'required', preview: duplicate }), 'manualRateRequired')
-  assert.equal(resolveSlhBillImportBlock({ duplicateAcknowledged: true, manualRateError: 'format', preview: duplicate }), 'manualRateFormat')
-  assert.equal(resolveSlhBillImportBlock({ duplicateAcknowledged: true, manualRateError: null, preview: previewFixture() }), null)
+  // 命中重复但没选处理方式时阻断；并存与取代都放行。
+  assert.equal(resolveSlhBillImportBlock({ duplicateResolution: undefined, manualRateError: null, preview: duplicate }), 'duplicateUnresolved')
+  assert.equal(resolveSlhBillImportBlock({ duplicateResolution: 'acknowledge', manualRateError: null, preview: duplicate }), null)
+  assert.equal(resolveSlhBillImportBlock({ duplicateResolution: 'supersede', manualRateError: null, preview: duplicate }), null)
+  // 汇率问题优先于重复：先把汇率填对，再谈重复怎么处理。
+  assert.equal(resolveSlhBillImportBlock({ duplicateResolution: 'supersede', manualRateError: 'required', preview: duplicate }), 'manualRateRequired')
+  assert.equal(resolveSlhBillImportBlock({ duplicateResolution: 'supersede', manualRateError: 'format', preview: duplicate }), 'manualRateFormat')
+  assert.equal(resolveSlhBillImportBlock({ duplicateResolution: 'acknowledge', manualRateError: null, preview: previewFixture() }), null)
 })
 
 const archive = { billName: '一月对账单', billMonth: '2026-01', remark: '' }
 
 test('入库载荷带上归档字段，空备注与未手填汇率都不发送', () => {
-  assert.deepEqual(buildSlhBillImportPayload({ archive, duplicateAcknowledged: false, manualRate: null, mediaAssetId: 'asset-1' }), {
+  assert.deepEqual(buildSlhBillImportPayload({ archive, duplicateResolution: undefined, manualRate: null, mediaAssetId: 'asset-1' }), {
     billMonth: '2026-01',
     billName: '一月对账单',
     duplicateAcknowledged: false,
@@ -157,7 +160,7 @@ test('入库载荷带上归档字段，空备注与未手填汇率都不发送',
   })
   assert.deepEqual(buildSlhBillImportPayload({
     archive: { billName: ' 一月对账单 ', billMonth: ' 2026-01 ', remark: ' 首次导入 ' },
-    duplicateAcknowledged: true,
+    duplicateResolution: 'acknowledge',
     manualRate: '4.9',
     mediaAssetId: 'asset-1',
   }), {
@@ -167,6 +170,29 @@ test('入库载荷带上归档字段，空备注与未手填汇率都不发送',
     manualForeignUnitsPerCny: '4.9',
     mediaAssetId: 'asset-1',
     remark: '首次导入',
+  })
+})
+
+test('只有取代才带上被取代账单 id，并存时即使传了也不发', () => {
+  assert.deepEqual(buildSlhBillImportPayload({ archive, duplicateResolution: 'supersede', manualRate: null, mediaAssetId: 'asset-1', supersedesBillId: 'bill-1' }), {
+    billMonth: '2026-01',
+    billName: '一月对账单',
+    duplicateAcknowledged: true,
+    mediaAssetId: 'asset-1',
+    supersedesBillId: 'bill-1',
+  })
+  assert.deepEqual(buildSlhBillImportPayload({ archive, duplicateResolution: 'acknowledge', manualRate: null, mediaAssetId: 'asset-1', supersedesBillId: 'bill-1' }), {
+    billMonth: '2026-01',
+    billName: '一月对账单',
+    duplicateAcknowledged: true,
+    mediaAssetId: 'asset-1',
+  })
+  // 选了取代却没拿到原账单 id 时退回「已确认重复」，不会发出半截取代指令。
+  assert.deepEqual(buildSlhBillImportPayload({ archive, duplicateResolution: 'supersede', manualRate: null, mediaAssetId: 'asset-1' }), {
+    billMonth: '2026-01',
+    billName: '一月对账单',
+    duplicateAcknowledged: true,
+    mediaAssetId: 'asset-1',
   })
 })
 
