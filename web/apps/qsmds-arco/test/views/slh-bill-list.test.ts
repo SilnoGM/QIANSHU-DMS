@@ -132,6 +132,8 @@ test('操作列的对账按钮只做轻提示，不跳转也不改数据', async
   // 按钮按状态出现（完成态 v-if 为假），点击只弹一条 info 提示。
   assert.match(source, /v-if="resolveSlhBillReconciliationActionLabelKey\(row\.reconciliationStatus\)"/u)
   assert.match(source, /function startReconciliation\(\): void \{[\s\S]{0,160}toast\.info\(t\('slhBill\.reconciliationUnavailable'\)\)/u)
+  // #actions 插槽同时供表格操作列与移动卡片底部使用（QsGenericTable 自动渲染），缺了它两端都会丢按钮。
+  assert.match(source, /<template #actions="\{ row \}">/u)
   // 占位期间不得出现跳转或写请求。
   assert.equal(source.includes('reconciliationStatus', source.indexOf('function startReconciliation')), true)
   const handler = source.slice(source.indexOf('function startReconciliation'), source.indexOf('function openImport'))
