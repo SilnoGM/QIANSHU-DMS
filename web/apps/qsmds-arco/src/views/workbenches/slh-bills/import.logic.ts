@@ -108,12 +108,17 @@ export function resolveSlhBillImportBlock(input: {
 /** 未手填时不发送该字段，让服务端冻结系统汇率并把来源记为 SYSTEM。 */
 export function buildSlhBillImportPayload(input: {
   mediaAssetId: string
+  archive: SlhBillArchiveDraft
   manualRate: string | null
   duplicateAcknowledged: boolean
   supersedesBillId?: SlhBillImportCreateDto['supersedesBillId']
 }): SlhBillImportCreateDto {
   return {
     mediaAssetId: input.mediaAssetId,
+    billName: input.archive.billName.trim(),
+    billMonth: input.archive.billMonth.trim(),
+    // 备注留空时不发该字段，与服务端的「空即缺」口径一致。
+    ...(input.archive.remark.trim() === '' ? {} : { remark: input.archive.remark.trim() }),
     duplicateAcknowledged: input.duplicateAcknowledged,
     ...(input.supersedesBillId === undefined ? {} : { supersedesBillId: input.supersedesBillId }),
     ...(input.manualRate === null ? {} : { manualForeignUnitsPerCny: input.manualRate }),
@@ -136,4 +141,54 @@ export function resolveSlhBillImportKeyAction(input: {
     return 'drop'
   }
   return input.pendingSignature === input.signature ? 'keep' : 'mine'
+}
+
+export interface SlhBillArchiveDraft {
+  billName: string
+  billMonth: string
+  remark: string
+}
+
+export type SlhBillArchiveFieldError = 'nameRequired' | 'nameTooLong' | 'monthRequired' | 'remarkTooLong'
+
+const BILL_MONTH_PATTERN = /^\d{4}-(?:0[1-9]|1[0-2])$/u
+
+/** 弹窗打开时的草稿：名称与月份用服务端推导的默认值（期间结束月优先），备注留空。 */
+export function createSlhBillArchiveDraft(preview: Pick<SlhBillImportPreviewDto, 'suggestedBillName' | 'suggestedBillMonth'>): SlhBillArchiveDraft {
+  return { billName: preview.suggestedBillName, billMonth: preview.suggestedBillMonth, remark: '' }
+}
+
+/**
+ * 归档字段校验，与服务端 DTO 同口径：名称必填且不超长、月份必须是 YYYY-MM、备注不超长。
+ * 返回字段到错误标识的映射，空对象表示可提交。
+ */
+export function validateSlhBillArchiveDraft(draft: SlhBillArchiveDraft): Partial<Record<keyof SlhBillArchiveDraft, SlhBillArchiveFieldError>> {
+  const errors: Partial<Record<keyof SlhBillArchiveDraft, SlhBillArchiveFieldError>> = {}
+  const name = draft.billName.trim()
+  if (name === '') {
+    errors.billName = 'nameRequired'
+  }
+  else if ([...name].length > 200) {
+    errors.billName = 'nameTooLong'
+  }
+  if (!BILL_MONTH_PATTERN.test(draft.billMonth.trim())) {
+    errors.billMonth = 'monthRequired'
+  }
+  if ([...draft.remark.trim()].length > 500) {
+    errors.remark = 'remarkTooLong'
+  }
+  return errors
+}
+
+/**
+ * 名称被占用时自动加日期后缀（-YYYYMMDD）。
+ *
+ * 用导入当天而不是账单期间：同一个期间重复导入时，只有导入日期能把两次区分开。
+ * 名称已经带同类后缀时先去掉再补，避免叠成「名称-20260927-20260927」。
+ */
+export function withSlhBillNameSuffix(name: string, now: Date): string {
+  const trimmed = name.trim().replace(/-\d{8}$/u, '')
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${trimmed}-${now.getFullYear()}${month}${day}`
 }

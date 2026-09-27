@@ -13,6 +13,28 @@
     "slhBillReconciliation": "順聯航帳單對帳"
   },
   "slhBill": {
+    "archive": {
+      "title": "確認入庫順聯航帳單",
+      "description": "核對歸檔資訊後入庫；編號由系統在入庫時派發",
+      "billNo": "對帳單編號",
+      "billNoHint": "編號由規則 CTN_BILL_NO 在入庫時派發，其中月份是派發月，與下面的帳單月份無關",
+      "billNoPending": "確認後系統自動取得",
+      "billName": "對帳單名稱",
+      "billNamePlaceholder": "預設取來源檔名，可修改",
+      "billMonth": "對帳單月份",
+      "billMonthHint": "預設取帳單裝櫃期間的結束月，可修改",
+      "attachment": "附件",
+      "attachmentHint": "原始帳單 Excel（{size}）；入庫前為暫存檔案，不可預覽或下載",
+      "remark": "備註",
+      "remarkPlaceholder": "選填",
+      "failed": "入庫失敗",
+      "error": {
+        "nameRequired": "請填寫對帳單名稱",
+        "nameTooLong": "名稱最多 200 個字元",
+        "monthRequired": "請選擇帳單月份",
+        "remarkTooLong": "備註最多 500 個字元"
+      }
+    },
     "back": "返回帳單列表",
     "cancel": "取消",
     "chargeType": {
@@ -44,7 +66,10 @@
       "rateSource": "匯率來源",
       "sourceFileName": "原件檔案",
       "created": "建立人",
-      "createdAt": "建立時間"
+      "createdAt": "建立時間",
+      "billName": "對帳單名稱",
+      "billMonth": "對帳單月份",
+      "remark": "備註"
     },
     "comparison": {
       "title": "合計對比",

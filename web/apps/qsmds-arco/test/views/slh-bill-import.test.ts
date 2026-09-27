@@ -6,12 +6,15 @@ import {
   buildSlhBillImportPayload,
   collectSlhBillLineErrors,
   countSlhBillImportIssues,
+  createSlhBillArchiveDraft,
   hasSlhBillTwdAmounts,
   needsSlhBillManualRate,
   resolveSlhBillImportBlock,
   resolveSlhBillImportKeyAction,
   resolveSlhBillImportPhase,
   resolveSlhBillManualRate,
+  validateSlhBillArchiveDraft,
+  withSlhBillNameSuffix,
 } from '../../src/views/workbenches/slh-bills/import.logic'
 
 function previewFixture(overrides: Partial<SlhBillImportPreviewDto> = {}): SlhBillImportPreviewDto {
@@ -143,21 +146,50 @@ test('明细错误逐行回显并阻止入库，重复账单必须先勾选确�
   assert.equal(resolveSlhBillImportBlock({ duplicateAcknowledged: true, manualRateError: null, preview: previewFixture() }), null)
 })
 
-test('入库载荷只发送有效字段，未手填时不发汇率让服务端冻结系统汇率', () => {
-  assert.deepEqual(buildSlhBillImportPayload({ duplicateAcknowledged: false, manualRate: null, mediaAssetId: 'asset-1' }), {
+const archive = { billName: '一月对账单', billMonth: '2026-01', remark: '' }
+
+test('入库载荷带上归档字段，空备注与未手填汇率都不发送', () => {
+  assert.deepEqual(buildSlhBillImportPayload({ archive, duplicateAcknowledged: false, manualRate: null, mediaAssetId: 'asset-1' }), {
+    billMonth: '2026-01',
+    billName: '一月对账单',
     duplicateAcknowledged: false,
     mediaAssetId: 'asset-1',
   })
-  assert.deepEqual(buildSlhBillImportPayload({ duplicateAcknowledged: true, manualRate: '4.9', mediaAssetId: 'asset-1' }), {
+  assert.deepEqual(buildSlhBillImportPayload({
+    archive: { billName: ' 一月对账单 ', billMonth: ' 2026-01 ', remark: ' 首次导入 ' },
+    duplicateAcknowledged: true,
+    manualRate: '4.9',
+    mediaAssetId: 'asset-1',
+  }), {
+    billMonth: '2026-01',
+    billName: '一月对账单',
     duplicateAcknowledged: true,
     manualForeignUnitsPerCny: '4.9',
     mediaAssetId: 'asset-1',
+    remark: '首次导入',
   })
-  assert.deepEqual(buildSlhBillImportPayload({ duplicateAcknowledged: false, manualRate: null, mediaAssetId: 'asset-1', supersedesBillId: { id: 'bill-0' } }), {
-    duplicateAcknowledged: false,
-    mediaAssetId: 'asset-1',
-    supersedesBillId: { id: 'bill-0' },
-  })
+})
+
+test('归档草稿取服务端推导的默认值，校验与服务端同口径', () => {
+  assert.deepEqual(
+    createSlhBillArchiveDraft({ suggestedBillMonth: '2026-01', suggestedBillName: '1月账单（3）千树贸易账单' }),
+    { billMonth: '2026-01', billName: '1月账单（3）千树贸易账单', remark: '' },
+  )
+  assert.deepEqual(validateSlhBillArchiveDraft({ billMonth: '2026-01', billName: '对账单', remark: '' }), {})
+  // 名称必填、月份必须是 YYYY-MM、备注不超长。
+  assert.equal(validateSlhBillArchiveDraft({ billMonth: '2026-01', billName: '   ', remark: '' }).billName, 'nameRequired')
+  assert.equal(validateSlhBillArchiveDraft({ billMonth: '2026-01', billName: '长'.repeat(201), remark: '' }).billName, 'nameTooLong')
+  assert.equal(validateSlhBillArchiveDraft({ billMonth: '2026-13', billName: '对账单', remark: '' }).billMonth, 'monthRequired')
+  assert.equal(validateSlhBillArchiveDraft({ billMonth: '', billName: '对账单', remark: '' }).billMonth, 'monthRequired')
+  assert.equal(validateSlhBillArchiveDraft({ billMonth: '2026-01', billName: '对账单', remark: '字'.repeat(501) }).remark, 'remarkTooLong')
+})
+
+test('名称冲突时补日期后缀，重复冲突不叠加', () => {
+  const day = new Date('2026-09-27T00:00:00Z')
+  assert.equal(withSlhBillNameSuffix('一月对账单', day), `一月对账单-20260927`)
+  // 已经带同类后缀时先去掉再补，避免叠成两段。
+  assert.equal(withSlhBillNameSuffix('一月对账单-20260926', day), '一月对账单-20260927')
+  assert.equal(withSlhBillNameSuffix(' 一月对账单 ', day), '一月对账单-20260927')
 })
 
 test('幂等键随内容变化重签，结果未知时沿用原键以便安全重放', () => {

@@ -224,10 +224,34 @@ onBeforeUnmount(() => {
               <dl class="m-0 gap-4 grid sm:grid-cols-[8rem_minmax(0,1fr)]">
                 <div>
                   <dt class="qs-type-meta text-muted-foreground">
+                    {{ t('slhBill.column.billName') }}
+                  </dt>
+                  <dd class="qs-type-data-emphasis m-0 mt-1.5 [overflow-wrap:anywhere]">
+                    {{ bill.billName }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-meta text-muted-foreground">
+                    {{ t('slhBill.column.billMonth') }}
+                  </dt>
+                  <dd class="qs-type-data m-0 mt-1.5">
+                    {{ bill.billMonth }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-meta text-muted-foreground">
                     {{ t('slhBill.column.slhBillNo') }}
                   </dt>
-                  <dd class="qs-type-data-emphasis font-mono m-0 mt-1.5 break-all">
+                  <dd class="qs-type-data font-mono m-0 mt-1.5 break-all">
                     {{ bill.slhBillNo }}
+                  </dd>
+                </div>
+                <div v-if="bill.remark">
+                  <dt class="qs-type-meta text-muted-foreground">
+                    {{ t('slhBill.column.remark') }}
+                  </dt>
+                  <dd class="qs-type-data m-0 mt-1.5 [overflow-wrap:anywhere]">
+                    {{ bill.remark }}
                   </dd>
                 </div>
                 <div>

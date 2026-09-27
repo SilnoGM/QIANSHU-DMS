@@ -181,3 +181,23 @@ test('导入页把加载器接在遮罩上并禁止中途关闭', async () => {
   // 选好文件即启动，不再有单独的"正在解析"文案阶段（改由遮罩承担）。
   assert.equal(/t\('slhBill\.parsing'\)/u.test(source), false)
 })
+
+test('入库先开确认弹窗，成功后回账单列表页', async () => {
+  const page = await readFile(new URL('../../src/views/workbenches/slh-bills/import.vue', import.meta.url), 'utf8')
+  assert.ok(page.includes('<SlhBillImportModal'))
+  assert.ok(page.includes('@click="openArchiveModal"'))
+  // 底部按钮只开弹窗，不再直接提交。
+  assert.equal(page.includes('@click="submit"'), false)
+  // 入库后回列表页；列表页没有开保活，返回即重新加载。
+  assert.ok(page.includes('qsFinanceBillReconciliationSlhBillManagement'))
+  assert.equal(page.includes('qsFinanceBillReconciliationSlhBillDetail'), false)
+
+  const modal = await readFile(new URL('../../src/views/workbenches/slh-bills/slh-bill-import-modal.vue', import.meta.url), 'utf8')
+  // 五个展示项与两个按钮；月份用现成的月份选择器。
+  for (const fragment of ['slhBill.archive.billNo', 'slhBill.archive.billName', 'slhBill.archive.billMonth', 'slhBill.archive.attachment', 'slhBill.archive.remark', '<FaCalendarMonth', 'slhBill.archive.billNoPending']) {
+    assert.ok(modal.includes(fragment), fragment)
+  }
+  // 名称冲突时补后缀并把字段错误交回表单。
+  assert.ok(modal.includes('withSlhBillNameSuffix'))
+  assert.ok(modal.includes('setFieldError'))
+})

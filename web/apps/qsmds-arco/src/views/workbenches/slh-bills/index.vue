@@ -45,7 +45,10 @@ const query = computed(() => buildSlhBillListQuery({
   state: state.value,
 }))
 const columns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
+  // 名称比编号更好认，放在最前；月份紧跟编号，两者都是入库时填的归档信息。
+  { id: 'billName', title: t('slhBill.column.billName'), accessorFn: item => item.billName, width: 240, minWidth: 240, fixed: 'left' },
   { id: 'slhBillNo', title: t('slhBill.column.slhBillNo'), accessorKey: 'slhBillNo', width: 215, minWidth: 215, fixed: 'left' },
+  { id: 'billMonth', title: t('slhBill.column.billMonth'), accessorFn: item => item.billMonth, width: 130, minWidth: 130 },
   { id: 'period', title: t('slhBill.column.period'), accessorFn: item => `${item.periodStart} ~ ${item.periodEnd}`, minWidth: 205 },
   { id: 'lineCount', title: t('slhBill.column.lineCount'), accessorKey: 'lineCount', minWidth: 110, align: 'right' },
   { id: 'containerBatchCount', title: t('slhBill.column.containerBatchCount'), accessorKey: 'containerBatchCount', minWidth: 100, align: 'right' },

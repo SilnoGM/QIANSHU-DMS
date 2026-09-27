@@ -13,6 +13,28 @@
     "slhBillReconciliation": "Shunlianhang Bill Reconciliation"
   },
   "slhBill": {
+    "archive": {
+      "title": "Confirm bill import",
+      "description": "Review the archive details; the number is dispatched on import",
+      "billNo": "Bill number",
+      "billNoHint": "Dispatched by rule CTN_BILL_NO on import; its month is the issuance month, unrelated to the bill month below",
+      "billNoPending": "Assigned automatically after you confirm",
+      "billName": "Bill name",
+      "billNamePlaceholder": "Defaults to the source file name; editable",
+      "billMonth": "Bill month",
+      "billMonthHint": "Defaults to the month the loading period ends; editable",
+      "attachment": "Attachment",
+      "attachmentHint": "Source xlsx ({size}); a staged file until imported, so it cannot be previewed or downloaded yet",
+      "remark": "Remark",
+      "remarkPlaceholder": "Optional",
+      "failed": "Import failed",
+      "error": {
+        "nameRequired": "Enter a bill name",
+        "nameTooLong": "The name accepts at most 200 characters",
+        "monthRequired": "Choose the bill month",
+        "remarkTooLong": "The remark accepts at most 500 characters"
+      }
+    },
     "back": "Back to bills",
     "cancel": "Cancel",
     "chargeType": {
@@ -44,7 +66,10 @@
       "rateSource": "Rate source",
       "sourceFileName": "Source file",
       "created": "Created by",
-      "createdAt": "Created at"
+      "createdAt": "Created at",
+      "billName": "Bill name",
+      "billMonth": "Bill month",
+      "remark": "Remark"
     },
     "comparison": {
       "title": "Totals comparison",

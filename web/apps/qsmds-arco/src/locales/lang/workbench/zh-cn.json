@@ -22,6 +22,28 @@
     "slhBillReconciliation": "顺联航账单对账"
   },
   "slhBill": {
+    "archive": {
+      "title": "确认入库顺联航账单",
+      "description": "核对归档信息后入库；编号由系统在入库时派发",
+      "billNo": "对账单编号",
+      "billNoHint": "编号由规则 CTN_BILL_NO 在入库时派发，其中月份是派发月，与下面的账单月份无关",
+      "billNoPending": "确认后系统自动获取",
+      "billName": "对账单名称",
+      "billNamePlaceholder": "默认取来源文件名，可修改",
+      "billMonth": "对账单月份",
+      "billMonthHint": "默认取账单装柜期间的结束月，可修改",
+      "attachment": "附件",
+      "attachmentHint": "原始账单 Excel（{size}）；入库前为暂存文件，不可预览或下载",
+      "remark": "备注",
+      "remarkPlaceholder": "选填",
+      "failed": "入库失败",
+      "error": {
+        "nameRequired": "请填写对账单名称",
+        "nameTooLong": "名称最多 200 个字符",
+        "monthRequired": "请选择账单月份",
+        "remarkTooLong": "备注最多 500 个字符"
+      }
+    },
     "back": "返回账单列表",
     "cancel": "取消",
     "chargeType": {
@@ -53,7 +75,10 @@
       "rateSource": "汇率来源",
       "sourceFileName": "原件文件",
       "created": "创建人",
-      "createdAt": "创建时间"
+      "createdAt": "创建时间",
+      "billName": "对账单名称",
+      "billMonth": "对账单月份",
+      "remark": "备注"
     },
     "comparison": {
       "title": "合计对比",

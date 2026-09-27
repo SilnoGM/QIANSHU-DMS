@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FileItem } from '@fantastic-admin/components'
+import type { SlhBillArchiveDraft } from './import.logic'
 import type { SlhBillImportPreviewDto, SlhBillPreviewLineDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import slhBillsApi from '@/api/modules/slh-bills'
@@ -21,6 +22,7 @@ import {
 import { buildSlhBillLineColumns } from './line-columns.logic'
 import SlhBillCharges from './slh-bill-charges.vue'
 import SlhBillComparison from './slh-bill-comparison.vue'
+import SlhBillImportModal from './slh-bill-import-modal.vue'
 import SlhBillOverflowText from './slh-bill-overflow-text.vue'
 import SlhBillPricingBasisTag from './slh-bill-pricing-basis-tag.vue'
 import SlhBillVolumeDifference from './slh-bill-volume-difference.vue'
@@ -36,6 +38,10 @@ const canImport = computed(() => auth('slh-bills:create'))
 const files = ref<FileItem[]>([])
 const preview = shallowRef<SlhBillImportPreviewDto | null>(null)
 const submitting = ref(false)
+const archiveModalOpen = ref(false)
+// 名称冲突时给弹窗一个非零的非ce，让它自动补日期后缀；同一个会话里可能连续冲突。
+const nameConflictNonce = ref(0)
+const archiveFieldErrors = ref<Record<string, string>>({})
 const parseError = ref('')
 const submitError = ref('')
 const manualRateDraft = ref('')
@@ -101,6 +107,15 @@ function jumpToLine(lineNumber: number): void {
   previewPage.value = pageForSlhBillLine(lineNumber, previewPageSize.value)
 }
 const busy = computed(() => importLoading.value || submitting.value)
+/** 入库前先收集归档信息；阻断项仍在页面上处理，不进入弹窗。 */
+function openArchiveModal(): void {
+  if (preview.value === null || staged.value === null || submitting.value || blockReason.value !== null) {
+    return
+  }
+  submitError.value = ''
+  archiveFieldErrors.value = {}
+  archiveModalOpen.value = true
+}
 function back(): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhBillManagement' })
 }
@@ -152,6 +167,8 @@ function importFailed(failure: unknown): void {
   }
 }
 function resetUpload(): void {
+  archiveModalOpen.value = false
+  archiveFieldErrors.value = {}
   resetImport()
   settleUpload = null
   files.value = []
@@ -174,11 +191,12 @@ function retryParse(): void {
   parseError.value = ''
   startParseOnly({ labels: importLabels(), mediaAssetId: current.mediaAssetId })
 }
-async function submit(): Promise<void> {
-  if (preview.value === null || staged.value === null || submitting.value || blockReason.value !== null) {
+async function submit(archive: SlhBillArchiveDraft): Promise<void> {
+  if (preview.value === null || staged.value === null || submitting.value) {
     return
   }
   const payload = buildSlhBillImportPayload({
+    archive,
     duplicateAcknowledged: duplicateAcknowledged.value,
     manualRate: manualRate.value.value,
     mediaAssetId: staged.value.mediaAssetId,
@@ -206,8 +224,10 @@ async function submit(): Promise<void> {
       pendingKey = null
       pendingSignature = null
     }
+    archiveModalOpen.value = false
     toast.success(t('slhBill.importSuccess', { billNo: response.data.slhBillNo }))
-    await router.push({ name: 'qsFinanceBillReconciliationSlhBillDetail', params: { id: response.data.id } })
+    // 入库后回账单列表：列表页没有保活，返回时会重新挂载并请求，新账单一律可见。
+    await router.push({ name: 'qsFinanceBillReconciliationSlhBillManagement' })
   }
   catch (failure) {
     if (request.signal.aborted) {
@@ -215,6 +235,13 @@ async function submit(): Promise<void> {
     }
     const parsed = containerFailure(failure)
     submitError.value = parsed.message
+    // 名称被占用时补上日期后缀并把字段错误交回弹窗，让用户就地改或直接重提。
+    const nameError = parsed.fieldErrors.billName
+    if (nameError !== undefined) {
+      archiveFieldErrors.value = { billName: nameError }
+      nameConflictNonce.value += 1
+      return
+    }
     // 结果未知时保留原键，人工重试仍能恢复到同一张账单。
     const action = resolveSlhBillImportKeyAction({ pendingSignature, settled: parsed.unknownResult ? 'unknown' : 'rejected', signature })
     if (action === 'drop') {
@@ -440,8 +467,8 @@ onBeforeUnmount(() => controller?.abort())
                 <FaButton variant="outline" :disabled="submitting" @click="back">
                   {{ t('slhBill.cancel') }}
                 </FaButton>
-                <FaButton :loading="submitting" :disabled="submitting || blockReason !== null" @click="submit">
-                  {{ t(submitting ? 'slhBill.submitting' : 'slhBill.confirm') }}
+                <FaButton :disabled="submitting || blockReason !== null" @click="openArchiveModal">
+                  {{ t('slhBill.confirm') }}
                 </FaButton>
               </div>
             </div>
@@ -451,5 +478,16 @@ onBeforeUnmount(() => controller?.abort())
     </template>
     <!-- 选好文件即开始：加载器自己保证最短展示时长，两个请求挂在对应步骤里。 -->
     <FaMultiStepLoader :loading="importLoading" :steps="importSteps" prevent-close @complete="importComplete" @error="importFailed" />
+    <SlhBillImportModal
+      v-model="archiveModalOpen"
+      :preview="preview"
+      :attachment-name="staged?.fileName ?? ''"
+      :attachment-size-bytes="staged?.sizeBytes ?? 0"
+      :submitting="submitting"
+      :error="submitError || null"
+      :field-errors="archiveFieldErrors"
+      :name-conflict-nonce="nameConflictNonce"
+      @submit="submit"
+    />
   </div>
 </template>
