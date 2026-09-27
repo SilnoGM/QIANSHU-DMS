@@ -54,7 +54,8 @@ test('顺联航账单入口排在实收实付之后、账户管理之前，管�
   assert.ok(leaves.every(leaf => leaf.children === undefined))
   assert.deepEqual(leaves.filter(leaf => leaf.meta?.menu === false).map(leaf => [leaf.path, leaf.name, leaf.meta?.title, leaf.meta?.auth, leaf.meta?.activeMenu, leaf.meta?.breadcrumb]), [
     ['slh-bill-management/import', 'qsFinanceBillReconciliationSlhBillImport', 'slhBill.importTitle', 'slh-bills:create', '/qs-finance/bill-reconciliation/slh-bill-management', undefined],
-    ['slh-bill-management/:id', 'qsFinanceBillReconciliationSlhBillDetail', 'slhBill.detailTitle', 'slh-bills:read', '/qs-finance/bill-reconciliation/slh-bill-management', false],
+    // 详情页与导入页一样保留面包屑末级（不设 breadcrumb: false），两页口径一致。
+    ['slh-bill-management/:id', 'qsFinanceBillReconciliationSlhBillDetail', 'slhBill.detailTitle', 'slh-bills:read', '/qs-finance/bill-reconciliation/slh-bill-management', undefined],
   ])
 })
 

@@ -145,11 +145,12 @@ export const financeWorkbench: RouteRecordMainRaw = {
           path: 'slh-bill-management/:id',
           name: 'qsFinanceBillReconciliationSlhBillDetail',
           component: () => import('@/views/workbenches/slh-bills/detail.vue'),
+          // 与导入页、柜次详情一致：隐藏菜单但保留面包屑末级（不设 breadcrumb: false），
+          // 让用户能看到自己在本页；注意详情是列表的兄弟路由，面包屑里不会出现列表那一级。
           meta: {
             title: 'slhBill.detailTitle',
             auth: 'slh-bills:read',
             menu: false,
-            breadcrumb: false,
             activeMenu: '/qs-finance/bill-reconciliation/slh-bill-management',
           },
         },
