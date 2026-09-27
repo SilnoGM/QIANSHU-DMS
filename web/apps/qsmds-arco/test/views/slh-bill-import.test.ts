@@ -184,12 +184,17 @@ test('归档草稿取服务端推导的默认值，校验与服务端同口径',
   assert.equal(validateSlhBillArchiveDraft({ billMonth: '2026-01', billName: '对账单', remark: '字'.repeat(501) }).remark, 'remarkTooLong')
 })
 
-test('名称冲突时补日期后缀，重复冲突不叠加', () => {
-  const day = new Date('2026-09-27T00:00:00Z')
-  assert.equal(withSlhBillNameSuffix('一月对账单', day), `一月对账单-20260927`)
+test('名称冲突时补时间戳后缀，重复冲突不叠加', () => {
+  // 用本地时间构造，避免时区把小时段移位。
+  const at = new Date(2026, 8, 27, 9, 33, 24)
+  assert.equal(withSlhBillNameSuffix('一月对账单', at), '一月对账单-260927093324')
+  // 同一天的不同时刻后缀不同，同天多次导入也能区分。
+  assert.equal(withSlhBillNameSuffix('一月对账单', new Date(2026, 8, 27, 10, 15, 0)), '一月对账单-260927101500')
   // 已经带同类后缀时先去掉再补，避免叠成两段。
-  assert.equal(withSlhBillNameSuffix('一月对账单-20260926', day), '一月对账单-20260927')
-  assert.equal(withSlhBillNameSuffix(' 一月对账单 ', day), '一月对账单-20260927')
+  assert.equal(withSlhBillNameSuffix('一月对账单-260927093324', new Date(2026, 8, 27, 10, 15, 0)), '一月对账单-260927101500')
+  assert.equal(withSlhBillNameSuffix(' 一月对账单 ', at), '一月对账单-260927093324')
+  // 年份取两位。
+  assert.equal(withSlhBillNameSuffix('对账单', new Date(2030, 0, 2, 3, 4, 5)), '对账单-300102030405')
 })
 
 test('幂等键随内容变化重签，结果未知时沿用原键以便安全重放', () => {

@@ -181,14 +181,22 @@ export function validateSlhBillArchiveDraft(draft: SlhBillArchiveDraft): Partial
 }
 
 /**
- * 名称被占用时自动加日期后缀（-YYYYMMDD）。
+ * 名称被占用时自动加时间戳后缀（-YYMMDDHHMMSS）。
  *
- * 用导入当天而不是账单期间：同一个期间重复导入时，只有导入日期能把两次区分开。
- * 名称已经带同类后缀时先去掉再补，避免叠成「名称-20260927-20260927」。
+ * 用导入时刻而不是账单期间：同一个期间重复导入时，只有导入时间能把两次区分开；
+ * 精确到秒是为了同一天内多次导入也各不相同。
+ * 名称已经带同类后缀时先去掉再补，避免叠成「名称-260927093324-260927101500」。
  */
 export function withSlhBillNameSuffix(name: string, now: Date): string {
-  const trimmed = name.trim().replace(/-\d{8}$/u, '')
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${trimmed}-${now.getFullYear()}${month}${day}`
+  const trimmed = name.trim().replace(/-\d{12}$/u, '')
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const stamp = [
+    pad(now.getFullYear() % 100),
+    pad(now.getMonth() + 1),
+    pad(now.getDate()),
+    pad(now.getHours()),
+    pad(now.getMinutes()),
+    pad(now.getSeconds()),
+  ].join('')
+  return `${trimmed}-${stamp}`
 }
