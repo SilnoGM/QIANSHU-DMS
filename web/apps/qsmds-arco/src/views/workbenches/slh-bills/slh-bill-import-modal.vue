@@ -44,6 +44,13 @@ const attachmentSize = computed(() => {
   const bytes = props.attachmentSizeBytes
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(2)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
 })
+/** 月份触发按钮沿用项目里月份的统一写法（YYYY-MM），避免默认的完整日期串。 */
+function formatMonthValue(value: DateValue | DateValue[] | undefined): string {
+  if (value === undefined || Array.isArray(value)) {
+    return ''
+  }
+  return `${value.year}-${String(value.month).padStart(2, '0')}`
+}
 function rule(field: keyof SlhBillArchiveDraft) {
   return (value: unknown) => {
     // FaForm 的字段校验可能先于父 model 更新，必须用本次控件值参与校验。
@@ -104,31 +111,47 @@ async function submit() {
     @update:model-value="close"
   >
     <FaAlert v-if="error" variant="destructive" :title="t('slhBill.archive.failed')" :description="error" class="mb-5" role="alert" />
-    <FaForm ref="formRef" :model="draft" :disabled="locked" scroll-to-error class="gap-3" @submit="submit">
+    <FaForm ref="formRef" :model="draft" :disabled="locked" scroll-to-error class="gap-4" @submit="submit">
       <!-- 编号与附件是只读展示，不用 FaFormItem：它要求 name，会把展示行当表单字段。 -->
-      <div class="flex flex-col gap-1.5">
+      <div class="flex flex-wrap gap-x-3 gap-y-1 items-center justify-between">
         <span class="qs-type-body-medium">{{ t('slhBill.archive.billNo') }}</span>
-        <p class="qs-type-data text-muted-foreground m-0">
-          {{ t('slhBill.archive.billNoPending') }}
-        </p>
-        <p class="qs-type-meta text-muted-foreground m-0">
-          {{ t('slhBill.archive.billNoHint') }}
-        </p>
+        <span class="flex gap-1.5 items-center">
+          <span class="qs-type-meta text-muted-foreground">{{ t('slhBill.archive.billNoPending') }}</span>
+          <!-- 编号规则较长，收进提示里按需查看，避免正文被解释文字占满。 -->
+          <FaTooltip :text="t('slhBill.archive.billNoHint')">
+            <button type="button" class="text-muted-foreground p-0 border-0 bg-transparent cursor-pointer" :aria-label="t('slhBill.archive.billNo')">
+              <FaIcon name="i-lucide:info" class="size-3.5" aria-hidden="true" />
+            </button>
+          </FaTooltip>
+        </span>
       </div>
       <FaFormItem name="billName" :label="t('slhBill.archive.billName')" :rules="rule('billName')" required>
         <FaInput v-model="draft.billName" class="w-full" maxlength="200" :placeholder="t('slhBill.archive.billNamePlaceholder')" />
       </FaFormItem>
       <FaFormItem name="billMonth" :label="t('slhBill.archive.billMonth')" :description="t('slhBill.archive.billMonthHint')" :rules="rule('billMonth')" required>
-        <FaCalendarMonth v-model="monthValue" :calendar-label="t('slhBill.archive.billMonth')" />
+        <!-- 用弹层形态：内联月历会把弹窗撑高一屏，触发按钮与上面的输入框同宽同高。 -->
+        <FaCalendarMonth
+          v-model="monthValue"
+          picker
+          :calendar-label="t('slhBill.archive.billMonth')"
+          :format-value="formatMonthValue"
+          :picker-placeholder="t('slhBill.archive.billMonth')"
+          trigger-class="w-full justify-start"
+        />
       </FaFormItem>
-      <div class="flex flex-col gap-1.5">
-        <span class="qs-type-body-medium">{{ t('slhBill.archive.attachment') }}</span>
-        <p class="qs-type-data m-0 [overflow-wrap:anywhere]">
-          {{ attachmentName }}
-        </p>
-        <p class="qs-type-meta text-muted-foreground m-0">
-          {{ t('slhBill.archive.attachmentHint', { size: attachmentSize }) }}
-        </p>
+      <div class="pt-1 border-t border-border" />
+      <div class="p-3 border border-border rounded-lg bg-muted/20 flex gap-3 min-w-0 items-center">
+        <span class="text-primary rounded-md bg-primary/10 flex shrink-0 size-9 items-center justify-center dark:text-foreground">
+          <FaIcon name="i-lucide:file-spreadsheet" class="size-5" aria-hidden="true" />
+        </span>
+        <div class="min-w-0">
+          <p class="qs-type-body m-0 [overflow-wrap:anywhere]">
+            {{ attachmentName }}
+          </p>
+          <p class="qs-type-meta text-muted-foreground m-0 mt-0.5">
+            {{ t('slhBill.archive.attachmentHint', { size: attachmentSize }) }}
+          </p>
+        </div>
       </div>
       <FaFormItem name="remark" :label="t('slhBill.archive.remark')" :rules="rule('remark')">
         <FaTextarea v-model="draft.remark" :rows="2" maxlength="500" :placeholder="t('slhBill.archive.remarkPlaceholder')" />
