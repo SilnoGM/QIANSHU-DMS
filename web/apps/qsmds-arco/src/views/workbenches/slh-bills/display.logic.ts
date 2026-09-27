@@ -57,6 +57,19 @@ export function resolveSlhBillContainerBatchPreview(
   return { hiddenCount: names.length - normalizedLimit, visible: names.slice(0, normalizedLimit) }
 }
 
+/**
+ * 尺寸按整厘米读：去掉无意义的小数位（`240.00` → `240`），真有小数的原样保留
+ * （不四舍五入，避免把 108.5 显示成 109）。非数值原样返回 null，由调用方给占位符。
+ */
+export function formatSlhBillDimensionValue(value: string): string | null {
+  const trimmed = value.trim()
+  if (!/^[+-]?\d+(?:\.\d+)?$/u.test(trimmed)) {
+    return null
+  }
+  // 只在确实带小数点时剥尾零：整数不能剥，否则 100 会被剥成 1。
+  return trimmed.includes('.') ? trimmed.replace(/\.?0+$/u, '') : trimmed
+}
+
 /** 尺寸缺任一边即视为不完整，避免用 0 补位后冒充账单原始尺寸。 */
 export function formatSlhBillDimensions(line: Pick<SlhBillLineDto, 'lengthCm' | 'widthCm' | 'heightCm'>): string | null {
   const length = line.lengthCm ?? null
@@ -65,8 +78,12 @@ export function formatSlhBillDimensions(line: Pick<SlhBillLineDto, 'lengthCm' | 
   if (length === null || width === null || height === null) {
     return null
   }
+  const sides = [length, width, height].map(formatSlhBillDimensionValue)
+  if (sides.includes(null)) {
+    return null
+  }
   // 三个维度之间不留空格，核对时更紧凑也便于整列扫读。
-  return `${length}×${width}×${height}`
+  return sides.join('×')
 }
 
 /** 重量与单位同源展示；单位缺失时只显示数值，不猜测单位。数值按 2 位小数展示。 */
