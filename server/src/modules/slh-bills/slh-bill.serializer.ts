@@ -199,6 +199,8 @@ export function serializeSlhBillListItem(row: SlhBillListRow): SlhBillListItemDt
     periodEnd: row.periodEnd.toISOString().slice(0, 10),
     lineCount: row.lineCount,
     containerBatchCount: row.containerBatchCount,
+    // 库里是逗号拼接的柜号集合，出参统一拆成数组（与详情接口同口径）。
+    containerBatchNames: row.containerBatchNames.split(',').filter(Boolean),
     payableTotalAmountCny: row.payableTotalAmountCny.toFixed(2),
     codTotalAmountTwd: row.codTotalAmountTwd.toFixed(2),
     ntdSurchargeTotalAmountTwd: row.ntdSurchargeTotalAmountTwd.toFixed(2),

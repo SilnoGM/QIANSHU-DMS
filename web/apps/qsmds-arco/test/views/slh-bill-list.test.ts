@@ -19,6 +19,15 @@ test('筛选栏只保留账单期间，金额区间输入已移除', async () =>
   assert.match(source, /<QsDateRangeFilter[\s\S]*?width-class="w-\[360px\]"/u)
 })
 
+test('柜号数单元格在数字后提供柜号清单浮层', async () => {
+  const source = await readPageSource()
+  // 柜号清单放在浮层里，数字本身仍留在列中；缺了浮层就只能看到数量、看不到是哪些柜。
+  assert.match(source, /#cell-containerBatchCount="\{ row \}"/u)
+  assert.match(source, /v-for="name in row\.original\.containerBatchNames"/u)
+  // 浮层内不能套 qs-type-*（那组类自带前景色，落在深色气泡上看不清），要用气泡自身的背景色文字。
+  assert.match(source, /v-for="name in row\.original\.containerBatchNames"[\s\S]{0,200}text-background/u)
+})
+
 test('查询条件带上期间与关键词，空关键词不进入查询', () => {
   assert.deepEqual(buildSlhBillListQuery({ page: 1, pageSize: 20, keyword: '  ', state: 'active' }), {
     page: 1,
@@ -47,8 +56,9 @@ test('进入详情只剩操作列的查看详情按钮，整行点击不再跳�
   const source = await readPageSource()
   assert.equal(source.includes('@row-click'), false)
   assert.equal(source.includes('onRowClick'), false)
-  // 行内不再有"可点"的光标暗示。
-  assert.equal(source.includes('cursor-pointer'), false)
+  // 行内不再有"整行可点"的光标暗示（行级类只在 table-class 上出现；
+  // 单元格内的按钮仍应保留 cursor-pointer，那是按钮该有的表现）。
+  assert.equal(source.includes('[&_tbody_tr]:cursor-pointer'), false)
   // 按钮文案与无障碍名都用「查看详情」，旧的「查看」不再出现。
   assert.equal(source.match(/slhBill\.viewDetail/gu)?.length, 2)
   assert.equal(source.includes(`t('slhBill.view')`), false)

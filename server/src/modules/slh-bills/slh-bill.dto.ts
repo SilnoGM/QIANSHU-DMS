@@ -146,6 +146,7 @@ export class SlhBillListItemDto {
   @ApiProperty({ type: 'string' }) periodEnd!: string
   @ApiProperty() lineCount!: number
   @ApiProperty() containerBatchCount!: number
+  @ApiProperty({ type: [String], description: 'Container batch names in this bill; the list shows them in a tooltip next to the count.' }) containerBatchNames!: string[]
   @ApiProperty({ type: 'string' }) payableTotalAmountCny!: string
   @ApiProperty({ type: 'string' }) codTotalAmountTwd!: string
   @ApiProperty({ type: 'string' }) ntdSurchargeTotalAmountTwd!: string

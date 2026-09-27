@@ -180,6 +180,29 @@ onBeforeUnmount(() => controller?.abort())
         <template #cell-period="{ row }">
           <span class="qs-type-data whitespace-nowrap">{{ row.original.periodStart }} ~ {{ row.original.periodEnd }}</span>
         </template>
+        <template #cell-containerBatchCount="{ row }">
+          <span class="inline-flex gap-1 items-baseline">
+            {{ row.original.containerBatchCount }}
+            <!-- 柜号清单较长，收进提示里按需查看；数字本身仍保留在列里。 -->
+            <FaTooltip v-if="row.original.containerBatchNames.length > 0">
+              <button
+                type="button"
+                class="text-muted-foreground p-0 border-0 bg-transparent cursor-pointer"
+                :aria-label="t('slhBill.column.containerBatchCount')"
+              >
+                <FaIcon name="i-lucide:info" class="size-3.5" aria-hidden="true" />
+              </button>
+              <template #content>
+                <!-- 气泡内不能套 qs-type-*：那组类自带前景色，落在深色气泡上会看不清。 -->
+                <div class="flex flex-wrap gap-x-3 gap-y-1 max-w-[16rem]">
+                  <span v-for="name in row.original.containerBatchNames" :key="name" class="text-xs text-background">
+                    {{ name }}
+                  </span>
+                </div>
+              </template>
+            </FaTooltip>
+          </span>
+        </template>
         <template #cell-payable="{ row }">
           <AmountDisplay :value="row.original.payableTotalAmountCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
         </template>

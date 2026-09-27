@@ -81933,6 +81933,13 @@
           "containerBatchCount": {
             "type": "number"
           },
+          "containerBatchNames": {
+            "description": "Container batch names in this bill; the list shows them in a tooltip next to the count.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "payableTotalAmountCny": {
             "type": "string"
           },
@@ -81978,6 +81985,7 @@
           "periodEnd",
           "lineCount",
           "containerBatchCount",
+          "containerBatchNames",
           "payableTotalAmountCny",
           "codTotalAmountTwd",
           "ntdSurchargeTotalAmountTwd",
