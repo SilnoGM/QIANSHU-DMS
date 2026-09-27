@@ -109,7 +109,9 @@ export function buildSlhBillLineColumns<TData extends SlhBillLineDto = SlhBillLi
     { id: 'payableAmountCny', title: translate('slhBill.line.payableAmountCny'), accessorFn: line => amount(line.payableAmountCny), width: 175, minWidth: 175, maxWidth: 175, align: 'right', cellClass: 'qs-type-data-emphasis tabular-nums' },
     { id: 'codAmountTwd', title: translate('slhBill.line.codAmountTwd'), accessorFn: line => amount(line.codAmountTwd), width: 160, minWidth: 160, maxWidth: 160, align: 'right', cellClass: 'qs-type-data tabular-nums' },
     { id: 'ntdSurchargeAmountTwd', title: translate('slhBill.line.ntdSurchargeAmountTwd'), accessorFn: line => amount(line.ntdSurchargeAmountTwd), width: 140, minWidth: 140, maxWidth: 140, align: 'right', cellClass: 'qs-type-data tabular-nums' },
-    { id: 'charges', title: translate('slhBill.line.charges'), accessorFn: line => chargesText(line), width: 320, minWidth: 260 },
+    // 费用明细按币种逐行列出，实测最宽的一组（`TWD二次派送 1700.00`）只占 157px，
+    // 320px 会空出小半列；收到 240px 仍能容纳现有数据，同时给更长的费别名留余量。
+    { id: 'charges', title: translate('slhBill.line.charges'), accessorFn: line => chargesText(line), width: 240, minWidth: 200 },
     { id: 'recipientInfo', title: translate('slhBill.line.recipientInfo'), accessorFn: line => text(line.recipientInfoRaw), width: 320, minWidth: 260 },
     { id: 'remark', title: translate('slhBill.line.remark'), accessorFn: line => text(line.remark), width: 220, minWidth: 220, maxWidth: 220 },
   ]
