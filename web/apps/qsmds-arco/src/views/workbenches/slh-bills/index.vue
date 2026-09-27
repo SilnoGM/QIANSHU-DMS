@@ -6,6 +6,7 @@ import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/
 import slhBillsApi from '@/api/modules/slh-bills'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDateRangeFilter from '@/components/business/QsDateRangeFilter/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
@@ -26,7 +27,7 @@ import {
   SLH_BILL_LIST_STATES,
   SLH_BILL_RECONCILIATION_FILTERS,
 } from './list.logic'
-import { resolveSlhBillReconciliationLabelKey } from './reconciliation-status.logic'
+import { resolveSlhBillReconciliationActionLabelKey, resolveSlhBillReconciliationLabelKey } from './reconciliation-status.logic'
 import SlhBillRateSourceTag from './slh-bill-rate-source-tag.vue'
 import SlhBillReconciliationStatusTag from './slh-bill-reconciliation-status-tag.vue'
 
@@ -36,6 +37,7 @@ const router = useRouter()
 const { auth } = useAppAuth()
 const accountStore = useAppAccountStore()
 const currencyCatalog = useCurrencyCatalog()
+const toast = useQsToast()
 const canRead = computed(() => auth('slh-bills:read'))
 const canImport = computed(() => canRead.value && auth('slh-bills:create'))
 const state = ref<SlhBillListState>('active')
@@ -178,6 +180,10 @@ async function loadCounts(): Promise<void> {
 }
 function viewBill(id: string): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhBillDetail', params: { id } })
+}
+/** 对账入口先占位：功能未上线，只给轻提示，不跳转也不改数据。 */
+function startReconciliation(): void {
+  toast.info(t('slhBill.reconciliationUnavailable'))
 }
 function openImport(): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhBillImport' })
@@ -407,6 +413,17 @@ onBeforeUnmount(() => {
         <template #actions="{ row }">
           <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.slhBillNo} · ${t('slhBill.viewDetail')}`" @click="viewBill(row.id)">
             <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('slhBill.viewDetail') }}
+          </FaButton>
+          <!-- 对账入口按状态出现：未对账给「开始对账」、部分对账给「继续对账」、对账完成不给。 -->
+          <FaButton
+            v-if="resolveSlhBillReconciliationActionLabelKey(row.reconciliationStatus)"
+            variant="ghost"
+            size="sm"
+            class="min-h-11 sm:min-h-8"
+            :aria-label="`${row.slhBillNo} · ${t(resolveSlhBillReconciliationActionLabelKey(row.reconciliationStatus) ?? '')}`"
+            @click="startReconciliation"
+          >
+            <FaIcon name="i-lucide:scale" aria-hidden="true" />{{ t(resolveSlhBillReconciliationActionLabelKey(row.reconciliationStatus) ?? '') }}
           </FaButton>
         </template>
       </QsGenericTable>

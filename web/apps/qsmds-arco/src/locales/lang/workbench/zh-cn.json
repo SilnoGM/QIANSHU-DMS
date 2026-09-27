@@ -129,6 +129,7 @@
     },
     "confirm": "确认入库",
     "containerBatches": "柜号清单",
+    "continueReconciliation": "继续对账",
     "detailTitle": "顺联航账单详情",
     "download": "下载原件",
     "downloadFailed": "原件下载失败，请重试",
@@ -230,6 +231,7 @@
     },
     "rateValue": "入库汇率",
     "reconciliation": "对账核对",
+    "reconciliationUnavailable": "对账功能暂未开放",
     "reconciliationStatus": {
       "PENDING": "未对账",
       "PARTIAL": "部分对账",
@@ -246,6 +248,7 @@
       "all": "全部"
     },
     "stateFilter": "账单状态",
+    "startReconciliation": "开始对账",
     "submitting": "正在入库",
     "superseded": "已被取代",
     "supersededAt": "取代时间",

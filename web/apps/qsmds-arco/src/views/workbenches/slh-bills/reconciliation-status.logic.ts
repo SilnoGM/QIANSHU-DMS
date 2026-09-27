@@ -31,3 +31,14 @@ export function resolveSlhBillReconciliationTone(status: SlhBillAnyReconciliatio
 export function resolveSlhBillReconciliationLabelKey(status: SlhBillAnyReconciliationStatus | 'all'): string {
   return `slhBill.reconciliationStatus.${status}`
 }
+
+/**
+ * 列表操作列的对账入口：未对账 → 开始对账，部分对账 → 继续对账，对账完成不给入口。
+ * 返回文案键，`null` 表示该状态下不显示按钮。
+ */
+export function resolveSlhBillReconciliationActionLabelKey(status: SlhBillReconciliationStatus): string | null {
+  if (status === 'PENDING') {
+    return 'slhBill.startReconciliation'
+  }
+  return status === 'PARTIAL' ? 'slhBill.continueReconciliation' : null
+}

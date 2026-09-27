@@ -114,6 +114,18 @@ test('列表页挂两块工具栏：上排账单状态、下排对账状态，�
   assert.match(source, /counts\.value = null/u)
 })
 
+test('操作列的对账按钮只做轻提示，不跳转也不改数据', async () => {
+  const source = await readPageSource()
+  // 按钮按状态出现（完成态 v-if 为假），点击只弹一条 info 提示。
+  assert.match(source, /v-if="resolveSlhBillReconciliationActionLabelKey\(row\.reconciliationStatus\)"/u)
+  assert.match(source, /function startReconciliation\(\): void \{[\s\S]{0,160}toast\.info\(t\('slhBill\.reconciliationUnavailable'\)\)/u)
+  // 占位期间不得出现跳转或写请求。
+  assert.equal(source.includes('reconciliationStatus', source.indexOf('function startReconciliation')), true)
+  const handler = source.slice(source.indexOf('function startReconciliation'), source.indexOf('function openImport'))
+  assert.equal(handler.includes('router.push'), false)
+  assert.equal(handler.includes('slhBillsApi'), false)
+})
+
 test('进入详情只剩操作列的查看详情按钮，整行点击不再跳转', async () => {
   // 行点击进详情已按需求移除：误点整行就跳走太容易发生，入口只保留操作列。
   const source = await readPageSource()

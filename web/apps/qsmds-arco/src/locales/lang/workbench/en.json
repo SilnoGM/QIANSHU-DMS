@@ -120,6 +120,7 @@
     },
     "confirm": "Confirm import",
     "containerBatches": "Container batches",
+    "continueReconciliation": "Continue reconciliation",
     "detailTitle": "Shunlianhang bill detail",
     "download": "Download source file",
     "downloadFailed": "Failed to download the source file, please retry",
@@ -221,6 +222,7 @@
     },
     "rateValue": "Import rate",
     "reconciliation": "Reconciliation checks",
+    "reconciliationUnavailable": "Reconciliation is not available yet",
     "reconciliationStatus": {
       "PENDING": "Not reconciled",
       "PARTIAL": "Partially reconciled",
@@ -237,6 +239,7 @@
       "all": "All"
     },
     "stateFilter": "Bill state",
+    "startReconciliation": "Start reconciliation",
     "submitting": "Storing",
     "superseded": "Superseded",
     "supersededAt": "Superseded at",

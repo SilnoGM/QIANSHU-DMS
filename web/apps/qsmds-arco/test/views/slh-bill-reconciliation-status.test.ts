@@ -6,7 +6,11 @@ import en from '../../src/locales/lang/workbench/en.json'
 import zhCn from '../../src/locales/lang/workbench/zh-cn.json'
 import zhTw from '../../src/locales/lang/workbench/zh-tw.json'
 import { buildSlhBillLineColumns } from '../../src/views/workbenches/slh-bills/line-columns.logic'
-import { resolveSlhBillReconciliationLabelKey, resolveSlhBillReconciliationTone } from '../../src/views/workbenches/slh-bills/reconciliation-status.logic'
+import {
+  resolveSlhBillReconciliationActionLabelKey,
+  resolveSlhBillReconciliationLabelKey,
+  resolveSlhBillReconciliationTone,
+} from '../../src/views/workbenches/slh-bills/reconciliation-status.logic'
 
 const ALL_STATUSES = ['PENDING', 'PARTIAL', 'COMPLETED', 'RECONCILED'] as const
 const ALL_LABEL_VALUES = [...ALL_STATUSES, 'all'] as const
@@ -38,6 +42,20 @@ test('状态颜色按需求固定：未对账红、部分对账黄、完成与�
   assert.match(resolveSlhBillReconciliationTone('PARTIAL'), /text-amber-700/u)
   assert.match(resolveSlhBillReconciliationTone('COMPLETED'), /text-emerald-700/u)
   assert.match(resolveSlhBillReconciliationTone('RECONCILED'), /text-emerald-700/u)
+})
+
+test('列表操作列的对账入口按状态出现，完成态没有入口', () => {
+  // 未对账 → 开始对账；部分对账 → 继续对账；对账完成 → 不给入口。
+  assert.equal(resolveSlhBillReconciliationActionLabelKey('PENDING'), 'slhBill.startReconciliation')
+  assert.equal(resolveSlhBillReconciliationActionLabelKey('PARTIAL'), 'slhBill.continueReconciliation')
+  assert.equal(resolveSlhBillReconciliationActionLabelKey('COMPLETED'), null)
+  // 两个入口的文案三语都要有。
+  for (const message of [zhCn, zhTw, en] as const) {
+    for (const key of ['startReconciliation', 'continueReconciliation', 'reconciliationUnavailable'] as const) {
+      assert.equal(typeof message.slhBill[key], 'string')
+      assert.notEqual(message.slhBill[key].trim(), '')
+    }
+  }
 })
 
 test('账单列表把服务端派生的三态直接渲染成标签，列紧跟账单期间', async () => {

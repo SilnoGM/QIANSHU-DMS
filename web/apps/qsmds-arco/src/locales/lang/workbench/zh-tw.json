@@ -120,6 +120,7 @@
     },
     "confirm": "確認入庫",
     "containerBatches": "櫃號清單",
+    "continueReconciliation": "繼續對帳",
     "detailTitle": "順聯航帳單詳情",
     "download": "下載原件",
     "downloadFailed": "原件下載失敗，請重試",
@@ -221,6 +222,7 @@
     },
     "rateValue": "入庫匯率",
     "reconciliation": "對帳核對",
+    "reconciliationUnavailable": "對帳功能暫未開放",
     "reconciliationStatus": {
       "PENDING": "未對帳",
       "PARTIAL": "部分對帳",
@@ -237,6 +239,7 @@
       "all": "全部"
     },
     "stateFilter": "帳單狀態",
+    "startReconciliation": "開始對帳",
     "submitting": "正在入庫",
     "superseded": "已被取代",
     "supersededAt": "取代時間",
