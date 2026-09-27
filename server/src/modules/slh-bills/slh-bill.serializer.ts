@@ -77,6 +77,9 @@ export function serializeSlhBillLine(row: Prisma.SlhBillLineGetPayload<{ include
     codAmountTwd: row.codAmountTwd.toFixed(2),
     ntdSurchargeAmountTwd: row.ntdSurchargeAmountTwd.toFixed(2),
     recipientInfoRaw: row.recipientInfoRaw,
+    recipientName: row.recipientName,
+    recipientPhones: row.recipientPhones,
+    recipientAddress: row.recipientAddress,
     remark: row.remark,
     charges: row.charges.map(charge => ({
       chargeType: charge.chargeType as SlhBillChargeTypeDto,
@@ -117,6 +120,9 @@ export function serializeSlhBillPreviewLine(line: ParsedSlhBillLine, findings: r
     codAmountTwd: line.codAmountTwd,
     ntdSurchargeAmountTwd: line.ntdSurchargeAmountTwd,
     recipientInfoRaw: line.recipientInfoRaw,
+    recipientName: line.recipientName,
+    recipientPhones: line.recipientPhones,
+    recipientAddress: line.recipientAddress,
     remark: line.remark,
     charges: line.charges.map(charge => ({
       chargeType: charge.chargeType as SlhBillChargeTypeDto,

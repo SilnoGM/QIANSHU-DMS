@@ -3,6 +3,7 @@ import type { WorkbookCell, WorkbookSheet } from '../container-batches/import-pa
 import { readContainerWorkbook } from '../container-batches/import-parser.workbook'
 import { formatDecimal, parseDecimal } from '../ocean-freight-calculation/ocean-decimal'
 import { parseSlhRemarks, sumSlhCharges } from './slh-bill-charge-parser'
+import { parseSlhBillRecipient } from './slh-bill-recipient-parser'
 import {
   calculateSlhFreight, calculateSlhPayable, deriveSlhPricingBasis, recordSlhVolume,
   slhAmountsEqual, slhNormalizeAmount, slhVolumeRatio, slhVolumesEqual, sourceDecimalPlaces, sumSlhAmounts,
@@ -195,6 +196,10 @@ function parseLine(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, W
     sourceData.cells[value.reference] = { value: value.value, formula: value.formula, type: value.type, sharedFormulaIndex: value.sharedFormulaIndex, mergedFrom: value.mergedFrom }
   }
 
+  const recipientInfoRaw = text(cell('recipientInfoRaw'), '收货人信息', 2000, errors)
+  // 结构化字段只是原文的派生视图：原文照旧保留，解析不出就留空（由上层标记"待确认"）。
+  const recipient = parseSlhBillRecipient(recipientInfoRaw)
+
   return {
     findings,
     line: {
@@ -210,7 +215,8 @@ function parseLine(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, W
       unitPriceAmount, pricingBasis,
       freightAmountCny, codHandlingAmountCny, surchargeAmountCny, payableAmountCny,
       codAmountTwd, ntdSurchargeAmountTwd,
-      recipientInfoRaw: text(cell('recipientInfoRaw'), '收货人信息', 2000, errors),
+      recipientInfoRaw,
+      ...recipient,
       remark, charges, errors, sourceData,
     },
   }

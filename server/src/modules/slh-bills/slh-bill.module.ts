@@ -6,11 +6,12 @@ import { NumberingModule } from '../numbering/numbering.module'
 import { SlhBillController } from './slh-bill.controller'
 import { SlhBillService } from './slh-bill.service'
 import { SlhBillQueryService } from './slh-bill-query.service'
+import { SlhBillRecipientBackfillService } from './slh-bill-recipient-backfill.service'
 import { SlhBillSourceFileService } from './slh-bill-source-file.service'
 
 @Module({
   imports: [PrismaModule, AuthModule, MediaModule, NumberingModule],
   controllers: [SlhBillController],
-  providers: [SlhBillService, SlhBillQueryService, SlhBillSourceFileService],
+  providers: [SlhBillService, SlhBillQueryService, SlhBillSourceFileService, SlhBillRecipientBackfillService],
 })
 export class SlhBillModule {}

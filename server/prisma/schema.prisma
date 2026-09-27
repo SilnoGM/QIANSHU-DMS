@@ -2101,6 +2101,10 @@ model SlhBillLine {
   codAmountTwd Decimal @map("cod_amount_twd") @db.Decimal(30, 2)
   ntdSurchargeAmountTwd Decimal @map("ntd_surcharge_amount_twd") @db.Decimal(30, 2)
   recipientInfoRaw String? @map("recipient_info_raw") @db.VarChar(2000)
+  /// 收货人信息解析结果（原文永久保留在 recipient_info_raw，这三列只做结构化检索与展示）。
+  recipientName String? @map("recipient_name") @db.VarChar(200)
+  recipientPhones String? @map("recipient_phones") @db.VarChar(500)
+  recipientAddress String? @map("recipient_address") @db.VarChar(1000)
   remark String? @db.VarChar(2000)
   sourceSheetName String @map("source_sheet_name") @db.VarChar(255)
   sourceRowNumber Int @map("source_row_number")

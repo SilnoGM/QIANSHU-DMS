@@ -123,6 +123,9 @@ export class SlhBillLineDto {
   @ApiProperty({ type: 'string' }) codAmountTwd!: string
   @ApiProperty({ type: 'string' }) ntdSurchargeAmountTwd!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) recipientInfoRaw!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Parsed recipient name; null when it cannot be determined.' }) recipientName!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Parsed phone numbers kept in the original writing, one field for all numbers.' }) recipientPhones!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Parsed shipping address.' }) recipientAddress!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) remark!: string | null
   @ApiProperty({ type: [SlhBillLineChargeDto] }) charges!: SlhBillLineChargeDto[]
 }

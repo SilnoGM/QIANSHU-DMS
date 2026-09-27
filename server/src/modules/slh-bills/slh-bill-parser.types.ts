@@ -57,6 +57,10 @@ export interface ParsedSlhBillLine {
   codAmountTwd: string
   ntdSurchargeAmountTwd: string
   recipientInfoRaw: string | null
+  /** 收货人信息解析结果；解析不出时为 null，原文仍完整保留在 recipientInfoRaw。 */
+  recipientName: string | null
+  recipientPhones: string | null
+  recipientAddress: string | null
   remark: string | null
   charges: SlhParsedCharge[]
   /** 无法按字段长度或格式落库的问题；存在时整张账单拒绝入库。 */

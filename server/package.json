@@ -20,6 +20,7 @@
     "start:prod": "node dist/main.js",
     "auth:bootstrap-admin": "node dist/cli/auth-admin/bootstrap-admin.js",
     "purchase-shipments:backfill-numbers": "node dist/commands/purchase-shipment-number-backfill.js",
+    "slh-bills:backfill-recipients": "node dist/commands/slh-bill-recipient-backfill.js",
     "auth:cleanup": "node dist/commands/auth-cleanup.js",
     "auth:recover-admin": "node dist/cli/auth-admin/recover-admin.js",
     "media:cleanup:expired-trash": "node dist/commands/media-operations.js cleanup-expired-trash",

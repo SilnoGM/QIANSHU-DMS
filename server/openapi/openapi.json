@@ -82422,6 +82422,21 @@
             "type": "string",
             "nullable": true
           },
+          "recipientName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parsed recipient name; null when it cannot be determined."
+          },
+          "recipientPhones": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parsed phone numbers kept in the original writing, one field for all numbers."
+          },
+          "recipientAddress": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parsed shipping address."
+          },
           "remark": {
             "type": "string",
             "nullable": true
@@ -82680,6 +82695,21 @@
           "recipientInfoRaw": {
             "type": "string",
             "nullable": true
+          },
+          "recipientName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parsed recipient name; null when it cannot be determined."
+          },
+          "recipientPhones": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parsed phone numbers kept in the original writing, one field for all numbers."
+          },
+          "recipientAddress": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parsed shipping address."
           },
           "remark": {
             "type": "string",
