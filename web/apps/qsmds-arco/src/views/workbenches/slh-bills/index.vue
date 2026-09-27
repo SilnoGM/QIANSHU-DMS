@@ -15,7 +15,7 @@ import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { containerFailure } from '../containers/use-container-resource'
-import { buildSlhBillListQuery, shouldOpenSlhBillFromRowClick } from './list.logic'
+import { buildSlhBillListQuery } from './list.logic'
 
 defineOptions({ name: 'QsFinanceBillReconciliationSlhBillManagement' })
 const { t } = useI18n()
@@ -109,12 +109,6 @@ function viewBill(id: string): void {
 function openImport(): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhBillImport' })
 }
-// 行内按钮与复制按钮自己处理点击，只有其余区域才算作进入详情，避免一次点击触发两次导航。
-function onRowClick(row: SlhBillListItemDto, _index: number, event: MouseEvent): void {
-  if (shouldOpenSlhBillFromRowClick(event.target)) {
-    viewBill(row.id)
-  }
-}
 watch(() => [canRead.value, accountStore.authEpoch], () => {
   items.value = []
   total.value = 0
@@ -141,7 +135,7 @@ onBeforeUnmount(() => controller?.abort())
         v-model:page-size="pageSize"
         v-model:search="keyword"
         row-key="id"
-        table-class="w-max min-w-full [&_tbody_tr]:cursor-pointer"
+        table-class="w-max min-w-full"
         :show-row-number="true"
         :columns="columns"
         :data="items"
@@ -157,7 +151,6 @@ onBeforeUnmount(() => controller?.abort())
         @search="search"
         @pagination-change="load"
         @retry="load"
-        @row-click="onRowClick"
       >
         <template #query-leading>
           <QsDateRangeFilter
@@ -291,8 +284,8 @@ onBeforeUnmount(() => controller?.abort())
           </article>
         </template>
         <template #actions="{ row }">
-          <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.slhBillNo} · ${t('slhBill.view')}`" @click="viewBill(row.id)">
-            <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('slhBill.view') }}
+          <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.slhBillNo} · ${t('slhBill.viewDetail')}`" @click="viewBill(row.id)">
+            <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('slhBill.viewDetail') }}
           </FaButton>
         </template>
       </QsGenericTable>
