@@ -25,6 +25,7 @@ import SlhBillComparison from './slh-bill-comparison.vue'
 import SlhBillImportModal from './slh-bill-import-modal.vue'
 import SlhBillOverflowText from './slh-bill-overflow-text.vue'
 import SlhBillPricingBasisTag from './slh-bill-pricing-basis-tag.vue'
+import SlhBillRecipient from './slh-bill-recipient.vue'
 import SlhBillVolumeDifference from './slh-bill-volume-difference.vue'
 import { useSlhBillImportRun } from './use-slh-bill-import-run'
 
@@ -435,6 +436,13 @@ onBeforeUnmount(() => controller?.abort())
           >
             <template #cell-charges="{ row }">
               <SlhBillCharges :charges="row.original.charges" />
+            </template>
+            <template #cell-recipientInfo="{ row }">
+              <SlhBillRecipient
+                :name="row.original.recipientName ?? null"
+                :phones="row.original.recipientPhones ?? null"
+                :address="row.original.recipientAddress ?? null"
+              />
             </template>
             <template #cell-warehouseReceiptReference="{ row }">
               <SlhBillOverflowText :text="row.original.warehouseReceiptReference ?? t('slhBill.valueMissing')" />
