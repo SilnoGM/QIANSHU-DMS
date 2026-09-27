@@ -90,6 +90,8 @@ const columns = computed<QsGenericTableColumn<SlhBillLineDto>[]>(() => [
     width: 130,
     minWidth: 130,
     maxWidth: 130,
+    // 明细表很宽，对账状态要一直看得见：固定在最右侧（本表没有操作列，它就是最右一列）。
+    fixed: 'right',
   },
 ])
 const flaggedRowNumbers = computed(() => collectSlhBillFlaggedRowNumbers(bill.value?.findings ?? []))

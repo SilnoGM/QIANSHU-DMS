@@ -53,6 +53,8 @@ const columns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
   { id: 'billName', title: t('slhBill.column.billName'), accessorFn: item => item.billName, width: 240, minWidth: 240 },
   { id: 'billMonth', title: t('slhBill.column.billMonth'), accessorFn: item => item.billMonth, width: 130, minWidth: 130 },
   { id: 'period', title: t('slhBill.column.period'), accessorFn: item => `${item.periodStart} ~ ${item.periodEnd}`, minWidth: 205 },
+  // 对账状态由服务端按明细行汇总派生，与详情页明细行上的状态同源；紧跟账单期间，便于一眼看进度。
+  { id: 'reconciliationStatus', title: t('slhBill.column.reconciliationStatus'), accessorKey: 'reconciliationStatus', minWidth: 140 },
   { id: 'lineCount', title: t('slhBill.column.lineCount'), accessorKey: 'lineCount', minWidth: 110, align: 'right' },
   { id: 'containerBatchCount', title: t('slhBill.column.containerBatchCount'), accessorKey: 'containerBatchCount', minWidth: 110, align: 'right' },
   // 金额三列按用户要求加宽：金额是核对时的主要对象，列太窄会挤在一起不好扫读。
@@ -62,8 +64,6 @@ const columns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
   // 折算净额：有账单内嵌汇率时出折算后的人民币，没有则退回不折算的台币原值。
   { id: 'foldedNet', title: t('slhBill.column.foldedNetAmount'), accessorFn: item => resolveSlhBillNetDisplay(item).amount, minWidth: 195, align: 'right' },
   { id: 'rate', title: t('slhBill.column.rateSource'), accessorFn: item => item.rateSource ?? '', minWidth: 175 },
-  // 对账状态由服务端按明细行汇总派生，与详情页明细行上的状态同源。
-  { id: 'reconciliationStatus', title: t('slhBill.column.reconciliationStatus'), accessorKey: 'reconciliationStatus', minWidth: 140 },
   { id: 'sourceFile', title: t('slhBill.column.sourceFileName'), accessorKey: 'sourceFileName', minWidth: 240 },
   { id: 'created', title: t('slhBill.column.createdAt'), accessorKey: 'createdAt', minWidth: 220 },
 ])
