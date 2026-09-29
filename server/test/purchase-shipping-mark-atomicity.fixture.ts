@@ -1,6 +1,7 @@
 import { createPaymentMediaFixture, createPaymentRecipientFixture, paymentRecipientBankAccounts } from './fixtures/payment-recipient.fixture'
 import { ensureDestinationWarehouseDictionary } from './purchase-destination-warehouse.fixture'
 import { createImageReviewDraft, createImageReviewService } from './purchase-order-image-review.fixture'
+import { assertIsolatedReplayPrecondition } from './isolated-replay-precondition'
 import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
 import { ensureShipmentNumberingRule } from './purchase-shipment-numbering.fixture'
 import { PurchaseShipmentNumberingService } from '../src/modules/purchase-orders/shipments/purchase-shipment-numbering.service'
@@ -29,6 +30,8 @@ import { createPurchaseShippingMarkDatabase, createTestShippingMarkRule } from '
 export const MARK_CONSUMER = 'PURCHASE_ORDER.REVIEW_SHIPPING_MARK'
 
 export async function createAtomicityFixture(deferPartsMigration = false, deferReviewMigration = false, deferShipmentNumbers = false, deferWarehouseReceipt = false) {
+  // 隔离回放的前置条件先失败：历史迁移在 public 里自校验顺联航账单表，缺表时只会给出一句看不出原因的错。
+  await assertIsolatedReplayPrecondition()
   const database = await createPurchaseShippingMarkDatabase(deferPartsMigration, deferReviewMigration, deferShipmentNumbers, deferWarehouseReceipt)
   const prisma = new IsolatedNumberingPrismaService(database) as unknown as PrismaService
   try {
