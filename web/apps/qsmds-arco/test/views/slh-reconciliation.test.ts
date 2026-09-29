@@ -141,6 +141,15 @@ test('弹窗把「开始对账」限制在有命中且无进行中提交时，�
   assert.doesNotMatch(source, /preview\.matched[\s\S]{0,400}FaCheckbox/u)
 })
 
+test('两处页面的提示都不用 FaAlert 的默认插槽（它只渲染 title/description）', async () => {
+  // FaAlert 没有默认插槽：把文案写在标签体里会被静默丢弃，只剩一个空提示框。
+  for (const name of ['detail.vue', 'slh-bill-select-modal.vue'] as const) {
+    const source = await readPageSource(name)
+    assert.doesNotMatch(source, /<FaAlert[^>]*>\s*\{\{/u, `${name} 把文案写进了 FaAlert 标签体`)
+    assert.doesNotMatch(source, /<FaAlert[^>]*>\s*[^<\s][^<]*\{\{/u, `${name} 的 FaAlert 文案应走 :title 或 description 插槽`)
+  }
+})
+
 test('详情页只渲染本批次成员行，并显示批次与账单两个进度', async () => {
   const source = await readPageSource('detail.vue')
   // 数据边界：明细表的数据源只能是 batch.members。

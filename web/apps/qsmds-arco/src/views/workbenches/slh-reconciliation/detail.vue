@@ -182,9 +182,7 @@ onBeforeUnmount(() => {
       <FaEmpty icon="i-lucide:shield-alert" :title="t('slhBill.noPermission')" class="py-12" />
     </FaPageMain>
     <FaPageMain v-else-if="error" class="min-w-0">
-      <FaAlert variant="destructive" role="alert">
-        {{ error }}
-      </FaAlert>
+      <FaAlert variant="destructive" role="alert" :title="error" />
       <FaButton class="mt-3" variant="outline" @click="load">
         {{ t('slhBill.retry') }}
       </FaButton>
@@ -236,9 +234,7 @@ onBeforeUnmount(() => {
           </div>
         </dl>
 
-        <FaAlert v-if="actionError" variant="destructive" role="alert">
-          {{ actionError }}
-        </FaAlert>
+        <FaAlert v-if="actionError" variant="destructive" role="alert" :title="actionError" />
 
         <div class="flex flex-wrap gap-2 items-center">
           <span class="qs-type-description text-muted-foreground">

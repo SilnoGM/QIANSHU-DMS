@@ -239,17 +239,13 @@ onBeforeUnmount(() => {
       </template>
 
       <template v-else>
-        <FaAlert v-if="previewError" variant="destructive" role="alert">
-          {{ previewError }}
-        </FaAlert>
+        <FaAlert v-if="previewError" variant="destructive" role="alert" :title="previewError" />
         <SaSpin v-else-if="previewLoading" class="py-8" />
         <template v-else-if="preview">
           <p class="qs-type-description text-muted-foreground m-0">
             {{ t('slhReconciliation.selectModal.summary', { bill: deliverable?.slhBillNo ?? '', matched: summary.matchedCount, unmatched: summary.unmatchedCount }) }}
           </p>
-          <FaAlert v-if="!summary.canStart" variant="destructive" role="status">
-            {{ t('slhReconciliation.selectModal.noMatch') }}
-          </FaAlert>
+          <FaAlert v-if="!summary.canStart" variant="destructive" role="status" :title="t('slhReconciliation.selectModal.noMatch')" />
           <div class="min-w-0 space-y-2">
             <h4 class="qs-type-component-title m-0">
               {{ t('slhReconciliation.selectModal.matchedTitle', { count: summary.matchedCount }) }}
@@ -292,9 +288,7 @@ onBeforeUnmount(() => {
             </QsGenericTable>
           </div>
         </template>
-        <FaAlert v-if="submitError" variant="destructive" role="alert">
-          {{ submitError }}
-        </FaAlert>
+        <FaAlert v-if="submitError" variant="destructive" role="alert" :title="submitError" />
       </template>
     </div>
     <template #footer>
