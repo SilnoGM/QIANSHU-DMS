@@ -55,6 +55,7 @@ enum AuditEventType {
   CONTAINER_LOADING_ITEM_UPDATED
   CONTAINER_LOADING_ITEM_CREATED
   CONTAINER_BATCH_CREATED
+  SLH_BILL_IMPORTED
   PACKAGING_COST_SUBMITTED
   PACKAGING_COST_PAID
   PACKAGING_COST_AMOUNT_UPDATED
@@ -504,6 +505,8 @@ model User {
   containerLoadingItemChanges ContainerLoadingItemChange[]
   containerBatchesCreated ContainerBatch[] @relation("ContainerBatchCreatedBy")
   containerBatchesUpdated ContainerBatch[] @relation("ContainerBatchUpdatedBy")
+  slhBillsCreated SlhBill[] @relation("SlhBillCreatedBy")
+  slhBillsUpdated SlhBill[] @relation("SlhBillUpdatedBy")
   containerLoadingItemsCreated ContainerLoadingItem[] @relation("ContainerLoadingItemCreatedBy")
   containerLoadingItemsUpdated ContainerLoadingItem[] @relation("ContainerLoadingItemUpdatedBy")
 
@@ -753,6 +756,7 @@ model ExchangeRate {
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   salesOrderPayments SalesOrderPayment[]
+  slhBills SlhBill[]
   currency Currency @relation(fields: [currencyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([updatedAt(sort: Desc), id(sort: Desc)], map: "exchange_rates_updated_at_id_idx")
@@ -887,6 +891,7 @@ model MediaAsset {
   salesOrderDocuments SalesOrderDocument[]
   purchaseOrderDocuments PurchaseOrderDocument[]
   purchaseOrderImageDraft PurchaseOrderImageDraft?
+  slhBillSourceFiles  SlhBill[]
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
   @@index([status, retentionUntil, id], map: "media_assets_status_retention_until_id_idx")
@@ -1521,6 +1526,7 @@ model NumberingPeriodState {
 
 model NumberingIssuance {
   containerBatch ContainerBatch?
+  slhBill SlhBill?
 
   id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   ruleId                 String   @map("rule_id") @db.Uuid
@@ -1879,6 +1885,7 @@ model ContainerBatch {
   numberingIssuance NumberingIssuance @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   sourceFile MediaAsset? @relation(fields: [sourceFileId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   items ContainerLoadingItem[]
+  slhBillLines SlhBillLine[]
   @@unique([warehouseValue, loadingDate, sequenceInDay], map: "container_batches_warehouse_date_sequence_key")
   @@unique([createdById, creationRequestKey], map: "container_batches_actor_request_key")
   @@index([loadingDate(sort: Desc), id(sort: Desc)], map: "container_batches_date_id_idx")
@@ -1957,4 +1964,177 @@ model ContainerLoadingItemChange {
   @@unique([actorUserId, requestKey], map: "container_loading_item_changes_actor_request_key")
   @@index([loadingItemId, createdAt], map: "container_loading_item_changes_item_created_idx")
   @@map("container_loading_item_changes")
+}
+
+/// 顺联航对账单上的费用类型；取值来自对方备注原文的费别口径。
+enum SlhBillChargeType {
+  FREIGHT
+  COD_HANDLING
+  HEAVY_CARGO
+  DELIVERY
+  REDELIVERY
+  TRANSFER_DELIVERY
+  REMOTE_AREA
+  UNLOADING
+  STORAGE
+  WAITING
+  OVERSIZE
+  INSPECTION
+  FORKLIFT
+  MINIMUM_CHARGE
+  OTHER
+
+  @@map("slh_bill_charge_type")
+}
+
+/// 计价方式由账单单价推导：单价大于 10 按材积计价，否则按重量计价。
+enum SlhBillPricingBasis {
+  WEIGHT
+  VOLUME
+
+  @@map("slh_bill_pricing_basis")
+}
+
+/// 账单汇率的来源；三种来源的字段形状由表级 CHECK 互斥约束。
+enum SlhBillRateSource {
+  EMBEDDED
+  SYSTEM
+  MANUAL
+
+  @@map("slh_bill_rate_source")
+}
+
+/// 顺联航每月对账单。外部单据的结构化留痕，只被引用，不回写我方业务数据。
+model SlhBill {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slhBillNo String @map("slh_bill_no") @unique(map: "slh_bills_number_key") @db.VarChar(64)
+  numberingIssuanceId String @map("numbering_issuance_id") @unique(map: "slh_bills_issuance_key") @db.Uuid
+  /// 归档信息由入库确认弹窗填写。名称必填，其唯一性只约束未被取代的账单，
+  /// 用部分唯一索引实现（Prisma schema 表达不了 WHERE，因此只存在于迁移里）。
+  billName String @map("bill_name") @db.VarChar(200)
+  /// 账单所属月份（YYYY-MM）；与编号里的派发月是两回事。
+  billMonth String @map("bill_month") @db.Char(7)
+  periodStart DateTime @map("period_start") @db.Date
+  periodEnd DateTime @map("period_end") @db.Date
+  sourceFileId String @map("source_file_id") @db.Uuid
+  sourceFileName String @map("source_file_name") @db.VarChar(255)
+  sourceFileSha256 String @map("source_file_sha256") @db.Char(64)
+  freightTotalAmountCny Decimal @map("freight_total_amount_cny") @db.Decimal(30, 2)
+  codHandlingTotalAmountCny Decimal @map("cod_handling_total_amount_cny") @db.Decimal(30, 2)
+  surchargeTotalAmountCny Decimal @map("surcharge_total_amount_cny") @db.Decimal(30, 2)
+  payableTotalAmountCny Decimal @map("payable_total_amount_cny") @db.Decimal(30, 2)
+  codTotalAmountTwd Decimal @map("cod_total_amount_twd") @db.Decimal(30, 2)
+  ntdSurchargeTotalAmountTwd Decimal @map("ntd_surcharge_total_amount_twd") @db.Decimal(30, 2)
+  reportedNetAmountTwd Decimal @map("reported_net_amount_twd") @db.Decimal(30, 2)
+  /// 账单自报值留痕：「合计应付人民币」行金额、台币单元格原值与公式原文。
+  reportedPayableAmountCny Decimal? @map("reported_payable_amount_cny") @db.Decimal(30, 2)
+  reportedNetAmountCell String? @map("reported_net_amount_cell") @db.VarChar(64)
+  reportedNetAmountFormula String? @map("reported_net_amount_formula") @db.VarChar(128)
+  /// 账单「小计」行自报值：用于在详情页与明细累加逐项对比。
+  reportedSubtotalPayableAmountCny Decimal? @map("reported_subtotal_payable_amount_cny") @db.Decimal(30, 2)
+  reportedSubtotalCodAmountTwd Decimal? @map("reported_subtotal_cod_amount_twd") @db.Decimal(30, 2)
+  reportedSubtotalNtdSurchargeAmountTwd Decimal? @map("reported_subtotal_ntd_surcharge_amount_twd") @db.Decimal(30, 2)
+  /// 确认入库时看到的差异与告警快照；明细行级差异也在这里，供详情页按类型分组呈现。
+  importFindings Json @map("import_findings") @db.JsonB
+  rateSource SlhBillRateSource? @map("rate_source")
+  foreignUnitsPerCnySnapshot Decimal? @map("foreign_units_per_cny_snapshot") @db.Decimal(30, 12)
+  embeddedForeignUnitsPerCny Decimal? @map("embedded_foreign_units_per_cny") @db.Decimal(30, 12)
+  exchangeRateId String? @map("exchange_rate_id") @db.Uuid
+  exchangeRateVersionSnapshot Int? @map("exchange_rate_version_snapshot")
+  rateCapturedAt DateTime? @map("rate_captured_at") @db.Timestamptz(6)
+  lineCount Int @map("line_count")
+  containerBatchCount Int @map("container_batch_count")
+  containerBatchNames String @map("container_batch_names") @db.VarChar(2000)
+  remark String? @db.VarChar(500)
+  supersededById String? @map("superseded_by_id") @db.Uuid
+  supersededAt DateTime? @map("superseded_at") @db.Timestamptz(6)
+  version Int @default(1)
+  importRequestKeyHash Bytes @map("import_request_key_hash") @db.ByteA
+  importPayloadHash Bytes @map("import_payload_hash") @db.ByteA
+  createdById String @map("created_by_id") @db.Uuid
+  updatedById String @map("updated_by_id") @db.Uuid
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @map("updated_at") @default(now()) @updatedAt @db.Timestamptz(6)
+
+  numberingIssuance NumberingIssuance @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sourceFile MediaAsset @relation(fields: [sourceFileId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  exchangeRate ExchangeRate? @relation(fields: [exchangeRateId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  supersededBy SlhBill? @relation("SlhBillSupersession", fields: [supersededById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  supersedes SlhBill[] @relation("SlhBillSupersession")
+  createdBy User @relation("SlhBillCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedBy User @relation("SlhBillUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  lines SlhBillLine[]
+
+  @@unique([createdById, importRequestKeyHash], map: "slh_bills_actor_request_key")
+  @@index([periodStart(sort: Desc), id(sort: Desc)], map: "slh_bills_period_id_idx")
+  @@index([sourceFileSha256], map: "slh_bills_source_sha256_idx")
+  @@map("slh_bills")
+}
+
+/// 账单明细行；原样字段与复算字段并存，差异由服务层比对呈现。
+model SlhBillLine {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  billId String @map("bill_id") @db.Uuid
+  lineNumber Int @map("line_number")
+  loadingDate DateTime @map("loading_date") @db.Date
+  containerBatchNameText String @map("container_batch_name_text") @db.VarChar(128)
+  containerBatchId String? @map("container_batch_id") @db.Uuid
+  warehouseReceiptReference String? @map("warehouse_receipt_reference") @db.VarChar(1000)
+  shippingMarkText String? @map("shipping_mark_text") @db.VarChar(500)
+  goodsName String @map("goods_name") @db.VarChar(255)
+  packageCount Int @map("package_count")
+  packageUnit String? @map("package_unit") @db.VarChar(32)
+  grossWeightKg Decimal? @map("gross_weight_kg") @db.Decimal(18, 3)
+  weightUnit String? @map("weight_unit") @db.VarChar(32)
+  lengthCm Decimal? @map("length_cm") @db.Decimal(18, 2)
+  widthCm Decimal? @map("width_cm") @db.Decimal(18, 2)
+  heightCm Decimal? @map("height_cm") @db.Decimal(18, 2)
+  volumeCai Decimal? @map("volume_cai") @db.Decimal(24, 2)
+  reportedVolumeCai Decimal? @map("reported_volume_cai") @db.Decimal(24, 2)
+  categoryCode String? @map("category_code") @db.VarChar(32)
+  unitPriceAmount Decimal? @map("unit_price_amount") @db.Decimal(30, 2)
+  pricingBasis SlhBillPricingBasis? @map("pricing_basis")
+  freightAmountCny Decimal @map("freight_amount_cny") @db.Decimal(30, 2)
+  codHandlingAmountCny Decimal @map("cod_handling_amount_cny") @db.Decimal(30, 2)
+  surchargeAmountCny Decimal @map("surcharge_amount_cny") @db.Decimal(30, 2)
+  payableAmountCny Decimal @map("payable_amount_cny") @db.Decimal(30, 2)
+  codAmountTwd Decimal @map("cod_amount_twd") @db.Decimal(30, 2)
+  ntdSurchargeAmountTwd Decimal @map("ntd_surcharge_amount_twd") @db.Decimal(30, 2)
+  recipientInfoRaw String? @map("recipient_info_raw") @db.VarChar(2000)
+  /// 收货人信息解析结果（原文永久保留在 recipient_info_raw，这三列只做结构化检索与展示）。
+  recipientName String? @map("recipient_name") @db.VarChar(200)
+  recipientPhones String? @map("recipient_phones") @db.VarChar(500)
+  recipientAddress String? @map("recipient_address") @db.VarChar(1000)
+  remark String? @db.VarChar(2000)
+  sourceSheetName String @map("source_sheet_name") @db.VarChar(255)
+  sourceRowNumber Int @map("source_row_number")
+  sourceData Json @map("source_data") @db.JsonB
+  /// 明细行的对账时刻；为空即未对账。账单级三态由本列汇总派生，不另存列。
+  reconciledAt DateTime? @map("reconciled_at") @db.Timestamptz(6)
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  bill SlhBill @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  containerBatch ContainerBatch? @relation(fields: [containerBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  charges SlhBillLineCharge[]
+
+  @@unique([billId, lineNumber], map: "slh_bill_lines_bill_line_key")
+  @@index([containerBatchId], map: "slh_bill_lines_container_batch_idx")
+  @@map("slh_bill_lines")
+}
+
+/// 费用明细行：从备注原文按币种拆解出的单笔杂费，合计必须等于所在行的聚合列。
+model SlhBillLineCharge {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  lineId String @map("line_id") @db.Uuid
+  chargeType SlhBillChargeType @map("charge_type")
+  currencyCode String @map("currency_code") @db.Char(3)
+  amount Decimal @db.Decimal(30, 2)
+  pricingBasis SlhBillPricingBasis? @map("pricing_basis")
+  sourceRemarkText String? @map("source_remark_text") @db.VarChar(2000)
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  line SlhBillLine @relation(fields: [lineId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([lineId], map: "slh_bill_line_charges_line_idx")
+  @@map("slh_bill_line_charges")
 }

@@ -121,11 +121,37 @@ export const financeWorkbench: RouteRecordMainRaw = {
         {
           path: 'slh-bill-management',
           name: 'qsFinanceBillReconciliationSlhBillManagement',
-          component: () => import('@/views/workbenches/placeholder.vue'),
+          component: () => import('@/views/workbenches/slh-bills/index.vue'),
           meta: {
             title: 'workbench.slhBillManagement',
             icon: 'qs-bill-management',
             auth: 'slh-bills:read',
+          },
+        },
+        {
+          // 有 children 的路由会被 Route Store 的 deleteMiddleRouteComponent 删掉自身 component，
+          // 因此列表页保持为叶子，导入与详情作为同组隐藏兄弟路由，URL 层级不变。
+          path: 'slh-bill-management/import',
+          name: 'qsFinanceBillReconciliationSlhBillImport',
+          component: () => import('@/views/workbenches/slh-bills/import.vue'),
+          meta: {
+            title: 'slhBill.importTitle',
+            auth: 'slh-bills:create',
+            menu: false,
+            activeMenu: '/qs-finance/bill-reconciliation/slh-bill-management',
+          },
+        },
+        {
+          path: 'slh-bill-management/:id',
+          name: 'qsFinanceBillReconciliationSlhBillDetail',
+          component: () => import('@/views/workbenches/slh-bills/detail.vue'),
+          // 与导入页、柜次详情一致：隐藏菜单但保留面包屑末级（不设 breadcrumb: false），
+          // 让用户能看到自己在本页；注意详情是列表的兄弟路由，面包屑里不会出现列表那一级。
+          meta: {
+            title: 'slhBill.detailTitle',
+            auth: 'slh-bills:read',
+            menu: false,
+            activeMenu: '/qs-finance/bill-reconciliation/slh-bill-management',
           },
         },
         {

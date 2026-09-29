@@ -1578,7 +1578,11 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.equal(permissionDrawerState.showsDisabledFundAccountRead, true)
   assert.equal(permissionDrawerState.showsUsersRead, true)
   assert.ok(permissionDrawerState.optionCount > 0)
+  // 可分配权限清单来自权限目录迁移，新增领域后必须同步这里（曾漏过 container-batches 与 slh-bills）。
   assert.deepEqual(permissionDrawerState.enabledPermissionCodes, [
+    'container-batches:create',
+    'container-batches:read',
+    'container-batches:update',
     'currencies:create',
     'currencies:disable',
     'currencies:enable',
@@ -1627,6 +1631,9 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'sales-receipts:read',
     'sales-receipts:review',
     'sales-receipts:void',
+    'slh-bills:create',
+    'slh-bills:read',
+    'slh-bills:reconcile',
     'supplier-payment-profiles:read',
     'supplier-payment-profiles:update',
   ])

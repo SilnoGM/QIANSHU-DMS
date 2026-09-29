@@ -196,6 +196,9 @@ test('QsGenericTable 组合 FaTable 与 FaPagination 并保持默认行号不参
   assert.match(source, /defineOptions\(\{ name: 'QsGenericTable' \}\)/u)
   assert.match(source, /<FaTable/u)
   assert.match(source, /:sortable="true"/u)
+  // 行样式透传：底层 FaTable 支持 rowClass，中间层必须把它放出来，否则业务页无法标记某类行。
+  assert.match(source, /rowClass\?: TableProps<TData>\['rowClass'\]/u)
+  assert.match(source, /:row-class="rowClass"/u)
   assert.match(source, /<FaPagination/u)
   assert.match(source, /\? 'total, sizes, ->, pager'/u)
   assert.match(source, /<FaPopover/u)
@@ -489,7 +492,12 @@ test('固定列与普通列共享悬停背景并根据横向滚动位置显示�
   // 固定列和排序列不能在 hover 状态重新露出下方滚动内容。
   assert.match(tableSource, /\[data-slot="table-row"\]:hover > \[data-slot="table-cell"\][\s\S]*?background-color: color-mix\(in oklch, oklch\(var\(--muted\)\) 50%, oklch\(var\(--background\)\)\) !important/u)
   assert.match(tableSource, /\[data-pinned\][\s\S]*?box-shadow: none/u)
-  assert.match(tableSource, /\[data-slot="table-cell"\]\[data-pinned\][\s\S]*?background-color: oklch\(var\(--background\)\) !important/u)
+  // 固定列的默认不透明底色刻意**不带** !important：带了之后行的状态类（rowClass 标黄、
+  // 斑马纹）就再也染不到固定列，标黄会断在左固定列上。仍然带 !important 的只有表头
+  // 固定列、排序列与悬停态——它们各自代表"始终不透明"和"优先级更高"。
+  assert.match(tableSource, /\[data-slot="table-cell"\]\[data-pinned\]\) \{\n {2}background-color: oklch\(var\(--background\)\);\n\}/u)
+  assert.doesNotMatch(tableSource, /\[data-slot="table-cell"\]\[data-pinned\]\) \{\n {2}background-color: oklch\(var\(--background\)\) !important/u)
+  assert.match(tableSource, /\[data-slot="table-head"\]\[data-pinned\]\) \{\n {2}background-color: oklch\(var\(--muted\)\) !important/u)
   assert.match(tableSource, /\[data-pinned\]\[data-sorted\][\s\S]*?color-mix\(in oklch/u)
   assert.match(tableSource, /:global\(\.dark \.qs-generic-table\)/u)
   // 边界层级由位于滚动内容上方的 24px 渐变遮罩表达，不能再依赖容易被

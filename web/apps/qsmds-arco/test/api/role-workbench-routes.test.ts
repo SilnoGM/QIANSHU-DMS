@@ -30,7 +30,7 @@ test('财务和采运工作台只展示当前用户有权访问的业务入口',
   assert.deepEqual(visiblePaths(['sales-receipts:read', 'purchase-orders:payment', 'purchase-orders:review']), ['/qs-finance/realtime-payments/sales-receipts', '/qs-finance/realtime-payments/purchase-payments', '/qs-purchase-transport/reviews'])
 })
 
-test('顺联航账单入口排在实收实付之后、账户管理之前，两个叶子各用独立权限与占位页', () => {
+test('顺联航账单入口排在实收实付之后、账户管理之前，管理页与对账占位各用独立权限', () => {
   const routes = financeWorkbench.children
   assert.deepEqual(routes.map(route => route.path), ['/qs-finance/realtime-payments', '/qs-finance/bill-reconciliation', '/qs-finance/fund-accounts'])
   const group = routes[1]!
@@ -39,16 +39,24 @@ test('顺联航账单入口排在实收实付之后、账户管理之前，两�
   assert.equal(group.meta?.icon, 'qs-bill-reconciliation')
   assert.deepEqual(group.meta?.auth, ['slh-bills:read', 'slh-bills:reconcile'])
   assert.equal(typeof group.component, 'function')
-  assert.deepEqual((group.children ?? []).map(leaf => [leaf.path, leaf.name, leaf.meta?.title, leaf.meta?.icon, leaf.meta?.auth]), [
+  const leaves = group.children ?? []
+  assert.deepEqual(leaves.filter(leaf => leaf.meta?.menu !== false).map(leaf => [leaf.path, leaf.name, leaf.meta?.title, leaf.meta?.icon, leaf.meta?.auth]), [
     ['slh-bill-management', 'qsFinanceBillReconciliationSlhBillManagement', 'workbench.slhBillManagement', 'qs-bill-management', 'slh-bills:read'],
     ['slh-bill-reconciliation', 'qsFinanceBillReconciliationSlhBillReconciliation', 'workbench.slhBillReconciliation', 'qs-bill-reconciliation-check', 'slh-bills:reconcile'],
   ])
-  for (const leaf of group.children ?? []) {
-    // 占位页沿用统一组件，功能开放时只替换 component 与新增业务 API。
+  for (const leaf of leaves) {
+    // 对账仍沿用占位页；账单管理已替换为真实页面，两者都保持叶子形状。
     assert.equal(typeof leaf.component, 'function')
-    assert.notEqual(leaf.meta?.menu, false)
     assert.notEqual(leaf.meta?.singleMenu, true)
   }
+  // 有 children 的路由会被 Route Store 的 deleteMiddleRouteComponent 删掉自身组件，
+  // 因此导入与详情必须是同组隐藏兄弟路由，列表页不能再挂子路由。
+  assert.ok(leaves.every(leaf => leaf.children === undefined))
+  assert.deepEqual(leaves.filter(leaf => leaf.meta?.menu === false).map(leaf => [leaf.path, leaf.name, leaf.meta?.title, leaf.meta?.auth, leaf.meta?.activeMenu, leaf.meta?.breadcrumb]), [
+    ['slh-bill-management/import', 'qsFinanceBillReconciliationSlhBillImport', 'slhBill.importTitle', 'slh-bills:create', '/qs-finance/bill-reconciliation/slh-bill-management', undefined],
+    // 详情页与导入页一样保留面包屑末级（不设 breadcrumb: false），两页口径一致。
+    ['slh-bill-management/:id', 'qsFinanceBillReconciliationSlhBillDetail', 'slhBill.detailTitle', 'slh-bills:read', '/qs-finance/bill-reconciliation/slh-bill-management', undefined],
+  ])
 })
 
 test('柜次菜单使用独立读取权限，货件与审核菜单保留既有授权', () => {
@@ -66,7 +74,8 @@ test('柜次菜单使用独立读取权限，货件与审核菜单保留既有�
 test('财务分为实时收付、账单对账和账户管理，叶子路由保留独立权限', () => {
   assert.deepEqual(financeWorkbench.children.map(route => route.path), ['/qs-finance/realtime-payments', '/qs-finance/bill-reconciliation', '/qs-finance/fund-accounts'])
   const routes = financeWorkbench.children.flatMap(route => route.children ?? [])
-  assert.equal(new Set(routes.map(route => route.name)).size, 11)
+  // 账单对账分组新增导入与详情两个隐藏叶子。
+  assert.equal(new Set(routes.map(route => route.name)).size, 13)
   const paymentDetail = routes.find(route => route.name === 'qsFinanceRealtimePurchasePayablePayment')
   assert.equal(paymentDetail?.meta?.menu, false)
   assert.equal(paymentDetail?.meta?.auth, 'purchase-orders:payment')

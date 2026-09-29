@@ -56722,6 +56722,7 @@
                 "CONTAINER_LOADING_ITEM_UPDATED",
                 "CONTAINER_LOADING_ITEM_CREATED",
                 "CONTAINER_BATCH_CREATED",
+                "SLH_BILL_IMPORTED",
                 "PACKAGING_COST_SUBMITTED",
                 "PACKAGING_COST_PAID",
                 "PACKAGING_COST_AMOUNT_UPDATED",
@@ -65458,12 +65459,2556 @@
           ]
         }
       }
+    },
+    "/api/slh-bills": {
+      "get": {
+        "operationId": "slh_bills_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "periodFrom",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive period start lower bound (YYYY-MM-DD).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "periodTo",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive period end upper bound (YYYY-MM-DD).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "Matches bill number, source file name or container batch name.",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "name": "payableMin",
+            "required": false,
+            "in": "query",
+            "description": "Minimum payable amount in CNY.",
+            "schema": {
+              "pattern": "^(?:0|[1-9]\\d{0,27})(?:\\.\\d{1,2})?$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "payableMax",
+            "required": false,
+            "in": "query",
+            "description": "Maximum payable amount in CNY.",
+            "schema": {
+              "pattern": "^(?:0|[1-9]\\d{0,27})(?:\\.\\d{1,2})?$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "active",
+              "type": "string",
+              "enum": [
+                "active",
+                "superseded",
+                "all"
+              ]
+            }
+          },
+          {
+            "name": "reconciliationStatus",
+            "required": false,
+            "in": "query",
+            "description": "Filter by the reconciliation status derived from the lines of this bill.",
+            "schema": {
+              "default": "all",
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "PARTIAL",
+                "COMPLETED",
+                "all"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlhBillPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "slh-bills"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": false,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      },
+      "post": {
+        "operationId": "slh_bills_create",
+        "parameters": [
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlhBillImportCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlhBillDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "slh-bills"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "SLH_BILL_CONFLICT",
+                "SLH_BILL_DUPLICATE_PERIOD",
+                "SLH_BILL_IDEMPOTENCY_CONFLICT",
+                "SLH_BILL_NUMBERING_UNAVAILABLE",
+                "SLH_BILL_RATE_UNAVAILABLE",
+                "SLH_BILL_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "SLH_BILL_CONTENT_INVALID",
+                "SLH_BILL_SOURCE_FILE_INVALID",
+                "SLH_BILL_SOURCE_FILE_UNAVAILABLE",
+                "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "MEDIA_STORAGE_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/slh-bills/status-counts": {
+      "get": {
+        "operationId": "slh_bills_status_counts",
+        "parameters": [
+          {
+            "name": "periodFrom",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive period start lower bound (YYYY-MM-DD).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "periodTo",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive period end upper bound (YYYY-MM-DD).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "Matches bill number, source file name or container batch name.",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "name": "payableMin",
+            "required": false,
+            "in": "query",
+            "description": "Minimum payable amount in CNY.",
+            "schema": {
+              "pattern": "^(?:0|[1-9]\\d{0,27})(?:\\.\\d{1,2})?$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "payableMax",
+            "required": false,
+            "in": "query",
+            "description": "Maximum payable amount in CNY.",
+            "schema": {
+              "pattern": "^(?:0|[1-9]\\d{0,27})(?:\\.\\d{1,2})?$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "active",
+              "type": "string",
+              "enum": [
+                "active",
+                "superseded",
+                "all"
+              ]
+            }
+          },
+          {
+            "name": "reconciliationStatus",
+            "required": false,
+            "in": "query",
+            "description": "Filter by the reconciliation status derived from the lines of this bill.",
+            "schema": {
+              "default": "all",
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "PARTIAL",
+                "COMPLETED",
+                "all"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlhBillStatusCountsDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "slh-bills"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": false,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/slh-bills/{id}": {
+      "get": {
+        "operationId": "slh_bills_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlhBillDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "slh-bills"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": false,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SLH_BILL_NOT_FOUND",
+                "SLH_BILL_SOURCE_FILE_UNAVAILABLE"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/slh-bills/{id}/lines": {
+      "get": {
+        "operationId": "slh_bills_lines",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 200,
+              "default": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "Matches warehouse receipt reference, shipping mark, goods name or recipient info.",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "name": "containerBatchName",
+            "required": false,
+            "in": "query",
+            "description": "Container batch name exactly as printed on the bill.",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlhBillLinePageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "slh-bills"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": false,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SLH_BILL_NOT_FOUND",
+                "SLH_BILL_SOURCE_FILE_UNAVAILABLE"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/slh-bills/source-file-uploads": {
+      "post": {
+        "operationId": "slh_bills_upload_source_file",
+        "parameters": [
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "mediaType",
+                  "file"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "mediaType": {
+                    "type": "string",
+                    "enum": [
+                      "DOCUMENT"
+                    ]
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlhBillStagedFileDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "slh-bills"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "SLH_BILL_CONFLICT",
+                "SLH_BILL_DUPLICATE_PERIOD",
+                "SLH_BILL_IDEMPOTENCY_CONFLICT",
+                "SLH_BILL_NUMBERING_UNAVAILABLE",
+                "SLH_BILL_RATE_UNAVAILABLE",
+                "SLH_BILL_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "SLH_BILL_CONTENT_INVALID",
+                "SLH_BILL_SOURCE_FILE_INVALID",
+                "SLH_BILL_SOURCE_FILE_UNAVAILABLE",
+                "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "MEDIA_STORAGE_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/slh-bills/import-preview": {
+      "post": {
+        "operationId": "slh_bills_import_preview",
+        "parameters": [
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlhBillMediaAssetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlhBillImportPreviewDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "slh-bills"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "SLH_BILL_CONFLICT",
+                "SLH_BILL_DUPLICATE_PERIOD",
+                "SLH_BILL_IDEMPOTENCY_CONFLICT",
+                "SLH_BILL_NUMBERING_UNAVAILABLE",
+                "SLH_BILL_RATE_UNAVAILABLE",
+                "SLH_BILL_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "SLH_BILL_CONTENT_INVALID",
+                "SLH_BILL_SOURCE_FILE_INVALID",
+                "SLH_BILL_SOURCE_FILE_UNAVAILABLE",
+                "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "MEDIA_STORAGE_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/slh-bills/{id}/source-file": {
+      "get": {
+        "operationId": "slh_bills_get_source_file",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private xlsx statement bytes.",
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "slh-bills"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": false,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SLH_BILL_NOT_FOUND",
+                "SLH_BILL_SOURCE_FILE_UNAVAILABLE"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "MEDIA_STORAGE_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      },
+      "head": {
+        "operationId": "slh_bills_head_source_file",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private xlsx statement headers.",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "slh-bills"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": false,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SLH_BILL_NOT_FOUND",
+                "SLH_BILL_SOURCE_FILE_UNAVAILABLE"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "MEDIA_STORAGE_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      }
     }
   },
   "info": {
     "title": "Qianshu DMS API",
     "description": "",
-    "version": "0.1.11",
+    "version": "0.1.12",
     "contact": {}
   },
   "tags": [
@@ -77631,6 +80176,7 @@
               "CONTAINER_LOADING_ITEM_UPDATED",
               "CONTAINER_LOADING_ITEM_CREATED",
               "CONTAINER_BATCH_CREATED",
+              "SLH_BILL_IMPORTED",
               "PACKAGING_COST_SUBMITTED",
               "PACKAGING_COST_PAID",
               "PACKAGING_COST_AMOUNT_UPDATED",
@@ -79651,6 +82197,1081 @@
         "required": [
           "requestKey",
           "expectedVersion"
+        ]
+      },
+      "SlhBillListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slhBillNo": {
+            "type": "string"
+          },
+          "billName": {
+            "type": "string"
+          },
+          "billMonth": {
+            "type": "string"
+          },
+          "periodStart": {
+            "type": "string"
+          },
+          "periodEnd": {
+            "type": "string"
+          },
+          "lineCount": {
+            "type": "number"
+          },
+          "containerBatchCount": {
+            "type": "number"
+          },
+          "containerBatchNames": {
+            "description": "Container batch names in this bill; the list shows them in a tooltip next to the count.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "payableTotalAmountCny": {
+            "type": "string"
+          },
+          "codTotalAmountTwd": {
+            "type": "string"
+          },
+          "ntdSurchargeTotalAmountTwd": {
+            "type": "string"
+          },
+          "reportedNetAmountTwd": {
+            "type": "string"
+          },
+          "embeddedForeignUnitsPerCny": {
+            "type": "string",
+            "nullable": true,
+            "description": "Rate embedded in the bill formula; the list folds the net amount with it."
+          },
+          "rateSource": {
+            "type": "string",
+            "enum": [
+              "EMBEDDED",
+              "SYSTEM",
+              "MANUAL"
+            ],
+            "nullable": true
+          },
+          "reconciliationStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "PARTIAL",
+              "COMPLETED"
+            ],
+            "description": "Derived from the lines of this bill: PENDING when none is reconciled, COMPLETED when all are, PARTIAL in between."
+          },
+          "supersededById": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true
+          },
+          "sourceFileName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "createdByDisplayName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slhBillNo",
+          "billName",
+          "billMonth",
+          "periodStart",
+          "periodEnd",
+          "lineCount",
+          "containerBatchCount",
+          "containerBatchNames",
+          "payableTotalAmountCny",
+          "codTotalAmountTwd",
+          "ntdSurchargeTotalAmountTwd",
+          "reportedNetAmountTwd",
+          "reconciliationStatus",
+          "sourceFileName",
+          "createdAt",
+          "createdByDisplayName"
+        ]
+      },
+      "SlhBillPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillListItemDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "SlhBillStateCountDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": [
+              "active",
+              "superseded",
+              "all"
+            ]
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ]
+      },
+      "SlhBillReconciliationCountDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "PARTIAL",
+              "COMPLETED",
+              "all"
+            ]
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ]
+      },
+      "SlhBillStatusCountsDto": {
+        "type": "object",
+        "properties": {
+          "states": {
+            "description": "Counts per bill state; the current reconciliation filter applies, the state filter does not.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillStateCountDto"
+            }
+          },
+          "reconciliationStatuses": {
+            "description": "Counts per reconciliation status; the current state filter applies, the reconciliation filter does not.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillReconciliationCountDto"
+            }
+          }
+        },
+        "required": [
+          "states",
+          "reconciliationStatuses"
+        ]
+      },
+      "SlhBillRateDto": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "EMBEDDED",
+              "SYSTEM",
+              "MANUAL"
+            ]
+          },
+          "foreignUnitsPerCny": {
+            "type": "string",
+            "description": "TWD per CNY, twelve decimals."
+          },
+          "embeddedForeignUnitsPerCny": {
+            "type": "string",
+            "nullable": true,
+            "description": "Rate embedded in the bill formula, when present."
+          },
+          "exchangeRateId": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true
+          },
+          "capturedAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "source",
+          "foreignUnitsPerCny"
+        ]
+      },
+      "SlhBillReportedDto": {
+        "type": "object",
+        "properties": {
+          "subtotalPayableAmountCny": {
+            "type": "string",
+            "nullable": true,
+            "description": "The 小计 row payable amount as written by the carrier."
+          },
+          "subtotalCodAmountTwd": {
+            "type": "string",
+            "nullable": true,
+            "description": "The 小计 row COD total."
+          },
+          "subtotalNtdSurchargeAmountTwd": {
+            "type": "string",
+            "nullable": true,
+            "description": "The 小计 row NTD surcharge total."
+          },
+          "payableAmountCny": {
+            "type": "string",
+            "nullable": true,
+            "description": "The 合计应付人民币 row amount, negative by the carrier convention."
+          },
+          "netAmountTwd": {
+            "type": "string",
+            "nullable": true,
+            "description": "The 合计应付台币NTD cell value as written by the carrier."
+          },
+          "netAmountFormula": {
+            "type": "string",
+            "nullable": true
+          },
+          "embeddedForeignUnitsPerCny": {
+            "type": "string",
+            "nullable": true,
+            "description": "TWD per CNY embedded in the bill formula; present means the net amount cell is already converted."
+          },
+          "reportedNetAmountTwd": {
+            "type": "string",
+            "description": "Unconverted net amount: COD total minus NTD surcharge total."
+          }
+        },
+        "required": [
+          "reportedNetAmountTwd"
+        ]
+      },
+      "SlhBillFindingDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "FREIGHT_MISMATCH",
+              "PAYABLE_MISMATCH",
+              "VOLUME_MISMATCH",
+              "CHARGE_MISMATCH",
+              "SUBTOTAL_MISMATCH",
+              "NET_AMOUNT_MISMATCH",
+              "DIMENSION_PRECISION",
+              "RATE_MISSING",
+              "REMARK_NOTE"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "difference",
+              "warning"
+            ]
+          },
+          "lineNumber": {
+            "type": "number",
+            "nullable": true,
+            "description": "Line ordinal inside the bill; used to locate the row."
+          },
+          "sourceRowNumber": {
+            "type": "number",
+            "nullable": true,
+            "description": "Row number in the source sheet, matching the line list."
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "severity",
+          "message"
+        ]
+      },
+      "SlhBillDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slhBillNo": {
+            "type": "string"
+          },
+          "billName": {
+            "type": "string"
+          },
+          "billMonth": {
+            "type": "string"
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true
+          },
+          "periodStart": {
+            "type": "string"
+          },
+          "periodEnd": {
+            "type": "string"
+          },
+          "lineCount": {
+            "type": "number"
+          },
+          "containerBatchCount": {
+            "type": "number"
+          },
+          "containerBatchNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "freightTotalAmountCny": {
+            "type": "string"
+          },
+          "codHandlingTotalAmountCny": {
+            "type": "string"
+          },
+          "surchargeTotalAmountCny": {
+            "type": "string"
+          },
+          "payableTotalAmountCny": {
+            "type": "string"
+          },
+          "codTotalAmountTwd": {
+            "type": "string"
+          },
+          "ntdSurchargeTotalAmountTwd": {
+            "type": "string"
+          },
+          "reportedNetAmountTwd": {
+            "type": "string"
+          },
+          "rate": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhBillRateDto"
+              }
+            ]
+          },
+          "reported": {
+            "$ref": "#/components/schemas/SlhBillReportedDto"
+          },
+          "findings": {
+            "description": "Confirm-time snapshot of differences and warnings.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillFindingDto"
+            }
+          },
+          "sourceFileName": {
+            "type": "string"
+          },
+          "sourceFileSha256": {
+            "type": "string"
+          },
+          "supersededById": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true
+          },
+          "supersededAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "createdByDisplayName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slhBillNo",
+          "billName",
+          "billMonth",
+          "periodStart",
+          "periodEnd",
+          "lineCount",
+          "containerBatchCount",
+          "containerBatchNames",
+          "freightTotalAmountCny",
+          "codHandlingTotalAmountCny",
+          "surchargeTotalAmountCny",
+          "payableTotalAmountCny",
+          "codTotalAmountTwd",
+          "ntdSurchargeTotalAmountTwd",
+          "reportedNetAmountTwd",
+          "reported",
+          "findings",
+          "sourceFileName",
+          "sourceFileSha256",
+          "version",
+          "createdAt",
+          "createdByDisplayName"
+        ]
+      },
+      "SlhBillLineChargeDto": {
+        "type": "object",
+        "properties": {
+          "chargeType": {
+            "type": "string",
+            "enum": [
+              "FREIGHT",
+              "COD_HANDLING",
+              "HEAVY_CARGO",
+              "DELIVERY",
+              "REDELIVERY",
+              "TRANSFER_DELIVERY",
+              "REMOTE_AREA",
+              "UNLOADING",
+              "STORAGE",
+              "WAITING",
+              "OVERSIZE",
+              "INSPECTION",
+              "FORKLIFT",
+              "MINIMUM_CHARGE",
+              "OTHER"
+            ]
+          },
+          "currencyCode": {
+            "type": "string",
+            "enum": [
+              "CNY",
+              "TWD"
+            ]
+          },
+          "amount": {
+            "type": "string",
+            "description": "Amount in the charge currency."
+          },
+          "sourceRemarkText": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "chargeType",
+          "currencyCode",
+          "amount"
+        ]
+      },
+      "SlhBillLineDto": {
+        "type": "object",
+        "properties": {
+          "lineNumber": {
+            "type": "number"
+          },
+          "sourceRowNumber": {
+            "type": "number",
+            "description": "Row number in the source sheet; the first detail row follows the header."
+          },
+          "loadingDate": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "containerBatchNameText": {
+            "type": "string"
+          },
+          "containerBatchId": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true
+          },
+          "warehouseReceiptReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "shippingMarkText": {
+            "type": "string",
+            "nullable": true
+          },
+          "goodsName": {
+            "type": "string"
+          },
+          "packageCount": {
+            "type": "number"
+          },
+          "packageUnit": {
+            "type": "string",
+            "nullable": true
+          },
+          "grossWeightKg": {
+            "type": "string",
+            "nullable": true
+          },
+          "weightUnit": {
+            "type": "string",
+            "nullable": true
+          },
+          "lengthCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "widthCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "heightCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "volumeCai": {
+            "type": "string",
+            "nullable": true
+          },
+          "reportedVolumeCai": {
+            "type": "string",
+            "nullable": true
+          },
+          "volumeDifferenceCai": {
+            "type": "string",
+            "nullable": true
+          },
+          "categoryCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "unitPriceAmount": {
+            "type": "string",
+            "nullable": true
+          },
+          "pricingBasis": {
+            "type": "string",
+            "enum": [
+              "WEIGHT",
+              "VOLUME"
+            ],
+            "nullable": true
+          },
+          "freightAmountCny": {
+            "type": "string"
+          },
+          "codHandlingAmountCny": {
+            "type": "string"
+          },
+          "surchargeAmountCny": {
+            "type": "string"
+          },
+          "payableAmountCny": {
+            "type": "string"
+          },
+          "codAmountTwd": {
+            "type": "string"
+          },
+          "ntdSurchargeAmountTwd": {
+            "type": "string"
+          },
+          "recipientInfoRaw": {
+            "type": "string",
+            "nullable": true
+          },
+          "recipientName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parsed recipient name; null when it cannot be determined."
+          },
+          "recipientPhones": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parsed phone numbers kept in the original writing, one field for all numbers."
+          },
+          "recipientAddress": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parsed shipping address."
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true
+          },
+          "reconciliationStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "RECONCILED"
+            ],
+            "description": "Reconciliation state of this line; RECONCILED once it has been reconciled."
+          },
+          "charges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillLineChargeDto"
+            }
+          }
+        },
+        "required": [
+          "lineNumber",
+          "sourceRowNumber",
+          "loadingDate",
+          "containerBatchNameText",
+          "goodsName",
+          "packageCount",
+          "freightAmountCny",
+          "codHandlingAmountCny",
+          "surchargeAmountCny",
+          "payableAmountCny",
+          "codAmountTwd",
+          "ntdSurchargeAmountTwd",
+          "reconciliationStatus",
+          "charges"
+        ]
+      },
+      "SlhBillLinePageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillLineDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "SlhBillStagedFileDto": {
+        "type": "object",
+        "properties": {
+          "mediaAssetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "checksumSha256": {
+            "type": "string",
+            "description": "Lowercase hex SHA-256 of the uploaded bytes."
+          },
+          "sizeBytes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "mediaAssetId",
+          "fileName",
+          "checksumSha256",
+          "sizeBytes"
+        ]
+      },
+      "SlhBillMediaAssetDto": {
+        "type": "object",
+        "properties": {
+          "mediaAssetId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "mediaAssetId"
+        ]
+      },
+      "SlhBillTotalsDto": {
+        "type": "object",
+        "properties": {
+          "freightTotalAmountCny": {
+            "type": "string"
+          },
+          "codHandlingTotalAmountCny": {
+            "type": "string"
+          },
+          "surchargeTotalAmountCny": {
+            "type": "string"
+          },
+          "payableTotalAmountCny": {
+            "type": "string"
+          },
+          "codTotalAmountTwd": {
+            "type": "string"
+          },
+          "ntdSurchargeTotalAmountTwd": {
+            "type": "string"
+          },
+          "reportedNetAmountTwd": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "freightTotalAmountCny",
+          "codHandlingTotalAmountCny",
+          "surchargeTotalAmountCny",
+          "payableTotalAmountCny",
+          "codTotalAmountTwd",
+          "ntdSurchargeTotalAmountTwd",
+          "reportedNetAmountTwd"
+        ]
+      },
+      "SlhBillDuplicateDto": {
+        "type": "object",
+        "properties": {
+          "billId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slhBillNo": {
+            "type": "string"
+          },
+          "periodStart": {
+            "type": "string"
+          },
+          "periodEnd": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "billId",
+          "slhBillNo",
+          "periodStart",
+          "periodEnd"
+        ]
+      },
+      "SlhBillPreviewLineDto": {
+        "type": "object",
+        "properties": {
+          "lineNumber": {
+            "type": "number"
+          },
+          "sourceRowNumber": {
+            "type": "number",
+            "description": "Row number in the source sheet; the first detail row follows the header."
+          },
+          "loadingDate": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "containerBatchNameText": {
+            "type": "string"
+          },
+          "containerBatchId": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true
+          },
+          "warehouseReceiptReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "shippingMarkText": {
+            "type": "string",
+            "nullable": true
+          },
+          "goodsName": {
+            "type": "string"
+          },
+          "packageCount": {
+            "type": "number"
+          },
+          "packageUnit": {
+            "type": "string",
+            "nullable": true
+          },
+          "grossWeightKg": {
+            "type": "string",
+            "nullable": true
+          },
+          "weightUnit": {
+            "type": "string",
+            "nullable": true
+          },
+          "lengthCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "widthCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "heightCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "volumeCai": {
+            "type": "string",
+            "nullable": true
+          },
+          "reportedVolumeCai": {
+            "type": "string",
+            "nullable": true
+          },
+          "volumeDifferenceCai": {
+            "type": "string",
+            "nullable": true
+          },
+          "categoryCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "unitPriceAmount": {
+            "type": "string",
+            "nullable": true
+          },
+          "pricingBasis": {
+            "type": "string",
+            "enum": [
+              "WEIGHT",
+              "VOLUME"
+            ],
+            "nullable": true
+          },
+          "freightAmountCny": {
+            "type": "string"
+          },
+          "codHandlingAmountCny": {
+            "type": "string"
+          },
+          "surchargeAmountCny": {
+            "type": "string"
+          },
+          "payableAmountCny": {
+            "type": "string"
+          },
+          "codAmountTwd": {
+            "type": "string"
+          },
+          "ntdSurchargeAmountTwd": {
+            "type": "string"
+          },
+          "recipientInfoRaw": {
+            "type": "string",
+            "nullable": true
+          },
+          "recipientName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parsed recipient name; null when it cannot be determined."
+          },
+          "recipientPhones": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parsed phone numbers kept in the original writing, one field for all numbers."
+          },
+          "recipientAddress": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parsed shipping address."
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true
+          },
+          "reconciliationStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "RECONCILED"
+            ],
+            "description": "Reconciliation state of this line; RECONCILED once it has been reconciled."
+          },
+          "charges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillLineChargeDto"
+            }
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillFindingDto"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "lineNumber",
+          "sourceRowNumber",
+          "loadingDate",
+          "containerBatchNameText",
+          "goodsName",
+          "packageCount",
+          "freightAmountCny",
+          "codHandlingAmountCny",
+          "surchargeAmountCny",
+          "payableAmountCny",
+          "codAmountTwd",
+          "ntdSurchargeAmountTwd",
+          "reconciliationStatus",
+          "charges",
+          "findings",
+          "errors"
+        ]
+      },
+      "SlhBillImportPreviewDto": {
+        "type": "object",
+        "properties": {
+          "suggestedBillName": {
+            "type": "string",
+            "description": "Default name derived from the source file name."
+          },
+          "suggestedBillMonth": {
+            "type": "string",
+            "description": "Default bill month derived from the period, falling back to the file name."
+          },
+          "periodStart": {
+            "type": "string"
+          },
+          "periodEnd": {
+            "type": "string"
+          },
+          "containerBatchNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "lineCount": {
+            "type": "number"
+          },
+          "containerBatchCount": {
+            "type": "number"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/SlhBillTotalsDto"
+          },
+          "reported": {
+            "$ref": "#/components/schemas/SlhBillReportedDto"
+          },
+          "systemForeignUnitsPerCny": {
+            "type": "string",
+            "nullable": true,
+            "description": "System TWD per CNY rate read for preview; null when the bill embeds its own rate."
+          },
+          "duplicate": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhBillDuplicateDto"
+              }
+            ]
+          },
+          "findings": {
+            "description": "Differences and warnings; unchanged when the bill is stored.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillFindingDto"
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillPreviewLineDto"
+            }
+          }
+        },
+        "required": [
+          "suggestedBillName",
+          "suggestedBillMonth",
+          "periodStart",
+          "periodEnd",
+          "containerBatchNames",
+          "lineCount",
+          "containerBatchCount",
+          "totals",
+          "reported",
+          "findings",
+          "lines"
+        ]
+      },
+      "SlhBillImportCreateDto": {
+        "type": "object",
+        "properties": {
+          "mediaAssetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "billName": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Bill name shown in the list; unique among bills that are not superseded."
+          },
+          "billMonth": {
+            "type": "string",
+            "pattern": "^\\d{4}-(?:0[1-9]|1[0-2])$",
+            "description": "Bill month (YYYY-MM)."
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          },
+          "manualForeignUnitsPerCny": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^(?:0|[1-9]\\d{0,17})(?:\\.\\d{1,12})?$",
+            "description": "Manual TWD per CNY rate; only allowed when the bill formula has no divisor."
+          },
+          "supersedesBillId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Existing bill this import replaces."
+          },
+          "duplicateAcknowledged": {
+            "type": "boolean",
+            "default": false,
+            "description": "Acknowledge a duplicate period and container set."
+          }
+        },
+        "required": [
+          "mediaAssetId",
+          "billName",
+          "billMonth"
         ]
       }
     }

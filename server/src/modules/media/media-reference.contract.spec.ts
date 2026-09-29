@@ -30,6 +30,7 @@ describe('media reference extension contract', () => {
       'prisma/migrations/20260827130000_purchase_order_media_reference_extension/migration.sql',
     ), 'utf8')
     const migration = [
+      readFileSync(resolve(serverRoot, 'prisma/migrations/20260926130000_slh_bill_management/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20260919091000_ocean_freight_access_media/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20260917040739_supplier_payment_profiles/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20260916030539_packaging_cost_requests/migration.sql'), 'utf8'),
@@ -48,7 +49,7 @@ describe('media reference extension contract', () => {
 
     expect(referenceTables).toEqual([...MEDIA_ASSET_REFERENCE_TABLES].sort())
     for (const table of MEDIA_ASSET_REFERENCE_TABLES) {
-      if (table === 'container_batches') {
+      if (table === 'container_batches' || table === 'slh_bills') {
         expect(migration).toContain(`FROM ${table} reference WHERE reference.source_file_id = reference_asset_id`)
         continue
       }

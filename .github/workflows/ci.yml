@@ -188,6 +188,10 @@ jobs:
     name: Web check and build
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    # vue-tsc -b 随代码量增长会吃满默认堆（实测 runner 上 OOM 退出 129），
+    # 只给需要类型检查与打包 Web 的 job 提高上限；runner 为 16 GB，留足余量。
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -230,6 +234,8 @@ jobs:
     name: Browser auth E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -307,6 +313,8 @@ jobs:
     name: Browser dictionaries E2E
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

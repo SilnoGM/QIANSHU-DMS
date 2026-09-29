@@ -17,6 +17,7 @@ import { PurchaseShippingMarksModule } from './modules/purchase-shipping-marks/p
 import { RegionsModule } from './modules/regions/regions.module'
 import { RolesModule } from './modules/roles/roles.module'
 import { SalesOrdersModule } from './modules/sales-orders/sales-orders.module'
+import { SlhBillModule } from './modules/slh-bills/slh-bill.module'
 import { UsersModule } from './modules/users/users.module'
 
 // 正式运行应用与 OpenAPI preview 必须消费同一清单，避免路由和快照随两份手工列表漂移。
@@ -41,4 +42,5 @@ export const HTTP_MODULES = [
   PackagingCostModule,
   PaymentRecipientsModule,
   ContainerBatchModule,
+  SlhBillModule,
 ] as const

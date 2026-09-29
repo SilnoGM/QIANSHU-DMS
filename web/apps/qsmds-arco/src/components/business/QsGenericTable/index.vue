@@ -55,6 +55,12 @@ const props = withDefaults(defineProps<{
   paginationUnit?: string
   pageSizeOptions?: number[]
   rowKey?: TableProps<TData>['rowKey']
+  /**
+   * 按行追加类名，用于标记某类行（如带差异或告警的账单明细）。
+   * 想改行背景时用单元格级选择器 `[&>td]:bg-...`：表格的斑马纹与固定列是在单元格上
+   * 上色的，只染 <tr> 会让这些单元格看起来"断开"。
+   */
+  rowClass?: TableProps<TData>['rowClass']
   searchable?: boolean
   searchPlaceholder?: string
   showColumnSettings?: boolean
@@ -96,6 +102,8 @@ const emit = defineEmits<{
   expandedChange: [expanded: TableExpandedState]
   paginationChange: [pagination: { page: number, pageSize: number }]
   retry: []
+  // 行整块可点开的页面（如顺联航账单列表）依赖该事件；不监听的页面行为不变。
+  rowClick: [row: TData, index: number, event: MouseEvent]
   search: [keyword: string]
   sortingChange: [sorting: TableSortingState]
 }>()
@@ -684,6 +692,7 @@ watch([tableColumns, isNarrow], () => {
         :columns="tableColumns"
         :data="data"
         :row-key="rowKey"
+        :row-class="rowClass"
         :tree="Boolean(grouping)"
         :group-row="grouping ? isGroupRow : undefined"
         :get-sub-rows="grouping ? groupedSubRows : undefined"
@@ -697,6 +706,7 @@ watch([tableColumns, isNarrow], () => {
         :class="loading && data.length ? 'pointer-events-none opacity-60' : undefined"
         @sorting-change="handleSortingChange"
         @expanded-change="updateTableExpanded"
+        @row-click="(row, index, event) => emit('rowClick', row, index, event)"
       >
         <template v-if="grouping" #group-header="scope">
           <GroupHeader
@@ -1012,13 +1022,18 @@ watch([tableColumns, isNarrow], () => {
   transition: background-color 150ms ease-out, box-shadow 180ms cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-/* 固定列始终使用不透明底色，避免排序色的透明度让滚动内容穿透。 */
 .qs-generic-table :deep([data-slot="table-head"][data-pinned]) {
   background-color: oklch(var(--muted)) !important;
 }
 
+/*
+ * 固定列始终使用不透明底色，避免排序色的透明度让滚动内容穿透。
+ * 这里**不能用 `!important`**：排序列与悬停态各自带 `!important`，本规则只负责"默认不透明"；
+ * 一旦它也 important，行的状态类（`rowClass` 标黄、斑马纹）就再也染不到固定列，
+ * 视觉上会断在左固定列上。
+ */
 .qs-generic-table :deep([data-slot="table-body"] [data-slot="table-cell"][data-pinned]) {
-  background-color: oklch(var(--background)) !important;
+  background-color: oklch(var(--background));
 }
 
 .qs-generic-table :deep([data-slot="table-head"][data-pinned][data-sorted]) {
