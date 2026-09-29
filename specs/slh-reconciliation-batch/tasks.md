@@ -67,7 +67,7 @@
 ## 4. 未执行项与遗留
 
 - **浏览器实测未执行**：新页面的真实浏览器验收未做（需要可登录的开发环境与管理员配置的编号规则）。接口层已由 e2e 覆盖，前端由单测覆盖。
-- **仓库既有缺陷（本任务外，未修改）**：
-  1. `server/src/modules/slh-bills/slh-bill.service.ts:173` 的幂等重放比较把「摘要的摘要」与明文摘要相比，永远不等 → 同一 `Idempotency-Key` 重试只会拿到 409 `SLH_BILL_IDEMPOTENCY_CONFLICT`，不会返回已创建的账单。本任务的批次创建接口已按正确写法实现（存指纹原始字节并逐字节比较）。
-  2. `server/prisma/migrations/20260926130000_slh_bill_management/migration.sql:394` 的结构自校验把表名写死在 `table_schema = 'public'`，在隔离 schema 里回放会报 `SLH bill tables missing`；因此该 spec 在全新 CI 库上无法通过（本地开发机因 public 已有表而"看起来"通过）。本任务的 e2e 也受此影响，需先在目标库 public 应用一次迁移。
+- **仓库既有缺陷（本任务外，已在 2026-09-29 单独修复）**：
+  1. 账单导入的幂等重放比较把「摘要的摘要」与明文摘要相比，永远不等 → 同一 `Idempotency-Key` 重试只会拿到 409，不会返回已创建的账单。已改为按同一推导比较，并补同键重放 e2e。_Evidence: commit a440a07b_
+  2. `20260926130000_slh_bill_management` 等四处迁移的结构自校验把表名写死在 `table_schema = 'public'`，隔离 schema 回放会报 `SLH bill tables missing`。历史迁移不可改写（改 checksum 会让所有已应用环境需要 `migrate resolve`），改为在隔离回放前显式断言 public 已应用迁移并给出可操作命令，迁移规范补 5.1 说明。_Evidence: commit c135a088_
 - **未纳入本轮**：明细行与柜次行的金额、材积逐项比对判定与比对 UI；撤销对账、移出批次、作废批次；账单被取代时的批次拦截；批次列表状态计数工具栏。
