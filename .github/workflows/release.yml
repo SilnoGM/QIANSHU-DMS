@@ -22,6 +22,9 @@ jobs:
     needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # 与 CI 的 Web job 一致：类型检查与打包需要更高的堆上限。
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
     outputs:
       artifact-id: ${{ steps.upload-web.outputs.artifact-id }}
     steps:
