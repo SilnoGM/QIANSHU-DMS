@@ -236,15 +236,15 @@ onBeforeUnmount(() => {
 
         <FaAlert v-if="actionError" variant="destructive" role="alert" :title="actionError" />
 
-        <div class="flex flex-wrap gap-2 items-center">
+        <div v-if="inProgress" class="flex flex-wrap gap-2 items-center">
           <span class="qs-type-description text-muted-foreground">
             {{ t('slhReconciliation.detail.selected', { count: selectedCount }) }}
           </span>
           <div class="flex-1" />
-          <FaButton v-if="inProgress" type="button" class="w-full sm:w-auto" :loading="reconciling" :disabled="selectedCount === 0 || reconciling" @click="reconcile">
+          <FaButton type="button" class="w-full sm:w-auto" :loading="reconciling" :disabled="selectedCount === 0 || reconciling" @click="reconcile">
             {{ t('slhReconciliation.detail.reconcile') }}
           </FaButton>
-          <FaButton v-if="inProgress" type="button" variant="outline" class="w-full sm:w-auto" :disabled="reconciling" @click="completeOpen = true">
+          <FaButton type="button" variant="outline" class="w-full sm:w-auto" :disabled="reconciling" @click="completeOpen = true">
             {{ t('slhReconciliation.detail.complete') }}
           </FaButton>
         </div>
