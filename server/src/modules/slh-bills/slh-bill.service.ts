@@ -170,7 +170,9 @@ export class SlhBillService {
           include: slhBillRateInclude,
         })
         if (previous) {
-          if (Buffer.from(previous.importPayloadHash).toString('hex') !== payloadHash) return slhBillFailure('SLH_BILL_IDEMPOTENCY_CONFLICT', '该提交标识已用于另一张账单', 409)
+          // 指纹落库时是 digest(payloadHash)（原始 32 字节），比较必须用同一推导：
+          // 拿存储值的十六进制去比 payloadHash 自己，两者永远不等，同键重放只能拿到冲突。
+          if (!Buffer.from(previous.importPayloadHash).equals(digest(payloadHash))) return slhBillFailure('SLH_BILL_IDEMPOTENCY_CONFLICT', '该提交标识已用于另一张账单', 409)
           return serializeSlhBill(previous)
         }
         const duplicate = await this.findDuplicate(parsed.periodStart, parsed.periodEnd, containerBatchNames)

@@ -229,4 +229,25 @@ describe('slh bill import with isolated PostgreSQL', () => {
 
     await h.prisma.slhBillLine.updateMany({ data: { reconciledAt: null }, where: { billId: bill.id } })
   })
+
+  /**
+   * 幂等键的生命周期在客户端是明确的：结果未知（网络中断或 5xx）时保留原键重试，
+   * 期望拿回同一张账单。这条用例守住服务端的对应契约——同键同载荷必须重放，
+   * 同键不同载荷才判冲突。放在最后：它会建第二张账单，前面依赖绝对计数的用例不受影响。
+   */
+  it('replays the same idempotency key as the same bill and still rejects a changed payload', async () => {
+    const staged = await upload(createSlhBillFixture())
+    const key = randomUUID()
+    const payload = { billMonth: '2026-01', billName: '幂等重放账单', duplicateAcknowledged: true, mediaAssetId: staged.mediaAssetId }
+    const created = (await browser.post('/api/slh-bills').set(packagingHeaders).set('Idempotency-Key', key).send(payload).expect(201)).body as SlhBillDto
+
+    const replayed = (await browser.post('/api/slh-bills').set(packagingHeaders).set('Idempotency-Key', key).send(payload).expect(201)).body as SlhBillDto
+    expect(replayed.id).toBe(created.id)
+    expect(replayed.slhBillNo).toBe(created.slhBillNo)
+    expect(await h.prisma.slhBill.count({ where: { slhBillNo: created.slhBillNo } })).toBe(1)
+
+    const conflict = (await browser.post('/api/slh-bills').set(packagingHeaders).set('Idempotency-Key', key)
+      .send({ ...payload, remark: '内容变了' }).expect(409)).body as { code: string }
+    expect(conflict.code).toBe('SLH_BILL_IDEMPOTENCY_CONFLICT')
+  })
 })
