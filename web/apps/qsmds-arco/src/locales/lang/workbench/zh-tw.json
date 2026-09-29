@@ -10,7 +10,8 @@
     "pending": "功能待開放",
     "billReconciliation": "帳單對帳",
     "slhBillManagement": "順聯航帳單管理",
-    "slhBillReconciliation": "順聯航帳單對帳"
+    "slhBillReconciliation": "順聯航帳單對帳",
+    "slhBillReconciliationDetail": "順聯航帳單對帳詳情"
   },
   "slhBill": {
     "archive": {
@@ -256,5 +257,91 @@
     },
     "valueMissing": "-",
     "viewDetail": "檢視詳情"
+  },
+  "slhReconciliation": {
+    "intro": "依帳單發起對帳：一個批次對應一張帳單，核對的是本輪匹配到櫃次的明細行。",
+    "create": "新建對帳",
+    "search": "搜尋批次編號、帳單編號或帳單名稱",
+    "empty": "還沒有對帳批次",
+    "emptyDescription": "點擊「新建對帳」選擇一張帳單開始核對",
+    "filterLabel": "批次狀態",
+    "filter": {
+      "IN_PROGRESS": "進行中",
+      "COMPLETED": "已完成",
+      "all": "全部"
+    },
+    "column": {
+      "batchNo": "批次編號",
+      "status": "批次狀態",
+      "progress": "本批次已核對",
+      "billRemaining": "帳單剩餘未核對行"
+    },
+    "batchStatus": {
+      "IN_PROGRESS": "進行中",
+      "COMPLETED": "已完成"
+    },
+    "matchSource": {
+      "NAME": "櫃號命中",
+      "MARK": "嘜頭推斷"
+    },
+    "unmatchedReason": {
+      "MISSING_CONTAINER_REFERENCE": "缺少櫃號，嘜頭也推不出月日",
+      "INVALID_CONTAINER_NAME": "櫃號無法解析出月日",
+      "CONTAINER_NOT_FOUND": "沒有對應裝櫃日期的櫃次",
+      "CONTAINER_AMBIGUOUS": "命中多個櫃次，無法確定",
+      "MISSING_SHIPPING_MARK": "帳單行缺少嘜頭",
+      "MARK_NOT_FOUND_IN_CONTAINER": "櫃次內沒有同嘜頭的行",
+      "LOADING_ITEM_AMBIGUOUS": "櫃次內同嘜頭行重複",
+      "SHIPMENT_NOT_MATCHED": "櫃次行未匹配貨件",
+      "PURCHASE_SOURCE_MISSING": "貨件缺少採購來源",
+      "SALES_SOURCE_MISSING": "貨件缺少銷售來源"
+    },
+    "created": "已建立對帳批次 {batchNo}",
+    "selectModal": {
+      "title": "順聯航帳單選擇",
+      "steps": {
+        "selectBill": "選擇要核對的帳單",
+        "previewScope": "核對範圍預覽"
+      },
+      "next": "下一步",
+      "back": "上一步",
+      "start": "開始對帳",
+      "emptyBills": "沒有可對帳的帳單",
+      "emptyBillsDescription": "只有未對帳、部分對帳且沒有進行中批次的帳單可以發起對帳",
+      "summary": "帳單 {bill}：本次可核對 {matched} 行，暫不能核對 {unmatched} 行。",
+      "noMatch": "該帳單目前沒有可核對的行",
+      "matchedTitle": "已匹配合格的行（{count}）",
+      "unmatchedTitle": "暫不能核對的行（{count}）",
+      "unmatchedEmpty": "沒有暫不能核對的行",
+      "containerName": "帳單櫃號",
+      "shippingMark": "嘜頭",
+      "goodsName": "貨物品名",
+      "matchedContainer": "匹配櫃次",
+      "matchedLine": "櫃次行號",
+      "source": "匹配來源",
+      "reason": "原因"
+    },
+    "detail": {
+      "title": "順聯航帳單對帳詳情",
+      "lineNumber": "行號",
+      "loadingDate": "裝櫃日期",
+      "memberProgress": "本批次已核對",
+      "billRemaining": "本帳單還剩未核對行",
+      "created": "建立",
+      "completedAt": "結束",
+      "notCompleted": "尚未結束",
+      "selected": "已選擇 {count} 行",
+      "reconcile": "確認核對",
+      "reconciledAt": "核對留痕",
+      "completed": "本次對帳已結束",
+      "complete": "結束本次對帳",
+      "completeTitle": "結束本次對帳？",
+      "completeHint": "結束後本批次不能再核對；還剩 {remaining} 行未核對，它們會留到下一輪重新匹配。",
+      "completeConfirm": "結束本次對帳",
+      "reconciled": "已核對 {count} 行",
+      "emptyMembers": "本批次沒有成員行",
+      "selectLine": "選擇第 {line} 行",
+      "notReconciledYet": "未核對"
+    }
   }
 }

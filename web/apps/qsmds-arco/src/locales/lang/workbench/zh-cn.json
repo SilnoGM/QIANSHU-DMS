@@ -19,7 +19,8 @@
     "packagingPayments": "打木架付款",
     "billReconciliation": "账单对账",
     "slhBillManagement": "顺联航账单管理",
-    "slhBillReconciliation": "顺联航账单对账"
+    "slhBillReconciliation": "顺联航账单对账",
+    "slhBillReconciliationDetail": "顺联航账单对账详情"
   },
   "slhBill": {
     "archive": {
@@ -265,5 +266,91 @@
     },
     "valueMissing": "-",
     "viewDetail": "查看详情"
+  },
+  "slhReconciliation": {
+    "intro": "按账单发起对账：一个批次对应一张账单，核对的是本轮匹配到柜次的明细行。",
+    "create": "新建对账",
+    "search": "搜索批次编号、账单编号或账单名称",
+    "empty": "还没有对账批次",
+    "emptyDescription": "点击「新建对账」选择一张账单开始核对",
+    "filterLabel": "批次状态",
+    "filter": {
+      "IN_PROGRESS": "进行中",
+      "COMPLETED": "已完成",
+      "all": "全部"
+    },
+    "column": {
+      "batchNo": "批次编号",
+      "status": "批次状态",
+      "progress": "本批次已核对",
+      "billRemaining": "账单剩余未核对行"
+    },
+    "batchStatus": {
+      "IN_PROGRESS": "进行中",
+      "COMPLETED": "已完成"
+    },
+    "matchSource": {
+      "NAME": "柜号命中",
+      "MARK": "唛头推断"
+    },
+    "unmatchedReason": {
+      "MISSING_CONTAINER_REFERENCE": "缺少柜号，唛头也推不出月日",
+      "INVALID_CONTAINER_NAME": "柜号无法解析出月日",
+      "CONTAINER_NOT_FOUND": "没有对应装柜日期的柜次",
+      "CONTAINER_AMBIGUOUS": "命中多个柜次，无法确定",
+      "MISSING_SHIPPING_MARK": "账单行缺少唛头",
+      "MARK_NOT_FOUND_IN_CONTAINER": "柜次内没有同唛头的行",
+      "LOADING_ITEM_AMBIGUOUS": "柜次内同唛头行重复",
+      "SHIPMENT_NOT_MATCHED": "柜次行未匹配货件",
+      "PURCHASE_SOURCE_MISSING": "货件缺少采购来源",
+      "SALES_SOURCE_MISSING": "货件缺少销售来源"
+    },
+    "created": "已创建对账批次 {batchNo}",
+    "selectModal": {
+      "title": "顺联航账单选择",
+      "steps": {
+        "selectBill": "选择要核对的账单",
+        "previewScope": "核对范围预览"
+      },
+      "next": "下一步",
+      "back": "上一步",
+      "start": "开始对账",
+      "emptyBills": "没有可对账的账单",
+      "emptyBillsDescription": "只有未对账、部分对账且没有进行中批次的账单可以发起对账",
+      "summary": "账单 {bill}：本次可核对 {matched} 行，暂不能核对 {unmatched} 行。",
+      "noMatch": "该账单当前没有可核对的行",
+      "matchedTitle": "已匹配合格的行（{count}）",
+      "unmatchedTitle": "暂不能核对的行（{count}）",
+      "unmatchedEmpty": "没有暂不能核对的行",
+      "containerName": "账单柜号",
+      "shippingMark": "唛头",
+      "goodsName": "货物品名",
+      "matchedContainer": "匹配柜次",
+      "matchedLine": "柜次行号",
+      "source": "匹配来源",
+      "reason": "原因"
+    },
+    "detail": {
+      "title": "顺联航账单对账详情",
+      "lineNumber": "行号",
+      "loadingDate": "装柜日期",
+      "memberProgress": "本批次已核对",
+      "billRemaining": "本账单还剩未核对行",
+      "created": "创建",
+      "completedAt": "结束",
+      "notCompleted": "尚未结束",
+      "selected": "已选择 {count} 行",
+      "reconcile": "确认核对",
+      "reconciledAt": "核对留痕",
+      "completed": "本次对账已结束",
+      "complete": "结束本次对账",
+      "completeTitle": "结束本次对账？",
+      "completeHint": "结束后本批次不能再核对；还剩 {remaining} 行未核对，它们会留到下一轮重新匹配。",
+      "completeConfirm": "结束本次对账",
+      "reconciled": "已核对 {count} 行",
+      "emptyMembers": "本批次没有成员行",
+      "selectLine": "选择第 {line} 行",
+      "notReconciledYet": "未核对"
+    }
   }
 }

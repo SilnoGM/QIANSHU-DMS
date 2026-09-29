@@ -1129,7 +1129,8 @@
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/batch-payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/detail.vue",
-      "apps/qsmds-arco/src/views/workbenches/slh-bills/import.vue"
+      "apps/qsmds-arco/src/views/workbenches/slh-bills/import.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/detail.vue"
     ]
   },
   {
@@ -1456,7 +1457,8 @@
     "usages": [
       "apps/qsmds-arco/src/components/AppAccountButton/feedback-canvas.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list-payment-action.vue",
-      "apps/qsmds-arco/src/views/operations/warehouse-arrivals/packaging-history-modal.vue"
+      "apps/qsmds-arco/src/views/operations/warehouse-arrivals/packaging-history-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-bill-select-modal.vue"
     ]
   },
   {
@@ -1560,6 +1562,15 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:circle-dot",
+    "label": "i-lucide:circle-dot",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-bill-select-modal.vue"
     ]
   },
   {
@@ -1868,6 +1879,7 @@
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/index.vue",
       "apps/qsmds-arco/src/views/workbenches/shipments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/index.vue",
       "packages/components/src/basic/input/index.vue"
     ]
   },
@@ -2766,7 +2778,8 @@
       "apps/qsmds-arco/src/views/system/basic-data/regions/index.vue",
       "apps/qsmds-arco/src/views/system/roles/index.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/detail.vue",
-      "apps/qsmds-arco/src/views/workbenches/containers/index.vue"
+      "apps/qsmds-arco/src/views/workbenches/containers/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/index.vue"
     ]
   },
   {
@@ -3061,7 +3074,9 @@
       "apps/qsmds-arco/src/views/workbenches/shipments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/import.vue",
-      "apps/qsmds-arco/src/views/workbenches/slh-bills/index.vue"
+      "apps/qsmds-arco/src/views/workbenches/slh-bills/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/detail.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/index.vue"
     ]
   },
   {

@@ -10,7 +10,8 @@
     "pending": "Coming soon",
     "billReconciliation": "Bill Reconciliation",
     "slhBillManagement": "Shunlianhang Bill Management",
-    "slhBillReconciliation": "Shunlianhang Bill Reconciliation"
+    "slhBillReconciliation": "Shunlianhang Bill Reconciliation",
+    "slhBillReconciliationDetail": "Shunlianhang Bill Reconciliation Detail"
   },
   "slhBill": {
     "archive": {
@@ -256,5 +257,91 @@
     },
     "valueMissing": "-",
     "viewDetail": "View details"
+  },
+  "slhReconciliation": {
+    "intro": "Reconcile per bill: one batch covers one bill and only the lines that matched a container row this round.",
+    "create": "New reconciliation",
+    "search": "Search batch, bill number or bill name",
+    "empty": "No reconciliation batch yet",
+    "emptyDescription": "Use \"New reconciliation\" to pick a bill and start",
+    "filterLabel": "Batch status",
+    "filter": {
+      "IN_PROGRESS": "In progress",
+      "COMPLETED": "Completed",
+      "all": "All"
+    },
+    "column": {
+      "batchNo": "Batch number",
+      "status": "Batch status",
+      "progress": "Reconciled in batch",
+      "billRemaining": "Lines left on bill"
+    },
+    "batchStatus": {
+      "IN_PROGRESS": "In progress",
+      "COMPLETED": "Completed"
+    },
+    "matchSource": {
+      "NAME": "Container number",
+      "MARK": "Mark inference"
+    },
+    "unmatchedReason": {
+      "MISSING_CONTAINER_REFERENCE": "No container reference, and the shipping mark carries no cycle",
+      "INVALID_CONTAINER_NAME": "Container reference has no readable cycle",
+      "CONTAINER_NOT_FOUND": "No container batch on that loading date",
+      "CONTAINER_AMBIGUOUS": "Matches more than one container batch",
+      "MISSING_SHIPPING_MARK": "Bill line has no shipping mark",
+      "MARK_NOT_FOUND_IN_CONTAINER": "No row with this shipping mark inside the container",
+      "LOADING_ITEM_AMBIGUOUS": "Duplicate shipping mark inside the container",
+      "SHIPMENT_NOT_MATCHED": "Container row has no shipment",
+      "PURCHASE_SOURCE_MISSING": "Shipment has no purchase source",
+      "SALES_SOURCE_MISSING": "Shipment has no sales source"
+    },
+    "created": "Reconciliation batch {batchNo} created",
+    "selectModal": {
+      "title": "Select a Shunlianhang bill",
+      "steps": {
+        "selectBill": "Choose the bill",
+        "previewScope": "Preview the scope"
+      },
+      "next": "Next",
+      "back": "Back",
+      "start": "Start reconciliation",
+      "emptyBills": "No bill can be reconciled",
+      "emptyBillsDescription": "Only active bills that still have unreconciled lines and no batch in progress",
+      "summary": "Bill {bill}: {matched} lines can be reconciled now, {unmatched} cannot.",
+      "noMatch": "This bill has no line that can be reconciled right now",
+      "matchedTitle": "Matched lines ({count})",
+      "unmatchedTitle": "Not reconcilable yet ({count})",
+      "unmatchedEmpty": "No blocked line",
+      "containerName": "Bill container",
+      "shippingMark": "Shipping mark",
+      "goodsName": "Goods",
+      "matchedContainer": "Matched container",
+      "matchedLine": "Container row",
+      "source": "Match source",
+      "reason": "Reason"
+    },
+    "detail": {
+      "title": "Shunlianhang bill reconciliation detail",
+      "lineNumber": "Line",
+      "loadingDate": "Loading date",
+      "memberProgress": "Reconciled in this batch",
+      "billRemaining": "Lines left on the bill",
+      "created": "Created",
+      "completedAt": "Completed",
+      "notCompleted": "Not completed",
+      "selected": "{count} selected",
+      "reconcile": "Confirm reconciliation",
+      "reconciledAt": "Reconciled at",
+      "completed": "Reconciliation completed",
+      "complete": "Complete this reconciliation",
+      "completeTitle": "Complete this reconciliation?",
+      "completeHint": "After completing, this batch cannot be reconciled further. {remaining} lines stay for the next round.",
+      "completeConfirm": "Complete",
+      "reconciled": "{count} lines reconciled",
+      "emptyMembers": "This batch has no member line",
+      "selectLine": "Select line {line}",
+      "notReconciledYet": "Not reconciled"
+    }
   }
 }
