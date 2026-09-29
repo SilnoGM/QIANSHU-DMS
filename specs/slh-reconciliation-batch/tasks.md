@@ -15,9 +15,12 @@
 - 新增 migration 后必须同步更新 `docs/后端文档/数据库迁移规范.md` 的「## 2. 当前迁移基线」。
 - 每次提交只暂存本任务文件；不 push、不创建 PR、不部署。
 
-## 2. 上线前置（运维）
+## 2. 编号规则现状（2026-09-29 核对本地库）
 
-- 管理员需在 `/system/basic-data/numbering/create` 新建编号规则「顺联航对账批次编号」（编码 `SLH_RECON_BATCH_NO`，用途=业务编码，建议 `SRB-YYYYMM-###`、按月重置、序号位宽 3）并发布启用；迁移不代替管理员建规则。
+- `SLH_RECON_BATCH_NO`「顺联航对账批次编号」已由管理员在编号管理页配置并启用：用途 `BUSINESS`、规则状态 `ENABLED`、生效版本 revision 2（`ACTIVE`）、重置周期 `YEARLY`、时区 `Asia/Shanghai`。
+- 生效片段：`FIXED 'SRB'` + `SEPARATOR '/'` + `DATE 'YYYYMMDD'` + `SEPARATOR '-'` + `SEQUENCE(width 3, start 1, step 1)`，即形如 `SRB/20260929-001`（revision 1 的 `SLHRC` 前缀已退役）。
+- 尚未派发过任何编号（`numbering_issuances` 0 条、无周期状态行），因此规则仍处于「首次发号前」：前缀、日期段与重置周期都还改得动；一旦发出第一个编号，只允许扩大序号位宽。
+- 迁移不代替管理员建规则，本环境无需再建；若其它环境缺失，创建批次会返回 `SLH_RECON_BATCH_NUMBERING_UNAVAILABLE` 并提示检查该规则。
 
 ## 3. 任务清单
 
@@ -66,7 +69,7 @@
 
 ## 4. 未执行项与遗留
 
-- **浏览器实测未执行**：新页面的真实浏览器验收未做（需要可登录的开发环境与管理员配置的编号规则）。接口层已由 e2e 覆盖，前端由单测覆盖。
+- **浏览器实测未执行**：新页面的真实浏览器验收未做（编号规则已在本地库配置并启用，剩下的是可登录的开发环境）。接口层已由 e2e 覆盖，前端由单测覆盖。
 - **仓库既有缺陷（本任务外，已在 2026-09-29 单独修复）**：
   1. 账单导入的幂等重放比较把「摘要的摘要」与明文摘要相比，永远不等 → 同一 `Idempotency-Key` 重试只会拿到 409，不会返回已创建的账单。已改为按同一推导比较，并补同键重放 e2e。_Evidence: commit a440a07b_
   2. `20260926130000_slh_bill_management` 等四处迁移的结构自校验把表名写死在 `table_schema = 'public'`，隔离 schema 回放会报 `SLH bill tables missing`。历史迁移不可改写（改 checksum 会让所有已应用环境需要 `migrate resolve`），改为在隔离回放前显式断言 public 已应用迁移并给出可操作命令，迁移规范补 5.1 说明。_Evidence: commit c135a088_
