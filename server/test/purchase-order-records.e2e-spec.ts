@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 
 import { Client } from 'pg'
 import { createPurchaseShippingMarkFixture } from './purchase-order-shipping-mark.fixture'
+import { assertIsolatedReplayPrecondition } from './isolated-replay-precondition'
 import { createPurchaseShippingMarkDatabase } from './purchase-shipping-mark-e2e-database'
 
 describe('purchase records constraints on isolated PostgreSQL', () => {
@@ -62,6 +63,8 @@ describe('purchase records constraints on isolated PostgreSQL', () => {
   }
 
   beforeAll(async () => {
+    // 隔离回放的前置条件先失败：历史迁移在 public 里自校验顺联航账单表，缺表时只会给出一句看不出原因的错。
+    await assertIsolatedReplayPrecondition()
     database = await createPurchaseShippingMarkDatabase(false, false, false, false, true)
     client = new Client({ connectionString: database.databaseUrl })
     await client.connect()

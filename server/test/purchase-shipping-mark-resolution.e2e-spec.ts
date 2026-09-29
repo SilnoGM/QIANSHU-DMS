@@ -9,6 +9,7 @@ import { NumberingQueryService } from '../src/modules/numbering/numbering-query.
 import { PurchaseShippingMarkResolverService } from '../src/modules/purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import { PurchaseShippingMarksService } from '../src/modules/purchase-shipping-marks/purchase-shipping-marks.service'
 import { IsolatedNumberingPrismaService } from './numbering-e2e-database'
+import { assertIsolatedReplayPrecondition } from './isolated-replay-precondition'
 import { createPurchaseShippingMarkDatabase } from './purchase-shipping-mark-e2e-database'
 
 const ACTIVE_CONFIG: NumberingRuleConfigResponseDto = {
@@ -26,6 +27,8 @@ const NEXT_CONFIG: NumberingRuleConfigResponseDto = {
 }
 
 async function createFixture() {
+  // 隔离回放的前置条件先失败：历史迁移在 public 里自校验顺联航账单表，缺表时只会给出一句看不出原因的错。
+  await assertIsolatedReplayPrecondition()
   const database = await createPurchaseShippingMarkDatabase()
   const prisma = new IsolatedNumberingPrismaService(database) as unknown as PrismaService
   try {
