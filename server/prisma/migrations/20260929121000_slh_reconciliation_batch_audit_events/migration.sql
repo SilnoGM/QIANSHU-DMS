@@ -1,0 +1,4 @@
+-- 对账批次写审计事件：账外凭证的对账作业与核对结论需要留痕。
+ALTER TYPE "audit_event_type" ADD VALUE 'SLH_RECONCILIATION_BATCH_CREATED';
+ALTER TYPE "audit_event_type" ADD VALUE 'SLH_RECONCILIATION_BATCH_COMPLETED';
+ALTER TYPE "audit_event_type" ADD VALUE 'SLH_BILL_LINES_RECONCILED';

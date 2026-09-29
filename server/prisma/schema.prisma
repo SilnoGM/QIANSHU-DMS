@@ -56,6 +56,9 @@ enum AuditEventType {
   CONTAINER_LOADING_ITEM_CREATED
   CONTAINER_BATCH_CREATED
   SLH_BILL_IMPORTED
+  SLH_RECONCILIATION_BATCH_CREATED
+  SLH_RECONCILIATION_BATCH_COMPLETED
+  SLH_BILL_LINES_RECONCILED
   PACKAGING_COST_SUBMITTED
   PACKAGING_COST_PAID
   PACKAGING_COST_AMOUNT_UPDATED
@@ -507,6 +510,10 @@ model User {
   containerBatchesUpdated ContainerBatch[] @relation("ContainerBatchUpdatedBy")
   slhBillsCreated SlhBill[] @relation("SlhBillCreatedBy")
   slhBillsUpdated SlhBill[] @relation("SlhBillUpdatedBy")
+  reconciliationBatchesCreated SlhReconciliationBatch[] @relation("SlhReconciliationBatchCreatedBy")
+  reconciliationBatchesUpdated SlhReconciliationBatch[] @relation("SlhReconciliationBatchUpdatedBy")
+  reconciliationBatchesCompleted SlhReconciliationBatch[] @relation("SlhReconciliationBatchCompletedBy")
+  reconciliationBatchLinesReconciled SlhReconciliationBatchLine[] @relation("SlhReconciliationBatchLineReconciledBy")
   containerLoadingItemsCreated ContainerLoadingItem[] @relation("ContainerLoadingItemCreatedBy")
   containerLoadingItemsUpdated ContainerLoadingItem[] @relation("ContainerLoadingItemUpdatedBy")
 
@@ -1527,6 +1534,7 @@ model NumberingPeriodState {
 model NumberingIssuance {
   containerBatch ContainerBatch?
   slhBill SlhBill?
+  reconciliationBatch SlhReconciliationBatch?
 
   id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   ruleId                 String   @map("rule_id") @db.Uuid
@@ -1930,6 +1938,7 @@ model ContainerLoadingItem {
   updatedBy User @relation("ContainerLoadingItemUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   containerBatch ContainerBatch @relation(fields: [containerBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   shipment PurchaseOrderPart? @relation(fields: [shipmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reconciliationBatchLines SlhReconciliationBatchLine[]
   @@unique([containerBatchId, lineNumber], map: "container_loading_items_batch_line_key")
   @@unique([containerBatchId, creationRequestKey], map: "container_loading_items_batch_request_key")
   @@index([shipmentId], map: "container_loading_items_shipment_idx")
@@ -2004,6 +2013,14 @@ enum SlhBillRateSource {
   @@map("slh_bill_rate_source")
 }
 
+/// 匹配来源：NAME 由账单柜号直接定位柜次，MARK 由唛头中的月日推断柜次（辅助路径）。
+enum SlhBillLineMatchSource {
+  NAME
+  MARK
+
+  @@map("slh_bill_line_match_source")
+}
+
 /// 顺联航每月对账单。外部单据的结构化留痕，只被引用，不回写我方业务数据。
 model SlhBill {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -2064,6 +2081,7 @@ model SlhBill {
   createdBy User @relation("SlhBillCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   updatedBy User @relation("SlhBillUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   lines SlhBillLine[]
+  reconciliationBatches SlhReconciliationBatch[]
 
   @@unique([createdById, importRequestKeyHash], map: "slh_bills_actor_request_key")
   @@index([periodStart(sort: Desc), id(sort: Desc)], map: "slh_bills_period_id_idx")
@@ -2116,6 +2134,7 @@ model SlhBillLine {
   bill SlhBill @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   containerBatch ContainerBatch? @relation(fields: [containerBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   charges SlhBillLineCharge[]
+  reconciliationBatchLines SlhReconciliationBatchLine[]
 
   @@unique([billId, lineNumber], map: "slh_bill_lines_bill_line_key")
   @@index([containerBatchId], map: "slh_bill_lines_container_batch_idx")
@@ -2137,4 +2156,58 @@ model SlhBillLineCharge {
 
   @@index([lineId], map: "slh_bill_line_charges_line_idx")
   @@map("slh_bill_line_charges")
+}
+
+/// 顺联航账单的对账批次：一次对账作业对应一张账单，成员行在创建时按唛头匹配结果冻结。
+/// 状态不落列：completed_at 为空即进行中；批次进度只由成员行自己的核对时刻统计。
+model SlhReconciliationBatch {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchNo String @map("batch_no") @unique(map: "slh_reconciliation_batches_number_key") @db.VarChar(64)
+  numberingIssuanceId String @map("numbering_issuance_id") @unique(map: "slh_reconciliation_batches_issuance_key") @db.Uuid
+  billId String @map("bill_id") @db.Uuid
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  completedById String? @map("completed_by_id") @db.Uuid
+  creationRequestKeyHash Bytes @map("creation_request_key_hash") @db.ByteA
+  creationPayloadHash Bytes @map("creation_payload_hash") @db.ByteA
+  version Int @default(1)
+  createdById String @map("created_by_id") @db.Uuid
+  updatedById String @map("updated_by_id") @db.Uuid
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @map("updated_at") @default(now()) @updatedAt @db.Timestamptz(6)
+
+  bill SlhBill @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  numberingIssuance NumberingIssuance @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  completedBy User? @relation("SlhReconciliationBatchCompletedBy", fields: [completedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy User @relation("SlhReconciliationBatchCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedBy User @relation("SlhReconciliationBatchUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  members SlhReconciliationBatchLine[]
+
+  @@unique([createdById, creationRequestKeyHash], map: "slh_reconciliation_batches_actor_request_key")
+  @@index([billId, completedAt], map: "slh_reconciliation_batches_bill_completed_idx")
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "slh_reconciliation_batches_created_id_idx")
+  @@map("slh_reconciliation_batches")
+}
+
+/// 批次成员行：创建时由匹配命中的明细行生成，matched_loading_item_id 是核对复检的锚点。
+/// 核对同时写明细行的 reconciled_at（账单三态的唯一来源）与本表的 reconciled_at（批次进度）。
+model SlhReconciliationBatchLine {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchId String @map("batch_id") @db.Uuid
+  lineId String @map("line_id") @db.Uuid
+  matchedLoadingItemId String @map("matched_loading_item_id") @db.Uuid
+  matchSource SlhBillLineMatchSource @map("match_source")
+  reconciledAt DateTime? @map("reconciled_at") @db.Timestamptz(6)
+  reconciledById String? @map("reconciled_by_id") @db.Uuid
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  batch SlhReconciliationBatch @relation(fields: [batchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  line SlhBillLine @relation(fields: [lineId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  matchedLoadingItem ContainerLoadingItem @relation(fields: [matchedLoadingItemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reconciledBy User? @relation("SlhReconciliationBatchLineReconciledBy", fields: [reconciledById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([batchId, lineId], map: "slh_reconciliation_batch_lines_batch_line_key")
+  @@index([lineId], map: "slh_reconciliation_batch_lines_line_idx")
+  @@index([matchedLoadingItemId], map: "slh_reconciliation_batch_lines_loading_item_idx")
+  @@index([batchId, reconciledAt], map: "slh_reconciliation_batch_lines_batch_reconciled_idx")
+  @@map("slh_reconciliation_batch_lines")
 }
