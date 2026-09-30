@@ -174,6 +174,15 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
   })
 
   it('创建批次：派发批次编号、冻结匹配命中的成员行，账单与明细行保持未对账', async () => {
+    // 详情必须把柜次那一侧的可比字段一并带出来，否则页面无法逐字段核对。
+    await h.prisma.containerLoadingItem.update({
+      where: { id: items.get('0102')! },
+      data: {
+        codAmountTwd: '300.00', grossWeightKg: '315.000', lengthCm: '215.00', widthCm: '137.00', heightCm: '113.00',
+        volumeCai: '8.00', reportedVolumeCai: '8.00', recipientName: '测试收货人二', recipientPhone: '0912345678',
+        recipientAddress: '台北市測試路 1 號', warehouseReceiptReference: 'WG-0102-0092',
+      },
+    })
     const created = (await createBatch(billA.id).expect(201)).body as SlhReconciliationBatchDetailDto
     expect(created.batchNo).toMatch(/^SRB-\d{6}-\d{3}$/u)
     expect(created.status).toBe('IN_PROGRESS')
@@ -181,6 +190,17 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     expect(created.reconciledMemberCount).toBe(0)
     expect(created.members).toHaveLength(3)
     expect(created.members.every(member => member.reconciliationStatus === SlhBillLineReconciliationStatusDto.PENDING && member.reconciledAt === null)).toBe(true)
+    // 柜次侧与账单侧同口径落值：金额两位、重量三位、没填的列仍是 null（不涉及），不是 0。
+    const matched = created.members.find(member => member.matchedContainerBatchName === '0102-01柜')!
+    expect(matched.matchedLoadingItem).toMatchObject({
+      codAmountTwd: '300.00', grossWeightKg: '315.000', lengthCm: '215.00', volumeCai: '8.00',
+      recipientName: '测试收货人二', recipientPhone: '0912345678', warehouseReceiptReference: 'WG-0102-0092',
+    })
+    const blank = created.members.find(member => member.matchedContainerBatchName === '1211-01柜')!
+    expect(blank.matchedLoadingItem.codAmountTwd).toBeNull()
+    // findings 是整张账单的导入快照，不按批次裁剪：页面自己筛出本批次的行，同时报出全账单条数。
+    const stored = await h.prisma.slhBill.findUniqueOrThrow({ where: { id: billA.id }, select: { importFindings: true } })
+    expect(created.findings).toHaveLength(Array.isArray(stored.importFindings) ? stored.importFindings.length : 0)
     // 建批次不写账单与明细行：账单三态仍是未对账。
     const bill = await h.prisma.slhBill.findUniqueOrThrow({ where: { id: billA.id }, select: { lineCount: true, lines: { select: { reconciledAt: true } } } })
     expect(bill.lines.every(line => line.reconciledAt === null)).toBe(true)

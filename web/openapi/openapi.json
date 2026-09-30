@@ -85441,6 +85441,82 @@
           "billId"
         ]
       },
+      "SlhReconciliationMatchedItemDto": {
+        "type": "object",
+        "properties": {
+          "warehouseReceiptReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "oceanShippingMarkText": {
+            "type": "string",
+            "nullable": true
+          },
+          "goodsName": {
+            "type": "string"
+          },
+          "packageCount": {
+            "type": "number"
+          },
+          "packageUnit": {
+            "type": "string",
+            "nullable": true
+          },
+          "grossWeightKg": {
+            "type": "string",
+            "nullable": true
+          },
+          "lengthCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "widthCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "heightCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "volumeCai": {
+            "type": "string",
+            "nullable": true
+          },
+          "chargeableVolumeCai": {
+            "type": "number",
+            "nullable": true
+          },
+          "reportedVolumeCai": {
+            "type": "string",
+            "nullable": true
+          },
+          "codAmountTwd": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this container row does not involve COD, matching the bill line contract."
+          },
+          "recipientName": {
+            "type": "string",
+            "nullable": true
+          },
+          "recipientPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "recipientAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "goodsName",
+          "packageCount"
+        ]
+      },
       "SlhReconciliationBatchMemberDto": {
         "type": "object",
         "properties": {
@@ -85623,6 +85699,14 @@
           "matchedLoadingItemLineNumber": {
             "type": "number"
           },
+          "matchedLoadingItem": {
+            "description": "Container row matched at creation time; the other side of every field comparison.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationMatchedItemDto"
+              }
+            ]
+          },
           "reconciledAt": {
             "type": "string",
             "nullable": true,
@@ -85653,7 +85737,8 @@
           "matchSource",
           "matchedLoadingItemId",
           "matchedContainerBatchName",
-          "matchedLoadingItemLineNumber"
+          "matchedLoadingItemLineNumber",
+          "matchedLoadingItem"
         ]
       },
       "SlhReconciliationBatchDetailDto": {
@@ -85704,6 +85789,13 @@
             "items": {
               "$ref": "#/components/schemas/SlhReconciliationBatchMemberDto"
             }
+          },
+          "findings": {
+            "description": "Import-time findings snapshot of the whole bill; the page keeps the ones belonging to this batch but still reports the bill-wide count.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillFindingDto"
+            }
           }
         },
         "required": [
@@ -85715,7 +85807,8 @@
           "reconciledMemberCount",
           "createdByDisplayName",
           "createdAt",
-          "members"
+          "members",
+          "findings"
         ]
       },
       "SlhReconciliationBatchReconcileDto": {

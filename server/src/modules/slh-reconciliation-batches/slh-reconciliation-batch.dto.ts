@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator'
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
-import { SlhBillLineDto, SlhBillListItemDto, SlhBillReconciliationStatusDto } from '../slh-bills/slh-bill.dto'
+import { SlhBillFindingDto, SlhBillLineDto, SlhBillListItemDto, SlhBillReconciliationStatusDto } from '../slh-bills/slh-bill.dto'
 
 /** 批次状态（派生，不落列）：completed_at 为空即进行中。 */
 export enum SlhReconciliationBatchStatusDto { IN_PROGRESS = 'IN_PROGRESS', COMPLETED = 'COMPLETED' }
@@ -114,7 +114,32 @@ export class SlhReconciliationBatchPreviewDto {
   @ApiProperty({ type: [SlhReconciliationMatchPreviewLineDto], description: 'Lines that cannot be reconciled now, each with its reason.' }) unmatched!: SlhReconciliationMatchPreviewLineDto[]
 }
 
-/** 成员行：账单明细行的全部字段 + 本批次的匹配依据与核对留痕。 */
+/**
+ * 匹配到的柜次装柜行：只带与账单行逐字段核对时用得到的列。
+ * 采购/销售来源与货件号刻意不放进来——本模块只要 `slh-bills:reconcile`，
+ * 不能顺带把采购、销售域的数据交给没有对应权限的账号。
+ */
+export class SlhReconciliationMatchedItemDto {
+  @ApiPropertyOptional({ type: 'string', nullable: true }) warehouseReceiptReference!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) oceanShippingMarkText!: string | null
+  @ApiProperty() goodsName!: string
+  @ApiProperty() packageCount!: number
+  @ApiPropertyOptional({ type: 'string', nullable: true }) packageUnit!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) grossWeightKg!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) lengthCm!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) widthCm!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) heightCm!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) volumeCai!: string | null
+  @ApiPropertyOptional({ type: Number, nullable: true }) chargeableVolumeCai!: number | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) reportedVolumeCai!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Null means this container row does not involve COD, matching the bill line contract.' }) codAmountTwd!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) recipientName!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) recipientPhone!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) recipientAddress!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) remark!: string | null
+}
+
+/** 成员行：账单明细行的全部字段 + 本批次的匹配依据、柜次侧可比字段与核对留痕。 */
 export class SlhReconciliationBatchMemberDto extends SlhBillLineDto {
   @ApiProperty({ format: 'uuid', description: 'Member row id inside this batch.' }) id!: string
   @ApiProperty({ format: 'uuid', description: 'Bill line id; the reconcile endpoint takes these ids.' }) lineId!: string
@@ -122,10 +147,12 @@ export class SlhReconciliationBatchMemberDto extends SlhBillLineDto {
   @ApiProperty({ format: 'uuid' }) matchedLoadingItemId!: string
   @ApiProperty({ type: 'string' }) matchedContainerBatchName!: string
   @ApiProperty({ type: Number }) matchedLoadingItemLineNumber!: number
+  @ApiProperty({ type: SlhReconciliationMatchedItemDto, description: 'Container row matched at creation time; the other side of every field comparison.' }) matchedLoadingItem!: SlhReconciliationMatchedItemDto
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Null means this batch has not reconciled the line yet.' }) reconciledAt!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) reconciledByDisplayName!: string | null
 }
 
 export class SlhReconciliationBatchDetailDto extends SlhReconciliationBatchListItemDto {
   @ApiProperty({ type: [SlhReconciliationBatchMemberDto], description: 'Only the lines matched at creation time; other bill lines never appear here.' }) members!: SlhReconciliationBatchMemberDto[]
+  @ApiProperty({ type: [SlhBillFindingDto], description: 'Import-time findings snapshot of the whole bill; the page keeps the ones belonging to this batch but still reports the bill-wide count.' }) findings!: SlhBillFindingDto[]
 }

@@ -1,6 +1,6 @@
 import { Prisma } from '../../generated/prisma/client'
 import { resolveSlhBillReconciliationStatus } from '../slh-bills/slh-bill-reconciliation'
-import { serializeSlhBillLine } from '../slh-bills/slh-bill.serializer'
+import { serializeSlhBillLine, serializeStoredFindings } from '../slh-bills/slh-bill.serializer'
 import type { SlhBillReconciliationStatusDto } from '../slh-bills/slh-bill.dto'
 import type {
   SlhBillLineUnmatchedReasonDto, SlhBillLineMatchSourceDto, SlhReconciliationBatchDetailDto,
@@ -33,11 +33,21 @@ export const slhReconciliationBatchListInclude = batchHeaderInclude
 /** 详情多取成员行本身：只包含创建时匹配命中的行，账单其它行不会出现在这里。 */
 export const slhReconciliationBatchDetailInclude = {
   ...batchHeaderInclude,
+  // 费用出入走导入时冻结的 findings 快照；列表接口不需要这份数据，所以只在详情里多取。
+  bill: { select: { ...batchHeaderInclude.bill.select, importFindings: true } },
   members: {
     orderBy: { createdAt: 'asc' },
     include: {
       line: { include: { charges: true } },
-      matchedLoadingItem: { select: { lineNumber: true, containerBatch: { select: { containerBatchName: true } } } },
+      matchedLoadingItem: {
+        select: {
+          lineNumber: true, warehouseReceiptReference: true, oceanShippingMarkText: true, goodsName: true,
+          packageCount: true, packageUnit: true, grossWeightKg: true, lengthCm: true, widthCm: true, heightCm: true,
+          volumeCai: true, chargeableVolumeCai: true, reportedVolumeCai: true, codAmountTwd: true,
+          recipientName: true, recipientPhone: true, recipientAddress: true, remark: true,
+          containerBatch: { select: { containerBatchName: true } },
+        },
+      },
       reconciledBy: { select: { displayName: true } },
     },
   },
@@ -83,21 +93,42 @@ export function serializeSlhReconciliationBatchListItem(row: BatchHeaderRow): Sl
 }
 
 function serializeBatchMember(row: BatchMemberRow): SlhReconciliationBatchMemberDto {
+  const item = row.matchedLoadingItem
   return {
     ...serializeSlhBillLine(row.line),
     id: row.id,
     lineId: row.lineId,
     matchSource: row.matchSource as SlhBillLineMatchSourceDto,
     matchedLoadingItemId: row.matchedLoadingItemId,
-    matchedContainerBatchName: row.matchedLoadingItem.containerBatch.containerBatchName,
-    matchedLoadingItemLineNumber: row.matchedLoadingItem.lineNumber,
+    matchedContainerBatchName: item.containerBatch.containerBatchName,
+    matchedLoadingItemLineNumber: item.lineNumber,
+    // 两侧金额同口径落字符串：空值一律 null（本行不涉及），零保留 0.00。
+    matchedLoadingItem: {
+      warehouseReceiptReference: item.warehouseReceiptReference,
+      oceanShippingMarkText: item.oceanShippingMarkText,
+      goodsName: item.goodsName,
+      packageCount: item.packageCount,
+      packageUnit: item.packageUnit,
+      grossWeightKg: item.grossWeightKg?.toFixed(3) ?? null,
+      lengthCm: item.lengthCm?.toFixed(2) ?? null,
+      widthCm: item.widthCm?.toFixed(2) ?? null,
+      heightCm: item.heightCm?.toFixed(2) ?? null,
+      volumeCai: item.volumeCai?.toFixed(2) ?? null,
+      chargeableVolumeCai: item.chargeableVolumeCai,
+      reportedVolumeCai: item.reportedVolumeCai?.toFixed(2) ?? null,
+      codAmountTwd: item.codAmountTwd?.toFixed(2) ?? null,
+      recipientName: item.recipientName,
+      recipientPhone: item.recipientPhone,
+      recipientAddress: item.recipientAddress,
+      remark: item.remark,
+    },
     reconciledAt: row.reconciledAt === null ? null : iso(row.reconciledAt),
     reconciledByDisplayName: row.reconciledBy?.displayName ?? null,
   }
 }
 
 export function serializeSlhReconciliationBatchDetail(row: SlhReconciliationBatchDetailRow): SlhReconciliationBatchDetailDto {
-  return { ...serializeBatchHeader(row), members: row.members.map(serializeBatchMember) }
+  return { ...serializeBatchHeader(row), findings: serializeStoredFindings(row.bill.importFindings), members: row.members.map(serializeBatchMember) }
 }
 
 /**

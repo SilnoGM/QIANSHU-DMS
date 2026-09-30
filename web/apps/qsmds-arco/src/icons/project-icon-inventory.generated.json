@@ -1397,6 +1397,7 @@
       "apps/qsmds-arco/src/views/workbenches/containers/container-remark.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-orders.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/detail.vue",
       "packages/components/src/basic/table/index.vue",
       "packages/components/src/pro/tree/index.vue"
     ]
@@ -1419,6 +1420,7 @@
       "apps/qsmds-arco/src/components/business/QsGenericTable/GroupHeader.vue",
       "apps/qsmds-arco/src/components/business/QsPartConfigurator/index.vue",
       "apps/qsmds-arco/src/components/business/QsStatusSwitchToolbar/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/detail.vue",
       "packages/components/src/basic/image-preview/preview.vue",
       "packages/components/src/basic/table/index.vue"
     ]
