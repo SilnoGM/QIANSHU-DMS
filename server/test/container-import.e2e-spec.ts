@@ -41,7 +41,7 @@ describe('container source import with isolated PostgreSQL', () => {
     const before = await h.prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: shipment.part.id } })
     const result = await preview(parent.id)
     expect(result).toMatchObject({ containerBatchId: parent.id, warehouseValue: parent.warehouseValue, alreadyImported: false, expectedVersion: 1 })
-    expect(result.rows[0]).toMatchObject({ matchStatus: 'MATCHED', matchedShipmentId: shipment.part.id, volumeCai: '12.88272063', chargeableVolumeCai: 13,
+    expect(result.rows[0]).toMatchObject({ matchStatus: 'MATCHED', matchedShipmentId: shipment.part.id, volumeCai: '12.88000000', chargeableVolumeCai: 13,
       candidates: [expect.objectContaining({ id: shipment.part.id, eligible: true, salesOrderNo: shipment.source!.orderNo }) as unknown] })
     expect(JSON.stringify(result)).not.toMatch(/sourceData|objectKey|checksumSha256|password/u)
     expect(await h.prisma.containerLoadingItem.count({ where: { containerBatchId: parent.id } })).toBe(0)

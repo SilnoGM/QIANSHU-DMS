@@ -44,7 +44,7 @@ describe('Container maintenance commands', () => {
   it('recalculates measurements and replaces nullable input without progressing shipments', async () => {
     const h = harness()
     const result = await h.service.updateItem(h.context, h.id, h.itemId, { ...fields, codAmountTwd: '100.10', recipientName: '客户' })
-    expect(result).toMatchObject({ volumeCai: '12.88272063', chargeableVolumeCai: 13, grossWeightKg: null, shipmentId: null, codAmountTwd: '100.10', recipientName: '客户', recipientPhone: null, version: 3 })
+    expect(result).toMatchObject({ volumeCai: '12.88000000', chargeableVolumeCai: 13, grossWeightKg: null, shipmentId: null, codAmountTwd: '100.10', recipientName: '客户', recipientPhone: null, version: 3 })
     expect(h.tx.containerBatch.update).toHaveBeenCalledWith({ where: { id: h.id }, data: { version: { increment: 1 }, updatedById: h.context.actorUserId } })
     expect(h.tx.purchaseOrderPart.findUnique).not.toHaveBeenCalled()
     expect(h.audit.record).toHaveBeenCalledTimes(1)

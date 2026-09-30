@@ -1,4 +1,5 @@
 import { ApiException } from '../../infrastructure/http/api.exception'
+import { VOLUME_CAI_DIVISOR } from '../ocean-freight-calculation/ocean-freight-calculation'
 import { formatDecimal, parseDecimal, power, roundRatio } from '../ocean-freight-calculation/ocean-decimal'
 
 /** 账单来源数据的精度口径：尺寸 2 位、重量 3 位、金额 2 位、材积 2 位。 */
@@ -10,10 +11,10 @@ export const SLH_AMOUNT_PRECISION = 30
 export const SLH_VOLUME_PRECISION = 24
 
 /**
- * 账单口径的材积分母。顺联航账单的材数按“长 × 宽 × 高 ÷ 28316 × 箱数”计算，
- * 与 DMS 内部装柜明细使用的 28317 不是同一口径；本模块忠于来源，口径差留给比对阶段处理。
+ * 账单口径的材积分母：长 × 宽 × 高 ÷ 28316 × 箱数。装柜明细使用同一个常量
+ * （`VOLUME_CAI_DIVISOR`），两侧不得再各自维护除数。
  */
-export const SLH_VOLUME_DIVISOR = 28316n
+export const SLH_VOLUME_DIVISOR = VOLUME_CAI_DIVISOR
 
 /** 单价超过该阈值即按材积计价；这是对方账单公式里的隐式约定，不是可配置项。 */
 export const SLH_VOLUME_PRICING_THRESHOLD = 10

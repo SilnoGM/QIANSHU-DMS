@@ -83069,14 +83069,14 @@
           "volumeCai": {
             "type": "string",
             "nullable": true,
-            "description": "Calculated row volume, rounded to eight decimals; null when dimensions are incomplete."
+            "description": "Calculated row volume using the shared 28316 divisor, rounded to two decimals; null when dimensions are incomplete."
           },
           "chargeableVolumeCai": {
             "type": "number",
             "nullable": true,
             "minimum": 1,
             "maximum": 2147483647,
-            "description": "Ceiling of the full precision row volume, before display rounding."
+            "description": "Ceiling of the exact row volume, used as the billable quantity when pricing by volume."
           },
           "reportedVolumeCai": {
             "type": "string",
@@ -83922,7 +83922,7 @@
           "volumeCai": {
             "type": "string",
             "nullable": true,
-            "description": "Calculated row volume, rounded to eight decimals; null when dimensions are incomplete."
+            "description": "Calculated row volume using the shared 28316 divisor, rounded to two decimals; null when dimensions are incomplete."
           }
         },
         "required": [
