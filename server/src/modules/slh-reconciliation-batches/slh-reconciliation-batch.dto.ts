@@ -101,6 +101,7 @@ export class SlhReconciliationMatchPreviewLineDto {
   @ApiPropertyOptional({ type: 'string', nullable: true }) shippingMarkText!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) warehouseReceiptReference!: string | null
   @ApiProperty() goodsName!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Customer name parsed from the bill recipient info; null when the bill only names a warehouse.' }) recipientName!: string | null
   @ApiProperty({ enum: SlhBillLineMatchSourceDto, nullable: true }) matchSource!: SlhBillLineMatchSourceDto | null
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Container batch name of the matched loading item.' }) matchedContainerBatchName!: string | null
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'Row number of the matched loading item inside its container batch.' }) matchedLoadingItemLineNumber!: number | null

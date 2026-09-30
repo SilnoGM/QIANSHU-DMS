@@ -314,6 +314,8 @@
       "unmatchedTitle": "Not reconcilable yet ({count})",
       "unmatchedEmpty": "No blocked line",
       "containerName": "Bill container",
+      "billLineNumber": "Bill line",
+      "customerName": "Bill customer",
       "shippingMark": "Shipping mark",
       "goodsName": "Goods",
       "matchedContainer": "Matched container",

@@ -113,11 +113,12 @@ export interface SlhReconciliationPreviewLineSource {
   shippingMarkText: string | null
   warehouseReceiptReference: string | null
   goodsName: string
+  recipientName: string | null
 }
 
 export const slhReconciliationPreviewLineSelect = {
   id: true, lineNumber: true, sourceRowNumber: true, loadingDate: true, containerBatchNameText: true,
-  shippingMarkText: true, warehouseReceiptReference: true, goodsName: true,
+  shippingMarkText: true, warehouseReceiptReference: true, goodsName: true, recipientName: true,
 } satisfies Prisma.SlhBillLineSelect
 
 export function serializeMatchPreviewLine(
@@ -136,6 +137,7 @@ export function serializeMatchPreviewLine(
     shippingMarkText: line.shippingMarkText,
     warehouseReceiptReference: line.warehouseReceiptReference,
     goodsName: line.goodsName,
+    recipientName: line.recipientName,
     matchSource: outcome.match?.source ?? null,
     matchedContainerBatchName: outcome.match?.containerBatchName ?? null,
     matchedLoadingItemLineNumber: outcome.match?.loadingItemLineNumber ?? null,

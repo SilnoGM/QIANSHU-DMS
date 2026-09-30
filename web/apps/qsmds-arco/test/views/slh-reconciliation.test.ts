@@ -118,11 +118,15 @@ test('两步弹窗：零命中不能开始对账，创建载荷带上预览到�
   assert.deepEqual(buildSlhReconciliationBatchCreatePayload('bill-1', null), { billId: 'bill-1', previewLineIds: [] })
 })
 
-test('弹窗预览表按已匹配/未匹配给出不同列，列定义可序列化', () => {
+test('弹窗预览表按已匹配/未匹配给出不同列，账单行号与客户名称两表都有', () => {
   const matched = buildSlhReconciliationPreviewColumns(key => key, 'matched').map(column => column.id)
   const unmatched = buildSlhReconciliationPreviewColumns(key => key, 'unmatched').map(column => column.id)
-  assert.deepEqual(matched, ['lineNumber', 'container', 'shippingMark', 'goodsName', 'matchedContainer', 'matchedLine', 'source'])
-  assert.deepEqual(unmatched, ['lineNumber', 'container', 'shippingMark', 'goodsName', 'reason'])
+  assert.deepEqual(matched, ['lineNumber', 'container', 'shippingMark', 'goodsName', 'customerName', 'matchedContainer', 'matchedLine', 'source'])
+  assert.deepEqual(unmatched, ['lineNumber', 'container', 'shippingMark', 'goodsName', 'customerName', 'reason'])
+  // 弹窗里「行号」按用户口径改叫账单行号，与详情页的列文案分开。
+  const titles = buildSlhReconciliationPreviewColumns(key => key, 'unmatched').map(column => column.title)
+  assert.equal(titles[0], 'slhReconciliation.selectModal.billLineNumber')
+  assert.equal(titles[4], 'slhReconciliation.selectModal.customerName')
 })
 
 test('列表页按名称跳详情，并复用账单状态标签', async () => {

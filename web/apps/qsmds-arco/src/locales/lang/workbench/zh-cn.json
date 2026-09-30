@@ -323,6 +323,8 @@
       "unmatchedTitle": "暂不能核对的行（{count}）",
       "unmatchedEmpty": "没有暂不能核对的行",
       "containerName": "账单柜号",
+      "billLineNumber": "账单行号",
+      "customerName": "账单客户名称",
       "shippingMark": "唛头",
       "goodsName": "货物品名",
       "matchedContainer": "匹配柜次",

@@ -85318,6 +85318,11 @@
           "goodsName": {
             "type": "string"
           },
+          "recipientName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Customer name parsed from the bill recipient info; null when the bill only names a warehouse."
+          },
           "matchSource": {
             "type": "string",
             "enum": [

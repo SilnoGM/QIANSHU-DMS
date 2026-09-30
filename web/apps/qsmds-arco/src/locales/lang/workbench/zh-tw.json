@@ -314,6 +314,8 @@
       "unmatchedTitle": "暫不能核對的行（{count}）",
       "unmatchedEmpty": "沒有暫不能核對的行",
       "containerName": "帳單櫃號",
+      "billLineNumber": "帳單行號",
+      "customerName": "帳單客戶名稱",
       "shippingMark": "嘜頭",
       "goodsName": "貨物品名",
       "matchedContainer": "匹配櫃次",

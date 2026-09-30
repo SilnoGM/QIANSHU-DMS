@@ -37,10 +37,12 @@ export function buildSlhReconciliationPreviewColumns(
   kind: 'matched' | 'unmatched',
 ): QsGenericTableColumn<SlhReconciliationPreviewLine>[] {
   const shared: QsGenericTableColumn<SlhReconciliationPreviewLine>[] = [
-    { id: 'lineNumber', title: t('slhReconciliation.detail.lineNumber'), accessorKey: 'lineNumber', width: 90, minWidth: 90, align: 'right' },
+    { id: 'lineNumber', title: t('slhReconciliation.selectModal.billLineNumber'), accessorKey: 'lineNumber', width: 110, minWidth: 110, align: 'right' },
     { id: 'container', title: t('slhReconciliation.selectModal.containerName'), accessorFn: line => line.containerBatchNameText ?? '', minWidth: 150 },
     { id: 'shippingMark', title: t('slhReconciliation.selectModal.shippingMark'), accessorFn: line => line.shippingMarkText ?? '', minWidth: 150 },
     { id: 'goodsName', title: t('slhReconciliation.selectModal.goodsName'), accessorKey: 'goodsName', minWidth: 200 },
+    // 客户名来自账单「收货人信息」的解析结果；账单只写了仓库时按缺值占位符展示。
+    { id: 'customerName', title: t('slhReconciliation.selectModal.customerName'), accessorFn: line => line.recipientName ?? t('slhBill.valueMissing'), minWidth: 180 },
   ]
   if (kind === 'matched') {
     return [
