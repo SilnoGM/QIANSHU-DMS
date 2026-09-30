@@ -145,12 +145,12 @@ export class SlhBillLineDto {
   @ApiPropertyOptional({ type: 'string', nullable: true }) categoryCode!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) unitPriceAmount!: string | null
   @ApiPropertyOptional({ enum: SlhBillPricingBasisDto, nullable: true }) pricingBasis!: SlhBillPricingBasisDto | null
-  @ApiProperty({ type: 'string' }) freightAmountCny!: string
-  @ApiProperty({ type: 'string' }) codHandlingAmountCny!: string
-  @ApiProperty({ type: 'string' }) surchargeAmountCny!: string
-  @ApiProperty({ type: 'string' }) payableAmountCny!: string
-  @ApiProperty({ type: 'string' }) codAmountTwd!: string
-  @ApiProperty({ type: 'string' }) ntdSurchargeAmountTwd!: string
+  @ApiProperty({ type: 'string', nullable: true, description: 'Null means this row does not involve the item, matching the container loading item contract.' }) freightAmountCny!: string | null
+  @ApiProperty({ type: 'string', nullable: true, description: 'Null means this row does not involve the item.' }) codHandlingAmountCny!: string | null
+  @ApiProperty({ type: 'string', nullable: true, description: 'Null means this row does not involve the item.' }) surchargeAmountCny!: string | null
+  @ApiProperty({ type: 'string', nullable: true, description: 'Null means this row does not involve the item.' }) payableAmountCny!: string | null
+  @ApiProperty({ type: 'string', nullable: true, description: 'Null means this row does not involve the item.' }) codAmountTwd!: string | null
+  @ApiProperty({ type: 'string', nullable: true, description: 'Null means this row does not involve the item.' }) ntdSurchargeAmountTwd!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) recipientInfoRaw!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Parsed recipient name; null when it cannot be determined.' }) recipientName!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Parsed phone numbers kept in the original writing, one field for all numbers.' }) recipientPhones!: string | null

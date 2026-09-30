@@ -84654,22 +84654,34 @@
             "nullable": true
           },
           "freightAmountCny": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item, matching the container loading item contract."
           },
           "codHandlingAmountCny": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "surchargeAmountCny": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "payableAmountCny": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "codAmountTwd": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "ntdSurchargeAmountTwd": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "recipientInfoRaw": {
             "type": "string",
@@ -84937,22 +84949,34 @@
             "nullable": true
           },
           "freightAmountCny": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item, matching the container loading item contract."
           },
           "codHandlingAmountCny": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "surchargeAmountCny": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "payableAmountCny": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "codAmountTwd": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "ntdSurchargeAmountTwd": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "recipientInfoRaw": {
             "type": "string",
@@ -85506,22 +85530,34 @@
             "nullable": true
           },
           "freightAmountCny": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item, matching the container loading item contract."
           },
           "codHandlingAmountCny": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "surchargeAmountCny": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "payableAmountCny": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "codAmountTwd": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "ntdSurchargeAmountTwd": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null means this row does not involve the item."
           },
           "recipientInfoRaw": {
             "type": "string",

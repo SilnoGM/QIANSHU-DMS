@@ -83,6 +83,14 @@ describe('slh bill calculation', () => {
     it('sums the January bill line amounts to its subtotal', () => {
       expect(sumSlhAmounts(['84072.50', '810.00', '2600.00'])).toBe('87482.50')
     })
+
+    it('treats a missing amount as 本行不涉及 and keeps the total exact', () => {
+      // 空列表示本行不涉及该项（与装柜明细同一口径），合计里按 0 参与。
+      expect(sumSlhAmounts(['84072.50', null, '2600.00'])).toBe('86672.50')
+      expect(sumSlhAmounts([null, null])).toBe('0.00')
+      expect(calculateSlhPayable('500.00', null, null)).toBe('500.00')
+      expect(calculateSlhPayable(null, null, null)).toBe('0.00')
+    })
   })
 
   describe('comparison helpers', () => {

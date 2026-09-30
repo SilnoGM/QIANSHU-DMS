@@ -104,14 +104,18 @@ export function calculateSlhFreight(input: SlhFreightInput): string {
   return slhRounding(unitPrice * weight, power(SLH_AMOUNT_SCALE + SLH_WEIGHT_SCALE))
 }
 
-/** 合计应付金额 = 运费 + 代收手续费 + 附加费；三项都是 2 位小数，相加不需要再取整。 */
-export function calculateSlhPayable(freightAmountCny: string, codHandlingAmountCny: string, surchargeAmountCny: string): string {
+/**
+ * 合计应付金额 = 运费 + 代收手续费 + 附加费；三项都是 2 位小数，相加不需要再取整。
+ * 任一列为 null 表示「本行不涉及此项」，按 0 计入。
+ */
+export function calculateSlhPayable(freightAmountCny: string | null, codHandlingAmountCny: string | null, surchargeAmountCny: string | null): string {
   return sumSlhAmounts([freightAmountCny, codHandlingAmountCny, surchargeAmountCny])
 }
 
-export function sumSlhAmounts(values: readonly string[]): string {
+/** 求和；null 表示「本行不涉及此项」，按 0 计入，因此合计不受空值影响。 */
+export function sumSlhAmounts(values: readonly (string | null)[]): string {
   return formatDecimal(
-    values.reduce((sum, value) => sum + parseDecimal(value, SLH_AMOUNT_PRECISION, SLH_AMOUNT_SCALE, 'amount', true), 0n),
+    values.reduce((sum, value) => sum + (value === null ? 0n : parseDecimal(value, SLH_AMOUNT_PRECISION, SLH_AMOUNT_SCALE, 'amount', true)), 0n),
     SLH_AMOUNT_PRECISION, SLH_AMOUNT_SCALE, 'total',
   )
 }

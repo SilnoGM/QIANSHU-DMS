@@ -126,6 +126,37 @@ describe('slh bill import with isolated PostgreSQL', () => {
   })
 
   /**
+   * 空单元格与显式零必须原样穿过解析、入库与接口：空表示「本行不涉及此项」（与装柜明细同一口径），
+   * 0 表示该项为零；夹具第一行两类写法同时存在，正好守住这条边界。
+   */
+  it('keeps an empty amount cell as null and an explicit zero as 0.00 across the API', async () => {
+    const bill = await h.prisma.slhBill.findFirstOrThrow({ orderBy: { createdAt: 'asc' } })
+    const stored = await h.prisma.slhBillLine.findFirstOrThrow({
+      where: { billId: bill.id, lineNumber: 1 },
+      select: { freightAmountCny: true, codHandlingAmountCny: true, surchargeAmountCny: true, payableAmountCny: true, codAmountTwd: true, ntdSurchargeAmountTwd: true },
+    })
+    expect(stored.codHandlingAmountCny).toBeNull()
+    expect(stored.surchargeAmountCny).toBeNull()
+    expect(stored.codAmountTwd).toBeNull()
+    expect(stored.freightAmountCny?.toFixed(2)).toBe('0.00')
+
+    const page = (await browser.get(`/api/slh-bills/${bill.id}/lines`).expect(200)).body as { items: Array<Record<string, unknown>> }
+    const first = page.items.find(item => item.lineNumber === 1)!
+    expect(first.codHandlingAmountCny).toBeNull()
+    expect(first.surchargeAmountCny).toBeNull()
+    expect(first.codAmountTwd).toBeNull()
+    expect(first.ntdSurchargeAmountTwd).toBe('2000.00')
+    expect(first.freightAmountCny).toBe('0.00')
+    expect(first.payableAmountCny).toBe('0.00')
+
+    // 账单头合计仍是各行已填列之和，不受空值影响（第一行只贡献 2000 台币偏远费）。
+    const list = (await browser.get('/api/slh-bills').expect(200)).body as { items: Array<{ id: string, codTotalAmountTwd: string, ntdSurchargeTotalAmountTwd: string }> }
+    const summary = list.items.find(item => item.id === bill.id)!
+    expect(summary.codTotalAmountTwd).toBe('129000.00')
+    expect(summary.ntdSurchargeTotalAmountTwd).toBe('8000.00')
+  })
+
+  /**
    * 对账状态：明细行二态由该行的对账时刻决定，账单三态由已对账行数汇总派生，
    * 同时守住「凭证不可改」的窄例外——只有对账时刻能改，别的列与删除仍然被拒。
    */
