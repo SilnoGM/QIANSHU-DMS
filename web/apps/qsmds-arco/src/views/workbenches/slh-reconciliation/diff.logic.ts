@@ -72,10 +72,15 @@ export interface SlhReconciliationMemberComparison {
   readonly fields: readonly SlhReconciliationFieldComparison[]
   readonly buckets: readonly SlhReconciliationDiffBucket[]
   /**
-   * 不一致的「处数」：不一致字段数 + 费用条目数。
-   * 中性口径——不区分桶、不区分性质，只回答「这条行有几处要处理」。
+   * 不一致处数拆成三段：冲突（数值不等）、缺口（单侧不涉及）、费用条目。
+   * 三段等权，但语义必须分开——「对方没填」与「两边数字不一样」要判断的东西完全不同，
+   * 合成一个数会让人按大小挑行时误判轻重。
    */
-  readonly differenceCount: number
+  readonly conflictCount: number
+  readonly gapCount: number
+  readonly findingCount: number
+  /** 每个桶的处数：字段桶按不一致字段数，费用桶按条目数。筛选某桶时行内显示它。 */
+  readonly bucketCounts: Readonly<Record<SlhReconciliationDiffBucket, number>>
   /** 挂在当前行上的账单导入快照差异（桶 FEE）。 */
   readonly findings: readonly SlhBillFindingDto[]
 }
@@ -243,6 +248,17 @@ function bucketsOf(fields: readonly SlhReconciliationFieldComparison[], findings
   return buckets
 }
 
+/** 每个桶的处数：字段桶数不一致字段，费用桶数条目。行内展示与「本桶 m 处」都取这里。 */
+function bucketCountsOf(fields: readonly SlhReconciliationFieldComparison[], findings: readonly SlhBillFindingDto[]): Readonly<Record<SlhReconciliationDiffBucket, number>> {
+  const counts = { COD: 0, FEE: findings.length, QUANTITY: 0, TEXT: 0 }
+  for (const field of fields) {
+    if (hasDifference(field)) {
+      counts[field.bucket] += 1
+    }
+  }
+  return counts
+}
+
 function buildFieldTotals(members: readonly SlhReconciliationMemberComparison[]): readonly SlhReconciliationFieldTotal[] {
   return SLH_RECONCILIATION_TOTAL_FIELDS.flatMap((field) => {
     let total: Decimal | null = null
@@ -294,10 +310,13 @@ export function buildSlhReconciliationComparisons(input: {
     const fields = compareSlhReconciliationMember(member)
     const findings = findingsByLine.get(member.lineNumber) ?? []
     return {
+      bucketCounts: bucketCountsOf(fields, findings),
       buckets: bucketsOf(fields, findings),
-      differenceCount: fields.filter(hasDifference).length + findings.length,
+      conflictCount: fields.filter(field => field.state === 'DIFFERENT').length,
       fields,
+      findingCount: findings.length,
       findings,
+      gapCount: fields.filter(field => field.state === 'ABSENT').length,
       lineId: member.lineId,
       lineNumber: member.lineNumber,
     }

@@ -253,36 +253,47 @@ onBeforeUnmount(() => {
       </FaButton>
     </FaPageMain>
     <FaPageMain v-else class="min-w-0 space-y-3">
+      <!-- 骨架按真实布局给三块，避免加载完成时首屏跳动。 -->
       <div v-if="loading && !batch" class="animate-pulse space-y-3" aria-hidden="true">
-        <div class="rounded-lg bg-muted/40 h-14" />
-        <div class="rounded-lg bg-muted/40 h-72" />
+        <div class="rounded-lg bg-muted/40 h-16" />
+        <div class="rounded-lg bg-muted/40 h-10" />
+        <div class="gap-3 grid lg:grid-cols-[minmax(20rem,26rem)_minmax(0,1fr)]">
+          <div class="rounded-lg bg-muted/40 h-72" />
+          <div class="rounded-lg bg-muted/40 h-72 hidden lg:block" />
+        </div>
       </div>
       <template v-else-if="batch && summary">
         <!-- 概览：四个桶等权，没有主数字；再点一次同一个桶即取消筛选。 -->
-        <section class="px-3 py-2 border rounded-lg flex flex-wrap gap-2 items-center">
-          <FaButton
-            v-for="chip in bucketChips"
-            :key="chip.bucket"
-            type="button"
-            size="sm"
-            :variant="activeBucket === chip.bucket ? 'default' : 'outline'"
-            :aria-pressed="activeBucket === chip.bucket"
-            @click="activeBucket = activeBucket === chip.bucket ? 'all' : chip.bucket"
-          >
-            {{ t(resolveSlhReconciliationBucketLabelKey(chip.bucket)) }}
-            <span class="tabular-nums">{{ chip.count }}</span>
-          </FaButton>
-          <FaButton v-if="activeBucket !== 'all'" type="button" size="sm" variant="ghost" @click="activeBucket = 'all'">
-            {{ t('slhReconciliation.detail.filterAll') }}
-          </FaButton>
-          <div class="flex-1" />
-          <!-- 进度压成一行：窄屏上三行数字会把首屏全部吃掉。 -->
-          <span class="qs-type-description text-muted-foreground tabular-nums">
-            {{ t('slhReconciliation.detail.memberProgress') }} {{ batch.reconciledMemberCount }} / {{ batch.memberCount }}
-            · {{ t('slhReconciliation.detail.remainingMembers', { count: summary.pendingMemberCount }) }}
-            · {{ t('slhReconciliation.detail.billRemaining') }} {{ billRemaining }}
-          </span>
-          <span v-if="!isNarrow" class="qs-type-description text-muted-foreground">{{ t('slhReconciliation.detail.recipientNote') }}</span>
+        <section class="px-3 py-2 border rounded-lg">
+          <div class="flex flex-wrap gap-2 items-center">
+            <FaButton
+              v-for="chip in bucketChips"
+              :key="chip.bucket"
+              type="button"
+              size="sm"
+              :variant="activeBucket === chip.bucket ? 'default' : 'outline'"
+              :aria-pressed="activeBucket === chip.bucket"
+              :disabled="chip.count === 0"
+              @click="activeBucket = activeBucket === chip.bucket ? 'all' : chip.bucket"
+            >
+              {{ t(resolveSlhReconciliationBucketLabelKey(chip.bucket)) }}
+              <span class="tabular-nums">{{ chip.count }}</span>
+            </FaButton>
+            <FaButton v-if="activeBucket !== 'all'" type="button" size="sm" variant="ghost" @click="activeBucket = 'all'">
+              {{ t('slhReconciliation.detail.filterAll') }}
+            </FaButton>
+            <div class="flex-1" />
+            <!-- 进度压成一行：窄屏上三行数字会把首屏全部吃掉。 -->
+            <span class="qs-type-description text-muted-foreground tabular-nums">
+              {{ t('slhReconciliation.detail.memberProgress') }} {{ batch.reconciledMemberCount }} / {{ batch.memberCount }}
+              · {{ t('slhReconciliation.detail.remainingMembers', { count: summary.pendingMemberCount }) }}
+              · {{ t('slhReconciliation.detail.billRemaining') }} {{ billRemaining }}
+            </span>
+          </div>
+          <!-- 口径说明单独一行：它与进度不是一类信息，挤在同一行会互相干扰。 -->
+          <p v-if="!isNarrow" class="qs-type-description text-muted-foreground m-0 mt-1">
+            {{ t('slhReconciliation.detail.recipientNote') }}
+          </p>
         </section>
 
         <FaAlert v-if="actionError" variant="destructive" role="alert" :title="actionError" />
@@ -325,6 +336,7 @@ onBeforeUnmount(() => {
             :selected-line-id="selectedLineId"
             :sort-mode="sortMode"
             :differences-only="differencesOnly"
+            :active-bucket="activeBucket"
             :in-progress="inProgress"
             :selectable-line-ids="selectableLineIds"
             :checked-line-ids="selected"
@@ -356,7 +368,9 @@ onBeforeUnmount(() => {
             {{ t('slhReconciliation.detail.feeScope', { batch: summary.batchFindingCount, bill: summary.billFindingCount }) }}
           </span>
           <span v-if="feeOutsideCount > 0" class="qs-type-description text-muted-foreground tabular-nums">
-            {{ t('slhReconciliation.detail.feeOutside', { count: feeOutsideCount, billLevel: comparison?.billLevelFindings.length ?? 0 }) }}
+            {{ (comparison?.billLevelFindings.length ?? 0) > 0
+              ? t('slhReconciliation.detail.feeOutside', { count: feeOutsideCount, billLevel: comparison?.billLevelFindings.length ?? 0 })
+              : t('slhReconciliation.detail.feeOutsidePlain', { count: feeOutsideCount }) }}
           </span>
           <div class="flex-1" />
           <span class="qs-type-description text-muted-foreground flex flex-wrap gap-2 items-center">

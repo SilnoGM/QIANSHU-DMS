@@ -37,6 +37,9 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const consistencyOpen = ref(false)
+const netDetailOpen = ref(false)
+/** 每个字段都没有可比行（全是单侧不涉及）时，净差小结压缩成一行结论。 */
+const allTotalsAbsent = computed(() => props.fieldTotals.length > 0 && props.fieldTotals.every(total => total.total === null))
 
 const inconsistent = computed(() => (props.row?.comparison.fields ?? []).filter(field => field.state === 'DIFFERENT' || field.state === 'ABSENT'))
 const consistent = computed(() => (props.row?.comparison.fields ?? []).filter(field => field.state === 'SAME' || field.state === 'BOTH_ABSENT'))
@@ -108,12 +111,12 @@ function totalText(total: SlhReconciliationFieldTotal): string {
               v-for="field in inconsistent"
               :key="field.field"
               class="px-2 py-1.5 rounded-md sm:gap-x-2 sm:grid sm:grid-cols-[minmax(6rem,auto)_1fr_auto] sm:items-baseline"
-              :class="field.state === 'DIFFERENT' ? 'bg-destructive/5' : 'bg-amber-500/8'"
+              :class="field.state === 'DIFFERENT' ? 'bg-destructive/5' : 'bg-muted/40'"
             >
               <span class="flex gap-2 items-baseline justify-between">
                 <span class="qs-type-description text-muted-foreground">{{ fieldLabel(field) }}</span>
                 <!-- 窄屏把状态提到标签行：三列网格在 320px 下会把取值列压成竖排。 -->
-                <span class="qs-type-status-tag tabular-nums sm:hidden" :class="field.state === 'DIFFERENT' ? 'text-destructive' : 'text-amber-700 dark:text-amber-300'">
+                <span class="qs-type-status-tag tabular-nums sm:hidden" :class="field.state === 'DIFFERENT' ? 'text-destructive' : 'text-muted-foreground'">
                   {{ stateLabel(field) }}
                 </span>
               </span>
@@ -180,10 +183,20 @@ function totalText(total: SlhReconciliationFieldTotal): string {
           <p class="qs-type-description text-muted-foreground m-0 mt-0.5">
             {{ t('slhReconciliation.detail.netHint') }}
           </p>
-          <p v-if="fieldTotals.length === 0" class="qs-type-description text-muted-foreground m-0 mt-1">
+          <!-- 没有可计算净差时只留一行结论，字段明细进折叠：空着三行「—」既占位又像功能失效。 -->
+          <template v-if="allTotalsAbsent">
+            <p class="qs-type-description text-muted-foreground m-0 mt-1">
+              {{ t('slhReconciliation.detail.netAllAbsent') }}
+            </p>
+            <button type="button" class="qs-type-description mt-1 flex gap-1 items-center" @click="netDetailOpen = !netDetailOpen">
+              <FaIcon :name="netDetailOpen ? 'i-lucide:chevron-down' : 'i-lucide:chevron-right'" aria-hidden="true" class="text-muted-foreground" />
+              {{ t('slhReconciliation.detail.netDetail') }}
+            </button>
+          </template>
+          <p v-else-if="fieldTotals.length === 0" class="qs-type-description text-muted-foreground m-0 mt-1">
             {{ t('slhReconciliation.detail.netEmpty') }}
           </p>
-          <ul v-else class="m-0 mt-2 p-0 list-none space-y-1">
+          <ul v-if="fieldTotals.length > 0 && (!allTotalsAbsent || netDetailOpen)" class="m-0 mt-2 p-0 list-none space-y-1">
             <li v-for="total in fieldTotals" :key="total.field" class="flex flex-wrap gap-2 items-baseline">
               <span class="qs-type-description text-muted-foreground min-w-24">{{ t(resolveSlhReconciliationFieldLabelKey(total.field)) }}</span>
               <span class="tabular-nums" :class="total.total === null ? 'text-muted-foreground' : undefined">{{ totalText(total) }}</span>

@@ -416,18 +416,32 @@ test('费用出入按导入快照挂到成员行，账单级条目只计数不�
   assert.equal(result.billLevelFindings.length, 1)
 })
 
-test('不一致处数只回答「有几处要处理」：不一致字段数 + 费用条数', () => {
+test('不一致处数拆成冲突、缺口与费用三段，并给出每桶处数', () => {
   const findings: SlhBillFindingDto[] = [
     { kind: 'FREIGHT_MISMATCH', lineNumber: 1, message: '运费复算不一致', severity: 'difference', sourceRowNumber: 12 },
     { kind: 'REMARK_NOTE', lineNumber: 1, message: '备注片段没有金额', severity: 'warning', sourceRowNumber: 12 },
   ]
   const result = comparisonOf([
     memberFixture(),
-    // 代收款一致、毛重与货品名各一处：一共两处不一致。
-    memberFixture({ codAmountTwd: '300.00', goodsName: '别的品名', lineId: 'line-2', lineNumber: 2 }, { grossWeightKg: '315.000' }),
+    // 代收款一致；毛重是「单侧不涉及」（缺口）、货品名是数值不等（冲突）。
+    memberFixture(
+      { codAmountTwd: '300.00', goodsName: '别的品名', lineId: 'line-2', lineNumber: 2 },
+      { grossWeightKg: null, oceanShippingMarkText: 'J-022602' },
+    ),
   ], findings)
-  assert.equal(result.members[0].differenceCount, 1 + findings.length)
-  assert.equal(result.members[1].differenceCount, 2)
+
+  // 第 1 行：代收款冲突 + 两条费用条目。
+  assert.equal(result.members[0].conflictCount, 1)
+  assert.equal(result.members[0].gapCount, 0)
+  assert.equal(result.members[0].findingCount, 2)
+  assert.deepEqual(result.members[0].bucketCounts, { COD: 1, FEE: 2, QUANTITY: 0, TEXT: 0 })
+
+  // 第 2 行：货品名冲突、毛重缺口，两处性质不同，不能合成一个数。
+  assert.equal(result.members[1].conflictCount, 1)
+  assert.equal(result.members[1].gapCount, 1)
+  assert.equal(result.members[1].findingCount, 0)
+  assert.equal(result.members[1].bucketCounts.QUANTITY, 1)
+  assert.equal(result.members[1].bucketCounts.TEXT, 1)
   assert.equal(result.members[1].buckets.length, 2)
 })
 
@@ -501,24 +515,44 @@ test('详情页：概览四桶等权、清单不内联数值、面板按原表�
   const page = await readPageSource('detail.vue')
   const list = await readPageSource('slh-reconciliation-line-list.vue')
   const panel = await readPageSource('slh-reconciliation-compare-panel.vue')
-  // 概览：四个桶同一套渲染规则，没有代收款专属的主数字。
+  // 概览：四个桶同一套渲染规则，没有代收款专属的主数字；0 计数的桶不可点。
   assert.match(page, /SLH_RECONCILIATION_DIFF_BUCKETS/u)
   assert.doesNotMatch(page, /heroCod/u)
   assert.match(page, /activeBucket = activeBucket === chip\.bucket \? 'all' : chip\.bucket/u)
-  // 清单只给不一致处数、桶标签与核对状态，不内联任何字段数值。
+  assert.match(page, /:disabled="chip\.count === 0"/u)
+  // 口径说明与进度分行，不再挤在同一行。
+  assert.match(page, /slhReconciliation\.detail\.recipientNote/u)
+  assert.doesNotMatch(page, /billRemaining'\) \}\} \{\{ billRemaining \}\}\s*<\/span>\s*<span v-if="!isNarrow"/u)
+  // 清单只给处数与桶标签，不内联任何字段数值；计数分冲突/缺口/费用三段，筛选时改报本桶处数。
   assert.doesNotMatch(list, /AmountDisplay/u)
-  assert.match(list, /differenceCount/u)
+  assert.match(list, /conflictCount/u)
+  assert.match(list, /gapCount/u)
+  assert.match(list, /bucketDifferenceCount/u)
   assert.match(list, /groupSlhReconciliationRowsByBucket|grouped/u)
-  // 面板：不一致在前、一致折叠在后，字段顺序来自判定层；净差小结在面板内。
+  // 面板：不一致在前、一致折叠在后，字段顺序来自判定层；净差小结在面板内，无净差时压缩成一行。
   assert.match(panel, /panelInconsistent/u)
   assert.match(panel, /resolveSlhReconciliationFieldLabelKey/u)
   assert.match(panel, /netTitle/u)
   assert.match(panel, /netAbsent/u)
+  assert.match(panel, /allTotalsAbsent/u)
+  assert.match(panel, /netAllAbsent/u)
   // 不给任何桶单独的类名分支（平等：不存在按桶分色）。
   assert.doesNotMatch(list, /bucket === 'COD'/u)
   assert.doesNotMatch(panel, /bucket === 'COD'/u)
   // 判定口径只有 diff.logic 一份，页面不自己算差异。
   assert.match(page, /buildSlhReconciliationComparisons\(/u)
+})
+
+test('自检修正：空态分语境、分组头吸顶、步进自动滚动、选中行有竖条', async () => {
+  const list = await readPageSource('slh-reconciliation-line-list.vue')
+  // 筛选后为空不能再说「本批次没有成员行」。
+  assert.match(list, /filtered \? 'slhReconciliation\.detail\.emptyFiltered' : 'slhReconciliation\.detail\.emptyMembers'/u)
+  // 类名顺序会被 eslint 调整，这里只断言两个 token 都在。
+  assert.match(list, /top-0/u)
+  assert.match(list, /sticky/u)
+  assert.match(list, /data-line-id/u)
+  assert.match(list, /scrollIntoView\(\{ block: 'nearest' \}\)/u)
+  assert.match(list, /selectedLineId === item\.row\.key \? 'border-primary bg-primary\/5' : 'border-transparent'/u)
 })
 
 test('详情页三档断点：并排 / 抽屉 / 全屏，且不引入键盘步进', async () => {

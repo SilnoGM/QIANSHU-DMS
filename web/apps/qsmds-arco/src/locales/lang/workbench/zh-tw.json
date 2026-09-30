@@ -404,7 +404,6 @@
       "groupNone": "不分組",
       "differencesOnly": "只看不一致",
       "groupNotice": "同一行可能同時出現在多個分組裡",
-      "differenceCount": "不一致 {count}",
       "reconciledShort": "已核對",
       "panelTitle": "第 {line} 行 · 對照",
       "panelInconsistent": "不一致",
@@ -427,7 +426,15 @@
       "sortPrefix": "排序",
       "groupPrefix": "分組",
       "groupOn": "按差異桶",
-      "groupOff": "不分組"
+      "groupOff": "不分組",
+      "bucketDifferenceCount": "本桶 {count} 處",
+      "conflictCount": "衝突 {count}",
+      "gapCount": "缺口 {count}",
+      "feeFindingCount": "費用 {count}",
+      "emptyFiltered": "目前篩選下沒有不一致",
+      "netAllAbsent": "本批次的不一致都是單側不涉及，沒有可計算的淨差",
+      "netDetail": "檢視按欄位的明細",
+      "feeOutsidePlain": "另有 {count} 條不在本批次範圍內"
     }
   }
 }

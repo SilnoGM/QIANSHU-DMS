@@ -404,7 +404,6 @@
       "groupNone": "No grouping",
       "differencesOnly": "Differences only",
       "groupNotice": "A line can appear in more than one group",
-      "differenceCount": "{count} differences",
       "reconciledShort": "Reconciled",
       "panelTitle": "Line {line} · comparison",
       "panelInconsistent": "Differences",
@@ -427,7 +426,15 @@
       "sortPrefix": "Sort",
       "groupPrefix": "Group",
       "groupOn": "By difference type",
-      "groupOff": "Off"
+      "groupOff": "Off",
+      "bucketDifferenceCount": "{count} in this type",
+      "conflictCount": "{count} conflicting",
+      "gapCount": "{count} gaps",
+      "feeFindingCount": "{count} fees",
+      "emptyFiltered": "No differences under the current filter",
+      "netAllAbsent": "Every difference in this batch has one side not involved, so no net difference can be computed",
+      "netDetail": "Show per-field detail",
+      "feeOutsidePlain": "{count} more are outside this batch"
     }
   }
 }
