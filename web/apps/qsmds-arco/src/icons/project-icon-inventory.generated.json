@@ -1397,7 +1397,7 @@
       "apps/qsmds-arco/src/views/workbenches/containers/container-remark.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-orders.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue",
-      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/detail.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-reconciliation-compare-panel.vue",
       "packages/components/src/basic/table/index.vue",
       "packages/components/src/pro/tree/index.vue"
     ]
@@ -1420,7 +1420,7 @@
       "apps/qsmds-arco/src/components/business/QsGenericTable/GroupHeader.vue",
       "apps/qsmds-arco/src/components/business/QsPartConfigurator/index.vue",
       "apps/qsmds-arco/src/components/business/QsStatusSwitchToolbar/index.vue",
-      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/detail.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-reconciliation-compare-panel.vue",
       "packages/components/src/basic/image-preview/preview.vue",
       "packages/components/src/basic/table/index.vue"
     ]
@@ -2318,7 +2318,8 @@
       "apps/qsmds-arco/src/views/component_library/business/components/StatusSwitchToolbarShowcase.vue",
       "apps/qsmds-arco/src/views/component_library/business/dictionary-select.vue",
       "apps/qsmds-arco/src/views/component_library/business/status-switch-toolbar.vue",
-      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/index.vue"
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-reconciliation-line-list.vue"
     ]
   },
   {
@@ -2359,7 +2360,8 @@
     "usages": [
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-panel.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
-      "apps/qsmds-arco/src/views/admin/product-management/list/product-attributes-modal.vue"
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-attributes-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-reconciliation-line-list.vue"
     ]
   },
   {
@@ -3538,6 +3540,7 @@
       "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
       "apps/qsmds-arco/src/views/system/users/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-reconciliation-compare-panel.vue",
       "packages/components/src/basic/input/index.vue",
       "packages/components/src/basic/tag/tag/Tag.vue",
       "packages/components/src/pro/cascader/index.vue",

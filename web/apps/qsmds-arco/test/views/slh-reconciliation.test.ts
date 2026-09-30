@@ -13,8 +13,18 @@ import zhCn from '../../src/locales/lang/workbench/zh-cn.json'
 import zhTw from '../../src/locales/lang/workbench/zh-tw.json'
 import {
   buildSlhReconciliationComparisons,
+  buildSlhReconciliationRows,
+  compareSlhReconciliationMember,
   filterSlhReconciliationComparisons,
+  filterSlhReconciliationDifferences,
+  groupSlhReconciliationRowsByBucket,
+  nextSlhReconciliationDifferenceLineId,
+  resolveSlhReconciliationField,
+  SLH_RECONCILIATION_BUCKET_GROUP_THRESHOLD,
   SLH_RECONCILIATION_DIFF_BUCKETS,
+  SLH_RECONCILIATION_FIELD_ORDER,
+  SLH_RECONCILIATION_TOTAL_FIELDS,
+  sortSlhReconciliationComparisons,
 } from '../../src/views/workbenches/slh-reconciliation/diff.logic'
 import {
   buildSlhReconciliationBatchListQuery,
@@ -247,16 +257,17 @@ test('第一步页脚给出未选择时的原因提示', async () => {
 })
 
 test('详情页只渲染本批次成员行，并显示批次与账单两个进度', async () => {
-  const source = await readPageSource('detail.vue')
-  // 数据边界：明细表的数据源只能是当前批次成员行（筛选后仍是它的子集）。
-  assert.match(source, /:data="rows"/u)
-  assert.doesNotMatch(source, /slhBillsApi/u)
-  assert.match(source, /batch\.reconciledMemberCount \}\} \/ \{\{ batch\.memberCount/u)
-  assert.match(source, /row\.bill\.lineCount - row\.bill\.reconciledLineCount/u)
+  const page = await readPageSource('detail.vue')
+  // 数据边界：清单的数据源只能是当前批次成员行（经判定层配对后仍是它的子集）。
+  assert.match(page, /:rows="rows"/u)
+  assert.match(page, /buildSlhReconciliationRows\(batch\.value\?\.members \?\? \[\]/u)
+  assert.doesNotMatch(page, /slhBillsApi/u)
+  assert.match(page, /batch\.reconciledMemberCount \}\} \/ \{\{ batch\.memberCount/u)
+  assert.match(page, /row\.bill\.lineCount - row\.bill\.reconciledLineCount/u)
   // 只核对未核对过的成员行，并在提交前做整批语义的说明。
-  assert.match(source, /row\.original\.member\.reconciledAt === null && inProgress/u)
-  assert.match(source, /slhReconciliationBatchesApi\.reconcile\(/u)
-  assert.match(source, /slhReconciliationBatchesApi\.complete\(/u)
+  assert.match(page, /member\.reconciledAt === null/u)
+  assert.match(page, /slhReconciliationBatchesApi\.reconcile\(/u)
+  assert.match(page, /slhReconciliationBatchesApi\.complete\(/u)
 })
 
 // ---- A 方案的差异判定：四桶、Hero 聚合与页面结构 ----
@@ -330,31 +341,40 @@ function comparisonOf(members: SlhReconciliationBatchMemberDto[], findings: SlhB
   return buildSlhReconciliationComparisons({ findings, members })
 }
 
-test('代收款是三态判定：两侧有值不等给差额，单侧不涉及不算一致，都不涉及才算一致', () => {
+test('字段展示顺序取账单原表列序，代收款不再是任何特例', () => {
+  const fields = compareSlhReconciliationMember(memberFixture())
+  assert.deepEqual(fields.map(field => field.field), [...SLH_RECONCILIATION_FIELD_ORDER])
+  // 原表列序的自然结果：入仓参考在最前，代收款落在材积之后、收货人之前。
+  assert.equal(fields[0].field, 'warehouseReceiptReference')
+  assert.ok(fields.findIndex(field => field.field === 'codAmountTwd') > fields.findIndex(field => field.field === 'volumeCai'))
+  // 取用方式与其它字段完全一致：没有 cod 专名，按字段名查。
+  const comparison = comparisonOf([memberFixture()])
+  const cod = resolveSlhReconciliationField(comparison.members[0], 'codAmountTwd')
+  assert.equal(cod?.state, 'DIFFERENT')
+  // 差额约定为「柜次 − 账单」：账单 340、柜次 300 ⇒ −40。
+  assert.equal(cod?.difference, '-40.00')
+})
+
+test('字段四态：两侧有值不等、单侧不涉及、一致、都不涉及', () => {
   const result = comparisonOf([
     memberFixture(),
-    // 账单没填（不涉及）而柜次有值：同样是差异，但没有差额可算。
-    memberFixture({ codAmountTwd: null }, { codAmountTwd: '340.00' }),
+    memberFixture({ codAmountTwd: null, lineId: 'line-2', lineNumber: 2 }, { codAmountTwd: '340.00' }),
     // 显式 0 与「不涉及」是两种写法：null 与 0.00 判为差异。
     memberFixture({ codAmountTwd: '0.00', lineId: 'line-3', lineNumber: 3 }, { codAmountTwd: null }),
     memberFixture({ codAmountTwd: null, lineId: 'line-4', lineNumber: 4 }, { codAmountTwd: null }),
+    memberFixture({ codAmountTwd: '300.00', lineId: 'line-5', lineNumber: 5 }),
   ])
-
-  const [first, second, third, fourth] = result.members
-  assert.equal(first.cod.state, 'DIFFERENT')
-  // 差额约定为「柜次 − 账单」：账单 340、柜次 300 ⇒ −40。
-  assert.equal(first.cod.difference, '-40.00')
-  assert.equal(second.cod.state, 'ABSENT')
-  assert.equal(second.cod.difference, null)
-  assert.equal(third.cod.state, 'ABSENT')
-  assert.equal(fourth.cod.state, 'BOTH_ABSENT')
+  assert.deepEqual(result.members.map(member => resolveSlhReconciliationField(member, 'codAmountTwd')?.state), [
+    'DIFFERENT',
+    'ABSENT',
+    'ABSENT',
+    'BOTH_ABSENT',
+    'SAME',
+  ])
+  // 单侧不涉及没有两个数可减，因此不给差额。
+  assert.equal(resolveSlhReconciliationField(result.members[1], 'codAmountTwd')?.difference, null)
   assert.equal(result.summary.bucketLineCounts.COD, 3)
-  assert.equal(result.summary.codDifferentCount, 1)
-  assert.equal(result.summary.codConflictCount, 2)
-  assert.equal(result.summary.codDifferenceTotal, '-40.00')
-  // 「不涉及」按 0 计入合计，所以两侧合计不能直接相减。
-  assert.equal(result.summary.billCodTotal, '340.00')
-  assert.equal(result.summary.containerCodTotal, '640.00')
+  assert.equal(result.summary.linesWithDifference, 3)
 })
 
 test('计费基础按记录精度比较，材积按计价方式与柜次侧配对', () => {
@@ -368,18 +388,18 @@ test('计费基础按记录精度比较，材积按计价方式与柜次侧配�
   const quantityFields = result.members[0].fields.filter(field => field.bucket === 'QUANTITY' && field.state !== 'SAME')
   assert.deepEqual(quantityFields.map(field => field.field), ['grossWeightKg'])
   assert.equal(quantityFields[0].difference, '-5.000')
-  assert.equal(result.members[0].fields.find(field => field.field === 'volumeCai')?.state, 'SAME')
+  assert.equal(resolveSlhReconciliationField(result.members[0], 'volumeCai')?.state, 'SAME')
   // 2.00 与计费量 3 判为差异，差额 +1.00。
   assert.deepEqual(result.members[1].buckets, ['QUANTITY'])
-  assert.equal(result.members[1].fields.find(field => field.field === 'volumeCai')?.difference, '1.00')
+  assert.equal(resolveSlhReconciliationField(result.members[1], 'volumeCai')?.difference, '1.00')
 })
 
 test('文本参考项同样入桶：货品名差异算差异，电话归一化后相等就算一致', () => {
   const result = comparisonOf([memberFixture({ codAmountTwd: '300.00', goodsName: '机器配件(含底座)' })])
   assert.deepEqual(result.members[0].buckets, ['TEXT'])
-  assert.equal(result.members[0].fields.find(field => field.field === 'goodsName')?.state, 'DIFFERENT')
+  assert.equal(resolveSlhReconciliationField(result.members[0], 'goodsName')?.state, 'DIFFERENT')
   // 09xx-xxx-xxx 与 09xxxxxxxx 去掉分隔符后相同：不再误报，最终模糊口径待定。
-  assert.equal(result.members[0].fields.find(field => field.field === 'recipientPhone')?.state, 'SAME')
+  assert.equal(resolveSlhReconciliationField(result.members[0], 'recipientPhone')?.state, 'SAME')
 })
 
 test('费用出入按导入快照挂到成员行，账单级条目只计数不混进批次', () => {
@@ -396,62 +416,149 @@ test('费用出入按导入快照挂到成员行，账单级条目只计数不�
   assert.equal(result.billLevelFindings.length, 1)
 })
 
-test('筛选与汇总：计数与实际筛出的行数一致', () => {
+test('不一致处数只回答「有几处要处理」：不一致字段数 + 费用条数', () => {
+  const findings: SlhBillFindingDto[] = [
+    { kind: 'FREIGHT_MISMATCH', lineNumber: 1, message: '运费复算不一致', severity: 'difference', sourceRowNumber: 12 },
+    { kind: 'REMARK_NOTE', lineNumber: 1, message: '备注片段没有金额', severity: 'warning', sourceRowNumber: 12 },
+  ]
   const result = comparisonOf([
     memberFixture(),
-    memberFixture({ codAmountTwd: null, lineId: 'line-2', lineNumber: 2 }, { codAmountTwd: '340.00' }),
-    // 两侧代收款一致且其余字段也无差异：已核对的行不会因为「已核对」被算成差异。
-    memberFixture(
-      { codAmountTwd: '1500.00', lineId: 'line-3', lineNumber: 3, reconciledAt: '2026-01-03T01:00:00.000Z' },
-      { codAmountTwd: '1500.00' },
-    ),
-  ])
-  assert.equal(result.summary.linesWithDifference, 2)
-  assert.equal(result.summary.pendingMemberCount, 2)
-  assert.equal(result.summary.reconciledMemberCount, 1)
-  assert.equal(filterSlhReconciliationComparisons(result.members, 'COD').length, result.summary.bucketLineCounts.COD)
-  assert.equal(filterSlhReconciliationComparisons(result.members, 'TEXT').length, 0)
-  assert.equal(filterSlhReconciliationComparisons(result.members, 'all').length, 3)
+    // 代收款一致、毛重与货品名各一处：一共两处不一致。
+    memberFixture({ codAmountTwd: '300.00', goodsName: '别的品名', lineId: 'line-2', lineNumber: 2 }, { grossWeightKg: '315.000' }),
+  ], findings)
+  assert.equal(result.members[0].differenceCount, 1 + findings.length)
+  assert.equal(result.members[1].differenceCount, 2)
+  assert.equal(result.members[1].buckets.length, 2)
 })
 
-test('详情页按 A 方案分层：Hero、筛选条、四桶、字段级对照与费用副表', async () => {
-  const source = await readPageSource('detail.vue')
-  // Hero 三个格子：差异行数、可计算差额、两侧有值合计，并说明两个合计不可直接相减。
-  assert.match(source, /slhReconciliation\.detail\.heroCodDifferenceValue/u)
-  assert.match(source, /slhReconciliation\.detail\.heroCodDifferenceTotal/u)
-  assert.match(source, /slhReconciliation\.detail\.heroCodTotalsHint/u)
-  // 筛选条按桶出计数、点选即筛；差异判定只有 diff.logic 一份。
-  assert.match(source, /SLH_RECONCILIATION_DIFF_BUCKETS/u)
-  assert.match(source, /filterSlhReconciliationComparisons/u)
-  assert.match(source, /activeBucket = filter\.key/u)
-  assert.match(source, /buildSlhReconciliationComparisons\(/u)
-  // 主表点行展开字段级对照，费用出入单独成表并标明批次与全账单两个口径。
-  assert.match(source, /@row-click="toggleCompare"/u)
-  assert.match(source, /slhReconciliation\.detail\.fieldCompareTitle/u)
-  assert.match(source, /slhReconciliation\.detail\.feeScope/u)
-  // 差异行给底色提示，一致的行保持白底。
-  assert.match(source, /\[&>td\]:bg-destructive\/5/u)
+test('排序：不一致优先只区分有没有，不在桶之间分先后', () => {
+  const result = comparisonOf([
+    memberFixture({ codAmountTwd: '300.00', lineId: 'line-1', lineNumber: 1 }),
+    memberFixture({ lineId: 'line-2', lineNumber: 2 }),
+    memberFixture({ codAmountTwd: '300.00', goodsName: '别的品名', lineId: 'line-3', lineNumber: 3 }),
+  ])
+  assert.deepEqual(sortSlhReconciliationComparisons(result.members, 'DIFFERENCE_FIRST').map(member => member.lineNumber), [2, 3, 1])
+  assert.deepEqual(sortSlhReconciliationComparisons(result.members, 'LINE_NUMBER').map(member => member.lineNumber), [1, 2, 3])
+})
+
+test('按差异桶分组：同一行可出现在多个分组，顶部计数仍是去重行数', () => {
+  const members = [
+    // 代收款 + 毛重：同时命中两个桶。
+    memberFixture({}, { grossWeightKg: '315.000' }),
+    memberFixture({ codAmountTwd: '300.00', goodsName: '别的品名', lineId: 'line-2', lineNumber: 2 }),
+    memberFixture({ codAmountTwd: '300.00', lineId: 'line-3', lineNumber: 3 }),
+  ]
+  const result = comparisonOf(members)
+  const groups = groupSlhReconciliationRowsByBucket(buildSlhReconciliationRows(members, result.members))
+  assert.deepEqual(groups.map(group => [group.bucket, group.rows.length]), [['COD', 1], ['QUANTITY', 1], ['TEXT', 1]])
+  assert.equal(groups.flatMap(group => group.rows).length, 3)
+  // 去重口径：不一致行数是 2，而分组里的行数合计是 3。
+  assert.equal(result.summary.linesWithDifference, 2)
+  assert.ok(SLH_RECONCILIATION_BUCKET_GROUP_THRESHOLD >= 10)
+})
+
+test('「下一条不一致」按当前顺序前进，末尾返回 null', () => {
+  const result = comparisonOf([
+    memberFixture({ codAmountTwd: '300.00', lineId: 'line-1', lineNumber: 1 }),
+    memberFixture({ lineId: 'line-2', lineNumber: 2 }),
+    memberFixture({ codAmountTwd: '300.00', lineId: 'line-3', lineNumber: 3 }),
+  ])
+  assert.equal(nextSlhReconciliationDifferenceLineId(result.members, ''), 'line-2')
+  assert.equal(nextSlhReconciliationDifferenceLineId(result.members, 'line-2'), null)
+})
+
+test('净差小结：只累加可加总的字段，单侧不涉及的行既不入净差也要报数', () => {
+  const result = comparisonOf([
+    memberFixture({}, { grossWeightKg: '315.000' }),
+    memberFixture({ codAmountTwd: null, lineId: 'line-2', lineNumber: 2 }, { codAmountTwd: '340.00' }),
+  ])
+  const totals = result.summary.fieldTotals
+  const cod = totals.find(total => total.field === 'codAmountTwd')
+  assert.equal(cod?.total, '-40.00')
+  assert.equal(cod?.computedCount, 1)
+  assert.equal(cod?.absentCount, 1)
+  const weight = totals.find(total => total.field === 'grossWeightKg')
+  assert.equal(weight?.total, '-5.000')
+  // 逐件尺寸不参与累加；两侧一致的字段根本不进小结。
+  assert.equal(totals.some(total => total.field === 'lengthCm'), false)
+  assert.equal(totals.some(total => total.field === 'packageCount'), false)
+  assert.deepEqual(totals.map(total => total.field), ['codAmountTwd', 'grossWeightKg'])
+})
+
+test('只看不一致与桶筛选：筛出来的行数与计数一致', () => {
+  const result = comparisonOf([
+    memberFixture(),
+    memberFixture({ codAmountTwd: '300.00', lineId: 'line-2', lineNumber: 2 }),
+    memberFixture({ codAmountTwd: '300.00', goodsName: '别的品名', lineId: 'line-3', lineNumber: 3 }),
+  ])
+  assert.equal(filterSlhReconciliationComparisons(result.members, 'COD').length, result.summary.bucketLineCounts.COD)
+  assert.equal(filterSlhReconciliationComparisons(result.members, 'TEXT').length, 1)
+  assert.equal(filterSlhReconciliationComparisons(result.members, 'all').length, 3)
+  assert.equal(filterSlhReconciliationDifferences(result.members).length, result.summary.linesWithDifference)
+})
+
+test('详情页：概览四桶等权、清单不内联数值、面板按原表列序并给出净差小结', async () => {
+  const page = await readPageSource('detail.vue')
+  const list = await readPageSource('slh-reconciliation-line-list.vue')
+  const panel = await readPageSource('slh-reconciliation-compare-panel.vue')
+  // 概览：四个桶同一套渲染规则，没有代收款专属的主数字。
+  assert.match(page, /SLH_RECONCILIATION_DIFF_BUCKETS/u)
+  assert.doesNotMatch(page, /heroCod/u)
+  assert.match(page, /activeBucket = activeBucket === chip\.bucket \? 'all' : chip\.bucket/u)
+  // 清单只给不一致处数、桶标签与核对状态，不内联任何字段数值。
+  assert.doesNotMatch(list, /AmountDisplay/u)
+  assert.match(list, /differenceCount/u)
+  assert.match(list, /groupSlhReconciliationRowsByBucket|grouped/u)
+  // 面板：不一致在前、一致折叠在后，字段顺序来自判定层；净差小结在面板内。
+  assert.match(panel, /panelInconsistent/u)
+  assert.match(panel, /resolveSlhReconciliationFieldLabelKey/u)
+  assert.match(panel, /netTitle/u)
+  assert.match(panel, /netAbsent/u)
+  // 不给任何桶单独的类名分支（平等：不存在按桶分色）。
+  assert.doesNotMatch(list, /bucket === 'COD'/u)
+  assert.doesNotMatch(panel, /bucket === 'COD'/u)
+  // 判定口径只有 diff.logic 一份，页面不自己算差异。
+  assert.match(page, /buildSlhReconciliationComparisons\(/u)
+})
+
+test('详情页三档断点：并排 / 抽屉 / 全屏，且不引入键盘步进', async () => {
+  const page = await readPageSource('detail.vue')
+  const panel = await readPageSource('slh-reconciliation-compare-panel.vue')
+  assert.match(page, /useMediaQuery\('\(max-width: 1023px\)'\)/u)
+  assert.match(page, /useMediaQuery\('\(max-width: 1439px\)'\)/u)
+  assert.match(page, /<FaDrawer/u)
+  assert.match(page, /isNarrow && panelOpen/u)
+  assert.match(page, /goNextDifference/u)
+  assert.match(panel, /slhReconciliation\.detail\.nextDifference/u)
+  assert.doesNotMatch(page, /keydown/u)
+})
+
+test('结束本次对账仍不受未核对行数限制（Q9 门禁未定，先不实现）', async () => {
+  const page = await readPageSource('detail.vue')
+  assert.doesNotMatch(page, /:disabled="[^"]*pendingMemberCount[^"]*"/u)
+  assert.match(page, /completeOpen = true/u)
 })
 
 test('差异判定的取值映射都有三语文案', () => {
   const detail = zhCn.slhReconciliation.detail as unknown as Record<string, unknown>
-  assertTranslated(detail, ['filterAll', 'recipientNote', 'diffNone', 'absentValue', 'fieldCompareTitle', 'feeTitle'])
-  assertTranslated(detail.bucket as Record<string, unknown>, [...SLH_RECONCILIATION_DIFF_BUCKETS])
-  assertTranslated(detail.field as Record<string, unknown>, [
-    'codAmountTwd',
-    'packageCount',
-    'grossWeightKg',
-    'lengthCm',
-    'widthCm',
-    'heightCm',
-    'volumeCai',
-    'goodsName',
-    'shippingMark',
-    'warehouseReceiptReference',
-    'recipientName',
-    'recipientPhone',
-    'recipientAddress',
+  assertTranslated(detail, [
+    'filterAll',
+    'recipientNote',
+    'diffNone',
+    'absentValue',
+    'listTitle',
+    'panelTitle',
+    'panelInconsistent',
+    'panelConsistent',
+    'netTitle',
+    'netHint',
+    'netAbsent',
+    'reconcileLine',
+    'nextDifference',
   ])
+  assertTranslated(detail.bucket as Record<string, unknown>, [...SLH_RECONCILIATION_DIFF_BUCKETS])
+  assertTranslated(detail.unit as Record<string, unknown>, [...SLH_RECONCILIATION_TOTAL_FIELDS])
+  assertTranslated(detail.field as Record<string, unknown>, [...SLH_RECONCILIATION_FIELD_ORDER])
   assertTranslated(detail.fieldState as Record<string, unknown>, ['SAME', 'DIFFERENT', 'ABSENT', 'BOTH_ABSENT'])
   assertTranslated(detail.finding as Record<string, unknown>, [
     'FREIGHT_MISMATCH',
