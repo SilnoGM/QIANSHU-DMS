@@ -9,6 +9,7 @@ import {
   buildShipmentShippingInfoText,
   canCopyShipmentShippingInfo,
   copyShipmentShippingInfo,
+  formatShippingInfoAddress,
   formatShippingInfoBalance,
   joinShippingInfoProductNames,
   shippingInfoFields,
@@ -86,6 +87,25 @@ test('复制文本逐行标签值，保留分组空行与结束时行', async ()
     '',
     '备注：',
   ].join('\n'))
+})
+
+test('复制收货地址去掉开头的国家地区前缀「中国台湾」，其他前缀与中间出现不动', () => {
+  assert.equal(formatShippingInfoAddress('中国台湾台湾新竹縣啊啊啊啊'), '台湾新竹縣啊啊啊啊')
+  assert.equal(formatShippingInfoAddress('中國台灣台灣新竹縣啊啊啊啊'), '台灣新竹縣啊啊啊啊')
+  assert.equal(formatShippingInfoAddress('中国台湾'), null)
+  assert.equal(formatShippingInfoAddress('中国北京市北京市测试路1号'), '中国北京市北京市测试路1号')
+  assert.equal(formatShippingInfoAddress('台湾中国台湾路1号'), '台湾中国台湾路1号')
+  assert.equal(formatShippingInfoAddress(null), null)
+  assert.equal(formatShippingInfoAddress('   '), null)
+})
+
+test('复制文本按去掉前缀后的地址输出，界面展示值仍保留完整地址', async () => {
+  const translate = await createTranslate()
+  const taiwanOrder = { ...salesOrder, customer: { ...salesOrder.customer, fullAddress: '中国台湾台湾新竹縣啊啊啊啊' } } as unknown as SalesOrderDetailDto
+  const info = buildShipmentShippingInfo(shipment, taiwanOrder, translate('warehouseArrivals.shippingInfoFreightBearer'))
+  assert.equal(info.customerAddress, '中国台湾台湾新竹縣啊啊啊啊')
+  assert.match(buildShipmentShippingInfoText(info, translate), /\n收货地址：台湾新竹縣啊啊啊啊\n/u)
+  assert.doesNotMatch(buildShipmentShippingInfoText(info, translate), /中国台湾/u)
 })
 
 test('复制文本缺值留空而不写占位符，多行备注保持换行', async () => {

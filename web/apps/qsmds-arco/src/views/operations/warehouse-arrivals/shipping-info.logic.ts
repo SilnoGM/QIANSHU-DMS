@@ -57,6 +57,18 @@ export function buildShipmentShippingInfo(
   }
 }
 
+/**
+ * 复制收货地址时去掉开头的「中国台湾」：地址快照是「国家+省+市+详情」拼的，
+ * 顺联航在台湾端收货，这四个字对对方是多余的。只处理开头，地址详情里出现的原样保留。
+ */
+export function formatShippingInfoAddress(address: string | null): string | null {
+  const value = address?.trim()
+  if (!value) {
+    return null
+  }
+  return value.replace(/^(?:中国台湾|中國台灣)\s*/u, '') || null
+}
+
 /** 复制文本与弹窗展示同源：同一个标签键、同样的分组空行；缺值留空，不把界面占位符发给对方。 */
 export function buildShipmentShippingInfoText(info: ShipmentShippingInfo, translate: Translate): string {
   const value = (text: string | null) => text?.trim() ?? ''
@@ -68,7 +80,7 @@ export function buildShipmentShippingInfoText(info: ShipmentShippingInfo, transl
     '',
     `${label('customerName')}：${value(info.customerName)}`,
     `${label('customerPhone')}：${value(info.customerPhone)}`,
-    `${label('customerAddress')}：${value(info.customerAddress)}`,
+    `${label('customerAddress')}：${value(formatShippingInfoAddress(info.customerAddress))}`,
     '',
     `${label('balanceText')}：${value(info.balanceText)}`,
     `${label('freightBearer')}：${value(info.freightBearer)}`,
