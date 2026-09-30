@@ -31,7 +31,7 @@ export function serializeOperationsOceanLine(row: PersonalLine): OperationsOcean
     purchaseOrderId: shipment?.purchaseOrder.id ?? null, purchaseOrderNo: shipment?.purchaseOrder.orderNo ?? null,
     codAmountTwd: codAmountTwd?.toFixed(2) ?? null, grossWeightKg: grossWeightKg?.toFixed(3) ?? null,
     lengthCm: lengthCm?.toFixed(2) ?? null, widthCm: widthCm?.toFixed(2) ?? null, heightCm: heightCm?.toFixed(2) ?? null,
-    volumeCai: volumeCai?.toFixed(8) ?? null,
+    volumeCai: volumeCai?.toFixed(2) ?? null,
   }
 }
 
@@ -72,7 +72,7 @@ export class OperationsOceanContainerService {
           itemCount: count, myItemCount: personalCounts.get(row.id) ?? 0,
           // 有任一缺失值时展示待完善，不能把部分合计伪装成完整合计；空柜为零。
           grossWeightKgTotal: count === 0 ? '0.000' : summary!._count.grossWeightKg < count ? null : summary!._sum.grossWeightKg!.toFixed(3),
-          volumeCaiTotal: count === 0 ? '0.00000000' : summary!._count.volumeCai < count ? null : summary!._sum.volumeCai!.toFixed(8),
+          volumeCaiTotal: count === 0 ? '0.00' : summary!._count.volumeCai < count ? null : summary!._sum.volumeCai!.toFixed(2),
         }
       }) }
     }, { isolationLevel: 'RepeatableRead' })

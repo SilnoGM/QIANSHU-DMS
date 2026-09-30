@@ -83069,7 +83069,7 @@
           "volumeCai": {
             "type": "string",
             "nullable": true,
-            "description": "Calculated row volume using the shared 28316 divisor, rounded to two decimals; null when dimensions are incomplete."
+            "description": "Calculated row volume using the shared 28316 divisor, rounded to two decimals; decimal(24,2); null when dimensions are incomplete."
           },
           "chargeableVolumeCai": {
             "type": "number",
@@ -83922,7 +83922,7 @@
           "volumeCai": {
             "type": "string",
             "nullable": true,
-            "description": "Calculated row volume using the shared 28316 divisor, rounded to two decimals; null when dimensions are incomplete."
+            "description": "Calculated row volume using the shared 28316 divisor, rounded to two decimals; decimal(24,2); null when dimensions are incomplete."
           }
         },
         "required": [

@@ -19,7 +19,7 @@ describe('container import normalization', () => {
     expect(first).not.toBe(importRowIdentity('other', row))
   })
   it('computes full row volume, flags container conflicts and duplicate ocean marks', () => {
-    expect(validateParsedRows([row], batch)[0]).toMatchObject({ errors: [], volumeCai: '12.88000000', chargeableVolumeCai: 13 })
+    expect(validateParsedRows([row], batch)[0]).toMatchObject({ errors: [], volumeCai: '12.88', chargeableVolumeCai: 13 })
     expect(validateParsedRows([{ ...row, containerBatchName: '0918柜' }], batch)[0].errors).toHaveLength(1)
     expect(validateParsedRows([row, { ...row, rowKey: '1:6', sourceRowNumber: 6 }], batch).every(value => value.errors.length === 1)).toBe(true)
   })

@@ -22,8 +22,6 @@ export const VOLUME_CAI_SCALE = 2
 /** 尺寸精度：账单表与装柜明细都按两位小数记录每件尺寸。 */
 export const VOLUME_DIMENSION_SCALE = 2
 
-const VOLUME_CAI_STORAGE_SCALE = 8
-
 /**
  * 按记录精度比较两侧材积：两个入参都已是记录精度（两位小数）的定点值，直接相减。
  * 账单表与装柜明细共用这一口径，来源多余的小数位不构成差异。
@@ -46,15 +44,14 @@ export function calculateOceanVolume(input: OceanVolumeInput) {
   // 按材积计价时材积就是计费数量，必须向上取整；不按材积计价时按记录精度保留两位小数。
   const chargeable = (product + denominator - 1n) / denominator
   if (chargeable > 2147483647n) throw new OceanCalculationError('chargeableVolumeCai', true)
-  // 舍入按记录精度进行，结果放大回落库精度后再格式化，避免用落库精度取值。
-  const volume = roundRatio(product * power(VOLUME_CAI_SCALE), denominator) * power(VOLUME_CAI_STORAGE_SCALE - VOLUME_CAI_SCALE)
-  // Decimal(24,8) 落库值仍须大于零；过小尺寸不能以零材积通过后再触发数据库约束。
+  const volume = roundRatio(product * power(VOLUME_CAI_SCALE), denominator)
+  // 落库列要求材积为正；过小尺寸不能以零材积通过后再触发数据库约束。
   if (volume === 0n) throw new OceanCalculationError('volumeCai')
   return {
-    volumeCai: formatDecimal(volume, 24, VOLUME_CAI_STORAGE_SCALE, 'volumeCai'),
+    volumeCai: formatDecimal(volume, 24, VOLUME_CAI_SCALE, 'volumeCai'),
     chargeableVolumeCai: Number(chargeable),
     volumeDifferenceCai: reported === null ? null : formatDecimal(
-      volumeDifferenceAtRecordScale(volume / power(VOLUME_CAI_STORAGE_SCALE - VOLUME_CAI_SCALE), parseDecimal(reported, 24, VOLUME_CAI_SCALE, 'reportedVolumeCai')),
+      volumeDifferenceAtRecordScale(volume, parseDecimal(reported, 24, VOLUME_CAI_SCALE, 'reportedVolumeCai')),
       24, VOLUME_CAI_SCALE, 'volumeDifferenceCai'),
   }
 }
