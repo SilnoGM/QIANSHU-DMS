@@ -154,6 +154,20 @@ test('两处页面的提示都不用 FaAlert 的默认插槽（它只渲染 titl
   }
 })
 
+test('弹窗第一步用操作列的选择按钮，不再用单选圆圈', async () => {
+  const source = await readPageSource('slh-bill-select-modal.vue')
+  // 右侧固定的操作列，按钮表达选中态。
+  assert.match(source, /const billActionColumn = \{ fixed: 'right' as const, width: 136, minWidth: 136 \}/u)
+  assert.match(source, /:action-column="billActionColumn"/u)
+  assert.match(source, /#actions="\{ row \}"[\s\S]{0,600}slhReconciliation\.selectModal\.select/u)
+  assert.match(source, /slhReconciliation\.selectModal\.selected/u)
+  // 只保留按钮这一条选择路径：行点击会与按钮点击叠加成两次切换。
+  assert.doesNotMatch(source, /@row-click/u)
+  assert.match(source, /@click="selectBill\(row\.id\)"/u)
+  assert.doesNotMatch(source, /i-lucide:circle-dot/u)
+  assert.doesNotMatch(source, /row\.original\.id === selectedBillId \? 'i-lucide:circle'/u)
+})
+
 test('详情页只渲染本批次成员行，并显示批次与账单两个进度', async () => {
   const source = await readPageSource('detail.vue')
   // 数据边界：明细表的数据源只能是 batch.members。

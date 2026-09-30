@@ -51,6 +51,8 @@ const billColumns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
   { id: 'lineCount', title: t('slhBill.column.lineCount'), accessorKey: 'lineCount', minWidth: 110, align: 'right' },
   { id: 'reconciliationStatus', title: t('slhBill.column.reconciliationStatus'), accessorKey: 'reconciliationStatus', minWidth: 140 },
 ])
+/** 操作列只放「选择 / 已选择」一个按钮，右固定；宽度按按钮 100 + 左右内边距 24 估算，取 136。 */
+const billActionColumn = { fixed: 'right' as const, width: 136, minWidth: 136 }
 const matchedColumns = computed(() => buildSlhReconciliationPreviewColumns(t, 'matched'))
 const unmatchedColumns = computed(() => buildSlhReconciliationPreviewColumns(t, 'unmatched'))
 
@@ -214,26 +216,35 @@ onBeforeUnmount(() => {
           :total="total"
           :addable="false"
           :show-column-settings="false"
+          :action-column="billActionColumn"
           :search-placeholder="t('slhBill.search')"
           :empty-title="t('slhReconciliation.selectModal.emptyBills')"
           :empty-description="t('slhReconciliation.selectModal.emptyBillsDescription')"
           @search="searchBills"
           @pagination-change="loadBills"
           @retry="loadBills"
-          @row-click="(row: SlhBillListItemDto) => selectBill(row.id)"
         >
           <template #cell-slhBillNo="{ row }">
-            <span class="flex gap-2 min-w-0 items-center">
-              <FaIcon
-                :name="row.original.id === selectedBillId ? 'i-lucide:circle-dot' : 'i-lucide:circle'"
-                class="text-primary shrink-0 size-4"
-                aria-hidden="true"
-              />
-              <span class="qs-type-data-emphasis font-mono break-all">{{ row.original.slhBillNo }}</span>
-            </span>
+            <span class="qs-type-data-emphasis font-mono break-all">{{ row.original.slhBillNo }}</span>
           </template>
           <template #cell-reconciliationStatus="{ row }">
             <SlhBillReconciliationStatusTag :status="row.original.reconciliationStatus" />
+          </template>
+          <template #actions="{ row }">
+            <!-- 选中态由按钮表达：已选中的行按钮转成「已选择」并禁用，不再用单选圆圈。 -->
+            <FaButton
+              v-if="row.id === selectedBillId"
+              type="button"
+              variant="outline"
+              size="sm"
+              class="min-h-11 sm:min-h-8"
+              disabled
+            >
+              <FaIcon name="i-lucide:check" aria-hidden="true" />{{ t('slhReconciliation.selectModal.selected') }}
+            </FaButton>
+            <FaButton v-else type="button" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" @click="selectBill(row.id)">
+              <FaIcon name="i-lucide:circle-check-big" aria-hidden="true" />{{ t('slhReconciliation.selectModal.select') }}
+            </FaButton>
           </template>
         </QsGenericTable>
       </template>

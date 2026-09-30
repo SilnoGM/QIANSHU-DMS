@@ -304,6 +304,8 @@
         "previewScope": "核對範圍預覽"
       },
       "next": "下一步",
+      "select": "選擇",
+      "selected": "已選擇",
       "back": "上一步",
       "start": "開始對帳",
       "emptyBills": "沒有可對帳的帳單",

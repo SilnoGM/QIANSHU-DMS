@@ -304,6 +304,8 @@
         "previewScope": "Preview the scope"
       },
       "next": "Next",
+      "select": "Select",
+      "selected": "Selected",
       "back": "Back",
       "start": "Start reconciliation",
       "emptyBills": "No bill can be reconciled",

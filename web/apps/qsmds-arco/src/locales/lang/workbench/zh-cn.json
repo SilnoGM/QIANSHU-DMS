@@ -313,6 +313,8 @@
         "previewScope": "核对范围预览"
       },
       "next": "下一步",
+      "select": "选择",
+      "selected": "已选择",
       "back": "上一步",
       "start": "开始对账",
       "emptyBills": "没有可对账的账单",
