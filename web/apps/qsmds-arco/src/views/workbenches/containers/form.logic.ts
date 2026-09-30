@@ -106,7 +106,7 @@ export function validateLoadingItemDraft(draft: LoadingItemDraft): FormErrors {
       errors[key] = 'measurementInvalid'
     }
   }
-  if (!validDecimal(draft.reportedVolumeCai, 24, 8, false)) {
+  if (!validDecimal(draft.reportedVolumeCai, 24, 2, false)) {
     errors.reportedVolumeCai = 'volumeInvalid'
   }
   if (!validDecimal(draft.codAmountTwd, 30, 2, false)) {

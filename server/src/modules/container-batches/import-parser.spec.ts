@@ -5,7 +5,7 @@ describe('container workbook parser', () => {
   it('maps carrier headers, preserves a ten-piece row and does not multiply gross weight', async () => {
     const result = await parseContainerWorkbook(createContainerImportFixture())
     expect(result.rows).toHaveLength(1)
-    expect(result.rows[0]).toMatchObject({ rowKey: '1:3', sourceSheetName: '装柜资料', sourceRowNumber: 3, containerBatchName: '0917柜', warehouseReceiptReference: 'MARK/001/货件-01', oceanShippingMarkText: 'L-091700-01~10', packageCount: 10, grossWeightKg: '180', lengthCm: '128', reportedVolumeCai: '12.88272', recipientPhone: '0912345678', codAmountTwd: '20000', errors: [] })
+    expect(result.rows[0]).toMatchObject({ rowKey: '1:3', sourceSheetName: '装柜资料', sourceRowNumber: 3, containerBatchName: '0917柜', warehouseReceiptReference: 'MARK/001/货件-01', oceanShippingMarkText: 'L-091700-01~10', packageCount: 10, grossWeightKg: '180', lengthCm: '128', reportedVolumeCai: '12.88', recipientPhone: '0912345678', codAmountTwd: '20000', errors: [] })
   })
   it.each([
     ['测试市测试路1号（派送前联系，自备堆高机卸货）', null, '测试市测试路1号', '派送前联系，自备堆高机卸货'],
@@ -35,7 +35,7 @@ describe('container workbook parser', () => {
   it('keeps original numeric strings/formulas and warns instead of restoring lost phone zeros', async () => {
     const row = containerImportRow(3).replace(textCell('O3', '0912345678'), numberCell('O3', '912345678')).replace(numberCell('L3', '12.882720'), numberCell('L3', '12.8827201234567', 'I3*J3*K3/28316*E3'))
     const { rows } = await parseContainerWorkbook(createContainerImportFixture({ sheets: [{ name: '装柜资料', rows: containerImportHeader() + row }] }))
-    expect(rows[0].reportedVolumeCai).toBe('12.88272012')
+    expect(rows[0].reportedVolumeCai).toBe('12.88')
     expect(rows[0].recipientPhone).toBe('912345678')
     expect(rows[0].warnings.join()).toContain('前导零')
     expect(rows[0].sourceData).toMatchObject({ cells: { L3: { value: '12.8827201234567', formula: 'I3*J3*K3/28316*E3' } } })
@@ -72,7 +72,7 @@ describe('container workbook parser', () => {
   it('calculates only safe arithmetic without a cache and reports missing references or unsupported formulas', async () => {
     const rows = containerImportHeader() + containerImportRow(3).replace(numberCell('L3', '12.882720'), '<c r="L3"><f>I3*J3*K3/28316*E3</f></c>') + containerImportRow(4).replace(numberCell('L4', '12.882720'), '<c r="L4"><f>WEBSERVICE("https://invalid")</f></c>')
     const result = await parseContainerWorkbook(createContainerImportFixture({ sheets: [{ name: '装柜资料', rows }] }))
-    expect(result.rows[0].reportedVolumeCai).toBe('12.88317559')
+    expect(result.rows[0].reportedVolumeCai).toBe('12.88')
     expect(result.rows[1].reportedVolumeCai).toBeNull()
     expect(result.rows[1].errors.join()).toContain('公式')
   })
@@ -87,7 +87,7 @@ describe('container workbook parser', () => {
   it('retains shared-formula cached values and reference indexes', async () => {
     const row = containerImportRow(3).replace(numberCell('L3', '12.882720'), '<c r="L3"><f t="shared" si="0"/><v>12.88272</v></c>')
     const result = await parseContainerWorkbook(createContainerImportFixture({ sheets: [{ name: '装柜资料', rows: containerImportHeader() + row }] }))
-    expect(result.rows[0].reportedVolumeCai).toBe('12.88272')
+    expect(result.rows[0].reportedVolumeCai).toBe('12.88')
     expect(result.rows[0].sourceData.cells.L3).toMatchObject({ formula: '', sharedFormulaIndex: '0' })
   })
   it.each(['I3/0', 'L3+1', 'Z3*2', '[Book.xlsx]Sheet1!A1'])('reports invalid or unsafe uncached formula %s', async formula => {

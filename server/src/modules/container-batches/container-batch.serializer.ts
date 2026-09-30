@@ -31,12 +31,12 @@ export function serializeContainerItem(row: ContainerLoadingItem & ItemReference
     grossWeightKg: row.grossWeightKg?.toFixed(3) ?? null,
     lengthCm: row.lengthCm?.toFixed(2) ?? null, widthCm: row.widthCm?.toFixed(2) ?? null, heightCm: row.heightCm?.toFixed(2) ?? null,
     volumeCai: row.volumeCai?.toFixed(8) ?? null, chargeableVolumeCai: row.chargeableVolumeCai,
-    reportedVolumeCai: row.reportedVolumeCai?.toFixed(8) ?? null,
+    reportedVolumeCai: row.reportedVolumeCai?.toFixed(2) ?? null,
     // 差异也按定点数相减，避免 Decimal 默认有效位数截掉大来源值的小数位。
     volumeDifferenceCai: row.volumeCai == null || row.reportedVolumeCai == null ? null : formatDecimal(
       volumeDifferenceAtRecordScale(
-        parseDecimal(row.volumeCai.toFixed(8), 24, 8, 'volumeCai'),
-        parseDecimal(row.reportedVolumeCai.toFixed(8), 24, 8, 'reportedVolumeCai'),
+        parseDecimal(row.volumeCai.toFixed(VOLUME_CAI_SCALE), 24, VOLUME_CAI_SCALE, 'volumeCai'),
+        parseDecimal(row.reportedVolumeCai.toFixed(VOLUME_CAI_SCALE), 24, VOLUME_CAI_SCALE, 'reportedVolumeCai'),
       ), 24, VOLUME_CAI_SCALE, 'volumeDifferenceCai'),
   }
 }

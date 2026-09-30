@@ -25,18 +25,17 @@ export const VOLUME_DIMENSION_SCALE = 2
 const VOLUME_CAI_STORAGE_SCALE = 8
 
 /**
- * 按记录精度比较两侧材积：各自先取两位小数，再在定点域相减，返回记录精度下的差值。
+ * 按记录精度比较两侧材积：两个入参都已是记录精度（两位小数）的定点值，直接相减。
  * 账单表与装柜明细共用这一口径，来源多余的小数位不构成差异。
  */
 export function volumeDifferenceAtRecordScale(volumeUnits: bigint, reportedUnits: bigint): bigint {
-  const factor = power(VOLUME_CAI_STORAGE_SCALE - VOLUME_CAI_SCALE)
-  return roundRatio(volumeUnits, factor) - roundRatio(reportedUnits, factor)
+  return volumeUnits - reportedUnits
 }
 
 export function calculateOceanVolume(input: OceanVolumeInput) {
   const dimensions = ['lengthCm', 'widthCm', 'heightCm'] as const
   const values = dimensions.map(field => normalizeOceanDecimal(input[field], 18, VOLUME_DIMENSION_SCALE, field, true))
-  const reported = normalizeOceanDecimal(input.reportedVolumeCai, 24, VOLUME_CAI_STORAGE_SCALE, 'reportedVolumeCai')
+  const reported = normalizeOceanDecimal(input.reportedVolumeCai, 24, VOLUME_CAI_SCALE, 'reportedVolumeCai')
   if (input.packageCount !== null) positiveInteger(input.packageCount, 'packageCount')
   if (values.some(value => value === null) || input.packageCount === null) {
     return { volumeCai: null, chargeableVolumeCai: null, volumeDifferenceCai: null }
@@ -54,7 +53,9 @@ export function calculateOceanVolume(input: OceanVolumeInput) {
   return {
     volumeCai: formatDecimal(volume, 24, VOLUME_CAI_STORAGE_SCALE, 'volumeCai'),
     chargeableVolumeCai: Number(chargeable),
-    volumeDifferenceCai: reported === null ? null : formatDecimal(volumeDifferenceAtRecordScale(volume, parseDecimal(reported, 24, VOLUME_CAI_STORAGE_SCALE, 'reportedVolumeCai')), 24, VOLUME_CAI_SCALE, 'volumeDifferenceCai'),
+    volumeDifferenceCai: reported === null ? null : formatDecimal(
+      volumeDifferenceAtRecordScale(volume / power(VOLUME_CAI_STORAGE_SCALE - VOLUME_CAI_SCALE), parseDecimal(reported, 24, VOLUME_CAI_SCALE, 'reportedVolumeCai')),
+      24, VOLUME_CAI_SCALE, 'volumeDifferenceCai'),
   }
 }
 

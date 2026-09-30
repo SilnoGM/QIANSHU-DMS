@@ -1921,7 +1921,7 @@ model ContainerLoadingItem {
   heightCm Decimal? @map("height_cm") @db.Decimal(18, 2)
   volumeCai Decimal? @map("volume_cai") @db.Decimal(24, 8)
   chargeableVolumeCai Int? @map("chargeable_volume_cai")
-  reportedVolumeCai Decimal? @map("reported_volume_cai") @db.Decimal(24, 8)
+  reportedVolumeCai Decimal? @map("reported_volume_cai") @db.Decimal(24, 2)
   recipientName String? @map("recipient_name") @db.VarChar(128)
   recipientPhone String? @map("recipient_phone") @db.VarChar(128)
   recipientAddress String? @map("recipient_address") @db.VarChar(2000)

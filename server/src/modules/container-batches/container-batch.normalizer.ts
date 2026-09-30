@@ -1,5 +1,5 @@
 import { ApiException } from '../../infrastructure/http/api.exception'
-import { normalizeOceanDecimal, VOLUME_DIMENSION_SCALE } from '../ocean-freight-calculation/ocean-freight-calculation'
+import { normalizeOceanDecimal, VOLUME_CAI_SCALE, VOLUME_DIMENSION_SCALE } from '../ocean-freight-calculation/ocean-freight-calculation'
 
 export interface ContainerCommandContext { actorUserId: string, requestId: string }
 export function containerFailure(code: string, message: string, status = 422): never {
@@ -56,7 +56,7 @@ export function normalizeLoadingItemCreate(raw: unknown) {
     lengthCm: normalizeOceanDecimal(input.lengthCm ?? null, 18, VOLUME_DIMENSION_SCALE, 'lengthCm', true),
     widthCm: normalizeOceanDecimal(input.widthCm ?? null, 18, VOLUME_DIMENSION_SCALE, 'widthCm', true),
     heightCm: normalizeOceanDecimal(input.heightCm ?? null, 18, VOLUME_DIMENSION_SCALE, 'heightCm', true),
-    reportedVolumeCai: normalizeOceanDecimal(input.reportedVolumeCai ?? null, 24, 8, 'reportedVolumeCai'),
+    reportedVolumeCai: normalizeOceanDecimal(input.reportedVolumeCai ?? null, 24, VOLUME_CAI_SCALE, 'reportedVolumeCai'),
   }
 }
 export function requireContainerVersion(value: unknown): number {

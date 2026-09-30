@@ -83227,7 +83227,7 @@
             "type": "string",
             "nullable": true,
             "maxLength": 25,
-            "description": "Non-negative source row volume; decimal(24,8). Preserved for comparison."
+            "description": "Non-negative source row volume recorded at two decimals; decimal(24,2). The raw source cell stays in sourceData."
           }
         },
         "required": [
@@ -83359,7 +83359,7 @@
             "type": "string",
             "nullable": true,
             "maxLength": 25,
-            "description": "Non-negative source row volume; decimal(24,8). Preserved for comparison."
+            "description": "Non-negative source row volume recorded at two decimals; decimal(24,2). The raw source cell stays in sourceData."
           },
           "itemExpectedVersion": {
             "type": "number",

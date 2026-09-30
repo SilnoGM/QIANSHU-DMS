@@ -1,5 +1,5 @@
 import { importCellNumber, importPackageCount } from './import-parser.numbers'
-import { VOLUME_DIMENSION_SCALE } from '../ocean-freight-calculation/ocean-freight-calculation'
+import { VOLUME_CAI_SCALE, VOLUME_DIMENSION_SCALE } from '../ocean-freight-calculation/ocean-freight-calculation'
 import { ContainerWorkbookParseError, type ParsedContainerRow, type WorkbookCell, type WorkbookSheet } from './import-parser.types'
 import { readContainerWorkbook } from './import-parser.workbook'
 
@@ -109,7 +109,7 @@ function parseRow(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, Wo
     goodsName, packageCount: count, packageUnit: text('packageUnit', '包装单位', 32),
     grossWeightKg: numeric('grossWeightKg', '整行毛重', 3, 18, true), lengthCm: numeric('lengthCm', '每件长度', VOLUME_DIMENSION_SCALE, 18, true),
     widthCm: numeric('widthCm', '每件宽度', VOLUME_DIMENSION_SCALE, 18, true), heightCm: numeric('heightCm', '每件高度', VOLUME_DIMENSION_SCALE, 18, true),
-    reportedVolumeCai: numeric('reportedVolumeCai', '来源材积', 8, 24),
+    reportedVolumeCai: numeric('reportedVolumeCai', '来源材积', VOLUME_CAI_SCALE, 24),
     recipientName: text('recipientName', '收件人', 128), recipientPhone, recipientAddress,
     codAmountTwd: numeric('codAmountTwd', '代收金额', 2, 30), remark, sourceData, errors, warnings,
   }

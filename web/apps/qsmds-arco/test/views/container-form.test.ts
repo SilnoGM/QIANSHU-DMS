@@ -32,11 +32,11 @@ test('new forms retain unknown measurements and default to one package', () => {
 
 test('measurements retain exact decimal strings without Number conversion', () => {
   const draft = createLoadingItemDraft()
-  Object.assign(draft, { goodsName: '炉', grossWeightKg: '999999999999999.999', reportedVolumeCai: '9999999999999999.99999999' })
+  Object.assign(draft, { goodsName: '炉', grossWeightKg: '999999999999999.999', reportedVolumeCai: '9999999999999999.99' })
   assert.deepEqual(validateLoadingItemDraft(draft), {})
   const submission = buildLoadingItemSubmission(draft)
   assert.equal(submission.grossWeightKg, '999999999999999.999')
-  assert.equal(submission.reportedVolumeCai, '9999999999999999.99999999')
+  assert.equal(submission.reportedVolumeCai, '9999999999999999.99')
 })
 
 test('invalid precision, signs, exponent, zero and quantity are rejected; source zero is allowed', () => {

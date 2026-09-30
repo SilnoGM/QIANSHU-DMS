@@ -44,7 +44,7 @@ export class ContainerLoadingItemCreateDto {
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package length in cm; decimal(18,2), matching the bill table record precision.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) lengthCm?: string | null
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package width in cm; decimal(18,2), matching the bill table record precision.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) widthCm?: string | null
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package height in cm; decimal(18,2), matching the bill table record precision.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) heightCm?: string | null
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 25, description: 'Non-negative source row volume; decimal(24,8). Preserved for comparison.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 25) reportedVolumeCai?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 25, description: 'Non-negative source row volume recorded at two decimals; decimal(24,2). The raw source cell stays in sourceData.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 25) reportedVolumeCai?: string | null
 }
 export class ContainerLoadingItemUpdateDto extends ContainerLoadingItemCreateDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) @Max(2_147_483_647) itemExpectedVersion!: number
