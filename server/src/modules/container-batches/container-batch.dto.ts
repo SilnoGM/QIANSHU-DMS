@@ -41,9 +41,9 @@ export class ContainerLoadingItemCreateDto {
   @ApiPropertyOptional({ type: String, maxLength: 32, nullable: true }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 32) packageUnit?: string | null
   @ApiPropertyOptional({ type: String, maxLength: 500, nullable: true }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 500) remark?: string | null
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive total row weight in kg; decimal(18,3). Never multiplied by packageCount.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) grossWeightKg?: string | null
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package length in cm; decimal(18,3).' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) lengthCm?: string | null
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package width in cm; decimal(18,3).' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) widthCm?: string | null
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package height in cm; decimal(18,3).' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) heightCm?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package length in cm; decimal(18,2), matching the bill table record precision.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) lengthCm?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package width in cm; decimal(18,2), matching the bill table record precision.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) widthCm?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package height in cm; decimal(18,2), matching the bill table record precision.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) heightCm?: string | null
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 25, description: 'Non-negative source row volume; decimal(24,8). Preserved for comparison.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 25) reportedVolumeCai?: string | null
 }
 export class ContainerLoadingItemUpdateDto extends ContainerLoadingItemCreateDto {

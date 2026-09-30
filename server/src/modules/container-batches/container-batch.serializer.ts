@@ -1,5 +1,6 @@
 import { Prisma, type ContainerBatch, type ContainerLoadingItem } from '../../generated/prisma/client'
 import { formatDecimal, parseDecimal } from '../ocean-freight-calculation/ocean-decimal'
+import { VOLUME_CAI_SCALE, volumeDifferenceAtRecordScale } from '../ocean-freight-calculation/ocean-freight-calculation'
 import type { ContainerBatchDto, ContainerLoadingItemDto } from './container-batch.dto'
 
 export const containerSummaryInclude = { items: { select: { shipmentId: true, packageCount: true, grossWeightKg: true, volumeCai: true, chargeableVolumeCai: true } } } satisfies Prisma.ContainerBatchInclude
@@ -28,10 +29,14 @@ export function serializeContainerItem(row: ContainerLoadingItem & ItemReference
     recipientName: row.recipientName ?? null, recipientPhone: row.recipientPhone ?? null, recipientAddress: row.recipientAddress ?? null, codAmountTwd: row.codAmountTwd?.toFixed(2) ?? null,
     id: row.id, containerBatchId: row.containerBatchId, shipmentId: row.shipmentId, lineNumber: row.lineNumber, oceanShippingMarkText: row.oceanShippingMarkText, warehouseReceiptReference: row.warehouseReceiptReference, goodsName: row.goodsName, packageCount: row.packageCount, packageUnit: row.packageUnit, remark: row.remark, version: row.version,
     grossWeightKg: row.grossWeightKg?.toFixed(3) ?? null,
-    lengthCm: row.lengthCm?.toFixed(3) ?? null, widthCm: row.widthCm?.toFixed(3) ?? null, heightCm: row.heightCm?.toFixed(3) ?? null,
+    lengthCm: row.lengthCm?.toFixed(2) ?? null, widthCm: row.widthCm?.toFixed(2) ?? null, heightCm: row.heightCm?.toFixed(2) ?? null,
     volumeCai: row.volumeCai?.toFixed(8) ?? null, chargeableVolumeCai: row.chargeableVolumeCai,
     reportedVolumeCai: row.reportedVolumeCai?.toFixed(8) ?? null,
     // 差异也按定点数相减，避免 Decimal 默认有效位数截掉大来源值的小数位。
-    volumeDifferenceCai: row.volumeCai == null || row.reportedVolumeCai == null ? null : formatDecimal(parseDecimal(row.volumeCai.toFixed(8), 24, 8, 'volumeCai') - parseDecimal(row.reportedVolumeCai.toFixed(8), 24, 8, 'reportedVolumeCai'), 24, 8, 'volumeDifferenceCai'),
+    volumeDifferenceCai: row.volumeCai == null || row.reportedVolumeCai == null ? null : formatDecimal(
+      volumeDifferenceAtRecordScale(
+        parseDecimal(row.volumeCai.toFixed(8), 24, 8, 'volumeCai'),
+        parseDecimal(row.reportedVolumeCai.toFixed(8), 24, 8, 'reportedVolumeCai'),
+      ), 24, VOLUME_CAI_SCALE, 'volumeDifferenceCai'),
   }
 }

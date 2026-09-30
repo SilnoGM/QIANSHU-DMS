@@ -31,7 +31,7 @@ describe('ContainerBatchService measurement calculation', () => {
   it('persists row volume and ceiling once while preserving source volume and total weight', async () => {
     const test = harness()
     const result = await test.service.createItem(test.context, test.batchId, { goodsName: '履带', packageCount: 10, expectedVersion: 1, lengthCm: '128', widthCm: '19', heightCm: '15', grossWeightKg: '180', reportedVolumeCai: '12.88' }, test.key)
-    expect(result).toMatchObject({ packageCount: 10, grossWeightKg: '180.000', lengthCm: '128.000', volumeCai: '12.88000000', chargeableVolumeCai: 13, reportedVolumeCai: '12.88000000', volumeDifferenceCai: '0.00000000' })
+    expect(result).toMatchObject({ packageCount: 10, grossWeightKg: '180.000', lengthCm: '128.00', volumeCai: '12.88000000', chargeableVolumeCai: 13, reportedVolumeCai: '12.88000000', volumeDifferenceCai: '0.00' })
     expect(test.tx.containerLoadingItem.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ volumeCai: '12.88000000', chargeableVolumeCai: 13, reportedVolumeCai: '12.88000000', grossWeightKg: '180.000' }) as unknown }))
     expect(test.audit.record).toHaveBeenCalledTimes(1)
   })
@@ -48,7 +48,7 @@ describe('ContainerBatchService measurement calculation', () => {
   it('compares the full supported source precision without decimal-library significant-digit rounding', async () => {
     const test = harness()
     const result = await test.service.createItem(test.context, test.batchId, { goodsName: '履带', packageCount: 10, expectedVersion: 1, lengthCm: '128', widthCm: '19', heightCm: '15', reportedVolumeCai: '9999999999999999.12345678' }, test.key)
-    expect(result.volumeDifferenceCai).toBe('-9999999999999986.24345678')
+    expect(result.volumeDifferenceCai).toBe('-9999999999999986.24')
   })
 
   it('replays a phase-one creation hash when new optional measurements are missing or null', async () => {

@@ -42,13 +42,18 @@ test('measurements retain exact decimal strings without Number conversion', () =
 test('invalid precision, signs, exponent, zero and quantity are rejected; source zero is allowed', () => {
   const draft = createLoadingItemDraft()
   draft.goodsName = '炉'
-  for (const value of ['0', '-1', '1e3', '1.0001', '1000000000000000', 'Infinity']) {
+  for (const value of ['0', '-1', '1e3', '1.0001', '10000000000000000', 'Infinity', '0.001']) {
     draft.lengthCm = value
     assert.ok(validateLoadingItemDraft(draft).lengthCm, value)
   }
-  draft.lengthCm = '0.001'
+  // 尺寸两位小数，毛重仍三位小数：同一张表单里两种精度各自成立。
+  draft.lengthCm = '0.01'
+  draft.grossWeightKg = '0.001'
   draft.reportedVolumeCai = '0'
   assert.deepEqual(validateLoadingItemDraft(draft), {})
+  draft.grossWeightKg = '0.0001'
+  assert.ok(validateLoadingItemDraft(draft).grossWeightKg)
+  draft.grossWeightKg = '0.001'
   for (const value of ['0', '1.5', '1000001', '1e2']) {
     draft.packageCount = value
     assert.ok(validateLoadingItemDraft(draft).packageCount, value)

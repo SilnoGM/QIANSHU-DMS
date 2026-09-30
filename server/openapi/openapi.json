@@ -83209,19 +83209,19 @@
             "type": "string",
             "nullable": true,
             "maxLength": 19,
-            "description": "Positive per-package length in cm; decimal(18,3)."
+            "description": "Positive per-package length in cm; decimal(18,2), matching the bill table record precision."
           },
           "widthCm": {
             "type": "string",
             "nullable": true,
             "maxLength": 19,
-            "description": "Positive per-package width in cm; decimal(18,3)."
+            "description": "Positive per-package width in cm; decimal(18,2), matching the bill table record precision."
           },
           "heightCm": {
             "type": "string",
             "nullable": true,
             "maxLength": 19,
-            "description": "Positive per-package height in cm; decimal(18,3)."
+            "description": "Positive per-package height in cm; decimal(18,2), matching the bill table record precision."
           },
           "reportedVolumeCai": {
             "type": "string",
@@ -83341,19 +83341,19 @@
             "type": "string",
             "nullable": true,
             "maxLength": 19,
-            "description": "Positive per-package length in cm; decimal(18,3)."
+            "description": "Positive per-package length in cm; decimal(18,2), matching the bill table record precision."
           },
           "widthCm": {
             "type": "string",
             "nullable": true,
             "maxLength": 19,
-            "description": "Positive per-package width in cm; decimal(18,3)."
+            "description": "Positive per-package width in cm; decimal(18,2), matching the bill table record precision."
           },
           "heightCm": {
             "type": "string",
             "nullable": true,
             "maxLength": 19,
-            "description": "Positive per-package height in cm; decimal(18,3)."
+            "description": "Positive per-package height in cm; decimal(18,2), matching the bill table record precision."
           },
           "reportedVolumeCai": {
             "type": "string",

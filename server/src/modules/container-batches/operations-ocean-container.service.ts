@@ -30,7 +30,7 @@ export function serializeOperationsOceanLine(row: PersonalLine): OperationsOcean
     salesOrderId: shipment?.purchaseOrder.salesOrder?.id ?? null, salesOrderNo: shipment?.purchaseOrder.salesOrder?.orderNo ?? null,
     purchaseOrderId: shipment?.purchaseOrder.id ?? null, purchaseOrderNo: shipment?.purchaseOrder.orderNo ?? null,
     codAmountTwd: codAmountTwd?.toFixed(2) ?? null, grossWeightKg: grossWeightKg?.toFixed(3) ?? null,
-    lengthCm: lengthCm?.toFixed(3) ?? null, widthCm: widthCm?.toFixed(3) ?? null, heightCm: heightCm?.toFixed(3) ?? null,
+    lengthCm: lengthCm?.toFixed(2) ?? null, widthCm: widthCm?.toFixed(2) ?? null, heightCm: heightCm?.toFixed(2) ?? null,
     volumeCai: volumeCai?.toFixed(8) ?? null,
   }
 }
