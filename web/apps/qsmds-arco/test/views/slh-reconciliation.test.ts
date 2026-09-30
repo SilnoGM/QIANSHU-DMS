@@ -15,8 +15,11 @@ import {
 import {
   buildSlhReconciliationBatchCreatePayload,
   buildSlhReconciliationPreviewColumns,
+  buildSlhReconciliationPreviewRows,
+  resolveSlhReconciliationBillRowClass,
   resolveSlhReconciliationPreviewSummary,
   SLH_RECONCILIATION_SELECT_STEPS,
+  SLH_RECONCILIATION_SELECTED_ROW_CLASS,
 } from '../../src/views/workbenches/slh-reconciliation/select-modal.logic'
 import {
   resolveSlhBillLineMatchSourceLabelKey,
@@ -118,15 +121,42 @@ test('两步弹窗：零命中不能开始对账，创建载荷带上预览到�
   assert.deepEqual(buildSlhReconciliationBatchCreatePayload('bill-1', null), { billId: 'bill-1', previewLineIds: [] })
 })
 
-test('弹窗预览表按已匹配/未匹配给出不同列，账单行号与客户名称两表都有', () => {
-  const matched = buildSlhReconciliationPreviewColumns(key => key, 'matched').map(column => column.id)
-  const unmatched = buildSlhReconciliationPreviewColumns(key => key, 'unmatched').map(column => column.id)
-  assert.deepEqual(matched, ['lineNumber', 'container', 'shippingMark', 'goodsName', 'customerName', 'matchedContainer', 'matchedLine', 'source'])
-  assert.deepEqual(unmatched, ['lineNumber', 'container', 'shippingMark', 'goodsName', 'customerName', 'reason'])
+test('预览表收口为六列：匹配依据与不合格原因共用「匹配结果」列', () => {
+  const columns = buildSlhReconciliationPreviewColumns(key => key)
+  assert.deepEqual(columns.map(column => column.id), ['lineNumber', 'container', 'shippingMark', 'goodsName', 'customerName', 'matchResult'])
   // 弹窗里「行号」按用户口径改叫账单行号，与详情页的列文案分开。
-  const titles = buildSlhReconciliationPreviewColumns(key => key, 'unmatched').map(column => column.title)
-  assert.equal(titles[0], 'slhReconciliation.selectModal.billLineNumber')
-  assert.equal(titles[4], 'slhReconciliation.selectModal.customerName')
+  assert.equal(columns[0]?.title, 'slhReconciliation.selectModal.billLineNumber')
+  assert.equal(columns[4]?.title, 'slhReconciliation.selectModal.customerName')
+  assert.equal(columns[5]?.title, 'slhReconciliation.selectModal.matchResult')
+})
+
+test('预览两组固定顺序且默认展开，明细行挂在组下', () => {
+  const preview = {
+    matched: [{ lineId: 'line-1' }, { lineId: 'line-2' }],
+    unmatched: [{ lineId: 'line-3' }],
+  } as unknown as SlhReconciliationBatchPreviewDto
+  const rows = buildSlhReconciliationPreviewRows(preview, { matched: '已匹配（2）', unmatched: '暂不能核对（1）' })
+  assert.deepEqual(rows.map(row => row.id), ['group-matched', 'group-unmatched'])
+  assert.deepEqual(rows.map(row => row.group?.count), [2, 1])
+  assert.deepEqual(rows.map(row => row.group?.tone), ['matched', 'unmatched'])
+  assert.deepEqual(rows[0]?.children?.map(row => row.id), ['line-line-1', 'line-line-2'])
+  assert.deepEqual(rows[1]?.children?.map(row => row.id), ['line-line-3'])
+  assert.deepEqual(buildSlhReconciliationPreviewRows(null, { matched: '', unmatched: '' }), [])
+  // 分组只用一层：组行没有 line，明细行没有 children。
+  assert.equal(rows[0]?.line, null)
+  assert.equal(rows[0]?.children?.[0]?.children, undefined)
+})
+
+test('选中账单行用整行浅绿底与细绿边表达，未选中不加类', () => {
+  const selected = resolveSlhReconciliationBillRowClass({ original: { id: 'bill-1' } } as never, 'bill-1')
+  assert.equal(selected, SLH_RECONCILIATION_SELECTED_ROW_CLASS)
+  assert.equal(resolveSlhReconciliationBillRowClass({ original: { id: 'bill-1' } } as never, 'bill-2'), '')
+  // 单元格级背景 + 固定列 `!`：与账单问题行标黄同一套写法，否则固定列会保持原色把边框与底色断开。
+  assert.match(SLH_RECONCILIATION_SELECTED_ROW_CLASS, /\[&>td\]:bg-primary\/5/u)
+  assert.match(SLH_RECONCILIATION_SELECTED_ROW_CLASS, /\[&>td\]:border-y/u)
+  assert.match(SLH_RECONCILIATION_SELECTED_ROW_CLASS, /\[&>td:first-child\]:border-l/u)
+  assert.match(SLH_RECONCILIATION_SELECTED_ROW_CLASS, /\[&>td:last-child\]:border-r/u)
+  assert.match(SLH_RECONCILIATION_SELECTED_ROW_CLASS, /\[&>td\[data-pinned\]\]:bg-primary\/5!/u)
 })
 
 test('列表页按名称跳详情，并复用账单状态标签', async () => {
@@ -154,18 +184,56 @@ test('两处页面的提示都不用 FaAlert 的默认插槽（它只渲染 titl
   }
 })
 
-test('弹窗第一步用操作列的选择按钮，不再用单选圆圈', async () => {
+test('弹窗第一步用操作列的选择按钮，选中行整行高亮且可再点取消', async () => {
   const source = await readPageSource('slh-bill-select-modal.vue')
-  // 右侧固定的操作列，按钮表达选中态。
-  assert.match(source, /const billActionColumn = \{ fixed: 'right' as const, width: 136, minWidth: 136 \}/u)
+  // 右侧固定的操作列，按钮表达选中态；选中行同时整行高亮（rowClass）。
+  assert.match(source, /const billActionColumn = \{ fixed: 'right' as const, width: 124, minWidth: 124 \}/u)
+  assert.match(source, /:show-row-number="false"/u)
   assert.match(source, /:action-column="billActionColumn"/u)
-  assert.match(source, /#actions="\{ row \}"[\s\S]{0,600}slhReconciliation\.selectModal\.select/u)
+  assert.match(source, /:row-class="billRowClass"/u)
+  assert.match(source, /#actions="\{ row \}"[\s\S]{0,700}slhReconciliation\.selectModal\.select/u)
   assert.match(source, /slhReconciliation\.selectModal\.selected/u)
   // 只保留按钮这一条选择路径：行点击会与按钮点击叠加成两次切换。
   assert.doesNotMatch(source, /@row-click/u)
   assert.match(source, /@click="selectBill\(row\.id\)"/u)
+  // 已选中的按钮不再禁用：再点一次就是取消选择。
+  assert.doesNotMatch(source, /variant="outline"[\s\S]{0,200}\n\s*disabled\n/u)
+  assert.match(source, /slhReconciliation\.selectModal\.deselect/u)
   assert.doesNotMatch(source, /i-lucide:circle-dot/u)
-  assert.doesNotMatch(source, /row\.original\.id === selectedBillId \? 'i-lucide:circle'/u)
+})
+
+test('弹窗第一步四列收口，账单信息与金额走堆叠单元格', async () => {
+  const source = await readPageSource('slh-bill-select-modal.vue')
+  // 状态前置到第二列、金额用折算净额（列表页同一口径）。
+  const columns = source.slice(source.indexOf('const billColumns = computed'), source.indexOf('const billActionColumn'))
+  const order = ['id: \'slhBillNo\'', 'id: \'reconciliationStatus\'', 'id: \'billInfo\'', 'id: \'netAmount\''].map(id => columns.indexOf(id))
+  assert.deepEqual([...order].sort((left, right) => left - right), order)
+  assert.equal(order.includes(-1), false)
+  assert.match(source, /#cell-billInfo="\{ row \}"[\s\S]{0,300}SlhBillOverflowText/u)
+  assert.match(source, /#cell-netAmount="\{ row \}"[\s\S]{0,400}resolveSlhBillNetDisplay/u)
+  assert.doesNotMatch(source, /id: 'period'/u)
+  assert.doesNotMatch(source, /id: 'lineCount'/u)
+})
+
+test('第二步是结论条加单表分组，两组默认展开且不再有两条分页', async () => {
+  const source = await readPageSource('slh-bill-select-modal.vue')
+  assert.match(source, /slhReconciliation\.selectModal\.canReconcile/u)
+  assert.match(source, /slhReconciliation\.selectModal\.cannotReconcile/u)
+  assert.match(source, /:grouping="previewGrouping"/u)
+  assert.match(source, /#group-header="\{ row \}"/u)
+  assert.match(source, /:show-pagination="false"/u)
+  // 合并列：匹配依据与原因共用一个单元格槽位。
+  assert.match(source, /#cell-matchResult="\{ row \}"/u)
+  assert.doesNotMatch(source, /matchedColumns|unmatchedColumns/u)
+  assert.doesNotMatch(source, /#cell-reason=/u)
+  assert.doesNotMatch(source, /#cell-source=/u)
+})
+
+test('第一步页脚给出未选择时的原因提示', async () => {
+  const source = await readPageSource('slh-bill-select-modal.vue')
+  assert.match(source, /slhReconciliation\.selectModal\.selectHint/u)
+  assert.match(source, /slhReconciliation\.selectModal\.selectedHint/u)
+  assert.match(source, /qs-type-meta text-muted-foreground m-0 flex-1 min-w-0 truncate/u)
 })
 
 test('详情页只渲染本批次成员行，并显示批次与账单两个进度', async () => {

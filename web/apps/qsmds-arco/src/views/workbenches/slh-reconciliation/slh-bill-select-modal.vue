@@ -1,18 +1,19 @@
 <script setup lang="ts">
-import type { SlhReconciliationSelectStep } from './select-modal.logic'
+import type { SlhReconciliationPreviewLine, SlhReconciliationPreviewRow, SlhReconciliationSelectStep } from './select-modal.logic'
 import type { SlhBillListItemDto, SlhReconciliationBatchDetailDto, SlhReconciliationBatchPreviewDto } from '@/api/generated/types.gen'
-import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
+import type { QsGenericTableColumn, QsGenericTableGrouping } from '@/components/business/QsGenericTable/logic'
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
+import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
+import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
+import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { containerFailure } from '../containers/use-container-resource'
+import { resolveSlhBillNetDisplay } from '../slh-bills/display.logic'
+import SlhBillOverflowText from '../slh-bills/slh-bill-overflow-text.vue'
 import SlhBillReconciliationStatusTag from '../slh-bills/slh-bill-reconciliation-status-tag.vue'
-import {
-  buildSlhReconciliationBatchCreatePayload,
-  buildSlhReconciliationPreviewColumns,
-  resolveSlhReconciliationPreviewSummary,
-  SLH_RECONCILIATION_SELECT_STEPS,
-} from './select-modal.logic'
+import { buildSlhReconciliationBatchCreatePayload, buildSlhReconciliationPreviewColumns, buildSlhReconciliationPreviewRows, resolveSlhReconciliationBillRowClass, resolveSlhReconciliationPreviewSummary, SLH_RECONCILIATION_SELECT_STEPS } from './select-modal.logic'
 import { resolveSlhBillLineMatchSourceLabelKey, resolveSlhBillLineUnmatchedReasonLabelKey } from './status.logic'
 
 defineOptions({ name: 'SlhReconciliationBatchSelectModal' })
@@ -44,17 +45,42 @@ const steps = computed(() => SLH_RECONCILIATION_SELECT_STEPS.map(id => ({ id, ti
 const summary = computed(() => resolveSlhReconciliationPreviewSummary(preview.value))
 const deliverable = computed(() => preview.value?.bill ?? null)
 const locked = computed(() => previewLoading.value || submitting.value)
+const currencyCatalog = useCurrencyCatalog()
+/**
+ * 第一步四列收口在 846px 可用宽度内：编号与操作列左右固定，中间放「对账状态 + 账单信息 + 折算净额」。
+ * 名称、月份、期间、行数合并进「账单信息」堆叠单元格；行号列关闭——账单编号才是这一列的导航标识
+ * （规范允许业务单号承担首列时关闭行号），否则 56px 行号会把金额列挤到固定操作列下面。
+ */
 const billColumns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
-  { id: 'slhBillNo', title: t('slhBill.column.slhBillNo'), accessorKey: 'slhBillNo', width: 205, minWidth: 205, fixed: 'left' },
-  { id: 'billName', title: t('slhBill.column.billName'), accessorFn: item => item.billName, minWidth: 220 },
-  { id: 'period', title: t('slhBill.column.period'), accessorFn: item => `${item.periodStart} ~ ${item.periodEnd}`, minWidth: 200 },
-  { id: 'lineCount', title: t('slhBill.column.lineCount'), accessorKey: 'lineCount', minWidth: 110, align: 'right' },
-  { id: 'reconciliationStatus', title: t('slhBill.column.reconciliationStatus'), accessorKey: 'reconciliationStatus', minWidth: 140 },
+  { id: 'slhBillNo', title: t('slhBill.column.slhBillNo'), accessorKey: 'slhBillNo', width: 170, minWidth: 170, fixed: 'left' },
+  { id: 'reconciliationStatus', title: t('slhBill.column.reconciliationStatus'), accessorKey: 'reconciliationStatus', width: 110, minWidth: 110 },
+  { id: 'billInfo', title: t('slhReconciliation.selectModal.billInfo'), accessorFn: item => item.billName, minWidth: 225 },
+  // 金额列要放得下「NT$1,946,939.00 TWD」这种带币种的长值，比同页其它列宽一档。
+  { id: 'netAmount', title: t('slhBill.column.foldedNetAmount'), accessorFn: item => resolveSlhBillNetDisplay(item).amount, width: 180, minWidth: 180, align: 'right' },
 ])
-/** 操作列只放「选择 / 已选择」一个按钮，右固定；宽度按按钮 100 + 左右内边距 24 估算，取 136。 */
-const billActionColumn = { fixed: 'right' as const, width: 136, minWidth: 136 }
-const matchedColumns = computed(() => buildSlhReconciliationPreviewColumns(t, 'matched'))
-const unmatchedColumns = computed(() => buildSlhReconciliationPreviewColumns(t, 'unmatched'))
+/** 操作列只放「选择 / 取消选择」一个按钮，右固定；宽度按按钮 100 + 左右内边距 24 估算，取 124。 */
+const billActionColumn = { fixed: 'right' as const, width: 124, minWidth: 124 }
+const previewColumns = computed(() => buildSlhReconciliationPreviewColumns(t))
+const previewRows = computed<SlhReconciliationPreviewRow[]>(() => buildSlhReconciliationPreviewRows(preview.value, {
+  matched: t('slhReconciliation.selectModal.matchedTitle', { count: summary.value.matchedCount }),
+  unmatched: t('slhReconciliation.selectModal.unmatchedTitle', { count: summary.value.unmatchedCount }),
+}))
+const previewGrouping: QsGenericTableGrouping<SlhReconciliationPreviewRow> = {
+  getRows: group => group.children ?? [],
+  getLabel: group => group.group?.label ?? '',
+}
+/** 选中行整行浅绿底 + 细绿边；未选中不加类，保持表格默认样式。 */
+function billRowClass(row: { original: SlhBillListItemDto }): string {
+  return resolveSlhReconciliationBillRowClass(row, selectedBillId.value)
+}
+/** 页脚提示：把「下一步为什么禁用」写成文字，而不是只把按钮灰掉。 */
+const footerHint = computed(() => selectedBillId.value === ''
+  ? t('slhReconciliation.selectModal.selectHint')
+  : t('slhReconciliation.selectModal.selectedHint', { billNo: items.value.find(item => item.id === selectedBillId.value)?.slhBillNo ?? '' }))
+/** 匹配来源只在已匹配行有值，缺省返回空串，由单元格决定展示方式。 */
+function matchedSourceLabel(line: SlhReconciliationPreviewLine): string {
+  return line.matchSource === null ? '' : t(resolveSlhBillLineMatchSourceLabelKey(line.matchSource))
+}
 
 async function loadBills(): Promise<void> {
   controller?.abort()
@@ -217,6 +243,8 @@ onBeforeUnmount(() => {
           :addable="false"
           :show-column-settings="false"
           :action-column="billActionColumn"
+          :row-class="billRowClass"
+          :show-row-number="false"
           :search-placeholder="t('slhBill.search')"
           :empty-title="t('slhReconciliation.selectModal.emptyBills')"
           :empty-description="t('slhReconciliation.selectModal.emptyBillsDescription')"
@@ -230,15 +258,48 @@ onBeforeUnmount(() => {
           <template #cell-reconciliationStatus="{ row }">
             <SlhBillReconciliationStatusTag :status="row.original.reconciliationStatus" />
           </template>
+          <!-- 名称是主信息，期间与行数退到次行（月份可由期间看出，不再重复占位）。 -->
+          <template #cell-billInfo="{ row }">
+            <QsTableStackedCell>
+              <QsTableStackedLine content-class="qs-type-body-medium">
+                <SlhBillOverflowText :text="row.original.billName" />
+              </QsTableStackedLine>
+              <QsTableStackedLine tone="muted">
+                {{ row.original.periodStart }} ~ {{ row.original.periodEnd }} · {{ t('slhReconciliation.selectModal.lineCountInline', { count: row.original.lineCount }) }}
+              </QsTableStackedLine>
+            </QsTableStackedCell>
+          </template>
+          <!-- 金额主值用折算净额（与账单列表同一口径），次行退到应付人民币，便于扫读规模。 -->
+          <template #cell-netAmount="{ row }">
+            <QsTableStackedCell>
+              <QsTableStackedLine content-class="qs-type-data-emphasis">
+                <AmountDisplay
+                  :value="resolveSlhBillNetDisplay(row.original).amount"
+                  :currency="resolveSlhBillNetDisplay(row.original).currency"
+                  :currencies="currencyCatalog.currencies.value"
+                />
+              </QsTableStackedLine>
+              <QsTableStackedLine tone="muted">
+                {{ t('slhReconciliation.selectModal.payableLabel') }}
+                <AmountDisplay
+                  class="ml-1"
+                  :value="row.original.payableTotalAmountCny"
+                  currency="CNY"
+                  :currencies="currencyCatalog.currencies.value"
+                />
+              </QsTableStackedLine>
+            </QsTableStackedCell>
+          </template>
+          <!-- 选中态由「整行浅绿底 + 细绿边」与按钮共同表达；已选中的按钮再点一次即取消选择。 -->
           <template #actions="{ row }">
-            <!-- 选中态由按钮表达：已选中的行按钮转成「已选择」并禁用，不再用单选圆圈。 -->
             <FaButton
               v-if="row.id === selectedBillId"
               type="button"
               variant="outline"
               size="sm"
               class="min-h-11 sm:min-h-8"
-              disabled
+              :aria-label="t('slhReconciliation.selectModal.deselect')"
+              @click="selectBill(row.id)"
             >
               <FaIcon name="i-lucide:check" aria-hidden="true" />{{ t('slhReconciliation.selectModal.selected') }}
             </FaButton>
@@ -253,82 +314,102 @@ onBeforeUnmount(() => {
         <FaAlert v-if="previewError" variant="destructive" role="alert" :title="previewError" />
         <SaSpin v-else-if="previewLoading" class="py-8" />
         <template v-else-if="preview">
-          <p class="qs-type-description text-muted-foreground m-0">
-            {{ t('slhReconciliation.selectModal.summary', { bill: deliverable?.slhBillNo ?? '', matched: summary.matchedCount, unmatched: summary.unmatchedCount }) }}
-          </p>
+          <!-- 结论条：两个数字是本步唯一的决策依据，先给它们主次分明的视觉权重，账单信息退到次行。 -->
+          <div class="flex flex-wrap gap-x-4 gap-y-2 items-center">
+            <span class="qs-type-data-emphasis text-primary">
+              {{ t('slhReconciliation.selectModal.canReconcile', { count: summary.matchedCount }) }}
+            </span>
+            <FaTag variant="outline" class="text-amber-700 qs-type-status-tag border-amber-500/40 dark:text-amber-300">
+              {{ t('slhReconciliation.selectModal.cannotReconcile', { count: summary.unmatchedCount }) }}
+            </FaTag>
+            <span v-if="deliverable" class="qs-type-meta text-muted-foreground min-w-0 truncate">
+              {{ deliverable.slhBillNo }} · {{ deliverable.billName }}
+            </span>
+          </div>
           <FaAlert v-if="!summary.canStart" variant="destructive" role="status" :title="t('slhReconciliation.selectModal.noMatch')" />
-          <div class="min-w-0 space-y-2">
-            <h4 class="qs-type-component-title m-0">
-              {{ t('slhReconciliation.selectModal.matchedTitle', { count: summary.matchedCount }) }}
-            </h4>
-            <QsGenericTable
-              :columns="matchedColumns"
-              :data="preview.matched"
-              :total="preview.matched.length"
-              :searchable="false"
-              :addable="false"
-              :show-column-settings="false"
-              :empty-title="t('slhReconciliation.selectModal.noMatch')"
-            >
-              <template #cell-source="{ row }">
-                <FaTag variant="outline" class="qs-type-status-tag">
-                  {{ t(resolveSlhBillLineMatchSourceLabelKey(row.original.matchSource)) }}
-                </FaTag>
-              </template>
-            </QsGenericTable>
-          </div>
-          <div class="min-w-0 space-y-2">
-            <h4 class="qs-type-component-title m-0">
-              {{ t('slhReconciliation.selectModal.unmatchedTitle', { count: summary.unmatchedCount }) }}
-            </h4>
-            <QsGenericTable
-              :columns="unmatchedColumns"
-              :data="preview.unmatched"
-              :total="preview.unmatched.length"
-              :searchable="false"
-              :addable="false"
-              :show-column-settings="false"
-              :empty-title="t('slhReconciliation.selectModal.unmatchedEmpty')"
-              :page-size="50"
-            >
-              <template #cell-reason="{ row }">
-                <FaTag variant="outline" class="text-amber-700 qs-type-status-tag border-amber-500/40 dark:text-amber-300">
-                  {{ row.original.reason === null ? '' : t(resolveSlhBillLineUnmatchedReasonLabelKey(row.original.reason)) }}
-                </FaTag>
-              </template>
-            </QsGenericTable>
-          </div>
+          <!-- 单表分组：已匹配在前、未匹配在后，两组默认展开；「匹配结果」列在两组间承载依据或原因。 -->
+          <QsGenericTable
+            row-key="id"
+            table-class="min-w-full"
+            :columns="previewColumns"
+            :data="previewRows"
+            :grouping="previewGrouping"
+            :total="previewRows.length"
+            :searchable="false"
+            :addable="false"
+            :show-column-settings="false"
+            :show-pagination="false"
+            :empty-title="t('slhReconciliation.selectModal.noMatch')"
+          >
+            <template #group-header="{ row }">
+              <span class="qs-type-component-title" :class="row.group?.tone === 'unmatched' ? 'text-muted-foreground' : undefined">
+                {{ row.group?.label ?? '' }}
+              </span>
+            </template>
+            <!-- 品名与客户名是次要信息：外层限宽 + 内层截断，完整内容进浮层；否则长名字会把「匹配结果」挤出可视区。 -->
+            <template #cell-goodsName="{ row }">
+              <span v-if="row.original.line?.goodsName" class="max-w-[145px] block">
+                <SlhBillOverflowText :text="row.original.line.goodsName" content-class="qs-type-body" />
+              </span>
+            </template>
+            <template #cell-customerName="{ row }">
+              <span v-if="row.original.line?.recipientName" class="max-w-[140px] block">
+                <SlhBillOverflowText :text="row.original.line.recipientName" content-class="qs-type-body" />
+              </span>
+              <span v-else class="text-muted-foreground">{{ t('slhBill.valueMissing') }}</span>
+            </template>
+            <!-- 已匹配行给核对依据（柜次 + 柜次行号 + 来源），未匹配行给原因：共用一列，不必横向滚动找证据。 -->
+            <template #cell-matchResult="{ row }">
+              <QsTableStackedCell v-if="row.original.line?.matchedContainerBatchName">
+                <QsTableStackedLine content-class="qs-type-data">
+                  {{ row.original.line.matchedContainerBatchName }}
+                </QsTableStackedLine>
+                <QsTableStackedLine tone="muted">
+                  {{ t('slhReconciliation.selectModal.matchedLine') }} {{ row.original.line.matchedLoadingItemLineNumber }} · {{ matchedSourceLabel(row.original.line) }}
+                </QsTableStackedLine>
+              </QsTableStackedCell>
+              <FaTag v-else variant="outline" class="text-amber-700 qs-type-status-tag border-amber-500/40 dark:text-amber-300">
+                {{ row.original.line?.reason == null ? t('slhBill.valueMissing') : t(resolveSlhBillLineUnmatchedReasonLabelKey(row.original.line.reason)) }}
+              </FaTag>
+            </template>
+          </QsGenericTable>
         </template>
         <FaAlert v-if="submitError" variant="destructive" role="alert" :title="submitError" />
       </template>
     </div>
     <template #footer>
-      <div class="flex flex-col gap-2 w-full sm:flex-row sm:justify-end">
-        <FaButton v-if="step === 0" type="button" variant="outline" class="w-full sm:w-auto" :disabled="locked" @click="close">
-          {{ t('slhBill.cancel') }}
-        </FaButton>
-        <FaButton v-else type="button" variant="outline" class="w-full sm:w-auto" :disabled="locked" @click="previousStep">
-          {{ t('slhReconciliation.selectModal.back') }}
-        </FaButton>
-        <FaButton
-          v-if="step === 0"
-          type="button"
-          class="w-full sm:w-auto"
-          :disabled="selectedBillId === '' || locked"
-          @click="nextStep"
-        >
-          {{ t('slhReconciliation.selectModal.next') }}
-        </FaButton>
-        <FaButton
-          v-else
-          type="button"
-          class="w-full sm:w-auto"
-          :loading="submitting"
-          :disabled="!summary.canStart || locked"
-          @click="submit"
-        >
-          {{ t('slhReconciliation.selectModal.start') }}
-        </FaButton>
+      <div class="flex flex-col gap-2 w-full sm:flex-row sm:items-center" :class="step === 0 ? '' : 'sm:justify-end'">
+        <!-- 把「下一步为什么禁用」写成文字，而不是只把按钮灰掉。 -->
+        <p v-if="step === 0" class="qs-type-meta text-muted-foreground m-0 flex-1 min-w-0 truncate">
+          {{ footerHint }}
+        </p>
+        <div class="flex flex-col gap-2 w-full sm:flex-row sm:w-auto">
+          <FaButton v-if="step === 0" type="button" variant="outline" class="w-full sm:w-auto" :disabled="locked" @click="close">
+            {{ t('slhBill.cancel') }}
+          </FaButton>
+          <FaButton v-else type="button" variant="outline" class="w-full sm:w-auto" :disabled="locked" @click="previousStep">
+            {{ t('slhReconciliation.selectModal.back') }}
+          </FaButton>
+          <FaButton
+            v-if="step === 0"
+            type="button"
+            class="w-full sm:w-auto"
+            :disabled="selectedBillId === '' || locked"
+            @click="nextStep"
+          >
+            {{ t('slhReconciliation.selectModal.next') }}
+          </FaButton>
+          <FaButton
+            v-else
+            type="button"
+            class="w-full sm:w-auto"
+            :loading="submitting"
+            :disabled="!summary.canStart || locked"
+            @click="submit"
+          >
+            {{ t('slhReconciliation.selectModal.start') }}
+          </FaButton>
+        </div>
       </div>
     </template>
   </QsGenericModal>
