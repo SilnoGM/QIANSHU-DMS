@@ -20,6 +20,8 @@ import ShipmentProducts from '../../workbenches/shipments/shipment-products.vue'
 import ArrivalMobileRow from './arrival-mobile-row.vue'
 import { buildWarehouseArrivalRouteQuery, buildWarehouseFilterOptions, createWarehouseArrivalColumns, parseWarehouseArrivalQuery, WAREHOUSE_ARRIVAL_VIEWS, warehouseArrivalActions, warehouseFilterFromQuery, warehouseFilterToQuery } from './logic'
 import PackagingCostAction from './packaging-cost-action.vue'
+import ShippingInfoModal from './shipping-info-modal.vue'
+import { useShippingInfoData } from './use-shipping-info'
 import { useWarehouseArrivalData } from './use-warehouse-arrival-data'
 
 defineOptions({ name: 'QsWarehouseArrivals' })
@@ -33,6 +35,8 @@ const currencyCatalog = useCurrencyCatalog()
 const warehouseCatalog = useDictionaryCatalog('mainland.warehouse')
 const canRead = computed(() => auth('purchase-orders:read'))
 const canCreatePackaging = computed(() => auth('packaging-costs:create'))
+// 出货信息的客户电话、收货地址与代收尾款属于销售域资料，另有销售查看权限才提供入口。
+const canReadShippingInfo = computed(() => auth('sales-orders:read'))
 const instancePath = route.fullPath
 const activated = ref(false)
 // 每个 fullPath 对应独立缓存实例；离开或撤权后立即停止列表、计数和详情读取。
@@ -50,6 +54,13 @@ const warehouseValues = computed(() => warehouseOptions.value.flatMap((item) => 
   return destinationWarehouseValue === undefined ? [] : [destinationWarehouseValue]
 }))
 const { rows, total, loading, error, counts, countsError, warehouseCounts, warehouseCountsError, detail, orderDetail, detailKind, detailLoading, detailError, refresh, loadCounts, loadDetail, openShipment, openOrder } = useWarehouseArrivalData(enabled, computed(() => account.authEpoch), query, value => navigate({ ...query.value, page: value }, true), warehouseValues)
+const { shipment: shippingInfoShipment, salesOrder: shippingInfoSalesOrder, loading: shippingInfoLoading, error: shippingInfoError, open: openShippingInfo, load: loadShippingInfo, close: closeShippingInfo } = useShippingInfoData(enabled, computed(() => account.authEpoch))
+const shippingInfoVisible = computed({ get: () => shippingInfoShipment.value !== null, set: (value) => {
+  if (!value) {
+    closeShippingInfo()
+  }
+} })
+const actionIcons: Record<WarehouseArrivalAction, string> = { view: 'i-lucide:eye', seaExpress: 'i-lucide:truck', woodenFrame: 'i-lucide:hammer', shippingInfo: 'i-lucide:clipboard-list' }
 const tabs = computed(() => WAREHOUSE_ARRIVAL_VIEWS.map(value => ({ value, label: t(`warehouseArrivals.${value}`), count: countsError.value || counts.value.length === 0 ? undefined : counts.value.find(item => item.value === value)?.count ?? 0 })))
 const columns = computed(() => createWarehouseArrivalColumns(activeView.value, t))
 const warehouseTabs = computed(() => warehouseOptions.value.map((item) => {
@@ -104,6 +115,11 @@ function handleAction(action: WarehouseArrivalAction, row: PurchaseShipmentListI
   else if (action === 'seaExpress') {
     toast.info(t('warehouseArrivals.seaExpressUnavailable'))
   }
+  else if (action === 'shippingInfo') {
+    if (canReadShippingInfo.value) {
+      void openShippingInfo(row)
+    }
+  }
   else if (canCreatePackaging.value) {
     packagingShipment.value = row
   }
@@ -138,9 +154,10 @@ watch([enabled, query], ([isEnabled]) => {
     pageSize.value = query.value.pageSize ?? 20
   }
 }, { flush: 'sync' })
-watch([enabled, canCreatePackaging, () => account.authEpoch], () => {
+watch([enabled, canCreatePackaging, canReadShippingInfo, () => account.authEpoch], () => {
   queuedOrderId = null
   packagingShipment.value = null
+  closeShippingInfo()
 }, { flush: 'sync' })
 onMounted(() => activated.value = true)
 onActivated(() => activated.value = true)
@@ -186,7 +203,7 @@ onBeforeUnmount(() => activated.value = false)
           row-key="id" :show-row-number="false" :columns="columns" :data="rows" :total="total" :loading="loading" :error="error"
           :addable="false" :page-size-options="[20, 50, 100]" :search-placeholder="t('warehouseArrivals.search')"
           :empty-title="t('warehouseArrivals.empty')" :empty-description="t('warehouseArrivals.emptyDescription')"
-          :action-column="{ fixed: 'right', width: activeView === 'SHIPPED' ? 130 : 245 }" table-class="w-max min-w-full"
+          :action-column="{ fixed: 'right', width: activeView === 'SHIPPED' ? 130 : 350 }" table-class="w-max min-w-full"
           @search="search" @pagination-change="paginate" @retry="refresh"
         >
           <template #cell-shipmentNo="{ row }">
@@ -233,8 +250,8 @@ onBeforeUnmount(() => activated.value = false)
             <QsPersonDisplay v-if="row.original.warehouseReceivedBy" :display-name="row.original.warehouseReceivedBy.displayName" size="md" /><span v-else>—</span>
           </template>
           <template #actions="{ row }">
-            <FaButton v-for="action in warehouseArrivalActions(activeView, row.viewStatus, row.destinationWarehouseValue).filter(value => value !== 'woodenFrame' || canCreatePackaging)" :key="action" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.shipmentNo || t('purchaseShipments.unnumbered')}：${t(`warehouseArrivals.${action}`)}`" @click="handleAction(action, row)">
-              <FaIcon :name="action === 'view' ? 'i-lucide:eye' : action === 'seaExpress' ? 'i-lucide:truck' : 'i-lucide:hammer'" aria-hidden="true" />{{ t(`warehouseArrivals.${action}`) }}
+            <FaButton v-for="action in warehouseArrivalActions(activeView, row.viewStatus, row.destinationWarehouseValue).filter(value => (value !== 'woodenFrame' || canCreatePackaging) && (value !== 'shippingInfo' || canReadShippingInfo))" :key="action" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.shipmentNo || t('purchaseShipments.unnumbered')}：${t(`warehouseArrivals.${action}`)}`" @click="handleAction(action, row)">
+              <FaIcon :name="actionIcons[action]" aria-hidden="true" />{{ t(`warehouseArrivals.${action}`) }}
             </FaButton>
           </template>
           <template #mobile-row="{ row }">
@@ -246,5 +263,6 @@ onBeforeUnmount(() => activated.value = false)
     <ShipmentDetailDrawer v-model="shipmentVisible" :detail="detail" :loading="detailLoading" :error="detailError" @reload="loadDetail" @view-order="viewOrderFromShipment" @closed="shipmentClosed" />
     <QsPurchaseOrderDrawer v-model="orderVisible" :order="null" :detail="orderDetail" :currencies="currencyCatalog.currencies.value" :loading="detailLoading" :error="detailError" action-error="" :busy="false" :can-attach-document="false" @reload="loadDetail" />
     <PackagingCostAction v-if="packagingShipment" :shipment="packagingShipment" :enabled="enabled && canCreatePackaging" @close="packagingShipment = null" @submitted="refresh" />
+    <ShippingInfoModal v-model="shippingInfoVisible" :shipment="shippingInfoShipment" :sales-order="shippingInfoSalesOrder" :loading="shippingInfoLoading" :error="shippingInfoError" @retry="loadShippingInfo" />
   </div>
 </template>

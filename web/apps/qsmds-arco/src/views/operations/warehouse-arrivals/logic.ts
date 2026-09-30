@@ -6,7 +6,7 @@ import { formatDestinationWarehouse } from '../../workbenches/shipments/logic'
 
 export const WAREHOUSE_ARRIVAL_VIEWS = ['SHIPPED', 'WAREHOUSE_RECEIVED'] as const
 export type WarehouseArrivalView = typeof WAREHOUSE_ARRIVAL_VIEWS[number]
-export type WarehouseArrivalAction = 'view' | 'woodenFrame' | 'seaExpress'
+export type WarehouseArrivalAction = 'view' | 'woodenFrame' | 'seaExpress' | 'shippingInfo'
 const ALL_WAREHOUSES_FILTER = '__all__'
 const WAREHOUSE_FILTER_PREFIX = 'warehouse:'
 // 打木架仅向深圳南浦科技园 B5 仓开放，以仓库稳定值判断，避免名称调整影响入口。
@@ -71,10 +71,15 @@ export function warehouseArrivalActions(view: WarehouseArrivalView, status: Purc
   if (view !== 'WAREHOUSE_RECEIVED' || status !== 'WAREHOUSE_RECEIVED') {
     return ['view']
   }
+  // 出货信息按到仓事实提供：此时货件已在顺联航仓，客户与代收资料取自销售订单。
+  const actions: WarehouseArrivalAction[] = ['view', 'shippingInfo']
   if (destinationWarehouseValue === WOODEN_PACKING_WAREHOUSE_VALUE) {
-    return ['view', 'woodenFrame']
+    actions.push('woodenFrame')
   }
-  return destinationWarehouseValue === SEA_EXPRESS_WAREHOUSE_VALUE ? ['view', 'seaExpress'] : ['view']
+  else if (destinationWarehouseValue === SEA_EXPRESS_WAREHOUSE_VALUE) {
+    actions.push('seaExpress')
+  }
+  return actions
 }
 
 export function createWarehouseArrivalColumns(view: WarehouseArrivalView, translate: (key: string) => string): QsGenericTableColumn<PurchaseShipmentListItemDto>[] {
