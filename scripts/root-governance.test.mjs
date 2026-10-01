@@ -45,6 +45,9 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/src/locales/lang/payment-recipient/zh-cn.json',
   'web/apps/qsmds-arco/src/router/modules/supplier.payment.profiles.ts',
   'web/apps/qsmds-arco/src/router/routes.ts',
+  // 权限抽屉按资源分组展示，`supplier-payment-profiles` 是收款资料配置的既有权限码资源名，
+  // 中文标签与断言只引用该权限码，不新增供应商主数据入口。
+  'web/apps/qsmds-arco/src/views/system/permissions/catalog.ts',
   'web/apps/qsmds-arco/src/views/admin/supplier-payment-profiles/index.vue',
   'web/apps/qsmds-arco/src/views/admin/supplier-payment-profiles/packaging-payment-profile.vue',
   'web/apps/qsmds-arco/src/views/admin/supplier-payment-profiles/use-packaging-payment-profile.ts',
@@ -58,6 +61,8 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/test/views/packaging-payment-profile-page.test.ts',
   'web/apps/qsmds-arco/test/views/packaging-payment-profile.test.ts',
   'web/apps/qsmds-arco/test/views/supplier-payment-profiles.test.ts',
+  // 资源中文名断言只覆盖既有权限码的展示文案，不引入供应商主数据。
+  'web/apps/qsmds-arco/test/views/system-management.test.ts',
   // 应付与批量付款按采购单已存 supplierValue 选单、解析历史字典标签；
   // 复制、取消、对账单只展示订单快照或自定义名称，不提供供应商增删改入口。
   'server/src/modules/purchase-orders/payables/README.md',
