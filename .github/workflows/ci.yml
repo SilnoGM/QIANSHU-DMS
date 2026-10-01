@@ -53,6 +53,10 @@ jobs:
     name: Server check and build
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    # jest 顺序加载全部单元套件，ts-jest 常驻内存随套件数累积，默认堆（约 2 GB）
+    # 会在套件执行中耗尽并 Aborted（退出 134，无失败断言）；与 Server E2E 同口径提高上限。
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

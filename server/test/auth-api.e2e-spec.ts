@@ -99,6 +99,9 @@ const MANAGEMENT_PERMISSION_CODES = [
   'users:read',
   'users:reset-password',
   'users:update',
+  'workbench:finance',
+  'workbench:operations',
+  'workbench:purchase-transport',
 ] as const
 
 interface AuthContextBody {

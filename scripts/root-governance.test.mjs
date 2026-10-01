@@ -367,6 +367,12 @@ const supplierResidueAllowlist = Object.freeze([
   'specs/supplier-management/design.md',
   'specs/supplier-management/requirements.md',
   'specs/supplier-management/tasks.md',
+  // 上线 seed 只按已批准边界写入字典稳定值与既有绑定表：供应商是
+  // `service_provider.supplier` 的字典条目，唛头绑定写 supplier_value 主键，
+  // 不新增 Supplier 主数据、表、权限或查询入口。
+  'server/src/cli/seed/seed.dataset.ts',
+  'server/src/cli/seed/seed.service.ts',
+  'server/test/seed.e2e-spec.ts',
 ].sort())
 
 const currentGlobalDocuments = Object.freeze([
@@ -374,6 +380,7 @@ const currentGlobalDocuments = Object.freeze([
   '开发工作流.md',
   '生产部署与Gate OPS检查清单.md',
   '用户认证与权限体系设计.md',
+  '腾讯云1Panel部署手册.md',
   '项目工程组织方案.md',
 ])
 
@@ -1394,7 +1401,7 @@ test('Node.js 主版本配置为 24', async () => {
   assert.equal(nodeVersion.trim(), '24')
 })
 
-test('全局文档只保留五份当前指导文档', async () => {
+test('全局文档只保留六份当前指导文档', async () => {
   assert.deepEqual(
     await directoryEntryKinds(path.join('docs', '全局文档')),
     expectedDirectoryEntryKinds({ files: currentGlobalDocuments }),

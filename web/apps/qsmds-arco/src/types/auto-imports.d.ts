@@ -15,6 +15,7 @@ declare global {
   const StaleAuthStateError: typeof import('../store/modules/app/auth-lifecycle').StaleAuthStateError
   const StaleProfileStateError: typeof import('../store/modules/app/profile-lifecycle').StaleProfileStateError
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
+  const buildRegisteredRoutes: typeof import('../store/modules/app/route.logic').buildRegisteredRoutes
   const computed: typeof import('vue').computed
   const createApp: typeof import('vue').createApp
   const createAuthLifecycleState: typeof import('../store/modules/app/auth-lifecycle').createAuthLifecycleState
@@ -24,6 +25,7 @@ declare global {
   const defineAsyncComponent: typeof import('vue').defineAsyncComponent
   const defineComponent: typeof import('vue').defineComponent
   const defineStore: typeof import('pinia').defineStore
+  const deleteMiddleRouteComponent: typeof import('../store/modules/app/route.logic').deleteMiddleRouteComponent
   const effectScope: typeof import('vue').effectScope
   const filterAccessibleMenus: typeof import('../store/modules/app/menu.logic').filterAccessibleMenus
   const getActivePinia: typeof import('pinia').getActivePinia

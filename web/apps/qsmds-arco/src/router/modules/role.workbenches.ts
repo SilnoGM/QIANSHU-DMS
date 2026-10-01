@@ -1,5 +1,9 @@
 import type { RouteRecordMainRaw } from '@fantastic-admin/types'
-import FundAccountManagement, { FUND_ACCOUNT_MANAGEMENT_PERMISSIONS } from './fund-account.management'
+import FundAccountManagement from './fund-account.management'
+import {
+  FINANCE_WORKBENCH_PERMISSION,
+  PURCHASE_TRANSPORT_WORKBENCH_PERMISSION,
+} from './workbench-access'
 
 /**
  * 顺联航账单首期只有两个空白入口，权限随迁移授予内置 system_admin。
@@ -10,12 +14,13 @@ export const SLH_BILL_PERMISSION_CODES = [
   'slh-bills:reconcile',
 ] as const
 
-// 工作台按独立业务权限展示，不依赖角色名称。
+// 工作台可见与准入由独立准入码决定（见 workbench-access.ts），不依赖角色名称，
+// 也不再由组内业务码并集决定；组内页面继续按各自业务码收敛。
 export const financeWorkbench: RouteRecordMainRaw = {
   meta: {
     title: 'workbench.finance',
     icon: 'qs-workbench-finance',
-    auth: ['sales-receipts:read', 'purchase-orders:payment', 'packaging-costs:read', ...SLH_BILL_PERMISSION_CODES, ...FUND_ACCOUNT_MANAGEMENT_PERMISSIONS],
+    auth: [FINANCE_WORKBENCH_PERMISSION],
   },
   children: [
     {
@@ -187,7 +192,7 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
   meta: {
     title: 'workbench.purchaseTransport',
     icon: 'qs-workbench-purchase',
-    auth: ['purchase-orders:review', 'purchase-orders:read', 'container-batches:read'],
+    auth: [PURCHASE_TRANSPORT_WORKBENCH_PERMISSION],
   },
   children: [
     {

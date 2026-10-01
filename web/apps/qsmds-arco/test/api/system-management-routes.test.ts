@@ -7,6 +7,7 @@ import { matchesAuthorization } from '../../src/composables/app/auth'
 import userRolesRoutes, {
   ADMIN_USER_ROLE_READ_PERMISSIONS,
 } from '../../src/router/modules/admin.user-roles'
+import applicationSettingsRoute from '../../src/router/modules/application.settings'
 import basicDataRoutes, {
   BASIC_DATA_READ_PERMISSIONS,
 } from '../../src/router/modules/basic.data'
@@ -17,6 +18,7 @@ import supplierPaymentProfilesRoute, {
   SUPPLIER_PAYMENT_PROFILE_PERMISSIONS,
 } from '../../src/router/modules/supplier.payment.profiles'
 import systemAuditRoute from '../../src/router/modules/system.audit'
+import { SYSTEM_MANAGEMENT_PERMISSION } from '../../src/router/modules/workbench-access'
 
 const routesSource = readFileSync(
   new URL('../../src/router/routes.ts', import.meta.url),
@@ -204,15 +206,28 @@ test('系统管理主导航始终注册独立应用配置页面且不受环境�
   )
 })
 
-test('首页复用管理读取权限门槛，使无业务页面的身份进入稳定 403', () => {
+test('系统管理分组用系统专用权限 audit:read 收敛，只有管理员可进入', () => {
+  assert.equal(SYSTEM_MANAGEMENT_PERMISSION, 'audit:read')
+  // audit:read 在权限目录里 system_only = true，普通角色无法分配，因此「只有管理员可进入」由权限目录保证。
   assert.match(
-    routesSource,
-    /export const MANAGEMENT_READ_PERMISSIONS = \[[\s\S]*?'users:read',[\s\S]*?'roles:read',[\s\S]*?'audit:read',[\s\S]*?'regions:read',[\s\S]*?\]/u,
+    asyncRoutesSource,
+    /title: '系统管理'[\s\S]{0,200}?auth: \[SYSTEM_MANAGEMENT_PERMISSION\]/u,
   )
-  assert.match(
-    routesSource,
-    /path: ''[\s\S]*?meta: \{[\s\S]*?auth: \[\.\.\.MANAGEMENT_READ_PERMISSIONS\]/u,
+  // 应用配置自身不声明 auth，继承分组门槛；审计日志页面自身的 audit:read 保持不变。
+  assert.equal(applicationSettingsRoute.meta?.auth, undefined)
+  assert.equal(systemAuditRoute.meta?.auth, 'audit:read')
+})
+
+test('首页不参与页面权限校验，任一已登录身份均可进入', () => {
+  const homeRouteSource = routesSource.slice(
+    routesSource.indexOf('component: () => import(\'@/views/index.vue\')'),
+    routesSource.indexOf('path: \'reload\''),
   )
+  assert.ok(homeRouteSource.includes('meta: {'), 'routes.ts 必须声明首页路由')
+
+  // 首页是登录后的默认落点，不能再声明 meta.auth，否则缺少管理读取权限的身份一登录就落到 403。
+  assert.doesNotMatch(homeRouteSource, /\bauth\b/u)
+  assert.doesNotMatch(routesSource, /MANAGEMENT_READ_PERMISSIONS/u)
 })
 
 test('无业务权限的已登录用户仍可从 403 页面打开账户菜单', () => {
