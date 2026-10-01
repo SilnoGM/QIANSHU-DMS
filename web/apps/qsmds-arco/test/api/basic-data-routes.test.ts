@@ -5,7 +5,9 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { matchesAuthorization } from '../../src/composables/app/auth'
-import basicDataRoutes from '../../src/router/modules/basic.data'
+import basicDataRoutes, {
+  BASIC_DATA_READ_PERMISSIONS,
+} from '../../src/router/modules/basic.data'
 import { filterAccessibleMenus } from '../../src/store/modules/app/menu.logic'
 
 const basicDataPageContracts = [
@@ -64,7 +66,7 @@ const basicDataPageContracts = [
 ] as const
 
 test('基础数据父路由保持权限中立并由叶子路由独立鉴权', () => {
-  assert.equal(basicDataRoutes.path, '/system/basic-data')
+  assert.equal(basicDataRoutes.path, '/admin/basic-data')
   assert.equal(basicDataRoutes.name, 'systemBasicData')
   assert.equal(basicDataRoutes.meta?.title, '基础数据')
   assert.equal(basicDataRoutes.meta?.auth, undefined)
@@ -103,7 +105,7 @@ test('基础数据父路由保持权限中立并由叶子路由独立鉴权', ()
   ])
   assert.equal(currencyExchangeRateRoute?.meta?.tabMerge, 'routeName')
   assert.equal(legacyExchangeRateRoute?.component, undefined)
-  assert.equal(legacyExchangeRateRoute?.meta?.activeMenu, '/system/basic-data/currencies')
+  assert.equal(legacyExchangeRateRoute?.meta?.activeMenu, '/admin/basic-data/currencies')
   assert.equal(legacyExchangeRateRoute?.meta?.menu, false)
   assert.deepEqual(legacyExchangeRateRoute?.redirect, {
     name: 'systemBasicDataCurrencies',
@@ -192,7 +194,7 @@ test('唛头绑定隐藏页面由独立配置权限鉴权，不借编号查看�
   )
   assert.equal(bindingRoute?.meta?.auth, 'purchase-shipping-marks:read')
   assert.equal(bindingRoute?.meta?.menu, false)
-  assert.equal(bindingRoute?.meta?.activeMenu, '/system/basic-data/numbering')
+  assert.equal(bindingRoute?.meta?.activeMenu, '/admin/basic-data/numbering')
   assert.equal(matchesAuthorization(['purchase-shipping-marks:read'], bindingRoute?.meta?.auth ?? ''), true)
   assert.equal(matchesAuthorization(['numbering-rules:read'], bindingRoute?.meta?.auth ?? ''), false)
   assert.equal(matchesAuthorization(['purchase-shipping-marks:update'], bindingRoute?.meta?.auth ?? ''), false)
@@ -234,7 +236,25 @@ test('编号管理菜单与页面都要求 numbering-rules:read', () => {
   assert.equal(matchesAuthorization([], numberingRoute?.meta?.auth), false)
 })
 
-test('基础数据作为一级菜单注册在系统管理顶部主路由内', () => {
+test('基础数据读取权限并集覆盖全部受保护叶子', () => {
+  assert.deepEqual(BASIC_DATA_READ_PERMISSIONS, [
+    'regions:read',
+    'currencies:read',
+    'exchange-rates:read',
+    'numbering-rules:read',
+    'purchase-shipping-marks:read',
+    'dictionaries:read',
+  ])
+  for (const route of basicDataRoutes.children ?? []) {
+    assert.equal(
+      matchesAuthorization([...BASIC_DATA_READ_PERMISSIONS], route.meta?.auth ?? ''),
+      true,
+      `${String(route.name)} 的读取权限必须包含在管理员工作台并集内`,
+    )
+  }
+})
+
+test('基础数据作为管理员工作台一级菜单注册在顶部主路由内', () => {
   const routesSource = readFileSync(
     new URL('../../src/router/routes.ts', import.meta.url),
     'utf8',
@@ -242,11 +262,11 @@ test('基础数据作为一级菜单注册在系统管理顶部主路由内', ()
 
   assert.match(
     routesSource,
-    /import BasicData from '\.\/modules\/basic\.data'/u,
+    /import BasicData, \{ BASIC_DATA_READ_PERMISSIONS \} from '\.\/modules\/basic\.data'/u,
   )
   assert.match(
     routesSource,
-    /title: '系统管理'[\s\S]*?children: \[[\s\S]*?SystemManagement,[\s\S]*?BasicData,[\s\S]*?ApplicationSettings/u,
+    /title: '管理员工作台'[\s\S]*?children: \[[\s\S]*?BasicData,[\s\S]*?ProductManagement,[\s\S]*?UserRoles,[\s\S]*?SupplierPaymentProfiles,/u,
   )
 })
 

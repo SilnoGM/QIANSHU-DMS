@@ -1457,7 +1457,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.equal(createdUser.status, 201)
   assert.equal(createdUser.body?.username, managedUsername)
 
-  await page.navigate(appRouteUrl(configuration.baseUrl, '/system/roles'))
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/roles'))
   await page.waitFor(`(() => (
     document.body.innerText.includes('角色管理')
     && document.body.innerText.includes('system_admin')
@@ -1654,7 +1654,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   // 窄屏重新从角色卡片打开同一权限抽屉，证明它占满可用宽度、保留 44px
   // 关闭目标和纵向 Footer，关闭后再把焦点交还给原“分配权限”入口。
   await page.setViewport(390, 844, true)
-  await page.navigate(appRouteUrl(configuration.baseUrl, '/system/roles'))
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/roles'))
   await page.waitFor(`document.body.innerText.includes(${JSON.stringify(roleCode)})`)
   await clickVisibleCardButton(page, 'role-card', roleCode, '分配权限')
   await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => {
@@ -1700,7 +1700,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
 
   // 继续在 390px 真机指标下从用户卡片进入重置密码，验证 Drawer -> Modal 的
   // 关键操作链和弹窗宽度；之后再切回桌面表格完成编辑、角色与状态操作。
-  await page.navigate(appRouteUrl(configuration.baseUrl, '/system/users'))
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/users'))
   await page.waitFor(`document.body.innerText.includes('用户管理')`)
   await waitForTableTools(page, 'user-table', '输入完整用户名搜索')
   assert.equal(
@@ -1891,7 +1891,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
 
   // 角色、权限目录和审计都必须在窄屏切换为卡片；卡片边界不得跑出视口。
   await page.setViewport(390, 844, true)
-  await page.navigate(appRouteUrl(configuration.baseUrl, '/system/roles'))
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/roles'))
   await waitForTableTools(page, 'role-table', '搜索角色名称、编码或说明')
   await waitForCardsInsideViewport(page, '[data-testid="role-card"]', editedRoleName)
   assert.equal(await page.evaluate(`(() => (
@@ -1899,7 +1899,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
       .some(element => element.getClientRects().length > 0)
   ))()`), false)
 
-  await page.navigate(appRouteUrl(configuration.baseUrl, '/system/permissions'))
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/permissions'))
   await waitForTableTools(page, 'permission-table', '搜索权限码、名称、说明或资源')
   await waitForCardsInsideViewport(page, '[data-testid="permission-card"]')
   // 权限目录分页后 users:read 不保证位于第一页；通过公开搜索交互定位目标卡片后再验证窄屏布局。

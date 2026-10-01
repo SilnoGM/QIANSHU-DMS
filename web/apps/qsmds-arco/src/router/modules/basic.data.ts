@@ -5,11 +5,26 @@ function Layout() {
 }
 
 /**
+ * 基础数据各叶子的读取权限并集。
+ *
+ * 管理员工作台的主导航组会把自身 auth 覆盖到每个一级子路由，App.vue 再校验全部
+ * matched 记录，因此该集合必须覆盖全部受保护叶子，缺项会让菜单可见但直达 URL 403。
+ */
+export const BASIC_DATA_READ_PERMISSIONS = [
+  'regions:read',
+  'currencies:read',
+  'exchange-rates:read',
+  'numbering-rules:read',
+  'purchase-shipping-marks:read',
+  'dictionaries:read',
+] as const
+
+/**
  * 基础数据父级保持权限中立，由各业务叶子独立声明访问权限。
  * 这样无地区权限的账号仍可看到其余基础数据入口，避免父级鉴权误删整棵菜单。
  */
 const routes: RouteRecordRaw = {
-  path: '/system/basic-data',
+  path: '/admin/basic-data',
   name: 'systemBasicData',
   component: Layout,
   meta: {
@@ -52,7 +67,7 @@ const routes: RouteRecordRaw = {
       meta: {
         title: '当前汇率',
         auth: 'exchange-rates:read',
-        activeMenu: '/system/basic-data/currencies',
+        activeMenu: '/admin/basic-data/currencies',
         menu: false,
       },
     },
@@ -73,7 +88,7 @@ const routes: RouteRecordRaw = {
       meta: {
         title: '新增编号规则',
         auth: 'numbering-rules:read',
-        activeMenu: '/system/basic-data/numbering',
+        activeMenu: '/admin/basic-data/numbering',
         menu: false,
         tabMerge: 'routeName',
       },
@@ -85,7 +100,7 @@ const routes: RouteRecordRaw = {
       meta: {
         title: '唛头规则绑定',
         auth: 'purchase-shipping-marks:read',
-        activeMenu: '/system/basic-data/numbering',
+        activeMenu: '/admin/basic-data/numbering',
         menu: false,
         tabMerge: 'routeName',
       },

@@ -32,7 +32,7 @@ import {
   restorePermissionsExpression,
 } from './regions.browser.helpers.mjs'
 
-const managementRoute = '/system/basic-data/dictionaries'
+const managementRoute = '/admin/basic-data/dictionaries'
 const typeCodeInput = 'E2E.BROWSER_DICTIONARY'
 const typeCode = 'e2e.browser_dictionary'
 const typeInitialName = '浏览器字典'
@@ -1620,7 +1620,7 @@ test('真实 Chrome 覆盖系统字典生命周期、双标签失效、权限与
       assert.equal(management.status, 403)
       assert.equal(management.body?.code, 'FORBIDDEN')
       await limitedPage.waitFor(`(() => (
-        location.hash === '#/system/basic-data/dictionaries'
+        location.hash === '#/admin/basic-data/dictionaries'
         && document.body.innerText.includes('403')
         && document.body.innerText.includes('无权访问该页面')
         && document.querySelector(

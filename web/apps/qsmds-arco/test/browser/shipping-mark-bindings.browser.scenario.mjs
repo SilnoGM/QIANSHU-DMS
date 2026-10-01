@@ -3,7 +3,7 @@ import { clickVisibleButton, patchNumberingPermissionsExpression, restoreNumberi
 import { apiExpression, appRouteUrl } from './regions.browser.helpers.mjs'
 
 const endpoint = '/api/purchase-shipping-mark-bindings'
-const route = '/system/basic-data/numbering/shipping-mark-bindings'
+const route = '/admin/basic-data/numbering/shipping-mark-bindings'
 const supplierValue = 'BROWSER_MARK_A'
 
 /** 数据仅经隔离 Browser 编排器的正式 API 创建，不接触开发业务库。 */
@@ -46,7 +46,7 @@ export async function verifyShippingMarkBindings(page, configuration) {
   const custom = await rule('CUSTOM_MARK', '自定义产品唛头')
 
   await page.setViewport(1440, 1000, false)
-  await page.navigate(appRouteUrl(configuration.baseUrl, '/system/basic-data/numbering'))
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/basic-data/numbering'))
   await page.waitFor('!!document.querySelector("[data-testid=shipping-mark-bindings-entry]")')
   await page.evaluate('document.querySelector("[data-testid=shipping-mark-bindings-entry]").click()')
   await page.waitFor('document.querySelector("[data-testid=shipping-mark-bindings-page]")?.textContent.includes("微耕机供应商")')

@@ -461,7 +461,7 @@ export function collectDictionaryRuntimeErrors(
 /** 真实路由、权限工作区与首轮 Type 请求必须完成后才允许进入 Browser 断言。 */
 export async function waitForDictionaryWorkspace(page) {
   await page.waitFor(`(() => (
-    location.hash === '#/system/basic-data/dictionaries'
+    location.hash === '#/admin/basic-data/dictionaries'
     && document.querySelector(
       '[data-testid="dictionary-management-workspace"]',
     )?.getClientRects().length > 0

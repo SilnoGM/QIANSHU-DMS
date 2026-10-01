@@ -38,7 +38,7 @@ import {
 } from './regions.browser.helpers.mjs'
 
 const selectorRoute = '/__e2e/region-selector'
-const managementRoute = '/system/basic-data/regions'
+const managementRoute = '/admin/basic-data/regions'
 
 async function runBrowserStep(label, action) {
   process.stdout.write(`[regions-browser] ${label}\n`)
@@ -1399,10 +1399,10 @@ test('真实 Chrome 覆盖地区管理查询、权限、写入、双标签失效
      * 字典叶子与其他基础数据入口一样受独立读取权限保护。直接访问时保持原地址，
      * 由 App 的统一权限边界展示 403，且不能挂载字典受保护工作区。
      */
-    await page.navigate(appRouteUrl(configuration.baseUrl, '/system/basic-data/dictionaries'))
+    await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/basic-data/dictionaries'))
     await page.waitFor(`(() => {
       const body = document.body.innerText
-      return location.hash === '#/system/basic-data/dictionaries'
+      return location.hash === '#/admin/basic-data/dictionaries'
         && body.includes('403')
         && body.includes('无权访问该页面')
         && document.querySelector('[data-testid="dictionary-management-workspace"]') === null

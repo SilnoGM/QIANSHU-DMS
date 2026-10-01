@@ -26,9 +26,9 @@ let successBypass = false
 const dirty = computed(() => formRef.value?.dirty ?? false)
 const locked = computed(() => submitting.value || navigating.value)
 const returnLocation = computed(() => typeof route.query.returnTo === 'string'
-  && /^\/system\/basic-data\/numbering(?:\?|$)/u.test(route.query.returnTo)
+  && /^\/admin\/basic-data\/numbering(?:\?|$)/u.test(route.query.returnTo)
   ? route.query.returnTo
-  : '/system/basic-data/numbering')
+  : '/admin/basic-data/numbering')
 
 function resolveDiscard(allowed: boolean): void {
   const pending = resolveLeave

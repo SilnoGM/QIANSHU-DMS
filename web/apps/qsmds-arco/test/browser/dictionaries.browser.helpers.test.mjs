@@ -240,6 +240,6 @@ test('workspace 等待器只接受真实字典路由与已挂载受保护工作�
     waitFor: async expression => expressions.push(expression),
   })
   assert.equal(expressions.length, 1)
-  assert.match(expressions[0], /#\/system\/basic-data\/dictionaries/u)
+  assert.match(expressions[0], /#\/admin\/basic-data\/dictionaries/u)
   assert.match(expressions[0], /dictionary-management-workspace/u)
 })

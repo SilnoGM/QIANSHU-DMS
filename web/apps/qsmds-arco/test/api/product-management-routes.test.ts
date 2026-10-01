@@ -70,16 +70,18 @@ test('管理员工作台保留产品管理，资金账户迁移至财务工作�
     asyncRoutesSource.indexOf('title: \'管理员工作台\''),
     asyncRoutesSource.indexOf('title: \'系统管理\''),
   )
-  const productPermissionIndex = administratorWorkbenchSource.indexOf(
-    '...PRODUCT_MANAGEMENT_PERMISSIONS',
-  )
+  // 主导航组权限并集在装配区之前声明，产品读取权限必须留在并集内并覆盖一级子路由。
+  const workbenchPermissionUnion = routesSource.match(
+    /const ADMIN_WORKBENCH_PERMISSIONS = \[([\s\S]*?)\]/u,
+  )?.[1] ?? ''
   const financeSource = readFileSync(new URL('../../src/router/modules/role.workbenches.ts', import.meta.url), 'utf8')
   const productRouteIndex = administratorWorkbenchSource.indexOf(
     'ProductManagement,',
   )
 
-  assert.ok(productPermissionIndex >= 0)
-  assert.ok(productRouteIndex > productPermissionIndex)
+  assert.match(workbenchPermissionUnion, /\.\.\.PRODUCT_MANAGEMENT_PERMISSIONS/u)
+  assert.match(administratorWorkbenchSource, /auth: \[\.\.\.ADMIN_WORKBENCH_PERMISSIONS\]/u)
+  assert.ok(productRouteIndex >= 0)
   assert.doesNotMatch(administratorWorkbenchSource, /FUND_ACCOUNT_MANAGEMENT_PERMISSIONS|FundAccountManagement/u)
   assert.match(financeSource, /FUND_ACCOUNT_MANAGEMENT_PERMISSIONS/u)
   assert.match(financeSource, /FundAccountManagement,/u)
