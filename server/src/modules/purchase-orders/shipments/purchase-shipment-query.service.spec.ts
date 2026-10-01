@@ -4,7 +4,7 @@ import { PurchaseShipmentQueryService } from './purchase-shipment-query.service'
 import type { PurchaseShipmentFilterDto, PurchaseShipmentListQueryDto } from './purchase-shipment.dto'
 
 function fixture() {
-  const part = { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), findUnique: jest.fn(), groupBy: jest.fn().mockResolvedValue([]) }
+  const part = { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), findUnique: jest.fn() }
   const order = { findMany: jest.fn().mockResolvedValue([]) }
   const user = { findMany: jest.fn().mockResolvedValue([]) }
   const transaction = { purchaseOrderPart: part, purchaseOrder: order, user }
@@ -18,6 +18,7 @@ function row() {
     id: 'part-1', shipmentNo: 'PKG/20260914-00001', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK/02', createdAt: new Date('2026-09-14T00:00:00Z'),
     shippedAt: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, trackingNo: null,
     warehouseReceivedAt: null, warehouseReceivedById: null, warehouseRecordedAt: null, warehouseRemark: null, warehouseReceivedBy: null,
+    loadedAt: null, loadedById: null, loadedRecordedAt: null, loadedBy: null,
     purchaseOrder: {
       id: 'order-1', version: 3, orderNo: 'PO/01', orderDate: new Date('2026-09-14'), purchaseType: 'STOCK', productMode: 'CUSTOM', orderStatus: 'CONFIRMED',
       shippingMarkText: 'MARK', supplierValue: null, customSupplierName: '临时工厂', createdBy: { id: 'buyer-1', displayName: '采购员' }, salesOrder: null,
@@ -34,9 +35,9 @@ describe('PurchaseShipmentQueryService', () => {
     await f.service.list(input)
     await f.service.statusCounts(input)
     const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
-    const countCall = f.part.groupBy.mock.calls[0] as [{ where: unknown }]
-    expect(listCall[0].where.AND[0]).toEqual(countCall[0].where)
-    expect(countCall[0].where).toMatchObject({ OR: expect.arrayContaining([
+    const countCall = f.part.count.mock.calls[1] as [{ where: { AND: unknown[] } }]
+    expect(listCall[0].where.AND[0]).toEqual(countCall[0].where.AND[0])
+    expect(countCall[0].where.AND[0]).toMatchObject({ OR: expect.arrayContaining([
       { trackingNo: { contains: 'ＳＦ-123', mode: 'insensitive' } },
       { shipmentNo: { contains: 'SF-123', mode: 'insensitive' } },
       { purchaseOrder: { is: { orderNo: { contains: 'SF-123', mode: 'insensitive' } } } },
@@ -50,12 +51,12 @@ describe('PurchaseShipmentQueryService', () => {
     await f.service.list(query)
     await f.service.statusCounts(filters)
     const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
-    const countCall = f.part.groupBy.mock.calls[0] as [{ where: unknown }]
-    expect(listCall[0].where.AND[0]).toEqual(countCall[0].where)
-    expect(countCall[0].where).toMatchObject({ destinationWarehouseValue: 'RETIRED-A', OR: expect.arrayContaining([
+    const countCall = f.part.count.mock.calls[1] as [{ where: { AND: unknown[] } }]
+    expect(listCall[0].where.AND[0]).toEqual(countCall[0].where.AND[0])
+    expect(countCall[0].where.AND[0]).toMatchObject({ destinationWarehouseValue: 'RETIRED-A', OR: expect.arrayContaining([
       { trackingNo: { contains: 'SF123', mode: 'insensitive' } },
     ]) as unknown })
-    expect(countCall[0].where).not.toHaveProperty('sort')
+    expect(countCall[0].where.AND[0]).not.toHaveProperty('sort')
     expect(f.lookup.resolveStoredValues).not.toHaveBeenCalled()
   })
 
@@ -65,8 +66,8 @@ describe('PurchaseShipmentQueryService', () => {
     await f.service.list(filters)
     await f.service.statusCounts(filters)
     const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: [{ destinationWarehouseValue?: unknown }] } }]
-    const countCall = f.part.groupBy.mock.calls[0] as [{ where: unknown }]
-    expect(listCall[0].where.AND[0]).toEqual(countCall[0].where)
+    const countCall = f.part.count.mock.calls[1] as [{ where: { AND: [{ destinationWarehouseValue?: unknown }] } }]
+    expect(listCall[0].where.AND[0]).toEqual(countCall[0].where.AND[0])
     expect(listCall[0].where.AND[0].destinationWarehouseValue).toBe(destinationWarehouseMissing === true ? null : undefined)
   })
 
@@ -153,9 +154,9 @@ describe('PurchaseShipmentQueryService', () => {
     await f.service.list({ keyword: '  ＰＫＧ/20260914-00001  ', view: 'ALL' })
     await f.service.statusCounts({ keyword: '  ＰＫＧ/20260914-00001  ' })
     const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
-    const countCall = f.part.groupBy.mock.calls[0] as [{ where: unknown }]
-    expect(countCall[0].where).toEqual(listCall[0].where.AND[0])
-    expect(countCall[0].where).toMatchObject({ OR: expect.arrayContaining([
+    const countCall = f.part.count.mock.calls[1] as [{ where: { AND: unknown[] } }]
+    expect(countCall[0].where.AND[0]).toEqual(listCall[0].where.AND[0])
+    expect(countCall[0].where.AND[0]).toMatchObject({ OR: expect.arrayContaining([
       { shipmentNo: { contains: 'PKG/20260914-00001', mode: 'insensitive' } },
     ]) as unknown })
   })
@@ -164,7 +165,7 @@ describe('PurchaseShipmentQueryService', () => {
     const f = fixture()
     f.part.findMany.mockResolvedValue([row()]); f.part.count.mockResolvedValue(3)
     const page = await f.service.list({ page: 2, pageSize: 1 })
-    expect(f.part.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { AND: [expect.any(Object) as unknown, { status: 'ACTIVE', shippedAt: null }] }, skip: 1, take: 1 }))
+    expect(f.part.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { AND: [expect.any(Object) as unknown, { status: 'ACTIVE', loadedAt: null, shippedAt: null }] }, skip: 1, take: 1 }))
     expect(page).toMatchObject({ page: 2, pageSize: 1, total: 3, items: [{ viewStatus: 'AWAITING_SHIPMENT', supplier: { source: 'CUSTOM_TEXT', label: '临时工厂' }, salesSource: null, lineSummary: { lineCount: 1, totalQuantity: 2, previews: [{ quantity: 2, mainImage: null }] } }] })
     expect(f.prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'RepeatableRead' })
   })
@@ -181,16 +182,21 @@ describe('PurchaseShipmentQueryService', () => {
     expect(page.items[0].lineSummary.previews[0]).toMatchObject({ quantity: 2, mainImage: { contentUrl: '/api/purchase-orders/order-1/lines/line-1/main-image/image-1/content' } })
   })
 
-  it('derives exclusive status counts with cancellation taking precedence over shippedAt', async () => {
+  it('counts every view with its own exclusive predicate, cancellation taking precedence over facts', async () => {
     const f = fixture()
-    f.part.groupBy.mockResolvedValue([
-      { status: 'PENDING_REVIEW', _count: { _all: 2, shippedAt: 0, warehouseReceivedAt: 0 } },
-      { status: 'ACTIVE', _count: { _all: 5, shippedAt: 3, warehouseReceivedAt: 2 } },
-      { status: 'CANCELLED', _count: { _all: 4, shippedAt: 2, warehouseReceivedAt: 1 } },
-    ])
+    // 逐视图计数，合计等于全部货件；互斥语义由谓词本身保证。
+    for (const total of [11, 2, 2, 1, 2, 1, 4]) f.part.count.mockResolvedValueOnce(total)
     f.user.findMany.mockResolvedValue([{ id: 'buyer-1', displayName: '采购员' }])
     const result = await f.service.statusCounts({ keyword: '厂', supplierSource: 'CUSTOM_TEXT' })
-    expect(result).toEqual({ items: [{ value: 'ALL', count: 11 }, { value: 'PENDING_REVIEW', count: 2 }, { value: 'AWAITING_SHIPMENT', count: 2 }, { value: 'SHIPPED', count: 1 }, { value: 'WAREHOUSE_RECEIVED', count: 2 }, { value: 'CANCELLED', count: 4 }], buyerOptions: [{ id: 'buyer-1', displayName: '采购员' }] })
+    expect(result).toEqual({ items: [{ value: 'ALL', count: 11 }, { value: 'PENDING_REVIEW', count: 2 }, { value: 'AWAITING_SHIPMENT', count: 2 }, { value: 'SHIPPED', count: 1 }, { value: 'WAREHOUSE_RECEIVED', count: 2 }, { value: 'CONTAINER_LOADED', count: 1 }, { value: 'CANCELLED', count: 4 }], buyerOptions: [{ id: 'buyer-1', displayName: '采购员' }] })
+    expect(f.part.count.mock.calls.map(call => (call as [{ where: { AND: unknown[] } }])[0].where.AND[1])).toEqual([
+      {}, { status: 'PENDING_REVIEW' },
+      { status: 'ACTIVE', loadedAt: null, shippedAt: null },
+      { status: 'ACTIVE', loadedAt: null, shippedAt: { not: null }, warehouseReceivedAt: null },
+      { status: 'ACTIVE', loadedAt: null, warehouseReceivedAt: { not: null } },
+      { status: 'ACTIVE', loadedAt: { not: null } },
+      { status: 'CANCELLED' },
+    ])
     expect(f.user.findMany).toHaveBeenCalledWith({ where: { purchaseOrdersCreated: { some: { parts: { some: {} } } } }, select: { id: true, displayName: true }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }] })
     expect(f.order.findMany).not.toHaveBeenCalled()
   })
@@ -200,9 +206,9 @@ describe('PurchaseShipmentQueryService', () => {
     const filters = { keyword: '  配件  ', orderDateFrom: '2026-09-01', orderDateTo: '2026-09-14', purchaseType: 'STOCK' as const, createdByUserId: 'buyer-1', supplierValue: 'SUPPLIER_A', supplierSource: 'DICTIONARY' as const }
     await f.service.list({ ...filters, view: 'SHIPPED' }); await f.service.statusCounts(filters)
     const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
-    const countCall = f.part.groupBy.mock.calls[0] as [{ where: unknown }]
+    const countCall = f.part.count.mock.calls[1] as [{ where: { AND: unknown[] } }]
     const listWhere = listCall[0].where.AND[0]
-    expect(countCall[0].where).toEqual(listWhere)
+    expect(countCall[0].where.AND[0]).toEqual(listWhere)
     expect(listWhere).toMatchObject({ purchaseOrder: { is: { purchaseType: 'STOCK', createdByUserId: 'buyer-1', supplierValue: 'SUPPLIER_A', orderDate: { gte: new Date('2026-09-01'), lte: new Date('2026-09-14') } } } })
     expect(listWhere).toMatchObject({ OR: expect.arrayContaining([{ items: { some: { line: { is: { productNameSnapshot: { contains: '配件', mode: 'insensitive' } } } } } }]) as unknown })
   })
@@ -217,11 +223,15 @@ describe('PurchaseShipmentQueryService', () => {
     const f = fixture()
     await f.service.list({ view: 'SHIPPED' })
     expect(f.part.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { AND: [expect.any(Object) as unknown, {
-      status: 'ACTIVE', shippedAt: { not: null }, warehouseReceivedAt: null,
+      status: 'ACTIVE', loadedAt: null, shippedAt: { not: null }, warehouseReceivedAt: null,
     }] } }))
     await f.service.list({ view: 'WAREHOUSE_RECEIVED' })
     expect(f.part.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { AND: [expect.any(Object) as unknown, {
-      status: 'ACTIVE', warehouseReceivedAt: { not: null },
+      status: 'ACTIVE', loadedAt: null, warehouseReceivedAt: { not: null },
+    }] } }))
+    await f.service.list({ view: 'CONTAINER_LOADED' })
+    expect(f.part.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { AND: [expect.any(Object) as unknown, {
+      status: 'ACTIVE', loadedAt: { not: null },
     }] } }))
     f.part.findUnique.mockResolvedValue({ ...row(), shippedAt: new Date('2026-09-14T01:00:00Z'),
       warehouseReceivedAt: new Date('2026-09-14T02:00:00Z'), warehouseRecordedAt: new Date('2026-09-14T03:00:00Z'),

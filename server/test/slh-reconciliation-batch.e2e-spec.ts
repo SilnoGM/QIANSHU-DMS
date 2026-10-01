@@ -5,6 +5,7 @@ import { SlhBillLineReconciliationStatusDto, SlhBillReconciliationStatusDto } fr
 import type { SlhReconciliationBatchDetailDto, SlhReconciliationBatchPageDto, SlhReconciliationBatchPreviewDto } from '../src/modules/slh-reconciliation-batches/slh-reconciliation-batch.dto'
 import { SlhReconciliationBatchStatusDto } from '../src/modules/slh-reconciliation-batches/slh-reconciliation-batch.dto'
 import { createSlhBillFixture } from './fixtures/slh-bill-xlsx.fixture'
+import { markShipmentsContainerLoaded } from './fixtures/container-loaded.fixture'
 import { createPackagingCostHarness, packagingHeaders, type PackagingCostHarness } from './packaging-cost.fixture'
 import { TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
 
@@ -60,6 +61,8 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
         select: { id: true },
       })
       batchIds.set(containerBatchName, batch.id)
+      // 关联即已装柜：直接落库的用例必须补齐装柜事实，否则关联会被触发器拒绝。
+      await markShipmentsContainerLoaded(tx, rows.flatMap(row => row.shipmentId ? [row.shipmentId] : []), h.fixture.actor.id)
       for (const [index, row] of rows.entries()) {
         const item = await tx.containerLoadingItem.create({
           data: {

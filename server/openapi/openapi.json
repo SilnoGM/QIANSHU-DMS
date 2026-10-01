@@ -53001,6 +53001,7 @@
                 "AWAITING_SHIPMENT",
                 "SHIPPED",
                 "WAREHOUSE_RECEIVED",
+                "CONTAINER_LOADED",
                 "CANCELLED"
               ]
             }
@@ -56805,6 +56806,7 @@
                 "PURCHASE_ORDER_CREATED",
                 "PURCHASE_SHIPMENT_NUMBER_ASSIGNED",
                 "PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED",
+                "PURCHASE_SHIPMENT_CONTAINER_LOADED",
                 "PURCHASE_ORDER_REVIEW_MARKS_PREPARED",
                 "PURCHASE_ORDER_IMAGE_GENERATED",
                 "PURCHASE_ORDER_ORDER_STATUS_CHANGED",
@@ -81165,6 +81167,7 @@
               "AWAITING_SHIPMENT",
               "SHIPPED",
               "WAREHOUSE_RECEIVED",
+              "CONTAINER_LOADED",
               "CANCELLED"
             ]
           },
@@ -81250,6 +81253,26 @@
               }
             ]
           },
+          "loadedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "被装柜明细关联的装柜时间；未装柜时为空，关联移除后不回退"
+          },
+          "loadedBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseOrderActorDto"
+              }
+            ]
+          },
+          "loadedRecordedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
           "purchaseOrder": {
             "$ref": "#/components/schemas/PurchaseShipmentOrderDto"
           },
@@ -81289,6 +81312,9 @@
           "warehouseRecordedAt",
           "warehouseRemark",
           "warehouseReceivedBy",
+          "loadedAt",
+          "loadedBy",
+          "loadedRecordedAt",
           "purchaseOrder",
           "supplier",
           "salesSource",
@@ -81335,6 +81361,7 @@
               "AWAITING_SHIPMENT",
               "SHIPPED",
               "WAREHOUSE_RECEIVED",
+              "CONTAINER_LOADED",
               "CANCELLED"
             ]
           },
@@ -81469,6 +81496,7 @@
               "AWAITING_SHIPMENT",
               "SHIPPED",
               "WAREHOUSE_RECEIVED",
+              "CONTAINER_LOADED",
               "CANCELLED"
             ]
           },
@@ -81554,6 +81582,26 @@
               }
             ]
           },
+          "loadedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "被装柜明细关联的装柜时间；未装柜时为空，关联移除后不回退"
+          },
+          "loadedBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseOrderActorDto"
+              }
+            ]
+          },
+          "loadedRecordedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
           "purchaseOrder": {
             "$ref": "#/components/schemas/PurchaseShipmentOrderDto"
           },
@@ -81599,6 +81647,9 @@
           "warehouseRecordedAt",
           "warehouseRemark",
           "warehouseReceivedBy",
+          "loadedAt",
+          "loadedBy",
+          "loadedRecordedAt",
           "purchaseOrder",
           "supplier",
           "salesSource",
@@ -82128,6 +82179,7 @@
               "PURCHASE_ORDER_CREATED",
               "PURCHASE_SHIPMENT_NUMBER_ASSIGNED",
               "PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED",
+              "PURCHASE_SHIPMENT_CONTAINER_LOADED",
               "PURCHASE_ORDER_REVIEW_MARKS_PREPARED",
               "PURCHASE_ORDER_IMAGE_GENERATED",
               "PURCHASE_ORDER_ORDER_STATUS_CHANGED",

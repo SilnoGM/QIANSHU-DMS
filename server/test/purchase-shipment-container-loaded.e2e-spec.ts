@@ -1,0 +1,141 @@
+import { randomUUID } from 'node:crypto'
+import request from 'supertest'
+import type { ContainerBatchDto, ContainerLoadingItemDto } from '../src/modules/container-batches/container-batch.dto'
+import type { ContainerSourceFileDto } from '../src/modules/container-batches/container-source-file.dto'
+import type { PurchaseShipmentPageDto, PurchaseShipmentStatusCountsDto } from '../src/modules/purchase-orders/shipments/purchase-shipment.dto'
+import { containerImportHeader, containerImportRow, createContainerImportFixture } from './fixtures/container-import.fixture'
+import { createOceanXlsxFixture } from './fixtures/ocean-freight-xlsx.fixture'
+import { createPackagingCostHarness, packagingHeaders, type PackagingCostHarness } from './packaging-cost.fixture'
+import { TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
+
+const permissions = ['container-batches:read', 'container-batches:create', 'container-batches:update', 'purchase-orders:read']
+const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+/** 关联即已装柜：覆盖新关联、幂等、解除不回退、未到仓门槛与视图计数五类情形。 */
+describe('shipment container loading fact over isolated PostgreSQL', () => {
+  jest.setTimeout(120_000)
+  let h: PackagingCostHarness, browser: ReturnType<typeof request.agent>
+  let actorUserId: string
+  let sequence = 50
+  const post = (url: string, body: object) => browser.post(url).set(packagingHeaders).set('Idempotency-Key', randomUUID()).send(body)
+  const patch = (url: string, body: object) => browser.patch(url).set(packagingHeaders).send(body)
+  const reference = async <T>(url: string): Promise<T> => (await browser.get(url).expect(200)).body as T
+  const upload = async (bytes: Buffer) => (await browser.post('/api/container-batches/source-file-uploads').set(packagingHeaders)
+    .field('mediaType', 'DOCUMENT').attach('file', bytes, { filename: '装柜资料.xlsx', contentType: mime }).expect(201)).body as ContainerSourceFileDto
+  async function batch(name = `0917-${String(++sequence).padStart(2, '0')}柜`) {
+    const source = await upload(createOceanXlsxFixture())
+    return (await post('/api/container-batches', { containerBatchName: name, warehouseValue: TEST_DESTINATION_WAREHOUSE, sourceFileId: source.mediaAssetId }).expect(201)).body as ContainerBatchDto
+  }
+  async function item(parentId: string, extra: object) {
+    const parent = await reference<ContainerBatchDto>(`/api/container-batches/${parentId}`)
+    return (await post(`/api/container-batches/${parentId}/items`, { expectedVersion: parent.version, goodsName: '履带', packageCount: 10, ...extra }).expect(201)).body as ContainerLoadingItemDto
+  }
+  async function fact(partId: string) {
+    const row = await h.prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: partId } })
+    return { loadedAt: row.loadedAt?.toISOString() ?? null, loadedById: row.loadedById, loadedRecordedAt: row.loadedRecordedAt?.toISOString() ?? null }
+  }
+  const unloaded = { loadedAt: null, loadedById: null, loadedRecordedAt: null }
+  const loadEvents = (partId: string) => h.prisma.auditEvent.count({ where: { eventType: 'PURCHASE_SHIPMENT_CONTAINER_LOADED', targetId: partId } })
+  const loadedCount = async () => {
+    const counts = (await reference<PurchaseShipmentStatusCountsDto>('/api/purchase-order-parts/status-counts'))
+    return counts.items.find(entry => entry.value === 'CONTAINER_LOADED')?.count
+  }
+
+  beforeAll(async () => {
+    h = await createPackagingCostHarness({ nativeImageProbe: true })
+    await h.app.listen(0, '127.0.0.1')
+    const session = await h.browserWithPermissions(permissions)
+    browser = session.browser
+    actorUserId = session.user.id
+    const context = { actorUserId: h.fixture.actor.id, requestId: randomUUID() }
+    const rule = await h.fixture.numberingCommands.create(context, { ruleCode: 'CONTAINER_BATCH_NO', purpose: 'BUSINESS', name: '柜次', resetPolicy: 'NEVER', segments: [{ type: 'FIXED', value: 'CB' }, { type: 'SEQUENCE', width: 8, startValue: '1', step: '1' }] })
+    const published = await h.fixture.numberingCommands.publish(context, rule.id, { expectedVersion: rule.version, draftRevision: 1 })
+    await h.fixture.numberingCommands.enable(context, rule.id, { expectedVersion: published.version })
+  })
+  afterAll(async () => { await h?.dispose() })
+
+  it('marks the shipment on the first association, stays idempotent and never reverts', async () => {
+    const parent = await batch(), shipment = await h.shipment({ salesLinked: true })
+    const before = await loadedCount()
+    expect(await fact(shipment.part.id)).toEqual(unloaded)
+    const first = await item(parent.id, { shipmentId: shipment.part.id })
+    const marked = await fact(shipment.part.id)
+    expect(marked).toMatchObject({ loadedById: actorUserId })
+    expect(marked.loadedAt).not.toBeNull()
+    expect(marked.loadedRecordedAt).not.toBeNull()
+    expect(await loadEvents(shipment.part.id)).toBe(1)
+
+    // 同柜再挂一行以及原行重存都不得改写事实或重复记审计。
+    const second = await item(parent.id, { shipmentId: shipment.part.id })
+    await patch(`/api/container-batches/${parent.id}/items/${second.id}`, { expectedVersion: (await reference<ContainerBatchDto>(`/api/container-batches/${parent.id}`)).version, itemExpectedVersion: second.version, shipmentId: shipment.part.id, goodsName: '履带', packageCount: 12 })
+    expect(await fact(shipment.part.id)).toEqual(marked)
+    expect(await loadEvents(shipment.part.id)).toBe(1)
+
+    const listed = (await browser.get('/api/purchase-order-parts').query({ view: 'CONTAINER_LOADED', keyword: shipment.part.shipmentNo! }).expect(200)).body as PurchaseShipmentPageDto
+    expect(listed.total).toBe(1)
+    expect(listed.items[0]).toMatchObject({ id: shipment.part.id, viewStatus: 'CONTAINER_LOADED', loadedAt: marked.loadedAt, loadedBy: { id: actorUserId }, warehouseReceivedAt: expect.any(String) as unknown })
+    expect(await loadedCount()).toBe(before! + 1)
+
+    // 解除关联与换绑都不回退：事实保留、视图仍在已装柜。
+    const parentVersion = (await reference<ContainerBatchDto>(`/api/container-batches/${parent.id}`)).version
+    const cleared = (await patch(`/api/container-batches/${parent.id}/items/${first.id}`, { expectedVersion: parentVersion, itemExpectedVersion: first.version, goodsName: '履带', packageCount: 10 }).expect(200)).body as ContainerLoadingItemDto
+    expect(cleared.shipmentId).toBeNull()
+    expect(await fact(shipment.part.id)).toEqual(marked)
+    expect((await browser.get('/api/purchase-order-parts').query({ view: 'CONTAINER_LOADED', keyword: shipment.part.shipmentNo! }).expect(200)).body as PurchaseShipmentPageDto).toMatchObject({ total: 1 })
+  })
+
+  it('keeps the container loading fact write-once at the database level', async () => {
+    const parent = await batch(), shipment = await h.shipment()
+    await item(parent.id, { shipmentId: shipment.part.id })
+    const marked = await fact(shipment.part.id)
+    await expect(h.prisma.$executeRaw`UPDATE purchase_order_parts SET loaded_at = NULL WHERE id = ${shipment.part.id}::uuid`).rejects.toThrow(/Purchase part configuration is immutable/u)
+    await expect(h.prisma.$executeRaw`UPDATE purchase_order_parts SET loaded_recorded_at = clock_timestamp(), loaded_by_id = NULL WHERE id = ${shipment.part.id}::uuid`).rejects.toThrow(/Purchase part configuration is immutable/u)
+    expect(await fact(shipment.part.id)).toEqual(marked)
+
+    // 绕过服务端直写关联同样被拒绝：装柜事实必须先于关联存在。
+    const unreceived = await h.shipment({ received: false })
+    await expect(h.prisma.containerLoadingItem.create({ data: {
+      containerBatchId: parent.id, shipmentId: unreceived.part.id, lineNumber: 9001, goodsName: '绕过服务端', packageCount: 1,
+      creationRequestKey: randomUUID(), creationPayloadHash: 'f'.repeat(64), createdById: h.fixture.actor.id, updatedById: h.fixture.actor.id,
+    } })).rejects.toThrow(/Shipment must record the container loading fact before allocation/u)
+    expect(await fact(unreceived.part.id)).toEqual(unloaded)
+  })
+
+  it('rejects container loading before the shipment is warehouse-received on every entry', async () => {
+    const parent = await batch(), unreceived = await h.shipment({ received: false })
+    const created = await post(`/api/container-batches/${parent.id}/items`, { expectedVersion: parent.version, goodsName: '履带', packageCount: 1, shipmentId: unreceived.part.id }).expect(422)
+    expect(created.body as { code: string }).toMatchObject({ code: 'CONTAINER_SHIPMENT_NOT_RECEIVED' })
+
+    const row = await item(parent.id, {})
+    const rejected = await patch(`/api/container-batches/${parent.id}/items/${row.id}`, { expectedVersion: (await reference<ContainerBatchDto>(`/api/container-batches/${parent.id}`)).version, itemExpectedVersion: row.version, shipmentId: unreceived.part.id, goodsName: '履带', packageCount: 1 }).expect(422)
+    expect(rejected.body as { code: string }).toMatchObject({ code: 'CONTAINER_SHIPMENT_NOT_RECEIVED' })
+
+    // 导入侧：预览标注不可选，确认仍按同一错误码拒绝。
+    const name = `0917-${String(++sequence).padStart(2, '0')}柜`
+    const source = await upload(createContainerImportFixture({ sheets: [{ name: '装柜资料', rows: containerImportHeader() + containerImportRow(3, { A: name, B: unreceived.part.shippingMarkText!, C: 'OCEAN-GATE' }) }] }))
+    const importing = (await post('/api/container-batches', { containerBatchName: name, warehouseValue: TEST_DESTINATION_WAREHOUSE, sourceFileId: source.mediaAssetId }).expect(201)).body as ContainerBatchDto
+    const preview = (await browser.get(`/api/container-batches/${importing.id}/import-preview`).expect(200)).body as { expectedVersion: number, sourceFileId: string, sourceHash: string, rows: Array<{ rowKey: string, candidates: Array<{ id: string, eligible: boolean, ineligibleReason: string | null }> }> }
+    expect(preview.rows[0].candidates[0]).toMatchObject({ id: unreceived.part.id, eligible: false, ineligibleReason: expect.stringContaining('尚未到仓') as unknown })
+    const confirmed = await post(`/api/container-batches/${importing.id}/import`, { expectedVersion: preview.expectedVersion, sourceFileId: preview.sourceFileId, sourceHash: preview.sourceHash, allowUnmatched: false, rows: [{ rowKey: preview.rows[0].rowKey, shipmentId: unreceived.part.id }] }).expect(422)
+    expect(confirmed.body as { code: string }).toMatchObject({ code: 'CONTAINER_SHIPMENT_NOT_RECEIVED' })
+    expect(await fact(unreceived.part.id)).toEqual(unloaded)
+    expect(await h.prisma.containerLoadingItem.count({ where: { shipmentId: unreceived.part.id } })).toBe(0)
+  })
+
+  it('partitions every view exactly once after loading a received shipment', async () => {
+    const parent = await batch(), shipment = await h.shipment()
+    const before = (await reference<PurchaseShipmentStatusCountsDto>('/api/purchase-order-parts/status-counts')).items
+    await item(parent.id, { shipmentId: shipment.part.id })
+    const after = (await reference<PurchaseShipmentStatusCountsDto>('/api/purchase-order-parts/status-counts')).items
+    const delta = new Map(after.map(entry => [entry.value, entry.count - (before.find(prior => prior.value === entry.value)?.count ?? 0)]))
+    // 计数口径与列表谓词一致：装柜只把货件从「已到仓」搬到「已装柜」，不影响其它视图。
+    expect(delta.get('CONTAINER_LOADED')).toBe(1)
+    expect(delta.get('WAREHOUSE_RECEIVED')).toBe(-1)
+    expect(delta.get('AWAITING_SHIPMENT')).toBe(0)
+    expect(delta.get('SHIPPED')).toBe(0)
+    expect(delta.get('PENDING_REVIEW')).toBe(0)
+    expect(delta.get('CANCELLED')).toBe(0)
+    const received = (await browser.get('/api/purchase-order-parts').query({ view: 'WAREHOUSE_RECEIVED', keyword: shipment.part.shipmentNo! }).expect(200)).body as PurchaseShipmentPageDto
+    expect(received.total).toBe(0)
+  })
+})

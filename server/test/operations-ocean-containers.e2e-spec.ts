@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import request from 'supertest'
 
 import type { Prisma } from '../src/generated/prisma/client'
+import { markShipmentsContainerLoaded } from './fixtures/container-loaded.fixture'
 import { createPackagingCostHarness, type PackagingCostHarness } from './packaging-cost.fixture'
 import { TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
 
@@ -67,6 +68,7 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
 
   async function createLine(containerBatchId: string, lineNumber: number, data: Partial<Prisma.ContainerLoadingItemUncheckedCreateInput> = {}) {
     // 仅在 harness 随机测试 schema 内种入完整、历史缺值和未匹配明细，避免夹具过滤掉需要验证的边界。
+    await markShipmentsContainerLoaded(h.prisma, data.shipmentId ? [data.shipmentId] : [], h.fixture.actor.id)
     return h.prisma.containerLoadingItem.create({ data: {
       containerBatchId, lineNumber, creationRequestKey: randomUUID(), creationPayloadHash: 'b'.repeat(64),
       goodsName: `装柜产品-${lineNumber}`, oceanShippingMarkText: `L-${containerBatchId.slice(0, 8)}-${lineNumber}`,

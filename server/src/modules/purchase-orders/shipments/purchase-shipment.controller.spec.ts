@@ -57,11 +57,11 @@ describe('PurchaseShipmentController contract', () => {
     expect(document.paths['/api/purchase-order-parts/{partId}'].get?.responses).toHaveProperty('404')
     for (const schema of ['PurchaseShipmentListItemDto', 'PurchaseShipmentDetailDto']) {
       expect(document.components?.schemas?.[schema]).toMatchObject({
-        required: expect.arrayContaining(['shipmentNo', 'warehouseReceivedAt', 'warehouseReceivedById', 'warehouseRecordedAt', 'warehouseRemark', 'warehouseReceivedBy']) as unknown,
-        properties: { shipmentNo: { type: 'string', nullable: true, maxLength: 64 }, warehouseReceivedAt: { type: 'string', format: 'date-time', nullable: true } },
+        required: expect.arrayContaining(['shipmentNo', 'warehouseReceivedAt', 'warehouseReceivedById', 'warehouseRecordedAt', 'warehouseRemark', 'warehouseReceivedBy', 'loadedAt', 'loadedBy', 'loadedRecordedAt']) as unknown,
+        properties: { shipmentNo: { type: 'string', nullable: true, maxLength: 64 }, warehouseReceivedAt: { type: 'string', format: 'date-time', nullable: true }, loadedAt: { type: 'string', format: 'date-time', nullable: true } },
       })
     }
-    expect(document.components?.schemas?.PurchaseShipmentDetailDto).toMatchObject({ properties: { items: { type: 'array' }, purchaseOrder: expect.any(Object) as unknown, shippedAt: { nullable: true }, viewStatus: { enum: ['PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CANCELLED'] } } })
+    expect(document.components?.schemas?.PurchaseShipmentDetailDto).toMatchObject({ properties: { items: { type: 'array' }, purchaseOrder: expect.any(Object) as unknown, shippedAt: { nullable: true }, viewStatus: { enum: ['PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CONTAINER_LOADED', 'CANCELLED'] } } })
     expect(document.components?.schemas?.PurchaseShipmentStatusCountsDto).toMatchObject({ properties: { buyerOptions: { type: 'array' } } })
   })
 })

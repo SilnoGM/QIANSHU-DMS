@@ -138,6 +138,7 @@ enum AuditEventType {
   PURCHASE_ORDER_CREATED
   PURCHASE_SHIPMENT_NUMBER_ASSIGNED
   PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED
+  PURCHASE_SHIPMENT_CONTAINER_LOADED
   PURCHASE_ORDER_REVIEW_MARKS_PREPARED
   PURCHASE_ORDER_IMAGE_GENERATED
   PURCHASE_ORDER_ORDER_STATUS_CHANGED
@@ -571,6 +572,7 @@ model User {
   purchaseOrdersCreated             PurchaseOrder[]              @relation("PurchaseOrderCreatedBy")
   purchaseOrderPartsShipped         PurchaseOrderPart[] @relation("PurchaseOrderPartShippedBy")
   purchaseOrderPartsWarehouseReceived PurchaseOrderPart[] @relation("PurchaseOrderPartWarehouseReceivedBy")
+  purchaseOrderPartsLoaded          PurchaseOrderPart[] @relation("PurchaseOrderPartLoadedBy")
   purchaseOrderPaymentsCreated      PurchaseOrderPayment[]       @relation("PurchaseOrderPaymentCreatedBy")
   purchaseOrderPaymentsVoided       PurchaseOrderPayment[]       @relation("PurchaseOrderPaymentVoidedBy")
   purchaseOrderDocumentsCreated     PurchaseOrderDocument[]      @relation("PurchaseOrderDocumentCreatedBy")
@@ -1227,6 +1229,11 @@ model PurchaseOrderPart {
   warehouseRecordedAt DateTime? @map("warehouse_recorded_at") @db.Timestamptz(6)
   warehouseRemark String? @map("warehouse_remark") @db.VarChar(500)
   warehouseReceivedBy User? @relation("PurchaseOrderPartWarehouseReceivedBy", fields: [warehouseReceivedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  // 装柜事实：被装柜明细行关联时一次写入，之后不可改写、不可清空；与审核状态正交，采购单取消也不清除。
+  loadedAt DateTime? @map("loaded_at") @db.Timestamptz(6)
+  loadedById String? @map("loaded_by_id") @db.Uuid
+  loadedRecordedAt DateTime? @map("loaded_recorded_at") @db.Timestamptz(6)
+  loadedBy User? @relation("PurchaseOrderPartLoadedBy", fields: [loadedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   items PurchaseOrderPartItem[]
 
   @@unique([id, purchaseOrderId], map: "purchase_order_parts_id_order_id_key")

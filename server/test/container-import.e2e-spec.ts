@@ -87,7 +87,11 @@ describe('container source import with isolated PostgreSQL', () => {
     expect(stored[0]).toMatchObject({ sourceSheetName: '装柜资料', sourceRowNumber: 3, sourceData: { sourceFileId: data.sourceFileId, sourceHash: data.sourceHash, source: { cells: expect.any(Object) as unknown } } })
     expect((await preview(parent.id)).alreadyImported).toBe(true)
     await post(path, { ...body, allowUnmatched: true, rows: body.rows.map(row => ({ ...row, shipmentId: null })) }).expect(409)
-    expect(await h.prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: shipment.part.id } })).toEqual(before)
+    // 导入只新增装柜事实，不搬运货件的其它状态；重放与新请求键都不会让货件跨柜或改写事实。
+    const after = await h.prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: shipment.part.id } })
+    expect(after.loadedAt).not.toBeNull()
+    expect(after.loadedById).not.toBeNull()
+    expect({ ...after, loadedAt: null, loadedById: null, loadedRecordedAt: null }).toEqual(before)
     expect(await h.prisma.fundPostingBatch.count()).toBe(0)
     expect(await h.prisma.fundLedgerEntry.count()).toBe(0)
   })

@@ -13,6 +13,7 @@ import { NumberingGeneratorService } from '../numbering/numbering-generator.serv
 import { NumberingGenerationError } from '../numbering/numbering.errors'
 import { calculateOceanVolume } from '../ocean-freight-calculation/ocean-freight-calculation'
 import { serializeContainerBatch as serialize, serializeContainerItem as serializeItem, containerSummaryInclude } from './container-batch.serializer'
+import { markShipmentsContainerLoaded } from './container-load-fact'
 import type { ContainerBatchDto, ContainerBatchListQueryDto, ContainerLoadingItemCreateDto, ContainerLoadingItemDto } from './container-batch.dto'
 import { containerFailure, containerUuid, deriveContainerDate, normalizeContainerCreate, normalizeLoadingItemCreate, normalizeContainerUpdate, normalizeLoadingItemUpdate, requireContainerVersion, type ContainerCommandContext } from './container-batch.normalizer'
 
@@ -126,10 +127,14 @@ export class ContainerBatchService {
         if (batch.version !== expectedVersion) return containerFailure('CONTAINER_STATE_CHANGED', '柜次已更新，请刷新后重试', 409)
         if (normalized.shipmentId) {
           await tx.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id = ${normalized.shipmentId}::uuid FOR UPDATE`)
-          const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, select: { status: true } })
+          const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, select: { status: true, warehouseReceivedAt: true } })
           if (!shipment || shipment.status !== 'ACTIVE') return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '货件不存在或已经取消')
+          // 装柜是到仓后的作业：未到仓货件不能进柜，发货事实由到仓事实隐含。
+          if (shipment.warehouseReceivedAt === null) return containerFailure('CONTAINER_SHIPMENT_NOT_RECEIVED', '货件尚未到仓，不能装柜')
           const elsewhere = await tx.containerLoadingItem.findFirst({ where: { shipmentId: normalized.shipmentId, containerBatchId: { not: id } }, select: { id: true } })
           if (elsewhere) return containerFailure('CONTAINER_SHIPMENT_ALREADY_ASSIGNED', '该货件已分配到其他柜次，首版不允许跨柜拆分', 409)
+          // 关联即已装柜：先写一次装柜事实，再由数据库触发器保证关联前提。
+          await markShipmentsContainerLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, shipmentIds: [normalized.shipmentId], source: 'ITEM_CREATE' })
         }
         const last = await tx.containerLoadingItem.aggregate({ where: { containerBatchId: id }, _max: { lineNumber: true } })
         const row = await tx.containerLoadingItem.create({ data: { ...normalized, volumeCai, chargeableVolumeCai, containerBatchId: id, lineNumber: (last._max.lineNumber ?? 0) + 1, creationRequestKey, creationPayloadHash, createdById: context.actorUserId, updatedById: context.actorUserId } })
@@ -181,9 +186,12 @@ export class ContainerBatchService {
         if (batch.version !== expectedVersion || previous.version !== itemExpectedVersion) return containerFailure('CONTAINER_STATE_CHANGED', '柜次或装柜明细已更新，请刷新后重试', 409)
         if (normalized.shipmentId) {
           await tx.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id = ${normalized.shipmentId}::uuid FOR UPDATE`)
-          const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, select: { status: true } })
+          const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, select: { status: true, warehouseReceivedAt: true } })
           if (!shipment || shipment.status !== 'ACTIVE') return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '货件不存在或已经取消')
+          if (shipment.warehouseReceivedAt === null) return containerFailure('CONTAINER_SHIPMENT_NOT_RECEIVED', '货件尚未到仓，不能装柜')
           if (await tx.containerLoadingItem.findFirst({ where: { shipmentId: normalized.shipmentId, containerBatchId: { not: id } }, select: { id: true } })) return containerFailure('CONTAINER_SHIPMENT_ALREADY_ASSIGNED', '该货件已分配到其他柜次，首版不允许跨柜拆分', 409)
+          // 换绑同样先写新货件的装柜事实；旧货件的事实保留，清空关联也不回退。
+          await markShipmentsContainerLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, loadingItemId: itemId, shipmentIds: [normalized.shipmentId], source: 'ITEM_UPDATE' })
         }
         const row = await tx.containerLoadingItem.update({ where: { id: itemId }, data: { ...normalized, volumeCai, chargeableVolumeCai, version: { increment: 1 }, updatedById: context.actorUserId } })
         await tx.containerBatch.update({ where: { id }, data: { version: { increment: 1 }, updatedById: context.actorUserId } })

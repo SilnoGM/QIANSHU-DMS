@@ -111,7 +111,11 @@ describe('container maintenance with isolated PostgreSQL', () => {
     const emptied = (await patch(url, { expectedVersion: 3, itemExpectedVersion: 2, goodsName: '履带', packageCount: 10 }).expect(200)).body as ContainerLoadingItemDto
     expect(emptied).toMatchObject({ shipmentId: null, volumeCai: null, codAmountTwd: null, recipientName: null, version: 3 })
     expect((await browser.get(`/api/container-batches/${parent.id}`).expect(200)).body as ContainerBatchDto).toMatchObject({ grossWeightKgTotal: null, volumeCaiTotal: null })
-    expect(await h.prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: shipment.part.id } })).toEqual(before)
+    // 关联即已装柜：解除关联保留装柜事实，不回退为未装柜。
+    const after = await h.prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: shipment.part.id } })
+    expect(after.loadedAt).not.toBeNull()
+    expect(after.loadedById).not.toBeNull()
+    expect({ ...after, loadedAt: null, loadedById: null, loadedRecordedAt: null }).toEqual(before)
   })
 
   it('serializes competing edits and prevents cross-container assignment while allowing same-container rows', async () => {

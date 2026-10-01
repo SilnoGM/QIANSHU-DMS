@@ -7,6 +7,7 @@ import { ApiException } from '../../infrastructure/http/api.exception'
 import { AccessControlService } from '../access-control/access-control.service'
 import { AuditService } from '../audit/audit.service'
 import { containerFailure, containerUuid, type ContainerCommandContext } from './container-batch.normalizer'
+import { markShipmentsContainerLoaded } from './container-load-fact'
 import type { ContainerImportConfirmDto, ContainerImportPreviewDto, ContainerImportResultDto, ContainerImportRowDto } from './container-import.dto'
 import { importHash, importRowIdentity, normalizeContainerImport, normalizeParsedFields, validateParsedRows } from './container-import.normalizer'
 import { findImportCandidates, lockImportShipments, serializeImportCandidate } from './container-import.shipments'
@@ -116,6 +117,11 @@ export class ContainerImportService {
         const unmatchedCount = pending.filter(row => selection.get(row.rowKey) === null).length
         if (unmatchedCount && !input.allowUnmatched) return containerFailure('CONTAINER_IMPORT_UNMATCHED', '存在未匹配货件的明细，请完成匹配或明确确认不关联货件')
         await lockImportShipments(tx, pending.flatMap(row => selection.get(row.rowKey) ? [selection.get(row.rowKey)!] : []), id, batch.warehouseValue)
+        // 关联即已装柜：批量明细落库前统一写入装柜事实，未匹配行不写。
+        await markShipmentsContainerLoaded(tx, this.audit, {
+          actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, source: 'IMPORT',
+          shipmentIds: pending.flatMap(row => selection.get(row.rowKey) ? [selection.get(row.rowKey)!] : []),
+        })
         const last = await tx.containerLoadingItem.aggregate({ where: { containerBatchId: id }, _max: { lineNumber: true } })
         for (const [index, row] of pending.entries()) {
           const inserted = await tx.containerLoadingItem.create({ data: {
