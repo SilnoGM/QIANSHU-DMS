@@ -14,6 +14,7 @@ import { NumberingGenerationError } from '../numbering/numbering.errors'
 import { calculateOceanVolume } from '../ocean-freight-calculation/ocean-freight-calculation'
 import { serializeContainerBatch as serialize, serializeContainerItem as serializeItem, containerSummaryInclude } from './container-batch.serializer'
 import { markShipmentsContainerLoaded } from './container-load-fact'
+import { advanceSalesOrdersWhenAllShipmentsLoaded, lockSalesOrderChains, salesOrderIdsOfShipments } from '../purchase-orders/shipments/sales-order-container-load-progress'
 import type { ContainerBatchDto, ContainerBatchListQueryDto, ContainerLoadingItemCreateDto, ContainerLoadingItemDto } from './container-batch.dto'
 import { containerFailure, containerUuid, deriveContainerDate, normalizeContainerCreate, normalizeLoadingItemCreate, normalizeContainerUpdate, normalizeLoadingItemUpdate, requireContainerVersion, type ContainerCommandContext } from './container-batch.normalizer'
 
@@ -125,7 +126,11 @@ export class ContainerBatchService {
           return serializeItem(previous)
         }
         if (batch.version !== expectedVersion) return containerFailure('CONTAINER_STATE_CHANGED', '柜次已更新，请刷新后重试', 409)
+        let salesOrderIds: readonly string[] = []
         if (normalized.shipmentId) {
+          // 销售链条先于货件加锁：装柜会推进销售履约，必须与发货、入仓保持同一加锁顺序。
+          salesOrderIds = await salesOrderIdsOfShipments(tx, [normalized.shipmentId])
+          await lockSalesOrderChains(tx, salesOrderIds)
           await tx.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id = ${normalized.shipmentId}::uuid FOR UPDATE`)
           const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, select: { status: true, warehouseReceivedAt: true } })
           if (!shipment || shipment.status !== 'ACTIVE') return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '货件不存在或已经取消')
@@ -140,6 +145,8 @@ export class ContainerBatchService {
         const row = await tx.containerLoadingItem.create({ data: { ...normalized, volumeCai, chargeableVolumeCai, containerBatchId: id, lineNumber: (last._max.lineNumber ?? 0) + 1, creationRequestKey, creationPayloadHash, createdById: context.actorUserId, updatedById: context.actorUserId } })
         await tx.containerBatch.update({ where: { id }, data: { version: { increment: 1 }, updatedById: context.actorUserId } })
         await this.audit.record(tx, { eventType: 'CONTAINER_LOADING_ITEM_CREATED', outcome: 'SUCCESS', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, targetType: 'CONTAINER_LOADING_ITEM', targetId: row.id, metadata: { containerBatchId: id, shipmentId: row.shipmentId, lineNumber: row.lineNumber } })
+        // 全部货件装柜后销售订单进入海运在途；未达标时保持现状，下次装柜再评估。
+        await advanceSalesOrdersWhenAllShipmentsLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, salesOrderIds })
         return serializeItem(row)
       }, { timeout: 30_000 })
     } catch (error) { return mapError(error) }
@@ -184,7 +191,11 @@ export class ContainerBatchService {
         const previous = await tx.containerLoadingItem.findFirst({ where: { id: itemId, containerBatchId: id } })
         if (!previous) return containerFailure('CONTAINER_LOADING_ITEM_NOT_FOUND', '装柜明细不存在', 404)
         if (batch.version !== expectedVersion || previous.version !== itemExpectedVersion) return containerFailure('CONTAINER_STATE_CHANGED', '柜次或装柜明细已更新，请刷新后重试', 409)
+        let salesOrderIds: readonly string[] = []
         if (normalized.shipmentId) {
+          // 与新增同一加锁顺序：销售链条先于货件，装柜后按现状重新评估销售履约。
+          salesOrderIds = await salesOrderIdsOfShipments(tx, [normalized.shipmentId])
+          await lockSalesOrderChains(tx, salesOrderIds)
           await tx.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id = ${normalized.shipmentId}::uuid FOR UPDATE`)
           const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, select: { status: true, warehouseReceivedAt: true } })
           if (!shipment || shipment.status !== 'ACTIVE') return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '货件不存在或已经取消')
@@ -196,6 +207,8 @@ export class ContainerBatchService {
         const row = await tx.containerLoadingItem.update({ where: { id: itemId }, data: { ...normalized, volumeCai, chargeableVolumeCai, version: { increment: 1 }, updatedById: context.actorUserId } })
         await tx.containerBatch.update({ where: { id }, data: { version: { increment: 1 }, updatedById: context.actorUserId } })
         await this.audit.record(tx, { eventType: 'CONTAINER_LOADING_ITEM_UPDATED', outcome: 'SUCCESS', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, targetType: 'CONTAINER_LOADING_ITEM', targetId: itemId, metadata: { containerBatchId: id, previousVersion: previous.version, version: row.version, previousShipmentId: previous.shipmentId, shipmentId: row.shipmentId } })
+        // 换绑不回退旧货件所属销售订单，只按现状评估新货件所属销售订单。
+        await advanceSalesOrdersWhenAllShipmentsLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, salesOrderIds })
         return serializeItem(row)
       }, { timeout: 30_000 })
     } catch (error) { return mapError(error) }

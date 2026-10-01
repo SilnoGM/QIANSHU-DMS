@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import request from 'supertest'
 import type { ContainerBatchDto, ContainerLoadingItemDto } from '../src/modules/container-batches/container-batch.dto'
+import type { ContainerImportPreviewDto } from '../src/modules/container-batches/container-import.dto'
 import type { ContainerSourceFileDto } from '../src/modules/container-batches/container-source-file.dto'
 import type { PurchaseShipmentPageDto, PurchaseShipmentStatusCountsDto } from '../src/modules/purchase-orders/shipments/purchase-shipment.dto'
 import { containerImportHeader, containerImportRow, createContainerImportFixture } from './fixtures/container-import.fixture'
@@ -14,7 +15,7 @@ const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 /** 关联即已装柜：覆盖新关联、幂等、解除不回退、未到仓门槛与视图计数五类情形。 */
 describe('shipment container loading fact over isolated PostgreSQL', () => {
   jest.setTimeout(120_000)
-  let h: PackagingCostHarness, browser: ReturnType<typeof request.agent>
+  let h: PackagingCostHarness, browser: ReturnType<typeof request.agent>, receiptBrowser: ReturnType<typeof request.agent>
   let actorUserId: string
   let sequence = 50
   const post = (url: string, body: object) => browser.post(url).set(packagingHeaders).set('Idempotency-Key', randomUUID()).send(body)
@@ -40,6 +41,10 @@ describe('shipment container loading fact over isolated PostgreSQL', () => {
     const counts = (await reference<PurchaseShipmentStatusCountsDto>('/api/purchase-order-parts/status-counts'))
     return counts.items.find(entry => entry.value === 'CONTAINER_LOADED')?.count
   }
+  const salesStatus = async (salesOrderId: string) => (await h.prisma.salesOrder.findUniqueOrThrow({ where: { id: salesOrderId }, select: { fulfillmentStatus: true } })).fulfillmentStatus
+  const loadEventsOfOrder = (salesOrderId: string) => h.prisma.auditEvent.count({ where: {
+    eventType: 'SALES_ORDER_FULFILLMENT_STATUS_CHANGED', targetId: salesOrderId, metadata: { path: ['trigger'], equals: 'CONTAINER_LOAD' },
+  } })
 
   beforeAll(async () => {
     h = await createPackagingCostHarness({ nativeImageProbe: true })
@@ -47,6 +52,7 @@ describe('shipment container loading fact over isolated PostgreSQL', () => {
     const session = await h.browserWithPermissions(permissions)
     browser = session.browser
     actorUserId = session.user.id
+    receiptBrowser = (await h.browserWithPermissions(['purchase-orders:read', 'purchase-orders:update'])).browser
     const context = { actorUserId: h.fixture.actor.id, requestId: randomUUID() }
     const rule = await h.fixture.numberingCommands.create(context, { ruleCode: 'CONTAINER_BATCH_NO', purpose: 'BUSINESS', name: '柜次', resetPolicy: 'NEVER', segments: [{ type: 'FIXED', value: 'CB' }, { type: 'SEQUENCE', width: 8, startValue: '1', step: '1' }] })
     const published = await h.fixture.numberingCommands.publish(context, rule.id, { expectedVersion: rule.version, draftRevision: 1 })
@@ -137,5 +143,90 @@ describe('shipment container loading fact over isolated PostgreSQL', () => {
     expect(delta.get('CANCELLED')).toBe(0)
     const received = (await browser.get('/api/purchase-order-parts').query({ view: 'WAREHOUSE_RECEIVED', keyword: shipment.part.shipmentNo! }).expect(200)).body as PurchaseShipmentPageDto
     expect(received.total).toBe(0)
+  })
+
+  it('advances the sales order only after every shipment is loaded, and never reverts', async () => {
+    const parent = await batch(), order = await h.shipment({ partCount: 2, salesLinked: true })
+    const salesOrderId = order.source!.id, [first, second] = order.parts
+    // 入仓已把订单推进到待装柜；单个货件装柜不足以推进。
+    expect(await salesStatus(salesOrderId)).toBe('WAREHOUSE_ARRIVED')
+    await item(parent.id, { shipmentId: first.id })
+    expect(await salesStatus(salesOrderId)).toBe('WAREHOUSE_ARRIVED')
+
+    await item(parent.id, { shipmentId: second.id })
+    expect(await salesStatus(salesOrderId)).toBe('SEA_TRANSIT')
+    expect(await h.prisma.salesOrderStatusHistory.count({ where: { salesOrderId, dimension: 'FULFILLMENT', toStatus: 'SEA_TRANSIT' } })).toBe(1)
+    expect(await h.prisma.salesOrderStatusHistory.findFirstOrThrow({ where: { salesOrderId, toStatus: 'SEA_TRANSIT' } })).toMatchObject({ fromStatus: 'WAREHOUSE_ARRIVED' })
+    expect(await loadEventsOfOrder(salesOrderId)).toBe(1)
+
+    // 幂等：已推进后再关联同一货件不重复推进、不重复记审计。
+    await item(parent.id, { shipmentId: second.id })
+    expect(await h.prisma.salesOrderStatusHistory.count({ where: { salesOrderId, toStatus: 'SEA_TRANSIT' } })).toBe(1)
+    expect(await loadEventsOfOrder(salesOrderId)).toBe(1)
+
+    // 不回退：解除关联后销售订单保持海运在途。
+    const items = (await browser.get(`/api/container-batches/${parent.id}/items`).expect(200)).body as { items: ContainerLoadingItemDto[] }
+    const target = items.items.find(entry => entry.shipmentId === second.id)!
+    const batchVersion = (await reference<ContainerBatchDto>(`/api/container-batches/${parent.id}`)).version
+    await patch(`/api/container-batches/${parent.id}/items/${target.id}`, { expectedVersion: batchVersion, itemExpectedVersion: target.version, goodsName: '履带', packageCount: 10 }).expect(200)
+    expect(await salesStatus(salesOrderId)).toBe('SEA_TRANSIT')
+    expect(await fact(second.id)).not.toEqual(unloaded)
+  })
+
+  it('keeps the order in warehouse-arrived when the sales lines are no longer covered', async () => {
+    const parent = await batch(), order = await h.shipment({ partCount: 2, salesLinked: true })
+    const salesOrderId = order.source!.id
+    // 入仓后销售明细被改量或追加，覆盖判断必须在装柜时按持锁现状重算（单价 10，行/订单金额同步调整）。
+    await h.prisma.$transaction(async transaction => {
+      await transaction.salesOrderLine.updateMany({ where: { salesOrderId }, data: { quantity: 3, lineTotalAmount: '30' } })
+      await transaction.salesOrder.update({ where: { id: salesOrderId }, data: { lineSubtotalAmount: '30', agreedTotalAmount: '30', balanceDueAmount: '30' } })
+    })
+    await item(parent.id, { shipmentId: order.parts[0].id })
+    await item(parent.id, { shipmentId: order.parts[1].id })
+    expect(await salesStatus(salesOrderId)).toBe('WAREHOUSE_ARRIVED')
+    expect(await loadEventsOfOrder(salesOrderId)).toBe(0)
+  })
+
+  it('advances every sales order touched by one bulk import', async () => {
+    const first = await h.shipment({ salesLinked: true }), second = await h.shipment({ salesLinked: true })
+    const name = `0917-${String(++sequence).padStart(2, '0')}柜`
+    const source = await upload(createContainerImportFixture({ sheets: [{ name: '装柜资料', rows: containerImportHeader()
+      + containerImportRow(3, { A: name, B: first.part.shippingMarkText!, C: 'OCEAN-BULK-A' })
+      + containerImportRow(4, { A: name, B: second.part.shippingMarkText!, C: 'OCEAN-BULK-B' }) }] }))
+    const importing = (await post('/api/container-batches', { containerBatchName: name, warehouseValue: TEST_DESTINATION_WAREHOUSE, sourceFileId: source.mediaAssetId }).expect(201)).body as ContainerBatchDto
+    const preview = (await browser.get(`/api/container-batches/${importing.id}/import-preview`).expect(200)).body as ContainerImportPreviewDto
+    expect(preview.rows.map(row => row.matchedShipmentId).sort()).toEqual([first.part.id, second.part.id].sort())
+    await post(`/api/container-batches/${importing.id}/import`, {
+      expectedVersion: preview.expectedVersion, sourceFileId: preview.sourceFileId, sourceHash: preview.sourceHash, allowUnmatched: false,
+      rows: preview.rows.map(row => ({ rowKey: row.rowKey, shipmentId: row.matchedShipmentId })),
+    }).expect(200)
+    // 一次导入同时推进两个销售订单。
+    expect(await salesStatus(first.source!.id)).toBe('SEA_TRANSIT')
+    expect(await salesStatus(second.source!.id)).toBe('SEA_TRANSIT')
+    expect(await loadEventsOfOrder(first.source!.id)).toBe(1)
+    expect(await loadEventsOfOrder(second.source!.id)).toBe(1)
+  })
+
+  it('serializes a container load racing the last warehouse receipt', async () => {
+    const parent = await batch(), order = await h.shipment({ partCount: 2, salesLinked: true, received: false })
+    const salesOrderId = order.source!.id, [first, second] = order.parts
+    const purchaseOrderId = order.order.id
+    const purchaseVersion = async () => (await h.prisma.purchaseOrder.findUniqueOrThrow({ where: { id: purchaseOrderId }, select: { version: true } })).version
+    const receive = async (partIds: string[]) => receiptBrowser.post(`/api/purchase-orders/${purchaseOrderId}/warehouse-receipts`).set(packagingHeaders)
+      .send({ expectedVersion: await purchaseVersion(), partIds })
+    expect((await receive([first.id])).status).toBe(200)
+    expect(await salesStatus(salesOrderId)).toBe('LAND_TRANSIT')
+
+    // 一个货件装柜与最后一个货件入仓并发：两侧都按同一把销售链条锁串行，不能死锁。
+    const version = (await reference<ContainerBatchDto>(`/api/container-batches/${parent.id}`)).version
+    const [loaded, received] = await Promise.all([
+      post(`/api/container-batches/${parent.id}/items`, { expectedVersion: version, goodsName: '履带', packageCount: 10, shipmentId: first.id }),
+      receive([second.id]),
+    ])
+    expect([loaded.status, received.status]).toEqual([201, 200])
+    // 入仓推进到待装柜；此时只有第一个货件装柜，海运在途需要再装第二个。
+    expect(await salesStatus(salesOrderId)).toBe('WAREHOUSE_ARRIVED')
+    await item(parent.id, { shipmentId: second.id })
+    expect(await salesStatus(salesOrderId)).toBe('SEA_TRANSIT')
   })
 })
