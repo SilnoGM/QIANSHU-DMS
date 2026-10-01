@@ -367,6 +367,12 @@ const supplierResidueAllowlist = Object.freeze([
   'specs/supplier-management/design.md',
   'specs/supplier-management/requirements.md',
   'specs/supplier-management/tasks.md',
+  // 上线 seed 只按已批准边界写入字典稳定值与既有绑定表：供应商是
+  // `service_provider.supplier` 的字典条目，唛头绑定写 supplier_value 主键，
+  // 不新增 Supplier 主数据、表、权限或查询入口。
+  'server/src/cli/seed/seed.dataset.ts',
+  'server/src/cli/seed/seed.service.ts',
+  'server/test/seed.e2e-spec.ts',
 ].sort())
 
 const currentGlobalDocuments = Object.freeze([

@@ -165,6 +165,7 @@ test ! -e /var/run/reboot-required
 | --- | --- |
 | OS/runtime | Ubuntu 24.04、glibc、x64、Node.js `^24.15.0` |
 | Database | PostgreSQL 16；生产库身份、备份和只向前 migration 已审批 |
+| Seed | 首次部署按 `pnpm -C server db:migrate:deploy` → `auth:bootstrap-admin` → `seed:run --apply` 顺序执行；`seed:run` 默认只预览，幂等且不覆盖已有记录，摘要含非空 `conflicts` 时停止并人工处理 |
 | Reverse proxy | Nginx/OpenResty 提供可信 TLS、Web 静态资源、`/api` 代理和私有媒体交付（`application` 或 `internal_redirect`，与部署决策记录一致） |
 | Media tools | `/usr/bin/ffprobe` 与 `/usr/bin/qpdf` 可执行且版本已记录 |
 | Identities | `qianshu-dms` 用户、`qianshu-media` 组及最小权限目录已创建 |
@@ -197,7 +198,7 @@ test ! -e /var/run/reboot-required
 | Release identity | Tag、source Commit、Workflow Run、Manifest 与附件摘要 |
 | Security evidence | SSH 有效配置、云/guest firewall、监听端口、TLS、补丁和账户核对结果 |
 | Recovery evidence | 快照、数据库恢复、媒体恢复和回滚演练结果 |
-| Deployment evidence | migration、systemd、health、login、权限和媒体 smoke |
+| Deployment evidence | migration、seed 摘要（含 `conflicts` 处置结果）、systemd、health、login、权限和媒体 smoke |
 | Decision | `PASS`、`BLOCKED` 或限期风险接受；风险接受不能覆盖 `P0` |
 
 只有所有 `P0-SECURITY`、`P0-READY` 和首次放量前要求的 `P1` 都取得当前证据，才允许将 Gate OPS 标记为 `PASS`。部署完成后仍需保留观察窗口；出现认证、数据库、媒体、容量或错误率异常时停止放量并执行已批准的回滚方案。
