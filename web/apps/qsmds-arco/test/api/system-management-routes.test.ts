@@ -147,7 +147,7 @@ test('管理员工作台主导航门槛覆盖四个子模块的全部叶子权�
     'SUPPLIER_PAYMENT_PROFILE_PERMISSIONS',
   ])
 
-  const union = unionNames.flatMap(name => {
+  const union = unionNames.flatMap((name) => {
     const codes = permissionArrays[name]
     assert.ok(codes, `routes.ts 使用了未登记的权限数组 ${name}`)
     return [...codes]

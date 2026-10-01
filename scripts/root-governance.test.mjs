@@ -50,6 +50,10 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/src/views/admin/supplier-payment-profiles/use-packaging-payment-profile.ts',
   'web/apps/qsmds-arco/src/views/admin/supplier-payment-profiles/use-supplier-payment-profiles.ts',
   'web/apps/qsmds-arco/src/views/system/audit/presentation.ts',
+  // 管理员工作台主导航分组由四个子模块读取权限并集构成，路由契约测试需要引用
+  // 收款资料配置模块导出的权限常量与叶子 auth；仅断言分组装配，不开放任何供应商维护入口。
+  'web/apps/qsmds-arco/test/api/basic-data-routes.test.ts',
+  'web/apps/qsmds-arco/test/api/system-management-routes.test.ts',
   'web/apps/qsmds-arco/test/api/payment-recipients.test.ts',
   'web/apps/qsmds-arco/test/views/packaging-payment-profile-page.test.ts',
   'web/apps/qsmds-arco/test/views/packaging-payment-profile.test.ts',
