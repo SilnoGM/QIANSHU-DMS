@@ -763,8 +763,9 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
     true,
   )
 
-  // 前端不展示管理菜单只是体验层；同一身份直接请求管理 API 仍必须由 Server 403。
-  await restartedPage.waitFor(`document.body.innerText.includes(${JSON.stringify(limitedCredentials.username)})`)
+  // 首页已无权限门槛：无管理权限身份登录后落在欢迎页而不是 403 页，
+  // 因此以欢迎页标题作为业务 Shell 已就绪的判据；管理菜单仍不得出现。
+  await restartedPage.waitFor(`document.body.innerText.includes('欢迎使用千树数据管理平台')`)
   assert.equal(
     await restartedPage.evaluate(`document.body.innerText.includes('用户管理')`),
     false,
