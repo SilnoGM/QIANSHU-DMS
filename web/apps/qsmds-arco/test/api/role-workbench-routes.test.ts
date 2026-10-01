@@ -6,9 +6,13 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { matchesAuthorization } from '../../src/composables/app/auth'
 import { financeWorkbench, purchaseTransportWorkbench } from '../../src/router/modules/role.workbenches'
+import {
+  FINANCE_WORKBENCH_PERMISSION,
+  PURCHASE_TRANSPORT_WORKBENCH_PERMISSION,
+} from '../../src/router/modules/workbench-access'
 import { filterAccessibleMenus } from '../../src/store/modules/app/menu.logic'
 
-test('财务和采运工作台只展示当前用户有权访问的业务入口', () => {
+test('财务和采运工作台需要准入码，组内入口再按业务权限收敛', () => {
   const menus = [financeWorkbench, purchaseTransportWorkbench]
   const visiblePaths = (permissions: string[]) => filterAccessibleMenus(
     menus,
@@ -17,17 +21,32 @@ test('财务和采运工作台只展示当前用户有权访问的业务入口',
   ).flatMap(menu => menu.children?.filter(child => child.meta?.menu !== false).flatMap(child => child.children?.filter(leaf => leaf.meta?.menu !== false).map(leaf => `${child.path}/${leaf.path}`) ?? [child.path]) ?? [])
 
   assert.deepEqual(visiblePaths([]), [])
-  assert.deepEqual(visiblePaths(['sales-orders:read', 'purchase-orders:read']), ['/qs-purchase-transport/shipments'])
-  assert.deepEqual(visiblePaths(['container-batches:read']), ['/qs-purchase-transport/containers'])
-  assert.deepEqual(visiblePaths(['sales-orders:payment']), [])
-  assert.deepEqual(visiblePaths(['sales-receipts:read']), ['/qs-finance/realtime-payments/sales-receipts'])
-  assert.deepEqual(visiblePaths(['packaging-costs:pay']), [])
-  assert.deepEqual(visiblePaths(['packaging-costs:read']), ['/qs-finance/realtime-payments/packaging-payments'])
-  assert.deepEqual(visiblePaths(['purchase-orders:payment']), ['/qs-finance/realtime-payments/purchase-payments'])
-  assert.deepEqual(visiblePaths(['purchase-orders:review']), ['/qs-purchase-transport/reviews'])
-  assert.deepEqual(visiblePaths(['slh-bills:read']), ['/qs-finance/bill-reconciliation/slh-bill-management'])
-  assert.deepEqual(visiblePaths(['slh-bills:reconcile']), ['/qs-finance/bill-reconciliation/slh-bill-reconciliation'])
-  assert.deepEqual(visiblePaths(['sales-receipts:read', 'purchase-orders:payment', 'purchase-orders:review']), ['/qs-finance/realtime-payments/sales-receipts', '/qs-finance/realtime-payments/purchase-payments', '/qs-purchase-transport/reviews'])
+  // 业务码（含跨工作台共享的读取与付款码）单独不再放行任何工作台：分组门槛只认准入码。
+  assert.deepEqual(visiblePaths(['sales-orders:read', 'purchase-orders:read']), [])
+  assert.deepEqual(visiblePaths(['container-batches:read']), [])
+  assert.deepEqual(visiblePaths(['sales-orders:payment', 'purchase-orders:payment', 'sales-receipts:read']), [])
+  // 准入码只决定工作台本身，组内入口仍要各自的业务码。
+  assert.deepEqual(visiblePaths([FINANCE_WORKBENCH_PERMISSION]), [])
+  assert.deepEqual(visiblePaths([PURCHASE_TRANSPORT_WORKBENCH_PERMISSION]), [])
+  assert.deepEqual(visiblePaths([PURCHASE_TRANSPORT_WORKBENCH_PERMISSION, 'purchase-orders:review']), ['/qs-purchase-transport/reviews'])
+  assert.deepEqual(visiblePaths([PURCHASE_TRANSPORT_WORKBENCH_PERMISSION, 'purchase-orders:read']), ['/qs-purchase-transport/shipments'])
+  assert.deepEqual(visiblePaths([PURCHASE_TRANSPORT_WORKBENCH_PERMISSION, 'container-batches:read']), ['/qs-purchase-transport/containers'])
+  assert.deepEqual(visiblePaths([FINANCE_WORKBENCH_PERMISSION, 'sales-receipts:read']), ['/qs-finance/realtime-payments/sales-receipts'])
+  assert.deepEqual(visiblePaths([FINANCE_WORKBENCH_PERMISSION, 'packaging-costs:pay']), [])
+  assert.deepEqual(visiblePaths([FINANCE_WORKBENCH_PERMISSION, 'packaging-costs:read']), ['/qs-finance/realtime-payments/packaging-payments'])
+  assert.deepEqual(visiblePaths([FINANCE_WORKBENCH_PERMISSION, 'purchase-orders:payment']), ['/qs-finance/realtime-payments/purchase-payments'])
+  assert.deepEqual(visiblePaths([FINANCE_WORKBENCH_PERMISSION, 'slh-bills:read']), ['/qs-finance/bill-reconciliation/slh-bill-management'])
+  assert.deepEqual(visiblePaths([FINANCE_WORKBENCH_PERMISSION, 'slh-bills:reconcile']), ['/qs-finance/bill-reconciliation/slh-bill-reconciliation'])
+  // 兼任两个工作台准入码时，两侧入口都可见；这是角色配置的并集语义，不是门槛失效。
+  assert.deepEqual(
+    visiblePaths([FINANCE_WORKBENCH_PERMISSION, PURCHASE_TRANSPORT_WORKBENCH_PERMISSION, 'sales-receipts:read', 'purchase-orders:read', 'purchase-orders:review', 'container-batches:read']),
+    [
+      '/qs-finance/realtime-payments/sales-receipts',
+      '/qs-purchase-transport/reviews',
+      '/qs-purchase-transport/shipments',
+      '/qs-purchase-transport/containers',
+    ],
+  )
 })
 
 test('顺联航账单入口排在实收实付之后、账户管理之前，管理页与对账页各用独立权限', () => {
@@ -91,8 +110,13 @@ test('财务分为实时收付、账单对账和账户管理，叶子路由保�
     assert.equal(typeof route.meta?.auth, 'string')
     assert.notEqual(route.meta?.singleMenu, true)
   }
-  const accountOnly = filterAccessibleMenus([financeWorkbench], value => matchesAuthorization(['fund-accounts:read'], value), () => true)
+  const accountOnly = filterAccessibleMenus([financeWorkbench], value => matchesAuthorization([FINANCE_WORKBENCH_PERMISSION, 'fund-accounts:read'], value), () => true)
   assert.deepEqual(accountOnly[0]?.children?.map(route => route.path), ['/qs-finance/fund-accounts'])
+  // 没有准入码时，即便持有页码也不显示财务工作台（分组门槛优先于组内业务码）。
+  assert.deepEqual(
+    filterAccessibleMenus([financeWorkbench], value => matchesAuthorization(['fund-accounts:read'], value), () => true),
+    [],
+  )
 })
 
 test('柜次详情可直接解析，隐藏菜单并保持对应列表高亮', async () => {

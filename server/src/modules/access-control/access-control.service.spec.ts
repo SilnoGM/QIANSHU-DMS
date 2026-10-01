@@ -107,8 +107,11 @@ describe('permission constants', () => {
       'slh-bills:create',
       'slh-bills:read',
       'slh-bills:reconcile',
+      'workbench:operations',
+      'workbench:finance',
+      'workbench:purchase-transport',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 76)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 79)
   })
 })
 

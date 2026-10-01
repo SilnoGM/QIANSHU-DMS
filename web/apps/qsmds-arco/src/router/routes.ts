@@ -18,6 +18,10 @@ import ProductManagement, {
 import { financeWorkbench, purchaseTransportWorkbench } from './modules/role.workbenches'
 import SupplierPaymentProfiles, { SUPPLIER_PAYMENT_PROFILE_PERMISSIONS } from './modules/supplier.payment.profiles'
 import SystemAudit from './modules/system.audit'
+import {
+  OPERATIONS_WORKBENCH_PERMISSION,
+  SYSTEM_MANAGEMENT_PERMISSION,
+} from './modules/workbench-access'
 
 /**
  * 管理员工作台主导航的 any-of 门槛，由四个子模块的读取权限并集构成。
@@ -105,6 +109,7 @@ const asyncRoutes: RouteRecordMainRaw[] = [
     meta: {
       title: '千树运营工作台',
       icon: 'qs-workbench-operations',
+      auth: [OPERATIONS_WORKBENCH_PERMISSION],
     },
     children: [
       ...OperationsWorkbenchRoutes,
@@ -129,6 +134,7 @@ const asyncRoutes: RouteRecordMainRaw[] = [
     meta: {
       title: '系统管理',
       icon: 'qs-system',
+      auth: [SYSTEM_MANAGEMENT_PERMISSION],
     },
     children: [
       SystemAudit,

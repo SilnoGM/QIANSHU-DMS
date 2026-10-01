@@ -117,6 +117,21 @@ export const SLH_BILL_PERMISSION_CODES = [
 ] as const
 
 /**
+ * 工作台准入权限：决定顶级导航分组的可见与直接 URL 准入。
+ *
+ * 业务域权限码会在工作台之间共享（`purchase-orders:payment`、`purchase-orders:read`
+ * 同时服务运营、财务与采运工作台），用它做分组门槛会让一个角色看到多个工作台。
+ * 准入码与业务域权限解耦：分组门槛只声明准入码，组内页面仍按业务码收敛。
+ * 由 `20261001190000_workbench_access_permissions` 建入并授予内置 `system_admin`，
+ * 普通角色由角色权限管理自行勾选。
+ */
+export const WORKBENCH_ACCESS_PERMISSION_CODES = [
+  'workbench:operations',
+  'workbench:finance',
+  'workbench:purchase-transport',
+] as const
+
+/**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
  * 顺序与数据库 seed 一致，既便于契约审查，也避免各业务模块各自拼写字符串。
@@ -171,6 +186,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...SUPPLIER_PAYMENT_PROFILE_PERMISSION_CODES,
   ...CONTAINER_BATCH_PERMISSION_CODES,
   ...SLH_BILL_PERMISSION_CODES,
+  ...WORKBENCH_ACCESS_PERMISSION_CODES,
 ] as const
 
 export type ManagementPermissionCode =

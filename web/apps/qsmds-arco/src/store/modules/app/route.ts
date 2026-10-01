@@ -4,6 +4,7 @@ import { cloneDeep } from 'es-toolkit'
 import { createRouterMatcher } from 'vue-router'
 import apiApp from '@/api/modules/app'
 import { systemRoutes as systemRoutesRaw } from '@/router/routes'
+import { buildRegisteredRoutes, deleteMiddleRouteComponent } from './route.logic'
 
 export const useAppRouteStore = defineStore(
   'appRoute',
@@ -18,29 +19,8 @@ export const useAppRouteStore = defineStore(
     const currentRemoveRoutes = ref<(() => void)[]>([])
 
     // 实际路由
-    const routes = computed(() => {
-      const returnRoutes: RouteRecordRaw[] = []
-      if (routesRaw.value) {
-        routesRaw.value.forEach((item) => {
-          const tmpRoutes = cloneDeep(item.children) as RouteRecordRaw[]
-          tmpRoutes.map((v) => {
-            if (!v.meta) {
-              v.meta = {}
-            }
-            v.meta.auth = item.meta?.auth ?? v.meta?.auth
-            return v
-          })
-          returnRoutes.push(...tmpRoutes)
-        })
-        returnRoutes.forEach((item) => {
-          if (item.children) {
-            item.children = deleteMiddleRouteComponent(item.children)
-          }
-          return item
-        })
-      }
-      return returnRoutes
-    })
+    const routes = computed(() => buildRegisteredRoutes(routesRaw.value))
+
     // 系统路由
     const systemRoutes = computed(() => {
       const routes = [...systemRoutesRaw]
@@ -51,21 +31,6 @@ export const useAppRouteStore = defineStore(
       })
       return routes
     })
-    // 删除路由中间层级对应的组件
-    function deleteMiddleRouteComponent(routes: RouteRecordRaw[]) {
-      const res: RouteRecordRaw[] = []
-      routes.forEach((route) => {
-        if (route.children?.length) {
-          delete route.component
-          route.children = deleteMiddleRouteComponent(route.children)
-        }
-        else {
-          delete route.children
-        }
-        res.push(route)
-      })
-      return res
-    }
 
     // 路由匹配器
     const routesMatcher = ref<RouterMatcher>()

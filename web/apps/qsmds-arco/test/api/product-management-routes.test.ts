@@ -75,6 +75,7 @@ test('管理员工作台保留产品管理，资金账户迁移至财务工作�
     /const ADMIN_WORKBENCH_PERMISSIONS = \[([\s\S]*?)\]/u,
   )?.[1] ?? ''
   const financeSource = readFileSync(new URL('../../src/router/modules/role.workbenches.ts', import.meta.url), 'utf8')
+  const fundAccountSource = readFileSync(new URL('../../src/router/modules/fund-account.management.ts', import.meta.url), 'utf8')
   const productRouteIndex = administratorWorkbenchSource.indexOf(
     'ProductManagement,',
   )
@@ -83,8 +84,11 @@ test('管理员工作台保留产品管理，资金账户迁移至财务工作�
   assert.match(administratorWorkbenchSource, /auth: \[\.\.\.ADMIN_WORKBENCH_PERMISSIONS\]/u)
   assert.ok(productRouteIndex >= 0)
   assert.doesNotMatch(administratorWorkbenchSource, /FUND_ACCOUNT_MANAGEMENT_PERMISSIONS|FundAccountManagement/u)
-  assert.match(financeSource, /FUND_ACCOUNT_MANAGEMENT_PERMISSIONS/u)
+  // 账户管理挂在财务工作台下；财务分组的准入由工作台准入码决定，账户管理自身
+  // 仍用 FUND_ACCOUNT_MANAGEMENT_PERMISSIONS 收敛，不随分组门槛改动而放宽。
   assert.match(financeSource, /FundAccountManagement,/u)
+  assert.match(fundAccountSource, /FUND_ACCOUNT_MANAGEMENT_PERMISSIONS/u)
+  assert.match(fundAccountSource, /auth: \[\.\.\.FUND_ACCOUNT_MANAGEMENT_PERMISSIONS\]/u)
   assert.ok(
     asyncRoutesSource.indexOf('title: \'管理员工作台\'')
     < asyncRoutesSource.indexOf('title: \'系统管理\''),
