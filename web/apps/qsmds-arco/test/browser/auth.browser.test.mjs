@@ -169,24 +169,6 @@ async function clickVisibleButton(page, text) {
   })()`)
 }
 
-async function clickVisibleButtonContaining(page, text) {
-  await page.waitFor(`(() => [...document.querySelectorAll('button')].some((button) => (
-    button.textContent?.includes(${JSON.stringify(text)})
-    && button.getClientRects().length > 0
-    && !button.disabled
-  )))()`)
-  await page.evaluate(`(() => {
-    const button = [...document.querySelectorAll('button')].find((candidate) => (
-      candidate.textContent?.includes(${JSON.stringify(text)})
-      && candidate.getClientRects().length > 0
-      && !candidate.disabled
-    ))
-    if (!button) throw new Error('visible button unavailable')
-    button.click()
-    return true
-  })()`)
-}
-
 // 无菜单身份（例如尚未分配角色的新用户）不会渲染侧边栏，账号菜单只能从头部右上角
 // 的头像按钮进入；该按钮是纯图标按钮、没有可读文本，因此以头部最后一个可见按钮定位。
 async function openHeaderAccountMenu(page) {
