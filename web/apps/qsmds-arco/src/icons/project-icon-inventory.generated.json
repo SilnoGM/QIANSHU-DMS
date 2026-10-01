@@ -357,33 +357,6 @@
     "source": "brand"
   },
   {
-    "name": "qs-release-notes",
-    "label": "版本更新",
-    "category": "系统",
-    "usages": [
-      "版本更新"
-    ],
-    "source": "brand"
-  },
-  {
-    "name": "qs-development-map",
-    "label": "开发图谱",
-    "category": "系统",
-    "usages": [
-      "开发图谱"
-    ],
-    "source": "brand"
-  },
-  {
-    "name": "qs-system-status",
-    "label": "系统状态",
-    "category": "系统",
-    "usages": [
-      "系统状态"
-    ],
-    "source": "brand"
-  },
-  {
     "name": "qs-home",
     "label": "首页",
     "category": "工作台",
@@ -1546,7 +1519,6 @@
       "apps/qsmds-arco/src/views/system/roles/index.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/system/roles/role-editor-modal.vue",
-      "apps/qsmds-arco/src/views/system/shared/development-data-source.ts",
       "apps/qsmds-arco/src/views/system/users/index.vue",
       "apps/qsmds-arco/src/views/system/users/password-reset-modal.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
@@ -2142,7 +2114,6 @@
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-detail.logic.ts",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
-      "apps/qsmds-arco/src/views/system/status/index.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
     ]
   },
@@ -2239,8 +2210,6 @@
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-lifecycle-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/region-status-change-modal.vue",
       "apps/qsmds-arco/src/views/system/roles/role-editor-modal.vue",
-      "apps/qsmds-arco/src/views/system/shared/development-data-source.ts",
-      "apps/qsmds-arco/src/views/system/status/index.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/slh-bill-comparison.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/slh-bill-conclusion.vue",
@@ -2435,7 +2404,6 @@
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-editor-drawer.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/region-scope-tree.vue",
-      "apps/qsmds-arco/src/views/system/status/index.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-image-preview.vue",
@@ -2563,15 +2531,6 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue"
-    ]
-  },
-  {
-    "name": "i-lucide:monitor-smartphone",
-    "label": "i-lucide:monitor-smartphone",
-    "category": "通用图标",
-    "source": "iconify",
-    "usages": [
-      "apps/qsmds-arco/src/views/system/status/index.vue"
     ]
   },
   {
@@ -2917,7 +2876,6 @@
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
       "apps/qsmds-arco/src/views/system/roles/index.vue",
-      "apps/qsmds-arco/src/views/system/status/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-form.vue",
@@ -3472,7 +3430,6 @@
     "usages": [
       "apps/qsmds-arco/src/views/component_library/business/components/PersonDisplayShowcase.vue",
       "apps/qsmds-arco/src/views/component_library/business/person-display.vue",
-      "apps/qsmds-arco/src/views/system/status/index.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-posting-summary.vue"
     ]
   },
@@ -3573,8 +3530,7 @@
       "apps/qsmds-arco/src/views/component_library/business/order-product-line-editor.vue",
       "apps/qsmds-arco/src/views/component_library/business/purchase-order-desc.vue",
       "apps/qsmds-arco/src/views/component_library/business/sales-order-products-editor-modal.vue",
-      "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue",
-      "apps/qsmds-arco/src/views/system/status/index.vue"
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue"
     ]
   },
   {

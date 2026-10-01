@@ -17,9 +17,6 @@ import supplierPaymentProfilesRoute, {
   SUPPLIER_PAYMENT_PROFILE_PERMISSIONS,
 } from '../../src/router/modules/supplier.payment.profiles'
 import systemAuditRoute from '../../src/router/modules/system.audit'
-import systemDevelopmentMapRoute from '../../src/router/modules/system.development-map'
-import systemReleaseNotesRoute from '../../src/router/modules/system.release-notes'
-import systemStatusRoute from '../../src/router/modules/system.status'
 
 const routesSource = readFileSync(
   new URL('../../src/router/routes.ts', import.meta.url),
@@ -216,38 +213,6 @@ test('首页复用管理读取权限门槛，使无业务页面的身份进入�
     routesSource,
     /path: ''[\s\S]*?meta: \{[\s\S]*?auth: \[\.\.\.MANAGEMENT_READ_PERMISSIONS\]/u,
   )
-})
-
-test('系统管理平铺版本更新、开发图谱与系统状态三个只读页面', () => {
-  const readOnlyRoutes = [
-    { icon: 'qs-release-notes', name: 'systemReleaseNotes', path: '/system/release-notes', route: systemReleaseNotesRoute, title: '版本更新' },
-    { icon: 'qs-development-map', name: 'systemDevelopmentMap', path: '/system/development-map', route: systemDevelopmentMapRoute, title: '开发图谱' },
-    { icon: 'qs-system-status', name: 'systemStatus', path: '/system/status', route: systemStatusRoute, title: '系统状态' },
-  ] as const
-
-  for (const item of readOnlyRoutes) {
-    assert.equal(item.route.path, item.path)
-    assert.equal(item.route.name, item.name)
-    assert.equal(item.route.meta?.title, item.title)
-    assert.equal(item.route.meta?.icon, item.icon)
-    // 单页菜单与应用配置同款：侧边栏直接落在页面上，不出现折叠分组。
-    assert.equal(item.route.meta?.singleMenu, true)
-    // 内容为构建期产物、公开健康接口与当前身份自己的信息，不设单独权限码。
-    assert.equal(item.route.meta?.auth, undefined)
-    assert.equal(item.route.meta?.auths, undefined)
-  }
-
-  assert.match(routesSource, /import SystemReleaseNotes from '\.\/modules\/system\.release-notes'/u)
-  assert.match(routesSource, /import SystemDevelopmentMap from '\.\/modules\/system\.development-map'/u)
-  assert.match(routesSource, /import SystemStatus from '\.\/modules\/system\.status'/u)
-  assert.match(
-    asyncRoutesSource,
-    /title: '系统管理'[\s\S]*?children: \[[\s\S]*?SystemAudit,[\s\S]*?ApplicationSettings,[\s\S]*?SystemReleaseNotes,[\s\S]*?SystemDevelopmentMap,[\s\S]*?SystemStatus,/u,
-  )
-
-  // 系统管理分组保持权限中立：门槛只落在需要鉴权的叶子上，新增页面不得改动分组语义。
-  const systemManagementSection = asyncRoutesSource.slice(asyncRoutesSource.indexOf('title: \'系统管理\''))
-  assert.doesNotMatch(systemManagementSection, /auth:/u)
 })
 
 test('无业务权限的已登录用户仍可从 403 页面打开账户菜单', () => {

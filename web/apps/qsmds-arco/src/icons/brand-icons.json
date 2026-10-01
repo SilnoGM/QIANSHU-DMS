@@ -318,30 +318,6 @@
     ]
   },
   {
-    "name": "qs-release-notes",
-    "label": "版本更新",
-    "category": "系统",
-    "usages": [
-      "版本更新"
-    ]
-  },
-  {
-    "name": "qs-development-map",
-    "label": "开发图谱",
-    "category": "系统",
-    "usages": [
-      "开发图谱"
-    ]
-  },
-  {
-    "name": "qs-system-status",
-    "label": "系统状态",
-    "category": "系统",
-    "usages": [
-      "系统状态"
-    ]
-  },
-  {
     "name": "qs-home",
     "label": "首页",
     "category": "工作台",

@@ -23,7 +23,6 @@ import { envParse, parseLoadedEnv } from 'vite-plugin-env-parse'
 import { vitePluginFakeServer } from 'vite-plugin-fake-server'
 import VueDevTools from 'vite-plugin-vue-devtools'
 import { createSnapdomFontIsolationPlugin } from '../../../scripts/sanitize-snapdom'
-import { createDevelopmentMapPlugin } from './development-map'
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -37,8 +36,6 @@ export default function createVitePlugins(mode: string, isBuild: boolean, appLoa
   const viteEnv = parseLoadedEnv(loadEnv(mode, process.cwd()))
   const vitePlugins: (PluginOption | PluginOption[])[] = [
     createSnapdomFontIsolationPlugin(),
-    // 版本更新与开发图谱的构建期数据；虚拟模块只在页面导入时求值。
-    createDevelopmentMapPlugin(),
     vue(),
     vueJsx(),
     vueLegacy({

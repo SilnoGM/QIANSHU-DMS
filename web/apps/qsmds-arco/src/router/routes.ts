@@ -18,9 +18,6 @@ import ProductManagement, {
 import { financeWorkbench, purchaseTransportWorkbench } from './modules/role.workbenches'
 import SupplierPaymentProfiles, { SUPPLIER_PAYMENT_PROFILE_PERMISSIONS } from './modules/supplier.payment.profiles'
 import SystemAudit from './modules/system.audit'
-import SystemDevelopmentMap from './modules/system.development-map'
-import SystemReleaseNotes from './modules/system.release-notes'
-import SystemStatus from './modules/system.status'
 
 /**
  * 首页准入使用「任一管理读取权限」门槛，使无业务页面的身份进入稳定 403。
@@ -147,9 +144,6 @@ const asyncRoutes: RouteRecordMainRaw[] = [
     children: [
       SystemAudit,
       ApplicationSettings,
-      SystemReleaseNotes,
-      SystemDevelopmentMap,
-      SystemStatus,
     ],
   },
   ...(shouldEnableComponentLibrary(import.meta.env)
