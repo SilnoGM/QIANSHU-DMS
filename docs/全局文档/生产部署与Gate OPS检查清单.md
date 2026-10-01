@@ -165,7 +165,7 @@ test ! -e /var/run/reboot-required
 | --- | --- |
 | OS/runtime | Ubuntu 24.04、glibc、x64、Node.js `^24.15.0` |
 | Database | PostgreSQL 16；生产库身份、备份和只向前 migration 已审批 |
-| Reverse proxy | Nginx/OpenResty 提供可信 TLS、Web 静态资源、`/api` 代理和私有媒体 internal redirect |
+| Reverse proxy | Nginx/OpenResty 提供可信 TLS、Web 静态资源、`/api` 代理和私有媒体交付（`application` 或 `internal_redirect`，与部署决策记录一致） |
 | Media tools | `/usr/bin/ffprobe` 与 `/usr/bin/qpdf` 可执行且版本已记录 |
 | Identities | `qianshu-dms` 用户、`qianshu-media` 组及最小权限目录已创建 |
 | Storage | `/var/lib/qianshu-dms/media` 在 release、源码和系统临时目录之外，权限和容量满足 preflight |
