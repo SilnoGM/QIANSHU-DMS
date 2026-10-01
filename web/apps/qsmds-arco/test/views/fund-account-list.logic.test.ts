@@ -1,7 +1,6 @@
 import type {
   FundAccountDto,
   FundAccountPageDto,
-  UserDto,
 } from '../../src/api/generated/types.gen'
 import type { CurrencyDescriptor } from '../../src/components/base/currency'
 
@@ -13,7 +12,6 @@ import {
   adaptFundAccountPage,
   buildFundAccountListQuery,
   findCompanyFundAccount,
-  findUnopenedFundAccountUsers,
   formatFundShareRate,
   getFundBalanceState,
   withFundAccountPrecision,
@@ -45,28 +43,6 @@ function accountFixture(
         },
     userShareRate: ownerType === 'COMPANY' ? null : '30.00',
     version: 3,
-  }
-}
-
-function userFixture(id: string, status: UserDto['status'] = 'ACTIVE'): UserDto {
-  return {
-    createdAt: '2026-08-18T01:00:00.000Z',
-    displayName: `用户 ${id}`,
-    id,
-    lastLoginAt: null,
-    mustChangePassword: false,
-    profile: {
-      avatarUrl: null,
-      createdAt: '2026-08-18T01:00:00.000Z',
-      email: null,
-      mobileE164: null,
-      remark: null,
-      updatedAt: '2026-08-18T01:00:00.000Z',
-    },
-    roleIds: [],
-    status,
-    updatedAt: '2026-08-18T01:00:00.000Z',
-    username: `member-${id}`,
   }
 }
 
@@ -113,27 +89,12 @@ test('账户分页 adapter 保留两位金额与版本但切断容器引用', ()
   assert.equal(adapted.items[0]?.version, 3)
 })
 
-test('开户候选只排除已有用户账户并保留用户状态供管理员核对', () => {
-  const users = [
-    userFixture('user-1'),
-    userFixture('user-2', 'DISABLED'),
-    userFixture('user-3'),
-  ]
+test('公司账户识别忽略用户账户', () => {
   const accounts = [
     accountFixture('account-company', 'COMPANY'),
     accountFixture('account-user-2', 'USER', 'user-2'),
   ]
 
-  assert.deepEqual(
-    findUnopenedFundAccountUsers(users, accounts).map(user => ({
-      id: user.id,
-      status: user.status,
-    })),
-    [
-      { id: 'user-1', status: 'ACTIVE' },
-      { id: 'user-3', status: 'ACTIVE' },
-    ],
-  )
   assert.equal(findCompanyFundAccount(accounts)?.id, 'account-company')
 })
 

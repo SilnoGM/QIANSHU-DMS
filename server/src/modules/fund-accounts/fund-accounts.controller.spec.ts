@@ -37,6 +37,11 @@ type HttpMethod = 'get' | 'patch' | 'post' | 'put'
 
 const OPERATIONS = [
   ['get', '/api/fund-accounts', 'fund_accounts_list'],
+  [
+    'get',
+    '/api/fund-accounts/owner-candidates',
+    'fund_accounts_owner_candidates',
+  ],
   ['post', '/api/fund-accounts', 'fund_accounts_create'],
   [
     'patch',
@@ -107,6 +112,7 @@ const OPERATIONS = [
 
 const STATUS_BY_OPERATION: Readonly<Record<string, readonly string[]>> = {
   fund_accounts_list: ['200', '400', '401', '403', '422', '500'],
+  fund_accounts_owner_candidates: ['200', '400', '401', '403', '422', '500'],
   fund_accounts_create: ['201', '400', '401', '403', '404', '409', '422', '500'],
   fund_accounts_update_share_rate: ['200', '400', '401', '403', '404', '409', '422', '500'],
   fund_accounts_manual_adjust: ['200', '400', '401', '403', '404', '409', '422', '500'],
@@ -150,6 +156,7 @@ const ERRORS_BY_OPERATION: Readonly<
   Record<string, readonly ContractErrorExpectation[]>
 > = {
   fund_accounts_list: READ_ERRORS,
+  fund_accounts_owner_candidates: READ_ERRORS,
   fund_accounts_create: [
     WRITE_FORBIDDEN_ERROR,
     { status: 404, codes: ['FUND_USER_NOT_FOUND'] },
@@ -469,6 +476,7 @@ describe('Fund account management permissions', () => {
 
   it.each([
     [FundAccountsController, 'list', 'fund-accounts:read'],
+    [FundAccountsController, 'ownerCandidates', 'fund-accounts:read'],
     [FundAccountsController, 'create', 'fund-accounts:create'],
     [FundAccountsController, 'updateShareRate', 'fund-accounts:update-share-rate'],
     [FundAccountsController, 'manualAdjust', 'fund-accounts:manual-adjust'],

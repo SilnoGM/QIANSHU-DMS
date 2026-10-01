@@ -8,8 +8,8 @@ import type {
   CreateFundAccountRequestDto,
   CreateFundManualAdjustmentRequestDto,
   FundAccountDto,
+  FundAccountUserDto,
   UpdateFundShareRateRequestDto,
-  UserDto,
 } from '@/api/generated/types.gen'
 import type {
   QsGenericTableColumn,
@@ -18,7 +18,6 @@ import type {
 } from '@/components/business/QsGenericTable/logic'
 
 import fundAccountsApi from '@/api/modules/fund-accounts'
-import managementApi from '@/api/modules/management'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
@@ -41,7 +40,6 @@ import {
   adaptFundAccountPage,
   buildFundAccountListQuery,
   findCompanyFundAccount,
-  findUnopenedFundAccountUsers,
   formatFundShareRate,
   getFundBalanceState,
   withFundAccountPrecision,
@@ -82,7 +80,7 @@ const loading = ref(false)
 const listFailure = ref<FundApiFailure | null>(null)
 
 const createVisible = ref(false)
-const createCandidates = ref<UserDto[]>([])
+const createCandidates = ref<FundAccountUserDto[]>([])
 const createCandidatesLoading = ref(false)
 const createFailure = ref<FundApiFailure | null>(null)
 const createSubmitting = ref(false)
@@ -340,41 +338,6 @@ async function loadCompanyAccount(): Promise<void> {
   }
 }
 
-async function loadAllUsers(signal: AbortSignal): Promise<UserDto[]> {
-  const items: UserDto[] = []
-  let currentPage = 1
-  while (!signal.aborted) {
-    const response = await managementApi.users.list({
-      page: currentPage,
-      pageSize: 100,
-    }, signal)
-    items.push(...response.data.items)
-    if (response.data.items.length === 0 || items.length >= response.data.total) {
-      break
-    }
-    currentPage += 1
-  }
-  return items
-}
-
-async function loadAllUserAccounts(signal: AbortSignal): Promise<FundAccountDto[]> {
-  const items: FundAccountDto[] = []
-  let currentPage = 1
-  while (!signal.aborted) {
-    const response = await fundAccountsApi.accounts.list({
-      ownerType: 'USER',
-      page: currentPage,
-      pageSize: 100,
-    }, signal)
-    items.push(...response.data.items)
-    if (response.data.items.length === 0 || items.length >= response.data.total) {
-      break
-    }
-    currentPage += 1
-  }
-  return items
-}
-
 async function loadCreateCandidates(): Promise<void> {
   if (!canCreate.value || !createVisible.value) {
     return
@@ -388,10 +351,8 @@ async function loadCreateCandidates(): Promise<void> {
   createFailure.value = null
 
   try {
-    const [users, userAccounts] = await Promise.all([
-      loadAllUsers(controller.signal),
-      loadAllUserAccounts(controller.signal),
-    ])
+    // 候选归属人（尚无账户的用户）由资金域端点一次算好，页面不再读取用户管理接口。
+    const response = await fundAccountsApi.accounts.ownerCandidates(controller.signal)
     if (responseIsCurrent(
       requestVersion,
       candidateRequestVersion,
@@ -399,7 +360,7 @@ async function loadCreateCandidates(): Promise<void> {
       controller,
       canCreate.value && createVisible.value,
     )) {
-      createCandidates.value = findUnopenedFundAccountUsers(users, userAccounts)
+      createCandidates.value = [...response.data.items]
     }
   }
   catch (error) {

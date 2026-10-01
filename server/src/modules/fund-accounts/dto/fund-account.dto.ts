@@ -247,6 +247,12 @@ export class FundAccountPageDto {
   total!: number
 }
 
+/** 新建账户下拉的候选归属人；只暴露选择所需的四个字段。 */
+export class FundAccountOwnerCandidateListDto {
+  @ApiProperty({ type: () => [FundAccountUserDto] })
+  items!: readonly FundAccountUserDto[]
+}
+
 export class FundAccountMutationResultDto {
   @ApiProperty({ type: 'boolean' })
   changed!: boolean

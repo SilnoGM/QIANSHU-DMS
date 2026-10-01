@@ -8,6 +8,7 @@ import type {
   CreateFundReversalRequestDto,
   FundAccountDto,
   FundAccountMutationResultDto,
+  FundAccountOwnerCandidateListDto,
   FundAccountPageDto,
   FundAccountsListData,
   FundBusinessSourceDto,
@@ -74,6 +75,18 @@ export function createFundAccountsApi(client: AxiosInstance) {
           params: query,
           signal,
         }),
+      /*
+       * 候选归属人由服务端按「尚无 USER 账户」计算，页面不再读取用户管理接口，
+       * 资金角色因此不需要 users:read 也能开立账户。
+       */
+      ownerCandidates: (signal: AbortSignal) =>
+        client.get<FundAccountOwnerCandidateListDto>(
+          'fund-accounts/owner-candidates',
+          {
+            errorPresentation: 'local',
+            signal,
+          },
+        ),
       create: (data: CreateFundAccountRequestDto) =>
         client.post<FundAccountDto>(
           'fund-accounts',

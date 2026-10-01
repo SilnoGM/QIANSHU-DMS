@@ -66,6 +66,16 @@ export interface FundAccountPage {
   readonly total: number
 }
 
+/**
+ * 新建账户的候选归属人：还没有 USER 账户的用户。
+ *
+ * 该读取专供资金域的下拉选择，字段与 FundAccountUserView 一致，
+ * 使资金域不必依赖用户管理的读取权限。
+ */
+export interface FundAccountOwnerCandidates {
+  readonly items: readonly FundAccountUserView[]
+}
+
 export interface FundAccountShareRateUpdateResult {
   readonly changed: boolean
   readonly account: FundAccountView

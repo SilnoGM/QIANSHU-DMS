@@ -4,6 +4,7 @@ import { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import type {
   FundAccountListQuery,
+  FundAccountOwnerCandidates,
   FundAccountPage,
   FundAccountSortField,
   FundAccountSortOrder,
@@ -100,6 +101,40 @@ export class FundAccountQueryService {
         page: query.page,
         pageSize: query.pageSize,
         total,
+      })
+    }
+    catch (error) {
+      if (error instanceof FundPostingError) throw error
+      throw new FundPostingError(FUND_POSTING_ERROR_CODES.INTERNAL_ERROR)
+    }
+  }
+
+  /**
+   * 新建账户的候选归属人：还没有 USER 账户的用户，按展示名稳定排序。
+   *
+   * 该查询只服务于资金域的下拉选择，因此不返回用户档案等资金域无关字段，
+   * 让财务角色无需用户管理读取权限即可开立账户。
+   */
+  async listOwnerCandidates(): Promise<FundAccountOwnerCandidates> {
+    try {
+      const rows = await this.prisma.user.findMany({
+        where: { fundAccount: { is: null } },
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          status: true,
+        },
+        orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+      })
+
+      return Object.freeze({
+        items: Object.freeze(rows.map(row => Object.freeze({
+          id: row.id,
+          username: row.username,
+          displayName: row.displayName,
+          status: row.status,
+        }))),
       })
     }
     catch (error) {
