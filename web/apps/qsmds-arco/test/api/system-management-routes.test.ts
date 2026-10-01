@@ -204,15 +204,16 @@ test('系统管理主导航始终注册独立应用配置页面且不受环境�
   )
 })
 
-test('首页复用管理读取权限门槛，使无业务页面的身份进入稳定 403', () => {
-  assert.match(
-    routesSource,
-    /export const MANAGEMENT_READ_PERMISSIONS = \[[\s\S]*?'users:read',[\s\S]*?'roles:read',[\s\S]*?'audit:read',[\s\S]*?'regions:read',[\s\S]*?\]/u,
+test('首页不参与页面权限校验，任一已登录身份均可进入', () => {
+  const homeRouteSource = routesSource.slice(
+    routesSource.indexOf('component: () => import(\'@/views/index.vue\')'),
+    routesSource.indexOf('path: \'reload\''),
   )
-  assert.match(
-    routesSource,
-    /path: ''[\s\S]*?meta: \{[\s\S]*?auth: \[\.\.\.MANAGEMENT_READ_PERMISSIONS\]/u,
-  )
+  assert.ok(homeRouteSource.includes('meta: {'), 'routes.ts 必须声明首页路由')
+
+  // 首页是登录后的默认落点，不能再声明 meta.auth，否则缺少管理读取权限的身份一登录就落到 403。
+  assert.doesNotMatch(homeRouteSource, /\bauth\b/u)
+  assert.doesNotMatch(routesSource, /MANAGEMENT_READ_PERMISSIONS/u)
 })
 
 test('无业务权限的已登录用户仍可从 403 页面打开账户菜单', () => {
