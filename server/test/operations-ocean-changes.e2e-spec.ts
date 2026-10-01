@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import request from 'supertest'
 import { AuditService } from '../src/modules/audit/audit.service'
+import { markShipmentsContainerLoaded } from './fixtures/container-loaded.fixture'
 import { createPackagingCostHarness, packagingHeaders, type PackagingCostHarness } from './packaging-cost.fixture'
 import { TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
 
@@ -11,6 +12,8 @@ describe('confirmed operations ocean changes and undo with isolated PostgreSQL',
   const path = (itemId: string, parentId = batchId) => `/api/operations/ocean-containers/${parentId}/items/${itemId}`
   const post = (itemId: string, input: object, browser = alice.browser) => browser.post(`${path(itemId)}/changes`).set(packagingHeaders).send(input)
   async function line() {
+    // 关联即已装柜：直接落库的用例补齐装柜事实，否则关联会被触发器拒绝。
+    await markShipmentsContainerLoaded(h.prisma, [shipmentId], h.fixture.actor.id)
     return h.prisma.containerLoadingItem.create({ data: { containerBatchId: batchId, shipmentId, lineNumber: ++nextLine, creationRequestKey: randomUUID(), creationPayloadHash: 'a'.repeat(64),
       goodsName: '测试装柜货品', packageCount: 1, oceanShippingMarkText: `L-TEST-${nextLine}`, recipientName: '原客户', recipientPhone: '0900000000', recipientAddress: '原地址', remark: '原备注', codAmountTwd: '120.50', createdById: h.fixture.actor.id, updatedById: h.fixture.actor.id } })
   }

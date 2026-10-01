@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type {
   CreateFundAccountRequestDto,
-  UserDto,
+  FundAccountUserDto,
 } from '@/api/generated/types.gen'
 
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
@@ -16,7 +16,7 @@ const props = withDefaults(defineProps<{
   modelValue: boolean
   requestId?: null | string
   submitting?: boolean
-  users: readonly UserDto[]
+  users: readonly FundAccountUserDto[]
 }>(), {
   error: null,
   loadingUsers: false,

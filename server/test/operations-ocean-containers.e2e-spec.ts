@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import request from 'supertest'
 
 import type { Prisma } from '../src/generated/prisma/client'
+import { markShipmentsContainerLoaded } from './fixtures/container-loaded.fixture'
 import { createPackagingCostHarness, type PackagingCostHarness } from './packaging-cost.fixture'
 import { TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
 
@@ -67,6 +68,7 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
 
   async function createLine(containerBatchId: string, lineNumber: number, data: Partial<Prisma.ContainerLoadingItemUncheckedCreateInput> = {}) {
     // 仅在 harness 随机测试 schema 内种入完整、历史缺值和未匹配明细，避免夹具过滤掉需要验证的边界。
+    await markShipmentsContainerLoaded(h.prisma, data.shipmentId ? [data.shipmentId] : [], h.fixture.actor.id)
     return h.prisma.containerLoadingItem.create({ data: {
       containerBatchId, lineNumber, creationRequestKey: randomUUID(), creationPayloadHash: 'b'.repeat(64),
       goodsName: `装柜产品-${lineNumber}`, oceanShippingMarkText: `L-${containerBatchId.slice(0, 8)}-${lineNumber}`,
@@ -106,17 +108,17 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
     emptyId = (await createBatch(17)).id
 
     const ownValues = [
-      { grossWeightKg: '1173', volumeCai: '150.12345678', codAmountTwd: '0' },
-      { grossWeightKg: '180', volumeCai: '12.88272063', codAmountTwd: null, packageCount: 10, oceanShippingMarkText: 'L-010831-01~10' },
-      { grossWeightKg: '47', volumeCai: '7.10000001', codAmountTwd: '2500.12' },
+      { grossWeightKg: '1173', volumeCai: '150.12', codAmountTwd: '0' },
+      { grossWeightKg: '180', volumeCai: '12.88', codAmountTwd: null, packageCount: 10, oceanShippingMarkText: 'L-010831-01~10' },
+      { grossWeightKg: '47', volumeCai: '7.1', codAmountTwd: '2500.12' },
     ]
     for (const [index, data] of ownValues.entries()) {
       ownIds.push((await createLine(mixedId, index + 1, { shipmentId: aliceShipment.part.id, ...data })).id)
     }
     for (const [index, data] of [
       { shipmentId: bobShipment.part.id, grossWeightKg: '400', volumeCai: '20' },
-      { shipmentId: stockShipment.part.id, grossWeightKg: '200', volumeCai: '10.99999999' },
-      { shipmentId: null, grossWeightKg: '50', volumeCai: '5.12345678' },
+      { shipmentId: stockShipment.part.id, grossWeightKg: '200', volumeCai: '11' },
+      { shipmentId: null, grossWeightKg: '50', volumeCai: '5.12' },
     ].entries()) {
       hiddenIds.push((await createLine(mixedId, index + 4, data)).id)
     }
@@ -143,11 +145,11 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
     for (const item of result.items) expect(Object.keys(item).sort()).toEqual(overviewKeys)
     expect(result.items[0]).toMatchObject({
       itemCount: 6, myItemCount: 3, loadingDate: '2026-09-20', warehouseValue: TEST_DESTINATION_WAREHOUSE,
-      grossWeightKgTotal: '2050.000', volumeCaiTotal: '206.22963419',
+      grossWeightKgTotal: '2050.000', volumeCaiTotal: '206.22',
     })
     expect(result.items[1]).toMatchObject({ itemCount: 2, myItemCount: 1, grossWeightKgTotal: null, volumeCaiTotal: null })
-    expect(result.items[2]).toMatchObject({ itemCount: 1, myItemCount: 0, grossWeightKgTotal: '12.000', volumeCaiTotal: '1.00000000' })
-    expect(result.items[3]).toMatchObject({ itemCount: 0, myItemCount: 0, grossWeightKgTotal: '0.000', volumeCaiTotal: '0.00000000' })
+    expect(result.items[2]).toMatchObject({ itemCount: 1, myItemCount: 0, grossWeightKgTotal: '12.000', volumeCaiTotal: '1.00' })
+    expect(result.items[3]).toMatchObject({ itemCount: 0, myItemCount: 0, grossWeightKgTotal: '0.000', volumeCaiTotal: '0.00' })
     expect(result.items[0].warehouseName).toBeTruthy()
     const first = (await alice.browser.get(basePath).query({ page: 1, pageSize: 2 }).expect(200)).body as Page<Overview>
     const second = (await alice.browser.get(basePath).query({ page: 2, pageSize: 2 }).expect(200)).body as Page<Overview>

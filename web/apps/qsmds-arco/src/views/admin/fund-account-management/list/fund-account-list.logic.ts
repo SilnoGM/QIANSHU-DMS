@@ -1,7 +1,6 @@
 import type {
   FundAccountDto,
   FundAccountPageDto,
-  UserDto,
 } from '@/api/generated/types.gen'
 import type { FundAccountListQuery } from '@/api/modules/fund-accounts'
 import type { CurrencyDescriptor } from '@/components/base/currency'
@@ -76,22 +75,6 @@ export function adaptFundAccountPage(
       user: account.user === null ? null : { ...account.user },
     })),
   }
-}
-
-/**
- * 开户候选来自用户目录减去全部 USER 账户。公司账户没有 user，不参与集合；
- * DISABLED 用户仍保留状态交给管理员判断，避免前端私自添加 Server 未声明的限制。
- */
-export function findUnopenedFundAccountUsers(
-  users: readonly UserDto[],
-  accounts: readonly FundAccountDto[],
-): UserDto[] {
-  const openedUserIds = new Set(accounts.flatMap(account => (
-    account.ownerType === 'USER' && account.user !== null
-      ? [account.user.id]
-      : []
-  )))
-  return users.filter(user => !openedUserIds.has(user.id))
 }
 
 export function findCompanyFundAccount(

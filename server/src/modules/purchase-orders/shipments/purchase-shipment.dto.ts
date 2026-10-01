@@ -7,7 +7,7 @@ import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-leng
 import { isNormalizableDictionaryItemValue, normalizeDictionaryItemValue } from '../../dictionaries/dictionary.normalizer'
 import { PurchaseOrderActorDto, PurchaseOrderListImageDto, PurchaseOrderSourceSalesOrderDto, PurchaseOrderSupplierDto } from '../dto/purchase-order-response.dto'
 
-export const PURCHASE_SHIPMENT_VIEWS = ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CANCELLED'] as const
+export const PURCHASE_SHIPMENT_VIEWS = ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CONTAINER_LOADED', 'CANCELLED'] as const
 export type PurchaseShipmentView = typeof PURCHASE_SHIPMENT_VIEWS[number]
 export const PURCHASE_SHIPMENT_SORTS = ['CREATED_DESC', 'SHIPPED_DESC', 'WAREHOUSE_RECEIVED_DESC'] as const
 export type PurchaseShipmentSort = typeof PURCHASE_SHIPMENT_SORTS[number]
@@ -136,6 +136,9 @@ export class PurchaseShipmentListItemDto {
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly warehouseRecordedAt!: string | null
   @ApiProperty({ type: 'string', maxLength: 500, nullable: true }) readonly warehouseRemark!: string | null
   @ApiProperty({ type: () => PurchaseOrderActorDto, nullable: true }) readonly warehouseReceivedBy!: PurchaseOrderActorDto | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true, description: '被装柜明细关联的装柜时间；未装柜时为空，关联移除后不回退' }) readonly loadedAt!: string | null
+  @ApiProperty({ type: () => PurchaseOrderActorDto, nullable: true }) readonly loadedBy!: PurchaseOrderActorDto | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly loadedRecordedAt!: string | null
   @ApiProperty({ type: () => PurchaseShipmentOrderDto }) readonly purchaseOrder!: PurchaseShipmentOrderDto
   @ApiProperty({ type: () => PurchaseOrderSupplierDto }) readonly supplier!: PurchaseOrderSupplierDto
   @ApiProperty({ type: () => PurchaseOrderSourceSalesOrderDto, nullable: true }) readonly salesSource!: PurchaseOrderSourceSalesOrderDto | null

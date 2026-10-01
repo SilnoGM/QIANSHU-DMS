@@ -23,6 +23,7 @@ const PART_SELECT = {
   shippedAt: true, shippedBy: { select: { id: true, displayName: true } }, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true, destinationWarehouseValue: true,
   warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true,
   warehouseReceivedBy: { select: { id: true, displayName: true } },
+  loadedAt: true, loadedRecordedAt: true, loadedBy: { select: { id: true, displayName: true } },
   purchaseOrder: { select: {
     id: true, version: true, orderNo: true, orderDate: true, purchaseType: true, productMode: true, orderStatus: true,
     shippingMarkText: true, supplierValue: true, customSupplierName: true,
@@ -103,13 +104,15 @@ function baseWhere(input: PurchaseShipmentFilterDto): Prisma.PurchaseOrderPartWh
   }
 }
 
+/** 视图谓词是列表与计数的唯一口径：装柜事实优先于到仓、发货事实，四者互斥且合计等于全部有效货件。 */
 function viewWhere(view: PurchaseShipmentView): Prisma.PurchaseOrderPartWhereInput {
   switch (view) {
     case 'ALL': return {}
     case 'PENDING_REVIEW': return { status: 'PENDING_REVIEW' }
-    case 'AWAITING_SHIPMENT': return { status: 'ACTIVE', shippedAt: null }
-    case 'SHIPPED': return { status: 'ACTIVE', shippedAt: { not: null }, warehouseReceivedAt: null }
-    case 'WAREHOUSE_RECEIVED': return { status: 'ACTIVE', warehouseReceivedAt: { not: null } }
+    case 'AWAITING_SHIPMENT': return { status: 'ACTIVE', loadedAt: null, shippedAt: null }
+    case 'SHIPPED': return { status: 'ACTIVE', loadedAt: null, shippedAt: { not: null }, warehouseReceivedAt: null }
+    case 'WAREHOUSE_RECEIVED': return { status: 'ACTIVE', loadedAt: null, warehouseReceivedAt: { not: null } }
+    case 'CONTAINER_LOADED': return { status: 'ACTIVE', loadedAt: { not: null } }
     case 'CANCELLED': return { status: 'CANCELLED' }
   }
 }
@@ -131,9 +134,9 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
   const order = row.purchaseOrder
   return {
     id: row.id, shipmentNo: row.shipmentNo, partNumber: row.partNumber, status: row.status,
-    // 先按货件生命周期归类，仅 ACTIVE 再按入仓、发货事实细分，保证各状态视图互斥。
+    // 先按货件生命周期归类，仅 ACTIVE 再按装柜、入仓、发货事实细分，保证各状态视图互斥。
     viewStatus: row.status === 'ACTIVE'
-      ? row.warehouseReceivedAt !== null ? 'WAREHOUSE_RECEIVED' : row.shippedAt === null ? 'AWAITING_SHIPMENT' : 'SHIPPED'
+      ? row.loadedAt !== null ? 'CONTAINER_LOADED' : row.warehouseReceivedAt !== null ? 'WAREHOUSE_RECEIVED' : row.shippedAt === null ? 'AWAITING_SHIPMENT' : 'SHIPPED'
       : row.status,
     shippingMarkText: row.shippingMarkText, createdAt: row.createdAt.toISOString(),
     shippedAt: row.shippedAt?.toISOString() ?? null, shippedBy: row.shippedBy,
@@ -143,6 +146,8 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
     warehouseReceivedAt: row.warehouseReceivedAt?.toISOString() ?? null, warehouseReceivedById: row.warehouseReceivedById,
     warehouseRecordedAt: row.warehouseRecordedAt?.toISOString() ?? null, warehouseRemark: row.warehouseRemark,
     warehouseReceivedBy: row.warehouseReceivedBy,
+    loadedAt: row.loadedAt?.toISOString() ?? null, loadedBy: row.loadedBy,
+    loadedRecordedAt: row.loadedRecordedAt?.toISOString() ?? null,
     purchaseOrder: {
       id: order.id, version: order.version, orderNo: order.orderNo, orderDate: order.orderDate.toISOString().slice(0, 10),
       purchaseType: order.purchaseType, productMode: order.productMode, orderStatus: order.orderStatus,
@@ -183,26 +188,20 @@ export class PurchaseShipmentQueryService {
 
   async statusCounts(input: PurchaseShipmentFilterDto): Promise<PurchaseShipmentStatusCountsDto> {
     const where = baseWhere(input)
-    const [groups, buyers] = await this.prisma.$transaction(async transaction => {
-      const groups = await transaction.purchaseOrderPart.groupBy({ by: ['status'], where, _count: { _all: true, shippedAt: true, warehouseReceivedAt: true } })
+    // 逐视图计数与列表共用同一份谓词，避免计数口径与列表细分再次漂移；代价是同一快照内的多次计数。
+    const [counts, buyers] = await this.prisma.$transaction(async transaction => {
+      const counts = new Map<PurchaseShipmentView, number>()
+      for (const view of PURCHASE_SHIPMENT_VIEWS) {
+        counts.set(view, await transaction.purchaseOrderPart.count({ where: { AND: [where, viewWhere(view)] } }))
+      }
       // 直接查询存在货件采购单的人员，避免 ORM 先加载全部采购单再在内存去重。
       const buyers = await transaction.user.findMany({
         where: { purchaseOrdersCreated: { some: { parts: { some: {} } } } },
         select: { id: true, displayName: true }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
       })
-      return [groups, buyers] as const
+      return [counts, buyers] as const
     }, { isolationLevel: 'RepeatableRead' })
-    const counts: Record<PurchaseShipmentView, number> = { ALL: 0, PENDING_REVIEW: 0, AWAITING_SHIPMENT: 0, SHIPPED: 0, WAREHOUSE_RECEIVED: 0, CANCELLED: 0 }
-    for (const group of groups) {
-      counts.ALL += group._count._all
-      if (group.status === 'ACTIVE') {
-        counts.WAREHOUSE_RECEIVED = group._count.warehouseReceivedAt
-        counts.SHIPPED = group._count.shippedAt - group._count.warehouseReceivedAt
-        counts.AWAITING_SHIPMENT = group._count._all - group._count.shippedAt
-      }
-      else counts[group.status] = group._count._all
-    }
-    return { items: PURCHASE_SHIPMENT_VIEWS.map(value => ({ value, count: counts[value] })), buyerOptions: buyers }
+    return { items: PURCHASE_SHIPMENT_VIEWS.map(value => ({ value, count: counts.get(value) ?? 0 })), buyerOptions: buyers }
   }
 
   async getById(partId: string): Promise<PurchaseShipmentDetailDto> {

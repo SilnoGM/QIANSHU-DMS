@@ -4,25 +4,29 @@ function Layout() {
   return import('@/layouts/index.vue')
 }
 
-export const MANAGEMENT_READ_PERMISSIONS = [
+/**
+ * 用户与角色分组的读取权限并集。
+ *
+ * 管理员工作台的主导航组会把自身 auth 覆盖到每个一级子路由，App.vue 再校验全部
+ * matched 记录，因此这里声明的集合同时是分组菜单的 any-of 门槛，必须覆盖全部叶子。
+ */
+export const ADMIN_USER_ROLE_READ_PERMISSIONS = [
   'users:read',
   'roles:read',
-  'audit:read',
-  'regions:read',
-]
+] as const
 
 /**
  * 页面路由只做体验层权限收敛，服务端 PermissionGuard 仍是最终判定。
- * 父级使用 any-of 读取权限，确保至少能访问一个管理页面时才展示菜单组。
+ * 权限目录沿用 roles:read，展示的是角色可分配的权限快照。
  */
 const routes: RouteRecordRaw = {
-  path: '/system',
-  name: 'systemManagement',
+  path: '/admin',
+  name: 'adminUserRoles',
   component: Layout,
   meta: {
-    title: '权限体系',
+    title: '用户与角色',
     icon: 'qs-access-control',
-    auth: [...MANAGEMENT_READ_PERMISSIONS],
+    auth: [...ADMIN_USER_ROLE_READ_PERMISSIONS],
   },
   children: [
     {
@@ -53,16 +57,6 @@ const routes: RouteRecordRaw = {
         title: '权限目录',
         icon: 'qs-permissions',
         auth: 'roles:read',
-      },
-    },
-    {
-      path: 'audit',
-      name: 'systemAudit',
-      component: () => import('@/views/system/audit/index.vue'),
-      meta: {
-        title: '审计日志',
-        icon: 'qs-audit-log',
-        auth: 'audit:read',
       },
     },
   ],

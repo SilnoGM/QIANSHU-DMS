@@ -15,7 +15,9 @@ function harness() {
     $queryRaw: jest.fn().mockResolvedValue([]), user: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
     containerBatch: { findUnique: jest.fn().mockResolvedValue(batch), update: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...batch, ...data, version: 5 })) },
     containerLoadingItem: { findFirst: jest.fn().mockResolvedValue(item), update: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...item, ...data, version: 3, ...Object.fromEntries(['grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'reportedVolumeCai', 'codAmountTwd'].map(field => [field, typeof data[field] === 'string' ? new Prisma.Decimal(data[field]) : null])) })) },
-    purchaseOrderPart: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
+    purchaseOrderPart: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
+    // 销售履约推进按现状判断；默认非候选状态，仅关联货件本身不改变订单。
+    salesOrder: { findUnique: jest.fn().mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'LAND_TRANSIT' }) },
   }
   const prisma = { $transaction: jest.fn((callback: (value: typeof tx) => unknown) => callback(tx)) }
   const access = { getPermissionCodesInTransaction: jest.fn().mockResolvedValue(['container-batches:update']), hasAll: jest.fn().mockReturnValue(true) }
@@ -44,7 +46,7 @@ describe('Container maintenance commands', () => {
   it('recalculates measurements and replaces nullable input without progressing shipments', async () => {
     const h = harness()
     const result = await h.service.updateItem(h.context, h.id, h.itemId, { ...fields, codAmountTwd: '100.10', recipientName: '客户' })
-    expect(result).toMatchObject({ volumeCai: '12.88272063', chargeableVolumeCai: 13, grossWeightKg: null, shipmentId: null, codAmountTwd: '100.10', recipientName: '客户', recipientPhone: null, version: 3 })
+    expect(result).toMatchObject({ volumeCai: '12.88', chargeableVolumeCai: 13, grossWeightKg: null, shipmentId: null, codAmountTwd: '100.10', recipientName: '客户', recipientPhone: null, version: 3 })
     expect(h.tx.containerBatch.update).toHaveBeenCalledWith({ where: { id: h.id }, data: { version: { increment: 1 }, updatedById: h.context.actorUserId } })
     expect(h.tx.purchaseOrderPart.findUnique).not.toHaveBeenCalled()
     expect(h.audit.record).toHaveBeenCalledTimes(1)
@@ -56,6 +58,23 @@ describe('Container maintenance commands', () => {
     h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce(h.item).mockResolvedValueOnce({ id: randomUUID() })
     await expect(h.service.updateItem(h.context, h.id, h.itemId, { ...fields, shipmentId })).rejects.toMatchObject({ code: 'CONTAINER_SHIPMENT_ALREADY_ASSIGNED' })
     expect(h.tx.containerLoadingItem.update).not.toHaveBeenCalled()
+  })
+  it('locks the sales order chain before the shipment and evaluates the advance afterwards', async () => {
+    const h = harness(), shipmentId = randomUUID()
+    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ purchaseOrder: { salesOrderId: 'so-1' } }])
+    h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce(h.item).mockResolvedValueOnce(null)
+    await h.service.updateItem(h.context, h.id, h.itemId, { ...fields, shipmentId })
+    // 锁序必须与发货、入仓一致：销售明细 → 采购单 → 销售主行 → 货件，装柜不能反向申请。
+    const statements = h.tx.$queryRaw.mock.calls.map(call => (call as [{ sql: string }])[0].sql.replace(/\s+/gu, ' '))
+    const position = (needle: string) => statements.findIndex(statement => statement.includes(needle))
+    const shipmentLock = position('purchase_order_parts WHERE id')
+    expect(shipmentLock).toBeGreaterThan(-1)
+    for (const table of ['sales_order_lines', 'purchase_orders', 'sales_orders']) {
+      expect(position(table)).toBeGreaterThan(-1)
+      expect(position(table)).toBeLessThan(shipmentLock)
+    }
+    // 关联后按现状评估销售履约；非候选状态保持不动。
+    expect(h.tx.salesOrder.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'so-1' } }))
   })
   it('prevents source detach, but permits a remark change', async () => {
     const h = harness(), sourceFileId = randomUUID()

@@ -3,7 +3,7 @@ import { clickVisibleButton, patchNumberingPermissionsExpression, restoreNumberi
 import { apiExpression, appRouteUrl } from './regions.browser.helpers.mjs'
 
 const endpoint = '/api/purchase-shipping-mark-bindings'
-const route = '/system/basic-data/numbering/shipping-mark-bindings'
+const route = '/admin/basic-data/numbering/shipping-mark-bindings'
 const supplierValue = 'BROWSER_MARK_A'
 
 /** 数据仅经隔离 Browser 编排器的正式 API 创建，不接触开发业务库。 */
@@ -31,7 +31,19 @@ export async function verifyShippingMarkBindings(page, configuration) {
   if (!type.enabled) {
     await request(`/api/dictionary-types/${type.id}/enable`, 'POST', { expectedVersion: type.version })
   }
+  /**
+   * 共享 bootstrap 会种下同码唛头夹具规则（CUSTOM_MARK 等），再创建必然 409。
+   * 已有规则只校验可用性后复用，夹具状态漂移时以断言失败暴露，不静默吞掉。
+   */
   async function rule(code, name) {
+    const listing = await request(`/api/numbering-rules?page=1&pageSize=100&keyword=${encodeURIComponent(code)}`)
+    const existing = listing.items.find(item => item.ruleCode === code)
+    if (existing) {
+      assert.equal(existing.purpose, 'SHIPPING_MARK', `既有规则 ${code} 必须是唛头用途`)
+      assert.equal(existing.status, 'ENABLED', `既有规则 ${code} 必须已启用`)
+      assert.notEqual(existing.activeRevision, null, `既有规则 ${code} 必须有生效版本`)
+      return existing
+    }
     const draft = await request('/api/numbering-rules', 'POST', {
       ruleCode: code,
       name,
@@ -46,7 +58,7 @@ export async function verifyShippingMarkBindings(page, configuration) {
   const custom = await rule('CUSTOM_MARK', '自定义产品唛头')
 
   await page.setViewport(1440, 1000, false)
-  await page.navigate(appRouteUrl(configuration.baseUrl, '/system/basic-data/numbering'))
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/basic-data/numbering'))
   await page.waitFor('!!document.querySelector("[data-testid=shipping-mark-bindings-entry]")')
   await page.evaluate('document.querySelector("[data-testid=shipping-mark-bindings-entry]").click()')
   await page.waitFor('document.querySelector("[data-testid=shipping-mark-bindings-page]")?.textContent.includes("微耕机供应商")')

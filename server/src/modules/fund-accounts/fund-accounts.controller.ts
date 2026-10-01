@@ -29,6 +29,7 @@ import {
   FundAccountIdParamDto,
   FundAccountListQueryDto,
   FundAccountMutationResultDto,
+  FundAccountOwnerCandidateListDto,
   FundAccountPageDto,
   UpdateFundShareRateRequestDto,
 } from './dto/fund-account.dto'
@@ -65,6 +66,26 @@ export class FundAccountsController {
   })
   list(@Query() dto: FundAccountListQueryDto): Promise<FundAccountPageDto> {
     return executeFundHttpOperation(() => this.accounts.listAccounts({ ...dto }))
+  }
+
+  /*
+   * 静态路由必须排在参数路由之前；本控制器当前只有精确路径，这里保持最近的顺序。
+   * 该端点让财务角色在不持有 users:read 的前提下取得新建账户的候选归属人。
+   */
+  @Get('owner-candidates')
+  @RequirePermissions('fund-accounts:read')
+  @ApiContractResponse({ status: HttpStatus.OK, type: FundAccountOwnerCandidateListDto })
+  @ApiApplicationContract({
+    operationId: 'fund_accounts_owner_candidates',
+    session: 'required',
+    authorization: true,
+    badRequest: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [FUND_READ_FORBIDDEN, FUND_VALIDATION_ERRORS],
+  })
+  ownerCandidates(): Promise<FundAccountOwnerCandidateListDto> {
+    return executeFundHttpOperation(() => this.accounts.listOwnerCandidates())
   }
 
   @Post()

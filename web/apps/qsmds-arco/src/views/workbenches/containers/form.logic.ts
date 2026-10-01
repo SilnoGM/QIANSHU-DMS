@@ -97,12 +97,16 @@ export function validateLoadingItemDraft(draft: LoadingItemDraft): FormErrors {
   if (!/^\d+$/u.test(draft.packageCount) || Number(draft.packageCount) < 1 || Number(draft.packageCount) > 1_000_000) {
     errors.packageCount = 'countInvalid'
   }
-  for (const key of ['grossWeightKg', 'lengthCm', 'widthCm', 'heightCm'] as const) {
-    if (!validDecimal(draft[key], 18, 3, true)) {
+  if (!validDecimal(draft.grossWeightKg, 18, 3, true)) {
+    errors.grossWeightKg = 'measurementInvalid'
+  }
+  // 每件尺寸与账单表同口径：两位小数；毛重仍按三位小数。
+  for (const key of ['lengthCm', 'widthCm', 'heightCm'] as const) {
+    if (!validDecimal(draft[key], 18, 2, true)) {
       errors[key] = 'measurementInvalid'
     }
   }
-  if (!validDecimal(draft.reportedVolumeCai, 24, 8, false)) {
+  if (!validDecimal(draft.reportedVolumeCai, 24, 2, false)) {
     errors.reportedVolumeCai = 'volumeInvalid'
   }
   if (!validDecimal(draft.codAmountTwd, 30, 2, false)) {

@@ -279,6 +279,7 @@ test('权限目录以中文展示现有业务资源', () => {
     .map(match => match[1])
 
   // 资源目录采用精确集合，避免已经退役的领域继续以孤立中文标签残留在权限 UI。
+  // 2026-10-01 决策：权限分配抽屉的分组标题必须全部可读，因此补齐了后建领域的标签。
   assert.deepEqual(resourceKeys, [
     'audit',
     'container-batches',
@@ -286,26 +287,42 @@ test('权限目录以中文展示现有业务资源', () => {
     'dictionaries',
     'exchange-rates',
     'fund-accounts',
-    'packaging-costs',
+    'fund-business-sources',
+    'fund-posting-types',
+    'fund-transactions',
     'numbering-rules',
-    'purchase-shipping-marks',
+    'packaging-costs',
     'product-media',
     'products',
+    'purchase-orders',
+    'purchase-shipping-marks',
     'regions',
     'roles',
+    'sales-orders',
+    'sales-receipts',
+    'slh-bills',
+    'supplier-payment-profiles',
     'users',
   ])
   assert.equal(permissionResourceLabel('container-batches'), '柜次管理')
   assert.equal(permissionResourceLabel('currencies'), '货币管理')
   assert.equal(permissionResourceLabel('exchange-rates'), '当前汇率')
   assert.equal(permissionResourceLabel('fund-accounts'), '资金账户管理')
+  assert.equal(permissionResourceLabel('fund-business-sources'), '资金业务来源')
+  assert.equal(permissionResourceLabel('fund-posting-types'), '资金业务类型')
+  assert.equal(permissionResourceLabel('fund-transactions'), '资金批次')
   assert.equal(permissionResourceLabel('packaging-costs'), '打木架费用')
   assert.equal(permissionResourceLabel('regions'), '地区管理')
   assert.equal(permissionResourceLabel('numbering-rules'), '编号规则')
+  assert.equal(permissionResourceLabel('purchase-orders'), '采购订单')
   assert.equal(permissionResourceLabel('purchase-shipping-marks'), '唛头规则绑定')
   assert.equal(permissionResourceLabel('dictionaries'), '字典管理')
   assert.equal(permissionResourceLabel('product-media'), '产品媒体')
   assert.equal(permissionResourceLabel('products'), '产品管理')
+  assert.equal(permissionResourceLabel('sales-orders'), '销售订单')
+  assert.equal(permissionResourceLabel('sales-receipts'), '销售收款')
+  assert.equal(permissionResourceLabel('slh-bills'), '顺联航账单')
+  assert.equal(permissionResourceLabel('supplier-payment-profiles'), '供应商收款配置')
 })
 
 test('系统管理页面按现有业务能力配置通用表格操作列与分页', () => {

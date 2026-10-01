@@ -41,10 +41,10 @@ export class ContainerLoadingItemCreateDto {
   @ApiPropertyOptional({ type: String, maxLength: 32, nullable: true }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 32) packageUnit?: string | null
   @ApiPropertyOptional({ type: String, maxLength: 500, nullable: true }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 500) remark?: string | null
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive total row weight in kg; decimal(18,3). Never multiplied by packageCount.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) grossWeightKg?: string | null
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package length in cm; decimal(18,3).' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) lengthCm?: string | null
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package width in cm; decimal(18,3).' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) widthCm?: string | null
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package height in cm; decimal(18,3).' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) heightCm?: string | null
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 25, description: 'Non-negative source row volume; decimal(24,8). Preserved for comparison.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 25) reportedVolumeCai?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package length in cm; decimal(18,2), matching the bill table record precision.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) lengthCm?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package width in cm; decimal(18,2), matching the bill table record precision.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) widthCm?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package height in cm; decimal(18,2), matching the bill table record precision.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) heightCm?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 25, description: 'Non-negative source row volume recorded at two decimals; decimal(24,2). The raw source cell stays in sourceData.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 25) reportedVolumeCai?: string | null
 }
 export class ContainerLoadingItemUpdateDto extends ContainerLoadingItemCreateDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) @Max(2_147_483_647) itemExpectedVersion!: number
@@ -99,8 +99,8 @@ export class ContainerLoadingItemDto {
   @ApiProperty({ type: String, nullable: true }) lengthCm!: string | null
   @ApiProperty({ type: String, nullable: true }) widthCm!: string | null
   @ApiProperty({ type: String, nullable: true }) heightCm!: string | null
-  @ApiProperty({ type: String, nullable: true, description: 'Calculated row volume, rounded to eight decimals; null when dimensions are incomplete.' }) volumeCai!: string | null
-  @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 2_147_483_647, description: 'Ceiling of the full precision row volume, before display rounding.' }) chargeableVolumeCai!: number | null
+  @ApiProperty({ type: String, nullable: true, description: 'Calculated row volume using the shared 28316 divisor, rounded to two decimals; decimal(24,2); null when dimensions are incomplete.' }) volumeCai!: string | null
+  @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 2_147_483_647, description: 'Ceiling of the exact row volume, used as the billable quantity when pricing by volume.' }) chargeableVolumeCai!: number | null
   @ApiProperty({ type: String, nullable: true }) reportedVolumeCai!: string | null
   @ApiProperty({ type: String, nullable: true, description: 'Calculated row volume minus reported source volume; null when either is missing.' }) volumeDifferenceCai!: string | null
 }

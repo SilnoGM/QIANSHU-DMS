@@ -1,4 +1,5 @@
 import { importCellNumber, importPackageCount } from './import-parser.numbers'
+import { VOLUME_CAI_SCALE, VOLUME_DIMENSION_SCALE } from '../ocean-freight-calculation/ocean-freight-calculation'
 import { ContainerWorkbookParseError, type ParsedContainerRow, type WorkbookCell, type WorkbookSheet } from './import-parser.types'
 import { readContainerWorkbook } from './import-parser.workbook'
 
@@ -34,8 +35,13 @@ function findColumns(row: Map<number, WorkbookCell>): Columns | null {
   return result
 }
 function batchName(value: string | null): string | null {
-  const match = /(?:^|[^\d])(\d{4}(?:-\d{2})?)[柜櫃](?:子)?/u.exec(value ?? '')
+  const match = (value ?? '').match(/(?:^|[^\d])(\d{4}(?:-\d{2})?)[柜櫃](?:子)?/u)
   return match ? `${match[1]}柜` : null
+}
+/** 来源单元格的小数位数；用于在按记录精度取整前逐列给出告警。 */
+function sourceDecimalPlaces(value: string | null | undefined): number {
+  const match = value === null || value === undefined ? null : value.trim().match(/^-?\d+(?:\.(\d*))?$/u)
+  return match ? (match[1]?.length ?? 0) : 0
 }
 function normalizeText(cell: WorkbookCell | undefined, maximum: number, label: string, errors: string[]): string | null {
   const value = cell?.value?.replace(/[\r\n\t]+/gu, ' ').trim() || null
@@ -82,6 +88,11 @@ function parseRow(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, Wo
   catch { errors.push('包装件数必须为 1 至 1000000 的整数') }
   const recipientPhone = text('recipientPhone', '收件人电话', 128)
   if (recipientPhone && cell('recipientPhone')?.type === 'n') warnings.push('电话以数字保存，可能已丢失前导零，请核对原始联系方式')
+  // 尺寸按记录精度取整，来源多余小数会被舍掉，因此逐列提示而不是静默处理。
+  for (const [field, label] of [['lengthCm', '长'], ['widthCm', '宽'], ['heightCm', '高']] as const) {
+    const places = sourceDecimalPlaces(cell(field)?.value)
+    if (places > VOLUME_DIMENSION_SCALE) warnings.push(`${label}在来源里保留 ${places} 位小数，已按 ${VOLUME_DIMENSION_SCALE} 位小数取整，材积复算可能有偏差`)
+  }
   const sourceData: ParsedContainerRow['sourceData'] = { cells: {} }
   for (const value of cells.values()) {
     const { value: raw, formula, type, sharedFormulaIndex, mergedFrom } = value
@@ -96,9 +107,9 @@ function parseRow(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, Wo
     rowKey: `${sheet.index + 1}:${rowNumber}`, sourceSheetName: sheet.name, sourceRowNumber: rowNumber,
     containerBatchName, warehouseReceiptReference: text('warehouseReceiptReference', '入仓参考', 500), oceanShippingMarkText: text('oceanShippingMarkText', '海运唛头', 128),
     goodsName, packageCount: count, packageUnit: text('packageUnit', '包装单位', 32),
-    grossWeightKg: numeric('grossWeightKg', '整行毛重', 3, 18, true), lengthCm: numeric('lengthCm', '每件长度', 3, 18, true),
-    widthCm: numeric('widthCm', '每件宽度', 3, 18, true), heightCm: numeric('heightCm', '每件高度', 3, 18, true),
-    reportedVolumeCai: numeric('reportedVolumeCai', '来源材积', 8, 24),
+    grossWeightKg: numeric('grossWeightKg', '整行毛重', 3, 18, true), lengthCm: numeric('lengthCm', '每件长度', VOLUME_DIMENSION_SCALE, 18, true),
+    widthCm: numeric('widthCm', '每件宽度', VOLUME_DIMENSION_SCALE, 18, true), heightCm: numeric('heightCm', '每件高度', VOLUME_DIMENSION_SCALE, 18, true),
+    reportedVolumeCai: numeric('reportedVolumeCai', '来源材积', VOLUME_CAI_SCALE, 24),
     recipientName: text('recipientName', '收件人', 128), recipientPhone, recipientAddress,
     codAmountTwd: numeric('codAmountTwd', '代收金额', 2, 30), remark, sourceData, errors, warnings,
   }

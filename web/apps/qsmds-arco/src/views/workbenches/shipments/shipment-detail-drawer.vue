@@ -336,6 +336,37 @@ const hasShipmentInformation = computed(() => props.detail && (
           {{ t('purchaseShipmentDetail.notReceived') }}
         </p>
       </section>
+      <section :aria-label="t('purchaseShipmentDetail.containerLoading')">
+        <h3 class="qs-type-component-title m-0 mb-3 flex gap-2 items-center">
+          <span class="rounded-full bg-primary shrink-0 h-5 w-1" aria-hidden="true" />{{ t('purchaseShipmentDetail.containerLoading') }}
+        </h3>
+        <dl v-if="detail.loadedAt" class="m-0 p-4 border border-border/70 rounded-lg bg-muted/20 gap-x-6 gap-y-4 grid sm:grid-cols-2">
+          <div>
+            <dt class="qs-type-meta text-muted-foreground mb-1">
+              {{ t('purchaseShipmentDetail.loadedAt') }}
+            </dt><dd class="m-0">
+              <DateTimeDisplay :value="detail.loadedAt" />
+            </dd>
+          </div>
+          <div>
+            <dt class="qs-type-meta text-muted-foreground mb-1">
+              {{ t('purchaseShipmentDetail.loadedBy') }}
+            </dt><dd class="m-0">
+              <QsPersonDisplay v-if="detail.loadedBy" :display-name="detail.loadedBy.displayName" size="md" /><span v-else>—</span>
+            </dd>
+          </div>
+          <div>
+            <dt class="qs-type-meta text-muted-foreground mb-1">
+              {{ t('purchaseShipmentDetail.loadedRecordedAt') }}
+            </dt><dd class="m-0">
+              <DateTimeDisplay :value="detail.loadedRecordedAt" />
+            </dd>
+          </div>
+        </dl>
+        <p v-else class="qs-type-meta text-muted-foreground m-0 p-4 border border-border/70 rounded-lg bg-muted/20">
+          {{ t('purchaseShipmentDetail.notLoaded') }}
+        </p>
+      </section>
     </div>
     <FaEmpty v-else-if="!loading && !error" icon="i-lucide:package-search" :title="t('purchaseShipmentDetail.empty')" :description="t('purchaseShipmentDetail.emptyDescription')" />
 

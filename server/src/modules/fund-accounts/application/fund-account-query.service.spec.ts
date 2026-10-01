@@ -142,4 +142,60 @@ describe('FundAccountQueryService', () => {
       message: '资金服务内部错误',
     })
   })
+
+  it('returns only unopened users as owner candidates with stable ordering', async () => {
+    const user = {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([
+        {
+          id: USER_ID,
+          username: 'zhangsan',
+          displayName: '张三',
+          status: 'ACTIVE' as const,
+          passwordHash: 'must-not-leak',
+        },
+      ]),
+    }
+    const service = new FundAccountQueryService(
+      { user } as unknown as PrismaService,
+    )
+
+    const result = await service.listOwnerCandidates()
+
+    expect(result.items).toEqual([
+      {
+        id: USER_ID,
+        username: 'zhangsan',
+        displayName: '张三',
+        status: 'ACTIVE',
+      },
+    ])
+    expect(result.items[0]).not.toHaveProperty('passwordHash')
+    expect(user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        status: true,
+      },
+      where: { fundAccount: { is: null } },
+    }))
+  })
+
+  it('fails owner candidates closed without exposing Prisma details', async () => {
+    const user = {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>()
+        .mockRejectedValue(new Error('must-not-leak database detail')),
+    }
+    const service = new FundAccountQueryService(
+      { user } as unknown as PrismaService,
+    )
+
+    const promise = service.listOwnerCandidates()
+    await expect(promise).rejects.toBeInstanceOf(FundPostingError)
+    await expect(promise).rejects.toMatchObject({
+      code: 'FUND_INTERNAL_ERROR',
+      message: '资金服务内部错误',
+    })
+  })
 })

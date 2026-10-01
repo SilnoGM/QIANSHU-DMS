@@ -7,6 +7,8 @@ import { ApiException } from '../../infrastructure/http/api.exception'
 import { AccessControlService } from '../access-control/access-control.service'
 import { AuditService } from '../audit/audit.service'
 import { containerFailure, containerUuid, type ContainerCommandContext } from './container-batch.normalizer'
+import { markShipmentsContainerLoaded } from './container-load-fact'
+import { advanceSalesOrdersWhenAllShipmentsLoaded, lockSalesOrderChains, salesOrderIdsOfShipments } from '../purchase-orders/shipments/sales-order-container-load-progress'
 import type { ContainerImportConfirmDto, ContainerImportPreviewDto, ContainerImportResultDto, ContainerImportRowDto } from './container-import.dto'
 import { importHash, importRowIdentity, normalizeContainerImport, normalizeParsedFields, validateParsedRows } from './container-import.normalizer'
 import { findImportCandidates, lockImportShipments, serializeImportCandidate } from './container-import.shipments'
@@ -115,7 +117,16 @@ export class ContainerImportService {
         if (pending.some(row => row.errors.length)) return containerFailure('CONTAINER_IMPORT_ROWS_INVALID', '来源表格存在数据异常，请修正后再导入')
         const unmatchedCount = pending.filter(row => selection.get(row.rowKey) === null).length
         if (unmatchedCount && !input.allowUnmatched) return containerFailure('CONTAINER_IMPORT_UNMATCHED', '存在未匹配货件的明细，请完成匹配或明确确认不关联货件')
-        await lockImportShipments(tx, pending.flatMap(row => selection.get(row.rowKey) ? [selection.get(row.rowKey)!] : []), id, batch.warehouseValue)
+        const shipmentIds = pending.flatMap(row => selection.get(row.rowKey) ? [selection.get(row.rowKey)!] : [])
+        // 销售链条先于货件加锁：批量导入可能同时推进多个销售订单，必须与发货、入仓保持同一加锁顺序。
+        const salesOrderIds = await salesOrderIdsOfShipments(tx, shipmentIds)
+        await lockSalesOrderChains(tx, salesOrderIds)
+        await lockImportShipments(tx, shipmentIds, id, batch.warehouseValue)
+        // 关联即已装柜：批量明细落库前统一写入装柜事实，未匹配行不写。
+        await markShipmentsContainerLoaded(tx, this.audit, {
+          actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, source: 'IMPORT',
+          shipmentIds,
+        })
         const last = await tx.containerLoadingItem.aggregate({ where: { containerBatchId: id }, _max: { lineNumber: true } })
         for (const [index, row] of pending.entries()) {
           const inserted = await tx.containerLoadingItem.create({ data: {
@@ -129,6 +140,8 @@ export class ContainerImportService {
             targetType: 'CONTAINER_LOADING_ITEM', targetId: inserted.id, metadata: { containerBatchId: id, shipmentId: inserted.shipmentId, lineNumber: inserted.lineNumber, sourceFileId: source.sourceFileId, sourceHash: source.sourceHash, importRequestKey: requestKey } })
         }
         await tx.containerBatch.update({ where: { id }, data: { version: { increment: 1 }, updatedById: context.actorUserId } })
+        // 整批落库后统一评估：本次涉及的全部销售订单各自判断是否需要进入海运在途。
+        await advanceSalesOrdersWhenAllShipmentsLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, salesOrderIds })
         return { containerBatchId: id, importedCount: pending.length, skippedCount, unmatchedCount, replayed: false }
       }, { timeout: 30_000 })
     } catch (error) {

@@ -30,7 +30,7 @@ test('财务和采运工作台只展示当前用户有权访问的业务入口',
   assert.deepEqual(visiblePaths(['sales-receipts:read', 'purchase-orders:payment', 'purchase-orders:review']), ['/qs-finance/realtime-payments/sales-receipts', '/qs-finance/realtime-payments/purchase-payments', '/qs-purchase-transport/reviews'])
 })
 
-test('顺联航账单入口排在实收实付之后、账户管理之前，管理页与对账占位各用独立权限', () => {
+test('顺联航账单入口排在实收实付之后、账户管理之前，管理页与对账页各用独立权限', () => {
   const routes = financeWorkbench.children
   assert.deepEqual(routes.map(route => route.path), ['/qs-finance/realtime-payments', '/qs-finance/bill-reconciliation', '/qs-finance/fund-accounts'])
   const group = routes[1]!
@@ -56,6 +56,8 @@ test('顺联航账单入口排在实收实付之后、账户管理之前，管�
     ['slh-bill-management/import', 'qsFinanceBillReconciliationSlhBillImport', 'slhBill.importTitle', 'slh-bills:create', '/qs-finance/bill-reconciliation/slh-bill-management', undefined],
     // 详情页与导入页一样保留面包屑末级（不设 breadcrumb: false），两页口径一致。
     ['slh-bill-management/:id', 'qsFinanceBillReconciliationSlhBillDetail', 'slhBill.detailTitle', 'slh-bills:read', '/qs-finance/bill-reconciliation/slh-bill-management', undefined],
+    // 对账详情同上：面包屑显示「顺联航账单对账详情」，层级里不出现列表那一级。
+    ['slh-bill-reconciliation/:id', 'qsFinanceBillReconciliationSlhReconciliationDetail', 'workbench.slhBillReconciliationDetail', 'slh-bills:reconcile', '/qs-finance/bill-reconciliation/slh-bill-reconciliation', undefined],
   ])
 })
 
@@ -74,8 +76,8 @@ test('柜次菜单使用独立读取权限，货件与审核菜单保留既有�
 test('财务分为实时收付、账单对账和账户管理，叶子路由保留独立权限', () => {
   assert.deepEqual(financeWorkbench.children.map(route => route.path), ['/qs-finance/realtime-payments', '/qs-finance/bill-reconciliation', '/qs-finance/fund-accounts'])
   const routes = financeWorkbench.children.flatMap(route => route.children ?? [])
-  // 账单对账分组新增导入与详情两个隐藏叶子。
-  assert.equal(new Set(routes.map(route => route.name)).size, 13)
+  // 账单对账分组新增导入与详情两个隐藏叶子；顺联航对账分组新增对账详情一个隐藏叶子。
+  assert.equal(new Set(routes.map(route => route.name)).size, 14)
   const paymentDetail = routes.find(route => route.name === 'qsFinanceRealtimePurchasePayablePayment')
   assert.equal(paymentDetail?.meta?.menu, false)
   assert.equal(paymentDetail?.meta?.auth, 'purchase-orders:payment')

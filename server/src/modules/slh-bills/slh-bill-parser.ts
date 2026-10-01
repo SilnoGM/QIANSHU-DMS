@@ -159,12 +159,13 @@ function parseLine(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, W
   const heightCm = numeric(cell('heightCm'), sheet, '高', 2, 18, errors)
   const reportedVolumeCai = numeric(cell('reportedVolumeCai'), sheet, '材数', 2, 24, errors)
   const unitPriceAmount = numeric(cell('unitPriceAmount'), sheet, '单价', 2, 30, errors)
-  const freightAmountCny = numeric(cell('freightAmountCny'), sheet, '运费', 2, 30, errors) ?? '0.00'
-  const codHandlingAmountCny = numeric(cell('codHandlingAmountCny'), sheet, '代收手续费', 2, 30, errors) ?? '0.00'
-  const surchargeAmountCny = numeric(cell('surchargeAmountCny'), sheet, '附加费', 2, 30, errors) ?? '0.00'
-  const payableAmountCny = numeric(cell('payableAmountCny'), sheet, '合计应付金额', 2, 30, errors) ?? '0.00'
-  const codAmountTwd = numeric(cell('codAmountTwd'), sheet, '代收货款', 2, 30, errors) ?? '0.00'
-  const ntdSurchargeAmountTwd = numeric(cell('ntdSurchargeAmountTwd'), sheet, 'NTD 杂费', 2, 30, errors) ?? '0.00'
+  // 空单元格表示「本行不涉及此项」，与装柜明细同一口径；来源写 0 则保留 0，两者不再合并。
+  const freightAmountCny = numeric(cell('freightAmountCny'), sheet, '运费', 2, 30, errors)
+  const codHandlingAmountCny = numeric(cell('codHandlingAmountCny'), sheet, '代收手续费', 2, 30, errors)
+  const surchargeAmountCny = numeric(cell('surchargeAmountCny'), sheet, '附加费', 2, 30, errors)
+  const payableAmountCny = numeric(cell('payableAmountCny'), sheet, '合计应付金额', 2, 30, errors)
+  const codAmountTwd = numeric(cell('codAmountTwd'), sheet, '代收货款', 2, 30, errors)
+  const ntdSurchargeAmountTwd = numeric(cell('ntdSurchargeAmountTwd'), sheet, 'NTD 杂费', 2, 30, errors)
 
   const pricingBasis = deriveSlhPricingBasis(unitPriceAmount)
   const ratio = slhVolumeRatio({ lengthCm, widthCm, heightCm, packageCount })
@@ -172,10 +173,19 @@ function parseLine(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, W
   if (ratio === null && pricingBasis === 'VOLUME') errors.push('按材积计价的明细缺少装箱尺寸')
 
   // 复算与账单缓存值逐项比对；差异只提示，不阻断入库。
+  // 列为空（不涉及）时只在复算非零时才报告，且措辞如实说明「未填」，不能写成与 0.00 不一致。
   const calculatedFreight = calculateSlhFreight({ unitPriceAmount, pricingBasis, grossWeightKg, volumeCai })
-  if (!slhAmountsEqual(calculatedFreight, freightAmountCny)) findings.push(finding('FREIGHT_MISMATCH', 'difference', lineNumber, `运费复算 ${calculatedFreight} 与账单 ${freightAmountCny} 不一致`, rowNumber))
+  if (freightAmountCny === null) {
+    if (!slhAmountsEqual(calculatedFreight, '0')) findings.push(finding('FREIGHT_MISMATCH', 'difference', lineNumber, `账单未填运费（本行不涉及），复算为 ${calculatedFreight}`, rowNumber))
+  } else if (!slhAmountsEqual(calculatedFreight, freightAmountCny)) {
+    findings.push(finding('FREIGHT_MISMATCH', 'difference', lineNumber, `运费复算 ${calculatedFreight} 与账单 ${freightAmountCny} 不一致`, rowNumber))
+  }
   const calculatedPayable = calculateSlhPayable(calculatedFreight, codHandlingAmountCny, surchargeAmountCny)
-  if (!slhAmountsEqual(calculatedPayable, payableAmountCny)) findings.push(finding('PAYABLE_MISMATCH', 'difference', lineNumber, `合计应付复算 ${calculatedPayable} 与账单 ${payableAmountCny} 不一致`, rowNumber))
+  if (payableAmountCny === null) {
+    if (!slhAmountsEqual(calculatedPayable, '0')) findings.push(finding('PAYABLE_MISMATCH', 'difference', lineNumber, `账单未填合计应付金额（本行不涉及），复算为 ${calculatedPayable}`, rowNumber))
+  } else if (!slhAmountsEqual(calculatedPayable, payableAmountCny)) {
+    findings.push(finding('PAYABLE_MISMATCH', 'difference', lineNumber, `合计应付复算 ${calculatedPayable} 与账单 ${payableAmountCny} 不一致`, rowNumber))
+  }
   if (volumeCai !== null && reportedVolumeCai !== null && !slhVolumesEqual(volumeCai, reportedVolumeCai)) {
     findings.push(finding('VOLUME_MISMATCH', 'difference', lineNumber, `材积复算 ${volumeCai} 与账单 ${reportedVolumeCai} 不一致`, rowNumber))
   }
@@ -185,8 +195,17 @@ function parseLine(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, W
   if (charges.length > 0) {
     const chargeCny = sumSlhCharges(charges, 'CNY')
     const chargeTwd = sumSlhCharges(charges, 'TWD')
-    if (!slhAmountsEqual(chargeCny, surchargeAmountCny)) findings.push(finding('CHARGE_MISMATCH', 'difference', lineNumber, `备注人民币费用合计 ${chargeCny} 与附加费 ${surchargeAmountCny} 不一致`, rowNumber))
-    if (!slhAmountsEqual(chargeTwd, ntdSurchargeAmountTwd)) findings.push(finding('CHARGE_MISMATCH', 'difference', lineNumber, `备注台币费用合计 ${chargeTwd} 与 NTD 杂费 ${ntdSurchargeAmountTwd} 不一致`, rowNumber))
+    // 对应列为空表示本行不涉及该项：只有备注确实列了该币种费用时才算来源矛盾。
+    if (surchargeAmountCny === null) {
+      if (!slhAmountsEqual(chargeCny, '0')) findings.push(finding('CHARGE_MISMATCH', 'difference', lineNumber, `备注人民币费用合计 ${chargeCny}，但账单未填附加费（本行不涉及）`, rowNumber))
+    } else if (!slhAmountsEqual(chargeCny, surchargeAmountCny)) {
+      findings.push(finding('CHARGE_MISMATCH', 'difference', lineNumber, `备注人民币费用合计 ${chargeCny} 与附加费 ${surchargeAmountCny} 不一致`, rowNumber))
+    }
+    if (ntdSurchargeAmountTwd === null) {
+      if (!slhAmountsEqual(chargeTwd, '0')) findings.push(finding('CHARGE_MISMATCH', 'difference', lineNumber, `备注台币费用合计 ${chargeTwd}，但账单未填 NTD 杂费（本行不涉及）`, rowNumber))
+    } else if (!slhAmountsEqual(chargeTwd, ntdSurchargeAmountTwd)) {
+      findings.push(finding('CHARGE_MISMATCH', 'difference', lineNumber, `备注台币费用合计 ${chargeTwd} 与 NTD 杂费 ${ntdSurchargeAmountTwd} 不一致`, rowNumber))
+    }
   }
   // 没有金额的备注片段不能成为费用行，但要让核对的人知道它被忽略了。
   for (const note of notes) findings.push(finding('REMARK_NOTE', 'warning', lineNumber, `备注片段「${note}」没有金额，未计入费用明细`, rowNumber))

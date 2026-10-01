@@ -111,9 +111,9 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
   })
   afterEach(() => { authenticated = true; granted = true })
 
-  it('counts each part once across all six views and defaults to active unshipped parts', async () => {
+  it('counts each part once across all seven views and defaults to active unshipped parts', async () => {
     const counts = (await request(application.getHttpServer()).get('/api/purchase-order-parts/status-counts').expect(200)).body as PurchaseShipmentStatusCountsDto
-    expect(counts.items).toEqual([{ value: 'ALL', count: 7 }, { value: 'PENDING_REVIEW', count: 3 }, { value: 'AWAITING_SHIPMENT', count: 1 }, { value: 'SHIPPED', count: 1 }, { value: 'WAREHOUSE_RECEIVED', count: 1 }, { value: 'CANCELLED', count: 1 }])
+    expect(counts.items).toEqual([{ value: 'ALL', count: 7 }, { value: 'PENDING_REVIEW', count: 3 }, { value: 'AWAITING_SHIPMENT', count: 1 }, { value: 'SHIPPED', count: 1 }, { value: 'WAREHOUSE_RECEIVED', count: 1 }, { value: 'CONTAINER_LOADED', count: 0 }, { value: 'CANCELLED', count: 1 }])
     const partition: string[] = []
     for (const view of counts.items.filter(item => item.value !== 'ALL')) {
       const page = await service.list({ view: view.value })
@@ -263,7 +263,7 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
     expect((await service.list({ view: 'SHIPPED' })).total).toBe(0)
     expect((await service.list({ view: 'WAREHOUSE_RECEIVED' })).total).toBe(2)
     expect((await service.list({ view: 'AWAITING_SHIPMENT' })).items.map(item => item.id)).toEqual([unshippedPartId])
-    expect((await service.statusCounts({})).items).toEqual([{ value: 'ALL', count: 7 }, { value: 'PENDING_REVIEW', count: 3 }, { value: 'AWAITING_SHIPMENT', count: 1 }, { value: 'SHIPPED', count: 0 }, { value: 'WAREHOUSE_RECEIVED', count: 2 }, { value: 'CANCELLED', count: 1 }])
+    expect((await service.statusCounts({})).items).toEqual([{ value: 'ALL', count: 7 }, { value: 'PENDING_REVIEW', count: 3 }, { value: 'AWAITING_SHIPMENT', count: 1 }, { value: 'SHIPPED', count: 0 }, { value: 'WAREHOUSE_RECEIVED', count: 2 }, { value: 'CONTAINER_LOADED', count: 0 }, { value: 'CANCELLED', count: 1 }])
     expect(await facts()).toEqual(afterReceipt)
   })
 })
@@ -298,7 +298,7 @@ describe('maximum shipment warehouse receipt and read consistency', () => {
       expect(result.parts.every(part => part.warehouseReceivedAt !== null && part.warehouseReceivedById === fixture.actor.id)).toBe(true)
       const shipments = new PurchaseShipmentQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma))
       const counts = await shipments.statusCounts({})
-      expect(counts.items).toEqual([{ value: 'ALL', count: 1000 }, { value: 'PENDING_REVIEW', count: 0 }, { value: 'AWAITING_SHIPMENT', count: 0 }, { value: 'SHIPPED', count: 0 }, { value: 'WAREHOUSE_RECEIVED', count: 1000 }, { value: 'CANCELLED', count: 0 }])
+      expect(counts.items).toEqual([{ value: 'ALL', count: 1000 }, { value: 'PENDING_REVIEW', count: 0 }, { value: 'AWAITING_SHIPMENT', count: 0 }, { value: 'SHIPPED', count: 0 }, { value: 'WAREHOUSE_RECEIVED', count: 1000 }, { value: 'CONTAINER_LOADED', count: 0 }, { value: 'CANCELLED', count: 0 }])
       expect((await shipments.list({ view: 'WAREHOUSE_RECEIVED', page: 10, pageSize: 100 })).items).toHaveLength(100)
       expect((await orders.list({ view: 'pending', pendingTask: 'AWAITING_WAREHOUSE' })).total).toBe(0)
       expect(await fixture.prisma.purchaseOrderPartItem.count({ where: { purchaseOrderId: orderId } })).toBe(10000)

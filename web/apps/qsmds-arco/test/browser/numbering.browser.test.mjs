@@ -42,7 +42,7 @@ import {
 } from './regions.browser.helpers.mjs'
 import { verifyShippingMarkBindings } from './shipping-mark-bindings.browser.scenario.mjs'
 
-const managementRoute = '/system/basic-data/numbering'
+const managementRoute = '/admin/basic-data/numbering'
 const mainRuleCode = 'E2E_BROWSER_SEQUENCE'
 const randomRuleCode = 'E2E_BROWSER_RANDOM'
 const mixedRuleCode = 'E2E_BROWSER_MIXED'

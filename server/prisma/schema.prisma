@@ -56,6 +56,9 @@ enum AuditEventType {
   CONTAINER_LOADING_ITEM_CREATED
   CONTAINER_BATCH_CREATED
   SLH_BILL_IMPORTED
+  SLH_RECONCILIATION_BATCH_CREATED
+  SLH_RECONCILIATION_BATCH_COMPLETED
+  SLH_BILL_LINES_RECONCILED
   PACKAGING_COST_SUBMITTED
   PACKAGING_COST_PAID
   PACKAGING_COST_AMOUNT_UPDATED
@@ -135,6 +138,7 @@ enum AuditEventType {
   PURCHASE_ORDER_CREATED
   PURCHASE_SHIPMENT_NUMBER_ASSIGNED
   PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED
+  PURCHASE_SHIPMENT_CONTAINER_LOADED
   PURCHASE_ORDER_REVIEW_MARKS_PREPARED
   PURCHASE_ORDER_IMAGE_GENERATED
   PURCHASE_ORDER_ORDER_STATUS_CHANGED
@@ -507,6 +511,10 @@ model User {
   containerBatchesUpdated ContainerBatch[] @relation("ContainerBatchUpdatedBy")
   slhBillsCreated SlhBill[] @relation("SlhBillCreatedBy")
   slhBillsUpdated SlhBill[] @relation("SlhBillUpdatedBy")
+  reconciliationBatchesCreated SlhReconciliationBatch[] @relation("SlhReconciliationBatchCreatedBy")
+  reconciliationBatchesUpdated SlhReconciliationBatch[] @relation("SlhReconciliationBatchUpdatedBy")
+  reconciliationBatchesCompleted SlhReconciliationBatch[] @relation("SlhReconciliationBatchCompletedBy")
+  reconciliationBatchLinesReconciled SlhReconciliationBatchLine[] @relation("SlhReconciliationBatchLineReconciledBy")
   containerLoadingItemsCreated ContainerLoadingItem[] @relation("ContainerLoadingItemCreatedBy")
   containerLoadingItemsUpdated ContainerLoadingItem[] @relation("ContainerLoadingItemUpdatedBy")
 
@@ -564,6 +572,7 @@ model User {
   purchaseOrdersCreated             PurchaseOrder[]              @relation("PurchaseOrderCreatedBy")
   purchaseOrderPartsShipped         PurchaseOrderPart[] @relation("PurchaseOrderPartShippedBy")
   purchaseOrderPartsWarehouseReceived PurchaseOrderPart[] @relation("PurchaseOrderPartWarehouseReceivedBy")
+  purchaseOrderPartsLoaded          PurchaseOrderPart[] @relation("PurchaseOrderPartLoadedBy")
   purchaseOrderPaymentsCreated      PurchaseOrderPayment[]       @relation("PurchaseOrderPaymentCreatedBy")
   purchaseOrderPaymentsVoided       PurchaseOrderPayment[]       @relation("PurchaseOrderPaymentVoidedBy")
   purchaseOrderDocumentsCreated     PurchaseOrderDocument[]      @relation("PurchaseOrderDocumentCreatedBy")
@@ -1220,6 +1229,11 @@ model PurchaseOrderPart {
   warehouseRecordedAt DateTime? @map("warehouse_recorded_at") @db.Timestamptz(6)
   warehouseRemark String? @map("warehouse_remark") @db.VarChar(500)
   warehouseReceivedBy User? @relation("PurchaseOrderPartWarehouseReceivedBy", fields: [warehouseReceivedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  // 装柜事实：被装柜明细行关联时一次写入，之后不可改写、不可清空；与审核状态正交，采购单取消也不清除。
+  loadedAt DateTime? @map("loaded_at") @db.Timestamptz(6)
+  loadedById String? @map("loaded_by_id") @db.Uuid
+  loadedRecordedAt DateTime? @map("loaded_recorded_at") @db.Timestamptz(6)
+  loadedBy User? @relation("PurchaseOrderPartLoadedBy", fields: [loadedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   items PurchaseOrderPartItem[]
 
   @@unique([id, purchaseOrderId], map: "purchase_order_parts_id_order_id_key")
@@ -1527,6 +1541,7 @@ model NumberingPeriodState {
 model NumberingIssuance {
   containerBatch ContainerBatch?
   slhBill SlhBill?
+  reconciliationBatch SlhReconciliationBatch?
 
   id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   ruleId                 String   @map("rule_id") @db.Uuid
@@ -1907,12 +1922,13 @@ model ContainerLoadingItem {
   packageCount Int @map("package_count")
   packageUnit String? @map("package_unit") @db.VarChar(32)
   grossWeightKg Decimal? @map("gross_weight_kg") @db.Decimal(18, 3)
-  lengthCm Decimal? @map("length_cm") @db.Decimal(18, 3)
-  widthCm Decimal? @map("width_cm") @db.Decimal(18, 3)
-  heightCm Decimal? @map("height_cm") @db.Decimal(18, 3)
-  volumeCai Decimal? @map("volume_cai") @db.Decimal(24, 8)
+  // 每件尺寸与账单表同口径：两位小数。
+  lengthCm Decimal? @map("length_cm") @db.Decimal(18, 2)
+  widthCm Decimal? @map("width_cm") @db.Decimal(18, 2)
+  heightCm Decimal? @map("height_cm") @db.Decimal(18, 2)
+  volumeCai Decimal? @map("volume_cai") @db.Decimal(24, 2)
   chargeableVolumeCai Int? @map("chargeable_volume_cai")
-  reportedVolumeCai Decimal? @map("reported_volume_cai") @db.Decimal(24, 8)
+  reportedVolumeCai Decimal? @map("reported_volume_cai") @db.Decimal(24, 2)
   recipientName String? @map("recipient_name") @db.VarChar(128)
   recipientPhone String? @map("recipient_phone") @db.VarChar(128)
   recipientAddress String? @map("recipient_address") @db.VarChar(2000)
@@ -1930,6 +1946,7 @@ model ContainerLoadingItem {
   updatedBy User @relation("ContainerLoadingItemUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   containerBatch ContainerBatch @relation(fields: [containerBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   shipment PurchaseOrderPart? @relation(fields: [shipmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reconciliationBatchLines SlhReconciliationBatchLine[]
   @@unique([containerBatchId, lineNumber], map: "container_loading_items_batch_line_key")
   @@unique([containerBatchId, creationRequestKey], map: "container_loading_items_batch_request_key")
   @@index([shipmentId], map: "container_loading_items_shipment_idx")
@@ -2004,6 +2021,14 @@ enum SlhBillRateSource {
   @@map("slh_bill_rate_source")
 }
 
+/// 匹配来源：NAME 由账单柜号直接定位柜次，MARK 由唛头中的月日推断柜次（辅助路径）。
+enum SlhBillLineMatchSource {
+  NAME
+  MARK
+
+  @@map("slh_bill_line_match_source")
+}
+
 /// 顺联航每月对账单。外部单据的结构化留痕，只被引用，不回写我方业务数据。
 model SlhBill {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -2064,6 +2089,7 @@ model SlhBill {
   createdBy User @relation("SlhBillCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   updatedBy User @relation("SlhBillUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   lines SlhBillLine[]
+  reconciliationBatches SlhReconciliationBatch[]
 
   @@unique([createdById, importRequestKeyHash], map: "slh_bills_actor_request_key")
   @@index([periodStart(sort: Desc), id(sort: Desc)], map: "slh_bills_period_id_idx")
@@ -2094,12 +2120,13 @@ model SlhBillLine {
   categoryCode String? @map("category_code") @db.VarChar(32)
   unitPriceAmount Decimal? @map("unit_price_amount") @db.Decimal(30, 2)
   pricingBasis SlhBillPricingBasis? @map("pricing_basis")
-  freightAmountCny Decimal @map("freight_amount_cny") @db.Decimal(30, 2)
-  codHandlingAmountCny Decimal @map("cod_handling_amount_cny") @db.Decimal(30, 2)
-  surchargeAmountCny Decimal @map("surcharge_amount_cny") @db.Decimal(30, 2)
-  payableAmountCny Decimal @map("payable_amount_cny") @db.Decimal(30, 2)
-  codAmountTwd Decimal @map("cod_amount_twd") @db.Decimal(30, 2)
-  ntdSurchargeAmountTwd Decimal @map("ntd_surcharge_amount_twd") @db.Decimal(30, 2)
+  /// 金额列为空表示「本行不涉及此项」，与 ContainerLoadingItem 同一口径；来源写 0 则保留 0。
+  freightAmountCny Decimal? @map("freight_amount_cny") @db.Decimal(30, 2)
+  codHandlingAmountCny Decimal? @map("cod_handling_amount_cny") @db.Decimal(30, 2)
+  surchargeAmountCny Decimal? @map("surcharge_amount_cny") @db.Decimal(30, 2)
+  payableAmountCny Decimal? @map("payable_amount_cny") @db.Decimal(30, 2)
+  codAmountTwd Decimal? @map("cod_amount_twd") @db.Decimal(30, 2)
+  ntdSurchargeAmountTwd Decimal? @map("ntd_surcharge_amount_twd") @db.Decimal(30, 2)
   recipientInfoRaw String? @map("recipient_info_raw") @db.VarChar(2000)
   /// 收货人信息解析结果（原文永久保留在 recipient_info_raw，这三列只做结构化检索与展示）。
   recipientName String? @map("recipient_name") @db.VarChar(200)
@@ -2116,6 +2143,7 @@ model SlhBillLine {
   bill SlhBill @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   containerBatch ContainerBatch? @relation(fields: [containerBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   charges SlhBillLineCharge[]
+  reconciliationBatchLines SlhReconciliationBatchLine[]
 
   @@unique([billId, lineNumber], map: "slh_bill_lines_bill_line_key")
   @@index([containerBatchId], map: "slh_bill_lines_container_batch_idx")
@@ -2137,4 +2165,58 @@ model SlhBillLineCharge {
 
   @@index([lineId], map: "slh_bill_line_charges_line_idx")
   @@map("slh_bill_line_charges")
+}
+
+/// 顺联航账单的对账批次：一次对账作业对应一张账单，成员行在创建时按唛头匹配结果冻结。
+/// 状态不落列：completed_at 为空即进行中；批次进度只由成员行自己的核对时刻统计。
+model SlhReconciliationBatch {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchNo String @map("batch_no") @unique(map: "slh_reconciliation_batches_number_key") @db.VarChar(64)
+  numberingIssuanceId String @map("numbering_issuance_id") @unique(map: "slh_reconciliation_batches_issuance_key") @db.Uuid
+  billId String @map("bill_id") @db.Uuid
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  completedById String? @map("completed_by_id") @db.Uuid
+  creationRequestKeyHash Bytes @map("creation_request_key_hash") @db.ByteA
+  creationPayloadHash Bytes @map("creation_payload_hash") @db.ByteA
+  version Int @default(1)
+  createdById String @map("created_by_id") @db.Uuid
+  updatedById String @map("updated_by_id") @db.Uuid
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @map("updated_at") @default(now()) @updatedAt @db.Timestamptz(6)
+
+  bill SlhBill @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  numberingIssuance NumberingIssuance @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  completedBy User? @relation("SlhReconciliationBatchCompletedBy", fields: [completedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy User @relation("SlhReconciliationBatchCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedBy User @relation("SlhReconciliationBatchUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  members SlhReconciliationBatchLine[]
+
+  @@unique([createdById, creationRequestKeyHash], map: "slh_reconciliation_batches_actor_request_key")
+  @@index([billId, completedAt], map: "slh_reconciliation_batches_bill_completed_idx")
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "slh_reconciliation_batches_created_id_idx")
+  @@map("slh_reconciliation_batches")
+}
+
+/// 批次成员行：创建时由匹配命中的明细行生成，matched_loading_item_id 是核对复检的锚点。
+/// 核对同时写明细行的 reconciled_at（账单三态的唯一来源）与本表的 reconciled_at（批次进度）。
+model SlhReconciliationBatchLine {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchId String @map("batch_id") @db.Uuid
+  lineId String @map("line_id") @db.Uuid
+  matchedLoadingItemId String @map("matched_loading_item_id") @db.Uuid
+  matchSource SlhBillLineMatchSource @map("match_source")
+  reconciledAt DateTime? @map("reconciled_at") @db.Timestamptz(6)
+  reconciledById String? @map("reconciled_by_id") @db.Uuid
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+
+  batch SlhReconciliationBatch @relation(fields: [batchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  line SlhBillLine @relation(fields: [lineId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  matchedLoadingItem ContainerLoadingItem @relation(fields: [matchedLoadingItemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reconciledBy User? @relation("SlhReconciliationBatchLineReconciledBy", fields: [reconciledById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([batchId, lineId], map: "slh_reconciliation_batch_lines_batch_line_key")
+  @@index([lineId], map: "slh_reconciliation_batch_lines_line_idx")
+  @@index([matchedLoadingItemId], map: "slh_reconciliation_batch_lines_loading_item_idx")
+  @@index([batchId, reconciledAt], map: "slh_reconciliation_batch_lines_batch_reconciled_idx")
+  @@map("slh_reconciliation_batch_lines")
 }

@@ -50,9 +50,15 @@
       "AWAITING_SHIPMENT": "待发货",
       "SHIPPED": "已发货",
       "CANCELLED": "已取消",
-      "WAREHOUSE_RECEIVED": "已入仓"
+      "WAREHOUSE_RECEIVED": "已入仓",
+      "CONTAINER_LOADED": "已装柜"
     },
     "warehouse": "入仓记录",
-    "notReceived": "尚未确认入仓"
+    "notReceived": "尚未确认入仓",
+    "containerLoading": "装柜记录",
+    "loadedAt": "装柜时间",
+    "loadedBy": "装柜操作人",
+    "loadedRecordedAt": "装柜记录时间",
+    "notLoaded": "尚未装柜。货件被装柜明细关联后自动记录，关联解除后也不回退"
   }
 }

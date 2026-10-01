@@ -157,11 +157,24 @@ export const financeWorkbench: RouteRecordMainRaw = {
         {
           path: 'slh-bill-reconciliation',
           name: 'qsFinanceBillReconciliationSlhBillReconciliation',
-          component: () => import('@/views/workbenches/placeholder.vue'),
+          component: () => import('@/views/workbenches/slh-reconciliation/index.vue'),
           meta: {
             title: 'workbench.slhBillReconciliation',
             icon: 'qs-bill-reconciliation-check',
             auth: 'slh-bills:reconcile',
+          },
+        },
+        {
+          path: 'slh-bill-reconciliation/:id',
+          name: 'qsFinanceBillReconciliationSlhReconciliationDetail',
+          component: () => import('@/views/workbenches/slh-reconciliation/detail.vue'),
+          // 与账单详情同款：隐藏菜单但保留面包屑末级（不设 breadcrumb: false），
+          // 让用户能看到自己在本页；详情是列表的兄弟路由，面包屑里不会出现列表那一级。
+          meta: {
+            title: 'workbench.slhBillReconciliationDetail',
+            auth: 'slh-bills:reconcile',
+            menu: false,
+            activeMenu: '/qs-finance/bill-reconciliation/slh-bill-reconciliation',
           },
         },
       ],

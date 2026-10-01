@@ -10,25 +10,49 @@ import type {
 export { normalizeOceanDecimal, OceanCalculationError } from './ocean-decimal'
 export type * from './ocean-freight-calculation.types'
 
+/**
+ * 材积分母。账单表与装柜明细的来源表格都按“长 × 宽 × 高 ÷ 28316 × 箱数”计算材数，
+ * 两个模块共用同一常量，避免任何一侧单独调整后再次出现口径差。
+ */
+export const VOLUME_CAI_DIVISOR = 28316n
+
+/** 材积记录精度：与账单表口径一致，非按材积计价时保留两位小数。 */
+export const VOLUME_CAI_SCALE = 2
+
+/** 尺寸精度：账单表与装柜明细都按两位小数记录每件尺寸。 */
+export const VOLUME_DIMENSION_SCALE = 2
+
+/**
+ * 按记录精度比较两侧材积：两个入参都已是记录精度（两位小数）的定点值，直接相减。
+ * 账单表与装柜明细共用这一口径，来源多余的小数位不构成差异。
+ */
+export function volumeDifferenceAtRecordScale(volumeUnits: bigint, reportedUnits: bigint): bigint {
+  return volumeUnits - reportedUnits
+}
+
 export function calculateOceanVolume(input: OceanVolumeInput) {
   const dimensions = ['lengthCm', 'widthCm', 'heightCm'] as const
-  const values = dimensions.map(field => normalizeOceanDecimal(input[field], 18, 3, field, true))
-  const reported = normalizeOceanDecimal(input.reportedVolumeCai, 24, 8, 'reportedVolumeCai')
+  const values = dimensions.map(field => normalizeOceanDecimal(input[field], 18, VOLUME_DIMENSION_SCALE, field, true))
+  const reported = normalizeOceanDecimal(input.reportedVolumeCai, 24, VOLUME_CAI_SCALE, 'reportedVolumeCai')
   if (input.packageCount !== null) positiveInteger(input.packageCount, 'packageCount')
   if (values.some(value => value === null) || input.packageCount === null) {
     return { volumeCai: null, chargeableVolumeCai: null, volumeDifferenceCai: null }
   }
-  const product = values.reduce<bigint>((result, value) => result * parseDecimal(value!, 18, 3, 'dimensions'), BigInt(input.packageCount))
-  const denominator = 28317n * power(9)
+  const product = values.reduce<bigint>((result, value) => result * parseDecimal(value!, 18, VOLUME_DIMENSION_SCALE, 'dimensions'), BigInt(input.packageCount))
+  // 三个尺寸各放大 10^2，立方后为 10^6；分母保持同一 scale 才能直接比较。
+  const denominator = VOLUME_CAI_DIVISOR * power(VOLUME_DIMENSION_SCALE * 3)
+  // 按材积计价时材积就是计费数量，必须向上取整；不按材积计价时按记录精度保留两位小数。
   const chargeable = (product + denominator - 1n) / denominator
   if (chargeable > 2147483647n) throw new OceanCalculationError('chargeableVolumeCai', true)
-  const volume = roundRatio(product * power(8), denominator)
-  // Decimal(24,8) 落库值仍须大于零；过小尺寸不能以零材积通过后再触发数据库约束。
+  const volume = roundRatio(product * power(VOLUME_CAI_SCALE), denominator)
+  // 落库列要求材积为正；过小尺寸不能以零材积通过后再触发数据库约束。
   if (volume === 0n) throw new OceanCalculationError('volumeCai')
   return {
-    volumeCai: formatDecimal(volume, 24, 8, 'volumeCai'),
+    volumeCai: formatDecimal(volume, 24, VOLUME_CAI_SCALE, 'volumeCai'),
     chargeableVolumeCai: Number(chargeable),
-    volumeDifferenceCai: reported === null ? null : formatDecimal(volume - parseDecimal(reported, 24, 8, 'reportedVolumeCai'), 24, 8, 'volumeDifferenceCai'),
+    volumeDifferenceCai: reported === null ? null : formatDecimal(
+      volumeDifferenceAtRecordScale(volume, parseDecimal(reported, 24, VOLUME_CAI_SCALE, 'reportedVolumeCai')),
+      24, VOLUME_CAI_SCALE, 'volumeDifferenceCai'),
   }
 }
 

@@ -4,7 +4,7 @@ import type { ContainerImportCandidateDto } from './container-import.dto'
 import { extractContainerReferenceTokens } from './import-matching'
 
 const shipmentSelect = {
-  id: true, shipmentNo: true, shippingMarkText: true, trackingNo: true, destinationWarehouseValue: true, status: true,
+  id: true, shipmentNo: true, shippingMarkText: true, trackingNo: true, destinationWarehouseValue: true, status: true, warehouseReceivedAt: true,
   purchaseOrder: { select: { orderNo: true, salesOrder: { select: { orderNo: true } } } },
   items: { select: { line: { select: { productNameSnapshot: true } } } },
   containerLoadingItems: { select: { containerBatchId: true } },
@@ -12,6 +12,8 @@ const shipmentSelect = {
 export type ImportShipment = Prisma.PurchaseOrderPartGetPayload<{ select: typeof shipmentSelect }>
 export function shipmentEligibility(shipment: ImportShipment, batchId: string, warehouseValue: string) {
   if (shipment.status !== 'ACTIVE') return '货件尚未生效或已取消'
+  // 装柜是到仓后的作业：未到仓货件不能进柜，发货事实由到仓事实隐含。
+  if (shipment.warehouseReceivedAt === null) return '货件尚未到仓，不能装柜'
   if (shipment.destinationWarehouseValue !== warehouseValue) return '货件目的地仓库与柜次装柜仓库不一致'
   if (shipment.containerLoadingItems.some(item => item.containerBatchId !== batchId)) return '货件已分配到其他柜次，不能跨柜拆分'
   return null
@@ -44,6 +46,7 @@ export async function lockImportShipments(tx: Prisma.TransactionClient, shipment
   for (const id of ids) {
     const row = found.find(shipment => shipment.id === id)
     if (!row || row.status !== 'ACTIVE') return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '所选货件不存在、尚未生效或已取消')
+    if (row.warehouseReceivedAt === null) return containerFailure('CONTAINER_SHIPMENT_NOT_RECEIVED', '所选货件尚未到仓，不能装柜')
     if (row.destinationWarehouseValue !== warehouseValue) return containerFailure('CONTAINER_SHIPMENT_WAREHOUSE_MISMATCH', '所选货件目的地仓库与柜次仓库不一致')
     if (row.containerLoadingItems.some(item => item.containerBatchId !== batchId)) return containerFailure('CONTAINER_SHIPMENT_ALREADY_ASSIGNED', '所选货件已分配到其他柜次，不能跨柜拆分', 409)
   }

@@ -23,6 +23,7 @@ import type { MediaAssetService } from '../src/modules/media/media-asset.service
 import { NumberingGeneratorService } from '../src/modules/numbering/numbering-generator.service'
 import { PurchaseShippingMarkResolverService } from '../src/modules/purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import { IsolatedNumberingPrismaService, type IsolatedNumberingDatabase } from './numbering-e2e-database'
+import { assertIsolatedReplayPrecondition } from './isolated-replay-precondition'
 import { createPurchaseShippingMarkDatabase, createTestShippingMarkRule } from './purchase-shipping-mark-e2e-database'
 import { PurchaseOrderCommandService } from '../src/modules/purchase-orders/purchase-order-command.service'
 import { PurchaseOrderCreateDependencyService } from '../src/modules/purchase-orders/purchase-order-create-dependency.service'
@@ -106,6 +107,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   let purchaseNumber = 0
 
   beforeAll(async () => {
+    // 隔离回放的前置条件先失败：历史迁移在 public 里自校验顺联航账单表，缺表时只会给出一句看不出原因的错。
+    await assertIsolatedReplayPrecondition()
     database = await createPurchaseShippingMarkDatabase()
     prisma = new IsolatedNumberingPrismaService(database) as unknown as PrismaService
     await prisma.onModuleInit()

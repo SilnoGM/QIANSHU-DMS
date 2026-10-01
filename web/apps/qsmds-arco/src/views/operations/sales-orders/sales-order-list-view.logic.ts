@@ -29,8 +29,7 @@ export type SalesOrderQueryTarget = Pick<
 >
 
 export type SalesOrderPendingActionKey
-  = | 'CONTAINER_SHIPMENT'
-    | 'DELIVERY_RECEIPT'
+  = | 'DELIVERY_RECEIPT'
     | 'FACTORY_SHIPMENT'
     | 'RECORD_PAYMENT'
     | 'SUBMIT_PURCHASE'
@@ -110,11 +109,7 @@ const PENDING_ACTION_BY_FULFILLMENT_STATUS: Partial<Record<
     key: 'WAREHOUSE_RECEIPT',
     label: '货物入仓',
   },
-  WAREHOUSE_ARRIVED: {
-    icon: 'i-lucide:ship',
-    key: 'CONTAINER_SHIPMENT',
-    label: '装柜出货',
-  },
+  // 待装柜不提供行内动作：装柜在采运工作台的柜次管理执行，货件全部装柜后订单自动进入海运在途。
   SEA_TRANSIT: {
     icon: 'i-lucide:package-check',
     key: 'DELIVERY_RECEIPT',

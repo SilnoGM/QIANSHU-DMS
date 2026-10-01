@@ -53,13 +53,13 @@ test('仓库筛选移除未记录，其他按字典稳定值查询，保留停�
 test('两个视图只提供指定行操作，列时间遵循当前到仓语义', () => {
   const warehouse = 'SLH.SZ.BA.SJJD.HSNP.B5'
   assert.deepEqual(warehouseArrivalActions('SHIPPED', 'SHIPPED', warehouse), ['view'])
-  assert.deepEqual(warehouseArrivalActions('WAREHOUSE_RECEIVED', 'WAREHOUSE_RECEIVED', warehouse), ['view', 'woodenFrame'])
+  assert.deepEqual(warehouseArrivalActions('WAREHOUSE_RECEIVED', 'WAREHOUSE_RECEIVED', warehouse), ['view', 'shippingInfo', 'woodenFrame'])
   assert.deepEqual(warehouseArrivalActions('SHIPPED', 'WAREHOUSE_RECEIVED', warehouse), ['view'])
   assert.deepEqual(warehouseArrivalActions('WAREHOUSE_RECEIVED', 'SHIPPED', warehouse), ['view'])
-  assert.deepEqual(warehouseArrivalActions('WAREHOUSE_RECEIVED', 'WAREHOUSE_RECEIVED', 'YJ.594540.DGHM.ZTBHCG.B.DXM'), ['view', 'seaExpress'])
+  assert.deepEqual(warehouseArrivalActions('WAREHOUSE_RECEIVED', 'WAREHOUSE_RECEIVED', 'YJ.594540.DGHM.ZTBHCG.B.DXM'), ['view', 'shippingInfo', 'seaExpress'])
   assert.deepEqual(warehouseArrivalActions('SHIPPED', 'SHIPPED', 'YJ.594540.DGHM.ZTBHCG.B.DXM'), ['view'])
   for (const otherWarehouse of ['SLH.DW.FHSNL.4HGYQ.B', 'QITA', 'UNKNOWN', null]) {
-    assert.deepEqual(warehouseArrivalActions('WAREHOUSE_RECEIVED', 'WAREHOUSE_RECEIVED', otherWarehouse), ['view'])
+    assert.deepEqual(warehouseArrivalActions('WAREHOUSE_RECEIVED', 'WAREHOUSE_RECEIVED', otherWarehouse), ['view', 'shippingInfo'])
   }
   const pending = createWarehouseArrivalColumns('SHIPPED', translate)
   const arrived = createWarehouseArrivalColumns('WAREHOUSE_RECEIVED', translate)

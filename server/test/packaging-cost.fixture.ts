@@ -94,8 +94,14 @@ export async function createPackagingCostHarness(options: { nativeImageProbe?: b
       return { browser, user, role, credentials: { username, password } }
     }
 
-    async function shipment(options: { received?: boolean, salesLinked?: boolean, ownerUserId?: string } = {}) {
+    /**
+     * 一个销售订单可以拆成多个货件：`partCount` 控制货件数，`salesLineQuantity` 控制销售行数量。
+     * 两者默认相等（采购与销售数量对齐）；用例要验证「销售行未被完全覆盖」时传更大的 `salesLineQuantity`。
+     */
+    async function shipment(options: { received?: boolean, salesLinked?: boolean, ownerUserId?: string, partCount?: number, salesLineQuantity?: number } = {}) {
       const input = await customInput(fixture)
+      const partCount = options.partCount ?? 1, lineQuantity = options.salesLineQuantity ?? partCount
+      const lineAmount = String(10 * lineQuantity)
       const source = options.salesLinked === false ? null : await prisma.salesOrder.create({ data: {
         orderNo: `PKG-SO-${randomUUID()}`, createIdempotencyKeyHash: randomBytes(32),
         createRequestFingerprintHash: randomBytes(32), orderDate: new Date('2026-09-07'),
@@ -104,17 +110,19 @@ export async function createPackagingCostHarness(options: { nativeImageProbe?: b
         customerCountryRegionCodeSnapshot: 'PKG_COUNTRY', customerProvinceStateCodeSnapshot: 'PKG_PROVINCE', customerCityCodeSnapshot: 'PKG_CITY',
         customerCountryRegionNameSnapshot: '国家', customerProvinceStateNameSnapshot: '省份', customerCityNameSnapshot: '城市',
         customerAddressDetail: '测试地址', customerFullAddressSnapshot: '国家省份城市测试地址',
-        lineSubtotalAmount: '10', agreedTotalAmount: '10', depositDueAmount: '0', balanceDueAmount: '10',
+        lineSubtotalAmount: lineAmount, agreedTotalAmount: lineAmount, depositDueAmount: '0', balanceDueAmount: lineAmount,
         orderStatus: 'CONFIRMED', fulfillmentStatus: 'PENDING', paymentStatus: 'UNPAID',
         lines: { create: { lineNumber: 1, lineType: 'CUSTOM', productNameSnapshot: 'Custom item',
-          actualUnitPriceAmount: '10', quantity: 1, lineTotalAmount: '10' } },
+          actualUnitPriceAmount: '10', quantity: lineQuantity, lineTotalAmount: lineAmount } },
       }, include: { lines: true } })
       const id = await createCommands(fixture).create(fixture.context(), source === null ? input : {
         ...input, purchaseType: 'SALES_LINKED', salesOrderId: source.id,
-        lines: [{ ...input.lines[0], sourceSalesOrderLineId: source.lines[0].id }],
+        parts: Array.from({ length: partCount }, () => ({ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] })),
+        lines: [{ ...input.lines[0], quantity: lineQuantity, sourceSalesOrderLineId: source.lines[0].id }],
+        purchaseTotalAmount: lineAmount, balanceDueAmount: lineAmount,
       })
       await createReviewMutations(fixture).review(fixture.context(), id, await prepareImageReview(fixture, id))
-      const order = await prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { parts: true } })
+      const order = await prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { parts: { orderBy: { partNumber: 'asc' } } } })
       const partIds = order.parts.map(part => part.id)
       await withDatabaseBusinessClock(fixture.prisma, async () => new PurchaseOrderFactoryShipmentService(prisma, fixture.audit, fixture.salesProgress, new DictionaryLookupService(prisma))
         .shipPurchaseOrder(fixture.context(), id, { expectedVersion: order.version, partIds, destinationWarehouses: destinationWarehouses(partIds) }))
@@ -122,7 +130,8 @@ export async function createPackagingCostHarness(options: { nativeImageProbe?: b
         await new PurchaseOrderWarehouseReceiptService(prisma, fixture.audit, query)
           .receive(fixture.context(), id, { expectedVersion: (await query.getById(id)).version, partIds })
       }
-      return { part: await prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: partIds[0] } }), order, source }
+      const parts = await prisma.purchaseOrderPart.findMany({ where: { id: { in: partIds } }, orderBy: { partNumber: 'asc' } })
+      return { part: parts[0], parts, order, source }
     }
 
     async function upload(browser: ReturnType<typeof request.agent>, extension: 'png' | 'jpeg' | 'webp' = 'png', url = '/api/packaging-cost-requests/images') {

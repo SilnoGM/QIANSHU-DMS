@@ -462,7 +462,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
 
   // 模拟同一用户的 Session 轮换先清空身份域；随后服务端广播重新验证必须
   // 注册动态路由、重建菜单并恢复当前业务 Shell，而不是等待手动刷新。
-  await secondaryPage.navigate(appRouteUrl(configuration.baseUrl, '/system/users'))
+  await secondaryPage.navigate(appRouteUrl(configuration.baseUrl, '/admin/users'))
   await secondaryPage.waitFor(`document.body.innerText.includes('用户管理')`)
   await secondaryPage.evaluate(authStoreExpression(`
     const rotated = JSON.parse(JSON.stringify(store.authContext))
@@ -492,7 +492,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
     const routeStore = pinia?._s?.get('appRoute')
     const menuStore = pinia?._s?.get('appMenu')
     const router = vue?.config?.globalProperties?.$router
-    return location.hash.startsWith('#/system/users')
+    return location.hash.startsWith('#/admin/users')
       && routeStore?.isGenerate === true
       && menuStore?.sidebarMenus?.length > 0
       && router?.hasRoute?.('systemUsers') === true
@@ -530,7 +530,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
     })
   `)
   // 重启后直接恢复受保护深链接；页面内容和最终路由共同证明首轮 Router guard 已完成。
-  await restartedPage.navigate(appRouteUrl(configuration.baseUrl, '/system/users'))
+  await restartedPage.navigate(appRouteUrl(configuration.baseUrl, '/admin/users'))
   await waitForAuthState(restartedPage, 'authenticated')
   assert.deepEqual(await restartedPage.evaluate(storeSnapshotExpression()), {
     state: 'authenticated',
@@ -543,7 +543,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
     const router = document.querySelector('#app')?.__vue_app__
       ?.config?.globalProperties?.$router
     return router?.currentRoute?.value?.name === 'systemUsers'
-      && router.currentRoute.value.fullPath === '/system/users'
+      && router.currentRoute.value.fullPath === '/admin/users'
       && document.body.innerText.includes('用户管理')
   })()`).catch(async () => {
     // 诊断只保留路由结构和固定页面标记，禁止把用户名、响应体或其他身份数据写入 CI 日志。
@@ -559,7 +559,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
         path: current?.fullPath ?? '',
         routeName: String(current?.name ?? ''),
         systemRoutes: router?.getRoutes?.()
-          ?.filter(route => route.path.includes('/system'))
+          ?.filter(route => route.path.includes('/admin') || route.path.includes('/system'))
           ?.map(route => ({ name: String(route.name ?? ''), path: route.path })) ?? [],
         showsForbidden: body.includes('无权访问'),
         showsNotFound: body.includes('找不到页面'),
@@ -1149,7 +1149,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
         .catch(() => undefined)
     }
   })
-  await unavailablePage.navigate(appRouteUrl(configuration.baseUrl, '/system/users'))
+  await unavailablePage.navigate(appRouteUrl(configuration.baseUrl, '/admin/users'))
   await waitForAuthState(unavailablePage, 'unavailable')
   assert.ok(unavailableFailures >= 1)
   stopFailingMe()
@@ -1159,7 +1159,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   await unavailablePage.waitFor(`location.hash.startsWith('#/login')`)
   assert.equal(
     await unavailablePage.evaluate(
-      `new URLSearchParams(location.hash.split('?')[1] ?? '').get('redirect') === '/system/users'`,
+      `new URLSearchParams(location.hash.split('?')[1] ?? '').get('redirect') === '/admin/users'`,
     ),
     true,
   )

@@ -167,12 +167,13 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
     }).map(action => action.key),
     ['WAREHOUSE_RECEIPT'],
   )
+  // 待装柜不提供行内动作：装柜在采运工作台的柜次管理执行，全部货件装柜后订单自动进入海运在途。
   assert.deepEqual(
     resolvePendingSalesOrderActions('WAREHOUSE_ARRIVED', {
       fulfillmentStatus: 'WAREHOUSE_ARRIVED',
       paymentStatus: 'UNPAID',
     }).map(action => action.key),
-    ['CONTAINER_SHIPMENT'],
+    [],
   )
   assert.deepEqual(
     resolvePendingSalesOrderActions('SEA_TRANSIT', {

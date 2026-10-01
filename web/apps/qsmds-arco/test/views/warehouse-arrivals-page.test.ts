@@ -7,6 +7,7 @@ import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import { compile, computed, createRenderer, defineComponent, effectScope, h, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 import * as arrivalLogic from '../../src/views/operations/warehouse-arrivals/logic'
+import { useShippingInfoData } from '../../src/views/operations/warehouse-arrivals/use-shipping-info'
 import { useWarehouseArrivalData } from '../../src/views/operations/warehouse-arrivals/use-warehouse-arrival-data'
 
 async function fixture(initialQuery: Record<string, string> = {}) {
@@ -16,6 +17,7 @@ async function fixture(initialQuery: Record<string, string> = {}) {
   const route = reactive({ name: 'qsOperationsWarehouseArrivals', fullPath: initialPath, query: { ...initialQuery } })
   const account = reactive({ authEpoch: 1 })
   const permission = ref(true)
+  const salesPermission = ref(true)
   const navigations: Array<Record<string, string>> = []
   const calls: Array<{ kind: string, query?: unknown, signal?: AbortSignal }> = []
   const info: string[] = []
@@ -36,8 +38,19 @@ async function fixture(initialQuery: Record<string, string> = {}) {
       return { data: { id } }
     },
   }
+  const salesApi = {
+    getById: async (id: string, signal: AbortSignal): Promise<any> => {
+      calls.push({ kind: `salesOrder:${id}`, signal })
+      return { data: {
+        id,
+        currencyCode: 'TWD',
+        customer: { name: '客户甲', phone: '0912345678', fullAddress: '台湾新北市板桥区测试路1号' },
+        amounts: { balanceDueAmount: '90000.0000' },
+      } }
+    },
+  }
   const scope = effectScope()
-  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ enabled, activeView, activeWarehouse, query, rows, tabs, warehouseTabs, keyword, page, pageSize, packagingShipment, selectView, selectWarehouse, search, paginate, handleAction, refresh, viewOrderFromShipment, shipmentClosed })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
+  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ enabled, activeView, activeWarehouse, query, rows, tabs, warehouseTabs, keyword, page, pageSize, packagingShipment, shippingInfoVisible, shippingInfoShipment, shippingInfoSalesOrder, shippingInfoError, closeShippingInfo, loadShippingInfo, selectView, selectWarehouse, search, paginate, handleAction, refresh, viewOrderFromShipment, shipmentClosed })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
     ...arrivalLogic,
     computed,
     ref,
@@ -46,7 +59,7 @@ async function fixture(initialQuery: Record<string, string> = {}) {
     useI18n: () => ({ t: (key: string) => key }),
     useRoute: () => route,
     useRouter: () => ({ resolve: () => ({ fullPath: '/next' }), push: (location: { query: Record<string, string> }) => navigations.push(location.query), replace: (location: { query: Record<string, string> }) => navigations.push(location.query) }),
-    useAppAuth: () => ({ auth: () => permission.value }),
+    useAppAuth: () => ({ auth: (code: string) => permission.value && (code !== 'sales-orders:read' || salesPermission.value) }),
     useAppAccountStore: () => account,
     useQsToast: () => ({ info: (message: string) => info.push(message), success: () => assert.fail('placeholder must not report success') }),
     useCurrencyCatalog: () => ({ currencies: ref([]) }),
@@ -56,6 +69,7 @@ async function fixture(initialQuery: Record<string, string> = {}) {
       { value: 'QITA', label: '其他', effectiveEnabled: true },
     ] }), error: ref(null), missing: ref(false) }),
     useWarehouseArrivalData: (...args: Parameters<typeof useWarehouseArrivalData>) => useWarehouseArrivalData(args[0], args[1], args[2], args[3], args[4], api, api),
+    useShippingInfoData: (...args: Parameters<typeof useShippingInfoData>) => useShippingInfoData(args[0], args[1], salesApi),
     defineOptions: () => {},
     onMounted: (callback: () => void) => lifecycle.mount = callback,
     onActivated: (callback: () => void) => lifecycle.activate = callback,
@@ -73,11 +87,17 @@ async function fixture(initialQuery: Record<string, string> = {}) {
     page: { value: number }
     pageSize: { value: number }
     packagingShipment: { value: { id: string } | null }
+    shippingInfoVisible: { value: boolean }
+    shippingInfoShipment: { value: { id: string, salesSource: { id: string } | null } | null }
+    shippingInfoSalesOrder: { value: { id: string, customer: { name: string, phone: string, fullAddress: string }, amounts: { balanceDueAmount: string } } | null }
+    shippingInfoError: { value: string | null }
+    closeShippingInfo: () => void
+    loadShippingInfo: () => Promise<void>
     selectView: (value: string) => void
     selectWarehouse: (value: string) => void
     search: () => void
     paginate: (value: { page: number, pageSize: number }) => void
-    handleAction: (action: string, row: { id: string, viewStatus: string, destinationWarehouseValue: string | null }) => void
+    handleAction: (action: string, row: { id: string, viewStatus: string, destinationWarehouseValue: string | null, salesSource: { id: string } | null }) => void
     refresh: () => void
     viewOrderFromShipment: (id: string) => void
     shipmentClosed: () => void
@@ -85,7 +105,7 @@ async function fixture(initialQuery: Record<string, string> = {}) {
   lifecycle.mount!()
   await nextTick()
   await new Promise<void>(resolve => setImmediate(resolve))
-  return { state, route, account, api, calls, permission, info, navigations, lifecycle, initialPath, dispose: () => scope.stop() }
+  return { state, route, account, api, salesApi, calls, permission, salesPermission, info, navigations, lifecycle, initialPath, dispose: () => scope.stop() }
 }
 
 test('页面默认已到仓；切换视图归一第一页，并保留关键词及目的地仓库', async (context) => {
@@ -300,6 +320,66 @@ test('计数与仓库错误的重试按钮通过真实 FaAlert description 插�
   finally {
     app.unmount()
   }
+})
+
+interface ShippingInfoRow { id: string, viewStatus: string, destinationWarehouseValue: string | null, salesSource: { id: string } | null }
+
+test('已到仓才有出货信息：打开时按销售来源读取销售订单，关闭后清空', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  const row: ShippingInfoRow = { id: 'part-info', viewStatus: 'WAREHOUSE_RECEIVED', destinationWarehouseValue: 'QITA', salesSource: { id: 'so-1' } }
+  f.state.handleAction('shippingInfo', { ...row, viewStatus: 'SHIPPED' })
+  assert.equal(f.state.shippingInfoShipment.value, null)
+  assert.equal(f.state.shippingInfoVisible.value, false)
+  f.state.handleAction('shippingInfo', row)
+  assert.equal(f.state.shippingInfoVisible.value, true)
+  assert.equal(f.state.shippingInfoShipment.value?.id, 'part-info')
+  await new Promise<void>(resolve => setImmediate(resolve))
+  assert.equal(f.calls.at(-1)?.kind, 'salesOrder:so-1')
+  assert.equal(f.state.shippingInfoSalesOrder.value?.customer.name, '客户甲')
+  assert.equal(f.state.shippingInfoSalesOrder.value?.amounts.balanceDueAmount, '90000.0000')
+  f.state.closeShippingInfo()
+  assert.equal(f.state.shippingInfoVisible.value, false)
+  assert.equal(f.state.shippingInfoShipment.value, null)
+  assert.equal(f.state.shippingInfoSalesOrder.value, null)
+  assert.equal(f.state.shippingInfoError.value, null)
+})
+
+test('没有销售来源的备货货件不读取销售订单，仍可查看货件侧出货信息', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  const requests = f.calls.length
+  f.state.handleAction('shippingInfo', { id: 'stock-part', viewStatus: 'WAREHOUSE_RECEIVED', destinationWarehouseValue: 'QITA', salesSource: null })
+  await new Promise<void>(resolve => setImmediate(resolve))
+  assert.equal(f.state.shippingInfoVisible.value, true)
+  assert.equal(f.calls.length, requests)
+  assert.equal(f.state.shippingInfoSalesOrder.value, null)
+  assert.equal(f.state.shippingInfoError.value, null)
+})
+
+test('缺少销售查看权限不出货信息，撤权或身份变化中止读取并丢弃迟到结果', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  const row: ShippingInfoRow = { id: 'part-info', viewStatus: 'WAREHOUSE_RECEIVED', destinationWarehouseValue: 'QITA', salesSource: { id: 'so-1' } }
+  f.salesPermission.value = false
+  f.state.handleAction('shippingInfo', row)
+  assert.equal(f.state.shippingInfoShipment.value, null)
+  assert.equal(f.calls.filter(call => call.kind.startsWith('salesOrder')).length, 0)
+  f.salesPermission.value = true
+  let finish!: (value: unknown) => void
+  let signal!: AbortSignal
+  f.salesApi.getById = (_id, nextSignal) => {
+    signal = nextSignal
+    return new Promise(resolve => finish = resolve)
+  }
+  f.state.handleAction('shippingInfo', row)
+  const pendingSignal = signal
+  f.account.authEpoch += 1
+  assert.equal(pendingSignal.aborted, true)
+  assert.equal(f.state.shippingInfoVisible.value, false)
+  finish({ data: { id: 'so-1', customer: { name: '迟到客户' }, amounts: { balanceDueAmount: '1.0000' } } })
+  await new Promise<void>(resolve => setImmediate(resolve))
+  assert.equal(f.state.shippingInfoSalesOrder.value, null)
 })
 
 test('大熊猫仓已到仓货件的海快出货只轻提示，不读取详情、提报包装或修改货件', async (context) => {

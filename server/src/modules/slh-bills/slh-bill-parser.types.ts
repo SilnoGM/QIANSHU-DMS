@@ -50,12 +50,16 @@ export interface ParsedSlhBillLine {
   categoryCode: string | null
   unitPriceAmount: string | null
   pricingBasis: SlhPricingBasisValue | null
-  freightAmountCny: string
-  codHandlingAmountCny: string
-  surchargeAmountCny: string
-  payableAmountCny: string
-  codAmountTwd: string
-  ntdSurchargeAmountTwd: string
+  /**
+   * 金额列为空表示「本行不涉及此项」，与装柜明细（container_loading_items）同一口径；
+   * 来源写 0 则如实保留 0。两种写法不再合并成 0.00。
+   */
+  freightAmountCny: string | null
+  codHandlingAmountCny: string | null
+  surchargeAmountCny: string | null
+  payableAmountCny: string | null
+  codAmountTwd: string | null
+  ntdSurchargeAmountTwd: string | null
   recipientInfoRaw: string | null
   /** 收货人信息解析结果；解析不出时为 null，原文仍完整保留在 recipientInfoRaw。 */
   recipientName: string | null

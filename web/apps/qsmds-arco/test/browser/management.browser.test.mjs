@@ -1457,7 +1457,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.equal(createdUser.status, 201)
   assert.equal(createdUser.body?.username, managedUsername)
 
-  await page.navigate(appRouteUrl(configuration.baseUrl, '/system/roles'))
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/roles'))
   await page.waitFor(`(() => (
     document.body.innerText.includes('角色管理')
     && document.body.innerText.includes('system_admin')
@@ -1512,9 +1512,9 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.equal(managedRole?.name, editedRoleName)
 
   /*
-   * 地区、货币、当前汇率、编号规则、唛头绑定、系统字典、包装费用和收款资料权限均可分配给普通角色，同时不能让普通
-   * 角色越权勾选 users/roles/audit 等系统专用权限。保存后以真实 API 结果确认
-   * 完整替换已落库。
+   * 地区、货币、当前汇率、编号规则、唛头绑定、系统字典、包装费用、收款资料与资金账户权限均可分配给
+   * 普通角色，同时不能让普通角色越权勾选 users/roles/audit 等系统专用权限。保存后以真实 API 结果
+   * 确认完整替换已落库。
    */
   const permissionsResponse = await page.evaluate(
     apiExpression('/api/permissions', 'GET'),
@@ -1526,8 +1526,13 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   const fundAccountReadPermission = permissionsResponse.body?.find(
     permission => permission.code === 'fund-accounts:read',
   )
+  const usersReadPermission = permissionsResponse.body?.find(
+    permission => permission.code === 'users:read',
+  )
   assert.equal(typeof regionReadPermission?.id, 'string')
-  assert.equal(fundAccountReadPermission?.systemOnly, true)
+  // 2026-10-01 起账户管理整组可委派（迁移 20261001140000），系统专用样本改用 users:read。
+  assert.equal(fundAccountReadPermission?.systemOnly, false)
+  assert.equal(usersReadPermission?.systemOnly, true)
 
   await clickVisibleTableRowButton(page, roleCode, '分配权限')
   await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => (
@@ -1566,8 +1571,13 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
       hasHorizontalOverflow: document.documentElement.scrollWidth > window.innerWidth,
       optionCount: options.length,
       rightGap: rect ? Math.abs(window.innerWidth - rect.right) : null,
-      showsDisabledFundAccountRead: options.some(option => (
+      enablesFundAccountManagement: options.some(option => (
         option.textContent?.includes('fund-accounts:read')
+        && option.getAttribute('aria-disabled') !== 'true'
+        && !option.disabled
+      )),
+      showsDisabledUsersRead: options.some(option => (
+        option.textContent?.includes('users:read')
         && (option.getAttribute('aria-disabled') === 'true' || option.disabled)
       )),
       showsUsersRead: options.some(option => option.textContent?.includes('users:read')),
@@ -1575,7 +1585,8 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     }
   })()`)
   assert.equal(permissionDrawerState.contentUsesGenericDrawer, true)
-  assert.equal(permissionDrawerState.showsDisabledFundAccountRead, true)
+  assert.equal(permissionDrawerState.enablesFundAccountManagement, true)
+  assert.equal(permissionDrawerState.showsDisabledUsersRead, true)
   assert.equal(permissionDrawerState.showsUsersRead, true)
   assert.ok(permissionDrawerState.optionCount > 0)
   // 可分配权限清单来自权限目录迁移，新增领域后必须同步这里（曾漏过 container-batches 与 slh-bills）。
@@ -1596,6 +1607,13 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'exchange-rates:create',
     'exchange-rates:read',
     'exchange-rates:update',
+    'fund-accounts:create',
+    'fund-accounts:manual-adjust',
+    'fund-accounts:read',
+    'fund-accounts:update-share-rate',
+    'fund-business-sources:manage',
+    'fund-posting-types:manage',
+    'fund-transactions:reverse',
     'numbering-rules:create',
     'numbering-rules:disable',
     'numbering-rules:enable',
@@ -1654,7 +1672,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   // 窄屏重新从角色卡片打开同一权限抽屉，证明它占满可用宽度、保留 44px
   // 关闭目标和纵向 Footer，关闭后再把焦点交还给原“分配权限”入口。
   await page.setViewport(390, 844, true)
-  await page.navigate(appRouteUrl(configuration.baseUrl, '/system/roles'))
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/roles'))
   await page.waitFor(`document.body.innerText.includes(${JSON.stringify(roleCode)})`)
   await clickVisibleCardButton(page, 'role-card', roleCode, '分配权限')
   await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => {
@@ -1700,7 +1718,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
 
   // 继续在 390px 真机指标下从用户卡片进入重置密码，验证 Drawer -> Modal 的
   // 关键操作链和弹窗宽度；之后再切回桌面表格完成编辑、角色与状态操作。
-  await page.navigate(appRouteUrl(configuration.baseUrl, '/system/users'))
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/users'))
   await page.waitFor(`document.body.innerText.includes('用户管理')`)
   await waitForTableTools(page, 'user-table', '输入完整用户名搜索')
   assert.equal(
@@ -1891,7 +1909,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
 
   // 角色、权限目录和审计都必须在窄屏切换为卡片；卡片边界不得跑出视口。
   await page.setViewport(390, 844, true)
-  await page.navigate(appRouteUrl(configuration.baseUrl, '/system/roles'))
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/roles'))
   await waitForTableTools(page, 'role-table', '搜索角色名称、编码或说明')
   await waitForCardsInsideViewport(page, '[data-testid="role-card"]', editedRoleName)
   assert.equal(await page.evaluate(`(() => (
@@ -1899,7 +1917,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
       .some(element => element.getClientRects().length > 0)
   ))()`), false)
 
-  await page.navigate(appRouteUrl(configuration.baseUrl, '/system/permissions'))
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/permissions'))
   await waitForTableTools(page, 'permission-table', '搜索权限码、名称、说明或资源')
   await waitForCardsInsideViewport(page, '[data-testid="permission-card"]')
   // 权限目录分页后 users:read 不保证位于第一页；通过公开搜索交互定位目标卡片后再验证窄屏布局。
