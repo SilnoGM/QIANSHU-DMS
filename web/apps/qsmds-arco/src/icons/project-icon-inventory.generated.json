@@ -1371,6 +1371,7 @@
     "usages": [
       "apps/qsmds-arco/src/components/business/QsGenericTable/CopyCellButton.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue",
+      "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-bill-select-modal.vue",
       "packages/components/src/pro/code/index.vue",
       "packages/components/src/pro/storage-box/index.vue"
@@ -1449,7 +1450,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/component_library/business/components/GenericTableGroupShowcase.vue"
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericTableGroupShowcase.vue",
+      "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue"
     ]
   },
   {
@@ -2373,7 +2375,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/admin/product-management/list/product-detail-drawer.vue"
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue"
     ]
   },
   {
@@ -2408,6 +2411,15 @@
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-voucher-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-form.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:locate",
+    "label": "i-lucide:locate",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue"
     ]
   },
   {
@@ -3001,6 +3013,7 @@
       "apps/qsmds-arco/src/views/operations/ocean-containers/index.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
       "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-list.vue",
+      "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
       "packages/components/src/pro/tree/index.vue"
     ]
@@ -3016,6 +3029,7 @@
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-form-modal.vue",
       "apps/qsmds-arco/src/views/component_library/business/components/SalesOrderSelectorModalShowcase.vue",
       "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-list.vue",
+      "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue"
     ]
   },
@@ -3534,6 +3548,7 @@
       "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/index.vue",
       "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
+      "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/system/users/index.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-reconciliation-compare-panel.vue",
       "packages/components/src/basic/input/index.vue",

@@ -213,6 +213,7 @@ Tooltip 只放补充信息，关键产品名称、状态和操作仍须直接可
 - `submitting` 会阻止关闭并禁用 Footer 交互，但不会自动禁用正文表单；页面仍需绑定 `FaForm :disabled="submitting"` 或对应控件状态。成功后先释放提交状态，再请求关闭，避免被关闭守卫拦住。失败后保留表单并展示可理解的错误。
 - Footer 插槽从首次渲染起稳定存在，将按钮显示条件放在插槽内部，避免异步加载后遗漏底部操作。
 - 未保存变更等场景通过 `beforeClose` 控制；其异常会阻止关闭，调用方负责说明原因。不要假设所有弹出层都自动有取消 / 保存按钮。
+- 分组多选（权限、角色等成组清单）：默认全部展开、不预设筛选，避免让人误以为条目变少；组头给三态复选框（只作用于可分配项）并显示「已选 x / 可分配 y」；筛选与折叠属于核对手段，筛选生效时要在组头说明还有多少项不在当前结果里；已选项提供独立汇总与逐项移除、定位入口。参考实现：[权限分配抽屉](../../web/apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue)、纯逻辑 [permission-assignment.logic.ts](../../web/apps/qsmds-arco/src/views/system/roles/permission-assignment.logic.ts)。
 
 来源：[Modal 契约](../../web/apps/qsmds-arco/src/components/business/QsGenericModal/logic.ts)、[Drawer 契约](../../web/apps/qsmds-arco/src/components/business/QsGenericDrawer/logic.ts)、[Fa 表单选型](./前端开发手册/Fantastic-admin内置组件/选型与使用规则.md)、[自定义组件手册](./前端开发手册/自定义组件库/README.md)。
 
