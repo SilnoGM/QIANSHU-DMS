@@ -60,7 +60,7 @@
     "select": "关联此货件",
     "cancelSelect": "收起选择",
     "shipmentPermission": "需要采购读取权限才能选择和查看货件",
-    "shipmentHint": "仅关联资料；保存后不会自动变更货件的运输状态。",
+    "shipmentHint": "只能关联已到仓的货件；保存后货件状态变为已装柜，解除关联也不会回退。",
     "totalHint": "汇总范围为本柜全部明细；存在缺值时相应汇总显示待完善。",
     "totalWeight": "总毛重（kg）",
     "totalVolume": "总材积（材）",

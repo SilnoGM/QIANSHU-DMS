@@ -137,6 +137,7 @@ const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(()
   { id: 'shipped', title: t('purchaseShipments.shipped'), accessorKey: 'shippedAt', minWidth: 200 },
   { id: 'destinationWarehouse', title: t('purchaseShipments.destinationWarehouse'), accessorFn: row => formatDestinationWarehouse(row, t), minWidth: 180 },
   { id: 'received', title: t('purchaseWarehouseReceipt.receivedAt'), accessorKey: 'warehouseReceivedAt', minWidth: 200 },
+  { id: 'loaded', title: t('purchaseShipments.loadedAt'), accessorKey: 'loadedAt', minWidth: 200, defaultVisible: false },
   { id: 'createdAt', title: t('purchaseShipments.createdAt'), accessorKey: 'createdAt', minWidth: 195, defaultVisible: false },
   { id: 'recordedAt', title: t('purchaseShipments.recordedAt'), accessorKey: 'shipmentRecordedAt', minWidth: 195, defaultVisible: false },
   { id: 'remark', title: t('purchaseShipments.remark'), accessorKey: 'shipmentRemark', minWidth: 220, defaultVisible: false },

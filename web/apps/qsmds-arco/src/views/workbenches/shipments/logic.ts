@@ -4,9 +4,9 @@ export const SHIPMENT_VIEWS = ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SH
 export type ShipmentView = typeof SHIPMENT_VIEWS[number]
 export type ShipmentListQuery = Omit<PurchaseShipmentListQuery, 'view'> & { view?: ShipmentView }
 
-/** 已到仓→已装柜；已装柜可签收或海外寄仓，寄仓中可签收，已签收为终态。本轮仅预留视图和按钮。 */
-export function isShipmentPlaceholderView(view: ShipmentView | undefined): view is 'CONTAINER_LOADED' | 'OVERSEAS_STORAGE' | 'DELIVERED' {
-  return view === 'CONTAINER_LOADED' || view === 'OVERSEAS_STORAGE' || view === 'DELIVERED'
+/** 已到仓→已装柜；已装柜可签收或海外寄仓，寄仓中可签收，已签收为终态。已装柜视图已接通，其余仍为预留。 */
+export function isShipmentPlaceholderView(view: ShipmentView | undefined): view is 'OVERSEAS_STORAGE' | 'DELIVERED' {
+  return view === 'OVERSEAS_STORAGE' || view === 'DELIVERED'
 }
 
 export function shipmentPlaceholderAction(view: ShipmentView, status: Exclude<ShipmentView, 'ALL'>): 'loadContainer' | 'sign' | null {

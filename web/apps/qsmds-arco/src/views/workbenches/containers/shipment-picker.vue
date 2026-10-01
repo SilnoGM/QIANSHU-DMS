@@ -30,6 +30,10 @@ const { data, loading, error } = resource
 function shipmentLabel(row: PurchaseShipmentListItemDto) {
   return row.shippingMarkText || row.shipmentNo || `${t('containerPage.shipment')}-${String(row.partNumber).padStart(2, '0')}`
 }
+/** 装柜是到仓后的作业：只有已到仓的有效货件可选，与服务端资格校验同一口径。 */
+function selectable(row: PurchaseShipmentListItemDto) {
+  return row.status === 'ACTIVE' && row.warehouseReceivedAt !== null
+}
 const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(() => [
   { id: 'shipment', title: t('containerManagement.shipmentAndSource'), accessorFn: shipmentLabel, minWidth: 255 },
   { id: 'goods', title: t('purchaseShipments.products'), accessorFn: row => row.lineSummary.previews.map(item => item.productName).join('、'), minWidth: 150 },
@@ -97,8 +101,8 @@ const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(()
         </div>
       </template>
       <template #actions="{ row }">
-        <FaButton type="button" size="sm" variant="outline" :disabled="disabled || row.status !== 'ACTIVE'" @click="emit('select', row)">
-          {{ t(row.status === 'ACTIVE' ? 'containerPage.select' : 'containerManagement.shipmentUnavailable') }}
+        <FaButton type="button" size="sm" variant="outline" :disabled="disabled || !selectable(row)" @click="emit('select', row)">
+          {{ t(selectable(row) ? 'containerPage.select' : row.status === 'ACTIVE' ? 'containerManagement.shipmentNotReceived' : 'containerManagement.shipmentUnavailable') }}
         </FaButton>
       </template>
     </QsGenericTable>

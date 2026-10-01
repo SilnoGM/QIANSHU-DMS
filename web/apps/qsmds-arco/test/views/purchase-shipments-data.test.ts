@@ -99,7 +99,7 @@ test('切换货件后忽略旧详情，关闭后取消请求，空尾页归一�
   assert.deepEqual(f.invalidPages, [2])
 })
 
-test('新运输视图保持空态且不向现有列表接口传未实现状态，迟到旧列表不能混入', async (context) => {
+test('已装柜视图读取真实列表并取消旧视图请求', async (context) => {
   const f = fixture()
   context.after(() => f.scope.stop())
   let finish!: () => void
@@ -112,7 +112,30 @@ test('新运输视图保持空态且不向现有列表接口传未实现状态�
   f.enabled.value = true
   const finishOld = finish
   const oldSignal = signal
-  for (const view of ['CONTAINER_LOADED', 'OVERSEAS_STORAGE', 'DELIVERED'] as const) {
+  assert.deepEqual(f.calls, ['list', 'counts'])
+  f.query.value = { view: 'CONTAINER_LOADED', page: 1, pageSize: 20 }
+  await nextTick()
+  assert.equal(oldSignal.aborted, true)
+  assert.equal(f.calls.filter(value => value === 'list').length, 2)
+  finishOld()
+  await nextTick()
+  assert.equal(f.state.rows.value.length, 0)
+})
+
+test('预留运输视图保持空态且不向现有列表接口传未实现状态，迟到旧列表不能混入', async (context) => {
+  const f = fixture()
+  context.after(() => f.scope.stop())
+  let finish!: () => void
+  let signal!: AbortSignal
+  f.api.list = (_query, requestSignal) => new Promise((resolve) => {
+    f.calls.push('list')
+    signal = requestSignal
+    finish = () => resolve({ data: { items: [{ id: 'stale' }], total: 1 } })
+  })
+  f.enabled.value = true
+  const finishOld = finish
+  const oldSignal = signal
+  for (const view of ['OVERSEAS_STORAGE', 'DELIVERED'] as const) {
     f.query.value = { view, page: 1, pageSize: 20 }
     await nextTick()
     assert.equal(f.state.rows.value.length, 0)

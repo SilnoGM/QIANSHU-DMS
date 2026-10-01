@@ -63,6 +63,7 @@
     "salesSource": "销售",
     "shipmentAndSource": "货件与来源",
     "shipmentUnavailable": "不可选",
+    "shipmentNotReceived": "未到仓",
     "grossWeightLabel": "整行毛重",
     "reportedVolumeLabel": "来源材积",
     "lengthCmLabel": "每件长",
