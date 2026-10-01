@@ -187,6 +187,25 @@ async function clickVisibleButtonContaining(page, text) {
   })()`)
 }
 
+// 无菜单身份（例如尚未分配角色的新用户）不会渲染侧边栏，账号菜单只能从头部右上角
+// 的头像按钮进入；该按钮是纯图标按钮、没有可读文本，因此以头部最后一个可见按钮定位。
+async function openHeaderAccountMenu(page) {
+  const accountButton = `(() => {
+    const buttons = [...document.querySelectorAll('header button')].filter((button) => (
+      button.getClientRects().length > 0
+      && !button.disabled
+    ))
+    return buttons.at(-1) ?? null
+  })()`
+  await page.waitFor(`Boolean(${accountButton})`)
+  await page.evaluate(`(() => {
+    const button = ${accountButton}
+    if (!button) throw new Error('visible button unavailable')
+    button.click()
+    return true
+  })()`)
+}
+
 async function clickVisibleText(page, text) {
   await page.waitFor(`(() => [...document.querySelectorAll('body *')].some((element) => (
     element.textContent?.trim() === ${JSON.stringify(text)}
@@ -795,7 +814,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
     tel: '+8613800138000',
     url: `${configuration.baseUrl}/missing-profile-avatar.png`,
   }
-  await clickVisibleButtonContaining(restartedPage, limitedCredentials.username)
+  await openHeaderAccountMenu(restartedPage)
   await clickVisibleText(restartedPage, '个人资料')
   await restartedPage.waitFor(`(() => (
     document.querySelector('input[autocomplete="email"]')?.getClientRects().length > 0
@@ -836,7 +855,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
     'userId',
   ])
 
-  await clickVisibleButtonContaining(restartedPage, limitedCredentials.username)
+  await openHeaderAccountMenu(restartedPage)
   await clickVisibleText(restartedPage, '个人资料')
   await restartedPage.waitFor(`document.querySelector('input[autocomplete="email"]')?.value === ${JSON.stringify(profileValues.email)}`)
   await restartedPage.waitFor(`(() => {
@@ -1005,7 +1024,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   const routeBeforeActivePasswordChange = await restartedPage.evaluate(
     'location.hash',
   )
-  await clickVisibleButtonContaining(restartedPage, limitedCredentials.username)
+  await openHeaderAccountMenu(restartedPage)
   await clickVisibleText(restartedPage, '修改密码')
   await restartedPage.waitFor(`(() => (
     [...document.querySelectorAll('[role="dialog"]')].some((modal) => {
@@ -1065,7 +1084,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
       logoutRequestUrls.push(request.url)
     }
   })
-  await clickVisibleButtonContaining(restartedPage, limitedCredentials.username)
+  await openHeaderAccountMenu(restartedPage)
   await restartedPage.waitFor(`(() => [...document.querySelectorAll('[role="menuitem"]')].some((item) => (
     item.textContent?.trim() === '退出登录'
     && item.getClientRects().length > 0
@@ -1118,7 +1137,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   )))()`)
   await waitForAuthState(restartedPage, 'authenticated')
 
-  await clickVisibleButtonContaining(restartedPage, limitedCredentials.username)
+  await openHeaderAccountMenu(restartedPage)
   await clickVisibleText(restartedPage, '退出登录')
   await clickVisibleButton(restartedPage, '退出当前登录')
   await waitForAuthState(restartedPage, 'anonymous')
@@ -1130,7 +1149,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
     password: activePassword,
     username: limitedCredentials.username,
   })
-  await clickVisibleButtonContaining(restartedPage, limitedCredentials.username)
+  await openHeaderAccountMenu(restartedPage)
   await clickVisibleText(restartedPage, '退出登录')
   await clickVisibleButton(restartedPage, '退出所有登录')
   await waitForAuthState(restartedPage, 'anonymous')
