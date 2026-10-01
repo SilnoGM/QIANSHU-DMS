@@ -1,7 +1,7 @@
 {
   "name": "qsmds-arco",
   "type": "module",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "scripts": {
     "api:generate": "pnpm --dir ../.. exec node --import tsx scripts/generate-api.ts",
