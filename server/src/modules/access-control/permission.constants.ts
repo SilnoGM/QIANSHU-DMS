@@ -28,8 +28,10 @@ export const PRODUCT_MEDIA_PERMISSION_CODES = ['product-media:read'] as const
 /**
  * 资金账户管理的完整人工权限边界。
  *
- * 数据库将全部权限标记为 systemOnly，确保普通角色不能通过角色权限维护接口获得；
- * 同一 Server 内业务域动账不使用这些管理员权限，而由可信来源白名单约束。
+ * 该域权限自 2026-10-01（迁移 `20261001140000_fund_account_permissions_delegable`）起
+ * 可委派给普通角色，财务工作台的账户管理整组需要它们；服务端 PermissionGuard 与审计
+ * 逻辑不变，仍按角色权限集合判定。同一 Server 内业务域动账不使用这些人工权限，
+ * 而由可信来源白名单约束。
  */
 export const FUND_ACCOUNT_PERMISSION_CODES = [
   'fund-accounts:read',

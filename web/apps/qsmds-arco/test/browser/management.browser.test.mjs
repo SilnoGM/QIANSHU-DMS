@@ -1512,9 +1512,9 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.equal(managedRole?.name, editedRoleName)
 
   /*
-   * 地区、货币、当前汇率、编号规则、唛头绑定、系统字典、包装费用和收款资料权限均可分配给普通角色，同时不能让普通
-   * 角色越权勾选 users/roles/audit 等系统专用权限。保存后以真实 API 结果确认
-   * 完整替换已落库。
+   * 地区、货币、当前汇率、编号规则、唛头绑定、系统字典、包装费用、收款资料与资金账户权限均可分配给
+   * 普通角色，同时不能让普通角色越权勾选 users/roles/audit 等系统专用权限。保存后以真实 API 结果
+   * 确认完整替换已落库。
    */
   const permissionsResponse = await page.evaluate(
     apiExpression('/api/permissions', 'GET'),
@@ -1526,8 +1526,13 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   const fundAccountReadPermission = permissionsResponse.body?.find(
     permission => permission.code === 'fund-accounts:read',
   )
+  const usersReadPermission = permissionsResponse.body?.find(
+    permission => permission.code === 'users:read',
+  )
   assert.equal(typeof regionReadPermission?.id, 'string')
-  assert.equal(fundAccountReadPermission?.systemOnly, true)
+  // 2026-10-01 起账户管理整组可委派（迁移 20261001140000），系统专用样本改用 users:read。
+  assert.equal(fundAccountReadPermission?.systemOnly, false)
+  assert.equal(usersReadPermission?.systemOnly, true)
 
   await clickVisibleTableRowButton(page, roleCode, '分配权限')
   await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => (
@@ -1566,8 +1571,13 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
       hasHorizontalOverflow: document.documentElement.scrollWidth > window.innerWidth,
       optionCount: options.length,
       rightGap: rect ? Math.abs(window.innerWidth - rect.right) : null,
-      showsDisabledFundAccountRead: options.some(option => (
+      enablesFundAccountManagement: options.some(option => (
         option.textContent?.includes('fund-accounts:read')
+        && option.getAttribute('aria-disabled') !== 'true'
+        && !option.disabled
+      )),
+      showsDisabledUsersRead: options.some(option => (
+        option.textContent?.includes('users:read')
         && (option.getAttribute('aria-disabled') === 'true' || option.disabled)
       )),
       showsUsersRead: options.some(option => option.textContent?.includes('users:read')),
@@ -1575,7 +1585,8 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     }
   })()`)
   assert.equal(permissionDrawerState.contentUsesGenericDrawer, true)
-  assert.equal(permissionDrawerState.showsDisabledFundAccountRead, true)
+  assert.equal(permissionDrawerState.enablesFundAccountManagement, true)
+  assert.equal(permissionDrawerState.showsDisabledUsersRead, true)
   assert.equal(permissionDrawerState.showsUsersRead, true)
   assert.ok(permissionDrawerState.optionCount > 0)
   // 可分配权限清单来自权限目录迁移，新增领域后必须同步这里（曾漏过 container-batches 与 slh-bills）。
@@ -1596,6 +1607,13 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'exchange-rates:create',
     'exchange-rates:read',
     'exchange-rates:update',
+    'fund-accounts:create',
+    'fund-accounts:manual-adjust',
+    'fund-accounts:read',
+    'fund-accounts:update-share-rate',
+    'fund-business-sources:manage',
+    'fund-posting-types:manage',
+    'fund-transactions:reverse',
     'numbering-rules:create',
     'numbering-rules:disable',
     'numbering-rules:enable',
