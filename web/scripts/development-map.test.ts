@@ -9,7 +9,6 @@ import {
   buildGraph,
   buildReleaseNotes,
   buildReleaseNotesData,
-  buildTechStack,
   commitTypeOf,
   compareVersionTags,
   createReleaseNotes,
@@ -188,44 +187,6 @@ test('线路图行数据带出引用徽标与所属发版', () => {
   assert.deepEqual(graph.versions, [{ version: '0.1.0', tag: 'v0.1.0', datetime: '2026-07-14', commitCount: 2 }])
 })
 
-test('技术栈按人工分类归类，版本优先取实际安装值并保留未登记项', () => {
-  const techStack = buildTechStack({
-    runtime: [{ label: 'Node', value: '^24.15.0' }],
-    manifests: [
-      {
-        origin: 'app',
-        dependencies: { 'vue': 'catalog:', 'unknown-package': '^1.2.3' },
-        devDependencies: { vite: 'catalog:' },
-      },
-      {
-        origin: 'server',
-        dependencies: { '@nestjs/common': '11.1.28', 'vue': '9.9.9' },
-        devDependencies: {},
-      },
-    ],
-    resolveInstalledVersion: (origin, name) => {
-      if (name === 'vue') {
-        return '3.5.39'
-      }
-      if (name === 'unknown-package') {
-        return null
-      }
-      return null
-    },
-  })
-
-  assert.deepEqual(techStack.runtime, [{ label: 'Node', value: '^24.15.0' }])
-  const frontend = techStack.groups.find(group => group.key === 'frontend')
-  assert.deepEqual(frontend?.items, [{ name: 'vue', version: '3.5.39', note: '核心视图框架' }], '同名依赖只登记一次并优先取解析出的实际版本')
-  const server = techStack.groups.find(group => group.key === 'server')
-  assert.deepEqual(server?.items, [{ name: '@nestjs/common', version: '11.1.28', note: 'NestJS 运行时基础模块' }])
-  const build = techStack.groups.find(group => group.key === 'build')
-  assert.deepEqual(build?.items, [{ name: 'vite', version: '未解析', note: '构建与开发服务器' }], 'catalog 依赖解析失败时不展示 catalog: 字面量')
-  const other = techStack.groups.at(-1)
-  assert.equal(other?.key, 'other', '未登记依赖统一落到最后一组')
-  assert.deepEqual(other?.items, [{ name: 'unknown-package', version: '^1.2.3', note: null }], '未登记项回退清单声明值')
-})
-
 test('发版更新内容按分组渲染为可直接写进 Tag 说明的 Markdown', () => {
   const markdown = renderReleaseNotesMarkdown({
     version: '0.1.12',
@@ -276,10 +237,9 @@ test('页面数据契约只暴露文档化的顶层字段', () => {
     releases: [],
     unreleased: null,
     graph: { maxLane: 0, commits: [], versions: [] },
-    techStack: { runtime: [], groups: [] },
   }
   assert.deepEqual(Object.keys(buildReleaseNotesData(input)).sort(), ['releases', 'schemaVersion', 'source', 'unreleased'])
-  assert.deepEqual(Object.keys(buildDevelopmentMapData(input)).sort(), ['graph', 'schemaVersion', 'source', 'techStack'])
+  assert.deepEqual(Object.keys(buildDevelopmentMapData(input)).sort(), ['graph', 'schemaVersion', 'source'])
 })
 
 test('命令行参数解析拒绝未知参数与缺值，并支持发版更新内容模式', () => {

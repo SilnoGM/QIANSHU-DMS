@@ -93,28 +93,8 @@ export interface GitGraphData {
   versions: GitGraphVersion[]
 }
 
-export interface TechStackItem {
-  name: string
-  /** 构建环境实际安装版本；解析失败时回退为清单声明值。 */
-  version: string
-  note: string | null
-}
-
-export interface TechStackGroup {
-  key: string
-  label: string
-  items: TechStackItem[]
-}
-
-export interface TechStackData {
-  /** 运行时基线：Node / pnpm / PostgreSQL / Web 基座版本。 */
-  runtime: Array<{ label: string, value: string }>
-  groups: TechStackGroup[]
-}
-
 export interface DevelopmentMapData {
   schemaVersion: 1
   source: DevelopmentMapSource
   graph: GitGraphData
-  techStack: TechStackData
 }

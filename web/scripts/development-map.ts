@@ -2,7 +2,7 @@
  * 开发图谱数据生成器：在构建时读取 Git 历史与依赖清单，产出「版本更新」「开发图谱」
  * 两个页面所需的数据。运行时不访问 Git —— 数据由 Vite 虚拟模块编进前端懒加载 chunk。
  *
- * 纯函数（解析、泳道布局、发版切分、技术栈归类）与 Git / 文件系统 IO 分离：
+ * 纯函数（解析、泳道布局、发版切分）与 Git / 文件系统 IO 分离：
  * 单测只覆盖纯函数，不依赖当前仓库的历史深度，因此浅克隆 CI 也能全绿。
  *
  * 安全边界：Git 一律以 `execFile` 的 argv 数组调用（不经过 shell），所有进入参数的
@@ -19,12 +19,9 @@ import type {
   ReleaseNotesData,
   ReleaseNotesGroup,
   ReleaseNotesRelease,
-  TechStackData,
-  TechStackGroup,
-  TechStackItem,
 } from '../apps/qsmds-arco/src/types/development-map'
 import { execFile } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -294,123 +291,11 @@ export function buildGraph(input: BuildGraphInput): GitGraphData {
   return { maxLane: input.layout.maxLane, commits, versions }
 }
 
-/**
- * 技术栈分类与说明为人工维护层：版本号始终自动解析，说明文字只在此处登记。
- * 新增依赖若未登记会落到「其他依赖」，展示仍完整，只是没有中文说明。
- */
-const techStackGroups: readonly { key: string, label: string }[] = [
-  { key: 'runtime', label: '运行时与平台' },
-  { key: 'base', label: 'Fantastic Admin 基座' },
-  { key: 'frontend', label: '前端框架与状态' },
-  { key: 'ui', label: 'UI 与样式' },
-  { key: 'server', label: '后端框架与数据' },
-  { key: 'build', label: '构建与工程化' },
-  { key: 'quality', label: '测试与质量' },
-  { key: 'other', label: '其他依赖' },
-]
-
-const techStackCatalog: Readonly<Record<string, { group: string, note: string }>> = Object.freeze({
-  '@fantastic-admin/components': { group: 'base', note: 'Fantastic Admin 业务组件与图表组件' },
-  '@fantastic-admin/composables': { group: 'base', note: '组合式函数（主题、布局、权限桥接）' },
-  '@fantastic-admin/hotkeys': { group: 'base', note: '全局快捷键注册' },
-  '@fantastic-admin/locales': { group: 'base', note: '框架内置多语言资源' },
-  '@fantastic-admin/settings': { group: 'base', note: '应用设置与偏好面板' },
-  '@fantastic-admin/themes': { group: 'base', note: '主题 Token 与配色定义' },
-  '@fantastic-admin/types': { group: 'base', note: '框架类型声明' },
-  '@fantastic-admin/copyright': { group: 'base', note: '版权信息插件' },
-  '@fantastic-admin/iconify-tools': { group: 'base', note: '图标清单生成工具' },
-  'vue': { group: 'frontend', note: '核心视图框架' },
-  'vue-router': { group: 'frontend', note: '菜单与路由真相源' },
-  'pinia': { group: 'frontend', note: '应用状态管理' },
-  'vue-i18n': { group: 'frontend', note: '界面多语言' },
-  'axios': { group: 'frontend', note: 'HTTP 客户端（含重试与错误归一化）' },
-  'zod': { group: 'frontend', note: '数据校验' },
-  'vee-validate': { group: 'frontend', note: '表单校验集成' },
-  '@vee-validate/zod': { group: 'frontend', note: 'zod 与表单校验桥接' },
-  '@vueuse/core': { group: 'frontend', note: '组合式工具集（含虚拟列表）' },
-  '@arco-design/web-vue': { group: 'ui', note: '组件库依赖（仅少量页面直接调用）' },
-  'reka-ui': { group: 'ui', note: '无样式交互原语' },
-  'unocss': { group: 'ui', note: '原子化样式引擎' },
-  '@iconify/vue': { group: 'ui', note: '图标渲染' },
-  'sass-embedded': { group: 'ui', note: 'SCSS 编译' },
-  '@nestjs/common': { group: 'server', note: 'NestJS 运行时基础模块' },
-  '@nestjs/core': { group: 'server', note: '依赖注入与应用容器' },
-  '@nestjs/platform-express': { group: 'server', note: 'HTTP 平台适配' },
-  '@nestjs/config': { group: 'server', note: '环境配置加载' },
-  '@nestjs/swagger': { group: 'server', note: 'OpenAPI 契约生成' },
-  '@nestjs/terminus': { group: 'server', note: '健康检查指示器' },
-  'prisma': { group: 'server', note: 'ORM 工具链与迁移' },
-  '@prisma/client': { group: 'server', note: '数据库客户端' },
-  '@prisma/adapter-pg': { group: 'server', note: 'Prisma 的 PostgreSQL 驱动适配' },
-  'pg': { group: 'server', note: 'PostgreSQL 驱动' },
-  'class-validator': { group: 'server', note: 'DTO 校验装饰器' },
-  'class-transformer': { group: 'server', note: 'DTO 序列化与转换' },
-  'argon2': { group: 'server', note: '密码哈希' },
-  'sharp': { group: 'server', note: '产品图片处理' },
-  'busboy': { group: 'server', note: '文件上传流式解析' },
-  'file-type': { group: 'server', note: '上传文件类型嗅探' },
-  'yauzl': { group: 'server', note: 'ZIP 读取（导入包解析）' },
-  'vite': { group: 'build', note: '构建与开发服务器' },
-  'typescript': { group: 'build', note: '类型系统' },
-  'vue-tsc': { group: 'build', note: 'Vue 单文件组件类型检查' },
-  'tsx': { group: 'build', note: '脚本与测试的 TS 执行器' },
-  '@vitejs/plugin-vue': { group: 'build', note: 'Vue SFC 编译插件' },
-  '@vitejs/plugin-legacy': { group: 'build', note: '旧浏览器兼容产物' },
-  'vite-plugin-compression2': { group: 'build', note: '产物压缩' },
-  '@hey-api/openapi-ts': { group: 'build', note: '按 OpenAPI 生成前端类型' },
-  'unplugin-vue-components': { group: 'build', note: '组件自动注册' },
-  'unplugin-auto-import': { group: 'build', note: 'API 自动导入' },
-  'jest': { group: 'quality', note: '服务端测试运行器' },
-  'ts-jest': { group: 'quality', note: '服务端 TS 测试转换' },
-  'supertest': { group: 'quality', note: 'HTTP 接口端到端测试' },
-  'eslint': { group: 'quality', note: '代码规范检查' },
-  'stylelint': { group: 'quality', note: '样式规范检查' },
-})
-
-export interface BuildTechStackInput {
-  runtime: Array<{ label: string, value: string }>
-  manifests: ReadonlyArray<{ origin: 'app' | 'server', dependencies: Record<string, string>, devDependencies: Record<string, string> }>
-  /** 解析构建环境实际安装版本；解析失败返回 null 并回退到清单声明值。 */
-  resolveInstalledVersion: (origin: 'app' | 'server', name: string) => string | null
-}
-
-export function buildTechStack(input: BuildTechStackInput): TechStackData {
-  const items = new Map<string, TechStackItem & { group: string }>()
-  for (const manifest of input.manifests) {
-    for (const [name, declared] of Object.entries({ ...manifest.dependencies, ...manifest.devDependencies })) {
-      if (items.has(name)) {
-        continue
-      }
-      const catalogEntry = techStackCatalog[name]
-      items.set(name, {
-        name,
-        version: input.resolveInstalledVersion(manifest.origin, name) ?? (declared.startsWith('catalog:') ? '未解析' : declared),
-        note: catalogEntry?.note ?? null,
-        group: catalogEntry?.group ?? 'other',
-      })
-    }
-  }
-
-  const groups: TechStackGroup[] = techStackGroups
-    .map(group => ({
-      key: group.key,
-      label: group.label,
-      items: [...items.values()]
-        .filter(item => item.group === group.key)
-        .sort((left, right) => left.name.localeCompare(right.name))
-        .map(({ name, version, note }) => ({ name, version, note })),
-    }))
-    .filter(group => group.items.length > 0)
-
-  return { runtime: input.runtime, groups }
-}
-
 export interface BuildDevelopmentMapInput {
   source: DevelopmentMapSource
   releases: ReleaseNotesRelease[]
   unreleased: ReleaseNotesData['unreleased']
   graph: GitGraphData
-  techStack: TechStackData
 }
 
 export function buildReleaseNotesData(input: BuildDevelopmentMapInput): ReleaseNotesData {
@@ -427,7 +312,6 @@ export function buildDevelopmentMapData(input: BuildDevelopmentMapInput): Develo
     schemaVersion: 1,
     source: input.source,
     graph: input.graph,
-    techStack: input.techStack,
   }
 }
 
@@ -481,38 +365,15 @@ function readJsonFile(filePath: string): Record<string, unknown> {
   return JSON.parse(readFileSync(filePath, 'utf8')) as Record<string, unknown>
 }
 
-interface ManifestInfo {
-  dependencies: Record<string, string>
-  devDependencies: Record<string, string>
-  version: string
-  engines?: Record<string, string>
-  packageManager?: string
-}
-
-function readManifest(filePath: string): ManifestInfo {
-  const manifest = readJsonFile(filePath)
-  return {
-    dependencies: (manifest.dependencies ?? {}) as Record<string, string>,
-    devDependencies: (manifest.devDependencies ?? {}) as Record<string, string>,
-    version: typeof manifest.version === 'string' ? manifest.version : '0.0.0',
-    engines: manifest.engines as Record<string, string> | undefined,
-    packageManager: typeof manifest.packageManager === 'string' ? manifest.packageManager : undefined,
-  }
-}
-
-function installedVersion(baseDir: string, name: string): string | null {
-  const manifestPath = path.join(baseDir, 'node_modules', name, 'package.json')
-  if (!existsSync(manifestPath)) {
-    return null
-  }
-  const version = readJsonFile(manifestPath).version
-  return typeof version === 'string' ? version : null
+/** 生成器只读产品版本一处：技术栈采集已随开发图谱页收敛一同移除。 */
+function readAppVersion(filePath: string): string {
+  const version = readJsonFile(filePath).version
+  return typeof version === 'string' ? version : '0.0.0'
 }
 
 export interface DevelopmentMapPaths {
   repoRoot: string
   appRoot: string
-  serverRoot: string
 }
 
 export interface DevelopmentMapBundle {
@@ -521,7 +382,7 @@ export interface DevelopmentMapBundle {
 }
 
 export async function createDevelopmentMapData(paths: DevelopmentMapPaths): Promise<DevelopmentMapBundle> {
-  const appManifest = readManifest(path.join(paths.appRoot, 'package.json'))
+  const appVersion = readAppVersion(path.join(paths.appRoot, 'package.json'))
   const generatedAt = new Date().toISOString()
 
   const emptyInput = (source: DevelopmentMapSource): BuildDevelopmentMapInput => ({
@@ -529,16 +390,15 @@ export async function createDevelopmentMapData(paths: DevelopmentMapPaths): Prom
     releases: [],
     unreleased: null,
     graph: { maxLane: 0, commits: [], versions: [] },
-    techStack: { runtime: [], groups: [] },
   })
 
   try {
-    return await collectDevelopmentMapData(paths, { appManifest, generatedAt })
+    return await collectDevelopmentMapData(paths, { appVersion, generatedAt })
   }
   catch {
     // 无 .git 的源码包构建或 Git 不可用时降级为空态：页面如实展示「数据不可用」，不让构建失败。
     process.stderr.write('开发图谱数据生成失败：构建环境缺少可用的 Git 仓库，页面将以不可用空态呈现\n')
-    const input = emptyInput(unavailableSource(appManifest.version, 'git-unavailable', generatedAt))
+    const input = emptyInput(unavailableSource(appVersion, 'git-unavailable', generatedAt))
     return {
       developmentMap: buildDevelopmentMapData(input),
       releaseNotes: buildReleaseNotesData(input),
@@ -547,28 +407,23 @@ export async function createDevelopmentMapData(paths: DevelopmentMapPaths): Prom
 }
 
 interface DevelopmentMapContext {
-  appManifest: ManifestInfo
+  appVersion: string
   generatedAt: string
 }
 
 async function collectDevelopmentMapData(paths: DevelopmentMapPaths, context: DevelopmentMapContext): Promise<DevelopmentMapBundle> {
-  const { appManifest, generatedAt } = context
-  // 非 Git 元信息在降级路径之外读取：源码包构建仍可展示版本，只是没有历史与图谱。
-  const serverManifest = readManifest(path.join(paths.serverRoot, 'package.json'))
-  const rootManifest = readManifest(path.join(paths.repoRoot, 'package.json'))
-  const webManifest = readManifest(path.join(paths.repoRoot, 'web', 'package.json'))
+  const { appVersion, generatedAt } = context
   const emptyInput = (source: DevelopmentMapSource): BuildDevelopmentMapInput => ({
     source,
     releases: [],
     unreleased: null,
     graph: { maxLane: 0, commits: [], versions: [] },
-    techStack: { runtime: [], groups: [] },
   })
 
   const shallow = (await runGit(paths.repoRoot, ['rev-parse', '--is-shallow-repository'])).trim() === 'true'
   if (shallow) {
     // 浅克隆拿不到完整历史与 Tag；明确降级为不可用，页面走空态而不是给出残缺图谱。
-    const input = emptyInput({ ...unavailableSource(appManifest.version, 'shallow-clone', generatedAt), shallow: true })
+    const input = emptyInput({ ...unavailableSource(appVersion, 'shallow-clone', generatedAt), shallow: true })
     return {
       developmentMap: buildDevelopmentMapData(input),
       releaseNotes: buildReleaseNotesData(input),
@@ -632,23 +487,9 @@ async function collectDevelopmentMapData(paths: DevelopmentMapPaths, context: De
     releaseIndexBySha,
     releases,
   })
-  const techStack = buildTechStack({
-    runtime: [
-      { label: 'Node', value: rootManifest.engines?.node ?? '未声明' },
-      { label: 'pnpm', value: rootManifest.packageManager ?? '未声明' },
-      { label: 'PostgreSQL', value: '16' },
-      { label: 'Web 基座', value: `Fantastic Admin ${webManifest.version}` },
-    ],
-    manifests: [
-      { origin: 'app', dependencies: appManifest.dependencies, devDependencies: appManifest.devDependencies },
-      { origin: 'server', dependencies: serverManifest.dependencies, devDependencies: serverManifest.devDependencies },
-    ],
-    resolveInstalledVersion: (origin, name) => installedVersion(origin === 'app' ? paths.appRoot : paths.serverRoot, name),
-  })
-
   const dirty = (await runGit(paths.repoRoot, ['status', '--porcelain', '-uno'])).trim().length > 0
   const tagOnHead = sortedTags.find(tag => tag.target === headSha) ?? null
-  const mode: DevelopmentMapSource['mode'] = tagOnHead && !dirty && tagOnHead.name === `v${appManifest.version}`
+  const mode: DevelopmentMapSource['mode'] = tagOnHead && !dirty && tagOnHead.name === `v${appVersion}`
     ? 'release'
     : 'development'
   const reason = mode === 'release'
@@ -662,7 +503,7 @@ async function collectDevelopmentMapData(paths: DevelopmentMapPaths, context: De
     available: true,
     mode,
     reason,
-    version: appManifest.version,
+    version: appVersion,
     tag: tagOnHead?.name ?? null,
     commit: headSha,
     shortCommit: headSha.slice(0, 8),
@@ -673,7 +514,7 @@ async function collectDevelopmentMapData(paths: DevelopmentMapPaths, context: De
     generatedAt,
   }
 
-  const input: BuildDevelopmentMapInput = { source, releases, unreleased, graph, techStack }
+  const input: BuildDevelopmentMapInput = { source, releases, unreleased, graph }
   return {
     developmentMap: buildDevelopmentMapData(input),
     releaseNotes: buildReleaseNotesData(input),
@@ -765,7 +606,6 @@ async function main(): Promise<void> {
   const bundle = await createDevelopmentMapData({
     repoRoot,
     appRoot: path.join(webRoot, 'apps', 'qsmds-arco'),
-    serverRoot: path.join(repoRoot, 'server'),
   })
   process.stdout.write(`${JSON.stringify(bundle.developmentMap, null, 2)}\n`)
 }

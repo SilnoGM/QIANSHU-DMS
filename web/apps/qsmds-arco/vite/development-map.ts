@@ -21,11 +21,7 @@ const repoRoot = path.resolve(appRoot, '../../..')
 export function createDevelopmentMapPlugin(): PluginOption {
   // 单次构建内只生成一次：三个虚拟模块共享同一份生成结果。
   let pending: Promise<{ developmentMap: DevelopmentMapData, releaseNotes: ReleaseNotesData }> | null = null
-  const loadData = () => pending ??= createDevelopmentMapData({
-    repoRoot,
-    appRoot,
-    serverRoot: path.join(repoRoot, 'server'),
-  })
+  const loadData = () => pending ??= createDevelopmentMapData({ repoRoot, appRoot })
 
   const moduleSelectors = new Map<string, (data: Awaited<ReturnType<typeof loadData>>) => unknown>([
     [releaseNotesModuleId, data => data.releaseNotes],

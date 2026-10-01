@@ -51,7 +51,6 @@ const pageContracts = [
       '../../src/views/system/development-map/index.vue',
       '../../src/views/system/development-map/git-graph.vue',
       '../../src/views/system/development-map/git-graph-row.vue',
-      '../../src/views/system/development-map/tech-stack-panel.vue',
     ],
     label: '开发图谱',
     virtualImport: 'virtual:qianshu/development-map',
