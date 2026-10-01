@@ -374,6 +374,7 @@ const currentGlobalDocuments = Object.freeze([
   '开发工作流.md',
   '生产部署与Gate OPS检查清单.md',
   '用户认证与权限体系设计.md',
+  '腾讯云1Panel部署手册.md',
   '项目工程组织方案.md',
 ])
 
@@ -1394,7 +1395,7 @@ test('Node.js 主版本配置为 24', async () => {
   assert.equal(nodeVersion.trim(), '24')
 })
 
-test('全局文档只保留五份当前指导文档', async () => {
+test('全局文档只保留六份当前指导文档', async () => {
   assert.deepEqual(
     await directoryEntryKinds(path.join('docs', '全局文档')),
     expectedDirectoryEntryKinds({ files: currentGlobalDocuments }),
