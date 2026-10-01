@@ -19,6 +19,7 @@
     "start": "pnpm prisma:generate && nest start",
     "start:prod": "node dist/main.js",
     "auth:bootstrap-admin": "node dist/cli/auth-admin/bootstrap-admin.js",
+    "seed:run": "node dist/cli/seed/seed-run.js",
     "purchase-shipments:backfill-numbers": "node dist/commands/purchase-shipment-number-backfill.js",
     "slh-bills:backfill-recipients": "node dist/commands/slh-bill-recipient-backfill.js",
     "slh-bills:backfill-amounts": "node dist/commands/slh-bill-amount-backfill.js",
