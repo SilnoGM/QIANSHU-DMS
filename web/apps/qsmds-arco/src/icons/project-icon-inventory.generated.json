@@ -712,15 +712,6 @@
     ]
   },
   {
-    "name": "i-ep:arrow-down",
-    "label": "i-ep:arrow-down",
-    "category": "通用图标",
-    "source": "iconify",
-    "usages": [
-      "apps/qsmds-arco/src/views/index.vue"
-    ]
-  },
-  {
     "name": "i-ep:arrow-left",
     "label": "i-ep:arrow-left",
     "category": "通用图标",
@@ -2202,6 +2193,7 @@
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-share-rate-modal.vue",
       "apps/qsmds-arco/src/views/component_library/basic/components/QsToastShowcase.vue",
       "apps/qsmds-arco/src/views/component_library/business/components/GenericDrawerShowcase.vue",
+      "apps/qsmds-arco/src/views/index.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-mark-summary.vue",
@@ -3932,33 +3924,6 @@
     "usages": [
       "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue",
       "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/I18n/index.vue"
-    ]
-  },
-  {
-    "name": "i-simple-icons:gitcode",
-    "label": "i-simple-icons:gitcode",
-    "category": "通用图标",
-    "source": "iconify",
-    "usages": [
-      "apps/qsmds-arco/src/views/index.vue"
-    ]
-  },
-  {
-    "name": "i-simple-icons:gitee",
-    "label": "i-simple-icons:gitee",
-    "category": "通用图标",
-    "source": "iconify",
-    "usages": [
-      "apps/qsmds-arco/src/views/index.vue"
-    ]
-  },
-  {
-    "name": "i-simple-icons:github",
-    "label": "i-simple-icons:github",
-    "category": "通用图标",
-    "source": "iconify",
-    "usages": [
-      "apps/qsmds-arco/src/views/index.vue"
     ]
   },
   {

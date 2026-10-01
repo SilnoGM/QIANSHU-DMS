@@ -20,17 +20,6 @@ import SupplierPaymentProfiles, { SUPPLIER_PAYMENT_PROFILE_PERMISSIONS } from '.
 import SystemAudit from './modules/system.audit'
 
 /**
- * 首页准入使用「任一管理读取权限」门槛，使无业务页面的身份进入稳定 403。
- * 该集合与具体导航分组解耦，独立于管理员工作台与系统管理的分组权限。
- */
-export const MANAGEMENT_READ_PERMISSIONS = [
-  'users:read',
-  'roles:read',
-  'audit:read',
-  'regions:read',
-] as const
-
-/**
  * 管理员工作台主导航的 any-of 门槛，由四个子模块的读取权限并集构成。
  *
  * route store 会把这个数组覆盖到每个一级子路由，App.vue 又校验全部 matched
@@ -83,7 +72,7 @@ const systemRoutes: RouteRecordRaw[] = [
           title: $t(useAppSettingsStore(pinia).settings.app.home.title),
           icon: 'qs-home',
           breadcrumb: false,
-          auth: [...MANAGEMENT_READ_PERMISSIONS],
+          // 首页是登录后的默认落点：此处不设置权限门槛，任一已登录身份都可进入而不落入 403 拦截。
         },
       },
       {
