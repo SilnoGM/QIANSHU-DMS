@@ -1672,7 +1672,9 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/packaging-history-modal.vue",
+      "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-form.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-form.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/order-receipt-requests.vue",
@@ -1772,6 +1774,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list-payment-action.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-marks-cell.vue",
+      "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-payment-statement-action.vue",
       "packages/components/src/pro/code/index.vue"
     ]
@@ -2859,6 +2862,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
+      "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
       "apps/qsmds-arco/src/views/system/roles/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-page.vue",
@@ -3114,15 +3118,6 @@
     "usages": [
       "apps/qsmds-arco/src/views/system/audit/index.vue",
       "apps/qsmds-arco/src/views/system/permissions/index.vue"
-    ]
-  },
-  {
-    "name": "i-lucide:ship",
-    "label": "i-lucide:ship",
-    "category": "通用图标",
-    "source": "iconify",
-    "usages": [
-      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-list-view.logic.ts"
     ]
   },
   {
