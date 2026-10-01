@@ -7,6 +7,7 @@ import { matchesAuthorization } from '../../src/composables/app/auth'
 import userRolesRoutes, {
   ADMIN_USER_ROLE_READ_PERMISSIONS,
 } from '../../src/router/modules/admin.user-roles'
+import applicationSettingsRoute from '../../src/router/modules/application.settings'
 import basicDataRoutes, {
   BASIC_DATA_READ_PERMISSIONS,
 } from '../../src/router/modules/basic.data'
@@ -17,6 +18,7 @@ import supplierPaymentProfilesRoute, {
   SUPPLIER_PAYMENT_PROFILE_PERMISSIONS,
 } from '../../src/router/modules/supplier.payment.profiles'
 import systemAuditRoute from '../../src/router/modules/system.audit'
+import { SYSTEM_MANAGEMENT_PERMISSION } from '../../src/router/modules/workbench-access'
 
 const routesSource = readFileSync(
   new URL('../../src/router/routes.ts', import.meta.url),
@@ -202,6 +204,18 @@ test('系统管理主导航始终注册独立应用配置页面且不受环境�
     routesSource,
     /import ApplicationSettings from '\.\/modules\/application\.settings'/u,
   )
+})
+
+test('系统管理分组用系统专用权限 audit:read 收敛，只有管理员可进入', () => {
+  assert.equal(SYSTEM_MANAGEMENT_PERMISSION, 'audit:read')
+  // audit:read 在权限目录里 system_only = true，普通角色无法分配，因此「只有管理员可进入」由权限目录保证。
+  assert.match(
+    asyncRoutesSource,
+    /title: '系统管理'[\s\S]{0,200}?auth: \[SYSTEM_MANAGEMENT_PERMISSION\]/u,
+  )
+  // 应用配置自身不声明 auth，继承分组门槛；审计日志页面自身的 audit:read 保持不变。
+  assert.equal(applicationSettingsRoute.meta?.auth, undefined)
+  assert.equal(systemAuditRoute.meta?.auth, 'audit:read')
 })
 
 test('首页不参与页面权限校验，任一已登录身份均可进入', () => {

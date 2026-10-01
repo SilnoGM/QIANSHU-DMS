@@ -1654,6 +1654,9 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'slh-bills:reconcile',
     'supplier-payment-profiles:read',
     'supplier-payment-profiles:update',
+    'workbench:finance',
+    'workbench:operations',
+    'workbench:purchase-transport',
   ])
   assert.equal(Math.round(permissionDrawerState.width), 768)
   assert.ok(permissionDrawerState.rightGap <= 1)

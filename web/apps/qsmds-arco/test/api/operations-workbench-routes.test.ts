@@ -162,6 +162,12 @@ test('千树运营工作台是最左侧顶部导航', () => {
     asyncRoutesSource,
     /title: '千树运营工作台'[\s\S]*?children: \[[\s\S]*?\.\.\.OperationsWorkbenchRoutes/u,
   )
+  // 主路由按工作台准入码收口：共享业务码（purchase-orders:read/payment）不再让其它工作台角色看到运营工作台。
+  assert.match(
+    asyncRoutesSource,
+    /title: '千树运营工作台'[\s\S]{0,200}?auth: \[OPERATIONS_WORKBENCH_PERMISSION\]/u,
+  )
+  assert.match(routesSource, /from '\.\/modules\/workbench-access'/u)
   assert.ok(
     asyncRoutesSource.indexOf('title: \'千树运营工作台\'')
     < asyncRoutesSource.indexOf('title: \'管理员工作台\''),
