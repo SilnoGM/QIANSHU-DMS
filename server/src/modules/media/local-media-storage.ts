@@ -39,6 +39,7 @@ import {
   type ReadableStoredObject,
   requireMediaObjectKeyNamespace,
   type StagingWrite,
+  type StoredObjectExpectation,
   type StoredObjectStat,
 } from './media-storage'
 
@@ -704,6 +705,47 @@ export class LocalMediaStorage implements MediaStorage {
       modifiedAt: new Date(inspected.metadata.mtimeMs),
       sizeBytes: BigInt(inspected.metadata.size),
     })
+  }
+
+  /**
+   * 回读全文校验：本地磁盘读取没有流量成本，因此这里不做任何降级。
+   *
+   * 读取长度以期望字节数为上界：一旦超出即判定不一致，避免异常对象把校验变成无界读取。
+   */
+  async verifyStoredObject(
+    objectKey: string,
+    expected: StoredObjectExpectation,
+  ): Promise<boolean> {
+    let opened: ReadableStoredObject
+    try {
+      opened = await this.openInspectedObject(requireManagedObjectKey(objectKey))
+    }
+    catch {
+      return false
+    }
+    if (opened.sizeBytes !== expected.sizeBytes) {
+      opened.stream.destroy()
+      return false
+    }
+
+    const hash = createHash('sha256')
+    let sizeBytes = 0n
+    try {
+      for await (const chunk of opened.stream) {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        sizeBytes += BigInt(buffer.length)
+        if (sizeBytes > expected.sizeBytes) {
+          opened.stream.destroy()
+          return false
+        }
+        hash.update(buffer)
+      }
+    }
+    catch {
+      return false
+    }
+    return sizeBytes === expected.sizeBytes &&
+      hash.digest('hex') === expected.checksumSha256
   }
 
   async withStagingValidationSource<T>(

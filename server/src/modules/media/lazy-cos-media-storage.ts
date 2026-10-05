@@ -9,6 +9,7 @@ import type {
   MediaStorageInventoryRequest,
   ReadableStoredObject,
   StagingWrite,
+  StoredObjectExpectation,
   StoredObjectStat,
 } from './media-storage'
 
@@ -79,6 +80,13 @@ export class LazyCosMediaStorage implements MediaStorage {
 
   stat(key: string): Promise<StoredObjectStat | null> {
     return this.withStorage(storage => storage.stat(key))
+  }
+
+  verifyStoredObject(
+    objectKey: string,
+    expected: StoredObjectExpectation,
+  ): Promise<boolean> {
+    return this.withStorage(storage => storage.verifyStoredObject(objectKey, expected))
   }
 
   withStagingValidationSource<T>(

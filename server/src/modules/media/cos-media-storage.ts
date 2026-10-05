@@ -20,6 +20,7 @@ import {
   type ReadableStoredObject,
   requireMediaObjectKeyNamespace,
   type StagingWrite,
+  type StoredObjectExpectation,
   type StoredObjectStat,
 } from './media-storage'
 
@@ -312,6 +313,32 @@ export class CosMediaStorage implements MediaStorage {
       stagingKey,
       operation,
     )
+  }
+
+  /**
+   * 分级校验：优先用上传时写入的对象元数据核对，元数据缺失时回退为回读全文。
+   *
+   * 这里不下载正文的前提是「长度 + 上传时记录的摘要」同时命中；只命中长度不足以放行，
+   * 因为长度一致并不能证明字节一致。全字节比对仍由对账工具 `recovery-dry-run` 承担。
+   */
+  async verifyStoredObject(
+    objectKey: string,
+    expected: StoredObjectExpectation,
+  ): Promise<boolean> {
+    const namespace = requireManagedNamespace(objectKey)
+    if (namespace === 'staging') {
+      return this.dependencies.staging.verifyStoredObject(objectKey, expected)
+    }
+    const head = await this.headObject(objectKey)
+    if (head === null) return false
+    if (head.sizeBytes !== expected.sizeBytes) return false
+
+    const recorded = head.metadata[SHA256_METADATA_KEY]
+    if (recorded !== undefined) {
+      return recorded === expected.checksumSha256
+    }
+    // 迁移进来的历史对象没有元数据摘要；此时必须实际读取字节，不能仅凭长度放行。
+    return await this.checksumSha256(objectKey) === expected.checksumSha256
   }
 
   private async openInspectedObject(

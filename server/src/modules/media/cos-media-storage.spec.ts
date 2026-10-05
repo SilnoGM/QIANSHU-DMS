@@ -23,6 +23,7 @@ import {
   type MediaStorageHealthResult,
   type ReadableStoredObject,
   type StagingWrite,
+  type StoredObjectExpectation,
   type StoredObjectStat,
 } from './media-storage'
 
@@ -220,6 +221,19 @@ class FakeStagingStorage implements MediaStorage {
     return Promise.resolve(bytes === undefined
       ? null
       : { modifiedAt: FIXED_MODIFIED_AT, sizeBytes: BigInt(bytes.length) })
+  }
+
+  verifyStoredObject(
+    objectKey: string,
+    expected: StoredObjectExpectation,
+  ): Promise<boolean> {
+    this.operations.push(`staging:verify:${objectKey}`)
+    const bytes = this.files.get(objectKey)
+    if (bytes === undefined) return Promise.resolve(false)
+    if (BigInt(bytes.length) !== expected.sizeBytes) return Promise.resolve(false)
+    return Promise.resolve(
+      createHash('sha256').update(bytes).digest('hex') === expected.checksumSha256,
+    )
   }
 
   withStagingValidationSource<T>(
@@ -529,6 +543,60 @@ describe('CosMediaStorage', () => {
     // 对外投递仍然只接受 assets：staging 键走 open 必须失败关闭。
     await expect(storage.open('staging/asset.part'))
       .rejects.toMatchObject({ code: 'MEDIA_STORAGE_INVALID_KEY' })
+  })
+
+  it('verifies stored objects through object metadata without downloading the body', async () => {
+    const { client, storage } = await createFixture()
+    const bytes = Buffer.from('object-bytes')
+    const digest = createHash('sha256').update(bytes).digest('hex')
+    client.store('assets/2026/10/asset.jpg', bytes)
+    client.objects.get('assets/2026/10/asset.jpg')!.metadata = {
+      'x-cos-meta-sha256': digest,
+    }
+
+    await expect(storage.verifyStoredObject('assets/2026/10/asset.jpg', {
+      checksumSha256: digest,
+      sizeBytes: BigInt(bytes.length),
+    })).resolves.toBe(true)
+    expect(client.operations.filter(operation => operation.startsWith('get:')))
+      .toEqual([])
+  })
+
+  it('fails verification on a length or digest mismatch', async () => {
+    const { client, storage } = await createFixture()
+    const bytes = Buffer.from('object-bytes')
+    const digest = createHash('sha256').update(bytes).digest('hex')
+    client.store('assets/2026/10/asset.jpg', bytes)
+    client.objects.get('assets/2026/10/asset.jpg')!.metadata = {
+      'x-cos-meta-sha256': digest,
+    }
+
+    await expect(storage.verifyStoredObject('assets/2026/10/asset.jpg', {
+      checksumSha256: digest,
+      sizeBytes: BigInt(bytes.length + 1),
+    })).resolves.toBe(false)
+    await expect(storage.verifyStoredObject('assets/2026/10/asset.jpg', {
+      checksumSha256: 'a'.repeat(64),
+      sizeBytes: BigInt(bytes.length),
+    })).resolves.toBe(false)
+    await expect(storage.verifyStoredObject('assets/2026/10/missing.jpg', {
+      checksumSha256: digest,
+      sizeBytes: BigInt(bytes.length),
+    })).resolves.toBe(false)
+  })
+
+  it('falls back to reading the body when the recorded digest metadata is missing', async () => {
+    const { client, storage } = await createFixture()
+    const bytes = Buffer.from('migrated-object')
+    const digest = createHash('sha256').update(bytes).digest('hex')
+    client.store('assets/2026/10/migrated.jpg', bytes)
+
+    await expect(storage.verifyStoredObject('assets/2026/10/migrated.jpg', {
+      checksumSha256: digest,
+      sizeBytes: BigInt(bytes.length),
+    })).resolves.toBe(true)
+    expect(client.operations.filter(operation => operation.startsWith('get:')))
+      .toEqual(['get:assets/2026/10/migrated.jpg'])
   })
 
   it('maps client authorization failures to a storage error without echoing object keys', async () => {
