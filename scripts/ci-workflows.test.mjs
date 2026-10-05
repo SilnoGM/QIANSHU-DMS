@@ -1043,3 +1043,29 @@ test('publish-only 以唯一写权限复用原 bundle 身份且只归一化一�
   }
   assert.equal(countOccurrences(source, 'GITHUB_TOKEN:'), 1)
 })
+
+// 发布流程曾在 package-images 上因 node --run release:images 缺少根脚本入口而失败，
+// 因此工作流引用的根脚本必须在根 package.json 中真实存在。
+test('Workflow 引用的根脚本都在根 package.json 中存在', async () => {
+  const manifest = JSON.parse(
+    await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'),
+  )
+  const scripts = new Set(Object.keys(manifest.scripts ?? {}))
+  const sources = [
+    ['ci.yml', await readCiWorkflow()],
+    ['examples.yml', await readExamplesWorkflow()],
+    ['release.yml', await readReleaseWorkflow()],
+  ]
+  let referenceCount = 0
+  for (const [label, source] of sources) {
+    for (const match of source.matchAll(/node --run ([a-z0-9:_-]+)/gu)) {
+      referenceCount += 1
+      assert.equal(
+        scripts.has(match[1]),
+        true,
+        `${label} 引用了根 package.json 中不存在的脚本：${match[1]}`,
+      )
+    }
+  }
+  assert.ok(referenceCount > 0, 'Workflow 应通过 node --run 调用根脚本')
+})
