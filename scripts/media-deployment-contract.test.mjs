@@ -26,6 +26,10 @@ test('Server release 包含媒体部署模板且模板不携带真实 Secret', a
     packageJson.scripts['media:cleanup:expired-trash'],
     'node dist/commands/media-operations.js cleanup-expired-trash',
   )
+  assert.equal(
+    packageJson.scripts['media:migrate'],
+    'node dist/commands/media-migration.js',
+  )
 
   const environment = await read(
     'server/deploy/environment/server.env.example',
@@ -35,12 +39,25 @@ test('Server release 包含媒体部署模板且模板不携带真实 Secret', a
     'MEDIA_STORAGE_ROOT=/var/lib/qianshu-dms/media',
     'MEDIA_FFPROBE_PATH=/usr/bin/ffprobe',
     'MEDIA_QPDF_PATH=/usr/bin/qpdf',
+    'MEDIA_COS_REGION=ap-beijing',
   ]) {
     assert.match(environment, new RegExp(`^${expected}$`, 'mu'))
   }
   assert.match(environment, /^DATABASE_URL=$/mu)
   assert.match(environment, /^AUTH_USERNAME_HMAC_KEY=$/mu)
   assert.doesNotMatch(environment, /postgres(?:ql)?:\/\/[^\s]*@/u)
+
+  // 两套模板都必须只留空占位：一旦有人把真实凭据写进模板，空行断言就会失败。
+  for (const relativePath of [
+    'server/deploy/environment/server.env.example',
+    'deploy/docker/server.env.example',
+  ]) {
+    const template = await read(relativePath)
+    for (const expected of ['MEDIA_COS_BUCKET=', 'MEDIA_COS_SECRET_ID=', 'MEDIA_COS_SECRET_KEY=']) {
+      assert.match(template, new RegExp(`^${expected}$`, 'mu'), relativePath)
+    }
+    assert.doesNotMatch(template, /^MEDIA_COS_SECRET_(?:ID|KEY)=\S+$/mu, relativePath)
+  }
 })
 
 test('Nginx 与 systemd 模板固定 internal、Range、body limit 和运行身份边界', async () => {
