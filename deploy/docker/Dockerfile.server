@@ -1,0 +1,48 @@
+# syntax=docker/dockerfile:1
+#
+# 千树 DMS Server 镜像：ubuntu:24.04 + Node 24 + ffmpeg(ffprobe)/qpdf。
+# 与宿主部署方案保持同一 OS 与 glibc 口径（Release 归档只承诺 Ubuntu 24.04 / glibc / x64）。
+#
+# 构建输入是发布流程产出的 Server 归档解包目录（server-app/），镜像内不执行 pnpm install，
+# 也不执行前端/后端构建；这样镜像内容与已校验的发布附件完全一致。
+FROM ubuntu:24.04
+
+ARG NODE_MAJOR=24
+ENV DEBIAN_FRONTEND=noninteractive \
+    NODE_ENV=production \
+    TZ=Asia/Shanghai
+
+# fontconfig 是采购订单图片渲染（sharp/Pango）的运行时依赖；ffmpeg 提供 /usr/bin/ffprobe，
+# qpdf 提供 /usr/bin/qpdf，二者是媒体上传的生产依赖，缺失会导致启动前 preflight 失败关闭。
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
+      fontconfig \
+      ffmpeg \
+      gnupg \
+      qpdf \
+      tzdata \
+ && curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
+ && apt-get install -y --no-install-recommends nodejs \
+ && rm -rf /var/lib/apt/lists/*
+
+# 与宿主方案的身份命名保持一致；uid/gid 固定为 10001，宿主媒体目录按此授权（见部署手册）。
+RUN groupadd --system --gid 10001 qianshu-media \
+ && useradd --system --uid 10001 --gid qianshu-media \
+      --home-dir /app --shell /usr/sbin/nologin qianshu-dms
+
+WORKDIR /app
+COPY server-app/ /app/
+COPY entrypoint/server-entrypoint.sh /usr/local/bin/qianshu-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/qianshu-entrypoint.sh \
+ && chown -R qianshu-dms:qianshu-media /app \
+ && chmod -R a-w /app
+
+# 媒体根目录由 compose 绑定挂载到宿主持久目录；容器内保持与宿主方案相同的路径。
+VOLUME ["/var/lib/qianshu-dms/media"]
+
+USER qianshu-dms
+EXPOSE 3000
+ENTRYPOINT ["/usr/local/bin/qianshu-entrypoint.sh"]
+CMD ["node", "dist/main.js"]

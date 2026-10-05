@@ -1,0 +1,13 @@
+[Unit]
+Description=Qianshu DMS Expired Media Trash Cleanup (Docker)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# 与宿主部署的 oneshot 单元等价：用同一镜像、同一 server.env 与同一媒体卷执行一次清理。
+# docker compose run 会按 depends_on 确保 db 已就绪，且不复用 web 容器。
+WorkingDirectory=/srv/qianshu-dms
+ExecStart=/usr/bin/docker compose run --rm server node dist/commands/media-operations.js cleanup-expired-trash
+TimeoutStartSec=120s
