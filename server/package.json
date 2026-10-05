@@ -26,6 +26,7 @@
     "auth:cleanup": "node dist/commands/auth-cleanup.js",
     "auth:recover-admin": "node dist/cli/auth-admin/recover-admin.js",
     "media:cleanup:expired-trash": "node dist/commands/media-operations.js cleanup-expired-trash",
+    "media:migrate": "node dist/commands/media-migration.js",
     "media:ops:health": "node dist/commands/media-operations.js health",
     "media:recovery:dry-run": "node dist/commands/media-operations.js recovery-dry-run",
     "typecheck": "pnpm prisma:generate && tsc --noEmit",

@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto'
 import { PassThrough, type Readable } from 'node:stream'
 
-import type { CosMediaConfiguration, LocalMediaConfiguration } from '../../config/media.config'
+import type {
+  CosMediaConfiguration,
+  LocalMediaConfiguration,
+  MediaConfiguration,
+} from '../../config/media.config'
 import {
   CosObjectClientError,
   type CosObjectClient,
@@ -409,13 +413,14 @@ export class CosMediaStorage implements MediaStorage {
 }
 
 /**
- * 只把 staging 需要的字段交给本地实例。
+ * 只把本地语义字段交给本地实现。
  *
  * 逐字段构造而非展开配置对象：这样 COS 目标与非敏感定位信息不会渗入本地实现，
  * 本地实现的安全校验（root realpath、权限位、设备一致性、容量）也保持不变。
+ * 存量迁移命令用同一个派生函数构造「源端本地存储」，保证与运行期完全一致的目录语义。
  */
-function toStagingConfiguration(
-  configuration: CosMediaConfiguration,
+export function deriveLocalMediaConfiguration(
+  configuration: MediaConfiguration,
 ): LocalMediaConfiguration {
   return Object.freeze({
     contentDeliveryMode: configuration.contentDeliveryMode,
@@ -426,6 +431,12 @@ function toStagingConfiguration(
     storageRoot: configuration.storageRoot,
     trashRetentionDays: configuration.trashRetentionDays,
   })
+}
+
+function toStagingConfiguration(
+  configuration: CosMediaConfiguration,
+): LocalMediaConfiguration {
+  return deriveLocalMediaConfiguration(configuration)
 }
 
 export { SHA256_METADATA_KEY }
