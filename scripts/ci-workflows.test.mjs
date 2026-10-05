@@ -465,6 +465,7 @@ test('web-check-build 只使用 Web cache 并验证正式应用产物', async ()
     'run: pnpm -C web check',
     'run: pnpm -C web build',
     'run: test -f web/apps/qsmds-arco/dist/index.html && test ! -L web/apps/qsmds-arco/dist/index.html && test -s web/apps/qsmds-arco/dist/index.html',
+    'name: Verify Web build identity',
     'run: git diff --exit-code -- .',
   ], 'web-check-build')
   assert.equal(job.includes('server/pnpm-lock.yaml'), false)
