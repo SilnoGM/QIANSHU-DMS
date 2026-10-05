@@ -134,6 +134,40 @@ jobs:
           test ! -L "$RUNNER_TEMP/release-server/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"
           test -s "$RUNNER_TEMP/release-server/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"
 
+      - name: Install media tools
+        run: |
+          # 归档 smoke 会运行归档内的媒体 CLI（health 需要 ffprobe）；GitHub Runner 镜像不含 ffmpeg。
+          # 与 browser-auth-e2e 使用同一套隔离 apt 源，避免旧索引、第三方源或云镜像参与解析。
+          if test ! -x /usr/bin/ffprobe; then
+            sudo tee /etc/apt/sources.list.d/qianshu-media.sources >/dev/null <<'EOF'
+          Types: deb
+          URIs: https://archive.ubuntu.com/ubuntu/
+          Suites: noble noble-updates noble-backports
+          Components: main restricted universe multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+          Types: deb
+          URIs: https://security.ubuntu.com/ubuntu/
+          Suites: noble-security
+          Components: main restricted universe multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+            apt_lists=/var/lib/apt/lists/qianshu-media-tools
+            sudo install -d -m 0755 -o root -g root "${apt_lists}"
+            sudo install -d -m 0700 -o _apt -g root "${apt_lists}/partial"
+            apt_options=(
+              -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/qianshu-media.sources
+              -o Dir::Etc::sourceparts=-
+              -o "Dir::State::lists=${apt_lists}"
+              -o Acquire::Retries=3
+              -o Acquire::https::Timeout=30
+            )
+            sudo timeout 5m apt-get "${apt_options[@]}" update
+            sudo timeout 15m apt-get "${apt_options[@]}" install --yes --no-install-recommends ffmpeg
+          fi
+          test -x /usr/bin/ffprobe
+          /usr/bin/ffprobe -version
+
       - name: Smoke test Server archive
         run: |
           node --run release:smoke:server -- \

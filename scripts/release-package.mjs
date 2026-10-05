@@ -339,6 +339,10 @@ function normalizeDependencies(dependencies = {}) {
     reservePort: dependencies.reservePort ?? reserveLoopbackPort,
     run,
     temporaryRoot: path.resolve(dependencies.temporaryRoot ?? os.tmpdir()),
+    // 媒体根不能位于系统临时目录内（Server 会拒绝该根），因此归档 smoke 需要一个临时目录之外的载体目录。
+    mediaSmokeRoot: path.resolve(
+      dependencies.mediaSmokeRoot ?? path.join(os.homedir(), '.qianshu-dms-smoke'),
+    ),
     terminationWait: dependencies.terminationWait ?? waitForTerminationGrace,
     wait: dependencies.wait ?? (milliseconds =>
       new Promise(resolve => setTimeout(resolve, milliseconds))),
@@ -1400,6 +1404,58 @@ async function runHealthAttempt(
   }
 }
 
+/*
+ * 归档内的媒体 CLI 必须能在 production 依赖集合下运行：历史缺陷是入口 require 了被 prune 掉的
+ * devDependency，导致 preflight、health、cleanup 在正式归档里启动即失败，而只跑 HTTP 的 smoke
+ * 无法发现。这里执行 health（比 preflight 更严格：非 healthy 即退出码 1），同时覆盖模块解析、
+ * 生产配置校验与媒体能力（读取、写入、容量、ffprobe）。
+ *
+ * 媒体根不能位于系统临时目录、归档目录或当前工作目录内，Server 会判定为不安全根，
+ * 因此使用临时目录之外的载体目录并在结束时回收。
+ */
+async function runArchiveMediaHealthCheck(
+  serverRoot,
+  smokeEnvironment,
+  dependencies,
+) {
+  const mkdir = resolveFileSystemMethod(dependencies.fileSystem, 'mkdir')
+  const mkdtemp = resolveFileSystemMethod(dependencies.fileSystem, 'mkdtemp')
+  const rm = resolveFileSystemMethod(dependencies.fileSystem, 'rm')
+  await mkdir(dependencies.mediaSmokeRoot, { mode: 0o700, recursive: true })
+  const mediaRoot = await mkdtemp(
+    path.join(dependencies.mediaSmokeRoot, 'media-'),
+  )
+  let primaryError
+  try {
+    for (const directory of ['staging', 'assets', 'trash']) {
+      // 目录权限必须不含组写与其他访问，否则读写能力会被判定为 down。
+      await mkdir(path.join(mediaRoot, directory), { mode: 0o750 })
+    }
+    await runStep(
+      dependencies.run,
+      process.execPath,
+      ['dist/commands/media-operations.js', 'health'],
+      {
+        cwd: serverRoot,
+        env: { ...smokeEnvironment, MEDIA_STORAGE_ROOT: mediaRoot },
+      },
+    )
+  } catch (error) {
+    primaryError = new Error('Server archive media operations health failed', {
+      cause: error,
+    })
+    throw primaryError
+  } finally {
+    try {
+      await rm(mediaRoot, { force: true, recursive: true })
+    } catch (cleanupError) {
+      if (primaryError === undefined) {
+        throw cleanupError
+      }
+    }
+  }
+}
+
 async function runServerArchiveSmoke(input, dependencies = {}) {
   const normalizedInput = normalizeSmokeInput(input)
   const normalizedDependencies = normalizeDependencies(dependencies)
@@ -1467,6 +1523,11 @@ async function runServerArchiveSmoke(input, dependencies = {}) {
         signalState,
       )
       if (passed) {
+        await runArchiveMediaHealthCheck(
+          extracted.serverRoot,
+          smokeEnvironment,
+          normalizedDependencies,
+        )
         return
       }
     }

@@ -809,6 +809,7 @@ test('package-server 重新构建并在上传前完成隔离 PostgreSQL runtime 
     'node --run release:package:server --',
     '--output "$RUNNER_TEMP/release-server"',
     'test -f "$RUNNER_TEMP/release-server/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"',
+    'test -x /usr/bin/ffprobe',
     'node --run release:smoke:server --',
     '--archive "$RUNNER_TEMP/release-server/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"',
     'run: git diff --exit-code -- .',
@@ -828,6 +829,18 @@ test('package-server 重新构建并在上传前完成隔离 PostgreSQL runtime 
   assert.equal(job.includes('web/pnpm-lock.yaml'), false)
   assert.equal(job.includes('services:'), false)
   assert.equal(job.includes('DATABASE_URL'), false)
+
+  // 归档 smoke 会在归档内运行媒体 CLI（health 需要 ffprobe），Runner 镜像不含 ffmpeg。
+  const mediaTools = findNamedStep(job, 'Install media tools')
+  for (const expected of [
+    'if test ! -x /usr/bin/ffprobe; then',
+    'sources.list.d/qianshu-media.sources',
+    'install --yes --no-install-recommends ffmpeg',
+    'test -x /usr/bin/ffprobe',
+    '/usr/bin/ffprobe -version',
+  ]) {
+    assert.equal(mediaTools.includes(expected), true, `媒体工具步骤缺少：${expected}`)
+  }
 })
 
 test('manifest 只按精确 artifact ID 下载 package 与 image 两组输入并使用隔离目录', async () => {
