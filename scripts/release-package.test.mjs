@@ -1725,10 +1725,10 @@ test('smoke 先 migration/安全提取，再以净化 env 和动态端口启动 
   assert.ok(processGroup.calls.some(call => call.type === 'terminate'))
   assert.ok(processGroup.calls.some(call => call.type === 'wait'))
 
-  // 归档内媒体 CLI 必须在 production 依赖集合下真实运行：health 非 healthy 时退出码为 1。
+  // 归档内媒体 CLI 必须在 production 依赖集合下真实运行：preflight 判定 down 时退出码为 1。
   const mediaCall = calls[2]
   assert.equal(mediaCall[0], process.execPath)
-  assert.deepEqual(mediaCall[1], ['dist/commands/media-operations.js', 'health'])
+  assert.deepEqual(mediaCall[1], ['dist/commands/media-operations.js', 'preflight'])
   assert.equal(
     path.basename(mediaCall[2].cwd),
     'qsmds-server-v1.2.3-linux-x64',
@@ -1746,7 +1746,7 @@ test('smoke 先 migration/安全提取，再以净化 env 和动态端口启动 
   assert.deepEqual(await fs.readdir(fixture.runnerTemp), [])
 })
 
-test('smoke 在归档媒体 CLI 非 healthy 时失败并回收媒体根', async (t) => {
+test('smoke 在归档媒体 preflight 判定 down 时失败并回收媒体根', async (t) => {
   const fixture = await createSandbox(t)
   const archive = await createServerArchiveFixture(fixture)
   const calls = []
@@ -1761,7 +1761,7 @@ test('smoke 在归档媒体 CLI 非 healthy 时失败并回收媒体根', async 
       )
       return undefined
     }
-    // 模拟归档媒体 CLI 非 healthy（退出码 1）。
+    // 模拟归档媒体 preflight 判定 down（退出码 1）。
     return command === process.execPath ? 1 : undefined
   }
   const harness = createDependencies(fixture, { run })

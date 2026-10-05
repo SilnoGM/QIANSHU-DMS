@@ -1407,8 +1407,9 @@ async function runHealthAttempt(
 /*
  * 归档内的媒体 CLI 必须能在 production 依赖集合下运行：历史缺陷是入口 require 了被 prune 掉的
  * devDependency，导致 preflight、health、cleanup 在正式归档里启动即失败，而只跑 HTTP 的 smoke
- * 无法发现。这里执行 health（比 preflight 更严格：非 healthy 即退出码 1），同时覆盖模块解析、
- * 生产配置校验与媒体能力（读取、写入、容量、ffprobe）。
+ * 无法发现。这里执行 preflight：模块解析失败、配置校验失败或媒体读取不可用时状态为 down、
+ * 退出码 1；容量告警与缺少 ffprobe 属于运行环境属性（CI runner 既没有 ffprobe、可用空间也常低于
+ * 20%），保持 degraded 不阻断，避免把环境差异误判成归档缺陷。
  *
  * 媒体根不能位于系统临时目录、归档目录或当前工作目录内，Server 会判定为不安全根，
  * 因此使用临时目录之外的载体目录并在结束时回收。
@@ -1434,7 +1435,7 @@ async function runArchiveMediaHealthCheck(
     await runStep(
       dependencies.run,
       process.execPath,
-      ['dist/commands/media-operations.js', 'health'],
+      ['dist/commands/media-operations.js', 'preflight'],
       {
         cwd: serverRoot,
         env: { ...smokeEnvironment, MEDIA_STORAGE_ROOT: mediaRoot },
