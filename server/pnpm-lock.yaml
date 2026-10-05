@@ -51,7 +51,7 @@ importers:
         specifier: 0.15.1
         version: 0.15.1
       cos-nodejs-sdk-v5:
-        specifier: ^3.0.0
+        specifier: 3.0.0
         version: 3.0.0
       dotenv:
         specifier: 17.4.2
