@@ -1,3 +1,4 @@
+import type { MediaStorageDriver } from '../../config/media.config'
 import type { Prisma } from '../../generated/prisma/client'
 import {
   MediaAssetStatus,
@@ -46,7 +47,14 @@ export type MediaAssetActivationResult =
  * 文件系统状态不在 persistence 内推断，领域引用也由未来各领域服务显式创建。
  */
 export class MediaAssetPersistence {
-  constructor(private readonly prisma: PrismaService) {}
+  /**
+   * driver 只在创建上传记录时落库，用于记录这份字节实际存放在哪里；
+   * 运行期读写分派仍由装配层按配置决定，因此该列不参与任何条件查询。
+   */
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storageDriver: MediaStorageDriver = 'local',
+  ) {}
 
   createUploading(
     input: CreateUploadingMediaAssetInput,
@@ -66,7 +74,7 @@ export class MediaAssetPersistence {
         retentionUntil: null,
         sizeBytes: null,
         status: MediaAssetStatus.UPLOADING,
-        storageDriver: 'local',
+        storageDriver: this.storageDriver,
         uploadExpiresAt: input.uploadExpiresAt,
         videoCodec: null,
         width: null,

@@ -4,6 +4,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
 import type { MediaConfiguration } from '../../config/media.config'
 import { PrismaModule } from '../../infrastructure/database/prisma.module'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { createCosObjectClient, readCosCredentials } from './cos-object-client'
+import { LazyCosMediaStorage } from './lazy-cos-media-storage'
 import { LazyLocalMediaStorage } from './lazy-local-media-storage'
 import { MediaAssetPersistence } from './media-asset.persistence'
 import { MediaAssetService } from './media-asset.service'
@@ -19,6 +21,30 @@ import { OceanFreightSourceFileService } from './ocean-freight-source-file.servi
 const MEDIA_CONFIGURATION = Symbol('qianshu.media.configuration')
 const MEDIA_STORAGE = Symbol('qianshu.media.storage')
 
+/**
+ * 按配置装配存储实现。
+ *
+ * COS 凭据只在这个函数的 cos 分支里读取：既不进入 MediaConfiguration，也不出现在日志或异常中；
+ * 本地驱动完全不接触凭据，因此 dev/CI 没有密钥也能照常启动。
+ */
+export function createMediaStorage(
+  configuration: MediaConfiguration,
+  environment: Record<string, unknown>,
+): MediaStorage {
+  if (configuration.driver !== 'cos') {
+    return new LazyLocalMediaStorage(configuration)
+  }
+  const credentials = readCosCredentials(environment)
+  return new LazyCosMediaStorage(
+    configuration,
+    createCosObjectClient({
+      bucket: configuration.cos.bucket,
+      region: configuration.cos.region,
+      ...credentials,
+    }),
+  )
+}
+
 const providers = [{
   provide: MEDIA_CONFIGURATION,
   inject: [ConfigService],
@@ -26,9 +52,15 @@ const providers = [{
     config.getOrThrow<MediaConfiguration>('media'),
 }, {
   provide: MEDIA_STORAGE,
-  inject: [MEDIA_CONFIGURATION],
-  useFactory: (configuration: MediaConfiguration): MediaStorage =>
-    new LazyLocalMediaStorage(configuration),
+  inject: [MEDIA_CONFIGURATION, ConfigService],
+  useFactory: (
+    configuration: MediaConfiguration,
+    config: ConfigService,
+  ): MediaStorage =>
+    createMediaStorage(configuration, {
+      MEDIA_COS_SECRET_ID: config.get<string>('MEDIA_COS_SECRET_ID'),
+      MEDIA_COS_SECRET_KEY: config.get<string>('MEDIA_COS_SECRET_KEY'),
+    }),
 }, {
   provide: MediaContentDeliveryService,
   inject: [MEDIA_STORAGE, MEDIA_CONFIGURATION],
@@ -39,9 +71,12 @@ const providers = [{
     MediaContentDeliveryService.fromConfiguration(storage, configuration),
 }, {
   provide: MediaAssetPersistence,
-  inject: [PrismaService],
-  useFactory: (prisma: PrismaService): MediaAssetPersistence =>
-    new MediaAssetPersistence(prisma),
+  inject: [PrismaService, MEDIA_CONFIGURATION],
+  useFactory: (
+    prisma: PrismaService,
+    configuration: MediaConfiguration,
+  ): MediaAssetPersistence =>
+    new MediaAssetPersistence(prisma, configuration.driver),
 }, {
   provide: MediaContentValidator,
   inject: [MEDIA_CONFIGURATION],

@@ -83,6 +83,44 @@ describe('MediaAssetPersistence', () => {
     })
   })
 
+  it('records the driver that actually holds the bytes', async () => {
+    const create = jest.fn().mockResolvedValue({ id: ASSET_ID })
+    const prisma = {
+      mediaAsset: { create, findUnique: jest.fn(), updateMany: jest.fn() },
+    } as unknown as PrismaService
+    const persistence = new MediaAssetPersistence(prisma, 'cos')
+
+    await persistence.createUploading({
+      actorUserId: ACTOR_ID,
+      mediaType: MediaType.IMAGE,
+      originalFilename: 'photo.webp',
+      uploadExpiresAt: EXPIRES_AT,
+    })
+
+    expect(create).toHaveBeenCalledWith({
+      data: {
+        audioCodec: null,
+        checksumSha256: null,
+        createdByUserId: ACTOR_ID,
+        durationMs: null,
+        failureCode: null,
+        height: null,
+        mediaType: MediaType.IMAGE,
+        mimeType: null,
+        objectKey: null,
+        originalFilename: 'photo.webp',
+        retentionUntil: null,
+        sizeBytes: null,
+        status: MediaAssetStatus.UPLOADING,
+        storageDriver: 'cos',
+        uploadExpiresAt: EXPIRES_AT,
+        videoCodec: null,
+        width: null,
+      },
+      select: { id: true },
+    })
+  })
+
   it('conditionally materializes trusted IMAGE metadata without making the asset READY', async () => {
     const fixture = createPersistenceFixture()
 
