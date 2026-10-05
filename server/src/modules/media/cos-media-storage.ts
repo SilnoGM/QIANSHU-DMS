@@ -156,11 +156,13 @@ export class CosMediaStorage implements MediaStorage {
     return healthResult('up', 'MEDIA_STORAGE_READY')
   }
 
+  /**
+   * 三个命名空间统一走「受控读取 + 本地计算摘要」。
+   *
+   * 不能把 staging 键转给本地实例的 `checksumSha256`：那个方法只接受 `assets/` 与 `trash/`，
+   * 传 staging 键会抛 `MEDIA_STORAGE_INVALID_KEY`（真实桶验收时踩到过）。
+   */
   async checksumSha256(objectKey: string): Promise<string> {
-    const namespace = requireManagedNamespace(objectKey)
-    if (namespace === 'staging') {
-      return this.dependencies.staging.checksumSha256(objectKey)
-    }
     const opened = await this.openManagedObject(objectKey)
     return digestOfStream(opened.stream)
   }
@@ -180,8 +182,10 @@ export class CosMediaStorage implements MediaStorage {
       throw new MediaStorageError('MEDIA_STORAGE_CONFLICT')
     }
 
-    // 摘要先写进对象元数据，供后续 HEAD 校验；这里的一次本地读取换取上传后不再回读整份对象。
-    const sha256 = await this.dependencies.staging.checksumSha256(source)
+    // 摘要必须在上传前算出来（要写进对象元数据），因此先完整读取一次 staging 文件；
+    // 这里同样不能复用本地实例的 checksumSha256——它只接受 assets/trash。
+    const stagedForDigest = await this.dependencies.staging.openManagedObject(source)
+    const sha256 = await digestOfStream(stagedForDigest.stream)
     const opened = await this.dependencies.staging.openManagedObject(source)
     try {
       await this.dependencies.client.putObject({

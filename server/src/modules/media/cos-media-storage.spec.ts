@@ -154,6 +154,11 @@ class FakeStagingStorage implements MediaStorage {
 
   checksumSha256(objectKey: string): Promise<string> {
     this.operations.push(`staging:checksum:${objectKey}`)
+    // 与真实本地实现同规则：只接受 assets/trash，传 staging 键必须失败关闭，
+    // 否则测试替身会比真实实现宽松，掩盖调用方的命名空间错误。
+    if (!objectKey.startsWith('assets/') && !objectKey.startsWith('trash/')) {
+      return Promise.reject(new MediaStorageError('MEDIA_STORAGE_INVALID_KEY'))
+    }
     const bytes = this.requireBytes(objectKey)
     return Promise.resolve(createHash('sha256').update(bytes).digest('hex'))
   }
@@ -505,7 +510,7 @@ describe('CosMediaStorage', () => {
     })
   })
 
-  it('hashes stored object bytes for reconciliation and delegates staging digests', async () => {
+  it('hashes stored object bytes for reconciliation across every namespace', async () => {
     const { client, staging, storage } = await createFixture()
     const bytes = Buffer.from('object-bytes')
     client.store('assets/2026/10/asset.jpg', bytes)
@@ -515,7 +520,9 @@ describe('CosMediaStorage', () => {
     await expect(storage.checksumSha256('assets/2026/10/asset.jpg'))
       .resolves.toBe(expected)
     await expect(storage.checksumSha256('staging/asset.part')).resolves.toBe(expected)
-    expect(staging.operations).toContain('staging:checksum:staging/asset.part')
+    // staging 摘要走受控读取：本地实例的 checksumSha256 只接受 assets/trash，不能用于 staging。
+    expect(staging.operations).toContain('staging:open:staging/asset.part')
+    expect(staging.operations).not.toContain('staging:checksum:staging/asset.part')
   })
 
   it('exposes staging validation sources through the local implementation', async () => {
