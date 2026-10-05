@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isMockDataEnabled } from '@/api/mock-mode'
 import Panel from './panel.vue'
 
 defineOptions({
@@ -7,7 +8,10 @@ defineOptions({
 
 const appNotificationStore = useAppNotificationStore()
 
-appNotificationStore.init()
+// 通知数据只有 mock 来源；没有 mock 服务时不得发起请求，否则会打到不存在的 /fake/* 并报错。
+if (isMockDataEnabled) {
+  appNotificationStore.init()
+}
 </script>
 
 <template>

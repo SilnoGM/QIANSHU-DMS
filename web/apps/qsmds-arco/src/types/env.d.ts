@@ -48,4 +48,5 @@ interface ImportMetaEnv {
    * Supported editors https://github.com/yyx990803/launch-editor#supported-editors
    */
   readonly VITE_LAUNCH_EDITOR: string
+  readonly VITE_ENABLE_COMPONENT_LIBRARY: boolean
 }

@@ -9,9 +9,65 @@ import pkg from './package.json'
 import { APP_THEME_BASE_COLORS } from './src/settings.theme'
 import createVitePlugins from './vite/plugins'
 
+/**
+ * 读取同目录的 `.env.<mode>.example` 公开模板。
+ *
+ * `web/.gitignore` 有意忽略所有真实 env 文件（公开契约就是这些模板），因此 CI 与全新克隆里
+ * 只有模板。模板值缺失会直接坏掉页面身份：index.html/loading.html 的 `%VITE_APP_TITLE%` 原样保留，
+ * `import.meta.env.VITE_APP_TITLE` 被内联成 undefined（标签页标题显示 "undefined"）。
+ */
+function readAppEnvTemplate(mode: string): Record<string, string> {
+  const templatePath = path.resolve(__dirname, `.env.${mode}.example`)
+  if (!fs.existsSync(templatePath)) {
+    return {}
+  }
+
+  const entries: Record<string, string> = {}
+  for (const rawLine of fs.readFileSync(templatePath, 'utf8').split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (line === '' || line.startsWith('#')) {
+      continue
+    }
+    const separatorIndex = line.indexOf('=')
+    if (separatorIndex === -1) {
+      continue
+    }
+    const key = line.slice(0, separatorIndex).trim()
+    if (key === '') {
+      continue
+    }
+    entries[key] = line.slice(separatorIndex + 1).trim()
+  }
+  return entries
+}
+
+/**
+ * 把模板默认值补进进程环境。
+ *
+ * 真实 env 文件或进程环境已定义的键一律不动，因此本地覆盖仍然生效；只有"完全缺失"的键才回落到模板。
+ * 时序很重要：必须在 Vite 内部解析 env（resolveConfig → loadEnv）之前写入，带 VITE_ 前缀的进程环境变量
+ * 会被 loadEnv 以最高优先级并入配置环境，于是 `import.meta.env.*`、`import.meta.env` 对象访问与
+ * HTML 的 `%VAR%` 替换三条路径拿到同一份值。
+ */
+function applyAppEnvTemplateDefaults(
+  mode: string,
+  fileEnv: Record<string, string>,
+): Record<string, string> {
+  const injected: Record<string, string> = {}
+  for (const [key, value] of Object.entries(readAppEnvTemplate(mode))) {
+    if (fileEnv[key] !== undefined || process.env[key] !== undefined) {
+      continue
+    }
+    process.env[key] = value
+    injected[key] = value
+  }
+  return injected
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode, command }) => {
-  const env = parseLoadedEnv(loadEnv(mode, process.cwd()))
+  const fileEnv = loadEnv(mode, process.cwd())
+  const env = parseLoadedEnv({ ...fileEnv, ...applyAppEnvTemplateDefaults(mode, fileEnv) })
   const loadingTheme = BASE_COLORS[APP_THEME_BASE_COLORS.light].light
   // 全局 scss 资源
   const scssResources: string[] = []
