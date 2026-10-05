@@ -423,7 +423,7 @@ openssl s_client -connect <域名>:443 -servername <域名> </dev/null 2>/dev/nu
 6. **对账**：把 `server.env` 的 `MEDIA_STORAGE_DRIVER` 改为 `cos`，然后
    `sudo docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm server node dist/commands/media-operations.js recovery-dry-run`，
    要求 `complete=true` 且全部 mismatch 为 0。
-7. **启动与验收**：`sudo docker compose -f /srv/qianshu-dms/docker-compose.yml up -d server`，执行第 10 节的「健康检查 / 媒体 / 订单图片」以及媒体 `health`（应报告 `read`、`write`、`video_validator` 全 up）。
+7. **启动与验收**：`sudo docker compose -f /srv/qianshu-dms/docker-compose.yml up -d server`，执行第 10 节的「健康检查 / 媒体 / 订单图片」以及媒体 `health`（应报告 `read`、`write`、`video_validator` 全 up）。切换前建议先在本地 checkout 跑一次 `pnpm -C server build && pnpm -C server media:accept:cos`（真实桶往返验收，只留一个临时对象并自行清理）。
 8. **保留回滚面**：`/srv/qianshu-dms/media/{assets,trash}` 在确认稳定前不得删除；回滚只需把 `MEDIA_STORAGE_DRIVER` 改回 `local`，并执行
    `docker compose exec -T db psql -U <数据库用户名> -d <数据库名> -c "UPDATE media_assets SET storage_driver='local' WHERE storage_driver='cos'"`，再 `up -d server`。
 

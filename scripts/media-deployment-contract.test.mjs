@@ -30,6 +30,10 @@ test('Server release 包含媒体部署模板且模板不携带真实 Secret', a
     packageJson.scripts['media:migrate'],
     'node dist/commands/media-migration.js',
   )
+  assert.equal(
+    packageJson.scripts['media:accept:cos'],
+    'MEDIA_STORAGE_DRIVER=cos node ./scripts/cos-acceptance.cjs',
+  )
 
   const environment = await read(
     'server/deploy/environment/server.env.example',
