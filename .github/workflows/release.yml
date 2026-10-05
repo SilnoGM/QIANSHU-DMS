@@ -153,8 +153,90 @@ jobs:
           retention-days: 1
           compression-level: 0
 
-  manifest:
+  package-images:
     needs: [package-web, package-server]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    outputs:
+      artifact-id: ${{ steps.upload-images.outputs.artifact-id }}
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Prepare package artifact directory
+        run: test ! -e "$RUNNER_TEMP/release-inputs"
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.package-web.outputs.artifact-id }},${{ needs.package-server.outputs.artifact-id }}
+          path: ${{ runner.temp }}/release-inputs
+          merge-multiple: true
+
+      - name: Validate package artifact set
+        run: |
+          test -d "$RUNNER_TEMP/release-inputs"
+          test ! -L "$RUNNER_TEMP/release-inputs"
+          web_archive="$RUNNER_TEMP/release-inputs/qsmds-web-${GITHUB_REF_NAME}.tar.gz"
+          server_archive="$RUNNER_TEMP/release-inputs/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"
+          test -f "$web_archive"
+          test ! -L "$web_archive"
+          test -s "$web_archive"
+          test -f "$server_archive"
+          test ! -L "$server_archive"
+          test -s "$server_archive"
+          test "$(find "$RUNNER_TEMP/release-inputs" -mindepth 1 -maxdepth 1 | wc -l)" -eq 2
+
+      # 镜像只由已校验的两个归档构建（镜像内不执行依赖安装与前端/后端构建），保证镜像内容与发布附件同源；
+      # 服务器不构建镜像，只 docker load 归档里的镜像 tar。
+      - name: Build release images
+        run: |
+          node --run release:images -- \
+            --tag "$GITHUB_REF_NAME" \
+            --platform linux/amd64 \
+            --server-archive "$RUNNER_TEMP/release-inputs/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz" \
+            --web-archive "$RUNNER_TEMP/release-inputs/qsmds-web-${GITHUB_REF_NAME}.tar.gz" \
+            --output "$RUNNER_TEMP/release-images"
+
+      - name: Verify image archives
+        run: |
+          test -d "$RUNNER_TEMP/release-images"
+          test ! -L "$RUNNER_TEMP/release-images"
+          for image in server web; do
+            archive="$RUNNER_TEMP/release-images/qsmds-${image}-image-${GITHUB_REF_NAME}-linux-x64.tar.gz"
+            test -f "$archive"
+            test ! -L "$archive"
+            test -s "$archive"
+          done
+          test -f "$RUNNER_TEMP/release-images/release-images.json"
+          test ! -L "$RUNNER_TEMP/release-images/release-images.json"
+          test -s "$RUNNER_TEMP/release-images/release-images.json"
+          test "$(find "$RUNNER_TEMP/release-images" -mindepth 1 -maxdepth 1 | wc -l)" -eq 3
+
+      - name: Verify tracked files are unchanged
+        run: git diff --exit-code -- .
+
+      - name: Upload image archives
+        id: upload-images
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-images-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-images/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  manifest:
+    needs: [package-web, package-server, package-images]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     outputs:
@@ -216,6 +298,31 @@ jobs:
           test -s "$server_archive"
           test "$(find "$RUNNER_TEMP/release-inputs" -mindepth 1 -maxdepth 1 | wc -l)" -eq 2
 
+      - name: Prepare image artifact directory
+        run: test ! -e "$RUNNER_TEMP/release-images"
+
+      - name: Download image artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.package-images.outputs.artifact-id }}
+          path: ${{ runner.temp }}/release-images
+          merge-multiple: true
+
+      - name: Validate image artifact set
+        run: |
+          test -d "$RUNNER_TEMP/release-images"
+          test ! -L "$RUNNER_TEMP/release-images"
+          for image in server web; do
+            archive="$RUNNER_TEMP/release-images/qsmds-${image}-image-${GITHUB_REF_NAME}-linux-x64.tar.gz"
+            test -f "$archive"
+            test ! -L "$archive"
+            test -s "$archive"
+          done
+          test -f "$RUNNER_TEMP/release-images/release-images.json"
+          test ! -L "$RUNNER_TEMP/release-images/release-images.json"
+          test -s "$RUNNER_TEMP/release-images/release-images.json"
+          test "$(find "$RUNNER_TEMP/release-images" -mindepth 1 -maxdepth 1 | wc -l)" -eq 3
+
       - name: Prepare final bundle directory
         run: |
           test ! -e "$RUNNER_TEMP/final-bundle"
@@ -234,6 +341,9 @@ jobs:
             --run-attempt "$GITHUB_RUN_ATTEMPT" \
             --web-archive "$RUNNER_TEMP/release-inputs/qsmds-web-${GITHUB_REF_NAME}.tar.gz" \
             --server-archive "$RUNNER_TEMP/release-inputs/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz" \
+            --web-image "$RUNNER_TEMP/release-images/qsmds-web-image-${GITHUB_REF_NAME}-linux-x64.tar.gz" \
+            --server-image "$RUNNER_TEMP/release-images/qsmds-server-image-${GITHUB_REF_NAME}-linux-x64.tar.gz" \
+            --images-metadata "$RUNNER_TEMP/release-images/release-images.json" \
             --output "$RUNNER_TEMP/final-bundle"
 
       - name: Validate final release bundle
@@ -248,13 +358,19 @@ jobs:
           test -f "$server_archive"
           test ! -L "$server_archive"
           test -s "$server_archive"
+          for image in server web; do
+            archive="$RUNNER_TEMP/final-bundle/qsmds-${image}-image-${GITHUB_REF_NAME}-linux-x64.tar.gz"
+            test -f "$archive"
+            test ! -L "$archive"
+            test -s "$archive"
+          done
           test -f "$RUNNER_TEMP/final-bundle/release-manifest.json"
           test ! -L "$RUNNER_TEMP/final-bundle/release-manifest.json"
           test -s "$RUNNER_TEMP/final-bundle/release-manifest.json"
           test -f "$RUNNER_TEMP/final-bundle/SHA256SUMS"
           test ! -L "$RUNNER_TEMP/final-bundle/SHA256SUMS"
           test -s "$RUNNER_TEMP/final-bundle/SHA256SUMS"
-          test "$(find "$RUNNER_TEMP/final-bundle" -mindepth 1 -maxdepth 1 | wc -l)" -eq 4
+          test "$(find "$RUNNER_TEMP/final-bundle" -mindepth 1 -maxdepth 1 | wc -l)" -eq 6
 
       - name: Verify tracked files are unchanged
         run: git diff --exit-code -- .

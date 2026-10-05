@@ -310,6 +310,7 @@ function createDependencies(fixture, overrides = {}) {
       },
       async terminationWait() {},
       temporaryRoot: fixture.runnerTemp,
+      mediaSmokeRoot: path.join(fixture.sandbox, 'media-smoke-root'),
       async wait(milliseconds) {
         currentTime += milliseconds
       },
@@ -1723,6 +1724,68 @@ test('smoke 先 migration/安全提取，再以净化 env 和动态端口启动 
   )
   assert.ok(processGroup.calls.some(call => call.type === 'terminate'))
   assert.ok(processGroup.calls.some(call => call.type === 'wait'))
+
+  // 归档内媒体 CLI 必须在 production 依赖集合下真实运行：preflight 判定 down 时退出码为 1。
+  const mediaCall = calls[2]
+  assert.equal(mediaCall[0], process.execPath)
+  assert.deepEqual(mediaCall[1], ['dist/commands/media-operations.js', 'preflight'])
+  assert.equal(
+    path.basename(mediaCall[2].cwd),
+    'qsmds-server-v1.2.3-linux-x64',
+  )
+  assert.equal(mediaCall[2].env.NODE_ENV, 'production')
+  assert.equal(mediaCall[2].env.DATABASE_URL, new URL(databaseUrl).toString())
+  const mediaRoot = mediaCall[2].env.MEDIA_STORAGE_ROOT
+  // 媒体根不得位于临时目录、归档目录或当前工作目录内，否则 Server 判定为不安全根。
+  assert.equal(mediaRoot.startsWith(fixture.runnerTemp), false)
+  assert.equal(mediaRoot.startsWith(mediaCall[2].cwd), false)
+  assert.deepEqual(
+    await fs.readdir(path.join(fixture.sandbox, 'media-smoke-root')),
+    [],
+  )
+  assert.deepEqual(await fs.readdir(fixture.runnerTemp), [])
+})
+
+test('smoke 在归档媒体 preflight 判定 down 时失败并回收媒体根', async (t) => {
+  const fixture = await createSandbox(t)
+  const archive = await createServerArchiveFixture(fixture)
+  const calls = []
+  const run = async (command, args) => {
+    calls.push([command, args])
+    if (command === 'tar') {
+      const extractRoot = args[args.indexOf('--directory') + 1]
+      await fs.cp(
+        archive.root,
+        path.join(extractRoot, 'qsmds-server-v1.2.3-linux-x64'),
+        { recursive: true, verbatimSymlinks: true },
+      )
+      return undefined
+    }
+    // 模拟归档媒体 preflight 判定 down（退出码 1）。
+    return command === process.execPath ? 1 : undefined
+  }
+  const harness = createDependencies(fixture, { run })
+
+  await assert.rejects(
+    smokeServerArchive(
+      { archivePath: archive.archivePath, databaseUrl, tag },
+      harness.dependencies,
+    ),
+    error => (
+      error.cause?.message === 'Server archive media operations health failed'
+    ),
+  )
+  assert.equal(
+    calls.some(([command, args]) => (
+      command === process.execPath
+      && args[0] === 'dist/commands/media-operations.js'
+    )),
+    true,
+  )
+  assert.deepEqual(
+    await fs.readdir(path.join(fixture.sandbox, 'media-smoke-root')),
+    [],
+  )
   assert.deepEqual(await fs.readdir(fixture.runnerTemp), [])
 })
 

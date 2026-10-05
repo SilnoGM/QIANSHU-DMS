@@ -49,6 +49,7 @@ const releaseJobIds = Object.freeze([
   'verify',
   'package-web',
   'package-server',
+  'package-images',
   'manifest',
   'publish',
 ])
@@ -696,13 +697,14 @@ test('Release verify 以本地 reusable CI 复验同一 release tag', async () =
   ].join('\n'))
 })
 
-test('Release 五个 Job 的 needs、runner、timeout 和 checkout 精确', async () => {
+test('Release 六个 Job 的 needs、runner、timeout 和 checkout 精确', async () => {
   const jobs = extractJobs(await readReleaseWorkflow())
   assert.deepEqual([...jobs.keys()], releaseJobIds)
   const expected = new Map([
     ['package-web', { fetchDepth: 0, needs: 'verify', timeout: 30 }],
     ['package-server', { fetchDepth: 0, needs: 'verify', timeout: 40 }],
-    ['manifest', { fetchDepth: 0, needs: '[package-web, package-server]', timeout: 25 }],
+    ['package-images', { fetchDepth: 1, needs: '[package-web, package-server]', timeout: 40 }],
+    ['manifest', { fetchDepth: 0, needs: '[package-web, package-server, package-images]', timeout: 25 }],
     ['publish', { fetchDepth: 1, needs: 'manifest', timeout: 15 }],
   ])
   for (const [id, values] of expected) {
@@ -719,12 +721,12 @@ test('Release 只使用固定 Action SHA 且 artifact 身份只沿允许 Job 传
   const source = await readReleaseWorkflow()
   const references = usesFrom(source)
   assert.equal(references.filter(value => value === './.github/workflows/ci.yml').length, 1)
-  assert.equal(references.filter(value => value === checkoutAction).length, 4)
+  assert.equal(references.filter(value => value === checkoutAction).length, 5)
   assert.equal(references.filter(value => value === pnpmSetupAction).length, 3)
-  assert.equal(references.filter(value => value === setupNodeAction).length, 4)
-  assert.equal(references.filter(value => value === uploadArtifactAction).length, 3)
-  assert.equal(references.filter(value => value === downloadArtifactAction).length, 2)
-  assert.equal(references.length, 17)
+  assert.equal(references.filter(value => value === setupNodeAction).length, 5)
+  assert.equal(references.filter(value => value === uploadArtifactAction).length, 4)
+  assert.equal(references.filter(value => value === downloadArtifactAction).length, 4)
+  assert.equal(references.length, 22)
   assert.deepEqual(new Set(references), new Set([
     './.github/workflows/ci.yml',
     checkoutAction,
@@ -736,10 +738,12 @@ test('Release 只使用固定 Action SHA 且 artifact 身份只沿允许 Job 传
 
   assert.equal(countOccurrences(source, '${{ steps.upload-web.outputs.artifact-id }}'), 1)
   assert.equal(countOccurrences(source, '${{ steps.upload-server.outputs.artifact-id }}'), 1)
+  assert.equal(countOccurrences(source, '${{ steps.upload-images.outputs.artifact-id }}'), 1)
   assert.equal(countOccurrences(source, '${{ steps.upload-final.outputs.artifact-id }}'), 1)
   assert.equal(countOccurrences(source, '${{ steps.upload-final.outputs.artifact-digest }}'), 1)
-  assert.equal(countOccurrences(source, '${{ needs.package-web.outputs.artifact-id }}'), 1)
-  assert.equal(countOccurrences(source, '${{ needs.package-server.outputs.artifact-id }}'), 1)
+  assert.equal(countOccurrences(source, '${{ needs.package-web.outputs.artifact-id }}'), 2)
+  assert.equal(countOccurrences(source, '${{ needs.package-server.outputs.artifact-id }}'), 2)
+  assert.equal(countOccurrences(source, '${{ needs.package-images.outputs.artifact-id }}'), 1)
   assert.equal(countOccurrences(source, '${{ needs.manifest.outputs.artifact-id }}'), 2)
   assert.equal(countOccurrences(source, '${{ needs.manifest.outputs.artifact-digest }}'), 1)
   assert.equal(countOccurrences(source, '${{ needs.manifest.outputs.bundle-run-attempt }}'), 2)
@@ -826,7 +830,7 @@ test('package-server 重新构建并在上传前完成隔离 PostgreSQL runtime 
   assert.equal(job.includes('DATABASE_URL'), false)
 })
 
-test('manifest 只按两个精确 artifact ID 下载并使用隔离输入输出目录', async () => {
+test('manifest 只按精确 artifact ID 下载 package 与 image 两组输入并使用隔离目录', async () => {
   const job = extractJobs(await readReleaseWorkflow()).get('manifest')
   assertToolSetupWithoutCache(job)
   assert.equal(job.includes(' install'), false)
@@ -843,8 +847,13 @@ test('manifest 只按两个精确 artifact ID 下载并使用隔离输入输出�
     'test ! -e "$RUNNER_TEMP/release-inputs"',
     `uses: ${downloadArtifactAction}`,
     'test -d "$RUNNER_TEMP/release-inputs"',
+    'test ! -e "$RUNNER_TEMP/release-images"',
+    'test -d "$RUNNER_TEMP/release-images"',
     'test ! -e "$RUNNER_TEMP/final-bundle"',
     'node --run release:manifest --',
+    '--web-image "$RUNNER_TEMP/release-images/qsmds-web-image-${GITHUB_REF_NAME}-linux-x64.tar.gz"',
+    '--server-image "$RUNNER_TEMP/release-images/qsmds-server-image-${GITHUB_REF_NAME}-linux-x64.tar.gz"',
+    '--images-metadata "$RUNNER_TEMP/release-images/release-images.json"',
     '--output "$RUNNER_TEMP/final-bundle"',
     'test -f "$RUNNER_TEMP/final-bundle/release-manifest.json"',
     'test -f "$RUNNER_TEMP/final-bundle/SHA256SUMS"',
@@ -857,6 +866,14 @@ test('manifest 只按两个精确 artifact ID 下载并使用隔离输入输出�
     '        with:',
     '          artifact-ids: ${{ needs.package-web.outputs.artifact-id }},${{ needs.package-server.outputs.artifact-id }}',
     '          path: ${{ runner.temp }}/release-inputs',
+    '          merge-multiple: true',
+  ].join('\n'))
+  assert.equal(findNamedStep(job, 'Download image artifacts'), [
+    '      - name: Download image artifacts',
+    `        uses: ${downloadArtifactAction}`,
+    '        with:',
+    '          artifact-ids: ${{ needs.package-images.outputs.artifact-id }}',
+    '          path: ${{ runner.temp }}/release-images',
     '          merge-multiple: true',
   ].join('\n'))
   const generate = findNamedStep(job, 'Generate final release bundle')
@@ -873,7 +890,51 @@ test('manifest 只按两个精确 artifact ID 下载并使用隔离输入输出�
   }
 })
 
-test('manifest final bundle 恰好四文件并输出固定 final artifact 身份', async () => {
+test('package-images 只消费两个归档并在上传前产出两个镜像归档与元数据', async () => {
+  const job = extractJobs(await readReleaseWorkflow()).get('package-images')
+  assert.equal(extractBlock(job, 'outputs', 4), [
+    '    outputs:',
+    '      artifact-id: ${{ steps.upload-images.outputs.artifact-id }}',
+  ].join('\n'))
+  // 镜像构建只需要仓库源码与 docker，不需要安装任何依赖域。
+  assert.equal(job.includes(' install'), false)
+  assert.equal(job.includes('pnpm'), false)
+  assertTextOrder(job, [
+    'test ! -e "$RUNNER_TEMP/release-inputs"',
+    `uses: ${downloadArtifactAction}`,
+    'server_archive="$RUNNER_TEMP/release-inputs/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"',
+    'test -s "$server_archive"',
+    'node --run release:images --',
+    '--platform linux/amd64',
+    '--server-archive "$RUNNER_TEMP/release-inputs/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"',
+    '--web-archive "$RUNNER_TEMP/release-inputs/qsmds-web-${GITHUB_REF_NAME}.tar.gz"',
+    '--output "$RUNNER_TEMP/release-images"',
+    'test -f "$RUNNER_TEMP/release-images/release-images.json"',
+    'run: git diff --exit-code -- .',
+    `uses: ${uploadArtifactAction}`,
+  ], 'package-images')
+  assert.equal(findNamedStep(job, 'Upload image archives'), [
+    '      - name: Upload image archives',
+    '        id: upload-images',
+    `        uses: ${uploadArtifactAction}`,
+    '        with:',
+    '          name: release-images-${{ github.run_id }}-${{ github.run_attempt }}',
+    '          path: ${{ runner.temp }}/release-images/',
+    '          if-no-files-found: error',
+    '          retention-days: 1',
+    '          compression-level: 0',
+  ].join('\n'))
+  for (const forbidden of [
+    'services:',
+    'postgres:',
+    'docker/login-action',
+    'docker/build-push-action',
+  ]) {
+    assert.equal(job.includes(forbidden), false, `package-images Job 禁止：${forbidden}`)
+  }
+})
+
+test('manifest final bundle 恰好六文件并输出固定 final artifact 身份', async () => {
   const job = extractJobs(await readReleaseWorkflow()).get('manifest')
   const validateInputs = findNamedStep(job, 'Validate package artifact set')
   for (const expected of [
@@ -884,14 +945,24 @@ test('manifest final bundle 恰好四文件并输出固定 final artifact 身份
   ]) {
     assert.equal(validateInputs.includes(expected), true, `输入校验缺少：${expected}`)
   }
+  const validateImages = findNamedStep(job, 'Validate image artifact set')
+  for (const expected of [
+    'qsmds-${image}-image-${GITHUB_REF_NAME}-linux-x64.tar.gz',
+    'release-images.json',
+    'find "$RUNNER_TEMP/release-images" -mindepth 1 -maxdepth 1 | wc -l',
+    '-eq 3',
+  ]) {
+    assert.equal(validateImages.includes(expected), true, `镜像输入校验缺少：${expected}`)
+  }
   const validateFinal = findNamedStep(job, 'Validate final release bundle')
   for (const expected of [
     'qsmds-web-${GITHUB_REF_NAME}.tar.gz',
     'qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz',
+    'qsmds-${image}-image-${GITHUB_REF_NAME}-linux-x64.tar.gz',
     'release-manifest.json',
     'SHA256SUMS',
     'find "$RUNNER_TEMP/final-bundle" -mindepth 1 -maxdepth 1 | wc -l',
-    '-eq 4',
+    '-eq 6',
   ]) {
     assert.equal(validateFinal.includes(expected), true, `最终目录校验缺少：${expected}`)
   }

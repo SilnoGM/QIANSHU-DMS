@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Qianshu DMS Expired Media Trash Cleanup Hourly (Docker)
+
+[Timer]
+OnCalendar=hourly
+AccuracySec=1m
+Persistent=true
+Unit=qianshu-dms-media-cleanup.service
+
+[Install]
+WantedBy=timers.target

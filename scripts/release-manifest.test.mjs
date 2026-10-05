@@ -115,9 +115,44 @@ async function createSandbox(t) {
   )
   await fs.writeFile(webArchivePath, 'web archive fixture\n')
   await fs.writeFile(serverArchivePath, 'server archive fixture\n')
+  const webImagePath = path.join(inputs, `qsmds-web-image-${tag}-linux-x64.tar.gz`)
+  const serverImagePath = path.join(
+    inputs,
+    `qsmds-server-image-${tag}-linux-x64.tar.gz`,
+  )
+  const webImageBytes = Buffer.from('web image archive fixture\n')
+  const serverImageBytes = Buffer.from('server image archive fixture\n')
+  await fs.writeFile(webImagePath, webImageBytes)
+  await fs.writeFile(serverImagePath, serverImageBytes)
+  const imagesMetadataPath = path.join(inputs, 'release-images.json')
+  await fs.writeFile(imagesMetadataPath, canonicalJson({
+    schemaVersion: 1,
+    tag,
+    images: {
+      server: {
+        reference: `qsmds-server:${tag}`,
+        digest: `sha256:${'1'.repeat(64)}`,
+        archive: `qsmds-server-image-${tag}-linux-x64.tar.gz`,
+        platform: 'linux',
+        arch: 'x64',
+        sha256: `sha256:${sha256(serverImageBytes)}`,
+        size: serverImageBytes.length,
+      },
+      web: {
+        reference: `qsmds-web:${tag}`,
+        digest: `sha256:${'2'.repeat(64)}`,
+        archive: `qsmds-web-image-${tag}-linux-x64.tar.gz`,
+        platform: 'linux',
+        arch: 'x64',
+        sha256: `sha256:${sha256(webImageBytes)}`,
+        size: webImageBytes.length,
+      },
+    },
+  }))
 
   t.after(() => fs.rm(sandbox, { force: true, recursive: true }))
   return {
+    imagesMetadataPath,
     inputs,
     openapi,
     output,
@@ -127,18 +162,23 @@ async function createSandbox(t) {
     repository,
     sandbox,
     serverArchivePath,
+    serverImagePath,
     webArchivePath,
+    webImagePath,
   }
 }
 
 function manifestInput(fixture, overrides = {}) {
   return {
+    imagesMetadataPath: fixture.imagesMetadataPath,
     releaseMetadataPath: fixture.releaseMetadataPath,
     repository: 'SilnoGM/QIANSHU-DMS',
     runAttempt: 1,
     runId: '123456789',
     serverArchivePath: fixture.serverArchivePath,
+    serverImagePath: fixture.serverImagePath,
     webArchivePath: fixture.webArchivePath,
+    webImagePath: fixture.webImagePath,
     workflow: 'release.yml',
     ...overrides,
   }
@@ -525,7 +565,7 @@ test('archive 文件替换 TOCTOU 会使 Manifest 生成失败', async (t) => {
   )
 })
 
-test('SHA256SUMS 恰好三行、两个空格、固定顺序且生成后重读通过', async (t) => {
+test('SHA256SUMS 恰好五行、两个空格、固定顺序且生成后重读通过', async (t) => {
   const fixture = await createSandbox(t)
   await generateReleaseBundle(
     { ...manifestInput(fixture), outputDirectory: fixture.output },
@@ -536,16 +576,18 @@ test('SHA256SUMS 恰好三行、两个空格、固定顺序且生成后重读通
   assert.deepEqual(lines.map(line => line.slice(66)), [
     path.basename(fixture.webArchivePath),
     path.basename(fixture.serverArchivePath),
+    `qsmds-web-image-${tag}-linux-x64.tar.gz`,
+    `qsmds-server-image-${tag}-linux-x64.tar.gz`,
     'release-manifest.json',
   ])
-  assert.equal(lines.length, 3)
+  assert.equal(lines.length, 5)
   assert.ok(lines.every(line => /^[0-9a-f]{64}  [^/\\]+$/u.test(line)))
 
   const entries = await createAndVerifyChecksums({
     bundleDirectory: fixture.output,
     fileNames: lines.map(line => line.slice(66)),
   })
-  assert.equal(entries.length, 3)
+  assert.equal(entries.length, 5)
   assert.equal(Object.isFrozen(entries), true)
 })
 
@@ -561,7 +603,7 @@ test('bundle 生成要求 fresh 空目录并拒绝重复 basename', async (t) =>
   )
 })
 
-test('verify 从磁盘重读四文件并交叉校验 identity、archive size/hash', async (t) => {
+test('verify 从磁盘重读六文件并交叉校验 identity、archive size/hash', async (t) => {
   const fixture = await createSandbox(t)
   await generateReleaseBundle(
     { ...manifestInput(fixture), outputDirectory: fixture.output },
@@ -572,7 +614,8 @@ test('verify 从磁盘重读四文件并交叉校验 identity、archive size/has
     runtimeDependencies(fixture.repository),
   )
   assert.equal(verified.manifest.release.sourceCommit, sourceCommit)
-  assert.equal(verified.checksums.length, 3)
+  assert.equal(verified.manifest.images.server.digest, `sha256:${'1'.repeat(64)}`)
+  assert.equal(verified.checksums.length, 5)
   assert.equal(Object.isFrozen(verified), true)
 })
 
@@ -618,6 +661,8 @@ test('生成后重读任一摘要文件变化都失败', async (t) => {
   for (const name of [
     `qsmds-web-${tag}.tar.gz`,
     `qsmds-server-${tag}-linux-x64.tar.gz`,
+    `qsmds-web-image-${tag}-linux-x64.tar.gz`,
+    `qsmds-server-image-${tag}-linux-x64.tar.gz`,
     'release-manifest.json',
   ]) {
     const fixture = await createSandbox(t)
@@ -644,6 +689,7 @@ test('verify 拒绝 Manifest schema 与 release/build identity mutation', async 
     document => { document.build.runId = '987654321' },
     document => { document.build.runAttempt = 2 },
     document => { document.contract.version = '9.9.9' },
+    document => { document.images.web.archive = `qsmds-web-image-v9.9.9-linux-x64.tar.gz` },
   ]
   for (const mutate of mutations) {
     const fixture = await createSandbox(t)
@@ -657,7 +703,13 @@ test('verify 拒绝 Manifest schema 与 release/build identity mutation', async 
     await fs.writeFile(manifestPath, canonicalJson(document))
     const webName = path.basename(fixture.webArchivePath)
     const serverName = path.basename(fixture.serverArchivePath)
-    const checksumLines = [webName, serverName, 'release-manifest.json'].map(name => {
+    const checksumLines = [
+      webName,
+      serverName,
+      `qsmds-web-image-${tag}-linux-x64.tar.gz`,
+      `qsmds-server-image-${tag}-linux-x64.tar.gz`,
+      'release-manifest.json',
+    ].map(name => {
       const target = path.join(fixture.output, name)
       return fs.readFile(target).then(bytes => `${sha256(bytes)}  ${name}`)
     })
@@ -683,6 +735,9 @@ test('CLI 参数只接受固定 generate 与 verify 协议', () => {
     '--run-attempt', '2',
     '--web-archive', `/tmp/qsmds-web-${tag}.tar.gz`,
     '--server-archive', `/tmp/qsmds-server-${tag}-linux-x64.tar.gz`,
+    '--web-image', `/tmp/qsmds-web-image-${tag}-linux-x64.tar.gz`,
+    '--server-image', `/tmp/qsmds-server-image-${tag}-linux-x64.tar.gz`,
+    '--images-metadata', '/tmp/release-images.json',
     '--output', '/tmp/final-bundle',
   ])
   assert.equal(generated.command, 'generate')
@@ -707,8 +762,34 @@ test('CLI 参数只接受固定 generate 与 verify 协议', () => {
     '--run-attempt', '1',
     '--web-archive', '/tmp/web.tar.gz',
     '--server-archive', '/tmp/server.tar.gz',
+    '--web-image', '/tmp/web-image.tar.gz',
+    '--server-image', '/tmp/server-image.tar.gz',
+    '--images-metadata', '/tmp/release-images.json',
     '--output', '/tmp/final-bundle',
   ]]) {
     assert.throws(() => parseReleaseManifestArguments(argv))
+  }
+})
+
+test('镜像元数据与真实镜像归档不一致或形状错误都失败', async (t) => {
+  const cases = [
+    metadata => { metadata.images.server.size += 1 },
+    metadata => { metadata.images.web.sha256 = `sha256:${'f'.repeat(64)}` },
+    metadata => { metadata.images.server.archive = `qsmds-server-image-v9.9.9-linux-x64.tar.gz` },
+    metadata => { metadata.images.server.reference = 'qsmds-server:v9.9.9' },
+    metadata => { metadata.tag = 'v9.9.9' },
+    metadata => { delete metadata.images.web.digest },
+  ]
+  for (const mutate of cases) {
+    const fixture = await createSandbox(t)
+    const metadata = JSON.parse(await fs.readFile(fixture.imagesMetadataPath, 'utf8'))
+    mutate(metadata)
+    await fs.writeFile(fixture.imagesMetadataPath, canonicalJson(metadata))
+    await assert.rejects(
+      createReleaseManifest(
+        manifestInput(fixture),
+        runtimeDependencies(fixture.repository),
+      ),
+    )
   }
 })

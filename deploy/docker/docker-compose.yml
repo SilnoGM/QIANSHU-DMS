@@ -1,0 +1,93 @@
+# 千树 DMS 生产编排模板（目标位置：/srv/qianshu-dms/docker-compose.yml）。
+#
+# 使用方式：
+#   1. 复制本文件与该目录下的 .env.example / server.env.example 到 /srv/qianshu-dms/，
+#      去掉 .example 后缀并替换全部 <...> 占位符；.env 与 server.env 权限设为 0600，且不进 Git。
+#   2. 把发布附件中的两个镜像归档 docker load 进来（见部署手册第 4 节）。
+#   3. docker compose up -d。
+#
+# 数据边界：pgdata 与 media 都是宿主绑定目录，容器可以重建，这两个目录不能删除；
+# 禁止执行 docker compose down -v 或 docker volume prune。
+name: qianshu-dms
+
+services:
+  db:
+    # 与 CI 测试使用的同一 PostgreSQL 16 digest；更换前必须先核对升级路径（大版本不可原地换）。
+    image: postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: Asia/Shanghai
+    # 小规格机器上的保守参数：3.6 GiB 内存需限制 postgres 的共享缓冲与连接数。
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - max_connections=60
+      - -c
+      - work_mem=8MB
+    volumes:
+      - /srv/qianshu-dms/pgdata:/var/lib/postgresql/data
+    # 2 vCPU / 3.6 GiB 机器上的实测初值：PG idle 约 33 MiB，给连接与排序留足余量。
+    mem_limit: 768m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    # 不发布宿主端口：只有 compose 网络内的 server 可以访问。
+
+  server:
+    image: qsmds-server:${QIANSHU_IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - ./server.env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # 媒体持久目录：宿主目录必须由 uid/gid 10001 拥有且权限 0750（见部署手册第 3 节）。
+      - /srv/qianshu-dms/media:/var/lib/qianshu-dms/media
+    # 实测 idle 约 266 MiB；500 MiB 视频校验会另起 ffprobe 进程、图片处理会走 sharp，
+    # 因此上限要覆盖单次大媒体处理的峰值。持续超过上限时优先升级服务器而不是放大上限。
+    mem_limit: 1024m
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    # 不发布宿主端口：只允许 web 容器经 compose 网络访问。
+
+  web:
+    image: qsmds-web:${QIANSHU_IMAGE_TAG}
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # 已有证书：fullchain.pem 与 privkey.pem；只读挂载。
+      - ./certs:/etc/nginx/certs:ro
+    # 实测 idle 约 41 MiB；media 交付走 application 模式，nginx 侧不做大文件落盘缓冲。
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

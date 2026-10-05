@@ -5,6 +5,8 @@
 **/.env.*
 !**/.env.example
 !**/.env.*.example
+# Docker 部署的真实环境文件只存在于服务器 /srv/qianshu-dms/；仓库内同名误拷不得进入版本库
+deploy/docker/server.env
 **/.DS_Store
 **/*.log
 server/src/generated/prisma/

@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1
+#
+# 千树 DMS Web 镜像：ubuntu:24.04 + nginx，站点同时承担静态托管、TLS 与 /api 反向代理。
+# 构建输入是发布流程产出的 Web 归档解包目录（web-app/），镜像内不执行前端构建。
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Asia/Shanghai
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates nginx tzdata \
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -f /etc/nginx/sites-enabled/default
+
+# nginx 在容器中以前台运行；访问日志与错误日志改为标准流，随 docker compose logs 输出。
+RUN ln -sf /dev/stdout /var/log/nginx/access.log \
+ && ln -sf /dev/stderr /var/log/nginx/error.log
+
+COPY nginx/qianshu-dms.conf /etc/nginx/conf.d/qianshu-dms.conf
+COPY web-app/ /usr/share/nginx/html/
+
+EXPOSE 80 443
+CMD ["nginx", "-g", "daemon off;"]

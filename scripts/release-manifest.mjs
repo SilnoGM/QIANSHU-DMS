@@ -10,6 +10,10 @@ import {
   applyFailureToProcess,
   isDirectEntry,
 } from './run-command.mjs'
+import {
+  imageArtifactNames,
+  imageReferences,
+} from './release-images.mjs'
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const defaultRepositoryRoot = path.resolve(scriptsDirectory, '..')
@@ -40,6 +44,8 @@ const positiveDigitsPattern = /^[1-9]\d*$/u
 const migrationDirectoryPattern = /^(\d{14})_[A-Za-z0-9][A-Za-z0-9_-]*$/u
 const checksumFileName = 'SHA256SUMS'
 const manifestFileName = 'release-manifest.json'
+const checksumLineCount = 5
+const sha256DigestPattern = /^sha256:[0-9a-f]{64}$/u
 const commandOutputLimit = 1024 * 1024
 
 function isRecord(value) {
@@ -566,17 +572,23 @@ function normalizeManifestInput(input) {
   assertExactKeys(
     input,
     [
+      'imagesMetadataPath',
       'releaseMetadataPath',
       'repository',
       'runAttempt',
       'runId',
       'serverArchivePath',
+      'serverImagePath',
       'webArchivePath',
+      'webImagePath',
       'workflow',
     ],
     'Release Manifest input',
   )
   return deepFreeze({
+    imagesMetadataPath: path.resolve(
+      assertNonEmptyString(input.imagesMetadataPath, 'Images metadata path'),
+    ),
     releaseMetadataPath: path.resolve(
       assertNonEmptyString(input.releaseMetadataPath, 'Release metadata path'),
     ),
@@ -586,11 +598,63 @@ function normalizeManifestInput(input) {
     serverArchivePath: path.resolve(
       assertNonEmptyString(input.serverArchivePath, 'Server archive path'),
     ),
+    serverImagePath: path.resolve(
+      assertNonEmptyString(input.serverImagePath, 'Server image archive path'),
+    ),
     webArchivePath: path.resolve(
       assertNonEmptyString(input.webArchivePath, 'Web archive path'),
     ),
+    webImagePath: path.resolve(
+      assertNonEmptyString(input.webImagePath, 'Web image archive path'),
+    ),
     workflow: assertPattern(input.workflow, workflowPattern, 'Workflow'),
   })
+}
+
+/*
+ * 镜像元数据由 release-images 生成，是镜像 digest 的唯一来源。这里只接受与 Tag
+ * 完全一致的引用/归档名，并把摘要与大小交给调用方与真实文件哈希交叉校验，
+ * 避免"元数据说自己是多少"取代"文件实际是多少"。
+ */
+function normalizeImagesMetadata(value, tag) {
+  assertExactKeys(value, ['schemaVersion', 'tag', 'images'], 'Images metadata')
+  if (value.schemaVersion !== 1 || value.tag !== tag) {
+    throw new Error('Images metadata identity is invalid')
+  }
+  assertExactKeys(value.images, ['server', 'web'], 'Images metadata set')
+  const references = imageReferences(tag)
+  const artifactNames = imageArtifactNames(tag)
+  const images = {}
+  for (const kind of ['server', 'web']) {
+    const entry = value.images[kind]
+    assertExactKeys(
+      entry,
+      ['reference', 'digest', 'archive', 'platform', 'arch', 'sha256', 'size'],
+      'Images metadata entry',
+    )
+    if (
+      entry.reference !== references[kind]
+      || entry.archive !== artifactNames[kind]
+      || entry.platform !== 'linux'
+      || entry.arch !== 'x64'
+    ) {
+      throw new Error('Images metadata entry identity is invalid')
+    }
+    images[kind] = deepFreeze({
+      reference: entry.reference,
+      digest: assertPattern(entry.digest, sha256DigestPattern, 'Image digest'),
+      archive: entry.archive,
+      platform: 'linux',
+      arch: 'x64',
+      sha256: assertPattern(
+        entry.sha256,
+        sha256DigestPattern,
+        'Image archive hash',
+      ),
+      size: assertPositiveInteger(entry.size, 'Image archive size'),
+    })
+  }
+  return deepFreeze({ server: images.server, web: images.web })
 }
 
 async function readRuntimeMetadata(dependencies) {
@@ -663,15 +727,29 @@ export async function createReleaseManifest(input, dependencies = {}) {
     normalizedDependencies.fileSystem,
   )
   const artifactNames = expectedArtifactNames(release.tag)
+  const imageArtifactNamesForTag = imageArtifactNames(release.tag)
   if (
     path.basename(normalizedInput.webArchivePath) !== artifactNames.web
     || path.basename(normalizedInput.serverArchivePath) !== artifactNames.server
+    || path.basename(normalizedInput.webImagePath) !== imageArtifactNamesForTag.web
+    || path.basename(normalizedInput.serverImagePath) !== imageArtifactNamesForTag.server
     || artifactNames.web === artifactNames.server
   ) {
     throw new Error('Release archive basename is invalid')
   }
 
-  const [schema, runtime, webArchive, serverArchive, openapi, prismaSchema, migrations] =
+  const [
+    schema,
+    runtime,
+    webArchive,
+    serverArchive,
+    webImageArchive,
+    serverImageArchive,
+    imagesMetadataFile,
+    openapi,
+    prismaSchema,
+    migrations,
+  ] =
     await Promise.all([
       loadManifestSchema(normalizedDependencies),
       readRuntimeMetadata(normalizedDependencies),
@@ -684,6 +762,21 @@ export async function createReleaseManifest(input, dependencies = {}) {
         normalizedInput.serverArchivePath,
         normalizedDependencies.fileSystem,
         'Server archive',
+      ),
+      hashStableRegularFile(
+        normalizedInput.webImagePath,
+        normalizedDependencies.fileSystem,
+        'Web image archive',
+      ),
+      hashStableRegularFile(
+        normalizedInput.serverImagePath,
+        normalizedDependencies.fileSystem,
+        'Server image archive',
+      ),
+      readStableRegularFile(
+        normalizedInput.imagesMetadataPath,
+        normalizedDependencies.fileSystem,
+        'Images metadata',
       ),
       hashStableRegularFile(
         path.join(
@@ -716,6 +809,23 @@ export async function createReleaseManifest(input, dependencies = {}) {
       ),
     ])
 
+  const images = normalizeImagesMetadata(
+    parseJsonObject(imagesMetadataFile.bytes, 'Images metadata'),
+    release.tag,
+  )
+  for (const [kind, archive] of [
+    ['server', serverImageArchive],
+    ['web', webImageArchive],
+  ]) {
+    // 摘要与大小必须同时吻合：只对摘要会让"元数据写了别的归档大小"漏过校验。
+    if (
+      images[kind].sha256 !== `sha256:${archive.sha256}`
+      || images[kind].size !== archive.size
+    ) {
+      throw new Error('Image archive identity is invalid')
+    }
+  }
+
   const manifest = {
     schemaVersion: 1,
     release,
@@ -739,6 +849,7 @@ export async function createReleaseManifest(input, dependencies = {}) {
         arch: 'x64',
       },
     },
+    images,
     contract: {
       version: release.version,
       openapiSha256: `sha256:${openapi.sha256}`,
@@ -761,7 +872,7 @@ function normalizeChecksumInput(input) {
   )
   if (
     !Array.isArray(input.fileNames)
-    || input.fileNames.length !== 3
+    || input.fileNames.length !== checksumLineCount
     || input.fileNames.length !== new Set(input.fileNames).size
     || input.fileNames.some(name => (
       typeof name !== 'string'
@@ -771,7 +882,7 @@ function normalizeChecksumInput(input) {
       || name.includes('\\')
       || name === checksumFileName
     ))
-    || input.fileNames[2] !== manifestFileName
+    || input.fileNames[checksumLineCount - 1] !== manifestFileName
   ) {
     throw new TypeError('Checksum file list is invalid')
   }
@@ -788,8 +899,8 @@ function parseChecksumDocument(contents, expectedNames) {
     throw new Error('SHA256SUMS format is invalid')
   }
   const lines = contents.slice(0, -1).split('\n')
-  if (lines.length !== 3) {
-    throw new Error('SHA256SUMS must contain exactly three lines')
+  if (lines.length !== expectedNames.length) {
+    throw new Error(`SHA256SUMS must contain exactly ${expectedNames.length} lines`)
   }
   return lines.map((line, index) => {
     const match = /^([0-9a-f]{64})  ([^/\\]+)$/u.exec(line)
@@ -851,13 +962,16 @@ function normalizeBundleGenerationInput(input) {
   assertExactKeys(
     input,
     [
+      'imagesMetadataPath',
       'outputDirectory',
       'releaseMetadataPath',
       'repository',
       'runAttempt',
       'runId',
       'serverArchivePath',
+      'serverImagePath',
       'webArchivePath',
+      'webImagePath',
       'workflow',
     ],
     'Bundle generation input',
@@ -896,11 +1010,21 @@ export async function generateReleaseBundle(input, dependencies = {}) {
     const sourcePaths = [
       normalizedInput.manifestInput.webArchivePath,
       normalizedInput.manifestInput.serverArchivePath,
+      normalizedInput.manifestInput.webImagePath,
+      normalizedInput.manifestInput.serverImagePath,
     ]
     const fileNames = [
       manifest.components.web.artifact,
       manifest.components.server.artifact,
+      manifest.images.web.archive,
+      manifest.images.server.archive,
       manifestFileName,
+    ]
+    const expectedDigests = [
+      manifest.components.web.sha256.slice('sha256:'.length),
+      manifest.components.server.sha256.slice('sha256:'.length),
+      manifest.images.web.sha256.slice('sha256:'.length),
+      manifest.images.server.sha256.slice('sha256:'.length),
     ]
     for (let index = 0; index < sourcePaths.length; index += 1) {
       const destination = path.join(normalizedInput.outputDirectory, fileNames[index])
@@ -911,10 +1035,7 @@ export async function generateReleaseBundle(input, dependencies = {}) {
         normalizedDependencies.fileSystem,
         'Copied release archive',
       )
-      const expected = index === 0
-        ? manifest.components.web.sha256.slice('sha256:'.length)
-        : manifest.components.server.sha256.slice('sha256:'.length)
-      if (copied.sha256 !== expected) {
+      if (copied.sha256 !== expectedDigests[index]) {
         throw new Error('Copied release archive digest differs')
       }
     }
@@ -978,9 +1099,12 @@ export async function verifyReleaseBundle(input, dependencies = {}) {
     normalizedDependencies.fileSystem,
   )
   const names = expectedArtifactNames(release.tag)
+  const imageNames = imageArtifactNames(release.tag)
   const expectedFiles = [
     names.web,
     names.server,
+    imageNames.web,
+    imageNames.server,
     manifestFileName,
     checksumFileName,
   ]
@@ -1007,7 +1131,13 @@ export async function verifyReleaseBundle(input, dependencies = {}) {
   const checksums = await createAndVerifyChecksums(
     {
       bundleDirectory: normalizedInput.bundleDirectory,
-      fileNames: [names.web, names.server, manifestFileName],
+      fileNames: [
+        names.web,
+        names.server,
+        imageNames.web,
+        imageNames.server,
+        manifestFileName,
+      ],
     },
     normalizedDependencies,
   )
@@ -1016,7 +1146,7 @@ export async function verifyReleaseBundle(input, dependencies = {}) {
     normalizedDependencies.fileSystem,
     'Release Manifest',
   )
-  if (manifestFile.sha256 !== checksums[2].sha256) {
+  if (manifestFile.sha256 !== checksums[checksumLineCount - 1].sha256) {
     throw new Error('Checksum verification failed')
   }
   const manifest = parseJsonObject(manifestFile.bytes, 'Release Manifest')
@@ -1030,6 +1160,8 @@ export async function verifyReleaseBundle(input, dependencies = {}) {
     || manifest.build.runAttempt !== normalizedInput.bundleRunAttempt
     || manifest.components.web.artifact !== names.web
     || manifest.components.server.artifact !== names.server
+    || manifest.images.web.archive !== imageNames.web
+    || manifest.images.server.archive !== imageNames.server
     || manifest.contract.version !== release.version
   ) {
     throw new Error('Release bundle identity is invalid')
@@ -1044,11 +1176,27 @@ export async function verifyReleaseBundle(input, dependencies = {}) {
     normalizedDependencies.fileSystem,
     'Server archive',
   )
+  const webImage = await hashStableRegularFile(
+    path.join(normalizedInput.bundleDirectory, imageNames.web),
+    normalizedDependencies.fileSystem,
+    'Web image archive',
+  )
+  const serverImage = await hashStableRegularFile(
+    path.join(normalizedInput.bundleDirectory, imageNames.server),
+    normalizedDependencies.fileSystem,
+    'Server image archive',
+  )
   if (
     manifest.components.web.sha256 !== `sha256:${web.sha256}`
     || manifest.components.server.sha256 !== `sha256:${server.sha256}`
+    || manifest.images.web.sha256 !== `sha256:${webImage.sha256}`
+    || manifest.images.server.sha256 !== `sha256:${serverImage.sha256}`
+    || manifest.images.web.size !== webImage.size
+    || manifest.images.server.size !== serverImage.size
     || web.sha256 !== checksums[0].sha256
     || server.sha256 !== checksums[1].sha256
+    || webImage.sha256 !== checksums[2].sha256
+    || serverImage.sha256 !== checksums[3].sha256
   ) {
     throw new Error('Release archive identity is invalid')
   }
@@ -1083,14 +1231,18 @@ export function parseReleaseManifestArguments(argv, cwd = process.cwd()) {
     '--run-attempt',
     '--web-archive',
     '--server-archive',
+    '--web-image',
+    '--server-image',
+    '--images-metadata',
     '--output',
   ]
-  const generateUsage = 'Usage: release-manifest --release-metadata file --repository owner/repo --workflow file --run-id digits --run-attempt positive-int --web-archive file --server-archive file --output directory'
+  const generateUsage = 'Usage: release-manifest --release-metadata file --repository owner/repo --workflow file --run-id digits --run-attempt positive-int --web-archive file --server-archive file --web-image file --server-image file --images-metadata file --output directory'
   if (argv[0] !== 'verify') {
     const values = parseFlagPairs(argv, generateFlags, generateUsage)
     return deepFreeze({
       command: 'generate',
       input: {
+        imagesMetadataPath: path.resolve(cwd, values['--images-metadata']),
         releaseMetadataPath: path.resolve(cwd, values['--release-metadata']),
         repository: assertPattern(
           values['--repository'],
@@ -1102,6 +1254,8 @@ export function parseReleaseManifestArguments(argv, cwd = process.cwd()) {
         runAttempt: parsePositiveInteger(values['--run-attempt'], 'Run attempt'),
         webArchivePath: path.resolve(cwd, values['--web-archive']),
         serverArchivePath: path.resolve(cwd, values['--server-archive']),
+        webImagePath: path.resolve(cwd, values['--web-image']),
+        serverImagePath: path.resolve(cwd, values['--server-image']),
         outputDirectory: path.resolve(cwd, values['--output']),
       },
     })

@@ -142,8 +142,43 @@ async function createBundleFixture(t) {
   )
   await fs.writeFile(webArchivePath, 'web archive fixture\n')
   await fs.writeFile(serverArchivePath, 'server archive fixture\n')
+  const webImagePath = path.join(inputs, `qsmds-web-image-${tag}-linux-x64.tar.gz`)
+  const serverImagePath = path.join(
+    inputs,
+    `qsmds-server-image-${tag}-linux-x64.tar.gz`,
+  )
+  const webImageBytes = Buffer.from('web image archive fixture\n')
+  const serverImageBytes = Buffer.from('server image archive fixture\n')
+  await fs.writeFile(webImagePath, webImageBytes)
+  await fs.writeFile(serverImagePath, serverImageBytes)
+  const imagesMetadataPath = path.join(inputs, 'release-images.json')
+  await fs.writeFile(imagesMetadataPath, canonicalJson({
+    schemaVersion: 1,
+    tag,
+    images: {
+      server: {
+        reference: `qsmds-server:${tag}`,
+        digest: `sha256:${'1'.repeat(64)}`,
+        archive: `qsmds-server-image-${tag}-linux-x64.tar.gz`,
+        platform: 'linux',
+        arch: 'x64',
+        sha256: `sha256:${sha256(serverImageBytes)}`,
+        size: serverImageBytes.length,
+      },
+      web: {
+        reference: `qsmds-web:${tag}`,
+        digest: `sha256:${'2'.repeat(64)}`,
+        archive: `qsmds-web-image-${tag}-linux-x64.tar.gz`,
+        platform: 'linux',
+        arch: 'x64',
+        sha256: `sha256:${sha256(webImageBytes)}`,
+        size: webImageBytes.length,
+      },
+    },
+  }))
   await generateReleaseBundle(
     {
+      imagesMetadataPath,
       releaseMetadataPath,
       repository,
       workflow: 'release.yml',
@@ -151,6 +186,8 @@ async function createBundleFixture(t) {
       runAttempt: bundleRunAttempt,
       webArchivePath,
       serverArchivePath,
+      webImagePath,
+      serverImagePath,
       outputDirectory: bundleDirectory,
     },
     runtimeDependencies(repositoryDirectory),
@@ -216,6 +253,8 @@ async function localAssets(bundleDirectory) {
   const names = [
     `qsmds-web-${tag}.tar.gz`,
     `qsmds-server-${tag}-linux-x64.tar.gz`,
+    `qsmds-web-image-${tag}-linux-x64.tar.gz`,
+    `qsmds-server-image-${tag}-linux-x64.tar.gz`,
     'release-manifest.json',
     'SHA256SUMS',
   ]
@@ -768,7 +807,7 @@ test('workflow artifact 任一身份字段不一致都失败且无 mutation', as
   }
 })
 
-test('无 Release 时创建 Draft、重读 author、上传四附件后唯一发布', async (t) => {
+test('无 Release 时创建 Draft、重读 author、上传六附件后唯一发布', async (t) => {
   const fixture = await createBundleFixture(t)
   const github = createGitHubFixture()
   const result = await coordinateDraftRelease(
@@ -779,7 +818,7 @@ test('无 Release 时创建 Draft、重读 author、上传四附件后唯一发�
   assert.equal(Object.isFrozen(result), true)
   assert.deepEqual(
     github.mutations.map(request => request.method),
-    ['POST', 'POST', 'POST', 'POST', 'POST', 'PATCH'],
+    ['POST', 'POST', 'POST', 'POST', 'POST', 'POST', 'POST', 'PATCH'],
   )
   assert.equal(
     github.mutations.some(request => request.method === 'DELETE'),
@@ -800,21 +839,25 @@ test('无 Release 时创建 Draft、重读 author、上传四附件后唯一发�
     { draft: false },
   )
   const uploadNames = github.mutations
-    .slice(1, 5)
+    .slice(1, 7)
     .map(request => new URL(request.url).searchParams.get('name'))
   assert.deepEqual(uploadNames, [
     `qsmds-web-${tag}.tar.gz`,
     `qsmds-server-${tag}-linux-x64.tar.gz`,
+    `qsmds-web-image-${tag}-linux-x64.tar.gz`,
+    `qsmds-server-image-${tag}-linux-x64.tar.gz`,
     'release-manifest.json',
     'SHA256SUMS',
   ])
   const expectedContentTypes = [
     'application/gzip',
     'application/gzip',
+    'application/gzip',
+    'application/gzip',
     'application/json',
     'text/plain',
   ]
-  for (const [index, request] of github.mutations.slice(1, 5).entries()) {
+  for (const [index, request] of github.mutations.slice(1, 7).entries()) {
     const bytes = await fs.readFile(
       path.join(fixture.bundleDirectory, uploadNames[index]),
     )
@@ -911,7 +954,7 @@ test('缺失 assets 只补传；unknown、duplicate、size、digest、uploader �
   )
   assert.deepEqual(
     missing.mutations.map(request => request.method),
-    ['POST', 'POST', 'PATCH'],
+    ['POST', 'POST', 'POST', 'POST', 'PATCH'],
   )
 
   const corruptions = [
@@ -990,7 +1033,7 @@ test('部分上传失败不发布，再次运行只补剩余附件', async (t) =
   )
   assert.deepEqual(
     github.mutations.map(request => request.method),
-    ['POST', 'POST', 'PATCH'],
+    ['POST', 'POST', 'POST', 'POST', 'PATCH'],
   )
 })
 

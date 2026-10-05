@@ -8,6 +8,7 @@
     "build",
     "runtime",
     "components",
+    "images",
     "contract",
     "database"
   ],
@@ -141,6 +142,83 @@
             "arch": {
               "type": "string",
               "enum": ["x64"]
+            }
+          }
+        }
+      }
+    },
+    "images": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["server", "web"],
+      "properties": {
+        "server": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reference", "digest", "archive", "platform", "arch", "sha256", "size"],
+          "properties": {
+            "reference": {
+              "type": "string",
+              "pattern": "^qsmds-server:v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "archive": {
+              "type": "string",
+              "pattern": "^qsmds-server-image-v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-linux-x64\\.tar\\.gz$"
+            },
+            "platform": {
+              "type": "string",
+              "enum": ["linux"]
+            },
+            "arch": {
+              "type": "string",
+              "enum": ["x64"]
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "web": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reference", "digest", "archive", "platform", "arch", "sha256", "size"],
+          "properties": {
+            "reference": {
+              "type": "string",
+              "pattern": "^qsmds-web:v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "archive": {
+              "type": "string",
+              "pattern": "^qsmds-web-image-v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-linux-x64\\.tar\\.gz$"
+            },
+            "platform": {
+              "type": "string",
+              "enum": ["linux"]
+            },
+            "arch": {
+              "type": "string",
+              "enum": ["x64"]
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 1
             }
           }
         }
