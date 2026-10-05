@@ -1156,6 +1156,7 @@ test('根 package 保持无依赖且不是 workspace', async () => {
     'release:package:web': 'node ./scripts/release-package.mjs web',
     'release:package:server': 'node ./scripts/release-package.mjs server',
     'release:smoke:server': 'node ./scripts/ci-postgres.mjs -- node ./scripts/release-package.mjs smoke-server',
+    'release:images': 'node ./scripts/release-images.mjs',
     'release:manifest': 'node ./scripts/release-manifest.mjs',
     'release:publish': 'node ./scripts/release-github.mjs',
     'test:root': 'node --test ./scripts/*.test.mjs',
