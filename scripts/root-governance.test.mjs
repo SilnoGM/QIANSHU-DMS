@@ -380,7 +380,7 @@ const currentGlobalDocuments = Object.freeze([
   '开发工作流.md',
   '生产部署与Gate OPS检查清单.md',
   '用户认证与权限体系设计.md',
-  '腾讯云1Panel部署手册.md',
+  '腾讯云Docker部署手册.md',
   '项目工程组织方案.md',
 ])
 
@@ -422,6 +422,13 @@ const archiveTasks = new Map([
       '归档说明.md',
       'Fantastic-admin与Arco文档本地化实施计划.md',
       'Fantastic-admin与Arco文档本地化设计.md',
+    ]),
+  ],
+  [
+    '腾讯云1Panel部署方案',
+    Object.freeze([
+      '归档说明.md',
+      '腾讯云1Panel部署手册.md',
     ]),
   ],
   [
@@ -1925,9 +1932,11 @@ test('发布与版本管理文档覆盖平台基线、完整发布、恢复与�
       [
         '`qsmds-web-vX.Y.Z.tar.gz`',
         '`qsmds-server-vX.Y.Z-linux-x64.tar.gz`',
+        '`qsmds-server-image-vX.Y.Z-linux-x64.tar.gz`',
+        '`qsmds-web-image-vX.Y.Z-linux-x64.tar.gz`',
         '`release-manifest.json`',
         '`SHA256SUMS`',
-        '四个固定附件',
+        '六个固定附件',
       ],
     ],
     [

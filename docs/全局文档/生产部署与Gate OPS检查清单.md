@@ -76,8 +76,7 @@ P0 加固涉及云安全组、SSH、账户、软件升级和重启，必须单�
 - `22/tcp` 只允许已批准的固定管理 CIDR 或 VPN。
 - `28317/tcp` 不对公网开放；如临时保留，只允许固定管理 CIDR，并且不得继续使用纯 HTTP 输入凭据。
 - `80/tcp` 与 `443/tcp` 只在正式入口、域名和 TLS 配置验收后开放。
-- Server `3000/tcp` 只监听 loopback，由反向代理访问。
-- PostgreSQL `5432/tcp` 只允许本机或明确批准的私网来源。
+- Docker 部署形态下只有 `web` 容器发布 `80/443`；Server `3000/tcp` 与 PostgreSQL `5432/tcp` 不发布到宿主端口，只允许 compose 网络内访问。
 
 guest firewall 必须形成与云安全组一致的默认拒绝策略。启用前先审计 1Panel、Docker 和 nftables/iptables 的规则关系，验证 Docker 发布端口不会绕过预期策略。任何来源不明的 `80/443` 外部握手都必须在继续部署前解释并关闭或纳入正式拓扑。
 
@@ -166,23 +165,23 @@ test ! -e /var/run/reboot-required
 | OS/runtime | Ubuntu 24.04、glibc、x64、Node.js `^24.15.0` |
 | Database | PostgreSQL 16；生产库身份、备份和只向前 migration 已审批 |
 | Seed | 首次部署按 `pnpm -C server db:migrate:deploy` → `auth:bootstrap-admin` → `seed:run --apply` 顺序执行；`seed:run` 默认只预览，幂等且不覆盖已有记录，摘要含非空 `conflicts` 时停止并人工处理 |
-| Reverse proxy | Nginx/OpenResty 提供可信 TLS、Web 静态资源、`/api` 代理和私有媒体交付（`application` 或 `internal_redirect`，与部署决策记录一致） |
-| Media tools | `/usr/bin/ffprobe` 与 `/usr/bin/qpdf` 可执行且版本已记录 |
-| Identities | `qianshu-dms` 用户、`qianshu-media` 组及最小权限目录已创建 |
-| Storage | `/var/lib/qianshu-dms/media` 在 release、源码和系统临时目录之外，权限和容量满足 preflight |
-| Service | 使用仓库 systemd unit，Server 只监听 `127.0.0.1:3000`，媒体清理 timer 已验收 |
-| Release | 从可信 GitHub Release 下载，`SHA256SUMS`、Manifest、Tag、Commit 和双端归档一致 |
-| Configuration | `/etc/qianshu-dms/server.env` 不进入 Git，权限最小，production 必填项通过启动前校验 |
+| Reverse proxy | `web` 容器内的 Nginx 提供可信 TLS、Web 静态资源、`/api` 代理和私有媒体交付（`application` 或 `internal_redirect`，与部署决策记录一致） |
+| Media tools | 镜像内 `/usr/bin/ffprobe` 与 `/usr/bin/qpdf` 可执行且版本已记录 |
+| Identities | `server` 容器以固定 uid/gid `10001:10001` 运行；媒体目录由该身份拥有且权限 `0750` |
+| Storage | 宿主媒体目录（如 `/srv/qianshu-dms/media`）在 release、源码和系统临时目录之外，权限和容量满足 preflight |
+| Service | 使用仓库 `deploy/docker/` 编排；`server` 与 `db` 不发布宿主端口，媒体清理 systemd timer 已验收 |
+| Release | 从可信 GitHub Release 下载六个附件，`SHA256SUMS`、Manifest、Tag、Commit、双端归档与双端镜像 digest 一致 |
+| Configuration | `server.env` 不进 Git，权限 0600，production 必填项通过启动前校验 |
 
-生产部署文件真相源：
+生产部署文件真相源（Docker 形态）：
 
-- [`qianshu-dms-server.service`](../../server/deploy/systemd/qianshu-dms-server.service)
-- [`qianshu-dms-media-cleanup.service`](../../server/deploy/systemd/qianshu-dms-media-cleanup.service)
-- [`qianshu-dms-media-cleanup.timer`](../../server/deploy/systemd/qianshu-dms-media-cleanup.timer)
-- [`qianshu-dms-media.conf`](../../server/deploy/nginx/qianshu-dms-media.conf)
-- [`server.env.example`](../../server/deploy/environment/server.env.example)
-- [`媒体存储部署与恢复`](../后端文档/媒体存储部署与恢复.md)
-- [`发布与版本管理`](./发布与版本管理.md)
+- [`Dockerfile.server`](../../deploy/docker/Dockerfile.server)、[`Dockerfile.web`](../../deploy/docker/Dockerfile.web)
+- [`docker-compose.yml`](../../deploy/docker/docker-compose.yml)、[`.env.example`](../../deploy/docker/.env.example)、[`server.env.example`](../../deploy/docker/server.env.example)
+- [`qianshu-dms.conf`](../../deploy/docker/nginx/qianshu-dms.conf)、[`server-entrypoint.sh`](../../deploy/docker/entrypoint/server-entrypoint.sh)
+- [`qianshu-dms-media-cleanup.service`](../../deploy/docker/systemd/qianshu-dms-media-cleanup.service)、[`qianshu-dms-media-cleanup.timer`](../../deploy/docker/systemd/qianshu-dms-media-cleanup.timer)
+- [`腾讯云 Docker 部署手册`](./腾讯云Docker部署手册.md)、[`媒体存储部署与恢复`](../后端文档/媒体存储部署与恢复.md)、[`发布与版本管理`](./发布与版本管理.md)
+
+宿主形态的历史模板保留在 `server/deploy/systemd/` 与 `server/deploy/nginx/`，只作为媒体目录语义与未来切换 `internal_redirect` 的参考，不再作为部署真相源。
 
 如果使用正式 Server Release 归档，pnpm 不是 `dist/main.js` 的运行时依赖；若选择在生产机安装、构建或执行需要 pnpm 的维护流程，则必须使用仓库声明的 pnpm `11.9.0`，并重新审查构建工具留在生产机上的必要性。
 

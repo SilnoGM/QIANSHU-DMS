@@ -5,6 +5,7 @@ import path from 'node:path'
 import process from 'node:process'
 
 import { verifyReleaseBundle } from './release-manifest.mjs'
+import { imageArtifactNames } from './release-images.mjs'
 import {
   applyFailureToProcess,
   isDirectEntry,
@@ -893,9 +894,12 @@ async function verifyLocalBundle(input, dependencies) {
 }
 
 function assetNames(tag) {
+  const imageNames = imageArtifactNames(tag)
   return [
     `qsmds-web-${tag}.tar.gz`,
     `qsmds-server-${tag}-linux-x64.tar.gz`,
+    imageNames.web,
+    imageNames.server,
     manifestFileName,
     checksumFileName,
   ]
