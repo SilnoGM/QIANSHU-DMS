@@ -108,11 +108,11 @@ cd /srv/qianshu-dms/images/<tag> && sha256sum -c <(grep -E 'qsmds-(server|web)(-
 cd /srv/qianshu-dms/images/<tag>
 sudo docker load -i qsmds-server-image-<tag>-linux-x64.tar.gz
 sudo docker load -i qsmds-web-image-<tag>-linux-x64.tar.gz
-sudo docker image inspect --format '{{.Id}}' qsmds-server:<tag>   # 应等于 manifest.images.server.digest
-sudo docker image inspect --format '{{.Id}}' qsmds-web:<tag>      # 应等于 manifest.images.web.digest
+sudo docker image inspect --format '{{.Id}}' qsmds-server:<tag>   # 期望等于 manifest.images.server.digest
+sudo docker image inspect --format '{{.Id}}' qsmds-web:<tag>      # 期望等于 manifest.images.web.digest
 ```
 
-两个 `Id` 与 `release-manifest.json` 的 `images.*.digest` 不一致时停止部署并重新上传。
+两个 `Id` 与 `release-manifest.json` 的 `images.*.digest` 不一致时，先确认 tar 本身完整（`sha256sum` 与 `SHA256SUMS` 一致）并重新 `docker load`；若 tar 完整且仍不一致，说明目标机的镜像存储后端与构建机不同（containerd 镜像存储与经典 overlayfs 对 `Id` 的定义不同），此时**以 tar 的 SHA-256 与 `SHA256SUMS` 为唯一校验依据**，并在部署记录中说明该差异。tar 摘要不一致时停止部署并重新上传。
 
 ## 5. 宿主机准备
 
