@@ -96,6 +96,13 @@ export interface MediaStorage {
   finalize(stagingKey: string, objectKey: string): Promise<void>
   inventory(request: MediaStorageInventoryRequest): Promise<MediaStorageInventoryPage>
   open(objectKey: string, range?: MediaByteRange): Promise<ReadableStoredObject>
+  /**
+   * 读取任意受控对象的字节：assets/trash 由对象存储实现，staging/ 始终由本地实现提供。
+   *
+   * 与 `open` 的区别只在于命名空间：本方法服务驱动间的搬运与校验（finalize 后的转存、存量迁移、
+   * 校验回退），不允许用于对外投递；对外投递继续走只接受 assets 的 `open`。
+   */
+  openManagedObject(objectKey: string, range?: MediaByteRange): Promise<ReadableStoredObject>
   moveToTrash(objectKey: string, trashKey: string): Promise<void>
   restoreFromTrash(trashKey: string, objectKey: string): Promise<void>
   purge(key: string): Promise<void>

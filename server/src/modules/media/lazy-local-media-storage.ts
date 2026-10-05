@@ -55,6 +55,13 @@ export class LazyLocalMediaStorage implements MediaStorage {
     return this.withStorage(storage => storage.open(objectKey, range))
   }
 
+  openManagedObject(
+    objectKey: string,
+    range?: MediaByteRange,
+  ): Promise<ReadableStoredObject> {
+    return this.withStorage(storage => storage.openManagedObject(objectKey, range))
+  }
+
   moveToTrash(objectKey: string, trashKey: string): Promise<void> {
     return this.withStorage(storage => storage.moveToTrash(objectKey, trashKey))
   }

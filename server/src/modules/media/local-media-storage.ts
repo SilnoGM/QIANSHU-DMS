@@ -597,7 +597,29 @@ export class LocalMediaStorage implements MediaStorage {
     objectKey: string,
     range?: MediaByteRange,
   ): Promise<ReadableStoredObject> {
-    const key = requireMediaObjectKeyNamespace(objectKey, 'assets')
+    return this.openInspectedObject(
+      requireMediaObjectKeyNamespace(objectKey, 'assets'),
+      range,
+    )
+  }
+
+  /**
+   * 驱动间搬运与校验入口：允许 staging 键。
+   *
+   * 对外投递继续走只接受 assets 的 `open`；这里放宽命名空间，是因为 COS 驱动需要把本地 staging
+   * 的字节转存到对象存储，存量迁移也需要读取尚未成为 assets 的受控对象。
+   */
+  async openManagedObject(
+    objectKey: string,
+    range?: MediaByteRange,
+  ): Promise<ReadableStoredObject> {
+    return this.openInspectedObject(requireManagedObjectKey(objectKey), range)
+  }
+
+  private async openInspectedObject(
+    key: string,
+    range?: MediaByteRange,
+  ): Promise<ReadableStoredObject> {
     const inspected = await this.inspectObject(key)
     if (!inspected) throw new MediaStorageError('MEDIA_STORAGE_NOT_FOUND')
 
