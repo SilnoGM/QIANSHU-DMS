@@ -29,6 +29,7 @@ const PASSED_REPORT: MediaKeyMigrationReport = {
   applied: 3,
   conflicts: 0,
   missingTarget: 0,
+  pools: { product: 4, voucher: 1 },
   registered: 4,
   scanned: 5,
   skipped: 0,
@@ -81,7 +82,7 @@ function createOperations(options: {
     scanned: options.planScanned ?? candidates.length,
   })
   const previewSummary = jest.fn<Promise<MediaKeyMigrationPreviewSummary>, []>()
-    .mockResolvedValue(options.preview ?? { alreadyRegistered: 0, applied: 0, candidates: 0 })
+    .mockResolvedValue(options.preview ?? { alreadyRegistered: 0, applied: 0, candidates: 0, pools: {} })
   const registerPlan = jest.fn<
     Promise<MediaKeyMigrationRegistrationResult>,
     [readonly MediaKeyMigrationCandidate[]]
@@ -127,13 +128,15 @@ function parsedCalls(output: jest.Mock<void, [string]>): unknown[] {
 describe('runPreviewMigration', () => {
   it('stays read-only and reports the work that is waiting', async () => {
     const fixture = createOperations({
-      preview: { alreadyRegistered: 7, applied: 2, candidates: 9 },
+      preview: { alreadyRegistered: 7, applied: 2, candidates: 9, pools: { product: 6, voucher: 3 } },
     })
 
     await expect(runPreviewMigration(fixture.operations)).resolves.toEqual({
       applied: 2,
       conflicts: 0,
       missingTarget: 0,
+      // 池分布是生产迁移前复核「哪些对象进哪个池」的唯一依据。
+      pools: { product: 6, voucher: 3 },
       registered: 7,
       scanned: 9,
       skipped: 0,
@@ -202,6 +205,7 @@ describe('runApplyMigration', () => {
       applied: 1020,
       conflicts: 0,
       missingTarget: 0,
+      pools: { product: 1 },
       registered: 1,
       scanned: 3,
       skipped: 0,
@@ -255,6 +259,7 @@ describe('runApplyMigration', () => {
       applied: 0,
       conflicts: 2,
       missingTarget: 0,
+      pools: { product: 1 },
       registered: 0,
       scanned: 1,
       skipped: 0,
@@ -285,6 +290,7 @@ describe('runMediaKeyMigrationCli', () => {
       conflicts: 0,
       kind: 'media_key_migration',
       missingTarget: 0,
+      pools: { product: 4, voucher: 1 },
       registered: 4,
       scanned: 5,
       skipped: 0,
@@ -370,13 +376,21 @@ describe('runMediaKeyMigrationCli', () => {
   it('copies through staging and finalize for the local driver and cancels on failure', async () => {
     const assetId = '00000000-0000-4000-8000-000000000321'
     const order: string[] = []
-    const cancel = jest.fn(async () => { order.push('cancel') })
-    const createStagingWrite = jest.fn(async () => {
-      order.push('staging')
-      return { cancel, key: `staging/${assetId}.00000000-0000-4000-8000-000000000777.part`, stream: new PassThrough() }
+    const cancel = jest.fn(() => {
+      order.push('cancel')
+      return Promise.resolve()
     })
-    const finalize = jest.fn(async (_stagingKey: string, objectKey: string) => {
+    const createStagingWrite = jest.fn(() => {
+      order.push('staging')
+      return Promise.resolve({
+        cancel,
+        key: `staging/${assetId}.00000000-0000-4000-8000-000000000777.part`,
+        stream: new PassThrough(),
+      })
+    })
+    const finalize = jest.fn((_stagingKey: string, objectKey: string) => {
       order.push(`finalize:${objectKey}`)
+      return Promise.resolve()
     })
     const client = createLocalCopyClient({ createStagingWrite, finalize } as never)
 
@@ -392,7 +406,7 @@ describe('runMediaKeyMigrationCli', () => {
     expect(cancel).not.toHaveBeenCalled()
 
     // 落位失败必须取消 staging 写入并向上抛错：半成品留在磁盘上会阻塞后续重试。
-    const failingFinalize = jest.fn(async () => { throw new Error('media storage conflict') })
+    const failingFinalize = jest.fn(() => Promise.reject(new Error('media storage conflict')))
     const failingClient = createLocalCopyClient({
       createStagingWrite,
       finalize: failingFinalize,

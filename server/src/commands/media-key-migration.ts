@@ -28,6 +28,7 @@ import {
 } from '../modules/media/media-key-migration-copy.service'
 import {
   MediaKeyMigrationService,
+  type MediaKeyMigrationCandidate,
   type MediaKeyMigrationOperations,
   type MediaKeyMigrationStorage,
 } from '../modules/media/media-key-migration.service'
@@ -51,6 +52,8 @@ export interface MediaKeyMigrationReport {
   readonly applied: number
   readonly conflicts: number
   readonly missingTarget: number
+  /** 计划里各业务池的对象数（只输出计数与池名，不含任何键或资产标识）：迁移前复核的输入。 */
+  readonly pools: Readonly<Record<string, number>>
   readonly registered: number
   readonly scanned: number
   readonly skipped: number
@@ -106,6 +109,23 @@ function parseMode(argv: readonly string[]): MediaKeyMigrationMode {
  * preview 只读：只统计候选与登记进度，不写库。输出里的 scanned 表达「需要改名的候选行数」——
  * 预览要回答的是工作量，而不是扫描成本。
  */
+/**
+ * 按目标键的第 3 段（业务池）统计计划分布。
+ *
+ * 生产迁移前需要先看清「哪些对象会进哪个池」：池是键里唯一承载业务语义的段，一旦写库基本不可逆，
+ * 所以复核依据必须是可见的。这里只输出池名与计数，不输出键、资产标识或文件名。
+ */
+function summarizePools(
+  candidates: readonly MediaKeyMigrationCandidate[],
+): Readonly<Record<string, number>> {
+  const pools: Record<string, number> = {}
+  for (const candidate of candidates) {
+    const pool = candidate.newKey.split('/')[2] ?? 'unknown'
+    pools[pool] = (pools[pool] ?? 0) + 1
+  }
+  return Object.freeze(pools)
+}
+
 export async function runPreviewMigration(
   operations: MediaKeyMigrationOperations,
 ): Promise<MediaKeyMigrationReport> {
@@ -114,6 +134,7 @@ export async function runPreviewMigration(
     applied: summary.applied,
     conflicts: 0,
     missingTarget: 0,
+    pools: Object.freeze(summary.pools),
     registered: summary.alreadyRegistered,
     scanned: summary.candidates,
     skipped: 0,
@@ -137,6 +158,7 @@ export async function runApplyMigration(
       applied: 0,
       conflicts: registration.conflicts,
       missingTarget: 0,
+      pools: summarizePools(plan.candidates),
       registered: registration.registered,
       scanned: plan.scanned,
       skipped: 0,
@@ -161,6 +183,7 @@ export async function runApplyMigration(
     applied,
     conflicts: registration.conflicts,
     missingTarget,
+    pools: summarizePools(plan.candidates),
     registered: registration.registered,
     scanned: plan.scanned,
     skipped,
@@ -375,6 +398,7 @@ export async function runMediaKeyMigrationCli(
       skipped: report.skipped,
       missingTarget: report.missingTarget,
       conflicts: report.conflicts,
+      pools: report.pools,
     }))
     if (status !== 'passed') dependencies.processRef.exitCode = 1
   }

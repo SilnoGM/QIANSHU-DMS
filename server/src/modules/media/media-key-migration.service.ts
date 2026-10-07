@@ -97,6 +97,8 @@ export interface MediaKeyMigrationPreviewSummary {
   readonly alreadyRegistered: number
   readonly applied: number
   readonly candidates: number
+  /** 计划里各业务池的对象数；生产迁移前复核「哪些对象进哪个池」的依据。 */
+  readonly pools: Readonly<Record<string, number>>
 }
 
 export interface MediaKeyMigrationSqlClient {
@@ -488,10 +490,16 @@ export class MediaKeyMigrationService implements MediaKeyMigrationOperations {
       FROM "media_object_key_migrations"
     `)
     const row = counts.at(0)
+    const pools: Record<string, number> = {}
+    for (const candidate of plan.candidates) {
+      const pool = candidate.newKey.split('/')[2] ?? 'unknown'
+      pools[pool] = (pools[pool] ?? 0) + 1
+    }
     return Object.freeze({
       alreadyRegistered: row?.registered ?? 0,
       applied: row?.applied ?? 0,
       candidates: plan.candidates.length,
+      pools: Object.freeze(pools),
     })
   }
 

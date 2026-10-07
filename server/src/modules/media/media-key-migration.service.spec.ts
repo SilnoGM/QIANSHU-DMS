@@ -598,6 +598,8 @@ describe('MediaKeyMigrationService.previewSummary', () => {
       alreadyRegistered: 2,
       applied: 1,
       candidates: 1,
+      // 唯一的候选是 product 池：分布要与候选清单同源，而不是另写一套判定。
+      pools: { product: 1 },
     })
 
     expect(database.calls.filter(call => call.query.text.includes('INSERT'))).toEqual([])
