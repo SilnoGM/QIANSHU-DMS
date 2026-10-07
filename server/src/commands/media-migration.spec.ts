@@ -7,7 +7,6 @@ import {
 const passed: MediaMigrationReport = {
   copied: 3,
   failed: 0,
-  flipped: 3,
   scanned: 4,
   skipped: 1,
 }
@@ -41,7 +40,6 @@ describe('runMediaMigrationCli', () => {
     expect(parsedCalls(log)).toContainEqual({
       copied: 3,
       failed: 0,
-      flipped: 3,
       kind: 'media_migration',
       mode: 'apply',
       scanned: 4,
@@ -56,13 +54,16 @@ describe('runMediaMigrationCli', () => {
     })
   })
 
-  it('passes the requested mode through and never flips the driver on preview', async () => {
-    const runMigration = jest.fn().mockResolvedValue({ ...passed, flipped: 0 })
+  it('passes the requested mode through and performs no database write', async () => {
+    const runMigration = jest.fn().mockResolvedValue(passed)
     const { dependencies } = fixture({ runMigration })
 
     await runMediaMigrationCli(['preview'], dependencies)
 
+    // 迁移不翻转 storage_driver（该列记录物化时的驱动，且被不可变触发器保护），
+    // 因此报告里只有搬运计数，没有数据库写入相关的字段。
     expect(runMigration).toHaveBeenCalledWith('preview')
+    expect(Object.keys(passed).sort()).toEqual(['copied', 'failed', 'scanned', 'skipped'])
   })
 
   it('exits non-zero when any object failed to migrate', async () => {
@@ -70,7 +71,6 @@ describe('runMediaMigrationCli', () => {
       runMigration: jest.fn().mockResolvedValue({
         copied: 1,
         failed: 2,
-        flipped: 0,
         scanned: 3,
         skipped: 0,
       }),

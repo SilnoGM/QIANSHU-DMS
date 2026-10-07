@@ -17,7 +17,17 @@ const COS_BUCKET_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?-\d{6,}$/u
 const COS_CREDENTIAL_PATTERN = /^\S{8,256}$/u
 
 export type MediaContentDeliveryMode = 'application' | 'internal_redirect'
-export type MediaStorageDriver = 'local' | 'cos'
+
+/**
+ * 支持的媒体存储驱动，是代码侧的唯一清单。
+ *
+ * 数据库 `media_assets_storage_driver_check` 允许的枚举必须与这里一致——两边不一致时，
+ * 运行期要么写不进库（数据库更严）、要么守卫形同虚设（代码更严），
+ * `media-schema.spec.ts` 会据此断言。
+ */
+export const MEDIA_STORAGE_DRIVERS = ['local', 'cos'] as const
+
+export type MediaStorageDriver = (typeof MEDIA_STORAGE_DRIVERS)[number]
 
 /**
  * 配置对象只携带非敏感的定位信息。
@@ -126,10 +136,13 @@ function mediaConfigurationError(key: string, constraint: string): Error {
 
 function normalizeDriver(value: unknown): MediaStorageDriver {
   if (value === undefined || value === '') return 'local'
-  if (value !== 'local' && value !== 'cos') {
-    throw mediaConfigurationError('MEDIA_STORAGE_DRIVER', 'must be one of local, cos')
+  if (!(MEDIA_STORAGE_DRIVERS as readonly unknown[]).includes(value)) {
+    throw mediaConfigurationError(
+      'MEDIA_STORAGE_DRIVER',
+      `must be one of ${MEDIA_STORAGE_DRIVERS.join(', ')}`,
+    )
   }
-  return value
+  return value as MediaStorageDriver
 }
 
 function normalizeCosRegion(value: unknown): string {

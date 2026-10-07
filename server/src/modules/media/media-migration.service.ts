@@ -55,7 +55,8 @@ function assetIdFromKey(key: string): string | null {
  * - 只读源端、只写目标端，任何失败都不删除源对象，因此本地目录始终是回滚面；
  * - 幂等可续跑：目标端已通过校验的对象直接跳过，中断后重跑不会重复上传；
  * - 逐一校验：每个对象上传后立即用驱动的分级校验确认，未通过即计为失败；
- * - 不做数据库写入：`storage_driver` 的翻转由调用方在全部对象通过后单独执行。
+ * - 不做数据库写入：`storage_driver` 记录"物化时的驱动"并被不可变触发器保护，
+ *   迁移只搬运字节，不改写该列（切换驱动由部署配置决定，与运行期分派解耦）。
  */
 export class MediaMigrationService {
   constructor(private readonly dependencies: MediaMigrationDependencies) {}
