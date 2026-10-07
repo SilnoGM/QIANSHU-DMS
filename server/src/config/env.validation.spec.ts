@@ -23,6 +23,8 @@ describe('validateEnvironment', () => {
       AUTH_ARGON2_CONCURRENCY: 2,
       AUTH_ARGON2_QUEUE_LIMIT: 32,
       MEDIA_CONTENT_DELIVERY_MODE: 'application',
+      MEDIA_COS_BUCKET: null,
+      MEDIA_COS_REGION: null,
       MEDIA_STORAGE_DRIVER: 'local',
       MEDIA_FFPROBE_PATH: '/usr/bin/ffprobe',
       MEDIA_QPDF_PATH: '/usr/bin/qpdf',
@@ -60,6 +62,8 @@ describe('validateEnvironment', () => {
       AUTH_ARGON2_CONCURRENCY: 3,
       AUTH_ARGON2_QUEUE_LIMIT: 48,
       MEDIA_CONTENT_DELIVERY_MODE: 'internal_redirect',
+      MEDIA_COS_BUCKET: null,
+      MEDIA_COS_REGION: null,
       MEDIA_STORAGE_DRIVER: 'local',
       MEDIA_FFPROBE_PATH: '/opt/media/bin/ffprobe',
       MEDIA_QPDF_PATH: '/opt/media/bin/qpdf',
@@ -67,6 +71,26 @@ describe('validateEnvironment', () => {
       MEDIA_STAGING_TTL_HOURS: 36,
       MEDIA_TRASH_RETENTION_DAYS: 14,
       CUSTOM_SETTING: 'kept',
+    })
+  })
+
+  it('normalizes an explicit cos target without surfacing credential values', () => {
+    const credential = ['placeholder', 'credential', '0123456789abcdef'].join('-')
+
+    const environment = validateEnvironment({
+      DATABASE_URL: validDatabaseUrl,
+      MEDIA_STORAGE_DRIVER: 'cos',
+      MEDIA_COS_REGION: 'ap-beijing',
+      MEDIA_COS_BUCKET: 'dms-qs-media-1396967080',
+      MEDIA_COS_SECRET_ID: credential,
+      MEDIA_COS_SECRET_KEY: credential,
+    })
+
+    expect(environment).toMatchObject({
+      MEDIA_CONTENT_DELIVERY_MODE: 'application',
+      MEDIA_COS_BUCKET: 'dms-qs-media-1396967080',
+      MEDIA_COS_REGION: 'ap-beijing',
+      MEDIA_STORAGE_DRIVER: 'cos',
     })
   })
 
@@ -229,7 +253,7 @@ describe('validateEnvironment', () => {
   describe('media storage environment', () => {
     it.each([
       ['MEDIA_CONTENT_DELIVERY_MODE', 'public', 'must be one of application, internal_redirect'],
-      ['MEDIA_STORAGE_DRIVER', 's3', 'must be local'],
+      ['MEDIA_STORAGE_DRIVER', 's3', 'must be one of local, cos'],
       ['MEDIA_STORAGE_ROOT', 'relative/media', 'must be an absolute non-root path'],
       ['MEDIA_FFPROBE_PATH', 'ffprobe', 'must be an absolute executable path'],
       ['MEDIA_QPDF_PATH', 'qpdf', 'must be an absolute executable path'],

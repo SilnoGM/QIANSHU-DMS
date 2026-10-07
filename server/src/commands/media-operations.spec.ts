@@ -215,6 +215,26 @@ describe('runMediaOperationsCli', () => {
     expect(blocked.processRef.exitCode).toBe(1)
   })
 
+  it('lets preflight start a cos deployment while a bucket read outage keeps alarming through health', async () => {
+    // COS 模式下读取依赖外部服务，物理上无法「保留读取」，因此读取不可用只降级、不阻止启动。
+    const outage: MediaOperationalHealthResult = {
+      ...healthy,
+      capabilities: {
+        ...healthy.capabilities,
+        read: { code: 'MEDIA_READ_UNAVAILABLE', status: 'down' },
+      },
+      status: 'degraded',
+    }
+
+    const started = fixture({ collectHealth: jest.fn().mockResolvedValue(outage) })
+    await runMediaOperationsCli(['preflight'], started.dependencies)
+    expect(started.processRef.exitCode).toBeUndefined()
+
+    const alarmed = fixture({ collectHealth: jest.fn().mockResolvedValue(outage) })
+    await runMediaOperationsCli(['health'], alarmed.dependencies)
+    expect(alarmed.processRef.exitCode).toBe(1)
+  })
+
   it('fails with one fixed message for unsupported input or an internal error', async () => {
     const unsupported = fixture()
     await runMediaOperationsCli(['unsupported'], unsupported.dependencies)

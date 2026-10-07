@@ -265,6 +265,36 @@ describe('LocalMediaStorage', () => {
     await expect(storage.stat(stagingWrite.key)).resolves.toBeNull()
   })
 
+  it('verifies stored bytes by re-reading the object and rejects every mismatch', async () => {
+    const storage = await LocalMediaStorage.create(
+      configuration(storageRoot),
+      testDependencies(),
+    )
+    const staging = await storage.createStagingWrite(ASSET_ID)
+    staging.stream.end(Buffer.from('trusted'))
+    await finished(staging.stream)
+    await storage.finalize(staging.key, OBJECT_KEY)
+
+    const digest = createHash('sha256').update('trusted').digest('hex')
+    await expect(storage.verifyStoredObject(OBJECT_KEY, {
+      checksumSha256: digest,
+      sizeBytes: 7n,
+    })).resolves.toBe(true)
+    // 长度不符、摘要不符与对象不存在都必须失败关闭，而不是抛出底层错误。
+    await expect(storage.verifyStoredObject(OBJECT_KEY, {
+      checksumSha256: digest,
+      sizeBytes: 8n,
+    })).resolves.toBe(false)
+    await expect(storage.verifyStoredObject(OBJECT_KEY, {
+      checksumSha256: 'a'.repeat(64),
+      sizeBytes: 7n,
+    })).resolves.toBe(false)
+    await expect(storage.verifyStoredObject(TRASH_KEY, {
+      checksumSha256: digest,
+      sizeBytes: 7n,
+    })).resolves.toBe(false)
+  })
+
   it('fails closed for new writes below 10 percent free space while existing reads continue', async () => {
     let capacity = {
       availableBlocks: 50n,

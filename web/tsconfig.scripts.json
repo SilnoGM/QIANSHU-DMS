@@ -11,5 +11,7 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["scripts/**/*.ts"]
+  // scripts 下的 node 测试会直接导入 app 模块（例如 settings 与 api 层的 mock 开关），
+  // 因此必须一并看到 app 的 Vite 环境类型声明，否则 `import.meta.env` 在 scripts 编译里不可见。
+  "include": ["scripts/**/*.ts", "apps/qsmds-arco/src/types/env.d.ts"]
 }

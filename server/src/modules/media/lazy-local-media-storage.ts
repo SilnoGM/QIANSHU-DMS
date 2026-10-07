@@ -8,6 +8,7 @@ import type {
   MediaStorageInventoryRequest,
   ReadableStoredObject,
   StagingWrite,
+  StoredObjectExpectation,
   StoredObjectStat,
 } from './media-storage'
 
@@ -55,6 +56,13 @@ export class LazyLocalMediaStorage implements MediaStorage {
     return this.withStorage(storage => storage.open(objectKey, range))
   }
 
+  openManagedObject(
+    objectKey: string,
+    range?: MediaByteRange,
+  ): Promise<ReadableStoredObject> {
+    return this.withStorage(storage => storage.openManagedObject(objectKey, range))
+  }
+
   moveToTrash(objectKey: string, trashKey: string): Promise<void> {
     return this.withStorage(storage => storage.moveToTrash(objectKey, trashKey))
   }
@@ -69,6 +77,13 @@ export class LazyLocalMediaStorage implements MediaStorage {
 
   stat(key: string): Promise<StoredObjectStat | null> {
     return this.withStorage(storage => storage.stat(key))
+  }
+
+  verifyStoredObject(
+    objectKey: string,
+    expected: StoredObjectExpectation,
+  ): Promise<boolean> {
+    return this.withStorage(storage => storage.verifyStoredObject(objectKey, expected))
   }
 
   withStagingValidationSource<T>(

@@ -39,6 +39,7 @@ import {
   type ReadableStoredObject,
   requireMediaObjectKeyNamespace,
   type StagingWrite,
+  type StoredObjectExpectation,
   type StoredObjectStat,
 } from './media-storage'
 
@@ -597,7 +598,29 @@ export class LocalMediaStorage implements MediaStorage {
     objectKey: string,
     range?: MediaByteRange,
   ): Promise<ReadableStoredObject> {
-    const key = requireMediaObjectKeyNamespace(objectKey, 'assets')
+    return this.openInspectedObject(
+      requireMediaObjectKeyNamespace(objectKey, 'assets'),
+      range,
+    )
+  }
+
+  /**
+   * 驱动间搬运与校验入口：允许 staging 键。
+   *
+   * 对外投递继续走只接受 assets 的 `open`；这里放宽命名空间，是因为 COS 驱动需要把本地 staging
+   * 的字节转存到对象存储，存量迁移也需要读取尚未成为 assets 的受控对象。
+   */
+  async openManagedObject(
+    objectKey: string,
+    range?: MediaByteRange,
+  ): Promise<ReadableStoredObject> {
+    return this.openInspectedObject(requireManagedObjectKey(objectKey), range)
+  }
+
+  private async openInspectedObject(
+    key: string,
+    range?: MediaByteRange,
+  ): Promise<ReadableStoredObject> {
     const inspected = await this.inspectObject(key)
     if (!inspected) throw new MediaStorageError('MEDIA_STORAGE_NOT_FOUND')
 
@@ -682,6 +705,47 @@ export class LocalMediaStorage implements MediaStorage {
       modifiedAt: new Date(inspected.metadata.mtimeMs),
       sizeBytes: BigInt(inspected.metadata.size),
     })
+  }
+
+  /**
+   * 回读全文校验：本地磁盘读取没有流量成本，因此这里不做任何降级。
+   *
+   * 读取长度以期望字节数为上界：一旦超出即判定不一致，避免异常对象把校验变成无界读取。
+   */
+  async verifyStoredObject(
+    objectKey: string,
+    expected: StoredObjectExpectation,
+  ): Promise<boolean> {
+    let opened: ReadableStoredObject
+    try {
+      opened = await this.openInspectedObject(requireManagedObjectKey(objectKey))
+    }
+    catch {
+      return false
+    }
+    if (opened.sizeBytes !== expected.sizeBytes) {
+      opened.stream.destroy()
+      return false
+    }
+
+    const hash = createHash('sha256')
+    let sizeBytes = 0n
+    try {
+      for await (const chunk of opened.stream) {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        sizeBytes += BigInt(buffer.length)
+        if (sizeBytes > expected.sizeBytes) {
+          opened.stream.destroy()
+          return false
+        }
+        hash.update(buffer)
+      }
+    }
+    catch {
+      return false
+    }
+    return sizeBytes === expected.sizeBytes &&
+      hash.digest('hex') === expected.checksumSha256
   }
 
   async withStagingValidationSource<T>(

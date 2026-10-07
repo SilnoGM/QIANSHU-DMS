@@ -60,6 +60,11 @@ export interface StoredObjectStat {
   readonly sizeBytes: bigint
 }
 
+export interface StoredObjectExpectation {
+  readonly checksumSha256: string
+  readonly sizeBytes: bigint
+}
+
 export interface ReadableStoredObject extends StoredObjectStat {
   readonly contentLength: bigint
   readonly stream: Readable
@@ -96,10 +101,28 @@ export interface MediaStorage {
   finalize(stagingKey: string, objectKey: string): Promise<void>
   inventory(request: MediaStorageInventoryRequest): Promise<MediaStorageInventoryPage>
   open(objectKey: string, range?: MediaByteRange): Promise<ReadableStoredObject>
+  /**
+   * 读取任意受控对象的字节：assets/trash 由对象存储实现，staging/ 始终由本地实现提供。
+   *
+   * 与 `open` 的区别只在于命名空间：本方法服务驱动间的搬运与校验（finalize 后的转存、存量迁移、
+   * 校验回退），不允许用于对外投递；对外投递继续走只接受 assets 的 `open`。
+   */
+  openManagedObject(objectKey: string, range?: MediaByteRange): Promise<ReadableStoredObject>
   moveToTrash(objectKey: string, trashKey: string): Promise<void>
   restoreFromTrash(trashKey: string, objectKey: string): Promise<void>
   purge(key: string): Promise<void>
   stat(key: string): Promise<StoredObjectStat | null>
+  /**
+   * 校验已存对象与期望的字节数与摘要一致；对象不存在或读取失败都返回 false。
+   *
+   * 校验强度按驱动分级：本地实现回读全文逐字节比对；对象存储实现可以使用上传时写入的对象
+   * 元数据（摘要）与服务端返回的长度，避免每次上传都把整份对象再下载一遍，但一旦元数据缺失
+   * 就必须回退为回读全文——不允许仅凭长度放行。
+   */
+  verifyStoredObject(
+    objectKey: string,
+    expected: StoredObjectExpectation,
+  ): Promise<boolean>
   /**
    * 只在 storage callback 生命周期内把受控 staging 文件交给内容验证器。
    * 绝对路径不得由调用方保存、记录或写入数据库；未来对象存储可用临时本地验证源实现同一合同。

@@ -16,7 +16,8 @@
 | 镜像来源 | 发布流程在 CI 内构建两个镜像并 `docker save` 成归档，作为 Release 附件；服务器只 `docker load`，不在服务器构建 |
 | 镜像分发 | 不使用镜像仓库：本地 `gh release download` 六个附件 → 校验 → 上传服务器 → `docker load` |
 | 基础镜像 | 两个镜像都以 `ubuntu:24.04` 为基础，与 Release 的 Ubuntu 24.04 / glibc / x64 承诺一致 |
-| 媒体投递 | `MEDIA_CONTENT_DELIVERY_MODE=application`（应用层流式交付；内部重定向见第 11.3 节的前置条件） |
+| 媒体投递 | `MEDIA_CONTENT_DELIVERY_MODE=application`（应用层流式交付；内部重定向见第 9.1 节的前置条件，仅 `local` 驱动可用） |
+| 媒体存储 | `MEDIA_STORAGE_DRIVER=local`（媒体在宿主目录）；可选 `cos`（`assets/`、`trash/` 在腾讯云对象存储，`staging` 仍在本地），切换流程见第 11.3 节 |
 | 证书 | 使用已有证书，挂载进 `web` 容器，不申请 ACME |
 | 媒体清理 | 宿主 systemd timer 调用 `docker compose run --rm server ...`，语义与宿主部署的 oneshot 单元一致 |
 | 迁移执行 | 本地通过 SSH 隧道对生产库执行 `prisma migrate deploy`，连接串只出现在本地 |
@@ -56,6 +57,8 @@
 | `/srv/qianshu-dms/media/{staging,assets,trash}` | 媒体持久目录（uid/gid 10001，权限 0750） |
 | `/srv/qianshu-dms/images/<tag>` | 每个版本的镜像归档与元数据（回滚点） |
 
+> **命令约定**：`/srv/qianshu-dms` 及其子目录为 `root:root 0750`，非 root 管理账号**不能直接 `cd` 进入**——`cd /srv/qianshu-dms && sudo docker compose …` 会在 `cd` 处报 `Permission denied`（`sudo` 只作用于 `&&` 之后的命令）。因此：本文涉及的 `docker compose <子命令>` 统一按 `sudo docker compose -f /srv/qianshu-dms/docker-compose.yml <子命令>` 执行（`-f` 形式无需 `cd`，`env_file` 与相对路径卷按 compose 文件所在目录解析）；其余需要在该目录内执行的命令使用 `sudo bash -c 'cd … && …'` 或绝对路径。
+
 ## 3. 第 0 步：安全加固前置（未完成前不得继续）
 
 审计快照结论为 `BLOCKED`，且安全加固尚未完成。进入部署前必须完成 [`生产部署与 Gate OPS 检查清单`](<./生产部署与Gate OPS检查清单.md>) 第 4 节的加固（云侧入口、SSH、账户、补丁、快照），顺序与停止条件以该文档为准。本形态下的端口口径调整为：
@@ -88,30 +91,30 @@ ls -l                              # 应恰好 6 个文件
 
 ### 4.2 上传到服务器
 
-把四个归档与 `release-manifest.json` 上传到服务器 `/srv/qianshu-dms/images/<tag>/`（`scp`/`rsync` 均可；服务器不直连 GitHub）：
+把四个归档、`release-manifest.json` 与 `SHA256SUMS`（共六个文件）上传到服务器 `/srv/qianshu-dms/images/<tag>/`（`scp`/`rsync` 均可；服务器不直连 GitHub）：
 
 ```bash
 ssh <服务器SSH用户>@<服务器公网IP> 'sudo install -d -o root -g root -m 0750 /srv/qianshu-dms/images/<tag>'
-scp ./qsmds-*-<tag>*.tar.gz ./release-manifest.json <服务器SSH用户>@<服务器公网IP>:/tmp/
-ssh <服务器SSH用户>@<服务器公网IP> 'sudo mv /tmp/qsmds-*-<tag>*.tar.gz /tmp/release-manifest.json /srv/qianshu-dms/images/<tag>/'
+scp ./qsmds-*-<tag>*.tar.gz ./release-manifest.json ./SHA256SUMS <服务器SSH用户>@<服务器公网IP>:/tmp/
+ssh <服务器SSH用户>@<服务器公网IP> 'sudo mv /tmp/qsmds-*-<tag>*.tar.gz /tmp/release-manifest.json /tmp/SHA256SUMS /srv/qianshu-dms/images/<tag>/'
 ```
 
-在服务器上复核摘要（与本地 `SHA256SUMS` 中的对应行一致）：
+在服务器上复核摘要（逐行核对，应 5/5 全部 `OK`；出现 `FAILED open or read` 通常是漏传了某个归档）：
 
 ```bash
-cd /srv/qianshu-dms/images/<tag> && sha256sum -c <(grep -E 'qsmds-(server|web)(-image)?-<tag>' /srv/qianshu-dms/images/<tag>/SHA256SUMS)
+sudo bash -c "cd /srv/qianshu-dms/images/<tag> && sha256sum -c SHA256SUMS"
 ```
 
 ### 4.3 载入镜像并核对 digest
 
 ```bash
-cd /srv/qianshu-dms/images/<tag>
-sudo docker load -i qsmds-server-image-<tag>-linux-x64.tar.gz
-sudo docker load -i qsmds-web-image-<tag>-linux-x64.tar.gz
+# 该目录为 root:root 0750：用绝对路径（或 sudo bash -c 'cd …'），不要直接 cd
+sudo docker load -i /srv/qianshu-dms/images/<tag>/qsmds-server-image-<tag>-linux-x64.tar.gz
+sudo docker load -i /srv/qianshu-dms/images/<tag>/qsmds-web-image-<tag>-linux-x64.tar.gz
 
 # 内容判据（跨镜像存储一致）：tar 内嵌的 Config digest 必须等于 Manifest 记录值
 for image in server web; do
-  digest=$(tar -xzOf "qsmds-${image}-image-<tag>-linux-x64.tar.gz" manifest.json \
+  digest=$(sudo tar -xzOf "/srv/qianshu-dms/images/<tag>/qsmds-${image}-image-<tag>-linux-x64.tar.gz" manifest.json \
     | grep -o '"Config":"[^"]*"' | cut -d'"' -f4 | grep -oE '[0-9a-f]{64}')
   echo "${image}: sha256:${digest}"
 done
@@ -137,6 +140,19 @@ docker compose version
 
 要求 Docker 引擎可用、`docker compose` v2 子命令存在、`docker buildx` 可用（镜像只加载不构建，但保留校验入口）。缺失时先安装并重新执行第 3 节的门禁检查。
 
+**配置镜像加速（国内地域必须）**：服务器直连 Docker Hub（`registry-1.docker.io`）会超时，第 7 节启动 db 时无法拉取 `postgres:16`。先配置（腾讯云轻量/CVM 内网可直接使用该源；备选 `https://docker.m.daocloud.io`；已有 `daemon.json` 时合并 `registry-mirrors` 键，不要整文件覆盖）：
+
+```bash
+sudo install -d -o root -g root -m 0755 /etc/docker
+sudo tee /etc/docker/daemon.json >/dev/null <<'JSON'
+{
+  "registry-mirrors": ["https://mirror.ccs.tencentyun.com"]
+}
+JSON
+sudo systemctl restart docker
+systemctl is-active docker
+```
+
 ### 5.2 创建目录与身份
 
 ```bash
@@ -154,6 +170,7 @@ sudo install -d -o 10001 -g 10001 -m 0750 /srv/qianshu-dms/media/trash
 
 - `pgdata` 使用 `postgres` 镜像的默认 uid/gid（999），目录权限 0700；PostgreSQL 数据目录不要手工改权限。
 - 媒体目录必须由 `10001:10001` 拥有且权限为 `0750`：媒体探针要求目录权限不含组写与其他访问（`(mode & 0o027) === 0`），否则 `read` 能力判定为 down，Server 启动会被 preflight 拦下。
+- `MEDIA_STORAGE_DRIVER=cos` 时本地媒体目录只承担 staging 与内容校验源，`assets/`、`trash/` 会是空目录但仍必须存在且权限正确（staging 写入与容量检查仍走这里）。
 - 目录不得放在源码、Release 暂存或系统临时目录内。
 
 **验证**：
@@ -204,8 +221,11 @@ ssh <服务器SSH用户>@<服务器公网IP> 'sudo chmod 0600 /srv/qianshu-dms/.
 | `APP_ORIGIN` | `https://<域名>` | **必须与最终对外域名完全一致**，否则登录被 CSRF 校验拒绝 |
 | `TRUST_PROXY_HOPS` | `1` | 只有 web 容器一层反代 |
 | `AUTH_USERNAME_HMAC_KEY` / `AUTH_USER_ID_HMAC_KEY` / `AUTH_IP_HMAC_KEY` | `<key1>` / `<key2>` / `<key3>` | 32-byte base64url，三者互不相同，生成方式见附录 15.1 |
-| `MEDIA_CONTENT_DELIVERY_MODE` | `application` | 本次决策 |
+| `MEDIA_CONTENT_DELIVERY_MODE` | `application` | 本次决策；`cos` 驱动下只能取该值 |
 | `MEDIA_FFPROBE_PATH` / `MEDIA_QPDF_PATH` | `/usr/bin/ffprobe` / `/usr/bin/qpdf` | 镜像内已安装 |
+| `MEDIA_STORAGE_DRIVER` | `local`（默认）或 `cos` | `cos` 表示 `assets/`、`trash/` 存在腾讯云桶里；切换必须先迁移存量（见第 11.3 节） |
+| `MEDIA_COS_REGION` / `MEDIA_COS_BUCKET` | `ap-beijing` / `<bucket>-<appid>` | 桶与服务器必须同地域；桶权限私有读写 |
+| `MEDIA_COS_SECRET_ID` / `MEDIA_COS_SECRET_KEY` | `<sub-account-secret-id>` / `<sub-account-secret-key>` | 只授权该桶的 CAM 子账号密钥；只写在 `server.env`（0600），不进 Git、不进工单、不进聊天记录 |
 
 **验证**：
 
@@ -217,7 +237,21 @@ sudo stat -c '%a %U:%G' /srv/qianshu-dms/.env /srv/qianshu-dms/server.env   # �
 
 数据库此前为空库，迁移在建库后、启动 Server 前执行一次；更新版本时同样先迁移、后换镜像。
 
-### 7.1 本地准备与隧道
+### 7.1 启动 db 容器（建库）
+
+先启动 db 服务：首次启动会从镜像加速源拉取 `postgres:16`（执行前确认第 5.1 节镜像加速已配置）并完成空库初始化（库名/用户/口令来自 `.env`）。
+
+```bash
+sudo docker compose -f /srv/qianshu-dms/docker-compose.yml up -d db
+# 等到 (healthy)
+sudo docker compose -f /srv/qianshu-dms/docker-compose.yml ps
+# 取 db 容器在 compose 网络中的地址（下一步的隧道目标）
+docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $(sudo docker compose -f /srv/qianshu-dms/docker-compose.yml ps -q db)
+```
+
+### 7.2 本地准备与隧道
+
+compose 未把 5432 发布到宿主机，隧道必须指向 db 容器的 compose 网络地址：
 
 ```bash
 # 本地仓库，切到与 Release 相同的源码
@@ -225,20 +259,11 @@ git fetch --tags
 git switch --detach <tag>
 pnpm -C server install --frozen-lockfile
 
-# 通过服务器转发到 db 容器所在宿主端口；db 不发布宿主端口，因此经 docker 转发
-ssh -N -L 15432:127.0.0.1:5432 <服务器SSH用户>@<服务器公网IP>
-```
-
-说明：compose 未把 5432 发布到宿主机。如需隧道，使用容器网络内地址：
-
-```bash
-# 服务器上执行，取得 db 容器在 compose 网络中的地址
-docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $(docker compose -f /srv/qianshu-dms/docker-compose.yml ps -q db)
-# 本地隧道改为指向该地址（示例）
+# 隧道：<db容器IP> 来自 7.1 的 docker inspect 输出
 ssh -N -L 15432:<db容器IP>:5432 <服务器SSH用户>@<服务器公网IP>
 ```
 
-### 7.2 执行迁移
+### 7.3 执行迁移
 
 ```bash
 cd <本地仓库>/server
@@ -247,7 +272,7 @@ DATABASE_URL='postgresql://<数据库用户名>:<数据库密码>@127.0.0.1:1543
 
 注意事项：连接串只作为单次命令的环境变量，不写入 `.env`、脚本或 shell 历史（可用 `set +o history`）；`migrate deploy` 只应用未执行的迁移，可安全重复执行；首次执行前确认第 3 节的快照已完成。
 
-### 7.3 验证
+### 7.4 验证
 
 ```bash
 # 再次执行，应输出 "No pending migrations"
@@ -263,9 +288,8 @@ docker compose -f /srv/qianshu-dms/docker-compose.yml exec -T db \
 ### 8.1 启动编排
 
 ```bash
-cd /srv/qianshu-dms
-sudo docker compose up -d
-sudo docker compose ps
+sudo docker compose -f /srv/qianshu-dms/docker-compose.yml up -d
+sudo docker compose -f /srv/qianshu-dms/docker-compose.yml ps
 ```
 
 `db` 先经过 healthcheck（`pg_isready`），`server` 才会启动；`server` 启动前会执行媒体 preflight（见 entrypoint），任一能力不满足都会导致容器重启循环。
@@ -273,8 +297,8 @@ sudo docker compose ps
 **验证**：
 
 ```bash
-sudo docker compose logs --tail=50 server      # 无环境校验或 preflight 失败
-sudo docker compose exec -T server curl -fsS http://127.0.0.1:3000/api/health
+sudo docker compose -f /srv/qianshu-dms/docker-compose.yml logs --tail=50 server      # 无环境校验或 preflight 失败
+sudo docker compose -f /srv/qianshu-dms/docker-compose.yml exec -T server curl -fsS http://127.0.0.1:3000/api/health
 sudo ss -lntp | grep -E ':(80|443|3000|5432)\b'   # 只应看到 80/443（docker-proxy），不应出现 3000/5432
 ```
 
@@ -283,16 +307,15 @@ sudo ss -lntp | grep -E ':(80|443|3000|5432)\b'   # 只应看到 80/443（docker
 该命令是交互式的，必须在真实终端执行（`-it`），密码由操作员当场输入：
 
 ```bash
-cd /srv/qianshu-dms
-sudo docker compose run --rm server node dist/cli/auth-admin/bootstrap-admin.js
+# 注意：不要写成 cd /srv/qianshu-dms && sudo docker compose …（该目录 0750，cd 会 Permission denied）
+sudo docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm server node dist/cli/auth-admin/bootstrap-admin.js
 ```
 
 ### 8.3 初始化基础数据
 
 ```bash
-cd /srv/qianshu-dms
-sudo docker compose run --rm server node dist/cli/seed/seed-run.js            # 默认只预览
-sudo docker compose run --rm server node dist/cli/seed/seed-run.js --apply    # 确认后写入
+sudo docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm server node dist/cli/seed/seed-run.js            # 默认只预览
+sudo docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm server node dist/cli/seed/seed-run.js --apply    # 确认后写入
 ```
 
 摘要中出现非空 `conflicts` 时停止并人工处理；`seed` 幂等，不会覆盖已有记录。
@@ -333,11 +356,11 @@ curl -sS https://<域名>/api/health
 openssl s_client -connect <域名>:443 -servername <域名> </dev/null 2>/dev/null | openssl x509 -noout -dates -subject
 ```
 
-登录被拒绝且 `server` 日志出现来源校验类错误时，核对 `APP_ORIGIN` 与 `TRUST_PROXY_HOPS`，改完执行 `sudo docker compose up -d server`。
+登录被拒绝且 `server` 日志出现来源校验类错误时，核对 `APP_ORIGIN` 与 `TRUST_PROXY_HOPS`，改完执行 `sudo docker compose -f /srv/qianshu-dms/docker-compose.yml up -d server`。
 
 ### 9.1 （备选）未来切换 internal_redirect 的前置条件
 
-本形态下 web 容器可控，切换 `internal_redirect` 需要同时做三件事：给 `web` 容器增加媒体目录只读挂载、解决容器内 nginx worker 对 `0750 10001:10001` 目录的读权限、把 `server/deploy/nginx/qianshu-dms-media.conf` 的 internal location 片段并入站点配置；随后把 `MEDIA_CONTENT_DELIVERY_MODE` 改为 `internal_redirect` 并重建 `web` 与 `server`。未经实测不要切换。
+本形态下 web 容器可控，切换 `internal_redirect` 需要同时做三件事：给 `web` 容器增加媒体目录只读挂载、解决容器内 nginx worker 对 `0750 10001:10001` 目录的读权限、把 `server/deploy/nginx/qianshu-dms-media.conf` 的 internal location 片段并入站点配置；随后把 `MEDIA_CONTENT_DELIVERY_MODE` 改为 `internal_redirect` 并重建 `web` 与 `server`。未经实测不要切换。**该模式只在 `MEDIA_STORAGE_DRIVER=local` 下成立**：`cos` 驱动没有本地媒体目录可供 Nginx 直读，配置里两者并存会被启动校验直接拒绝。
 
 ## 10. 上线验证清单
 
@@ -353,7 +376,8 @@ openssl s_client -connect <域名>:443 -servername <域名> </dev/null 2>/dev/nu
 | 视频（可选） | 上传 MP4 并拖动进度 | 分片请求 206 正常 |
 | 订单图片 | 在采购订单中生成订单图片 | 生成成功（验证 sharp/Pango 与归档字体、FONTCONFIG_FILE） |
 | 媒体探针 | `docker compose run --rm server node dist/commands/media-operations.js health` | 能力检查全部通过 |
-| 迁移状态 | 第 7.3 节重复执行 | No pending migrations |
+| 媒体存储（`cos` 驱动时） | 第 11.3 节第 6 步的 `recovery-dry-run` | `complete=true` 且全部 mismatch 为 0 |
+| 迁移状态 | 第 7.4 节重复执行 | No pending migrations |
 | 定时任务 | `systemctl list-timers qianshu-dms-media-cleanup.timer` | 已排程 |
 | 重启存活 | `docker compose restart server` 后重新健康检查 | 数据与媒体不丢失 |
 | 备份 | 执行第 13.2 节备份 | 数据库与媒体同一恢复点，摘要与文件数可核对 |
@@ -368,7 +392,7 @@ openssl s_client -connect <域名>:443 -servername <域名> </dev/null 2>/dev/nu
 2. **上传**：把四个归档与 `release-manifest.json` 上传到 `/srv/qianshu-dms/images/<新tag>/` 并复核摘要。
 3. **迁移**：按第 7 节经 SSH 隧道执行 `migrate deploy`（新版本含迁移时；先确认快照）。
 4. **载入镜像**：`docker load` 两个新镜像，核对 digest。
-5. **切换**：编辑 `/srv/qianshu-dms/.env` 的 `QIANSHU_IMAGE_TAG=<新tag>` → `cd /srv/qianshu-dms && sudo docker compose up -d`。
+5. **切换**：编辑 `/srv/qianshu-dms/.env` 的 `QIANSHU_IMAGE_TAG=<新tag>` → `sudo docker compose -f /srv/qianshu-dms/docker-compose.yml up -d`。
 6. **验证**：执行第 10 节中的「健康检查 / 前端 / 登录 / 媒体 / 订单图片」。
 7. **记录**：登记新 tag、镜像 digest、时间与结果。
 
@@ -376,11 +400,34 @@ openssl s_client -connect <域名>:443 -servername <域名> </dev/null 2>/dev/nu
 
 ### 11.2 回滚
 
-- **应用**：把 `.env` 的 `QIANSHU_IMAGE_TAG` 改回旧 tag → `sudo docker compose up -d`。旧镜像仍在本地（未执行 `docker image prune`），无需重新上传。
+- **应用**：把 `.env` 的 `QIANSHU_IMAGE_TAG` 改回旧 tag → `sudo docker compose -f /srv/qianshu-dms/docker-compose.yml up -d`。旧镜像仍在本地（未执行 `docker image prune`），无需重新上传。
 - **前端/后端独立回滚**：两个容器同源于一个 tag；如需只回滚一端，单独改动对应服务再 `up -d`。
 - **数据库**：不降级。迁移只向前；若新版本迁移导致不兼容且必须回退，从快照或第 13.2 节的备份恢复到更新前时点，属破坏性操作，必须明确批准后在维护窗口执行。
 
 回滚后同样执行第 10 节验证项，并记录回滚原因与结果。
+
+### 11.3 切换媒体存储到 COS
+
+默认形态是 `MEDIA_STORAGE_DRIVER=local`（媒体在 `/srv/qianshu-dms/media`）。切换到腾讯云对象存储时按下列顺序执行，语义细节以 [`媒体存储部署与恢复`](../后端文档/媒体存储部署与恢复.md) 第 8.2 节为准：
+
+1. **准备**：确认桶已创建（同地域、私有读写）、CAM 子账号只授权该桶，并把 `MEDIA_COS_REGION`、`MEDIA_COS_BUCKET`、`MEDIA_COS_SECRET_ID`、`MEDIA_COS_SECRET_KEY` 写入 `/srv/qianshu-dms/server.env`（0600）。此时先**不要**改 `MEDIA_STORAGE_DRIVER`。
+2. **备份（同一恢复点）**：执行第 13.2 节，记录数据库与媒体的摘要、UTC 时间与 release commit。
+3. **停写**：`sudo docker compose -f /srv/qianshu-dms/docker-compose.yml stop server`，此后不接受新上传。
+4. **预览**：
+   ```bash
+   sudo docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm \
+     -e MEDIA_STORAGE_DRIVER=cos server node dist/commands/media-migration.js preview
+   ```
+   输出 `scanned`、`skipped` 计数；桶不可达会直接失败退出。
+5. **搬运**：同一条命令把 `preview` 换成 `apply`。全部对象通过校验后命令才会翻转 `media_assets.storage_driver`；有对象失败时退出非零且不翻转，本地文件保持原样，可安全重跑。
+6. **对账**：把 `server.env` 的 `MEDIA_STORAGE_DRIVER` 改为 `cos`，然后
+   `sudo docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm server node dist/commands/media-operations.js recovery-dry-run`，
+   要求 `complete=true` 且全部 mismatch 为 0。
+7. **启动与验收**：`sudo docker compose -f /srv/qianshu-dms/docker-compose.yml up -d server`，执行第 10 节的「健康检查 / 媒体 / 订单图片」以及媒体 `health`（应报告 `read`、`write`、`video_validator` 全 up）。切换前建议先在本地 checkout 跑一次 `pnpm -C server build && pnpm -C server media:accept:cos`（真实桶往返验收，只留一个临时对象并自行清理）。
+8. **保留回滚面**：`/srv/qianshu-dms/media/{assets,trash}` 在确认稳定前不得删除；回滚只需把 `MEDIA_STORAGE_DRIVER` 改回 `local`，并执行
+   `docker compose exec -T db psql -U <数据库用户名> -d <数据库名> -c "UPDATE media_assets SET storage_driver='local' WHERE storage_driver='cos'"`，再 `up -d server`。
+
+注意：`cos` 驱动下 `read` 探针走桶探针，桶不可达时容器仍会启动（`preflight` 只拦 `local` 的读取故障），但 `health` 会持续以非零退出码告警——这是刻意设计，不要据此放宽告警。
 
 ## 12. 数据安全红线
 
@@ -406,8 +453,7 @@ backup_root=/srv/qianshu-dms/backups/$stamp
 sudo install -d -o root -g root -m 0700 "$backup_root"
 
 # 数据库（走容器内 pg_dump，凭据不落盘）
-cd /srv/qianshu-dms
-sudo docker compose exec -T db pg_dump -U <数据库用户名> -d <数据库名> -Fc > "$backup_root/database.dump"
+sudo docker compose -f /srv/qianshu-dms/docker-compose.yml exec -T db pg_dump -U <数据库用户名> -d <数据库名> -Fc > "$backup_root/database.dump"
 
 # 媒体（只含 assets 与 trash）
 sudo tar -C /srv/qianshu-dms/media -czf "$backup_root/media.tar.gz" assets trash
@@ -423,6 +469,13 @@ EOF
 
 随后把 `$backup_root` 加密并复制到离机位置（云硬盘快照或对象存储），并在记录中确认可读取。
 
+`MEDIA_STORAGE_DRIVER=cos` 时媒体备份来自桶而不是本地目录，两者不可混用：
+
+- 桶开启版本控制时，记录 `utc=$stamp` 对应的恢复点时间即可按版本回溯；对外导出时用
+  `assets/`、`trash/` 前缀同步到离机桶并记录同步完成时间与对象数。
+- 数据库备份与媒体备份必须来自同一恢复点；只备份数据库、只依赖对象存储多副本都不满足合同。
+- 本节的 `tar` 步骤在 `cos` 下只对空的本地 `assets/`、`trash/` 生效，不得据此声称媒体已备份。
+
 ### 13.3 恢复
 
 1. 核对同一恢复点与 release commit，先恢复数据库；
@@ -430,8 +483,7 @@ EOF
 3. 用 release 镜像运行只读 dry run：
 
    ```bash
-   cd /srv/qianshu-dms
-   sudo docker compose run --rm server node dist/commands/media-operations.js recovery-dry-run
+   sudo docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm server node dist/commands/media-operations.js recovery-dry-run
    ```
 
 4. 确认 `complete=true` 且 missing、size、checksum、location、orphan 全部为零；
@@ -450,6 +502,9 @@ EOF
 | 上传大文件 413 | 请求未走 `/api/` 前缀 | 确认客户端基址为 `/api/`（默认即如此） |
 | 登录报来源/CSRF 错误 | `APP_ORIGIN` 与实际域名不符 | 修改 `server.env` 后 `docker compose up -d server` |
 | 媒体预览 404/500 | 媒体目录权限或存储状态 | 第 10 节的媒体探针与 `docker compose logs server` |
+| `cos` 驱动下 Server 启动即失败，日志含环境校验 | `MEDIA_COS_*` 缺项、格式不合规，或同时配置了 `internal_redirect` | 对照 6.3 节补齐键值；`cos` 的投递模式必须是 `application` |
+| `cos` 驱动下 `health` 退出非零但服务仍在运行 | 桶不可达、凭据无权限或桶不可写（`read`/`write` 探针失败） | 运行媒体 `health` 查看能力码；核对 CAM 策略、桶名与地域；这是刻意允许的降级启动，不要放宽告警 |
+| 迁移命令报 `status: failed` | 未启用 `cos` 驱动配置、桶不可达或凭据缺失 | 确认 `MEDIA_COS_*` 已写入 `server.env` 并用 `-e MEDIA_STORAGE_DRIVER=cos` 运行；命令输出不含底层细节，细节看对象存储侧审计 |
 | `docker load` 后 digest 不一致 | 上传不完整或版本不符 | 重新上传并核对 `SHA256SUMS` |
 | 磁盘告警 | 镜像归档、日志、备份堆积 | 清理 `/srv/qianshu-dms/images` 的历史 tag（保留至少上一个版本）、核对日志轮转与备份保留期 |
 
@@ -466,6 +521,8 @@ EOF
 | `<key1>/<key2>/<key3>` | 三个独立 HMAC 密钥 |
 | `<worktree>` | 与 `<tag>` 一致的本地源码目录 |
 | `<本地fullchain>` / `<本地privkey>` | 证书文件在本地的路径 |
+| `<bucket>-<appid>` | COS 存储桶名（含 APPID 后缀），如 `dms-qs-media-1396967080` |
+| `<sub-account-secret-id>` / `<sub-account-secret-key>` | 只授权单个桶的 CAM 子账号 API 密钥；只写入 `server.env`，不进入文档、工单或聊天记录 |
 
 ### 15.2 HMAC 密钥生成
 

@@ -65,13 +65,17 @@ allowBuilds:
 | `AUTH_USERNAME_HMAC_KEY` | username 限流主体 Hash key；production 必填 | development 留空时进程随机生成 |
 | `AUTH_USER_ID_HMAC_KEY` | user ID 限流与审计主体 Hash key；production 必填且不得与其他 key 相同 | development 留空时进程随机生成 |
 | `AUTH_IP_HMAC_KEY` | IP 限流与审计主体 Hash key；production 必填且不得与其他 key 相同 | development 留空时进程随机生成 |
-| `MEDIA_STORAGE_DRIVER` | 媒体存储驱动；首期只允许 `local` | `local` |
-| `MEDIA_STORAGE_ROOT` | release、源码和系统临时目录之外的绝对持久路径 | `/var/lib/qianshu-dms/media` |
-| `MEDIA_CONTENT_DELIVERY_MODE` | 私有内容交付；`application` 由 Server 流式输出，`internal_redirect` 交给 Nginx | development 使用 `application`，production 默认 `internal_redirect` |
+| `MEDIA_STORAGE_DRIVER` | 媒体存储驱动：`local`（本地磁盘，默认）或 `cos`（腾讯云对象存储） | `local` |
+| `MEDIA_STORAGE_ROOT` | release、源码和系统临时目录之外的绝对持久路径；`cos` 驱动下只承担 staging 与内容校验源 | `/var/lib/qianshu-dms/media` |
+| `MEDIA_CONTENT_DELIVERY_MODE` | 私有内容交付；`application` 由 Server 流式输出，`internal_redirect` 交给 Nginx（仅 `local` 驱动可用） | development 使用 `application`，production 默认 `internal_redirect` |
 | `MEDIA_STAGING_TTL_HOURS` | 未完成 staging 的回收期限，只允许 `1` 到 `168` | `24` |
 | `MEDIA_TRASH_RETENTION_DAYS` | 软删除保留天数，只允许 `7` 到 `3650` | `7` |
 | `MEDIA_FFPROBE_PATH` | 受限 MP4 探测器的绝对可执行路径 | `/usr/bin/ffprobe` |
 | `MEDIA_QPDF_PATH` | 受限 PDF 结构探测器的绝对可执行路径 | `/usr/bin/qpdf` |
+| `MEDIA_COS_REGION` | 存储桶地域；`cos` 驱动必填 | `ap-beijing` |
+| `MEDIA_COS_BUCKET` | 存储桶名（含 APPID 后缀）；`cos` 驱动必填 | 模板保持为空 |
+| `MEDIA_COS_SECRET_ID` | 只授权该桶的 CAM 子账号 SecretId；`cos` 驱动必填 | 模板保持为空 |
+| `MEDIA_COS_SECRET_KEY` | 同一子账号的 SecretKey；`cos` 驱动必填，只在创建时可见 | 模板保持为空 |
 
 三个 HMAC key 在 production 必须分别使用独立的 32-byte canonical base64url 值。具体必填条件与边界以 `.env.example` 和 `src/config/env.validation.ts` 为真相源；README 不保存真实值。
 
@@ -79,6 +83,16 @@ Local media root 由部署侧预创建并设置运行用户权限；`internal_re
 Server 会在实际启用存储时校验
 realpath、symlink、可写性、同一文件系统和剩余空间。不得把示例路径改为源码、release 或系统临时目录，
 也不得把实际 root 或其下文件名写入日志。
+
+### 存储驱动与 bucket
+
+- `local`：`assets/`、`trash/`、`staging/` 都在 `MEDIA_STORAGE_ROOT` 下；投递可用 `application` 或 `internal_redirect`。
+- `cos`：`assets/`、`trash/` 在桶里；`staging/` 与 ffprobe/qpdf/sharp 的校验源仍在本地磁盘。
+  投递只能使用 `application`（显式配置 `internal_redirect` 会被启动校验拒绝），对象键布局与 `local` 完全一致。
+- COS 凭据只由装配层从进程环境读取，不进入 `MediaConfiguration`，也不出现在日志与异常中；
+  CAM 子账号只授权该桶的 `PutObject/GetObject/DeleteObject/GetBucket/HeadBucket`。
+- 切换驱动前必须完成存量迁移：`media:migrate` 的 `preview` 只读预览，`apply` 搬运并逐一校验，
+  全部通过后才翻转 `media_assets.storage_driver`；本地目录在确认稳定前不得删除（回滚面）。
 
 ## 常用命令
 

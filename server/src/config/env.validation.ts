@@ -1,3 +1,4 @@
+import type { MediaStorageDriver } from './media.config'
 import { normalizeMediaEnvironment } from './media.config'
 
 const NODE_ENV_VALUES = ['development', 'test', 'production'] as const
@@ -266,7 +267,9 @@ export function validateEnvironment(
   AUTH_ARGON2_CONCURRENCY: number
   AUTH_ARGON2_QUEUE_LIMIT: number
   MEDIA_CONTENT_DELIVERY_MODE: 'application' | 'internal_redirect'
-  MEDIA_STORAGE_DRIVER: 'local'
+  MEDIA_COS_BUCKET: string | null
+  MEDIA_COS_REGION: string | null
+  MEDIA_STORAGE_DRIVER: MediaStorageDriver
   MEDIA_FFPROBE_PATH: string
   MEDIA_QPDF_PATH: string
   MEDIA_STORAGE_ROOT: string
@@ -288,7 +291,9 @@ export function validateEnvironment(
     AUTH_ARGON2_CONCURRENCY: number
     AUTH_ARGON2_QUEUE_LIMIT: number
     MEDIA_CONTENT_DELIVERY_MODE: 'application' | 'internal_redirect'
-    MEDIA_STORAGE_DRIVER: 'local'
+    MEDIA_COS_BUCKET: string | null
+    MEDIA_COS_REGION: string | null
+    MEDIA_STORAGE_DRIVER: MediaStorageDriver
     MEDIA_FFPROBE_PATH: string
     MEDIA_QPDF_PATH: string
     MEDIA_STORAGE_ROOT: string

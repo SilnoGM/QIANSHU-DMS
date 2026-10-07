@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 
@@ -143,35 +142,6 @@ function isMediaAssetFailureCode(value: string): value is MediaAssetFailureCode 
   return (MEDIA_ASSET_FAILURE_CODES as readonly string[]).includes(value)
 }
 
-async function readStoredObjectDigest(
-  storage: MediaStorage,
-  objectKey: string,
-  maximumBytes: bigint,
-): Promise<{ readonly checksumSha256: string; readonly sizeBytes: bigint }> {
-  const stored = await storage.open(objectKey)
-  const hash = createHash('sha256')
-  let sizeBytes = 0n
-  try {
-    for await (const chunk of stored.stream) {
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-      sizeBytes += BigInt(buffer.length)
-      if (sizeBytes > maximumBytes) {
-        stored.stream.destroy()
-        throw new MediaAssetLifecycleError('MEDIA_ASSET_STORAGE_FAILED')
-      }
-      hash.update(buffer)
-    }
-  }
-  catch (error) {
-    if (error instanceof MediaAssetLifecycleError) throw error
-    throw new MediaAssetLifecycleError('MEDIA_ASSET_STORAGE_FAILED')
-  }
-  return Object.freeze({
-    checksumSha256: hash.digest('hex'),
-    sizeBytes,
-  })
-}
-
 /**
  * 文件准备与领域激活严格分离：prepare 只把可信内容放入最终目录并保持 UPLOADING；
  * activate 必须复用调用方事务，让 deferred reference trigger 在提交时验证真实领域引用。
@@ -275,19 +245,13 @@ export class MediaAssetService {
 
       try {
         await this.storage.finalize(staging.key, objectKey)
-        const finalStat = await this.storage.stat(objectKey)
-        if (!finalStat || finalStat.sizeBytes !== digest.sizeBytes) {
-          throw new MediaAssetLifecycleError('MEDIA_ASSET_STORAGE_FAILED')
-        }
-        const finalDigest = await readStoredObjectDigest(
-          this.storage,
-          objectKey,
-          digest.sizeBytes,
-        )
-        if (
-          finalDigest.sizeBytes !== digest.sizeBytes ||
-          finalDigest.checksumSha256 !== digest.checksumSha256
-        ) {
+        // 校验强度由驱动决定：本地回读全文，对象存储用长度 + 上传时写入的摘要，
+        // 元数据缺失时回退为回读全文。写入失败或校验不通过都必须失败关闭。
+        const verified = await this.storage.verifyStoredObject(objectKey, {
+          checksumSha256: digest.checksumSha256,
+          sizeBytes: digest.sizeBytes,
+        })
+        if (!verified) {
           throw new MediaAssetLifecycleError('MEDIA_ASSET_STORAGE_FAILED')
         }
       }

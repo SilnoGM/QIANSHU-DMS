@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from 'node:crypto'
 import { constants as fileSystemConstants, type Stats } from 'node:fs'
 import {
   access,
@@ -6,8 +7,15 @@ import {
   statfs,
 } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { Readable } from 'node:stream'
 
 import type { MediaConfiguration } from '../../config/media.config'
+import {
+  CosObjectClientError,
+  type CosObjectClient,
+  createCosObjectClient,
+  readCosCredentials,
+} from './cos-object-client'
 import { runRestrictedMediaProcess } from './restricted-media-process'
 
 export interface MediaOperationalCapacity {
@@ -18,6 +26,10 @@ export interface MediaOperationalCapacity {
 
 export interface MediaOperationalHealthDependencies {
   readonly checkReadAccess: (storageRoot: string) => Promise<boolean>
+  /** COS 驱动专用：桶可达性与对象级读取权限。 */
+  readonly checkRemoteReadAccess: (configuration: MediaConfiguration) => Promise<boolean>
+  /** COS 驱动专用：桶写入权限。 */
+  readonly checkRemoteWriteAccess: (configuration: MediaConfiguration) => Promise<boolean>
   readonly checkVideoValidator: (executablePath: string) => Promise<boolean>
   readonly checkWriteAccess: (storageRoot: string) => Promise<boolean>
   readonly inspectCapacity: (storageRoot: string) => Promise<MediaOperationalCapacity>
@@ -85,12 +97,63 @@ async function checkDirectories(
   }
 }
 
+const BUCKET_PROBE_PREFIX = '_ops/health-probe-'
+
+/**
+ * 桶探针刻意放在 assets/staging/trash 三个命名空间之外。
+ *
+ * 对账只扫描这三个命名空间，因此探针对象既不会被计成 orphan，也不会污染「零 mismatch」判定；
+ * 进程在 PUT 与 DELETE 之间崩溃留下的残留由桶上针对 `_ops/` 的生命周期规则回收。
+ */
+function createDefaultRemoteProbes(): Pick<
+  MediaOperationalHealthDependencies,
+  'checkRemoteReadAccess' | 'checkRemoteWriteAccess'
+> {
+  const clientFor = (configuration: MediaConfiguration): CosObjectClient => {
+    if (configuration.driver !== 'cos') {
+      // 只有 cos 驱动会调用这两个探针；本地驱动误入时失败关闭而不是伪造结论。
+      throw new CosObjectClientError('COS_CLIENT_CONFIGURATION_INVALID')
+    }
+    const credentials = readCosCredentials(process.env)
+    return createCosObjectClient({
+      bucket: configuration.cos.bucket,
+      region: configuration.cos.region,
+      ...credentials,
+    })
+  }
+
+  return {
+    checkRemoteReadAccess: async (configuration: MediaConfiguration) => {
+      const client = clientFor(configuration)
+      await client.headBucket()
+      // HEAD 一个固定探针键：对象不存在（null）同样证明对象级读取链路与权限可用。
+      await client.headObject(`${BUCKET_PROBE_PREFIX}read`)
+      return true
+    },
+    checkRemoteWriteAccess: async (configuration: MediaConfiguration) => {
+      const client = clientFor(configuration)
+      const contents = Buffer.from('probe')
+      const key = `${BUCKET_PROBE_PREFIX}${randomUUID()}`
+      await client.putObject({
+        contentLength: contents.length,
+        key,
+        sha256: createHash('sha256').update(contents).digest('hex'),
+        stream: Readable.from([contents]),
+      })
+      // 探针必须自清理，避免每次探活都在桶里留下对象。
+      await client.deleteObject(key)
+      return true
+    },
+  }
+}
+
 const DEFAULT_DEPENDENCIES: MediaOperationalHealthDependencies = Object.freeze({
   checkReadAccess: (storageRoot: string) => checkDirectories(
     storageRoot,
     ['assets', 'trash'],
     fileSystemConstants.R_OK | fileSystemConstants.X_OK,
   ),
+  ...createDefaultRemoteProbes(),
   checkVideoValidator: async (executablePath: string) => {
     try {
       await runRestrictedMediaProcess({
@@ -146,14 +209,24 @@ function capacityPercent(capacity: MediaOperationalCapacity): number | null {
 /**
  * 媒体部署探针与公开 `/api/health` 分离：结果只含固定 capability/code 和容量百分比，
  * 不包含 root、可执行路径或文件名。read 独立于 write，确保容量 critical 不会误报读取中断。
+ *
+ * 驱动差异：本地驱动的读取只看目录权限；COS 驱动的读取走桶探针，写入还要额外证明桶可写，
+ * 因此 COS 下缺少凭证或权限会在启动前就暴露，而不是等到第一次上传才失败。
  */
 export async function collectMediaOperationalHealth(
   configuration: MediaConfiguration,
   dependencies: MediaOperationalHealthDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<MediaOperationalHealthResult> {
-  const [readAvailable, writeAvailable, videoAvailable, rawCapacity] =
+  const remote = configuration.driver === 'cos'
+  const [readAvailable, remoteWriteAvailable, writeAvailable, videoAvailable, rawCapacity] =
     await Promise.all([
-      dependencies.checkReadAccess(configuration.storageRoot).catch(() => false),
+      (remote
+        ? dependencies.checkRemoteReadAccess(configuration)
+        : dependencies.checkReadAccess(configuration.storageRoot)
+      ).catch(() => false),
+      remote
+        ? dependencies.checkRemoteWriteAccess(configuration).catch(() => false)
+        : Promise.resolve(true),
       dependencies.checkWriteAccess(configuration.storageRoot).catch(() => false),
       dependencies.checkVideoValidator(configuration.ffprobePath).catch(() => false),
       dependencies.inspectCapacity(configuration.storageRoot).catch(() => null),
@@ -169,7 +242,7 @@ export async function collectMediaOperationalHealth(
   const read = readAvailable
     ? capability('up', 'MEDIA_READ_READY')
     : capability('down', 'MEDIA_READ_UNAVAILABLE')
-  const write = !writeAvailable || capacityLevel === 'unknown'
+  const write = !writeAvailable || !remoteWriteAvailable || capacityLevel === 'unknown'
     ? capability('down', 'MEDIA_WRITE_UNAVAILABLE')
     : capacityLevel === 'critical'
       ? capability('down', 'MEDIA_CAPACITY_CRITICAL')
@@ -179,8 +252,11 @@ export async function collectMediaOperationalHealth(
   const videoValidator = videoAvailable
     ? capability('up', 'MEDIA_VIDEO_VALIDATOR_READY')
     : capability('down', 'MEDIA_VIDEO_VALIDATOR_UNAVAILABLE')
+  // COS 模式的读取依赖外部服务，物理上不存在「读取不可用时保留读取」的降级路径，
+  // 因此读取不可用不再阻止进程启动（preflight 只拦 down），而是以 degraded 让 health
+  // 继续以非零退出码告警。本地驱动保持原合同：读取不可用即拒绝启动。
   const status = read.status === 'down'
-    ? 'down'
+    ? (remote ? 'degraded' : 'down')
     : write.status === 'down' ||
         videoValidator.status === 'down' ||
         capacityLevel === 'warning'

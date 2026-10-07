@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { Readable, Writable } from 'node:stream'
 import { Readable as NodeReadable, Writable as NodeWritable } from 'node:stream'
 import type { Prisma } from '../../generated/prisma/client'
@@ -32,6 +33,7 @@ interface Fixture {
   readonly service: MediaAssetService
   readonly storage: MediaStorage
   readonly validate: jest.Mock
+  readonly verifyStoredObject: jest.Mock
   readonly withStagingValidationSource: jest.Mock
 }
 
@@ -87,15 +89,26 @@ function createFixture(options: {
     } satisfies StagingWrite),
     finalize,
     moveToTrash: jest.fn(),
-    open: jest.fn().mockImplementation(() => {
-      const finalContents = options.finalContents ?? Buffer.from('abc')
-      return Promise.resolve({
-        contentLength: BigInt(finalContents.length),
-        modifiedAt: NOW,
-        sizeBytes: BigInt(finalContents.length),
-        stream: NodeReadable.from([finalContents]),
-      })
-    }),
+    /**
+     * 模拟驱动的分级校验：stat 不可证明或摘要不一致都必须返回 false，
+     * 与真实驱动「长度 + 摘要」的失败关闭语义保持一致。
+     */
+    verifyStoredObject: jest.fn().mockImplementation(
+      (
+        _key: string,
+        expected: { readonly checksumSha256: string; readonly sizeBytes: bigint },
+      ) => {
+        if (options.statSize === null) return Promise.resolve(false)
+        const finalContents = options.finalContents ?? Buffer.from('abc')
+        if (BigInt(finalContents.length) !== expected.sizeBytes) {
+          return Promise.resolve(false)
+        }
+        return Promise.resolve(
+          createHash('sha256').update(finalContents).digest('hex') ===
+            expected.checksumSha256,
+        )
+      },
+    ),
     purge,
     restoreFromTrash: jest.fn(),
     stat: jest.fn().mockResolvedValue(
@@ -134,6 +147,7 @@ function createFixture(options: {
     service,
     storage,
     validate,
+    verifyStoredObject: jest.mocked(storage.verifyStoredObject),
     withStagingValidationSource,
   }
 }
@@ -446,6 +460,22 @@ describe('MediaAssetService', () => {
     expect(fixture.failUploading).toHaveBeenCalledWith(
       ASSET_ID,
       'MEDIA_ASSET_STORAGE_FAILED',
+    )
+  })
+
+  it('verifies the stored object through the driver contract after finalize', async () => {
+    const fixture = createFixture()
+
+    await prepare(fixture)
+
+    expect(fixture.finalize).toHaveBeenCalledTimes(1)
+    // 校验强度由驱动决定，服务只提供期望的长度与摘要，因此这里断言的是合同调用本身。
+    expect(fixture.verifyStoredObject).toHaveBeenCalledWith(
+      `assets/2026/08/${ASSET_ID}.webp`,
+      {
+        checksumSha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+        sizeBytes: 3n,
+      },
     )
   })
 
