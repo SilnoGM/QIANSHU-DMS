@@ -419,13 +419,12 @@ openssl s_client -connect <域名>:443 -servername <域名> </dev/null 2>/dev/nu
      -e MEDIA_STORAGE_DRIVER=cos server node dist/commands/media-migration.js preview
    ```
    输出 `scanned`、`skipped` 计数；桶不可达会直接失败退出。
-5. **搬运**：同一条命令把 `preview` 换成 `apply`。全部对象通过校验后命令才会翻转 `media_assets.storage_driver`；有对象失败时退出非零且不翻转，本地文件保持原样，可安全重跑。
+5. **搬运**：同一条命令把 `preview` 换成 `apply`。命令逐个对象复制并校验，任一失败即退出非零、本地文件保持原样、可安全重跑；**它不写数据库**（`media_assets.storage_driver` 记录"物化时的驱动"且被不可变触发器保护），切换只由 `server.env` 的配置决定。
 6. **对账**：把 `server.env` 的 `MEDIA_STORAGE_DRIVER` 改为 `cos`，然后
    `sudo docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm server node dist/commands/media-operations.js recovery-dry-run`，
    要求 `complete=true` 且全部 mismatch 为 0。
-7. **启动与验收**：`sudo docker compose -f /srv/qianshu-dms/docker-compose.yml up -d server`，执行第 10 节的「健康检查 / 媒体 / 订单图片」以及媒体 `health`（应报告 `read`、`write`、`video_validator` 全 up）。切换前建议先在本地 checkout 跑一次 `pnpm -C server build && pnpm -C server media:accept:cos`（真实桶往返验收，只留一个临时对象并自行清理）。
-8. **保留回滚面**：`/srv/qianshu-dms/media/{assets,trash}` 在确认稳定前不得删除；回滚只需把 `MEDIA_STORAGE_DRIVER` 改回 `local`，并执行
-   `docker compose exec -T db psql -U <数据库用户名> -d <数据库名> -c "UPDATE media_assets SET storage_driver='local' WHERE storage_driver='cos'"`，再 `up -d server`。
+7. **启动与验收**：`sudo docker compose -f /srv/qianshu-dms/docker-compose.yml up -d server`，执行第 10 节的「健康检查 / 媒体 / 订单图片」以及媒体 `health`（应报告 `read`、`write`、`video_validator` 全 up）。切换前建议先在本地 checkout 跑一次 `pnpm -C server build && pnpm -C server media:accept:cos`（真实桶往返验收，只留一个临时对象并自行清理）。**切换后必须真正上传一张图片**：切换前若未应用"放松驱动枚举"的数据库迁移（`20261007120000_media_storage_driver_cos_allowed`），新上传会在写库时被拒绝并返回 500。
+8. **保留回滚面**：`/srv/qianshu-dms/media/{assets,trash}` 在确认稳定前不得删除；回滚只需把 `MEDIA_STORAGE_DRIVER` 改回 `local` 再 `up -d server`（**不要**改写 `storage_driver` 列，它受不可变触发器保护且不参与运行期分派）。
 
 注意：`cos` 驱动下 `read` 探针走桶探针，桶不可达时容器仍会启动（`preflight` 只拦 `local` 的读取故障），但 `health` 会持续以非零退出码告警——这是刻意设计，不要据此放宽告警。
 

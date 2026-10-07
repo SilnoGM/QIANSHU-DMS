@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { MEDIA_STORAGE_DRIVERS } from '../../config/media.config'
 import {
   MANAGEMENT_PERMISSION_CODES,
   PRODUCT_MEDIA_PERMISSION_CODES,
@@ -270,5 +271,32 @@ describe('media asset and product media schema', () => {
     expect(migration).toContain(
       'media schema migration invariant mismatch: system admin grant',
     )
+  })
+
+  it('keeps the media storage driver check in sync with the supported drivers', () => {
+    // 逐迁移取该约束的最后一次定义：首期建表只允许 local，后续迁移可以放松它。
+    const definitions = readdirSync(migrationsRoot, { withFileTypes: true })
+      .filter(entry => entry.isDirectory())
+      .map(entry => entry.name)
+      .sort()
+      .flatMap((directory) => {
+        const source = readFileSync(
+          resolve(migrationsRoot, directory, 'migration.sql'),
+          'utf8',
+        )
+        return [...source.matchAll(
+          /"media_assets_storage_driver_check"[\s\S]{0,64}?CHECK \(([^)]*)\)/gu,
+        )].map(match => match[1] ?? '')
+      })
+    const latest = definitions.at(-1)
+    expect(latest).toBeDefined()
+
+    const databaseDrivers = [
+      ...(latest ?? '').matchAll(/'([a-z0-9_-]+)'/gu),
+    ].map(match => match[1]).sort()
+
+    // 数据库允许的枚举与代码允许的驱动必须完全一致：数据库更严会让上传写不进库，
+    // 代码更严则等于放弃这条守卫（v0.3.0 的 COS 写入故障就是前者）。
+    expect(databaseDrivers).toEqual([...MEDIA_STORAGE_DRIVERS].sort())
   })
 })

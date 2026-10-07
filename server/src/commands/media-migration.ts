@@ -26,10 +26,7 @@ export interface MediaMigrationProcess {
   exitCode?: number | string | null
 }
 
-export interface MediaMigrationReport extends MediaMigrationResult {
-  /** 迁移完成并全部校验通过后翻转 storage_driver 的行数；预览或存在失败时为 0。 */
-  readonly flipped: number
-}
+export type MediaMigrationReport = MediaMigrationResult
 
 export interface MediaMigrationCliDependencies {
   readonly output: MediaMigrationOutput
@@ -99,21 +96,9 @@ async function defaultRunMigration(
       target,
     })
 
-    const result = await service.run(mode)
-    if (mode === 'preview' || result.failed > 0) {
-      return { ...result, flipped: 0 }
-    }
-
-    // 只有整轮对象全部通过校验才翻转 driver；提前翻转会让未搬迁的对象在切换后读不到。
-    const flipped = await prisma.mediaAsset.updateMany({
-      data: { storageDriver: 'cos' },
-      where: {
-        objectKey: { not: null },
-        status: { in: ['READY', 'TRASHED'] },
-        storageDriver: 'local',
-      },
-    })
-    return { ...result, flipped: flipped.count }
+    // 迁移只搬运与校验字节，不改写数据库：`storage_driver` 记录"物化时的驱动"，
+    // 且被不可变触发器保护（见 media-asset.persistence 的说明），迁移后仍保留原值。
+    return service.run(mode)
   })
 }
 
