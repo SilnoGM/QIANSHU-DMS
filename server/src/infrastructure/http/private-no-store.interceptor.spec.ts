@@ -2,12 +2,9 @@ import type {
   CallHandler,
   ExecutionContext,
 } from '@nestjs/common'
-import { Reflector } from '@nestjs/core'
 import { firstValueFrom, of, throwError } from 'rxjs'
 
 import {
-  IMMUTABLE_MEDIA_CACHE_CONTROL,
-  ImmutableMediaContentCache,
   PRIVATE_NO_STORE_CACHE_CONTROL,
   PrivateNoStoreInterceptor,
 } from './private-no-store.interceptor'
@@ -31,11 +28,8 @@ function createResponse(): ResponseDouble {
 function createContext(
   request: object,
   response: ResponseDouble,
-  targets: { readonly handler?: object, readonly klass?: object } = {},
 ): ExecutionContext {
   return {
-    getClass: () => targets.klass ?? class UnmarkedController {},
-    getHandler: () => targets.handler ?? function unmarkedHandler() {},
     switchToHttp: () => ({
       getRequest: () => request,
       getResponse: () => response,
@@ -51,7 +45,7 @@ function createHandler(
 }
 
 describe('PrivateNoStoreInterceptor', () => {
-  const interceptor = new PrivateNoStoreInterceptor(new Reflector())
+  const interceptor = new PrivateNoStoreInterceptor()
 
   it('sets the private no-store header before a successful application handler runs', async () => {
     const response = createResponse()
@@ -74,32 +68,6 @@ describe('PrivateNoStoreInterceptor', () => {
       'Cache-Control',
       PRIVATE_NO_STORE_CACHE_CONTROL,
     )
-  })
-
-  it('allows long-lived private caching only on routes that declare immutable media', async () => {
-    class CachedMediaController {
-      @ImmutableMediaContentCache()
-      content(): unknown { return undefined }
-    }
-    const response = createResponse()
-
-    await expect(
-      firstValueFrom(
-        interceptor.intercept(
-          createContext({ path: '/api/products/p1/media/m1/content' }, response, {
-            handler: CachedMediaController.prototype.content,
-            klass: CachedMediaController,
-          }),
-          createHandler(() => of({ ok: true })),
-        ),
-      ),
-    ).resolves.toEqual({ ok: true })
-
-    expect(response.headers.get('cache-control')).toBe(
-      IMMUTABLE_MEDIA_CACHE_CONTROL,
-    )
-    // 鉴权路由只能进入浏览器私有缓存；公共缓存会绕过会话与权限。
-    expect(IMMUTABLE_MEDIA_CACHE_CONTROL).not.toContain('public')
   })
 
   it('sets the header before a handler throws synchronously', () => {

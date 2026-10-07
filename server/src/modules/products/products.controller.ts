@@ -23,7 +23,6 @@ import {
   ApiTags,
 } from '@nestjs/swagger'
 
-import { ImmutableMediaContentCache } from '../../infrastructure/http/private-no-store.interceptor'
 import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
@@ -195,7 +194,6 @@ export class ProductsController {
   }
 
   @Head(':productId/media/:productMediaId/content')
-  @ImmutableMediaContentCache()
   @RequirePermissions('product-media:read')
   @ApiProductMediaContentContract('HEAD')
   async headMediaContent(
@@ -215,7 +213,6 @@ export class ProductsController {
   }
 
   @Get(':productId/media/:productMediaId/content')
-  @ImmutableMediaContentCache()
   @RequirePermissions('product-media:read')
   @ApiProductMediaContentContract('GET')
   async getMediaContent(

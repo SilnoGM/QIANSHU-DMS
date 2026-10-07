@@ -100,7 +100,7 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
       hasAll: (actual: readonly string[], required: readonly string[]) => required.every(value => actual.includes(value)),
     } as unknown as AccessControlService
     application.useGlobalGuards(new PermissionGuard(new Reflector(), access))
-    application.useGlobalInterceptors(new PrivateNoStoreInterceptor(new Reflector()))
+    application.useGlobalInterceptors(new PrivateNoStoreInterceptor())
     await application.init()
     before = await facts()
   })
