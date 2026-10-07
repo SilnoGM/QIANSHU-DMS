@@ -15,6 +15,7 @@ const MAX_MEDIA_TRASH_RETENTION_DAYS = 3_650
 const COS_REGION_PATTERN = /^[a-z]{2,4}-[a-z0-9-]{2,32}$/u
 const COS_BUCKET_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?-\d{6,}$/u
 const COS_CREDENTIAL_PATTERN = /^\S{8,256}$/u
+const DEFAULT_MEDIA_STORAGE_ENVIRONMENT: MediaStorageEnvironment = 'dev'
 
 export type MediaContentDeliveryMode = 'application' | 'internal_redirect'
 
@@ -28,6 +29,20 @@ export type MediaContentDeliveryMode = 'application' | 'internal_redirect'
 export const MEDIA_STORAGE_DRIVERS = ['local', 'cos'] as const
 
 export type MediaStorageDriver = (typeof MEDIA_STORAGE_DRIVERS)[number]
+
+/**
+ * 对象键环境段的取值清单，是代码侧的唯一真相源。
+ *
+ * 同一桶承载多个环境时，环境段把 `assets/` 与 `trash/` 隔成互不可见的前缀，让 CAM 子账号策略、
+ * 桶生命周期规则与对账都能按环境收敛。`NODE_ENV` 不能承担这个职责——测试构建同样可能使用
+ * `production`，把部署期环境当成存储维度会产生错误前缀。`staging/` 永远在本地磁盘，不参与隔离。
+ *
+ * 取值禁止形如四位数字：对象键的布局判别以「环境段/业务池段不是年份」为前提（见
+ * `media-object-key.ts` 的键形态判别）。
+ */
+export const MEDIA_STORAGE_ENVIRONMENTS = ['dev', 'test', 'prod'] as const
+
+export type MediaStorageEnvironment = (typeof MEDIA_STORAGE_ENVIRONMENTS)[number]
 
 /**
  * 配置对象只携带非敏感的定位信息。
@@ -45,6 +60,7 @@ interface SharedMediaConfiguration {
   readonly ffprobePath: string
   readonly qpdfPath: string
   readonly stagingTtlHours: number
+  readonly storageEnvironment: MediaStorageEnvironment
   readonly storageRoot: string
   readonly trashRetentionDays: number
 }
@@ -65,6 +81,7 @@ interface SharedNormalizedMediaEnvironment {
   readonly MEDIA_FFPROBE_PATH: string
   readonly MEDIA_QPDF_PATH: string
   readonly MEDIA_STAGING_TTL_HOURS: number
+  readonly MEDIA_STORAGE_ENV: MediaStorageEnvironment
   readonly MEDIA_STORAGE_ROOT: string
   readonly MEDIA_TRASH_RETENTION_DAYS: number
 }
@@ -171,6 +188,32 @@ function requireCosCredential(
   }
 }
 
+function normalizeStorageEnvironment(
+  value: unknown,
+  driver: MediaStorageDriver,
+): MediaStorageEnvironment {
+  if (value === undefined || value === '') {
+    // cos 下没有默认值：回落到 dev 会把生产存量写成 dev 前缀，属于静默数据污染，必须失败关闭。
+    if (driver === 'cos') {
+      throw mediaConfigurationError(
+        'MEDIA_STORAGE_ENV',
+        'must be one of dev, test, prod when MEDIA_STORAGE_DRIVER is cos',
+      )
+    }
+    return DEFAULT_MEDIA_STORAGE_ENVIRONMENT
+  }
+  if (
+    typeof value !== 'string' ||
+    !(MEDIA_STORAGE_ENVIRONMENTS as readonly unknown[]).includes(value.trim())
+  ) {
+    throw mediaConfigurationError(
+      'MEDIA_STORAGE_ENV',
+      'must be one of dev, test, prod',
+    )
+  }
+  return value.trim() as MediaStorageEnvironment
+}
+
 function normalizeStorageRoot(value: unknown): string {
   const rawValue = value === undefined || value === ''
     ? DEFAULT_MEDIA_STORAGE_ROOT
@@ -264,6 +307,10 @@ export function normalizeMediaEnvironment(
       MIN_MEDIA_STAGING_TTL_HOURS,
       MAX_MEDIA_STAGING_TTL_HOURS,
     ),
+    MEDIA_STORAGE_ENV: normalizeStorageEnvironment(
+      environment.MEDIA_STORAGE_ENV,
+      driver,
+    ),
     MEDIA_STORAGE_ROOT: normalizeStorageRoot(environment.MEDIA_STORAGE_ROOT),
     MEDIA_TRASH_RETENTION_DAYS: normalizeBoundedInteger(
       'MEDIA_TRASH_RETENTION_DAYS',
@@ -305,6 +352,7 @@ export function createMediaConfiguration(
     ffprobePath: normalized.MEDIA_FFPROBE_PATH,
     qpdfPath: normalized.MEDIA_QPDF_PATH,
     stagingTtlHours: normalized.MEDIA_STAGING_TTL_HOURS,
+    storageEnvironment: normalized.MEDIA_STORAGE_ENV,
     storageRoot: normalized.MEDIA_STORAGE_ROOT,
     trashRetentionDays: normalized.MEDIA_TRASH_RETENTION_DAYS,
   }

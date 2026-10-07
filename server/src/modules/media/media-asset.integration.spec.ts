@@ -31,6 +31,7 @@ function configuration(storageRoot: string): MediaConfiguration {
     ffprobePath: '/usr/bin/ffprobe',
     qpdfPath: '/usr/bin/qpdf',
     stagingTtlHours: 24,
+    storageEnvironment: 'dev',
     storageRoot,
     trashRetentionDays: 7,
   }
@@ -138,6 +139,7 @@ describe('MediaAssetService with LocalMediaStorage', () => {
       allowedTypes: [MediaType.IMAGE],
       declaredMimeType: 'image/webp',
       originalFilename: 'photo.webp',
+      pool: 'product',
       requestedType: MediaType.IMAGE,
       stream: Readable.from([contents]),
     })
@@ -145,7 +147,7 @@ describe('MediaAssetService with LocalMediaStorage', () => {
     expect(prepared).toMatchObject({
       id: ASSET_ID,
       mediaType: MediaType.IMAGE,
-      objectKey: `assets/2026/08/${ASSET_ID}.webp`,
+      objectKey: `assets/dev/product/2026/08/${ASSET_ID}.webp`,
       trustedMetadata: {
         height: 3,
         mediaType: 'IMAGE',
@@ -171,13 +173,14 @@ describe('MediaAssetService with LocalMediaStorage', () => {
       allowedTypes: [MediaType.DOCUMENT],
       declaredMimeType: 'application/pdf',
       originalFilename: 'manual.pdf',
+      pool: 'bill',
       requestedType: MediaType.DOCUMENT,
       stream: Readable.from([contents]),
     })
 
     expect(prepared).toMatchObject({
       mediaType: MediaType.DOCUMENT,
-      objectKey: `assets/2026/08/${ASSET_ID}.pdf`,
+      objectKey: `assets/dev/bill/2026/08/${ASSET_ID}.pdf`,
       trustedMetadata: {
         mediaType: 'DOCUMENT',
         mimeType: 'application/pdf',
@@ -187,7 +190,7 @@ describe('MediaAssetService with LocalMediaStorage', () => {
     const persistenceInput = fixture.markPrepared.mock.calls[0]?.[0]
     expect(persistenceInput).toMatchObject({
       assetId: ASSET_ID,
-      objectKey: `assets/2026/08/${ASSET_ID}.pdf`,
+      objectKey: `assets/dev/bill/2026/08/${ASSET_ID}.pdf`,
     })
     expect(persistenceInput).not.toHaveProperty('productId')
     expect(persistenceInput).not.toHaveProperty('ownerType')

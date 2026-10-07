@@ -7,6 +7,7 @@ import type { MediaConfiguration } from '../../config/media.config'
 import { PRODUCT_MEDIA_ALLOWED_TYPES } from '../products/media/product-media.policy'
 import type { MediaStorage, StagingWrite } from './media-storage'
 import { MediaStorageError } from './media-storage'
+import type { MediaStoragePool } from './media-object-key'
 import type { MediaContentValidator } from './media-content-validator'
 import { MediaValidationError } from './media-validation'
 import type { MediaAssetPersistence } from './media-asset.persistence'
@@ -44,6 +45,7 @@ function configuration(): MediaConfiguration {
     ffprobePath: '/usr/bin/ffprobe',
     qpdfPath: '/usr/bin/qpdf',
     stagingTtlHours: 24,
+    storageEnvironment: 'dev',
     storageRoot: '/var/lib/qianshu-dms/media',
     trashRetentionDays: 7,
   }
@@ -158,6 +160,7 @@ function prepare(
     allowedTypes: readonly MediaType[]
     declaredMimeType: string | null
     originalFilename: string
+    pool: MediaStoragePool
     requestedType: MediaType
     stream: Readable
   }> = {},
@@ -167,6 +170,7 @@ function prepare(
     allowedTypes: [MediaType.IMAGE],
     declaredMimeType: 'image/webp',
     originalFilename: 'photo.webp',
+    pool: 'product',
     requestedType: MediaType.IMAGE,
     stream: NodeReadable.from([Buffer.from('abc')]),
     ...overrides,
@@ -200,7 +204,7 @@ describe('MediaAssetService', () => {
     expect(prepared).toEqual({
       id: ASSET_ID,
       mediaType: MediaType.IMAGE,
-      objectKey: `assets/2026/08/${ASSET_ID}.webp`,
+      objectKey: `assets/dev/product/2026/08/${ASSET_ID}.webp`,
       trustedMetadata: {
         canonicalExtension: '.webp',
         checksumSha256: prepared.trustedMetadata.checksumSha256,
@@ -234,12 +238,12 @@ describe('MediaAssetService', () => {
     )[0][0]
     expect(markPreparedInput).toEqual({
       assetId: ASSET_ID,
-      objectKey: `assets/2026/08/${ASSET_ID}.webp`,
+      objectKey: `assets/dev/product/2026/08/${ASSET_ID}.webp`,
       trustedMetadata: expect.objectContaining({ sizeBytes: 3n }) as unknown,
     })
     expect(fixture.finalize).toHaveBeenCalledWith(
       STAGING_KEY,
-      `assets/2026/08/${ASSET_ID}.webp`,
+      `assets/dev/product/2026/08/${ASSET_ID}.webp`,
     )
     expect(fixture.markPrepared.mock.invocationCallOrder[0]).toBeLessThan(
       fixture.finalize.mock.invocationCallOrder[0],
@@ -261,7 +265,7 @@ describe('MediaAssetService', () => {
     expect(Array.from(createInput.originalFilename)).toHaveLength(255)
     const finalizeCall = (fixture.finalize.mock.calls as unknown as [[string, string]])[0]
     expect(finalizeCall[1]).toBe(
-      `assets/2026/08/${ASSET_ID}.webp`,
+      `assets/dev/product/2026/08/${ASSET_ID}.webp`,
     )
   })
 
@@ -277,6 +281,7 @@ describe('MediaAssetService', () => {
         allowedTypes: PRODUCT_MEDIA_ALLOWED_TYPES,
         declaredMimeType: 'application/pdf',
         originalFilename: 'manual.pdf',
+        pool: 'bill',
         requestedType: MediaType.DOCUMENT,
       }),
       'MEDIA_ASSET_TYPE_NOT_ALLOWED',
@@ -301,11 +306,12 @@ describe('MediaAssetService', () => {
       allowedTypes: [MediaType.DOCUMENT],
       declaredMimeType: 'application/pdf',
       originalFilename: 'manual.pdf',
+      pool: 'bill',
       requestedType: MediaType.DOCUMENT,
       stream: NodeReadable.from([Buffer.from('test')]),
     })).resolves.toMatchObject({
       mediaType: MediaType.DOCUMENT,
-      objectKey: `assets/2026/08/${ASSET_ID}.pdf`,
+      objectKey: `assets/dev/bill/2026/08/${ASSET_ID}.pdf`,
     })
   })
 
@@ -471,7 +477,7 @@ describe('MediaAssetService', () => {
     expect(fixture.finalize).toHaveBeenCalledTimes(1)
     // 校验强度由驱动决定，服务只提供期望的长度与摘要，因此这里断言的是合同调用本身。
     expect(fixture.verifyStoredObject).toHaveBeenCalledWith(
-      `assets/2026/08/${ASSET_ID}.webp`,
+      `assets/dev/product/2026/08/${ASSET_ID}.webp`,
       {
         checksumSha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
         sizeBytes: 3n,

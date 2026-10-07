@@ -28,7 +28,7 @@ export class PaymentRecipientImageService {
     try {
       return await this.multipart.parse(request, async input => {
         if (input.mediaType !== 'IMAGE' || !MIME_TYPES.includes(input.declaredMimeType ?? '')) return recipientFailure('PAYMENT_RECIPIENT_IMAGE_INVALID', '仅支持 JPEG、PNG、WebP 收款码图片')
-        const asset = await this.media.prepare({ actorUserId, requestedType: 'IMAGE', allowedTypes: ['IMAGE'], declaredMimeType: input.declaredMimeType, originalFilename: input.originalFilename, stream: input.stream })
+        const asset = await this.media.prepare({ actorUserId, requestedType: 'IMAGE', allowedTypes: ['IMAGE'], declaredMimeType: input.declaredMimeType, originalFilename: input.originalFilename, pool: 'payment-recipient', stream: input.stream })
         // prepare 保持 UPLOADING；标记失败也不会产生 READY 孤儿，过期清理仍可回收。
         const marked = await this.prisma.mediaAsset.updateMany({ where: { id: asset.id, status: 'UPLOADING', createdByUserId: actorUserId, uploadPurpose: null }, data: { uploadPurpose: 'PAYMENT_RECIPIENT_QR' } })
         if (marked.count !== 1) return recipientFailure('PAYMENT_RECIPIENT_IMAGE_UNAVAILABLE', '收款码上传状态已变化，请重新上传')

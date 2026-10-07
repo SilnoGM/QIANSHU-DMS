@@ -432,6 +432,7 @@ export function deriveLocalMediaConfiguration(
     ffprobePath: configuration.ffprobePath,
     qpdfPath: configuration.qpdfPath,
     stagingTtlHours: configuration.stagingTtlHours,
+    storageEnvironment: configuration.storageEnvironment,
     storageRoot: configuration.storageRoot,
     trashRetentionDays: configuration.trashRetentionDays,
   })

@@ -38,7 +38,7 @@ export class ContainerSourceFileService {
           fail('CONTAINER_SOURCE_FILE_INVALID', '请选择有效的 .xlsx 装柜资料文件')
         }
         // prepare 会识别真实 OOXML 内容并验证完整文件，上传仍为临时状态；只有父柜次保存成功才激活。
-        const asset = await this.media.prepare({ actorUserId, allowedTypes: ['DOCUMENT'], requestedType: 'DOCUMENT', declaredMimeType: input.declaredMimeType, originalFilename: input.originalFilename, stream: input.stream })
+        const asset = await this.media.prepare({ actorUserId, allowedTypes: ['DOCUMENT'], requestedType: 'DOCUMENT', declaredMimeType: input.declaredMimeType, originalFilename: input.originalFilename, pool: 'container', stream: input.stream })
         const marked = await this.prisma.mediaAsset.updateMany({
           where: { id: asset.id, status: 'UPLOADING', createdByUserId: actorUserId, uploadPurpose: null },
           data: { uploadPurpose: OCEAN_FREIGHT_SOURCE_UPLOAD_PURPOSE },

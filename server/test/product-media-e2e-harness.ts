@@ -197,6 +197,7 @@ export class ProductMediaE2eHarness {
       ffprobePath: '/e2e/ffprobe',
       qpdfPath: '/e2e/qpdf',
       stagingTtlHours: 24,
+      storageEnvironment: 'dev',
       storageRoot,
       trashRetentionDays: 7,
     }
@@ -223,6 +224,7 @@ export class ProductMediaE2eHarness {
       this.reconciliationPersistence,
       this.references,
       storage,
+      'dev',
       { monotonicNow: () => 0, now },
     )
     this.persistence = new ProductMediaPersistence(prisma)
@@ -281,6 +283,7 @@ export class ProductMediaE2eHarness {
         ffprobePath: '/e2e/ffprobe',
         qpdfPath: '/e2e/qpdf',
         stagingTtlHours: 24,
+        storageEnvironment: 'dev',
         storageRoot,
         trashRetentionDays: 7,
       }

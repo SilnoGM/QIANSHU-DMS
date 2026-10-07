@@ -11,6 +11,7 @@ const configuration: MediaConfiguration = {
   driver: 'local',
   ffprobePath: '/usr/bin/ffprobe',
   qpdfPath: '/usr/bin/qpdf',
+  storageEnvironment: 'dev',
   storageRoot: '/srv/qianshu-media',
   stagingTtlHours: 24,
   trashRetentionDays: 7,

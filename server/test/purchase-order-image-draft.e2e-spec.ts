@@ -77,7 +77,7 @@ describe('purchase order image drafts with isolated PostgreSQL and real storage'
   }
 
   it('prepares generated PNG through the real media validation and storage lifecycle', async () => {
-    const asset = await images.media.prepare({ actorUserId: fixture.actor.id, allowedTypes: ['IMAGE'], requestedType: 'IMAGE', declaredMimeType: 'image/png', originalFilename: 'fixture.png', stream: Readable.from(images.png) })
+    const asset = await images.media.prepare({ actorUserId: fixture.actor.id, allowedTypes: ['IMAGE'], requestedType: 'IMAGE', declaredMimeType: 'image/png', originalFilename: 'fixture.png', pool: 'purchase', stream: Readable.from(images.png) })
     expect(asset.trustedMetadata.mimeType).toBe('image/png')
     await images.media.fail(asset.id, 'MEDIA_ASSET_DOMAIN_TRANSACTION_FAILED')
   })

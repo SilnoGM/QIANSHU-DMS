@@ -131,6 +131,8 @@ export class PurchaseOrderDocumentService {
           allowedTypes: paymentUpload ? ['IMAGE'] : ['IMAGE', 'DOCUMENT'],
           declaredMimeType: input.declaredMimeType,
           originalFilename: input.originalFilename,
+          // 同一个上传器承载普通凭证与付款凭证：付款截图属于资金凭证池，键一旦物化不可改写。
+          pool: paymentUpload ? 'voucher' : 'purchase',
           requestedType: input.mediaType,
           stream: input.stream,
         })

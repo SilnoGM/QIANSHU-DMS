@@ -25,6 +25,7 @@ const LOCAL_CONFIGURATION: LocalMediaConfiguration = Object.freeze({
   ffprobePath: '/usr/bin/ffprobe',
   qpdfPath: '/usr/bin/qpdf',
   stagingTtlHours: 24,
+  storageEnvironment: 'dev',
   storageRoot: '/var/lib/qianshu-dms/media',
   trashRetentionDays: 7,
 })

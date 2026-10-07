@@ -5,6 +5,11 @@ import type { MediaConfiguration } from '../../config/media.config'
 import type { Prisma } from '../../generated/prisma/client'
 import { MediaType } from '../../generated/prisma/enums'
 import type { MediaContentValidator } from './media-content-validator'
+import {
+  buildMediaObjectKey,
+  type MediaStoragePool,
+  MediaObjectKeyError,
+} from './media-object-key'
 import type { MediaStorage, StagingWrite } from './media-storage'
 import { MediaStorageError } from './media-storage'
 import {
@@ -62,6 +67,13 @@ export interface PrepareMediaAssetInput {
   readonly allowedTypes: readonly MediaType[]
   readonly declaredMimeType: string | null
   readonly originalFilename: string
+  /**
+   * 目标业务池，必须是上传瞬间就能确定的粗分类。
+   *
+   * 它决定对象键，而键在 READY 之后不可改写，因此调用方必须在调用前判定完毕；同一个 HTTP 入口
+   * 可能服务多个池时（例如采购付款凭证与普通凭证共用上传器），必须按请求语义分支。
+   */
+  readonly pool: MediaStoragePool
   readonly requestedType: MediaType
   readonly stream: Readable
 }
@@ -115,14 +127,28 @@ function uploadExpiry(now: Date, hours: number): Date {
   return new Date(now.getTime() + hours * 60 * 60 * 1_000)
 }
 
-function objectKeyFor(
-  assetId: string,
-  canonicalExtension: ValidatedMediaContent['canonicalExtension'],
-  now: Date,
+/**
+ * 键里的年月取自 prepare 时刻的 UTC 时间，与 staging 过期时间同源；池与环境来自调用方与部署配置。
+ * 键生成失败（非法池、非法环境或非法资产标识）一律归为输入无效，不把它当成存储故障。
+ */
+function resolveObjectKey(
+  input: {
+    readonly assetId: string
+    readonly canonicalExtension: ValidatedMediaContent['canonicalExtension']
+    readonly now: Date
+    readonly pool: MediaStoragePool
+    readonly storageEnvironment: MediaConfiguration['storageEnvironment']
+  },
 ): string {
-  const year = now.getUTCFullYear().toString().padStart(4, '0')
-  const month = (now.getUTCMonth() + 1).toString().padStart(2, '0')
-  return `assets/${year}/${month}/${assetId}${canonicalExtension}`
+  try {
+    return buildMediaObjectKey(input)
+  }
+  catch (error) {
+    if (error instanceof MediaObjectKeyError) {
+      throw new MediaAssetLifecycleError('MEDIA_ASSET_INPUT_INVALID')
+    }
+    throw error
+  }
 }
 
 function lifecycleFromValidation(error: MediaValidationError): MediaAssetLifecycleError {
@@ -223,11 +249,13 @@ export class MediaAssetService {
         throw new MediaAssetLifecycleError('MEDIA_ASSET_CONTENT_INVALID')
       }
 
-      const objectKey = objectKeyFor(
+      const objectKey = resolveObjectKey({
         assetId,
-        trustedMetadata.canonicalExtension,
+        canonicalExtension: trustedMetadata.canonicalExtension,
         now,
-      )
+        pool: input.pool,
+        storageEnvironment: this.configuration.storageEnvironment,
+      })
       let materialized: boolean
       try {
         materialized = await this.persistence.markPrepared({

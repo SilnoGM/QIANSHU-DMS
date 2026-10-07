@@ -34,7 +34,7 @@ export class SlhBillSourceFileService {
         if (input.mediaType !== 'DOCUMENT' || input.declaredMimeType !== SLH_BILL_SOURCE_MIME || !/\.xlsx$/iu.test(input.originalFilename)) {
           fail('SLH_BILL_SOURCE_FILE_INVALID', '请选择顺联航对账单的 .xlsx 文件')
         }
-        const asset = await this.media.prepare({ actorUserId, allowedTypes: ['DOCUMENT'], requestedType: 'DOCUMENT', declaredMimeType: input.declaredMimeType, originalFilename: input.originalFilename, stream: input.stream })
+        const asset = await this.media.prepare({ actorUserId, allowedTypes: ['DOCUMENT'], requestedType: 'DOCUMENT', declaredMimeType: input.declaredMimeType, originalFilename: input.originalFilename, pool: 'bill', stream: input.stream })
         const marked = await this.prisma.mediaAsset.updateMany({
           where: { id: asset.id, status: 'UPLOADING', createdByUserId: actorUserId, uploadPurpose: null },
           data: { uploadPurpose: SLH_BILL_SOURCE_UPLOAD_PURPOSE },

@@ -176,6 +176,8 @@ export class SalesOrderDocumentService {
           allowedTypes: ['IMAGE', 'DOCUMENT'],
           declaredMimeType: input.declaredMimeType,
           originalFilename: input.originalFilename,
+          // 与收款申请共用同一个上传入口，上传时无法区分凭证最终用途；此处统一按销售单据池落键。
+          pool: 'sales',
           requestedType: input.mediaType,
           stream: input.stream,
         })

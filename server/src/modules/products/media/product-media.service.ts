@@ -122,6 +122,7 @@ export class ProductMediaService {
         allowedTypes: PRODUCT_MEDIA_ALLOWED_TYPES,
         declaredMimeType: input.declaredMimeType,
         originalFilename: input.originalFilename,
+        pool: 'product',
         requestedType: mediaTypeForProductMedia(kind),
         stream: input.stream,
       })

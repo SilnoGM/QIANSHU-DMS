@@ -26,7 +26,8 @@ export class PackagingCostImageService {
       // 共用已有单文件流式解析器；完整 framing 确认后才会激活准备流程的 EOF。
       return await this.multipart.parse(request, async input => {
         if (input.mediaType !== 'IMAGE' || !MIME_TYPES.includes(input.declaredMimeType ?? '')) return packagingCostFailure('PACKAGING_COST_IMAGE_INVALID', '仅支持 JPEG、PNG、WebP 图片')
-        const asset = await this.media.prepare({ actorUserId: context.actorUserId, allowedTypes: ['IMAGE'], requestedType: 'IMAGE', declaredMimeType: input.declaredMimeType, originalFilename: input.originalFilename, stream: input.stream })
+        // 同一个上传器承载提报证据与付款截图：带提报 ID 的入口是资金凭证，其余是提报证据。
+        const asset = await this.media.prepare({ actorUserId: context.actorUserId, allowedTypes: ['IMAGE'], requestedType: 'IMAGE', declaredMimeType: input.declaredMimeType, originalFilename: input.originalFilename, pool: packagingCostId ? 'voucher' : 'packaging', stream: input.stream })
         // 付款凭证限定当前提报和上传者，不能挪用普通包装截图或其他提报的附件。
         if (packagingCostId) {
           const marked = await this.prisma.mediaAsset.updateMany({ where: { id: asset.id, status: 'UPLOADING', createdByUserId: context.actorUserId, uploadPurpose: null }, data: { uploadPurpose: 'PACKAGING_PAYMENT_VOUCHER', packagingCostUploadId: packagingCostId } })

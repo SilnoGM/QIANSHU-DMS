@@ -130,7 +130,7 @@ export class PurchaseOrderImageDraftService {
       const image = await this.renderer.render(snapshot, images)
       const prepared = await this.media.prepare({
         actorUserId: context.actorUserId, allowedTypes: ['IMAGE'], requestedType: 'IMAGE',
-        declaredMimeType: 'image/png', originalFilename: `采购单-${detail.orderNo.replaceAll('/', '-')}.png`, stream: Readable.from(image),
+        declaredMimeType: 'image/png', originalFilename: `采购单-${detail.orderNo.replaceAll('/', '-')}.png`, pool: 'purchase', stream: Readable.from(image),
       })
       preparedId = prepared.id
       const result = await this.prisma.$transaction(async transaction => {

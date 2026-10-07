@@ -40,6 +40,7 @@ function configuration(storageRoot: string): MediaConfiguration {
     driver: 'local',
     ffprobePath: '/usr/bin/ffprobe',
     qpdfPath: '/usr/bin/qpdf',
+    storageEnvironment: 'dev',
     storageRoot,
     stagingTtlHours: 24,
     trashRetentionDays: 7,
