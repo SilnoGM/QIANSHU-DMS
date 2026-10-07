@@ -89,6 +89,11 @@ test('固定计划使用真实构建、双环境 Server、同源代理和外部 
   assert.equal(webBuild?.env.NODE_ENV, 'production')
   assert.equal(webBuild?.env.VITE_ENABLE_COMPONENT_LIBRARY, 'true', '隔离浏览器构建必须包含实际组件库验收路由')
   assert.equal(
+    webBuild?.env.VITE_APP_DISABLE_DEVTOOL,
+    'false',
+    '隔离浏览器构建必须关闭禁用开发者工具，否则 CDP 无法驱动页面',
+  )
+  assert.equal(
     plan.prepare.find(step => step.name === 'media-fixture')
       ?.env.QIANSHU_BROWSER_AUTH_MEDIA_STORAGE_ROOT,
     '/var/tmp/qianshu-browser-media',

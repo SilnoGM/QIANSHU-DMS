@@ -146,7 +146,13 @@ export function createBrowserAuthPlan(input) {
       command: 'pnpm',
       args: Object.freeze(['-C', 'web', 'build']),
       // 仅隔离浏览器验收构建开放组件库，正式生产构建继续遵循默认关闭策略。
-      env: safeEnvironment(sourceEnv, { NODE_ENV: 'production', VITE_ENABLE_COMPONENT_LIBRARY: 'true' }),
+      // 同时必须关闭"禁用开发者工具"：正式生产构建会按模板默认打开它，而该产物由 CDP 驱动，
+      // 打开后页面会主动拦截开发者工具，导致 CDP 命令失败、应用根本挂载不起来。
+      env: safeEnvironment(sourceEnv, {
+        NODE_ENV: 'production',
+        VITE_APP_DISABLE_DEVTOOL: 'false',
+        VITE_ENABLE_COMPONENT_LIBRARY: 'true',
+      }),
     }),
     Object.freeze({
       name: 'admin-fixture',
