@@ -226,8 +226,7 @@ describe('Product media private content API', () => {
 
     expect(response.headers).toMatchObject({
       'accept-ranges': 'bytes',
-      // 商品素材是内容不可变的低敏媒体：允许浏览器长期私有缓存，但不得进入公共缓存。
-      'cache-control': 'private, max-age=31536000, immutable',
+      'cache-control': 'private, no-store',
       'content-disposition': 'inline; filename="front.webp"',
       'content-length': String(PRIVATE_CONTENT.length),
       'content-type': 'image/webp',
@@ -286,7 +285,7 @@ describe('Product media private content API', () => {
     expect(conditional.text).toBe('')
     expect(conditional.headers).toMatchObject({
       'accept-ranges': 'bytes',
-      'cache-control': 'private, max-age=31536000, immutable',
+      'cache-control': 'private, no-store',
       etag: initial.headers.etag,
       'x-content-type-options': 'nosniff',
     })

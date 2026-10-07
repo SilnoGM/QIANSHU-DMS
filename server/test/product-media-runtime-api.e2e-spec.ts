@@ -315,8 +315,7 @@ describeExclusive('Product media runtime HTTP with isolated PostgreSQL and local
     const response = await contentRequest(productId, mediaId).expect(HttpStatus.OK)
     expect(response.headers).toMatchObject({
       'accept-ranges': 'bytes',
-      // 商品素材内容不可变，允许浏览器长期私有缓存；公共缓存会绕过会话鉴权。
-      'cache-control': 'private, max-age=31536000, immutable',
+      'cache-control': 'private, no-store',
       'content-type': 'image/webp',
       'x-content-type-options': 'nosniff',
     })

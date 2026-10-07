@@ -18,7 +18,6 @@ import {
 } from '@nestjs/common'
 import { ApiBody, ApiConsumes, ApiHeader, ApiTags } from '@nestjs/swagger'
 
-import { ImmutableMediaContentCache } from '../../infrastructure/http/private-no-store.interceptor'
 import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
@@ -316,7 +315,6 @@ export class SalesOrdersController {
   }
 
   @Head(':salesOrderId/product-edit-options/:productId/main-image/:productMediaId/content')
-  @ImmutableMediaContentCache()
   @RequirePermissions('sales-orders:update')
   @ApiProductMediaContentContract('HEAD', {
     operationId: 'sales_orders_head_product_edit_option_main_image',
@@ -341,7 +339,6 @@ export class SalesOrdersController {
   }
 
   @Get(':salesOrderId/product-edit-options/:productId/main-image/:productMediaId/content')
-  @ImmutableMediaContentCache()
   @RequirePermissions('sales-orders:update')
   @ApiProductMediaContentContract('GET', {
     operationId: 'sales_orders_get_product_edit_option_main_image',
@@ -369,7 +366,6 @@ export class SalesOrdersController {
   }
 
   @Head('product-options/:productId/main-image/:productMediaId/content')
-  @ImmutableMediaContentCache()
   @RequirePermissions('sales-orders:create')
   @ApiProductMediaContentContract('HEAD', {
     operationId: 'sales_orders_head_product_option_main_image',
@@ -395,7 +391,6 @@ export class SalesOrdersController {
   }
 
   @Get('product-options/:productId/main-image/:productMediaId/content')
-  @ImmutableMediaContentCache()
   @RequirePermissions('sales-orders:create')
   @ApiProductMediaContentContract('GET', {
     operationId: 'sales_orders_get_product_option_main_image',
@@ -424,7 +419,6 @@ export class SalesOrdersController {
   }
 
   @Head(':salesOrderId/lines/:lineId/main-image/:productMediaId/content')
-  @ImmutableMediaContentCache()
   @RequirePermissions('sales-orders:read')
   @ApiProductMediaContentContract('HEAD', {
     operationId: 'sales_orders_head_product_preview_main_image',
@@ -449,7 +443,6 @@ export class SalesOrdersController {
   }
 
   @Get(':salesOrderId/lines/:lineId/main-image/:productMediaId/content')
-  @ImmutableMediaContentCache()
   @RequirePermissions('sales-orders:read')
   @ApiProductMediaContentContract('GET', {
     operationId: 'sales_orders_get_product_preview_main_image',
