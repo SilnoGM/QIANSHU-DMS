@@ -97,14 +97,20 @@ async function checkDirectories(
   }
 }
 
-const BUCKET_PROBE_PREFIX = '_ops/health-probe-'
-
 /**
- * 桶探针刻意放在 assets/staging/trash 三个命名空间之外。
+ * 桶探针键前缀，必须带环境段。
  *
- * 对账只扫描这三个命名空间，因此探针对象既不会被计成 orphan，也不会污染「零 mismatch」判定；
- * 进程在 PUT 与 DELETE 之间崩溃留下的残留由桶上针对 `_ops/` 的生命周期规则回收。
+ * 探针刻意放在 assets/staging/trash 三个命名空间之外：对账只扫描这三个命名空间，探针对象既不
+ * 会被计成 orphan，也不会污染「零 mismatch」判定；进程在 PUT 与 DELETE 之间崩溃留下的残留由桶上
+ * 针对 `_ops/` 的生命周期规则回收。
+ *
+ * 共桶形态下环境段不可省略：写探针是「PUT 后立即 DELETE」，若两个环境共用同一个键，一个环境的
+ * 探活会删掉另一个环境正在使用的探针对象。
  */
+function bucketProbePrefix(configuration: MediaConfiguration): string {
+  return `_ops/${configuration.storageEnvironment}/health-probe-`
+}
+
 function createDefaultRemoteProbes(): Pick<
   MediaOperationalHealthDependencies,
   'checkRemoteReadAccess' | 'checkRemoteWriteAccess'
@@ -127,13 +133,13 @@ function createDefaultRemoteProbes(): Pick<
       const client = clientFor(configuration)
       await client.headBucket()
       // HEAD 一个固定探针键：对象不存在（null）同样证明对象级读取链路与权限可用。
-      await client.headObject(`${BUCKET_PROBE_PREFIX}read`)
+      await client.headObject(`${bucketProbePrefix(configuration)}read`)
       return true
     },
     checkRemoteWriteAccess: async (configuration: MediaConfiguration) => {
       const client = clientFor(configuration)
       const contents = Buffer.from('probe')
-      const key = `${BUCKET_PROBE_PREFIX}${randomUUID()}`
+      const key = `${bucketProbePrefix(configuration)}${randomUUID()}`
       await client.putObject({
         contentLength: contents.length,
         key,

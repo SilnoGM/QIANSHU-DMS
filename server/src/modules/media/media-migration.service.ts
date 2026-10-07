@@ -1,16 +1,10 @@
 import type { CosObjectClient } from './cos-object-client'
 import type { MediaStorage } from './media-storage'
+import { parseStoredMediaObjectKey } from './media-object-key'
 
 const INVENTORY_PAGE_SIZE = 500
 const MAX_INVENTORY_PAGES = 10_000
 const MIGRATION_NAMESPACES = ['assets', 'trash'] as const
-
-/**
- * 对象键布局：`<namespace>/<YYYY>/<MM>/<assetId><extension>`（trash 同形）。
- * 只解析出 assetId 用于回查数据库摘要，不保留原始键以外的任何标识。
- */
-const STORED_ASSET_PATTERN =
-  /^(?:assets|trash)\/[0-9]{4}\/[0-9]{2}\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.[a-z0-9]+$/iu
 
 export interface MediaMigrationAssetRecord {
   readonly checksumSha256: string
@@ -43,9 +37,14 @@ interface MutableCounters {
   skipped: number
 }
 
+/**
+ * 从对象键解析 assetId，用于回查数据库摘要；不保留原始键以外的任何标识。
+ *
+ * 使用与对账、回收同一个解析器：它同时接受旧布局（`assets/YYYY/MM/...`）与新布局
+ * （`assets/{env}/{pool}/YYYY/MM/...`），因此迁移在布局切换期间可以跨两种形态续跑。
+ */
 function assetIdFromKey(key: string): string | null {
-  const matched = key.match(STORED_ASSET_PATTERN)
-  return matched?.[1]?.toLowerCase() ?? null
+  return parseStoredMediaObjectKey(key)?.assetId ?? null
 }
 
 /**

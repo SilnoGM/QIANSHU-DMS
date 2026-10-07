@@ -138,15 +138,18 @@ const providers = [{
     MediaReconciliationPersistence,
     MediaAssetReferenceRepository,
     MEDIA_STORAGE,
+    MEDIA_CONFIGURATION,
   ],
   useFactory: (
     persistence: MediaReconciliationPersistence,
     references: MediaAssetReferenceRepository,
     storage: MediaStorage,
+    configuration: MediaConfiguration,
   ): MediaReconciliationService => new MediaReconciliationService(
     persistence,
     references,
     storage,
+    configuration.storageEnvironment,
   ),
 }]
 

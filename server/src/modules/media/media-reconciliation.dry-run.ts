@@ -1,4 +1,10 @@
+import type { MediaStorageEnvironment } from '../../config/media.config'
 import { MediaAssetStatus } from '../../generated/prisma/enums'
+import {
+  belongsToMediaStorageEnvironment,
+  isMediaAssetId,
+  parseStoredMediaObjectKey,
+} from './media-object-key'
 import type {
   MediaStorage,
   MediaStorageInventoryPage,
@@ -11,15 +17,6 @@ import type {
 import { trashKeyFor } from './media-retention.service'
 
 const DEFAULT_DRY_RUN_MAX_BATCHES = 100
-const UUID_PATTERN = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'
-const STAGING_ASSET_PATTERN = new RegExp(
-  `^staging/(${UUID_PATTERN})\\.${UUID_PATTERN}\\.part$`,
-  'iu',
-)
-const STORED_ASSET_PATTERN = new RegExp(
-  `^(?:assets|trash)/[0-9]{4}/[0-9]{2}/(${UUID_PATTERN})\\.[a-z0-9]+$`,
-  'iu',
-)
 
 export interface MediaReconciliationDryRunOptions {
   readonly batchSize?: number
@@ -59,6 +56,8 @@ interface DryRunExecutionOptions {
   readonly batchSize: number
   readonly maxBatches?: number
   readonly monotonicNow: () => number
+  /** 当前环境的对象键前缀归属；其它环境的对象被整体跳过，不计入任何计数。 */
+  readonly storageEnvironment: MediaStorageEnvironment
   readonly timeBudgetMs: number
 }
 
@@ -70,10 +69,40 @@ function requireMaximumBatches(value: number | undefined): number {
   return normalized
 }
 
-function assetIdFromKey(key: string): string | null {
-  return STAGING_ASSET_PATTERN.exec(key)?.[1]?.toLowerCase() ??
-    STORED_ASSET_PATTERN.exec(key)?.[1]?.toLowerCase() ??
-    null
+/**
+ * staging 键形如 `staging/<assetId>.<randomUuid>.part`，永远在本地磁盘，不含环境段。
+ * 按分隔符切分而不使用捕获组：这里只需要「两段都是合法资产标识」这一个事实。
+ */
+function stagingAssetIdFromKey(key: string): string | null {
+  const prefix = 'staging/'
+  const suffix = '.part'
+  if (!key.startsWith(prefix) || !key.endsWith(suffix)) return null
+
+  const parts = key.slice(prefix.length, key.length - suffix.length).split('.')
+  if (parts.length !== 2) return null
+  const [assetId, randomPart] = parts
+  if (!isMediaAssetId(assetId) || !isMediaAssetId(randomPart)) return null
+  return (assetId ?? '').toLowerCase()
+}
+
+/**
+ * 把存储对象映射回资产标识，并区分「属于其它环境」与「无法映射」。
+ *
+ * 共桶后同一前缀下会出现其它环境的对象：它们必须被整体跳过，既不能计成 orphanObject（数据库里
+ * 本就没有它们），也不能计成 unmappableObject（键本身完全合法），否则每个环境的对账都会被邻居
+ * 的存量污染。旧布局没有环境段，它产生于共桶之前、只属于本环境。
+ */
+function classifyStorageObject(
+  key: string,
+  storageEnvironment: MediaStorageEnvironment,
+): 'foreign' | 'unmappable' | { readonly assetId: string } {
+  const stagingAssetId = stagingAssetIdFromKey(key)
+  if (stagingAssetId !== null) return { assetId: stagingAssetId }
+
+  const parsed = parseStoredMediaObjectKey(key)
+  if (parsed === null) return 'unmappable'
+  if (!belongsToMediaStorageEnvironment(parsed, storageEnvironment)) return 'foreign'
+  return { assetId: parsed.assetId }
 }
 
 async function inspectDatabaseRecord(
@@ -165,24 +194,28 @@ async function inspectStoragePage(
   namespace: MediaStorageNamespace,
   page: MediaStorageInventoryPage,
   issues: MutableIssueCounts,
+  storageEnvironment: MediaStorageEnvironment,
 ): Promise<number> {
   const keyedObjects = page.objects.map(object => ({
-    assetId: assetIdFromKey(object.key),
+    classification: classifyStorageObject(object.key, storageEnvironment),
     object,
   }))
   const mappedIds = [...new Set(keyedObjects
-    .map(item => item.assetId)
+    .map(item => (typeof item.classification === 'object' ? item.classification.assetId : null))
     .filter((value): value is string => value !== null))]
   const records = await persistence.readAssetsByIds(mappedIds)
   const recordById = new Map(records.map(record => [record.id.toLowerCase(), record]))
   let matched = 0
 
   for (const item of keyedObjects) {
-    if (item.assetId === null) {
+    const { classification } = item
+    // 其它环境的对象整体跳过：既不是 orphan（本库本就没有它们），也不是 unmappable（键完全合法）。
+    if (classification === 'foreign') continue
+    if (classification === 'unmappable') {
       issues.unmappableObject += 1
       continue
     }
-    const record = recordById.get(item.assetId)
+    const record = recordById.get(classification.assetId)
     if (!record) {
       issues.orphanObject += 1
       continue
@@ -257,7 +290,13 @@ export async function runMediaReconciliationDryRun(
       })
       batches += 1
       storageScanned += page.objects.length
-      matched += await inspectStoragePage(persistence, namespace, page, issues)
+      matched += await inspectStoragePage(
+        persistence,
+        namespace,
+        page,
+        issues,
+        options.storageEnvironment,
+      )
       storageCursor = page.nextCursor ?? undefined
     } while (storageCursor !== undefined)
     if (!complete) break

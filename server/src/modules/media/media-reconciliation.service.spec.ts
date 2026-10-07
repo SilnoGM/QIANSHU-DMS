@@ -82,6 +82,7 @@ function createFixture(options: {
     persistence,
     references,
     storage,
+    'dev',
     {
       monotonicNow: options.monotonicNow ?? (() => 0),
       now: () => new Date(NOW),
@@ -253,6 +254,62 @@ describe('MediaReconciliationService', () => {
       timeBudgetMs: 1_000,
     })).resolves.toMatchObject({ completed: 1, scanned: 1 })
     expect(fixture.withExpiredUploadClaim).toHaveBeenCalledTimes(1)
+  })
+
+  it('maps legacy storage objects so both layouts stay reconcilable during the migration', async () => {
+    const fixture = createFixture()
+    fixture.inventory.mockImplementation(({ namespace }: { namespace: string }) =>
+      Promise.resolve(namespace === 'assets'
+        ? {
+            nextCursor: null,
+            objects: [{ key: OBJECT_KEY, modifiedAt: NOW, sizeBytes: 321n }],
+          }
+        : { nextCursor: null, objects: [] }))
+    fixture.readAssetsByIds.mockResolvedValue([asset(MediaAssetStatus.READY)])
+
+    const result = await fixture.service.dryRun({ batchSize: 100, maxBatches: 10 })
+
+    expect(fixture.readAssetsByIds).toHaveBeenCalledWith([ASSET_ID])
+    expect(result).toMatchObject({
+      matched: 1,
+      issues: { orphanObject: 0, unmappableObject: 0 },
+    })
+  })
+
+  it('skips objects that belong to another environment instead of counting them as issues', async () => {
+    const fixture = createFixture()
+    fixture.inventory.mockImplementation(({ namespace }: { namespace: string }) =>
+      Promise.resolve(namespace === 'assets'
+        ? {
+            nextCursor: null,
+            objects: [
+              {
+                key: `assets/dev/voucher/2026/08/${ASSET_ID}.webp`,
+                modifiedAt: NOW,
+                sizeBytes: 321n,
+              },
+              // 共桶邻居：键完全合法但不属于本环境，既不能计 orphan 也不能计 unmappable。
+              {
+                key: `assets/prod/voucher/2026/08/${ASSET_ID}.webp`,
+                modifiedAt: NOW,
+                sizeBytes: 321n,
+              },
+            ],
+          }
+        : { nextCursor: null, objects: [] }))
+    fixture.readAssetsByIds.mockResolvedValue([asset(MediaAssetStatus.READY, {
+      objectKey: `assets/dev/voucher/2026/08/${ASSET_ID}.webp`,
+    })])
+
+    const result = await fixture.service.dryRun({ batchSize: 100, maxBatches: 10 })
+
+    // 只有本环境的对象进入数据库回查，另一个环境的对象被整体跳过。
+    expect(fixture.readAssetsByIds).toHaveBeenCalledWith([ASSET_ID])
+    expect(result).toMatchObject({
+      storageScanned: 2,
+      matched: 1,
+      issues: { orphanObject: 0, unmappableObject: 0, unexpectedLocation: 0 },
+    })
   })
 
   it('reports a mutation-free bounded dry run without returning identifiers or object keys', async () => {

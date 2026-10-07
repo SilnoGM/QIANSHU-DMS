@@ -1,5 +1,6 @@
 import { performance } from 'node:perf_hooks'
 
+import type { MediaStorageEnvironment } from '../../config/media.config'
 import type { Prisma } from '../../generated/prisma/client'
 import { MediaAssetStatus } from '../../generated/prisma/enums'
 import type {
@@ -119,6 +120,11 @@ export class MediaReconciliationService {
     private readonly persistence: MediaReconciliationPersistence,
     private readonly references: MediaAssetReferenceRepository,
     private readonly storage: MediaStorage,
+    /**
+     * 当前环境的对象键归属。对账必须知道它，才能在共桶形态下跳过其它环境的对象；
+     * 这里刻意不提供默认值——回落到 dev 会把生产对象误判成外来对象而静默放行。
+     */
+    private readonly storageEnvironment: MediaStorageEnvironment,
     dependencyOverrides: Partial<ReconciliationDependencies> = {},
   ) {
     this.dependencies = Object.freeze({
@@ -192,6 +198,7 @@ export class MediaReconciliationService {
       batchSize,
       maxBatches: options.maxBatches,
       monotonicNow: this.dependencies.monotonicNow,
+      storageEnvironment: this.storageEnvironment,
       timeBudgetMs,
     })
   }
