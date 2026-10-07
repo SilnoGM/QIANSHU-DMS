@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream'
+
 import type { PrismaService } from '../../../infrastructure/database/prisma.service'
 import type { AuditService } from '../../audit/audit.service'
 import type { MediaAssetService } from '../../media/media-asset.service'
@@ -16,6 +18,7 @@ function setup(
   documentType = 'DELIVERY_RECEIPT',
   fulfillmentStatus = 'SEA_TRANSIT',
   orderStatus = 'CONFIRMED',
+  parser: SalesOrderDocumentMultipartParser = {} as SalesOrderDocumentMultipartParser,
 ) {
   const transaction = {
     $queryRaw: jest.fn<Promise<unknown[]>, [unknown]>()
@@ -77,7 +80,7 @@ function setup(
     {} as MediaContentDeliveryService,
     audit as unknown as AuditService,
     query as unknown as SalesOrderQueryService,
-    {} as SalesOrderDocumentMultipartParser,
+    parser,
     automaticState as unknown as SalesOrderAutomaticStateService,
   )
   return { audit, automaticState, detail, media, query, service, transaction }
@@ -86,6 +89,50 @@ function setup(
 const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
 
 describe('SalesOrderDocumentService', () => {
+  it.each([
+    [null, 'sales'],
+    ['PAYMENT_VOUCHER', 'voucher'],
+  ] as const)(
+    'lands a temporary upload with purpose %s in the %s pool',
+    async (purpose, expectedPool) => {
+      const prepare = jest.fn().mockResolvedValue({
+        id: MEDIA_ASSET_ID,
+        mediaType: 'IMAGE',
+        objectKey: `assets/dev/${expectedPool}/2026/10/${MEDIA_ASSET_ID}.png`,
+        trustedMetadata: {
+          canonicalExtension: '.png',
+          checksumSha256: 'a'.repeat(64),
+          mediaType: 'IMAGE',
+          mimeType: 'image/png',
+          sizeBytes: 3n,
+        },
+      })
+      const parser = {
+        parse: async (
+          _request: unknown,
+          handler: (input: unknown) => Promise<unknown>,
+        ) => handler({
+          declaredMimeType: 'image/png',
+          mediaType: 'IMAGE',
+          originalFilename: 'voucher.png',
+          purpose,
+          stream: Readable.from([Buffer.from('abc')]),
+        }),
+      } as unknown as SalesOrderDocumentMultipartParser
+      const fixture = setup('DELIVERY_RECEIPT', 'SEA_TRANSIT', 'CONFIRMED', parser)
+      Object.assign(fixture.media, { prepare })
+
+      // 请求替身用真实 Readable：多字段解析器只读 headers，其它成员由流本体补齐。
+      await fixture.service.uploadTemporary(
+        context,
+        Object.assign(Readable.from([Buffer.from('')]), { headers: {} }),
+      )
+
+      // 用途只影响键布局：权限与敏感级仍由服务端按业务主体独立校验。
+      expect(prepare).toHaveBeenCalledWith(expect.objectContaining({ pool: expectedPool }))
+    },
+  )
+
   it('atomically creates one delivery receipt and advances sea transit to signed', async () => {
     const fixture = setup()
 

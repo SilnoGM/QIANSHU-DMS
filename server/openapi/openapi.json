@@ -76206,6 +76206,12 @@
               "DOCUMENT"
             ]
           },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "PAYMENT_VOUCHER"
+            ]
+          },
           "file": {
             "type": "string",
             "format": "binary"

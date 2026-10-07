@@ -15,10 +15,18 @@ export interface SalesOrderDocumentMultipartRequest extends Readable {
   readonly headers: IncomingHttpHeaders
 }
 
+/**
+ * 订单凭证的用途标记。只有收款凭证需要它：出单凭证与收款凭证共用同一个上传入口，
+ * 而对象键一旦物化不可改写，所以「这份临时文件最终会被当成什么」必须在上传瞬间由客户端声明。
+ */
+export type SalesOrderDocumentPurpose = 'PAYMENT_VOUCHER'
+
 export interface SalesOrderDocumentUploadInput {
   readonly declaredMimeType: string | null
   readonly mediaType: Extract<MediaType, 'IMAGE' | 'DOCUMENT'>
   readonly originalFilename: string
+  /** 缺省表示普通订单凭证（出单凭证 / 签收单）；只接受白名单取值。 */
+  readonly purpose: SalesOrderDocumentPurpose | null
   readonly stream: Readable
 }
 
@@ -51,6 +59,10 @@ function normalizeMediaType(value: string | undefined): 'IMAGE' | 'DOCUMENT' | n
   return value === 'IMAGE' || value === 'DOCUMENT' ? value : null
 }
 
+function normalizePurpose(value: string): SalesOrderDocumentPurpose | null {
+  return value === 'PAYMENT_VOUCHER' ? value : null
+}
+
 /** 单文件流式解析；完整 multipart framing 验证通过后才向媒体领域发送 EOF。 */
 export class SalesOrderDocumentMultipartParser {
   async parse<T>(
@@ -73,7 +85,8 @@ export class SalesOrderDocumentMultipartParser {
         limits: {
           fieldNameSize: 64,
           fieldSize: 64,
-          fields: 1,
+          // 两个字段：mediaType 必填，purpose 可选。
+          fields: 2,
           fileSize: MAXIMUM_FILE_BYTES + 1,
           files: 1,
           headerPairs: 100,
@@ -86,6 +99,7 @@ export class SalesOrderDocumentMultipartParser {
     }
 
     let mediaTypeValue: string | undefined
+    let purposeValue: string | undefined
     let fileSeen = false
     let activeFile: Readable | undefined
     let bridge: PassThrough | undefined
@@ -101,17 +115,28 @@ export class SalesOrderDocumentMultipartParser {
     }
 
     multipart.on('field', (name, value, info) => {
-      if (
-        fileSeen
-        || name !== 'mediaType'
-        || mediaTypeValue !== undefined
-        || info.nameTruncated
-        || info.valueTruncated
-      ) {
+      if (fileSeen || info.nameTruncated || info.valueTruncated) {
         fail()
         return
       }
-      mediaTypeValue = value
+      if (name === 'mediaType') {
+        if (mediaTypeValue !== undefined) {
+          fail()
+          return
+        }
+        mediaTypeValue = value
+        return
+      }
+      if (name === 'purpose') {
+        // 重复出现即视为格式无效：让客户端改成一个字段，而不是让服务端猜哪个生效。
+        if (purposeValue !== undefined) {
+          fail()
+          return
+        }
+        purposeValue = value
+        return
+      }
+      fail()
     })
 
     multipart.on('file', (name, file, info) => {
@@ -123,10 +148,12 @@ export class SalesOrderDocumentMultipartParser {
       }
       fileSeen = true
       const mediaType = normalizeMediaType(mediaTypeValue)
+      const purpose = purposeValue === undefined ? null : normalizePurpose(purposeValue)
       if (
         failure !== undefined
         || name !== 'file'
         || mediaType === null
+        || (purposeValue !== undefined && purpose === null)
         || info.filename.length === 0
       ) {
         fail()
@@ -144,6 +171,7 @@ export class SalesOrderDocumentMultipartParser {
           declaredMimeType: info.mimeType.length === 0 ? null : info.mimeType,
           mediaType,
           originalFilename: info.filename,
+          purpose,
           stream: bridge as PassThrough,
         }))
         .then(

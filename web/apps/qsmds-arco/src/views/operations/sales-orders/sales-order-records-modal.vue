@@ -376,6 +376,8 @@ async function uploadActionVoucher(
       file,
       file.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT',
       controller.signal,
+      // 收款凭证落到资金凭证池；签收单不声明用途，沿用普通订单凭证池。
+      target === 'payment' ? 'PAYMENT_VOUCHER' : undefined,
     )
     if (controller.signal.aborted) {
       return

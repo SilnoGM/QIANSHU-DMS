@@ -176,8 +176,9 @@ export class SalesOrderDocumentService {
           allowedTypes: ['IMAGE', 'DOCUMENT'],
           declaredMimeType: input.declaredMimeType,
           originalFilename: input.originalFilename,
-          // 与收款申请共用同一个上传入口，上传时无法区分凭证最终用途；此处统一按销售单据池落键。
-          pool: 'sales',
+          // 共用上传入口：客户端声明收款凭证用途时落 voucher 池，缺省是普通订单凭证（出单凭证 / 签收单）。
+          // 用途只影响对象键布局，不影响权限与敏感级——那些由服务端按业务主体独立校验。
+          pool: input.purpose === 'PAYMENT_VOUCHER' ? 'voucher' : 'sales',
           requestedType: input.mediaType,
           stream: input.stream,
         })

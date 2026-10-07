@@ -251,6 +251,24 @@ test('临时凭证上传只发送 multipart，不携带订单编号或幂等 Key
   assert.ok(call.data instanceof FormData)
   assert.equal(call.data.get('mediaType'), 'IMAGE')
   assert.equal((call.data.get('file') as File).name, 'deposit.png')
+  // 不声明用途时不得凭空补一个：出单凭证 / 签收单走服务端缺省。
+  assert.equal(call.data.get('purpose'), null)
+})
+
+test('收款凭证上传声明用途，签收单沿用缺省', async () => {
+  const calls: Call[] = []
+  const api = createSalesOrdersApi(createRecorder(calls))
+  const controller = new AbortController()
+  const file = new File(['proof'], 'payment.png', { type: 'image/png' })
+
+  await api.uploadTemporaryDocument(file, 'IMAGE', controller.signal, 'PAYMENT_VOUCHER')
+
+  const call = calls[0]!
+  assert.ok(call.data instanceof FormData)
+  assert.equal(call.data.get('mediaType'), 'IMAGE')
+  // 服务端在文件 part 之前读字段，因此 purpose 必须排在 file 之前。
+  assert.deepEqual([...call.data.keys()], ['mediaType', 'purpose', 'file'])
+  assert.equal(call.data.get('purpose'), 'PAYMENT_VOUCHER')
 })
 
 test('销售产品修改读取不依赖供应商，PATCH 写入局部呈错且绝不自动重试', async () => {
