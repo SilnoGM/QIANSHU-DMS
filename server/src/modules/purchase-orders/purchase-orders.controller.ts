@@ -17,6 +17,7 @@ import {
 } from '@nestjs/common'
 import { ApiBody, ApiConsumes, ApiHeader, ApiTags } from '@nestjs/swagger'
 
+import { ImmutableMediaContentCache } from '../../infrastructure/http/private-no-store.interceptor'
 import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
@@ -205,6 +206,7 @@ export class PurchaseOrdersController {
   }
 
   @Head('product-options/:productId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('purchase-orders:create')
   @ApiProductMediaContentContract('HEAD', {
     operationId: 'purchase_orders_head_product_option_main_image',
@@ -228,6 +230,7 @@ export class PurchaseOrdersController {
   }
 
   @Get('product-options/:productId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('purchase-orders:create')
   @ApiProductMediaContentContract('GET', {
     operationId: 'purchase_orders_get_product_option_main_image',
@@ -304,6 +307,7 @@ export class PurchaseOrdersController {
   }
 
   @Head('source-sales-orders/:salesOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('purchase-orders:create')
   @ApiProductMediaContentContract('HEAD', {
     operationId: 'purchase_orders_head_source_sales_order_line_main_image',
@@ -328,6 +332,7 @@ export class PurchaseOrdersController {
   }
 
   @Get('source-sales-orders/:salesOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('purchase-orders:create')
   @ApiProductMediaContentContract('GET', {
     operationId: 'purchase_orders_get_source_sales_order_line_main_image',
@@ -355,6 +360,7 @@ export class PurchaseOrdersController {
   }
 
   @Head(':purchaseOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('purchase-orders:read')
   @ApiProductMediaContentContract('HEAD', {
     operationId: 'purchase_orders_head_product_preview_main_image',
@@ -379,6 +385,7 @@ export class PurchaseOrdersController {
   }
 
   @Get(':purchaseOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('purchase-orders:read')
   @ApiProductMediaContentContract('GET', {
     operationId: 'purchase_orders_get_product_preview_main_image',
