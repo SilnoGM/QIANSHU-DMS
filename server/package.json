@@ -28,6 +28,7 @@
     "media:accept:cos": "MEDIA_STORAGE_DRIVER=cos node ./scripts/cos-acceptance.cjs",
     "media:cleanup:expired-trash": "node dist/commands/media-operations.js cleanup-expired-trash",
     "media:migrate": "node dist/commands/media-migration.js",
+    "media:keys:replan": "node dist/commands/media-key-migration.js",
     "media:ops:health": "node dist/commands/media-operations.js health",
     "media:recovery:dry-run": "node dist/commands/media-operations.js recovery-dry-run",
     "typecheck": "pnpm prisma:generate && tsc --noEmit",
