@@ -567,7 +567,8 @@ describe('media schema constraints with isolated PostgreSQL', () => {
           [secondaryAssetId, `media/e2e/${randomUUID()}`],
         ),
         '23514',
-        'media_assets_content_identity_immutable_check',
+        // 键改写改由受控通道裁决：没有登记键对时与原来一样被硬拒，只是约束名不同。
+        'media_assets_object_key_rewrite_check',
         savepointIndex++,
       )
       await expectDatabaseRejection(
@@ -592,6 +593,142 @@ describe('media schema constraints with isolated PostgreSQL', () => {
         [productId],
       )
       expect(activeRows.rows).toEqual([{ id: primaryProductMediaId }])
+    }
+    finally {
+      await client.query('ROLLBACK')
+    }
+  })
+
+  it('rewrites an object key only through a registered migration key pair', async () => {
+    await client.query('BEGIN')
+    try {
+      const actorUserId = randomUUID()
+      const username = `media_key_e2e_${randomUUID().replaceAll('-', '')}`
+      await client.query(
+        `
+          INSERT INTO "users" (
+            "id",
+            "username",
+            "username_normalized",
+            "display_name",
+            "password_hash",
+            "password_changed_at",
+            "updated_at"
+          )
+          VALUES ($1, $2, $2, 'Media Key E2E', 'not-used', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `,
+        [actorUserId, username],
+      )
+
+      const assetId = await insertUploadingAsset(client, actorUserId, 'IMAGE')
+      const otherAssetId = await insertUploadingAsset(client, actorUserId, 'IMAGE')
+      const oldKey = `assets/2026/08/${assetId}.webp`
+      const newKey = `assets/dev/product/2026/08/${assetId}.webp`
+      // 走 UPLOADING → FAILED → PURGED：PURGED 属于内容身份锁定态，且不需要领域引用即可构造。
+      await client.query(
+        `
+          UPDATE "media_assets"
+          SET
+            "object_key" = $2,
+            "mime_type" = 'image/webp',
+            "size_bytes" = 321,
+            "checksum_sha256" = $3,
+            "width" = 640,
+            "height" = 480,
+            "status" = 'FAILED',
+            "failure_code" = 'MEDIA_ASSET_STORAGE_FAILED'
+          WHERE "id" = $1
+        `,
+        [assetId, oldKey, 'c'.repeat(64)],
+      )
+      await client.query(
+        `
+          UPDATE "media_assets"
+          SET
+            "status" = 'PURGED',
+            "deleted_at" = CURRENT_TIMESTAMP,
+            "upload_expires_at" = NULL
+          WHERE "id" = $1
+        `,
+        [assetId],
+      )
+
+      let savepointIndex = 0
+      await expectDatabaseRejection(
+        client,
+        () => client.query(
+          'UPDATE "media_assets" SET "object_key" = $2 WHERE "id" = $1',
+          [assetId, newKey],
+        ),
+        '23514',
+        'media_assets_object_key_rewrite_check',
+        savepointIndex++,
+      )
+      // 键对登记必须与资产绑定：登记在别的资产名下时这条改写仍然被拒。
+      await expectDatabaseRejection(
+        client,
+        async () => {
+          await client.query(
+            `
+              INSERT INTO "media_object_key_migrations" ("asset_id", "old_key", "new_key")
+              VALUES ($1, $2, $3)
+            `,
+            [otherAssetId, oldKey, newKey],
+          )
+          await client.query(
+            'UPDATE "media_assets" SET "object_key" = $2 WHERE "id" = $1',
+            [assetId, newKey],
+          )
+        },
+        '23514',
+        'media_assets_object_key_rewrite_check',
+        savepointIndex++,
+      )
+
+      await client.query(
+        `
+          INSERT INTO "media_object_key_migrations" ("asset_id", "old_key", "new_key")
+          VALUES ($1, $2, $3)
+        `,
+        [assetId, oldKey, newKey],
+      )
+      const forward = await client.query(
+        'UPDATE "media_assets" SET "object_key" = $2 WHERE "id" = $1',
+        [assetId, newKey],
+      )
+      expect(forward.rowCount).toBe(1)
+      await client.query(
+        `
+          UPDATE "media_object_key_migrations"
+          SET "applied_at" = CURRENT_TIMESTAMP
+          WHERE "asset_id" = $1
+        `,
+        [assetId],
+      )
+      // 反方向同样放行：回滚走的是同一个登记键对。
+      const reversed = await client.query(
+        'UPDATE "media_assets" SET "object_key" = $2 WHERE "id" = $1',
+        [assetId, oldKey],
+      )
+      expect(reversed.rowCount).toBe(1)
+
+      // 登记只对 object_key 生效：其余内容身份列仍然完全不可变。
+      await expectDatabaseRejection(
+        client,
+        () => client.query(
+          'UPDATE "media_assets" SET "checksum_sha256" = $2 WHERE "id" = $1',
+          [assetId, 'd'.repeat(64)],
+        ),
+        '23514',
+        'media_assets_content_identity_immutable_check',
+        savepointIndex++,
+      )
+
+      const stored = await client.query<{ objectKey: string | null }>(
+        'SELECT "object_key" AS "objectKey" FROM "media_assets" WHERE "id" = $1',
+        [assetId],
+      )
+      expect(stored.rows).toEqual([{ objectKey: oldKey }])
     }
     finally {
       await client.query('ROLLBACK')

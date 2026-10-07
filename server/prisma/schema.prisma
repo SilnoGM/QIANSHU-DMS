@@ -891,6 +891,7 @@ model MediaAsset {
   deletedAt        DateTime?        @map("deleted_at") @db.Timestamptz(6)
 
   createdBy           User                 @relation("MediaAssetCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  keyMigrations       MediaObjectKeyMigration[]
   packagingCostImages PackagingCostRequest[] @relation("PackagingCostImage")
   packagingPaymentImages PackagingCostRequest[] @relation("PackagingPaymentImage")
   packagingRecipientSnapshots PackagingCostRequest[] @relation("PackagingPaymentRecipientQr")
@@ -907,6 +908,24 @@ model MediaAsset {
   @@index([packagingCostUploadId], map: "media_assets_packaging_cost_upload_idx")
   @@index([purchasePayableUploadId], map: "media_assets_purchase_payable_upload_idx")
   @@map("media_assets")
+}
+
+/// 存量对象键重命名的受控通道：登记「允许从 old_key 改成 new_key」的键对。
+///
+/// 这个表是迁移专用设施，不是业务数据：READY/TRASHED/PURGED 状态下 object_key 由
+/// `enforce_media_asset_invariants` 保护为不可变，只有在此登记过的键对才能被双向改写
+/// （正向＝迁移，反向＝回滚）。表在迁移与观察期结束后，随「恢复严格不可变 + 删表」的回收迁移
+/// 一起移除；不要再向它写入其它用途的映射。
+model MediaObjectKeyMigration {
+  assetId   String    @id @map("asset_id") @db.Uuid
+  oldKey    String    @map("old_key") @db.VarChar(512)
+  newKey    String    @map("new_key") @db.VarChar(512)
+  plannedAt DateTime  @default(now()) @map("planned_at") @db.Timestamptz(6)
+  appliedAt DateTime? @map("applied_at") @db.Timestamptz(6)
+
+  asset MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@map("media_object_key_migrations")
 }
 
 model ProductMedia {
