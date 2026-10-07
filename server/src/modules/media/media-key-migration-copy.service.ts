@@ -5,9 +5,14 @@ import type { MediaKeyMigrationCandidate } from './media-key-migration.service'
 /**
  * 复制阶段的三个端口都用最小接口：对象存储的真实实现（CosObjectClient / CosMediaStorage）结构性满足它们，
  * 单测与命令层不必为了注入而构造完整的 MediaStorage 端口。
+ *
+ * `putObject` 携带 assetId：本地驱动没有「按任意键写入 assets」的原语，它的复制实现要先写 staging 再
+ * finalize，而 staging 键需要资产标识（`staging/{assetId}.{uuid}.part`）。把它放进请求里，复制实现
+ * 就能保持无状态；对象存储实现忽略该字段。
  */
 export interface MediaKeyMigrationCopyClient {
   putObject(request: {
+    readonly assetId: string
     readonly contentLength: number
     readonly key: string
     readonly sha256: string
@@ -120,6 +125,7 @@ export class MediaKeyMigrationCopyService implements MediaKeyMigrationCopyOperat
       const stored = await this.dependencies.source.openManagedObject(candidate.oldKey)
       try {
         await this.dependencies.client.putObject({
+          assetId: candidate.assetId,
           contentLength: Number(stored.sizeBytes),
           key: candidate.newKey,
           sha256: checksumSha256,

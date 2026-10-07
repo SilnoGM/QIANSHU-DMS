@@ -1,3 +1,5 @@
+import { PassThrough, Readable } from 'node:stream'
+
 import type { MediaKeyMigrationCopyOperations } from '../modules/media/media-key-migration-copy.service'
 import type {
   MediaKeyMigrationApplyResult,
@@ -8,6 +10,7 @@ import type {
   MediaKeyMigrationRegistrationResult,
 } from '../modules/media/media-key-migration.service'
 import {
+  createLocalCopyClient,
   runApplyMigration,
   runCopyMigration,
   runCopyMigrationFromEnvironment,
@@ -348,17 +351,60 @@ describe('runMediaKeyMigrationCli', () => {
     }))
   })
 
-  it('refuses the copy mode with a fixed failure when the storage driver is not cos', async () => {
+  it('fails closed with the fixed event when the configured storage cannot be mounted', async () => {
     const { dependencies, error, log, processRef } = cliFixture({
-      runCopy: () => runCopyMigrationFromEnvironment({ MEDIA_STORAGE_DRIVER: 'local' }),
+      // 本地驱动也支持复制，但存储根不可用时必须在装配阶段失败关闭，而不是报告「什么都没复制」。
+      runCopy: () => runCopyMigrationFromEnvironment({
+        MEDIA_STORAGE_DRIVER: 'local',
+        MEDIA_STORAGE_ROOT: '/',
+      }),
     })
 
     await runMediaKeyMigrationCli(['copy'], dependencies)
 
-    // 本地驱动没有跨键复制端口：装配阶段就失败关闭，不产生任何事件外的输出。
     expect(processRef.exitCode).toBe(1)
     expect(error).toHaveBeenCalledWith('{"kind":"media_key_migration","status":"failed"}')
     expect(log).not.toHaveBeenCalled()
+  })
+
+  it('copies through staging and finalize for the local driver and cancels on failure', async () => {
+    const assetId = '00000000-0000-4000-8000-000000000321'
+    const order: string[] = []
+    const cancel = jest.fn(async () => { order.push('cancel') })
+    const createStagingWrite = jest.fn(async () => {
+      order.push('staging')
+      return { cancel, key: `staging/${assetId}.00000000-0000-4000-8000-000000000777.part`, stream: new PassThrough() }
+    })
+    const finalize = jest.fn(async (_stagingKey: string, objectKey: string) => {
+      order.push(`finalize:${objectKey}`)
+    })
+    const client = createLocalCopyClient({ createStagingWrite, finalize } as never)
+
+    await client.putObject({
+      assetId,
+      contentLength: 3,
+      key: `assets/dev/product/2026/08/${assetId}.webp`,
+      sha256: 'a'.repeat(64),
+      stream: Readable.from([Buffer.from('abc')]),
+    })
+
+    expect(order).toEqual(['staging', `finalize:assets/dev/product/2026/08/${assetId}.webp`])
+    expect(cancel).not.toHaveBeenCalled()
+
+    // 落位失败必须取消 staging 写入并向上抛错：半成品留在磁盘上会阻塞后续重试。
+    const failingFinalize = jest.fn(async () => { throw new Error('media storage conflict') })
+    const failingClient = createLocalCopyClient({
+      createStagingWrite,
+      finalize: failingFinalize,
+    } as never)
+    await expect(failingClient.putObject({
+      assetId,
+      contentLength: 3,
+      key: `assets/dev/product/2026/08/${assetId}.webp`,
+      sha256: 'a'.repeat(64),
+      stream: Readable.from([Buffer.from('abc')]),
+    })).rejects.toThrow('media storage conflict')
+    expect(cancel).toHaveBeenCalledTimes(1)
   })
 
   it('fails with one fixed event and never touches the runner for unsupported input', async () => {

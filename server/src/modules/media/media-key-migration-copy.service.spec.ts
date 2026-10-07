@@ -20,6 +20,7 @@ const OTHER_OLD_KEY = `assets/2026/08/${OTHER_ASSET_ID}.webp`
 const OTHER_NEW_KEY = `assets/prod/product/2026/08/${OTHER_ASSET_ID}.webp`
 
 interface PutRequest {
+  readonly assetId: string
   readonly contentLength: number
   readonly key: string
   readonly sha256: string
@@ -140,10 +141,13 @@ describe('MediaKeyMigrationCopyService.copyBatch', () => {
 
     expect(fixture.source.opened).toEqual([OLD_KEY])
     expect(fixture.client.puts.map(put => ({
+      assetId: put.assetId,
       contentLength: put.contentLength,
       key: put.key,
       sha256: put.sha256,
     }))).toEqual([{
+      // assetId 供本地驱动派生 staging 键；对象存储实现忽略它，但请求合同必须带上。
+      assetId: ASSET_ID,
       contentLength: Number(SIZE_BYTES),
       key: NEW_KEY,
       sha256: CHECKSUM,

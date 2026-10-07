@@ -1,6 +1,8 @@
 import 'dotenv/config'
 import 'reflect-metadata'
 
+import { pipeline } from 'node:stream/promises'
+
 import {
   createMediaConfiguration,
   type CosMediaConfiguration,
@@ -16,8 +18,10 @@ import {
   deriveLocalMediaConfiguration,
 } from '../modules/media/cos-media-storage'
 import { LocalMediaStorage } from '../modules/media/local-media-storage'
+import type { MediaStorage } from '../modules/media/media-storage'
 import {
   MediaKeyMigrationCopyService,
+  type MediaKeyMigrationCopyClient,
   type MediaKeyMigrationCopyOperations,
   type MediaKeyMigrationCopySource,
   type MediaKeyMigrationCopyTarget,
@@ -83,6 +87,13 @@ const MIGRATION_MODES: readonly MediaKeyMigrationMode[] = ['apply', 'copy', 'pre
 type MediaKeyMigrationStorages = MediaKeyMigrationStorage
   & MediaKeyMigrationCopySource
   & MediaKeyMigrationCopyTarget
+  /** 本地复制端复用上传管线的两步落位；对象存储端不需要，但端口类型必须涵盖两者。 */
+  & Pick<MediaStorage, 'createStagingWrite' | 'finalize'>
+
+interface MediaKeyMigrationStoragePorts {
+  readonly cosClient: CosObjectClient | null
+  readonly ports: MediaKeyMigrationStorages
+}
 
 function parseMode(argv: readonly string[]): MediaKeyMigrationMode {
   if (argv.length !== 1 || !MIGRATION_MODES.includes(argv[0] as MediaKeyMigrationMode)) {
@@ -207,20 +218,47 @@ function createMigrationService(
 }
 
 /**
- * 改键前要核对目标键上的对象，因此 apply 也必须装配存储：cos 用对象存储，local 用本地目录。
- * 复制阶段（copy）只支持 cos，两者在这里分开装配。
+ * 改键前要核对目标键上的对象，因此 apply 也要装配存储：cos 用对象存储，local 用本地目录。
+ * cos 客户端同时被复制阶段复用（返回它以免重复装配）。
  */
-async function createStorages(
+async function createStoragePorts(
   configuration: MediaConfiguration,
   environment: Record<string, unknown>,
-): Promise<MediaKeyMigrationStorages> {
+): Promise<MediaKeyMigrationStoragePorts> {
   if (configuration.driver !== 'cos') {
-    return LocalMediaStorage.create(deriveLocalMediaConfiguration(configuration))
+    return {
+      cosClient: null,
+      ports: await LocalMediaStorage.create(deriveLocalMediaConfiguration(configuration)),
+    }
   }
-  return CosMediaStorage.create(
-    configuration,
-    createCosClient(configuration, environment),
-  )
+  const cosClient = createCosClient(configuration, environment)
+  return {
+    cosClient,
+    ports: await CosMediaStorage.create(configuration, cosClient),
+  }
+}
+
+/**
+ * 本地驱动的复制端：把源字节写进 staging，再用 finalize 落位到目标键。
+ *
+ * 本地端口刻意没有「按任意键写入 assets」的原语（写入与投递都只认受控入口），因此复制复用上传管线的
+ * 两步：staging 独占写入 + rename 原子落位。目标已存在时 finalize 抛 `MEDIA_STORAGE_CONFLICT`，
+ * 与对象存储端「不覆盖任何已有对象」的语义一致；源对象始终保留。
+ */
+export function createLocalCopyClient(ports: MediaKeyMigrationStorages): MediaKeyMigrationCopyClient {
+  return {
+    putObject: async ({ assetId, key, stream }) => {
+      const staging = await ports.createStagingWrite(assetId)
+      try {
+        await pipeline(stream, staging.stream)
+        await ports.finalize(staging.key, key)
+      }
+      catch (error) {
+        await staging.cancel().catch(() => undefined)
+        throw error
+      }
+    },
+  }
 }
 
 function createCosClient(
@@ -242,32 +280,28 @@ async function defaultRunMigration(
   mode: MediaKeyMigrationPlanMode,
 ): Promise<MediaKeyMigrationReport> {
   const configuration = createMediaConfiguration(process.env)
-  const storage = await createStorages(configuration, process.env)
+  const { ports } = await createStoragePorts(configuration, process.env)
   return withPrisma((prisma) => {
-    const operations = createMigrationService(prisma, configuration, storage)
+    const operations = createMigrationService(prisma, configuration, ports)
     return mode === 'preview' ? runPreviewMigration(operations) : runApplyMigration(operations)
   })
 }
 
 /**
- * copy 的装配：只读候选（数据库）＋ 桶内跨键复制（对象存储）。
+ * copy 的装配：只读候选（数据库）＋ 跨键复制（对象存储或本地目录）。
  *
- * 装配前必须确认 cos 驱动：本地驱动没有跨键复制端口，且规范规定 dev 的本地媒体不迁移、直接重建，
- * 因此这里失败关闭，而不是退化成「什么都没做但报告成功」。
+ * 两种驱动都受支持，但复制端的实现不同：cos 直写对象存储并落下 `x-cos-meta-sha256` 元数据；
+ * local 走 staging + finalize（本地端口没有按任意键写入的原语）。两者都只复制、不写数据库、不删源。
  */
 export async function runCopyMigrationFromEnvironment(
   environment: Record<string, unknown>,
 ): Promise<MediaKeyMigrationCopyReport> {
   const configuration = createMediaConfiguration(environment)
-  if (configuration.driver !== 'cos') {
-    throw new Error('Media key migration copy requires the cos storage driver')
-  }
-
-  const client = createCosClient(configuration, environment)
-  const storage = await CosMediaStorage.create(configuration, client)
+  const { cosClient, ports } = await createStoragePorts(configuration, environment)
+  const client = cosClient ?? createLocalCopyClient(ports)
   return withPrisma((prisma) => runCopyMigration(
-    createMigrationService(prisma, configuration, storage),
-    new MediaKeyMigrationCopyService({ client, source: storage, target: storage }),
+    createMigrationService(prisma, configuration, ports),
+    new MediaKeyMigrationCopyService({ client, source: ports, target: ports }),
   ))
 }
 
