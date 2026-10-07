@@ -40,6 +40,7 @@ test('Server release 包含媒体部署模板且模板不携带真实 Secret', a
   )
   for (const expected of [
     'MEDIA_STORAGE_DRIVER=local',
+    'MEDIA_STORAGE_ENV=dev',
     'MEDIA_STORAGE_ROOT=/var/lib/qianshu-dms/media',
     'MEDIA_FFPROBE_PATH=/usr/bin/ffprobe',
     'MEDIA_QPDF_PATH=/usr/bin/qpdf',
@@ -47,6 +48,12 @@ test('Server release 包含媒体部署模板且模板不携带真实 Secret', a
   ]) {
     assert.match(environment, new RegExp(`^${expected}$`, 'mu'))
   }
+  // 对象键的环境段必须出现在两套模板里：cos 驱动缺它会在启动时失败关闭，
+  // 模板漏写会让部署方在第一次启动才发现。
+  assert.match(
+    await read('deploy/docker/server.env.example'),
+    /^MEDIA_STORAGE_ENV=(?:dev|test|prod)$/mu,
+  )
   assert.match(environment, /^DATABASE_URL=$/mu)
   assert.match(environment, /^AUTH_USERNAME_HMAC_KEY=$/mu)
   assert.doesNotMatch(environment, /postgres(?:ql)?:\/\/[^\s]*@/u)

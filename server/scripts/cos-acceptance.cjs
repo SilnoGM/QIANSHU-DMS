@@ -4,8 +4,9 @@
  * 真实桶受控验收（`pnpm -C server media:accept:cos`，需先 `pnpm build` 且具备 `MEDIA_COS_*`）。
  *
  * 只创建/读取/搬运一个临时对象，结束时删除；只输出布尔与计数，不打印凭据、预签名 URL、桶名或对象键。
- * 退出码非零代表验收未通过；被强杀（跳过 finally）时最多留下一个 `assets/YYYY/MM/<uuid>.bin` 孤儿对象，
- * 由只读 `dry run` 的 `orphanObject` 暴露后人工清理。该脚本不进入发布归档，只在本地 checkout 内运行。
+ * 退出码非零代表验收未通过；被强杀（跳过 finally）时最多留下一个
+ * `assets/{env}/misc/YYYY/MM/<uuid>.bin` 孤儿对象，由只读 `dry run` 的 `orphanObject` 暴露后人工清理。
+ * 该脚本不进入发布归档，只在本地 checkout 内运行。
  */
 require('dotenv/config')
 
@@ -40,8 +41,10 @@ async function main() {
   const storage = await CosMediaStorage.create(configuration, client)
 
   const assetId = randomUUID()
-  const objectKey = `assets/2026/10/${assetId}.bin`
-  const trashKey = `trash/2026/10/${assetId}.bin`
+  // 采用与运行期一致的键布局：探针对象落在既有业务池之外，并在结束时删除。
+  const keyRoot = `${configuration.storageEnvironment}/misc/2026/10`
+  const objectKey = `assets/${keyRoot}/${assetId}.bin`
+  const trashKey = `trash/${keyRoot}/${assetId}.bin`
   const bytes = Buffer.alloc(1024 * 1024 + 7)
   for (let index = 0; index < bytes.length; index += 1) bytes[index] = index % 251
   const digest = createHash('sha256').update(bytes).digest('hex')
@@ -81,7 +84,7 @@ async function main() {
 
     check('checksumSha256 全文摘要', await storage.checksumSha256(objectKey) === digest)
 
-    const page = await storage.inventory({ limit: 10, namespace: 'assets', prefix: 'assets/2026/10' })
+    const page = await storage.inventory({ limit: 10, namespace: 'assets', prefix: `assets/${keyRoot}` })
     check('inventory 列出对象', page.objects.some(object => object.key === objectKey), `count=${page.objects.length}`)
 
     await storage.moveToTrash(objectKey, trashKey)
@@ -99,7 +102,7 @@ async function main() {
     // 无论成败都清理：这两个键是本次验收唯一的残留面。
     await storage.purge(objectKey).catch(() => undefined)
     await storage.purge(trashKey).catch(() => undefined)
-    const residue = await storage.inventory({ limit: 10, namespace: 'assets', prefix: 'assets/2026/10' }).catch(() => null)
+    const residue = await storage.inventory({ limit: 10, namespace: 'assets', prefix: `assets/${keyRoot}` }).catch(() => null)
     const leftover = residue === null
       ? '无法确认'
       : String(residue.objects.filter(object => object.key.includes(assetId)).length)
