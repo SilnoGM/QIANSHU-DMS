@@ -41,6 +41,7 @@ function createFixture(options: {
   const markTrashPurged = jest.fn().mockResolvedValue(true)
   const listAssets = jest.fn().mockResolvedValue({ nextCursor: null, records: [] })
   const readAssetsByIds = jest.fn().mockResolvedValue([])
+  const readObjectKeyMigrations = jest.fn().mockResolvedValue([])
   const transaction = {} as Prisma.TransactionClient
   const withExpiredUploadClaim = jest.fn().mockImplementation(async (
     _now: Date,
@@ -63,6 +64,7 @@ function createFixture(options: {
     markExpiredPurged,
     markTrashPurged,
     readAssetsByIds,
+    readObjectKeyMigrations,
     withExpiredTrashClaim,
     withExpiredUploadClaim,
   } as unknown as MediaReconciliationPersistence
@@ -98,6 +100,7 @@ function createFixture(options: {
     markTrashPurged,
     purge,
     readAssetsByIds,
+    readObjectKeyMigrations,
     service,
     stat,
     withExpiredTrashClaim,
@@ -309,6 +312,54 @@ describe('MediaReconciliationService', () => {
       storageScanned: 2,
       matched: 1,
       issues: { orphanObject: 0, unmappableObject: 0, unexpectedLocation: 0 },
+    })
+  })
+
+  it('treats a registered migration counterpart key as a legal location', async () => {
+    const fixture = createFixture()
+    const newKey = `assets/dev/product/2026/08/${ASSET_ID}.webp`
+    // 登记键对 = 复制阶段完成后「旧键与新键同时存在」的窗口期白名单。
+    fixture.readObjectKeyMigrations.mockResolvedValue([
+      { assetId: ASSET_ID, newKey, oldKey: OBJECT_KEY },
+    ])
+    fixture.inventory.mockImplementation(({ namespace }: { namespace: string }) =>
+      Promise.resolve(namespace === 'assets'
+        ? { nextCursor: null, objects: [{ key: newKey, modifiedAt: NOW, sizeBytes: 321n }] }
+        : { nextCursor: null, objects: [] }))
+    fixture.readAssetsByIds.mockResolvedValue([asset(MediaAssetStatus.READY)])
+
+    const result = await fixture.service.dryRun({ batchSize: 100, maxBatches: 10 })
+
+    // 数据库里仍是旧键，但新键是登记过的对端位置：算匹配，不算位置异常。
+    expect(result).toMatchObject({
+      matched: 1,
+      issues: { unexpectedLocation: 0, orphanObject: 0 },
+    })
+  })
+
+  it('still reports a location that no registration covers', async () => {
+    const fixture = createFixture()
+    fixture.readObjectKeyMigrations.mockResolvedValue([
+      { assetId: ASSET_ID, newKey: `assets/dev/product/2026/08/${ASSET_ID}.webp`, oldKey: OBJECT_KEY },
+    ])
+    fixture.inventory.mockImplementation(({ namespace }: { namespace: string }) =>
+      Promise.resolve(namespace === 'assets'
+        ? {
+            nextCursor: null,
+            objects: [{
+              key: `assets/dev/bill/2026/08/${ASSET_ID}.webp`,
+              modifiedAt: NOW,
+              sizeBytes: 321n,
+            }],
+          }
+        : { nextCursor: null, objects: [] }))
+    fixture.readAssetsByIds.mockResolvedValue([asset(MediaAssetStatus.READY)])
+
+    const result = await fixture.service.dryRun({ batchSize: 100, maxBatches: 10 })
+
+    expect(result).toMatchObject({
+      matched: 0,
+      issues: { unexpectedLocation: 1, orphanObject: 0 },
     })
   })
 

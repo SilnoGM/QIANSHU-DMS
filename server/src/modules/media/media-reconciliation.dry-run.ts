@@ -12,6 +12,7 @@ import type {
 } from './media-storage'
 import type {
   MediaReconciliationPersistence,
+  ObjectKeyMigrationPair,
   ReconciliationAssetRecord,
 } from './media-reconciliation.persistence'
 import { trashKeyFor } from './media-retention.service'
@@ -168,16 +169,48 @@ async function inspectDatabaseRecord(
   return 'MATCHED'
 }
 
+/**
+ * 对象键重命名迁移期：登记过的「对端键」同样算合法位置。
+ *
+ * 复制阶段完成后旧键与新键会同时存在，改键之后又反过来；只认数据库里当前那一个键，会把同一份内容的
+ * 另一半判成 `unexpectedLocation`，让迁移窗口内的告警全部变成噪声。登记表就是这段窗口期的白名单，
+ * 阶段 7 删除旧键、回收迁移删表之后，这条放宽自然消失。
+ */
+/** 把登记键对折成「资产 → 合法键集合」，键与资产标识统一小写后比较。 */
+function toAssetMigrationMap(
+  pairs: readonly ObjectKeyMigrationPair[],
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const byAsset = new Map<string, Set<string>>()
+  for (const pair of pairs) {
+    const assetId = pair.assetId.toLowerCase()
+    const keys = byAsset.get(assetId) ?? new Set<string>()
+    keys.add(pair.oldKey)
+    keys.add(pair.newKey)
+    byAsset.set(assetId, keys)
+  }
+  return byAsset
+}
+
+function isRegisteredMigrationLocation(
+  assetMigrations: ReadonlyMap<string, ReadonlySet<string>> | undefined,
+  assetId: string,
+  key: string,
+): boolean {
+  return assetMigrations?.get(assetId.toLowerCase())?.has(key) === true
+}
+
 function isExpectedStorageObject(
   namespace: MediaStorageNamespace,
   key: string,
   record: ReconciliationAssetRecord,
+  assetMigrations?: ReadonlyMap<string, ReadonlySet<string>>,
 ): boolean {
   if (namespace === 'staging') {
     return record.status === MediaAssetStatus.UPLOADING ||
       record.status === MediaAssetStatus.FAILED
   }
   if (record.objectKey === null) return false
+  if (isRegisteredMigrationLocation(assetMigrations, record.id, key)) return true
   if (namespace === 'assets') {
     return key === record.objectKey && (
       record.status === MediaAssetStatus.READY ||
@@ -195,6 +228,7 @@ async function inspectStoragePage(
   page: MediaStorageInventoryPage,
   issues: MutableIssueCounts,
   storageEnvironment: MediaStorageEnvironment,
+  assetMigrations: ReadonlyMap<string, ReadonlySet<string>>,
 ): Promise<number> {
   const keyedObjects = page.objects.map(object => ({
     classification: classifyStorageObject(object.key, storageEnvironment),
@@ -220,7 +254,7 @@ async function inspectStoragePage(
       issues.orphanObject += 1
       continue
     }
-    if (isExpectedStorageObject(namespace, item.object.key, record)) {
+    if (isExpectedStorageObject(namespace, item.object.key, record, assetMigrations)) {
       matched += 1
     }
     else {
@@ -247,6 +281,9 @@ export async function runMediaReconciliationDryRun(
     unexpectedLocation: 0,
     unmappableObject: 0,
   }
+  const assetMigrations = toAssetMigrationMap(
+    await persistence.readObjectKeyMigrations(),
+  )
   let databaseScanned = 0
   let storageScanned = 0
   let matched = 0
@@ -296,6 +333,7 @@ export async function runMediaReconciliationDryRun(
         page,
         issues,
         options.storageEnvironment,
+        assetMigrations,
       )
       storageCursor = page.nextCursor ?? undefined
     } while (storageCursor !== undefined)

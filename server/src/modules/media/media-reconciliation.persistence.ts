@@ -16,6 +16,13 @@ export interface ExpiredAssetTransition {
   readonly status: 'FAILED' | 'UPLOADING'
 }
 
+/** 迁移期登记的「旧键 → 新键」对；对账据此把两个位置都视为合法。 */
+export interface ObjectKeyMigrationPair {
+  readonly assetId: string
+  readonly newKey: string
+  readonly oldKey: string
+}
+
 export interface ReconciliationAssetPage {
   readonly nextCursor: string | null
   readonly records: readonly ReconciliationAssetRecord[]
@@ -228,6 +235,19 @@ export class MediaReconciliationPersistence {
         sizeBytes: true,
         status: true,
       },
+    })
+    return Object.freeze(records.map(record => Object.freeze({ ...record })))
+  }
+
+  /**
+   * 读取存量键重命名的登记键对（迁移期专用，通常只有几十到几万行）。
+   *
+   * 对账需要它才能把「登记过的对端键」也算作合法位置：复制阶段完成后旧键与新键会同时存在，
+   * 只认数据库里那一个键会把另一半判成 unexpectedLocation，迁移窗口内的告警就全是噪声。
+   */
+  async readObjectKeyMigrations(): Promise<readonly ObjectKeyMigrationPair[]> {
+    const records = await this.prisma.mediaObjectKeyMigration.findMany({
+      select: { assetId: true, newKey: true, oldKey: true },
     })
     return Object.freeze(records.map(record => Object.freeze({ ...record })))
   }
