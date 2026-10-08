@@ -764,9 +764,11 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
     true,
   )
 
-  // 首页已无权限门槛：无管理权限身份登录后落在欢迎页而不是 403 页，
-  // 因此以欢迎页标题作为业务 Shell 已就绪的判据；管理菜单仍不得出现。
-  await restartedPage.waitFor(`document.body.innerText.includes('欢迎使用千树数据管理平台')`)
+  // 首页已无权限门槛：无管理权限身份登录后落在首页而不是 403 页。
+  // 首页已清空为空白页，内容不再是可用判据，改以 hash 落在首页且业务布局
+  // （header）已渲染作为业务 Shell 已就绪的判据——403 页面由 AppNotAllowed
+  // 整页替换布局渲染，没有 header，因此 header 出现即证明未落入 403；管理菜单仍不得出现。
+  await restartedPage.waitFor(`location.hash === '#/' && document.querySelector('header') !== null`)
   assert.equal(
     await restartedPage.evaluate(`document.body.innerText.includes('用户管理')`),
     false,
