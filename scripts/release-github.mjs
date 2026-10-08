@@ -469,6 +469,20 @@ export async function verifyRemoteReleaseTag(client, expected) {
   ) {
     throw new GitHubApiError('Remote annotated Tag object is invalid')
   }
+  // 面向使用者的版本说明只有一个真相源：annotated Tag 的 message。
+  // Release 正文由它派生，因此这里必须证明 message 存在且不与机器标记冲突。
+  if (typeof tagObject.message !== 'string') {
+    throw new GitHubApiError('Remote annotated Tag message is invalid')
+  }
+  const tagMessage = tagObject.message.trimEnd()
+  if (tagMessage === '') {
+    throw new GitHubApiError('Remote annotated Tag message is empty')
+  }
+  if (tagMessage.includes(ownershipMarkerPrefix)) {
+    throw new GitHubApiError(
+      'Remote annotated Tag message conflicts with the ownership marker',
+    )
+  }
 
   const tagRefs = await readAllPages(
     client,
@@ -535,6 +549,7 @@ export async function verifyRemoteReleaseTag(client, expected) {
     tag: normalized.tag,
     tagObjectSha: normalized.tagObjectSha,
     sourceCommit: normalized.sourceCommit,
+    tagMessage,
   })
 }
 
@@ -668,16 +683,24 @@ function normalizeMarkerIdentity(identity) {
   })
 }
 
+const ownershipMarkerPrefix = '<!-- qianshu-release:'
+
 export function createOwnershipMarker(identity) {
   const normalized = normalizeMarkerIdentity(identity)
-  return `<!-- qianshu-release:${JSON.stringify(normalized)} -->`
+  return `${ownershipMarkerPrefix}${JSON.stringify(normalized)} -->`
+}
+
+// Release 正文固定为「机器标记 + annotated Tag 说明」：标记供所有权校验，说明供人阅读。
+// Tag 与 Release 因此共享同一份面向使用者的文案，不需要手工编辑 Release 正文。
+export function createReleaseBody(identity, tagMessage) {
+  return `${createOwnershipMarker(identity)}\n\n${tagMessage}\n`
 }
 
 export function parseOwnershipMarker(body) {
   if (typeof body !== 'string') {
     throw new TypeError('Release ownership marker body is invalid')
   }
-  const prefix = '<!-- qianshu-release:'
+  const prefix = ownershipMarkerPrefix
   const prefixCount = body.split(prefix).length - 1
   const matches = [...body.matchAll(
     /<!-- qianshu-release:(\{[^\r\n]*\}) -->/gu,
@@ -1182,7 +1205,7 @@ async function reconcileAssets(
   return remote
 }
 
-async function createOrResumeDraft(client, input, marker) {
+async function createOrResumeDraft(client, input, marker, tagMessage) {
   let releases = await listReleases(client, input.repository)
   let release = findReleaseForTag(releases, input.tag)
   if (release !== undefined) {
@@ -1196,10 +1219,10 @@ async function createOrResumeDraft(client, input, marker) {
     tag_name: input.tag,
     target_commitish: input.sourceCommit,
     name: input.tag,
-    body: createOwnershipMarker(marker),
+    body: createReleaseBody(marker, tagMessage),
     draft: true,
     prerelease: false,
-    generate_release_notes: true,
+    generate_release_notes: false,
   }
   try {
     await client.post(
@@ -1273,7 +1296,12 @@ export async function coordinateDraftRelease(input, dependencies = {}) {
     client,
     remoteExpected,
   )
-  const release = await createOrResumeDraft(client, normalizedInput, marker)
+  const release = await createOrResumeDraft(
+    client,
+    normalizedInput,
+    marker,
+    firstRemoteIdentity.tagMessage,
+  )
   const initialLocalAssets = await readLocalAssets(
     normalizedInput,
     normalizedDependencies,

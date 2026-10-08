@@ -11,6 +11,7 @@ import {
   coordinateDraftRelease,
   createGitHubClient,
   createOwnershipMarker,
+  createReleaseBody,
   parseOwnershipMarker,
   parseReleaseGitHubArguments,
   verifyRemoteReleaseTag,
@@ -29,6 +30,7 @@ const tag = 'v1.2.3'
 const version = '1.2.3'
 const sourceCommit = 'b'.repeat(40)
 const tagObjectSha = 'a'.repeat(40)
+const tagMessage = `千树 DMS ${tag}\n\n新增功能\n- 面向使用者的版本说明原文`
 const artifactDigest = `sha256:${'f'.repeat(64)}`
 const runId = '123456789'
 const artifactId = '456'
@@ -335,6 +337,7 @@ function createGitHubFixture(options = {}) {
   state.tagObject ??= {
     sha: tagObjectSha,
     tag,
+    message: tagMessage,
     object: { type: 'commit', sha: sourceCommit },
   }
   state.compare ??= {
@@ -711,6 +714,7 @@ test('远端 Tag verifier 完整读取分页稳定 Tag、annotated object 与 ma
     tag,
     tagObjectSha,
     sourceCommit,
+    tagMessage,
   })
   assert.equal(Object.isFrozen(identity), true)
   assert.equal(
@@ -746,6 +750,32 @@ test('远端 Tag verifier 拒绝 lightweight、peel、main、版本与分页漂�
     },
     github => {
       github.paginationLink = () => '<https://evil.example/page=2>; rel="next"'
+    },
+  ]
+  for (const mutate of mutations) {
+    const github = createGitHubFixture()
+    mutate(github)
+    const client = createGitHubClient({
+      apiUrl,
+      token,
+      fetchImpl: github.fetchImpl,
+      clock: github.clock,
+      wait: github.wait,
+    })
+    await assert.rejects(
+      verifyRemoteReleaseTag(client, remoteTagExpected()),
+    )
+    assert.equal(github.mutations.length, 0)
+  }
+})
+
+test('远端 Tag verifier 要求非空且不含所有权标记的版本说明', async () => {
+  const mutations = [
+    github => { delete github.tagObject.message },
+    github => { github.tagObject.message = '' },
+    github => { github.tagObject.message = '   \n\n' },
+    github => {
+      github.tagObject.message = '千树 DMS\n\n<!-- qianshu-release:{} -->'
     },
   ]
   for (const mutate of mutations) {
@@ -829,11 +859,16 @@ test('无 Release 时创建 Draft、重读 author、上传六附件后唯一发�
     tag_name: tag,
     target_commitish: sourceCommit,
     name: tag,
-    body: createOwnershipMarker(markerIdentity()),
+    body: createReleaseBody(markerIdentity(), tagMessage),
     draft: true,
     prerelease: false,
-    generate_release_notes: true,
+    generate_release_notes: false,
   })
+  assert.match(
+    String(createPayload.body),
+    /面向使用者的版本说明原文/u,
+    'Release 正文必须带上 annotated Tag 的版本说明原文',
+  )
   assert.deepEqual(
     JSON.parse(String(github.mutations.at(-1).body)),
     { draft: false },
