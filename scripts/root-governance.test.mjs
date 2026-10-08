@@ -1621,9 +1621,9 @@ test('根 README 公开 CI、Release 与当前平台事实且不暗示根安装'
     assert.ok(releaseSection.includes(`\`${command}\``), `根 README 缺少命令：${command}`)
   }
   assert.ok(releaseSection.includes('根目录仍不执行 `pnpm install`'))
-  assert.ok(releaseSection.includes('`v0.1.2` 已完成 GitHub 平台验收'))
-  assert.ok(releaseSection.includes('Main CI Run `29317624359`'))
-  assert.ok(releaseSection.includes('Release Run `29317866199` attempt `2`'))
+  assert.ok(releaseSection.includes('平台证据表'))
+  assert.ok(releaseSection.includes('本文不复制会随每次发布变化的流水线身份'))
+  assert.doesNotMatch(releaseSection, /29317624359|29317866199|29240879781/u)
   assert.doesNotMatch(releaseSection, /平台验收以 Task 14 为准|当前不得.*平台已验收/u)
   assert.ok(rootCommands.includes('归档已构建的正式 Web 产物'))
   assert.ok(rootCommands.includes('归档已构建的 Server production 产物'))
@@ -1801,9 +1801,9 @@ test('工程方案记录三 Workflow、双端重建和本地与平台验收边�
   for (const fact of [
     '| 状态 | 工程组织基线已完成；用户认证与权限体系功能分支本地验收完成 |',
     '| 基线完成日期 | 2026-07-14 |',
-    '| 当前事实更新日期 | 2026-07-18 |',
-    '| 当前产品版本 | `v0.1.2` |',
-    '| 当前正式版本 Source Commit | `ec418b8a7dca9c0da51770f6559813f3c7059077` |',
+    '| 当前事实更新日期 | 2026-10-08 |',
+    '| 当前产品版本 | `v0.4.0` |',
+    '| 当前正式版本 Source Commit | `dab103fe3e9987a0fa2981ae6127184e12b450a3` |',
     'Server release archive packaging',
     'Main CI Run `29317624359`',
     'Release Run `29317866199`',
