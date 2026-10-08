@@ -9,6 +9,7 @@ import {
 } from '../../../generated/prisma/enums'
 import type { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { MediaContentDeliveryService } from '../../media/media-content-delivery.service'
+import type { MediaVariantService } from '../../media/media-variant.service'
 import type { MediaStorage } from '../../media/media-storage'
 import {
   ProductMediaContentService,
@@ -74,10 +75,13 @@ function createFixture(
     open,
     stat,
   } as unknown as MediaStorage, mode)
+  // 变体渲染默认返回 null（等价于派生失败），需要断言变体行为的用例再覆盖 render 结果。
+  const render = jest.fn().mockResolvedValue(null)
+  const variants = { render } as unknown as MediaVariantService
   const service = new ProductMediaContentService({
     productMedia: { findFirst },
-  } as unknown as PrismaService, delivery)
-  return { findFirst, open, service, stat }
+  } as unknown as PrismaService, delivery, variants)
+  return { findFirst, open, render, service, stat }
 }
 
 describe('ProductMediaContentService', () => {
@@ -466,6 +470,170 @@ describe('ProductMediaContentService', () => {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       code: 'INTERNAL_ERROR',
       publicMessage: '服务器内部错误',
+    })
+  })
+  describe('derived presentation variants', () => {
+    const RENDERED = Buffer.from('rendered-webp-bytes')
+
+    async function readStream(stream: Readable): Promise<Buffer> {
+      const chunks: Buffer[] = []
+      for await (const chunk of stream) {
+        chunks.push(Buffer.from(chunk as Buffer))
+      }
+      return Buffer.concat(chunks)
+    }
+
+    it('serves a privately cached webp thumbnail and ignores Range on the variant path', async () => {
+      const fixture = createFixture(contentRow(), 'application')
+      fixture.render.mockResolvedValue(RENDERED)
+
+      const result = await fixture.service.resolve(
+        PRODUCT_ID,
+        PRODUCT_MEDIA_ID,
+        undefined,
+        'bytes=0-1',
+        'GET',
+        'thumb',
+      )
+
+      expect(fixture.render).toHaveBeenCalledWith({
+        checksumSha256: CHECKSUM,
+        objectKey: `assets/2026/08/${PRODUCT_MEDIA_ID}.webp`,
+        variant: 'thumb',
+      })
+      expect(result.status).toBe(HttpStatus.OK)
+      expect(result.headers).toMatchObject({
+        'Accept-Ranges': 'none',
+        'Cache-Control': 'private, max-age=31536000, immutable',
+        'Content-Length': String(RENDERED.length),
+        'Content-Type': 'image/webp',
+      })
+      expect(result.headers).not.toHaveProperty('Content-Range')
+      expect(result.headers['Content-Disposition']).toBe(
+        'inline; filename="front _.thumb.webp"',
+      )
+      // 变体由派生缓存承担，不再回源读取原件。
+      expect(fixture.open).not.toHaveBeenCalled()
+      expect(await readStream(result.stream!)).toEqual(RENDERED)
+    })
+
+    it('uses a distinct opaque ETag per variant and answers 304 without a body', async () => {
+      const fixture = createFixture(contentRow(), 'application')
+      fixture.render.mockResolvedValue(RENDERED)
+
+      const original = await fixture.service.resolve(PRODUCT_ID, PRODUCT_MEDIA_ID, undefined)
+      const variant = await fixture.service.resolve(
+        PRODUCT_ID, PRODUCT_MEDIA_ID, undefined, undefined, 'GET', 'thumb',
+      )
+      expect(variant.headers.ETag).not.toBe(original.headers.ETag)
+
+      const notModified = await fixture.service.resolve(
+        PRODUCT_ID, PRODUCT_MEDIA_ID, variant.headers.ETag, undefined, 'GET', 'thumb',
+      )
+      expect(notModified.status).toBe(HttpStatus.NOT_MODIFIED)
+      expect(notModified.headers).toMatchObject({
+        'Accept-Ranges': 'none',
+        'Cache-Control': 'private, max-age=31536000, immutable',
+        ETag: variant.headers.ETag,
+      })
+      expect(notModified.stream).toBeUndefined()
+    })
+
+    it('describes a variant HEAD without opening a body stream', async () => {
+      const fixture = createFixture(contentRow(), 'application')
+      fixture.render.mockResolvedValue(RENDERED)
+
+      const result = await fixture.service.resolve(
+        PRODUCT_ID, PRODUCT_MEDIA_ID, undefined, undefined, 'HEAD', 'thumb',
+      )
+
+      expect(result.status).toBe(HttpStatus.OK)
+      expect(result.headers['Content-Length']).toBe(String(RENDERED.length))
+      expect(result.stream).toBeUndefined()
+    })
+
+    it.each([
+      ['thumb', videoContentRow('video/mp4', '.mp4', 'clip.mp4')],
+      ['poster', contentRow()],
+    ] as const)('hides %s when the variant does not match the asset media type', async (variant, row) => {
+      const fixture = createFixture(row)
+      fixture.render.mockResolvedValue(RENDERED)
+
+      await expect(fixture.service.resolve(
+        PRODUCT_ID, PRODUCT_MEDIA_ID, undefined, undefined, 'GET', variant,
+      )).rejects.toMatchObject({
+        code: 'PRODUCT_MEDIA_NOT_FOUND',
+        status: HttpStatus.NOT_FOUND,
+      })
+      // 类型不匹配时既不渲染也不回退成原件传输。
+      expect(fixture.render).not.toHaveBeenCalled()
+      expect(fixture.open).not.toHaveBeenCalled()
+    })
+
+    it.each(['original', 'thumbnail', 'thumbs', 'posters', 1, ['thumb']])(
+      'rejects the unsupported variant value %p with a validation failure',
+      async (variant) => {
+        const fixture = createFixture()
+
+        await expect(fixture.service.resolve(
+          PRODUCT_ID, PRODUCT_MEDIA_ID, undefined, undefined, 'GET', variant,
+        )).rejects.toMatchObject({
+          code: 'VALIDATION_FAILED',
+          status: HttpStatus.UNPROCESSABLE_ENTITY,
+        })
+        expect(fixture.render).not.toHaveBeenCalled()
+      },
+    )
+
+    it('falls back to the original image when thumbnail rendering fails', async () => {
+      const fixture = createFixture(contentRow(), 'application')
+
+      // 变体服务默认返回 null，等价于派生失败。
+      const result = await fixture.service.resolve(
+        PRODUCT_ID, PRODUCT_MEDIA_ID, undefined, undefined, 'GET', 'thumb',
+      )
+
+      expect(result.status).toBe(HttpStatus.OK)
+      expect(result.headers).toMatchObject({
+        'Accept-Ranges': 'bytes',
+        'Content-Type': 'image/webp',
+      })
+      expect(result.headers).not.toHaveProperty('Cache-Control')
+      expect(fixture.open).toHaveBeenCalled()
+    })
+
+    it('never falls back to the whole video when poster rendering fails', async () => {
+      const fixture = createFixture(videoContentRow('video/mp4', '.mp4', 'clip.mp4'))
+
+      await expect(fixture.service.resolve(
+        PRODUCT_ID, PRODUCT_MEDIA_ID, undefined, undefined, 'GET', 'poster',
+      )).rejects.toMatchObject({
+        code: 'PRODUCT_MEDIA_NOT_FOUND',
+        status: HttpStatus.NOT_FOUND,
+      })
+      expect(fixture.open).not.toHaveBeenCalled()
+    })
+
+    it('renders a poster for video assets through the same authorization path', async () => {
+      const fixture = createFixture(videoContentRow('video/mp4', '.mp4', 'clip.mp4'))
+      fixture.render.mockResolvedValue(RENDERED)
+
+      const result = await fixture.service.resolve(
+        PRODUCT_ID, PRODUCT_MEDIA_ID, undefined, undefined, 'GET', 'poster',
+      )
+
+      expect(fixture.render).toHaveBeenCalledWith({
+        checksumSha256: CHECKSUM,
+        objectKey: `assets/2026/08/${PRODUCT_MEDIA_ID}.mp4`,
+        variant: 'poster',
+      })
+      expect(result.headers).toMatchObject({
+        'Accept-Ranges': 'none',
+        'Content-Type': 'image/webp',
+      })
+      expect(result.headers['Content-Disposition']).toBe(
+        'inline; filename="clip.poster.webp"',
+      )
     })
   })
 })

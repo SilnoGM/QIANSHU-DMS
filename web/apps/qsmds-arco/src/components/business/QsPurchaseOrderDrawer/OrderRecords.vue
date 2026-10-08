@@ -5,6 +5,7 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
+import { mediaThumbnailUrl } from '@/utils/media-variant'
 import { getPaymentDocuments } from './logic'
 import OrderDocument from './OrderDocument.vue'
 
@@ -45,7 +46,7 @@ watch(() => props.detail.id, () => {
         <template #trigger="{ open }">
           <TransitionGroup name="record-summary" tag="span" class="p-4 text-start flex gap-3 min-h-22 min-w-0 items-center relative hover:bg-muted/25 sm:gap-4">
             <span v-if="!open" key="thumbnail" data-slot="record-summary-thumbnail" class="border border-border/70 rounded-lg bg-muted/20 flex shrink-0 size-14 items-center justify-center overflow-hidden">
-              <img v-if="thumbnail" :src="thumbnail" :alt="t('purchaseOrderDrawer.paymentVoucher')" class="size-full object-cover">
+              <img v-if="thumbnail" :src="mediaThumbnailUrl(thumbnail) ?? thumbnail" :alt="t('purchaseOrderDrawer.paymentVoucher')" class="size-full object-cover">
               <FaIcon v-else name="i-lucide:receipt-text" class="text-muted-foreground size-6" aria-hidden="true" />
             </span>
             <span key="details" class="flex flex-1 flex-wrap gap-x-4 gap-y-2 min-w-0 items-center justify-between">

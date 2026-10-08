@@ -38,6 +38,7 @@ function configuration(storageRoot: string): MediaConfiguration {
   return {
     contentDeliveryMode: 'application',
     driver: 'local',
+    ffmpegPath: '/usr/bin/ffmpeg',
     ffprobePath: '/usr/bin/ffprobe',
     qpdfPath: '/usr/bin/qpdf',
     storageEnvironment: 'dev',

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PurchaseOrderDetailDto } from '@/api/generated/types.gen'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import { mediaThumbnailUrl } from '@/utils/media-variant'
 import { getOrderDocuments } from './logic'
 import OrderDocument from './OrderDocument.vue'
 
@@ -38,7 +39,7 @@ watch(() => props.detail.id, () => {
         <template #trigger="{ open }">
           <TransitionGroup name="document-summary" tag="span" class="p-4 text-start flex gap-3 min-h-22 min-w-0 items-center relative hover:bg-muted/25 sm:gap-4">
             <span v-if="!open" key="thumbnail" class="border border-border/70 rounded-lg bg-muted/20 flex shrink-0 size-14 items-center justify-center overflow-hidden">
-              <img v-if="document.mediaType === 'IMAGE' && document.contentUrl" :src="document.contentUrl" :alt="t(`purchaseOrderDrawer.documentTypes.${document.documentType}`)" class="size-full object-cover">
+              <img v-if="document.mediaType === 'IMAGE' && document.contentUrl" :src="mediaThumbnailUrl(document.contentUrl) ?? document.contentUrl" :alt="t(`purchaseOrderDrawer.documentTypes.${document.documentType}`)" class="size-full object-cover">
               <FaIcon v-else name="i-lucide:file-text" class="text-muted-foreground size-6" aria-hidden="true" />
             </span>
             <span key="details" class="flex-1 min-w-0">

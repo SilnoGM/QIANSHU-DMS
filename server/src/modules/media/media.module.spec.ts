@@ -10,6 +10,7 @@ import { LazyCosMediaStorage } from './lazy-cos-media-storage'
 import { LazyLocalMediaStorage } from './lazy-local-media-storage'
 import { MediaAssetService } from './media-asset.service'
 import { MediaContentDeliveryService } from './media-content-delivery.service'
+import { MediaVariantService } from './media-variant.service'
 import { createMediaStorage, MediaModule } from './media.module'
 import { OceanFreightSourceFileService } from './ocean-freight-source-file.service'
 import { MediaAssetRetentionService } from './media-retention.service'
@@ -22,6 +23,7 @@ function placeholderCredential(label: string): string {
 const LOCAL_CONFIGURATION: LocalMediaConfiguration = Object.freeze({
   contentDeliveryMode: 'application',
   driver: 'local',
+  ffmpegPath: '/usr/bin/ffmpeg',
   ffprobePath: '/usr/bin/ffprobe',
   qpdfPath: '/usr/bin/qpdf',
   stagingTtlHours: 24,
@@ -47,12 +49,14 @@ describe('MediaModule metadata', () => {
       OceanFreightSourceFileService,
       MediaContentDeliveryService,
       MediaAssetRetentionService,
+      MediaVariantService,
     ])
     const providers = Reflect.getMetadata('providers', MediaModule) as unknown[]
     expect(providers).toEqual(expect.arrayContaining([
       expect.objectContaining({ provide: MediaAssetService }),
       expect.objectContaining({ provide: MediaContentDeliveryService }),
       expect.objectContaining({ provide: MediaAssetRetentionService }),
+      expect.objectContaining({ provide: MediaVariantService }),
     ]))
   })
 

@@ -56,6 +56,7 @@ describe('PurchaseOrderProductImageService', () => {
       '"known"',
       'bytes=0-0',
       'HEAD',
+      undefined,
     )).resolves.toBe(RESPONSE)
 
     expect(fixture.productMedia.findFirst).toHaveBeenCalledWith({
@@ -83,6 +84,7 @@ describe('PurchaseOrderProductImageService', () => {
       '"known"',
       'bytes=0-0',
       'HEAD',
+      undefined,
     )
   })
 
@@ -95,6 +97,7 @@ describe('PurchaseOrderProductImageService', () => {
       undefined,
       undefined,
       'GET',
+      'thumb',
     )).rejects.toMatchObject({
       code: 'PURCHASE_ORDER_PRODUCT_IMAGE_NOT_FOUND',
       publicMessage: '产品主图不存在或当前不可用',
@@ -113,6 +116,7 @@ describe('PurchaseOrderProductImageService', () => {
       '"known"',
       'bytes=0-0',
       'HEAD',
+      undefined,
     )).resolves.toBe(RESPONSE)
 
     expect(fixture.salesOrderLine.findFirst).toHaveBeenCalledWith({
@@ -145,6 +149,7 @@ describe('PurchaseOrderProductImageService', () => {
       '"known"',
       'bytes=0-0',
       'HEAD',
+      undefined,
     )
   })
 
@@ -158,6 +163,7 @@ describe('PurchaseOrderProductImageService', () => {
       undefined,
       undefined,
       'GET',
+      'thumb',
     )).resolves.toBe(RESPONSE)
 
     expect(fixture.purchaseOrderLine.findFirst).toHaveBeenCalledWith({
@@ -188,6 +194,7 @@ describe('PurchaseOrderProductImageService', () => {
       undefined,
       undefined,
       'GET',
+      'thumb',
     )
   })
 
@@ -201,6 +208,7 @@ describe('PurchaseOrderProductImageService', () => {
       undefined,
       undefined,
       'HEAD',
+      undefined,
     )).rejects.toMatchObject({
       code: 'PURCHASE_ORDER_PRODUCT_IMAGE_NOT_FOUND',
       publicMessage: '产品主图不存在或当前不可用',

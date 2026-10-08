@@ -157,7 +157,7 @@ describe('PurchaseOrder HTTP API contract', () => {
       imports: [PurchaseOrderApiE2eModule],
     }).compile()
     application = moduleRef.createNestApplication()
-    application.useGlobalInterceptors(new PrivateNoStoreInterceptor())
+    application.useGlobalInterceptors(new PrivateNoStoreInterceptor(new Reflector()))
     application.use(attachTestAuth)
     configureApplication(application, { nodeEnvironment: 'test' })
     primaryApplication = application.getHttpAdapter().getInstance()
@@ -313,6 +313,7 @@ describe('PurchaseOrder HTTP API contract', () => {
       undefined,
       undefined,
       'GET',
+      undefined,
     )
     expect(getById).not.toHaveBeenCalled()
   })
@@ -439,7 +440,7 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
       new PasswordChangeRequiredGuard(reflector),
       new PermissionGuard(reflector, accessControl),
     )
-    application.useGlobalInterceptors(new PrivateNoStoreInterceptor())
+    application.useGlobalInterceptors(new PrivateNoStoreInterceptor(new Reflector()))
     configureApplication(application, { nodeEnvironment: 'test' })
     await application.init()
   })

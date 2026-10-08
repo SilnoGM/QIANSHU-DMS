@@ -41,7 +41,7 @@ describe('purchase order image HTTP contract', () => {
     })
     const access = { getPermissionCodes: () => Promise.resolve(permissions), hasAll: (actual: readonly string[], required: readonly string[]) => required.every(value => actual.includes(value)) } as unknown as AccessControlService
     app.useGlobalGuards(new CsrfProtectionGuard(new ConfigService({ auth: { appOrigin: origin } })), new PermissionGuard(new Reflector(), access))
-    app.useGlobalInterceptors(new PrivateNoStoreInterceptor())
+    app.useGlobalInterceptors(new PrivateNoStoreInterceptor(new Reflector()))
     await app.init()
   })
   beforeEach(() => { authenticated = true; permissions = ['purchase-orders:review']; jest.clearAllMocks() })

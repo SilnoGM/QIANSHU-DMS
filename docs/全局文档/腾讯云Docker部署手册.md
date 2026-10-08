@@ -222,7 +222,7 @@ ssh <服务器SSH用户>@<服务器公网IP> 'sudo chmod 0600 /srv/qianshu-dms/.
 | `TRUST_PROXY_HOPS` | `1` | 只有 web 容器一层反代 |
 | `AUTH_USERNAME_HMAC_KEY` / `AUTH_USER_ID_HMAC_KEY` / `AUTH_IP_HMAC_KEY` | `<key1>` / `<key2>` / `<key3>` | 32-byte base64url，三者互不相同，生成方式见附录 15.1 |
 | `MEDIA_CONTENT_DELIVERY_MODE` | `application` | 本次决策；`cos` 驱动下只能取该值 |
-| `MEDIA_FFPROBE_PATH` / `MEDIA_QPDF_PATH` | `/usr/bin/ffprobe` / `/usr/bin/qpdf` | 镜像内已安装 |
+| `MEDIA_FFMPEG_PATH` / `MEDIA_FFPROBE_PATH` / `MEDIA_QPDF_PATH` | `/usr/bin/ffmpeg` / `/usr/bin/ffprobe` / `/usr/bin/qpdf` | 镜像内已安装 |
 | `MEDIA_STORAGE_DRIVER` | `local`（默认）或 `cos` | `cos` 表示 `assets/`、`trash/` 存在腾讯云桶里；切换必须先迁移存量（见第 11.3 节） |
 | `MEDIA_STORAGE_ENV` | `dev` / `test` / `prod` | 对象键的环境段：共桶时隔离 `assets/trash` 前缀，并界定 CAM 子账号与生命周期规则的作用范围；`cos` 驱动**必填**（缺失拒绝启动），`local` 默认 `dev`。不要用 `NODE_ENV` 代替 |
 | `MEDIA_COS_REGION` / `MEDIA_COS_BUCKET` | `ap-beijing` / `<bucket>-<appid>` | 桶与服务器必须同地域；桶权限私有读写 |

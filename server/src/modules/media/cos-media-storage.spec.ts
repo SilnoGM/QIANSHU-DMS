@@ -262,6 +262,7 @@ const COS_CONFIGURATION: CosMediaConfiguration = Object.freeze({
   contentDeliveryMode: 'application',
   cos: Object.freeze({ bucket: 'dms-qs-media-1396967080', region: 'ap-beijing' }),
   driver: 'cos',
+  ffmpegPath: '/usr/bin/ffmpeg',
   ffprobePath: '/usr/bin/ffprobe',
   qpdfPath: '/usr/bin/qpdf',
   stagingTtlHours: 24,

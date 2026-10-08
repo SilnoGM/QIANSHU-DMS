@@ -285,17 +285,17 @@ describe('PurchaseOrdersController', () => {
     const response = { status: jest.fn(), setHeader: jest.fn() }
 
     await controller.headProductOptionMainImage(
-      params, '"known"', 'bytes=0-0', response,
+      params, '"known"', 'bytes=0-0', undefined, response,
     )
     const body = await controller.getProductOptionMainImage(
-      params, undefined, undefined, response,
+      params, undefined, undefined, 'thumb', response,
     )
 
     expect(resolve).toHaveBeenNthCalledWith(
-      1, params.productId, params.productMediaId, '"known"', 'bytes=0-0', 'HEAD',
+      1, params.productId, params.productMediaId, '"known"', 'bytes=0-0', 'HEAD', undefined,
     )
     expect(resolve).toHaveBeenNthCalledWith(
-      2, params.productId, params.productMediaId, undefined, undefined, 'GET',
+      2, params.productId, params.productMediaId, undefined, undefined, 'GET', 'thumb',
     )
     expect(body).toBeInstanceOf(StreamableFile)
     expect((body as StreamableFile).getStream()).toBe(stream)
@@ -340,10 +340,10 @@ describe('PurchaseOrdersController', () => {
     const response = { status: jest.fn(), setHeader: jest.fn() }
 
     await controller.headSourceSalesOrderLineMainImage(
-      params, '"known"', 'bytes=0-0', response,
+      params, '"known"', 'bytes=0-0', undefined, response,
     )
     const body = await controller.getSourceSalesOrderLineMainImage(
-      params, undefined, undefined, response,
+      params, undefined, undefined, 'thumb', response,
     )
 
     expect(resolveSourceLinePreview).toHaveBeenNthCalledWith(
@@ -354,6 +354,7 @@ describe('PurchaseOrdersController', () => {
       '"known"',
       'bytes=0-0',
       'HEAD',
+      undefined,
     )
     expect(resolveSourceLinePreview).toHaveBeenNthCalledWith(
       2,
@@ -363,6 +364,7 @@ describe('PurchaseOrdersController', () => {
       undefined,
       undefined,
       'GET',
+      'thumb',
     )
     expect(body).toBeInstanceOf(StreamableFile)
     expect((body as StreamableFile).getStream()).toBe(stream)
@@ -408,10 +410,10 @@ describe('PurchaseOrdersController', () => {
     const response = { status: jest.fn(), setHeader: jest.fn() }
 
     await controller.headProductPreviewMainImage(
-      params, '"known"', 'bytes=0-0', response,
+      params, '"known"', 'bytes=0-0', undefined, response,
     )
     const body = await controller.getProductPreviewMainImage(
-      params, undefined, undefined, response,
+      params, undefined, undefined, 'thumb', response,
     )
 
     expect(resolveListPreview).toHaveBeenNthCalledWith(
@@ -422,6 +424,7 @@ describe('PurchaseOrdersController', () => {
       '"known"',
       'bytes=0-0',
       'HEAD',
+      undefined,
     )
     expect(resolveListPreview).toHaveBeenNthCalledWith(
       2,
@@ -431,6 +434,7 @@ describe('PurchaseOrdersController', () => {
       undefined,
       undefined,
       'GET',
+      'thumb',
     )
     expect(body).toBeInstanceOf(StreamableFile)
 
@@ -717,8 +721,13 @@ describe('PurchaseOrdersController OpenAPI', () => {
       expect(contract).toMatchObject({
         authorization: true,
         resourceLocator: true,
-        privateNoStore: true,
       })
+      expect(contract).not.toMatchObject({ privateNoStore: true })
+      expect(operation?.parameters).toContainEqual(expect.objectContaining({
+        in: 'query',
+        name: 'variant',
+        required: false,
+      }))
       if (typeof contract !== 'object' || contract === null || !('errors' in contract)) {
         throw new Error('OpenAPI contract must expose an errors array')
       }
@@ -755,8 +764,13 @@ describe('PurchaseOrdersController OpenAPI', () => {
       expect(contract).toMatchObject({
         authorization: true,
         resourceLocator: true,
-        privateNoStore: true,
       })
+      expect(contract).not.toMatchObject({ privateNoStore: true })
+      expect(operation?.parameters).toContainEqual(expect.objectContaining({
+        in: 'query',
+        name: 'variant',
+        required: false,
+      }))
       if (typeof contract !== 'object' || contract === null || !('errors' in contract)) {
         throw new Error('OpenAPI contract must expose an errors array')
       }

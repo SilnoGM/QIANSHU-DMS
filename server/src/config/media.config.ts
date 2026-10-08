@@ -3,6 +3,7 @@ import { isAbsolute, parse, resolve } from 'node:path'
 import { registerAs } from '@nestjs/config'
 
 export const DEFAULT_MEDIA_STORAGE_ROOT = '/var/lib/qianshu-dms/media'
+export const DEFAULT_MEDIA_FFMPEG_PATH = '/usr/bin/ffmpeg'
 export const DEFAULT_MEDIA_FFPROBE_PATH = '/usr/bin/ffprobe'
 export const DEFAULT_MEDIA_QPDF_PATH = '/usr/bin/qpdf'
 const DEFAULT_MEDIA_STAGING_TTL_HOURS = 24
@@ -57,6 +58,7 @@ export interface MediaCosTarget {
 
 interface SharedMediaConfiguration {
   readonly contentDeliveryMode: MediaContentDeliveryMode
+  readonly ffmpegPath: string
   readonly ffprobePath: string
   readonly qpdfPath: string
   readonly stagingTtlHours: number
@@ -78,6 +80,7 @@ export type MediaConfiguration = CosMediaConfiguration | LocalMediaConfiguration
 
 interface SharedNormalizedMediaEnvironment {
   readonly MEDIA_CONTENT_DELIVERY_MODE: MediaContentDeliveryMode
+  readonly MEDIA_FFMPEG_PATH: string
   readonly MEDIA_FFPROBE_PATH: string
   readonly MEDIA_QPDF_PATH: string
   readonly MEDIA_STAGING_TTL_HOURS: number
@@ -131,7 +134,7 @@ function normalizeContentDeliveryMode(
 }
 
 function normalizeExecutablePath(
-  key: 'MEDIA_FFPROBE_PATH' | 'MEDIA_QPDF_PATH',
+  key: 'MEDIA_FFMPEG_PATH' | 'MEDIA_FFPROBE_PATH' | 'MEDIA_QPDF_PATH',
   value: unknown,
   fallback: string,
 ): string {
@@ -290,6 +293,11 @@ export function normalizeMediaEnvironment(
       environment.NODE_ENV,
       driver,
     ),
+    MEDIA_FFMPEG_PATH: normalizeExecutablePath(
+      'MEDIA_FFMPEG_PATH',
+      environment.MEDIA_FFMPEG_PATH,
+      DEFAULT_MEDIA_FFMPEG_PATH,
+    ),
     MEDIA_FFPROBE_PATH: normalizeExecutablePath(
       'MEDIA_FFPROBE_PATH',
       environment.MEDIA_FFPROBE_PATH,
@@ -349,6 +357,7 @@ export function createMediaConfiguration(
   const normalized = normalizeMediaEnvironment(environment)
   const shared = {
     contentDeliveryMode: normalized.MEDIA_CONTENT_DELIVERY_MODE,
+    ffmpegPath: normalized.MEDIA_FFMPEG_PATH,
     ffprobePath: normalized.MEDIA_FFPROBE_PATH,
     qpdfPath: normalized.MEDIA_QPDF_PATH,
     stagingTtlHours: normalized.MEDIA_STAGING_TTL_HOURS,

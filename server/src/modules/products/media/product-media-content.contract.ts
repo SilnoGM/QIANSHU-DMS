@@ -1,15 +1,29 @@
 import { applyDecorators, HttpStatus } from '@nestjs/common'
-import { ApiHeader, type ApiResponseOptions } from '@nestjs/swagger'
+import { ApiHeader, ApiQuery, type ApiResponseOptions } from '@nestjs/swagger'
 
 import { ApiApplicationContract } from '../../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../../openapi/contract-response.decorator'
+import {
+  MEDIA_VARIANT_CACHE_CONTROL,
+  MEDIA_VARIANT_NAMES,
+} from '../../media/media-variant.service'
+import { PRIVATE_NO_STORE_CACHE_CONTROL } from '../../../infrastructure/http/private-no-store.interceptor'
 
 const PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS: NonNullable<
   ApiResponseOptions['headers']
 > = {
   'Accept-Ranges': {
-    description: 'Byte-range capability is implemented by the selected private delivery mode.',
-    schema: { type: 'string', enum: ['bytes'] },
+    description: 'Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.',
+    schema: { type: 'string', enum: ['bytes', 'none'] },
+  },
+  // 原件路由的默认策略仍是 no-store，商品主路由按不可变内容放宽为长期私有缓存；
+  // 派生变体由不可变原件确定性生成，任何路由上都返回长期私有缓存。
+  'Cache-Control': {
+    description: 'Private cache policy selected by route metadata and representation kind.',
+    schema: {
+      type: 'string',
+      enum: [PRIVATE_NO_STORE_CACHE_CONTROL, MEDIA_VARIANT_CACHE_CONTROL],
+    },
   },
   'Content-Disposition': {
     description: 'Inline disposition with a sanitized ASCII filename.',
@@ -76,6 +90,14 @@ export function ApiProductMediaContentContract(
   options: ProductMediaContentContractOptions = {},
 ): MethodDecorator {
   return applyDecorators(
+    ApiQuery({
+      name: 'variant',
+      required: false,
+      enum: [...MEDIA_VARIANT_NAMES],
+      description:
+        'Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). '
+        + 'Variants are rendered on demand and cached privately by the browser.',
+    }),
     ApiHeader({
       name: 'If-None-Match',
       required: false,
@@ -103,6 +125,7 @@ export function ApiProductMediaContentContract(
       description: 'The current opaque ETag matches If-None-Match.',
       headers: {
         'Accept-Ranges': PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS['Accept-Ranges'],
+        'Cache-Control': PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS['Cache-Control'],
         ETag: PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS.ETag,
         'X-Content-Type-Options':
           PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS['X-Content-Type-Options'],
@@ -113,6 +136,7 @@ export function ApiProductMediaContentContract(
       description: 'The requested application-delivery byte range is invalid or unsatisfied.',
       headers: {
         'Accept-Ranges': PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS['Accept-Ranges'],
+        'Cache-Control': PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS['Cache-Control'],
         'Content-Range': PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS['Content-Range'],
         ETag: PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS.ETag,
         'X-Content-Type-Options':
@@ -128,7 +152,8 @@ export function ApiProductMediaContentContract(
       badRequest: true,
       resourceLocator: true,
       validation: true,
-      privateNoStore: true,
+      // 不设置 privateNoStore：缓存策略按「路由元数据 + 表示种类」在两档之间选择，
+      // 由上方响应头里的 Cache-Control 枚举如实声明；错误响应仍由异常过滤器固定 no-store。
       errors: [
         {
           status: 403,

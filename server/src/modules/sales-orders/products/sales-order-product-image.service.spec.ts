@@ -54,6 +54,7 @@ describe('SalesOrderProductImageService', () => {
       '"known"',
       'bytes=0-0',
       'HEAD',
+      undefined,
     )).resolves.toBe(RESPONSE)
 
     expect(fixture.productMedia.findFirst).toHaveBeenCalledWith({
@@ -78,6 +79,7 @@ describe('SalesOrderProductImageService', () => {
       '"known"',
       'bytes=0-0',
       'HEAD',
+      undefined,
     )
   })
 
@@ -91,6 +93,7 @@ describe('SalesOrderProductImageService', () => {
       undefined,
       undefined,
       'GET',
+      'thumb',
     )).resolves.toBe(RESPONSE)
 
     expect(fixture.salesOrderLine.findFirst).toHaveBeenCalledWith({
@@ -122,6 +125,7 @@ describe('SalesOrderProductImageService', () => {
       undefined,
       undefined,
       'GET',
+      'thumb',
     )
   })
 
@@ -135,6 +139,7 @@ describe('SalesOrderProductImageService', () => {
       undefined,
       undefined,
       'GET',
+      'thumb',
     )).rejects.toMatchObject({
       code: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
       publicMessage: '产品主图不存在或当前不可用',
@@ -153,6 +158,7 @@ describe('SalesOrderProductImageService', () => {
       '"known"',
       'bytes=0-0',
       'HEAD',
+      undefined,
     )).resolves.toBe(RESPONSE)
 
     expect(fixture.productEditQueries.context).toHaveBeenCalledWith(SALES_ORDER_ID)
@@ -183,6 +189,7 @@ describe('SalesOrderProductImageService', () => {
       undefined,
       undefined,
       'GET',
+      'thumb',
     )).rejects.toThrow('product-edit context is no longer eligible')
     expect(fixture.productMedia.findFirst).not.toHaveBeenCalled()
   })
@@ -197,6 +204,7 @@ describe('SalesOrderProductImageService', () => {
       undefined,
       undefined,
       'GET',
+      'thumb',
     )).rejects.toMatchObject({
       code: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
       status: HttpStatus.NOT_FOUND,

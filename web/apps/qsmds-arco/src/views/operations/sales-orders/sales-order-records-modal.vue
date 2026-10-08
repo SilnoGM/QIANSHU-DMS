@@ -30,6 +30,7 @@ import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
+import { mediaThumbnailUrl } from '@/utils/media-variant'
 import OrderReceiptRequests from '../../workbenches/sales-receipts/order-receipt-requests.vue'
 import { findReceiptSourcePage } from '../../workbenches/sales-receipts/order-receipt-summary.logic'
 import { freezeReceiptSubmission, isReceiptResultUnknown } from '../../workbenches/sales-receipts/submission.logic'
@@ -955,7 +956,7 @@ onBeforeUnmount(() => {
                     <div class="mt-3 p-3 border border-border rounded-lg bg-muted/15 flex gap-3 min-w-0 items-center">
                       <FaImagePreview
                         v-if="payment.voucher.mediaType === 'IMAGE'"
-                        :src="payment.voucher.contentUrl"
+                        :src="mediaThumbnailUrl(payment.voucher.contentUrl) ?? payment.voucher.contentUrl"
                         class="rounded-md shrink-0 size-14 object-cover"
                         :aria-label="`收款凭证 ${payment.voucher.title || payment.voucher.originalFilename}`"
                       />
@@ -1037,7 +1038,7 @@ onBeforeUnmount(() => {
           >
             <FaImagePreview
               v-if="document.mediaType === 'IMAGE'"
-              :src="document.contentUrl"
+              :src="mediaThumbnailUrl(document.contentUrl) ?? document.contentUrl"
               class="shrink-0 size-20 object-cover"
               role="img"
               :aria-label="`凭证图片 ${document.title || document.originalFilename}`"

@@ -9,6 +9,7 @@ import type {
 } from './types'
 
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
+import { mediaThumbnailUrl } from '@/utils/media-variant'
 import QsGenericModal from '../QsGenericModal/index.vue'
 import {
   canApplyProductSelectorResponse,
@@ -440,7 +441,7 @@ onBeforeUnmount(() => {
                 <div class="border border-border rounded-lg bg-muted/35 flex shrink-0 size-16 items-center justify-center overflow-hidden">
                   <img
                     v-if="item.mainImage && !failedImages.has(item.id)"
-                    :src="item.mainImage.contentUrl"
+                    :src="mediaThumbnailUrl(item.mainImage.contentUrl) ?? item.mainImage.contentUrl"
                     :alt="item.name"
                     class="size-full object-cover"
                     loading="lazy"

@@ -22,6 +22,7 @@ import { MediaReconciliationPersistence } from '../src/modules/media/media-recon
 import { MediaReconciliationService } from '../src/modules/media/media-reconciliation.service'
 import { MediaAssetReferenceRepository } from '../src/modules/media/media-reference.repository'
 import { MediaAssetRetentionService } from '../src/modules/media/media-retention.service'
+import { MediaVariantService } from '../src/modules/media/media-variant.service'
 import type {
   RestrictedMediaProcessRequest,
   RestrictedMediaProcessResult,
@@ -194,6 +195,7 @@ export class ProductMediaE2eHarness {
     const configuration: MediaConfiguration = {
       contentDeliveryMode: 'application',
       driver: 'local',
+      ffmpegPath: '/e2e/ffmpeg',
       ffprobePath: '/e2e/ffprobe',
       qpdfPath: '/e2e/qpdf',
       stagingTtlHours: 24,
@@ -236,9 +238,11 @@ export class ProductMediaE2eHarness {
       new AuditService(),
       { now },
     )
+    const delivery = new MediaContentDeliveryService(storage, 'application')
     this.content = new ProductMediaContentService(
       prisma,
-      new MediaContentDeliveryService(storage, 'application'),
+      delivery,
+      new MediaVariantService(delivery, configuration),
     )
   }
 
@@ -280,6 +284,7 @@ export class ProductMediaE2eHarness {
       const configuration: MediaConfiguration = {
         contentDeliveryMode: 'application',
         driver: 'local',
+        ffmpegPath: '/e2e/ffmpeg',
         ffprobePath: '/e2e/ffprobe',
         qpdfPath: '/e2e/qpdf',
         stagingTtlHours: 24,

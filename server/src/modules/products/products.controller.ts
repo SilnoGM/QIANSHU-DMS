@@ -23,6 +23,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger'
 
+import { ImmutableMediaContentCache } from '../../infrastructure/http/private-no-store.interceptor'
 import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
@@ -194,12 +195,14 @@ export class ProductsController {
   }
 
   @Head(':productId/media/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('product-media:read')
   @ApiProductMediaContentContract('HEAD')
   async headMediaContent(
     @Param() params: ProductMediaIdParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<void> {
     const result = await this.productMediaContent.resolve(
@@ -208,17 +211,20 @@ export class ProductsController {
       ifNoneMatch,
       range,
       'HEAD',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
   }
 
   @Get(':productId/media/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('product-media:read')
   @ApiProductMediaContentContract('GET')
   async getMediaContent(
     @Param() params: ProductMediaIdParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<StreamableFile | undefined> {
     const result = await this.productMediaContent.resolve(
@@ -227,6 +233,7 @@ export class ProductsController {
       ifNoneMatch,
       range,
       'GET',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
     return result.stream === undefined

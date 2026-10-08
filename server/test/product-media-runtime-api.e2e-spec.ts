@@ -315,7 +315,7 @@ describeExclusive('Product media runtime HTTP with isolated PostgreSQL and local
     const response = await contentRequest(productId, mediaId).expect(HttpStatus.OK)
     expect(response.headers).toMatchObject({
       'accept-ranges': 'bytes',
-      'cache-control': 'private, no-store',
+      'cache-control': 'private, max-age=31536000, immutable',
       'content-type': 'image/webp',
       'x-content-type-options': 'nosniff',
     })
@@ -330,6 +330,28 @@ describeExclusive('Product media runtime HTTP with isolated PostgreSQL and local
       .expect(HttpStatus.NOT_MODIFIED)
     expect(conditional.text).toBe('')
     expect(conditional.headers['x-accel-redirect']).toBeUndefined()
+
+    // 派生缩略图与原件共用同一路鉴权，但由真实 sharp 渲染并按长期私有缓存下发。
+    const thumbnail = await contentRequest(productId, mediaId)
+      .query({ variant: 'thumb' })
+      .expect(HttpStatus.OK)
+    expect(thumbnail.headers).toMatchObject({
+      'accept-ranges': 'none',
+      'cache-control': 'private, max-age=31536000, immutable',
+      'content-type': 'image/webp',
+    })
+    expect(thumbnail.headers['x-accel-redirect']).toBeUndefined()
+    expect(thumbnail.headers.etag).not.toBe(response.headers.etag)
+    const thumbnailBody = thumbnail.body as Buffer
+    expect(thumbnailBody.length).toBeGreaterThan(0)
+    expect(thumbnailBody.subarray(0, 4).toString('ascii')).toBe('RIFF')
+    expect(thumbnailBody.subarray(8, 12).toString('ascii')).toBe('WEBP')
+
+    // 图片没有封面帧：类型不匹配按防枚举 404 处理，绝不回退成原件。
+    const poster = await contentRequest(productId, mediaId)
+      .query({ variant: 'poster' })
+      .expect(HttpStatus.NOT_FOUND)
+    expect(poster.headers['cache-control']).toBe('private, no-store')
 
     const head = await contentRequest(productId, mediaId, 'head')
       .set('Range', 'bytes=0-0')

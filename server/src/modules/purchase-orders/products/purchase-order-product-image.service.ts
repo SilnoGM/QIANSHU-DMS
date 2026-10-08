@@ -32,6 +32,7 @@ export class PurchaseOrderProductImageService {
     ifNoneMatch: unknown,
     range: unknown,
     method: 'GET' | 'HEAD',
+    variant: unknown,
   ): Promise<ProductMediaContentResponse> {
     let row: { readonly id: string } | null
     try {
@@ -70,6 +71,7 @@ export class PurchaseOrderProductImageService {
       ifNoneMatch,
       range,
       method,
+      variant,
     )
   }
 
@@ -84,6 +86,7 @@ export class PurchaseOrderProductImageService {
     ifNoneMatch: unknown,
     range: unknown,
     method: 'GET' | 'HEAD',
+    variant: unknown,
   ): Promise<ProductMediaContentResponse> {
     let line: { readonly productId: string | null } | null
     try {
@@ -125,6 +128,7 @@ export class PurchaseOrderProductImageService {
       ifNoneMatch,
       range,
       method,
+      variant,
     )
   }
 
@@ -140,6 +144,7 @@ export class PurchaseOrderProductImageService {
     ifNoneMatch: unknown,
     range: unknown,
     method: 'GET' | 'HEAD',
+    variant: unknown,
   ): Promise<ProductMediaContentResponse> {
     let line: { readonly productId: string | null } | null
     try {
@@ -183,6 +188,7 @@ export class PurchaseOrderProductImageService {
       ifNoneMatch,
       range,
       method,
+      variant,
     )
   }
 }

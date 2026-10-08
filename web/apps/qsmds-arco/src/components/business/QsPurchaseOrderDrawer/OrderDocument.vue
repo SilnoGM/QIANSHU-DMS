@@ -3,12 +3,17 @@ import type { PurchaseOrderDocumentDto } from '@/api/generated/types.gen'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
+import { mediaThumbnailUrl } from '@/utils/media-variant'
 
 const props = defineProps<{ document: PurchaseOrderDocumentDto }>()
 const { t } = useI18n()
 // 凭证区域仅展示与预览，已解除的历史记录继续保留元数据，不加载失效媒体。
 const images = computed(() => props.document.mediaType === 'IMAGE' && props.document.detachedAt === null && props.document.contentUrl
-  ? [{ src: props.document.contentUrl, previewSrc: props.document.contentUrl, alt: props.document.originalFilename }]
+  ? [{
+      src: mediaThumbnailUrl(props.document.contentUrl) ?? props.document.contentUrl,
+      previewSrc: props.document.contentUrl,
+      alt: props.document.originalFilename,
+    }]
   : [])
 const fileSize = computed(() => {
   const bytes = Number(props.document.sizeBytes)

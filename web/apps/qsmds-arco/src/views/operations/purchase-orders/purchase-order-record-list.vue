@@ -5,6 +5,7 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
+import { mediaThumbnailUrl } from '@/utils/media-variant'
 
 const props = defineProps<{ detail: PurchaseOrderDetailDto, kind: 'payments' | 'documents', currencies: readonly CurrencyDescriptor[] }>()
 const { t } = useI18n()
@@ -76,7 +77,7 @@ const documentTones = {
             {{ t('purchaseOrderDrawer.noVoucher') }}
           </p>
           <div v-for="voucher in paymentDocuments(payment)" :key="voucher.id" class="mt-3 p-3 border border-border rounded-lg bg-muted/15 flex gap-3 min-w-0 items-center">
-            <FaImagePreview v-if="voucher.mediaType === 'IMAGE'" :src="voucher.contentUrl" class="rounded-md shrink-0 size-14 object-cover" :aria-label="t('purchaseOrderList.records.preview', { name: voucher.title || voucher.originalFilename })" />
+            <FaImagePreview v-if="voucher.mediaType === 'IMAGE'" :src="mediaThumbnailUrl(voucher.contentUrl) ?? voucher.contentUrl" class="rounded-md shrink-0 size-14 object-cover" :aria-label="t('purchaseOrderList.records.preview', { name: voucher.title || voucher.originalFilename })" />
             <a v-else :href="voucher.contentUrl" target="_blank" rel="noopener noreferrer" class="border border-border rounded-md bg-background flex shrink-0 size-14 items-center justify-center" :aria-label="t('purchaseOrderList.records.openFile', { name: voucher.title || voucher.originalFilename })">
               <FaIcon name="i-lucide:file-text" class="text-muted-foreground size-6" aria-hidden="true" />
             </a>
@@ -108,7 +109,7 @@ const documentTones = {
     <FaEmpty v-if="!documentRows.length" icon="i-lucide:files" :title="t('purchaseOrderDrawer.noDocuments')" :description="t('purchaseOrderList.records.noDocumentsDescription')" class="py-10" />
     <ul v-else class="m-0 p-0 list-none border-y border-border divide-border divide-y">
       <li v-for="{ document, payment } in documentRows" :key="document.id" class="py-4 flex gap-4 min-w-0 items-start">
-        <FaImagePreview v-if="document.mediaType === 'IMAGE'" :src="document.contentUrl" class="shrink-0 size-20 object-cover" :aria-label="t('purchaseOrderList.records.preview', { name: document.title || document.originalFilename })">
+        <FaImagePreview v-if="document.mediaType === 'IMAGE'" :src="mediaThumbnailUrl(document.contentUrl) ?? document.contentUrl" class="shrink-0 size-20 object-cover" :aria-label="t('purchaseOrderList.records.preview', { name: document.title || document.originalFilename })">
           <template #error>
             <div class="text-muted-foreground flex size-20 items-center justify-center">
               <FaIcon name="i-lucide:image-off" class="size-8" aria-hidden="true" />

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { Readable } from 'node:stream'
+import { Readable } from 'node:stream'
 
 import { HttpStatus, Injectable } from '@nestjs/common'
 import type { Prisma } from '../../../generated/prisma/client'
@@ -16,9 +16,18 @@ import {
   requireMediaObjectKeyNamespace,
 } from '../../media/media-storage'
 import {
+  isMediaVariantName,
+  MEDIA_VARIANT_CACHE_CONTROL,
+  MEDIA_VARIANT_CONTENT_TYPE,
+  MEDIA_VARIANT_FILE_EXTENSION,
+  type MediaVariantName,
+  MediaVariantService,
+} from '../../media/media-variant.service'
+import {
   productMediaInternalError,
   productMediaNotFoundError,
   productMediaStorageUnavailableError,
+  productMediaValidationError,
 } from './product-media.errors'
 
 const PRODUCT_MEDIA_CONTENT_SELECT = {
@@ -41,6 +50,7 @@ type ProductMediaContentRow = Prisma.ProductMediaGetPayload<{
 
 type ProductMediaContentHeaderName =
   | 'Accept-Ranges'
+  | 'Cache-Control'
   | 'Content-Disposition'
   | 'Content-Length'
   | 'Content-Range'
@@ -56,7 +66,8 @@ export interface ProductMediaContentResponse {
     | HttpStatus.PARTIAL_CONTENT
     | HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE
   readonly headers: Partial<Record<ProductMediaContentHeaderName, string>> & {
-    readonly 'Accept-Ranges': 'bytes'
+    /** 派生变体只提供完整内容，因此显式声明 none 而不是伪装支持字节区间。 */
+    readonly 'Accept-Ranges': 'bytes' | 'none'
     readonly ETag: string
     readonly 'X-Content-Type-Options': 'nosniff'
   }
@@ -228,6 +239,37 @@ function buildContentDisposition(
     : `${fallback}; filename*=UTF-8''${encodeRfc5987Filename(unicodeFilename)}`
 }
 
+/**
+ * 派生变体只服务浏览器内联渲染，不存在下载语义，因此只给净化后的 ASCII 文件名，
+ * 不像原件那样附带 filename*。
+ */
+function buildVariantContentDisposition(
+  originalFilename: string,
+  contentType: TrustedContentType,
+  variant: MediaVariantName,
+): string {
+  const sanitized = sanitizeAsciiFilename(
+    originalFilename,
+    contentType.extension,
+    false,
+  )
+  const stem = sanitized.toLowerCase().endsWith(contentType.extension)
+    ? sanitized.slice(0, -contentType.extension.length)
+    : sanitized
+  const filename = `${stem.length === 0 ? 'media' : stem}.${variant}${MEDIA_VARIANT_FILE_EXTENSION}`
+  return `inline; filename="${filename}"`
+}
+
+/**
+ * 只有受控的变体名才进入派生路径；其余取值按参数校验失败处理，
+ * 避免未知变体静默退化成整份原件的传输。
+ */
+function normalizeVariant(value: unknown): MediaVariantName | undefined {
+  if (value === undefined || value === '') return undefined
+  if (!isMediaVariantName(value)) throw productMediaValidationError()
+  return value
+}
+
 function buildOpaqueEtag(checksumSha256: string): string {
   // 对数据库 checksum 再做带命名空间的单向摘要，避免把内容摘要本身作为公开标识。
   const digest = createHash('sha256')
@@ -320,6 +362,7 @@ export class ProductMediaContentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly delivery: MediaContentDeliveryService,
+    private readonly variants: MediaVariantService,
   ) {}
 
   async resolve(
@@ -328,6 +371,7 @@ export class ProductMediaContentService {
     ifNoneMatch: unknown,
     range: unknown = undefined,
     method: 'GET' | 'HEAD' = 'GET',
+    variant: unknown = undefined,
   ): Promise<ProductMediaContentResponse> {
     let row: ProductMediaContentRow | null
 
@@ -376,6 +420,23 @@ export class ProductMediaContentService {
     } catch {
       // 缺失、已脱离、状态不一致与不安全持久化元数据统一为防枚举 404。
       throw productMediaNotFoundError()
+    }
+
+    const variantName = normalizeVariant(variant)
+    if (variantName !== undefined) {
+      const derived = await this.renderVariantResponse(
+        variantName,
+        contentType,
+        objectKey,
+        checksumSha256,
+        row.mediaAsset.originalFilename,
+        ifNoneMatch,
+        method,
+      )
+      if (derived !== null) return derived
+
+      // 视频封面派生失败时绝不回退成整段视频；图片缩略派生失败则回退原件，列表仍能显示图片。
+      if (variantName === 'poster') throw productMediaNotFoundError()
     }
 
     const etag = buildOpaqueEtag(checksumSha256)
@@ -476,6 +537,66 @@ export class ProductMediaContentService {
     }
     catch {
       throw productMediaStorageUnavailableError()
+    }
+  }
+
+  /**
+   * 派生变体与原件共用同一路鉴权与关联校验，只把交付字节换成呈现层产物。
+   *
+   * 变体字节不接受字节区间（`Accept-Ranges: none`），因此 Range 头在变体路径被忽略；
+   * 它由不可变原件确定性派生，所以自带长期私有缓存，浏览器只需为每个资源付一次派生成本。
+   */
+  private async renderVariantResponse(
+    variant: MediaVariantName,
+    contentType: TrustedContentType,
+    objectKey: string,
+    checksumSha256: string,
+    originalFilename: string,
+    ifNoneMatch: unknown,
+    method: 'GET' | 'HEAD',
+  ): Promise<ProductMediaContentResponse | null> {
+    const requiredMediaType = variant === 'thumb'
+      ? MediaType.IMAGE
+      : MediaType.VIDEO
+    // 变体与媒体类型不匹配（例如向视频请求缩略图）不存在可交付内容，按防枚举 404 处理。
+    if (contentType.mediaType !== requiredMediaType) {
+      throw productMediaNotFoundError()
+    }
+
+    let bytes: Buffer | null
+    try {
+      bytes = await this.variants.render({ checksumSha256, objectKey, variant })
+    }
+    catch {
+      bytes = null
+    }
+    if (bytes === null) return null
+
+    const etag = buildOpaqueEtag(`${variant}:${checksumSha256}`)
+    const headers = {
+      'Accept-Ranges': 'none' as const,
+      'Cache-Control': MEDIA_VARIANT_CACHE_CONTROL,
+      ETag: etag,
+      'X-Content-Type-Options': 'nosniff' as const,
+    }
+
+    if (matchesIfNoneMatch(ifNoneMatch, etag)) {
+      return { status: HttpStatus.NOT_MODIFIED, headers }
+    }
+
+    return {
+      status: HttpStatus.OK,
+      headers: {
+        ...headers,
+        'Content-Disposition': buildVariantContentDisposition(
+          originalFilename,
+          contentType,
+          variant,
+        ),
+        'Content-Length': bytes.length.toString(),
+        'Content-Type': MEDIA_VARIANT_CONTENT_TYPE,
+      },
+      ...(method === 'HEAD' ? {} : { stream: Readable.from([bytes]) }),
     }
   }
 }

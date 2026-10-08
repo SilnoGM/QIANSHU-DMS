@@ -325,6 +325,7 @@ export class SalesOrdersController {
     @Param() params: SalesOrderProductEditImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<void> {
     const result = await this.productImages.resolveProductEditOption(
@@ -334,6 +335,7 @@ export class SalesOrdersController {
       ifNoneMatch,
       range,
       'HEAD',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
   }
@@ -349,6 +351,7 @@ export class SalesOrdersController {
     @Param() params: SalesOrderProductEditImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<StreamableFile | undefined> {
     const result = await this.productImages.resolveProductEditOption(
@@ -358,6 +361,7 @@ export class SalesOrdersController {
       ifNoneMatch,
       range,
       'GET',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
     return result.stream === undefined
@@ -386,6 +390,7 @@ export class SalesOrdersController {
       ifNoneMatch,
       range,
       'HEAD',
+      query.variant,
     )
     applyProductMediaContentResponse(response, result)
   }
@@ -411,6 +416,7 @@ export class SalesOrdersController {
       ifNoneMatch,
       range,
       'GET',
+      query.variant,
     )
     applyProductMediaContentResponse(response, result)
     return result.stream === undefined
@@ -429,6 +435,7 @@ export class SalesOrdersController {
     @Param() params: SalesOrderLineProductImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<void> {
     const result = await this.productImages.resolveListPreview(
@@ -438,6 +445,7 @@ export class SalesOrdersController {
       ifNoneMatch,
       range,
       'HEAD',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
   }
@@ -453,6 +461,7 @@ export class SalesOrdersController {
     @Param() params: SalesOrderLineProductImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<StreamableFile | undefined> {
     const result = await this.productImages.resolveListPreview(
@@ -462,6 +471,7 @@ export class SalesOrdersController {
       ifNoneMatch,
       range,
       'GET',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
     return result.stream === undefined

@@ -85,12 +85,14 @@ describe('ProductsController private media content', () => {
       params,
       undefined,
       undefined,
+      undefined,
       fixture.response,
     )).resolves.toBeUndefined()
     await expect(fixture.controller.headMediaContent(
       params,
       '"known"',
       'bytes=0-0',
+      'thumb',
       fixture.response,
     )).resolves.toBeUndefined()
 
@@ -101,6 +103,7 @@ describe('ProductsController private media content', () => {
       undefined,
       undefined,
       'GET',
+      undefined,
     )
     expect(fixture.resolve).toHaveBeenNthCalledWith(
       2,
@@ -109,6 +112,7 @@ describe('ProductsController private media content', () => {
       '"known"',
       'bytes=0-0',
       'HEAD',
+      'thumb',
     )
     expect(fixture.response.status).toHaveBeenCalledWith(HttpStatus.OK)
     for (const [name, value] of Object.entries(READY_RESPONSE.headers)) {
@@ -147,6 +151,7 @@ describe('ProductsController private media content', () => {
       { productId: PRODUCT_ID, productMediaId: PRODUCT_MEDIA_ID },
       undefined,
       undefined,
+      'poster',
       fixture.response,
     )
 
@@ -204,7 +209,6 @@ describe('ProductsController private media content OpenAPI', () => {
         conflict: false,
         validation: true,
         session: 'required',
-        privateNoStore: true,
         errors: [{
           status: 403,
           codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'],
@@ -250,6 +254,21 @@ describe('ProductsController private media content OpenAPI', () => {
         'X-Content-Type-Options',
         'X-Request-Id',
       ].sort())
+      expect(response.headers?.['Accept-Ranges']).toMatchObject({
+        schema: { enum: ['bytes', 'none'] },
+      })
+      expect(response.headers?.['Cache-Control']).toMatchObject({
+        schema: {
+          enum: ['private, no-store', 'private, max-age=31536000, immutable'],
+        },
+      })
+    }
+    for (const operation of [get, head]) {
+      expect(operation?.parameters).toContainEqual(expect.objectContaining({
+        in: 'query',
+        name: 'variant',
+        required: false,
+      }))
     }
   })
 })

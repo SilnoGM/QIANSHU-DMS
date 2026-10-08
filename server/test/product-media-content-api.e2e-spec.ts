@@ -23,6 +23,7 @@ import { PermissionGuard } from '../src/modules/auth/guards/permission.guard'
 import { SessionCookieProvider } from '../src/modules/auth/providers/session-cookie.provider'
 import { MediaContentDeliveryService } from '../src/modules/media/media-content-delivery.service'
 import type { MediaByteRange, MediaStorage } from '../src/modules/media/media-storage'
+import { MediaVariantService } from '../src/modules/media/media-variant.service'
 import { ProductMediaContentService } from '../src/modules/products/media/product-media-content.service'
 import { ProductMediaHttpService } from '../src/modules/products/media/product-media-http.service'
 import { ProductCommandService } from '../src/modules/products/product-command.service'
@@ -86,6 +87,7 @@ describe('Product media private content API', () => {
   let findFirst: jest.Mock
   let openObject: jest.Mock
   let statObject: jest.Mock
+  let renderVariant: jest.Mock
 
   beforeAll(async () => {
     permissions = ['product-media:read']
@@ -95,6 +97,7 @@ describe('Product media private content API', () => {
       modifiedAt: new Date('2026-08-16T00:00:00.000Z'),
       sizeBytes: BigInt(PRIVATE_CONTENT.length),
     })
+    renderVariant = jest.fn().mockResolvedValue(null)
     openObject = jest.fn().mockImplementation(
       (_objectKey: string, range?: MediaByteRange) => {
         const content = range === undefined
@@ -157,6 +160,9 @@ describe('Product media private content API', () => {
       }, {
         provide: MediaContentDeliveryService,
         useValue: delivery,
+      }, {
+        provide: MediaVariantService,
+        useValue: { render: renderVariant },
       }, ProductMediaContentService, {
         provide: ProductQueryService,
         useValue: { list: jest.fn(), getById: jest.fn() },
@@ -212,6 +218,7 @@ describe('Product media private content API', () => {
     findFirst.mockReset().mockResolvedValue(readyContentRow())
     statObject.mockClear()
     openObject.mockClear()
+    renderVariant.mockReset().mockResolvedValue(null)
   })
 
   function contentRequest(method: 'get' | 'head' = 'get') {
@@ -226,7 +233,7 @@ describe('Product media private content API', () => {
 
     expect(response.headers).toMatchObject({
       'accept-ranges': 'bytes',
-      'cache-control': 'private, no-store',
+      'cache-control': 'private, max-age=31536000, immutable',
       'content-disposition': 'inline; filename="front.webp"',
       'content-length': String(PRIVATE_CONTENT.length),
       'content-type': 'image/webp',
@@ -285,7 +292,7 @@ describe('Product media private content API', () => {
     expect(conditional.text).toBe('')
     expect(conditional.headers).toMatchObject({
       'accept-ranges': 'bytes',
-      'cache-control': 'private, no-store',
+      'cache-control': 'private, max-age=31536000, immutable',
       etag: initial.headers.etag,
       'x-content-type-options': 'nosniff',
     })
@@ -424,5 +431,100 @@ describe('Product media private content API', () => {
       .toBe('VALIDATION_FAILED')
 
     expect(findFirst).not.toHaveBeenCalled()
+  })
+
+  describe('derived presentation variants', () => {
+    function variantRequest(variant: string, method: 'get' | 'head' = 'get') {
+      const agent = request(application.getHttpServer())
+      const path = `/api/products/${PRODUCT_ID}/media/${MEDIA_ID}/content`
+      return agent[method](path)
+        .query({ variant })
+        .set('Cookie', 'qs_session=valid')
+    }
+
+    it('serves a privately cached webp thumbnail without touching the original object', async () => {
+      const rendered = Buffer.from('rendered-thumb-bytes')
+      renderVariant.mockResolvedValue(rendered)
+
+      const response = await variantRequest('thumb').expect(HttpStatus.OK)
+
+      expect(renderVariant).toHaveBeenCalledWith({
+        checksumSha256: 'a'.repeat(64),
+        objectKey: OBJECT_KEY,
+        variant: 'thumb',
+      })
+      expect(response.headers).toMatchObject({
+        'accept-ranges': 'none',
+        'cache-control': 'private, max-age=31536000, immutable',
+        'content-disposition': 'inline; filename="front.thumb.webp"',
+        'content-length': String(rendered.length),
+        'content-type': 'image/webp',
+        'x-content-type-options': 'nosniff',
+      })
+      expect(response.body).toEqual(rendered)
+      expect(openObject).not.toHaveBeenCalled()
+      expect(statObject).not.toHaveBeenCalled()
+    })
+
+    it('returns a bodyless 304 for a matching variant ETag under the same private policy', async () => {
+      renderVariant.mockResolvedValue(Buffer.from('rendered-thumb-bytes'))
+      const initial = await variantRequest('thumb').expect(HttpStatus.OK)
+
+      const conditional = await variantRequest('thumb')
+        .set('If-None-Match', initial.headers.etag)
+        .expect(HttpStatus.NOT_MODIFIED)
+
+      expect(conditional.text).toBe('')
+      expect(conditional.headers).toMatchObject({
+        'accept-ranges': 'none',
+        'cache-control': 'private, max-age=31536000, immutable',
+        etag: initial.headers.etag,
+      })
+      expect(initial.headers.etag).toMatch(/^"sha256-[A-Za-z0-9_-]{43}"$/u)
+    })
+
+    it('returns bodyless application HEAD metadata for a variant', async () => {
+      renderVariant.mockResolvedValue(Buffer.from('rendered-thumb-bytes'))
+      const response = await variantRequest('thumb', 'head').expect(HttpStatus.OK)
+
+      expect(response.headers['content-length']).toBe('20')
+      expect(response.headers['content-type']).toBe('image/webp')
+      expect(response.text).toBeUndefined()
+      expect(openObject).not.toHaveBeenCalled()
+    })
+
+    it('hides variants that do not match the asset media type behind the anti-enumeration 404', async () => {
+      const response = await variantRequest('poster').expect(HttpStatus.NOT_FOUND)
+
+      expect(readResponseBody<ApiErrorBody>(response).code)
+        .toBe('PRODUCT_MEDIA_NOT_FOUND')
+      expect(response.headers['cache-control']).toBe('private, no-store')
+      expect(renderVariant).not.toHaveBeenCalled()
+      expect(openObject).not.toHaveBeenCalled()
+    })
+
+    it('falls back to the original image when variant rendering fails', async () => {
+      renderVariant.mockResolvedValue(null)
+
+      const response = await variantRequest('thumb').expect(HttpStatus.OK)
+
+      expect(response.headers['content-type']).toBe('image/webp')
+      expect(response.headers['cache-control'])
+        .toBe('private, max-age=31536000, immutable')
+      expect(response.headers['accept-ranges']).toBe('bytes')
+      expect(response.body).toEqual(PRIVATE_CONTENT)
+      expect(openObject).toHaveBeenCalledTimes(1)
+    })
+
+    it('rejects unsupported variant names before any storage or render work', async () => {
+      const response = await variantRequest('original')
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY)
+
+      expect(readResponseBody<ApiErrorBody>(response).code).toBe('VALIDATION_FAILED')
+      expect(response.headers['cache-control']).toBe('private, no-store')
+      expect(renderVariant).not.toHaveBeenCalled()
+      expect(openObject).not.toHaveBeenCalled()
+      expect(findFirst).toHaveBeenCalledTimes(1)
+    })
   })
 })

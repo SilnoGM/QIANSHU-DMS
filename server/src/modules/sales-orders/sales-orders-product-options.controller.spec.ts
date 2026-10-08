@@ -215,7 +215,8 @@ describe('SalesOrdersController product options', () => {
       stream,
     })
     const params = { productId: PRODUCT_ID, productMediaId: PRODUCT_MEDIA_ID }
-    const query = { currencyCode: 'MYR' as const }
+    // 变体名随录单主图的查询 DTO 传入并被原样委派（取值白名单由 DTO 层校验）。
+    const query = { currencyCode: 'MYR' as const, variant: 'thumb' }
 
     await fixture.controller.headProductOptionMainImage(
       params, query, '"known"', 'bytes=0-0', fixture.response,
@@ -225,10 +226,10 @@ describe('SalesOrdersController product options', () => {
     )
 
     expect(fixture.resolve).toHaveBeenNthCalledWith(
-      1, PRODUCT_ID, PRODUCT_MEDIA_ID, 'MYR', '"known"', 'bytes=0-0', 'HEAD',
+      1, PRODUCT_ID, PRODUCT_MEDIA_ID, 'MYR', '"known"', 'bytes=0-0', 'HEAD', 'thumb',
     )
     expect(fixture.resolve).toHaveBeenNthCalledWith(
-      2, PRODUCT_ID, PRODUCT_MEDIA_ID, 'MYR', undefined, undefined, 'GET',
+      2, PRODUCT_ID, PRODUCT_MEDIA_ID, 'MYR', undefined, undefined, 'GET', 'thumb',
     )
     expect(body).toBeInstanceOf(StreamableFile)
     expect((body as StreamableFile).getStream()).toBe(stream)
@@ -263,19 +264,19 @@ describe('SalesOrdersController product options', () => {
     }
 
     await fixture.controller.headProductPreviewMainImage(
-      params, '"known"', 'bytes=0-0', fixture.response,
+      params, '"known"', 'bytes=0-0', undefined, fixture.response,
     )
     const body = await fixture.controller.getProductPreviewMainImage(
-      params, undefined, undefined, fixture.response,
+      params, undefined, undefined, 'thumb', fixture.response,
     )
 
     expect(fixture.resolveListPreview).toHaveBeenNthCalledWith(
       1, params.salesOrderId, params.lineId, PRODUCT_MEDIA_ID,
-      '"known"', 'bytes=0-0', 'HEAD',
+      '"known"', 'bytes=0-0', 'HEAD', undefined,
     )
     expect(fixture.resolveListPreview).toHaveBeenNthCalledWith(
       2, params.salesOrderId, params.lineId, PRODUCT_MEDIA_ID,
-      undefined, undefined, 'GET',
+      undefined, undefined, 'GET', 'thumb',
     )
     expect(body).toBeInstanceOf(StreamableFile)
 
@@ -329,10 +330,10 @@ describe('SalesOrdersController product options', () => {
       items: [],
     })
     await controller.headProductEditOptionMainImage(
-      params, '"known"', 'bytes=0-0', response,
+      params, '"known"', 'bytes=0-0', undefined, response,
     )
     const body = await controller.getProductEditOptionMainImage(
-      params, undefined, undefined, response,
+      params, undefined, undefined, 'thumb', response,
     )
     expect(context).toHaveBeenCalledWith(params.salesOrderId)
     expect(productOptions).toHaveBeenCalledWith(params.salesOrderId, query)
@@ -468,8 +469,13 @@ describe('SalesOrdersController product options OpenAPI', () => {
       expect(contract).toMatchObject({
         authorization: true,
         resourceLocator: true,
-        privateNoStore: true,
       })
+      expect(contract).not.toMatchObject({ privateNoStore: true })
+      expect(operation?.parameters).toContainEqual(expect.objectContaining({
+        in: 'query',
+        name: 'variant',
+        required: false,
+      }))
       if (typeof contract !== 'object' || contract === null || !('errors' in contract)) {
         throw new Error('OpenAPI contract must expose an errors array')
       }
@@ -507,17 +513,28 @@ describe('SalesOrdersController product options OpenAPI', () => {
       .toBe('sales_orders_head_product_edit_option_main_image')
     expect(imagePath?.get?.operationId)
       .toBe('sales_orders_get_product_edit_option_main_image')
+    for (const operation of [context, options] as readonly (ContractOperation | undefined)[]) {
+      expect(operation?.security).toEqual([{ sessionCookie: [] }])
+      expect(operation?.['x-qianshu-contract']).toMatchObject({
+        authorization: true,
+        privateNoStore: true,
+      })
+    }
+    // 主图内容路由不设置 privateNoStore：缓存策略由响应头里的 Cache-Control 枚举如实声明。
     for (const operation of [
-      context,
-      options,
       imagePath?.head,
       imagePath?.get,
     ] as readonly (ContractOperation | undefined)[]) {
       expect(operation?.security).toEqual([{ sessionCookie: [] }])
       expect(operation?.['x-qianshu-contract']).toMatchObject({
         authorization: true,
-        privateNoStore: true,
       })
+      expect(operation?.['x-qianshu-contract']).not.toMatchObject({ privateNoStore: true })
+      expect(operation?.parameters).toContainEqual(expect.objectContaining({
+        in: 'query',
+        name: 'variant',
+        required: false,
+      }))
     }
   })
 
@@ -626,8 +643,13 @@ describe('SalesOrdersController product options OpenAPI', () => {
       expect(operation?.['x-qianshu-contract']).toMatchObject({
         authorization: true,
         resourceLocator: true,
-        privateNoStore: true,
       })
+      expect(operation?.['x-qianshu-contract']).not.toMatchObject({ privateNoStore: true })
+      expect(operation?.parameters).toContainEqual(expect.objectContaining({
+        in: 'query',
+        name: 'variant',
+        required: false,
+      }))
     }
   })
 })

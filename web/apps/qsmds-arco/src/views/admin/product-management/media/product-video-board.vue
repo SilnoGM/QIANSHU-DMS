@@ -2,6 +2,7 @@
 import type { ProductMediaItemDto } from '../../../../api/generated/types.gen'
 import type { ProductVideoPreviewFailure } from './product-media-common.logic'
 
+import { mediaPosterUrl } from '@/utils/media-variant'
 import { resolveProductVideoPreviewFailure } from './product-media-common.logic'
 import {
   formatProductMediaBytes,
@@ -199,11 +200,12 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
           >
             <video
               :src="contentUrls[item.id]!"
+              :poster="mediaPosterUrl(contentUrls[item.id])"
               class="h-full w-full object-contain"
               aria-hidden="true"
               muted
               playsinline
-              preload="metadata"
+              preload="none"
               tabindex="-1"
               @error="handleVideoError($event, item.id)"
               @loadedmetadata="delete previewFailures[item.id]"
