@@ -377,6 +377,7 @@ const supplierResidueAllowlist = Object.freeze([
 
 const currentGlobalDocuments = Object.freeze([
   '发布与版本管理.md',
+  '发布与部署流程.md',
   '开发工作流.md',
   '生产部署与Gate OPS检查清单.md',
   '用户认证与权限体系设计.md',
@@ -1396,8 +1397,10 @@ test('根治理入口和当前指导文档均为真实文件', async () => {
     'docs/全局文档/项目工程组织方案.md',
     'docs/全局文档/开发工作流.md',
     'docs/全局文档/发布与版本管理.md',
+    'docs/全局文档/发布与部署流程.md',
     'docs/全局文档/生产部署与Gate OPS检查清单.md',
     'docs/全局文档/用户认证与权限体系设计.md',
+    'docs/全局文档/腾讯云Docker部署手册.md',
     'docs/工程归档/归档索引.md',
   ]) {
     await assertRegularFile(file)
@@ -1409,7 +1412,7 @@ test('Node.js 主版本配置为 24', async () => {
   assert.equal(nodeVersion.trim(), '24')
 })
 
-test('全局文档只保留六份当前指导文档', async () => {
+test('全局文档只保留七份当前指导文档', async () => {
   assert.deepEqual(
     await directoryEntryKinds(path.join('docs', '全局文档')),
     expectedDirectoryEntryKinds({ files: currentGlobalDocuments }),
@@ -1440,6 +1443,7 @@ test('文档索引只展开当前文档并通过唯一入口进入工程归档',
     './全局文档/项目工程组织方案.md',
     './全局文档/开发工作流.md',
     './全局文档/发布与版本管理.md',
+    './全局文档/发布与部署流程.md',
     './全局文档/生产部署与Gate OPS检查清单.md',
     './全局文档/用户认证与权限体系设计.md',
     './前端文档/前端架构.md',
@@ -1617,9 +1621,9 @@ test('根 README 公开 CI、Release 与当前平台事实且不暗示根安装'
     assert.ok(releaseSection.includes(`\`${command}\``), `根 README 缺少命令：${command}`)
   }
   assert.ok(releaseSection.includes('根目录仍不执行 `pnpm install`'))
-  assert.ok(releaseSection.includes('`v0.1.2` 已完成 GitHub 平台验收'))
-  assert.ok(releaseSection.includes('Main CI Run `29317624359`'))
-  assert.ok(releaseSection.includes('Release Run `29317866199` attempt `2`'))
+  assert.ok(releaseSection.includes('平台证据表'))
+  assert.ok(releaseSection.includes('本文不复制会随每次发布变化的流水线身份'))
+  assert.doesNotMatch(releaseSection, /29317624359|29317866199|29240879781/u)
   assert.doesNotMatch(releaseSection, /平台验收以 Task 14 为准|当前不得.*平台已验收/u)
   assert.ok(rootCommands.includes('归档已构建的正式 Web 产物'))
   assert.ok(rootCommands.includes('归档已构建的 Server production 产物'))
@@ -1797,9 +1801,9 @@ test('工程方案记录三 Workflow、双端重建和本地与平台验收边�
   for (const fact of [
     '| 状态 | 工程组织基线已完成；用户认证与权限体系功能分支本地验收完成 |',
     '| 基线完成日期 | 2026-07-14 |',
-    '| 当前事实更新日期 | 2026-07-18 |',
-    '| 当前产品版本 | `v0.1.2` |',
-    '| 当前正式版本 Source Commit | `ec418b8a7dca9c0da51770f6559813f3c7059077` |',
+    '| 当前事实更新日期 | 2026-10-08 |',
+    '| 当前产品版本 | `v0.4.0` |',
+    '| 当前正式版本 Source Commit | `dab103fe3e9987a0fa2981ae6127184e12b450a3` |',
     'Server release archive packaging',
     'Main CI Run `29317624359`',
     'Release Run `29317866199`',
@@ -1890,11 +1894,11 @@ test('发布与版本管理文档覆盖平台基线、完整发布、恢复与�
     [
       '## 1. 状态与边界',
       [
-        '`v0.1.2`',
-        '`ec418b8a7dca9c0da51770f6559813f3c7059077`',
-        '29317624359',
-        '29240879781',
-        '29317866199',
+        '`v0.4.0`',
+        '`dab103fe3e9987a0fa2981ae6127184e12b450a3`',
+        '37593751063',
+        '36839640174',
+        '37594095891',
         'attempt 2',
       ],
     ],
@@ -1988,9 +1992,11 @@ test('发布与版本管理文档覆盖平台基线、完整发布、恢复与�
   const tagSection = markdownSection(guide, '## 3. Annotated Tag')
   const orderedTagCommands = [
     ': "${RELEASE_VERSION:?RELEASE_VERSION must be an approved stable version}"',
+    ': "${RELEASE_NOTES:?RELEASE_NOTES must point to the prepared release notes file}"',
+    'test -s "$RELEASE_NOTES"',
     'git fetch origin main --tags',
     'source_commit="$(git rev-parse refs/remotes/origin/main)"',
-    'git tag -a "v${RELEASE_VERSION}" "$source_commit" -m "千树 DMS v${RELEASE_VERSION}"',
+    'git tag -a "v${RELEASE_VERSION}" "$source_commit" -F "$RELEASE_NOTES"',
     'test "$(git cat-file -t "refs/tags/v${RELEASE_VERSION}")" = tag',
     'test "$(git rev-parse "v${RELEASE_VERSION}^{commit}")" = "$source_commit"',
     'node --run release:check -- --tag "v${RELEASE_VERSION}" --source-commit "$source_commit"',

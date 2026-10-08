@@ -18,6 +18,7 @@ import {
 } from '@nestjs/common'
 import { ApiBody, ApiConsumes, ApiHeader, ApiTags } from '@nestjs/swagger'
 
+import { ImmutableMediaContentCache } from '../../infrastructure/http/private-no-store.interceptor'
 import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
@@ -315,6 +316,7 @@ export class SalesOrdersController {
   }
 
   @Head(':salesOrderId/product-edit-options/:productId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('sales-orders:update')
   @ApiProductMediaContentContract('HEAD', {
     operationId: 'sales_orders_head_product_edit_option_main_image',
@@ -325,6 +327,7 @@ export class SalesOrdersController {
     @Param() params: SalesOrderProductEditImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<void> {
     const result = await this.productImages.resolveProductEditOption(
@@ -334,11 +337,13 @@ export class SalesOrdersController {
       ifNoneMatch,
       range,
       'HEAD',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
   }
 
   @Get(':salesOrderId/product-edit-options/:productId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('sales-orders:update')
   @ApiProductMediaContentContract('GET', {
     operationId: 'sales_orders_get_product_edit_option_main_image',
@@ -349,6 +354,7 @@ export class SalesOrdersController {
     @Param() params: SalesOrderProductEditImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<StreamableFile | undefined> {
     const result = await this.productImages.resolveProductEditOption(
@@ -358,6 +364,7 @@ export class SalesOrdersController {
       ifNoneMatch,
       range,
       'GET',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
     return result.stream === undefined
@@ -366,6 +373,7 @@ export class SalesOrdersController {
   }
 
   @Head('product-options/:productId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('sales-orders:create')
   @ApiProductMediaContentContract('HEAD', {
     operationId: 'sales_orders_head_product_option_main_image',
@@ -386,11 +394,13 @@ export class SalesOrdersController {
       ifNoneMatch,
       range,
       'HEAD',
+      query.variant,
     )
     applyProductMediaContentResponse(response, result)
   }
 
   @Get('product-options/:productId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('sales-orders:create')
   @ApiProductMediaContentContract('GET', {
     operationId: 'sales_orders_get_product_option_main_image',
@@ -411,6 +421,7 @@ export class SalesOrdersController {
       ifNoneMatch,
       range,
       'GET',
+      query.variant,
     )
     applyProductMediaContentResponse(response, result)
     return result.stream === undefined
@@ -419,6 +430,7 @@ export class SalesOrdersController {
   }
 
   @Head(':salesOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('sales-orders:read')
   @ApiProductMediaContentContract('HEAD', {
     operationId: 'sales_orders_head_product_preview_main_image',
@@ -429,6 +441,7 @@ export class SalesOrdersController {
     @Param() params: SalesOrderLineProductImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<void> {
     const result = await this.productImages.resolveListPreview(
@@ -438,11 +451,13 @@ export class SalesOrdersController {
       ifNoneMatch,
       range,
       'HEAD',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
   }
 
   @Get(':salesOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('sales-orders:read')
   @ApiProductMediaContentContract('GET', {
     operationId: 'sales_orders_get_product_preview_main_image',
@@ -453,6 +468,7 @@ export class SalesOrdersController {
     @Param() params: SalesOrderLineProductImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<StreamableFile | undefined> {
     const result = await this.productImages.resolveListPreview(
@@ -462,6 +478,7 @@ export class SalesOrdersController {
       ifNoneMatch,
       range,
       'GET',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
     return result.stream === undefined

@@ -24163,6 +24163,19 @@
             }
           },
           {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -24185,11 +24198,22 @@
             "description": "Authorized private product media content.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -24251,15 +24275,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             }
@@ -24268,11 +24283,22 @@
             "description": "Authorized private product media byte range.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -24335,15 +24361,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -24351,11 +24368,22 @@
             "description": "The current opaque ETag matches If-None-Match.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -24376,15 +24404,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             }
@@ -24394,15 +24413,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -24421,15 +24431,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -24446,15 +24447,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -24473,15 +24465,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -24497,11 +24480,22 @@
             "description": "The requested application-delivery byte range is invalid or unsatisfied.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -24530,15 +24524,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -24547,15 +24532,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -24574,15 +24550,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -24599,15 +24566,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -24638,7 +24596,6 @@
           "conflict": false,
           "validation": true,
           "session": "required",
-          "privateNoStore": true,
           "errors": [
             {
               "status": 403,
@@ -24690,6 +24647,19 @@
             }
           },
           {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -24712,11 +24682,22 @@
             "description": "Authorized private product media content.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -24778,15 +24759,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -24839,11 +24811,22 @@
             "description": "Authorized private product media byte range.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -24906,15 +24889,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "content": {
@@ -24966,11 +24940,22 @@
             "description": "The current opaque ETag matches If-None-Match.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -24992,15 +24977,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -25009,15 +24985,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -25036,15 +25003,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -25061,15 +25019,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -25088,15 +25037,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -25112,11 +25052,22 @@
             "description": "The requested application-delivery byte range is invalid or unsatisfied.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -25145,15 +25096,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -25162,15 +25104,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -25189,15 +25122,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -25214,15 +25138,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -25253,7 +25168,6 @@
           "conflict": false,
           "validation": true,
           "session": "required",
-          "privateNoStore": true,
           "errors": [
             {
               "status": 403,
@@ -28740,6 +28654,19 @@
             }
           },
           {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -28762,11 +28689,22 @@
             "description": "Authorized sales-order product-edit option main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -28828,15 +28766,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             }
@@ -28845,11 +28774,22 @@
             "description": "Authorized sales-order product-edit option main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -28912,15 +28852,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -28928,11 +28859,22 @@
             "description": "The current opaque ETag matches If-None-Match.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -28953,15 +28895,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             }
@@ -28971,15 +28904,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -28998,15 +28922,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -29023,15 +28938,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -29050,15 +28956,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -29074,11 +28971,22 @@
             "description": "The requested application-delivery byte range is invalid or unsatisfied.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -29107,15 +29015,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -29124,15 +29023,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -29151,15 +29041,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -29176,15 +29057,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -29215,7 +29087,6 @@
           "conflict": false,
           "validation": true,
           "session": "required",
-          "privateNoStore": true,
           "errors": [
             {
               "status": 403,
@@ -29276,6 +29147,19 @@
             }
           },
           {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -29298,11 +29182,22 @@
             "description": "Authorized sales-order product-edit option main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -29364,15 +29259,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -29425,11 +29311,22 @@
             "description": "Authorized sales-order product-edit option main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -29492,15 +29389,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "content": {
@@ -29552,11 +29440,22 @@
             "description": "The current opaque ETag matches If-None-Match.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -29578,15 +29477,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -29595,15 +29485,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -29622,15 +29503,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -29647,15 +29519,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -29674,15 +29537,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -29698,11 +29552,22 @@
             "description": "The requested application-delivery byte range is invalid or unsatisfied.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -29731,15 +29596,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -29748,15 +29604,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -29775,15 +29622,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -29800,15 +29638,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -29839,7 +29668,6 @@
           "conflict": false,
           "validation": true,
           "session": "required",
-          "privateNoStore": true,
           "errors": [
             {
               "status": 403,
@@ -29905,6 +29733,19 @@
             }
           },
           {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -29927,11 +29768,22 @@
             "description": "Authorized sales-order product option main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -29993,15 +29845,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             }
@@ -30010,11 +29853,22 @@
             "description": "Authorized sales-order product option main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -30077,15 +29931,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -30093,11 +29938,22 @@
             "description": "The current opaque ETag matches If-None-Match.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -30118,15 +29974,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             }
@@ -30136,15 +29983,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -30163,15 +30001,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -30188,15 +30017,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -30215,15 +30035,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -30239,11 +30050,22 @@
             "description": "The requested application-delivery byte range is invalid or unsatisfied.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -30272,15 +30094,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -30289,15 +30102,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -30316,15 +30120,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -30341,15 +30136,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -30380,7 +30166,6 @@
           "conflict": false,
           "validation": true,
           "session": "required",
-          "privateNoStore": true,
           "errors": [
             {
               "status": 403,
@@ -30444,6 +30229,19 @@
             }
           },
           {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -30466,11 +30264,22 @@
             "description": "Authorized sales-order product option main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -30532,15 +30341,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -30593,11 +30393,22 @@
             "description": "Authorized sales-order product option main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -30660,15 +30471,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "content": {
@@ -30720,11 +30522,22 @@
             "description": "The current opaque ETag matches If-None-Match.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -30746,15 +30559,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -30763,15 +30567,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -30790,15 +30585,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -30815,15 +30601,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -30842,15 +30619,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -30866,11 +30634,22 @@
             "description": "The requested application-delivery byte range is invalid or unsatisfied.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -30899,15 +30678,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -30916,15 +30686,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -30943,15 +30704,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -30968,15 +30720,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -31007,7 +30750,6 @@
           "conflict": false,
           "validation": true,
           "session": "required",
-          "privateNoStore": true,
           "errors": [
             {
               "status": 403,
@@ -31070,6 +30812,19 @@
             }
           },
           {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -31092,11 +30847,22 @@
             "description": "Authorized sales-order list product preview image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -31158,15 +30924,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             }
@@ -31175,11 +30932,22 @@
             "description": "Authorized sales-order list product preview image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -31242,15 +31010,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -31258,11 +31017,22 @@
             "description": "The current opaque ETag matches If-None-Match.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -31283,15 +31053,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             }
@@ -31301,15 +31062,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -31328,15 +31080,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -31353,15 +31096,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -31380,15 +31114,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -31404,11 +31129,22 @@
             "description": "The requested application-delivery byte range is invalid or unsatisfied.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -31437,15 +31173,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -31454,15 +31181,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -31481,15 +31199,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -31506,15 +31215,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -31545,7 +31245,6 @@
           "conflict": false,
           "validation": true,
           "session": "required",
-          "privateNoStore": true,
           "errors": [
             {
               "status": 403,
@@ -31606,6 +31305,19 @@
             }
           },
           {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -31628,11 +31340,22 @@
             "description": "Authorized sales-order list product preview image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -31694,15 +31417,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -31755,11 +31469,22 @@
             "description": "Authorized sales-order list product preview image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -31822,15 +31547,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "content": {
@@ -31882,11 +31598,22 @@
             "description": "The current opaque ETag matches If-None-Match.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -31908,15 +31635,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -31925,15 +31643,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -31952,15 +31661,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -31977,15 +31677,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -32004,15 +31695,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -32028,11 +31710,22 @@
             "description": "The requested application-delivery byte range is invalid or unsatisfied.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -32061,15 +31754,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -32078,15 +31762,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -32105,15 +31780,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -32130,15 +31796,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -32169,7 +31826,6 @@
           "conflict": false,
           "validation": true,
           "session": "required",
-          "privateNoStore": true,
           "errors": [
             {
               "status": 403,
@@ -43234,6 +42890,19 @@
             }
           },
           {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -43256,11 +42925,22 @@
             "description": "Authorized purchase-order product option main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -43322,15 +43002,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             }
@@ -43339,11 +43010,22 @@
             "description": "Authorized purchase-order product option main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -43406,15 +43088,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -43422,11 +43095,22 @@
             "description": "The current opaque ETag matches If-None-Match.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -43447,15 +43131,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             }
@@ -43465,15 +43140,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -43492,15 +43158,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -43517,15 +43174,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -43544,15 +43192,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -43568,11 +43207,22 @@
             "description": "The requested application-delivery byte range is invalid or unsatisfied.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -43601,15 +43251,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -43618,15 +43259,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -43645,15 +43277,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -43670,15 +43293,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -43709,7 +43323,6 @@
           "conflict": false,
           "validation": true,
           "session": "required",
-          "privateNoStore": true,
           "errors": [
             {
               "status": 403,
@@ -43761,6 +43374,19 @@
             }
           },
           {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -43783,11 +43409,22 @@
             "description": "Authorized purchase-order product option main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -43849,15 +43486,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -43910,11 +43538,22 @@
             "description": "Authorized purchase-order product option main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -43977,15 +43616,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "content": {
@@ -44037,11 +43667,22 @@
             "description": "The current opaque ETag matches If-None-Match.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -44063,15 +43704,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -44080,15 +43712,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -44107,15 +43730,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -44132,15 +43746,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -44159,15 +43764,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -44183,11 +43779,22 @@
             "description": "The requested application-delivery byte range is invalid or unsatisfied.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -44216,15 +43823,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -44233,15 +43831,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -44260,15 +43849,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -44285,15 +43865,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -44324,7 +43895,6 @@
           "conflict": false,
           "validation": true,
           "session": "required",
-          "privateNoStore": true,
           "errors": [
             {
               "status": 403,
@@ -44991,6 +44561,19 @@
             }
           },
           {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -45013,11 +44596,22 @@
             "description": "Authorized purchase source sales-order line main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -45079,15 +44673,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             }
@@ -45096,11 +44681,22 @@
             "description": "Authorized purchase source sales-order line main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -45163,15 +44759,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -45179,11 +44766,22 @@
             "description": "The current opaque ETag matches If-None-Match.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -45204,15 +44802,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             }
@@ -45222,15 +44811,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -45249,15 +44829,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -45274,15 +44845,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -45301,15 +44863,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -45325,11 +44878,22 @@
             "description": "The requested application-delivery byte range is invalid or unsatisfied.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -45358,15 +44922,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -45375,15 +44930,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -45402,15 +44948,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -45427,15 +44964,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -45466,7 +44994,6 @@
           "conflict": false,
           "validation": true,
           "session": "required",
-          "privateNoStore": true,
           "errors": [
             {
               "status": 403,
@@ -45527,6 +45054,19 @@
             }
           },
           {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -45549,11 +45089,22 @@
             "description": "Authorized purchase source sales-order line main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -45615,15 +45166,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -45676,11 +45218,22 @@
             "description": "Authorized purchase source sales-order line main image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -45743,15 +45296,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "content": {
@@ -45803,11 +45347,22 @@
             "description": "The current opaque ETag matches If-None-Match.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -45829,15 +45384,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -45846,15 +45392,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -45873,15 +45410,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -45898,15 +45426,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -45925,15 +45444,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -45949,11 +45459,22 @@
             "description": "The requested application-delivery byte range is invalid or unsatisfied.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -45982,15 +45503,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -45999,15 +45511,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -46026,15 +45529,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -46051,15 +45545,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -46090,7 +45575,6 @@
           "conflict": false,
           "validation": true,
           "session": "required",
-          "privateNoStore": true,
           "errors": [
             {
               "status": 403,
@@ -46153,6 +45637,19 @@
             }
           },
           {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -46175,11 +45672,22 @@
             "description": "Authorized purchase-order list product preview image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -46241,15 +45749,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             }
@@ -46258,11 +45757,22 @@
             "description": "Authorized purchase-order list product preview image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -46325,15 +45835,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -46341,11 +45842,22 @@
             "description": "The current opaque ETag matches If-None-Match.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -46366,15 +45878,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             }
@@ -46384,15 +45887,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -46411,15 +45905,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -46436,15 +45921,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -46463,15 +45939,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -46487,11 +45954,22 @@
             "description": "The requested application-delivery byte range is invalid or unsatisfied.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -46520,15 +45998,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -46537,15 +46006,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -46564,15 +46024,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -46589,15 +46040,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -46628,7 +46070,6 @@
           "conflict": false,
           "validation": true,
           "session": "required",
-          "privateNoStore": true,
           "errors": [
             {
               "status": 403,
@@ -46689,6 +46130,19 @@
             }
           },
           {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -46711,11 +46165,22 @@
             "description": "Authorized purchase-order list product preview image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -46777,15 +46242,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -46838,11 +46294,22 @@
             "description": "Authorized purchase-order list product preview image.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -46905,15 +46372,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "content": {
@@ -46965,11 +46423,22 @@
             "description": "The current opaque ETag matches If-None-Match.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -46991,15 +46460,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -47008,15 +46468,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -47035,15 +46486,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -47060,15 +46502,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -47087,15 +46520,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -47111,11 +46535,22 @@
             "description": "The requested application-delivery byte range is invalid or unsatisfied.",
             "headers": {
               "Accept-Ranges": {
-                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
                 "schema": {
                   "type": "string",
                   "enum": [
-                    "bytes"
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
                   ]
                 }
               },
@@ -47144,15 +46579,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             }
           },
@@ -47161,15 +46587,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -47188,15 +46605,6 @@
                 "schema": {
                   "type": "string"
                 }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
               }
             },
             "description": "",
@@ -47213,15 +46621,6 @@
               "X-Request-Id": {
                 "schema": {
                   "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
                 }
               }
             },
@@ -47252,7 +46651,6 @@
           "conflict": false,
           "validation": true,
           "session": "required",
-          "privateNoStore": true,
           "errors": [
             {
               "status": 403,

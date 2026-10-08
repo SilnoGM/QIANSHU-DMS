@@ -36,6 +36,7 @@ export class SalesOrderProductImageService {
     ifNoneMatch: unknown,
     range: unknown,
     method: 'GET' | 'HEAD',
+    variant: unknown,
   ): Promise<ProductMediaContentResponse> {
     void currencyCode
     return this.resolveProductOptionImage(
@@ -44,6 +45,7 @@ export class SalesOrderProductImageService {
       ifNoneMatch,
       range,
       method,
+      variant,
     )
   }
 
@@ -58,6 +60,7 @@ export class SalesOrderProductImageService {
     ifNoneMatch: unknown,
     range: unknown,
     method: 'GET' | 'HEAD',
+    variant: unknown,
   ): Promise<ProductMediaContentResponse> {
     let line: { readonly productId: string | null } | null
     try {
@@ -100,6 +103,7 @@ export class SalesOrderProductImageService {
       ifNoneMatch,
       range,
       method,
+      variant,
     )
   }
 
@@ -110,6 +114,7 @@ export class SalesOrderProductImageService {
     ifNoneMatch: unknown,
     range: unknown,
     method: 'GET' | 'HEAD',
+    variant: unknown,
   ): Promise<ProductMediaContentResponse> {
     if (this.productEditQueries === undefined) {
       throw new Error('SalesOrderProductEditQueryService is not configured')
@@ -145,6 +150,7 @@ export class SalesOrderProductImageService {
       ifNoneMatch,
       range,
       method,
+      variant,
     )
   }
 
@@ -154,6 +160,7 @@ export class SalesOrderProductImageService {
     ifNoneMatch: unknown,
     range: unknown,
     method: 'GET' | 'HEAD',
+    variant: unknown,
   ): Promise<ProductMediaContentResponse> {
     let row: { readonly id: string } | null
     try {
@@ -185,6 +192,7 @@ export class SalesOrderProductImageService {
       ifNoneMatch,
       range,
       method,
+      variant,
     )
   }
 }

@@ -429,6 +429,7 @@ export function deriveLocalMediaConfiguration(
   return Object.freeze({
     contentDeliveryMode: configuration.contentDeliveryMode,
     driver: 'local',
+    ffmpegPath: configuration.ffmpegPath,
     ffprobePath: configuration.ffprobePath,
     qpdfPath: configuration.qpdfPath,
     stagingTtlHours: configuration.stagingTtlHours,

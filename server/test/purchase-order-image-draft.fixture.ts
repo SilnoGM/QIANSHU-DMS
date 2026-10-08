@@ -41,7 +41,7 @@ export async function createPurchaseOrderImageFixture(fixture: AtomicityFixture)
   const sandbox = await mkdtemp(join(tmpdir(), 'qianshu-order-image-e2e-'))
   const storageRoot = join(sandbox, 'media')
   await mkdir(storageRoot, { mode: 0o750 })
-  const configuration: MediaConfiguration = { contentDeliveryMode: 'application', driver: 'local', ffprobePath: '/usr/bin/ffprobe', qpdfPath: '/usr/bin/qpdf', stagingTtlHours: 24, storageEnvironment: 'dev', storageRoot, trashRetentionDays: 7 }
+  const configuration: MediaConfiguration = { contentDeliveryMode: 'application', driver: 'local', ffmpegPath: '/usr/bin/ffmpeg', ffprobePath: '/usr/bin/ffprobe', qpdfPath: '/usr/bin/qpdf', stagingTtlHours: 24, storageEnvironment: 'dev', storageRoot, trashRetentionDays: 7 }
   const storage = await LocalMediaStorage.create(configuration, { forbiddenRoots: [] })
   const media = new MediaAssetService(new MediaAssetPersistence(fixture.prisma), storage, new MediaContentValidator(configuration, {
     // Jest 29 无法解析 ESM-only file-type@21；只替代魔数探测，sharp 完整解码及 SHA 校验仍使用生产代码。

@@ -1,4 +1,4 @@
-import { ApiProperty, OmitType } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import {
   IsEnum,
@@ -134,6 +134,13 @@ export class SalesOrderProductImageQueryDto {
   @ApiProperty({ enum: ['TWD', 'MYR'] })
   @IsIn(['TWD', 'MYR'])
   currencyCode!: 'TWD' | 'MYR'
+
+  // 派生变体名必须进入白名单：全局 ValidationPipe 拒绝未声明的查询参数，
+  // 而列表缩略图正是通过追加该参数复用同一条录单主图路由。
+  @ApiPropertyOptional({ enum: ['thumb', 'poster'] })
+  @IsOptional()
+  @IsIn(['thumb', 'poster'])
+  variant?: string
 }
 
 export class SalesOrderProductEditOptionsQueryDto {

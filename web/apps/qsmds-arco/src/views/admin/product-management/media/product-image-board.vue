@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ProductMediaItemDto } from '../../../../api/generated/types.gen'
 
+import { mediaThumbnailUrl } from '@/utils/media-variant'
 import { formatProductMediaBytes } from './product-media-view.logic'
 
 interface ProductImageBoardProps {
@@ -180,7 +181,7 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
             @click="emit('preview', item)"
           >
             <img
-              :src="contentUrls[item.id]!"
+              :src="mediaThumbnailUrl(contentUrls[item.id]) ?? contentUrls[item.id]!"
               :alt="item.originalFilename"
               class="h-full w-full object-contain"
               loading="lazy"

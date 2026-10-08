@@ -383,7 +383,8 @@ test('销售订单记录弹窗按需读取详情并分开展示收款、凭证�
   assert.match(source, /class="qs-type-data-emphasis text-primary font-semibold/u)
   assert.doesNotMatch(source, /referenceNo|参考编号/u)
   assert.match(source, /document\.detachedAt === null/u)
-  assert.match(documentsSource, /<FaImagePreview[\s\S]*?v-if="document\.mediaType === 'IMAGE'"[\s\S]*?:src="document\.contentUrl"/u)
+  // 列表缩略位下发派生缩略图，原件仍是失败时的回退与预览地址。
+  assert.match(documentsSource, /<FaImagePreview[\s\S]*?v-if="document\.mediaType === 'IMAGE'"[\s\S]*?:src="mediaThumbnailUrl\(document\.contentUrl\) \?\? document\.contentUrl"/u)
   assert.match(documentsSource, /<template #error>/u)
   assert.match(documentsSource, /<a[\s\S]*?v-else/u)
   assert.doesNotMatch(documentsSource, /<img/u)

@@ -17,6 +17,7 @@ import {
 } from '@nestjs/common'
 import { ApiBody, ApiConsumes, ApiHeader, ApiTags } from '@nestjs/swagger'
 
+import { ImmutableMediaContentCache } from '../../infrastructure/http/private-no-store.interceptor'
 import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
@@ -205,6 +206,7 @@ export class PurchaseOrdersController {
   }
 
   @Head('product-options/:productId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('purchase-orders:create')
   @ApiProductMediaContentContract('HEAD', {
     operationId: 'purchase_orders_head_product_option_main_image',
@@ -215,6 +217,7 @@ export class PurchaseOrdersController {
     @Param() params: PurchaseOrderProductImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<void> {
     const result = await this.productImages.resolve(
@@ -223,11 +226,13 @@ export class PurchaseOrdersController {
       ifNoneMatch,
       range,
       'HEAD',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
   }
 
   @Get('product-options/:productId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('purchase-orders:create')
   @ApiProductMediaContentContract('GET', {
     operationId: 'purchase_orders_get_product_option_main_image',
@@ -238,6 +243,7 @@ export class PurchaseOrdersController {
     @Param() params: PurchaseOrderProductImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<StreamableFile | undefined> {
     const result = await this.productImages.resolve(
@@ -246,6 +252,7 @@ export class PurchaseOrdersController {
       ifNoneMatch,
       range,
       'GET',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
     return result.stream === undefined
@@ -304,6 +311,7 @@ export class PurchaseOrdersController {
   }
 
   @Head('source-sales-orders/:salesOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('purchase-orders:create')
   @ApiProductMediaContentContract('HEAD', {
     operationId: 'purchase_orders_head_source_sales_order_line_main_image',
@@ -314,6 +322,7 @@ export class PurchaseOrdersController {
     @Param() params: PurchaseOrderSourceSalesOrderLineImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<void> {
     const result = await this.productImages.resolveSourceLinePreview(
@@ -323,11 +332,13 @@ export class PurchaseOrdersController {
       ifNoneMatch,
       range,
       'HEAD',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
   }
 
   @Get('source-sales-orders/:salesOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('purchase-orders:create')
   @ApiProductMediaContentContract('GET', {
     operationId: 'purchase_orders_get_source_sales_order_line_main_image',
@@ -338,6 +349,7 @@ export class PurchaseOrdersController {
     @Param() params: PurchaseOrderSourceSalesOrderLineImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<StreamableFile | undefined> {
     const result = await this.productImages.resolveSourceLinePreview(
@@ -347,6 +359,7 @@ export class PurchaseOrdersController {
       ifNoneMatch,
       range,
       'GET',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
     return result.stream === undefined
@@ -355,6 +368,7 @@ export class PurchaseOrdersController {
   }
 
   @Head(':purchaseOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('purchase-orders:read')
   @ApiProductMediaContentContract('HEAD', {
     operationId: 'purchase_orders_head_product_preview_main_image',
@@ -365,6 +379,7 @@ export class PurchaseOrdersController {
     @Param() params: PurchaseOrderLineProductImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<void> {
     const result = await this.productImages.resolveListPreview(
@@ -374,11 +389,13 @@ export class PurchaseOrdersController {
       ifNoneMatch,
       range,
       'HEAD',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
   }
 
   @Get(':purchaseOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
   @RequirePermissions('purchase-orders:read')
   @ApiProductMediaContentContract('GET', {
     operationId: 'purchase_orders_get_product_preview_main_image',
@@ -389,6 +406,7 @@ export class PurchaseOrdersController {
     @Param() params: PurchaseOrderLineProductImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<StreamableFile | undefined> {
     const result = await this.productImages.resolveListPreview(
@@ -398,6 +416,7 @@ export class PurchaseOrdersController {
       ifNoneMatch,
       range,
       'GET',
+      variant,
     )
     applyProductMediaContentResponse(response, result)
     return result.stream === undefined

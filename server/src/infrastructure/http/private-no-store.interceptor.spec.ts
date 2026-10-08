@@ -2,9 +2,11 @@ import type {
   CallHandler,
   ExecutionContext,
 } from '@nestjs/common'
+import type { Reflector } from '@nestjs/core'
 import { firstValueFrom, of, throwError } from 'rxjs'
 
 import {
+  IMMUTABLE_MEDIA_CACHE_CONTROL,
   PRIVATE_NO_STORE_CACHE_CONTROL,
   PrivateNoStoreInterceptor,
 } from './private-no-store.interceptor'
@@ -25,11 +27,16 @@ function createResponse(): ResponseDouble {
   }
 }
 
+const HANDLER_MARKER = function handlerMarker(): void {}
+const CLASS_MARKER = class ClassMarker {}
+
 function createContext(
   request: object,
   response: ResponseDouble,
 ): ExecutionContext {
   return {
+    getClass: () => CLASS_MARKER,
+    getHandler: () => HANDLER_MARKER,
     switchToHttp: () => ({
       getRequest: () => request,
       getResponse: () => response,
@@ -44,8 +51,21 @@ function createHandler(
   return { handle }
 }
 
+/**
+ * 只替换反射结果，其余行为走真实实现：默认返回 false（未标注 -> 维持 no-store）。
+ */
+function createInterceptor(immutableMedia = false) {
+  const getAllAndOverride = jest.fn().mockReturnValue(immutableMedia)
+  return {
+    getAllAndOverride,
+    interceptor: new PrivateNoStoreInterceptor({
+      getAllAndOverride,
+    } as unknown as Reflector),
+  }
+}
+
 describe('PrivateNoStoreInterceptor', () => {
-  const interceptor = new PrivateNoStoreInterceptor()
+  const { interceptor } = createInterceptor()
 
   it('sets the private no-store header before a successful application handler runs', async () => {
     const response = createResponse()
@@ -216,6 +236,72 @@ describe('PrivateNoStoreInterceptor', () => {
 
     expect(response.headers.get('cache-control')).toBe(
       PRIVATE_NO_STORE_CACHE_CONTROL,
+    )
+  })
+
+  it('relaxes only the routes that explicitly declare immutable media content', async () => {
+    const { getAllAndOverride, interceptor: relaxed } = createInterceptor(true)
+    const response = createResponse()
+
+    await firstValueFrom(
+      relaxed.intercept(
+        createContext({ path: '/api/products/p/media/m/content' }, response),
+        createHandler(() => of(undefined)),
+      ),
+    )
+
+    expect(response.headers.get('cache-control')).toBe(
+      IMMUTABLE_MEDIA_CACHE_CONTROL,
+    )
+    // 豁免必须同时看 handler 与 class 元数据，路由改名时不会因 URL 匹配而静默失效。
+    expect(getAllAndOverride).toHaveBeenCalledWith(
+      expect.any(String),
+      [HANDLER_MARKER, CLASS_MARKER],
+    )
+  })
+
+  it('falls back to private no-store when the execution context cannot provide handlers', async () => {
+    const { interceptor: relaxed } = createInterceptor(true)
+    const response = createResponse()
+    const hostileContext = {
+      getClass: () => CLASS_MARKER,
+      getHandler: () => {
+        throw new Error('hostile handler getter')
+      },
+      switchToHttp: () => ({
+        getRequest: () => ({ path: '/api/products/p/media/m/content' }),
+        getResponse: () => response,
+        getNext: () => undefined,
+      }),
+    } as unknown as ExecutionContext
+
+    await expect(
+      firstValueFrom(
+        relaxed.intercept(hostileContext, createHandler(() => of(undefined))),
+      ),
+    ).resolves.toBeUndefined()
+    expect(response.headers.get('cache-control')).toBe(
+      PRIVATE_NO_STORE_CACHE_CONTROL,
+    )
+  })
+
+  it('keeps the relaxed policy off the health route even when the class is annotated', async () => {
+    const { interceptor: relaxed } = createInterceptor(true)
+    const response = createResponse()
+    const terminusCacheControl = 'no-cache, no-store, must-revalidate'
+    response.headers.set('cache-control', terminusCacheControl)
+
+    await firstValueFrom(
+      relaxed.intercept(
+        createContext({ path: '/api/health' }, response),
+        createHandler(() => of(undefined)),
+      ),
+    )
+
+    expect(response.headers.get('cache-control')).toBe(terminusCacheControl)
+    expect(response.setHeader).not.toHaveBeenCalledWith(
+      'Cache-Control',
+      expect.anything(),
     )
   })
 })

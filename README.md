@@ -115,9 +115,9 @@ env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null node --run build
 
 `release:package:*` 只归档已构建产物，单独执行前必须先完成对应 build：Web 使用 `node --run build:web`，Server 使用 `node --run build:server`。正式 `release.yml` 已在两个 package Job 内显式先执行 build，再调用归档入口。
 
-`v0.1.2` 已完成 GitHub 平台验收：source Commit 为 `ec418b8a7dca9c0da51770f6559813f3c7059077`，Main CI Run `29317624359`、Examples Run `29240879781` 与 Release Run `29317866199` attempt `2` 均成功。Job ID `ci-gate` 对应的平台 Required Check context 为 `CI gate`；`v*.*.*` Tag ruleset、Actions 默认 `contents: read` 和 Release immutability 已生效。
+当前正式版本、source Commit、Main CI / Examples / Release Run 的验收记录统一维护在[发布与版本管理](./docs/全局文档/发布与版本管理.md)第 1 节平台证据表，本文不复制会随每次发布变化的流水线身份。Job ID `ci-gate` 对应的平台 Required Check context 为 `CI gate`；`v*.*.*` Tag ruleset、Actions 默认 `contents: read` 和 Release immutability 属于 GitHub 外部状态，每次发布前必须重新核验。
 
-Release workflow 只生成并发布可校验附件，不连接生产数据库、不执行 production migration，也不自动部署 Web 或 Server。版本准备、Annotated Tag、附件校验、Draft 恢复和管理员配置详见[发布与版本管理](./docs/全局文档/发布与版本管理.md)。
+Release workflow 只生成并发布可校验附件，不连接生产数据库、不执行 production migration，也不自动部署 Web 或 Server。版本准备、Annotated Tag、附件校验、Draft 恢复和管理员配置详见[发布与版本管理](./docs/全局文档/发布与版本管理.md)；从本地开发完成到生产上线的四阶段闸门详见[发布与部署流程](./docs/全局文档/发布与部署流程.md)。
 
 ## 数据库 migration 与 E2E
 
@@ -189,6 +189,7 @@ node --run dev
 - [项目工程组织方案](./docs/全局文档/项目工程组织方案.md)
 - [开发工作流](./docs/全局文档/开发工作流.md)
 - [发布与版本管理](./docs/全局文档/发布与版本管理.md)
+- [发布与部署流程](./docs/全局文档/发布与部署流程.md)
 - [生产部署与 Gate OPS 检查清单](<./docs/全局文档/生产部署与Gate OPS检查清单.md>)
 - [腾讯云 Docker 部署手册](./docs/全局文档/腾讯云Docker部署手册.md)
 - [工程归档索引](./docs/工程归档/归档索引.md)

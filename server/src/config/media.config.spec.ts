@@ -47,6 +47,7 @@ describe('media configuration', () => {
     expect(createMediaConfiguration({})).toEqual({
       contentDeliveryMode: 'application',
       driver: 'local',
+      ffmpegPath: '/usr/bin/ffmpeg',
       ffprobePath: '/usr/bin/ffprobe',
       qpdfPath: '/usr/bin/qpdf',
       storageEnvironment: 'dev',
@@ -63,6 +64,7 @@ describe('media configuration', () => {
       createMediaConfiguration({
         MEDIA_CONTENT_DELIVERY_MODE: 'internal_redirect',
         MEDIA_STORAGE_DRIVER: 'local',
+        MEDIA_FFMPEG_PATH: '  /opt/media/bin/ffmpeg  ',
         MEDIA_FFPROBE_PATH: '  /opt/media/bin/ffprobe  ',
         MEDIA_QPDF_PATH: '/opt/media/bin/qpdf',
         MEDIA_STORAGE_ENV: '  test  ',
@@ -73,6 +75,7 @@ describe('media configuration', () => {
     ).toEqual({
       contentDeliveryMode: 'internal_redirect',
       driver: 'local',
+      ffmpegPath: '/opt/media/bin/ffmpeg',
       ffprobePath: '/opt/media/bin/ffprobe',
       qpdfPath: '/opt/media/bin/qpdf',
       storageEnvironment: 'test',
@@ -98,6 +101,7 @@ describe('media configuration', () => {
       contentDeliveryMode: 'application',
       cos: { bucket: 'dms-qs-media-1396967080', region: 'ap-beijing' },
       driver: 'cos',
+      ffmpegPath: '/usr/bin/ffmpeg',
       ffprobePath: '/usr/bin/ffprobe',
       qpdfPath: '/usr/bin/qpdf',
       storageEnvironment: 'prod',
@@ -189,6 +193,7 @@ describe('media configuration', () => {
     ['MEDIA_STORAGE_DRIVER', 's3', 'must be one of local, cos'],
     ['MEDIA_STORAGE_ROOT', 'relative/media', 'must be an absolute non-root path'],
     ['MEDIA_STORAGE_ROOT', '/', 'must be an absolute non-root path'],
+    ['MEDIA_FFMPEG_PATH', 'ffmpeg', 'must be an absolute executable path'],
     ['MEDIA_FFPROBE_PATH', 'ffprobe', 'must be an absolute executable path'],
     ['MEDIA_QPDF_PATH', '/', 'must be an absolute executable path'],
     ['MEDIA_STAGING_TTL_HOURS', 0, 'must be an integer between 1 and 168'],

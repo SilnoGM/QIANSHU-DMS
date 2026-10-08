@@ -70,6 +70,7 @@ allowBuilds:
 | `MEDIA_CONTENT_DELIVERY_MODE` | 私有内容交付；`application` 由 Server 流式输出，`internal_redirect` 交给 Nginx（仅 `local` 驱动可用） | development 使用 `application`，production 默认 `internal_redirect` |
 | `MEDIA_STAGING_TTL_HOURS` | 未完成 staging 的回收期限，只允许 `1` 到 `168` | `24` |
 | `MEDIA_TRASH_RETENTION_DAYS` | 软删除保留天数，只允许 `7` 到 `3650` | `7` |
+| `MEDIA_FFMPEG_PATH` | 受控视频封面抽帧的绝对可执行路径（仅 `poster` 变体使用） | `/usr/bin/ffmpeg` |
 | `MEDIA_FFPROBE_PATH` | 受限 MP4 探测器的绝对可执行路径 | `/usr/bin/ffprobe` |
 | `MEDIA_QPDF_PATH` | 受限 PDF 结构探测器的绝对可执行路径 | `/usr/bin/qpdf` |
 | `MEDIA_COS_REGION` | 存储桶地域；`cos` 驱动必填 | `ap-beijing` |

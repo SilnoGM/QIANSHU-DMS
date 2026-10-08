@@ -25,6 +25,49 @@ const productFiles = Object.freeze({
 
 export const STABLE_TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u
 
+// 面向业务用户的 Release 文案由 release/notes/<tag>.md 承载，必须在打 Tag 之前就已提交。
+// Tag 文案面向开发者、允许技术名词；这份文件面向不懂技术的用户，因此禁止技术词汇与代码痕迹。
+const releaseNotesDirectory = path.join('release', 'notes')
+const ownershipMarkerPrefix = '<!-- qianshu-release:'
+const forbiddenReleaseNotesAsciiPattern = /\b(?:API|SQL|PR|commit|issue|token|Vue|React|Arco|NestJS|PostgreSQL|Postgres|Redis|Docker|nginx|ffmpeg|ffprobe|Prisma|TypeScript|Node|pnpm|COS)\b/iu
+const forbiddenReleaseNotesChineseTerms = Object.freeze([
+  '接口',
+  '字段',
+  '数据库',
+  '缓存',
+  '构建',
+  '部署',
+  '环境变量',
+  '重构',
+  '依赖',
+  '迁移',
+  '容器',
+  '镜像',
+  '脚本',
+])
+const releaseNotesCodePatterns = Object.freeze([
+  Object.freeze({
+    label: 'a function call or identifier',
+    pattern: /[A-Za-z_][A-Za-z0-9_]*\s*\(/u,
+  }),
+  Object.freeze({
+    label: 'a file path',
+    pattern: /[A-Za-z0-9_-]*[A-Za-z][A-Za-z0-9_-]*\/[A-Za-z0-9_-]+/u,
+  }),
+  Object.freeze({
+    label: 'a file name',
+    pattern: /\.(?:ts|tsx|js|mjs|cjs|json|md|sql|yml|yaml|sh|prisma)\b/u,
+  }),
+  Object.freeze({
+    label: 'a constant name',
+    pattern: /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/u,
+  }),
+  Object.freeze({
+    label: 'a commit hash or digest',
+    pattern: /\b(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b/u,
+  }),
+])
+
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -311,7 +354,11 @@ function parseAnnotatedTagObject(contents, expectedTag) {
   if (fields.get('tag') !== expectedTag) {
     throw new Error('Annotated Tag header does not match the input tag')
   }
-  return Object.freeze({ target })
+  const message = text.slice(separatorIndex + 2).trimEnd()
+  if (message === '') {
+    throw new Error('Annotated Tag message must not be empty')
+  }
+  return Object.freeze({ target, message })
 }
 
 function normalizeVerificationInput(input) {
@@ -389,6 +436,52 @@ async function verifyCurrentTag(input, dependencies) {
     throw new Error('Source commit does not match the current checkout')
   }
   return Object.freeze({ tagObjectSha })
+}
+
+function assertUserFacingReleaseNotes(releaseNotes) {
+  if (releaseNotes.includes(ownershipMarkerPrefix)) {
+    throw new Error('Release notes must not contain the ownership marker')
+  }
+  const asciiMatch = releaseNotes.match(forbiddenReleaseNotesAsciiPattern)
+  if (asciiMatch !== null) {
+    throw new Error(
+      `Release notes must not contain technical vocabulary: ${asciiMatch[0]}`,
+    )
+  }
+  for (const term of forbiddenReleaseNotesChineseTerms) {
+    if (releaseNotes.includes(term)) {
+      throw new Error(
+        `Release notes must not contain technical vocabulary: ${term}`,
+      )
+    }
+  }
+  for (const { label, pattern } of releaseNotesCodePatterns) {
+    if (pattern.test(releaseNotes)) {
+      throw new Error(`Release notes must not contain ${label}`)
+    }
+  }
+}
+
+async function verifyReleaseNotes(input, dependencies) {
+  const notesPath = path.join(
+    dependencies.repositoryRoot,
+    releaseNotesDirectory,
+    `${input.tag}.md`,
+  )
+  const bytes = await readRegularFile(
+    dependencies.fileSystem,
+    notesPath,
+    'Release notes',
+  )
+  if (Buffer.from(bytes).includes(0)) {
+    throw new Error('Release notes must be UTF-8 text')
+  }
+  const releaseNotes = Buffer.from(bytes).toString('utf8').trimEnd()
+  if (releaseNotes === '') {
+    throw new Error('Release notes must not be empty')
+  }
+  assertUserFacingReleaseNotes(releaseNotes)
+  return Object.freeze({ releaseNotesPath: notesPath })
 }
 
 function parseTagList(contents) {
@@ -496,6 +589,7 @@ export async function verifyReleaseVersion(input, dependencies = {}) {
     normalizedInput,
     normalizedDependencies,
   )
+  await verifyReleaseNotes(normalizedInput, normalizedDependencies)
   await verifyVersionMonotonicity(
     normalizedInput,
     normalizedDependencies,

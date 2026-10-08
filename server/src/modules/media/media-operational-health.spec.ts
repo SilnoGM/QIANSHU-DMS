@@ -10,6 +10,7 @@ import {
 const configuration: MediaConfiguration = {
   contentDeliveryMode: 'application',
   driver: 'local',
+  ffmpegPath: '/usr/bin/ffmpeg',
   ffprobePath: '/usr/bin/ffprobe',
   qpdfPath: '/usr/bin/qpdf',
   storageEnvironment: 'dev',

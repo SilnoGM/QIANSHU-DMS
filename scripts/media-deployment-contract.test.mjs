@@ -42,6 +42,7 @@ test('Server release 包含媒体部署模板且模板不携带真实 Secret', a
     'MEDIA_STORAGE_DRIVER=local',
     'MEDIA_STORAGE_ENV=dev',
     'MEDIA_STORAGE_ROOT=/var/lib/qianshu-dms/media',
+    'MEDIA_FFMPEG_PATH=/usr/bin/ffmpeg',
     'MEDIA_FFPROBE_PATH=/usr/bin/ffprobe',
     'MEDIA_QPDF_PATH=/usr/bin/qpdf',
     'MEDIA_COS_REGION=ap-beijing',

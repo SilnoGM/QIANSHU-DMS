@@ -270,6 +270,7 @@ export function validateEnvironment(
   MEDIA_COS_BUCKET: string | null
   MEDIA_COS_REGION: string | null
   MEDIA_STORAGE_DRIVER: MediaStorageDriver
+  MEDIA_FFMPEG_PATH: string
   MEDIA_FFPROBE_PATH: string
   MEDIA_QPDF_PATH: string
   MEDIA_STORAGE_ROOT: string
@@ -294,6 +295,7 @@ export function validateEnvironment(
     MEDIA_COS_BUCKET: string | null
     MEDIA_COS_REGION: string | null
     MEDIA_STORAGE_DRIVER: MediaStorageDriver
+    MEDIA_FFMPEG_PATH: string
     MEDIA_FFPROBE_PATH: string
     MEDIA_QPDF_PATH: string
     MEDIA_STORAGE_ROOT: string

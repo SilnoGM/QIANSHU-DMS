@@ -11,6 +11,7 @@ import {
   coordinateDraftRelease,
   createGitHubClient,
   createOwnershipMarker,
+  createReleaseBody,
   parseOwnershipMarker,
   parseReleaseGitHubArguments,
   verifyRemoteReleaseTag,
@@ -29,6 +30,8 @@ const tag = 'v1.2.3'
 const version = '1.2.3'
 const sourceCommit = 'b'.repeat(40)
 const tagObjectSha = 'a'.repeat(40)
+// 用户视角的 Release 文案样本；写入 release/notes/<tag>.md 后由发布步骤读取。
+const releaseNotes = '新增功能\n- 用户能看到的新能力'
 const artifactDigest = `sha256:${'f'.repeat(64)}`
 const runId = '123456789'
 const artifactId = '456'
@@ -111,6 +114,14 @@ async function createBundleFixture(t) {
   })
   await fs.mkdir(inputs)
   await fs.mkdir(bundleDirectory)
+  const releaseNotesPath = path.join(
+    repositoryDirectory,
+    'release',
+    'notes',
+    `${tag}.md`,
+  )
+  await fs.mkdir(path.dirname(releaseNotesPath), { recursive: true })
+  await fs.writeFile(releaseNotesPath, `${releaseNotes}\n`)
   await fs.writeFile(
     path.join(repositoryDirectory, 'server', 'openapi', 'openapi.json'),
     '{"openapi":"3.1.0"}\n',
@@ -193,7 +204,13 @@ async function createBundleFixture(t) {
     runtimeDependencies(repositoryDirectory),
   )
   t.after(() => fs.rm(sandbox, { force: true, recursive: true }))
-  return { bundleDirectory, releaseMetadataPath, repositoryDirectory, sandbox }
+  return {
+    bundleDirectory,
+    releaseMetadataPath,
+    releaseNotesPath,
+    repositoryDirectory,
+    sandbox,
+  }
 }
 
 function coordinateInput(fixture, overrides = {}) {
@@ -208,6 +225,7 @@ function coordinateInput(fixture, overrides = {}) {
     artifactDigest,
     artifactName,
     bundleDirectory: fixture.bundleDirectory,
+    releaseNotesPath: fixture.releaseNotesPath,
     ...overrides,
   }
 }
@@ -670,7 +688,7 @@ test('CLI parser 只接受唯一固定 flag 顺序与严格身份格式', () => 
     '--artifact-name', artifactName,
     '--bundle', '/tmp/final-bundle',
   ]
-  const parsed = parseReleaseGitHubArguments(argv)
+  const parsed = parseReleaseGitHubArguments(argv, '/tmp/repository')
   assert.deepEqual(parsed, {
     repository,
     tag,
@@ -682,6 +700,7 @@ test('CLI parser 只接受唯一固定 flag 顺序与严格身份格式', () => 
     artifactDigest,
     artifactName,
     bundleDirectory: '/tmp/final-bundle',
+    releaseNotesPath: `/tmp/repository/release/notes/${tag}.md`,
   })
   for (const invalid of [
     [],
@@ -765,6 +784,64 @@ test('远端 Tag verifier 拒绝 lightweight、peel、main、版本与分页漂�
   }
 })
 
+test('Release 文案缺失、为空、含所有权标记或非文本字节时失败关闭', async (t) => {
+  const cases = [
+    {
+      name: 'missing',
+      prepare: async ({ releaseNotesPath }) => fs.rm(releaseNotesPath),
+    },
+    {
+      name: 'empty',
+      prepare: async ({ releaseNotesPath }) => fs.writeFile(releaseNotesPath, '\n\n'),
+    },
+    {
+      name: 'marker',
+      prepare: async ({ releaseNotesPath }) => fs.writeFile(
+        releaseNotesPath,
+        `${createOwnershipMarker(markerIdentity())}\n`,
+      ),
+    },
+    {
+      name: 'binary',
+      prepare: async ({ releaseNotesPath }) => fs.writeFile(
+        releaseNotesPath,
+        Buffer.from([0x61, 0x00, 0x62]),
+      ),
+    },
+    {
+      name: 'symlink',
+      prepare: async ({ releaseNotesPath, sandbox }) => {
+        const target = path.join(sandbox, 'notes-target.md')
+        await fs.writeFile(target, `${releaseNotes}\n`)
+        await fs.rm(releaseNotesPath)
+        await fs.symlink(target, releaseNotesPath)
+      },
+    },
+    {
+      name: 'directory',
+      prepare: async ({ releaseNotesPath }) => {
+        await fs.rm(releaseNotesPath)
+        await fs.mkdir(releaseNotesPath)
+      },
+    },
+  ]
+  for (const fixtureCase of cases) {
+    const fixture = await createBundleFixture(t)
+    await fixtureCase.prepare(fixture)
+    const github = createGitHubFixture()
+    await assert.rejects(
+      coordinateDraftRelease(coordinateInput(fixture), coordinateDependencies(github)),
+      undefined,
+      fixtureCase.name,
+    )
+    assert.equal(
+      github.mutations.some(request => request.method === 'POST'),
+      false,
+      `不应创建 Draft：${fixtureCase.name}`,
+    )
+  }
+})
+
 test('workflow artifact verifier 绑定 repository/run/attempt/id/digest/name/head SHA', async () => {
   const github = createGitHubFixture()
   const client = createGitHubClient({
@@ -829,11 +906,16 @@ test('无 Release 时创建 Draft、重读 author、上传六附件后唯一发�
     tag_name: tag,
     target_commitish: sourceCommit,
     name: tag,
-    body: createOwnershipMarker(markerIdentity()),
+    body: createReleaseBody(markerIdentity(), releaseNotes),
     draft: true,
     prerelease: false,
-    generate_release_notes: true,
+    generate_release_notes: false,
   })
+  assert.match(
+    String(createPayload.body),
+    /用户能看到的新能力/u,
+    'Release 正文必须带上 release/notes 的用户视角文案',
+  )
   assert.deepEqual(
     JSON.parse(String(github.mutations.at(-1).body)),
     { draft: false },

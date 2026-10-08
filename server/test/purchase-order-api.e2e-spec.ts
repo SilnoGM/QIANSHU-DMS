@@ -157,7 +157,7 @@ describe('PurchaseOrder HTTP API contract', () => {
       imports: [PurchaseOrderApiE2eModule],
     }).compile()
     application = moduleRef.createNestApplication()
-    application.useGlobalInterceptors(new PrivateNoStoreInterceptor())
+    application.useGlobalInterceptors(new PrivateNoStoreInterceptor(new Reflector()))
     application.use(attachTestAuth)
     configureApplication(application, { nodeEnvironment: 'test' })
     primaryApplication = application.getHttpAdapter().getInstance()
@@ -300,12 +300,15 @@ describe('PurchaseOrder HTTP API contract', () => {
   })
 
   it('serves sales-source preview images without entering the order locator', async () => {
-    await request(requireApplication().getHttpServer())
+    const response = await request(requireApplication().getHttpServer())
       .get(
         `/api/purchase-orders/source-sales-orders/${SALES_ORDER_ID}/lines/${SALES_ORDER_LINE_ID}/main-image/${PRODUCT_MEDIA_ID}/content`,
       )
       .expect(200)
 
+    // 订单侧复用主图的路由与商品主路由同属不可变内容，按长期私有缓存下发。
+    expect(response.headers['cache-control'])
+      .toBe('private, max-age=31536000, immutable')
     expect(resolveSourceLinePreview).toHaveBeenCalledWith(
       SALES_ORDER_ID,
       SALES_ORDER_LINE_ID,
@@ -313,6 +316,7 @@ describe('PurchaseOrder HTTP API contract', () => {
       undefined,
       undefined,
       'GET',
+      undefined,
     )
     expect(getById).not.toHaveBeenCalled()
   })
@@ -439,7 +443,7 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
       new PasswordChangeRequiredGuard(reflector),
       new PermissionGuard(reflector, accessControl),
     )
-    application.useGlobalInterceptors(new PrivateNoStoreInterceptor())
+    application.useGlobalInterceptors(new PrivateNoStoreInterceptor(new Reflector()))
     configureApplication(application, { nodeEnvironment: 'test' })
     await application.init()
   })

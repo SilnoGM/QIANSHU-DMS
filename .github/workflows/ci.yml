@@ -80,6 +80,11 @@ jobs:
       - name: Install Server dependencies
         run: pnpm -C server install --frozen-lockfile
 
+      # 媒体派生变体有一条用真实 ffmpeg 抽视频封面的集成测试，生产镜像也内置 ffmpeg。
+      # GitHub ubuntu-24.04 镜像不带 ffmpeg，这里显式安装，保持与生产一致的验证口径。
+      - name: Install media tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       - name: Check Server
         run: pnpm -C server check
 

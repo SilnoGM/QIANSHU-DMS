@@ -77,6 +77,7 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { mediaThumbnailUrl } from '@/utils/media-variant'
 import { getPurchaseOrderApiFailure } from '../purchase-orders/purchase-order-list.logic'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import SalesOrderDetailDrawer from './sales-order-detail-drawer.vue'
@@ -404,7 +405,9 @@ function productImageItems(row: SalesOrderListItemDto): readonly ImageGroupItem[
     : [{
         alt: preview.productName,
         key: preview.lineId,
-        src: preview.mainImage.contentUrl,
+        // 列表位下发缩略图，点击预览仍读取原件。
+        previewSrc: preview.mainImage.contentUrl,
+        src: mediaThumbnailUrl(preview.mainImage.contentUrl) ?? preview.mainImage.contentUrl,
         tooltip: preview.productName,
       }])
 }

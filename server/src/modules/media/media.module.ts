@@ -16,6 +16,7 @@ import { MediaReconciliationService } from './media-reconciliation.service'
 import { MediaAssetReferenceRepository } from './media-reference.repository'
 import { MediaAssetRetentionService } from './media-retention.service'
 import type { MediaStorage } from './media-storage'
+import { MediaVariantService } from './media-variant.service'
 import { OceanFreightSourceFileService } from './ocean-freight-source-file.service'
 
 const MEDIA_CONFIGURATION = Symbol('qianshu.media.configuration')
@@ -77,6 +78,13 @@ const providers = [{
     configuration: MediaConfiguration,
   ): MediaAssetPersistence =>
     new MediaAssetPersistence(prisma, configuration.driver),
+}, {
+  provide: MediaVariantService,
+  inject: [MediaContentDeliveryService, MEDIA_CONFIGURATION],
+  useFactory: (
+    delivery: MediaContentDeliveryService,
+    configuration: MediaConfiguration,
+  ): MediaVariantService => new MediaVariantService(delivery, configuration),
 }, {
   provide: MediaContentValidator,
   inject: [MEDIA_CONFIGURATION],
@@ -162,6 +170,7 @@ const providers = [{
     OceanFreightSourceFileService,
     MediaContentDeliveryService,
     MediaAssetRetentionService,
+    MediaVariantService,
   ],
 })
 export class MediaModule {}

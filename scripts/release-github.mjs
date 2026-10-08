@@ -17,6 +17,8 @@ const userAgent = 'qianshu-dms-release'
 const botLogin = 'github-actions[bot]'
 const manifestFileName = 'release-manifest.json'
 const checksumFileName = 'SHA256SUMS'
+// 用户视角的 Release 文案在仓库内的固定位置：release/notes/vX.Y.Z.md
+const releaseNotesDirectory = path.join('release', 'notes')
 const maximumResponseBytes = 8 * 1024 * 1024
 const maximumPages = 20
 const digestWaits = Object.freeze([1000, 2000, 4000, 8000])
@@ -668,16 +670,24 @@ function normalizeMarkerIdentity(identity) {
   })
 }
 
+const ownershipMarkerPrefix = '<!-- qianshu-release:'
+
 export function createOwnershipMarker(identity) {
   const normalized = normalizeMarkerIdentity(identity)
-  return `<!-- qianshu-release:${JSON.stringify(normalized)} -->`
+  return `${ownershipMarkerPrefix}${JSON.stringify(normalized)} -->`
+}
+
+// Release 正文固定为「机器标记 + 用户视角文案」：标记供所有权校验，文案供业务用户阅读。
+// 用户文案来自独立的 release/notes/<tag>.md，与面向开发者的 Tag 文案互不复用。
+export function createReleaseBody(identity, releaseNotes) {
+  return `${createOwnershipMarker(identity)}\n\n${releaseNotes}\n`
 }
 
 export function parseOwnershipMarker(body) {
   if (typeof body !== 'string') {
     throw new TypeError('Release ownership marker body is invalid')
   }
-  const prefix = '<!-- qianshu-release:'
+  const prefix = ownershipMarkerPrefix
   const prefixCount = body.split(prefix).length - 1
   const matches = [...body.matchAll(
     /<!-- qianshu-release:(\{[^\r\n]*\}) -->/gu,
@@ -712,6 +722,7 @@ function normalizeCoordinateInput(input) {
       'artifactDigest',
       'artifactName',
       'bundleDirectory',
+      'releaseNotesPath',
     ],
     'Release coordination input',
   )
@@ -738,6 +749,9 @@ function normalizeCoordinateInput(input) {
     currentRunAttempt,
     bundleDirectory: path.resolve(
       assertNonEmptyString(input.bundleDirectory, 'Bundle directory'),
+    ),
+    releaseNotesPath: path.resolve(
+      assertNonEmptyString(input.releaseNotesPath, 'Release notes path'),
     ),
   })
 }
@@ -937,6 +951,28 @@ async function readLocalAssets(input, dependencies) {
 
 function sameMarker(left, right) {
   return JSON.stringify(left) === JSON.stringify(right)
+}
+
+// 用户视角的 Release 文案来自版本准备阶段提交的 release/notes/<tag>.md。
+// 文件必须随 Tag 一起进入被发布的提交；缺失、为空、含所有权标记或不是 UTF-8 文本
+// 都在创建 Draft 之前失败关闭，避免发出没有用户文案或所有权标记被破坏的 Release。
+async function readReleaseNotes(input, dependencies) {
+  const file = await readStableRegularFile(
+    input.releaseNotesPath,
+    dependencies.fileSystem,
+    'Release notes',
+  )
+  if (file.bytes.includes(0)) {
+    throw new Error('Release notes must be UTF-8 text')
+  }
+  const releaseNotes = file.bytes.toString('utf8').trimEnd()
+  if (releaseNotes === '') {
+    throw new Error('Release notes must not be empty')
+  }
+  if (releaseNotes.includes(ownershipMarkerPrefix)) {
+    throw new Error('Release notes must not contain the ownership marker')
+  }
+  return releaseNotes
 }
 
 async function listReleases(client, repository) {
@@ -1182,7 +1218,7 @@ async function reconcileAssets(
   return remote
 }
 
-async function createOrResumeDraft(client, input, marker) {
+async function createOrResumeDraft(client, input, marker, dependencies) {
   let releases = await listReleases(client, input.repository)
   let release = findReleaseForTag(releases, input.tag)
   if (release !== undefined) {
@@ -1192,14 +1228,15 @@ async function createOrResumeDraft(client, input, marker) {
     return validateReleaseOwnership(client, release, marker)
   }
 
+  const releaseNotes = await readReleaseNotes(input, dependencies)
   const payload = {
     tag_name: input.tag,
     target_commitish: input.sourceCommit,
     name: input.tag,
-    body: createOwnershipMarker(marker),
+    body: createReleaseBody(marker, releaseNotes),
     draft: true,
     prerelease: false,
-    generate_release_notes: true,
+    generate_release_notes: false,
   }
   try {
     await client.post(
@@ -1273,7 +1310,12 @@ export async function coordinateDraftRelease(input, dependencies = {}) {
     client,
     remoteExpected,
   )
-  const release = await createOrResumeDraft(client, normalizedInput, marker)
+  const release = await createOrResumeDraft(
+    client,
+    normalizedInput,
+    marker,
+    normalizedDependencies,
+  )
   const initialLocalAssets = await readLocalAssets(
     normalizedInput,
     normalizedDependencies,
@@ -1398,9 +1440,11 @@ export function parseReleaseGitHubArguments(argv, cwd = process.cwd()) {
   ]
   const usage = 'Usage: release-github --repository owner/repo --tag vX.Y.Z --source-commit SHA --run-id digits --bundle-run-attempt positive-int --current-run-attempt positive-int --artifact-id digits --artifact-digest sha256:hex --artifact-name name --bundle directory'
   const values = parseFlagPairs(argv, flags, usage)
+  // 先用严格 Tag 模式校验，再参与路径拼接，避免非法 Tag 影响 release/notes 的解析位置。
+  const releaseTag = assertPattern(values['--tag'], stableTagPattern, 'Release tag')
   return normalizeCoordinateInput({
     repository: values['--repository'],
-    tag: values['--tag'],
+    tag: releaseTag,
     sourceCommit: values['--source-commit'],
     runId: values['--run-id'],
     bundleRunAttempt: parsePositiveInteger(
@@ -1415,6 +1459,11 @@ export function parseReleaseGitHubArguments(argv, cwd = process.cwd()) {
     artifactDigest: values['--artifact-digest'],
     artifactName: values['--artifact-name'],
     bundleDirectory: path.resolve(cwd, values['--bundle']),
+    releaseNotesPath: path.resolve(
+      cwd,
+      releaseNotesDirectory,
+      `${releaseTag}.md`,
+    ),
   })
 }
 
