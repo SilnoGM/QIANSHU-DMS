@@ -397,6 +397,7 @@ test('server-check-build 使用 Server cache 并执行固定检查构建顺序',
   ].join('\n'))
   assertTextOrder(job, [
     'run: pnpm -C server install --frozen-lockfile',
+    'run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg',
     'run: pnpm -C server check',
     'run: pnpm -C server build',
     '      - name: Verify Server entrypoint',
