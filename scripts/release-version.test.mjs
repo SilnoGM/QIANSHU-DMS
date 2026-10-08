@@ -19,6 +19,8 @@ import {
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const entrypoint = path.join(scriptsDirectory, 'release-version.mjs')
+// 用户视角的 Release 文案样本：不含技术词汇、代码标识符、路径或提交号。
+const releaseNotesFixture = '新增功能\n- 订单列表可以直接按柜号筛选\n\n问题修复\n- 修复了登录状态过期后部分页面出错的问题'
 
 function gitResult(repositoryRoot, args, options = {}) {
   const result = spawnSync('git', args, {
@@ -104,6 +106,16 @@ async function writeProductFiles(repositoryRoot, version, overrides = {}) {
     ['server/openapi/openapi.json', serverOpenApi],
     ['web/openapi/openapi.json', webOpenApi],
   ])
+  // 用户视角的 Release 文案必须随版本准备一起进入被 Tag 的提交；null 表示故意不写。
+  const releaseNotes = overrides.releaseNotes === undefined
+    ? releaseNotesFixture
+    : overrides.releaseNotes
+  if (releaseNotes !== null) {
+    files.set(
+      path.join('release', 'notes', `v${version}.md`),
+      `${releaseNotes}\n`,
+    )
+  }
 
   for (const [relativePath, contents] of files) {
     const target = path.join(repositoryRoot, relativePath)
@@ -543,6 +555,84 @@ test('历史稳定 Tag 若为 lightweight 或不可 peel 对象必须失败', as
         ),
       )
     })
+  }
+})
+
+function rewriteAnnotatedTagMessage(repositoryRoot, tag, message) {
+  const target = mustGit(repositoryRoot, ['rev-parse', `refs/tags/${tag}^{commit}`])
+  const payload = [
+    `object ${target}`,
+    'type commit',
+    `tag ${tag}`,
+    'tagger Qianshu Release Fixture <release-fixture@example.invalid> 1700000000 +0000',
+    '',
+    message,
+  ].join('\n')
+  const tagObjectSha = mustGit(
+    repositoryRoot,
+    ['hash-object', '-t', 'tag', '-w', '--stdin'],
+    { input: payload },
+  )
+  mustGit(repositoryRoot, ['update-ref', `refs/tags/${tag}`, tagObjectSha])
+  return tagObjectSha
+}
+
+async function rewriteReleaseNotes(fixture, contents) {
+  const notesPath = path.join(
+    fixture.repositoryRoot,
+    'release',
+    'notes',
+    `${fixture.tag}.md`,
+  )
+  if (contents === null) {
+    await fs.rm(notesPath)
+    return notesPath
+  }
+  await fs.writeFile(notesPath, contents)
+  return notesPath
+}
+
+test('Tag 技术文案不能为空', async (t) => {
+  const fixture = await createValidReleaseFixture(t)
+  rewriteAnnotatedTagMessage(fixture.repositoryRoot, fixture.tag, '')
+  await assert.rejects(
+    verifyReleaseVersion(
+      verificationInput(fixture),
+      verificationDependencies(fixture),
+    ),
+    /Annotated Tag message must not be empty/u,
+  )
+})
+
+test('用户文案缺失、为空、非文本或含技术痕迹时失败关闭', async (t) => {
+  const cases = [
+    { name: 'missing file', notes: null, expected: /ENOENT/u },
+    { name: 'empty file', notes: '\n\n', expected: /must not be empty/u },
+    { name: 'binary bytes', notes: Buffer.from([0x61, 0x00, 0x62]), expected: /UTF-8/u },
+    {
+      name: 'ownership marker',
+      notes: '<!-- qianshu-release:{"schemaVersion":1} -->\n',
+      expected: /ownership marker/u,
+    },
+    { name: 'chinese jargon', notes: '问题修复\n- 修复了缓存导致的加载慢\n', expected: /technical vocabulary: 缓存/u },
+    { name: 'ascii jargon', notes: '问题修复\n- 修复了 API 返回异常\n', expected: /API/u },
+    { name: 'identifier', notes: '问题修复\n- 修复了 prepare() 的问题\n', expected: /function call/u },
+    { name: 'file path', notes: '问题修复\n- 修复了 libs/utils 的问题\n', expected: /file path/u },
+    { name: 'file name', notes: '问题修复\n- 修复了 types.gen.ts 的问题\n', expected: /file name/u },
+    { name: 'constant', notes: '问题修复\n- 修复了 MEDIA_STORAGE_ENV 的问题\n', expected: /constant name/u },
+    { name: 'commit hash', notes: '问题修复\n- 修复了 1b8e02ca 引入的问题\n', expected: /commit hash/u },
+  ]
+  for (const fixtureCase of cases) {
+    const fixture = await createValidReleaseFixture(t)
+    await rewriteReleaseNotes(fixture, fixtureCase.notes)
+    await assert.rejects(
+      verifyReleaseVersion(
+        verificationInput(fixture),
+        verificationDependencies(fixture),
+      ),
+      fixtureCase.expected,
+      fixtureCase.name,
+    )
   }
 })
 
