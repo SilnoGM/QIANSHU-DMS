@@ -19,7 +19,11 @@ export const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store'
  */
 export const IMMUTABLE_MEDIA_CACHE_CONTROL = 'private, max-age=31536000, immutable'
 
-const IMMUTABLE_MEDIA_CACHE_METADATA = 'qianshu:immutable-media-content'
+/**
+ * 标注元数据键。导出只为让「放宽清单」的契约测试精确断言哪些处理器被标注；
+ * 其它位置一律通过 `ImmutableMediaContentCache()` 与拦截器读写，不要按名称自行设置。
+ */
+export const IMMUTABLE_MEDIA_CACHE_METADATA = 'qianshu:immutable-media-content'
 
 /** 显式标注「本路由返回内容不可变的低敏媒体」；其余路由一律维持默认的不可缓存策略。 */
 export const ImmutableMediaContentCache = (): MethodDecorator & ClassDecorator =>
