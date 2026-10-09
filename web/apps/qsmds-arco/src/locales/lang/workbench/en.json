@@ -291,7 +291,6 @@
       "totalBills": "{count} bills",
       "lineCount": "{count} lines",
       "containerCount": "{count} containers",
-      "createdLabel": "Created",
       "payableLabel": "Payable",
       "selectHint": "Select a bill to continue",
       "selectedHint": "Selected: {billNo}",

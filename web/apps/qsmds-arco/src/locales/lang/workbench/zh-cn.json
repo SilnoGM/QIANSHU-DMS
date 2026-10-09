@@ -300,7 +300,6 @@
       "totalBills": "共 {count} 张账单",
       "lineCount": "{count} 行",
       "containerCount": "{count} 个柜号",
-      "createdLabel": "创建",
       "payableLabel": "应付",
       "selectHint": "请先选择一张账单",
       "selectedHint": "已选择：{billNo}",

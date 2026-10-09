@@ -1,8 +1,8 @@
 import type { SlhBillListItemDto } from '@/api/generated/types.gen'
 import type { SlhReconciliationBatchCandidateQuery } from '@/api/modules/slh-reconciliation-batches'
 
-/** 候选账单弹窗每页 10 条：一屏卡片正好铺满，不需要二次滚动。 */
-export const SLH_BILL_SELECT_PAGE_SIZE = 10
+/** 候选账单弹窗每页 20 条：压缩后的卡片一屏约 7 张，一页约 3 屏，翻页次数减半。 */
+export const SLH_BILL_SELECT_PAGE_SIZE = 20
 
 /** 空态分语境：带关键词时是"没搜到"，不是"没有可对账的账单"。 */
 export type SlhBillSelectEmptyKind = 'none' | 'keyword'

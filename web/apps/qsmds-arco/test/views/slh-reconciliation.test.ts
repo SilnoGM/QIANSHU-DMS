@@ -9,6 +9,7 @@ import zhTw from '../../src/locales/lang/workbench/zh-tw.json'
 import {
   buildSlhBillSelectQuery,
   resolveSlhBillSelectEmptyKind,
+  SLH_BILL_SELECT_PAGE_SIZE,
   toggleSlhBillSelection,
 } from '../../src/views/workbenches/slh-reconciliation/bill-select.logic'
 import {
@@ -84,11 +85,12 @@ test('列表页按名称跳详情，并复用账单状态标签', async () => {
   assert.match(source, /SlhBillReconciliationStatusTag/u)
 })
 
-test('候选账单查询：关键词去空白，空关键词不发参数', () => {
-  assert.deepEqual(buildSlhBillSelectQuery({ page: 2, pageSize: 10, keyword: '  ' }), { page: 2, pageSize: 10 })
-  assert.deepEqual(buildSlhBillSelectQuery({ page: 1, pageSize: 10, keyword: ' CBILL/202609-01 ' }), {
+test('候选账单查询：关键词去空白，空关键词不发参数，每页 20 条', () => {
+  assert.equal(SLH_BILL_SELECT_PAGE_SIZE, 20)
+  assert.deepEqual(buildSlhBillSelectQuery({ page: 2, pageSize: SLH_BILL_SELECT_PAGE_SIZE, keyword: '  ' }), { page: 2, pageSize: 20 })
+  assert.deepEqual(buildSlhBillSelectQuery({ page: 1, pageSize: SLH_BILL_SELECT_PAGE_SIZE, keyword: ' CBILL/202609-01 ' }), {
     page: 1,
-    pageSize: 10,
+    pageSize: 20,
     keyword: 'CBILL/202609-01',
   })
 })
@@ -127,4 +129,16 @@ test('选择弹窗是卡片单选：不用通用表格，带搜索与分页，�
   assert.match(modal, /border-primary border-l-2 bg-primary\/5/u)
   // 确认后只交回选中项：详情页重构完成前不得跳转。
   assert.doesNotMatch(modal, /router\.push|useRouter/u)
+})
+
+test('卡片两行结构：编号与名称同为一级且加粗，元数据压成一行，创建时间不进卡片', async () => {
+  const modal = await readPageSource('slh-bill-select-modal.vue')
+  // 编号加粗（Mono 500 → 600），名称用紧凑标题角色（Sans 600）。
+  assert.match(modal, /qs-type-data-emphasis font-semibold/u)
+  assert.match(modal, /content-class="qs-type-compact-title"/u)
+  // 三级信息收在同一行：期间 · 行数 · 柜号数 · 应付。
+  assert.match(modal, /qs-type-meta[\s\S]{0,600}containerCount/u)
+  assert.match(modal, /payableLabel/u)
+  // 创建时间与创建人不再参与选择判断。
+  assert.doesNotMatch(modal, /DateTimeDisplay|createdLabel/u)
 })

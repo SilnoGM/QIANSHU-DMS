@@ -2,7 +2,6 @@
 import type { SlhBillListItemDto } from '@/api/generated/types.gen'
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
-import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { containerFailure } from '../containers/use-container-resource'
@@ -159,55 +158,41 @@ onBeforeUnmount(() => {
         class="py-10"
       />
       <template v-else>
-        <div role="radiogroup" :aria-label="t('slhReconciliation.billSelect.title')" class="flex flex-col gap-2">
-          <!-- 整卡就是一个单选项：点选中的卡片＝取消，点另一张＝切换。 -->
+        <div role="radiogroup" :aria-label="t('slhReconciliation.billSelect.title')" class="flex flex-col gap-1.5">
+          <!-- 整卡就是一个单选项：点选中的卡片＝取消，点另一张＝切换。两行结构：一级行放标识与净额，三级行收拢元数据。 -->
           <button
             v-for="bill in items"
             :key="bill.id"
             type="button"
             role="radio"
             :aria-checked="selected?.id === bill.id"
-            class="px-3 py-2 text-left border rounded-lg flex flex-col gap-1.5 w-full transition-colors"
+            class="px-3 py-1.5 text-left border rounded-lg flex flex-col gap-1 w-full transition-colors"
             :class="selected?.id === bill.id ? 'border-primary border-l-2 bg-primary/5' : 'border-border hover:bg-muted/40'"
             @click="selectBill(bill)"
           >
             <span class="flex flex-wrap gap-2 min-w-0 w-full items-center">
-              <span class="qs-type-data-emphasis font-mono break-all">{{ bill.slhBillNo }}</span>
-              <SlhBillReconciliationStatusTag :status="bill.reconciliationStatus" />
-              <span class="flex-1" />
+              <span class="qs-type-data-emphasis font-semibold shrink-0">{{ bill.slhBillNo }}</span>
+              <SlhBillReconciliationStatusTag :status="bill.reconciliationStatus" class="shrink-0" />
+              <!-- 名称自己撑满剩余宽度并在其中截断，净额才能贴住卡片右端、跨卡对齐。 -->
+              <span class="min-w-0 flex-1"><SlhBillOverflowText :text="bill.billName" content-class="qs-type-compact-title" /></span>
+              <AmountDisplay
+                :value="resolveSlhBillNetDisplay(bill).amount"
+                :currency="resolveSlhBillNetDisplay(bill).currency"
+                :currencies="currencyCatalog.currencies.value"
+                class="qs-type-data-emphasis shrink-0"
+              />
               <FaIcon v-if="selected?.id === bill.id" name="i-lucide:check" class="text-primary shrink-0" aria-hidden="true" />
             </span>
-            <span class="qs-type-body-medium min-w-0 w-full">
-              <SlhBillOverflowText :text="bill.billName" />
-            </span>
-            <span class="flex flex-wrap gap-x-3 gap-y-1 w-full items-baseline justify-between">
-              <span class="qs-type-description text-muted-foreground tabular-nums">
-                {{ bill.periodStart }} ~ {{ bill.periodEnd }} · {{ t('slhReconciliation.billSelect.lineCount', { count: bill.lineCount }) }}
-              </span>
-              <!-- 金额主值用折算净额（与账单列表同口径），次行退到应付人民币。 -->
-              <span class="flex flex-col gap-0.5 items-end">
-                <AmountDisplay
-                  :value="resolveSlhBillNetDisplay(bill).amount"
-                  :currency="resolveSlhBillNetDisplay(bill).currency"
-                  :currencies="currencyCatalog.currencies.value"
-                  class="qs-type-data-emphasis"
-                />
-                <span class="qs-type-description text-muted-foreground">
-                  {{ t('slhReconciliation.billSelect.payableLabel') }}
-                  <AmountDisplay
-                    class="ml-1"
-                    :value="bill.payableTotalAmountCny"
-                    currency="CNY"
-                    :currencies="currencyCatalog.currencies.value"
-                  />
-                </span>
-              </span>
-            </span>
-            <span class="qs-type-meta text-muted-foreground flex flex-wrap gap-x-3 items-center tabular-nums">
-              <span>{{ t('slhReconciliation.billSelect.containerCount', { count: bill.containerBatchCount }) }}</span>
+            <!-- 三级信息压成一行：期间 · 行数 · 柜号数 · 应付；创建时间不参与选择判断，不进卡片。 -->
+            <span class="qs-type-meta text-muted-foreground flex flex-wrap gap-x-2 w-full items-center tabular-nums">
+              <span>{{ bill.periodStart }} ~ {{ bill.periodEnd }} · {{ t('slhReconciliation.billSelect.lineCount', { count: bill.lineCount }) }} · {{ t('slhReconciliation.billSelect.containerCount', { count: bill.containerBatchCount }) }}</span>
               <span class="flex gap-1 items-center">
-                {{ t('slhReconciliation.billSelect.createdLabel') }}
-                <DateTimeDisplay :value="bill.createdAt" />
+                {{ t('slhReconciliation.billSelect.payableLabel') }}
+                <AmountDisplay
+                  :value="bill.payableTotalAmountCny"
+                  currency="CNY"
+                  :currencies="currencyCatalog.currencies.value"
+                />
               </span>
             </span>
           </button>

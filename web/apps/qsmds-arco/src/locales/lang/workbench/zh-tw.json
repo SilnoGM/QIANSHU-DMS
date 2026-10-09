@@ -291,7 +291,6 @@
       "totalBills": "共 {count} 張帳單",
       "lineCount": "{count} 行",
       "containerCount": "{count} 個櫃號",
-      "createdLabel": "建立",
       "payableLabel": "應付",
       "selectHint": "請先選擇一張帳單",
       "selectedHint": "已選擇：{billNo}",
