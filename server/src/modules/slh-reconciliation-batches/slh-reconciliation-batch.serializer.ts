@@ -27,6 +27,8 @@ const batchHeaderInclude = {
   members: { select: { reconciledAt: true } },
 } satisfies Prisma.SlhReconciliationBatchInclude
 
+export const slhReconciliationBatchListInclude = batchHeaderInclude
+
 /** 详情多取成员行本身与账单导入快照的 findings（成员为空时两者分别是空数组）。 */
 export const slhReconciliationBatchDetailInclude = {
   ...batchHeaderInclude,
@@ -117,6 +119,10 @@ function serializeBatchMember(row: BatchMemberRow): SlhReconciliationBatchMember
     reconciledAt: row.reconciledAt === null ? null : iso(row.reconciledAt),
     reconciledByDisplayName: row.reconciledBy?.displayName ?? null,
   }
+}
+
+export function serializeSlhReconciliationBatchListItem(row: BatchHeaderRow): SlhReconciliationBatchListItemDto {
+  return serializeBatchHeader(row)
 }
 
 export function serializeSlhReconciliationBatchDetail(row: SlhReconciliationBatchDetailRow): SlhReconciliationBatchDetailDto {

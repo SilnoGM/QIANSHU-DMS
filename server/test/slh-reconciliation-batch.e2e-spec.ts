@@ -131,9 +131,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     expect(secondPage.items[0].id).not.toBe(firstPage.items[0].id)
   })
 
-  it('仍为空壳的接口：批次列表空集合；未知批次与未实现的写路径返回契约声明的 404 且不落数据', async () => {
-    const list = await browser.get(BASE).expect(200)
-    expect(list.body).toEqual({ items: [], total: 0, page: 1, pageSize: 20 })
+  it('未知批次与未实现的写路径：返回契约声明的 404，且不落数据', async () => {
     const before = {
       batches: await h.prisma.slhReconciliationBatch.count(),
       members: await h.prisma.slhReconciliationBatchLine.count(),
@@ -247,6 +245,46 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     const candidates = (await browser.get(`${BASE}/candidates`).query({ pageSize: 100 }).expect(200)).body as { items: Array<{ id: string }> }
     expect(candidates.items.map(item => item.id)).toContain(replacement.id)
     await createBatch(replacement.id, randomUUID()).expect(201)
+  })
+
+  it('批次列表：默认只看进行中，状态与关键词筛选、分页与总数同口径', async () => {
+    const inProgressCount = await h.prisma.slhReconciliationBatch.count({ where: { completedAt: null } })
+    const completedCount = await h.prisma.slhReconciliationBatch.count({ where: { completedAt: { not: null } } })
+    const totalCount = inProgressCount + completedCount
+    expect(inProgressCount).toBeGreaterThan(0)
+    expect(completedCount).toBeGreaterThan(0)
+
+    // 默认（不传状态）＝只看进行中，与页面「进页面先看还没收工的活」一致。
+    const defaultList = (await browser.get(BASE).query({ pageSize: 100 }).expect(200)).body as { items: Array<{ status: string, memberCount: number, reconciledMemberCount: number, createdByDisplayName: string, bill: { lineCount: number, reconciledLineCount: number } }>, total: number }
+    expect(defaultList.total).toBe(inProgressCount)
+    expect(defaultList.items.every(item => item.status === 'IN_PROGRESS')).toBe(true)
+    // 列表项自带页面要用的进度与账单摘要字段。
+    expect(defaultList.items.every(item => typeof item.memberCount === 'number' && typeof item.reconciledMemberCount === 'number')).toBe(true)
+    expect(defaultList.items.every(item => typeof item.bill.lineCount === 'number' && typeof item.bill.reconciledLineCount === 'number')).toBe(true)
+    expect(defaultList.items.every(item => item.createdByDisplayName.length > 0)).toBe(true)
+
+    const completedList = (await browser.get(BASE).query({ status: 'COMPLETED', pageSize: 100 }).expect(200)).body as { items: Array<{ status: string }>, total: number }
+    expect(completedList.total).toBe(completedCount)
+    expect(completedList.items.every(item => item.status === 'COMPLETED')).toBe(true)
+
+    const allList = (await browser.get(BASE).query({ status: 'all', pageSize: 100 }).expect(200)).body as { total: number }
+    expect(allList.total).toBe(totalCount)
+
+    // 关键词：批次编号命中唯一一条；账单编号命中该账单下的全部批次。
+    const replacementBatch = await h.prisma.slhReconciliationBatch.findFirstOrThrow({ where: { billId: replacement.id, completedAt: null }, select: { batchNo: true } })
+    const byBatchNo = (await browser.get(BASE).query({ status: 'all', keyword: replacementBatch.batchNo }).expect(200)).body as { items: Array<{ batchNo: string }>, total: number }
+    expect(byBatchNo.total).toBe(1)
+    expect(byBatchNo.items[0].batchNo).toBe(replacementBatch.batchNo)
+
+    const replacementBatchCount = await h.prisma.slhReconciliationBatch.count({ where: { billId: replacement.id } })
+    const byBillNo = (await browser.get(BASE).query({ status: 'all', keyword: replacement.slhBillNo }).expect(200)).body as { items: Array<{ bill: { slhBillNo: string } }>, total: number }
+    expect(byBillNo.total).toBe(replacementBatchCount)
+    expect(byBillNo.items.every(item => item.bill.slhBillNo === replacement.slhBillNo)).toBe(true)
+
+    // 分页：列表长度受 pageSize 限制，总数始终是整个结果集。
+    const paged = (await browser.get(BASE).query({ status: 'all', page: 1, pageSize: 1 }).expect(200)).body as { items: unknown[], total: number, page: number, pageSize: number }
+    expect([paged.page, paged.pageSize, paged.total]).toEqual([1, 1, totalCount])
+    expect(paged.items).toHaveLength(1)
   })
 
   it('取号不可用：停用编号规则后创建被拒，且不留下批次与派发记录', async () => {

@@ -30,11 +30,10 @@ const writeErrors: ApiContractErrorOptions[] = [
 ]
 
 /**
- * 对账批次接口。当前已解冻的路径：候选账单（选账单的数据来源）、批次详情读取、创建批次头与完成批次；
- * 批次列表与匹配预览仍是空壳：列表返回空集合，其余返回契约已声明的 404。
+ * 对账批次接口。当前仍是空壳的只有匹配预览（返回契约已声明的 404）与批次核对 `reconcile`；
+ * 列表、候选账单、详情读取、创建与完成都已接上实现。
  * 空壳方法的请求参数仅为保留契约声明与既有校验而留在签名里。
  */
-const emptyPage = (page?: number, pageSize?: number) => ({ items: [], total: 0, page: page ?? 1, pageSize: pageSize ?? 20 })
 function context(request: object) {
   return { actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) }
 }
@@ -50,7 +49,7 @@ export class SlhReconciliationBatchController {
   ) {}
 
   @Get() @RequirePermissions('slh-bills:reconcile') @ApiContractResponse({ status: 200, type: SlhReconciliationBatchPageDto }) @contract('slh_reconciliation_batches_list')
-  list(@Query() query: SlhReconciliationBatchListQueryDto) { return emptyPage(query.page, query.pageSize) }
+  list(@Query() query: SlhReconciliationBatchListQueryDto) { return this.queries.list(query) }
 
   // 必须排在 `:id` 之前，否则会被当成批次主键。
   @Get('candidates') @RequirePermissions('slh-bills:reconcile') @ApiContractResponse({ status: 200, type: SlhBillPageDto }) @contract('slh_reconciliation_batch_candidates')

@@ -6,20 +6,63 @@ import { serializeSlhBillListItem, slhBillListInclude } from '../slh-bills/slh-b
 import type { SlhBillPageDto } from '../slh-bills/slh-bill.dto'
 import { slhReconciliationBatchFailure } from './slh-reconciliation-batch.errors'
 import { slhReconciliationBatchUuid } from './slh-reconciliation-batch.normalizer'
-import { serializeSlhReconciliationBatchDetail, slhReconciliationBatchDetailInclude } from './slh-reconciliation-batch.serializer'
-import type { SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchDetailDto } from './slh-reconciliation-batch.dto'
+import { serializeSlhReconciliationBatchDetail, serializeSlhReconciliationBatchListItem, slhReconciliationBatchDetailInclude, slhReconciliationBatchListInclude } from './slh-reconciliation-batch.serializer'
+import { SlhReconciliationBatchFilterDto } from './slh-reconciliation-batch.dto'
+import type {
+  SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchDetailDto, SlhReconciliationBatchListQueryDto,
+  SlhReconciliationBatchPageDto,
+} from './slh-reconciliation-batch.dto'
 
 const DEFAULT_PAGE_SIZE = 20
+
+/** 列表筛选取值 → 完成态条件；`all` 表示不加状态条件。 */
+function batchStatusWhere(status: SlhReconciliationBatchFilterDto): Prisma.SlhReconciliationBatchWhereInput {
+  if (status === SlhReconciliationBatchFilterDto.IN_PROGRESS) {
+    return { completedAt: null }
+  }
+  if (status === SlhReconciliationBatchFilterDto.COMPLETED) {
+    return { completedAt: { not: null } }
+  }
+  return {}
+}
 
 /**
  * 对账批次的读查询。
  *
- * 已解冻的读路径：候选账单（新建批次弹窗的数据来源）与批次详情（详情页头部与创建/结束的响应体）；
- * 批次列表与匹配预览仍是空壳。
+ * 已解冻的读路径：候选账单（新建批次弹窗的数据来源）、批次列表与批次详情
+ * （详情页头部与创建/结束的响应体）；匹配预览仍是空壳。
  */
 @Injectable()
 export class SlhReconciliationBatchQueryService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * 批次列表：状态筛选（默认只看进行中）+ 关键词（批次编号 / 账单编号 / 账单名称）+ 分页。
+   * 列表与总数共用同一份条件，否则筛选后会出现「有数据但总数为 0」。
+   */
+  async list(query: SlhReconciliationBatchListQueryDto): Promise<SlhReconciliationBatchPageDto> {
+    const page = query.page ?? 1
+    const pageSize = query.pageSize ?? DEFAULT_PAGE_SIZE
+    const keyword = query.keyword?.trim()
+    const where: Prisma.SlhReconciliationBatchWhereInput = {
+      ...batchStatusWhere(query.status ?? SlhReconciliationBatchFilterDto.IN_PROGRESS),
+      ...(keyword === undefined || keyword === '' ? {} : {
+        OR: [
+          { batchNo: { contains: keyword, mode: 'insensitive' } },
+          { bill: { slhBillNo: { contains: keyword, mode: 'insensitive' } } },
+          { bill: { billName: { contains: keyword, mode: 'insensitive' } } },
+        ],
+      }),
+    }
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.slhReconciliationBatch.findMany({
+        where, include: slhReconciliationBatchListInclude,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * pageSize, take: pageSize,
+      }),
+      this.prisma.slhReconciliationBatch.count({ where }),
+    ])
+    return { items: items.map(serializeSlhReconciliationBatchListItem), total, page, pageSize }
+  }
 
   /**
    * 弹窗第一步的候选账单：生效中、至少一行未对账、且没有进行中的批次。
