@@ -269,6 +269,7 @@
   },
   "slhReconciliation": {
     "intro": "按账单发起对账：一个批次对应一张账单，核对的是本轮匹配到柜次的明细行。",
+    "backToList": "返回对账批次",
     "search": "搜索批次编号、账单编号或账单名称",
     "empty": "还没有对账批次",
     "filterLabel": "批次状态",
@@ -305,7 +306,14 @@
       "selectHint": "请先选择一张账单",
       "selectedHint": "已选择：{billNo}",
       "confirm": "确认选择",
-      "selectedToast": "已选择账单 {billNo}，对账详情页重构中暂不跳转"
+      "createdToast": "已创建对账批次 {batchNo}"
+    },
+    "detail": {
+      "completeButton": "完成批次对账",
+      "completeTitle": "完成批次对账？",
+      "completeHint": "完成后本批次不能再继续核对，账单会重新回到可发起对账的状态。",
+      "completeConfirm": "确认完成",
+      "completedToast": "已完成本次对账"
     }
   }
 }

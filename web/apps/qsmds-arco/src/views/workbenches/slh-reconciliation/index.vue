@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { SlhReconciliationBatchFilter } from './list.logic'
-import type { SlhBillListItemDto, SlhReconciliationBatchListItemDto } from '@/api/generated/types.gen'
+import type { SlhReconciliationBatchDetailDto, SlhReconciliationBatchListItemDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
@@ -36,8 +36,6 @@ const items = shallowRef<SlhReconciliationBatchListItemDto[]>([])
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
-/** 弹窗确认后的暂存选择：详情页尚未重构，本次只记录、不跳转。 */
-const selectedBill = shallowRef<SlhBillListItemDto | null>(null)
 const billSelectOpen = ref(false)
 let controller: AbortController | null = null
 
@@ -112,10 +110,10 @@ function viewBatch(id: string): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhReconciliationDetail', params: { id } })
 }
 
-/** 详情页尚未重构：本次只记录选择，不跳转。 */
-function confirmBillSelection(bill: SlhBillListItemDto): void {
-  selectedBill.value = bill
-  toast.success(t('slhReconciliation.billSelect.selectedToast', { billNo: bill.slhBillNo }))
+/** 批次创建成功：提示编号并进入本次对账的作业面（详情页）。 */
+function handleBatchCreated(batch: SlhReconciliationBatchDetailDto): void {
+  toast.success(t('slhReconciliation.billSelect.createdToast', { batchNo: batch.batchNo }))
+  viewBatch(batch.id)
 }
 
 watch([canReconcile, () => accountStore.authEpoch], () => {
@@ -200,6 +198,6 @@ onBeforeUnmount(() => {
         </template>
       </QsGenericTable>
     </FaPageMain>
-    <SlhBillSelectModal v-if="canReconcile" v-model="billSelectOpen" @confirm="confirmBillSelection" />
+    <SlhBillSelectModal v-if="canReconcile" v-model="billSelectOpen" @created="handleBatchCreated" />
   </div>
 </template>

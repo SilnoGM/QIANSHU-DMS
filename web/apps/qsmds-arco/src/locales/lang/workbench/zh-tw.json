@@ -260,6 +260,7 @@
   },
   "slhReconciliation": {
     "intro": "依帳單發起對帳：一個批次對應一張帳單，核對的是本輪匹配到櫃次的明細行。",
+    "backToList": "返回對帳批次",
     "search": "搜尋批次編號、帳單編號或帳單名稱",
     "empty": "還沒有對帳批次",
     "filterLabel": "批次狀態",
@@ -296,7 +297,14 @@
       "selectHint": "請先選擇一張帳單",
       "selectedHint": "已選擇：{billNo}",
       "confirm": "確認選擇",
-      "selectedToast": "已選擇帳單 {billNo}，對帳詳情頁重構中暫不跳轉"
+      "createdToast": "已建立對帳批次 {batchNo}"
+    },
+    "detail": {
+      "completeButton": "完成批次對帳",
+      "completeTitle": "完成批次對帳？",
+      "completeHint": "完成後本批次不能再繼續核對，帳單會重新回到可發起對帳的狀態。",
+      "completeConfirm": "確認完成",
+      "completedToast": "已完成本次對帳"
     }
   }
 }

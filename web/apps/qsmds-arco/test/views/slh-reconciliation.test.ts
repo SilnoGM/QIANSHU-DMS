@@ -110,14 +110,15 @@ test('单选：点已选中的账单取消选择，点另一张切换', () => {
   assert.equal(toggleSlhBillSelection(first, first), null)
 })
 
-test('新建入口接线：按钮、页头说明与暂存回调都挂在列表页上', async () => {
+test('新建入口接线：按钮、页头说明与创建成功跳转都挂在列表页上', async () => {
   const page = await readPageSource('index.vue')
   assert.match(page, /:description="t\('slhReconciliation\.intro'\)"/u)
   assert.match(page, /t\('slhReconciliation\.billSelect\.createButton'\)/u)
-  assert.match(page, /<SlhBillSelectModal v-if="canReconcile" v-model="billSelectOpen" @confirm="confirmBillSelection" \/>/u)
-  assert.match(page, /selectedBill\.value = bill/u)
-  assert.match(page, /slhReconciliation\.billSelect\.selectedToast/u)
-  // 已选择的账单只在弹窗页脚与 toast 里出现，页面头部不常驻展示。
+  assert.match(page, /<SlhBillSelectModal v-if="canReconcile" v-model="billSelectOpen" @created="handleBatchCreated" \/>/u)
+  assert.match(page, /slhReconciliation\.billSelect\.createdToast/u)
+  // 创建成功后由列表页跳详情：批次主键就是路由参数。
+  assert.match(page, /viewBatch\(batch\.id\)/u)
+  // 已选择的账单只在弹窗页脚出现，页面头部不常驻展示。
   assert.doesNotMatch(page, /billSelect\.selectedHint/u)
 })
 
@@ -144,4 +145,32 @@ test('卡片两行结构：编号与名称同为一级且加粗，元数据压�
   assert.match(modal, /payableLabel/u)
   // 创建时间与创建人不再参与选择判断。
   assert.doesNotMatch(modal, /DateTimeDisplay|createdLabel/u)
+})
+
+test('弹窗确认＝创建批次：带幂等键、提交中不可重复点击、失败留在弹窗', async () => {
+  const modal = await readPageSource('slh-bill-select-modal.vue')
+  assert.match(modal, /slhReconciliationBatchesApi\.create\(/u)
+  assert.match(modal, /idempotencyKey \?\?= crypto\.randomUUID\(\)/u)
+  // 提交中：弹窗封锁关闭、列表与页脚一起失效（QsGenericModal 对 submitting 的处理）。
+  assert.match(modal, /:submitting="submitting"/u)
+  assert.match(modal, /:inert="submitting \|\| undefined"/u)
+  assert.match(modal, /:disabled="selected === null \|\| submitting"/u)
+  // 失败不关窗：错误留在弹窗里，并刷新候选列表（占用冲突后该账单会消失）。
+  assert.match(modal, /submitError\.value = containerFailure\(failure\)\.message/u)
+  assert.match(modal, /await load\(\)/u)
+  assert.doesNotMatch(modal, /router\.push|useRouter/u)
+})
+
+test('批次详情页占位：页头标题加返回入口、底部承接完成批次，主体保持空白', async () => {
+  const page = await readPageSource('detail.vue')
+  assert.match(page, /t\('workbench\.slhBillReconciliationDetail'\)/u)
+  assert.match(page, /t\('slhReconciliation\.backToList'\)/u)
+  assert.match(page, /router\.push\(\{ name: 'qsFinanceBillReconciliationSlhBillReconciliation' \}\)/u)
+  assert.match(page, /t\('slhReconciliation\.detail\.completeButton'\)/u)
+  assert.match(page, /slhReconciliationBatchesApi\.complete\(/u)
+  // 完成后本地记忆「已完成」并禁用按钮；错误改用内联 FaAlert 显示。
+  assert.match(page, /const completed = ref\(false\)/u)
+  assert.match(page, /:disabled="completed \|\| completing"/u)
+  // 主体保持空白：不渲染任何批次字段、不加空态占位提示。
+  assert.doesNotMatch(page, /FaEmpty|batchNo|memberCount|findings/u)
 })

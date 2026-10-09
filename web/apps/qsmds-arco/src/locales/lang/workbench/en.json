@@ -260,6 +260,7 @@
   },
   "slhReconciliation": {
     "intro": "Reconcile per bill: one batch covers one bill and only the lines that matched a container row this round.",
+    "backToList": "Back to reconciliation batches",
     "search": "Search batch, bill number or bill name",
     "empty": "No reconciliation batch yet",
     "filterLabel": "Batch status",
@@ -296,7 +297,14 @@
       "selectHint": "Select a bill to continue",
       "selectedHint": "Selected: {billNo}",
       "confirm": "Confirm selection",
-      "selectedToast": "Bill {billNo} selected; the detail page is still being rebuilt"
+      "createdToast": "Reconciliation batch {batchNo} created"
+    },
+    "detail": {
+      "completeButton": "Complete this batch",
+      "completeTitle": "Complete this batch?",
+      "completeHint": "After completing, this batch can no longer be reconciled and the bill becomes available again.",
+      "completeConfirm": "Complete",
+      "completedToast": "Reconciliation completed"
     }
   }
 }

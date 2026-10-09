@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SlhBillListItemDto } from '@/api/generated/types.gen'
+import type { SlhBillListItemDto, SlhReconciliationBatchDetailDto } from '@/api/generated/types.gen'
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
@@ -17,14 +17,14 @@ import {
 
 /**
  * 「选择对账账单」：为新建对账批次单选一张账单。
- * 候选集合由服务端的候选账单接口决定（生效中 + 仍有未对账行 + 没有进行中批次），
- * 页面只负责取数、分页与单选；确认后只把选中项交回调用方，不在这里跳转。
+ * 候选集合由服务端的候选账单接口决定（生效中 + 仍有未对账行 + 没有进行中批次）；
+ * 确认后由本组件直接创建批次头，成功才把批次交回调用方（由调用方跳转详情页）。
  */
 defineOptions({ name: 'SlhBillSelectModal' })
 const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{
   'update:modelValue': [open: boolean]
-  'confirm': [bill: SlhBillListItemDto]
+  'created': [batch: SlhReconciliationBatchDetailDto]
 }>()
 
 const { t } = useI18n()
@@ -43,6 +43,13 @@ const loading = ref(false)
 const error = ref('')
 /** 暂存的选中项；跨翻页与搜索保留，确认时直接拿到账单对象。 */
 const selected = shallowRef<SlhBillListItemDto | null>(null)
+const submitting = ref(false)
+const submitError = ref('')
+/**
+ * 幂等键：改选账单后重置；同一意图的失败重试复用同一个键，
+ * 网络超时重试不会多建一条批次（服务端按键返回同一批次）。
+ */
+let idempotencyKey: string | null = null
 let controller: AbortController | null = null
 
 const emptyKind = computed(() => resolveSlhBillSelectEmptyKind({ keyword: keyword.value, total: total.value }))
@@ -93,15 +100,37 @@ function changePage(next: number): void {
 }
 
 function selectBill(bill: SlhBillListItemDto): void {
+  // 改选就把幂等键作废：这是另一张账单，不能复用上一个意图的键。
+  idempotencyKey = null
   selected.value = toggleSlhBillSelection(selected.value, bill)
 }
 
-function confirm(): void {
-  if (selected.value === null) {
+/** 确认＝创建批次头：成功才交回调用方，失败留在弹窗里说明原因并刷新候选。 */
+async function confirm(): Promise<void> {
+  if (selected.value === null || submitting.value) {
     return
   }
-  emit('confirm', selected.value)
-  open.value = false
+  idempotencyKey ??= crypto.randomUUID()
+  submitting.value = true
+  submitError.value = ''
+  try {
+    const response = await slhReconciliationBatchesApi.create(
+      { billId: selected.value.id },
+      idempotencyKey,
+      new AbortController().signal,
+    )
+    idempotencyKey = null
+    emit('created', response.data)
+    open.value = false
+  }
+  catch (failure) {
+    // 占用冲突或准入变化都要让用户重新看一眼，因此把候选列表一起刷新。
+    submitError.value = containerFailure(failure).message
+    await load()
+  }
+  finally {
+    submitting.value = false
+  }
 }
 
 /** 每次打开都从干净的第一页开始取数；选中项保留，便于关掉再核对。 */
@@ -120,7 +149,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <QsGenericModal v-model="open" :title="t('slhReconciliation.billSelect.title')" size="lg">
+  <QsGenericModal v-model="open" :title="t('slhReconciliation.billSelect.title')" size="lg" :submitting="submitting">
     <div class="flex flex-col gap-3 min-w-0">
       <div class="flex gap-2 items-center">
         <FaInput
@@ -135,6 +164,9 @@ onBeforeUnmount(() => {
           {{ t('slhReconciliation.billSelect.search') }}
         </FaButton>
       </div>
+
+      <!-- 创建失败留在弹窗里说明原因（占用冲突、取号不可用等），不跳转也不关窗。 -->
+      <FaAlert v-if="submitError" variant="destructive" role="alert" :title="submitError" />
 
       <!-- 取数期间给骨架卡片：弹窗与搜索框保持可见，不整窗闪。 -->
       <div v-if="loading" role="status" :aria-label="t('slhReconciliation.billSelect.loading')" class="flex flex-col gap-2">
@@ -158,7 +190,7 @@ onBeforeUnmount(() => {
         class="py-10"
       />
       <template v-else>
-        <div role="radiogroup" :aria-label="t('slhReconciliation.billSelect.title')" class="flex flex-col gap-1.5">
+        <div role="radiogroup" :aria-label="t('slhReconciliation.billSelect.title')" :inert="submitting || undefined" class="flex flex-col gap-1.5">
           <!-- 整卡就是一个单选项：点选中的卡片＝取消，点另一张＝切换。两行结构：一级行放标识与净额，三级行收拢元数据。 -->
           <button
             v-for="bill in items"
@@ -174,7 +206,7 @@ onBeforeUnmount(() => {
               <span class="qs-type-data-emphasis font-semibold shrink-0">{{ bill.slhBillNo }}</span>
               <SlhBillReconciliationStatusTag :status="bill.reconciliationStatus" class="shrink-0" />
               <!-- 名称自己撑满剩余宽度并在其中截断，净额才能贴住卡片右端、跨卡对齐。 -->
-              <span class="min-w-0 flex-1"><SlhBillOverflowText :text="bill.billName" content-class="qs-type-compact-title" /></span>
+              <span class="flex-1 min-w-0"><SlhBillOverflowText :text="bill.billName" content-class="qs-type-compact-title" /></span>
               <AmountDisplay
                 :value="resolveSlhBillNetDisplay(bill).amount"
                 :currency="resolveSlhBillNetDisplay(bill).currency"
@@ -217,10 +249,10 @@ onBeforeUnmount(() => {
             : t('slhReconciliation.billSelect.selectedHint', { billNo: selected.slhBillNo }) }}
         </span>
         <div class="flex-1" />
-        <FaButton type="button" variant="outline" class="w-full sm:w-auto" @click="open = false">
+        <FaButton type="button" variant="outline" class="w-full sm:w-auto" :disabled="submitting" @click="open = false">
           {{ t('slhBill.cancel') }}
         </FaButton>
-        <FaButton type="button" class="w-full sm:w-auto" :disabled="selected === null" @click="confirm">
+        <FaButton type="button" class="w-full sm:w-auto" :loading="submitting" :disabled="selected === null || submitting" @click="confirm">
           {{ t('slhReconciliation.billSelect.confirm') }}
         </FaButton>
       </div>

@@ -1120,7 +1120,8 @@
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/batch-payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/detail.vue",
-      "apps/qsmds-arco/src/views/workbenches/slh-bills/import.vue"
+      "apps/qsmds-arco/src/views/workbenches/slh-bills/import.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/detail.vue"
     ]
   },
   {
