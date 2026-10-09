@@ -10,7 +10,7 @@ export enum SlhReconciliationBatchStatusDto { IN_PROGRESS = 'IN_PROGRESS', COMPL
 export enum SlhReconciliationBatchFilterDto { IN_PROGRESS = 'IN_PROGRESS', COMPLETED = 'COMPLETED', ALL = 'all' }
 /** 匹配来源：与持久化枚举 slh_bill_line_match_source 一致。 */
 export enum SlhBillLineMatchSourceDto { NAME = 'NAME', MARK = 'MARK' }
-/** 未匹配合格的原因；与 slh-bill-line-matching 的原因码一一对应。 */
+/** 未匹配合格的原因码；取值空间随契约保留（对账功能已冻结，算法侧声明已移除）。 */
 export enum SlhBillLineUnmatchedReasonDto {
   MISSING_CONTAINER_REFERENCE = 'MISSING_CONTAINER_REFERENCE',
   INVALID_CONTAINER_NAME = 'INVALID_CONTAINER_NAME',

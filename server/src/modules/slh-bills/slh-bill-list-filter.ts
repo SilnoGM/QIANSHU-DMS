@@ -81,16 +81,6 @@ export function withSlhBillReconciliationStatus(
 }
 
 /**
- * 未完成对账（未对账或部分对账）：账单里至少还有一行没有对账时刻。
- * 这是「未对账 + 部分对账」两态的统一谓词，供对账批次的候选账单筛选复用，
- * 免得候选集合与账单三态各自写一套判断。
- */
-export function withSlhBillIncompleteReconciliation(where: Prisma.SlhBillWhereInput): Prisma.SlhBillWhereInput {
-  const existing = where.AND === undefined ? [] : Array.isArray(where.AND) ? where.AND : [where.AND]
-  return { ...where, AND: [...existing, { lines: { some: { reconciledAt: null } } }] }
-}
-
-/**
  * 对账状态是明细行的汇总结果：
  * - 未对账 = 没有任何一行有对账时刻；
  * - 对账完成 = 没有未对账的行；

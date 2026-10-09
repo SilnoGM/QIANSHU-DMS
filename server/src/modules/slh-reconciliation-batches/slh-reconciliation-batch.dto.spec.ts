@@ -1,18 +1,13 @@
-import { SLH_BILL_LINE_UNMATCHED_REASONS } from './slh-bill-line-matching'
 import {
-  SlhBillLineMatchSourceDto, SlhBillLineUnmatchedReasonDto, SlhReconciliationBatchFilterDto,
+  SlhBillLineMatchSourceDto, SlhReconciliationBatchFilterDto,
   SlhReconciliationBatchStatusDto,
 } from './slh-reconciliation-batch.dto'
 
 /**
- * 接口层枚举镜像规则层取值：两边是两份声明，靠这里的断言保证不漂移。
- * 前端按枚举值映射文案，多一个或少一个都会在页面上表现为空白或丢失原因。
+ * 接口层枚举取值稳定：前端按枚举值映射文案，多一个或少一个都会在页面上表现为空白或丢失原因。
+ * 对账功能冻结期间这些取值仍是契约的一部分（DTO 原样保留），因此继续守住。
  */
-describe('对账批次的接口枚举镜像规则层取值', () => {
-  it('未匹配合格的原因码与规则层一一对应', () => {
-    expect(Object.values(SlhBillLineUnmatchedReasonDto).sort()).toEqual([...SLH_BILL_LINE_UNMATCHED_REASONS].sort())
-  })
-
+describe('对账批次的接口枚举取值稳定', () => {
   it('匹配来源与持久化枚举取值一致', () => {
     expect(Object.values(SlhBillLineMatchSourceDto).sort()).toEqual(['MARK', 'NAME'])
   })
