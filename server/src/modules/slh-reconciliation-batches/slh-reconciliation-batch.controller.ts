@@ -11,6 +11,7 @@ import {
   SlhReconciliationBatchIdDto, SlhReconciliationBatchListQueryDto, SlhReconciliationBatchPageDto,
   SlhReconciliationBatchPreviewDto, SlhReconciliationBatchPreviewRequestDto, SlhReconciliationBatchReconcileDto,
 } from './slh-reconciliation-batch.dto'
+import { SlhReconciliationBatchQueryService } from './slh-reconciliation-batch-query.service'
 
 function contract(operationId: string, mutation = false, errors: ApiContractErrorOptions[] = []) {
   return ApiApplicationContract({ operationId, session: 'required', authorization: true, csrf: mutation, badRequest: true, validation: true, privateNoStore: true,
@@ -26,8 +27,9 @@ const writeErrors: ApiContractErrorOptions[] = [
 ]
 
 /**
- * 对账功能已整体冻结（重构第一步）：路径、权限、DTO 与契约声明原样保留，实现不再读写数据库。
- * 读接口返回空集合（对账域当前没有任何对象）；其余接口返回契约已声明的 404。
+ * 对账功能整体处于冻结状态（重构第一步），当前只解冻「候选账单」读路径——它是
+ * 「新建对账批次」弹窗的数据来源，其余接口保留路径、权限、DTO 与契约声明，实现仍是空壳：
+ * 读接口返回空集合（对账域当前没有任何对象），其余接口返回契约已声明的 404。
  * 请求参数仅为保留契约声明与既有校验而留在签名里，空壳实现不消费它们。
  */
 const emptyPage = (page?: number, pageSize?: number) => ({ items: [], total: 0, page: page ?? 1, pageSize: pageSize ?? 20 })
@@ -37,12 +39,14 @@ const noSuchBatch = (): never => { throw new ApiException(404, 'SLH_RECON_BATCH_
 @ApiTags('slh-reconciliation-batches')
 @Controller('slh-reconciliation-batches')
 export class SlhReconciliationBatchController {
+  constructor(private readonly queries: SlhReconciliationBatchQueryService) {}
+
   @Get() @RequirePermissions('slh-bills:reconcile') @ApiContractResponse({ status: 200, type: SlhReconciliationBatchPageDto }) @contract('slh_reconciliation_batches_list')
   list(@Query() query: SlhReconciliationBatchListQueryDto) { return emptyPage(query.page, query.pageSize) }
 
   // 必须排在 `:id` 之前，否则会被当成批次主键。
   @Get('candidates') @RequirePermissions('slh-bills:reconcile') @ApiContractResponse({ status: 200, type: SlhBillPageDto }) @contract('slh_reconciliation_batch_candidates')
-  candidates(@Query() query: SlhReconciliationBatchCandidateQueryDto) { return emptyPage(query.page, query.pageSize) }
+  candidates(@Query() query: SlhReconciliationBatchCandidateQueryDto) { return this.queries.candidates(query) }
 
   @Post('match-preview') @HttpCode(200) @RequirePermissions('slh-bills:reconcile')
   @ApiContractResponse({ status: 200, type: SlhReconciliationBatchPreviewDto }) @contract('slh_reconciliation_batch_match_preview', true, [notFound])
