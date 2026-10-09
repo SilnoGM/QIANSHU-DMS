@@ -27,8 +27,14 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
   let occupied: SlhBillDto
   let superseded: SlhBillDto
   let replacement: SlhBillDto
+  let batchRuleId = ''
+  let batchRuleVersion = 0
   const unknownId = '00000000-0000-4000-8000-000000000001'
+  const idempotencyKeyA = randomUUID()
+  const idempotencyKeyB = randomUUID()
   const errorCode = (response: request.Response) => (response.body as { code: string }).code
+  const createBatch = (billId: string, key: string) => browser
+    .post(BASE).set(packagingHeaders).set('Idempotency-Key', key).send({ billId })
 
   async function importBill(name: string, supersedesBillId: string | null = null): Promise<SlhBillDto> {
     const staged = await browser.post('/api/slh-bills/source-file-uploads').set(packagingHeaders)
@@ -81,7 +87,11 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     ]) {
       const ruleRecord = await h.fixture.numberingCommands.create(context, { ...rule, purpose: 'BUSINESS' })
       const published = await h.fixture.numberingCommands.publish(context, ruleRecord.id, { expectedVersion: ruleRecord.version, draftRevision: 1 })
-      await h.fixture.numberingCommands.enable(context, ruleRecord.id, { expectedVersion: published.version })
+      const enabled = await h.fixture.numberingCommands.enable(context, ruleRecord.id, { expectedVersion: published.version })
+      if (rule.ruleCode === BATCH_RULE_CODE) {
+        batchRuleId = enabled.id
+        batchRuleVersion = enabled.version
+      }
     }
 
     pending = await importBill('对账候选-待对账')
@@ -121,7 +131,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     expect(secondPage.items[0].id).not.toBe(firstPage.items[0].id)
   })
 
-  it('其余接口仍为空壳：批次列表空集合，写接口返回契约声明的 404 且不落数据', async () => {
+  it('仍为空壳的接口：批次列表空集合，详情/核对/预览返回契约声明的 404 且不落数据', async () => {
     const list = await browser.get(BASE).expect(200)
     expect(list.body).toEqual({ items: [], total: 0, page: 1, pageSize: 20 })
     const before = {
@@ -130,9 +140,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     }
     expect(errorCode(await browser.get(`${BASE}/${unknownId}`).expect(404))).toBe('SLH_RECON_BATCH_NOT_FOUND')
     expect(errorCode(await browser.post(`${BASE}/${unknownId}/reconcile`).set(packagingHeaders).send({ lineIds: [unknownId] }).expect(404))).toBe('SLH_RECON_BATCH_NOT_FOUND')
-    expect(errorCode(await browser.post(`${BASE}/${unknownId}/complete`).set(packagingHeaders).send({}).expect(404))).toBe('SLH_RECON_BATCH_NOT_FOUND')
     expect(errorCode(await browser.post(`${BASE}/match-preview`).set(packagingHeaders).send({ billId: unknownId }).expect(404))).toBe('SLH_BILL_NOT_FOUND')
-    expect(errorCode(await browser.post(BASE).set(packagingHeaders).set('Idempotency-Key', unknownId).send({ billId: unknownId }).expect(404))).toBe('SLH_BILL_NOT_FOUND')
     expect({
       batches: await h.prisma.slhReconciliationBatch.count(),
       members: await h.prisma.slhReconciliationBatchLine.count(),
@@ -143,6 +151,103 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     await request(h.app.getHttpServer()).get(BASE).expect(401)
     await outsider.get(BASE).expect(403)
     await outsider.get(`${BASE}/candidates`).expect(403)
+    await outsider.post(BASE).set(packagingHeaders).set('Idempotency-Key', randomUUID()).send({ billId: pending.id }).expect(403)
     await outsider.post(`${BASE}/${unknownId}/complete`).set(packagingHeaders).send({}).expect(403)
+  })
+
+  it('创建批次头：编号来自派发台账、写审计事件，候选集随即排除该账单', async () => {
+    const response = await createBatch(pending.id, idempotencyKeyA).expect(201)
+    const batch = response.body as {
+      id: string, batchNo: string, status: string, memberCount: number, reconciledMemberCount: number,
+      members: unknown[], completedAt: string | null, bill: { slhBillNo: string }
+    }
+    // 形状跟随本用例夹具的规则（月度 `SRB-{YYYYMM}-{SEQ:3}`），并与派发台账逐字比对。
+    expect(batch.batchNo).toMatch(/^SRB-\d{6}-\d{3}$/u)
+    expect([batch.status, batch.memberCount, batch.reconciledMemberCount, batch.completedAt]).toEqual(['IN_PROGRESS', 0, 0, null])
+    expect(batch.bill.slhBillNo).toBe(pending.slhBillNo)
+    expect(batch.members).toEqual([])
+
+    const row = await h.prisma.slhReconciliationBatch.findUniqueOrThrow({
+      where: { id: batch.id }, select: { numberingIssuanceId: true, creationPayloadHash: true },
+    })
+    const issuance = await h.prisma.numberingIssuance.findUniqueOrThrow({
+      where: { id: row.numberingIssuanceId }, select: { generatedNumber: true, consumerCode: true, ruleId: true },
+    })
+    expect(issuance.generatedNumber).toBe(batch.batchNo)
+    expect(issuance.consumerCode).toBe(BATCH_CONSUMER_CODE)
+    const rule = await h.prisma.numberingRule.findUniqueOrThrow({ where: { id: issuance.ruleId }, select: { ruleCode: true } })
+    expect(rule.ruleCode).toBe(BATCH_RULE_CODE)
+    expect(row.creationPayloadHash).toHaveLength(32)
+
+    const audit = await h.prisma.auditEvent.findFirst({
+      where: { eventType: 'SLH_RECONCILIATION_BATCH_CREATED', targetId: batch.id }, select: { metadata: true },
+    })
+    expect(audit?.metadata).toMatchObject({ batchNo: batch.batchNo, slhBillNo: pending.slhBillNo })
+
+    // 该账单已被占用：候选集不再包含它。
+    const candidates = (await browser.get(`${BASE}/candidates`).query({ pageSize: 100 }).expect(200)).body as { items: Array<{ id: string }> }
+    expect(candidates.items.map(item => item.id)).not.toContain(pending.id)
+  })
+
+  it('幂等：同键重放返回同一批次，同一键换账单被拒，非法键在业务前被拒', async () => {
+    const replay = await createBatch(pending.id, idempotencyKeyA).expect(201)
+    const first = await h.prisma.slhReconciliationBatch.findFirstOrThrow({ where: { billId: pending.id }, select: { id: true } })
+    expect((replay.body as { id: string }).id).toBe(first.id)
+    expect(await h.prisma.slhReconciliationBatch.count({ where: { billId: pending.id } })).toBe(1)
+
+    // 同一个键换一张账单 ⇒ 意图变了，必须拒绝而不是静默复用。
+    expect(errorCode(await createBatch(replacement.id, idempotencyKeyA).expect(409))).toBe('SLH_RECON_BATCH_IDEMPOTENCY_CONFLICT')
+    // 非法幂等键（非规范 UUID v4）在进入业务前就被拒。
+    expect(errorCode(await createBatch(replacement.id, 'not-a-uuid').expect(422))).toBe('VALIDATION_FAILED')
+  })
+
+  it('占用与准入：占用中、无未对账行、被取代与未知账单都挡在创建之前', async () => {
+    expect(errorCode(await createBatch(pending.id, randomUUID()).expect(409))).toBe('SLH_RECON_BATCH_CONFLICT')
+    expect(errorCode(await createBatch(occupied.id, randomUUID()).expect(409))).toBe('SLH_RECON_BATCH_CONFLICT')
+    expect(errorCode(await createBatch(completed.id, randomUUID()).expect(409))).toBe('SLH_RECON_BATCH_NO_LINES_TO_RECONCILE')
+    expect(errorCode(await createBatch(superseded.id, randomUUID()).expect(409))).toBe('SLH_RECON_BATCH_CONFLICT')
+    expect(errorCode(await createBatch(unknownId, randomUUID()).expect(404))).toBe('SLH_BILL_NOT_FOUND')
+  })
+
+  it('完成批次：解除占用、写审计事件，重复完成被拒，释放后可再次发起', async () => {
+    const created = await createBatch(replacement.id, idempotencyKeyB).expect(201)
+    const batchId = (created.body as { id: string }).id
+
+    const completed = (await browser.post(`${BASE}/${batchId}/complete`).set(packagingHeaders).send({}).expect(200)).body as {
+      status: string, completedAt: string | null, completedByDisplayName: string | null
+    }
+    expect(completed.status).toBe('COMPLETED')
+    expect(completed.completedAt).not.toBeNull()
+    expect(completed.completedByDisplayName).toBeTruthy()
+    const audit = await h.prisma.auditEvent.findFirst({
+      where: { eventType: 'SLH_RECONCILIATION_BATCH_COMPLETED', targetId: batchId }, select: { id: true },
+    })
+    expect(audit).not.toBeNull()
+
+    expect(errorCode(await browser.post(`${BASE}/${batchId}/complete`).set(packagingHeaders).send({}).expect(409))).toBe('SLH_RECON_BATCH_NOT_IN_PROGRESS')
+
+    // 结束之后账单重新变成候选，可以再次发起对账。
+    const candidates = (await browser.get(`${BASE}/candidates`).query({ pageSize: 100 }).expect(200)).body as { items: Array<{ id: string }> }
+    expect(candidates.items.map(item => item.id)).toContain(replacement.id)
+    await createBatch(replacement.id, randomUUID()).expect(201)
+  })
+
+  it('取号不可用：停用编号规则后创建被拒，且不留下批次与派发记录', async () => {
+    const freshBill = await importBill('对账-取号失败')
+    const before = {
+      batches: await h.prisma.slhReconciliationBatch.count(),
+      issuances: await h.prisma.numberingIssuance.count(),
+    }
+    const context = { actorUserId: h.fixture.actor.id, requestId: randomUUID() }
+    const disabled = await h.fixture.numberingCommands.disable(context, batchRuleId, { expectedVersion: batchRuleVersion })
+
+    expect(errorCode(await createBatch(freshBill.id, randomUUID()).expect(409))).toBe('SLH_RECON_BATCH_NUMBERING_UNAVAILABLE')
+    expect({
+      batches: await h.prisma.slhReconciliationBatch.count(),
+      issuances: await h.prisma.numberingIssuance.count(),
+    }).toEqual(before)
+
+    // 交还环境：本用例是最后一个，仍把规则恢复启用，避免影响后续可能的断言。
+    await h.fixture.numberingCommands.enable(context, batchRuleId, { expectedVersion: disabled.version })
   })
 })

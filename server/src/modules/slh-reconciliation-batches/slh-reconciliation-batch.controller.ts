@@ -1,9 +1,11 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common'
+import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query, Req } from '@nestjs/common'
 import { ApiHeader, ApiTags } from '@nestjs/swagger'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import type { ApiContractErrorOptions } from '../../openapi/contract-metadata'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
+import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
 import { SlhBillPageDto } from '../slh-bills/slh-bill.dto'
 import {
@@ -12,6 +14,7 @@ import {
   SlhReconciliationBatchPreviewDto, SlhReconciliationBatchPreviewRequestDto, SlhReconciliationBatchReconcileDto,
 } from './slh-reconciliation-batch.dto'
 import { SlhReconciliationBatchQueryService } from './slh-reconciliation-batch-query.service'
+import { SlhReconciliationBatchService } from './slh-reconciliation-batch.service'
 
 function contract(operationId: string, mutation = false, errors: ApiContractErrorOptions[] = []) {
   return ApiApplicationContract({ operationId, session: 'required', authorization: true, csrf: mutation, badRequest: true, validation: true, privateNoStore: true,
@@ -27,19 +30,24 @@ const writeErrors: ApiContractErrorOptions[] = [
 ]
 
 /**
- * 对账功能整体处于冻结状态（重构第一步），当前只解冻「候选账单」读路径——它是
- * 「新建对账批次」弹窗的数据来源，其余接口保留路径、权限、DTO 与契约声明，实现仍是空壳：
- * 读接口返回空集合（对账域当前没有任何对象），其余接口返回契约已声明的 404。
- * 请求参数仅为保留契约声明与既有校验而留在签名里，空壳实现不消费它们。
+ * 对账批次接口。当前已解冻的路径：候选账单（选账单的数据来源）、创建批次头与完成批次；
+ * 批次列表、批次详情读取与匹配预览仍是空壳：读接口返回空集合，其余返回契约已声明的 404。
+ * 空壳方法的请求参数仅为保留契约声明与既有校验而留在签名里。
  */
 const emptyPage = (page?: number, pageSize?: number) => ({ items: [], total: 0, page: page ?? 1, pageSize: pageSize ?? 20 })
+function context(request: object) {
+  return { actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) }
+}
 const noSuchBill = (): never => { throw new ApiException(404, 'SLH_BILL_NOT_FOUND', '账单不存在') }
 const noSuchBatch = (): never => { throw new ApiException(404, 'SLH_RECON_BATCH_NOT_FOUND', '对账批次不存在') }
 
 @ApiTags('slh-reconciliation-batches')
 @Controller('slh-reconciliation-batches')
 export class SlhReconciliationBatchController {
-  constructor(private readonly queries: SlhReconciliationBatchQueryService) {}
+  constructor(
+    private readonly commands: SlhReconciliationBatchService,
+    private readonly queries: SlhReconciliationBatchQueryService,
+  ) {}
 
   @Get() @RequirePermissions('slh-bills:reconcile') @ApiContractResponse({ status: 200, type: SlhReconciliationBatchPageDto }) @contract('slh_reconciliation_batches_list')
   list(@Query() query: SlhReconciliationBatchListQueryDto) { return emptyPage(query.page, query.pageSize) }
@@ -57,9 +65,8 @@ export class SlhReconciliationBatchController {
 
   @Post() @HttpCode(201) @RequirePermissions('slh-bills:reconcile') @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } })
   @ApiContractResponse({ status: 201, type: SlhReconciliationBatchDetailDto }) @contract('slh_reconciliation_batches_create', true, [notFound, ...writeErrors])
-  create(@Body() input: SlhReconciliationBatchCreateDto): never {
-    void input
-    return noSuchBill()
+  create(@Body() input: SlhReconciliationBatchCreateDto, @Headers('idempotency-key') key: unknown, @Req() request: object) {
+    return this.commands.create(context(request), input, key)
   }
 
   @Get(':id') @RequirePermissions('slh-bills:reconcile') @ApiContractResponse({ status: 200, type: SlhReconciliationBatchDetailDto }) @contract('slh_reconciliation_batches_get', false, [notFound])
@@ -78,8 +85,7 @@ export class SlhReconciliationBatchController {
 
   @Post(':id/complete') @HttpCode(200) @RequirePermissions('slh-bills:reconcile')
   @ApiContractResponse({ status: 200, type: SlhReconciliationBatchDetailDto }) @contract('slh_reconciliation_batch_complete', true, [notFound, ...writeErrors])
-  complete(@Param() params: SlhReconciliationBatchIdDto): never {
-    void params
-    return noSuchBatch()
+  complete(@Param() params: SlhReconciliationBatchIdDto, @Req() request: object) {
+    return this.commands.complete(context(request), params.id)
   }
 }
