@@ -1,6 +1,5 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query, Req } from '@nestjs/common'
 import { ApiHeader, ApiTags } from '@nestjs/swagger'
-import { ApiException } from '../../infrastructure/http/api.exception'
 import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import type { ApiContractErrorOptions } from '../../openapi/contract-metadata'
@@ -11,7 +10,8 @@ import { SlhBillPageDto } from '../slh-bills/slh-bill.dto'
 import {
   SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchCreateDto, SlhReconciliationBatchDetailDto,
   SlhReconciliationBatchIdDto, SlhReconciliationBatchListQueryDto, SlhReconciliationBatchPageDto,
-  SlhReconciliationBatchPreviewDto, SlhReconciliationBatchPreviewRequestDto, SlhReconciliationBatchReconcileDto,
+  SlhReconciliationBillOptionPageDto, SlhReconciliationBillOptionQueryDto,
+  SlhReconciliationReconcilableCountsDto, SlhReconciliationReconcilableCountsRequestDto,
 } from './slh-reconciliation-batch.dto'
 import { SlhReconciliationBatchQueryService } from './slh-reconciliation-batch-query.service'
 import { SlhReconciliationBatchService } from './slh-reconciliation-batch.service'
@@ -29,16 +29,10 @@ const writeErrors: ApiContractErrorOptions[] = [
   ] },
 ]
 
-/**
- * 对账批次接口。当前仍是空壳的只有匹配预览（返回契约已声明的 404）与批次核对 `reconcile`；
- * 列表、候选账单、详情读取、创建与完成都已接上实现。
- * 空壳方法的请求参数仅为保留契约声明与既有校验而留在签名里。
- */
+/** 对账批次接口：列表、候选/可选账单、静默算可核对行数、详情、创建与完成都已接上实现。 */
 function context(request: object) {
   return { actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) }
 }
-const noSuchBill = (): never => { throw new ApiException(404, 'SLH_BILL_NOT_FOUND', '账单不存在') }
-const noSuchBatch = (): never => { throw new ApiException(404, 'SLH_RECON_BATCH_NOT_FOUND', '对账批次不存在') }
 
 @ApiTags('slh-reconciliation-batches')
 @Controller('slh-reconciliation-batches')
@@ -55,12 +49,13 @@ export class SlhReconciliationBatchController {
   @Get('candidates') @RequirePermissions('slh-bills:reconcile') @ApiContractResponse({ status: 200, type: SlhBillPageDto }) @contract('slh_reconciliation_batch_candidates')
   candidates(@Query() query: SlhReconciliationBatchCandidateQueryDto) { return this.queries.candidates(query) }
 
-  @Post('match-preview') @HttpCode(200) @RequirePermissions('slh-bills:reconcile')
-  @ApiContractResponse({ status: 200, type: SlhReconciliationBatchPreviewDto }) @contract('slh_reconciliation_batch_match_preview', true, [notFound])
-  preview(@Body() input: SlhReconciliationBatchPreviewRequestDto): never {
-    void input
-    return noSuchBill()
-  }
+  @Get('selectable-bills') @RequirePermissions('slh-bills:reconcile') @ApiContractResponse({ status: 200, type: SlhReconciliationBillOptionPageDto }) @contract('slh_reconciliation_bill_options')
+  selectableBills(@Query() query: SlhReconciliationBillOptionQueryDto) { return this.queries.selectableBills(query) }
+
+  // 批量算「当前可核对」是纯读，但用 POST 传账单标识：不进 URL，也就不进日志与历史记录。
+  @Post('reconcilable-counts') @HttpCode(200) @RequirePermissions('slh-bills:reconcile')
+  @ApiContractResponse({ status: 200, type: SlhReconciliationReconcilableCountsDto }) @contract('slh_reconciliation_reconcilable_counts', true)
+  reconcilableCounts(@Body() input: SlhReconciliationReconcilableCountsRequestDto) { return this.queries.reconcilableCounts(input) }
 
   @Post() @HttpCode(201) @RequirePermissions('slh-bills:reconcile') @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } })
   @ApiContractResponse({ status: 201, type: SlhReconciliationBatchDetailDto }) @contract('slh_reconciliation_batches_create', true, [notFound, ...writeErrors])
@@ -70,14 +65,6 @@ export class SlhReconciliationBatchController {
 
   @Get(':id') @RequirePermissions('slh-bills:reconcile') @ApiContractResponse({ status: 200, type: SlhReconciliationBatchDetailDto }) @contract('slh_reconciliation_batches_get', false, [notFound])
   detail(@Param() params: SlhReconciliationBatchIdDto) { return this.queries.detail(params.id) }
-
-  @Post(':id/reconcile') @HttpCode(200) @RequirePermissions('slh-bills:reconcile')
-  @ApiContractResponse({ status: 200, type: SlhReconciliationBatchDetailDto }) @contract('slh_reconciliation_batch_reconcile', true, [notFound, ...writeErrors])
-  reconcile(@Param() params: SlhReconciliationBatchIdDto, @Body() input: SlhReconciliationBatchReconcileDto): never {
-    void params
-    void input
-    return noSuchBatch()
-  }
 
   @Post(':id/complete') @HttpCode(200) @RequirePermissions('slh-bills:reconcile')
   @ApiContractResponse({ status: 200, type: SlhReconciliationBatchDetailDto }) @contract('slh_reconciliation_batch_complete', true, [notFound, ...writeErrors])

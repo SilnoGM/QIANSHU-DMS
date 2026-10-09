@@ -3,14 +3,18 @@ import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { buildSlhBillListWhere, withSlhBillIncompleteReconciliation } from '../slh-bills/slh-bill-list-filter'
 import { serializeSlhBillListItem, slhBillListInclude } from '../slh-bills/slh-bill.serializer'
+import type { SlhBillListRow } from '../slh-bills/slh-bill.serializer'
 import type { SlhBillPageDto } from '../slh-bills/slh-bill.dto'
+import { matchBillUnreconciledLines } from './slh-reconciliation-batch.matcher'
 import { slhReconciliationBatchFailure } from './slh-reconciliation-batch.errors'
 import { slhReconciliationBatchUuid } from './slh-reconciliation-batch.normalizer'
 import { serializeSlhReconciliationBatchDetail, serializeSlhReconciliationBatchListItem, slhReconciliationBatchDetailInclude, slhReconciliationBatchListInclude } from './slh-reconciliation-batch.serializer'
-import { SlhReconciliationBatchFilterDto } from './slh-reconciliation-batch.dto'
+import { SlhReconciliationBatchFilterDto, SlhReconciliationBillBlockReasonDto, SlhReconciliationBillGroupDto } from './slh-reconciliation-batch.dto'
 import type {
-  SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchDetailDto, SlhReconciliationBatchListQueryDto,
-  SlhReconciliationBatchPageDto,
+  SlhBillLineUnmatchedReasonCountDto, SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchDetailDto,
+  SlhReconciliationBatchListQueryDto, SlhReconciliationBatchPageDto, SlhReconciliationBillOptionDto,
+  SlhReconciliationBillOptionPageDto, SlhReconciliationBillOptionQueryDto, SlhReconciliationReconcilableCountsDto,
+  SlhReconciliationReconcilableCountsRequestDto,
 } from './slh-reconciliation-batch.dto'
 
 const DEFAULT_PAGE_SIZE = 20
@@ -24,6 +28,29 @@ function batchStatusWhere(status: SlhReconciliationBatchFilterDto): Prisma.SlhRe
     return { completedAt: { not: null } }
   }
   return {}
+}
+
+/** 一张账单「当前能不能发起对账」的评估结果：匹配明细 + 占用/剩余行情况。 */
+interface SlhBillReconciliationOption {
+  bill: SlhBillListRow
+  inProgressBatch: boolean
+  unreconciledLineCount: number
+  reconcilableLineIds: string[]
+  reasons: SlhBillLineUnmatchedReasonCountDto[]
+}
+
+/** 不合格原因按条数汇总（多的在前，同数按原因码稳定排序）。 */
+function summarizeUnmatchedReasons(matches: Awaited<ReturnType<typeof matchBillUnreconciledLines>>): SlhBillLineUnmatchedReasonCountDto[] {
+  const counts = new Map<string, number>()
+  for (const match of matches) {
+    if (match.status !== 'UNMATCHED' || match.reason === null) {
+      continue
+    }
+    counts.set(match.reason, (counts.get(match.reason) ?? 0) + 1)
+  }
+  return [...counts.entries()]
+    .map(([code, count]) => ({ code: code as SlhBillLineUnmatchedReasonCountDto['code'], count }))
+    .sort((left, right) => right.count - left.count || left.code.localeCompare(right.code))
 }
 
 /**
@@ -97,5 +124,97 @@ export class SlhReconciliationBatchQueryService {
       slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_FOUND', '对账批次不存在', 404)
     }
     return serializeSlhReconciliationBatchDetail(row)
+  }
+
+  /**
+   * 评估一张账单当前能不能发起对账：跑一次匹配，再叠加占用与剩余行判断。
+   * 「可核对」是即时值：不落库、不缓存，柜次数据变化后重算即得新结果。
+   */
+  private async evaluateBill(bill: SlhBillListRow): Promise<SlhBillReconciliationOption> {
+    const [inProgressBatch, matches] = await Promise.all([
+      this.prisma.slhReconciliationBatch.count({ where: { billId: bill.id, completedAt: null } }),
+      matchBillUnreconciledLines(this.prisma, bill.id),
+    ])
+    return {
+      bill,
+      inProgressBatch: inProgressBatch > 0,
+      unreconciledLineCount: matches.length,
+      reconcilableLineIds: matches.filter(match => match.status === 'MATCHED').map(match => match.line.id),
+      reasons: summarizeUnmatchedReasons(matches),
+    }
+  }
+
+  /** 分组判定：占用中 → 无未对账行 → 无可核对行 → 可选（顺序即优先级）。 */
+  private resolveBlockReason(option: SlhBillReconciliationOption): SlhReconciliationBillBlockReasonDto | null {
+    if (option.inProgressBatch) {
+      return SlhReconciliationBillBlockReasonDto.IN_PROGRESS_BATCH
+    }
+    if (option.unreconciledLineCount === 0) {
+      return SlhReconciliationBillBlockReasonDto.NO_UNRECONCILED_LINES
+    }
+    if (option.reconcilableLineIds.length === 0) {
+      return SlhReconciliationBillBlockReasonDto.NO_RECONCILABLE_LINES
+    }
+    return null
+  }
+
+  private serializeBillOption(option: SlhBillReconciliationOption): SlhReconciliationBillOptionDto {
+    const blockReason = this.resolveBlockReason(option)
+    return {
+      ...serializeSlhBillListItem(option.bill),
+      selectable: blockReason === null,
+      reconcilableLineCount: option.reconcilableLineIds.length,
+      reconcilableLineIds: option.reconcilableLineIds,
+      blockReason,
+      // 只有「没有可核对的行」这一档需要原因汇总；其余档位的原因已在 blockReason 上。
+      reasons: blockReason === SlhReconciliationBillBlockReasonDto.NO_RECONCILABLE_LINES ? option.reasons : [],
+    }
+  }
+
+  /**
+   * 弹窗的「可选 / 不可选」两组账单：以关键词筛出生效中账单，逐单评估后分组。
+   *
+   * 分组取决于匹配结果（SQL 谓词表达不了），因此每次请求都会评估当前生效中的全部账单；
+   * 顺联航账单按月度产出、量级很小，这样换来的「计数与分组同源」比省几次查询更重要。
+   * 计数与分组共用同一份评估结果，避免两个请求之间的数字漂移。
+   */
+  async selectableBills(query: SlhReconciliationBillOptionQueryDto): Promise<SlhReconciliationBillOptionPageDto> {
+    const page = query.page ?? 1
+    const pageSize = query.pageSize ?? DEFAULT_PAGE_SIZE
+    const bills = await this.prisma.slhBill.findMany({
+      where: buildSlhBillListWhere({ keyword: query.keyword }),
+      include: slhBillListInclude,
+      orderBy: [{ periodStart: 'desc' }, { id: 'desc' }],
+    })
+    const options = await Promise.all(bills.map(async bill => this.serializeBillOption(await this.evaluateBill(bill))))
+    const selectable = options.filter(option => option.selectable)
+    const blocked = options.filter(option => !option.selectable)
+    const group = query.group === SlhReconciliationBillGroupDto.SELECTABLE ? selectable : blocked
+    return {
+      items: group.slice((page - 1) * pageSize, page * pageSize),
+      counts: { selectable: selectable.length, blocked: blocked.length },
+      total: group.length,
+      page,
+      pageSize,
+    }
+  }
+
+  /**
+   * 静默算：按账单主键批量算「当前可核对行数」（账单列表的「当前可核对」列用）。
+   * 未知账单按 0 行返回（调用方拿的是刚列出来的主键），不改任何数据。
+   */
+  async reconcilableCounts(input: SlhReconciliationReconcilableCountsRequestDto): Promise<SlhReconciliationReconcilableCountsDto> {
+    const billIds = [...new Set(input.billIds)]
+    const items = await Promise.all(billIds.map(async (billId) => {
+      const matches = await matchBillUnreconciledLines(this.prisma, billId)
+      const reconcilableLineIds = matches.filter(match => match.status === 'MATCHED').map(match => match.line.id)
+      return {
+        billId,
+        reconcilableLineCount: reconcilableLineIds.length,
+        reconcilableLineIds,
+        reasons: summarizeUnmatchedReasons(matches),
+      }
+    }))
+    return { items }
   }
 }

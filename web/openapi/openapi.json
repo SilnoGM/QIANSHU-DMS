@@ -68379,32 +68379,52 @@
         }
       }
     },
-    "/api/slh-reconciliation-batches/match-preview": {
-      "post": {
-        "operationId": "slh_reconciliation_batch_match_preview",
+    "/api/slh-reconciliation-batches/selectable-bills": {
+      "get": {
+        "operationId": "slh_reconciliation_bill_options",
         "parameters": [
           {
-            "name": "X-Qianshu-CSRF",
-            "in": "header",
+            "name": "group",
             "required": true,
+            "in": "query",
             "schema": {
               "type": "string",
               "enum": [
-                "1"
+                "SELECTABLE",
+                "BLOCKED"
               ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "Matches bill number, source file name or container batch name.",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SlhReconciliationBatchPreviewRequestDto"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "headers": {
@@ -68427,7 +68447,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SlhReconciliationBatchPreviewDto"
+                  "$ref": "#/components/schemas/SlhReconciliationBillOptionPageDto"
                 }
               }
             }
@@ -68510,7 +68530,202 @@
               }
             }
           },
-          "404": {
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "slh-reconciliation-batches"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": false,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/slh-reconciliation-batches/reconcilable-counts": {
+      "post": {
+        "operationId": "slh_reconciliation_reconcilable_counts",
+        "parameters": [
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlhReconciliationReconcilableCountsRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlhReconciliationReconcilableCountsDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
             "headers": {
               "X-Request-Id": {
                 "schema": {
@@ -68615,13 +68830,6 @@
                 "CSRF_REJECTED",
                 "FORBIDDEN",
                 "PASSWORD_CHANGE_REQUIRED"
-              ]
-            },
-            {
-              "status": 404,
-              "codes": [
-                "SLH_BILL_NOT_FOUND",
-                "SLH_RECON_BATCH_NOT_FOUND"
               ]
             },
             {
@@ -68864,309 +69072,6 @@
               "codes": [
                 "SLH_BILL_NOT_FOUND",
                 "SLH_RECON_BATCH_NOT_FOUND"
-              ]
-            },
-            {
-              "status": 422,
-              "codes": [
-                "VALIDATION_FAILED"
-              ]
-            }
-          ]
-        }
-      }
-    },
-    "/api/slh-reconciliation-batches/{id}/reconcile": {
-      "post": {
-        "operationId": "slh_reconciliation_batch_reconcile",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "name": "X-Qianshu-CSRF",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "1"
-              ]
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SlhReconciliationBatchReconcileDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "headers": {
-              "X-Request-Id": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
-              }
-            },
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SlhReconciliationBatchDetailDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "headers": {
-              "X-Request-Id": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
-              }
-            },
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "401": {
-            "headers": {
-              "X-Request-Id": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
-              }
-            },
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "403": {
-            "headers": {
-              "X-Request-Id": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
-              }
-            },
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "404": {
-            "headers": {
-              "X-Request-Id": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
-              }
-            },
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "409": {
-            "headers": {
-              "X-Request-Id": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
-              }
-            },
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "422": {
-            "headers": {
-              "X-Request-Id": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
-              }
-            },
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "500": {
-            "headers": {
-              "X-Request-Id": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Cache-Control": {
-                "description": "身份相关响应禁止缓存",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "private, no-store"
-                  ]
-                }
-              }
-            },
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "sessionCookie": []
-          }
-        ],
-        "summary": "",
-        "tags": [
-          "slh-reconciliation-batches"
-        ],
-        "x-qianshu-contract": {
-          "kind": "application",
-          "authentication": true,
-          "authorization": true,
-          "resourceLocator": false,
-          "conflict": false,
-          "validation": true,
-          "session": "required",
-          "csrf": true,
-          "privateNoStore": true,
-          "errors": [
-            {
-              "status": 403,
-              "codes": [
-                "CSRF_REJECTED",
-                "FORBIDDEN",
-                "PASSWORD_CHANGE_REQUIRED"
-              ]
-            },
-            {
-              "status": 404,
-              "codes": [
-                "SLH_BILL_NOT_FOUND",
-                "SLH_RECON_BATCH_NOT_FOUND"
-              ]
-            },
-            {
-              "status": 409,
-              "codes": [
-                "SLH_RECON_BATCH_CONFLICT",
-                "SLH_RECON_BATCH_IDEMPOTENCY_CONFLICT",
-                "SLH_RECON_BATCH_LINES_NOT_ELIGIBLE",
-                "SLH_RECON_BATCH_NOT_IN_PROGRESS",
-                "SLH_RECON_BATCH_NO_LINES_TO_RECONCILE",
-                "SLH_RECON_BATCH_NUMBERING_UNAVAILABLE",
-                "SLH_RECON_BATCH_SCOPE_CHANGED",
-                "SLH_RECON_BATCH_STATE_CHANGED"
               ]
             },
             {
@@ -84966,75 +84871,10 @@
           "pageSize"
         ]
       },
-      "SlhReconciliationBatchPreviewRequestDto": {
+      "SlhBillLineUnmatchedReasonCountDto": {
         "type": "object",
         "properties": {
-          "billId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Bill whose unreconciled lines will be matched against container rows."
-          }
-        },
-        "required": [
-          "billId"
-        ]
-      },
-      "SlhReconciliationMatchPreviewLineDto": {
-        "type": "object",
-        "properties": {
-          "lineId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "lineNumber": {
-            "type": "number"
-          },
-          "sourceRowNumber": {
-            "type": "number"
-          },
-          "loadingDate": {
-            "type": "string",
-            "description": "YYYY-MM-DD"
-          },
-          "containerBatchNameText": {
-            "type": "string",
-            "nullable": true
-          },
-          "shippingMarkText": {
-            "type": "string",
-            "nullable": true
-          },
-          "warehouseReceiptReference": {
-            "type": "string",
-            "nullable": true
-          },
-          "goodsName": {
-            "type": "string"
-          },
-          "recipientName": {
-            "type": "string",
-            "nullable": true,
-            "description": "Customer name parsed from the bill recipient info; null when the bill only names a warehouse."
-          },
-          "matchSource": {
-            "type": "string",
-            "enum": [
-              "NAME",
-              "MARK"
-            ],
-            "nullable": true
-          },
-          "matchedContainerBatchName": {
-            "type": "string",
-            "nullable": true,
-            "description": "Container batch name of the matched loading item."
-          },
-          "matchedLoadingItemLineNumber": {
-            "type": "number",
-            "nullable": true,
-            "description": "Row number of the matched loading item inside its container batch."
-          },
-          "reason": {
+          "code": {
             "type": "string",
             "enum": [
               "MISSING_CONTAINER_REFERENCE",
@@ -85047,45 +84887,274 @@
               "SHIPMENT_NOT_MATCHED",
               "PURCHASE_SOURCE_MISSING",
               "SALES_SOURCE_MISSING"
-            ],
-            "nullable": true
+            ]
+          },
+          "count": {
+            "type": "number"
           }
         },
         "required": [
-          "lineId",
-          "lineNumber",
-          "sourceRowNumber",
-          "loadingDate",
-          "goodsName",
-          "matchSource",
-          "reason"
+          "code",
+          "count"
         ]
       },
-      "SlhReconciliationBatchPreviewDto": {
+      "SlhReconciliationBillOptionDto": {
         "type": "object",
         "properties": {
-          "bill": {
-            "$ref": "#/components/schemas/SlhBillListItemDto"
+          "id": {
+            "type": "string",
+            "format": "uuid"
           },
-          "matched": {
-            "description": "Lines that match a qualified container row and will become batch members.",
+          "slhBillNo": {
+            "type": "string"
+          },
+          "billName": {
+            "type": "string"
+          },
+          "billMonth": {
+            "type": "string"
+          },
+          "periodStart": {
+            "type": "string"
+          },
+          "periodEnd": {
+            "type": "string"
+          },
+          "lineCount": {
+            "type": "number"
+          },
+          "containerBatchCount": {
+            "type": "number"
+          },
+          "containerBatchNames": {
+            "description": "Container batch names in this bill; the list shows them in a tooltip next to the count.",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/SlhReconciliationMatchPreviewLineDto"
+              "type": "string"
             }
           },
-          "unmatched": {
-            "description": "Lines that cannot be reconciled now, each with its reason.",
+          "payableTotalAmountCny": {
+            "type": "string"
+          },
+          "codTotalAmountTwd": {
+            "type": "string"
+          },
+          "ntdSurchargeTotalAmountTwd": {
+            "type": "string"
+          },
+          "reportedNetAmountTwd": {
+            "type": "string"
+          },
+          "embeddedForeignUnitsPerCny": {
+            "type": "string",
+            "nullable": true,
+            "description": "Rate embedded in the bill formula; the list folds the net amount with it."
+          },
+          "rateSource": {
+            "type": "string",
+            "enum": [
+              "EMBEDDED",
+              "SYSTEM",
+              "MANUAL"
+            ],
+            "nullable": true
+          },
+          "reconciliationStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "PARTIAL",
+              "COMPLETED"
+            ],
+            "description": "Derived from the lines of this bill: PENDING when none is reconciled, COMPLETED when all are, PARTIAL in between."
+          },
+          "supersededById": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true
+          },
+          "sourceFileName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "createdByDisplayName": {
+            "type": "string"
+          },
+          "selectable": {
+            "type": "boolean",
+            "description": "True when the bill currently has at least one reconcilable line and no batch in progress."
+          },
+          "reconcilableLineCount": {
+            "type": "number",
+            "description": "Reconcilable line count; 0 when the bill cannot be selected."
+          },
+          "reconcilableLineIds": {
+            "description": "Reconcilable line ids; echoed back on create so the frozen scope is compared instead of silently changed.",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/SlhReconciliationMatchPreviewLineDto"
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "blockReason": {
+            "type": "string",
+            "enum": [
+              "IN_PROGRESS_BATCH",
+              "NO_UNRECONCILED_LINES",
+              "NO_RECONCILABLE_LINES"
+            ],
+            "nullable": true,
+            "description": "Null when selectable."
+          },
+          "reasons": {
+            "description": "Reason summary when the block reason is NO_RECONCILABLE_LINES.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillLineUnmatchedReasonCountDto"
             }
           }
         },
         "required": [
-          "bill",
-          "matched",
-          "unmatched"
+          "id",
+          "slhBillNo",
+          "billName",
+          "billMonth",
+          "periodStart",
+          "periodEnd",
+          "lineCount",
+          "containerBatchCount",
+          "containerBatchNames",
+          "payableTotalAmountCny",
+          "codTotalAmountTwd",
+          "ntdSurchargeTotalAmountTwd",
+          "reportedNetAmountTwd",
+          "reconciliationStatus",
+          "sourceFileName",
+          "createdAt",
+          "createdByDisplayName",
+          "selectable",
+          "reconcilableLineCount",
+          "reconcilableLineIds",
+          "reasons"
+        ]
+      },
+      "SlhReconciliationBillOptionCountsDto": {
+        "type": "object",
+        "properties": {
+          "selectable": {
+            "type": "number",
+            "description": "Bills that currently have reconcilable lines and no batch in progress."
+          },
+          "blocked": {
+            "type": "number",
+            "description": "Bills that cannot be selected right now."
+          }
+        },
+        "required": [
+          "selectable",
+          "blocked"
+        ]
+      },
+      "SlhReconciliationBillOptionPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhReconciliationBillOptionDto"
+            }
+          },
+          "counts": {
+            "description": "Counts of both groups under the current keyword; the paged group is included.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationBillOptionCountsDto"
+              }
+            ]
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "counts",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "SlhReconciliationReconcilableCountsRequestDto": {
+        "type": "object",
+        "properties": {
+          "billIds": {
+            "maxItems": 100,
+            "description": "Bills whose currently reconcilable lines are counted. At most 100 per request.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "billIds"
+        ]
+      },
+      "SlhReconciliationReconcilableCountsItemDto": {
+        "type": "object",
+        "properties": {
+          "billId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reconcilableLineCount": {
+            "type": "number",
+            "description": "Lines that currently match a qualified container row."
+          },
+          "reconcilableLineIds": {
+            "description": "Reconcilable line ids; the create endpoint compares them before freezing members.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "reasons": {
+            "description": "Why the remaining unreconciled lines cannot be reconciled right now.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhBillLineUnmatchedReasonCountDto"
+            }
+          }
+        },
+        "required": [
+          "billId",
+          "reconcilableLineCount",
+          "reconcilableLineIds",
+          "reasons"
+        ]
+      },
+      "SlhReconciliationReconcilableCountsDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhReconciliationReconcilableCountsItemDto"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "SlhReconciliationBatchCreateDto": {
@@ -85094,11 +85163,11 @@
           "billId": {
             "type": "string",
             "format": "uuid",
-            "description": "Bill whose unreconciled lines will be matched against container rows."
+            "description": "Bill to reconcile. Its currently reconcilable lines are matched again inside the create transaction."
           },
-          "previewLineIds": {
+          "reconcilableLineIds": {
             "maxItems": 1000,
-            "description": "Line ids the user saw in the preview. Compared with the server-side match only: any difference rejects the create instead of silently changing the scope.",
+            "description": "Line ids the user saw as reconcilable. Compared with the server-side match only: any difference rejects the create instead of silently changing the scope.",
             "type": "array",
             "items": {
               "type": "string",
@@ -85478,23 +85547,6 @@
           "createdAt",
           "members",
           "findings"
-        ]
-      },
-      "SlhReconciliationBatchReconcileDto": {
-        "type": "object",
-        "properties": {
-          "lineIds": {
-            "maxItems": 1000,
-            "description": "Member line ids to reconcile in this batch.",
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        },
-        "required": [
-          "lineIds"
         ]
       }
     }

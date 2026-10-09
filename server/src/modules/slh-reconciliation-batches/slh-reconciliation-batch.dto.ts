@@ -10,7 +10,7 @@ export enum SlhReconciliationBatchStatusDto { IN_PROGRESS = 'IN_PROGRESS', COMPL
 export enum SlhReconciliationBatchFilterDto { IN_PROGRESS = 'IN_PROGRESS', COMPLETED = 'COMPLETED', ALL = 'all' }
 /** 匹配来源：与持久化枚举 slh_bill_line_match_source 一致。 */
 export enum SlhBillLineMatchSourceDto { NAME = 'NAME', MARK = 'MARK' }
-/** 未匹配合格的原因码；取值空间随契约保留（对账功能已冻结，算法侧声明已移除）。 */
+/** 未匹配合格的原因码；与 slh-bill-line-matching 的原因码一一对应。 */
 export enum SlhBillLineUnmatchedReasonDto {
   MISSING_CONTAINER_REFERENCE = 'MISSING_CONTAINER_REFERENCE',
   INVALID_CONTAINER_NAME = 'INVALID_CONTAINER_NAME',
@@ -36,6 +36,15 @@ export class SlhReconciliationBatchListQueryDto {
   @ApiPropertyOptional({ maxLength: 128, description: 'Matches batch number, bill number or bill name.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 128) keyword?: string
 }
 
+/** 弹窗候选账单的筛选取值；`all` 收尾，与工具栏顺序一致。 */
+export enum SlhReconciliationBillGroupDto { SELECTABLE = 'SELECTABLE', BLOCKED = 'BLOCKED' }
+/** 账单暂时不能发起对账的原因：决定「不可选」分组卡片上的说明。 */
+export enum SlhReconciliationBillBlockReasonDto {
+  IN_PROGRESS_BATCH = 'IN_PROGRESS_BATCH',
+  NO_UNRECONCILED_LINES = 'NO_UNRECONCILED_LINES',
+  NO_RECONCILABLE_LINES = 'NO_RECONCILABLE_LINES',
+}
+
 /** 弹窗第一步的候选账单列表：只列未完成对账且没有进行中批次的生效账单。 */
 export class SlhReconciliationBatchCandidateQueryDto {
   @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number
@@ -43,21 +52,65 @@ export class SlhReconciliationBatchCandidateQueryDto {
   @ApiPropertyOptional({ maxLength: 128, description: 'Matches bill number, source file name or container batch name.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 128) keyword?: string
 }
 
-export class SlhReconciliationBatchPreviewRequestDto {
-  @ApiProperty({ format: 'uuid', description: 'Bill whose unreconciled lines will be matched against container rows.' }) @IsUUID('4') billId!: string
+/** 可选/不可选两组的分组查询：`group` 决定返回哪一组的当页数据，计数始终同时给出。 */
+export class SlhReconciliationBillOptionQueryDto {
+  @ApiProperty({ enum: SlhReconciliationBillGroupDto }) @IsIn([SlhReconciliationBillGroupDto.SELECTABLE, SlhReconciliationBillGroupDto.BLOCKED]) group!: SlhReconciliationBillGroupDto
+  @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number
+  @ApiPropertyOptional({ default: 20, maximum: 100 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize?: number
+  @ApiPropertyOptional({ maxLength: 128, description: 'Matches bill number, source file name or container batch name.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 128) keyword?: string
 }
 
-export class SlhReconciliationBatchCreateDto extends SlhReconciliationBatchPreviewRequestDto {
+/** 静默算可核对行数：按账单主键批量算当前页（上限 100），不改任何数据。 */
+export class SlhReconciliationReconcilableCountsRequestDto {
+  @ApiProperty({ type: [String], format: 'uuid', maxItems: 100, description: 'Bills whose currently reconcilable lines are counted. At most 100 per request.' })
+  @IsArray() @ArrayNotEmpty() @ArrayMaxSize(100) @IsUUID('4', { each: true }) billIds!: string[]
+}
+
+export class SlhBillLineUnmatchedReasonCountDto {
+  @ApiProperty({ enum: SlhBillLineUnmatchedReasonDto }) code!: SlhBillLineUnmatchedReasonDto
+  @ApiProperty() count!: number
+}
+
+export class SlhReconciliationReconcilableCountsItemDto {
+  @ApiProperty({ format: 'uuid' }) billId!: string
+  @ApiProperty({ description: 'Lines that currently match a qualified container row.' }) reconcilableLineCount!: number
+  @ApiProperty({ type: [String], format: 'uuid', description: 'Reconcilable line ids; the create endpoint compares them before freezing members.' }) reconcilableLineIds!: string[]
+  @ApiProperty({ type: [SlhBillLineUnmatchedReasonCountDto], description: 'Why the remaining unreconciled lines cannot be reconciled right now.' }) reasons!: SlhBillLineUnmatchedReasonCountDto[]
+}
+
+export class SlhReconciliationReconcilableCountsDto {
+  @ApiProperty({ type: [SlhReconciliationReconcilableCountsItemDto] }) items!: SlhReconciliationReconcilableCountsItemDto[]
+}
+
+/** 弹窗卡片：账单基础信息 + 可核对行数（可选）或不能对账的原因（不可选）。 */
+export class SlhReconciliationBillOptionDto extends SlhBillListItemDto {
+  @ApiProperty({ description: 'True when the bill currently has at least one reconcilable line and no batch in progress.' }) selectable!: boolean
+  @ApiProperty({ description: 'Reconcilable line count; 0 when the bill cannot be selected.' }) reconcilableLineCount!: number
+  @ApiProperty({ type: [String], format: 'uuid', description: 'Reconcilable line ids; echoed back on create so the frozen scope is compared instead of silently changed.' }) reconcilableLineIds!: string[]
+  @ApiPropertyOptional({ enum: SlhReconciliationBillBlockReasonDto, nullable: true, description: 'Null when selectable.' }) blockReason?: SlhReconciliationBillBlockReasonDto | null
+  @ApiProperty({ type: [SlhBillLineUnmatchedReasonCountDto], description: 'Reason summary when the block reason is NO_RECONCILABLE_LINES.' }) reasons!: SlhBillLineUnmatchedReasonCountDto[]
+}
+
+export class SlhReconciliationBillOptionCountsDto {
+  @ApiProperty({ description: 'Bills that currently have reconcilable lines and no batch in progress.' }) selectable!: number
+  @ApiProperty({ description: 'Bills that cannot be selected right now.' }) blocked!: number
+}
+
+export class SlhReconciliationBillOptionPageDto {
+  @ApiProperty({ type: [SlhReconciliationBillOptionDto] }) items!: SlhReconciliationBillOptionDto[]
+  @ApiProperty({ type: SlhReconciliationBillOptionCountsDto, description: 'Counts of both groups under the current keyword; the paged group is included.' }) counts!: SlhReconciliationBillOptionCountsDto
+  @ApiProperty() total!: number
+  @ApiProperty() page!: number
+  @ApiProperty() pageSize!: number
+}
+
+export class SlhReconciliationBatchCreateDto {
+  @ApiProperty({ format: 'uuid', description: 'Bill to reconcile. Its currently reconcilable lines are matched again inside the create transaction.' }) @IsUUID('4') billId!: string
   @ApiPropertyOptional({
     type: [String], format: 'uuid', maxItems: 1000,
-    description: 'Line ids the user saw in the preview. Compared with the server-side match only: any difference rejects the create instead of silently changing the scope.',
+    description: 'Line ids the user saw as reconcilable. Compared with the server-side match only: any difference rejects the create instead of silently changing the scope.',
   })
-  @IsOptional() @IsArray() @ArrayMaxSize(1000) @IsUUID('4', { each: true }) previewLineIds?: string[]
-}
-
-export class SlhReconciliationBatchReconcileDto {
-  @ApiProperty({ type: [String], format: 'uuid', maxItems: 1000, description: 'Member line ids to reconcile in this batch.' })
-  @IsArray() @ArrayNotEmpty() @ArrayMaxSize(1000) @IsUUID('4', { each: true }) lineIds!: string[]
+  @IsOptional() @IsArray() @ArrayMaxSize(1000) @IsUUID('4', { each: true }) reconcilableLineIds?: string[]
 }
 
 export class SlhReconciliationBatchBillDto {
@@ -89,29 +142,6 @@ export class SlhReconciliationBatchPageDto {
   @ApiProperty() total!: number
   @ApiProperty() page!: number
   @ApiProperty() pageSize!: number
-}
-
-/** 预审/匹配结果行：已匹配的行带柜次依据，未匹配的行只带原因。 */
-export class SlhReconciliationMatchPreviewLineDto {
-  @ApiProperty({ format: 'uuid' }) lineId!: string
-  @ApiProperty() lineNumber!: number
-  @ApiProperty() sourceRowNumber!: number
-  @ApiProperty({ type: 'string', description: 'YYYY-MM-DD' }) loadingDate!: string
-  @ApiPropertyOptional({ type: 'string', nullable: true }) containerBatchNameText!: string | null
-  @ApiPropertyOptional({ type: 'string', nullable: true }) shippingMarkText!: string | null
-  @ApiPropertyOptional({ type: 'string', nullable: true }) warehouseReceiptReference!: string | null
-  @ApiProperty() goodsName!: string
-  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Customer name parsed from the bill recipient info; null when the bill only names a warehouse.' }) recipientName!: string | null
-  @ApiProperty({ enum: SlhBillLineMatchSourceDto, nullable: true }) matchSource!: SlhBillLineMatchSourceDto | null
-  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Container batch name of the matched loading item.' }) matchedContainerBatchName!: string | null
-  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Row number of the matched loading item inside its container batch.' }) matchedLoadingItemLineNumber!: number | null
-  @ApiProperty({ enum: SlhBillLineUnmatchedReasonDto, nullable: true }) reason!: SlhBillLineUnmatchedReasonDto | null
-}
-
-export class SlhReconciliationBatchPreviewDto {
-  @ApiProperty({ type: SlhBillListItemDto }) bill!: SlhBillListItemDto
-  @ApiProperty({ type: [SlhReconciliationMatchPreviewLineDto], description: 'Lines that match a qualified container row and will become batch members.' }) matched!: SlhReconciliationMatchPreviewLineDto[]
-  @ApiProperty({ type: [SlhReconciliationMatchPreviewLineDto], description: 'Lines that cannot be reconciled now, each with its reason.' }) unmatched!: SlhReconciliationMatchPreviewLineDto[]
 }
 
 /**

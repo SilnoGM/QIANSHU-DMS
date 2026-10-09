@@ -8,6 +8,7 @@ import { AuditService } from '../audit/audit.service'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { slhBillUuid } from '../slh-bills/slh-bill.normalizer'
 import { mapSlhReconciliationBatchError, slhReconciliationBatchFailure } from './slh-reconciliation-batch.errors'
+import { matchBillUnreconciledLines } from './slh-reconciliation-batch.matcher'
 import { slhReconciliationBatchUuid } from './slh-reconciliation-batch.normalizer'
 import { SlhReconciliationBatchQueryService } from './slh-reconciliation-batch-query.service'
 import type { SlhReconciliationBatchCreateDto, SlhReconciliationBatchDetailDto } from './slh-reconciliation-batch.dto'
@@ -46,15 +47,15 @@ export class SlhReconciliationBatchService {
   }
 
   /**
-   * 开始对账：为一张账单创建批次头（编号 + 账单关联）。
+   * 开始对账：为一张账单创建批次，并把当前匹配命中的明细行冻结为成员。
    *
-   * 本步只建批次头，不冻结成员行（成员与匹配口径留到详情页重做时决定）；
-   * 事务顺序即不变量顺序：幂等键 → 账单行锁 → 准入复检 → 取号 → 落库。
+   * 事务顺序即不变量顺序：幂等键 → 账单行锁 → 准入复检 → 重跑匹配 → 范围比对 → 取号 → 落库。
+   * 匹配在事务内重跑，前端「当前可核对」的结果只用于比对，不参与创建决策。
    */
   async create(context: SlhReconciliationBatchCommandContext, input: SlhReconciliationBatchCreateDto, key: unknown): Promise<SlhReconciliationBatchDetailDto> {
     const billId = slhBillUuid(input.billId)
     const requestKey = slhReconciliationBatchUuid(key)
-    // 指纹只描述创建语义（哪张账单）；预览行集合不在本步口径内，不参与指纹。
+    // 指纹只描述创建语义（哪张账单）；可核对行集合是客户端的比对依据，不参与指纹。
     const payloadFingerprint = hash({ format: CREATE_PAYLOAD_FORMAT, billId })
     const payloadBytes = Buffer.from(payloadFingerprint, 'hex')
     try {
@@ -97,9 +98,20 @@ export class SlhReconciliationBatchService {
         if (inProgress > 0) {
           return slhReconciliationBatchFailure('SLH_RECON_BATCH_CONFLICT', '该账单正在对账中，请先结束当前对账批次', 409)
         }
-        const unreconciledLineCount = await tx.slhBillLine.count({ where: { billId, reconciledAt: null } })
-        if (unreconciledLineCount === 0) {
+        const matches = await matchBillUnreconciledLines(tx, billId)
+        const matched = matches.flatMap(match => match.loadingItemId === null || match.source === null
+          ? []
+          : [{ lineId: match.line.id, loadingItemId: match.loadingItemId, source: match.source }])
+        if (matched.length === 0) {
           return slhReconciliationBatchFailure('SLH_RECON_BATCH_NO_LINES_TO_RECONCILE', '该账单当前没有可核对的明细行', 409)
+        }
+        if (input.reconcilableLineIds !== undefined) {
+          // 静默算与创建之间柜次数据可能变化：范围不一致就让用户重看，不静默少核对几行。
+          const seen = [...input.reconcilableLineIds].sort()
+          const current = matched.map(item => item.lineId).sort()
+          if (seen.length !== current.length || seen.some((lineId, index) => lineId !== current[index])) {
+            return slhReconciliationBatchFailure('SLH_RECON_BATCH_SCOPE_CHANGED', '可核对的行已发生变化，请重新查看核对范围', 409)
+          }
         }
 
         const issuance = await this.numbering.generateScopedInTransaction(tx, {
@@ -115,6 +127,13 @@ export class SlhReconciliationBatchService {
             creationPayloadHash: payloadBytes,
             createdById: context.actorUserId,
             updatedById: context.actorUserId,
+            members: {
+              create: matched.map(item => ({
+                lineId: item.lineId,
+                matchedLoadingItemId: item.loadingItemId,
+                matchSource: item.source,
+              })),
+            },
           },
           select: { id: true },
         })
@@ -122,7 +141,7 @@ export class SlhReconciliationBatchService {
           eventType: 'SLH_RECONCILIATION_BATCH_CREATED', outcome: 'SUCCESS', actorType: 'USER',
           actorUserId: context.actorUserId, requestId: context.requestId,
           targetType: 'SLH_RECONCILIATION_BATCH', targetId: batch.id,
-          metadata: { batchNo: issuance.number, slhBillNo: bill.slhBillNo, unreconciledLineCount },
+          metadata: { batchNo: issuance.number, slhBillNo: bill.slhBillNo, memberCount: matched.length },
         })
         return batch.id
       }, { timeout: 60_000 })

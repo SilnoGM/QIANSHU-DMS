@@ -128,3 +128,24 @@ export function serializeSlhReconciliationBatchListItem(row: BatchHeaderRow): Sl
 export function serializeSlhReconciliationBatchDetail(row: SlhReconciliationBatchDetailRow): SlhReconciliationBatchDetailDto {
   return { ...serializeBatchHeader(row), findings: serializeStoredFindings(row.bill.importFindings), members: row.members.map(serializeBatchMember) }
 }
+
+/**
+ * 参与匹配的账单明细行：只取匹配与展示需要的列，不加载费用明细。
+ * 匹配算法（slh-bill-line-matching）与「静默算可核对行数」共用这一份选择。
+ */
+export interface SlhReconciliationMatchLineSource {
+  id: string
+  lineNumber: number
+  sourceRowNumber: number
+  loadingDate: Date
+  containerBatchNameText: string | null
+  shippingMarkText: string | null
+  warehouseReceiptReference: string | null
+  goodsName: string
+  recipientName: string | null
+}
+
+export const slhReconciliationMatchLineSelect = {
+  id: true, lineNumber: true, sourceRowNumber: true, loadingDate: true, containerBatchNameText: true,
+  shippingMarkText: true, warehouseReceiptReference: true, goodsName: true, recipientName: true,
+} satisfies Prisma.SlhBillLineSelect
