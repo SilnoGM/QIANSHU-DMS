@@ -161,16 +161,23 @@ test('弹窗确认＝创建批次：带幂等键、提交中不可重复点击�
   assert.doesNotMatch(modal, /router\.push|useRouter/u)
 })
 
-test('批次详情页占位：页头标题加返回入口、底部承接完成批次，主体保持空白', async () => {
+test('批次详情页占位：头部只给批次与账单标识、底部承接完成批次，主体保持空白', async () => {
   const page = await readPageSource('detail.vue')
   assert.match(page, /t\('workbench\.slhBillReconciliationDetail'\)/u)
   assert.match(page, /t\('slhReconciliation\.backToList'\)/u)
   assert.match(page, /router\.push\(\{ name: 'qsFinanceBillReconciliationSlhBillReconciliation' \}\)/u)
   assert.match(page, /t\('slhReconciliation\.detail\.completeButton'\)/u)
   assert.match(page, /slhReconciliationBatchesApi\.complete\(/u)
-  // 完成后本地记忆「已完成」并禁用按钮；错误改用内联 FaAlert 显示。
-  assert.match(page, /const completed = ref\(false\)/u)
-  assert.match(page, /:disabled="completed \|\| completing"/u)
-  // 主体保持空白：不渲染任何批次字段、不加空态占位提示。
-  assert.doesNotMatch(page, /FaEmpty|batchNo|memberCount|findings/u)
+  // 头部辅助文字：批次状态标签 + 批次编号 + 账单编号 + 对账单名称。
+  assert.match(page, /resolveSlhReconciliationBatchTone\(batch\.status\)/u)
+  assert.match(page, /\{\{ batch\.batchNo \}\}/u)
+  assert.match(page, /\{\{ batch\.bill\.slhBillNo \}\}/u)
+  assert.match(page, /\{\{ batch\.bill\.billName \}\}/u)
+  assert.match(page, /slhReconciliationBatchesApi\.get\(/u)
+  // 完成与否由服务端数据派生（替代本地 ref），读取失败时禁用。
+  assert.match(page, /const canComplete = computed\(\(\) => batch\.value\?\.status === 'IN_PROGRESS'\)/u)
+  assert.match(page, /:disabled="!canComplete \|\| completing"/u)
+  assert.match(page, /t\('slhBill\.retry'\)/u)
+  // 主体保持空白：除读取失败的错误外不渲染任何批次内容。
+  assert.doesNotMatch(page, /FaEmpty|memberCount|reconciledMemberCount|findings|matchedLoadingItem/u)
 })
