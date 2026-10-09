@@ -299,6 +299,15 @@ const routes: RouteRecordRaw[] = [
           icon: 'qs-status-switch',
         },
       },
+      {
+        path: 'reconciliation-line-switcher',
+        name: 'componentLibraryQsReconciliationLineSwitcher',
+        component: () => import('@/views/component_library/business/reconciliation-line-switcher.vue'),
+        meta: {
+          title: '对账明细行切换',
+          icon: 'qs-bill-reconciliation-check',
+        },
+      },
     ],
   },
   {
