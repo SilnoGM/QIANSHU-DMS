@@ -279,22 +279,30 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     expect(blockedByKeyword.items.map(item => item.id)).toEqual([unmatchable.id])
   })
 
-  it('静默算：批量返回可核对行数与行 id，无可核对行时给原因汇总', async () => {
-    const response = await reconcilableCounts([pending.id, unmatchable.id]).expect(200)
-    const items = (response.body as { items: Array<{ billId: string, reconcilableLineCount: number, reconcilableLineIds: string[], reasons: Array<{ code: string, count: number }> }> }).items
-    expect(items.map(item => item.billId).sort()).toEqual([pending.id, unmatchable.id].sort())
+  it('静默算：批量返回可核对行数、未冻结行数与行 id，无可核对行时给原因汇总', async () => {
+    const response = await reconcilableCounts([pending.id, unmatchable.id, occupied.id]).expect(200)
+    const items = (response.body as { items: Array<{ billId: string, reconcilableLineCount: number, unfrozenLineCount: number, reconcilableLineIds: string[], reasons: Array<{ code: string, count: number }> }> }).items
+    expect(items.map(item => item.billId).sort()).toEqual([pending.id, unmatchable.id, occupied.id].sort())
     const pendingCounts = items.find(item => item.billId === pending.id)!
     expect(pendingCounts.reconcilableLineCount).toBe(3)
     expect(pendingCounts.reconcilableLineIds.sort()).toEqual((await unreconciledLineIds(pending.id)).sort())
     expect(pendingCounts.reasons).toEqual([])
+    // 没有被进行中批次冻结任何行：未冻结行数＝可核对行数。
+    expect(pendingCounts.unfrozenLineCount).toBe(3)
     const unmatchableCounts = items.find(item => item.billId === unmatchable.id)!
     expect(unmatchableCounts.reconcilableLineCount).toBe(0)
+    expect(unmatchableCounts.unfrozenLineCount).toBe(0)
     expect(unmatchableCounts.reconcilableLineIds).toEqual([])
     expect(unmatchableCounts.reasons).toEqual([{ code: 'INVALID_CONTAINER_NAME', count: 3 }])
+    // 占用中但一个成员都没冻结（本例的批次是直接落库的）：匹配行仍在，
+    // 「未冻结」只反映冻结了多少行，不反映这一账单此刻能不能新建批次（那由弹窗的可选分组定）。
+    const occupiedCounts = items.find(item => item.billId === occupied.id)!
+    expect([occupiedCounts.reconcilableLineCount, occupiedCounts.unfrozenLineCount]).toEqual([3, 3])
 
     // 已对账完成的账单没有未对账行：0 行、无原因（没有"不能核对的行"可言）。
-    const noLines = (await reconcilableCounts([completed.id]).expect(200)).body as { items: Array<{ reconcilableLineCount: number, reasons: unknown[] }> }
+    const noLines = (await reconcilableCounts([completed.id]).expect(200)).body as { items: Array<{ reconcilableLineCount: number, unfrozenLineCount: number, reasons: unknown[] }> }
     expect(noLines.items[0].reconcilableLineCount).toBe(0)
+    expect(noLines.items[0].unfrozenLineCount).toBe(0)
     expect(noLines.items[0].reasons).toEqual([])
   })
 
@@ -387,6 +395,10 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     const selectable = (await selectableBills('SELECTABLE').expect(200)).body as BillOptionPage
     expect(selectable.counts).toEqual({ selectable: 1, blocked: 4 })
     expect(selectable.items.map(item => item.id)).not.toContain(pending.id)
+
+    // 冻结后的两个数字：匹配得上的行不变，未冻结（＝当前可核对列显示）的行归零。
+    const frozen = (await reconcilableCounts([pending.id]).expect(200)).body as { items: Array<{ reconcilableLineCount: number, unfrozenLineCount: number }> }
+    expect([frozen.items[0].reconcilableLineCount, frozen.items[0].unfrozenLineCount]).toEqual([3, 0])
   })
 
   it('幂等：同键重放返回同一批次，同一键换账单被拒，非法键在业务前被拒', async () => {
@@ -445,9 +457,11 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
 
     expect(errorCode(await browser.post(`${BASE}/${batchId}/complete`).set(packagingHeaders).send({}).expect(409))).toBe('SLH_RECON_BATCH_NOT_IN_PROGRESS')
 
-    // 结束之后账单重新变成候选，可再次发起对账。
+    // 结束之后账单重新变成候选，可再次发起对账；冻结解除后「未冻结行数」回到可核对行数。
     const candidates = (await browser.get(`${BASE}/candidates`).query({ pageSize: 100 }).expect(200)).body as { items: Array<{ id: string }> }
     expect(candidates.items.map(item => item.id)).toContain(replacement.id)
+    const released = (await reconcilableCounts([replacement.id]).expect(200)).body as { items: Array<{ reconcilableLineCount: number, unfrozenLineCount: number }> }
+    expect([released.items[0].reconcilableLineCount, released.items[0].unfrozenLineCount]).toEqual([3, 3])
     expect((await createBatch(replacement.id, randomUUID()).expect(201)).body as BatchDetail).toMatchObject({ memberCount: 3 })
   })
 

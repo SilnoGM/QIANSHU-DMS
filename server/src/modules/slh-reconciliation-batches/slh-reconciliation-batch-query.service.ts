@@ -201,16 +201,37 @@ export class SlhReconciliationBatchQueryService {
 
   /**
    * 静默算：按账单主键批量算「当前可核对行数」（账单列表的「当前可核对」列用）。
-   * 未知账单按 0 行返回（调用方拿的是刚列出来的主键），不改任何数据。
+   *
+   * 每单给两个数：`reconcilableLineCount`（匹配得上且尚未对账的行）与 `unfrozenLineCount`
+   * （其中没有被进行中批次冻结、即「当前可核对」列显示的行）；**两者之差就是进行中批次
+   * 已经冻结的明细行数**，所以账单被批次占用后前者不变、后者归零。未知账单按 0 行返回
+   * （调用方拿的是刚列出来的主键），全程只读。
    */
   async reconcilableCounts(input: SlhReconciliationReconcilableCountsRequestDto): Promise<SlhReconciliationReconcilableCountsDto> {
     const billIds = [...new Set(input.billIds)]
+    // 进行中批次冻结了哪些行：一次查完再逐单做差集，避免每单再查一次批次与成员。
+    const activeBatches = await this.prisma.slhReconciliationBatch.findMany({
+      where: { billId: { in: billIds }, completedAt: null },
+      select: { billId: true, members: { select: { lineId: true } } },
+    })
+    const frozenLineIdsByBill = new Map<string, Set<string>>()
+    for (const batch of activeBatches) {
+      const frozen = frozenLineIdsByBill.get(batch.billId) ?? new Set<string>()
+      for (const member of batch.members) {
+        frozen.add(member.lineId)
+      }
+      frozenLineIdsByBill.set(batch.billId, frozen)
+    }
     const items = await Promise.all(billIds.map(async (billId) => {
       const matches = await matchBillUnreconciledLines(this.prisma, billId)
       const reconcilableLineIds = matches.filter(match => match.status === 'MATCHED').map(match => match.line.id)
+      const frozenLineIds = frozenLineIdsByBill.get(billId)
       return {
         billId,
         reconcilableLineCount: reconcilableLineIds.length,
+        unfrozenLineCount: frozenLineIds === undefined
+          ? reconcilableLineIds.length
+          : reconcilableLineIds.filter(lineId => !frozenLineIds.has(lineId)).length,
         reconcilableLineIds,
         reasons: summarizeUnmatchedReasons(matches),
       }

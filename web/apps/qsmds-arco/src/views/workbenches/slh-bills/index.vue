@@ -217,7 +217,8 @@ async function loadReconcilableCounts(billIds: string[]): Promise<void> {
     if (current.signal.aborted || !canReconcile.value) {
       return
     }
-    reconcilableCounts.value = new Map(response.data.items.map(item => [item.billId, item.reconcilableLineCount]))
+    // 列口径＝匹配得上且没有被进行中批次冻结的行（unfrozenLineCount），不是全部匹配行。
+    reconcilableCounts.value = new Map(response.data.items.map(item => [item.billId, item.unfrozenLineCount]))
   }
   catch {
     // 静默算：取不到就不显示数字，让「当前可核对」留占位符。

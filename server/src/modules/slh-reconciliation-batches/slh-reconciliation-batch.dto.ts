@@ -74,6 +74,11 @@ export class SlhBillLineUnmatchedReasonCountDto {
 export class SlhReconciliationReconcilableCountsItemDto {
   @ApiProperty({ format: 'uuid' }) billId!: string
   @ApiProperty({ description: 'Lines that currently match a qualified container row.' }) reconcilableLineCount!: number
+  @ApiProperty({
+    description: 'Matchable lines that no batch in progress has frozen: what the bill list column shows. '
+      + 'reconcilableLineCount minus this value is what the in-progress batch froze.',
+  })
+  unfrozenLineCount!: number
   @ApiProperty({ type: [String], format: 'uuid', description: 'Reconcilable line ids; the create endpoint compares them before freezing members.' }) reconcilableLineIds!: string[]
   @ApiProperty({ type: [SlhBillLineUnmatchedReasonCountDto], description: 'Why the remaining unreconciled lines cannot be reconciled right now.' }) reasons!: SlhBillLineUnmatchedReasonCountDto[]
 }

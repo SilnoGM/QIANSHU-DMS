@@ -85120,6 +85120,10 @@
             "type": "number",
             "description": "Lines that currently match a qualified container row."
           },
+          "unfrozenLineCount": {
+            "type": "number",
+            "description": "Matchable lines that no batch in progress has frozen: what the bill list column shows. reconcilableLineCount minus this value is what the in-progress batch froze."
+          },
           "reconcilableLineIds": {
             "description": "Reconcilable line ids; the create endpoint compares them before freezing members.",
             "type": "array",
@@ -85139,6 +85143,7 @@
         "required": [
           "billId",
           "reconcilableLineCount",
+          "unfrozenLineCount",
           "reconcilableLineIds",
           "reasons"
         ]

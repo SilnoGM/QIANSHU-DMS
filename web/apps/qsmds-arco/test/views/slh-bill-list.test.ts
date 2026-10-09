@@ -178,7 +178,9 @@ test('静默算只算当前页：进页面/翻页/筛选后按当页账单批量
   assert.match(source, /slhReconciliationBatchesApi\.reconcilableCounts\(\{ billIds \}, current\.signal\)/u)
   // 快照按账单主键存，每次先清空：旧页的数字绝不停留在新页上。
   assert.match(source, /reconcilableCounts\.value = new Map\(\)/u)
-  assert.match(source, /reconcilableCounts\.value = new Map\(response\.data\.items\.map\(item => \[item\.billId, item\.reconcilableLineCount\]\)\)/u)
+  // 列口径＝匹配得上且未被进行中批次冻结的行（unfrozenLineCount），不是全部匹配行。
+  assert.match(source, /reconcilableCounts\.value = new Map\(response\.data\.items\.map\(item => \[item\.billId, item\.unfrozenLineCount\]\)\)/u)
+  assert.equal(source.includes('item.reconcilableLineCount'), false)
   // 静默：失败只留占位符，不写页面错误、不弹提示。
   assert.match(source, /catch \{[\s\S]{0,160}静默算/u)
   // 页面卸载要收掉自己那条请求。
