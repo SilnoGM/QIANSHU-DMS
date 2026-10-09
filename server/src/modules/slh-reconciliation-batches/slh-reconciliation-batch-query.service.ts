@@ -4,15 +4,18 @@ import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { buildSlhBillListWhere, withSlhBillIncompleteReconciliation } from '../slh-bills/slh-bill-list-filter'
 import { serializeSlhBillListItem, slhBillListInclude } from '../slh-bills/slh-bill.serializer'
 import type { SlhBillPageDto } from '../slh-bills/slh-bill.dto'
-import type { SlhReconciliationBatchCandidateQueryDto } from './slh-reconciliation-batch.dto'
+import { slhReconciliationBatchFailure } from './slh-reconciliation-batch.errors'
+import { slhReconciliationBatchUuid } from './slh-reconciliation-batch.normalizer'
+import { serializeSlhReconciliationBatchDetail, slhReconciliationBatchDetailInclude } from './slh-reconciliation-batch.serializer'
+import type { SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchDetailDto } from './slh-reconciliation-batch.dto'
 
 const DEFAULT_PAGE_SIZE = 20
 
 /**
  * 对账批次的读查询。
  *
- * 对账功能整体仍处于冻结状态，这里只解冻「候选账单」这一条读路径：
- * 它是「新建对账批次」弹窗的数据来源；批次读写与匹配预览等仍是空壳。
+ * 已解冻的读路径：候选账单（新建批次弹窗的数据来源）与批次详情（详情页头部与创建/结束的响应体）；
+ * 批次列表与匹配预览仍是空壳。
  */
 @Injectable()
 export class SlhReconciliationBatchQueryService {
@@ -39,5 +42,17 @@ export class SlhReconciliationBatchQueryService {
       this.prisma.slhBill.count({ where }),
     ])
     return { items: items.map(serializeSlhBillListItem), total, page, pageSize }
+  }
+
+  /** 批次详情：详情页头部与创建/结束的响应体共用这一处读取。 */
+  async detail(id: string): Promise<SlhReconciliationBatchDetailDto> {
+    const row = await this.prisma.slhReconciliationBatch.findUnique({
+      where: { id: slhReconciliationBatchUuid(id) },
+      include: slhReconciliationBatchDetailInclude,
+    })
+    if (!row) {
+      slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_FOUND', '对账批次不存在', 404)
+    }
+    return serializeSlhReconciliationBatchDetail(row)
   }
 }

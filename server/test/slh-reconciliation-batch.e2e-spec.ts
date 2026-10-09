@@ -131,7 +131,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     expect(secondPage.items[0].id).not.toBe(firstPage.items[0].id)
   })
 
-  it('仍为空壳的接口：批次列表空集合，详情/核对/预览返回契约声明的 404 且不落数据', async () => {
+  it('仍为空壳的接口：批次列表空集合；未知批次与未实现的写路径返回契约声明的 404 且不落数据', async () => {
     const list = await browser.get(BASE).expect(200)
     expect(list.body).toEqual({ items: [], total: 0, page: 1, pageSize: 20 })
     const before = {
@@ -145,6 +145,23 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       batches: await h.prisma.slhReconciliationBatch.count(),
       members: await h.prisma.slhReconciliationBatchLine.count(),
     }).toEqual(before)
+  })
+
+  it('批次详情读取：返回批次头与账单摘要，未知主键 404，缺权限 403', async () => {
+    const occupiedBatch = await h.prisma.slhReconciliationBatch.findFirstOrThrow({ where: { billId: occupied.id }, select: { id: true, batchNo: true } })
+    const detail = (await browser.get(`${BASE}/${occupiedBatch.id}`).expect(200)).body as {
+      batchNo: string, status: string, memberCount: number, reconciledMemberCount: number,
+      members: unknown[], bill: { slhBillNo: string, lineCount: number, reconciliationStatus: string }
+    }
+    expect(detail.batchNo).toBe(occupiedBatch.batchNo)
+    expect([detail.status, detail.memberCount, detail.reconciledMemberCount]).toEqual(['IN_PROGRESS', 0, 0])
+    expect(detail.members).toEqual([])
+    expect(detail.bill.slhBillNo).toBe(occupied.slhBillNo)
+    expect(detail.bill.lineCount).toBeGreaterThan(0)
+    expect(['PENDING', 'PARTIAL']).toContain(detail.bill.reconciliationStatus)
+
+    expect(errorCode(await browser.get(`${BASE}/${unknownId}`).expect(404))).toBe('SLH_RECON_BATCH_NOT_FOUND')
+    await outsider.get(`${BASE}/${occupiedBatch.id}`).expect(403)
   })
 
   it('权限与会话边界仍在：未登录 401，缺少 reconcile 权限 403', async () => {

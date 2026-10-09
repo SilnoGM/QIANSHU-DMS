@@ -9,7 +9,7 @@ import { NumberingGeneratorService } from '../numbering/numbering-generator.serv
 import { slhBillUuid } from '../slh-bills/slh-bill.normalizer'
 import { mapSlhReconciliationBatchError, slhReconciliationBatchFailure } from './slh-reconciliation-batch.errors'
 import { slhReconciliationBatchUuid } from './slh-reconciliation-batch.normalizer'
-import { serializeSlhReconciliationBatchDetail, slhReconciliationBatchDetailInclude } from './slh-reconciliation-batch.serializer'
+import { SlhReconciliationBatchQueryService } from './slh-reconciliation-batch-query.service'
 import type { SlhReconciliationBatchCreateDto, SlhReconciliationBatchDetailDto } from './slh-reconciliation-batch.dto'
 
 const PERMISSION = 'slh-bills:reconcile'
@@ -29,6 +29,7 @@ const digest = (value: string) => Buffer.from(createHash('sha256').update(value)
 export class SlhReconciliationBatchService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly queries: SlhReconciliationBatchQueryService,
     private readonly numbering: NumberingGeneratorService,
     private readonly access: AccessControlService,
     private readonly audit: AuditService,
@@ -42,18 +43,6 @@ export class SlhReconciliationBatchService {
     if (user?.status !== 'ACTIVE' || !this.access.hasAll(codes, [permission])) {
       return slhReconciliationBatchFailure('FORBIDDEN', '权限不足', 403)
     }
-  }
-
-  /** 事务提交后按批次主键读回详情：与创建/结束的响应体同源，前端只依赖 id 与 batchNo。 */
-  private async readDetail(id: string): Promise<SlhReconciliationBatchDetailDto> {
-    const row = await this.prisma.slhReconciliationBatch.findUnique({
-      where: { id },
-      include: slhReconciliationBatchDetailInclude,
-    })
-    if (!row) {
-      slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_FOUND', '对账批次不存在', 404)
-    }
-    return serializeSlhReconciliationBatchDetail(row)
   }
 
   /**
@@ -137,7 +126,7 @@ export class SlhReconciliationBatchService {
         })
         return batch.id
       }, { timeout: 60_000 })
-      return await this.readDetail(created)
+      return await this.queries.detail(created)
     }
     catch (error) { return mapSlhReconciliationBatchError(error) }
   }
@@ -186,7 +175,7 @@ export class SlhReconciliationBatchService {
           },
         })
       }, { timeout: 60_000 })
-      return await this.readDetail(batchId)
+      return await this.queries.detail(batchId)
     }
     catch (error) { return mapSlhReconciliationBatchError(error) }
   }
