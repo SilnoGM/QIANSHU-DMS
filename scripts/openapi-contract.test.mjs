@@ -88,7 +88,7 @@ test('快照基础 API 使用稳定字节、hash 与安全解析行为', () => {
   )
 })
 
-test('已退役 operationId 公开清单冻结且精确为六个供应商操作', () => {
+test('已退役 operationId 公开清单冻结且精确为供应商六条加对账两条', () => {
   assert.equal(Object.isFrozen(RETIRED_OPERATION_IDS), true)
   assert.deepEqual(RETIRED_OPERATION_IDS, [
     'suppliers_list',
@@ -97,6 +97,8 @@ test('已退役 operationId 公开清单冻结且精确为六个供应商操作'
     'suppliers_update',
     'suppliers_enable',
     'suppliers_disable',
+    'slh_reconciliation_batch_match_preview',
+    'slh_reconciliation_batch_reconcile',
   ])
 })
 
@@ -340,7 +342,7 @@ test('operationId baseline 允许新增 operationId', () => {
   )
 })
 
-test('operationId baseline 仅允许六个供应商 operationId 退役', () => {
+test('operationId baseline 只豁免清单内登记过的已退役 operationId', () => {
   const baselineDocument = createValidContractFixture()
   const currentDocument = createValidContractFixture()
   RETIRED_OPERATION_IDS.forEach((operationId, index) => {

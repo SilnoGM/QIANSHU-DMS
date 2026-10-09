@@ -72,7 +72,8 @@ const API_ERROR_FORBIDDEN_KEYWORDS = [
   'not',
   'items',
 ]
-// 供应商独立 API 已正式退役。清单使用精确字符串比较，既不接受前缀或通配符，
+// 已退役的公共操作清单：供应商独立 API 正式退役，顺联航对账的「匹配预览」与「逐行核对」
+// 两条路由被新流程取代后删除（用户确认）。清单使用精确字符串比较，既不接受前缀或通配符，
 // 也不通过环境变量、CI 事件或调用方参数扩大公共契约的删除边界。
 export const RETIRED_OPERATION_IDS = Object.freeze([
   'suppliers_list',
@@ -81,6 +82,8 @@ export const RETIRED_OPERATION_IDS = Object.freeze([
   'suppliers_update',
   'suppliers_enable',
   'suppliers_disable',
+  'slh_reconciliation_batch_match_preview',
+  'slh_reconciliation_batch_reconcile',
 ])
 
 export class ContractValidationError extends Error {
