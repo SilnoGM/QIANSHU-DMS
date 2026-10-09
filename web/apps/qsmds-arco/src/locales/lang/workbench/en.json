@@ -331,7 +331,18 @@
       "membersEmpty": "This batch froze no lines.",
       "membersCopy": "Copy member list",
       "membersCopied": "Member list copied",
-      "membersCopyFailed": "Copy failed, select the text manually"
+      "membersCopyFailed": "Copy failed, select the text manually",
+      "lineSwitcherLabel": "Frozen line switcher",
+      "lineDataTitle": "Selected line data",
+      "lineDataEmpty": "No line selected.",
+      "matchSource": "Match source",
+      "matchSourceValue": {
+        "NAME": "Matched by name",
+        "MARK": "Matched by mark"
+      },
+      "matchedContainer": "Matched container",
+      "reconciledAt": "Reconciled at",
+      "reconciledBy": "Reconciled by"
     }
   }
 }

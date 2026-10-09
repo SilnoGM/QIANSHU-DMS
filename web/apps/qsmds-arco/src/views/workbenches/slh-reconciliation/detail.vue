@@ -3,12 +3,19 @@ import type { SlhReconciliationBatchDetailDto } from '@/api/generated/types.gen'
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsReconciliationLineSwitcher from '@/components/business/QsReconciliationLineSwitcher/index.vue'
 import { containerFailure } from '../containers/use-container-resource'
-import { buildSlhReconciliationMemberListText } from './detail.logic'
+import {
+  buildSlhReconciliationLineFields,
+  buildSlhReconciliationLineItems,
+  buildSlhReconciliationMemberListText,
+  resolveSlhReconciliationSelectedMember,
+  SLH_RECONCILIATION_LINE_TONES,
+} from './detail.logic'
 import { resolveSlhReconciliationBatchLabelKey, resolveSlhReconciliationBatchTone } from './status.logic'
 
 /**
- * 批次详情页：主体只列出创建时冻结的成员行（明细行 ID 为主），完整的对照工作台后续再做。
+ * 批次详情页：用切换器浏览创建时冻结的明细行，选中行的字段数据跟在下方（对照工作台后续再做）。
  * 头部辅助文字给出批次状态、批次编号与账单基础信息（账单编号、对账单名称）；
  * 底部承接「结束批次」接口的「完成批次对账」动作。
  */
@@ -25,11 +32,34 @@ const completeOpen = ref(false)
 const completing = ref(false)
 const copyingMembers = ref(false)
 const actionError = ref('')
+/** 选中行由页面持有：切换器只发 update:modelValue，行数据与后续核对动作都跟着它走。 */
+const selectedLineId = ref<string | null>(null)
 let controller: AbortController | null = null
+
+/** 纯函数只要求最小翻译签名；带参数时显式展开，与弹窗里的既有写法一致。 */
+function translate(key: string, params?: Record<string, unknown>) {
+  return params === undefined ? t(key) : t(key, params)
+}
 
 /** 只有读到了进行中的批次才能完成：状态由服务端数据派生，刷新页面后同样正确。 */
 const canComplete = computed(() => batch.value?.status === 'IN_PROGRESS')
 const members = computed(() => batch.value?.members ?? [])
+const lineSwitcherItems = computed(() => buildSlhReconciliationLineItems(members.value, translate))
+const selectedMember = computed(() => resolveSlhReconciliationSelectedMember(members.value, selectedLineId.value))
+const selectedLineFields = computed(() => (
+  selectedMember.value === null ? [] : buildSlhReconciliationLineFields(selectedMember.value, translate)
+))
+
+/**
+ * 成员变化后收敛选中值：仍在清单里就保持，否则退回第一条，批次为空时清空。
+ * 切换器不擅自改模型值，选中项的校正属于页面职责。
+ */
+watch(members, (list) => {
+  if (selectedLineId.value !== null && list.some(member => member.lineId === selectedLineId.value)) {
+    return
+  }
+  selectedLineId.value = list.at(0)?.lineId ?? null
+}, { immediate: true })
 
 async function load(): Promise<void> {
   controller?.abort()
@@ -127,7 +157,7 @@ onBeforeUnmount(() => {
         <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />{{ t('slhReconciliation.backToList') }}
       </FaButton>
     </FaPageHeader>
-    <!-- 主体只列冻结成员：读取失败时给出错误与重试，其余批次内容留到详情页重做时再补。 -->
+    <!-- 主体用切换器浏览冻结成员：读取失败时给出错误与重试，其余批次内容留到详情页重做时再补。 -->
     <FaPageMain class="min-w-0">
       <template v-if="loadError">
         <FaAlert variant="destructive" role="alert" :title="loadError" />
@@ -147,15 +177,33 @@ onBeforeUnmount(() => {
         <p v-if="members.length === 0" class="qs-type-description text-muted-foreground m-0">
           {{ t('slhReconciliation.detail.membersEmpty') }}
         </p>
-        <ul v-else class="m-0 p-0 list-none gap-1 grid">
-          <li v-for="member in members" :key="member.id" class="flex flex-wrap gap-x-2 min-w-0 items-baseline">
-            <span class="qs-type-data font-mono break-all">{{ member.lineId }}</span>
-            <span class="text-muted-foreground" aria-hidden="true">·</span>
-            <span class="qs-type-body">{{ member.goodsName }}</span>
-            <span class="text-muted-foreground" aria-hidden="true">·</span>
-            <span class="qs-type-data text-muted-foreground">{{ member.matchedContainerBatchName }} #{{ member.matchedLoadingItemLineNumber }}</span>
-          </li>
-        </ul>
+        <template v-else>
+          <QsReconciliationLineSwitcher
+            v-model="selectedLineId"
+            :items="lineSwitcherItems"
+            :status-tones="SLH_RECONCILIATION_LINE_TONES"
+            :aria-label="t('slhReconciliation.detail.lineSwitcherLabel')"
+          />
+          <!-- 选中行的字段数据：先给纯字段清单，完整的对照工作台后续再做。 -->
+          <section class="flex flex-col gap-2" aria-labelledby="slh-reconciliation-line-data-title">
+            <h3 id="slh-reconciliation-line-data-title" class="qs-type-compact-title m-0">
+              {{ t('slhReconciliation.detail.lineDataTitle') }}
+            </h3>
+            <p v-if="selectedMember === null" class="qs-type-description text-muted-foreground m-0">
+              {{ t('slhReconciliation.detail.lineDataEmpty') }}
+            </p>
+            <dl v-else class="m-0 gap-x-8 gap-y-1 grid md:grid-cols-2">
+              <div v-for="field in selectedLineFields" :key="field.id" class="flex gap-2 min-w-0 items-baseline">
+                <dt class="qs-type-compact-label shrink-0">
+                  {{ field.label }}
+                </dt>
+                <dd class="qs-type-data m-0 break-all">
+                  {{ field.value }}
+                </dd>
+              </div>
+            </dl>
+          </section>
+        </template>
       </section>
     </FaPageMain>
     <FaFixedBar position="bottom" class="border-t border-border">

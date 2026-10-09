@@ -340,7 +340,18 @@
       "membersEmpty": "本批次没有冻结任何明细行。",
       "membersCopy": "复制成员清单",
       "membersCopied": "已复制成员清单",
-      "membersCopyFailed": "复制失败，请手动选择文本复制"
+      "membersCopyFailed": "复制失败，请手动选择文本复制",
+      "lineSwitcherLabel": "本批次冻结的明细行切换",
+      "lineDataTitle": "当前明细行数据",
+      "lineDataEmpty": "未选择明细行。",
+      "matchSource": "匹配方式",
+      "matchSourceValue": {
+        "NAME": "按名称匹配",
+        "MARK": "按唛头匹配"
+      },
+      "matchedContainer": "匹配柜号",
+      "reconciledAt": "核对时间",
+      "reconciledBy": "核对人"
     }
   }
 }
