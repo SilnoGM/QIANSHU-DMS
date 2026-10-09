@@ -259,6 +259,7 @@
     "viewDetail": "檢視詳情"
   },
   "slhReconciliation": {
+    "intro": "依帳單發起對帳：一個批次對應一張帳單，核對的是本輪匹配到櫃次的明細行。",
     "search": "搜尋批次編號、帳單編號或帳單名稱",
     "empty": "還沒有對帳批次",
     "filterLabel": "批次狀態",

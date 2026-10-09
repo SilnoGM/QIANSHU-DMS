@@ -128,10 +128,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="min-w-0">
-    <FaPageHeader :title="t('workbench.slhBillReconciliation')">
-      <span v-if="canReconcile && selectedBill" class="qs-type-description text-muted-foreground truncate">
-        {{ t('slhReconciliation.billSelect.selectedHint', { billNo: selectedBill.slhBillNo }) }}
-      </span>
+    <FaPageHeader :title="t('workbench.slhBillReconciliation')" :description="t('slhReconciliation.intro')">
       <FaButton v-if="canReconcile" @click="billSelectOpen = true">
         <FaIcon name="i-lucide:plus" aria-hidden="true" />{{ t('slhReconciliation.billSelect.createButton') }}
       </FaButton>

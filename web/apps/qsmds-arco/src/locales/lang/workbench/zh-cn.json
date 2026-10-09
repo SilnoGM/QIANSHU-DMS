@@ -268,6 +268,7 @@
     "viewDetail": "查看详情"
   },
   "slhReconciliation": {
+    "intro": "按账单发起对账：一个批次对应一张账单，核对的是本轮匹配到柜次的明细行。",
     "search": "搜索批次编号、账单编号或账单名称",
     "empty": "还没有对账批次",
     "filterLabel": "批次状态",

@@ -110,12 +110,15 @@ test('单选：点已选中的账单取消选择，点另一张切换', () => {
   assert.equal(toggleSlhBillSelection(first, first), null)
 })
 
-test('新建入口接线：按钮、弹窗与暂存回调都挂在列表页上', async () => {
+test('新建入口接线：按钮、页头说明与暂存回调都挂在列表页上', async () => {
   const page = await readPageSource('index.vue')
+  assert.match(page, /:description="t\('slhReconciliation\.intro'\)"/u)
   assert.match(page, /t\('slhReconciliation\.billSelect\.createButton'\)/u)
   assert.match(page, /<SlhBillSelectModal v-if="canReconcile" v-model="billSelectOpen" @confirm="confirmBillSelection" \/>/u)
   assert.match(page, /selectedBill\.value = bill/u)
   assert.match(page, /slhReconciliation\.billSelect\.selectedToast/u)
+  // 已选择的账单只在弹窗页脚与 toast 里出现，页面头部不常驻展示。
+  assert.doesNotMatch(page, /billSelect\.selectedHint/u)
 })
 
 test('选择弹窗是卡片单选：不用通用表格，带搜索与分页，且不在这里跳转', async () => {

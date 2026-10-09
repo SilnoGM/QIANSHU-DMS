@@ -259,6 +259,7 @@
     "viewDetail": "View details"
   },
   "slhReconciliation": {
+    "intro": "Reconcile per bill: one batch covers one bill and only the lines that matched a container row this round.",
     "search": "Search batch, bill number or bill name",
     "empty": "No reconciliation batch yet",
     "filterLabel": "Batch status",
