@@ -259,11 +259,8 @@
     "viewDetail": "檢視詳情"
   },
   "slhReconciliation": {
-    "intro": "依帳單發起對帳：一個批次對應一張帳單，核對的是本輪匹配到櫃次的明細行。",
-    "create": "新建對帳",
     "search": "搜尋批次編號、帳單編號或帳單名稱",
     "empty": "還沒有對帳批次",
-    "emptyDescription": "點擊「新建對帳」選擇一張帳單開始核對",
     "filterLabel": "批次狀態",
     "filter": {
       "IN_PROGRESS": "進行中",
@@ -279,56 +276,6 @@
     "batchStatus": {
       "IN_PROGRESS": "進行中",
       "COMPLETED": "已完成"
-    },
-    "matchSource": {
-      "NAME": "櫃號命中",
-      "MARK": "嘜頭推斷"
-    },
-    "unmatchedReason": {
-      "MISSING_CONTAINER_REFERENCE": "缺少櫃號，嘜頭也推不出月日",
-      "INVALID_CONTAINER_NAME": "櫃號無法解析出月日",
-      "CONTAINER_NOT_FOUND": "沒有對應裝櫃日期的櫃次",
-      "CONTAINER_AMBIGUOUS": "命中多個櫃次，無法確定",
-      "MISSING_SHIPPING_MARK": "帳單行缺少嘜頭",
-      "MARK_NOT_FOUND_IN_CONTAINER": "櫃次內沒有同嘜頭的行",
-      "LOADING_ITEM_AMBIGUOUS": "櫃次內同嘜頭行重複",
-      "SHIPMENT_NOT_MATCHED": "櫃次行未匹配貨件",
-      "PURCHASE_SOURCE_MISSING": "貨件缺少採購來源",
-      "SALES_SOURCE_MISSING": "貨件缺少銷售來源"
-    },
-    "created": "已建立對帳批次 {batchNo}",
-    "selectModal": {
-      "title": "順聯航帳單選擇",
-      "steps": {
-        "selectBill": "選擇要核對的帳單",
-        "previewScope": "核對範圍預覽"
-      },
-      "next": "下一步",
-      "select": "選擇",
-      "selected": "已選擇",
-      "back": "上一步",
-      "start": "開始對帳",
-      "emptyBills": "沒有可對帳的帳單",
-      "emptyBillsDescription": "只有未對帳、部分對帳且沒有進行中批次的帳單可以發起對帳",
-      "noMatch": "該帳單目前沒有可核對的行",
-      "matchedTitle": "已匹配合格的行（{count}）",
-      "unmatchedTitle": "暫不能核對的行（{count}）",
-      "unmatchedEmpty": "沒有暫不能核對的行",
-      "containerName": "帳單櫃號",
-      "billLineNumber": "帳單行號",
-      "customerName": "帳單客戶名稱",
-      "shippingMark": "嘜頭",
-      "goodsName": "貨物品名",
-      "billInfo": "帳單資訊",
-      "matchResult": "匹配結果",
-      "matchedLine": "櫃次行號",
-      "lineCountInline": "{count} 行",
-      "payableLabel": "應付",
-      "canReconcile": "可核對 {count} 行",
-      "cannotReconcile": "暫不能核對 {count} 行",
-      "selectHint": "請先選擇一張帳單",
-      "selectedHint": "已選擇：{billNo}",
-      "deselect": "取消選擇"
     }
   }
 }

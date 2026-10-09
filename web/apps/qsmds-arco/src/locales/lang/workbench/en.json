@@ -259,11 +259,8 @@
     "viewDetail": "View details"
   },
   "slhReconciliation": {
-    "intro": "Reconcile per bill: one batch covers one bill and only the lines that matched a container row this round.",
-    "create": "New reconciliation",
     "search": "Search batch, bill number or bill name",
     "empty": "No reconciliation batch yet",
-    "emptyDescription": "Use \"New reconciliation\" to pick a bill and start",
     "filterLabel": "Batch status",
     "filter": {
       "IN_PROGRESS": "In progress",
@@ -279,56 +276,6 @@
     "batchStatus": {
       "IN_PROGRESS": "In progress",
       "COMPLETED": "Completed"
-    },
-    "matchSource": {
-      "NAME": "Container number",
-      "MARK": "Mark inference"
-    },
-    "unmatchedReason": {
-      "MISSING_CONTAINER_REFERENCE": "No container reference, and the shipping mark carries no cycle",
-      "INVALID_CONTAINER_NAME": "Container reference has no readable cycle",
-      "CONTAINER_NOT_FOUND": "No container batch on that loading date",
-      "CONTAINER_AMBIGUOUS": "Matches more than one container batch",
-      "MISSING_SHIPPING_MARK": "Bill line has no shipping mark",
-      "MARK_NOT_FOUND_IN_CONTAINER": "No row with this shipping mark inside the container",
-      "LOADING_ITEM_AMBIGUOUS": "Duplicate shipping mark inside the container",
-      "SHIPMENT_NOT_MATCHED": "Container row has no shipment",
-      "PURCHASE_SOURCE_MISSING": "Shipment has no purchase source",
-      "SALES_SOURCE_MISSING": "Shipment has no sales source"
-    },
-    "created": "Reconciliation batch {batchNo} created",
-    "selectModal": {
-      "title": "Select a Shunlianhang bill",
-      "steps": {
-        "selectBill": "Choose the bill",
-        "previewScope": "Preview the scope"
-      },
-      "next": "Next",
-      "select": "Select",
-      "selected": "Selected",
-      "back": "Back",
-      "start": "Start reconciliation",
-      "emptyBills": "No bill can be reconciled",
-      "emptyBillsDescription": "Only active bills that still have unreconciled lines and no batch in progress",
-      "noMatch": "This bill has no line that can be reconciled right now",
-      "matchedTitle": "Matched lines ({count})",
-      "unmatchedTitle": "Not reconcilable yet ({count})",
-      "unmatchedEmpty": "No blocked line",
-      "containerName": "Bill container",
-      "billLineNumber": "Bill line",
-      "customerName": "Bill customer",
-      "shippingMark": "Shipping mark",
-      "goodsName": "Goods",
-      "billInfo": "Bill info",
-      "matchResult": "Match result",
-      "matchedLine": "Container row",
-      "lineCountInline": "{count} lines",
-      "payableLabel": "Payable",
-      "canReconcile": "{count} lines ready",
-      "cannotReconcile": "{count} lines blocked",
-      "selectHint": "Select a bill to continue",
-      "selectedHint": "Selected: {billNo}",
-      "deselect": "Deselect"
     }
   }
 }
