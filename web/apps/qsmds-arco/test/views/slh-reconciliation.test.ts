@@ -85,6 +85,14 @@ test('列表页按名称跳详情，并复用账单状态标签', async () => {
   assert.match(source, /SlhBillReconciliationStatusTag/u)
 })
 
+test('批次列表把创建人与创建时间拆成两列', async () => {
+  const page = await readPageSource('index.vue')
+  assert.match(page, /\{ id: 'createdBy', title: t\('slhBill\.column\.created'\), accessorFn: item => item\.createdByDisplayName/u)
+  assert.match(page, /\{ id: 'created', title: t\('slhBill\.column\.createdAt'\), accessorFn: item => item\.createdAt/u)
+  assert.match(page, /#cell-createdBy="\{ row \}"[\s\S]{0,160}QsPersonDisplay/u)
+  assert.match(page, /#cell-created="\{ row \}"[\s\S]{0,200}DateTimeDisplay/u)
+})
+
 test('候选账单查询：关键词去空白，空关键词不发参数，每页 20 条', () => {
   assert.equal(SLH_BILL_SELECT_PAGE_SIZE, 20)
   assert.deepEqual(buildSlhBillSelectQuery({ page: 2, pageSize: SLH_BILL_SELECT_PAGE_SIZE, keyword: '  ' }), { page: 2, pageSize: 20 })

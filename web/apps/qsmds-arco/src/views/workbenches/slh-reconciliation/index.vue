@@ -57,7 +57,9 @@ const columns = computed<QsGenericTableColumn<SlhReconciliationBatchListItemDto>
   { id: 'progress', title: t('slhReconciliation.column.progress'), accessorFn: item => `${item.reconciledMemberCount}/${item.memberCount}`, minWidth: 130, align: 'right' },
   { id: 'billRemaining', title: t('slhReconciliation.column.billRemaining'), accessorFn: item => String(item.bill.lineCount - item.bill.reconciledLineCount), minWidth: 150, align: 'right' },
   { id: 'billStatus', title: t('slhBill.column.reconciliationStatus'), accessorFn: item => item.bill.reconciliationStatus, minWidth: 140 },
-  { id: 'created', title: t('slhBill.column.createdAt'), accessorFn: item => item.createdAt, minWidth: 220 },
+  // 创建人与创建时间分两列：原先叠在一个「创建时间」列里，扫读时要二次分辨。
+  { id: 'createdBy', title: t('slhBill.column.created'), accessorFn: item => item.createdByDisplayName, minWidth: 140 },
+  { id: 'created', title: t('slhBill.column.createdAt'), accessorFn: item => item.createdAt, minWidth: 190 },
 ])
 /** 操作列只有「查看详情」一个按钮：宽度按按钮 100 + 左右内边距 24 估算。 */
 const actionColumn = { fixed: 'right' as const, width: 128, minWidth: 128 }
@@ -183,13 +185,13 @@ onBeforeUnmount(() => {
         <template #cell-billStatus="{ row }">
           <SlhBillReconciliationStatusTag :status="row.original.bill.reconciliationStatus" />
         </template>
+        <template #cell-createdBy="{ row }">
+          <QsPersonDisplay :display-name="row.original.createdByDisplayName" size="sm" />
+        </template>
         <template #cell-created="{ row }">
-          <QsTableStackedCell>
-            <QsPersonDisplay :display-name="row.original.createdByDisplayName" size="sm" />
-            <QsTableStackedLine tone="muted">
-              <DateTimeDisplay :value="row.original.createdAt" />
-            </QsTableStackedLine>
-          </QsTableStackedCell>
+          <span class="qs-type-data whitespace-nowrap">
+            <DateTimeDisplay :value="row.original.createdAt" />
+          </span>
         </template>
         <template #actions="{ row }">
           <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" @click="viewBatch(row.id)">
