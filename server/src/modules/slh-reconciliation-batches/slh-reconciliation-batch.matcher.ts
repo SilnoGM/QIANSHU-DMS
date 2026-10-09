@@ -3,10 +3,10 @@ import {
   collectContainerCandidateDates, matchSlhBillLines,
   type SlhBillContainerBatchInput, type SlhBillLineMatchSource, type SlhBillLineUnmatchedReason,
 } from './slh-bill-line-matching'
-import { slhReconciliationPreviewLineSelect, type SlhReconciliationPreviewLineSource } from './slh-reconciliation-batch.serializer'
+import { slhReconciliationMatchLineSelect, type SlhReconciliationMatchLineSource } from './slh-reconciliation-batch.serializer'
 
 export interface SlhReconciliationLineMatch {
-  line: SlhReconciliationPreviewLineSource
+  line: SlhReconciliationMatchLineSource
   status: 'MATCHED' | 'UNMATCHED'
   source: SlhBillLineMatchSource | null
   reason: SlhBillLineUnmatchedReason | null
@@ -29,7 +29,7 @@ export async function matchBillUnreconciledLines(
 ): Promise<SlhReconciliationLineMatch[]> {
   const lines = await client.slhBillLine.findMany({
     where: { billId, reconciledAt: null },
-    select: slhReconciliationPreviewLineSelect,
+    select: slhReconciliationMatchLineSelect,
     orderBy: { lineNumber: 'asc' },
   })
   if (lines.length === 0) {

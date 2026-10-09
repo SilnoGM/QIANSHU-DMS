@@ -1,5 +1,5 @@
 import { Prisma } from '../../generated/prisma/client'
-import { buildSlhBillListWhere, withSlhBillReconciliationStatus, withSlhBillState } from './slh-bill-list-filter'
+import { buildSlhBillListWhere, withSlhBillIncompleteReconciliation, withSlhBillReconciliationStatus, withSlhBillState } from './slh-bill-list-filter'
 
 describe('SLH bill list filter', () => {
   it('defaults to active bills and keeps blank input unfiltered', () => {
@@ -8,6 +8,17 @@ describe('SLH bill list filter', () => {
     expect(buildSlhBillListWhere({ state: 'active' })).toEqual({ supersededById: null })
     expect(buildSlhBillListWhere({ keyword: '   ', state: 'all' })).toEqual({})
     expect(buildSlhBillListWhere({ state: 'superseded' })).toEqual({ supersededById: { not: null } })
+  })
+
+  it('keeps every bill that still has an unreconciled line', () => {
+    // 候选账单用：未对账与部分对账是同一个谓词（至少一行没有对账时刻）。
+    expect(withSlhBillIncompleteReconciliation({ supersededById: null })).toEqual({
+      supersededById: null,
+      AND: [{ lines: { some: { reconciledAt: null } } }],
+    })
+    expect(withSlhBillIncompleteReconciliation({ AND: [{ supersededById: null }] })).toEqual({
+      AND: [{ supersededById: null }, { lines: { some: { reconciledAt: null } } }],
+    })
   })
 
   it('trims the keyword and matches bill number, file name and container batches', () => {

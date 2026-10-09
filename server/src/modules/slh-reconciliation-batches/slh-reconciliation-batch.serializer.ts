@@ -3,8 +3,8 @@ import { resolveSlhBillReconciliationStatus } from '../slh-bills/slh-bill-reconc
 import { serializeSlhBillLine, serializeStoredFindings } from '../slh-bills/slh-bill.serializer'
 import type { SlhBillReconciliationStatusDto } from '../slh-bills/slh-bill.dto'
 import type {
-  SlhBillLineUnmatchedReasonDto, SlhBillLineMatchSourceDto, SlhReconciliationBatchDetailDto,
-  SlhReconciliationBatchListItemDto, SlhReconciliationBatchMemberDto, SlhReconciliationMatchPreviewLineDto,
+  SlhBillLineMatchSourceDto, SlhReconciliationBatchDetailDto, SlhReconciliationBatchListItemDto,
+  SlhReconciliationBatchMemberDto,
 } from './slh-reconciliation-batch.dto'
 import { SlhReconciliationBatchStatusDto } from './slh-reconciliation-batch.dto'
 
@@ -13,8 +13,7 @@ const isoDate = (value: Date): string => value.toISOString().slice(0, 10)
 
 /**
  * 批次头与账单摘要。账单三态仍由明细行派生（与账单列表共用同一个派生函数），
- * 批次自己只提供「成员数 / 已核对成员数」两个计数：成员行自带核对时刻，
- * 因此同一张账单的多个批次各自的进度互不污染。
+ * 批次自己只提供「成员数 / 已核对成员数」两个计数。
  */
 const batchHeaderInclude = {
   bill: {
@@ -30,10 +29,9 @@ const batchHeaderInclude = {
 
 export const slhReconciliationBatchListInclude = batchHeaderInclude
 
-/** 详情多取成员行本身：只包含创建时匹配命中的行，账单其它行不会出现在这里。 */
+/** 详情多取成员行本身与账单导入快照的 findings（成员为空时两者分别是空数组）。 */
 export const slhReconciliationBatchDetailInclude = {
   ...batchHeaderInclude,
-  // 费用出入走导入时冻结的 findings 快照；列表接口不需要这份数据，所以只在详情里多取。
   bill: { select: { ...batchHeaderInclude.bill.select, importFindings: true } },
   members: {
     orderBy: { createdAt: 'asc' },
@@ -88,10 +86,6 @@ function serializeBatchHeader(row: BatchHeaderRow): SlhReconciliationBatchListIt
   }
 }
 
-export function serializeSlhReconciliationBatchListItem(row: BatchHeaderRow): SlhReconciliationBatchListItemDto {
-  return serializeBatchHeader(row)
-}
-
 function serializeBatchMember(row: BatchMemberRow): SlhReconciliationBatchMemberDto {
   const item = row.matchedLoadingItem
   return {
@@ -127,15 +121,19 @@ function serializeBatchMember(row: BatchMemberRow): SlhReconciliationBatchMember
   }
 }
 
+export function serializeSlhReconciliationBatchListItem(row: BatchHeaderRow): SlhReconciliationBatchListItemDto {
+  return serializeBatchHeader(row)
+}
+
 export function serializeSlhReconciliationBatchDetail(row: SlhReconciliationBatchDetailRow): SlhReconciliationBatchDetailDto {
   return { ...serializeBatchHeader(row), findings: serializeStoredFindings(row.bill.importFindings), members: row.members.map(serializeBatchMember) }
 }
 
 /**
- * 匹配预览行。行字段只取预览需要的列，与成员行的完整账单字段分开，
- * 避免预览为了展示原因而加载费用明细。
+ * 参与匹配的账单明细行：只取匹配与展示需要的列，不加载费用明细。
+ * 匹配算法（slh-bill-line-matching）与「静默算可核对行数」共用这一份选择。
  */
-export interface SlhReconciliationPreviewLineSource {
+export interface SlhReconciliationMatchLineSource {
   id: string
   lineNumber: number
   sourceRowNumber: number
@@ -147,31 +145,7 @@ export interface SlhReconciliationPreviewLineSource {
   recipientName: string | null
 }
 
-export const slhReconciliationPreviewLineSelect = {
+export const slhReconciliationMatchLineSelect = {
   id: true, lineNumber: true, sourceRowNumber: true, loadingDate: true, containerBatchNameText: true,
   shippingMarkText: true, warehouseReceiptReference: true, goodsName: true, recipientName: true,
 } satisfies Prisma.SlhBillLineSelect
-
-export function serializeMatchPreviewLine(
-  line: SlhReconciliationPreviewLineSource,
-  outcome: {
-    match: { source: SlhBillLineMatchSourceDto, containerBatchName: string, loadingItemLineNumber: number } | null
-    reason: SlhBillLineUnmatchedReasonDto | null
-  },
-): SlhReconciliationMatchPreviewLineDto {
-  return {
-    lineId: line.id,
-    lineNumber: line.lineNumber,
-    sourceRowNumber: line.sourceRowNumber,
-    loadingDate: isoDate(line.loadingDate),
-    containerBatchNameText: line.containerBatchNameText,
-    shippingMarkText: line.shippingMarkText,
-    warehouseReceiptReference: line.warehouseReceiptReference,
-    goodsName: line.goodsName,
-    recipientName: line.recipientName,
-    matchSource: outcome.match?.source ?? null,
-    matchedContainerBatchName: outcome.match?.containerBatchName ?? null,
-    matchedLoadingItemLineNumber: outcome.match?.loadingItemLineNumber ?? null,
-    reason: outcome.reason,
-  }
-}

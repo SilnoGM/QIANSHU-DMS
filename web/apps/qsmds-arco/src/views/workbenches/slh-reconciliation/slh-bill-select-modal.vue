@@ -1,106 +1,112 @@
 <script setup lang="ts">
-import type { SlhReconciliationPreviewLine, SlhReconciliationPreviewRow, SlhReconciliationSelectStep } from './select-modal.logic'
-import type { SlhBillListItemDto, SlhReconciliationBatchDetailDto, SlhReconciliationBatchPreviewDto } from '@/api/generated/types.gen'
-import type { QsGenericTableColumn, QsGenericTableGrouping } from '@/components/business/QsGenericTable/logic'
+import type { SlhBillSelectGroup } from './bill-select.logic'
+import type { SlhReconciliationBatchDetailDto, SlhReconciliationBillOptionDto } from '@/api/generated/types.gen'
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
-import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
-import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
-import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { containerFailure } from '../containers/use-container-resource'
 import { resolveSlhBillNetDisplay } from '../slh-bills/display.logic'
 import SlhBillOverflowText from '../slh-bills/slh-bill-overflow-text.vue'
 import SlhBillReconciliationStatusTag from '../slh-bills/slh-bill-reconciliation-status-tag.vue'
-import { buildSlhReconciliationBatchCreatePayload, buildSlhReconciliationPreviewColumns, buildSlhReconciliationPreviewRows, resolveSlhReconciliationBillRowClass, resolveSlhReconciliationPreviewSummary, SLH_RECONCILIATION_SELECT_STEPS } from './select-modal.logic'
-import { resolveSlhBillLineMatchSourceLabelKey, resolveSlhBillLineUnmatchedReasonLabelKey } from './status.logic'
+import {
+  buildSlhBillBlockReasonText,
+  buildSlhBillSelectQuery,
+  resolveSlhBillSelectEmptyKind,
+  SLH_BILL_SELECT_GROUPS,
+  SLH_BILL_SELECT_PAGE_SIZE,
+  toggleSlhBillSelection,
+} from './bill-select.logic'
 
-defineOptions({ name: 'SlhReconciliationBatchSelectModal' })
-/** 弹窗只管「选账单 → 看范围 → 创建」；创建成功后由页面决定去哪。 */
+/**
+ * 「选择对账账单」：为新建对账批次单选一张账单。
+ *
+ * 服务端把生效中的账单分成两组：**可选**（当前有可核对的行、且没有进行中批次）与
+ * **不可选**（附原因）；确认后由本组件创建批次（服务端重跑匹配并比对行集合），
+ * 成功才把批次交回调用方（由调用方跳转详情页）。
+ */
+defineOptions({ name: 'SlhBillSelectModal' })
 const props = defineProps<{ modelValue: boolean }>()
-const emit = defineEmits<{ 'update:modelValue': [value: boolean], 'created': [batch: SlhReconciliationBatchDetailDto] }>()
+const emit = defineEmits<{
+  'update:modelValue': [open: boolean]
+  'created': [batch: SlhReconciliationBatchDetailDto]
+}>()
 
 const { t } = useI18n()
-const step = ref<SlhReconciliationSelectStep>(0)
-const selectedBillId = ref('')
+const currencyCatalog = useCurrencyCatalog()
+
+const open = computed({
+  get: () => props.modelValue,
+  set: value => emit('update:modelValue', value),
+})
+const group = ref<SlhBillSelectGroup>('SELECTABLE')
 const keyword = ref('')
 const page = ref(1)
-const pageSize = ref(20)
-const items = shallowRef<SlhBillListItemDto[]>([])
+const pageSize = SLH_BILL_SELECT_PAGE_SIZE
+const items = shallowRef<SlhReconciliationBillOptionDto[]>([])
+const counts = ref<{ selectable: number, blocked: number }>({ selectable: 0, blocked: 0 })
 const total = ref(0)
 const loading = ref(false)
-const listError = ref('')
-const preview = shallowRef<SlhReconciliationBatchPreviewDto | null>(null)
-const previewLoading = ref(false)
-const previewError = ref('')
+const error = ref('')
+/** 暂存的选中项；跨翻页与搜索保留，确认时直接拿到账单对象。 */
+const selected = shallowRef<SlhReconciliationBillOptionDto | null>(null)
 const submitting = ref(false)
 const submitError = ref('')
-// 幂等键随「选定账单」生成一次：同一批行的重试复用同一个键，服务端返回同一批次。
-const idempotencyKey = ref('')
-let controller: AbortController | null = null
-let previewController: AbortController | null = null
-
-const steps = computed(() => SLH_RECONCILIATION_SELECT_STEPS.map(id => ({ id, title: t(`slhReconciliation.selectModal.steps.${id}`) })))
-const summary = computed(() => resolveSlhReconciliationPreviewSummary(preview.value))
-const deliverable = computed(() => preview.value?.bill ?? null)
-const locked = computed(() => previewLoading.value || submitting.value)
-const currencyCatalog = useCurrencyCatalog()
 /**
- * 第一步四列收口在 846px 可用宽度内：编号与操作列左右固定，中间放「对账状态 + 账单信息 + 折算净额」。
- * 名称、月份、期间、行数合并进「账单信息」堆叠单元格；行号列关闭——账单编号才是这一列的导航标识
- * （规范允许业务单号承担首列时关闭行号），否则 56px 行号会把金额列挤到固定操作列下面。
+ * 幂等键：改选账单后重置；同一意图的失败重试复用同一个键，
+ * 网络超时重试不会多建一条批次（服务端按键返回同一批次）。
  */
-const billColumns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
-  { id: 'slhBillNo', title: t('slhBill.column.slhBillNo'), accessorKey: 'slhBillNo', width: 170, minWidth: 170, fixed: 'left' },
-  { id: 'reconciliationStatus', title: t('slhBill.column.reconciliationStatus'), accessorKey: 'reconciliationStatus', width: 110, minWidth: 110 },
-  { id: 'billInfo', title: t('slhReconciliation.selectModal.billInfo'), accessorFn: item => item.billName, minWidth: 225 },
-  // 金额列要放得下「NT$1,946,939.00 TWD」这种带币种的长值，比同页其它列宽一档。
-  { id: 'netAmount', title: t('slhBill.column.foldedNetAmount'), accessorFn: item => resolveSlhBillNetDisplay(item).amount, width: 180, minWidth: 180, align: 'right' },
-])
-/** 操作列只放「选择 / 取消选择」一个按钮，右固定；宽度按按钮 100 + 左右内边距 24 估算，取 124。 */
-const billActionColumn = { fixed: 'right' as const, width: 124, minWidth: 124 }
-const previewColumns = computed(() => buildSlhReconciliationPreviewColumns(t))
-const previewRows = computed<SlhReconciliationPreviewRow[]>(() => buildSlhReconciliationPreviewRows(preview.value, {
-  matched: t('slhReconciliation.selectModal.matchedTitle', { count: summary.value.matchedCount }),
-  unmatched: t('slhReconciliation.selectModal.unmatchedTitle', { count: summary.value.unmatchedCount }),
-}))
-const previewGrouping: QsGenericTableGrouping<SlhReconciliationPreviewRow> = {
-  getRows: group => group.children ?? [],
-  getLabel: group => group.group?.label ?? '',
-}
-/** 选中行整行浅绿底 + 细绿边；未选中不加类，保持表格默认样式。 */
-function billRowClass(row: { original: SlhBillListItemDto }): string {
-  return resolveSlhReconciliationBillRowClass(row, selectedBillId.value)
-}
-/** 页脚提示：把「下一步为什么禁用」写成文字，而不是只把按钮灰掉。 */
-const footerHint = computed(() => selectedBillId.value === ''
-  ? t('slhReconciliation.selectModal.selectHint')
-  : t('slhReconciliation.selectModal.selectedHint', { billNo: items.value.find(item => item.id === selectedBillId.value)?.slhBillNo ?? '' }))
-/** 匹配来源只在已匹配行有值，缺省返回空串，由单元格决定展示方式。 */
-function matchedSourceLabel(line: SlhReconciliationPreviewLine): string {
-  return line.matchSource === null ? '' : t(resolveSlhBillLineMatchSourceLabelKey(line.matchSource))
+let idempotencyKey: string | null = null
+let controller: AbortController | null = null
+
+const groupItems = computed(() => SLH_BILL_SELECT_GROUPS.map(value => ({
+  value,
+  label: t(value === 'SELECTABLE' ? 'slhReconciliation.billSelect.groupSelectable' : 'slhReconciliation.billSelect.groupBlocked'),
+  count: counts.value[value === 'SELECTABLE' ? 'selectable' : 'blocked'],
+})))
+const emptyKind = computed(() => resolveSlhBillSelectEmptyKind({ group: group.value, keyword: keyword.value, total: total.value }))
+const emptyTitle = computed(() => {
+  if (emptyKind.value === 'keyword') {
+    return t('slhReconciliation.billSelect.emptyKeyword', { keyword: keyword.value.trim() })
+  }
+  return emptyKind.value === 'blocked' ? t('slhReconciliation.billSelect.emptyBlocked') : t('slhReconciliation.billSelect.empty')
+})
+const emptyDescription = computed(() => {
+  if (emptyKind.value === 'keyword') {
+    return t('slhReconciliation.billSelect.emptyKeywordHint')
+  }
+  return emptyKind.value === 'blocked' ? t('slhReconciliation.billSelect.emptyBlockedHint') : t('slhReconciliation.billSelect.emptyHint')
+})
+
+/** 不可选卡片的说明：拼接规则在 bill-select.logic 里（含原因摘要与「等 N 类」），这里只接翻译。 */
+function blockReasonText(bill: SlhReconciliationBillOptionDto): string {
+  return buildSlhBillBlockReasonText(bill, (key, params) => params === undefined ? t(key) : t(key, params))
 }
 
-async function loadBills(): Promise<void> {
+async function load(): Promise<void> {
   controller?.abort()
   const current = new AbortController()
   controller = current
   loading.value = true
-  listError.value = ''
+  error.value = ''
   try {
-    const response = await slhReconciliationBatchesApi.candidates({ page: page.value, pageSize: pageSize.value, ...(keyword.value.trim() === '' ? {} : { keyword: keyword.value.trim() }) }, current.signal)
+    const response = await slhReconciliationBatchesApi.selectableBills(
+      buildSlhBillSelectQuery({ group: group.value, page: page.value, pageSize, keyword: keyword.value }),
+      current.signal,
+    )
     if (current.signal.aborted) {
       return
     }
     items.value = response.data.items
+    counts.value = { selectable: response.data.counts.selectable, blocked: response.data.counts.blocked }
     total.value = response.data.total
   }
   catch (failure) {
     if (!current.signal.aborted) {
       items.value = []
       total.value = 0
-      listError.value = containerFailure(failure).message
+      error.value = containerFailure(failure).message
     }
   }
   finally {
@@ -110,306 +116,200 @@ async function loadBills(): Promise<void> {
   }
 }
 
-function searchBills(): void {
+/** 搜索一律回到第 1 页：否则第 3 页搜出来是空的会像"没有结果"。 */
+function search(): void {
   page.value = 1
-  void loadBills()
+  void load()
 }
 
-function selectBill(id: string): void {
-  if (locked.value) {
+/** 切分组同样回到第 1 页；关键词与已选中的账单都保留。 */
+function selectGroup(next: string): void {
+  const value = next as SlhBillSelectGroup
+  if (value === group.value) {
     return
   }
-  selectedBillId.value = selectedBillId.value === id ? '' : id
+  group.value = value
+  page.value = 1
+  void load()
 }
 
-async function loadPreview(): Promise<void> {
-  previewController?.abort()
-  const current = new AbortController()
-  previewController = current
-  previewLoading.value = true
-  previewError.value = ''
-  preview.value = null
-  try {
-    const response = await slhReconciliationBatchesApi.matchPreview({ billId: selectedBillId.value }, current.signal)
-    if (current.signal.aborted) {
-      return
-    }
-    preview.value = response.data
-  }
-  catch (failure) {
-    if (!current.signal.aborted) {
-      previewError.value = containerFailure(failure).message
-    }
-  }
-  finally {
-    if (previewController === current) {
-      previewLoading.value = false
-    }
-  }
-}
-
-async function nextStep(): Promise<void> {
-  if (selectedBillId.value === '' || locked.value) {
+function changePage(next: number): void {
+  if (next === page.value) {
     return
   }
-  step.value = 1
-  submitError.value = ''
-  idempotencyKey.value = crypto.randomUUID()
-  await loadPreview()
+  page.value = next
+  void load()
 }
 
-function previousStep(): void {
-  if (locked.value) {
-    return
-  }
-  step.value = 0
-  submitError.value = ''
+function selectBill(bill: SlhReconciliationBillOptionDto): void {
+  // 改选就把幂等键作废：这是另一张账单，不能复用上一个意图的键。
+  idempotencyKey = null
+  selected.value = toggleSlhBillSelection(selected.value, bill)
 }
 
-async function submit(): Promise<void> {
-  if (!summary.value.canStart || locked.value) {
+/** 确认＝创建批次：成功才交回调用方，失败留在弹窗里说明原因并刷新两组数据。 */
+async function confirm(): Promise<void> {
+  if (selected.value === null || !selected.value.selectable || submitting.value) {
     return
   }
+  idempotencyKey ??= crypto.randomUUID()
   submitting.value = true
   submitError.value = ''
   try {
     const response = await slhReconciliationBatchesApi.create(
-      buildSlhReconciliationBatchCreatePayload(selectedBillId.value, preview.value),
-      idempotencyKey.value,
+      { billId: selected.value.id, reconcilableLineIds: selected.value.reconcilableLineIds },
+      idempotencyKey,
       new AbortController().signal,
     )
+    idempotencyKey = null
     emit('created', response.data)
+    open.value = false
   }
   catch (failure) {
-    // 范围变化或占用冲突都要让用户重新看一眼，因此把预览一起刷新。
+    // 占用冲突、范围变化或取号失败都要让用户重新看一眼，因此把两组数据一起刷新。
     submitError.value = containerFailure(failure).message
-    await loadPreview()
+    selected.value = null
+    await load()
   }
   finally {
     submitting.value = false
   }
 }
 
-function close(): void {
-  emit('update:modelValue', false)
-}
-
-watch(() => props.modelValue, (open) => {
-  if (open) {
-    step.value = 0
-    selectedBillId.value = ''
-    keyword.value = ''
-    page.value = 1
-    preview.value = null
-    previewError.value = ''
-    submitError.value = ''
-    void loadBills()
-  }
-  else {
+/** 每次打开都从干净的第一页、可选分组开始取数；选中项保留，便于关掉再核对。 */
+watch(open, (value) => {
+  if (!value) {
     controller?.abort()
-    previewController?.abort()
+    return
   }
+  group.value = 'SELECTABLE'
+  keyword.value = ''
+  page.value = 1
+  void load()
 })
 onBeforeUnmount(() => {
   controller?.abort()
-  previewController?.abort()
 })
 </script>
 
 <template>
-  <QsGenericModal
-    :model-value="modelValue"
-    :title="t('slhReconciliation.selectModal.title')"
-    size="xl"
-    :loading="locked"
-    :submitting="submitting"
-    @update:model-value="emit('update:modelValue', $event)"
-  >
-    <div class="min-w-0 space-y-4">
-      <FaSteps :model-value="step" :steps="steps" :status="step === 1 && summary.canStart ? 'process' : 'process'" class="w-full" />
+  <QsGenericModal v-model="open" :title="t('slhReconciliation.billSelect.title')" size="lg" :submitting="submitting">
+    <div class="flex flex-col gap-3 min-w-0">
+      <div class="flex gap-2 items-center">
+        <FaInput
+          v-model="keyword"
+          class="flex-1"
+          clearable
+          :placeholder="t('slhReconciliation.billSelect.searchPlaceholder')"
+          @clear="search"
+          @keyup.enter="search"
+        />
+        <FaButton type="button" variant="outline" @click="search">
+          {{ t('slhReconciliation.billSelect.search') }}
+        </FaButton>
+      </div>
 
-      <template v-if="step === 0">
-        <QsGenericTable
-          v-model:page="page"
-          v-model:page-size="pageSize"
-          v-model:search="keyword"
-          row-key="id"
-          class="min-w-0"
-          :columns="billColumns"
-          :data="items"
-          :loading="loading"
-          :error="listError || undefined"
-          :total="total"
-          :addable="false"
-          :show-column-settings="false"
-          :action-column="billActionColumn"
-          :row-class="billRowClass"
-          :show-row-number="false"
-          :search-placeholder="t('slhBill.search')"
-          :empty-title="t('slhReconciliation.selectModal.emptyBills')"
-          :empty-description="t('slhReconciliation.selectModal.emptyBillsDescription')"
-          @search="searchBills"
-          @pagination-change="loadBills"
-          @retry="loadBills"
+      <QsStatusSwitchToolbar :model-value="group" :items="groupItems" :aria-label="t('slhReconciliation.billSelect.title')" @update:model-value="selectGroup" />
+
+      <!-- 创建失败留在弹窗里说明原因（占用冲突、范围变化、取号不可用等），不跳转也不关窗。 -->
+      <FaAlert v-if="submitError" variant="destructive" role="alert" :title="submitError" />
+
+      <!-- 取数期间给骨架卡片：弹窗与搜索框保持可见，不整窗闪。 -->
+      <div v-if="loading" role="status" :aria-label="t('slhReconciliation.billSelect.loading')" class="flex flex-col gap-2">
+        <div v-for="index in 3" :key="index" aria-hidden="true" class="rounded-lg bg-muted/40 h-20 animate-pulse" />
+      </div>
+      <div v-else-if="error" class="py-8 flex flex-col gap-3 items-center">
+        <FaEmpty icon="i-lucide:clipboard-check" :title="t('slhReconciliation.billSelect.loadFailed')" :description="error" />
+        <FaButton variant="outline" @click="load">
+          {{ t('slhBill.retry') }}
+        </FaButton>
+      </div>
+      <FaEmpty
+        v-else-if="emptyKind !== null"
+        :icon="emptyKind === 'keyword' ? 'i-lucide:file-search' : 'i-lucide:clipboard-check'"
+        :title="emptyTitle"
+        :description="emptyDescription"
+        class="py-10"
+      />
+      <template v-else>
+        <div
+          :role="group === 'SELECTABLE' ? 'radiogroup' : undefined"
+          :aria-label="group === 'SELECTABLE' ? t('slhReconciliation.billSelect.title') : undefined"
+          :inert="submitting || undefined"
+          class="flex flex-col gap-1.5"
         >
-          <template #cell-slhBillNo="{ row }">
-            <span class="qs-type-data-emphasis font-mono break-all">{{ row.original.slhBillNo }}</span>
-          </template>
-          <template #cell-reconciliationStatus="{ row }">
-            <SlhBillReconciliationStatusTag :status="row.original.reconciliationStatus" />
-          </template>
-          <!-- 名称是主信息，期间与行数退到次行（月份可由期间看出，不再重复占位）。 -->
-          <template #cell-billInfo="{ row }">
-            <QsTableStackedCell>
-              <QsTableStackedLine content-class="qs-type-body-medium">
-                <SlhBillOverflowText :text="row.original.billName" />
-              </QsTableStackedLine>
-              <QsTableStackedLine tone="muted">
-                {{ row.original.periodStart }} ~ {{ row.original.periodEnd }} · {{ t('slhReconciliation.selectModal.lineCountInline', { count: row.original.lineCount }) }}
-              </QsTableStackedLine>
-            </QsTableStackedCell>
-          </template>
-          <!-- 金额主值用折算净额（与账单列表同一口径），次行退到应付人民币，便于扫读规模。 -->
-          <template #cell-netAmount="{ row }">
-            <QsTableStackedCell>
-              <QsTableStackedLine content-class="qs-type-data-emphasis">
+          <!-- 可选＝单选项；不可选＝同款卡片但不可点，最后一行给出原因。 -->
+          <component
+            :is="bill.selectable ? 'button' : 'div'"
+            v-for="bill in items"
+            :key="bill.id"
+            :type="bill.selectable ? 'button' : undefined"
+            :role="bill.selectable ? 'radio' : undefined"
+            :aria-checked="bill.selectable ? selected?.id === bill.id : undefined"
+            :aria-disabled="bill.selectable ? undefined : 'true'"
+            class="px-3 py-1.5 text-left border rounded-lg flex flex-col gap-1 w-full transition-colors"
+            :class="bill.selectable
+              ? (selected?.id === bill.id ? 'border-primary border-l-2 bg-primary/5' : 'border-border hover:bg-muted/40')
+              : 'border-border bg-muted/20'"
+            @click="selectBill(bill)"
+          >
+            <span class="flex flex-wrap gap-2 min-w-0 w-full items-center">
+              <span class="qs-type-data-emphasis font-semibold shrink-0">{{ bill.slhBillNo }}</span>
+              <SlhBillReconciliationStatusTag :status="bill.reconciliationStatus" class="shrink-0" />
+              <span class="flex-1 min-w-0"><SlhBillOverflowText :text="bill.billName" content-class="qs-type-compact-title" /></span>
+              <span v-if="bill.selectable" class="qs-type-body-medium text-primary shrink-0 tabular-nums">
+                {{ t('slhReconciliation.billSelect.reconcilable', { count: bill.reconcilableLineCount }) }}
+              </span>
+              <AmountDisplay
+                :value="resolveSlhBillNetDisplay(bill).amount"
+                :currency="resolveSlhBillNetDisplay(bill).currency"
+                :currencies="currencyCatalog.currencies.value"
+                class="qs-type-data-emphasis shrink-0"
+              />
+              <FaIcon v-if="bill.selectable && selected?.id === bill.id" name="i-lucide:check" class="text-primary shrink-0" aria-hidden="true" />
+            </span>
+            <span class="qs-type-meta text-muted-foreground flex flex-wrap gap-x-2 w-full items-center tabular-nums">
+              <span>{{ bill.periodStart }} ~ {{ bill.periodEnd }} · {{ t('slhReconciliation.billSelect.lineCount', { count: bill.lineCount }) }} · {{ t('slhReconciliation.billSelect.containerCount', { count: bill.containerBatchCount }) }}</span>
+              <span class="flex gap-1 items-center">
+                {{ t('slhReconciliation.billSelect.payableLabel') }}
                 <AmountDisplay
-                  :value="resolveSlhBillNetDisplay(row.original).amount"
-                  :currency="resolveSlhBillNetDisplay(row.original).currency"
-                  :currencies="currencyCatalog.currencies.value"
-                />
-              </QsTableStackedLine>
-              <QsTableStackedLine tone="muted">
-                {{ t('slhReconciliation.selectModal.payableLabel') }}
-                <AmountDisplay
-                  class="ml-1"
-                  :value="row.original.payableTotalAmountCny"
+                  :value="bill.payableTotalAmountCny"
                   currency="CNY"
                   :currencies="currencyCatalog.currencies.value"
                 />
-              </QsTableStackedLine>
-            </QsTableStackedCell>
-          </template>
-          <!-- 选中态由「整行浅绿底 + 细绿边」与按钮共同表达；已选中的按钮再点一次即取消选择。 -->
-          <template #actions="{ row }">
-            <FaButton
-              v-if="row.id === selectedBillId"
-              type="button"
-              variant="outline"
-              size="sm"
-              class="min-h-11 sm:min-h-8"
-              :aria-label="t('slhReconciliation.selectModal.deselect')"
-              @click="selectBill(row.id)"
-            >
-              <FaIcon name="i-lucide:check" aria-hidden="true" />{{ t('slhReconciliation.selectModal.selected') }}
-            </FaButton>
-            <FaButton v-else type="button" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" @click="selectBill(row.id)">
-              <FaIcon name="i-lucide:circle-check-big" aria-hidden="true" />{{ t('slhReconciliation.selectModal.select') }}
-            </FaButton>
-          </template>
-        </QsGenericTable>
-      </template>
-
-      <template v-else>
-        <FaAlert v-if="previewError" variant="destructive" role="alert" :title="previewError" />
-        <SaSpin v-else-if="previewLoading" class="py-8" />
-        <template v-else-if="preview">
-          <!-- 结论条：两个数字是本步唯一的决策依据，先给它们主次分明的视觉权重，账单信息退到次行。 -->
-          <div class="flex flex-wrap gap-x-4 gap-y-2 items-center">
-            <span class="qs-type-data-emphasis text-primary">
-              {{ t('slhReconciliation.selectModal.canReconcile', { count: summary.matchedCount }) }}
+              </span>
             </span>
-            <FaTag variant="outline" class="text-amber-700 qs-type-status-tag border-amber-500/40 dark:text-amber-300">
-              {{ t('slhReconciliation.selectModal.cannotReconcile', { count: summary.unmatchedCount }) }}
-            </FaTag>
-            <span v-if="deliverable" class="qs-type-meta text-muted-foreground min-w-0 truncate">
-              {{ deliverable.slhBillNo }} · {{ deliverable.billName }}
+            <span v-if="!bill.selectable" class="qs-type-meta text-destructive w-full">
+              {{ blockReasonText(bill) }}
             </span>
-          </div>
-          <FaAlert v-if="!summary.canStart" variant="destructive" role="status" :title="t('slhReconciliation.selectModal.noMatch')" />
-          <!-- 单表分组：已匹配在前、未匹配在后，两组默认展开；「匹配结果」列在两组间承载依据或原因。 -->
-          <QsGenericTable
-            row-key="id"
-            table-class="min-w-full"
-            :columns="previewColumns"
-            :data="previewRows"
-            :grouping="previewGrouping"
-            :total="previewRows.length"
-            :searchable="false"
-            :addable="false"
-            :show-column-settings="false"
-            :show-pagination="false"
-            :empty-title="t('slhReconciliation.selectModal.noMatch')"
-          >
-            <template #group-header="{ row }">
-              <span class="qs-type-component-title" :class="row.group?.tone === 'unmatched' ? 'text-muted-foreground' : undefined">
-                {{ row.group?.label ?? '' }}
-              </span>
-            </template>
-            <!-- 品名与客户名是次要信息：外层限宽 + 内层截断，完整内容进浮层；否则长名字会把「匹配结果」挤出可视区。 -->
-            <template #cell-goodsName="{ row }">
-              <span v-if="row.original.line?.goodsName" class="max-w-[145px] block">
-                <SlhBillOverflowText :text="row.original.line.goodsName" content-class="qs-type-body" />
-              </span>
-            </template>
-            <template #cell-customerName="{ row }">
-              <span v-if="row.original.line?.recipientName" class="max-w-[140px] block">
-                <SlhBillOverflowText :text="row.original.line.recipientName" content-class="qs-type-body" />
-              </span>
-              <span v-else class="text-muted-foreground">{{ t('slhBill.valueMissing') }}</span>
-            </template>
-            <!-- 已匹配行给核对依据（柜次 + 柜次行号 + 来源），未匹配行给原因：共用一列，不必横向滚动找证据。 -->
-            <template #cell-matchResult="{ row }">
-              <QsTableStackedCell v-if="row.original.line?.matchedContainerBatchName">
-                <QsTableStackedLine content-class="qs-type-data">
-                  {{ row.original.line.matchedContainerBatchName }}
-                </QsTableStackedLine>
-                <QsTableStackedLine tone="muted">
-                  {{ t('slhReconciliation.selectModal.matchedLine') }} {{ row.original.line.matchedLoadingItemLineNumber }} · {{ matchedSourceLabel(row.original.line) }}
-                </QsTableStackedLine>
-              </QsTableStackedCell>
-              <FaTag v-else variant="outline" class="text-amber-700 qs-type-status-tag border-amber-500/40 dark:text-amber-300">
-                {{ row.original.line?.reason == null ? t('slhBill.valueMissing') : t(resolveSlhBillLineUnmatchedReasonLabelKey(row.original.line.reason)) }}
-              </FaTag>
-            </template>
-          </QsGenericTable>
-        </template>
-        <FaAlert v-if="submitError" variant="destructive" role="alert" :title="submitError" />
+          </component>
+        </div>
+        <FaPagination
+          v-if="total > 0"
+          :page="page"
+          :size="pageSize"
+          :total="total"
+          layout="total, prev, pager, next"
+          :text-templates="{ total: value => t('slhReconciliation.billSelect.totalBills', { count: value }) }"
+          @update:page="changePage($event)"
+        />
       </template>
     </div>
+
     <template #footer>
-      <div class="flex flex-col gap-2 w-full sm:flex-row sm:items-center" :class="step === 0 ? '' : 'sm:justify-end'">
-        <!-- 把「下一步为什么禁用」写成文字，而不是只把按钮灰掉。 -->
-        <p v-if="step === 0" class="qs-type-meta text-muted-foreground m-0 flex-1 min-w-0 truncate">
-          {{ footerHint }}
-        </p>
-        <div class="flex flex-col gap-2 w-full sm:flex-row sm:w-auto">
-          <FaButton v-if="step === 0" type="button" variant="outline" class="w-full sm:w-auto" :disabled="locked" @click="close">
-            {{ t('slhBill.cancel') }}
-          </FaButton>
-          <FaButton v-else type="button" variant="outline" class="w-full sm:w-auto" :disabled="locked" @click="previousStep">
-            {{ t('slhReconciliation.selectModal.back') }}
-          </FaButton>
-          <FaButton
-            v-if="step === 0"
-            type="button"
-            class="w-full sm:w-auto"
-            :disabled="selectedBillId === '' || locked"
-            @click="nextStep"
-          >
-            {{ t('slhReconciliation.selectModal.next') }}
-          </FaButton>
-          <FaButton
-            v-else
-            type="button"
-            class="w-full sm:w-auto"
-            :loading="submitting"
-            :disabled="!summary.canStart || locked"
-            @click="submit"
-          >
-            {{ t('slhReconciliation.selectModal.start') }}
-          </FaButton>
-        </div>
+      <div class="flex flex-col gap-2 w-full sm:flex-row sm:items-center">
+        <span class="qs-type-description text-muted-foreground truncate">
+          {{ selected === null
+            ? t('slhReconciliation.billSelect.selectHint')
+            : t('slhReconciliation.billSelect.selectedHint', { billNo: selected.slhBillNo }) }}
+        </span>
+        <div class="flex-1" />
+        <FaButton type="button" variant="outline" class="w-full sm:w-auto" :disabled="submitting" @click="open = false">
+          {{ t('slhBill.cancel') }}
+        </FaButton>
+        <FaButton type="button" class="w-full sm:w-auto" :loading="submitting" :disabled="selected === null || submitting" @click="confirm">
+          {{ t('slhReconciliation.billSelect.confirm') }}
+        </FaButton>
       </div>
     </template>
   </QsGenericModal>

@@ -7,13 +7,14 @@ import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
 import { SlhBillPageDto } from '../slh-bills/slh-bill.dto'
-import { SlhReconciliationBatchQueryService } from './slh-reconciliation-batch-query.service'
-import { SlhReconciliationBatchService } from './slh-reconciliation-batch.service'
 import {
   SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchCreateDto, SlhReconciliationBatchDetailDto,
   SlhReconciliationBatchIdDto, SlhReconciliationBatchListQueryDto, SlhReconciliationBatchPageDto,
-  SlhReconciliationBatchPreviewDto, SlhReconciliationBatchPreviewRequestDto, SlhReconciliationBatchReconcileDto,
+  SlhReconciliationBillOptionPageDto, SlhReconciliationBillOptionQueryDto,
+  SlhReconciliationReconcilableCountsDto, SlhReconciliationReconcilableCountsRequestDto,
 } from './slh-reconciliation-batch.dto'
+import { SlhReconciliationBatchQueryService } from './slh-reconciliation-batch-query.service'
+import { SlhReconciliationBatchService } from './slh-reconciliation-batch.service'
 
 function contract(operationId: string, mutation = false, errors: ApiContractErrorOptions[] = []) {
   return ApiApplicationContract({ operationId, session: 'required', authorization: true, csrf: mutation, badRequest: true, validation: true, privateNoStore: true,
@@ -27,6 +28,8 @@ const writeErrors: ApiContractErrorOptions[] = [
     'SLH_RECON_BATCH_NUMBERING_UNAVAILABLE', 'SLH_RECON_BATCH_IDEMPOTENCY_CONFLICT',
   ] },
 ]
+
+/** 对账批次接口：列表、候选/可选账单、静默算可核对行数、详情、创建与完成都已接上实现。 */
 function context(request: object) {
   return { actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) }
 }
@@ -46,9 +49,13 @@ export class SlhReconciliationBatchController {
   @Get('candidates') @RequirePermissions('slh-bills:reconcile') @ApiContractResponse({ status: 200, type: SlhBillPageDto }) @contract('slh_reconciliation_batch_candidates')
   candidates(@Query() query: SlhReconciliationBatchCandidateQueryDto) { return this.queries.candidates(query) }
 
-  @Post('match-preview') @HttpCode(200) @RequirePermissions('slh-bills:reconcile')
-  @ApiContractResponse({ status: 200, type: SlhReconciliationBatchPreviewDto }) @contract('slh_reconciliation_batch_match_preview', true, [notFound])
-  preview(@Body() input: SlhReconciliationBatchPreviewRequestDto) { return this.queries.preview(input.billId) }
+  @Get('selectable-bills') @RequirePermissions('slh-bills:reconcile') @ApiContractResponse({ status: 200, type: SlhReconciliationBillOptionPageDto }) @contract('slh_reconciliation_bill_options')
+  selectableBills(@Query() query: SlhReconciliationBillOptionQueryDto) { return this.queries.selectableBills(query) }
+
+  // 批量算「当前可核对」是纯读，但用 POST 传账单标识：不进 URL，也就不进日志与历史记录。
+  @Post('reconcilable-counts') @HttpCode(200) @RequirePermissions('slh-bills:reconcile')
+  @ApiContractResponse({ status: 200, type: SlhReconciliationReconcilableCountsDto }) @contract('slh_reconciliation_reconcilable_counts', true)
+  reconcilableCounts(@Body() input: SlhReconciliationReconcilableCountsRequestDto) { return this.queries.reconcilableCounts(input) }
 
   @Post() @HttpCode(201) @RequirePermissions('slh-bills:reconcile') @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } })
   @ApiContractResponse({ status: 201, type: SlhReconciliationBatchDetailDto }) @contract('slh_reconciliation_batches_create', true, [notFound, ...writeErrors])
@@ -58,12 +65,6 @@ export class SlhReconciliationBatchController {
 
   @Get(':id') @RequirePermissions('slh-bills:reconcile') @ApiContractResponse({ status: 200, type: SlhReconciliationBatchDetailDto }) @contract('slh_reconciliation_batches_get', false, [notFound])
   detail(@Param() params: SlhReconciliationBatchIdDto) { return this.queries.detail(params.id) }
-
-  @Post(':id/reconcile') @HttpCode(200) @RequirePermissions('slh-bills:reconcile')
-  @ApiContractResponse({ status: 200, type: SlhReconciliationBatchDetailDto }) @contract('slh_reconciliation_batch_reconcile', true, [notFound, ...writeErrors])
-  reconcile(@Param() params: SlhReconciliationBatchIdDto, @Body() input: SlhReconciliationBatchReconcileDto, @Req() request: object) {
-    return this.commands.reconcile(context(request), params.id, input)
-  }
 
   @Post(':id/complete') @HttpCode(200) @RequirePermissions('slh-bills:reconcile')
   @ApiContractResponse({ status: 200, type: SlhReconciliationBatchDetailDto }) @contract('slh_reconciliation_batch_complete', true, [notFound, ...writeErrors])

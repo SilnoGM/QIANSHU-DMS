@@ -17,7 +17,7 @@ import {
   SLH_RECONCILIATION_BATCH_DEFAULT_FILTER,
   SLH_RECONCILIATION_BATCH_FILTERS,
 } from './list.logic'
-import SlhReconciliationBatchSelectModal from './slh-bill-select-modal.vue'
+import SlhBillSelectModal from './slh-bill-select-modal.vue'
 import { resolveSlhReconciliationBatchLabelKey, resolveSlhReconciliationBatchTone } from './status.logic'
 
 defineOptions({ name: 'QsFinanceBillReconciliationSlhBillReconciliation' })
@@ -36,7 +36,7 @@ const items = shallowRef<SlhReconciliationBatchListItemDto[]>([])
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
-const createOpen = ref(false)
+const billSelectOpen = ref(false)
 let controller: AbortController | null = null
 
 const statusItems = computed(() => SLH_RECONCILIATION_BATCH_FILTERS.map(value => ({ value, label: t(`slhReconciliation.filter.${value}`) })))
@@ -57,7 +57,9 @@ const columns = computed<QsGenericTableColumn<SlhReconciliationBatchListItemDto>
   { id: 'progress', title: t('slhReconciliation.column.progress'), accessorFn: item => `${item.reconciledMemberCount}/${item.memberCount}`, minWidth: 130, align: 'right' },
   { id: 'billRemaining', title: t('slhReconciliation.column.billRemaining'), accessorFn: item => String(item.bill.lineCount - item.bill.reconciledLineCount), minWidth: 150, align: 'right' },
   { id: 'billStatus', title: t('slhBill.column.reconciliationStatus'), accessorFn: item => item.bill.reconciliationStatus, minWidth: 140 },
-  { id: 'created', title: t('slhBill.column.createdAt'), accessorFn: item => item.createdAt, minWidth: 220 },
+  // 创建人与创建时间分两列：原先叠在一个「创建时间」列里，扫读时要二次分辨。
+  { id: 'createdBy', title: t('slhBill.column.created'), accessorFn: item => item.createdByDisplayName, minWidth: 140 },
+  { id: 'created', title: t('slhBill.column.createdAt'), accessorFn: item => item.createdAt, minWidth: 190 },
 ])
 /** 操作列只有「查看详情」一个按钮：宽度按按钮 100 + 左右内边距 24 估算。 */
 const actionColumn = { fixed: 'right' as const, width: 128, minWidth: 128 }
@@ -110,10 +112,9 @@ function viewBatch(id: string): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhReconciliationDetail', params: { id } })
 }
 
-/** 创建成功后直接进详情页：本次对账的作业面就是这一页。 */
-function enterCreatedBatch(batch: SlhReconciliationBatchDetailDto): void {
-  createOpen.value = false
-  toast.success(t('slhReconciliation.created', { batchNo: batch.batchNo }))
+/** 批次创建成功：提示编号并进入本次对账的作业面（详情页）。 */
+function handleBatchCreated(batch: SlhReconciliationBatchDetailDto): void {
+  toast.success(t('slhReconciliation.billSelect.createdToast', { batchNo: batch.batchNo }))
   viewBatch(batch.id)
 }
 
@@ -128,8 +129,8 @@ onBeforeUnmount(() => {
 <template>
   <div class="min-w-0">
     <FaPageHeader :title="t('workbench.slhBillReconciliation')" :description="t('slhReconciliation.intro')">
-      <FaButton v-if="canReconcile" @click="createOpen = true">
-        <FaIcon name="i-lucide:plus" aria-hidden="true" />{{ t('slhReconciliation.create') }}
+      <FaButton v-if="canReconcile" @click="billSelectOpen = true">
+        <FaIcon name="i-lucide:plus" aria-hidden="true" />{{ t('slhReconciliation.billSelect.createButton') }}
       </FaButton>
     </FaPageHeader>
     <FaPageMain v-if="!canReconcile">
@@ -152,7 +153,6 @@ onBeforeUnmount(() => {
         :search-placeholder="t('slhReconciliation.search')"
         :page-size-options="[20, 50, 100]"
         :empty-title="t('slhReconciliation.empty')"
-        :empty-description="t('slhReconciliation.emptyDescription')"
         :action-column="actionColumn"
         @search="search"
         @pagination-change="load"
@@ -185,13 +185,13 @@ onBeforeUnmount(() => {
         <template #cell-billStatus="{ row }">
           <SlhBillReconciliationStatusTag :status="row.original.bill.reconciliationStatus" />
         </template>
+        <template #cell-createdBy="{ row }">
+          <QsPersonDisplay :display-name="row.original.createdByDisplayName" size="sm" />
+        </template>
         <template #cell-created="{ row }">
-          <QsTableStackedCell>
-            <QsPersonDisplay :display-name="row.original.createdByDisplayName" size="sm" />
-            <QsTableStackedLine tone="muted">
-              <DateTimeDisplay :value="row.original.createdAt" />
-            </QsTableStackedLine>
-          </QsTableStackedCell>
+          <span class="qs-type-data whitespace-nowrap">
+            <DateTimeDisplay :value="row.original.createdAt" />
+          </span>
         </template>
         <template #actions="{ row }">
           <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" @click="viewBatch(row.id)">
@@ -200,6 +200,6 @@ onBeforeUnmount(() => {
         </template>
       </QsGenericTable>
     </FaPageMain>
-    <SlhReconciliationBatchSelectModal v-if="canReconcile" v-model="createOpen" @created="enterCreatedBatch" />
+    <SlhBillSelectModal v-if="canReconcile" v-model="billSelectOpen" @created="handleBatchCreated" />
   </div>
 </template>
