@@ -1,10 +1,11 @@
-import type { SlhReconciliationBatchListItemDto } from '@/api/generated/types.gen'
+import type { SlhBillLineUnmatchedReasonCountDto, SlhReconciliationBatchListItemDto } from '@/api/generated/types.gen'
 
 /**
- * 批次状态的「取值 → 文案/颜色」映射（前端唯一一处）。
- * 取值以契约为准（生成类型）；匹配来源与不合格原因的映射随创建弹窗一并移除。
+ * 批次状态与匹配原因的「取值 → 文案/颜色」映射（前端唯一一处）。
+ * 取值全部以契约为准（生成类型）：批次自身状态、以及「这一行为什么不能核对」。
  */
 export type SlhReconciliationBatchStatus = SlhReconciliationBatchListItemDto['status']
+export type SlhBillLineUnmatchedReason = SlhBillLineUnmatchedReasonCountDto['code']
 
 /** 进行中用主色（还在作业中），已完成用绿色（收口）。与对账状态标签同款 outline 变体，不铺底色。 */
 const BATCH_STATUS_TONES: Readonly<Record<SlhReconciliationBatchStatus, string>> = {
@@ -18,4 +19,9 @@ export function resolveSlhReconciliationBatchTone(status: SlhReconciliationBatch
 
 export function resolveSlhReconciliationBatchLabelKey(status: SlhReconciliationBatchStatus): string {
   return `slhReconciliation.batchStatus.${status}`
+}
+
+/** 不合格原因：与账单行的匹配规则一一对应（见 slh-bill-line-matching），前端只做取值到文案键的映射。 */
+export function resolveSlhBillLineUnmatchedReasonLabelKey(reason: SlhBillLineUnmatchedReason): string {
+  return `slhReconciliation.unmatchedReason.${reason}`
 }

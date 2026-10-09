@@ -1767,6 +1767,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-marks-cell.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-payment-statement-action.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/detail.vue",
       "packages/components/src/pro/code/index.vue"
     ]
   },

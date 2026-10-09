@@ -69,6 +69,7 @@
       "slhBillNo": "账单编号",
       "period": "账单期间",
       "lineCount": "明细行数",
+      "reconcilableLineCount": "当前可核对",
       "containerBatchCount": "柜号数",
       "payableTotalAmountCny": "合计应付人民币",
       "codTotalAmountTwd": "代收货款台币",
@@ -288,6 +289,18 @@
       "IN_PROGRESS": "进行中",
       "COMPLETED": "已完成"
     },
+    "unmatchedReason": {
+      "MISSING_CONTAINER_REFERENCE": "缺少柜号，唛头也推不出月日",
+      "INVALID_CONTAINER_NAME": "柜号无法解析出月日",
+      "CONTAINER_NOT_FOUND": "没有对应装柜日期的柜次",
+      "CONTAINER_AMBIGUOUS": "命中多个柜次，无法确定",
+      "MISSING_SHIPPING_MARK": "账单行缺少唛头",
+      "MARK_NOT_FOUND_IN_CONTAINER": "柜次内没有同唛头的行",
+      "LOADING_ITEM_AMBIGUOUS": "柜次内同唛头行重复",
+      "SHIPMENT_NOT_MATCHED": "柜次行未匹配货件",
+      "PURCHASE_SOURCE_MISSING": "货件缺少采购来源",
+      "SALES_SOURCE_MISSING": "货件缺少销售来源"
+    },
     "billSelect": {
       "createButton": "新建对账批次",
       "title": "选择对账账单",
@@ -296,7 +309,7 @@
       "loading": "正在加载候选账单",
       "loadFailed": "账单加载失败",
       "empty": "没有可对账的账单",
-      "emptyHint": "只有生效中、未对账或部分对账，且没有进行中批次的账单可以发起对账",
+      "emptyHint": "只有当账单当前有可核对的行、且没有进行中的批次时才能发起对账",
       "emptyKeyword": "没有匹配「{keyword}」的账单",
       "emptyKeywordHint": "换一个账单编号、名称或柜号试试",
       "totalBills": "共 {count} 张账单",
@@ -305,6 +318,15 @@
       "payableLabel": "应付",
       "selectHint": "请先选择一张账单",
       "selectedHint": "已选择：{billNo}",
+      "groupSelectable": "可选",
+      "groupBlocked": "不可选",
+      "reconcilable": "可核对 {count} 行",
+      "reasonMore": "等 {count} 类",
+      "blockInProgress": "正在对账中，请先结束当前批次",
+      "blockNoUnreconciled": "没有未对账的明细行",
+      "blockNoReconcilable": "没有可核对的行：",
+      "emptyBlocked": "没有被挡住的账单",
+      "emptyBlockedHint": "当前生效中的账单都可以发起对账",
       "confirm": "确认选择",
       "createdToast": "已创建对账批次 {batchNo}"
     },
@@ -313,7 +335,12 @@
       "completeTitle": "完成批次对账？",
       "completeHint": "完成后本批次不能再继续核对，账单会重新回到可发起对账的状态。",
       "completeConfirm": "确认完成",
-      "completedToast": "已完成本次对账"
+      "completedToast": "已完成本次对账",
+      "membersTitle": "已冻结明细行（{count}）",
+      "membersEmpty": "本批次没有冻结任何明细行。",
+      "membersCopy": "复制成员清单",
+      "membersCopied": "已复制成员清单",
+      "membersCopyFailed": "复制失败，请手动选择文本复制"
     }
   }
 }

@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 // eslint-disable-next-line test/no-import-node-test -- 校验真实列表页的筛选栏结构。
 import test from 'node:test'
+import en from '../../src/locales/lang/workbench/en.json'
+import zhCn from '../../src/locales/lang/workbench/zh-cn.json'
+import zhTw from '../../src/locales/lang/workbench/zh-tw.json'
 import {
   buildSlhBillListQuery,
   buildSlhBillStatusCountsQuery,
@@ -152,4 +155,37 @@ test('进入详情只剩操作列的查看详情按钮，整行点击不再跳�
   // 按钮文案与无障碍名都用「查看详情」，旧的「查看」不再出现。
   assert.equal(source.match(/slhBill\.viewDetail/gu)?.length, 2)
   assert.equal(source.includes(`t('slhBill.view')`), false)
+})
+
+test('「当前可核对」列紧跟在明细行数之后，右对齐', async () => {
+  const source = await readPageSource()
+  const lineCountAt = source.indexOf(`{ id: 'lineCount'`)
+  const reconcilableAt = source.indexOf(`{ id: 'reconcilable'`)
+  const containerAt = source.indexOf(`{ id: 'containerBatchCount'`)
+  assert.ok(lineCountAt > 0 && reconcilableAt > lineCountAt && containerAt > reconcilableAt, '「当前可核对」要在明细行数与柜号数之间')
+  assert.match(source, /\{ id: 'reconcilable', title: t\('slhBill\.column\.reconcilableLineCount'\)[\s\S]{0,140}align: 'right' \}/u)
+  // 三语都要有这一列的标题。
+  for (const messages of [zhCn, zhTw, en]) {
+    assert.equal(typeof messages.slhBill.column.reconcilableLineCount, 'string')
+    assert.notEqual(messages.slhBill.column.reconcilableLineCount.trim(), '')
+  }
+})
+
+test('静默算只算当前页：进页面/翻页/筛选后按当页账单批量算一次，失败不打断列表', async () => {
+  const source = await readPageSource()
+  // 列表拿到当页数据就把这一页交给静默算；翻页与改筛选都走同一条 load()。
+  assert.match(source, /void loadReconcilableCounts\(response\.data\.items\.map\(item => item\.id\)\)/u)
+  assert.match(source, /slhReconciliationBatchesApi\.reconcilableCounts\(\{ billIds \}, current\.signal\)/u)
+  // 快照按账单主键存，每次先清空：旧页的数字绝不停留在新页上。
+  assert.match(source, /reconcilableCounts\.value = new Map\(\)/u)
+  assert.match(source, /reconcilableCounts\.value = new Map\(response\.data\.items\.map\(item => \[item\.billId, item\.reconcilableLineCount\]\)\)/u)
+  // 静默：失败只留占位符，不写页面错误、不弹提示。
+  assert.match(source, /catch \{[\s\S]{0,160}静默算/u)
+  // 页面卸载要收掉自己那条请求。
+  assert.match(source, /onBeforeUnmount\(\(\) => \{[\s\S]{0,120}reconcilableController\?\.abort\(\)/u)
+  // 未知与 0 要分得开：没算出来显示占位符，不显示 0。
+  assert.match(source, /reconcilableCounts\.get\(row\.original\.id\) !== undefined/u)
+  assert.match(source, /text-muted-foreground">—</u)
+  // 可核对 > 0 才用主色强调。
+  assert.match(source, /reconcilableCounts\.get\(row\.original\.id\)! > 0 && 'text-primary font-semibold'/u)
 })

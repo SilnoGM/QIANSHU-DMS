@@ -60,6 +60,7 @@
       "slhBillNo": "Bill number",
       "period": "Period",
       "lineCount": "Lines",
+      "reconcilableLineCount": "Reconcilable now",
       "containerBatchCount": "Containers",
       "payableTotalAmountCny": "Total payable (CNY)",
       "codTotalAmountTwd": "COD total (TWD)",
@@ -279,6 +280,18 @@
       "IN_PROGRESS": "In progress",
       "COMPLETED": "Completed"
     },
+    "unmatchedReason": {
+      "MISSING_CONTAINER_REFERENCE": "No container reference, and the shipping mark carries no cycle",
+      "INVALID_CONTAINER_NAME": "Container reference has no readable cycle",
+      "CONTAINER_NOT_FOUND": "No container batch on that loading date",
+      "CONTAINER_AMBIGUOUS": "Matches more than one container batch",
+      "MISSING_SHIPPING_MARK": "Bill line has no shipping mark",
+      "MARK_NOT_FOUND_IN_CONTAINER": "No row with this shipping mark inside the container",
+      "LOADING_ITEM_AMBIGUOUS": "Duplicate shipping mark inside the container",
+      "SHIPMENT_NOT_MATCHED": "Container row has no shipment",
+      "PURCHASE_SOURCE_MISSING": "Shipment has no purchase source",
+      "SALES_SOURCE_MISSING": "Shipment has no sales source"
+    },
     "billSelect": {
       "createButton": "New reconciliation batch",
       "title": "Select a bill to reconcile",
@@ -287,7 +300,7 @@
       "loading": "Loading candidate bills",
       "loadFailed": "Failed to load bills",
       "empty": "No bill can be reconciled",
-      "emptyHint": "Only active bills that still have unreconciled lines and no batch in progress can be reconciled",
+      "emptyHint": "A bill can start a reconciliation only when it currently has reconcilable lines and no batch in progress",
       "emptyKeyword": "No bill matches \"{keyword}\"",
       "emptyKeywordHint": "Try another bill number, name or container",
       "totalBills": "{count} bills",
@@ -296,6 +309,15 @@
       "payableLabel": "Payable",
       "selectHint": "Select a bill to continue",
       "selectedHint": "Selected: {billNo}",
+      "groupSelectable": "Selectable",
+      "groupBlocked": "Not selectable",
+      "reconcilable": "{count} lines reconcilable",
+      "reasonMore": "+{count} more",
+      "blockInProgress": "A batch is in progress; complete it first",
+      "blockNoUnreconciled": "No unreconciled line",
+      "blockNoReconcilable": "No reconcilable line: ",
+      "emptyBlocked": "No blocked bill",
+      "emptyBlockedHint": "Every active bill can start a reconciliation right now",
       "confirm": "Confirm selection",
       "createdToast": "Reconciliation batch {batchNo} created"
     },
@@ -304,7 +326,12 @@
       "completeTitle": "Complete this batch?",
       "completeHint": "After completing, this batch can no longer be reconciled and the bill becomes available again.",
       "completeConfirm": "Complete",
-      "completedToast": "Reconciliation completed"
+      "completedToast": "Reconciliation completed",
+      "membersTitle": "Frozen lines ({count})",
+      "membersEmpty": "This batch froze no lines.",
+      "membersCopy": "Copy member list",
+      "membersCopied": "Member list copied",
+      "membersCopyFailed": "Copy failed, select the text manually"
     }
   }
 }

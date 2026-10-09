@@ -4,6 +4,7 @@ import type { SlhBillListState, SlhBillReconciliationFilter } from './list.logic
 import type { SlhBillListItemDto, SlhBillStatusCountsDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import slhBillsApi from '@/api/modules/slh-bills'
+import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
@@ -39,6 +40,8 @@ const accountStore = useAppAccountStore()
 const currencyCatalog = useCurrencyCatalog()
 const toast = useQsToast()
 const canRead = computed(() => auth('slh-bills:read'))
+/** 可核对行数只在能发起对账时才有意义，没权限就不发注定被拒的请求，列上留占位符。 */
+const canReconcile = computed(() => canRead.value && auth('slh-bills:reconcile'))
 const canImport = computed(() => canRead.value && auth('slh-bills:create'))
 const state = ref<SlhBillListState>('active')
 // 进页面默认停在未对账：财务打开账单管理时最先要处理的就是这批。
@@ -53,8 +56,14 @@ const total = ref(0)
 const counts = shallowRef<SlhBillStatusCountsDto | null>(null)
 const loading = ref(false)
 const error = ref('')
+/**
+ * 「当前可核对」只覆盖当前页：进页面、翻页、改筛选后按当页账单批量算一次，
+ * 结果按账单主键存，数值随列表一起被替换，不跨页复用。
+ */
+const reconcilableCounts = shallowRef<Map<string, number>>(new Map())
 let controller: AbortController | null = null
 let countsController: AbortController | null = null
+let reconcilableController: AbortController | null = null
 const stateItems = computed(() => withStatusSwitchCounts(
   SLH_BILL_LIST_STATES.map(value => ({ value, label: t(`slhBill.state.${value}`) })),
   (counts.value?.states ?? []).map(item => ({ value: item.value, count: item.count })),
@@ -85,6 +94,8 @@ const columns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
   // 对账状态由服务端按明细行汇总派生，与详情页明细行上的状态同源；紧跟账单期间，便于一眼看进度。
   { id: 'reconciliationStatus', title: t('slhBill.column.reconciliationStatus'), accessorKey: 'reconciliationStatus', minWidth: 140 },
   { id: 'lineCount', title: t('slhBill.column.lineCount'), accessorKey: 'lineCount', minWidth: 110, align: 'right' },
+  // 当前可核对紧跟明细行数：两个数字放一起，才能看出「还有多少行等着核对」。
+  { id: 'reconcilable', title: t('slhBill.column.reconcilableLineCount'), accessorFn: item => reconcilableCounts.value.get(item.id), minWidth: 130, align: 'right' },
   { id: 'containerBatchCount', title: t('slhBill.column.containerBatchCount'), accessorKey: 'containerBatchCount', minWidth: 110, align: 'right' },
   // 金额三列按用户要求加宽：金额是核对时的主要对象，列太窄会挤在一起不好扫读。
   { id: 'payable', title: t('slhBill.column.payableTotalAmountCny'), accessorKey: 'payableTotalAmountCny', minWidth: 195, align: 'right' },
@@ -106,6 +117,7 @@ async function load(): Promise<void> {
   if (!canRead.value) {
     items.value = []
     total.value = 0
+    void loadReconcilableCounts([])
     return
   }
   const current = new AbortController()
@@ -119,12 +131,14 @@ async function load(): Promise<void> {
     }
     items.value = response.data.items
     total.value = response.data.total
+    void loadReconcilableCounts(response.data.items.map(item => item.id))
   }
   catch (failure) {
     if (!current.signal.aborted) {
       items.value = []
       total.value = 0
       error.value = containerFailure(failure).message
+      void loadReconcilableCounts([])
     }
   }
   finally {
@@ -183,6 +197,37 @@ async function loadCounts(): Promise<void> {
     }
   }
 }
+/**
+ * 静默算当前页每张账单可核对的明细行数。
+ *
+ * 与列表解耦：自己一条控制器、独立失败（失败就留占位符，不提示也不影响列表），
+ * 但结果必须跟着列表走——每次先把快照清空，旧页的数字绝不停留在新页上。
+ */
+async function loadReconcilableCounts(billIds: string[]): Promise<void> {
+  reconcilableController?.abort()
+  if (!canReconcile.value || billIds.length === 0) {
+    reconcilableCounts.value = new Map()
+    return
+  }
+  const current = new AbortController()
+  reconcilableController = current
+  reconcilableCounts.value = new Map()
+  try {
+    const response = await slhReconciliationBatchesApi.reconcilableCounts({ billIds }, current.signal)
+    if (current.signal.aborted || !canReconcile.value) {
+      return
+    }
+    reconcilableCounts.value = new Map(response.data.items.map(item => [item.billId, item.reconcilableLineCount]))
+  }
+  catch {
+    // 静默算：取不到就不显示数字，让「当前可核对」留占位符。
+  }
+  finally {
+    if (reconcilableController === current) {
+      reconcilableController = null
+    }
+  }
+}
 function viewBill(id: string): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhBillDetail', params: { id } })
 }
@@ -198,11 +243,13 @@ watch(() => [canRead.value, accountStore.authEpoch], () => {
   total.value = 0
   counts.value = null
   error.value = ''
+  void loadReconcilableCounts([])
   refresh()
 }, { immediate: true })
 onBeforeUnmount(() => {
   controller?.abort()
   countsController?.abort()
+  reconcilableController?.abort()
 })
 </script>
 
@@ -270,6 +317,15 @@ onBeforeUnmount(() => {
         <template #cell-period="{ row }">
           <span class="qs-type-data whitespace-nowrap">{{ row.original.periodStart }} ~ {{ row.original.periodEnd }}</span>
         </template>
+        <template #cell-reconcilable="{ row }">
+          <!-- 静默算还没回来（或算不出来）时给占位符：不显示 0，避免把「未知」读成「没有」。 -->
+          <span
+            v-if="reconcilableCounts.get(row.original.id) !== undefined"
+            class="qs-type-data tabular-nums"
+            :class="reconcilableCounts.get(row.original.id)! > 0 && 'text-primary font-semibold'"
+          >{{ reconcilableCounts.get(row.original.id) }}</span>
+          <span v-else class="qs-type-data text-muted-foreground">—</span>
+        </template>
         <template #cell-containerBatchCount="{ row }">
           <!-- 悬停整格即出柜号清单：不再单独放图标，数量本身仍留在列里。 -->
           <FaTooltip v-if="row.original.containerBatchNames.length > 0">
@@ -336,6 +392,14 @@ onBeforeUnmount(() => {
                   {{ t('slhBill.column.lineCount') }}
                 </dt><dd class="qs-type-data m-0">
                   {{ row.lineCount }}
+                </dd>
+              </div>
+              <div>
+                <dt class="qs-type-meta text-muted-foreground">
+                  {{ t('slhBill.column.reconcilableLineCount') }}
+                </dt>
+                <dd class="qs-type-data m-0">
+                  {{ reconcilableCounts.get(row.id) ?? '—' }}
                 </dd>
               </div>
               <div>
