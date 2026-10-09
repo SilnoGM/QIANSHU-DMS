@@ -276,6 +276,27 @@
     "batchStatus": {
       "IN_PROGRESS": "In progress",
       "COMPLETED": "Completed"
+    },
+    "billSelect": {
+      "createButton": "New reconciliation batch",
+      "title": "Select a bill to reconcile",
+      "searchPlaceholder": "Search bill number, name or container",
+      "search": "Search",
+      "loading": "Loading candidate bills",
+      "loadFailed": "Failed to load bills",
+      "empty": "No bill can be reconciled",
+      "emptyHint": "Only active bills that still have unreconciled lines and no batch in progress can be reconciled",
+      "emptyKeyword": "No bill matches \"{keyword}\"",
+      "emptyKeywordHint": "Try another bill number, name or container",
+      "totalBills": "{count} bills",
+      "lineCount": "{count} lines",
+      "containerCount": "{count} containers",
+      "createdLabel": "Created",
+      "payableLabel": "Payable",
+      "selectHint": "Select a bill to continue",
+      "selectedHint": "Selected: {billNo}",
+      "confirm": "Confirm selection",
+      "selectedToast": "Bill {billNo} selected; the detail page is still being rebuilt"
     }
   }
 }

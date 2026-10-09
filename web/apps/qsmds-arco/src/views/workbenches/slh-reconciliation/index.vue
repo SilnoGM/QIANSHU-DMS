@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { SlhReconciliationBatchFilter } from './list.logic'
-import type { SlhReconciliationBatchListItemDto } from '@/api/generated/types.gen'
+import type { SlhBillListItemDto, SlhReconciliationBatchListItemDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
@@ -16,6 +17,7 @@ import {
   SLH_RECONCILIATION_BATCH_DEFAULT_FILTER,
   SLH_RECONCILIATION_BATCH_FILTERS,
 } from './list.logic'
+import SlhBillSelectModal from './slh-bill-select-modal.vue'
 import { resolveSlhReconciliationBatchLabelKey, resolveSlhReconciliationBatchTone } from './status.logic'
 
 defineOptions({ name: 'QsFinanceBillReconciliationSlhBillReconciliation' })
@@ -23,6 +25,7 @@ const { t } = useI18n()
 const router = useRouter()
 const { auth } = useAppAuth()
 const accountStore = useAppAccountStore()
+const toast = useQsToast()
 const canReconcile = computed(() => auth('slh-bills:reconcile'))
 // 进页面先看进行中的对账：那是还没收工的活。
 const status = ref<SlhReconciliationBatchFilter>(SLH_RECONCILIATION_BATCH_DEFAULT_FILTER)
@@ -33,6 +36,9 @@ const items = shallowRef<SlhReconciliationBatchListItemDto[]>([])
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
+/** 弹窗确认后的暂存选择：详情页尚未重构，本次只记录、不跳转。 */
+const selectedBill = shallowRef<SlhBillListItemDto | null>(null)
+const billSelectOpen = ref(false)
 let controller: AbortController | null = null
 
 const statusItems = computed(() => SLH_RECONCILIATION_BATCH_FILTERS.map(value => ({ value, label: t(`slhReconciliation.filter.${value}`) })))
@@ -106,6 +112,12 @@ function viewBatch(id: string): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhReconciliationDetail', params: { id } })
 }
 
+/** 详情页尚未重构：本次只记录选择，不跳转。 */
+function confirmBillSelection(bill: SlhBillListItemDto): void {
+  selectedBill.value = bill
+  toast.success(t('slhReconciliation.billSelect.selectedToast', { billNo: bill.slhBillNo }))
+}
+
 watch([canReconcile, () => accountStore.authEpoch], () => {
   void load()
 }, { immediate: true })
@@ -116,7 +128,14 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="min-w-0">
-    <FaPageHeader :title="t('workbench.slhBillReconciliation')" />
+    <FaPageHeader :title="t('workbench.slhBillReconciliation')">
+      <span v-if="canReconcile && selectedBill" class="qs-type-description text-muted-foreground truncate">
+        {{ t('slhReconciliation.billSelect.selectedHint', { billNo: selectedBill.slhBillNo }) }}
+      </span>
+      <FaButton v-if="canReconcile" @click="billSelectOpen = true">
+        <FaIcon name="i-lucide:plus" aria-hidden="true" />{{ t('slhReconciliation.billSelect.createButton') }}
+      </FaButton>
+    </FaPageHeader>
     <FaPageMain v-if="!canReconcile">
       <FaEmpty icon="i-lucide:shield-alert" :title="t('slhBill.noPermission')" class="py-12" />
     </FaPageMain>
@@ -184,5 +203,6 @@ onBeforeUnmount(() => {
         </template>
       </QsGenericTable>
     </FaPageMain>
+    <SlhBillSelectModal v-if="canReconcile" v-model="billSelectOpen" @confirm="confirmBillSelection" />
   </div>
 </template>

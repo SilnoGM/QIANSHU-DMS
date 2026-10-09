@@ -276,6 +276,27 @@
     "batchStatus": {
       "IN_PROGRESS": "進行中",
       "COMPLETED": "已完成"
+    },
+    "billSelect": {
+      "createButton": "新建對帳批次",
+      "title": "選擇對帳帳單",
+      "searchPlaceholder": "搜尋帳單編號、名稱或櫃號",
+      "search": "查詢",
+      "loading": "正在載入候選帳單",
+      "loadFailed": "帳單載入失敗",
+      "empty": "沒有可對帳的帳單",
+      "emptyHint": "只有生效中、未對帳或部分對帳，且沒有進行中批次的帳單可以發起對帳",
+      "emptyKeyword": "沒有符合「{keyword}」的帳單",
+      "emptyKeywordHint": "換一個帳單編號、名稱或櫃號試試",
+      "totalBills": "共 {count} 張帳單",
+      "lineCount": "{count} 行",
+      "containerCount": "{count} 個櫃號",
+      "createdLabel": "建立",
+      "payableLabel": "應付",
+      "selectHint": "請先選擇一張帳單",
+      "selectedHint": "已選擇：{billNo}",
+      "confirm": "確認選擇",
+      "selectedToast": "已選擇帳單 {billNo}，對帳詳情頁重構中暫不跳轉"
     }
   }
 }

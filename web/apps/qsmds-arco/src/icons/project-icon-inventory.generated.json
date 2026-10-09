@@ -1362,6 +1362,7 @@
       "apps/qsmds-arco/src/components/business/QsGenericTable/CopyCellButton.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-bill-select-modal.vue",
       "packages/components/src/pro/code/index.vue",
       "packages/components/src/pro/storage-box/index.vue"
     ]
@@ -1651,7 +1652,8 @@
       "apps/qsmds-arco/src/views/component_library/business/components/GenericDrawerShowcase.vue",
       "apps/qsmds-arco/src/views/component_library/business/components/GenericTableShowcase.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-reviews/index.vue",
-      "apps/qsmds-arco/src/views/workbenches/slh-bills/detail.vue"
+      "apps/qsmds-arco/src/views/workbenches/slh-bills/detail.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-bill-select-modal.vue"
     ]
   },
   {
@@ -1932,7 +1934,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/workbenches/shipments/shipment-detail-drawer.vue"
+      "apps/qsmds-arco/src/views/workbenches/shipments/shipment-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-bill-select-modal.vue"
     ]
   },
   {
@@ -2773,7 +2776,8 @@
       "apps/qsmds-arco/src/views/system/basic-data/regions/index.vue",
       "apps/qsmds-arco/src/views/system/roles/index.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/detail.vue",
-      "apps/qsmds-arco/src/views/workbenches/containers/index.vue"
+      "apps/qsmds-arco/src/views/workbenches/containers/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/index.vue"
     ]
   },
   {

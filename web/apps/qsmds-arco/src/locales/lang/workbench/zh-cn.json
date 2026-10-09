@@ -285,6 +285,27 @@
     "batchStatus": {
       "IN_PROGRESS": "进行中",
       "COMPLETED": "已完成"
+    },
+    "billSelect": {
+      "createButton": "新建对账批次",
+      "title": "选择对账账单",
+      "searchPlaceholder": "搜索账单编号、名称或柜号",
+      "search": "查询",
+      "loading": "正在加载候选账单",
+      "loadFailed": "账单加载失败",
+      "empty": "没有可对账的账单",
+      "emptyHint": "只有生效中、未对账或部分对账，且没有进行中批次的账单可以发起对账",
+      "emptyKeyword": "没有匹配「{keyword}」的账单",
+      "emptyKeywordHint": "换一个账单编号、名称或柜号试试",
+      "totalBills": "共 {count} 张账单",
+      "lineCount": "{count} 行",
+      "containerCount": "{count} 个柜号",
+      "createdLabel": "创建",
+      "payableLabel": "应付",
+      "selectHint": "请先选择一张账单",
+      "selectedHint": "已选择：{billNo}",
+      "confirm": "确认选择",
+      "selectedToast": "已选择账单 {billNo}，对账详情页重构中暂不跳转"
     }
   }
 }
