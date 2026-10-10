@@ -575,7 +575,8 @@ test('账单明细行面板：顶部信息块 + 货物明细 / 费用结算 / �
   assert.equal(panel.receiptReference.value, '500229791776（安能） -1')
   assert.deepEqual(panel.tags, [
     { text: '[slhBill.line.lineNumberValue:14]', tone: 'info' },
-    { text: '[slhBill.line.containerBatchName]：CONT-1', tone: 'info' },
+    // 柜号标签同样只给值。
+    { text: 'CONT-1', tone: 'info' },
     { text: '2026-09-01', tone: 'neutral' },
   ])
   assert.deepEqual(panel.sections.map(section => [section.id, section.label]), [
@@ -746,9 +747,10 @@ test('装柜明细行面板：顶部信息块 + 货物明细 + 代收货款块 +
   // 顶部信息块：装柜侧入仓单号 + 匹配依据三标签（方式与柜号蓝色、货件号中性）。
   assert.equal(panel.receiptReference.label, '[slhBill.line.warehouseReceiptReference]')
   assert.equal(panel.receiptReference.value, 'WR-C-1')
+  // 标签只给值：匹配方式、柜号与货件号同一行，不再重复前缀说明。
   assert.deepEqual(panel.tags, [
-    { text: '[slhReconciliation.detail.matchSource]：[slhReconciliation.detail.matchSourceValue.MARK]', tone: 'info' },
-    { text: '[slhReconciliation.detail.matchedContainer]：CONT-1 #12', tone: 'info' },
+    { text: '[slhReconciliation.detail.matchSourceValue.MARK]', tone: 'info' },
+    { text: 'CONT-1 #12', tone: 'info' },
     { text: 'PS-0001', tone: 'neutral' },
   ])
 

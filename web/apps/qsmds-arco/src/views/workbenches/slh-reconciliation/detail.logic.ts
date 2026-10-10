@@ -287,7 +287,7 @@ export function buildSlhReconciliationBillLinePanel(
     tags: [
       // 行号沿用账单明细列的模板键：它说的就是原表行号，不是批次内顺序。
       { text: translate('slhBill.line.lineNumberValue', { line: member.sourceRowNumber }), tone: 'info' },
-      { text: `${translate('slhBill.line.containerBatchName')}：${text(member.containerBatchNameText)}`, tone: 'info' },
+      { text: text(member.containerBatchNameText), tone: 'info' },
       { text: text(member.loadingDate), tone: 'neutral' },
     ],
     sections: [
@@ -411,15 +411,10 @@ export function buildSlhReconciliationLoadingItemPanel(
       value: text(item.warehouseReceiptReference),
     },
     tags: [
-      {
-        text: `${translate('slhReconciliation.detail.matchSource')}：${translate(`slhReconciliation.detail.matchSourceValue.${member.matchSource}`)}`,
-        tone: 'info',
-      },
-      {
-        text: `${translate('slhReconciliation.detail.matchedContainer')}：${member.matchedContainerBatchName} #${member.matchedLoadingItemLineNumber}`,
-        tone: 'info',
-      },
-      // 货件号自解释，只给值；缺失时与其它字段一样走占位符。
+      // 标签只给值：匹配方式、柜号与货件号放在同一行本就是一组身份信息，前缀说明是重复的。
+      { text: translate(`slhReconciliation.detail.matchSourceValue.${member.matchSource}`), tone: 'info' },
+      { text: `${member.matchedContainerBatchName} #${member.matchedLoadingItemLineNumber}`, tone: 'info' },
+      // 缺失时与其它字段一样走占位符。
       { text: text(item.shipmentNo), tone: 'neutral' },
     ],
     cargo: {
