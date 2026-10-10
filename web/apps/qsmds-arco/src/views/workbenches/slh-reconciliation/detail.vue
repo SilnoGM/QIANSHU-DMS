@@ -48,7 +48,8 @@ const loading = ref(false)
 const loadError = ref('')
 const completeOpen = ref(false)
 const completing = ref(false)
-const actionError = ref('')
+/** 完成失败的错误提示比默认提示停得久一点：失败原因常常要读几行，别还没看清就消失。 */
+const ACTION_ERROR_TOAST_DURATION = 8_000
 /** 选中行由页面持有：切换器只发 update:modelValue，行数据与后续核对动作都跟着它走。 */
 const selectedLineId = ref<string | null>(null)
 let controller: AbortController | null = null
@@ -167,7 +168,6 @@ async function complete(): Promise<void> {
     return
   }
   completing.value = true
-  actionError.value = ''
   try {
     await slhReconciliationBatchesApi.complete(batchId.value, new AbortController().signal)
     completeOpen.value = false
@@ -176,7 +176,7 @@ async function complete(): Promise<void> {
     await load()
   }
   catch (failure) {
-    actionError.value = containerFailure(failure).message
+    toast.error(containerFailure(failure).message, { duration: ACTION_ERROR_TOAST_DURATION })
     completeOpen.value = false
   }
   finally {
@@ -206,9 +206,25 @@ onBeforeUnmount(() => {
           <span class="text-foreground">{{ batch.bill.billName }}</span>
         </span>
       </template>
-      <FaButton variant="outline" class="w-full sm:w-auto" @click="backToList">
-        <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />{{ t('slhReconciliation.backToList') }}
-      </FaButton>
+      <div class="flex flex-col gap-2 w-full sm:flex-row sm:w-auto sm:items-center">
+        <FaButton variant="outline" class="w-full sm:w-auto" @click="backToList">
+          <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />{{ t('slhReconciliation.backToList') }}
+        </FaButton>
+        <!--
+          完成按钮在门禁未过时只做「软禁用」：aria-disabled + 降透明度，但保留点击，
+          点了由 requestComplete 说明原因；批次没读到时才是真禁用（页面已有错误与重试）。
+        -->
+        <FaButton
+          :loading="completing"
+          :disabled="batch === null || completing"
+          :aria-disabled="!canComplete || completing"
+          class="w-full sm:w-auto"
+          :class="canComplete ? '' : 'opacity-50'"
+          @click="requestComplete"
+        >
+          {{ t('slhReconciliation.detail.completeButton') }}
+        </FaButton>
+      </div>
     </FaPageHeader>
     <!-- 读取失败给错误与重试；其余批次内容留到详情页重做时再补。 -->
     <FaPageMain v-if="loadError" class="min-w-0">
@@ -639,34 +655,20 @@ onBeforeUnmount(() => {
     </template>
     <FaFixedBar position="bottom" class="border-t border-border">
       <div class="flex flex-col gap-3 w-full md:flex-row md:items-center md:justify-end">
-        <FaAlert v-if="actionError" variant="destructive" role="alert" :title="actionError" class="md:mr-auto" />
         <FaButton
-          variant="outline"
-          class="text-destructive"
+          variant="destructive"
+          class="w-full sm:w-auto"
           :disabled="completing"
           @click="showReconcilePending('slhReconciliation.detail.reconcileWrong')"
         >
           {{ t('slhReconciliation.detail.reconcileWrong') }}
         </FaButton>
         <FaButton
-          variant="outline"
+          class="w-full sm:w-auto"
           :disabled="completing"
           @click="showReconcilePending('slhReconciliation.detail.reconcileCorrect')"
         >
           {{ t('slhReconciliation.detail.reconcileCorrect') }}
-        </FaButton>
-        <!--
-          完成按钮在门禁未过时只做「软禁用」：aria-disabled + 降透明度，但保留点击，
-          点了由 requestComplete 说明原因；批次没读到时才是真禁用（页面已有错误与重试）。
-        -->
-        <FaButton
-          :loading="completing"
-          :disabled="batch === null || completing"
-          :aria-disabled="!canComplete || completing"
-          :class="canComplete ? '' : 'opacity-50'"
-          @click="requestComplete"
-        >
-          {{ t('slhReconciliation.detail.completeButton') }}
         </FaButton>
       </div>
     </FaFixedBar>

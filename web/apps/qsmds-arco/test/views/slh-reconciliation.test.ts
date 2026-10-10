@@ -330,13 +330,29 @@ test('批次详情页：头部只给批次与账单标识、底部承接完成�
   assert.match(page, /t\('workbench\.slhBillReconciliationDetail'\)/u)
   assert.match(page, /t\('slhReconciliation\.backToList'\)/u)
   assert.match(page, /router\.push\(\{ name: 'qsFinanceBillReconciliationSlhBillReconciliation' \}\)/u)
-  assert.match(page, /t\('slhReconciliation\.detail\.completeButton'\)/u)
+  // 完成按钮搬到页头「返回对账批次」右边，两枚按钮同一个 flex 容器留出间隙。
+  const header = page.slice(page.indexOf('<FaPageHeader'), page.indexOf('</FaPageHeader>'))
+  assert.match(header, /t\('slhReconciliation\.backToList'\)/u)
+  assert.match(header, /t\('slhReconciliation\.detail\.completeButton'\)/u)
+  // 类名顺序会被 unocss/order 重排：只断言「竖排 + 间隙 + 宽屏横排」三件事都在。
+  assert.match(header, /flex flex-col gap-2 w-full/u)
+  assert.match(header, /sm:flex-row/u)
   assert.match(page, /slhReconciliationBatchesApi\.complete\(/u)
-  // 底栏多两个逐行核对动作：点击先只给轻提示（接口随本分支重构删除）。
-  assert.match(page, /t\('slhReconciliation\.detail\.reconcileWrong'\)/u)
-  assert.match(page, /t\('slhReconciliation\.detail\.reconcileCorrect'\)/u)
-  assert.match(page, /showReconcilePending\('slhReconciliation\.detail\.reconcileWrong'\)/u)
-  assert.match(page, /t\('slhReconciliation\.detail\.reconcilePending', \{ action/u)
+  // 底栏只留两个逐行核对动作：带色按钮，点击先只给轻提示（接口随本分支重构删除）。
+  const bar = page.slice(page.indexOf('<FaFixedBar'), page.indexOf('</FaFixedBar>'))
+  assert.match(bar, /variant="destructive"/u)
+  assert.match(bar, /t\('slhReconciliation\.detail\.reconcileWrong'\)/u)
+  assert.match(bar, /t\('slhReconciliation\.detail\.reconcileCorrect'\)/u)
+  assert.match(bar, /showReconcilePending\('slhReconciliation\.detail\.reconcileWrong'\)/u)
+  assert.match(bar, /showReconcilePending\('slhReconciliation\.detail\.reconcileCorrect'\)/u)
+  // 两个动作共用一个轻提示函数：文案模板带动作名参数。
+  assert.match(page, /t\('slhReconciliation\.detail\.reconcilePending', \{ action: t\(labelKey\) \}\)/u)
+  assert.doesNotMatch(bar, /completeButton/u)
+  // 完成失败改成轻提示，并且停得比默认更久；页面上不再有常驻错误条。
+  assert.match(page, /toast\.error\(containerFailure\(failure\)\.message, \{ duration: ACTION_ERROR_TOAST_DURATION \}\)/u)
+  assert.match(page, /const ACTION_ERROR_TOAST_DURATION = 8_000/u)
+  // 常驻错误条退场（读取失败那条 FaAlert 仍留在页面主体上）。
+  assert.doesNotMatch(page, /actionError/u)
   // 完成按钮：门禁未过时软禁用（可点但看起来不可用），点了说明原因；批次没读到时才是真禁用。
   assert.match(page, /:disabled="batch === null \|\| completing"/u)
   assert.match(page, /:aria-disabled="!canComplete \|\| completing"/u)
@@ -344,6 +360,9 @@ test('批次详情页：头部只给批次与账单标识、底部承接完成�
   assert.match(page, /resolveSlhReconciliationCompleteBlockLabelKey\(completeBlockReason\.value\)/u)
   assert.match(page, /completeOpen\.value = true/u)
   assert.doesNotMatch(page, /:disabled="!canComplete/u)
+  // 两个逐行按钮的文案带上「本行」，与批次级动作区分开。
+  assert.equal(zhCn.slhReconciliation.detail.reconcileWrong, '本行核对有误')
+  assert.equal(zhCn.slhReconciliation.detail.reconcileCorrect, '本行核对正确')
   // 头部辅助文字：批次状态标签 + 批次编号 + 账单编号 + 对账单名称。
   assert.match(page, /resolveSlhReconciliationBatchTone\(batch\.status\)/u)
   assert.match(page, /\{\{ batch\.batchNo \}\}/u)
