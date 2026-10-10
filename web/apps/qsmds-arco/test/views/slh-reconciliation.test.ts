@@ -68,6 +68,17 @@ function assertTranslated(group: Record<string, unknown>, keys: readonly string[
   }
 }
 
+test('销售与采购并排放置时标题为销售信息与采购信息', () => {
+  assert.equal(zhCn.slhReconciliation.detail.salesGroup, '销售信息')
+  assert.equal(zhCn.slhReconciliation.detail.purchaseGroup, '采购信息')
+  assert.equal(zhTw.slhReconciliation.detail.salesGroup, '銷售資訊')
+  assert.equal(zhTw.slhReconciliation.detail.purchaseGroup, '採購資訊')
+  assert.equal(en.slhReconciliation.detail.salesGroup, 'Sales information')
+  assert.equal(en.slhReconciliation.detail.purchaseGroup, 'Purchase information')
+  // 「销售与采购信息」这个合成标题随拆分一起退场。
+  assert.equal('ordersTitle' in zhCn.slhReconciliation.detail, false)
+})
+
 test('三语的 slhReconciliation 组文案键完全对齐', () => {
   const collect = (group: Record<string, unknown>, prefix = ''): string[] => Object.entries(group).flatMap(([key, value]) =>
     value !== null && typeof value === 'object'
@@ -333,7 +344,7 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   // 三块面板：横向排布（宽屏三列），由 fieldColumns 统一渲染标题与分组。
   assert.match(page, /class="m-4 gap-4 grid items-start lg:grid-cols-2 xl:grid-cols-3"/u)
   assert.match(page, /v-for="column in fieldColumns"/u)
-  assert.match(page, /v-for="group in column\.groups"/u)
+  assert.match(page, /v-for="\(group, groupIndex\) in column\.groups"/u)
   // 金额行在列里也统一走 AmountDisplay（就地覆盖对齐，缺失时回落占位符文本）。
   assert.match(page, /v-if="field\.amount"[\s\S]{0,300}?:currencies="currencyCatalog\.currencies\.value"/u)
   // 类名会被 unocss/order 重排：只断言两个覆盖都在，不锁定顺序。
@@ -342,6 +353,12 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   // 非金额值保持等宽数据字体，两条分支都带样式类。
   assert.match(page, /<span v-else class="qs-type-data">/u)
   assert.match(page, /t\(column\.titleKey\)/u)
+  // 销售与采购同处一个面板但拆成两块：面板标题可选，没有标题时分组标题自己升为 h2，两块之间画分割线。
+  assert.match(page, /v-if="column\.titleKey"/u)
+  assert.match(page, /column\.titleKey === undefined \? 'h2' : 'h3'/u)
+  assert.match(page, /column\.groupDividers/u)
+  assert.match(page, /\{ id: 'orders', groups: orderFieldGroups\.value, groupDividers: true \}/u)
+  assert.doesNotMatch(page, /ordersTitle/u)
   // 不再有成员标题与复制入口。
   assert.doesNotMatch(page, /membersTitle|membersCopy|copyMembers|clipboard\.writeText/u)
   // 批次没有冻结行时只给一句批次级说明，不让切换器空转。

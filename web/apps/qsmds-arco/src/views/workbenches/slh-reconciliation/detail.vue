@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { SlhReconciliationFieldGroup } from './detail.logic'
 import type { SlhReconciliationBatchDetailDto } from '@/api/generated/types.gen'
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
@@ -23,7 +24,7 @@ import { resolveSlhReconciliationBatchLabelKey, resolveSlhReconciliationBatchTon
 /**
  * 批次详情页：切换器自带面板，用来浏览创建时冻结的明细行；切换器下方是「核对焦点」——
  * 三个跨域金额（销售尾款 / 装柜代收货款 / 账单代收货款）并列展示供人工比对，只展示不判定；
- * 再往下三块面板横向排布，分别展示选中行的销售与采购信息、装柜明细行信息与账单明细行信息。
+ * 再往下三块面板横向排布，分别展示选中行的销售/采购信息、装柜明细行信息与账单明细行信息。
  * 头部辅助文字给出批次状态、批次编号与账单基础信息；底部承接「完成批次对账」动作。
  */
 defineOptions({ name: 'QsFinanceBillReconciliationSlhReconciliationDetail' })
@@ -66,12 +67,28 @@ const loadingItemFieldGroups = computed(() => (
 const billLineFieldGroups = computed(() => (
   selectedMember.value === null ? [] : buildSlhReconciliationBillLineFieldGroups(selectedMember.value, translate)
 ))
+/** 面板列：标题可选（没有标题时分组标题自己就是这一块的一级标题）。 */
+interface SlhReconciliationFieldColumn {
+  readonly id: string
+  readonly titleKey?: string
+  /** 相邻分组之间画一条分割线：销售与采购同处一个面板时用它分区。 */
+  readonly groupDividers?: boolean
+  readonly groups: readonly SlhReconciliationFieldGroup[]
+}
 /** 三块面板共用同一段模板：标题 + 分组后的字段清单。 */
-const fieldColumns = computed(() => [
-  { id: 'orders', titleKey: 'slhReconciliation.detail.ordersTitle', groups: orderFieldGroups.value },
+const fieldColumns = computed<readonly SlhReconciliationFieldColumn[]>(() => [
+  // 销售与采购共用一个面板：两个分组各自成块，用分割线隔开，不再有合成标题。
+  { id: 'orders', groups: orderFieldGroups.value, groupDividers: true },
   { id: 'loadingItem', titleKey: 'slhReconciliation.detail.loadingItemTitle', groups: loadingItemFieldGroups.value },
   { id: 'billLine', titleKey: 'slhReconciliation.detail.billLineTitle', groups: billLineFieldGroups.value },
 ])
+/** 分组的上下间距：首个分组在面板标题下留白；有分割线的分组由分割线自己撑开间距。 */
+function sectionClass(column: SlhReconciliationFieldColumn, index: number): string {
+  if (index === 0) {
+    return column.titleKey === undefined ? '' : 'mt-3'
+  }
+  return column.groupDividers === true ? '' : 'mt-3'
+}
 
 /**
  * 成员变化后收敛选中值：仍在清单里就保持，否则退回第一条，批次为空时清空。
@@ -235,57 +252,70 @@ onBeforeUnmount(() => {
           class="m-4 gap-4 grid items-start lg:grid-cols-2 xl:grid-cols-3"
         >
           <FaPageMain v-for="column in fieldColumns" :key="column.id" class="m-0 min-w-0">
-            <h2 class="qs-type-compact-title m-0">
+            <h2 v-if="column.titleKey" class="qs-type-compact-title m-0">
               {{ t(column.titleKey) }}
             </h2>
-            <div v-for="group in column.groups" :key="group.id" class="mt-3 flex flex-col gap-1">
-              <h3 class="qs-type-compact-label m-0">
-                {{ group.label }}
-              </h3>
-              <dl class="m-0 flex flex-col gap-1">
-                <div v-for="field in group.fields" :key="field.id" class="flex gap-2 min-w-0 items-baseline">
-                  <dt class="qs-type-meta shrink-0">
-                    {{ field.label }}
-                  </dt>
-                  <dd class="m-0 break-all">
-                    <!-- 金额行统一走 AmountDisplay（符号、千分位、币种精度）；缺失时回落占位符文本。 -->
-                    <AmountDisplay
-                      v-if="field.amount"
-                      :value="field.amount.value"
-                      :currency="field.amount.currency"
-                      :currencies="currencyCatalog.currencies.value"
-                      class="!text-left !justify-start"
-                    />
-                    <!-- 人员行：姓名交给 QsPersonDisplay（头像位 + 单行截断 + 悬停完整名）。 -->
-                    <QsPersonDisplay
-                      v-else-if="field.person"
-                      :display-name="field.person"
-                      size="sm"
-                      class="max-w-full"
-                    />
-                    <!-- 状态行：一行展示该订单的三个彩色状态标签（维度名进无障碍朗读）。 -->
-                    <span
-                      v-else-if="field.tags && field.tags.length > 0"
-                      class="flex flex-wrap gap-1.5"
-                    >
-                      <FaTag
-                        v-for="statusTag in field.tags"
-                        :key="statusTag.dimension"
-                        variant="outline"
-                        class="qs-type-status-tag"
-                        :class="resolveStatusTagToneClass(statusTag.tone)"
-                        :aria-label="`${statusTag.dimension}：${statusTag.label}`"
+            <template v-for="(group, groupIndex) in column.groups" :key="group.id">
+              <!-- 销售与采购两块的唯一分隔：装饰性分割线不进无障碍树。 -->
+              <div
+                v-if="column.groupDividers === true && groupIndex > 0"
+                class="my-3 border-t border-border"
+                aria-hidden="true"
+              />
+              <div class="flex flex-col gap-1" :class="sectionClass(column, groupIndex)">
+                <!-- 没有面板标题时分组标题升为 h2：一块面板两级标题，层级不断档。 -->
+                <component
+                  :is="column.titleKey === undefined ? 'h2' : 'h3'"
+                  class="m-0"
+                  :class="column.titleKey === undefined ? 'qs-type-compact-title' : 'qs-type-compact-label'"
+                >
+                  {{ group.label }}
+                </component>
+                <dl class="m-0 flex flex-col gap-1">
+                  <div v-for="field in group.fields" :key="field.id" class="flex gap-2 min-w-0 items-baseline">
+                    <dt class="qs-type-meta shrink-0">
+                      {{ field.label }}
+                    </dt>
+                    <dd class="m-0 break-all">
+                      <!-- 金额行统一走 AmountDisplay（符号、千分位、币种精度）；缺失时回落占位符文本。 -->
+                      <AmountDisplay
+                        v-if="field.amount"
+                        :value="field.amount.value"
+                        :currency="field.amount.currency"
+                        :currencies="currencyCatalog.currencies.value"
+                        class="!text-left !justify-start"
+                      />
+                      <!-- 人员行：姓名交给 QsPersonDisplay（头像位 + 单行截断 + 悬停完整名）。 -->
+                      <QsPersonDisplay
+                        v-else-if="field.person"
+                        :display-name="field.person"
+                        size="sm"
+                        class="max-w-full"
+                      />
+                      <!-- 状态行：一行展示该订单的三个彩色状态标签（维度名进无障碍朗读）。 -->
+                      <span
+                        v-else-if="field.tags && field.tags.length > 0"
+                        class="flex flex-wrap gap-1.5"
                       >
-                        {{ statusTag.label }}
-                      </FaTag>
-                    </span>
-                    <span v-else class="qs-type-data">
-                      {{ field.value }}
-                    </span>
-                  </dd>
-                </div>
-              </dl>
-            </div>
+                        <FaTag
+                          v-for="statusTag in field.tags"
+                          :key="statusTag.dimension"
+                          variant="outline"
+                          class="qs-type-status-tag"
+                          :class="resolveStatusTagToneClass(statusTag.tone)"
+                          :aria-label="`${statusTag.dimension}：${statusTag.label}`"
+                        >
+                          {{ statusTag.label }}
+                        </FaTag>
+                      </span>
+                      <span v-else class="qs-type-data">
+                        {{ field.value }}
+                      </span>
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </template>
           </FaPageMain>
         </div>
       </template>
