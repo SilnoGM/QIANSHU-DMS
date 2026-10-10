@@ -178,20 +178,16 @@ onBeforeUnmount(() => {
             :aria-label="t('slhReconciliation.detail.lineSwitcherLabel')"
           />
         </div>
-        <!-- 核对焦点：三个跨域金额并列展示，只供人工比目测比对（不判定、不给差异、不换算币种）。 -->
-        <section
+        <!--
+          核对焦点：三个跨域金额并列展示，只供人工目测比对（不判定、不给差异、不换算币种）。
+          按产品要求不显示标题与说明文字；容器只保留一个不可见的无障碍名称。
+        -->
+        <div
           v-if="selectedMember"
-          class="m-4 flex flex-col gap-3 min-w-0"
-          aria-labelledby="slh-reconciliation-focus-title"
+          class="m-4 min-w-0"
+          role="group"
+          :aria-label="t('slhReconciliation.detail.focusTitle')"
         >
-          <header class="flex flex-col gap-1">
-            <h2 id="slh-reconciliation-focus-title" class="qs-type-compact-title m-0">
-              {{ t('slhReconciliation.detail.focusTitle') }}
-            </h2>
-            <p class="qs-type-meta text-muted-foreground m-0">
-              {{ t('slhReconciliation.detail.focusHint') }}
-            </p>
-          </header>
           <div class="gap-4 grid sm:grid-cols-3">
             <div
               v-for="focus in focusValues"
@@ -221,7 +217,7 @@ onBeforeUnmount(() => {
               </p>
             </div>
           </div>
-        </section>
+        </div>
         <!-- 选中行的三方资料横向排布：宽屏三列、中屏两列、窄屏堆叠。 -->
         <div
           v-if="selectedMember"

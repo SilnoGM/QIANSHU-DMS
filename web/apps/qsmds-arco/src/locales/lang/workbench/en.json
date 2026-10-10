@@ -327,7 +327,6 @@
       "salesBalance": "Sales balance",
       "focusSourceWithCurrency": "{source} ({currency})",
       "focusTitle": "Reconciliation focus",
-      "focusHint": "The three amounts are listed side by side; compare them by hand",
       "focusSalesBalance": "Sales order · Balance",
       "focusLoadingCod": "Loading row · COD",
       "focusBillCod": "Bill line · COD",

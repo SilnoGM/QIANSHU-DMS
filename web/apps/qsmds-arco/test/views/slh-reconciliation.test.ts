@@ -310,8 +310,9 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   // 切换器挂在 FaPageMain 之外，只用一个普通容器承接页面外边距：它自己就是一块面板。
   assert.match(page, /<div class="m-4 min-w-0">[\s\S]{0,200}?<QsReconciliationLineSwitcher/u)
   // 核对焦点区在切换器下方：三个数值并列，只展示不判定，空值走占位符 + 说明文案。
-  assert.match(page, /t\('slhReconciliation\.detail\.focusTitle'\)/u)
-  assert.match(page, /t\('slhReconciliation\.detail\.focusHint'\)/u)
+  // 按产品要求不渲染标题与说明：只保留一个不可见的无障碍名称。
+  assert.match(page, /role="group"[\s\S]{0,200}?:aria-label="t\('slhReconciliation\.detail\.focusTitle'\)"/u)
+  assert.doesNotMatch(page, /focusHint/u)
   assert.match(page, /data-slot="slh-reconciliation-focus-item"/u)
   assert.match(page, /v-for="focus in focusValues"/u)
   assert.match(page, /<AmountDisplay[\s\S]{0,300}?:currencies="currencyCatalog\.currencies\.value"/u)

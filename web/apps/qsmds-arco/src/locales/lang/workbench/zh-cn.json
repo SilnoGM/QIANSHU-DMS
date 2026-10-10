@@ -336,7 +336,6 @@
       "salesBalance": "销售尾款",
       "focusSourceWithCurrency": "{source}（{currency}）",
       "focusTitle": "核对焦点",
-      "focusHint": "三个数值并列展示，是否相符由人工判断",
       "focusSalesBalance": "销售订单 · 尾款",
       "focusLoadingCod": "装柜明细行 · 代收货款",
       "focusBillCod": "账单明细行 · 代收货款",
