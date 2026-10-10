@@ -136,7 +136,7 @@ onMounted(() => {
   <div
     ref="root"
     data-slot="qs-reconciliation-line-switcher"
-    class="p-3 border border-border rounded-xl bg-card flex flex-col gap-2"
+    class="p-4 border border-border rounded-lg bg-card flex flex-col gap-2"
     role="group"
     :aria-label="resolvedAriaLabel"
     @keydown.left.prevent="step(-1)"
