@@ -1,3 +1,4 @@
+import type { SlhBillVolumeDifference } from '../slh-bills/display.logic'
 import type { SlhReconciliationBatchMemberDto } from '@/api/generated/types.gen'
 import type {
   QsReconciliationLineSwitcherItem,
@@ -215,6 +216,22 @@ function createFieldFormatters(translate: SlhReconciliationTranslate) {
 }
 
 /**
+ * 材积行里的括注：主值取系统计算材积，括号里给与账单自报的比较结果（一致 / 差异）；
+ * 任一侧缺失就没有括注。账单面板与装柜面板共用，两侧同一行同一措辞。
+ */
+function volumeComparisonNote(
+  difference: SlhBillVolumeDifference | null,
+  translate: SlhReconciliationTranslate,
+): string {
+  if (difference === null) {
+    return ''
+  }
+  return difference.tone === 'even'
+    ? `（${translate('slhReconciliation.detail.billVolumeEven')}）`
+    : `（${translate('slhBill.line.volumeDifferenceCai')} ${difference.text}）`
+}
+
+/**
  * 账单明细行面板：顶部信息块（入仓单号 + 行号/柜号/装柜日期）＋货物明细＋费用结算＋收货与备注。
  *
  * 取值与账单明细列同源，三处合并按对账阅读顺序重组：箱数+重量、系统材积+（自报比较）、
@@ -250,12 +267,7 @@ export function buildSlhReconciliationBillLinePanel(
     amount: amountValue(item.amount, 'TWD'),
     emphasis: 'warning',
   }))
-  // 材积：主值取系统计算材积，括号里给与账单自报的比较结果；任一侧缺失就没有括注。
-  const volumeNote = difference === null
-    ? ''
-    : difference.tone === 'even'
-      ? `（${translate('slhReconciliation.detail.billVolumeEven')}）`
-      : `（${translate('slhBill.line.volumeDifferenceCai')} ${difference.text}）`
+  const volumeNote = volumeComparisonNote(difference, translate)
   const recipientLines = [member.recipientName, member.recipientAddress, member.recipientPhones]
     .map(value => text(value))
     .filter(value => value !== missing)
@@ -382,6 +394,7 @@ export function buildSlhReconciliationLoadingItemPanel(
 ): SlhReconciliationLoadingItemPanel {
   const { missing, text, amount, amountValue, volume, chargeableVolume, dimensions, weight } = createFieldFormatters(translate)
   const item = member.matchedLoadingItem
+  const volumeNote = volumeComparisonNote(resolveSlhBillVolumeDifference(item), translate)
   const recipientLines = [item.recipientName, item.recipientAddress, item.recipientPhone]
     .map(value => text(value))
     .filter(value => value !== missing)
@@ -412,10 +425,9 @@ export function buildSlhReconciliationLoadingItemPanel(
         { id: 'packageCount', label: translate('slhBill.line.packageCount'), value: `${item.packageCount} ${item.packageUnit ?? ''}`.trim() },
         { id: 'weight', label: translate('slhBill.line.weight'), value: weight(item) },
         { id: 'dimensions', label: translate('slhBill.line.dimensions'), value: dimensions(item) },
-        // 装柜侧三个材积口径都要看（系统计算 / 收费 / 账单自报），不合并成一行。
-        { id: 'volumeCai', label: translate('slhBill.line.volumeCai'), value: volume(item.volumeCai) },
+        // 与账单面板同款：系统计算材积带与账单自报的比较括注，收费材积单独一行。
+        { id: 'volumeCai', label: translate('slhBill.line.volumeCai'), value: `${volume(item.volumeCai)}${volumeNote}` },
         { id: 'chargeableVolumeCai', label: translate('slhReconciliation.detail.chargeableVolume'), value: chargeableVolume(item.chargeableVolumeCai) },
-        { id: 'reportedVolumeCai', label: translate('slhBill.line.reportedVolumeCai'), value: volume(item.reportedVolumeCai) },
       ],
     },
     codAmount: {

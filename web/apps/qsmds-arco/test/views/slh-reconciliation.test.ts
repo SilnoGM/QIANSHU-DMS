@@ -689,7 +689,8 @@ test('装柜明细行面板：顶部信息块 + 货物明细 + 代收货款块 +
     { text: 'PS-0001', tone: 'neutral' },
   ])
 
-  // 货物明细：与账单侧同名；箱数与重量各占一行，三个材积口径分行保留。
+  // 货物明细：与账单侧同名；箱数与重量各占一行，系统计算材积与账单面板同款带比较括注，
+  // 收费材积单独一行。
   assert.equal(panel.cargo.label, '[slhReconciliation.detail.billCargoGroup]')
   assert.deepEqual(panel.cargo.fields.map(field => field.id), [
     'goodsName',
@@ -699,16 +700,16 @@ test('装柜明细行面板：顶部信息块 + 货物明细 + 代收货款块 +
     'dimensions',
     'volumeCai',
     'chargeableVolumeCai',
-    'reportedVolumeCai',
   ])
   assert.equal(panel.cargo.fields[2]?.label, '[slhBill.line.packageCount]')
   assert.equal(panel.cargo.fields[2]?.value, '12 箱')
   assert.equal(panel.cargo.fields[3]?.label, '[slhBill.line.weight]')
   assert.equal(panel.cargo.fields[3]?.value, '120.50 KG')
   assert.equal(panel.cargo.fields[4]?.value, '215×137×113 [slhBill.unit.cm]')
-  assert.equal(panel.cargo.fields[5]?.value, '1.23 [slhBill.unit.cai]')
+  // 系统计算 − 账单自报 = +0.03：括注与账单面板同一措辞。
+  assert.equal(panel.cargo.fields[5]?.value, '1.23 [slhBill.unit.cai]（[slhBill.line.volumeDifferenceCai] +0.03）')
+  assert.equal(panel.cargo.fields[6]?.label, '[slhReconciliation.detail.chargeableVolume]')
   assert.equal(panel.cargo.fields[6]?.value, '7 [slhBill.unit.cai]')
-  assert.equal(panel.cargo.fields[7]?.value, '1.20 [slhBill.unit.cai]')
   // 长文本字段带截断标记（货名 / 唛头）。
   assert.deepEqual(panel.cargo.fields.slice(0, 2).map(field => field.truncate === true), [true, true])
 
@@ -725,6 +726,18 @@ test('装柜明细行面板：顶部信息块 + 货物明细 + 代收货款块 +
   assert.deepEqual(panel.recipient.fields[0]?.lines, ['林口仓库', '新北市林口区', '0911111111'])
   assert.equal(panel.recipient.fields[0]?.value, '林口仓库 / 新北市林口区 / 0911111111')
   assert.equal(panel.recipient.fields[1]?.chip, true)
+})
+
+test('装柜明细行面板：材积两侧一致时括注写成自报/系统一致', () => {
+  const panel = buildSlhReconciliationLoadingItemPanel(memberFixture({
+    matchedLoadingItem: {
+      ...memberFixture().matchedLoadingItem,
+      volumeCai: '2',
+      reportedVolumeCai: '2',
+    },
+  }), echoKey)
+
+  assert.equal(panel.cargo.fields[5]?.value, '2.00 [slhBill.unit.cai]（[slhReconciliation.detail.billVolumeEven]）')
 })
 
 test('装柜明细行面板：缺货件号与收费材积时走占位符，收货三列全空也不留下孤立分隔符', () => {
