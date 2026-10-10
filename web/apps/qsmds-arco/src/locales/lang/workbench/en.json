@@ -322,8 +322,6 @@
       "createdToast": "Reconciliation batch {batchNo} created"
     },
     "detail": {
-      "purchaseOrderState": "Purchase order status",
-      "salesOrderState": "Sales order status",
       "purchaseDeposit": "Purchase deposit",
       "salesDeposit": "Sales deposit",
       "salesBalance": "Sales balance",

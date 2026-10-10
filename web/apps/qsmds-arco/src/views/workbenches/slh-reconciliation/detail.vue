@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import type { SlhReconciliationFieldGroup } from './detail.logic'
+import type {
+  SlhReconciliationFieldGroup,
+  SlhReconciliationLineField,
+} from './detail.logic'
 import type { SlhReconciliationBatchDetailDto } from '@/api/generated/types.gen'
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
@@ -15,7 +18,7 @@ import {
   buildSlhReconciliationFocusValues,
   buildSlhReconciliationLineItems,
   buildSlhReconciliationLoadingItemFieldGroups,
-  buildSlhReconciliationOrderFieldGroups,
+  buildSlhReconciliationOrderSections,
   resolveSlhReconciliationSelectedMember,
   SLH_RECONCILIATION_LINE_TONES,
 } from './detail.logic'
@@ -58,8 +61,8 @@ const selectedMember = computed(() => resolveSlhReconciliationSelectedMember(mem
 const focusValues = computed(() => (
   selectedMember.value === null ? [] : buildSlhReconciliationFocusValues(selectedMember.value, translate)
 ))
-const orderFieldGroups = computed(() => (
-  selectedMember.value === null ? [] : buildSlhReconciliationOrderFieldGroups(selectedMember.value, translate)
+const orderSections = computed(() => (
+  selectedMember.value === null ? [] : buildSlhReconciliationOrderSections(selectedMember.value, translate)
 ))
 const loadingItemFieldGroups = computed(() => (
   selectedMember.value === null ? [] : buildSlhReconciliationLoadingItemFieldGroups(selectedMember.value, translate)
@@ -67,27 +70,26 @@ const loadingItemFieldGroups = computed(() => (
 const billLineFieldGroups = computed(() => (
   selectedMember.value === null ? [] : buildSlhReconciliationBillLineFieldGroups(selectedMember.value, translate)
 ))
-/** 面板列：标题可选（没有标题时分组标题自己就是这一块的一级标题）。 */
+/** 装柜明细行与账单明细行两块面板共用同一段模板：标题 + 分组后的字段清单。 */
 interface SlhReconciliationFieldColumn {
   readonly id: string
-  readonly titleKey?: string
-  /** 相邻分组之间画一条分割线：销售与采购同处一个面板时用它分区。 */
-  readonly groupDividers?: boolean
+  readonly titleKey: string
   readonly groups: readonly SlhReconciliationFieldGroup[]
 }
-/** 三块面板共用同一段模板：标题 + 分组后的字段清单。 */
 const fieldColumns = computed<readonly SlhReconciliationFieldColumn[]>(() => [
-  // 销售与采购共用一个面板：两个分组各自成块，用分割线隔开，不再有合成标题。
-  { id: 'orders', groups: orderFieldGroups.value, groupDividers: true },
   { id: 'loadingItem', titleKey: 'slhReconciliation.detail.loadingItemTitle', groups: loadingItemFieldGroups.value },
   { id: 'billLine', titleKey: 'slhReconciliation.detail.billLineTitle', groups: billLineFieldGroups.value },
 ])
-/** 分组的上下间距：首个分组在面板标题下留白；有分割线的分组由分割线自己撑开间距。 */
-function sectionClass(column: SlhReconciliationFieldColumn, index: number): string {
-  if (index === 0) {
-    return column.titleKey === undefined ? '' : 'mt-3'
+/** 金额块的行间距：总额行之后用一条虚线分开，其余行只靠行距区分。 */
+function amountRowClass(index: number): string {
+  return index === 1 ? 'pt-2 border-t border-dashed border-border' : ''
+}
+/** 金额块的金额样式：总额大号加粗，余额非零时染红（标记由 logic 判断后下发）。 */
+function amountClass(field: SlhReconciliationLineField): string {
+  if (field.emphasis === 'total') {
+    return '!text-2xl !leading-8 !font-semibold'
   }
-  return column.groupDividers === true ? '' : 'mt-3'
+  return field.emphasis === 'balance' ? '!text-destructive' : ''
 }
 
 /**
@@ -251,71 +253,131 @@ onBeforeUnmount(() => {
           v-if="selectedMember"
           class="m-4 gap-4 grid items-start lg:grid-cols-2 xl:grid-cols-3"
         >
-          <FaPageMain v-for="column in fieldColumns" :key="column.id" class="m-0 min-w-0">
-            <h2 v-if="column.titleKey" class="qs-type-compact-title m-0">
-              {{ t(column.titleKey) }}
-            </h2>
-            <template v-for="(group, groupIndex) in column.groups" :key="group.id">
-              <!-- 销售与采购两块的唯一分隔：装饰性分割线不进无障碍树。 -->
+          <!-- 销售与采购：每个区块＝信息块（单号＋状态徽章）＋关键字段行＋金额块，区块之间用分割线隔开。 -->
+          <FaPageMain class="m-0 min-w-0">
+            <template v-for="(section, sectionIndex) in orderSections" :key="section.id">
+              <!-- 装饰性分割线不进无障碍树。 -->
               <div
-                v-if="column.groupDividers === true && groupIndex > 0"
+                v-if="sectionIndex > 0"
                 class="my-3 border-t border-border"
                 aria-hidden="true"
               />
-              <div class="flex flex-col gap-1" :class="sectionClass(column, groupIndex)">
-                <!-- 没有面板标题时分组标题升为 h2：一块面板两级标题，层级不断档。 -->
-                <component
-                  :is="column.titleKey === undefined ? 'h2' : 'h3'"
-                  class="m-0"
-                  :class="column.titleKey === undefined ? 'qs-type-compact-title' : 'qs-type-compact-label'"
-                >
-                  {{ group.label }}
-                </component>
-                <dl class="m-0 flex flex-col gap-1">
-                  <div v-for="field in group.fields" :key="field.id" class="flex gap-2 min-w-0 items-baseline">
-                    <dt class="qs-type-meta shrink-0">
+              <section class="min-w-0" :aria-label="section.label">
+                <!-- 区块标题：竖条沿用采购订单详情的分区标题范式（纯装饰，不进无障碍树）。 -->
+                <h2 class="qs-type-section-title m-0 flex gap-2 items-center">
+                  <span class="rounded-full bg-primary h-4.5 w-1" aria-hidden="true" />
+                  {{ section.label }}
+                </h2>
+                <!-- 信息块：单号单独一行，下面一行三个状态徽章。 -->
+                <div class="mt-3 p-3 rounded-lg bg-muted/40 flex flex-col gap-2 min-w-0">
+                  <p class="qs-type-data-emphasis m-0 break-all">
+                    {{ section.orderNo.value }}
+                  </p>
+                  <div v-if="section.states.length > 0" class="flex flex-wrap gap-1.5">
+                    <FaTag
+                      v-for="state in section.states"
+                      :key="state.dimension"
+                      variant="outline"
+                      class="qs-type-status-tag"
+                      :class="resolveStatusTagToneClass(state.tone)"
+                      :aria-label="`${state.dimension}：${state.label}`"
+                    >
+                      {{ state.label }}
+                    </FaTag>
+                  </div>
+                </div>
+                <!-- 关键字段行：客户信息（姓名 · 电话合并）、完整地址、出单人 / 供应商、采购唛头、采购人。 -->
+                <dl class="m-0 mt-3 flex flex-col gap-2">
+                  <div
+                    v-for="field in section.fields"
+                    :key="field.id"
+                    class="gap-x-3 grid grid-cols-[5rem_minmax(0,1fr)] items-baseline"
+                  >
+                    <dt class="qs-type-compact-label text-muted-foreground">
                       {{ field.label }}
                     </dt>
                     <dd class="m-0 break-all">
-                      <!-- 金额行统一走 AmountDisplay（符号、千分位、币种精度）；缺失时回落占位符文本。 -->
-                      <AmountDisplay
-                        v-if="field.amount"
-                        :value="field.amount.value"
-                        :currency="field.amount.currency"
-                        :currencies="currencyCatalog.currencies.value"
-                        class="!text-left !justify-start"
-                      />
                       <!-- 人员行：姓名交给 QsPersonDisplay（头像位 + 单行截断 + 悬停完整名）。 -->
                       <QsPersonDisplay
-                        v-else-if="field.person"
+                        v-if="field.person"
                         :display-name="field.person"
                         size="sm"
                         class="max-w-full"
                       />
-                      <!-- 状态行：一行展示该订单的三个彩色状态标签（维度名进无障碍朗读）。 -->
-                      <span
-                        v-else-if="field.tags && field.tags.length > 0"
-                        class="flex flex-wrap gap-1.5"
-                      >
-                        <FaTag
-                          v-for="statusTag in field.tags"
-                          :key="statusTag.dimension"
-                          variant="outline"
-                          class="qs-type-status-tag"
-                          :class="resolveStatusTagToneClass(statusTag.tone)"
-                          :aria-label="`${statusTag.dimension}：${statusTag.label}`"
-                        >
-                          {{ statusTag.label }}
-                        </FaTag>
-                      </span>
                       <span v-else class="qs-type-data">
                         {{ field.value }}
                       </span>
                     </dd>
                   </div>
                 </dl>
-              </div>
+                <!-- 金额块：总额大号加粗右对齐，虚线之后是三项明细，末行余额非零时染红。 -->
+                <dl class="m-0 mt-3 p-3 border border-border rounded-lg flex flex-col gap-2">
+                  <div
+                    v-for="(field, index) in section.amountFields"
+                    :key="field.id"
+                    class="gap-x-3 grid grid-cols-[5rem_minmax(0,1fr)] items-baseline"
+                    :class="amountRowClass(index)"
+                  >
+                    <dt
+                      class="qs-type-compact-label"
+                      :class="field.emphasis === 'total' ? 'text-foreground' : 'text-muted-foreground'"
+                    >
+                      {{ field.label }}
+                    </dt>
+                    <dd class="m-0 break-all">
+                      <!-- 金额统一走 AmountDisplay（自带右对齐、符号、千分位与币种精度）。 -->
+                      <AmountDisplay
+                        v-if="field.amount"
+                        :value="field.amount.value"
+                        :currency="field.amount.currency"
+                        :currencies="currencyCatalog.currencies.value"
+                        :class="amountClass(field)"
+                      />
+                      <span v-else class="qs-type-data">
+                        {{ field.value }}
+                      </span>
+                    </dd>
+                  </div>
+                </dl>
+              </section>
             </template>
+          </FaPageMain>
+          <FaPageMain v-for="column in fieldColumns" :key="column.id" class="m-0 min-w-0">
+            <h2 class="qs-type-compact-title m-0">
+              {{ t(column.titleKey) }}
+            </h2>
+            <div v-for="group in column.groups" :key="group.id" class="mt-3 flex flex-col gap-1">
+              <h3 class="qs-type-compact-label m-0">
+                {{ group.label }}
+              </h3>
+              <dl class="m-0 flex flex-col gap-1">
+                <div v-for="field in group.fields" :key="field.id" class="flex gap-2 min-w-0 items-baseline">
+                  <dt class="qs-type-meta shrink-0">
+                    {{ field.label }}
+                  </dt>
+                  <dd class="m-0 break-all">
+                    <!-- 金额行统一走 AmountDisplay（符号、千分位、币种精度）；缺失时回落占位符文本。 -->
+                    <AmountDisplay
+                      v-if="field.amount"
+                      :value="field.amount.value"
+                      :currency="field.amount.currency"
+                      :currencies="currencyCatalog.currencies.value"
+                      class="!text-left !justify-start"
+                    />
+                    <!-- 人员行：姓名交给 QsPersonDisplay（头像位 + 单行截断 + 悬停完整名）。 -->
+                    <QsPersonDisplay
+                      v-else-if="field.person"
+                      :display-name="field.person"
+                      size="sm"
+                      class="max-w-full"
+                    />
+                    <span v-else class="qs-type-data">
+                      {{ field.value }}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
           </FaPageMain>
         </div>
       </template>

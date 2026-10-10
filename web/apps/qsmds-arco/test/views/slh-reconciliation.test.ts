@@ -2,6 +2,8 @@ import type {
   SlhBillLineUnmatchedReasonCountDto,
   SlhReconciliationBatchMemberDto,
   SlhReconciliationBillOptionDto,
+  SlhReconciliationMatchedPurchaseOrderDto,
+  SlhReconciliationMatchedSalesOrderDto,
 } from '../../src/api/generated/types.gen'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -24,7 +26,7 @@ import {
   buildSlhReconciliationFocusValues,
   buildSlhReconciliationLineItems,
   buildSlhReconciliationLoadingItemFieldGroups,
-  buildSlhReconciliationOrderFieldGroups,
+  buildSlhReconciliationOrderSections,
   resolveSlhReconciliationSelectedMember,
   SLH_RECONCILIATION_LINE_TONES,
 } from '../../src/views/workbenches/slh-reconciliation/detail.logic'
@@ -344,7 +346,23 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   // 三块面板：横向排布（宽屏三列），由 fieldColumns 统一渲染标题与分组。
   assert.match(page, /class="m-4 gap-4 grid items-start lg:grid-cols-2 xl:grid-cols-3"/u)
   assert.match(page, /v-for="column in fieldColumns"/u)
-  assert.match(page, /v-for="\(group, groupIndex\) in column\.groups"/u)
+  assert.match(page, /v-for="group in column\.groups"/u)
+  // 销售/采购改成专用区块模板：单号＋状态徽章的信息块、关键字段行、金额块，两块之间一条分割线。
+  assert.match(page, /v-for="\(section, sectionIndex\) in orderSections"/u)
+  assert.match(page, /v-if="sectionIndex > 0"[\s\S]{0,120}?border-t border-border/u)
+  assert.match(page, /v-if="section\.states\.length > 0"/u)
+  assert.match(page, /\{\{ section\.orderNo\.value \}\}/u)
+  assert.match(page, /v-for="\(field, index\) in section\.amountFields"/u)
+  // 区块标题是项目既有的竖条范式；信息块是浅底圆角容器。
+  assert.match(page, /rounded-full bg-primary h-4\.5 w-1/u)
+  assert.match(page, /p-3 rounded-lg bg-muted\/40/u)
+  // 金额块：总额行之后虚线分隔；总额大号加粗、余额非零染红由 logic 的标记驱动。
+  assert.match(page, /index === 1 \? 'pt-2 border-t border-dashed border-border' : ''/u)
+  assert.match(page, /!text-2xl !leading-8 !font-semibold/u)
+  assert.match(page, /!text-destructive/u)
+  assert.match(page, /field\.emphasis === 'total'/u)
+  // 订单面板不再用分组渲染，装柜/账单两块保持原样。
+  assert.doesNotMatch(page, /orderFieldGroups|groupDividers|sectionClass/u)
   // 金额行在列里也统一走 AmountDisplay（就地覆盖对齐，缺失时回落占位符文本）。
   assert.match(page, /v-if="field\.amount"[\s\S]{0,300}?:currencies="currencyCatalog\.currencies\.value"/u)
   // 类名会被 unocss/order 重排：只断言两个覆盖都在，不锁定顺序。
@@ -353,12 +371,6 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   // 非金额值保持等宽数据字体，两条分支都带样式类。
   assert.match(page, /<span v-else class="qs-type-data">/u)
   assert.match(page, /t\(column\.titleKey\)/u)
-  // 销售与采购同处一个面板但拆成两块：面板标题可选，没有标题时分组标题自己升为 h2，两块之间画分割线。
-  assert.match(page, /v-if="column\.titleKey"/u)
-  assert.match(page, /column\.titleKey === undefined \? 'h2' : 'h3'/u)
-  assert.match(page, /column\.groupDividers/u)
-  assert.match(page, /\{ id: 'orders', groups: orderFieldGroups\.value, groupDividers: true \}/u)
-  assert.doesNotMatch(page, /ordersTitle/u)
   // 不再有成员标题与复制入口。
   assert.doesNotMatch(page, /membersTitle|membersCopy|copyMembers|clipboard\.writeText/u)
   // 批次没有冻结行时只给一句批次级说明，不让切换器空转。
@@ -602,101 +614,72 @@ test('装柜明细行面板：缺货件号与收费材积时走占位符', () =>
   assert.equal(fields.find(field => field.id === 'codAmountTwd')?.amount, undefined)
 })
 
-test('销售与采购面板：销售 11 项、采购 10 项（销售在前），金额带币种、状态合并成一行彩色标签', () => {
-  const groups = buildSlhReconciliationOrderFieldGroups(memberFixture({
-    purchaseOrder: {
-      id: 'po-1',
-      orderNo: 'CG-202609-01',
-      orderStatus: 'CONFIRMED',
-      purchaseTotalAmount: '4425',
-      depositDueAmount: '1000',
-      balanceDueAmount: '3425',
-      paidAmount: '1000',
-      outstandingAmount: '3425',
-      creatorDisplayName: '李四',
-      fulfillmentStatus: 'PARTIALLY_SHIPPED',
-      paymentStatus: 'PARTIALLY_PAID',
-      shippingMarkText: 'J-070924',
-      supplier: { source: 'DICTIONARY', value: 'MARK_SUPPLIER', label: 'Mark supplier', tone: null, known: true, effectiveEnabled: true },
-    },
-    salesOrder: {
-      id: 'so-1',
-      orderNo: 'XS-202609-01',
-      orderStatus: 'PENDING_RECONCILIATION',
-      currencyCode: 'TWD',
-      customerName: '包装客户',
-      customerPhone: '0912345678',
-      customerFullAddress: '新北市林口区文化一路 100 号',
-      agreedTotalAmount: '129000.5',
-      depositDueAmount: '30000',
-      balanceDueAmount: '99000.5',
-      receivedAmount: '30000',
-      outstandingAmount: '99000.5',
-      fulfillmentStatus: 'SEA_TRANSIT',
-      paymentStatus: 'PARTIALLY_PAID',
-      issuerDisplayName: '张三',
-    },
+/** 订单侧两个来源的完整夹具：用例只改要断言的那几项，其余保持定值。 */
+function purchaseOrderFixture(overrides: Partial<SlhReconciliationMatchedPurchaseOrderDto> = {}): SlhReconciliationMatchedPurchaseOrderDto {
+  return {
+    id: 'po-1',
+    orderNo: 'CG-202609-01',
+    orderStatus: 'CONFIRMED',
+    purchaseTotalAmount: '4425',
+    depositDueAmount: '1000',
+    balanceDueAmount: '3425',
+    paidAmount: '1000',
+    outstandingAmount: '3425',
+    fulfillmentStatus: 'PARTIALLY_SHIPPED',
+    paymentStatus: 'PARTIALLY_PAID',
+    shippingMarkText: 'J-070924',
+    supplier: { source: 'DICTIONARY', value: 'MARK_SUPPLIER', label: 'Mark supplier', tone: null, known: true, effectiveEnabled: true },
+    creatorDisplayName: '李四',
+    ...overrides,
+  }
+}
+
+function salesOrderFixture(overrides: Partial<SlhReconciliationMatchedSalesOrderDto> = {}): SlhReconciliationMatchedSalesOrderDto {
+  return {
+    id: 'so-1',
+    orderNo: 'XS-202609-01',
+    orderStatus: 'PENDING_RECONCILIATION',
+    currencyCode: 'TWD',
+    customerName: '包装客户',
+    customerPhone: '0912345678',
+    customerFullAddress: '新北市林口区文化一路 100 号',
+    agreedTotalAmount: '129000.5',
+    depositDueAmount: '30000',
+    balanceDueAmount: '99000.5',
+    receivedAmount: '30000',
+    outstandingAmount: '99000.5',
+    fulfillmentStatus: 'SEA_TRANSIT',
+    paymentStatus: 'PARTIALLY_PAID',
+    issuerDisplayName: '张三',
+    ...overrides,
+  }
+}
+
+test('销售与采购区块：单号＋三枚状态徽章、关键字段行、金额块（销售在前）', () => {
+  const sections = buildSlhReconciliationOrderSections(memberFixture({
+    purchaseOrder: purchaseOrderFixture(),
+    salesOrder: salesOrderFixture(),
   }), echoKey)
 
-  // 销售分组排在采购之上：这一屏最常看的是客户侧的钱。
-  assert.deepEqual(groups.map(group => group.id), ['sales', 'purchase'])
-  assert.deepEqual(groups.map(group => group.label), [
+  // 销售区块排在采购之上：这一屏最常看的是客户侧的钱。
+  assert.deepEqual(sections.map(section => section.id), ['sales', 'purchase'])
+  assert.deepEqual(sections.map(section => section.label), [
     '[slhReconciliation.detail.salesGroup]',
     '[slhReconciliation.detail.purchaseGroup]',
   ])
-  const valueOf = (groupId: string, fieldId: string) => (
-    groups.find(group => group.id === groupId)?.fields.find(field => field.id === fieldId)?.value
-  )
-  const tagsOf = (groupId: string, fieldId: string) => (
-    groups.find(group => group.id === groupId)?.fields.find(field => field.id === fieldId)?.tags
-  )
-  // 采购：金额恒为人民币两位小数；三类状态挤进「采购单状态」一行，各自带色调标签。
-  assert.equal(valueOf('purchase', 'purchaseOrderNo'), 'CG-202609-01')
-  assert.equal(valueOf('purchase', 'supplier'), 'Mark supplier')
-  assert.equal(valueOf('purchase', 'purchaseTotalAmount'), 'CNY 4425.00')
-  assert.equal(valueOf('purchase', 'depositDueAmount'), 'CNY 1000.00')
-  assert.equal(valueOf('purchase', 'balanceDueAmount'), 'CNY 3425.00')
-  // 实际已付款/未付款与采购列表「实际付款」列同口径（未作废付款累加、未付＝采购金额 − 已付）。
-  assert.equal(valueOf('purchase', 'paidAmount'), 'CNY 1000.00')
-  assert.equal(valueOf('purchase', 'outstandingAmount'), 'CNY 3425.00')
-  assert.equal(valueOf('purchase', 'shippingMark'), 'J-070924')
-  assert.equal(
-    valueOf('purchase', 'purchaseState'),
-    '[purchaseOrderDrawer.statuses.CONFIRMED] / [purchaseOrderDrawer.statuses.PARTIALLY_SHIPPED] / [purchaseOrderDrawer.statuses.PARTIALLY_PAID]',
-  )
-  // 合并行的标签各自标注维度（采购状态/履约状态/付款状态），挨在一起才不会认错哪个是哪个。
-  assert.deepEqual(tagsOf('purchase', 'purchaseState'), [
-    {
-      dimension: '[slhReconciliation.detail.purchaseOrderStatus]',
-      label: '[purchaseOrderDrawer.statuses.CONFIRMED]',
-      tone: 'success',
-    },
-    {
-      dimension: '[slhReconciliation.detail.fulfillmentStatus]',
-      label: '[purchaseOrderDrawer.statuses.PARTIALLY_SHIPPED]',
-      tone: 'warning',
-    },
-    {
-      dimension: '[slhReconciliation.detail.paymentStatus]',
-      label: '[purchaseOrderDrawer.statuses.PARTIALLY_PAID]',
-      tone: 'warning',
-    },
-  ])
-  // 销售：金额带订单币种，四位小数收敛到两位展示；实际已收/待收取销售域的聚合结果。
-  assert.equal(valueOf('sales', 'salesOrderNo'), 'XS-202609-01')
-  assert.equal(valueOf('sales', 'customer'), '包装客户')
-  assert.equal(valueOf('sales', 'customerPhone'), '0912345678')
-  assert.equal(valueOf('sales', 'customerFullAddress'), '新北市林口区文化一路 100 号')
-  assert.equal(valueOf('sales', 'salesTotalAmount'), 'TWD 129000.50')
-  assert.equal(valueOf('sales', 'depositDueAmount'), 'TWD 30000.00')
-  assert.equal(valueOf('sales', 'balanceDueAmount'), 'TWD 99000.50')
-  assert.equal(valueOf('sales', 'receivedAmount'), 'TWD 30000.00')
-  assert.equal(valueOf('sales', 'outstandingAmount'), 'TWD 99000.50')
-  assert.equal(
-    valueOf('sales', 'salesState'),
-    '[salesOrderDrawer.statuses.PENDING_RECONCILIATION] / [salesOrderDrawer.statuses.SEA_TRANSIT] / [salesOrderDrawer.statuses.PARTIALLY_PAID]',
-  )
-  assert.deepEqual(tagsOf('sales', 'salesState'), [
+  const sales = sections[0]
+  const purchase = sections[1]
+  assert.ok(sales !== undefined && purchase !== undefined)
+
+  // 信息块第一行：单号单独一行（标签沿用页面键，值取订单号）。
+  assert.equal(sales.orderNo.id, 'salesOrderNo')
+  assert.equal(sales.orderNo.label, '[slhReconciliation.detail.salesOrderNo]')
+  assert.equal(sales.orderNo.value, 'XS-202609-01')
+  assert.equal(purchase.orderNo.id, 'purchaseOrderNo')
+  assert.equal(purchase.orderNo.label, '[slhReconciliation.detail.purchaseOrderNo]')
+  assert.equal(purchase.orderNo.value, 'CG-202609-01')
+  // 信息块第二行：三个维度各一枚徽章，维度名进无障碍朗读，挨在一起才不会认错哪个是哪个。
+  assert.deepEqual(sales.states, [
     {
       dimension: '[slhReconciliation.detail.salesOrderStatus]',
       label: '[salesOrderDrawer.statuses.PENDING_RECONCILIATION]',
@@ -713,61 +696,94 @@ test('销售与采购面板：销售 11 项、采购 10 项（销售在前），
       tone: 'warning',
     },
   ])
-  assert.equal(valueOf('sales', 'issuer'), '张三')
-  // 出单人交给 QsPersonDisplay 渲染：字段多带一个人名标记，缺名时不下发。
-  const issuer = groups.find(group => group.id === 'sales')?.fields.find(field => field.id === 'issuer')
-  assert.equal(issuer?.person, '张三')
-  // 采购人同样走人员字段（采购列表那一列的可视口径），来源是采购订单的创建人。
-  const creator = groups.find(group => group.id === 'purchase')?.fields.find(field => field.id === 'purchaseCreator')
-  assert.equal(creator?.person, '李四')
-  const purchase = groups.find(group => group.id === 'purchase')
-  const sales = groups.find(group => group.id === 'sales')
-  assert.deepEqual(sales?.fields.map(field => field.id), [
-    'salesOrderNo',
+  assert.deepEqual(purchase.states.map(state => state.tone), ['success', 'warning', 'warning'])
+
+  // 关键字段行：客户信息（姓名 · 电话合并）、完整地址、出单人 / 供应商、采购唛头、采购人。
+  assert.deepEqual(sales.fields.map(field => field.id), ['customer', 'customerFullAddress', 'issuer'])
+  assert.equal(sales.fields[0]?.label, '[salesOrderDesc.sections.customer]')
+  assert.equal(sales.fields[0]?.value, '包装客户 · 0912345678')
+  assert.equal(sales.fields[1]?.value, '新北市林口区文化一路 100 号')
+  assert.deepEqual(purchase.fields.map(field => field.id), ['supplier', 'shippingMark', 'purchaseCreator'])
+  assert.equal(purchase.fields[0]?.value, 'Mark supplier')
+  assert.equal(purchase.fields[1]?.value, 'J-070924')
+  // 出单人与采购人都走人员字段（模板据此改用 QsPersonDisplay）。
+  assert.equal(sales.fields[2]?.person, '张三')
+  assert.equal(purchase.fields[2]?.person, '李四')
+
+  // 金额块：首项总额、末项余额；金额带币种并收敛到两位小数，原始值与币种一并下发。
+  assert.deepEqual(sales.amountFields.map(field => field.id), [
+    'salesTotalAmount',
+    'depositDueAmount',
     'balanceDueAmount',
     'receivedAmount',
     'outstandingAmount',
-    'salesTotalAmount',
-    'depositDueAmount',
-    'customer',
-    'customerPhone',
-    'customerFullAddress',
-    'salesState',
-    'issuer',
   ])
-  assert.deepEqual(purchase?.fields.map(field => field.id), [
-    'purchaseOrderNo',
-    'supplier',
+  assert.deepEqual(purchase.amountFields.map(field => field.id), [
     'purchaseTotalAmount',
     'depositDueAmount',
     'balanceDueAmount',
     'paidAmount',
     'outstandingAmount',
-    'purchaseState',
-    'shippingMark',
-    'purchaseCreator',
   ])
-  // 金额行额外下发原始值 + 币种：模板据此改用 AmountDisplay（符号/千分位/币种精度由它负责）。
-  const purchaseTotal = groups.find(group => group.id === 'purchase')?.fields.find(field => field.id === 'purchaseTotalAmount')
-  const salesTotal = groups.find(group => group.id === 'sales')?.fields.find(field => field.id === 'salesTotalAmount')
-  assert.deepEqual(purchaseTotal?.amount, { value: '4425', currency: 'CNY' })
-  assert.deepEqual(salesTotal?.amount, { value: '129000.5', currency: 'TWD' })
-  for (const group of groups) {
-    for (const field of group.fields) {
-      assert.notEqual(field.label.trim(), '', `${group.id}.${field.id} 缺少字段名`)
+  assert.deepEqual(sales.amountFields[0]?.amount, { value: '129000.5', currency: 'TWD' })
+  assert.equal(sales.amountFields[0]?.value, 'TWD 129000.50')
+  assert.deepEqual(purchase.amountFields[0]?.amount, { value: '4425', currency: 'CNY' })
+  assert.equal(purchase.amountFields[0]?.value, 'CNY 4425.00')
+  // 实际已付款/未付款与采购列表「实际付款」列同口径（未作废付款累加、未付＝采购金额 − 已付）。
+  assert.equal(purchase.amountFields[3]?.value, 'CNY 1000.00')
+  assert.equal(purchase.amountFields[4]?.value, 'CNY 3425.00')
+  // 总额行始终带标记；余额行非零时带标记（模板据此放大加粗、染红）。
+  assert.deepEqual(sales.amountFields.map(field => field.emphasis), ['total', undefined, undefined, undefined, 'balance'])
+  assert.deepEqual(purchase.amountFields.map(field => field.emphasis), ['total', undefined, undefined, undefined, 'balance'])
+  for (const section of sections) {
+    for (const field of [...section.fields, section.orderNo, ...section.amountFields]) {
+      assert.notEqual(field.label.trim(), '', `${section.id}.${field.id} 缺少字段名`)
     }
   }
 })
 
-test('销售与采购面板：来源缺失时整组占位符，不猜也不留空', () => {
-  const groups = buildSlhReconciliationOrderFieldGroups(memberFixture({
+test('销售与采购区块：余额为零时不下发标记，已结清不染红', () => {
+  const sections = buildSlhReconciliationOrderSections(memberFixture({
+    purchaseOrder: purchaseOrderFixture({ outstandingAmount: '0.00' }),
+    salesOrder: salesOrderFixture({ outstandingAmount: '0' }),
+  }), echoKey)
+
+  // 0 视为已结清：不下发 balance，模板就不会染红；总额行不受影响。
+  assert.deepEqual(sections[0]?.amountFields.map(field => field.emphasis), ['total', undefined, undefined, undefined, undefined])
+  assert.deepEqual(sections[1]?.amountFields.map(field => field.emphasis), ['total', undefined, undefined, undefined, undefined])
+  assert.equal(sections[0]?.amountFields[4]?.value, 'TWD 0.00')
+})
+
+test('销售与采购区块：客户姓名与电话合并成一行，缺一不出现孤立点号', () => {
+  const customerOf = (overrides: Partial<SlhReconciliationMatchedSalesOrderDto> | null) => (
+    buildSlhReconciliationOrderSections(memberFixture({
+      salesOrder: overrides === null ? null : salesOrderFixture(overrides),
+    }), echoKey)[0]?.fields[0]?.value
+  )
+
+  assert.equal(customerOf({}), '包装客户 · 0912345678')
+  // 只有电话时只显示电话；只有姓名时只显示姓名。
+  assert.equal(customerOf({ customerName: '  ' }), '0912345678')
+  assert.equal(customerOf({ customerPhone: null as unknown as string }), '包装客户')
+  // 两个来源都缺才走占位符。
+  assert.equal(customerOf({ customerName: null as unknown as string, customerPhone: null as unknown as string }), '[slhBill.valueMissing]')
+  assert.equal(customerOf(null), '[slhBill.valueMissing]')
+})
+
+test('销售与采购区块：来源缺失时整块占位符，不猜也不留空', () => {
+  const sections = buildSlhReconciliationOrderSections(memberFixture({
     purchaseOrder: null,
     salesOrder: null,
   }), echoKey)
 
-  for (const group of groups) {
-    for (const field of group.fields) {
-      assert.equal(field.value, '[slhBill.valueMissing]', `${group.id}.${field.id} 应为占位符`)
+  for (const section of sections) {
+    assert.equal(section.orderNo.value, '[slhBill.valueMissing]', `${section.id}.orderNo 应为占位符`)
+    assert.deepEqual(section.states, [], `${section.id} 无来源时不应有状态徽章`)
+    for (const field of [...section.fields, ...section.amountFields]) {
+      assert.equal(field.value, '[slhBill.valueMissing]', `${section.id}.${field.id} 应为占位符`)
+      // 缺失的金额不下发原始值、也不放大加粗。
+      assert.equal(field.amount, undefined, `${section.id}.${field.id} 不应下发 amount`)
+      assert.equal(field.emphasis, undefined, `${section.id}.${field.id} 不应下发 emphasis`)
     }
   }
 })

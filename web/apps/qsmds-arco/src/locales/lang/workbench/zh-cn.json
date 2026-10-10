@@ -331,8 +331,6 @@
       "createdToast": "已创建对账批次 {batchNo}"
     },
     "detail": {
-      "purchaseOrderState": "采购单状态",
-      "salesOrderState": "销售单状态",
       "purchaseDeposit": "采购定金",
       "salesDeposit": "销售定金",
       "salesBalance": "销售尾款",

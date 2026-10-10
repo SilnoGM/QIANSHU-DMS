@@ -71,10 +71,10 @@ export interface SlhReconciliationLineField {
   readonly value: string
   /** 金额行才有：原始金额与币种（由 AmountDisplay 负责符号、千分位与币种精度）。 */
   readonly amount?: SlhReconciliationAmountValue
-  /** 状态行才有：一行里的多个彩色状态标签（文案与色调都由这里下发，模板只负责渲染）。 */
-  readonly tags?: readonly SlhReconciliationStatusTag[]
   /** 人员行才有：交给 QsPersonDisplay 渲染的显示名；缺名时不下发，模板回落占位符文本。 */
   readonly person?: string
+  /** 金额块里才有的位置标记：总额行（大号加粗）与余额行（非零时染红），其余金额行不下发。 */
+  readonly emphasis?: 'total' | 'balance'
 }
 
 /** 订单侧单个维度的状态标签：维度名用于无障碍朗读，标签文案与色调由本模块查表给出。 */
@@ -84,11 +84,29 @@ export interface SlhReconciliationStatusTag {
   readonly tone: QsStatusTagTone
 }
 
-/** 面板内的分组：目前只有「销售与采购信息」需要（采购 / 销售）。 */
+/** 面板内的分组：装柜明细行与账单明细行两块面板用它分节。 */
 export interface SlhReconciliationFieldGroup {
   readonly id: string
   readonly label: string
   readonly fields: readonly SlhReconciliationLineField[]
+}
+
+/**
+ * 订单区块（销售 / 采购）：信息块（单号 + 三个维度的状态徽章）＋关键字段行＋金额块。
+ * 金额块首项是总额、末项是余额，末项非零时带 balance 标记由模板染红。
+ */
+export interface SlhReconciliationOrderSection {
+  readonly id: 'purchase' | 'sales'
+  /** 已翻译的区块标题。 */
+  readonly label: string
+  /** 信息块第一行：订单单号。 */
+  readonly orderNo: SlhReconciliationLineField
+  /** 信息块第二行：状态徽章，取值缺失的维度不出现。 */
+  readonly states: readonly SlhReconciliationStatusTag[]
+  /** 关键字段行：客户信息（姓名 · 电话合并）、完整地址、人员等。 */
+  readonly fields: readonly SlhReconciliationLineField[]
+  /** 金额块：总额 → 三项明细 → 余额。 */
+  readonly amountFields: readonly SlhReconciliationLineField[]
 }
 
 /**
@@ -280,19 +298,23 @@ const SALES_STATUS_TONES = {
   payment: { UNPAID: 'danger', PARTIALLY_PAID: 'warning', PAID: 'success' },
 } as const satisfies Record<string, Readonly<Record<string, QsStatusTagTone>>>
 
+/** 金额字符串是否为「零」：决定余额行要不要染红（0 视为已结清，染红会被读成异常）。 */
+function isZeroAmount(value: string | null | undefined): boolean {
+  return value === null || value === undefined || /^0*(?:\.0*)?$/u.test(value.trim())
+}
+
 /**
- * 销售与采购信息：装柜行匹配到的货件 → 采购订单 → 销售订单，与匹配合格判定同一条链路。
+ * 销售与采购区块：装柜行匹配到的货件 → 采购订单 → 销售订单，与匹配合格判定同一条链路。
  *
- * 销售组排在采购组之前。采购保留单号、供应商、金额三项（采购金额/定金/尾款）、状态一行与采购唛头；
- * 销售保留单号、金额五项（销售金额/定金/尾款/实际已收款/实际待收款）、客户三项（姓名/电话/地址）、
- * 状态一行与出单人。金额按各自币种标注并统一两位小数展示（销售侧源数据是四位小数），
- * 枚举取值与字段名沿用采购/销售页面那套键，保证同一事实在两个页面上的措辞一致。
- * 来源缺失（历史或损坏数据）时整组走占位符，不猜也不留空。
+ * 每个区块＝信息块（单号一行 + 状态徽章一行）＋关键字段行＋金额块（总额、三项明细、余额）。
+ * 销售排在采购之前；客户姓名与电话合并成一行（只有其一就只显示存在的那个）；金额按各自币种
+ * 标注并统一两位小数展示（销售侧源数据是四位小数）；枚举取值与字段名沿用采购/销售页面那套键，
+ * 保证同一事实在两个页面上的措辞一致。来源缺失（历史或损坏数据）时走占位符，不猜也不留空。
  */
-export function buildSlhReconciliationOrderFieldGroups(
+export function buildSlhReconciliationOrderSections(
   member: SlhReconciliationBatchMemberDto,
   translate: SlhReconciliationTranslate,
-): readonly SlhReconciliationFieldGroup[] {
+): readonly SlhReconciliationOrderSection[] {
   const { missing, text, amount, amountValue, person } = createFieldFormatters(translate)
   // 契约上两个来源都是可选且可空：先归一成 null，后面只判一种缺失形态。
   const purchase = member.purchaseOrder ?? null
@@ -314,65 +336,93 @@ export function buildSlhReconciliationOrderFieldGroups(
           tone: tones[value] ?? 'neutral',
         }
   )
-  /** 三维状态合并成一行：模板按 tags 渲染彩色标签，纯文本形态供用例与无障碍兜底。 */
-  const stateField = (
+  /** 金额块的一行：总额行与余额行带位置标记，余额为零时不下发标记（模板据此决定染不染红）。 */
+  const amountField = (
     id: string,
     labelKey: string,
-    tags: readonly (SlhReconciliationStatusTag | null)[],
+    currency: string,
+    value: string | undefined,
+    position?: 'balance' | 'total',
   ): SlhReconciliationLineField => {
-    const resolved = tags.filter((item): item is SlhReconciliationStatusTag => item !== null)
-    return {
+    const amount = amountValue(value, currency)
+    const field: SlhReconciliationLineField = {
       id,
       label: translate(labelKey),
-      value: resolved.length === 0 ? missing : resolved.map(item => item.label).join(' / '),
-      tags: resolved,
+      value: money(currency, value),
+      amount,
     }
+    // 标记只跟着真实金额走：缺失（本行不涉及）时既不下发 amount 也不下发 emphasis。
+    const emphasis = amount === undefined || (position === 'balance' && isZeroAmount(value))
+      ? undefined
+      : position
+    return emphasis === undefined ? field : { ...field, emphasis }
   }
+  /**
+   * 客户信息合并成一行：姓名与电话都用「 · 」连接，只有其一就只显示存在的那个，
+   * 两个都缺才走占位符（避免出现孤立的点号）。
+   */
+  const merged = (
+    id: string,
+    labelKey: string,
+    parts: readonly (string | null | undefined)[],
+  ): SlhReconciliationLineField => {
+    const values = parts.map(part => text(part)).filter(value => value !== missing)
+    return { id, label: translate(labelKey), value: values.length === 0 ? missing : values.join(' · ') }
+  }
+  /** 三个维度的状态徽章统一在这里装配：维度名用于无障碍朗读，色调由对应域的查表给出。 */
+  const states = (
+    orderStatusKey: string,
+    statusGroup: 'purchaseOrderDrawer' | 'salesOrderDrawer',
+    tones: {
+      readonly fulfillment: Readonly<Record<string, QsStatusTagTone>>
+      readonly order: Readonly<Record<string, QsStatusTagTone>>
+      readonly payment: Readonly<Record<string, QsStatusTagTone>>
+    },
+    row: { readonly fulfillmentStatus: string, readonly orderStatus: string, readonly paymentStatus: string } | null,
+  ): readonly SlhReconciliationStatusTag[] => [
+    tag(orderStatusKey, statusGroup, tones.order, row?.orderStatus),
+    tag('slhReconciliation.detail.fulfillmentStatus', statusGroup, tones.fulfillment, row?.fulfillmentStatus),
+    tag('slhReconciliation.detail.paymentStatus', statusGroup, tones.payment, row?.paymentStatus),
+  ].filter((item): item is SlhReconciliationStatusTag => item !== null)
+  const salesCurrency = sales?.currencyCode ?? ''
   return [
     {
       id: 'sales',
       label: translate('slhReconciliation.detail.salesGroup'),
-      // 销售信息排在采购之前；尾款是与装柜/账单代收货款并列核对的值，故紧跟单号。
+      orderNo: { id: 'salesOrderNo', label: translate('slhReconciliation.detail.salesOrderNo'), value: text(sales?.orderNo) },
+      states: states('slhReconciliation.detail.salesOrderStatus', 'salesOrderDrawer', SALES_STATUS_TONES, sales),
       fields: [
-        { id: 'salesOrderNo', label: translate('slhReconciliation.detail.salesOrderNo'), value: text(sales?.orderNo) },
-        { id: 'balanceDueAmount', label: translate('slhReconciliation.detail.salesBalance'), value: money(sales?.currencyCode ?? '', sales?.balanceDueAmount), amount: amountValue(sales?.balanceDueAmount, sales?.currencyCode ?? '') },
-        { id: 'receivedAmount', label: translate('slhReconciliation.detail.receivedAmount'), value: money(sales?.currencyCode ?? '', sales?.receivedAmount), amount: amountValue(sales?.receivedAmount, sales?.currencyCode ?? '') },
-        { id: 'outstandingAmount', label: translate('slhReconciliation.detail.outstandingAmount'), value: money(sales?.currencyCode ?? '', sales?.outstandingAmount), amount: amountValue(sales?.outstandingAmount, sales?.currencyCode ?? '') },
-        { id: 'salesTotalAmount', label: translate('slhReconciliation.detail.salesTotalAmount'), value: money(sales?.currencyCode ?? '', sales?.agreedTotalAmount), amount: amountValue(sales?.agreedTotalAmount, sales?.currencyCode ?? '') },
-        { id: 'depositDueAmount', label: translate('slhReconciliation.detail.salesDeposit'), value: money(sales?.currencyCode ?? '', sales?.depositDueAmount), amount: amountValue(sales?.depositDueAmount, sales?.currencyCode ?? '') },
-        { id: 'customer', label: translate('salesOrderDesc.fields.customerName'), value: text(sales?.customerName) },
-        { id: 'customerPhone', label: translate('salesOrderDesc.fields.customerPhone'), value: text(sales?.customerPhone) },
+        merged('customer', 'salesOrderDesc.sections.customer', [sales?.customerName, sales?.customerPhone]),
         { id: 'customerFullAddress', label: translate('salesOrderDesc.fields.fullAddress'), value: text(sales?.customerFullAddress) },
-        stateField('salesState', 'slhReconciliation.detail.salesOrderState', [
-          tag('slhReconciliation.detail.salesOrderStatus', 'salesOrderDrawer', SALES_STATUS_TONES.order, sales?.orderStatus),
-          tag('slhReconciliation.detail.fulfillmentStatus', 'salesOrderDrawer', SALES_STATUS_TONES.fulfillment, sales?.fulfillmentStatus),
-          tag('slhReconciliation.detail.paymentStatus', 'salesOrderDrawer', SALES_STATUS_TONES.payment, sales?.paymentStatus),
-        ]),
         // 出单人是人员信息：交给 QsPersonDisplay（头像位 + 名称截断），文案仍取销售域键。
         { id: 'issuer', label: translate('salesOrderDesc.fields.issuer'), ...person(sales?.issuerDisplayName) },
+      ],
+      amountFields: [
+        amountField('salesTotalAmount', 'slhReconciliation.detail.salesTotalAmount', salesCurrency, sales?.agreedTotalAmount, 'total'),
+        amountField('depositDueAmount', 'slhReconciliation.detail.salesDeposit', salesCurrency, sales?.depositDueAmount),
+        amountField('balanceDueAmount', 'slhReconciliation.detail.salesBalance', salesCurrency, sales?.balanceDueAmount),
+        amountField('receivedAmount', 'slhReconciliation.detail.receivedAmount', salesCurrency, sales?.receivedAmount),
+        amountField('outstandingAmount', 'slhReconciliation.detail.outstandingAmount', salesCurrency, sales?.outstandingAmount, 'balance'),
       ],
     },
     {
       id: 'purchase',
       label: translate('slhReconciliation.detail.purchaseGroup'),
+      orderNo: { id: 'purchaseOrderNo', label: translate('slhReconciliation.detail.purchaseOrderNo'), value: text(purchase?.orderNo) },
+      states: states('slhReconciliation.detail.purchaseOrderStatus', 'purchaseOrderDrawer', PURCHASE_STATUS_TONES, purchase),
       fields: [
-        { id: 'purchaseOrderNo', label: translate('slhReconciliation.detail.purchaseOrderNo'), value: text(purchase?.orderNo) },
         { id: 'supplier', label: translate('slhReconciliation.detail.supplier'), value: text(purchase?.supplier.label) },
-        { id: 'purchaseTotalAmount', label: translate('slhReconciliation.detail.purchaseTotalAmount'), value: money('CNY', purchase?.purchaseTotalAmount), amount: amountValue(purchase?.purchaseTotalAmount, 'CNY') },
-        { id: 'depositDueAmount', label: translate('slhReconciliation.detail.purchaseDeposit'), value: money('CNY', purchase?.depositDueAmount), amount: amountValue(purchase?.depositDueAmount, 'CNY') },
-        // 采购侧也有「尾款」，与销售的尾款同名不同币种：加来源前缀消歧（对账要核的是销售尾款）。
-        { id: 'balanceDueAmount', label: translate('slhReconciliation.detail.purchaseBalance'), value: money('CNY', purchase?.balanceDueAmount), amount: amountValue(purchase?.balanceDueAmount, 'CNY') },
-        // 实际已付款/未付款与采购列表「实际付款」列同口径（未作废付款累加、未付＝采购金额 − 已付）。
-        { id: 'paidAmount', label: translate('slhReconciliation.detail.purchasePaidAmount'), value: money('CNY', purchase?.paidAmount), amount: amountValue(purchase?.paidAmount, 'CNY') },
-        { id: 'outstandingAmount', label: translate('slhReconciliation.detail.purchaseOutstandingAmount'), value: money('CNY', purchase?.outstandingAmount), amount: amountValue(purchase?.outstandingAmount, 'CNY') },
-        stateField('purchaseState', 'slhReconciliation.detail.purchaseOrderState', [
-          tag('slhReconciliation.detail.purchaseOrderStatus', 'purchaseOrderDrawer', PURCHASE_STATUS_TONES.order, purchase?.orderStatus),
-          tag('slhReconciliation.detail.fulfillmentStatus', 'purchaseOrderDrawer', PURCHASE_STATUS_TONES.fulfillment, purchase?.fulfillmentStatus),
-          tag('slhReconciliation.detail.paymentStatus', 'purchaseOrderDrawer', PURCHASE_STATUS_TONES.payment, purchase?.paymentStatus),
-        ]),
         { id: 'shippingMark', label: translate('purchaseOrderDesc.fields.shippingMark'), value: text(purchase?.shippingMarkText) },
         // 采购人＝采购订单的创建人，与销售侧出单人一样交给 QsPersonDisplay。
         { id: 'purchaseCreator', label: translate('slhReconciliation.detail.purchaseCreator'), ...person(purchase?.creatorDisplayName) },
+      ],
+      amountFields: [
+        amountField('purchaseTotalAmount', 'slhReconciliation.detail.purchaseTotalAmount', 'CNY', purchase?.purchaseTotalAmount, 'total'),
+        amountField('depositDueAmount', 'slhReconciliation.detail.purchaseDeposit', 'CNY', purchase?.depositDueAmount),
+        // 采购侧也有「尾款」，与销售的尾款同名不同币种：加来源前缀消歧（对账要核的是销售尾款）。
+        amountField('balanceDueAmount', 'slhReconciliation.detail.purchaseBalance', 'CNY', purchase?.balanceDueAmount),
+        amountField('paidAmount', 'slhReconciliation.detail.purchasePaidAmount', 'CNY', purchase?.paidAmount),
+        amountField('outstandingAmount', 'slhReconciliation.detail.purchaseOutstandingAmount', 'CNY', purchase?.outstandingAmount, 'balance'),
       ],
     },
   ]
