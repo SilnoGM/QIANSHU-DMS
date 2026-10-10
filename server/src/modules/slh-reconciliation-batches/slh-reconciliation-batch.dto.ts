@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator'
-import { PurchaseOrderStatus, SalesOrderStatus } from '../../generated/prisma/enums'
+import { PurchaseOrderFulfillmentStatus, PurchaseOrderPaymentStatus, PurchaseOrderProductMode, PurchaseOrderStatus, PurchaseOrderType, SalesOrderFulfillmentStatus, SalesOrderPaymentStatus, SalesOrderStatus } from '../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
 import { PurchaseOrderSupplierDto } from '../purchase-orders/dto/purchase-order-response.dto'
 import { SlhBillFindingDto, SlhBillLineDto, SlhBillListItemDto, SlhBillReconciliationStatusDto } from '../slh-bills/slh-bill.dto'
@@ -181,13 +181,24 @@ export class SlhReconciliationMatchedItemDto {
  *
  * 本模块对外只要求 `slh-bills:reconcile`，这里是经确认后有意放开的采购域字段：
  * 只带对账页要展示的列，金额与供应商标签都与采购域同口径（两位小数人民币、同一份字典解析）。
+ * 已付/未付这类需要按应付单聚合的值不在这里，避免在读取路径上重复采购域的金额口径。
  */
 export class SlhReconciliationMatchedPurchaseOrderDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty({ type: 'string' }) orderNo!: string
   @ApiProperty({ type: 'string', description: 'YYYY-MM-DD' }) orderDate!: string
   @ApiProperty({ enum: PurchaseOrderStatus }) orderStatus!: PurchaseOrderStatus
+  @ApiProperty({ enum: PurchaseOrderType }) purchaseType!: PurchaseOrderType
+  @ApiProperty({ enum: PurchaseOrderProductMode }) productMode!: PurchaseOrderProductMode
   @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) purchaseTotalAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) lineSubtotalAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) depositDueAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) balanceDueAmount!: string
+  @ApiProperty({ enum: PurchaseOrderFulfillmentStatus }) fulfillmentStatus!: PurchaseOrderFulfillmentStatus
+  @ApiProperty({ enum: PurchaseOrderPaymentStatus }) paymentStatus!: PurchaseOrderPaymentStatus
+  @ApiPropertyOptional({ type: 'string', nullable: true }) shippingMarkText!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) remark!: string | null
+  @ApiProperty({ type: 'string' }) createdAt!: string
   @ApiProperty({ type: () => PurchaseOrderSupplierDto }) supplier!: PurchaseOrderSupplierDto
 }
 
@@ -199,7 +210,16 @@ export class SlhReconciliationMatchedSalesOrderDto {
   @ApiProperty({ enum: SalesOrderStatus }) orderStatus!: SalesOrderStatus
   @ApiProperty({ type: 'string' }) currencyCode!: string
   @ApiProperty({ type: 'string' }) customerName!: string
+  @ApiProperty({ type: 'string' }) customerPhone!: string
   @ApiProperty({ type: 'string', description: '四位小数的订单币种金额' }) agreedTotalAmount!: string
+  @ApiProperty({ type: 'string', description: '四位小数的订单币种金额' }) lineSubtotalAmount!: string
+  @ApiProperty({ type: 'string', description: '四位小数的订单币种金额' }) depositDueAmount!: string
+  @ApiProperty({ type: 'string', description: '四位小数的订单币种金额' }) balanceDueAmount!: string
+  @ApiProperty({ enum: SalesOrderFulfillmentStatus }) fulfillmentStatus!: SalesOrderFulfillmentStatus
+  @ApiProperty({ enum: SalesOrderPaymentStatus }) paymentStatus!: SalesOrderPaymentStatus
+  @ApiPropertyOptional({ type: 'string', nullable: true }) remark!: string | null
+  @ApiProperty({ type: 'string' }) createdAt!: string
+  @ApiProperty({ type: 'string' }) issuerDisplayName!: string
 }
 
 /** 成员行：账单明细行的全部字段 + 本批次的匹配依据、柜次侧可比字段、来源摘要与核对留痕。 */

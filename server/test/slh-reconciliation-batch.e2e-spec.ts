@@ -48,7 +48,17 @@ interface BatchDetail {
       orderNo: string
       orderDate: string
       orderStatus: string
+      purchaseType: string
+      productMode: string
       purchaseTotalAmount: string
+      lineSubtotalAmount: string
+      depositDueAmount: string
+      balanceDueAmount: string
+      fulfillmentStatus: string
+      paymentStatus: string
+      shippingMarkText: string | null
+      remark: string | null
+      createdAt: string
       supplier: { source: string, value: string | null, label: string, known: boolean | null }
     } | null
     salesOrder: {
@@ -58,7 +68,16 @@ interface BatchDetail {
       orderStatus: string
       currencyCode: string
       customerName: string
+      customerPhone: string
       agreedTotalAmount: string
+      lineSubtotalAmount: string
+      depositDueAmount: string
+      balanceDueAmount: string
+      fulfillmentStatus: string
+      paymentStatus: string
+      remark: string | null
+      createdAt: string
+      issuerDisplayName: string
     } | null
     reconciledAt: string | null
   }>
@@ -436,9 +455,25 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       expect(member.purchaseOrder?.supplier).toMatchObject({
         source: 'CUSTOM_TEXT', value: null, label: 'Custom supplier',
       })
+      // 夹具走的是销售关联采购 + 自定义产品，金额为 10 元含 0 定金 / 10 尾款：逐项对齐能挡住字段错配。
+      expect(member.purchaseOrder?.purchaseType).toBe('SALES_LINKED')
+      expect(member.purchaseOrder?.productMode).toBe('CUSTOM')
+      expect(member.purchaseOrder?.lineSubtotalAmount).toBe('10.00')
+      expect(member.purchaseOrder?.depositDueAmount).toBe('0.00')
+      expect(member.purchaseOrder?.balanceDueAmount).toBe('10.00')
+      expect(member.purchaseOrder?.paymentStatus).toBe('UNPAID')
+      expect(member.purchaseOrder?.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/u)
+      expect(['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED', 'SHIPPED', 'SIGNED']).toContain(member.purchaseOrder?.fulfillmentStatus)
       // 销售来源：四位小数订单币种金额，字段口径与销售域一致。
       expect(member.salesOrder).toMatchObject({ customerName: '包装客户', currencyCode: 'TWD', orderStatus: 'CONFIRMED' })
       expect(member.salesOrder?.agreedTotalAmount).toMatch(/^\d+\.\d{4}$/u)
+      expect(member.salesOrder?.customerPhone).toBe('12345678')
+      expect(member.salesOrder?.lineSubtotalAmount).toBe('10.0000')
+      expect(member.salesOrder?.depositDueAmount).toBe('0.0000')
+      expect(member.salesOrder?.balanceDueAmount).toBe('10.0000')
+      expect(member.salesOrder?.paymentStatus).toBe('UNPAID')
+      expect(member.salesOrder?.issuerDisplayName).toBeTruthy()
+      expect(['PENDING', 'PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED', 'SEA_TRANSIT', 'SIGNED']).toContain(member.salesOrder?.fulfillmentStatus)
     }
 
     // 链路逐条对齐数据库事实：成员匹配行 → 货件 → 采购订单 → 销售订单。

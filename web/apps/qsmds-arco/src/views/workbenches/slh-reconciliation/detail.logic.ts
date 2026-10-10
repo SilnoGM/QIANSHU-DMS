@@ -3,6 +3,8 @@ import type {
   QsReconciliationLineSwitcherItem,
   QsReconciliationLineSwitcherTone,
 } from '@/components/business/QsReconciliationLineSwitcher/types'
+// 运行时导入必须用相对路径：本模块被 node --test 直接加载，`@/` 别名只有在应用构建与应用目录下才解析得到。
+import { formatDateTime } from '../../../components/base/DateTimeDisplay/format'
 import {
   formatSlhBillAmount,
   formatSlhBillDimensions,
@@ -101,6 +103,10 @@ function createFieldFormatters(translate: SlhReconciliationTranslate) {
     weight: (line: Pick<SlhReconciliationBatchMemberDto, 'grossWeightKg' | 'weightUnit'>) => (
       formatSlhBillWeight(line) ?? missing
     ),
+    /** 带时区的 ISO → 与 DateTimeDisplay 同一份规则（固定数字宽度、24 小时制、Asia/Shanghai）。 */
+    dateTime: (value: string | null | undefined) => (
+      value === null || value === undefined || value.trim() === '' ? missing : formatDateTime(value)
+    ),
     charges: (charges: readonly SlhBillLineChargeDto[]) => {
       const text = groupSlhBillCharges(charges)
         .map(group => `${group.currencyCode} ${group.items
@@ -120,7 +126,7 @@ export function buildSlhReconciliationBillLineFields(
   member: SlhReconciliationBatchMemberDto,
   translate: SlhReconciliationTranslate,
 ): readonly SlhReconciliationLineField[] {
-  const { missing, text, amount, volume, dimensions, weight, charges } = createFieldFormatters(translate)
+  const { missing, text, amount, volume, dimensions, weight, dateTime, charges } = createFieldFormatters(translate)
   const difference = resolveSlhBillVolumeDifference(member)
   return [
     {
@@ -166,7 +172,7 @@ export function buildSlhReconciliationBillLineFields(
       value: translate(`slhBill.reconciliationStatus.${member.reconciliationStatus}`),
     },
     { id: 'charges', label: translate('slhBill.line.charges'), value: charges(member.charges) },
-    { id: 'reconciledAt', label: translate('slhReconciliation.detail.reconciledAt'), value: text(member.reconciledAt) },
+    { id: 'reconciledAt', label: translate('slhReconciliation.detail.reconciledAt'), value: dateTime(member.reconciledAt) },
     { id: 'reconciledBy', label: translate('slhReconciliation.detail.reconciledBy'), value: text(member.reconciledByDisplayName) },
   ]
 }
@@ -212,17 +218,26 @@ export function buildSlhReconciliationLoadingItemFields(
 
 /**
  * 销售与采购信息：装柜行匹配到的货件 → 采购订单 → 销售订单，与匹配合格判定同一条链路。
- * 金额按各自币种标注（采购恒为人民币，销售为订单币种），状态文案与采购/销售页面共用同一套键；
+ *
+ * 字段只取库内既有列与订单快照：金额按各自币种标注（采购恒为人民币，销售为订单币种，统一两位小数展示），
+ * 枚举取值与字段名沿用采购/销售页面那套键，保证同一事实在两个页面上的措辞一致；
+ * 已付/未付、已收/未收这类按应付单/收款聚合的值不在本面板内（不在读取路径上重复聚合口径）。
  * 来源缺失（历史或损坏数据）时整组走占位符，不猜也不留空。
  */
 export function buildSlhReconciliationOrderFieldGroups(
   member: SlhReconciliationBatchMemberDto,
   translate: SlhReconciliationTranslate,
 ): readonly SlhReconciliationFieldGroup[] {
-  const { missing, text, amount } = createFieldFormatters(translate)
+  const { missing, text, amount, dateTime } = createFieldFormatters(translate)
   // 契约上两个来源都是可选且可空：先归一成 null，后面只判一种缺失形态。
   const purchase = member.purchaseOrder ?? null
   const sales = member.salesOrder ?? null
+  const status = (group: 'purchaseOrderDrawer' | 'salesOrderDrawer', value: string | undefined) => (
+    value === undefined ? missing : translate(`${group}.statuses.${value}`)
+  )
+  const money = (currency: string, value: string | undefined) => (
+    value === undefined ? missing : `${currency} ${amount(value)}`
+  )
   return [
     {
       id: 'purchase',
@@ -232,15 +247,38 @@ export function buildSlhReconciliationOrderFieldGroups(
         { id: 'purchaseOrderDate', label: translate('slhReconciliation.detail.purchaseOrderDate'), value: text(purchase?.orderDate) },
         { id: 'supplier', label: translate('slhReconciliation.detail.supplier'), value: text(purchase?.supplier.label) },
         {
-          id: 'purchaseTotalAmount',
-          label: translate('slhReconciliation.detail.purchaseTotalAmount'),
-          value: purchase === null ? missing : `CNY ${amount(purchase.purchaseTotalAmount)}`,
+          id: 'purchaseType',
+          label: translate('purchaseOrderDesc.fields.purchaseType'),
+          // 采购类型与产品类型的取值沿用采购页面的枚举文案。
+          value: purchase === null ? missing : translate(`purchaseOrderDrawer.purchaseTypes.${purchase.purchaseType}`),
         },
+        {
+          id: 'productMode',
+          label: translate('purchaseOrderDrawer.productMode'),
+          value: purchase === null ? missing : translate(`purchaseOrderDrawer.productModes.${purchase.productMode}`),
+        },
+        { id: 'purchaseTotalAmount', label: translate('slhReconciliation.detail.purchaseTotalAmount'), value: money('CNY', purchase?.purchaseTotalAmount) },
+        { id: 'lineSubtotalAmount', label: translate('purchaseOrderDesc.fields.lineSubtotalAmount'), value: money('CNY', purchase?.lineSubtotalAmount) },
+        { id: 'depositDueAmount', label: translate('purchaseOrderDesc.fields.deposit'), value: money('CNY', purchase?.depositDueAmount) },
+        { id: 'balanceDueAmount', label: translate('purchaseOrderDesc.fields.balance'), value: money('CNY', purchase?.balanceDueAmount) },
         {
           id: 'purchaseOrderStatus',
           label: translate('slhReconciliation.detail.purchaseOrderStatus'),
-          value: purchase === null ? missing : translate(`purchaseOrderDrawer.statuses.${purchase.orderStatus}`),
+          value: status('purchaseOrderDrawer', purchase?.orderStatus),
         },
+        {
+          id: 'purchaseFulfillmentStatus',
+          label: translate('slhReconciliation.detail.fulfillmentStatus'),
+          value: status('purchaseOrderDrawer', purchase?.fulfillmentStatus),
+        },
+        {
+          id: 'purchasePaymentStatus',
+          label: translate('slhReconciliation.detail.paymentStatus'),
+          value: status('purchaseOrderDrawer', purchase?.paymentStatus),
+        },
+        { id: 'shippingMark', label: translate('purchaseOrderDesc.fields.shippingMark'), value: text(purchase?.shippingMarkText) },
+        { id: 'remark', label: translate('slhBill.line.remark'), value: text(purchase?.remark) },
+        { id: 'createdAt', label: translate('slhReconciliation.detail.createdAt'), value: dateTime(purchase?.createdAt) },
       ],
     },
     {
@@ -250,16 +288,29 @@ export function buildSlhReconciliationOrderFieldGroups(
         { id: 'salesOrderNo', label: translate('slhReconciliation.detail.salesOrderNo'), value: text(sales?.orderNo) },
         { id: 'salesOrderDate', label: translate('slhReconciliation.detail.salesOrderDate'), value: text(sales?.orderDate) },
         { id: 'customer', label: translate('slhReconciliation.detail.customer'), value: text(sales?.customerName) },
-        {
-          id: 'salesTotalAmount',
-          label: translate('slhReconciliation.detail.salesTotalAmount'),
-          value: sales === null ? missing : `${sales.currencyCode} ${amount(sales.agreedTotalAmount)}`,
-        },
+        { id: 'customerPhone', label: translate('salesOrderDesc.fields.customerPhone'), value: text(sales?.customerPhone) },
+        { id: 'salesTotalAmount', label: translate('slhReconciliation.detail.salesTotalAmount'), value: money(sales?.currencyCode ?? '', sales?.agreedTotalAmount) },
+        { id: 'lineSubtotalAmount', label: translate('salesOrderDesc.fields.lineSubtotalAmount'), value: money(sales?.currencyCode ?? '', sales?.lineSubtotalAmount) },
+        { id: 'depositDueAmount', label: translate('salesOrderDesc.fields.deposit'), value: money(sales?.currencyCode ?? '', sales?.depositDueAmount) },
+        { id: 'balanceDueAmount', label: translate('salesOrderDesc.fields.balance'), value: money(sales?.currencyCode ?? '', sales?.balanceDueAmount) },
         {
           id: 'salesOrderStatus',
           label: translate('slhReconciliation.detail.salesOrderStatus'),
-          value: sales === null ? missing : translate(`salesOrderDrawer.statuses.${sales.orderStatus}`),
+          value: status('salesOrderDrawer', sales?.orderStatus),
         },
+        {
+          id: 'salesFulfillmentStatus',
+          label: translate('slhReconciliation.detail.fulfillmentStatus'),
+          value: status('salesOrderDrawer', sales?.fulfillmentStatus),
+        },
+        {
+          id: 'salesPaymentStatus',
+          label: translate('slhReconciliation.detail.paymentStatus'),
+          value: status('salesOrderDrawer', sales?.paymentStatus),
+        },
+        { id: 'issuer', label: translate('salesOrderDesc.fields.issuer'), value: text(sales?.issuerDisplayName) },
+        { id: 'remark', label: translate('slhBill.line.remark'), value: text(sales?.remark) },
+        { id: 'createdAt', label: translate('slhReconciliation.detail.createdAt'), value: dateTime(sales?.createdAt) },
       ],
     },
   ]

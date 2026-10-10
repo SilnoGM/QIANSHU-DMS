@@ -85288,10 +85288,69 @@
               "CANCELLED"
             ]
           },
+          "purchaseType": {
+            "type": "string",
+            "enum": [
+              "SALES_LINKED",
+              "STOCK"
+            ]
+          },
+          "productMode": {
+            "type": "string",
+            "enum": [
+              "CATALOG",
+              "CUSTOM",
+              "MIXED"
+            ]
+          },
           "purchaseTotalAmount": {
             "type": "string",
             "pattern": "^\\d+\\.\\d{2}$",
             "description": "两位小数的人民币金额"
+          },
+          "lineSubtotalAmount": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
+          },
+          "depositDueAmount": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
+          },
+          "balanceDueAmount": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
+          },
+          "fulfillmentStatus": {
+            "type": "string",
+            "enum": [
+              "ORDERED",
+              "PREPARING",
+              "PARTIALLY_SHIPPED",
+              "SHIPPED",
+              "SIGNED"
+            ]
+          },
+          "paymentStatus": {
+            "type": "string",
+            "enum": [
+              "UNPAID",
+              "PARTIALLY_PAID",
+              "PAID"
+            ]
+          },
+          "shippingMarkText": {
+            "type": "string",
+            "nullable": true
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
           },
           "supplier": {
             "$ref": "#/components/schemas/PurchaseOrderSupplierDto"
@@ -85302,7 +85361,15 @@
           "orderNo",
           "orderDate",
           "orderStatus",
+          "purchaseType",
+          "productMode",
           "purchaseTotalAmount",
+          "lineSubtotalAmount",
+          "depositDueAmount",
+          "balanceDueAmount",
+          "fulfillmentStatus",
+          "paymentStatus",
+          "createdAt",
           "supplier"
         ]
       },
@@ -85336,9 +85403,53 @@
           "customerName": {
             "type": "string"
           },
+          "customerPhone": {
+            "type": "string"
+          },
           "agreedTotalAmount": {
             "type": "string",
             "description": "四位小数的订单币种金额"
+          },
+          "lineSubtotalAmount": {
+            "type": "string",
+            "description": "四位小数的订单币种金额"
+          },
+          "depositDueAmount": {
+            "type": "string",
+            "description": "四位小数的订单币种金额"
+          },
+          "balanceDueAmount": {
+            "type": "string",
+            "description": "四位小数的订单币种金额"
+          },
+          "fulfillmentStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "PREPARING",
+              "LAND_TRANSIT",
+              "WAREHOUSE_ARRIVED",
+              "SEA_TRANSIT",
+              "SIGNED"
+            ]
+          },
+          "paymentStatus": {
+            "type": "string",
+            "enum": [
+              "UNPAID",
+              "PARTIALLY_PAID",
+              "PAID"
+            ]
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "issuerDisplayName": {
+            "type": "string"
           }
         },
         "required": [
@@ -85348,7 +85459,15 @@
           "orderStatus",
           "currencyCode",
           "customerName",
-          "agreedTotalAmount"
+          "customerPhone",
+          "agreedTotalAmount",
+          "lineSubtotalAmount",
+          "depositDueAmount",
+          "balanceDueAmount",
+          "fulfillmentStatus",
+          "paymentStatus",
+          "createdAt",
+          "issuerDisplayName"
         ]
       },
       "SlhReconciliationBatchMemberDto": {
