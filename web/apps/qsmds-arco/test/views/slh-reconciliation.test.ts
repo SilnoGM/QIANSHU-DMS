@@ -585,7 +585,7 @@ test('装柜明细行面板：缺货件号与收费材积时走占位符', () =>
   assert.equal(fields.find(field => field.id === 'codAmountTwd')?.amount, undefined)
 })
 
-test('销售与采购面板：销售 11 项、采购 9 项（销售在前），金额带币种、状态合并成一行彩色标签', () => {
+test('销售与采购面板：销售 11 项、采购 10 项（销售在前），金额带币种、状态合并成一行彩色标签', () => {
   const groups = buildSlhReconciliationOrderFieldGroups(memberFixture({
     purchaseOrder: {
       id: 'po-1',
@@ -596,6 +596,7 @@ test('销售与采购面板：销售 11 项、采购 9 项（销售在前），�
       balanceDueAmount: '3425',
       paidAmount: '1000',
       outstandingAmount: '3425',
+      creatorDisplayName: '李四',
       fulfillmentStatus: 'PARTIALLY_SHIPPED',
       paymentStatus: 'PARTIALLY_PAID',
       shippingMarkText: 'J-070924',
@@ -699,6 +700,9 @@ test('销售与采购面板：销售 11 项、采购 9 项（销售在前），�
   // 出单人交给 QsPersonDisplay 渲染：字段多带一个人名标记，缺名时不下发。
   const issuer = groups.find(group => group.id === 'sales')?.fields.find(field => field.id === 'issuer')
   assert.equal(issuer?.person, '张三')
+  // 采购人同样走人员字段（采购列表那一列的可视口径），来源是采购订单的创建人。
+  const creator = groups.find(group => group.id === 'purchase')?.fields.find(field => field.id === 'purchaseCreator')
+  assert.equal(creator?.person, '李四')
   const purchase = groups.find(group => group.id === 'purchase')
   const sales = groups.find(group => group.id === 'sales')
   assert.deepEqual(sales?.fields.map(field => field.id), [
@@ -724,6 +728,7 @@ test('销售与采购面板：销售 11 项、采购 9 项（销售在前），�
     'outstandingAmount',
     'purchaseState',
     'shippingMark',
+    'purchaseCreator',
   ])
   // 金额行额外下发原始值 + 币种：模板据此改用 AmountDisplay（符号/千分位/币种精度由它负责）。
   const purchaseTotal = groups.find(group => group.id === 'purchase')?.fields.find(field => field.id === 'purchaseTotalAmount')

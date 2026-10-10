@@ -345,6 +345,7 @@
       "purchaseBalance": "采购尾款",
       "purchasePaidAmount": "实际已付款",
       "purchaseOutstandingAmount": "实际未付款",
+      "purchaseCreator": "采购人",
       "loadingCodAmount": "装柜代收货款台币",
       "billCodAmount": "账单代收货款台币",
       "groupMatchEvidence": "匹配依据",

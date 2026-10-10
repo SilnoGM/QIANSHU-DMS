@@ -336,6 +336,7 @@
       "purchaseBalance": "Purchase balance",
       "purchasePaidAmount": "Paid amount",
       "purchaseOutstandingAmount": "Unpaid amount",
+      "purchaseCreator": "Buyer",
       "loadingCodAmount": "Loading row COD (TWD)",
       "billCodAmount": "Bill line COD (TWD)",
       "groupMatchEvidence": "Match evidence",

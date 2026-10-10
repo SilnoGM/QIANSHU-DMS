@@ -69,6 +69,8 @@ export const slhReconciliationBatchDetailInclude = {
                   supplierValue: true, customSupplierName: true,
                   // 实际已付款沿用采购域的累加口径，需要未作废的付款记录。
                   payments: { select: { amount: true, voidedAt: true } },
+                  // 采购人是采购列表那一列的同源字段。
+                  createdBy: { select: { displayName: true } },
                   salesOrder: {
                     select: {
                       id: true, orderNo: true, orderStatus: true,
@@ -190,6 +192,7 @@ function serializeBatchMember(
         purchaseOrderRow,
         supplierResolutions.get(purchaseOrderRow.id),
       ),
+      creatorDisplayName: purchaseOrderRow.createdBy.displayName,
     },
     salesOrder: salesOrderRow === null ? null : {
       id: salesOrderRow.id,

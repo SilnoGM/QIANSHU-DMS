@@ -336,6 +336,7 @@
       "purchaseBalance": "採購尾款",
       "purchasePaidAmount": "實際已付款",
       "purchaseOutstandingAmount": "實際未付款",
+      "purchaseCreator": "採購人",
       "loadingCodAmount": "裝櫃代收貨款台幣",
       "billCodAmount": "帳單代收貨款台幣",
       "groupMatchEvidence": "比對依據",

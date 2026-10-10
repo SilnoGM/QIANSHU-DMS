@@ -52,6 +52,7 @@ interface BatchDetail {
       balanceDueAmount: string
       paidAmount: string
       outstandingAmount: string
+      creatorDisplayName: string
       fulfillmentStatus: string
       paymentStatus: string
       shippingMarkText: string | null
@@ -458,6 +459,8 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       // purchase_order_payments_identity_trigger 拒绝，所以不在这里另造一份。
       expect(member.purchaseOrder?.paidAmount).toBe('0.00')
       expect(member.purchaseOrder?.outstandingAmount).toBe('10.00')
+      // 采购人＝采购订单的创建人（夹具由原子性用例的账号建单）。
+      expect(member.purchaseOrder?.creatorDisplayName).toBe('Mark atomicity')
       expect(['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED', 'SHIPPED', 'SIGNED']).toContain(member.purchaseOrder?.fulfillmentStatus)
       // 销售来源：四位小数订单币种金额，字段口径与销售域一致。
       expect(member.salesOrder).toMatchObject({ customerName: '包装客户', currencyCode: 'TWD', orderStatus: 'CONFIRMED' })

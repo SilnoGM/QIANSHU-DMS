@@ -196,6 +196,7 @@ export class SlhReconciliationMatchedPurchaseOrderDto {
   @ApiProperty({ enum: PurchaseOrderPaymentStatus }) paymentStatus!: PurchaseOrderPaymentStatus
   @ApiPropertyOptional({ type: 'string', nullable: true }) shippingMarkText!: string | null
   @ApiProperty({ type: () => PurchaseOrderSupplierDto }) supplier!: PurchaseOrderSupplierDto
+  @ApiProperty({ type: 'string', description: '采购人：采购订单创建人的显示名' }) creatorDisplayName!: string
 }
 
 /**

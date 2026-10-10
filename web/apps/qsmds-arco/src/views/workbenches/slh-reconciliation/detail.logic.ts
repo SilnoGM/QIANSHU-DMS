@@ -371,6 +371,8 @@ export function buildSlhReconciliationOrderFieldGroups(
           tag('slhReconciliation.detail.paymentStatus', 'purchaseOrderDrawer', PURCHASE_STATUS_TONES.payment, purchase?.paymentStatus),
         ]),
         { id: 'shippingMark', label: translate('purchaseOrderDesc.fields.shippingMark'), value: text(purchase?.shippingMarkText) },
+        // 采购人＝采购订单的创建人，与销售侧出单人一样交给 QsPersonDisplay。
+        { id: 'purchaseCreator', label: translate('slhReconciliation.detail.purchaseCreator'), ...person(purchase?.creatorDisplayName) },
       ],
     },
   ]

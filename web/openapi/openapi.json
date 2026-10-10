@@ -85333,6 +85333,10 @@
           },
           "supplier": {
             "$ref": "#/components/schemas/PurchaseOrderSupplierDto"
+          },
+          "creatorDisplayName": {
+            "type": "string",
+            "description": "采购人：采购订单创建人的显示名"
           }
         },
         "required": [
@@ -85346,7 +85350,8 @@
           "outstandingAmount",
           "fulfillmentStatus",
           "paymentStatus",
-          "supplier"
+          "supplier",
+          "creatorDisplayName"
         ]
       },
       "SlhReconciliationMatchedSalesOrderDto": {
