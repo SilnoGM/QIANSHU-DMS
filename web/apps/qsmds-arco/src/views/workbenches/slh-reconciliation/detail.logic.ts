@@ -1,4 +1,4 @@
-import type { SlhBillLineChargeDto, SlhReconciliationBatchMemberDto } from '@/api/generated/types.gen'
+import type { SlhReconciliationBatchMemberDto } from '@/api/generated/types.gen'
 import type {
   QsReconciliationLineSwitcherItem,
   QsReconciliationLineSwitcherTone,
@@ -77,6 +77,10 @@ export interface SlhReconciliationLineField {
   readonly emphasis?: 'total' | 'balance'
   /** 长文本字段才有：单行截断，超长时悬停给完整值（模板按需挂浮层）。 */
   readonly truncate?: true
+  /** 多行值的字段（收货信息）：值按行拆开展示，`value` 仍是拼好的兜底文本。 */
+  readonly lines?: readonly string[]
+  /** 备注这类整段强调的短文本：值以浅色标签呈现。 */
+  readonly chip?: true
 }
 
 /** 订单侧单个维度的状态标签：维度名用于无障碍朗读，标签文案与色调由本模块查表给出。 */
@@ -91,6 +95,46 @@ export interface SlhReconciliationFieldGroup {
   readonly id: string
   readonly label: string
   readonly fields: readonly SlhReconciliationLineField[]
+}
+
+/** 账单面板顶部的身份标签：文案自洽（如「第 31 行」），色调只决定浅色底。 */
+export interface SlhReconciliationIdentityTag {
+  readonly text: string
+  readonly tone: QsStatusTagTone
+}
+
+/** 账单面板费用块里的一行：emphasis 决定字号与颜色，tag 是该行的费别标签（如「重货费」）。 */
+export interface SlhReconciliationBillAmountRow {
+  readonly id: string
+  readonly label: string
+  readonly value: string
+  readonly amount?: SlhReconciliationAmountValue
+  /** total＝总额（大号加粗）；cod＝代收货款（大号加粗、蓝色，与核对焦点同源同色）；warning＝台币杂费。 */
+  readonly emphasis?: 'cod' | 'total' | 'warning'
+  readonly tag?: SlhReconciliationIdentityTag
+}
+
+/** 账单面板的一段：字段段（货物明细 / 收货与备注）或费用段（费用结算）。 */
+export type SlhReconciliationBillSection
+  = | {
+    readonly id: 'cargo' | 'recipient'
+    readonly label: string
+    readonly fields: readonly SlhReconciliationLineField[]
+  }
+  | {
+    readonly id: 'fees'
+    readonly label: string
+    /** 上下排布的两个大号数值：合计应付与代收货款（窄列下并排放不下长金额）。 */
+    readonly headline: readonly SlhReconciliationBillAmountRow[]
+    /** 逐项费用：运费、附加费、代收手续费与台币杂费。 */
+    readonly details: readonly SlhReconciliationBillAmountRow[]
+  }
+
+/** 账单明细行面板：顶部信息块（入仓单号 + 身份标签）＋三段内容（货物明细 / 费用结算 / 收货与备注）。 */
+export interface SlhReconciliationBillLinePanel {
+  readonly receiptReference: SlhReconciliationLineField
+  readonly tags: readonly SlhReconciliationIdentityTag[]
+  readonly sections: readonly SlhReconciliationBillSection[]
 }
 
 /**
@@ -150,87 +194,161 @@ function createFieldFormatters(translate: SlhReconciliationTranslate) {
     weight: (line: Pick<SlhReconciliationBatchMemberDto, 'grossWeightKg' | 'weightUnit'>) => (
       formatSlhBillWeight(line) ?? missing
     ),
-    charges: (charges: readonly SlhBillLineChargeDto[]) => {
-      const text = groupSlhBillCharges(charges)
-        .map(group => `${group.currencyCode} ${group.items
-          .map(item => `${translate(`slhBill.chargeType.${item.chargeType}`)} ${formatSlhBillAmount(item.amount) ?? missing}`)
-          .join(' ')}`)
-        .join('；')
-      return text === '' ? missing : text
-    },
   }
 }
 
 /**
- * 账单明细行信息：账单行自身字段，按「对账要看的顺序」分段。
- * 代收货款台币是对账焦点之一，提到段首；金额类单列一段，收货与备注收尾。
+ * 账单明细行面板：顶部信息块（入仓单号 + 行号/柜号/装柜日期）＋货物明细＋费用结算＋收货与备注。
+ *
+ * 取值与账单明细列同源，三处合并按对账阅读顺序重组：箱数+重量、系统材积+（自报比较）、
+ * 计价方式+类别+单价；台币杂费逐项列出（合计与逐项之和逐行一致，避免同一笔钱出现两次），
+ * 人民币费用并入附加费并以费别标签标注（本账单里恒为「重货费」）。
+ * 字段名与费别沿用账单域既有键，保证同一事实在明细列与这里的措辞一致。
  * 对账状态与核对留痕按产品要求不在此展示，匹配依据属于柜次侧（放在装柜明细行面板）。
  */
-export function buildSlhReconciliationBillLineFieldGroups(
+export function buildSlhReconciliationBillLinePanel(
   member: SlhReconciliationBatchMemberDto,
   translate: SlhReconciliationTranslate,
-): readonly SlhReconciliationFieldGroup[] {
-  const { missing, text, amount, amountValue, volume, dimensions, weight, charges } = createFieldFormatters(translate)
+): SlhReconciliationBillLinePanel {
+  const { missing, text, amount, amountValue, volume, dimensions, weight } = createFieldFormatters(translate)
   const difference = resolveSlhBillVolumeDifference(member)
-  return [
-    {
-      id: 'billLine',
-      label: translate('slhReconciliation.detail.groupBillLine'),
-      fields: [
-        {
-          id: 'lineNumber',
-          label: translate('slhBill.line.lineNumber'),
-          // 与账单明细列一致：行号指的是原表行号，不是批次内的顺序。
-          value: translate('slhBill.line.lineNumberValue', { line: member.sourceRowNumber }),
-        },
-        { id: 'loadingDate', label: translate('slhBill.line.loadingDate'), value: text(member.loadingDate) },
-        { id: 'containerBatchName', label: translate('slhBill.line.containerBatchName'), value: text(member.containerBatchNameText) },
-        // 对账焦点：与顶部核对焦点区的「账单代收货款」同源。
-        { id: 'codAmountTwd', label: translate('slhReconciliation.detail.billCodAmount'), value: amount(member.codAmountTwd), amount: amountValue(member.codAmountTwd, 'TWD') },
-        { id: 'warehouseReceiptReference', label: translate('slhBill.line.warehouseReceiptReference'), value: text(member.warehouseReceiptReference) },
-        { id: 'shippingMark', label: translate('slhBill.line.shippingMark'), value: text(member.shippingMarkText) },
-        { id: 'goodsName', label: translate('slhBill.line.goodsName'), value: text(member.goodsName) },
-        { id: 'packageCount', label: translate('slhBill.line.packageCount'), value: `${member.packageCount} ${member.packageUnit ?? ''}`.trim() },
-        { id: 'weight', label: translate('slhBill.line.weight'), value: weight(member) },
-        { id: 'dimensions', label: translate('slhBill.line.dimensions'), value: dimensions(member) },
-        { id: 'volumeCai', label: translate('slhBill.line.volumeCai'), value: volume(member.volumeCai) },
-        { id: 'reportedVolumeCai', label: translate('slhBill.line.reportedVolumeCai'), value: volume(member.reportedVolumeCai) },
-        {
-          id: 'volumeDifferenceCai',
-          label: translate('slhBill.line.volumeDifferenceCai'),
-          value: difference === null || difference.text === '' ? missing : difference.text,
-        },
-        { id: 'categoryCode', label: translate('slhBill.line.categoryCode'), value: text(member.categoryCode) },
-        { id: 'unitPriceAmount', label: translate('slhBill.line.unitPriceAmount'), value: text(member.unitPriceAmount) },
-        {
-          id: 'pricingBasis',
-          label: translate('slhBill.line.pricingBasis'),
-          // 契约标的是可选，服务端实际会对缺失回 null：真值判断与账单明细列同一写法。
-          value: member.pricingBasis ? translate(`slhBill.pricingBasis.${member.pricingBasis}`) : missing,
-        },
-      ],
+  const chargeGroups = groupSlhBillCharges(member.charges)
+  const chargeItems = (currencyCode: string) => chargeGroups
+    .filter(group => group.currencyCode === currencyCode)
+    .flatMap(group => group.items)
+  // 附加费的费别标签：账单里的人民币费用已经并进附加费列，标签说明这笔钱是什么费。
+  const cnyChargeTypes = [...new Set(chargeItems('CNY').map(item => item.chargeType))]
+  const surchargeTag: SlhReconciliationIdentityTag | undefined = member.surchargeAmountCny === null || cnyChargeTypes.length === 0
+    ? undefined
+    : {
+        text: cnyChargeTypes.map(type => translate(`slhBill.chargeType.${type}`)).join('、'),
+        tone: 'warning',
+      }
+  // 台币杂费逐项：费别 + 金额（与账单明细列同一精度），整行橙红强调。
+  const twdChargeRows: SlhReconciliationBillAmountRow[] = chargeItems('TWD').map((item, index) => ({
+    id: `charge-${item.chargeType}-${index}`,
+    label: translate(`slhBill.chargeType.${item.chargeType}`),
+    value: amount(item.amount) ?? missing,
+    amount: amountValue(item.amount, 'TWD'),
+    emphasis: 'warning',
+  }))
+  // 台币杂费合计来自账单列而不是费用行推导：没有费用行却有合计时补一行，避免这笔钱在页面上消失。
+  if (twdChargeRows.length === 0 && member.ntdSurchargeAmountTwd !== null) {
+    twdChargeRows.push({
+      id: 'ntdSurchargeAmountTwd',
+      label: translate('slhBill.line.charges'),
+      value: amount(member.ntdSurchargeAmountTwd) ?? missing,
+      amount: amountValue(member.ntdSurchargeAmountTwd, 'TWD'),
+      emphasis: 'warning',
+    })
+  }
+  // 材积：主值取系统计算材积，括号里给与账单自报的比较结果；任一侧缺失就没有括注。
+  const volumeNote = difference === null
+    ? ''
+    : difference.tone === 'even'
+      ? `（${translate('slhReconciliation.detail.billVolumeEven')}）`
+      : `（${translate('slhBill.line.volumeDifferenceCai')} ${difference.text}）`
+  const recipientLines = [member.recipientName, member.recipientAddress, member.recipientPhones]
+    .map(value => text(value))
+    .filter(value => value !== missing)
+  return {
+    receiptReference: {
+      id: 'warehouseReceiptReference',
+      label: translate('slhBill.line.warehouseReceiptReference'),
+      // 承运方与序号都在原始值里（如「500229791776（安能） -1」）：原样展示，不解析。
+      value: text(member.warehouseReceiptReference),
     },
-    {
-      id: 'amounts',
-      label: translate('slhReconciliation.detail.groupAmounts'),
-      fields: [
-        { id: 'freightAmountCny', label: translate('slhBill.line.freightAmountCny'), value: amount(member.freightAmountCny), amount: amountValue(member.freightAmountCny, 'CNY') },
-        { id: 'codHandlingAmountCny', label: translate('slhBill.line.codHandlingAmountCny'), value: amount(member.codHandlingAmountCny), amount: amountValue(member.codHandlingAmountCny, 'CNY') },
-        { id: 'surchargeAmountCny', label: translate('slhBill.line.surchargeAmountCny'), value: amount(member.surchargeAmountCny), amount: amountValue(member.surchargeAmountCny, 'CNY') },
-        { id: 'payableAmountCny', label: translate('slhBill.line.payableAmountCny'), value: amount(member.payableAmountCny), amount: amountValue(member.payableAmountCny, 'CNY') },
-        { id: 'ntdSurchargeAmountTwd', label: translate('slhBill.line.ntdSurchargeAmountTwd'), value: amount(member.ntdSurchargeAmountTwd), amount: amountValue(member.ntdSurchargeAmountTwd, 'TWD') },
-      ],
-    },
-    {
-      id: 'recipient',
-      label: translate('slhReconciliation.detail.groupRecipient'),
-      fields: [
-        { id: 'recipientInfo', label: translate('slhBill.line.recipientInfo'), value: text(member.recipientInfoRaw) },
-        { id: 'remark', label: translate('slhBill.line.remark'), value: text(member.remark) },
-        { id: 'charges', label: translate('slhBill.line.charges'), value: charges(member.charges) },
-      ],
-    },
-  ]
+    tags: [
+      // 行号沿用账单明细列的模板键：它说的就是原表行号，不是批次内顺序。
+      { text: translate('slhBill.line.lineNumberValue', { line: member.sourceRowNumber }), tone: 'info' },
+      { text: `${translate('slhBill.line.containerBatchName')}：${text(member.containerBatchNameText)}`, tone: 'info' },
+      { text: text(member.loadingDate), tone: 'neutral' },
+    ],
+    sections: [
+      {
+        id: 'cargo',
+        label: translate('slhReconciliation.detail.billCargoGroup'),
+        fields: [
+          { id: 'goodsName', label: translate('slhBill.line.goodsName'), value: text(member.goodsName), truncate: true },
+          { id: 'shippingMark', label: translate('slhBill.line.shippingMark'), value: text(member.shippingMarkText), truncate: true },
+          {
+            id: 'packageAndWeight',
+            label: `${translate('slhBill.line.packageCount')} / ${translate('slhBill.line.weight')}`,
+            value: `${`${member.packageCount} ${member.packageUnit ?? ''}`.trim()} | ${weight(member)}`,
+          },
+          { id: 'dimensions', label: translate('slhBill.line.dimensions'), value: dimensions(member) },
+          { id: 'volumeCai', label: translate('slhBill.line.volumeCai'), value: `${volume(member.volumeCai)}${volumeNote}` },
+          {
+            id: 'chargeRule',
+            label: translate('slhReconciliation.detail.billChargeRule'),
+            value: [
+              // 契约标的是可选，服务端实际会对缺失回 null：真值判断与账单明细列同一写法。
+              member.pricingBasis ? translate(`slhBill.pricingBasis.${member.pricingBasis}`) : missing,
+              `${translate('slhBill.line.categoryCode')} ${text(member.categoryCode)}`,
+              `${translate('slhBill.line.unitPriceAmount')} ${text(member.unitPriceAmount)}`,
+            ].join(' | '),
+          },
+        ],
+      },
+      {
+        id: 'fees',
+        label: translate('slhReconciliation.detail.billFeeGroup'),
+        headline: [
+          {
+            id: 'payableAmountCny',
+            label: translate('slhBill.line.payableAmountCny'),
+            value: amount(member.payableAmountCny) ?? missing,
+            amount: amountValue(member.payableAmountCny, 'CNY'),
+            emphasis: 'total',
+          },
+          {
+            // 与核对焦点区的「账单代收货款」同一字段、同一组件：蓝色身份也一致。
+            id: 'codAmountTwd',
+            label: translate('slhBill.line.codAmountTwd'),
+            value: amount(member.codAmountTwd) ?? missing,
+            amount: amountValue(member.codAmountTwd, 'TWD'),
+            emphasis: 'cod',
+          },
+        ],
+        details: [
+          {
+            id: 'freightAmountCny',
+            label: translate('slhBill.line.freightAmountCny'),
+            value: amount(member.freightAmountCny) ?? missing,
+            amount: amountValue(member.freightAmountCny, 'CNY'),
+          },
+          {
+            id: 'surchargeAmountCny',
+            label: translate('slhBill.line.surchargeAmountCny'),
+            value: amount(member.surchargeAmountCny) ?? missing,
+            amount: amountValue(member.surchargeAmountCny, 'CNY'),
+            tag: surchargeTag,
+          },
+          {
+            id: 'codHandlingAmountCny',
+            label: translate('slhBill.line.codHandlingAmountCny'),
+            value: amount(member.codHandlingAmountCny) ?? missing,
+            amount: amountValue(member.codHandlingAmountCny, 'CNY'),
+          },
+          ...twdChargeRows,
+        ],
+      },
+      {
+        id: 'recipient',
+        label: translate('slhReconciliation.detail.groupRecipient'),
+        fields: [
+          {
+            id: 'recipientInfo',
+            label: translate('slhBill.line.recipientInfo'),
+            // 收货信息按名称 / 地址 / 电话叠三行展示：原始串仍可在账单明细列查到。
+            value: recipientLines.length === 0 ? missing : recipientLines.join(' / '),
+            lines: recipientLines,
+          },
+          { id: 'remark', label: translate('slhBill.line.remark'), value: text(member.remark), chip: true },
+        ],
+      },
+    ],
+  }
 }
 
 /**

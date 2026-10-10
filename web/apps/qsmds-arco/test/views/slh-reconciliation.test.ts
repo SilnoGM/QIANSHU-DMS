@@ -22,7 +22,7 @@ import {
   toggleSlhBillSelection,
 } from '../../src/views/workbenches/slh-reconciliation/bill-select.logic'
 import {
-  buildSlhReconciliationBillLineFieldGroups,
+  buildSlhReconciliationBillLinePanel,
   buildSlhReconciliationFocusValues,
   buildSlhReconciliationLineItems,
   buildSlhReconciliationLoadingItemFieldGroups,
@@ -366,8 +366,22 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   assert.match(page, /v-else-if="field\.truncate"[\s\S]{0,120}?:text="field\.value"/u)
   assert.match(page, /<SlhReconciliationOverflowText/u)
   assert.match(page, /field\.emphasis === 'total'/u)
-  // 订单面板不再用分组渲染，装柜/账单两块保持原样。
+  // 订单面板不再用分组渲染；装柜面板保持分组渲染，账单面板走独立的四段模板。
   assert.doesNotMatch(page, /orderFieldGroups|groupDividers|sectionClass/u)
+  assert.match(page, /v-if="billLinePanel"/u)
+  assert.match(page, /v-for="section in billLinePanel\.sections"/u)
+  assert.match(page, /v-for="tag in billLinePanel\.tags"/u)
+  assert.match(page, /\{\{ billLinePanel\.receiptReference\.value \}\}/u)
+  // 费用段：两个大号数值上下排布，逐项费用第一行带虚线分隔，费别标签跟在标签后面。
+  assert.match(page, /v-for="row in section\.headline"/u)
+  assert.match(page, /v-for="\(row, index\) in section\.details"/u)
+  assert.match(page, /index === 0 \? 'pt-2 border-t border-dashed border-border' : ''/u)
+  assert.match(page, /v-if="row\.tag"/u)
+  assert.match(page, /!text-sky-700 dark:!text-sky-300/u)
+  assert.match(page, /!text-amber-700 dark:!text-amber-300/u)
+  // 多行值（收货信息）与浅色标签（备注）两个分支都在。
+  assert.match(page, /v-if="field\.lines && field\.lines\.length > 0"/u)
+  assert.match(page, /v-else-if="field\.chip"/u)
   // 金额行在列里也统一走 AmountDisplay（就地覆盖对齐，缺失时回落占位符文本）。
   assert.match(page, /v-if="field\.amount"[\s\S]{0,300}?:currencies="currencyCatalog\.currencies\.value"/u)
   // 类名会被 unocss/order 重排：只断言两个覆盖都在，不锁定顺序。
@@ -432,6 +446,9 @@ function memberFixture(overrides: Partial<SlhReconciliationBatchMemberDto> = {})
     codAmountTwd: '1200',
     ntdSurchargeAmountTwd: null,
     recipientInfoRaw: '王小明 0912345678 台北市',
+    recipientName: '王小明',
+    recipientAddress: '台北市',
+    recipientPhones: '0912345678',
     remark: '备注',
     reconciliationStatus: 'PENDING',
     charges: [],
@@ -475,72 +492,161 @@ test('选中行解析：命中返回成员，找不到、未选中或空批次�
   assert.equal(resolveSlhReconciliationSelectedMember([], 'line-1'), null)
 })
 
-test('账单明细行面板：格式化与账单明细列同源，缺值与核对留痕统一占位符', () => {
-  const fields = flattenFields(buildSlhReconciliationBillLineFieldGroups(memberFixture(), echoKey))
-  const valueOf = (id: string) => fields.find(field => field.id === id)?.value
-
-  assert.equal(valueOf('lineNumber'), '[slhBill.line.lineNumberValue:14]')
-  assert.equal(valueOf('packageCount'), '12 箱')
-  assert.equal(valueOf('weight'), '120.50 KG')
-  assert.equal(valueOf('dimensions'), '215×137×113 [slhBill.unit.cm]')
-  assert.equal(valueOf('volumeCai'), '1.23 [slhBill.unit.cai]')
-  assert.equal(valueOf('reportedVolumeCai'), '1.20 [slhBill.unit.cai]')
-  // 材积差异按「系统计算 − 账单自报」带符号展示。
-  assert.equal(valueOf('volumeDifferenceCai'), '+0.03')
-  assert.equal(valueOf('payableAmountCny'), '4455.00')
-  assert.equal(valueOf('pricingBasis'), '[slhBill.pricingBasis.VOLUME]')
-  assert.equal(valueOf('recipientInfo'), '王小明 0912345678 台北市')
-  // 空值＝不涉及：一律占位符，不回显 null / 空串。
-  assert.equal(valueOf('codHandlingAmountCny'), '[slhBill.valueMissing]')
-  assert.equal(valueOf('ntdSurchargeAmountTwd'), '[slhBill.valueMissing]')
-  assert.equal(valueOf('charges'), '[slhBill.valueMissing]')
-  // 匹配依据属于柜次侧、对账状态与核对留痕按产品要求不展示：账单面板都不再出现。
-  assert.equal(valueOf('matchSource'), undefined)
-  assert.equal(valueOf('matchedContainer'), undefined)
-  assert.equal(valueOf('reconciliationStatus'), undefined)
-  assert.equal(valueOf('reconciledAt'), undefined)
-  assert.equal(valueOf('reconciledBy'), undefined)
-  for (const field of fields) {
-    assert.notEqual(field.label.trim(), '', `${field.id} 缺少字段名`)
+test('账单明细行面板：顶部信息块 + 货物明细 / 费用结算 / 收货与备注', () => {
+  const panel = buildSlhReconciliationBillLinePanel(memberFixture({
+    warehouseReceiptReference: '500229791776（安能） -1',
+  }), echoKey)
+  const [cargo, fees, recipient] = panel.sections
+  if (
+    cargo === undefined || cargo.id !== 'cargo'
+    || fees === undefined || fees.id !== 'fees'
+    || recipient === undefined || recipient.id !== 'recipient'
+  ) {
+    throw new Error('账单面板缺少预期分段')
   }
+
+  // 顶部信息块：入仓单号原样展示（承运方与序号都在原始值里），行号/柜号蓝色、装柜日期中性。
+  assert.equal(panel.receiptReference.label, '[slhBill.line.warehouseReceiptReference]')
+  assert.equal(panel.receiptReference.value, '500229791776（安能） -1')
+  assert.deepEqual(panel.tags, [
+    { text: '[slhBill.line.lineNumberValue:14]', tone: 'info' },
+    { text: '[slhBill.line.containerBatchName]：CONT-1', tone: 'info' },
+    { text: '2026-09-01', tone: 'neutral' },
+  ])
+  assert.deepEqual(panel.sections.map(section => [section.id, section.label]), [
+    ['cargo', '[slhReconciliation.detail.billCargoGroup]'],
+    ['fees', '[slhReconciliation.detail.billFeeGroup]'],
+    ['recipient', '[slhReconciliation.detail.groupRecipient]'],
+  ])
+
+  // 货物明细：三处合并行（箱数/重量、系统材积+自报比较、计价方式+类别+单价）。
+  assert.deepEqual(cargo.fields.map(field => field.id), [
+    'goodsName',
+    'shippingMark',
+    'packageAndWeight',
+    'dimensions',
+    'volumeCai',
+    'chargeRule',
+  ])
+  assert.equal(cargo.fields[2]?.label, '[slhBill.line.packageCount] / [slhBill.line.weight]')
+  assert.equal(cargo.fields[2]?.value, '12 箱 | 120.50 KG')
+  assert.equal(cargo.fields[3]?.value, '215×137×113 [slhBill.unit.cm]')
+  // 材积主值取系统计算，括号里给与账单自报的差异（本例系统更大）。
+  assert.equal(cargo.fields[4]?.value, '1.23 [slhBill.unit.cai]（[slhBill.line.volumeDifferenceCai] +0.03）')
+  assert.equal(
+    cargo.fields[5]?.value,
+    '[slhBill.pricingBasis.VOLUME] | [slhBill.line.categoryCode] A | [slhBill.line.unitPriceAmount] 12.5',
+  )
+
+  // 费用结算：两个大号数值 = 合计应付与代收货款（代收与核对焦点同字段、同组件、同格式）。
+  assert.deepEqual(fees.headline.map(row => [row.id, row.emphasis]), [
+    ['payableAmountCny', 'total'],
+    ['codAmountTwd', 'cod'],
+  ])
+  assert.equal(fees.headline[0]?.label, '[slhBill.line.payableAmountCny]')
+  assert.deepEqual(fees.headline[0]?.amount, { value: '4455', currency: 'CNY' })
+  assert.deepEqual(fees.headline[1]?.amount, { value: '1200', currency: 'TWD' })
+  assert.deepEqual(fees.headline[1]?.value, '1200.00')
+  // 逐项费用：运费 / 附加费 / 代收手续费（本夹具没有费用行、也没有台币杂费合计）。
+  assert.deepEqual(fees.details.map(row => row.id), ['freightAmountCny', 'surchargeAmountCny', 'codHandlingAmountCny'])
+  assert.equal(fees.details[0]?.value, '4425.00')
+  assert.equal(fees.details[1]?.value, '30.00')
+  assert.equal(fees.details[1]?.tag, undefined)
+  assert.equal(fees.details[2]?.value, '[slhBill.valueMissing]')
+
+  // 收货与备注：收货信息按名称 / 地址 / 电话三行，备注走浅色标签。
+  assert.deepEqual(recipient.fields.map(field => field.id), ['recipientInfo', 'remark'])
+  assert.deepEqual(recipient.fields[0]?.lines, ['王小明', '台北市', '0912345678'])
+  assert.equal(recipient.fields[0]?.value, '王小明 / 台北市 / 0912345678')
+  assert.equal(recipient.fields[1]?.chip, true)
+  assert.equal(recipient.fields[1]?.value, '备注')
 })
 
-test('账单明细行面板：尺寸缺边不进尺寸列，材积缺一侧不算差异，费用明细按币种分组', () => {
-  const fields = flattenFields(buildSlhReconciliationBillLineFieldGroups(memberFixture({
-    lengthCm: null,
+test('账单明细行面板：材积一致与缺一侧、重货费标签、多项台币杂费与合计回落', () => {
+  const even = buildSlhReconciliationBillLinePanel(memberFixture({
+    volumeCai: '2',
+    reportedVolumeCai: '2',
+    surchargeAmountCny: '100',
+    charges: [
+      { chargeType: 'HEAVY_CARGO', currencyCode: 'CNY', amount: '100' },
+    ] as SlhReconciliationBatchMemberDto['charges'],
+  }), echoKey)
+  const evenCargo = even.sections[0]
+  const evenFees = even.sections[1]
+  if (evenCargo?.id !== 'cargo' || evenFees?.id !== 'fees') {
+    throw new Error('账单面板缺少预期分段')
+  }
+  // 两侧一致：不写差异，只标「自报/系统一致」。
+  assert.equal(evenCargo.fields[4]?.value, '2.00 [slhBill.unit.cai]（[slhReconciliation.detail.billVolumeEven]）')
+  // 人民币费用已并入附加费列：标签说明这笔钱是什么费。
+  assert.deepEqual(evenFees.details[1]?.tag, { text: '[slhBill.chargeType.HEAVY_CARGO]', tone: 'warning' })
+
+  // 缺任一侧：不写括注（差异无从谈起），尺寸缺边也不冒充。
+  const partial = buildSlhReconciliationBillLinePanel(memberFixture({
     volumeCai: null,
     reportedVolumeCai: '2',
-    pricingBasis: undefined,
-    charges: [
-      { chargeType: 'DELIVERY', currencyCode: 'TWD', amount: '250' },
-      { chargeType: 'FREIGHT', currencyCode: 'CNY', amount: '10' },
-    ] as SlhReconciliationBatchMemberDto['charges'],
-    reconciledAt: '2026-10-09T10:00:00.000Z',
-    reconciledByDisplayName: '张三',
-  }), echoKey))
-  const valueOf = (id: string) => fields.find(field => field.id === id)?.value
+    lengthCm: null,
+  }), echoKey)
+  const partialCargo = partial.sections[0]
+  if (partialCargo?.id !== 'cargo') {
+    throw new Error('账单面板缺少货物明细')
+  }
+  assert.equal(partialCargo.fields[3]?.value, '[slhBill.valueMissing]')
+  assert.equal(partialCargo.fields[4]?.value, '[slhBill.valueMissing]')
 
-  // 缺任一边就不冒充账单尺寸；材积缺一侧时差异也没有意义。
-  assert.equal(valueOf('dimensions'), '[slhBill.valueMissing]')
-  assert.equal(valueOf('volumeCai'), '[slhBill.valueMissing]')
-  assert.equal(valueOf('volumeDifferenceCai'), '[slhBill.valueMissing]')
-  assert.equal(valueOf('reportedVolumeCai'), '2.00 [slhBill.unit.cai]')
-  assert.equal(valueOf('pricingBasis'), '[slhBill.valueMissing]')
-  // 人民币在前台币在后，组内保持来源顺序。
-  assert.equal(
-    valueOf('charges'),
-    'CNY [slhBill.chargeType.FREIGHT] 10.00；TWD [slhBill.chargeType.DELIVERY] 250.00',
-  )
+  // 多项台币费用：逐项一行、橙红强调、与账单明细列同一精度。
+  const items = buildSlhReconciliationBillLinePanel(memberFixture({
+    ntdSurchargeAmountTwd: '1686',
+    charges: [
+      { chargeType: 'REMOTE_AREA', currencyCode: 'TWD', amount: '1000' },
+      { chargeType: 'STORAGE', currencyCode: 'TWD', amount: '686' },
+    ] as SlhReconciliationBatchMemberDto['charges'],
+  }), echoKey)
+  const itemFees = items.sections[1]
+  if (itemFees?.id !== 'fees') {
+    throw new Error('账单面板缺少费用结算')
+  }
+  assert.deepEqual(itemFees.details.slice(3).map(row => [row.label, row.value, row.emphasis]), [
+    ['[slhBill.chargeType.REMOTE_AREA]', '1000.00', 'warning'],
+    ['[slhBill.chargeType.STORAGE]', '686.00', 'warning'],
+  ])
+
+  // 台币杂费合计来自账单列：没有费用行却有合计时补一行，避免这笔钱在页面上消失。
+  const fallback = buildSlhReconciliationBillLinePanel(memberFixture({
+    ntdSurchargeAmountTwd: '1000',
+    charges: [],
+  }), echoKey)
+  const fallbackFees = fallback.sections[1]
+  if (fallbackFees?.id !== 'fees') {
+    throw new Error('账单面板缺少费用结算')
+  }
+  assert.deepEqual(fallbackFees.details.slice(3).map(row => [row.id, row.value, row.emphasis]), [
+    ['ntdSurchargeAmountTwd', '1000.00', 'warning'],
+  ])
 })
 
-test('账单明细行面板：计价方式缺失（服务端回 null）时走占位符而不是拼出空译文键', () => {
-  // 契约上 pricingBasis 标的是可选，服务端实际会对缺失返回 null：与 undefined 同一处理。
-  const fields = flattenFields(buildSlhReconciliationBillLineFieldGroups(
-    memberFixture({ pricingBasis: null as unknown as SlhReconciliationBatchMemberDto['pricingBasis'] }),
-    echoKey,
-  ))
-
-  assert.equal(fields.find(field => field.id === 'pricingBasis')?.value, '[slhBill.valueMissing]')
+test('账单明细行面板：计价方式缺失与收货三列全空时都走占位符', () => {
+  // 契约上 pricingBasis 标的是可选，服务端实际会对缺失回 null：与 undefined 同一处理。
+  const panel = buildSlhReconciliationBillLinePanel(memberFixture({
+    pricingBasis: null as unknown as SlhReconciliationBatchMemberDto['pricingBasis'],
+    recipientName: null,
+    recipientAddress: null,
+    recipientPhones: null,
+  }), echoKey)
+  const cargo = panel.sections[0]
+  const recipient = panel.sections[2]
+  if (cargo?.id !== 'cargo' || recipient?.id !== 'recipient') {
+    throw new Error('账单面板缺少预期分段')
+  }
+  assert.equal(
+    cargo.fields[5]?.value,
+    '[slhBill.valueMissing] | [slhBill.line.categoryCode] A | [slhBill.line.unitPriceAmount] 12.5',
+  )
+  assert.equal(recipient.fields[0]?.value, '[slhBill.valueMissing]')
+  assert.deepEqual(recipient.fields[0]?.lines, [])
+  // 匹配依据属于柜次侧、对账状态与核对留痕按产品要求不展示：账单面板都不出现。
+  assert.equal(JSON.stringify(panel).includes('matchSource'), false)
+  assert.equal(JSON.stringify(panel).includes('reconciliationStatus'), false)
 })
 
 test('装柜明细行面板：先给匹配依据再给装柜行可比字段，收费材积带单位', () => {
