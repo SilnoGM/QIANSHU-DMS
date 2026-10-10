@@ -358,8 +358,13 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   assert.match(page, /p-3 rounded-lg bg-muted\/40/u)
   // 金额块：总额行之后虚线分隔；总额大号加粗、余额非零染红由 logic 的标记驱动。
   assert.match(page, /index === 1 \? 'pt-2 border-t border-dashed border-border' : ''/u)
-  assert.match(page, /!text-2xl !leading-8 !font-semibold/u)
+  assert.match(page, /!text-xl !font-semibold/u)
   assert.match(page, /!text-destructive/u)
+  // 金额块整列右对齐（AmountDisplay 是 inline-flex，靠所在行的 text-align 定位）。
+  assert.match(page, /class="m-0 text-right"/u)
+  // 长文本行走本地截断组件：只有真被截断才挂浮层。
+  assert.match(page, /v-else-if="field\.truncate"[\s\S]{0,120}?:text="field\.value"/u)
+  assert.match(page, /<SlhReconciliationOverflowText/u)
   assert.match(page, /field\.emphasis === 'total'/u)
   // 订单面板不再用分组渲染，装柜/账单两块保持原样。
   assert.doesNotMatch(page, /orderFieldGroups|groupDividers|sectionClass/u)
@@ -706,6 +711,11 @@ test('销售与采购区块：单号＋三枚状态徽章、关键字段行、�
   assert.deepEqual(purchase.fields.map(field => field.id), ['supplier', 'shippingMark', 'purchaseCreator'])
   assert.equal(purchase.fields[0]?.value, 'Mark supplier')
   assert.equal(purchase.fields[1]?.value, 'J-070924')
+  // 长文本字段带截断标记（客户信息 / 完整地址 / 供应商 / 采购唛头）：单行截断、超长才提示。
+  assert.deepEqual(
+    [...sales.fields, ...purchase.fields].map(field => [field.id, field.truncate === true]),
+    [['customer', true], ['customerFullAddress', true], ['issuer', false], ['supplier', true], ['shippingMark', true], ['purchaseCreator', false]],
+  )
   // 出单人与采购人都走人员字段（模板据此改用 QsPersonDisplay）。
   assert.equal(sales.fields[2]?.person, '张三')
   assert.equal(purchase.fields[2]?.person, '李四')
@@ -740,6 +750,18 @@ test('销售与采购区块：单号＋三枚状态徽章、关键字段行、�
       assert.notEqual(field.label.trim(), '', `${section.id}.${field.id} 缺少字段名`)
     }
   }
+})
+
+test('对账详情截断文本：只在真的被截断时才给悬停提示', async () => {
+  const source = await readFile(new URL('../../src/views/workbenches/slh-reconciliation/overflow-text.vue', import.meta.url), 'utf8')
+
+  // 单行截断 + 按需浮层：:disabled 由实测宽度决定，未截断时 hover 不该弹出同一段文字。
+  assert.match(source, /class="block truncate"/u)
+  assert.match(source, /:disabled="!truncated"/u)
+  assert.match(source, /node\.scrollWidth > node\.clientWidth/u)
+  // 文本变化与容器宽度变化都要重算（列宽由外层网格决定）。
+  assert.match(source, /watch\(\(\) => props\.text, measure\)/u)
+  assert.match(source, /useResizeObserver\(content, measure\)/u)
 })
 
 test('销售与采购区块：余额为零时不下发标记，已结清不染红', () => {

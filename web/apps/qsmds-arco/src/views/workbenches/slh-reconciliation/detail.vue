@@ -22,6 +22,7 @@ import {
   resolveSlhReconciliationSelectedMember,
   SLH_RECONCILIATION_LINE_TONES,
 } from './detail.logic'
+import SlhReconciliationOverflowText from './overflow-text.vue'
 import { resolveSlhReconciliationBatchLabelKey, resolveSlhReconciliationBatchTone } from './status.logic'
 
 /**
@@ -87,7 +88,7 @@ function amountRowClass(index: number): string {
 /** 金额块的金额样式：总额大号加粗，余额非零时染红（标记由 logic 判断后下发）。 */
 function amountClass(field: SlhReconciliationLineField): string {
   if (field.emphasis === 'total') {
-    return '!text-2xl !leading-8 !font-semibold'
+    return '!text-xl !font-semibold'
   }
   return field.emphasis === 'balance' ? '!text-destructive' : ''
 }
@@ -304,6 +305,11 @@ onBeforeUnmount(() => {
                         size="sm"
                         class="max-w-full"
                       />
+                      <!-- 长文本行：单行截断，只有真的截断了才给悬停提示。 -->
+                      <SlhReconciliationOverflowText
+                        v-else-if="field.truncate"
+                        :text="field.value"
+                      />
                       <span v-else class="qs-type-data">
                         {{ field.value }}
                       </span>
@@ -324,8 +330,8 @@ onBeforeUnmount(() => {
                     >
                       {{ field.label }}
                     </dt>
-                    <dd class="m-0 break-all">
-                      <!-- 金额统一走 AmountDisplay（自带右对齐、符号、千分位与币种精度）。 -->
+                    <dd class="m-0 text-right">
+                      <!-- 金额统一走 AmountDisplay（符号、千分位与币种精度）；右对齐由本行给定。 -->
                       <AmountDisplay
                         v-if="field.amount"
                         :value="field.amount.value"

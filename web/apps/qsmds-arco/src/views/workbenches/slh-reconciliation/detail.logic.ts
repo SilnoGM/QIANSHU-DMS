@@ -75,6 +75,8 @@ export interface SlhReconciliationLineField {
   readonly person?: string
   /** 金额块里才有的位置标记：总额行（大号加粗）与余额行（非零时染红），其余金额行不下发。 */
   readonly emphasis?: 'total' | 'balance'
+  /** 长文本字段才有：单行截断，超长时悬停给完整值（模板按需挂浮层）。 */
+  readonly truncate?: true
 }
 
 /** 订单侧单个维度的状态标签：维度名用于无障碍朗读，标签文案与色调由本模块查表给出。 */
@@ -367,7 +369,13 @@ export function buildSlhReconciliationOrderSections(
     parts: readonly (string | null | undefined)[],
   ): SlhReconciliationLineField => {
     const values = parts.map(part => text(part)).filter(value => value !== missing)
-    return { id, label: translate(labelKey), value: values.length === 0 ? missing : values.join(' · ') }
+    // 姓名 + 电话拼起来容易超长：单行截断，超长时悬停看完整值。
+    return {
+      id,
+      label: translate(labelKey),
+      value: values.length === 0 ? missing : values.join(' · '),
+      truncate: true,
+    }
   }
   /** 三个维度的状态徽章统一在这里装配：维度名用于无障碍朗读，色调由对应域的查表给出。 */
   const states = (
@@ -393,7 +401,7 @@ export function buildSlhReconciliationOrderSections(
       states: states('slhReconciliation.detail.salesOrderStatus', 'salesOrderDrawer', SALES_STATUS_TONES, sales),
       fields: [
         merged('customer', 'salesOrderDesc.sections.customer', [sales?.customerName, sales?.customerPhone]),
-        { id: 'customerFullAddress', label: translate('salesOrderDesc.fields.fullAddress'), value: text(sales?.customerFullAddress) },
+        { id: 'customerFullAddress', label: translate('salesOrderDesc.fields.fullAddress'), value: text(sales?.customerFullAddress), truncate: true },
         // 出单人是人员信息：交给 QsPersonDisplay（头像位 + 名称截断），文案仍取销售域键。
         { id: 'issuer', label: translate('salesOrderDesc.fields.issuer'), ...person(sales?.issuerDisplayName) },
       ],
@@ -411,8 +419,8 @@ export function buildSlhReconciliationOrderSections(
       orderNo: { id: 'purchaseOrderNo', label: translate('slhReconciliation.detail.purchaseOrderNo'), value: text(purchase?.orderNo) },
       states: states('slhReconciliation.detail.purchaseOrderStatus', 'purchaseOrderDrawer', PURCHASE_STATUS_TONES, purchase),
       fields: [
-        { id: 'supplier', label: translate('slhReconciliation.detail.supplier'), value: text(purchase?.supplier.label) },
-        { id: 'shippingMark', label: translate('purchaseOrderDesc.fields.shippingMark'), value: text(purchase?.shippingMarkText) },
+        { id: 'supplier', label: translate('slhReconciliation.detail.supplier'), value: text(purchase?.supplier.label), truncate: true },
+        { id: 'shippingMark', label: translate('purchaseOrderDesc.fields.shippingMark'), value: text(purchase?.shippingMarkText), truncate: true },
         // 采购人＝采购订单的创建人，与销售侧出单人一样交给 QsPersonDisplay。
         { id: 'purchaseCreator', label: translate('slhReconciliation.detail.purchaseCreator'), ...person(purchase?.creatorDisplayName) },
       ],
