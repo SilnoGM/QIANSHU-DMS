@@ -193,7 +193,8 @@ onBeforeUnmount(() => {
               v-for="focus in focusValues"
               :key="focus.id"
               data-slot="slh-reconciliation-focus-item"
-              class="p-4 border border-border rounded-xl bg-card flex flex-col gap-1 min-w-0"
+              class="qs-focus-card p-4 border border-border rounded-xl bg-card flex flex-col gap-1 min-w-0"
+              :class="`qs-focus-card--${focus.accent}`"
             >
               <p class="qs-type-compact-label text-muted-foreground m-0">
                 {{ focus.sourceLabel }}
@@ -205,16 +206,15 @@ onBeforeUnmount(() => {
                 :currencies="currencyCatalog.currencies.value"
                 class="!text-2xl !font-semibold"
               />
-              <!-- 空值＝本行不涉及：占位符 + 降噪 + 说明文案，三处都与 0.00 区分开。 -->
-              <p v-else class="text-base text-muted-foreground m-0">
-                {{ t('slhBill.valueMissing') }}
-              </p>
-              <p class="qs-type-meta text-muted-foreground m-0">
-                {{ focus.trace }}
-              </p>
-              <p v-if="focus.isEmpty" class="qs-type-meta text-muted-foreground m-0">
-                {{ t('slhReconciliation.detail.focusEmptyNote') }}
-              </p>
+              <!-- 空值＝本行不涉及：只留占位符与说明，与 0.00 区分开。 -->
+              <template v-else>
+                <p class="text-base text-muted-foreground m-0">
+                  {{ t('slhBill.valueMissing') }}
+                </p>
+                <p class="qs-type-meta text-muted-foreground m-0">
+                  {{ t('slhReconciliation.detail.focusEmptyNote') }}
+                </p>
+              </template>
             </div>
           </div>
         </div>
@@ -293,3 +293,33 @@ onBeforeUnmount(() => {
     </QsGenericModal>
   </div>
 </template>
+
+<style scoped>
+/*
+ * 三张核对焦点卡各自的身份色：纯装饰，不承载任何判定语义（不用语义色的深浅，
+ * 只把同色系中调色按固定比例混进当前主题的卡片底色做斜向过渡）。
+ * 混色基于 --card，浅色下自动得到淡色高光、深色下得到同色系暗调，无需为明暗各写一套规则。
+ */
+.qs-focus-card {
+  position: relative;
+  background-repeat: no-repeat;
+}
+
+.qs-focus-card--emerald {
+  background-image:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in oklab, oklch(69.6% 0.17 162.48deg) 14%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in oklab, oklch(69.6% 0.17 162.48deg) 20%, oklch(var(--card))) 0%, oklch(var(--card)) 70%);
+}
+
+.qs-focus-card--amber {
+  background-image:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in oklab, oklch(76.9% 0.188 70.08deg) 14%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in oklab, oklch(76.9% 0.188 70.08deg) 20%, oklch(var(--card))) 0%, oklch(var(--card)) 70%);
+}
+
+.qs-focus-card--blue {
+  background-image:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in oklab, oklch(62.3% 0.214 259.815deg) 14%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in oklab, oklch(62.3% 0.214 259.815deg) 20%, oklch(var(--card))) 0%, oklch(var(--card)) 70%);
+}
+</style>

@@ -343,8 +343,8 @@ export interface SlhReconciliationFocusValue {
   /** 原始金额字符串；为空（本行不涉及）时模板走占位符分支，绝不出现 0.00 之外的替代值。 */
   readonly value: string | null
   readonly currency: string
-  /** 来源线索：单号 / 柜次行 / 账单行 + 币种代码，便于回三列追查。 */
-  readonly trace: string
+  /** 身份色：三张卡各自的渐变基色，纯装饰、不承载任何判定语义。 */
+  readonly accent: 'emerald' | 'amber' | 'blue'
   readonly isEmpty: boolean
 }
 
@@ -359,7 +359,6 @@ export function buildSlhReconciliationFocusValues(
   member: SlhReconciliationBatchMemberDto,
   translate: SlhReconciliationTranslate,
 ): readonly SlhReconciliationFocusValue[] {
-  const missing = translate('slhBill.valueMissing')
   const sales = member.salesOrder ?? null
   const item = member.matchedLoadingItem
   const salesBalance = sales?.balanceDueAmount ?? null
@@ -374,31 +373,25 @@ export function buildSlhReconciliationFocusValues(
     {
       id: 'salesBalance',
       sourceLabel: sourceLabel('slhReconciliation.detail.focusSalesBalance', sales?.currencyCode ?? ''),
+      accent: 'emerald',
       value: salesBalance,
       currency: sales?.currencyCode ?? '',
-      trace: `${translate('slhReconciliation.detail.salesOrderNo')} ${sales?.orderNo ?? missing}`,
       isEmpty: salesBalance === null,
     },
     {
       id: 'loadingCod',
       sourceLabel: sourceLabel('slhReconciliation.detail.focusLoadingCod', 'TWD'),
+      accent: 'amber',
       value: loadingCod,
       currency: 'TWD',
-      trace: [
-        `${translate('slhReconciliation.detail.matchedContainer')} ${member.matchedContainerBatchName} #${member.matchedLoadingItemLineNumber}`,
-        `${translate('slhReconciliation.detail.shipmentNo')} ${item.shipmentNo ?? missing}`,
-      ].join(' · '),
       isEmpty: loadingCod === null,
     },
     {
       id: 'billCod',
       sourceLabel: sourceLabel('slhReconciliation.detail.focusBillCod', 'TWD'),
+      accent: 'blue',
       value: billCod,
       currency: 'TWD',
-      trace: [
-        `${translate('slhBill.line.lineNumber')} ${translate('slhBill.line.lineNumberValue', { line: member.sourceRowNumber })}`,
-        `${translate('slhBill.line.shippingMark')} ${member.shippingMarkText ?? missing}`,
-      ].join(' · '),
       isEmpty: billCod === null,
     },
   ]

@@ -318,6 +318,10 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   assert.match(page, /<AmountDisplay[\s\S]{0,300}?:currencies="currencyCatalog\.currencies\.value"/u)
   assert.match(page, /v-if="!focus\.isEmpty"/u)
   assert.match(page, /t\('slhReconciliation\.detail\.focusEmptyNote'\)/u)
+  // 每张卡按 accent 挂身份色渐变类，卡片内不再渲染来源线索。
+  assert.match(page, /:class="`qs-focus-card--\$\{focus\.accent\}`"/u)
+  assert.match(page, /qs-focus-card--emerald|qs-focus-card--amber|qs-focus-card--blue/u)
+  assert.doesNotMatch(page, /focus\.trace/u)
   // 三块面板：横向排布（宽屏三列），由 fieldColumns 统一渲染标题与分组。
   assert.match(page, /class="m-4 gap-4 grid items-start lg:grid-cols-2 xl:grid-cols-3"/u)
   assert.match(page, /v-for="column in fieldColumns"/u)
@@ -733,9 +737,9 @@ test('核对焦点：三个跨域金额并列，来源标签与线索指向各�
     ['8000', 'TWD', false],
     ['8000', 'TWD', false],
   ])
-  assert.equal(focus[0]?.trace, '[slhReconciliation.detail.salesOrderNo] XS-202609-01')
-  assert.equal(focus[1]?.trace, '[slhReconciliation.detail.matchedContainer] 1211-01柜 #1 · [slhReconciliation.detail.shipmentNo] PKG/20260929-00001')
-  assert.equal(focus[2]?.trace, '[slhBill.line.lineNumber] [slhBill.line.lineNumberValue:14] · [slhBill.line.shippingMark] J-070924')
+  // 三个值各有装饰用身份色（绿/黄/蓝）；卡片不再展示来源线索行。
+  assert.deepEqual(focus.map(item => item.accent), ['emerald', 'amber', 'blue'])
+  assert.equal('trace' in (focus[0] ?? {}), false)
 })
 
 test('核对焦点：销售尾款币种跟随订单，代收两项恒为台币', () => {
@@ -762,6 +766,8 @@ test('核对焦点：销售尾款币种跟随订单，代收两项恒为台币',
   // 不做换算、不做判定：只把各自的币种如实标出来。
   assert.deepEqual(focus.map(item => item.currency), ['MYR', 'TWD', 'TWD'])
   assert.equal(focus[0]?.sourceLabel, '[slhReconciliation.detail.focusSourceWithCurrency:[slhReconciliation.detail.focusSalesBalance]:MYR]')
+  // 身份色与金额无关，不随币种变化。
+  assert.deepEqual(focus.map(item => item.accent), ['emerald', 'amber', 'blue'])
 })
 
 test('核对焦点：空值只下发 null 与说明位，与显式 0 区分', () => {
