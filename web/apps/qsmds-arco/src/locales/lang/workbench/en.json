@@ -322,6 +322,9 @@
       "createdToast": "Reconciliation batch {batchNo} created"
     },
     "detail": {
+      "purchaseDeposit": "Purchase deposit",
+      "salesDeposit": "Sales deposit",
+      "salesBalance": "Sales balance",
       "focusSourceWithCurrency": "{source} ({currency})",
       "focusTitle": "Reconciliation focus",
       "focusHint": "The three amounts are listed side by side; compare them by hand",

@@ -331,6 +331,9 @@
       "createdToast": "已创建对账批次 {batchNo}"
     },
     "detail": {
+      "purchaseDeposit": "采购定金",
+      "salesDeposit": "销售定金",
+      "salesBalance": "销售尾款",
       "focusSourceWithCurrency": "{source}（{currency}）",
       "focusTitle": "核对焦点",
       "focusHint": "三个数值并列展示，是否相符由人工判断",

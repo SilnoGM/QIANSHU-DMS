@@ -321,6 +321,13 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   assert.match(page, /class="m-4 gap-4 grid items-start lg:grid-cols-2 xl:grid-cols-3"/u)
   assert.match(page, /v-for="column in fieldColumns"/u)
   assert.match(page, /v-for="group in column\.groups"/u)
+  // 金额行在列里也统一走 AmountDisplay（就地覆盖对齐，缺失时回落占位符文本）。
+  assert.match(page, /v-if="field\.amount"[\s\S]{0,300}?:currencies="currencyCatalog\.currencies\.value"/u)
+  // 类名会被 unocss/order 重排：只断言两个覆盖都在，不锁定顺序。
+  assert.match(page, /!justify-start/u)
+  assert.match(page, /!text-left/u)
+  // 非金额值保持等宽数据字体，两条分支都带样式类。
+  assert.match(page, /<span v-else class="qs-type-data">/u)
   assert.match(page, /t\(column\.titleKey\)/u)
   // 不再有成员标题与复制入口。
   assert.doesNotMatch(page, /membersTitle|membersCopy|copyMembers|clipboard\.writeText/u)
@@ -531,6 +538,10 @@ test('装柜明细行面板：先给匹配依据再给装柜行可比字段，�
   assert.equal(valueOf('chargeableVolumeCai'), '7 [slhBill.unit.cai]')
   assert.equal(valueOf('reportedVolumeCai'), '1.20 [slhBill.unit.cai]')
   assert.equal(valueOf('codAmountTwd'), '1200.00')
+  assert.deepEqual(
+    fields.find(field => field.id === 'codAmountTwd')?.amount,
+    { value: '1200', currency: 'TWD' },
+  )
   assert.equal(valueOf('recipientName'), '林口仓库')
   assert.equal(valueOf('recipientPhone'), '0911111111')
   assert.equal(valueOf('recipientAddress'), '新北市林口区')
@@ -557,6 +568,8 @@ test('装柜明细行面板：缺货件号与收费材积时走占位符', () =>
   for (const id of ['shipmentNo', 'chargeableVolumeCai', 'recipientName', 'recipientPhone', 'recipientAddress', 'remark']) {
     assert.equal(valueOf(id), '[slhBill.valueMissing]', `${id} 应为占位符`)
   }
+  // 金额为空（本行不涉及）时不下发 amount：模板回落占位符文本，而不是渲染成 0。
+  assert.equal(fields.find(field => field.id === 'codAmountTwd')?.amount, undefined)
 })
 
 test('销售与采购面板：采购 9 项、销售 13 项，金额带币种、枚举取值复用采购/销售页面文案键', () => {
@@ -652,6 +665,11 @@ test('销售与采购面板：采购 9 项、销售 13 项，金额带币种、�
     'salesPaymentStatus',
     'issuer',
   ])
+  // 金额行额外下发原始值 + 币种：模板据此改用 AmountDisplay（符号/千分位/币种精度由它负责）。
+  const purchaseTotal = groups.find(group => group.id === 'purchase')?.fields.find(field => field.id === 'purchaseTotalAmount')
+  const salesTotal = groups.find(group => group.id === 'sales')?.fields.find(field => field.id === 'salesTotalAmount')
+  assert.deepEqual(purchaseTotal?.amount, { value: '4425', currency: 'CNY' })
+  assert.deepEqual(salesTotal?.amount, { value: '129000.5', currency: 'TWD' })
   for (const group of groups) {
     for (const field of group.fields) {
       assert.notEqual(field.label.trim(), '', `${group.id}.${field.id} 缺少字段名`)

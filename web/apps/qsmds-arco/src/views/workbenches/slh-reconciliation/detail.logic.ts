@@ -56,12 +56,20 @@ export function resolveSlhReconciliationSelectedMember(
   return members.find(member => member.lineId === selectedLineId) ?? null
 }
 
+/** 金额字段额外下发的原始值：模板据此改用 AmountDisplay，空值仍走占位符。 */
+export interface SlhReconciliationAmountValue {
+  readonly value: string | null
+  readonly currency: string
+}
+
 export interface SlhReconciliationLineField {
   readonly id: string
   /** 已翻译的字段名。 */
   readonly label: string
-  /** 已格式化的字段值；缺值统一为占位符。 */
+  /** 文本形态：列表、复制与用例统一断言它；金额行由模板改用 amount 渲染。 */
   readonly value: string
+  /** 金额行才有：原始金额与币种（由 AmountDisplay 负责符号、千分位与币种精度）。 */
+  readonly amount?: SlhReconciliationAmountValue
 }
 
 /** 面板内的分组：目前只有「销售与采购信息」需要（采购 / 销售）。 */
@@ -86,6 +94,10 @@ function createFieldFormatters(translate: SlhReconciliationTranslate) {
     missing,
     text,
     amount: (value: string | null | undefined) => formatSlhBillAmount(value) ?? missing,
+    /** 金额行下发给模板的原始值；缺失（本行不涉及）时返回 undefined，让模板回落到占位符文本。 */
+    amountValue: (value: string | null | undefined, currency: string): SlhReconciliationAmountValue | undefined => (
+      value === null || value === undefined || value.trim() === '' ? undefined : { value, currency }
+    ),
     volume: (value: string | null | undefined) => {
       const formatted = formatSlhBillVolume(value)
       return formatted === null ? missing : `${formatted} ${cai}`
@@ -121,7 +133,7 @@ export function buildSlhReconciliationBillLineFieldGroups(
   member: SlhReconciliationBatchMemberDto,
   translate: SlhReconciliationTranslate,
 ): readonly SlhReconciliationFieldGroup[] {
-  const { missing, text, amount, volume, dimensions, weight, charges } = createFieldFormatters(translate)
+  const { missing, text, amount, amountValue, volume, dimensions, weight, charges } = createFieldFormatters(translate)
   const difference = resolveSlhBillVolumeDifference(member)
   return [
     {
@@ -137,7 +149,7 @@ export function buildSlhReconciliationBillLineFieldGroups(
         { id: 'loadingDate', label: translate('slhBill.line.loadingDate'), value: text(member.loadingDate) },
         { id: 'containerBatchName', label: translate('slhBill.line.containerBatchName'), value: text(member.containerBatchNameText) },
         // 对账焦点：与顶部核对焦点区的「账单代收货款」同源。
-        { id: 'codAmountTwd', label: translate('slhReconciliation.detail.billCodAmount'), value: amount(member.codAmountTwd) },
+        { id: 'codAmountTwd', label: translate('slhReconciliation.detail.billCodAmount'), value: amount(member.codAmountTwd), amount: amountValue(member.codAmountTwd, 'TWD') },
         { id: 'warehouseReceiptReference', label: translate('slhBill.line.warehouseReceiptReference'), value: text(member.warehouseReceiptReference) },
         { id: 'shippingMark', label: translate('slhBill.line.shippingMark'), value: text(member.shippingMarkText) },
         { id: 'goodsName', label: translate('slhBill.line.goodsName'), value: text(member.goodsName) },
@@ -165,11 +177,11 @@ export function buildSlhReconciliationBillLineFieldGroups(
       id: 'amounts',
       label: translate('slhReconciliation.detail.groupAmounts'),
       fields: [
-        { id: 'freightAmountCny', label: translate('slhBill.line.freightAmountCny'), value: amount(member.freightAmountCny) },
-        { id: 'codHandlingAmountCny', label: translate('slhBill.line.codHandlingAmountCny'), value: amount(member.codHandlingAmountCny) },
-        { id: 'surchargeAmountCny', label: translate('slhBill.line.surchargeAmountCny'), value: amount(member.surchargeAmountCny) },
-        { id: 'payableAmountCny', label: translate('slhBill.line.payableAmountCny'), value: amount(member.payableAmountCny) },
-        { id: 'ntdSurchargeAmountTwd', label: translate('slhBill.line.ntdSurchargeAmountTwd'), value: amount(member.ntdSurchargeAmountTwd) },
+        { id: 'freightAmountCny', label: translate('slhBill.line.freightAmountCny'), value: amount(member.freightAmountCny), amount: amountValue(member.freightAmountCny, 'CNY') },
+        { id: 'codHandlingAmountCny', label: translate('slhBill.line.codHandlingAmountCny'), value: amount(member.codHandlingAmountCny), amount: amountValue(member.codHandlingAmountCny, 'CNY') },
+        { id: 'surchargeAmountCny', label: translate('slhBill.line.surchargeAmountCny'), value: amount(member.surchargeAmountCny), amount: amountValue(member.surchargeAmountCny, 'CNY') },
+        { id: 'payableAmountCny', label: translate('slhBill.line.payableAmountCny'), value: amount(member.payableAmountCny), amount: amountValue(member.payableAmountCny, 'CNY') },
+        { id: 'ntdSurchargeAmountTwd', label: translate('slhBill.line.ntdSurchargeAmountTwd'), value: amount(member.ntdSurchargeAmountTwd), amount: amountValue(member.ntdSurchargeAmountTwd, 'TWD') },
       ],
     },
     {
@@ -193,7 +205,7 @@ export function buildSlhReconciliationLoadingItemFieldGroups(
   member: SlhReconciliationBatchMemberDto,
   translate: SlhReconciliationTranslate,
 ): readonly SlhReconciliationFieldGroup[] {
-  const { text, amount, volume, chargeableVolume, dimensions, weight } = createFieldFormatters(translate)
+  const { text, amount, amountValue, volume, chargeableVolume, dimensions, weight } = createFieldFormatters(translate)
   const item = member.matchedLoadingItem
   return [
     {
@@ -218,7 +230,7 @@ export function buildSlhReconciliationLoadingItemFieldGroups(
       label: translate('slhReconciliation.detail.groupLoadingItem'),
       fields: [
         // 对账焦点：与顶部核对焦点区的「装柜代收货款」同源。
-        { id: 'codAmountTwd', label: translate('slhReconciliation.detail.loadingCodAmount'), value: amount(item.codAmountTwd) },
+        { id: 'codAmountTwd', label: translate('slhReconciliation.detail.loadingCodAmount'), value: amount(item.codAmountTwd), amount: amountValue(item.codAmountTwd, 'TWD') },
         { id: 'warehouseReceiptReference', label: translate('slhBill.line.warehouseReceiptReference'), value: text(item.warehouseReceiptReference) },
         { id: 'shippingMark', label: translate('slhBill.line.shippingMark'), value: text(item.oceanShippingMarkText) },
         { id: 'goodsName', label: translate('slhBill.line.goodsName'), value: text(item.goodsName) },
@@ -250,7 +262,7 @@ export function buildSlhReconciliationOrderFieldGroups(
   member: SlhReconciliationBatchMemberDto,
   translate: SlhReconciliationTranslate,
 ): readonly SlhReconciliationFieldGroup[] {
-  const { missing, text, amount } = createFieldFormatters(translate)
+  const { missing, text, amount, amountValue } = createFieldFormatters(translate)
   // 契约上两个来源都是可选且可空：先归一成 null，后面只判一种缺失形态。
   const purchase = member.purchaseOrder ?? null
   const sales = member.salesOrder ?? null
@@ -267,10 +279,10 @@ export function buildSlhReconciliationOrderFieldGroups(
       fields: [
         { id: 'purchaseOrderNo', label: translate('slhReconciliation.detail.purchaseOrderNo'), value: text(purchase?.orderNo) },
         { id: 'supplier', label: translate('slhReconciliation.detail.supplier'), value: text(purchase?.supplier.label) },
-        { id: 'purchaseTotalAmount', label: translate('slhReconciliation.detail.purchaseTotalAmount'), value: money('CNY', purchase?.purchaseTotalAmount) },
-        { id: 'depositDueAmount', label: translate('purchaseOrderDesc.fields.deposit'), value: money('CNY', purchase?.depositDueAmount) },
+        { id: 'purchaseTotalAmount', label: translate('slhReconciliation.detail.purchaseTotalAmount'), value: money('CNY', purchase?.purchaseTotalAmount), amount: amountValue(purchase?.purchaseTotalAmount, 'CNY') },
+        { id: 'depositDueAmount', label: translate('slhReconciliation.detail.purchaseDeposit'), value: money('CNY', purchase?.depositDueAmount), amount: amountValue(purchase?.depositDueAmount, 'CNY') },
         // 采购侧也有「尾款」，与销售的尾款同名不同币种：加来源前缀消歧（对账要核的是销售尾款）。
-        { id: 'balanceDueAmount', label: translate('slhReconciliation.detail.purchaseBalance'), value: money('CNY', purchase?.balanceDueAmount) },
+        { id: 'balanceDueAmount', label: translate('slhReconciliation.detail.purchaseBalance'), value: money('CNY', purchase?.balanceDueAmount), amount: amountValue(purchase?.balanceDueAmount, 'CNY') },
         {
           id: 'purchaseOrderStatus',
           label: translate('slhReconciliation.detail.purchaseOrderStatus'),
@@ -295,11 +307,11 @@ export function buildSlhReconciliationOrderFieldGroups(
       // 尾款是与装柜/账单代收货款并列核对的值，提到销售组最前，紧跟实际已收/待收。
       fields: [
         { id: 'salesOrderNo', label: translate('slhReconciliation.detail.salesOrderNo'), value: text(sales?.orderNo) },
-        { id: 'balanceDueAmount', label: translate('salesOrderDesc.fields.balance'), value: money(sales?.currencyCode ?? '', sales?.balanceDueAmount) },
-        { id: 'receivedAmount', label: translate('slhReconciliation.detail.receivedAmount'), value: money(sales?.currencyCode ?? '', sales?.receivedAmount) },
-        { id: 'outstandingAmount', label: translate('slhReconciliation.detail.outstandingAmount'), value: money(sales?.currencyCode ?? '', sales?.outstandingAmount) },
-        { id: 'salesTotalAmount', label: translate('slhReconciliation.detail.salesTotalAmount'), value: money(sales?.currencyCode ?? '', sales?.agreedTotalAmount) },
-        { id: 'depositDueAmount', label: translate('salesOrderDesc.fields.deposit'), value: money(sales?.currencyCode ?? '', sales?.depositDueAmount) },
+        { id: 'balanceDueAmount', label: translate('slhReconciliation.detail.salesBalance'), value: money(sales?.currencyCode ?? '', sales?.balanceDueAmount), amount: amountValue(sales?.balanceDueAmount, sales?.currencyCode ?? '') },
+        { id: 'receivedAmount', label: translate('slhReconciliation.detail.receivedAmount'), value: money(sales?.currencyCode ?? '', sales?.receivedAmount), amount: amountValue(sales?.receivedAmount, sales?.currencyCode ?? '') },
+        { id: 'outstandingAmount', label: translate('slhReconciliation.detail.outstandingAmount'), value: money(sales?.currencyCode ?? '', sales?.outstandingAmount), amount: amountValue(sales?.outstandingAmount, sales?.currencyCode ?? '') },
+        { id: 'salesTotalAmount', label: translate('slhReconciliation.detail.salesTotalAmount'), value: money(sales?.currencyCode ?? '', sales?.agreedTotalAmount), amount: amountValue(sales?.agreedTotalAmount, sales?.currencyCode ?? '') },
+        { id: 'depositDueAmount', label: translate('slhReconciliation.detail.salesDeposit'), value: money(sales?.currencyCode ?? '', sales?.depositDueAmount), amount: amountValue(sales?.depositDueAmount, sales?.currencyCode ?? '') },
         { id: 'customer', label: translate('salesOrderDesc.fields.customerName'), value: text(sales?.customerName) },
         { id: 'customerPhone', label: translate('salesOrderDesc.fields.customerPhone'), value: text(sales?.customerPhone) },
         { id: 'customerFullAddress', label: translate('salesOrderDesc.fields.fullAddress'), value: text(sales?.customerFullAddress) },

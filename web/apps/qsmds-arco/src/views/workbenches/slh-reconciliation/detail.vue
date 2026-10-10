@@ -240,8 +240,18 @@ onBeforeUnmount(() => {
                   <dt class="qs-type-meta shrink-0">
                     {{ field.label }}
                   </dt>
-                  <dd class="qs-type-data m-0 break-all">
-                    {{ field.value }}
+                  <dd class="m-0 break-all">
+                    <!-- 金额行统一走 AmountDisplay（符号、千分位、币种精度）；缺失时回落占位符文本。 -->
+                    <AmountDisplay
+                      v-if="field.amount"
+                      :value="field.amount.value"
+                      :currency="field.amount.currency"
+                      :currencies="currencyCatalog.currencies.value"
+                      class="!text-left !justify-start"
+                    />
+                    <span v-else class="qs-type-data">
+                      {{ field.value }}
+                    </span>
                   </dd>
                 </div>
               </dl>
