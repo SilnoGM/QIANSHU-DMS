@@ -372,9 +372,11 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   assert.match(page, /v-for="section in billLinePanel\.sections"/u)
   assert.match(page, /v-for="tag in billLinePanel\.tags"/u)
   assert.match(page, /\{\{ billLinePanel\.receiptReference\.value \}\}/u)
-  // 费用段：两个大号数值上下排布，逐项费用第一行带虚线分隔，费别标签跟在标签后面。
-  assert.match(page, /v-for="row in section\.headline"/u)
-  assert.match(page, /v-for="\(row, index\) in section\.details"/u)
+  // 费用段按币种分两块：每块一个大号合计，可选的明细合计行，明细第一行带虚线分隔。
+  assert.match(page, /v-for="block in section\.blocks"/u)
+  assert.match(page, /\{\{ block\.headline\.label \}\}/u)
+  assert.match(page, /v-if="block\.summary"[\s\S]{0,400}?block\.summary\.label/u)
+  assert.match(page, /v-for="\(row, index\) in block\.details"/u)
   assert.match(page, /index === 0 \? 'pt-2 border-t border-dashed border-border' : ''/u)
   assert.match(page, /v-if="row\.tag"/u)
   assert.match(page, /!text-sky-700 dark:!text-sky-300/u)
@@ -538,21 +540,23 @@ test('账单明细行面板：顶部信息块 + 货物明细 / 费用结算 / �
     '[slhBill.pricingBasis.VOLUME] | [slhBill.line.categoryCode] A | [slhBill.line.unitPriceAmount] 12.5',
   )
 
-  // 费用结算：两个大号数值 = 合计应付与代收货款（代收与核对焦点同字段、同组件、同格式）。
-  assert.deepEqual(fees.headline.map(row => [row.id, row.emphasis]), [
-    ['payableAmountCny', 'total'],
-    ['codAmountTwd', 'cod'],
-  ])
-  assert.equal(fees.headline[0]?.label, '[slhBill.line.payableAmountCny]')
-  assert.deepEqual(fees.headline[0]?.amount, { value: '4455', currency: 'CNY' })
-  assert.deepEqual(fees.headline[1]?.amount, { value: '1200', currency: 'TWD' })
-  assert.deepEqual(fees.headline[1]?.value, '1200.00')
-  // 逐项费用：运费 / 附加费 / 代收手续费（本夹具没有费用行、也没有台币杂费合计）。
-  assert.deepEqual(fees.details.map(row => row.id), ['freightAmountCny', 'surchargeAmountCny', 'codHandlingAmountCny'])
-  assert.equal(fees.details[0]?.value, '4425.00')
-  assert.equal(fees.details[1]?.value, '30.00')
-  assert.equal(fees.details[1]?.tag, undefined)
-  assert.equal(fees.details[2]?.value, '[slhBill.valueMissing]')
+  // 费用结算分两块：人民币块（合计应付 + 三项费用）与台币块（代收货款 + 杂费合计 + 逐项）。
+  assert.deepEqual(fees.blocks.map(block => block.headline.id), ['payableAmountCny', 'codAmountTwd'])
+  assert.deepEqual(fees.blocks.map(block => block.headline.emphasis), ['total', 'cod'])
+  const [payableBlock, codBlock] = fees.blocks
+  assert.equal(payableBlock?.headline.label, '[slhBill.line.payableAmountCny]')
+  assert.deepEqual(payableBlock?.headline.amount, { value: '4455', currency: 'CNY' })
+  assert.deepEqual(payableBlock?.details.map(row => row.id), ['freightAmountCny', 'surchargeAmountCny', 'codHandlingAmountCny'])
+  assert.equal(payableBlock?.details[0]?.value, '4425.00')
+  assert.equal(payableBlock?.details[1]?.value, '30.00')
+  assert.equal(payableBlock?.details[1]?.tag, undefined)
+  assert.equal(payableBlock?.details[2]?.value, '[slhBill.valueMissing]')
+  // 代收货款与核对焦点同字段、同组件、同格式；台币杂费合计恒作明细的合计行。
+  assert.deepEqual(codBlock?.headline.amount, { value: '1200', currency: 'TWD' })
+  assert.deepEqual(codBlock?.headline.value, '1200.00')
+  assert.equal(codBlock?.summary?.label, '[slhBill.line.ntdSurchargeAmountTwd]')
+  assert.equal(codBlock?.summary?.value, '[slhBill.valueMissing]')
+  assert.deepEqual(codBlock?.details, [])
 
   // 收货与备注：收货信息按名称 / 地址 / 电话三行，备注走浅色标签。
   assert.deepEqual(recipient.fields.map(field => field.id), ['recipientInfo', 'remark'])
@@ -579,7 +583,7 @@ test('账单明细行面板：材积一致与缺一侧、重货费标签、多�
   // 两侧一致：不写差异，只标「自报/系统一致」。
   assert.equal(evenCargo.fields[4]?.value, '2.00 [slhBill.unit.cai]（[slhReconciliation.detail.billVolumeEven]）')
   // 人民币费用已并入附加费列：标签说明这笔钱是什么费。
-  assert.deepEqual(evenFees.details[1]?.tag, { text: '[slhBill.chargeType.HEAVY_CARGO]', tone: 'warning' })
+  assert.deepEqual(evenFees.blocks[0]?.details[1]?.tag, { text: '[slhBill.chargeType.HEAVY_CARGO]', tone: 'warning' })
 
   // 缺任一侧：不写括注（差异无从谈起），尺寸缺边也不冒充。
   const partial = buildSlhReconciliationBillLinePanel(memberFixture({
@@ -606,23 +610,22 @@ test('账单明细行面板：材积一致与缺一侧、重货费标签、多�
   if (itemFees?.id !== 'fees') {
     throw new Error('账单面板缺少费用结算')
   }
-  assert.deepEqual(itemFees.details.slice(3).map(row => [row.label, row.value, row.emphasis]), [
+  assert.equal(itemFees.blocks[1]?.summary?.value, '1686.00')
+  assert.deepEqual(itemFees.blocks[1]?.details.map(row => [row.label, row.value, row.emphasis]), [
     ['[slhBill.chargeType.REMOTE_AREA]', '1000.00', 'warning'],
     ['[slhBill.chargeType.STORAGE]', '686.00', 'warning'],
   ])
-
-  // 台币杂费合计来自账单列：没有费用行却有合计时补一行，避免这笔钱在页面上消失。
-  const fallback = buildSlhReconciliationBillLinePanel(memberFixture({
+  // 台币杂费合计来自账单列而不是费用行推导：没有费用行时它就是这一行（不额外补行、也不漏钱）。
+  const noItems = buildSlhReconciliationBillLinePanel(memberFixture({
     ntdSurchargeAmountTwd: '1000',
     charges: [],
   }), echoKey)
-  const fallbackFees = fallback.sections[1]
-  if (fallbackFees?.id !== 'fees') {
+  const noItemFees = noItems.sections[1]
+  if (noItemFees?.id !== 'fees') {
     throw new Error('账单面板缺少费用结算')
   }
-  assert.deepEqual(fallbackFees.details.slice(3).map(row => [row.id, row.value, row.emphasis]), [
-    ['ntdSurchargeAmountTwd', '1000.00', 'warning'],
-  ])
+  assert.equal(noItemFees.blocks[1]?.summary?.value, '1000.00')
+  assert.deepEqual(noItemFees.blocks[1]?.details, [])
 })
 
 test('账单明细行面板：计价方式缺失与收货三列全空时都走占位符', () => {

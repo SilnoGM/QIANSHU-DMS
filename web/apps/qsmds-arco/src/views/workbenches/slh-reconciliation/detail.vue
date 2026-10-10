@@ -462,56 +462,76 @@ onBeforeUnmount(() => {
                     </dd>
                   </div>
                 </dl>
-                <!-- 费用段：两个大号数值上下排布（窄列放不下并排的长金额），虚线之后逐项费用。 -->
-                <dl v-else class="m-0 mt-3 p-3 border border-border rounded-lg flex flex-col gap-2">
-                  <div
-                    v-for="row in section.headline"
-                    :key="row.id"
-                    class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline"
+                <!-- 费用段按币种分块：每块＝合计（大号）＋可选的明细合计行＋虚线之后的明细。 -->
+                <div v-else class="mt-3 flex flex-col gap-3">
+                  <dl
+                    v-for="block in section.blocks"
+                    :key="block.headline.id"
+                    class="m-0 p-3 border border-border rounded-lg flex flex-col gap-2"
                   >
-                    <dt class="qs-type-compact-label text-foreground">
-                      {{ row.label }}
-                    </dt>
-                    <dd class="m-0 text-right">
-                      <AmountDisplay
-                        v-if="row.amount"
-                        :value="row.amount.value"
-                        :currency="row.amount.currency"
-                        :currencies="currencyCatalog.currencies.value"
-                        :class="billAmountClass(row)"
-                      />
-                      <span v-else class="qs-type-data">{{ row.value }}</span>
-                    </dd>
-                  </div>
-                  <div
-                    v-for="(row, index) in section.details"
-                    :key="row.id"
-                    class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline"
-                    :class="index === 0 ? 'pt-2 border-t border-dashed border-border' : ''"
-                  >
-                    <dt class="qs-type-compact-label text-muted-foreground flex flex-wrap gap-1 items-center">
-                      {{ row.label }}
-                      <FaTag
-                        v-if="row.tag"
-                        variant="outline"
-                        class="qs-type-status-tag"
-                        :class="resolveStatusTagToneClass(row.tag.tone)"
-                      >
-                        {{ row.tag.text }}
-                      </FaTag>
-                    </dt>
-                    <dd class="m-0 text-right">
-                      <AmountDisplay
-                        v-if="row.amount"
-                        :value="row.amount.value"
-                        :currency="row.amount.currency"
-                        :currencies="currencyCatalog.currencies.value"
-                        :class="billAmountClass(row)"
-                      />
-                      <span v-else class="qs-type-data">{{ row.value }}</span>
-                    </dd>
-                  </div>
-                </dl>
+                    <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline">
+                      <dt class="qs-type-compact-label text-foreground">
+                        {{ block.headline.label }}
+                      </dt>
+                      <dd class="m-0 text-right">
+                        <AmountDisplay
+                          v-if="block.headline.amount"
+                          :value="block.headline.amount.value"
+                          :currency="block.headline.amount.currency"
+                          :currencies="currencyCatalog.currencies.value"
+                          :class="billAmountClass(block.headline)"
+                        />
+                        <span v-else class="qs-type-data">{{ block.headline.value }}</span>
+                      </dd>
+                    </div>
+                    <div
+                      v-if="block.summary"
+                      class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline"
+                    >
+                      <dt class="qs-type-compact-label text-muted-foreground">
+                        {{ block.summary.label }}
+                      </dt>
+                      <dd class="m-0 text-right">
+                        <AmountDisplay
+                          v-if="block.summary.amount"
+                          :value="block.summary.amount.value"
+                          :currency="block.summary.amount.currency"
+                          :currencies="currencyCatalog.currencies.value"
+                          :class="billAmountClass(block.summary)"
+                        />
+                        <span v-else class="qs-type-data">{{ block.summary.value }}</span>
+                      </dd>
+                    </div>
+                    <div
+                      v-for="(row, index) in block.details"
+                      :key="row.id"
+                      class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline"
+                      :class="index === 0 ? 'pt-2 border-t border-dashed border-border' : ''"
+                    >
+                      <dt class="qs-type-compact-label text-muted-foreground flex flex-wrap gap-1 items-center">
+                        {{ row.label }}
+                        <FaTag
+                          v-if="row.tag"
+                          variant="outline"
+                          class="qs-type-status-tag"
+                          :class="resolveStatusTagToneClass(row.tag.tone)"
+                        >
+                          {{ row.tag.text }}
+                        </FaTag>
+                      </dt>
+                      <dd class="m-0 text-right">
+                        <AmountDisplay
+                          v-if="row.amount"
+                          :value="row.amount.value"
+                          :currency="row.amount.currency"
+                          :currencies="currencyCatalog.currencies.value"
+                          :class="billAmountClass(row)"
+                        />
+                        <span v-else class="qs-type-data">{{ row.value }}</span>
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
               </div>
             </template>
           </FaPageMain>

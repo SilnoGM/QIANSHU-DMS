@@ -124,11 +124,19 @@ export type SlhReconciliationBillSection
   | {
     readonly id: 'fees'
     readonly label: string
-    /** 上下排布的两个大号数值：合计应付与代收货款（窄列下并排放不下长金额）。 */
-    readonly headline: readonly SlhReconciliationBillAmountRow[]
-    /** 逐项费用：运费、附加费、代收手续费与台币杂费。 */
-    readonly details: readonly SlhReconciliationBillAmountRow[]
+    /** 费用结算按币种分块：人民币一块（合计应付 + 三项费用）、台币一块（代收货款 + 杂费明细）。 */
+    readonly blocks: readonly SlhReconciliationFeeBlock[]
   }
+
+/** 费用结算里的一块：一个总额 + 可选的明细合计行 + 虚线之后的明细。 */
+export interface SlhReconciliationFeeBlock {
+  /** 块头：合计应付人民币或代收货款台币（大号）。 */
+  readonly headline: SlhReconciliationBillAmountRow
+  /** 明细的合计行（台币杂费合计）：排在明细之上，不参与明细列表。 */
+  readonly summary?: SlhReconciliationBillAmountRow
+  /** 虚线之后的明细：人民币三项费用或台币杂费逐项。 */
+  readonly details: readonly SlhReconciliationBillAmountRow[]
+}
 
 /** 账单明细行面板：顶部信息块（入仓单号 + 身份标签）＋三段内容（货物明细 / 费用结算 / 收货与备注）。 */
 export interface SlhReconciliationBillLinePanel {
@@ -225,6 +233,7 @@ export function buildSlhReconciliationBillLinePanel(
         tone: 'warning',
       }
   // 台币杂费逐项：费别 + 金额（与账单明细列同一精度），整行橙红强调。
+  // 合计来自账单列而不是费用行推导，所以它恒作明细的合计行单独展示；没有费用行时就是这一行的值。
   const twdChargeRows: SlhReconciliationBillAmountRow[] = chargeItems('TWD').map((item, index) => ({
     id: `charge-${item.chargeType}-${index}`,
     label: translate(`slhBill.chargeType.${item.chargeType}`),
@@ -232,16 +241,6 @@ export function buildSlhReconciliationBillLinePanel(
     amount: amountValue(item.amount, 'TWD'),
     emphasis: 'warning',
   }))
-  // 台币杂费合计来自账单列而不是费用行推导：没有费用行却有合计时补一行，避免这笔钱在页面上消失。
-  if (twdChargeRows.length === 0 && member.ntdSurchargeAmountTwd !== null) {
-    twdChargeRows.push({
-      id: 'ntdSurchargeAmountTwd',
-      label: translate('slhBill.line.charges'),
-      value: amount(member.ntdSurchargeAmountTwd) ?? missing,
-      amount: amountValue(member.ntdSurchargeAmountTwd, 'TWD'),
-      emphasis: 'warning',
-    })
-  }
   // 材积：主值取系统计算材积，括号里给与账单自报的比较结果；任一侧缺失就没有括注。
   const volumeNote = difference === null
     ? ''
@@ -293,44 +292,56 @@ export function buildSlhReconciliationBillLinePanel(
       {
         id: 'fees',
         label: translate('slhReconciliation.detail.billFeeGroup'),
-        headline: [
+        blocks: [
           {
-            id: 'payableAmountCny',
-            label: translate('slhBill.line.payableAmountCny'),
-            value: amount(member.payableAmountCny) ?? missing,
-            amount: amountValue(member.payableAmountCny, 'CNY'),
-            emphasis: 'total',
+            // 人民币块：合计应付＋基础运费/附加费/代收手续费（三者之和恒等于合计）。
+            headline: {
+              id: 'payableAmountCny',
+              label: translate('slhBill.line.payableAmountCny'),
+              value: amount(member.payableAmountCny) ?? missing,
+              amount: amountValue(member.payableAmountCny, 'CNY'),
+              emphasis: 'total',
+            },
+            details: [
+              {
+                id: 'freightAmountCny',
+                label: translate('slhBill.line.freightAmountCny'),
+                value: amount(member.freightAmountCny) ?? missing,
+                amount: amountValue(member.freightAmountCny, 'CNY'),
+              },
+              {
+                id: 'surchargeAmountCny',
+                label: translate('slhBill.line.surchargeAmountCny'),
+                value: amount(member.surchargeAmountCny) ?? missing,
+                amount: amountValue(member.surchargeAmountCny, 'CNY'),
+                tag: surchargeTag,
+              },
+              {
+                id: 'codHandlingAmountCny',
+                label: translate('slhBill.line.codHandlingAmountCny'),
+                value: amount(member.codHandlingAmountCny) ?? missing,
+                amount: amountValue(member.codHandlingAmountCny, 'CNY'),
+              },
+            ],
           },
           {
-            // 与核对焦点区的「账单代收货款」同一字段、同一组件：蓝色身份也一致。
-            id: 'codAmountTwd',
-            label: translate('slhBill.line.codAmountTwd'),
-            value: amount(member.codAmountTwd) ?? missing,
-            amount: amountValue(member.codAmountTwd, 'TWD'),
-            emphasis: 'cod',
+            // 台币块：代收货款＋台币杂费合计（明细的合计行）＋杂费逐项。
+            headline: {
+              // 与核对焦点区的「账单代收货款」同一字段、同一组件：蓝色身份也一致。
+              id: 'codAmountTwd',
+              label: translate('slhBill.line.codAmountTwd'),
+              value: amount(member.codAmountTwd) ?? missing,
+              amount: amountValue(member.codAmountTwd, 'TWD'),
+              emphasis: 'cod',
+            },
+            summary: {
+              id: 'ntdSurchargeAmountTwd',
+              label: translate('slhBill.line.ntdSurchargeAmountTwd'),
+              value: amount(member.ntdSurchargeAmountTwd) ?? missing,
+              amount: amountValue(member.ntdSurchargeAmountTwd, 'TWD'),
+            },
+            details: twdChargeRows,
           },
-        ],
-        details: [
-          {
-            id: 'freightAmountCny',
-            label: translate('slhBill.line.freightAmountCny'),
-            value: amount(member.freightAmountCny) ?? missing,
-            amount: amountValue(member.freightAmountCny, 'CNY'),
-          },
-          {
-            id: 'surchargeAmountCny',
-            label: translate('slhBill.line.surchargeAmountCny'),
-            value: amount(member.surchargeAmountCny) ?? missing,
-            amount: amountValue(member.surchargeAmountCny, 'CNY'),
-            tag: surchargeTag,
-          },
-          {
-            id: 'codHandlingAmountCny',
-            label: translate('slhBill.line.codHandlingAmountCny'),
-            value: amount(member.codHandlingAmountCny) ?? missing,
-            amount: amountValue(member.codHandlingAmountCny, 'CNY'),
-          },
-          ...twdChargeRows,
         ],
       },
       {
