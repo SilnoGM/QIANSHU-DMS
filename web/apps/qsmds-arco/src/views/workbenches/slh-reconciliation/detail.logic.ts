@@ -345,6 +345,8 @@ export interface SlhReconciliationFocusValue {
   readonly currency: string
   /** 身份色：三张卡各自的渐变基色，纯装饰、不承载任何判定语义。 */
   readonly accent: 'emerald' | 'amber' | 'blue'
+  /** 身份图案：与来源同域的装饰性图标（购物车 / 船 / 纸币），仅作视觉标记。 */
+  readonly motif: string
   readonly isEmpty: boolean
 }
 
@@ -374,6 +376,7 @@ export function buildSlhReconciliationFocusValues(
       id: 'salesBalance',
       sourceLabel: sourceLabel('slhReconciliation.detail.focusSalesBalance', sales?.currencyCode ?? ''),
       accent: 'emerald',
+      motif: 'i-lucide:shopping-cart',
       value: salesBalance,
       currency: sales?.currencyCode ?? '',
       isEmpty: salesBalance === null,
@@ -382,6 +385,7 @@ export function buildSlhReconciliationFocusValues(
       id: 'loadingCod',
       sourceLabel: sourceLabel('slhReconciliation.detail.focusLoadingCod', 'TWD'),
       accent: 'amber',
+      motif: 'i-lucide:ship',
       value: loadingCod,
       currency: 'TWD',
       isEmpty: loadingCod === null,
@@ -390,6 +394,7 @@ export function buildSlhReconciliationFocusValues(
       id: 'billCod',
       sourceLabel: sourceLabel('slhReconciliation.detail.focusBillCod', 'TWD'),
       accent: 'blue',
+      motif: 'i-lucide:banknote',
       value: billCod,
       currency: 'TWD',
       isEmpty: billCod === null,

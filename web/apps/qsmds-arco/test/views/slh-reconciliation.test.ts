@@ -321,6 +321,9 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   // 每张卡按 accent 挂身份色渐变类，卡片内不再渲染来源线索。
   assert.match(page, /:class="`qs-focus-card--\$\{focus\.accent\}`"/u)
   assert.match(page, /qs-focus-card--emerald|qs-focus-card--amber|qs-focus-card--blue/u)
+  // 身份图案是装饰元素：不进无障碍树，且压在内容下层不接鼠标事件。
+  assert.match(page, /<FaIcon[\s\S]{0,120}?:name="focus\.motif"[\s\S]{0,80}?aria-hidden="true"/u)
+  assert.match(page, /class="qs-focus-card__motif"/u)
   assert.doesNotMatch(page, /focus\.trace/u)
   // 三块面板：横向排布（宽屏三列），由 fieldColumns 统一渲染标题与分组。
   assert.match(page, /class="m-4 gap-4 grid items-start lg:grid-cols-2 xl:grid-cols-3"/u)
@@ -737,8 +740,13 @@ test('核对焦点：三个跨域金额并列，来源标签与线索指向各�
     ['8000', 'TWD', false],
     ['8000', 'TWD', false],
   ])
-  // 三个值各有装饰用身份色（绿/黄/蓝）；卡片不再展示来源线索行。
+  // 三个值各有装饰用身份色（绿/黄/蓝）与身份图案（购物车/船/纸币）；卡片不再展示来源线索行。
   assert.deepEqual(focus.map(item => item.accent), ['emerald', 'amber', 'blue'])
+  assert.deepEqual(focus.map(item => item.motif), [
+    'i-lucide:shopping-cart',
+    'i-lucide:ship',
+    'i-lucide:banknote',
+  ])
   assert.equal('trace' in (focus[0] ?? {}), false)
 })
 

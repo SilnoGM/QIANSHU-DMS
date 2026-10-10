@@ -196,6 +196,12 @@ onBeforeUnmount(() => {
               class="qs-focus-card p-4 border border-border rounded-xl bg-card flex flex-col gap-1 min-w-0"
               :class="`qs-focus-card--${focus.accent}`"
             >
+              <!-- 装饰图案：与来源同域的大号图标，只做视觉标记，不进无障碍树。 -->
+              <FaIcon
+                :name="focus.motif"
+                aria-hidden="true"
+                class="qs-focus-card__motif"
+              />
               <p class="qs-type-compact-label text-muted-foreground m-0">
                 {{ focus.sourceLabel }}
               </p>
@@ -302,7 +308,31 @@ onBeforeUnmount(() => {
  */
 .qs-focus-card {
   position: relative;
+  overflow: hidden;
   background-repeat: no-repeat;
+}
+
+/* 装饰图案压在内容下层、不接鼠标事件；颜色同样从主题卡片底色里混出来，明暗主题共用一套。 */
+.qs-focus-card__motif {
+  position: absolute;
+  right: -0.75rem;
+  bottom: -1rem;
+  width: 6.5rem;
+  height: 6.5rem;
+  pointer-events: none;
+  transform: rotate(-8deg);
+}
+
+.qs-focus-card--emerald .qs-focus-card__motif {
+  color: color-mix(in oklab, oklch(69.6% 0.17 162.48deg) 26%, oklch(var(--card)));
+}
+
+.qs-focus-card--amber .qs-focus-card__motif {
+  color: color-mix(in oklab, oklch(76.9% 0.188 70.08deg) 26%, oklch(var(--card)));
+}
+
+.qs-focus-card--blue .qs-focus-card__motif {
+  color: color-mix(in oklab, oklch(62.3% 0.214 259.815deg) 26%, oklch(var(--card)));
 }
 
 .qs-focus-card--emerald {

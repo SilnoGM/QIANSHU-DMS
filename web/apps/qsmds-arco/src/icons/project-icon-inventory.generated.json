@@ -1233,7 +1233,8 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderHistory.vue",
-      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/OrderHistory.vue"
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/OrderHistory.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/detail.logic.ts"
     ]
   },
   {
@@ -3139,6 +3140,15 @@
     ]
   },
   {
+    "name": "i-lucide:ship",
+    "label": "i-lucide:ship",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/detail.logic.ts"
+    ]
+  },
+  {
     "name": "i-lucide:shopping-basket",
     "label": "i-lucide:shopping-basket",
     "category": "通用图标",
@@ -3156,7 +3166,8 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/index.vue",
-      "apps/qsmds-arco/src/components/business/QsPurchaseStartModal/index.vue"
+      "apps/qsmds-arco/src/components/business/QsPurchaseStartModal/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/detail.logic.ts"
     ]
   },
   {
