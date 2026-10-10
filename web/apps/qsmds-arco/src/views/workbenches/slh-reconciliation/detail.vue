@@ -193,7 +193,7 @@ onBeforeUnmount(() => {
               v-for="focus in focusValues"
               :key="focus.id"
               data-slot="slh-reconciliation-focus-item"
-              class="qs-focus-card p-4 border border-border rounded-xl bg-card flex flex-col gap-1 min-w-0"
+              class="qs-focus-card p-4 border border-border rounded-xl bg-card min-w-0"
               :class="`qs-focus-card--${focus.accent}`"
             >
               <!-- 装饰图案：与来源同域的大号图标，只做视觉标记，不进无障碍树。 -->
@@ -202,25 +202,28 @@ onBeforeUnmount(() => {
                 aria-hidden="true"
                 class="qs-focus-card__motif"
               />
-              <p class="qs-type-compact-label text-muted-foreground m-0">
-                {{ focus.sourceLabel }}
-              </p>
-              <AmountDisplay
-                v-if="!focus.isEmpty"
-                :value="focus.value"
-                :currency="focus.currency"
-                :currencies="currencyCatalog.currencies.value"
-                class="!text-2xl !font-semibold"
-              />
-              <!-- 空值＝本行不涉及：只留占位符与说明，与 0.00 区分开。 -->
-              <template v-else>
-                <p class="text-base text-muted-foreground m-0">
-                  {{ t('slhBill.valueMissing') }}
+              <!-- 内容自成一格并抬到图案之上，否则绝对定位的图案会盖住金额文字。 -->
+              <div class="flex flex-col gap-1 min-w-0 relative z-1">
+                <p class="qs-type-compact-label text-muted-foreground m-0">
+                  {{ focus.sourceLabel }}
                 </p>
-                <p class="qs-type-meta text-muted-foreground m-0">
-                  {{ t('slhReconciliation.detail.focusEmptyNote') }}
-                </p>
-              </template>
+                <AmountDisplay
+                  v-if="!focus.isEmpty"
+                  :value="focus.value"
+                  :currency="focus.currency"
+                  :currencies="currencyCatalog.currencies.value"
+                  class="!text-2xl !font-semibold"
+                />
+                <!-- 空值＝本行不涉及：只留占位符与说明，与 0.00 区分开。 -->
+                <template v-else>
+                  <p class="text-base text-muted-foreground m-0">
+                    {{ t('slhBill.valueMissing') }}
+                  </p>
+                  <p class="qs-type-meta text-muted-foreground m-0">
+                    {{ t('slhReconciliation.detail.focusEmptyNote') }}
+                  </p>
+                </template>
+              </div>
             </div>
           </div>
         </div>
@@ -317,6 +320,7 @@ onBeforeUnmount(() => {
   position: absolute;
   right: -0.75rem;
   bottom: -1rem;
+  z-index: 0;
   width: 6.5rem;
   height: 6.5rem;
   pointer-events: none;
@@ -324,15 +328,15 @@ onBeforeUnmount(() => {
 }
 
 .qs-focus-card--emerald .qs-focus-card__motif {
-  color: color-mix(in oklab, oklch(69.6% 0.17 162.48deg) 26%, oklch(var(--card)));
+  color: color-mix(in oklab, oklch(69.6% 0.17 162.48deg) 14%, oklch(var(--card)));
 }
 
 .qs-focus-card--amber .qs-focus-card__motif {
-  color: color-mix(in oklab, oklch(76.9% 0.188 70.08deg) 26%, oklch(var(--card)));
+  color: color-mix(in oklab, oklch(76.9% 0.188 70.08deg) 14%, oklch(var(--card)));
 }
 
 .qs-focus-card--blue .qs-focus-card__motif {
-  color: color-mix(in oklab, oklch(62.3% 0.214 259.815deg) 26%, oklch(var(--card)));
+  color: color-mix(in oklab, oklch(62.3% 0.214 259.815deg) 14%, oklch(var(--card)));
 }
 
 .qs-focus-card--emerald {

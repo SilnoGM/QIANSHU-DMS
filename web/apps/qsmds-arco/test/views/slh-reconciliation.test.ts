@@ -324,6 +324,9 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   // 身份图案是装饰元素：不进无障碍树，且压在内容下层不接鼠标事件。
   assert.match(page, /<FaIcon[\s\S]{0,120}?:name="focus\.motif"[\s\S]{0,80}?aria-hidden="true"/u)
   assert.match(page, /class="qs-focus-card__motif"/u)
+  // 图案压在内容下层：内容块自身定位并抬到 z-1，避免绝对定位图案盖住金额。
+  // 类名顺序会被 unocss/order 重排，按「同一个 class 里同时有 relative 与 z-1」断言。
+  assert.match(page, /class="[^"]*\brelative\b[^"]*\bz-1\b[^"]*"/u)
   assert.doesNotMatch(page, /focus\.trace/u)
   // 三块面板：横向排布（宽屏三列），由 fieldColumns 统一渲染标题与分组。
   assert.match(page, /class="m-4 gap-4 grid items-start lg:grid-cols-2 xl:grid-cols-3"/u)
