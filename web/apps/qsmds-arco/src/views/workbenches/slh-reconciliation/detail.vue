@@ -4,6 +4,7 @@ import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batche
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsReconciliationLineSwitcher from '@/components/business/QsReconciliationLineSwitcher/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { resolveStatusTagToneClass } from '@/utils/status-tag-tone'
@@ -254,6 +255,13 @@ onBeforeUnmount(() => {
                       :currency="field.amount.currency"
                       :currencies="currencyCatalog.currencies.value"
                       class="!text-left !justify-start"
+                    />
+                    <!-- 人员行：姓名交给 QsPersonDisplay（头像位 + 单行截断 + 悬停完整名）。 -->
+                    <QsPersonDisplay
+                      v-else-if="field.person"
+                      :display-name="field.person"
+                      size="sm"
+                      class="max-w-full"
                     />
                     <!-- 状态行：一行展示该订单的三个彩色状态标签（维度名进无障碍朗读）。 -->
                     <span

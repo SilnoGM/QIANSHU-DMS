@@ -334,6 +334,8 @@
       "focusBillCod": "Bill line · COD",
       "focusEmptyNote": "Not applicable for this row",
       "purchaseBalance": "Purchase balance",
+      "purchasePaidAmount": "Paid amount",
+      "purchaseOutstandingAmount": "Unpaid amount",
       "loadingCodAmount": "Loading row COD (TWD)",
       "billCodAmount": "Bill line COD (TWD)",
       "groupMatchEvidence": "Match evidence",

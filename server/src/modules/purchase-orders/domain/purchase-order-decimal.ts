@@ -105,6 +105,28 @@ export function sumPurchaseOrderAmounts(values: readonly string[]): string {
   ))
 }
 
+/** 参与「实际已付款」累加的最小形状：人民币金额 +（可选）作废时间。 */
+export interface PurchaseOrderPaidPaymentSource {
+  readonly amount: { toFixed: (decimalPlaces: number) => string }
+  /** 缺省表示调用方已在查询层过滤掉作废记录（列表路径就是这样取数的）。 */
+  readonly voidedAt?: Date | null
+}
+
+/**
+ * 实际已付款：未作废的付款记录之和（人民币分精度）。
+ * 采购列表、采购详情与对账读取共用这一处口径：作废过的付款不计入，只统计仍生效的记录。
+ */
+export function sumPurchaseOrderPaidUnits(
+  payments: readonly PurchaseOrderPaidPaymentSource[],
+): bigint {
+  return payments.reduce(
+    (sum, payment) => payment.voidedAt === undefined || payment.voidedAt === null
+      ? sum + parsePurchaseOrderAmountUnits(payment.amount.toFixed(4))
+      : sum,
+    0n,
+  )
+}
+
 export interface PurchaseOrderAgreedAmountsInput {
   readonly lineSubtotalAmount: unknown
   readonly purchaseTotalAmount: unknown

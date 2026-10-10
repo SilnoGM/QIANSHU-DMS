@@ -50,6 +50,8 @@ interface BatchDetail {
       purchaseTotalAmount: string
       depositDueAmount: string
       balanceDueAmount: string
+      paidAmount: string
+      outstandingAmount: string
       fulfillmentStatus: string
       paymentStatus: string
       shippingMarkText: string | null
@@ -451,6 +453,11 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       expect(member.purchaseOrder?.depositDueAmount).toBe('0.00')
       expect(member.purchaseOrder?.balanceDueAmount).toBe('10.00')
       expect(member.purchaseOrder?.paymentStatus).toBe('UNPAID')
+      // 夹具没有付款记录：实际已付款为 0，实际未付款等于采购金额。
+      // 有付款（含作废）一侧的口径由采购域覆盖：付款必须走应付与资金过账，直接插入付款行会被
+      // purchase_order_payments_identity_trigger 拒绝，所以不在这里另造一份。
+      expect(member.purchaseOrder?.paidAmount).toBe('0.00')
+      expect(member.purchaseOrder?.outstandingAmount).toBe('10.00')
       expect(['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED', 'SHIPPED', 'SIGNED']).toContain(member.purchaseOrder?.fulfillmentStatus)
       // 销售来源：四位小数订单币种金额，字段口径与销售域一致。
       expect(member.salesOrder).toMatchObject({ customerName: '包装客户', currencyCode: 'TWD', orderStatus: 'CONFIRMED' })

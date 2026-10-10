@@ -190,6 +190,8 @@ export class SlhReconciliationMatchedPurchaseOrderDto {
   @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) purchaseTotalAmount!: string
   @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) depositDueAmount!: string
   @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) balanceDueAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额；未作废付款记录之和' }) paidAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额；采购金额 − 实际已付款' }) outstandingAmount!: string
   @ApiProperty({ enum: PurchaseOrderFulfillmentStatus }) fulfillmentStatus!: PurchaseOrderFulfillmentStatus
   @ApiProperty({ enum: PurchaseOrderPaymentStatus }) paymentStatus!: PurchaseOrderPaymentStatus
   @ApiPropertyOptional({ type: 'string', nullable: true }) shippingMarkText!: string | null

@@ -2,6 +2,11 @@ import { Prisma } from '../../generated/prisma/client'
 import type { StoredDictionaryValueResolution } from '../dictionaries/dictionary-lookup.service'
 import { purchaseOrderSupplierFromSources } from '../purchase-orders/purchase-order-query.service'
 import {
+  formatPurchaseOrderAmountUnits,
+  parsePurchaseOrderAmountUnits,
+  sumPurchaseOrderPaidUnits,
+} from '../purchase-orders/domain/purchase-order-decimal'
+import {
   formatSalesOrderAmountUnits,
   parseSalesOrderAmountUnits,
   sumSalesOrderReceivedUnits,
@@ -62,6 +67,8 @@ export const slhReconciliationBatchDetailInclude = {
                   depositDueAmount: true, balanceDueAmount: true,
                   fulfillmentStatus: true, paymentStatus: true, shippingMarkText: true,
                   supplierValue: true, customSupplierName: true,
+                  // 实际已付款沿用采购域的累加口径，需要未作废的付款记录。
+                  payments: { select: { amount: true, voidedAt: true } },
                   salesOrder: {
                     select: {
                       id: true, orderNo: true, orderStatus: true,
@@ -170,6 +177,12 @@ function serializeBatchMember(
       purchaseTotalAmount: purchaseOrderRow.purchaseTotalAmount.toFixed(2),
       depositDueAmount: purchaseOrderRow.depositDueAmount.toFixed(2),
       balanceDueAmount: purchaseOrderRow.balanceDueAmount.toFixed(2),
+      // 实际已付款/未付款沿用采购域口径：未作废付款累加，未付＝采购金额 − 已付。
+      paidAmount: formatPurchaseOrderAmountUnits(sumPurchaseOrderPaidUnits(purchaseOrderRow.payments)),
+      outstandingAmount: formatPurchaseOrderAmountUnits(
+        parsePurchaseOrderAmountUnits(purchaseOrderRow.purchaseTotalAmount.toFixed(2))
+        - sumPurchaseOrderPaidUnits(purchaseOrderRow.payments),
+      ),
       fulfillmentStatus: purchaseOrderRow.fulfillmentStatus,
       paymentStatus: purchaseOrderRow.paymentStatus,
       shippingMarkText: purchaseOrderRow.shippingMarkText,

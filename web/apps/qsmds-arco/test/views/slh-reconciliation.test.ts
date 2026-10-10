@@ -585,7 +585,7 @@ test('装柜明细行面板：缺货件号与收费材积时走占位符', () =>
   assert.equal(fields.find(field => field.id === 'codAmountTwd')?.amount, undefined)
 })
 
-test('销售与采购面板：销售 11 项、采购 7 项（销售在前），金额带币种、状态合并成一行彩色标签', () => {
+test('销售与采购面板：销售 11 项、采购 9 项（销售在前），金额带币种、状态合并成一行彩色标签', () => {
   const groups = buildSlhReconciliationOrderFieldGroups(memberFixture({
     purchaseOrder: {
       id: 'po-1',
@@ -594,6 +594,8 @@ test('销售与采购面板：销售 11 项、采购 7 项（销售在前），�
       purchaseTotalAmount: '4425',
       depositDueAmount: '1000',
       balanceDueAmount: '3425',
+      paidAmount: '1000',
+      outstandingAmount: '3425',
       fulfillmentStatus: 'PARTIALLY_SHIPPED',
       paymentStatus: 'PARTIALLY_PAID',
       shippingMarkText: 'J-070924',
@@ -636,6 +638,9 @@ test('销售与采购面板：销售 11 项、采购 7 项（销售在前），�
   assert.equal(valueOf('purchase', 'purchaseTotalAmount'), 'CNY 4425.00')
   assert.equal(valueOf('purchase', 'depositDueAmount'), 'CNY 1000.00')
   assert.equal(valueOf('purchase', 'balanceDueAmount'), 'CNY 3425.00')
+  // 实际已付款/未付款与采购列表「实际付款」列同口径（未作废付款累加、未付＝采购金额 − 已付）。
+  assert.equal(valueOf('purchase', 'paidAmount'), 'CNY 1000.00')
+  assert.equal(valueOf('purchase', 'outstandingAmount'), 'CNY 3425.00')
   assert.equal(valueOf('purchase', 'shippingMark'), 'J-070924')
   assert.equal(
     valueOf('purchase', 'purchaseState'),
@@ -691,6 +696,9 @@ test('销售与采购面板：销售 11 项、采购 7 项（销售在前），�
     },
   ])
   assert.equal(valueOf('sales', 'issuer'), '张三')
+  // 出单人交给 QsPersonDisplay 渲染：字段多带一个人名标记，缺名时不下发。
+  const issuer = groups.find(group => group.id === 'sales')?.fields.find(field => field.id === 'issuer')
+  assert.equal(issuer?.person, '张三')
   const purchase = groups.find(group => group.id === 'purchase')
   const sales = groups.find(group => group.id === 'sales')
   assert.deepEqual(sales?.fields.map(field => field.id), [
@@ -712,6 +720,8 @@ test('销售与采购面板：销售 11 项、采购 7 项（销售在前），�
     'purchaseTotalAmount',
     'depositDueAmount',
     'balanceDueAmount',
+    'paidAmount',
+    'outstandingAmount',
     'purchaseState',
     'shippingMark',
   ])

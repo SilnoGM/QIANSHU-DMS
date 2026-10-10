@@ -73,6 +73,8 @@ export interface SlhReconciliationLineField {
   readonly amount?: SlhReconciliationAmountValue
   /** 状态行才有：一行里的多个彩色状态标签（文案与色调都由这里下发，模板只负责渲染）。 */
   readonly tags?: readonly SlhReconciliationStatusTag[]
+  /** 人员行才有：交给 QsPersonDisplay 渲染的显示名；缺名时不下发，模板回落占位符文本。 */
+  readonly person?: string
 }
 
 /** 订单侧单个维度的状态标签：维度名用于无障碍朗读，标签文案与色调由本模块查表给出。 */
@@ -111,6 +113,11 @@ function createFieldFormatters(translate: SlhReconciliationTranslate) {
     volume: (value: string | null | undefined) => {
       const formatted = formatSlhBillVolume(value)
       return formatted === null ? missing : `${formatted} ${cai}`
+    },
+    /** 人员行：有名字时下发 person 让模板改用 QsPersonDisplay，缺名字仍走占位符。 */
+    person: (name: string | null | undefined): { readonly value: string, readonly person?: string } => {
+      const displayName = text(name)
+      return displayName === missing ? { value: displayName } : { value: displayName, person: displayName }
     },
     /** 收费材积在装柜行是整数材数，与其它材积字段一样带单位展示。 */
     chargeableVolume: (value: number | null | undefined) => (
@@ -286,7 +293,7 @@ export function buildSlhReconciliationOrderFieldGroups(
   member: SlhReconciliationBatchMemberDto,
   translate: SlhReconciliationTranslate,
 ): readonly SlhReconciliationFieldGroup[] {
-  const { missing, text, amount, amountValue } = createFieldFormatters(translate)
+  const { missing, text, amount, amountValue, person } = createFieldFormatters(translate)
   // 契约上两个来源都是可选且可空：先归一成 null，后面只判一种缺失形态。
   const purchase = member.purchaseOrder ?? null
   const sales = member.salesOrder ?? null
@@ -341,7 +348,8 @@ export function buildSlhReconciliationOrderFieldGroups(
           tag('slhReconciliation.detail.fulfillmentStatus', 'salesOrderDrawer', SALES_STATUS_TONES.fulfillment, sales?.fulfillmentStatus),
           tag('slhReconciliation.detail.paymentStatus', 'salesOrderDrawer', SALES_STATUS_TONES.payment, sales?.paymentStatus),
         ]),
-        { id: 'issuer', label: translate('salesOrderDesc.fields.issuer'), value: text(sales?.issuerDisplayName) },
+        // 出单人是人员信息：交给 QsPersonDisplay（头像位 + 名称截断），文案仍取销售域键。
+        { id: 'issuer', label: translate('salesOrderDesc.fields.issuer'), ...person(sales?.issuerDisplayName) },
       ],
     },
     {
@@ -354,6 +362,9 @@ export function buildSlhReconciliationOrderFieldGroups(
         { id: 'depositDueAmount', label: translate('slhReconciliation.detail.purchaseDeposit'), value: money('CNY', purchase?.depositDueAmount), amount: amountValue(purchase?.depositDueAmount, 'CNY') },
         // 采购侧也有「尾款」，与销售的尾款同名不同币种：加来源前缀消歧（对账要核的是销售尾款）。
         { id: 'balanceDueAmount', label: translate('slhReconciliation.detail.purchaseBalance'), value: money('CNY', purchase?.balanceDueAmount), amount: amountValue(purchase?.balanceDueAmount, 'CNY') },
+        // 实际已付款/未付款与采购列表「实际付款」列同口径（未作废付款累加、未付＝采购金额 − 已付）。
+        { id: 'paidAmount', label: translate('slhReconciliation.detail.purchasePaidAmount'), value: money('CNY', purchase?.paidAmount), amount: amountValue(purchase?.paidAmount, 'CNY') },
+        { id: 'outstandingAmount', label: translate('slhReconciliation.detail.purchaseOutstandingAmount'), value: money('CNY', purchase?.outstandingAmount), amount: amountValue(purchase?.outstandingAmount, 'CNY') },
         stateField('purchaseState', 'slhReconciliation.detail.purchaseOrderState', [
           tag('slhReconciliation.detail.purchaseOrderStatus', 'purchaseOrderDrawer', PURCHASE_STATUS_TONES.order, purchase?.orderStatus),
           tag('slhReconciliation.detail.fulfillmentStatus', 'purchaseOrderDrawer', PURCHASE_STATUS_TONES.fulfillment, purchase?.fulfillmentStatus),
