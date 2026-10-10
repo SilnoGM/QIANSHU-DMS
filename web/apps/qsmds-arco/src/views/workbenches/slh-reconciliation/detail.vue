@@ -401,24 +401,30 @@ onBeforeUnmount(() => {
                 </div>
               </dl>
             </div>
-            <!-- 代收货款块：对账焦点之一，单独成块并与核对焦点区同源同格式。 -->
-            <dl class="m-0 mt-3 p-3 border border-border rounded-lg flex flex-col">
-              <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline">
-                <dt class="qs-type-compact-label text-foreground">
-                  {{ loadingItemPanel.codAmount.label }}
-                </dt>
-                <dd class="m-0 text-right">
-                  <AmountDisplay
-                    v-if="loadingItemPanel.codAmount.amount"
-                    :value="loadingItemPanel.codAmount.amount.value"
-                    :currency="loadingItemPanel.codAmount.amount.currency"
-                    :currencies="currencyCatalog.currencies.value"
-                    :class="billAmountClass(loadingItemPanel.codAmount)"
-                  />
-                  <span v-else class="qs-type-data">{{ loadingItemPanel.codAmount.value }}</span>
-                </dd>
-              </div>
-            </dl>
+            <!-- 费用详情：代收货款是对账焦点之一，单独成块并与核对焦点区同源同格式。 -->
+            <div class="mt-4 min-w-0">
+              <h3 class="qs-type-section-title m-0 flex gap-2 items-center">
+                <span class="rounded-full bg-primary h-4.5 w-1" aria-hidden="true" />
+                {{ loadingItemPanel.fee.label }}
+              </h3>
+              <dl class="m-0 mt-3 p-3 border border-border rounded-lg flex flex-col">
+                <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline">
+                  <dt class="qs-type-compact-label text-foreground">
+                    {{ loadingItemPanel.fee.amount.label }}
+                  </dt>
+                  <dd class="m-0 text-right">
+                    <AmountDisplay
+                      v-if="loadingItemPanel.fee.amount.amount"
+                      :value="loadingItemPanel.fee.amount.amount.value"
+                      :currency="loadingItemPanel.fee.amount.amount.currency"
+                      :currencies="currencyCatalog.currencies.value"
+                      :class="billAmountClass(loadingItemPanel.fee.amount)"
+                    />
+                    <span v-else class="qs-type-data">{{ loadingItemPanel.fee.amount.value }}</span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
             <!-- 收货与备注：收货信息叠三行，备注走浅色标签，与账单侧同一形态。 -->
             <div class="mt-4 min-w-0">
               <h3 class="qs-type-section-title m-0 flex gap-2 items-center">

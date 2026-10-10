@@ -143,9 +143,15 @@ export interface SlhReconciliationLoadingItemPanel {
   readonly receiptReference: SlhReconciliationLineField
   readonly tags: readonly SlhReconciliationIdentityTag[]
   readonly cargo: SlhReconciliationLoadingSection
-  /** 代收货款块（对账焦点之一）：无标题边框块，与销售/采购的金额块同款。 */
-  readonly codAmount: SlhReconciliationBillAmountRow
+  /** 费用详情段：目前只有代收货款块（对账焦点之一）。 */
+  readonly fee: SlhReconciliationLoadingFeeSection
   readonly recipient: SlhReconciliationLoadingSection
+}
+
+/** 费用详情段：段标题 + 边框块里的金额行。 */
+export interface SlhReconciliationLoadingFeeSection {
+  readonly label: string
+  readonly amount: SlhReconciliationBillAmountRow
 }
 
 /** 账单明细行面板：顶部信息块（入仓单号 + 身份标签）＋三段内容（货物明细 / 费用结算 / 收货与备注）。 */
@@ -430,13 +436,16 @@ export function buildSlhReconciliationLoadingItemPanel(
         { id: 'chargeableVolumeCai', label: translate('slhReconciliation.detail.chargeableVolume'), value: chargeableVolume(item.chargeableVolumeCai) },
       ],
     },
-    codAmount: {
-      // 与核对焦点区的「装柜代收货款」同一字段、同一组件、同一格式。
-      id: 'codAmountTwd',
-      label: translate('slhReconciliation.detail.loadingCodAmount'),
-      value: amount(item.codAmountTwd) ?? missing,
-      amount: amountValue(item.codAmountTwd, 'TWD'),
-      emphasis: 'total',
+    fee: {
+      label: translate('slhReconciliation.detail.loadingFeeGroup'),
+      amount: {
+        // 与核对焦点区的「装柜代收货款」同一字段、同一组件、同一格式。
+        id: 'codAmountTwd',
+        label: translate('slhReconciliation.detail.loadingCodAmount'),
+        value: amount(item.codAmountTwd) ?? missing,
+        amount: amountValue(item.codAmountTwd, 'TWD'),
+        emphasis: 'total',
+      },
     },
     recipient: {
       label: translate('slhReconciliation.detail.groupRecipient'),

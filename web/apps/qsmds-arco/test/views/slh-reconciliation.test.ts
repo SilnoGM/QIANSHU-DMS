@@ -351,7 +351,8 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   assert.match(page, /v-for="tag in loadingItemPanel\.tags"/u)
   assert.match(page, /\{\{ loadingItemPanel\.receiptReference\.value \}\}/u)
   assert.match(page, /\{\{ loadingItemPanel\.cargo\.label \}\}/u)
-  assert.match(page, /\{\{ loadingItemPanel\.codAmount\.label \}\}/u)
+  assert.match(page, /\{\{ loadingItemPanel\.fee\.label \}\}/u)
+  assert.match(page, /\{\{ loadingItemPanel\.fee\.amount\.label \}\}/u)
   assert.match(page, /v-for="line in field\.lines"/u)
   assert.doesNotMatch(page, /fieldColumns|column\.groups/u)
   // 销售/采购改成专用区块模板：单号＋状态徽章的信息块、关键字段行、金额块，两块之间一条分割线。
@@ -713,12 +714,13 @@ test('装柜明细行面板：顶部信息块 + 货物明细 + 代收货款块 +
   // 长文本字段带截断标记（货名 / 唛头）。
   assert.deepEqual(panel.cargo.fields.slice(0, 2).map(field => field.truncate === true), [true, true])
 
-  // 代收货款块：与核对焦点区的「装柜代收货款」同字段、同组件、同格式，单独成块。
-  assert.equal(panel.codAmount.id, 'codAmountTwd')
-  assert.equal(panel.codAmount.label, '[slhReconciliation.detail.loadingCodAmount]')
-  assert.deepEqual(panel.codAmount.amount, { value: '1200', currency: 'TWD' })
-  assert.equal(panel.codAmount.value, '1200.00')
-  assert.equal(panel.codAmount.emphasis, 'total')
+  // 费用详情段：与核对焦点区的「装柜代收货款」同字段、同组件、同格式。
+  assert.equal(panel.fee.label, '[slhReconciliation.detail.loadingFeeGroup]')
+  assert.equal(panel.fee.amount.id, 'codAmountTwd')
+  assert.equal(panel.fee.amount.label, '[slhReconciliation.detail.loadingCodAmount]')
+  assert.deepEqual(panel.fee.amount.amount, { value: '1200', currency: 'TWD' })
+  assert.equal(panel.fee.amount.value, '1200.00')
+  assert.equal(panel.fee.amount.emphasis, 'total')
 
   // 收货与备注：名称 / 地址 / 电话叠三行，备注走浅色标签。
   assert.equal(panel.recipient.label, '[slhReconciliation.detail.groupRecipient]')
@@ -759,8 +761,8 @@ test('装柜明细行面板：缺货件号与收费材积时走占位符，收�
   assert.equal(panel.recipient.fields[0]?.value, '[slhBill.valueMissing]')
   assert.deepEqual(panel.recipient.fields[0]?.lines, [])
   assert.equal(panel.recipient.fields[1]?.value, '[slhBill.valueMissing]')
-  assert.equal(panel.codAmount.value, '[slhBill.valueMissing]')
-  assert.equal(panel.codAmount.amount, undefined)
+  assert.equal(panel.fee.amount.value, '[slhBill.valueMissing]')
+  assert.equal(panel.fee.amount.amount, undefined)
 })
 
 /** 订单侧两个来源的完整夹具：用例只改要断言的那几项，其余保持定值。 */

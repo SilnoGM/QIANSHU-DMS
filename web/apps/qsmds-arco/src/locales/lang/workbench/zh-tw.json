@@ -340,6 +340,7 @@
       "groupRecipient": "收貨與備註",
       "billCargoGroup": "貨物明細",
       "billFeeGroup": "費用結算",
+      "loadingFeeGroup": "費用詳情",
       "billChargeRule": "計費規則",
       "billVolumeEven": "自報/系統一致",
       "receivedAmount": "實際已收款",

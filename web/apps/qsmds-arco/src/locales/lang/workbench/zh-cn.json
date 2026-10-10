@@ -349,6 +349,7 @@
       "groupRecipient": "收货与备注",
       "billCargoGroup": "货物明细",
       "billFeeGroup": "费用结算",
+      "loadingFeeGroup": "费用详情",
       "billChargeRule": "计费规则",
       "billVolumeEven": "自报/系统一致",
       "receivedAmount": "实际已收款",

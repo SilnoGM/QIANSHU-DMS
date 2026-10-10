@@ -340,6 +340,7 @@
       "groupRecipient": "Recipient and remarks",
       "billCargoGroup": "Cargo details",
       "billFeeGroup": "Fee settlement",
+      "loadingFeeGroup": "Fee details",
       "billChargeRule": "Charge basis",
       "billVolumeEven": "Reported matches system",
       "receivedAmount": "Received amount",
