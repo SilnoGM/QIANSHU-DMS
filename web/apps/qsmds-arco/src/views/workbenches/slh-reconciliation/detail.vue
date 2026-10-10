@@ -8,15 +8,14 @@ import { containerFailure } from '../containers/use-container-resource'
 import {
   buildSlhReconciliationLineFields,
   buildSlhReconciliationLineItems,
-  buildSlhReconciliationMemberListText,
   resolveSlhReconciliationSelectedMember,
   SLH_RECONCILIATION_LINE_TONES,
 } from './detail.logic'
 import { resolveSlhReconciliationBatchLabelKey, resolveSlhReconciliationBatchTone } from './status.logic'
 
 /**
- * 批次详情页：用切换器浏览创建时冻结的明细行，选中行的字段数据跟在下方（对照工作台后续再做）。
- * 头部辅助文字给出批次状态、批次编号与账单基础信息（账单编号、对账单名称）；
+ * 批次详情页：切换器自带面板，用来浏览创建时冻结的明细行，选中行的字段数据跟在下方
+ * （对照工作台后续再做）。头部辅助文字给出批次状态、批次编号与账单基础信息；
  * 底部承接「结束批次」接口的「完成批次对账」动作。
  */
 defineOptions({ name: 'QsFinanceBillReconciliationSlhReconciliationDetail' })
@@ -30,7 +29,6 @@ const loading = ref(false)
 const loadError = ref('')
 const completeOpen = ref(false)
 const completing = ref(false)
-const copyingMembers = ref(false)
 const actionError = ref('')
 /** 选中行由页面持有：切换器只发 update:modelValue，行数据与后续核对动作都跟着它走。 */
 const selectedLineId = ref<string | null>(null)
@@ -91,24 +89,6 @@ function backToList(): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhBillReconciliation' })
 }
 
-/** 复制整份成员清单：内容与页面上逐字一致，失败只提示当前用户，不打印清单内容。 */
-async function copyMembers(): Promise<void> {
-  if (copyingMembers.value || members.value.length === 0) {
-    return
-  }
-  copyingMembers.value = true
-  try {
-    await navigator.clipboard.writeText(buildSlhReconciliationMemberListText(members.value))
-    toast.success(t('slhReconciliation.detail.membersCopied'))
-  }
-  catch {
-    toast.error(t('slhReconciliation.detail.membersCopyFailed'))
-  }
-  finally {
-    copyingMembers.value = false
-  }
-}
-
 async function complete(): Promise<void> {
   if (!canComplete.value || completing.value) {
     return
@@ -157,55 +137,50 @@ onBeforeUnmount(() => {
         <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />{{ t('slhReconciliation.backToList') }}
       </FaButton>
     </FaPageHeader>
-    <!-- 主体用切换器浏览冻结成员：读取失败时给出错误与重试，其余批次内容留到详情页重做时再补。 -->
-    <FaPageMain class="min-w-0">
-      <template v-if="loadError">
-        <FaAlert variant="destructive" role="alert" :title="loadError" />
-        <FaButton class="mt-3" variant="outline" @click="load">
-          {{ t('slhBill.retry') }}
-        </FaButton>
-      </template>
-      <section v-else-if="batch" class="p-4 border border-border rounded-lg flex flex-col gap-3">
-        <header class="flex flex-wrap gap-2 items-center justify-between">
-          <h2 class="qs-type-compact-title m-0">
-            {{ t('slhReconciliation.detail.membersTitle', { count: members.length }) }}
-          </h2>
-          <FaButton variant="outline" size="sm" :disabled="members.length === 0 || copyingMembers" @click="copyMembers">
-            <FaIcon name="i-lucide:copy" aria-hidden="true" />{{ t('slhReconciliation.detail.membersCopy') }}
-          </FaButton>
-        </header>
+    <!-- 读取失败给错误与重试；其余批次内容留到详情页重做时再补。 -->
+    <FaPageMain v-if="loadError" class="min-w-0">
+      <FaAlert variant="destructive" role="alert" :title="loadError" />
+      <FaButton class="mt-3" variant="outline" @click="load">
+        {{ t('slhBill.retry') }}
+      </FaButton>
+    </FaPageMain>
+    <template v-else-if="batch">
+      <!-- 切换器独立成一块面板：只用一个普通容器承接页面外边距，不塞进 FaPageMain 里。 -->
+      <div v-if="members.length > 0" class="m-4 min-w-0">
+        <QsReconciliationLineSwitcher
+          v-model="selectedLineId"
+          :items="lineSwitcherItems"
+          :status-tones="SLH_RECONCILIATION_LINE_TONES"
+          :aria-label="t('slhReconciliation.detail.lineSwitcherLabel')"
+        />
+      </div>
+      <FaPageMain class="min-w-0">
+        <!-- 没有冻结行时只给一句批次级说明，不让切换器空转。 -->
         <p v-if="members.length === 0" class="qs-type-description text-muted-foreground m-0">
           {{ t('slhReconciliation.detail.membersEmpty') }}
         </p>
-        <template v-else>
-          <QsReconciliationLineSwitcher
-            v-model="selectedLineId"
-            :items="lineSwitcherItems"
-            :status-tones="SLH_RECONCILIATION_LINE_TONES"
-            :aria-label="t('slhReconciliation.detail.lineSwitcherLabel')"
-          />
-          <!-- 选中行的字段数据：先给纯字段清单，完整的对照工作台后续再做。 -->
-          <section class="flex flex-col gap-2" aria-labelledby="slh-reconciliation-line-data-title">
-            <h3 id="slh-reconciliation-line-data-title" class="qs-type-compact-title m-0">
-              {{ t('slhReconciliation.detail.lineDataTitle') }}
-            </h3>
-            <p v-if="selectedMember === null" class="qs-type-description text-muted-foreground m-0">
-              {{ t('slhReconciliation.detail.lineDataEmpty') }}
-            </p>
-            <dl v-else class="m-0 gap-x-8 gap-y-1 grid md:grid-cols-2">
-              <div v-for="field in selectedLineFields" :key="field.id" class="flex gap-2 min-w-0 items-baseline">
-                <dt class="qs-type-compact-label shrink-0">
-                  {{ field.label }}
-                </dt>
-                <dd class="qs-type-data m-0 break-all">
-                  {{ field.value }}
-                </dd>
-              </div>
-            </dl>
-          </section>
-        </template>
-      </section>
-    </FaPageMain>
+        <!-- 选中行的字段数据：先给纯字段清单，完整的对照工作台后续再做。 -->
+        <section
+          v-else-if="selectedMember"
+          class="flex flex-col gap-2"
+          aria-labelledby="slh-reconciliation-line-data-title"
+        >
+          <h3 id="slh-reconciliation-line-data-title" class="qs-type-compact-title m-0">
+            {{ t('slhReconciliation.detail.lineDataTitle') }}
+          </h3>
+          <dl class="m-0 gap-x-8 gap-y-1 grid md:grid-cols-2">
+            <div v-for="field in selectedLineFields" :key="field.id" class="flex gap-2 min-w-0 items-baseline">
+              <dt class="qs-type-compact-label shrink-0">
+                {{ field.label }}
+              </dt>
+              <dd class="qs-type-data m-0 break-all">
+                {{ field.value }}
+              </dd>
+            </div>
+          </dl>
+        </section>
+      </FaPageMain>
+    </template>
     <FaFixedBar position="bottom" class="border-t border-border">
       <div class="flex flex-col gap-3 w-full md:flex-row md:items-center md:justify-end">
         <FaAlert v-if="actionError" variant="destructive" role="alert" :title="actionError" class="md:mr-auto" />

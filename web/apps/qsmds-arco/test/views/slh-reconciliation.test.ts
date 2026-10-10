@@ -22,7 +22,6 @@ import {
 import {
   buildSlhReconciliationLineFields,
   buildSlhReconciliationLineItems,
-  buildSlhReconciliationMemberListText,
   resolveSlhReconciliationSelectedMember,
   SLH_RECONCILIATION_LINE_TONES,
 } from '../../src/views/workbenches/slh-reconciliation/detail.logic'
@@ -298,38 +297,24 @@ test('批次详情页：头部只给批次与账单标识、底部承接完成�
   assert.match(page, /t\('slhBill\.retry'\)/u)
 })
 
-test('详情页成员区：用切换器浏览冻结行，选中行数据在下方逐字段展示', async () => {
+test('详情页成员区：切换器独立成面板，选中行数据在下方逐字段展示', async () => {
   const page = await readPageSource('detail.vue')
-  assert.match(page, /t\('slhReconciliation\.detail\.membersTitle', \{ count: members\.length \}\)/u)
-  assert.match(page, /t\('slhReconciliation\.detail\.membersEmpty'\)/u)
-  // 成员区改成切换器：受控选中 + 状态色映射 + 页面自己的无障碍名称。
+  // 切换器受控接线：选中值由页面持有，状态色映射与无障碍名称都由页面给。
   assert.match(page, /<QsReconciliationLineSwitcher[\s\S]{0,400}?v-model="selectedLineId"/u)
   assert.match(page, /:items="lineSwitcherItems"/u)
   assert.match(page, /:status-tones="SLH_RECONCILIATION_LINE_TONES"/u)
   assert.match(page, /t\('slhReconciliation\.detail\.lineSwitcherLabel'\)/u)
+  // 切换器挂在 FaPageMain 之外，只用一个普通容器承接页面外边距：它自己就是一块面板。
+  assert.match(page, /<div v-if="members\.length > 0" class="m-4 min-w-0">[\s\S]{0,200}?<QsReconciliationLineSwitcher/u)
+  // 不再有成员标题与复制入口。
+  assert.doesNotMatch(page, /membersTitle|membersCopy|copyMembers|clipboard\.writeText/u)
+  // 批次没有冻结行时只给一句批次级说明，不让切换器空转。
+  assert.match(page, /v-if="members\.length > 0"/u)
+  assert.match(page, /t\('slhReconciliation\.detail\.membersEmpty'\)/u)
   // 选中行数据跟在切换器下方，是纯字段清单；旧的一行式成员清单已不再渲染。
   assert.match(page, /t\('slhReconciliation\.detail\.lineDataTitle'\)/u)
   assert.match(page, /v-for="field in selectedLineFields"/u)
-  assert.match(page, /t\('slhReconciliation\.detail\.lineDataEmpty'\)/u)
   assert.doesNotMatch(page, /v-for="member in members"/u)
-  // 复制仍走整份成员清单：复制到的与看到的成员集合一致。
-  assert.match(page, /navigator\.clipboard\.writeText\(buildSlhReconciliationMemberListText\(members\.value\)\)/u)
-  assert.match(page, /t\('slhReconciliation\.detail\.membersCopied'\)/u)
-  assert.match(page, /t\('slhReconciliation\.detail\.membersCopyFailed'\)/u)
-  // 没有冻结行时不给复制按钮一个空动作。
-  assert.match(page, /:disabled="members\.length === 0 \|\| copyingMembers"/u)
-})
-
-test('成员清单文本与页面同形：明细行 ID · 品名 · 柜次名 #行号', () => {
-  const members = [
-    { lineId: 'line-1', goodsName: '木桌', matchedContainerBatchName: 'CONT-1', matchedLoadingItemLineNumber: 12 },
-    { lineId: 'line-2', goodsName: '铁架', matchedContainerBatchName: 'CONT-2', matchedLoadingItemLineNumber: 3 },
-  ] as unknown as SlhReconciliationBatchMemberDto[]
-  assert.equal(
-    buildSlhReconciliationMemberListText(members),
-    'line-1 · 木桌 · CONT-1 #12\nline-2 · 铁架 · CONT-2 #3',
-  )
-  assert.equal(buildSlhReconciliationMemberListText([]), '')
 })
 
 /** 译函数只回显键与参数，断言的是拼接规则本身（译文归语言包）。 */
