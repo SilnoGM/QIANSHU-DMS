@@ -521,22 +521,25 @@ test('账单明细行面板：顶部信息块 + 货物明细 / 费用结算 / �
     ['recipient', '[slhReconciliation.detail.groupRecipient]'],
   ])
 
-  // 货物明细：三处合并行（箱数/重量、系统材积+自报比较、计价方式+类别+单价）。
+  // 货物明细：箱数与重量各占一行；材积与计费规则仍是合并行。
   assert.deepEqual(cargo.fields.map(field => field.id), [
     'goodsName',
     'shippingMark',
-    'packageAndWeight',
+    'packageCount',
+    'weight',
     'dimensions',
     'volumeCai',
     'chargeRule',
   ])
-  assert.equal(cargo.fields[2]?.label, '[slhBill.line.packageCount] / [slhBill.line.weight]')
-  assert.equal(cargo.fields[2]?.value, '12 箱 | 120.50 KG')
-  assert.equal(cargo.fields[3]?.value, '215×137×113 [slhBill.unit.cm]')
+  assert.equal(cargo.fields[2]?.label, '[slhBill.line.packageCount]')
+  assert.equal(cargo.fields[2]?.value, '12 箱')
+  assert.equal(cargo.fields[3]?.label, '[slhBill.line.weight]')
+  assert.equal(cargo.fields[3]?.value, '120.50 KG')
+  assert.equal(cargo.fields[4]?.value, '215×137×113 [slhBill.unit.cm]')
   // 材积主值取系统计算，括号里给与账单自报的差异（本例系统更大）。
-  assert.equal(cargo.fields[4]?.value, '1.23 [slhBill.unit.cai]（[slhBill.line.volumeDifferenceCai] +0.03）')
+  assert.equal(cargo.fields[5]?.value, '1.23 [slhBill.unit.cai]（[slhBill.line.volumeDifferenceCai] +0.03）')
   assert.equal(
-    cargo.fields[5]?.value,
+    cargo.fields[6]?.value,
     '[slhBill.pricingBasis.VOLUME] | [slhBill.line.categoryCode] A | [slhBill.line.unitPriceAmount] 12.5',
   )
 
@@ -581,7 +584,7 @@ test('账单明细行面板：材积一致与缺一侧、重货费标签、多�
     throw new Error('账单面板缺少预期分段')
   }
   // 两侧一致：不写差异，只标「自报/系统一致」。
-  assert.equal(evenCargo.fields[4]?.value, '2.00 [slhBill.unit.cai]（[slhReconciliation.detail.billVolumeEven]）')
+  assert.equal(evenCargo.fields[5]?.value, '2.00 [slhBill.unit.cai]（[slhReconciliation.detail.billVolumeEven]）')
   // 人民币费用已并入附加费列：标签说明这笔钱是什么费。
   assert.deepEqual(evenFees.blocks[0]?.details[1]?.tag, { text: '[slhBill.chargeType.HEAVY_CARGO]', tone: 'warning' })
 
@@ -595,8 +598,8 @@ test('账单明细行面板：材积一致与缺一侧、重货费标签、多�
   if (partialCargo?.id !== 'cargo') {
     throw new Error('账单面板缺少货物明细')
   }
-  assert.equal(partialCargo.fields[3]?.value, '[slhBill.valueMissing]')
   assert.equal(partialCargo.fields[4]?.value, '[slhBill.valueMissing]')
+  assert.equal(partialCargo.fields[5]?.value, '[slhBill.valueMissing]')
 
   // 多项台币费用：逐项一行、橙红强调、与账单明细列同一精度。
   const items = buildSlhReconciliationBillLinePanel(memberFixture({
@@ -642,7 +645,7 @@ test('账单明细行面板：计价方式缺失与收货三列全空时都走�
     throw new Error('账单面板缺少预期分段')
   }
   assert.equal(
-    cargo.fields[5]?.value,
+    cargo.fields[6]?.value,
     '[slhBill.valueMissing] | [slhBill.line.categoryCode] A | [slhBill.line.unitPriceAmount] 12.5',
   )
   assert.equal(recipient.fields[0]?.value, '[slhBill.valueMissing]')
@@ -686,23 +689,26 @@ test('装柜明细行面板：顶部信息块 + 货物明细 + 代收货款块 +
     { text: 'PS-0001', tone: 'neutral' },
   ])
 
-  // 货物明细：与账单侧同名；箱数/重量合并一行，三个材积口径分行保留。
+  // 货物明细：与账单侧同名；箱数与重量各占一行，三个材积口径分行保留。
   assert.equal(panel.cargo.label, '[slhReconciliation.detail.billCargoGroup]')
   assert.deepEqual(panel.cargo.fields.map(field => field.id), [
     'goodsName',
     'shippingMark',
-    'packageAndWeight',
+    'packageCount',
+    'weight',
     'dimensions',
     'volumeCai',
     'chargeableVolumeCai',
     'reportedVolumeCai',
   ])
-  assert.equal(panel.cargo.fields[2]?.label, '[slhBill.line.packageCount] / [slhBill.line.weight]')
-  assert.equal(panel.cargo.fields[2]?.value, '12 箱 | 120.50 KG')
-  assert.equal(panel.cargo.fields[3]?.value, '215×137×113 [slhBill.unit.cm]')
-  assert.equal(panel.cargo.fields[4]?.value, '1.23 [slhBill.unit.cai]')
-  assert.equal(panel.cargo.fields[5]?.value, '7 [slhBill.unit.cai]')
-  assert.equal(panel.cargo.fields[6]?.value, '1.20 [slhBill.unit.cai]')
+  assert.equal(panel.cargo.fields[2]?.label, '[slhBill.line.packageCount]')
+  assert.equal(panel.cargo.fields[2]?.value, '12 箱')
+  assert.equal(panel.cargo.fields[3]?.label, '[slhBill.line.weight]')
+  assert.equal(panel.cargo.fields[3]?.value, '120.50 KG')
+  assert.equal(panel.cargo.fields[4]?.value, '215×137×113 [slhBill.unit.cm]')
+  assert.equal(panel.cargo.fields[5]?.value, '1.23 [slhBill.unit.cai]')
+  assert.equal(panel.cargo.fields[6]?.value, '7 [slhBill.unit.cai]')
+  assert.equal(panel.cargo.fields[7]?.value, '1.20 [slhBill.unit.cai]')
   // 长文本字段带截断标记（货名 / 唛头）。
   assert.deepEqual(panel.cargo.fields.slice(0, 2).map(field => field.truncate === true), [true, true])
 
@@ -736,7 +742,7 @@ test('装柜明细行面板：缺货件号与收费材积时走占位符，收�
 
   // 货件号缺失也保留标签位（占位符），与其它字段同一口径。
   assert.equal(panel.tags[2]?.text, '[slhBill.valueMissing]')
-  assert.equal(panel.cargo.fields[5]?.value, '[slhBill.valueMissing]')
+  assert.equal(panel.cargo.fields[6]?.value, '[slhBill.valueMissing]')
   assert.equal(panel.recipient.fields[0]?.value, '[slhBill.valueMissing]')
   assert.deepEqual(panel.recipient.fields[0]?.lines, [])
   assert.equal(panel.recipient.fields[1]?.value, '[slhBill.valueMissing]')

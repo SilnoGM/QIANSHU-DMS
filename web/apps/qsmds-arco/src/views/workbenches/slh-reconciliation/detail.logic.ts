@@ -279,11 +279,8 @@ export function buildSlhReconciliationBillLinePanel(
         fields: [
           { id: 'goodsName', label: translate('slhBill.line.goodsName'), value: text(member.goodsName), truncate: true },
           { id: 'shippingMark', label: translate('slhBill.line.shippingMark'), value: text(member.shippingMarkText), truncate: true },
-          {
-            id: 'packageAndWeight',
-            label: `${translate('slhBill.line.packageCount')} / ${translate('slhBill.line.weight')}`,
-            value: `${`${member.packageCount} ${member.packageUnit ?? ''}`.trim()} | ${weight(member)}`,
-          },
+          { id: 'packageCount', label: translate('slhBill.line.packageCount'), value: `${member.packageCount} ${member.packageUnit ?? ''}`.trim() },
+          { id: 'weight', label: translate('slhBill.line.weight'), value: weight(member) },
           { id: 'dimensions', label: translate('slhBill.line.dimensions'), value: dimensions(member) },
           { id: 'volumeCai', label: translate('slhBill.line.volumeCai'), value: `${volume(member.volumeCai)}${volumeNote}` },
           {
@@ -412,11 +409,8 @@ export function buildSlhReconciliationLoadingItemPanel(
       fields: [
         { id: 'goodsName', label: translate('slhBill.line.goodsName'), value: text(item.goodsName), truncate: true },
         { id: 'shippingMark', label: translate('slhBill.line.shippingMark'), value: text(item.oceanShippingMarkText), truncate: true },
-        {
-          id: 'packageAndWeight',
-          label: `${translate('slhBill.line.packageCount')} / ${translate('slhBill.line.weight')}`,
-          value: `${`${item.packageCount} ${item.packageUnit ?? ''}`.trim()} | ${weight(item)}`,
-        },
+        { id: 'packageCount', label: translate('slhBill.line.packageCount'), value: `${item.packageCount} ${item.packageUnit ?? ''}`.trim() },
+        { id: 'weight', label: translate('slhBill.line.weight'), value: weight(item) },
         { id: 'dimensions', label: translate('slhBill.line.dimensions'), value: dimensions(item) },
         // 装柜侧三个材积口径都要看（系统计算 / 收费 / 账单自报），不合并成一行。
         { id: 'volumeCai', label: translate('slhBill.line.volumeCai'), value: volume(item.volumeCai) },
