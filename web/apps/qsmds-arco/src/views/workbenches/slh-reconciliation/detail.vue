@@ -197,7 +197,7 @@ onBeforeUnmount(() => {
               v-for="focus in focusValues"
               :key="focus.id"
               data-slot="slh-reconciliation-focus-item"
-              class="p-4 border border-border rounded-xl bg-muted/20 flex flex-col gap-1 min-w-0"
+              class="p-4 border border-border rounded-xl bg-card flex flex-col gap-1 min-w-0"
             >
               <p class="qs-type-compact-label text-muted-foreground m-0">
                 {{ focus.sourceLabel }}
