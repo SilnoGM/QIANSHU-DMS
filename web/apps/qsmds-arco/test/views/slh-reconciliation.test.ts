@@ -418,17 +418,17 @@ test('账单明细行面板：格式化与账单明细列同源，缺值与核�
   assert.equal(valueOf('volumeDifferenceCai'), '+0.03')
   assert.equal(valueOf('payableAmountCny'), '4455.00')
   assert.equal(valueOf('pricingBasis'), '[slhBill.pricingBasis.VOLUME]')
-  assert.equal(valueOf('reconciliationStatus'), '[slhBill.reconciliationStatus.PENDING]')
   assert.equal(valueOf('recipientInfo'), '王小明 0912345678 台北市')
   // 空值＝不涉及：一律占位符，不回显 null / 空串。
   assert.equal(valueOf('codHandlingAmountCny'), '[slhBill.valueMissing]')
   assert.equal(valueOf('ntdSurchargeAmountTwd'), '[slhBill.valueMissing]')
-  assert.equal(valueOf('reconciledAt'), '[slhBill.valueMissing]')
-  assert.equal(valueOf('reconciledBy'), '[slhBill.valueMissing]')
   assert.equal(valueOf('charges'), '[slhBill.valueMissing]')
-  // 匹配依据属于柜次侧：账单面板不再重复铺一遍。
+  // 匹配依据属于柜次侧、对账状态与核对留痕按产品要求不展示：账单面板都不再出现。
   assert.equal(valueOf('matchSource'), undefined)
   assert.equal(valueOf('matchedContainer'), undefined)
+  assert.equal(valueOf('reconciliationStatus'), undefined)
+  assert.equal(valueOf('reconciledAt'), undefined)
+  assert.equal(valueOf('reconciledBy'), undefined)
   for (const field of fields) {
     assert.notEqual(field.label.trim(), '', `${field.id} 缺少字段名`)
   }
@@ -460,9 +460,6 @@ test('账单明细行面板：尺寸缺边不进尺寸列，材积缺一侧不�
     valueOf('charges'),
     'CNY [slhBill.chargeType.FREIGHT] 10.00；TWD [slhBill.chargeType.DELIVERY] 250.00',
   )
-  // 核对时间走 DateTimeDisplay 同一份格式化：固定宽度、24 小时制、Asia/Shanghai。
-  assert.equal(valueOf('reconciledAt'), '2026-10-09 18:00:00')
-  assert.equal(valueOf('reconciledBy'), '张三')
 })
 
 test('账单明细行面板：计价方式缺失（服务端回 null）时走占位符而不是拼出空译文键', () => {
@@ -545,42 +542,35 @@ test('装柜明细行面板：缺货件号与收费材积时走占位符', () =>
   }
 })
 
-test('销售与采购面板：采购 15 项、销售 14 项，金额带币种、枚举取值复用采购/销售页面文案键', () => {
+test('销售与采购面板：采购 9 项、销售 13 项，金额带币种、枚举取值复用采购/销售页面文案键', () => {
   const groups = buildSlhReconciliationOrderFieldGroups(memberFixture({
     purchaseOrder: {
       id: 'po-1',
       orderNo: 'CG-202609-01',
-      orderDate: '2026-09-07',
       orderStatus: 'CONFIRMED',
-      purchaseType: 'SALES_LINKED',
-      productMode: 'CATALOG',
       purchaseTotalAmount: '4425',
-      lineSubtotalAmount: '4400',
       depositDueAmount: '1000',
       balanceDueAmount: '3425',
       fulfillmentStatus: 'PARTIALLY_SHIPPED',
       paymentStatus: 'PARTIALLY_PAID',
       shippingMarkText: 'J-070924',
-      remark: '采购备注',
-      createdAt: '2026-09-07T02:00:00.000Z',
       supplier: { source: 'DICTIONARY', value: 'MARK_SUPPLIER', label: 'Mark supplier', tone: null, known: true, effectiveEnabled: true },
     },
     salesOrder: {
       id: 'so-1',
       orderNo: 'XS-202609-01',
-      orderDate: '2026-09-07',
       orderStatus: 'PENDING_RECONCILIATION',
       currencyCode: 'TWD',
       customerName: '包装客户',
       customerPhone: '0912345678',
+      customerFullAddress: '新北市林口区文化一路 100 号',
       agreedTotalAmount: '129000.5',
-      lineSubtotalAmount: '129000',
       depositDueAmount: '30000',
       balanceDueAmount: '99000.5',
+      receivedAmount: '30000',
+      outstandingAmount: '99000.5',
       fulfillmentStatus: 'SEA_TRANSIT',
-      paymentStatus: 'UNPAID',
-      remark: '销售备注',
-      createdAt: '2026-09-07T03:00:00.000Z',
+      paymentStatus: 'PARTIALLY_PAID',
       issuerDisplayName: '张三',
     },
   }), echoKey)
@@ -593,38 +583,58 @@ test('销售与采购面板：采购 15 项、销售 14 项，金额带币种、
   const valueOf = (groupId: string, fieldId: string) => (
     groups.find(group => group.id === groupId)?.fields.find(field => field.id === fieldId)?.value
   )
-  // 采购：金额恒为人民币两位小数；订单/履约/付款三类状态与类型都取采购页面的枚举文案。
+  // 采购：金额恒为人民币两位小数，三类状态取采购页面的枚举文案。
   assert.equal(valueOf('purchase', 'purchaseOrderNo'), 'CG-202609-01')
-  assert.equal(valueOf('purchase', 'purchaseOrderDate'), '2026-09-07')
   assert.equal(valueOf('purchase', 'supplier'), 'Mark supplier')
-  assert.equal(valueOf('purchase', 'purchaseType'), '[purchaseOrderDrawer.purchaseTypes.SALES_LINKED]')
-  assert.equal(valueOf('purchase', 'productMode'), '[purchaseOrderDrawer.productModes.CATALOG]')
   assert.equal(valueOf('purchase', 'purchaseTotalAmount'), 'CNY 4425.00')
-  assert.equal(valueOf('purchase', 'lineSubtotalAmount'), 'CNY 4400.00')
   assert.equal(valueOf('purchase', 'depositDueAmount'), 'CNY 1000.00')
   assert.equal(valueOf('purchase', 'balanceDueAmount'), 'CNY 3425.00')
   assert.equal(valueOf('purchase', 'purchaseOrderStatus'), '[purchaseOrderDrawer.statuses.CONFIRMED]')
   assert.equal(valueOf('purchase', 'purchaseFulfillmentStatus'), '[purchaseOrderDrawer.statuses.PARTIALLY_SHIPPED]')
   assert.equal(valueOf('purchase', 'purchasePaymentStatus'), '[purchaseOrderDrawer.statuses.PARTIALLY_PAID]')
   assert.equal(valueOf('purchase', 'shippingMark'), 'J-070924')
-  assert.equal(valueOf('purchase', 'remark'), '采购备注')
-  assert.equal(valueOf('purchase', 'createdAt'), '2026-09-07 10:00:00')
-  // 销售：金额带订单币种，四位小数收敛到两位展示。
+  // 销售：金额带订单币种，四位小数收敛到两位展示；实际已收/待收取销售域的聚合结果。
   assert.equal(valueOf('sales', 'salesOrderNo'), 'XS-202609-01')
   assert.equal(valueOf('sales', 'customer'), '包装客户')
   assert.equal(valueOf('sales', 'customerPhone'), '0912345678')
+  assert.equal(valueOf('sales', 'customerFullAddress'), '新北市林口区文化一路 100 号')
   assert.equal(valueOf('sales', 'salesTotalAmount'), 'TWD 129000.50')
-  assert.equal(valueOf('sales', 'lineSubtotalAmount'), 'TWD 129000.00')
   assert.equal(valueOf('sales', 'depositDueAmount'), 'TWD 30000.00')
   assert.equal(valueOf('sales', 'balanceDueAmount'), 'TWD 99000.50')
+  assert.equal(valueOf('sales', 'receivedAmount'), 'TWD 30000.00')
+  assert.equal(valueOf('sales', 'outstandingAmount'), 'TWD 99000.50')
   assert.equal(valueOf('sales', 'salesOrderStatus'), '[salesOrderDrawer.statuses.PENDING_RECONCILIATION]')
   assert.equal(valueOf('sales', 'salesFulfillmentStatus'), '[salesOrderDrawer.statuses.SEA_TRANSIT]')
-  assert.equal(valueOf('sales', 'salesPaymentStatus'), '[salesOrderDrawer.statuses.UNPAID]')
+  assert.equal(valueOf('sales', 'salesPaymentStatus'), '[salesOrderDrawer.statuses.PARTIALLY_PAID]')
   assert.equal(valueOf('sales', 'issuer'), '张三')
-  assert.equal(valueOf('sales', 'remark'), '销售备注')
-  assert.equal(valueOf('sales', 'createdAt'), '2026-09-07 11:00:00')
-  assert.equal(groups.find(group => group.id === 'purchase')?.fields.length, 15)
-  assert.equal(groups.find(group => group.id === 'sales')?.fields.length, 14)
+  const purchase = groups.find(group => group.id === 'purchase')
+  const sales = groups.find(group => group.id === 'sales')
+  assert.deepEqual(purchase?.fields.map(field => field.id), [
+    'purchaseOrderNo',
+    'supplier',
+    'purchaseTotalAmount',
+    'depositDueAmount',
+    'balanceDueAmount',
+    'purchaseOrderStatus',
+    'purchaseFulfillmentStatus',
+    'purchasePaymentStatus',
+    'shippingMark',
+  ])
+  assert.deepEqual(sales?.fields.map(field => field.id), [
+    'salesOrderNo',
+    'customer',
+    'customerPhone',
+    'customerFullAddress',
+    'salesTotalAmount',
+    'depositDueAmount',
+    'balanceDueAmount',
+    'receivedAmount',
+    'outstandingAmount',
+    'salesOrderStatus',
+    'salesFulfillmentStatus',
+    'salesPaymentStatus',
+    'issuer',
+  ])
   for (const group of groups) {
     for (const field of group.fields) {
       assert.notEqual(field.label.trim(), '', `${group.id}.${field.id} 缺少字段名`)

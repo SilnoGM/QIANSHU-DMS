@@ -322,6 +322,8 @@
       "createdToast": "已建立對帳批次 {batchNo}"
     },
     "detail": {
+      "receivedAmount": "實際已收款",
+      "outstandingAmount": "實際待收款",
       "completeButton": "完成批次對帳",
       "completeTitle": "完成批次對帳？",
       "completeHint": "完成後本批次不能再繼續核對，帳單會重新回到可發起對帳的狀態。",

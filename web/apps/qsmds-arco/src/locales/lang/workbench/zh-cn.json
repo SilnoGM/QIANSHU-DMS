@@ -331,6 +331,8 @@
       "createdToast": "已创建对账批次 {batchNo}"
     },
     "detail": {
+      "receivedAmount": "实际已收款",
+      "outstandingAmount": "实际待收款",
       "completeButton": "完成批次对账",
       "completeTitle": "完成批次对账？",
       "completeHint": "完成后本批次不能再继续核对，账单会重新回到可发起对账的状态。",

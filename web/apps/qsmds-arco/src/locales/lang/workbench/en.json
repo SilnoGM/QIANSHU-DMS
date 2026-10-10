@@ -322,6 +322,8 @@
       "createdToast": "Reconciliation batch {batchNo} created"
     },
     "detail": {
+      "receivedAmount": "Received amount",
+      "outstandingAmount": "Outstanding amount",
       "completeButton": "Complete this batch",
       "completeTitle": "Complete this batch?",
       "completeHint": "After completing, this batch can no longer be reconciled and the bill becomes available again.",

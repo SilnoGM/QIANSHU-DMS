@@ -85,6 +85,28 @@ export function sumSalesOrderAmounts(values: readonly string[]): string {
   ))
 }
 
+/** 参与「实际已收款」累加的最小形状：订单币种金额 +（可选）作废时间。 */
+export interface SalesOrderReceivedPaymentSource {
+  readonly amount: { toFixed: (decimalPlaces: number) => string }
+  /** 缺省表示调用方已在查询层过滤掉作废记录（列表路径就是这样取数的）。 */
+  readonly voidedAt?: Date | null
+}
+
+/**
+ * 实际已收款：未作废的收款记录之和（订单币种四位小数单位）。
+ * 销售详情、销售列表与对账读取共用这一处口径：作废过的收款不计入，只统计仍生效的记录。
+ */
+export function sumSalesOrderReceivedUnits(
+  payments: readonly SalesOrderReceivedPaymentSource[],
+): bigint {
+  return payments.reduce(
+    (sum, payment) => payment.voidedAt === undefined || payment.voidedAt === null
+      ? sum + parseSalesOrderAmountUnits(payment.amount.toFixed(4))
+      : sum,
+    0n,
+  )
+}
+
 export interface SalesOrderAgreedAmountsInput {
   readonly lineSubtotalAmount: unknown
   readonly agreedTotalAmount: unknown

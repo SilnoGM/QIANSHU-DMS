@@ -85275,10 +85275,6 @@
           "orderNo": {
             "type": "string"
           },
-          "orderDate": {
-            "type": "string",
-            "description": "YYYY-MM-DD"
-          },
           "orderStatus": {
             "type": "string",
             "enum": [
@@ -85288,27 +85284,7 @@
               "CANCELLED"
             ]
           },
-          "purchaseType": {
-            "type": "string",
-            "enum": [
-              "SALES_LINKED",
-              "STOCK"
-            ]
-          },
-          "productMode": {
-            "type": "string",
-            "enum": [
-              "CATALOG",
-              "CUSTOM",
-              "MIXED"
-            ]
-          },
           "purchaseTotalAmount": {
-            "type": "string",
-            "pattern": "^\\d+\\.\\d{2}$",
-            "description": "两位小数的人民币金额"
-          },
-          "lineSubtotalAmount": {
             "type": "string",
             "pattern": "^\\d+\\.\\d{2}$",
             "description": "两位小数的人民币金额"
@@ -85345,13 +85321,6 @@
             "type": "string",
             "nullable": true
           },
-          "remark": {
-            "type": "string",
-            "nullable": true
-          },
-          "createdAt": {
-            "type": "string"
-          },
           "supplier": {
             "$ref": "#/components/schemas/PurchaseOrderSupplierDto"
           }
@@ -85359,17 +85328,12 @@
         "required": [
           "id",
           "orderNo",
-          "orderDate",
           "orderStatus",
-          "purchaseType",
-          "productMode",
           "purchaseTotalAmount",
-          "lineSubtotalAmount",
           "depositDueAmount",
           "balanceDueAmount",
           "fulfillmentStatus",
           "paymentStatus",
-          "createdAt",
           "supplier"
         ]
       },
@@ -85382,10 +85346,6 @@
           },
           "orderNo": {
             "type": "string"
-          },
-          "orderDate": {
-            "type": "string",
-            "description": "YYYY-MM-DD"
           },
           "orderStatus": {
             "type": "string",
@@ -85406,11 +85366,10 @@
           "customerPhone": {
             "type": "string"
           },
-          "agreedTotalAmount": {
-            "type": "string",
-            "description": "四位小数的订单币种金额"
+          "customerFullAddress": {
+            "type": "string"
           },
-          "lineSubtotalAmount": {
+          "agreedTotalAmount": {
             "type": "string",
             "description": "四位小数的订单币种金额"
           },
@@ -85419,6 +85378,14 @@
             "description": "四位小数的订单币种金额"
           },
           "balanceDueAmount": {
+            "type": "string",
+            "description": "四位小数的订单币种金额"
+          },
+          "receivedAmount": {
+            "type": "string",
+            "description": "四位小数的订单币种金额"
+          },
+          "outstandingAmount": {
             "type": "string",
             "description": "四位小数的订单币种金额"
           },
@@ -85441,13 +85408,6 @@
               "PAID"
             ]
           },
-          "remark": {
-            "type": "string",
-            "nullable": true
-          },
-          "createdAt": {
-            "type": "string"
-          },
           "issuerDisplayName": {
             "type": "string"
           }
@@ -85455,18 +85415,18 @@
         "required": [
           "id",
           "orderNo",
-          "orderDate",
           "orderStatus",
           "currencyCode",
           "customerName",
           "customerPhone",
+          "customerFullAddress",
           "agreedTotalAmount",
-          "lineSubtotalAmount",
           "depositDueAmount",
           "balanceDueAmount",
+          "receivedAmount",
+          "outstandingAmount",
           "fulfillmentStatus",
           "paymentStatus",
-          "createdAt",
           "issuerDisplayName"
         ]
       },
