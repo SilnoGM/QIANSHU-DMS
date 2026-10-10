@@ -6,6 +6,7 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsReconciliationLineSwitcher from '@/components/business/QsReconciliationLineSwitcher/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { resolveStatusTagToneClass } from '@/utils/status-tag-tone'
 import { containerFailure } from '../containers/use-container-resource'
 import {
   buildSlhReconciliationBillLineFieldGroups,
@@ -254,6 +255,22 @@ onBeforeUnmount(() => {
                       :currencies="currencyCatalog.currencies.value"
                       class="!text-left !justify-start"
                     />
+                    <!-- 状态行：一行展示该订单的三个彩色状态标签（维度名进无障碍朗读）。 -->
+                    <span
+                      v-else-if="field.tags && field.tags.length > 0"
+                      class="flex flex-wrap gap-1.5"
+                    >
+                      <FaTag
+                        v-for="statusTag in field.tags"
+                        :key="statusTag.dimension"
+                        variant="outline"
+                        class="qs-type-status-tag"
+                        :class="resolveStatusTagToneClass(statusTag.tone)"
+                        :aria-label="`${statusTag.dimension}：${statusTag.label}`"
+                      >
+                        {{ statusTag.label }}
+                      </FaTag>
+                    </span>
                     <span v-else class="qs-type-data">
                       {{ field.value }}
                     </span>

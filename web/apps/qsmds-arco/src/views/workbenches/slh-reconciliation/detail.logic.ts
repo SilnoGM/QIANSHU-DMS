@@ -3,6 +3,7 @@ import type {
   QsReconciliationLineSwitcherItem,
   QsReconciliationLineSwitcherTone,
 } from '@/components/business/QsReconciliationLineSwitcher/types'
+import type { QsStatusTagTone } from '@/utils/status-tag-tone'
 import {
   formatSlhBillAmount,
   formatSlhBillDimensions,
@@ -70,6 +71,15 @@ export interface SlhReconciliationLineField {
   readonly value: string
   /** 金额行才有：原始金额与币种（由 AmountDisplay 负责符号、千分位与币种精度）。 */
   readonly amount?: SlhReconciliationAmountValue
+  /** 状态行才有：一行里的多个彩色状态标签（文案与色调都由这里下发，模板只负责渲染）。 */
+  readonly tags?: readonly SlhReconciliationStatusTag[]
+}
+
+/** 订单侧单个维度的状态标签：维度名用于无障碍朗读，标签文案与色调由本模块查表给出。 */
+export interface SlhReconciliationStatusTag {
+  readonly dimension: string
+  readonly label: string
+  readonly tone: QsStatusTagTone
 }
 
 /** 面板内的分组：目前只有「销售与采购信息」需要（采购 / 销售）。 */
@@ -249,12 +259,26 @@ export function buildSlhReconciliationLoadingItemFieldGroups(
   ]
 }
 
+/** 采购订单三维状态色调：与 purchase-order-desc.logic 的既有口径一致（取消红、待审黄、其余绿）。 */
+const PURCHASE_STATUS_TONES = {
+  order: { PENDING_REVIEW: 'warning', CONFIRMED: 'success', COMPLETED: 'success', CANCELLED: 'danger' },
+  fulfillment: { ORDERED: 'info', PREPARING: 'warning', PARTIALLY_SHIPPED: 'warning', SHIPPED: 'info', SIGNED: 'success' },
+  payment: { UNPAID: 'danger', PARTIALLY_PAID: 'warning', PAID: 'success' },
+} as const satisfies Record<string, Readonly<Record<string, QsStatusTagTone>>>
+
+/** 销售订单三维状态色调：项目里没有既有映射，按同一套语义给出（草稿中性、待对账黄、完成绿、取消红）。 */
+const SALES_STATUS_TONES = {
+  order: { DRAFT: 'neutral', CONFIRMED: 'success', PENDING_RECONCILIATION: 'warning', COMPLETED: 'success', CANCELLED: 'danger' },
+  fulfillment: { PENDING: 'info', PREPARING: 'warning', LAND_TRANSIT: 'info', WAREHOUSE_ARRIVED: 'info', SEA_TRANSIT: 'info', SIGNED: 'success' },
+  payment: { UNPAID: 'danger', PARTIALLY_PAID: 'warning', PAID: 'success' },
+} as const satisfies Record<string, Readonly<Record<string, QsStatusTagTone>>>
+
 /**
  * 销售与采购信息：装柜行匹配到的货件 → 采购订单 → 销售订单，与匹配合格判定同一条链路。
  *
- * 采购只保留单号、供应商、金额三项（采购金额/定金/尾款）与三类状态、采购唛头；
- * 销售保留单号、客户三项（姓名/电话/地址）、金额四项（销售金额/定金/尾款/实际已收款/实际待收款）
- * 与三类状态、出单人。金额按各自币种标注并统一两位小数展示（销售侧源数据是四位小数），
+ * 销售组排在采购组之前。采购保留单号、供应商、金额三项（采购金额/定金/尾款）、状态一行与采购唛头；
+ * 销售保留单号、金额五项（销售金额/定金/尾款/实际已收款/实际待收款）、客户三项（姓名/电话/地址）、
+ * 状态一行与出单人。金额按各自币种标注并统一两位小数展示（销售侧源数据是四位小数），
  * 枚举取值与字段名沿用采购/销售页面那套键，保证同一事实在两个页面上的措辞一致。
  * 来源缺失（历史或损坏数据）时整组走占位符，不猜也不留空。
  */
@@ -266,45 +290,42 @@ export function buildSlhReconciliationOrderFieldGroups(
   // 契约上两个来源都是可选且可空：先归一成 null，后面只判一种缺失形态。
   const purchase = member.purchaseOrder ?? null
   const sales = member.salesOrder ?? null
-  const status = (group: 'purchaseOrderDrawer' | 'salesOrderDrawer', value: string | undefined) => (
-    value === undefined ? missing : translate(`${group}.statuses.${value}`)
-  )
   const money = (currency: string, value: string | undefined) => (
     value === undefined ? missing : `${currency} ${amount(value)}`
   )
+  const tag = (
+    dimensionKey: string,
+    statusGroup: 'purchaseOrderDrawer' | 'salesOrderDrawer',
+    tones: Readonly<Record<string, QsStatusTagTone>>,
+    value: string | undefined,
+  ): SlhReconciliationStatusTag | null => (
+    value === undefined
+      ? null
+      : {
+          dimension: translate(dimensionKey),
+          label: translate(`${statusGroup}.statuses.${value}`),
+          tone: tones[value] ?? 'neutral',
+        }
+  )
+  /** 三维状态合并成一行：模板按 tags 渲染彩色标签，纯文本形态供用例与无障碍兜底。 */
+  const stateField = (
+    id: string,
+    labelKey: string,
+    tags: readonly (SlhReconciliationStatusTag | null)[],
+  ): SlhReconciliationLineField => {
+    const resolved = tags.filter((item): item is SlhReconciliationStatusTag => item !== null)
+    return {
+      id,
+      label: translate(labelKey),
+      value: resolved.length === 0 ? missing : resolved.map(item => item.label).join(' / '),
+      tags: resolved,
+    }
+  }
   return [
-    {
-      id: 'purchase',
-      label: translate('slhReconciliation.detail.purchaseGroup'),
-      fields: [
-        { id: 'purchaseOrderNo', label: translate('slhReconciliation.detail.purchaseOrderNo'), value: text(purchase?.orderNo) },
-        { id: 'supplier', label: translate('slhReconciliation.detail.supplier'), value: text(purchase?.supplier.label) },
-        { id: 'purchaseTotalAmount', label: translate('slhReconciliation.detail.purchaseTotalAmount'), value: money('CNY', purchase?.purchaseTotalAmount), amount: amountValue(purchase?.purchaseTotalAmount, 'CNY') },
-        { id: 'depositDueAmount', label: translate('slhReconciliation.detail.purchaseDeposit'), value: money('CNY', purchase?.depositDueAmount), amount: amountValue(purchase?.depositDueAmount, 'CNY') },
-        // 采购侧也有「尾款」，与销售的尾款同名不同币种：加来源前缀消歧（对账要核的是销售尾款）。
-        { id: 'balanceDueAmount', label: translate('slhReconciliation.detail.purchaseBalance'), value: money('CNY', purchase?.balanceDueAmount), amount: amountValue(purchase?.balanceDueAmount, 'CNY') },
-        {
-          id: 'purchaseOrderStatus',
-          label: translate('slhReconciliation.detail.purchaseOrderStatus'),
-          value: status('purchaseOrderDrawer', purchase?.orderStatus),
-        },
-        {
-          id: 'purchaseFulfillmentStatus',
-          label: translate('slhReconciliation.detail.fulfillmentStatus'),
-          value: status('purchaseOrderDrawer', purchase?.fulfillmentStatus),
-        },
-        {
-          id: 'purchasePaymentStatus',
-          label: translate('slhReconciliation.detail.paymentStatus'),
-          value: status('purchaseOrderDrawer', purchase?.paymentStatus),
-        },
-        { id: 'shippingMark', label: translate('purchaseOrderDesc.fields.shippingMark'), value: text(purchase?.shippingMarkText) },
-      ],
-    },
     {
       id: 'sales',
       label: translate('slhReconciliation.detail.salesGroup'),
-      // 尾款是与装柜/账单代收货款并列核对的值，提到销售组最前，紧跟实际已收/待收。
+      // 销售信息排在采购之前；尾款是与装柜/账单代收货款并列核对的值，故紧跟单号。
       fields: [
         { id: 'salesOrderNo', label: translate('slhReconciliation.detail.salesOrderNo'), value: text(sales?.orderNo) },
         { id: 'balanceDueAmount', label: translate('slhReconciliation.detail.salesBalance'), value: money(sales?.currencyCode ?? '', sales?.balanceDueAmount), amount: amountValue(sales?.balanceDueAmount, sales?.currencyCode ?? '') },
@@ -315,22 +336,30 @@ export function buildSlhReconciliationOrderFieldGroups(
         { id: 'customer', label: translate('salesOrderDesc.fields.customerName'), value: text(sales?.customerName) },
         { id: 'customerPhone', label: translate('salesOrderDesc.fields.customerPhone'), value: text(sales?.customerPhone) },
         { id: 'customerFullAddress', label: translate('salesOrderDesc.fields.fullAddress'), value: text(sales?.customerFullAddress) },
-        {
-          id: 'salesOrderStatus',
-          label: translate('slhReconciliation.detail.salesOrderStatus'),
-          value: status('salesOrderDrawer', sales?.orderStatus),
-        },
-        {
-          id: 'salesFulfillmentStatus',
-          label: translate('slhReconciliation.detail.fulfillmentStatus'),
-          value: status('salesOrderDrawer', sales?.fulfillmentStatus),
-        },
-        {
-          id: 'salesPaymentStatus',
-          label: translate('slhReconciliation.detail.paymentStatus'),
-          value: status('salesOrderDrawer', sales?.paymentStatus),
-        },
+        stateField('salesState', 'slhReconciliation.detail.salesOrderState', [
+          tag('slhReconciliation.detail.salesOrderStatus', 'salesOrderDrawer', SALES_STATUS_TONES.order, sales?.orderStatus),
+          tag('slhReconciliation.detail.fulfillmentStatus', 'salesOrderDrawer', SALES_STATUS_TONES.fulfillment, sales?.fulfillmentStatus),
+          tag('slhReconciliation.detail.paymentStatus', 'salesOrderDrawer', SALES_STATUS_TONES.payment, sales?.paymentStatus),
+        ]),
         { id: 'issuer', label: translate('salesOrderDesc.fields.issuer'), value: text(sales?.issuerDisplayName) },
+      ],
+    },
+    {
+      id: 'purchase',
+      label: translate('slhReconciliation.detail.purchaseGroup'),
+      fields: [
+        { id: 'purchaseOrderNo', label: translate('slhReconciliation.detail.purchaseOrderNo'), value: text(purchase?.orderNo) },
+        { id: 'supplier', label: translate('slhReconciliation.detail.supplier'), value: text(purchase?.supplier.label) },
+        { id: 'purchaseTotalAmount', label: translate('slhReconciliation.detail.purchaseTotalAmount'), value: money('CNY', purchase?.purchaseTotalAmount), amount: amountValue(purchase?.purchaseTotalAmount, 'CNY') },
+        { id: 'depositDueAmount', label: translate('slhReconciliation.detail.purchaseDeposit'), value: money('CNY', purchase?.depositDueAmount), amount: amountValue(purchase?.depositDueAmount, 'CNY') },
+        // 采购侧也有「尾款」，与销售的尾款同名不同币种：加来源前缀消歧（对账要核的是销售尾款）。
+        { id: 'balanceDueAmount', label: translate('slhReconciliation.detail.purchaseBalance'), value: money('CNY', purchase?.balanceDueAmount), amount: amountValue(purchase?.balanceDueAmount, 'CNY') },
+        stateField('purchaseState', 'slhReconciliation.detail.purchaseOrderState', [
+          tag('slhReconciliation.detail.purchaseOrderStatus', 'purchaseOrderDrawer', PURCHASE_STATUS_TONES.order, purchase?.orderStatus),
+          tag('slhReconciliation.detail.fulfillmentStatus', 'purchaseOrderDrawer', PURCHASE_STATUS_TONES.fulfillment, purchase?.fulfillmentStatus),
+          tag('slhReconciliation.detail.paymentStatus', 'purchaseOrderDrawer', PURCHASE_STATUS_TONES.payment, purchase?.paymentStatus),
+        ]),
+        { id: 'shippingMark', label: translate('purchaseOrderDesc.fields.shippingMark'), value: text(purchase?.shippingMarkText) },
       ],
     },
   ]
@@ -375,28 +404,28 @@ export function buildSlhReconciliationFocusValues(
     {
       id: 'salesBalance',
       sourceLabel: sourceLabel('slhReconciliation.detail.focusSalesBalance', sales?.currencyCode ?? ''),
-      accent: 'emerald',
-      motif: 'i-lucide:shopping-cart',
       value: salesBalance,
       currency: sales?.currencyCode ?? '',
+      accent: 'emerald',
+      motif: 'i-lucide:shopping-cart',
       isEmpty: salesBalance === null,
     },
     {
       id: 'loadingCod',
       sourceLabel: sourceLabel('slhReconciliation.detail.focusLoadingCod', 'TWD'),
-      accent: 'amber',
-      motif: 'i-lucide:ship',
       value: loadingCod,
       currency: 'TWD',
+      accent: 'amber',
+      motif: 'i-lucide:ship',
       isEmpty: loadingCod === null,
     },
     {
       id: 'billCod',
       sourceLabel: sourceLabel('slhReconciliation.detail.focusBillCod', 'TWD'),
-      accent: 'blue',
-      motif: 'i-lucide:banknote',
       value: billCod,
       currency: 'TWD',
+      accent: 'blue',
+      motif: 'i-lucide:banknote',
       isEmpty: billCod === null,
     },
   ]

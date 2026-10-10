@@ -325,8 +325,10 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   assert.match(page, /<FaIcon[\s\S]{0,120}?:name="focus\.motif"[\s\S]{0,80}?aria-hidden="true"/u)
   assert.match(page, /class="qs-focus-card__motif"/u)
   // 图案压在内容下层：内容块自身定位并抬到 z-1，避免绝对定位图案盖住金额。
-  // 类名顺序会被 unocss/order 重排，按「同一个 class 里同时有 relative 与 z-1」断言。
-  assert.match(page, /class="[^"]*\brelative\b[^"]*\bz-1\b[^"]*"/u)
+  // 类名顺序会被 unocss/order 重排，只断言同一处 class 同时带上这两个类，不锁顺序。
+  const contentWrapperHasLayering = /class="[^"]*relative[^"]*z-1[^"]*"/u.test(page)
+    || /class="[^"]*z-1[^"]*relative[^"]*"/u.test(page)
+  assert.ok(contentWrapperHasLayering, '焦点卡内容块需要同时带 relative 与 z-1')
   assert.doesNotMatch(page, /focus\.trace/u)
   // 三块面板：横向排布（宽屏三列），由 fieldColumns 统一渲染标题与分组。
   assert.match(page, /class="m-4 gap-4 grid items-start lg:grid-cols-2 xl:grid-cols-3"/u)
@@ -583,7 +585,7 @@ test('装柜明细行面板：缺货件号与收费材积时走占位符', () =>
   assert.equal(fields.find(field => field.id === 'codAmountTwd')?.amount, undefined)
 })
 
-test('销售与采购面板：采购 9 项、销售 13 项，金额带币种、枚举取值复用采购/销售页面文案键', () => {
+test('销售与采购面板：销售 11 项、采购 7 项（销售在前），金额带币种、状态合并成一行彩色标签', () => {
   const groups = buildSlhReconciliationOrderFieldGroups(memberFixture({
     purchaseOrder: {
       id: 'po-1',
@@ -616,24 +618,47 @@ test('销售与采购面板：采购 9 项、销售 13 项，金额带币种、�
     },
   }), echoKey)
 
-  assert.deepEqual(groups.map(group => group.id), ['purchase', 'sales'])
+  // 销售分组排在采购之上：这一屏最常看的是客户侧的钱。
+  assert.deepEqual(groups.map(group => group.id), ['sales', 'purchase'])
   assert.deepEqual(groups.map(group => group.label), [
-    '[slhReconciliation.detail.purchaseGroup]',
     '[slhReconciliation.detail.salesGroup]',
+    '[slhReconciliation.detail.purchaseGroup]',
   ])
   const valueOf = (groupId: string, fieldId: string) => (
     groups.find(group => group.id === groupId)?.fields.find(field => field.id === fieldId)?.value
   )
-  // 采购：金额恒为人民币两位小数，三类状态取采购页面的枚举文案。
+  const tagsOf = (groupId: string, fieldId: string) => (
+    groups.find(group => group.id === groupId)?.fields.find(field => field.id === fieldId)?.tags
+  )
+  // 采购：金额恒为人民币两位小数；三类状态挤进「采购单状态」一行，各自带色调标签。
   assert.equal(valueOf('purchase', 'purchaseOrderNo'), 'CG-202609-01')
   assert.equal(valueOf('purchase', 'supplier'), 'Mark supplier')
   assert.equal(valueOf('purchase', 'purchaseTotalAmount'), 'CNY 4425.00')
   assert.equal(valueOf('purchase', 'depositDueAmount'), 'CNY 1000.00')
   assert.equal(valueOf('purchase', 'balanceDueAmount'), 'CNY 3425.00')
-  assert.equal(valueOf('purchase', 'purchaseOrderStatus'), '[purchaseOrderDrawer.statuses.CONFIRMED]')
-  assert.equal(valueOf('purchase', 'purchaseFulfillmentStatus'), '[purchaseOrderDrawer.statuses.PARTIALLY_SHIPPED]')
-  assert.equal(valueOf('purchase', 'purchasePaymentStatus'), '[purchaseOrderDrawer.statuses.PARTIALLY_PAID]')
   assert.equal(valueOf('purchase', 'shippingMark'), 'J-070924')
+  assert.equal(
+    valueOf('purchase', 'purchaseState'),
+    '[purchaseOrderDrawer.statuses.CONFIRMED] / [purchaseOrderDrawer.statuses.PARTIALLY_SHIPPED] / [purchaseOrderDrawer.statuses.PARTIALLY_PAID]',
+  )
+  // 合并行的标签各自标注维度（采购状态/履约状态/付款状态），挨在一起才不会认错哪个是哪个。
+  assert.deepEqual(tagsOf('purchase', 'purchaseState'), [
+    {
+      dimension: '[slhReconciliation.detail.purchaseOrderStatus]',
+      label: '[purchaseOrderDrawer.statuses.CONFIRMED]',
+      tone: 'success',
+    },
+    {
+      dimension: '[slhReconciliation.detail.fulfillmentStatus]',
+      label: '[purchaseOrderDrawer.statuses.PARTIALLY_SHIPPED]',
+      tone: 'warning',
+    },
+    {
+      dimension: '[slhReconciliation.detail.paymentStatus]',
+      label: '[purchaseOrderDrawer.statuses.PARTIALLY_PAID]',
+      tone: 'warning',
+    },
+  ])
   // 销售：金额带订单币种，四位小数收敛到两位展示；实际已收/待收取销售域的聚合结果。
   assert.equal(valueOf('sales', 'salesOrderNo'), 'XS-202609-01')
   assert.equal(valueOf('sales', 'customer'), '包装客户')
@@ -644,23 +669,30 @@ test('销售与采购面板：采购 9 项、销售 13 项，金额带币种、�
   assert.equal(valueOf('sales', 'balanceDueAmount'), 'TWD 99000.50')
   assert.equal(valueOf('sales', 'receivedAmount'), 'TWD 30000.00')
   assert.equal(valueOf('sales', 'outstandingAmount'), 'TWD 99000.50')
-  assert.equal(valueOf('sales', 'salesOrderStatus'), '[salesOrderDrawer.statuses.PENDING_RECONCILIATION]')
-  assert.equal(valueOf('sales', 'salesFulfillmentStatus'), '[salesOrderDrawer.statuses.SEA_TRANSIT]')
-  assert.equal(valueOf('sales', 'salesPaymentStatus'), '[salesOrderDrawer.statuses.PARTIALLY_PAID]')
+  assert.equal(
+    valueOf('sales', 'salesState'),
+    '[salesOrderDrawer.statuses.PENDING_RECONCILIATION] / [salesOrderDrawer.statuses.SEA_TRANSIT] / [salesOrderDrawer.statuses.PARTIALLY_PAID]',
+  )
+  assert.deepEqual(tagsOf('sales', 'salesState'), [
+    {
+      dimension: '[slhReconciliation.detail.salesOrderStatus]',
+      label: '[salesOrderDrawer.statuses.PENDING_RECONCILIATION]',
+      tone: 'warning',
+    },
+    {
+      dimension: '[slhReconciliation.detail.fulfillmentStatus]',
+      label: '[salesOrderDrawer.statuses.SEA_TRANSIT]',
+      tone: 'info',
+    },
+    {
+      dimension: '[slhReconciliation.detail.paymentStatus]',
+      label: '[salesOrderDrawer.statuses.PARTIALLY_PAID]',
+      tone: 'warning',
+    },
+  ])
   assert.equal(valueOf('sales', 'issuer'), '张三')
   const purchase = groups.find(group => group.id === 'purchase')
   const sales = groups.find(group => group.id === 'sales')
-  assert.deepEqual(purchase?.fields.map(field => field.id), [
-    'purchaseOrderNo',
-    'supplier',
-    'purchaseTotalAmount',
-    'depositDueAmount',
-    'balanceDueAmount',
-    'purchaseOrderStatus',
-    'purchaseFulfillmentStatus',
-    'purchasePaymentStatus',
-    'shippingMark',
-  ])
   assert.deepEqual(sales?.fields.map(field => field.id), [
     'salesOrderNo',
     'balanceDueAmount',
@@ -671,10 +703,17 @@ test('销售与采购面板：采购 9 项、销售 13 项，金额带币种、�
     'customer',
     'customerPhone',
     'customerFullAddress',
-    'salesOrderStatus',
-    'salesFulfillmentStatus',
-    'salesPaymentStatus',
+    'salesState',
     'issuer',
+  ])
+  assert.deepEqual(purchase?.fields.map(field => field.id), [
+    'purchaseOrderNo',
+    'supplier',
+    'purchaseTotalAmount',
+    'depositDueAmount',
+    'balanceDueAmount',
+    'purchaseState',
+    'shippingMark',
   ])
   // 金额行额外下发原始值 + 币种：模板据此改用 AmountDisplay（符号/千分位/币种精度由它负责）。
   const purchaseTotal = groups.find(group => group.id === 'purchase')?.fields.find(field => field.id === 'purchaseTotalAmount')

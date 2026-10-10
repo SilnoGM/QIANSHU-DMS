@@ -1,8 +1,10 @@
 import type { CurrencyDescriptor } from '@/components/base/currency'
+import type { QsStatusTagTone } from '@/utils/status-tag-tone'
 
 export type QsPurchaseOrderDescLineType = 'CATALOG' | 'CUSTOM'
 export type QsPurchaseOrderDescStatusKey = 'FULFILLMENT' | 'ORDER' | 'PAYMENT'
-export type QsPurchaseOrderDescStatusTone = 'danger' | 'info' | 'neutral' | 'success' | 'warning'
+/** 状态色调沿用共享色板，采购详情与对账详情不各自维护一套。 */
+export type QsPurchaseOrderDescStatusTone = QsStatusTagTone
 
 export interface QsPurchaseOrderDescAmountsViewModel {
   readonly balanceDueAmount: null | string
