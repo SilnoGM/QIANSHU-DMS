@@ -23,7 +23,12 @@ import {
   SLH_RECONCILIATION_LINE_TONES,
 } from './detail.logic'
 import SlhReconciliationOverflowText from './overflow-text.vue'
-import { resolveSlhReconciliationBatchLabelKey, resolveSlhReconciliationBatchTone } from './status.logic'
+import {
+  resolveSlhReconciliationBatchLabelKey,
+  resolveSlhReconciliationBatchTone,
+  resolveSlhReconciliationCompleteBlockLabelKey,
+  resolveSlhReconciliationCompleteBlockReason,
+} from './status.logic'
 
 /**
  * 批次详情页：切换器自带面板，用来浏览创建时冻结的明细行；切换器下方是「核对焦点」——
@@ -53,8 +58,15 @@ function translate(key: string, params?: Record<string, unknown>) {
   return params === undefined ? t(key) : t(key, params)
 }
 
-/** 只有读到了进行中的批次才能完成：状态由服务端数据派生，刷新页面后同样正确。 */
-const canComplete = computed(() => batch.value?.status === 'IN_PROGRESS')
+/**
+ * 完成批次的门禁：批次已结束、或还有未核对的明细行时都不让完成。
+ * 未通过时按钮看起来不可用，但仍可点击——点了给一句轻提示说明原因，而不是无声无息。
+ * 批次还没读到时是例外：按钮真禁用（页面上已有错误与重试，不必再解释）。
+ */
+const completeBlockReason = computed(() => (
+  batch.value === null ? null : resolveSlhReconciliationCompleteBlockReason(batch.value)
+))
+const canComplete = computed(() => batch.value !== null && completeBlockReason.value === null)
 const members = computed(() => batch.value?.members ?? [])
 const lineSwitcherItems = computed(() => buildSlhReconciliationLineItems(members.value, translate))
 const selectedMember = computed(() => resolveSlhReconciliationSelectedMember(members.value, selectedLineId.value))
@@ -132,6 +144,22 @@ async function load(): Promise<void> {
 
 function backToList(): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhBillReconciliation' })
+}
+
+/** 点完成：门禁未过时只说明原因（按钮仍是软禁用态，可点但看起来不可用）。 */
+function requestComplete(): void {
+  if (completeBlockReason.value !== null) {
+    toast.info(t(resolveSlhReconciliationCompleteBlockLabelKey(completeBlockReason.value), {
+      count: Math.max((batch.value?.memberCount ?? 0) - (batch.value?.reconciledMemberCount ?? 0), 0),
+    }))
+    return
+  }
+  completeOpen.value = true
+}
+
+/** 逐行核对的两个动作：接口随本分支重构删除，先只给反馈，接线时替换成真实动作。 */
+function showReconcilePending(labelKey: string): void {
+  toast.info(t('slhReconciliation.detail.reconcilePending', { action: t(labelKey) }))
 }
 
 async function complete(): Promise<void> {
@@ -612,7 +640,32 @@ onBeforeUnmount(() => {
     <FaFixedBar position="bottom" class="border-t border-border">
       <div class="flex flex-col gap-3 w-full md:flex-row md:items-center md:justify-end">
         <FaAlert v-if="actionError" variant="destructive" role="alert" :title="actionError" class="md:mr-auto" />
-        <FaButton :loading="completing" :disabled="!canComplete || completing" @click="completeOpen = true">
+        <FaButton
+          variant="outline"
+          class="text-destructive"
+          :disabled="completing"
+          @click="showReconcilePending('slhReconciliation.detail.reconcileWrong')"
+        >
+          {{ t('slhReconciliation.detail.reconcileWrong') }}
+        </FaButton>
+        <FaButton
+          variant="outline"
+          :disabled="completing"
+          @click="showReconcilePending('slhReconciliation.detail.reconcileCorrect')"
+        >
+          {{ t('slhReconciliation.detail.reconcileCorrect') }}
+        </FaButton>
+        <!--
+          完成按钮在门禁未过时只做「软禁用」：aria-disabled + 降透明度，但保留点击，
+          点了由 requestComplete 说明原因；批次没读到时才是真禁用（页面已有错误与重试）。
+        -->
+        <FaButton
+          :loading="completing"
+          :disabled="batch === null || completing"
+          :aria-disabled="!canComplete || completing"
+          :class="canComplete ? '' : 'opacity-50'"
+          @click="requestComplete"
+        >
           {{ t('slhReconciliation.detail.completeButton') }}
         </FaButton>
       </div>

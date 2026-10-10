@@ -40,6 +40,8 @@ import {
   resolveSlhBillLineUnmatchedReasonLabelKey,
   resolveSlhReconciliationBatchLabelKey,
   resolveSlhReconciliationBatchTone,
+  resolveSlhReconciliationCompleteBlockLabelKey,
+  resolveSlhReconciliationCompleteBlockReason,
 } from '../../src/views/workbenches/slh-reconciliation/status.logic'
 
 const MESSAGES = [zhCn, zhTw, en] as const
@@ -104,6 +106,35 @@ test('批次状态与「不能核对」原因的三语文案齐全', () => {
   for (const reason of UNMATCHED_REASONS) {
     assert.equal(resolveSlhBillLineUnmatchedReasonLabelKey(reason), `slhReconciliation.unmatchedReason.${reason}`)
   }
+})
+
+test('完成批次的门禁：还有未核对行或批次已结束都挡下，全部核对完才放行', () => {
+  const gate = (overrides: Partial<{ memberCount: number, reconciledMemberCount: number, status: 'COMPLETED' | 'IN_PROGRESS' }> = {}) => (
+    resolveSlhReconciliationCompleteBlockReason({
+      memberCount: 6,
+      reconciledMemberCount: 6,
+      status: 'IN_PROGRESS',
+      ...overrides,
+    })
+  )
+
+  assert.equal(gate(), null)
+  // 还有一行没核对就挡下（含部分核对）。
+  assert.equal(gate({ reconciledMemberCount: 5 }), 'LINES_UNRECONCILED')
+  assert.equal(gate({ reconciledMemberCount: 0 }), 'LINES_UNRECONCILED')
+  // 批次已结束：无论行核对到什么程度都不再放行。
+  assert.equal(gate({ status: 'COMPLETED' }), 'BATCH_COMPLETED')
+  // 没有冻结行的批次不挡（没有可核对的行，与既有语义一致）。
+  assert.equal(gate({ memberCount: 0, reconciledMemberCount: 0 }), null)
+  // 取值到文案键的映射各有一条。
+  assert.equal(
+    resolveSlhReconciliationCompleteBlockLabelKey('LINES_UNRECONCILED'),
+    'slhReconciliation.detail.completeBlockedUnreconciled',
+  )
+  assert.equal(
+    resolveSlhReconciliationCompleteBlockLabelKey('BATCH_COMPLETED'),
+    'slhReconciliation.detail.completeBlockedBatchCompleted',
+  )
 })
 
 test('批次列表默认停在进行中，非法取值退回默认且关键词去空白', () => {
@@ -301,6 +332,18 @@ test('批次详情页：头部只给批次与账单标识、底部承接完成�
   assert.match(page, /router\.push\(\{ name: 'qsFinanceBillReconciliationSlhBillReconciliation' \}\)/u)
   assert.match(page, /t\('slhReconciliation\.detail\.completeButton'\)/u)
   assert.match(page, /slhReconciliationBatchesApi\.complete\(/u)
+  // 底栏多两个逐行核对动作：点击先只给轻提示（接口随本分支重构删除）。
+  assert.match(page, /t\('slhReconciliation\.detail\.reconcileWrong'\)/u)
+  assert.match(page, /t\('slhReconciliation\.detail\.reconcileCorrect'\)/u)
+  assert.match(page, /showReconcilePending\('slhReconciliation\.detail\.reconcileWrong'\)/u)
+  assert.match(page, /t\('slhReconciliation\.detail\.reconcilePending', \{ action/u)
+  // 完成按钮：门禁未过时软禁用（可点但看起来不可用），点了说明原因；批次没读到时才是真禁用。
+  assert.match(page, /:disabled="batch === null \|\| completing"/u)
+  assert.match(page, /:aria-disabled="!canComplete \|\| completing"/u)
+  assert.match(page, /@click="requestComplete"/u)
+  assert.match(page, /resolveSlhReconciliationCompleteBlockLabelKey\(completeBlockReason\.value\)/u)
+  assert.match(page, /completeOpen\.value = true/u)
+  assert.doesNotMatch(page, /:disabled="!canComplete/u)
   // 头部辅助文字：批次状态标签 + 批次编号 + 账单编号 + 对账单名称。
   assert.match(page, /resolveSlhReconciliationBatchTone\(batch\.status\)/u)
   assert.match(page, /\{\{ batch\.batchNo \}\}/u)
@@ -308,8 +351,8 @@ test('批次详情页：头部只给批次与账单标识、底部承接完成�
   assert.match(page, /\{\{ batch\.bill\.billName \}\}/u)
   assert.match(page, /slhReconciliationBatchesApi\.get\(/u)
   // 完成与否由服务端数据派生（替代本地 ref），读取失败时禁用。
-  assert.match(page, /const canComplete = computed\(\(\) => batch\.value\?\.status === 'IN_PROGRESS'\)/u)
-  assert.match(page, /:disabled="!canComplete \|\| completing"/u)
+  // 能否完成由门禁派生：批次已结束或还有未核对行时不可完成。
+  assert.match(page, /const canComplete = computed\(\(\) => batch\.value !== null && completeBlockReason\.value === null\)/u)
   assert.match(page, /t\('slhBill\.retry'\)/u)
 })
 
