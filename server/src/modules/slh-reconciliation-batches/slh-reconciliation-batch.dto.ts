@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator'
+import { PurchaseOrderStatus, SalesOrderStatus } from '../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
+import { PurchaseOrderSupplierDto } from '../purchase-orders/dto/purchase-order-response.dto'
 import { SlhBillFindingDto, SlhBillLineDto, SlhBillListItemDto, SlhBillReconciliationStatusDto } from '../slh-bills/slh-bill.dto'
 
 /** 批次状态（派生，不落列）：completed_at 为空即进行中。 */
@@ -150,9 +152,8 @@ export class SlhReconciliationBatchPageDto {
 }
 
 /**
- * 匹配到的柜次装柜行：只带与账单行逐字段核对时用得到的列。
- * 采购/销售来源与货件号刻意不放进来——本模块只要 `slh-bills:reconcile`，
- * 不能顺带把采购、销售域的数据交给没有对应权限的账号。
+ * 匹配到的柜次装柜行：与账单行逐字段核对时用得到的列，外加串联来源链路的货件号。
+ * 采购/销售订单本身不在这块里，见下面的来源摘要。
  */
 export class SlhReconciliationMatchedItemDto {
   @ApiPropertyOptional({ type: 'string', nullable: true }) warehouseReceiptReference!: string | null
@@ -172,9 +173,36 @@ export class SlhReconciliationMatchedItemDto {
   @ApiPropertyOptional({ type: 'string', nullable: true }) recipientPhone!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) recipientAddress!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) remark!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Purchase part matched to this container row; null when the row has no shipment (never for frozen members).' }) shipmentNo!: string | null
 }
 
-/** 成员行：账单明细行的全部字段 + 本批次的匹配依据、柜次侧可比字段与核对留痕。 */
+/**
+ * 采购来源摘要：装柜行 → 货件 → 采购订单，与匹配合格判定同一条关系链。
+ *
+ * 本模块对外只要求 `slh-bills:reconcile`，这里是经确认后有意放开的采购域字段：
+ * 只带对账页要展示的列，金额与供应商标签都与采购域同口径（两位小数人民币、同一份字典解析）。
+ */
+export class SlhReconciliationMatchedPurchaseOrderDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ type: 'string' }) orderNo!: string
+  @ApiProperty({ type: 'string', description: 'YYYY-MM-DD' }) orderDate!: string
+  @ApiProperty({ enum: PurchaseOrderStatus }) orderStatus!: PurchaseOrderStatus
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) purchaseTotalAmount!: string
+  @ApiProperty({ type: () => PurchaseOrderSupplierDto }) supplier!: PurchaseOrderSupplierDto
+}
+
+/** 销售来源摘要：采购订单上的销售来源，字段口径与销售域一致（四位小数订单币种金额）。 */
+export class SlhReconciliationMatchedSalesOrderDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ type: 'string' }) orderNo!: string
+  @ApiProperty({ type: 'string', description: 'YYYY-MM-DD' }) orderDate!: string
+  @ApiProperty({ enum: SalesOrderStatus }) orderStatus!: SalesOrderStatus
+  @ApiProperty({ type: 'string' }) currencyCode!: string
+  @ApiProperty({ type: 'string' }) customerName!: string
+  @ApiProperty({ type: 'string', description: '四位小数的订单币种金额' }) agreedTotalAmount!: string
+}
+
+/** 成员行：账单明细行的全部字段 + 本批次的匹配依据、柜次侧可比字段、来源摘要与核对留痕。 */
 export class SlhReconciliationBatchMemberDto extends SlhBillLineDto {
   @ApiProperty({ format: 'uuid', description: 'Member row id inside this batch.' }) id!: string
   @ApiProperty({ format: 'uuid', description: 'Bill line id; the reconcile endpoint takes these ids.' }) lineId!: string
@@ -183,6 +211,8 @@ export class SlhReconciliationBatchMemberDto extends SlhBillLineDto {
   @ApiProperty({ type: 'string' }) matchedContainerBatchName!: string
   @ApiProperty({ type: Number }) matchedLoadingItemLineNumber!: number
   @ApiProperty({ type: SlhReconciliationMatchedItemDto, description: 'Container row matched at creation time; the other side of every field comparison.' }) matchedLoadingItem!: SlhReconciliationMatchedItemDto
+  @ApiPropertyOptional({ type: () => SlhReconciliationMatchedPurchaseOrderDto, nullable: true, description: 'Purchase source reachable from the matched container row; null only for damaged data.' }) purchaseOrder!: SlhReconciliationMatchedPurchaseOrderDto | null
+  @ApiPropertyOptional({ type: () => SlhReconciliationMatchedSalesOrderDto, nullable: true, description: 'Sales source of the purchase order; null only for damaged data.' }) salesOrder!: SlhReconciliationMatchedSalesOrderDto | null
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Null means this batch has not reconciled the line yet.' }) reconciledAt!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) reconciledByDisplayName!: string | null
 }

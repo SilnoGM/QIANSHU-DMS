@@ -1,4 +1,6 @@
 import { Prisma } from '../../generated/prisma/client'
+import type { StoredDictionaryValueResolution } from '../dictionaries/dictionary-lookup.service'
+import { purchaseOrderSupplierFromSources } from '../purchase-orders/purchase-order-query.service'
 import { resolveSlhBillReconciliationStatus } from '../slh-bills/slh-bill-reconciliation'
 import { serializeSlhBillLine, serializeStoredFindings } from '../slh-bills/slh-bill.serializer'
 import type { SlhBillReconciliationStatusDto } from '../slh-bills/slh-bill.dto'
@@ -44,6 +46,24 @@ export const slhReconciliationBatchDetailInclude = {
           volumeCai: true, chargeableVolumeCai: true, reportedVolumeCai: true, codAmountTwd: true,
           recipientName: true, recipientPhone: true, recipientAddress: true, remark: true,
           containerBatch: { select: { containerBatchName: true } },
+          // 来源链路与匹配器的合格判定同一条：装柜行 → 货件 → 采购订单 → 销售订单。
+          shipment: {
+            select: {
+              shipmentNo: true,
+              purchaseOrder: {
+                select: {
+                  id: true, orderNo: true, orderDate: true, orderStatus: true, purchaseTotalAmount: true,
+                  supplierValue: true, customSupplierName: true,
+                  salesOrder: {
+                    select: {
+                      id: true, orderNo: true, orderDate: true, orderStatus: true,
+                      currencyCode: true, customerName: true, agreedTotalAmount: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
       reconciledBy: { select: { displayName: true } },
@@ -86,8 +106,19 @@ function serializeBatchHeader(row: BatchHeaderRow): SlhReconciliationBatchListIt
   }
 }
 
-function serializeBatchMember(row: BatchMemberRow): SlhReconciliationBatchMemberDto {
+/**
+ * 成员行：账单行全部字段 + 本批次匹配依据 + 柜次侧可比字段 + 来源摘要 + 核对留痕。
+ *
+ * `supplierResolutions` 由查询服务先经 DictionaryLookupService 解析（同一字典码与采购域共用），
+ * 序列化本身保持纯函数：字典解析结果没命中时按采购域的同一兜底显示原值。
+ */
+function serializeBatchMember(
+  row: BatchMemberRow,
+  supplierResolutions: ReadonlyMap<string, StoredDictionaryValueResolution>,
+): SlhReconciliationBatchMemberDto {
   const item = row.matchedLoadingItem
+  const purchaseOrderRow = item.shipment?.purchaseOrder ?? null
+  const salesOrderRow = purchaseOrderRow?.salesOrder ?? null
   return {
     ...serializeSlhBillLine(row.line),
     id: row.id,
@@ -115,6 +146,29 @@ function serializeBatchMember(row: BatchMemberRow): SlhReconciliationBatchMember
       recipientPhone: item.recipientPhone,
       recipientAddress: item.recipientAddress,
       remark: item.remark,
+      shipmentNo: item.shipment?.shipmentNo ?? null,
+    },
+    purchaseOrder: purchaseOrderRow === null ? null : {
+      id: purchaseOrderRow.id,
+      orderNo: purchaseOrderRow.orderNo,
+      orderDate: isoDate(purchaseOrderRow.orderDate),
+      orderStatus: purchaseOrderRow.orderStatus,
+      // 采购金额与采购域同口径：两位小数人民币。
+      purchaseTotalAmount: purchaseOrderRow.purchaseTotalAmount.toFixed(2),
+      supplier: purchaseOrderSupplierFromSources(
+        purchaseOrderRow,
+        supplierResolutions.get(purchaseOrderRow.id),
+      ),
+    },
+    salesOrder: salesOrderRow === null ? null : {
+      id: salesOrderRow.id,
+      orderNo: salesOrderRow.orderNo,
+      orderDate: isoDate(salesOrderRow.orderDate),
+      orderStatus: salesOrderRow.orderStatus,
+      currencyCode: salesOrderRow.currencyCode,
+      customerName: salesOrderRow.customerName,
+      // 销售金额与销售域同口径：四位小数订单币种金额。
+      agreedTotalAmount: salesOrderRow.agreedTotalAmount.toFixed(4),
     },
     reconciledAt: row.reconciledAt === null ? null : iso(row.reconciledAt),
     reconciledByDisplayName: row.reconciledBy?.displayName ?? null,
@@ -125,8 +179,31 @@ export function serializeSlhReconciliationBatchListItem(row: BatchHeaderRow): Sl
   return serializeBatchHeader(row)
 }
 
-export function serializeSlhReconciliationBatchDetail(row: SlhReconciliationBatchDetailRow): SlhReconciliationBatchDetailDto {
-  return { ...serializeBatchHeader(row), findings: serializeStoredFindings(row.bill.importFindings), members: row.members.map(serializeBatchMember) }
+export function serializeSlhReconciliationBatchDetail(
+  row: SlhReconciliationBatchDetailRow,
+  supplierResolutions: ReadonlyMap<string, StoredDictionaryValueResolution> = new Map(),
+): SlhReconciliationBatchDetailDto {
+  return {
+    ...serializeBatchHeader(row),
+    findings: serializeStoredFindings(row.bill.importFindings),
+    members: row.members.map(member => serializeBatchMember(member, supplierResolutions)),
+  }
+}
+
+/** 成员行里出现的采购订单及其供应商原值：查询服务据此一次解析字典标签。 */
+export function collectMemberPurchaseOrderSuppliers(
+  row: SlhReconciliationBatchDetailRow,
+): readonly { readonly id: string, readonly supplierValue: string | null, readonly customSupplierName: string | null }[] {
+  return row.members.flatMap((member) => {
+    const purchaseOrder = member.matchedLoadingItem.shipment?.purchaseOrder
+    return purchaseOrder === undefined || purchaseOrder === null
+      ? []
+      : [{
+          id: purchaseOrder.id,
+          supplierValue: purchaseOrder.supplierValue,
+          customSupplierName: purchaseOrder.customSupplierName,
+        }]
+  })
 }
 
 /**

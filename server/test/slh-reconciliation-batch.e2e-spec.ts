@@ -41,7 +41,25 @@ interface BatchDetail {
     matchedContainerBatchName: string
     matchedLoadingItemId: string
     matchedLoadingItemLineNumber: number
+    matchedLoadingItem: { shipmentNo: string | null }
     matchSource: string
+    purchaseOrder: {
+      id: string
+      orderNo: string
+      orderDate: string
+      orderStatus: string
+      purchaseTotalAmount: string
+      supplier: { source: string, value: string | null, label: string, known: boolean | null }
+    } | null
+    salesOrder: {
+      id: string
+      orderNo: string
+      orderDate: string
+      orderStatus: string
+      currencyCode: string
+      customerName: string
+      agreedTotalAmount: string
+    } | null
     reconciledAt: string | null
   }>
   reconciledMemberCount: number
@@ -399,6 +417,59 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     // 冻结后的两个数字：匹配得上的行不变，未冻结（＝当前可核对列显示）的行归零。
     const frozen = (await reconcilableCounts([pending.id]).expect(200)).body as { items: Array<{ reconcilableLineCount: number, unfrozenLineCount: number }> }
     expect([frozen.items[0].reconcilableLineCount, frozen.items[0].unfrozenLineCount]).toEqual([3, 0])
+  })
+
+  it('来源摘要随详情返回：装柜行带出货件号，采购与销售口径与各自域一致', async () => {
+    const batchRow = await h.prisma.slhReconciliationBatch.findFirstOrThrow({
+      where: { billId: pending.id, completedAt: null }, select: { id: true },
+    })
+    const detail = (await browser.get(`${BASE}/${batchRow.id}`).expect(200)).body as BatchDetail
+    expect(detail.members).toHaveLength(3)
+
+    for (const member of detail.members) {
+      // 装柜行：货件号来自这一行匹配到的货件。
+      expect(member.matchedLoadingItem.shipmentNo).toBeTruthy()
+      // 采购来源：金额两位小数人民币；供应商沿用采购域的解析口径。
+      // 本夹具的采购单是自定义供应商文案，字典供应商的标签解析由采购域既有用例覆盖。
+      expect(member.purchaseOrder?.purchaseTotalAmount).toMatch(/^\d+\.\d{2}$/u)
+      expect(member.purchaseOrder?.orderDate).toBe('2026-09-07')
+      expect(member.purchaseOrder?.supplier).toMatchObject({
+        source: 'CUSTOM_TEXT', value: null, label: 'Custom supplier',
+      })
+      // 销售来源：四位小数订单币种金额，字段口径与销售域一致。
+      expect(member.salesOrder).toMatchObject({ customerName: '包装客户', currencyCode: 'TWD', orderStatus: 'CONFIRMED' })
+      expect(member.salesOrder?.agreedTotalAmount).toMatch(/^\d+\.\d{4}$/u)
+    }
+
+    // 链路逐条对齐数据库事实：成员匹配行 → 货件 → 采购订单 → 销售订单。
+    const memberRows = await h.prisma.slhReconciliationBatchLine.findMany({
+      where: { batchId: batchRow.id },
+      select: {
+        lineId: true,
+        matchedLoadingItem: {
+          select: {
+            shipment: {
+              select: {
+                shipmentNo: true,
+                purchaseOrder: {
+                  select: { id: true, orderNo: true, salesOrder: { select: { id: true, orderNo: true } } },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+    const expectedByLineId = new Map(memberRows.map(row => [row.lineId, row.matchedLoadingItem.shipment]))
+    for (const member of detail.members) {
+      const expected = expectedByLineId.get(member.lineId)
+      expect(expected).toBeTruthy()
+      expect(member.matchedLoadingItem.shipmentNo).toBe(expected?.shipmentNo)
+      expect(member.purchaseOrder?.id).toBe(expected?.purchaseOrder.id)
+      expect(member.purchaseOrder?.orderNo).toBe(expected?.purchaseOrder.orderNo)
+      expect(member.salesOrder?.id).toBe(expected?.purchaseOrder.salesOrder?.id)
+      expect(member.salesOrder?.orderNo).toBe(expected?.purchaseOrder.salesOrder?.orderNo)
+    }
   })
 
   it('幂等：同键重放返回同一批次，同一键换账单被拒，非法键在业务前被拒', async () => {

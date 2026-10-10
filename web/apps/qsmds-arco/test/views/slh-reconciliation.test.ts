@@ -20,8 +20,10 @@ import {
   toggleSlhBillSelection,
 } from '../../src/views/workbenches/slh-reconciliation/bill-select.logic'
 import {
-  buildSlhReconciliationLineFields,
+  buildSlhReconciliationBillLineFields,
   buildSlhReconciliationLineItems,
+  buildSlhReconciliationLoadingItemFields,
+  buildSlhReconciliationOrderFieldGroups,
   resolveSlhReconciliationSelectedMember,
   SLH_RECONCILIATION_LINE_TONES,
 } from '../../src/views/workbenches/slh-reconciliation/detail.logic'
@@ -297,7 +299,7 @@ test('批次详情页：头部只给批次与账单标识、底部承接完成�
   assert.match(page, /t\('slhBill\.retry'\)/u)
 })
 
-test('详情页成员区：切换器独立成面板，选中行数据在下方逐字段展示', async () => {
+test('详情页成员区：切换器独立成面板，下方三块面板按来源/装柜行/账单行逐字段展示', async () => {
   const page = await readPageSource('detail.vue')
   // 切换器受控接线：选中值由页面持有，状态色映射与无障碍名称都由页面给。
   assert.match(page, /<QsReconciliationLineSwitcher[\s\S]{0,400}?v-model="selectedLineId"/u)
@@ -305,15 +307,20 @@ test('详情页成员区：切换器独立成面板，选中行数据在下方�
   assert.match(page, /:status-tones="SLH_RECONCILIATION_LINE_TONES"/u)
   assert.match(page, /t\('slhReconciliation\.detail\.lineSwitcherLabel'\)/u)
   // 切换器挂在 FaPageMain 之外，只用一个普通容器承接页面外边距：它自己就是一块面板。
-  assert.match(page, /<div v-if="members\.length > 0" class="m-4 min-w-0">[\s\S]{0,200}?<QsReconciliationLineSwitcher/u)
+  assert.match(page, /<div class="m-4 min-w-0">[\s\S]{0,200}?<QsReconciliationLineSwitcher/u)
+  // 三块面板：横向排布（宽屏三列），分别接销售与采购、装柜行、账单行。
+  assert.match(page, /class="m-4 gap-4 grid items-start lg:grid-cols-2 xl:grid-cols-3"/u)
+  assert.match(page, /t\('slhReconciliation\.detail\.ordersTitle'\)/u)
+  assert.match(page, /t\('slhReconciliation\.detail\.loadingItemTitle'\)/u)
+  assert.match(page, /t\('slhReconciliation\.detail\.billLineTitle'\)/u)
+  assert.match(page, /v-for="group in orderFieldGroups"/u)
+  assert.match(page, /v-for="field in loadingItemFields"/u)
+  assert.match(page, /v-for="field in billLineFields"/u)
   // 不再有成员标题与复制入口。
   assert.doesNotMatch(page, /membersTitle|membersCopy|copyMembers|clipboard\.writeText/u)
   // 批次没有冻结行时只给一句批次级说明，不让切换器空转。
   assert.match(page, /v-if="members\.length > 0"/u)
   assert.match(page, /t\('slhReconciliation\.detail\.membersEmpty'\)/u)
-  // 选中行数据跟在切换器下方，是纯字段清单；旧的一行式成员清单已不再渲染。
-  assert.match(page, /t\('slhReconciliation\.detail\.lineDataTitle'\)/u)
-  assert.match(page, /v-for="field in selectedLineFields"/u)
   assert.doesNotMatch(page, /v-for="member in members"/u)
 })
 
@@ -397,8 +404,8 @@ test('选中行解析：命中返回成员，找不到、未选中或空批次�
   assert.equal(resolveSlhReconciliationSelectedMember([], 'line-1'), null)
 })
 
-test('当前明细行字段：格式化与账单明细列同源，缺值统一占位符', () => {
-  const fields = buildSlhReconciliationLineFields(memberFixture(), echoKey)
+test('账单明细行面板：格式化与账单明细列同源，缺值与核对留痕统一占位符', () => {
+  const fields = buildSlhReconciliationBillLineFields(memberFixture(), echoKey)
   const valueOf = (id: string) => fields.find(field => field.id === id)?.value
 
   assert.equal(valueOf('lineNumber'), '[slhBill.line.lineNumberValue:14]')
@@ -412,8 +419,6 @@ test('当前明细行字段：格式化与账单明细列同源，缺值统一�
   assert.equal(valueOf('payableAmountCny'), '4455.00')
   assert.equal(valueOf('pricingBasis'), '[slhBill.pricingBasis.VOLUME]')
   assert.equal(valueOf('reconciliationStatus'), '[slhBill.reconciliationStatus.PENDING]')
-  assert.equal(valueOf('matchSource'), '[slhReconciliation.detail.matchSourceValue.MARK]')
-  assert.equal(valueOf('matchedContainer'), 'CONT-1 #12')
   assert.equal(valueOf('recipientInfo'), '王小明 0912345678 台北市')
   // 空值＝不涉及：一律占位符，不回显 null / 空串。
   assert.equal(valueOf('codHandlingAmountCny'), '[slhBill.valueMissing]')
@@ -421,13 +426,16 @@ test('当前明细行字段：格式化与账单明细列同源，缺值统一�
   assert.equal(valueOf('reconciledAt'), '[slhBill.valueMissing]')
   assert.equal(valueOf('reconciledBy'), '[slhBill.valueMissing]')
   assert.equal(valueOf('charges'), '[slhBill.valueMissing]')
+  // 匹配依据属于柜次侧：账单面板不再重复铺一遍。
+  assert.equal(valueOf('matchSource'), undefined)
+  assert.equal(valueOf('matchedContainer'), undefined)
   for (const field of fields) {
     assert.notEqual(field.label.trim(), '', `${field.id} 缺少字段名`)
   }
 })
 
-test('当前明细行字段：尺寸缺边不进尺寸列，材积缺一侧不算差异，费用明细按币种分组', () => {
-  const fields = buildSlhReconciliationLineFields(memberFixture({
+test('账单明细行面板：尺寸缺边不进尺寸列，材积缺一侧不算差异，费用明细按币种分组', () => {
+  const fields = buildSlhReconciliationBillLineFields(memberFixture({
     lengthCm: null,
     volumeCai: null,
     reportedVolumeCai: '2',
@@ -456,12 +464,143 @@ test('当前明细行字段：尺寸缺边不进尺寸列，材积缺一侧不�
   assert.equal(valueOf('reconciledBy'), '张三')
 })
 
-test('当前明细行字段：计价方式缺失（服务端回 null）时走占位符而不是拼出空译文键', () => {
+test('账单明细行面板：计价方式缺失（服务端回 null）时走占位符而不是拼出空译文键', () => {
   // 契约上 pricingBasis 标的是可选，服务端实际会对缺失返回 null：与 undefined 同一处理。
-  const fields = buildSlhReconciliationLineFields(
+  const fields = buildSlhReconciliationBillLineFields(
     memberFixture({ pricingBasis: null as unknown as SlhReconciliationBatchMemberDto['pricingBasis'] }),
     echoKey,
   )
 
   assert.equal(fields.find(field => field.id === 'pricingBasis')?.value, '[slhBill.valueMissing]')
+})
+
+test('装柜明细行面板：先给匹配依据再给装柜行可比字段，收费材积带单位', () => {
+  const fields = buildSlhReconciliationLoadingItemFields(memberFixture({
+    matchedLoadingItem: {
+      warehouseReceiptReference: 'WR-C-1',
+      oceanShippingMarkText: 'J-070924',
+      goodsName: '木桌（柜次侧）',
+      packageCount: 12,
+      packageUnit: '箱',
+      grossWeightKg: '120.5',
+      lengthCm: '215',
+      widthCm: '137',
+      heightCm: '113',
+      volumeCai: '1.234',
+      chargeableVolumeCai: 7,
+      reportedVolumeCai: '1.2',
+      codAmountTwd: '1200',
+      recipientName: '林口仓库',
+      recipientPhone: '0911111111',
+      recipientAddress: '新北市林口区',
+      remark: '柜次备注',
+      shipmentNo: 'PS-0001',
+    },
+  }), echoKey)
+  const valueOf = (id: string) => fields.find(field => field.id === id)?.value
+
+  // 匹配依据在最前：怎么找到这一行的。
+  assert.equal(fields[0]?.id, 'matchSource')
+  assert.equal(valueOf('matchSource'), '[slhReconciliation.detail.matchSourceValue.MARK]')
+  assert.equal(valueOf('matchedContainer'), 'CONT-1 #12')
+  assert.equal(valueOf('shipmentNo'), 'PS-0001')
+  // 装柜行自己的可比字段：与账单面板同一套格式化口径。
+  assert.equal(valueOf('warehouseReceiptReference'), 'WR-C-1')
+  assert.equal(valueOf('shippingMark'), 'J-070924')
+  assert.equal(valueOf('goodsName'), '木桌（柜次侧）')
+  assert.equal(valueOf('packageCount'), '12 箱')
+  // 装柜行的毛重列本身以 kg 定义（没有独立单位字段），沿用重量格式化「无单位只出数值」的口径。
+  assert.equal(valueOf('weight'), '120.50')
+  assert.equal(valueOf('dimensions'), '215×137×113 [slhBill.unit.cm]')
+  assert.equal(valueOf('volumeCai'), '1.23 [slhBill.unit.cai]')
+  assert.equal(valueOf('chargeableVolumeCai'), '7 [slhBill.unit.cai]')
+  assert.equal(valueOf('reportedVolumeCai'), '1.20 [slhBill.unit.cai]')
+  assert.equal(valueOf('codAmountTwd'), '1200.00')
+  assert.equal(valueOf('recipientName'), '林口仓库')
+  assert.equal(valueOf('recipientPhone'), '0911111111')
+  assert.equal(valueOf('recipientAddress'), '新北市林口区')
+  assert.equal(valueOf('remark'), '柜次备注')
+  for (const field of fields) {
+    assert.notEqual(field.label.trim(), '', `${field.id} 缺少字段名`)
+  }
+})
+
+test('装柜明细行面板：缺货件号与收费材积时走占位符', () => {
+  const fields = buildSlhReconciliationLoadingItemFields(memberFixture({
+    matchedLoadingItem: {
+      ...memberFixture().matchedLoadingItem,
+      shipmentNo: null,
+      chargeableVolumeCai: null,
+      recipientName: null,
+      recipientPhone: null,
+      recipientAddress: null,
+      remark: '  ',
+    },
+  }), echoKey)
+  const valueOf = (id: string) => fields.find(field => field.id === id)?.value
+
+  for (const id of ['shipmentNo', 'chargeableVolumeCai', 'recipientName', 'recipientPhone', 'recipientAddress', 'remark']) {
+    assert.equal(valueOf(id), '[slhBill.valueMissing]', `${id} 应为占位符`)
+  }
+})
+
+test('销售与采购面板：两组各五项，金额带币种、状态复用采购/销售页面文案键', () => {
+  const groups = buildSlhReconciliationOrderFieldGroups(memberFixture({
+    purchaseOrder: {
+      id: 'po-1',
+      orderNo: 'CG-202609-01',
+      orderDate: '2026-09-07',
+      orderStatus: 'CONFIRMED',
+      purchaseTotalAmount: '4425',
+      supplier: { source: 'DICTIONARY', value: 'MARK_SUPPLIER', label: 'Mark supplier', tone: null, known: true, effectiveEnabled: true },
+    },
+    salesOrder: {
+      id: 'so-1',
+      orderNo: 'XS-202609-01',
+      orderDate: '2026-09-07',
+      orderStatus: 'PENDING_RECONCILIATION',
+      currencyCode: 'TWD',
+      customerName: '包装客户',
+      agreedTotalAmount: '129000.5',
+    },
+  }), echoKey)
+
+  assert.deepEqual(groups.map(group => group.id), ['purchase', 'sales'])
+  assert.deepEqual(groups.map(group => group.label), [
+    '[slhReconciliation.detail.purchaseGroup]',
+    '[slhReconciliation.detail.salesGroup]',
+  ])
+  const valueOf = (groupId: string, fieldId: string) => (
+    groups.find(group => group.id === groupId)?.fields.find(field => field.id === fieldId)?.value
+  )
+  // 采购：金额恒为人民币两位小数，供应商沿用采购域的解析结果。
+  assert.equal(valueOf('purchase', 'purchaseOrderNo'), 'CG-202609-01')
+  assert.equal(valueOf('purchase', 'purchaseOrderDate'), '2026-09-07')
+  assert.equal(valueOf('purchase', 'supplier'), 'Mark supplier')
+  assert.equal(valueOf('purchase', 'purchaseTotalAmount'), 'CNY 4425.00')
+  assert.equal(valueOf('purchase', 'purchaseOrderStatus'), '[purchaseOrderDrawer.statuses.CONFIRMED]')
+  // 销售：金额带订单币种，四位小数收敛到两位展示。
+  assert.equal(valueOf('sales', 'salesOrderNo'), 'XS-202609-01')
+  assert.equal(valueOf('sales', 'customer'), '包装客户')
+  assert.equal(valueOf('sales', 'salesTotalAmount'), 'TWD 129000.50')
+  assert.equal(valueOf('sales', 'salesOrderStatus'), '[salesOrderDrawer.statuses.PENDING_RECONCILIATION]')
+  for (const group of groups) {
+    assert.equal(group.fields.length, 5)
+    for (const field of group.fields) {
+      assert.notEqual(field.label.trim(), '', `${group.id}.${field.id} 缺少字段名`)
+    }
+  }
+})
+
+test('销售与采购面板：来源缺失时整组占位符，不猜也不留空', () => {
+  const groups = buildSlhReconciliationOrderFieldGroups(memberFixture({
+    purchaseOrder: null,
+    salesOrder: null,
+  }), echoKey)
+
+  for (const group of groups) {
+    for (const field of group.fields) {
+      assert.equal(field.value, '[slhBill.valueMissing]', `${group.id}.${field.id} 应为占位符`)
+    }
+  }
 })

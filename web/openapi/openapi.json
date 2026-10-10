@@ -85253,11 +85253,102 @@
           "remark": {
             "type": "string",
             "nullable": true
+          },
+          "shipmentNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Purchase part matched to this container row; null when the row has no shipment (never for frozen members)."
           }
         },
         "required": [
           "goodsName",
           "packageCount"
+        ]
+      },
+      "SlhReconciliationMatchedPurchaseOrderDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "orderDate": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "orderStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING_REVIEW",
+              "CONFIRMED",
+              "COMPLETED",
+              "CANCELLED"
+            ]
+          },
+          "purchaseTotalAmount": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
+          },
+          "supplier": {
+            "$ref": "#/components/schemas/PurchaseOrderSupplierDto"
+          }
+        },
+        "required": [
+          "id",
+          "orderNo",
+          "orderDate",
+          "orderStatus",
+          "purchaseTotalAmount",
+          "supplier"
+        ]
+      },
+      "SlhReconciliationMatchedSalesOrderDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "orderDate": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "orderStatus": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "CONFIRMED",
+              "PENDING_RECONCILIATION",
+              "COMPLETED",
+              "CANCELLED"
+            ]
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "customerName": {
+            "type": "string"
+          },
+          "agreedTotalAmount": {
+            "type": "string",
+            "description": "四位小数的订单币种金额"
+          }
+        },
+        "required": [
+          "id",
+          "orderNo",
+          "orderDate",
+          "orderStatus",
+          "currencyCode",
+          "customerName",
+          "agreedTotalAmount"
         ]
       },
       "SlhReconciliationBatchMemberDto": {
@@ -85447,6 +85538,26 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/SlhReconciliationMatchedItemDto"
+              }
+            ]
+          },
+          "purchaseOrder": {
+            "nullable": true,
+            "description": "Purchase source reachable from the matched container row; null only for damaged data.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationMatchedPurchaseOrderDto"
+              }
+            ]
+          },
+          "salesOrder": {
+            "nullable": true,
+            "description": "Sales source of the purchase order; null only for damaged data.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationMatchedSalesOrderDto"
               }
             ]
           },

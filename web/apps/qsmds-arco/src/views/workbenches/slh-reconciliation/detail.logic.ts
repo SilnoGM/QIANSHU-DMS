@@ -1,4 +1,4 @@
-import type { SlhReconciliationBatchMemberDto } from '@/api/generated/types.gen'
+import type { SlhBillLineChargeDto, SlhReconciliationBatchMemberDto } from '@/api/generated/types.gen'
 import type {
   QsReconciliationLineSwitcherItem,
   QsReconciliationLineSwitcherTone,
@@ -64,34 +64,64 @@ export interface SlhReconciliationLineField {
   readonly value: string
 }
 
+/** 面板内的分组：目前只有「销售与采购信息」需要（采购 / 销售）。 */
+export interface SlhReconciliationFieldGroup {
+  readonly id: string
+  readonly label: string
+  readonly fields: readonly SlhReconciliationLineField[]
+}
+
 /**
- * 当前明细行的字段清单（先给纯字段，对照工作台后续再做）。
- *
- * 格式化与账单明细列同源：金额 2 位小数、材积带「材」、尺寸 `215×137×113 CM`、重量带单位、
- * 费用明细按币种分组。空值与「本行不涉及」同义，一律占位符，不回显原始 null。
+ * 三个面板共用的格式化口径，与账单明细列同源：
+ * 金额 2 位小数、材积带「材」、尺寸 `215×137×113 CM`、重量带单位、费用明细按币种分组；
+ * 空值与「本行不涉及」同义，一律占位符，不回显原始 null。
  */
-export function buildSlhReconciliationLineFields(
-  member: SlhReconciliationBatchMemberDto,
-  translate: SlhReconciliationTranslate,
-): readonly SlhReconciliationLineField[] {
+function createFieldFormatters(translate: SlhReconciliationTranslate) {
   const missing = translate('slhBill.valueMissing')
+  const cai = translate('slhBill.unit.cai')
   const text = (value: string | null | undefined) => (
     value === null || value === undefined || value.trim() === '' ? missing : value
   )
-  const amount = (value: string | null | undefined) => formatSlhBillAmount(value) ?? missing
-  const volume = (value: string | null | undefined) => {
-    const formatted = formatSlhBillVolume(value)
-    return formatted === null ? missing : `${formatted} ${translate('slhBill.unit.cai')}`
+  return {
+    missing,
+    text,
+    amount: (value: string | null | undefined) => formatSlhBillAmount(value) ?? missing,
+    volume: (value: string | null | undefined) => {
+      const formatted = formatSlhBillVolume(value)
+      return formatted === null ? missing : `${formatted} ${cai}`
+    },
+    /** 收费材积在装柜行是整数材数，与其它材积字段一样带单位展示。 */
+    chargeableVolume: (value: number | null | undefined) => (
+      value === null || value === undefined ? missing : `${value} ${cai}`
+    ),
+    dimensions: (line: Pick<SlhReconciliationBatchMemberDto, 'lengthCm' | 'widthCm' | 'heightCm'>) => {
+      const dimensions = formatSlhBillDimensions(line)
+      return dimensions === null ? missing : `${dimensions} ${translate('slhBill.unit.cm')}`
+    },
+    weight: (line: Pick<SlhReconciliationBatchMemberDto, 'grossWeightKg' | 'weightUnit'>) => (
+      formatSlhBillWeight(line) ?? missing
+    ),
+    charges: (charges: readonly SlhBillLineChargeDto[]) => {
+      const text = groupSlhBillCharges(charges)
+        .map(group => `${group.currencyCode} ${group.items
+          .map(item => `${translate(`slhBill.chargeType.${item.chargeType}`)} ${formatSlhBillAmount(item.amount) ?? missing}`)
+          .join(' ')}`)
+        .join('；')
+      return text === '' ? missing : text
+    },
   }
-  const dimensions = formatSlhBillDimensions(member)
-  const weight = formatSlhBillWeight(member)
-  const difference = resolveSlhBillVolumeDifference(member)
-  const charges = groupSlhBillCharges(member.charges)
-    .map(group => `${group.currencyCode} ${group.items
-      .map(item => `${translate(`slhBill.chargeType.${item.chargeType}`)} ${amount(item.amount)}`)
-      .join(' ')}`)
-    .join('；')
+}
 
+/**
+ * 账单明细行信息：账单行自身字段 + 本批次对账留痕（对账状态 / 核对时间 / 核对人）。
+ * 匹配依据属于柜次侧，放在装柜明细行面板里。
+ */
+export function buildSlhReconciliationBillLineFields(
+  member: SlhReconciliationBatchMemberDto,
+  translate: SlhReconciliationTranslate,
+): readonly SlhReconciliationLineField[] {
+  const { missing, text, amount, volume, dimensions, weight, charges } = createFieldFormatters(translate)
+  const difference = resolveSlhBillVolumeDifference(member)
   return [
     {
       id: 'lineNumber',
@@ -105,12 +135,8 @@ export function buildSlhReconciliationLineFields(
     { id: 'shippingMark', label: translate('slhBill.line.shippingMark'), value: text(member.shippingMarkText) },
     { id: 'goodsName', label: translate('slhBill.line.goodsName'), value: text(member.goodsName) },
     { id: 'packageCount', label: translate('slhBill.line.packageCount'), value: `${member.packageCount} ${member.packageUnit ?? ''}`.trim() },
-    { id: 'weight', label: translate('slhBill.line.weight'), value: weight ?? missing },
-    {
-      id: 'dimensions',
-      label: translate('slhBill.line.dimensions'),
-      value: dimensions === null ? missing : `${dimensions} ${translate('slhBill.unit.cm')}`,
-    },
+    { id: 'weight', label: translate('slhBill.line.weight'), value: weight(member) },
+    { id: 'dimensions', label: translate('slhBill.line.dimensions'), value: dimensions(member) },
     { id: 'volumeCai', label: translate('slhBill.line.volumeCai'), value: volume(member.volumeCai) },
     { id: 'reportedVolumeCai', label: translate('slhBill.line.reportedVolumeCai'), value: volume(member.reportedVolumeCai) },
     {
@@ -139,7 +165,23 @@ export function buildSlhReconciliationLineFields(
       label: translate('slhBill.line.reconciliationStatus'),
       value: translate(`slhBill.reconciliationStatus.${member.reconciliationStatus}`),
     },
-    { id: 'charges', label: translate('slhBill.line.charges'), value: charges === '' ? missing : charges },
+    { id: 'charges', label: translate('slhBill.line.charges'), value: charges(member.charges) },
+    { id: 'reconciledAt', label: translate('slhReconciliation.detail.reconciledAt'), value: text(member.reconciledAt) },
+    { id: 'reconciledBy', label: translate('slhReconciliation.detail.reconciledBy'), value: text(member.reconciledByDisplayName) },
+  ]
+}
+
+/**
+ * 装柜明细行信息：先给本批次的匹配依据（怎么找到这一行的），再给装柜行自己的可比字段。
+ * 字段名沿用账单侧的叫法，让同一页里两侧的同一概念用同一个词。
+ */
+export function buildSlhReconciliationLoadingItemFields(
+  member: SlhReconciliationBatchMemberDto,
+  translate: SlhReconciliationTranslate,
+): readonly SlhReconciliationLineField[] {
+  const { text, amount, volume, chargeableVolume, dimensions, weight } = createFieldFormatters(translate)
+  const item = member.matchedLoadingItem
+  return [
     {
       id: 'matchSource',
       label: translate('slhReconciliation.detail.matchSource'),
@@ -150,7 +192,75 @@ export function buildSlhReconciliationLineFields(
       label: translate('slhReconciliation.detail.matchedContainer'),
       value: `${member.matchedContainerBatchName} #${member.matchedLoadingItemLineNumber}`,
     },
-    { id: 'reconciledAt', label: translate('slhReconciliation.detail.reconciledAt'), value: text(member.reconciledAt) },
-    { id: 'reconciledBy', label: translate('slhReconciliation.detail.reconciledBy'), value: text(member.reconciledByDisplayName) },
+    { id: 'shipmentNo', label: translate('slhReconciliation.detail.shipmentNo'), value: text(item.shipmentNo) },
+    { id: 'warehouseReceiptReference', label: translate('slhBill.line.warehouseReceiptReference'), value: text(item.warehouseReceiptReference) },
+    { id: 'shippingMark', label: translate('slhBill.line.shippingMark'), value: text(item.oceanShippingMarkText) },
+    { id: 'goodsName', label: translate('slhBill.line.goodsName'), value: text(item.goodsName) },
+    { id: 'packageCount', label: translate('slhBill.line.packageCount'), value: `${item.packageCount} ${item.packageUnit ?? ''}`.trim() },
+    { id: 'weight', label: translate('slhBill.line.weight'), value: weight(item) },
+    { id: 'dimensions', label: translate('slhBill.line.dimensions'), value: dimensions(item) },
+    { id: 'volumeCai', label: translate('slhBill.line.volumeCai'), value: volume(item.volumeCai) },
+    { id: 'chargeableVolumeCai', label: translate('slhReconciliation.detail.chargeableVolume'), value: chargeableVolume(item.chargeableVolumeCai) },
+    { id: 'reportedVolumeCai', label: translate('slhBill.line.reportedVolumeCai'), value: volume(item.reportedVolumeCai) },
+    { id: 'codAmountTwd', label: translate('slhBill.line.codAmountTwd'), value: amount(item.codAmountTwd) },
+    { id: 'recipientName', label: translate('slhReconciliation.detail.recipientName'), value: text(item.recipientName) },
+    { id: 'recipientPhone', label: translate('slhReconciliation.detail.recipientPhone'), value: text(item.recipientPhone) },
+    { id: 'recipientAddress', label: translate('slhReconciliation.detail.recipientAddress'), value: text(item.recipientAddress) },
+    { id: 'remark', label: translate('slhBill.line.remark'), value: text(item.remark) },
+  ]
+}
+
+/**
+ * 销售与采购信息：装柜行匹配到的货件 → 采购订单 → 销售订单，与匹配合格判定同一条链路。
+ * 金额按各自币种标注（采购恒为人民币，销售为订单币种），状态文案与采购/销售页面共用同一套键；
+ * 来源缺失（历史或损坏数据）时整组走占位符，不猜也不留空。
+ */
+export function buildSlhReconciliationOrderFieldGroups(
+  member: SlhReconciliationBatchMemberDto,
+  translate: SlhReconciliationTranslate,
+): readonly SlhReconciliationFieldGroup[] {
+  const { missing, text, amount } = createFieldFormatters(translate)
+  // 契约上两个来源都是可选且可空：先归一成 null，后面只判一种缺失形态。
+  const purchase = member.purchaseOrder ?? null
+  const sales = member.salesOrder ?? null
+  return [
+    {
+      id: 'purchase',
+      label: translate('slhReconciliation.detail.purchaseGroup'),
+      fields: [
+        { id: 'purchaseOrderNo', label: translate('slhReconciliation.detail.purchaseOrderNo'), value: text(purchase?.orderNo) },
+        { id: 'purchaseOrderDate', label: translate('slhReconciliation.detail.purchaseOrderDate'), value: text(purchase?.orderDate) },
+        { id: 'supplier', label: translate('slhReconciliation.detail.supplier'), value: text(purchase?.supplier.label) },
+        {
+          id: 'purchaseTotalAmount',
+          label: translate('slhReconciliation.detail.purchaseTotalAmount'),
+          value: purchase === null ? missing : `CNY ${amount(purchase.purchaseTotalAmount)}`,
+        },
+        {
+          id: 'purchaseOrderStatus',
+          label: translate('slhReconciliation.detail.purchaseOrderStatus'),
+          value: purchase === null ? missing : translate(`purchaseOrderDrawer.statuses.${purchase.orderStatus}`),
+        },
+      ],
+    },
+    {
+      id: 'sales',
+      label: translate('slhReconciliation.detail.salesGroup'),
+      fields: [
+        { id: 'salesOrderNo', label: translate('slhReconciliation.detail.salesOrderNo'), value: text(sales?.orderNo) },
+        { id: 'salesOrderDate', label: translate('slhReconciliation.detail.salesOrderDate'), value: text(sales?.orderDate) },
+        { id: 'customer', label: translate('slhReconciliation.detail.customer'), value: text(sales?.customerName) },
+        {
+          id: 'salesTotalAmount',
+          label: translate('slhReconciliation.detail.salesTotalAmount'),
+          value: sales === null ? missing : `${sales.currencyCode} ${amount(sales.agreedTotalAmount)}`,
+        },
+        {
+          id: 'salesOrderStatus',
+          label: translate('slhReconciliation.detail.salesOrderStatus'),
+          value: sales === null ? missing : translate(`salesOrderDrawer.statuses.${sales.orderStatus}`),
+        },
+      ],
+    },
   ]
 }

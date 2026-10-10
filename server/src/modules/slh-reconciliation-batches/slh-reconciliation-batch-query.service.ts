@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
+import type { StoredDictionaryValueResolution } from '../dictionaries/dictionary-lookup.service'
 import { buildSlhBillListWhere, withSlhBillIncompleteReconciliation } from '../slh-bills/slh-bill-list-filter'
 import { serializeSlhBillListItem, slhBillListInclude } from '../slh-bills/slh-bill.serializer'
 import type { SlhBillListRow } from '../slh-bills/slh-bill.serializer'
@@ -8,7 +10,11 @@ import type { SlhBillPageDto } from '../slh-bills/slh-bill.dto'
 import { matchBillUnreconciledLines } from './slh-reconciliation-batch.matcher'
 import { slhReconciliationBatchFailure } from './slh-reconciliation-batch.errors'
 import { slhReconciliationBatchUuid } from './slh-reconciliation-batch.normalizer'
-import { serializeSlhReconciliationBatchDetail, serializeSlhReconciliationBatchListItem, slhReconciliationBatchDetailInclude, slhReconciliationBatchListInclude } from './slh-reconciliation-batch.serializer'
+import {
+  collectMemberPurchaseOrderSuppliers, serializeSlhReconciliationBatchDetail, serializeSlhReconciliationBatchListItem,
+  slhReconciliationBatchDetailInclude, slhReconciliationBatchListInclude,
+} from './slh-reconciliation-batch.serializer'
+import type { SlhReconciliationBatchDetailRow } from './slh-reconciliation-batch.serializer'
 import { SlhReconciliationBatchFilterDto, SlhReconciliationBillBlockReasonDto, SlhReconciliationBillGroupDto } from './slh-reconciliation-batch.dto'
 import type {
   SlhBillLineUnmatchedReasonCountDto, SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchDetailDto,
@@ -18,6 +24,9 @@ import type {
 } from './slh-reconciliation-batch.dto'
 
 const DEFAULT_PAGE_SIZE = 20
+
+/** 供应商字典码：与采购域和商品域用的是同一个码（该字面量在各消费方各自声明）。 */
+const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 
 /** 列表筛选取值 → 完成态条件；`all` 表示不加状态条件。 */
 function batchStatusWhere(status: SlhReconciliationBatchFilterDto): Prisma.SlhReconciliationBatchWhereInput {
@@ -61,7 +70,10 @@ function summarizeUnmatchedReasons(matches: Awaited<ReturnType<typeof matchBillU
  */
 @Injectable()
 export class SlhReconciliationBatchQueryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dictionaryLookup: DictionaryLookupService,
+  ) {}
 
   /**
    * 批次列表：状态筛选（默认只看进行中）+ 关键词（批次编号 / 账单编号 / 账单名称）+ 分页。
@@ -123,7 +135,27 @@ export class SlhReconciliationBatchQueryService {
     if (!row) {
       slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_FOUND', '对账批次不存在', 404)
     }
-    return serializeSlhReconciliationBatchDetail(row)
+    return serializeSlhReconciliationBatchDetail(row, await this.resolveMemberSuppliers(row))
+  }
+
+  /**
+   * 成员采购单的供应商标签：与采购域共用同一个字典码与解析服务，
+   * 保证同一供应商在对账页与采购页显示一致（未命中字典时由采购域的兜底逻辑处理）。
+   */
+  private async resolveMemberSuppliers(
+    row: SlhReconciliationBatchDetailRow,
+  ): Promise<ReadonlyMap<string, StoredDictionaryValueResolution>> {
+    const dictionaryOrders = collectMemberPurchaseOrderSuppliers(row).filter(
+      (order): order is typeof order & { readonly supplierValue: string } => order.supplierValue !== null,
+    )
+    if (dictionaryOrders.length === 0) {
+      return new Map()
+    }
+    const resolutions = await this.dictionaryLookup.resolveStoredValues({
+      dictionaryCode: SUPPLIER_DICTIONARY_CODE,
+      values: dictionaryOrders.map(order => order.supplierValue),
+    })
+    return new Map(dictionaryOrders.map((order, index) => [order.id, resolutions[index]]))
   }
 
   /**
