@@ -113,93 +113,127 @@ function createFieldFormatters(translate: SlhReconciliationTranslate) {
 }
 
 /**
- * 账单明细行信息：账单行自身字段。
+ * 账单明细行信息：账单行自身字段，按「对账要看的顺序」分段。
+ * 代收货款台币是对账焦点之一，提到段首；金额类单列一段，收货与备注收尾。
  * 对账状态与核对留痕按产品要求不在此展示，匹配依据属于柜次侧（放在装柜明细行面板）。
  */
-export function buildSlhReconciliationBillLineFields(
+export function buildSlhReconciliationBillLineFieldGroups(
   member: SlhReconciliationBatchMemberDto,
   translate: SlhReconciliationTranslate,
-): readonly SlhReconciliationLineField[] {
+): readonly SlhReconciliationFieldGroup[] {
   const { missing, text, amount, volume, dimensions, weight, charges } = createFieldFormatters(translate)
   const difference = resolveSlhBillVolumeDifference(member)
   return [
     {
-      id: 'lineNumber',
-      label: translate('slhBill.line.lineNumber'),
-      // 与账单明细列一致：行号指的是原表行号，不是批次内的顺序。
-      value: translate('slhBill.line.lineNumberValue', { line: member.sourceRowNumber }),
+      id: 'billLine',
+      label: translate('slhReconciliation.detail.groupBillLine'),
+      fields: [
+        {
+          id: 'lineNumber',
+          label: translate('slhBill.line.lineNumber'),
+          // 与账单明细列一致：行号指的是原表行号，不是批次内的顺序。
+          value: translate('slhBill.line.lineNumberValue', { line: member.sourceRowNumber }),
+        },
+        { id: 'loadingDate', label: translate('slhBill.line.loadingDate'), value: text(member.loadingDate) },
+        { id: 'containerBatchName', label: translate('slhBill.line.containerBatchName'), value: text(member.containerBatchNameText) },
+        // 对账焦点：与顶部核对焦点区的「账单代收货款」同源。
+        { id: 'codAmountTwd', label: translate('slhReconciliation.detail.billCodAmount'), value: amount(member.codAmountTwd) },
+        { id: 'warehouseReceiptReference', label: translate('slhBill.line.warehouseReceiptReference'), value: text(member.warehouseReceiptReference) },
+        { id: 'shippingMark', label: translate('slhBill.line.shippingMark'), value: text(member.shippingMarkText) },
+        { id: 'goodsName', label: translate('slhBill.line.goodsName'), value: text(member.goodsName) },
+        { id: 'packageCount', label: translate('slhBill.line.packageCount'), value: `${member.packageCount} ${member.packageUnit ?? ''}`.trim() },
+        { id: 'weight', label: translate('slhBill.line.weight'), value: weight(member) },
+        { id: 'dimensions', label: translate('slhBill.line.dimensions'), value: dimensions(member) },
+        { id: 'volumeCai', label: translate('slhBill.line.volumeCai'), value: volume(member.volumeCai) },
+        { id: 'reportedVolumeCai', label: translate('slhBill.line.reportedVolumeCai'), value: volume(member.reportedVolumeCai) },
+        {
+          id: 'volumeDifferenceCai',
+          label: translate('slhBill.line.volumeDifferenceCai'),
+          value: difference === null || difference.text === '' ? missing : difference.text,
+        },
+        { id: 'categoryCode', label: translate('slhBill.line.categoryCode'), value: text(member.categoryCode) },
+        { id: 'unitPriceAmount', label: translate('slhBill.line.unitPriceAmount'), value: text(member.unitPriceAmount) },
+        {
+          id: 'pricingBasis',
+          label: translate('slhBill.line.pricingBasis'),
+          // 契约标的是可选，服务端实际会对缺失回 null：真值判断与账单明细列同一写法。
+          value: member.pricingBasis ? translate(`slhBill.pricingBasis.${member.pricingBasis}`) : missing,
+        },
+      ],
     },
-    { id: 'loadingDate', label: translate('slhBill.line.loadingDate'), value: text(member.loadingDate) },
-    { id: 'containerBatchName', label: translate('slhBill.line.containerBatchName'), value: text(member.containerBatchNameText) },
-    { id: 'warehouseReceiptReference', label: translate('slhBill.line.warehouseReceiptReference'), value: text(member.warehouseReceiptReference) },
-    { id: 'shippingMark', label: translate('slhBill.line.shippingMark'), value: text(member.shippingMarkText) },
-    { id: 'goodsName', label: translate('slhBill.line.goodsName'), value: text(member.goodsName) },
-    { id: 'packageCount', label: translate('slhBill.line.packageCount'), value: `${member.packageCount} ${member.packageUnit ?? ''}`.trim() },
-    { id: 'weight', label: translate('slhBill.line.weight'), value: weight(member) },
-    { id: 'dimensions', label: translate('slhBill.line.dimensions'), value: dimensions(member) },
-    { id: 'volumeCai', label: translate('slhBill.line.volumeCai'), value: volume(member.volumeCai) },
-    { id: 'reportedVolumeCai', label: translate('slhBill.line.reportedVolumeCai'), value: volume(member.reportedVolumeCai) },
     {
-      id: 'volumeDifferenceCai',
-      label: translate('slhBill.line.volumeDifferenceCai'),
-      value: difference === null || difference.text === '' ? missing : difference.text,
+      id: 'amounts',
+      label: translate('slhReconciliation.detail.groupAmounts'),
+      fields: [
+        { id: 'freightAmountCny', label: translate('slhBill.line.freightAmountCny'), value: amount(member.freightAmountCny) },
+        { id: 'codHandlingAmountCny', label: translate('slhBill.line.codHandlingAmountCny'), value: amount(member.codHandlingAmountCny) },
+        { id: 'surchargeAmountCny', label: translate('slhBill.line.surchargeAmountCny'), value: amount(member.surchargeAmountCny) },
+        { id: 'payableAmountCny', label: translate('slhBill.line.payableAmountCny'), value: amount(member.payableAmountCny) },
+        { id: 'ntdSurchargeAmountTwd', label: translate('slhBill.line.ntdSurchargeAmountTwd'), value: amount(member.ntdSurchargeAmountTwd) },
+      ],
     },
-    { id: 'categoryCode', label: translate('slhBill.line.categoryCode'), value: text(member.categoryCode) },
-    { id: 'unitPriceAmount', label: translate('slhBill.line.unitPriceAmount'), value: text(member.unitPriceAmount) },
     {
-      id: 'pricingBasis',
-      label: translate('slhBill.line.pricingBasis'),
-      // 契约标的是可选，服务端实际会对缺失回 null：真值判断与账单明细列同一写法。
-      value: member.pricingBasis ? translate(`slhBill.pricingBasis.${member.pricingBasis}`) : missing,
+      id: 'recipient',
+      label: translate('slhReconciliation.detail.groupRecipient'),
+      fields: [
+        { id: 'recipientInfo', label: translate('slhBill.line.recipientInfo'), value: text(member.recipientInfoRaw) },
+        { id: 'remark', label: translate('slhBill.line.remark'), value: text(member.remark) },
+        { id: 'charges', label: translate('slhBill.line.charges'), value: charges(member.charges) },
+      ],
     },
-    { id: 'freightAmountCny', label: translate('slhBill.line.freightAmountCny'), value: amount(member.freightAmountCny) },
-    { id: 'codHandlingAmountCny', label: translate('slhBill.line.codHandlingAmountCny'), value: amount(member.codHandlingAmountCny) },
-    { id: 'surchargeAmountCny', label: translate('slhBill.line.surchargeAmountCny'), value: amount(member.surchargeAmountCny) },
-    { id: 'payableAmountCny', label: translate('slhBill.line.payableAmountCny'), value: amount(member.payableAmountCny) },
-    { id: 'codAmountTwd', label: translate('slhBill.line.codAmountTwd'), value: amount(member.codAmountTwd) },
-    { id: 'ntdSurchargeAmountTwd', label: translate('slhBill.line.ntdSurchargeAmountTwd'), value: amount(member.ntdSurchargeAmountTwd) },
-    { id: 'recipientInfo', label: translate('slhBill.line.recipientInfo'), value: text(member.recipientInfoRaw) },
-    { id: 'remark', label: translate('slhBill.line.remark'), value: text(member.remark) },
-    { id: 'charges', label: translate('slhBill.line.charges'), value: charges(member.charges) },
   ]
 }
 
 /**
  * 装柜明细行信息：先给本批次的匹配依据（怎么找到这一行的），再给装柜行自己的可比字段。
- * 字段名沿用账单侧的叫法，让同一页里两侧的同一概念用同一个词。
+ * 代收货款台币是对账焦点之一，放在装柜行资料段首；字段名沿用账单侧的叫法，
+ * 让同一页里两侧的同一概念用同一个词，只有与账单侧重名的那一项加「装柜」前缀区分。
  */
-export function buildSlhReconciliationLoadingItemFields(
+export function buildSlhReconciliationLoadingItemFieldGroups(
   member: SlhReconciliationBatchMemberDto,
   translate: SlhReconciliationTranslate,
-): readonly SlhReconciliationLineField[] {
+): readonly SlhReconciliationFieldGroup[] {
   const { text, amount, volume, chargeableVolume, dimensions, weight } = createFieldFormatters(translate)
   const item = member.matchedLoadingItem
   return [
     {
-      id: 'matchSource',
-      label: translate('slhReconciliation.detail.matchSource'),
-      value: translate(`slhReconciliation.detail.matchSourceValue.${member.matchSource}`),
+      id: 'matchEvidence',
+      label: translate('slhReconciliation.detail.groupMatchEvidence'),
+      fields: [
+        {
+          id: 'matchSource',
+          label: translate('slhReconciliation.detail.matchSource'),
+          value: translate(`slhReconciliation.detail.matchSourceValue.${member.matchSource}`),
+        },
+        {
+          id: 'matchedContainer',
+          label: translate('slhReconciliation.detail.matchedContainer'),
+          value: `${member.matchedContainerBatchName} #${member.matchedLoadingItemLineNumber}`,
+        },
+        { id: 'shipmentNo', label: translate('slhReconciliation.detail.shipmentNo'), value: text(item.shipmentNo) },
+      ],
     },
     {
-      id: 'matchedContainer',
-      label: translate('slhReconciliation.detail.matchedContainer'),
-      value: `${member.matchedContainerBatchName} #${member.matchedLoadingItemLineNumber}`,
+      id: 'loadingItem',
+      label: translate('slhReconciliation.detail.groupLoadingItem'),
+      fields: [
+        // 对账焦点：与顶部核对焦点区的「装柜代收货款」同源。
+        { id: 'codAmountTwd', label: translate('slhReconciliation.detail.loadingCodAmount'), value: amount(item.codAmountTwd) },
+        { id: 'warehouseReceiptReference', label: translate('slhBill.line.warehouseReceiptReference'), value: text(item.warehouseReceiptReference) },
+        { id: 'shippingMark', label: translate('slhBill.line.shippingMark'), value: text(item.oceanShippingMarkText) },
+        { id: 'goodsName', label: translate('slhBill.line.goodsName'), value: text(item.goodsName) },
+        { id: 'packageCount', label: translate('slhBill.line.packageCount'), value: `${item.packageCount} ${item.packageUnit ?? ''}`.trim() },
+        { id: 'weight', label: translate('slhBill.line.weight'), value: weight(item) },
+        { id: 'dimensions', label: translate('slhBill.line.dimensions'), value: dimensions(item) },
+        { id: 'volumeCai', label: translate('slhBill.line.volumeCai'), value: volume(item.volumeCai) },
+        { id: 'chargeableVolumeCai', label: translate('slhReconciliation.detail.chargeableVolume'), value: chargeableVolume(item.chargeableVolumeCai) },
+        { id: 'reportedVolumeCai', label: translate('slhBill.line.reportedVolumeCai'), value: volume(item.reportedVolumeCai) },
+        { id: 'recipientName', label: translate('slhReconciliation.detail.recipientName'), value: text(item.recipientName) },
+        { id: 'recipientPhone', label: translate('slhReconciliation.detail.recipientPhone'), value: text(item.recipientPhone) },
+        { id: 'recipientAddress', label: translate('slhReconciliation.detail.recipientAddress'), value: text(item.recipientAddress) },
+        { id: 'remark', label: translate('slhBill.line.remark'), value: text(item.remark) },
+      ],
     },
-    { id: 'shipmentNo', label: translate('slhReconciliation.detail.shipmentNo'), value: text(item.shipmentNo) },
-    { id: 'warehouseReceiptReference', label: translate('slhBill.line.warehouseReceiptReference'), value: text(item.warehouseReceiptReference) },
-    { id: 'shippingMark', label: translate('slhBill.line.shippingMark'), value: text(item.oceanShippingMarkText) },
-    { id: 'goodsName', label: translate('slhBill.line.goodsName'), value: text(item.goodsName) },
-    { id: 'packageCount', label: translate('slhBill.line.packageCount'), value: `${item.packageCount} ${item.packageUnit ?? ''}`.trim() },
-    { id: 'weight', label: translate('slhBill.line.weight'), value: weight(item) },
-    { id: 'dimensions', label: translate('slhBill.line.dimensions'), value: dimensions(item) },
-    { id: 'volumeCai', label: translate('slhBill.line.volumeCai'), value: volume(item.volumeCai) },
-    { id: 'chargeableVolumeCai', label: translate('slhReconciliation.detail.chargeableVolume'), value: chargeableVolume(item.chargeableVolumeCai) },
-    { id: 'reportedVolumeCai', label: translate('slhBill.line.reportedVolumeCai'), value: volume(item.reportedVolumeCai) },
-    { id: 'codAmountTwd', label: translate('slhBill.line.codAmountTwd'), value: amount(item.codAmountTwd) },
-    { id: 'recipientName', label: translate('slhReconciliation.detail.recipientName'), value: text(item.recipientName) },
-    { id: 'recipientPhone', label: translate('slhReconciliation.detail.recipientPhone'), value: text(item.recipientPhone) },
-    { id: 'recipientAddress', label: translate('slhReconciliation.detail.recipientAddress'), value: text(item.recipientAddress) },
-    { id: 'remark', label: translate('slhBill.line.remark'), value: text(item.remark) },
   ]
 }
 
@@ -235,7 +269,8 @@ export function buildSlhReconciliationOrderFieldGroups(
         { id: 'supplier', label: translate('slhReconciliation.detail.supplier'), value: text(purchase?.supplier.label) },
         { id: 'purchaseTotalAmount', label: translate('slhReconciliation.detail.purchaseTotalAmount'), value: money('CNY', purchase?.purchaseTotalAmount) },
         { id: 'depositDueAmount', label: translate('purchaseOrderDesc.fields.deposit'), value: money('CNY', purchase?.depositDueAmount) },
-        { id: 'balanceDueAmount', label: translate('purchaseOrderDesc.fields.balance'), value: money('CNY', purchase?.balanceDueAmount) },
+        // 采购侧也有「尾款」，与销售的尾款同名不同币种：加来源前缀消歧（对账要核的是销售尾款）。
+        { id: 'balanceDueAmount', label: translate('slhReconciliation.detail.purchaseBalance'), value: money('CNY', purchase?.balanceDueAmount) },
         {
           id: 'purchaseOrderStatus',
           label: translate('slhReconciliation.detail.purchaseOrderStatus'),
@@ -257,16 +292,17 @@ export function buildSlhReconciliationOrderFieldGroups(
     {
       id: 'sales',
       label: translate('slhReconciliation.detail.salesGroup'),
+      // 尾款是与装柜/账单代收货款并列核对的值，提到销售组最前，紧跟实际已收/待收。
       fields: [
         { id: 'salesOrderNo', label: translate('slhReconciliation.detail.salesOrderNo'), value: text(sales?.orderNo) },
-        { id: 'customer', label: translate('salesOrderDesc.fields.customerName'), value: text(sales?.customerName) },
-        { id: 'customerPhone', label: translate('salesOrderDesc.fields.customerPhone'), value: text(sales?.customerPhone) },
-        { id: 'customerFullAddress', label: translate('salesOrderDesc.fields.fullAddress'), value: text(sales?.customerFullAddress) },
-        { id: 'salesTotalAmount', label: translate('slhReconciliation.detail.salesTotalAmount'), value: money(sales?.currencyCode ?? '', sales?.agreedTotalAmount) },
-        { id: 'depositDueAmount', label: translate('salesOrderDesc.fields.deposit'), value: money(sales?.currencyCode ?? '', sales?.depositDueAmount) },
         { id: 'balanceDueAmount', label: translate('salesOrderDesc.fields.balance'), value: money(sales?.currencyCode ?? '', sales?.balanceDueAmount) },
         { id: 'receivedAmount', label: translate('slhReconciliation.detail.receivedAmount'), value: money(sales?.currencyCode ?? '', sales?.receivedAmount) },
         { id: 'outstandingAmount', label: translate('slhReconciliation.detail.outstandingAmount'), value: money(sales?.currencyCode ?? '', sales?.outstandingAmount) },
+        { id: 'salesTotalAmount', label: translate('slhReconciliation.detail.salesTotalAmount'), value: money(sales?.currencyCode ?? '', sales?.agreedTotalAmount) },
+        { id: 'depositDueAmount', label: translate('salesOrderDesc.fields.deposit'), value: money(sales?.currencyCode ?? '', sales?.depositDueAmount) },
+        { id: 'customer', label: translate('salesOrderDesc.fields.customerName'), value: text(sales?.customerName) },
+        { id: 'customerPhone', label: translate('salesOrderDesc.fields.customerPhone'), value: text(sales?.customerPhone) },
+        { id: 'customerFullAddress', label: translate('salesOrderDesc.fields.fullAddress'), value: text(sales?.customerFullAddress) },
         {
           id: 'salesOrderStatus',
           label: translate('slhReconciliation.detail.salesOrderStatus'),
@@ -284,6 +320,74 @@ export function buildSlhReconciliationOrderFieldGroups(
         },
         { id: 'issuer', label: translate('salesOrderDesc.fields.issuer'), value: text(sales?.issuerDisplayName) },
       ],
+    },
+  ]
+}
+
+export interface SlhReconciliationFocusValue {
+  readonly id: string
+  /** 来源标签：写明这是哪一侧的哪个字段（同名字段借此区分）。 */
+  readonly sourceLabel: string
+  /** 原始金额字符串；为空（本行不涉及）时模板走占位符分支，绝不出现 0.00 之外的替代值。 */
+  readonly value: string | null
+  readonly currency: string
+  /** 来源线索：单号 / 柜次行 / 账单行 + 币种代码，便于回三列追查。 */
+  readonly trace: string
+  readonly isEmpty: boolean
+}
+
+/**
+ * 核对焦点：把三个跨域的金额并排放在一处供人工比对。
+ *
+ * 只做并列展示——不给一致/不一致结论、不给差异值、不做币种换算；
+ * 币种跟随各自的来源（销售尾款是订单币种，两个代收恒为台币），标在来源标签里，
+ * 空值（本行不涉及）与 0 必须在视觉上可区分，因此空值只下发占位符与说明文案。
+ */
+export function buildSlhReconciliationFocusValues(
+  member: SlhReconciliationBatchMemberDto,
+  translate: SlhReconciliationTranslate,
+): readonly SlhReconciliationFocusValue[] {
+  const missing = translate('slhBill.valueMissing')
+  const sales = member.salesOrder ?? null
+  const item = member.matchedLoadingItem
+  const salesBalance = sales?.balanceDueAmount ?? null
+  const loadingCod = item.codAmountTwd ?? null
+  const billCod = member.codAmountTwd ?? null
+  const sourceLabel = (key: string, currency: string) => (
+    currency === ''
+      ? translate(key)
+      : translate('slhReconciliation.detail.focusSourceWithCurrency', { source: translate(key), currency })
+  )
+  return [
+    {
+      id: 'salesBalance',
+      sourceLabel: sourceLabel('slhReconciliation.detail.focusSalesBalance', sales?.currencyCode ?? ''),
+      value: salesBalance,
+      currency: sales?.currencyCode ?? '',
+      trace: `${translate('slhReconciliation.detail.salesOrderNo')} ${sales?.orderNo ?? missing}`,
+      isEmpty: salesBalance === null,
+    },
+    {
+      id: 'loadingCod',
+      sourceLabel: sourceLabel('slhReconciliation.detail.focusLoadingCod', 'TWD'),
+      value: loadingCod,
+      currency: 'TWD',
+      trace: [
+        `${translate('slhReconciliation.detail.matchedContainer')} ${member.matchedContainerBatchName} #${member.matchedLoadingItemLineNumber}`,
+        `${translate('slhReconciliation.detail.shipmentNo')} ${item.shipmentNo ?? missing}`,
+      ].join(' · '),
+      isEmpty: loadingCod === null,
+    },
+    {
+      id: 'billCod',
+      sourceLabel: sourceLabel('slhReconciliation.detail.focusBillCod', 'TWD'),
+      value: billCod,
+      currency: 'TWD',
+      trace: [
+        `${translate('slhBill.line.lineNumber')} ${translate('slhBill.line.lineNumberValue', { line: member.sourceRowNumber })}`,
+        `${translate('slhBill.line.shippingMark')} ${member.shippingMarkText ?? missing}`,
+      ].join(' · '),
+      isEmpty: billCod === null,
     },
   ]
 }
