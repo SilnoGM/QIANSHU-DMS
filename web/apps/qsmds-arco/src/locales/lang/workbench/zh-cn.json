@@ -346,8 +346,6 @@
       "purchaseCreator": "采购人",
       "loadingCodAmount": "装柜代收货款台币",
       "billCodAmount": "账单代收货款台币",
-      "groupMatchEvidence": "匹配依据",
-      "groupLoadingItem": "装柜行资料",
       "groupRecipient": "收货与备注",
       "billCargoGroup": "货物明细",
       "billFeeGroup": "费用结算",

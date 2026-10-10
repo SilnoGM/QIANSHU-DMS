@@ -25,7 +25,7 @@ import {
   buildSlhReconciliationBillLinePanel,
   buildSlhReconciliationFocusValues,
   buildSlhReconciliationLineItems,
-  buildSlhReconciliationLoadingItemFieldGroups,
+  buildSlhReconciliationLoadingItemPanel,
   buildSlhReconciliationOrderSections,
   resolveSlhReconciliationSelectedMember,
   SLH_RECONCILIATION_LINE_TONES,
@@ -343,10 +343,17 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
     || /class="[^"]*z-1[^"]*relative[^"]*"/u.test(page)
   assert.ok(contentWrapperHasLayering, '焦点卡内容块需要同时带 relative 与 z-1')
   assert.doesNotMatch(page, /focus\.trace/u)
-  // 三块面板：横向排布（宽屏三列），由 fieldColumns 统一渲染标题与分组。
-  assert.match(page, /class="m-4 gap-4 grid items-start lg:grid-cols-2 xl:grid-cols-3"/u)
-  assert.match(page, /v-for="column in fieldColumns"/u)
-  assert.match(page, /v-for="group in column\.groups"/u)
+  // 三块面板：横向排布（宽屏三列）且等高——网格用默认的拉伸对齐，卡片随行拉齐到最高者。
+  assert.match(page, /class="m-4 gap-4 grid lg:grid-cols-2 xl:grid-cols-3"/u)
+  assert.doesNotMatch(page, /items-start/u)
+  // 装柜面板与另两块同款：信息块 + 竖条标题段 + 边框金额块。
+  assert.match(page, /v-if="loadingItemPanel"/u)
+  assert.match(page, /v-for="tag in loadingItemPanel\.tags"/u)
+  assert.match(page, /\{\{ loadingItemPanel\.receiptReference\.value \}\}/u)
+  assert.match(page, /\{\{ loadingItemPanel\.cargo\.label \}\}/u)
+  assert.match(page, /\{\{ loadingItemPanel\.codAmount\.label \}\}/u)
+  assert.match(page, /v-for="line in field\.lines"/u)
+  assert.doesNotMatch(page, /fieldColumns|column\.groups/u)
   // 销售/采购改成专用区块模板：单号＋状态徽章的信息块、关键字段行、金额块，两块之间一条分割线。
   assert.match(page, /v-for="\(section, sectionIndex\) in orderSections"/u)
   assert.match(page, /v-if="sectionIndex > 0"[\s\S]{0,120}?border-t border-border/u)
@@ -384,14 +391,14 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   // 多行值（收货信息）与浅色标签（备注）两个分支都在。
   assert.match(page, /v-if="field\.lines && field\.lines\.length > 0"/u)
   assert.match(page, /v-else-if="field\.chip"/u)
-  // 金额行在列里也统一走 AmountDisplay（就地覆盖对齐，缺失时回落占位符文本）。
+  // 金额统一走 AmountDisplay（缺失时回落占位符文本）；等宽数据字体用于所有非金额值。
   assert.match(page, /v-if="field\.amount"[\s\S]{0,300}?:currencies="currencyCatalog\.currencies\.value"/u)
-  // 类名会被 unocss/order 重排：只断言两个覆盖都在，不锁定顺序。
-  assert.match(page, /!justify-start/u)
-  assert.match(page, /!text-left/u)
+  assert.match(page, /class="m-0 text-right"/u)
   // 非金额值保持等宽数据字体，两条分支都带样式类。
   assert.match(page, /<span v-else class="qs-type-data">/u)
-  assert.match(page, /t\(column\.titleKey\)/u)
+  // 三块的标题都来自各自面板模型（销售/采购区块、装柜面板、账单面板）。
+  assert.match(page, /t\('slhReconciliation\.detail\.loadingItemTitle'\)/u)
+  assert.match(page, /t\('slhReconciliation\.detail\.billLineTitle'\)/u)
   // 不再有成员标题与复制入口。
   assert.doesNotMatch(page, /membersTitle|membersCopy|copyMembers|clipboard\.writeText/u)
   // 批次没有冻结行时只给一句批次级说明，不让切换器空转。
@@ -399,13 +406,6 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   assert.match(page, /t\('slhReconciliation\.detail\.membersEmpty'\)/u)
   assert.doesNotMatch(page, /v-for="member in members"/u)
 })
-
-/** 三块面板现在按分组下发：用例把分组摊平后按字段 id 断言取值。 */
-function flattenFields(
-  groups: readonly { readonly fields: readonly { readonly id: string, readonly label: string, readonly value: string }[] }[],
-) {
-  return groups.flatMap(group => [...group.fields])
-}
 
 /** 译函数只回显键与参数，断言的是拼接规则本身（译文归语言包）。 */
 function echoKey(key: string, params?: Record<string, unknown>): string {
@@ -652,8 +652,8 @@ test('账单明细行面板：计价方式缺失与收货三列全空时都走�
   assert.equal(JSON.stringify(panel).includes('reconciliationStatus'), false)
 })
 
-test('装柜明细行面板：先给匹配依据再给装柜行可比字段，收费材积带单位', () => {
-  const fields = flattenFields(buildSlhReconciliationLoadingItemFieldGroups(memberFixture({
+test('装柜明细行面板：顶部信息块 + 货物明细 + 代收货款块 + 收货与备注', () => {
+  const panel = buildSlhReconciliationLoadingItemPanel(memberFixture({
     matchedLoadingItem: {
       warehouseReceiptReference: 'WR-C-1',
       oceanShippingMarkText: 'J-070924',
@@ -661,6 +661,7 @@ test('装柜明细行面板：先给匹配依据再给装柜行可比字段，�
       packageCount: 12,
       packageUnit: '箱',
       grossWeightKg: '120.5',
+      weightUnit: 'KG',
       lengthCm: '215',
       widthCm: '137',
       heightCm: '113',
@@ -674,41 +675,54 @@ test('装柜明细行面板：先给匹配依据再给装柜行可比字段，�
       remark: '柜次备注',
       shipmentNo: 'PS-0001',
     },
-  }), echoKey))
-  const valueOf = (id: string) => fields.find(field => field.id === id)?.value
+  }), echoKey)
 
-  // 匹配依据在最前：怎么找到这一行的。
-  assert.equal(fields[0]?.id, 'matchSource')
-  assert.equal(valueOf('matchSource'), '[slhReconciliation.detail.matchSourceValue.MARK]')
-  assert.equal(valueOf('matchedContainer'), 'CONT-1 #12')
-  assert.equal(valueOf('shipmentNo'), 'PS-0001')
-  // 装柜行自己的可比字段：与账单面板同一套格式化口径。
-  assert.equal(valueOf('warehouseReceiptReference'), 'WR-C-1')
-  assert.equal(valueOf('shippingMark'), 'J-070924')
-  assert.equal(valueOf('goodsName'), '木桌（柜次侧）')
-  assert.equal(valueOf('packageCount'), '12 箱')
-  // 装柜行的毛重列本身以 kg 定义（没有独立单位字段），沿用重量格式化「无单位只出数值」的口径。
-  assert.equal(valueOf('weight'), '120.50')
-  assert.equal(valueOf('dimensions'), '215×137×113 [slhBill.unit.cm]')
-  assert.equal(valueOf('volumeCai'), '1.23 [slhBill.unit.cai]')
-  assert.equal(valueOf('chargeableVolumeCai'), '7 [slhBill.unit.cai]')
-  assert.equal(valueOf('reportedVolumeCai'), '1.20 [slhBill.unit.cai]')
-  assert.equal(valueOf('codAmountTwd'), '1200.00')
-  assert.deepEqual(
-    fields.find(field => field.id === 'codAmountTwd')?.amount,
-    { value: '1200', currency: 'TWD' },
-  )
-  assert.equal(valueOf('recipientName'), '林口仓库')
-  assert.equal(valueOf('recipientPhone'), '0911111111')
-  assert.equal(valueOf('recipientAddress'), '新北市林口区')
-  assert.equal(valueOf('remark'), '柜次备注')
-  for (const field of fields) {
-    assert.notEqual(field.label.trim(), '', `${field.id} 缺少字段名`)
-  }
+  // 顶部信息块：装柜侧入仓单号 + 匹配依据三标签（方式与柜号蓝色、货件号中性）。
+  assert.equal(panel.receiptReference.label, '[slhBill.line.warehouseReceiptReference]')
+  assert.equal(panel.receiptReference.value, 'WR-C-1')
+  assert.deepEqual(panel.tags, [
+    { text: '[slhReconciliation.detail.matchSource]：[slhReconciliation.detail.matchSourceValue.MARK]', tone: 'info' },
+    { text: '[slhReconciliation.detail.matchedContainer]：CONT-1 #12', tone: 'info' },
+    { text: 'PS-0001', tone: 'neutral' },
+  ])
+
+  // 货物明细：与账单侧同名；箱数/重量合并一行，三个材积口径分行保留。
+  assert.equal(panel.cargo.label, '[slhReconciliation.detail.billCargoGroup]')
+  assert.deepEqual(panel.cargo.fields.map(field => field.id), [
+    'goodsName',
+    'shippingMark',
+    'packageAndWeight',
+    'dimensions',
+    'volumeCai',
+    'chargeableVolumeCai',
+    'reportedVolumeCai',
+  ])
+  assert.equal(panel.cargo.fields[2]?.label, '[slhBill.line.packageCount] / [slhBill.line.weight]')
+  assert.equal(panel.cargo.fields[2]?.value, '12 箱 | 120.50 KG')
+  assert.equal(panel.cargo.fields[3]?.value, '215×137×113 [slhBill.unit.cm]')
+  assert.equal(panel.cargo.fields[4]?.value, '1.23 [slhBill.unit.cai]')
+  assert.equal(panel.cargo.fields[5]?.value, '7 [slhBill.unit.cai]')
+  assert.equal(panel.cargo.fields[6]?.value, '1.20 [slhBill.unit.cai]')
+  // 长文本字段带截断标记（货名 / 唛头）。
+  assert.deepEqual(panel.cargo.fields.slice(0, 2).map(field => field.truncate === true), [true, true])
+
+  // 代收货款块：与核对焦点区的「装柜代收货款」同字段、同组件、同格式，单独成块。
+  assert.equal(panel.codAmount.id, 'codAmountTwd')
+  assert.equal(panel.codAmount.label, '[slhReconciliation.detail.loadingCodAmount]')
+  assert.deepEqual(panel.codAmount.amount, { value: '1200', currency: 'TWD' })
+  assert.equal(panel.codAmount.value, '1200.00')
+  assert.equal(panel.codAmount.emphasis, 'total')
+
+  // 收货与备注：名称 / 地址 / 电话叠三行，备注走浅色标签。
+  assert.equal(panel.recipient.label, '[slhReconciliation.detail.groupRecipient]')
+  assert.deepEqual(panel.recipient.fields.map(field => field.id), ['recipientInfo', 'remark'])
+  assert.deepEqual(panel.recipient.fields[0]?.lines, ['林口仓库', '新北市林口区', '0911111111'])
+  assert.equal(panel.recipient.fields[0]?.value, '林口仓库 / 新北市林口区 / 0911111111')
+  assert.equal(panel.recipient.fields[1]?.chip, true)
 })
 
-test('装柜明细行面板：缺货件号与收费材积时走占位符', () => {
-  const fields = flattenFields(buildSlhReconciliationLoadingItemFieldGroups(memberFixture({
+test('装柜明细行面板：缺货件号与收费材积时走占位符，收货三列全空也不留下孤立分隔符', () => {
+  const panel = buildSlhReconciliationLoadingItemPanel(memberFixture({
     matchedLoadingItem: {
       ...memberFixture().matchedLoadingItem,
       shipmentNo: null,
@@ -718,14 +732,16 @@ test('装柜明细行面板：缺货件号与收费材积时走占位符', () =>
       recipientAddress: null,
       remark: '  ',
     },
-  }), echoKey))
-  const valueOf = (id: string) => fields.find(field => field.id === id)?.value
+  }), echoKey)
 
-  for (const id of ['shipmentNo', 'chargeableVolumeCai', 'recipientName', 'recipientPhone', 'recipientAddress', 'remark']) {
-    assert.equal(valueOf(id), '[slhBill.valueMissing]', `${id} 应为占位符`)
-  }
-  // 金额为空（本行不涉及）时不下发 amount：模板回落占位符文本，而不是渲染成 0。
-  assert.equal(fields.find(field => field.id === 'codAmountTwd')?.amount, undefined)
+  // 货件号缺失也保留标签位（占位符），与其它字段同一口径。
+  assert.equal(panel.tags[2]?.text, '[slhBill.valueMissing]')
+  assert.equal(panel.cargo.fields[5]?.value, '[slhBill.valueMissing]')
+  assert.equal(panel.recipient.fields[0]?.value, '[slhBill.valueMissing]')
+  assert.deepEqual(panel.recipient.fields[0]?.lines, [])
+  assert.equal(panel.recipient.fields[1]?.value, '[slhBill.valueMissing]')
+  assert.equal(panel.codAmount.value, '[slhBill.valueMissing]')
+  assert.equal(panel.codAmount.amount, undefined)
 })
 
 /** 订单侧两个来源的完整夹具：用例只改要断言的那几项，其余保持定值。 */

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type {
   SlhReconciliationBillAmountRow,
-  SlhReconciliationFieldGroup,
   SlhReconciliationLineField,
 } from './detail.logic'
 import type { SlhReconciliationBatchDetailDto } from '@/api/generated/types.gen'
@@ -18,7 +17,7 @@ import {
   buildSlhReconciliationBillLinePanel,
   buildSlhReconciliationFocusValues,
   buildSlhReconciliationLineItems,
-  buildSlhReconciliationLoadingItemFieldGroups,
+  buildSlhReconciliationLoadingItemPanel,
   buildSlhReconciliationOrderSections,
   resolveSlhReconciliationSelectedMember,
   SLH_RECONCILIATION_LINE_TONES,
@@ -66,21 +65,12 @@ const focusValues = computed(() => (
 const orderSections = computed(() => (
   selectedMember.value === null ? [] : buildSlhReconciliationOrderSections(selectedMember.value, translate)
 ))
-const loadingItemFieldGroups = computed(() => (
-  selectedMember.value === null ? [] : buildSlhReconciliationLoadingItemFieldGroups(selectedMember.value, translate)
+const loadingItemPanel = computed(() => (
+  selectedMember.value === null ? null : buildSlhReconciliationLoadingItemPanel(selectedMember.value, translate)
 ))
 const billLinePanel = computed(() => (
   selectedMember.value === null ? null : buildSlhReconciliationBillLinePanel(selectedMember.value, translate)
 ))
-/** 装柜明细行与账单明细行两块面板共用同一段模板：标题 + 分组后的字段清单。 */
-interface SlhReconciliationFieldColumn {
-  readonly id: string
-  readonly titleKey: string
-  readonly groups: readonly SlhReconciliationFieldGroup[]
-}
-const fieldColumns = computed<readonly SlhReconciliationFieldColumn[]>(() => [
-  { id: 'loadingItem', titleKey: 'slhReconciliation.detail.loadingItemTitle', groups: loadingItemFieldGroups.value },
-])
 /** 账单面板金额行的字号与颜色：总额大号加粗、代收货款大号加粗且蓝、台币杂费橙红。 */
 function billAmountClass(row: SlhReconciliationBillAmountRow): string {
   if (row.emphasis === 'total') {
@@ -262,7 +252,7 @@ onBeforeUnmount(() => {
         <!-- 选中行的三方资料横向排布：宽屏三列、中屏两列、窄屏堆叠。 -->
         <div
           v-if="selectedMember"
-          class="m-4 gap-4 grid items-start lg:grid-cols-2 xl:grid-cols-3"
+          class="m-4 gap-4 grid lg:grid-cols-2 xl:grid-cols-3"
         >
           <!-- 销售与采购：每个区块＝信息块（单号＋状态徽章）＋关键字段行＋金额块，区块之间用分割线隔开。 -->
           <FaPageMain class="m-0 min-w-0">
@@ -358,35 +348,104 @@ onBeforeUnmount(() => {
               </section>
             </template>
           </FaPageMain>
-          <FaPageMain v-for="column in fieldColumns" :key="column.id" class="m-0 min-w-0">
+          <!-- 装柜明细行：顶部信息块（入仓单号 + 匹配依据标签）＋货物明细＋代收货款块＋收货与备注。 -->
+          <FaPageMain v-if="loadingItemPanel" class="m-0 min-w-0">
             <h2 class="qs-type-compact-title m-0">
-              {{ t(column.titleKey) }}
+              {{ t('slhReconciliation.detail.loadingItemTitle') }}
             </h2>
-            <div v-for="group in column.groups" :key="group.id" class="mt-3 flex flex-col gap-1">
-              <h3 class="qs-type-compact-label m-0">
-                {{ group.label }}
+            <div class="mt-3 p-3 rounded-lg bg-muted/40 flex flex-col gap-2 min-w-0">
+              <p class="m-0 min-w-0">
+                <span class="qs-type-compact-label text-muted-foreground">
+                  {{ loadingItemPanel.receiptReference.label }}
+                </span>
+                <span class="qs-type-data-emphasis mt-0.5 block break-all">
+                  {{ loadingItemPanel.receiptReference.value }}
+                </span>
+              </p>
+              <div class="flex flex-wrap gap-1.5">
+                <FaTag
+                  v-for="tag in loadingItemPanel.tags"
+                  :key="tag.text"
+                  variant="outline"
+                  class="qs-type-status-tag"
+                  :class="resolveStatusTagToneClass(tag.tone)"
+                >
+                  {{ tag.text }}
+                </FaTag>
+              </div>
+            </div>
+            <!-- 货物明细：与账单侧同名，两侧同名行便于逐项对照。 -->
+            <div class="mt-4 min-w-0">
+              <h3 class="qs-type-section-title m-0 flex gap-2 items-center">
+                <span class="rounded-full bg-primary h-4.5 w-1" aria-hidden="true" />
+                {{ loadingItemPanel.cargo.label }}
               </h3>
-              <dl class="m-0 flex flex-col gap-1">
-                <div v-for="field in group.fields" :key="field.id" class="flex gap-2 min-w-0 items-baseline">
-                  <dt class="qs-type-meta shrink-0">
+              <dl class="m-0 mt-3 flex flex-col gap-2">
+                <div
+                  v-for="field in loadingItemPanel.cargo.fields"
+                  :key="field.id"
+                  class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline"
+                >
+                  <dt class="qs-type-compact-label text-muted-foreground">
                     {{ field.label }}
                   </dt>
-                  <dd class="m-0 break-all">
-                    <!-- 金额行统一走 AmountDisplay（符号、千分位、币种精度）；缺失时回落占位符文本。 -->
-                    <AmountDisplay
-                      v-if="field.amount"
-                      :value="field.amount.value"
-                      :currency="field.amount.currency"
-                      :currencies="currencyCatalog.currencies.value"
-                      class="!text-left !justify-start"
+                  <dd class="m-0 min-w-0">
+                    <SlhReconciliationOverflowText
+                      v-if="field.truncate"
+                      :text="field.value"
                     />
-                    <!-- 人员行：姓名交给 QsPersonDisplay（头像位 + 单行截断 + 悬停完整名）。 -->
-                    <QsPersonDisplay
-                      v-else-if="field.person"
-                      :display-name="field.person"
-                      size="sm"
-                      class="max-w-full"
-                    />
+                    <span v-else class="qs-type-data">
+                      {{ field.value }}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
+            <!-- 代收货款块：对账焦点之一，单独成块并与核对焦点区同源同格式。 -->
+            <dl class="m-0 mt-3 p-3 border border-border rounded-lg flex flex-col">
+              <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline">
+                <dt class="qs-type-compact-label text-foreground">
+                  {{ loadingItemPanel.codAmount.label }}
+                </dt>
+                <dd class="m-0 text-right">
+                  <AmountDisplay
+                    v-if="loadingItemPanel.codAmount.amount"
+                    :value="loadingItemPanel.codAmount.amount.value"
+                    :currency="loadingItemPanel.codAmount.amount.currency"
+                    :currencies="currencyCatalog.currencies.value"
+                    :class="billAmountClass(loadingItemPanel.codAmount)"
+                  />
+                  <span v-else class="qs-type-data">{{ loadingItemPanel.codAmount.value }}</span>
+                </dd>
+              </div>
+            </dl>
+            <!-- 收货与备注：收货信息叠三行，备注走浅色标签，与账单侧同一形态。 -->
+            <div class="mt-4 min-w-0">
+              <h3 class="qs-type-section-title m-0 flex gap-2 items-center">
+                <span class="rounded-full bg-primary h-4.5 w-1" aria-hidden="true" />
+                {{ loadingItemPanel.recipient.label }}
+              </h3>
+              <dl class="m-0 mt-3 flex flex-col gap-2">
+                <div
+                  v-for="field in loadingItemPanel.recipient.fields"
+                  :key="field.id"
+                  class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline"
+                >
+                  <dt class="qs-type-compact-label text-muted-foreground">
+                    {{ field.label }}
+                  </dt>
+                  <dd class="m-0 min-w-0">
+                    <template v-if="field.lines && field.lines.length > 0">
+                      <span v-for="line in field.lines" :key="line" class="qs-type-data block break-all">
+                        {{ line }}
+                      </span>
+                    </template>
+                    <span
+                      v-else-if="field.chip"
+                      class="qs-type-data px-2 py-0.5 rounded-md bg-muted/50 inline-block break-all"
+                    >
+                      {{ field.value }}
+                    </span>
                     <span v-else class="qs-type-data">
                       {{ field.value }}
                     </span>

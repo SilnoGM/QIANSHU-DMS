@@ -90,13 +90,6 @@ export interface SlhReconciliationStatusTag {
   readonly tone: QsStatusTagTone
 }
 
-/** 面板内的分组：装柜明细行与账单明细行两块面板用它分节。 */
-export interface SlhReconciliationFieldGroup {
-  readonly id: string
-  readonly label: string
-  readonly fields: readonly SlhReconciliationLineField[]
-}
-
 /** 账单面板顶部的身份标签：文案自洽（如「第 31 行」），色调只决定浅色底。 */
 export interface SlhReconciliationIdentityTag {
   readonly text: string
@@ -136,6 +129,22 @@ export interface SlhReconciliationFeeBlock {
   readonly summary?: SlhReconciliationBillAmountRow
   /** 虚线之后的明细：人民币三项费用或台币杂费逐项。 */
   readonly details: readonly SlhReconciliationBillAmountRow[]
+}
+
+/** 装柜面板里的一段：段标题 + 字段行（货物明细 / 收货与备注）。 */
+export interface SlhReconciliationLoadingSection {
+  readonly label: string
+  readonly fields: readonly SlhReconciliationLineField[]
+}
+
+/** 装柜明细行面板：顶部信息块（入仓单号 + 匹配依据标签）＋货物明细＋代收货款块＋收货与备注。 */
+export interface SlhReconciliationLoadingItemPanel {
+  readonly receiptReference: SlhReconciliationLineField
+  readonly tags: readonly SlhReconciliationIdentityTag[]
+  readonly cargo: SlhReconciliationLoadingSection
+  /** 代收货款块（对账焦点之一）：无标题边框块，与销售/采购的金额块同款。 */
+  readonly codAmount: SlhReconciliationBillAmountRow
+  readonly recipient: SlhReconciliationLoadingSection
 }
 
 /** 账单明细行面板：顶部信息块（入仓单号 + 身份标签）＋三段内容（货物明细 / 费用结算 / 收货与备注）。 */
@@ -363,56 +372,80 @@ export function buildSlhReconciliationBillLinePanel(
 }
 
 /**
- * 装柜明细行信息：先给本批次的匹配依据（怎么找到这一行的），再给装柜行自己的可比字段。
- * 代收货款台币是对账焦点之一，放在装柜行资料段首；字段名沿用账单侧的叫法，
+ * 装柜明细行信息：顶部信息块（装柜侧入仓单号 + 匹配依据标签）＋货物明细＋代收货款块＋收货与备注。
+ *
+ * 匹配依据（匹配方式 / 匹配柜号 / 货件号）从字段段升为顶部标签：它们是「怎么找到这一行的」，
+ * 与单号同属这一行的身份；段标题与账单侧同名（货物明细 / 收货与备注），两侧同名行便于逐项对照。
+ * 代收货款台币是对账焦点之一，单独成块并与核对焦点区同源；字段名沿用账单侧的叫法，
  * 让同一页里两侧的同一概念用同一个词，只有与账单侧重名的那一项加「装柜」前缀区分。
  */
-export function buildSlhReconciliationLoadingItemFieldGroups(
+export function buildSlhReconciliationLoadingItemPanel(
   member: SlhReconciliationBatchMemberDto,
   translate: SlhReconciliationTranslate,
-): readonly SlhReconciliationFieldGroup[] {
-  const { text, amount, amountValue, volume, chargeableVolume, dimensions, weight } = createFieldFormatters(translate)
+): SlhReconciliationLoadingItemPanel {
+  const { missing, text, amount, amountValue, volume, chargeableVolume, dimensions, weight } = createFieldFormatters(translate)
   const item = member.matchedLoadingItem
-  return [
-    {
-      id: 'matchEvidence',
-      label: translate('slhReconciliation.detail.groupMatchEvidence'),
-      fields: [
-        {
-          id: 'matchSource',
-          label: translate('slhReconciliation.detail.matchSource'),
-          value: translate(`slhReconciliation.detail.matchSourceValue.${member.matchSource}`),
-        },
-        {
-          id: 'matchedContainer',
-          label: translate('slhReconciliation.detail.matchedContainer'),
-          value: `${member.matchedContainerBatchName} #${member.matchedLoadingItemLineNumber}`,
-        },
-        { id: 'shipmentNo', label: translate('slhReconciliation.detail.shipmentNo'), value: text(item.shipmentNo) },
-      ],
+  const recipientLines = [item.recipientName, item.recipientAddress, item.recipientPhone]
+    .map(value => text(value))
+    .filter(value => value !== missing)
+  return {
+    receiptReference: {
+      id: 'warehouseReceiptReference',
+      label: translate('slhBill.line.warehouseReceiptReference'),
+      value: text(item.warehouseReceiptReference),
     },
-    {
-      id: 'loadingItem',
-      label: translate('slhReconciliation.detail.groupLoadingItem'),
+    tags: [
+      {
+        text: `${translate('slhReconciliation.detail.matchSource')}：${translate(`slhReconciliation.detail.matchSourceValue.${member.matchSource}`)}`,
+        tone: 'info',
+      },
+      {
+        text: `${translate('slhReconciliation.detail.matchedContainer')}：${member.matchedContainerBatchName} #${member.matchedLoadingItemLineNumber}`,
+        tone: 'info',
+      },
+      // 货件号自解释，只给值；缺失时与其它字段一样走占位符。
+      { text: text(item.shipmentNo), tone: 'neutral' },
+    ],
+    cargo: {
+      // 与账单侧同名：两侧同一段内容用同一个词，便于左右逐项对照。
+      label: translate('slhReconciliation.detail.billCargoGroup'),
       fields: [
-        // 对账焦点：与顶部核对焦点区的「装柜代收货款」同源。
-        { id: 'codAmountTwd', label: translate('slhReconciliation.detail.loadingCodAmount'), value: amount(item.codAmountTwd), amount: amountValue(item.codAmountTwd, 'TWD') },
-        { id: 'warehouseReceiptReference', label: translate('slhBill.line.warehouseReceiptReference'), value: text(item.warehouseReceiptReference) },
-        { id: 'shippingMark', label: translate('slhBill.line.shippingMark'), value: text(item.oceanShippingMarkText) },
-        { id: 'goodsName', label: translate('slhBill.line.goodsName'), value: text(item.goodsName) },
-        { id: 'packageCount', label: translate('slhBill.line.packageCount'), value: `${item.packageCount} ${item.packageUnit ?? ''}`.trim() },
-        { id: 'weight', label: translate('slhBill.line.weight'), value: weight(item) },
+        { id: 'goodsName', label: translate('slhBill.line.goodsName'), value: text(item.goodsName), truncate: true },
+        { id: 'shippingMark', label: translate('slhBill.line.shippingMark'), value: text(item.oceanShippingMarkText), truncate: true },
+        {
+          id: 'packageAndWeight',
+          label: `${translate('slhBill.line.packageCount')} / ${translate('slhBill.line.weight')}`,
+          value: `${`${item.packageCount} ${item.packageUnit ?? ''}`.trim()} | ${weight(item)}`,
+        },
         { id: 'dimensions', label: translate('slhBill.line.dimensions'), value: dimensions(item) },
+        // 装柜侧三个材积口径都要看（系统计算 / 收费 / 账单自报），不合并成一行。
         { id: 'volumeCai', label: translate('slhBill.line.volumeCai'), value: volume(item.volumeCai) },
         { id: 'chargeableVolumeCai', label: translate('slhReconciliation.detail.chargeableVolume'), value: chargeableVolume(item.chargeableVolumeCai) },
         { id: 'reportedVolumeCai', label: translate('slhBill.line.reportedVolumeCai'), value: volume(item.reportedVolumeCai) },
-        { id: 'recipientName', label: translate('slhReconciliation.detail.recipientName'), value: text(item.recipientName) },
-        { id: 'recipientPhone', label: translate('slhReconciliation.detail.recipientPhone'), value: text(item.recipientPhone) },
-        { id: 'recipientAddress', label: translate('slhReconciliation.detail.recipientAddress'), value: text(item.recipientAddress) },
-        { id: 'remark', label: translate('slhBill.line.remark'), value: text(item.remark) },
       ],
     },
-  ]
+    codAmount: {
+      // 与核对焦点区的「装柜代收货款」同一字段、同一组件、同一格式。
+      id: 'codAmountTwd',
+      label: translate('slhReconciliation.detail.loadingCodAmount'),
+      value: amount(item.codAmountTwd) ?? missing,
+      amount: amountValue(item.codAmountTwd, 'TWD'),
+      emphasis: 'total',
+    },
+    recipient: {
+      label: translate('slhReconciliation.detail.groupRecipient'),
+      fields: [
+        {
+          id: 'recipientInfo',
+          label: translate('slhBill.line.recipientInfo'),
+          // 名称 / 地址 / 电话叠三行，与账单侧的收货信息同一形态。
+          value: recipientLines.length === 0 ? missing : recipientLines.join(' / '),
+          lines: recipientLines,
+        },
+        { id: 'remark', label: translate('slhBill.line.remark'), value: text(item.remark), chip: true },
+      ],
+    },
+  }
 }
 
 /** 采购订单三维状态色调：与 purchase-order-desc.logic 的既有口径一致（取消红、待审黄、其余绿）。 */

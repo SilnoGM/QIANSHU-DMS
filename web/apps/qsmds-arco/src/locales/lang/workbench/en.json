@@ -337,8 +337,6 @@
       "purchaseCreator": "Buyer",
       "loadingCodAmount": "Loading row COD (TWD)",
       "billCodAmount": "Bill line COD (TWD)",
-      "groupMatchEvidence": "Match evidence",
-      "groupLoadingItem": "Loading row data",
       "groupRecipient": "Recipient and remarks",
       "billCargoGroup": "Cargo details",
       "billFeeGroup": "Fee settlement",
