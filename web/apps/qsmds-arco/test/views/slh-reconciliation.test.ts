@@ -776,6 +776,22 @@ test('销售与采购区块：余额为零时不下发标记，已结清不染�
   assert.equal(sections[0]?.amountFields[4]?.value, 'TWD 0.00')
 })
 
+test('销售与采购区块：完整地址去掉开头的国家前缀「中国台湾」', () => {
+  const addressOf = (fullAddress: string) => (
+    buildSlhReconciliationOrderSections(memberFixture({
+      salesOrder: salesOrderFixture({ customerFullAddress: fullAddress }),
+    }), echoKey)[0]?.fields[1]?.value
+  )
+
+  // 地址快照是「国家+省+市+详情」拼的：国家名在这一页多余，去掉后正文里的同名文字不动。
+  assert.equal(addressOf('中国台湾台湾新竹縣啊啊啊啊'), '台湾新竹縣啊啊啊啊')
+  assert.equal(addressOf('中國台灣台灣新竹縣啊啊啊啊'), '台灣新竹縣啊啊啊啊')
+  assert.equal(addressOf('中国台湾台南市安平區中正一路100号'), '台南市安平區中正一路100号')
+  // 其它国家/地区的前缀不碰，正文里出现的「中国台湾」也不碰。
+  assert.equal(addressOf('中国北京市北京市测试路1号'), '中国北京市北京市测试路1号')
+  assert.equal(addressOf('新竹縣中国台湾路1号'), '新竹縣中国台湾路1号')
+})
+
 test('销售与采购区块：客户姓名与电话合并成一行，缺一不出现孤立点号', () => {
   const customerOf = (overrides: Partial<SlhReconciliationMatchedSalesOrderDto> | null) => (
     buildSlhReconciliationOrderSections(memberFixture({

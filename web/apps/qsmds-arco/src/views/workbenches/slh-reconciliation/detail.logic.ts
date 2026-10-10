@@ -300,6 +300,22 @@ const SALES_STATUS_TONES = {
   payment: { UNPAID: 'danger', PARTIALLY_PAID: 'warning', PAID: 'success' },
 } as const satisfies Record<string, Readonly<Record<string, QsStatusTagTone>>>
 
+/** 地址开头的国家前缀：地址快照按「国家+省+市+详情」拼，顺联航的地址国家名恒为「中国台湾」。 */
+const ADDRESS_COUNTRY_PREFIX = /^(?:中国台湾|中國台灣)\s*/u
+
+/**
+ * 去掉完整地址开头的国家前缀「中国台湾」：这一页是内部对账，重复的国家名只占宽度；
+ * 只剥离落在开头的一处，地址正文里的同名文字原样保留。
+ */
+function withoutAddressCountryPrefix(address: string | null | undefined): string | null {
+  const value = address?.trim()
+  if (!value) {
+    return null
+  }
+  const stripped = value.replace(ADDRESS_COUNTRY_PREFIX, '')
+  return stripped === '' ? null : stripped
+}
+
 /** 金额字符串是否为「零」：决定余额行要不要染红（0 视为已结清，染红会被读成异常）。 */
 function isZeroAmount(value: string | null | undefined): boolean {
   return value === null || value === undefined || /^0*(?:\.0*)?$/u.test(value.trim())
@@ -401,7 +417,7 @@ export function buildSlhReconciliationOrderSections(
       states: states('slhReconciliation.detail.salesOrderStatus', 'salesOrderDrawer', SALES_STATUS_TONES, sales),
       fields: [
         merged('customer', 'salesOrderDesc.sections.customer', [sales?.customerName, sales?.customerPhone]),
-        { id: 'customerFullAddress', label: translate('salesOrderDesc.fields.fullAddress'), value: text(sales?.customerFullAddress), truncate: true },
+        { id: 'customerFullAddress', label: translate('salesOrderDesc.fields.fullAddress'), value: text(withoutAddressCountryPrefix(sales?.customerFullAddress)), truncate: true },
         // 出单人是人员信息：交给 QsPersonDisplay（头像位 + 名称截断），文案仍取销售域键。
         { id: 'issuer', label: translate('salesOrderDesc.fields.issuer'), ...person(sales?.issuerDisplayName) },
       ],
