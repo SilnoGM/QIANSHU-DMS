@@ -2124,7 +2124,8 @@
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-detail.logic.ts",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
-      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/records-modal.vue"
     ]
   },
   {

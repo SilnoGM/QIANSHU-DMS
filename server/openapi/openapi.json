@@ -69688,6 +69688,256 @@
             }
           ]
         }
+      },
+      "get": {
+        "operationId": "slh_reconciliation_settlements_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "batchLineId",
+            "required": true,
+            "in": "query",
+            "description": "批次成员行 id（详情里 members[].id）。",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlhReconciliationSettlementListDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "slh-reconciliation-batches"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": false,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SLH_BILL_NOT_FOUND",
+                "SLH_RECON_BATCH_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
       }
     }
   },
@@ -86207,6 +86457,150 @@
           "paymentFeeRate",
           "createdByDisplayName",
           "createdAt"
+        ]
+      },
+      "SlhReconciliationSettlementRecordDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUPERSEDED"
+            ],
+            "description": "ACTIVE 为当前有效，SUPERSEDED 为已被后续结果取代。"
+          },
+          "rateSource": {
+            "type": "string",
+            "enum": [
+              "EMBEDDED",
+              "SYSTEM"
+            ]
+          },
+          "foreignUnitsPerCny": {
+            "type": "string"
+          },
+          "paymentFeeRate": {
+            "type": "string"
+          },
+          "codAmountTwd": {
+            "type": "string",
+            "nullable": true
+          },
+          "codAmountCurrency": {
+            "type": "string"
+          },
+          "ntdSurchargeAmountTwd": {
+            "type": "string",
+            "nullable": true
+          },
+          "ntdSurchargeCurrency": {
+            "type": "string"
+          },
+          "payableAmountCny": {
+            "type": "string",
+            "nullable": true
+          },
+          "payableCurrency": {
+            "type": "string"
+          },
+          "settlementAmountCny": {
+            "type": "string",
+            "nullable": true
+          },
+          "settlementCurrency": {
+            "type": "string"
+          },
+          "salesAmount": {
+            "type": "string",
+            "nullable": true
+          },
+          "salesCurrency": {
+            "type": "string"
+          },
+          "paymentFeeAmountCny": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentFeeCurrency": {
+            "type": "string"
+          },
+          "slhBillNo": {
+            "type": "string"
+          },
+          "salesOrderNo": {
+            "type": "string"
+          },
+          "purchaseOrderNo": {
+            "type": "string"
+          },
+          "containerBatchNo": {
+            "type": "string"
+          },
+          "shipmentNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "warehouseReceiptReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "shippingMarkText": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdByDisplayName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "rateSource",
+          "foreignUnitsPerCny",
+          "paymentFeeRate",
+          "codAmountTwd",
+          "codAmountCurrency",
+          "ntdSurchargeAmountTwd",
+          "ntdSurchargeCurrency",
+          "payableAmountCny",
+          "payableCurrency",
+          "settlementAmountCny",
+          "settlementCurrency",
+          "salesAmount",
+          "salesCurrency",
+          "paymentFeeAmountCny",
+          "paymentFeeCurrency",
+          "slhBillNo",
+          "salesOrderNo",
+          "purchaseOrderNo",
+          "containerBatchNo",
+          "shipmentNo",
+          "warehouseReceiptReference",
+          "shippingMarkText",
+          "createdByDisplayName",
+          "createdAt"
+        ]
+      },
+      "SlhReconciliationSettlementListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhReconciliationSettlementRecordDto"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       }
     }

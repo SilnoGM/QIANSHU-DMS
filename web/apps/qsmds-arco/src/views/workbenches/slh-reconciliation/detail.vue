@@ -25,6 +25,7 @@ import {
   SLH_RECONCILIATION_LINE_TONES,
 } from './detail.logic'
 import SlhReconciliationOverflowText from './overflow-text.vue'
+import SlhReconciliationRecordsModal from './records-modal.vue'
 import SlhReconciliationSettleModal from './settle-modal.vue'
 import {
   resolveSlhReconciliationBatchLabelKey,
@@ -214,6 +215,15 @@ async function openSettleModal(): Promise<void> {
 /** 「本行核对有误」：接口随本分支重构删除，先只给反馈，接线时替换成真实动作。 */
 function showReconcilePending(labelKey: string): void {
   toast.info(t('slhReconciliation.detail.reconcilePending', { action: t(labelKey) }))
+}
+
+/** 「查看核对记录」：只读弹窗自己取数，页面只负责开合与当前选中行。 */
+const recordsOpen = ref(false)
+function openRecordsModal(): void {
+  if (selectedMember.value === null) {
+    return
+  }
+  recordsOpen.value = true
 }
 
 async function complete(): Promise<void> {
@@ -708,6 +718,15 @@ onBeforeUnmount(() => {
     </template>
     <FaFixedBar position="bottom" class="border-t border-border">
       <div class="flex flex-col gap-3 w-full md:flex-row md:items-center md:justify-end">
+        <!-- 只读的查历史放在最左：与右侧两个写动作在视觉上分开。 -->
+        <FaButton
+          variant="outline"
+          class="w-full md:mr-auto sm:w-auto"
+          :disabled="selectedMember === null"
+          @click="openRecordsModal"
+        >
+          {{ t('slhReconciliation.detail.viewRecords') }}
+        </FaButton>
         <FaButton
           variant="destructive"
           class="w-full sm:w-auto"
@@ -754,6 +773,12 @@ onBeforeUnmount(() => {
       :system-rate="settleSystemRate"
       :bill-rate="settleBillRate"
       @settled="load"
+    />
+
+    <SlhReconciliationRecordsModal
+      v-model="recordsOpen"
+      :batch-id="batchId"
+      :member="selectedMember"
     />
   </div>
 </template>

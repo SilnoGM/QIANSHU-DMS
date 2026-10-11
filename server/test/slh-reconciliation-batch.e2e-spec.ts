@@ -758,6 +758,49 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       await expect(h.prisma.$executeRaw`DELETE FROM slh_reconciliation_settlements`).rejects.toThrow(/immutable/u)
     })
 
+    it('核对记录列表：按成员行倒序给出完整留痕，跨批次成员与未知批次都 404', async () => {
+      const batchId = await pendingBatch()
+      const member = await memberByCod(batchId, '129000.00')
+      const detail = (await browser.get(`${BASE}/${batchId}`).expect(200)).body as BatchDetail
+      // 夹具里另一行不涉及代收货款：它没有确认过，用来验空列表。
+      const untouched = detail.members.find(entry => entry.codAmountTwd === null)
+      if (untouched === undefined) {
+        throw new Error('fixture member without COD not found')
+      }
+
+      const page = (await browser.get(`${BASE}/${batchId}/settlements`).query({ batchLineId: member.id }).expect(200))
+        .body as { items: Array<Record<string, unknown>> }
+      // 该行已确认过两次（SYSTEM 与 EMBEDDED）：最新的在最前，且只有一条有效。
+      expect(page.items).toHaveLength(2)
+      expect(page.items.map(item => item.status)).toEqual(['ACTIVE', 'SUPERSEDED'])
+      expect(page.items.map(item => item.rateSource)).toEqual(['EMBEDDED', 'SYSTEM'])
+      expect(page.items[0]).toMatchObject({
+        foreignUnitsPerCny: '4.800000000000',
+        paymentFeeRate: '0.007000000000',
+        settlementAmountCny: '21070.00',
+        settlementCurrency: 'CNY',
+        codAmountTwd: '129000.00',
+        codAmountCurrency: 'TWD',
+        salesAmount: '10.0000',
+        salesCurrency: 'TWD',
+        slhBillNo: pending.slhBillNo,
+        containerBatchNo: '0102-01柜',
+        shippingMarkText: 'L-010229',
+        warehouseReceiptReference: 'WG-0102-0092',
+      })
+      expect(typeof page.items[0]?.createdByDisplayName).toBe('string')
+      expect(typeof page.items[0]?.createdAt).toBe('string')
+
+      // 还没确认过的行返回空列表；不属于该批次的成员行与未知批次都按 404 拒绝。
+      const empty = (await browser.get(`${BASE}/${batchId}/settlements`).query({ batchLineId: untouched.id }).expect(200))
+        .body as { items: unknown[] }
+      expect(empty.items).toEqual([])
+      expect(errorCode(await browser.get(`${BASE}/${batchId}/settlements`).query({ batchLineId: unknownId }).expect(404))).toBe('SLH_RECON_BATCH_NOT_FOUND')
+      expect(errorCode(await browser.get(`${BASE}/${unknownId}/settlements`).query({ batchLineId: member.id }).expect(404))).toBe('SLH_RECON_BATCH_NOT_FOUND')
+      expect((await outsider.get(`${BASE}/${batchId}/settlements`).query({ batchLineId: member.id })).status).toBe(403)
+      expect(errorCode(await browser.get(`${BASE}/${batchId}/settlements`).query({ batchLineId: 'not-a-uuid' }).expect(422))).toBe('VALIDATION_FAILED')
+    })
+
     it('权限、批次归属与完成状态都在写库前把关', async () => {
       const batchId = await pendingBatch()
       const member = await memberByCod(batchId, '129000.00')

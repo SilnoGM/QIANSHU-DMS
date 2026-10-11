@@ -13,6 +13,7 @@ import {
   SlhReconciliationBillOptionPageDto, SlhReconciliationBillOptionQueryDto,
   SlhReconciliationReconcilableCountsDto, SlhReconciliationReconcilableCountsRequestDto,
   SlhReconciliationSettlementCreateDto, SlhReconciliationSettlementDto,
+  SlhReconciliationSettlementListDto, SlhReconciliationSettlementListQueryDto,
 } from './slh-reconciliation-batch.dto'
 import { SlhReconciliationBatchQueryService } from './slh-reconciliation-batch-query.service'
 import { SlhReconciliationBatchService } from './slh-reconciliation-batch.service'
@@ -91,5 +92,11 @@ export class SlhReconciliationBatchController {
     @Req() request: object,
   ) {
     return this.commands.settle(context(request), params.id, input, key)
+  }
+
+  @Get(':id/settlements') @RequirePermissions('slh-bills:reconcile')
+  @ApiContractResponse({ status: 200, type: SlhReconciliationSettlementListDto }) @contract('slh_reconciliation_settlements_list', false, [notFound])
+  settlements(@Param() params: SlhReconciliationBatchIdDto, @Query() query: SlhReconciliationSettlementListQueryDto) {
+    return this.queries.settlements(params.id, query)
   }
 }

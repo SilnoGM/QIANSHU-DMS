@@ -395,7 +395,8 @@
       },
       "matchedContainer": "匹配柜号",
       "reconciledAt": "核对时间",
-      "reconciledBy": "核对人"
+      "reconciledBy": "核对人",
+      "viewRecords": "查看核对记录"
     },
     "settle": {
       "title": "对账信息",
@@ -445,6 +446,18 @@
       "errorStateChanged": "资料已变化或正在处理，请刷新后重试",
       "errorForbidden": "权限不足",
       "errorUnknown": "结算失败，请稍后重试"
+    },
+    "records": {
+      "title": "核对记录",
+      "description": "本行确认结算的历史留痕，最新在最前；记录只读，不可修改或删除。",
+      "loading": "正在读取核对记录…",
+      "loadFailed": "核对记录读取失败，请稍后重试",
+      "empty": "本行还没有核对记录，确认结算后会在这里留下记录。",
+      "checkedAt": "核对时间",
+      "checkedBy": "核对人",
+      "rateSource": "汇率来源",
+      "statusActive": "有效",
+      "statusSuperseded": "已被取代"
     }
   }
 }

@@ -386,7 +386,8 @@
       },
       "matchedContainer": "Matched container",
       "reconciledAt": "Reconciled at",
-      "reconciledBy": "Reconciled by"
+      "reconciledBy": "Reconciled by",
+      "viewRecords": "View records"
     },
     "settle": {
       "title": "Reconciliation info",
@@ -436,6 +437,18 @@
       "errorStateChanged": "Data changed or is being processed. Refresh and try again.",
       "errorForbidden": "Permission denied.",
       "errorUnknown": "Settlement failed. Try again later."
+    },
+    "records": {
+      "title": "Reconciliation records",
+      "description": "History of settlement confirmations for this row, newest first. Records are read-only.",
+      "loading": "Loading records…",
+      "loadFailed": "Could not load the records. Try again later.",
+      "empty": "No records for this row yet. Confirming a settlement adds one here.",
+      "checkedAt": "Checked at",
+      "checkedBy": "Checked by",
+      "rateSource": "Rate source",
+      "statusActive": "Active",
+      "statusSuperseded": "Superseded"
     }
   }
 }

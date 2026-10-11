@@ -12,6 +12,7 @@ import type {
   SlhReconciliationReconcilableCountsRequestDto,
   SlhReconciliationSettlementCreateDto,
   SlhReconciliationSettlementDto,
+  SlhReconciliationSettlementListDto,
 } from '../generated/types.gen'
 import api from '../index'
 
@@ -37,6 +38,8 @@ export function createSlhReconciliationBatchesApi(client: AxiosInstance) {
     complete: (id: string, signal: AbortSignal) => client.post<SlhReconciliationBatchDetailDto>(`${path(id)}/complete`, {}, write(signal)),
     // 确认结算：同样携带幂等键，双击或网络重试只会恢复同一条结算记录。
     settle: (id: string, data: SlhReconciliationSettlementCreateDto, key: string, signal: AbortSignal) => client.post<SlhReconciliationSettlementDto>(`${path(id)}/settlements`, data, { ...write(signal), headers: { 'Idempotency-Key': key } }),
+    // 核对记录：按批次成员行取历史（同一行最多一条有效），最新的在最前。
+    settlements: (id: string, batchLineId: string, signal: AbortSignal) => client.get<SlhReconciliationSettlementListDto>(`${path(id)}/settlements`, { ...read(signal), params: { batchLineId } }),
   }
 }
 

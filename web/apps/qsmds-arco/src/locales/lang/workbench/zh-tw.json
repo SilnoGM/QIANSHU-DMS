@@ -386,7 +386,8 @@
       },
       "matchedContainer": "比對櫃號",
       "reconciledAt": "核對時間",
-      "reconciledBy": "核對人"
+      "reconciledBy": "核對人",
+      "viewRecords": "查看核對記錄"
     },
     "settle": {
       "title": "對帳資訊",
@@ -436,6 +437,18 @@
       "errorStateChanged": "資料已變化或正在處理，請刷新後重試",
       "errorForbidden": "權限不足",
       "errorUnknown": "結算失敗，請稍後重試"
+    },
+    "records": {
+      "title": "核對記錄",
+      "description": "本行確認結算的歷史留痕，最新在最前；記錄只讀，不可修改或刪除。",
+      "loading": "正在讀取核對記錄…",
+      "loadFailed": "核對記錄讀取失敗，請稍後重試",
+      "empty": "本行還沒有核對記錄，確認結算後會在這裡留下記錄。",
+      "checkedAt": "核對時間",
+      "checkedBy": "核對人",
+      "rateSource": "匯率來源",
+      "statusActive": "有效",
+      "statusSuperseded": "已被取代"
     }
   }
 }

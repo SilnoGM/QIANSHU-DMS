@@ -4,6 +4,7 @@ import type {
   SlhReconciliationBillOptionDto,
   SlhReconciliationMatchedPurchaseOrderDto,
   SlhReconciliationMatchedSalesOrderDto,
+  SlhReconciliationSettlementRecordDto,
 } from '../../src/api/generated/types.gen'
 import type { CurrencyDescriptor } from '../../src/components/base/currency'
 import assert from 'node:assert/strict'
@@ -37,6 +38,11 @@ import {
   SLH_RECONCILIATION_BATCH_DEFAULT_FILTER,
   SLH_RECONCILIATION_BATCH_FILTERS,
 } from '../../src/views/workbenches/slh-reconciliation/list.logic'
+import {
+  buildSlhReconciliationRecordCard,
+  buildSlhReconciliationRecordCards,
+  resolveRecordAmountTone,
+} from '../../src/views/workbenches/slh-reconciliation/records-modal.logic'
 import {
   buildSettleRateCards,
   buildSettleSummary,
@@ -714,6 +720,93 @@ test('金流费率在两个依赖域里保持一致：后端常量与前端展�
 
   assert.notEqual(match, null)
   assert.equal(Number(match?.[1]), FULL_FLOW_FEE_RATE)
+})
+
+test('核对记录弹窗：卡片按「状态 / 汇率费率 / 六个金额 / 来源」摊平，金额按符号与恒红着色', () => {
+  const record: SlhReconciliationSettlementRecordDto = {
+    id: 'settlement-1',
+    status: 'ACTIVE',
+    rateSource: 'EMBEDDED',
+    foreignUnitsPerCny: '4.800000000000',
+    paymentFeeRate: '0.007000000000',
+    codAmountTwd: null,
+    codAmountCurrency: 'TWD',
+    ntdSurchargeAmountTwd: '2000.00',
+    ntdSurchargeCurrency: 'TWD',
+    payableAmountCny: '0.00',
+    payableCurrency: 'CNY',
+    settlementAmountCny: '-384.62',
+    settlementCurrency: 'CNY',
+    salesAmount: '500.0000',
+    salesCurrency: 'TWD',
+    paymentFeeAmountCny: '0.73',
+    paymentFeeCurrency: 'CNY',
+    slhBillNo: 'CBILL/202609-01',
+    salesOrderNo: 'SO-1',
+    purchaseOrderNo: 'PO-1',
+    containerBatchNo: '1211-01柜',
+    shipmentNo: null,
+    warehouseReceiptReference: 'WG-0078-0072',
+    shippingMarkText: 'J-121125',
+    createdByDisplayName: '张三',
+    createdAt: '2026-10-11T07:05:24.555Z',
+  }
+  const card = buildSlhReconciliationRecordCard(record)
+
+  assert.equal(card.statusKey, 'slhReconciliation.records.statusActive')
+  assert.equal(card.rateSourceKey, 'slhReconciliation.settle.billRate')
+  assert.equal(card.rate, '4.800000000000')
+  assert.equal(card.createdByDisplayName, '张三')
+  // 金额顺序与结算弹窗一致，币种透传（本行不涉及的代收为 null，由 AmountDisplay 出占位符）。
+  assert.deepEqual(card.amounts.map(amount => [amount.id, amount.value, amount.currencyCode]), [
+    ['codAmountTwd', null, 'TWD'],
+    ['ntdSurchargeAmountTwd', '2000.00', 'TWD'],
+    ['payableAmountCny', '0.00', 'CNY'],
+    ['settlementAmountCny', '-384.62', 'CNY'],
+    ['salesAmount', '500.0000', 'TWD'],
+    ['paymentFeeAmountCny', '0.73', 'CNY'],
+  ])
+  // 结算金额按符号、金流服务费恒红、其余沿用默认前景色。
+  assert.equal(resolveRecordAmountTone(card.amounts[3]!), 'danger')
+  assert.equal(resolveRecordAmountTone(card.amounts[5]!), 'danger')
+  assert.equal(resolveRecordAmountTone(card.amounts[1]!), 'neutral')
+  assert.equal(resolveRecordAmountTone({ ...card.amounts[3]!, value: '11874.62' }), 'success')
+  assert.equal(resolveRecordAmountTone({ ...card.amounts[3]!, value: '0.00' }), 'neutral')
+  // 来源行缺值一律占位符，行内不再出现空串。
+  assert.deepEqual(card.references, [
+    'CBILL/202609-01',
+    'J-121125 · WG-0078-0072',
+    '1211-01柜 · —',
+    'SO-1 · PO-1',
+  ])
+
+  // 列表保持服务端顺序（最新在前），状态与标签色调一一对应。
+  const superseded = buildSlhReconciliationRecordCards([record, { ...record, id: 'settlement-2', status: 'SUPERSEDED' }])
+  assert.deepEqual(superseded.map(item => [item.id, item.statusKey, item.statusClass.includes('emerald')]), [
+    ['settlement-1', 'slhReconciliation.records.statusActive', true],
+    ['settlement-2', 'slhReconciliation.records.statusSuperseded', false],
+  ])
+})
+
+test('核对记录弹窗：底栏只读入口与弹窗接线，卡片只走 AmountDisplay 不写死展示逻辑', async () => {
+  const page = await readFile(new URL('../../src/views/workbenches/slh-reconciliation/detail.vue', import.meta.url), 'utf8')
+  const modal = await readFile(new URL('../../src/views/workbenches/slh-reconciliation/records-modal.vue', import.meta.url), 'utf8')
+
+  // 底栏第三个按钮：只读、无选中行时禁用、点击打开记录弹窗；弹窗挂在页面上。
+  assert.match(page, /t\('slhReconciliation\.detail\.viewRecords'\)/u)
+  assert.match(page, /variant="outline"[\s\S]{0,200}?:disabled="selectedMember === null"[\s\S]{0,120}?@click="openRecordsModal"/u)
+  assert.match(page, /<SlhReconciliationRecordsModal[\s\S]{0,200}?:batch-id="batchId"[\s\S]{0,120}?:member="selectedMember"/u)
+  // 弹窗自己取数：打开时按成员行拉记录，切行/关窗都会打断在途请求。
+  assert.match(modal, /slhReconciliationBatchesApi\.settlements\(props\.batchId, member\.id, current\.signal\)/u)
+  assert.match(modal, /watch\(\(\) => props\.modelValue/u)
+  // 三种状态互斥：加载中 / 读取失败 / 空态；记录只读，没有编辑或删除入口。
+  assert.match(modal, /v-if="loading"/u)
+  assert.match(modal, /v-else-if="loadError !== ''"/u)
+  assert.match(modal, /v-else-if="cards\.length === 0"/u)
+  assert.doesNotMatch(modal, /@click="(?!openRecordsModal)/u)
+  // 金额走 AmountDisplay（记录有币种），时间走 DateTimeDisplay。
+  assert.match(modal, /import AmountDisplay from '@\/components\/base\/AmountDisplay\/index\.vue'/u)
+  assert.match(modal, /import DateTimeDisplay from '@\/components\/base\/DateTimeDisplay\/index\.vue'/u)
 })
 
 test('对账信息弹窗：结算结果舍入成负零时不带符号也不染红', () => {

@@ -20,10 +20,13 @@ import type {
   SlhBillLineUnmatchedReasonCountDto, SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchDetailDto,
   SlhReconciliationBatchListQueryDto, SlhReconciliationBatchPageDto, SlhReconciliationBillOptionDto,
   SlhReconciliationBillOptionPageDto, SlhReconciliationBillOptionQueryDto, SlhReconciliationReconcilableCountsDto,
-  SlhReconciliationReconcilableCountsRequestDto,
+  SlhReconciliationReconcilableCountsRequestDto, SlhReconciliationSettlementListDto,
+  SlhReconciliationSettlementListQueryDto, SlhReconciliationSettlementRecordDto,
 } from './slh-reconciliation-batch.dto'
 
 const DEFAULT_PAGE_SIZE = 20
+/** 核对记录一次性返回的条数上限：单行确认次数很少，超出只可能是异常数据。 */
+const SETTLEMENT_RECORD_LIMIT = 50
 
 /** 供应商字典码：与采购域和商品域用的是同一个码（该字面量在各消费方各自声明）。 */
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
@@ -136,6 +139,74 @@ export class SlhReconciliationBatchQueryService {
       slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_FOUND', '对账批次不存在', 404)
     }
     return serializeSlhReconciliationBatchDetail(row, await this.resolveMemberSuppliers(row))
+  }
+
+  /**
+   * 核对记录：按批次成员行取历史，最新的在最前。
+   *
+   * 只认「该批次下的这个成员行」——与「同一成员行最多一条有效」的部分唯一索引同范围；
+   * 记录量随确认次数增长，因此带一个防御性上限（单行确认次数很少，不做分页）。
+   */
+  async settlements(id: string, query: SlhReconciliationSettlementListQueryDto): Promise<SlhReconciliationSettlementListDto> {
+    const batchId = slhReconciliationBatchUuid(id)
+    const batch = await this.prisma.slhReconciliationBatch.findUnique({
+      where: { id: batchId },
+      select: {
+        members: { where: { id: slhReconciliationBatchUuid(query.batchLineId) }, select: { id: true } },
+      },
+    })
+    if (batch === null || batch.members.length === 0) {
+      slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_FOUND', '批次成员行不存在', 404)
+    }
+    const batchLineId = batch.members[0].id
+    const rows = await this.prisma.slhReconciliationSettlement.findMany({
+      where: { batchId, batchLineId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: SETTLEMENT_RECORD_LIMIT,
+      select: {
+        id: true, status: true, rateSource: true, foreignUnitsPerCny: true, paymentFeeRate: true,
+        codAmountTwd: true, codAmountCurrency: true,
+        ntdSurchargeAmountTwd: true, ntdSurchargeCurrency: true,
+        payableAmountCny: true, payableCurrency: true,
+        settlementAmountCny: true, settlementCurrency: true,
+        salesAmount: true, salesCurrency: true,
+        paymentFeeAmountCny: true, paymentFeeCurrency: true,
+        slhBillNo: true, salesOrderNo: true, purchaseOrderNo: true, containerBatchNo: true,
+        shipmentNo: true, warehouseReceiptReference: true, shippingMarkText: true,
+        createdAt: true,
+        createdBy: { select: { displayName: true } },
+      },
+    })
+    return {
+      items: rows.map(row => ({
+        id: row.id,
+        status: row.status as SlhReconciliationSettlementRecordDto['status'],
+        rateSource: row.rateSource as SlhReconciliationSettlementRecordDto['rateSource'],
+        foreignUnitsPerCny: row.foreignUnitsPerCny.toFixed(12),
+        paymentFeeRate: row.paymentFeeRate.toFixed(12),
+        codAmountTwd: row.codAmountTwd?.toFixed(2) ?? null,
+        codAmountCurrency: row.codAmountCurrency,
+        ntdSurchargeAmountTwd: row.ntdSurchargeAmountTwd?.toFixed(2) ?? null,
+        ntdSurchargeCurrency: row.ntdSurchargeCurrency,
+        payableAmountCny: row.payableAmountCny?.toFixed(2) ?? null,
+        payableCurrency: row.payableCurrency,
+        settlementAmountCny: row.settlementAmountCny?.toFixed(2) ?? null,
+        settlementCurrency: row.settlementCurrency,
+        salesAmount: row.salesAmount?.toFixed(4) ?? null,
+        salesCurrency: row.salesCurrency,
+        paymentFeeAmountCny: row.paymentFeeAmountCny?.toFixed(2) ?? null,
+        paymentFeeCurrency: row.paymentFeeCurrency,
+        slhBillNo: row.slhBillNo,
+        salesOrderNo: row.salesOrderNo,
+        purchaseOrderNo: row.purchaseOrderNo,
+        containerBatchNo: row.containerBatchNo,
+        shipmentNo: row.shipmentNo,
+        warehouseReceiptReference: row.warehouseReceiptReference,
+        shippingMarkText: row.shippingMarkText,
+        createdByDisplayName: row.createdBy.displayName,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    }
   }
 
   /**

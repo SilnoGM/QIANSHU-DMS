@@ -304,3 +304,46 @@ export class SlhReconciliationSettlementDto {
   @ApiProperty({ type: 'string' }) createdByDisplayName!: string
   @ApiProperty({ type: 'string' }) createdAt!: string
 }
+
+/** 核对记录查询：按批次成员行取历史（同一行最多一条有效）。 */
+export class SlhReconciliationSettlementListQueryDto {
+  @ApiProperty({ format: 'uuid', description: '批次成员行 id（详情里 members[].id）。' }) @IsUUID('4') batchLineId!: string
+}
+
+/**
+ * 核对记录：一条确认结算的完整留痕，供「查看核对记录」按卡片展示。
+ * 金额与币种保持库里的成对关系；快照字段原样带出，便于不回表核对来源。
+ */
+export class SlhReconciliationSettlementRecordDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ enum: SlhReconciliationSettlementStatusDto, description: 'ACTIVE 为当前有效，SUPERSEDED 为已被后续结果取代。' }) status!: SlhReconciliationSettlementStatusDto
+  @ApiProperty({ enum: SlhReconciliationSettlementRateSourceDto }) rateSource!: SlhReconciliationSettlementRateSourceDto
+  @ApiProperty({ type: 'string' }) foreignUnitsPerCny!: string
+  @ApiProperty({ type: 'string' }) paymentFeeRate!: string
+  @ApiProperty({ type: 'string', nullable: true }) codAmountTwd!: string | null
+  @ApiProperty({ type: 'string' }) codAmountCurrency!: string
+  @ApiProperty({ type: 'string', nullable: true }) ntdSurchargeAmountTwd!: string | null
+  @ApiProperty({ type: 'string' }) ntdSurchargeCurrency!: string
+  @ApiProperty({ type: 'string', nullable: true }) payableAmountCny!: string | null
+  @ApiProperty({ type: 'string' }) payableCurrency!: string
+  @ApiProperty({ type: 'string', nullable: true }) settlementAmountCny!: string | null
+  @ApiProperty({ type: 'string' }) settlementCurrency!: string
+  @ApiProperty({ type: 'string', nullable: true }) salesAmount!: string | null
+  @ApiProperty({ type: 'string' }) salesCurrency!: string
+  @ApiProperty({ type: 'string', nullable: true }) paymentFeeAmountCny!: string | null
+  @ApiProperty({ type: 'string' }) paymentFeeCurrency!: string
+  @ApiProperty({ type: 'string' }) slhBillNo!: string
+  @ApiProperty({ type: 'string' }) salesOrderNo!: string
+  @ApiProperty({ type: 'string' }) purchaseOrderNo!: string
+  @ApiProperty({ type: 'string' }) containerBatchNo!: string
+  @ApiProperty({ type: 'string', nullable: true }) shipmentNo!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) warehouseReceiptReference!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) shippingMarkText!: string | null
+  @ApiProperty({ type: 'string' }) createdByDisplayName!: string
+  @ApiProperty({ type: 'string' }) createdAt!: string
+}
+
+/** 核对记录列表：按时间倒序，最新一条在最前。 */
+export class SlhReconciliationSettlementListDto {
+  @ApiProperty({ type: [SlhReconciliationSettlementRecordDto] }) items!: SlhReconciliationSettlementRecordDto[]
+}
