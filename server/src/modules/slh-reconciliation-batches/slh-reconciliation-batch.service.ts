@@ -5,6 +5,15 @@ import { applyTransactionTimeouts } from '../../infrastructure/database/transact
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { AccessControlService } from '../access-control/access-control.service'
 import { AuditService } from '../audit/audit.service'
+import {
+  SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER,
+  SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER,
+  SLH_BILL_FINANCE_SETTLEMENT_SOURCE,
+  SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE,
+  SLH_BILL_SETTLEMENT_POSTING_TYPE,
+} from '../fund-accounts/application/fund-bill-settlement'
+import { FundPostingService } from '../fund-accounts/application/fund-posting.contract'
+import type { FundBusinessTransactionContext, PostBusinessEventInput } from '../fund-accounts/application/fund-posting.contract'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { slhBillUuid } from '../slh-bills/slh-bill.normalizer'
 import { mapSlhReconciliationBatchError, slhReconciliationBatchFailure } from './slh-reconciliation-batch.errors'
@@ -30,8 +39,28 @@ const BATCH_CONSUMER = 'SLH_RECON_BATCH.CREATE'
 const CREATE_PAYLOAD_FORMAT = 'slh-reconciliation-batch.create.v1'
 /** 结算语义指纹的格式标记：口径（含金额与汇率）变化时必须递增。 */
 const SETTLEMENT_PAYLOAD_FORMAT = 'slh-reconciliation-settlement.create.v1'
+/** 完成批次入账的摘要：结算与金流费用是两个独立动作、两条资金流水。 */
+const COMPLETION_SETTLEMENT_SUMMARY = '顺联航账单对账结算'
+const COMPLETION_FEE_SUMMARY = '顺联航账单全流程金流费用'
 
 export interface SlhReconciliationBatchCommandContext { actorUserId: string, requestId: string }
+
+/**
+ * 完成批次逐行入账所需的最小事实：成员行 + 该行当前有效（ACTIVE）的结算记录。
+ * 同一成员行的历史记录已被取代，不作为入账依据。
+ */
+interface CompletedBatchMemberRecord {
+  readonly id: string
+  readonly reconciledAt: Date | null
+  readonly settlements: readonly {
+    readonly id: string
+    readonly salesOrderId: string
+    readonly settlementAmountCny: Prisma.Decimal | null
+    readonly paymentFeeAmountCny: Prisma.Decimal | null
+    readonly rateSource: string
+    readonly foreignUnitsPerCny: Prisma.Decimal
+  }[]
+}
 
 const hash = (input: unknown) => createHash('sha256').update(JSON.stringify(input)).digest('hex')
 /** 幂等键与指纹都以 SHA-256 落库，两者都必须是 32 字节。 */
@@ -45,6 +74,7 @@ export class SlhReconciliationBatchService {
     private readonly numbering: NumberingGeneratorService,
     private readonly access: AccessControlService,
     private readonly audit: AuditService,
+    private readonly funds: FundPostingService,
   ) {}
 
   /** 与账单写路径同一口径：事务内复核用户状态与权限，前端条件不可信。 */
@@ -162,10 +192,11 @@ export class SlhReconciliationBatchService {
   }
 
   /**
-   * 完成批次对账：结束本次对账，解除账单占用。
+   * 完成批次对账：结束本次对账，解除账单占用，并把每行的核对结果入账。
    *
    * 允许账单仍有未核对的行：剩余行留给下一次对账重新发起。结束是单次动作，
-   * 已结束的批次不能再次结束。
+   * 已结束的批次不能再次结束。入账与完成同一事务：任一笔失败（账户未配置、规则不可用、
+   * 金额非法）整体回滚，批次保持进行中，不留下「已完成但没有资金事实」的批次。
    */
   async complete(context: SlhReconciliationBatchCommandContext, id: string): Promise<SlhReconciliationBatchDetailDto> {
     const batchId = slhReconciliationBatchUuid(id)
@@ -178,7 +209,18 @@ export class SlhReconciliationBatchService {
           select: {
             id: true, batchNo: true, completedAt: true,
             bill: { select: { slhBillNo: true } },
-            members: { select: { reconciledAt: true } },
+            members: {
+              select: {
+                id: true, reconciledAt: true,
+                settlements: {
+                  where: { status: 'ACTIVE' },
+                  select: {
+                    id: true, salesOrderId: true, settlementAmountCny: true, paymentFeeAmountCny: true,
+                    rateSource: true, foreignUnitsPerCny: true,
+                  },
+                },
+              },
+            },
           },
         })
         if (!batch) {
@@ -187,6 +229,7 @@ export class SlhReconciliationBatchService {
         if (batch.completedAt !== null) {
           return slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_IN_PROGRESS', '该批次已经结束', 409)
         }
+        const postingBatchIds = await this.postCompletedMembers(tx, context, batchId, batch.batchNo, batch.bill.slhBillNo, batch.members)
         await tx.slhReconciliationBatch.update({
           where: { id: batchId },
           data: {
@@ -202,12 +245,94 @@ export class SlhReconciliationBatchService {
             batchNo: batch.batchNo, slhBillNo: batch.bill.slhBillNo,
             memberCount: batch.members.length,
             reconciledMemberCount: batch.members.filter(member => member.reconciledAt !== null).length,
+            // 审计 metadata 只收标量：单笔入账直接记批次 id，多笔只记数量。
+            // 逐笔关联在资金侧可回查（资金批次的 business_id = 结算记录 id）。
+            fundPostingCount: postingBatchIds.length,
+            fundPostingBatchId: postingBatchIds.length === 1 ? postingBatchIds[0] ?? null : null,
           },
         })
       }, { timeout: 60_000 })
       return await this.queries.detail(batchId)
     }
     catch (error) { return mapSlhReconciliationBatchError(error) }
+  }
+
+  /**
+   * 逐行入账：每行的依据是它最新的有效核对（ACTIVE 结算记录），结算金额与金流费用
+   * 各成一条独立资金流水，不做同出单人合并；资金归属人取销售订单出单人（不是当前操作人）。
+   * 结算金额为空或为 0、金流费用为空或为 0 时跳过该笔；两者都跳过时这一行不产生资金流水，
+   * 因此「没有任何可入账内容」的批次完成仍然成功、只是零流水。
+   */
+  private async postCompletedMembers(
+    tx: Prisma.TransactionClient,
+    context: SlhReconciliationBatchCommandContext,
+    batchId: string,
+    batchNo: string,
+    slhBillNo: string,
+    members: readonly CompletedBatchMemberRecord[],
+  ): Promise<string[]> {
+    const reconciled = members.flatMap(member => member.settlements.map(settlement => ({ memberId: member.id, settlement })))
+    if (reconciled.length === 0) return []
+    const orders = await tx.salesOrder.findMany({
+      where: { id: { in: [...new Set(reconciled.map(entry => entry.settlement.salesOrderId))] } },
+      select: { id: true, issuerUserId: true },
+    })
+    const issuerByOrderId = new Map(orders.map(order => [order.id, order.issuerUserId]))
+    const metadata = (memberId: string, settlementId: string, rateSource: string, foreignUnitsPerCny: string) => ({
+      slhReconciliationBatchId: batchId,
+      slhReconciliationBatchNo: batchNo,
+      slhReconciliationBatchLineId: memberId,
+      slhReconciliationSettlementId: settlementId,
+      slhBillNo,
+      rateSource,
+      foreignUnitsPerCny,
+    })
+    const entries: Array<{ context: FundBusinessTransactionContext, input: PostBusinessEventInput }> = []
+    for (const { memberId, settlement } of reconciled) {
+      const issuerUserId = issuerByOrderId.get(settlement.salesOrderId)
+      if (issuerUserId === undefined) {
+        return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_SOURCE_MISSING', '这一行的销售订单已不可用，暂时无法入账', 409)
+      }
+      const rateSource = settlement.rateSource
+      const foreignUnitsPerCny = settlement.foreignUnitsPerCny.toFixed(12)
+      const settlementAmount = settlement.settlementAmountCny
+      if (settlementAmount !== null && !settlementAmount.isZero()) {
+        entries.push({
+          context: { ...context, sourceCode: SLH_BILL_FINANCE_SETTLEMENT_SOURCE, consumerCode: SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER },
+          input: {
+            postingTypeCode: SLH_BILL_SETTLEMENT_POSTING_TYPE, userId: issuerUserId,
+            amount: settlementAmount.toFixed(2), businessId: settlement.id, businessNo: batchNo,
+            summary: COMPLETION_SETTLEMENT_SUMMARY,
+            metadata: metadata(memberId, settlement.id, rateSource, foreignUnitsPerCny),
+            idempotencyKey: `${settlement.id}:RECONCILE`,
+          },
+        })
+      }
+      const feeAmount = settlement.paymentFeeAmountCny
+      if (feeAmount !== null && feeAmount.gt(0)) {
+        entries.push({
+          context: { ...context, sourceCode: SLH_BILL_FINANCE_SETTLEMENT_SOURCE, consumerCode: SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER },
+          input: {
+            postingTypeCode: SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE, userId: issuerUserId,
+            amount: feeAmount.toFixed(2), businessId: settlement.id, businessNo: batchNo,
+            summary: COMPLETION_FEE_SUMMARY,
+            metadata: metadata(memberId, settlement.id, rateSource, foreignUnitsPerCny),
+            idempotencyKey: `${settlement.id}:FEE`,
+          },
+        })
+      }
+    }
+    if (entries.length === 0) return []
+    // 跨行批量入账先取齐账户集合并统一排序加锁：逐笔锁用户/公司组合可能形成反序等待。
+    await this.funds.lockBusinessEventAccountsInTransaction(tx, entries)
+    const postingBatchIds: string[] = []
+    for (const entry of entries) {
+      // 预览与入账共用当前事务：规则版本、比例、账户金额任一并发变化都会以并发冲突失败并整体回滚。
+      const preview = await this.funds.previewBusinessEventInTransaction(tx, entry.context, entry.input)
+      const posting = await this.funds.postBusinessEventInTransaction(tx, entry.context, entry.input, preview)
+      postingBatchIds.push(posting.batchId)
+    }
+    return postingBatchIds
   }
 
   /**
