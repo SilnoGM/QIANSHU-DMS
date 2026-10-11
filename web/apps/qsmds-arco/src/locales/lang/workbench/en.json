@@ -387,6 +387,31 @@
       "matchedContainer": "Matched container",
       "reconciledAt": "Reconciled at",
       "reconciledBy": "Reconciled by"
+    },
+    "settle": {
+      "title": "Reconciliation info",
+      "description": "Choose the rate for this row. It only affects settlement and payment-flow amounts, not the row status.",
+      "stepRate": "Choose rate",
+      "stepSummary": "Settlement",
+      "stepIndicator": "Step {current} of {total}: {title}",
+      "systemRate": "Current system rate",
+      "systemRateSource": "Rate table · in effect now",
+      "billRate": "Bill embedded rate",
+      "billRateSource": "Embedded in bill · frozen on import",
+      "rateHint": "1 CNY = {rate} TWD",
+      "rateMissing": "No rate recorded",
+      "rateSelect": "Click to select",
+      "rateSelected": "Selected",
+      "rateUnavailable": "Unavailable",
+      "rateMissingNote": "Neither rate is available, so this row cannot be settled yet.",
+      "selectedRate": "Selected rate",
+      "settlementTitle": "Bill settlement",
+      "paymentFeeTitle": "Payment-flow fee",
+      "previous": "Previous",
+      "next": "Next",
+      "confirm": "OK",
+      "cancel": "Cancel",
+      "doneToast": "Settlement {settlement} · Fee {fee}"
     }
   }
 }

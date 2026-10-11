@@ -387,6 +387,31 @@
       "matchedContainer": "比對櫃號",
       "reconciledAt": "核對時間",
       "reconciledBy": "核對人"
+    },
+    "settle": {
+      "title": "對帳資訊",
+      "description": "為本行選擇結算使用的匯率；只影響結算金額與金流費的計算，不改變本行的核對狀態。",
+      "stepRate": "選擇匯率",
+      "stepSummary": "結算資訊",
+      "stepIndicator": "第 {current} 步，共 {total} 步：{title}",
+      "systemRate": "系統當前匯率",
+      "systemRateSource": "匯率表 · 當前生效",
+      "billRate": "帳單內建匯率",
+      "billRateSource": "帳單內嵌 · 入庫時凍結",
+      "rateHint": "1 人民幣 = {rate} 新台幣",
+      "rateMissing": "未記錄匯率",
+      "rateSelect": "點擊選擇",
+      "rateSelected": "已選中",
+      "rateUnavailable": "當前不可用",
+      "rateMissingNote": "兩個匯率都取不到，暫時無法結算本行。",
+      "selectedRate": "當前已選匯率",
+      "settlementTitle": "帳單金額結算",
+      "paymentFeeTitle": "全流程金流費",
+      "previous": "上一步",
+      "next": "下一步",
+      "confirm": "確定",
+      "cancel": "取消",
+      "doneToast": "結算金額 {settlement} · 金流費 {fee}"
     }
   }
 }

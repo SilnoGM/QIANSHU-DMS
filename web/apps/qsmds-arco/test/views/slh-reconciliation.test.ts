@@ -37,6 +37,11 @@ import {
   SLH_RECONCILIATION_BATCH_FILTERS,
 } from '../../src/views/workbenches/slh-reconciliation/list.logic'
 import {
+  buildSettleRateCards,
+  buildSettleSummary,
+  FULL_FLOW_FEE_RATE,
+} from '../../src/views/workbenches/slh-reconciliation/settle-modal.logic'
+import {
   resolveSlhBillLineUnmatchedReasonLabelKey,
   resolveSlhReconciliationBatchLabelKey,
   resolveSlhReconciliationBatchTone,
@@ -344,7 +349,12 @@ test('批次详情页：头部只给批次与账单标识、底部承接完成�
   assert.match(bar, /t\('slhReconciliation\.detail\.reconcileWrong'\)/u)
   assert.match(bar, /t\('slhReconciliation\.detail\.reconcileCorrect'\)/u)
   assert.match(bar, /showReconcilePending\('slhReconciliation\.detail\.reconcileWrong'\)/u)
-  assert.match(bar, /showReconcilePending\('slhReconciliation\.detail\.reconcileCorrect'\)/u)
+  // 核对正确打开两步的「对账信息」弹窗（核对有误仍是占位提示）。
+  assert.match(bar, /:disabled="selectedMember === null"[\s\S]{0,120}?@click="openSettleModal"/u)
+  assert.match(page, /<SlhReconciliationSettleModal/u)
+  // 账单内置汇率取账单详情里嵌套的 rate 对象。
+  assert.match(page, /slhBillsApi\.get\(billId/u)
+  assert.match(page, /response\.data\.rate\?\.embeddedForeignUnitsPerCny \?\? null/u)
   // 两个动作共用一个轻提示函数：文案模板带动作名参数。
   assert.match(page, /t\('slhReconciliation\.detail\.reconcilePending', \{ action: t\(labelKey\) \}\)/u)
   assert.doesNotMatch(bar, /completeButton/u)
@@ -529,6 +539,69 @@ function memberFixture(overrides: Partial<SlhReconciliationBatchMemberDto> = {})
     ...overrides,
   }
 }
+
+test('对账信息弹窗：结算金额与金流费按所选汇率计算，计算式带上代入后的数值', () => {
+  const member = memberFixture({
+    salesOrder: salesOrderFixture({ currencyCode: 'TWD', agreedTotalAmount: '500.0000' }),
+    codAmountTwd: '129000.00',
+    ntdSurchargeAmountTwd: '6000.00',
+    payableAmountCny: '4555.00',
+  })
+  const summary = buildSettleSummary(member, '5.2', [])
+
+  // （129000 − 6000）÷ 5.2 − 4555 = 19098.8461… → 19098.85（人民币两位小数 HALF_UP）。
+  assert.deepEqual(summary.settlementAmount, { value: '19098.85', currencyCode: 'CNY' })
+  // 500 ÷ 5.2 × 0.07 = 6.7307… → 6.73。
+  assert.deepEqual(summary.paymentFeeAmount, { value: '6.73', currencyCode: 'CNY' })
+  assert.equal(FULL_FLOW_FEE_RATE, 0.07)
+  // 计算式把代入值一并给出，直接可核对。
+  assert.equal(summary.settlementFormula, '（129000.00 TWD − 6000.00 TWD）÷ 5.2 − 4555.00 CNY = 19098.85 CNY')
+  assert.equal(summary.paymentFeeFormula, '500.0000 TWD ÷ 5.2 × 0.07 = 6.73 CNY')
+
+  // 换汇率：两个金额都跟着走。
+  // （129000 − 6000）÷ 4.8 − 4555 = 21070.00
+  const embedded = buildSettleSummary(member, '4.8', [])
+  assert.equal(embedded.settlementAmount.value, '21070.00')
+  assert.equal(embedded.paymentFeeAmount.value, '7.29')
+
+  // 汇率为空或输入缺失时金额留空，计算式仍可读（缺失项显示占位符）。
+  const noRate = buildSettleSummary(member, null, [])
+  assert.equal(noRate.settlementAmount.value, null)
+  assert.equal(noRate.paymentFeeAmount.value, null)
+  assert.equal(noRate.settlementFormula, '（129000.00 TWD − 6000.00 TWD）÷ — − 4555.00 CNY = —')
+  const missingCod = buildSettleSummary(memberFixture({ salesOrder: salesOrderFixture() }), '5.2', [])
+  assert.equal(missingCod.settlementAmount.value, null)
+})
+
+test('对账信息弹窗：两张汇率卡按来源与可用性给出，汇率去尾零展示', () => {
+  assert.equal(buildSettleRateCards(null, '4.800000000000')[1]?.rate, '4.8')
+  assert.equal(buildSettleRateCards('5.000000000000', null)[0]?.rate, '5')
+  const both = buildSettleRateCards('5.2', '4.8')
+  assert.deepEqual(both.map(card => [card.source, card.rate, card.disabled]), [
+    ['SYSTEM', '5.2', false],
+    ['EMBEDDED', '4.8', false],
+  ])
+  assert.equal(buildSettleRateCards('5.2', null)[1]?.disabled, true)
+  assert.deepEqual(buildSettleRateCards(null, null).map(card => card.disabled), [true, true])
+})
+
+test('对账信息弹窗：两步结构、确定只弹金额且不落库', async () => {
+  const source = await readFile(new URL('../../src/views/workbenches/slh-reconciliation/settle-modal.vue', import.meta.url), 'utf8')
+
+  // 两步：选汇率 → 结算信息；第二步给出三块（汇率 / 账单金额结算 / 全流程金流费）。
+  assert.match(source, /stepRate[\s\S]{0,160}?stepSummary/u)
+  assert.match(source, /t\('slhReconciliation\.settle\.selectedRate'\)/u)
+  assert.match(source, /t\('slhReconciliation\.settle\.settlementTitle'\)/u)
+  assert.match(source, /t\('slhReconciliation\.settle\.paymentFeeTitle'\)/u)
+  // 确定＝轻提示两个金额，不调接口、不落库。
+  assert.match(source, /t\('slhReconciliation\.settle\.doneToast', \{/u)
+  assert.doesNotMatch(source, /slhReconciliationBatchesApi|slhBillsApi/u)
+  // 打开时重置：回到第一步、清掉上一行的选择。
+  assert.match(source, /selectedRate\.value = null/u)
+  assert.match(source, /step\.value = 0/u)
+  // 金额必须显式导入 AmountDisplay，否则会被当成原生标签渲染。
+  assert.match(source, /import AmountDisplay from '@\/components\/base\/AmountDisplay\/index\.vue'/u)
+})
 
 test('切换器项：value 用明细行 id、label 用唛头、两态交给 statusTones 映射', () => {
   const items = buildSlhReconciliationLineItems([

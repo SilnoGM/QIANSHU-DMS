@@ -396,6 +396,31 @@
       "matchedContainer": "匹配柜号",
       "reconciledAt": "核对时间",
       "reconciledBy": "核对人"
+    },
+    "settle": {
+      "title": "对账信息",
+      "description": "为本行选择结算使用的汇率；只影响结算金额与金流费的计算，不改变本行的核对状态。",
+      "stepRate": "选择汇率",
+      "stepSummary": "结算信息",
+      "stepIndicator": "第 {current} 步，共 {total} 步：{title}",
+      "systemRate": "系统当前汇率",
+      "systemRateSource": "汇率表 · 当前生效",
+      "billRate": "账单内置汇率",
+      "billRateSource": "账单内嵌 · 入库时冻结",
+      "rateHint": "1 人民币 = {rate} 新台币",
+      "rateMissing": "未记录汇率",
+      "rateSelect": "点击选择",
+      "rateSelected": "已选中",
+      "rateUnavailable": "当前不可用",
+      "rateMissingNote": "两个汇率都取不到，暂时无法结算本行。",
+      "selectedRate": "当前已选汇率",
+      "settlementTitle": "账单金额结算",
+      "paymentFeeTitle": "全流程金流费",
+      "previous": "上一步",
+      "next": "下一步",
+      "confirm": "确定",
+      "cancel": "取消",
+      "doneToast": "结算金额 {settlement} · 金流费 {fee}"
     }
   }
 }

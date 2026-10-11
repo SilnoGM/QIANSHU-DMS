@@ -4,6 +4,8 @@ import type {
   SlhReconciliationLineField,
 } from './detail.logic'
 import type { SlhReconciliationBatchDetailDto } from '@/api/generated/types.gen'
+import exchangeRatesApi from '@/api/modules/exchange-rates'
+import slhBillsApi from '@/api/modules/slh-bills'
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
@@ -23,6 +25,7 @@ import {
   SLH_RECONCILIATION_LINE_TONES,
 } from './detail.logic'
 import SlhReconciliationOverflowText from './overflow-text.vue'
+import SlhReconciliationSettleModal from './settle-modal.vue'
 import {
   resolveSlhReconciliationBatchLabelKey,
   resolveSlhReconciliationBatchTone,
@@ -48,6 +51,10 @@ const loading = ref(false)
 const loadError = ref('')
 const completeOpen = ref(false)
 const completing = ref(false)
+/** 「对账信息」弹窗：开关与打开时取到的两个汇率（系统当前 / 账单内置）。 */
+const settleOpen = ref(false)
+const settleSystemRate = ref<string | null>(null)
+const settleBillRate = ref<string | null>(null)
 /** 完成失败的错误提示比默认提示停得久一点：失败原因常常要读几行，别还没看清就消失。 */
 const ACTION_ERROR_TOAST_DURATION = 8_000
 /** 选中行由页面持有：切换器只发 update:modelValue，行数据与后续核对动作都跟着它走。 */
@@ -158,7 +165,53 @@ function requestComplete(): void {
   completeOpen.value = true
 }
 
-/** 逐行核对的两个动作：接口随本分支重构删除，先只给反馈，接线时替换成真实动作。 */
+const SYSTEM_RATE_CURRENCY_CODE = 'TWD'
+
+/** 当前系统汇率（顺联航账单的台币口径）：取不到（无权限/失败）返回 null，由调用方决定怎么退化。 */
+async function resolveSystemForeignUnitsPerCny(): Promise<string | null> {
+  try {
+    const response = await exchangeRatesApi.list(new AbortController().signal)
+    return response.data.items
+      .find(item => item.currency.code === SYSTEM_RATE_CURRENCY_CODE)
+      ?.currentRate
+      ?.foreignUnitsPerCny ?? null
+  }
+  catch {
+    return null
+  }
+}
+
+/** 账单内置汇率：批次详情不带，打开弹窗时按账单 id 取一次账单详情。 */
+async function resolveBillForeignUnitsPerCny(): Promise<string | null> {
+  const billId = batch.value?.bill.id
+  if (billId === undefined) {
+    return null
+  }
+  try {
+    const response = await slhBillsApi.get(billId, new AbortController().signal)
+    // 账单详情把汇率收在 rate 里：内嵌汇率可能为 null（账单公式没自带汇率）。
+    return response.data.rate?.embeddedForeignUnitsPerCny ?? null
+  }
+  catch {
+    return null
+  }
+}
+
+/** 「本行核对正确」：打开两步的「对账信息」弹窗（只算汇率与两个金额，不落库）。 */
+async function openSettleModal(): Promise<void> {
+  if (selectedMember.value === null) {
+    return
+  }
+  const [systemRate, billRate] = await Promise.all([
+    resolveSystemForeignUnitsPerCny(),
+    resolveBillForeignUnitsPerCny(),
+  ])
+  settleSystemRate.value = systemRate
+  settleBillRate.value = billRate
+  settleOpen.value = true
+}
+
+/** 「本行核对有误」：接口随本分支重构删除，先只给反馈，接线时替换成真实动作。 */
 function showReconcilePending(labelKey: string): void {
   toast.info(t('slhReconciliation.detail.reconcilePending', { action: t(labelKey) }))
 }
@@ -665,8 +718,8 @@ onBeforeUnmount(() => {
         </FaButton>
         <FaButton
           class="w-full sm:w-auto"
-          :disabled="completing"
-          @click="showReconcilePending('slhReconciliation.detail.reconcileCorrect')"
+          :disabled="selectedMember === null"
+          @click="openSettleModal"
         >
           {{ t('slhReconciliation.detail.reconcileCorrect') }}
         </FaButton>
@@ -693,6 +746,14 @@ onBeforeUnmount(() => {
         </div>
       </template>
     </QsGenericModal>
+
+    <SlhReconciliationSettleModal
+      v-model="settleOpen"
+      :batch="batch"
+      :member="selectedMember"
+      :system-rate="settleSystemRate"
+      :bill-rate="settleBillRate"
+    />
   </div>
 </template>
 
