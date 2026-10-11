@@ -415,6 +415,7 @@
       "rateMissingNote": "两个汇率都取不到，暂时无法结算本行。",
       "selectedRate": "当前已选汇率",
       "settlementTitle": "账单金额结算",
+      "missingAmountAsZero": "本行不涉及的金额已按 0 代入计算。",
       "paymentFeeTitle": "全流程金流费",
       "previous": "上一步",
       "next": "下一步",

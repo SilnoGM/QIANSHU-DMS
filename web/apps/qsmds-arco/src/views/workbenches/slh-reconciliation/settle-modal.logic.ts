@@ -78,13 +78,18 @@ export interface SlhReconciliationSettleAmount {
  * 结算弹窗第二步的三块内容：
  * ①当前已选汇率；②账单金额结算＝（代收货款台币 − NTD杂费）÷ 汇率 − 合计应付人民币；
  * ③全流程金流费＝销售金额 ÷ 汇率 × 0.07。
- * 计算式里带上代入后的数值（与 AmountDisplay 同一处格式化），便于直接核对；
- * 任一输入缺失时金额留空，计算式只给到缺失的那一项。
+ * 计算式里带上代入后的数值（与 AmountDisplay 同一处格式化），便于直接核对。
+ *
+ * 金额口径：三个金额列的 NULL 表示「本行不涉及此项」（与账单行的存储约定一致），
+ * 结算时按 0 代入并给出 `settlementAssumesZero` 供界面说明——负数结果就是
+ * 「无代收但有杂费」这类行的真实结算方向；整行三列都不涉及或汇率不可用时仍留空。
  */
 export interface SlhReconciliationSettleSummary {
   readonly rate: string | null
   readonly settlementAmount: SlhReconciliationSettleAmount
   readonly settlementFormula: string
+  /** 结算式把「本行不涉及」的空金额按 0 代入过；界面据此给出说明行。 */
+  readonly settlementAssumesZero: boolean
   readonly paymentFeeAmount: SlhReconciliationSettleAmount
   readonly paymentFeeFormula: string
 }
@@ -103,6 +108,20 @@ function showAmount(
   return formatCurrencyAmount(value, currencyCode, currencies)
 }
 
+/**
+ * 结算式的操作数展示：按 0 代入时必须显示 0，否则公式会出现「— ÷ 5.2 = −384.62」这种
+ * 读不出算法的式子；没有代入时（整行不涉及、汇率不可用）保留占位符。
+ */
+function showOperand(
+  value: string | null,
+  currencyCode: string,
+  currencies: readonly CurrencyDescriptor[],
+  assumesZero: boolean,
+): string {
+  const operand = assumesZero && (value === null || value.trim() === '') ? '0.00' : value
+  return showAmount(operand, currencyCode, currencies)
+}
+
 export function buildSettleSummary(
   member: SlhReconciliationBatchMemberDto,
   rate: string | null,
@@ -116,16 +135,22 @@ export function buildSettleSummary(
   const rateUnits = rate === null || new Decimal(rate).isZero() ? null : rate
   const rateText = rate ?? EMPTY_AMOUNT_TEXT
 
-  const settlementReady = cod !== null && ntdSurcharge !== null && payable !== null && rateUnits !== null
+  // 空金额按 0 代入；但整行三个金额都不涉及时不造「伪 0」结果，仍留空占位。
+  const hasSettlementInput = cod !== null || ntdSurcharge !== null || payable !== null
+  const settlementReady = rateUnits !== null && hasSettlementInput
+  const settlementAssumesZero = settlementReady
+    && (cod === null || ntdSurcharge === null || payable === null)
+  let settlementValue: string | null = null
+  if (rateUnits !== null && hasSettlementInput) {
+    settlementValue = new Decimal(cod ?? 0)
+      .minus(ntdSurcharge ?? 0)
+      .div(rateUnits)
+      .minus(payable ?? 0)
+      .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+      .toFixed(2)
+  }
   const settlementAmount: SlhReconciliationSettleAmount = {
-    value: settlementReady
-      ? new Decimal(cod)
-          .minus(ntdSurcharge)
-          .div(rateUnits)
-          .minus(payable)
-          .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
-          .toFixed(2)
-      : null,
+    value: settlementValue,
     currencyCode: SETTLEMENT_CURRENCY,
   }
 
@@ -144,7 +169,8 @@ export function buildSettleSummary(
   return {
     rate,
     settlementAmount,
-    settlementFormula: `（${showAmount(cod, 'TWD', currencies)} − ${showAmount(ntdSurcharge, 'TWD', currencies)}）÷ ${rateText} − ${showAmount(payable, SETTLEMENT_CURRENCY, currencies)} = ${showAmount(settlementAmount.value, SETTLEMENT_CURRENCY, currencies)}`,
+    settlementFormula: `（${showOperand(cod, 'TWD', currencies, settlementAssumesZero)} − ${showOperand(ntdSurcharge, 'TWD', currencies, settlementAssumesZero)}）÷ ${rateText} − ${showOperand(payable, SETTLEMENT_CURRENCY, currencies, settlementAssumesZero)} = ${showAmount(settlementAmount.value, SETTLEMENT_CURRENCY, currencies)}`,
+    settlementAssumesZero,
     paymentFeeAmount,
     paymentFeeFormula: `${showAmount(salesAmount, orderCurrency, currencies)} ÷ ${rateText} × ${FULL_FLOW_FEE_RATE} = ${showAmount(paymentFeeAmount.value, SETTLEMENT_CURRENCY, currencies)}`,
   }

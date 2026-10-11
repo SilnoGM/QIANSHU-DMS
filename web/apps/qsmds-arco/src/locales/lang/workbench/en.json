@@ -406,6 +406,7 @@
       "rateMissingNote": "Neither rate is available, so this row cannot be settled yet.",
       "selectedRate": "Selected rate",
       "settlementTitle": "Bill settlement",
+      "missingAmountAsZero": "Amounts this row does not involve are counted as 0.",
       "paymentFeeTitle": "Payment-flow fee",
       "previous": "Previous",
       "next": "Next",

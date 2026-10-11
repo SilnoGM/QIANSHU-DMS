@@ -564,13 +564,61 @@ test('对账信息弹窗：结算金额与金流费按所选汇率计算，计�
   assert.equal(embedded.settlementAmount.value, '21070.00')
   assert.equal(embedded.paymentFeeAmount.value, '0.73')
 
-  // 汇率为空或输入缺失时金额留空，计算式仍可读（缺失项显示占位符）。
+  // 汇率取不到时金额留空，计算式仍可读（缺失项显示占位符），且不触发「按 0 代入」。
   const noRate = buildSettleSummary(member, null, [])
   assert.equal(noRate.settlementAmount.value, null)
   assert.equal(noRate.paymentFeeAmount.value, null)
   assert.equal(noRate.settlementFormula, '（129000.00 TWD − 6000.00 TWD）÷ — − 4555.00 CNY = —')
-  const missingCod = buildSettleSummary(memberFixture({ salesOrder: salesOrderFixture() }), '5.2', [])
-  assert.equal(missingCod.settlementAmount.value, null)
+  assert.equal(noRate.settlementAssumesZero, false)
+  assert.equal(summary.settlementAssumesZero, false)
+})
+
+test('对账信息弹窗：本行不涉及的金额按 0 代入结算，整行都无输入时仍留空', () => {
+  // 截图行 J-121125 的形状：不涉及代收货款、有 2000 台币杂费、应付 0 → （0 − 2000）÷ 5.2 = −384.62。
+  const missingCod = buildSettleSummary(memberFixture({
+    salesOrder: salesOrderFixture(),
+    codAmountTwd: null,
+    ntdSurchargeAmountTwd: '2000.00',
+    payableAmountCny: '0.00',
+  }), '5.2', [])
+  assert.deepEqual(missingCod.settlementAmount, { value: '-384.62', currencyCode: 'CNY' })
+  assert.equal(missingCod.settlementAssumesZero, true)
+  // 公式里代入的是实际参与计算的 0，而不是「本行不涉及」的占位符，读的人才能验算。
+  assert.equal(missingCod.settlementFormula, '（0.00 TWD − 2000.00 TWD）÷ 5.2 − 0.00 CNY = -384.62 CNY')
+
+  // L-010233 的形状：有代收、不涉及台币杂费 → （80000 − 0）÷ 5.2 − 3510 = 11874.62。
+  const missingNtd = buildSettleSummary(memberFixture({
+    salesOrder: salesOrderFixture(),
+    codAmountTwd: '80000.00',
+    ntdSurchargeAmountTwd: null,
+    payableAmountCny: '3510.00',
+  }), '5.2', [])
+  assert.equal(missingNtd.settlementAmount.value, '11874.62')
+  assert.equal(missingNtd.settlementAssumesZero, true)
+
+  // 三个金额都不涉及：不给「伪 0」结果，仍留空占位。
+  const allMissing = buildSettleSummary(memberFixture({
+    salesOrder: salesOrderFixture(),
+    codAmountTwd: null,
+    ntdSurchargeAmountTwd: null,
+    payableAmountCny: null,
+  }), '5.2', [])
+  assert.equal(allMissing.settlementAmount.value, null)
+  assert.equal(allMissing.settlementAssumesZero, false)
+  assert.equal(allMissing.settlementFormula, '（— − —）÷ 5.2 − — = —')
+})
+
+test('对账信息弹窗：结算结果舍入成负零时不带符号', () => {
+  const negativeZero = buildSettleSummary(memberFixture({
+    salesOrder: salesOrderFixture(),
+    codAmountTwd: '0.00',
+    ntdSurchargeAmountTwd: '0.01',
+    payableAmountCny: '0.00',
+  }), '5.2', [])
+
+  // （0 − 0.01）÷ 5.2 = −0.0019… → 舍入后是负零，输出按 0.00 处理。
+  assert.equal(negativeZero.settlementAmount.value, '0.00')
+  assert.equal(negativeZero.settlementFormula, '（0.00 TWD − 0.01 TWD）÷ 5.2 − 0.00 CNY = 0.00 CNY')
 })
 
 test('对账信息弹窗：两张汇率卡按来源与可用性给出，汇率去尾零展示', () => {
@@ -593,6 +641,8 @@ test('对账信息弹窗：两步结构、确定只弹金额且不落库', async
   assert.match(source, /t\('slhReconciliation\.settle\.selectedRate'\)/u)
   assert.match(source, /t\('slhReconciliation\.settle\.settlementTitle'\)/u)
   assert.match(source, /t\('slhReconciliation\.settle\.paymentFeeTitle'\)/u)
+  // 「按 0 代入」的说明只在真的代入了才出现，且与逻辑层的标记同源。
+  assert.match(source, /v-if="summary\?\.settlementAssumesZero"[\s\S]{0,160}?t\('slhReconciliation\.settle\.missingAmountAsZero'\)/u)
   // 确定＝轻提示两个金额，不调接口、不落库。
   assert.match(source, /t\('slhReconciliation\.settle\.doneToast', \{/u)
   assert.doesNotMatch(source, /slhReconciliationBatchesApi|slhBillsApi/u)

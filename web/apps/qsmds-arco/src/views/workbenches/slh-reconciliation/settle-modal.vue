@@ -228,6 +228,10 @@ const canNext = computed(() => selectedRate.value !== null)
         <p class="text-sm qs-type-data m-0 mt-3 break-all">
           {{ summary?.settlementFormula }}
         </p>
+        <!-- 「本行不涉及」的金额按 0 代入时给一行说明，避免把代入值误读成账面数据。 -->
+        <p v-if="summary?.settlementAssumesZero" class="qs-type-meta text-muted-foreground m-0 mt-1">
+          {{ t('slhReconciliation.settle.missingAmountAsZero') }}
+        </p>
         <div class="mt-2 flex justify-end">
           <AmountDisplay
             :value="summary?.settlementAmount.value ?? null"
