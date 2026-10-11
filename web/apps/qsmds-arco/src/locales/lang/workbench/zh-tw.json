@@ -447,8 +447,17 @@
       "checkedAt": "核對時間",
       "checkedBy": "核對人",
       "rateSource": "匯率來源",
-      "statusActive": "有效",
-      "statusSuperseded": "已被取代"
+      "statusActive": "當前有效",
+      "statusSuperseded": "已被取代",
+      "amountAtThatTime": "當時結算金額",
+      "paymentFeeLabel": "金流費用",
+      "rateSourceSystemShort": "系統當前",
+      "rateSourceEmbeddedShort": "帳單內嵌",
+      "expandSnapshot": "展開完整快照",
+      "collapseSnapshot": "收起快照",
+      "ordersTitle": "訂單資訊",
+      "transportTitle": "運輸資訊",
+      "billTitle": "帳單資訊"
     }
   }
 }

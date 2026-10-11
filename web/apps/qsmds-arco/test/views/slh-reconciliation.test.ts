@@ -751,41 +751,56 @@ test('核对记录弹窗：卡片按「状态 / 汇率费率 / 六个金额 / �
     createdByDisplayName: '张三',
     createdAt: '2026-10-11T07:05:24.555Z',
   }
-  const card = buildSlhReconciliationRecordCard(record)
+  const card = buildSlhReconciliationRecordCard(record, SETTLE_CURRENCIES)
 
   assert.equal(card.statusKey, 'slhReconciliation.records.statusActive')
-  assert.equal(card.rateSourceKey, 'slhReconciliation.settle.billRate')
-  assert.equal(card.rate, '4.800000000000')
+  assert.equal(card.summaryRateSourceKey, 'slhReconciliation.records.rateSourceEmbeddedShort')
   assert.equal(card.createdByDisplayName, '张三')
-  // 金额顺序与结算弹窗一致，币种透传（本行不涉及的代收为 null，由 AmountDisplay 出占位符）。
-  assert.deepEqual(card.amounts.map(amount => [amount.id, amount.value, amount.currencyCode]), [
-    ['codAmountTwd', null, 'TWD'],
-    ['ntdSurchargeAmountTwd', '2000.00', 'TWD'],
-    ['payableAmountCny', '0.00', 'CNY'],
-    ['settlementAmountCny', '-384.62', 'CNY'],
-    ['salesAmount', '500.0000', 'TWD'],
-    ['paymentFeeAmountCny', '0.73', 'CNY'],
-  ])
-  // 结算金额按符号、金流服务费恒红、其余沿用默认前景色。
-  assert.equal(resolveRecordAmountTone(card.amounts[3]!), 'danger')
-  assert.equal(resolveRecordAmountTone(card.amounts[5]!), 'danger')
-  assert.equal(resolveRecordAmountTone(card.amounts[1]!), 'neutral')
-  assert.equal(resolveRecordAmountTone({ ...card.amounts[3]!, value: '11874.62' }), 'success')
-  assert.equal(resolveRecordAmountTone({ ...card.amounts[3]!, value: '0.00' }), 'neutral')
-  // 来源行缺值一律占位符，行内不再出现空串。
-  assert.deepEqual(card.references, [
-    'CBILL/202609-01',
-    'J-121125 · WG-0078-0072',
-    '1211-01柜 · —',
-    'SO-1 · PO-1',
-  ])
+  // 有效记录默认展开；汇率与费率按去尾零 / 百分比展示，摘要里也带汇率来源。
+  assert.equal(card.collapsedByDefault, false)
+  assert.equal(card.summaryAmountLabelKey, 'slhReconciliation.records.amountAtThatTime')
+  assert.deepEqual(card.summaryAmount, { value: '-384.62', currencyCode: 'CNY', tone: 'settlement' })
+  assert.equal(card.summaryRateText, '4.8')
+  assert.equal(card.summaryFeeRateText, '0.7%')
 
-  // 列表保持服务端顺序（最新在前），状态与标签色调一一对应。
-  const superseded = buildSlhReconciliationRecordCards([record, { ...record, id: 'settlement-2', status: 'SUPERSEDED' }])
-  assert.deepEqual(superseded.map(item => [item.id, item.statusKey, item.statusClass.includes('emerald')]), [
-    ['settlement-1', 'slhReconciliation.records.statusActive', true],
-    ['settlement-2', 'slhReconciliation.records.statusSuperseded', false],
+  // 两个大区块：结算金额与金流费用，各自带区块内的汇率/费率辅助文字。
+  assert.deepEqual(
+    card.blocks.map(block => [block.id, block.labelKey, block.amount.value, block.amount.currencyCode, block.rateLabelKey, block.rateText]),
+    [
+      ['settlement', 'slhReconciliation.settle.settlementResult', '-384.62', 'CNY', 'slhReconciliation.settle.rateRow', '4.8'],
+      ['paymentFee', 'slhReconciliation.records.paymentFeeLabel', '0.73', 'CNY', 'slhReconciliation.settle.paymentFeeRate', '0.7%'],
+    ],
+  )
+  // 公式区域的两条计算式：代入后的数值；本行不涉及的代收保留占位符，不按 0 改写历史。
+  assert.equal(card.formulas.settlement, '（— − NT$2,000.00 TWD）÷ 4.8 − ¥0.00 CNY = -¥384.62 CNY')
+  // 销售额按币种精度收敛到两位小数（与 AmountDisplay 同一处规则）。
+  assert.equal(card.formulas.paymentFee, 'NT$500.00 TWD ÷ 4.8 × 0.7% = ¥0.73 CNY')
+
+  // 三段来源信息：订单 / 运输 / 账单，组内缺值一律占位符。
+  assert.deepEqual(
+    card.groups.map(group => [group.id, group.titleKey, group.icon, group.rows.map(row => `${row.label}:${row.value}`)]),
+    [
+      ['orders', 'slhReconciliation.records.ordersTitle', 'i-lucide:file-text', ['销:SO-1', '采:PO-1']],
+      ['transport', 'slhReconciliation.records.transportTitle', 'i-lucide:arrow-left-right', ['柜号:1211-01柜', '货件:—']],
+      ['bill', 'slhReconciliation.records.billTitle', 'i-lucide:package', ['账单:CBILL/202609-01', '入仓/唛头:WG-0078-0072 / J-121125']],
+    ],
+  )
+
+  // 结算金额按符号、金流费用恒红、其余沿用默认前景色。
+  assert.equal(resolveRecordAmountTone(card.blocks[0]!.amount), 'danger')
+  assert.equal(resolveRecordAmountTone(card.blocks[1]!.amount), 'danger')
+  assert.equal(resolveRecordAmountTone({ ...card.blocks[0]!.amount, value: '11874.62' }), 'success')
+  assert.equal(resolveRecordAmountTone({ ...card.blocks[0]!.amount, value: '0.00' }), 'neutral')
+  assert.equal(resolveRecordAmountTone({ ...card.blocks[0]!.amount, value: null }), 'neutral')
+
+  // 列表保持服务端顺序（最新在前）：被取代的记录默认折起、配色转为中性，头部底条随之变化。
+  const superseded = buildSlhReconciliationRecordCards([record, { ...record, id: 'settlement-2', status: 'SUPERSEDED' }], SETTLE_CURRENCIES)
+  assert.deepEqual(superseded.map(item => [item.id, item.statusKey, item.statusClass.includes('emerald'), item.collapsedByDefault]), [
+    ['settlement-1', 'slhReconciliation.records.statusActive', true, false],
+    ['settlement-2', 'slhReconciliation.records.statusSuperseded', false, true],
   ])
+  assert.equal(superseded[0]!.headerClass.includes('emerald'), true)
+  assert.equal(superseded[1]!.headerClass.includes('emerald'), false)
 })
 
 test('核对记录弹窗：底栏只读入口与弹窗接线，卡片只走 AmountDisplay 不写死展示逻辑', async () => {
@@ -799,11 +814,19 @@ test('核对记录弹窗：底栏只读入口与弹窗接线，卡片只走 Amou
   // 弹窗自己取数：打开时按成员行拉记录，切行/关窗都会打断在途请求。
   assert.match(modal, /slhReconciliationBatchesApi\.settlements\(props\.batchId, member\.id, current\.signal\)/u)
   assert.match(modal, /watch\(\(\) => props\.modelValue/u)
-  // 三种状态互斥：加载中 / 读取失败 / 空态；记录只读，没有编辑或删除入口。
+  // 三种状态互斥：加载中 / 读取失败 / 空态。
   assert.match(modal, /v-if="loading"/u)
   assert.match(modal, /v-else-if="loadError !== ''"/u)
   assert.match(modal, /v-else-if="cards\.length === 0"/u)
-  assert.doesNotMatch(modal, /@click="(?!openRecordsModal)/u)
+  // 只读：不调任何写接口，也没有编辑/删除入口。
+  assert.doesNotMatch(modal, /\.settle\(|\.complete\(/u)
+  // 版式：2xl 弹窗；两个大区块是按钮、公式区域跟着选中区块走；被取代的记录默认折起可展开。
+  assert.match(modal, /size="2xl"/u)
+  assert.match(modal, /:aria-pressed="selectedOf\(card\) === block\.id"/u)
+  assert.match(modal, /\{\{ card\.formulas\[selectedOf\(card\)\] \}\}/u)
+  assert.match(modal, /v-if="!isExpanded\(card\)"/u)
+  assert.match(modal, /t\('slhReconciliation\.records\.expandSnapshot'\)/u)
+  assert.match(modal, /t\('slhReconciliation\.records\.collapseSnapshot'\)/u)
   // 金额走 AmountDisplay（记录有币种），时间走 DateTimeDisplay。
   assert.match(modal, /import AmountDisplay from '@\/components\/base\/AmountDisplay\/index\.vue'/u)
   assert.match(modal, /import DateTimeDisplay from '@\/components\/base\/DateTimeDisplay\/index\.vue'/u)

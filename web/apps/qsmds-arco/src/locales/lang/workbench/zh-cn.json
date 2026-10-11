@@ -456,8 +456,17 @@
       "checkedAt": "核对时间",
       "checkedBy": "核对人",
       "rateSource": "汇率来源",
-      "statusActive": "有效",
-      "statusSuperseded": "已被取代"
+      "statusActive": "当前有效",
+      "statusSuperseded": "已被取代",
+      "amountAtThatTime": "当时结算金额",
+      "paymentFeeLabel": "金流费用",
+      "rateSourceSystemShort": "系统当前",
+      "rateSourceEmbeddedShort": "账单内嵌",
+      "expandSnapshot": "展开完整快照",
+      "collapseSnapshot": "收起快照",
+      "ordersTitle": "订单信息",
+      "transportTitle": "运输信息",
+      "billTitle": "账单信息"
     }
   }
 }

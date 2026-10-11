@@ -447,8 +447,17 @@
       "checkedAt": "Checked at",
       "checkedBy": "Checked by",
       "rateSource": "Rate source",
-      "statusActive": "Active",
-      "statusSuperseded": "Superseded"
+      "statusActive": "Currently active",
+      "statusSuperseded": "Superseded",
+      "amountAtThatTime": "Settlement then",
+      "paymentFeeLabel": "Payment fee",
+      "rateSourceSystemShort": "system",
+      "rateSourceEmbeddedShort": "bill-embedded",
+      "expandSnapshot": "Show full snapshot",
+      "collapseSnapshot": "Hide snapshot",
+      "ordersTitle": "Order info",
+      "transportTitle": "Transport info",
+      "billTitle": "Bill info"
     }
   }
 }
