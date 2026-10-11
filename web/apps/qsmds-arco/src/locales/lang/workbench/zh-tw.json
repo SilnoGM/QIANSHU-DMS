@@ -387,7 +387,11 @@
       "matchedContainer": "比對櫃號",
       "reconciledAt": "核對時間",
       "reconciledBy": "核對人",
-      "viewRecords": "查看核對記錄"
+      "viewRecords": "查看核對記錄",
+      "reconciledNotice": "該明細已經核對過了",
+      "recheckTitle": "該明細已核對過，是否需要重新核對？",
+      "recheckHint": "重新核對會寫入一條新的結算記錄，並把上一條置為「已被取代」。",
+      "recheckConfirm": "重新核對"
     },
     "settle": {
       "title": "對帳資訊",

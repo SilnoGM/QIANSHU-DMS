@@ -29,6 +29,7 @@ import {
   buildSlhReconciliationLineItems,
   buildSlhReconciliationLoadingItemPanel,
   buildSlhReconciliationOrderSections,
+  isSlhReconciliationMemberReconciled,
   resolveSlhReconciliationSelectedMember,
   SLH_RECONCILIATION_LINE_TONES,
 } from '../../src/views/workbenches/slh-reconciliation/detail.logic'
@@ -338,6 +339,27 @@ test('弹窗确认＝创建批次并带上可核对行范围：幂等键、提�
   assert.doesNotMatch(modal, /router\.push|useRouter/u)
 })
 
+test('已核对明细的两个提示：切换过去弹轻提示，点「本行核对正确」先二次确认', async () => {
+  const page = await readPageSource('detail.vue')
+
+  // 判据只有一处：账单明细行的三态（批次成员与账单行同步标记）。
+  const reconciled = memberFixture({ reconciliationStatus: 'RECONCILED' })
+  assert.equal(isSlhReconciliationMemberReconciled(reconciled), true)
+  assert.equal(isSlhReconciliationMemberReconciled(memberFixture({ reconciliationStatus: 'PENDING' })), false)
+
+  // 切换器换行：切到已核对的行给一句轻提示；打开页面时的自动选中不走这条路径。
+  assert.match(page, /function selectLine\(lineId: string \| null\): void \{/u)
+  assert.match(page, /toast\.info\(t\('slhReconciliation\.detail\.reconciledNotice'\)\)/u)
+  assert.match(page, /const member = resolveSlhReconciliationSelectedMember\(members\.value, lineId\)/u)
+
+  // 点「本行核对正确」：已核对的行先开确认弹窗，确认后才打开对账信息弹窗。
+  assert.match(page, /function requestSettle\(\): void \{[\s\S]{0,200}?recheckOpen\.value = true/u)
+  assert.match(page, /async function confirmRecheck\(\): Promise<void> \{\n {2}recheckOpen\.value = false\n {2}await openSettleModal\(\)/u)
+  assert.match(page, /v-model="recheckOpen"[\s\S]{0,160}?t\('slhReconciliation\.detail\.recheckTitle'\)/u)
+  assert.match(page, /t\('slhReconciliation\.detail\.recheckHint'\)/u)
+  assert.match(page, /@click="confirmRecheck"/u)
+})
+
 test('批次详情页：头部只给批次与账单标识、底部承接完成批次', async () => {
   const page = await readPageSource('detail.vue')
   assert.match(page, /t\('workbench\.slhBillReconciliationDetail'\)/u)
@@ -358,7 +380,7 @@ test('批次详情页：头部只给批次与账单标识、底部承接完成�
   assert.match(bar, /t\('slhReconciliation\.detail\.reconcileCorrect'\)/u)
   assert.match(bar, /showReconcilePending\('slhReconciliation\.detail\.reconcileWrong'\)/u)
   // 核对正确打开两步的「对账信息」弹窗（核对有误仍是占位提示）。
-  assert.match(bar, /:disabled="selectedMember === null"[\s\S]{0,120}?@click="openSettleModal"/u)
+  assert.match(bar, /:disabled="selectedMember === null"[\s\S]{0,120}?@click="requestSettle"/u)
   assert.match(page, /<SlhReconciliationSettleModal/u)
   // 账单内置汇率取账单详情里嵌套的 rate 对象。
   assert.match(page, /slhBillsApi\.get\(billId/u)
@@ -396,7 +418,7 @@ test('批次详情页：头部只给批次与账单标识、底部承接完成�
 test('详情页成员区：切换器独立成面板，核对焦点在下、三块分组面板在上', async () => {
   const page = await readPageSource('detail.vue')
   // 切换器受控接线：选中值由页面持有，状态色映射与无障碍名称都由页面给。
-  assert.match(page, /<QsReconciliationLineSwitcher[\s\S]{0,400}?v-model="selectedLineId"/u)
+  assert.match(page, /<QsReconciliationLineSwitcher[\s\S]{0,400}?@update:model-value="selectLine"/u)
   assert.match(page, /:items="lineSwitcherItems"/u)
   assert.match(page, /:status-tones="SLH_RECONCILIATION_LINE_TONES"/u)
   assert.match(page, /t\('slhReconciliation\.detail\.lineSwitcherLabel'\)/u)
@@ -469,9 +491,9 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   assert.match(page, /v-if="row\.tag"/u)
   assert.match(page, /!text-sky-700 dark:!text-sky-300/u)
   assert.match(page, /!text-amber-700 dark:!text-amber-300/u)
-  // 多行值（收货信息）与浅色标签（备注）两个分支都在。
+  // 多行值（收货信息）保留分支；备注已改为正文文本，不再有浅色标签分支。
   assert.match(page, /v-if="field\.lines && field\.lines\.length > 0"/u)
-  assert.match(page, /v-else-if="field\.chip"/u)
+  assert.doesNotMatch(page, /field\.chip/u)
   // 金额统一走 AmountDisplay（缺失时回落占位符文本）；等宽数据字体用于所有非金额值。
   assert.match(page, /v-if="field\.amount"[\s\S]{0,300}?:currencies="currencyCatalog\.currencies\.value"/u)
   assert.match(page, /class="m-0 text-right"/u)
@@ -1176,7 +1198,7 @@ test('装柜明细行面板：顶部信息块 + 货物明细 + 代收货款块 +
   assert.deepEqual(panel.recipient.fields.map(field => field.id), ['recipientInfo', 'remark'])
   assert.deepEqual(panel.recipient.fields[0]?.lines, ['林口仓库', '新北市林口区', '0911111111'])
   assert.equal(panel.recipient.fields[0]?.value, '林口仓库 / 新北市林口区 / 0911111111')
-  assert.equal(panel.recipient.fields[1]?.chip, true)
+  assert.equal(panel.recipient.fields[1]?.chip, undefined)
 })
 
 test('装柜明细行面板：材积两侧一致时括注写成自报/系统一致', () => {

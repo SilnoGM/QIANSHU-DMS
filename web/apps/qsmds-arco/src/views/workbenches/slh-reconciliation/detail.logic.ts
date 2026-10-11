@@ -58,6 +58,13 @@ export function resolveSlhReconciliationSelectedMember(
   return members.find(member => member.lineId === selectedLineId) ?? null
 }
 
+/** 这一行是否已经核对过：账单明细行的三态就是唯一判据（批次成员与账单行同步标记）。 */
+export function isSlhReconciliationMemberReconciled(
+  member: SlhReconciliationBatchMemberDto,
+): boolean {
+  return member.reconciliationStatus === 'RECONCILED'
+}
+
 /** 金额字段额外下发的原始值：模板据此改用 AmountDisplay，空值仍走占位符。 */
 export interface SlhReconciliationAmountValue {
   readonly value: string | null
@@ -80,8 +87,6 @@ export interface SlhReconciliationLineField {
   readonly truncate?: true
   /** 多行值的字段（收货信息）：值按行拆开展示，`value` 仍是拼好的兜底文本。 */
   readonly lines?: readonly string[]
-  /** 备注这类整段强调的短文本：值以浅色标签呈现。 */
-  readonly chip?: true
 }
 
 /** 订单侧单个维度的状态标签：维度名用于无障碍朗读，标签文案与色调由本模块查表给出。 */
@@ -453,7 +458,8 @@ export function buildSlhReconciliationLoadingItemPanel(
           value: recipientLines.length === 0 ? missing : recipientLines.join(' / '),
           lines: recipientLines,
         },
-        { id: 'remark', label: translate('slhBill.line.remark'), value: text(item.remark), chip: true },
+        // 备注按正文文本呈现，不铺底色（与账单原表的「备注」列观感一致）。
+        { id: 'remark', label: translate('slhBill.line.remark'), value: text(item.remark) },
       ],
     },
   }

@@ -396,7 +396,11 @@
       "matchedContainer": "匹配柜号",
       "reconciledAt": "核对时间",
       "reconciledBy": "核对人",
-      "viewRecords": "查看核对记录"
+      "viewRecords": "查看核对记录",
+      "reconciledNotice": "该明细已经核对过了",
+      "recheckTitle": "该明细已核对过，是否需要重新核对？",
+      "recheckHint": "重新核对会写入一条新的结算记录，并把上一条置为「已被取代」。",
+      "recheckConfirm": "重新核对"
     },
     "settle": {
       "title": "对账信息",

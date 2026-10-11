@@ -21,6 +21,7 @@ import {
   buildSlhReconciliationLineItems,
   buildSlhReconciliationLoadingItemPanel,
   buildSlhReconciliationOrderSections,
+  isSlhReconciliationMemberReconciled,
   resolveSlhReconciliationSelectedMember,
   SLH_RECONCILIATION_LINE_TONES,
 } from './detail.logic'
@@ -212,6 +213,40 @@ async function openSettleModal(): Promise<void> {
   settleOpen.value = true
 }
 
+/**
+ * 切换器换行：切到已核对的明细时提示一下，避免误以为这行还没核对过。
+ * 打开页面时的自动选中不经过这里，因此不会跟着弹提示。
+ */
+function selectLine(lineId: string | null): void {
+  if (lineId === selectedLineId.value) {
+    return
+  }
+  selectedLineId.value = lineId
+  const member = resolveSlhReconciliationSelectedMember(members.value, lineId)
+  if (member !== null && isSlhReconciliationMemberReconciled(member)) {
+    toast.info(t('slhReconciliation.detail.reconciledNotice'))
+  }
+}
+
+/** 已核对过的行先问一句是否重新核对，避免无意覆盖既有留痕。 */
+const recheckOpen = ref(false)
+function requestSettle(): void {
+  const member = selectedMember.value
+  if (member === null) {
+    return
+  }
+  if (isSlhReconciliationMemberReconciled(member)) {
+    recheckOpen.value = true
+    return
+  }
+  void openSettleModal()
+}
+
+async function confirmRecheck(): Promise<void> {
+  recheckOpen.value = false
+  await openSettleModal()
+}
+
 /** 「本行核对有误」：接口随本分支重构删除，先只给反馈，接线时替换成真实动作。 */
 function showReconcilePending(labelKey: string): void {
   toast.info(t('slhReconciliation.detail.reconcilePending', { action: t(labelKey) }))
@@ -301,10 +336,11 @@ onBeforeUnmount(() => {
         <!-- 切换器独立成一块面板：只用一个普通容器承接页面外边距，不塞进 FaPageMain 里。 -->
         <div class="m-4 min-w-0">
           <QsReconciliationLineSwitcher
-            v-model="selectedLineId"
+            :model-value="selectedLineId"
             :items="lineSwitcherItems"
             :status-tones="SLH_RECONCILIATION_LINE_TONES"
             :aria-label="t('slhReconciliation.detail.lineSwitcherLabel')"
+            @update:model-value="selectLine"
           />
         </div>
         <!--
@@ -553,12 +589,6 @@ onBeforeUnmount(() => {
                         {{ line }}
                       </span>
                     </template>
-                    <span
-                      v-else-if="field.chip"
-                      class="qs-type-data px-2 py-0.5 rounded-md bg-muted/50 inline-block break-all"
-                    >
-                      {{ field.value }}
-                    </span>
                     <span v-else class="qs-type-data">
                       {{ field.value }}
                     </span>
@@ -617,13 +647,6 @@ onBeforeUnmount(() => {
                           {{ line }}
                         </span>
                       </template>
-                      <!-- 备注这类整段短文本：值以浅色标签呈现。 -->
-                      <span
-                        v-else-if="field.chip"
-                        class="qs-type-data px-2 py-0.5 rounded-md bg-muted/50 inline-block break-all"
-                      >
-                        {{ field.value }}
-                      </span>
                       <SlhReconciliationOverflowText
                         v-else-if="field.truncate"
                         :text="field.value"
@@ -738,7 +761,7 @@ onBeforeUnmount(() => {
         <FaButton
           class="w-full sm:w-auto"
           :disabled="selectedMember === null"
-          @click="openSettleModal"
+          @click="requestSettle"
         >
           {{ t('slhReconciliation.detail.reconcileCorrect') }}
         </FaButton>
@@ -780,6 +803,27 @@ onBeforeUnmount(() => {
       :batch-id="batchId"
       :member="selectedMember"
     />
+
+    <!-- 重新核对确认：确认后照常打开「对账信息」弹窗，留痕由后端按取代规则处理。 -->
+    <QsGenericModal
+      v-model="recheckOpen"
+      :title="t('slhReconciliation.detail.recheckTitle')"
+      size="sm"
+    >
+      <p class="qs-type-description text-muted-foreground m-0">
+        {{ t('slhReconciliation.detail.recheckHint') }}
+      </p>
+      <template #footer>
+        <div class="flex flex-col gap-2 w-full sm:flex-row sm:justify-end">
+          <FaButton type="button" variant="outline" class="w-full sm:w-auto" @click="recheckOpen = false">
+            {{ t('slhBill.cancel') }}
+          </FaButton>
+          <FaButton type="button" class="w-full sm:w-auto" @click="confirmRecheck">
+            {{ t('slhReconciliation.detail.recheckConfirm') }}
+          </FaButton>
+        </div>
+      </template>
+    </QsGenericModal>
   </div>
 </template>
 

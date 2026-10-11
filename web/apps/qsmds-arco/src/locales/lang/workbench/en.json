@@ -387,7 +387,11 @@
       "matchedContainer": "Matched container",
       "reconciledAt": "Reconciled at",
       "reconciledBy": "Reconciled by",
-      "viewRecords": "View records"
+      "viewRecords": "View records",
+      "reconciledNotice": "This row has already been reconciled.",
+      "recheckTitle": "This row was already reconciled. Reconcile it again?",
+      "recheckHint": "Reconciling again records a new settlement and marks the previous one as superseded.",
+      "recheckConfirm": "Reconcile again"
     },
     "settle": {
       "title": "Reconciliation info",
