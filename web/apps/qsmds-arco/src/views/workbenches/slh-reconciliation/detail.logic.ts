@@ -379,7 +379,8 @@ export function buildSlhReconciliationBillLinePanel(
             value: recipientLines.length === 0 ? missing : recipientLines.join(' / '),
             lines: recipientLines,
           },
-          { id: 'remark', label: translate('slhBill.line.remark'), value: text(member.remark), chip: true },
+          // 备注按正文文本呈现，不铺底色（与账单原表的「备注」列观感一致）。
+          { id: 'remark', label: translate('slhBill.line.remark'), value: text(member.remark) },
         ],
       },
     ],

@@ -159,7 +159,8 @@ export function buildSlhReconciliationRecordCard(
       },
       {
         id: 'paymentFee',
-        labelKey: 'slhReconciliation.records.paymentFeeLabel',
+        // 与结算弹窗同一处文案键：同一概念只留一个键，避免两处措辞漂移。
+        labelKey: 'slhReconciliation.settle.paymentFeeResult',
         amount: amount(record.paymentFeeAmountCny, record.paymentFeeCurrency, 'paymentFee'),
         rateLabelKey: 'slhReconciliation.settle.paymentFeeRate',
         rateText: feeRatePercent,

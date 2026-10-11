@@ -768,7 +768,7 @@ test('核对记录弹窗：卡片按「状态 / 汇率费率 / 六个金额 / �
     card.blocks.map(block => [block.id, block.labelKey, block.amount.value, block.amount.currencyCode, block.rateLabelKey, block.rateText]),
     [
       ['settlement', 'slhReconciliation.settle.settlementResult', '-384.62', 'CNY', 'slhReconciliation.settle.rateRow', '4.8'],
-      ['paymentFee', 'slhReconciliation.records.paymentFeeLabel', '0.73', 'CNY', 'slhReconciliation.settle.paymentFeeRate', '0.7%'],
+      ['paymentFee', 'slhReconciliation.settle.paymentFeeResult', '0.73', 'CNY', 'slhReconciliation.settle.paymentFeeRate', '0.7%'],
     ],
   )
   // 公式区域的两条计算式：代入后的数值；本行不涉及的代收保留占位符，不按 0 改写历史。
@@ -1010,11 +1010,11 @@ test('账单明细行面板：顶部信息块 + 货物明细 / 费用结算 / �
   assert.equal(codBlock?.summary?.value, '[slhBill.valueMissing]')
   assert.deepEqual(codBlock?.details, [])
 
-  // 收货与备注：收货信息按名称 / 地址 / 电话三行，备注走浅色标签。
+  // 收货与备注：收货信息按名称 / 地址 / 电话三行，备注按正文文本呈现（不铺底色）。
   assert.deepEqual(recipient.fields.map(field => field.id), ['recipientInfo', 'remark'])
   assert.deepEqual(recipient.fields[0]?.lines, ['王小明', '台北市', '0912345678'])
   assert.equal(recipient.fields[0]?.value, '王小明 / 台北市 / 0912345678')
-  assert.equal(recipient.fields[1]?.chip, true)
+  assert.equal(recipient.fields[1]?.chip, undefined)
   assert.equal(recipient.fields[1]?.value, '备注')
 })
 
