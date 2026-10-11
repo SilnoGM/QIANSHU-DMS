@@ -14,14 +14,16 @@ function readRelativeSource(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 }
 
-test('通用模态框默认使用 md，并提供四档响应式宽度与动态视口边界', () => {
+test('通用模态框默认使用 md，并提供六档响应式宽度与动态视口边界', () => {
   assert.equal(QS_GENERIC_MODAL_DEFAULT_SIZE, 'md')
 
   const expectedWidths = {
-    lg: 'sm:max-w-[45rem]',
-    md: 'sm:max-w-[35rem]',
-    sm: 'sm:max-w-[30rem]',
-    xl: 'sm:max-w-[56rem]',
+    '2xl': 'sm:max-w-[68rem]',
+    '3xl': 'sm:max-w-[80rem]',
+    'lg': 'sm:max-w-[45rem]',
+    'md': 'sm:max-w-[35rem]',
+    'sm': 'sm:max-w-[30rem]',
+    'xl': 'sm:max-w-[56rem]',
   } as const
 
   Object.entries(expectedWidths).forEach(([size, widthClass]) => {

@@ -109,7 +109,7 @@ const canNext = computed(() => selectedRate.value !== null)
     v-model="visible"
     :title="t('slhReconciliation.settle.title')"
     :description="t('slhReconciliation.settle.description')"
-    size="xl"
+    size="2xl"
   >
     <template #header-leading>
       <FaIcon name="i-lucide:calculator" class="size-5" aria-hidden="true" />

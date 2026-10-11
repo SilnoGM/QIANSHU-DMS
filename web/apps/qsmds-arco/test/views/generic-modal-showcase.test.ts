@@ -36,7 +36,7 @@ test('模态框展示覆盖尺寸、稳定状态、长内容滚动和关闭守�
   assert.match(source, /import QsGenericModal from '@\/components\/business\/QsGenericModal\/index\.vue'/u)
   assert.match(source, /<QsGenericModal/u)
   assert.doesNotMatch(source, /<FaModal|<AModal/u)
-  assert.match(source, /'sm', 'md', 'lg', 'xl'/u)
+  assert.match(source, /'sm', 'md', 'lg', 'xl', '2xl', '3xl'/u)
   assert.match(source, /'ready', 'long-content', 'loading', 'error'/u)
   assert.match(source, /data-testid="generic-modal-long-content"/u)
   assert.match(source, /v-for="item in longContentItems"/u)
