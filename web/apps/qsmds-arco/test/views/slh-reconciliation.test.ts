@@ -583,6 +583,39 @@ const SETTLE_CURRENCIES = [
   { code: 'MYR', enabled: true, minorUnit: 2, name: '马来西亚林吉特', symbol: 'RM' },
 ] as const satisfies readonly CurrencyDescriptor[]
 
+test('核对焦点块：三处只在这三块开流光边框，参数统一且错峰', async () => {
+  const member = memberFixture()
+  // 销售段的金额块开流光，采购段不开（同一段模板渲染两个区块，必须靠模型区分）。
+  const sections = buildSlhReconciliationOrderSections(member, echoKey)
+  assert.deepEqual(sections.map(section => [section.id, section.beam ?? false]), [
+    ['sales', true],
+    ['purchase', false],
+  ])
+  // 装柜「费用详情」段恒定开（值缺失也亮）。
+  assert.equal(buildSlhReconciliationLoadingItemPanel(member, echoKey).fee.beam, true)
+  // 账单费用段只给台币块开；块现在带稳定 id。
+  const feeSection = buildSlhReconciliationBillLinePanel(member, echoKey).sections.find(section => section.id === 'fees')
+  assert.deepEqual(feeSection?.blocks.map(block => [block.id, block.beam ?? false]), [
+    ['cny', false],
+    ['twd', true],
+  ])
+
+  // 三处模板：相对定位 + 裁剪 + 主题色单色渐变 + 2px + 8s + 错峰 + 动效偏好与无障碍。
+  const page = await readPageSource('detail.vue')
+  assert.equal(page.match(/<FaBorderBeam/gu)?.length, 3)
+  assert.equal(page.match(/oklch\(var\(--primary\)\)/gu)?.length, 3)
+  assert.equal(page.match(/:duration="8000"/gu)?.length, 3)
+  assert.equal(page.match(/:border-width="2"/gu)?.length, 3)
+  assert.deepEqual([...page.matchAll(/:delay="(\d+)"/gu)].map(match => match[1]), ['2600', '5200'])
+  // 组件的 animation 简写会把 animation-delay 重置为 0，错峰靠 important 工具类兜住。
+  assert.deepEqual([...page.matchAll(/after:!\[animation-delay:(\d+)ms\]/gu)].map(match => match[1]), ['2600', '5200'])
+  assert.equal(page.match(/relative overflow-hidden/gu)?.length, 3)
+  assert.equal(page.match(/motion-reduce:hidden/gu)?.length, 3)
+  // 逐块检查：每个光带都带 aria-hidden（懒量词跨块匹配会吞掉下一块，因此按块切开看）。
+  const beamSnippets = page.split('<FaBorderBeam').slice(1)
+  assert.equal(beamSnippets.filter(snippet => snippet.slice(0, 600).includes('aria-hidden="true"')).length, 3)
+})
+
 test('对账信息弹窗：结算金额与金流费按所选汇率计算，横排算式给出运算符与代入值', () => {
   const member = memberFixture({
     salesOrder: salesOrderFixture({ currencyCode: 'TWD', agreedTotalAmount: '500.0000' }),

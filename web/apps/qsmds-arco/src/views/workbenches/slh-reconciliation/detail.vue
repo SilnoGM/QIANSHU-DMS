@@ -460,7 +460,19 @@ onBeforeUnmount(() => {
                   </div>
                 </dl>
                 <!-- 金额块：总额大号加粗右对齐，虚线之后是三项明细，末行余额非零时染红。 -->
-                <dl class="m-0 mt-3 p-3 border border-border rounded-lg flex flex-col gap-2">
+                <dl class="m-0 mt-3 p-3 border border-border rounded-lg flex flex-col gap-2 relative overflow-hidden">
+                  <!-- 核对焦点块：流光边框只作视觉重心，纯装饰不进无障碍树。 -->
+                  <FaBorderBeam
+                    v-if="section.beam"
+                    :size="200"
+                    :duration="8000"
+                    :border-width="2"
+                    color-from="oklch(var(--primary))"
+                    color-to="oklch(var(--primary) / 0.15)"
+                    class="motion-reduce:hidden"
+                    aria-hidden="true"
+                  />
+
                   <div
                     v-for="(field, index) in section.amountFields"
                     :key="field.id"
@@ -550,7 +562,19 @@ onBeforeUnmount(() => {
                 <span class="rounded-full bg-primary h-4.5 w-1" aria-hidden="true" />
                 {{ loadingItemPanel.fee.label }}
               </h3>
-              <dl class="m-0 mt-3 p-3 border border-border rounded-lg flex flex-col">
+              <dl class="m-0 mt-3 p-3 border border-border rounded-lg flex flex-col relative overflow-hidden">
+                <!-- 核对焦点块：与销售金额块错峰，避免三束光同步转。 -->
+                <FaBorderBeam
+                  v-if="loadingItemPanel.fee.beam"
+                  :size="200"
+                  :duration="8000"
+                  :delay="2600"
+                  :border-width="2"
+                  color-from="oklch(var(--primary))"
+                  color-to="oklch(var(--primary) / 0.15)"
+                  class="motion-reduce:hidden after:![animation-delay:2600ms]"
+                  aria-hidden="true"
+                />
                 <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline">
                   <dt class="qs-type-compact-label text-foreground">
                     {{ loadingItemPanel.fee.amount.label }}
@@ -661,9 +685,21 @@ onBeforeUnmount(() => {
                 <div v-else class="mt-3 flex flex-col gap-3">
                   <dl
                     v-for="block in section.blocks"
-                    :key="block.headline.id"
-                    class="m-0 p-3 border border-border rounded-lg flex flex-col gap-2"
+                    :key="block.id"
+                    class="m-0 p-3 border border-border rounded-lg flex flex-col gap-2 relative overflow-hidden"
                   >
+                    <!-- 核对焦点块（仅台币块）：再错峰一档，三处节奏互不同步。 -->
+                    <FaBorderBeam
+                      v-if="block.beam"
+                      :size="200"
+                      :duration="8000"
+                      :delay="5200"
+                      :border-width="2"
+                      color-from="oklch(var(--primary))"
+                      color-to="oklch(var(--primary) / 0.15)"
+                      class="motion-reduce:hidden after:![animation-delay:5200ms]"
+                      aria-hidden="true"
+                    />
                     <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline">
                       <dt class="qs-type-compact-label text-foreground">
                         {{ block.headline.label }}

@@ -129,6 +129,10 @@ export type SlhReconciliationBillSection
 
 /** 费用结算里的一块：一个总额 + 可选的明细合计行 + 虚线之后的明细。 */
 export interface SlhReconciliationFeeBlock {
+  /** 币种分块的稳定标识；台币块是核对焦点之一，恒开流光边框。 */
+  readonly id: 'cny' | 'twd'
+  /** 核对焦点块：恒定开流光边框（不随值有无变化）。 */
+  readonly beam?: true
   /** 块头：合计应付人民币或代收货款台币（大号）。 */
   readonly headline: SlhReconciliationBillAmountRow
   /** 明细的合计行（台币杂费合计）：排在明细之上，不参与明细列表。 */
@@ -157,6 +161,8 @@ export interface SlhReconciliationLoadingItemPanel {
 export interface SlhReconciliationLoadingFeeSection {
   readonly label: string
   readonly amount: SlhReconciliationBillAmountRow
+  /** 核对焦点块：恒定开流光边框（不随值有无变化）。 */
+  readonly beam: true
 }
 
 /** 账单明细行面板：顶部信息块（入仓单号 + 身份标签）＋三段内容（货物明细 / 费用结算 / 收货与备注）。 */
@@ -182,6 +188,8 @@ export interface SlhReconciliationOrderSection {
   readonly fields: readonly SlhReconciliationLineField[]
   /** 金额块：总额 → 三项明细 → 余额。 */
   readonly amountFields: readonly SlhReconciliationLineField[]
+  /** 核对焦点块：销售段的金额块恒定开流光边框（采购段不开）。 */
+  readonly beam?: true
 }
 
 /**
@@ -323,6 +331,7 @@ export function buildSlhReconciliationBillLinePanel(
         label: translate('slhReconciliation.detail.billFeeGroup'),
         blocks: [
           {
+            id: 'cny',
             // 人民币块：合计应付＋基础运费/附加费/代收手续费（三者之和恒等于合计）。
             headline: {
               id: 'payableAmountCny',
@@ -354,7 +363,9 @@ export function buildSlhReconciliationBillLinePanel(
             ],
           },
           {
-            // 台币块：代收货款＋台币杂费合计（明细的合计行）＋杂费逐项。
+            id: 'twd',
+            // 台币块：代收货款＋台币杂费合计（明细的合计行）＋杂费逐项；恒定开流光边框。
+            beam: true,
             headline: {
               // 与核对焦点区的「账单代收货款」同一字段、同一组件：蓝色身份也一致。
               id: 'codAmountTwd',
@@ -439,6 +450,8 @@ export function buildSlhReconciliationLoadingItemPanel(
     },
     fee: {
       label: translate('slhReconciliation.detail.loadingFeeGroup'),
+      // 装柜代收货款是对账焦点之一：恒定开流光边框（值缺失也照常亮）。
+      beam: true,
       amount: {
         // 与核对焦点区的「装柜代收货款」同一字段、同一组件、同一格式。
         id: 'codAmountTwd',
@@ -592,6 +605,8 @@ export function buildSlhReconciliationOrderSections(
     {
       id: 'sales',
       label: translate('slhReconciliation.detail.salesGroup'),
+      // 销售金额块是核对焦点之一（尾款要跟装柜/账单两侧对），恒定开流光边框。
+      beam: true,
       orderNo: { id: 'salesOrderNo', label: translate('slhReconciliation.detail.salesOrderNo'), value: text(sales?.orderNo) },
       states: states('slhReconciliation.detail.salesOrderStatus', 'salesOrderDrawer', SALES_STATUS_TONES, sales),
       fields: [
