@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { StepsItem } from '@fantastic-admin/components'
-import type { SlhReconciliationSettleRateCard, SlhReconciliationSettleRateSource, SlhReconciliationSettleTone } from './settle-modal.logic'
+import type { SlhReconciliationSettleRateCard, SlhReconciliationSettleRateSource, SlhReconciliationSettleTermWidth, SlhReconciliationSettleTone } from './settle-modal.logic'
 import type { SlhReconciliationBatchDetailDto, SlhReconciliationBatchMemberDto } from '@/api/generated/types.gen'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
@@ -68,8 +68,24 @@ const RESULT_VALUE_CLASSES: Record<SlhReconciliationSettleTone, string> = {
   success: '!text-primary',
   neutral: '',
 }
-/** 虚线分组框；普通分组用 display:contents 保持在同一行流里。 */
-const DASHED_GROUP_CLASSES = 'flex flex-wrap gap-2 min-w-0 px-2 py-2 border border-dashed border-border rounded-xl items-center'
+/**
+ * 卡片宽度档位：被减项与销售额吃剩余宽度（上限 12rem，多出的留白推到结果卡左侧），
+ * 汇率/费率与合计应付固定宽度——位数不受控的项固定住，整行才不会随数据抖动。
+ */
+const TERM_WIDTH_CLASSES: Record<SlhReconciliationSettleTermWidth, string> = {
+  flex: 'flex-1 min-w-[7rem] max-w-[12rem]',
+  rate: 'w-[6.5rem] shrink-0',
+  payable: 'w-[7.5rem] shrink-0',
+}
+/** 结果卡固定宽度并贴右；值槽按「符号位 + 6 位整数 + 2 位小数 + 1ch 余量」预留。 */
+const RESULT_CARD_WIDTH_CLASS = 'w-[16.5rem] shrink-0 ml-auto'
+const RESULT_VALUE_SLOT_CLASS = 'min-w-[12ch]'
+/**
+ * 虚线分组框；普通分组用 display:contents 保持在同一行流里。
+ * 分组要自己吃剩余宽度（否则内部两张卡只能停在最小宽度），上限＝两张卡各自的上限
+ * 12rem×2 + 内距 2×0.5rem + 卡间两段 gap 1rem + 运算符徽标 1.25rem = 27.5rem。
+ */
+const DASHED_GROUP_CLASSES = 'flex flex-wrap flex-1 gap-2 min-w-0 max-w-[27.5rem] px-2 py-2 border border-dashed border-border rounded-xl items-center'
 
 /** 每次打开都重置：回到第一步、清掉上一行的选择。 */
 watch(() => props.modelValue, (open) => {
@@ -278,14 +294,18 @@ const canNext = computed(() => selectedRate.value !== null)
               >
                 {{ term.operator }}
               </span>
-              <div class="px-3 py-2 border border-border rounded-lg bg-card flex shrink-0 flex-col gap-0.5">
-                <span class="qs-type-meta text-muted-foreground whitespace-nowrap">
+              <div
+                class="px-3 py-2 border border-border rounded-lg bg-card flex flex-col gap-0.5"
+                :class="TERM_WIDTH_CLASSES[term.width]"
+              >
+                <span class="qs-type-meta text-muted-foreground truncate" :title="term.label">
                   {{ term.label }}<template v-if="term.unit !== null"> ({{ term.unit }})</template>
                 </span>
                 <span
-                  class="text-base qs-type-data tabular-nums"
+                  class="text-base qs-type-data text-right truncate tabular-nums"
                   :class="term.accent ? ACCENT_VALUE_CLASS : ''"
                   :data-currency="term.currencyCode ?? undefined"
+                  :title="term.value"
                 >
                   {{ term.value }}
                 </span>
@@ -295,20 +315,21 @@ const canNext = computed(() => selectedRate.value !== null)
 
           <FaIcon name="i-lucide:arrow-right" class="text-muted-foreground shrink-0 size-4" aria-hidden="true" />
 
-          <!-- 结果卡：标签 + 裸数字 + 币种 chip，颜色跟着逻辑层的 tone 走。 -->
+          <!-- 结果卡：标签 + 裸数字 + 币种 chip，颜色跟着逻辑层的 tone 走；固定宽度并贴右。 -->
           <div
-            class="px-3 py-2 border rounded-lg flex gap-4 min-w-0 items-center"
-            :class="RESULT_CARD_CLASSES[block.resultTone]"
+            class="px-3 py-2 border rounded-lg flex gap-4 items-center overflow-hidden"
+            :class="[RESULT_CARD_CLASSES[block.resultTone], RESULT_CARD_WIDTH_CLASS]"
             :data-tone="block.resultTone"
           >
             <span class="flex flex-col gap-0.5 min-w-0">
-              <span class="text-xs font-medium">
+              <span class="text-xs font-medium truncate" :title="t(block.resultLabelKey)">
                 {{ t(block.resultLabelKey) }}
               </span>
               <span
-                class="text-2xl qs-type-data font-semibold tabular-nums"
-                :class="RESULT_VALUE_CLASSES[block.resultTone]"
+                class="text-2xl qs-type-data font-semibold text-right truncate tabular-nums"
+                :class="[RESULT_VALUE_CLASSES[block.resultTone], RESULT_VALUE_SLOT_CLASS]"
                 :data-currency="block.resultCurrencyCode"
+                :title="block.result"
               >
                 {{ block.result }}
               </span>

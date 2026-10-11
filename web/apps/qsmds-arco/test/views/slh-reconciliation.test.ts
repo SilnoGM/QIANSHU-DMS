@@ -594,6 +594,15 @@ test('对账信息弹窗：结算金额与金流费按所选汇率计算，横�
   assert.equal(settlement?.noteKey, null)
   // 右上角抽象公式由 logic 出，别把占位符漏给模板。
   assert.equal(settlement?.formula, '[slhReconciliation.settle.settlementFormula]')
+  // 宽度档位：汇率与合计应付固定宽度，其余可变项平均吃剩余宽度（模板侧再设上限）。
+  assert.deepEqual(
+    settlement?.groups.map(group => group.terms.map(term => term.width)),
+    [['flex', 'flex'], ['rate', 'payable']],
+  )
+  assert.deepEqual(
+    paymentFee?.groups.map(group => group.terms.map(term => term.width)),
+    [['flex', 'rate', 'rate']],
+  )
 
   // （129000 − 6000）÷ 5.2 − 4555 = 19098.8461… → 19098.85（人民币两位小数 HALF_UP），正数走绿色。
   assert.equal(settlement?.result, '19,098.85')
@@ -711,6 +720,17 @@ test('对账信息弹窗：两步结构、基准汇率条与横排算式，确�
   assert.match(source, /v-for="term in group\.terms"/u)
   assert.match(source, /term\.operator/u)
   assert.match(source, /i-lucide:arrow-right/u)
+  // 宽度：可变项吃剩余宽度但设上限，汇率/合计应付固定，结果卡固定宽度并贴右。
+  assert.match(source, /TERM_WIDTH_CLASSES\[term\.width\]/u)
+  assert.match(source, /max-w-\[12rem\]/u)
+  assert.match(source, /w-\[6\.5rem\]/u)
+  assert.match(source, /w-\[7\.5rem\]/u)
+  assert.match(source, /w-\[16\.5rem\]/u)
+  assert.match(source, /ml-auto/u)
+  // 值槽：符号位 + 6 位整数 + 2 位小数 + 1ch 余量，右对齐，超长裁切并可 hover 看全。
+  assert.match(source, /min-w-\[12ch\]/u)
+  assert.match(source, /text-right/u)
+  assert.match(source, /truncate/u)
   // 结果卡：标签 + 裸数字 + 币种 chip，着色由逻辑层的 tone 驱动
   // （数值必须显式着色，`qs-type-data` 自带前景色会盖掉卡片继承的语义色）。
   assert.match(source, /t\(block\.resultLabelKey\)/u)

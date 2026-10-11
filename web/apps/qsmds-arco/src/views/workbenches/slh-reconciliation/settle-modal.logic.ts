@@ -73,6 +73,12 @@ export function buildSettleRateCards(
 export type SlhReconciliationSettleTone = 'danger' | 'success' | 'neutral'
 
 /**
+ * 卡片宽度档位：被减项与销售额吃剩余宽度（模板侧再设上限，多出的留白推到结果卡左侧），
+ * 汇率/费率与合计应付是固定宽度——它们的位数不受控，固定后整行不随数据抖动。
+ */
+export type SlhReconciliationSettleTermWidth = 'flex' | 'rate' | 'payable'
+
+/**
  * 横排算式里的一个操作数卡片：标签带单位（`代收货款 (TWD)`），值是**裸数字**
  * （去掉货币符号与代码，保留千分位与币种精度），这样才能在一行里排下。
  * 汇率与费率是文本项（没有单位），用琥珀黄强调。
@@ -87,6 +93,7 @@ export interface SlhReconciliationSettleTerm {
   /** 金额项的币种（供可审计属性）；汇率/费率项为 null。 */
   readonly currencyCode: string | null
   readonly accent: boolean
+  readonly width: SlhReconciliationSettleTermWidth
 }
 
 /** 一组项：账单块的前两项用虚线框分组，其余是普通流式排列。 */
@@ -231,6 +238,7 @@ export function buildSettleSummary(
     value: rateText,
     currencyCode: null,
     accent: true,
+    width: 'rate',
   })
 
   return {
@@ -247,8 +255,8 @@ export function buildSettleSummary(
             id: 'parenthesized',
             dashed: true,
             terms: [
-              { id: 'codAmount', operator: null, label: translate('slhReconciliation.settle.codAmount'), unit: BILL_AMOUNT_CURRENCY, value: bare(operand(cod), BILL_AMOUNT_CURRENCY), currencyCode: BILL_AMOUNT_CURRENCY, accent: false },
-              { id: 'ntdDeduction', operator: '−', label: translate('slhReconciliation.settle.ntdDeduction'), unit: BILL_AMOUNT_CURRENCY, value: bare(operand(ntdSurcharge), BILL_AMOUNT_CURRENCY), currencyCode: BILL_AMOUNT_CURRENCY, accent: false },
+              { id: 'codAmount', operator: null, label: translate('slhReconciliation.settle.codAmount'), unit: BILL_AMOUNT_CURRENCY, value: bare(operand(cod), BILL_AMOUNT_CURRENCY), currencyCode: BILL_AMOUNT_CURRENCY, accent: false, width: 'flex' },
+              { id: 'ntdDeduction', operator: '−', label: translate('slhReconciliation.settle.ntdDeduction'), unit: BILL_AMOUNT_CURRENCY, value: bare(operand(ntdSurcharge), BILL_AMOUNT_CURRENCY), currencyCode: BILL_AMOUNT_CURRENCY, accent: false, width: 'flex' },
             ],
           },
           {
@@ -256,7 +264,7 @@ export function buildSettleSummary(
             dashed: false,
             terms: [
               rateTerm('rate', '÷'),
-              { id: 'payableTotal', operator: '−', label: translate('slhReconciliation.settle.payableTotal'), unit: SETTLEMENT_CURRENCY, value: bare(operand(payable), SETTLEMENT_CURRENCY), currencyCode: SETTLEMENT_CURRENCY, accent: false },
+              { id: 'payableTotal', operator: '−', label: translate('slhReconciliation.settle.payableTotal'), unit: SETTLEMENT_CURRENCY, value: bare(operand(payable), SETTLEMENT_CURRENCY), currencyCode: SETTLEMENT_CURRENCY, accent: false, width: 'payable' },
             ],
           },
         ],
@@ -275,9 +283,9 @@ export function buildSettleSummary(
             id: 'operands',
             dashed: false,
             terms: [
-              { id: 'salesAmount', operator: null, label: translate('slhReconciliation.detail.salesTotalAmount'), unit: orderCurrency === '' ? null : orderCurrency, value: bare(salesAmount, orderCurrency), currencyCode: salesAmount === null ? null : orderCurrency, accent: false },
+              { id: 'salesAmount', operator: null, label: translate('slhReconciliation.detail.salesTotalAmount'), unit: orderCurrency === '' ? null : orderCurrency, value: bare(salesAmount, orderCurrency), currencyCode: salesAmount === null ? null : orderCurrency, accent: false, width: 'flex' },
               rateTerm('rate', '÷'),
-              { id: 'feeRate', operator: '×', label: translate('slhReconciliation.settle.paymentFeeRate'), unit: null, value: translate('slhReconciliation.settle.paymentFeeRateValue', { percent: feePercentText }), currencyCode: null, accent: true },
+              { id: 'feeRate', operator: '×', label: translate('slhReconciliation.settle.paymentFeeRate'), unit: null, value: translate('slhReconciliation.settle.paymentFeeRateValue', { percent: feePercentText }), currencyCode: null, accent: true, width: 'rate' },
             ],
           },
         ],
