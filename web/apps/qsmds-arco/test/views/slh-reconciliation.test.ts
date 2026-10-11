@@ -604,11 +604,11 @@ test('核对焦点块：三处只在这三块开流光边框，参数统一且�
   const page = await readPageSource('detail.vue')
   assert.equal(page.match(/<FaBorderBeam/gu)?.length, 3)
   assert.equal(page.match(/oklch\(var\(--primary\)\)/gu)?.length, 3)
-  assert.equal(page.match(/:duration="8000"/gu)?.length, 3)
+  assert.equal(page.match(/:duration="5000"/gu)?.length, 3)
   assert.equal(page.match(/:border-width="2"/gu)?.length, 3)
-  assert.deepEqual([...page.matchAll(/:delay="(\d+)"/gu)].map(match => match[1]), ['2600', '5200'])
+  assert.deepEqual([...page.matchAll(/:delay="(\d+)"/gu)].map(match => match[1]), ['1000', '2000'])
   // 组件的 animation 简写会把 animation-delay 重置为 0，错峰靠 important 工具类兜住。
-  assert.deepEqual([...page.matchAll(/after:!\[animation-delay:(\d+)ms\]/gu)].map(match => match[1]), ['2600', '5200'])
+  assert.deepEqual([...page.matchAll(/after:!\[animation-delay:(\d+)ms\]/gu)].map(match => match[1]), ['1000', '2000'])
   assert.equal(page.match(/relative overflow-hidden/gu)?.length, 3)
   assert.equal(page.match(/motion-reduce:hidden/gu)?.length, 3)
   // 逐块检查：每个光带都带 aria-hidden（懒量词跨块匹配会吞掉下一块，因此按块切开看）。

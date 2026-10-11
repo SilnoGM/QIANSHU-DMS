@@ -465,7 +465,7 @@ onBeforeUnmount(() => {
                   <FaBorderBeam
                     v-if="section.beam"
                     :size="200"
-                    :duration="8000"
+                    :duration="5000"
                     :border-width="2"
                     color-from="oklch(var(--primary))"
                     color-to="oklch(var(--primary) / 0.15)"
@@ -567,12 +567,12 @@ onBeforeUnmount(() => {
                 <FaBorderBeam
                   v-if="loadingItemPanel.fee.beam"
                   :size="200"
-                  :duration="8000"
-                  :delay="2600"
+                  :duration="5000"
+                  :delay="1000"
                   :border-width="2"
                   color-from="oklch(var(--primary))"
                   color-to="oklch(var(--primary) / 0.15)"
-                  class="motion-reduce:hidden after:![animation-delay:2600ms]"
+                  class="motion-reduce:hidden after:![animation-delay:1000ms]"
                   aria-hidden="true"
                 />
                 <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline">
@@ -692,12 +692,12 @@ onBeforeUnmount(() => {
                     <FaBorderBeam
                       v-if="block.beam"
                       :size="200"
-                      :duration="8000"
-                      :delay="5200"
+                      :duration="5000"
+                      :delay="2000"
                       :border-width="2"
                       color-from="oklch(var(--primary))"
                       color-to="oklch(var(--primary) / 0.15)"
-                      class="motion-reduce:hidden after:![animation-delay:5200ms]"
+                      class="motion-reduce:hidden after:![animation-delay:2000ms]"
                       aria-hidden="true"
                     />
                     <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline">
