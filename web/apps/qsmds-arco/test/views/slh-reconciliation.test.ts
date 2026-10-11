@@ -551,18 +551,18 @@ test('对账信息弹窗：结算金额与金流费按所选汇率计算，计�
 
   // （129000 − 6000）÷ 5.2 − 4555 = 19098.8461… → 19098.85（人民币两位小数 HALF_UP）。
   assert.deepEqual(summary.settlementAmount, { value: '19098.85', currencyCode: 'CNY' })
-  // 500 ÷ 5.2 × 0.07 = 6.7307… → 6.73。
-  assert.deepEqual(summary.paymentFeeAmount, { value: '6.73', currencyCode: 'CNY' })
-  assert.equal(FULL_FLOW_FEE_RATE, 0.07)
+  // 500 ÷ 5.2 × 0.7% = 0.6730… → 0.67。
+  assert.deepEqual(summary.paymentFeeAmount, { value: '0.67', currencyCode: 'CNY' })
+  assert.equal(FULL_FLOW_FEE_RATE, 0.007)
   // 计算式把代入值一并给出，直接可核对。
   assert.equal(summary.settlementFormula, '（129000.00 TWD − 6000.00 TWD）÷ 5.2 − 4555.00 CNY = 19098.85 CNY')
-  assert.equal(summary.paymentFeeFormula, '500.0000 TWD ÷ 5.2 × 0.07 = 6.73 CNY')
+  assert.equal(summary.paymentFeeFormula, '500.0000 TWD ÷ 5.2 × 0.007 = 0.67 CNY')
 
   // 换汇率：两个金额都跟着走。
   // （129000 − 6000）÷ 4.8 − 4555 = 21070.00
   const embedded = buildSettleSummary(member, '4.8', [])
   assert.equal(embedded.settlementAmount.value, '21070.00')
-  assert.equal(embedded.paymentFeeAmount.value, '7.29')
+  assert.equal(embedded.paymentFeeAmount.value, '0.73')
 
   // 汇率为空或输入缺失时金额留空，计算式仍可读（缺失项显示占位符）。
   const noRate = buildSettleSummary(member, null, [])

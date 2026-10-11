@@ -23,11 +23,10 @@ export interface SlhReconciliationSettleRateCard {
 }
 
 /**
- * 全流程金流费比例。
- * ⚠️ 用户 2026-10-11 给的公式是「销售金额 / 汇率 * 0.07」；此前一轮口头说的是 0.7%（0.007）。
- * 这里按**书面公式**取 0.07，若实际应为千分之七，改这一个常量即可。
+ * 全流程金流费比例：0.7%（用户 2026-10-11 确认；公式「销售金额 ÷ 汇率 × 0.7%」）。
+ * 显示式里直接写小数常量，改这一处即可调整费率。
  */
-export const FULL_FLOW_FEE_RATE = 0.07
+export const FULL_FLOW_FEE_RATE = 0.007
 
 /** 汇率只做显示裁剪：契约里固定 12 位小数（`4.800000000000`），展示按去尾零；数值不变。 */
 export function trimRate(rate: string | null): string | null {
