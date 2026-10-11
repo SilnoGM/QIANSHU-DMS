@@ -1,7 +1,9 @@
 import type { SlhReconciliationBatchMemberDto } from '@/api/generated/types.gen'
+import type { CurrencyDescriptor } from '@/components/base/currency'
 import Decimal from 'decimal.js'
 // 运行时导入必须用相对路径：本文件被 node --test 从 web/ 根加载，@/ 别名解析不到。
-import { EMPTY_AMOUNT_TEXT } from '../../../components/base/AmountDisplay/format'
+import { EMPTY_AMOUNT_TEXT, formatCurrencyAmount } from '../../../components/base/AmountDisplay/format'
+import { findCurrencyDescriptor } from '../../../components/base/currency'
 
 /** 汇率来源：与账单域的 rate_source 同取值（系统汇率表 / 账单内嵌）。 */
 export type SlhReconciliationSettleRateSource = 'EMBEDDED' | 'SYSTEM'
@@ -67,49 +69,54 @@ export function buildSettleRateCards(
   ]
 }
 
-/** 一个待展示的金额：原始值（给 AmountDisplay，含币种代码）+ 币种。 */
-export interface SlhReconciliationSettleAmount {
-  readonly value: string | null
-  readonly currencyCode: string
-}
-
 /** 结果强调色：结算金额按符号（负红/正绿/其余中性），金流费恒红（成本项）。 */
 export type SlhReconciliationSettleTone = 'danger' | 'success' | 'neutral'
 
-interface SlhReconciliationSettleRowBase {
+/**
+ * 横排算式里的一个操作数卡片：标签带单位（`代收货款 (TWD)`），值是**裸数字**
+ * （去掉货币符号与代码，保留千分位与币种精度），这样才能在一行里排下。
+ * 汇率与费率是文本项（没有单位），用琥珀黄强调。
+ */
+export interface SlhReconciliationSettleTerm {
   readonly id: string
-  /** 行首运算符；起始行没有。方向由它表达，行值保持原值不带符号，避免一行出现两个减号。 */
+  /** 该项之前的运算符徽标；首项没有。 */
   readonly operator: string | null
   readonly label: string
-  /** 该行之前画虚线，与「合计应付」前的分组线一致。 */
-  readonly dividerBefore: boolean
+  readonly unit: string | null
+  readonly value: string
+  /** 金额项的币种（供可审计属性）；汇率/费率项为 null。 */
+  readonly currencyCode: string | null
+  readonly accent: boolean
 }
 
-/** 算式表的一行：金额行走 AmountDisplay，汇率与费率等纯数值行直接给文本。 */
-export type SlhReconciliationSettleRow
-  = | (SlhReconciliationSettleRowBase & { readonly kind: 'amount', readonly amount: SlhReconciliationSettleAmount })
-    | (SlhReconciliationSettleRowBase & { readonly kind: 'text', readonly text: string })
+/** 一组项：账单块的前两项用虚线框分组，其余是普通流式排列。 */
+export interface SlhReconciliationSettleGroup {
+  readonly id: string
+  readonly dashed: boolean
+  readonly terms: readonly SlhReconciliationSettleTerm[]
+}
 
 /**
- * 结算弹窗第二步的一块：标题 + 右上角抽象公式 + 算式表 + 结果行。
- * 算式表给的是**代入后**的逐行取值，直接可核对；空金额按 0 代入的说明挂在 `noteKey` 上。
+ * 结算弹窗第二步的一块：标题 + 右上角抽象公式 + 横排算式 + 结果卡。
+ * 算式给的是**代入后**的取值，直接可核对；空金额按 0 代入的说明挂在 `noteKey` 上。
  */
 export interface SlhReconciliationSettleBlock {
   readonly id: 'settlement' | 'paymentFee'
   readonly titleKey: string
-  /** 右上角的抽象公式（费率等参数已在 logic 内代入），与算式表的代入值互为对照。 */
   readonly formula: string
-  readonly rows: readonly SlhReconciliationSettleRow[]
+  readonly groups: readonly SlhReconciliationSettleGroup[]
   readonly resultLabelKey: string
-  readonly result: SlhReconciliationSettleAmount
+  /** 结果值同样是裸数字，币种由结果卡的 chip 表达。 */
+  readonly result: string
+  readonly resultCurrencyCode: string
   readonly resultTone: SlhReconciliationSettleTone
   /** 「本行不涉及」的空金额被按 0 代入过时的说明文案键；没代入即 null。 */
   readonly noteKey: string | null
 }
 
 /**
- * 结算弹窗第二步：①顶部基准汇率条（`rateBaseText`）②账单金额结算
- * ＝（代收货款台币 − NTD杂费）÷ 汇率 − 合计应付人民币 ③全流程金流费
+ * 结算弹窗第二步：①顶部汇率条（`rateBaseText`）②账单金额结算明细
+ * ＝（代收货款台币 − NTD杂费）÷ 汇率 − 合计应付人民币 ③全流程金流服务费
  * ＝销售金额 ÷ 汇率 × 0.7%。
  *
  * 金额口径：三个金额列的 NULL 表示「本行不涉及此项」（与账单行的存储约定一致），
@@ -131,8 +138,30 @@ const BILL_AMOUNT_CURRENCY = 'TWD'
 /** 译函数只要求最小签名，与页面里其它 logic 的写法一致。 */
 type SlhReconciliationSettleTranslate = (key: string, params?: Record<string, string>) => string
 
-function toAmount(value: string | null, currencyCode: string): SlhReconciliationSettleAmount {
-  return { value, currencyCode }
+/**
+ * 卡片里的裸数值：标签已经带单位、结果卡另有币种 chip，所以复用公共格式化
+ * （精度、千分位、负号规则都只有一处来源）后把货币符号与代码裁掉，
+ * 避免为了展示再实现一套金额格式化。
+ */
+export function formatBareAmount(
+  value: string | null,
+  currencyCode: string,
+  currencies: readonly CurrencyDescriptor[],
+): string {
+  if (value === null || value.trim() === '') {
+    return EMPTY_AMOUNT_TEXT
+  }
+  const formatted = formatCurrencyAmount(value, currencyCode, currencies)
+  const withoutCode = formatted.endsWith(` ${currencyCode}`)
+    ? formatted.slice(0, -(currencyCode.length + 1))
+    : formatted
+  const symbol = findCurrencyDescriptor(currencies, currencyCode)?.symbol
+  if (symbol === null || symbol === undefined || symbol === '') {
+    return withoutCode
+  }
+  const sign = withoutCode.startsWith('-') ? '-' : ''
+  const unsigned = sign === '' ? withoutCode : withoutCode.slice(1)
+  return unsigned.startsWith(symbol) ? `${sign}${unsigned.slice(symbol.length)}` : withoutCode
 }
 
 /** 结算金额按符号着色：负红、正绿，零（含舍入后的负零）与占位符保持中性。 */
@@ -150,6 +179,7 @@ function resolveSettlementTone(value: string | null): SlhReconciliationSettleTon
 export function buildSettleSummary(
   member: SlhReconciliationBatchMemberDto,
   rate: string | null,
+  currencies: readonly CurrencyDescriptor[],
   translate: SlhReconciliationSettleTranslate,
 ): SlhReconciliationSettleSummary {
   const cod = member.codAmountTwd
@@ -160,15 +190,16 @@ export function buildSettleSummary(
   const rateUnits = rate === null || new Decimal(rate).isZero() ? null : rate
   const rateText = trimRate(rate) ?? EMPTY_AMOUNT_TEXT
 
-  // 空金额按 0 代入；但整行三个金额都不涉及时不造「伪 0」结果，行值与结果都留空占位。
+  // 空金额按 0 代入；但整行三个金额都不涉及时不造「伪 0」结果，卡片与结果都留空占位。
   const hasSettlementInput = cod !== null || ntdSurcharge !== null || payable !== null
   const settlementReady = rateUnits !== null && hasSettlementInput
   const settlementAssumesZero = settlementReady
     && (cod === null || ntdSurcharge === null || payable === null)
-  /** 行值：只有真的代入过才把空值换成 0.00，否则保留「本行不涉及」的占位符。 */
+  /** 卡片值：只有真的代入过才把空值换成 0，否则保留「本行不涉及」的占位符。 */
   const operand = (value: string | null): string | null => (
-    settlementAssumesZero && (value === null || value.trim() === '') ? '0.00' : value
+    settlementAssumesZero && (value === null || value.trim() === '') ? '0' : value
   )
+  const bare = (value: string | null, currencyCode: string) => formatBareAmount(value, currencyCode, currencies)
 
   let settlementValue: string | null = null
   if (rateUnits !== null && hasSettlementInput) {
@@ -192,7 +223,15 @@ export function buildSettleSummary(
   // 百分比用 Decimal 折算，避免 0.007 × 100 的浮点尾差。
   const feePercentText = new Decimal(FULL_FLOW_FEE_RATE).times(100).toString()
 
-  const rateRowLabel = translate('slhReconciliation.settle.rateRow')
+  const rateTerm = (id: string, operator: string): SlhReconciliationSettleTerm => ({
+    id,
+    operator,
+    label: translate('slhReconciliation.settle.rateRow'),
+    unit: null,
+    value: rateText,
+    currencyCode: null,
+    accent: true,
+  })
 
   return {
     rate,
@@ -202,28 +241,49 @@ export function buildSettleSummary(
         id: 'settlement',
         titleKey: 'slhReconciliation.settle.settlementTitle',
         formula: translate('slhReconciliation.settle.settlementFormula'),
-        rows: [
-          { id: 'codAmount', operator: null, label: translate('slhReconciliation.settle.codAmount'), kind: 'amount', amount: toAmount(operand(cod), BILL_AMOUNT_CURRENCY), dividerBefore: false },
-          { id: 'ntdDeduction', operator: '−', label: translate('slhReconciliation.settle.ntdDeduction'), kind: 'amount', amount: toAmount(operand(ntdSurcharge), BILL_AMOUNT_CURRENCY), dividerBefore: false },
-          { id: 'rate', operator: '÷', label: rateRowLabel, kind: 'text', text: rateText, dividerBefore: false },
-          { id: 'payableTotal', operator: '−', label: translate('slhReconciliation.settle.payableTotal'), kind: 'amount', amount: toAmount(operand(payable), SETTLEMENT_CURRENCY), dividerBefore: true },
+        groups: [
+          // 被减的两项用虚线框括起来：它们先相减、再参与后面的除法与减法。
+          {
+            id: 'parenthesized',
+            dashed: true,
+            terms: [
+              { id: 'codAmount', operator: null, label: translate('slhReconciliation.settle.codAmount'), unit: BILL_AMOUNT_CURRENCY, value: bare(operand(cod), BILL_AMOUNT_CURRENCY), currencyCode: BILL_AMOUNT_CURRENCY, accent: false },
+              { id: 'ntdDeduction', operator: '−', label: translate('slhReconciliation.settle.ntdDeduction'), unit: BILL_AMOUNT_CURRENCY, value: bare(operand(ntdSurcharge), BILL_AMOUNT_CURRENCY), currencyCode: BILL_AMOUNT_CURRENCY, accent: false },
+            ],
+          },
+          {
+            id: 'operands',
+            dashed: false,
+            terms: [
+              rateTerm('rate', '÷'),
+              { id: 'payableTotal', operator: '−', label: translate('slhReconciliation.settle.payableTotal'), unit: SETTLEMENT_CURRENCY, value: bare(operand(payable), SETTLEMENT_CURRENCY), currencyCode: SETTLEMENT_CURRENCY, accent: false },
+            ],
+          },
         ],
         resultLabelKey: 'slhReconciliation.settle.settlementResult',
-        result: toAmount(settlementValue, SETTLEMENT_CURRENCY),
+        result: bare(settlementValue, SETTLEMENT_CURRENCY),
+        resultCurrencyCode: SETTLEMENT_CURRENCY,
         resultTone: resolveSettlementTone(settlementValue),
         noteKey: settlementAssumesZero ? 'slhReconciliation.settle.missingAmountAsZero' : null,
       },
       {
         id: 'paymentFee',
         titleKey: 'slhReconciliation.settle.paymentFeeTitle',
-        formula: translate('slhReconciliation.settle.paymentFeeFormula', { rate: `${feePercentText}%` }),
-        rows: [
-          { id: 'salesAmount', operator: null, label: translate('slhReconciliation.detail.salesTotalAmount'), kind: 'amount', amount: toAmount(salesAmount, orderCurrency), dividerBefore: false },
-          { id: 'rate', operator: '÷', label: rateRowLabel, kind: 'text', text: rateText, dividerBefore: false },
-          { id: 'feeRate', operator: '×', label: translate('slhReconciliation.settle.paymentFeeRate'), kind: 'text', text: translate('slhReconciliation.settle.paymentFeeRateValue', { percent: feePercentText, decimal: String(FULL_FLOW_FEE_RATE) }), dividerBefore: false },
+        formula: translate('slhReconciliation.settle.paymentFeeFormula'),
+        groups: [
+          {
+            id: 'operands',
+            dashed: false,
+            terms: [
+              { id: 'salesAmount', operator: null, label: translate('slhReconciliation.detail.salesTotalAmount'), unit: orderCurrency === '' ? null : orderCurrency, value: bare(salesAmount, orderCurrency), currencyCode: salesAmount === null ? null : orderCurrency, accent: false },
+              rateTerm('rate', '÷'),
+              { id: 'feeRate', operator: '×', label: translate('slhReconciliation.settle.paymentFeeRate'), unit: null, value: translate('slhReconciliation.settle.paymentFeeRateValue', { percent: feePercentText }), currencyCode: null, accent: true },
+            ],
+          },
         ],
         resultLabelKey: 'slhReconciliation.settle.paymentFeeResult',
-        result: toAmount(paymentFeeValue, SETTLEMENT_CURRENCY),
+        result: bare(paymentFeeValue, SETTLEMENT_CURRENCY),
+        resultCurrencyCode: SETTLEMENT_CURRENCY,
         // 金流费恒红：它是净支出，不按符号着色（用户 2026-10-11 口径）。
         resultTone: paymentFeeValue === null ? 'neutral' : 'danger',
         noteKey: null,

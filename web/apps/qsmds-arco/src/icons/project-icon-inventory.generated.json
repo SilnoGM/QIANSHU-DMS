@@ -1150,7 +1150,8 @@
       "apps/qsmds-arco/src/views/admin/product-management/media/product-video-board.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-change-records.vue",
-      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue"
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/settle-modal.vue"
     ]
   },
   {
@@ -1417,7 +1418,6 @@
       "apps/qsmds-arco/src/components/business/QsPartConfigurator/index.vue",
       "apps/qsmds-arco/src/components/business/QsReconciliationLineSwitcher/index.vue",
       "apps/qsmds-arco/src/components/business/QsStatusSwitchToolbar/index.vue",
-      "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/settle-modal.vue",
       "packages/components/src/basic/image-preview/preview.vue",
       "packages/components/src/basic/table/index.vue"
     ]

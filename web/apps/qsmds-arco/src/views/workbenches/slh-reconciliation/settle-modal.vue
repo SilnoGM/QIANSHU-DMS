@@ -2,7 +2,6 @@
 import type { StepsItem } from '@fantastic-admin/components'
 import type { SlhReconciliationSettleRateCard, SlhReconciliationSettleRateSource, SlhReconciliationSettleTone } from './settle-modal.logic'
 import type { SlhReconciliationBatchDetailDto, SlhReconciliationBatchMemberDto } from '@/api/generated/types.gen'
-import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
@@ -53,17 +52,24 @@ function translate(key: string, params?: Record<string, unknown>) {
 const summary = computed(() => (
   props.member === null
     ? null
-    : buildSettleSummary(props.member, selectedRate.value, translate)
+    : buildSettleSummary(props.member, selectedRate.value, currencyCatalog.currencies.value, translate)
 ))
 /** 结果色：结算金额按符号（负红/正绿）、金流费恒红，颜色只由逻辑层给的 tone 决定。 */
-const RESULT_TONE_CLASSES: Record<SlhReconciliationSettleTone, string> = {
+const RESULT_CARD_CLASSES: Record<SlhReconciliationSettleTone, string> = {
+  danger: 'border-destructive/30 bg-destructive/10 text-destructive',
+  success: 'border-primary/30 bg-primary/10 text-primary',
+  neutral: 'border-border bg-muted/40 text-foreground',
+}
+/** 汇率与费率的值用琥珀黄强调（用户 2026-10-11 口径）。 */
+const ACCENT_VALUE_CLASS = 'text-amber-700 dark:text-amber-300'
+/** 结果数值必须显式着色：`qs-type-data` 自带 `text-foreground`，会盖掉卡片继承的语义色。 */
+const RESULT_VALUE_CLASSES: Record<SlhReconciliationSettleTone, string> = {
   danger: '!text-destructive',
   success: '!text-primary',
   neutral: '',
 }
-function resultToneClass(tone: SlhReconciliationSettleTone): string {
-  return RESULT_TONE_CLASSES[tone]
-}
+/** 虚线分组框；普通分组用 display:contents 保持在同一行流里。 */
+const DASHED_GROUP_CLASSES = 'flex flex-wrap gap-2 min-w-0 px-2 py-2 border border-dashed border-border rounded-xl items-center'
 
 /** 每次打开都重置：回到第一步、清掉上一行的选择。 */
 watch(() => props.modelValue, (open) => {
@@ -85,14 +91,13 @@ function selectRate(card: SlhReconciliationSettleRateCard): void {
 /** 确定：只把两个金额打出来（轻提示），不落库。 */
 function confirmSettlement(): void {
   const blocks = summary.value?.blocks ?? []
+  const missing = t('slhBill.valueMissing')
   const resultOf = (id: 'settlement' | 'paymentFee') => (
-    blocks.find(block => block.id === id)?.result.value ?? null
+    blocks.find(block => block.id === id)?.result ?? missing
   )
-  const settlement = resultOf('settlement')
-  const fee = resultOf('paymentFee')
   toast.info(t('slhReconciliation.settle.doneToast', {
-    settlement: settlement ?? t('slhBill.valueMissing'),
-    fee: fee ?? t('slhBill.valueMissing'),
+    settlement: resultOf('settlement'),
+    fee: resultOf('paymentFee'),
   }))
 }
 
@@ -236,11 +241,10 @@ const canNext = computed(() => selectedRate.value !== null)
         </span>
         <button
           type="button"
-          class="text-sm text-primary font-medium ml-auto flex shrink-0 gap-0.5 items-center hover:underline"
+          class="text-sm text-primary font-medium ml-auto shrink-0 hover:underline"
           @click="step = 0"
         >
           {{ t('slhReconciliation.settle.changeRate') }}
-          <FaIcon name="i-lucide:chevron-right" class="size-4" aria-hidden="true" />
         </button>
       </div>
 
@@ -259,53 +263,66 @@ const canNext = computed(() => selectedRate.value !== null)
           </p>
         </header>
 
-        <!-- 算式表：运算符列承载方向，行值保持原值；汇总项之前用虚线分开。 -->
-        <div class="mt-3 p-3 rounded-lg bg-muted/40 flex flex-col gap-2 min-w-0">
+        <!-- 横排算式：操作数卡片 + 运算符徽标；账单侧被减的两项圈在虚线框里。 -->
+        <div class="mt-3 flex flex-wrap gap-2 min-w-0 items-center">
           <div
-            v-for="row in block.rows"
-            :key="row.id"
-            class="flex gap-3 min-w-0 items-baseline justify-between"
-            :class="row.dividerBefore ? 'mt-2 pt-2 border-t border-dashed border-border' : ''"
+            v-for="group in block.groups"
+            :key="group.id"
+            :class="group.dashed ? DASHED_GROUP_CLASSES : 'contents'"
           >
-            <span class="text-sm text-muted-foreground flex gap-2 min-w-0 items-baseline">
-              <span class="text-center shrink-0 w-3">
-                {{ row.operator ?? '' }}
+            <template v-for="term in group.terms" :key="term.id">
+              <span
+                v-if="term.operator !== null"
+                class="text-xs text-muted-foreground rounded-full bg-muted flex shrink-0 size-5 items-center justify-center"
+                aria-hidden="true"
+              >
+                {{ term.operator }}
               </span>
-              <span class="truncate">
-                {{ row.label }}
+              <div class="px-3 py-2 border border-border rounded-lg bg-card flex shrink-0 flex-col gap-0.5">
+                <span class="qs-type-meta text-muted-foreground whitespace-nowrap">
+                  {{ term.label }}<template v-if="term.unit !== null"> ({{ term.unit }})</template>
+                </span>
+                <span
+                  class="text-base qs-type-data tabular-nums"
+                  :class="term.accent ? ACCENT_VALUE_CLASS : ''"
+                  :data-currency="term.currencyCode ?? undefined"
+                >
+                  {{ term.value }}
+                </span>
+              </div>
+            </template>
+          </div>
+
+          <FaIcon name="i-lucide:arrow-right" class="text-muted-foreground shrink-0 size-4" aria-hidden="true" />
+
+          <!-- 结果卡：标签 + 裸数字 + 币种 chip，颜色跟着逻辑层的 tone 走。 -->
+          <div
+            class="px-3 py-2 border rounded-lg flex gap-4 min-w-0 items-center"
+            :class="RESULT_CARD_CLASSES[block.resultTone]"
+            :data-tone="block.resultTone"
+          >
+            <span class="flex flex-col gap-0.5 min-w-0">
+              <span class="text-xs font-medium">
+                {{ t(block.resultLabelKey) }}
+              </span>
+              <span
+                class="text-2xl qs-type-data font-semibold tabular-nums"
+                :class="RESULT_VALUE_CLASSES[block.resultTone]"
+                :data-currency="block.resultCurrencyCode"
+              >
+                {{ block.result }}
               </span>
             </span>
-            <AmountDisplay
-              v-if="row.kind === 'amount'"
-              :value="row.amount.value"
-              :currency="row.amount.currencyCode"
-              :currencies="currencyCatalog.currencies.value"
-              class="shrink-0 !text-sm"
-            />
-            <span v-else class="text-sm qs-type-data shrink-0 tabular-nums">
-              {{ row.text }}
+            <span class="text-xs font-medium px-2 py-0.5 rounded-md bg-background/70 shrink-0 self-start">
+              {{ block.resultCurrencyCode }}
             </span>
           </div>
         </div>
 
-        <div class="mt-3 flex gap-4 min-w-0 items-end justify-between">
-          <div class="pb-1 min-w-0">
-            <p class="text-sm font-medium m-0 truncate">
-              {{ t(block.resultLabelKey) }}
-            </p>
-            <!-- 「本行不涉及」的金额被按 0 代入过才给说明，避免把代入值误读成账面数据。 -->
-            <p v-if="block.noteKey" class="qs-type-meta text-muted-foreground m-0 mt-1">
-              {{ t(block.noteKey) }}
-            </p>
-          </div>
-          <AmountDisplay
-            :value="block.result.value"
-            :currency="block.result.currencyCode"
-            :currencies="currencyCatalog.currencies.value"
-            class="shrink-0 !text-3xl !font-semibold"
-            :class="resultToneClass(block.resultTone)"
-          />
-        </div>
+        <!-- 「本行不涉及」的金额被按 0 代入过才给说明，避免把代入值误读成账面数据。 -->
+        <p v-if="block.noteKey" class="qs-type-meta text-muted-foreground m-0 mt-2">
+          {{ t(block.noteKey) }}
+        </p>
       </article>
     </section>
 

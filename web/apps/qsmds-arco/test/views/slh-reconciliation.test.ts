@@ -5,6 +5,7 @@ import type {
   SlhReconciliationMatchedPurchaseOrderDto,
   SlhReconciliationMatchedSalesOrderDto,
 } from '../../src/api/generated/types.gen'
+import type { CurrencyDescriptor } from '../../src/components/base/currency'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 // eslint-disable-next-line test/no-import-node-test -- 校验对账批次的列表筛选、可选择账单规则、弹窗接线与详情页成员清单。
@@ -546,66 +547,88 @@ function settleTranslate(key: string, params?: Record<string, string>): string {
   return values.length === 0 ? `[${key}]` : `[${key}:${values.join(':')}]`
 }
 
-test('对账信息弹窗：结算金额与金流费按所选汇率计算，算式表给出运算符与代入值', () => {
+/** 裸数字卡片要的是「符号与代码都去掉、精度与千分位仍走公共规则」。 */
+const SETTLE_CURRENCIES = [
+  { code: 'CNY', enabled: true, minorUnit: 2, name: '人民币', symbol: '¥' },
+  { code: 'TWD', enabled: true, minorUnit: 2, name: '新台币', symbol: 'NT$' },
+  { code: 'MYR', enabled: true, minorUnit: 2, name: '马来西亚林吉特', symbol: 'RM' },
+] as const satisfies readonly CurrencyDescriptor[]
+
+test('对账信息弹窗：结算金额与金流费按所选汇率计算，横排算式给出运算符与代入值', () => {
   const member = memberFixture({
     salesOrder: salesOrderFixture({ currencyCode: 'TWD', agreedTotalAmount: '500.0000' }),
     codAmountTwd: '129000.00',
     ntdSurchargeAmountTwd: '6000.00',
     payableAmountCny: '4555.00',
   })
-  const summary = buildSettleSummary(member, '5.2', settleTranslate)
+  const summary = buildSettleSummary(member, '5.2', SETTLE_CURRENCIES, settleTranslate)
 
   assert.equal(summary.rate, '5.2')
   assert.equal(summary.rateBaseText, '[slhReconciliation.settle.baseRateText:5.2]')
   const [settlement, paymentFee] = summary.blocks
-  // 运算符列承载方向，行值保持原值（不带符号），避免同一行出现两个减号。
+
+  // 账单块分两组：前两项落在虚线分组里，运算符徽标挂在项上（首项没有）。
   assert.deepEqual(
-    settlement?.rows.map(row => [row.id, row.operator, row.kind, row.dividerBefore]),
+    settlement?.groups.map(group => [group.id, group.dashed, group.terms.map(term => [term.id, term.operator])]),
     [
-      ['codAmount', null, 'amount', false],
-      ['ntdDeduction', '−', 'amount', false],
-      ['rate', '÷', 'text', false],
-      ['payableTotal', '−', 'amount', true],
+      ['parenthesized', true, [['codAmount', null], ['ntdDeduction', '−']]],
+      ['operands', false, [['rate', '÷'], ['payableTotal', '−']]],
     ],
   )
-  assert.deepEqual(settlement?.rows[0]?.amount, { value: '129000.00', currencyCode: 'TWD' })
-  assert.deepEqual(settlement?.rows[1]?.amount, { value: '6000.00', currencyCode: 'TWD' })
-  assert.deepEqual(settlement?.rows[2]?.text, '5.2')
-  assert.deepEqual(settlement?.rows[3]?.amount, { value: '4555.00', currencyCode: 'CNY' })
+  // 卡片值是裸数字（去掉货币符号与代码，保留千分位与币种精度），单位写在标签里。
+  assert.deepEqual(
+    settlement?.groups[0]?.terms.map(term => [term.label, term.unit, term.value, term.currencyCode, term.accent]),
+    [
+      ['[slhReconciliation.settle.codAmount]', 'TWD', '129,000.00', 'TWD', false],
+      ['[slhReconciliation.settle.ntdDeduction]', 'TWD', '6,000.00', 'TWD', false],
+    ],
+  )
+  // 汇率用琥珀黄强调（用户 2026-10-11 口径），金额项不着色。
+  assert.deepEqual(
+    settlement?.groups[1]?.terms.map(term => [term.label, term.unit, term.value, term.accent]),
+    [
+      ['[slhReconciliation.settle.rateRow]', null, '5.2', true],
+      ['[slhReconciliation.settle.payableTotal]', 'CNY', '4,555.00', false],
+    ],
+  )
   assert.equal(settlement?.noteKey, null)
-  // 右上角抽象公式：费率等参数在 logic 内代入，别把占位符漏给模板。
+  // 右上角抽象公式由 logic 出，别把占位符漏给模板。
   assert.equal(settlement?.formula, '[slhReconciliation.settle.settlementFormula]')
-  assert.equal(paymentFee?.formula, '[slhReconciliation.settle.paymentFeeFormula:0.7%]')
 
   // （129000 − 6000）÷ 5.2 − 4555 = 19098.8461… → 19098.85（人民币两位小数 HALF_UP），正数走绿色。
-  assert.deepEqual(settlement?.result, { value: '19098.85', currencyCode: 'CNY' })
+  assert.equal(settlement?.result, '19,098.85')
+  assert.equal(settlement?.resultCurrencyCode, 'CNY')
   assert.equal(settlement?.resultTone, 'success')
 
   // 金流费：500 ÷ 5.2 × 0.7% = 0.6730… → 0.67；口径是恒红（成本项），不按符号。
   assert.deepEqual(
-    paymentFee?.rows.map(row => [row.id, row.operator, row.kind]),
-    [['salesAmount', null, 'amount'], ['rate', '÷', 'text'], ['feeRate', '×', 'text']],
+    paymentFee?.groups.map(group => group.terms.map(term => [term.id, term.operator, term.value, term.accent])),
+    [[
+      ['salesAmount', null, '500.00', false],
+      ['rate', '÷', '5.2', true],
+      ['feeRate', '×', '[slhReconciliation.settle.paymentFeeRateValue:0.7]', true],
+    ]],
   )
-  assert.deepEqual(paymentFee?.rows[0]?.amount, { value: '500.0000', currencyCode: 'TWD' })
-  assert.equal(paymentFee?.rows[2]?.text, '[slhReconciliation.settle.paymentFeeRateValue:0.7:0.007]')
-  assert.deepEqual(paymentFee?.result, { value: '0.67', currencyCode: 'CNY' })
+  assert.equal(paymentFee?.groups[0]?.dashed, false)
+  assert.equal(paymentFee?.formula, '[slhReconciliation.settle.paymentFeeFormula]')
+  assert.equal(paymentFee?.result, '0.67')
   assert.equal(paymentFee?.resultTone, 'danger')
   assert.equal(FULL_FLOW_FEE_RATE, 0.007)
 
   // 换汇率：两块结果都跟着走。
   // （129000 − 6000）÷ 4.8 − 4555 = 21070.00；500 ÷ 4.8 × 0.007 = 0.73。
-  const embedded = buildSettleSummary(member, '4.8', settleTranslate)
-  assert.equal(embedded.blocks[0]?.result.value, '21070.00')
-  assert.equal(embedded.blocks[1]?.result.value, '0.73')
+  const embedded = buildSettleSummary(member, '4.8', SETTLE_CURRENCIES, settleTranslate)
+  assert.equal(embedded.blocks[0]?.result, '21,070.00')
+  assert.equal(embedded.blocks[1]?.result, '0.73')
 
-  // 汇率取不到：行与结果都留占位符，且不触发「按 0 代入」。
-  const noRate = buildSettleSummary(member, null, settleTranslate)
+  // 汇率取不到：汇率项与结果都留占位符，且不触发「按 0 代入」。
+  const noRate = buildSettleSummary(member, null, SETTLE_CURRENCIES, settleTranslate)
   assert.equal(noRate.rateBaseText, '[slhReconciliation.settle.baseRateText:—]')
-  assert.equal(noRate.blocks[0]?.rows[2]?.text, '—')
-  assert.equal(noRate.blocks[0]?.result.value, null)
+  assert.equal(noRate.blocks[0]?.groups[1]?.terms[0]?.value, '—')
+  assert.equal(noRate.blocks[0]?.result, '—')
   assert.equal(noRate.blocks[0]?.resultTone, 'neutral')
   assert.equal(noRate.blocks[0]?.noteKey, null)
-  assert.equal(noRate.blocks[1]?.result.value, null)
+  assert.equal(noRate.blocks[1]?.result, '—')
   assert.equal(noRate.blocks[1]?.resultTone, 'neutral')
 })
 
@@ -616,10 +639,10 @@ test('对账信息弹窗：本行不涉及的金额按 0 代入结算，整行�
     codAmountTwd: null,
     ntdSurchargeAmountTwd: '2000.00',
     payableAmountCny: '0.00',
-  }), '5.2', settleTranslate)
-  // 行里代入的是实际参与计算的 0，而不是「本行不涉及」的占位符，读的人才能验算。
-  assert.deepEqual(missingCod.blocks[0]?.rows[0]?.amount, { value: '0.00', currencyCode: 'TWD' })
-  assert.deepEqual(missingCod.blocks[0]?.result, { value: '-384.62', currencyCode: 'CNY' })
+  }), '5.2', SETTLE_CURRENCIES, settleTranslate)
+  // 卡片里代入的是实际参与计算的 0，而不是「本行不涉及」的占位符，读的人才能验算。
+  assert.equal(missingCod.blocks[0]?.groups[0]?.terms[0]?.value, '0.00')
+  assert.equal(missingCod.blocks[0]?.result, '-384.62')
   // 负数是「无代收但有杂费」这类行的真实结算方向 ⇒ 红色。
   assert.equal(missingCod.blocks[0]?.resultTone, 'danger')
   assert.equal(missingCod.blocks[0]?.noteKey, 'slhReconciliation.settle.missingAmountAsZero')
@@ -630,19 +653,19 @@ test('对账信息弹窗：本行不涉及的金额按 0 代入结算，整行�
     codAmountTwd: '80000.00',
     ntdSurchargeAmountTwd: null,
     payableAmountCny: '3510.00',
-  }), '5.2', settleTranslate)
-  assert.equal(missingNtd.blocks[0]?.result.value, '11874.62')
+  }), '5.2', SETTLE_CURRENCIES, settleTranslate)
+  assert.equal(missingNtd.blocks[0]?.result, '11,874.62')
   assert.equal(missingNtd.blocks[0]?.resultTone, 'success')
 
-  // 三个金额都不涉及：不给「伪 0」结果，行与结果都留空占位、也不出说明行。
+  // 三个金额都不涉及：不给「伪 0」结果，卡片与结果都留空占位、也不出说明行。
   const allMissing = buildSettleSummary(memberFixture({
     salesOrder: salesOrderFixture(),
     codAmountTwd: null,
     ntdSurchargeAmountTwd: null,
     payableAmountCny: null,
-  }), '5.2', settleTranslate)
-  assert.equal(allMissing.blocks[0]?.rows[0]?.amount?.value, null)
-  assert.equal(allMissing.blocks[0]?.result.value, null)
+  }), '5.2', SETTLE_CURRENCIES, settleTranslate)
+  assert.equal(allMissing.blocks[0]?.groups[0]?.terms[0]?.value, '—')
+  assert.equal(allMissing.blocks[0]?.result, '—')
   assert.equal(allMissing.blocks[0]?.noteKey, null)
 })
 
@@ -652,10 +675,10 @@ test('对账信息弹窗：结算结果舍入成负零时不带符号也不染�
     codAmountTwd: '0.00',
     ntdSurchargeAmountTwd: '0.01',
     payableAmountCny: '0.00',
-  }), '5.2', settleTranslate)
+  }), '5.2', SETTLE_CURRENCIES, settleTranslate)
 
   // （0 − 0.01）÷ 5.2 = −0.0019… → 舍入后是负零，输出按 0.00 处理，按符号着色也保持中性。
-  assert.equal(negativeZero.blocks[0]?.result.value, '0.00')
+  assert.equal(negativeZero.blocks[0]?.result, '0.00')
   assert.equal(negativeZero.blocks[0]?.resultTone, 'neutral')
 })
 
@@ -671,23 +694,32 @@ test('对账信息弹窗：两张汇率卡按来源与可用性给出，汇率�
   assert.deepEqual(buildSettleRateCards(null, null).map(card => card.disabled), [true, true])
 })
 
-test('对账信息弹窗：两步结构、基准汇率条与两块算式表，确定只弹金额且不落库', async () => {
+test('对账信息弹窗：两步结构、基准汇率条与横排算式，确定只弹金额且不落库', async () => {
   const source = await readFile(new URL('../../src/views/workbenches/slh-reconciliation/settle-modal.vue', import.meta.url), 'utf8')
 
   // 两步：选汇率 → 结算信息。
   assert.match(source, /stepRate[\s\S]{0,160}?stepSummary/u)
-  // 第二步顶部是基准汇率条，「返回修改」回到第一步。
+  // 第二步顶部是基准汇率条，「调整汇率配置」回到第一步。
   assert.match(source, /t\('slhReconciliation\.settle\.baseRate'\)/u)
   assert.match(source, /summary\?\.rateBaseText/u)
   assert.match(source, /@click="step = 0"[\s\S]{0,320}?t\('slhReconciliation\.settle\.changeRate'\)/u)
-  // 两块共用同一段模板：标题、公式说明、算式表、结果行。
+  // 横排算式：分组（前两项是虚线框）+ 项上的运算符徽标 + 箭头 + 结果卡。
   assert.match(source, /v-for="block in summary\?\.blocks \?\? \[\]"/u)
   assert.match(source, /block\.formula/u)
-  assert.match(source, /v-for="row in block\.rows"/u)
-  assert.match(source, /row\.dividerBefore/u)
+  assert.match(source, /v-for="group in block\.groups"/u)
+  assert.match(source, /group\.dashed/u)
+  assert.match(source, /v-for="term in group\.terms"/u)
+  assert.match(source, /term\.operator/u)
+  assert.match(source, /i-lucide:arrow-right/u)
+  // 结果卡：标签 + 裸数字 + 币种 chip，着色由逻辑层的 tone 驱动
+  // （数值必须显式着色，`qs-type-data` 自带前景色会盖掉卡片继承的语义色）。
   assert.match(source, /t\(block\.resultLabelKey\)/u)
-  // 结果色由逻辑层的 tone 驱动（结算按符号、金流费恒红）。
   assert.match(source, /block\.resultTone/u)
+  assert.match(source, /RESULT_VALUE_CLASSES\[block\.resultTone\]/u)
+  assert.match(source, /block\.resultCurrencyCode/u)
+  // 金额不再走 AmountDisplay（改为裸数字 + 单位在标签），但结果值保留币种可审计属性。
+  assert.doesNotMatch(source, /AmountDisplay/u)
+  assert.match(source, /data-currency="block\.resultCurrencyCode"/u)
   // 「按 0 代入」的说明只在真的代入了才出现（noteKey 为 null 即不渲染）。
   assert.match(source, /v-if="block\.noteKey"[\s\S]{0,120}?t\(block\.noteKey\)/u)
   // 确定＝轻提示两个金额，不调接口、不落库。
@@ -696,8 +728,6 @@ test('对账信息弹窗：两步结构、基准汇率条与两块算式表，�
   // 打开时重置：回到第一步、清掉上一行的选择。
   assert.match(source, /selectedRate\.value = null/u)
   assert.match(source, /step\.value = 0/u)
-  // 金额必须显式导入 AmountDisplay，否则会被当成原生标签渲染。
-  assert.match(source, /import AmountDisplay from '@\/components\/base\/AmountDisplay\/index\.vue'/u)
 })
 
 test('切换器项：value 用明细行 id、label 用唛头、两态交给 statusTones 映射', () => {
