@@ -434,7 +434,17 @@
       "next": "下一步",
       "confirm": "确定结算",
       "cancel": "取消",
-      "doneToast": "结算金额 {settlement} · 金流费 {fee}"
+      "savedToast": "结算结果已记录",
+      "errorUnchanged": "已有相同的结算结果，未重复记录",
+      "errorRateChanged": "该来源的汇率已变化，请重新打开结算弹窗",
+      "errorMismatch": "结算金额与服务端重算结果不一致，请重新打开结算弹窗",
+      "errorRateUnavailable": "当前没有该来源可用的汇率",
+      "errorSourceMissing": "这一行的采购或销售来源缺失，暂时无法结算",
+      "errorKeyReused": "提交标识已被使用，请刷新后重试",
+      "errorBatchCompleted": "该批次已经结束，不能再确认结算",
+      "errorStateChanged": "资料已变化或正在处理，请刷新后重试",
+      "errorForbidden": "权限不足",
+      "errorUnknown": "结算失败，请稍后重试"
     }
   }
 }

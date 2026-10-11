@@ -69376,6 +69376,319 @@
           ]
         }
       }
+    },
+    "/api/slh-reconciliation-batches/{id}/settlements": {
+      "post": {
+        "operationId": "slh_reconciliation_settlement_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlhReconciliationSettlementCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlhReconciliationSettlementDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "slh-reconciliation-batches"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SLH_BILL_NOT_FOUND",
+                "SLH_RECON_BATCH_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "SLH_RECON_BATCH_IDEMPOTENCY_CONFLICT",
+                "SLH_RECON_BATCH_NOT_IN_PROGRESS",
+                "SLH_RECON_BATCH_STATE_CHANGED",
+                "SLH_RECON_SETTLEMENT_KEY_REUSED",
+                "SLH_RECON_SETTLEMENT_MISMATCH",
+                "SLH_RECON_SETTLEMENT_RATE_CHANGED",
+                "SLH_RECON_SETTLEMENT_RATE_UNAVAILABLE",
+                "SLH_RECON_SETTLEMENT_SOURCE_MISSING",
+                "SLH_RECON_SETTLEMENT_UNCHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
     }
   },
   "info": {
@@ -85759,6 +86072,141 @@
           "createdAt",
           "members",
           "findings"
+        ]
+      },
+      "SlhReconciliationSettlementAmountsDto": {
+        "type": "object",
+        "properties": {
+          "codAmountTwd": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$",
+            "description": "账单行的代收货款台币；本行不涉及时为 null。"
+          },
+          "ntdSurchargeAmountTwd": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$",
+            "description": "账单行的 NTD 杂费；本行不涉及时为 null。"
+          },
+          "payableAmountCny": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$",
+            "description": "账单行的合计应付人民币；本行不涉及时为 null。"
+          },
+          "settlementAmountCny": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$",
+            "description": "（代收 − 杂费）÷ 汇率 − 合计应付，可为负；不可计算时为 null。"
+          },
+          "salesAmount": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$",
+            "description": "销售订单的约定总额（订单币种，四位小数）。"
+          },
+          "paymentFeeAmountCny": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$",
+            "description": "销售金额 ÷ 汇率 × 金流费率，两位小数人民币；不可计算时为 null。"
+          }
+        },
+        "required": [
+          "codAmountTwd",
+          "ntdSurchargeAmountTwd",
+          "payableAmountCny",
+          "settlementAmountCny",
+          "salesAmount",
+          "paymentFeeAmountCny"
+        ]
+      },
+      "SlhReconciliationSettlementCreateDto": {
+        "type": "object",
+        "properties": {
+          "batchLineId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "批次成员行 id（详情里 members[].id）。"
+          },
+          "rateSource": {
+            "type": "string",
+            "enum": [
+              "EMBEDDED",
+              "SYSTEM"
+            ],
+            "description": "用户在弹窗第一步选择的汇率来源。"
+          },
+          "rate": {
+            "type": "string",
+            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,12})?$",
+            "description": "界面上显示的汇率：服务端按来源重取当前值比对，不一致时要求重新确认。"
+          },
+          "amounts": {
+            "description": "界面上显示的六个金额：与服务端重算结果逐项比对。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationSettlementAmountsDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "batchLineId",
+          "rateSource",
+          "rate",
+          "amounts"
+        ]
+      },
+      "SlhReconciliationSettlementDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "batchLineId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUPERSEDED"
+            ]
+          },
+          "rateSource": {
+            "type": "string",
+            "enum": [
+              "EMBEDDED",
+              "SYSTEM"
+            ]
+          },
+          "foreignUnitsPerCny": {
+            "type": "string"
+          },
+          "paymentFeeRate": {
+            "type": "string"
+          },
+          "createdByDisplayName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "batchLineId",
+          "status",
+          "rateSource",
+          "foreignUnitsPerCny",
+          "paymentFeeRate",
+          "createdByDisplayName",
+          "createdAt"
         ]
       }
     }

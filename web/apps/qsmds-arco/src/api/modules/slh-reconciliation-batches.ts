@@ -10,6 +10,8 @@ import type {
   SlhReconciliationBillOptionsData,
   SlhReconciliationReconcilableCountsDto,
   SlhReconciliationReconcilableCountsRequestDto,
+  SlhReconciliationSettlementCreateDto,
+  SlhReconciliationSettlementDto,
 } from '../generated/types.gen'
 import api from '../index'
 
@@ -33,6 +35,8 @@ export function createSlhReconciliationBatchesApi(client: AxiosInstance) {
     create: (data: SlhReconciliationBatchCreateDto, key: string, signal: AbortSignal) => client.post<SlhReconciliationBatchDetailDto>('slh-reconciliation-batches', data, { ...write(signal), headers: { 'Idempotency-Key': key } }),
     get: (id: string, signal: AbortSignal) => client.get<SlhReconciliationBatchDetailDto>(path(id), read(signal)),
     complete: (id: string, signal: AbortSignal) => client.post<SlhReconciliationBatchDetailDto>(`${path(id)}/complete`, {}, write(signal)),
+    // 确认结算：同样携带幂等键，双击或网络重试只会恢复同一条结算记录。
+    settle: (id: string, data: SlhReconciliationSettlementCreateDto, key: string, signal: AbortSignal) => client.post<SlhReconciliationSettlementDto>(`${path(id)}/settlements`, data, { ...write(signal), headers: { 'Idempotency-Key': key } }),
   }
 }
 

@@ -425,7 +425,17 @@
       "next": "Next",
       "confirm": "Confirm settlement",
       "cancel": "Cancel",
-      "doneToast": "Settlement {settlement} · Fee {fee}"
+      "savedToast": "Settlement saved.",
+      "errorUnchanged": "The same settlement result already exists; nothing was recorded.",
+      "errorRateChanged": "The rate for this source has changed. Reopen the settlement dialog.",
+      "errorMismatch": "Amounts differ from the server recalculation. Reopen the settlement dialog.",
+      "errorRateUnavailable": "No rate is available for this source right now.",
+      "errorSourceMissing": "This row has no purchase or sales source, so it cannot be settled yet.",
+      "errorKeyReused": "This submission key was already used. Refresh and try again.",
+      "errorBatchCompleted": "This batch is already finished and cannot be settled again.",
+      "errorStateChanged": "Data changed or is being processed. Refresh and try again.",
+      "errorForbidden": "Permission denied.",
+      "errorUnknown": "Settlement failed. Try again later."
     }
   }
 }

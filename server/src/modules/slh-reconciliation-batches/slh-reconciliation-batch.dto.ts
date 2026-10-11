@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
-import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator'
+import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min, ValidateNested } from 'class-validator'
 import { PurchaseOrderFulfillmentStatus, PurchaseOrderPaymentStatus, PurchaseOrderStatus, SalesOrderFulfillmentStatus, SalesOrderPaymentStatus, SalesOrderStatus } from '../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
 import { PurchaseOrderSupplierDto } from '../purchase-orders/dto/purchase-order-response.dto'
@@ -239,4 +239,68 @@ export class SlhReconciliationBatchMemberDto extends SlhBillLineDto {
 export class SlhReconciliationBatchDetailDto extends SlhReconciliationBatchListItemDto {
   @ApiProperty({ type: [SlhReconciliationBatchMemberDto], description: 'Only the lines matched at creation time; other bill lines never appear here.' }) members!: SlhReconciliationBatchMemberDto[]
   @ApiProperty({ type: [SlhBillFindingDto], description: 'Import-time findings snapshot of the whole bill; the page keeps the ones belonging to this batch but still reports the bill-wide count.' }) findings!: SlhBillFindingDto[]
+}
+
+/** 结算结果状态：有效 / 已被后续结果取代（与持久化枚举 slh_reconciliation_settlement_status 一致）。 */
+export enum SlhReconciliationSettlementStatusDto { ACTIVE = 'ACTIVE', SUPERSEDED = 'SUPERSEDED' }
+
+/**
+ * 结算汇率来源：弹窗只提供「系统当前汇率」与「账单内置汇率」两种基准。
+ * 库侧复用账单域的 `slh_bill_rate_source` 枚举，但 `MANUAL` 不作为可选来源。
+ */
+export enum SlhReconciliationSettlementRateSourceDto {
+  EMBEDDED = 'EMBEDDED',
+  SYSTEM = 'SYSTEM',
+}
+
+/** 结算金额以十进制字符串传输：允许负号（结算金额可为负），最多 4 位小数。 */
+const SETTLEMENT_AMOUNT_PATTERN = /^-?(?:0|[1-9]\d{0,25})(?:\.\d{1,4})?$/u
+/** 汇率与费率的契约精度是 12 位小数，按 30,12 收。 */
+const SETTLEMENT_RATE_PATTERN = /^-?(?:0|[1-9]\d{0,25})(?:\.\d{1,12})?$/u
+
+/**
+ * 「界面上看到的」六个金额：服务端按来源重取汇率并重算，任一项与重算结果不一致即拒绝。
+ * 账单侧三个原始列在本行不涉及时为 null，与账单行的存储口径一致。
+ */
+export class SlhReconciliationSettlementAmountsDto {
+  @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '账单行的代收货款台币；本行不涉及时为 null。' })
+  @IsOptional() @IsString() @Matches(SETTLEMENT_AMOUNT_PATTERN) codAmountTwd!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '账单行的 NTD 杂费；本行不涉及时为 null。' })
+  @IsOptional() @IsString() @Matches(SETTLEMENT_AMOUNT_PATTERN) ntdSurchargeAmountTwd!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '账单行的合计应付人民币；本行不涉及时为 null。' })
+  @IsOptional() @IsString() @Matches(SETTLEMENT_AMOUNT_PATTERN) payableAmountCny!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '（代收 − 杂费）÷ 汇率 − 合计应付，可为负；不可计算时为 null。' })
+  @IsOptional() @IsString() @Matches(SETTLEMENT_AMOUNT_PATTERN) settlementAmountCny!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '销售订单的约定总额（订单币种，四位小数）。' })
+  @IsOptional() @IsString() @Matches(SETTLEMENT_AMOUNT_PATTERN) salesAmount!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '销售金额 ÷ 汇率 × 金流费率，两位小数人民币；不可计算时为 null。' })
+  @IsOptional() @IsString() @Matches(SETTLEMENT_AMOUNT_PATTERN) paymentFeeAmountCny!: string | null
+}
+
+/** 确认结算：写入这一行的结算结果；提交标识由 `Idempotency-Key` 头给出。 */
+export class SlhReconciliationSettlementCreateDto {
+  @ApiProperty({ format: 'uuid', description: '批次成员行 id（详情里 members[].id）。' }) @IsUUID('4') batchLineId!: string
+  @ApiProperty({ enum: SlhReconciliationSettlementRateSourceDto, description: '用户在弹窗第一步选择的汇率来源。' })
+  @IsIn([SlhReconciliationSettlementRateSourceDto.SYSTEM, SlhReconciliationSettlementRateSourceDto.EMBEDDED]) rateSource!: SlhReconciliationSettlementRateSourceDto
+  @ApiProperty({ type: 'string', pattern: SETTLEMENT_RATE_PATTERN.source, description: '界面上显示的汇率：服务端按来源重取当前值比对，不一致时要求重新确认。' })
+  @IsString() @Matches(SETTLEMENT_RATE_PATTERN) rate!: string
+  @ApiProperty({ type: SlhReconciliationSettlementAmountsDto, description: '界面上显示的六个金额：与服务端重算结果逐项比对。' })
+  @ValidateNested() @Type(() => SlhReconciliationSettlementAmountsDto) amounts!: SlhReconciliationSettlementAmountsDto
+}
+
+/** 结算结果：返回写入的这条记录，供前端刷新与提示。 */
+export class SlhReconciliationSettlementDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ format: 'uuid' }) batchLineId!: string
+  @ApiProperty({ enum: SlhReconciliationSettlementStatusDto }) status!: SlhReconciliationSettlementStatusDto
+  @ApiProperty({ enum: SlhReconciliationSettlementRateSourceDto }) rateSource!: SlhReconciliationSettlementRateSourceDto
+  @ApiProperty({ type: 'string' }) foreignUnitsPerCny!: string
+  @ApiProperty({ type: 'string' }) paymentFeeRate!: string
+  @ApiProperty({ type: 'string' }) createdByDisplayName!: string
+  @ApiProperty({ type: 'string' }) createdAt!: string
 }

@@ -134,7 +134,42 @@ export interface SlhReconciliationSettleSummary {
   readonly rate: string | null
   /** 「1 CNY = 5.2 TWD」；汇率缺失时给占位符。 */
   readonly rateBaseText: string
+  /** 确认结算要提交的六个金额（账单侧三个原始值含 null，两个派生值按同一口径算）。 */
+  readonly payload: SlhReconciliationSettlePayloadAmounts
   readonly blocks: readonly SlhReconciliationSettleBlock[]
+}
+
+/** 提交给服务端的六个金额：与库侧「金额 + 币种」成对存储的字段一一对应。 */
+export interface SlhReconciliationSettlePayloadAmounts {
+  readonly codAmountTwd: string | null
+  readonly ntdSurchargeAmountTwd: string | null
+  readonly payableAmountCny: string | null
+  readonly settlementAmountCny: string | null
+  readonly salesAmount: string | null
+  readonly paymentFeeAmountCny: string | null
+}
+
+/** 确认结算失败的错误码 → 文案键：服务端拒绝的原因要能直接讲清楚，其余给通用提示。 */
+const SETTLE_FAILURE_KEYS: Readonly<Record<string, string>> = {
+  FORBIDDEN: 'slhReconciliation.settle.errorForbidden',
+  SLH_RECON_BATCH_NOT_IN_PROGRESS: 'slhReconciliation.settle.errorBatchCompleted',
+  SLH_RECON_BATCH_STATE_CHANGED: 'slhReconciliation.settle.errorStateChanged',
+  SLH_RECON_SETTLEMENT_KEY_REUSED: 'slhReconciliation.settle.errorKeyReused',
+  SLH_RECON_SETTLEMENT_MISMATCH: 'slhReconciliation.settle.errorMismatch',
+  SLH_RECON_SETTLEMENT_RATE_CHANGED: 'slhReconciliation.settle.errorRateChanged',
+  SLH_RECON_SETTLEMENT_RATE_UNAVAILABLE: 'slhReconciliation.settle.errorRateUnavailable',
+  SLH_RECON_SETTLEMENT_SOURCE_MISSING: 'slhReconciliation.settle.errorSourceMissing',
+  SLH_RECON_SETTLEMENT_UNCHANGED: 'slhReconciliation.settle.errorUnchanged',
+}
+const SETTLE_FAILURE_FALLBACK_KEY = 'slhReconciliation.settle.errorUnknown'
+
+/** 从接口错误里取业务错误码并映射到文案键；结构不对或未登记的码一律回落到通用提示。 */
+export function resolveSettleFailureKey(error: unknown): string {
+  const code = (error as { body?: { code?: unknown } } | null)?.body?.code
+  if (typeof code !== 'string') {
+    return SETTLE_FAILURE_FALLBACK_KEY
+  }
+  return SETTLE_FAILURE_KEYS[code] ?? SETTLE_FAILURE_FALLBACK_KEY
 }
 
 /** 结算金额币种恒为人民币（台币已按汇率折成人民币）；金流费同理。 */
@@ -244,6 +279,15 @@ export function buildSettleSummary(
   return {
     rate,
     rateBaseText: translate('slhReconciliation.settle.baseRateText', { rate: rateText }),
+    // 提交的是原始值（不是展示用的裸数字）：服务端按同一口径重算后逐项比对。
+    payload: {
+      codAmountTwd: cod,
+      ntdSurchargeAmountTwd: ntdSurcharge,
+      payableAmountCny: payable,
+      settlementAmountCny: settlementValue,
+      salesAmount,
+      paymentFeeAmountCny: paymentFeeValue,
+    },
     blocks: [
       {
         id: 'settlement',

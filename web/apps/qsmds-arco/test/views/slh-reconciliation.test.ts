@@ -41,6 +41,7 @@ import {
   buildSettleRateCards,
   buildSettleSummary,
   FULL_FLOW_FEE_RATE,
+  resolveSettleFailureKey,
 } from '../../src/views/workbenches/slh-reconciliation/settle-modal.logic'
 import {
   resolveSlhBillLineUnmatchedReasonLabelKey,
@@ -678,6 +679,43 @@ test('对账信息弹窗：本行不涉及的金额按 0 代入结算，整行�
   assert.equal(allMissing.blocks[0]?.noteKey, null)
 })
 
+test('对账信息弹窗：提交载荷是原始值（本行不涉及为 null），失败按错误码给文案', () => {
+  const member = memberFixture({
+    salesOrder: salesOrderFixture({ currencyCode: 'TWD', agreedTotalAmount: '10.0000' }),
+    // 本行不涉及代收货款：提交 null，而不是展示用的 0.00。
+    codAmountTwd: null,
+    ntdSurchargeAmountTwd: '2000.00',
+    payableAmountCny: '0.00',
+  })
+  const summary = buildSettleSummary(member, '5.2', SETTLE_CURRENCIES, settleTranslate)
+
+  assert.deepEqual(summary.payload, {
+    codAmountTwd: null,
+    ntdSurchargeAmountTwd: '2000.00',
+    payableAmountCny: '0.00',
+    // （0 − 2000）÷ 5.2 − 0 = −384.62；10 ÷ 5.2 × 0.7% = 0.01。
+    settlementAmountCny: '-384.62',
+    salesAmount: '10.0000',
+    paymentFeeAmountCny: '0.01',
+  })
+
+  // 服务端拒绝的原因必须能直接讲清楚；结构不对或未登记的码回落通用提示。
+  assert.equal(resolveSettleFailureKey({ body: { code: 'SLH_RECON_SETTLEMENT_UNCHANGED' } }), 'slhReconciliation.settle.errorUnchanged')
+  assert.equal(resolveSettleFailureKey({ body: { code: 'SLH_RECON_SETTLEMENT_MISMATCH' } }), 'slhReconciliation.settle.errorMismatch')
+  assert.equal(resolveSettleFailureKey({ body: { code: 'SLH_RECON_BATCH_NOT_IN_PROGRESS' } }), 'slhReconciliation.settle.errorBatchCompleted')
+  assert.equal(resolveSettleFailureKey({ body: { code: 'SLH_RECON_SOMETHING_NEW' } }), 'slhReconciliation.settle.errorUnknown')
+  assert.equal(resolveSettleFailureKey(new Error('boom')), 'slhReconciliation.settle.errorUnknown')
+  assert.equal(resolveSettleFailureKey(undefined), 'slhReconciliation.settle.errorUnknown')
+})
+
+test('金流费率在两个依赖域里保持一致：后端常量与前端展示口径必须相等', async () => {
+  const serverLogic = await readFile(new URL('../../../../../server/src/modules/slh-reconciliation-batches/slh-reconciliation-settlement.logic.ts', import.meta.url), 'utf8')
+  const match = serverLogic.match(/export const PAYMENT_FEE_RATE = '([\d.]+)'/u)
+
+  assert.notEqual(match, null)
+  assert.equal(Number(match?.[1]), FULL_FLOW_FEE_RATE)
+})
+
 test('对账信息弹窗：结算结果舍入成负零时不带符号也不染红', () => {
   const negativeZero = buildSettleSummary(memberFixture({
     salesOrder: salesOrderFixture(),
@@ -742,9 +780,20 @@ test('对账信息弹窗：两步结构、基准汇率条与横排算式，确�
   assert.match(source, /data-currency="block\.resultCurrencyCode"/u)
   // 「按 0 代入」的说明只在真的代入了才出现（noteKey 为 null 即不渲染）。
   assert.match(source, /v-if="block\.noteKey"[\s\S]{0,120}?t\(block\.noteKey\)/u)
-  // 确定＝轻提示两个金额，不调接口、不落库。
-  assert.match(source, /t\('slhReconciliation\.settle\.doneToast', \{/u)
-  assert.doesNotMatch(source, /slhReconciliationBatchesApi|slhBillsApi/u)
+  // 确定结算：按成员行 + 所选来源 + 界面上的汇率与六个金额提交，携带幂等键、禁用自动重试。
+  assert.match(source, /slhReconciliationBatchesApi\.settle\(batch\.id, \{/u)
+  assert.match(source, /batchLineId: member\.id/u)
+  assert.match(source, /rateSource: selectedSource\.value/u)
+  assert.match(source, /rate: selectedRate\.value/u)
+  assert.match(source, /amounts: current\.payload/u)
+  assert.match(source, /settlementKey\.value, pending\.signal/u)
+  // 每次打开换一个提交标识：双击命中同一条记录，关窗再打开才算新的一次确认。
+  assert.match(source, /settlementKey\.value = crypto\.randomUUID\(\)/u)
+  // 提交中禁用交互与整窗关闭；失败按错误码提示，成功关窗并让页面刷新。
+  assert.match(source, /:submitting="submitting"/u)
+  assert.match(source, /toast\.error\(t\(resolveSettleFailureKey\(failure\)\)\)/u)
+  assert.match(source, /emit\('settled'\)/u)
+  assert.match(source, /t\('slhReconciliation\.settle\.savedToast'\)/u)
   // 打开时重置：回到第一步、清掉上一行的选择。
   assert.match(source, /selectedRate\.value = null/u)
   assert.match(source, /step\.value = 0/u)

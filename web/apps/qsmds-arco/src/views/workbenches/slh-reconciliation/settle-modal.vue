@@ -2,12 +2,14 @@
 import type { StepsItem } from '@fantastic-admin/components'
 import type { SlhReconciliationSettleRateCard, SlhReconciliationSettleRateSource, SlhReconciliationSettleTermWidth, SlhReconciliationSettleTone } from './settle-modal.logic'
 import type { SlhReconciliationBatchDetailDto, SlhReconciliationBatchMemberDto } from '@/api/generated/types.gen'
+import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import {
   buildSettleRateCards,
   buildSettleSummary,
+  resolveSettleFailureKey,
 
 } from './settle-modal.logic'
 
@@ -22,7 +24,10 @@ const props = defineProps<{
   /** 账单内置汇率（账单公式自带的那一份）；取不到传 null。 */
   readonly billRate: string | null
 }>()
-const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
+const emit = defineEmits<{
+  'settled': []
+  'update:modelValue': [value: boolean]
+}>()
 
 const { t } = useI18n()
 const toast = useQsToast()
@@ -44,6 +49,14 @@ const activeStepTitle = computed(() => steps.value[step.value]?.title ?? '')
 /** 选中的汇率（第一步写入，第二步据此算两个金额）。 */
 const selectedSource = ref<SlhReconciliationSettleRateSource | null>(null)
 const selectedRate = ref<string | null>(null)
+/** 写入进行中：由 QsGenericModal 的 submitting 托管正文与页脚交互。 */
+const submitting = ref(false)
+/**
+ * 提交标识随每次打开生成：双击或网络重试命中同一条记录，
+ * 关掉再打开才算新的一次确认。
+ */
+const settlementKey = ref(crypto.randomUUID())
+let controller: AbortController | null = null
 const rateCards = computed(() => buildSettleRateCards(props.systemRate, props.billRate))
 /** 纯函数只要求最小翻译签名；带参数时显式展开，与页面里其它 logic 的既有写法一致。 */
 function translate(key: string, params?: Record<string, unknown>) {
@@ -87,12 +100,13 @@ const RESULT_VALUE_SLOT_CLASS = 'min-w-[12ch]'
  */
 const DASHED_GROUP_CLASSES = 'flex flex-wrap flex-1 gap-2 min-w-0 max-w-[27.5rem] px-2 py-2 border border-dashed border-border rounded-xl items-center'
 
-/** 每次打开都重置：回到第一步、清掉上一行的选择。 */
+/** 每次打开都重置：回到第一步、清掉上一行的选择，并换一个提交标识。 */
 watch(() => props.modelValue, (open) => {
   if (open) {
     step.value = 0
     selectedSource.value = null
     selectedRate.value = null
+    settlementKey.value = crypto.randomUUID()
   }
 })
 
@@ -104,17 +118,48 @@ function selectRate(card: SlhReconciliationSettleRateCard): void {
   selectedRate.value = card.rate
 }
 
-/** 确定：只把两个金额打出来（轻提示），不落库。 */
-function confirmSettlement(): void {
-  const blocks = summary.value?.blocks ?? []
-  const missing = t('slhBill.valueMissing')
-  const resultOf = (id: 'settlement' | 'paymentFee') => (
-    blocks.find(block => block.id === id)?.result ?? missing
-  )
-  toast.info(t('slhReconciliation.settle.doneToast', {
-    settlement: resultOf('settlement'),
-    fee: resultOf('paymentFee'),
-  }))
+/**
+ * 确定结算：把这一行的结算结果写进库。
+ *
+ * 提交界面上的汇率与六个金额，服务端按来源重取汇率、重算并逐项比对后才落库；
+ * 成功即视为本行已核对（服务端同时标记成员行与账单行），关窗并让页面刷新。
+ */
+async function confirmSettlement(): Promise<void> {
+  const current = summary.value
+  const member = props.member
+  const batch = props.batch
+  if (current === null || member === null || batch === null
+    || selectedSource.value === null || selectedRate.value === null) {
+    return
+  }
+  controller?.abort()
+  const pending = new AbortController()
+  controller = pending
+  submitting.value = true
+  try {
+    await slhReconciliationBatchesApi.settle(batch.id, {
+      batchLineId: member.id,
+      rateSource: selectedSource.value,
+      rate: selectedRate.value,
+      amounts: current.payload,
+    }, settlementKey.value, pending.signal)
+    if (pending.signal.aborted) {
+      return
+    }
+    toast.success(t('slhReconciliation.settle.savedToast'))
+    visible.value = false
+    emit('settled')
+  }
+  catch (failure) {
+    if (!pending.signal.aborted) {
+      toast.error(t(resolveSettleFailureKey(failure)))
+    }
+  }
+  finally {
+    if (controller === pending) {
+      submitting.value = false
+    }
+  }
 }
 
 const canNext = computed(() => selectedRate.value !== null)
@@ -125,6 +170,7 @@ const canNext = computed(() => selectedRate.value !== null)
     v-model="visible"
     :title="t('slhReconciliation.settle.title')"
     :description="t('slhReconciliation.settle.description')"
+    :submitting="submitting"
     size="2xl"
   >
     <template #header-leading>

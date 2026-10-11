@@ -37,12 +37,15 @@ interface BatchDetail {
   id: string
   memberCount: number
   members: Array<{
+    codAmountTwd: string | null
+    id: string
     lineId: string
     matchedContainerBatchName: string
     matchedLoadingItemId: string
     matchedLoadingItemLineNumber: number
     matchedLoadingItem: { shipmentNo: string | null }
     matchSource: string
+    reconciliationStatus: string
     purchaseOrder: {
       id: string
       orderNo: string
@@ -610,6 +613,169 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     const paged = (await browser.get(BASE).query({ status: 'all', page: 1, pageSize: 1 }).expect(200)).body as { items: unknown[], total: number, page: number, pageSize: number }
     expect([paged.page, paged.pageSize, paged.total]).toEqual([1, 1, totalCount])
     expect(paged.items).toHaveLength(1)
+  })
+
+  describe('确认结算', () => {
+    /** 系统汇率在测试库里保持零值或没有行，这里显式给台币一条可用汇率（口径与 dev 一致）。 */
+    const setSystemRate = async (value: string) => {
+      const currency = await h.prisma.currency.findUniqueOrThrow({ where: { code: 'TWD' }, select: { id: true } })
+      await h.prisma.exchangeRate.upsert({
+        where: { currencyId: currency.id },
+        create: { currencyId: currency.id, foreignUnitsPerCny: value },
+        update: { foreignUnitsPerCny: value },
+      })
+    }
+    const settle = (batchId: string, key: string, body: Record<string, unknown>) => browser
+      .post(`${BASE}/${batchId}/settlements`).set(packagingHeaders).set('Idempotency-Key', key).send(body)
+    const pendingBatch = async () => (await h.prisma.slhReconciliationBatch.findFirstOrThrow({
+      where: { billId: pending.id, completedAt: null }, select: { id: true },
+    })).id
+    const memberByCod = async (batchId: string, codAmountTwd: string) => {
+      const detail = (await browser.get(`${BASE}/${batchId}`).expect(200)).body as BatchDetail
+      const member = detail.members.find(entry => entry.codAmountTwd === codAmountTwd)
+      if (member === undefined) throw new Error(`member with cod ${codAmountTwd} not found`)
+      return member
+    }
+    /** 夹具里每柜一个销售订单，约定总额固定为 10.0000（TWD）。 */
+    const payload = (batchLineId: string, amounts: Record<string, string | null>) => ({
+      batchLineId, rateSource: 'SYSTEM', rate: '5.200000000000', amounts,
+    })
+    const fullPayload = (batchLineId: string, rateSource: string, rate: string, settlementAmountCny: string) => ({
+      batchLineId, rateSource, rate,
+      amounts: {
+        codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
+        settlementAmountCny, salesAmount: '10.0000', paymentFeeAmountCny: '0.01',
+      },
+    })
+
+    it('写入结算结果：标记成员行与账单行、写审计事件，金额按「金额 + 币种」成对落库', async () => {
+      await setSystemRate('5.200000000000')
+      const batchId = await pendingBatch()
+      const member = await memberByCod(batchId, '129000.00')
+      const response = await settle(batchId, randomUUID(), payload(member.id, {
+        codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
+        settlementAmountCny: '19098.85', salesAmount: '10.0000', paymentFeeAmountCny: '0.01',
+      })).expect(201)
+      expect(response.body).toMatchObject({
+        batchLineId: member.id, status: 'ACTIVE', rateSource: 'SYSTEM', paymentFeeRate: '0.007000000000',
+      })
+
+      const row = await h.prisma.slhReconciliationSettlement.findFirstOrThrow({ where: { batchLineId: member.id } })
+      expect(row).toMatchObject({
+        status: 'ACTIVE', rateSource: 'SYSTEM',
+        slhBillNo: pending.slhBillNo,
+        codAmountCurrency: 'TWD', ntdSurchargeCurrency: 'TWD',
+        payableCurrency: 'CNY', settlementCurrency: 'CNY', paymentFeeCurrency: 'CNY', salesCurrency: 'TWD',
+        shippingMarkText: 'L-010229', warehouseReceiptReference: 'WG-0102-0092', containerBatchNo: '0102-01柜',
+      })
+      expect(row.salesOrderNo.startsWith('PKG-SO-')).toBe(true)
+      expect(row.codAmountTwd?.toFixed(2)).toBe('129000.00')
+      expect(row.settlementAmountCny?.toFixed(2)).toBe('19098.85')
+      expect(row.paymentFeeAmountCny?.toFixed(2)).toBe('0.01')
+      expect(row.foreignUnitsPerCny.toFixed(12)).toBe('5.200000000000')
+
+      // 首次核对才写留痕：成员行与账单行都要被标记，批次进度随之变化，切换器读到的行状态变成已对账。
+      const memberRow = await h.prisma.slhReconciliationBatchLine.findUniqueOrThrow({ where: { id: member.id }, select: { reconciledAt: true, reconciledById: true } })
+      expect(memberRow.reconciledAt).not.toBeNull()
+      // 核对人就是这次写入的记录人（浏览器会话身份，不假设等于夹具账号）。
+      expect(memberRow.reconciledById).toBe(row.createdById)
+      const lineRow = await h.prisma.slhBillLine.findUniqueOrThrow({ where: { id: member.lineId }, select: { reconciledAt: true } })
+      expect(lineRow.reconciledAt).not.toBeNull()
+      const detail = (await browser.get(`${BASE}/${batchId}`).expect(200)).body as BatchDetail
+      expect(detail.reconciledMemberCount).toBe(1)
+      expect(detail.members.find(entry => entry.id === member.id)?.reconciliationStatus).toBe('RECONCILED')
+
+      const audit = await h.prisma.auditEvent.findFirst({
+        where: { eventType: 'SLH_BILL_LINES_RECONCILED', targetId: (response.body as { id: string }).id }, select: { metadata: true },
+      })
+      expect(audit?.metadata).toMatchObject({ batchLineId: member.id, rateSource: 'SYSTEM', settlementAmountCny: '19098.85' })
+    })
+
+    it('界面值与重算不一致、汇率变化、来源不可用都在写库前被拒，且不落数据', async () => {
+      const batchId = await pendingBatch()
+      const member = await memberByCod(batchId, '129000.00')
+      const before = await h.prisma.slhReconciliationSettlement.count()
+
+      const mismatch = await settle(batchId, randomUUID(), payload(member.id, {
+        codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
+        settlementAmountCny: '19098.86', salesAmount: '10.0000', paymentFeeAmountCny: '0.01',
+      })).expect(409)
+      expect(errorCode(mismatch)).toBe('SLH_RECON_SETTLEMENT_MISMATCH')
+      expect((mismatch.body as { message: string }).message).toContain('结算金额')
+
+      const rateChanged = await settle(batchId, randomUUID(), fullPayload(member.id, 'SYSTEM', '5.100000000000', '19098.85')).expect(409)
+      expect(errorCode(rateChanged)).toBe('SLH_RECON_SETTLEMENT_RATE_CHANGED')
+
+      // 台币汇率行被删掉（没有可用汇率）：来源不可用必须失败关闭。
+      const twd = await h.prisma.currency.findUniqueOrThrow({ where: { code: 'TWD' }, select: { id: true } })
+      await h.prisma.exchangeRate.deleteMany({ where: { currencyId: twd.id } })
+      const unavailable = await settle(batchId, randomUUID(), payload(member.id, {
+        codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
+        settlementAmountCny: '19098.85', salesAmount: '10.0000', paymentFeeAmountCny: '0.01',
+      })).expect(409)
+      expect(errorCode(unavailable)).toBe('SLH_RECON_SETTLEMENT_RATE_UNAVAILABLE')
+      await setSystemRate('5.200000000000')
+
+      expect(await h.prisma.slhReconciliationSettlement.count()).toBe(before)
+    })
+
+    it('相同数据被拒、不同数据取代旧记录、同键重放只落一条', async () => {
+      const batchId = await pendingBatch()
+      const member = await memberByCod(batchId, '129000.00')
+
+      // 与当前有效记录完全相同的口径 ⇒ 拒绝，不写库。
+      const unchanged = await settle(batchId, randomUUID(), payload(member.id, {
+        codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
+        settlementAmountCny: '19098.85', salesAmount: '10.0000', paymentFeeAmountCny: '0.01',
+      })).expect(409)
+      expect(errorCode(unchanged)).toBe('SLH_RECON_SETTLEMENT_UNCHANGED')
+
+      // 换汇率来源 ⇒ 口径变了：旧记录失效、新记录有效，同一行始终只剩一条有效。
+      const key = randomUUID()
+      const changed = await settle(batchId, key, fullPayload(member.id, 'EMBEDDED', '4.800000000000', '21070.00')).expect(201)
+      expect(changed.body).toMatchObject({ status: 'ACTIVE', rateSource: 'EMBEDDED' })
+      const rows = await h.prisma.slhReconciliationSettlement.findMany({
+        where: { batchLineId: member.id }, orderBy: { createdAt: 'asc' }, select: { id: true, status: true },
+      })
+      expect(rows).toHaveLength(2)
+      expect(rows.map(row => row.status)).toEqual(['SUPERSEDED', 'ACTIVE'])
+      expect(rows[1]?.id).toBe((changed.body as { id: string }).id)
+
+      // 同键重放：返回同一条记录且不新增行；同键换载荷被拒。
+      const replay = await settle(batchId, key, fullPayload(member.id, 'EMBEDDED', '4.800000000000', '21070.00')).expect(201)
+      expect((replay.body as { id: string }).id).toBe((changed.body as { id: string }).id)
+      expect(await h.prisma.slhReconciliationSettlement.count({ where: { batchLineId: member.id } })).toBe(2)
+
+      const reused = await settle(batchId, key, fullPayload(member.id, 'SYSTEM', '5.200000000000', '19098.85')).expect(409)
+      expect(errorCode(reused)).toBe('SLH_RECON_SETTLEMENT_KEY_REUSED')
+
+      // 重新结算不刷新「首次核对时刻」：留痕仍是第一次写入时的值。
+      const reconciled = await h.prisma.slhReconciliationBatchLine.findUniqueOrThrow({ where: { id: member.id }, select: { reconciledAt: true } })
+      expect(reconciled.reconciledAt).not.toBeNull()
+      const detail = (await browser.get(`${BASE}/${batchId}`).expect(200)).body as BatchDetail
+      expect(detail.reconciledMemberCount).toBe(1)
+      // 数据行不可删：直接删库被触发器拒绝。
+      await expect(h.prisma.$executeRaw`DELETE FROM slh_reconciliation_settlements`).rejects.toThrow(/immutable/u)
+    })
+
+    it('权限、批次归属与完成状态都在写库前把关', async () => {
+      const batchId = await pendingBatch()
+      const member = await memberByCod(batchId, '129000.00')
+      const body = fullPayload(member.id, 'SYSTEM', '5.200000000000', '19098.85')
+      const rowsBefore = await h.prisma.slhReconciliationSettlement.count()
+
+      // 缺少 reconcile 权限：403；批次或成员不存在：404；非法幂等键：422。
+      expect((await outsider.post(`${BASE}/${batchId}/settlements`).set(packagingHeaders).set('Idempotency-Key', randomUUID()).send(body)).status).toBe(403)
+      expect(errorCode(await settle(unknownId, randomUUID(), body).expect(404))).toBe('SLH_RECON_BATCH_NOT_FOUND')
+      expect(errorCode(await settle(batchId, randomUUID(), { ...body, batchLineId: unknownId }).expect(404))).toBe('SLH_RECON_BATCH_NOT_FOUND')
+      expect(errorCode(await settle(batchId, 'not-a-uuid', body).expect(422))).toBe('VALIDATION_FAILED')
+
+      // 批次完成后不能再确认结算。
+      await browser.post(`${BASE}/${batchId}/complete`).set(packagingHeaders).send({}).expect(200)
+      const completed = await settle(batchId, randomUUID(), body).expect(409)
+      expect(errorCode(completed)).toBe('SLH_RECON_BATCH_NOT_IN_PROGRESS')
+      expect(await h.prisma.slhReconciliationSettlement.count()).toBe(rowsBefore)
+    })
   })
 
   it('取号不可用：停用编号规则后创建被拒，且不留下批次与派发记录', async () => {

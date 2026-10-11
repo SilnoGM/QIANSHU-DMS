@@ -753,6 +753,7 @@ onBeforeUnmount(() => {
       :member="selectedMember"
       :system-rate="settleSystemRate"
       :bill-rate="settleBillRate"
+      @settled="load"
     />
   </div>
 </template>

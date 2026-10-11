@@ -425,7 +425,17 @@
       "next": "下一步",
       "confirm": "確定結算",
       "cancel": "取消",
-      "doneToast": "結算金額 {settlement} · 金流費 {fee}"
+      "savedToast": "結算結果已記錄",
+      "errorUnchanged": "已有相同的結算結果，未重複記錄",
+      "errorRateChanged": "該來源的匯率已變化，請重新打開結算彈窗",
+      "errorMismatch": "結算金額與服務端重算結果不一致，請重新打開結算彈窗",
+      "errorRateUnavailable": "當前沒有該來源可用的匯率",
+      "errorSourceMissing": "這一行的採購或銷售來源缺失，暫時無法結算",
+      "errorKeyReused": "提交標識已被使用，請刷新後重試",
+      "errorBatchCompleted": "該批次已經結束，不能再確認結算",
+      "errorStateChanged": "資料已變化或正在處理，請刷新後重試",
+      "errorForbidden": "權限不足",
+      "errorUnknown": "結算失敗，請稍後重試"
     }
   }
 }
