@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { StepsItem } from '@fantastic-admin/components'
-import type { SlhReconciliationSettleRateCard, SlhReconciliationSettleRateSource } from './settle-modal.logic'
+import type { SlhReconciliationSettleRateCard, SlhReconciliationSettleRateSource, SlhReconciliationSettleTone } from './settle-modal.logic'
 import type { SlhReconciliationBatchDetailDto, SlhReconciliationBatchMemberDto } from '@/api/generated/types.gen'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
@@ -46,11 +46,24 @@ const activeStepTitle = computed(() => steps.value[step.value]?.title ?? '')
 const selectedSource = ref<SlhReconciliationSettleRateSource | null>(null)
 const selectedRate = ref<string | null>(null)
 const rateCards = computed(() => buildSettleRateCards(props.systemRate, props.billRate))
+/** 纯函数只要求最小翻译签名；带参数时显式展开，与页面里其它 logic 的既有写法一致。 */
+function translate(key: string, params?: Record<string, unknown>) {
+  return params === undefined ? t(key) : t(key, params)
+}
 const summary = computed(() => (
   props.member === null
     ? null
-    : buildSettleSummary(props.member, selectedRate.value, currencyCatalog.currencies.value)
+    : buildSettleSummary(props.member, selectedRate.value, translate)
 ))
+/** 结果色：结算金额按符号（负红/正绿）、金流费恒红，颜色只由逻辑层给的 tone 决定。 */
+const RESULT_TONE_CLASSES: Record<SlhReconciliationSettleTone, string> = {
+  danger: '!text-destructive',
+  success: '!text-primary',
+  neutral: '',
+}
+function resultToneClass(tone: SlhReconciliationSettleTone): string {
+  return RESULT_TONE_CLASSES[tone]
+}
 
 /** 每次打开都重置：回到第一步、清掉上一行的选择。 */
 watch(() => props.modelValue, (open) => {
@@ -71,14 +84,15 @@ function selectRate(card: SlhReconciliationSettleRateCard): void {
 
 /** 确定：只把两个金额打出来（轻提示），不落库。 */
 function confirmSettlement(): void {
-  const current = summary.value
+  const blocks = summary.value?.blocks ?? []
+  const resultOf = (id: 'settlement' | 'paymentFee') => (
+    blocks.find(block => block.id === id)?.result.value ?? null
+  )
+  const settlement = resultOf('settlement')
+  const fee = resultOf('paymentFee')
   toast.info(t('slhReconciliation.settle.doneToast', {
-    settlement: current === null || current.settlementAmount.value === null
-      ? t('slhBill.valueMissing')
-      : current.settlementAmount.value,
-    fee: current === null || current.paymentFeeAmount.value === null
-      ? t('slhBill.valueMissing')
-      : current.paymentFeeAmount.value,
+    settlement: settlement ?? t('slhBill.valueMissing'),
+    fee: fee ?? t('slhBill.valueMissing'),
   }))
 }
 
@@ -208,54 +222,88 @@ const canNext = computed(() => selectedRate.value !== null)
       />
     </section>
 
-    <!-- 第二步：当前已选汇率 + 两个计算式与结果。 -->
+    <!-- 第二步：基准汇率条 + 两块算式表与结果。 -->
     <section v-show="step === 1" class="mt-5 flex flex-col gap-4 min-w-0">
-      <article class="p-4 border border-border rounded-lg min-w-0">
-        <h3 class="qs-type-section-title m-0 flex gap-2 items-center">
-          <span class="rounded-full bg-primary h-4.5 w-1" aria-hidden="true" />
-          {{ t('slhReconciliation.settle.selectedRate') }}
-        </h3>
-        <p class="text-2xl qs-type-data-emphasis m-0 mt-3 tabular-nums">
-          {{ summary?.rate ?? t('slhBill.valueMissing') }}
-        </p>
-      </article>
+      <div class="px-4 py-3 border border-border rounded-xl flex flex-wrap gap-x-3 gap-y-2 min-w-0 items-center">
+        <span class="text-sm text-primary font-medium px-2.5 py-1 rounded-md bg-primary/10 shrink-0">
+          {{ t('slhReconciliation.settle.baseRate') }}
+        </span>
+        <span class="qs-type-meta text-muted-foreground shrink-0">
+          {{ t('slhReconciliation.settle.baseRateLabel') }}
+        </span>
+        <span class="text-base qs-type-data tabular-nums">
+          {{ summary?.rateBaseText }}
+        </span>
+        <button
+          type="button"
+          class="text-sm text-primary font-medium ml-auto flex shrink-0 gap-0.5 items-center hover:underline"
+          @click="step = 0"
+        >
+          {{ t('slhReconciliation.settle.changeRate') }}
+          <FaIcon name="i-lucide:chevron-right" class="size-4" aria-hidden="true" />
+        </button>
+      </div>
 
-      <article class="p-4 border border-border rounded-lg min-w-0">
-        <h3 class="qs-type-section-title m-0 flex gap-2 items-center">
-          <span class="rounded-full bg-primary h-4.5 w-1" aria-hidden="true" />
-          {{ t('slhReconciliation.settle.settlementTitle') }}
-        </h3>
-        <p class="text-sm qs-type-data m-0 mt-3 break-all">
-          {{ summary?.settlementFormula }}
-        </p>
-        <!-- 「本行不涉及」的金额按 0 代入时给一行说明，避免把代入值误读成账面数据。 -->
-        <p v-if="summary?.settlementAssumesZero" class="qs-type-meta text-muted-foreground m-0 mt-1">
-          {{ t('slhReconciliation.settle.missingAmountAsZero') }}
-        </p>
-        <div class="mt-2 flex justify-end">
-          <AmountDisplay
-            :value="summary?.settlementAmount.value ?? null"
-            :currency="summary?.settlementAmount.currencyCode ?? 'CNY'"
-            :currencies="currencyCatalog.currencies.value"
-            class="!text-2xl !font-semibold"
-          />
+      <article
+        v-for="block in summary?.blocks ?? []"
+        :key="block.id"
+        class="p-4 border border-border rounded-lg min-w-0"
+      >
+        <header class="flex flex-wrap gap-x-3 items-baseline justify-between">
+          <h3 class="qs-type-section-title m-0 flex gap-2 items-center">
+            <span class="rounded-full bg-primary h-4.5 w-1" aria-hidden="true" />
+            {{ t(block.titleKey) }}
+          </h3>
+          <p class="qs-type-meta text-muted-foreground m-0">
+            {{ block.formula }}
+          </p>
+        </header>
+
+        <!-- 算式表：运算符列承载方向，行值保持原值；汇总项之前用虚线分开。 -->
+        <div class="mt-3 p-3 rounded-lg bg-muted/40 flex flex-col gap-2 min-w-0">
+          <div
+            v-for="row in block.rows"
+            :key="row.id"
+            class="flex gap-3 min-w-0 items-baseline justify-between"
+            :class="row.dividerBefore ? 'mt-2 pt-2 border-t border-dashed border-border' : ''"
+          >
+            <span class="text-sm text-muted-foreground flex gap-2 min-w-0 items-baseline">
+              <span class="text-center shrink-0 w-3">
+                {{ row.operator ?? '' }}
+              </span>
+              <span class="truncate">
+                {{ row.label }}
+              </span>
+            </span>
+            <AmountDisplay
+              v-if="row.kind === 'amount'"
+              :value="row.amount.value"
+              :currency="row.amount.currencyCode"
+              :currencies="currencyCatalog.currencies.value"
+              class="shrink-0 !text-sm"
+            />
+            <span v-else class="text-sm qs-type-data shrink-0 tabular-nums">
+              {{ row.text }}
+            </span>
+          </div>
         </div>
-      </article>
 
-      <article class="p-4 border border-border rounded-lg min-w-0">
-        <h3 class="qs-type-section-title m-0 flex gap-2 items-center">
-          <span class="rounded-full bg-primary h-4.5 w-1" aria-hidden="true" />
-          {{ t('slhReconciliation.settle.paymentFeeTitle') }}
-        </h3>
-        <p class="text-sm qs-type-data m-0 mt-3 break-all">
-          {{ summary?.paymentFeeFormula }}
-        </p>
-        <div class="mt-2 flex justify-end">
+        <div class="mt-3 flex gap-4 min-w-0 items-end justify-between">
+          <div class="pb-1 min-w-0">
+            <p class="text-sm font-medium m-0 truncate">
+              {{ t(block.resultLabelKey) }}
+            </p>
+            <!-- 「本行不涉及」的金额被按 0 代入过才给说明，避免把代入值误读成账面数据。 -->
+            <p v-if="block.noteKey" class="qs-type-meta text-muted-foreground m-0 mt-1">
+              {{ t(block.noteKey) }}
+            </p>
+          </div>
           <AmountDisplay
-            :value="summary?.paymentFeeAmount.value ?? null"
-            :currency="summary?.paymentFeeAmount.currencyCode ?? 'CNY'"
+            :value="block.result.value"
+            :currency="block.result.currencyCode"
             :currencies="currencyCatalog.currencies.value"
-            class="!text-2xl !font-semibold"
+            class="shrink-0 !text-3xl !font-semibold"
+            :class="resultToneClass(block.resultTone)"
           />
         </div>
       </article>
