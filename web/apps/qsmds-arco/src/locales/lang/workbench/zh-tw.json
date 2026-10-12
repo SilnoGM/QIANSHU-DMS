@@ -223,8 +223,8 @@
       "MANUAL": "手工填寫"
     },
     "rateValue": "入庫匯率",
+    "reconcilingBatch": "對帳中",
     "reconciliation": "對帳核對",
-    "reconciliationUnavailable": "對帳功能暫未開放",
     "reconciliationStatus": {
       "PENDING": "未對帳",
       "PARTIAL": "部分對帳",
@@ -242,6 +242,10 @@
     },
     "stateFilter": "帳單狀態",
     "startReconciliation": "開始對帳",
+    "startReconciliationConfirm": "確認開始",
+    "startReconciliationHint": "將為帳單 {billNo} 建立對帳批次，並凍結目前可核對的 {count} 行明細。",
+    "startReconciliationSuccess": "已建立對帳批次 {batchNo}",
+    "startReconciliationTitle": "開始對帳？",
     "submitting": "正在入庫",
     "superseded": "已被取代",
     "supersededAt": "取代時間",

@@ -232,8 +232,8 @@
       "MANUAL": "手工填写"
     },
     "rateValue": "入库汇率",
+    "reconcilingBatch": "对账中",
     "reconciliation": "对账核对",
-    "reconciliationUnavailable": "对账功能暂未开放",
     "reconciliationStatus": {
       "PENDING": "未对账",
       "PARTIAL": "部分对账",
@@ -251,6 +251,10 @@
     },
     "stateFilter": "账单状态",
     "startReconciliation": "开始对账",
+    "startReconciliationConfirm": "确认开始",
+    "startReconciliationHint": "将为账单 {billNo} 创建对账批次，并冻结当前可核对的 {count} 行明细。",
+    "startReconciliationSuccess": "已创建对账批次 {batchNo}",
+    "startReconciliationTitle": "开始对账？",
     "submitting": "正在入库",
     "superseded": "已被取代",
     "supersededAt": "取代时间",

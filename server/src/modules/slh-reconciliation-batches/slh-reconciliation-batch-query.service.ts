@@ -307,28 +307,33 @@ export class SlhReconciliationBatchQueryService {
    *
    * 每单给两个数：`reconcilableLineCount`（匹配得上且尚未对账的行）与 `unfrozenLineCount`
    * （其中没有被进行中批次冻结、即「当前可核对」列显示的行）；**两者之差就是进行中批次
-   * 已经冻结的明细行数**，所以账单被批次占用后前者不变、后者归零。未知账单按 0 行返回
-   * （调用方拿的是刚列出来的主键），全程只读。
+   * 已经冻结的明细行数**，所以账单被批次占用后前者不变、后者归零。同时带出占用该账单的
+   * 进行中批次 id 与编号：账单列表据此把入口显示成「继续对账」而不是「开始对账」。
+   * 未知账单按 0 行返回（调用方拿的是刚列出来的主键），全程只读。
    */
   async reconcilableCounts(input: SlhReconciliationReconcilableCountsRequestDto): Promise<SlhReconciliationReconcilableCountsDto> {
     const billIds = [...new Set(input.billIds)]
     // 进行中批次冻结了哪些行：一次查完再逐单做差集，避免每单再查一次批次与成员。
+    // 「一张账单同时只有一个进行中批次」由创建路径的账单行锁与占用复检保证，因此这里按账单存一条。
     const activeBatches = await this.prisma.slhReconciliationBatch.findMany({
       where: { billId: { in: billIds }, completedAt: null },
-      select: { billId: true, members: { select: { lineId: true } } },
+      select: { id: true, batchNo: true, billId: true, members: { select: { lineId: true } } },
     })
     const frozenLineIdsByBill = new Map<string, Set<string>>()
+    const inProgressBatchByBill = new Map<string, { id: string, batchNo: string }>()
     for (const batch of activeBatches) {
       const frozen = frozenLineIdsByBill.get(batch.billId) ?? new Set<string>()
       for (const member of batch.members) {
         frozen.add(member.lineId)
       }
       frozenLineIdsByBill.set(batch.billId, frozen)
+      inProgressBatchByBill.set(batch.billId, { id: batch.id, batchNo: batch.batchNo })
     }
     const items = await Promise.all(billIds.map(async (billId) => {
       const matches = await matchBillUnreconciledLines(this.prisma, billId)
       const reconcilableLineIds = matches.filter(match => match.status === 'MATCHED').map(match => match.line.id)
       const frozenLineIds = frozenLineIdsByBill.get(billId)
+      const inProgressBatch = inProgressBatchByBill.get(billId)
       return {
         billId,
         reconcilableLineCount: reconcilableLineIds.length,
@@ -336,6 +341,8 @@ export class SlhReconciliationBatchQueryService {
           ? reconcilableLineIds.length
           : reconcilableLineIds.filter(lineId => !frozenLineIds.has(lineId)).length,
         reconcilableLineIds,
+        inProgressBatchId: inProgressBatch?.id ?? null,
+        inProgressBatchNo: inProgressBatch?.batchNo ?? null,
         reasons: summarizeUnmatchedReasons(matches),
       }
     }))

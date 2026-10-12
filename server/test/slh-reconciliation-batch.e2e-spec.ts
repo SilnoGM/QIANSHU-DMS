@@ -320,9 +320,19 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     expect(blockedByKeyword.items.map(item => item.id)).toEqual([unmatchable.id])
   })
 
-  it('静默算：批量返回可核对行数、未冻结行数与行 id，无可核对行时给原因汇总', async () => {
+  it('静默算：批量返回可核对行数、未冻结行数、行 id 与占用该账单的进行中批次，无批次时为 null', async () => {
     const response = await reconcilableCounts([pending.id, unmatchable.id, occupied.id]).expect(200)
-    const items = (response.body as { items: Array<{ billId: string, reconcilableLineCount: number, unfrozenLineCount: number, reconcilableLineIds: string[], reasons: Array<{ code: string, count: number }> }> }).items
+    const items = (response.body as {
+      items: Array<{
+        billId: string
+        reconcilableLineCount: number
+        unfrozenLineCount: number
+        reconcilableLineIds: string[]
+        inProgressBatchId: string | null
+        inProgressBatchNo: string | null
+        reasons: Array<{ code: string, count: number }>
+      }>
+    }).items
     expect(items.map(item => item.billId).sort()).toEqual([pending.id, unmatchable.id, occupied.id].sort())
     const pendingCounts = items.find(item => item.billId === pending.id)!
     expect(pendingCounts.reconcilableLineCount).toBe(3)
@@ -330,20 +340,29 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     expect(pendingCounts.reasons).toEqual([])
     // 没有被进行中批次冻结任何行：未冻结行数＝可核对行数。
     expect(pendingCounts.unfrozenLineCount).toBe(3)
+    // 没有进行中批次：批次身份双 null，账单列表据此给「开始对账」。
+    expect([pendingCounts.inProgressBatchId, pendingCounts.inProgressBatchNo]).toEqual([null, null])
     const unmatchableCounts = items.find(item => item.billId === unmatchable.id)!
     expect(unmatchableCounts.reconcilableLineCount).toBe(0)
     expect(unmatchableCounts.unfrozenLineCount).toBe(0)
     expect(unmatchableCounts.reconcilableLineIds).toEqual([])
+    expect([unmatchableCounts.inProgressBatchId, unmatchableCounts.inProgressBatchNo]).toEqual([null, null])
     expect(unmatchableCounts.reasons).toEqual([{ code: 'INVALID_CONTAINER_NAME', count: 3 }])
     // 占用中但一个成员都没冻结（本例的批次是直接落库的）：匹配行仍在，
-    // 「未冻结」只反映冻结了多少行，不反映这一账单此刻能不能新建批次（那由弹窗的可选分组定）。
+    // 「未冻结」只反映冻结了多少行，不反映这一账单此刻能不能新建批次（那由弹窗的可选分组定）；
+    // 但占用它的批次身份必须给出来，账单列表才有条件显示「继续对账」。
+    const occupiedBatch = await h.prisma.slhReconciliationBatch.findFirstOrThrow({
+      where: { billId: occupied.id, completedAt: null }, select: { id: true, batchNo: true },
+    })
     const occupiedCounts = items.find(item => item.billId === occupied.id)!
     expect([occupiedCounts.reconcilableLineCount, occupiedCounts.unfrozenLineCount]).toEqual([3, 3])
+    expect([occupiedCounts.inProgressBatchId, occupiedCounts.inProgressBatchNo]).toEqual([occupiedBatch.id, occupiedBatch.batchNo])
 
     // 已对账完成的账单没有未对账行：0 行、无原因（没有"不能核对的行"可言）。
-    const noLines = (await reconcilableCounts([completed.id]).expect(200)).body as { items: Array<{ reconcilableLineCount: number, unfrozenLineCount: number, reasons: unknown[] }> }
+    const noLines = (await reconcilableCounts([completed.id]).expect(200)).body as { items: Array<{ reconcilableLineCount: number, unfrozenLineCount: number, inProgressBatchId: string | null, reasons: unknown[] }> }
     expect(noLines.items[0].reconcilableLineCount).toBe(0)
     expect(noLines.items[0].unfrozenLineCount).toBe(0)
+    expect(noLines.items[0].inProgressBatchId).toBeNull()
     expect(noLines.items[0].reasons).toEqual([])
   })
 

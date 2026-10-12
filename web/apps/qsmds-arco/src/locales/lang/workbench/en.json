@@ -223,8 +223,8 @@
       "MANUAL": "Manually entered"
     },
     "rateValue": "Import rate",
+    "reconcilingBatch": "In reconciliation",
     "reconciliation": "Reconciliation checks",
-    "reconciliationUnavailable": "Reconciliation is not available yet",
     "reconciliationStatus": {
       "PENDING": "Not reconciled",
       "PARTIAL": "Partially reconciled",
@@ -242,6 +242,10 @@
     },
     "stateFilter": "Bill state",
     "startReconciliation": "Start reconciliation",
+    "startReconciliationConfirm": "Start",
+    "startReconciliationHint": "A reconciliation batch will be created for bill {billNo} and the {count} reconcilable line(s) will be frozen.",
+    "startReconciliationSuccess": "Batch {batchNo} created",
+    "startReconciliationTitle": "Start reconciliation?",
     "submitting": "Storing",
     "superseded": "Superseded",
     "supersededAt": "Superseded at",

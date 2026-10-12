@@ -82,6 +82,12 @@ export class SlhReconciliationReconcilableCountsItemDto {
   })
   unfrozenLineCount!: number
   @ApiProperty({ type: [String], format: 'uuid', description: 'Reconcilable line ids; the create endpoint compares them before freezing members.' }) reconcilableLineIds!: string[]
+  @ApiPropertyOptional({
+    type: 'string', format: 'uuid', nullable: true,
+    description: 'Batch in progress on this bill. At most one by construction; the bill list needs its id to offer 继续对账 instead of 开始对账.',
+  })
+  inProgressBatchId!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Number of that in-progress batch, shown next to the bill status.' }) inProgressBatchNo!: string | null
   @ApiProperty({ type: [SlhBillLineUnmatchedReasonCountDto], description: 'Why the remaining unreconciled lines cannot be reconciled right now.' }) reasons!: SlhBillLineUnmatchedReasonCountDto[]
 }
 

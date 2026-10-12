@@ -85695,6 +85695,17 @@
               "format": "uuid"
             }
           },
+          "inProgressBatchId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Batch in progress on this bill. At most one by construction; the bill list needs its id to offer 继续对账 instead of 开始对账."
+          },
+          "inProgressBatchNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Number of that in-progress batch, shown next to the bill status."
+          },
           "reasons": {
             "description": "Why the remaining unreconciled lines cannot be reconciled right now.",
             "type": "array",

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { CalendarDateRangeValue } from '@fantastic-admin/components'
 import type { SlhBillListState, SlhBillReconciliationFilter } from './list.logic'
-import type { SlhBillListItemDto, SlhBillStatusCountsDto } from '@/api/generated/types.gen'
+import type { SlhBillReconciliationEntryAction } from './reconciliation-status.logic'
+import type { SlhBillListItemDto, SlhBillStatusCountsDto, SlhReconciliationReconcilableCountsItemDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import slhBillsApi from '@/api/modules/slh-bills'
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
@@ -9,6 +10,7 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDateRangeFilter from '@/components/business/QsDateRangeFilter/index.vue'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
@@ -18,6 +20,7 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { containerFailure } from '../containers/use-container-resource'
+import { buildSlhBillBlockReasonText } from '../slh-reconciliation/bill-select.logic'
 import { resolveSlhBillNetDisplay } from './display.logic'
 import {
   buildSlhBillListQuery,
@@ -28,7 +31,12 @@ import {
   SLH_BILL_LIST_STATES,
   SLH_BILL_RECONCILIATION_FILTERS,
 } from './list.logic'
-import { resolveSlhBillReconciliationActionLabelKey, resolveSlhBillReconciliationLabelKey } from './reconciliation-status.logic'
+import {
+  isSlhBillReconciliationStartBlocked,
+  resolveSlhBillReconciliationEntry,
+  resolveSlhBillReconciliationEntryLabelKey,
+  resolveSlhBillReconciliationLabelKey,
+} from './reconciliation-status.logic'
 import SlhBillRateSourceTag from './slh-bill-rate-source-tag.vue'
 import SlhBillReconciliationStatusTag from './slh-bill-reconciliation-status-tag.vue'
 
@@ -43,6 +51,10 @@ const canRead = computed(() => auth('slh-bills:read'))
 /** 可核对行数只在能发起对账时才有意义，没权限就不发注定被拒的请求，列上留占位符。 */
 const canReconcile = computed(() => canRead.value && auth('slh-bills:reconcile'))
 const canImport = computed(() => canRead.value && auth('slh-bills:create'))
+/** 纯函数只要求最小翻译签名；带参数时显式展开，与其它页面的既有写法一致。 */
+function translate(key: string, params?: Record<string, unknown>) {
+  return params === undefined ? t(key) : t(key, params)
+}
 const state = ref<SlhBillListState>('active')
 // 进页面默认停在未对账：财务打开账单管理时最先要处理的就是这批。
 const reconciliationStatus = ref<SlhBillReconciliationFilter>(SLH_BILL_DEFAULT_RECONCILIATION_FILTER)
@@ -57,10 +69,26 @@ const counts = shallowRef<SlhBillStatusCountsDto | null>(null)
 const loading = ref(false)
 const error = ref('')
 /**
- * 「当前可核对」只覆盖当前页：进页面、翻页、改筛选后按当页账单批量算一次，
- * 结果按账单主键存，数值随列表一起被替换，不跨页复用。
+ * 「当前可核对」与对账入口共用这一份当页快照：列只取 `unfrozenLineCount`，
+ * 入口还要 `inProgressBatchId`（有进行中批次就是「继续对账」，没有才是「开始对账」），
+ * 开始对账时要带上 `reconcilableLineIds` 供服务端比对范围。
  */
-const reconcilableCounts = shallowRef<Map<string, number>>(new Map())
+interface SlhBillReconcilableState {
+  unfrozenLineCount: number
+  reconcilableLineCount: number
+  reconcilableLineIds: string[]
+  inProgressBatchId: string | null
+  inProgressBatchNo: string | null
+  reasons: SlhReconciliationReconcilableCountsItemDto['reasons']
+}
+const reconcilableCounts = shallowRef<Map<string, SlhBillReconcilableState>>(new Map())
+/** 开始对账的确认弹窗：目标账单、提交中、就地错误，以及一次尝试用到底的幂等键。 */
+const startOpen = ref(false)
+const starting = ref(false)
+const startTarget = shallowRef<SlhBillListItemDto | null>(null)
+const startError = ref('')
+let startKey: string | null = null
+let startController: AbortController | null = null
 let controller: AbortController | null = null
 let countsController: AbortController | null = null
 let reconcilableController: AbortController | null = null
@@ -85,6 +113,28 @@ const filter = computed(() => ({
 }))
 const query = computed(() => buildSlhBillListQuery({ ...filter.value, page: page.value, pageSize: pageSize.value }))
 const countsQuery = computed(() => buildSlhBillStatusCountsQuery(filter.value))
+/**
+ * 操作列的对账入口：按「有没有进行中批次」逐行判定，计数还没回来时不给入口（见纯函数注释）。
+ * 标签、无障碍名与点击动作都从这一份结果派生，避免三处各判一次。
+ */
+const reconciliationEntry = computed(() => new Map(items.value.map((row) => {
+  const state = reconcilableCounts.value.get(row.id)
+  return [row.id, resolveSlhBillReconciliationEntry({
+    countsKnown: state !== undefined,
+    inProgressBatchId: state?.inProgressBatchId ?? null,
+    reconciliationStatus: row.reconciliationStatus,
+    superseded: row.supersededById !== null,
+  })]
+})))
+const entryOf = (row: SlhBillListItemDto): SlhBillReconciliationEntryAction | null => reconciliationEntry.value.get(row.id) ?? null
+/** 「开始对账」没有可核对的行时软禁用：按钮照常显示，点了说明原因（口径见纯函数）。 */
+function startBlockedOf(row: SlhBillListItemDto): boolean {
+  const state = reconcilableCounts.value.get(row.id)
+  return state !== undefined && isSlhBillReconciliationStartBlocked({
+    inProgressBatchId: state.inProgressBatchId,
+    reconcilableLineCount: state.reconcilableLineCount,
+  })
+}
 const columns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
   // 编号是账单的唯一标识，固定在最左；名称与月份是入库时填的归档信息，紧随其后不固定。
   { id: 'slhBillNo', title: t('slhBill.column.slhBillNo'), accessorKey: 'slhBillNo', width: 215, minWidth: 215, fixed: 'left' },
@@ -95,7 +145,7 @@ const columns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
   { id: 'reconciliationStatus', title: t('slhBill.column.reconciliationStatus'), accessorKey: 'reconciliationStatus', minWidth: 140 },
   { id: 'lineCount', title: t('slhBill.column.lineCount'), accessorKey: 'lineCount', minWidth: 110, align: 'right' },
   // 当前可核对紧跟明细行数：两个数字放一起，才能看出「还有多少行等着核对」。
-  { id: 'reconcilable', title: t('slhBill.column.reconcilableLineCount'), accessorFn: item => reconcilableCounts.value.get(item.id), minWidth: 130, align: 'right' },
+  { id: 'reconcilable', title: t('slhBill.column.reconcilableLineCount'), accessorFn: item => reconcilableCounts.value.get(item.id)?.unfrozenLineCount, minWidth: 130, align: 'right' },
   { id: 'containerBatchCount', title: t('slhBill.column.containerBatchCount'), accessorKey: 'containerBatchCount', minWidth: 110, align: 'right' },
   // 金额三列按用户要求加宽：金额是核对时的主要对象，列太窄会挤在一起不好扫读。
   { id: 'payable', title: t('slhBill.column.payableTotalAmountCny'), accessorKey: 'payableTotalAmountCny', minWidth: 195, align: 'right' },
@@ -217,8 +267,16 @@ async function loadReconcilableCounts(billIds: string[]): Promise<void> {
     if (current.signal.aborted || !canReconcile.value) {
       return
     }
-    // 列口径＝匹配得上且没有被进行中批次冻结的行（unfrozenLineCount），不是全部匹配行。
-    reconcilableCounts.value = new Map(response.data.items.map(item => [item.billId, item.unfrozenLineCount]))
+    // 列口径＝匹配得上且没有被进行中批次冻结的行（unfrozenLineCount），不是全部匹配行；
+    // 入口判据与开始对账的范围也一并存在这里：有进行中批次时 inProgressBatchId 非空。
+    reconcilableCounts.value = new Map(response.data.items.map(item => [item.billId, {
+      unfrozenLineCount: item.unfrozenLineCount,
+      reconcilableLineCount: item.reconcilableLineCount,
+      reconcilableLineIds: item.reconcilableLineIds,
+      inProgressBatchId: item.inProgressBatchId ?? null,
+      inProgressBatchNo: item.inProgressBatchNo ?? null,
+      reasons: item.reasons,
+    }]))
   }
   catch {
     // 静默算：取不到就不显示数字，让「当前可核对」留占位符。
@@ -232,9 +290,88 @@ async function loadReconcilableCounts(billIds: string[]): Promise<void> {
 function viewBill(id: string): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhBillDetail', params: { id } })
 }
-/** 对账入口先占位：功能未上线，只给轻提示，不跳转也不改数据。 */
-function startReconciliation(): void {
-  toast.info(t('slhBill.reconciliationUnavailable'))
+/** 对账入口：有进行中批次就直接回到那条批次继续核对，没有才开新一轮。 */
+function requestReconciliation(row: SlhBillListItemDto): void {
+  const action = entryOf(row)
+  if (action === 'CONTINUE') {
+    continueReconciliation(row)
+    return
+  }
+  if (action !== 'START') {
+    return
+  }
+  if (startBlockedOf(row)) {
+    // 软禁用：不跳转也不弹窗，把「为什么开不起来」按同一套原因文案说清楚（与对账页弹窗同源）。
+    toast.info(buildSlhBillBlockReasonText(
+      { blockReason: 'NO_RECONCILABLE_LINES', reasons: reconcilableCounts.value.get(row.id)?.reasons ?? [] },
+      translate,
+    ))
+    return
+  }
+  openStartDialog(row)
+}
+/** 继续对账：批次详情页就是继续核对的战场，不在这里重复它的内容。 */
+function continueReconciliation(row: SlhBillListItemDto): void {
+  const batchId = reconcilableCounts.value.get(row.id)?.inProgressBatchId
+  if (batchId === undefined || batchId === null) {
+    // 入口存在即代表计数里带了批次 id；真取不到就刷新快照，别跳到空路由上。
+    void loadReconcilableCounts(items.value.map(item => item.id))
+    return
+  }
+  void router.push({ name: 'qsFinanceBillReconciliationSlhReconciliationDetail', params: { id: batchId } })
+}
+function openStartDialog(row: SlhBillListItemDto): void {
+  startTarget.value = row
+  startError.value = ''
+  // 幂等键在一次「打开 → 提交成功」之间保持不变：网络重试只恢复同一批次，不重复取号。
+  startKey = crypto.randomUUID()
+  startOpen.value = true
+}
+/**
+ * 开始对账＝为该账单创建批次并冻结当前可核对的明细行。
+ * 这里带上界面上看到的行 id，服务端重跑匹配后会逐行比对，范围变了就拒绝而不是少核对几行。
+ */
+async function confirmStart(): Promise<void> {
+  const target = startTarget.value
+  if (target === null || starting.value || startKey === null) {
+    return
+  }
+  startController?.abort()
+  const current = new AbortController()
+  startController = current
+  starting.value = true
+  startError.value = ''
+  const key = startKey
+  try {
+    const response = await slhReconciliationBatchesApi.create(
+      {
+        billId: target.id,
+        reconcilableLineIds: reconcilableCounts.value.get(target.id)?.reconcilableLineIds ?? [],
+      },
+      key,
+      current.signal,
+    )
+    if (current.signal.aborted) {
+      return
+    }
+    startKey = null
+    startOpen.value = false
+    toast.success(t('slhBill.startReconciliationSuccess', { batchNo: response.data.batchNo }))
+    await router.push({ name: 'qsFinanceBillReconciliationSlhReconciliationDetail', params: { id: response.data.id } })
+  }
+  catch (failure) {
+    if (current.signal.aborted) {
+      return
+    }
+    // 失败就地说明，并刷新这一页的计数与批次信息：占用冲突与范围变化都要让用户重新看一眼。
+    startError.value = containerFailure(failure).message
+    void loadReconcilableCounts(items.value.map(item => item.id))
+  }
+  finally {
+    if (startController === current) {
+      starting.value = false
+    }
+  }
 }
 function openImport(): void {
   void router.push({ name: 'qsFinanceBillReconciliationSlhBillImport' })
@@ -323,8 +460,8 @@ onBeforeUnmount(() => {
           <span
             v-if="reconcilableCounts.get(row.original.id) !== undefined"
             class="qs-type-data tabular-nums"
-            :class="reconcilableCounts.get(row.original.id)! > 0 && 'text-primary font-semibold'"
-          >{{ reconcilableCounts.get(row.original.id) }}</span>
+            :class="(reconcilableCounts.get(row.original.id)?.unfrozenLineCount ?? 0) > 0 && 'text-primary font-semibold'"
+          >{{ reconcilableCounts.get(row.original.id)?.unfrozenLineCount }}</span>
           <span v-else class="qs-type-data text-muted-foreground">—</span>
         </template>
         <template #cell-containerBatchCount="{ row }">
@@ -362,7 +499,17 @@ onBeforeUnmount(() => {
           <SlhBillRateSourceTag :source="row.original.rateSource ?? null" />
         </template>
         <template #cell-reconciliationStatus="{ row }">
-          <SlhBillReconciliationStatusTag :status="row.original.reconciliationStatus" />
+          <div class="flex flex-wrap gap-x-2 gap-y-1 items-center">
+            <SlhBillReconciliationStatusTag :status="row.original.reconciliationStatus" />
+            <!-- 有进行中批次时补一句「对账中 · 批次号」：状态说的是行核对到哪，批次说的是这单正被谁占着。 -->
+            <span
+              v-if="reconcilableCounts.get(row.original.id)?.inProgressBatchNo"
+              class="qs-type-data inline-flex gap-1 items-center"
+            >
+              <span>{{ t('slhBill.reconcilingBatch') }}</span>
+              <span class="font-mono">{{ reconcilableCounts.get(row.original.id)?.inProgressBatchNo }}</span>
+            </span>
+          </div>
         </template>
         <template #cell-sourceFile="{ row }">
           <!-- 只做"这是原件文件名"的视觉标注，不可点击（下载入口在详情页）。 -->
@@ -400,7 +547,7 @@ onBeforeUnmount(() => {
                   {{ t('slhBill.column.reconcilableLineCount') }}
                 </dt>
                 <dd class="qs-type-data m-0">
-                  {{ reconcilableCounts.get(row.id) ?? '—' }}
+                  {{ reconcilableCounts.get(row.id)?.unfrozenLineCount ?? '—' }}
                 </dd>
               </div>
               <div>
@@ -453,7 +600,16 @@ onBeforeUnmount(() => {
                   {{ t('slhBill.column.reconciliationStatus') }}
                 </dt>
                 <dd class="m-0 mt-1">
-                  <SlhBillReconciliationStatusTag :status="row.reconciliationStatus" />
+                  <div class="flex flex-wrap gap-x-2 gap-y-1 items-center">
+                    <SlhBillReconciliationStatusTag :status="row.reconciliationStatus" />
+                    <span
+                      v-if="reconcilableCounts.get(row.id)?.inProgressBatchNo"
+                      class="qs-type-data inline-flex gap-1 items-center"
+                    >
+                      <span>{{ t('slhBill.reconcilingBatch') }}</span>
+                      <span class="font-mono">{{ reconcilableCounts.get(row.id)?.inProgressBatchNo }}</span>
+                    </span>
+                  </div>
                 </dd>
               </div>
               <div>
@@ -484,19 +640,53 @@ onBeforeUnmount(() => {
           <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.slhBillNo} · ${t('slhBill.viewDetail')}`" @click="viewBill(row.id)">
             <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('slhBill.viewDetail') }}
           </FaButton>
-          <!-- 对账入口按状态出现：未对账给「开始对账」、部分对账给「继续对账」、对账完成不给。 -->
+          <!--
+            对账入口按「有没有进行中批次」出现：有批次就是「继续对账」（回那条批次继续核对），
+            没有才是「开始对账」（开新一轮）；已被取代的账单与全部核对完的账单都不给入口。
+            「开始对账」没有可核对的行时软禁用：照常显示，点了由 requestReconciliation 说明原因。
+          -->
           <FaButton
-            v-if="resolveSlhBillReconciliationActionLabelKey(row.reconciliationStatus)"
+            v-if="canReconcile && entryOf(row) !== null"
             variant="ghost"
             size="sm"
             class="min-h-11 sm:min-h-8"
-            :aria-label="`${row.slhBillNo} · ${t(resolveSlhBillReconciliationActionLabelKey(row.reconciliationStatus) ?? '')}`"
-            @click="startReconciliation"
+            :class="entryOf(row) === 'START' && startBlockedOf(row) ? 'opacity-50' : ''"
+            :aria-disabled="entryOf(row) === 'START' && startBlockedOf(row)"
+            :aria-label="`${row.slhBillNo} · ${t(resolveSlhBillReconciliationEntryLabelKey(entryOf(row) ?? 'START'))}`"
+            @click="requestReconciliation(row)"
           >
-            <FaIcon name="i-lucide:scale" aria-hidden="true" />{{ t(resolveSlhBillReconciliationActionLabelKey(row.reconciliationStatus) ?? '') }}
+            <FaIcon name="i-lucide:scale" aria-hidden="true" />{{ t(resolveSlhBillReconciliationEntryLabelKey(entryOf(row) ?? 'START')) }}
           </FaButton>
         </template>
       </QsGenericTable>
     </FaPageMain>
+
+    <!-- 开始对账的确认：会建批次、占编号并冻结当前可核对的行，因此先让用户看一眼再落库。 -->
+    <QsGenericModal
+      v-model="startOpen"
+      :title="t('slhBill.startReconciliationTitle')"
+      size="sm"
+      :submitting="starting"
+    >
+      <div class="gap-3 grid min-w-0">
+        <p class="qs-type-description text-muted-foreground m-0">
+          {{ t('slhBill.startReconciliationHint', {
+            billNo: startTarget?.slhBillNo ?? '',
+            count: startTarget === null ? 0 : (reconcilableCounts.get(startTarget.id)?.reconcilableLineIds.length ?? 0),
+          }) }}
+        </p>
+        <FaAlert v-if="startError" variant="destructive" role="alert" :title="startError" />
+      </div>
+      <template #footer>
+        <div class="flex flex-col gap-2 w-full sm:flex-row sm:justify-end">
+          <FaButton type="button" variant="outline" class="w-full sm:w-auto" :disabled="starting" @click="startOpen = false">
+            {{ t('slhBill.cancel') }}
+          </FaButton>
+          <FaButton type="button" class="w-full sm:w-auto" :loading="starting" @click="confirmStart">
+            {{ t('slhBill.startReconciliationConfirm') }}
+          </FaButton>
+        </div>
+      </template>
+    </QsGenericModal>
   </div>
 </template>
