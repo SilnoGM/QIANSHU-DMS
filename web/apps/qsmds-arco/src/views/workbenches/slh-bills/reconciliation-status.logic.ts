@@ -32,13 +32,50 @@ export function resolveSlhBillReconciliationLabelKey(status: SlhBillAnyReconcili
   return `slhBill.reconciliationStatus.${status}`
 }
 
+/** 列表操作列的对账入口动作：开始新一轮，或继续那条进行中的批次。 */
+export type SlhBillReconciliationEntryAction = 'START' | 'CONTINUE'
+
 /**
- * 列表操作列的对账入口：未对账 → 开始对账，部分对账 → 继续对账，对账完成不给入口。
- * 返回文案键，`null` 表示该状态下不显示按钮。
+ * 列表操作列的对账入口：判据是「该账单有没有进行中批次」，不是账单三态。
+ *
+ * 三态由明细行派生，和批次占用是两件事：刚建批次还没核对的行数是 0（PENDING），
+ * 但此刻该给的是「继续对账」；反过来，上一批结束后剩下的行还没核对（PARTIAL），
+ * 该给的是「开始对账」——新一轮核对。计数与批次信息还没取到时一律不给入口：
+ * 宁可少给一个，也不给一个指向错的入口。
  */
-export function resolveSlhBillReconciliationActionLabelKey(status: SlhBillReconciliationStatus): string | null {
-  if (status === 'PENDING') {
-    return 'slhBill.startReconciliation'
+export function resolveSlhBillReconciliationEntry(input: {
+  readonly countsKnown: boolean
+  readonly inProgressBatchId: string | null
+  readonly reconciliationStatus: SlhBillReconciliationStatus
+  readonly superseded: boolean
+}): SlhBillReconciliationEntryAction | null {
+  if (input.superseded || !input.countsKnown) {
+    return null
   }
-  return status === 'PARTIAL' ? 'slhBill.continueReconciliation' : null
+  if (input.inProgressBatchId !== null) {
+    return 'CONTINUE'
+  }
+  // 没有进行中批次：全部核对完的账单没有可开的活，其余都还能开新一轮。
+  return input.reconciliationStatus === 'COMPLETED' ? null : 'START'
+}
+
+const ENTRY_LABEL_KEYS: Readonly<Record<SlhBillReconciliationEntryAction, string>> = {
+  START: 'slhBill.startReconciliation',
+  CONTINUE: 'slhBill.continueReconciliation',
+}
+
+export function resolveSlhBillReconciliationEntryLabelKey(action: SlhBillReconciliationEntryAction): string {
+  return ENTRY_LABEL_KEYS[action]
+}
+
+/**
+ * 「开始对账」能不能真的开起来：没有可核对的明细行时按钮软禁用（可点但看起来不可用），
+ * 点了说明原因——与账单详情页完成按钮同一套软禁用口径。继续对账不受这条影响：
+ * 批次已经建好，剩余行核对与否由批次自己管。
+ */
+export function isSlhBillReconciliationStartBlocked(input: {
+  readonly inProgressBatchId: string | null
+  readonly reconcilableLineCount: number
+}): boolean {
+  return input.inProgressBatchId === null && input.reconcilableLineCount === 0
 }

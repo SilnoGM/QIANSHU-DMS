@@ -1,4 +1,4 @@
-export type QsGenericModalSize = 'sm' | 'md' | 'lg' | 'xl'
+export type QsGenericModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl'
 export type QsGenericModalCloseReason
   = | 'close-button'
     | 'overlay'
@@ -27,10 +27,13 @@ export interface QsGenericModalProps {
 export const QS_GENERIC_MODAL_DEFAULT_SIZE: QsGenericModalSize = 'md'
 
 const SIZE_CLASSES: Record<QsGenericModalSize, string> = {
-  sm: 'sm:max-w-[30rem]',
-  md: 'sm:max-w-[35rem]',
-  lg: 'sm:max-w-[45rem]',
-  xl: 'sm:max-w-[56rem]',
+  'sm': 'sm:max-w-[30rem]',
+  'md': 'sm:max-w-[35rem]',
+  'lg': 'sm:max-w-[45rem]',
+  'xl': 'sm:max-w-[56rem]',
+  // 后两档给宽内容（横排算式、多列对照）用，按 +12rem 等步长延续既有梯度。
+  '2xl': 'sm:max-w-[68rem]',
+  '3xl': 'sm:max-w-[80rem]',
 }
 
 const BASE_CONTENT_CLASS = [
@@ -40,7 +43,7 @@ const BASE_CONTENT_CLASS = [
 ].join(' ')
 
 /**
- * 尺寸类保持为静态字符串，确保 UnoCSS 在构建时生成全部四档样式。
+ * 尺寸类保持为静态字符串，确保 UnoCSS 在构建时生成全部档位样式。
  * 窄屏宽度相对 fixed containing block 计算，统一保留 12px 视口边距；
  * 不使用 vw，避免运行中切换设备指标时布局视口单位晚一帧更新而产生横向溢出。
  * 桌面端再按业务内容密度限制最大宽度。

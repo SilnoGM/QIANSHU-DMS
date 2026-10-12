@@ -112,7 +112,9 @@ test('状态标签、空态、主题和操作插槽保持稳定', () => {
     '../../src/locales/lang/purchase-order-desc/en.json',
   )
 
-  assert.match(source, /statusToneClass/u)
+  // 色调类名已抽到共享色板：组件只调用解析器，不自己维护一份硬编码。
+  assert.match(source, /resolveStatusTagToneClass/u)
+  assert.doesNotMatch(source, /const statusToneClass/u)
   assert.match(source, /model\.statuses/u)
   assert.match(source, /purchaseOrderDesc\.empty\.text/u)
   assert.match(source, /purchaseOrderDesc\.empty\.lines/u)

@@ -14,6 +14,7 @@ import { ApiException } from '../../infrastructure/http/api.exception'
 import {
   formatSalesOrderAmountUnits,
   parseSalesOrderAmountUnits,
+  sumSalesOrderReceivedUnits,
 } from './domain/sales-order-decimal'
 import { mapSalesOrderProductOption } from './products/sales-order-product-option.mapper'
 
@@ -534,12 +535,8 @@ function mapDetailDocument(
 }
 
 function mapSalesOrderDetail(row: SalesOrderDetailRow): SalesOrderDetail {
-  const receivedUnits = row.payments.reduce(
-    (sum, payment) => payment.voidedAt === null
-      ? sum + parseSalesOrderAmountUnits(decimalToFixed4(payment.amount))
-      : sum,
-    0n,
-  )
+  // 实际已收款口径下沉到领域模块：详情、列表与对账读取共用同一处累加规则。
+  const receivedUnits = sumSalesOrderReceivedUnits(row.payments)
   const agreedUnits = parseSalesOrderAmountUnits(
     decimalToFixed4(row.agreedTotalAmount),
   )
@@ -763,12 +760,7 @@ export class SalesOrderQueryService {
         const agreedUnits = parseSalesOrderAmountUnits(
           decimalToFixed4(row.agreedTotalAmount),
         )
-        const receivedUnits = row.payments.reduce(
-          (sum, payment) => sum + parseSalesOrderAmountUnits(
-            decimalToFixed4(payment.amount),
-          ),
-          0n,
-        )
+        const receivedUnits = sumSalesOrderReceivedUnits(row.payments)
         return {
           id: row.id,
           orderNo: row.orderNo,

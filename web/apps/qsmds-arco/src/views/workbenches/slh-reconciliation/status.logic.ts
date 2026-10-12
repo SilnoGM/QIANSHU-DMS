@@ -21,6 +21,34 @@ export function resolveSlhReconciliationBatchLabelKey(status: SlhReconciliationB
   return `slhReconciliation.batchStatus.${status}`
 }
 
+/** 完成批次的门禁原因：批次已结束、或还有未核对的明细行。 */
+export type SlhReconciliationCompleteBlockReason = 'BATCH_COMPLETED' | 'LINES_UNRECONCILED'
+
+const COMPLETE_BLOCK_LABEL_KEYS: Readonly<Record<SlhReconciliationCompleteBlockReason, string>> = {
+  BATCH_COMPLETED: 'slhReconciliation.detail.completeBlockedBatchCompleted',
+  LINES_UNRECONCILED: 'slhReconciliation.detail.completeBlockedUnreconciled',
+}
+
+/**
+ * 完成批次的门禁：返回 null 表示可以完成。
+ * 判定只看服务端下发的计数（已核对行数由服务端统计），前端不自行推导每一行的状态；
+ * 成员数为 0 的批次不挡（没有可核对的行，与既有语义一致）。
+ */
+export function resolveSlhReconciliationCompleteBlockReason(batch: {
+  readonly memberCount: number
+  readonly reconciledMemberCount: number
+  readonly status: SlhReconciliationBatchStatus
+}): SlhReconciliationCompleteBlockReason | null {
+  if (batch.status !== 'IN_PROGRESS') {
+    return 'BATCH_COMPLETED'
+  }
+  return batch.reconciledMemberCount >= batch.memberCount ? null : 'LINES_UNRECONCILED'
+}
+
+export function resolveSlhReconciliationCompleteBlockLabelKey(reason: SlhReconciliationCompleteBlockReason): string {
+  return COMPLETE_BLOCK_LABEL_KEYS[reason]
+}
+
 /** 不合格原因：与账单行的匹配规则一一对应（见 slh-bill-line-matching），前端只做取值到文案键的映射。 */
 export function resolveSlhBillLineUnmatchedReasonLabelKey(reason: SlhBillLineUnmatchedReason): string {
   return `slhReconciliation.unmatchedReason.${reason}`

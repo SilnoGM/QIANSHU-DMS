@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>对账明细行切换组件（QsLineSwitcher）· 交互原型</title>
+<style>
+/*
+ * 原型只做交互与视觉验证，因此内联项目真实 Token，不引入任何外部资源。
+ * 取色来源：web/packages/themes (baseColor = zinc) + settings.ts (theme = green)。
+ */
+:root {
+  --background: 1 0 0;
+  --foreground: 0.141 0.005 285.823;
+  --card: 1 0 0;
+  --muted: 0.967 0.001 286.375;
+  --muted-foreground: 0.552 0.016 285.938;
+  --border: 0.92 0.004 286.32;
+  --primary: 0.527 0.154 150.069;
+  --primary-foreground: 0.982 0.018 155.826;
+  --destructive: 0.577 0.245 27.325;
+  --ring: 0.705 0.015 286.067;
+  /* 状态色：未核对红 / 已核对绿，与 reconciliation-status.logic.ts 的语义取色一致 */
+  --tone-danger: var(--destructive);
+  --tone-success: 0.696 0.17 162.48;
+  --tone-warning: 0.769 0.188 70.08;
+  --tone-neutral: 0.552 0.016 285.938;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --font-sans: "Noto Sans SC", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "Noto Sans Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --page-bg: 0.9612 0 0;
+}
+html[data-theme="dark"] {
+  --background: 0.141 0.005 285.823;
+  --foreground: 0.985 0 0;
+  --card: 0.21 0.006 285.885;
+  --muted: 0.274 0.006 286.033;
+  --muted-foreground: 0.705 0.015 286.067;
+  --border: 0.252 0 0;
+  --primary: 0.448 0.119 151.328;
+  --primary-foreground: 0.982 0.018 155.826;
+  --destructive: 0.704 0.191 22.216;
+  --ring: 0.552 0.016 285.938;
+  --tone-success: 0.765 0.177 163.223;
+  --page-bg: var(--background);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 2rem 1.25rem 4rem;
+  font-family: var(--font-sans);
+  color: oklch(var(--foreground));
+  background: oklch(var(--page-bg));
+  -webkit-font-smoothing: antialiased;
+}
+.page { max-width: 1080px; margin: 0 auto; }
+h1 { font-size: 1.375rem; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 1rem; font-weight: 600; margin: 0 0 0.75rem; }
+p { margin: 0; }
+code, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.page-head { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-start; justify-content: space-between; }
+.page-head__meta { font-size: 0.75rem; color: oklch(var(--muted-foreground)); line-height: 1.75; margin-top: 0.5rem; max-width: 62ch; }
+.badge {
+  display: inline-flex; align-items: center; gap: 0.375rem; flex: none;
+  padding: 0.25rem 0.625rem; border: 1px solid oklch(var(--border));
+  border-radius: 999px; background: oklch(var(--card));
+  font-size: 0.75rem; font-weight: 500; color: oklch(var(--muted-foreground));
+}
+.panel {
+  margin-top: 1.5rem; padding: 1.25rem; border: 1px solid oklch(var(--border));
+  border-radius: var(--radius-xl); background: oklch(var(--card));
+}
+.toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; padding-bottom: 1rem; border-bottom: 1px solid oklch(var(--border)); }
+.toolbar__label { font-size: 0.75rem; font-weight: 500; color: oklch(var(--muted-foreground)); margin-right: 0.25rem; }
+.toolbar__divider { width: 1px; height: 1.25rem; margin: 0 0.375rem; background: oklch(var(--border)); }
+.chip {
+  appearance: none; cursor: pointer; font-family: inherit;
+  padding: 0.25rem 0.625rem; font-size: 0.75rem; font-weight: 500;
+  border: 1px solid oklch(var(--border)); border-radius: 999px;
+  background: oklch(var(--background)); color: oklch(var(--muted-foreground));
+}
+.chip:hover { background: oklch(var(--muted)); color: oklch(var(--foreground)); }
+.chip[aria-pressed="true"] { border-color: oklch(var(--primary) / 0.45); background: oklch(var(--primary) / 0.08); color: oklch(var(--primary)); }
+.chip:focus-visible { outline: 2px solid oklch(var(--ring)); outline-offset: 2px; }
+.stage { padding: 1.5rem 0; }
+.readout {
+  display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; padding-top: 1rem;
+  border-top: 1px solid oklch(var(--border)); font-size: 0.8125rem; color: oklch(var(--muted-foreground));
+}
+.readout b { color: oklch(var(--foreground)); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.75rem; font-size: 0.75rem; color: oklch(var(--muted-foreground)); }
+.legend__item { display: inline-flex; align-items: center; gap: 0.375rem; }
+.legend__bar { width: 1.25rem; height: 0.25rem; border-radius: 2px; }
+.notes { margin-top: 1.5rem; }
+.notes ol { margin: 0; padding-left: 1.25rem; font-size: 0.8125rem; line-height: 1.9; color: oklch(var(--muted-foreground)); }
+.notes code { font-size: 0.75rem; }
+.contract {
+  margin-top: 1.5rem; border: 1px solid oklch(var(--border)); border-radius: var(--radius-xl);
+  background: oklch(var(--card)); overflow: hidden;
+}
+.contract__head { padding: 0.75rem 1.25rem; border-bottom: 1px solid oklch(var(--border)); font-size: 0.8125rem; font-weight: 600; }
+.contract pre {
+  margin: 0; padding: 1.25rem; overflow-x: auto;
+  font-family: var(--font-mono); font-size: 0.75rem; line-height: 1.7; color: oklch(var(--foreground));
+}
+
+/* ============================================================
+ * 组件样式（正式实现会落到 QsLineSwitcher/index.vue 的 scoped style，
+ * 类名保持 qs-line-switcher__* 前缀，与 QsStatusSwitchToolbar 一致）
+ * ============================================================ */
+.qs-line-switcher {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  padding: 1rem; border: 1px solid oklch(var(--border));
+  border-radius: var(--radius-lg); background: oklch(var(--card));
+}
+.qs-line-switcher__row { display: flex; gap: 0.5rem; align-items: center; }
+.qs-line-switcher__viewport { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.qs-line-switcher__viewport::-webkit-scrollbar { display: none; }
+.qs-line-switcher__track { display: flex; gap: 0.5rem; align-items: center; justify-content: center; min-width: max-content; }
+.qs-line-switcher__arrow {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 2.5rem; height: 2.5rem; padding: 0; cursor: pointer;
+  border: 1px solid oklch(var(--border)); border-radius: var(--radius-lg);
+  background: oklch(var(--background)); color: oklch(var(--muted-foreground));
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.qs-line-switcher__arrow:hover:not(:disabled) { background: oklch(var(--muted)); color: oklch(var(--foreground)); }
+.qs-line-switcher__arrow:disabled { opacity: 0.45; cursor: not-allowed; }
+.qs-line-switcher__arrow:focus-visible { outline: 2px solid oklch(var(--ring)); outline-offset: 2px; }
+
+.qs-line-switcher__slot {
+  position: relative; flex: none; cursor: pointer; overflow: hidden;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 6.5rem; height: 2.5rem; padding: 0 0.75rem 0.25rem;
+  border: 1px solid oklch(var(--border)); border-radius: var(--radius-lg);
+  background: oklch(var(--background)); color: oklch(var(--muted-foreground));
+  font-family: inherit; font-size: 0.875rem; font-weight: 500; line-height: 1.25rem;
+  white-space: nowrap;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease,
+    font-size 0.15s ease, height 0.15s ease, min-width 0.15s ease;
+}
+.qs-line-switcher__slot:hover:not([aria-pressed="true"]) { background: oklch(var(--muted)); color: oklch(var(--foreground)); }
+.qs-line-switcher__slot:focus-visible { outline: 2px solid oklch(var(--ring)); outline-offset: 2px; }
+/* 选中项：加粗 + 放大字号 + 绿色文字/边框/浅绿底，仅折叠形态放大 */
+.qs-line-switcher__slot[aria-pressed="true"] {
+  color: oklch(var(--primary));
+  border-color: oklch(var(--primary) / 0.45);
+  background: oklch(var(--primary) / 0.08);
+}
+.qs-line-switcher[data-form="collapsed"] .qs-line-switcher__slot[aria-pressed="true"] {
+  min-width: 8.75rem; height: 3.25rem; padding: 0 1.25rem 0.25rem;
+  font-size: 1.125rem; font-weight: 600; line-height: 1.5rem;
+}
+.qs-line-switcher[data-form="expanded"] .qs-line-switcher__slot[aria-pressed="true"] { font-weight: 600; }
+.qs-line-switcher__slot--empty {
+  cursor: default; border-style: dashed; border-color: oklch(var(--border) / 0.7);
+  background: transparent;
+}
+.qs-line-switcher__bar {
+  position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 1.25rem; height: 0.25rem; border-radius: 2px;
+}
+.qs-line-switcher__footer { display: flex; justify-content: center; }
+.qs-line-switcher__toggle {
+  display: inline-flex; align-items: center; gap: 0.25rem; cursor: pointer;
+  padding: 0.125rem 0.625rem; border: 1px solid transparent; border-radius: 999px;
+  background: transparent; color: oklch(var(--muted-foreground));
+  font-family: inherit; font-size: 0.75rem; font-weight: 500;
+}
+.qs-line-switcher__toggle:hover:not(:disabled) { background: oklch(var(--muted)); color: oklch(var(--foreground)); }
+.qs-line-switcher__toggle:disabled { opacity: 0.45; cursor: not-allowed; }
+.qs-line-switcher__toggle:focus-visible { outline: 2px solid oklch(var(--ring)); outline-offset: 2px; }
+/* 展开形态左对齐：末行不居中，保持与首行同一起始列 */
+.qs-line-switcher__grid { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.qs-line-switcher__empty {
+  display: flex; align-items: center; justify-content: center; width: 100%; height: 3.25rem;
+  font-size: 0.875rem; color: oklch(var(--muted-foreground));
+}
+[data-tone="danger"] { background: oklch(var(--tone-danger)); }
+[data-tone="success"] { background: oklch(var(--tone-success)); }
+[data-tone="warning"] { background: oklch(var(--tone-warning)); }
+[data-tone="neutral"] { background: oklch(var(--tone-neutral)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .qs-line-switcher__slot, .qs-line-switcher__arrow { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h1>对账明细行切换组件 · 交互原型</h1>
+      <p class="page-head__meta">
+        命名 <code>QsReconciliationLineSwitcher</code>（已确认）；两种形态：折叠（条带内选中项放大）与展开（全量左对齐换行）。
+        本页只演示交互与视觉，未改动项目代码；状态取值与状态色映射全部来自示例数据。
+      </p>
+    </div>
+    <button class="chip" id="theme-toggle" type="button">切换深色</button>
+  </header>
+
+  <section class="panel">
+    <div class="toolbar" role="group" aria-label="原型控制（不属于组件接口）">
+      <span class="toolbar__label">演示数据</span>
+      <button class="chip" type="button" data-size="12" aria-pressed="true">12 条</button>
+      <button class="chip" type="button" data-size="7" aria-pressed="false">7 条（刚好一屏）</button>
+      <button class="chip" type="button" data-size="3" aria-pressed="false">3 条（少于 7）</button>
+      <button class="chip" type="button" data-size="1" aria-pressed="false">1 条</button>
+      <button class="chip" type="button" data-size="0" aria-pressed="false">0 条（空数组）</button>
+      <span class="toolbar__divider" aria-hidden="true"></span>
+      <span class="toolbar__label">每侧可见项数</span>
+      <button class="chip" type="button" data-side="1" aria-pressed="false">1（共 3 槽）</button>
+      <button class="chip" type="button" data-side="2" aria-pressed="false">2（共 5 槽）</button>
+      <button class="chip" type="button" data-side="3" aria-pressed="true">3（共 7 槽）</button>
+    </div>
+
+    <div class="stage" id="stage"></div>
+
+    <div class="readout">
+      <span>选中值（v-model）：<b class="mono" id="readout-value">—</b></span>
+      <span>选中位置：<b class="mono" id="readout-index">—</b></span>
+      <span>形态：<b id="readout-form">折叠</b></span>
+    </div>
+
+    <div class="legend">
+      <span class="legend__item"><span class="legend__bar" data-tone="danger"></span>未核对</span>
+      <span class="legend__item"><span class="legend__bar" data-tone="success"></span>已核对</span>
+      <span class="legend__item">横条颜色来自调用方传入 <code>statusTones</code>，组件不识别状态字面量</span>
+    </div>
+  </section>
+
+  <section class="notes">
+    <h2>本原型已覆盖的边界</h2>
+    <ol>
+      <li>首项：<code>上一条</code> 置灰不可点（<code>disabled</code>，不做循环）；末项同理。</li>
+      <li>窗口贴边（已确认）：条带始终铺满 2×每侧项数+1 个真实项，无空槽占位；因此首尾处选中项会移动到条带两端，不再固定居中。</li>
+      <li>少于条带槽数：显示数组全部项，条带整体居中，宽度不随数据量跳动。</li>
+      <li>空数组：槽位区显示空态文案，<code>上一条</code>/<code>下一条</code>/<code>展开</code> 全部禁用。</li>
+      <li>展开再收起、切换数据规模与每侧项数：选中项保持不变（选中值由页面持有，本原型里是 <code>state.selectedValue</code>）。</li>
+      <li>展开形态左对齐（已确认）：末行不居中，与首行同一起始列。</li>
+      <li>键盘：组件内按 <code>←</code> / <code>→</code> 等同于「上一条」/「下一条」，焦点跟随选中项。</li>
+      <li>窄容器：条带横向滚动并把选中槽滚回视口正中（261px 宽实测生效）。</li>
+    </ol>
+  </section>
+
+  <section class="contract">
+    <div class="contract__head">接口设计草案（正式实现以此为契约）</div>
+    <pre><code>// 调用方定义状态取值，组件只认 tone
+type QsLineSwitcherTone = 'danger' | 'success' | 'warning' | 'neutral'
+
+interface QsLineSwitcherItem {
+  value: string         // 稳定标识，= 明细行 id
+  label: string         // 唛头
+  status: string        // 状态取值，仅用于查表
+  statusLabel?: string  // 可选：无障碍朗读用的状态文案，缺省回退到 status
+}
+
+// 受控：选中项由页面持有（v-model），组件不擅自选择默认值
+const model = defineModel&lt;string | null&gt;({ required: true })
+
+props:
+  items: readonly QsLineSwitcherItem[]              // 必填，顺序即左右顺序
+  statusTones?: Readonly&lt;Record&lt;string, QsLineSwitcherTone&gt;&gt;  // 默认 {}，未登记状态回退 neutral
+  visibleSideCount?: number                         // 默认 3；条带槽位数 = 2 * visibleSideCount + 1
+  ariaLabel?: string                                // 默认「明细行切换」
+// 形态（折叠/展开）是纯视图状态，组件内部持有，不外露</code></pre>
+  </section>
+</div>
+
+<script>
+/*
+ * 原型脚本刻意写得像正式组件：数据与状态色映射由「页面」提供，
+ * 组件只按 items/statusTones 渲染，不出现任何状态字面量。
+ */
+const STATUS_TONES = { '未核对': 'danger', '已核对': 'success' }
+
+/** 演示数据：id 用域名内的流水号，唛头与状态混排，便于观察横条取色。 */
+const FIXTURES = {
+  12: [
+    ['LH-20261009-001', 'J-070924', '已核对'],
+    ['LH-20261009-002', 'H-080334', '未核对'],
+    ['LH-20261009-003', 'J-070925', '未核对'],
+    ['LH-20261009-004', 'K-090117', '已核对'],
+    ['LH-20261009-005', 'H-080335', '未核对'],
+    ['LH-20261009-006', 'M-110482', '已核对'],
+    ['LH-20261009-007', 'J-070926', '未核对'],
+    ['LH-20261009-008', 'P-120733', '已核对'],
+    ['LH-20261009-009', 'H-080336', '未核对'],
+    ['LH-20261009-010', 'K-090118', '已核对'],
+    ['LH-20261009-011', 'M-110483', '未核对'],
+    ['LH-20261009-012', 'P-120734', '未核对'],
+  ],
+  7: [
+    ['LH-20261009-001', 'J-070924', '已核对'],
+    ['LH-20261009-002', 'H-080334', '未核对'],
+    ['LH-20261009-003', 'J-070925', '未核对'],
+    ['LH-20261009-004', 'K-090117', '已核对'],
+    ['LH-20261009-005', 'H-080335', '未核对'],
+    ['LH-20261009-006', 'M-110482', '已核对'],
+    ['LH-20261009-007', 'J-070926', '未核对'],
+  ],
+  3: [
+    ['LH-20261009-001', 'J-070924', '未核对'],
+    ['LH-20261009-002', 'H-080334', '已核对'],
+    ['LH-20261009-003', 'J-070925', '未核对'],
+  ],
+  1: [
+    ['LH-20261009-001', 'J-070924', '未核对'],
+  ],
+  0: [],
+}
+const toItems = rows => rows.map(([id, mark, status]) => ({ value: id, label: mark, status }))
+
+/** 页面持有的状态（对应正式页面的 ref + v-model）。 */
+const state = {
+  items: toItems(FIXTURES[12]),
+  selectedValue: FIXTURES[12][3][0],
+  expanded: false,
+  size: 12,
+  sideCount: 3,
+}
+
+const ICONS = {
+  prev: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>',
+  next: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>',
+  expand: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
+  collapse: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>',
+}
+
+const escapeHtml = value => String(value).replace(/[&<>"]/g, char => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char]
+))
+
+const selectedIndex = () => state.items.findIndex(item => item.value === state.selectedValue)
+const toneOf = item => STATUS_TONES[item.status] ?? 'neutral'
+
+/** 单个唛头按钮块：文字 + 底部状态横条。 */
+function renderSlot(item, pressed) {
+  const statusLabel = item.status
+  return `<button type="button" class="qs-line-switcher__slot" data-action="select" data-value="${escapeHtml(item.value)}"
+    aria-pressed="${pressed}" aria-label="${escapeHtml(item.label)}，状态 ${escapeHtml(statusLabel)}" title="${escapeHtml(item.label)} · ${escapeHtml(statusLabel)}">
+    <span>${escapeHtml(item.label)}</span>
+    <span class="qs-line-switcher__bar" data-tone="${toneOf(item)}" aria-hidden="true"></span>
+  </button>`
+}
+
+function renderCollapsed() {
+  const index = selectedIndex()
+  const atStart = index <= 0 || state.items.length === 0
+  const atEnd = index < 0 || index >= state.items.length - 1
+  let track = ''
+  if (state.items.length === 0) {
+    track = '<div class="qs-line-switcher__empty">暂无可切换的明细行</div>'
+  }
+  else {
+    // 窗口贴边：始终铺满 2*sideCount+1 个真实项，不做空槽占位，
+    // 因此首尾处选中项会随窗口移动到两端，而不是固定在正中。
+    const slotCount = state.sideCount * 2 + 1
+    const anchor = index < 0 ? state.sideCount : index
+    const start = Math.min(
+      Math.max(anchor - state.sideCount, 0),
+      Math.max(state.items.length - slotCount, 0),
+    )
+    for (let offset = 0; offset < slotCount; offset++) {
+      const item = state.items[start + offset]
+      if (!item) {
+        continue
+      }
+      track += renderSlot(item, index >= 0 && item.value === state.selectedValue)
+    }
+  }
+  return `<div class="qs-line-switcher" data-form="collapsed" role="group" aria-label="明细行切换">
+    <div class="qs-line-switcher__row">
+      <button type="button" class="qs-line-switcher__arrow" data-action="prev" aria-label="上一条" ${atStart ? 'disabled' : ''}>${ICONS.prev}</button>
+      <div class="qs-line-switcher__viewport"><div class="qs-line-switcher__track">${track}</div></div>
+      <button type="button" class="qs-line-switcher__arrow" data-action="next" aria-label="下一条" ${atEnd ? 'disabled' : ''}>${ICONS.next}</button>
+    </div>
+    <div class="qs-line-switcher__footer">
+      <button type="button" class="qs-line-switcher__toggle" data-action="expand" aria-expanded="false" ${state.items.length === 0 ? 'disabled' : ''}>${ICONS.expand}展开</button>
+    </div>
+  </div>`
+}
+
+function renderExpanded() {
+  const index = selectedIndex()
+  const grid = state.items.length === 0
+    ? '<div class="qs-line-switcher__empty">暂无可切换的明细行</div>'
+    : state.items.map(item => renderSlot(item, index >= 0 && item.value === state.selectedValue)).join('')
+  return `<div class="qs-line-switcher" data-form="expanded" role="group" aria-label="明细行切换">
+    <div class="qs-line-switcher__grid">${grid}</div>
+    <div class="qs-line-switcher__footer">
+      <button type="button" class="qs-line-switcher__toggle" data-action="collapse" aria-expanded="true">${ICONS.collapse}收起</button>
+    </div>
+  </div>`
+}
+
+function render() {
+  const stage = document.getElementById('stage')
+  // 原型整段重渲染会重建按钮，先记住焦点再还原，否则键盘 ←/→ 会因焦点丢失而失效。
+  const active = stage.contains(document.activeElement) ? document.activeElement : null
+  const keepAction = active?.dataset.action ?? null
+  const keepValue = active?.dataset.value ?? null
+
+  stage.innerHTML = state.expanded ? renderExpanded() : renderCollapsed()
+
+  if (keepAction) {
+    // 焦点语义：选中切换（点击或 ←/→）后焦点跟随选中项，点方向按钮时焦点留在按钮上。
+    const selector = keepAction === 'select'
+      ? '[data-action="select"][aria-pressed="true"]'
+      : keepValue
+        ? `[data-action="${keepAction}"][data-value="${keepValue}"]`
+        : `[data-action="${keepAction}"]`
+    stage.querySelector(selector)?.focus()
+  }
+
+  const index = selectedIndex()
+  const current = index >= 0 ? state.items[index] : null
+  document.getElementById('readout-value').textContent = current ? `${current.value} · ${current.label} · ${current.status}` : 'null'
+  document.getElementById('readout-index').textContent = index >= 0 ? `${index + 1} / ${state.items.length}` : `— / ${state.items.length}`
+  document.getElementById('readout-form').textContent = state.expanded ? '展开' : '折叠'
+
+  // 容器窄于 7 槽时轨道会横向滚动：把选中槽滚回可视区正中，避免「居中」在窄屏失效。
+  const viewport = stage.querySelector('.qs-line-switcher__viewport')
+  const track = viewport?.querySelector('.qs-line-switcher__track')
+  const selectedSlot = stage.querySelector('[data-action="select"][aria-pressed="true"]')
+  if (viewport && track && selectedSlot) {
+    const contentOffset = selectedSlot.getBoundingClientRect().left
+      - track.getBoundingClientRect().left
+      + viewport.scrollLeft
+    viewport.scrollLeft = contentOffset - (viewport.clientWidth - selectedSlot.offsetWidth) / 2
+  }
+}
+
+/** 「上一条 / 下一条」到边界即停，不做循环。 */
+function step(delta) {
+  const index = selectedIndex()
+  if (index < 0) {
+    return
+  }
+  const next = state.items[index + delta]
+  if (next) {
+    state.selectedValue = next.value
+    render()
+  }
+}
+
+document.getElementById('stage').addEventListener('click', (event) => {
+  const trigger = event.target.closest('[data-action]')
+  if (!trigger) {
+    return
+  }
+  const action = trigger.dataset.action
+  if (action === 'prev') {
+    step(-1)
+  }
+  else if (action === 'next') {
+    step(1)
+  }
+  else if (action === 'select') {
+    state.selectedValue = trigger.dataset.value
+    render()
+  }
+  else if (action === 'expand') {
+    state.expanded = true
+    render()
+  }
+  else if (action === 'collapse') {
+    state.expanded = false
+    render()
+  }
+})
+
+/** 组件内键盘：← / → 等于上一条 / 下一条；展开形态下同样生效。 */
+document.getElementById('stage').addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault()
+    step(-1)
+  }
+  else if (event.key === 'ArrowRight') {
+    event.preventDefault()
+    step(1)
+  }
+})
+
+document.querySelectorAll('.chip[data-size]').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    const size = Number(chip.dataset.size)
+    state.size = size
+    state.items = toItems(FIXTURES[size])
+    // 页面负责兜底选中值：空数组没有选中项，其余情况落在中间项，便于观察两侧槽位。
+    state.selectedValue = state.items.length === 0
+      ? null
+      : state.items[Math.min(Math.floor(state.items.length / 2), state.items.length - 1)].value
+    document.querySelectorAll('.chip[data-size]').forEach(other => other.setAttribute('aria-pressed', String(other === chip)))
+    render()
+  })
+})
+
+document.querySelectorAll('.chip[data-side]').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    state.sideCount = Number(chip.dataset.side)
+    document.querySelectorAll('.chip[data-side]').forEach(other => other.setAttribute('aria-pressed', String(other === chip)))
+    render()
+  })
+})
+
+document.getElementById('theme-toggle').addEventListener('click', (event) => {
+  const dark = document.documentElement.dataset.theme === 'dark'
+  document.documentElement.dataset.theme = dark ? 'light' : 'dark'
+  event.currentTarget.textContent = dark ? '切换深色' : '切换浅色'
+})
+
+render()
+</script>
+</body>
+</html>

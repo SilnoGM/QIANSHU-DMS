@@ -1,0 +1,11 @@
+{
+  "qsReconciliationLineSwitcher": {
+    "ariaLabel": "Line switcher",
+    "previous": "Previous line",
+    "next": "Next line",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "empty": "No lines available",
+    "itemAriaLabel": "{label}, status {status}"
+  }
+}

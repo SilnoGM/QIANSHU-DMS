@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
+import type { StoredDictionaryValueResolution } from '../dictionaries/dictionary-lookup.service'
 import { buildSlhBillListWhere, withSlhBillIncompleteReconciliation } from '../slh-bills/slh-bill-list-filter'
 import { serializeSlhBillListItem, slhBillListInclude } from '../slh-bills/slh-bill.serializer'
 import type { SlhBillListRow } from '../slh-bills/slh-bill.serializer'
@@ -8,16 +10,26 @@ import type { SlhBillPageDto } from '../slh-bills/slh-bill.dto'
 import { matchBillUnreconciledLines } from './slh-reconciliation-batch.matcher'
 import { slhReconciliationBatchFailure } from './slh-reconciliation-batch.errors'
 import { slhReconciliationBatchUuid } from './slh-reconciliation-batch.normalizer'
-import { serializeSlhReconciliationBatchDetail, serializeSlhReconciliationBatchListItem, slhReconciliationBatchDetailInclude, slhReconciliationBatchListInclude } from './slh-reconciliation-batch.serializer'
+import {
+  collectMemberPurchaseOrderSuppliers, serializeSlhReconciliationBatchDetail, serializeSlhReconciliationBatchListItem,
+  slhReconciliationBatchDetailInclude, slhReconciliationBatchListInclude,
+} from './slh-reconciliation-batch.serializer'
+import type { SlhReconciliationBatchDetailRow } from './slh-reconciliation-batch.serializer'
 import { SlhReconciliationBatchFilterDto, SlhReconciliationBillBlockReasonDto, SlhReconciliationBillGroupDto } from './slh-reconciliation-batch.dto'
 import type {
   SlhBillLineUnmatchedReasonCountDto, SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchDetailDto,
   SlhReconciliationBatchListQueryDto, SlhReconciliationBatchPageDto, SlhReconciliationBillOptionDto,
   SlhReconciliationBillOptionPageDto, SlhReconciliationBillOptionQueryDto, SlhReconciliationReconcilableCountsDto,
-  SlhReconciliationReconcilableCountsRequestDto,
+  SlhReconciliationReconcilableCountsRequestDto, SlhReconciliationSettlementListDto,
+  SlhReconciliationSettlementListQueryDto, SlhReconciliationSettlementRecordDto,
 } from './slh-reconciliation-batch.dto'
 
 const DEFAULT_PAGE_SIZE = 20
+/** 核对记录一次性返回的条数上限：单行确认次数很少，超出只可能是异常数据。 */
+const SETTLEMENT_RECORD_LIMIT = 50
+
+/** 供应商字典码：与采购域和商品域用的是同一个码（该字面量在各消费方各自声明）。 */
+const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 
 /** 列表筛选取值 → 完成态条件；`all` 表示不加状态条件。 */
 function batchStatusWhere(status: SlhReconciliationBatchFilterDto): Prisma.SlhReconciliationBatchWhereInput {
@@ -61,7 +73,10 @@ function summarizeUnmatchedReasons(matches: Awaited<ReturnType<typeof matchBillU
  */
 @Injectable()
 export class SlhReconciliationBatchQueryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dictionaryLookup: DictionaryLookupService,
+  ) {}
 
   /**
    * 批次列表：状态筛选（默认只看进行中）+ 关键词（批次编号 / 账单编号 / 账单名称）+ 分页。
@@ -123,7 +138,95 @@ export class SlhReconciliationBatchQueryService {
     if (!row) {
       slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_FOUND', '对账批次不存在', 404)
     }
-    return serializeSlhReconciliationBatchDetail(row)
+    return serializeSlhReconciliationBatchDetail(row, await this.resolveMemberSuppliers(row))
+  }
+
+  /**
+   * 核对记录：按批次成员行取历史，最新的在最前。
+   *
+   * 只认「该批次下的这个成员行」——与「同一成员行最多一条有效」的部分唯一索引同范围；
+   * 记录量随确认次数增长，因此带一个防御性上限（单行确认次数很少，不做分页）。
+   */
+  async settlements(id: string, query: SlhReconciliationSettlementListQueryDto): Promise<SlhReconciliationSettlementListDto> {
+    const batchId = slhReconciliationBatchUuid(id)
+    const batch = await this.prisma.slhReconciliationBatch.findUnique({
+      where: { id: batchId },
+      select: {
+        members: { where: { id: slhReconciliationBatchUuid(query.batchLineId) }, select: { id: true } },
+      },
+    })
+    if (batch === null || batch.members.length === 0) {
+      slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_FOUND', '批次成员行不存在', 404)
+    }
+    const batchLineId = batch.members[0].id
+    const rows = await this.prisma.slhReconciliationSettlement.findMany({
+      where: { batchId, batchLineId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: SETTLEMENT_RECORD_LIMIT,
+      select: {
+        id: true, status: true, rateSource: true, foreignUnitsPerCny: true, paymentFeeRate: true,
+        codAmountTwd: true, codAmountCurrency: true,
+        ntdSurchargeAmountTwd: true, ntdSurchargeCurrency: true,
+        payableAmountCny: true, payableCurrency: true,
+        settlementAmountCny: true, settlementCurrency: true,
+        salesAmount: true, salesCurrency: true,
+        paymentFeeAmountCny: true, paymentFeeCurrency: true,
+        slhBillNo: true, salesOrderNo: true, purchaseOrderNo: true, containerBatchNo: true,
+        shipmentNo: true, warehouseReceiptReference: true, shippingMarkText: true,
+        createdAt: true,
+        createdBy: { select: { displayName: true } },
+      },
+    })
+    return {
+      items: rows.map(row => ({
+        id: row.id,
+        status: row.status as SlhReconciliationSettlementRecordDto['status'],
+        rateSource: row.rateSource as SlhReconciliationSettlementRecordDto['rateSource'],
+        foreignUnitsPerCny: row.foreignUnitsPerCny.toFixed(12),
+        paymentFeeRate: row.paymentFeeRate.toFixed(12),
+        codAmountTwd: row.codAmountTwd?.toFixed(2) ?? null,
+        codAmountCurrency: row.codAmountCurrency,
+        ntdSurchargeAmountTwd: row.ntdSurchargeAmountTwd?.toFixed(2) ?? null,
+        ntdSurchargeCurrency: row.ntdSurchargeCurrency,
+        payableAmountCny: row.payableAmountCny?.toFixed(2) ?? null,
+        payableCurrency: row.payableCurrency,
+        settlementAmountCny: row.settlementAmountCny?.toFixed(2) ?? null,
+        settlementCurrency: row.settlementCurrency,
+        salesAmount: row.salesAmount?.toFixed(4) ?? null,
+        salesCurrency: row.salesCurrency,
+        paymentFeeAmountCny: row.paymentFeeAmountCny?.toFixed(2) ?? null,
+        paymentFeeCurrency: row.paymentFeeCurrency,
+        slhBillNo: row.slhBillNo,
+        salesOrderNo: row.salesOrderNo,
+        purchaseOrderNo: row.purchaseOrderNo,
+        containerBatchNo: row.containerBatchNo,
+        shipmentNo: row.shipmentNo,
+        warehouseReceiptReference: row.warehouseReceiptReference,
+        shippingMarkText: row.shippingMarkText,
+        createdByDisplayName: row.createdBy.displayName,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    }
+  }
+
+  /**
+   * 成员采购单的供应商标签：与采购域共用同一个字典码与解析服务，
+   * 保证同一供应商在对账页与采购页显示一致（未命中字典时由采购域的兜底逻辑处理）。
+   */
+  private async resolveMemberSuppliers(
+    row: SlhReconciliationBatchDetailRow,
+  ): Promise<ReadonlyMap<string, StoredDictionaryValueResolution>> {
+    const dictionaryOrders = collectMemberPurchaseOrderSuppliers(row).filter(
+      (order): order is typeof order & { readonly supplierValue: string } => order.supplierValue !== null,
+    )
+    if (dictionaryOrders.length === 0) {
+      return new Map()
+    }
+    const resolutions = await this.dictionaryLookup.resolveStoredValues({
+      dictionaryCode: SUPPLIER_DICTIONARY_CODE,
+      values: dictionaryOrders.map(order => order.supplierValue),
+    })
+    return new Map(dictionaryOrders.map((order, index) => [order.id, resolutions[index]]))
   }
 
   /**
@@ -204,28 +307,33 @@ export class SlhReconciliationBatchQueryService {
    *
    * 每单给两个数：`reconcilableLineCount`（匹配得上且尚未对账的行）与 `unfrozenLineCount`
    * （其中没有被进行中批次冻结、即「当前可核对」列显示的行）；**两者之差就是进行中批次
-   * 已经冻结的明细行数**，所以账单被批次占用后前者不变、后者归零。未知账单按 0 行返回
-   * （调用方拿的是刚列出来的主键），全程只读。
+   * 已经冻结的明细行数**，所以账单被批次占用后前者不变、后者归零。同时带出占用该账单的
+   * 进行中批次 id 与编号：账单列表据此把入口显示成「继续对账」而不是「开始对账」。
+   * 未知账单按 0 行返回（调用方拿的是刚列出来的主键），全程只读。
    */
   async reconcilableCounts(input: SlhReconciliationReconcilableCountsRequestDto): Promise<SlhReconciliationReconcilableCountsDto> {
     const billIds = [...new Set(input.billIds)]
     // 进行中批次冻结了哪些行：一次查完再逐单做差集，避免每单再查一次批次与成员。
+    // 「一张账单同时只有一个进行中批次」由创建路径的账单行锁与占用复检保证，因此这里按账单存一条。
     const activeBatches = await this.prisma.slhReconciliationBatch.findMany({
       where: { billId: { in: billIds }, completedAt: null },
-      select: { billId: true, members: { select: { lineId: true } } },
+      select: { id: true, batchNo: true, billId: true, members: { select: { lineId: true } } },
     })
     const frozenLineIdsByBill = new Map<string, Set<string>>()
+    const inProgressBatchByBill = new Map<string, { id: string, batchNo: string }>()
     for (const batch of activeBatches) {
       const frozen = frozenLineIdsByBill.get(batch.billId) ?? new Set<string>()
       for (const member of batch.members) {
         frozen.add(member.lineId)
       }
       frozenLineIdsByBill.set(batch.billId, frozen)
+      inProgressBatchByBill.set(batch.billId, { id: batch.id, batchNo: batch.batchNo })
     }
     const items = await Promise.all(billIds.map(async (billId) => {
       const matches = await matchBillUnreconciledLines(this.prisma, billId)
       const reconcilableLineIds = matches.filter(match => match.status === 'MATCHED').map(match => match.line.id)
       const frozenLineIds = frozenLineIdsByBill.get(billId)
+      const inProgressBatch = inProgressBatchByBill.get(billId)
       return {
         billId,
         reconcilableLineCount: reconcilableLineIds.length,
@@ -233,6 +341,8 @@ export class SlhReconciliationBatchQueryService {
           ? reconcilableLineIds.length
           : reconcilableLineIds.filter(lineId => !frozenLineIds.has(lineId)).length,
         reconcilableLineIds,
+        inProgressBatchId: inProgressBatch?.id ?? null,
+        inProgressBatchNo: inProgressBatch?.batchNo ?? null,
         reasons: summarizeUnmatchedReasons(matches),
       }
     }))

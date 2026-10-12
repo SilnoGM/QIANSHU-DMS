@@ -373,6 +373,17 @@ const supplierResidueAllowlist = Object.freeze([
   'server/src/cli/seed/seed.dataset.ts',
   'server/src/cli/seed/seed.service.ts',
   'server/test/seed.e2e-spec.ts',
+  // 对账详情按明细行展示装柜行匹配到的采购/销售来源：只读订单快照、金额与
+  // 供应商字典标签，不新增供应商主数据入口，也不放开采采购/销售的写操作。
+  'server/src/modules/slh-reconciliation-batches/slh-reconciliation-batch-query.service.ts',
+  'server/src/modules/slh-reconciliation-batches/slh-reconciliation-batch.dto.ts',
+  'server/src/modules/slh-reconciliation-batches/slh-reconciliation-batch.serializer.ts',
+  'server/test/slh-reconciliation-batch.e2e-spec.ts',
+  'web/apps/qsmds-arco/src/locales/lang/workbench/zh-cn.json',
+  'web/apps/qsmds-arco/src/locales/lang/workbench/zh-tw.json',
+  'web/apps/qsmds-arco/src/locales/lang/workbench/en.json',
+  'web/apps/qsmds-arco/src/views/workbenches/slh-reconciliation/detail.logic.ts',
+  'web/apps/qsmds-arco/test/views/slh-reconciliation.test.ts',
 ].sort())
 
 const currentGlobalDocuments = Object.freeze([

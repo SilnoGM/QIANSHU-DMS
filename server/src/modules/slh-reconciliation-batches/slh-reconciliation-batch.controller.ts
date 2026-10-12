@@ -12,6 +12,8 @@ import {
   SlhReconciliationBatchIdDto, SlhReconciliationBatchListQueryDto, SlhReconciliationBatchPageDto,
   SlhReconciliationBillOptionPageDto, SlhReconciliationBillOptionQueryDto,
   SlhReconciliationReconcilableCountsDto, SlhReconciliationReconcilableCountsRequestDto,
+  SlhReconciliationSettlementCreateDto, SlhReconciliationSettlementDto,
+  SlhReconciliationSettlementListDto, SlhReconciliationSettlementListQueryDto,
 } from './slh-reconciliation-batch.dto'
 import { SlhReconciliationBatchQueryService } from './slh-reconciliation-batch-query.service'
 import { SlhReconciliationBatchService } from './slh-reconciliation-batch.service'
@@ -26,6 +28,14 @@ const writeErrors: ApiContractErrorOptions[] = [
     'SLH_RECON_BATCH_CONFLICT', 'SLH_RECON_BATCH_NO_LINES_TO_RECONCILE', 'SLH_RECON_BATCH_SCOPE_CHANGED',
     'SLH_RECON_BATCH_LINES_NOT_ELIGIBLE', 'SLH_RECON_BATCH_NOT_IN_PROGRESS', 'SLH_RECON_BATCH_STATE_CHANGED',
     'SLH_RECON_BATCH_NUMBERING_UNAVAILABLE', 'SLH_RECON_BATCH_IDEMPOTENCY_CONFLICT',
+  ] },
+]
+/** 确认结算的失败出口：界面值与重算不一致、汇率变化、已有相同结果、提交标识复用等都要能与刷新重试区分。 */
+const settlementErrors: ApiContractErrorOptions[] = [
+  { status: 409, codes: [
+    'SLH_RECON_BATCH_NOT_IN_PROGRESS', 'SLH_RECON_BATCH_STATE_CHANGED', 'SLH_RECON_BATCH_IDEMPOTENCY_CONFLICT',
+    'SLH_RECON_SETTLEMENT_SOURCE_MISSING', 'SLH_RECON_SETTLEMENT_RATE_UNAVAILABLE', 'SLH_RECON_SETTLEMENT_RATE_CHANGED',
+    'SLH_RECON_SETTLEMENT_MISMATCH', 'SLH_RECON_SETTLEMENT_UNCHANGED', 'SLH_RECON_SETTLEMENT_KEY_REUSED',
   ] },
 ]
 
@@ -70,5 +80,23 @@ export class SlhReconciliationBatchController {
   @ApiContractResponse({ status: 200, type: SlhReconciliationBatchDetailDto }) @contract('slh_reconciliation_batch_complete', true, [notFound, ...writeErrors])
   complete(@Param() params: SlhReconciliationBatchIdDto, @Req() request: object) {
     return this.commands.complete(context(request), params.id)
+  }
+
+  @Post(':id/settlements') @HttpCode(201) @RequirePermissions('slh-bills:reconcile')
+  @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } })
+  @ApiContractResponse({ status: 201, type: SlhReconciliationSettlementDto }) @contract('slh_reconciliation_settlement_create', true, [notFound, ...settlementErrors])
+  settle(
+    @Param() params: SlhReconciliationBatchIdDto,
+    @Body() input: SlhReconciliationSettlementCreateDto,
+    @Headers('idempotency-key') key: unknown,
+    @Req() request: object,
+  ) {
+    return this.commands.settle(context(request), params.id, input, key)
+  }
+
+  @Get(':id/settlements') @RequirePermissions('slh-bills:reconcile')
+  @ApiContractResponse({ status: 200, type: SlhReconciliationSettlementListDto }) @contract('slh_reconciliation_settlements_list', false, [notFound])
+  settlements(@Param() params: SlhReconciliationBatchIdDto, @Query() query: SlhReconciliationSettlementListQueryDto) {
+    return this.queries.settlements(params.id, query)
   }
 }

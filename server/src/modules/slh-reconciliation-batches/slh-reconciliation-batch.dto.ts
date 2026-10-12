@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
-import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator'
+import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min, ValidateNested } from 'class-validator'
+import { PurchaseOrderFulfillmentStatus, PurchaseOrderPaymentStatus, PurchaseOrderStatus, SalesOrderFulfillmentStatus, SalesOrderPaymentStatus, SalesOrderStatus } from '../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
+import { PurchaseOrderSupplierDto } from '../purchase-orders/dto/purchase-order-response.dto'
 import { SlhBillFindingDto, SlhBillLineDto, SlhBillListItemDto, SlhBillReconciliationStatusDto } from '../slh-bills/slh-bill.dto'
 
 /** 批次状态（派生，不落列）：completed_at 为空即进行中。 */
@@ -80,6 +82,12 @@ export class SlhReconciliationReconcilableCountsItemDto {
   })
   unfrozenLineCount!: number
   @ApiProperty({ type: [String], format: 'uuid', description: 'Reconcilable line ids; the create endpoint compares them before freezing members.' }) reconcilableLineIds!: string[]
+  @ApiPropertyOptional({
+    type: 'string', format: 'uuid', nullable: true,
+    description: 'Batch in progress on this bill. At most one by construction; the bill list needs its id to offer 继续对账 instead of 开始对账.',
+  })
+  inProgressBatchId!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Number of that in-progress batch, shown next to the bill status.' }) inProgressBatchNo!: string | null
   @ApiProperty({ type: [SlhBillLineUnmatchedReasonCountDto], description: 'Why the remaining unreconciled lines cannot be reconciled right now.' }) reasons!: SlhBillLineUnmatchedReasonCountDto[]
 }
 
@@ -150,9 +158,8 @@ export class SlhReconciliationBatchPageDto {
 }
 
 /**
- * 匹配到的柜次装柜行：只带与账单行逐字段核对时用得到的列。
- * 采购/销售来源与货件号刻意不放进来——本模块只要 `slh-bills:reconcile`，
- * 不能顺带把采购、销售域的数据交给没有对应权限的账号。
+ * 匹配到的柜次装柜行：与账单行逐字段核对时用得到的列，外加串联来源链路的货件号。
+ * 采购/销售订单本身不在这块里，见下面的来源摘要。
  */
 export class SlhReconciliationMatchedItemDto {
   @ApiPropertyOptional({ type: 'string', nullable: true }) warehouseReceiptReference!: string | null
@@ -172,9 +179,55 @@ export class SlhReconciliationMatchedItemDto {
   @ApiPropertyOptional({ type: 'string', nullable: true }) recipientPhone!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) recipientAddress!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) remark!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Purchase part matched to this container row; null when the row has no shipment (never for frozen members).' }) shipmentNo!: string | null
 }
 
-/** 成员行：账单明细行的全部字段 + 本批次的匹配依据、柜次侧可比字段与核对留痕。 */
+/**
+ * 采购来源摘要：装柜行 → 货件 → 采购订单，与匹配合格判定同一条关系链。
+ *
+ * 本模块对外只要求 `slh-bills:reconcile`，这里是经确认后有意放开的采购域字段，
+ * 只保留对账页当前展示的列；金额与供应商标签都与采购域同口径
+ * （两位小数人民币、同一份字典解析），余下列（下单日期、类型、产品模式、备注等）不放进来。
+ */
+export class SlhReconciliationMatchedPurchaseOrderDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ type: 'string' }) orderNo!: string
+  @ApiProperty({ enum: PurchaseOrderStatus }) orderStatus!: PurchaseOrderStatus
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) purchaseTotalAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) depositDueAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' }) balanceDueAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额；未作废付款记录之和' }) paidAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额；采购金额 − 实际已付款' }) outstandingAmount!: string
+  @ApiProperty({ enum: PurchaseOrderFulfillmentStatus }) fulfillmentStatus!: PurchaseOrderFulfillmentStatus
+  @ApiProperty({ enum: PurchaseOrderPaymentStatus }) paymentStatus!: PurchaseOrderPaymentStatus
+  @ApiPropertyOptional({ type: 'string', nullable: true }) shippingMarkText!: string | null
+  @ApiProperty({ type: () => PurchaseOrderSupplierDto }) supplier!: PurchaseOrderSupplierDto
+  @ApiProperty({ type: 'string', description: '采购人：采购订单创建人的显示名' }) creatorDisplayName!: string
+}
+
+/**
+ * 销售来源摘要：采购订单上的销售来源，字段口径与销售域一致（四位小数订单币种金额）。
+ * 实际已收款/实际待收款直接用销售域的聚合口径（未作废收款累加、待收＝约定总额 − 已收）。
+ */
+export class SlhReconciliationMatchedSalesOrderDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ type: 'string' }) orderNo!: string
+  @ApiProperty({ enum: SalesOrderStatus }) orderStatus!: SalesOrderStatus
+  @ApiProperty({ type: 'string' }) currencyCode!: string
+  @ApiProperty({ type: 'string' }) customerName!: string
+  @ApiProperty({ type: 'string' }) customerPhone!: string
+  @ApiProperty({ type: 'string' }) customerFullAddress!: string
+  @ApiProperty({ type: 'string', description: '四位小数的订单币种金额' }) agreedTotalAmount!: string
+  @ApiProperty({ type: 'string', description: '四位小数的订单币种金额' }) depositDueAmount!: string
+  @ApiProperty({ type: 'string', description: '四位小数的订单币种金额' }) balanceDueAmount!: string
+  @ApiProperty({ type: 'string', description: '四位小数的订单币种金额' }) receivedAmount!: string
+  @ApiProperty({ type: 'string', description: '四位小数的订单币种金额' }) outstandingAmount!: string
+  @ApiProperty({ enum: SalesOrderFulfillmentStatus }) fulfillmentStatus!: SalesOrderFulfillmentStatus
+  @ApiProperty({ enum: SalesOrderPaymentStatus }) paymentStatus!: SalesOrderPaymentStatus
+  @ApiProperty({ type: 'string' }) issuerDisplayName!: string
+}
+
+/** 成员行：账单明细行的全部字段 + 本批次的匹配依据、柜次侧可比字段、来源摘要与核对留痕。 */
 export class SlhReconciliationBatchMemberDto extends SlhBillLineDto {
   @ApiProperty({ format: 'uuid', description: 'Member row id inside this batch.' }) id!: string
   @ApiProperty({ format: 'uuid', description: 'Bill line id; the reconcile endpoint takes these ids.' }) lineId!: string
@@ -183,6 +236,8 @@ export class SlhReconciliationBatchMemberDto extends SlhBillLineDto {
   @ApiProperty({ type: 'string' }) matchedContainerBatchName!: string
   @ApiProperty({ type: Number }) matchedLoadingItemLineNumber!: number
   @ApiProperty({ type: SlhReconciliationMatchedItemDto, description: 'Container row matched at creation time; the other side of every field comparison.' }) matchedLoadingItem!: SlhReconciliationMatchedItemDto
+  @ApiPropertyOptional({ type: () => SlhReconciliationMatchedPurchaseOrderDto, nullable: true, description: 'Purchase source reachable from the matched container row; null only for damaged data.' }) purchaseOrder!: SlhReconciliationMatchedPurchaseOrderDto | null
+  @ApiPropertyOptional({ type: () => SlhReconciliationMatchedSalesOrderDto, nullable: true, description: 'Sales source of the purchase order; null only for damaged data.' }) salesOrder!: SlhReconciliationMatchedSalesOrderDto | null
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Null means this batch has not reconciled the line yet.' }) reconciledAt!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) reconciledByDisplayName!: string | null
 }
@@ -190,4 +245,111 @@ export class SlhReconciliationBatchMemberDto extends SlhBillLineDto {
 export class SlhReconciliationBatchDetailDto extends SlhReconciliationBatchListItemDto {
   @ApiProperty({ type: [SlhReconciliationBatchMemberDto], description: 'Only the lines matched at creation time; other bill lines never appear here.' }) members!: SlhReconciliationBatchMemberDto[]
   @ApiProperty({ type: [SlhBillFindingDto], description: 'Import-time findings snapshot of the whole bill; the page keeps the ones belonging to this batch but still reports the bill-wide count.' }) findings!: SlhBillFindingDto[]
+}
+
+/** 结算结果状态：有效 / 已被后续结果取代（与持久化枚举 slh_reconciliation_settlement_status 一致）。 */
+export enum SlhReconciliationSettlementStatusDto { ACTIVE = 'ACTIVE', SUPERSEDED = 'SUPERSEDED' }
+
+/**
+ * 结算汇率来源：弹窗只提供「系统当前汇率」与「账单内置汇率」两种基准。
+ * 库侧复用账单域的 `slh_bill_rate_source` 枚举，但 `MANUAL` 不作为可选来源。
+ */
+export enum SlhReconciliationSettlementRateSourceDto {
+  EMBEDDED = 'EMBEDDED',
+  SYSTEM = 'SYSTEM',
+}
+
+/** 结算金额以十进制字符串传输：允许负号（结算金额可为负），最多 4 位小数。 */
+const SETTLEMENT_AMOUNT_PATTERN = /^-?(?:0|[1-9]\d{0,25})(?:\.\d{1,4})?$/u
+/** 汇率与费率的契约精度是 12 位小数，按 30,12 收。 */
+const SETTLEMENT_RATE_PATTERN = /^-?(?:0|[1-9]\d{0,25})(?:\.\d{1,12})?$/u
+
+/**
+ * 「界面上看到的」六个金额：服务端按来源重取汇率并重算，任一项与重算结果不一致即拒绝。
+ * 账单侧三个原始列在本行不涉及时为 null，与账单行的存储口径一致。
+ */
+export class SlhReconciliationSettlementAmountsDto {
+  @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '账单行的代收货款台币；本行不涉及时为 null。' })
+  @IsOptional() @IsString() @Matches(SETTLEMENT_AMOUNT_PATTERN) codAmountTwd!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '账单行的 NTD 杂费；本行不涉及时为 null。' })
+  @IsOptional() @IsString() @Matches(SETTLEMENT_AMOUNT_PATTERN) ntdSurchargeAmountTwd!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '账单行的合计应付人民币；本行不涉及时为 null。' })
+  @IsOptional() @IsString() @Matches(SETTLEMENT_AMOUNT_PATTERN) payableAmountCny!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '（代收 − 杂费）÷ 汇率 − 合计应付，可为负；不可计算时为 null。' })
+  @IsOptional() @IsString() @Matches(SETTLEMENT_AMOUNT_PATTERN) settlementAmountCny!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '销售订单的约定总额（订单币种，四位小数）。' })
+  @IsOptional() @IsString() @Matches(SETTLEMENT_AMOUNT_PATTERN) salesAmount!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '销售金额 ÷ 汇率 × 金流费率，两位小数人民币；不可计算时为 null。' })
+  @IsOptional() @IsString() @Matches(SETTLEMENT_AMOUNT_PATTERN) paymentFeeAmountCny!: string | null
+}
+
+/** 确认结算：写入这一行的结算结果；提交标识由 `Idempotency-Key` 头给出。 */
+export class SlhReconciliationSettlementCreateDto {
+  @ApiProperty({ format: 'uuid', description: '批次成员行 id（详情里 members[].id）。' }) @IsUUID('4') batchLineId!: string
+  @ApiProperty({ enum: SlhReconciliationSettlementRateSourceDto, description: '用户在弹窗第一步选择的汇率来源。' })
+  @IsIn([SlhReconciliationSettlementRateSourceDto.SYSTEM, SlhReconciliationSettlementRateSourceDto.EMBEDDED]) rateSource!: SlhReconciliationSettlementRateSourceDto
+  @ApiProperty({ type: 'string', pattern: SETTLEMENT_RATE_PATTERN.source, description: '界面上显示的汇率：服务端按来源重取当前值比对，不一致时要求重新确认。' })
+  @IsString() @Matches(SETTLEMENT_RATE_PATTERN) rate!: string
+  @ApiProperty({ type: SlhReconciliationSettlementAmountsDto, description: '界面上显示的六个金额：与服务端重算结果逐项比对。' })
+  @ValidateNested() @Type(() => SlhReconciliationSettlementAmountsDto) amounts!: SlhReconciliationSettlementAmountsDto
+}
+
+/** 结算结果：返回写入的这条记录，供前端刷新与提示。 */
+export class SlhReconciliationSettlementDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ format: 'uuid' }) batchLineId!: string
+  @ApiProperty({ enum: SlhReconciliationSettlementStatusDto }) status!: SlhReconciliationSettlementStatusDto
+  @ApiProperty({ enum: SlhReconciliationSettlementRateSourceDto }) rateSource!: SlhReconciliationSettlementRateSourceDto
+  @ApiProperty({ type: 'string' }) foreignUnitsPerCny!: string
+  @ApiProperty({ type: 'string' }) paymentFeeRate!: string
+  @ApiProperty({ type: 'string' }) createdByDisplayName!: string
+  @ApiProperty({ type: 'string' }) createdAt!: string
+}
+
+/** 核对记录查询：按批次成员行取历史（同一行最多一条有效）。 */
+export class SlhReconciliationSettlementListQueryDto {
+  @ApiProperty({ format: 'uuid', description: '批次成员行 id（详情里 members[].id）。' }) @IsUUID('4') batchLineId!: string
+}
+
+/**
+ * 核对记录：一条确认结算的完整留痕，供「查看核对记录」按卡片展示。
+ * 金额与币种保持库里的成对关系；快照字段原样带出，便于不回表核对来源。
+ */
+export class SlhReconciliationSettlementRecordDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ enum: SlhReconciliationSettlementStatusDto, description: 'ACTIVE 为当前有效，SUPERSEDED 为已被后续结果取代。' }) status!: SlhReconciliationSettlementStatusDto
+  @ApiProperty({ enum: SlhReconciliationSettlementRateSourceDto }) rateSource!: SlhReconciliationSettlementRateSourceDto
+  @ApiProperty({ type: 'string' }) foreignUnitsPerCny!: string
+  @ApiProperty({ type: 'string' }) paymentFeeRate!: string
+  @ApiProperty({ type: 'string', nullable: true }) codAmountTwd!: string | null
+  @ApiProperty({ type: 'string' }) codAmountCurrency!: string
+  @ApiProperty({ type: 'string', nullable: true }) ntdSurchargeAmountTwd!: string | null
+  @ApiProperty({ type: 'string' }) ntdSurchargeCurrency!: string
+  @ApiProperty({ type: 'string', nullable: true }) payableAmountCny!: string | null
+  @ApiProperty({ type: 'string' }) payableCurrency!: string
+  @ApiProperty({ type: 'string', nullable: true }) settlementAmountCny!: string | null
+  @ApiProperty({ type: 'string' }) settlementCurrency!: string
+  @ApiProperty({ type: 'string', nullable: true }) salesAmount!: string | null
+  @ApiProperty({ type: 'string' }) salesCurrency!: string
+  @ApiProperty({ type: 'string', nullable: true }) paymentFeeAmountCny!: string | null
+  @ApiProperty({ type: 'string' }) paymentFeeCurrency!: string
+  @ApiProperty({ type: 'string' }) slhBillNo!: string
+  @ApiProperty({ type: 'string' }) salesOrderNo!: string
+  @ApiProperty({ type: 'string' }) purchaseOrderNo!: string
+  @ApiProperty({ type: 'string' }) containerBatchNo!: string
+  @ApiProperty({ type: 'string', nullable: true }) shipmentNo!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) warehouseReceiptReference!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) shippingMarkText!: string | null
+  @ApiProperty({ type: 'string' }) createdByDisplayName!: string
+  @ApiProperty({ type: 'string' }) createdAt!: string
+}
+
+/** 核对记录列表：按时间倒序，最新一条在最前。 */
+export class SlhReconciliationSettlementListDto {
+  @ApiProperty({ type: [SlhReconciliationSettlementRecordDto] }) items!: SlhReconciliationSettlementRecordDto[]
 }

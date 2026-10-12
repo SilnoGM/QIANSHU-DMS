@@ -10,7 +10,7 @@ defineOptions({ name: 'GenericModalShowcase' })
 const demoStateValues = ['ready', 'long-content', 'loading', 'error'] as const
 type DemoState = typeof demoStateValues[number]
 
-const modalSizes = ['sm', 'md', 'lg', 'xl'] as const
+const modalSizes = ['sm', 'md', 'lg', 'xl', '2xl', '3xl'] as const
 /**
  * 使用确定性的本地费用行主动撑高正文，保证 Showcase 不依赖接口也能反复验收：
  * 模态框整体高度受视口约束，Header 与 Footer 稳定，只有中间正文产生滚动。

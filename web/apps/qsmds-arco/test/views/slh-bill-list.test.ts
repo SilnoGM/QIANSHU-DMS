@@ -130,18 +130,45 @@ test('操作列宽度容得下两个按钮并排，不再换行', async () => {
   assert.match(source, /:action-column="actionColumn"/u)
 })
 
-test('操作列的对账按钮只做轻提示，不跳转也不改数据', async () => {
+test('操作列的对账入口接批次：继续对账跳批次详情，开始对账确认后建批次再跳详情', async () => {
   const source = await readPageSource()
-  // 按钮按状态出现（完成态 v-if 为假），点击只弹一条 info 提示。
-  assert.match(source, /v-if="resolveSlhBillReconciliationActionLabelKey\(row\.reconciliationStatus\)"/u)
-  assert.match(source, /function startReconciliation\(\): void \{[\s\S]{0,160}toast\.info\(t\('slhBill\.reconciliationUnavailable'\)\)/u)
+  // 入口按批次判据出现（纯函数），并受 reconcile 权限门控。
+  assert.match(source, /v-if="canReconcile && entryOf\(row\) !== null"/u)
+  assert.match(source, /resolveSlhBillReconciliationEntryLabelKey\(entryOf\(row\) \?\? 'START'\)/u)
+  assert.match(source, /@click="requestReconciliation\(row\)"/u)
+  // 继续对账：直接用快照里的批次 id 跳批次详情，不在这里重复批次内容。
+  const continueHandler = source.slice(source.indexOf('function continueReconciliation'), source.indexOf('function openStartDialog'))
+  assert.match(continueHandler, /reconcilableCounts\.value\.get\(row\.id\)\?\.inProgressBatchId/u)
+  assert.match(continueHandler, /name: 'qsFinanceBillReconciliationSlhReconciliationDetail', params: \{ id: batchId \}/u)
+  // 开始对账：先弹确认（会建批次、占编号、冻结成员），确认后带幂等键与范围提交。
+  assert.match(source, /function openStartDialog\(row: SlhBillListItemDto\): void \{[\s\S]{0,400}?startKey = crypto\.randomUUID\(\)[\s\S]{0,120}?startOpen\.value = true/u)
+  const startHandler = source.slice(source.indexOf('function confirmStart'), source.indexOf('function openImport'))
+  assert.match(startHandler, /slhReconciliationBatchesApi\.create\([\s\S]{0,300}?reconcilableLineIds: reconcilableCounts\.value\.get\(target\.id\)\?\.reconcilableLineIds \?\? \[\]/u)
+  assert.match(startHandler, /startError\.value = containerFailure\(failure\)\.message/u)
+  // 失败（占用冲突 / 范围变化）就地说明并刷新这一页的计数与批次信息。
+  assert.match(startHandler, /void loadReconcilableCounts\(items\.value\.map\(item => item\.id\)\)/u)
+  assert.match(startHandler, /toast\.success\(t\('slhBill\.startReconciliationSuccess'/u)
+  // 确认弹窗：提交中封锁、提示带账单号与行数、成功按钮接确认。
+  const dialog = source.slice(source.indexOf('v-model="startOpen"'), source.indexOf('</QsGenericModal>'))
+  assert.match(dialog, /:submitting="starting"/u)
+  assert.match(dialog, /t\('slhBill\.startReconciliationHint', \{[\s\S]{0,240}?count: startTarget === null \? 0 : \(reconcilableCounts\.get\(startTarget\.id\)\?\.reconcilableLineIds\.length \?\? 0\)/u)
+  assert.match(dialog, /@click="confirmStart"/u)
+  // 没有可核对的行时「开始对账」软禁用（照常显示、点了说明原因），文案与对账页弹窗同源。
+  assert.match(source, /isSlhBillReconciliationStartBlocked\(\{[\s\S]{0,120}?reconcilableLineCount: state\.reconcilableLineCount/u)
+  assert.match(source, /toast\.info\(buildSlhBillBlockReasonText\([\s\S]{0,220}?blockReason: 'NO_RECONCILABLE_LINES'/u)
+  assert.match(source, /:aria-disabled="entryOf\(row\) === 'START' && startBlockedOf\(row\)"/u)
   // #actions 插槽同时供表格操作列与移动卡片底部使用（QsGenericTable 自动渲染），缺了它两端都会丢按钮。
   assert.match(source, /<template #actions="\{ row \}">/u)
-  // 占位期间不得出现跳转或写请求。
-  assert.equal(source.includes('reconciliationStatus', source.indexOf('function startReconciliation')), true)
-  const handler = source.slice(source.indexOf('function startReconciliation'), source.indexOf('function openImport'))
-  assert.equal(handler.includes('router.push'), false)
-  assert.equal(handler.includes('slhBillsApi'), false)
+  // 占位实现与它的文案一并退场。
+  assert.equal(source.includes('reconciliationUnavailable'), false)
+})
+
+test('对账状态列在有进行中批次时补一句「对账中 · 批次号」', async () => {
+  const source = await readPageSource()
+  // 桌面单元格与移动卡片各一处：状态说的是行核对到哪，批次说的是这单正被谁占着。
+  assert.match(source, /reconcilableCounts\.get\(row\.original\.id\)\?\.inProgressBatchNo/u)
+  assert.match(source, /reconcilableCounts\.get\(row\.id\)\?\.inProgressBatchNo/u)
+  assert.equal(source.match(/t\('slhBill\.reconcilingBatch'\)/gu)?.length, 2)
 })
 
 test('进入详情只剩操作列的查看详情按钮，整行点击不再跳转', async () => {
@@ -178,9 +205,14 @@ test('静默算只算当前页：进页面/翻页/筛选后按当页账单批量
   assert.match(source, /slhReconciliationBatchesApi\.reconcilableCounts\(\{ billIds \}, current\.signal\)/u)
   // 快照按账单主键存，每次先清空：旧页的数字绝不停留在新页上。
   assert.match(source, /reconcilableCounts\.value = new Map\(\)/u)
-  // 列口径＝匹配得上且未被进行中批次冻结的行（unfrozenLineCount），不是全部匹配行。
-  assert.match(source, /reconcilableCounts\.value = new Map\(response\.data\.items\.map\(item => \[item\.billId, item\.unfrozenLineCount\]\)\)/u)
-  assert.equal(source.includes('item.reconcilableLineCount'), false)
+  // 一次请求同时供四处用：列口径（unfrozenLineCount）、入口判据与「对账中」批次号（inProgressBatch*）、
+  // 开始对账的范围（reconcilableLineIds），以及软禁用时的原因摘要（reasons + reconcilableLineCount）。
+  assert.match(source, /reconcilableCounts\.value = new Map\(response\.data\.items\.map\(item => \[item\.billId, \{/u)
+  assert.match(source, /unfrozenLineCount: item\.unfrozenLineCount/u)
+  assert.match(source, /reconcilableLineIds: item\.reconcilableLineIds/u)
+  assert.match(source, /inProgressBatchId: item\.inProgressBatchId \?\? null/u)
+  assert.match(source, /reconcilableLineCount: item\.reconcilableLineCount/u)
+  assert.match(source, /reasons: item\.reasons/u)
   // 静默：失败只留占位符，不写页面错误、不弹提示。
   assert.match(source, /catch \{[\s\S]{0,160}静默算/u)
   // 页面卸载要收掉自己那条请求。
@@ -189,5 +221,5 @@ test('静默算只算当前页：进页面/翻页/筛选后按当页账单批量
   assert.match(source, /reconcilableCounts\.get\(row\.original\.id\) !== undefined/u)
   assert.match(source, /text-muted-foreground">—</u)
   // 可核对 > 0 才用主色强调。
-  assert.match(source, /reconcilableCounts\.get\(row\.original\.id\)! > 0 && 'text-primary font-semibold'/u)
+  assert.match(source, /\(reconcilableCounts\.get\(row\.original\.id\)\?\.unfrozenLineCount \?\? 0\) > 0 && 'text-primary font-semibold'/u)
 })

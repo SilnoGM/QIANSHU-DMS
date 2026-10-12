@@ -1,4 +1,16 @@
 import { Prisma } from '../../generated/prisma/client'
+import type { StoredDictionaryValueResolution } from '../dictionaries/dictionary-lookup.service'
+import { purchaseOrderSupplierFromSources } from '../purchase-orders/purchase-order-query.service'
+import {
+  formatPurchaseOrderAmountUnits,
+  parsePurchaseOrderAmountUnits,
+  sumPurchaseOrderPaidUnits,
+} from '../purchase-orders/domain/purchase-order-decimal'
+import {
+  formatSalesOrderAmountUnits,
+  parseSalesOrderAmountUnits,
+  sumSalesOrderReceivedUnits,
+} from '../sales-orders/domain/sales-order-decimal'
 import { resolveSlhBillReconciliationStatus } from '../slh-bills/slh-bill-reconciliation'
 import { serializeSlhBillLine, serializeStoredFindings } from '../slh-bills/slh-bill.serializer'
 import type { SlhBillReconciliationStatusDto } from '../slh-bills/slh-bill.dto'
@@ -44,6 +56,37 @@ export const slhReconciliationBatchDetailInclude = {
           volumeCai: true, chargeableVolumeCai: true, reportedVolumeCai: true, codAmountTwd: true,
           recipientName: true, recipientPhone: true, recipientAddress: true, remark: true,
           containerBatch: { select: { containerBatchName: true } },
+          // 来源链路与匹配器的合格判定同一条：装柜行 → 货件 → 采购订单 → 销售订单。
+          // 只取对账页要展示的列，采购/销售的金额聚合口径不在这里重复实现。
+          shipment: {
+            select: {
+              shipmentNo: true,
+              purchaseOrder: {
+                select: {
+                  id: true, orderNo: true, orderStatus: true, purchaseTotalAmount: true,
+                  depositDueAmount: true, balanceDueAmount: true,
+                  fulfillmentStatus: true, paymentStatus: true, shippingMarkText: true,
+                  supplierValue: true, customSupplierName: true,
+                  // 实际已付款沿用采购域的累加口径，需要未作废的付款记录。
+                  payments: { select: { amount: true, voidedAt: true } },
+                  // 采购人是采购列表那一列的同源字段。
+                  createdBy: { select: { displayName: true } },
+                  salesOrder: {
+                    select: {
+                      id: true, orderNo: true, orderStatus: true,
+                      currencyCode: true, customerName: true, customerPhone: true,
+                      customerFullAddressSnapshot: true,
+                      agreedTotalAmount: true, depositDueAmount: true, balanceDueAmount: true,
+                      fulfillmentStatus: true, paymentStatus: true,
+                      // 实际已收款沿用销售域的累加口径，需要未作废的收款记录。
+                      payments: { select: { amount: true, voidedAt: true } },
+                      issuer: { select: { displayName: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
       reconciledBy: { select: { displayName: true } },
@@ -86,8 +129,19 @@ function serializeBatchHeader(row: BatchHeaderRow): SlhReconciliationBatchListIt
   }
 }
 
-function serializeBatchMember(row: BatchMemberRow): SlhReconciliationBatchMemberDto {
+/**
+ * 成员行：账单行全部字段 + 本批次匹配依据 + 柜次侧可比字段 + 来源摘要 + 核对留痕。
+ *
+ * `supplierResolutions` 由查询服务先经 DictionaryLookupService 解析（同一字典码与采购域共用），
+ * 序列化本身保持纯函数：字典解析结果没命中时按采购域的同一兜底显示原值。
+ */
+function serializeBatchMember(
+  row: BatchMemberRow,
+  supplierResolutions: ReadonlyMap<string, StoredDictionaryValueResolution>,
+): SlhReconciliationBatchMemberDto {
   const item = row.matchedLoadingItem
+  const purchaseOrderRow = item.shipment?.purchaseOrder ?? null
+  const salesOrderRow = purchaseOrderRow?.salesOrder ?? null
   return {
     ...serializeSlhBillLine(row.line),
     id: row.id,
@@ -115,6 +169,52 @@ function serializeBatchMember(row: BatchMemberRow): SlhReconciliationBatchMember
       recipientPhone: item.recipientPhone,
       recipientAddress: item.recipientAddress,
       remark: item.remark,
+      shipmentNo: item.shipment?.shipmentNo ?? null,
+    },
+    purchaseOrder: purchaseOrderRow === null ? null : {
+      id: purchaseOrderRow.id,
+      orderNo: purchaseOrderRow.orderNo,
+      orderStatus: purchaseOrderRow.orderStatus,
+      // 采购金额与采购域同口径：两位小数人民币。
+      purchaseTotalAmount: purchaseOrderRow.purchaseTotalAmount.toFixed(2),
+      depositDueAmount: purchaseOrderRow.depositDueAmount.toFixed(2),
+      balanceDueAmount: purchaseOrderRow.balanceDueAmount.toFixed(2),
+      // 实际已付款/未付款沿用采购域口径：未作废付款累加，未付＝采购金额 − 已付。
+      paidAmount: formatPurchaseOrderAmountUnits(sumPurchaseOrderPaidUnits(purchaseOrderRow.payments)),
+      outstandingAmount: formatPurchaseOrderAmountUnits(
+        parsePurchaseOrderAmountUnits(purchaseOrderRow.purchaseTotalAmount.toFixed(2))
+        - sumPurchaseOrderPaidUnits(purchaseOrderRow.payments),
+      ),
+      fulfillmentStatus: purchaseOrderRow.fulfillmentStatus,
+      paymentStatus: purchaseOrderRow.paymentStatus,
+      shippingMarkText: purchaseOrderRow.shippingMarkText,
+      supplier: purchaseOrderSupplierFromSources(
+        purchaseOrderRow,
+        supplierResolutions.get(purchaseOrderRow.id),
+      ),
+      creatorDisplayName: purchaseOrderRow.createdBy.displayName,
+    },
+    salesOrder: salesOrderRow === null ? null : {
+      id: salesOrderRow.id,
+      orderNo: salesOrderRow.orderNo,
+      orderStatus: salesOrderRow.orderStatus,
+      currencyCode: salesOrderRow.currencyCode,
+      customerName: salesOrderRow.customerName,
+      customerPhone: salesOrderRow.customerPhone,
+      customerFullAddress: salesOrderRow.customerFullAddressSnapshot,
+      // 销售金额与销售域同口径：四位小数订单币种金额。
+      agreedTotalAmount: salesOrderRow.agreedTotalAmount.toFixed(4),
+      depositDueAmount: salesOrderRow.depositDueAmount.toFixed(4),
+      balanceDueAmount: salesOrderRow.balanceDueAmount.toFixed(4),
+      // 实际已收款/待收款沿用销售域的同一处口径：未作废收款累加，待收＝约定总额 − 已收。
+      receivedAmount: formatSalesOrderAmountUnits(sumSalesOrderReceivedUnits(salesOrderRow.payments)),
+      outstandingAmount: formatSalesOrderAmountUnits(
+        parseSalesOrderAmountUnits(salesOrderRow.agreedTotalAmount.toFixed(4))
+        - sumSalesOrderReceivedUnits(salesOrderRow.payments),
+      ),
+      fulfillmentStatus: salesOrderRow.fulfillmentStatus,
+      paymentStatus: salesOrderRow.paymentStatus,
+      issuerDisplayName: salesOrderRow.issuer.displayName,
     },
     reconciledAt: row.reconciledAt === null ? null : iso(row.reconciledAt),
     reconciledByDisplayName: row.reconciledBy?.displayName ?? null,
@@ -125,8 +225,31 @@ export function serializeSlhReconciliationBatchListItem(row: BatchHeaderRow): Sl
   return serializeBatchHeader(row)
 }
 
-export function serializeSlhReconciliationBatchDetail(row: SlhReconciliationBatchDetailRow): SlhReconciliationBatchDetailDto {
-  return { ...serializeBatchHeader(row), findings: serializeStoredFindings(row.bill.importFindings), members: row.members.map(serializeBatchMember) }
+export function serializeSlhReconciliationBatchDetail(
+  row: SlhReconciliationBatchDetailRow,
+  supplierResolutions: ReadonlyMap<string, StoredDictionaryValueResolution> = new Map(),
+): SlhReconciliationBatchDetailDto {
+  return {
+    ...serializeBatchHeader(row),
+    findings: serializeStoredFindings(row.bill.importFindings),
+    members: row.members.map(member => serializeBatchMember(member, supplierResolutions)),
+  }
+}
+
+/** 成员行里出现的采购订单及其供应商原值：查询服务据此一次解析字典标签。 */
+export function collectMemberPurchaseOrderSuppliers(
+  row: SlhReconciliationBatchDetailRow,
+): readonly { readonly id: string, readonly supplierValue: string | null, readonly customSupplierName: string | null }[] {
+  return row.members.flatMap((member) => {
+    const purchaseOrder = member.matchedLoadingItem.shipment?.purchaseOrder
+    return purchaseOrder === undefined || purchaseOrder === null
+      ? []
+      : [{
+          id: purchaseOrder.id,
+          supplierValue: purchaseOrder.supplierValue,
+          customSupplierName: purchaseOrder.customSupplierName,
+        }]
+  })
 }
 
 /**

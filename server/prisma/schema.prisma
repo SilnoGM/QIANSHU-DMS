@@ -515,6 +515,7 @@ model User {
   reconciliationBatchesUpdated SlhReconciliationBatch[] @relation("SlhReconciliationBatchUpdatedBy")
   reconciliationBatchesCompleted SlhReconciliationBatch[] @relation("SlhReconciliationBatchCompletedBy")
   reconciliationBatchLinesReconciled SlhReconciliationBatchLine[] @relation("SlhReconciliationBatchLineReconciledBy")
+  reconciliationSettlementsCreated SlhReconciliationSettlement[] @relation("SlhReconciliationSettlementCreatedBy")
   containerLoadingItemsCreated ContainerLoadingItem[] @relation("ContainerLoadingItemCreatedBy")
   containerLoadingItemsUpdated ContainerLoadingItem[] @relation("ContainerLoadingItemUpdatedBy")
 
@@ -1002,6 +1003,7 @@ model SalesOrder {
   @@index([currencyCode, orderStatus, customerProvinceStateId, orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_currency_province_date_idx")
   @@index([currencyCode, orderStatus, customerCityId, orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_currency_city_date_idx")
   @@index([issuerUserId, orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_issuer_order_date_id_idx")
+  reconciliationSettlements SlhReconciliationSettlement[]
   @@map("sales_orders")
 }
 
@@ -1179,6 +1181,7 @@ model PurchaseOrder {
   @@index([salesOrderId, orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_sales_order_date_id_idx")
   @@index([supplierValue, orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_supplier_date_id_idx")
   @@index([customSupplierName, orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_custom_supplier_date_id_idx")
+  reconciliationSettlements SlhReconciliationSettlement[]
   @@map("purchase_orders")
 }
 
@@ -1924,6 +1927,7 @@ model ContainerBatch {
   @@unique([createdById, creationRequestKey], map: "container_batches_actor_request_key")
   @@index([loadingDate(sort: Desc), id(sort: Desc)], map: "container_batches_date_id_idx")
   @@index([sourceFileId], map: "container_batches_source_file_idx")
+  reconciliationSettlements SlhReconciliationSettlement[]
   @@map("container_batches")
 }
 
@@ -1970,6 +1974,7 @@ model ContainerLoadingItem {
   @@unique([containerBatchId, creationRequestKey], map: "container_loading_items_batch_request_key")
   @@index([shipmentId], map: "container_loading_items_shipment_idx")
   @@index([oceanShippingMarkText], map: "container_loading_items_ocean_mark_idx")
+  reconciliationSettlements SlhReconciliationSettlement[]
   @@map("container_loading_items")
 }
 
@@ -2109,6 +2114,7 @@ model SlhBill {
   updatedBy User @relation("SlhBillUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   lines SlhBillLine[]
   reconciliationBatches SlhReconciliationBatch[]
+  reconciliationSettlements SlhReconciliationSettlement[]
 
   @@unique([createdById, importRequestKeyHash], map: "slh_bills_actor_request_key")
   @@index([periodStart(sort: Desc), id(sort: Desc)], map: "slh_bills_period_id_idx")
@@ -2162,6 +2168,7 @@ model SlhBillLine {
   bill SlhBill @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   containerBatch ContainerBatch? @relation(fields: [containerBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   charges SlhBillLineCharge[]
+  reconciliationSettlements SlhReconciliationSettlement[]
   reconciliationBatchLines SlhReconciliationBatchLine[]
 
   @@unique([billId, lineNumber], map: "slh_bill_lines_bill_line_key")
@@ -2209,6 +2216,7 @@ model SlhReconciliationBatch {
   createdBy User @relation("SlhReconciliationBatchCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   updatedBy User @relation("SlhReconciliationBatchUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   members SlhReconciliationBatchLine[]
+  settlements SlhReconciliationSettlement[]
 
   @@unique([createdById, creationRequestKeyHash], map: "slh_reconciliation_batches_actor_request_key")
   @@index([billId, completedAt], map: "slh_reconciliation_batches_bill_completed_idx")
@@ -2237,5 +2245,78 @@ model SlhReconciliationBatchLine {
   @@index([lineId], map: "slh_reconciliation_batch_lines_line_idx")
   @@index([matchedLoadingItemId], map: "slh_reconciliation_batch_lines_loading_item_idx")
   @@index([batchId, reconciledAt], map: "slh_reconciliation_batch_lines_batch_reconciled_idx")
+  settlements SlhReconciliationSettlement[]
   @@map("slh_reconciliation_batch_lines")
+}
+
+/// 对账结算结果的状态：有效 / 已被后续结果取代。
+/// 「同一成员行最多一条 ACTIVE」由迁移里的部分唯一索引保证（Prisma schema 不表达部分索引）。
+enum SlhReconciliationSettlementStatus {
+  ACTIVE
+  SUPERSEDED
+
+  @@map("slh_reconciliation_settlement_status")
+}
+
+/// 对账结算结果：每次「确认结算」写入一条完整快照，同一成员行的后续结果会取代前一条。
+/// 追加式留痕：DELETE 被触发器拒绝；UPDATE 只允许 status 与 updated_at，且只允许 ACTIVE → SUPERSEDED。
+model SlhReconciliationSettlement {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchId String @map("batch_id") @db.Uuid
+  batchLineId String @map("batch_line_id") @db.Uuid
+  billId String @map("bill_id") @db.Uuid
+  billLineId String @map("bill_line_id") @db.Uuid
+  loadingItemId String @map("loading_item_id") @db.Uuid
+  containerBatchId String @map("container_batch_id") @db.Uuid
+  purchaseOrderId String @map("purchase_order_id") @db.Uuid
+  salesOrderId String @map("sales_order_id") @db.Uuid
+  status SlhReconciliationSettlementStatus @default(ACTIVE)
+  rateSource SlhBillRateSource @map("rate_source")
+  foreignUnitsPerCny Decimal @map("foreign_units_per_cny") @db.Decimal(30, 12)
+  paymentFeeRate Decimal @map("payment_fee_rate") @db.Decimal(30, 12)
+  salesOrderNo String @map("sales_order_no") @db.VarChar(64)
+  purchaseOrderNo String @map("purchase_order_no") @db.VarChar(64)
+  containerBatchNo String @map("container_batch_no") @db.VarChar(128)
+  shipmentNo String? @map("shipment_no") @db.VarChar(64)
+  slhBillNo String @map("slh_bill_no") @db.VarChar(64)
+  warehouseReceiptReference String? @map("warehouse_receipt_reference") @db.VarChar(1000)
+  shippingMarkText String? @map("shipping_mark_text") @db.VarChar(500)
+  codAmountTwd Decimal? @map("cod_amount_twd") @db.Decimal(30, 2)
+  codAmountCurrency String @map("cod_amount_currency") @db.Char(3)
+  ntdSurchargeAmountTwd Decimal? @map("ntd_surcharge_amount_twd") @db.Decimal(30, 2)
+  ntdSurchargeCurrency String @map("ntd_surcharge_currency") @db.Char(3)
+  payableAmountCny Decimal? @map("payable_amount_cny") @db.Decimal(30, 2)
+  payableCurrency String @map("payable_currency") @db.Char(3)
+  settlementAmountCny Decimal? @map("settlement_amount_cny") @db.Decimal(30, 2)
+  settlementCurrency String @map("settlement_currency") @db.Char(3)
+  salesAmount Decimal? @map("sales_amount") @db.Decimal(30, 4)
+  salesCurrency String @map("sales_currency") @db.Char(3)
+  paymentFeeAmountCny Decimal? @map("payment_fee_amount_cny") @db.Decimal(30, 2)
+  paymentFeeCurrency String @map("payment_fee_currency") @db.Char(3)
+  requestKeyHash Bytes @map("request_key_hash") @db.ByteA
+  payloadHash Bytes @map("payload_hash") @db.ByteA
+  createdById String @map("created_by_id") @db.Uuid
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @map("updated_at") @default(now()) @updatedAt @db.Timestamptz(6)
+
+  batch SlhReconciliationBatch @relation(fields: [batchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  batchLine SlhReconciliationBatchLine @relation(fields: [batchLineId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  bill SlhBill @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  billLine SlhBillLine @relation(fields: [billLineId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  loadingItem ContainerLoadingItem @relation(fields: [loadingItemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  containerBatch ContainerBatch @relation(fields: [containerBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy User @relation("SlhReconciliationSettlementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([createdById, requestKeyHash], map: "slh_reconciliation_settlements_actor_request_key")
+  @@index([batchId, createdAt(sort: Desc)], map: "slh_reconciliation_settlements_batch_created_idx")
+  @@index([batchLineId, createdAt(sort: Desc)], map: "slh_reconciliation_settlements_line_created_idx")
+  @@index([billId, createdAt(sort: Desc)], map: "slh_reconciliation_settlements_bill_created_idx")
+  @@index([containerBatchId], map: "slh_reconciliation_settlements_container_batch_idx")
+  @@index([loadingItemId], map: "slh_reconciliation_settlements_loading_item_idx")
+  @@index([salesOrderId], map: "slh_reconciliation_settlements_sales_order_idx")
+  @@index([purchaseOrderId], map: "slh_reconciliation_settlements_purchase_order_idx")
+  @@index([createdById, createdAt(sort: Desc)], map: "slh_reconciliation_settlements_actor_created_idx")
+  @@map("slh_reconciliation_settlements")
 }

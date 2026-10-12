@@ -54,7 +54,7 @@ test('真实 Provider Browser harness 只在显式 test build 注册且不进入
   assert.equal(route?.children?.[0]?.meta?.menu, false)
 })
 
-test('组件库按分类提供二十三个独立组件路由', () => {
+test('组件库按分类提供二十四个独立组件路由', () => {
   const [basicRoute, businessRoute, pageTemplatesRoute] = componentLibraryRoutes
 
   assert.equal(basicRoute?.name, 'componentLibraryBasic')
@@ -203,6 +203,11 @@ test('组件库按分类提供二十三个独立组件路由', () => {
         path: 'status-switch-toolbar',
         title: '状态切换工具栏',
       },
+      {
+        name: 'componentLibraryQsReconciliationLineSwitcher',
+        path: 'reconciliation-line-switcher',
+        title: '对账明细行切换',
+      },
     ],
   )
 
@@ -215,7 +220,7 @@ test('组件库按分类提供二十三个独立组件路由', () => {
     ...(basicRoute?.children ?? []),
     ...(businessRoute?.children ?? []),
   ].map(route => route.name)
-  assert.equal(new Set(componentRouteNames).size, 23)
+  assert.equal(new Set(componentRouteNames).size, 24)
   assert.ok(
     [...(basicRoute?.children ?? []), ...(businessRoute?.children ?? [])]
       .every(route => !route.path.startsWith('/')),
@@ -354,6 +359,11 @@ test('既有组件页面与页面模板复用展示壳且不依赖业务 API 或
       title: '状态切换工具栏',
     },
     {
+      componentName: 'ComponentLibraryQsReconciliationLineSwitcher',
+      file: '../../src/views/component_library/business/reconciliation-line-switcher.vue',
+      title: '对账明细行切换',
+    },
+    {
       componentName: 'ComponentLibraryPageTemplates',
       file: '../../src/views/component_library/page_templates/index.vue',
       title: '页面模板',
@@ -415,6 +425,18 @@ test('状态切换工具栏叶子路由固定图标与独立动态页面', () =>
   assert.match(
     source,
     /path: 'status-switch-toolbar',[\s\S]*?name: 'componentLibraryQsStatusSwitchToolbar',[\s\S]*?component: \(\) => import\('@\/views\/component_library\/business\/status-switch-toolbar\.vue'\),[\s\S]*?title: '状态切换工具栏',[\s\S]*?icon: 'qs-status-switch'/u,
+  )
+})
+
+test('对账明细行切换叶子路由固定图标与独立动态页面', () => {
+  const source = readFileSync(
+    new URL('../../src/router/modules/component.library.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /path: 'reconciliation-line-switcher',[\s\S]*?name: 'componentLibraryQsReconciliationLineSwitcher',[\s\S]*?component: \(\) => import\('@\/views\/component_library\/business\/reconciliation-line-switcher\.vue'\),[\s\S]*?title: '对账明细行切换',[\s\S]*?icon: 'qs-bill-reconciliation-check'/u,
   )
 })
 

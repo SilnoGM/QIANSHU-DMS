@@ -71,6 +71,13 @@ import {
   PURCHASE_PAYMENT_VOID_CONSUMER,
 } from './fund-purchase-payment'
 import {
+  SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER,
+  SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER,
+  SLH_BILL_FINANCE_SETTLEMENT_SOURCE,
+  SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE,
+  SLH_BILL_SETTLEMENT_POSTING_TYPE,
+} from './fund-bill-settlement'
+import {
   isFundIdempotencyUniqueViolation,
   mapFundPersistenceError,
 } from './fund-persistence-error.mapper'
@@ -99,6 +106,24 @@ const ADMIN_REVERSAL_CONSUMER_CODE = 'ADMIN_REVERSAL'
 const ADMIN_ADJUSTMENT_CONSUMER_CODE = 'ADMIN_MANUAL_ADJUSTMENT'
 const ADMIN_ADJUSTMENT_SOURCE_CODE = 'ADMIN_CONSOLE'
 const ADMIN_ADJUSTMENT_POSTING_TYPE_CODE = 'ADMIN_MANUAL_ADJUSTMENT'
+
+/**
+ * 受控来源只认白名单里的 (sourceCode, consumerCode) 组合，业务类型必须由组合显式决定：
+ * 一个来源可以对应两个动作、两个业务类型（顺联航账单对账＝结算 + 全流程金流费用），
+ * 所以不能再按 sourceCode 推单一类型。
+ */
+const CONTROLLED_POSTING_TYPE_BY_SOURCE_CONSUMER: Readonly<Record<string, string>> = Object.freeze({
+  [`${SALES_RECEIPT_SOURCE_CODE}/${SALES_RECEIPT_APPROVE_CONSUMER_CODE}`]: 'ORDER_SETTLEMENT',
+  [`${SALES_RECEIPT_SOURCE_CODE}/${SALES_RECEIPT_VOID_CONSUMER_CODE}`]: 'ORDER_SETTLEMENT',
+  [`${PACKAGING_COST_SOURCE_CODE}/${PACKAGING_COST_PAY_CONSUMER_CODE}`]: 'WOODEN_PACKING_COST',
+  [`${PURCHASE_PAYMENT_FUND_SOURCE}/${PURCHASE_PAYMENT_PAY_CONSUMER}`]: PURCHASE_PAYMENT_POSTING_TYPE,
+  [`${PURCHASE_PAYMENT_FUND_SOURCE}/${PURCHASE_PAYMENT_STOCK_PAY_CONSUMER}`]: PURCHASE_PAYMENT_POSTING_TYPE,
+  [`${PURCHASE_PAYMENT_FUND_SOURCE}/${PURCHASE_PAYMENT_VOID_CONSUMER}`]: PURCHASE_PAYMENT_POSTING_TYPE,
+  [`${SLH_BILL_FINANCE_SETTLEMENT_SOURCE}/${SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER}`]:
+    SLH_BILL_SETTLEMENT_POSTING_TYPE,
+  [`${SLH_BILL_FINANCE_SETTLEMENT_SOURCE}/${SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER}`]:
+    SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE,
+})
 
 interface PlannedLedgerEntry {
   readonly persistence: FundLedgerEntryInsert
@@ -483,7 +508,10 @@ export class FundPostingApplicationService extends FundPostingService {
       && (action === 'POST'
         ? [PURCHASE_PAYMENT_PAY_CONSUMER, PURCHASE_PAYMENT_STOCK_PAY_CONSUMER].includes(context.consumerCode)
         : context.consumerCode === PURCHASE_PAYMENT_VOID_CONSUMER)
-    if (!salesReceipt && !packagingPayment && !purchasePayment) {
+    // 顺联航账单对账：完成批次时逐笔入账，结算与金流费用是两个独立 consumer（都不支持反向）。
+    const billSettlement = action === 'POST' && context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_SOURCE
+      && [SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER, SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER].includes(context.consumerCode)
+    if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     return normalizeFundAccountCommandContext({
@@ -493,11 +521,13 @@ export class FundPostingApplicationService extends FundPostingService {
     })
   }
 
+  /**
+   * 受控来源的 (来源, consumer) → 业务类型是显式映射：一个来源可以有两个动作、两个类型
+   * （顺联航账单对账就是「结算 + 金流费用」），不再用按来源推单一类型的三元写法。
+   */
   private normalizeBusinessRequest(context: FundBusinessTransactionContext, input: PostBusinessEventInput) {
-    const postingTypeCode = context.sourceCode === PURCHASE_PAYMENT_FUND_SOURCE
-      ? PURCHASE_PAYMENT_POSTING_TYPE
-      : context.sourceCode === PACKAGING_COST_SOURCE_CODE ? 'WOODEN_PACKING_COST' : 'ORDER_SETTLEMENT'
-    if (input.postingTypeCode !== postingTypeCode) {
+    const postingTypeCode = this.resolveControlledPostingType(context)
+    if (postingTypeCode === null || input.postingTypeCode !== postingTypeCode) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     return normalizePostBusinessEventRequest({
@@ -506,6 +536,10 @@ export class FundPostingApplicationService extends FundPostingService {
       requestId: context.requestId,
       ...(context.correlationId === undefined ? {} : { correlationId: context.correlationId }),
     }, input)
+  }
+
+  private resolveControlledPostingType(context: FundBusinessTransactionContext): string | null {
+    return CONTROLLED_POSTING_TYPE_BY_SOURCE_CONSUMER[`${context.sourceCode}/${context.consumerCode}`] ?? null
   }
 
   async lockBusinessEventAccountsInTransaction(
@@ -563,10 +597,12 @@ export class FundPostingApplicationService extends FundPostingService {
     input: FundReversalInput,
   ): Promise<FundPostingResult> {
     const actor = this.normalizeBusinessContext(context, 'REVERSE')
+    const postingTypeCode = this.resolveControlledPostingType(context)
+    if (postingTypeCode === null) throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     return this.reverseInTransaction(transaction, actor, normalizeFundReversalRequest(input), {
       sourceCode: context.sourceCode,
       consumerCode: context.consumerCode,
-      postingTypeCode: context.sourceCode === PURCHASE_PAYMENT_FUND_SOURCE ? PURCHASE_PAYMENT_POSTING_TYPE : 'ORDER_SETTLEMENT',
+      postingTypeCode,
     })
   }
 
@@ -1103,6 +1139,22 @@ export class FundPostingApplicationService extends FundPostingService {
       || plan.entries.some(entry => entry.direction !== 'DEBIT')
     )) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
+    }
+    // 顺联航账单对账的两个动作语义固定：结算是可正可负的归属人收入（方向跟随金额符号），
+    // 金流费用是恒正的归属人成本（只出账）。规则可被管理员调整，但不能改成反向或单向语义。
+    if (request.context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_SOURCE) {
+      const businessAmountMinor = parseFundAmountMinor(plan.businessAmount)
+      const fee = request.context.consumerCode === SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER
+      const invalid = fee
+        ? postingType.businessCategory !== 'COST'
+          || !postingType.requiresUser
+          || !postingType.ruleVersion.legs.some(leg => leg.accountTarget === 'USER')
+          || businessAmountMinor <= 0n
+          || plan.entries.some(entry => entry.direction !== 'DEBIT')
+        : postingType.businessCategory !== 'REVENUE'
+          || !postingType.requiresUser
+          || plan.entries.some(entry => entry.direction !== (businessAmountMinor > 0n ? 'CREDIT' : 'DEBIT'))
+      if (invalid) throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
     }
     return { source, postingType, targetAccounts, plan, userShareRate }
   }

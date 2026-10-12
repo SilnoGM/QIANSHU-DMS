@@ -1,5 +1,9 @@
 import type { PurchaseOrderDocumentType, PurchaseOrderPaymentType } from '../../generated/prisma/enums'
-import { formatPurchaseOrderAmountUnits, parsePurchaseOrderAmountUnits } from './domain/purchase-order-decimal'
+import {
+  formatPurchaseOrderAmountUnits,
+  parsePurchaseOrderAmountUnits,
+  sumPurchaseOrderPaidUnits,
+} from './domain/purchase-order-decimal'
 
 interface ChangeRecord {
   readonly id: string
@@ -67,7 +71,7 @@ export function summarizePurchaseOrderRecords(source: RecordSource): PurchaseOrd
   })
   const latest = candidates[0]
   return {
-    paidAmount: formatPurchaseOrderAmountUnits(byPaymentType.reduce((sum, item) => sum + parsePurchaseOrderAmountUnits(item.amount), 0n)),
+    paidAmount: formatPurchaseOrderAmountUnits(sumPurchaseOrderPaidUnits(source.payments)),
     // 浏览记录总数包含作废历史；有效数量和金额继续只取未作废付款。
     paymentRecordSummary: { totalCount: source._count.payments, count: payments.length, byType: byPaymentType },
     documentSummary: {

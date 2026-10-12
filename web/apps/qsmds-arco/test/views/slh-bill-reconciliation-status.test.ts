@@ -7,7 +7,9 @@ import zhCn from '../../src/locales/lang/workbench/zh-cn.json'
 import zhTw from '../../src/locales/lang/workbench/zh-tw.json'
 import { buildSlhBillLineColumns } from '../../src/views/workbenches/slh-bills/line-columns.logic'
 import {
-  resolveSlhBillReconciliationActionLabelKey,
+  isSlhBillReconciliationStartBlocked,
+  resolveSlhBillReconciliationEntry,
+  resolveSlhBillReconciliationEntryLabelKey,
   resolveSlhBillReconciliationLabelKey,
   resolveSlhBillReconciliationTone,
 } from '../../src/views/workbenches/slh-bills/reconciliation-status.logic'
@@ -44,14 +46,46 @@ test('状态颜色按需求固定：未对账红、部分对账黄、完成与�
   assert.match(resolveSlhBillReconciliationTone('RECONCILED'), /text-emerald-700/u)
 })
 
-test('列表操作列的对账入口按状态出现，完成态没有入口', () => {
-  // 未对账 → 开始对账；部分对账 → 继续对账；对账完成 → 不给入口。
-  assert.equal(resolveSlhBillReconciliationActionLabelKey('PENDING'), 'slhBill.startReconciliation')
-  assert.equal(resolveSlhBillReconciliationActionLabelKey('PARTIAL'), 'slhBill.continueReconciliation')
-  assert.equal(resolveSlhBillReconciliationActionLabelKey('COMPLETED'), null)
+test('列表操作列的对账入口按「有没有进行中批次」出现，三态只决定没有批次时给不给入口', () => {
+  const entry = (overrides: Partial<Parameters<typeof resolveSlhBillReconciliationEntry>[0]> = {}) => resolveSlhBillReconciliationEntry({
+    countsKnown: true,
+    inProgressBatchId: null,
+    reconciliationStatus: 'PENDING',
+    superseded: false,
+    ...overrides,
+  })
+
+  // 有进行中批次：一律「继续对账」，与明细行核对到什么程度无关——
+  // 刚建批次还没核对（PENDING）是继续，全部核对完但没结束（COMPLETED）也是继续。
+  assert.equal(entry({ inProgressBatchId: 'batch-1' }), 'CONTINUE')
+  assert.equal(entry({ inProgressBatchId: 'batch-1', reconciliationStatus: 'PARTIAL' }), 'CONTINUE')
+  assert.equal(entry({ inProgressBatchId: 'batch-1', reconciliationStatus: 'COMPLETED' }), 'CONTINUE')
+  // 没有批次：全部核对完的账单没有可开的活，其余（未对账 / 上一轮结束后剩下没核对的）都能开新一轮。
+  assert.equal(entry(), 'START')
+  assert.equal(entry({ reconciliationStatus: 'PARTIAL' }), 'START')
+  assert.equal(entry({ reconciliationStatus: 'COMPLETED' }), null)
+  // 已被取代的账单不给入口；计数与批次信息还没取到（或取不到）时也不给：宁可少给，也不给错的。
+  assert.equal(entry({ superseded: true }), null)
+  assert.equal(entry({ superseded: true, inProgressBatchId: 'batch-1' }), null)
+  assert.equal(entry({ countsKnown: false }), null)
+  assert.equal(entry({ countsKnown: false, inProgressBatchId: 'batch-1' }), null)
+  // 「开始对账」没有可核对的行时按钮照常出现（软禁用），点了说明原因；继续对账不受这条影响。
+  assert.equal(isSlhBillReconciliationStartBlocked({ inProgressBatchId: null, reconcilableLineCount: 0 }), true)
+  assert.equal(isSlhBillReconciliationStartBlocked({ inProgressBatchId: null, reconcilableLineCount: 3 }), false)
+  assert.equal(isSlhBillReconciliationStartBlocked({ inProgressBatchId: 'batch-1', reconcilableLineCount: 0 }), false)
   // 两个入口的文案三语都要有。
+  assert.equal(resolveSlhBillReconciliationEntryLabelKey('START'), 'slhBill.startReconciliation')
+  assert.equal(resolveSlhBillReconciliationEntryLabelKey('CONTINUE'), 'slhBill.continueReconciliation')
   for (const message of [zhCn, zhTw, en] as const) {
-    for (const key of ['startReconciliation', 'continueReconciliation', 'reconciliationUnavailable'] as const) {
+    for (const key of [
+      'startReconciliation',
+      'continueReconciliation',
+      'reconcilingBatch',
+      'startReconciliationTitle',
+      'startReconciliationHint',
+      'startReconciliationConfirm',
+      'startReconciliationSuccess',
+    ] as const) {
       assert.equal(typeof message.slhBill[key], 'string')
       assert.notEqual(message.slhBill[key].trim(), '')
     }

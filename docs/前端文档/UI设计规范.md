@@ -201,11 +201,11 @@ Tooltip 只放补充信息，关键产品名称、状态和操作仍须直接可
 
 | 表面 | 当前默认值与尺寸 | 开发要求 |
 | --- | --- | --- |
-| `QsGenericModal` | 默认 `md`；`sm/md/lg/xl` 最大宽度为 `30/35/45/56rem` | 聚焦任务；窄屏两侧各留 `12px`，正文独立滚动 |
+| `QsGenericModal` | 默认 `md`；`sm/md/lg/xl/2xl/3xl` 最大宽度为 `30/35/45/56/68/80rem` | 聚焦任务；窄屏两侧各留 `12px`，正文独立滚动 |
 | `QsGenericDrawer` | 默认右侧、`md`；右侧桌面 `sm/md/lg/xl` 宽度为 `24/30/40/48rem` | 上下文详情或侧滑任务；小于 `768px` 的右侧抽屉占满视口宽度。编辑型实例：[编号规则编辑器](../../web/apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-editor-drawer.vue) 带未保存修改守卫，[柜次装柜明细编辑器](../../web/apps/qsmds-arco/src/views/workbenches/containers/loading-item-form-drawer.vue) 按业务决定不设守卫、关闭即丢弃 |
 | 底部 Drawer | 调用方设置 `placement="bottom"`，最大高度 `calc(100dvh - 1rem)` | 按页面任务用于窄屏；不会仅因屏幕变窄就自动改为底部 |
 
-当前两个 Qs 通用弹出层都只支持 `sm/md/lg/xl`，不传入不存在的 `full`。Modal 桌面最大宽度类从 `sm` 断点生效；Drawer 右侧尺寸类从 `md` 生效。不要把两者尺寸和断点混用。页脚按钮的断点必须跟随所在表面：Modal 用 `w-full sm:w-auto`，Drawer 用 `w-full md:w-auto`，否则在 `640px–768px` 区间会出现按钮宽度与浮层宽度不匹配。
+当前 `QsGenericModal` 支持 `sm/md/lg/xl/2xl/3xl` 六档，`QsGenericDrawer` 支持 `sm/md/lg/xl` 四档，双方都不接受未声明的档位（如 `full`）。Modal 桌面最大宽度类从 `sm` 断点生效；Drawer 右侧尺寸类从 `md` 生效。不要把两者尺寸和断点混用。页脚按钮的断点必须跟随所在表面：Modal 用 `w-full sm:w-auto`，Drawer 用 `w-full md:w-auto`，否则在 `640px–768px` 区间会出现按钮宽度与浮层宽度不匹配。
 
 - 标题始终明确，说明只解释当前任务；保留键盘焦点、Escape 和关闭后的焦点恢复。
 - Header / Footer 保持稳定，正文负责滚动；避免内容再套固定高度滚动区而形成双滚动条。

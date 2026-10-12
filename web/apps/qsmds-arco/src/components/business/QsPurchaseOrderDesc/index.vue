@@ -3,13 +3,13 @@ import type {
   QsPurchaseOrderDescLineType,
   QsPurchaseOrderDescLineViewModel,
   QsPurchaseOrderDescProps,
-  QsPurchaseOrderDescStatusTone,
 } from './types'
 import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
 
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
+import { resolveStatusTagToneClass } from '@/utils/status-tag-tone'
 
 defineOptions({ name: 'QsPurchaseOrderDesc' })
 
@@ -44,16 +44,6 @@ function displayText(value: null | string): string {
 
 function lineTypeLabel(lineType: QsPurchaseOrderDescLineType): string {
   return t(`purchaseOrderDesc.lineTypes.${lineType}`)
-}
-
-function statusToneClass(tone: QsPurchaseOrderDescStatusTone): string {
-  return {
-    danger: 'border-destructive/35 bg-destructive/10 text-destructive',
-    info: 'border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300',
-    neutral: 'border-border bg-muted/60 text-muted-foreground',
-    success: 'border-primary/35 bg-primary/10 text-primary',
-    warning: 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  }[tone]
 }
 
 function lineImageItems(
@@ -105,7 +95,7 @@ function lineImageItems(
             v-for="status in model.statuses"
             :key="status.key"
             variant="outline"
-            :class="statusToneClass(status.tone)"
+            :class="resolveStatusTagToneClass(status.tone)"
             :aria-label="`${status.label}：${status.value}`"
           >
             {{ status.value }}

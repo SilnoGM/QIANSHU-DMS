@@ -2,12 +2,14 @@ import {
   assertCustomPurchasePrices,
   calculatePurchaseOrderLineTotal,
   derivePurchaseOrderPaymentStatus,
+  formatPurchaseOrderAmountUnits,
   normalizePositivePurchaseOrderAmount,
   normalizePurchaseOrderAmount,
   normalizePurchaseOrderQuantity,
   normalizePurchaseOrderSnapshotAmount,
   normalizePurchaseOrderReferenceAmount,
   parsePurchaseOrderAmountUnits,
+  sumPurchaseOrderPaidUnits,
   validatePurchaseOrderAgreedAmounts,
 } from './purchase-order-decimal'
 
@@ -133,6 +135,28 @@ describe('purchase order decimal rules', () => {
     expect(normalizePositivePurchaseOrderAmount('0.01')).toBe('0.01')
     expect(() => normalizePositivePurchaseOrderAmount('0')).toThrow(
       expect.objectContaining({ code: 'PURCHASE_ORDER_PAYMENT_AMOUNT_INVALID' }),
+    )
+  })
+
+  it('sums only active payments and keeps the cent precision contract', () => {
+    const payment = (amount: string, voidedAt: Date | null = null) => ({
+      amount: { toFixed: () => amount },
+      voidedAt,
+    })
+    expect(sumPurchaseOrderPaidUnits([])).toBe(0n)
+    expect(formatPurchaseOrderAmountUnits(sumPurchaseOrderPaidUnits([
+      payment('30.01'), payment('0.01'),
+    ]))).toBe('30.02')
+    // 作废记录不计入；缺省 voidedAt 表示调用方已在 SQL 里过滤过，两种形态都要接受。
+    expect(formatPurchaseOrderAmountUnits(sumPurchaseOrderPaidUnits([
+      payment('30.01'), payment('6.00', new Date('2026-01-01T00:00:00Z')),
+    ]))).toBe('30.01')
+    expect(formatPurchaseOrderAmountUnits(sumPurchaseOrderPaidUnits([
+      { amount: { toFixed: () => '12.34' } },
+    ]))).toBe('12.34')
+    // 非零厘/毫不能被四舍五入掩盖：读四位原值后仍按分精度校验。
+    expect(() => sumPurchaseOrderPaidUnits([payment('1.0001')])).toThrow(
+      expect.objectContaining({ code: 'PURCHASE_ORDER_AMOUNT_INVALID' }),
     )
   })
 })
