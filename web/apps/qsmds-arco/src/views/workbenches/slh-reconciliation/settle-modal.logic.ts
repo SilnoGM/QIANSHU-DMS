@@ -338,7 +338,8 @@ export function buildSettleSummary(
         resultCurrencyCode: SETTLEMENT_CURRENCY,
         // 金流费恒红：它是净支出，不按符号着色（用户 2026-10-11 口径）。
         resultTone: paymentFeeValue === null ? 'neutral' : 'danger',
-        noteKey: null,
+        // 费用是对整张销售订单收的，而一个销售单可能对应多行账单：入账按销售单计一次（2026-10-13 口径）。
+        noteKey: 'slhReconciliation.settle.paymentFeeOncePerSalesOrder',
       },
     ],
   }

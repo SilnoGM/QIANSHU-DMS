@@ -756,6 +756,13 @@ test('对账信息弹窗：本行不涉及的金额按 0 代入结算，整行�
   // 负数是「无代收但有杂费」这类行的真实结算方向 ⇒ 红色。
   assert.equal(missingCod.blocks[0]?.resultTone, 'danger')
   assert.equal(missingCod.blocks[0]?.noteKey, 'slhReconciliation.settle.missingAmountAsZero')
+  // 金流费用恒带一句「按销售单计一次」：费用是对整单销售金额收的，同一销售单的其他行不重复计入。
+  assert.equal(missingCod.blocks[1]?.noteKey, 'slhReconciliation.settle.paymentFeeOncePerSalesOrder')
+  for (const locale of [zhCn, zhTw, en] as const) {
+    const noteKey = locale.slhReconciliation.settle.paymentFeeOncePerSalesOrder
+    assert.equal(typeof noteKey, 'string')
+    assert.notEqual(noteKey.trim(), '')
+  }
 
   // L-010233 的形状：有代收、不涉及台币杂费 → （80000 − 0）÷ 5.2 − 3510 = 11874.62。
   const missingNtd = buildSettleSummary(memberFixture({
@@ -918,6 +925,9 @@ test('核对记录弹窗：底栏只读入口与弹窗接线，卡片只走 Amou
   assert.match(modal, /size="2xl"/u)
   assert.match(modal, /:aria-pressed="selectedOf\(card\) === block\.id"/u)
   assert.match(modal, /\{\{ card\.formulas\[selectedOf\(card\)\] \}\}/u)
+  // 区块级补充说明：选中金流费用时给出「按销售单计一次」，避免被读成按行重复收。
+  assert.match(modal, /v-if="card\.blockNoteKeys\[selectedOf\(card\)\]"/u)
+  assert.match(modal, /t\(card\.blockNoteKeys\[selectedOf\(card\)\] \?\? ''\)/u)
   assert.match(modal, /v-if="!isExpanded\(card\)"/u)
   assert.match(modal, /t\('slhReconciliation\.records\.expandSnapshot'\)/u)
   assert.match(modal, /t\('slhReconciliation\.records\.collapseSnapshot'\)/u)

@@ -939,8 +939,9 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       expect(row.paymentFeeAmountCny?.toFixed(2)).toBe('0.01')
 
       await browser.post(`${BASE}/${prepared.batchId}/complete`).set(packagingHeaders).send({}).expect(200)
+      // 费用按销售单入账：用销售单主键回查，账单行的结算记录只在 metadata 里留痕。
       const postings = await h.prisma.fundPostingBatch.findMany({
-        where: { businessId: settlement.id }, include: { entries: true }, orderBy: { consumerCode: 'asc' },
+        where: { businessId: row.salesOrderId }, include: { entries: true }, orderBy: { consumerCode: 'asc' },
       })
       expect(postings.map(entry => entry.consumerCode)).toEqual(['SLH_BILL_FINANCE_SETTLEMENT.FEE'])
       const [fee] = postings
@@ -949,12 +950,14 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
         businessSourceCodeSnapshot: 'SLH_BILL_FINANCE_SETTLEMENT',
         postingTypeCodeSnapshot: 'FULL_FLOW_PAYMENT_FEE',
         businessCategorySnapshot: 'COST',
-        businessNo: (await h.prisma.slhReconciliationBatch.findUniqueOrThrow({ where: { id: prepared.batchId }, select: { batchNo: true } })).batchNo,
+        // 费用按销售单入账：业务身份是销售单（编号），不是账单行。
+        businessId: row.salesOrderId,
+        businessNo: row.salesOrderNo,
         userId: h.fixture.actor.id,
       })
       expect(fee.businessAmount.toFixed(2)).toBe('0.01')
-      // 幂等键由结算记录推导：同一结算记录重放不会产生第二条流水。
-      expect(Buffer.from(fee.idempotencyKeyHash).equals(createHash('sha256').update(`${settlement.id}:FEE`).digest())).toBe(true)
+      // 幂等键按销售单推导：同一销售单的费用只会入一次，重放也恢复同一笔。
+      expect(Buffer.from(fee.idempotencyKeyHash).equals(createHash('sha256').update(`${row.salesOrderId}:FEE`).digest())).toBe(true)
       expect(fee.metadata).toMatchObject({ slhReconciliationBatchId: prepared.batchId, slhReconciliationSettlementId: settlement.id })
       // 用户 30% 的分账量化为 0.00 被省略，公司承接全部尾差；费用恒为出账。
       expect(fee.entries.map(entry => [entry.accountTarget, entry.direction, entry.amount.toFixed(2)])).toEqual([
@@ -975,7 +978,10 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       const company = await h.prisma.fundAccount.findFirstOrThrow({ where: { ownerType: 'COMPANY' }, select: { id: true, balance: true } })
       await browser.post(`${BASE}/${prepared.batchId}/complete`).set(packagingHeaders).send({}).expect(200)
 
-      const postings = await h.prisma.fundPostingBatch.findMany({ where: { businessId: settlement.id }, include: { entries: true } })
+      // 结算金额挂在账单行（业务身份＝结算记录），费用挂在销售单：两类流水的身份不同，各查一次。
+      const postings = await h.prisma.fundPostingBatch.findMany({
+        where: { OR: [{ businessId: settlement.id }, { businessId: row.salesOrderId }] }, include: { entries: true },
+      })
       expect(postings.map(entry => entry.consumerCode).sort()).toEqual([
         'SLH_BILL_FINANCE_SETTLEMENT.FEE', 'SLH_BILL_FINANCE_SETTLEMENT.RECONCILE',
       ])
@@ -1077,6 +1083,102 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       await expect(h.prisma.fundPostingBatch.create({ data: { ...base, userId: null, userShareRateSnapshot: null, companyShareRateSnapshot: null } }))
         .rejects.toThrow(/fund_posting_batches_slh_bill_settlement_shape_check/u)
       expect(await h.prisma.fundPostingBatch.count({ where: { businessSourceCodeSnapshot: 'SLH_BILL_FINANCE_SETTLEMENT', businessId: base.businessId } })).toBe(0)
+    })
+  })
+
+  describe('金流费用按销售单计一次', () => {
+    /** 结算与费用都从系统汇率取值，和其他入账用例同口径。 */
+    const setSystemRate = async (value: string) => {
+      const currency = await h.prisma.currency.findUniqueOrThrow({ where: { code: 'TWD' }, select: { id: true } })
+      await h.prisma.exchangeRate.upsert({
+        where: { currencyId: currency.id },
+        create: { currencyId: currency.id, foreignUnitsPerCny: value },
+        update: { foreignUnitsPerCny: value },
+      })
+    }
+    /** 账单「装柜日期」列是 Excel 序列号：年份与柜号/唛头里的月日一起定位柜次。 */
+    const excelSerial = (date: string) => String(Math.round((Date.parse(`${date}T00:00:00.000Z`) - Date.UTC(1899, 11, 30)) / 86_400_000))
+
+    /**
+     * 一条货件在装柜时被拆成三个唛头（同一柜次、同一个货件、三行装柜明细），
+     * 账单三行分别对上它们：三条账单行的匹配链是**同一个销售单**。
+     * 这是「一个销售单对应多行账单」的最小构造，用来验证费用不会被按行重复收。
+     */
+    async function splitShipmentBill(): Promise<{ billId: string, marks: string[] }> {
+      const date = '2026-03-07'
+      const containerBatchName = '0307-01柜'
+      const marks = ['M-030701', 'M-030702', 'M-030703']
+      const shipment = await h.shipment({ salesLinked: true })
+      await createContainer(containerBatchName, date, marks.map(mark => ({ mark, shipmentId: shipment.part.id })))
+      const bill = await importBill(`入账-${containerBatchName}`, createSlhBillFixture({
+        rows: marks.map((mark, index) => ({
+          B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: `WG-0307-000${index + 1}`, F: mark,
+          G: '农用四轮微耕机', H: '1', I: 'CTN',
+          // 行级勾稽 payable = 运费 + 代收手续费 + 附加费：整笔放进运费列。
+          R: String(1000 * (index + 1)), U: String(1000 * (index + 1)),
+          V: '52000', W: '0', X: '入账测试', Y: '测试收货人一',
+        })),
+      }))
+      return { billId: bill.id, marks }
+    }
+
+    /** 逐行写结算：(52000 − 0) ÷ 5.2 = 10000，减去各行应付后就是各行的结算金额；费用三行相同。 */
+    async function settleLine(batchId: string, memberId: string, payable: number): Promise<{ id: string }> {
+      const amounts = resolveSettlementAmounts({
+        codAmountTwd: '52000.00', ntdSurchargeAmountTwd: '0.00', payableAmountCny: `${payable}.00`,
+        salesAmount: '10.0000', rate: '5.200000000000', paymentFeeRate: PAYMENT_FEE_RATE,
+      })
+      const response = await browser.post(`${BASE}/${batchId}/settlements`).set(packagingHeaders).set('Idempotency-Key', randomUUID())
+        .send({ batchLineId: memberId, rateSource: 'SYSTEM', rate: '5.200000000000', amounts }).expect(201)
+      return response.body as { id: string }
+    }
+    const feePostings = (salesOrderId: string) => h.prisma.fundPostingBatch.findMany({
+      where: { businessSourceCodeSnapshot: 'SLH_BILL_FINANCE_SETTLEMENT', consumerCode: 'SLH_BILL_FINANCE_SETTLEMENT.FEE', businessId: salesOrderId },
+      select: { businessNo: true, businessAmount: true, metadata: true },
+    })
+
+    it('同一销售单的两行只入一笔费用，费用身份挂在销售单上；跨批次也不重复', async () => {
+      const { billId } = await splitShipmentBill()
+      await setSystemRate('5.200000000000')
+
+      // 第一轮：三行里的前两行一起核对并完成。
+      const firstBatch = (await createBatch(billId, randomUUID()).expect(201)).body as BatchDetail
+      expect(firstBatch.memberCount).toBe(3)
+      const [firstLine, secondLine] = firstBatch.members
+      const firstSettlement = await settleLine(firstBatch.id, firstLine.id, 1000)
+      const secondSettlement = await settleLine(firstBatch.id, secondLine.id, 2000)
+      const salesOrder = await h.prisma.slhReconciliationSettlement.findUniqueOrThrow({
+        where: { id: firstSettlement.id }, select: { salesOrderId: true, salesOrderNo: true },
+      })
+      await browser.post(`${BASE}/${firstBatch.id}/complete`).set(packagingHeaders).send({}).expect(200)
+
+      // 结算金额逐行入账（两行各一笔），费用只入一笔且业务身份是销售单。
+      const reconcile = await h.prisma.fundPostingBatch.findMany({
+        where: { businessId: { in: [firstSettlement.id, secondSettlement.id] }, consumerCode: 'SLH_BILL_FINANCE_SETTLEMENT.RECONCILE' },
+        select: { businessAmount: true },
+      })
+      expect(reconcile.map(row => row.businessAmount.toFixed(2)).sort()).toEqual(['8000.00', '9000.00'])
+      const firstFees = await feePostings(salesOrder.salesOrderId)
+      expect(firstFees).toHaveLength(1)
+      expect(firstFees[0]).toMatchObject({ businessNo: salesOrder.salesOrderNo })
+      expect(firstFees[0].businessAmount.toFixed(2)).toBe('0.01')
+      // 触发它的是本轮第一条核对：费用属于销售单，但要能从这里回查到是哪一行把它带进来的。
+      expect(firstFees[0].metadata).toMatchObject({
+        slhReconciliationSettlementId: firstSettlement.id,
+        slhReconciliationSalesOrderNo: salesOrder.salesOrderNo,
+      })
+
+      // 第二轮：同一销售单的第三行单独开一批完成（成员行 id 属于新批次，不能用上一批的）。
+      const secondBatch = (await createBatch(billId, randomUUID()).expect(201)).body as BatchDetail
+      expect(secondBatch.memberCount).toBe(1)
+      const thirdSettlement = await settleLine(secondBatch.id, secondBatch.members[0].id, 3000)
+      await browser.post(`${BASE}/${secondBatch.id}/complete`).set(packagingHeaders).send({}).expect(200)
+
+      // 第三行的结算金额照常入账，费用不再重复：整个销售单始终只有一笔。
+      expect(await h.prisma.fundPostingBatch.count({
+        where: { businessId: thirdSettlement.id, consumerCode: 'SLH_BILL_FINANCE_SETTLEMENT.RECONCILE' },
+      })).toBe(1)
+      expect(await feePostings(salesOrder.salesOrderId)).toHaveLength(1)
     })
   })
 

@@ -262,6 +262,12 @@ export class SlhReconciliationBatchService {
    * 各成一条独立资金流水，不做同出单人合并；资金归属人取销售订单出单人（不是当前操作人）。
    * 结算金额为空或为 0、金流费用为空或为 0 时跳过该笔；两者都跳过时这一行不产生资金流水，
    * 因此「没有任何可入账内容」的批次完成仍然成功、只是零流水。
+   *
+   * **结算与费用的记账单位不同**：结算金额是本行的钱（代收/杂费/应付），逐行各入一笔；
+   * 金流费用是对**整张销售订单的销售金额**收的（销售金额 ÷ 汇率 × 费率），而一个销售单可能
+   * 对应多行账单（多货件，或一个货件装柜时拆成多个唛头/装柜行），逐行入账会按行数翻倍。
+   * 因此费用按销售单去重：同一销售单只入一次，以**首次遇到的那一行**的汇率快照与费用为准，
+   * 已入过就跳过（不重算、不补差）。
    */
   private async postCompletedMembers(
     tx: Prisma.TransactionClient,
@@ -273,24 +279,37 @@ export class SlhReconciliationBatchService {
   ): Promise<string[]> {
     const reconciled = members.flatMap(member => member.settlements.map(settlement => ({ memberId: member.id, settlement })))
     if (reconciled.length === 0) return []
+    const salesOrderIds = [...new Set(reconciled.map(entry => entry.settlement.salesOrderId))]
     const orders = await tx.salesOrder.findMany({
-      where: { id: { in: [...new Set(reconciled.map(entry => entry.settlement.salesOrderId))] } },
-      select: { id: true, issuerUserId: true },
+      where: { id: { in: salesOrderIds } },
+      select: { id: true, orderNo: true, issuerUserId: true },
     })
-    const issuerByOrderId = new Map(orders.map(order => [order.id, order.issuerUserId]))
-    const metadata = (memberId: string, settlementId: string, rateSource: string, foreignUnitsPerCny: string) => ({
+    const orderById = new Map(orders.map(order => [order.id, order]))
+    // 已收过费用的销售单：按业务身份查（source + consumer + business_id = 销售单），
+    // 不能只靠幂等键——不同结算记录触发的费用 memo 不同，同键会被资金层判为幂等冲突而不是重放。
+    const charged = await tx.fundPostingBatch.findMany({
+      where: {
+        businessSourceCodeSnapshot: SLH_BILL_FINANCE_SETTLEMENT_SOURCE,
+        consumerCode: SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER,
+        businessId: { in: salesOrderIds },
+      },
+      select: { businessId: true },
+    })
+    const feeChargedOrderIds = new Set(charged.map(row => row.businessId))
+    const metadata = (memberId: string, settlementId: string, salesOrderNo: string, rateSource: string, foreignUnitsPerCny: string) => ({
       slhReconciliationBatchId: batchId,
       slhReconciliationBatchNo: batchNo,
       slhReconciliationBatchLineId: memberId,
       slhReconciliationSettlementId: settlementId,
+      slhReconciliationSalesOrderNo: salesOrderNo,
       slhBillNo,
       rateSource,
       foreignUnitsPerCny,
     })
     const entries: Array<{ context: FundBusinessTransactionContext, input: PostBusinessEventInput }> = []
     for (const { memberId, settlement } of reconciled) {
-      const issuerUserId = issuerByOrderId.get(settlement.salesOrderId)
-      if (issuerUserId === undefined) {
+      const order = orderById.get(settlement.salesOrderId)
+      if (order === undefined) {
         return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_SOURCE_MISSING', '这一行的销售订单已不可用，暂时无法入账', 409)
       }
       const rateSource = settlement.rateSource
@@ -300,24 +319,26 @@ export class SlhReconciliationBatchService {
         entries.push({
           context: { ...context, sourceCode: SLH_BILL_FINANCE_SETTLEMENT_SOURCE, consumerCode: SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER },
           input: {
-            postingTypeCode: SLH_BILL_SETTLEMENT_POSTING_TYPE, userId: issuerUserId,
+            postingTypeCode: SLH_BILL_SETTLEMENT_POSTING_TYPE, userId: order.issuerUserId,
             amount: settlementAmount.toFixed(2), businessId: settlement.id, businessNo: batchNo,
             summary: COMPLETION_SETTLEMENT_SUMMARY,
-            metadata: metadata(memberId, settlement.id, rateSource, foreignUnitsPerCny),
+            metadata: metadata(memberId, settlement.id, order.orderNo, rateSource, foreignUnitsPerCny),
             idempotencyKey: `${settlement.id}:RECONCILE`,
           },
         })
       }
       const feeAmount = settlement.paymentFeeAmountCny
-      if (feeAmount !== null && feeAmount.gt(0)) {
+      // 本批内同一销售单的后续行也不重复入：集合在构建过程中就地扩充。
+      if (feeAmount !== null && feeAmount.gt(0) && !feeChargedOrderIds.has(order.id)) {
+        feeChargedOrderIds.add(order.id)
         entries.push({
           context: { ...context, sourceCode: SLH_BILL_FINANCE_SETTLEMENT_SOURCE, consumerCode: SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER },
           input: {
-            postingTypeCode: SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE, userId: issuerUserId,
-            amount: feeAmount.toFixed(2), businessId: settlement.id, businessNo: batchNo,
+            postingTypeCode: SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE, userId: order.issuerUserId,
+            amount: feeAmount.toFixed(2), businessId: order.id, businessNo: order.orderNo,
             summary: COMPLETION_FEE_SUMMARY,
-            metadata: metadata(memberId, settlement.id, rateSource, foreignUnitsPerCny),
-            idempotencyKey: `${settlement.id}:FEE`,
+            metadata: metadata(memberId, settlement.id, order.orderNo, rateSource, foreignUnitsPerCny),
+            idempotencyKey: `${order.id}:FEE`,
           },
         })
       }
