@@ -355,6 +355,11 @@
       "completeHint": "完成後本批次不能再繼續核對，帳單會重新回到可發起對帳的狀態。",
       "completeConfirm": "確認完成",
       "completedToast": "已完成本次對帳",
+      "completeSteps": {
+        "accounts": "取得使用者資金帳戶",
+        "rules": "確認入帳規則與比例",
+        "posting": "執行資金入帳"
+      },
       "membersEmpty": "本批次沒有凍結任何明細行。",
       "lineSwitcherLabel": "本批次凍結的明細行切換",
       "loadingItemTitle": "裝櫃明細行資訊",

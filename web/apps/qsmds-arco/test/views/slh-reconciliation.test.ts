@@ -25,6 +25,7 @@ import {
 } from '../../src/views/workbenches/slh-reconciliation/bill-select.logic'
 import {
   buildSlhReconciliationBillLinePanel,
+  buildSlhReconciliationCompleteSteps,
   buildSlhReconciliationFocusValues,
   buildSlhReconciliationLineItems,
   buildSlhReconciliationLoadingItemPanel,
@@ -149,6 +150,27 @@ test('完成批次的门禁：还有未核对行或批次已结束都挡下，�
     resolveSlhReconciliationCompleteBlockLabelKey('BATCH_COMPLETED'),
     'slhReconciliation.detail.completeBlockedBatchCompleted',
   )
+})
+
+test('完成批次的多步步骤：三步只给最后一步挂真实请求，文案按账户→规则→入账排序', () => {
+  const run = async (): Promise<void> => {}
+  const steps = buildSlhReconciliationCompleteSteps(echoKey, run)
+
+  // 三步是这次单请求的叙事：服务端在同一个事务里完成账户、规则与逐笔入账，前端观察不到边界。
+  assert.equal(steps.length, 3)
+  assert.deepEqual(steps.map(step => step.text), [
+    '[slhReconciliation.detail.completeSteps.accounts]',
+    '[slhReconciliation.detail.completeSteps.rules]',
+    '[slhReconciliation.detail.completeSteps.posting]',
+  ])
+  // 只有「执行资金入账」那一步携带真实请求：挂在前面会让后续步骤与事实不符。
+  assert.deepEqual(steps.map(step => step.action === undefined), [true, true, false])
+  assert.equal(steps[2]?.action, run)
+  // 文案键是动态拼的，类型检查管不到；三语都要有且非空。
+  for (const locale of [zhCn, zhTw, en]) {
+    assertTranslated(locale.slhReconciliation.detail.completeSteps as unknown as Record<string, unknown>, ['accounts', 'rules', 'posting'])
+  }
+  assert.equal(zhCn.slhReconciliation.detail.completeSteps.posting, '执行资金入账')
 })
 
 test('批次列表默认停在进行中，非法取值退回默认且关键词去空白', () => {
@@ -394,12 +416,29 @@ test('批次详情页：头部只给批次与账单标识、底部承接完成�
   // 常驻错误条退场（读取失败那条 FaAlert 仍留在页面主体上）。
   assert.doesNotMatch(page, /actionError/u)
   // 完成按钮：门禁未过时软禁用（可点但看起来不可用），点了说明原因；批次没读到时才是真禁用。
-  assert.match(page, /:disabled="batch === null \|\| completing"/u)
-  assert.match(page, /:aria-disabled="!canComplete \|\| completing"/u)
+  assert.match(page, /:disabled="batch === null \|\| completeLoading"/u)
+  assert.match(page, /:aria-disabled="!canComplete \|\| completeLoading"/u)
   assert.match(page, /@click="requestComplete"/u)
   assert.match(page, /resolveSlhReconciliationCompleteBlockLabelKey\(completeBlockReason\.value\)/u)
   assert.match(page, /completeOpen\.value = true/u)
   assert.doesNotMatch(page, /:disabled="!canComplete/u)
+  // 确认后的编排：确认即同步关弹窗，再开多步加载器；请求挂在最后一步。
+  assert.match(page, /function confirmComplete\(\): void \{[\s\S]{0,400}?completeOpen\.value = false\n\s+completeLoading\.value = true/u)
+  assert.match(page, /await slhReconciliationBatchesApi\.complete\(batchId\.value, current\.signal\)/u)
+  assert.match(page, /const completeSteps = computed\(\(\) => buildSlhReconciliationCompleteSteps\(translate, runCompletion\)\)/u)
+  assert.match(page, /:loading="completeLoading"/u)
+  assert.match(page, /:steps="completeSteps"/u)
+  assert.match(page, /@complete="completeFinished"/u)
+  assert.match(page, /@error="completeFailed"/u)
+  // 一次性写入不能被用户中途藏起来：沿用仓内既有口径的 prevent-close。
+  assert.match(page, /<FaMultiStepLoader[\s\S]{0,240}?prevent-close/u)
+  // 成功才刷新并提示；失败立刻收尾（组件最短 2 秒不适用于失败路径）。
+  assert.match(page, /function completeFinished\(\): void \{[\s\S]{0,240}?toast\.success\(t\('slhReconciliation\.detail\.completedToast'\)\)[\s\S]{0,120}?void load\(\)/u)
+  assert.match(page, /function completeFailed\(failure: unknown\): void \{[\s\S]{0,200}?completeLoading\.value = false/u)
+  // 确认弹窗不再接 submitting：关闭发生在请求之前，不存在提交期间关闭的窗口。
+  const completeModal = page.slice(page.indexOf('completeOpen'), page.indexOf('@click="confirmComplete"'))
+  assert.doesNotMatch(completeModal, /:submitting=/u)
+  assert.doesNotMatch(page, /completing/u)
   // 两个逐行按钮的文案带上「本行」，与批次级动作区分开。
   assert.equal(zhCn.slhReconciliation.detail.reconcileWrong, '本行核对有误')
   assert.equal(zhCn.slhReconciliation.detail.reconcileCorrect, '本行核对正确')

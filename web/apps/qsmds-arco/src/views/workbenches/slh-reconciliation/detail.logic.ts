@@ -47,6 +47,32 @@ export function buildSlhReconciliationLineItems(
   }))
 }
 
+/**
+ * 完成批次的多步加载器步骤：三步只是这一次单请求的叙事——服务端在同一个事务里取账户、
+ * 校验规则比例并逐笔入账，前端无法观察阶段边界。因此只有最后一步携带真实请求：那一步
+ * 就是这次入账本身，挂在前面会让后续步骤与事实不符。展示时长由加载器自己保证（最短 2 秒）。
+ */
+const SLH_RECONCILIATION_COMPLETE_STEP_KEYS = [
+  'slhReconciliation.detail.completeSteps.accounts',
+  'slhReconciliation.detail.completeSteps.rules',
+  'slhReconciliation.detail.completeSteps.posting',
+] as const
+
+export interface SlhReconciliationCompleteStep {
+  readonly text: string
+  readonly action?: () => Promise<void>
+}
+
+export function buildSlhReconciliationCompleteSteps(
+  translate: SlhReconciliationTranslate,
+  runPosting: () => Promise<void>,
+): SlhReconciliationCompleteStep[] {
+  const lastIndex = SLH_RECONCILIATION_COMPLETE_STEP_KEYS.length - 1
+  return SLH_RECONCILIATION_COMPLETE_STEP_KEYS.map((key, index) => (
+    index === lastIndex ? { text: translate(key), action: runPosting } : { text: translate(key) }
+  ))
+}
+
 /** 选中值由页面持有；成员被替换或清空时解析为 null，由页面负责校正模型值。 */
 export function resolveSlhReconciliationSelectedMember(
   members: readonly SlhReconciliationBatchMemberDto[],

@@ -364,6 +364,11 @@
       "completeHint": "完成后本批次不能再继续核对，账单会重新回到可发起对账的状态。",
       "completeConfirm": "确认完成",
       "completedToast": "已完成本次对账",
+      "completeSteps": {
+        "accounts": "获取用户资金账户",
+        "rules": "确认入账规则和比例",
+        "posting": "执行资金入账"
+      },
       "membersEmpty": "本批次没有冻结任何明细行。",
       "lineSwitcherLabel": "本批次冻结的明细行切换",
       "loadingItemTitle": "装柜明细行信息",

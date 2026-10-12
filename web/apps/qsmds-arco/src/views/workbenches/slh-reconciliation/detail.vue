@@ -17,6 +17,7 @@ import { resolveStatusTagToneClass } from '@/utils/status-tag-tone'
 import { containerFailure } from '../containers/use-container-resource'
 import {
   buildSlhReconciliationBillLinePanel,
+  buildSlhReconciliationCompleteSteps,
   buildSlhReconciliationFocusValues,
   buildSlhReconciliationLineItems,
   buildSlhReconciliationLoadingItemPanel,
@@ -52,7 +53,8 @@ const batch = shallowRef<SlhReconciliationBatchDetailDto | null>(null)
 const loading = ref(false)
 const loadError = ref('')
 const completeOpen = ref(false)
-const completing = ref(false)
+/** 完成进行中：既驱动头部按钮的加载态，也用于挡住重入。 */
+const completeLoading = ref(false)
 /** 「对账信息」弹窗：开关与打开时取到的两个汇率（系统当前 / 账单内置）。 */
 const settleOpen = ref(false)
 const settleSystemRate = ref<string | null>(null)
@@ -62,11 +64,16 @@ const ACTION_ERROR_TOAST_DURATION = 8_000
 /** 选中行由页面持有：切换器只发 update:modelValue，行数据与后续核对动作都跟着它走。 */
 const selectedLineId = ref<string | null>(null)
 let controller: AbortController | null = null
+/** 完成批次的请求控制器与批次读取分开：刷新不能中断一次在途的入账，反之亦然。 */
+let completeController: AbortController | null = null
 
 /** 纯函数只要求最小翻译签名；带参数时显式展开，与弹窗里的既有写法一致。 */
 function translate(key: string, params?: Record<string, unknown>) {
   return params === undefined ? t(key) : t(key, params)
 }
+
+/** 三步叙事，只有最后一步真正发出请求（口径见 detail.logic 的 buildSlhReconciliationCompleteSteps）。 */
+const completeSteps = computed(() => buildSlhReconciliationCompleteSteps(translate, runCompletion))
 
 /**
  * 完成批次的门禁：批次已结束、或还有未核对的明细行时都不让完成。
@@ -261,25 +268,40 @@ function openRecordsModal(): void {
   recordsOpen.value = true
 }
 
-async function complete(): Promise<void> {
-  if (!canComplete.value || completing.value) {
+/**
+ * 点「确认」：先同步关掉确认弹窗，再交给多步加载器。
+ *
+ * 弹窗必须在这里关完再去发请求：`QsGenericModal` 的契约是提交期间拒绝一切关闭方式，
+ * 请求在途时再让父级把 `modelValue` 改成 false 会被守卫顶回 true，弹窗就再也关不上。
+ * 关掉之后弹窗没有任何角色——失败了用户重新点「完成批次对账」即可，不需要它留在屏幕上。
+ */
+function confirmComplete(): void {
+  if (!canComplete.value || completeLoading.value) {
     return
   }
-  completing.value = true
-  try {
-    await slhReconciliationBatchesApi.complete(batchId.value, new AbortController().signal)
-    completeOpen.value = false
-    toast.success(t('slhReconciliation.detail.completedToast'))
-    // 重新读回：头部状态标签与底部按钮的禁用都跟着服务端数据走。
-    await load()
-  }
-  catch (failure) {
-    toast.error(containerFailure(failure).message, { duration: ACTION_ERROR_TOAST_DURATION })
-    completeOpen.value = false
-  }
-  finally {
-    completing.value = false
-  }
+  completeOpen.value = false
+  completeLoading.value = true
+}
+
+/** 最后一步的真实请求：整个过程就是这一次入账，取消由这里的控制器负责。 */
+async function runCompletion(): Promise<void> {
+  completeController?.abort()
+  const current = new AbortController()
+  completeController = current
+  await slhReconciliationBatchesApi.complete(batchId.value, current.signal)
+}
+
+/** 加载器完成：收起遮罩、提示成功并重新读回批次（状态标签与按钮禁用都跟着服务端数据走）。 */
+function completeFinished(): void {
+  completeLoading.value = false
+  toast.success(t('slhReconciliation.detail.completedToast'))
+  void load()
+}
+
+/** 加载器失败：立刻收起遮罩（失败不等最短展示时长），错误用比默认更久的轻提示交代。 */
+function completeFailed(failure: unknown): void {
+  completeLoading.value = false
+  toast.error(containerFailure(failure).message, { duration: ACTION_ERROR_TOAST_DURATION })
 }
 
 watch(batchId, () => {
@@ -287,6 +309,7 @@ watch(batchId, () => {
 }, { immediate: true })
 onBeforeUnmount(() => {
   controller?.abort()
+  completeController?.abort()
 })
 </script>
 
@@ -313,9 +336,9 @@ onBeforeUnmount(() => {
           点了由 requestComplete 说明原因；批次没读到时才是真禁用（页面已有错误与重试）。
         -->
         <FaButton
-          :loading="completing"
-          :disabled="batch === null || completing"
-          :aria-disabled="!canComplete || completing"
+          :loading="completeLoading"
+          :disabled="batch === null || completeLoading"
+          :aria-disabled="!canComplete || completeLoading"
           class="w-full sm:w-auto"
           :class="canComplete ? '' : 'opacity-50'"
           @click="requestComplete"
@@ -789,7 +812,7 @@ onBeforeUnmount(() => {
         <FaButton
           variant="destructive"
           class="w-full sm:w-auto"
-          :disabled="completing"
+          :disabled="completeLoading"
           @click="showReconcilePending('slhReconciliation.detail.reconcileWrong')"
         >
           {{ t('slhReconciliation.detail.reconcileWrong') }}
@@ -804,26 +827,38 @@ onBeforeUnmount(() => {
       </div>
     </FaFixedBar>
 
+    <!--
+      确认弹窗不接 `submitting`：它只在「点确认」的同一拍里关闭，之后由多步加载器接管，
+      因此不存在提交期间请求关闭的窗口（那会被守卫顶回来，弹窗再也关不上）。
+    -->
     <QsGenericModal
       v-model="completeOpen"
       :title="t('slhReconciliation.detail.completeTitle')"
       size="sm"
-      :submitting="completing"
     >
       <p class="qs-type-description text-muted-foreground m-0">
         {{ t('slhReconciliation.detail.completeHint') }}
       </p>
       <template #footer>
         <div class="flex flex-col gap-2 w-full sm:flex-row sm:justify-end">
-          <FaButton type="button" variant="outline" class="w-full sm:w-auto" :disabled="completing" @click="completeOpen = false">
+          <FaButton type="button" variant="outline" class="w-full sm:w-auto" @click="completeOpen = false">
             {{ t('slhBill.cancel') }}
           </FaButton>
-          <FaButton type="button" class="w-full sm:w-auto" :loading="completing" @click="complete">
+          <FaButton type="button" class="w-full sm:w-auto" @click="confirmComplete">
             {{ t('slhReconciliation.detail.completeConfirm') }}
           </FaButton>
         </div>
       </template>
     </QsGenericModal>
+
+    <!-- 全屏多步加载器：最短展示 2 秒、失败即收尾，都由组件负责；这里只接成功与失败。 -->
+    <FaMultiStepLoader
+      :loading="completeLoading"
+      :steps="completeSteps"
+      prevent-close
+      @complete="completeFinished"
+      @error="completeFailed"
+    />
 
     <SlhReconciliationSettleModal
       v-model="settleOpen"

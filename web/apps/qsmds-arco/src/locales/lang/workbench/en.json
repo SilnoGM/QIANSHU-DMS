@@ -355,6 +355,11 @@
       "completeHint": "After completing, this batch can no longer be reconciled and the bill becomes available again.",
       "completeConfirm": "Complete",
       "completedToast": "Reconciliation completed",
+      "completeSteps": {
+        "accounts": "Loading the payer's fund account",
+        "rules": "Verifying posting rules and share rate",
+        "posting": "Posting the funds"
+      },
       "membersEmpty": "This batch froze no lines.",
       "lineSwitcherLabel": "Frozen line switcher",
       "loadingItemTitle": "Container loading row",
