@@ -69,6 +69,8 @@ export interface SlhReconciliationRecordCard {
   readonly blocks: readonly SlhReconciliationRecordBlock[]
   /** 两条计算式（代入后的数值），键与大区块 id 一致。 */
   readonly formulas: Readonly<Record<SlhReconciliationRecordBlockId, string>>
+  /** 区块级补充说明：选中的区块若在这里有键，就在计算式下面多给一句。 */
+  readonly blockNoteKeys: Readonly<Partial<Record<SlhReconciliationRecordBlockId, string>>>
   readonly groups: readonly SlhReconciliationRecordGroup[]
 }
 
@@ -170,6 +172,8 @@ export function buildSlhReconciliationRecordCard(
       settlement: `（${showAmount(record.codAmountTwd, record.codAmountCurrency, currencies)} − ${showAmount(record.ntdSurchargeAmountTwd, record.ntdSurchargeCurrency, currencies)}）÷ ${rate} − ${showAmount(record.payableAmountCny, record.payableCurrency, currencies)} = ${showAmount(record.settlementAmountCny, record.settlementCurrency, currencies)}`,
       paymentFee: `${showAmount(record.salesAmount, record.salesCurrency, currencies)} ÷ ${rate} × ${feeRatePercent} = ${showAmount(record.paymentFeeAmountCny, record.paymentFeeCurrency, currencies)}`,
     },
+    // 费用是对整张销售订单收的：同一销售单的多行都记着同一个费用，实际入账只发生一次。
+    blockNoteKeys: { paymentFee: 'slhReconciliation.settle.paymentFeeOncePerSalesOrder' },
     groups: [
       {
         id: 'orders',

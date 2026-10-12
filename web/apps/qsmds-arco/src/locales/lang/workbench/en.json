@@ -433,6 +433,7 @@
       "settlementResult": "Settlement amount",
       "paymentFeeResult": "Payment fee",
       "missingAmountAsZero": "Amounts this row does not involve are counted as 0.",
+      "paymentFeeOncePerSalesOrder": "The payment fee is charged once per sales order: other lines of the same order do not add it again.",
       "settlementTitle": "Bill settlement details",
       "paymentFeeTitle": "Payment-flow service fee",
       "previous": "Previous",

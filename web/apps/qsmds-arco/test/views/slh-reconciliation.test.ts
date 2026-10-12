@@ -198,6 +198,24 @@ test('列表页按名称跳详情，并复用账单状态标签', async () => {
   assert.match(source, /SlhBillReconciliationStatusTag/u)
 })
 
+test('切换器带三档计数：当前档用列表 total，另两档各发一次 pageSize=1 的列表请求', async () => {
+  const source = await readPageSource('index.vue')
+  // 计数写进切换器项：同一套 withStatusSwitchCounts，选中项用 total 校准，避免两个请求打架。
+  assert.match(source, /withStatusSwitchCounts\(/u)
+  assert.match(source, /\{ selectedCount: loading\.value \? undefined : total\.value, selectedValue: status\.value \}/u)
+  // 另外两档各一次小请求，关键词跟着筛选走；失败静默、不打扰列表。
+  assert.match(source, /const others = SLH_RECONCILIATION_BATCH_FILTERS\.filter\(value => value !== status\.value\)/u)
+  assert.match(source, /buildSlhReconciliationBatchListQuery\(\{ page: 1, pageSize: 1, keyword: keyword\.value, status: value \}\)/u)
+  assert.match(source, /counts\.value = \{ \.\.\.counts\.value, \[value\]: response\.data\.total \}/u)
+  assert.match(source, /counts\.value = \{\}/u)
+  // 计数有自己的控制器：切换与卸载都要收掉在途请求。
+  assert.match(source, /countsController\?\.abort\(\)/u)
+  assert.match(source, /onBeforeUnmount\(\(\) => \{[\s\S]{0,120}?countsController\?\.abort\(\)/u)
+  // 列表、计数与重试都走同一条 refresh：换筛选或关键词后两处一起更新。
+  assert.match(source, /function refresh\(\): void \{\n\s+void load\(\)\n\s+void loadCounts\(\)/u)
+  assert.match(source, /@retry="refresh"/u)
+})
+
 test('批次列表把创建人与创建时间拆成两列', async () => {
   const page = await readPageSource('index.vue')
   assert.match(page, /\{ id: 'createdBy', title: t\('slhBill\.column\.created'\), accessorFn: item => item\.createdByDisplayName/u)
@@ -756,6 +774,13 @@ test('对账信息弹窗：本行不涉及的金额按 0 代入结算，整行�
   // 负数是「无代收但有杂费」这类行的真实结算方向 ⇒ 红色。
   assert.equal(missingCod.blocks[0]?.resultTone, 'danger')
   assert.equal(missingCod.blocks[0]?.noteKey, 'slhReconciliation.settle.missingAmountAsZero')
+  // 金流费用恒带一句「按销售单计一次」：费用是对整单销售金额收的，同一销售单的其他行不重复计入。
+  assert.equal(missingCod.blocks[1]?.noteKey, 'slhReconciliation.settle.paymentFeeOncePerSalesOrder')
+  for (const locale of [zhCn, zhTw, en] as const) {
+    const noteKey = locale.slhReconciliation.settle.paymentFeeOncePerSalesOrder
+    assert.equal(typeof noteKey, 'string')
+    assert.notEqual(noteKey.trim(), '')
+  }
 
   // L-010233 的形状：有代收、不涉及台币杂费 → （80000 − 0）÷ 5.2 − 3510 = 11874.62。
   const missingNtd = buildSettleSummary(memberFixture({
@@ -918,6 +943,9 @@ test('核对记录弹窗：底栏只读入口与弹窗接线，卡片只走 Amou
   assert.match(modal, /size="2xl"/u)
   assert.match(modal, /:aria-pressed="selectedOf\(card\) === block\.id"/u)
   assert.match(modal, /\{\{ card\.formulas\[selectedOf\(card\)\] \}\}/u)
+  // 区块级补充说明：选中金流费用时给出「按销售单计一次」，避免被读成按行重复收。
+  assert.match(modal, /v-if="card\.blockNoteKeys\[selectedOf\(card\)\]"/u)
+  assert.match(modal, /t\(card\.blockNoteKeys\[selectedOf\(card\)\] \?\? ''\)/u)
   assert.match(modal, /v-if="!isExpanded\(card\)"/u)
   assert.match(modal, /t\('slhReconciliation\.records\.expandSnapshot'\)/u)
   assert.match(modal, /t\('slhReconciliation\.records\.collapseSnapshot'\)/u)

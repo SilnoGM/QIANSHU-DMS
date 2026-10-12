@@ -213,6 +213,10 @@ function selectBlock(card: SlhReconciliationRecordCard, id: SlhReconciliationRec
             <p class="text-sm qs-type-data m-0 p-3 rounded-lg bg-muted/40 break-all">
               {{ card.formulas[selectedOf(card)] }}
             </p>
+            <!-- 区块级补充说明：金流费用按销售单计一次，选中它时顺带说明，免得误以为按行重复收。 -->
+            <p v-if="card.blockNoteKeys[selectedOf(card)]" class="qs-type-meta text-muted-foreground m-0">
+              {{ t(card.blockNoteKeys[selectedOf(card)] ?? '') }}
+            </p>
 
             <!-- 三段来源信息：订单 / 运输 / 账单。 -->
             <div class="gap-3 grid grid-cols-1 min-w-0 sm:grid-cols-3">

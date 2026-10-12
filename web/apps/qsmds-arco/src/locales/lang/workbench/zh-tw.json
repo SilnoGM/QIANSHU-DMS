@@ -433,6 +433,7 @@
       "settlementResult": "結算金額",
       "paymentFeeResult": "金流費用",
       "missingAmountAsZero": "本行未涉及的金額已預設按 0 代入計算",
+      "paymentFeeOncePerSalesOrder": "金流費用按銷售單計一次：同一銷售單的其他明細行不重複計入",
       "settlementTitle": "帳單金額結算明細",
       "paymentFeeTitle": "全流程金流服務費",
       "previous": "上一步",
