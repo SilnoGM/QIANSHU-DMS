@@ -1302,10 +1302,11 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
 
     it('多批次覆盖：仍有批次进行中时订单停留在待对账，全部结束后才自动完成', async () => {
       await setSystemRate('5.200000000000')
-      // 一条货件装柜时拆成两个唛头、两张账单：同一个销售单可以同时被两个批次覆盖。
+      // 一条货件装柜时拆成四个唛头：甲行承载代收货款、乙丙两行不涉及金额、
+      // 丁行留到订单完成之后再建批次，验证「已完成订单仍可继续对账」。
       const date = '2026-03-16'
       const containerBatchName = '0316-01柜'
-      const marks = ['M-031601', 'M-031602']
+      const marks = ['M-031601', 'M-031602', 'M-031603', 'M-031604']
       const shipment = await h.shipment({ salesLinked: true, ownerUserId: h.fixture.actor.id })
       if (shipment.source === null) throw new Error('sales linked shipment must create a sales order')
       const salesOrderId = shipment.source.id
@@ -1313,23 +1314,27 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       await widenSalesTotal(salesOrderId, '129000.0000')
       await h.prisma.salesOrder.update({ where: { id: salesOrderId }, data: { fulfillmentStatus: 'SIGNED' } })
       await createContainer(containerBatchName, date, marks.map(mark => ({ mark, shipmentId: shipment.part.id })))
-      // 甲行承载代收货款；乙行不涉及金额（只验证「有批次还在进行中」的停留形态）。
       const codRow = {
         B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: 'WG-0316-0001', F: marks[0],
         G: '农用四轮微耕机', H: '1', I: 'CTN',
         R: '4555', U: '4555', V: '129000', W: '6000', X: '入账测试', Y: '测试收货人一',
       }
-      const plainRow = {
-        B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: 'WG-0316-0002', F: marks[1],
+      const plainRowOf = (mark: string, index: number) => ({
+        B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: `WG-0316-000${index + 1}`, F: mark,
         G: '农用四轮微耕机', H: '1', I: 'CTN', X: '入账测试', Y: '测试收货人一',
-      }
+      })
       const firstBill = await importBill(`入账-${containerBatchName}-甲`, createSlhBillFixture({ rows: [codRow] }))
-      const secondBill = await importBill(`入账-${containerBatchName}-乙`, createSlhBillFixture({ rows: [plainRow] }))
+      const secondBill = await importBill(`入账-${containerBatchName}-乙`, createSlhBillFixture({ rows: [plainRowOf(marks[1], 1)] }))
+      const thirdBill = await importBill(`入账-${containerBatchName}-丙`, createSlhBillFixture({ rows: [plainRowOf(marks[2], 2)] }))
       const firstBatch = (await createBatch(firstBill.id, randomUUID()).expect(201)).body as BatchDetail
       const secondBatch = (await createBatch(secondBill.id, randomUUID()).expect(201)).body as BatchDetail
+      const thirdBatch = (await createBatch(thirdBill.id, randomUUID()).expect(201)).body as BatchDetail
       const [firstMember] = firstBatch.members
       const [secondMember] = secondBatch.members
-      if (firstMember === undefined || secondMember === undefined) throw new Error('batch has no member')
+      const [thirdMember] = thirdBatch.members
+      if (firstMember === undefined || secondMember === undefined || thirdMember === undefined) {
+        throw new Error('batch has no member')
+      }
 
       const reader = (await h.browserWithPermissions(['sales-orders:read'])).browser
       const readOrder = async () => {
@@ -1352,8 +1357,18 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
         await browser.post(`${BASE}/${batchId}/settlements`).set(packagingHeaders).set('Idempotency-Key', randomUUID())
           .send({ batchLineId: memberId, rateSource: 'SYSTEM', rate, amounts: resolved }).expect(201)
       }
+      const settlementOfPlainMember = (batchId: string, memberId: string) => settleFromOrderTotal(
+        batchId,
+        memberId,
+        '5.200000000000',
+        // 不涉及任何金额：结算金额为 0，费用由「按销售单只入一次」的去重挡住。
+        { codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null },
+      )
+      const completedAuditOf = (batchId: string) => h.prisma.auditEvent.findFirstOrThrow({
+        where: { eventType: 'SLH_RECONCILIATION_BATCH_COMPLETED', targetId: batchId }, select: { metadata: true },
+      })
 
-      // 甲批次先核对并完成：代收回填让订单收齐，但乙批次仍在进行中 → 按口径 R3 停在待对账。
+      // 甲批次先核对并完成：代收回填让订单收齐，但乙丙批次仍在进行中 → 按口径 R3 停在待对账。
       await settleFromOrderTotal(firstBatch.id, firstMember.id, '5.200000000000', {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
       })
@@ -1363,34 +1378,43 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       })).toMatchObject({ paymentStatus: 'PAID', orderStatus: 'PENDING_RECONCILIATION' })
       expect(await readOrder()).toMatchObject({
         orderStatus: 'PENDING_RECONCILIATION',
-        completionHold: { reason: 'RECONCILIATION_IN_PROGRESS', pendingBatchCount: 1, unreconciledMemberCount: 1 },
+        completionHold: { reason: 'RECONCILIATION_IN_PROGRESS', pendingBatchCount: 2, unreconciledMemberCount: 2 },
       })
       // 本次完成没有自动完成订单：审计里的自动完成计数为 0。
-      const firstAudit = await h.prisma.auditEvent.findFirstOrThrow({
-        where: { eventType: 'SLH_RECONCILIATION_BATCH_COMPLETED', targetId: firstBatch.id }, select: { metadata: true },
-      })
-      expect(firstAudit.metadata).toMatchObject({ autoCompletedOrderCount: 0 })
+      expect((await completedAuditOf(firstBatch.id)).metadata).toMatchObject({ autoCompletedOrderCount: 0 })
 
-      // 乙批次核对完成后只剩「批次未结束」：批次计数保留、行数归零。
-      // 这一行不涉及任何金额：结算金额为 0，费用由「按销售单只入一次」的去重挡住。
-      await settleFromOrderTotal(secondBatch.id, secondMember.id, '5.200000000000', {
-        codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null,
-      })
+      // 乙批次核对完成后只剩「批次未结束」：批次计数保留，未核对行数减到丙批次那一行。
+      await settlementOfPlainMember(secondBatch.id, secondMember.id)
       expect((await readOrder()).completionHold).toEqual({
-        reason: 'RECONCILIATION_IN_PROGRESS', pendingBatchCount: 1, unreconciledMemberCount: 0,
+        reason: 'RECONCILIATION_IN_PROGRESS', pendingBatchCount: 2, unreconciledMemberCount: 1,
+      })
+      // 乙批次结束但丙批次仍在进行中：订单继续停在待对账。
+      await browser.post(`${BASE}/${secondBatch.id}/complete`).set(packagingHeaders).send({}).expect(200)
+      expect(await readOrder()).toMatchObject({
+        orderStatus: 'PENDING_RECONCILIATION',
+        completionHold: { reason: 'RECONCILIATION_IN_PROGRESS', pendingBatchCount: 1, unreconciledMemberCount: 1 },
       })
 
       // 全部批次结束：口径 R3 自动完成，停留原因清空，状态历史留痕。
-      await browser.post(`${BASE}/${secondBatch.id}/complete`).set(packagingHeaders).send({}).expect(200)
+      await settlementOfPlainMember(thirdBatch.id, thirdMember.id)
+      await browser.post(`${BASE}/${thirdBatch.id}/complete`).set(packagingHeaders).send({}).expect(200)
       expect(await readOrder()).toMatchObject({ orderStatus: 'COMPLETED', completionHold: null })
       const completedHistory = await h.prisma.salesOrderStatusHistory.findFirst({
         where: { salesOrderId, dimension: 'ORDER', toStatus: 'COMPLETED' }, select: { reason: true },
       })
       expect(completedHistory?.reason).toBe('订单对账已完成，系统自动完成订单')
-      const secondAudit = await h.prisma.auditEvent.findFirstOrThrow({
-        where: { eventType: 'SLH_RECONCILIATION_BATCH_COMPLETED', targetId: secondBatch.id }, select: { metadata: true },
-      })
-      expect(secondAudit.metadata).toMatchObject({ autoCompletedOrderCount: 1 })
+      expect((await completedAuditOf(thirdBatch.id)).metadata).toMatchObject({ autoCompletedOrderCount: 1 })
+
+      // 已完成订单之后仍可继续对账：新建批次、核对并完成，订单状态保持已完成、
+      // 不会被重评回退，停留原因仍为空，自动完成计数为 0。
+      const trailingBill = await importBill(`入账-${containerBatchName}-丁`, createSlhBillFixture({ rows: [plainRowOf(marks[3], 3)] }))
+      const trailingBatch = (await createBatch(trailingBill.id, randomUUID()).expect(201)).body as BatchDetail
+      const [trailingMember] = trailingBatch.members
+      if (trailingMember === undefined) throw new Error('batch has no member')
+      await settlementOfPlainMember(trailingBatch.id, trailingMember.id)
+      await browser.post(`${BASE}/${trailingBatch.id}/complete`).set(packagingHeaders).send({}).expect(200)
+      expect(await readOrder()).toMatchObject({ orderStatus: 'COMPLETED', completionHold: null })
+      expect((await completedAuditOf(trailingBatch.id)).metadata).toMatchObject({ autoCompletedOrderCount: 0 })
     })
 
     it('代收超收：相关行退回未核对、结算作废并拒绝完成，修复后可重新核对完成', async () => {
