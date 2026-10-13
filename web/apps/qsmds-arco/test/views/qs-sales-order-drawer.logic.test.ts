@@ -2,7 +2,7 @@ import type { SalesOrderAmountRevisionDto, SalesOrderDocumentDto, SalesOrderStat
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 验证只读抽屉的凭证分流及变更时间线。
 import test from 'node:test'
-import { buildSalesOrderTimeline, getOrderDocuments } from '../../src/components/business/QsSalesOrderDrawer/logic'
+import { buildSalesOrderTimeline, describeCompletionHold, getOrderDocuments } from '../../src/components/business/QsSalesOrderDrawer/logic'
 
 test('订单凭证排除收款凭证及已解除关联记录，且不修改原数组', () => {
   const documents = [
@@ -23,4 +23,45 @@ test('状态与金额变更合并后按时间倒序排列，保留不同类型�
   assert.equal(timeline[0]?.record, amounts[0])
   assert.equal(statuses[0]?.id, 'same')
   assert.deepEqual(buildSalesOrderTimeline({ statusHistory: [], amountRevisions: [] }), [])
+})
+
+test('停留原因映射到标签与解释文案：无停留返回空，对账进行中按未核对行数选解释模板', () => {
+  assert.equal(describeCompletionHold(null), null)
+  assert.deepEqual(describeCompletionHold({
+    reason: 'PAYMENT_INCOMPLETE',
+    pendingBatchCount: 0,
+    unreconciledMemberCount: 0,
+  }), {
+    labelKey: 'salesOrderDrawer.completionHolds.PAYMENT_INCOMPLETE',
+    hintKey: 'salesOrderDrawer.completionHolds.PAYMENT_INCOMPLETE_HINT',
+    hintParams: {},
+  })
+  assert.deepEqual(describeCompletionHold({
+    reason: 'RECONCILIATION_IN_PROGRESS',
+    pendingBatchCount: 2,
+    unreconciledMemberCount: 5,
+  }), {
+    labelKey: 'salesOrderDrawer.completionHolds.RECONCILIATION_IN_PROGRESS',
+    hintKey: 'salesOrderDrawer.completionHolds.RECONCILIATION_IN_PROGRESS_HINT',
+    hintParams: { batchCount: 2, lineCount: 5 },
+  })
+  // 批次内所有行都已核对、只等完成批次时，不再提「0 行待核对」。
+  assert.deepEqual(describeCompletionHold({
+    reason: 'RECONCILIATION_IN_PROGRESS',
+    pendingBatchCount: 1,
+    unreconciledMemberCount: 0,
+  }), {
+    labelKey: 'salesOrderDrawer.completionHolds.RECONCILIATION_IN_PROGRESS',
+    hintKey: 'salesOrderDrawer.completionHolds.RECONCILIATION_IN_PROGRESS_HINT_NO_LINES',
+    hintParams: { batchCount: 1 },
+  })
+  assert.deepEqual(describeCompletionHold({
+    reason: 'AWAITING_RECONCILIATION_COVERAGE',
+    pendingBatchCount: 0,
+    unreconciledMemberCount: 0,
+  }), {
+    labelKey: 'salesOrderDrawer.completionHolds.AWAITING_RECONCILIATION_COVERAGE',
+    hintKey: 'salesOrderDrawer.completionHolds.AWAITING_RECONCILIATION_COVERAGE_HINT',
+    hintParams: {},
+  })
 })

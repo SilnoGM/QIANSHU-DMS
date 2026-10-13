@@ -32642,7 +32642,7 @@
               "status": 422,
               "codes": [
                 "SALES_ORDER_CANCEL_HAS_PAYMENTS",
-                "SALES_ORDER_COMPLETION_CONDITIONS_NOT_MET",
+                "SALES_ORDER_COMPLETION_IS_AUTOMATIC",
                 "SALES_ORDER_RECONCILIATION_CONDITIONS_NOT_MET",
                 "SALES_ORDER_STATUS_TRANSITION_INVALID",
                 "VALIDATION_FAILED"
@@ -75133,6 +75133,32 @@
           "displayName"
         ]
       },
+      "SalesOrderCompletionHoldDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "PAYMENT_INCOMPLETE",
+              "RECONCILIATION_IN_PROGRESS",
+              "AWAITING_RECONCILIATION_COVERAGE"
+            ]
+          },
+          "pendingBatchCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unreconciledMemberCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "reason",
+          "pendingBatchCount",
+          "unreconciledMemberCount"
+        ]
+      },
       "SalesOrderLinePreviewDto": {
         "type": "object",
         "properties": {
@@ -75349,6 +75375,15 @@
               "PAID"
             ]
           },
+          "completionHold": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SalesOrderCompletionHoldDto"
+              }
+            ]
+          },
           "paymentRecordCount": {
             "type": "integer",
             "minimum": 0
@@ -75402,6 +75437,7 @@
           "orderStatus",
           "fulfillmentStatus",
           "paymentStatus",
+          "completionHold",
           "paymentRecordCount",
           "statusChangeRecordCount",
           "amountChangeRecordCount",
@@ -76761,6 +76797,15 @@
               "PAID"
             ]
           },
+          "completionHold": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SalesOrderCompletionHoldDto"
+              }
+            ]
+          },
           "remark": {
             "type": "string",
             "nullable": true
@@ -76819,6 +76864,7 @@
           "orderStatus",
           "fulfillmentStatus",
           "paymentStatus",
+          "completionHold",
           "remark",
           "version",
           "lines",

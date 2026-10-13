@@ -1228,6 +1228,36 @@ function paymentStatusLabel(value: SalesOrderListItemDto['paymentStatus']): stri
   return { UNPAID: '未付款', PARTIALLY_PAID: '部分付款', PAID: '已付清' }[value]
 }
 
+/**
+ * 停留原因由服务端按完成判定（口径 R3）下发，只有待对账订单会有值：
+ * 短标签进单元格、完整解释放 tooltip，避免表格行高被长文案撑开。
+ */
+function completionHoldLabel(hold: SalesOrderListItemDto['completionHold']): string {
+  if (hold === null) {
+    return ''
+  }
+  return {
+    PAYMENT_INCOMPLETE: '等待收齐款项',
+    RECONCILIATION_IN_PROGRESS: '对账进行中',
+    AWAITING_RECONCILIATION_COVERAGE: '等待账单对账',
+  }[hold.reason]
+}
+
+function completionHoldHint(hold: SalesOrderListItemDto['completionHold']): string {
+  if (hold === null) {
+    return ''
+  }
+  if (hold.reason === 'PAYMENT_INCOMPLETE') {
+    return '订单需已签收且已收齐款项，系统才会在对账完成后自动推进为已完成'
+  }
+  if (hold.reason === 'RECONCILIATION_IN_PROGRESS') {
+    return hold.unreconciledMemberCount > 0
+      ? `还有 ${hold.pendingBatchCount} 个对账批次未结束、${hold.unreconciledMemberCount} 行待核对，批次全部结束后自动完成`
+      : `还有 ${hold.pendingBatchCount} 个对账批次未结束，批次全部结束后自动完成`
+  }
+  return '该订单尚未被账单对账覆盖，账单对账完成后自动完成'
+}
+
 // 与币种选择卡片保持相同的视觉身份，文字仍作为主要识别信息，颜色仅用于快速区分。
 function currencyTagClass(value: SalesOrderListItemDto['currencyCode']): string {
   return value === 'TWD'
@@ -1630,6 +1660,18 @@ onBeforeUnmount(() => {
               >
                 {{ fulfillmentStatusLabel(row.original.fulfillmentStatus) }}
               </FaTag>
+            </QsTableStackedLine>
+            <QsTableStackedLine
+              v-if="row.original.completionHold"
+              label="停留原因"
+              tone="muted"
+              nowrap
+            >
+              <FaTooltip :text="completionHoldHint(row.original.completionHold)">
+                <span class="qs-type-meta underline underline-offset-4 decoration-dotted">
+                  {{ completionHoldLabel(row.original.completionHold) }}
+                </span>
+              </FaTooltip>
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -2064,6 +2106,18 @@ onBeforeUnmount(() => {
                       >
                         {{ fulfillmentStatusLabel(row.fulfillmentStatus) }}
                       </FaTag>
+                    </QsTableStackedLine>
+                    <QsTableStackedLine
+                      v-if="row.completionHold"
+                      label="停留原因"
+                      tone="muted"
+                      nowrap
+                    >
+                      <FaTooltip :text="completionHoldHint(row.completionHold)">
+                        <span class="qs-type-meta underline underline-offset-4 decoration-dotted">
+                          {{ completionHoldLabel(row.completionHold) }}
+                        </span>
+                      </FaTooltip>
                     </QsTableStackedLine>
                   </QsTableStackedCell>
                 </dd>

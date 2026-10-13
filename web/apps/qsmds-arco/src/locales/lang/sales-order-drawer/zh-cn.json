@@ -64,6 +64,15 @@
       "LEGACY": "历史收款",
       "REVIEWED": "财务审核",
       "COD_SETTLEMENT": "代收回填"
+    },
+    "completionHolds": {
+      "PAYMENT_INCOMPLETE": "等待收齐款项",
+      "PAYMENT_INCOMPLETE_HINT": "订单需已签收且已收齐款项，系统才会在对账完成后自动推进为已完成",
+      "RECONCILIATION_IN_PROGRESS": "对账进行中",
+      "RECONCILIATION_IN_PROGRESS_HINT": "还有 {batchCount} 个对账批次未结束、{lineCount} 行待核对，批次全部结束后订单自动完成",
+      "RECONCILIATION_IN_PROGRESS_HINT_NO_LINES": "还有 {batchCount} 个对账批次未结束，批次全部结束后订单自动完成",
+      "AWAITING_RECONCILIATION_COVERAGE": "等待账单对账",
+      "AWAITING_RECONCILIATION_COVERAGE_HINT": "该订单尚未被账单对账覆盖，账单对账完成后订单自动完成"
     }
   }
 }

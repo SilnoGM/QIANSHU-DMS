@@ -16,6 +16,11 @@ import {
   parseSalesOrderAmountUnits,
   sumSalesOrderReceivedUnits,
 } from './domain/sales-order-decimal'
+import {
+  readSalesOrderReconciliationStates,
+  resolveSalesOrderCompletionHold,
+  type SalesOrderCompletionHold,
+} from './domain/sales-order-reconciliation-state'
 import { mapSalesOrderProductOption } from './products/sales-order-product-option.mapper'
 
 const SALES_ORDER_DETAIL_INCLUDE = {
@@ -172,6 +177,7 @@ export interface SalesOrderDetail {
   readonly orderStatus: SalesOrderDetailRow['orderStatus']
   readonly fulfillmentStatus: SalesOrderDetailRow['fulfillmentStatus']
   readonly paymentStatus: SalesOrderDetailRow['paymentStatus']
+  readonly completionHold: SalesOrderCompletionHold | null
   readonly remark: string | null
   readonly version: number
   readonly lines: readonly Record<string, unknown>[]
@@ -254,6 +260,7 @@ export interface SalesOrderListItem {
   readonly orderStatus: SalesOrderStatus
   readonly fulfillmentStatus: SalesOrderFulfillmentStatus
   readonly paymentStatus: SalesOrderPaymentStatus
+  readonly completionHold: SalesOrderCompletionHold | null
   readonly paymentRecordCount: number
   readonly statusChangeRecordCount: number
   readonly amountChangeRecordCount: number
@@ -534,7 +541,10 @@ function mapDetailDocument(
   }
 }
 
-function mapSalesOrderDetail(row: SalesOrderDetailRow): SalesOrderDetail {
+function mapSalesOrderDetail(
+  row: SalesOrderDetailRow,
+  completionHold: SalesOrderCompletionHold | null,
+): SalesOrderDetail {
   // 实际已收款口径下沉到领域模块：详情、列表与对账读取共用同一处累加规则。
   const receivedUnits = sumSalesOrderReceivedUnits(row.payments)
   const agreedUnits = parseSalesOrderAmountUnits(
@@ -578,6 +588,7 @@ function mapSalesOrderDetail(row: SalesOrderDetailRow): SalesOrderDetail {
     orderStatus: row.orderStatus,
     fulfillmentStatus: row.fulfillmentStatus,
     paymentStatus: row.paymentStatus,
+    completionHold,
     remark: row.remark,
     version: row.version,
     lines: row.lines.map(line => ({
@@ -756,6 +767,14 @@ export class SalesOrderQueryService {
       mapCurrencySummary('TWD', twdOrders, twdStandardPriceLines, twdPayments),
       mapCurrencySummary('MYR', myrOrders, myrStandardPriceLines, myrPayments),
     ].filter(summary => summary !== null)
+    // 停留原因只对待对账订单有意义：一次读取当页全部待对账订单的对账状态（口径 R3），
+    // 避免逐行查询；其它状态的订单不参与读取。
+    const reconciliationStates = await readSalesOrderReconciliationStates(
+      this.prisma,
+      rows
+        .filter(row => row.orderStatus === 'PENDING_RECONCILIATION')
+        .map(row => row.id),
+    )
     return {
       items: rows.map((row) => {
         const agreedUnits = parseSalesOrderAmountUnits(
@@ -788,6 +807,7 @@ export class SalesOrderQueryService {
           orderStatus: row.orderStatus,
           fulfillmentStatus: row.fulfillmentStatus,
           paymentStatus: row.paymentStatus,
+          completionHold: resolveSalesOrderCompletionHold(row, reconciliationStates.get(row.id)),
           paymentRecordCount: row._count.payments,
           statusChangeRecordCount: row._count.statusHistory,
           amountChangeRecordCount: row._count.amountRevisions,
@@ -980,6 +1000,14 @@ export class SalesOrderQueryService {
         '销售订单不存在',
       )
     }
-    return mapSalesOrderDetail(row)
+    // 非待对账订单不读取对账状态（读取器对空入参直接返回空 Map）。
+    const reconciliationStates = await readSalesOrderReconciliationStates(
+      this.prisma,
+      row.orderStatus === 'PENDING_RECONCILIATION' ? [salesOrderId] : [],
+    )
+    return mapSalesOrderDetail(
+      row,
+      resolveSalesOrderCompletionHold(row, reconciliationStates.get(salesOrderId)),
+    )
   }
 }

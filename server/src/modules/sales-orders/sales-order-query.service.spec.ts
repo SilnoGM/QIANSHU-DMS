@@ -132,10 +132,14 @@ function createListFixture() {
   const transaction = jest.fn(async (operations: readonly Promise<unknown>[]) => (
     Promise.all(operations)
   ))
+  const slhReconciliationBatchLine = {
+    findMany: jest.fn().mockResolvedValue([]),
+  }
   const service = new SalesOrderQueryService({
     salesOrder,
     salesOrderLine,
     salesOrderPayment,
+    slhReconciliationBatchLine,
     $transaction: transaction,
   } as unknown as PrismaService)
   return {
@@ -144,6 +148,7 @@ function createListFixture() {
     salesOrderLine,
     salesOrderPayment,
     service,
+    slhReconciliationBatchLine,
     transaction,
   }
 }
@@ -179,6 +184,7 @@ describe('SalesOrderQueryService list summaries', () => {
         orderStatus: 'CONFIRMED',
         fulfillmentStatus: 'PREPARING',
         paymentStatus: 'PARTIALLY_PAID',
+        completionHold: null,
         paymentRecordCount: 2,
         statusChangeRecordCount: 3,
         amountChangeRecordCount: 1,
@@ -254,6 +260,35 @@ describe('SalesOrderQueryService list summaries', () => {
         paymentStatus: undefined,
       },
     })
+  })
+
+  it('adds the reconciliation hold for pending orders with one batched coverage read', async () => {
+    const fixture = createListFixture()
+    fixture.listRow.orderStatus = 'PENDING_RECONCILIATION'
+    fixture.listRow.fulfillmentStatus = 'SIGNED'
+    fixture.listRow.paymentStatus = 'PAID'
+    fixture.slhReconciliationBatchLine.findMany.mockResolvedValue([{
+      batchId: 'batch-1',
+      reconciledAt: null,
+      batch: { completedAt: null },
+      matchedLoadingItem: { shipment: { purchaseOrder: { salesOrderId: SALES_ORDER_ID } } },
+    }])
+
+    const page = await fixture.service.list({ page: 1, pageSize: 20 })
+
+    expect(page.items[0]?.completionHold).toEqual({
+      reason: 'RECONCILIATION_IN_PROGRESS',
+      pendingBatchCount: 1,
+      unreconciledMemberCount: 1,
+    })
+    // 对账覆盖按当页订单一次性读取，不随行数增长。
+    expect(fixture.slhReconciliationBatchLine.findMany).toHaveBeenCalledTimes(1)
+
+    // 非待对账订单不读取对账覆盖。
+    const confirmed = createListFixture()
+    const confirmedPage = await confirmed.service.list({ page: 1, pageSize: 20 })
+    expect(confirmedPage.items[0]?.completionHold).toBeNull()
+    expect(confirmed.slhReconciliationBatchLine.findMany).not.toHaveBeenCalled()
   })
 
   it('omits currencies that have no orders in the filtered result', async () => {
