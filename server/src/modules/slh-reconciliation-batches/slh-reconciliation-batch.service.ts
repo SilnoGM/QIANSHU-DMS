@@ -258,7 +258,9 @@ export class SlhReconciliationBatchService {
             id: true, batchNo: true,
             bill: { select: { slhBillNo: true } },
             members: {
-              orderBy: { id: 'asc' },
+              // 成员按账单行号排序：同一事务写入的成员行 created_at 完全相同，只用主键兜底
+              // 会让「费用归属哪一行」随随机 uuid 漂移；账单行号是用户可见的稳定顺序。
+              orderBy: [{ line: { lineNumber: 'asc' } }, { id: 'asc' }],
               select: {
                 id: true, lineId: true, reconciledAt: true,
                 line: { select: { lineNumber: true } },
