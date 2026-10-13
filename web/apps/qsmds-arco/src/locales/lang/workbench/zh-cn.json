@@ -362,6 +362,8 @@
       "reconcileWrong": "本行核对有误",
       "reconcileCorrect": "本行核对正确",
       "reconcilePending": "{action}：功能开发中",
+      "settleBlockedSalesOrder": "销售订单未满足核对条件：需为待对账、已签收且已付清",
+      "settleBlockedPurchaseOrder": "采购订单未满足核对条件：需为已完成（已入仓且已付清）",
       "completeBlockedUnreconciled": "还有 {count} 行未完成核对，逐行核对后才能完成批次对账",
       "completeBlockedBatchCompleted": "批次已完成，无需再执行",
       "completeTitle": "完成批次对账？",

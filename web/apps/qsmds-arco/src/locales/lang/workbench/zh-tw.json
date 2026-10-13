@@ -353,6 +353,8 @@
       "reconcileWrong": "本行核對有誤",
       "reconcileCorrect": "本行核對正確",
       "reconcilePending": "{action}：功能開發中",
+      "settleBlockedSalesOrder": "銷售訂單未滿足核對條件：需為待對帳、已簽收且已付清",
+      "settleBlockedPurchaseOrder": "採購訂單未滿足核對條件：需為已完成（已入倉且已付清）",
       "completeBlockedUnreconciled": "還有 {count} 行未完成核對，逐行核對後才能完成批次對帳",
       "completeBlockedBatchCompleted": "批次已完成，無需再執行",
       "completeTitle": "完成批次對帳？",

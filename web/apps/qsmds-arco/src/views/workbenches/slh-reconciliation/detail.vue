@@ -34,6 +34,8 @@ import {
   resolveSlhReconciliationBatchTone,
   resolveSlhReconciliationCompleteBlockLabelKey,
   resolveSlhReconciliationCompleteBlockReason,
+  resolveSlhReconciliationSettleBlockLabelKey,
+  resolveSlhReconciliationSettleBlockReason,
 } from './status.logic'
 
 /**
@@ -237,9 +239,18 @@ function selectLine(lineId: string | null): void {
 
 /** 已核对过的行先问一句是否重新核对，避免无意覆盖既有留痕。 */
 const recheckOpen = ref(false)
+/**
+ * 点「本行核对正确」：先过订单状态门禁（销售需待对账且已签收已付清、采购需已完成），
+ * 未通过只给一句轻提示；通过后已核对的行再问是否重新核对，其余直接打开对账信息弹窗。
+ */
 function requestSettle(): void {
   const member = selectedMember.value
   if (member === null) {
+    return
+  }
+  const blockReason = resolveSlhReconciliationSettleBlockReason(member)
+  if (blockReason !== null) {
+    toast.info(t(resolveSlhReconciliationSettleBlockLabelKey(blockReason)))
     return
   }
   if (isSlhReconciliationMemberReconciled(member)) {
