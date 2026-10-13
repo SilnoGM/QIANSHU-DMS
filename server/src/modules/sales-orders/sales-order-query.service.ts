@@ -601,7 +601,8 @@ function mapSalesOrderDetail(row: SalesOrderDetailRow): SalesOrderDetail {
         document.paymentId === payment.id
         && document.documentType === 'PAYMENT_VOUCHER'
       ))
-      if (voucher === undefined) {
+      // 代收回填收款没有凭证文件（凭证即对应的结算记录）；其余来源缺凭证属于脏数据，维持拒绝。
+      if (voucher === undefined && payment.origin !== 'COD_SETTLEMENT') {
         throw new ApiException(
           HttpStatus.CONFLICT,
           'SALES_ORDER_STATE_CHANGED',
@@ -625,7 +626,7 @@ function mapSalesOrderDetail(row: SalesOrderDetailRow): SalesOrderDetail {
         voidedAt: payment.voidedAt?.toISOString() ?? null,
         voidedBy: mapActor(payment.voidedBy),
         voidReason: payment.voidReason,
-        voucher: mapDetailDocument(row.id, voucher),
+        voucher: voucher === undefined ? null : mapDetailDocument(row.id, voucher),
       }
     }),
     documents: row.documents.map(document => mapDetailDocument(row.id, document)),

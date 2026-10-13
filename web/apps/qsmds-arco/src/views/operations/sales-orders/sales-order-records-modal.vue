@@ -176,10 +176,28 @@ const paymentTypeOptions: Array<{
 function paymentTypeLabel(value: SalesOrderPaymentDto['paymentType']): string {
   return {
     BALANCE: '尾款',
+    COD_BALANCE: '代收尾款',
     DEPOSIT: '定金',
     INVOICE_TAX: '开票税金',
     OTHER: '其他',
     PROGRESS: '过程款',
+  }[value]
+}
+
+/** 收款来源标签：代收回填由对账结算产生，历史收款是接入审核前的遗留数据。 */
+function paymentOriginLabel(value: SalesOrderPaymentDto['origin']): string {
+  return {
+    COD_SETTLEMENT: '代收回填',
+    LEGACY: '历史收款',
+    REVIEWED: '财务审核',
+  }[value]
+}
+
+function paymentOriginTagClass(value: SalesOrderPaymentDto['origin']): string {
+  return {
+    COD_SETTLEMENT: 'border-sky-500/30 bg-sky-500/8 text-sky-700 dark:text-sky-300',
+    LEGACY: 'border-border bg-muted text-muted-foreground',
+    REVIEWED: '',
   }[value]
 }
 
@@ -515,7 +533,10 @@ function resubmitReceipt(request: SalesReceiptRequestDetailDto): void {
     return
   }
   resetPaymentForm()
-  paymentType.value = request.paymentType
+  // 代收尾款是代收回填专用、不会出现在收款申请里；这里的判空只用于收窄类型。
+  if (request.paymentType !== 'COD_BALANCE') {
+    paymentType.value = request.paymentType
+  }
   paymentAmount.value = request.amount
   paymentReceivedAt.value = formatSalesOrderLocalDateTime(new Date(request.receivedAt))
   paymentMethod.value = request.paymentMethod
@@ -921,6 +942,13 @@ onBeforeUnmount(() => {
                       >
                         {{ payment.voidedAt === null ? '有效' : '已作废' }}
                       </FaTag>
+                      <FaTag
+                        variant="outline"
+                        class="qs-type-status-tag"
+                        :class="paymentOriginTagClass(payment.origin)"
+                      >
+                        {{ paymentOriginLabel(payment.origin) }}
+                      </FaTag>
                       <FaButton v-if="payment.origin === 'REVIEWED'" variant="link" size="sm" :disabled="sourceLoading" @click="showReceiptSource(payment.id)">
                         查看来源申请
                       </FaButton>
@@ -953,7 +981,7 @@ onBeforeUnmount(() => {
                         </dd>
                       </div>
                     </dl>
-                    <div class="mt-3 p-3 border border-border rounded-lg bg-muted/15 flex gap-3 min-w-0 items-center">
+                    <div v-if="payment.voucher" class="mt-3 p-3 border border-border rounded-lg bg-muted/15 flex gap-3 min-w-0 items-center">
                       <FaImagePreview
                         v-if="payment.voucher.mediaType === 'IMAGE'"
                         :src="mediaThumbnailUrl(payment.voucher.contentUrl) ?? payment.voucher.contentUrl"
@@ -978,6 +1006,10 @@ onBeforeUnmount(() => {
                         </p>
                       </div>
                     </div>
+                    <!-- 代收回填没有凭证文件：凭证即产生这笔收款的账单结算记录。 -->
+                    <p v-else class="qs-type-meta m-0 mt-3">
+                      无收款凭证（凭证见对应的顺联航账单结算记录）
+                    </p>
                     <div
                       v-if="payment.voidedAt"
                       class="text-sm mt-3 p-3 border border-destructive/20 rounded-lg bg-destructive/5"

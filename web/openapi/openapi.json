@@ -56411,7 +56411,8 @@
                 "PURCHASE_ORDER_PAYMENT_RECORDED",
                 "PURCHASE_ORDER_PAYMENT_VOIDED",
                 "PURCHASE_ORDER_DOCUMENT_ATTACHED",
-                "PURCHASE_ORDER_DOCUMENT_DETACHED"
+                "PURCHASE_ORDER_DOCUMENT_DETACHED",
+                "SLH_RECONCILIATION_BATCH_COMPLETION_REJECTED"
               ]
             }
           },
@@ -68137,7 +68138,8 @@
                 "SLH_RECON_BATCH_NO_LINES_TO_RECONCILE",
                 "SLH_RECON_BATCH_NUMBERING_UNAVAILABLE",
                 "SLH_RECON_BATCH_SCOPE_CHANGED",
-                "SLH_RECON_BATCH_STATE_CHANGED"
+                "SLH_RECON_BATCH_STATE_CHANGED",
+                "SLH_RECON_SALES_CURRENCY_UNSUPPORTED"
               ]
             },
             {
@@ -69363,8 +69365,12 @@
                 "SLH_RECON_BATCH_NOT_IN_PROGRESS",
                 "SLH_RECON_BATCH_NO_LINES_TO_RECONCILE",
                 "SLH_RECON_BATCH_NUMBERING_UNAVAILABLE",
+                "SLH_RECON_BATCH_PENDING_RECEIPTS",
                 "SLH_RECON_BATCH_SCOPE_CHANGED",
-                "SLH_RECON_BATCH_STATE_CHANGED"
+                "SLH_RECON_BATCH_STATE_CHANGED",
+                "SLH_RECON_BATCH_UNRECONCILED_MEMBERS",
+                "SLH_RECON_SALES_CURRENCY_UNSUPPORTED",
+                "SLH_RECON_SETTLEMENT_COD_OVERCOLLECTED"
               ]
             },
             {
@@ -69672,6 +69678,7 @@
                 "SLH_RECON_BATCH_IDEMPOTENCY_CONFLICT",
                 "SLH_RECON_BATCH_NOT_IN_PROGRESS",
                 "SLH_RECON_BATCH_STATE_CHANGED",
+                "SLH_RECON_SALES_CURRENCY_UNSUPPORTED",
                 "SLH_RECON_SETTLEMENT_KEY_REUSED",
                 "SLH_RECON_SETTLEMENT_MISMATCH",
                 "SLH_RECON_SETTLEMENT_RATE_CHANGED",
@@ -76487,7 +76494,8 @@
             "type": "string",
             "enum": [
               "LEGACY",
-              "REVIEWED"
+              "REVIEWED",
+              "COD_SETTLEMENT"
             ]
           },
           "fundPostingBatchId": {
@@ -76520,7 +76528,8 @@
               "PROGRESS",
               "INVOICE_TAX",
               "BALANCE",
-              "OTHER"
+              "OTHER",
+              "COD_BALANCE"
             ]
           },
           "amount": {
@@ -76564,7 +76573,13 @@
             "nullable": true
           },
           "voucher": {
-            "$ref": "#/components/schemas/SalesOrderDocumentDto"
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SalesOrderDocumentDto"
+              }
+            ]
           }
         },
         "required": [
@@ -77225,7 +77240,8 @@
               "PROGRESS",
               "INVOICE_TAX",
               "BALANCE",
-              "OTHER"
+              "OTHER",
+              "COD_BALANCE"
             ]
           },
           "amount": {
@@ -82272,7 +82288,8 @@
               "PURCHASE_ORDER_PAYMENT_RECORDED",
               "PURCHASE_ORDER_PAYMENT_VOIDED",
               "PURCHASE_ORDER_DOCUMENT_ATTACHED",
-              "PURCHASE_ORDER_DOCUMENT_DETACHED"
+              "PURCHASE_ORDER_DOCUMENT_DETACHED",
+              "SLH_RECONCILIATION_BATCH_COMPLETION_REJECTED"
             ]
           },
           "outcome": {

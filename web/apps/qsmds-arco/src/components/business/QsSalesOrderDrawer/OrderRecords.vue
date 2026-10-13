@@ -40,7 +40,7 @@ watch(() => props.detail.id, () => {
         <template #trigger="{ open }">
           <TransitionGroup name="record-summary" tag="span" class="p-4 text-start flex gap-3 min-h-22 min-w-0 items-center relative hover:bg-muted/25 sm:gap-4">
             <span v-if="!open" key="thumbnail" data-slot="record-summary-thumbnail" class="border border-border/70 rounded-lg bg-muted/20 flex shrink-0 size-14 items-center justify-center overflow-hidden">
-              <img v-if="payment.voucher.mediaType === 'IMAGE' && payment.voucher.detachedAt === null" :src="payment.voucher.contentUrl" :alt="t('salesOrderDesc.documentTypes.PAYMENT_VOUCHER')" class="size-full object-cover">
+              <img v-if="payment.voucher && payment.voucher.mediaType === 'IMAGE' && payment.voucher.detachedAt === null" :src="payment.voucher.contentUrl" :alt="t('salesOrderDesc.documentTypes.PAYMENT_VOUCHER')" class="size-full object-cover">
               <FaIcon v-else name="i-lucide:receipt-text" class="text-muted-foreground size-6" aria-hidden="true" />
             </span>
             <span key="details" class="flex flex-1 flex-wrap gap-x-4 gap-y-2 min-w-0 items-center justify-between">
@@ -48,6 +48,7 @@ watch(() => props.detail.id, () => {
                 <span class="flex flex-wrap gap-2 items-center">
                   <span class="qs-type-body-medium">{{ t(`salesOrderDrawer.paymentTypes.${payment.paymentType}`) }}</span>
                   <FaTag variant="outline" :class="payment.voidedAt ? 'border-destructive/25 bg-destructive/5 text-destructive' : 'border-primary/20 bg-primary/5 text-primary dark:text-foreground'">{{ t(payment.voidedAt ? 'salesOrderDrawer.voided' : 'salesOrderDrawer.valid') }}</FaTag>
+                  <FaTag variant="outline" :class="payment.origin === 'COD_SETTLEMENT' ? 'border-sky-500/25 bg-sky-500/8 text-sky-700 dark:text-sky-300' : 'border-border text-muted-foreground'">{{ t(`salesOrderDrawer.paymentOrigins.${payment.origin}`) }}</FaTag>
                 </span>
                 <span class="qs-type-meta mt-1.5 block"><DateTimeDisplay :value="payment.receivedAt" /></span>
               </span>
@@ -98,7 +99,11 @@ watch(() => props.detail.id, () => {
             {{ t('salesOrderDrawer.voidReason') }}：{{ payment.voidReason || '-' }} · <DateTimeDisplay :value="payment.voidedAt" />
           </p>
           <div class="pt-5 border-t border-border/70">
-            <OrderDocument :document="payment.voucher" />
+            <OrderDocument v-if="payment.voucher" :document="payment.voucher" />
+            <!-- 代收回填没有凭证文件：凭证即产生这笔收款的顺联航账单结算记录。 -->
+            <p v-else class="qs-type-meta m-0">
+              {{ t('salesOrderDrawer.noPaymentVoucher') }}
+            </p>
           </div>
         </div>
       </FaCollapsible>

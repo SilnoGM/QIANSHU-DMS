@@ -267,12 +267,13 @@ describe('dictionary management database schema', () => {
     }
     // 产品、资金、销售订单、销售加购与采购订单领域会在后续 append-only migration 扩展审计类型；
     // 字典测试锁定当前全量基线，同时只要求字典 migration 对自身八个类型负责。
-    expect(auditEventTypes).toHaveLength(96)
+    expect(auditEventTypes).toHaveLength(97)
     expect(auditEventTypes).toEqual(expect.arrayContaining([
       'SLH_BILL_IMPORTED',
       'SLH_RECONCILIATION_BATCH_CREATED',
       'SLH_RECONCILIATION_BATCH_COMPLETED',
       'SLH_BILL_LINES_RECONCILED',
+      'SLH_RECONCILIATION_BATCH_COMPLETION_REJECTED',
     ]))
     expect(auditEventTypes).toEqual(expect.arrayContaining(['CONTAINER_BATCH_UPDATED', 'CONTAINER_LOADING_ITEM_UPDATED', 'CONTAINER_BATCH_CREATED', 'CONTAINER_LOADING_ITEM_CREATED']))
     expect(auditEventTypes).toContain('SUPPLIER_PAYMENT_PROFILE_SAVED')

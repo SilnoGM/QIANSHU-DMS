@@ -35,7 +35,8 @@
       "PROGRESS": "过程款",
       "INVOICE_TAX": "开票税金",
       "BALANCE": "尾款",
-      "OTHER": "其他"
+      "OTHER": "其他",
+      "COD_BALANCE": "代收尾款"
     },
     "dimensions": {
       "ORDER": "订单状态变更",
@@ -57,6 +58,12 @@
       "UNPAID": "未付款",
       "PARTIALLY_PAID": "部分付款",
       "PAID": "已付清"
+    },
+    "noPaymentVoucher": "无收款凭证（凭证见对应的顺联航账单结算记录）",
+    "paymentOrigins": {
+      "LEGACY": "历史收款",
+      "REVIEWED": "财务审核",
+      "COD_SETTLEMENT": "代收回填"
     }
   }
 }

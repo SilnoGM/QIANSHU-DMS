@@ -148,6 +148,65 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     return lines.map(line => line.id)
   }
 
+  /**
+   * 完成批次会把账单代收回填为销售收款，回填要求「账单代收合计 ≤ 订单实际待收款」。
+   * 夹具默认订单总额 10 元远小于账单代收，这里统一放宽成大额（金流费用随之变大，
+   * 相关断言按 1,000,000 ÷ 5.2 × 0.007 = 1346.15 更新）；超收/收齐等边界由专项用例另行构造。
+   */
+  const WIDE_SALES_TOTAL = '1000000.0000'
+  async function widenSalesTotal(salesOrderId: string, total = WIDE_SALES_TOTAL): Promise<void> {
+    // 订单小计与有效行合计是一对延迟约束触发器：行与订单必须同事务改写，提交时才校验；
+    // 本 spec 的销售单都是单行订单，直接把唯一有效行改到同一总额。
+    await h.prisma.$transaction(async (tx) => {
+      const lines = await tx.salesOrderLine.findMany({ where: { salesOrderId, removedAt: null }, select: { id: true, quantity: true } })
+      const [line] = lines
+      if (line === undefined || lines.length !== 1) throw new Error(`widenSalesTotal expects a single active line, got ${lines.length}`)
+      // 行总额必须等于单价 × 数量（CHECK 约束）：改总额时同步改单价。
+      await tx.salesOrderLine.update({
+        where: { id: line.id },
+        data: { lineTotalAmount: total, actualUnitPriceAmount: (Number(total) / line.quantity).toFixed(4) },
+      })
+      await tx.salesOrder.update({
+        where: { id: salesOrderId },
+        data: { lineSubtotalAmount: total, agreedTotalAmount: total, depositDueAmount: '0', balanceDueAmount: total },
+      })
+    })
+  }
+
+  /** 系统汇率：结算与完成都从系统来源取台币汇率。 */
+  async function setSystemRate(value: string): Promise<void> {
+    const currency = await h.prisma.currency.findUniqueOrThrow({ where: { code: 'TWD' }, select: { id: true } })
+    await h.prisma.exchangeRate.upsert({
+      where: { currencyId: currency.id },
+      create: { currencyId: currency.id, foreignUnitsPerCny: value },
+      update: { foreignUnitsPerCny: value },
+    })
+  }
+
+  /** 按成员行的账单金额回表重算六个金额并提交结算（与结算服务的重算口径一致）。 */
+  async function settleMemberFromBillLine(batchId: string, member: BatchDetail['members'][number]): Promise<void> {
+    const line = await h.prisma.slhBillLine.findUniqueOrThrow({
+      where: { id: member.lineId },
+      select: { codAmountTwd: true, ntdSurchargeAmountTwd: true, payableAmountCny: true },
+    })
+    const amounts = resolveSettlementAmounts({
+      codAmountTwd: line.codAmountTwd?.toFixed(2) ?? null,
+      ntdSurchargeAmountTwd: line.ntdSurchargeAmountTwd?.toFixed(2) ?? null,
+      payableAmountCny: line.payableAmountCny?.toFixed(2) ?? null,
+      salesAmount: WIDE_SALES_TOTAL, rate: '5.200000000000', paymentFeeRate: PAYMENT_FEE_RATE,
+    })
+    await browser.post(`${BASE}/${batchId}/settlements`).set(packagingHeaders).set('Idempotency-Key', randomUUID())
+      .send({ batchLineId: member.id, rateSource: 'SYSTEM', rate: '5.200000000000', amounts }).expect(201)
+  }
+
+  /** 把所有未核对的成员补齐结算：完成批次要求全部已核对。 */
+  async function settleAllMembers(batchId: string): Promise<void> {
+    const detail = (await browser.get(`${BASE}/${batchId}`).expect(200)).body as BatchDetail
+    for (const member of detail.members.filter(entry => entry.reconciliationStatus === 'PENDING')) {
+      await settleMemberFromBillLine(batchId, member)
+    }
+  }
+
   /** 直接落一条进行中批次：编号必须来自真实派发台账，否则身份触发器拒绝。 */
   async function createInProgressBatch(billId: string): Promise<void> {
     await h.prisma.$transaction(async (tx) => {
@@ -242,10 +301,14 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       ['0116柜', '2026-01-16', 'L-011652'],
     ] as const) {
       const shipment = await h.shipment({ salesLinked: true, ownerUserId: h.fixture.actor.id })
+      if (shipment.source === null) throw new Error('sales linked shipment must create a sales order')
+      // 完成批次会把账单代收回填为销售收款：订单总额必须覆盖账单代收（夹具默认 10 元，统一放宽）。
+      await widenSalesTotal(shipment.source.id)
       await createContainer(name, date, [{ mark, shipmentId: shipment.part.id }])
     }
 
-    // 完成批次要逐行入账：销售出单人的资金账户与比例必须先存在，否则完成会被阻断。
+    // 完成批次要逐行入账，先备好系统汇率；销售出单人的资金账户与比例必须先存在，否则完成会被阻断。
+    await setSystemRate('5.200000000000')
     await h.setupFunds('30')
   })
   afterAll(async () => { await h?.dispose() })
@@ -495,10 +558,10 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       expect(member.salesOrder?.customerPhone).toBe('12345678')
       expect(member.salesOrder?.customerFullAddress).toBe('国家省份城市测试地址')
       expect(member.salesOrder?.depositDueAmount).toBe('0.0000')
-      expect(member.salesOrder?.balanceDueAmount).toBe('10.0000')
+      expect(member.salesOrder?.balanceDueAmount).toBe(WIDE_SALES_TOTAL)
       // 夹具没有收款记录：实际已收款为 0，实际待收款等于约定总额（与销售域同一处累加口径）。
       expect(member.salesOrder?.receivedAmount).toBe('0.0000')
-      expect(member.salesOrder?.outstandingAmount).toBe('10.0000')
+      expect(member.salesOrder?.outstandingAmount).toBe(WIDE_SALES_TOTAL)
       expect(member.salesOrder?.paymentStatus).toBe('UNPAID')
       expect(member.salesOrder?.issuerDisplayName).toBeTruthy()
       expect(['PENDING', 'PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED', 'SEA_TRANSIT', 'SIGNED']).toContain(member.salesOrder?.fulfillmentStatus)
@@ -576,8 +639,36 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     expect(errorCode(await createBatch(unknownId, randomUUID()).expect(404))).toBe('SLH_BILL_NOT_FOUND')
   })
 
-  it('完成批次：解除占用、成员保持冻结、写审计事件，重复完成被拒，释放后可再次发起', async () => {
+  it('创建批次断言销售单币种为台币：非台币订单在创建口被拒', async () => {
+    // 柜次身份是「入仓仓库 + 装柜日期 + 当日序号」：日期在用例之间必须互不重复。
+    const date = '2026-03-11'
+    const containerBatchName = '0311-01柜'
+    const mark = 'M-031126'
+    const shipment = await h.shipment({ salesLinked: true })
+    if (shipment.source === null) throw new Error('sales linked shipment must create a sales order')
+    await widenSalesTotal(shipment.source.id)
+    await createContainer(containerBatchName, date, [{ mark, shipmentId: shipment.part.id }])
+    const bill = await importBill(`入账-${containerBatchName}`, createSlhBillFixture({
+      rows: [{
+        B: String(Math.round((Date.parse(`${date}T00:00:00.000Z`) - Date.UTC(1899, 11, 30)) / 86_400_000)),
+        C: containerBatchName, D: '千树贸易', E: 'WG-0311-0001', F: mark,
+        G: '农用四轮微耕机', H: '1', I: 'CTN', R: '1000', U: '1000', V: '52000', W: '0', X: '币种测试', Y: '测试收货人一',
+      }],
+    }))
+
+    // 非台币销售单：顺联航对账按 1:1 回填台币代收，必须挡在创建之前。
+    await h.prisma.salesOrder.update({ where: { id: shipment.source.id }, data: { currencyCode: 'MYR' } })
+    expect(errorCode(await createBatch(bill.id, randomUUID()).expect(409))).toBe('SLH_RECON_SALES_CURRENCY_UNSUPPORTED')
+    // 改回台币后可正常创建：断言只拦非台币，不误伤。
+    await h.prisma.salesOrder.update({ where: { id: shipment.source.id }, data: { currencyCode: 'TWD' } })
+    expect((await createBatch(bill.id, randomUUID()).expect(201)).body as BatchDetail).toMatchObject({ memberCount: 1 })
+  })
+
+  it('完成批次：先补齐全部核对、解除占用、成员保持冻结、写审计事件，重复完成被拒，释放后可再次发起', async () => {
     const batchId = (await h.prisma.slhReconciliationBatch.findFirstOrThrow({ where: { billId: replacement.id, completedAt: null }, select: { id: true } })).id
+    // 完成前必须全部已核对：先把三个成员逐行结算（账单金额由回表重算，不硬编码）。
+    expect(errorCode(await browser.post(`${BASE}/${batchId}/complete`).set(packagingHeaders).send({}).expect(409))).toBe('SLH_RECON_BATCH_UNRECONCILED_MEMBERS')
+    await settleAllMembers(batchId)
     const completedBatch = (await browser.post(`${BASE}/${batchId}/complete`).set(packagingHeaders).send({}).expect(200)).body as BatchDetail
     expect(completedBatch.status).toBe('COMPLETED')
     expect(completedBatch.completedAt).not.toBeNull()
@@ -591,12 +682,13 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
 
     expect(errorCode(await browser.post(`${BASE}/${batchId}/complete`).set(packagingHeaders).send({}).expect(409))).toBe('SLH_RECON_BATCH_NOT_IN_PROGRESS')
 
-    // 结束之后账单重新变成候选，可再次发起对账；冻结解除后「未冻结行数」回到可核对行数。
+    // 结束之后占用解除：再次发起不再被「进行中」阻挡；全部行已核对，已没有可核对的活。
+    expect(errorCode(await createBatch(replacement.id, randomUUID()).expect(409))).toBe('SLH_RECON_BATCH_NO_LINES_TO_RECONCILE')
+    // 核对完的账单不再是候选（候选要求至少一行未对账），可核对/未冻结计数都归零。
     const candidates = (await browser.get(`${BASE}/candidates`).query({ pageSize: 100 }).expect(200)).body as { items: Array<{ id: string }> }
-    expect(candidates.items.map(item => item.id)).toContain(replacement.id)
+    expect(candidates.items.map(item => item.id)).not.toContain(replacement.id)
     const released = (await reconcilableCounts([replacement.id]).expect(200)).body as { items: Array<{ reconcilableLineCount: number, unfrozenLineCount: number }> }
-    expect([released.items[0].reconcilableLineCount, released.items[0].unfrozenLineCount]).toEqual([3, 3])
-    expect((await createBatch(replacement.id, randomUUID()).expect(201)).body as BatchDetail).toMatchObject({ memberCount: 3 })
+    expect([released.items[0].reconcilableLineCount, released.items[0].unfrozenLineCount]).toEqual([0, 0])
   })
 
   it('批次列表：默认只看进行中，状态与关键词筛选、分页与总数同口径', async () => {
@@ -623,7 +715,8 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     expect(allList.total).toBe(totalCount)
 
     // 关键词：批次编号命中唯一一条；账单编号命中该账单下的全部批次。
-    const replacementBatch = await h.prisma.slhReconciliationBatch.findFirstOrThrow({ where: { billId: replacement.id, completedAt: null }, select: { batchNo: true } })
+    // 完成批次现在要求整批全部已核对，replacement 的批次已结束、不再有进行中的批次。
+    const replacementBatch = await h.prisma.slhReconciliationBatch.findFirstOrThrow({ where: { billId: replacement.id }, select: { batchNo: true } })
     const byBatchNo = (await browser.get(BASE).query({ status: 'all', keyword: replacementBatch.batchNo }).expect(200)).body as { items: Array<{ batchNo: string }>, total: number }
     expect(byBatchNo.total).toBe(1)
     expect(byBatchNo.items[0].batchNo).toBe(replacementBatch.batchNo)
@@ -660,17 +753,24 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       if (member === undefined) throw new Error(`member with cod ${codAmountTwd} not found`)
       return member
     }
-    /** 夹具里每柜一个销售订单，约定总额固定为 10.0000（TWD）。 */
+    /** 夹具里每柜一个销售订单；beforeAll 统一把它们放宽为 WIDE_SALES_TOTAL（TWD），覆盖账单代收。 */
     const payload = (batchLineId: string, amounts: Record<string, string | null>) => ({
       batchLineId, rateSource: 'SYSTEM', rate: '5.200000000000', amounts,
     })
-    const fullPayload = (batchLineId: string, rateSource: string, rate: string, settlementAmountCny: string) => ({
-      batchLineId, rateSource, rate,
-      amounts: {
+    /** 结算金额由调用方给定（用于制造不一致场景）；金流费用随汇率变化，按服务端同一口径复算。 */
+    const fullPayload = (batchLineId: string, rateSource: string, rate: string, settlementAmountCny: string) => {
+      const { paymentFeeAmountCny } = resolveSettlementAmounts({
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
-        settlementAmountCny, salesAmount: '10.0000', paymentFeeAmountCny: '0.01',
-      },
-    })
+        salesAmount: WIDE_SALES_TOTAL, rate, paymentFeeRate: PAYMENT_FEE_RATE,
+      })
+      return {
+        batchLineId, rateSource, rate,
+        amounts: {
+          codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
+          settlementAmountCny, salesAmount: WIDE_SALES_TOTAL, paymentFeeAmountCny,
+        },
+      }
+    }
 
     it('写入结算结果：标记成员行与账单行、写审计事件，金额按「金额 + 币种」成对落库', async () => {
       await setSystemRate('5.200000000000')
@@ -678,7 +778,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       const member = await memberByCod(batchId, '129000.00')
       const response = await settle(batchId, randomUUID(), payload(member.id, {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
-        settlementAmountCny: '19098.85', salesAmount: '10.0000', paymentFeeAmountCny: '0.01',
+        settlementAmountCny: '19098.85', salesAmount: WIDE_SALES_TOTAL, paymentFeeAmountCny: '1346.15',
       })).expect(201)
       expect(response.body).toMatchObject({
         batchLineId: member.id, status: 'ACTIVE', rateSource: 'SYSTEM', paymentFeeRate: '0.007000000000',
@@ -695,7 +795,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       expect(row.salesOrderNo.startsWith('PKG-SO-')).toBe(true)
       expect(row.codAmountTwd?.toFixed(2)).toBe('129000.00')
       expect(row.settlementAmountCny?.toFixed(2)).toBe('19098.85')
-      expect(row.paymentFeeAmountCny?.toFixed(2)).toBe('0.01')
+      expect(row.paymentFeeAmountCny?.toFixed(2)).toBe('1346.15')
       expect(row.foreignUnitsPerCny.toFixed(12)).toBe('5.200000000000')
 
       // 首次核对才写留痕：成员行与账单行都要被标记，批次进度随之变化，切换器读到的行状态变成已对账。
@@ -722,7 +822,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
 
       const mismatch = await settle(batchId, randomUUID(), payload(member.id, {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
-        settlementAmountCny: '19098.86', salesAmount: '10.0000', paymentFeeAmountCny: '0.01',
+        settlementAmountCny: '19098.86', salesAmount: WIDE_SALES_TOTAL, paymentFeeAmountCny: '1346.15',
       })).expect(409)
       expect(errorCode(mismatch)).toBe('SLH_RECON_SETTLEMENT_MISMATCH')
       expect((mismatch.body as { message: string }).message).toContain('结算金额')
@@ -735,7 +835,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       await h.prisma.exchangeRate.deleteMany({ where: { currencyId: twd.id } })
       const unavailable = await settle(batchId, randomUUID(), payload(member.id, {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
-        settlementAmountCny: '19098.85', salesAmount: '10.0000', paymentFeeAmountCny: '0.01',
+        settlementAmountCny: '19098.85', salesAmount: WIDE_SALES_TOTAL, paymentFeeAmountCny: '1346.15',
       })).expect(409)
       expect(errorCode(unavailable)).toBe('SLH_RECON_SETTLEMENT_RATE_UNAVAILABLE')
       await setSystemRate('5.200000000000')
@@ -750,7 +850,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       // 与当前有效记录完全相同的口径 ⇒ 拒绝，不写库。
       const unchanged = await settle(batchId, randomUUID(), payload(member.id, {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
-        settlementAmountCny: '19098.85', salesAmount: '10.0000', paymentFeeAmountCny: '0.01',
+        settlementAmountCny: '19098.85', salesAmount: WIDE_SALES_TOTAL, paymentFeeAmountCny: '1346.15',
       })).expect(409)
       expect(errorCode(unchanged)).toBe('SLH_RECON_SETTLEMENT_UNCHANGED')
 
@@ -805,7 +905,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
         settlementCurrency: 'CNY',
         codAmountTwd: '129000.00',
         codAmountCurrency: 'TWD',
-        salesAmount: '10.0000',
+        salesAmount: WIDE_SALES_TOTAL,
         salesCurrency: 'TWD',
         slhBillNo: pending.slhBillNo,
         containerBatchNo: '0102-01柜',
@@ -829,7 +929,6 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       const batchId = await pendingBatch()
       const member = await memberByCod(batchId, '129000.00')
       const body = fullPayload(member.id, 'SYSTEM', '5.200000000000', '19098.85')
-      const rowsBefore = await h.prisma.slhReconciliationSettlement.count()
 
       // 缺少 reconcile 权限：403；批次或成员不存在：404；非法幂等键：422。
       expect((await outsider.post(`${BASE}/${batchId}/settlements`).set(packagingHeaders).set('Idempotency-Key', randomUUID()).send(body)).status).toBe(403)
@@ -837,7 +936,9 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       expect(errorCode(await settle(batchId, randomUUID(), { ...body, batchLineId: unknownId }).expect(404))).toBe('SLH_RECON_BATCH_NOT_FOUND')
       expect(errorCode(await settle(batchId, 'not-a-uuid', body).expect(422))).toBe('VALIDATION_FAILED')
 
-      // 批次完成后不能再确认结算。
+      // 批次完成后不能再确认结算：完成门禁要求全部已核对，先把剩余成员补齐再完成。
+      await settleAllMembers(batchId)
+      const rowsBefore = await h.prisma.slhReconciliationSettlement.count()
       await browser.post(`${BASE}/${batchId}/complete`).set(packagingHeaders).send({}).expect(200)
       const completed = await settle(batchId, randomUUID(), body).expect(409)
       expect(errorCode(completed)).toBe('SLH_RECON_BATCH_NOT_IN_PROGRESS')
@@ -866,22 +967,27 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
      */
     async function preparedBatch(suffix: string, options: {
       issuerUserId?: string
-      payableAmountCny: string
-      codAmountTwd: string
+      payableAmountCny: string | null
+      codAmountTwd: string | null
       surchargeNtd?: string
     }): Promise<{ batchId: string, memberId: string }> {
       const date = `2026-03-${suffix}`
       const containerBatchName = `03${suffix}-01柜`
       const mark = `M-03${suffix}26`
       const shipment = await h.shipment({ salesLinked: true, ownerUserId: options.issuerUserId ?? h.fixture.actor.id })
+      if (shipment.source === null) throw new Error('sales linked shipment must create a sales order')
+      // 完成批次会把账单代收回填为销售收款：订单总额必须覆盖账单代收，统一放宽为大额。
+      await widenSalesTotal(shipment.source.id)
       await createContainer(containerBatchName, date, [{ mark, shipmentId: shipment.part.id }])
       const bill = await importBill(`入账-${containerBatchName}`, createSlhBillFixture({
         rows: [{
           B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: `WG-03${suffix}-0001`, F: mark,
           G: '农用四轮微耕机', H: '1', I: 'CTN',
           // 行级勾稽 payable = 运费 + 代收手续费 + 附加费 是数据库硬约束：整笔放进运费列。
-          R: options.payableAmountCny, U: options.payableAmountCny,
-          V: options.codAmountTwd, W: options.surchargeNtd ?? '6000', X: '入账测试', Y: '测试收货人一',
+          // 金额全为 null 表示「本行不涉及」——用于零流水的完成用例；不涉及代收时也不带 NTD 杂费。
+          ...(options.payableAmountCny === null ? {} : { R: options.payableAmountCny, U: options.payableAmountCny }),
+          ...(options.codAmountTwd === null ? {} : { V: options.codAmountTwd, W: options.surchargeNtd ?? '6000' }),
+          X: '入账测试', Y: '测试收货人一',
         }],
       }))
       const created = (await createBatch(bill.id, randomUUID()).expect(201)).body as BatchDetail
@@ -892,10 +998,28 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
 
     /** 结算金额与金流费用都由同一口径复算，避免在用例里硬编码中间值。 */
     const settleWith = async (batchId: string, memberId: string, rate: string, amounts: { codAmountTwd: string | null, ntdSurchargeAmountTwd: string | null, payableAmountCny: string | null }) => {
-      const resolved = resolveSettlementAmounts({ ...amounts, salesAmount: '10.0000', rate, paymentFeeRate: PAYMENT_FEE_RATE })
+      const resolved = resolveSettlementAmounts({ ...amounts, salesAmount: WIDE_SALES_TOTAL, rate, paymentFeeRate: PAYMENT_FEE_RATE })
       const response = await browser.post(`${BASE}/${batchId}/settlements`).set(packagingHeaders).set('Idempotency-Key', randomUUID())
         .send({ batchLineId: memberId, rateSource: 'SYSTEM', rate, amounts: resolved }).expect(201)
       return response.body as { id: string }
+    }
+
+    /** 成员行背后的销售订单主键：回填相关断言都用它回查。 */
+    const salesOrderIdOfMember = async (memberId: string): Promise<string> => {
+      const row = await h.prisma.slhReconciliationBatchLine.findUniqueOrThrow({
+        where: { id: memberId },
+        select: { matchedLoadingItem: { select: { shipment: { select: { purchaseOrder: { select: { salesOrderId: true } } } } } } },
+      })
+      const salesOrderId = row.matchedLoadingItem.shipment?.purchaseOrder?.salesOrderId
+      if (salesOrderId === null || salesOrderId === undefined) throw new Error('member has no sales order')
+      return salesOrderId
+    }
+
+    /** 销售单详情需要 sales-orders:read：核对域会话只有 slh-bills 权限，另开一个只读会话。 */
+    let salesOrderReader: request.Agent | null = null
+    const salesOrderDetail = async (salesOrderId: string): Promise<Record<string, unknown>> => {
+      salesOrderReader ??= (await h.browserWithPermissions(['sales-orders:read'])).browser
+      return (await salesOrderReader.get(`/api/sales-orders/${salesOrderId}`).expect(200)).body as Record<string, unknown>
     }
 
     it('归属人没有资金账户时阻断完成：批次保持进行中、无资金流水、无完成审计', async () => {
@@ -936,7 +1060,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       })
       const row = await h.prisma.slhReconciliationSettlement.findUniqueOrThrow({ where: { id: settlement.id } })
       expect(row.settlementAmountCny?.toFixed(2)).toBe('0.00')
-      expect(row.paymentFeeAmountCny?.toFixed(2)).toBe('0.01')
+      expect(row.paymentFeeAmountCny?.toFixed(2)).toBe('1346.15')
 
       await browser.post(`${BASE}/${prepared.batchId}/complete`).set(packagingHeaders).send({}).expect(200)
       // 费用按销售单入账：用销售单主键回查，账单行的结算记录只在 metadata 里留痕。
@@ -955,13 +1079,13 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
         businessNo: row.salesOrderNo,
         userId: h.fixture.actor.id,
       })
-      expect(fee.businessAmount.toFixed(2)).toBe('0.01')
+      expect(fee.businessAmount.toFixed(2)).toBe('1346.15')
       // 幂等键按销售单推导：同一销售单的费用只会入一次，重放也恢复同一笔。
       expect(Buffer.from(fee.idempotencyKeyHash).equals(createHash('sha256').update(`${row.salesOrderId}:FEE`).digest())).toBe(true)
       expect(fee.metadata).toMatchObject({ slhReconciliationBatchId: prepared.batchId, slhReconciliationSettlementId: settlement.id })
-      // 用户 30% 的分账量化为 0.00 被省略，公司承接全部尾差；费用恒为出账。
-      expect(fee.entries.map(entry => [entry.accountTarget, entry.direction, entry.amount.toFixed(2)])).toEqual([
-        ['COMPANY', 'DEBIT', '0.01'],
+      // 用户 30%（403.845 按 HALF_UP 进到 403.85）与公司尾差各一笔，费用恒为出账。
+      expect(fee.entries.map(entry => [entry.accountTarget, entry.direction, entry.amount.toFixed(2)]).sort()).toEqual([
+        ['COMPANY', 'DEBIT', '942.30'], ['USER', 'DEBIT', '403.85'],
       ])
     })
 
@@ -997,11 +1121,12 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       ])
       expect(reconcileEntries.reduce((sum, entry) => sum + Number(entry[2]), 0).toFixed(2)).toBe('19098.85')
 
-      // 余额真的动了：用户只拿到结算分账；公司还要在同一次完成里承担 0.01 金流费用。
+      // 余额真的动了：用户与公司各自「结算分账贷记 − 金流费用分账借记」。
+      // 金流费用 1346.15 按 30% 分账：用户借记 403.85（403.845 按 HALF_UP 进位）、公司承接尾差 942.30。
       const userAfter = await h.prisma.fundAccount.findUniqueOrThrow({ where: { id: account.id }, select: { balance: true } })
       const companyAfter = await h.prisma.fundAccount.findUniqueOrThrow({ where: { id: company.id }, select: { balance: true } })
-      expect(userAfter.balance.minus(account.balance).toFixed(2)).toBe('5729.66')
-      expect(companyAfter.balance.minus(company.balance).toFixed(2)).toBe('13369.18')
+      expect(userAfter.balance.minus(account.balance).toFixed(2)).toBe('5325.81')
+      expect(companyAfter.balance.minus(company.balance).toFixed(2)).toBe('12426.89')
 
       // 批次审计只留标量事实：多笔入账只记数量，逐笔关联走资金侧的 business_id 回查。
       const audit = await h.prisma.auditEvent.findFirstOrThrow({
@@ -1026,32 +1151,205 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       ])
     })
 
-    it('金流费用为零时只入结算，未确认的行不产生流水', async () => {
+    it('金流费用为零时只入结算，金额全零的核对不产生流水', async () => {
       const prepared = await preparedBatch('05', { payableAmountCny: '4555', codAmountTwd: '129000' })
-      // 汇率放大后 10 ÷ 2000 × 0.007 量化为 0.00：金流费用为零，这一笔跳过。
-      await setSystemRate('2000.000000000000')
-      const settlement = await settleWith(prepared.batchId, prepared.memberId, '2000.000000000000', {
+      // 汇率放大后 1,000,000 ÷ 2,000,000 × 0.007 量化为 0.00：金流费用为零，这一笔跳过。
+      await setSystemRate('2000000.000000000000')
+      const settlement = await settleWith(prepared.batchId, prepared.memberId, '2000000.000000000000', {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
       })
       const row = await h.prisma.slhReconciliationSettlement.findUniqueOrThrow({ where: { id: settlement.id } })
       expect(row.paymentFeeAmountCny?.toFixed(2)).toBe('0.00')
-      expect(row.settlementAmountCny?.toFixed(2)).toBe('-4493.50')
+      // (129000 − 6000) ÷ 2000000 − 4555 = −4554.94。
+      expect(row.settlementAmountCny?.toFixed(2)).toBe('-4554.94')
 
       await browser.post(`${BASE}/${prepared.batchId}/complete`).set(packagingHeaders).send({}).expect(200)
       const postings = await h.prisma.fundPostingBatch.findMany({ where: { businessId: settlement.id }, select: { consumerCode: true } })
       expect(postings.map(entry => entry.consumerCode)).toEqual(['SLH_BILL_FINANCE_SETTLEMENT.RECONCILE'])
 
-      // 完全没有确认过的行：完成批次不产生任何资金流水。
-      const untouched = await preparedBatch('06', { payableAmountCny: '4555', codAmountTwd: '129000' })
+      // 金额全为零的核对（本行不涉及代收也不涉及应付，汇率下费用也量化为 0.00）：完成不产生任何资金流水。
+      const zeroAmount = await preparedBatch('06', { payableAmountCny: null, codAmountTwd: null })
+      await settleWith(zeroAmount.batchId, zeroAmount.memberId, '2000000.000000000000', {
+        codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null,
+      })
       const before = await h.prisma.fundPostingBatch.count()
-      await browser.post(`${BASE}/${untouched.batchId}/complete`).set(packagingHeaders).send({}).expect(200)
+      await browser.post(`${BASE}/${zeroAmount.batchId}/complete`).set(packagingHeaders).send({}).expect(200)
       expect(await h.prisma.fundPostingBatch.count()).toBe(before)
       const audit = await h.prisma.auditEvent.findFirstOrThrow({
-        where: { eventType: 'SLH_RECONCILIATION_BATCH_COMPLETED', targetId: untouched.batchId }, select: { metadata: true },
+        where: { eventType: 'SLH_RECONCILIATION_BATCH_COMPLETED', targetId: zeroAmount.batchId }, select: { metadata: true },
       })
       expect((audit.metadata as { fundPostingBatchId: string | null, fundPostingCount: number }))
         .toMatchObject({ fundPostingBatchId: null, fundPostingCount: 0 })
       await setSystemRate('5.200000000000')
+    })
+
+    it('完成回填代收货款收款：字段口径与来源固定，收齐且已签收时订单自动进待对账', async () => {
+      await setSystemRate('5.200000000000')
+      const prepared = await preparedBatch('07', { payableAmountCny: '4555', codAmountTwd: '129000' })
+      const settlement = await settleWith(prepared.batchId, prepared.memberId, '5.200000000000', {
+        codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
+      })
+      const salesOrderId = await salesOrderIdOfMember(prepared.memberId)
+      // 订单总额压到恰好等于本行账单代收：回填后应「已付清」；履约置为已签收，验证自动推进。
+      await widenSalesTotal(salesOrderId, '129000.0000')
+      await h.prisma.salesOrder.update({ where: { id: salesOrderId }, data: { fulfillmentStatus: 'SIGNED' } })
+
+      await browser.post(`${BASE}/${prepared.batchId}/complete`).set(packagingHeaders).send({}).expect(200)
+
+      const settlementRow = await h.prisma.slhReconciliationSettlement.findUniqueOrThrow({ where: { id: settlement.id } })
+      const reconcileBatch = await h.prisma.fundPostingBatch.findFirstOrThrow({
+        where: { businessId: settlement.id, consumerCode: 'SLH_BILL_FINANCE_SETTLEMENT.RECONCILE' },
+        select: { id: true },
+      })
+      const payment = await h.prisma.salesOrderPayment.findFirstOrThrow({
+        where: { salesOrderId, origin: 'COD_SETTLEMENT' },
+      })
+      expect(payment).toMatchObject({
+        origin: 'COD_SETTLEMENT', paymentType: 'COD_BALANCE', paymentMethod: 'BILL_COD_SETTLEMENT',
+        remark: 'COD代收货款顺联航账单结算',
+        // 溯源锚点是产生它的结算记录；而 RECONCILE 入账批次「有则绑」。
+        slhReconciliationSettlementId: settlement.id,
+        fundPostingBatchId: reconcileBatch.id,
+        // 回填不经汇率（台币 1:1），也没有作废入口。
+        voidedAt: null, voidReason: null, exchangeRateId: null, foreignUnitsPerCnySnapshot: null,
+      })
+      expect(payment.amount.toFixed(4)).toBe('129000.0000')
+      expect(payment.receivedAt.toISOString()).toBe(settlementRow.createdAt.toISOString())
+
+      // 付款状态由回填驱动：收齐即已付清，并自动推进到待对账（与收款审核同一条派生链路）。
+      const order = await h.prisma.salesOrder.findUniqueOrThrow({ where: { id: salesOrderId }, select: { paymentStatus: true, orderStatus: true } })
+      expect(order).toMatchObject({ paymentStatus: 'PAID', orderStatus: 'PENDING_RECONCILIATION' })
+      const history = await h.prisma.salesOrderStatusHistory.findFirst({
+        where: { salesOrderId, dimension: 'PAYMENT', toStatus: 'PAID' }, select: { reason: true },
+      })
+      expect(history?.reason).toContain('结算回填代收货款')
+
+      const audit = await h.prisma.auditEvent.findFirstOrThrow({
+        where: { eventType: 'SLH_RECONCILIATION_BATCH_COMPLETED', targetId: prepared.batchId }, select: { metadata: true },
+      })
+      expect(audit.metadata).toMatchObject({ backfilledPaymentCount: 1 })
+
+      // 收款详情契约：代收回填没有凭证文件，详情接口仍返回 200，origin 与类型可见、voucher 为空。
+      const detail = await salesOrderDetail(salesOrderId) as {
+        payments: Array<{ origin: string, paymentType: string, voucher: unknown }>
+      }
+      const dto = detail.payments.find(entry => entry.origin === 'COD_SETTLEMENT')
+      expect(dto).toMatchObject({ origin: 'COD_SETTLEMENT', paymentType: 'COD_BALANCE', voucher: null })
+    })
+
+    it('代收超收：相关行退回未核对、结算作废并拒绝完成，修复后可重新核对完成', async () => {
+      await setSystemRate('5.200000000000')
+      const prepared = await preparedBatch('08', { payableAmountCny: '4555', codAmountTwd: '129000' })
+      const settlement = await settleWith(prepared.batchId, prepared.memberId, '5.200000000000', {
+        codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
+      })
+      const salesOrderId = await salesOrderIdOfMember(prepared.memberId)
+      const memberRow = await h.prisma.slhReconciliationBatchLine.findUniqueOrThrow({ where: { id: prepared.memberId }, select: { lineId: true } })
+
+      // 订单总额压回夹具原值（10 元）：账单代收远超实际待收款＝超收，完成必须退回。
+      await widenSalesTotal(salesOrderId, '10.0000')
+      const rejected = await browser.post(`${BASE}/${prepared.batchId}/complete`).set(packagingHeaders).send({}).expect(409)
+      expect(errorCode(rejected)).toBe('SLH_RECON_SETTLEMENT_COD_OVERCOLLECTED')
+      const message = (rejected.body as { message: string }).message
+      expect(message).toContain('已退回重新核对')
+      expect(message).toContain('129000.00')
+      expect(message).toContain('10.00')
+
+      // 重置：成员行与账单行退回未核对、结算记录作废、批次保持进行中、没有入账也没有回填。
+      expect(await h.prisma.slhReconciliationBatchLine.findUniqueOrThrow({
+        where: { id: prepared.memberId }, select: { reconciledAt: true, reconciledById: true },
+      })).toEqual({ reconciledAt: null, reconciledById: null })
+      expect((await h.prisma.slhBillLine.findUniqueOrThrow({ where: { id: memberRow.lineId }, select: { reconciledAt: true } })).reconciledAt).toBeNull()
+      expect((await h.prisma.slhReconciliationSettlement.findUniqueOrThrow({ where: { id: settlement.id }, select: { status: true } })).status).toBe('SUPERSEDED')
+      expect((await h.prisma.slhReconciliationBatch.findUniqueOrThrow({ where: { id: prepared.batchId }, select: { completedAt: true } })).completedAt).toBeNull()
+      expect(await h.prisma.fundPostingBatch.count({ where: { businessId: settlement.id } })).toBe(0)
+      expect(await h.prisma.salesOrderPayment.count({ where: { salesOrderId, origin: 'COD_SETTLEMENT' } })).toBe(0)
+      expect(await h.prisma.auditEvent.count({
+        where: { eventType: 'SLH_RECONCILIATION_BATCH_COMPLETION_REJECTED', targetId: prepared.batchId },
+      })).toBe(1)
+      const detail = (await browser.get(`${BASE}/${prepared.batchId}`).expect(200)).body as BatchDetail
+      expect(detail.reconciledMemberCount).toBe(0)
+      expect(detail.members[0]?.reconciliationStatus).toBe('PENDING')
+
+      // 修复金额后重新核对（作废的记录留在核对记录里）→ 完成成功且只回填一笔。
+      await widenSalesTotal(salesOrderId)
+      await settleAllMembers(prepared.batchId)
+      expect(await h.prisma.slhReconciliationSettlement.count({ where: { batchLineId: prepared.memberId } })).toBe(2)
+      await browser.post(`${BASE}/${prepared.batchId}/complete`).set(packagingHeaders).send({}).expect(200)
+      expect(await h.prisma.salesOrderPayment.count({ where: { salesOrderId, origin: 'COD_SETTLEMENT' } })).toBe(1)
+    })
+
+    it('少收不拦截：回填只写实收，订单停留部分付款并保留未收余额', async () => {
+      await setSystemRate('5.200000000000')
+      const prepared = await preparedBatch('09', { payableAmountCny: '4555', codAmountTwd: '129000' })
+      await settleWith(prepared.batchId, prepared.memberId, '5.200000000000', {
+        codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
+      })
+      const salesOrderId = await salesOrderIdOfMember(prepared.memberId)
+      // 总额比账单代收多 2000：回填只写实收，差额留给直付渠道追收。
+      await widenSalesTotal(salesOrderId, '131000.0000')
+      await browser.post(`${BASE}/${prepared.batchId}/complete`).set(packagingHeaders).send({}).expect(200)
+      expect((await h.prisma.salesOrderPayment.findFirstOrThrow({
+        where: { salesOrderId, origin: 'COD_SETTLEMENT' }, select: { amount: true },
+      })).amount.toFixed(4)).toBe('129000.0000')
+      expect(await h.prisma.salesOrder.findUniqueOrThrow({
+        where: { id: salesOrderId }, select: { paymentStatus: true, orderStatus: true },
+      })).toMatchObject({ paymentStatus: 'PARTIALLY_PAID', orderStatus: 'CONFIRMED' })
+      const detail = await salesOrderDetail(salesOrderId) as {
+        amounts: { receivedAmount: string, outstandingAmount: string }
+      }
+      expect(detail).toMatchObject({ amounts: { receivedAmount: '129000.0000', outstandingAmount: '2000.0000' } })
+    })
+
+    it('完成门禁：整批未全部核对时拒绝完成，补齐后可完成', async () => {
+      await setSystemRate('5.200000000000')
+      // 柜次身份是「入仓仓库 + 装柜日期 + 当日序号」：日期在用例之间必须互不重复。
+      const date = '2026-03-12'
+      const containerBatchName = '0312-01柜'
+      const marks = ['M-031226', 'M-031227']
+      const shipment = await h.shipment({ salesLinked: true })
+      if (shipment.source === null) throw new Error('sales linked shipment must create a sales order')
+      await widenSalesTotal(shipment.source.id)
+      await createContainer(containerBatchName, date, marks.map(mark => ({ mark, shipmentId: shipment.part.id })))
+      const bill = await importBill(`入账-${containerBatchName}`, createSlhBillFixture({
+        rows: marks.map((mark, index) => ({
+          B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: `WG-0312-000${index + 1}`, F: mark,
+          G: '农用四轮微耕机', H: '1', I: 'CTN',
+          R: String(1000 * (index + 1)), U: String(1000 * (index + 1)),
+          V: '52000', W: '0', X: '入账测试', Y: '测试收货人一',
+        })),
+      }))
+      const created = (await createBatch(bill.id, randomUUID()).expect(201)).body as BatchDetail
+      expect(created.memberCount).toBe(2)
+      const [first, second] = created.members
+      if (first === undefined || second === undefined) throw new Error('batch members missing')
+
+      // 只核对一行：完成必须被门禁拒绝，且批次保持进行中、无任何入账。
+      await settleMemberFromBillLine(created.id, first)
+      const blocked = await browser.post(`${BASE}/${created.id}/complete`).set(packagingHeaders).send({}).expect(409)
+      expect(errorCode(blocked)).toBe('SLH_RECON_BATCH_UNRECONCILED_MEMBERS')
+      expect((await h.prisma.slhReconciliationBatch.findUniqueOrThrow({ where: { id: created.id }, select: { completedAt: true } })).completedAt).toBeNull()
+
+      await settleMemberFromBillLine(created.id, second)
+      await browser.post(`${BASE}/${created.id}/complete`).set(packagingHeaders).send({}).expect(200)
+    })
+
+    it('并发完成串行化：同一批次的两次完成只成功一次，回填只有一笔', async () => {
+      await setSystemRate('5.200000000000')
+      const prepared = await preparedBatch('10', { payableAmountCny: '4555', codAmountTwd: '129000' })
+      await settleWith(prepared.batchId, prepared.memberId, '5.200000000000', {
+        codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
+      })
+      const responses = await Promise.all([
+        browser.post(`${BASE}/${prepared.batchId}/complete`).set(packagingHeaders).send({}),
+        browser.post(`${BASE}/${prepared.batchId}/complete`).set(packagingHeaders).send({}),
+      ])
+      expect(responses.map(response => response.status).sort()).toEqual([200, 409])
+      const failed = responses.find(response => response.status === 409)
+      if (failed === undefined) throw new Error('expected one rejected completion')
+      expect(errorCode(failed)).toBe('SLH_RECON_BATCH_NOT_IN_PROGRESS')
+      const salesOrderId = await salesOrderIdOfMember(prepared.memberId)
+      expect(await h.prisma.salesOrderPayment.count({ where: { salesOrderId, origin: 'COD_SETTLEMENT' } })).toBe(1)
     })
 
     it('伪造来源合规形状被数据库拒绝：consumer 与业务类型必须严格配对', async () => {
@@ -1100,33 +1398,37 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     const excelSerial = (date: string) => String(Math.round((Date.parse(`${date}T00:00:00.000Z`) - Date.UTC(1899, 11, 30)) / 86_400_000))
 
     /**
-     * 一条货件在装柜时被拆成三个唛头（同一柜次、同一个货件、三行装柜明细），
-     * 账单三行分别对上它们：三条账单行的匹配链是**同一个销售单**。
-     * 这是「一个销售单对应多行账单」的最小构造，用来验证费用不会被按行重复收。
+     * 一条货件在装柜时被拆成三个唛头（同一柜次、同一个货件、三行装柜明细）。
+     * 账单拆成两张：前两个唛头一张、第三个唛头一张——两条账单行的匹配链是**同一个销售单**。
+     * 完成批次要求整批全部已核对，跨批次的重复收费只能靠两张账单来构造。
      */
-    async function splitShipmentBill(): Promise<{ billId: string, marks: string[] }> {
-      const date = '2026-03-07'
-      const containerBatchName = '0307-01柜'
-      const marks = ['M-030701', 'M-030702', 'M-030703']
+    async function splitShipmentBills(): Promise<{ firstBillId: string, secondBillId: string }> {
+      // 柜次身份是「入仓仓库 + 装柜日期 + 当日序号」：日期在用例之间必须互不重复。
+      const date = '2026-03-13'
+      const containerBatchName = '0313-01柜'
+      const marks = ['M-031301', 'M-031302', 'M-031303']
       const shipment = await h.shipment({ salesLinked: true })
+      if (shipment.source === null) throw new Error('sales linked shipment must create a sales order')
+      // 完成批次会把账单代收回填为销售收款：订单总额必须覆盖账单代收。
+      await widenSalesTotal(shipment.source.id)
       await createContainer(containerBatchName, date, marks.map(mark => ({ mark, shipmentId: shipment.part.id })))
-      const bill = await importBill(`入账-${containerBatchName}`, createSlhBillFixture({
-        rows: marks.map((mark, index) => ({
-          B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: `WG-0307-000${index + 1}`, F: mark,
-          G: '农用四轮微耕机', H: '1', I: 'CTN',
-          // 行级勾稽 payable = 运费 + 代收手续费 + 附加费：整笔放进运费列。
-          R: String(1000 * (index + 1)), U: String(1000 * (index + 1)),
-          V: '52000', W: '0', X: '入账测试', Y: '测试收货人一',
-        })),
-      }))
-      return { billId: bill.id, marks }
+      const row = (mark: string, index: number) => ({
+        B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: `WG-0313-000${index + 1}`, F: mark,
+        G: '农用四轮微耕机', H: '1', I: 'CTN',
+        // 行级勾稽 payable = 运费 + 代收手续费 + 附加费：整笔放进运费列。
+        R: String(1000 * (index + 1)), U: String(1000 * (index + 1)),
+        V: '52000', W: '0', X: '入账测试', Y: '测试收货人一',
+      })
+      const first = await importBill(`入账-${containerBatchName}-甲`, createSlhBillFixture({ rows: [row(marks[0], 0), row(marks[1], 1)] }))
+      const second = await importBill(`入账-${containerBatchName}-乙`, createSlhBillFixture({ rows: [row(marks[2], 2)] }))
+      return { firstBillId: first.id, secondBillId: second.id }
     }
 
     /** 逐行写结算：(52000 − 0) ÷ 5.2 = 10000，减去各行应付后就是各行的结算金额；费用三行相同。 */
     async function settleLine(batchId: string, memberId: string, payable: number): Promise<{ id: string }> {
       const amounts = resolveSettlementAmounts({
         codAmountTwd: '52000.00', ntdSurchargeAmountTwd: '0.00', payableAmountCny: `${payable}.00`,
-        salesAmount: '10.0000', rate: '5.200000000000', paymentFeeRate: PAYMENT_FEE_RATE,
+        salesAmount: WIDE_SALES_TOTAL, rate: '5.200000000000', paymentFeeRate: PAYMENT_FEE_RATE,
       })
       const response = await browser.post(`${BASE}/${batchId}/settlements`).set(packagingHeaders).set('Idempotency-Key', randomUUID())
         .send({ batchLineId: memberId, rateSource: 'SYSTEM', rate: '5.200000000000', amounts }).expect(201)
@@ -1138,12 +1440,12 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     })
 
     it('同一销售单的两行只入一笔费用，费用身份挂在销售单上；跨批次也不重复', async () => {
-      const { billId } = await splitShipmentBill()
+      const { firstBillId, secondBillId } = await splitShipmentBills()
       await setSystemRate('5.200000000000')
 
-      // 第一轮：三行里的前两行一起核对并完成。
-      const firstBatch = (await createBatch(billId, randomUUID()).expect(201)).body as BatchDetail
-      expect(firstBatch.memberCount).toBe(3)
+      // 第一轮：甲账单的两行一起核对并完成。
+      const firstBatch = (await createBatch(firstBillId, randomUUID()).expect(201)).body as BatchDetail
+      expect(firstBatch.memberCount).toBe(2)
       const [firstLine, secondLine] = firstBatch.members
       const firstSettlement = await settleLine(firstBatch.id, firstLine.id, 1000)
       const secondSettlement = await settleLine(firstBatch.id, secondLine.id, 2000)
@@ -1161,15 +1463,15 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       const firstFees = await feePostings(salesOrder.salesOrderId)
       expect(firstFees).toHaveLength(1)
       expect(firstFees[0]).toMatchObject({ businessNo: salesOrder.salesOrderNo })
-      expect(firstFees[0].businessAmount.toFixed(2)).toBe('0.01')
+      expect(firstFees[0].businessAmount.toFixed(2)).toBe('1346.15')
       // 触发它的是本轮第一条核对：费用属于销售单，但要能从这里回查到是哪一行把它带进来的。
       expect(firstFees[0].metadata).toMatchObject({
         slhReconciliationSettlementId: firstSettlement.id,
         slhReconciliationSalesOrderNo: salesOrder.salesOrderNo,
       })
 
-      // 第二轮：同一销售单的第三行单独开一批完成（成员行 id 属于新批次，不能用上一批的）。
-      const secondBatch = (await createBatch(billId, randomUUID()).expect(201)).body as BatchDetail
+      // 第二轮：同一销售单的第三个唛头在乙账单单独开一批完成（成员行 id 属于新批次，不能用上一批的）。
+      const secondBatch = (await createBatch(secondBillId, randomUUID()).expect(201)).body as BatchDetail
       expect(secondBatch.memberCount).toBe(1)
       const thirdSettlement = await settleLine(secondBatch.id, secondBatch.members[0].id, 3000)
       await browser.post(`${BASE}/${secondBatch.id}/complete`).set(packagingHeaders).send({}).expect(200)

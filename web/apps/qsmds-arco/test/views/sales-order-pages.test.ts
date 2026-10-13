@@ -381,6 +381,11 @@ test('销售订单记录弹窗按需读取详情并分开展示收款、凭证�
   assert.match(source, /buildSalesOrderDeliveryReceiptRequest/u)
   assert.match(source, /payment\.voucher\.contentUrl/u)
   assert.match(source, /class="qs-type-data-emphasis text-primary font-semibold/u)
+  // 代收回填的收款：类型与来源标签固定，且没有凭证文件时走「无凭证」分支。
+  assert.match(source, /COD_BALANCE: '代收尾款'/u)
+  assert.match(source, /paymentOriginLabel\(payment\.origin\)/u)
+  assert.match(source, /COD_SETTLEMENT: '代收回填'/u)
+  assert.match(source, /v-if="payment\.voucher"[\s\S]*?<p v-else[\s\S]{0,80}?无收款凭证/u)
   assert.doesNotMatch(source, /referenceNo|参考编号/u)
   assert.match(source, /document\.detachedAt === null/u)
   // 列表缩略位下发派生缩略图，原件仍是失败时的回退与预览地址。

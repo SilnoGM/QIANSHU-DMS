@@ -99,6 +99,7 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   SLH_BILL_IMPORTED: '顺联航账单已导入',
   SLH_RECONCILIATION_BATCH_CREATED: '顺联航对账批次已创建',
   SLH_RECONCILIATION_BATCH_COMPLETED: '顺联航对账批次已结束',
+  SLH_RECONCILIATION_BATCH_COMPLETION_REJECTED: '顺联航对账完成被退回（代收超收，相关行已退回未核对）',
   SLH_BILL_LINES_RECONCILED: '顺联航账单明细已核对',
   PURCHASE_ORDER_CREATED: '采购订单已创建',
   PURCHASE_ORDER_REVIEW_MARKS_PREPARED: '采购审核唛头已派发',

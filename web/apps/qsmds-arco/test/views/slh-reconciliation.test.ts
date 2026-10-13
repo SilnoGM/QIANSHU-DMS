@@ -57,6 +57,8 @@ import {
   resolveSlhReconciliationBatchTone,
   resolveSlhReconciliationCompleteBlockLabelKey,
   resolveSlhReconciliationCompleteBlockReason,
+  resolveSlhReconciliationSettleBlockLabelKey,
+  resolveSlhReconciliationSettleBlockReason,
 } from '../../src/views/workbenches/slh-reconciliation/status.logic'
 
 const MESSAGES = [zhCn, zhTw, en] as const
@@ -150,6 +152,82 @@ test('完成批次的门禁：还有未核对行或批次已结束都挡下，�
     resolveSlhReconciliationCompleteBlockLabelKey('BATCH_COMPLETED'),
     'slhReconciliation.detail.completeBlockedBatchCompleted',
   )
+})
+
+test('本行核对的门禁：代收行只需已签收，纯直付行需已收齐，采购需已完成', () => {
+  type SalesStates = Pick<SlhReconciliationMatchedSalesOrderDto, 'orderStatus' | 'fulfillmentStatus' | 'paymentStatus'>
+  type PurchaseStates = Pick<SlhReconciliationMatchedPurchaseOrderDto, 'orderStatus' | 'fulfillmentStatus' | 'paymentStatus'>
+  const salesReady: SalesStates = { orderStatus: 'PENDING_RECONCILIATION', fulfillmentStatus: 'SIGNED', paymentStatus: 'PAID' }
+  const purchaseReady: PurchaseStates = { orderStatus: 'COMPLETED', fulfillmentStatus: 'SIGNED', paymentStatus: 'PAID' }
+  const gate = (
+    sales: SalesStates | null = salesReady,
+    purchase: PurchaseStates | null = purchaseReady,
+    codAmountTwd: string | null = '52000.00',
+  ) => (
+    resolveSlhReconciliationSettleBlockReason({ codAmountTwd, purchaseOrder: purchase, salesOrder: sales })
+  )
+
+  // 代收行（账单代收有值）：收齐由完成批次的代收回填完成，核对前只要求已签收。
+  assert.equal(gate(), null)
+  assert.equal(gate({ ...salesReady, orderStatus: 'CONFIRMED', paymentStatus: 'UNPAID' }), null)
+  assert.equal(gate({ ...salesReady, orderStatus: 'CONFIRMED', paymentStatus: 'PARTIALLY_PAID' }), null)
+  assert.equal(gate({ ...salesReady, orderStatus: 'COMPLETED' }), null)
+  assert.equal(gate({ ...salesReady, fulfillmentStatus: 'SEA_TRANSIT' }), 'SALES_ORDER_NOT_SIGNED')
+
+  // 纯直付行（账单代收为空）：维持原口径——待对账 + 已签收 + 已付清。
+  // 待对账不蕴含已付清：待对账状态下仍可作废收款，付款状态会回落而订单状态不动，所以付款必须单独查。
+  assert.equal(gate(salesReady, purchaseReady, null), null)
+  assert.equal(gate({ ...salesReady, orderStatus: 'CONFIRMED' }, purchaseReady, null), 'SALES_ORDER_NOT_READY')
+  assert.equal(gate({ ...salesReady, orderStatus: 'COMPLETED' }, purchaseReady, null), 'SALES_ORDER_NOT_READY')
+  assert.equal(gate({ ...salesReady, fulfillmentStatus: 'SEA_TRANSIT' }, purchaseReady, null), 'SALES_ORDER_NOT_READY')
+  assert.equal(gate({ ...salesReady, paymentStatus: 'PARTIALLY_PAID' }, purchaseReady, null), 'SALES_ORDER_NOT_READY')
+  assert.equal(gate({ ...salesReady, paymentStatus: 'UNPAID' }, purchaseReady, null), 'SALES_ORDER_NOT_READY')
+
+  // 已取消的订单两条渠道都挡；订单来源缺失（脏数据）与条件不满足同路，一律不放行。
+  assert.equal(gate({ ...salesReady, orderStatus: 'CANCELLED' }), 'SALES_ORDER_CANCELLED')
+  assert.equal(gate({ ...salesReady, orderStatus: 'CANCELLED' }, purchaseReady, null), 'SALES_ORDER_CANCELLED')
+  assert.equal(gate(null), 'SALES_ORDER_NOT_READY')
+
+  // 采购侧只看订单状态：COMPLETED 是服务端由事实派生的状态，
+  // 数据库还有 completed_requires_signed_paid 约束兜底其余两维。
+  assert.equal(gate(salesReady, { ...purchaseReady, orderStatus: 'CONFIRMED' }), 'PURCHASE_ORDER_NOT_READY')
+  assert.equal(gate(salesReady, { ...purchaseReady, orderStatus: 'PENDING_REVIEW' }), 'PURCHASE_ORDER_NOT_READY')
+  assert.equal(gate(salesReady, { ...purchaseReady, orderStatus: 'CANCELLED' }), 'PURCHASE_ORDER_NOT_READY')
+  assert.equal(gate(salesReady, null), 'PURCHASE_ORDER_NOT_READY')
+  // 两侧都不满足时先报销售（与页面销售在前的排布一致）。
+  assert.equal(
+    gate({ ...salesReady, fulfillmentStatus: 'SEA_TRANSIT' }, { ...purchaseReady, orderStatus: 'CONFIRMED' }),
+    'SALES_ORDER_NOT_SIGNED',
+  )
+  // 取值到文案键的映射各有一条，且三语齐全。
+  assert.equal(
+    resolveSlhReconciliationSettleBlockLabelKey('SALES_ORDER_NOT_SIGNED'),
+    'slhReconciliation.detail.settleBlockedSalesOrderUnsigned',
+  )
+  assert.equal(
+    resolveSlhReconciliationSettleBlockLabelKey('SALES_ORDER_NOT_READY'),
+    'slhReconciliation.detail.settleBlockedSalesOrder',
+  )
+  assert.equal(
+    resolveSlhReconciliationSettleBlockLabelKey('SALES_ORDER_CANCELLED'),
+    'slhReconciliation.detail.settleBlockedSalesOrderCancelled',
+  )
+  assert.equal(
+    resolveSlhReconciliationSettleBlockLabelKey('PURCHASE_ORDER_NOT_READY'),
+    'slhReconciliation.detail.settleBlockedPurchaseOrder',
+  )
+  for (const message of MESSAGES) {
+    assertTranslated(message.slhReconciliation.detail as unknown as Record<string, unknown>, [
+      'settleBlockedSalesOrder',
+      'settleBlockedSalesOrderUnsigned',
+      'settleBlockedSalesOrderCancelled',
+      'settleBlockedPurchaseOrder',
+    ])
+  }
+  assert.equal(zhCn.slhReconciliation.detail.settleBlockedSalesOrder, '销售订单尚未收齐，暂不能核对本行（纯直付行需为待对账、已签收且已付清）')
+  assert.equal(zhCn.slhReconciliation.detail.settleBlockedSalesOrderUnsigned, '销售订单未签收，暂不能核对本行')
+  assert.equal(zhCn.slhReconciliation.detail.settleBlockedSalesOrderCancelled, '销售订单已取消，暂不能核对本行')
+  assert.equal(zhCn.slhReconciliation.detail.settleBlockedPurchaseOrder, '采购订单未满足核对条件：需为已完成（已入仓且已付清）')
 })
 
 test('完成批次的多步步骤：三步只给最后一步挂真实请求，文案按账户→规则→入账排序', () => {
@@ -392,8 +470,9 @@ test('已核对明细的两个提示：切换过去弹轻提示，点「本行�
   assert.match(page, /toast\.info\(t\('slhReconciliation\.detail\.reconciledNotice'\)\)/u)
   assert.match(page, /const member = resolveSlhReconciliationSelectedMember\(members\.value, lineId\)/u)
 
-  // 点「本行核对正确」：已核对的行先开确认弹窗，确认后才打开对账信息弹窗。
-  assert.match(page, /function requestSettle\(\): void \{[\s\S]{0,200}?recheckOpen\.value = true/u)
+  // 点「本行核对正确」：先过订单状态门禁，未通过只给一句轻提示；通过后已核对的行再开确认弹窗。
+  assert.match(page, /const blockReason = resolveSlhReconciliationSettleBlockReason\(member\)\n {2}if \(blockReason !== null\) \{\n {4}toast\.info\(t\(resolveSlhReconciliationSettleBlockLabelKey\(blockReason\)\)\)\n {4}return\n {2}\}/u)
+  assert.match(page, /function requestSettle\(\): void \{[\s\S]{0,500}?recheckOpen\.value = true/u)
   assert.match(page, /async function confirmRecheck\(\): Promise<void> \{\n {2}recheckOpen\.value = false\n {2}await openSettleModal\(\)/u)
   assert.match(page, /v-model="recheckOpen"[\s\S]{0,160}?t\('slhReconciliation\.detail\.recheckTitle'\)/u)
   assert.match(page, /t\('slhReconciliation\.detail\.recheckHint'\)/u)
@@ -453,6 +532,8 @@ test('批次详情页：头部只给批次与账单标识、底部承接完成�
   // 成功才刷新并提示；失败立刻收尾（组件最短 2 秒不适用于失败路径）。
   assert.match(page, /function completeFinished\(\): void \{[\s\S]{0,240}?toast\.success\(t\('slhReconciliation\.detail\.completedToast'\)\)[\s\S]{0,120}?void load\(\)/u)
   assert.match(page, /function completeFailed\(failure: unknown\): void \{[\s\S]{0,200}?completeLoading\.value = false/u)
+  // 超收退回会重置核对留痕：失败后同样重读批次，让切换器与完成门禁反映服务端状态。
+  assert.match(page, /function completeFailed\(failure: unknown\): void \{[\s\S]{0,400}?void load\(\)/u)
   // 确认弹窗不再接 submitting：关闭发生在请求之前，不存在提交期间关闭的窗口。
   const completeModal = page.slice(page.indexOf('completeOpen'), page.indexOf('@click="confirmComplete"'))
   assert.doesNotMatch(completeModal, /:submitting=/u)

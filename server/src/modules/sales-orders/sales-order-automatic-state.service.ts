@@ -17,6 +17,8 @@ export type SalesOrderAutomaticReconciliationTrigger
     | 'FULFILLMENT'
     | 'PAYMENT'
     | 'PAYMENT_TERMS'
+    /// 顺联航账单对账完成时的代收货款回填。
+    | 'RECONCILIATION'
 
 export interface SalesOrderAutomaticStateContext {
   readonly actorUserId: string
