@@ -113,7 +113,7 @@ export class SalesOrderLineDto {
 }
 
 export class SalesOrderPaymentDto {
-  @ApiProperty({ enum: ['LEGACY', 'REVIEWED'] }) readonly origin!: 'LEGACY' | 'REVIEWED'
+  @ApiProperty({ enum: ['LEGACY', 'REVIEWED', 'COD_SETTLEMENT'] }) readonly origin!: 'LEGACY' | 'REVIEWED' | 'COD_SETTLEMENT'
   @ApiProperty({ type: 'string', nullable: true, format: 'uuid' }) readonly fundPostingBatchId!: string | null
   @ApiProperty({ type: 'string', nullable: true, format: 'uuid' }) readonly fundReversalBatchId!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly foreignUnitsPerCnySnapshot!: string | null
@@ -152,8 +152,9 @@ export class SalesOrderPaymentDto {
   @ApiProperty({ type: 'string', nullable: true })
   readonly voidReason!: string | null
 
-  @ApiProperty({ type: () => SalesOrderDocumentDto })
-  readonly voucher!: Readonly<Record<string, unknown>>
+  /** 代收回填收款没有收款凭证文件（凭证即对应的结算记录），此时为 null。 */
+  @ApiProperty({ type: () => SalesOrderDocumentDto, nullable: true })
+  readonly voucher!: Readonly<Record<string, unknown>> | null
 }
 
 export class SalesOrderDocumentDto {

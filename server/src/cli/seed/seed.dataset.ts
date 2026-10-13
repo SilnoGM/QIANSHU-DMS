@@ -100,6 +100,8 @@ export const SEED_DICTIONARIES: readonly SeedDictionaryType[] = [
       { value: 'CASH', label: '现金付款', tone: DictionaryTone.DEFAULT, sortOrder: 20 },
       { value: 'CHECK', label: '支票支付', tone: DictionaryTone.DEFAULT, sortOrder: 30 },
       { value: 'LETTER_OF_CREDIT', label: '信用证 L/C', tone: DictionaryTone.DEFAULT, sortOrder: 40 },
+      // 代收回填收款的固定收款方式：与迁移来源同标签、同排序，seed 只补缺失不覆盖。
+      { value: 'BILL_COD_SETTLEMENT', label: '账单代收结算', tone: DictionaryTone.DEFAULT, sortOrder: 50 },
     ],
   },
   {

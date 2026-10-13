@@ -12,6 +12,8 @@ const TITLE_LABELS: Readonly<Record<SalesOrderDocumentTitleKind, string>> = {
   INVOICE_TAX: '开票税金凭证',
   BALANCE: '尾款凭证',
   OTHER: '其他收款凭证',
+  // 代收回填收款不生成凭证文件，此标签仅为枚举穷尽性保留。
+  COD_BALANCE: '代收尾款凭证',
   DELIVERY_RECEIPT: '签收单',
 }
 

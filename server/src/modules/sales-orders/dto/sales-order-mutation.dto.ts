@@ -3,6 +3,7 @@ import { Type } from 'class-transformer'
 import {
   IsDefined,
   IsInt,
+  IsIn,
   Min,
   IsEnum,
   IsOptional,
@@ -20,6 +21,18 @@ import {
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 
 const AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,4})?$/u
+
+/**
+ * 收款申请可提交的类型：COD_BALANCE 是代收回填收款专用（由账单结算产生），
+ * 不开放给人工申请；枚举加值不会自动放宽这道口子。
+ */
+const SUBMITTABLE_PAYMENT_TYPES = [
+  SalesOrderPaymentType.DEPOSIT,
+  SalesOrderPaymentType.PROGRESS,
+  SalesOrderPaymentType.INVOICE_TAX,
+  SalesOrderPaymentType.BALANCE,
+  SalesOrderPaymentType.OTHER,
+] as const
 
 export class SalesOrderStatusRequestDto {
   @ApiProperty({ enum: SalesOrderStatus })
@@ -71,8 +84,8 @@ export class SalesOrderPaymentVoucherInputDto {
 }
 
 export class SalesOrderPaymentRequestDto {
-  @ApiProperty({ enum: SalesOrderPaymentType })
-  @IsEnum(SalesOrderPaymentType)
+  @ApiProperty({ enum: SUBMITTABLE_PAYMENT_TYPES })
+  @IsIn(SUBMITTABLE_PAYMENT_TYPES)
   paymentType!: SalesOrderPaymentType
 
   @ApiProperty({ type: 'string', pattern: AMOUNT_PATTERN.source })

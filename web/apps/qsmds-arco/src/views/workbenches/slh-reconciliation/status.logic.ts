@@ -55,31 +55,52 @@ export function resolveSlhReconciliationCompleteBlockLabelKey(reason: SlhReconci
   return COMPLETE_BLOCK_LABEL_KEYS[reason]
 }
 
-/** 「本行核对正确」的门禁原因：销售订单或采购订单未达到核对前置状态。 */
-export type SlhReconciliationSettleBlockReason = 'SALES_ORDER_NOT_READY' | 'PURCHASE_ORDER_NOT_READY'
+/** 「本行核对正确」的门禁原因：销售订单或采购订单未达到核对前置状态（销售侧按渠道分档）。 */
+export type SlhReconciliationSettleBlockReason
+  = | 'SALES_ORDER_CANCELLED'
+    | 'SALES_ORDER_NOT_SIGNED'
+    | 'SALES_ORDER_NOT_READY'
+    | 'PURCHASE_ORDER_NOT_READY'
 
 const SETTLE_BLOCK_LABEL_KEYS: Readonly<Record<SlhReconciliationSettleBlockReason, string>> = {
+  SALES_ORDER_CANCELLED: 'slhReconciliation.detail.settleBlockedSalesOrderCancelled',
+  SALES_ORDER_NOT_SIGNED: 'slhReconciliation.detail.settleBlockedSalesOrderUnsigned',
   SALES_ORDER_NOT_READY: 'slhReconciliation.detail.settleBlockedSalesOrder',
   PURCHASE_ORDER_NOT_READY: 'slhReconciliation.detail.settleBlockedPurchaseOrder',
 }
 
 /**
- * 「本行核对正确」的门禁：返回 null 表示可以核对。
+ * 「本行核对正确」的门禁：返回 null 表示可以核对。销售侧按渠道分档：
  *
- * 销售侧三个维度必须同时成立——待对账不蕴含已付清：待对账状态下仍允许作废收款，
- * 付款状态会回落而订单状态不会跟着退，因此付款状态必须单独查（已签收是履约终态，不会被回退）。
+ * - 本行涉及代收（账单代收有值）：钱由顺联航代收渠道回流，「收齐」由完成批次的代收回填完成，
+ *   因此核对前只要求销售订单已签收且未取消；
+ * - 本行不涉及代收（纯直付）：维持原口径——待对账 + 已签收 + 已付清；付款状态必须单独查
+ *   （待对账不蕴含已付清：待对账状态下仍允许作废收款，付款状态会回落而订单状态不会跟着退）。
+ *
  * 采购侧只查订单状态：`COMPLETED` 由服务端从履约与付款事实派生，数据库还有
  * `purchase_orders_completed_requires_signed_paid_check` 兜底，其余两维无需重复校验。
  * 订单来源缺失（脏数据）与条件不满足同路，从紧不放行。
  */
 export function resolveSlhReconciliationSettleBlockReason(member: {
+  readonly codAmountTwd?: string | null
   readonly salesOrder?: Pick<SlhReconciliationMatchedSalesOrderDto, 'orderStatus' | 'fulfillmentStatus' | 'paymentStatus'> | null
   readonly purchaseOrder?: Pick<SlhReconciliationMatchedPurchaseOrderDto, 'orderStatus' | 'fulfillmentStatus' | 'paymentStatus'> | null
 }): SlhReconciliationSettleBlockReason | null {
   const sales = member.salesOrder ?? null
-  if (
-    sales === null
-    || sales.orderStatus !== 'PENDING_RECONCILIATION'
+  if (sales === null) {
+    return 'SALES_ORDER_NOT_READY'
+  }
+  if (sales.orderStatus === 'CANCELLED') {
+    return 'SALES_ORDER_CANCELLED'
+  }
+  const involvesCod = member.codAmountTwd !== null && member.codAmountTwd !== undefined
+  if (involvesCod) {
+    if (sales.fulfillmentStatus !== 'SIGNED') {
+      return 'SALES_ORDER_NOT_SIGNED'
+    }
+  }
+  else if (
+    sales.orderStatus !== 'PENDING_RECONCILIATION'
     || sales.fulfillmentStatus !== 'SIGNED'
     || sales.paymentStatus !== 'PAID'
   ) {

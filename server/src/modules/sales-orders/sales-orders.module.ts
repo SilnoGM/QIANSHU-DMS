@@ -35,6 +35,8 @@ import { SalesOrdersController } from './sales-orders.controller'
     ProductsModule,
   ],
   controllers: [SalesOrderPendingPurchaseController, SalesOrdersController, SalesReceiptController, SalesReceiptOrderController],
+  // 自动进待对账服务由顺联航对账域的完成批次复用（代收回填后推进订单）。
+  exports: [SalesOrderAutomaticStateService],
   providers: [
     SalesReceiptService, SalesReceiptQueryService, SalesReceiptVoucherService,
     SalesOrderQueryService,

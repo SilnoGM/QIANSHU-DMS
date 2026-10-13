@@ -147,6 +147,8 @@ enum AuditEventType {
   PURCHASE_ORDER_PAYMENT_VOIDED
   PURCHASE_ORDER_DOCUMENT_ATTACHED
   PURCHASE_ORDER_DOCUMENT_DETACHED
+  /// 完成批次因代收超收被退回、相关行重置为未核对的审计事件。追加在末尾与数据库枚举顺序一致。
+  SLH_RECONCILIATION_BATCH_COMPLETION_REJECTED
 
   @@map("audit_event_type")
 }
@@ -286,6 +288,8 @@ enum SalesReceiptRequestStatus {
 enum SalesOrderPaymentOrigin {
   LEGACY
   REVIEWED
+  /// 代收货款渠道：由顺联航账单对账完成时的结算回填产生，不经过收款申请审核。
+  COD_SETTLEMENT
 
   @@map("sales_order_payment_origin")
 }
@@ -296,6 +300,8 @@ enum SalesOrderPaymentType {
   INVOICE_TAX
   BALANCE
   OTHER
+  /// 代收尾款：系统回填收款专用，不开放给收款申请选择。追加在末尾与数据库枚举顺序一致。
+  COD_BALANCE
 
   @@map("sales_order_payment_type")
 }
@@ -1054,9 +1060,12 @@ model SalesOrderPayment {
   exchangeRateVersionSnapshot Int? @map("exchange_rate_version_snapshot")
   foreignUnitsPerCnySnapshot Decimal? @map("foreign_units_per_cny_snapshot") @db.Decimal(30, 12)
   exchangeRateCapturedAt DateTime? @map("exchange_rate_captured_at") @db.Timestamptz(6)
+  /// 代收回填的溯源锚点：非空时唯一指向产生这笔收款的结算记录；其余来源恒为空。
+  slhReconciliationSettlementId String? @unique(map: "sales_order_payments_reconciliation_settlement_key") @map("slh_reconciliation_settlement_id") @db.Uuid
   fundPostingBatch FundPostingBatch? @relation("ReceiptPostingBatch", fields: [fundPostingBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   fundReversalBatch FundPostingBatch? @relation("ReceiptReversalBatch", fields: [fundReversalBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   exchangeRate ExchangeRate? @relation(fields: [exchangeRateId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  slhReconciliationSettlement SlhReconciliationSettlement? @relation("SlhReconciliationSettlementPayments", fields: [slhReconciliationSettlementId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   receiptRequest SalesReceiptRequest?
 
   salesOrder SalesOrder           @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
@@ -2308,6 +2317,8 @@ model SlhReconciliationSettlement {
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   createdBy User @relation("SlhReconciliationSettlementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// 由本结算记录回填产生的销售收款（0..1）。
+  payments SalesOrderPayment[] @relation("SlhReconciliationSettlementPayments")
 
   @@unique([createdById, requestKeyHash], map: "slh_reconciliation_settlements_actor_request_key")
   @@index([batchId, createdAt(sort: Desc)], map: "slh_reconciliation_settlements_batch_created_idx")

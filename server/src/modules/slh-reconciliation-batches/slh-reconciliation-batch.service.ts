@@ -15,6 +15,12 @@ import {
 import { FundPostingService } from '../fund-accounts/application/fund-posting.contract'
 import type { FundBusinessTransactionContext, PostBusinessEventInput } from '../fund-accounts/application/fund-posting.contract'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
+import {
+  deriveSalesOrderPaymentStatus,
+  formatSalesOrderAmountUnits,
+  sumSalesOrderReceivedUnits,
+} from '../sales-orders/domain/sales-order-decimal'
+import { SalesOrderAutomaticStateService } from '../sales-orders/sales-order-automatic-state.service'
 import { slhBillUuid } from '../slh-bills/slh-bill.normalizer'
 import { mapSlhReconciliationBatchError, slhReconciliationBatchFailure } from './slh-reconciliation-batch.errors'
 import { matchBillUnreconciledLines } from './slh-reconciliation-batch.matcher'
@@ -42,6 +48,10 @@ const SETTLEMENT_PAYLOAD_FORMAT = 'slh-reconciliation-settlement.create.v1'
 /** 完成批次入账的摘要：结算与金流费用是两个独立动作、两条资金流水。 */
 const COMPLETION_SETTLEMENT_SUMMARY = '顺联航账单对账结算'
 const COMPLETION_FEE_SUMMARY = '顺联航账单全流程金流费用'
+/** 代收回填收款的收款方式：受控字典值，数据库形状约束锁定同一值。 */
+const COD_SETTLEMENT_PAYMENT_METHOD = 'BILL_COD_SETTLEMENT'
+/** 代收回填收款的固定备注。 */
+const COD_SETTLEMENT_PAYMENT_REMARK = 'COD代收货款顺联航账单结算'
 
 export interface SlhReconciliationBatchCommandContext { actorUserId: string, requestId: string }
 
@@ -51,15 +61,25 @@ export interface SlhReconciliationBatchCommandContext { actorUserId: string, req
  */
 interface CompletedBatchMemberRecord {
   readonly id: string
+  readonly lineId: string
   readonly reconciledAt: Date | null
+  readonly line: { readonly lineNumber: number }
   readonly settlements: readonly {
     readonly id: string
     readonly salesOrderId: string
     readonly settlementAmountCny: Prisma.Decimal | null
     readonly paymentFeeAmountCny: Prisma.Decimal | null
+    readonly codAmountTwd: Prisma.Decimal | null
+    readonly createdAt: Date
     readonly rateSource: string
     readonly foreignUnitsPerCny: Prisma.Decimal
   }[]
+}
+
+/** 完成事务里成员与它当前有效结算的配对：回填、入账与超收退回都以它为最小单位。 */
+type ReconciledMemberSettlement = {
+  readonly member: CompletedBatchMemberRecord
+  readonly settlement: CompletedBatchMemberRecord['settlements'][number]
 }
 
 const hash = (input: unknown) => createHash('sha256').update(JSON.stringify(input)).digest('hex')
@@ -75,6 +95,7 @@ export class SlhReconciliationBatchService {
     private readonly access: AccessControlService,
     private readonly audit: AuditService,
     private readonly funds: FundPostingService,
+    private readonly salesOrderStates: SalesOrderAutomaticStateService,
   ) {}
 
   /** 与账单写路径同一口径：事务内复核用户状态与权限，前端条件不可信。 */
@@ -154,6 +175,18 @@ export class SlhReconciliationBatchService {
             return slhReconciliationBatchFailure('SLH_RECON_BATCH_SCOPE_CHANGED', '可核对的行已发生变化，请重新查看核对范围', 409)
           }
         }
+        // 顺联航对账域只支持台币销售单与台币账单（代收回填按 1:1）。非台币订单在创建口拒绝，
+        // 不进入批次后静默按 1:1 回填；销售来源缺失的行不在此断言范围（结算与完成时会单独拦）。
+        const foreignCurrency = await tx.containerLoadingItem.findFirst({
+          where: {
+            id: { in: matched.map(item => item.loadingItemId) },
+            shipment: { purchaseOrder: { salesOrder: { currencyCode: { not: 'TWD' } } } },
+          },
+          select: { id: true },
+        })
+        if (foreignCurrency !== null) {
+          return slhReconciliationBatchFailure('SLH_RECON_SALES_CURRENCY_UNSUPPORTED', '该账单匹配到非台币销售订单，当前对账仅支持台币订单', 409)
+        }
 
         const issuance = await this.numbering.generateScopedInTransaction(tx, {
           ruleCode: BATCH_RULE, consumerCode: BATCH_CONSUMER,
@@ -192,30 +225,49 @@ export class SlhReconciliationBatchService {
   }
 
   /**
-   * 完成批次对账：结束本次对账，解除账单占用，并把每行的核对结果入账。
+   * 完成批次对账：结束本次对账，解除账单占用，把每行的核对结果入账并回填代收货款收款。
    *
    * 允许账单仍有未核对的行：剩余行留给下一次对账重新发起。结束是单次动作，
-   * 已结束的批次不能再次结束。入账与完成同一事务：任一笔失败（账户未配置、规则不可用、
-   * 金额非法）整体回滚，批次保持进行中，不留下「已完成但没有资金事实」的批次。
+   * 已结束的批次不能再次结束。全部校验、回填、入账与完成同一事务：任一失败整体回滚，
+   * 批次保持进行中。唯一的例外是代收超收——同一事务内先把相关行退回未核对、作废其结算记录，
+   * 提交这份重置后再以业务失败响应（批次同样保持进行中，等待重新核对）。
    */
   async complete(context: SlhReconciliationBatchCommandContext, id: string): Promise<SlhReconciliationBatchDetailDto> {
     const batchId = slhReconciliationBatchUuid(id)
     try {
-      await this.prisma.$transaction(async tx => {
+      const rejection = await this.prisma.$transaction(async tx => {
         await applyTransactionTimeouts(tx)
         await this.authorize(tx, context.actorUserId, PERMISSION)
+        // 批次行锁：与「确认结算」串行化，并挡住两个并发完成。
+        const lockedBatch = await tx.$queryRaw<Array<{ id: string, completed_at: Date | null }>>(Prisma.sql`
+          SELECT "id", "completed_at"
+          FROM "slh_reconciliation_batches"
+          WHERE "id" = ${batchId}::uuid
+          FOR UPDATE
+        `)
+        const batchRow = lockedBatch[0]
+        if (batchRow === undefined) {
+          return slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_FOUND', '对账批次不存在', 404)
+        }
+        if (batchRow.completed_at !== null) {
+          return slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_IN_PROGRESS', '该批次已经结束', 409)
+        }
         const batch = await tx.slhReconciliationBatch.findUnique({
           where: { id: batchId },
           select: {
-            id: true, batchNo: true, completedAt: true,
+            id: true, batchNo: true,
             bill: { select: { slhBillNo: true } },
             members: {
+              orderBy: { id: 'asc' },
               select: {
-                id: true, reconciledAt: true,
+                id: true, lineId: true, reconciledAt: true,
+                line: { select: { lineNumber: true } },
                 settlements: {
                   where: { status: 'ACTIVE' },
+                  orderBy: { createdAt: 'asc' },
                   select: {
                     id: true, salesOrderId: true, settlementAmountCny: true, paymentFeeAmountCny: true,
+                    codAmountTwd: true, createdAt: true,
                     rateSource: true, foreignUnitsPerCny: true,
                   },
                 },
@@ -226,10 +278,24 @@ export class SlhReconciliationBatchService {
         if (!batch) {
           return slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_FOUND', '对账批次不存在', 404)
         }
-        if (batch.completedAt !== null) {
-          return slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_IN_PROGRESS', '该批次已经结束', 409)
+        // 完成前必须全部已核对：核对与留痕在结算事务里一起写入，缺留痕的行不能被完成吞掉。
+        if (batch.members.some(member => member.reconciledAt === null)) {
+          return slhReconciliationBatchFailure('SLH_RECON_BATCH_UNRECONCILED_MEMBERS', '还有明细行未完成核对，不能完成批次对账', 409)
         }
-        const postingBatchIds = await this.postCompletedMembers(tx, context, batchId, batch.batchNo, batch.bill.slhBillNo, batch.members)
+        const reconciled = batch.members.flatMap(member => member.settlements.map(settlement => ({ member, settlement })))
+        if (reconciled.length !== batch.members.length) {
+          return slhReconciliationBatchFailure('SLH_RECON_BATCH_STATE_CHANGED', '批次核对留痕不完整，请刷新后重试', 409)
+        }
+        let postingBatchIds: readonly string[] = []
+        let backfilledPaymentCount = 0
+        if (reconciled.length > 0) {
+          const writeBack = await this.postCompletionSettlement(tx, context, batch, reconciled)
+          if (writeBack.kind === 'REJECTED') {
+            return writeBack
+          }
+          postingBatchIds = writeBack.postingBatchIds
+          backfilledPaymentCount = writeBack.backfilledPaymentCount
+        }
         await tx.slhReconciliationBatch.update({
           where: { id: batchId },
           data: {
@@ -249,12 +315,205 @@ export class SlhReconciliationBatchService {
             // 逐笔关联在资金侧可回查（资金批次的 business_id = 结算记录 id）。
             fundPostingCount: postingBatchIds.length,
             fundPostingBatchId: postingBatchIds.length === 1 ? postingBatchIds[0] ?? null : null,
+            backfilledPaymentCount,
           },
         })
+        return null
       }, { timeout: 60_000 })
+      if (rejection !== null) {
+        return slhReconciliationBatchFailure(rejection.code, rejection.message, 409)
+      }
       return await this.queries.detail(batchId)
     }
     catch (error) { return mapSlhReconciliationBatchError(error) }
+  }
+
+  /**
+   * 完成批次的结算回填：锁内校验（订单可用/币种/取消/待审收款/超收）→ 逐行入账 → 回填 COD 收款
+   * → 重算付款状态并驱动「已签收且已付清 → 待对账」的自动推进。
+   *
+   * 超收不封顶：账单代收合计超出订单实际待收款时，把该订单在本批次的全部已核对行退回未核对、
+   * 作废其结算记录，然后拒绝本次完成（重置与检测在同一事务提交，入账与回填都不执行）；
+   * 少收只写实收金额，差额留给直付渠道追收。
+   * 调用方须已持有批次行锁；销售订单行锁在本方法内按既有锁序取得。
+   */
+  private async postCompletionSettlement(
+    tx: Prisma.TransactionClient,
+    context: SlhReconciliationBatchCommandContext,
+    batch: { readonly id: string, readonly batchNo: string, readonly bill: { readonly slhBillNo: string } },
+    reconciled: readonly ReconciledMemberSettlement[],
+  ): Promise<
+    | { readonly kind: 'REJECTED', readonly code: string, readonly message: string }
+    | { readonly kind: 'POSTED', readonly postingBatchIds: readonly string[], readonly backfilledPaymentCount: number }
+  > {
+    const orderIds = [...new Set(reconciled.map(entry => entry.settlement.salesOrderId))].sort()
+    // 锁序：批次行 → 销售订单行（升序）→ 资金账户，与收款审核/采购付款的「业务行先于账户」一致。
+    // 回填的残额判定必须在订单行锁内，否则并发完成或收款审核可能各写一笔越过约定总额。
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "sales_orders"
+      WHERE "id" IN (${Prisma.join(orderIds.map(orderId => Prisma.sql`${orderId}::uuid`))})
+      ORDER BY "id" FOR UPDATE
+    `)
+    const orders = await tx.salesOrder.findMany({
+      where: { id: { in: orderIds } },
+      select: {
+        id: true, orderNo: true, orderStatus: true, currencyCode: true, agreedTotalAmount: true,
+        payments: { select: { amount: true, voidedAt: true } },
+        receiptRequests: { where: { status: 'PENDING_REVIEW' }, select: { amount: true } },
+      },
+    })
+    const orderById = new Map(orders.map(order => [order.id, order]))
+    // 超收检测：账单代收合计（本批次该订单全部已核对行）对比实际待收款（锁内重读）。
+    const overcollected: Array<{
+      readonly orderId: string
+      readonly orderNo: string
+      readonly lineNumbers: readonly number[]
+      readonly collected: Prisma.Decimal
+      readonly outstanding: Prisma.Decimal
+    }> = []
+    for (const orderId of orderIds) {
+      const order = orderById.get(orderId)
+      if (order === undefined) {
+        return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_SOURCE_MISSING', '这一行的销售订单已不可用，暂时无法入账', 409)
+      }
+      // 创建与结算都已断言台币；这里再挡一次，避免非台币订单被按 1:1 回填。
+      if (order.currencyCode !== 'TWD') {
+        return slhReconciliationBatchFailure('SLH_RECON_SALES_CURRENCY_UNSUPPORTED', '销售订单不是台币，暂不支持对账', 409)
+      }
+      if (order.orderStatus === 'CANCELLED') {
+        return slhReconciliationBatchFailure('SLH_RECON_BATCH_STATE_CHANGED', `销售订单 ${order.orderNo} 已取消，请刷新核对`, 409)
+      }
+      const entries = reconciled.filter(entry => entry.settlement.salesOrderId === orderId)
+      let collected = new Prisma.Decimal(0)
+      for (const entry of entries) {
+        if (entry.settlement.codAmountTwd !== null) {
+          collected = collected.plus(entry.settlement.codAmountTwd)
+        }
+      }
+      const received = new Prisma.Decimal(formatSalesOrderAmountUnits(sumSalesOrderReceivedUnits(order.payments)))
+      const outstanding = order.agreedTotalAmount.minus(received)
+      // 回填会顶到数据库的「待审核收款预留金额」不变量：叠加后超过约定总额时先让财务处理申请，
+      // 否则收尾的订单更新会以延迟约束失败回滚，报出无法理解的系统错误。
+      const pending = order.receiptRequests.reduce((sum, request) => sum.plus(request.amount), new Prisma.Decimal(0))
+      if (pending.gt(0) && received.plus(collected).plus(pending).gt(order.agreedTotalAmount)) {
+        return slhReconciliationBatchFailure('SLH_RECON_BATCH_PENDING_RECEIPTS', `销售订单 ${order.orderNo} 的待审核收款与代收回填金额叠加超过约定总额，请先处理收款申请`, 409)
+      }
+      if (collected.gt(outstanding)) {
+        overcollected.push({
+          orderId, orderNo: order.orderNo,
+          lineNumbers: entries.map(entry => entry.member.line.lineNumber),
+          collected, outstanding,
+        })
+      }
+    }
+    if (overcollected.length > 0) {
+      // 重置范围＝该订单在本批次的全部已核对行：金额互相牵连，只退回触发行重新核对仍可能对不上。
+      const rejectedOrderIds = new Set(overcollected.map(item => item.orderId))
+      const rejected = reconciled.filter(entry => rejectedOrderIds.has(entry.settlement.salesOrderId))
+      await tx.slhReconciliationBatchLine.updateMany({
+        where: { id: { in: rejected.map(entry => entry.member.id) } },
+        data: { reconciledAt: null, reconciledById: null },
+      })
+      // 账单行的核对标记是账单三态的唯一来源，与批次进度一起退回。
+      await tx.slhBillLine.updateMany({
+        where: { id: { in: rejected.map(entry => entry.member.lineId) } },
+        data: { reconciledAt: null },
+      })
+      // 已核对记录作废：结算记录只允许 ACTIVE → SUPERSEDED 的受控转换，历史留在核对记录里可查。
+      await tx.slhReconciliationSettlement.updateMany({
+        where: { batchLineId: { in: rejected.map(entry => entry.member.id) }, status: 'ACTIVE' },
+        data: { status: 'SUPERSEDED' },
+      })
+      const detail = overcollected
+        .map(item => `第 ${item.lineNumbers.join('、')} 行（订单 ${item.orderNo}）：账单代收合计 NT$${item.collected.toFixed(2)} 超出实际待收款 NT$${item.outstanding.toFixed(2)}`)
+        .join('；')
+      const message = [...`${detail}，本行未核对正确，已退回重新核对`].slice(0, 500).join('')
+      await this.audit.record(tx, {
+        eventType: 'SLH_RECONCILIATION_BATCH_COMPLETION_REJECTED', outcome: 'SUCCESS', actorType: 'USER',
+        actorUserId: context.actorUserId, requestId: context.requestId,
+        targetType: 'SLH_RECONCILIATION_BATCH', targetId: batch.id,
+        metadata: {
+          batchNo: batch.batchNo, slhBillNo: batch.bill.slhBillNo,
+          rejectedOrderCount: overcollected.length,
+          rejectedMemberCount: rejected.length,
+          firstRejectedOrderNo: overcollected[0]?.orderNo ?? null,
+          firstCollectedTwd: overcollected[0]?.collected.toFixed(2) ?? null,
+          firstOutstandingTwd: overcollected[0]?.outstanding.toFixed(2) ?? null,
+        },
+      })
+      return { kind: 'REJECTED', code: 'SLH_RECON_SETTLEMENT_COD_OVERCOLLECTED', message }
+    }
+    // 入账先于回填：回填收款要绑定该行 RECONCILE 入账的资金批次（金额为零的结算行没有批次，绑空）。
+    const posted = await this.postCompletedMembers(tx, context, batch, reconciled)
+    let backfilledPaymentCount = 0
+    for (const entry of reconciled) {
+      const cod = entry.settlement.codAmountTwd
+      if (cod === null || cod.isZero()) {
+        continue
+      }
+      await tx.salesOrderPayment.create({
+        data: {
+          salesOrderId: entry.settlement.salesOrderId,
+          paymentType: 'COD_BALANCE',
+          amount: cod,
+          // 收款时间＝结算时间；备注固定文案，来源靠 origin 标识。
+          receivedAt: entry.settlement.createdAt,
+          paymentMethod: COD_SETTLEMENT_PAYMENT_METHOD,
+          remark: COD_SETTLEMENT_PAYMENT_REMARK,
+          createdByUserId: context.actorUserId,
+          origin: 'COD_SETTLEMENT',
+          slhReconciliationSettlementId: entry.settlement.id,
+          fundPostingBatchId: posted.reconcileBatchIdBySettlementId.get(entry.settlement.id) ?? null,
+        },
+      })
+      backfilledPaymentCount += 1
+    }
+    // 回填后按订单重算付款状态并驱动自动推进（与收款审核同一条派生链路）。
+    for (const orderId of orderIds) {
+      await this.refreshSalesOrderPaymentStatus(tx, context, batch, orderId)
+    }
+    return { kind: 'POSTED', postingBatchIds: posted.postingBatchIds, backfilledPaymentCount }
+  }
+
+  /**
+   * 回填后重算订单付款状态：与销售域的派生口径同源（未作废收款累加对约定总额），
+   * 并由自动状态服务把「已签收且已付清」的订单推进到待对账（与收款审核走同一服务）。
+   */
+  private async refreshSalesOrderPaymentStatus(
+    tx: Prisma.TransactionClient,
+    context: SlhReconciliationBatchCommandContext,
+    batch: { readonly bill: { readonly slhBillNo: string } },
+    salesOrderId: string,
+  ): Promise<void> {
+    const order = await tx.salesOrder.findUnique({
+      where: { id: salesOrderId },
+      select: {
+        id: true, paymentStatus: true, agreedTotalAmount: true,
+        payments: { select: { amount: true, voidedAt: true } },
+      },
+    })
+    if (order === null) {
+      return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_SOURCE_MISSING', '这一行的销售订单已不可用，暂时无法入账', 409)
+    }
+    const received = formatSalesOrderAmountUnits(sumSalesOrderReceivedUnits(order.payments))
+    const newStatus = deriveSalesOrderPaymentStatus(order.agreedTotalAmount.toFixed(4), received)
+    if (newStatus !== order.paymentStatus) {
+      await tx.salesOrder.update({
+        where: { id: order.id },
+        data: { paymentStatus: newStatus, version: { increment: 1 } },
+      })
+      await tx.salesOrderStatusHistory.create({
+        data: {
+          salesOrderId: order.id,
+          dimension: 'PAYMENT',
+          fromStatus: order.paymentStatus,
+          toStatus: newStatus,
+          reason: `顺联航账单 ${batch.bill.slhBillNo} 结算回填代收货款，重算累计有效收款 ${received}，约定总额 ${order.agreedTotalAmount.toFixed(4)}`,
+          changedByUserId: context.actorUserId,
+        },
+      })
+    }
+    await this.salesOrderStates.advanceToPendingReconciliationWhenEligible(tx, context, order.id, 'RECONCILIATION')
   }
 
   /**
@@ -268,17 +527,18 @@ export class SlhReconciliationBatchService {
    * 对应多行账单（多货件，或一个货件装柜时拆成多个唛头/装柜行），逐行入账会按行数翻倍。
    * 因此费用按销售单去重：同一销售单只入一次，以**首次遇到的那一行**的汇率快照与费用为准，
    * 已入过就跳过（不重算、不补差）。
+   *
+   * 返回值同时给出「结算记录 id → RECONCILE 入账批次 id」的映射：代收回填收款要绑定它。
    */
   private async postCompletedMembers(
     tx: Prisma.TransactionClient,
     context: SlhReconciliationBatchCommandContext,
-    batchId: string,
-    batchNo: string,
-    slhBillNo: string,
-    members: readonly CompletedBatchMemberRecord[],
-  ): Promise<string[]> {
-    const reconciled = members.flatMap(member => member.settlements.map(settlement => ({ memberId: member.id, settlement })))
-    if (reconciled.length === 0) return []
+    batch: { readonly id: string, readonly batchNo: string, readonly bill: { readonly slhBillNo: string } },
+    reconciled: readonly ReconciledMemberSettlement[],
+  ): Promise<{ postingBatchIds: string[], reconcileBatchIdBySettlementId: Map<string, string> }> {
+    if (reconciled.length === 0) {
+      return { postingBatchIds: [], reconcileBatchIdBySettlementId: new Map() }
+    }
     const salesOrderIds = [...new Set(reconciled.map(entry => entry.settlement.salesOrderId))]
     const orders = await tx.salesOrder.findMany({
       where: { id: { in: salesOrderIds } },
@@ -297,17 +557,22 @@ export class SlhReconciliationBatchService {
     })
     const feeChargedOrderIds = new Set(charged.map(row => row.businessId))
     const metadata = (memberId: string, settlementId: string, salesOrderNo: string, rateSource: string, foreignUnitsPerCny: string) => ({
-      slhReconciliationBatchId: batchId,
-      slhReconciliationBatchNo: batchNo,
+      slhReconciliationBatchId: batch.id,
+      slhReconciliationBatchNo: batch.batchNo,
       slhReconciliationBatchLineId: memberId,
       slhReconciliationSettlementId: settlementId,
       slhReconciliationSalesOrderNo: salesOrderNo,
-      slhBillNo,
+      slhBillNo: batch.bill.slhBillNo,
       rateSource,
       foreignUnitsPerCny,
     })
-    const entries: Array<{ context: FundBusinessTransactionContext, input: PostBusinessEventInput }> = []
-    for (const { memberId, settlement } of reconciled) {
+    const entries: Array<{
+      readonly kind: 'RECONCILE' | 'FEE'
+      readonly settlementId: string | null
+      readonly context: FundBusinessTransactionContext
+      readonly input: PostBusinessEventInput
+    }> = []
+    for (const { member, settlement } of reconciled) {
       const order = orderById.get(settlement.salesOrderId)
       if (order === undefined) {
         return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_SOURCE_MISSING', '这一行的销售订单已不可用，暂时无法入账', 409)
@@ -317,12 +582,14 @@ export class SlhReconciliationBatchService {
       const settlementAmount = settlement.settlementAmountCny
       if (settlementAmount !== null && !settlementAmount.isZero()) {
         entries.push({
+          kind: 'RECONCILE',
+          settlementId: settlement.id,
           context: { ...context, sourceCode: SLH_BILL_FINANCE_SETTLEMENT_SOURCE, consumerCode: SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER },
           input: {
             postingTypeCode: SLH_BILL_SETTLEMENT_POSTING_TYPE, userId: order.issuerUserId,
-            amount: settlementAmount.toFixed(2), businessId: settlement.id, businessNo: batchNo,
+            amount: settlementAmount.toFixed(2), businessId: settlement.id, businessNo: batch.batchNo,
             summary: COMPLETION_SETTLEMENT_SUMMARY,
-            metadata: metadata(memberId, settlement.id, order.orderNo, rateSource, foreignUnitsPerCny),
+            metadata: metadata(member.id, settlement.id, order.orderNo, rateSource, foreignUnitsPerCny),
             idempotencyKey: `${settlement.id}:RECONCILE`,
           },
         })
@@ -332,28 +599,36 @@ export class SlhReconciliationBatchService {
       if (feeAmount !== null && feeAmount.gt(0) && !feeChargedOrderIds.has(order.id)) {
         feeChargedOrderIds.add(order.id)
         entries.push({
+          kind: 'FEE',
+          settlementId: null,
           context: { ...context, sourceCode: SLH_BILL_FINANCE_SETTLEMENT_SOURCE, consumerCode: SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER },
           input: {
             postingTypeCode: SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE, userId: order.issuerUserId,
             amount: feeAmount.toFixed(2), businessId: order.id, businessNo: order.orderNo,
             summary: COMPLETION_FEE_SUMMARY,
-            metadata: metadata(memberId, settlement.id, order.orderNo, rateSource, foreignUnitsPerCny),
+            metadata: metadata(member.id, settlement.id, order.orderNo, rateSource, foreignUnitsPerCny),
             idempotencyKey: `${order.id}:FEE`,
           },
         })
       }
     }
-    if (entries.length === 0) return []
+    if (entries.length === 0) {
+      return { postingBatchIds: [], reconcileBatchIdBySettlementId: new Map() }
+    }
     // 跨行批量入账先取齐账户集合并统一排序加锁：逐笔锁用户/公司组合可能形成反序等待。
     await this.funds.lockBusinessEventAccountsInTransaction(tx, entries)
     const postingBatchIds: string[] = []
+    const reconcileBatchIdBySettlementId = new Map<string, string>()
     for (const entry of entries) {
       // 预览与入账共用当前事务：规则版本、比例、账户金额任一并发变化都会以并发冲突失败并整体回滚。
       const preview = await this.funds.previewBusinessEventInTransaction(tx, entry.context, entry.input)
       const posting = await this.funds.postBusinessEventInTransaction(tx, entry.context, entry.input, preview)
       postingBatchIds.push(posting.batchId)
+      if (entry.kind === 'RECONCILE' && entry.settlementId !== null) {
+        reconcileBatchIdBySettlementId.set(entry.settlementId, posting.batchId)
+      }
     }
-    return postingBatchIds
+    return { postingBatchIds, reconcileBatchIdBySettlementId }
   }
 
   /**
@@ -450,6 +725,9 @@ export class SlhReconciliationBatchService {
         const salesOrder = purchaseOrder?.salesOrder ?? null
         if (purchaseOrder === null || salesOrder === null) {
           return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_SOURCE_MISSING', '这一行的采购或销售来源缺失，暂时无法结算', 409)
+        }
+        if (salesOrder.currencyCode !== 'TWD') {
+          return slhReconciliationBatchFailure('SLH_RECON_SALES_CURRENCY_UNSUPPORTED', '销售订单不是台币，暂不支持对账', 409)
         }
         const rate = await this.resolveSettlementRate(tx, input.rateSource, batch.billId, batch.bill.embeddedForeignUnitsPerCny)
         if (!new Prisma.Decimal(rate).equals(new Prisma.Decimal(input.rate))) {

@@ -313,6 +313,8 @@ function completeFinished(): void {
 function completeFailed(failure: unknown): void {
   completeLoading.value = false
   toast.error(containerFailure(failure).message, { duration: ACTION_ERROR_TOAST_DURATION })
+  // 代收超收的退回会在服务端重置核对留痕：失败后重读批次，让切换器与完成门禁反映最新状态。
+  void load()
 }
 
 watch(batchId, () => {

@@ -60,8 +60,10 @@ test('两类摘要缩略图随展开状态移除，过渡仅使用透明度和�
   assert.match(records, /transition: none/u)
   assert.doesNotMatch(records, /transition:[^;]*(?:width|height|margin|padding)/u)
   // 大图和单展开逻辑仍使用原组件，图片隐藏不能改变收款或凭证的关联。
-  assert.match(records, /<OrderDocument :document="payment\.voucher"/u)
+  // 收款凭证对代收回填为空：无凭证时走「凭证见结算记录」说明，不挂 OrderDocument。
+  assert.match(records, /<OrderDocument v-if="payment\.voucher" :document="payment\.voucher"/u)
   assert.match(records, /<OrderDocument :document="document"/u)
+  assert.match(records, /salesOrderDrawer\.noPaymentVoucher/u)
 })
 
 test('销售详情抽屉按需读取详情并使用 QsSalesOrderDrawer 展示', async () => {

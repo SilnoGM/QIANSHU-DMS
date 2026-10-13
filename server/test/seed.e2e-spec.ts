@@ -31,6 +31,7 @@ const expectedDictionaries: ReadonlyArray<readonly [string, readonly string[]]> 
     'ALIPAY',
     'WECHAT',
     'BANK_TRANSFER',
+    'BILL_COD_SETTLEMENT',
     'CASH',
     'CHECK',
     'LETTER_OF_CREDIT',

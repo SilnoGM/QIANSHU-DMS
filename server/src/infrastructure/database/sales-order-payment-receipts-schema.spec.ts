@@ -20,8 +20,12 @@ describe('sales order payment and receipt schema', () => {
   it('uses the confirmed payment and document types without referenceNo', () => {
     const schema = readFileSync(schemaPath, 'utf8')
 
+    // 代收回填专用值追加在末尾（与数据库枚举顺序一致）：DOC 注释允许出现在值之前。
     expect(extractPrismaBlock(schema, 'enum', 'SalesOrderPaymentType')).toMatch(
-      /DEPOSIT\s+PROGRESS\s+INVOICE_TAX\s+BALANCE\s+OTHER\s+@@map\("sales_order_payment_type"\)/u,
+      /DEPOSIT\s+PROGRESS\s+INVOICE_TAX\s+BALANCE\s+OTHER\s+(?:\/\/\/[^\n]*\n\s*)?COD_BALANCE\s+@@map\("sales_order_payment_type"\)/u,
+    )
+    expect(extractPrismaBlock(schema, 'enum', 'SalesOrderPaymentOrigin')).toMatch(
+      /LEGACY\s+REVIEWED\s+(?:\/\/\/[^\n]*\n\s*)?COD_SETTLEMENT\s+@@map\("sales_order_payment_origin"\)/u,
     )
     expect(extractPrismaBlock(schema, 'enum', 'SalesOrderDocumentType')).toMatch(
       /ORDER_ISSUANCE_VOUCHER\s+PAYMENT_VOUCHER\s+DELIVERY_RECEIPT\s+@@map\("sales_order_document_type"\)/u,
@@ -29,6 +33,8 @@ describe('sales order payment and receipt schema', () => {
 
     const payment = extractPrismaBlock(schema, 'model', 'SalesOrderPayment')
     expect(payment).not.toMatch(/^\s*referenceNo\s/mu)
+    // 代收回填的溯源锚点：可空、唯一，指向产生这笔收款的结算记录。
+    expect(payment).toMatch(/slhReconciliationSettlementId String\? @unique\(map: "sales_order_payments_reconciliation_settlement_key"\)/u)
   })
 
   it('migrates old data fail-closed and enforces document relationship cardinality', () => {
