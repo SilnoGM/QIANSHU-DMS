@@ -105,9 +105,9 @@ function setup() {
       })),
   }
   const automaticState = {
-    advanceToPendingReconciliationWhenEligible:
-      jest.fn<Promise<boolean>, [unknown, unknown, string, string]>()
-        .mockResolvedValue(false),
+    advanceWhenEligible:
+      jest.fn<Promise<'NONE'>, [unknown, unknown, string, string]>()
+        .mockResolvedValue('NONE'),
   }
   const service = new SalesOrderMutationService(
     prisma as unknown as PrismaService,
@@ -240,7 +240,7 @@ describe('SalesOrderMutationService', () => {
       { toStatus: 'SIGNED', reason: '客户已签收' },
     )).resolves.toEqual(fixture.detail)
 
-    expect(fixture.automaticState.advanceToPendingReconciliationWhenEligible)
+    expect(fixture.automaticState.advanceWhenEligible)
       .toHaveBeenCalledWith(
         fixture.transaction,
         context,
@@ -321,7 +321,7 @@ describe('SalesOrderMutationService', () => {
             },
           })
       }
-      expect(fixture.automaticState.advanceToPendingReconciliationWhenEligible)
+      expect(fixture.automaticState.advanceWhenEligible)
         .toHaveBeenCalledWith(
           fixture.transaction,
           context,
@@ -388,7 +388,7 @@ describe('SalesOrderMutationService', () => {
     expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
   })
 
-  it('rechecks signed and paid before completing a reconciliation order', async () => {
+  it('rejects manual completion: the completed state is advanced only by the automatic service', async () => {
     const fixture = setup()
     fixture.order.orderStatus = 'PENDING_RECONCILIATION'
     fixture.order.fulfillmentStatus = 'SIGNED'
@@ -397,26 +397,24 @@ describe('SalesOrderMutationService', () => {
       _sum: { amount: decimal('100.0000') },
     })
 
+    // 即便已签收已付清，手工入口也不允许把订单置为已完成（无论当前处于哪个状态）。
     await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
       toStatus: 'COMPLETED',
       reason: '对账确认无误',
-    })).resolves.toEqual(fixture.detail)
-    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
-      where: { id: ORDER_ID },
-      data: { orderStatus: 'COMPLETED', version: { increment: 1 } },
+    })).rejects.toMatchObject({
+      code: 'SALES_ORDER_COMPLETION_IS_AUTOMATIC',
     })
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
 
-    const blocked = setup()
-    blocked.order.orderStatus = 'PENDING_RECONCILIATION'
-    blocked.order.fulfillmentStatus = 'SIGNED'
-    blocked.order.paymentStatus = 'PARTIALLY_PAID'
-    await expect(blocked.service.updateOrderStatus(context, ORDER_ID, {
+    const confirmed = setup()
+    confirmed.order.orderStatus = 'CONFIRMED'
+    await expect(confirmed.service.updateOrderStatus(context, ORDER_ID, {
       toStatus: 'COMPLETED',
       reason: null,
     })).rejects.toMatchObject({
-      code: 'SALES_ORDER_COMPLETION_CONDITIONS_NOT_MET',
+      code: 'SALES_ORDER_COMPLETION_IS_AUTOMATIC',
     })
-    expect(blocked.transaction.salesOrder.update).not.toHaveBeenCalled()
+    expect(confirmed.transaction.salesOrder.update).not.toHaveBeenCalled()
   })
 
   it('freezes payment recording and voiding after completion', async () => {

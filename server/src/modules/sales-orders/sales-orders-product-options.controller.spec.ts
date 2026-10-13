@@ -611,7 +611,7 @@ describe('SalesOrdersController product options OpenAPI', () => {
       '/api/sales-orders/{salesOrderId}/order-status'
     ]?.patch
     const operationContract = JSON.stringify(readOperationContract(operation))
-    expect(operationContract).toContain('SALES_ORDER_COMPLETION_CONDITIONS_NOT_MET')
+    expect(operationContract).toContain('SALES_ORDER_COMPLETION_IS_AUTOMATIC')
     expect(operationContract).toContain('SALES_ORDER_RECONCILIATION_CONDITIONS_NOT_MET')
 
     for (const mutationContract of [

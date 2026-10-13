@@ -303,6 +303,15 @@ export class SlhReconciliationBatchService {
             updatedById: context.actorUserId, version: { increment: 1 },
           },
         })
+        // 订单状态收敛必须放在批次标记完成之后：完成判定要求「该订单的所有批次都已结束」，
+        // 本批次刚结束的事实要先在同一事务里落库，再按订单重评（判决读的是事务内的先后状态）。
+        // 已在待对账且对账已完结（口径 R3）的订单会在此自动完成；其余停在待对账等下一次事件。
+        let autoCompletedOrderCount = 0
+        for (const orderId of [...new Set(reconciled.map(entry => entry.settlement.salesOrderId))].sort()) {
+          if (await this.salesOrderStates.advanceWhenEligible(tx, context, orderId, 'RECONCILIATION') === 'COMPLETED') {
+            autoCompletedOrderCount += 1
+          }
+        }
         await this.audit.record(tx, {
           eventType: 'SLH_RECONCILIATION_BATCH_COMPLETED', outcome: 'SUCCESS', actorType: 'USER',
           actorUserId: context.actorUserId, requestId: context.requestId,
@@ -316,6 +325,7 @@ export class SlhReconciliationBatchService {
             fundPostingCount: postingBatchIds.length,
             fundPostingBatchId: postingBatchIds.length === 1 ? postingBatchIds[0] ?? null : null,
             backfilledPaymentCount,
+            autoCompletedOrderCount,
           },
         })
         return null
@@ -476,8 +486,9 @@ export class SlhReconciliationBatchService {
   }
 
   /**
-   * 回填后重算订单付款状态：与销售域的派生口径同源（未作废收款累加对约定总额），
-   * 并由自动状态服务把「已签收且已付清」的订单推进到待对账（与收款审核走同一服务）。
+   * 回填后重算订单付款状态：与销售域的派生口径同源（未作废收款累加对约定总额）。
+   * 订单状态收敛不在这里做——自动状态服务的完成判定要求「该订单的所有批次都已结束」，
+   * 必须等批次标记完成后再统一驱动（见 complete() 的时序说明）。
    */
   private async refreshSalesOrderPaymentStatus(
     tx: Prisma.TransactionClient,
@@ -513,7 +524,6 @@ export class SlhReconciliationBatchService {
         },
       })
     }
-    await this.salesOrderStates.advanceToPendingReconciliationWhenEligible(tx, context, order.id, 'RECONCILIATION')
   }
 
   /**

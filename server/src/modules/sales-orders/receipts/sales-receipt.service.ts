@@ -114,7 +114,7 @@ export class SalesReceiptService {
     const paymentStatus = deriveSalesOrderPaymentStatus(order.agreedTotalAmount.toFixed(4), paid._sum.amount?.toFixed(4) ?? '0.0000')
     await tx.salesOrder.update({ where: { id: order.id }, data: { paymentStatus, version: { increment: 1 } } })
     if (paymentStatus !== order.paymentStatus) await tx.salesOrderStatusHistory.create({ data: { salesOrderId: order.id, dimension: 'PAYMENT', fromStatus: order.paymentStatus, toStatus: paymentStatus, reason: changeReason, changedByUserId: context.actorUserId } })
-    if (advance) await this.automatic.advanceToPendingReconciliationWhenEligible(tx, context, order.id, 'PAYMENT')
+    if (advance) await this.automatic.advanceWhenEligible(tx, context, order.id, 'PAYMENT')
   }
   private async rate(tx: Tx, currencyCode: string) {
     // 与汇率写入端保持 Currency → ExchangeRate 的确定锁序，不依赖 JOIN 执行计划。

@@ -204,6 +204,13 @@ export class SalesOrderMutationService {
       return salesOrderValidationFailure('toStatus')
     }
     const toStatus = body.toStatus as SalesOrderStatus
+    // 已完成是派生态：只由自动状态服务在「对账已完结」时推进，手工入口一律拒绝。
+    if (toStatus === 'COMPLETED') {
+      return salesOrderRuleFailure(
+        'SALES_ORDER_COMPLETION_IS_AUTOMATIC',
+        '已完成由系统在对账完成后自动推进，不支持手动设置',
+      )
+    }
     const reason = optionalText(body.reason, 'reason', 500)
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
@@ -309,7 +316,7 @@ export class SalesOrderMutationService {
         metadata: { fromStatus: order.fulfillmentStatus, toStatus },
       })
       // 在同一事务内重新读取更新后的三个状态维度，避免调用方凭旧快照判断。
-      await this.automaticState.advanceToPendingReconciliationWhenEligible(
+      await this.automaticState.advanceWhenEligible(
         transaction,
         trusted,
         salesOrderId,
@@ -388,7 +395,7 @@ export class SalesOrderMutationService {
         targetId: salesOrderId,
         metadata: { reasonProvided: true },
       })
-      await this.automaticState.advanceToPendingReconciliationWhenEligible(
+      await this.automaticState.advanceWhenEligible(
         transaction,
         trusted,
         salesOrderId,

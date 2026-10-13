@@ -13,7 +13,7 @@ describe('收款引起的付款状态变更原因', () => {
       salesOrder: { update: jest.fn().mockResolvedValue({}) },
       salesOrderStatusHistory: { create },
     }
-    const automatic = { advanceToPendingReconciliationWhenEligible: jest.fn().mockResolvedValue(undefined) }
+    const automatic = { advanceWhenEligible: jest.fn().mockResolvedValue('NONE') }
     // 直接验证事务内部实际写入，避免测试触发真实资金分录。
     const update = SalesReceiptService.prototype['updatePaymentStatus']
     await update.call({ automatic } as unknown as SalesReceiptService, tx as unknown as Prisma.TransactionClient,
