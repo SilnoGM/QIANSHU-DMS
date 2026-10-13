@@ -438,10 +438,42 @@ async function verifyCurrentTag(input, dependencies) {
   return Object.freeze({ tagObjectSha })
 }
 
+/**
+ * 用户文案固定按这四个分类组织（顺序即模板顺序）：每类标题各出现一次、按顺序出现，
+ * 每类下至少有一行内容——该版没有就写「无」，不允许整类省略或留空节。
+ */
+const releaseNotesSections = Object.freeze(['功能新增', '功能优化', '缺陷修复', '已知问题'])
+
+function assertReleaseNotesSections(releaseNotes) {
+  const lines = releaseNotes.split('\n').map(line => line.trim())
+  let previousHeadingIndex = -1
+  for (const section of releaseNotesSections) {
+    const headingIndexes = lines.flatMap((line, position) => (line === section ? [position] : []))
+    if (headingIndexes.length !== 1) {
+      throw new Error(
+        `Release notes must have exactly one "${section}" section, found ${headingIndexes.length}`,
+      )
+    }
+    const headingIndex = headingIndexes[0]
+    if (headingIndex <= previousHeadingIndex) {
+      throw new Error(`Release notes sections must keep the documented order, "${section}" is out of place`)
+    }
+    previousHeadingIndex = headingIndex
+    const nextHeadingIndex = lines.findIndex(
+      (line, position) => position > headingIndex && releaseNotesSections.includes(line),
+    )
+    const body = lines.slice(headingIndex + 1, nextHeadingIndex === -1 ? lines.length : nextHeadingIndex)
+    if (body.every(line => line === '')) {
+      throw new Error(`Release notes section "${section}" must not be empty; write 无 when nothing changed`)
+    }
+  }
+}
+
 function assertUserFacingReleaseNotes(releaseNotes) {
   if (releaseNotes.includes(ownershipMarkerPrefix)) {
     throw new Error('Release notes must not contain the ownership marker')
   }
+  assertReleaseNotesSections(releaseNotes)
   const asciiMatch = releaseNotes.match(forbiddenReleaseNotesAsciiPattern)
   if (asciiMatch !== null) {
     throw new Error(

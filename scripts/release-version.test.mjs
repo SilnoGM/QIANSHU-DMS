@@ -20,7 +20,7 @@ import {
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const entrypoint = path.join(scriptsDirectory, 'release-version.mjs')
 // 用户视角的 Release 文案样本：不含技术词汇、代码标识符、路径或提交号。
-const releaseNotesFixture = '新增功能\n- 订单列表可以直接按柜号筛选\n\n问题修复\n- 修复了登录状态过期后部分页面出错的问题'
+const releaseNotesFixture = '功能新增\n- 订单列表可以直接按柜号筛选\n\n功能优化\n- 无\n\n缺陷修复\n- 修复了登录状态过期后部分页面出错的问题\n\n已知问题\n- 无'
 
 function gitResult(repositoryRoot, args, options = {}) {
   const result = spawnSync('git', args, {
@@ -605,6 +605,12 @@ test('Tag 技术文案不能为空', async (t) => {
 })
 
 test('用户文案缺失、为空、非文本或含技术痕迹时失败关闭', async (t) => {
+  // 技术词用例必须先把四个分类补齐：否则会先被分类闸门拦下，测不到词表。
+  const notesWithBody = (body, section = '缺陷修复') => {
+    const sections = { 功能新增: '- 无', 功能优化: '- 无', 缺陷修复: '- 无', 已知问题: '- 无' }
+    sections[section] = body
+    return Object.entries(sections).map(([title, content]) => `${title}\n${content}`).join('\n\n')
+  }
   const cases = [
     { name: 'missing file', notes: null, expected: /ENOENT/u },
     { name: 'empty file', notes: '\n\n', expected: /must not be empty/u },
@@ -614,13 +620,43 @@ test('用户文案缺失、为空、非文本或含技术痕迹时失败关闭',
       notes: '<!-- qianshu-release:{"schemaVersion":1} -->\n',
       expected: /ownership marker/u,
     },
-    { name: 'chinese jargon', notes: '问题修复\n- 修复了缓存导致的加载慢\n', expected: /technical vocabulary: 缓存/u },
-    { name: 'ascii jargon', notes: '问题修复\n- 修复了 API 返回异常\n', expected: /API/u },
-    { name: 'identifier', notes: '问题修复\n- 修复了 prepare() 的问题\n', expected: /function call/u },
-    { name: 'file path', notes: '问题修复\n- 修复了 libs/utils 的问题\n', expected: /file path/u },
-    { name: 'file name', notes: '问题修复\n- 修复了 types.gen.ts 的问题\n', expected: /file name/u },
-    { name: 'constant', notes: '问题修复\n- 修复了 MEDIA_STORAGE_ENV 的问题\n', expected: /constant name/u },
-    { name: 'commit hash', notes: '问题修复\n- 修复了 1b8e02ca 引入的问题\n', expected: /commit hash/u },
+    { name: 'chinese jargon', notes: notesWithBody('- 修复了缓存导致的加载慢'), expected: /technical vocabulary: 缓存/u },
+    { name: 'ascii jargon', notes: notesWithBody('- 修复了 API 返回异常'), expected: /API/u },
+    { name: 'identifier', notes: notesWithBody('- 修复了 prepare() 的问题'), expected: /function call/u },
+    { name: 'file path', notes: notesWithBody('- 修复了 libs/utils 的问题'), expected: /file path/u },
+    { name: 'file name', notes: notesWithBody('- 修复了 types.gen.ts 的问题'), expected: /file name/u },
+    { name: 'constant', notes: notesWithBody('- 修复了 MEDIA_STORAGE_ENV 的问题'), expected: /constant name/u },
+    { name: 'commit hash', notes: notesWithBody('- 修复了 1b8e02ca 引入的问题'), expected: /commit hash/u },
+  ]
+  for (const fixtureCase of cases) {
+    const fixture = await createValidReleaseFixture(t)
+    await rewriteReleaseNotes(fixture, fixtureCase.notes)
+    await assert.rejects(
+      verifyReleaseVersion(
+        verificationInput(fixture),
+        verificationDependencies(fixture),
+      ),
+      fixtureCase.expected,
+      fixtureCase.name,
+    )
+  }
+})
+
+test('用户文案必须按四个分类组织：缺分类、重复分类、顺序错乱或留空节都失败关闭', async (t) => {
+  const complete = [
+    ['功能新增', '- 无'],
+    ['功能优化', '- 无'],
+    ['缺陷修复', '- 无'],
+    ['已知问题', '- 无'],
+  ]
+  const render = sections => sections.map(([title, content]) => `${title}\n${content}`).join('\n\n')
+  const cases = [
+    { name: 'missing section', notes: render(complete.slice(0, 3)), expected: /exactly one "已知问题" section, found 0/u },
+    { name: 'missing first section', notes: render(complete.slice(1)), expected: /exactly one "功能新增" section, found 0/u },
+    { name: 'duplicated section', notes: render([...complete, ['功能新增', '- 又一条']]), expected: /exactly one "功能新增" section, found 2/u },
+    { name: 'out of order', notes: render([complete[1], complete[0], complete[2], complete[3]]), expected: /must keep the documented order/u },
+    { name: 'empty section body', notes: render(complete.map(([title]) => [title, ''])), expected: /section "功能新增" must not be empty/u },
+    { name: 'only the last section empty', notes: render(complete.map(([title, content], index) => [title, index === 3 ? '   ' : content])), expected: /section "已知问题" must not be empty/u },
   ]
   for (const fixtureCase of cases) {
     const fixture = await createValidReleaseFixture(t)
