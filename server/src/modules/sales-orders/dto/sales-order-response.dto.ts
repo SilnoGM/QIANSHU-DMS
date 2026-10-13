@@ -250,6 +250,24 @@ export class SalesOrderAmountRevisionDto {
   readonly changedAt!: string
 }
 
+export const SALES_ORDER_COMPLETION_HOLD_REASONS = [
+  'PAYMENT_INCOMPLETE',
+  'RECONCILIATION_IN_PROGRESS',
+  'AWAITING_RECONCILIATION_COVERAGE',
+] as const
+
+/** 待对账订单停留在「待对账」的原因（完成判定见自动状态服务，口径 R3）。 */
+export class SalesOrderCompletionHoldDto {
+  @ApiProperty({ enum: SALES_ORDER_COMPLETION_HOLD_REASONS })
+  readonly reason!: typeof SALES_ORDER_COMPLETION_HOLD_REASONS[number]
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly pendingBatchCount!: number
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly unreconciledMemberCount!: number
+}
+
 export class SalesOrderDetailDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly orderNo!: string
@@ -261,6 +279,8 @@ export class SalesOrderDetailDto {
   @ApiProperty({ enum: SalesOrderStatus }) readonly orderStatus!: SalesOrderStatus
   @ApiProperty({ enum: SalesOrderFulfillmentStatus }) readonly fulfillmentStatus!: SalesOrderFulfillmentStatus
   @ApiProperty({ enum: SalesOrderPaymentStatus }) readonly paymentStatus!: SalesOrderPaymentStatus
+  @ApiProperty({ type: () => SalesOrderCompletionHoldDto, nullable: true })
+  readonly completionHold!: SalesOrderCompletionHoldDto | null
   @ApiProperty({ type: 'string', nullable: true }) readonly remark!: string | null
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
   @ApiProperty({ type: () => [SalesOrderLineDto] }) readonly lines!: readonly SalesOrderLineDto[]
@@ -353,6 +373,8 @@ export class SalesOrderListItemDto {
   @ApiProperty({ enum: SalesOrderStatus }) readonly orderStatus!: SalesOrderStatus
   @ApiProperty({ enum: SalesOrderFulfillmentStatus }) readonly fulfillmentStatus!: SalesOrderFulfillmentStatus
   @ApiProperty({ enum: SalesOrderPaymentStatus }) readonly paymentStatus!: SalesOrderPaymentStatus
+  @ApiProperty({ type: () => SalesOrderCompletionHoldDto, nullable: true })
+  readonly completionHold!: SalesOrderCompletionHoldDto | null
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly paymentRecordCount!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly statusChangeRecordCount!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly amountChangeRecordCount!: number

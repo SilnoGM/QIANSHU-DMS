@@ -70,9 +70,9 @@ function setup(
     getById: jest.fn<Promise<typeof detail>, [string]>().mockResolvedValue(detail),
   }
   const automaticState = {
-    advanceToPendingReconciliationWhenEligible:
-      jest.fn<Promise<boolean>, [unknown, unknown, string, string]>()
-        .mockResolvedValue(false),
+    advanceWhenEligible:
+      jest.fn<Promise<'NONE'>, [unknown, unknown, string, string]>()
+        .mockResolvedValue('NONE'),
   }
   const service = new SalesOrderDocumentService(
     prisma as unknown as PrismaService,
@@ -185,7 +185,7 @@ describe('SalesOrderDocumentService', () => {
       requestId: 'request-1',
       metadata: { fromStatus: 'SEA_TRANSIT', toStatus: 'SIGNED' },
     })
-    expect(fixture.automaticState.advanceToPendingReconciliationWhenEligible)
+    expect(fixture.automaticState.advanceWhenEligible)
       .toHaveBeenCalledWith(
         fixture.transaction,
         context,
@@ -196,7 +196,7 @@ describe('SalesOrderDocumentService', () => {
 
   it('does not return a successful detail when receipt-derived state fails', async () => {
     const fixture = setup()
-    fixture.automaticState.advanceToPendingReconciliationWhenEligible
+    fixture.automaticState.advanceWhenEligible
       .mockRejectedValue(new Error('automatic-state-failed'))
 
     await expect(fixture.service.submitDeliveryReceipt(

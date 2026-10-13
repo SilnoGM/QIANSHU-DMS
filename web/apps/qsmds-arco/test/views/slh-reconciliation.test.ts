@@ -154,7 +154,7 @@ test('完成批次的门禁：还有未核对行或批次已结束都挡下，�
   )
 })
 
-test('本行核对的门禁：代收行只需已签收，纯直付行需已收齐，采购需已完成', () => {
+test('本行核对的门禁：销售订单未取消且已签收即可核对（不再要求收齐），采购需已完成', () => {
   type SalesStates = Pick<SlhReconciliationMatchedSalesOrderDto, 'orderStatus' | 'fulfillmentStatus' | 'paymentStatus'>
   type PurchaseStates = Pick<SlhReconciliationMatchedPurchaseOrderDto, 'orderStatus' | 'fulfillmentStatus' | 'paymentStatus'>
   const salesReady: SalesStates = { orderStatus: 'PENDING_RECONCILIATION', fulfillmentStatus: 'SIGNED', paymentStatus: 'PAID' }
@@ -162,31 +162,23 @@ test('本行核对的门禁：代收行只需已签收，纯直付行需已收�
   const gate = (
     sales: SalesStates | null = salesReady,
     purchase: PurchaseStates | null = purchaseReady,
-    codAmountTwd: string | null = '52000.00',
   ) => (
-    resolveSlhReconciliationSettleBlockReason({ codAmountTwd, purchaseOrder: purchase, salesOrder: sales })
+    resolveSlhReconciliationSettleBlockReason({ purchaseOrder: purchase, salesOrder: sales })
   )
 
-  // 代收行（账单代收有值）：收齐由完成批次的代收回填完成，核对前只要求已签收。
+  // 「收齐」不再是核对前置：涉不涉及代收一视同仁（判据已不再读取本行代收与付款状态）。
+  // 同一订单里「不涉及代收」的行（如代收全记在同订单另一行上）此前会被要求先收齐，
+  // 而同批次完成又要求该行已核对，形成死锁；放开后按已签收即可核对。
   assert.equal(gate(), null)
   assert.equal(gate({ ...salesReady, orderStatus: 'CONFIRMED', paymentStatus: 'UNPAID' }), null)
   assert.equal(gate({ ...salesReady, orderStatus: 'CONFIRMED', paymentStatus: 'PARTIALLY_PAID' }), null)
-  assert.equal(gate({ ...salesReady, orderStatus: 'COMPLETED' }), null)
+  assert.equal(gate({ ...salesReady, orderStatus: 'COMPLETED', paymentStatus: 'UNPAID' }), null)
+  assert.equal(gate({ ...salesReady, paymentStatus: 'PARTIALLY_PAID' }), null)
+
+  // 未签收、已取消、订单来源缺失（脏数据）都挡。
   assert.equal(gate({ ...salesReady, fulfillmentStatus: 'SEA_TRANSIT' }), 'SALES_ORDER_NOT_SIGNED')
-
-  // 纯直付行（账单代收为空）：维持原口径——待对账 + 已签收 + 已付清。
-  // 待对账不蕴含已付清：待对账状态下仍可作废收款，付款状态会回落而订单状态不动，所以付款必须单独查。
-  assert.equal(gate(salesReady, purchaseReady, null), null)
-  assert.equal(gate({ ...salesReady, orderStatus: 'CONFIRMED' }, purchaseReady, null), 'SALES_ORDER_NOT_READY')
-  assert.equal(gate({ ...salesReady, orderStatus: 'COMPLETED' }, purchaseReady, null), 'SALES_ORDER_NOT_READY')
-  assert.equal(gate({ ...salesReady, fulfillmentStatus: 'SEA_TRANSIT' }, purchaseReady, null), 'SALES_ORDER_NOT_READY')
-  assert.equal(gate({ ...salesReady, paymentStatus: 'PARTIALLY_PAID' }, purchaseReady, null), 'SALES_ORDER_NOT_READY')
-  assert.equal(gate({ ...salesReady, paymentStatus: 'UNPAID' }, purchaseReady, null), 'SALES_ORDER_NOT_READY')
-
-  // 已取消的订单两条渠道都挡；订单来源缺失（脏数据）与条件不满足同路，一律不放行。
   assert.equal(gate({ ...salesReady, orderStatus: 'CANCELLED' }), 'SALES_ORDER_CANCELLED')
-  assert.equal(gate({ ...salesReady, orderStatus: 'CANCELLED' }, purchaseReady, null), 'SALES_ORDER_CANCELLED')
-  assert.equal(gate(null), 'SALES_ORDER_NOT_READY')
+  assert.equal(gate(null), 'SALES_ORDER_SOURCE_MISSING')
 
   // 采购侧只看订单状态：COMPLETED 是服务端由事实派生的状态，
   // 数据库还有 completed_requires_signed_paid 约束兜底其余两维。
@@ -205,8 +197,8 @@ test('本行核对的门禁：代收行只需已签收，纯直付行需已收�
     'slhReconciliation.detail.settleBlockedSalesOrderUnsigned',
   )
   assert.equal(
-    resolveSlhReconciliationSettleBlockLabelKey('SALES_ORDER_NOT_READY'),
-    'slhReconciliation.detail.settleBlockedSalesOrder',
+    resolveSlhReconciliationSettleBlockLabelKey('SALES_ORDER_SOURCE_MISSING'),
+    'slhReconciliation.detail.settleBlockedSalesOrderMissing',
   )
   assert.equal(
     resolveSlhReconciliationSettleBlockLabelKey('SALES_ORDER_CANCELLED'),
@@ -218,13 +210,13 @@ test('本行核对的门禁：代收行只需已签收，纯直付行需已收�
   )
   for (const message of MESSAGES) {
     assertTranslated(message.slhReconciliation.detail as unknown as Record<string, unknown>, [
-      'settleBlockedSalesOrder',
+      'settleBlockedSalesOrderMissing',
       'settleBlockedSalesOrderUnsigned',
       'settleBlockedSalesOrderCancelled',
       'settleBlockedPurchaseOrder',
     ])
   }
-  assert.equal(zhCn.slhReconciliation.detail.settleBlockedSalesOrder, '销售订单尚未收齐，暂不能核对本行（纯直付行需为待对账、已签收且已付清）')
+  assert.equal(zhCn.slhReconciliation.detail.settleBlockedSalesOrderMissing, '销售订单来源缺失，暂不能核对本行')
   assert.equal(zhCn.slhReconciliation.detail.settleBlockedSalesOrderUnsigned, '销售订单未签收，暂不能核对本行')
   assert.equal(zhCn.slhReconciliation.detail.settleBlockedSalesOrderCancelled, '销售订单已取消，暂不能核对本行')
   assert.equal(zhCn.slhReconciliation.detail.settleBlockedPurchaseOrder, '采购订单未满足核对条件：需为已完成（已入仓且已付清）')

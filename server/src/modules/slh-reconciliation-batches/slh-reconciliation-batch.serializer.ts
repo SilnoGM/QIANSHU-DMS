@@ -46,7 +46,9 @@ export const slhReconciliationBatchDetailInclude = {
   ...batchHeaderInclude,
   bill: { select: { ...batchHeaderInclude.bill.select, importFindings: true } },
   members: {
-    orderBy: { createdAt: 'asc' },
+    // 账单行号顺序：与批次完成时的成员遍历同序（见 service 的完成查询），
+    // 保证「详情第一行」与「费用归属那一行」是同一行，展示顺序也与账单原表一致。
+    orderBy: [{ line: { lineNumber: 'asc' } }, { id: 'asc' }],
     include: {
       line: { include: { charges: true } },
       matchedLoadingItem: {

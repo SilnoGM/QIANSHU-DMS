@@ -334,7 +334,7 @@ export class SalesOrderDocumentService {
           },
         })
         // 签收状态与可能已存在的付清状态必须在同一事务中共同派生待对账。
-        await this.automaticState.advanceToPendingReconciliationWhenEligible(
+        await this.automaticState.advanceWhenEligible(
           transaction,
           context,
           salesOrderId,

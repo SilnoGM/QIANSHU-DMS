@@ -2213,6 +2213,7 @@
       "apps/qsmds-arco/src/components/base/QsToast/config.ts",
       "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue",
       "apps/qsmds-arco/src/components/business/QsPurchaseStartModal/pending-purchase-products.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/index.vue",
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-manual-adjustment-modal.vue",
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-share-rate-modal.vue",
       "apps/qsmds-arco/src/views/component_library/basic/components/QsToastShowcase.vue",

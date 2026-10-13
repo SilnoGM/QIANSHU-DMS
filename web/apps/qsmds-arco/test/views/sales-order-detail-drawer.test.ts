@@ -94,6 +94,7 @@ test('销售详情 DTO 映射为独立只读详情模型并忽略已解除附件
       receivedAmount: '0.0000',
     },
     createdAt: '2026-08-31T01:00:00.000Z',
+    completionHold: null,
     currencyCode: 'TWD',
     customer: {
       addressDetail: '测试路 1 号',

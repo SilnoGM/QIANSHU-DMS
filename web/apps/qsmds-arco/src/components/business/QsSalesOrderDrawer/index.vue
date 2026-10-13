@@ -2,6 +2,7 @@
 import type { SalesOrderDetailDto, SalesOrderListItemDto } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import { describeCompletionHold } from './logic'
 import OrderHistory from './OrderHistory.vue'
 import OrderInformation from './OrderInformation.vue'
 
@@ -26,6 +27,11 @@ const drawerBody = useTemplateRef<HTMLDivElement>('drawerBody')
 const visible = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
 const currentOrder = computed(() => props.detail ?? props.order)
 const title = computed(() => currentOrder.value?.orderNo ?? t('salesOrderDrawer.title'))
+/**
+ * 停留原因与完成判定同源（口径 R3）：标签保持短句，悬停给出完整解释与计数，
+ * 只有待对账订单会带该字段，其它状态不渲染。
+ */
+const holdDescription = computed(() => describeCompletionHold(currentOrder.value?.completionHold ?? null))
 const tabs = computed(() => [
   { value: 'information', label: t('salesOrderDrawer.information'), icon: 'i-lucide:receipt-text', class: 'dark:data-[state=active]:text-foreground!' },
   { value: 'changes', label: t('salesOrderDrawer.changes'), icon: 'i-lucide:history', class: 'dark:data-[state=active]:text-foreground!' },
@@ -75,6 +81,15 @@ function onClosed() {
               {{ currentOrder.currencyCode }}
             </FaTag>
             <span aria-hidden="true">·</span><span class="inline-flex gap-1.5 items-center"><FaIcon name="i-lucide:calendar-days" class="size-3.5" aria-hidden="true" />{{ currentOrder.orderDate }}</span>
+            <template v-if="holdDescription">
+              <span aria-hidden="true">·</span>
+              <FaTooltip :text="t(holdDescription.hintKey, holdDescription.hintParams)">
+                <span class="inline-flex gap-1 items-center">
+                  <FaIcon name="i-lucide:info" class="size-3.5" aria-hidden="true" />
+                  {{ t(holdDescription.labelKey) }}
+                </span>
+              </FaTooltip>
+            </template>
           </p>
         </div>
         <FaButton type="button" variant="ghost" size="icon" class="text-muted-foreground rounded-full shrink-0 size-11 self-start" :aria-label="t('salesOrderDrawer.close')" @click="visible = false">

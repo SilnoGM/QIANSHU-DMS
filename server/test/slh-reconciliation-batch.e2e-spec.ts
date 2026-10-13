@@ -1183,7 +1183,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       await setSystemRate('5.200000000000')
     })
 
-    it('完成回填代收货款收款：字段口径与来源固定，收齐且已签收时订单自动进待对账', async () => {
+    it('完成回填代收货款收款：字段口径与来源固定，收齐且已签收时订单自动完成', async () => {
       await setSystemRate('5.200000000000')
       const prepared = await preparedBatch('07', { payableAmountCny: '4555', codAmountTwd: '129000' })
       const settlement = await settleWith(prepared.batchId, prepared.memberId, '5.200000000000', {
@@ -1216,25 +1216,205 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       expect(payment.amount.toFixed(4)).toBe('129000.0000')
       expect(payment.receivedAt.toISOString()).toBe(settlementRow.createdAt.toISOString())
 
-      // 付款状态由回填驱动：收齐即已付清，并自动推进到待对账（与收款审核同一条派生链路）。
+      // 付款状态由回填驱动：收齐即已付清；订单被本批次覆盖且没有其它进行中的批次，
+      // 按口径 R3 一步推进到已完成（「进待对账」与「完成」在同一次重评里完成）。
       const order = await h.prisma.salesOrder.findUniqueOrThrow({ where: { id: salesOrderId }, select: { paymentStatus: true, orderStatus: true } })
-      expect(order).toMatchObject({ paymentStatus: 'PAID', orderStatus: 'PENDING_RECONCILIATION' })
+      expect(order).toMatchObject({ paymentStatus: 'PAID', orderStatus: 'COMPLETED' })
       const history = await h.prisma.salesOrderStatusHistory.findFirst({
         where: { salesOrderId, dimension: 'PAYMENT', toStatus: 'PAID' }, select: { reason: true },
       })
       expect(history?.reason).toContain('结算回填代收货款')
+      const completedHistory = await h.prisma.salesOrderStatusHistory.findFirst({
+        where: { salesOrderId, dimension: 'ORDER', toStatus: 'COMPLETED' }, select: { reason: true },
+      })
+      expect(completedHistory?.reason).toBe('订单对账已完成，系统自动完成订单')
 
       const audit = await h.prisma.auditEvent.findFirstOrThrow({
         where: { eventType: 'SLH_RECONCILIATION_BATCH_COMPLETED', targetId: prepared.batchId }, select: { metadata: true },
       })
-      expect(audit.metadata).toMatchObject({ backfilledPaymentCount: 1 })
+      expect(audit.metadata).toMatchObject({ backfilledPaymentCount: 1, autoCompletedOrderCount: 1 })
 
-      // 收款详情契约：代收回填没有凭证文件，详情接口仍返回 200，origin 与类型可见、voucher 为空。
+      // 收款详情契约：代收回填没有凭证文件，详情接口仍返回 200，origin 与类型可见、voucher 为空；
+      // 订单已完成，不再有停留原因。
       const detail = await salesOrderDetail(salesOrderId) as {
+        completionHold: unknown
         payments: Array<{ origin: string, paymentType: string, voucher: unknown }>
       }
+      expect(detail.completionHold).toBeNull()
       const dto = detail.payments.find(entry => entry.origin === 'COD_SETTLEMENT')
       expect(dto).toMatchObject({ origin: 'COD_SETTLEMENT', paymentType: 'COD_BALANCE', voucher: null })
+    })
+
+    it('手工入口不能把订单置为已完成：已完成只由系统在对账完成后自动推进', async () => {
+      const updater = (await h.browserWithPermissions(['sales-orders:update'])).browser
+      const shipment = await h.shipment({ salesLinked: true, ownerUserId: h.fixture.actor.id })
+      if (shipment.source === null) throw new Error('sales linked shipment must create a sales order')
+      // 即便已签收，手工置为已完成也要被拒：该状态是派生态，只由自动状态服务推进
+      // （付款状态不动：订单的付款状态必须与实收一致，数据库触发器会核对）。
+      await h.prisma.salesOrder.update({
+        where: { id: shipment.source.id },
+        data: { orderStatus: 'PENDING_RECONCILIATION', fulfillmentStatus: 'SIGNED' },
+      })
+      const rejected = await updater.patch(`/api/sales-orders/${shipment.source.id}/order-status`)
+        .set(packagingHeaders).send({ toStatus: 'COMPLETED', reason: '手工完成' }).expect(422)
+      expect(errorCode(rejected)).toBe('SALES_ORDER_COMPLETION_IS_AUTOMATIC')
+      expect(await h.prisma.salesOrder.findUniqueOrThrow({
+        where: { id: shipment.source.id }, select: { orderStatus: true },
+      })).toEqual({ orderStatus: 'PENDING_RECONCILIATION' })
+    })
+
+    it('停留原因的读侧口径：非待对账不下发，未收齐时先报「等待收齐款项」，列表与详情一致', async () => {
+      const shipment = await h.shipment({ salesLinked: true, ownerUserId: h.fixture.actor.id })
+      if (shipment.source === null) throw new Error('sales linked shipment must create a sales order')
+      const salesOrderId = shipment.source.id
+      const reader = (await h.browserWithPermissions(['sales-orders:read'])).browser
+      const detailOf = async () => {
+        return (await reader.get(`/api/sales-orders/${salesOrderId}`).expect(200)).body as {
+          orderStatus: string
+          completionHold: unknown
+        }
+      }
+
+      // 已确认订单没有停留原因。
+      expect((await detailOf()).completionHold).toBeNull()
+
+      // 待对账但未收齐：付清前置先于对账完备性（收款被作废后的回退形态）。
+      await h.prisma.salesOrder.update({
+        where: { id: salesOrderId },
+        data: { orderStatus: 'PENDING_RECONCILIATION', fulfillmentStatus: 'SIGNED' },
+      })
+      expect(await detailOf()).toMatchObject({
+        orderStatus: 'PENDING_RECONCILIATION',
+        completionHold: { reason: 'PAYMENT_INCOMPLETE', pendingBatchCount: 0, unreconciledMemberCount: 0 },
+      })
+
+      // 列表口径与详情一致。
+      const orderNo = (await h.prisma.salesOrder.findUniqueOrThrow({
+        where: { id: salesOrderId }, select: { orderNo: true },
+      })).orderNo
+      const list = (await reader.get('/api/sales-orders').query({ keyword: orderNo, pageSize: 50 }).expect(200)).body as {
+        items: Array<{ id: string, completionHold: unknown }>
+      }
+      expect(list.items.find(item => item.id === salesOrderId)?.completionHold).toEqual({
+        reason: 'PAYMENT_INCOMPLETE', pendingBatchCount: 0, unreconciledMemberCount: 0,
+      })
+    })
+
+    it('多批次覆盖：仍有批次进行中时订单停留在待对账，全部结束后才自动完成', async () => {
+      await setSystemRate('5.200000000000')
+      // 一条货件装柜时拆成四个唛头：甲行承载代收货款、乙丙两行不涉及金额、
+      // 丁行留到订单完成之后再建批次，验证「已完成订单仍可继续对账」。
+      const date = '2026-03-16'
+      const containerBatchName = '0316-01柜'
+      const marks = ['M-031601', 'M-031602', 'M-031603', 'M-031604']
+      const shipment = await h.shipment({ salesLinked: true, ownerUserId: h.fixture.actor.id })
+      if (shipment.source === null) throw new Error('sales linked shipment must create a sales order')
+      const salesOrderId = shipment.source.id
+      // 订单总额压到恰好等于甲账单代收：甲批次完成后回填即可收齐。
+      await widenSalesTotal(salesOrderId, '129000.0000')
+      await h.prisma.salesOrder.update({ where: { id: salesOrderId }, data: { fulfillmentStatus: 'SIGNED' } })
+      await createContainer(containerBatchName, date, marks.map(mark => ({ mark, shipmentId: shipment.part.id })))
+      const codRow = {
+        B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: 'WG-0316-0001', F: marks[0],
+        G: '农用四轮微耕机', H: '1', I: 'CTN',
+        R: '4555', U: '4555', V: '129000', W: '6000', X: '入账测试', Y: '测试收货人一',
+      }
+      const plainRowOf = (mark: string, index: number) => ({
+        B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: `WG-0316-000${index + 1}`, F: mark,
+        G: '农用四轮微耕机', H: '1', I: 'CTN', X: '入账测试', Y: '测试收货人一',
+      })
+      const firstBill = await importBill(`入账-${containerBatchName}-甲`, createSlhBillFixture({ rows: [codRow] }))
+      const secondBill = await importBill(`入账-${containerBatchName}-乙`, createSlhBillFixture({ rows: [plainRowOf(marks[1], 1)] }))
+      const thirdBill = await importBill(`入账-${containerBatchName}-丙`, createSlhBillFixture({ rows: [plainRowOf(marks[2], 2)] }))
+      const firstBatch = (await createBatch(firstBill.id, randomUUID()).expect(201)).body as BatchDetail
+      const secondBatch = (await createBatch(secondBill.id, randomUUID()).expect(201)).body as BatchDetail
+      const thirdBatch = (await createBatch(thirdBill.id, randomUUID()).expect(201)).body as BatchDetail
+      const [firstMember] = firstBatch.members
+      const [secondMember] = secondBatch.members
+      const [thirdMember] = thirdBatch.members
+      if (firstMember === undefined || secondMember === undefined || thirdMember === undefined) {
+        throw new Error('batch has no member')
+      }
+
+      const reader = (await h.browserWithPermissions(['sales-orders:read'])).browser
+      const readOrder = async () => {
+        return (await reader.get(`/api/sales-orders/${salesOrderId}`).expect(200)).body as {
+          orderStatus: string
+          completionHold: unknown
+        }
+      }
+      // 服务端按订单约定总额重算结算金额：这里的 salesAmount 必须与订单当前总额一致，
+      // 否则接口按「与重算结果不一致」拒绝。
+      const settleFromOrderTotal = async (
+        batchId: string,
+        memberId: string,
+        rate: string,
+        amounts: { codAmountTwd: string | null, ntdSurchargeAmountTwd: string | null, payableAmountCny: string | null },
+      ) => {
+        const resolved = resolveSettlementAmounts({
+          ...amounts, salesAmount: '129000.0000', rate, paymentFeeRate: PAYMENT_FEE_RATE,
+        })
+        await browser.post(`${BASE}/${batchId}/settlements`).set(packagingHeaders).set('Idempotency-Key', randomUUID())
+          .send({ batchLineId: memberId, rateSource: 'SYSTEM', rate, amounts: resolved }).expect(201)
+      }
+      const settlementOfPlainMember = (batchId: string, memberId: string) => settleFromOrderTotal(
+        batchId,
+        memberId,
+        '5.200000000000',
+        // 不涉及任何金额：结算金额为 0，费用由「按销售单只入一次」的去重挡住。
+        { codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null },
+      )
+      const completedAuditOf = (batchId: string) => h.prisma.auditEvent.findFirstOrThrow({
+        where: { eventType: 'SLH_RECONCILIATION_BATCH_COMPLETED', targetId: batchId }, select: { metadata: true },
+      })
+
+      // 甲批次先核对并完成：代收回填让订单收齐，但乙丙批次仍在进行中 → 按口径 R3 停在待对账。
+      await settleFromOrderTotal(firstBatch.id, firstMember.id, '5.200000000000', {
+        codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
+      })
+      await browser.post(`${BASE}/${firstBatch.id}/complete`).set(packagingHeaders).send({}).expect(200)
+      expect(await h.prisma.salesOrder.findUniqueOrThrow({
+        where: { id: salesOrderId }, select: { paymentStatus: true, orderStatus: true },
+      })).toMatchObject({ paymentStatus: 'PAID', orderStatus: 'PENDING_RECONCILIATION' })
+      expect(await readOrder()).toMatchObject({
+        orderStatus: 'PENDING_RECONCILIATION',
+        completionHold: { reason: 'RECONCILIATION_IN_PROGRESS', pendingBatchCount: 2, unreconciledMemberCount: 2 },
+      })
+      // 本次完成没有自动完成订单：审计里的自动完成计数为 0。
+      expect((await completedAuditOf(firstBatch.id)).metadata).toMatchObject({ autoCompletedOrderCount: 0 })
+
+      // 乙批次核对完成后只剩「批次未结束」：批次计数保留，未核对行数减到丙批次那一行。
+      await settlementOfPlainMember(secondBatch.id, secondMember.id)
+      expect((await readOrder()).completionHold).toEqual({
+        reason: 'RECONCILIATION_IN_PROGRESS', pendingBatchCount: 2, unreconciledMemberCount: 1,
+      })
+      // 乙批次结束但丙批次仍在进行中：订单继续停在待对账。
+      await browser.post(`${BASE}/${secondBatch.id}/complete`).set(packagingHeaders).send({}).expect(200)
+      expect(await readOrder()).toMatchObject({
+        orderStatus: 'PENDING_RECONCILIATION',
+        completionHold: { reason: 'RECONCILIATION_IN_PROGRESS', pendingBatchCount: 1, unreconciledMemberCount: 1 },
+      })
+
+      // 全部批次结束：口径 R3 自动完成，停留原因清空，状态历史留痕。
+      await settlementOfPlainMember(thirdBatch.id, thirdMember.id)
+      await browser.post(`${BASE}/${thirdBatch.id}/complete`).set(packagingHeaders).send({}).expect(200)
+      expect(await readOrder()).toMatchObject({ orderStatus: 'COMPLETED', completionHold: null })
+      const completedHistory = await h.prisma.salesOrderStatusHistory.findFirst({
+        where: { salesOrderId, dimension: 'ORDER', toStatus: 'COMPLETED' }, select: { reason: true },
+      })
+      expect(completedHistory?.reason).toBe('订单对账已完成，系统自动完成订单')
+      expect((await completedAuditOf(thirdBatch.id)).metadata).toMatchObject({ autoCompletedOrderCount: 1 })
+
+      // 已完成订单之后仍可继续对账：新建批次、核对并完成，订单状态保持已完成、
+      // 不会被重评回退，停留原因仍为空，自动完成计数为 0。
+      const trailingBill = await importBill(`入账-${containerBatchName}-丁`, createSlhBillFixture({ rows: [plainRowOf(marks[3], 3)] }))
+      const trailingBatch = (await createBatch(trailingBill.id, randomUUID()).expect(201)).body as BatchDetail
+      const [trailingMember] = trailingBatch.members
+      if (trailingMember === undefined) throw new Error('batch has no member')
+      await settlementOfPlainMember(trailingBatch.id, trailingMember.id)
+      await browser.post(`${BASE}/${trailingBatch.id}/complete`).set(packagingHeaders).send({}).expect(200)
+      expect(await readOrder()).toMatchObject({ orderStatus: 'COMPLETED', completionHold: null })
+      expect((await completedAuditOf(trailingBatch.id)).metadata).toMatchObject({ autoCompletedOrderCount: 0 })
     })
 
     it('代收超收：相关行退回未核对、结算作废并拒绝完成，修复后可重新核对完成', async () => {

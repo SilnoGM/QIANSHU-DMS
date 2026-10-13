@@ -353,7 +353,7 @@
       "reconcileWrong": "本行核對有誤",
       "reconcileCorrect": "本行核對正確",
       "reconcilePending": "{action}：功能開發中",
-      "settleBlockedSalesOrder": "銷售訂單尚未收齊，暫不能核對本行（純直付行需為待對帳、已簽收且已付清）",
+      "settleBlockedSalesOrderMissing": "銷售訂單來源缺失，暫不能核對本行",
       "settleBlockedSalesOrderUnsigned": "銷售訂單未簽收，暫不能核對本行",
       "settleBlockedSalesOrderCancelled": "銷售訂單已取消，暫不能核對本行",
       "settleBlockedPurchaseOrder": "採購訂單未滿足核對條件：需為已完成（已入倉且已付清）",
