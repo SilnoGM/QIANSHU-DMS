@@ -142,11 +142,27 @@
 - 前端审计页补七个开票申请事件标签（`EVENT_LABELS` 是穷尽类型，契约一扩展就必须同批补）；`web typecheck` 与 `web test:api`（1756/1756）通过。
 - 本机 pnpm 报 `ERR_PNPM_VERIFY_DEPS_BEFORE_RUN`（已知误报）时，用 PATH 前置的包装脚本注入 `--config.verifyDepsBeforeRun=false` 绕过；环境变量方式对嵌套调用无效。
 
+### T8/T9 前端（已提交 `a8c9293e`）
+
+- 两个工作台各新增「发票管理」分组；四枚品牌图标 + 清单重生成；`workbench.*` 三语菜单键；
+  `lang/invoice-requests/*` 三语 105 键（完全扁平，与 `salesReceipt` 同形）。
+- 四个页面接真实接口：开票申请（新建 + 重填、金额只读自动算、提交确认、四项比对弹窗、离开确认四类出口）、
+  开票记录（本人六态筛选与计数、详情弹窗含发票照片、已退回提供重新填写）、开票审批（按状态给动作、
+  复制开票信息、上传即定稿、满 120 小时才可结算）、审批详情（隐藏路由只读）。
+- 验证：`web typecheck`、`web check`（脚本测试 + typecheck + lint）、`web test:api` 1757/1757 全绿。
+- **实现偏差（待回写设计）**：
+  1. 弹窗用自绘遮罩而非 `QsGenericModal`（本轮按预算取舍，交互等价，样式与既有弹窗组件未对齐）；
+  2. 列表用语义化表格而非 `QsGenericTable`（未接列设置/分组/移动端卡片插槽）；
+  3. 服务端新增 `version` 响应字段——写动作的乐观锁版本号原先没有随响应返回，前端无法回传。
+- **尚未做**：浏览器实测（T10）、页面级单测（三语键对齐与表单纯函数用例）。
+
 ### 待完成
 
-- **T8/T9 前端**：两个工作台的「发票管理」分组、四个页面与三语文案、图标资产、路由契约测试（`role-workbench-routes`、`workbench-access-isolation`）。
-- **T10 全量门禁与浏览器实测**：`pnpm -C web check`、`node --run ci:server-e2e`（隔离库全量 e2e）、浏览器全链路实测（提交 → 通知 → 退回 → 重填 → 上传 → 等待 → 结算）。
-- **服务端补齐项**：资金来源迁移 e2e（仿 `packaging-cost-fund-source-migration.e2e-spec.ts`）与服务层用例（状态前置、乐观锁、四项比对池边界、幂等重放、结算失败整体回滚）。
+- **T10 浏览器实测与全量门禁**：`node --run ci:server-e2e`（隔离库全量 e2e，本轮只跑过定点复验）、
+  浏览器全链路实测（提交 → 通知 → 退回 → 重填 → 上传 → 等待窗 → 结算，含运营可见范围隔离）。
+- **服务端补齐项**：资金来源迁移 e2e（仿 `packaging-cost-fund-source-migration.e2e-spec.ts`）与服务层用例
+  （状态前置、乐观锁、四项比对池边界、幂等重放、结算失败整体回滚）。
+- **前端打磨项**：把自绘弹窗换成 `QsGenericModal`、列表换成 `QsGenericTable`（含移动端插槽）、补页面级单测。
 
 ## 6. 业务启用边界
 
