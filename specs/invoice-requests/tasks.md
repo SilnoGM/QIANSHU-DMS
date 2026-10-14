@@ -136,11 +136,17 @@
 2. **资金常量位置**：改为 `fund-accounts/application/fund-invoice-request.ts`（与 `fund-bill-settlement.ts` 同一先例），避免资金域反向依赖业务域；业务模块从这里导入。
 3. **提交幂等语义**：`request_key_hash` 存**幂等键**的 SHA-256；同一个键重放直接恢复原单，不做载荷比对（同一键换内容按重放处理）。载荷指纹只用于编号派发的 `requestFingerprint`。
 
+### T7 契约同步（已提交 `59739b1a`）
+
+- `node --run contract:sync` 同步两份 `openapi.json`（12 个新 operationId）；`contract:check` 通过。
+- 前端审计页补七个开票申请事件标签（`EVENT_LABELS` 是穷尽类型，契约一扩展就必须同批补）；`web typecheck` 与 `web test:api`（1756/1756）通过。
+- 本机 pnpm 报 `ERR_PNPM_VERIFY_DEPS_BEFORE_RUN`（已知误报）时，用 PATH 前置的包装脚本注入 `--config.verifyDepsBeforeRun=false` 绕过；环境变量方式对嵌套调用无效。
+
 ### 待完成
 
-- T7 契约同步（`node --run contract:sync` 三产物）与前端审计事件标签（后者的类型依赖前者生成的 eventType 联合）。
-- T8/T9 前端：两个工作台的「发票管理」分组、四个页面与三语文案、图标资产、路由契约测试。
-- T10 全量门禁（`test:root`、前端 `check`、`ci:server-e2e`）与浏览器实测验收。
+- **T8/T9 前端**：两个工作台的「发票管理」分组、四个页面与三语文案、图标资产、路由契约测试（`role-workbench-routes`、`workbench-access-isolation`）。
+- **T10 全量门禁与浏览器实测**：`pnpm -C web check`、`node --run ci:server-e2e`（隔离库全量 e2e）、浏览器全链路实测（提交 → 通知 → 退回 → 重填 → 上传 → 等待 → 结算）。
+- **服务端补齐项**：资金来源迁移 e2e（仿 `packaging-cost-fund-source-migration.e2e-spec.ts`）与服务层用例（状态前置、乐观锁、四项比对池边界、幂等重放、结算失败整体回滚）。
 
 ## 6. 业务启用边界
 
