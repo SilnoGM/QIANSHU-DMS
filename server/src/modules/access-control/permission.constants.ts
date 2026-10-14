@@ -117,6 +117,23 @@ export const SLH_BILL_PERMISSION_CODES = [
 ] as const
 
 /**
+ * 开票申请与审批：提交、查看、跨提交人查看、审核并通知、退回、上传照片、结算入账、取消。
+ *
+ * 「运营仅可见本人」是行级归属校验而不是权限点：读单条时按提交人过滤，`:read-all`
+ * 只负责把财务从「仅本人」放开到全量。顺序与权限目录按 code 的排序一致。
+ */
+export const INVOICE_REQUEST_PERMISSION_CODES = [
+  'invoice-requests:cancel',
+  'invoice-requests:create',
+  'invoice-requests:document',
+  'invoice-requests:read',
+  'invoice-requests:read-all',
+  'invoice-requests:return',
+  'invoice-requests:review',
+  'invoice-requests:settle',
+] as const
+
+/**
  * 工作台准入权限：决定顶级导航分组的可见与直接 URL 准入。
  *
  * 业务域权限码会在工作台之间共享（`purchase-orders:payment`、`purchase-orders:read`
@@ -186,6 +203,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...SUPPLIER_PAYMENT_PROFILE_PERMISSION_CODES,
   ...CONTAINER_BATCH_PERMISSION_CODES,
   ...SLH_BILL_PERMISSION_CODES,
+  ...INVOICE_REQUEST_PERMISSION_CODES,
   ...WORKBENCH_ACCESS_PERMISSION_CODES,
 ] as const
 

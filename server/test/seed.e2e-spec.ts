@@ -41,8 +41,8 @@ const expectedDictionaries: ReadonlyArray<readonly [string, readonly string[]]> 
   ['warehouse.packaging_type', ['WOODEN_BOX', 'WOODEN_FRAME']],
 ]
 const expectedRoles: ReadonlyArray<readonly [string, number]> = [
-  ['finance_staff', 17],
-  ['operations_staff', 13],
+  ['finance_staff', 24],
+  ['operations_staff', 16],
   ['purchasing_staff', 8],
 ]
 const expectedRuleShapes: Readonly<Record<string, string>> = {
@@ -52,6 +52,7 @@ const expectedRuleShapes: Readonly<Record<string, string>> = {
   CUSTOM_MARK: 'FIXED(CUSTOM) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
   DBJ_MARK: 'FIXED(DBJ) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
   FSL_MARK: 'FIXED(FSL) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
+  INVOICE_REQUEST: 'FIXED(INV) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
   LDC_MARK: 'FIXED(LDC) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
   PRODUCT: 'FIXED(PROD) SEP(/) SEQ(5)',
   PSJ_MARK: 'FIXED(PSJ) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',

@@ -16,6 +16,7 @@ const RESOURCE_LABELS: Readonly<Record<string, string>> = {
   'fund-business-sources': '资金业务来源',
   'fund-posting-types': '资金业务类型',
   'fund-transactions': '资金批次',
+  'invoice-requests': '开票申请',
   'numbering-rules': '编号规则',
   'packaging-costs': '打木架费用',
   'product-media': '产品媒体',

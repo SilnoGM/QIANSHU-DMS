@@ -19,6 +19,7 @@ export const MEDIA_STORAGE_POOLS = [
   'payment-recipient',
   'bill',
   'container',
+  'invoice',
   'misc',
 ] as const
 
