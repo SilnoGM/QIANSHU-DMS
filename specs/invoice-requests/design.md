@@ -205,7 +205,8 @@ server/src/modules/invoice-requests/
 | 重新提交 | `POST /api/invoice-requests/:id/resubmissions` | `invoice_requests_resubmit` | `:create` + 本人 | 仅 `RETURNED`；全量字段；`duplicateAcknowledged`；保留单号 |
 | 退回 | `POST /api/invoice-requests/:id/returns` | `invoice_requests_return` | `:return` | 仅 `PENDING_REVIEW`；`reason` 必填 |
 | 审核并通知 | `POST /api/invoice-requests/:id/notifications` | `invoice_requests_notify` | `:review` | 仅 `PENDING_REVIEW` |
-| 上传照片 | `POST /api/invoice-requests/:id/document-uploads` | `invoice_requests_upload_document` | `:document` | 仅 `NOTIFIED`；multipart，`mediaType` 在 `file` 之前；已上传则 `INVOICE_REQUEST_DOCUMENT_EXISTS` |
+| 上传照片 | `POST /api/invoice-requests/:id/document-uploads` | `invoice_requests_upload_document` | `:document` | 仅 `NOTIFIED`；multipart，`mediaType` 在 `file` 之前；已上传则 `INVOICE_REQUEST_DOCUMENT_EXISTS`。**实现调整**：不带 `expectedVersion`——并发保护由状态前置 + `document_media_asset_id` 唯一 + 触发器只放行 `NOTIFIED → ISSUED` 共同兜底 |
+| 读发票照片 | `GET`/`HEAD` `/api/invoice-requests/:id/document` | `invoice_requests_get_document` / `invoice_requests_head_document` | `:read` + 归属 | 私有、不缓存、inline；没有照片与单据不可见都返回 404 |
 | 结算入账 | `POST /api/invoice-requests/:id/settlements` | `invoice_requests_settle` | `:settle` | 仅 `ISSUED`；≥120 小时；携带 `expectedVersion` 与 `exchangeRateId/version`；`Idempotency-Key` |
 | 取消 | `POST /api/invoice-requests/:id/cancellations` | `invoice_requests_cancel` | `:cancel` + 归属 | `reason` 必填；运营仅 `PENDING_REVIEW/RETURNED`，财务任意非终态 |
 
@@ -269,7 +270,7 @@ DTO 级校验（统编格式、明细行数与正整数、原因非空、备注�
 
 | 位置 | 内容 |
 | --- | --- |
-| `invoice-request-fund.ts` | `SOURCE_CODE = 'INVOICE_REQUEST'`、`CONSUMER_CODE = 'INVOICE_REQUEST.SETTLE'`、`POSTING_TYPE_CODE = 'INVOICE_FEE'`、摘要常量 `开票服务费及邮寄费` |
+| `invoice-request-fund.ts` | 资金常量改用 `fund-accounts/application/fund-invoice-request.ts`（与 `fund-bill-settlement.ts` 同一先例：常量放在资金模块内，避免资金域反向依赖业务域）；业务模块从这里导入 `INVOICE_REQUEST_FUND_SOURCE`、`INVOICE_REQUEST_SETTLE_CONSUMER`、`INVOICE_REQUEST_POSTING_TYPE`，摘要文案在业务侧声明 |
 | `fund-posting.service.ts:115-126` | `CONTROLLED_POSTING_TYPE_BY_SOURCE_CONSUMER` 增加 `(INVOICE_REQUEST, INVOICE_REQUEST.SETTLE) → INVOICE_FEE` |
 | `fund-posting.service.ts:499-522` | `normalizeBusinessContext` 准入白名单加入该来源与 consumer |
 | `fund-posting.service.ts:1125-1158` | `prepareBusinessPlan` 语义守卫：分类为 `COST`、`requiresUser`、金额 > 0、两条 leg 均为 `DEBIT` |

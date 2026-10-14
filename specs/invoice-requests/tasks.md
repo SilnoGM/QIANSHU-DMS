@@ -109,7 +109,38 @@
 
 ## 5. 证据记录
 
-（实施过程中逐任务填写：命令、输出摘要、失败与修复说明。本清单创建时为空。）
+### T1 数据层（已提交 `ac32e6d0`）
+
+- 空库（隔离容器）首次与二次 `migrate deploy` 均成功；`migrate status` 为最新；`prisma migrate diff` 比对为 `No difference detected`。
+- 新增 `server/test/invoice-request-schema.e2e-spec.ts`：4/4 通过（枚举清单、状态机与列白名单正反例、明细行可编辑性、状态历史不可变、编号身份、媒体就绪引用）。
+  - **测试发现的真实缺陷**：结算列的成对形状 CHECK 最初写成单向约束，「SETTLED 但缺入账列」能通过；已在提交前改为双向。
+- 五条迁移已应用 dev 库并登记进《数据库迁移规范》；`node --run test:root` 710/710。
+- `pnpm -C server check` 全绿（含同步更新的媒体引用契约与字典基线断言）。
+
+### T2 权限与审计 / T3 编号 / T6 媒体登记（已提交 `84c79558`）
+
+- `invoice-request-permission.spec.ts` 2/2；权限副本、角色计数（17→24 / 13→16）、编号集合（19→20）与前端资源标签同步。
+- 隔离库定点复验：`invoice-request-schema`、`seed`、`region-seed`、`shipping-mark-bindings` 共 16/16 通过。
+- 官方隔离库全量 e2e 一次运行：89 套件中 2 个失败（`shipping-mark-bindings` 登录返回 404）；该套件单跑 5/5 通过，属仓库已记录的偶发 404（形态一致：期望 2xx 得到 404、单跑必绿），与本批改动无关。
+
+### T4 服务端模块 / T5 资金接入（已提交 `d019e307`）
+
+- `invoice-request.logic.spec.ts` 4/4（税率取整边界、成本公式与向上取整、120 小时整点边界、明细合计）。
+- `pnpm -C server check` 345 套件 / 3951 用例全绿（含 lint 与 typecheck）。
+- 资金侧四处代码登记已落地：受控映射表、准入白名单、结算语义守卫（COST/requiresUser/DEBIT/金额 > 0）、独立事务入口拒绝列表。
+- **尚未执行**：资金迁移 e2e（仿 `packaging-cost-fund-source-migration.e2e-spec.ts`）与服务层用例（状态前置、乐观锁、四项比对池边界、幂等重放、结算失败回滚）。这两项是 T10 之前的补齐项。
+
+### 与设计的偏差（实现阶段调整，需回写设计）
+
+1. **上传不带 `expectedVersion`**：发票照片上传复用订单凭证的 multipart 解析器（字段 `mediaType` + `file`），并发保护由「状态必须是已通知开票」+ `document_media_asset_id` 唯一 + 触发器只放行 `NOTIFIED → ISSUED` 三次兜底，客户端版本号在此动作上是冗余的。
+2. **资金常量位置**：改为 `fund-accounts/application/fund-invoice-request.ts`（与 `fund-bill-settlement.ts` 同一先例），避免资金域反向依赖业务域；业务模块从这里导入。
+3. **提交幂等语义**：`request_key_hash` 存**幂等键**的 SHA-256；同一个键重放直接恢复原单，不做载荷比对（同一键换内容按重放处理）。载荷指纹只用于编号派发的 `requestFingerprint`。
+
+### 待完成
+
+- T7 契约同步（`node --run contract:sync` 三产物）与前端审计事件标签（后者的类型依赖前者生成的 eventType 联合）。
+- T8/T9 前端：两个工作台的「发票管理」分组、四个页面与三语文案、图标资产、路由契约测试。
+- T10 全量门禁（`test:root`、前端 `check`、`ci:server-e2e`）与浏览器实测验收。
 
 ## 6. 业务启用边界
 
