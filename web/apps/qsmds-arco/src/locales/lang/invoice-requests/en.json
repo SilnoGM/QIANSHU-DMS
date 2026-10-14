@@ -103,5 +103,6 @@
   "invoiceRequest.error.rateChanged": "The TWD rate changed; refresh and confirm with the latest rate",
   "invoiceRequest.error.validation": "Check the input and try again",
   "invoiceRequest.error.storage": "Photo storage is temporarily unavailable; try again later",
-  "invoiceRequest.error.unknown": "The action failed; try again later"
+  "invoiceRequest.error.unknown": "The action failed; try again later",
+  "invoiceRequest.list.loadFailed": "Failed to load the list; try again"
 }

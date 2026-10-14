@@ -163,7 +163,7 @@ onBeforeUnmount(closeDetail)
       </template>
     </QsGenericTable>
     <p v-if="loadFailed" class="text-sm text-destructive mt-3">
-      {{ t('invoiceRequest.detail.loadFailed') }}
+      {{ t('invoiceRequest.list.loadFailed') }}
     </p>
 
     <QsGenericModal v-model="detailOpen" :title="t('invoiceRequest.detailTitle')" :description="detail === null ? undefined : `${detail.invoiceNo} · ${detail.buyerName}`" size="lg">

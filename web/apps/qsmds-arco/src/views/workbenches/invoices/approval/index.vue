@@ -289,7 +289,7 @@ onMounted(load)
       </template>
     </QsGenericTable>
     <p v-if="failed" class="text-sm text-destructive mt-3">
-      {{ t('invoiceRequest.detail.loadFailed') }}
+      {{ t('invoiceRequest.list.loadFailed') }}
     </p>
 
     <QsGenericModal

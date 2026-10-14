@@ -103,5 +103,6 @@
   "invoiceRequest.error.rateChanged": "台幣匯率已更新，請重新整理後按最新匯率重新確認",
   "invoiceRequest.error.validation": "請檢查填寫內容後重試",
   "invoiceRequest.error.storage": "發票照片儲存暫時不可用，請稍後重試",
-  "invoiceRequest.error.unknown": "操作失敗，請稍後重試"
+  "invoiceRequest.error.unknown": "操作失敗，請稍後重試",
+  "invoiceRequest.list.loadFailed": "清單載入失敗，請重試"
 }

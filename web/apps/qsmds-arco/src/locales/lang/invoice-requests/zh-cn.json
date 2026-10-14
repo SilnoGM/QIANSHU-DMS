@@ -103,5 +103,6 @@
   "invoiceRequest.error.rateChanged": "台币汇率已更新，请刷新后按最新汇率重新确认",
   "invoiceRequest.error.validation": "请检查填写内容后重试",
   "invoiceRequest.error.storage": "发票照片存储暂时不可用，请稍后重试",
-  "invoiceRequest.error.unknown": "操作失败，请稍后重试"
+  "invoiceRequest.error.unknown": "操作失败，请稍后重试",
+  "invoiceRequest.list.loadFailed": "列表加载失败，请重试"
 }
