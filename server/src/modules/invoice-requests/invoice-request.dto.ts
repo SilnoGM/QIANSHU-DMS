@@ -124,6 +124,7 @@ export class InvoiceRequestDocumentDto {
 
 export class InvoiceRequestListItemDto {
   @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ type: 'integer', description: '乐观锁版本号；写动作必须回传它，冲突时服务端返回 STATE_CHANGED。' }) version!: number
   @ApiProperty() invoiceNo!: string
   @ApiProperty({ enum: INVOICE_REQUEST_STATUS_FILTER_VALUES }) status!: InvoiceRequestStatusValue
   @ApiProperty() buyerName!: string

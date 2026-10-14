@@ -184,6 +184,41 @@ export const financeWorkbench: RouteRecordMainRaw = {
         },
       ],
     },
+    {
+      path: '/qs-finance/invoices',
+      name: 'qsFinanceInvoices',
+      component: () => import('@/layouts/index.vue'),
+      meta: {
+        title: 'workbench.invoiceManagement',
+        icon: 'qs-invoices',
+        // 只用于菜单过滤：组内叶子业务码的并集；直接 URL 准入仍由工作台准入码覆盖。
+        auth: ['invoice-requests:read', 'invoice-requests:review'],
+      },
+      children: [
+        {
+          path: 'approval',
+          name: 'qsFinanceInvoicesApproval',
+          component: () => import('@/views/workbenches/invoices/approval/index.vue'),
+          meta: {
+            title: 'workbench.invoiceApproval',
+            icon: 'qs-invoice-approval',
+            auth: 'invoice-requests:review',
+          },
+        },
+        {
+          path: 'approval/:id',
+          name: 'qsFinanceInvoicesDetail',
+          component: () => import('@/views/workbenches/invoices/approval/detail.vue'),
+          // 与账单详情同款：隐藏菜单但保留面包屑末级（不设 breadcrumb: false）。
+          meta: {
+            title: 'invoiceRequest.detailTitle',
+            auth: 'invoice-requests:review',
+            menu: false,
+            activeMenu: '/qs-finance/invoices/approval',
+          },
+        },
+      ],
+    },
     FundAccountManagement,
   ],
 }

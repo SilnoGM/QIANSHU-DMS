@@ -90086,6 +90086,10 @@
             "type": "string",
             "format": "uuid"
           },
+          "version": {
+            "type": "integer",
+            "description": "乐观锁版本号；写动作必须回传它，冲突时服务端返回 STATE_CHANGED。"
+          },
           "invoiceNo": {
             "type": "string"
           },
@@ -90196,6 +90200,7 @@
         },
         "required": [
           "id",
+          "version",
           "invoiceNo",
           "status",
           "buyerName",
@@ -90369,6 +90374,10 @@
             "type": "string",
             "format": "uuid"
           },
+          "version": {
+            "type": "integer",
+            "description": "乐观锁版本号；写动作必须回传它，冲突时服务端返回 STATE_CHANGED。"
+          },
           "invoiceNo": {
             "type": "string"
           },
@@ -90528,6 +90537,7 @@
         },
         "required": [
           "id",
+          "version",
           "invoiceNo",
           "status",
           "buyerName",

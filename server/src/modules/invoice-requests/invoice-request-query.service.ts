@@ -60,6 +60,7 @@ function toListItem(row: RequestRow): InvoiceRequestListItemDto {
       : firstLine.productName
   return {
     id: row.id,
+    version: row.version,
     invoiceNo: row.invoiceNo,
     status: row.status,
     buyerName: row.buyerName,

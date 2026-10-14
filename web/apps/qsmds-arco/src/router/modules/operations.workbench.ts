@@ -124,6 +124,31 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
+  {
+    path: '/qs-operations/invoices',
+    name: 'qsOperationsInvoices',
+    component: Layout,
+    redirect: { name: 'qsOperationsInvoicesRecords' },
+    meta: {
+      title: '发票管理',
+      icon: 'qs-invoices',
+    },
+    children: [
+      {
+        path: 'create',
+        name: 'qsOperationsInvoicesCreate',
+        component: () => import('@/views/workbenches/invoices/records/create.vue'),
+        // 新建与「重填」共用本页：重填通过 query 带单据 id 回填，不再单开路由。
+        meta: { title: '开票申请', icon: 'qs-invoice-request', auth: 'invoice-requests:create' },
+      },
+      {
+        path: 'records',
+        name: 'qsOperationsInvoicesRecords',
+        component: () => import('@/views/workbenches/invoices/records/index.vue'),
+        meta: { title: '开票记录', icon: 'qs-invoice-records', auth: 'invoice-requests:read' },
+      },
+    ],
+  },
 ]
 
 export default routes

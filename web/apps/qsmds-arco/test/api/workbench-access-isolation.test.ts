@@ -55,6 +55,9 @@ const routesRaw = [
 
 const rolePermissions: Record<string, string[]> = {
   operations_staff: [
+    'invoice-requests:cancel',
+    'invoice-requests:create',
+    'invoice-requests:read',
     'packaging-costs:create',
     'purchase-orders:create',
     'purchase-orders:document',
@@ -77,6 +80,13 @@ const rolePermissions: Record<string, string[]> = {
     'fund-business-sources:manage',
     'fund-posting-types:manage',
     'fund-transactions:reverse',
+    'invoice-requests:cancel',
+    'invoice-requests:document',
+    'invoice-requests:read',
+    'invoice-requests:read-all',
+    'invoice-requests:return',
+    'invoice-requests:review',
+    'invoice-requests:settle',
     'packaging-costs:pay',
     'packaging-costs:read',
     'purchase-orders:payment',
@@ -141,6 +151,7 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-purchase-transport/reviews',
     '/qs-purchase-transport/containers',
     '/qs-purchase-transport/containers/container-1/import',
+    '/qs-finance/invoices/approval',
     '/system/audit',
     '/system/application-settings',
   ]) {
@@ -152,6 +163,8 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-operations/purchase/purchase-orders/create',
     '/qs-operations/warehouse-transport/ocean-containers',
     '/qs-operations/warehouse-transport/overseas-storage',
+    '/qs-operations/invoices/create',
+    '/qs-operations/invoices/records',
   ]) {
     assert.equal(canEnter(operationsStaff, path), true, `运营角色应能进入 ${path}`)
   }
@@ -161,6 +174,8 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-operations/sales/sales-orders/create',
     '/qs-operations/purchase/purchase-orders',
     '/qs-operations/warehouse-transport/ocean-containers',
+    '/qs-operations/invoices/create',
+    '/qs-operations/invoices/records',
     '/qs-purchase-transport/containers',
     '/system/audit',
     '/system/application-settings',
@@ -172,6 +187,8 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-finance/realtime-payments/purchase-payments/batch',
     '/qs-finance/bill-reconciliation/slh-bill-management/import',
     '/qs-finance/fund-accounts/transactions',
+    '/qs-finance/invoices/approval',
+    '/qs-finance/invoices/approval/9f1e0b6c-1111-4222-8333-444444444444',
   ]) {
     assert.equal(canEnter(financeStaff, path), true, `财务角色应能进入 ${path}`)
   }
@@ -181,7 +198,10 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-operations/purchase/purchase-orders',
     '/qs-operations/warehouse-transport/warehouse-arrivals',
     '/qs-operations/warehouse-transport/ocean-containers',
+    '/qs-operations/invoices/create',
+    '/qs-operations/invoices/records',
     '/qs-finance/realtime-payments/purchase-payments',
+    '/qs-finance/invoices/approval',
     '/system/audit',
     '/system/application-settings',
   ]) {
