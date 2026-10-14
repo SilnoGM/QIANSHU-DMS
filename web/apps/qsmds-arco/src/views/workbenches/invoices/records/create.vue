@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import invoiceRequestsApi from '@/api/modules/invoice-requests'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { resolveDuplicateFieldErrors, resolveInvoiceFailureKey } from '../invoice-failure.logic'
 import { buildInvoiceSubmitPayload, calculateInvoiceTotals, emptyInvoiceFormLine, INVOICE_REQUEST_LINE_LIMIT } from '../invoice-form.logic'
 import { parseDuplicateSuspects } from '../invoice-status.logic'
@@ -33,10 +34,10 @@ const loadFailed = ref(false)
 const submitting = ref(false)
 const submitError = ref<string | null>(null)
 const returnedReason = ref<string | null>(null)
-const confirmVisible = ref(false)
-const duplicateVisible = ref(false)
+const confirmOpen = ref(false)
+const duplicateOpen = ref(false)
+const discardOpen = ref(false)
 const duplicateSuspects = ref<ReturnType<typeof parseDuplicateSuspects>>([])
-const discardVisible = ref(false)
 const dirty = ref(false)
 
 const totals = computed(() => calculateInvoiceTotals(lines.value))
@@ -57,6 +58,19 @@ function addLine(): void {
 function removeLine(index: number): void {
   lines.value = lines.value.filter((_, current) => current !== index)
   markDirty()
+}
+
+function currentPayload(): ReturnType<typeof buildInvoiceSubmitPayload> {
+  return buildInvoiceSubmitPayload({
+    buyerName: buyerName.value,
+    buyerTaxId: buyerTaxId.value,
+    invoiceRemark: invoiceRemark.value,
+    internalRemark: internalRemark.value,
+    recipientName: recipientName.value,
+    recipientPhone: recipientPhone.value,
+    recipientAddress: recipientAddress.value,
+    lines: lines.value,
+  })
 }
 
 async function loadForRefill(id: string): Promise<void> {
@@ -89,34 +103,15 @@ onMounted(async () => {
 
 function requestSubmit(): void {
   submitError.value = null
-  const built = buildInvoiceSubmitPayload({
-    buyerName: buyerName.value,
-    buyerTaxId: buyerTaxId.value,
-    invoiceRemark: invoiceRemark.value,
-    internalRemark: internalRemark.value,
-    recipientName: recipientName.value,
-    recipientPhone: recipientPhone.value,
-    recipientAddress: recipientAddress.value,
-    lines: lines.value,
-  })
-  if ('invalidField' in built) {
+  if ('invalidField' in currentPayload()) {
     submitError.value = t('invoiceRequest.error.validation')
     return
   }
-  confirmVisible.value = true
+  confirmOpen.value = true
 }
 
-async function submit(): Promise<void> {
-  const built = buildInvoiceSubmitPayload({
-    buyerName: buyerName.value,
-    buyerTaxId: buyerTaxId.value,
-    invoiceRemark: invoiceRemark.value,
-    internalRemark: internalRemark.value,
-    recipientName: recipientName.value,
-    recipientPhone: recipientPhone.value,
-    recipientAddress: recipientAddress.value,
-    lines: lines.value,
-  })
+async function send(duplicateAcknowledged: boolean): Promise<void> {
+  const built = currentPayload()
   if ('invalidField' in built) {
     return
   }
@@ -124,19 +119,20 @@ async function submit(): Promise<void> {
   submitError.value = null
   try {
     const signal = new AbortController().signal
+    const payload = duplicateAcknowledged ? { ...built.payload, duplicateAcknowledged: true } : built.payload
     if (editingId.value === null) {
       // 提交是唯一带幂等键的动作：同一个键重放只会恢复同一张单。
-      await invoiceRequestsApi.submit(built.payload, crypto.randomUUID(), signal)
+      await invoiceRequestsApi.submit(payload, crypto.randomUUID(), signal)
     }
     else {
       if (editingVersion.value === null) {
         throw new Error('missing version')
       }
-      await invoiceRequestsApi.resubmit(editingId.value, { ...built.payload, expectedVersion: editingVersion.value }, signal)
+      await invoiceRequestsApi.resubmit(editingId.value, { ...payload, expectedVersion: editingVersion.value }, signal)
     }
     dirty.value = false
-    confirmVisible.value = false
-    duplicateVisible.value = false
+    confirmOpen.value = false
+    duplicateOpen.value = false
     await router.push({ name: 'qsOperationsInvoicesRecords' })
   }
   catch (error) {
@@ -144,51 +140,12 @@ async function submit(): Promise<void> {
     if (suspects.length > 0) {
       // 四项比对命中：列出相似单再确认，确认后带 duplicateAcknowledged 重发。
       duplicateSuspects.value = suspects
-      confirmVisible.value = false
-      duplicateVisible.value = true
+      confirmOpen.value = false
+      duplicateOpen.value = true
     }
     else {
       submitError.value = t(resolveInvoiceFailureKey(error))
     }
-  }
-  finally {
-    submitting.value = false
-  }
-}
-
-async function submitAcknowledged(): Promise<void> {
-  const built = buildInvoiceSubmitPayload({
-    buyerName: buyerName.value,
-    buyerTaxId: buyerTaxId.value,
-    invoiceRemark: invoiceRemark.value,
-    internalRemark: internalRemark.value,
-    recipientName: recipientName.value,
-    recipientPhone: recipientPhone.value,
-    recipientAddress: recipientAddress.value,
-    lines: lines.value,
-  })
-  if ('invalidField' in built) {
-    return
-  }
-  submitting.value = true
-  try {
-    const signal = new AbortController().signal
-    if (editingId.value === null) {
-      await invoiceRequestsApi.submit({ ...built.payload, duplicateAcknowledged: true }, crypto.randomUUID(), signal)
-    }
-    else {
-      if (editingVersion.value === null) {
-        throw new Error('missing version')
-      }
-      await invoiceRequestsApi.resubmit(editingId.value, { ...built.payload, duplicateAcknowledged: true, expectedVersion: editingVersion.value }, signal)
-    }
-    dirty.value = false
-    dirty.value = false
-    await router.push({ name: 'qsOperationsInvoicesRecords' })
-  }
-  catch (error) {
-    duplicateVisible.value = false
-    submitError.value = t(resolveInvoiceFailureKey(error))
   }
   finally {
     submitting.value = false
@@ -204,6 +161,7 @@ function beforeUnload(event: BeforeUnloadEvent): void {
   event.preventDefault()
   event.returnValue = ''
 }
+
 onMounted(() => window.addEventListener('beforeunload', beforeUnload))
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', beforeUnload)
@@ -218,11 +176,12 @@ onBeforeRouteLeave(() => {
   }
   return new Promise<boolean>((resolve) => {
     pendingNavigationResolver = resolve
-    discardVisible.value = true
+    discardOpen.value = true
   })
 })
+
 function finishLeave(allowed: boolean): void {
-  discardVisible.value = false
+  discardOpen.value = false
   const resolve = pendingNavigationResolver
   pendingNavigationResolver = null
   if (allowed) {
@@ -281,17 +240,20 @@ function finishLeave(allowed: boolean): void {
         </FaButton>
         <dl class="text-sm mt-4 pt-3 border-t border-border gap-1 grid">
           <div class="flex justify-between">
-            <dt>{{ t('invoiceRequest.field.salesAmount') }}</dt><dd class="tabular-nums">
+            <dt>{{ t('invoiceRequest.field.salesAmount') }}</dt>
+            <dd class="tabular-nums">
               {{ totals.salesAmount ?? '—' }}
             </dd>
           </div>
           <div class="flex justify-between">
-            <dt>{{ t('invoiceRequest.field.taxAmount') }}</dt><dd class="tabular-nums">
+            <dt>{{ t('invoiceRequest.field.taxAmount') }}</dt>
+            <dd class="tabular-nums">
               {{ totals.taxAmount ?? '—' }}
             </dd>
           </div>
           <div class="font-semibold flex justify-between">
-            <dt>{{ t('invoiceRequest.field.totalAmount') }}</dt><dd class="tabular-nums">
+            <dt>{{ t('invoiceRequest.field.totalAmount') }}</dt>
+            <dd class="tabular-nums">
               {{ totals.totalAmount ?? '—' }}
             </dd>
           </div>
@@ -349,66 +311,57 @@ function finishLeave(allowed: boolean): void {
       </div>
     </div>
 
-    <div v-if="confirmVisible" class="p-4 bg-black/40 flex items-center inset-0 justify-center fixed z-50">
-      <div class="p-5 rounded-lg bg-card max-w-md w-full shadow-lg">
-        <h3 class="text-base font-semibold">
-          {{ t('invoiceRequest.form.submitConfirmTitle') }}
-        </h3>
-        <p class="text-sm text-muted-foreground mt-2">
-          {{ t('invoiceRequest.form.submitConfirmBody', { count: lines.length, total: totals.totalAmount ?? 0 }) }}
-        </p>
-        <div class="mt-5 flex gap-2 justify-end">
-          <FaButton variant="outline" :disabled="submitting" @click="confirmVisible = false">
-            {{ t('invoiceRequest.form.continueEditing') }}
-          </FaButton>
-          <FaButton :loading="submitting" :disabled="submitting" @click="submit">
-            {{ t('invoiceRequest.common.confirm') }}
-          </FaButton>
-        </div>
-      </div>
-    </div>
+    <QsGenericModal
+      v-model="confirmOpen"
+      :title="t('invoiceRequest.form.submitConfirmTitle')"
+      size="sm"
+      :submitting="submitting"
+      :error="submitError"
+    >
+      <p class="text-sm text-muted-foreground">
+        {{ t('invoiceRequest.form.submitConfirmBody', { count: lines.length, total: totals.totalAmount ?? 0 }) }}
+      </p>
+      <template #footer>
+        <FaButton variant="outline" :disabled="submitting" @click="confirmOpen = false">
+          {{ t('invoiceRequest.form.continueEditing') }}
+        </FaButton>
+        <FaButton :loading="submitting" :disabled="submitting" @click="send(false)">
+          {{ t('invoiceRequest.common.confirm') }}
+        </FaButton>
+      </template>
+    </QsGenericModal>
 
-    <div v-if="duplicateVisible" class="p-4 bg-black/40 flex items-center inset-0 justify-center fixed z-50">
-      <div class="p-5 rounded-lg bg-card max-w-lg w-full shadow-lg">
-        <h3 class="text-base font-semibold">
-          {{ t('invoiceRequest.form.duplicateTitle') }}
-        </h3>
-        <p class="text-sm text-muted-foreground mt-2">
-          {{ t('invoiceRequest.form.duplicateBody') }}
-        </p>
-        <ul class="text-sm mt-3 flex flex-col gap-1">
-          <li v-for="suspect in duplicateSuspects" :key="suspect.invoiceNo" class="tabular-nums">
-            {{ suspect.invoiceNo }} · {{ t(`invoiceRequest.status.${suspect.status}`) }} · {{ suspect.submittedAt }}
-          </li>
-        </ul>
-        <div class="mt-5 flex gap-2 justify-end">
-          <FaButton variant="outline" :disabled="submitting" @click="duplicateVisible = false">
-            {{ t('invoiceRequest.form.continueEditing') }}
-          </FaButton>
-          <FaButton :loading="submitting" :disabled="submitting" @click="submitAcknowledged">
-            {{ t('invoiceRequest.form.duplicateConfirm') }}
-          </FaButton>
-        </div>
-      </div>
-    </div>
+    <QsGenericModal v-model="duplicateOpen" :title="t('invoiceRequest.form.duplicateTitle')" size="md" :submitting="submitting">
+      <p class="text-sm text-muted-foreground">
+        {{ t('invoiceRequest.form.duplicateBody') }}
+      </p>
+      <ul class="text-sm mt-3 flex flex-col gap-1">
+        <li v-for="suspect in duplicateSuspects" :key="suspect.invoiceNo" class="tabular-nums">
+          {{ suspect.invoiceNo }} · {{ t(`invoiceRequest.status.${suspect.status}`) }} · {{ suspect.submittedAt }}
+        </li>
+      </ul>
+      <template #footer>
+        <FaButton variant="outline" :disabled="submitting" @click="duplicateOpen = false">
+          {{ t('invoiceRequest.form.continueEditing') }}
+        </FaButton>
+        <FaButton :loading="submitting" :disabled="submitting" @click="send(true)">
+          {{ t('invoiceRequest.form.duplicateConfirm') }}
+        </FaButton>
+      </template>
+    </QsGenericModal>
 
-    <div v-if="discardVisible" class="p-4 bg-black/40 flex items-center inset-0 justify-center fixed z-50">
-      <div class="p-5 rounded-lg bg-card max-w-md w-full shadow-lg">
-        <h3 class="text-base font-semibold">
-          {{ t('invoiceRequest.form.discardTitle') }}
-        </h3>
-        <p class="text-sm text-muted-foreground mt-2">
-          {{ t('invoiceRequest.form.discardBody') }}
-        </p>
-        <div class="mt-5 flex gap-2 justify-end">
-          <FaButton variant="outline" @click="finishLeave(false)">
-            {{ t('invoiceRequest.form.continueEditing') }}
-          </FaButton>
-          <FaButton variant="destructive" @click="finishLeave(true)">
-            {{ t('invoiceRequest.form.confirmDiscard') }}
-          </FaButton>
-        </div>
-      </div>
-    </div>
+    <QsGenericModal v-model="discardOpen" :title="t('invoiceRequest.form.discardTitle')" size="sm">
+      <p class="text-sm text-muted-foreground">
+        {{ t('invoiceRequest.form.discardBody') }}
+      </p>
+      <template #footer>
+        <FaButton variant="outline" @click="finishLeave(false)">
+          {{ t('invoiceRequest.form.continueEditing') }}
+        </FaButton>
+        <FaButton variant="destructive" @click="finishLeave(true)">
+          {{ t('invoiceRequest.form.confirmDiscard') }}
+        </FaButton>
+      </template>
+    </QsGenericModal>
   </FaPageMain>
 </template>
