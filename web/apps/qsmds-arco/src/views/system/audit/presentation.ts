@@ -113,6 +113,13 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   PURCHASE_ORDER_PAYMENT_VOIDED: '采购订单付款已作废',
   PURCHASE_ORDER_DOCUMENT_ATTACHED: '采购订单凭证已关联',
   PURCHASE_ORDER_DOCUMENT_DETACHED: '采购订单凭证已解除',
+  INVOICE_REQUEST_CREATED: '开票申请已提交',
+  INVOICE_REQUEST_RESUBMITTED: '开票申请已重新提交',
+  INVOICE_REQUEST_RETURNED: '开票申请已退回重填',
+  INVOICE_REQUEST_NOTIFIED: '开票申请已审核并通知',
+  INVOICE_REQUEST_DOCUMENT_UPLOADED: '发票照片已上传',
+  INVOICE_REQUEST_SETTLED: '开票成本已结算入账',
+  INVOICE_REQUEST_CANCELLED: '开票申请已取消',
 }
 
 export function auditMetadataEntries(
