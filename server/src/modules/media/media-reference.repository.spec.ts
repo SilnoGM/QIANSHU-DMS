@@ -8,7 +8,7 @@ const ASSET_ID = '00000000-0000-4000-8000-000000000321'
 
 describe('MediaAssetReferenceRepository', () => {
   it.each(['paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill'])('retains recipient code through %s even after configuration changes', async target => {
-    const reader = Object.fromEntries(['productMedia', 'salesOrderDocument', 'purchaseOrderDocument', 'salesReceiptRequest', 'purchaseOrderImageDraft', 'packagingCostRequest', 'paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill']
+    const reader = Object.fromEntries(['productMedia', 'salesOrderDocument', 'purchaseOrderDocument', 'salesReceiptRequest', 'purchaseOrderImageDraft', 'packagingCostRequest', 'paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'invoiceRequest']
       .map(name => [name, { findFirst: jest.fn().mockResolvedValue(name === target ? { id: 'reference' } : null) }])) as unknown as Prisma.TransactionClient
     await expect(new MediaAssetReferenceRepository().hasActiveReferences(reader, ASSET_ID)).resolves.toBe(true)
   })
@@ -34,6 +34,24 @@ describe('MediaAssetReferenceRepository', () => {
     } as unknown as Prisma.TransactionClient
     await expect(new MediaAssetReferenceRepository().hasActiveReferences(reader, ASSET_ID)).resolves.toBe(true)
     expect(findFirst).toHaveBeenCalledWith({ where: { voucherMediaAssetId: ASSET_ID }, select: { id: true } })
+  })
+  it('keeps the invoice document as evidence after the request is cancelled', async () => {
+    const invoiceRequest = jest.fn().mockResolvedValue({ id: 'cancelled-invoice-request' })
+    const reader = {
+      productMedia: { findFirst: jest.fn().mockResolvedValue(null) },
+      salesOrderDocument: { findFirst: jest.fn().mockResolvedValue(null) },
+      purchaseOrderDocument: { findFirst: jest.fn().mockResolvedValue(null) },
+      salesReceiptRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      purchaseOrderImageDraft: { findFirst: jest.fn().mockResolvedValue(null) },
+      packagingCostRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      paymentRecipientAccount: { findFirst: jest.fn().mockResolvedValue(null) },
+      purchaseOrderPayment: { findFirst: jest.fn().mockResolvedValue(null) },
+      containerBatch: { findFirst: jest.fn().mockResolvedValue(null) },
+      slhBill: { findFirst: jest.fn().mockResolvedValue(null) },
+      invoiceRequest: { findFirst: invoiceRequest },
+    } as unknown as Prisma.TransactionClient
+    await expect(new MediaAssetReferenceRepository().hasActiveReferences(reader, ASSET_ID)).resolves.toBe(true)
+    expect(invoiceRequest).toHaveBeenCalledWith({ where: { documentMediaAssetId: ASSET_ID }, select: { id: true } })
   })
   it('explicitly checks every implemented active media reference', async () => {
     const productMediaFindFirst = jest.fn().mockResolvedValue(null)
@@ -61,6 +79,7 @@ describe('MediaAssetReferenceRepository', () => {
       'purchase_order_payments',
       'container_batches',
       'slh_bills',
+      'invoice_requests',
     ])
     expect(productMediaFindFirst).toHaveBeenCalledWith({
       where: {
@@ -107,6 +126,7 @@ describe('MediaAssetReferenceRepository', () => {
       purchaseOrderPayment: { findFirst: jest.fn().mockResolvedValue(null) },
       containerBatch: { findFirst: jest.fn().mockResolvedValue(null) },
       slhBill: { findFirst: jest.fn().mockResolvedValue(null) },
+      invoiceRequest: { findFirst: jest.fn().mockResolvedValue(null) },
     } as unknown as Prisma.TransactionClient
 
     await expect(

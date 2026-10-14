@@ -17,11 +17,12 @@ export const MEDIA_ASSET_REFERENCE_TABLES = Object.freeze([
   'purchase_order_payments',
   'container_batches',
   'slh_bills',
+  'invoice_requests',
 ] as const)
 
 type MediaReferenceReader = Pick<
   Prisma.TransactionClient,
-  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest' | 'paymentRecipientAccount' | 'purchaseOrderPayment' | 'containerBatch' | 'slhBill'
+  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest' | 'paymentRecipientAccount' | 'purchaseOrderPayment' | 'containerBatch' | 'slhBill' | 'invoiceRequest'
 >
 
 /**
@@ -81,6 +82,8 @@ export class MediaAssetReferenceRepository {
     if (await reader.purchaseOrderPayment.findFirst({ where: { recipientQrMediaAssetId: assetId }, select: { id: true } }) !== null) return true
     // 柜次的来源文件是核对依据，即使还没有明细也不能被回收。
     if (await reader.containerBatch.findFirst({ where: { sourceFileId: assetId }, select: { id: true } }) !== null) return true
+    // 发票照片是结算成本与票面核对唯一的证据，单据不可删，照片同样不可回收（含取消后保留的单据）。
+    if (await reader.invoiceRequest.findFirst({ where: { documentMediaAssetId: assetId }, select: { id: true } }) !== null) return true
     // 账单原件是外部凭证的唯一留痕；账单本身不可删，原件同样不可回收。
     return await reader.slhBill.findFirst({ where: { sourceFileId: assetId }, select: { id: true } }) !== null
   }
