@@ -6,6 +6,7 @@ import invoiceRequestsApi from '@/api/modules/invoice-requests'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
+import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { resolveInvoiceFailureKey } from './invoice-failure.logic'
@@ -109,8 +110,10 @@ function close(): void {
   emit('update:modelValue', false)
 }
 
-function historyLine(entry: InvoiceRequestHistoryDto): string {
-  return [t(`invoiceRequest.status.${entry.toStatus}`), entry.actorName].join(' · ')
+/** 流程行的状态流转：提交没有前置状态，只显示目标状态。 */
+function statusTransition(entry: InvoiceRequestHistoryDto): string {
+  const target = t(`invoiceRequest.status.${entry.toStatus}`)
+  return entry.fromStatus === null ? target : `${t(`invoiceRequest.status.${entry.fromStatus}`)} → ${target}`
 }
 
 /** 节点操作人：取流程历史里最近一次该动作的 actorName（退回可多次，取最新；未发生则为 null）。 */
@@ -172,40 +175,40 @@ function lineAmount(line: InvoiceRequestLineDto): string {
             <dt class="qs-type-compact-label mb-1.5">
               {{ t('invoiceRequest.detail.node.applicant') }}
             </dt>
-            <dd class="m-0 flex flex-wrap gap-x-3 gap-y-1 items-baseline">
+            <dd class="m-0 flex flex-col gap-1 items-start">
               <QsPersonDisplay v-if="nodes.applicant !== null" :display-name="nodes.applicant" size="sm" />
-              <span v-else class="qs-type-meta">—</span>
-              <DateTimeDisplay :value="detail.submittedAt" />
+              <span v-else class="qs-type-body">—</span>
+              <DateTimeDisplay :value="detail.submittedAt" class="text-muted-foreground" />
             </dd>
           </div>
           <div class="min-w-0">
             <dt class="qs-type-compact-label mb-1.5">
               {{ t('invoiceRequest.detail.node.notifier') }}
             </dt>
-            <dd class="m-0 flex flex-wrap gap-x-3 gap-y-1 items-baseline">
+            <dd class="m-0 flex flex-col gap-1 items-start">
               <QsPersonDisplay v-if="nodes.notifier !== null" :display-name="nodes.notifier" size="sm" />
-              <span v-else class="qs-type-meta">—</span>
-              <DateTimeDisplay :value="detail.notifiedAt" />
+              <span v-else class="qs-type-body">—</span>
+              <DateTimeDisplay :value="detail.notifiedAt" class="text-muted-foreground" />
             </dd>
           </div>
           <div class="min-w-0">
             <dt class="qs-type-compact-label mb-1.5">
               {{ t('invoiceRequest.detail.node.uploader') }}
             </dt>
-            <dd class="m-0 flex flex-wrap gap-x-3 gap-y-1 items-baseline">
+            <dd class="m-0 flex flex-col gap-1 items-start">
               <QsPersonDisplay v-if="nodes.uploader !== null" :display-name="nodes.uploader" size="sm" />
-              <span v-else class="qs-type-meta">—</span>
-              <DateTimeDisplay :value="detail.documentUploadedAt" />
+              <span v-else class="qs-type-body">—</span>
+              <DateTimeDisplay :value="detail.documentUploadedAt" class="text-muted-foreground" />
             </dd>
           </div>
           <div class="min-w-0">
             <dt class="qs-type-compact-label mb-1.5">
               {{ t('invoiceRequest.detail.node.settler') }}
             </dt>
-            <dd class="m-0 flex flex-wrap gap-x-3 gap-y-1 items-baseline">
+            <dd class="m-0 flex flex-col gap-1 items-start">
               <QsPersonDisplay v-if="nodes.settler !== null" :display-name="nodes.settler" size="sm" />
-              <span v-else class="qs-type-meta">—</span>
-              <DateTimeDisplay :value="detail.settledAt" />
+              <span v-else class="qs-type-body">—</span>
+              <DateTimeDisplay :value="detail.settledAt" class="text-muted-foreground" />
             </dd>
           </div>
         </dl>
@@ -220,24 +223,26 @@ function lineAmount(line: InvoiceRequestLineDto): string {
             {{ t('invoiceRequest.detail.sectionInvoice') }}
           </h3>
         </header>
-        <dl class="m-0 gap-x-6 gap-y-4 grid sm:grid-cols-2">
-          <div class="min-w-0">
-            <dt class="qs-type-compact-label mb-1.5">
-              {{ t('invoiceRequest.field.buyerName') }}
-            </dt>
-            <dd class="qs-type-body m-0 break-words">
-              {{ detail.buyerName }}
-            </dd>
+        <div class="gap-4 grid min-w-0 sm:grid-cols-2">
+          <div class="p-4 border border-border rounded-xl bg-muted/40 flex flex-col gap-2 min-w-0">
+            <p class="qs-type-compact-label m-0">
+              {{ t('invoiceRequest.field.buyerName') }} (buyer_name)
+            </p>
+            <div class="flex gap-3 min-w-0 items-center justify-between">
+              <span class="qs-type-section-title min-w-0 break-words">{{ detail.buyerName }}</span>
+              <CopyCellButton :always-visible="true" :label="t('invoiceRequest.field.buyerName')" :text="detail.buyerName" />
+            </div>
           </div>
-          <div class="min-w-0">
-            <dt class="qs-type-compact-label mb-1.5">
-              {{ t('invoiceRequest.field.buyerTaxId') }}
-            </dt>
-            <dd class="qs-type-data m-0">
-              {{ detail.buyerTaxId }}
-            </dd>
+          <div class="p-4 border border-border rounded-xl bg-muted/40 flex flex-col gap-2 min-w-0">
+            <p class="qs-type-compact-label m-0">
+              {{ t('invoiceRequest.field.buyerTaxId') }} (buyer_tax_id)
+            </p>
+            <div class="flex gap-3 min-w-0 items-center justify-between">
+              <span class="text-lg qs-type-data-emphasis font-semibold min-w-0 break-words">{{ detail.buyerTaxId }}</span>
+              <CopyCellButton :always-visible="true" :label="t('invoiceRequest.field.buyerTaxId')" :text="detail.buyerTaxId" />
+            </div>
           </div>
-        </dl>
+        </div>
         <div class="border border-border rounded-xl bg-background overflow-x-auto">
           <table class="text-sm w-full border-collapse">
             <caption class="sr-only">
@@ -270,13 +275,13 @@ function lineAmount(line: InvoiceRequestLineDto): string {
                 <td class="p-3 break-words">
                   {{ line.productName }}
                 </td>
-                <td class="qs-type-data p-3">
+                <td class="qs-type-data p-3 text-right">
                   {{ line.quantity }}
                 </td>
-                <td class="qs-type-data p-3">
+                <td class="qs-type-data p-3 text-right">
                   {{ line.unitPrice }}
                 </td>
-                <td class="qs-type-data-emphasis p-3">
+                <td class="qs-type-data-emphasis p-3 text-right">
                   {{ lineAmount(line) }}
                 </td>
               </tr>
@@ -311,24 +316,34 @@ function lineAmount(line: InvoiceRequestLineDto): string {
             </div>
           </dl>
         </div>
-        <dl class="m-0 gap-x-6 gap-y-4 grid sm:grid-cols-2">
-          <div class="min-w-0">
-            <dt class="qs-type-compact-label mb-1.5">
-              {{ t('invoiceRequest.field.invoiceRemark') }}
-            </dt>
-            <dd class="qs-type-body m-0 break-words">
+        <div class="gap-4 grid min-w-0 sm:grid-cols-2">
+          <div class="p-4 border border-border rounded-xl bg-background flex flex-col gap-2 min-w-0">
+            <div class="flex gap-2 items-center justify-between">
+              <p class="qs-type-compact-label m-0">
+                {{ t('invoiceRequest.field.invoiceRemark') }} (invoice_remark)
+              </p>
+              <span class="text-xs text-primary font-medium px-1.5 py-0.5 rounded bg-primary/10 whitespace-nowrap">
+                {{ t('invoiceRequest.detail.mergeIntoCopyText') }}
+              </span>
+            </div>
+            <p class="qs-type-body m-0 break-words">
               {{ detail.invoiceRemark ?? '—' }}
-            </dd>
+            </p>
           </div>
-          <div class="min-w-0">
-            <dt class="qs-type-compact-label mb-1.5">
-              {{ t('invoiceRequest.field.internalRemark') }}
-            </dt>
-            <dd class="qs-type-body m-0 break-words">
+          <div class="p-4 border border-amber-500/30 rounded-xl bg-amber-500/10 flex flex-col gap-2 min-w-0">
+            <div class="flex gap-2 items-center justify-between">
+              <p class="text-xs text-amber-700 font-medium m-0 dark:text-amber-300">
+                {{ t('invoiceRequest.field.internalRemark') }} (internal_remark)
+              </p>
+              <span class="text-xs text-amber-700 font-medium px-1.5 py-0.5 rounded bg-amber-500/15 whitespace-nowrap dark:text-amber-300">
+                {{ t('invoiceRequest.detail.internalOnlyTag') }}
+              </span>
+            </div>
+            <p class="qs-type-body m-0 break-words">
               {{ detail.internalRemark ?? '—' }}
-            </dd>
+            </p>
           </div>
-        </dl>
+        </div>
       </section>
 
       <section class="p-4 border border-border rounded-xl bg-background min-w-0 space-y-4 sm:p-5">
@@ -384,9 +399,17 @@ function lineAmount(line: InvoiceRequestLineDto): string {
             class="h-80 w-auto"
             :aria-label="t('invoiceRequest.detail.document')"
           />
-          <p v-else class="qs-type-meta m-0">
-            {{ t('invoiceRequest.detail.documentNone') }}
-          </p>
+          <div v-else class="text-muted-foreground px-4 py-10 text-center rounded-xl bg-muted/30 flex flex-col gap-2 items-center justify-center">
+            <span class="rounded-full bg-muted flex size-12 items-center justify-center">
+              <FaIcon name="i-lucide:camera" class="size-6" aria-hidden="true" />
+            </span>
+            <p class="qs-type-body-medium m-0">
+              {{ t('invoiceRequest.detail.documentNone') }}
+            </p>
+            <p class="qs-type-meta m-0">
+              {{ t('invoiceRequest.detail.documentNoneDescription') }}
+            </p>
+          </div>
         </section>
 
         <section class="p-4 border border-border rounded-xl bg-background min-w-0 space-y-4 sm:p-5">
@@ -424,9 +447,17 @@ function lineAmount(line: InvoiceRequestLineDto): string {
               </dd>
             </div>
           </dl>
-          <p v-else class="qs-type-meta m-0">
-            {{ t('invoiceRequest.detail.settleNone') }}
-          </p>
+          <div v-else class="text-muted-foreground px-4 py-10 text-center rounded-xl bg-muted/30 flex flex-col gap-2 items-center justify-center">
+            <span class="rounded-full bg-muted flex size-12 items-center justify-center">
+              <FaIcon name="i-lucide:landmark" class="size-6" aria-hidden="true" />
+            </span>
+            <p class="qs-type-body-medium m-0">
+              {{ t('invoiceRequest.detail.settleNone') }}
+            </p>
+            <p class="qs-type-meta m-0">
+              {{ t('invoiceRequest.detail.settleNoneDescription') }}
+            </p>
+          </div>
         </section>
       </div>
 
@@ -440,10 +471,15 @@ function lineAmount(line: InvoiceRequestLineDto): string {
           </h3>
         </header>
         <ol class="m-0 p-0 list-none space-y-3">
-          <li v-for="entry in detail.history" :key="entry.occurredAt + entry.action" class="flex flex-wrap gap-x-3 gap-y-1 items-baseline">
-            <span class="qs-type-body-medium">{{ historyLine(entry) }}</span>
-            <DateTimeDisplay :value="entry.occurredAt" />
-            <span v-if="entry.reason !== null" class="qs-type-meta basis-full">{{ t('invoiceRequest.detail.returnReason') }}：{{ entry.reason }}</span>
+          <li v-for="entry in detail.history" :key="entry.occurredAt + entry.action" class="flex flex-wrap gap-x-3 gap-y-1 items-baseline justify-between">
+            <div class="flex flex-wrap gap-x-2 gap-y-1 min-w-0 items-baseline">
+              <span class="qs-type-body-medium">{{ entry.actorName }}</span>
+              <span class="qs-type-body text-muted-foreground">{{ t('invoiceRequest.detail.actionVerb') }}</span>
+              <span class="qs-type-body-medium">【{{ t(`invoiceRequest.detail.action.${entry.action}`) }}】</span>
+              <span class="qs-type-meta px-1.5 py-0.5 rounded bg-muted/60 whitespace-nowrap">{{ statusTransition(entry) }}</span>
+            </div>
+            <DateTimeDisplay :value="entry.occurredAt" class="text-muted-foreground" />
+            <span v-if="entry.reason !== null" class="qs-type-meta basis-full">{{ t('invoiceRequest.action.reasonLabel') }}：{{ entry.reason }}</span>
           </li>
         </ol>
         <p v-if="detail.documentUploadedAt !== null" class="qs-type-meta m-0">

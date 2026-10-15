@@ -1397,6 +1397,15 @@
     ]
   },
   {
+    "name": "i-lucide:camera",
+    "label": "i-lucide:camera",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue"
+    ]
+  },
+  {
     "name": "i-lucide:check",
     "label": "i-lucide:check",
     "category": "通用图标",

@@ -37,6 +37,17 @@ test('详情抽屉按 2026-10-15 结构图重组：五节 + 节点四组 + 复�
   // 结构图里没有的旧分区标题不得回归。
   assert.equal(source.includes('form.remarkSection'), false)
   assert.equal(source.includes('detail.history\''), false)
+  // 流程行：操作人 + 执行了 + 【动作】 + 状态流转，动作标签与流转都走三语键。
+  assert.match(source, /detail\.actionVerb/u)
+  assert.match(source, /detail\.action\.\$\{entry\.action\}/u)
+  assert.match(source, /statusTransition/u)
+  // 主体/备注卡复用组件库复制按钮；两处占位为「图标 + 标题 + 说明」。
+  assert.match(source, /import CopyCellButton from '@\/components\/business\/QsGenericTable\/CopyCellButton\.vue'/u)
+  assert.match(source, /detail\.documentNoneDescription/u)
+  assert.match(source, /detail\.settleNoneDescription/u)
+  // 明细表数量、单价、金额右对齐。
+  assert.match(source, /qs-type-data[^"\n]*text-right/u)
+  assert.match(source, /qs-type-data-emphasis[^"\n]*text-right/u)
 })
 
 test('两张列表的列与口径符合 2026-10-15 拍板：照片用 ImageGroup、无明细摘要/可结算/提交人独立列', async () => {
