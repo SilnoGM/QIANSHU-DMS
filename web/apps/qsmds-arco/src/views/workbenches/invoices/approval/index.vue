@@ -291,6 +291,7 @@ onMounted(load)
         v-model:page-size="pageSize"
         v-model:search="search"
         row-key="id"
+        :addable="false"
         :columns="columns"
         :data="items"
         :loading="loading"
