@@ -137,6 +137,7 @@ export const SEED_ROLES: readonly SeedRole[] = [
     name: '运营人员',
     description: '运营人员（销售人员）',
     permissionCodes: [
+      'exchange-rates:read',
       'invoice-requests:cancel',
       'invoice-requests:create',
       'invoice-requests:read',
@@ -160,6 +161,7 @@ export const SEED_ROLES: readonly SeedRole[] = [
     name: '财务人员',
     description: '财务人员（千树财务工作台）',
     permissionCodes: [
+      'exchange-rates:read',
       'fund-accounts:create',
       'fund-accounts:manual-adjust',
       'fund-accounts:read',

@@ -55,6 +55,7 @@ const routesRaw = [
 
 const rolePermissions: Record<string, string[]> = {
   operations_staff: [
+    'exchange-rates:read',
     'invoice-requests:cancel',
     'invoice-requests:create',
     'invoice-requests:read',
@@ -73,6 +74,7 @@ const rolePermissions: Record<string, string[]> = {
     OPERATIONS_WORKBENCH_PERMISSION,
   ],
   finance_staff: [
+    'exchange-rates:read',
     'fund-accounts:create',
     'fund-accounts:manual-adjust',
     'fund-accounts:read',
