@@ -336,7 +336,7 @@ await postBusinessEventInTransaction(tx, ctx, input, preview)
 ### 10.1 路由与菜单
 
 - 运营：`router/modules/operations.workbench.ts` 新增分组「发票管理」（第 4 组，中文字面量 title），两个正式菜单项：`开票申请`（`/qs-operations/invoices/create`，业务码 `:create`）与 `开票记录`（`/qs-operations/invoices/records`，业务码 `:read`）；重填复用开票申请路由（带单据 id 的查询参数），不再单开路由。
-- 财务：`router/modules/role.workbenches.ts` 的 `financeWorkbench` 新增分组「发票管理」（i18n key `workbench.invoiceApproval`），菜单项 `开票审批`（`/qs-finance/invoices/approval`，业务码 `:review`）+ 一个 `menu: false` 的隐藏详情路由。
+- 财务：`router/modules/role.workbenches.ts` 的 `financeWorkbench` 新增分组「发票管理」（i18n key `workbench.invoiceManagement`），菜单项 `开票审批`（`/qs-finance/invoices/approval`，业务码 `:review`）。**只读详情已按 UI 规范改为共用的 `QsGenericDrawer`（保留列表上下文），原先预留的 `menu: false` 隐藏详情路由与页面已删除（2026-10-15 用户拍板）**。
 - 分组门槛用工作台准入码（组级 `auth` 会覆盖一级子路由声明，业务码放在叶子）。
 
 ### 10.2 页面落点

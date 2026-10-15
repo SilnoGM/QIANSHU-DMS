@@ -156,6 +156,14 @@
   3. 服务端新增 `version` 响应字段——写动作的乐观锁版本号原先没有随响应返回，前端无法回传。
 - **尚未做**：浏览器实测（T10）、页面级单测（三语键对齐与表单纯函数用例）。
 
+### UI 规范对齐（已提交 `adb486b5`）
+
+用户判定三页 UI「与本项目风格不符」后做了全量对齐（前端规范 + 既有页面）：骨架（FaPageHeader/FaCard/qs-type-*）、控件（FaInput/FaTextarea/FaImageUpload + FaFormItem 字段级校验）、展示组件（AmountDisplay/DateTimeDisplay/QsPersonDisplay/QsTableStackedCell）、列表接线（:error/@retry/empty-*/action-column/mobile-row）、表面选型（只读详情 → 共用 QsGenericDrawer；审批动作弹窗 size=xl 分区重排）、私有图片失效保护。
+
+**随之删除**：隐藏详情路由 `approval/:id` 与页面 `approval/detail.vue`（详情并入共用抽屉）；路由契约测试叶子数 16 → 15、URL 准入清单同步。
+
+验证：web check 通过、test:api 1757/1757、图标清单重新生成（382 条）。
+
 ### 待完成
 
 - **T10 浏览器实测与全量门禁**：`node --run ci:server-e2e`（隔离库全量 e2e，本轮只跑过定点复验）、
