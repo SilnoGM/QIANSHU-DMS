@@ -1571,6 +1571,7 @@
       "apps/qsmds-arco/src/views/system/users/status-change-modal.vue",
       "apps/qsmds-arco/src/views/system/users/user-form-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue"
     ]
   },
@@ -1726,7 +1727,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue"
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue"
     ]
   },
   {
@@ -2044,7 +2045,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-record-list.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/create.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
-      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-info.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-voucher.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/records-modal.logic.ts"
     ]
@@ -2977,6 +2978,7 @@
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
       "apps/qsmds-arco/src/views/system/roles/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-page.vue",
@@ -3471,7 +3473,7 @@
       "apps/qsmds-arco/src/views/component_library/business/factory-shipment-modal.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list.logic.ts",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
-      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-info.vue",
       "apps/qsmds-arco/src/views/workbenches/shipments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/shipments/shipment-detail-drawer.vue"
     ]

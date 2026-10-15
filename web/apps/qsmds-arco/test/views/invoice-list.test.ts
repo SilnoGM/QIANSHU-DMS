@@ -22,9 +22,11 @@ test('发票照片列：缩略变体进列表、原件进预览、无照片返�
 
 test('详情抽屉按 2026-10-15 结构图重组：五节 + 节点四组 + 复用现有展示组件', async () => {
   const source = await readFile(new URL('../../src/views/workbenches/invoices/invoice-request-detail-drawer.vue', import.meta.url), 'utf8')
-  for (const key of ['detail.sectionBasic', 'detail.sectionInvoice', 'detail.sectionRecipient', 'detail.sectionSettle', 'detail.sectionFlow']) {
+  for (const key of ['detail.sectionBasic', 'detail.sectionSettle', 'detail.sectionFlow']) {
     assert.ok(source.includes(key), `抽屉缺少 ${key}`)
   }
+  // 「发票信息 + 收件信息」已抽为共用块（审批弹窗第一步按用户要求复用同一结构）。
+  assert.match(source, /<InvoiceRequestInfo :detail="detail" \/>/u)
   // 节点四组「人 + 时间」的操作人从流程历史派生（NOTIFY/UPLOAD_DOCUMENT/SETTLE 取最近一条）。
   for (const action of ['actor(\'NOTIFY\')', 'actor(\'UPLOAD_DOCUMENT\')', 'actor(\'SETTLE\')']) {
     assert.ok(source.includes(action), `抽屉缺少节点派生 ${action}`)
@@ -41,10 +43,18 @@ test('详情抽屉按 2026-10-15 结构图重组：五节 + 节点四组 + 复�
   assert.match(source, /detail\.actionVerb/u)
   assert.match(source, /detail\.action\.\$\{entry\.action\}/u)
   assert.match(source, /statusTransition/u)
-  // 主体/备注卡复用组件库复制按钮；两处占位为「图标 + 标题 + 说明」。
-  assert.match(source, /import CopyCellButton from '@\/components\/business\/QsGenericTable\/CopyCellButton\.vue'/u)
+  // 两处占位为「图标 + 标题 + 说明」。
   assert.match(source, /detail\.documentNoneDescription/u)
   assert.match(source, /detail\.settleNoneDescription/u)
+})
+
+test('开票信息块抽为共用组件：抽屉与审批弹窗第一步复用同一结构', async () => {
+  const source = await readFile(new URL('../../src/views/workbenches/invoices/invoice-request-info.vue', import.meta.url), 'utf8')
+  for (const key of ['detail.sectionInvoice', 'detail.sectionRecipient']) {
+    assert.ok(source.includes(key), `共用块缺少 ${key}`)
+  }
+  // 主体/备注卡复用组件库复制按钮。
+  assert.match(source, /import CopyCellButton from '@\/components\/business\/QsGenericTable\/CopyCellButton\.vue'/u)
   // 明细表数量、单价、金额右对齐。
   assert.match(source, /qs-type-data[^"\n]*text-right/u)
   assert.match(source, /qs-type-data-emphasis[^"\n]*text-right/u)
@@ -52,6 +62,10 @@ test('详情抽屉按 2026-10-15 结构图重组：五节 + 节点四组 + 复�
   for (const code of ['(buyer_name)', '(buyer_tax_id)', '(invoice_remark)', '(internal_remark)']) {
     assert.equal(source.includes(code), false, `${code} 应已移除`)
   }
+  const drawer = await readFile(new URL('../../src/views/workbenches/invoices/invoice-request-detail-drawer.vue', import.meta.url), 'utf8')
+  assert.match(drawer, /<InvoiceRequestInfo :detail="detail" \/>/u)
+  const modal = await readFile(new URL('../../src/views/workbenches/invoices/approval/review-modal.vue', import.meta.url), 'utf8')
+  assert.match(modal, /<InvoiceRequestInfo :detail="detail" \/>/u)
 })
 
 test('两张列表的列与口径符合 2026-10-15 拍板：照片用 ImageGroup、无明细摘要/可结算/提交人独立列', async () => {
@@ -75,4 +89,20 @@ test('两张列表的列与口径符合 2026-10-15 拍板：照片用 ImageGroup
   // R12.2 的剩余时间落点：结算按钮禁用并以 tooltip 展示等待提示。
   assert.match(approval, /FaTooltip[\s\S]{0,400}row\.status === 'ISSUED'[\s\S]{0,400}settleHint\(row\)/u)
   assert.match(approval, /:disabled="!canSettleRow\(row\)"/u)
+})
+
+test('发票审批按 2026-10-15 规格走三步弹窗（独立组件 review-modal）', async () => {
+  const approval = await readPageSource('approval')
+  assert.match(approval, /import InvoiceRequestReviewModal from '\.\/review-modal\.vue'/u)
+  assert.match(approval, /invoiceRequest\.action\.review/u)
+  // 操作列按钮改「发票审批」后，旧的 review 分支与复制函数不得残留。
+  assert.equal(approval.includes('openAction(row, \'review\')'), false)
+  assert.equal(approval.includes('copyInvoiceInfo'), false)
+  const modal = await readFile(new URL('../../src/views/workbenches/invoices/approval/review-modal.vue', import.meta.url), 'utf8')
+  for (const key of ['reviewStepInfo', 'reviewStepCopy', 'reviewStepConfirm', 'reviewNext', 'reviewBack', 'reviewConfirm', 'reviewCopyHint', 'reviewDone']) {
+    assert.ok(modal.includes(key), `review-modal 缺少 ${key}`)
+  }
+  assert.match(modal, /<FaSteps v-model="step"/u)
+  assert.match(modal, /buildInvoiceCopyText/u)
+  assert.match(modal, /invoiceRequestsApi\.notify/u)
 })

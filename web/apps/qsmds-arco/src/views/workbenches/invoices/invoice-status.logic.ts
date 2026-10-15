@@ -105,25 +105,36 @@ export function parseDuplicateSuspects(fieldErrors: unknown): InvoiceDuplicateSu
 }
 
 /**
- * 复制给代开票方的开票信息文本：与弹窗展示同源、缺值留空，
+ * 复制给代开票方的开票信息文本（2026-10-15 用户定稿的格式）：与弹窗展示同源、缺值留空，
  * 只含发票备注——申请单备注是内部信息，不发出去。
+ *
+ * 分组之间保留空行；多行明细带 `[明细行N]` 小标题，只有一行时不加小标题。
  */
 export function buildInvoiceCopyText(request: Pick<InvoiceRequestDto, 'buyerName' | 'buyerTaxId' | 'lines' | 'salesAmount' | 'taxAmount' | 'totalAmount' | 'invoiceRemark' | 'recipientName' | 'recipientPhone' | 'recipientAddress'>): string {
-  const lines = request.lines.map(line => [
-    line.productName,
-    line.quantity,
-    line.unitPrice,
-    line.amount,
-  ].join('\t')).join('\n')
+  const showLineHeaders = request.lines.length > 1
+  const lineBlocks = request.lines.map((line, index) => [
+    ...(showLineHeaders ? [`[明细行${index + 1}]`] : []),
+    `品名：${line.productName}`,
+    `数量：${line.quantity}`,
+    `单价：${line.unitPrice}`,
+    `金额：${line.amount}`,
+  ].join('\n'))
   return [
+    '【开票信息】',
     `抬头：${request.buyerName}`,
     `统编：${request.buyerTaxId}`,
-    '明细：',
-    lines,
+    '',
+    lineBlocks.join('\n\n'),
+    '',
     `销售额合计：${request.salesAmount}`,
-    `营业税：${request.taxAmount}`,
+    `营业税应税：${request.taxAmount}`,
     `总计：${request.totalAmount}`,
-    `发票备注：${request.invoiceRemark ?? ''}`,
-    `寄送：${[request.recipientName, request.recipientPhone, request.recipientAddress].join(' / ')}`,
+    '',
+    `发票備註：${request.invoiceRemark ?? ''}`,
+    '',
+    '[发票寄送信息]',
+    `姓名：${request.recipientName}`,
+    `电话：${request.recipientPhone}`,
+    `地址：${request.recipientAddress}`,
   ].join('\n')
 }

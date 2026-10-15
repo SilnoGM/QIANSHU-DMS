@@ -21,15 +21,16 @@ import { calculateEstimatedCostCny } from '../invoice-cost.logic'
 import { buildInvoiceDocumentItems } from '../invoice-document.logic'
 import { resolveInvoiceFailureKey } from '../invoice-failure.logic'
 import InvoiceRequestDetailDrawer from '../invoice-request-detail-drawer.vue'
-import { buildInvoiceCopyText, isSettleable, resolveSettleRemaining, statusSwitchItems, statusTagClass } from '../invoice-status.logic'
+import { isSettleable, resolveSettleRemaining, statusSwitchItems, statusTagClass } from '../invoice-status.logic'
+import InvoiceRequestReviewModal from './review-modal.vue'
 
 /**
  * 开票审批（财务）：一个页面 + 六态筛选（始终带计数）+ 按状态给动作 + 只读详情抽屉。
  *
- * 四个动作各是一个聚焦式弹窗：审核并通知（可复制开票信息）、退回、取消（原因必填）、
- * 上传发票照片（上传即定稿）、结算入账（满 120 小时才可用，展示汇率与算式）。
+ * 发票审批走独立的三步弹窗（review-modal）；退回、取消（原因必填）、上传发票照片（上传即定稿）、
+ * 结算入账（满 120 小时才可用，展示汇率与算式）各是一个聚焦式弹窗。
  */
-type ActionMode = 'review' | 'return' | 'cancel' | 'document' | 'settle'
+type ActionMode = 'return' | 'cancel' | 'document' | 'settle'
 
 const { t } = useI18n()
 const { auth } = useAppAuth()
@@ -51,18 +52,18 @@ const detailOpen = ref(false)
 const detailId = ref<string | null>(null)
 const target = ref<InvoiceRequestListItemDto | null>(null)
 const actionOpen = ref(false)
-const mode = ref<ActionMode>('review')
+const mode = ref<ActionMode>('return')
 const reason = ref('')
 const busy = ref(false)
 const actionError = ref<string | null>(null)
-const copyState = ref<'none' | 'copied' | 'failed'>('none')
 const pickedFile = ref<File | null>(null)
 const images = ref<string[]>([])
 const uploadError = ref<string | null>(null)
 const rate = ref<{ id: string, version: number, foreignUnitsPerCny: string } | null>(null)
+const reviewOpen = ref(false)
+const reviewId = ref<string | null>(null)
 
 const ACTION_TITLE_KEYS: Readonly<Record<ActionMode, string>> = {
-  review: 'invoiceRequest.action.notify',
   return: 'invoiceRequest.action.return',
   cancel: 'invoiceRequest.action.cancel',
   document: 'invoiceRequest.action.document',
@@ -140,6 +141,11 @@ function openDetail(row: InvoiceRequestListItemDto): void {
   detailOpen.value = true
 }
 
+function openReview(row: InvoiceRequestListItemDto): void {
+  reviewId.value = row.id
+  reviewOpen.value = true
+}
+
 function closeDetail(): void {
   detailOpen.value = false
   detailId.value = null
@@ -150,7 +156,6 @@ async function openAction(row: InvoiceRequestListItemDto, next: ActionMode): Pro
   mode.value = next
   reason.value = ''
   actionError.value = null
-  copyState.value = 'none'
   pickedFile.value = null
   images.value = []
   uploadError.value = null
@@ -184,22 +189,6 @@ const settlePreview = computed(() => {
   const cost = calculateEstimatedCostCny(Number(row.totalAmount), Number(rate.value.foreignUnitsPerCny))
   return cost === null ? null : String(cost)
 })
-
-async function copyInvoiceInfo(): Promise<void> {
-  const row = target.value
-  if (row === null) {
-    return
-  }
-  try {
-    const { data } = await invoiceRequestsApi.get(row.id, new AbortController().signal)
-    await navigator.clipboard.writeText(buildInvoiceCopyText(data))
-    copyState.value = 'copied'
-  }
-  catch {
-    // 复制失败不谎报：让财务手动选择文本。
-    copyState.value = 'failed'
-  }
-}
 
 const ALLOWED_IMAGE_TYPES: readonly string[] = ['image/jpeg', 'image/png', 'image/webp']
 
@@ -247,10 +236,7 @@ async function submitAction(): Promise<void> {
   actionError.value = null
   try {
     const signal = new AbortController().signal
-    if (mode.value === 'review') {
-      await invoiceRequestsApi.notify(row.id, { expectedVersion: row.version }, signal)
-    }
-    else if (mode.value === 'return') {
+    if (mode.value === 'return') {
       await invoiceRequestsApi.requestReturn(row.id, { reason: reason.value.trim(), expectedVersion: row.version }, signal)
     }
     else if (mode.value === 'cancel') {
@@ -458,10 +444,10 @@ onMounted(load)
             variant="ghost"
             size="sm"
             class="min-h-11 sm:min-h-8"
-            :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.notify')}`"
-            @click="openAction(row, 'review')"
+            :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.review')}`"
+            @click="openReview(row)"
           >
-            <FaIcon name="i-lucide:clipboard-check" aria-hidden="true" />{{ t('invoiceRequest.action.notify') }}
+            <FaIcon name="i-lucide:clipboard-check" aria-hidden="true" />{{ t('invoiceRequest.action.review') }}
           </FaButton>
           <FaButton
             v-if="row.status === 'PENDING_REVIEW'"
@@ -521,6 +507,7 @@ onMounted(load)
     </FaPageMain>
 
     <InvoiceRequestDetailDrawer :id="detailId" v-model="detailOpen" @closed="closeDetail" />
+    <InvoiceRequestReviewModal :id="reviewId" v-model="reviewOpen" @completed="load" />
 
     <QsGenericModal
       v-model="actionOpen"
@@ -585,9 +572,6 @@ onMounted(load)
             </h3>
           </header>
 
-          <p v-if="mode === 'review'" class="qs-type-meta m-0">
-            {{ t('invoiceRequest.approval.notifyBody') }}
-          </p>
           <p v-if="mode === 'return'" class="qs-type-meta m-0">
             {{ t('invoiceRequest.approval.returnBody') }}
           </p>
@@ -597,14 +581,6 @@ onMounted(load)
           <p v-if="mode === 'document'" class="qs-type-meta m-0">
             {{ t('invoiceRequest.approval.documentBody') }}
           </p>
-
-          <div v-if="mode === 'review'" class="flex flex-wrap gap-3 items-center">
-            <FaButton type="button" variant="outline" size="sm" @click="copyInvoiceInfo">
-              <FaIcon name="i-lucide:clipboard-copy" class="size-4" aria-hidden="true" />{{ t('invoiceRequest.approval.copy') }}
-            </FaButton>
-            <span v-if="copyState === 'copied'" class="qs-type-meta text-primary m-0">{{ t('invoiceRequest.approval.copied') }}</span>
-            <span v-if="copyState === 'failed'" role="alert" class="qs-type-meta text-destructive m-0">{{ t('invoiceRequest.approval.copyFailed') }}</span>
-          </div>
 
           <FaForm v-if="mode === 'return' || mode === 'cancel'" :disabled="busy" class="min-w-0">
             <FaFormItem name="reason" :label="t('invoiceRequest.action.reasonLabel')" required :auto-bind="false">
