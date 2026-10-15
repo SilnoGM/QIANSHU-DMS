@@ -135,6 +135,14 @@ test('上传发票照片弹窗：信息卡含抬头/统编卡与整行总计，�
   assert.match(approval, /invoiceRequest\.field\.buyerTaxId'\)[\s\S]{0,500}CopyCellButton/u)
   assert.match(approval, /invoiceRequest\.field\.totalAmount'\) \}\}[\s\S]{0,400}\[&_\[data-currency\]\]:text-4xl/u)
   assert.equal(approval.includes('[&_[data-currency]]:text-3xl'), false, '总计已移到整行卡片，字号应加大为 4xl')
+  // 36px 字号的行内盒高过行高会溢出，overflow-x-auto 的兜底必须显式关掉竖向滚动条；
+  // 段间距必须用显式 mt-6/pt-8：UnoCSS 的 space-y 走 margin-bottom，会被子元素（dl、段落）的 m-0 反压掉。
+  assert.match(approval, /overflow-x-auto overflow-y-hidden/u)
+  assert.match(approval, /mt-6 gap-4 grid min-w-0 sm:grid-cols-2/u)
+  assert.match(approval, /mt-6 p-4 border border-border rounded-xl bg-background/u)
+  assert.match(approval, /pt-8 space-y-4/u)
+  // 原因输入框不再单设「原因 *」标签行（必填由占位符与按钮禁用表达）。
+  assert.equal(approval.includes(':label="t(\'invoiceRequest.action.reasonLabel\')"'), false, '原因标签行应已移除')
   // 上传区：点击区域与两行说明文字都居中。
   assert.match(approval, /flex justify-center">\s*<FaImageUpload/u)
   assert.match(approval, /text-center">\s*\{\{ t\('invoiceRequest\.approval\.documentBody'\) \}\}/u)

@@ -561,7 +561,8 @@ onMounted(load)
       </template>
 
       <div v-if="target !== null" class="space-y-5">
-        <section class="p-4 border border-border rounded-xl bg-muted/15 min-w-0 space-y-4 sm:p-5">
+        <!-- 段间距用显式 mt-6：UnoCSS 的 space-y 走 margin-bottom，会被子元素的 m-0（dl/段落）反压掉。 -->
+        <section class="p-4 border border-border rounded-xl bg-muted/15 min-w-0 sm:p-5">
           <dl class="m-0 gap-x-6 gap-y-4 grid sm:grid-cols-2">
             <div class="min-w-0">
               <dt class="qs-type-compact-label mb-1.5">
@@ -580,7 +581,7 @@ onMounted(load)
               </dd>
             </div>
           </dl>
-          <div class="gap-4 grid min-w-0 sm:grid-cols-2">
+          <div class="mt-6 gap-4 grid min-w-0 sm:grid-cols-2">
             <div class="p-4 border border-border rounded-xl bg-muted/40 flex flex-col gap-2 min-w-0">
               <p class="qs-type-compact-label m-0">
                 {{ t('invoiceRequest.field.buyerName') }}
@@ -600,11 +601,12 @@ onMounted(load)
               </div>
             </div>
           </div>
-          <div class="p-4 border border-border rounded-xl bg-background flex gap-4 items-center justify-between">
+          <div class="mt-6 p-4 border border-border rounded-xl bg-background flex gap-4 items-center justify-between">
             <p class="qs-type-compact-label m-0">
               {{ t('invoiceRequest.field.totalAmount') }}
             </p>
-            <div tabindex="0" class="flex max-w-full overflow-x-auto [&_[data-currency]]:text-4xl [&_[data-currency]]:font-bold">
+            <!-- 窄屏兜底横向滚动；overflow-y-hidden 必须显式声明，否则 36px 字号的行内盒会被 auto 出竖向滚动条。 -->
+            <div tabindex="0" class="flex max-w-full overflow-x-auto overflow-y-hidden [&_[data-currency]]:text-4xl [&_[data-currency]]:font-bold">
               <AmountDisplay :value="target.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
             </div>
           </div>
@@ -628,7 +630,8 @@ onMounted(load)
           </p>
 
           <FaForm v-if="mode === 'return' || mode === 'cancel'" :disabled="busy" class="min-w-0">
-            <FaFormItem name="reason" :label="t('invoiceRequest.action.reasonLabel')" required :auto-bind="false">
+            <!-- 只保留输入框：必填由占位符与底部按钮禁用共同表达，不再单设「原因 *」标签行。 -->
+            <FaFormItem name="reason" :auto-bind="false">
               <FaTextarea
                 v-model="reason"
                 :rows="3"
@@ -648,48 +651,51 @@ onMounted(load)
             <p class="qs-type-meta m-0 text-center">
               {{ t('invoiceRequest.approval.documentBody') }}
             </p>
-            <template v-if="pickedFile === null">
-              <div class="flex justify-center">
-                <FaImageUpload
-                  v-model="images"
-                  :max="1"
-                  :width="144"
-                  :height="104"
+            <!-- 上传区与上方说明拉开 32px：说明段带 m-0 会压掉 space-y，所以间距全放在这里的 pt-8 上。 -->
+            <div class="pt-8 space-y-4">
+              <template v-if="pickedFile === null">
+                <div class="flex justify-center">
+                  <FaImageUpload
+                    v-model="images"
+                    :max="1"
+                    :width="144"
+                    :height="104"
+                    :disabled="busy"
+                    :http-request="selectFile"
+                    :aria-label="t('invoiceRequest.action.document')"
+                  >
+                    <span class="text-muted-foreground border border-border rounded-lg border-dashed flex flex-col gap-2 size-full items-center justify-center">
+                      <FaIcon name="i-lucide:image-plus" class="size-6" aria-hidden="true" />
+                      <span class="qs-type-meta">{{ t('invoiceRequest.upload.pick') }}</span>
+                    </span>
+                  </FaImageUpload>
+                </div>
+                <p class="qs-type-meta m-0 text-center">
+                  {{ t('invoiceRequest.approval.documentHint') }}
+                </p>
+              </template>
+              <div v-else class="p-3 border border-border rounded-xl bg-background flex gap-3 items-center">
+                <img :src="pickedPreviewUrl ?? ''" alt="" class="border border-border rounded-lg h-14 w-14 object-contain">
+                <div class="flex-1 min-w-0 space-y-0.5">
+                  <p class="qs-type-data-emphasis m-0 break-all">
+                    {{ pickedUploadName }}
+                  </p>
+                  <p class="qs-type-meta text-muted-foreground m-0">
+                    {{ pickedFileMeta }}
+                  </p>
+                </div>
+                <FaButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="text-destructive"
                   :disabled="busy"
-                  :http-request="selectFile"
-                  :aria-label="t('invoiceRequest.action.document')"
+                  :aria-label="t('invoiceRequest.upload.remove')"
+                  @click="clearPick"
                 >
-                  <span class="text-muted-foreground border border-border rounded-lg border-dashed flex flex-col gap-2 size-full items-center justify-center">
-                    <FaIcon name="i-lucide:image-plus" class="size-6" aria-hidden="true" />
-                    <span class="qs-type-meta">{{ t('invoiceRequest.upload.pick') }}</span>
-                  </span>
-                </FaImageUpload>
+                  <FaIcon name="i-lucide:trash-2" aria-hidden="true" />
+                </FaButton>
               </div>
-              <p class="qs-type-meta m-0 text-center">
-                {{ t('invoiceRequest.approval.documentHint') }}
-              </p>
-            </template>
-            <div v-else class="p-3 border border-border rounded-xl bg-background flex gap-3 items-center">
-              <img :src="pickedPreviewUrl ?? ''" alt="" class="border border-border rounded-lg h-14 w-14 object-contain">
-              <div class="flex-1 min-w-0 space-y-0.5">
-                <p class="qs-type-data-emphasis m-0 break-all">
-                  {{ pickedUploadName }}
-                </p>
-                <p class="qs-type-meta text-muted-foreground m-0">
-                  {{ pickedFileMeta }}
-                </p>
-              </div>
-              <FaButton
-                type="button"
-                variant="ghost"
-                size="sm"
-                class="text-destructive"
-                :disabled="busy"
-                :aria-label="t('invoiceRequest.upload.remove')"
-                @click="clearPick"
-              >
-                <FaIcon name="i-lucide:trash-2" aria-hidden="true" />
-              </FaButton>
             </div>
             <p v-if="uploadError !== null" role="alert" class="qs-type-meta text-destructive m-0 text-center">
               {{ uploadError }}
