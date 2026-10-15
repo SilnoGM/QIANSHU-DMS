@@ -55,8 +55,6 @@
   "invoiceRequest.form.continueEditing": "Keep editing",
   "invoiceRequest.form.confirmDiscard": "Discard",
   "invoiceRequest.form.submitted": "Invoice request submitted",
-  "invoiceRequest.placeholder.buyerName": "Zhengmiao Engineering Co., Ltd.",
-  "invoiceRequest.placeholder.buyerTaxId": "89697375",
   "invoiceRequest.placeholder.invoiceRemark": "150 E-Po",
   "invoiceRequest.list.searchPlaceholder": "Search request number, buyer, tax ID or recipient",
   "invoiceRequest.list.empty": "No invoice requests",

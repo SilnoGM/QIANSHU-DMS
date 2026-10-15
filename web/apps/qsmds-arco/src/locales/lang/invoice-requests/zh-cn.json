@@ -55,8 +55,6 @@
   "invoiceRequest.form.continueEditing": "继续编辑",
   "invoiceRequest.form.confirmDiscard": "确认放弃",
   "invoiceRequest.form.submitted": "开票申请已提交",
-  "invoiceRequest.placeholder.buyerName": "正苗工程股份有限公司",
-  "invoiceRequest.placeholder.buyerTaxId": "89697375",
   "invoiceRequest.placeholder.invoiceRemark": "150鄂破",
   "invoiceRequest.list.searchPlaceholder": "搜索申请单号、抬头、统编或寄送姓名",
   "invoiceRequest.list.empty": "暂无开票申请",
