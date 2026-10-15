@@ -149,13 +149,13 @@ export class InvoiceRequestListItemDto {
   @ApiPropertyOptional({ type: 'string', nullable: true, description: '入账成本（人民币，两位小数）。' }) settleAmountCny!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) cancelledAt!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) cancelReason!: string | null
-  @ApiPropertyOptional({ format: 'uuid', nullable: true, description: '发票照片；有值即可用单据详情的内容接口读取。' }) documentMediaAssetId!: string | null
-}
-
-export class InvoiceRequestDto extends InvoiceRequestListItemDto {
+  @ApiPropertyOptional({ type: 'string', format: 'uuid', nullable: true, description: '发票照片；有值即可用单据详情的内容接口读取。' }) documentMediaAssetId!: string | null
   @ApiProperty() recipientName!: string
   @ApiProperty() recipientPhone!: string
   @ApiProperty() recipientAddress!: string
+}
+
+export class InvoiceRequestDto extends InvoiceRequestListItemDto {
   @ApiProperty({ type: [InvoiceRequestLineDto] }) lines!: InvoiceRequestLineDto[]
   @ApiProperty({ type: [InvoiceRequestHistoryDto] }) history!: InvoiceRequestHistoryDto[]
   @ApiPropertyOptional({ type: InvoiceRequestDocumentDto, nullable: true }) document!: InvoiceRequestDocumentDto | null

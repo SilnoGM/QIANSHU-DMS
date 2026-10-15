@@ -5,6 +5,7 @@ import {
   describeSettleFormula,
   INVOICE_SETTLE_WAIT_HOURS,
   isSettleable,
+  resolveInvoiceDocumentVariant,
   resolveSettleableAt,
   sumLineAmounts,
 } from './invoice-request.logic'
@@ -46,5 +47,16 @@ describe('invoice request amounts and settle window', () => {
     // 顺序敏感：先加 30 再向上取整，向上取整发生在最后一步。
     expect(calculateSettleAmountCny(520_000n, new Prisma.Decimal('5.2'))).toBe('6030.00')
     expect(describeSettleFormula(283_500n, new Prisma.Decimal('5.2'))).toBe('总计 283500 ÷ 汇率 5.2 × 0.06 + 30 = 3302.00')
+  })
+
+  it('accepts only the thumb variant and rejects unknown values instead of degrading to the original', () => {
+    // 缺省与空串视为「不请求变体」，直接返回原件。
+    expect(resolveInvoiceDocumentVariant(undefined)).toBeUndefined()
+    expect(resolveInvoiceDocumentVariant('')).toBeUndefined()
+    expect(resolveInvoiceDocumentVariant('thumb')).toBe('thumb')
+    // poster 是视频封面专用、大小写敏感、类型错误的取值一律按参数校验失败处理。
+    expect(resolveInvoiceDocumentVariant('poster')).toBe('invalid')
+    expect(resolveInvoiceDocumentVariant('THUMB')).toBe('invalid')
+    expect(resolveInvoiceDocumentVariant(42)).toBe('invalid')
   })
 })

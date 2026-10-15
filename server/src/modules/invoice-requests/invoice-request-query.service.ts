@@ -86,17 +86,17 @@ function toListItem(row: RequestRow): InvoiceRequestListItemDto {
     cancelledAt: toIso(row.cancelledAt),
     cancelReason: row.cancelReason,
     documentMediaAssetId: row.documentMediaAssetId,
+    recipientName: row.recipientName,
+    recipientPhone: row.recipientPhone,
+    recipientAddress: row.recipientAddress,
   }
 }
 
-/** 详情只在列表字段之上补明细、寄送信息与完整历史；历史不参与列表摘要。 */
+/** 详情只在列表字段之上补明细与完整历史；历史不参与列表摘要。 */
 function toDetail(row: DetailRow): InvoiceRequestDto {
   const base = toListItem({ ...row, statusHistory: [] })
   return {
     ...base,
-    recipientName: row.recipientName,
-    recipientPhone: row.recipientPhone,
-    recipientAddress: row.recipientAddress,
     lines: toLines(row.lines),
     history: row.statusHistory.map(entry => ({
       action: entry.action,

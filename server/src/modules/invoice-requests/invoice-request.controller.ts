@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Head, Headers, HttpCode, Param, Post, Query, Req, Res, StreamableFile } from '@nestjs/common'
-import { ApiBody, ApiConsumes, ApiHeader, ApiTags } from '@nestjs/swagger'
+import { ApiBody, ApiConsumes, ApiHeader, ApiQuery, ApiTags } from '@nestjs/swagger'
 import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import type { ApiContractErrorOptions } from '../../openapi/contract-metadata'
@@ -14,6 +14,7 @@ import {
   InvoiceRequestStatusCountsQueryDto, InvoiceRequestSubmitDto,
 } from './invoice-request.dto'
 import { InvoiceRequestQueryService } from './invoice-request-query.service'
+import { INVOICE_DOCUMENT_VARIANT_NAMES } from './invoice-request.logic'
 import { InvoiceRequestService, type InvoiceRequestCommandContext } from './invoice-request.service'
 
 function contract(operationId: string, mutation = false, errors: ApiContractErrorOptions[] = []) {
@@ -112,15 +113,17 @@ export class InvoiceRequestController {
   }
 
   @Get(':id/document') @RequirePermissions('invoice-requests:read') @contract('invoice_requests_get_document', false, [notFound, { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] }])
+  @ApiQuery({ name: 'variant', required: false, enum: [...INVOICE_DOCUMENT_VARIANT_NAMES], description: '派生呈现变体：thumb（列表缩略图，webp）。按需派生并由浏览器长期私有缓存。' })
   @ApiContractResponse({ status: 200, description: 'Private invoice photo bytes.', content: Object.fromEntries(['image/jpeg', 'image/png', 'image/webp'].map(mime => [mime, { schema: { type: 'string', format: 'binary' } }])) })
-  async document(@Param() params: InvoiceRequestIdDto, @Req() request: object, @Res({ passthrough: true }) response: ContentResponse) {
-    return deliver(await this.documents.content(await this.queries.documentAsset(actorUserId(request), params.id), 'GET'), response)
+  async document(@Param() params: InvoiceRequestIdDto, @Query('variant') variant: unknown, @Req() request: object, @Res({ passthrough: true }) response: ContentResponse) {
+    return deliver(await this.documents.content(await this.queries.documentAsset(actorUserId(request), params.id), 'GET', variant), response)
   }
 
   @Head(':id/document') @RequirePermissions('invoice-requests:read') @contract('invoice_requests_head_document', false, [notFound, { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] }])
+  @ApiQuery({ name: 'variant', required: false, enum: [...INVOICE_DOCUMENT_VARIANT_NAMES], description: '派生呈现变体：thumb（列表缩略图，webp）。按需派生并由浏览器长期私有缓存。' })
   @ApiContractResponse({ status: 200, description: 'Private invoice photo headers.' })
-  async headDocument(@Param() params: InvoiceRequestIdDto, @Req() request: object, @Res({ passthrough: true }) response: ContentResponse) {
-    return deliver(await this.documents.content(await this.queries.documentAsset(actorUserId(request), params.id), 'HEAD'), response)
+  async headDocument(@Param() params: InvoiceRequestIdDto, @Query('variant') variant: unknown, @Req() request: object, @Res({ passthrough: true }) response: ContentResponse) {
+    return deliver(await this.documents.content(await this.queries.documentAsset(actorUserId(request), params.id), 'HEAD', variant), response)
   }
 
   /**

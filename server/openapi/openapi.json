@@ -72800,6 +72800,18 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "派生呈现变体：thumb（列表缩略图，webp）。按需派生并由浏览器长期私有缓存。",
+            "schema": {
+              "enum": [
+                "thumb"
+              ],
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -73084,6 +73096,18 @@
             "in": "path",
             "schema": {
               "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "派生呈现变体：thumb（列表缩略图，webp）。按需派生并由浏览器长期私有缓存。",
+            "schema": {
+              "enum": [
+                "thumb"
+              ],
               "type": "string"
             }
           }
@@ -90192,10 +90216,19 @@
             "nullable": true
           },
           "documentMediaAssetId": {
-            "type": "object",
+            "type": "string",
             "format": "uuid",
             "nullable": true,
             "description": "发票照片；有值即可用单据详情的内容接口读取。"
+          },
+          "recipientName": {
+            "type": "string"
+          },
+          "recipientPhone": {
+            "type": "string"
+          },
+          "recipientAddress": {
+            "type": "string"
           }
         },
         "required": [
@@ -90212,7 +90245,10 @@
           "creatorUserId",
           "creatorName",
           "submittedAt",
-          "lastSubmittedAt"
+          "lastSubmittedAt",
+          "recipientName",
+          "recipientPhone",
+          "recipientAddress"
         ]
       },
       "InvoiceRequestPageDto": {
@@ -90480,7 +90516,7 @@
             "nullable": true
           },
           "documentMediaAssetId": {
-            "type": "object",
+            "type": "string",
             "format": "uuid",
             "nullable": true,
             "description": "发票照片；有值即可用单据详情的内容接口读取。"

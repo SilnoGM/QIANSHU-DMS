@@ -19,6 +19,22 @@ export const INVOICE_MAILING_FEE_CNY = 30
 /** 可结算等待期：自发票照片上传起满 120 小时。 */
 export const INVOICE_SETTLE_WAIT_HOURS = 120
 
+/** 发票照片当前只支持缩略图一种派生变体（照片仅允许 jpg/png/webp）。 */
+export const INVOICE_DOCUMENT_VARIANT_NAMES = ['thumb'] as const
+
+export type InvoiceDocumentVariantName = (typeof INVOICE_DOCUMENT_VARIANT_NAMES)[number]
+
+/**
+ * 只有受控且适用的变体名进入派生路径；未知取值返回 `invalid`，由调用方按参数校验失败
+ * 处理，避免未知变体静默退化成整份原件的传输。
+ */
+export function resolveInvoiceDocumentVariant(value: unknown): InvoiceDocumentVariantName | undefined | 'invalid' {
+  if (value === undefined || value === '') {
+    return undefined
+  }
+  return value === 'thumb' ? 'thumb' : 'invalid'
+}
+
 /** 营业税应税 = 四舍五入(销售额 × 5%)；整数运算，销售额 1 元时为 0。 */
 export function calculateTaxAmount(salesAmount: number): number {
   return Math.floor((salesAmount * INVOICE_TAX_RATE_PERCENT + 50) / 100)
