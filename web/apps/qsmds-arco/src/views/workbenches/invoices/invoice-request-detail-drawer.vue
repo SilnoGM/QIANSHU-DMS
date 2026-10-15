@@ -226,7 +226,7 @@ function lineAmount(line: InvoiceRequestLineDto): string {
         <div class="gap-4 grid min-w-0 sm:grid-cols-2">
           <div class="p-4 border border-border rounded-xl bg-muted/40 flex flex-col gap-2 min-w-0">
             <p class="qs-type-compact-label m-0">
-              {{ t('invoiceRequest.field.buyerName') }} (buyer_name)
+              {{ t('invoiceRequest.field.buyerName') }}
             </p>
             <div class="flex gap-3 min-w-0 items-center justify-between">
               <span class="qs-type-section-title min-w-0 break-words">{{ detail.buyerName }}</span>
@@ -235,7 +235,7 @@ function lineAmount(line: InvoiceRequestLineDto): string {
           </div>
           <div class="p-4 border border-border rounded-xl bg-muted/40 flex flex-col gap-2 min-w-0">
             <p class="qs-type-compact-label m-0">
-              {{ t('invoiceRequest.field.buyerTaxId') }} (buyer_tax_id)
+              {{ t('invoiceRequest.field.buyerTaxId') }}
             </p>
             <div class="flex gap-3 min-w-0 items-center justify-between">
               <span class="text-lg qs-type-data-emphasis font-semibold min-w-0 break-words">{{ detail.buyerTaxId }}</span>
@@ -320,7 +320,7 @@ function lineAmount(line: InvoiceRequestLineDto): string {
           <div class="p-4 border border-border rounded-xl bg-background flex flex-col gap-2 min-w-0">
             <div class="flex gap-2 items-center justify-between">
               <p class="qs-type-compact-label m-0">
-                {{ t('invoiceRequest.field.invoiceRemark') }} (invoice_remark)
+                {{ t('invoiceRequest.field.invoiceRemark') }}
               </p>
               <span class="text-xs text-primary font-medium px-1.5 py-0.5 rounded bg-primary/10 whitespace-nowrap">
                 {{ t('invoiceRequest.detail.mergeIntoCopyText') }}
@@ -333,7 +333,7 @@ function lineAmount(line: InvoiceRequestLineDto): string {
           <div class="p-4 border border-amber-500/30 rounded-xl bg-amber-500/10 flex flex-col gap-2 min-w-0">
             <div class="flex gap-2 items-center justify-between">
               <p class="text-xs text-amber-700 font-medium m-0 dark:text-amber-300">
-                {{ t('invoiceRequest.field.internalRemark') }} (internal_remark)
+                {{ t('invoiceRequest.field.internalRemark') }}
               </p>
               <span class="text-xs text-amber-700 font-medium px-1.5 py-0.5 rounded bg-amber-500/15 whitespace-nowrap dark:text-amber-300">
                 {{ t('invoiceRequest.detail.internalOnlyTag') }}
@@ -470,9 +470,13 @@ function lineAmount(line: InvoiceRequestLineDto): string {
             {{ t('invoiceRequest.detail.sectionFlow') }}
           </h3>
         </header>
-        <ol class="m-0 p-0 list-none space-y-3">
-          <li v-for="entry in detail.history" :key="entry.occurredAt + entry.action" class="flex flex-wrap gap-x-3 gap-y-1 items-baseline justify-between">
-            <div class="flex flex-wrap gap-x-2 gap-y-1 min-w-0 items-baseline">
+        <ol class="m-0 p-0 list-none divide-border divide-y">
+          <li
+            v-for="entry in detail.history"
+            :key="entry.occurredAt + entry.action"
+            class="py-3 flex flex-wrap gap-x-6 gap-y-2 items-baseline justify-between first:pt-0 last:pb-0"
+          >
+            <div class="flex flex-wrap gap-x-4 gap-y-1 min-w-0 items-baseline">
               <span class="qs-type-body-medium">{{ entry.actorName }}</span>
               <span class="qs-type-body text-muted-foreground">{{ t('invoiceRequest.detail.actionVerb') }}</span>
               <span class="qs-type-body-medium">【{{ t(`invoiceRequest.detail.action.${entry.action}`) }}】</span>
@@ -482,8 +486,9 @@ function lineAmount(line: InvoiceRequestLineDto): string {
             <span v-if="entry.reason !== null" class="qs-type-meta basis-full">{{ t('invoiceRequest.action.reasonLabel') }}：{{ entry.reason }}</span>
           </li>
         </ol>
-        <p v-if="detail.documentUploadedAt !== null" class="qs-type-meta m-0">
-          {{ t('invoiceRequest.detail.settleableAt') }}：{{ detail.settleableAt }}
+        <p v-if="detail.documentUploadedAt !== null" class="qs-type-meta m-0 flex flex-wrap gap-x-2 gap-y-1 items-baseline">
+          <span>{{ t('invoiceRequest.detail.settleableAt') }}</span>
+          <DateTimeDisplay :value="detail.settleableAt" class="text-muted-foreground" />
         </p>
       </section>
     </div>

@@ -48,6 +48,10 @@ test('详情抽屉按 2026-10-15 结构图重组：五节 + 节点四组 + 复�
   // 明细表数量、单价、金额右对齐。
   assert.match(source, /qs-type-data[^"\n]*text-right/u)
   assert.match(source, /qs-type-data-emphasis[^"\n]*text-right/u)
+  // 字段代码后缀已按用户要求移除，不得回归。
+  for (const code of ['(buyer_name)', '(buyer_tax_id)', '(invoice_remark)', '(internal_remark)']) {
+    assert.equal(source.includes(code), false, `${code} 应已移除`)
+  }
 })
 
 test('两张列表的列与口径符合 2026-10-15 拍板：照片用 ImageGroup、无明细摘要/可结算/提交人独立列', async () => {
