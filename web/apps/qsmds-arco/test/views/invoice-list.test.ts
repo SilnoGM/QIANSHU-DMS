@@ -161,6 +161,23 @@ test('上传发票照片弹窗：信息卡含抬头/统编卡与整行总计，�
   assert.match(approval, /uploadDocument\(row\.id, renamed, signal\)/u)
 })
 
+test('写操作弹窗的关闭与刷新必须晚于释放 busy/submitting（防空壳弹窗回归）', async () => {
+  // 退回/取消/上传/结算四个动作共用 submitAction：守卫在 submitting 期间拒绝受控关闭并回写 true，
+  // 提前置 actionOpen=false 会留下「有头有脚没有内容」的空壳弹窗（2026-10-15 用户实测退回重填复现）。
+  const approval = await readPageSource('approval')
+  const action = approval.slice(approval.indexOf('async function submitAction'), approval.indexOf('const cancelBodyKey'))
+  assert.match(action, /let succeeded = false/u, '成功标记缺失')
+  assert.match(action, /finally \{\s*busy\.value = false\s*\}/u, 'busy 必须在 finally 释放')
+  assert.ok(action.indexOf('busy.value = false') < action.indexOf('actionOpen.value = false'), 'actionOpen 必须晚于释放 busy')
+  assert.ok(action.indexOf('actionOpen.value = false') < action.indexOf('target.value = null'), '先关弹窗再清 target')
+  assert.ok(action.indexOf('target.value = null') < action.indexOf('await load()'), '刷新放在关闭与清空之后')
+  // 审批弹窗的通知成功路径遵守同一不变量。
+  const modal = await readFile(new URL('../../src/views/workbenches/invoices/approval/review-modal.vue', import.meta.url), 'utf8')
+  const notify = modal.slice(modal.indexOf('async function confirmNotify'), modal.indexOf('function close'))
+  assert.ok(notify.includes('let succeeded = false'), 'review-modal 通知缺少成功标记')
+  assert.ok(notify.indexOf('submitting.value = false') < notify.indexOf('emit(\'update:modelValue\', false)'), 'review-modal 关闭必须晚于释放 submitting')
+})
+
 test('发票审批按 2026-10-15 规格走三步弹窗（独立组件 review-modal）', async () => {
   const approval = await readPageSource('approval')
   assert.match(approval, /import InvoiceRequestReviewModal from '\.\/review-modal\.vue'/u)

@@ -269,6 +269,7 @@ async function submitAction(): Promise<void> {
   }
   busy.value = true
   actionError.value = null
+  let succeeded = false
   try {
     const signal = new AbortController().signal
     if (mode.value === 'return') {
@@ -292,15 +293,24 @@ async function submitAction(): Promise<void> {
       }
       await invoiceRequestsApi.settle(row.id, { expectedVersion: row.version, exchangeRateId: rate.value.id, exchangeRateVersion: rate.value.version }, signal)
     }
-    actionOpen.value = false
-    target.value = null
-    await load()
+    succeeded = true
   }
   catch (error) {
     actionError.value = t(resolveInvoiceFailureKey(error))
   }
   finally {
     busy.value = false
+  }
+  /*
+   * 关闭与刷新必须晚于 finally 释放 busy：QsGenericModal 在 submitting 期间拒绝受控关闭
+   * 并回写 true，提前置 actionOpen=false 会先触发关闭守卫、等 target 清空后留下空壳弹窗
+   * （退回/取消/上传/结算四个模式共用这条路径）。load() 里的 await 会让守卫恰好在 busy
+   * 仍未释放时执行，所以顺序不能再调回来。
+   */
+  if (succeeded) {
+    actionOpen.value = false
+    target.value = null
+    await load()
   }
 }
 

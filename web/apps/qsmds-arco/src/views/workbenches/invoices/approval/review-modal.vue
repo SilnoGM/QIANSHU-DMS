@@ -104,17 +104,23 @@ async function confirmNotify(): Promise<void> {
   }
   submitting.value = true
   submitError.value = null
+  let succeeded = false
   try {
     await invoiceRequestsApi.notify(request.id, { expectedVersion: request.version }, new AbortController().signal)
-    toast.success(t('invoiceRequest.approval.reviewDone'))
-    emit('completed')
-    emit('update:modelValue', false)
+    succeeded = true
   }
   catch (error) {
     submitError.value = t(resolveInvoiceFailureKey(error))
   }
   finally {
     submitting.value = false
+  }
+  // 关闭必须晚于释放 submitting：QsGenericModal 在提交期拒绝受控关闭并回写 true
+  // （与 approval/index.vue 的 submitAction 同一约束），先关后放会被守卫弹回去。
+  if (succeeded) {
+    toast.success(t('invoiceRequest.approval.reviewDone'))
+    emit('completed')
+    emit('update:modelValue', false)
   }
 }
 
