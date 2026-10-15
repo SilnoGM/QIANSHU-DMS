@@ -169,6 +169,10 @@ async function send(duplicateAcknowledged: boolean): Promise<void> {
   }
   submitting.value = true
   submitError.value = null
+  // 收尾动作必须发生在释放 submitting 之后：弹窗的程序化关闭与路由离开守卫都把
+  // submitting 视为硬阻止，提前收尾会被拒绝——弹窗被回写为打开、导航被静默取消，
+  // 单据已在服务端创建却看起来像没提交成功。
+  let outcome: 'success' | 'duplicate' | 'failed' = 'failed'
   try {
     const signal = new AbortController().signal
     const payload = duplicateAcknowledged ? { ...built.payload, duplicateAcknowledged: true } : built.payload
@@ -182,18 +186,14 @@ async function send(duplicateAcknowledged: boolean): Promise<void> {
       }
       await invoiceRequestsApi.resubmit(editingId.value, { ...payload, expectedVersion: editingVersion.value }, signal)
     }
-    dirty.value = false
-    confirmOpen.value = false
-    duplicateOpen.value = false
-    await router.push({ name: 'qsOperationsInvoicesRecords' })
+    outcome = 'success'
   }
   catch (error) {
     const suspects = parseDuplicateSuspects(resolveDuplicateFieldErrors(error))
     if (suspects.length > 0) {
       // 四项比对命中：列出相似单再确认，确认后带 duplicateAcknowledged 重发。
       duplicateSuspects.value = suspects
-      confirmOpen.value = false
-      duplicateOpen.value = true
+      outcome = 'duplicate'
     }
     else {
       submitError.value = t(resolveInvoiceFailureKey(error))
@@ -201,6 +201,17 @@ async function send(duplicateAcknowledged: boolean): Promise<void> {
   }
   finally {
     submitting.value = false
+  }
+
+  if (outcome === 'success') {
+    dirty.value = false
+    confirmOpen.value = false
+    duplicateOpen.value = false
+    await router.push({ name: 'qsOperationsInvoicesRecords' })
+  }
+  else if (outcome === 'duplicate') {
+    confirmOpen.value = false
+    duplicateOpen.value = true
   }
 }
 
