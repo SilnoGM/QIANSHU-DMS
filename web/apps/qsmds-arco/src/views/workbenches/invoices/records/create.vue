@@ -491,7 +491,7 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
               class="text-lg font-semibold self-end"
             />
           </div>
-          <div class="p-4 border border-border rounded-xl flex flex-col gap-2">
+          <div class="p-4 border border-border rounded-xl bg-destructive/5 flex flex-col gap-2">
             <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.cost.estimatedCost') }}</span>
             <AmountDisplay
               :value="estimatedCostCny === null ? null : String(estimatedCostCny)"
