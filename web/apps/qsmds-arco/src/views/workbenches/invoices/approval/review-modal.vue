@@ -32,7 +32,6 @@ const loading = ref(false)
 const loadError = ref<string | null>(null)
 const submitting = ref(false)
 const submitError = ref<string | null>(null)
-const copyState = ref<'copied' | 'failed' | 'idle'>('idle')
 const step = ref(0)
 
 const steps = computed(() => [
@@ -63,7 +62,6 @@ async function load(): Promise<void> {
 watch(() => [props.modelValue, props.id], ([open]) => {
   if (open) {
     step.value = 0
-    copyState.value = 'idle'
     submitError.value = null
     void load()
   }
@@ -74,19 +72,23 @@ watch(() => [props.modelValue, props.id], ([open]) => {
   }
 })
 
-async function copyInvoiceInfo(): Promise<void> {
+/**
+ * 第二步的主按钮＝复制并前进：复制是线下通知的工具；复制失败不拦路，
+ * 只用 toast 提示手动选择（开票信息在第一步可见、也可选）。
+ */
+async function copyAndAdvance(): Promise<void> {
   const request = detail.value
   if (request === null) {
     return
   }
   try {
     await navigator.clipboard.writeText(buildInvoiceCopyText(request))
-    copyState.value = 'copied'
+    toast.success(t('invoiceRequest.approval.copied'))
   }
   catch {
-    // 复制失败不谎报：让财务手动选择文本。
-    copyState.value = 'failed'
+    toast.error(t('invoiceRequest.approval.copyFailed'))
   }
+  step.value = 2
 }
 
 async function confirmNotify(): Promise<void> {
@@ -148,19 +150,22 @@ function close(): void {
         <p class="qs-type-body text-muted-foreground m-0">
           {{ t('invoiceRequest.approval.reviewCopyHint') }}
         </p>
-        <div class="flex flex-wrap gap-3 items-center">
-          <FaButton type="button" variant="outline" size="sm" @click="copyInvoiceInfo">
-            <FaIcon name="i-lucide:clipboard-copy" class="size-4" aria-hidden="true" />{{ t('invoiceRequest.approval.copy') }}
-          </FaButton>
-          <span v-if="copyState === 'copied'" class="qs-type-meta text-primary m-0">{{ t('invoiceRequest.approval.copied') }}</span>
-          <span v-if="copyState === 'failed'" role="alert" class="qs-type-meta text-destructive m-0">{{ t('invoiceRequest.approval.copyFailed') }}</span>
-        </div>
       </template>
 
       <template v-else>
-        <p class="qs-type-meta m-0">
-          {{ t('invoiceRequest.approval.notifyBody') }}
-        </p>
+        <div class="flex gap-3 items-start">
+          <span class="text-primary rounded-lg bg-primary/10 flex shrink-0 size-9 items-center justify-center">
+            <FaIcon name="i-lucide:send" class="size-5" aria-hidden="true" />
+          </span>
+          <div class="min-w-0 space-y-1">
+            <h3 class="qs-type-component-title m-0">
+              {{ t('invoiceRequest.approval.reviewConfirmTitle') }}
+            </h3>
+            <p class="qs-type-description text-muted-foreground m-0">
+              {{ t('invoiceRequest.approval.reviewConfirmHint') }}
+            </p>
+          </div>
+        </div>
       </template>
     </div>
 
@@ -168,11 +173,14 @@ function close(): void {
       <FaButton v-if="step > 0" type="button" variant="outline" :disabled="submitting" @click="step -= 1">
         {{ t('invoiceRequest.approval.reviewBack') }}
       </FaButton>
-      <FaButton type="button" variant="outline" :disabled="submitting" @click="close">
+      <FaButton v-if="step !== 1" type="button" variant="outline" :disabled="submitting" @click="close">
         {{ t('invoiceRequest.common.cancel') }}
       </FaButton>
-      <FaButton v-if="step < 2" type="button" :disabled="loading || detail === null || loadError !== null" @click="step += 1">
+      <FaButton v-if="step === 0" type="button" :disabled="loading || detail === null || loadError !== null" @click="step += 1">
         {{ t('invoiceRequest.approval.reviewNext') }}
+      </FaButton>
+      <FaButton v-else-if="step === 1" type="button" :disabled="detail === null" @click="copyAndAdvance">
+        <FaIcon name="i-lucide:clipboard-copy" class="size-4" aria-hidden="true" />{{ t('invoiceRequest.approval.copy') }}
       </FaButton>
       <FaButton v-else type="button" :loading="submitting" :disabled="submitting || detail === null" @click="confirmNotify">
         {{ t('invoiceRequest.approval.reviewConfirm') }}

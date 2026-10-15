@@ -127,6 +127,8 @@
   "invoiceRequest.approval.reviewConfirm": "Confirm notified",
   "invoiceRequest.approval.reviewCopyHint": "Copy the invoice info and send it to the issuer; the system only records that the notification happened, which is done offline.",
   "invoiceRequest.approval.reviewDone": "Notification recorded; the request is now Notified",
+  "invoiceRequest.approval.reviewConfirmTitle": "Notified the issuer already?",
+  "invoiceRequest.approval.reviewConfirmHint": "Record the notification only after the info has been sent.",
   "invoiceRequest.common.confirm": "Confirm",
   "invoiceRequest.common.cancel": "Cancel",
   "invoiceRequest.error.forbidden": "Your account cannot perform this action",

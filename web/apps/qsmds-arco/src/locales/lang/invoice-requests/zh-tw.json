@@ -127,6 +127,8 @@
   "invoiceRequest.approval.reviewConfirm": "確認已通知",
   "invoiceRequest.approval.reviewCopyHint": "請複製開票資訊並發送給代開票方；系統只記錄「已通知」，通知動作在線下完成。",
   "invoiceRequest.approval.reviewDone": "已記錄通知，申請單轉為「已通知開票」",
+  "invoiceRequest.approval.reviewConfirmTitle": "確定已通知代開票方了嗎？",
+  "invoiceRequest.approval.reviewConfirmHint": "確認已發送開票資訊後，再記錄通知。",
   "invoiceRequest.common.confirm": "確認",
   "invoiceRequest.common.cancel": "取消",
   "invoiceRequest.error.forbidden": "當前身分沒有執行該操作的權限",

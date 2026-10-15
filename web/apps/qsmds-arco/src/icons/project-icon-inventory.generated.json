@@ -3144,7 +3144,8 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-panel.vue",
-      "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue"
+      "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue"
     ]
   },
   {

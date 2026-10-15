@@ -99,10 +99,15 @@ test('发票审批按 2026-10-15 规格走三步弹窗（独立组件 review-mod
   assert.equal(approval.includes('openAction(row, \'review\')'), false)
   assert.equal(approval.includes('copyInvoiceInfo'), false)
   const modal = await readFile(new URL('../../src/views/workbenches/invoices/approval/review-modal.vue', import.meta.url), 'utf8')
-  for (const key of ['reviewStepInfo', 'reviewStepCopy', 'reviewStepConfirm', 'reviewNext', 'reviewBack', 'reviewConfirm', 'reviewCopyHint', 'reviewDone']) {
+  for (const key of ['reviewStepInfo', 'reviewStepCopy', 'reviewStepConfirm', 'reviewNext', 'reviewBack', 'reviewConfirm', 'reviewCopyHint', 'reviewDone', 'reviewConfirmTitle', 'reviewConfirmHint']) {
     assert.ok(modal.includes(key), `review-modal 缺少 ${key}`)
   }
   assert.match(modal, /<FaSteps v-model="step"/u)
   assert.match(modal, /buildInvoiceCopyText/u)
   assert.match(modal, /invoiceRequestsApi\.notify/u)
+  // 第二步：复制按钮在 footer 并承担前进（复制 + 前进一步）；该步不出现「取消」。
+  assert.match(modal, /copyAndAdvance/u)
+  assert.match(modal, /v-if="step !== 1"[\s\S]{0,200}invoiceRequest\.common\.cancel/u)
+  // 第三步：图标 + 标题 + 说明的确认块（send 图标）。
+  assert.match(modal, /i-lucide:send/u)
 })
