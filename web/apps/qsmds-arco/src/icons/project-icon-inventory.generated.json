@@ -1729,6 +1729,7 @@
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/packaging-history-modal.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-form.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-form.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/order-receipt-requests.vue",
@@ -2034,6 +2035,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-record-list.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/create.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-voucher.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/records-modal.logic.ts"
     ]
@@ -2369,15 +2371,6 @@
     ]
   },
   {
-    "name": "i-lucide:list",
-    "label": "i-lucide:list",
-    "category": "通用图标",
-    "source": "iconify",
-    "usages": [
-      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue"
-    ]
-  },
-  {
     "name": "i-lucide:list-checks",
     "label": "i-lucide:list-checks",
     "category": "通用图标",
@@ -2595,8 +2588,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/component_library/basic/image-group.vue",
-      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue"
+      "apps/qsmds-arco/src/views/component_library/basic/image-group.vue"
     ]
   },
   {

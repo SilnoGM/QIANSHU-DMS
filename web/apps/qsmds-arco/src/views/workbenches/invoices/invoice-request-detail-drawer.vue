@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { InvoiceRequestDto, InvoiceRequestHistoryDto, InvoiceRequestLineDto } from '@/api/generated/types.gen'
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import invoiceRequestsApi from '@/api/modules/invoice-requests'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
@@ -113,6 +113,19 @@ function historyLine(entry: InvoiceRequestHistoryDto): string {
   return [t(`invoiceRequest.status.${entry.toStatus}`), entry.actorName].join(' · ')
 }
 
+/** 节点操作人：取流程历史里最近一次该动作的 actorName（退回可多次，取最新；未发生则为 null）。 */
+const nodes = computed(() => {
+  const history = detail.value?.history ?? []
+  const actor = (action: InvoiceRequestHistoryDto['action']): string | null =>
+    history.filter(entry => entry.action === action).at(-1)?.actorName ?? null
+  return {
+    applicant: detail.value?.creatorName ?? null,
+    notifier: actor('NOTIFY'),
+    uploader: actor('UPLOAD_DOCUMENT'),
+    settler: actor('SETTLE'),
+  }
+})
+
 function lineAmount(line: InvoiceRequestLineDto): string {
   return line.amount
 }
@@ -145,42 +158,69 @@ function lineAmount(line: InvoiceRequestLineDto): string {
     </template>
 
     <div v-if="detail !== null && error === null" class="space-y-5">
-      <section class="p-4 border border-border rounded-xl bg-muted/15 min-w-0 space-y-5 sm:p-5">
-        <div class="flex gap-4 items-start justify-between">
-          <div class="min-w-0">
-            <p class="qs-type-compact-label mb-1.5">
-              {{ t('invoiceRequest.column.invoiceNo') }}
-            </p>
-            <p class="qs-type-data-emphasis m-0 break-all">
-              {{ detail.invoiceNo }}
-            </p>
-          </div>
-          <div class="text-right">
-            <p class="qs-type-compact-label mb-1.5">
-              {{ t('invoiceRequest.field.totalAmount') }}
-            </p>
-            <div tabindex="0" class="flex max-w-full overflow-x-auto [&_[data-currency]]:text-3xl [&_[data-currency]]:font-bold">
-              <AmountDisplay :value="detail.totalAmount" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" />
-            </div>
-          </div>
-        </div>
+      <section class="p-4 border border-border rounded-xl bg-background min-w-0 space-y-4 sm:p-5">
+        <header class="flex gap-2.5 items-center">
+          <span class="text-muted-foreground rounded-lg bg-muted/60 flex shrink-0 size-8 items-center justify-center">
+            <FaIcon name="i-lucide:clipboard-list" class="size-4" aria-hidden="true" />
+          </span>
+          <h3 class="qs-type-component-title m-0">
+            {{ t('invoiceRequest.detail.sectionBasic') }}
+          </h3>
+        </header>
         <dl class="m-0 gap-x-6 gap-y-4 grid sm:grid-cols-2">
           <div class="min-w-0">
             <dt class="qs-type-compact-label mb-1.5">
-              {{ t('invoiceRequest.column.submitter') }}
+              {{ t('invoiceRequest.detail.node.applicant') }}
             </dt>
-            <dd class="m-0">
-              <QsPersonDisplay :display-name="detail.creatorName" size="sm" />
+            <dd class="m-0 flex flex-wrap gap-x-3 gap-y-1 items-baseline">
+              <QsPersonDisplay v-if="nodes.applicant !== null" :display-name="nodes.applicant" size="sm" />
+              <span v-else class="qs-type-meta">—</span>
+              <DateTimeDisplay :value="detail.submittedAt" />
             </dd>
           </div>
           <div class="min-w-0">
             <dt class="qs-type-compact-label mb-1.5">
-              {{ t('invoiceRequest.column.submittedAt') }}
+              {{ t('invoiceRequest.detail.node.notifier') }}
             </dt>
-            <dd class="m-0">
-              <DateTimeDisplay :value="detail.submittedAt" />
+            <dd class="m-0 flex flex-wrap gap-x-3 gap-y-1 items-baseline">
+              <QsPersonDisplay v-if="nodes.notifier !== null" :display-name="nodes.notifier" size="sm" />
+              <span v-else class="qs-type-meta">—</span>
+              <DateTimeDisplay :value="detail.notifiedAt" />
             </dd>
           </div>
+          <div class="min-w-0">
+            <dt class="qs-type-compact-label mb-1.5">
+              {{ t('invoiceRequest.detail.node.uploader') }}
+            </dt>
+            <dd class="m-0 flex flex-wrap gap-x-3 gap-y-1 items-baseline">
+              <QsPersonDisplay v-if="nodes.uploader !== null" :display-name="nodes.uploader" size="sm" />
+              <span v-else class="qs-type-meta">—</span>
+              <DateTimeDisplay :value="detail.documentUploadedAt" />
+            </dd>
+          </div>
+          <div class="min-w-0">
+            <dt class="qs-type-compact-label mb-1.5">
+              {{ t('invoiceRequest.detail.node.settler') }}
+            </dt>
+            <dd class="m-0 flex flex-wrap gap-x-3 gap-y-1 items-baseline">
+              <QsPersonDisplay v-if="nodes.settler !== null" :display-name="nodes.settler" size="sm" />
+              <span v-else class="qs-type-meta">—</span>
+              <DateTimeDisplay :value="detail.settledAt" />
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="p-4 border border-border rounded-xl bg-background min-w-0 space-y-4 sm:p-5">
+        <header class="flex gap-2.5 items-center">
+          <span class="text-muted-foreground rounded-lg bg-muted/60 flex shrink-0 size-8 items-center justify-center">
+            <FaIcon name="i-lucide:file-text" class="size-4" aria-hidden="true" />
+          </span>
+          <h3 class="qs-type-component-title m-0">
+            {{ t('invoiceRequest.detail.sectionInvoice') }}
+          </h3>
+        </header>
+        <dl class="m-0 gap-x-6 gap-y-4 grid sm:grid-cols-2">
           <div class="min-w-0">
             <dt class="qs-type-compact-label mb-1.5">
               {{ t('invoiceRequest.field.buyerName') }}
@@ -198,17 +238,6 @@ function lineAmount(line: InvoiceRequestLineDto): string {
             </dd>
           </div>
         </dl>
-      </section>
-
-      <section class="p-4 border border-border rounded-xl bg-background min-w-0 space-y-4 sm:p-5">
-        <header class="flex gap-2.5 items-center">
-          <span class="text-muted-foreground rounded-lg bg-muted/60 flex shrink-0 size-8 items-center justify-center">
-            <FaIcon name="i-lucide:list" class="size-4" aria-hidden="true" />
-          </span>
-          <h3 class="qs-type-component-title m-0">
-            {{ t('invoiceRequest.form.linesSection') }}
-          </h3>
-        </header>
         <div class="border border-border rounded-xl bg-background overflow-x-auto">
           <table class="text-sm w-full border-collapse">
             <caption class="sr-only">
@@ -254,43 +283,34 @@ function lineAmount(line: InvoiceRequestLineDto): string {
             </tbody>
           </table>
         </div>
-        <dl class="m-0 flex flex-col gap-2">
-          <div class="flex gap-4 justify-between">
-            <dt class="text-sm text-muted-foreground">
-              {{ t('invoiceRequest.field.salesAmount') }}
-            </dt>
-            <dd class="m-0">
-              <AmountDisplay :value="detail.salesAmount" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" />
-            </dd>
-          </div>
-          <div class="flex gap-4 justify-between">
-            <dt class="text-sm text-muted-foreground">
-              {{ t('invoiceRequest.field.taxAmount') }}
-            </dt>
-            <dd class="m-0">
-              <AmountDisplay :value="detail.taxAmount" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" />
-            </dd>
-          </div>
-          <div class="p-4 border border-border rounded-xl bg-primary/5 flex gap-4 items-center justify-between">
-            <dt class="text-sm text-muted-foreground">
-              {{ t('invoiceRequest.field.totalAmount') }}
-            </dt>
-            <dd class="m-0 max-w-full overflow-x-auto">
-              <AmountDisplay :value="detail.totalAmount" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" class="font-bold" />
-            </dd>
-          </div>
-        </dl>
-      </section>
-
-      <section class="p-4 border border-border rounded-xl bg-background min-w-0 space-y-4 sm:p-5">
-        <header class="flex gap-2.5 items-center">
-          <span class="text-muted-foreground rounded-lg bg-muted/60 flex shrink-0 size-8 items-center justify-center">
-            <FaIcon name="i-lucide:message-square-text" class="size-4" aria-hidden="true" />
-          </span>
-          <h3 class="qs-type-component-title m-0">
-            {{ t('invoiceRequest.form.remarkSection') }}
-          </h3>
-        </header>
+        <div class="flex justify-end">
+          <dl class="m-0 flex flex-col gap-2 w-full sm:w-80">
+            <div class="flex gap-4 justify-between">
+              <dt class="text-sm text-muted-foreground">
+                {{ t('invoiceRequest.field.salesAmount') }}
+              </dt>
+              <dd class="m-0">
+                <AmountDisplay :value="detail.salesAmount" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" />
+              </dd>
+            </div>
+            <div class="flex gap-4 justify-between">
+              <dt class="text-sm text-muted-foreground">
+                {{ t('invoiceRequest.field.taxAmount') }}
+              </dt>
+              <dd class="m-0">
+                <AmountDisplay :value="detail.taxAmount" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" />
+              </dd>
+            </div>
+            <div class="p-4 border border-border rounded-xl bg-primary/5 flex gap-4 items-center justify-between">
+              <dt class="text-sm text-muted-foreground">
+                {{ t('invoiceRequest.field.totalAmount') }}
+              </dt>
+              <dd class="m-0 max-w-full overflow-x-auto">
+                <AmountDisplay :value="detail.totalAmount" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" class="font-bold" />
+              </dd>
+            </div>
+          </dl>
+        </div>
         <dl class="m-0 gap-x-6 gap-y-4 grid sm:grid-cols-2">
           <div class="min-w-0">
             <dt class="qs-type-compact-label mb-1.5">
@@ -317,7 +337,7 @@ function lineAmount(line: InvoiceRequestLineDto): string {
             <FaIcon name="i-lucide:truck" class="size-4" aria-hidden="true" />
           </span>
           <h3 class="qs-type-component-title m-0">
-            {{ t('invoiceRequest.form.recipientSection') }}
+            {{ t('invoiceRequest.detail.sectionRecipient') }}
           </h3>
         </header>
         <dl class="m-0 gap-x-6 gap-y-4 grid sm:grid-cols-2">
@@ -348,62 +368,67 @@ function lineAmount(line: InvoiceRequestLineDto): string {
         </dl>
       </section>
 
-      <section class="p-4 border border-border rounded-xl bg-background min-w-0 space-y-4 sm:p-5">
-        <header class="flex gap-2.5 items-center">
-          <span class="text-muted-foreground rounded-lg bg-muted/60 flex shrink-0 size-8 items-center justify-center">
-            <FaIcon name="i-lucide:image" class="size-4" aria-hidden="true" />
-          </span>
-          <h3 class="qs-type-component-title m-0">
-            {{ t('invoiceRequest.detail.document') }}
-          </h3>
-        </header>
-        <img
-          v-if="photoUrl !== null"
-          :src="photoUrl"
-          :alt="t('invoiceRequest.detail.document')"
-          class="p-2 border border-border rounded-xl bg-white max-h-80 object-contain"
-        >
-        <p v-else class="qs-type-meta m-0">
-          {{ t('invoiceRequest.detail.documentNone') }}
-        </p>
-      </section>
+      <div class="gap-5 grid min-w-0 lg:grid-cols-2">
+        <section class="p-4 border border-border rounded-xl bg-background min-w-0 space-y-4 sm:p-5">
+          <header class="flex gap-2.5 items-center">
+            <span class="text-muted-foreground rounded-lg bg-muted/60 flex shrink-0 size-8 items-center justify-center">
+              <FaIcon name="i-lucide:image" class="size-4" aria-hidden="true" />
+            </span>
+            <h3 class="qs-type-component-title m-0">
+              {{ t('invoiceRequest.detail.document') }}
+            </h3>
+          </header>
+          <FaImagePreview
+            v-if="photoUrl !== null"
+            :src="photoUrl"
+            class="h-80 w-auto"
+            :aria-label="t('invoiceRequest.detail.document')"
+          />
+          <p v-else class="qs-type-meta m-0">
+            {{ t('invoiceRequest.detail.documentNone') }}
+          </p>
+        </section>
 
-      <section v-if="detail.settleAmountCny !== null" class="p-4 border border-border rounded-xl bg-background min-w-0 space-y-4 sm:p-5">
-        <header class="flex gap-2.5 items-center">
-          <span class="text-muted-foreground rounded-lg bg-muted/60 flex shrink-0 size-8 items-center justify-center">
-            <FaIcon name="i-lucide:landmark" class="size-4" aria-hidden="true" />
-          </span>
-          <h3 class="qs-type-component-title m-0">
-            {{ t('invoiceRequest.action.settle') }}
-          </h3>
-        </header>
-        <dl class="m-0 gap-x-6 gap-y-4 grid sm:grid-cols-2">
-          <div class="min-w-0">
-            <dt class="qs-type-compact-label mb-1.5">
-              {{ t('invoiceRequest.approval.settleRate') }}
-            </dt>
-            <dd class="qs-type-data m-0">
-              {{ detail.foreignUnitsPerCnySnapshot ?? '—' }}
-            </dd>
-          </div>
-          <div class="min-w-0">
-            <dt class="qs-type-compact-label mb-1.5">
-              {{ t('invoiceRequest.approval.settleAmount') }}
-            </dt>
-            <dd class="m-0">
-              <AmountDisplay :value="detail.settleAmountCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
-            </dd>
-          </div>
-          <div class="min-w-0">
-            <dt class="qs-type-compact-label mb-1.5">
-              {{ t('invoiceRequest.detail.settledAt') }}
-            </dt>
-            <dd class="m-0">
-              <DateTimeDisplay :value="detail.settledAt" />
-            </dd>
-          </div>
-        </dl>
-      </section>
+        <section class="p-4 border border-border rounded-xl bg-background min-w-0 space-y-4 sm:p-5">
+          <header class="flex gap-2.5 items-center">
+            <span class="text-muted-foreground rounded-lg bg-muted/60 flex shrink-0 size-8 items-center justify-center">
+              <FaIcon name="i-lucide:landmark" class="size-4" aria-hidden="true" />
+            </span>
+            <h3 class="qs-type-component-title m-0">
+              {{ t('invoiceRequest.detail.sectionSettle') }}
+            </h3>
+          </header>
+          <dl v-if="detail.settleAmountCny !== null" class="m-0 gap-x-6 gap-y-4 grid sm:grid-cols-2">
+            <div class="min-w-0">
+              <dt class="qs-type-compact-label mb-1.5">
+                {{ t('invoiceRequest.approval.settleRate') }}
+              </dt>
+              <dd class="qs-type-data m-0">
+                {{ detail.foreignUnitsPerCnySnapshot ?? '—' }}
+              </dd>
+            </div>
+            <div class="min-w-0">
+              <dt class="qs-type-compact-label mb-1.5">
+                {{ t('invoiceRequest.approval.settleAmount') }}
+              </dt>
+              <dd class="m-0">
+                <AmountDisplay :value="detail.settleAmountCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+              </dd>
+            </div>
+            <div class="min-w-0">
+              <dt class="qs-type-compact-label mb-1.5">
+                {{ t('invoiceRequest.detail.settledAt') }}
+              </dt>
+              <dd class="m-0">
+                <DateTimeDisplay :value="detail.settledAt" />
+              </dd>
+            </div>
+          </dl>
+          <p v-else class="qs-type-meta m-0">
+            {{ t('invoiceRequest.detail.settleNone') }}
+          </p>
+        </section>
+      </div>
 
       <section class="p-4 border border-border rounded-xl bg-background min-w-0 space-y-4 sm:p-5">
         <header class="flex gap-2.5 items-center">
@@ -411,7 +436,7 @@ function lineAmount(line: InvoiceRequestLineDto): string {
             <FaIcon name="i-lucide:history" class="size-4" aria-hidden="true" />
           </span>
           <h3 class="qs-type-component-title m-0">
-            {{ t('invoiceRequest.detail.history') }}
+            {{ t('invoiceRequest.detail.sectionFlow') }}
           </h3>
         </header>
         <ol class="m-0 p-0 list-none space-y-3">
