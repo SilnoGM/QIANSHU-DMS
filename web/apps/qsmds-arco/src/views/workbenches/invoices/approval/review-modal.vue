@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import invoiceRequestsApi from '@/api/modules/invoice-requests'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import { resolveInvoiceFailureKey } from '../invoice-failure.logic'
 import InvoiceRequestInfo from '../invoice-request-info.vue'
 import { buildInvoiceCopyText } from '../invoice-status.logic'
@@ -73,16 +74,21 @@ watch(() => [props.modelValue, props.id], ([open]) => {
 })
 
 /**
+ * 第二步的复制文本：展示与写入剪贴板必须同一来源，避免屏幕上看到的
+ * 与复制出去的文本不一致。
+ */
+const copyText = computed(() => detail.value === null ? '' : buildInvoiceCopyText(detail.value))
+
+/**
  * 第二步的主按钮＝复制并前进：复制是线下通知的工具；复制失败不拦路，
- * 只用 toast 提示手动选择（开票信息在第一步可见、也可选）。
+ * 只用 toast 提示手动选择（第二步内容区展示全文，可直接选中）。
  */
 async function copyAndAdvance(): Promise<void> {
-  const request = detail.value
-  if (request === null) {
+  if (copyText.value === '') {
     return
   }
   try {
-    await navigator.clipboard.writeText(buildInvoiceCopyText(request))
+    await navigator.clipboard.writeText(copyText.value)
     toast.success(t('invoiceRequest.approval.copied'))
   }
   catch {
@@ -147,9 +153,17 @@ function close(): void {
       </template>
 
       <template v-else-if="step === 1">
-        <p class="qs-type-body text-muted-foreground m-0">
-          {{ t('invoiceRequest.approval.reviewCopyHint') }}
-        </p>
+        <div class="min-w-0 space-y-3">
+          <p class="qs-type-body text-muted-foreground m-0">
+            {{ t('invoiceRequest.approval.reviewCopyHint') }}
+          </p>
+          <div class="p-4 rounded-lg bg-muted/50 relative">
+            <span class="right-2 top-2 absolute">
+              <CopyCellButton :always-visible="true" :label="t('invoiceRequest.approval.copyLabel')" :text="copyText" />
+            </span>
+            <pre class="text-sm m-0 pr-9 whitespace-pre-wrap [overflow-wrap:anywhere]">{{ copyText }}</pre>
+          </div>
+        </div>
       </template>
 
       <template v-else>

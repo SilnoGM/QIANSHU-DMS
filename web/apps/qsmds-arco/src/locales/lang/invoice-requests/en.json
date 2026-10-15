@@ -117,6 +117,7 @@
   "invoiceRequest.approval.settleRate": "Current rate (TWD per 1 CNY)",
   "invoiceRequest.approval.settleAmount": "Cost (CNY)",
   "invoiceRequest.approval.copy": "Copy invoice info",
+  "invoiceRequest.approval.copyLabel": "invoice info",
   "invoiceRequest.approval.copied": "Invoice info copied",
   "invoiceRequest.approval.copyFailed": "Copy failed; select the text manually",
   "invoiceRequest.approval.reviewStepInfo": "Invoice info",

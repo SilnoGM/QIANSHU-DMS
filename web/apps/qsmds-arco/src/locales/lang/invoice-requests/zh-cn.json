@@ -117,6 +117,7 @@
   "invoiceRequest.approval.settleRate": "当前汇率（1 人民币 = 台币）",
   "invoiceRequest.approval.settleAmount": "入账成本（人民币）",
   "invoiceRequest.approval.copy": "复制开票信息",
+  "invoiceRequest.approval.copyLabel": "开票信息",
   "invoiceRequest.approval.copied": "开票信息已复制",
   "invoiceRequest.approval.copyFailed": "复制失败，请手动选择文本",
   "invoiceRequest.approval.reviewStepInfo": "开票信息",

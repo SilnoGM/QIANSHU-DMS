@@ -117,6 +117,7 @@
   "invoiceRequest.approval.settleRate": "當前匯率（1 人民幣 = 台幣）",
   "invoiceRequest.approval.settleAmount": "入帳成本（人民幣）",
   "invoiceRequest.approval.copy": "複製開票資訊",
+  "invoiceRequest.approval.copyLabel": "開票資訊",
   "invoiceRequest.approval.copied": "開票資訊已複製",
   "invoiceRequest.approval.copyFailed": "複製失敗，請手動選取文字",
   "invoiceRequest.approval.reviewStepInfo": "開票資訊",

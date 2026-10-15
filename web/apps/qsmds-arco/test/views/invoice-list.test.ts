@@ -99,12 +99,19 @@ test('发票审批按 2026-10-15 规格走三步弹窗（独立组件 review-mod
   assert.equal(approval.includes('openAction(row, \'review\')'), false)
   assert.equal(approval.includes('copyInvoiceInfo'), false)
   const modal = await readFile(new URL('../../src/views/workbenches/invoices/approval/review-modal.vue', import.meta.url), 'utf8')
-  for (const key of ['reviewStepInfo', 'reviewStepCopy', 'reviewStepConfirm', 'reviewNext', 'reviewBack', 'reviewConfirm', 'reviewCopyHint', 'reviewDone', 'reviewConfirmTitle', 'reviewConfirmHint']) {
+  for (const key of ['reviewStepInfo', 'reviewStepCopy', 'reviewStepConfirm', 'reviewNext', 'reviewBack', 'reviewConfirm', 'reviewCopyHint', 'reviewDone', 'reviewConfirmTitle', 'reviewConfirmHint', 'copyLabel']) {
     assert.ok(modal.includes(key), `review-modal 缺少 ${key}`)
   }
   assert.match(modal, /<FaSteps v-model="step"/u)
   assert.match(modal, /buildInvoiceCopyText/u)
   assert.match(modal, /invoiceRequestsApi\.notify/u)
+  // 第二步内容区：复制文本全文预览（灰底）+ 右上角一键复制按钮；展示与剪贴板同一来源。
+  assert.match(modal, /import CopyCellButton from '@\/components\/business\/QsGenericTable\/CopyCellButton\.vue'/u)
+  assert.match(modal, /const copyText = computed\(/u)
+  assert.match(modal, /bg-muted\/50/u)
+  assert.match(modal, /:text="copyText"/u)
+  assert.match(modal, /<pre[^>]*>\{\{ copyText \}\}<\/pre>/u)
+  assert.match(modal, /await navigator\.clipboard\.writeText\(copyText\.value\)/u)
   // 第二步：复制按钮在 footer 并承担前进（复制 + 前进一步）；该步不出现「取消」。
   assert.match(modal, /copyAndAdvance/u)
   assert.match(modal, /v-if="step !== 1"[\s\S]{0,200}invoiceRequest\.common\.cancel/u)
