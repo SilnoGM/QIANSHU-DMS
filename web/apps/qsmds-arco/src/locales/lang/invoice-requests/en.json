@@ -104,5 +104,21 @@
   "invoiceRequest.error.validation": "Check the input and try again",
   "invoiceRequest.error.storage": "Photo storage is temporarily unavailable; try again later",
   "invoiceRequest.error.unknown": "The action failed; try again later",
-  "invoiceRequest.list.loadFailed": "Failed to load the list; try again"
+  "invoiceRequest.list.loadFailed": "Failed to load the list; try again",
+  "invoiceRequest.create.title": "Invoice request",
+  "invoiceRequest.create.description": "Fill in the invoice details and submit; amounts are computed as quantity × unit price, then reviewed by finance.",
+  "invoiceRequest.records.title": "Invoice records",
+  "invoiceRequest.records.description": "Track your own invoice requests; returned ones can be fixed and submitted again.",
+  "invoiceRequest.approval.title": "Invoice approval",
+  "invoiceRequest.approval.description": "Review requests, notify the issuer, upload the invoice photo, and settle the cost 120 hours after the upload.",
+  "invoiceRequest.column.status": "Status",
+  "invoiceRequest.list.emptyDescription": "Submitted invoice requests appear here.",
+  "invoiceRequest.detail.close": "Close",
+  "invoiceRequest.detail.settledAt": "Settled at",
+  "invoiceRequest.error.taxIdFormat": "Tax ID must be 8 digits",
+  "invoiceRequest.action.viewRecords": "View records",
+  "invoiceRequest.upload.pick": "Choose the invoice photo",
+  "invoiceRequest.upload.imageOnly": "Only jpg, png or webp invoice photos are supported",
+  "invoiceRequest.upload.imageEmpty": "This file is empty; choose another one",
+  "invoiceRequest.upload.imageTooLarge": "The invoice photo must not exceed 10 MiB"
 }

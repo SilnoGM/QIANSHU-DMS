@@ -104,5 +104,21 @@
   "invoiceRequest.error.validation": "請檢查填寫內容後重試",
   "invoiceRequest.error.storage": "發票照片儲存暫時不可用，請稍後重試",
   "invoiceRequest.error.unknown": "操作失敗，請稍後重試",
-  "invoiceRequest.list.loadFailed": "清單載入失敗，請重試"
+  "invoiceRequest.list.loadFailed": "清單載入失敗，請重試",
+  "invoiceRequest.create.title": "開票申請",
+  "invoiceRequest.create.description": "填寫開票資訊並提交；金額由系統按數量 × 單價計算，提交後交財務審核。",
+  "invoiceRequest.records.title": "開票記錄",
+  "invoiceRequest.records.description": "查看本人提交的開票申請與進度；被退回的可以修改後重新提交。",
+  "invoiceRequest.approval.title": "開票審批",
+  "invoiceRequest.approval.description": "審核開票申請、通知代開票方、回傳發票照片，並在滿 120 小時後結算入帳。",
+  "invoiceRequest.column.status": "狀態",
+  "invoiceRequest.list.emptyDescription": "提交開票申請後可以在這裡查看進度。",
+  "invoiceRequest.detail.close": "關閉",
+  "invoiceRequest.detail.settledAt": "結算日期",
+  "invoiceRequest.error.taxIdFormat": "統一編號必須是 8 位數字",
+  "invoiceRequest.action.viewRecords": "查看開票記錄",
+  "invoiceRequest.upload.pick": "選擇發票照片",
+  "invoiceRequest.upload.imageOnly": "只支援 jpg、png、webp 格式的發票照片",
+  "invoiceRequest.upload.imageEmpty": "這個檔案是空的，請重新選擇",
+  "invoiceRequest.upload.imageTooLarge": "發票照片不能超過 10 MiB"
 }

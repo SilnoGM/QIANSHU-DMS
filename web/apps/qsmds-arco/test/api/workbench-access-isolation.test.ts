@@ -188,7 +188,6 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-finance/bill-reconciliation/slh-bill-management/import',
     '/qs-finance/fund-accounts/transactions',
     '/qs-finance/invoices/approval',
-    '/qs-finance/invoices/approval/9f1e0b6c-1111-4222-8333-444444444444',
   ]) {
     assert.equal(canEnter(financeStaff, path), true, `财务角色应能进入 ${path}`)
   }

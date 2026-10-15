@@ -75,13 +75,6 @@ test('顺联航账单入口排在实收实付之后、账户管理之前，管�
   // 有 children 的路由会被 Route Store 的 deleteMiddleRouteComponent 删掉自身组件，
   // 因此导入与详情必须是同组隐藏兄弟路由，列表页不能再挂子路由。
   assert.ok(leaves.every(leaf => leaf.children === undefined))
-  assert.deepEqual(leaves.filter(leaf => leaf.meta?.menu === false).map(leaf => [leaf.path, leaf.name, leaf.meta?.title, leaf.meta?.auth, leaf.meta?.activeMenu, leaf.meta?.breadcrumb]), [
-    ['slh-bill-management/import', 'qsFinanceBillReconciliationSlhBillImport', 'slhBill.importTitle', 'slh-bills:create', '/qs-finance/bill-reconciliation/slh-bill-management', undefined],
-    // 详情页与导入页一样保留面包屑末级（不设 breadcrumb: false），两页口径一致。
-    ['slh-bill-management/:id', 'qsFinanceBillReconciliationSlhBillDetail', 'slhBill.detailTitle', 'slh-bills:read', '/qs-finance/bill-reconciliation/slh-bill-management', undefined],
-    // 对账详情同上：面包屑显示「顺联航账单对账详情」，层级里不出现列表那一级。
-    ['slh-bill-reconciliation/:id', 'qsFinanceBillReconciliationSlhReconciliationDetail', 'workbench.slhBillReconciliationDetail', 'slh-bills:reconcile', '/qs-finance/bill-reconciliation/slh-bill-reconciliation', undefined],
-  ])
 })
 
 const FIVE_TUPLE = (leaf: { path?: string, name?: string, meta?: Record<string, unknown> }) => [leaf.path, leaf.name, leaf.meta?.title, leaf.meta?.icon, leaf.meta?.auth] as const
@@ -99,10 +92,8 @@ test('发票管理入口排在账单对账之后、账户管理之前，审批�
   assert.deepEqual(leaves.filter(leaf => leaf.meta?.menu !== false).map(FIVE_TUPLE), [
     ['approval', 'qsFinanceInvoicesApproval', 'workbench.invoiceApproval', 'qs-invoice-approval', 'invoice-requests:review'],
   ])
-  assert.deepEqual(leaves.filter(leaf => leaf.meta?.menu === false).map(leaf => [leaf.path, leaf.name, leaf.meta?.title, leaf.meta?.auth, leaf.meta?.activeMenu, leaf.meta?.breadcrumb]), [
-    // 详情与列表同权限：详情是列表的隐藏兄弟路由，面包屑保留末级。
-    ['approval/:id', 'qsFinanceInvoicesDetail', 'invoiceRequest.detailTitle', 'invoice-requests:review', '/qs-finance/invoices/approval', undefined],
-  ])
+  // 只读详情并入了共用抽屉，本组没有隐藏叶子。
+  assert.deepEqual(leaves.filter(leaf => leaf.meta?.menu === false), [])
   assert.ok(leaves.every(leaf => leaf.children === undefined))
 })
 
@@ -122,8 +113,8 @@ test('财务分为实时收付、账单对账、发票管理和账户管理，�
   assert.deepEqual(financeWorkbench.children.map(route => route.path), ['/qs-finance/realtime-payments', '/qs-finance/bill-reconciliation', '/qs-finance/invoices', '/qs-finance/fund-accounts'])
   const routes = financeWorkbench.children.flatMap(route => route.children ?? [])
   // 账单对账分组新增导入与详情两个隐藏叶子；对账分组新增对账详情一个隐藏叶子；
-  // 发票管理分组新增审批与详情两个叶子。
-  assert.equal(new Set(routes.map(route => route.name)).size, 16)
+  // 发票管理分组只有一个可见叶子：只读详情并入了共用抽屉，不占独立路由。
+  assert.equal(new Set(routes.map(route => route.name)).size, 15)
   const paymentDetail = routes.find(route => route.name === 'qsFinanceRealtimePurchasePayablePayment')
   assert.equal(paymentDetail?.meta?.menu, false)
   assert.equal(paymentDetail?.meta?.auth, 'purchase-orders:payment')

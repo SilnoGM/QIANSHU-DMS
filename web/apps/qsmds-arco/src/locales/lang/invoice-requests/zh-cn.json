@@ -104,5 +104,21 @@
   "invoiceRequest.error.validation": "请检查填写内容后重试",
   "invoiceRequest.error.storage": "发票照片存储暂时不可用，请稍后重试",
   "invoiceRequest.error.unknown": "操作失败，请稍后重试",
-  "invoiceRequest.list.loadFailed": "列表加载失败，请重试"
+  "invoiceRequest.list.loadFailed": "列表加载失败，请重试",
+  "invoiceRequest.create.title": "开票申请",
+  "invoiceRequest.create.description": "填写开票信息并提交；金额由系统按数量 × 单价计算，提交后交财务审核。",
+  "invoiceRequest.records.title": "开票记录",
+  "invoiceRequest.records.description": "查看本人提交的开票申请与进度；被退回的可以修改后重新提交。",
+  "invoiceRequest.approval.title": "开票审批",
+  "invoiceRequest.approval.description": "审核开票申请、通知代开票方、回传发票照片，并在满 120 小时后结算入账。",
+  "invoiceRequest.column.status": "状态",
+  "invoiceRequest.list.emptyDescription": "提交开票申请后可以在这里查看进度。",
+  "invoiceRequest.detail.close": "关闭",
+  "invoiceRequest.detail.settledAt": "结算日期",
+  "invoiceRequest.error.taxIdFormat": "统一编号必须是 8 位数字",
+  "invoiceRequest.action.viewRecords": "查看开票记录",
+  "invoiceRequest.upload.pick": "选择发票照片",
+  "invoiceRequest.upload.imageOnly": "只支持 jpg、png、webp 格式的发票照片",
+  "invoiceRequest.upload.imageEmpty": "这个文件是空的，请重新选择",
+  "invoiceRequest.upload.imageTooLarge": "发票照片不能超过 10 MiB"
 }

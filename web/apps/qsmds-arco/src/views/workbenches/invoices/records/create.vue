@@ -4,7 +4,9 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import invoiceRequestsApi from '@/api/modules/invoice-requests'
+import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { resolveDuplicateFieldErrors, resolveInvoiceFailureKey } from '../invoice-failure.logic'
 import { buildInvoiceSubmitPayload, calculateInvoiceTotals, emptyInvoiceFormLine, INVOICE_REQUEST_LINE_LIMIT } from '../invoice-form.logic'
 import { parseDuplicateSuspects } from '../invoice-status.logic'
@@ -12,12 +14,14 @@ import { parseDuplicateSuspects } from '../invoice-status.logic'
 /**
  * 开票申请表单：新建与「重新填写」共用本页。
  *
- * 金额只由系统算（数量 × 单价），提交前二次确认；提交成功后跳开票记录。
+ * 金额只由系统算（数量 × 单价），汇总走 AmountDisplay（台币）；提交前二次确认；
  * 离开确认覆盖四类出口：路由离开、路由参数变化、刷新/关标签、提交进行中。
+ * 校验是手工的：buildInvoiceSubmitPayload 返回第一个不合格字段，页面按下标红该字段。
  */
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const currencyCatalog = useCurrencyCatalog()
 
 const editingId = computed(() => (typeof route.query.id === 'string' ? route.query.id : null))
 const editingVersion = ref<number | null>(null)
@@ -33,6 +37,7 @@ const loadError = ref<string | null>(null)
 const loadFailed = ref(false)
 const submitting = ref(false)
 const submitError = ref<string | null>(null)
+const fieldError = ref<string | null>(null)
 const returnedReason = ref<string | null>(null)
 const confirmOpen = ref(false)
 const duplicateOpen = ref(false)
@@ -42,9 +47,11 @@ const dirty = ref(false)
 
 const totals = computed(() => calculateInvoiceTotals(lines.value))
 const canAddLine = computed(() => lines.value.length < INVOICE_REQUEST_LINE_LIMIT)
+const invoiceCurrency = 'TWD'
 
 function markDirty(): void {
   dirty.value = true
+  fieldError.value = null
 }
 
 function addLine(): void {
@@ -58,6 +65,10 @@ function addLine(): void {
 function removeLine(index: number): void {
   lines.value = lines.value.filter((_, current) => current !== index)
   markDirty()
+}
+
+function lineFieldError(index: number, field: 'productName' | 'quantity' | 'unitPrice'): boolean {
+  return fieldError.value === `lines.${index}.${field}` || fieldError.value === 'lines'
 }
 
 function currentPayload(): ReturnType<typeof buildInvoiceSubmitPayload> {
@@ -103,16 +114,19 @@ onMounted(async () => {
 
 function requestSubmit(): void {
   submitError.value = null
-  if ('invalidField' in currentPayload()) {
-    submitError.value = t('invoiceRequest.error.validation')
+  const built = currentPayload()
+  if ('invalidField' in built) {
+    fieldError.value = built.invalidField
     return
   }
+  fieldError.value = null
   confirmOpen.value = true
 }
 
 async function send(duplicateAcknowledged: boolean): Promise<void> {
   const built = currentPayload()
   if ('invalidField' in built) {
+    fieldError.value = built.invalidField
     return
   }
   submitting.value = true
@@ -189,179 +203,291 @@ function finishLeave(allowed: boolean): void {
   }
   resolve?.(allowed)
 }
+
+const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.create.title') : t('invoiceRequest.form.resubmit'))
 </script>
 
 <template>
-  <FaPageMain class="min-w-0">
-    <div class="mx-auto flex flex-col gap-5 max-w-3xl w-full">
-      <div v-if="returnedReason !== null" class="text-sm text-destructive px-4 py-3 border border-destructive/30 rounded-md bg-destructive/10">
-        <p>{{ t('invoiceRequest.form.returnedBanner') }}</p>
-        <p class="mt-1">
-          {{ t('invoiceRequest.detail.returnReason') }}：{{ returnedReason }}
-        </p>
-      </div>
+  <div class="min-w-0">
+    <FaPageHeader :title="pageTitle" :description="t('invoiceRequest.create.description')">
+      <FaButton variant="outline" class="min-h-11 sm:min-h-9" @click="router.push({ name: 'qsOperationsInvoicesRecords' })">
+        <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />{{ t('invoiceRequest.action.viewRecords') }}
+      </FaButton>
+    </FaPageHeader>
 
-      <section class="p-4 border border-border rounded-lg bg-card">
-        <h2 class="text-base font-semibold mb-3">
-          {{ t('invoiceRequest.form.buyerSection') }}
-        </h2>
-        <div class="gap-3 grid sm:grid-cols-2">
-          <label class="text-sm flex flex-col gap-1">
-            <span>{{ t('invoiceRequest.field.buyerName') }}</span>
-            <input v-model="buyerName" class="px-3 border border-border rounded-md bg-background min-h-11" :placeholder="t('invoiceRequest.placeholder.buyerName')" @input="markDirty">
-          </label>
-          <label class="text-sm flex flex-col gap-1">
-            <span>{{ t('invoiceRequest.field.buyerTaxId') }}</span>
-            <input v-model="buyerTaxId" inputmode="numeric" maxlength="8" class="px-3 border border-border rounded-md bg-background min-h-11" :placeholder="t('invoiceRequest.placeholder.buyerTaxId')" @input="markDirty">
-          </label>
-        </div>
-      </section>
+    <FaPageMain main-class="min-w-0 overflow-visible" class="min-w-0">
+      <FaAlert v-if="returnedReason !== null" variant="destructive" icon="i-lucide:circle-alert" :title="t('invoiceRequest.form.returnedBanner')" class="mb-4">
+        <template #description>
+          <span>{{ t('invoiceRequest.detail.returnReason') }}：{{ returnedReason }}</span>
+        </template>
+      </FaAlert>
+      <FaAlert v-if="loadFailed" variant="destructive" icon="i-lucide:circle-alert" :title="loadError ?? t('invoiceRequest.detail.loadFailed')" class="mb-4" />
+      <FaAlert v-if="submitError !== null" variant="destructive" icon="i-lucide:circle-alert" :title="submitError" role="alert" class="mb-4" />
 
-      <section class="p-4 border border-border rounded-lg bg-card">
-        <div class="mb-3 flex items-center justify-between">
-          <h2 class="text-base font-semibold">
-            {{ t('invoiceRequest.form.linesSection') }}
-          </h2>
-          <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.form.lineLimit') }}</span>
-        </div>
-        <div class="flex flex-col gap-3">
-          <div v-for="(line, index) in lines" :key="index" class="gap-2 grid sm:grid-cols-[1fr_5rem_7rem_7rem_auto] sm:items-center">
-            <input v-model="line.productName" class="px-3 border border-border rounded-md bg-background min-h-11" :placeholder="t('invoiceRequest.field.productName')" @input="markDirty">
-            <input v-model="line.quantity" inputmode="numeric" class="px-3 border border-border rounded-md bg-background min-h-11" :placeholder="t('invoiceRequest.field.quantity')" @input="markDirty">
-            <input v-model="line.unitPrice" inputmode="numeric" class="px-3 border border-border rounded-md bg-background min-h-11" :placeholder="t('invoiceRequest.field.unitPrice')" @input="markDirty">
-            <span class="text-sm tabular-nums">{{ totals.lineAmounts[index] ?? '—' }}</span>
-            <FaButton v-if="lines.length > 1" type="button" variant="ghost" size="sm" class="text-muted-foreground hover:text-destructive" @click="removeLine(index)">
-              {{ t('invoiceRequest.form.removeLine') }}
+      <FaForm :disabled="submitting" class="min-w-0 space-y-6">
+        <FaCard :title="t('invoiceRequest.form.buyerSection')" content-class="gap-4 grid grid-cols-1 md:grid-cols-2">
+          <FaFormItem name="buyerName" :label="t('invoiceRequest.field.buyerName')" required :auto-bind="false">
+            <FaInput
+              v-model="buyerName"
+              class="w-full"
+              maxlength="200"
+              :placeholder="t('invoiceRequest.placeholder.buyerName')"
+              :disabled="submitting"
+              :aria-invalid="fieldError === 'buyerName'"
+              @update:model-value="markDirty"
+            />
+            <p v-if="fieldError === 'buyerName'" role="alert" class="text-xs text-destructive m-0 mt-1">
+              {{ t('invoiceRequest.error.validation') }}
+            </p>
+          </FaFormItem>
+          <FaFormItem name="buyerTaxId" :label="t('invoiceRequest.field.buyerTaxId')" required :auto-bind="false">
+            <FaInput
+              v-model="buyerTaxId"
+              class="w-full"
+              inputmode="numeric"
+              maxlength="8"
+              :placeholder="t('invoiceRequest.placeholder.buyerTaxId')"
+              :disabled="submitting"
+              :aria-invalid="fieldError === 'buyerTaxId'"
+              @update:model-value="markDirty"
+            />
+            <p v-if="fieldError === 'buyerTaxId'" role="alert" class="text-xs text-destructive m-0 mt-1">
+              {{ t('invoiceRequest.error.taxIdFormat') }}
+            </p>
+          </FaFormItem>
+        </FaCard>
+
+        <FaCard :title="t('invoiceRequest.form.linesSection')" :description="t('invoiceRequest.form.lineLimit')" content-class="space-y-4">
+          <div class="border border-border rounded-xl bg-background overflow-x-auto">
+            <table class="text-sm min-w-[46rem] w-full border-collapse">
+              <caption class="sr-only">
+                {{ t('invoiceRequest.form.linesSection') }}
+              </caption>
+              <thead class="bg-muted/45">
+                <tr>
+                  <th scope="col" class="font-medium p-3 text-left w-12">
+                    #
+                  </th>
+                  <th scope="col" class="font-medium p-3 text-left">
+                    {{ t('invoiceRequest.field.productName') }}
+                  </th>
+                  <th scope="col" class="font-medium p-3 text-right w-28">
+                    {{ t('invoiceRequest.field.quantity') }}
+                  </th>
+                  <th scope="col" class="font-medium p-3 text-right w-36">
+                    {{ t('invoiceRequest.field.unitPrice') }}
+                  </th>
+                  <th scope="col" class="font-medium p-3 text-right w-36">
+                    {{ t('invoiceRequest.field.amount') }}
+                  </th>
+                  <th scope="col" class="font-medium p-3 text-right w-20">
+                    <span class="sr-only">{{ t('invoiceRequest.form.removeLine') }}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(line, index) in lines" :key="index" class="align-middle border-b border-border last:border-b-0">
+                  <td class="qs-type-meta p-3">
+                    {{ index + 1 }}
+                  </td>
+                  <td class="p-3">
+                    <FaInput
+                      v-model="line.productName"
+                      class="w-full"
+                      maxlength="200"
+                      :placeholder="t('invoiceRequest.field.productName')"
+                      :disabled="submitting"
+                      :aria-invalid="lineFieldError(index, 'productName')"
+                      :aria-label="t('invoiceRequest.field.productName')"
+                      @update:model-value="markDirty"
+                    />
+                  </td>
+                  <td class="p-3">
+                    <FaInput
+                      v-model="line.quantity"
+                      class="w-full"
+                      inputmode="numeric"
+                      maxlength="7"
+                      input-class="text-right font-mono tabular-nums"
+                      :aria-label="t('invoiceRequest.field.quantity')"
+                      :disabled="submitting"
+                      :aria-invalid="lineFieldError(index, 'quantity')"
+                      @update:model-value="markDirty"
+                    />
+                  </td>
+                  <td class="p-3">
+                    <FaInput
+                      v-model="line.unitPrice"
+                      class="w-full"
+                      inputmode="numeric"
+                      maxlength="16"
+                      input-class="text-right font-mono tabular-nums"
+                      :aria-label="t('invoiceRequest.field.unitPrice')"
+                      :disabled="submitting"
+                      :aria-invalid="lineFieldError(index, 'unitPrice')"
+                      @update:model-value="markDirty"
+                    />
+                  </td>
+                  <td class="p-3 text-right">
+                    <span v-if="totals.lineAmounts[index] === null" class="qs-type-meta">—</span>
+                    <span v-else class="qs-type-data-emphasis">{{ totals.lineAmounts[index] }}</span>
+                  </td>
+                  <td class="p-3 text-right">
+                    <FaButton
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      class="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9"
+                      :aria-label="`${t('invoiceRequest.form.removeLine')} ${index + 1}`"
+                      :disabled="submitting || lines.length <= 1"
+                      @click="removeLine(index)"
+                    >
+                      <FaIcon name="i-lucide:trash-2" aria-hidden="true" />
+                    </FaButton>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p v-if="fieldError === 'lines' || lineFieldError(0, 'quantity')" role="alert" class="text-xs text-destructive m-0">
+            {{ t('invoiceRequest.form.lineLimit') }}
+          </p>
+          <div class="flex justify-end">
+            <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" :disabled="submitting || !canAddLine" @click="addLine">
+              <FaIcon name="i-lucide:list-plus" aria-hidden="true" />{{ t('invoiceRequest.form.addLine') }}
             </FaButton>
           </div>
-        </div>
-        <FaButton v-if="canAddLine" type="button" variant="outline" size="sm" class="mt-3" @click="addLine">
-          {{ t('invoiceRequest.form.addLine') }}
-        </FaButton>
-        <dl class="text-sm mt-4 pt-3 border-t border-border gap-1 grid">
-          <div class="flex justify-between">
-            <dt>{{ t('invoiceRequest.field.salesAmount') }}</dt>
-            <dd class="tabular-nums">
-              {{ totals.salesAmount ?? '—' }}
-            </dd>
+          <div class="mt-2 px-1 flex flex-col gap-2 items-end" :aria-label="t('invoiceRequest.field.totalAmount')">
+            <div class="flex gap-2 whitespace-nowrap items-baseline">
+              <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.field.salesAmount') }}</span>
+              <AmountDisplay :value="totals.salesAmount === null ? null : String(totals.salesAmount)" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" />
+            </div>
+            <div class="flex gap-2 whitespace-nowrap items-baseline">
+              <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.field.taxAmount') }}</span>
+              <AmountDisplay :value="totals.taxAmount === null ? null : String(totals.taxAmount)" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" />
+            </div>
+            <div class="p-3 border border-border rounded-xl bg-primary/5 flex gap-4 items-center">
+              <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.field.totalAmount') }}</span>
+              <AmountDisplay
+                :value="totals.totalAmount === null ? null : String(totals.totalAmount)"
+                :currency="invoiceCurrency"
+                :currencies="currencyCatalog.currencies.value"
+                class="text-lg font-bold"
+              />
+            </div>
           </div>
-          <div class="flex justify-between">
-            <dt>{{ t('invoiceRequest.field.taxAmount') }}</dt>
-            <dd class="tabular-nums">
-              {{ totals.taxAmount ?? '—' }}
-            </dd>
-          </div>
-          <div class="font-semibold flex justify-between">
-            <dt>{{ t('invoiceRequest.field.totalAmount') }}</dt>
-            <dd class="tabular-nums">
-              {{ totals.totalAmount ?? '—' }}
-            </dd>
-          </div>
-        </dl>
-      </section>
+        </FaCard>
 
-      <section class="p-4 border border-border rounded-lg bg-card">
-        <h2 class="text-base font-semibold mb-3">
-          {{ t('invoiceRequest.form.remarkSection') }}
-        </h2>
-        <label class="text-sm flex flex-col gap-1">
-          <span>{{ t('invoiceRequest.field.invoiceRemark') }}<span class="text-xs text-muted-foreground ml-2">{{ t('invoiceRequest.form.invoiceRemarkHint') }}</span></span>
-          <input v-model="invoiceRemark" class="px-3 border border-border rounded-md bg-background min-h-11" :placeholder="t('invoiceRequest.placeholder.invoiceRemark')" @input="markDirty">
-        </label>
-        <label class="text-sm mt-3 flex flex-col gap-1">
-          <span>{{ t('invoiceRequest.field.internalRemark') }}<span class="text-xs text-muted-foreground ml-2">{{ t('invoiceRequest.form.internalRemarkHint') }}</span></span>
-          <input v-model="internalRemark" class="px-3 border border-border rounded-md bg-background min-h-11" @input="markDirty">
-        </label>
-      </section>
+        <FaCard :title="t('invoiceRequest.form.remarkSection')" content-class="gap-4 grid grid-cols-1 md:grid-cols-2">
+          <FaFormItem name="invoiceRemark" :label="t('invoiceRequest.field.invoiceRemark')" :description="t('invoiceRequest.form.invoiceRemarkHint')" :auto-bind="false">
+            <FaInput
+              v-model="invoiceRemark"
+              class="w-full"
+              maxlength="500"
+              :placeholder="t('invoiceRequest.placeholder.invoiceRemark')"
+              :disabled="submitting"
+              @update:model-value="markDirty"
+            />
+          </FaFormItem>
+          <FaFormItem name="internalRemark" :label="t('invoiceRequest.field.internalRemark')" :description="t('invoiceRequest.form.internalRemarkHint')" :auto-bind="false">
+            <FaInput v-model="internalRemark" class="w-full" maxlength="500" :disabled="submitting" @update:model-value="markDirty" />
+          </FaFormItem>
+        </FaCard>
 
-      <section class="p-4 border border-border rounded-lg bg-card">
-        <h2 class="text-base font-semibold mb-3">
-          {{ t('invoiceRequest.form.recipientSection') }}
-        </h2>
-        <div class="gap-3 grid sm:grid-cols-2">
-          <label class="text-sm flex flex-col gap-1">
-            <span>{{ t('invoiceRequest.field.recipientName') }}</span>
-            <input v-model="recipientName" class="px-3 border border-border rounded-md bg-background min-h-11" @input="markDirty">
-          </label>
-          <label class="text-sm flex flex-col gap-1">
-            <span>{{ t('invoiceRequest.field.recipientPhone') }}<span class="text-xs text-muted-foreground ml-2">{{ t('invoiceRequest.form.recipientPhoneHint') }}</span></span>
-            <input v-model="recipientPhone" class="px-3 border border-border rounded-md bg-background min-h-11" @input="markDirty">
-          </label>
-          <label class="text-sm flex flex-col gap-1 sm:col-span-2">
-            <span>{{ t('invoiceRequest.field.recipientAddress') }}</span>
-            <input v-model="recipientAddress" class="px-3 border border-border rounded-md bg-background min-h-11" @input="markDirty">
-          </label>
-        </div>
-      </section>
+        <FaCard :title="t('invoiceRequest.form.recipientSection')" content-class="gap-4 grid grid-cols-1 md:grid-cols-3">
+          <FaFormItem name="recipientName" :label="t('invoiceRequest.field.recipientName')" required :auto-bind="false">
+            <FaInput
+              v-model="recipientName"
+              class="w-full"
+              :disabled="submitting"
+              :aria-invalid="fieldError === 'recipientName'"
+              @update:model-value="markDirty"
+            />
+          </FaFormItem>
+          <FaFormItem name="recipientPhone" :label="t('invoiceRequest.field.recipientPhone')" required :description="t('invoiceRequest.form.recipientPhoneHint')" :auto-bind="false">
+            <FaInput
+              v-model="recipientPhone"
+              class="w-full"
+              :disabled="submitting"
+              :aria-invalid="fieldError === 'recipientPhone'"
+              @update:model-value="markDirty"
+            />
+          </FaFormItem>
+          <FaFormItem name="recipientAddress" :label="t('invoiceRequest.field.recipientAddress')" required :auto-bind="false">
+            <FaInput
+              v-model="recipientAddress"
+              class="w-full"
+              :disabled="submitting"
+              :aria-invalid="fieldError === 'recipientAddress'"
+              @update:model-value="markDirty"
+            />
+          </FaFormItem>
+        </FaCard>
+      </FaForm>
 
-      <p v-if="loadFailed" class="text-sm text-destructive">
-        {{ loadError ?? t('invoiceRequest.detail.loadFailed') }}
-      </p>
-      <p v-if="submitError !== null" class="text-sm text-destructive">
-        {{ submitError }}
-      </p>
-
-      <div class="flex gap-2 justify-end">
-        <FaButton variant="outline" :disabled="submitting" @click="router.push({ name: 'qsOperationsInvoicesRecords' })">
+      <nav class="mt-6 pt-4 border-t border-border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" aria-label="开票申请操作">
+        <FaButton type="button" variant="outline" class="min-h-11 w-full sm:min-h-9 sm:w-auto" :disabled="submitting" @click="router.push({ name: 'qsOperationsInvoicesRecords' })">
           {{ t('invoiceRequest.common.cancel') }}
         </FaButton>
-        <FaButton :loading="submitting" :disabled="submitting" @click="requestSubmit">
+        <FaButton type="button" class="min-h-11 w-full sm:min-h-9 sm:w-auto" :loading="submitting" :disabled="submitting" @click="requestSubmit">
           {{ editingId === null ? t('invoiceRequest.form.submit') : t('invoiceRequest.form.resubmit') }}
         </FaButton>
-      </div>
-    </div>
+      </nav>
+    </FaPageMain>
 
     <QsGenericModal
       v-model="confirmOpen"
       :title="t('invoiceRequest.form.submitConfirmTitle')"
+      :description="t('invoiceRequest.form.submitConfirmBody', { count: lines.length, total: totals.totalAmount ?? 0 })"
       size="sm"
       :submitting="submitting"
       :error="submitError"
     >
-      <p class="text-sm text-muted-foreground">
-        {{ t('invoiceRequest.form.submitConfirmBody', { count: lines.length, total: totals.totalAmount ?? 0 }) }}
-      </p>
       <template #footer>
-        <FaButton variant="outline" :disabled="submitting" @click="confirmOpen = false">
+        <FaButton type="button" variant="outline" :disabled="submitting" @click="confirmOpen = false">
           {{ t('invoiceRequest.form.continueEditing') }}
         </FaButton>
-        <FaButton :loading="submitting" :disabled="submitting" @click="send(false)">
+        <FaButton type="button" :loading="submitting" :disabled="submitting" @click="send(false)">
           {{ t('invoiceRequest.common.confirm') }}
         </FaButton>
       </template>
     </QsGenericModal>
 
-    <QsGenericModal v-model="duplicateOpen" :title="t('invoiceRequest.form.duplicateTitle')" size="md" :submitting="submitting">
-      <p class="text-sm text-muted-foreground">
-        {{ t('invoiceRequest.form.duplicateBody') }}
-      </p>
-      <ul class="text-sm mt-3 flex flex-col gap-1">
-        <li v-for="suspect in duplicateSuspects" :key="suspect.invoiceNo" class="tabular-nums">
-          {{ suspect.invoiceNo }} · {{ t(`invoiceRequest.status.${suspect.status}`) }} · {{ suspect.submittedAt }}
+    <QsGenericModal v-model="duplicateOpen" :title="t('invoiceRequest.form.duplicateTitle')" :description="t('invoiceRequest.form.duplicateBody')" size="md" :submitting="submitting">
+      <ul class="m-0 p-0 list-none space-y-2">
+        <li v-for="suspect in duplicateSuspects" :key="suspect.invoiceNo" class="flex flex-wrap gap-x-3 gap-y-1 items-baseline">
+          <span class="qs-type-data-emphasis">{{ suspect.invoiceNo }}</span>
+          <FaTag variant="outline" class="qs-type-status-tag">
+            {{ t(`invoiceRequest.status.${suspect.status}`) }}
+          </FaTag>
+          <span class="qs-type-data">{{ suspect.submittedAt }}</span>
         </li>
       </ul>
       <template #footer>
-        <FaButton variant="outline" :disabled="submitting" @click="duplicateOpen = false">
+        <FaButton type="button" variant="outline" :disabled="submitting" @click="duplicateOpen = false">
           {{ t('invoiceRequest.form.continueEditing') }}
         </FaButton>
-        <FaButton :loading="submitting" :disabled="submitting" @click="send(true)">
+        <FaButton type="button" :loading="submitting" :disabled="submitting" @click="send(true)">
           {{ t('invoiceRequest.form.duplicateConfirm') }}
         </FaButton>
       </template>
     </QsGenericModal>
 
-    <QsGenericModal v-model="discardOpen" :title="t('invoiceRequest.form.discardTitle')" size="sm">
-      <p class="text-sm text-muted-foreground">
-        {{ t('invoiceRequest.form.discardBody') }}
-      </p>
+    <QsGenericModal
+      :model-value="discardOpen"
+      :title="t('invoiceRequest.form.discardTitle')"
+      :description="t('invoiceRequest.form.discardBody')"
+      size="sm"
+      @update:model-value="$event ? (discardOpen = true) : finishLeave(false)"
+    >
       <template #footer>
-        <FaButton variant="outline" @click="finishLeave(false)">
+        <FaButton type="button" variant="outline" @click="finishLeave(false)">
           {{ t('invoiceRequest.form.continueEditing') }}
         </FaButton>
-        <FaButton variant="destructive" @click="finishLeave(true)">
+        <FaButton type="button" variant="destructive" @click="finishLeave(true)">
           {{ t('invoiceRequest.form.confirmDiscard') }}
         </FaButton>
       </template>
     </QsGenericModal>
-  </FaPageMain>
+  </div>
 </template>

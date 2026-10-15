@@ -205,18 +205,6 @@ export const financeWorkbench: RouteRecordMainRaw = {
             auth: 'invoice-requests:review',
           },
         },
-        {
-          path: 'approval/:id',
-          name: 'qsFinanceInvoicesDetail',
-          component: () => import('@/views/workbenches/invoices/approval/detail.vue'),
-          // 与账单详情同款：隐藏菜单但保留面包屑末级（不设 breadcrumb: false）。
-          meta: {
-            title: 'invoiceRequest.detailTitle',
-            auth: 'invoice-requests:review',
-            menu: false,
-            activeMenu: '/qs-finance/invoices/approval',
-          },
-        },
       ],
     },
     FundAccountManagement,
