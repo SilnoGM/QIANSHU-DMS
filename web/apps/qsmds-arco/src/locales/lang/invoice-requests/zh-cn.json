@@ -56,7 +56,6 @@
   "invoiceRequest.form.confirmDiscard": "确认放弃",
   "invoiceRequest.form.submitted": "开票申请已提交",
   "invoiceRequest.placeholder.productName": "若无特殊要求，请填写：機械設備",
-  "invoiceRequest.placeholder.invoiceRemark": "150鄂破",
   "invoiceRequest.list.searchPlaceholder": "搜索申请单号、抬头、统编或寄送姓名",
   "invoiceRequest.list.empty": "暂无开票申请",
   "invoiceRequest.list.noPermission": "当前身份没有查看开票申请的权限",

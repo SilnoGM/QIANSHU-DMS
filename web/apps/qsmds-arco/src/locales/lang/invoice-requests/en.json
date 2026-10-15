@@ -56,7 +56,6 @@
   "invoiceRequest.form.confirmDiscard": "Discard",
   "invoiceRequest.form.submitted": "Invoice request submitted",
   "invoiceRequest.placeholder.productName": "If no special requirement, enter 機械設備",
-  "invoiceRequest.placeholder.invoiceRemark": "150 E-Po",
   "invoiceRequest.list.searchPlaceholder": "Search request number, buyer, tax ID or recipient",
   "invoiceRequest.list.empty": "No invoice requests",
   "invoiceRequest.list.noPermission": "Your account cannot view invoice requests",

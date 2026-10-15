@@ -433,7 +433,6 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
               v-model="invoiceRemark"
               class="w-full"
               maxlength="500"
-              :placeholder="t('invoiceRequest.placeholder.invoiceRemark')"
               :disabled="submitting"
               @update:model-value="markDirty"
             />
