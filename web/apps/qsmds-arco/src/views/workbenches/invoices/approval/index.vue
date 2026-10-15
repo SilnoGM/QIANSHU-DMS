@@ -2,7 +2,7 @@
 import type { InvoiceRequestStatusValue } from '../invoice-status.logic'
 import type { InvoiceRequestListItemDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import exchangeRatesApi from '@/api/modules/exchange-rates'
 import invoiceRequestsApi from '@/api/modules/invoice-requests'
@@ -10,6 +10,7 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
@@ -18,7 +19,7 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useAppAuth } from '@/composables/app/auth'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { calculateEstimatedCostCny } from '../invoice-cost.logic'
-import { buildInvoiceDocumentItems } from '../invoice-document.logic'
+import { buildInvoiceDocumentFilename, buildInvoiceDocumentItems, formatInvoiceDocumentFileSize } from '../invoice-document.logic'
 import { resolveInvoiceFailureKey } from '../invoice-failure.logic'
 import InvoiceRequestDetailDrawer from '../invoice-request-detail-drawer.vue'
 import { isSettleable, resolveSettleRemaining, statusSwitchItems, statusTagClass } from '../invoice-status.logic'
@@ -59,6 +60,10 @@ const actionError = ref<string | null>(null)
 const pickedFile = ref<File | null>(null)
 const images = ref<string[]>([])
 const uploadError = ref<string | null>(null)
+/** 上传到云端的目标文件名（抬头-统编-上传时间）：卡片展示与实际上传必须是同一个名称。 */
+const pickedUploadName = ref<string | null>(null)
+const pickedPreviewUrl = ref<string | null>(null)
+const pickedFileMeta = computed(() => pickedFile.value === null ? '' : formatInvoiceDocumentFileSize(pickedFile.value.size))
 const rate = ref<{ id: string, version: number, foreignUnitsPerCny: string } | null>(null)
 const reviewOpen = ref(false)
 const reviewId = ref<string | null>(null)
@@ -156,9 +161,8 @@ async function openAction(row: InvoiceRequestListItemDto, next: ActionMode): Pro
   mode.value = next
   reason.value = ''
   actionError.value = null
-  pickedFile.value = null
+  clearPick()
   images.value = []
-  uploadError.value = null
   rate.value = null
   actionOpen.value = true
   if (next === 'settle') {
@@ -192,7 +196,31 @@ const settlePreview = computed(() => {
 
 const ALLOWED_IMAGE_TYPES: readonly string[] = ['image/jpeg', 'image/png', 'image/webp']
 
-/** FaImageUpload 只负责选文件：本地先校验格式与体积，真正的上传在确认动作里。 */
+/** 暂存照片的本地预览：object URL 跟随 pickedFile 生命周期，替换或关闭弹窗时立即回收。 */
+watch(pickedFile, (file) => {
+  if (pickedPreviewUrl.value !== null) {
+    URL.revokeObjectURL(pickedPreviewUrl.value)
+    pickedPreviewUrl.value = null
+  }
+  pickedPreviewUrl.value = file === null ? null : URL.createObjectURL(file)
+})
+
+onBeforeUnmount(() => {
+  if (pickedPreviewUrl.value !== null) {
+    URL.revokeObjectURL(pickedPreviewUrl.value)
+  }
+})
+
+function clearPick(): void {
+  pickedFile.value = null
+  pickedUploadName.value = null
+  uploadError.value = null
+}
+
+/**
+ * FaImageUpload 只负责选文件：本地先校验格式与体积，真正的上传在确认动作里。
+ * 文件名按「抬头-统编-上传时间」在选到时生成并沿用上传，卡片显示与云端名称一致。
+ */
 function selectFile({ file }: { file: File }): null {
   uploadError.value = null
   if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
@@ -208,6 +236,13 @@ function selectFile({ file }: { file: File }): null {
     return null
   }
   pickedFile.value = file
+  pickedUploadName.value = buildInvoiceDocumentFilename({
+    buyerName: target.value?.buyerName ?? '',
+    buyerTaxId: target.value?.buyerTaxId ?? '',
+    uploadedAt: new Date(),
+    originalName: file.name,
+    mimeType: file.type,
+  })
   return null
 }
 
@@ -243,10 +278,13 @@ async function submitAction(): Promise<void> {
       await invoiceRequestsApi.cancel(row.id, { reason: reason.value.trim(), expectedVersion: row.version }, signal)
     }
     else if (mode.value === 'document') {
-      if (pickedFile.value === null) {
+      const file = pickedFile.value
+      if (file === null) {
         throw new Error('missing file')
       }
-      await invoiceRequestsApi.uploadDocument(row.id, pickedFile.value, signal)
+      // 上传到云端前改名：抬头-统编-上传时间；名称与暂存卡片展示的完全一致。
+      const renamed = new File([file], pickedUploadName.value ?? file.name, { type: file.type })
+      await invoiceRequestsApi.uploadDocument(row.id, renamed, signal)
     }
     else {
       if (rate.value === null) {
@@ -524,25 +562,15 @@ onMounted(load)
 
       <div v-if="target !== null" class="space-y-5">
         <section class="p-4 border border-border rounded-xl bg-muted/15 min-w-0 space-y-4 sm:p-5">
-          <div class="flex gap-4 items-start justify-between">
-            <div class="min-w-0">
-              <p class="qs-type-compact-label mb-1.5">
-                {{ t('invoiceRequest.column.invoiceNo') }}
-              </p>
-              <p class="qs-type-data-emphasis m-0 break-all">
-                {{ target.invoiceNo }}
-              </p>
-            </div>
-            <div class="text-right">
-              <p class="qs-type-compact-label mb-1.5">
-                {{ t('invoiceRequest.field.totalAmount') }}
-              </p>
-              <div tabindex="0" class="flex max-w-full overflow-x-auto [&_[data-currency]]:text-3xl [&_[data-currency]]:font-bold">
-                <AmountDisplay :value="target.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
-              </div>
-            </div>
-          </div>
           <dl class="m-0 gap-x-6 gap-y-4 grid sm:grid-cols-2">
+            <div class="min-w-0">
+              <dt class="qs-type-compact-label mb-1.5">
+                {{ t('invoiceRequest.column.invoiceNo') }}
+              </dt>
+              <dd class="qs-type-data-emphasis m-0 break-all">
+                {{ target.invoiceNo }}
+              </dd>
+            </div>
             <div class="min-w-0">
               <dt class="qs-type-compact-label mb-1.5">
                 {{ t('invoiceRequest.column.submitter') }}
@@ -551,15 +579,35 @@ onMounted(load)
                 <QsPersonDisplay :display-name="target.creatorName" size="sm" />
               </dd>
             </div>
-            <div class="min-w-0">
-              <dt class="qs-type-compact-label mb-1.5">
-                {{ t('invoiceRequest.field.buyerTaxId') }}
-              </dt>
-              <dd class="qs-type-data m-0">
-                {{ target.buyerTaxId }}
-              </dd>
-            </div>
           </dl>
+          <div class="gap-4 grid min-w-0 sm:grid-cols-2">
+            <div class="p-4 border border-border rounded-xl bg-muted/40 flex flex-col gap-2 min-w-0">
+              <p class="qs-type-compact-label m-0">
+                {{ t('invoiceRequest.field.buyerName') }}
+              </p>
+              <div class="flex gap-3 min-w-0 items-center justify-between">
+                <span class="qs-type-section-title min-w-0 break-words">{{ target.buyerName }}</span>
+                <CopyCellButton :always-visible="true" :label="t('invoiceRequest.field.buyerName')" :text="target.buyerName" />
+              </div>
+            </div>
+            <div class="p-4 border border-border rounded-xl bg-muted/40 flex flex-col gap-2 min-w-0">
+              <p class="qs-type-compact-label m-0">
+                {{ t('invoiceRequest.field.buyerTaxId') }}
+              </p>
+              <div class="flex gap-3 min-w-0 items-center justify-between">
+                <span class="text-lg qs-type-data-emphasis font-semibold min-w-0 break-words">{{ target.buyerTaxId }}</span>
+                <CopyCellButton :always-visible="true" :label="t('invoiceRequest.field.buyerTaxId')" :text="target.buyerTaxId" />
+              </div>
+            </div>
+          </div>
+          <div class="p-4 border border-border rounded-xl bg-background flex gap-4 items-center justify-between">
+            <p class="qs-type-compact-label m-0">
+              {{ t('invoiceRequest.field.totalAmount') }}
+            </p>
+            <div tabindex="0" class="flex max-w-full overflow-x-auto [&_[data-currency]]:text-4xl [&_[data-currency]]:font-bold">
+              <AmountDisplay :value="target.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+            </div>
+          </div>
         </section>
 
         <section class="p-4 border-2 border-primary/30 rounded-xl bg-background min-w-0 space-y-4 sm:p-5">
@@ -577,9 +625,6 @@ onMounted(load)
           </p>
           <p v-if="mode === 'cancel'" class="qs-type-meta m-0">
             {{ t(cancelBodyKey) }}
-          </p>
-          <p v-if="mode === 'document'" class="qs-type-meta m-0">
-            {{ t('invoiceRequest.approval.documentBody') }}
           </p>
 
           <FaForm v-if="mode === 'return' || mode === 'cancel'" :disabled="busy" class="min-w-0">
@@ -599,28 +644,54 @@ onMounted(load)
             </FaFormItem>
           </FaForm>
 
-          <div v-if="mode === 'document'" class="space-y-2">
-            <FaImageUpload
-              v-model="images"
-              :max="1"
-              :width="144"
-              :height="104"
-              :disabled="busy"
-              :http-request="selectFile"
-              :aria-label="t('invoiceRequest.action.document')"
-            >
-              <span class="text-muted-foreground border border-border rounded-lg border-dashed flex flex-col gap-2 size-full items-center justify-center">
-                <FaIcon name="i-lucide:image-plus" class="size-6" aria-hidden="true" />
-                <span class="qs-type-meta">{{ t('invoiceRequest.upload.pick') }}</span>
-              </span>
-            </FaImageUpload>
-            <p class="qs-type-meta m-0">
-              {{ t('invoiceRequest.approval.documentHint') }}
+          <div v-if="mode === 'document'" class="space-y-4">
+            <p class="qs-type-meta m-0 text-center">
+              {{ t('invoiceRequest.approval.documentBody') }}
             </p>
-            <p v-if="pickedFile !== null" class="qs-type-meta text-primary m-0">
-              {{ pickedFile.name }}
-            </p>
-            <p v-if="uploadError !== null" role="alert" class="qs-type-meta text-destructive m-0">
+            <template v-if="pickedFile === null">
+              <div class="flex justify-center">
+                <FaImageUpload
+                  v-model="images"
+                  :max="1"
+                  :width="144"
+                  :height="104"
+                  :disabled="busy"
+                  :http-request="selectFile"
+                  :aria-label="t('invoiceRequest.action.document')"
+                >
+                  <span class="text-muted-foreground border border-border rounded-lg border-dashed flex flex-col gap-2 size-full items-center justify-center">
+                    <FaIcon name="i-lucide:image-plus" class="size-6" aria-hidden="true" />
+                    <span class="qs-type-meta">{{ t('invoiceRequest.upload.pick') }}</span>
+                  </span>
+                </FaImageUpload>
+              </div>
+              <p class="qs-type-meta m-0 text-center">
+                {{ t('invoiceRequest.approval.documentHint') }}
+              </p>
+            </template>
+            <div v-else class="p-3 border border-border rounded-xl bg-background flex gap-3 items-center">
+              <img :src="pickedPreviewUrl ?? ''" alt="" class="border border-border rounded-lg h-14 w-14 object-contain">
+              <div class="flex-1 min-w-0 space-y-0.5">
+                <p class="qs-type-data-emphasis m-0 break-all">
+                  {{ pickedUploadName }}
+                </p>
+                <p class="qs-type-meta text-muted-foreground m-0">
+                  {{ pickedFileMeta }}
+                </p>
+              </div>
+              <FaButton
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="text-destructive"
+                :disabled="busy"
+                :aria-label="t('invoiceRequest.upload.remove')"
+                @click="clearPick"
+              >
+                <FaIcon name="i-lucide:trash-2" aria-hidden="true" />
+              </FaButton>
+            </div>
+            <p v-if="uploadError !== null" role="alert" class="qs-type-meta text-destructive m-0 text-center">
               {{ uploadError }}
             </p>
           </div>

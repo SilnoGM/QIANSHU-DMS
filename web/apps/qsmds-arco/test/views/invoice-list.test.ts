@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 // eslint-disable-next-line test/no-import-node-test -- 与其它 views 测试同一范式：直接校验纯函数与页面结构。
 import test from 'node:test'
-import { buildInvoiceDocumentItems, resolveInvoiceDocumentContentUrl } from '../../src/views/workbenches/invoices/invoice-document.logic'
+import { buildInvoiceDocumentFilename, buildInvoiceDocumentItems, formatInvoiceDocumentFileSize, resolveInvoiceDocumentContentUrl } from '../../src/views/workbenches/invoices/invoice-document.logic'
 
 async function readPageSource(name: 'records' | 'approval'): Promise<string> {
   return readFile(new URL(`../../src/views/workbenches/invoices/${name}/index.vue`, import.meta.url), 'utf8')
@@ -18,6 +18,42 @@ test('发票照片列：缩略变体进列表、原件进预览、无照片返�
   assert.equal(items[0]?.alt, '发票照片')
   // id 必须整体编码，不能把路径分隔符带进内容路径。
   assert.equal(resolveInvoiceDocumentContentUrl('a/b c'), '/api/invoice-requests/a%2Fb%20c/document')
+})
+
+test('上传改名：抬头-统编-YYYYMMDDHHMMSS，扩展名跟随原文件、缺失时按 MIME 兜底', () => {
+  const base = {
+    buyerName: '流程測試有限公司',
+    buyerTaxId: '87654321',
+    uploadedAt: new Date(2026, 9, 15, 15, 45, 6),
+  }
+  assert.equal(
+    buildInvoiceDocumentFilename({ ...base, originalName: '00000.png' }),
+    '流程測試有限公司-87654321-20261015154506.png',
+  )
+  // 扩展名统一小写，原文件名带多个点也只取最后一段。
+  assert.equal(
+    buildInvoiceDocumentFilename({ ...base, originalName: 'scan.v2.WEBP' }),
+    '流程測試有限公司-87654321-20261015154506.webp',
+  )
+  // 原文件名没有可用扩展名时按声明的 MIME 兜底；都缺省时给 .jpg。
+  assert.equal(buildInvoiceDocumentFilename({ ...base, originalName: 'IMG_0001', mimeType: 'image/jpeg' }), '流程測試有限公司-87654321-20261015154506.jpg')
+  assert.equal(buildInvoiceDocumentFilename({ ...base, originalName: 'IMG_0001', mimeType: 'image/png' }), '流程測試有限公司-87654321-20261015154506.png')
+  assert.equal(buildInvoiceDocumentFilename({ ...base, originalName: 'noext' }), '流程測試有限公司-87654321-20261015154506.jpg')
+  // 月/日/时/分/秒都要补零；长度可疑的“扩展名”不认，按 MIME 兜底。
+  assert.equal(
+    buildInvoiceDocumentFilename({ ...base, uploadedAt: new Date(2026, 0, 2, 3, 4, 5), originalName: 'a.thisisaverylongextension' }),
+    '流程測試有限公司-87654321-20260102030405.jpg',
+  )
+})
+
+test('暂存卡片文件体积展示：KB/MB 取整口径，非法输入给「—」', () => {
+  assert.equal(formatInvoiceDocumentFileSize(0), '—')
+  assert.equal(formatInvoiceDocumentFileSize(Number.NaN), '—')
+  assert.equal(formatInvoiceDocumentFileSize(512), '1 KB')
+  assert.equal(formatInvoiceDocumentFileSize(240 * 1024), '240 KB')
+  assert.equal(formatInvoiceDocumentFileSize(1024 * 1024 - 1), '1024 KB')
+  assert.equal(formatInvoiceDocumentFileSize(1024 * 1024), '1.0 MB')
+  assert.equal(formatInvoiceDocumentFileSize(2.5 * 1024 * 1024), '2.5 MB')
 })
 
 test('详情抽屉按 2026-10-15 结构图重组：五节 + 节点四组 + 复用现有展示组件', async () => {
@@ -89,6 +125,32 @@ test('两张列表的列与口径符合 2026-10-15 拍板：照片用 ImageGroup
   // R12.2 的剩余时间落点：结算按钮禁用并以 tooltip 展示等待提示。
   assert.match(approval, /FaTooltip[\s\S]{0,400}row\.status === 'ISSUED'[\s\S]{0,400}settleHint\(row\)/u)
   assert.match(approval, /:disabled="!canSettleRow\(row\)"/u)
+})
+
+test('上传发票照片弹窗：信息卡含抬头/统编卡与整行总计，上传区居中、选图后换成横条卡片', async () => {
+  const approval = await readPageSource('approval')
+  // 信息卡重组：抬头/统编改图2 式卡片（带复制按钮），总计单独占一整行且字号加大；旧的 3xl 口径不得回归。
+  assert.match(approval, /import CopyCellButton from '@\/components\/business\/QsGenericTable\/CopyCellButton\.vue'/u)
+  assert.match(approval, /invoiceRequest\.field\.buyerName'\)[\s\S]{0,500}CopyCellButton/u)
+  assert.match(approval, /invoiceRequest\.field\.buyerTaxId'\)[\s\S]{0,500}CopyCellButton/u)
+  assert.match(approval, /invoiceRequest\.field\.totalAmount'\) \}\}[\s\S]{0,400}\[&_\[data-currency\]\]:text-4xl/u)
+  assert.equal(approval.includes('[&_[data-currency]]:text-3xl'), false, '总计已移到整行卡片，字号应加大为 4xl')
+  // 上传区：点击区域与两行说明文字都居中。
+  assert.match(approval, /flex justify-center">\s*<FaImageUpload/u)
+  assert.match(approval, /text-center">\s*\{\{ t\('invoiceRequest\.approval\.documentBody'\) \}\}/u)
+  assert.match(approval, /text-center">\s*\{\{ t\('invoiceRequest\.approval\.documentHint'\) \}\}/u)
+  // 选图后隐藏上传区，换成横条卡片（缩略图 + 云端目标文件名/体积 + 右侧删除）；删除后上传区恢复。
+  assert.match(approval, /v-if="pickedFile === null"/u)
+  assert.match(approval, /pickedPreviewUrl/u)
+  assert.match(approval, /pickedUploadName/u)
+  assert.match(approval, /invoiceRequest\.upload\.remove/u)
+  assert.match(approval, /@click="clearPick"/u)
+  assert.match(approval, /URL\.revokeObjectURL/u)
+  assert.equal(approval.includes('pickedFile.name'), false, '旧的原文件名文本展示应已换成卡片')
+  // 上传前改名：抬头-统编-上传时间，卡片展示与实际上传是同一个名称。
+  assert.match(approval, /buildInvoiceDocumentFilename/u)
+  assert.match(approval, /new File\(\[file\], pickedUploadName\.value \?\? file\.name, \{ type: file\.type \}\)/u)
+  assert.match(approval, /uploadDocument\(row\.id, renamed, signal\)/u)
 })
 
 test('发票审批按 2026-10-15 规格走三步弹窗（独立组件 review-modal）', async () => {

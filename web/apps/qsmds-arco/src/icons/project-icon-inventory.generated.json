@@ -3406,6 +3406,7 @@
       "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-video-board.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-voucher-upload.vue"
     ]

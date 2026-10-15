@@ -163,5 +163,6 @@
   "invoiceRequest.upload.pick": "Choose the invoice photo",
   "invoiceRequest.upload.imageOnly": "Only jpg, png or webp invoice photos are supported",
   "invoiceRequest.upload.imageEmpty": "This file is empty; choose another one",
-  "invoiceRequest.upload.imageTooLarge": "The invoice photo must not exceed 10 MiB"
+  "invoiceRequest.upload.imageTooLarge": "The invoice photo must not exceed 10 MiB",
+  "invoiceRequest.upload.remove": "Remove photo"
 }

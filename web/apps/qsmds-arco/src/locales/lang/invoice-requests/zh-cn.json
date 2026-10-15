@@ -163,5 +163,6 @@
   "invoiceRequest.upload.pick": "选择发票照片",
   "invoiceRequest.upload.imageOnly": "只支持 jpg、png、webp 格式的发票照片",
   "invoiceRequest.upload.imageEmpty": "这个文件是空的，请重新选择",
-  "invoiceRequest.upload.imageTooLarge": "发票照片不能超过 10 MiB"
+  "invoiceRequest.upload.imageTooLarge": "发票照片不能超过 10 MiB",
+  "invoiceRequest.upload.remove": "删除照片"
 }
