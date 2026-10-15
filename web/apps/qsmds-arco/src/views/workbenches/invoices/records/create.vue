@@ -360,22 +360,32 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
               <FaIcon name="i-lucide:list-plus" aria-hidden="true" />{{ t('invoiceRequest.form.addLine', { current: lines.length, limit: INVOICE_REQUEST_LINE_LIMIT }) }}
             </FaButton>
           </div>
-          <div class="mt-2 px-1 flex flex-col gap-2 items-end" :aria-label="t('invoiceRequest.field.totalAmount')">
-            <div class="flex gap-2 whitespace-nowrap items-baseline">
+          <div class="gap-3 grid grid-cols-1 md:grid-cols-3">
+            <div class="p-4 border border-border rounded-xl flex flex-col gap-2">
               <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.field.salesAmount') }}</span>
-              <AmountDisplay :value="totals.salesAmount === null ? null : String(totals.salesAmount)" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" />
+              <AmountDisplay
+                :value="totals.salesAmount === null ? null : String(totals.salesAmount)"
+                :currency="invoiceCurrency"
+                :currencies="currencyCatalog.currencies.value"
+                class="text-lg font-semibold self-end"
+              />
             </div>
-            <div class="flex gap-2 whitespace-nowrap items-baseline">
-              <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.field.taxAmount') }}</span>
-              <AmountDisplay :value="totals.taxAmount === null ? null : String(totals.taxAmount)" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" />
+            <div class="p-4 border border-border rounded-xl flex flex-col gap-2">
+              <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.form.taxAmountWithRate') }}</span>
+              <AmountDisplay
+                :value="totals.taxAmount === null ? null : String(totals.taxAmount)"
+                :currency="invoiceCurrency"
+                :currencies="currencyCatalog.currencies.value"
+                class="text-lg font-semibold self-end"
+              />
             </div>
-            <div class="p-3 border border-border rounded-xl bg-primary/5 flex gap-4 items-center">
+            <div class="p-4 border border-border rounded-xl bg-primary/5 flex flex-col gap-2">
               <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.field.totalAmount') }}</span>
               <AmountDisplay
                 :value="totals.totalAmount === null ? null : String(totals.totalAmount)"
                 :currency="invoiceCurrency"
                 :currencies="currencyCatalog.currencies.value"
-                class="text-lg font-bold"
+                class="text-lg font-bold self-end"
               />
             </div>
           </div>

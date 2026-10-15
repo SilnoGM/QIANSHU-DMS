@@ -34,6 +34,7 @@
   "invoiceRequest.form.unitPriceExTax": "單價（未稅）",
   "invoiceRequest.form.amountHint": "金額 = 數量 × 單價，系統自動計算",
   "invoiceRequest.form.totalPreview": "開票總計（含 5% 稅）",
+  "invoiceRequest.form.taxAmountWithRate": "營業稅應稅（× 5%）",
   "invoiceRequest.form.submit": "提交申請",
   "invoiceRequest.form.resubmit": "重新提交",
   "invoiceRequest.form.submitting": "提交中…",

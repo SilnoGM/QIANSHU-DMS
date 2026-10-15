@@ -34,6 +34,7 @@
   "invoiceRequest.form.unitPriceExTax": "Unit price (excl. tax)",
   "invoiceRequest.form.amountHint": "Amount = quantity × unit price, calculated by the system",
   "invoiceRequest.form.totalPreview": "Invoice total (incl. 5% tax)",
+  "invoiceRequest.form.taxAmountWithRate": "Business tax (× 5%)",
   "invoiceRequest.form.submit": "Submit",
   "invoiceRequest.form.resubmit": "Submit again",
   "invoiceRequest.form.submitting": "Submitting…",
