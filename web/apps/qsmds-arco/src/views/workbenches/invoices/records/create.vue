@@ -332,7 +332,7 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
                       v-model="line.productName"
                       class="w-full"
                       maxlength="200"
-                      :placeholder="t('invoiceRequest.field.productName')"
+                      :placeholder="t('invoiceRequest.placeholder.productName')"
                       :disabled="submitting"
                       :aria-invalid="lineFieldError(index, 'productName')"
                       :aria-label="t('invoiceRequest.field.productName')"

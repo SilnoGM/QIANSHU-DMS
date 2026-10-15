@@ -55,6 +55,7 @@
   "invoiceRequest.form.continueEditing": "繼續編輯",
   "invoiceRequest.form.confirmDiscard": "確認放棄",
   "invoiceRequest.form.submitted": "開票申請已提交",
+  "invoiceRequest.placeholder.productName": "若無特殊要求，請填寫：機械設備",
   "invoiceRequest.placeholder.invoiceRemark": "150鄂破",
   "invoiceRequest.list.searchPlaceholder": "搜尋申請單號、抬頭、統編或寄送姓名",
   "invoiceRequest.list.empty": "暫無開票申請",
