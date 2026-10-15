@@ -54,6 +54,11 @@ export function calculateInvoiceTotals(lines: readonly InvoiceFormLine[]): Invoi
   return { salesAmount, taxAmount, totalAmount: salesAmount + taxAmount, lineAmounts }
 }
 
+/** 明细行金额展示文本：千分位分组（与 AmountDisplay 的整数分组口径一致）；行不完整时用「—」。 */
+export function formatLineAmount(value: number | null): string {
+  return value === null ? '—' : String(value).replace(/\B(?=(\d{3})+(?!\d))/gu, ',')
+}
+
 export interface InvoiceSubmitPayload {
   readonly buyerName: string
   readonly buyerTaxId: string
