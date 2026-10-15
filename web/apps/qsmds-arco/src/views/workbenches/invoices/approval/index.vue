@@ -16,6 +16,7 @@ import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useAppAuth } from '@/composables/app/auth'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { calculateEstimatedCostCny } from '../invoice-cost.logic'
 import { resolveInvoiceFailureKey } from '../invoice-failure.logic'
 import InvoiceRequestDetailDrawer from '../invoice-request-detail-drawer.vue'
 import { buildInvoiceCopyText, isSettleable, resolveSettleRemaining, statusSwitchItems, statusTagClass } from '../invoice-status.logic'
@@ -162,17 +163,14 @@ async function loadRate(): Promise<void> {
   }
 }
 
-/** 结算预览与后端同一公式：向上取整(总计 ÷ 汇率 × 0.06 + 30)。 */
+/** 结算预览：与申请页预估、后端入账共用 invoice-cost.logic 的同一公式与常量。 */
 const settlePreview = computed(() => {
   const row = target.value
   if (row === null || rate.value === null) {
     return null
   }
-  const foreignUnitsPerCny = Number(rate.value.foreignUnitsPerCny)
-  if (!Number.isFinite(foreignUnitsPerCny) || foreignUnitsPerCny <= 0) {
-    return null
-  }
-  return String(Math.ceil((Number(row.totalAmount) / foreignUnitsPerCny) * 0.06 + 30))
+  const cost = calculateEstimatedCostCny(Number(row.totalAmount), Number(rate.value.foreignUnitsPerCny))
+  return cost === null ? null : String(cost)
 })
 
 async function copyInvoiceInfo(): Promise<void> {

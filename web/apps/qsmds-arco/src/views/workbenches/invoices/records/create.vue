@@ -3,10 +3,12 @@ import type { InvoiceFormLine } from '../invoice-form.logic'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import exchangeRatesApi from '@/api/modules/exchange-rates'
 import invoiceRequestsApi from '@/api/modules/invoice-requests'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { calculateEstimatedCostCny, INVOICE_MAILING_FEE_CNY, INVOICE_SERVICE_FEE_RATE } from '../invoice-cost.logic'
 import { resolveDuplicateFieldErrors, resolveInvoiceFailureKey } from '../invoice-failure.logic'
 import { buildInvoiceSubmitPayload, calculateInvoiceTotals, emptyInvoiceFormLine, formatLineAmount, INVOICE_REQUEST_LINE_LIMIT } from '../invoice-form.logic'
 import { parseDuplicateSuspects } from '../invoice-status.logic'
@@ -48,6 +50,25 @@ const dirty = ref(false)
 const totals = computed(() => calculateInvoiceTotals(lines.value))
 const canAddLine = computed(() => lines.value.length < INVOICE_REQUEST_LINE_LIMIT)
 const invoiceCurrency = 'TWD'
+const serviceFeePercent = Math.round(INVOICE_SERVICE_FEE_RATE * 100)
+
+/** 预估成本用的当前台币汇率（1 人民币兑多少台币）；加载失败或缺失时为 null。 */
+const costRate = ref<string | null>(null)
+const costRateState = ref<'loading' | 'ready' | 'unavailable'>('loading')
+
+const estimatedCostCny = computed(() => {
+  if (costRate.value === null || totals.value.totalAmount === null) {
+    return null
+  }
+  return calculateEstimatedCostCny(totals.value.totalAmount, Number(costRate.value))
+})
+
+const costHint = computed(() => {
+  if (costRateState.value === 'loading') {
+    return ''
+  }
+  return costRate.value === null ? t('invoiceRequest.cost.rateUnavailable') : t('invoiceRequest.cost.hint', { rate: costRate.value })
+})
 
 function markDirty(): void {
   dirty.value = true
@@ -106,10 +127,27 @@ async function loadForRefill(id: string): Promise<void> {
   }
 }
 
+/** 预估成本模块只读当前台币汇率；失败不阻塞表单，模块内提示「汇率暂不可用」。 */
+async function loadCostRate(): Promise<void> {
+  try {
+    const response = await exchangeRatesApi.list(new AbortController().signal)
+    const current = response.data.items.find(entry => entry.currency.code === 'TWD')?.currentRate
+    costRate.value = current?.foreignUnitsPerCny ?? null
+  }
+  catch {
+    costRate.value = null
+  }
+  costRateState.value = costRate.value === null ? 'unavailable' : 'ready'
+}
+
 onMounted(async () => {
   if (editingId.value !== null) {
     await loadForRefill(editingId.value)
   }
+})
+
+onMounted(() => {
+  void loadCostRate()
 })
 
 function requestSubmit(): void {
@@ -437,6 +475,36 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
           </FaFormItem>
         </FaCard>
       </FaForm>
+
+      <FaCard :title="t('invoiceRequest.cost.section')" class="mt-6" content-class="space-y-3">
+        <div class="gap-3 grid grid-cols-1 md:grid-cols-3">
+          <div class="p-4 border border-border rounded-xl flex flex-col gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.cost.serviceFeeRate') }}</span>
+            <span class="text-lg qs-type-data-emphasis font-semibold self-end">{{ serviceFeePercent }}%</span>
+          </div>
+          <div class="p-4 border border-border rounded-xl flex flex-col gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.cost.mailingFee') }}</span>
+            <AmountDisplay
+              :value="String(INVOICE_MAILING_FEE_CNY)"
+              currency="CNY"
+              :currencies="currencyCatalog.currencies.value"
+              class="text-lg font-semibold self-end"
+            />
+          </div>
+          <div class="p-4 border border-border rounded-xl flex flex-col gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.cost.estimatedCost') }}</span>
+            <AmountDisplay
+              :value="estimatedCostCny === null ? null : String(estimatedCostCny)"
+              currency="CNY"
+              :currencies="currencyCatalog.currencies.value"
+              class="text-lg font-bold self-end"
+            />
+          </div>
+        </div>
+        <p v-if="costHint !== ''" class="text-xs text-muted-foreground m-0">
+          {{ costHint }}
+        </p>
+      </FaCard>
     </FaPageMain>
 
     <FaFixedBar position="bottom" class="pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-border">

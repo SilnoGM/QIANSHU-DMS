@@ -27,6 +27,12 @@ test('明细区新增文案键与占位符在三语中都存在', () => {
     'invoiceRequest.form.amountHint',
     'invoiceRequest.form.totalPreview',
     'invoiceRequest.form.taxAmountWithRate',
+    'invoiceRequest.cost.section',
+    'invoiceRequest.cost.serviceFeeRate',
+    'invoiceRequest.cost.mailingFee',
+    'invoiceRequest.cost.estimatedCost',
+    'invoiceRequest.cost.hint',
+    'invoiceRequest.cost.rateUnavailable',
   ] as const) {
     for (const message of messages) {
       const value = (message as Record<string, string>)[key]
@@ -37,5 +43,7 @@ test('明细区新增文案键与占位符在三语中都存在', () => {
   for (const message of messages) {
     // 计数按钮依赖 {current}/{limit} 插值，缺占位符会原样显示花括号。
     assert.match((message as Record<string, string>)['invoiceRequest.form.addLine'], /\{current\}\/\{limit\}/u)
+    // 预估成本的提示行要带当前汇率插值。
+    assert.match((message as Record<string, string>)['invoiceRequest.cost.hint'], /\{rate\}/u)
   }
 })
