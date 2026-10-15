@@ -60,6 +60,8 @@
   "invoiceRequest.list.empty": "No invoice requests",
   "invoiceRequest.list.noPermission": "Your account cannot view invoice requests",
   "invoiceRequest.column.invoiceNo": "Request no.",
+  "invoiceRequest.column.buyer": "Buyer",
+  "invoiceRequest.column.recipient": "Mailing info",
   "invoiceRequest.column.submitter": "Submitted by",
   "invoiceRequest.column.submittedAt": "Submitted at",
   "invoiceRequest.column.lineSummary": "Lines",

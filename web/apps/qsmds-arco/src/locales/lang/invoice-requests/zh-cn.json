@@ -60,6 +60,8 @@
   "invoiceRequest.list.empty": "暂无开票申请",
   "invoiceRequest.list.noPermission": "当前身份没有查看开票申请的权限",
   "invoiceRequest.column.invoiceNo": "申请单号",
+  "invoiceRequest.column.buyer": "开票主体",
+  "invoiceRequest.column.recipient": "寄送信息",
   "invoiceRequest.column.submitter": "提交人",
   "invoiceRequest.column.submittedAt": "提交时间",
   "invoiceRequest.column.lineSummary": "明细",

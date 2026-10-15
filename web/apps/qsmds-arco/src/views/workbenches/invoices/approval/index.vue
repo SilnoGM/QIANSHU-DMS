@@ -8,6 +8,7 @@ import exchangeRatesApi from '@/api/modules/exchange-rates'
 import invoiceRequestsApi from '@/api/modules/invoice-requests'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
@@ -17,6 +18,7 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useAppAuth } from '@/composables/app/auth'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { calculateEstimatedCostCny } from '../invoice-cost.logic'
+import { buildInvoiceDocumentItems } from '../invoice-document.logic'
 import { resolveInvoiceFailureKey } from '../invoice-failure.logic'
 import InvoiceRequestDetailDrawer from '../invoice-request-detail-drawer.vue'
 import { buildInvoiceCopyText, isSettleable, resolveSettleRemaining, statusSwitchItems, statusTagClass } from '../invoice-status.logic'
@@ -84,13 +86,23 @@ function settleHint(row: InvoiceRequestListItemDto): string {
   return remaining === null ? '' : t('invoiceRequest.detail.settleWait', remaining)
 }
 
+/** 行内「结算入账」按钮的可用性：与结算弹窗同口径，未满 120 小时禁用并用 tooltip 展示等待时间。 */
+function canSettleRow(row: InvoiceRequestListItemDto): boolean {
+  return row.documentUploadedAt !== null && isSettleable(row.documentUploadedAt, now.value)
+}
+
 const columns = computed<QsGenericTableColumn<InvoiceRequestListItemDto>[]>(() => [
   { id: 'invoiceNo', accessorKey: 'invoiceNo', title: t('invoiceRequest.column.invoiceNo'), minWidth: 190, fixed: 'left' },
-  { id: 'creatorName', accessorFn: row => row.creatorName, title: t('invoiceRequest.column.submitter'), minWidth: 190 },
-  { id: 'totalAmount', accessorKey: 'totalAmount', title: t('invoiceRequest.field.totalAmount'), minWidth: 150, align: 'right' },
-  { id: 'submittedAt', accessorFn: row => row.submittedAt, title: t('invoiceRequest.column.submittedAt'), minWidth: 170 },
+  { id: 'document', accessorFn: row => row.documentMediaAssetId, title: t('invoiceRequest.column.document'), minWidth: 96 },
   { id: 'status', accessorFn: row => row.status, title: t('invoiceRequest.column.status'), minWidth: 130 },
-  { id: 'settleable', accessorFn: row => settleHint(row), title: t('invoiceRequest.detail.settleableAt'), minWidth: 200 },
+  { id: 'buyer', accessorFn: row => row.buyerName, title: t('invoiceRequest.column.buyer'), minWidth: 190 },
+  { id: 'salesAmount', accessorKey: 'salesAmount', title: t('invoiceRequest.field.salesAmount'), minWidth: 150, align: 'right' },
+  { id: 'taxAmount', accessorKey: 'taxAmount', title: t('invoiceRequest.field.taxAmount'), minWidth: 150, align: 'right' },
+  { id: 'totalAmount', accessorKey: 'totalAmount', title: t('invoiceRequest.field.totalAmount'), minWidth: 150, align: 'right' },
+  { id: 'invoiceRemark', accessorFn: row => row.invoiceRemark ?? '—', title: t('invoiceRequest.field.invoiceRemark'), minWidth: 200, cellClass: 'whitespace-normal break-words' },
+  { id: 'recipient', accessorFn: row => row.recipientName, title: t('invoiceRequest.column.recipient'), minWidth: 220 },
+  { id: 'internalRemark', accessorFn: row => row.internalRemark ?? '—', title: t('invoiceRequest.field.internalRemark'), minWidth: 200, cellClass: 'whitespace-normal break-words' },
+  { id: 'submittedAt', accessorFn: row => row.submittedAt, title: t('invoiceRequest.column.submittedAt'), minWidth: 190 },
 ])
 
 async function load(): Promise<void> {
@@ -308,16 +320,42 @@ onMounted(load)
             <QsTableStackedLine content-class="qs-type-data-emphasis break-all whitespace-normal">
               {{ row.original.invoiceNo }}
             </QsTableStackedLine>
-            <QsTableStackedLine v-if="row.original.invoiceRemark !== null" tone="muted">
-              {{ row.original.invoiceRemark }}
+          </QsTableStackedCell>
+        </template>
+        <template #cell-document="{ row }">
+          <ImageGroup :items="buildInvoiceDocumentItems(row.original, t('invoiceRequest.column.document'))" :max-count="1" radius="lg" size="sm" />
+        </template>
+        <template #cell-buyer="{ row }">
+          <QsTableStackedCell>
+            <QsTableStackedLine content-class="whitespace-normal break-words">
+              {{ row.original.buyerName }}
+            </QsTableStackedLine>
+            <QsTableStackedLine tone="muted" content-class="qs-type-data">
+              {{ row.original.buyerTaxId }}
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
-        <template #cell-creatorName="{ row }">
+        <template #cell-salesAmount="{ row }">
+          <QsTableStackedCell class="text-right justify-items-end">
+            <QsTableStackedLine>
+              <AmountDisplay :value="row.original.salesAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+            </QsTableStackedLine>
+          </QsTableStackedCell>
+        </template>
+        <template #cell-taxAmount="{ row }">
+          <QsTableStackedCell class="text-right justify-items-end">
+            <QsTableStackedLine>
+              <AmountDisplay :value="row.original.taxAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+            </QsTableStackedLine>
+          </QsTableStackedCell>
+        </template>
+        <template #cell-recipient="{ row }">
           <QsTableStackedCell>
-            <QsPersonDisplay :display-name="row.original.creatorName" size="sm" />
-            <QsTableStackedLine tone="muted">
-              {{ row.original.buyerName }}
+            <QsTableStackedLine content-class="whitespace-normal">
+              {{ `${row.original.recipientName} · ${row.original.recipientPhone}` }}
+            </QsTableStackedLine>
+            <QsTableStackedLine tone="muted" content-class="whitespace-normal">
+              {{ row.original.recipientAddress }}
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -330,20 +368,16 @@ onMounted(load)
         </template>
         <template #cell-submittedAt="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine><DateTimeDisplay :value="row.original.submittedAt" /></QsTableStackedLine>
+            <QsPersonDisplay :display-name="row.original.creatorName" size="sm" />
+            <QsTableStackedLine tone="muted">
+              <DateTimeDisplay :value="row.original.submittedAt" />
+            </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
         <template #cell-status="{ row }">
           <FaTag variant="outline" class="qs-type-status-tag" :class="statusTagClass(row.original.status)">
             {{ t(`invoiceRequest.status.${row.original.status}`) }}
           </FaTag>
-        </template>
-        <template #cell-settleable="{ row }">
-          <QsTableStackedCell>
-            <QsTableStackedLine tone="muted" content-class="whitespace-normal">
-              {{ settleHint(row.original) }}
-            </QsTableStackedLine>
-          </QsTableStackedCell>
         </template>
 
         <template #mobile-row="{ row }">
@@ -354,13 +388,30 @@ onMounted(load)
                 {{ t(`invoiceRequest.status.${row.status}`) }}
               </FaTag>
             </div>
+            <ImageGroup
+              v-if="row.documentMediaAssetId !== null"
+              :items="buildInvoiceDocumentItems(row, t('invoiceRequest.column.document'))"
+              :max-count="1"
+              radius="lg"
+              size="sm"
+            />
             <dl class="m-0 gap-x-4 gap-y-2 grid grid-cols-2">
               <div class="min-w-0">
                 <dt class="qs-type-meta mb-1">
-                  {{ t('invoiceRequest.column.submitter') }}
+                  {{ t('invoiceRequest.column.buyer') }}
+                </dt>
+                <dd class="text-sm m-0 break-words">
+                  {{ row.buyerName }}
+                  <span class="qs-type-data block">{{ row.buyerTaxId }}</span>
+                </dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="qs-type-meta mb-1">
+                  {{ t('invoiceRequest.column.submittedAt') }}
                 </dt>
                 <dd class="text-sm m-0">
                   {{ row.creatorName }}
+                  <span class="text-muted-foreground block">{{ row.submittedAt.slice(0, 19).replace('T', ' ') }}</span>
                 </dd>
               </div>
               <div class="min-w-0">
@@ -371,12 +422,30 @@ onMounted(load)
                   <AmountDisplay :value="row.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
                 </dd>
               </div>
+              <div class="min-w-0">
+                <dt class="qs-type-meta mb-1">
+                  {{ t('invoiceRequest.field.salesAmount') }} / {{ t('invoiceRequest.field.taxAmount') }}
+                </dt>
+                <dd class="m-0 flex flex-col gap-1 items-start">
+                  <AmountDisplay :value="row.salesAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+                  <AmountDisplay :value="row.taxAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+                </dd>
+              </div>
               <div class="col-span-2 min-w-0">
                 <dt class="qs-type-meta mb-1">
-                  {{ t('invoiceRequest.detail.settleableAt') }}
+                  {{ t('invoiceRequest.column.recipient') }}
                 </dt>
-                <dd class="text-sm text-muted-foreground m-0">
-                  {{ settleHint(row) }}
+                <dd class="text-sm m-0 break-words">
+                  {{ `${row.recipientName} · ${row.recipientPhone}` }}
+                  <span class="text-muted-foreground block">{{ row.recipientAddress }}</span>
+                </dd>
+              </div>
+              <div v-if="row.invoiceRemark !== null" class="col-span-2 min-w-0">
+                <dt class="qs-type-meta mb-1">
+                  {{ t('invoiceRequest.field.invoiceRemark') }}
+                </dt>
+                <dd class="text-sm m-0 break-words">
+                  {{ row.invoiceRemark }}
                 </dd>
               </div>
             </dl>
@@ -414,16 +483,20 @@ onMounted(load)
           >
             <FaIcon name="i-lucide:image-plus" aria-hidden="true" />{{ t('invoiceRequest.action.document') }}
           </FaButton>
-          <FaButton
-            v-if="row.status === 'ISSUED'"
-            variant="ghost"
-            size="sm"
-            class="min-h-11 sm:min-h-8"
-            :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.settle')}`"
-            @click="openAction(row, 'settle')"
-          >
-            <FaIcon name="i-lucide:landmark" aria-hidden="true" />{{ t('invoiceRequest.action.settle') }}
-          </FaButton>
+          <FaTooltip v-if="row.status === 'ISSUED'" :text="settleHint(row)">
+            <span class="inline-flex">
+              <FaButton
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-8"
+                :disabled="!canSettleRow(row)"
+                :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.settle')}`"
+                @click="openAction(row, 'settle')"
+              >
+                <FaIcon name="i-lucide:landmark" aria-hidden="true" />{{ t('invoiceRequest.action.settle') }}
+              </FaButton>
+            </span>
+          </FaTooltip>
           <FaButton
             v-if="row.status !== 'SETTLED' && row.status !== 'CANCELLED'"
             variant="ghost"

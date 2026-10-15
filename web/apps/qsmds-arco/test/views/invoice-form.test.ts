@@ -35,6 +35,8 @@ test('明细区新增文案键与占位符在三语中都存在', () => {
     'invoiceRequest.cost.hint',
     'invoiceRequest.cost.rateUnavailable',
     'invoiceRequest.placeholder.productName',
+    'invoiceRequest.column.buyer',
+    'invoiceRequest.column.recipient',
   ] as const) {
     for (const message of messages) {
       const value = (message as Record<string, string>)[key]

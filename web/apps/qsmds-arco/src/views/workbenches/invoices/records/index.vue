@@ -8,6 +8,7 @@ import { useRouter } from 'vue-router'
 import invoiceRequestsApi from '@/api/modules/invoice-requests'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
@@ -15,8 +16,9 @@ import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useAppAuth } from '@/composables/app/auth'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { buildInvoiceDocumentItems } from '../invoice-document.logic'
 import InvoiceRequestDetailDrawer from '../invoice-request-detail-drawer.vue'
-import { isSettleable, resolveSettleRemaining, statusSwitchItems, statusTagClass } from '../invoice-status.logic'
+import { statusSwitchItems, statusTagClass } from '../invoice-status.logic'
 
 /** 开票记录（运营）：仅本人数据，六态筛选（始终带计数），只有「已退回」提供重新填写入口。 */
 const { t } = useI18n()
@@ -37,7 +39,6 @@ const loading = ref(false)
 const loadError = ref<string | null>(null)
 const detailOpen = ref(false)
 const detailId = ref<string | null>(null)
-const now = ref(new Date())
 
 // 计数始终显示：缺失按 0，避免工具栏在计数回来之前跳动。
 const toolbarItems = computed(() => statusSwitchItems().map(item => ({
@@ -46,24 +47,18 @@ const toolbarItems = computed(() => statusSwitchItems().map(item => ({
   count: counts.value[item.value] ?? 0,
 })))
 
-function settleHint(row: InvoiceRequestListItemDto): string {
-  if (row.documentUploadedAt === null || row.documentUploadedAt === undefined) {
-    return t('invoiceRequest.detail.documentNone')
-  }
-  if (isSettleable(row.documentUploadedAt, now.value)) {
-    return t('invoiceRequest.detail.settleable')
-  }
-  const remaining = resolveSettleRemaining(row.documentUploadedAt, now.value)
-  return remaining === null ? '' : t('invoiceRequest.detail.settleWait', remaining)
-}
-
 const columns = computed<QsGenericTableColumn<InvoiceRequestListItemDto>[]>(() => [
   { id: 'invoiceNo', accessorKey: 'invoiceNo', title: t('invoiceRequest.column.invoiceNo'), minWidth: 190, fixed: 'left' },
-  { id: 'submittedAt', accessorFn: row => row.submittedAt, title: t('invoiceRequest.column.submittedAt'), minWidth: 200 },
-  { id: 'lineSummary', accessorFn: row => row.lineSummary ?? '—', title: t('invoiceRequest.column.lineSummary'), minWidth: 220 },
-  { id: 'totalAmount', accessorKey: 'totalAmount', title: t('invoiceRequest.field.totalAmount'), minWidth: 150, align: 'right' },
+  { id: 'document', accessorFn: row => row.documentMediaAssetId, title: t('invoiceRequest.column.document'), minWidth: 96 },
   { id: 'status', accessorFn: row => row.status, title: t('invoiceRequest.column.status'), minWidth: 130 },
-  { id: 'settleable', accessorFn: row => settleHint(row), title: t('invoiceRequest.detail.settleableAt'), minWidth: 200 },
+  { id: 'buyer', accessorFn: row => row.buyerName, title: t('invoiceRequest.column.buyer'), minWidth: 190 },
+  { id: 'salesAmount', accessorKey: 'salesAmount', title: t('invoiceRequest.field.salesAmount'), minWidth: 150, align: 'right' },
+  { id: 'taxAmount', accessorKey: 'taxAmount', title: t('invoiceRequest.field.taxAmount'), minWidth: 150, align: 'right' },
+  { id: 'totalAmount', accessorKey: 'totalAmount', title: t('invoiceRequest.field.totalAmount'), minWidth: 150, align: 'right' },
+  { id: 'invoiceRemark', accessorFn: row => row.invoiceRemark ?? '—', title: t('invoiceRequest.field.invoiceRemark'), minWidth: 200, cellClass: 'whitespace-normal break-words' },
+  { id: 'recipient', accessorFn: row => row.recipientName, title: t('invoiceRequest.column.recipient'), minWidth: 220 },
+  { id: 'internalRemark', accessorFn: row => row.internalRemark ?? '—', title: t('invoiceRequest.field.internalRemark'), minWidth: 200, cellClass: 'whitespace-normal break-words' },
+  { id: 'submittedAt', accessorFn: row => row.submittedAt, title: t('invoiceRequest.column.submittedAt'), minWidth: 190 },
 ])
 
 async function load(): Promise<void> {
@@ -72,7 +67,6 @@ async function load(): Promise<void> {
   }
   loading.value = true
   loadError.value = null
-  now.value = new Date()
   try {
     const signal = new AbortController().signal
     const [list, statusCounts] = await Promise.all([
@@ -160,13 +154,40 @@ onMounted(load)
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
-        <template #cell-lineSummary="{ row }">
+        <template #cell-document="{ row }">
+          <ImageGroup :items="buildInvoiceDocumentItems(row.original, t('invoiceRequest.column.document'))" :max-count="1" radius="lg" size="sm" />
+        </template>
+        <template #cell-buyer="{ row }">
           <QsTableStackedCell>
             <QsTableStackedLine content-class="whitespace-normal break-words">
-              {{ row.original.lineSummary ?? '—' }}
+              {{ row.original.buyerName }}
             </QsTableStackedLine>
-            <QsTableStackedLine v-if="row.original.invoiceRemark !== null" tone="muted">
-              {{ row.original.invoiceRemark }}
+            <QsTableStackedLine tone="muted" content-class="qs-type-data">
+              {{ row.original.buyerTaxId }}
+            </QsTableStackedLine>
+          </QsTableStackedCell>
+        </template>
+        <template #cell-salesAmount="{ row }">
+          <QsTableStackedCell class="text-right justify-items-end">
+            <QsTableStackedLine>
+              <AmountDisplay :value="row.original.salesAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+            </QsTableStackedLine>
+          </QsTableStackedCell>
+        </template>
+        <template #cell-taxAmount="{ row }">
+          <QsTableStackedCell class="text-right justify-items-end">
+            <QsTableStackedLine>
+              <AmountDisplay :value="row.original.taxAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+            </QsTableStackedLine>
+          </QsTableStackedCell>
+        </template>
+        <template #cell-recipient="{ row }">
+          <QsTableStackedCell>
+            <QsTableStackedLine content-class="whitespace-normal">
+              {{ `${row.original.recipientName} · ${row.original.recipientPhone}` }}
+            </QsTableStackedLine>
+            <QsTableStackedLine tone="muted" content-class="whitespace-normal">
+              {{ row.original.recipientAddress }}
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -182,13 +203,6 @@ onMounted(load)
             {{ t(`invoiceRequest.status.${row.original.status}`) }}
           </FaTag>
         </template>
-        <template #cell-settleable="{ row }">
-          <QsTableStackedCell>
-            <QsTableStackedLine tone="muted" content-class="whitespace-normal">
-              {{ settleHint(row.original) }}
-            </QsTableStackedLine>
-          </QsTableStackedCell>
-        </template>
 
         <template #mobile-row="{ row }">
           <div class="space-y-2">
@@ -198,13 +212,30 @@ onMounted(load)
                 {{ t(`invoiceRequest.status.${row.status}`) }}
               </FaTag>
             </div>
+            <ImageGroup
+              v-if="row.documentMediaAssetId !== null"
+              :items="buildInvoiceDocumentItems(row, t('invoiceRequest.column.document'))"
+              :max-count="1"
+              radius="lg"
+              size="sm"
+            />
             <dl class="m-0 gap-x-4 gap-y-2 grid grid-cols-2">
+              <div class="min-w-0">
+                <dt class="qs-type-meta mb-1">
+                  {{ t('invoiceRequest.column.buyer') }}
+                </dt>
+                <dd class="text-sm m-0 break-words">
+                  {{ row.buyerName }}
+                  <span class="qs-type-data block">{{ row.buyerTaxId }}</span>
+                </dd>
+              </div>
               <div class="min-w-0">
                 <dt class="qs-type-meta mb-1">
                   {{ t('invoiceRequest.column.submittedAt') }}
                 </dt>
                 <dd class="text-sm m-0">
-                  {{ row.submittedAt.slice(0, 19).replace('T', ' ') }}
+                  {{ row.creatorName }}
+                  <span class="text-muted-foreground block">{{ row.submittedAt.slice(0, 19).replace('T', ' ') }}</span>
                 </dd>
               </div>
               <div class="min-w-0">
@@ -215,20 +246,30 @@ onMounted(load)
                   <AmountDisplay :value="row.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
                 </dd>
               </div>
-              <div class="col-span-2 min-w-0">
+              <div class="min-w-0">
                 <dt class="qs-type-meta mb-1">
-                  {{ t('invoiceRequest.column.lineSummary') }}
+                  {{ t('invoiceRequest.field.salesAmount') }} / {{ t('invoiceRequest.field.taxAmount') }}
                 </dt>
-                <dd class="text-sm m-0 break-words">
-                  {{ row.lineSummary ?? '—' }}
+                <dd class="m-0 flex flex-col gap-1 items-start">
+                  <AmountDisplay :value="row.salesAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+                  <AmountDisplay :value="row.taxAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
                 </dd>
               </div>
               <div class="col-span-2 min-w-0">
                 <dt class="qs-type-meta mb-1">
-                  {{ t('invoiceRequest.detail.settleableAt') }}
+                  {{ t('invoiceRequest.column.recipient') }}
                 </dt>
-                <dd class="text-sm text-muted-foreground m-0">
-                  {{ settleHint(row) }}
+                <dd class="text-sm m-0 break-words">
+                  {{ `${row.recipientName} · ${row.recipientPhone}` }}
+                  <span class="text-muted-foreground block">{{ row.recipientAddress }}</span>
+                </dd>
+              </div>
+              <div v-if="row.invoiceRemark !== null" class="col-span-2 min-w-0">
+                <dt class="qs-type-meta mb-1">
+                  {{ t('invoiceRequest.field.invoiceRemark') }}
+                </dt>
+                <dd class="text-sm m-0 break-words">
+                  {{ row.invoiceRemark }}
                 </dd>
               </div>
             </dl>
