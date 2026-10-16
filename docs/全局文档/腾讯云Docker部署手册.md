@@ -519,6 +519,7 @@ EOF
 
 | 现象 | 可能原因 | 处置 |
 | --- | --- | --- |
+| 更新后页面一直卡在加载页，控制台报 `assets/index-*.js` 404 | 浏览器仍在用上一次的入口 HTML：可复现构建把 `index.html` 的 mtime 固定为 0，nginx 默认 ETag 只由 mtime 与字节数决定，两次构建的 `index.html` 大小相同时（例如只改版本号与等长资源名）校验器完全相同，浏览器带旧 `If-None-Match` 拿到 304 就不会更新入口，而旧入口引用的资源名在新镜像里已不存在 | 浏览器强制刷新一次即可恢复（服务端也可 `docker exec <web容器> touch /usr/share/nginx/html/index.html` 让旧校验器失效）；仓库已在 `deploy/docker/nginx/qianshu-dms.conf` 的入口 HTML 位置改为 `etag off` + `Cache-Control "no-store"`，该修复随下一次发版进入镜像 |
 | `server` 反复重启、日志无堆栈 | 媒体 preflight 失败（目录属主/权限、容量、ffprobe） | `docker compose logs server` 查看 preflight 输出；核对第 5.2 节目录属主 10001 与权限 0750 |
 | 日志提示环境变量 | `server.env` 缺项或 HMAC key 不合规 | 对照 6.3 逐项核对后 `docker compose up -d server` |
 | 容器起不来，提示 `pg_isready` 超时 | pgdata 属主不是 999 或目录被占用 | 核对第 5.2 节；不要手工 `initdb` |
