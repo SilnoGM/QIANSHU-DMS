@@ -138,6 +138,8 @@ export const SEED_ROLES: readonly SeedRole[] = [
     description: '运营人员（销售人员）',
     permissionCodes: [
       'exchange-rates:read',
+      'fund-accounts:read-self',
+      'fund-withdrawals:create',
       'invoice-requests:cancel',
       'invoice-requests:create',
       'invoice-requests:read',
@@ -169,6 +171,7 @@ export const SEED_ROLES: readonly SeedRole[] = [
       'fund-business-sources:manage',
       'fund-posting-types:manage',
       'fund-transactions:reverse',
+      'fund-withdrawals:review',
       'invoice-requests:cancel',
       'invoice-requests:document',
       'invoice-requests:read',

@@ -41,8 +41,8 @@ const expectedDictionaries: ReadonlyArray<readonly [string, readonly string[]]> 
   ['warehouse.packaging_type', ['WOODEN_BOX', 'WOODEN_FRAME']],
 ]
 const expectedRoles: ReadonlyArray<readonly [string, number]> = [
-  ['finance_staff', 25],
-  ['operations_staff', 17],
+  ['finance_staff', 26],
+  ['operations_staff', 19],
   ['purchasing_staff', 8],
 ]
 const expectedRuleShapes: Readonly<Record<string, string>> = {
