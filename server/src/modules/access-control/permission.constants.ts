@@ -134,17 +134,38 @@ export const INVOICE_REQUEST_PERMISSION_CODES = [
 ] as const
 
 /**
+ * 个人财务（运营自助）与提款审批的权限边界。
+ *
+ * 运营的「个人财务」入口只处理本人数据，本人账户读取因此用独立权限
+ * `fund-accounts:read-self` 表达，不能复用财务侧的 `fund-accounts:read`：
+ * 后者是资金账户全量视图的服务端门槛，授予运营等于放开所有人的账户与流水。
+ * 提款按提交与审批拆开，运营持有提交、财务持有审批，与开票申请的拆分口径一致。
+ * 三条都是可委派权限（`system_only = false`），由 `20261016120000_personal_fund_permissions`
+ * 建入、授予内置 `system_admin`，并幂等授予两个内置业务角色。
+ */
+export const PERSONAL_FUND_PERMISSION_CODES = [
+  'fund-accounts:read-self',
+  'fund-withdrawals:create',
+  'fund-withdrawals:review',
+] as const
+
+/**
  * 工作台准入权限：决定顶级导航分组的可见与直接 URL 准入。
  *
  * 业务域权限码会在工作台之间共享（`purchase-orders:payment`、`purchase-orders:read`
  * 同时服务运营、财务与采运工作台），用它做分组门槛会让一个角色看到多个工作台。
  * 准入码与业务域权限解耦：分组门槛只声明准入码，组内页面仍按业务码收敛。
- * 由 `20261001190000_workbench_access_permissions` 建入并授予内置 `system_admin`，
+ *
+ * 前三条由 `20261001180000_workbench_access_permissions` 建入；管理员工作台曾用
+ * 「四个子模块读取权限的并集」做门槛，导致持有 `exchange-rates:read` 的运营与财务
+ * 也看到并进入该工作台，因此 `workbench:admin` 由 `20261016140000_workbench_admin_permission`
+ * 单独建入，管理员工作台收敛到这一条准入码。四条都授予内置 `system_admin`，
  * 普通角色由角色权限管理自行勾选。
  */
 export const WORKBENCH_ACCESS_PERMISSION_CODES = [
-  'workbench:operations',
+  'workbench:admin',
   'workbench:finance',
+  'workbench:operations',
   'workbench:purchase-transport',
 ] as const
 
@@ -195,6 +216,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...PRODUCT_MEDIA_PERMISSION_CODES,
   ...PRODUCT_MANAGEMENT_PERMISSION_CODES,
   ...FUND_ACCOUNT_PERMISSION_CODES,
+  ...PERSONAL_FUND_PERMISSION_CODES,
   ...SALES_ORDER_PERMISSION_CODES,
   ...SALES_RECEIPT_PERMISSION_CODES,
   ...PURCHASE_ORDER_PERMISSION_CODES,

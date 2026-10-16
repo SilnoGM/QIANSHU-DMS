@@ -79,6 +79,9 @@ describe('permission constants', () => {
       'fund-transactions:reverse',
       'fund-posting-types:manage',
       'fund-business-sources:manage',
+      'fund-accounts:read-self',
+      'fund-withdrawals:create',
+      'fund-withdrawals:review',
       'sales-orders:read',
       'sales-orders:create',
       'sales-orders:update',
@@ -115,11 +118,12 @@ describe('permission constants', () => {
       'invoice-requests:return',
       'invoice-requests:review',
       'invoice-requests:settle',
-      'workbench:operations',
+      'workbench:admin',
       'workbench:finance',
+      'workbench:operations',
       'workbench:purchase-transport',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 87)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 91)
   })
 })
 

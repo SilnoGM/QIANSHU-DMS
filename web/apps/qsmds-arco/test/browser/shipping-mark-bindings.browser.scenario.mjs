@@ -116,7 +116,12 @@ export async function verifyShippingMarkBindings(page, configuration) {
   await page.waitFor('!document.querySelector("[data-testid=shipping-mark-binding-editor]")')
 
   // 撤掉写权限的前端上下文应立即隐藏操作；真实 Server 403 在独立集成测试覆盖。
-  await page.evaluate(patchNumberingPermissionsExpression(['purchase-shipping-marks:read', 'numbering-rules:read']))
+  // 管理员工作台由独立准入码收敛，动态撤权后的权限快照仍要保留它在页面上。
+  await page.evaluate(patchNumberingPermissionsExpression([
+    'purchase-shipping-marks:read',
+    'numbering-rules:read',
+    'workbench:admin',
+  ]))
   await page.waitFor('document.querySelector("[data-testid=shipping-mark-bindings-page]")?.textContent.includes("只读")')
   assert.equal(await page.evaluate(`(() => [...document.querySelectorAll('[data-testid=shipping-mark-bindings-page] button')].some(button => /设置规则|更换规则/.test(button.textContent)))()`), false)
   await page.evaluate(restoreNumberingPermissionsExpression())

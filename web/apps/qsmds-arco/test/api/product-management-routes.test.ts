@@ -70,18 +70,16 @@ test('管理员工作台保留产品管理，资金账户迁移至财务工作�
     asyncRoutesSource.indexOf('title: \'管理员工作台\''),
     asyncRoutesSource.indexOf('title: \'系统管理\''),
   )
-  // 主导航组权限并集在装配区之前声明，产品读取权限必须留在并集内并覆盖一级子路由。
-  const workbenchPermissionUnion = routesSource.match(
-    /const ADMIN_WORKBENCH_PERMISSIONS = \[([\s\S]*?)\]/u,
-  )?.[1] ?? ''
   const financeSource = readFileSync(new URL('../../src/router/modules/role.workbenches.ts', import.meta.url), 'utf8')
   const fundAccountSource = readFileSync(new URL('../../src/router/modules/fund-account.management.ts', import.meta.url), 'utf8')
   const productRouteIndex = administratorWorkbenchSource.indexOf(
     'ProductManagement,',
   )
 
-  assert.match(workbenchPermissionUnion, /\.\.\.PRODUCT_MANAGEMENT_PERMISSIONS/u)
-  assert.match(administratorWorkbenchSource, /auth: \[\.\.\.ADMIN_WORKBENCH_PERMISSIONS\]/u)
+  // 管理员工作台收敛到独立准入码：产品读取权限仍是组内页面的门槛，但不再
+  // 充当工作台准入，避免业务角色凭共享读取码进入管理员区域。
+  assert.match(administratorWorkbenchSource, /auth: \[ADMIN_WORKBENCH_PERMISSION\]/u)
+  assert.doesNotMatch(routesSource, /ADMIN_WORKBENCH_PERMISSIONS/u)
   assert.ok(productRouteIndex >= 0)
   assert.doesNotMatch(administratorWorkbenchSource, /FUND_ACCOUNT_MANAGEMENT_PERMISSIONS|FundAccountManagement/u)
   // 账户管理挂在财务工作台下；财务分组的准入由工作台准入码决定，账户管理自身

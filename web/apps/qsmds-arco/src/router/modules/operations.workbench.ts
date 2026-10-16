@@ -149,6 +149,35 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
+  {
+    // 运营只看本人财务数据，因此本人账户读取用独立权限 `fund-accounts:read-self`，
+    // 不借用财务侧的全量账户视图权限 `fund-accounts:read`；提款按提交与审批拆分，
+    // 本组只声明提交。分组 auth 只用于菜单过滤，取组内叶子业务码的并集。
+    // 刻意不声明 redirect：两个叶子各自独立授权，显式重定向会把只持有其中一个码的
+    // 角色送到无权限页面；交给 Route Store 的既有回退（进入第一个有权限的子路由）。
+    path: '/qs-operations/personal-finance',
+    name: 'qsOperationsPersonalFinance',
+    component: Layout,
+    meta: {
+      title: '个人财务',
+      icon: 'qs-personal-finance',
+      auth: ['fund-accounts:read-self', 'fund-withdrawals:create'],
+    },
+    children: [
+      {
+        path: 'fund-accounts',
+        name: 'qsOperationsPersonalFinanceFundAccounts',
+        component: () => import('@/views/operations/personal-finance/fund-accounts/index.vue'),
+        meta: { title: '资金账户', icon: 'qs-fund-account-list', auth: 'fund-accounts:read-self' },
+      },
+      {
+        path: 'withdrawals',
+        name: 'qsOperationsPersonalFinanceWithdrawals',
+        component: () => import('@/views/operations/personal-finance/withdrawals/index.vue'),
+        meta: { title: '提款申请', icon: 'qs-fund-withdrawal', auth: 'fund-withdrawals:create' },
+      },
+    ],
+  },
 ]
 
 export default routes

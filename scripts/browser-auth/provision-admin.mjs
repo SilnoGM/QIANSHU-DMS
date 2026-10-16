@@ -859,12 +859,90 @@ function executeProvisionCommand(definition) {
   })
 }
 
+/**
+ * 历史夹具只能引用「历史迁移基线」里已存在的权限码；发布后新增的码只能在真实
+ * migration 全量应用之后补齐。补授权单独成一个程序：只做幂等 INSERT 与存在性自检，
+ * 失败时输出稳定错误码，不触碰其它夹具数据。
+ */
+const postMigrationGrantProgram = String.raw`
+const { Client } = require('pg')
+
+/* 产品媒体 RBAC 夹具要打开管理员工作台下的产品编辑页，因此必须持有工作台准入码。 */
+const grants = [
+  { roleCode: 'browser_products_manage_no_media', permissionCode: 'workbench:admin' },
+]
+
+;(async () => {
+  const client = new Client({ connectionString: process.env.DATABASE_URL })
+  await client.connect()
+  try {
+    await client.query('BEGIN')
+    for (const grant of grants) {
+      await client.query(
+        [
+          'INSERT INTO role_permissions (role_id, permission_id)',
+          'SELECT role.id, permission.id',
+          'FROM roles AS role',
+          'CROSS JOIN permissions AS permission',
+          'WHERE role.code = $1',
+          '  AND permission.code = $2',
+          '  AND NOT EXISTS (',
+          '    SELECT 1 FROM role_permissions AS existing',
+          '    WHERE existing.role_id = role.id',
+          '      AND existing.permission_id = permission.id',
+          '  )',
+        ].join(' '),
+        [grant.roleCode, grant.permissionCode],
+      )
+      const state = await client.query(
+        [
+          'SELECT count(*)::integer AS granted',
+          'FROM role_permissions AS grant_entry',
+          'JOIN roles AS role ON role.id = grant_entry.role_id',
+          'JOIN permissions AS permission ON permission.id = grant_entry.permission_id',
+          'WHERE role.code = $1 AND permission.code = $2',
+        ].join(' '),
+        [grant.roleCode, grant.permissionCode],
+      )
+      if (state.rows[0]?.granted !== 1) {
+        process.stderr.write('POST_MIGRATION_GRANT')
+        process.exit(1)
+      }
+    }
+    await client.query('COMMIT')
+  }
+  catch {
+    await client.query('ROLLBACK').catch(() => undefined)
+    process.stderr.write('POST_MIGRATION_GRANT')
+    process.exit(1)
+  }
+  finally {
+    await client.end()
+  }
+})()
+`
+
 export async function provisionAdmin(environment = process.env) {
   const input = readProvisionInput(environment)
   await executeProvisionCommand(createProvisionCommand(input, environment))
   // 历史夹具先以发布前结构写入，再用真实 migration 升级；不为测试关闭生产守卫。
   await runCommand('pnpm', ['-C', 'server', 'db:migrate:deploy'], {
     env: { ...environment, DATABASE_URL: input.databaseUrl, DOTENV_CONFIG_PATH: '/dev/null' },
+  })
+  await executeProvisionCommand({
+    args: [
+      '-C', 'server', 'exec', 'node',
+      '--input-type=commonjs',
+      '--eval',
+      postMigrationGrantProgram,
+    ],
+    command: 'pnpm',
+    env: {
+      ...environment,
+      DATABASE_URL: input.databaseUrl,
+      DOTENV_CONFIG_PATH: '/dev/null',
+      NODE_ENV: 'test',
+    },
   })
 }
 

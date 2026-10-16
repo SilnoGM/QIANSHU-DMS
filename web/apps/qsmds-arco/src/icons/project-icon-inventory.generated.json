@@ -215,7 +215,8 @@
     "label": "资金账户列表",
     "category": "财务",
     "usages": [
-      "资金账户列表"
+      "资金账户列表",
+      "运营工作台个人财务资金账户页"
     ],
     "source": "brand"
   },
@@ -225,6 +226,25 @@
     "category": "财务",
     "usages": [
       "资金账户流水"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-personal-finance",
+    "label": "个人财务",
+    "category": "财务",
+    "usages": [
+      "运营工作台个人财务分组"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-fund-withdrawal",
+    "label": "提款",
+    "category": "财务",
+    "usages": [
+      "运营工作台提款申请页",
+      "财务工作台账户提款审批页"
     ],
     "source": "brand"
   },

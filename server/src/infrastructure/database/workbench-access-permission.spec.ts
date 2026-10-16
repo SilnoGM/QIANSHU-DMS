@@ -33,9 +33,14 @@ const expectedPermissions = [
 
 describe('workbench access permission migration', () => {
   it('lists every workbench access permission in the complete catalog without duplicates', () => {
-    expect([...WORKBENCH_ACCESS_PERMISSION_CODES]).toEqual(
-      expectedPermissions.map(permission => permission.code),
-    )
+    // 管理员工作台准入码由 20261016140000_workbench_admin_permission 建入，
+    // 其自身契约见 workbench-admin-permission.spec.ts；常量按 code 排序。
+    expect([...WORKBENCH_ACCESS_PERMISSION_CODES]).toEqual([
+      'workbench:admin',
+      'workbench:finance',
+      'workbench:operations',
+      'workbench:purchase-transport',
+    ])
     expect(MANAGEMENT_PERMISSION_CODES).toEqual(
       expect.arrayContaining([...WORKBENCH_ACCESS_PERMISSION_CODES]),
     )

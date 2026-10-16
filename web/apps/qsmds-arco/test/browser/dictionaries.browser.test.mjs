@@ -800,6 +800,12 @@ async function prepareLimitedIdentities(page, configuration) {
   const readPermissionId = dictionaryPermissions
     ?.find(([code]) => code === 'dictionaries:read')?.[1]
   assert.equal(typeof readPermissionId, 'string')
+  // 只读身份要打开管理员工作台下的字典页，因此除业务码外还必须持有管理员工作台准入码；
+  // 业务读码不再放行该工作台（见《路由导航与状态管理》的工作台准入约束）。
+  const adminWorkbenchPermissionId = permissionsResponse.body
+    ?.find(permission => permission.code === 'workbench:admin')
+    ?.id
+  assert.equal(typeof adminWorkbenchPermissionId, 'string')
 
   const readonlyRole = await page.evaluate(apiExpression('/api/roles', 'POST', {
     code: 'browser_dictionary_readonly',
@@ -810,7 +816,7 @@ async function prepareLimitedIdentities(page, configuration) {
   const rolePermissions = await page.evaluate(apiExpression(
     `/api/roles/${encodeURIComponent(readonlyRole.body.id)}/permissions`,
     'PUT',
-    { permissionIds: [readPermissionId] },
+    { permissionIds: [readPermissionId, adminWorkbenchPermissionId] },
   ))
   assert.equal(rolePermissions.status, 200)
 
@@ -1096,10 +1102,11 @@ test('真实 Chrome 覆盖系统字典生命周期、双标签失效、权限与
   )
 
   await runDictionaryBrowserStep('client read-only visibility', async () => {
+    // 管理员工作台由独立准入码收敛，动态撤权快照必须保留它才能停留在字典页。
     const permissions = await page.evaluate(
-      patchPermissionsExpression(['dictionaries:read']),
+      patchPermissionsExpression(['dictionaries:read', 'workbench:admin']),
     )
-    assert.deepEqual(permissions, ['dictionaries:read'])
+    assert.deepEqual(permissions, ['dictionaries:read', 'workbench:admin'])
     await page.waitFor(`(() => {
       const summary = document.querySelector('[aria-label="当前字典类型摘要"]')
       const table = document.querySelector('[data-testid="dictionary-item-table"]')

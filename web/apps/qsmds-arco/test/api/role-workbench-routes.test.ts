@@ -113,8 +113,9 @@ test('财务分为实时收付、账单对账、发票管理和账户管理，�
   assert.deepEqual(financeWorkbench.children.map(route => route.path), ['/qs-finance/realtime-payments', '/qs-finance/bill-reconciliation', '/qs-finance/invoices', '/qs-finance/fund-accounts'])
   const routes = financeWorkbench.children.flatMap(route => route.children ?? [])
   // 账单对账分组新增导入与详情两个隐藏叶子；对账分组新增对账详情一个隐藏叶子；
-  // 发票管理分组只有一个可见叶子：只读详情并入了共用抽屉，不占独立路由。
-  assert.equal(new Set(routes.map(route => route.name)).size, 15)
+  // 发票管理分组只有一个可见叶子：只读详情并入了共用抽屉，不占独立路由；
+  // 账户管理分组新增账户提款审批一个可见叶子。
+  assert.equal(new Set(routes.map(route => route.name)).size, 16)
   const paymentDetail = routes.find(route => route.name === 'qsFinanceRealtimePurchasePayablePayment')
   assert.equal(paymentDetail?.meta?.menu, false)
   assert.equal(paymentDetail?.meta?.auth, 'purchase-orders:payment')
