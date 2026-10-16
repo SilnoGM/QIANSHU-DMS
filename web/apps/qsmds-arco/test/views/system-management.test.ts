@@ -290,6 +290,7 @@ test('权限目录以中文展示现有业务资源', () => {
     'fund-business-sources',
     'fund-posting-types',
     'fund-transactions',
+    'fund-withdrawals',
     'invoice-requests',
     'numbering-rules',
     'packaging-costs',
@@ -312,6 +313,7 @@ test('权限目录以中文展示现有业务资源', () => {
   assert.equal(permissionResourceLabel('fund-business-sources'), '资金业务来源')
   assert.equal(permissionResourceLabel('fund-posting-types'), '资金业务类型')
   assert.equal(permissionResourceLabel('fund-transactions'), '资金批次')
+  assert.equal(permissionResourceLabel('fund-withdrawals'), '提款')
   assert.equal(permissionResourceLabel('packaging-costs'), '打木架费用')
   assert.equal(permissionResourceLabel('regions'), '地区管理')
   assert.equal(permissionResourceLabel('numbering-rules'), '编号规则')

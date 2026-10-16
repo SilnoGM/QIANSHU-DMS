@@ -56,6 +56,8 @@ const routesRaw = [
 const rolePermissions: Record<string, string[]> = {
   operations_staff: [
     'exchange-rates:read',
+    'fund-accounts:read-self',
+    'fund-withdrawals:create',
     'invoice-requests:cancel',
     'invoice-requests:create',
     'invoice-requests:read',
@@ -82,6 +84,7 @@ const rolePermissions: Record<string, string[]> = {
     'fund-business-sources:manage',
     'fund-posting-types:manage',
     'fund-transactions:reverse',
+    'fund-withdrawals:review',
     'invoice-requests:cancel',
     'invoice-requests:document',
     'invoice-requests:read',
@@ -150,6 +153,7 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-finance/realtime-payments/purchase-payments/batch',
     '/qs-finance/bill-reconciliation/slh-bill-management',
     '/qs-finance/fund-accounts/list',
+    '/qs-finance/fund-accounts/withdrawal-approvals',
     '/qs-purchase-transport/reviews',
     '/qs-purchase-transport/containers',
     '/qs-purchase-transport/containers/container-1/import',
@@ -167,6 +171,8 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-operations/warehouse-transport/overseas-storage',
     '/qs-operations/invoices/create',
     '/qs-operations/invoices/records',
+    '/qs-operations/personal-finance/fund-accounts',
+    '/qs-operations/personal-finance/withdrawals',
   ]) {
     assert.equal(canEnter(operationsStaff, path), true, `运营角色应能进入 ${path}`)
   }
@@ -178,6 +184,8 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-operations/warehouse-transport/ocean-containers',
     '/qs-operations/invoices/create',
     '/qs-operations/invoices/records',
+    '/qs-operations/personal-finance/fund-accounts',
+    '/qs-operations/personal-finance/withdrawals',
     '/qs-purchase-transport/containers',
     '/system/audit',
     '/system/application-settings',
@@ -189,6 +197,7 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-finance/realtime-payments/purchase-payments/batch',
     '/qs-finance/bill-reconciliation/slh-bill-management/import',
     '/qs-finance/fund-accounts/transactions',
+    '/qs-finance/fund-accounts/withdrawal-approvals',
     '/qs-finance/invoices/approval',
   ]) {
     assert.equal(canEnter(financeStaff, path), true, `财务角色应能进入 ${path}`)
@@ -201,7 +210,10 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-operations/warehouse-transport/ocean-containers',
     '/qs-operations/invoices/create',
     '/qs-operations/invoices/records',
+    '/qs-operations/personal-finance/fund-accounts',
+    '/qs-operations/personal-finance/withdrawals',
     '/qs-finance/realtime-payments/purchase-payments',
+    '/qs-finance/fund-accounts/withdrawal-approvals',
     '/qs-finance/invoices/approval',
     '/system/audit',
     '/system/application-settings',

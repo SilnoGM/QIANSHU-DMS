@@ -10,15 +10,18 @@ import fundAccountManagementRoutes, {
 import { financeWorkbench } from '../../src/router/modules/role.workbenches'
 import { filterAccessibleMenus } from '../../src/store/modules/app/menu.logic'
 
-test('财务工作台注册账户管理分组及两个资金账户入口', () => {
-  assert.deepEqual(FUND_ACCOUNT_MANAGEMENT_PERMISSIONS, ['fund-accounts:read'])
+test('财务工作台注册账户管理分组及两个资金账户入口与提款审批入口', () => {
+  assert.deepEqual(FUND_ACCOUNT_MANAGEMENT_PERMISSIONS, [
+    'fund-accounts:read',
+    'fund-withdrawals:review',
+  ])
   assert.equal(fundAccountManagementRoutes.path, '/qs-finance/fund-accounts')
   assert.equal(fundAccountManagementRoutes.name, 'qsFinanceFundAccountManagement')
   assert.equal(fundAccountManagementRoutes.meta?.title, '账户管理')
   assert.equal(fundAccountManagementRoutes.meta?.icon, 'qs-fund-accounts')
   assert.deepEqual(
     fundAccountManagementRoutes.meta?.auth,
-    ['fund-accounts:read'],
+    ['fund-accounts:read', 'fund-withdrawals:review'],
   )
   assert.deepEqual(
     fundAccountManagementRoutes.children?.map(route => ({
@@ -39,6 +42,12 @@ test('财务工作台注册账户管理分组及两个资金账户入口', () =>
         name: 'qsFinanceFundAccountTransactions',
         path: 'transactions',
         title: '资金账户流水',
+      },
+      {
+        auth: 'fund-withdrawals:review',
+        name: 'qsFinanceFundWithdrawalApprovals',
+        path: 'withdrawal-approvals',
+        title: '账户提款审批',
       },
     ],
   )
@@ -81,6 +90,10 @@ test('资金账户专属权限精确控制分组、菜单和直接访问资格',
   assert.deepEqual(visiblePaths(['fund-accounts:read']), [
     'list',
     'transactions',
+  ])
+  // 提款审批是独立权限：只持有它时分组仍可见（并集包含该码），但只放行审批页。
+  assert.deepEqual(visiblePaths(['fund-withdrawals:review']), [
+    'withdrawal-approvals',
   ])
   assert.deepEqual(visiblePaths(['products:read']), [])
   assert.deepEqual(visiblePaths([]), [])
