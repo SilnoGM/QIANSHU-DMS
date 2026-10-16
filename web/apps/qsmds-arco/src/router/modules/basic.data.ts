@@ -5,23 +5,12 @@ function Layout() {
 }
 
 /**
- * 基础数据各叶子的读取权限并集。
- *
- * 管理员工作台的主导航组会把自身 auth 覆盖到每个一级子路由，App.vue 再校验全部
- * matched 记录，因此该集合必须覆盖全部受保护叶子，缺项会让菜单可见但直达 URL 403。
- */
-export const BASIC_DATA_READ_PERMISSIONS = [
-  'regions:read',
-  'currencies:read',
-  'exchange-rates:read',
-  'numbering-rules:read',
-  'purchase-shipping-marks:read',
-  'dictionaries:read',
-] as const
-
-/**
  * 基础数据父级保持权限中立，由各业务叶子独立声明访问权限。
  * 这样无地区权限的账号仍可看到其余基础数据入口，避免父级鉴权误删整棵菜单。
+ *
+ * 工作台准入由「管理员工作台」的独立准入码 `workbench:admin` 承担；该分组不再
+ * 参与任何读取权限并集（历史并集门槛曾让持有 `exchange-rates:read` 的业务角色
+ * 看到并进入管理员工作台）。
  */
 const routes: RouteRecordRaw = {
   path: '/admin/basic-data',

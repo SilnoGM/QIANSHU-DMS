@@ -118,11 +118,12 @@ describe('permission constants', () => {
       'invoice-requests:return',
       'invoice-requests:review',
       'invoice-requests:settle',
-      'workbench:operations',
+      'workbench:admin',
       'workbench:finance',
+      'workbench:operations',
       'workbench:purchase-transport',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 90)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 91)
   })
 })
 

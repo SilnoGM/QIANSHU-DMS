@@ -1377,6 +1377,12 @@ test('真实普通用户覆盖编号七权限、组合权限、动态撤权与�
     Object.keys(permissionIdByCode).sort(),
     allNumberingPermissions,
   )
+  // 受限身份要打开管理员工作台下的编号页，因此每个权限矩阵组合都附带工作台准入码；
+  // 业务读码不再放行该工作台（见《路由导航与状态管理》的工作台准入约束）。
+  const adminWorkbenchPermissionId = permissionCatalog.body
+    ?.find(permission => permission.code === 'workbench:admin')
+    ?.id
+  assert.equal(typeof adminWorkbenchPermissionId, 'string')
 
   const matrixRole = await adminPage.evaluate(apiExpression(
     '/api/roles',
@@ -1416,11 +1422,14 @@ test('真实普通用户覆盖编号七权限、组合权限、动态撤权与�
   let limitedIssuesStarted = false
 
   const setPermissions = async (codes) => {
-    const permissionIds = codes.map((code) => {
-      const id = permissionIdByCode[code]
-      assert.equal(typeof id, 'string')
-      return id
-    })
+    const permissionIds = [
+      ...codes.map((code) => {
+        const id = permissionIdByCode[code]
+        assert.equal(typeof id, 'string')
+        return id
+      }),
+      adminWorkbenchPermissionId,
+    ]
     const response = await adminPage.evaluate(apiExpression(
       `/api/roles/${encodeURIComponent(matrixRole.body.id)}/permissions`,
       'PUT',
@@ -1706,12 +1715,14 @@ test('真实普通用户覆盖编号七权限、组合权限、动态撤权与�
     '权限矩阵编号规则',
   )
   const patched = await limitedPage.evaluate(
-    patchNumberingPermissionsExpression(['numbering-rules:read']),
+    // 管理员工作台由独立准入码收敛，动态撤权快照必须保留它才能停留在编号页。
+    patchNumberingPermissionsExpression(['numbering-rules:read', 'workbench:admin']),
   )
   assert.deepEqual(
     patched.filter(permission => permission.startsWith('numbering-rules:')),
     ['numbering-rules:read'],
   )
+  assert.equal(patched.includes('workbench:admin'), true)
   await waitForNoVisibleDialog(limitedPage, '编辑编号规则')
   await limitedPage.evaluate(restoreNumberingPermissionsExpression())
 

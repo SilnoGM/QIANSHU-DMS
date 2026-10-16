@@ -8,17 +8,14 @@ import userRolesRoutes, {
   ADMIN_USER_ROLE_READ_PERMISSIONS,
 } from '../../src/router/modules/admin.user-roles'
 import applicationSettingsRoute from '../../src/router/modules/application.settings'
-import basicDataRoutes, {
-  BASIC_DATA_READ_PERMISSIONS,
-} from '../../src/router/modules/basic.data'
-import productManagementRoutes, {
-  PRODUCT_MANAGEMENT_PERMISSIONS,
-} from '../../src/router/modules/product.management'
-import supplierPaymentProfilesRoute, {
-  SUPPLIER_PAYMENT_PROFILE_PERMISSIONS,
-} from '../../src/router/modules/supplier.payment.profiles'
+import basicDataRoutes from '../../src/router/modules/basic.data'
+import productManagementRoutes from '../../src/router/modules/product.management'
+import supplierPaymentProfilesRoute from '../../src/router/modules/supplier.payment.profiles'
 import systemAuditRoute from '../../src/router/modules/system.audit'
-import { SYSTEM_MANAGEMENT_PERMISSION } from '../../src/router/modules/workbench-access'
+import {
+  ADMIN_WORKBENCH_PERMISSION,
+  SYSTEM_MANAGEMENT_PERMISSION,
+} from '../../src/router/modules/workbench-access'
 
 const routesSource = readFileSync(
   new URL('../../src/router/routes.ts', import.meta.url),
@@ -69,11 +66,11 @@ test('用户与角色分组按读取权限隔离三个管理页面', () => {
 test('顶层主导航按目标结构装配管理员工作台与系统管理', () => {
   assert.match(
     routesSource,
-    /import BasicData, \{ BASIC_DATA_READ_PERMISSIONS \} from '\.\/modules\/basic\.data'/u,
+    /import BasicData from '\.\/modules\/basic\.data'/u,
   )
   assert.match(
     routesSource,
-    /import UserRoles, \{ ADMIN_USER_ROLE_READ_PERMISSIONS \} from '\.\/modules\/admin\.user-roles'/u,
+    /import UserRoles from '\.\/modules\/admin\.user-roles'/u,
   )
   assert.match(
     routesSource,
@@ -97,63 +94,48 @@ test('顶层主导航按目标结构装配管理员工作台与系统管理', ()
   assert.doesNotMatch(systemManagementSection, /ApplicationSettings/u)
 })
 
-test('管理员工作台 any-of 门槛由四个子模块读取权限并集构成', () => {
-  const unionMatch = routesSource.match(
-    /const ADMIN_WORKBENCH_PERMISSIONS = \[([\s\S]*?)\]/u,
-  )
-  assert.ok(unionMatch, 'routes.ts 必须声明管理员工作台权限并集常量')
-  const unionBody = unionMatch[1]
-
-  for (const spread of [
-    '...BASIC_DATA_READ_PERMISSIONS',
-    '...PRODUCT_MANAGEMENT_PERMISSIONS',
-    '...ADMIN_USER_ROLE_READ_PERMISSIONS',
-    '...SUPPLIER_PAYMENT_PROFILE_PERMISSIONS',
-  ]) {
-    assert.ok(
-      unionBody.includes(spread),
-      `管理员工作台权限并集缺少 ${spread}`,
-    )
-  }
-
-  /*
-   * route store 会把主导航组的 auth 覆盖到每个一级子路由，App.vue 又校验全部
-   * matched 记录，因此并集必须是子模块读取权限的超集，否则会出现菜单可见但
-   * 直达 URL 403。并集按四个模块数组展开组合，新增权限自动进入并集。
-   */
+test('管理员工作台由独立准入码收敛，业务读码不再放行', () => {
+  assert.equal(ADMIN_WORKBENCH_PERMISSION, 'workbench:admin')
+  // 并集门槛已退役：历史缺陷是四个子模块读取权限的并集当作准入门槛，
+  // 任何业务角色获得并集中的一条（如运营/财务的 exchange-rates:read）就能进入。
+  assert.doesNotMatch(routesSource, /ADMIN_WORKBENCH_PERMISSIONS/u)
   const workbenchSection = asyncRoutesSource.slice(
     asyncRoutesSource.indexOf('title: \'管理员工作台\''),
     asyncRoutesSource.indexOf('title: \'系统管理\''),
   )
   assert.match(
     workbenchSection,
-    /auth: \[\.\.\.ADMIN_WORKBENCH_PERMISSIONS\]/u,
+    /auth: \[ADMIN_WORKBENCH_PERMISSION\]/u,
+  )
+
+  // 四个子模块的读取码都不等于工作台准入：单条业务码不得放行管理员工作台。
+  for (const code of [
+    'regions:read',
+    'currencies:read',
+    'exchange-rates:read',
+    'numbering-rules:read',
+    'purchase-shipping-marks:read',
+    'dictionaries:read',
+    'products:read',
+    'products:create',
+    'users:read',
+    'roles:read',
+    'supplier-payment-profiles:read',
+  ]) {
+    assert.equal(
+      matchesAuthorization([code], ADMIN_WORKBENCH_PERMISSION),
+      false,
+      `${code} 不得放行管理员工作台`,
+    )
+  }
+  assert.equal(matchesAuthorization([], ADMIN_WORKBENCH_PERMISSION), false)
+  assert.equal(
+    matchesAuthorization([ADMIN_WORKBENCH_PERMISSION], ADMIN_WORKBENCH_PERMISSION),
+    true,
   )
 })
 
-test('管理员工作台主导航门槛覆盖四个子模块的全部叶子权限', () => {
-  const unionNames = [...(routesSource.match(
-    /const ADMIN_WORKBENCH_PERMISSIONS = \[([\s\S]*?)\]/u,
-  )?.[1] ?? '').matchAll(/\.\.\.([A-Z_]+)/gu)].map(match => match[1])
-  const permissionArrays: Record<string, readonly string[]> = {
-    ADMIN_USER_ROLE_READ_PERMISSIONS,
-    BASIC_DATA_READ_PERMISSIONS,
-    PRODUCT_MANAGEMENT_PERMISSIONS,
-    SUPPLIER_PAYMENT_PROFILE_PERMISSIONS,
-  }
-
-  assert.deepEqual(unionNames.sort(), [
-    'ADMIN_USER_ROLE_READ_PERMISSIONS',
-    'BASIC_DATA_READ_PERMISSIONS',
-    'PRODUCT_MANAGEMENT_PERMISSIONS',
-    'SUPPLIER_PAYMENT_PROFILE_PERMISSIONS',
-  ])
-
-  const union = unionNames.flatMap((name) => {
-    const codes = permissionArrays[name]
-    assert.ok(codes, `routes.ts 使用了未登记的权限数组 ${name}`)
-    return [...codes]
-  })
+test('管理员工作台每个叶子仍各自声明业务权限', () => {
   const leafAuths: Array<string | string[]> = []
   const collectLeafAuths = (route: { children?: unknown, meta?: { auth?: string | string[] } } | undefined): void => {
     if (!route) {
@@ -175,18 +157,30 @@ test('管理员工作台主导航门槛覆盖四个子模块的全部叶子权�
     collectLeafAuths(module)
   }
 
-  // 每个叶子至少要有一个读取权限落在并集内；缺项即“菜单可见但直达 URL 403”的根因。
+  // 准入码只决定工作台本身：叶子必须保留自己的业务码，否则只有准入码的身份
+  // 就能进入该模块的全部页面。
   for (const auth of leafAuths) {
     const values = Array.isArray(auth) ? auth : [auth]
     assert.ok(
-      values.some(code => code !== '' && union.includes(code)),
-      `管理员工作台并集缺少叶子权限 ${JSON.stringify(auth)}`,
+      values.some(code => code !== ''),
+      `管理员工作台叶子缺少业务权限：${JSON.stringify(auth)}`,
+    )
+    assert.ok(
+      values.every(code => code !== ADMIN_WORKBENCH_PERMISSION),
+      `叶子不得直接用工作台准入码当作页面权限：${JSON.stringify(auth)}`,
     )
   }
-  // 无任何管理权限的身份不得看到管理员工作台，单权限身份仍可进入。
-  assert.equal(matchesAuthorization([], union), false)
-  assert.equal(matchesAuthorization(['regions:read'], union), true)
-  assert.equal(matchesAuthorization(['supplier-payment-profiles:read'], union), true)
+  // 基础数据父级保持权限中立，菜单过滤交给叶子；准入由工作台准入码承担。
+  assert.equal(basicDataRoutes.meta?.auth, undefined)
+  assert.deepEqual(
+    productManagementRoutes.meta?.auth,
+    ['products:read', 'products:create', 'products:update'],
+  )
+  assert.deepEqual(userRolesRoutes.meta?.auth, ['users:read', 'roles:read'])
+  assert.deepEqual(
+    supplierPaymentProfilesRoute.meta?.auth,
+    ['supplier-payment-profiles:read'],
+  )
 })
 
 test('系统管理主导航始终注册独立应用配置页面且不受环境变量控制', () => {

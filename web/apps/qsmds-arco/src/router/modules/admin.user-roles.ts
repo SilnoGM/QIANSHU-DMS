@@ -7,8 +7,9 @@ function Layout() {
 /**
  * 用户与角色分组的读取权限并集。
  *
- * 管理员工作台的主导航组会把自身 auth 覆盖到每个一级子路由，App.vue 再校验全部
- * matched 记录，因此这里声明的集合同时是分组菜单的 any-of 门槛，必须覆盖全部叶子。
+ * 该数组只用于本分组的菜单过滤（any-of），必须覆盖组内全部叶子，否则叶子可见时
+ * 分组已被整体过滤；工作台准入由「管理员工作台」的独立准入码 `workbench:admin`
+ * 承担，不再与业务读码混用。
  */
 export const ADMIN_USER_ROLE_READ_PERMISSIONS = [
   'users:read',

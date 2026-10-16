@@ -986,6 +986,12 @@ test('真实 Chrome 覆盖地区管理查询、权限、写入、双标签失效
       'regions:update',
     ],
   )
+  // 受限身份要打开管理员工作台下的地区页，因此每组权限矩阵都附带工作台准入码；
+  // 业务读码不再放行该工作台（见《路由导航与状态管理》的工作台准入约束）。
+  const adminWorkbenchPermissionId = permissionCatalog.body
+    ?.find(permission => permission.code === 'workbench:admin')
+    ?.id
+  assert.equal(typeof adminWorkbenchPermissionId, 'string')
   const matrixRole = await page.evaluate(apiExpression('/api/roles', 'POST', {
     code: 'browser_region_matrix',
     description: 'Browser regions permission matrix',
@@ -1277,6 +1283,7 @@ test('真实 Chrome 覆盖地区管理查询、权限、写入、双标签失效
   await page.evaluate(patchPermissionsExpression([
     'regions:read',
     'regions:enable',
+    'workbench:admin',
   ]))
   await page.waitFor(`(() => {
     const row = [...document.querySelectorAll('tr')]
@@ -1349,7 +1356,11 @@ test('真实 Chrome 覆盖地区管理查询、权限、写入、双标签失效
     await runBrowserStep(
       `management permission matrix ${expectation.label}`,
       async () => {
-        await page.evaluate(patchPermissionsExpression(expectation.permissions))
+        // 管理员工作台由独立准入码收敛，动态撤权快照必须保留它才能停留在本页。
+        await page.evaluate(patchPermissionsExpression([
+          ...expectation.permissions,
+          'workbench:admin',
+        ]))
         await page.waitFor(`(() => {
           const marker = ${JSON.stringify(regionCode)}
           const row = [...document.querySelectorAll('tr')].find(candidate => (
@@ -1789,11 +1800,14 @@ test('真实 Chrome 覆盖地区管理查询、权限、写入、双标签失效
     }#${routePath}`
 
   const setMatrixPermissions = async (codes) => {
-    const permissionIds = codes.map((code) => {
-      const id = regionPermissionIdByCode[code]
-      assert.equal(typeof id, 'string')
-      return id
-    })
+    const permissionIds = [
+      ...codes.map((code) => {
+        const id = regionPermissionIdByCode[code]
+        assert.equal(typeof id, 'string')
+        return id
+      }),
+      adminWorkbenchPermissionId,
+    ]
     const response = await page.evaluate(apiExpression(
       `/api/roles/${encodeURIComponent(matrixRole.body.id)}/permissions`,
       'PUT',

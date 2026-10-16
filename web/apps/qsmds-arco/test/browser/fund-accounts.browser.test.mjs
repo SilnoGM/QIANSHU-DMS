@@ -35,10 +35,15 @@ const allFundPermissions = [
   'fund-accounts:create',
   'fund-accounts:manual-adjust',
   'fund-accounts:read',
+  // 本人账户读取与提款三条码同为 fund- 前缀：system_admin 持有全量目录；
+  // 财务侧全量账户视图的门槛仍是 fund-accounts:read。
+  'fund-accounts:read-self',
   'fund-accounts:update-share-rate',
   'fund-business-sources:manage',
   'fund-posting-types:manage',
   'fund-transactions:reverse',
+  'fund-withdrawals:create',
+  'fund-withdrawals:review',
 ]
 
 function readLimitedPassword(environment) {

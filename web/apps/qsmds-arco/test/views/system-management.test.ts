@@ -305,6 +305,7 @@ test('权限目录以中文展示现有业务资源', () => {
     'slh-bills',
     'supplier-payment-profiles',
     'users',
+    'workbench',
   ])
   assert.equal(permissionResourceLabel('container-batches'), '柜次管理')
   assert.equal(permissionResourceLabel('currencies'), '货币管理')
@@ -326,6 +327,7 @@ test('权限目录以中文展示现有业务资源', () => {
   assert.equal(permissionResourceLabel('sales-receipts'), '销售收款')
   assert.equal(permissionResourceLabel('slh-bills'), '顺联航账单')
   assert.equal(permissionResourceLabel('supplier-payment-profiles'), '供应商收款配置')
+  assert.equal(permissionResourceLabel('workbench'), '工作台准入')
 })
 
 test('系统管理页面按现有业务能力配置通用表格操作列与分页', () => {

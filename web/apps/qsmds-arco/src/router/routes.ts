@@ -2,9 +2,9 @@ import type { RouteRecordMainRaw } from '@fantastic-admin/types'
 import type { RouteRecordRaw } from 'vue-router'
 import { $t } from '@/locales'
 import pinia from '@/store'
-import UserRoles, { ADMIN_USER_ROLE_READ_PERMISSIONS } from './modules/admin.user-roles'
+import UserRoles from './modules/admin.user-roles'
 import ApplicationSettings from './modules/application.settings'
-import BasicData, { BASIC_DATA_READ_PERMISSIONS } from './modules/basic.data'
+import BasicData from './modules/basic.data'
 import ComponentLibraryRoutes, {
   createRegionSelectorBrowserE2eRoutes,
   shouldEnableComponentLibrary,
@@ -12,30 +12,15 @@ import ComponentLibraryRoutes, {
 import { financeLegacyRedirects } from './modules/finance-legacy-redirects'
 import { managementLegacyRedirects } from './modules/management-legacy-redirects'
 import OperationsWorkbenchRoutes from './modules/operations.workbench'
-import ProductManagement, {
-  PRODUCT_MANAGEMENT_PERMISSIONS,
-} from './modules/product.management'
+import ProductManagement from './modules/product.management'
 import { financeWorkbench, purchaseTransportWorkbench } from './modules/role.workbenches'
-import SupplierPaymentProfiles, { SUPPLIER_PAYMENT_PROFILE_PERMISSIONS } from './modules/supplier.payment.profiles'
+import SupplierPaymentProfiles from './modules/supplier.payment.profiles'
 import SystemAudit from './modules/system.audit'
 import {
+  ADMIN_WORKBENCH_PERMISSION,
   OPERATIONS_WORKBENCH_PERMISSION,
   SYSTEM_MANAGEMENT_PERMISSION,
 } from './modules/workbench-access'
-
-/**
- * 管理员工作台主导航的 any-of 门槛，由四个子模块的读取权限并集构成。
- *
- * route store 会把这个数组覆盖到每个一级子路由，App.vue 又校验全部 matched
- * 记录，因此并集必须覆盖子模块的全部需求：漏项会让对应角色菜单可见但页面 403，
- * 或整个管理员工作台主导航被过滤。新增子模块权限时同步扩展此数组即可。
- */
-const ADMIN_WORKBENCH_PERMISSIONS = [
-  ...BASIC_DATA_READ_PERMISSIONS,
-  ...PRODUCT_MANAGEMENT_PERMISSIONS,
-  ...ADMIN_USER_ROLE_READ_PERMISSIONS,
-  ...SUPPLIER_PAYMENT_PROFILE_PERMISSIONS,
-]
 
 // 固定路由（默认路由）
 const constantRoutes: RouteRecordRaw[] = [
@@ -121,7 +106,7 @@ const asyncRoutes: RouteRecordMainRaw[] = [
     meta: {
       title: '管理员工作台',
       icon: 'qs-workbench-admin',
-      auth: [...ADMIN_WORKBENCH_PERMISSIONS],
+      auth: [ADMIN_WORKBENCH_PERMISSION],
     },
     children: [
       BasicData,

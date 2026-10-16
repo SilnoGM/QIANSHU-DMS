@@ -90,6 +90,7 @@ const MANAGEMENT_PERMISSION_CODES = [
   'users:read',
   'users:reset-password',
   'users:update',
+  'workbench:admin',
   'workbench:finance',
   'workbench:operations',
   'workbench:purchase-transport',

@@ -31,6 +31,7 @@ const RESOURCE_LABELS: Readonly<Record<string, string>> = {
   'slh-bills': '顺联航账单',
   'supplier-payment-profiles': '供应商收款配置',
   'users': '用户管理',
+  'workbench': '工作台准入',
 }
 
 function compareText(left: string, right: string): number {

@@ -155,12 +155,17 @@ export const PERSONAL_FUND_PERMISSION_CODES = [
  * 业务域权限码会在工作台之间共享（`purchase-orders:payment`、`purchase-orders:read`
  * 同时服务运营、财务与采运工作台），用它做分组门槛会让一个角色看到多个工作台。
  * 准入码与业务域权限解耦：分组门槛只声明准入码，组内页面仍按业务码收敛。
- * 由 `20261001190000_workbench_access_permissions` 建入并授予内置 `system_admin`，
+ *
+ * 前三条由 `20261001180000_workbench_access_permissions` 建入；管理员工作台曾用
+ * 「四个子模块读取权限的并集」做门槛，导致持有 `exchange-rates:read` 的运营与财务
+ * 也看到并进入该工作台，因此 `workbench:admin` 由 `20261016140000_workbench_admin_permission`
+ * 单独建入，管理员工作台收敛到这一条准入码。四条都授予内置 `system_admin`，
  * 普通角色由角色权限管理自行勾选。
  */
 export const WORKBENCH_ACCESS_PERMISSION_CODES = [
-  'workbench:operations',
+  'workbench:admin',
   'workbench:finance',
+  'workbench:operations',
   'workbench:purchase-transport',
 ] as const
 

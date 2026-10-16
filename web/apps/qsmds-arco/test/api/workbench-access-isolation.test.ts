@@ -5,11 +5,16 @@ import test from 'node:test'
 import { createRouterMatcher } from 'vue-router'
 
 import { matchesAuthorization } from '../../src/composables/app/auth'
+import UserRoles from '../../src/router/modules/admin.user-roles'
 import ApplicationSettings from '../../src/router/modules/application.settings'
+import BasicData from '../../src/router/modules/basic.data'
 import operationsWorkbenchRoutes from '../../src/router/modules/operations.workbench'
+import ProductManagement from '../../src/router/modules/product.management'
 import { financeWorkbench, purchaseTransportWorkbench } from '../../src/router/modules/role.workbenches'
+import SupplierPaymentProfiles from '../../src/router/modules/supplier.payment.profiles'
 import SystemAudit from '../../src/router/modules/system.audit'
 import {
+  ADMIN_WORKBENCH_PERMISSION,
   FINANCE_WORKBENCH_PERMISSION,
   OPERATIONS_WORKBENCH_PERMISSION,
   PURCHASE_TRANSPORT_WORKBENCH_PERMISSION,
@@ -28,7 +33,7 @@ const workbenchesSource = readFileSync(
 )
 
 /**
- * 与 routes.ts 的 asyncRoutes 同形：运营与系统管理分组在 routes.ts 内联装配，
+ * 与 routes.ts 的 asyncRoutes 同形：运营、管理员与系统管理分组在 routes.ts 内联装配，
  * 这里用同一份子路由数组与同一个准入常量复刻，并由「routes.ts 装配」用例锁住源码。
  */
 const operationsWorkbench = {
@@ -37,6 +42,13 @@ const operationsWorkbench = {
     auth: [OPERATIONS_WORKBENCH_PERMISSION],
   },
   children: [...operationsWorkbenchRoutes],
+}
+const adminWorkbench = {
+  meta: {
+    title: '管理员工作台',
+    auth: [ADMIN_WORKBENCH_PERMISSION],
+  },
+  children: [BasicData, ProductManagement, UserRoles, SupplierPaymentProfiles],
 }
 const systemManagement = {
   meta: {
@@ -50,6 +62,7 @@ const routesRaw = [
   operationsWorkbench,
   financeWorkbench,
   purchaseTransportWorkbench,
+  adminWorkbench,
   systemManagement,
 ]
 
@@ -250,6 +263,69 @@ test('系统管理只对管理员权限（audit:read，系统专用）开放', (
   assert.equal(canEnter([], '/system/application-settings'), false)
 })
 
+test('管理员工作台只对管理员准入码开放，业务读码不再放行', () => {
+  // 历史缺陷：管理员工作台曾用四个子模块读取权限的并集做门槛，任何业务角色
+  // 一旦获得其中一条（例如运营/财务的 exchange-rates:read）就会看到并进入该工作台。
+  for (const permissions of [
+    rolePermissions.operations_staff,
+    rolePermissions.finance_staff,
+    rolePermissions.purchasing_staff,
+    ['exchange-rates:read'],
+    ['regions:read', 'products:read', 'users:read', 'supplier-payment-profiles:read'],
+    [],
+  ]) {
+    assert.deepEqual(
+      visibleMainRouteTitles(permissions).includes('管理员工作台'),
+      false,
+      `业务码不得放行管理员工作台：${permissions.join(',') || '无权限'}`,
+    )
+  }
+  // 准入码是必要条件而不是充分条件：只持有它时四个子模块都不可见，主导航不显示；
+  // 与任一子模块读取码组合后才同时出现工作台与对应模块。
+  assert.deepEqual(visibleMainRouteTitles([ADMIN_WORKBENCH_PERMISSION]), [])
+  assert.deepEqual(
+    visibleMainRouteTitles([ADMIN_WORKBENCH_PERMISSION, 'regions:read']),
+    ['管理员工作台'],
+  )
+  assert.deepEqual(
+    visibleMainRouteTitles([ADMIN_WORKBENCH_PERMISSION, 'users:read']),
+    ['管理员工作台'],
+  )
+  assert.deepEqual(visibleMainRouteTitles(['regions:read']), [])
+
+  // 准入码只决定工作台本身，具体页面仍要各自的业务码。
+  for (const path of [
+    '/admin/basic-data/currencies',
+    '/admin/basic-data/exchange-rates',
+    '/admin/products/list',
+    '/admin/users',
+  ]) {
+    assert.equal(canEnter([ADMIN_WORKBENCH_PERMISSION], path), false, `仅有准入码不得进入 ${path}`)
+  }
+  for (const path of [
+    '/admin/basic-data/currencies',
+    '/admin/basic-data/exchange-rates',
+    '/admin/products/list',
+    '/admin/users',
+  ]) {
+    for (const [label, permissions] of [
+      ['运营', rolePermissions.operations_staff],
+      ['财务', rolePermissions.finance_staff],
+      ['采运', rolePermissions.purchasing_staff],
+    ] as const) {
+      assert.equal(canEnter(permissions, path), false, `${label}角色不应进入 ${path}`)
+    }
+  }
+  assert.equal(
+    canEnter([ADMIN_WORKBENCH_PERMISSION, 'exchange-rates:read'], '/admin/basic-data/exchange-rates'),
+    true,
+  )
+  assert.equal(
+    canEnter([ADMIN_WORKBENCH_PERMISSION, 'currencies:read'], '/admin/basic-data/currencies'),
+    true,
+  )
+})
+
 test('routes.ts 与 role.workbenches.ts 按准入常量装配分组门槛', () => {
   assert.match(routesSource, /from '\.\/modules\/workbench-access'/u)
   assert.match(
@@ -262,8 +338,10 @@ test('routes.ts 与 role.workbenches.ts 按准入常量装配分组门槛', () =
   )
   assert.match(
     routesSource,
-    /title: '管理员工作台'[\s\S]{0,200}?auth: \[\.\.\.ADMIN_WORKBENCH_PERMISSIONS\]/u,
+    /title: '管理员工作台'[\s\S]{0,200}?auth: \[ADMIN_WORKBENCH_PERMISSION\]/u,
   )
+  // 并集门槛已退役：五个主导航分组都只声明独立准入码，业务码不再参与工作台准入。
+  assert.doesNotMatch(routesSource, /ADMIN_WORKBENCH_PERMISSIONS/u)
   assert.match(
     workbenchesSource,
     /auth: \[FINANCE_WORKBENCH_PERMISSION\]/u,
