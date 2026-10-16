@@ -1,5 +1,41 @@
 [
   {
+    "name": "qs-invoices",
+    "label": "发票管理",
+    "category": "财务",
+    "usages": [
+      "运营工作台发票管理分组 / 财务工作台发票管理分组"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-invoice-request",
+    "label": "开票申请",
+    "category": "财务",
+    "usages": [
+      "开票申请表单页"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-invoice-records",
+    "label": "开票记录",
+    "category": "财务",
+    "usages": [
+      "开票记录列表页"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-invoice-approval",
+    "label": "开票审批",
+    "category": "财务",
+    "usages": [
+      "开票审批页"
+    ],
+    "source": "brand"
+  },
+  {
     "name": "qs-workbench-operations",
     "label": "运营工作台",
     "category": "工作台",
@@ -1117,6 +1153,7 @@
       "apps/qsmds-arco/src/views/system/basic-data/numbering/shipping-mark-bindings.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/batch-payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-page.vue",
@@ -1360,6 +1397,15 @@
     ]
   },
   {
+    "name": "i-lucide:camera",
+    "label": "i-lucide:camera",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue"
+    ]
+  },
+  {
     "name": "i-lucide:check",
     "label": "i-lucide:check",
     "category": "通用图标",
@@ -1523,7 +1569,10 @@
       "apps/qsmds-arco/src/views/system/users/password-reset-modal.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
       "apps/qsmds-arco/src/views/system/users/status-change-modal.vue",
-      "apps/qsmds-arco/src/views/system/users/user-form-modal.vue"
+      "apps/qsmds-arco/src/views/system/users/user-form-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue"
     ]
   },
   {
@@ -1653,6 +1702,7 @@
     "usages": [
       "apps/qsmds-arco/src/components/base/QsToast/config.ts",
       "apps/qsmds-arco/src/views/component_library/basic/components/QsToastShowcase.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-reviews/cancellation-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-reviews/index.vue"
     ]
@@ -1665,9 +1715,19 @@
     "usages": [
       "apps/qsmds-arco/src/views/component_library/business/components/GenericDrawerShowcase.vue",
       "apps/qsmds-arco/src/views/component_library/business/components/GenericTableShowcase.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-reviews/index.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-bill-select-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:clipboard-copy",
+    "label": "i-lucide:clipboard-copy",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue"
     ]
   },
   {
@@ -1679,6 +1739,7 @@
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/packaging-history-modal.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-form.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-form.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/order-receipt-requests.vue",
@@ -1875,6 +1936,8 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/index.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/records/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-reviews/index.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/index.vue",
@@ -1982,6 +2045,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-record-list.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/create.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-info.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-voucher.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/records-modal.logic.ts"
     ]
@@ -2128,6 +2192,7 @@
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-detail.logic.ts",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/records-modal.vue"
     ]
@@ -2140,7 +2205,8 @@
     "usages": [
       "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue",
       "apps/qsmds-arco/src/components/business/QsPartConfigurator/PartProductSummary.vue",
-      "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue"
+      "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue"
     ]
   },
   {
@@ -2180,6 +2246,7 @@
     "usages": [
       "apps/qsmds-arco/src/components/business/QsPaymentRecipientEditor/QrImageUpload.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-image.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-voucher-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-voucher-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-voucher.vue"
@@ -2241,6 +2308,8 @@
       "apps/qsmds-arco/src/views/admin/supplier-payment-profiles/index.vue",
       "apps/qsmds-arco/src/views/admin/supplier-payment-profiles/packaging-payment-profile.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-payment-recipients.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/settle-modal.logic.ts"
     ]
   },
@@ -2359,7 +2428,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue"
+      "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue"
     ]
   },
   {
@@ -2747,6 +2817,15 @@
     ]
   },
   {
+    "name": "i-lucide:pencil-line",
+    "label": "i-lucide:pencil-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/invoices/records/index.vue"
+    ]
+  },
+  {
     "name": "i-lucide:percent",
     "label": "i-lucide:percent",
     "category": "通用图标",
@@ -2848,6 +2927,8 @@
       "apps/qsmds-arco/src/views/component_library/business/sales-order-desc.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-detail.logic.ts",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/records/index.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/settle-modal.logic.ts"
     ]
@@ -2897,6 +2978,8 @@
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
       "apps/qsmds-arco/src/views/system/roles/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-form.vue",
@@ -3061,7 +3144,8 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-panel.vue",
-      "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue"
+      "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue"
     ]
   },
   {
@@ -3099,6 +3183,8 @@
       "apps/qsmds-arco/src/views/system/basic-data/regions/index.vue",
       "apps/qsmds-arco/src/views/system/users/index.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/records/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/batch-payment-page.vue",
@@ -3244,6 +3330,15 @@
     ]
   },
   {
+    "name": "i-lucide:stamp",
+    "label": "i-lucide:stamp",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue"
+    ]
+  },
+  {
     "name": "i-lucide:star",
     "label": "i-lucide:star",
     "category": "通用图标",
@@ -3311,6 +3406,8 @@
       "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-video-board.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-voucher-upload.vue"
     ]
   },
@@ -3378,6 +3475,7 @@
       "apps/qsmds-arco/src/views/component_library/business/factory-shipment-modal.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list.logic.ts",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-info.vue",
       "apps/qsmds-arco/src/views/workbenches/shipments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/shipments/shipment-detail-drawer.vue"
     ]
@@ -3397,6 +3495,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
     ]
   },

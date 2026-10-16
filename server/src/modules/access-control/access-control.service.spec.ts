@@ -107,11 +107,19 @@ describe('permission constants', () => {
       'slh-bills:create',
       'slh-bills:read',
       'slh-bills:reconcile',
+      'invoice-requests:cancel',
+      'invoice-requests:create',
+      'invoice-requests:document',
+      'invoice-requests:read',
+      'invoice-requests:read-all',
+      'invoice-requests:return',
+      'invoice-requests:review',
+      'invoice-requests:settle',
       'workbench:operations',
       'workbench:finance',
       'workbench:purchase-transport',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 79)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 87)
   })
 })
 

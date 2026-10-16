@@ -149,6 +149,14 @@ enum AuditEventType {
   PURCHASE_ORDER_DOCUMENT_DETACHED
   /// 完成批次因代收超收被退回、相关行重置为未核对的审计事件。追加在末尾与数据库枚举顺序一致。
   SLH_RECONCILIATION_BATCH_COMPLETION_REJECTED
+  /// 开票申请与审批的七个动作事件。追加在末尾与数据库枚举顺序一致。
+  INVOICE_REQUEST_CREATED
+  INVOICE_REQUEST_RESUBMITTED
+  INVOICE_REQUEST_RETURNED
+  INVOICE_REQUEST_NOTIFIED
+  INVOICE_REQUEST_DOCUMENT_UPLOADED
+  INVOICE_REQUEST_SETTLED
+  INVOICE_REQUEST_CANCELLED
 
   @@map("audit_event_type")
 }
@@ -522,6 +530,13 @@ model User {
   reconciliationBatchesCompleted SlhReconciliationBatch[] @relation("SlhReconciliationBatchCompletedBy")
   reconciliationBatchLinesReconciled SlhReconciliationBatchLine[] @relation("SlhReconciliationBatchLineReconciledBy")
   reconciliationSettlementsCreated SlhReconciliationSettlement[] @relation("SlhReconciliationSettlementCreatedBy")
+  invoiceRequestsCreated InvoiceRequest[] @relation("InvoiceRequestCreatedBy")
+  invoiceRequestsNotified InvoiceRequest[] @relation("InvoiceRequestNotifiedBy")
+  invoiceRequestsReturned InvoiceRequest[] @relation("InvoiceRequestReturnedBy")
+  invoiceRequestsDocumentUploaded InvoiceRequest[] @relation("InvoiceRequestDocumentUploadedBy")
+  invoiceRequestsSettled InvoiceRequest[] @relation("InvoiceRequestSettledBy")
+  invoiceRequestsCancelled InvoiceRequest[] @relation("InvoiceRequestCancelledBy")
+  invoiceRequestStatusHistoryRecorded InvoiceRequestStatusHistory[] @relation("InvoiceRequestStatusHistoryActor")
   containerLoadingItemsCreated ContainerLoadingItem[] @relation("ContainerLoadingItemCreatedBy")
   containerLoadingItemsUpdated ContainerLoadingItem[] @relation("ContainerLoadingItemUpdatedBy")
 
@@ -773,6 +788,7 @@ model ExchangeRate {
 
   salesOrderPayments SalesOrderPayment[]
   slhBills SlhBill[]
+  invoiceRequests InvoiceRequest[]
   currency Currency @relation(fields: [currencyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([updatedAt(sort: Desc), id(sort: Desc)], map: "exchange_rates_updated_at_id_idx")
@@ -909,6 +925,7 @@ model MediaAsset {
   purchaseOrderDocuments PurchaseOrderDocument[]
   purchaseOrderImageDraft PurchaseOrderImageDraft?
   slhBillSourceFiles  SlhBill[]
+  invoiceRequestDocuments InvoiceRequest[]
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
   @@index([status, retentionUntil, id], map: "media_assets_status_retention_until_id_idx")
@@ -1573,6 +1590,7 @@ model NumberingIssuance {
   containerBatch ContainerBatch?
   slhBill SlhBill?
   reconciliationBatch SlhReconciliationBatch?
+  invoiceRequest InvoiceRequest?
 
   id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   ruleId                 String   @map("rule_id") @db.Uuid
@@ -1728,6 +1746,7 @@ model FundBusinessSourcePostingType {
 model FundPostingBatch {
   purchasePayment PurchaseOrderPayment? @relation("PurchasePaymentPostingBatch")
   purchaseVoidedPayment PurchaseOrderPayment? @relation("PurchasePaymentReversalBatch")
+  invoiceRequest InvoiceRequest? @relation("InvoiceRequestSettlementBatch")
   id                         String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   batchNo                    String               @unique(map: "fund_posting_batches_batch_no_key") @map("batch_no") @db.VarChar(64)
   kind                       FundPostingBatchKind
@@ -2330,4 +2349,135 @@ model SlhReconciliationSettlement {
   @@index([purchaseOrderId], map: "slh_reconciliation_settlements_purchase_order_idx")
   @@index([createdById, createdAt(sort: Desc)], map: "slh_reconciliation_settlements_actor_created_idx")
   @@map("slh_reconciliation_settlements")
+}
+
+/// 开票申请单状态：SETTLED 与 CANCELLED 是终态，终态后整单不可变。
+/// 状态只能按迁移里的触发器白名单单向流转（退回、取消是仅有的两条逆向边）。
+enum InvoiceRequestStatus {
+  PENDING_REVIEW
+  RETURNED
+  NOTIFIED
+  ISSUED
+  SETTLED
+  CANCELLED
+
+  @@map("invoice_request_status")
+}
+
+/// 开票申请单的动作：每次状态流转写一条状态历史，退回与取消必须带原因。
+enum InvoiceRequestAction {
+  SUBMIT
+  RESUBMIT
+  RETURN
+  NOTIFY
+  UPLOAD_DOCUMENT
+  SETTLE
+  CANCEL
+
+  @@map("invoice_request_action")
+}
+
+/// 开票申请单：运营提交 → 财务审核并通知 → 上传发票照片 → 结算入账。
+///
+/// 生命周期由迁移里的触发器封闭：不可删除；状态只能按白名单单向流转；每一步只允许写各自的列，
+/// 只有 RETURNED → PENDING_REVIEW（退回重填）允许修改业务字段与明细行。
+/// 申请日期即 created_at；last_submitted_at 在重新提交时刷新，created_at 不动。
+/// 台币金额一律整数元（票面即整数）；settle_amount_cny 是人民币入账成本，2 位小数。
+/// 发票字号（字轨号码）不记录，票面证据只有一张照片。
+model InvoiceRequest {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceNo String @map("invoice_no") @unique(map: "invoice_requests_number_key") @db.VarChar(64)
+  numberingIssuanceId String @map("numbering_issuance_id") @unique(map: "invoice_requests_issuance_key") @db.Uuid
+  status InvoiceRequestStatus @default(PENDING_REVIEW)
+  buyerName String @map("buyer_name") @db.VarChar(200)
+  buyerTaxId String @map("buyer_tax_id") @db.VarChar(8)
+  salesAmount BigInt @map("sales_amount") @db.BigInt
+  taxAmount BigInt @map("tax_amount") @db.BigInt
+  totalAmount BigInt @map("total_amount") @db.BigInt
+  invoiceRemark String? @map("invoice_remark") @db.VarChar(500)
+  internalRemark String? @map("internal_remark") @db.VarChar(500)
+  recipientName String @map("recipient_name") @db.Text
+  recipientPhone String @map("recipient_phone") @db.Text
+  recipientAddress String @map("recipient_address") @db.Text
+  lastSubmittedAt DateTime @map("last_submitted_at") @db.Timestamptz(6)
+  notifiedAt DateTime? @map("notified_at") @db.Timestamptz(6)
+  notifiedByUserId String? @map("notified_by_user_id") @db.Uuid
+  returnedAt DateTime? @map("returned_at") @db.Timestamptz(6)
+  returnedByUserId String? @map("returned_by_user_id") @db.Uuid
+  documentMediaAssetId String? @map("document_media_asset_id") @unique(map: "invoice_requests_document_asset_key") @db.Uuid
+  documentUploadedAt DateTime? @map("document_uploaded_at") @db.Timestamptz(6)
+  documentUploadedByUserId String? @map("document_uploaded_by_user_id") @db.Uuid
+  settledAt DateTime? @map("settled_at") @db.Timestamptz(6)
+  settledByUserId String? @map("settled_by_user_id") @db.Uuid
+  settleAmountCny Decimal? @map("settle_amount_cny") @db.Decimal(30, 2)
+  exchangeRateId String? @map("exchange_rate_id") @db.Uuid
+  exchangeRateVersionSnapshot Int? @map("exchange_rate_version_snapshot")
+  foreignUnitsPerCnySnapshot Decimal? @map("foreign_units_per_cny_snapshot") @db.Decimal(30, 12)
+  rateCapturedAt DateTime? @map("rate_captured_at") @db.Timestamptz(6)
+  fundPostingBatchId String? @unique(map: "invoice_requests_posting_batch_key") @map("fund_posting_batch_id") @db.Uuid
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelledByUserId String? @map("cancelled_by_user_id") @db.Uuid
+  cancelReason String? @map("cancel_reason") @db.VarChar(500)
+  requestKeyHash Bytes @map("request_key_hash") @db.ByteA
+  version Int @default(1)
+  createdById String @map("created_by_id") @db.Uuid
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @map("updated_at") @default(now()) @updatedAt @db.Timestamptz(6)
+
+  numberingIssuance NumberingIssuance @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  documentMediaAsset MediaAsset? @relation(fields: [documentMediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fundPostingBatch FundPostingBatch? @relation("InvoiceRequestSettlementBatch", fields: [fundPostingBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  exchangeRate ExchangeRate? @relation(fields: [exchangeRateId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy User @relation("InvoiceRequestCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  notifiedBy User? @relation("InvoiceRequestNotifiedBy", fields: [notifiedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  returnedBy User? @relation("InvoiceRequestReturnedBy", fields: [returnedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  documentUploadedBy User? @relation("InvoiceRequestDocumentUploadedBy", fields: [documentUploadedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  settledBy User? @relation("InvoiceRequestSettledBy", fields: [settledByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cancelledBy User? @relation("InvoiceRequestCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  lines InvoiceRequestLine[]
+  statusHistory InvoiceRequestStatusHistory[]
+
+  @@unique([createdById, requestKeyHash], map: "invoice_requests_actor_request_key")
+  @@index([createdById, createdAt(sort: Desc), id(sort: Desc)], map: "invoice_requests_creator_created_idx")
+  @@index([status, createdAt(sort: Desc), id(sort: Desc)], map: "invoice_requests_status_created_idx")
+  @@index([buyerTaxId, totalAmount], map: "invoice_requests_duplicate_key_idx")
+  @@map("invoice_requests")
+}
+
+/// 开票申请明细行：1–5 行，金额 = 数量 × 单价（行内勾稽由迁移里的 CHECK 保证）。
+/// 可变性由父单状态决定：只有父单处于 RETURNED（退回重填）时才能改行。
+model InvoiceRequestLine {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId String @map("request_id") @db.Uuid
+  lineNo Int @map("line_no")
+  productName String @map("product_name") @db.VarChar(200)
+  quantity Int
+  unitPrice BigInt @map("unit_price") @db.BigInt
+  amount BigInt
+  createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @map("updated_at") @default(now()) @updatedAt @db.Timestamptz(6)
+
+  request InvoiceRequest @relation(fields: [requestId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([requestId, lineNo], map: "invoice_request_lines_request_line_key")
+  @@map("invoice_request_lines")
+}
+
+/// 开票申请单状态历史：追加式留痕，UPDATE / DELETE 被触发器拒绝。
+/// 取消时所处的状态由 from_status 表达；SUBMIT 是首条，from_status 为空。
+model InvoiceRequestStatusHistory {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId String @map("request_id") @db.Uuid
+  action InvoiceRequestAction
+  fromStatus InvoiceRequestStatus? @map("from_status")
+  toStatus InvoiceRequestStatus @map("to_status")
+  reason String? @db.VarChar(500)
+  actorUserId String @map("actor_user_id") @db.Uuid
+  occurredAt DateTime @map("occurred_at") @default(now()) @db.Timestamptz(6)
+
+  request InvoiceRequest @relation(fields: [requestId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  actor User @relation("InvoiceRequestStatusHistoryActor", fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([requestId, occurredAt, id], map: "invoice_request_status_history_request_occurred_idx")
+  @@map("invoice_request_status_history")
 }

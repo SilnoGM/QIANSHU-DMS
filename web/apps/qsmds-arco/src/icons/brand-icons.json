@@ -1,5 +1,37 @@
 [
   {
+    "name": "qs-invoices",
+    "label": "发票管理",
+    "category": "财务",
+    "usages": [
+      "运营工作台发票管理分组 / 财务工作台发票管理分组"
+    ]
+  },
+  {
+    "name": "qs-invoice-request",
+    "label": "开票申请",
+    "category": "财务",
+    "usages": [
+      "开票申请表单页"
+    ]
+  },
+  {
+    "name": "qs-invoice-records",
+    "label": "开票记录",
+    "category": "财务",
+    "usages": [
+      "开票记录列表页"
+    ]
+  },
+  {
+    "name": "qs-invoice-approval",
+    "label": "开票审批",
+    "category": "财务",
+    "usages": [
+      "开票审批页"
+    ]
+  },
+  {
     "name": "qs-workbench-operations",
     "label": "运营工作台",
     "category": "工作台",

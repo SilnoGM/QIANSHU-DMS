@@ -11,7 +11,9 @@
     "billReconciliation": "Bill Reconciliation",
     "slhBillManagement": "Shunlianhang Bill Management",
     "slhBillReconciliation": "Shunlianhang Bill Reconciliation",
-    "slhBillReconciliationDetail": "Shunlianhang Bill Reconciliation Detail"
+    "slhBillReconciliationDetail": "Shunlianhang Bill Reconciliation Detail",
+    "invoiceManagement": "Invoice management",
+    "invoiceApproval": "Invoice approval"
   },
   "slhBill": {
     "archive": {

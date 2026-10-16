@@ -78,6 +78,11 @@ import {
   SLH_BILL_SETTLEMENT_POSTING_TYPE,
 } from './fund-bill-settlement'
 import {
+  INVOICE_REQUEST_FUND_SOURCE,
+  INVOICE_REQUEST_POSTING_TYPE,
+  INVOICE_REQUEST_SETTLE_CONSUMER,
+} from './fund-invoice-request'
+import {
   isFundIdempotencyUniqueViolation,
   mapFundPersistenceError,
 } from './fund-persistence-error.mapper'
@@ -123,6 +128,8 @@ const CONTROLLED_POSTING_TYPE_BY_SOURCE_CONSUMER: Readonly<Record<string, string
     SLH_BILL_SETTLEMENT_POSTING_TYPE,
   [`${SLH_BILL_FINANCE_SETTLEMENT_SOURCE}/${SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER}`]:
     SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE,
+  [`${INVOICE_REQUEST_FUND_SOURCE}/${INVOICE_REQUEST_SETTLE_CONSUMER}`]:
+    INVOICE_REQUEST_POSTING_TYPE,
 })
 
 interface PlannedLedgerEntry {
@@ -480,7 +487,7 @@ export class FundPostingApplicationService extends FundPostingService {
   ): Promise<FundPostingResult> {
     const request = normalizePostBusinessEventRequest(rawContext, rawInput)
     // 受控业务必须与业务状态共用事务，不能独立动账后再补写状态。
-    if ([SALES_RECEIPT_SOURCE_CODE, PACKAGING_COST_SOURCE_CODE, PURCHASE_PAYMENT_FUND_SOURCE].includes(request.context.sourceCode)) {
+    if ([SALES_RECEIPT_SOURCE_CODE, PACKAGING_COST_SOURCE_CODE, PURCHASE_PAYMENT_FUND_SOURCE, INVOICE_REQUEST_FUND_SOURCE].includes(request.context.sourceCode)) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     try {
@@ -511,7 +518,10 @@ export class FundPostingApplicationService extends FundPostingService {
     // 顺联航账单对账：完成批次时逐笔入账，结算与金流费用是两个独立 consumer（都不支持反向）。
     const billSettlement = action === 'POST' && context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_SOURCE
       && [SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER, SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER].includes(context.consumerCode)
-    if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement) {
+    // 开票申请结算：只有一个动作（服务费与邮寄费合成一笔成本），不支持反向。
+    const invoiceSettlement = action === 'POST' && context.sourceCode === INVOICE_REQUEST_FUND_SOURCE
+      && context.consumerCode === INVOICE_REQUEST_SETTLE_CONSUMER
+    if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement && !invoiceSettlement) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     return normalizeFundAccountCommandContext({
@@ -1155,6 +1165,17 @@ export class FundPostingApplicationService extends FundPostingService {
           || !postingType.requiresUser
           || plan.entries.some(entry => entry.direction !== (businessAmountMinor > 0n ? 'CREDIT' : 'DEBIT'))
       if (invalid) throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
+    }
+    // 开票申请结算语义固定：归属人的成本支出，必须大于 0 且只出账；
+    // 规则可被管理员调整，但不能改成收入、仅公司业务或反向。
+    if (request.context.sourceCode === INVOICE_REQUEST_FUND_SOURCE && (
+      postingType.businessCategory !== 'COST'
+      || !postingType.requiresUser
+      || !postingType.ruleVersion.legs.some(leg => leg.accountTarget === 'USER')
+      || parseFundAmountMinor(plan.businessAmount) <= 0n
+      || plan.entries.some(entry => entry.direction !== 'DEBIT')
+    )) {
+      throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
     }
     return { source, postingType, targetAccounts, plan, userShareRate }
   }

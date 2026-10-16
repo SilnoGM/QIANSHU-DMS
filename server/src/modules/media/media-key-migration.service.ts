@@ -25,6 +25,7 @@ const MAXIMUM_APPLY_BATCH_SIZE = 5_000
 
 /** `uploadPurpose` 与业务池的映射（规则 10）：只有列表里的用途能定池，其余一律 misc。 */
 const UPLOAD_PURPOSE_POOLS: Readonly<Record<string, MediaStoragePool>> = Object.freeze({
+  INVOICE_REQUEST_DOCUMENT: 'invoice',
   OCEAN_FREIGHT_SOURCE_XLSX: 'container',
   PACKAGING_PAYMENT_VOUCHER: 'voucher',
   PAYMENT_RECIPIENT_QR: 'payment-recipient',
@@ -41,6 +42,7 @@ const UPLOAD_PURPOSE_POOLS: Readonly<Record<string, MediaStoragePool>> = Object.
 export interface MediaKeyPoolFacts {
   readonly billSourceFile: boolean
   readonly containerSourceFile: boolean
+  readonly invoiceRequestDocument: boolean
   readonly packagingImage: boolean
   readonly packagingPaymentVoucher: boolean
   readonly paymentRecipientQr: boolean
@@ -162,6 +164,7 @@ export function resolveMediaStoragePool(facts: MediaKeyPoolFacts): MediaStorageP
   if (facts.paymentRecipientQr) return 'payment-recipient'
   if (facts.containerSourceFile) return 'container'
   if (facts.billSourceFile) return 'bill'
+  if (facts.invoiceRequestDocument) return 'invoice'
   return facts.uploadPurpose === null
     ? 'misc'
     : UPLOAD_PURPOSE_POOLS[facts.uploadPurpose] ?? 'misc'
@@ -256,7 +259,11 @@ function buildScanQuery(cursor: string | null, limit: number): Prisma.Sql {
       EXISTS (
         SELECT 1 FROM "slh_bills" AS "reference"
         WHERE "reference"."source_file_id" = "batch"."id"
-      ) AS "billSourceFile"
+      ) AS "billSourceFile",
+      EXISTS (
+        SELECT 1 FROM "invoice_requests" AS "reference"
+        WHERE "reference"."document_media_asset_id" = "batch"."id"
+      ) AS "invoiceRequestDocument"
     FROM "batch"
   `
 }

@@ -23,6 +23,7 @@ const SIZE_BYTES = 321n
 const NO_REFERENCE_FACTS: MediaKeyPoolFacts = {
   billSourceFile: false,
   containerSourceFile: false,
+  invoiceRequestDocument: false,
   packagingImage: false,
   packagingPaymentVoucher: false,
   paymentRecipientQr: false,
@@ -336,6 +337,8 @@ describe('resolveMediaStoragePool', () => {
     ['收款码三列', { paymentRecipientQr: true }, 'payment-recipient'],
     ['container_batches.source_file_id', { containerSourceFile: true }, 'container'],
     ['slh_bills.source_file_id', { billSourceFile: true }, 'bill'],
+    ['invoice_requests.document_media_asset_id', { invoiceRequestDocument: true }, 'invoice'],
+    ['uploadPurpose=INVOICE_REQUEST_DOCUMENT', { uploadPurpose: 'INVOICE_REQUEST_DOCUMENT' }, 'invoice'],
     [
       'uploadPurpose=PURCHASE_PAYMENT_VOUCHER',
       { uploadPurpose: 'PURCHASE_PAYMENT_VOUCHER' },

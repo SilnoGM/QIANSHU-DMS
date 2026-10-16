@@ -11,7 +11,9 @@
     "billReconciliation": "帳單對帳",
     "slhBillManagement": "順聯航帳單管理",
     "slhBillReconciliation": "順聯航帳單對帳",
-    "slhBillReconciliationDetail": "順聯航帳單對帳詳情"
+    "slhBillReconciliationDetail": "順聯航帳單對帳詳情",
+    "invoiceManagement": "發票管理",
+    "invoiceApproval": "開票審批"
   },
   "slhBill": {
     "archive": {

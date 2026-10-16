@@ -141,6 +141,8 @@ describe('media object key', () => {
   it('exposes the pool inventory for call sites and the migration tool', () => {
     expect(isMediaStoragePool('payment-recipient')).toBe(true)
     expect(isMediaStoragePool('misc')).toBe(true)
+    // 池名用单数（与 bill、voucher 等一致）；复数形式仍是非法池名。
+    expect(isMediaStoragePool('invoice')).toBe(true)
     expect(isMediaStoragePool('invoices')).toBe(false)
   })
 })

@@ -290,6 +290,7 @@ test('权限目录以中文展示现有业务资源', () => {
     'fund-business-sources',
     'fund-posting-types',
     'fund-transactions',
+    'invoice-requests',
     'numbering-rules',
     'packaging-costs',
     'product-media',
