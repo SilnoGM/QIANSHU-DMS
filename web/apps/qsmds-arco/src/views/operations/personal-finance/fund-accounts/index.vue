@@ -4,6 +4,7 @@ import type { FundSelfAccountDto, FundSelfTransactionDto } from '@/api/generated
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import { getApiClientErrorMessage } from '@/api/errors'
 import fundAccountsApi from '@/api/modules/fund-accounts'
+import { formatCurrencyAmount } from '@/components/base/AmountDisplay/format'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
@@ -11,6 +12,7 @@ import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsPersonalFundAccountCard from '@/components/business/QsPersonalFundAccountCard/index.vue'
 import { formatUserShareRate } from '@/components/business/QsPersonalFundAccountCard/logic'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import ApplyWithdrawalModal from './apply-withdrawal-modal.vue'
 import {
   LEDGER_BATCH_KIND_META,
   LEDGER_CATEGORY_META,
@@ -39,6 +41,7 @@ const active = ref(false)
 const accountLoading = ref(true)
 const accountError = ref('')
 const account = shallowRef<FundSelfAccountDto | null>(null)
+const withdrawalOpen = ref(false)
 
 const transactionPage = ref(1)
 const transactionPageSize = ref(20)
@@ -232,7 +235,30 @@ function directionMeta(direction: FundSelfTransactionDto['direction']) {
 }
 
 function applyWithdrawal(): void {
-  toast.info(t('qsPersonalFundAccount.withdrawalComingSoon'))
+  if (account.value !== null) {
+    withdrawalOpen.value = true
+  }
+}
+
+function submitWithdrawal(payload: { amount: string, currency: string }): void {
+  const current = account.value
+  withdrawalOpen.value = false
+  if (current === null) {
+    return
+  }
+
+  toast.info(t('qsPersonalFundAccount.withdrawalSubmitted', {
+    balance: formatCurrencyAmount(
+      current.balance,
+      current.currency,
+      currencyCatalog.currencies.value,
+    ),
+    amount: formatCurrencyAmount(
+      payload.amount,
+      payload.currency,
+      currencyCatalog.currencies.value,
+    ),
+  }))
 }
 
 function viewWithdrawals(): void {
@@ -250,6 +276,7 @@ watch(() => appAccount.authEpoch, () => {
   transactions.value = []
   transactionTotal.value = 0
   transactionPage.value = 1
+  withdrawalOpen.value = false
 })
 
 // active 控制页面是否在台前；authEpoch 变化时重新取数。
@@ -272,6 +299,7 @@ onActivated(() => {
 })
 onDeactivated(() => {
   active.value = false
+  withdrawalOpen.value = false
 })
 onBeforeUnmount(() => {
   active.value = false
@@ -482,6 +510,15 @@ onBeforeUnmount(() => {
           </FaButton>
         </template>
       </QsGenericTable>
+
+      <ApplyWithdrawalModal
+        v-if="account"
+        v-model="withdrawalOpen"
+        :balance="account.balance"
+        :currency="account.currency"
+        :currencies="currencyCatalog.currencies.value"
+        @submit="submitWithdrawal"
+      />
     </FaPageMain>
   </div>
 </template>

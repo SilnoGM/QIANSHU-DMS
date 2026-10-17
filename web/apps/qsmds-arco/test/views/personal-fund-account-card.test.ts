@@ -134,8 +134,18 @@ test('个人资金账户卡片三语文案键完全对齐', () => {
     'qsPersonalFundAccount.showAmount',
     'qsPersonalFundAccount.systemSynced',
     'qsPersonalFundAccount.title',
+    'qsPersonalFundAccount.withdrawalAmountHint',
+    'qsPersonalFundAccount.withdrawalAmountInvalid',
+    'qsPersonalFundAccount.withdrawalAmountLabel',
+    'qsPersonalFundAccount.withdrawalAmountPlaceholder',
+    'qsPersonalFundAccount.withdrawalAmountRequired',
+    'qsPersonalFundAccount.withdrawalCancel',
     'qsPersonalFundAccount.withdrawalComingSoon',
+    'qsPersonalFundAccount.withdrawalCurrentBalance',
+    'qsPersonalFundAccount.withdrawalModalTitle',
     'qsPersonalFundAccount.withdrawalRecords',
     'qsPersonalFundAccount.withdrawalRecordsComingSoon',
+    'qsPersonalFundAccount.withdrawalSubmit',
+    'qsPersonalFundAccount.withdrawalSubmitted',
   ])
 })
