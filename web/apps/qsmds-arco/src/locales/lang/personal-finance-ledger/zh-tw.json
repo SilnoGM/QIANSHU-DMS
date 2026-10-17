@@ -1,0 +1,45 @@
+{
+  "personalFinanceLedger": {
+    "ariaLabel": "資金流水",
+    "empty": "暫無流水",
+    "emptyHint": "帳戶產生動帳後會在這裡顯示",
+    "loadError": "資金流水載入失敗",
+    "loading": "正在載入資金流水",
+    "total": "共 {count} 筆",
+    "column": {
+      "sequence": "序號",
+      "postedAt": "記帳時間",
+      "typeSource": "入帳類型與來源",
+      "summary": "摘要與關聯單號",
+      "businessBasis": "業務核算基準",
+      "amount": "入帳金額 (CNY)",
+      "balance": "帳戶餘額變動",
+      "action": "操作"
+    },
+    "category": {
+      "REVENUE": "營收類",
+      "COST": "成本類",
+      "ADJUSTMENT": "調帳類",
+      "NEUTRAL": "中性類"
+    },
+    "batchKind": {
+      "REVERSAL": "沖帳批次",
+      "MANUAL_ADJUSTMENT": "手動調帳"
+    },
+    "reversal": {
+      "PARTIAL": "已部分沖帳",
+      "FULL": "已全額沖帳"
+    },
+    "direction": {
+      "CREDIT": "入帳",
+      "DEBIT": "出帳"
+    },
+    "businessNo": "業務單",
+    "batchNo": "批次",
+    "noBusinessNo": "無關聯業務單",
+    "shareRate": "分成快照",
+    "balanceBefore": "變動前",
+    "viewDetail": "查看詳情",
+    "detailComingSoon": "流水詳情功能建置中，敬請期待"
+  }
+}

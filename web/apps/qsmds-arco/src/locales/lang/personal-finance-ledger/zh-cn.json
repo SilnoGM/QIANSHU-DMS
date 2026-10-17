@@ -1,0 +1,45 @@
+{
+  "personalFinanceLedger": {
+    "ariaLabel": "资金流水",
+    "empty": "暂无流水",
+    "emptyHint": "账户产生动账后会在这里显示",
+    "loadError": "资金流水加载失败",
+    "loading": "正在加载资金流水",
+    "total": "共 {count} 条",
+    "column": {
+      "sequence": "序号",
+      "postedAt": "记账时间",
+      "typeSource": "入账类型与来源",
+      "summary": "摘要与关联单号",
+      "businessBasis": "业务核算基准",
+      "amount": "入账金额 (CNY)",
+      "balance": "账户余额变动",
+      "action": "操作"
+    },
+    "category": {
+      "REVENUE": "营收类",
+      "COST": "成本类",
+      "ADJUSTMENT": "调账类",
+      "NEUTRAL": "中性类"
+    },
+    "batchKind": {
+      "REVERSAL": "冲账批次",
+      "MANUAL_ADJUSTMENT": "手动调账"
+    },
+    "reversal": {
+      "PARTIAL": "已部分冲账",
+      "FULL": "已全额冲账"
+    },
+    "direction": {
+      "CREDIT": "入账",
+      "DEBIT": "出账"
+    },
+    "businessNo": "业务单",
+    "batchNo": "批次",
+    "noBusinessNo": "无关联业务单",
+    "shareRate": "分成快照",
+    "balanceBefore": "变动前",
+    "viewDetail": "查看详情",
+    "detailComingSoon": "流水详情功能建设中，敬请期待"
+  }
+}

@@ -194,7 +194,7 @@ test('直接 URL 准入与菜单一致：跨工作台被拦截，本工作台可
   }
 })
 
-test('个人资金账户页面接入页头、账户卡片与本人账户接口', () => {
+test('个人资金账户页面接入页头、账户卡片、流水表与本人接口', () => {
   const source = readFileSync(
     new URL('../../src/views/operations/personal-finance/fund-accounts/index.vue', import.meta.url),
     'utf8',
@@ -204,9 +204,12 @@ test('个人资金账户页面接入页头、账户卡片与本人账户接口',
   assert.match(source, /<FaPageMain/u)
   assert.match(source, /<QsPersonalFundAccountCard/u)
   assert.match(source, /fundAccountsApi\.accounts\.self\(/u)
+  assert.match(source, /fundAccountsApi\.transactions\.listSelf\(/u)
   assert.match(source, /:account="account"/u)
-  assert.match(source, /:loading="loading"/u)
-  assert.match(source, /@retry="load"/u)
+  assert.match(source, /:loading="accountLoading"/u)
+  assert.match(source, /@retry="loadAccount"/u)
+  assert.match(source, /personalFinanceLedger\.column\.sequence/u)
+  assert.match(source, /personalFinanceLedger\.column\.amount/u)
 })
 
 test('提款入口页面保持空白占位约定：单根节点、无文案、无数据依赖', () => {
