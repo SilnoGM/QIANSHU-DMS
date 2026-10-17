@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ApiClientError } from '@/api/errors'
 import type { FundWithdrawalDto } from '@/api/generated/types.gen'
 import type { FundWithdrawalListQuery } from '@/api/modules/fund-withdrawals'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
@@ -7,6 +8,8 @@ import fundWithdrawalsApi from '@/api/modules/fund-withdrawals'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import FundWithdrawalApproveModal from '@/views/operations/personal-finance/withdrawals/fund-withdrawal-approve-modal.vue'
 import FundWithdrawalDetailModal from '@/views/operations/personal-finance/withdrawals/fund-withdrawal-detail-modal.vue'
@@ -28,6 +31,7 @@ const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 const items = ref<FundWithdrawalDto[]>([])
+const counts = ref<Record<string, number>>({})
 const loading = ref(false)
 const loadError = ref('')
 const detailOpen = ref(false)
@@ -38,13 +42,14 @@ const reviewTarget = ref<FundWithdrawalDto | null>(null)
 let controller: AbortController | null = null
 
 const enabled = computed(() => active.value && canReview.value)
-const statusOptions = computed(() => FUND_WITHDRAWAL_STATUS_FILTER_OPTIONS.map(item => ({
+const toolbarItems = computed(() => FUND_WITHDRAWAL_STATUS_FILTER_OPTIONS.map(item => ({
   value: item.value,
   label: t(item.labelKey),
+  count: counts.value[item.value] ?? 0,
 })))
 const columns = computed<QsGenericTableColumn<FundWithdrawalDto>[]>(() => [
   { id: 'withdrawalNo', accessorKey: 'withdrawalNo', title: t('fundWithdrawal.column.withdrawalNo'), minWidth: 190, fixed: 'left' },
-  { id: 'applicant', accessorKey: 'applicantName', title: t('fundWithdrawal.column.applicant'), minWidth: 190 },
+  { id: 'applicant', accessorKey: 'applicantName', title: t('fundWithdrawal.column.applicant'), minWidth: 210 },
   { id: 'amount', accessorKey: 'amount', title: t('fundWithdrawal.column.amount'), minWidth: 200, align: 'right' },
   { id: 'accountBalance', accessorKey: 'accountBalance', title: t('fundWithdrawal.column.accountBalance'), minWidth: 190, align: 'right' },
   { id: 'status', accessorKey: 'status', title: t('fundWithdrawal.column.status'), minWidth: 120 },
@@ -52,6 +57,7 @@ const columns = computed<QsGenericTableColumn<FundWithdrawalDto>[]>(() => [
   { id: 'reviewedAt', accessorKey: 'reviewedAt', title: t('fundWithdrawal.column.reviewedAt'), minWidth: 190 },
 ])
 
+/** 与运营页同口径：当前状态取整页，其余三个视图各取一页 total 作为工具栏计数。 */
 async function load(): Promise<void> {
   controller?.abort()
   if (!enabled.value) {
@@ -61,21 +67,37 @@ async function load(): Promise<void> {
   controller = request
   loading.value = true
   loadError.value = ''
+  const selectedStatus = status.value
+  const countStatuses = FUND_WITHDRAWAL_STATUS_FILTER_OPTIONS.filter(
+    item => item.value !== selectedStatus,
+  )
   try {
     const query: FundWithdrawalListQuery = {
       page: page.value,
       pageSize: pageSize.value,
-      status: status.value,
+      status: selectedStatus,
     }
-    const response = await fundWithdrawalsApi.list(query, request.signal)
+    const [list, ...countResponses] = await Promise.all([
+      fundWithdrawalsApi.list(query, request.signal),
+      ...countStatuses.map(item => fundWithdrawalsApi.list({
+        page: 1,
+        pageSize: 1,
+        status: item.value,
+      }, request.signal)),
+    ])
     if (!request.signal.aborted && controller === request) {
-      items.value = response.data.items
-      total.value = response.data.total
+      items.value = list.data.items
+      total.value = list.data.total
+      const nextCounts: Record<string, number> = { [selectedStatus]: list.data.total }
+      countStatuses.forEach((item, index) => {
+        nextCounts[item.value] = countResponses[index]?.data.total ?? 0
+      })
+      counts.value = nextCounts
     }
   }
   catch (failure) {
     if (!request.signal.aborted && controller === request) {
-      loadError.value = getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0])
+      loadError.value = getApiClientErrorMessage(failure as ApiClientError)
         || t('fundWithdrawal.error.load')
     }
   }
@@ -139,19 +161,19 @@ function completed(): void {
     <FaPageHeader
       :title="t('fundWithdrawal.approvalPageTitle')"
       :description="t('fundWithdrawal.approvalPageDescription')"
-    >
-      <FaButton v-if="canReview" variant="outline" :loading="loading" @click="load">
-        <FaIcon name="i-lucide:refresh-cw" aria-hidden="true" />
-        {{ t('fundWithdrawal.refresh') }}
-      </FaButton>
-    </FaPageHeader>
+    />
 
     <FaPageMain class="min-w-0">
+      <QsStatusSwitchToolbar
+        v-model="status"
+        :items="toolbarItems"
+        :aria-label="t('fundWithdrawal.approvalPageTitle')"
+        class="mb-4"
+      />
       <QsGenericTable
         v-model:page="page"
         v-model:page-size="pageSize"
         row-key="id"
-        :show-row-number="false"
         :columns="columns"
         :data="items"
         :total="total"
@@ -168,26 +190,10 @@ function completed(): void {
         @pagination-change="load"
         @retry="load"
       >
-        <template #query-leading>
-          <div class="flex flex-wrap gap-3 items-center">
-            <h2 class="qs-type-component-title m-0">
-              {{ t('fundWithdrawal.approvalPageTitle') }}
-            </h2>
-            <FaSelect
-              v-model="status"
-              :options="statusOptions"
-              class="w-32"
-              :aria-label="t('fundWithdrawal.statusFilter')"
-            />
-          </div>
-        </template>
-
         <template #cell-applicant="{ row }">
           <div class="min-w-0">
-            <p class="qs-type-body-strong m-0">
-              {{ row.original.applicantName }}
-            </p>
-            <p class="qs-type-meta text-muted-foreground m-0">
+            <QsPersonDisplay :display-name="row.original.applicantName" size="sm" />
+            <p class="qs-type-meta text-muted-foreground m-0 mt-1">
               {{ row.original.applicantUsername }}
             </p>
           </div>

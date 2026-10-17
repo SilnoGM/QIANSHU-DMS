@@ -4,8 +4,6 @@
     "pageDescription": "Submit and view your withdrawal requests. Funds are debited only after finance approves.",
     "approvalPageTitle": "Withdrawal approvals",
     "approvalPageDescription": "Review user withdrawal requests. Approval uploads a payment screenshot and debits the applicant's account.",
-    "refresh": "Refresh",
-    "statusFilter": "Status",
     "status": {
       "ALL": "All",
       "PENDING": "In review",
@@ -15,6 +13,7 @@
     "column": {
       "withdrawalNo": "Request no.",
       "amount": "Withdrawal amount",
+      "paymentProof": "Payment screenshot",
       "accountBalance": "Current balance",
       "status": "Status",
       "applicant": "Applicant",
@@ -24,6 +23,7 @@
       "action": "Actions"
     },
     "action": {
+      "create": "New withdrawal request",
       "view": "View",
       "approve": "Approve",
       "reject": "Reject",
@@ -65,8 +65,12 @@
     "toast": {
       "submitted": "Withdrawal request submitted for finance review"
     },
+    "apply": {
+      "unavailable": "No fund account has been opened. Contact finance."
+    },
     "error": {
       "load": "Failed to load withdrawal requests",
+      "account": "Failed to load the fund account",
       "submit": "Failed to submit the withdrawal request",
       "approve": "Approval failed",
       "reject": "Rejection failed",

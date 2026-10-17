@@ -4,8 +4,6 @@
     "pageDescription": "提交与查看本人提款申请；财务审批通过后才会扣减账户余额",
     "approvalPageTitle": "账户提款审批",
     "approvalPageDescription": "审核用户提款申请；通过时上传付款截图并扣减申请人账户",
-    "refresh": "刷新",
-    "statusFilter": "状态",
     "status": {
       "ALL": "全部",
       "PENDING": "审核中",
@@ -15,6 +13,7 @@
     "column": {
       "withdrawalNo": "申请单号",
       "amount": "提款金额",
+      "paymentProof": "付款截图",
       "accountBalance": "当前余额",
       "status": "状态",
       "applicant": "申请人",
@@ -24,6 +23,7 @@
       "action": "操作"
     },
     "action": {
+      "create": "新增提款申请",
       "view": "查看",
       "approve": "通过",
       "reject": "拒绝",
@@ -65,8 +65,12 @@
     "toast": {
       "submitted": "提款申请已提交，等待财务审核"
     },
+    "apply": {
+      "unavailable": "尚未开立资金账户，请联系财务"
+    },
     "error": {
       "load": "加载提款记录失败",
+      "account": "资金账户加载失败",
       "submit": "提款申请提交失败",
       "approve": "审核通过失败",
       "reject": "拒绝失败",

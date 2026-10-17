@@ -212,14 +212,42 @@ test('个人资金账户页面接入页头、账户卡片、流水表与本人�
   assert.match(source, /personalFinanceLedger\.column\.amount/u)
 })
 
-test('提款入口页面保持空白占位约定：单根节点、无文案、无数据依赖', () => {
-  for (const [relativePath, componentName] of [
-    ['../../src/views/operations/personal-finance/withdrawals/index.vue', 'OperationsPersonalFinanceWithdrawals'],
-    ['../../src/views/admin/fund-account-management/withdrawal-approvals/index.vue', 'FinanceFundWithdrawalApprovals'],
+test('提款申请与审批页面接入状态切换、序号和业务表格', () => {
+  for (const [relativePath, componentName, requiredMarkers] of [
+    [
+      '../../src/views/operations/personal-finance/withdrawals/index.vue',
+      'OperationsPersonalFinanceWithdrawals',
+      [
+        'ApplyWithdrawalModal',
+        'ImageGroup',
+        'fundAccountsApi.accounts.self(',
+        'fundWithdrawalsApi.listSelf(',
+        'fundWithdrawal.action.create',
+        'fundWithdrawal.column.paymentProof',
+      ],
+    ],
+    [
+      '../../src/views/admin/fund-account-management/withdrawal-approvals/index.vue',
+      'FinanceFundWithdrawalApprovals',
+      [
+        'QsPersonDisplay',
+        'fundWithdrawalsApi.list(',
+      ],
+    ],
   ] as const) {
     const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
     assert.match(source, new RegExp(`defineOptions\\(\\{ name: '${componentName}' \\}\\)`, 'u'))
-    assert.match(source, /<template>\s*<div \/>\s*<\/template>/u)
-    assert.doesNotMatch(source, /FaPageMain|FaPageHeader|useRoute|useI18n|Api/u)
+    for (const marker of requiredMarkers) {
+      assert.ok(source.includes(marker), `${componentName} missing ${marker}`)
+    }
+    assert.match(source, /<FaPageHeader/u)
+    assert.match(source, /<FaPageMain/u)
+    assert.match(source, /<QsGenericTable/u)
+    assert.match(source, /<QsStatusSwitchToolbar/u)
+    assert.match(source, /countStatuses/u)
+    assert.match(source, /pageSize: 1/u)
+    assert.doesNotMatch(source, /:show-row-number="false"/u)
+    assert.doesNotMatch(source, /<FaSelect/u)
+    assert.doesNotMatch(source, /i-lucide:refresh-cw/u)
   }
 })

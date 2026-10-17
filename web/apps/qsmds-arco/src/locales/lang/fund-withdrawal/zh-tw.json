@@ -4,8 +4,6 @@
     "pageDescription": "提交與查看本人提款申請；財務審批通過後才會扣減帳戶餘額",
     "approvalPageTitle": "帳戶提款審批",
     "approvalPageDescription": "審核使用者提款申請；通過時上傳付款截圖並扣減申請人帳戶",
-    "refresh": "重新整理",
-    "statusFilter": "狀態",
     "status": {
       "ALL": "全部",
       "PENDING": "審核中",
@@ -15,6 +13,7 @@
     "column": {
       "withdrawalNo": "申請單號",
       "amount": "提款金額",
+      "paymentProof": "付款截圖",
       "accountBalance": "目前餘額",
       "status": "狀態",
       "applicant": "申請人",
@@ -24,6 +23,7 @@
       "action": "操作"
     },
     "action": {
+      "create": "新增提款申請",
       "view": "查看",
       "approve": "通過",
       "reject": "拒絕",
@@ -65,8 +65,12 @@
     "toast": {
       "submitted": "提款申請已提交，等待財務審核"
     },
+    "apply": {
+      "unavailable": "尚未開立資金帳戶，請聯絡財務"
+    },
     "error": {
       "load": "載入提款紀錄失敗",
+      "account": "資金帳戶載入失敗",
       "submit": "提款申請提交失敗",
       "approve": "審核通過失敗",
       "reject": "拒絕失敗",
