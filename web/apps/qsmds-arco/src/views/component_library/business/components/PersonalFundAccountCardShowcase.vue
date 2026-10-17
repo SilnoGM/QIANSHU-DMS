@@ -73,7 +73,7 @@ function retry(): void {
         <div>
           <div class="mb-3 flex flex-wrap gap-2 items-baseline justify-between">
             <span class="qs-type-compact-label text-foreground">宽屏（容器 ≥ 1140px）</span>
-            <span class="text-xs text-muted-foreground">三指标横排 + 右侧操作列</span>
+            <span class="text-xs text-muted-foreground">三指标横排 + 按钮下方并排</span>
           </div>
           <div class="pb-1 overflow-x-auto">
             <div class="w-[1400px]">

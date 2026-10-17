@@ -415,13 +415,13 @@ const toggleLabel = computed(() => t(
 }
 
 .qs-personal-fund-card__content {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) 170px;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
 }
 
 .qs-personal-fund-card__metrics {
-  grid-column: 1 / 4;
+  flex: 1 1 auto;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-content: center;
@@ -504,14 +504,16 @@ const toggleLabel = computed(() => t(
 }
 
 .qs-personal-fund-card__actions {
-  grid-column: 4;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
+  flex-direction: row;
   gap: 0.75rem;
-  padding: 1.25rem;
-  border-left: 1px solid oklch(var(--border));
+  padding: 1.25rem 1.75rem 1.75rem;
+  border-top: 1px solid oklch(var(--border));
   min-width: 0;
+}
+
+.qs-personal-fund-card__actions > * {
+  flex: 1 1 0;
 }
 
 .qs-personal-fund-card__empty-title {
@@ -528,25 +530,12 @@ const toggleLabel = computed(() => t(
     grid-template-columns: minmax(300px, 32%) minmax(0, 1fr);
   }
 
-  .qs-personal-fund-card__content {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .qs-personal-fund-card__metrics {
-    grid-column: 1;
     padding: 1.5rem;
   }
 
   .qs-personal-fund-card__actions {
-    grid-column: 1;
-    flex-direction: row;
-    padding: 1.25rem 1.5rem;
-    border-top: 1px solid oklch(var(--border));
-    border-left: 0;
-  }
-
-  .qs-personal-fund-card__actions > * {
-    flex: 1 1 0;
+    padding: 1.25rem 1.5rem 1.5rem;
   }
 
   .qs-personal-fund-card__metric-date {
