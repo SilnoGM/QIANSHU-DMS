@@ -10,7 +10,6 @@ import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsPersonalFundAccountCard from '@/components/business/QsPersonalFundAccountCard/index.vue'
-import { formatUserShareRate } from '@/components/business/QsPersonalFundAccountCard/logic'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import ApplyWithdrawalModal from './apply-withdrawal-modal.vue'
 import {
@@ -462,9 +461,6 @@ onBeforeUnmount(() => {
               :currencies="currencyCatalog.currencies.value"
               class="!text-base !font-semibold"
             />
-            <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-              {{ t('personalFinanceLedger.shareRate') }} {{ formatUserShareRate(row.original.userShareRateSnapshot) }}
-            </p>
           </div>
         </template>
 

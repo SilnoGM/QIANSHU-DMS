@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 // eslint-disable-next-line test/no-import-node-test -- 流水表纯逻辑与三语键对齐使用 Node.js 内置 runner 验证。
 import test from 'node:test'
@@ -32,6 +33,14 @@ test('流水类型、批次、冲账与方向元数据固定', () => {
   assert.equal(LEDGER_DIRECTION_META.DEBIT.labelKey, 'personalFinanceLedger.direction.DEBIT')
   assert.match(LEDGER_DIRECTION_META.DEBIT.badgeClass, /text-destructive/u)
   assert.match(LEDGER_DIRECTION_META.DEBIT.amountClass, /text-destructive/u)
+})
+
+test('流水行不再展示分成比例', () => {
+  const source = readFileSync(
+    new URL('../../src/views/operations/personal-finance/fund-accounts/index.vue', import.meta.url),
+    'utf8',
+  )
+  assert.doesNotMatch(source, /personalFinanceLedger\.shareRate|userShareRateSnapshot/u)
 })
 
 function collectKeys(source: Record<string, unknown>): string[] {
@@ -75,7 +84,6 @@ test('资金流水三语文案键完全对齐', () => {
     'personalFinanceLedger.noBusinessNo',
     'personalFinanceLedger.reversal.FULL',
     'personalFinanceLedger.reversal.PARTIAL',
-    'personalFinanceLedger.shareRate',
     'personalFinanceLedger.title',
     'personalFinanceLedger.total',
     'personalFinanceLedger.viewDetail',
