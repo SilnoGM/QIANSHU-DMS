@@ -9,6 +9,7 @@ describe('mapFundHttpError', () => {
   it.each([
     [FUND_POSTING_ERROR_CODES.ACCOUNT_NOT_FOUND, 404],
     [FUND_POSTING_ERROR_CODES.CONCURRENT_STATE_CHANGED, 409],
+    [FUND_POSTING_ERROR_CODES.NUMBERING_UNAVAILABLE, 409],
     [FUND_POSTING_ERROR_CODES.POSTING_AMOUNT_INVALID, 422],
   ] as const)('maps %s to HTTP %i', (code, status) => {
     const exception = mapFundHttpError(new FundPostingError(code, 'amount'))

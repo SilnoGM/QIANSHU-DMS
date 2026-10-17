@@ -7,7 +7,7 @@ import type {
 
 /**
  * 上线内置数据的唯一真相源，内容按 2026-10-01 用户确认口径取自 dev 库现状：
- * 四币种全启用 + 三条汇率、除 develop.test 外的全部字典、19 条编号规则、
+ * 四币种全启用 + 三条汇率、除 develop.test 外的全部字典、21 条编号规则、
  * 供应商唛头绑定、打木架资金类型。业务账号不在此数据集内，管理员一律由
  * `auth:bootstrap-admin` 交互创建。
  */
@@ -230,6 +230,8 @@ export const SEED_NUMBERING_RULES: readonly SeedNumberingRule[] = [
   { ruleCode: 'CONTAINER_BATCH_NO', name: '海运柜次编号', description: '海运装柜柜次编号', purpose: 'BUSINESS', resetPolicy: 'YEARLY', segments: datedSequence('CTN', 3, 'YYYY') },
   { ruleCode: 'CTN_BILL_NO', name: '海运账单编号', description: '海运账单编号', purpose: 'BUSINESS', resetPolicy: 'YEARLY', segments: datedSequence('CBILL', 2, 'YYYYMM') },
   { ruleCode: 'SLH_RECON_BATCH_NO', name: '顺联航对账批次编号', description: '顺联航对账批次编号', purpose: 'BUSINESS', resetPolicy: 'YEARLY', segments: datedSequence('SRB', 3, 'YYYYMMDD') },
+  { ruleCode: 'FUND_POSTING_BATCH_NO', name: '资金动账批次编号', description: '用于资金动账批次编号', purpose: 'BUSINESS', resetPolicy: 'YEARLY', segments: datedSequence('FUND', 5, 'YYYYMMDD') },
+  { ruleCode: 'FUND_WITHDRAWAL_NO', name: '资金提款申请编号', description: '用于用户提款申请的唯一编号', purpose: 'BUSINESS', resetPolicy: 'YEARLY', segments: datedSequence('WD', 4, 'YYYYMMDD') },
   { ruleCode: 'SALES_COLLECTION', name: '销售收款编号', description: '用于给销售收款申请编号', purpose: 'BUSINESS', resetPolicy: 'YEARLY', segments: datedSequence('SCO', 4, 'YYYYMMDD') },
   { ruleCode: 'SEA_FRT_VOY_NO', name: '海快运次编号', description: '海快运次编号，每月一个', purpose: 'BUSINESS', resetPolicy: 'YEARLY', segments: datedSequence('SEAF', 2, 'YYYYMM') },
   { ruleCode: 'TEST', name: '测试编号', description: '', purpose: 'BUSINESS', resetPolicy: 'YEARLY', segments: datedSequence('TEST', 4, 'YYYYMMDD') },

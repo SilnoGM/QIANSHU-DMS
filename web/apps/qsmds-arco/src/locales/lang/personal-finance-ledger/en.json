@@ -1,0 +1,51 @@
+{
+  "personalFinanceLedger": {
+    "ariaLabel": "Fund ledger",
+    "title": "Account ledger",
+    "empty": "No ledger entries",
+    "emptyHint": "Entries will appear here once the account has activity.",
+    "loadError": "Failed to load the fund ledger",
+    "loading": "Loading fund ledger",
+    "total": "{count} entries",
+    "column": {
+      "sequence": "No.",
+      "postedAt": "Posted at",
+      "typeSource": "Type and source",
+      "summary": "Summary and reference",
+      "businessBasis": "Business basis",
+      "amount": "Movement amount",
+      "balanceAfter": "Account balance",
+      "balanceBefore": "Previous balance",
+      "action": "Actions"
+    },
+    "category": {
+      "REVENUE": "Revenue",
+      "COST": "Cost",
+      "ADJUSTMENT": "Adjustment",
+      "NEUTRAL": "Neutral"
+    },
+    "batchKind": {
+      "REVERSAL": "Reversal",
+      "MANUAL_ADJUSTMENT": "Manual adjustment"
+    },
+    "reversal": {
+      "PARTIAL": "Partially reversed",
+      "FULL": "Fully reversed"
+    },
+    "direction": {
+      "CREDIT": "Credit",
+      "DEBIT": "Debit"
+    },
+    "businessNo": "Business no.",
+    "batchNo": "Batch",
+    "noBusinessNo": "No linked business",
+    "viewDetail": "View details",
+    "detail": {
+      "title": "Ledger details",
+      "businessOccurredAt": "Business occurred at",
+      "summary": "Summary",
+      "reversalStatus": "Reversal status",
+      "close": "Close"
+    }
+  }
+}

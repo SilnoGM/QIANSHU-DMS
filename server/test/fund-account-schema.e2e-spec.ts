@@ -3,11 +3,16 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { Client } from 'pg'
+import { insertFundPostingBatchIssuance } from './fixtures/fund-posting-numbering.fixture'
 
 const serverRoot = resolve(__dirname, '..')
 const authMigrationPath = resolve(
   serverRoot,
   'prisma/migrations/20260717090000_user_auth_rbac/migration.sql',
+)
+const numberingMigrationPath = resolve(
+  serverRoot,
+  'prisma/migrations/20260802090000_numbering_management_schema_and_permissions/migration.sql',
 )
 const readPermissionMigrationPath = resolve(
   serverRoot,
@@ -20,6 +25,14 @@ const fundMigrationPath = resolve(
 const precisionMigrationPath = resolve(
   serverRoot,
   'prisma/migrations/20260819090000_fund_account_two_decimal_precision/migration.sql',
+)
+const numberingPurposeMigrationPath = resolve(
+  serverRoot,
+  'prisma/migrations/20260906090000_numbering_rule_purpose/migration.sql',
+)
+const batchNumberMigrationPath = resolve(
+  serverRoot,
+  'prisma/migrations/20261017120000_fund_posting_batch_numbering/migration.sql',
 )
 const SYSTEM_ADMIN_ROLE_ID = '00000000-0000-4000-8000-000000000001'
 const COMPANY_ACCOUNT_ID = '00000000-0000-4000-8000-000000002001'
@@ -123,9 +136,12 @@ describe('fund account domain migration replay against PostgreSQL', () => {
       schemaCreated = true
       await client.query(`SET search_path TO ${quotedSchema}, public`)
       await client.query(readFileSync(authMigrationPath, 'utf8'))
+      await client.query(readFileSync(numberingMigrationPath, 'utf8'))
       await client.query(readFileSync(readPermissionMigrationPath, 'utf8'))
       await client.query(readFileSync(fundMigrationPath, 'utf8'))
       await client.query(readFileSync(precisionMigrationPath, 'utf8'))
+      await client.query(readFileSync(numberingPurposeMigrationPath, 'utf8'))
+      await client.query(readFileSync(batchNumberMigrationPath, 'utf8'))
 
       const tableCount = await client.query<{ count: number }>(`
         SELECT count(*)::integer AS "count"
@@ -332,9 +348,14 @@ describe('fund account domain migration replay against PostgreSQL', () => {
         6,
       )
 
+      const batchNo = 'FUND-E2E-0001'
+      const numberingIssuanceId = await insertFundPostingBatchIssuance(
+        client,
+        batchNo,
+      )
       await client.query(`
         INSERT INTO "fund_posting_batches" (
-          "id", "batch_no", "kind", "posting_type_id",
+          "id", "batch_no", "numbering_issuance_id", "kind", "posting_type_id",
           "posting_type_code_snapshot", "posting_type_name_snapshot",
           "business_category_snapshot", "business_source_id",
           "business_source_code_snapshot", "business_source_name_snapshot",
@@ -346,7 +367,7 @@ describe('fund account domain migration replay against PostgreSQL', () => {
           "adjustment_mode", "actor_user_id", "request_id"
         )
         VALUES (
-          $1, 'FUND-E2E-0001', 'MANUAL_ADJUSTMENT', $2,
+          $1, $6, $7, 'MANUAL_ADJUSTMENT', $2,
           'ADMIN_MANUAL_ADJUSTMENT', '管理员手动调账', 'ADJUSTMENT', $3,
           'ADMIN_CONSOLE', '管理员工作台', $4, 1, $5,
           100, 30, 70, 'e2e-adjustment', 'E2E-ADJUST-0001',
@@ -360,6 +381,8 @@ describe('fund account domain migration replay against PostgreSQL', () => {
         ADMIN_SOURCE_ID,
         ADMIN_RULE_VERSION_ID,
         userId,
+        batchNo,
+        numberingIssuanceId,
       ])
       await client.query(`
         INSERT INTO "fund_ledger_entries" (
@@ -393,6 +416,43 @@ describe('fund account domain migration replay against PostgreSQL', () => {
         'fund_posting_batches_immutable_check',
         '23514',
         8,
+      )
+      await expectDatabaseRejection(
+        client,
+        () => client.query(`
+          INSERT INTO "fund_posting_batches" (
+            "id", "batch_no", "numbering_issuance_id", "kind",
+            "posting_type_id", "posting_type_code_snapshot",
+            "posting_type_name_snapshot", "business_category_snapshot",
+            "business_source_id", "business_source_code_snapshot",
+            "business_source_name_snapshot", "rule_version_id",
+            "rule_revision_snapshot", "user_id", "business_amount",
+            "currency", "user_share_rate_snapshot",
+            "company_share_rate_snapshot", "business_id", "business_no",
+            "summary", "metadata", "business_occurred_at", "consumer_code",
+            "idempotency_key_hash", "request_fingerprint_hash",
+            "adjustment_mode", "reversal_of_batch_id", "reversal_reason",
+            "actor_user_id", "request_id", "correlation_id", "posted_at"
+          )
+          SELECT
+            $1, 'FUND-E2E-FAKE', "numbering_issuance_id", "kind",
+            "posting_type_id", "posting_type_code_snapshot",
+            "posting_type_name_snapshot", "business_category_snapshot",
+            "business_source_id", "business_source_code_snapshot",
+            "business_source_name_snapshot", "rule_version_id",
+            "rule_revision_snapshot", "user_id", "business_amount",
+            "currency", "user_share_rate_snapshot",
+            "company_share_rate_snapshot", "business_id", "business_no",
+            "summary", "metadata", "business_occurred_at", "consumer_code",
+            "idempotency_key_hash", "request_fingerprint_hash",
+            "adjustment_mode", "reversal_of_batch_id", "reversal_reason",
+            "actor_user_id", "request_id", "correlation_id", "posted_at"
+          FROM "fund_posting_batches"
+          WHERE "id" = $2
+        `, [randomUUID(), batchId]),
+        'fund_posting_batches_number_identity_check',
+        '23514',
+        10,
       )
       await expectDatabaseRejection(
         client,

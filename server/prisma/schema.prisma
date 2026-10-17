@@ -122,6 +122,9 @@ enum AuditEventType {
   FUND_MANUAL_ADJUSTMENT_POSTED
   FUND_BUSINESS_POSTED
   FUND_POSTING_REVERSED
+  FUND_WITHDRAWAL_SUBMITTED
+  FUND_WITHDRAWAL_APPROVED
+  FUND_WITHDRAWAL_REJECTED
   SALES_ORDER_CREATED
   SALES_ORDER_ORDER_STATUS_CHANGED
   SALES_ORDER_FULFILLMENT_STATUS_CHANGED
@@ -519,6 +522,14 @@ enum FundPostingBatchKind {
   @@map("fund_posting_batch_kind")
 }
 
+enum FundWithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@map("fund_withdrawal_status")
+}
+
 model User {
   containerLoadingItemChanges ContainerLoadingItemChange[]
   containerBatchesCreated ContainerBatch[] @relation("ContainerBatchCreatedBy")
@@ -581,6 +592,8 @@ model User {
   fundRuleVersionsPublished   FundPostingRuleVersion[]   @relation("FundRuleVersionPublishedBy")
   fundPostingBatches          FundPostingBatch[]         @relation("FundPostingBatchUser")
   fundPostingBatchesActed     FundPostingBatch[]         @relation("FundPostingBatchActor")
+  fundWithdrawalRequests      FundWithdrawalRequest[]    @relation("FundWithdrawalRequestUser")
+  fundWithdrawalRequestsReviewed FundWithdrawalRequest[] @relation("FundWithdrawalRequestReviewedBy")
   receiptRequestsOwned SalesReceiptRequest[] @relation("ReceiptAccountOwner")
   receiptRequestsSubmitted SalesReceiptRequest[] @relation("ReceiptSubmittedBy")
   receiptRequestsReviewed SalesReceiptRequest[] @relation("ReceiptReviewedBy")
@@ -926,6 +939,7 @@ model MediaAsset {
   purchaseOrderImageDraft PurchaseOrderImageDraft?
   slhBillSourceFiles  SlhBill[]
   invoiceRequestDocuments InvoiceRequest[]
+  fundWithdrawalProofs FundWithdrawalRequest[] @relation("FundWithdrawalPaymentProof")
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
   @@index([status, retentionUntil, id], map: "media_assets_status_retention_until_id_idx")
@@ -1591,6 +1605,8 @@ model NumberingIssuance {
   slhBill SlhBill?
   reconciliationBatch SlhReconciliationBatch?
   invoiceRequest InvoiceRequest?
+  fundPostingBatch FundPostingBatch?
+  fundWithdrawalRequest FundWithdrawalRequest?
 
   id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   ruleId                 String   @map("rule_id") @db.Uuid
@@ -1636,6 +1652,7 @@ model FundAccount {
 
   user    User?             @relation("FundAccountUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   entries FundLedgerEntry[]
+  withdrawalRequests FundWithdrawalRequest[] @relation("FundWithdrawalRequestAccount")
 
   @@index([ownerType, updatedAt(sort: Desc), id(sort: Desc)], map: "fund_accounts_owner_type_updated_at_id_idx")
   @@index([balance, id], map: "fund_accounts_balance_id_idx")
@@ -1747,8 +1764,10 @@ model FundPostingBatch {
   purchasePayment PurchaseOrderPayment? @relation("PurchasePaymentPostingBatch")
   purchaseVoidedPayment PurchaseOrderPayment? @relation("PurchasePaymentReversalBatch")
   invoiceRequest InvoiceRequest? @relation("InvoiceRequestSettlementBatch")
+  withdrawalRequest FundWithdrawalRequest? @relation("FundWithdrawalPostingBatch")
   id                         String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   batchNo                    String               @unique(map: "fund_posting_batches_batch_no_key") @map("batch_no") @db.VarChar(64)
+  numberingIssuanceId        String?              @unique(map: "fund_posting_batches_numbering_issuance_id_key") @map("numbering_issuance_id") @db.Uuid
   kind                       FundPostingBatchKind
   postingTypeId              String               @map("posting_type_id") @db.Uuid
   postingTypeCodeSnapshot    String               @map("posting_type_code_snapshot") @db.VarChar(64)
@@ -1780,6 +1799,7 @@ model FundPostingBatch {
   correlationId              String?              @map("correlation_id") @db.VarChar(128)
   postedAt                   DateTime             @default(now()) @map("posted_at") @db.Timestamptz(6)
 
+  numberingIssuance NumberingIssuance?            @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   postingType       FundPostingType               @relation("FundPostingBatchPostingType", fields: [postingTypeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   businessSource    FundBusinessSource            @relation("FundPostingBatchBusinessSource", fields: [businessSourceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   allowedSourceType FundBusinessSourcePostingType @relation(fields: [businessSourceId, postingTypeId], references: [businessSourceId, postingTypeId], onDelete: Restrict, onUpdate: Restrict)
@@ -1824,6 +1844,42 @@ model FundLedgerEntry {
   @@index([accountId, postedAt(sort: Desc), id(sort: Desc)], map: "fund_ledger_entries_account_id_posted_at_id_idx")
   @@index([batchId, lineNo, id], map: "fund_ledger_entries_batch_id_line_no_id_idx")
   @@map("fund_ledger_entries")
+}
+
+/// 用户提款申请：运营提交 → 财务审核；通过时上传付款截图并原子扣减用户账户。
+/// 审核与状态终态由迁移里的触发器封闭，金额、归属与申请单号不可改。
+model FundWithdrawalRequest {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  withdrawalNo String @unique(map: "fund_withdrawal_requests_number_key") @map("withdrawal_no") @db.VarChar(64)
+  numberingIssuanceId String @unique(map: "fund_withdrawal_requests_issuance_key") @map("numbering_issuance_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  accountId String @map("account_id") @db.Uuid
+  amount Decimal @db.Decimal(30, 2)
+  currency String @default("CNY") @db.Char(3)
+  status FundWithdrawalStatus @default(PENDING)
+  submittedAt DateTime @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  reviewedAt DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  reviewedByUserId String? @map("reviewed_by_user_id") @db.Uuid
+  rejectReason String? @map("reject_reason") @db.VarChar(500)
+  paymentProofMediaAssetId String? @unique(map: "fund_withdrawal_requests_payment_proof_key") @map("payment_proof_media_asset_id") @db.Uuid
+  fundPostingBatchId String? @unique(map: "fund_withdrawal_requests_posting_batch_key") @map("fund_posting_batch_id") @db.Uuid
+  requestKeyHash Bytes @map("request_key_hash") @db.ByteA
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation("FundWithdrawalRequestUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account FundAccount @relation("FundWithdrawalRequestAccount", fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy User? @relation("FundWithdrawalRequestReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  numberingIssuance NumberingIssuance @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  paymentProofMediaAsset MediaAsset? @relation("FundWithdrawalPaymentProof", fields: [paymentProofMediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fundPostingBatch FundPostingBatch? @relation("FundWithdrawalPostingBatch", fields: [fundPostingBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([userId, requestKeyHash], map: "fund_withdrawal_requests_user_request_key")
+  @@index([userId, submittedAt(sort: Desc), id(sort: Desc)], map: "fund_withdrawal_requests_user_submitted_id_idx")
+  @@index([status, submittedAt(sort: Desc), id(sort: Desc)], map: "fund_withdrawal_requests_status_submitted_id_idx")
+  @@index([reviewedByUserId, reviewedAt(sort: Desc), id(sort: Desc)], map: "fund_withdrawal_requests_reviewer_reviewed_id_idx")
+  @@map("fund_withdrawal_requests")
 }
 
 /// 提交后的收款事实不可修改；正式收款和资金入账只在财务审核通过时原子生成。

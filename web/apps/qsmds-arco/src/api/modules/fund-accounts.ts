@@ -21,8 +21,12 @@ import type {
   FundPostingTypeMutationResultDto,
   FundPostingTypePageDto,
   FundPostingTypesListData,
+  FundSelfAccountResponseDto,
+  FundSelfPostingTypeOptionListDto,
+  FundSelfTransactionPageDto,
   FundTransactionPageDto,
   FundTransactionsListData,
+  FundTransactionsListSelfData,
   PublishFundPostingRuleRequestDto,
   ReplaceFundDraftRuleRequestDto,
   UpdateFundBusinessSourceRequestDto,
@@ -40,6 +44,8 @@ export type FundPostingTypeListQuery
   = NonNullable<FundPostingTypesListData['query']>
 export type FundBusinessSourceListQuery
   = NonNullable<FundBusinessSourcesListData['query']>
+export type FundSelfTransactionListQuery
+  = NonNullable<FundTransactionsListSelfData['query']>
 
 const LOCAL_MUTATION_CONFIG = Object.freeze({
   errorPresentation: 'local' as const,
@@ -110,6 +116,12 @@ export function createFundAccountsApi(client: AxiosInstance) {
         data,
         idempotentMutationConfig(idempotencyKey),
       ),
+      /* 运营本人账户；未开户时服务端返回 200 + account: null。 */
+      self: (signal: AbortSignal) =>
+        client.get<FundSelfAccountResponseDto>('fund-accounts/me', {
+          errorPresentation: 'local',
+          signal,
+        }),
     },
     transactions: {
       list: (query: FundTransactionListQuery, signal: AbortSignal) =>
@@ -118,6 +130,18 @@ export function createFundAccountsApi(client: AxiosInstance) {
           params: query,
           signal,
         }),
+      /* 本人流水；scope 由服务端按会话强制，查询参数不含 userId/accountId。 */
+      listSelf: (query: FundSelfTransactionListQuery, signal: AbortSignal) =>
+        client.get<FundSelfTransactionPageDto>('fund-transactions/me', {
+          errorPresentation: 'local',
+          params: query,
+          signal,
+        }),
+      selfPostingTypes: (signal: AbortSignal) =>
+        client.get<FundSelfPostingTypeOptionListDto>(
+          'fund-transactions/me/posting-types',
+          { errorPresentation: 'local', signal },
+        ),
     },
     batches: {
       get: (batchId: string, signal: AbortSignal) =>

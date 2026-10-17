@@ -26,12 +26,17 @@ import {
   FUND_TRANSACTION_REVERSAL_STATUSES,
   FUND_TRANSACTION_SORT_FIELDS,
   type FundPostingBatchDetailView,
+  type FundSelfPostingTypeOptionList,
+  type FundSelfTransactionListQuery,
+  type FundSelfTransactionPage,
   type FundTransactionListQuery,
   type FundTransactionPage,
   type FundTransactionReversalStatus,
   type FundTransactionSortField,
   type FundTransactionView,
 } from './fund-transaction.contract'
+import { mapFundSelfTransactionView } from './fund-self.mapper'
+import { resolveFundTransactionSummary } from './fund-summary'
 
 const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
@@ -409,7 +414,11 @@ function mapTransactionRow(row: TransactionDatabaseRow): FundTransactionView {
     companyShareRateSnapshot: nullableDecimalString(row.companyShareRateSnapshot),
     businessId: requiredString(row.businessId),
     businessNo: nullableString(row.businessNo),
-    summary: requiredString(row.summary),
+    summary: resolveFundTransactionSummary({
+      postingTypeCode: requiredString(row.postingTypeCode),
+      businessNo: nullableString(row.businessNo),
+      summary: requiredString(row.summary),
+    }),
     businessOccurredAt: requiredDate(row.businessOccurredAt).toISOString(),
     adjustmentMode: row.adjustmentMode === null
       ? null
@@ -619,7 +628,11 @@ export class FundTransactionQueryService {
             batch.companyShareRateSnapshot?.toFixed(2) ?? null,
           businessId: batch.businessId,
           businessNo: batch.businessNo,
-          summary: batch.summary,
+          summary: resolveFundTransactionSummary({
+            postingTypeCode: batch.postingTypeCodeSnapshot,
+            businessNo: batch.businessNo,
+            summary: batch.summary,
+          }),
           metadata: normalizeFundMetadata(batch.metadata),
           businessOccurredAt: batch.businessOccurredAt.toISOString(),
           adjustmentMode: batch.adjustmentMode,
@@ -676,6 +689,102 @@ export class FundTransactionQueryService {
           }),
         })
       })
+    }
+    catch (error) {
+      if (error instanceof FundPostingError) throw error
+      throw new FundPostingError(FUND_POSTING_ERROR_CODES.INTERNAL_ERROR)
+    }
+  }
+
+  /**
+   * 运营本人流水。
+   *
+   * userId 来自会话，服务端按唯一 user_id 解析本人账户后强制按 account_id
+   * 过滤；不能只按 batch.user_id 过滤，否则同一批次的 COMPANY 账户分录
+   * 会连同公司余额一起暴露给运营。未开户返回空页而不是错误。
+   */
+  async listOwnTransactions(
+    userId: string,
+    input: FundSelfTransactionListQuery,
+  ): Promise<FundSelfTransactionPage> {
+    try {
+      const account = await this.prisma.fundAccount.findUnique({
+        where: { userId },
+        select: { id: true },
+      })
+      if (account === null) {
+        const query = normalizeFundTransactionListQuery({ ...input })
+        return Object.freeze({
+          items: Object.freeze([]),
+          page: query.page,
+          pageSize: query.pageSize,
+          total: 0,
+        })
+      }
+
+      const page = await this.listTransactions({
+        ...input,
+        accountId: account.id,
+      })
+      return Object.freeze({
+        items: Object.freeze(page.items.map(mapFundSelfTransactionView)),
+        page: page.page,
+        pageSize: page.pageSize,
+        total: page.total,
+      })
+    }
+    catch (error) {
+      if (error instanceof FundPostingError) throw error
+      throw new FundPostingError(FUND_POSTING_ERROR_CODES.INTERNAL_ERROR)
+    }
+  }
+
+  /**
+   * 本人流水中实际出现过的业务类型。
+   *
+   * 只取本人账户的分录，避免把同批次公司分录或他人流水的类型带进筛选下拉；
+   * 名称取当前类型名，历史流水行仍展示各自的名称快照。
+   */
+  async listOwnPostingTypes(
+    userId: string,
+  ): Promise<FundSelfPostingTypeOptionList> {
+    try {
+      const account = await this.prisma.fundAccount.findUnique({
+        where: { userId },
+        select: { id: true },
+      })
+      if (account === null) {
+        return Object.freeze({ items: Object.freeze([]) })
+      }
+
+      const rows = await this.prisma.$queryRaw<
+        Array<{ readonly id: unknown, readonly name: unknown }>
+      >(Prisma.sql`
+        SELECT DISTINCT
+          batch."posting_type_id" AS "id",
+          posting_type."name" AS "name"
+        FROM "fund_ledger_entries" AS entry
+        INNER JOIN "fund_posting_batches" AS batch
+          ON batch."id" = entry."batch_id"
+        INNER JOIN "fund_posting_types" AS posting_type
+          ON posting_type."id" = batch."posting_type_id"
+        WHERE entry."account_id" = CAST(${account.id} AS uuid)
+        ORDER BY "name" ASC, "id" ASC
+      `)
+
+      const items = rows.map((row) => {
+        if (
+          typeof row.id !== 'string'
+          || row.id.length === 0
+          || typeof row.name !== 'string'
+          || row.name.length === 0
+        ) {
+          throw new FundPostingError(FUND_POSTING_ERROR_CODES.INTERNAL_ERROR)
+        }
+        return Object.freeze({ id: row.id, name: row.name })
+      })
+
+      return Object.freeze({ items: Object.freeze(items) })
     }
     catch (error) {
       if (error instanceof FundPostingError) throw error

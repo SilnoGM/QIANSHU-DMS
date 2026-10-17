@@ -8,11 +8,13 @@ import type {
   FundAccountPage,
   FundAccountSortField,
   FundAccountSortOrder,
+  FundSelfAccountResponse,
 } from './fund-account.contract'
 import {
   FUND_ACCOUNT_VIEW_SELECT,
   mapFundAccountView,
 } from './fund-account.mapper'
+import { mapFundSelfAccountView } from './fund-self.mapper'
 import {
   normalizeFundAccountListQuery,
   type NormalizedFundAccountListQuery,
@@ -101,6 +103,31 @@ export class FundAccountQueryService {
         page: query.page,
         pageSize: query.pageSize,
         total,
+      })
+    }
+    catch (error) {
+      if (error instanceof FundPostingError) throw error
+      throw new FundPostingError(FUND_POSTING_ERROR_CODES.INTERNAL_ERROR)
+    }
+  }
+
+  /**
+   * 运营本人账户：user_id 唯一索引保证最多一条，未开户返回 account: null。
+   *
+   * 这里只读取 USER 账户；公司账户没有 user_id，不可能被本查询命中。
+   */
+  async getOwnAccount(userId: string): Promise<FundSelfAccountResponse> {
+    try {
+      const row = await this.prisma.fundAccount.findUnique({
+        where: { userId },
+        select: FUND_ACCOUNT_VIEW_SELECT,
+      })
+      if (row === null) {
+        return Object.freeze({ account: null })
+      }
+
+      return Object.freeze({
+        account: mapFundSelfAccountView(mapFundAccountView(row)),
       })
     }
     catch (error) {

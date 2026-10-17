@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { Client } from 'pg'
 import { insertFixture, insertRequest } from './fixtures/sales-receipt-schema.fixture'
+import { insertFundPostingBatchIssuance } from './fixtures/fund-posting-numbering.fixture'
 
 /** 直接 SQL 故意绕过应用服务，验证资金事实在事务提交前仍受数据库守卫保护。 */
 describe('sales receipt fund invariants against direct PostgreSQL writes', () => {
@@ -16,16 +17,21 @@ describe('sales receipt fund invariants against direct PostgreSQL writes', () =>
 
   async function batch(userId: string, requestId: string) {
     const id = randomUUID()
+    const batchNo = `GUARD_${id.replaceAll('-', '').toUpperCase()}`
+    const numberingIssuanceId = await insertFundPostingBatchIssuance(
+      client,
+      batchNo,
+    )
     await client.query(`INSERT INTO fund_posting_batches (
-      id,batch_no,kind,posting_type_id,posting_type_code_snapshot,posting_type_name_snapshot,
+      id,batch_no,numbering_issuance_id,kind,posting_type_id,posting_type_code_snapshot,posting_type_name_snapshot,
       business_category_snapshot,business_source_id,business_source_code_snapshot,business_source_name_snapshot,
       rule_version_id,rule_revision_snapshot,user_id,business_amount,user_share_rate_snapshot,company_share_rate_snapshot,
       business_id,summary,business_occurred_at,consumer_code,idempotency_key_hash,request_fingerprint_hash,actor_user_id,request_id)
-      SELECT $1,$2,'BUSINESS',type.id,type.code,type.name,'REVENUE',source.id,source.code,source.name,
+      SELECT $1,$2,$8,'BUSINESS',type.id,type.code,type.name,'REVENUE',source.id,source.code,source.name,
       rule.id,rule.revision,$3,100,100,0,$4,'Receipt guard fixture',CURRENT_TIMESTAMP,'SALES_RECEIPT.APPROVE',$5,$6,$3,$7
       FROM fund_posting_types type JOIN fund_posting_rule_versions rule ON rule.id=type.current_rule_version_id
       CROSS JOIN fund_business_sources source WHERE type.code='ORDER_SETTLEMENT' AND source.code='SALES_RECEIPT'`,
-    [id, `GUARD_${id.replaceAll('-', '').toUpperCase()}`, userId, requestId, randomBytes(32), randomBytes(32), randomUUID()])
+    [id, batchNo, userId, requestId, randomBytes(32), randomBytes(32), randomUUID(), numberingIssuanceId])
     return id
   }
 
@@ -58,16 +64,21 @@ describe('sales receipt fund invariants against direct PostgreSQL writes', () =>
 
   async function reversal(fixture: Awaited<ReturnType<typeof approvedFixture>>) {
     const id = randomUUID()
+    const batchNo = `GUARD_${id.replaceAll('-', '').toUpperCase()}`
+    const numberingIssuanceId = await insertFundPostingBatchIssuance(
+      client,
+      batchNo,
+    )
     await client.query(`INSERT INTO fund_posting_batches (
-      id,batch_no,kind,posting_type_id,posting_type_code_snapshot,posting_type_name_snapshot,
+      id,batch_no,numbering_issuance_id,kind,posting_type_id,posting_type_code_snapshot,posting_type_name_snapshot,
       business_category_snapshot,business_source_id,business_source_code_snapshot,business_source_name_snapshot,
       rule_version_id,rule_revision_snapshot,user_id,business_amount,currency,user_share_rate_snapshot,company_share_rate_snapshot,
       business_id,summary,business_occurred_at,consumer_code,idempotency_key_hash,request_fingerprint_hash,actor_user_id,request_id,reversal_of_batch_id,reversal_reason)
-      SELECT $1,$2,'REVERSAL',posting_type_id,posting_type_code_snapshot,posting_type_name_snapshot,
+      SELECT $1,$2,$7,'REVERSAL',posting_type_id,posting_type_code_snapshot,posting_type_name_snapshot,
       business_category_snapshot,business_source_id,business_source_code_snapshot,business_source_name_snapshot,
       rule_version_id,rule_revision_snapshot,user_id,-business_amount,currency,user_share_rate_snapshot,company_share_rate_snapshot,
       business_id,summary,business_occurred_at,'SALES_RECEIPT.VOID',$3,$4,actor_user_id,$5,id,'Guard reversal'
-      FROM fund_posting_batches WHERE id=$6`, [id, `GUARD_${id.replaceAll('-', '').toUpperCase()}`, randomBytes(32), randomBytes(32), randomUUID(), fixture.batchId])
+      FROM fund_posting_batches WHERE id=$6`, [id, batchNo, randomBytes(32), randomBytes(32), randomUUID(), fixture.batchId, numberingIssuanceId])
     await client.query(`INSERT INTO fund_ledger_entries (batch_id,line_no,account_id,direction,account_target,amount_strategy,amount,balance_before,balance_after,account_sequence)
       VALUES ($1,1,$2,'DEBIT','USER','USER_SHARE',100,100,0,2)`, [id, fixture.accountId])
     return id

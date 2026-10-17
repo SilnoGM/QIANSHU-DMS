@@ -1,0 +1,89 @@
+{
+  "fundWithdrawal": {
+    "pageTitle": "提款申請",
+    "pageDescription": "提交與查看本人提款申請；財務審批通過後才會扣減帳戶餘額",
+    "approvalPageTitle": "帳戶提款審批",
+    "approvalPageDescription": "審核使用者提款申請；通過時上傳付款截圖並扣減申請人帳戶",
+    "status": {
+      "ALL": "全部",
+      "PENDING": "審核中",
+      "APPROVED": "已通過",
+      "REJECTED": "已拒絕"
+    },
+    "column": {
+      "withdrawalNo": "申請單號",
+      "amount": "提款金額",
+      "paymentProof": "付款截圖",
+      "accountBalance": "目前餘額",
+      "status": "狀態",
+      "applicant": "申請人",
+      "submittedAt": "提交時間",
+      "reviewedAt": "審核時間",
+      "reviewer": "審核人",
+      "action": "操作"
+    },
+    "action": {
+      "create": "新增提款申請",
+      "view": "查看詳情",
+      "approve": "通過",
+      "reject": "拒絕",
+      "cancel": "取消",
+      "close": "關閉",
+      "submit": "提交",
+      "changeProof": "更換截圖",
+      "removeProof": "移除",
+      "viewRecords": "查看申請"
+    },
+    "detail": {
+      "title": "提款申請詳情",
+      "applicant": "申請人",
+      "amount": "提款金額",
+      "accountBalance": "目前餘額",
+      "status": "狀態",
+      "submittedAt": "提交時間",
+      "reviewedAt": "審核時間",
+      "reviewer": "審核人",
+      "rejectReason": "拒絕原因",
+      "proof": "付款截圖",
+      "batchNo": "資金批次",
+      "noProof": "暫無付款截圖",
+      "noValue": "—"
+    },
+    "approve": {
+      "title": "審核通過",
+      "proof": "付款截圖",
+      "proofHint": "支援 jpg、png、webp，最大 10 MiB；上傳後自動改名為「展示名-提款金額元-日期」。",
+      "proofRequired": "請先上傳付款截圖",
+      "negativeHint": "資金帳戶允許負餘額，通過後將依申請金額扣款。",
+      "success": "提款申請已通過並完成扣款"
+    },
+    "reject": {
+      "title": "拒絕提款",
+      "reason": "拒絕原因",
+      "reasonPlaceholder": "請填寫拒絕原因",
+      "success": "提款申請已拒絕"
+    },
+    "toast": {
+      "submitted": "提款申請已提交，等待財務審核"
+    },
+    "apply": {
+      "unavailable": "尚未開立資金帳戶，請聯絡財務"
+    },
+    "error": {
+      "load": "載入提款紀錄失敗",
+      "account": "資金帳戶載入失敗",
+      "submit": "提款申請提交失敗",
+      "approve": "審核通過失敗",
+      "reject": "拒絕失敗",
+      "upload": "付款截圖上傳失敗",
+      "proof": "付款截圖載入失敗"
+    },
+    "empty": {
+      "own": "暫無提款紀錄",
+      "ownHint": "提交提款申請後，紀錄會顯示在這裡",
+      "review": "暫無提款申請",
+      "reviewHint": "新的提款申請會顯示在這裡"
+    },
+    "loading": "正在載入提款紀錄"
+  }
+}

@@ -31,6 +31,7 @@ import {
   FundAccountMutationResultDto,
   FundAccountOwnerCandidateListDto,
   FundAccountPageDto,
+  FundSelfAccountResponseDto,
   UpdateFundShareRateRequestDto,
 } from './dto/fund-account.dto'
 import { FundPostingResultDto } from './dto/fund-transaction.dto'
@@ -66,6 +67,29 @@ export class FundAccountsController {
   })
   list(@Query() dto: FundAccountListQueryDto): Promise<FundAccountPageDto> {
     return executeFundHttpOperation(() => this.accounts.listAccounts({ ...dto }))
+  }
+
+  /*
+   * 运营本人账户：身份只来自会话，不接受客户端传 userId/accountId。
+   * 未开户返回 200 + account: null，由前端按空态处理。
+   */
+  @Get('me')
+  @RequirePermissions('fund-accounts:read-self')
+  @ApiContractResponse({
+    status: HttpStatus.OK,
+    type: FundSelfAccountResponseDto,
+  })
+  @ApiApplicationContract({
+    operationId: 'fund_accounts_get_self',
+    session: 'required',
+    authorization: true,
+    privateNoStore: true,
+    errors: [FUND_READ_FORBIDDEN],
+  })
+  getSelf(@Req() request: object): Promise<FundSelfAccountResponseDto> {
+    return executeFundHttpOperation(() => (
+      this.accounts.getOwnAccount(getRequestAuthContext(request).userId)
+    ))
   }
 
   /*
@@ -205,6 +229,7 @@ export class FundAccountsController {
           'FUND_COMPANY_ACCOUNT_UNAVAILABLE',
           'FUND_CONCURRENT_STATE_CHANGED',
           'FUND_IDEMPOTENCY_CONFLICT',
+          'FUND_POSTING_NUMBERING_UNAVAILABLE',
           'FUND_POSTING_RULE_UNAVAILABLE',
           'FUND_POSTING_TYPE_DISABLED',
           'FUND_POSTING_TYPE_NOT_ALLOWED',

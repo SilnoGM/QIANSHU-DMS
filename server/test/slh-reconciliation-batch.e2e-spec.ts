@@ -1548,17 +1548,42 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
         requestFingerprintHash: createHash('sha256').update(randomUUID()).digest(),
         actorUserId: h.fixture.actor.id, requestId: randomUUID(), businessOccurredAt: new Date(),
       }
+      // 编号身份守卫先于业务形状 CHECK 执行；伪造行也必须先有一条匹配的
+      // fund 发号台账，才能继续验证 SLH 来源形状被数据库拒绝。
+      const fundRule = await h.prisma.numberingRule.findUniqueOrThrow({
+        where: { ruleCode: 'FUND_POSTING_BATCH_NO' },
+        include: { versions: { where: { status: 'ACTIVE' }, take: 1, select: { id: true } } },
+      })
+      const periodKey = new Date().toISOString().slice(0, 4)
+      await h.prisma.numberingPeriodState.upsert({
+        where: { ruleId_periodKey: { ruleId: fundRule.id, periodKey } },
+        update: {},
+        create: { ruleId: fundRule.id, periodKey },
+      })
+      const fundIssuance = await h.prisma.numberingIssuance.create({
+        data: {
+          ruleId: fundRule.id,
+          ruleVersionId: fundRule.versions[0].id,
+          periodKey,
+          generatedNumber: base.batchNo,
+          consumerCode: 'FUND_POSTING',
+          idempotencyKeyHash: createHash('sha256').update(randomUUID()).digest(),
+          requestFingerprintHash: createHash('sha256').update(randomUUID()).digest(),
+        },
+        select: { id: true },
+      })
+      const forged = { ...base, numberingIssuanceId: fundIssuance.id }
       // .FEE 必须配 FULL_FLOW_PAYMENT_FEE；换成 ORDER_SETTLEMENT 直接被 CHECK 拒绝。
-      await expect(h.prisma.fundPostingBatch.create({ data: base }))
+      await expect(h.prisma.fundPostingBatch.create({ data: forged }))
         .rejects.toThrow(/fund_posting_batches_slh_bill_settlement_shape_check/u)
       // .FEE 也不能是非正金额。
       await expect(h.prisma.fundPostingBatch.create({ data: {
-        ...base, postingTypeId: paymentFee.id, postingTypeCodeSnapshot: 'FULL_FLOW_PAYMENT_FEE',
+        ...forged, postingTypeId: paymentFee.id, postingTypeCodeSnapshot: 'FULL_FLOW_PAYMENT_FEE',
         postingTypeNameSnapshot: paymentFee.name, businessCategorySnapshot: paymentFee.businessCategory,
         ruleVersionId: paymentFee.currentRuleVersionId!, businessAmount: '-1.00',
       } })).rejects.toThrow(/fund_posting_batches_slh_bill_settlement_shape_check/u)
       // 归属人缺失同样被拒（资金归属人是销售出单人，不能为空）。
-      await expect(h.prisma.fundPostingBatch.create({ data: { ...base, userId: null, userShareRateSnapshot: null, companyShareRateSnapshot: null } }))
+      await expect(h.prisma.fundPostingBatch.create({ data: { ...forged, userId: null, userShareRateSnapshot: null, companyShareRateSnapshot: null } }))
         .rejects.toThrow(/fund_posting_batches_slh_bill_settlement_shape_check/u)
       expect(await h.prisma.fundPostingBatch.count({ where: { businessSourceCodeSnapshot: 'SLH_BILL_FINANCE_SETTLEMENT', businessId: base.businessId } })).toBe(0)
     })

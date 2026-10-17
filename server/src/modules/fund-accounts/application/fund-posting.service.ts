@@ -11,6 +11,8 @@ import {
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../../infrastructure/database/transaction-timeouts'
 import { AuditService } from '../../audit/audit.service'
+import { NumberingGenerationError } from '../../numbering/numbering.errors'
+import { NumberingGeneratorService } from '../../numbering/numbering-generator.service'
 import {
   FundCalculationError,
   calculateFundReversal,
@@ -62,6 +64,10 @@ import type {
   FundReversalInput,
   PostBusinessEventInput,
 } from './fund-posting.contract'
+import {
+  FUND_POSTING_BATCH_NUMBER_CONSUMER_CODE,
+  FUND_POSTING_BATCH_NUMBER_RULE_CODE,
+} from './fund-posting-batch-number'
 import { FundPostingService } from './fund-posting.contract'
 import {
   PURCHASE_PAYMENT_FUND_SOURCE,
@@ -82,6 +88,11 @@ import {
   INVOICE_REQUEST_POSTING_TYPE,
   INVOICE_REQUEST_SETTLE_CONSUMER,
 } from './fund-invoice-request'
+import {
+  FUND_WITHDRAWAL_APPROVE_CONSUMER,
+  FUND_WITHDRAWAL_FUND_SOURCE,
+  FUND_WITHDRAWAL_POSTING_TYPE,
+} from './fund-withdrawal'
 import {
   isFundIdempotencyUniqueViolation,
   mapFundPersistenceError,
@@ -130,6 +141,8 @@ const CONTROLLED_POSTING_TYPE_BY_SOURCE_CONSUMER: Readonly<Record<string, string
     SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE,
   [`${INVOICE_REQUEST_FUND_SOURCE}/${INVOICE_REQUEST_SETTLE_CONSUMER}`]:
     INVOICE_REQUEST_POSTING_TYPE,
+  [`${FUND_WITHDRAWAL_FUND_SOURCE}/${FUND_WITHDRAWAL_APPROVE_CONSUMER}`]:
+    FUND_WITHDRAWAL_POSTING_TYPE,
 })
 
 interface PlannedLedgerEntry {
@@ -154,6 +167,11 @@ function postingError(
 
 function toPostingError(error: unknown): FundPostingError {
   if (error instanceof FundPostingError) return error
+  if (error instanceof NumberingGenerationError) {
+    return new FundPostingError(
+      FUND_POSTING_ERROR_CODES.NUMBERING_UNAVAILABLE,
+    )
+  }
   if (error instanceof FundCalculationError) {
     return new FundPostingError(
       error.code,
@@ -188,14 +206,6 @@ function resolveReplay(
     entries: record.entries,
     postedAt: record.postedAt.toISOString(),
     idempotentReplay: true,
-  })
-}
-
-function createBatchIdentity(): { readonly id: string; readonly batchNo: string } {
-  const id = randomUUID()
-  return Object.freeze({
-    id,
-    batchNo: `FUND_${id.replaceAll('-', '').toUpperCase()}`,
   })
 }
 
@@ -477,8 +487,38 @@ export class FundPostingApplicationService extends FundPostingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly numbering: NumberingGeneratorService,
   ) {
     super()
+  }
+
+  /**
+   * 批次号与资金事实必须在同一事务内取得：发号失败会回滚整笔动账，不会留下
+   * 已消耗号码却没有批次的孤儿。数据库身份触发器会再次核对批次号与发号记录。
+   */
+  private async createBatchIdentity(
+    transaction: Prisma.TransactionClient,
+    requestFingerprintHash: Buffer,
+  ): Promise<{
+    readonly id: string
+    readonly batchNo: string
+    readonly numberingIssuanceId: string
+  }> {
+    const id = randomUUID()
+    const numbering = await this.numbering.generateScopedInTransaction(
+      transaction,
+      {
+        ruleCode: FUND_POSTING_BATCH_NUMBER_RULE_CODE,
+        consumerCode: FUND_POSTING_BATCH_NUMBER_CONSUMER_CODE,
+        idempotencyKey: `batch:${id}`,
+        requestFingerprint: requestFingerprintHash.toString('hex'),
+      },
+    )
+    return Object.freeze({
+      id,
+      batchNo: numbering.number,
+      numberingIssuanceId: numbering.issuanceId,
+    })
   }
 
   async postBusinessEvent(
@@ -521,7 +561,10 @@ export class FundPostingApplicationService extends FundPostingService {
     // 开票申请结算：只有一个动作（服务费与邮寄费合成一笔成本），不支持反向。
     const invoiceSettlement = action === 'POST' && context.sourceCode === INVOICE_REQUEST_FUND_SOURCE
       && context.consumerCode === INVOICE_REQUEST_SETTLE_CONSUMER
-    if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement && !invoiceSettlement) {
+    // 用户提款审批：通过时从申请人账户单一扣款，不支持反向。
+    const fundWithdrawal = action === 'POST' && context.sourceCode === FUND_WITHDRAWAL_FUND_SOURCE
+      && context.consumerCode === FUND_WITHDRAWAL_APPROVE_CONSUMER
+    if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement && !invoiceSettlement && !fundWithdrawal) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     return normalizeFundAccountCommandContext({
@@ -739,7 +782,10 @@ export class FundPostingApplicationService extends FundPostingService {
       userShareRate,
       adjustmentMode: request.input.adjustmentMode,
     })
-    const identity = createBatchIdentity()
+    const identity = await this.createBatchIdentity(
+      transaction,
+      request.requestFingerprintHash,
+    )
     const plannedEntries = plan.entries.map((entry, index) => (
       planLedgerEntry(
         entry,
@@ -756,6 +802,7 @@ export class FundPostingApplicationService extends FundPostingService {
     await insertFundManualAdjustmentBatch(transaction, {
       id: identity.id,
       batchNo: identity.batchNo,
+      numberingIssuanceId: identity.numberingIssuanceId,
       kind: 'MANUAL_ADJUSTMENT',
       postingTypeId: postingType.id,
       postingTypeCodeSnapshot: postingType.code,
@@ -946,7 +993,10 @@ export class FundPostingApplicationService extends FundPostingService {
     )
     const accounts = await lockFundAccountsForPosting(transaction, accountIds)
     const targetAccounts = mapTargetAccounts(accounts, identities, original.userId)
-    const batchIdentity = createBatchIdentity()
+    const batchIdentity = await this.createBatchIdentity(
+      transaction,
+      request.requestFingerprintHash,
+    )
     const plannedEntries = plan.entries.map((entry, index) => (
       planLedgerEntry(
         entry,
@@ -963,6 +1013,7 @@ export class FundPostingApplicationService extends FundPostingService {
     await insertFundReversalBatch(transaction, {
       id: batchIdentity.id,
       batchNo: batchIdentity.batchNo,
+      numberingIssuanceId: batchIdentity.numberingIssuanceId,
       originalBatchId: original.id,
       businessAmount: plan.reversalBusinessAmount,
       consumerCode: business?.consumerCode ?? ADMIN_REVERSAL_CONSUMER_CODE,
@@ -1217,7 +1268,10 @@ export class FundPostingApplicationService extends FundPostingService {
     )) {
       throw postingError(FUND_POSTING_ERROR_CODES.CONCURRENT_STATE_CHANGED)
     }
-    const identity = createBatchIdentity()
+    const identity = await this.createBatchIdentity(
+      transaction,
+      request.requestFingerprintHash,
+    )
     const plannedEntries = plan.entries.map((entry, index) => (
       planLedgerEntry(
         entry,
@@ -1234,6 +1288,7 @@ export class FundPostingApplicationService extends FundPostingService {
     await insertFundPostingBatch(transaction, {
       id: identity.id,
       batchNo: identity.batchNo,
+      numberingIssuanceId: identity.numberingIssuanceId,
       kind: 'BUSINESS',
       ...(business === undefined ? {} : { actorUserId: business.actorUserId }),
       postingTypeId: postingType.id,

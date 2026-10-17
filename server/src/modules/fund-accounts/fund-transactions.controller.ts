@@ -25,6 +25,9 @@ import {
   FundPostingBatchDetailDto,
   FundPostingBatchIdParamDto,
   FundPostingResultDto,
+  FundSelfPostingTypeOptionListDto,
+  FundSelfTransactionListQueryDto,
+  FundSelfTransactionPageDto,
   FundTransactionListQueryDto,
   FundTransactionPageDto,
 } from './dto/fund-transaction.dto'
@@ -62,6 +65,61 @@ export class FundTransactionsController {
   ): Promise<FundTransactionPageDto> {
     return executeFundHttpOperation(() => (
       this.transactions.listTransactions({ ...dto })
+    ))
+  }
+
+  /*
+   * 运营本人流水：服务端按会话解析本人账户并强制 account_id 过滤，
+   * 客户端不传也不可覆盖 userId/accountId；来源说明随行返回。
+   */
+  @Get('fund-transactions/me')
+  @RequirePermissions('fund-accounts:read-self')
+  @ApiContractResponse({
+    status: HttpStatus.OK,
+    type: FundSelfTransactionPageDto,
+  })
+  @ApiApplicationContract({
+    operationId: 'fund_transactions_list_self',
+    session: 'required',
+    authorization: true,
+    badRequest: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [FUND_READ_FORBIDDEN, FUND_VALIDATION_ERRORS],
+  })
+  listSelf(
+    @Query() dto: FundSelfTransactionListQueryDto,
+    @Req() request: object,
+  ): Promise<FundSelfTransactionPageDto> {
+    return executeFundHttpOperation(() => (
+      this.transactions.listOwnTransactions(
+        getRequestAuthContext(request).userId,
+        { ...dto },
+      )
+    ))
+  }
+
+  /* 本人流水中实际出现过的业务类型，供运营端筛选下拉使用。 */
+  @Get('fund-transactions/me/posting-types')
+  @RequirePermissions('fund-accounts:read-self')
+  @ApiContractResponse({
+    status: HttpStatus.OK,
+    type: FundSelfPostingTypeOptionListDto,
+  })
+  @ApiApplicationContract({
+    operationId: 'fund_transactions_self_posting_types',
+    session: 'required',
+    authorization: true,
+    privateNoStore: true,
+    errors: [FUND_READ_FORBIDDEN],
+  })
+  selfPostingTypes(
+    @Req() request: object,
+  ): Promise<FundSelfPostingTypeOptionListDto> {
+    return executeFundHttpOperation(() => (
+      this.transactions.listOwnPostingTypes(
+        getRequestAuthContext(request).userId,
+      )
     ))
   }
 
@@ -118,6 +176,7 @@ export class FundTransactionsController {
           'FUND_ACCOUNT_UNAVAILABLE',
           'FUND_CONCURRENT_STATE_CHANGED',
           'FUND_IDEMPOTENCY_CONFLICT',
+          'FUND_POSTING_NUMBERING_UNAVAILABLE',
           'FUND_REVERSAL_REQUIRES_RECEIPT_VOID',
           'FUND_REVERSAL_STATE_CHANGED',
         ],

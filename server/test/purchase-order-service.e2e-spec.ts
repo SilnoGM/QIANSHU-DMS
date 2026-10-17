@@ -380,7 +380,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     await ensureReceiptNumberingRule(prisma, actorUserId)
     await ensureShipmentNumberingRule(prisma, actorUserId)
     salesReceipts = new SalesReceiptService(prisma, new SalesReceiptQueryService(prisma), dictionaryLookup, media,
-      new FundPostingApplicationService(prisma, new AuditService()), new AuditService(), new SalesOrderAutomaticStateService(new AuditService()),
+      new FundPostingApplicationService(prisma, new AuditService(), new NumberingGeneratorService(prisma)), new AuditService(), new SalesOrderAutomaticStateService(new AuditService()),
       { getPermissionCodesInTransaction: () => Promise.resolve(['sales-orders:payment', 'sales-orders:document', 'sales-receipts:review']), hasAll: () => true } as unknown as AccessControlService,
       { stat: () => Promise.resolve({ sizeBytes: 1n, modifiedAt: new Date() }) } as unknown as MediaContentDeliveryService,
       new NumberingGeneratorService(prisma),
@@ -412,7 +412,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       markResolver,
       new PurchaseOrderWarehouseReceiptService(prisma, new AuditService(), queries),
       createImageReviewService(prisma, queries, new AuditService()),
-      new PurchasePayableService(new FundPostingApplicationService(prisma, new AuditService()), {
+      new PurchasePayableService(new FundPostingApplicationService(prisma, new AuditService(), new NumberingGeneratorService(prisma)), {
         getPermissionCodesInTransaction: () => Promise.resolve(['purchase-orders:payment']),
         hasAll: (granted: readonly string[], required: readonly string[]) => required.every(code => granted.includes(code)),
       } as unknown as AccessControlService, createPaymentRecipientFixture(prisma)),

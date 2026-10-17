@@ -2,10 +2,12 @@ import { Module } from '@nestjs/common'
 
 import { PrismaModule } from '../../infrastructure/database/prisma.module'
 import { AuthModule } from '../auth/auth.module'
+import { NumberingModule } from '../numbering/numbering.module'
 import { FundAccountCommandService } from './application/fund-account-command.service'
 import { FundAccountQueryService } from './application/fund-account-query.service'
 import { FundConfigurationCommandService } from './application/fund-configuration-command.service'
 import { FundConfigurationQueryService } from './application/fund-configuration-query.service'
+import { FundPostingBatchNumberBackfillService } from './application/fund-posting-batch-number-backfill.service'
 import { FundPostingService } from './application/fund-posting.contract'
 import { FundPostingApplicationService } from './application/fund-posting.service'
 import { FundTransactionQueryService } from './application/fund-transaction-query.service'
@@ -19,7 +21,7 @@ import { FundTransactionsController } from './fund-transactions.controller'
  * 不会获得人工调账、冲账、配置命令或 Prisma persistence。
  */
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, NumberingModule],
   controllers: [
     FundAccountsController,
     FundTransactionsController,
@@ -33,6 +35,7 @@ import { FundTransactionsController } from './fund-transactions.controller'
     FundConfigurationCommandService,
     FundTransactionQueryService,
     FundPostingApplicationService,
+    FundPostingBatchNumberBackfillService,
     {
       provide: FundPostingService,
       useExisting: FundPostingApplicationService,

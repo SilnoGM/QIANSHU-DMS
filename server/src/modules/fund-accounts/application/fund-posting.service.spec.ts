@@ -2,6 +2,11 @@ import type { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { AuditService } from '../../audit/audit.service'
 import {
+  NUMBERING_ERROR_CODES,
+  NumberingGenerationError,
+} from '../../numbering/numbering.errors'
+import { NumberingGeneratorService } from '../../numbering/numbering-generator.service'
+import {
   INITIAL_FUND_POSTING_RULES,
   type FundPostingRule,
 } from '../domain'
@@ -30,6 +35,8 @@ const USER_ID = '44444444-4444-4444-a444-444444444444'
 const COMPANY_ACCOUNT_ID = '55555555-5555-4555-a555-555555555555'
 const USER_ACCOUNT_ID = '99999999-9999-4999-a999-999999999999'
 const AS_OF = new Date('2026-08-18T08:00:00.000Z')
+const NUMBERING_ISSUANCE_ID = '66666666-6666-4666-a666-666666666666'
+const NUMBERING_NUMBER = 'FUND/20261017-00001'
 const CONTEXT = {
   consumerCode: 'ORDER',
   sourceCode: 'ORDER_SYSTEM',
@@ -127,11 +134,22 @@ function fixture() {
     record: jest.fn<Promise<unknown>, [unknown, unknown]>()
       .mockResolvedValue({ id: 'audit-1' }),
   }
+  const numbering = {
+    generateScopedInTransaction: jest.fn().mockResolvedValue({
+      issuanceId: NUMBERING_ISSUANCE_ID,
+      number: NUMBERING_NUMBER,
+      ruleCode: 'FUND_POSTING_BATCH_NO',
+      ruleRevision: 1,
+      issuedAt: AS_OF.toISOString(),
+      idempotentReplay: false,
+    }),
+  }
   const service = new FundPostingApplicationService(
     prisma as unknown as PrismaService,
     audit as unknown as AuditService,
+    numbering as unknown as NumberingGeneratorService,
   )
-  return { audit, prisma, service, transaction }
+  return { audit, prisma, service, transaction, numbering }
 }
 
 function configureSuccessfulPosting(rule: FundPostingRule): void {
@@ -237,6 +255,19 @@ describe('FundPostingApplicationService business rules', () => {
     },
   )
 
+  it('fails closed with a stable code when numbering is unavailable', async () => {
+    configureSuccessfulPosting(requireInitialRule('ORDER_SETTLEMENT'))
+    const { service, numbering } = fixture()
+    numbering.generateScopedInTransaction.mockRejectedValueOnce(
+      new NumberingGenerationError(NUMBERING_ERROR_CODES.RULE_UNAVAILABLE),
+    )
+
+    await expect(service.postBusinessEvent(CONTEXT, businessInput()))
+      .rejects.toMatchObject({
+        code: 'FUND_POSTING_NUMBERING_UNAVAILABLE',
+      })
+  })
+
   it('posts a negative settlement by sharing the loss and permits negative balances', async () => {
     const rule = requireInitialRule('ORDER_SETTLEMENT')
     configureSuccessfulPosting(rule)
@@ -303,9 +334,8 @@ describe('FundPostingApplicationService business rules', () => {
     )
     const batchInput = mockedInsertBatch.mock.calls[0]?.[1]
     expect(batchInput?.id).toMatch(/^[0-9a-f-]{36}$/u)
-    expect(batchInput?.batchNo).toBe(
-      `FUND_${batchInput?.id.replaceAll('-', '').toUpperCase()}`,
-    )
+    expect(batchInput?.batchNo).toBe(NUMBERING_NUMBER)
+    expect(batchInput?.numberingIssuanceId).toBe(NUMBERING_ISSUANCE_ID)
     expect(mockedUpdateAccount.mock.calls.map(call => call[1].accountId)).toEqual([
       COMPANY_ACCOUNT_ID,
       USER_ACCOUNT_ID,
