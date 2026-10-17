@@ -40,6 +40,12 @@
     "batchNo": "Batch",
     "noBusinessNo": "No linked business",
     "viewDetail": "View details",
-    "detailComingSoon": "Ledger details are coming soon."
+    "detail": {
+      "title": "Ledger details",
+      "businessOccurredAt": "Business occurred at",
+      "summary": "Summary",
+      "reversalStatus": "Reversal status",
+      "close": "Close"
+    }
   }
 }

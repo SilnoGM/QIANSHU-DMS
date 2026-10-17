@@ -12,11 +12,13 @@ import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsPersonalFundAccountCard from '@/components/business/QsPersonalFundAccountCard/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import ApplyWithdrawalModal from './apply-withdrawal-modal.vue'
+import FundTransactionDetailModal from './fund-transaction-detail-modal.vue'
 import {
   LEDGER_BATCH_KIND_META,
   LEDGER_CATEGORY_META,
   LEDGER_DIRECTION_META,
   LEDGER_REVERSAL_META,
+  ledgerSignedAmount,
 } from './ledger.logic'
 
 /**
@@ -52,6 +54,8 @@ const transactionTotal = ref(0)
 const transactionLoading = ref(true)
 const transactionError = ref('')
 const transactions = shallowRef<FundSelfTransactionDto[]>([])
+const transactionDetailOpen = ref(false)
+const transactionDetail = shallowRef<FundSelfTransactionDto | null>(null)
 
 const canRead = computed(() => auth('fund-accounts:read-self'))
 const enabled = computed(() => (
@@ -281,8 +285,9 @@ function viewWithdrawals(): void {
   void router.push({ name: 'qsOperationsPersonalFinanceWithdrawals' })
 }
 
-function viewTransactionDetail(): void {
-  toast.info(t('personalFinanceLedger.detailComingSoon'))
+function viewTransactionDetail(transaction: FundSelfTransactionDto): void {
+  transactionDetail.value = transaction
+  transactionDetailOpen.value = true
 }
 
 // 身份切换时先清空本人数据，避免在新请求完成前短暂显示上一个身份的余额与流水。
@@ -293,6 +298,8 @@ watch(() => appAccount.authEpoch, () => {
   transactionTotal.value = 0
   transactionPage.value = 1
   withdrawalOpen.value = false
+  transactionDetailOpen.value = false
+  transactionDetail.value = null
 })
 
 // active 控制页面是否在台前；authEpoch 变化时重新取数。
@@ -316,6 +323,7 @@ onActivated(() => {
 onDeactivated(() => {
   active.value = false
   withdrawalOpen.value = false
+  transactionDetailOpen.value = false
 })
 onBeforeUnmount(() => {
   active.value = false
@@ -479,7 +487,7 @@ onBeforeUnmount(() => {
                 :class="directionMeta(row.original.direction).amountClass"
               >+</span>
               <AmountDisplay
-                :value="row.original.direction === 'DEBIT' ? `-${row.original.amount}` : row.original.amount"
+                :value="ledgerSignedAmount(row.original.direction, row.original.amount)"
                 currency="CNY"
                 :currencies="currencyCatalog.currencies.value"
                 class="!text-base !font-semibold"
@@ -511,12 +519,13 @@ onBeforeUnmount(() => {
           </div>
         </template>
 
-        <template #actions>
+        <template #actions="{ row }">
           <FaButton
             variant="ghost"
             size="sm"
             class="min-h-11 sm:min-h-8"
-            @click="viewTransactionDetail"
+            :aria-label="`${t('personalFinanceLedger.viewDetail')} #${row.accountSequence}`"
+            @click="viewTransactionDetail(row)"
           >
             <FaIcon name="i-lucide:eye" aria-hidden="true" />
             {{ t('personalFinanceLedger.viewDetail') }}
@@ -533,6 +542,11 @@ onBeforeUnmount(() => {
         :error="withdrawalError || null"
         :submitting="withdrawalSubmitting"
         @submit="submitWithdrawal"
+      />
+
+      <FundTransactionDetailModal
+        v-model="transactionDetailOpen"
+        :transaction="transactionDetail"
       />
     </FaPageMain>
   </div>

@@ -11,6 +11,7 @@ import {
   LEDGER_CATEGORY_META,
   LEDGER_DIRECTION_META,
   LEDGER_REVERSAL_META,
+  ledgerSignedAmount,
 } from '../../src/views/operations/personal-finance/fund-accounts/ledger.logic'
 
 test('流水类型、批次、冲账与方向元数据固定', () => {
@@ -33,6 +34,8 @@ test('流水类型、批次、冲账与方向元数据固定', () => {
   assert.equal(LEDGER_DIRECTION_META.DEBIT.labelKey, 'personalFinanceLedger.direction.DEBIT')
   assert.match(LEDGER_DIRECTION_META.DEBIT.badgeClass, /text-destructive/u)
   assert.match(LEDGER_DIRECTION_META.DEBIT.amountClass, /text-destructive/u)
+  assert.equal(ledgerSignedAmount('DEBIT', '100.00'), '-100.00')
+  assert.equal(ledgerSignedAmount('CREDIT', '385.85'), '385.85')
 })
 
 test('流水行不再展示分成比例', () => {
@@ -41,6 +44,22 @@ test('流水行不再展示分成比例', () => {
     'utf8',
   )
   assert.doesNotMatch(source, /personalFinanceLedger\.shareRate|userShareRateSnapshot/u)
+})
+
+test('流水详情按钮接入只读弹窗', () => {
+  const pageSource = readFileSync(
+    new URL('../../src/views/operations/personal-finance/fund-accounts/index.vue', import.meta.url),
+    'utf8',
+  )
+  const modalSource = readFileSync(
+    new URL('../../src/views/operations/personal-finance/fund-accounts/fund-transaction-detail-modal.vue', import.meta.url),
+    'utf8',
+  )
+  assert.match(pageSource, /FundTransactionDetailModal/u)
+  assert.match(pageSource, /viewTransactionDetail\(row\)/u)
+  assert.doesNotMatch(pageSource, /detailComingSoon/u)
+  assert.match(modalSource, /<QsGenericModal/u)
+  assert.match(modalSource, /ledgerSignedAmount/u)
 })
 
 function collectKeys(source: Record<string, unknown>): string[] {
@@ -74,7 +93,11 @@ test('资金流水三语文案键完全对齐', () => {
     'personalFinanceLedger.column.sequence',
     'personalFinanceLedger.column.summary',
     'personalFinanceLedger.column.typeSource',
-    'personalFinanceLedger.detailComingSoon',
+    'personalFinanceLedger.detail.businessOccurredAt',
+    'personalFinanceLedger.detail.close',
+    'personalFinanceLedger.detail.reversalStatus',
+    'personalFinanceLedger.detail.summary',
+    'personalFinanceLedger.detail.title',
     'personalFinanceLedger.direction.CREDIT',
     'personalFinanceLedger.direction.DEBIT',
     'personalFinanceLedger.empty',

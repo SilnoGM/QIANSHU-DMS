@@ -40,6 +40,12 @@
     "batchNo": "批次",
     "noBusinessNo": "無關聯業務單",
     "viewDetail": "查看詳情",
-    "detailComingSoon": "流水詳情功能建置中，敬請期待"
+    "detail": {
+      "title": "流水詳情",
+      "businessOccurredAt": "業務發生時間",
+      "summary": "摘要",
+      "reversalStatus": "沖帳狀態",
+      "close": "關閉"
+    }
   }
 }

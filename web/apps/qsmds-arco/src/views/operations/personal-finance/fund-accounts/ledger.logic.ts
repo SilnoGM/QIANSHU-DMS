@@ -66,3 +66,11 @@ export const LEDGER_DIRECTION_META = {
     amountClass: '!text-destructive',
   },
 } as const
+
+/** 表格与详情弹窗共用同一带符号金额口径，避免两处出现正负号差异。 */
+export function ledgerSignedAmount(
+  direction: keyof typeof LEDGER_DIRECTION_META,
+  amount: string,
+): string {
+  return direction === 'DEBIT' ? `-${amount}` : amount
+}
