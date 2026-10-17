@@ -93,7 +93,7 @@ const ledgerColumns = computed<QsGenericTableColumn<FundSelfTransactionDto>[]>((
     id: 'amount',
     accessorKey: 'amount',
     title: t('personalFinanceLedger.column.amount'),
-    minWidth: 220,
+    minWidth: 260,
     align: 'right',
   },
   {
