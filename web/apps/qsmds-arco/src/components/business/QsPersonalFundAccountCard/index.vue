@@ -336,7 +336,7 @@ const toggleLabel = computed(() => t(
 .qs-personal-fund-card__layout {
   display: grid;
   grid-template-columns: minmax(460px, 26%) minmax(0, 1fr);
-  min-height: 15rem;
+  min-height: 13rem;
 }
 
 .qs-personal-fund-card__balance {
@@ -395,17 +395,17 @@ const toggleLabel = computed(() => t(
 }
 
 .qs-personal-fund-card__circle--top {
-  top: -8rem;
-  right: -7rem;
-  width: 20rem;
-  height: 20rem;
+  top: -6rem;
+  right: -5rem;
+  width: 16rem;
+  height: 16rem;
 }
 
 .qs-personal-fund-card__circle--bottom {
-  bottom: -7rem;
+  bottom: -6rem;
   left: -3rem;
-  width: 12rem;
-  height: 12rem;
+  width: 10rem;
+  height: 10rem;
   background: color-mix(in oklab, oklch(100% 0 0deg) 7%, transparent);
 }
 
