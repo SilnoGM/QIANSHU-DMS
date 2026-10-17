@@ -4,6 +4,7 @@ import {
   AuditService,
   type RecordAuditEventInput,
 } from '../../audit/audit.service'
+import { NumberingGeneratorService } from '../../numbering/numbering-generator.service'
 import { normalizeFundReversalRequest } from './fund-input.normalizer'
 import {
   insertFundLedgerEntries,
@@ -169,9 +170,20 @@ function fixture() {
     record: jest.fn<Promise<unknown>, [unknown, unknown]>()
       .mockResolvedValue({ id: 'audit-1' }),
   }
+  const numbering = {
+    generateScopedInTransaction: jest.fn().mockResolvedValue({
+      issuanceId: '66666666-6666-4666-a666-666666666666',
+      number: 'FUND/20261017-00001',
+      ruleCode: 'FUND_POSTING_BATCH_NO',
+      ruleRevision: 1,
+      issuedAt: AS_OF.toISOString(),
+      idempotentReplay: false,
+    }),
+  }
   const service = new FundPostingApplicationService(
     prisma as unknown as PrismaService,
     audit as unknown as AuditService,
+    numbering as unknown as NumberingGeneratorService,
   )
   return { audit, prisma, service, transaction }
 }

@@ -1,5 +1,6 @@
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { INITIAL_FUND_POSTING_RULES } from '../domain'
+import { NumberingGeneratorService } from '../../numbering/numbering-generator.service'
 import {
   insertFundLedgerEntries,
   insertFundManualAdjustmentBatch,
@@ -43,11 +44,22 @@ function fixture() {
     )),
   }
   const audit = { record: jest.fn().mockResolvedValue({ id: 'audit-1' }) }
+  const numbering = {
+    generateScopedInTransaction: jest.fn().mockResolvedValue({
+      issuanceId: '66666666-6666-4666-a666-666666666666',
+      number: 'FUND/20261017-00001',
+      ruleCode: 'FUND_POSTING_BATCH_NO',
+      ruleRevision: 1,
+      issuedAt: AS_OF.toISOString(),
+      idempotentReplay: false,
+    }),
+  }
   return {
     audit,
     service: new FundPostingApplicationService(
       prisma as unknown as PrismaService,
       audit,
+      numbering as unknown as NumberingGeneratorService,
     ),
   }
 }

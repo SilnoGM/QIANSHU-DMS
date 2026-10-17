@@ -288,6 +288,20 @@ describe('fund account posting against isolated PostgreSQL', () => {
       results.push(result)
     }
 
+    const numberedBatch = await prisma.fundPostingBatch.findUniqueOrThrow({
+      where: { id: results[0].batchId },
+      select: { batchNo: true, numberingIssuanceId: true },
+    })
+    expect(numberedBatch.batchNo).toMatch(/^FUND\/\d{8}-\d{5}$/u)
+    expect(numberedBatch.numberingIssuanceId).not.toBeNull()
+    await expect(prisma.numberingIssuance.findUniqueOrThrow({
+      where: { id: numberedBatch.numberingIssuanceId! },
+      select: { generatedNumber: true, consumerCode: true },
+    })).resolves.toEqual({
+      generatedNumber: numberedBatch.batchNo,
+      consumerCode: 'FUND_POSTING',
+    })
+
     const adjustment = await postings.postManualAdjustment(
       commandContext('manual_type'),
       {

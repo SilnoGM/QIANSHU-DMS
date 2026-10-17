@@ -98,6 +98,7 @@ export interface FundIdempotentPostingRecord {
 export interface FundPostingBatchInsert {
   readonly id: string
   readonly batchNo: string
+  readonly numberingIssuanceId: string
   readonly kind: 'BUSINESS'
   readonly actorUserId?: string
   readonly postingTypeId: string
@@ -129,6 +130,7 @@ export interface FundPostingBatchInsert {
 export interface FundManualAdjustmentBatchInsert {
   readonly id: string
   readonly batchNo: string
+  readonly numberingIssuanceId: string
   readonly kind: 'MANUAL_ADJUSTMENT'
   readonly postingTypeId: string
   readonly postingTypeCodeSnapshot: string
@@ -812,6 +814,7 @@ export async function insertFundPostingBatch(
     data: {
       id: input.id,
       batchNo: input.batchNo,
+      numberingIssuanceId: input.numberingIssuanceId,
       kind: input.kind,
       postingTypeId: input.postingTypeId,
       postingTypeCodeSnapshot: input.postingTypeCodeSnapshot,
@@ -870,6 +873,7 @@ export async function insertFundManualAdjustmentBatch(
     data: {
       id: input.id,
       batchNo: input.batchNo,
+      numberingIssuanceId: input.numberingIssuanceId,
       kind: input.kind,
       postingTypeId: input.postingTypeId,
       postingTypeCodeSnapshot: input.postingTypeCodeSnapshot,

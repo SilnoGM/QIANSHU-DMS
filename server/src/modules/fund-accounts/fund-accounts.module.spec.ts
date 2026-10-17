@@ -1,10 +1,12 @@
 import { HTTP_MODULES } from '../../http.modules'
 import { PrismaModule } from '../../infrastructure/database/prisma.module'
 import { AuthModule } from '../auth/auth.module'
+import { NumberingModule } from '../numbering/numbering.module'
 import { FundAccountCommandService } from './application/fund-account-command.service'
 import { FundAccountQueryService } from './application/fund-account-query.service'
 import { FundConfigurationCommandService } from './application/fund-configuration-command.service'
 import { FundConfigurationQueryService } from './application/fund-configuration-query.service'
+import { FundPostingBatchNumberBackfillService } from './application/fund-posting-batch-number-backfill.service'
 import { FundPostingService } from './application/fund-posting.contract'
 import { FundPostingApplicationService } from './application/fund-posting.service'
 import { FundTransactionQueryService } from './application/fund-transaction-query.service'
@@ -19,6 +21,7 @@ describe('FundAccountsModule metadata', () => {
     expect(Reflect.getMetadata('imports', FundAccountsModule)).toEqual([
       PrismaModule,
       AuthModule,
+      NumberingModule,
     ])
     expect(Reflect.getMetadata('controllers', FundAccountsModule)).toEqual([
       FundAccountsController,
@@ -33,6 +36,7 @@ describe('FundAccountsModule metadata', () => {
       FundConfigurationCommandService,
       FundTransactionQueryService,
       FundPostingApplicationService,
+      FundPostingBatchNumberBackfillService,
       {
         provide: FundPostingService,
         useExisting: FundPostingApplicationService,

@@ -65,6 +65,7 @@ export interface FundOriginalEntriesForReversalRecord {
 export interface FundReversalBatchInsert {
   readonly id: string
   readonly batchNo: string
+  readonly numberingIssuanceId: string
   readonly originalBatchId: string
   readonly businessAmount: string
   readonly consumerCode: string
@@ -401,6 +402,7 @@ export async function insertFundReversalBatch(
       INSERT INTO "fund_posting_batches" (
         "id",
         "batch_no",
+        "numbering_issuance_id",
         "kind",
         "posting_type_id",
         "posting_type_code_snapshot",
@@ -435,6 +437,7 @@ export async function insertFundReversalBatch(
       SELECT
         CAST(${input.id} AS uuid),
         ${input.batchNo},
+        CAST(${input.numberingIssuanceId} AS uuid),
         'REVERSAL'::"fund_posting_batch_kind",
         original."posting_type_id",
         original."posting_type_code_snapshot",

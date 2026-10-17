@@ -125,7 +125,7 @@ export function createReviewMutations(fixture: AtomicityFixture, wrap?: (transac
     fixture.numbering, fixture.resolver,
     new PurchaseOrderWarehouseReceiptService(prisma, fixture.audit, new PurchaseOrderQueryService(fixture.prisma, lookup, createPaymentRecipientFixture(fixture.prisma))),
     createImageReviewService(fixture.prisma, new PurchaseOrderQueryService(fixture.prisma, lookup, createPaymentRecipientFixture(fixture.prisma)), fixture.audit),
-    new PurchasePayableService(new FundPostingApplicationService(prisma, fixture.audit), fixture.access, createPaymentRecipientFixture(prisma)),
+    new PurchasePayableService(new FundPostingApplicationService(prisma, fixture.audit, new NumberingGeneratorService(fixture.prisma)), fixture.access, createPaymentRecipientFixture(prisma)),
   )
 }
 

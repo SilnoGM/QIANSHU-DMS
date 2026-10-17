@@ -199,6 +199,7 @@ describe('fund reversal persistence', () => {
     await expect(insertFundReversalBatch(transaction.client, {
       id: REVERSAL_BATCH_ID,
       batchNo: 'FUND_2222222222224222A222222222222222',
+      numberingIssuanceId: '77777777-7777-4777-a777-777777777777',
       originalBatchId: ORIGINAL_BATCH_ID,
       businessAmount: '40.00',
       consumerCode: 'ADMIN_REVERSAL',
@@ -213,6 +214,7 @@ describe('fund reversal persistence', () => {
 
     const sql = sqlText(transaction)
     expect(sql).toContain('INSERT INTO "fund_posting_batches"')
+    expect(sql).toContain('"numbering_issuance_id"')
     expect(sql).toContain("'REVERSAL'::\"fund_posting_batch_kind\"")
     expect(sql).toContain('FROM "fund_posting_batches" AS original')
     expect(sql).not.toContain('UPDATE "fund_posting_batches"')
@@ -233,6 +235,7 @@ describe('fund reversal persistence', () => {
     await expectInternal(insertFundReversalBatch(invalidInsert.client, {
       id: REVERSAL_BATCH_ID,
       batchNo: 'FUND_2222222222224222A222222222222222',
+      numberingIssuanceId: '77777777-7777-4777-a777-777777777777',
       originalBatchId: ORIGINAL_BATCH_ID,
       businessAmount: '10.00',
       consumerCode: 'ADMIN_REVERSAL',

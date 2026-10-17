@@ -6,6 +6,7 @@ import { readPersistenceErrorFacts } from '../src/infrastructure/database/persis
 import { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-lookup.service'
 import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
 import { FundPostingApplicationService } from '../src/modules/fund-accounts/application/fund-posting.service'
+import { NumberingGeneratorService } from '../src/modules/numbering/numbering-generator.service'
 import { PurchasePayableQueryService } from '../src/modules/purchase-orders/payables/purchase-payable-query.service'
 import { createAtomicityFixture, createCommands, createReviewMutations, customInput, prepareImageReview, prepareSalesSource, type AtomicityFixture } from './purchase-shipping-mark-atomicity.fixture'
 
@@ -206,7 +207,7 @@ describe('Purchase payables with isolated PostgreSQL', () => {
     const company = await h.prisma.fundAccount.findFirstOrThrow({ where: { ownerType: 'COMPANY' } })
     await pay(group.items[0].id)
     const payment = await h.prisma.purchaseOrderPayment.findFirstOrThrow({ where: { purchaseOrderId: group.id } })
-    const funds = new FundPostingApplicationService(h.prisma, h.audit)
+    const funds = new FundPostingApplicationService(h.prisma, h.audit, new NumberingGeneratorService(h.prisma))
     await expect(funds.reversePostingBatch(finance(), { originalBatchId: payment.fundPostingBatchId!, amount: '3.00', reason: 'Bypass attempt', idempotencyKey: randomUUID() })).rejects.toMatchObject({ code: 'FUND_REVERSAL_TARGET_INVALID' })
     await createReviewMutations(h).voidPayment(finance(), group.id, payment.id, { reason: 'Correction' })
     const after = await queries.getOrder(group.id)
@@ -318,7 +319,7 @@ describe('Purchase payables with isolated PostgreSQL', () => {
   it('rejects an orphan controlled fund posting and leaves balances unchanged', async () => {
     const group = await reviewed()
     const before = await financialFacts(group.id)
-    const funds = new FundPostingApplicationService(h.prisma, h.audit)
+    const funds = new FundPostingApplicationService(h.prisma, h.audit, new NumberingGeneratorService(h.prisma))
     const context = { ...finance(), sourceCode: 'PURCHASE_PAYMENT', consumerCode: 'PURCHASE_PAYMENT.STOCK_PAY' }
     const input = { postingTypeCode: 'PURCHASE_PAYMENT', amount: '3.00', businessId: randomUUID(), summary: 'Orphan payment', idempotencyKey: randomUUID() }
     await expectDatabaseConstraint(h.prisma.$transaction(async tx => {
@@ -331,7 +332,7 @@ describe('Purchase payables with isolated PostgreSQL', () => {
   it.each(['amount', 'stage', 'actor'])('rejects forged payment-to-batch association: %s', async forged => {
     const group = await reviewed()
     const before = await financialFacts(group.id)
-    const funds = new FundPostingApplicationService(h.prisma, h.audit)
+    const funds = new FundPostingApplicationService(h.prisma, h.audit, new NumberingGeneratorService(h.prisma))
     const recipientSnapshot = group.paymentRecipientProfile!.accounts[0]
     await expectDatabaseConstraint(h.prisma.$transaction(async tx => {
       const paymentId = randomUUID()
@@ -354,7 +355,7 @@ describe('Purchase payables with isolated PostgreSQL', () => {
 
   it('keeps unrelated manual adjustments usable', async () => {
     const account = await h.prisma.fundAccount.findFirstOrThrow({ where: { userId: h.actor.id } })
-    const result = await new FundPostingApplicationService(h.prisma, h.audit).postManualAdjustment(finance(), { userAccountId: account.id, amount: '1', adjustmentMode: 'USER_ONLY', reason: 'Unrelated adjustment regression', idempotencyKey: randomUUID() })
+    const result = await new FundPostingApplicationService(h.prisma, h.audit, new NumberingGeneratorService(h.prisma)).postManualAdjustment(finance(), { userAccountId: account.id, amount: '1', adjustmentMode: 'USER_ONLY', reason: 'Unrelated adjustment regression', idempotencyKey: randomUUID() })
     expect(result).toMatchObject({ postingTypeCode: 'ADMIN_MANUAL_ADJUSTMENT', businessAmount: '1.00' })
   })
 })

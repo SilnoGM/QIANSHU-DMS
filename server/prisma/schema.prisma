@@ -1591,6 +1591,7 @@ model NumberingIssuance {
   slhBill SlhBill?
   reconciliationBatch SlhReconciliationBatch?
   invoiceRequest InvoiceRequest?
+  fundPostingBatch FundPostingBatch?
 
   id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   ruleId                 String   @map("rule_id") @db.Uuid
@@ -1749,6 +1750,7 @@ model FundPostingBatch {
   invoiceRequest InvoiceRequest? @relation("InvoiceRequestSettlementBatch")
   id                         String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   batchNo                    String               @unique(map: "fund_posting_batches_batch_no_key") @map("batch_no") @db.VarChar(64)
+  numberingIssuanceId        String?              @unique(map: "fund_posting_batches_numbering_issuance_id_key") @map("numbering_issuance_id") @db.Uuid
   kind                       FundPostingBatchKind
   postingTypeId              String               @map("posting_type_id") @db.Uuid
   postingTypeCodeSnapshot    String               @map("posting_type_code_snapshot") @db.VarChar(64)
@@ -1780,6 +1782,7 @@ model FundPostingBatch {
   correlationId              String?              @map("correlation_id") @db.VarChar(128)
   postedAt                   DateTime             @default(now()) @map("posted_at") @db.Timestamptz(6)
 
+  numberingIssuance NumberingIssuance?            @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   postingType       FundPostingType               @relation("FundPostingBatchPostingType", fields: [postingTypeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   businessSource    FundBusinessSource            @relation("FundPostingBatchBusinessSource", fields: [businessSourceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   allowedSourceType FundBusinessSourcePostingType @relation(fields: [businessSourceId, postingTypeId], references: [businessSourceId, postingTypeId], onDelete: Restrict, onUpdate: Restrict)

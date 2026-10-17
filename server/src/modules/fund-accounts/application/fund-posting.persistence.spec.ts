@@ -360,6 +360,7 @@ describe('fund posting persistence writes', () => {
     await insertFundPostingBatch(transaction.client, {
       id: BATCH_ID,
       batchNo: 'FUND_AAAAAAAAAAAA4AAAAAAAAAAAAAAAAAAA',
+      numberingIssuanceId: '77777777-7777-4777-a777-777777777777',
       kind: 'BUSINESS',
       postingTypeId: TYPE_ID,
       postingTypeCodeSnapshot: 'ORDER_SETTLEMENT',
@@ -394,6 +395,7 @@ describe('fund posting persistence writes', () => {
     expect(createInput.select).toEqual({ id: true })
     expect(createInput.data).toMatchObject({
       id: BATCH_ID,
+      numberingIssuanceId: '77777777-7777-4777-a777-777777777777',
       kind: 'BUSINESS',
       businessAmount: new Prisma.Decimal('-100.00'),
       idempotencyKeyHash: Uint8Array.from(IDEMPOTENCY_HASH),
@@ -414,6 +416,7 @@ describe('fund posting persistence writes', () => {
     await insertFundManualAdjustmentBatch(transaction.client, {
       id: BATCH_ID,
       batchNo: 'FUND_AAAAAAAAAAAA4AAAAAAAAAAAAAAAAAAA',
+      numberingIssuanceId: '77777777-7777-4777-a777-777777777777',
       kind: 'MANUAL_ADJUSTMENT',
       postingTypeId: TYPE_ID,
       postingTypeCodeSnapshot: 'ADMIN_MANUAL_ADJUSTMENT',
@@ -446,6 +449,7 @@ describe('fund posting persistence writes', () => {
       data: Record<string, unknown>
     }
     expect(createInput.data).toMatchObject({
+      numberingIssuanceId: '77777777-7777-4777-a777-777777777777',
       kind: 'MANUAL_ADJUSTMENT',
       businessCategorySnapshot: 'ADJUSTMENT',
       businessNo: null,
