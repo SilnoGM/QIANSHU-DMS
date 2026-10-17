@@ -69,6 +69,7 @@ const toggleLabel = computed(() => t(
     :aria-label="t('qsPersonalFundAccount.ariaLabel')"
     :aria-busy="state === 'loading'"
     class="qs-personal-fund-card py-0 rounded-2xl gap-0 overflow-hidden"
+    content-class="p-0"
     data-slot="qs-personal-fund-account-card"
   >
     <!-- 加载态：保持与正式布局相同的骨架，避免数据到达时发生整卡跳动。 -->
