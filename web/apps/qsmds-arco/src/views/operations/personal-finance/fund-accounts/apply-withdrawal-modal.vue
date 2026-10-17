@@ -93,16 +93,25 @@ function submit(): void {
     size="sm"
     @update:model-value="updateVisible"
   >
-    <div class="mb-5 p-4 border border-border rounded-lg bg-muted/25 flex gap-3 items-center justify-between">
-      <span class="qs-type-compact-label">
+    <section
+      class="text-primary-foreground mb-5 px-4 py-3.5 rounded-xl bg-primary"
+      aria-labelledby="withdrawal-current-balance-label"
+    >
+      <p
+        id="withdrawal-current-balance-label"
+        class="text-xs text-primary-foreground/75 font-medium m-0"
+      >
         {{ t('qsPersonalFundAccount.withdrawalCurrentBalance') }}
-      </span>
-      <AmountDisplay
-        :value="balance"
-        :currency="displayCurrency"
-        :currencies="currencies"
-      />
-    </div>
+      </p>
+      <div class="mt-1">
+        <AmountDisplay
+          :value="balance"
+          :currency="displayCurrency"
+          :currencies="currencies"
+          class="!text-3xl !text-white !font-semibold"
+        />
+      </div>
+    </section>
 
     <FaForm :model="{ amount }" @submit="submit">
       <FaFormItem
