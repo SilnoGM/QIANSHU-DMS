@@ -317,20 +317,20 @@ const toggleLabel = computed(() => t(
 
 /*
  * 余额面板最小宽度按「负号 + ¥ + 6 位整数（含千分位）+ 2 位小数 + CNY」
- * 在当前最大金额字号下计算：16 个等宽字符 + 左右 2rem 内边距 ≈ 460px。
- * 窄屏金额字号随容器缩小，32% 面板宽度已能容纳同一字符串。
+ * 在当前最大金额字号下计算：16 个等宽字符 + 左右 1.5rem 内边距 ≈ 432px，
+ * 面板保留 460px 最小宽度留出余量。窄屏金额字号随容器缩小。
  */
 .qs-personal-fund-card__layout {
   display: grid;
   grid-template-columns: minmax(460px, 26%) minmax(0, 1fr);
-  min-height: 18.75rem;
+  min-height: 15rem;
 }
 
 .qs-personal-fund-card__balance {
   position: relative;
   overflow: hidden;
   display: flex;
-  padding: 2rem;
+  padding: 1.5rem;
   background: oklch(var(--primary));
   color: oklch(var(--primary-foreground));
 }
@@ -341,7 +341,7 @@ const toggleLabel = computed(() => t(
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.25rem;
   min-width: 0;
 }
 
@@ -438,7 +438,7 @@ const toggleLabel = computed(() => t(
   align-content: center;
   gap: 1rem;
   margin: 0;
-  padding: 1.75rem;
+  padding: 1.25rem 1.75rem;
   min-width: 0;
 }
 
@@ -518,7 +518,7 @@ const toggleLabel = computed(() => t(
   display: flex;
   flex-direction: row;
   gap: 0.75rem;
-  padding: 1.25rem 1.75rem 1.75rem;
+  padding: 1rem 1.75rem 1.25rem;
   border-top: 1px solid oklch(var(--border));
   min-width: 0;
 }
@@ -542,11 +542,11 @@ const toggleLabel = computed(() => t(
   }
 
   .qs-personal-fund-card__metrics {
-    padding: 1.5rem;
+    padding: 1.25rem 1.5rem;
   }
 
   .qs-personal-fund-card__actions {
-    padding: 1.25rem 1.5rem 1.5rem;
+    padding: 1rem 1.5rem 1.25rem;
   }
 
   /* 窄容器只保留日期；具体时间在宽容器才展示。 */
@@ -558,10 +558,6 @@ const toggleLabel = computed(() => t(
     flex-direction: column;
     gap: 0;
   }
-
-  .qs-personal-fund-card__balance {
-    padding: 1.5rem;
-  }
 }
 
 @container (width < 840px) {
@@ -571,16 +567,16 @@ const toggleLabel = computed(() => t(
   }
 
   .qs-personal-fund-card__balance {
-    min-height: 13.75rem;
+    min-height: 12rem;
   }
 
   .qs-personal-fund-card__balance-content {
-    gap: 1.5rem;
+    gap: 1rem;
   }
 
   .qs-personal-fund-card__metrics {
     grid-template-columns: minmax(0, 1fr);
-    padding: 1.5rem;
+    padding: 1.25rem 1.5rem;
   }
 
   .qs-personal-fund-card__metric + .qs-personal-fund-card__metric {
@@ -592,7 +588,7 @@ const toggleLabel = computed(() => t(
 
   .qs-personal-fund-card__actions {
     flex-direction: column;
-    padding: 1.25rem 1.5rem 1.5rem;
+    padding: 1rem 1.5rem 1.25rem;
   }
 
   .qs-personal-fund-card__actions > * {
