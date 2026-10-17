@@ -25,6 +25,7 @@ const MAXIMUM_APPLY_BATCH_SIZE = 5_000
 
 /** `uploadPurpose` 与业务池的映射（规则 10）：只有列表里的用途能定池，其余一律 misc。 */
 const UPLOAD_PURPOSE_POOLS: Readonly<Record<string, MediaStoragePool>> = Object.freeze({
+  FUND_WITHDRAWAL_PAYMENT_PROOF: 'voucher',
   INVOICE_REQUEST_DOCUMENT: 'invoice',
   OCEAN_FREIGHT_SOURCE_XLSX: 'container',
   PACKAGING_PAYMENT_VOUCHER: 'voucher',

@@ -4,7 +4,7 @@ import type { FundSelfAccountDto, FundSelfTransactionDto } from '@/api/generated
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import { getApiClientErrorMessage } from '@/api/errors'
 import fundAccountsApi from '@/api/modules/fund-accounts'
-import { formatCurrencyAmount } from '@/components/base/AmountDisplay/format'
+import fundWithdrawalsApi from '@/api/modules/fund-withdrawals'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
@@ -31,6 +31,7 @@ defineOptions({ name: 'OperationsPersonalFinanceFundAccounts' })
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const { auth } = useAppAuth()
 const appAccount = useAppAccountStore()
 const currencyCatalog = useCurrencyCatalog()
@@ -42,6 +43,9 @@ const accountLoading = ref(true)
 const accountError = ref('')
 const account = shallowRef<FundSelfAccountDto | null>(null)
 const withdrawalOpen = ref(false)
+const withdrawalSubmitting = ref(false)
+const withdrawalError = ref('')
+const withdrawalKey = ref('')
 
 const transactionPage = ref(1)
 const transactionPageSize = ref(20)
@@ -235,34 +239,47 @@ function directionMeta(direction: FundSelfTransactionDto['direction']) {
 }
 
 function applyWithdrawal(): void {
-  if (account.value !== null) {
-    withdrawalOpen.value = true
-  }
-}
-
-function submitWithdrawal(payload: { amount: string, currency: string }): void {
-  const current = account.value
-  withdrawalOpen.value = false
-  if (current === null) {
+  if (account.value === null) {
     return
   }
+  withdrawalKey.value = crypto.randomUUID()
+  withdrawalError.value = ''
+  withdrawalOpen.value = true
+}
 
-  toast.info(t('qsPersonalFundAccount.withdrawalSubmitted', {
-    balance: formatCurrencyAmount(
-      current.balance,
-      current.currency,
-      currencyCatalog.currencies.value,
-    ),
-    amount: formatCurrencyAmount(
-      payload.amount,
-      payload.currency,
-      currencyCatalog.currencies.value,
-    ),
-  }))
+async function submitWithdrawal(payload: { amount: string, currency: string }): Promise<void> {
+  if (withdrawalSubmitting.value || account.value === null) {
+    return
+  }
+  withdrawalSubmitting.value = true
+  withdrawalError.value = ''
+  let succeeded = false
+  try {
+    await fundWithdrawalsApi.create({ amount: payload.amount }, withdrawalKey.value)
+    succeeded = true
+  }
+  catch (failure) {
+    withdrawalError.value = getApiClientErrorMessage(failure as ApiClientError)
+      || t('fundWithdrawal.error.submit')
+  }
+  finally {
+    withdrawalSubmitting.value = false
+  }
+  if (succeeded) {
+    withdrawalOpen.value = false
+    toast.info(t('fundWithdrawal.toast.submitted'), {
+      action: {
+        label: t('fundWithdrawal.action.viewRecords'),
+        onClick: () => {
+          void router.push({ name: 'qsOperationsPersonalFinanceWithdrawals' })
+        },
+      },
+    })
+  }
 }
 
 function viewWithdrawals(): void {
-  toast.info(t('qsPersonalFundAccount.withdrawalRecordsComingSoon'))
+  void router.push({ name: 'qsOperationsPersonalFinanceWithdrawals' })
 }
 
 function viewTransactionDetail(): void {
@@ -517,6 +534,8 @@ onBeforeUnmount(() => {
         :balance="account.balance"
         :currency="account.currency"
         :currencies="currencyCatalog.currencies.value"
+        :error="withdrawalError || null"
+        :submitting="withdrawalSubmitting"
         @submit="submitWithdrawal"
       />
     </FaPageMain>

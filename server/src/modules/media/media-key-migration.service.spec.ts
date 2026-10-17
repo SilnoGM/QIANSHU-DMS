@@ -340,6 +340,11 @@ describe('resolveMediaStoragePool', () => {
     ['invoice_requests.document_media_asset_id', { invoiceRequestDocument: true }, 'invoice'],
     ['uploadPurpose=INVOICE_REQUEST_DOCUMENT', { uploadPurpose: 'INVOICE_REQUEST_DOCUMENT' }, 'invoice'],
     [
+      'uploadPurpose=FUND_WITHDRAWAL_PAYMENT_PROOF',
+      { uploadPurpose: 'FUND_WITHDRAWAL_PAYMENT_PROOF' },
+      'voucher',
+    ],
+    [
       'uploadPurpose=PURCHASE_PAYMENT_VOUCHER',
       { uploadPurpose: 'PURCHASE_PAYMENT_VOUCHER' },
       'voucher',

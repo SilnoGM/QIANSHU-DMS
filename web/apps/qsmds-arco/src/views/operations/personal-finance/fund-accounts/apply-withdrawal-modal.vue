@@ -11,12 +11,17 @@ import {
 
 defineOptions({ name: 'ApplyWithdrawalModal' })
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   balance: string
   currencies: readonly CurrencyDescriptor[]
   currency: string
+  error?: null | string
   modelValue: boolean
-}>()
+  submitting?: boolean
+}>(), {
+  error: null,
+  submitting: false,
+})
 
 const emit = defineEmits<{
   'submit': [payload: { amount: string, currency: string }]
@@ -36,8 +41,11 @@ const minimumAmount = computed(() => (
   minimumWithdrawalAmount(currencyDescriptor.value?.minorUnit ?? 2)
 ))
 const canSubmit = computed(() => (
-  amount.value !== null && amount.value.trim().length > 0
+  !props.submitting
+  && amount.value !== null
+  && amount.value.trim().length > 0
 ))
+const visibleError = computed(() => localError.value || props.error || '')
 
 watch(() => props.modelValue, (visible) => {
   if (visible) {
@@ -54,6 +62,9 @@ watch(() => props.currency, (value) => {
 })
 
 function close(): void {
+  if (props.submitting) {
+    return
+  }
   emit('update:modelValue', false)
 }
 
@@ -66,6 +77,9 @@ function updateVisible(value: boolean): void {
 }
 
 function submit(): void {
+  if (props.submitting) {
+    return
+  }
   const descriptor = currencyDescriptor.value
   if (descriptor === null) {
     localError.value = t('qsPersonalFundAccount.withdrawalAmountInvalid')
@@ -82,7 +96,6 @@ function submit(): void {
 
   localError.value = ''
   emit('submit', { amount: result.amount, currency: descriptor.code })
-  close()
 }
 </script>
 
@@ -91,6 +104,9 @@ function submit(): void {
     :model-value="modelValue"
     :title="t('qsPersonalFundAccount.withdrawalModalTitle')"
     size="sm"
+    :submitting="submitting"
+    :dismiss-on-escape="!submitting"
+    :dismiss-on-overlay="!submitting"
     @update:model-value="updateVisible"
   >
     <section
@@ -134,8 +150,8 @@ function submit(): void {
       </FaFormItem>
     </FaForm>
 
-    <p v-if="localError" class="qs-type-meta text-destructive m-0 mt-2" role="alert">
-      {{ localError }}
+    <p v-if="visibleError" class="qs-type-meta text-destructive m-0 mt-2" role="alert">
+      {{ visibleError }}
     </p>
 
     <template #footer>
@@ -143,6 +159,7 @@ function submit(): void {
         type="button"
         variant="outline"
         class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :disabled="submitting"
         @click="close"
       >
         {{ t('qsPersonalFundAccount.withdrawalCancel') }}
@@ -150,6 +167,7 @@ function submit(): void {
       <FaButton
         type="button"
         class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :loading="submitting"
         :disabled="!canSubmit"
         @click="submit"
       >

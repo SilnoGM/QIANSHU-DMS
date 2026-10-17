@@ -1,0 +1,84 @@
+{
+  "fundWithdrawal": {
+    "pageTitle": "Withdrawal requests",
+    "pageDescription": "Submit and view your withdrawal requests. Funds are debited only after finance approves.",
+    "approvalPageTitle": "Withdrawal approvals",
+    "approvalPageDescription": "Review user withdrawal requests. Approval uploads a payment screenshot and debits the applicant's account.",
+    "refresh": "Refresh",
+    "statusFilter": "Status",
+    "status": {
+      "ALL": "All",
+      "PENDING": "In review",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected"
+    },
+    "column": {
+      "withdrawalNo": "Request no.",
+      "amount": "Withdrawal amount",
+      "accountBalance": "Current balance",
+      "status": "Status",
+      "applicant": "Applicant",
+      "submittedAt": "Submitted at",
+      "reviewedAt": "Reviewed at",
+      "reviewer": "Reviewer",
+      "action": "Actions"
+    },
+    "action": {
+      "view": "View",
+      "approve": "Approve",
+      "reject": "Reject",
+      "cancel": "Cancel",
+      "submit": "Submit",
+      "changeProof": "Replace screenshot",
+      "removeProof": "Remove",
+      "viewRecords": "View requests"
+    },
+    "detail": {
+      "title": "Withdrawal request details",
+      "applicant": "Applicant",
+      "amount": "Withdrawal amount",
+      "accountBalance": "Current balance",
+      "status": "Status",
+      "submittedAt": "Submitted at",
+      "reviewedAt": "Reviewed at",
+      "reviewer": "Reviewer",
+      "rejectReason": "Rejection reason",
+      "proof": "Payment screenshot",
+      "batchNo": "Fund batch",
+      "noProof": "No payment screenshot",
+      "noValue": "—"
+    },
+    "approve": {
+      "title": "Approve withdrawal",
+      "proof": "Payment screenshot",
+      "proofHint": "jpg, png, or webp up to 10 MiB. The uploaded name becomes “display name-withdrawal amount-date”.",
+      "proofRequired": "Upload the payment screenshot first",
+      "negativeHint": "Fund accounts may have a negative balance. The requested amount is debited on approval.",
+      "success": "Withdrawal approved and funds debited"
+    },
+    "reject": {
+      "title": "Reject withdrawal",
+      "reason": "Rejection reason",
+      "reasonPlaceholder": "Enter the rejection reason",
+      "success": "Withdrawal rejected"
+    },
+    "toast": {
+      "submitted": "Withdrawal request submitted for finance review"
+    },
+    "error": {
+      "load": "Failed to load withdrawal requests",
+      "submit": "Failed to submit the withdrawal request",
+      "approve": "Approval failed",
+      "reject": "Rejection failed",
+      "upload": "Payment screenshot upload failed",
+      "proof": "Failed to load the payment screenshot"
+    },
+    "empty": {
+      "own": "No withdrawal requests",
+      "ownHint": "Your submitted requests will appear here",
+      "review": "No withdrawal requests",
+      "reviewHint": "New withdrawal requests will appear here"
+    },
+    "loading": "Loading withdrawal requests"
+  }
+}

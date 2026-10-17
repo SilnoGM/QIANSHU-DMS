@@ -89,6 +89,11 @@ import {
   INVOICE_REQUEST_SETTLE_CONSUMER,
 } from './fund-invoice-request'
 import {
+  FUND_WITHDRAWAL_APPROVE_CONSUMER,
+  FUND_WITHDRAWAL_FUND_SOURCE,
+  FUND_WITHDRAWAL_POSTING_TYPE,
+} from './fund-withdrawal'
+import {
   isFundIdempotencyUniqueViolation,
   mapFundPersistenceError,
 } from './fund-persistence-error.mapper'
@@ -136,6 +141,8 @@ const CONTROLLED_POSTING_TYPE_BY_SOURCE_CONSUMER: Readonly<Record<string, string
     SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE,
   [`${INVOICE_REQUEST_FUND_SOURCE}/${INVOICE_REQUEST_SETTLE_CONSUMER}`]:
     INVOICE_REQUEST_POSTING_TYPE,
+  [`${FUND_WITHDRAWAL_FUND_SOURCE}/${FUND_WITHDRAWAL_APPROVE_CONSUMER}`]:
+    FUND_WITHDRAWAL_POSTING_TYPE,
 })
 
 interface PlannedLedgerEntry {
@@ -554,7 +561,10 @@ export class FundPostingApplicationService extends FundPostingService {
     // 开票申请结算：只有一个动作（服务费与邮寄费合成一笔成本），不支持反向。
     const invoiceSettlement = action === 'POST' && context.sourceCode === INVOICE_REQUEST_FUND_SOURCE
       && context.consumerCode === INVOICE_REQUEST_SETTLE_CONSUMER
-    if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement && !invoiceSettlement) {
+    // 用户提款审批：通过时从申请人账户单一扣款，不支持反向。
+    const fundWithdrawal = action === 'POST' && context.sourceCode === FUND_WITHDRAWAL_FUND_SOURCE
+      && context.consumerCode === FUND_WITHDRAWAL_APPROVE_CONSUMER
+    if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement && !invoiceSettlement && !fundWithdrawal) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     return normalizeFundAccountCommandContext({

@@ -53,6 +53,7 @@ const expectedRuleShapes: Readonly<Record<string, string>> = {
   DBJ_MARK: 'FIXED(DBJ) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
   FSL_MARK: 'FIXED(FSL) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
   FUND_POSTING_BATCH_NO: 'FIXED(FUND) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(5)',
+  FUND_WITHDRAWAL_NO: 'FIXED(WD) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
   INVOICE_REQUEST: 'FIXED(INV) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
   LDC_MARK: 'FIXED(LDC) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
   PRODUCT: 'FIXED(PROD) SEP(/) SEQ(5)',
@@ -198,8 +199,8 @@ describe('系统上线内置数据 seed', () => {
     expect(after).toEqual(before)
     const currencies = await prisma.currency.findMany({ select: { code: true, enabled: true } })
     expect(currencies.filter(currency => currency.code !== 'CNY').every(currency => !currency.enabled)).toBe(true)
-    // 新资金批次编号规则由 migration 预置（不是 seed 写入），预览只能保持这个基线。
-    expect(await prisma.numberingRule.count()).toBe(1)
+    // 资金批次与提款申请编号规则由 migration 预置（不是 seed 写入），预览只能保持这个基线。
+    expect(await prisma.numberingRule.count()).toBe(2)
   })
 
   it('执行后六类内置数据全部就位', async () => {
