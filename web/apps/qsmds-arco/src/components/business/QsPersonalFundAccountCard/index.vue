@@ -361,10 +361,10 @@ const toggleLabel = computed(() => t(
 }
 
 .qs-personal-fund-card__circle--bottom {
-  bottom: -9rem;
-  left: 3rem;
-  width: 17rem;
-  height: 17rem;
+  bottom: -7rem;
+  left: -3rem;
+  width: 12rem;
+  height: 12rem;
   background: color-mix(in oklab, oklch(var(--primary-foreground)) 7%, transparent);
 }
 
