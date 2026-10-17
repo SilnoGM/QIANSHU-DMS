@@ -1,0 +1,25 @@
+{
+  "qsPersonalFundAccount": {
+    "title": "个人资金账户",
+    "ariaLabel": "个人资金账户",
+    "balanceLabel": "可用余额 ({currency})",
+    "showAmount": "显示金额",
+    "hideAmount": "隐藏金额",
+    "amountHidden": "金额已隐藏",
+    "shareRate": "用户分成比例",
+    "rateEffectiveAt": "生效于",
+    "lastAccountUpdate": "最近账务更新",
+    "systemSynced": "系统自动同步",
+    "accountOpenedAt": "账户开通时间",
+    "firstActivated": "首次激活日期",
+    "applyWithdrawal": "申请提款",
+    "withdrawalRecords": "提款记录",
+    "withdrawalComingSoon": "提款功能建设中，敬请期待",
+    "withdrawalRecordsComingSoon": "提款记录功能建设中，敬请期待",
+    "emptyTitle": "尚未开通个人资金账户",
+    "emptyDescription": "请联系财务开通后再查看余额与提款",
+    "loadError": "个人资金账户加载失败",
+    "retry": "重试",
+    "loading": "正在加载个人资金账户"
+  }
+}

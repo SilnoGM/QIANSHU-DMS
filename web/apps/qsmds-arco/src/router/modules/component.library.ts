@@ -308,6 +308,15 @@ const routes: RouteRecordRaw[] = [
           icon: 'qs-bill-reconciliation-check',
         },
       },
+      {
+        path: 'personal-fund-account-card',
+        name: 'componentLibraryQsPersonalFundAccountCard',
+        component: () => import('@/views/component_library/business/personal-fund-account-card.vue'),
+        meta: {
+          title: '个人资金账户卡片',
+          icon: 'qs-fund-accounts',
+        },
+      },
     ],
   },
   {
