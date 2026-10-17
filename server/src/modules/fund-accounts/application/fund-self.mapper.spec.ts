@@ -139,4 +139,17 @@ describe('fund self view mappers', () => {
       businessNo: 'ORDER/0000001',
     })
   })
+
+  it('strips a legacy withdrawal number that is already exposed as businessNo', () => {
+    const view = mapFundSelfTransactionView({
+      ...TRANSACTION_VIEW,
+      postingTypeCode: 'USER_WITHDRAWAL',
+      postingTypeName: '用户提款',
+      businessNo: 'WD/20261017-0002',
+      summary: '用户提款 WD/20261017-0002',
+    })
+
+    expect(view.summary).toBe('用户提款')
+    expect(view.businessNo).toBe('WD/20261017-0002')
+  })
 })

@@ -10,6 +10,7 @@ import {
   FUND_POSTING_ERROR_CODES,
   FundPostingError,
 } from './fund-posting.errors'
+import { resolveFundTransactionSummary } from './fund-summary'
 
 /**
  * 本人账户投影。
@@ -61,7 +62,11 @@ export function mapFundSelfTransactionView(
     businessAmount: view.businessAmount,
     userShareRateSnapshot: view.userShareRateSnapshot,
     businessNo: view.businessNo,
-    summary: view.summary,
+    summary: resolveFundTransactionSummary({
+      postingTypeCode: view.postingTypeCode,
+      businessNo: view.businessNo,
+      summary: view.summary,
+    }),
     businessOccurredAt: view.businessOccurredAt,
     reversalStatus: view.reversalStatus,
     postedAt: view.postedAt,

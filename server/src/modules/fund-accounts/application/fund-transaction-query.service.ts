@@ -36,6 +36,7 @@ import {
   type FundTransactionView,
 } from './fund-transaction.contract'
 import { mapFundSelfTransactionView } from './fund-self.mapper'
+import { resolveFundTransactionSummary } from './fund-summary'
 
 const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
@@ -413,7 +414,11 @@ function mapTransactionRow(row: TransactionDatabaseRow): FundTransactionView {
     companyShareRateSnapshot: nullableDecimalString(row.companyShareRateSnapshot),
     businessId: requiredString(row.businessId),
     businessNo: nullableString(row.businessNo),
-    summary: requiredString(row.summary),
+    summary: resolveFundTransactionSummary({
+      postingTypeCode: requiredString(row.postingTypeCode),
+      businessNo: nullableString(row.businessNo),
+      summary: requiredString(row.summary),
+    }),
     businessOccurredAt: requiredDate(row.businessOccurredAt).toISOString(),
     adjustmentMode: row.adjustmentMode === null
       ? null
@@ -623,7 +628,11 @@ export class FundTransactionQueryService {
             batch.companyShareRateSnapshot?.toFixed(2) ?? null,
           businessId: batch.businessId,
           businessNo: batch.businessNo,
-          summary: batch.summary,
+          summary: resolveFundTransactionSummary({
+            postingTypeCode: batch.postingTypeCodeSnapshot,
+            businessNo: batch.businessNo,
+            summary: batch.summary,
+          }),
           metadata: normalizeFundMetadata(batch.metadata),
           businessOccurredAt: batch.businessOccurredAt.toISOString(),
           adjustmentMode: batch.adjustmentMode,

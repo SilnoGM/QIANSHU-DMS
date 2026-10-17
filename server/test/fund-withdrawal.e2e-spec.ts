@@ -237,6 +237,8 @@ describe('fund withdrawals against isolated PostgreSQL', () => {
       consumerCode: 'FUND_WITHDRAWAL.PAY',
       postingTypeCodeSnapshot: 'USER_WITHDRAWAL',
       businessCategorySnapshot: 'NEUTRAL',
+      businessNo: created.withdrawalNo,
+      summary: '用户提款',
     })
     expect(batch.businessAmount.toFixed(2)).toBe('150.00')
     expect(batch.entries).toHaveLength(1)

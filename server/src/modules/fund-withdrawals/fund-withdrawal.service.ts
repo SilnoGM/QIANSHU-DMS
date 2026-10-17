@@ -10,6 +10,7 @@ import {
   FUND_WITHDRAWAL_APPROVE_CONSUMER,
   FUND_WITHDRAWAL_FUND_SOURCE,
   FUND_WITHDRAWAL_POSTING_TYPE,
+  FUND_WITHDRAWAL_SUMMARY,
 } from '../fund-accounts/application/fund-withdrawal'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import {
@@ -250,7 +251,7 @@ export class FundWithdrawalService {
           amount: row.amount.toFixed(2),
           businessId: id,
           businessNo: row.withdrawalNo,
-          summary: `用户提款 ${row.withdrawalNo}`,
+          summary: FUND_WITHDRAWAL_SUMMARY,
           metadata: {
             applicantUserId: row.userId,
             withdrawalRequestId: id,

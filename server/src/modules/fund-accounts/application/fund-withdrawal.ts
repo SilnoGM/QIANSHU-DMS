@@ -5,3 +5,5 @@
 export const FUND_WITHDRAWAL_FUND_SOURCE = 'FUND_WITHDRAWAL'
 export const FUND_WITHDRAWAL_APPROVE_CONSUMER = 'FUND_WITHDRAWAL.PAY'
 export const FUND_WITHDRAWAL_POSTING_TYPE = 'USER_WITHDRAWAL'
+/** 摘要只描述业务含义；提款单号由批次 businessNo 单独记录。 */
+export const FUND_WITHDRAWAL_SUMMARY = '用户提款'
