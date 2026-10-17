@@ -19,6 +19,7 @@ import {
 import { buildFundWithdrawalProofFilename } from '../src/modules/fund-withdrawals/fund-withdrawal.logic'
 import { MediaAssetService } from '../src/modules/media/media-asset.service'
 import { MediaContentValidator } from '../src/modules/media/media-content-validator'
+import { cleanupFundE2eData } from './fixtures/fund-e2e-cleanup'
 
 jest.setTimeout(90_000)
 
@@ -88,7 +89,12 @@ describe('fund withdrawals against isolated PostgreSQL', () => {
   })
 
   afterAll(async () => {
-    await application?.close()
+    try {
+      await cleanupFundE2eData(prisma, { usernamePrefix: 'fund_wd_' })
+    }
+    finally {
+      await application?.close()
+    }
   })
 
   function commandContext(prefix: string) {
@@ -115,6 +121,7 @@ describe('fund withdrawals against isolated PostgreSQL', () => {
         displayName,
         passwordHash: 'hash',
         passwordChangedAt: new Date(),
+        profile: { create: {} },
       },
       select: { id: true },
     })

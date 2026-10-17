@@ -16,6 +16,7 @@ import type {
   PostBusinessEventInput,
 } from '../src/modules/fund-accounts/application/fund-posting.contract'
 import { PasswordProvider } from '../src/modules/auth/providers/password.provider'
+import { cleanupFundE2eData } from './fixtures/fund-e2e-cleanup'
 
 const APP_ORIGIN = 'http://127.0.0.1:9000'
 const CSRF_HEADERS = {
@@ -264,8 +265,18 @@ describe('personal fund self API with Cookie Session and PostgreSQL', () => {
   })
 
   afterAll(async () => {
-    await prisma?.authRateLimit.deleteMany()
-    await application?.close()
+    try {
+      await prisma?.authRateLimit.deleteMany()
+      if (prisma) {
+        await cleanupFundE2eData(prisma, {
+          roleCodePrefix: 'fund_self_e2e_',
+          usernamePrefix: 'fund_self_e2e_',
+        })
+      }
+    }
+    finally {
+      await application?.close()
+    }
   })
 
   function commandContext(prefix: string) {
