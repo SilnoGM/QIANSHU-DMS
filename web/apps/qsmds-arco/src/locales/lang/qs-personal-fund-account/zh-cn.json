@@ -2,6 +2,9 @@
   "qsPersonalFundAccount": {
     "title": "个人资金账户",
     "ariaLabel": "个人资金账户",
+    "pageTitle": "资金账户",
+    "pageDescription": "查看本人资金账户余额、分成比例与账户信息",
+    "refresh": "刷新",
     "balanceLabel": "可用余额 ({currency})",
     "showAmount": "显示金额",
     "hideAmount": "隐藏金额",

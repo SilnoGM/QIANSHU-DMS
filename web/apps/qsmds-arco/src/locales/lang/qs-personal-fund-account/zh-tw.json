@@ -2,6 +2,9 @@
   "qsPersonalFundAccount": {
     "title": "個人資金帳戶",
     "ariaLabel": "個人資金帳戶",
+    "pageTitle": "資金帳戶",
+    "pageDescription": "查看本人資金帳戶餘額、分成比例與帳戶資訊",
+    "refresh": "重新整理",
     "balanceLabel": "可用餘額 ({currency})",
     "showAmount": "顯示金額",
     "hideAmount": "隱藏金額",

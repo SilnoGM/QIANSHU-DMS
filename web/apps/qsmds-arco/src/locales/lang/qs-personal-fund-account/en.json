@@ -2,6 +2,9 @@
   "qsPersonalFundAccount": {
     "title": "Personal Fund Account",
     "ariaLabel": "Personal fund account",
+    "pageTitle": "Fund Account",
+    "pageDescription": "View your fund account balance, share rate, and account information.",
+    "refresh": "Refresh",
     "balanceLabel": "Available balance ({currency})",
     "showAmount": "Show amount",
     "hideAmount": "Hide amount",

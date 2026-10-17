@@ -194,9 +194,23 @@ test('直接 URL 准入与菜单一致：跨工作台被拦截，本工作台可
   }
 })
 
-test('三个入口页面保持空白占位约定：单根节点、无文案、无数据依赖', () => {
+test('个人资金账户页面接入页头、账户卡片与本人账户接口', () => {
+  const source = readFileSync(
+    new URL('../../src/views/operations/personal-finance/fund-accounts/index.vue', import.meta.url),
+    'utf8',
+  )
+  assert.match(source, /defineOptions\(\{ name: 'OperationsPersonalFinanceFundAccounts' \}\)/u)
+  assert.match(source, /<FaPageHeader/u)
+  assert.match(source, /<FaPageMain/u)
+  assert.match(source, /<QsPersonalFundAccountCard/u)
+  assert.match(source, /fundAccountsApi\.accounts\.self\(/u)
+  assert.match(source, /:account="account"/u)
+  assert.match(source, /:loading="loading"/u)
+  assert.match(source, /@retry="load"/u)
+})
+
+test('提款入口页面保持空白占位约定：单根节点、无文案、无数据依赖', () => {
   for (const [relativePath, componentName] of [
-    ['../../src/views/operations/personal-finance/fund-accounts/index.vue', 'OperationsPersonalFinanceFundAccounts'],
     ['../../src/views/operations/personal-finance/withdrawals/index.vue', 'OperationsPersonalFinanceWithdrawals'],
     ['../../src/views/admin/fund-account-management/withdrawal-approvals/index.vue', 'FinanceFundWithdrawalApprovals'],
   ] as const) {
