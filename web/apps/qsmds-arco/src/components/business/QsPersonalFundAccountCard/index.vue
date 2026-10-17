@@ -341,11 +341,11 @@ const toggleLabel = computed(() => t(
 
 .qs-personal-fund-card__balance {
   position: relative;
-  overflow: hidden;
   display: flex;
   padding: 1.5rem;
-  background: oklch(var(--primary));
+  overflow: hidden;
   color: oklch(var(--primary-foreground));
+  background: oklch(var(--primary));
 }
 
 /*
@@ -353,24 +353,25 @@ const toggleLabel = computed(() => t(
  * 白字需要更深的底色与纯白标签保证可读性。
  */
 .qs-personal-fund-card__balance--yellow {
-  background-color: oklch(0.6 0.17 55);
-  background-image: radial-gradient(
-    120% 110% at 100% 0%,
-    color-mix(in oklab, oklch(1 0 0) 13%, transparent),
-    transparent 60%
-  );
-  color: oklch(1 0 0);
+  color: oklch(100% 0 0deg);
+  background-color: oklch(60% 0.17 55deg);
+  background-image:
+    radial-gradient(
+      120% 110% at 100% 0%,
+      color-mix(in oklab, oklch(100% 0 0deg) 13%, transparent),
+      transparent 60%
+    );
 }
 
 .qs-personal-fund-card__balance--yellow .qs-personal-fund-card__balance-label,
 .qs-personal-fund-card__balance--yellow .qs-personal-fund-card__visibility-toggle {
-  color: oklch(1 0 0);
+  color: oklch(100% 0 0deg);
 }
 
 /* 未开户使用项目 destructive 语义色，与既有危险按钮同色系。 */
 .qs-personal-fund-card__balance--red {
+  color: oklch(100% 0 0deg);
   background: oklch(var(--destructive));
-  color: oklch(1 0 0);
 }
 
 .qs-personal-fund-card__balance-content {
@@ -387,9 +388,10 @@ const toggleLabel = computed(() => t(
 .qs-personal-fund-card__circle {
   position: absolute;
   pointer-events: none;
-  border-radius: 9999px;
+
   /* 固定浅白叠层：绿色/红色面板保持原效果，黄色面板得到提亮而不是暗色脏块。 */
-  background: color-mix(in oklab, oklch(1 0 0) 9%, transparent);
+  background: color-mix(in oklab, oklch(100% 0 0deg) 9%, transparent);
+  border-radius: 9999px;
 }
 
 .qs-personal-fund-card__circle--top {
@@ -404,77 +406,78 @@ const toggleLabel = computed(() => t(
   left: -3rem;
   width: 12rem;
   height: 12rem;
-  background: color-mix(in oklab, oklch(1 0 0) 7%, transparent);
+  background: color-mix(in oklab, oklch(100% 0 0deg) 7%, transparent);
 }
 
 .qs-personal-fund-card__title-icon {
-  background: color-mix(in oklab, currentColor 15%, transparent);
+  background: color-mix(in oklab, currentcolor 15%, transparent);
 }
 
 .qs-personal-fund-card__title {
-  color: currentColor;
   font-family: var(--qs-font-sans);
   font-size: var(--qs-type-size-lg);
   font-weight: var(--qs-type-weight-semibold);
   line-height: var(--qs-type-leading-lg);
+  color: currentcolor;
   letter-spacing: var(--qs-type-tracking-normal);
 }
 
 .qs-personal-fund-card__balance-label {
-  color: color-mix(in oklab, currentColor 88%, transparent);
   font-family: var(--qs-font-sans);
   font-size: var(--qs-type-size-sm);
   font-weight: var(--qs-type-weight-medium);
   line-height: var(--qs-type-leading-sm);
+  color: color-mix(in oklab, currentcolor 88%, transparent);
 }
 
 /* 金额可能很宽：容器内横向滚动兜底，绝不截断数字；隐藏态复用同一排版高度。 */
 .qs-personal-fund-card__amount-line {
-  overflow-x: auto;
-  /* overflow-x 非 visible 时另一轴会计算为 auto；显式关掉纵向，避免出现竖向滚动条。 */
-  overflow-y: hidden;
   min-width: 0;
   padding-bottom: 0.125rem;
+  overflow: auto hidden;
+
+  /* overflow-x 非 visible 时另一轴会计算为 auto；显式关掉纵向，避免出现竖向滚动条。 */
 }
 
 .qs-personal-fund-card__amount {
   display: flex;
   align-items: baseline;
   justify-content: flex-start;
-  color: currentColor;
   font-family: var(--qs-font-mono);
+
   /* 上限 2.5rem 与面板 460px 最小宽度配套，保证最大金额字符串不溢出。 */
   font-size: clamp(1.75rem, 2.7cqw, 2.5rem);
   font-weight: var(--qs-type-weight-bold);
-  line-height: 1.15;
-  letter-spacing: var(--qs-type-tracking-tight);
   font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  color: currentcolor;
   text-align: left;
+  letter-spacing: var(--qs-type-tracking-tight);
   white-space: nowrap;
 }
 
 /* 未开户时金额位展示开户提示，沿用面板当前文字色。 */
 .qs-personal-fund-card__contact-finance {
-  color: currentColor;
   font-family: var(--qs-font-sans);
   font-size: clamp(1.125rem, 1.6cqw, 1.5rem);
   font-weight: var(--qs-type-weight-semibold);
   line-height: 1.3;
+  color: currentcolor;
   letter-spacing: var(--qs-type-tracking-normal);
 }
 
 .qs-personal-fund-card__visibility-toggle {
   flex-shrink: 0;
-  color: color-mix(in oklab, currentColor 85%, transparent);
+  color: color-mix(in oklab, currentcolor 85%, transparent);
 }
 
 .qs-personal-fund-card__visibility-toggle:hover {
-  color: currentColor;
-  background: color-mix(in oklab, currentColor 12%, transparent);
+  color: currentcolor;
+  background: color-mix(in oklab, currentcolor 12%, transparent);
 }
 
 .qs-personal-fund-card__visibility-toggle:focus-visible {
-  outline: 2px solid color-mix(in oklab, currentColor 75%, transparent);
+  outline: 2px solid color-mix(in oklab, currentcolor 75%, transparent);
   outline-offset: 2px;
 }
 
@@ -493,14 +496,14 @@ const toggleLabel = computed(() => t(
 }
 
 .qs-personal-fund-card__metrics {
-  flex: 1 1 auto;
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-content: center;
   gap: 1rem;
-  margin: 0;
-  padding: 1.25rem 1.75rem;
+  align-content: center;
   min-width: 0;
+  padding: 1.25rem 1.75rem;
+  margin: 0;
 }
 
 .qs-personal-fund-card__metric {
@@ -510,8 +513,8 @@ const toggleLabel = computed(() => t(
 }
 
 .qs-personal-fund-card__metric + .qs-personal-fund-card__metric {
-  border-left: 1px solid oklch(var(--border));
   padding-left: 1rem;
+  border-left: 1px solid oklch(var(--border));
 }
 
 .qs-personal-fund-card__metric-icon {
@@ -535,20 +538,20 @@ const toggleLabel = computed(() => t(
 }
 
 .qs-personal-fund-card__metric-label {
-  color: oklch(var(--muted-foreground));
   font-family: var(--qs-font-sans);
   font-size: var(--qs-type-size-sm);
   font-weight: var(--qs-type-weight-regular);
   line-height: var(--qs-type-leading-sm);
+  color: oklch(var(--muted-foreground));
 }
 
 .qs-personal-fund-card__metric-value {
   margin: 0.125rem 0 0;
-  color: oklch(var(--foreground));
   font-family: var(--qs-font-sans);
   font-size: var(--qs-type-size-md);
   font-weight: var(--qs-type-weight-semibold);
   line-height: var(--qs-type-leading-md);
+  color: oklch(var(--foreground));
 }
 
 /* 日期默认一行展示；窄容器改为日期 / 时间两行，与设计图 2 一致。 */
@@ -560,28 +563,28 @@ const toggleLabel = computed(() => t(
 }
 
 .qs-personal-fund-card__metric-date-value {
-  color: oklch(var(--foreground));
   font-size: var(--qs-type-size-md);
   font-weight: var(--qs-type-weight-semibold);
   line-height: var(--qs-type-leading-md);
+  color: oklch(var(--foreground));
 }
 
 .qs-personal-fund-card__metric-sub {
   margin: 0.25rem 0 0;
-  color: oklch(var(--muted-foreground));
   font-family: var(--qs-font-sans);
   font-size: var(--qs-type-size-xs);
   font-weight: var(--qs-type-weight-regular);
   line-height: var(--qs-type-leading-xs);
+  color: oklch(var(--muted-foreground));
 }
 
 .qs-personal-fund-card__actions {
   display: flex;
   flex-direction: row;
   gap: 0.75rem;
+  min-width: 0;
   padding: 1rem 1.75rem 1.25rem;
   border-top: 1px solid oklch(var(--border));
-  min-width: 0;
 }
 
 .qs-personal-fund-card__actions > * {
@@ -632,10 +635,10 @@ const toggleLabel = computed(() => t(
   }
 
   .qs-personal-fund-card__metric + .qs-personal-fund-card__metric {
-    border-top: 1px solid oklch(var(--border));
-    border-left: 0;
     padding-top: 1.25rem;
     padding-left: 0;
+    border-top: 1px solid oklch(var(--border));
+    border-left: 0;
   }
 
   .qs-personal-fund-card__actions {
