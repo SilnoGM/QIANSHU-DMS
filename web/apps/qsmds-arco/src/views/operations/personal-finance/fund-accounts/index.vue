@@ -60,7 +60,9 @@ const ledgerColumns = computed<QsGenericTableColumn<FundSelfTransactionDto>[]>((
     id: 'sequence',
     accessorKey: 'accountSequence',
     title: t('personalFinanceLedger.column.sequence'),
-    minWidth: 80,
+    width: 64,
+    minWidth: 64,
+    maxWidth: 72,
     fixed: 'left',
   },
   {
@@ -324,6 +326,12 @@ onBeforeUnmount(() => {
         @pagination-change="loadTransactions"
         @retry="loadTransactions"
       >
+        <template #query-leading>
+          <h2 class="qs-type-component-title m-0">
+            {{ t('personalFinanceLedger.title') }}
+          </h2>
+        </template>
+
         <template #cell-sequence="{ row }">
           <span class="qs-type-data text-muted-foreground">
             #{{ row.original.accountSequence }}
@@ -356,7 +364,7 @@ onBeforeUnmount(() => {
             </span>
             <div class="min-w-0">
               <div class="flex flex-wrap gap-2 items-center">
-                <span class="qs-type-component-title">{{ row.original.postingTypeName }}</span>
+                <span class="qs-type-compact-title">{{ row.original.postingTypeName }}</span>
                 <span
                   v-if="batchKindMeta(row.original.batchKind)"
                   class="qs-type-tag px-2 py-0.5 border rounded-md inline-flex items-center"
@@ -375,7 +383,7 @@ onBeforeUnmount(() => {
         <template #cell-summary="{ row }">
           <div class="min-w-0">
             <div class="flex flex-wrap gap-2 items-center">
-              <span class="qs-type-component-title">{{ row.original.summary }}</span>
+              <span class="qs-type-compact-title">{{ row.original.summary }}</span>
               <span
                 v-if="reversalMeta(row.original.reversalStatus)"
                 class="qs-type-tag px-2 py-0.5 border rounded-md inline-flex items-center"

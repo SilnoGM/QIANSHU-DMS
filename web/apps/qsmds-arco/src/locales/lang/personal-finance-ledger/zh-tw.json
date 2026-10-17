@@ -1,6 +1,7 @@
 {
   "personalFinanceLedger": {
     "ariaLabel": "資金流水",
+    "title": "帳戶流水記錄",
     "empty": "暫無流水",
     "emptyHint": "帳戶產生動帳後會在這裡顯示",
     "loadError": "資金流水載入失敗",

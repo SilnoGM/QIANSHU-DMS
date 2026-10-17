@@ -96,6 +96,7 @@ test('资金流水三语文案键完全对齐', () => {
     'personalFinanceLedger.reversal.FULL',
     'personalFinanceLedger.reversal.PARTIAL',
     'personalFinanceLedger.shareRate',
+    'personalFinanceLedger.title',
     'personalFinanceLedger.total',
     'personalFinanceLedger.viewDetail',
   ])

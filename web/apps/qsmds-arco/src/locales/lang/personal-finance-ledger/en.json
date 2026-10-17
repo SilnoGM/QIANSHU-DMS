@@ -1,6 +1,7 @@
 {
   "personalFinanceLedger": {
     "ariaLabel": "Fund ledger",
+    "title": "Account ledger",
     "empty": "No ledger entries",
     "emptyHint": "Entries will appear here once the account has activity.",
     "loadError": "Failed to load the fund ledger",
