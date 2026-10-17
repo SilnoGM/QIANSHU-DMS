@@ -8,7 +8,7 @@ export const LEDGER_CATEGORY_META = {
   REVENUE: {
     icon: 'i-lucide:trending-up',
     labelKey: 'personalFinanceLedger.category.REVENUE',
-    tileClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300',
+    tileClass: 'qs-ledger-positive-tile',
   },
   COST: {
     icon: 'i-lucide:shopping-cart',
@@ -57,8 +57,8 @@ export const LEDGER_REVERSAL_META = {
 export const LEDGER_DIRECTION_META = {
   CREDIT: {
     labelKey: 'personalFinanceLedger.direction.CREDIT',
-    badgeClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300',
-    amountClass: '!text-emerald-700 dark:!text-emerald-300',
+    badgeClass: 'qs-ledger-positive-badge',
+    amountClass: 'qs-ledger-positive',
   },
   DEBIT: {
     labelKey: 'personalFinanceLedger.direction.DEBIT',

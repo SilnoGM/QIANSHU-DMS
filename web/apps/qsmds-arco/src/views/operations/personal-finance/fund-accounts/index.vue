@@ -435,6 +435,7 @@ onBeforeUnmount(() => {
               <span
                 v-if="row.original.direction === 'CREDIT'"
                 class="qs-type-data-emphasis !text-base !font-semibold"
+                :class="directionMeta(row.original.direction).amountClass"
               >+</span>
               <AmountDisplay
                 :value="row.original.direction === 'DEBIT' ? `-${row.original.amount}` : row.original.amount"
@@ -484,3 +485,33 @@ onBeforeUnmount(() => {
     </FaPageMain>
   </div>
 </template>
+
+<style scoped>
+/*
+ * 正向金额、营收类图标与入账标签沿用主题品牌绿；
+ * 深色模式沿用项目既有「主题色 + 前景色混合」写法保证对比度。
+ */
+.qs-ledger-positive {
+  color: oklch(var(--primary));
+}
+
+.qs-ledger-positive-tile {
+  color: oklch(var(--primary));
+  background: color-mix(in oklab, oklch(var(--primary)) 10%, transparent);
+}
+
+.qs-ledger-positive-badge {
+  color: oklch(var(--primary));
+  background: color-mix(in oklab, oklch(var(--primary)) 10%, transparent);
+}
+
+:global(.dark) .qs-ledger-positive {
+  color: color-mix(in oklab, oklch(var(--primary)), oklch(var(--foreground)) 45%);
+}
+
+:global(.dark) .qs-ledger-positive-tile,
+:global(.dark) .qs-ledger-positive-badge {
+  color: color-mix(in oklab, oklch(var(--primary)), oklch(var(--foreground)) 45%);
+  background: color-mix(in oklab, oklch(var(--primary)) 18%, transparent);
+}
+</style>
