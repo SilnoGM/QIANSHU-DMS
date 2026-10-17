@@ -68,7 +68,6 @@ test('资金流水三语文案键完全对齐', () => {
   assert.deepEqual(collectKeys(en as unknown as Record<string, unknown>), reference)
   assert.deepEqual(reference, [
     'personalFinanceLedger.ariaLabel',
-    'personalFinanceLedger.balanceBefore',
     'personalFinanceLedger.batchKind.MANUAL_ADJUSTMENT',
     'personalFinanceLedger.batchKind.REVERSAL',
     'personalFinanceLedger.batchNo',
@@ -79,7 +78,8 @@ test('资金流水三语文案键完全对齐', () => {
     'personalFinanceLedger.category.REVENUE',
     'personalFinanceLedger.column.action',
     'personalFinanceLedger.column.amount',
-    'personalFinanceLedger.column.balance',
+    'personalFinanceLedger.column.balanceAfter',
+    'personalFinanceLedger.column.balanceBefore',
     'personalFinanceLedger.column.businessBasis',
     'personalFinanceLedger.column.postedAt',
     'personalFinanceLedger.column.sequence',

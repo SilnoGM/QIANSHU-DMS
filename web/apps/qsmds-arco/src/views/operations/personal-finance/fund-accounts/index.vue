@@ -98,9 +98,16 @@ const ledgerColumns = computed<QsGenericTableColumn<FundSelfTransactionDto>[]>((
     align: 'right',
   },
   {
-    id: 'balance',
+    id: 'balanceAfter',
     accessorKey: 'balanceAfter',
-    title: t('personalFinanceLedger.column.balance'),
+    title: t('personalFinanceLedger.column.balanceAfter'),
+    minWidth: 180,
+    align: 'right',
+  },
+  {
+    id: 'balanceBefore',
+    accessorKey: 'balanceBefore',
+    title: t('personalFinanceLedger.column.balanceBefore'),
     minWidth: 180,
     align: 'right',
   },
@@ -422,32 +429,32 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-amount="{ row }">
-          <div class="text-right">
+          <div class="flex gap-2 items-center justify-end">
+            <span
+              class="qs-type-tag px-2 py-0.5 rounded-md"
+              :class="directionMeta(row.original.direction).badgeClass"
+            >
+              {{ t(directionMeta(row.original.direction).labelKey) }}
+            </span>
             <p
               class="qs-type-data-emphasis m-0 !text-base !font-semibold"
               :class="directionMeta(row.original.direction).amountClass"
             >
               {{ formatLedgerSignedAmount(row.original.amount, row.original.direction, currencyCatalog.currencies.value) }}
             </p>
-            <span
-              class="qs-type-tag mt-1 px-2 py-0.5 rounded-md inline-flex"
-              :class="directionMeta(row.original.direction).badgeClass"
-            >
-              {{ t(directionMeta(row.original.direction).labelKey) }}
-            </span>
           </div>
         </template>
 
-        <template #cell-balance="{ row }">
-          <div class="text-right">
-            <p class="qs-type-data-emphasis m-0 !text-base !font-semibold">
-              {{ formatLedgerCny(row.original.balanceAfter, currencyCatalog.currencies.value) }}
-            </p>
-            <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-              {{ t('personalFinanceLedger.balanceBefore') }}
-              {{ formatLedgerCny(row.original.balanceBefore, currencyCatalog.currencies.value) }}
-            </p>
-          </div>
+        <template #cell-balanceAfter="{ row }">
+          <p class="qs-type-data-emphasis m-0 text-right !text-base !font-semibold">
+            {{ formatLedgerCny(row.original.balanceAfter, currencyCatalog.currencies.value) }}
+          </p>
+        </template>
+
+        <template #cell-balanceBefore="{ row }">
+          <p class="qs-type-data-emphasis m-0 text-right !text-base !font-semibold">
+            {{ formatLedgerCny(row.original.balanceBefore, currencyCatalog.currencies.value) }}
+          </p>
         </template>
 
         <template #actions>

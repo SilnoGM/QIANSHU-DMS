@@ -14,7 +14,8 @@
       "summary": "摘要與關聯單號",
       "businessBasis": "業務核算基準",
       "amount": "入帳金額 (CNY)",
-      "balance": "帳戶餘額變動",
+      "balanceAfter": "帳戶餘額",
+      "balanceBefore": "變動前餘額",
       "action": "操作"
     },
     "category": {
@@ -39,7 +40,6 @@
     "batchNo": "批次",
     "noBusinessNo": "無關聯業務單",
     "shareRate": "分成快照",
-    "balanceBefore": "變動前",
     "viewDetail": "查看詳情",
     "detailComingSoon": "流水詳情功能建置中，敬請期待"
   }

@@ -14,7 +14,8 @@
       "summary": "Summary and reference",
       "businessBasis": "Business basis",
       "amount": "Amount (CNY)",
-      "balance": "Balance change",
+      "balanceAfter": "Account balance",
+      "balanceBefore": "Previous balance",
       "action": "Actions"
     },
     "category": {
@@ -39,7 +40,6 @@
     "batchNo": "Batch",
     "noBusinessNo": "No linked business",
     "shareRate": "Share snapshot",
-    "balanceBefore": "Before",
     "viewDetail": "View details",
     "detailComingSoon": "Ledger details are coming soon."
   }
