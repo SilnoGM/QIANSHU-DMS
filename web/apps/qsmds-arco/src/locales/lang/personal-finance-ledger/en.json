@@ -13,7 +13,7 @@
       "typeSource": "Type and source",
       "summary": "Summary and reference",
       "businessBasis": "Business basis",
-      "amount": "Movement amount (CNY)",
+      "amount": "Movement amount",
       "balanceAfter": "Account balance",
       "balanceBefore": "Previous balance",
       "action": "Actions"
@@ -39,7 +39,7 @@
     "businessNo": "Business no.",
     "batchNo": "Batch",
     "noBusinessNo": "No linked business",
-    "shareRate": "Share snapshot",
+    "shareRate": "Current share rate",
     "viewDetail": "View details",
     "detailComingSoon": "Ledger details are coming soon."
   }

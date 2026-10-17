@@ -13,7 +13,7 @@
       "typeSource": "入账类型与来源",
       "summary": "摘要与关联单号",
       "businessBasis": "业务核算基准",
-      "amount": "动账金额 (CNY)",
+      "amount": "动账金额",
       "balanceAfter": "账户余额",
       "balanceBefore": "变动前余额",
       "action": "操作"
@@ -39,7 +39,7 @@
     "businessNo": "业务单",
     "batchNo": "批次",
     "noBusinessNo": "无关联业务单",
-    "shareRate": "分成快照",
+    "shareRate": "当前分成比例",
     "viewDetail": "查看详情",
     "detailComingSoon": "流水详情功能建设中，敬请期待"
   }
