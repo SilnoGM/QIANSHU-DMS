@@ -8,6 +8,7 @@ import {
   formatMaskedAmount,
   formatUserShareRate,
   resolvePersonalFundAccountCardState,
+  resolvePersonalFundAccountPanelTone,
 } from './logic'
 
 /**
@@ -44,6 +45,16 @@ const state = computed(() => resolvePersonalFundAccountCardState({
   loading: props.loading,
   error: props.error,
   hasAccount: props.account !== null,
+}))
+
+/**
+ * 余额面板配色：未开户红色、可见负余额黄色、其余绿色。
+ * 金额隐藏时保持绿色，避免颜色反向暴露余额正负。
+ */
+const panelTone = computed(() => resolvePersonalFundAccountPanelTone({
+  state: state.value,
+  balance: props.account?.balance ?? null,
+  amountVisible: amountVisible.value,
 }))
 
 const currencySymbol = computed(() => (
@@ -129,29 +140,20 @@ const toggleLabel = computed(() => t(
       </FaButton>
     </FaEmpty>
 
-    <!-- 未开户：按确认口径使用项目 destructive 语义色，不渲染绿色余额面板。 -->
-    <div v-else-if="state === 'empty'" class="p-5 sm:p-7">
-      <div class="p-6 text-center border border-destructive/30 rounded-xl bg-destructive/5 flex flex-col gap-3 items-center sm:p-8">
-        <span class="text-destructive rounded-full bg-destructive/10 flex-center size-12" aria-hidden="true">
-          <FaIcon name="i-lucide:wallet" class="size-6" />
-        </span>
-        <h2 class="qs-personal-fund-card__empty-title m-0">
-          {{ t('qsPersonalFundAccount.emptyTitle') }}
-        </h2>
-        <p class="qs-type-description m-0 max-w-md">
-          {{ t('qsPersonalFundAccount.emptyDescription') }}
-        </p>
-      </div>
-    </div>
-
-    <div v-else-if="account" class="qs-personal-fund-card__layout">
-      <section class="qs-personal-fund-card__balance">
+    <div v-else-if="state === 'empty' || account" class="qs-personal-fund-card__layout">
+      <section
+        class="qs-personal-fund-card__balance"
+        :class="{
+          'qs-personal-fund-card__balance--yellow': panelTone === 'yellow',
+          'qs-personal-fund-card__balance--red': panelTone === 'red',
+        }"
+      >
         <span class="qs-personal-fund-card__circle qs-personal-fund-card__circle--top" aria-hidden="true" />
         <span class="qs-personal-fund-card__circle qs-personal-fund-card__circle--bottom" aria-hidden="true" />
 
         <div class="qs-personal-fund-card__balance-content">
           <div class="flex gap-3 items-center">
-            <span class="rounded-lg bg-primary-foreground/15 flex-center size-10" aria-hidden="true">
+            <span class="qs-personal-fund-card__title-icon rounded-lg flex-center size-10" aria-hidden="true">
               <FaIcon name="i-lucide:wallet" class="size-5" />
             </span>
             <h2 class="qs-personal-fund-card__title m-0">
@@ -165,6 +167,7 @@ const toggleLabel = computed(() => t(
                 {{ balanceLabel }}
               </p>
               <FaButton
+                v-if="account"
                 variant="ghost"
                 size="icon-sm"
                 class="qs-personal-fund-card__visibility-toggle -my-1"
@@ -181,28 +184,33 @@ const toggleLabel = computed(() => t(
             </div>
 
             <div class="qs-personal-fund-card__amount-line">
-              <AmountDisplay
-                v-if="amountVisible"
-                :value="account.balance"
-                :currency="account.currency"
-                :currencies="currencies"
-                class="qs-personal-fund-card__amount"
-              />
-              <!-- 隐藏态只输出掩码；真实余额不进入 DOM、aria-label 或 title。 -->
-              <p
-                v-else
-                class="qs-personal-fund-card__amount m-0"
-                :aria-label="t('qsPersonalFundAccount.amountHidden')"
-              >
-                <span aria-hidden="true">{{ maskedAmount }}</span>
-                <span class="sr-only">{{ t('qsPersonalFundAccount.amountHidden') }}</span>
+              <template v-if="account">
+                <AmountDisplay
+                  v-if="amountVisible"
+                  :value="account.balance"
+                  :currency="account.currency"
+                  :currencies="currencies"
+                  class="qs-personal-fund-card__amount"
+                />
+                <!-- 隐藏态只输出掩码；真实余额不进入 DOM、aria-label 或 title。 -->
+                <p
+                  v-else
+                  class="qs-personal-fund-card__amount m-0"
+                  :aria-label="t('qsPersonalFundAccount.amountHidden')"
+                >
+                  <span aria-hidden="true">{{ maskedAmount }}</span>
+                  <span class="sr-only">{{ t('qsPersonalFundAccount.amountHidden') }}</span>
+                </p>
+              </template>
+              <p v-else class="qs-personal-fund-card__contact-finance m-0">
+                {{ t('qsPersonalFundAccount.contactFinanceToOpen') }}
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      <div class="qs-personal-fund-card__content">
+      <div v-if="account" class="qs-personal-fund-card__content">
         <dl class="qs-personal-fund-card__metrics">
           <div class="qs-personal-fund-card__metric">
             <span
@@ -302,6 +310,11 @@ const toggleLabel = computed(() => t(
           </FaButton>
         </div>
       </div>
+      <div v-else class="qs-personal-fund-card__content qs-personal-fund-card__content--empty">
+        <p class="qs-type-description m-0 max-w-sm">
+          {{ t('qsPersonalFundAccount.openAccountHint') }}
+        </p>
+      </div>
     </div>
   </FaCard>
 </template>
@@ -335,6 +348,18 @@ const toggleLabel = computed(() => t(
   color: oklch(var(--primary-foreground));
 }
 
+/* 负数余额使用项目 amber 语义色；深色文字保证黄色背景上的可读性。 */
+.qs-personal-fund-card__balance--yellow {
+  background: oklch(0.769 0.188 70.08);
+  color: oklch(0.216 0.006 56.043);
+}
+
+/* 未开户使用项目 destructive 语义色，与既有危险按钮同色系。 */
+.qs-personal-fund-card__balance--red {
+  background: oklch(var(--destructive));
+  color: oklch(1 0 0);
+}
+
 .qs-personal-fund-card__balance-content {
   position: relative;
   z-index: 1;
@@ -350,7 +375,7 @@ const toggleLabel = computed(() => t(
   position: absolute;
   pointer-events: none;
   border-radius: 9999px;
-  background: color-mix(in oklab, oklch(var(--primary-foreground)) 9%, transparent);
+  background: color-mix(in oklab, currentColor 9%, transparent);
 }
 
 .qs-personal-fund-card__circle--top {
@@ -365,11 +390,15 @@ const toggleLabel = computed(() => t(
   left: -3rem;
   width: 12rem;
   height: 12rem;
-  background: color-mix(in oklab, oklch(var(--primary-foreground)) 7%, transparent);
+  background: color-mix(in oklab, currentColor 7%, transparent);
+}
+
+.qs-personal-fund-card__title-icon {
+  background: color-mix(in oklab, currentColor 15%, transparent);
 }
 
 .qs-personal-fund-card__title {
-  color: oklch(var(--primary-foreground));
+  color: currentColor;
   font-family: var(--qs-font-sans);
   font-size: var(--qs-type-size-lg);
   font-weight: var(--qs-type-weight-semibold);
@@ -378,7 +407,7 @@ const toggleLabel = computed(() => t(
 }
 
 .qs-personal-fund-card__balance-label {
-  color: color-mix(in oklab, oklch(var(--primary-foreground)) 88%, transparent);
+  color: color-mix(in oklab, currentColor 88%, transparent);
   font-family: var(--qs-font-sans);
   font-size: var(--qs-type-size-sm);
   font-weight: var(--qs-type-weight-medium);
@@ -398,7 +427,7 @@ const toggleLabel = computed(() => t(
   display: flex;
   align-items: baseline;
   justify-content: flex-start;
-  color: oklch(var(--primary-foreground));
+  color: currentColor;
   font-family: var(--qs-font-mono);
   /* 上限 2.5rem 与面板 460px 最小宽度配套，保证最大金额字符串不溢出。 */
   font-size: clamp(1.75rem, 2.7cqw, 2.5rem);
@@ -410,18 +439,28 @@ const toggleLabel = computed(() => t(
   white-space: nowrap;
 }
 
+/* 未开户时金额位展示开户提示，沿用面板当前文字色。 */
+.qs-personal-fund-card__contact-finance {
+  color: currentColor;
+  font-family: var(--qs-font-sans);
+  font-size: clamp(1.125rem, 1.6cqw, 1.5rem);
+  font-weight: var(--qs-type-weight-semibold);
+  line-height: 1.3;
+  letter-spacing: var(--qs-type-tracking-normal);
+}
+
 .qs-personal-fund-card__visibility-toggle {
   flex-shrink: 0;
-  color: color-mix(in oklab, oklch(var(--primary-foreground)) 85%, transparent);
+  color: color-mix(in oklab, currentColor 85%, transparent);
 }
 
 .qs-personal-fund-card__visibility-toggle:hover {
-  color: oklch(var(--primary-foreground));
-  background: color-mix(in oklab, oklch(var(--primary-foreground)) 12%, transparent);
+  color: currentColor;
+  background: color-mix(in oklab, currentColor 12%, transparent);
 }
 
 .qs-personal-fund-card__visibility-toggle:focus-visible {
-  outline: 2px solid color-mix(in oklab, oklch(var(--primary-foreground)) 75%, transparent);
+  outline: 2px solid color-mix(in oklab, currentColor 75%, transparent);
   outline-offset: 2px;
 }
 
@@ -429,6 +468,14 @@ const toggleLabel = computed(() => t(
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+
+/* 未开户时右侧仅保留说明，避免出现无数据的指标和操作列。 */
+.qs-personal-fund-card__content--empty {
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  text-align: center;
 }
 
 .qs-personal-fund-card__metrics {
@@ -525,15 +572,6 @@ const toggleLabel = computed(() => t(
 
 .qs-personal-fund-card__actions > * {
   flex: 1 1 0;
-}
-
-.qs-personal-fund-card__empty-title {
-  color: oklch(var(--destructive));
-  font-family: var(--qs-font-sans);
-  font-size: var(--qs-type-size-lg);
-  font-weight: var(--qs-type-weight-semibold);
-  line-height: var(--qs-type-leading-lg);
-  letter-spacing: var(--qs-type-tracking-normal);
 }
 
 @container (width < 1140px) {

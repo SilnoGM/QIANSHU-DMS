@@ -52,3 +52,47 @@ export function resolvePersonalFundAccountCardState(input: {
   }
   return 'ready'
 }
+
+export type PersonalFundAccountPanelTone = 'green' | 'yellow' | 'red'
+
+/**
+ * 负余额识别只用于面板配色，不参与金额计算。
+ *
+ * 服务端输出普通十进制字符串；负零（-0.00）不算负数，
+ * 异常值一律按非负数处理，避免面板误变黄色。
+ */
+export function isNegativeAmount(value: string | null | undefined): boolean {
+  if (typeof value !== 'string') {
+    return false
+  }
+
+  const normalized = value.trim()
+  if (!/^-?\d+(?:\.\d+)?$/u.test(normalized)) {
+    return false
+  }
+  return Number(normalized) < 0
+}
+
+/**
+ * 余额面板状态色：未开户红色、可见负余额黄色、其余绿色。
+ *
+ * 隐藏金额时即使余额为负也保持绿色：颜色不能反向暴露余额正负，
+ * 否则金额隐藏就失去意义。
+ */
+export function resolvePersonalFundAccountPanelTone(input: {
+  state: QsPersonalFundAccountCardState
+  balance: string | null
+  amountVisible: boolean
+}): PersonalFundAccountPanelTone {
+  if (input.state === 'empty') {
+    return 'red'
+  }
+  if (
+    input.state === 'ready'
+    && input.amountVisible
+    && isNegativeAmount(input.balance)
+  ) {
+    return 'yellow'
+  }
+  return 'green'
+}

@@ -16,8 +16,8 @@
     "withdrawalRecords": "Withdrawal history",
     "withdrawalComingSoon": "Withdrawals are coming soon.",
     "withdrawalRecordsComingSoon": "Withdrawal history is coming soon.",
-    "emptyTitle": "No personal fund account yet",
-    "emptyDescription": "Contact finance to open an account before viewing your balance and withdrawals.",
+    "contactFinanceToOpen": "Contact finance to open an account",
+    "openAccountHint": "After the account is opened, you can view the share rate, account updates, and withdrawals.",
     "loadError": "Failed to load the personal fund account",
     "retry": "Retry",
     "loading": "Loading personal fund account"

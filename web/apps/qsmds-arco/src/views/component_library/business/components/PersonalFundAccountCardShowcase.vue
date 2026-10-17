@@ -27,6 +27,12 @@ const account: QsPersonalFundAccountCardAccount = {
 const wideVisible = ref(true)
 const narrowVisible = ref(false)
 const mobileVisible = ref(true)
+const negativeVisible = ref(true)
+
+const negativeAccount: QsPersonalFundAccountCardAccount = {
+  ...account,
+  balance: '-120.00',
+}
 
 function applyWithdrawal(): void {
   toast.info(t('qsPersonalFundAccount.withdrawalComingSoon'))
@@ -60,7 +66,7 @@ function retry(): void {
             个人资金账户卡片场景
           </h3>
           <p class="text-sm text-muted-foreground leading-6 m-0 mt-2 max-w-3xl">
-            本地 mock 数据覆盖宽屏、窄屏、移动端、金额隐藏、空态与加载/错误态。
+            本地 mock 数据覆盖宽屏、窄屏、移动端、金额隐藏、负数余额、未开户与加载/错误态。
             组件库容器较窄时，宽屏示例可横向滚动查看；按钮只触发轻提示，不跳转、不调接口。
           </p>
         </div>
@@ -127,13 +133,32 @@ function retry(): void {
 
         <div>
           <div class="mb-3 flex flex-wrap gap-2 items-baseline justify-between">
+            <span class="qs-type-compact-label text-foreground">负数余额（黄色面板）</span>
+            <span class="text-xs text-muted-foreground">隐藏金额时回到绿色，避免颜色泄露正负</span>
+          </div>
+          <div class="pb-1 overflow-x-auto">
+            <div class="w-[960px]">
+              <QsPersonalFundAccountCard
+                v-model:amount-visible="negativeVisible"
+                :account="negativeAccount"
+                :currencies="currencies"
+                @apply-withdrawal="applyWithdrawal"
+                @view-withdrawals="viewWithdrawals"
+                @retry="retry"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="mb-3 flex flex-wrap gap-2 items-baseline justify-between">
             <span class="qs-type-compact-label text-foreground">状态</span>
             <span class="text-xs text-muted-foreground">空态 / 加载 / 失败</span>
           </div>
           <div class="gap-6 grid min-w-0 lg:grid-cols-2">
             <div class="min-w-0">
               <div class="text-xs text-muted-foreground mb-3">
-                未开户：红色空态，不显示绿色余额面板与操作按钮
+                未开户：红色余额面板，金额位显示联系财务开户
               </div>
               <QsPersonalFundAccountCard
                 :account="null"

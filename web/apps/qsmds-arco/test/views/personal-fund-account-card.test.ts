@@ -5,8 +5,10 @@ import test from 'node:test'
 import {
   formatMaskedAmount,
   formatUserShareRate,
+  isNegativeAmount,
   PERSONAL_FUND_ACCOUNT_AMOUNT_MASK,
   resolvePersonalFundAccountCardState,
+  resolvePersonalFundAccountPanelTone,
 } from '../../src/components/business/QsPersonalFundAccountCard/logic'
 import en from '../../src/locales/lang/qs-personal-fund-account/en.json'
 import zhCn from '../../src/locales/lang/qs-personal-fund-account/zh-cn.json'
@@ -60,6 +62,43 @@ test('卡片状态按加载、错误、空账户、就绪的顺序收敛', () =>
   assert.equal(resolvePersonalFundAccountCardState(ready), 'ready')
 })
 
+test('负数金额识别覆盖负零与异常值', () => {
+  assert.equal(isNegativeAmount('-0.01'), true)
+  assert.equal(isNegativeAmount('-120.00'), true)
+
+  for (const invalid of [null, undefined, '', '   ', '-0.00', '0.00', '120.00', 'abc', '--1.00']) {
+    assert.equal(isNegativeAmount(invalid), false)
+  }
+})
+
+test('余额面板色只在可见负数时变黄，未开户为红，隐藏金额不泄露符号', () => {
+  assert.equal(
+    resolvePersonalFundAccountPanelTone({ state: 'empty', balance: null, amountVisible: true }),
+    'red',
+  )
+  assert.equal(
+    resolvePersonalFundAccountPanelTone({ state: 'ready', balance: '-120.00', amountVisible: true }),
+    'yellow',
+  )
+  // 隐藏金额时保持绿色：颜色不能反向暴露余额正负。
+  assert.equal(
+    resolvePersonalFundAccountPanelTone({ state: 'ready', balance: '-120.00', amountVisible: false }),
+    'green',
+  )
+  assert.equal(
+    resolvePersonalFundAccountPanelTone({ state: 'ready', balance: '0.00', amountVisible: true }),
+    'green',
+  )
+  assert.equal(
+    resolvePersonalFundAccountPanelTone({ state: 'ready', balance: '120.00', amountVisible: true }),
+    'green',
+  )
+  assert.equal(
+    resolvePersonalFundAccountPanelTone({ state: 'empty', balance: '-120.00', amountVisible: false }),
+    'red',
+  )
+})
+
 function collectKeys(source: Record<string, unknown>): string[] {
   return Object.entries(source).flatMap(([key, value]) => (
     value && typeof value === 'object' && !Array.isArray(value)
@@ -79,13 +118,13 @@ test('个人资金账户卡片三语文案键完全对齐', () => {
     'qsPersonalFundAccount.applyWithdrawal',
     'qsPersonalFundAccount.ariaLabel',
     'qsPersonalFundAccount.balanceLabel',
-    'qsPersonalFundAccount.emptyDescription',
-    'qsPersonalFundAccount.emptyTitle',
+    'qsPersonalFundAccount.contactFinanceToOpen',
     'qsPersonalFundAccount.firstActivated',
     'qsPersonalFundAccount.hideAmount',
     'qsPersonalFundAccount.lastAccountUpdate',
     'qsPersonalFundAccount.loadError',
     'qsPersonalFundAccount.loading',
+    'qsPersonalFundAccount.openAccountHint',
     'qsPersonalFundAccount.rateEffectiveAt',
     'qsPersonalFundAccount.retry',
     'qsPersonalFundAccount.shareRate',
