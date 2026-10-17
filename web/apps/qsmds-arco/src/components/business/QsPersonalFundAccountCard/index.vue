@@ -375,7 +375,8 @@ const toggleLabel = computed(() => t(
   position: absolute;
   pointer-events: none;
   border-radius: 9999px;
-  background: color-mix(in oklab, currentColor 9%, transparent);
+  /* 固定浅白叠层：绿色/红色面板保持原效果，黄色面板得到提亮而不是暗色脏块。 */
+  background: color-mix(in oklab, oklch(1 0 0) 9%, transparent);
 }
 
 .qs-personal-fund-card__circle--top {
@@ -390,7 +391,7 @@ const toggleLabel = computed(() => t(
   left: -3rem;
   width: 12rem;
   height: 12rem;
-  background: color-mix(in oklab, currentColor 7%, transparent);
+  background: color-mix(in oklab, oklch(1 0 0) 7%, transparent);
 }
 
 .qs-personal-fund-card__title-icon {
