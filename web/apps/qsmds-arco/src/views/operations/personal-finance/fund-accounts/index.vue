@@ -324,7 +324,7 @@ onBeforeUnmount(() => {
         @retry="loadTransactions"
       >
         <template #cell-sequence="{ row }">
-          <span class="qs-type-data-emphasis px-2 py-1 border border-border rounded-lg bg-muted/60 inline-flex min-w-12 justify-center">
+          <span class="qs-type-data text-muted-foreground">
             #{{ row.original.accountSequence }}
           </span>
         </template>
