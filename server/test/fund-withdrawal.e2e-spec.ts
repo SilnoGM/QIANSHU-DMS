@@ -1,5 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { Readable } from 'node:stream'
 
 import type { INestApplication } from '@nestjs/common'
@@ -7,6 +9,7 @@ import { Test } from '@nestjs/testing'
 import sharp from 'sharp'
 
 import { AppModule } from '../src/app.module'
+import mediaConfig, { createMediaConfiguration } from '../src/config/media.config'
 import { PrismaService } from '../src/infrastructure/database/prisma.service'
 import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
 import { FundPostingApplicationService } from '../src/modules/fund-accounts/application/fund-posting.service'
@@ -36,14 +39,19 @@ describe('fund withdrawals against isolated PostgreSQL', () => {
   let financeId: string
   let applicantId: string
   let applicantAccountId: string
+  let mediaRoot: string
 
   beforeAll(async () => {
+    // CI 中默认媒体根不可写；付款截图使用用户目录下的独占目录，结束时清理。
+    mediaRoot = await mkdtemp(join(homedir(), '.qianshu-fund-withdrawal-media-'))
     png = await sharp({
       create: { width: 2, height: 2, channels: 3, background: '#ffffff' },
     }).png().toBuffer()
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     })
+      .overrideProvider(mediaConfig.KEY)
+      .useValue(createMediaConfiguration({ MEDIA_STORAGE_ROOT: mediaRoot }))
       // Jest 29 不能解析 ESM-only file-type；这里只跳过解码/魔数探测，
       // 媒体写入、摘要/大小一致性、引用与付款截图形状仍走生产实现。
       .overrideProvider(MediaContentValidator)
@@ -94,6 +102,7 @@ describe('fund withdrawals against isolated PostgreSQL', () => {
     }
     finally {
       await application?.close()
+      await rm(mediaRoot, { recursive: true, force: true })
     }
   })
 
