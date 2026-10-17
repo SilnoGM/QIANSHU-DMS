@@ -221,7 +221,12 @@ const toggleLabel = computed(() => t(
               <dd class="qs-personal-fund-card__metric-sub">
                 <span class="flex flex-wrap gap-x-1 items-baseline">
                   <span>{{ t('qsPersonalFundAccount.rateEffectiveAt') }}</span>
-                  <DateTimeDisplay :value="account.shareRateUpdatedAt" format="datetime" />
+                  <DateTimeDisplay :value="account.shareRateUpdatedAt" format="date" />
+                  <DateTimeDisplay
+                    :value="account.shareRateUpdatedAt"
+                    format="time"
+                    class="qs-personal-fund-card__time"
+                  />
                 </span>
               </dd>
             </div>
@@ -247,7 +252,7 @@ const toggleLabel = computed(() => t(
                 <DateTimeDisplay
                   :value="account.updatedAt"
                   format="time"
-                  class="qs-personal-fund-card__metric-date-value"
+                  class="qs-personal-fund-card__metric-date-value qs-personal-fund-card__time"
                 />
               </dd>
               <dd class="qs-personal-fund-card__metric-sub">
@@ -276,7 +281,7 @@ const toggleLabel = computed(() => t(
                 <DateTimeDisplay
                   :value="account.createdAt"
                   format="time"
-                  class="qs-personal-fund-card__metric-date-value"
+                  class="qs-personal-fund-card__metric-date-value qs-personal-fund-card__time"
                 />
               </dd>
               <dd class="qs-personal-fund-card__metric-sub">
@@ -310,9 +315,14 @@ const toggleLabel = computed(() => t(
   container-type: inline-size;
 }
 
+/*
+ * 余额面板最小宽度按「负号 + ¥ + 6 位整数（含千分位）+ 2 位小数 + CNY」
+ * 在当前最大金额字号下计算：16 个等宽字符 + 左右 2rem 内边距 ≈ 460px。
+ * 窄屏金额字号随容器缩小，32% 面板宽度已能容纳同一字符串。
+ */
 .qs-personal-fund-card__layout {
   display: grid;
-  grid-template-columns: minmax(360px, 26%) minmax(0, 1fr);
+  grid-template-columns: minmax(460px, 26%) minmax(0, 1fr);
   min-height: 18.75rem;
 }
 
@@ -390,7 +400,8 @@ const toggleLabel = computed(() => t(
   justify-content: flex-start;
   color: oklch(var(--primary-foreground));
   font-family: var(--qs-font-mono);
-  font-size: clamp(1.75rem, 2.7cqw, 3rem);
+  /* 上限 2.5rem 与面板 460px 最小宽度配套，保证最大金额字符串不溢出。 */
+  font-size: clamp(1.75rem, 2.7cqw, 2.5rem);
   font-weight: var(--qs-type-weight-bold);
   line-height: 1.15;
   letter-spacing: var(--qs-type-tracking-tight);
@@ -536,6 +547,11 @@ const toggleLabel = computed(() => t(
 
   .qs-personal-fund-card__actions {
     padding: 1.25rem 1.5rem 1.5rem;
+  }
+
+  /* 窄容器只保留日期；具体时间在宽容器才展示。 */
+  .qs-personal-fund-card__time {
+    display: none;
   }
 
   .qs-personal-fund-card__metric-date {

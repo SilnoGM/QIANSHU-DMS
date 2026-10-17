@@ -92,7 +92,7 @@ function retry(): void {
         <div>
           <div class="mb-3 flex flex-wrap gap-2 items-baseline justify-between">
             <span class="qs-type-compact-label text-foreground">窄屏（容器 840–1139px，金额隐藏）</span>
-            <span class="text-xs text-muted-foreground">日期/时间两行 + 按钮并排</span>
+            <span class="text-xs text-muted-foreground">仅日期 + 按钮并排</span>
           </div>
           <div class="pb-1 overflow-x-auto">
             <div class="w-[960px]">
