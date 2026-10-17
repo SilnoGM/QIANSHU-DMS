@@ -94,6 +94,65 @@ export interface FundTransactionPage {
   readonly total: number
 }
 
+/**
+ * 运营本人流水只开放方向、业务发生时间与业务类型三个筛选维度。
+ *
+ * accountId 与 userId 由服务端按会话解析，不属于客户端可传入的范围。
+ */
+export interface FundSelfTransactionListQuery {
+  readonly page?: number
+  readonly pageSize?: number
+  readonly direction?: FundEntryDirection
+  readonly occurredFrom?: string
+  readonly occurredTo?: string
+  readonly postingTypeId?: string
+  readonly sortBy?: FundTransactionSortField
+  readonly sortOrder?: FundAccountSortOrder
+}
+
+/**
+ * 运营本人流水视图：来源说明随行返回，公司比例、内部批次/账户标识与
+ * 规则金额策略不下发。
+ */
+export interface FundSelfTransactionView {
+  readonly entryId: string
+  readonly batchNo: string
+  readonly batchKind: FundPostingBatchKind
+  readonly postingTypeId: string
+  readonly postingTypeName: string
+  readonly businessCategory: FundBusinessCategory
+  readonly businessSourceName: string
+  readonly direction: FundEntryDirection
+  readonly amount: string
+  readonly balanceBefore: string
+  readonly balanceAfter: string
+  readonly accountSequence: string
+  readonly businessAmount: string
+  readonly userShareRateSnapshot: string | null
+  readonly businessNo: string | null
+  readonly summary: string
+  readonly businessOccurredAt: string
+  readonly reversalStatus: FundTransactionReversalStatus
+  readonly postedAt: string
+}
+
+export interface FundSelfTransactionPage {
+  readonly items: readonly FundSelfTransactionView[]
+  readonly page: number
+  readonly pageSize: number
+  readonly total: number
+}
+
+/** 本人流水出现过的业务类型，供运营端筛选下拉使用。 */
+export interface FundSelfPostingTypeOption {
+  readonly id: string
+  readonly name: string
+}
+
+export interface FundSelfPostingTypeOptionList {
+  readonly items: readonly FundSelfPostingTypeOption[]
+}
+
 export interface FundPostingBatchEntryView {
   readonly entryId: string
   readonly lineNo: number

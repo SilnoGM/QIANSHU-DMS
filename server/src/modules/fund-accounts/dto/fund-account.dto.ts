@@ -260,3 +260,36 @@ export class FundAccountMutationResultDto {
   @ApiProperty({ type: () => FundAccountDto })
   account!: FundAccountDto
 }
+
+/**
+ * 运营本人账户：只下发本人可感知字段。
+ *
+ * 公司分成比例即使可由 userShareRate 推导，也不在响应中明文出现。
+ */
+export class FundSelfAccountDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  id!: string
+
+  @ApiProperty({ type: 'string', enum: ['CNY'] })
+  currency!: 'CNY'
+
+  @ApiProperty({ type: 'string', pattern: FUND_DECIMAL_OUTPUT_PATTERN })
+  balance!: string
+
+  @ApiProperty({ type: 'string', pattern: FUND_DECIMAL_OUTPUT_PATTERN })
+  userShareRate!: string
+
+  @ApiProperty({ type: 'string', format: 'date-time' })
+  shareRateUpdatedAt!: string
+
+  @ApiProperty({ type: 'string', format: 'date-time' })
+  createdAt!: string
+
+  @ApiProperty({ type: 'string', format: 'date-time' })
+  updatedAt!: string
+}
+
+export class FundSelfAccountResponseDto {
+  @ApiProperty({ type: () => FundSelfAccountDto, nullable: true })
+  account!: FundSelfAccountDto | null
+}

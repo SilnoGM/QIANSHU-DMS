@@ -311,6 +311,59 @@ test('十四个资金 mutation 均本地呈错且禁止自动重试', async () =
   ])
 })
 
+test('三个 self 资金 GET 使用 generated query、AbortSignal 与本地呈错', async () => {
+  const fixture = createClientRecorder()
+  const fund = createFundAccountsApi(fixture.client)
+  const accountController = new AbortController()
+  const transactionController = new AbortController()
+  const optionController = new AbortController()
+  const selfTransactionQuery = {
+    direction: 'DEBIT' as const,
+    occurredFrom: '2026-01-01T00:00:00.000Z',
+    occurredTo: '2026-03-01T00:00:00.000Z',
+    page: 2,
+    pageSize: 50,
+    postingTypeId: 'posting-type-id',
+    sortBy: 'postedAt' as const,
+    sortOrder: 'desc' as const,
+  }
+
+  await fund.accounts.self(accountController.signal)
+  await fund.transactions.listSelf(
+    selfTransactionQuery,
+    transactionController.signal,
+  )
+  await fund.transactions.selfPostingTypes(optionController.signal)
+
+  assert.deepEqual(fixture.calls, [
+    {
+      method: 'get',
+      url: 'fund-accounts/me',
+      config: {
+        errorPresentation: 'local',
+        signal: accountController.signal,
+      },
+    },
+    {
+      method: 'get',
+      url: 'fund-transactions/me',
+      config: {
+        errorPresentation: 'local',
+        params: selfTransactionQuery,
+        signal: transactionController.signal,
+      },
+    },
+    {
+      method: 'get',
+      url: 'fund-transactions/me/posting-types',
+      config: {
+        errorPresentation: 'local',
+        signal: optionController.signal,
+      },
+    },
+  ])
+})
+
 test('资金 adapter 不暴露删除或远程业务动账入口', () => {
   const fund = createFundAccountsApi(createClientRecorder().client)
 

@@ -67,6 +67,26 @@ export interface FundAccountPage {
 }
 
 /**
+ * 运营本人账户视图。
+ *
+ * 本人只能说 USER 账户，因此不返回 ownerType、user、version 等内部字段；
+ * 公司分成比例即使可由 userShareRate 推导，也绝不下发明文。
+ */
+export interface FundSelfAccountView {
+  readonly id: string
+  readonly currency: 'CNY'
+  readonly balance: string
+  readonly userShareRate: string
+  readonly shareRateUpdatedAt: string
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+export interface FundSelfAccountResponse {
+  readonly account: FundSelfAccountView | null
+}
+
+/**
  * 新建账户的候选归属人：还没有 USER 账户的用户。
  *
  * 该读取专供资金域的下拉选择，字段与 FundAccountUserView 一致，

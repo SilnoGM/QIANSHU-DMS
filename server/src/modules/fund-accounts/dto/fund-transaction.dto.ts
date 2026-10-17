@@ -165,6 +165,80 @@ export class FundTransactionListQueryDto {
   sortOrder: 'asc' | 'desc' = 'desc'
 }
 
+/**
+ * 运营本人流水查询：只开放方向、业务发生时间与业务类型三类筛选。
+ *
+ * accountId 与 userId 由服务端按会话解析；全局 forbidNonWhitelisted
+ * 会拒绝客户端额外传入的越权范围字段。
+ */
+export class FundSelfTransactionListQueryDto {
+  @ApiPropertyOptional({ type: 'integer', minimum: 1, default: 1 })
+  @Type(() => Number)
+  @IsInt({ message: 'page 必须是整数' })
+  @Min(1, { message: 'page 不能小于 1' })
+  page = 1
+
+  @ApiPropertyOptional({
+    type: 'integer',
+    minimum: 1,
+    maximum: 100,
+    default: 20,
+  })
+  @Type(() => Number)
+  @IsInt({ message: 'pageSize 必须是整数' })
+  @Min(1, { message: 'pageSize 不能小于 1' })
+  @Max(100, { message: 'pageSize 不能超过 100' })
+  pageSize = 20
+
+  @ApiPropertyOptional({ type: 'string', enum: FUND_ENTRY_DIRECTIONS })
+  @ValidateIf((_object: FundSelfTransactionListQueryDto, value: unknown) =>
+    value !== undefined,
+  )
+  @IsIn(FUND_ENTRY_DIRECTIONS, { message: 'direction 不在白名单内' })
+  direction?: FundEntryDirection
+
+  @ApiPropertyOptional({ type: 'string', format: 'date-time' })
+  @ValidateIf((_object: FundSelfTransactionListQueryDto, value: unknown) =>
+    value !== undefined,
+  )
+  @IsISO8601({ strict: true, strictSeparator: true }, {
+    message: 'occurredFrom 必须是 ISO 8601 时间',
+  })
+  occurredFrom?: string
+
+  @ApiPropertyOptional({ type: 'string', format: 'date-time' })
+  @ValidateIf((_object: FundSelfTransactionListQueryDto, value: unknown) =>
+    value !== undefined,
+  )
+  @IsISO8601({ strict: true, strictSeparator: true }, {
+    message: 'occurredTo 必须是 ISO 8601 时间',
+  })
+  occurredTo?: string
+
+  @ApiPropertyOptional({ type: 'string', format: 'uuid' })
+  @ValidateIf((_object: FundSelfTransactionListQueryDto, value: unknown) =>
+    value !== undefined,
+  )
+  @IsUUID(undefined, { message: 'postingTypeId 必须是有效的 UUID' })
+  postingTypeId?: string
+
+  @ApiPropertyOptional({
+    type: 'string',
+    enum: FUND_TRANSACTION_SORT_FIELDS,
+    default: 'postedAt',
+  })
+  @IsIn(FUND_TRANSACTION_SORT_FIELDS, { message: 'sortBy 不在白名单内' })
+  sortBy: FundTransactionSortField = 'postedAt'
+
+  @ApiPropertyOptional({
+    type: 'string',
+    enum: ['asc', 'desc'],
+    default: 'desc',
+  })
+  @IsIn(['asc', 'desc'], { message: 'sortOrder 只允许 asc 或 desc' })
+  sortOrder: 'asc' | 'desc' = 'desc'
+}
+
 export class CreateFundReversalRequestDto {
   @ApiProperty({
     type: 'string',
@@ -304,6 +378,104 @@ export class FundTransactionPageDto {
 
   @ApiProperty({ type: 'integer', minimum: 0 })
   total!: number
+}
+
+/**
+ * 运营本人流水视图：来源说明随行返回，公司比例、内部批次/账户标识与
+ * 规则金额策略不下发。
+ */
+export class FundSelfTransactionDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  entryId!: string
+
+  @ApiProperty({ type: 'string' })
+  batchNo!: string
+
+  @ApiProperty({
+    type: 'string',
+    enum: ['BUSINESS', 'MANUAL_ADJUSTMENT', 'REVERSAL'],
+  })
+  batchKind!: FundPostingBatchKind
+
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  postingTypeId!: string
+
+  @ApiProperty({ type: 'string' })
+  postingTypeName!: string
+
+  @ApiProperty({ type: 'string', enum: FUND_BUSINESS_CATEGORIES })
+  businessCategory!: FundBusinessCategory
+
+  @ApiProperty({ type: 'string' })
+  businessSourceName!: string
+
+  @ApiProperty({ type: 'string', enum: FUND_ENTRY_DIRECTIONS })
+  direction!: FundEntryDirection
+
+  @ApiProperty({ type: 'string', pattern: FUND_DECIMAL_OUTPUT_PATTERN })
+  amount!: string
+
+  @ApiProperty({ type: 'string', pattern: FUND_DECIMAL_OUTPUT_PATTERN })
+  balanceBefore!: string
+
+  @ApiProperty({ type: 'string', pattern: FUND_DECIMAL_OUTPUT_PATTERN })
+  balanceAfter!: string
+
+  @ApiProperty({ type: 'string', pattern: '^[1-9]\\d*$' })
+  accountSequence!: string
+
+  @ApiProperty({ type: 'string', pattern: FUND_DECIMAL_OUTPUT_PATTERN })
+  businessAmount!: string
+
+  @ApiProperty({
+    type: 'string',
+    pattern: FUND_DECIMAL_OUTPUT_PATTERN,
+    nullable: true,
+  })
+  userShareRateSnapshot!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true })
+  businessNo!: string | null
+
+  @ApiProperty({ type: 'string' })
+  summary!: string
+
+  @ApiProperty({ type: 'string', format: 'date-time' })
+  businessOccurredAt!: string
+
+  @ApiProperty({ type: 'string', enum: FUND_TRANSACTION_REVERSAL_STATUSES })
+  reversalStatus!: FundTransactionReversalStatus
+
+  @ApiProperty({ type: 'string', format: 'date-time' })
+  postedAt!: string
+}
+
+export class FundSelfTransactionPageDto {
+  @ApiProperty({ type: () => [FundSelfTransactionDto] })
+  items!: readonly FundSelfTransactionDto[]
+
+  @ApiProperty({ type: 'integer', minimum: 1 })
+  page!: number
+
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: 100 })
+  pageSize!: number
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  total!: number
+}
+
+/** 本人流水出现过的业务类型，供筛选下拉使用。 */
+export class FundSelfPostingTypeOptionDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  id!: string
+
+  @ApiProperty({ type: 'string' })
+  name!: string
+}
+
+export class FundSelfPostingTypeOptionListDto {
+  @ApiProperty({ type: () => [FundSelfPostingTypeOptionDto] })
+  items!: readonly FundSelfPostingTypeOptionDto[]
 }
 
 export class FundPostingBatchEntryDto {
