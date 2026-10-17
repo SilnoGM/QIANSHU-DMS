@@ -13,7 +13,7 @@
       "typeSource": "Type and source",
       "summary": "Summary and reference",
       "businessBasis": "Business basis",
-      "amount": "Amount (CNY)",
+      "amount": "Movement amount (CNY)",
       "balanceAfter": "Account balance",
       "balanceBefore": "Previous balance",
       "action": "Actions"

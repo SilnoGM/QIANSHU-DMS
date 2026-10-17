@@ -1,4 +1,3 @@
-import type { CurrencyDescriptor } from '../../src/components/base/currency'
 import assert from 'node:assert/strict'
 
 // eslint-disable-next-line test/no-import-node-test -- 流水表纯逻辑与三语键对齐使用 Node.js 内置 runner 验证。
@@ -7,32 +6,11 @@ import en from '../../src/locales/lang/personal-finance-ledger/en.json'
 import zhCn from '../../src/locales/lang/personal-finance-ledger/zh-cn.json'
 import zhTw from '../../src/locales/lang/personal-finance-ledger/zh-tw.json'
 import {
-  formatLedgerCny,
-  formatLedgerCnyNumber,
-  formatLedgerSignedAmount,
   LEDGER_BATCH_KIND_META,
   LEDGER_CATEGORY_META,
   LEDGER_DIRECTION_META,
   LEDGER_REVERSAL_META,
 } from '../../src/views/operations/personal-finance/fund-accounts/ledger.logic'
-
-const CURRENCIES: readonly CurrencyDescriptor[] = [
-  { code: 'CNY', enabled: true, minorUnit: 2, name: '人民币', symbol: '¥' },
-]
-
-test('流水金额按 CNY 格式化，表格内不重复展示币种代码', () => {
-  assert.equal(formatLedgerCny('1000', CURRENCIES), '¥1,000.00')
-  assert.equal(formatLedgerCny('-55', CURRENCIES), '-¥55.00')
-  assert.equal(formatLedgerCnyNumber('300', CURRENCIES), '300.00')
-  assert.equal(formatLedgerCnyNumber('-55', CURRENCIES), '-55.00')
-  assert.equal(formatLedgerSignedAmount('300', 'CREDIT', CURRENCIES), '+300.00')
-  assert.equal(formatLedgerSignedAmount('30', 'DEBIT', CURRENCIES), '-30.00')
-})
-
-test('币种目录尚未加载时保留原始金额并去掉代码', () => {
-  assert.equal(formatLedgerCny('1000', []), '1000')
-  assert.equal(formatLedgerCnyNumber('300', []), '300')
-})
 
 test('流水类型、批次、冲账与方向元数据固定', () => {
   assert.deepEqual(Object.keys(LEDGER_CATEGORY_META), ['REVENUE', 'COST', 'ADJUSTMENT', 'NEUTRAL'])

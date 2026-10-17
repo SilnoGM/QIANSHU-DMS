@@ -13,7 +13,7 @@
       "typeSource": "入账类型与来源",
       "summary": "摘要与关联单号",
       "businessBasis": "业务核算基准",
-      "amount": "入账金额 (CNY)",
+      "amount": "动账金额 (CNY)",
       "balanceAfter": "账户余额",
       "balanceBefore": "变动前余额",
       "action": "操作"

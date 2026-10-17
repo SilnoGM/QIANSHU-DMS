@@ -1,11 +1,3 @@
-import type { CurrencyDescriptor } from '../../../../components/base/currency'
-import { formatCurrencyAmount } from '../../../../components/base/AmountDisplay/format'
-
-export type LedgerCategory = 'REVENUE' | 'COST' | 'ADJUSTMENT' | 'NEUTRAL'
-export type LedgerBatchKind = 'BUSINESS' | 'MANUAL_ADJUSTMENT' | 'REVERSAL'
-export type LedgerReversalStatus = 'NONE' | 'PARTIAL' | 'FULL' | 'NOT_APPLICABLE'
-export type LedgerDirection = 'CREDIT' | 'DEBIT'
-
 /**
  * 流水表的类目视觉映射。
  *
@@ -66,52 +58,11 @@ export const LEDGER_DIRECTION_META = {
   CREDIT: {
     labelKey: 'personalFinanceLedger.direction.CREDIT',
     badgeClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300',
-    amountClass: 'text-emerald-700 dark:text-emerald-300',
+    amountClass: '!text-emerald-700 dark:!text-emerald-300',
   },
   DEBIT: {
     labelKey: 'personalFinanceLedger.direction.DEBIT',
     badgeClass: 'bg-muted text-muted-foreground',
-    amountClass: 'text-foreground',
+    amountClass: '!text-foreground',
   },
 } as const
-
-/**
- * 表格金额统一用 CNY；列头已经声明币种，单元格内不再重复 `CNY`。
- *
- * 直接复用 AmountDisplay 的十进制格式化，保证大额 decimal 字符串不经过
- * 浮点数；币种目录尚未加载时保留原始数字并去掉后缀。
- */
-export function formatLedgerCny(
-  value: string,
-  currencies: readonly CurrencyDescriptor[],
-): string {
-  const formatted = formatCurrencyAmount(value, 'CNY', currencies)
-  return formatted.endsWith(' CNY') ? formatted.slice(0, -4) : formatted
-}
-
-/** 入账金额列只显示数字，正负号由 direction 决定。 */
-export function formatLedgerCnyNumber(
-  value: string,
-  currencies: readonly CurrencyDescriptor[],
-): string {
-  const formatted = formatLedgerCny(value, currencies)
-  if (formatted.startsWith('-¥')) {
-    return `-${formatted.slice(2)}`
-  }
-  if (formatted.startsWith('¥')) {
-    return formatted.slice(1)
-  }
-  return formatted
-}
-
-export function formatLedgerSignedAmount(
-  amount: string,
-  direction: LedgerDirection,
-  currencies: readonly CurrencyDescriptor[],
-): string {
-  const formatted = formatLedgerCnyNumber(amount, currencies)
-  if (formatted === '—') {
-    return formatted
-  }
-  return `${direction === 'CREDIT' ? '+' : '-'}${formatted}`
-}

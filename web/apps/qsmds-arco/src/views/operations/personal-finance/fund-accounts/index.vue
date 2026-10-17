@@ -4,6 +4,7 @@ import type { FundSelfAccountDto, FundSelfTransactionDto } from '@/api/generated
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import { getApiClientErrorMessage } from '@/api/errors'
 import fundAccountsApi from '@/api/modules/fund-accounts'
+import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
@@ -11,8 +12,6 @@ import QsPersonalFundAccountCard from '@/components/business/QsPersonalFundAccou
 import { formatUserShareRate } from '@/components/business/QsPersonalFundAccountCard/logic'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import {
-  formatLedgerCny,
-  formatLedgerSignedAmount,
   LEDGER_BATCH_KIND_META,
   LEDGER_CATEGORY_META,
   LEDGER_DIRECTION_META,
@@ -69,7 +68,7 @@ const ledgerColumns = computed<QsGenericTableColumn<FundSelfTransactionDto>[]>((
     id: 'postedAt',
     accessorKey: 'postedAt',
     title: t('personalFinanceLedger.column.postedAt'),
-    minWidth: 130,
+    minWidth: 200,
   },
   {
     id: 'typeSource',
@@ -94,7 +93,7 @@ const ledgerColumns = computed<QsGenericTableColumn<FundSelfTransactionDto>[]>((
     id: 'amount',
     accessorKey: 'amount',
     title: t('personalFinanceLedger.column.amount'),
-    minWidth: 180,
+    minWidth: 220,
     align: 'right',
   },
   {
@@ -346,18 +345,11 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-postedAt="{ row }">
-          <div class="flex flex-col gap-1">
-            <DateTimeDisplay
-              :value="row.original.postedAt"
-              format="date"
-              class="qs-type-data-emphasis"
-            />
-            <DateTimeDisplay
-              :value="row.original.postedAt"
-              format="time"
-              class="qs-type-data text-muted-foreground"
-            />
-          </div>
+          <DateTimeDisplay
+            :value="row.original.postedAt"
+            format="datetime"
+            class="qs-type-data-emphasis whitespace-nowrap"
+          />
         </template>
 
         <template #cell-typeSource="{ row }">
@@ -419,9 +411,12 @@ onBeforeUnmount(() => {
 
         <template #cell-businessBasis="{ row }">
           <div class="text-right">
-            <p class="qs-type-data-emphasis m-0 !text-base !font-semibold">
-              {{ formatLedgerCny(row.original.businessAmount, currencyCatalog.currencies.value) }}
-            </p>
+            <AmountDisplay
+              :value="row.original.businessAmount"
+              currency="CNY"
+              :currencies="currencyCatalog.currencies.value"
+              class="!text-base !font-semibold"
+            />
             <p class="qs-type-meta text-muted-foreground m-0 mt-1">
               {{ t('personalFinanceLedger.shareRate') }} {{ formatUserShareRate(row.original.userShareRateSnapshot) }}
             </p>
@@ -436,25 +431,42 @@ onBeforeUnmount(() => {
             >
               {{ t(directionMeta(row.original.direction).labelKey) }}
             </span>
-            <p
-              class="qs-type-data-emphasis m-0 !text-base !font-semibold"
-              :class="directionMeta(row.original.direction).amountClass"
-            >
-              {{ formatLedgerSignedAmount(row.original.amount, row.original.direction, currencyCatalog.currencies.value) }}
-            </p>
+            <span class="inline-flex items-baseline" :class="directionMeta(row.original.direction).amountClass">
+              <span
+                v-if="row.original.direction === 'CREDIT'"
+                class="qs-type-data-emphasis !text-base !font-semibold"
+              >+</span>
+              <AmountDisplay
+                :value="row.original.direction === 'DEBIT' ? `-${row.original.amount}` : row.original.amount"
+                currency="CNY"
+                :currencies="currencyCatalog.currencies.value"
+                class="!text-base !font-semibold"
+                :class="directionMeta(row.original.direction).amountClass"
+              />
+            </span>
           </div>
         </template>
 
         <template #cell-balanceAfter="{ row }">
-          <p class="qs-type-data-emphasis m-0 text-right !text-base !font-semibold">
-            {{ formatLedgerCny(row.original.balanceAfter, currencyCatalog.currencies.value) }}
-          </p>
+          <div class="text-right">
+            <AmountDisplay
+              :value="row.original.balanceAfter"
+              currency="CNY"
+              :currencies="currencyCatalog.currencies.value"
+              class="!text-base !font-semibold"
+            />
+          </div>
         </template>
 
         <template #cell-balanceBefore="{ row }">
-          <p class="qs-type-data-emphasis m-0 text-right !text-base !font-semibold">
-            {{ formatLedgerCny(row.original.balanceBefore, currencyCatalog.currencies.value) }}
-          </p>
+          <div class="text-right">
+            <AmountDisplay
+              :value="row.original.balanceBefore"
+              currency="CNY"
+              :currencies="currencyCatalog.currencies.value"
+              class="!text-base !font-semibold"
+            />
+          </div>
         </template>
 
         <template #actions>
