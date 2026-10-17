@@ -61,6 +61,7 @@ const ledgerColumns = computed<QsGenericTableColumn<FundSelfTransactionDto>[]>((
     accessorKey: 'accountSequence',
     title: t('personalFinanceLedger.column.sequence'),
     minWidth: 80,
+    fixed: 'left',
   },
   {
     id: 'postedAt',
@@ -84,21 +85,21 @@ const ledgerColumns = computed<QsGenericTableColumn<FundSelfTransactionDto>[]>((
     id: 'businessBasis',
     accessorKey: 'businessAmount',
     title: t('personalFinanceLedger.column.businessBasis'),
-    minWidth: 150,
+    minWidth: 180,
     align: 'right',
   },
   {
     id: 'amount',
     accessorKey: 'amount',
     title: t('personalFinanceLedger.column.amount'),
-    minWidth: 140,
+    minWidth: 180,
     align: 'right',
   },
   {
     id: 'balance',
     accessorKey: 'balanceAfter',
     title: t('personalFinanceLedger.column.balance'),
-    minWidth: 150,
+    minWidth: 180,
     align: 'right',
   },
 ])
@@ -317,7 +318,7 @@ onBeforeUnmount(() => {
         :page-size-options="[20, 50, 100]"
         :empty-title="t('personalFinanceLedger.empty')"
         :empty-description="t('personalFinanceLedger.emptyHint')"
-        :action-column="{ fixed: 'right', width: 110, title: t('personalFinanceLedger.column.action') }"
+        :action-column="{ fixed: 'right', width: 130, title: t('personalFinanceLedger.column.action') }"
         table-class="w-max min-w-full"
         :aria-label="t('personalFinanceLedger.ariaLabel')"
         @pagination-change="loadTransactions"
@@ -403,7 +404,7 @@ onBeforeUnmount(() => {
 
         <template #cell-businessBasis="{ row }">
           <div class="text-right">
-            <p class="qs-type-data-emphasis m-0">
+            <p class="qs-type-data-emphasis m-0 !text-base !font-semibold">
               {{ formatLedgerCny(row.original.businessAmount, currencyCatalog.currencies.value) }}
             </p>
             <p class="qs-type-meta text-muted-foreground m-0 mt-1">
@@ -415,7 +416,7 @@ onBeforeUnmount(() => {
         <template #cell-amount="{ row }">
           <div class="text-right">
             <p
-              class="qs-type-data-emphasis m-0 !text-lg !font-semibold"
+              class="qs-type-data-emphasis m-0 !text-base !font-semibold"
               :class="directionMeta(row.original.direction).amountClass"
             >
               {{ formatLedgerSignedAmount(row.original.amount, row.original.direction, currencyCatalog.currencies.value) }}
@@ -448,6 +449,7 @@ onBeforeUnmount(() => {
             class="min-h-11 sm:min-h-8"
             @click="viewTransactionDetail"
           >
+            <FaIcon name="i-lucide:eye" aria-hidden="true" />
             {{ t('personalFinanceLedger.viewDetail') }}
           </FaButton>
         </template>
