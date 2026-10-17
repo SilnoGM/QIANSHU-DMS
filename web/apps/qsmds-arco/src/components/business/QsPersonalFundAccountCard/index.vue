@@ -348,10 +348,10 @@ const toggleLabel = computed(() => t(
   color: oklch(var(--primary-foreground));
 }
 
-/* 负数余额使用项目 amber 语义色；深色文字保证黄色背景上的可读性。 */
+/* 负数余额使用项目 amber 主题色；白字需要更深的琥珀底色保证可读性。 */
 .qs-personal-fund-card__balance--yellow {
-  background: oklch(0.769 0.188 70.08);
-  color: oklch(0.216 0.006 56.043);
+  background: oklch(0.555 0.163 48.998);
+  color: oklch(1 0 0);
 }
 
 /* 未开户使用项目 destructive 语义色，与既有危险按钮同色系。 */
