@@ -16,7 +16,7 @@
     "withdrawalRecords": "Withdrawal history",
     "withdrawalComingSoon": "Withdrawals are coming soon.",
     "withdrawalRecordsComingSoon": "Withdrawal history is coming soon.",
-    "contactFinanceToOpen": "Contact finance to open an account",
+    "contactFinanceToOpen": "Account not opened or an error occurred. Please contact finance.",
     "openAccountHint": "After the account is opened, you can view the share rate, account updates, and withdrawals.",
     "loadError": "Failed to load the personal fund account",
     "retry": "Retry",

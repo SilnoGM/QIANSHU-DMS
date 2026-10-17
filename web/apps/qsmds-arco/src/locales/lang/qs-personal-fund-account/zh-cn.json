@@ -16,7 +16,7 @@
     "withdrawalRecords": "提款记录",
     "withdrawalComingSoon": "提款功能建设中，敬请期待",
     "withdrawalRecordsComingSoon": "提款记录功能建设中，敬请期待",
-    "contactFinanceToOpen": "联系财务开户",
+    "contactFinanceToOpen": "未开户或异常，请联系财务",
     "openAccountHint": "账户开通后可查看分成比例、账务更新与提款",
     "loadError": "个人资金账户加载失败",
     "retry": "重试",

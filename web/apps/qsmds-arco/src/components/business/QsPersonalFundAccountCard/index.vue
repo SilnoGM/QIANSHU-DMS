@@ -348,9 +348,22 @@ const toggleLabel = computed(() => t(
   color: oklch(var(--primary-foreground));
 }
 
-/* 负数余额使用项目 amber 主题色；白字需要更深的琥珀底色保证可读性。 */
+/*
+ * 负数余额使用提亮后的 amber 底色 + 右上浅色高光，避免暗沉；
+ * 白字需要更深的底色与纯白标签保证可读性。
+ */
 .qs-personal-fund-card__balance--yellow {
-  background: oklch(0.555 0.163 48.998);
+  background-color: oklch(0.6 0.17 55);
+  background-image: radial-gradient(
+    120% 110% at 100% 0%,
+    color-mix(in oklab, oklch(1 0 0) 13%, transparent),
+    transparent 60%
+  );
+  color: oklch(1 0 0);
+}
+
+.qs-personal-fund-card__balance--yellow .qs-personal-fund-card__balance-label,
+.qs-personal-fund-card__balance--yellow .qs-personal-fund-card__visibility-toggle {
   color: oklch(1 0 0);
 }
 

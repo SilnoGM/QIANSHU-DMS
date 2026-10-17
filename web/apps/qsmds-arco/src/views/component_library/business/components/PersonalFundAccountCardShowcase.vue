@@ -158,7 +158,7 @@ function retry(): void {
           <div class="gap-6 grid min-w-0 lg:grid-cols-2">
             <div class="min-w-0">
               <div class="text-xs text-muted-foreground mb-3">
-                未开户：红色余额面板，金额位显示联系财务开户
+                未开户：红色余额面板，金额位显示未开户或异常，请联系财务
               </div>
               <QsPersonalFundAccountCard
                 :account="null"
