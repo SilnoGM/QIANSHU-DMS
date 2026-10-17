@@ -11,10 +11,11 @@ import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import ApplyWithdrawalModal from '../fund-accounts/apply-withdrawal-modal.vue'
-import FundWithdrawalDetailModal from './fund-withdrawal-detail-modal.vue'
+import FundWithdrawalDetailDrawer from './fund-withdrawal-detail-drawer.vue'
 import {
   FUND_WITHDRAWAL_STATUS_FILTER_OPTIONS,
   withdrawalStatusMeta,
@@ -332,6 +333,11 @@ function openDetail(row: FundWithdrawalDto): void {
           <span v-else class="text-muted-foreground">—</span>
         </template>
 
+        <template #cell-reviewer="{ row }">
+          <QsPersonDisplay v-if="row.original.reviewerName" :display-name="row.original.reviewerName" size="sm" />
+          <span v-else class="text-muted-foreground">—</span>
+        </template>
+
         <template #actions="{ row }">
           <FaButton
             variant="ghost"
@@ -358,7 +364,7 @@ function openDetail(row: FundWithdrawalDto): void {
       />
     </FaPageMain>
 
-    <FundWithdrawalDetailModal
+    <FundWithdrawalDetailDrawer
       v-model="detailOpen"
       :request="detail"
       scope="self"

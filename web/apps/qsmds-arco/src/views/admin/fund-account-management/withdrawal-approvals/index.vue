@@ -12,7 +12,7 @@ import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import FundWithdrawalApproveModal from '@/views/operations/personal-finance/withdrawals/fund-withdrawal-approve-modal.vue'
-import FundWithdrawalDetailModal from '@/views/operations/personal-finance/withdrawals/fund-withdrawal-detail-modal.vue'
+import FundWithdrawalDetailDrawer from '@/views/operations/personal-finance/withdrawals/fund-withdrawal-detail-drawer.vue'
 import FundWithdrawalRejectModal from '@/views/operations/personal-finance/withdrawals/fund-withdrawal-reject-modal.vue'
 import {
   FUND_WITHDRAWAL_STATUS_FILTER_OPTIONS,
@@ -49,7 +49,7 @@ const toolbarItems = computed(() => FUND_WITHDRAWAL_STATUS_FILTER_OPTIONS.map(it
 })))
 const columns = computed<QsGenericTableColumn<FundWithdrawalDto>[]>(() => [
   { id: 'withdrawalNo', accessorKey: 'withdrawalNo', title: t('fundWithdrawal.column.withdrawalNo'), minWidth: 190, fixed: 'left' },
-  { id: 'applicant', accessorKey: 'applicantName', title: t('fundWithdrawal.column.applicant'), minWidth: 210 },
+  { id: 'applicant', accessorKey: 'applicantName', title: t('fundWithdrawal.column.applicant'), minWidth: 190 },
   { id: 'amount', accessorKey: 'amount', title: t('fundWithdrawal.column.amount'), minWidth: 200, align: 'right' },
   { id: 'accountBalance', accessorKey: 'accountBalance', title: t('fundWithdrawal.column.accountBalance'), minWidth: 190, align: 'right' },
   { id: 'status', accessorKey: 'status', title: t('fundWithdrawal.column.status'), minWidth: 120 },
@@ -191,12 +191,7 @@ function completed(): void {
         @retry="load"
       >
         <template #cell-applicant="{ row }">
-          <div class="min-w-0">
-            <QsPersonDisplay :display-name="row.original.applicantName" size="sm" />
-            <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-              {{ row.original.applicantUsername }}
-            </p>
-          </div>
+          <QsPersonDisplay :display-name="row.original.applicantName" size="sm" />
         </template>
 
         <template #cell-amount="{ row }">
@@ -265,7 +260,7 @@ function completed(): void {
       </QsGenericTable>
     </FaPageMain>
 
-    <FundWithdrawalDetailModal
+    <FundWithdrawalDetailDrawer
       v-model="detailOpen"
       :request="detail"
       scope="review"

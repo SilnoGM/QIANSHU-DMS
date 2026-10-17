@@ -24,10 +24,11 @@
     },
     "action": {
       "create": "New withdrawal request",
-      "view": "View",
+      "view": "View details",
       "approve": "Approve",
       "reject": "Reject",
       "cancel": "Cancel",
+      "close": "Close",
       "submit": "Submit",
       "changeProof": "Replace screenshot",
       "removeProof": "Remove",

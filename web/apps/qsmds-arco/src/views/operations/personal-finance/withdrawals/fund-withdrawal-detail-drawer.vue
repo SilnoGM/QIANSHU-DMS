@@ -3,11 +3,12 @@ import type { FundWithdrawalDto } from '@/api/generated/types.gen'
 import fundWithdrawalsApi from '@/api/modules/fund-withdrawals'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
-import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { withdrawalStatusMeta } from './status.logic'
 
-defineOptions({ name: 'FundWithdrawalDetailModal' })
+defineOptions({ name: 'FundWithdrawalDetailDrawer' })
 
 const props = defineProps<{
   modelValue: boolean
@@ -83,10 +84,10 @@ function close(): void {
 </script>
 
 <template>
-  <QsGenericModal
+  <QsGenericDrawer
     :model-value="modelValue"
     :title="t('fundWithdrawal.detail.title')"
-    :description="request?.withdrawalNo"
+    :description="request?.withdrawalNo ?? undefined"
     size="lg"
     @update:model-value="emit('update:modelValue', $event)"
     @closed="releaseProof"
@@ -107,9 +108,8 @@ function close(): void {
             <dt class="qs-type-compact-label">
               {{ t('fundWithdrawal.detail.applicant') }}
             </dt>
-            <dd class="qs-type-body-strong m-0">
-              {{ request.applicantName }}
-              <span class="qs-type-meta text-muted-foreground">（{{ request.applicantUsername }}）</span>
+            <dd class="m-0">
+              <QsPersonDisplay :display-name="request.applicantName" size="sm" />
             </dd>
           </div>
           <div>
@@ -149,8 +149,9 @@ function close(): void {
             <dt class="qs-type-compact-label">
               {{ t('fundWithdrawal.detail.reviewer') }}
             </dt>
-            <dd class="qs-type-body m-0">
-              {{ request.reviewerName ?? t('fundWithdrawal.detail.noValue') }}
+            <dd class="m-0">
+              <QsPersonDisplay v-if="request.reviewerName" :display-name="request.reviewerName" size="sm" />
+              <span v-else class="qs-type-meta">{{ t('fundWithdrawal.detail.noValue') }}</span>
             </dd>
           </div>
           <div>
@@ -198,9 +199,9 @@ function close(): void {
     </div>
 
     <template #footer>
-      <FaButton type="button" variant="outline" class="min-h-11 w-full sm:min-h-9 sm:w-auto" @click="close">
-        {{ t('fundWithdrawal.action.cancel') }}
+      <FaButton type="button" variant="outline" class="w-full md:w-auto" @click="close">
+        {{ t('fundWithdrawal.action.close') }}
       </FaButton>
     </template>
-  </QsGenericModal>
+  </QsGenericDrawer>
 </template>

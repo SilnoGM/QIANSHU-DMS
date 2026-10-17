@@ -24,10 +24,11 @@
     },
     "action": {
       "create": "新增提款申请",
-      "view": "查看",
+      "view": "查看详情",
       "approve": "通过",
       "reject": "拒绝",
       "cancel": "取消",
+      "close": "关闭",
       "submit": "提交",
       "changeProof": "更换截图",
       "removeProof": "移除",

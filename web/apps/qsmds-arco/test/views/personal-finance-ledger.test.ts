@@ -30,6 +30,8 @@ test('流水类型、批次、冲账与方向元数据固定', () => {
 
   assert.equal(LEDGER_DIRECTION_META.CREDIT.labelKey, 'personalFinanceLedger.direction.CREDIT')
   assert.equal(LEDGER_DIRECTION_META.DEBIT.labelKey, 'personalFinanceLedger.direction.DEBIT')
+  assert.match(LEDGER_DIRECTION_META.DEBIT.badgeClass, /text-destructive/u)
+  assert.match(LEDGER_DIRECTION_META.DEBIT.amountClass, /text-destructive/u)
 })
 
 function collectKeys(source: Record<string, unknown>): string[] {

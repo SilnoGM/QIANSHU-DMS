@@ -62,7 +62,7 @@ export const LEDGER_DIRECTION_META = {
   },
   DEBIT: {
     labelKey: 'personalFinanceLedger.direction.DEBIT',
-    badgeClass: 'bg-muted text-muted-foreground',
-    amountClass: '!text-foreground',
+    badgeClass: 'bg-destructive/10 text-destructive',
+    amountClass: '!text-destructive',
   },
 } as const

@@ -219,7 +219,9 @@ test('提款申请与审批页面接入状态切换、序号和业务表格', ()
       'OperationsPersonalFinanceWithdrawals',
       [
         'ApplyWithdrawalModal',
+        'FundWithdrawalDetailDrawer',
         'ImageGroup',
+        'QsPersonDisplay',
         'fundAccountsApi.accounts.self(',
         'fundWithdrawalsApi.listSelf(',
         'fundWithdrawal.action.create',
@@ -230,6 +232,7 @@ test('提款申请与审批页面接入状态切换、序号和业务表格', ()
       '../../src/views/admin/fund-account-management/withdrawal-approvals/index.vue',
       'FinanceFundWithdrawalApprovals',
       [
+        'FundWithdrawalDetailDrawer',
         'QsPersonDisplay',
         'fundWithdrawalsApi.list(',
       ],
@@ -240,12 +243,17 @@ test('提款申请与审批页面接入状态切换、序号和业务表格', ()
     for (const marker of requiredMarkers) {
       assert.ok(source.includes(marker), `${componentName} missing ${marker}`)
     }
+    if (componentName === 'FinanceFundWithdrawalApprovals') {
+      assert.doesNotMatch(source, /applicantUsername/u)
+    }
     assert.match(source, /<FaPageHeader/u)
     assert.match(source, /<FaPageMain/u)
     assert.match(source, /<QsGenericTable/u)
     assert.match(source, /<QsStatusSwitchToolbar/u)
     assert.match(source, /countStatuses/u)
     assert.match(source, /pageSize: 1/u)
+    assert.match(source, /fundWithdrawal\.action\.view/u)
+    assert.doesNotMatch(source, /FundWithdrawalDetailModal|fund-withdrawal-detail-modal/u)
     assert.doesNotMatch(source, /:show-row-number="false"/u)
     assert.doesNotMatch(source, /<FaSelect/u)
     assert.doesNotMatch(source, /i-lucide:refresh-cw/u)
