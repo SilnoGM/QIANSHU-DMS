@@ -258,7 +258,7 @@ test('下一步只拦截当前采购填写步骤的领域错误', () => {
 test('采购产品 loader 映射 CNY 采购定价且保持分页身份', () => {
   assert.deepEqual(adaptPurchaseOrderProductPage({
     items: [catalogOption],
-    categories: [{ name: '农机', count: 1 }],
+    categories: [{ name: '农机', count: 1, productHeads: [{ name: '微耕机', count: 1 }] }],
     unclassifiedCount: 0,
     page: 2,
     pageSize: 20,
@@ -276,7 +276,7 @@ test('采购产品 loader 映射 CNY 采购定价且保持分页身份', () => {
       currencyCode: 'CNY',
       mainImage: catalogOption.mainImage,
     }],
-    categories: [{ name: '农机', count: 1 }],
+    categories: [{ name: '农机', count: 1, productHeads: [{ name: '微耕机', count: 1 }] }],
     unclassifiedCount: 0,
     page: 2,
     pageSize: 20,

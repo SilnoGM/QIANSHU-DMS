@@ -22,6 +22,10 @@ import {
   type SalesOrderCompletionHold,
 } from './domain/sales-order-reconciliation-state'
 import { mapSalesOrderProductOption } from './products/sales-order-product-option.mapper'
+import {
+  readProductOptionCategoryFacets,
+  type ProductOptionCategoryFacet,
+} from '../products/product-option-category-facets'
 
 const SALES_ORDER_DETAIL_INCLUDE = {
   issuer: { select: { id: true, displayName: true } },
@@ -334,19 +338,15 @@ export interface SalesOrderProductOptionsQueryInput {
   readonly keyword?: string
   readonly supplierValue?: string
   readonly categoryName?: string
+  readonly productHeadName?: string
   readonly unclassified?: boolean
   readonly page?: number
   readonly pageSize?: number
 }
 
-export interface SalesOrderProductOptionCategory {
-  readonly name: string
-  readonly count: number
-}
-
 export interface SalesOrderProductOptionsPage {
   readonly items: readonly SalesOrderProductOption[]
-  readonly categories: readonly SalesOrderProductOptionCategory[]
+  readonly categories: readonly ProductOptionCategoryFacet[]
   readonly unclassifiedCount: number
   readonly page: number
   readonly pageSize: number
@@ -942,12 +942,15 @@ export class SalesOrderQueryService {
   async productOptions(
     input: SalesOrderProductOptionsQueryInput,
   ): Promise<SalesOrderProductOptionsPage> {
-    if (input.categoryName !== undefined && input.unclassified === true) {
+    if (
+      input.unclassified === true
+      && (input.categoryName !== undefined || input.productHeadName !== undefined)
+    ) {
       throw new ApiException(
         422,
         'VALIDATION_FAILED',
         '请求参数校验失败',
-        { categoryName: ['分类与未分类筛选不能同时使用'] },
+        { categoryName: ['未分类筛选不能与分类/产品头筛选同时使用'] },
       )
     }
     const page = input.page ?? 1
@@ -964,6 +967,9 @@ export class SalesOrderQueryService {
       ...(input.categoryName === undefined
         ? {}
         : { categoryName: input.categoryName }),
+      ...(input.productHeadName === undefined
+        ? {}
+        : { productHeadName: input.productHeadName }),
       ...(input.unclassified === true ? { categoryName: null } : {}),
       ...(normalizedKeyword === undefined || normalizedKeyword.length === 0
         ? {}
@@ -1010,7 +1016,7 @@ export class SalesOrderQueryService {
           },
         },
       }),
-      this.readProductOptionCategoryFacets(facetWhere),
+      readProductOptionCategoryFacets(this.prisma, facetWhere),
     ])
     const items = rows.map(row => mapSalesOrderProductOption(
       row,
@@ -1027,31 +1033,6 @@ export class SalesOrderQueryService {
       categories: facets.categories,
       unclassifiedCount: facets.unclassifiedCount,
     }
-  }
-
-  private async readProductOptionCategoryFacets(
-    where: Prisma.ProductWhereInput,
-  ): Promise<{
-    readonly categories: readonly SalesOrderProductOptionCategory[]
-    readonly unclassifiedCount: number
-  }> {
-    const rows = await this.prisma.product.groupBy({
-      by: ['categoryName'],
-      where,
-      orderBy: { categoryName: 'asc' },
-      _count: { _all: true },
-    })
-    let unclassifiedCount = 0
-    const categories: SalesOrderProductOptionCategory[] = []
-    for (const row of rows) {
-      if (row.categoryName === null) {
-        unclassifiedCount = row._count._all
-      }
-      else {
-        categories.push({ name: row.categoryName, count: row._count._all })
-      }
-    }
-    return { categories, unclassifiedCount }
   }
 
   async getById(salesOrderId: string): Promise<SalesOrderDetail> {

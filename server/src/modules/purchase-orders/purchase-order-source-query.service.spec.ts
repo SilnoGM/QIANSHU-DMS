@@ -66,8 +66,8 @@ function setup() {
     product: {
       count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(1),
       groupBy: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([
-        { categoryName: '农机', _count: { _all: 1 } },
-        { categoryName: null, _count: { _all: 0 } },
+        { categoryName: '农机', productHeadName: '微耕机', _count: { _all: 1 } },
+        { categoryName: null, productHeadName: null, _count: { _all: 0 } },
       ]),
       findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
         id: 'product-id',
@@ -192,7 +192,7 @@ describe('PurchaseOrderSourceQueryService', () => {
             '/api/purchase-orders/product-options/product-id/main-image/product-media-id/content',
         },
       }],
-      categories: [{ name: '农机', count: 1 }],
+      categories: [{ name: '农机', count: 1, productHeads: [{ name: '微耕机', count: 1 }] }],
       unclassifiedCount: 0,
       page: 1,
       pageSize: 20,

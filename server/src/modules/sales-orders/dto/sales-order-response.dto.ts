@@ -451,9 +451,16 @@ export class SalesOrderProductOptionDto {
   } | null
 }
 
+export class SalesOrderProductOptionHeadDto {
+  @ApiProperty({ type: 'string' }) readonly name!: string
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly count!: number
+}
+
 export class SalesOrderProductOptionCategoryDto {
   @ApiProperty({ type: 'string' }) readonly name!: string
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly count!: number
+  @ApiProperty({ type: () => [SalesOrderProductOptionHeadDto] })
+  readonly productHeads!: readonly SalesOrderProductOptionHeadDto[]
 }
 
 export class SalesOrderProductOptionsDto {

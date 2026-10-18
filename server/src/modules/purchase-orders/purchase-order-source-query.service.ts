@@ -7,6 +7,7 @@ import {
   DictionaryLookupService,
 } from '../dictionaries/dictionary-lookup.service'
 import { normalizeDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
+import { readProductOptionCategoryFacets } from '../products/product-option-category-facets'
 import { formatPurchaseOrderAmountUnits, normalizePurchaseOrderReferenceAmount, parsePurchaseOrderAmountUnits } from './domain/purchase-order-decimal'
 import {
   PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS,
@@ -22,6 +23,7 @@ export interface PurchaseOrderProductOptionsInput {
   readonly supplierValue: string
   readonly keyword?: string
   readonly categoryName?: string
+  readonly productHeadName?: string
   readonly unclassified?: boolean
   readonly page?: number
   readonly pageSize?: number
@@ -283,12 +285,15 @@ export class PurchaseOrderSourceQueryService {
   ) {}
 
   async productOptions(input: PurchaseOrderProductOptionsInput) {
-    if (input.categoryName !== undefined && input.unclassified === true) {
+    if (
+      input.unclassified === true
+      && (input.categoryName !== undefined || input.productHeadName !== undefined)
+    ) {
       throw new ApiException(
         422,
         'VALIDATION_FAILED',
         '请求参数校验失败',
-        { categoryName: ['分类与未分类筛选不能同时使用'] },
+        { categoryName: ['未分类筛选不能与分类/产品头筛选同时使用'] },
       )
     }
     let supplierValue: string
@@ -319,6 +324,9 @@ export class PurchaseOrderSourceQueryService {
       ...(input.categoryName === undefined
         ? {}
         : { categoryName: input.categoryName }),
+      ...(input.productHeadName === undefined
+        ? {}
+        : { productHeadName: input.productHeadName }),
       ...(input.unclassified === true ? { categoryName: null } : {}),
       ...(keyword === undefined || keyword.length === 0
         ? {}
@@ -327,7 +335,7 @@ export class PurchaseOrderSourceQueryService {
             { name: { contains: keyword, mode: 'insensitive' } },
           ] }),
     }
-    const [total, rows, categoryRows] = await Promise.all([
+    const [total, rows, facets] = await Promise.all([
       this.prisma.product.count({ where }),
       this.prisma.product.findMany({
         where,
@@ -362,23 +370,8 @@ export class PurchaseOrderSourceQueryService {
           },
         },
       }),
-      this.prisma.product.groupBy({
-        by: ['categoryName'],
-        where: facetWhere,
-        orderBy: { categoryName: 'asc' },
-        _count: { _all: true },
-      }),
+      readProductOptionCategoryFacets(this.prisma, facetWhere),
     ])
-    let unclassifiedCount = 0
-    const categoryFacets: { name: string, count: number }[] = []
-    for (const row of categoryRows) {
-      if (row.categoryName === null) {
-        unclassifiedCount = row._count._all
-      }
-      else {
-        categoryFacets.push({ name: row.categoryName, count: row._count._all })
-      }
-    }
     return {
       items: rows.map((row) => {
         if (row.purchaseCostAmount === null) {
@@ -415,8 +408,8 @@ export class PurchaseOrderSourceQueryService {
               },
         }
       }),
-      categories: categoryFacets,
-      unclassifiedCount,
+      categories: facets.categories,
+      unclassifiedCount: facets.unclassifiedCount,
       page,
       pageSize,
       total,

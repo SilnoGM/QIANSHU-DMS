@@ -101,7 +101,23 @@
 验证：`pnpm -C web run check` 通过；Server 单元测试 3982 个通过；`contract:check` 通过；
 浏览器实测 3xl 布局、分类列宽度、区块内滚动、隐藏滚动条、总数条高度、供应商分组正常。
 
-## 7. 后续可选
+## 7. 2026-10-18 分类手风琴与横向卡片
+
+- 选品左栏改为「分类 → 产品头」两级手风琴：分类行可展开/收起，产品头行
+  精确筛选 `categoryName + productHeadName`；分类行本身筛选整个分类。
+- 产品区移除产品头分组和组头，产品按服务端顺序平铺展示。
+- 产品卡片改为横向长条：左侧缩略图、右侧名称/编号/选择状态；图片点击仍独立放大。
+- 选品接口 facet 从 `categories: [{ name, count }]` 扩展为
+  `categories: [{ name, count, productHeads: [{ name, count }] }]`；三条接口
+  增加 `productHeadName` 查询参数，`unclassified` 与分类/产品头互斥。
+- 后端抽出 `readProductOptionCategoryFacets` 共享 facet 读取，销售创建、销售编辑、
+  采购创建统一使用。
+- 保留已选产品按供应商分组与「未设置供应商」回退。
+
+验证：Server 单元测试 3982 个通过；`contract:check` 通过；`pnpm -C web run check`
+通过；浏览器实测分类展开/收起、产品头筛选（肩带 7 项）、平铺横向卡片正常。
+
+## 8. 后续可选
 
 - 批量补录工具（CSV → dry-run → apply），仅在业务提供映射表后实施。
 - 存量补录完成后可另起迁移把两列改为 `NOT NULL`。

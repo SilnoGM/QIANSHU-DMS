@@ -69,8 +69,8 @@ function setup() {
     product: {
       count: jest.fn().mockResolvedValue(1),
       groupBy: jest.fn().mockResolvedValue([
-        { categoryName: '收纳包', _count: { _all: 1 } },
-        { categoryName: null, _count: { _all: 0 } },
+        { categoryName: '收纳包', productHeadName: '城市旅行', _count: { _all: 1 } },
+        { categoryName: null, productHeadName: null, _count: { _all: 0 } },
       ]),
       findMany: jest.fn().mockResolvedValue([{
         id: 'product-id',
@@ -206,7 +206,7 @@ describe('SalesOrderProductEditQueryService', () => {
           contentUrl: '/api/sales-orders/sales-order-id/product-edit-options/product-id/main-image/product-media-id/content',
         },
       })],
-      categories: [{ name: '收纳包', count: 1 }],
+      categories: [{ name: '收纳包', count: 1, productHeads: [{ name: '城市旅行', count: 1 }] }],
       unclassifiedCount: 0,
       page: 2,
       pageSize: 10,

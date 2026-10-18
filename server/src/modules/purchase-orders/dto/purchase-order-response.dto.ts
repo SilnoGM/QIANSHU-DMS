@@ -318,9 +318,16 @@ export class PurchaseOrderProductOptionDto {
   readonly mainImage!: PurchaseOrderProductImageDto | null
 }
 
+export class PurchaseOrderProductOptionHeadDto {
+  @ApiProperty({ type: 'string' }) readonly name!: string
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly count!: number
+}
+
 export class PurchaseOrderProductOptionCategoryDto {
   @ApiProperty({ type: 'string' }) readonly name!: string
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly count!: number
+  @ApiProperty({ type: () => [PurchaseOrderProductOptionHeadDto] })
+  readonly productHeads!: readonly PurchaseOrderProductOptionHeadDto[]
 }
 
 export class PurchaseOrderProductOptionsDto {

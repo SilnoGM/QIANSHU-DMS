@@ -31591,10 +31591,19 @@
             }
           },
           {
+            "name": "productHeadName",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
             "name": "unclassified",
             "required": false,
             "in": "query",
-            "description": "只看未分类产品；与 categoryName 互斥",
+            "description": "只看未分类产品；与 categoryName、productHeadName 互斥",
             "schema": {
               "type": "boolean"
             }
@@ -32423,10 +32432,19 @@
             }
           },
           {
+            "name": "productHeadName",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
             "name": "unclassified",
             "required": false,
             "in": "query",
-            "description": "只看未分类产品；与 categoryName 互斥",
+            "description": "只看未分类产品；与 categoryName、productHeadName 互斥",
             "schema": {
               "type": "boolean"
             }
@@ -46739,10 +46757,19 @@
             }
           },
           {
+            "name": "productHeadName",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
             "name": "unclassified",
             "required": false,
             "in": "query",
-            "description": "只看未分类产品；与 categoryName 互斥",
+            "description": "只看未分类产品；与 categoryName、productHeadName 互斥",
             "schema": {
               "type": "boolean"
             }
@@ -83726,7 +83753,7 @@
           "currencyCode"
         ]
       },
-      "SalesOrderProductOptionCategoryDto": {
+      "SalesOrderProductOptionHeadDto": {
         "type": "object",
         "properties": {
           "name": {
@@ -83740,6 +83767,29 @@
         "required": [
           "name",
           "count"
+        ]
+      },
+      "SalesOrderProductOptionCategoryDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "productHeads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalesOrderProductOptionHeadDto"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "count",
+          "productHeads"
         ]
       },
       "SalesOrderProductOptionsDto": {
@@ -87035,7 +87085,7 @@
           "mainImage"
         ]
       },
-      "PurchaseOrderProductOptionCategoryDto": {
+      "PurchaseOrderProductOptionHeadDto": {
         "type": "object",
         "properties": {
           "name": {
@@ -87049,6 +87099,29 @@
         "required": [
           "name",
           "count"
+        ]
+      },
+      "PurchaseOrderProductOptionCategoryDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "productHeads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderProductOptionHeadDto"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "count",
+          "productHeads"
         ]
       },
       "PurchaseOrderProductOptionsDto": {

@@ -200,6 +200,7 @@ export function createOrderProductFixtureLoader(): ProductPageLoader {
     ))
     const filtered = facetBase.filter(item => (
       (query.categoryName === undefined || item.categoryName === query.categoryName)
+      && (query.productHeadName === undefined || item.productHeadName === query.productHeadName)
       && (query.unclassified !== true || item.categoryName === null)
       && (keyword === '' || item.name.toLocaleLowerCase().includes(keyword)
         || item.productNo.toLocaleLowerCase().includes(keyword))
@@ -208,22 +209,41 @@ export function createOrderProductFixtureLoader(): ProductPageLoader {
       || (left.productHeadName ?? '').localeCompare(right.productHeadName ?? '', 'zh-Hans-CN')
       || left.name.localeCompare(right.name, 'zh-Hans-CN')
     ))
-    const categoryCounts = new Map<string, number>()
+    const categoryCounts = new Map<string, {
+      count: number
+      heads: Map<string, number>
+    }>()
     let unclassifiedCount = 0
     for (const item of facetBase) {
       if (item.categoryName === null) {
         unclassifiedCount += 1
+        continue
       }
-      else {
-        categoryCounts.set(item.categoryName, (categoryCounts.get(item.categoryName) ?? 0) + 1)
+      const category = categoryCounts.get(item.categoryName) ?? {
+        count: 0,
+        heads: new Map<string, number>(),
       }
+      category.count += 1
+      if (item.productHeadName !== null) {
+        category.heads.set(
+          item.productHeadName,
+          (category.heads.get(item.productHeadName) ?? 0) + 1,
+        )
+      }
+      categoryCounts.set(item.categoryName, category)
     }
     const start = (query.page - 1) * query.pageSize
     return {
       items: filtered.slice(start, start + query.pageSize),
       categories: [...categoryCounts.entries()]
         .sort(([left], [right]) => left.localeCompare(right, 'zh-Hans-CN'))
-        .map(([name, count]) => ({ name, count })),
+        .map(([name, category]) => ({
+          name,
+          count: category.count,
+          productHeads: [...category.heads.entries()]
+            .sort(([left], [right]) => left.localeCompare(right, 'zh-Hans-CN'))
+            .map(([headName, count]) => ({ name: headName, count })),
+        })),
       unclassifiedCount,
       page: query.page,
       pageSize: query.pageSize,

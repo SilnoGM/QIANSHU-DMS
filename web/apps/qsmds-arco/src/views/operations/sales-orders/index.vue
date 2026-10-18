@@ -576,6 +576,7 @@ const loadProductEditProducts: ProductPageLoader = async (query, signal) => {
   const response = await salesOrdersApi.productEditOptions(order.id, {
     ...(query.keyword === undefined ? {} : { keyword: query.keyword }),
     ...(query.categoryName === undefined ? {} : { categoryName: query.categoryName }),
+    ...(query.productHeadName === undefined ? {} : { productHeadName: query.productHeadName }),
     ...(query.unclassified === true ? { unclassified: true } : {}),
     page: query.page,
     pageSize: query.pageSize,

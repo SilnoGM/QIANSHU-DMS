@@ -7,7 +7,6 @@ import type {
   ProductSelectorCategoryFacet,
   ProductSelectorCategoryFilter,
   ProductSelectorCurrency,
-  ProductSelectorGroup,
   ProductSelectorItem,
 } from './types'
 
@@ -21,7 +20,6 @@ import {
   createExistingCatalogLineIndex,
   createProductSelectorQueryKey,
   createSelectedProductItems,
-  groupProductSelectorItems,
   groupSelectedProductItems,
   mergeProductSelectorItems,
   normalizeProductSelectorKeyword,
@@ -76,17 +74,11 @@ const imagePreview = useFaImagePreview()
 const categoryFilter = ref<ProductSelectorCategoryFilter>({ kind: 'all' })
 const categories = shallowRef<readonly ProductSelectorCategoryFacet[]>([])
 const unclassifiedCount = ref(0)
+const expandedCategories = ref<ReadonlySet<string>>(new Set())
 let requestVersion = 0
 let activeQueryKey = ''
 let activeController: AbortController | null = null
 let keywordTimer: ReturnType<typeof setTimeout> | undefined
-
-interface CategoryOption {
-  readonly key: string
-  readonly label: string
-  readonly count: number
-  readonly filter: ProductSelectorCategoryFilter
-}
 
 const existingByProductId = computed(() => (
   createExistingCatalogLineIndex(props.existingLines)
@@ -132,39 +124,47 @@ const supplierOptions = computed(() => [{ label: '全部供应商', value: ALL_S
   value: item.value,
 }))])
 const hasNextPage = computed(() => items.value.length < total.value)
-const groups = computed<readonly ProductSelectorGroup[]>(() => (
-  groupProductSelectorItems(items.value)
-))
-const showCategoryInGroup = computed(() => categoryFilter.value.kind !== 'category')
-const categoryOptions = computed<readonly CategoryOption[]>(() => {
-  const totalCount = categories.value.reduce(
+const allCategoryCount = computed(() => (
+  categories.value.reduce(
     (sum, category) => sum + category.count,
     unclassifiedCount.value,
   )
-  const options: CategoryOption[] = [
-    {
-      key: 'all',
-      label: '全部',
-      count: totalCount,
-      filter: { kind: 'all' },
-    },
-    ...categories.value.map(category => ({
-      key: `category:${category.name}`,
-      label: category.name,
-      count: category.count,
-      filter: { kind: 'category' as const, name: category.name },
-    })),
-  ]
-  if (unclassifiedCount.value > 0) {
-    options.push({
-      key: 'unclassified',
-      label: '未分类',
-      count: unclassifiedCount.value,
-      filter: { kind: 'unclassified' },
-    })
+))
+
+function isCategoryExpanded(name: string): boolean {
+  return expandedCategories.value.has(name)
+}
+
+function isCategoryActive(name: string): boolean {
+  return categoryFilter.value.kind === 'category'
+    && categoryFilter.value.name === name
+}
+
+function isProductHeadActive(
+  categoryName: string,
+  productHeadName: string,
+): boolean {
+  return categoryFilter.value.kind === 'category'
+    && categoryFilter.value.name === categoryName
+    && categoryFilter.value.productHeadName === productHeadName
+}
+
+function expandCategory(name: string): void {
+  if (!expandedCategories.value.has(name)) {
+    expandedCategories.value = new Set([...expandedCategories.value, name])
   }
-  return options
-})
+}
+
+function toggleCategory(name: string): void {
+  const next = new Set(expandedCategories.value)
+  if (next.has(name)) {
+    next.delete(name)
+  }
+  else {
+    next.add(name)
+  }
+  expandedCategories.value = next
+}
 
 function clearKeywordTimer(): void {
   if (keywordTimer !== undefined) {
@@ -195,6 +195,7 @@ function resetSession(): void {
   categoryFilter.value = { kind: 'all' }
   categories.value = []
   unclassifiedCount.value = 0
+  expandedCategories.value = new Set()
 }
 
 /**
@@ -225,7 +226,12 @@ async function loadPage(targetPage: number, replace: boolean): Promise<void> {
       ? {}
       : { supplierValue: props.fixedSupplierValue ?? supplierValue.value }),
     ...(categoryFilter.value.kind === 'category'
-      ? { categoryName: categoryFilter.value.name }
+      ? {
+          categoryName: categoryFilter.value.name,
+          ...(categoryFilter.value.productHeadName === undefined
+            ? {}
+            : { productHeadName: categoryFilter.value.productHeadName }),
+        }
       : {}),
     ...(categoryFilter.value.kind === 'unclassified'
       ? { unclassified: true }
@@ -318,6 +324,7 @@ function handleSupplierChange(value: unknown): void {
   supplierValue.value = next
   // 供应商变化后旧分类可能不存在，统一回到「全部」，避免空列表看似加载失败。
   categoryFilter.value = { kind: 'all' }
+  expandedCategories.value = new Set()
   refreshProducts()
 }
 
@@ -328,12 +335,11 @@ function sameCategoryFilter(
   if (left.kind !== right.kind) {
     return false
   }
-  return left.kind !== 'category'
-    || (right.kind === 'category' && left.name === right.name)
-}
-
-function isCategoryOptionActive(option: CategoryOption): boolean {
-  return sameCategoryFilter(option.filter, categoryFilter.value)
+  if (left.kind !== 'category' || right.kind !== 'category') {
+    return true
+  }
+  return left.name === right.name
+    && (left.productHeadName ?? '') === (right.productHeadName ?? '')
 }
 
 function selectCategory(filter: ProductSelectorCategoryFilter): void {
@@ -342,6 +348,23 @@ function selectCategory(filter: ProductSelectorCategoryFilter): void {
   }
   categoryFilter.value = filter
   refreshProducts()
+}
+
+function handleCategorySelect(name: string): void {
+  expandCategory(name)
+  selectCategory({ kind: 'category', name })
+}
+
+function handleProductHeadSelect(
+  categoryName: string,
+  productHeadName: string,
+): void {
+  expandCategory(categoryName)
+  selectCategory({
+    kind: 'category',
+    name: categoryName,
+    productHeadName,
+  })
 }
 
 function openProductImage(item: ProductSelectorItem): void {
@@ -518,21 +541,92 @@ onBeforeUnmount(() => {
               产品分类
             </h3>
           </div>
-          <div class="qs-product-selector-scroll p-2 flex gap-1 overflow-x-auto xl:flex-1 xl:flex-col xl:gap-0.5 xl:min-h-0 xl:overflow-x-hidden xl:overflow-y-auto">
+          <div class="qs-product-selector-scroll p-2 flex gap-1 overflow-x-auto xl:flex-1 xl:flex-col xl:gap-1 xl:min-h-0 xl:overflow-x-hidden xl:overflow-y-auto">
             <button
-              v-for="option in categoryOptions"
-              :key="option.key"
               type="button"
               class="text-sm px-2.5 py-1.5 border rounded-lg flex shrink-0 gap-2 min-h-9 transition-colors items-center xl:w-full"
-              :class="isCategoryOptionActive(option)
+              :class="categoryFilter.kind === 'all'
                 ? 'border-primary/25 bg-primary/10 text-primary font-semibold'
                 : 'border-transparent hover:bg-background/70'"
-              :aria-pressed="isCategoryOptionActive(option)"
-              @click="selectCategory(option.filter)"
+              :aria-pressed="categoryFilter.kind === 'all'"
+              @click="selectCategory({ kind: 'all' })"
             >
               <span class="rounded-full bg-current opacity-60 shrink-0 size-1.5" aria-hidden="true" />
-              <span class="text-left flex-1 min-w-0 truncate">{{ option.label }}</span>
-              <span class="text-[11px] text-muted-foreground tabular-nums">{{ option.count }}</span>
+              <span class="text-left flex-1 min-w-0 truncate">全部</span>
+              <span class="text-[11px] text-muted-foreground tabular-nums">{{ allCategoryCount }}</span>
+            </button>
+
+            <div
+              v-for="category in categories"
+              :key="category.name"
+              class="shrink-0 min-w-0 xl:w-full"
+            >
+              <div class="flex gap-1 items-center">
+                <button
+                  v-if="category.productHeads.length > 0"
+                  type="button"
+                  class="text-muted-foreground rounded-md shrink-0 size-7 hidden transition-colors place-items-center hover:bg-background/70 xl:grid"
+                  :aria-expanded="isCategoryExpanded(category.name)"
+                  :aria-label="`${isCategoryExpanded(category.name) ? '收起' : '展开'}${category.name}的产品头`"
+                  @click="toggleCategory(category.name)"
+                >
+                  <FaIcon
+                    name="i-lucide:chevron-right"
+                    class="size-4 transition-transform"
+                    :class="isCategoryExpanded(category.name) ? 'rotate-90' : ''"
+                    aria-hidden="true"
+                  />
+                </button>
+                <span v-else class="shrink-0 size-7 hidden xl:block" aria-hidden="true" />
+                <button
+                  type="button"
+                  class="text-sm px-2.5 py-1.5 border rounded-lg flex flex-1 gap-2 min-h-9 min-w-0 transition-colors items-center"
+                  :class="isCategoryActive(category.name)
+                    ? 'border-primary/25 bg-primary/10 text-primary font-semibold'
+                    : 'border-transparent hover:bg-background/70'"
+                  :aria-pressed="isCategoryActive(category.name)"
+                  @click="handleCategorySelect(category.name)"
+                >
+                  <span class="text-left flex-1 min-w-0 truncate">{{ category.name }}</span>
+                  <span class="text-[11px] text-muted-foreground tabular-nums">{{ category.count }}</span>
+                </button>
+              </div>
+
+              <div
+                v-if="category.productHeads.length > 0 && isCategoryExpanded(category.name)"
+                class="pb-1 pl-8 pr-1 gap-0.5 hidden xl:grid"
+              >
+                <button
+                  v-for="head in category.productHeads"
+                  :key="head.name"
+                  type="button"
+                  class="text-xs px-2 py-1.5 text-left rounded-md flex gap-2 min-h-8 min-w-0 transition-colors items-center"
+                  :class="isProductHeadActive(category.name, head.name)
+                    ? 'bg-primary/10 text-primary font-semibold'
+                    : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'"
+                  :aria-pressed="isProductHeadActive(category.name, head.name)"
+                  @click="handleProductHeadSelect(category.name, head.name)"
+                >
+                  <span class="rounded-full bg-current opacity-50 shrink-0 size-1" aria-hidden="true" />
+                  <span class="flex-1 min-w-0 truncate">{{ head.name }}</span>
+                  <span class="text-[11px] tabular-nums">{{ head.count }}</span>
+                </button>
+              </div>
+            </div>
+
+            <button
+              v-if="unclassifiedCount > 0"
+              type="button"
+              class="text-sm px-2.5 py-1.5 border rounded-lg flex shrink-0 gap-2 min-h-9 transition-colors items-center xl:w-full"
+              :class="categoryFilter.kind === 'unclassified'
+                ? 'border-primary/25 bg-primary/10 text-primary font-semibold'
+                : 'border-transparent hover:bg-background/70'"
+              :aria-pressed="categoryFilter.kind === 'unclassified'"
+              @click="selectCategory({ kind: 'unclassified' })"
+            >
+              <span class="rounded-full bg-current opacity-60 shrink-0 size-1.5" aria-hidden="true" />
+              <span class="text-left flex-1 min-w-0 truncate">未分类</span>
+              <span class="text-[11px] text-muted-foreground tabular-nums">{{ unclassifiedCount }}</span>
             </button>
           </div>
         </aside>
@@ -570,127 +664,104 @@ onBeforeUnmount(() => {
               description="请调整关键词、供应商或分类后重试。"
               class="py-16"
             />
-            <div v-else class="gap-5 grid">
-              <section
-                v-for="group in groups"
-                :key="group.key"
-                class="min-w-0"
-                :aria-label="`${group.categoryName ?? '未分类'} ${group.productHeadName ?? '未填写产品头'}`"
+            <div v-else class="gap-2 grid">
+              <article
+                v-for="item in items"
+                :key="item.id"
+                class="border rounded-xl bg-background flex min-h-24 min-w-0 transition-[border-color,background-color,box-shadow] duration-200 overflow-hidden"
+                :class="selectedByProductId.has(item.id)
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/50'"
               >
-                <div class="px-1 py-2 bg-background flex gap-2 items-center top-0 sticky z-10 -mx-1">
+                <button
+                  v-if="item.mainImage && !failedImages.has(item.id)"
+                  type="button"
+                  class="bg-muted shrink-0 w-28 self-stretch relative overflow-hidden sm:w-32"
+                  :aria-label="`放大查看 ${item.name} 产品图片`"
+                  :data-zoom-product="item.id"
+                  @click.stop="openProductImage(item)"
+                >
+                  <img
+                    :src="mediaThumbnailUrl(item.mainImage.contentUrl) ?? item.mainImage.contentUrl"
+                    :alt="item.name"
+                    class="size-full transition-transform duration-200 object-cover hover:scale-[1.025]"
+                    decoding="async"
+                    fetchpriority="low"
+                    loading="lazy"
+                    @error="markImageFailed(item.id)"
+                  >
                   <span
-                    v-if="showCategoryInGroup"
-                    class="text-[11px] text-muted-foreground px-2 py-0.5 border border-border rounded-full bg-muted whitespace-nowrap"
+                    v-if="selectedByProductId.has(item.id)"
+                    class="text-[10px] text-primary-foreground font-semibold px-2 py-0.5 rounded-full bg-primary flex gap-1 shadow items-center left-2 top-2 absolute"
                   >
-                    {{ group.categoryName ?? '未分类' }}
+                    <FaIcon name="i-lucide:circle-check" class="size-3" aria-hidden="true" />
+                    已选
                   </span>
-                  <h3 class="text-sm font-semibold m-0 whitespace-nowrap">
-                    {{ group.productHeadName ?? '未填写产品头' }}
-                  </h3>
-                  <span class="bg-border flex-1 h-px" aria-hidden="true" />
-                  <span class="text-[11px] text-muted-foreground tabular-nums">{{ group.items.length }} 个</span>
-                </div>
-
-                <div class="mt-2 gap-3 grid sm:grid-cols-2">
-                  <article
-                    v-for="item in group.items"
-                    :key="item.id"
-                    class="border rounded-xl bg-background transition-[border-color,background-color,box-shadow] duration-200 overflow-hidden"
-                    :class="selectedByProductId.has(item.id)
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/50'"
+                  <span class="text-muted-foreground p-1.5 border border-border/60 rounded-md bg-background/85 pointer-events-none shadow-sm right-2 top-2 absolute backdrop-blur">
+                    <FaIcon name="i-lucide:zoom-in" class="size-4" aria-hidden="true" />
+                  </span>
+                </button>
+                <div v-else class="bg-muted flex shrink-0 w-28 items-center self-stretch justify-center relative sm:w-32">
+                  <FaIcon name="i-lucide:image" class="text-muted-foreground size-7" aria-hidden="true" />
+                  <span
+                    v-if="selectedByProductId.has(item.id)"
+                    class="text-[10px] text-primary-foreground font-semibold px-2 py-0.5 rounded-full bg-primary flex gap-1 shadow items-center left-2 top-2 absolute"
                   >
-                    <button
-                      v-if="item.mainImage && !failedImages.has(item.id)"
-                      type="button"
-                      class="bg-muted w-full aspect-[16/10] block relative overflow-hidden"
-                      :aria-label="`放大查看 ${item.name} 产品图片`"
-                      :data-zoom-product="item.id"
-                      @click.stop="openProductImage(item)"
-                    >
-                      <img
-                        :src="mediaThumbnailUrl(item.mainImage.contentUrl) ?? item.mainImage.contentUrl"
-                        :alt="item.name"
-                        class="size-full transition-transform duration-200 object-cover hover:scale-[1.025]"
-                        decoding="async"
-                        fetchpriority="low"
-                        loading="lazy"
-                        @error="markImageFailed(item.id)"
-                      >
-                      <span
-                        v-if="selectedByProductId.has(item.id)"
-                        class="text-[10px] text-primary-foreground font-semibold px-2 py-0.5 rounded-full bg-primary flex gap-1 shadow items-center left-2 top-2 absolute"
-                      >
-                        <FaIcon name="i-lucide:circle-check" class="size-3" aria-hidden="true" />
-                        已选
-                      </span>
-                      <span class="text-muted-foreground p-1.5 border border-border/60 rounded-md bg-background/85 pointer-events-none shadow-sm right-2 top-2 absolute backdrop-blur">
-                        <FaIcon name="i-lucide:zoom-in" class="size-4" aria-hidden="true" />
-                      </span>
-                    </button>
-                    <div v-else class="bg-muted flex aspect-[16/10] items-center justify-center relative">
-                      <FaIcon name="i-lucide:image" class="text-muted-foreground size-7" aria-hidden="true" />
-                      <span
-                        v-if="selectedByProductId.has(item.id)"
-                        class="text-[10px] text-primary-foreground font-semibold px-2 py-0.5 rounded-full bg-primary flex gap-1 shadow items-center left-2 top-2 absolute"
-                      >
-                        <FaIcon name="i-lucide:circle-check" class="size-3" aria-hidden="true" />
-                        已选
-                      </span>
-                    </div>
-                    <FaPopover
-                      :open="incrementProductId === item.id"
-                      :auto-focus="true"
-                      :collision-padding="16"
-                      side="bottom"
-                      @update:open="value => handleIncrementPopoverOpen(item.id, value)"
-                    >
-                      <button
-                        type="button"
-                        class="p-3 text-left w-full block disabled:opacity-60 disabled:cursor-not-allowed"
-                        :aria-pressed="selectedByProductId.has(item.id)"
-                        :disabled="disabled"
-                        @click="selectProduct(item)"
-                      >
-                        <span class="text-sm font-semibold block truncate">{{ item.name }}</span>
-                        <span class="text-xs text-muted-foreground font-mono mt-1 block truncate">{{ item.productNo }}</span>
-                        <span class="text-xs text-primary font-medium mt-2 pt-2 border-t border-border flex gap-1 items-center">
-                          <FaIcon :name="selectedByProductId.has(item.id) ? 'i-lucide:circle-check' : 'i-lucide:plus-circle'" aria-hidden="true" />
-                          {{ itemStatus(item) }}
-                        </span>
-                      </button>
-                      <template #panel>
-                        <div class="gap-3 grid" role="alertdialog" aria-label="确认增加产品数量">
-                          <p class="text-sm font-medium m-0">
-                            产品已存在，是否增加数量？
-                          </p>
-                          <p class="text-xs text-muted-foreground m-0">
-                            本次确认只会把原明细数量增加 1。
-                          </p>
-                          <div class="flex gap-2 justify-end">
-                            <FaButton type="button" variant="outline" size="sm" @click="cancelIncrement">
-                              取消
-                            </FaButton>
-                            <FaButton type="button" size="sm" @click="confirmIncrement">
-                              增加数量
-                            </FaButton>
-                          </div>
-                        </div>
-                      </template>
-                    </FaPopover>
-                  </article>
+                    <FaIcon name="i-lucide:circle-check" class="size-3" aria-hidden="true" />
+                    已选
+                  </span>
                 </div>
-              </section>
+                <FaPopover
+                  :open="incrementProductId === item.id"
+                  :auto-focus="true"
+                  :collision-padding="16"
+                  side="bottom"
+                  @update:open="value => handleIncrementPopoverOpen(item.id, value)"
+                >
+                  <button
+                    type="button"
+                    class="p-3 text-left flex flex-1 flex-col min-w-0 w-full justify-center disabled:opacity-60 disabled:cursor-not-allowed"
+                    :aria-pressed="selectedByProductId.has(item.id)"
+                    :disabled="disabled"
+                    @click="selectProduct(item)"
+                  >
+                    <span class="text-sm font-semibold block truncate">{{ item.name }}</span>
+                    <span class="text-xs text-muted-foreground font-mono mt-1 block truncate">{{ item.productNo }}</span>
+                    <span class="text-xs text-primary font-medium mt-2 flex gap-1 items-center">
+                      <FaIcon :name="selectedByProductId.has(item.id) ? 'i-lucide:circle-check' : 'i-lucide:plus-circle'" aria-hidden="true" />
+                      {{ itemStatus(item) }}
+                    </span>
+                  </button>
+                  <template #panel>
+                    <div class="gap-3 grid" role="alertdialog" aria-label="确认增加产品数量">
+                      <p class="text-sm font-medium m-0">
+                        产品已存在，是否增加数量？
+                      </p>
+                      <p class="text-xs text-muted-foreground m-0">
+                        本次确认只会把原明细数量增加 1。
+                      </p>
+                      <div class="flex gap-2 justify-end">
+                        <FaButton type="button" variant="outline" size="sm" @click="cancelIncrement">
+                          取消
+                        </FaButton>
+                        <FaButton type="button" size="sm" @click="confirmIncrement">
+                          增加数量
+                        </FaButton>
+                      </div>
+                    </div>
+                  </template>
+                </FaPopover>
+              </article>
+            </div>
 
-              <p v-if="loadingMore" class="text-xs text-muted-foreground m-0 py-3 text-center" role="status">
-                正在加载更多产品…
-              </p>
-              <div v-if="pageError" class="text-xs text-destructive py-2 flex gap-2 items-center justify-center" role="alert">
-                <span>{{ pageError }}</span>
-                <FaButton type="button" variant="link" size="sm" @click="loadPage(page + 1, false)">
-                  重试
-                </FaButton>
-              </div>
+            <p v-if="loadingMore" class="text-xs text-muted-foreground m-0 py-3 text-center" role="status">
+              正在加载更多产品…
+            </p>
+            <div v-if="pageError" class="text-xs text-destructive py-2 flex gap-2 items-center justify-center" role="alert">
+              <span>{{ pageError }}</span>
+              <FaButton type="button" variant="link" size="sm" @click="loadPage(page + 1, false)">
+                重试
+              </FaButton>
             </div>
           </div>
 

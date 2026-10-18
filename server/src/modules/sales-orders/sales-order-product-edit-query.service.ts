@@ -11,6 +11,7 @@ import {
   parseSalesOrderAmountUnits,
 } from './domain/sales-order-decimal'
 import { mapSalesOrderProductOption } from './products/sales-order-product-option.mapper'
+import { readProductOptionCategoryFacets } from '../products/product-option-category-facets'
 
 const MAX_SALES_ORDER_LINES = 100
 
@@ -184,17 +185,21 @@ export class SalesOrderProductEditQueryService {
     input: {
       readonly keyword?: string
       readonly categoryName?: string
+      readonly productHeadName?: string
       readonly unclassified?: boolean
       readonly page?: number
       readonly pageSize?: number
     },
   ) {
-    if (input.categoryName !== undefined && input.unclassified === true) {
+    if (
+      input.unclassified === true
+      && (input.categoryName !== undefined || input.productHeadName !== undefined)
+    ) {
       throw new ApiException(
         422,
         'VALIDATION_FAILED',
         '请求参数校验失败',
-        { categoryName: ['分类与未分类筛选不能同时使用'] },
+        { categoryName: ['未分类筛选不能与分类/产品头筛选同时使用'] },
       )
     }
     const context = await this.context(salesOrderId)
@@ -207,6 +212,9 @@ export class SalesOrderProductEditQueryService {
       ...(input.categoryName === undefined
         ? {}
         : { categoryName: input.categoryName }),
+      ...(input.productHeadName === undefined
+        ? {}
+        : { productHeadName: input.productHeadName }),
       ...(input.unclassified === true ? { categoryName: null } : {}),
       ...(keyword === undefined || keyword.length === 0
         ? {}
@@ -215,7 +223,7 @@ export class SalesOrderProductEditQueryService {
             { name: { contains: keyword, mode: 'insensitive' } },
           ] }),
     }
-    const [total, rows, categories] = await Promise.all([
+    const [total, rows, facets] = await Promise.all([
       this.prisma.product.count({ where }),
       this.prisma.product.findMany({
         where,
@@ -250,12 +258,7 @@ export class SalesOrderProductEditQueryService {
           },
         },
       }),
-      this.prisma.product.groupBy({
-        by: ['categoryName'],
-        where: facetWhere,
-        orderBy: { categoryName: 'asc' },
-        _count: { _all: true },
-      }),
+      readProductOptionCategoryFacets(this.prisma, facetWhere),
     ])
     const items = rows.map(row => mapSalesOrderProductOption(
       row,
@@ -264,23 +267,13 @@ export class SalesOrderProductEditQueryService {
         `/api/sales-orders/${salesOrderId}/product-edit-options/${productId}/main-image/${productMediaId}/content`
       ),
     ))
-    let unclassifiedCount = 0
-    const categoryFacets: { name: string, count: number }[] = []
-    for (const row of categories) {
-      if (row.categoryName === null) {
-        unclassifiedCount = row._count._all
-      }
-      else {
-        categoryFacets.push({ name: row.categoryName, count: row._count._all })
-      }
-    }
     return {
       items,
       page,
       pageSize,
       total,
-      categories: categoryFacets,
-      unclassifiedCount,
+      categories: facets.categories,
+      unclassifiedCount: facets.unclassifiedCount,
     }
   }
 }

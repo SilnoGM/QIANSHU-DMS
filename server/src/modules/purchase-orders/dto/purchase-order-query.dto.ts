@@ -150,10 +150,17 @@ export class PurchaseOrderProductOptionsQueryDto extends PurchaseOrderPageQueryD
   @Matches(/\S/u)
   categoryName?: string
 
+  @ApiProperty({ type: 'string', maxLength: 64, required: false })
+  @IsOptional()
+  @IsString()
+  @IsUnicodeCodePointLength(1, 64)
+  @Matches(/\S/u)
+  productHeadName?: string
+
   @ApiProperty({
     type: 'boolean',
     required: false,
-    description: '只看未分类产品；与 categoryName 互斥',
+    description: '只看未分类产品；与 categoryName、productHeadName 互斥',
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => {

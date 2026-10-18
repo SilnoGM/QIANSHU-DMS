@@ -22,8 +22,8 @@ function createFixture(
   const product = {
     count: jest.fn().mockResolvedValue(5),
     groupBy: jest.fn().mockResolvedValue([
-      { categoryName: '收纳包', _count: { _all: 4 } },
-      { categoryName: null, _count: { _all: 1 } },
+      { categoryName: '收纳包', productHeadName: '城市旅行', _count: { _all: 4 } },
+      { categoryName: null, productHeadName: null, _count: { _all: 1 } },
     ]),
     findMany: jest.fn().mockResolvedValue([{
       id: PRODUCT_ID,
@@ -565,7 +565,7 @@ describe('SalesOrderQueryService product options', () => {
           contentUrl: `/api/sales-orders/product-options/${PRODUCT_ID}/main-image/${PRODUCT_MEDIA_ID}/content?currencyCode=TWD`,
         },
       }],
-      categories: [{ name: '收纳包', count: 4 }],
+      categories: [{ name: '收纳包', count: 4, productHeads: [{ name: '城市旅行', count: 4 }] }],
       unclassifiedCount: 1,
       page: 2,
       pageSize: 2,
@@ -582,12 +582,15 @@ describe('SalesOrderQueryService product options', () => {
     }
     expect(fixture.product.count).toHaveBeenCalledWith({ where: expectedWhere })
     expect(fixture.product.groupBy).toHaveBeenCalledWith({
-      by: ['categoryName'],
+      by: ['categoryName', 'productHeadName'],
       where: {
         status: 'ACTIVE',
         supplierValue: 'SUPPLIER_TW_01',
       },
-      orderBy: { categoryName: 'asc' },
+      orderBy: [
+        { categoryName: 'asc' },
+        { productHeadName: 'asc' },
+      ],
       _count: { _all: true },
     })
     expect(fixture.product.findMany).toHaveBeenCalledWith({
@@ -643,7 +646,7 @@ describe('SalesOrderQueryService product options', () => {
         currencyCode: 'TWD',
         mainImage: null,
       }],
-      categories: [{ name: '收纳包', count: 4 }],
+      categories: [{ name: '收纳包', count: 4, productHeads: [{ name: '城市旅行', count: 4 }] }],
       unclassifiedCount: 1,
       page: 1,
       pageSize: 20,

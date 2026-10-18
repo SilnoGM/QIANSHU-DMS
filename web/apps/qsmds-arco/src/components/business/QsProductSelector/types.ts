@@ -5,6 +5,7 @@ export interface ProductSelectorQuery {
   readonly keyword?: string
   readonly supplierValue?: string
   readonly categoryName?: string
+  readonly productHeadName?: string
   readonly unclassified?: boolean
   readonly page: number
   readonly pageSize: number
@@ -26,9 +27,15 @@ export interface ProductSelectorItem {
   }
 }
 
+export interface ProductSelectorCategoryHeadFacet {
+  readonly name: string
+  readonly count: number
+}
+
 export interface ProductSelectorCategoryFacet {
   readonly name: string
   readonly count: number
+  readonly productHeads: readonly ProductSelectorCategoryHeadFacet[]
 }
 
 export interface ProductSelectorPage {
@@ -43,14 +50,11 @@ export interface ProductSelectorPage {
 export type ProductSelectorCategoryFilter
   = | { readonly kind: 'all' }
     | { readonly kind: 'unclassified' }
-    | { readonly kind: 'category', readonly name: string }
-
-export interface ProductSelectorGroup {
-  readonly key: string
-  readonly categoryName: string | null
-  readonly productHeadName: string | null
-  readonly items: readonly ProductSelectorItem[]
-}
+    | {
+      readonly kind: 'category'
+      readonly name: string
+      readonly productHeadName?: string
+    }
 
 export interface ExistingCatalogLine {
   readonly key: string
