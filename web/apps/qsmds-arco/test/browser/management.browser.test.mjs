@@ -538,6 +538,8 @@ async function verifyProductCreate(page, baseUrl) {
     await page.disableRequestInterception()
   }
 
+  // 供应商现为必填且分类/产品头按供应商作用域加载，必须先选供应商。
+  await selectVisibleComboboxOption(page, '供应商', 'Browser 有效供应商')
   await createVisibleTaxonomyValue(page, '分类', '＋ 新建分类', '输入分类名称', 'Browser 分类')
   await createVisibleTaxonomyValue(page, '产品头', '＋ 新建产品头', '输入产品头名称', 'Browser 产品头')
 
@@ -548,18 +550,16 @@ async function verifyProductCreate(page, baseUrl) {
     )),
     name: document.querySelector('input[placeholder="请输入产品名称"]')?.value ?? null,
     purchaseCurrency: document.querySelector('input[data-currency="CNY"]') !== null,
-    showsDraft: document.body.innerText.includes('草稿（DRAFT）'),
+    showsDefaultActive: document.body.innerText.includes('新建产品保存后默认为启用'),
   }))()`)
   assert.deepEqual(defaultState, {
     documentFits: true,
     hasMediaInput: false,
     name: productName,
     purchaseCurrency: true,
-    showsDraft: true,
+    showsDefaultActive: true,
   })
 
-  await selectVisibleComboboxOption(page, '产品状态', '启用（ACTIVE）')
-  await selectVisibleComboboxOption(page, '供应商', 'Browser 有效供应商')
   await fillVisibleProductControl(page, 'input[data-currency="TWD"]', '1280.50')
   await fillVisibleProductControl(page, 'input[data-currency="MYR"]', '42.25')
   await fillVisibleProductControl(page, 'input[data-currency="CNY"]', '88.10')
@@ -604,7 +604,7 @@ async function verifyProductCreate(page, baseUrl) {
         TWD: visibleValues('input[data-currency="TWD"]'),
       },
       name: visibleValues('input[placeholder="请输入产品名称"]'),
-      status: selectedValue('产品状态'),
+      showsDefaultActive: document.body.innerText.includes('新建产品保存后默认为启用'),
       supplier: selectedValue('供应商'),
     }
   })()`)
@@ -618,7 +618,7 @@ async function verifyProductCreate(page, baseUrl) {
       TWD: ['1280.50'],
     },
     name: [productName],
-    status: '启用（ACTIVE）',
+    showsDefaultActive: true,
     supplier: 'Browser 有效供应商',
   })
 
@@ -815,6 +815,7 @@ async function verifyProductCreate(page, baseUrl) {
   assert.equal(productAudits?.length, 1)
   assert.deepEqual(productAudits[0]?.metadata, {
     attributeCount: 2,
+    categorySelected: true,
     myrSalePriceProvided: true,
     productNo: product.productNo,
     purchaseCostProvided: true,
