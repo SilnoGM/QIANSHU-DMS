@@ -31,7 +31,10 @@ function orderRow(overrides: Record<string, unknown> = {}) {
       actualUnitPriceAmount: decimal('50'),
       quantity: 2,
       lineTotalAmount: decimal('100'),
-      product: { media: [{ id: 'existing-product-media-id' }] },
+      product: {
+        supplierValue: 'SUPPLIER_A',
+        media: [{ id: 'existing-product-media-id' }],
+      },
     }, {
       id: 'sales-line-b',
       lineNumber: 2,
@@ -121,6 +124,7 @@ describe('SalesOrderProductEditQueryService', () => {
         productId: 'product-id',
         productNo: 'P-001',
         productName: '目录产品',
+        supplierValue: 'SUPPLIER_A',
         description: '备注',
         standardUnitPriceAmount: '55.0000',
         actualUnitPriceAmount: '50.0000',

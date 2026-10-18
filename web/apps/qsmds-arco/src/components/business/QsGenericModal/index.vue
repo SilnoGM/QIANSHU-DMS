@@ -21,6 +21,7 @@ const props = withDefaults(defineProps<QsGenericModalProps>(), {
   dismissOnEscape: true,
   dismissOnOverlay: true,
   error: null,
+  fillHeight: false,
   loading: false,
   modelValue: false,
   size: QS_GENERIC_MODAL_DEFAULT_SIZE,
@@ -194,7 +195,9 @@ onBeforeUnmount(() => {
     :title="title"
     :description="description"
     :class="contentClass"
-    content-class="min-h-auto p-0 overflow-y-auto"
+    :content-class="fillHeight
+      ? 'min-h-0 p-0 overflow-hidden flex flex-col'
+      : 'min-h-auto p-0 overflow-y-auto'"
     header-class="p-0 border-b border-border/70"
     footer-class="p-0 border-t border-border/70 bg-muted/25"
     :footer="hasFooter"
@@ -262,6 +265,7 @@ onBeforeUnmount(() => {
     <div
       data-slot="qs-generic-modal"
       class="p-4 sm:p-6"
+      :class="fillHeight ? 'flex-1 min-h-0 flex flex-col' : ''"
       :aria-busy="loading || submitting"
     >
       <div
@@ -304,7 +308,10 @@ onBeforeUnmount(() => {
           </FaAlert>
         </div>
 
-        <div data-slot="qs-generic-modal-body">
+        <div
+          data-slot="qs-generic-modal-body"
+          :class="fillHeight ? 'flex-1 min-h-0 flex flex-col' : ''"
+        >
           <slot />
         </div>
       </template>

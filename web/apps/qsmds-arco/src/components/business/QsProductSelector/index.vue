@@ -22,6 +22,7 @@ import {
   createProductSelectorQueryKey,
   createSelectedProductItems,
   groupProductSelectorItems,
+  groupSelectedProductItems,
   mergeProductSelectorItems,
   normalizeProductSelectorKeyword,
   removeProductFromSession,
@@ -43,7 +44,8 @@ const props = withDefaults(defineProps<{
   disabled: false,
   description: undefined,
   fixedSupplierValue: undefined,
-  pageSize: 20,
+  // 首屏只取 12 个产品，降低“全部供应商 + 缩略图”打开成本；滚动仍可继续加载。
+  pageSize: 12,
 })
 
 const emit = defineEmits<{
@@ -96,6 +98,33 @@ const selectedItems = computed(() => createSelectedProductItems(
 const selectedByProductId = computed(() => new Map(selectedItems.value.map(item => (
   [item.productId, item]
 ))))
+const supplierLabelByValue = computed(() => new Map(
+  (supplierCatalog.catalog.value?.items ?? []).map(item => [
+    item.value,
+    item.effectiveEnabled ? item.label : `${item.label}（已停用）`,
+  ]),
+))
+const supplierByProductId = computed(() => {
+  const index = new Map(items.value.map(item => [item.id, item.supplierValue]))
+  for (const change of changes.value) {
+    if (change.kind === 'ADD') {
+      index.set(change.product.id, change.product.supplierValue)
+    }
+  }
+  return index
+})
+const selectedGroups = computed(() => groupSelectedProductItems(
+  selectedItems.value,
+  item => item.supplierValue
+    ?? supplierByProductId.value.get(item.productId)
+    ?? null,
+))
+function supplierGroupLabel(value: string | null): string {
+  if (value === null) {
+    return '未设置供应商'
+  }
+  return supplierLabelByValue.value.get(value) ?? value
+}
 const supplierOptions = computed(() => [{ label: '全部供应商', value: ALL_SUPPLIERS_OPTION_VALUE }, ...(
   supplierCatalog.catalog.value?.items ?? []
 ).map(item => ({
@@ -442,13 +471,14 @@ onBeforeUnmount(() => {
     :model-value="modelValue"
     title="选择数据库产品"
     :description="description ?? `产品选择不限制币种；当前订单币种为 ${currency}，无该币种标准价时需手填本单售价。`"
-    size="2xl"
+    size="3xl"
+    fill-height
     :submitting="disabled"
     @update:model-value="handleModalValue"
   >
-    <div class="gap-3 grid">
+    <div class="flex flex-1 flex-col gap-3 min-h-0">
       <div
-        class="p-4 border border-border rounded-xl bg-muted/20 gap-3 grid"
+        class="p-4 border border-border rounded-xl bg-muted/20 shrink-0 gap-3 grid"
         :class="fixedSupplierValue === undefined ? 'sm:grid-cols-[minmax(0,1fr)_14rem]' : 'sm:grid-cols-1'"
       >
         <FaInput
@@ -481,14 +511,14 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div class="gap-3 grid xl:grid-cols-[10rem_minmax(0,1fr)_18rem]">
-        <aside class="border border-border rounded-xl bg-muted/15 min-w-0 overflow-hidden" aria-label="产品分类">
-          <div class="px-3 py-2 border-b border-border bg-muted/25 hidden xl:block">
+      <div class="qs-product-selector-scroll flex-1 gap-3 grid min-h-0 overflow-y-auto xl:grid-cols-[12rem_minmax(0,1fr)_18rem] xl:grid-rows-[minmax(0,1fr)] xl:overflow-hidden">
+        <aside class="border border-border rounded-xl bg-muted/15 flex flex-col min-h-0 min-w-0 overflow-hidden" aria-label="产品分类">
+          <div class="px-3 py-2 border-b border-border bg-muted/25 shrink-0 hidden xl:block">
             <h3 class="text-sm font-semibold m-0">
               产品分类
             </h3>
           </div>
-          <div class="p-2 flex gap-1 overflow-x-auto xl:flex-col xl:gap-0.5 xl:h-[min(58vh,32rem)] xl:overflow-x-hidden xl:overflow-y-auto">
+          <div class="qs-product-selector-scroll p-2 flex gap-1 overflow-x-auto xl:flex-1 xl:flex-col xl:gap-0.5 xl:min-h-0 xl:overflow-x-hidden xl:overflow-y-auto">
             <button
               v-for="option in categoryOptions"
               :key="option.key"
@@ -507,9 +537,9 @@ onBeforeUnmount(() => {
           </div>
         </aside>
 
-        <section class="border border-border rounded-xl bg-background min-w-0 overflow-hidden" aria-label="产品检索结果">
+        <section class="border border-border rounded-xl bg-background flex flex-col min-h-0 min-w-0 overflow-hidden" aria-label="产品检索结果">
           <div
-            class="p-3 overscroll-contain h-[min(58vh,32rem)] overflow-y-auto"
+            class="qs-product-selector-scroll p-3 overscroll-contain flex-1 max-h-[58vh] min-h-0 overflow-y-auto xl:max-h-none"
             tabindex="0"
             aria-label="产品列表"
             @scroll="handleResultScroll"
@@ -582,6 +612,8 @@ onBeforeUnmount(() => {
                         :src="mediaThumbnailUrl(item.mainImage.contentUrl) ?? item.mainImage.contentUrl"
                         :alt="item.name"
                         class="size-full transition-transform duration-200 object-cover hover:scale-[1.025]"
+                        decoding="async"
+                        fetchpriority="low"
                         loading="lazy"
                         @error="markImageFailed(item.id)"
                       >
@@ -662,24 +694,24 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div class="px-4 py-3 border-t border-border bg-muted/20 flex items-center justify-between">
+          <div class="px-3 py-1.5 border-t border-border bg-muted/20 flex shrink-0 items-center justify-between">
             <span class="text-sm text-muted-foreground">产品总数</span>
             <span class="text-sm qs-type-data-emphasis">共 {{ total }} 个产品</span>
           </div>
         </section>
 
-        <aside class="border border-border rounded-xl bg-muted/15 min-w-0 overflow-hidden" aria-label="已选择产品">
-          <div class="px-4 py-3 border-b border-border bg-muted/25">
+        <aside class="border border-border rounded-xl bg-muted/15 flex flex-col min-h-0 min-w-0 overflow-hidden" aria-label="已选择产品">
+          <div class="px-4 py-3 border-b border-border bg-muted/25 shrink-0">
             <h3 class="text-sm font-semibold m-0">
               已选择的产品
             </h3>
             <p class="text-xs text-muted-foreground m-0 mt-1">
-              确认后才会一次性写入订单明细。
+              按供应商分组；确认后才会一次性写入订单明细。
             </p>
           </div>
           <!-- Grid 子项默认的 min-width:auto 会被长名称撑宽；这里同时约束滚动轴和
                各级可收缩宽度，让列表只保留纵向滚动。 -->
-          <div class="p-3 h-[min(58vh,32rem)] overflow-x-hidden overflow-y-auto">
+          <div class="qs-product-selector-scroll p-3 flex-1 max-h-[40vh] min-h-0 overflow-x-hidden overflow-y-auto xl:max-h-none">
             <FaEmpty
               v-if="selectedItems.length === 0"
               icon="i-lucide:list-plus"
@@ -687,33 +719,48 @@ onBeforeUnmount(() => {
               description="从左侧选择要加入本单的产品。"
               class="py-14"
             />
-            <ul v-else class="m-0 p-0 list-none gap-2 grid min-w-0 w-full">
-              <li
-                v-for="selected in selectedItems"
-                :key="selected.productId"
-                class="p-3 border border-border rounded-lg bg-background flex gap-3 max-w-full min-w-0 w-full items-center"
+            <div v-else class="gap-3 grid min-w-0">
+              <section
+                v-for="group in selectedGroups"
+                :key="group.key"
+                class="min-w-0"
+                :aria-label="supplierGroupLabel(group.supplierValue)"
               >
-                <span class="flex-1 min-w-0 overflow-hidden">
-                  <FaTooltip :text="selected.name">
-                    <span tabindex="0" class="text-sm font-medium w-full block truncate">{{ selected.name }}</span>
-                  </FaTooltip>
-                  <span class="text-xs text-muted-foreground font-mono mt-0.5 block truncate">{{ selected.productNo }}</span>
-                  <span class="text-xs text-primary mt-1 block">
-                    {{ selected.origin === 'ADDED' ? '新增产品' : '已有明细' }} · 数量 {{ selected.quantity }}
-                  </span>
-                </span>
-                <FaButton
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  :aria-label="`移除 ${selected.name}`"
-                  class="shrink-0"
-                  @click="removeSelectedProduct(selected.productId)"
-                >
-                  <FaIcon name="i-lucide:x" aria-hidden="true" />
-                </FaButton>
-              </li>
-            </ul>
+                <div class="px-1 pb-1 flex gap-2 items-baseline justify-between">
+                  <h4 class="text-xs text-muted-foreground font-semibold m-0 truncate">
+                    {{ supplierGroupLabel(group.supplierValue) }}
+                  </h4>
+                  <span class="text-[11px] text-muted-foreground shrink-0 tabular-nums">{{ group.items.length }} 项</span>
+                </div>
+                <ul class="m-0 p-0 list-none gap-2 grid min-w-0 w-full">
+                  <li
+                    v-for="selected in group.items"
+                    :key="selected.productId"
+                    class="p-3 border border-border rounded-lg bg-background flex gap-3 max-w-full min-w-0 w-full items-center"
+                  >
+                    <span class="flex-1 min-w-0 overflow-hidden">
+                      <FaTooltip :text="selected.name">
+                        <span tabindex="0" class="text-sm font-medium w-full block truncate">{{ selected.name }}</span>
+                      </FaTooltip>
+                      <span class="text-xs text-muted-foreground font-mono mt-0.5 block truncate">{{ selected.productNo }}</span>
+                      <span class="text-xs text-primary mt-1 block">
+                        {{ selected.origin === 'ADDED' ? '新增产品' : '已有明细' }} · 数量 {{ selected.quantity }}
+                      </span>
+                    </span>
+                    <FaButton
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      :aria-label="`移除 ${selected.name}`"
+                      class="shrink-0"
+                      @click="removeSelectedProduct(selected.productId)"
+                    >
+                      <FaIcon name="i-lucide:x" aria-hidden="true" />
+                    </FaButton>
+                  </li>
+                </ul>
+              </section>
+            </div>
           </div>
         </aside>
       </div>
@@ -738,6 +785,14 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.qs-product-selector-scroll {
+  scrollbar-width: none;
+}
+
+.qs-product-selector-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

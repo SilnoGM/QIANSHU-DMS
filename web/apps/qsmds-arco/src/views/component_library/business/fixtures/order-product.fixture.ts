@@ -111,6 +111,7 @@ export const ORDER_PRODUCT_FIXTURE_EXISTING_LINES = Object.freeze([{
   productNo: ORDER_PRODUCT_FIXTURE_PRODUCTS[0]!.productNo,
   name: ORDER_PRODUCT_FIXTURE_PRODUCTS[0]!.name,
   quantity: '2',
+  supplierValue: ORDER_PRODUCT_FIXTURE_PRODUCTS[0]!.supplierValue,
 }])
 
 export function createOrderProductFixtureEditorLines(

@@ -63,6 +63,7 @@ export class SalesOrderProductEditQueryService {
             lineTotalAmount: true,
             product: {
               select: {
+                supplierValue: true,
                 media: {
                   where: {
                     kind: 'IMAGE',
@@ -156,6 +157,7 @@ export class SalesOrderProductEditQueryService {
           productId: line.productId,
           productNo: line.productNoSnapshot,
           productName: line.productNameSnapshot,
+          supplierValue: line.product?.supplierValue ?? null,
           description: line.descriptionSnapshot,
           standardUnitPriceAmount: line.standardUnitPriceAmount === null
             ? null

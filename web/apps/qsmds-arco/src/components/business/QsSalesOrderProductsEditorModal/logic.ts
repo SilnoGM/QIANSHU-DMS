@@ -119,6 +119,7 @@ export function createSalesOrderProductEditLines(
     productId: line.productId,
     productNo: line.productNo,
     name: line.productName,
+    supplierValue: line.supplierValue,
     description: line.description ?? '',
     standardUnitPriceAmount: line.standardUnitPriceAmount,
     actualUnitPriceAmount: editableAmount(line.actualUnitPriceAmount),

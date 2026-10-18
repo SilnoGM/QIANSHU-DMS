@@ -497,6 +497,7 @@ export class SalesOrderProductEditExistingLineDto {
   readonly productId!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly productNo!: string | null
   @ApiProperty({ type: 'string' }) readonly productName!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly supplierValue!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly description!: string | null
   @ApiProperty({ type: 'string', nullable: true })
   readonly standardUnitPriceAmount!: string | null

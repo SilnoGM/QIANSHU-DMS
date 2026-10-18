@@ -58,6 +58,7 @@ export interface ExistingCatalogLine {
   readonly productNo: string
   readonly name: string
   readonly quantity: string
+  readonly supplierValue?: string | null
 }
 
 export type ProductIncrementCandidate
@@ -78,6 +79,13 @@ export interface SelectedProductItem {
   readonly productNo: string
   readonly name: string
   readonly quantity: string
+  readonly supplierValue: string | null
+}
+
+export interface SelectedProductGroup {
+  readonly key: string
+  readonly supplierValue: string | null
+  readonly items: readonly SelectedProductItem[]
 }
 
 export type ProductSelectionChange

@@ -61,6 +61,7 @@ const existingCatalogLines = computed(() => props.modelValue.flatMap(line => (
         productNo: line.productNo,
         name: line.name,
         quantity: line.quantity,
+        supplierValue: line.supplierValue ?? null,
       }]
     : []
 )))

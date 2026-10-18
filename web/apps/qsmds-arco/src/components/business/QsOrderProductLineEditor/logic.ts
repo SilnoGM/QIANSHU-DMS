@@ -208,6 +208,7 @@ export function applyProductSelectionChanges(
       // 本单价格属于订单录入值，不继承产品档案参考价；由用户基于当前订单重新确认。
       actualUnitPriceAmount: initialActualUnitPriceAmount,
       quantity: String(change.quantity),
+      supplierValue: change.product.supplierValue,
       mainImage: change.product.mainImage,
     })
   }

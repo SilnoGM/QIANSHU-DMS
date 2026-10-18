@@ -5,6 +5,7 @@ import type {
   ProductSelectorGroup,
   ProductSelectorItem,
   ProductSelectorQuery,
+  SelectedProductGroup,
   SelectedProductItem,
 } from './types'
 
@@ -147,6 +148,7 @@ export function createSelectedProductItems(
             line.quantity,
             incrementByProductId.get(line.productId) ?? 0,
           ),
+          supplierValue: line.supplierValue ?? null,
         }]
   ))
   const addedItems = changes.flatMap(change => (
@@ -157,10 +159,43 @@ export function createSelectedProductItems(
           productNo: change.product.productNo,
           name: change.product.name,
           quantity: String(change.quantity),
+          supplierValue: change.product.supplierValue,
         }]
       : []
   ))
   return [...existingItems, ...addedItems]
+}
+
+/**
+ * 右侧清单按供应商分组；已有明细可能没有供应商，调用方可用候选页同一
+ * productId 的供应商补齐，仍无法确定时归入 null 组（未设置供应商）。
+ */
+export function groupSelectedProductItems(
+  items: readonly SelectedProductItem[],
+  resolveSupplier: (item: SelectedProductItem) => string | null = item => (
+    item.supplierValue
+  ),
+): readonly SelectedProductGroup[] {
+  const groups = new Map<string, {
+    supplierValue: string | null
+    items: SelectedProductItem[]
+  }>()
+  for (const item of items) {
+    const supplierValue = resolveSupplier(item)
+    const key = supplierValue ?? ''
+    const group = groups.get(key)
+    if (group === undefined) {
+      groups.set(key, { supplierValue, items: [item] })
+    }
+    else {
+      group.items.push(item)
+    }
+  }
+  return [...groups.entries()].map(([key, group]) => ({
+    key,
+    supplierValue: group.supplierValue,
+    items: group.items,
+  }))
 }
 
 export function removeProductFromSession(

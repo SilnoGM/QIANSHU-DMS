@@ -14,6 +14,7 @@ export interface OrderProductLineModel {
   readonly standardUnitPriceAmount: string | null
   readonly actualUnitPriceAmount: string | null
   readonly quantity: string
+  readonly supplierValue?: string | null
   readonly mainImage: null | {
     readonly id: string
     readonly contentUrl: string

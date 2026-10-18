@@ -17,6 +17,7 @@ export interface QsGenericModalProps {
   dismissOnEscape?: boolean
   dismissOnOverlay?: boolean
   error?: null | string
+  fillHeight?: boolean
   loading?: boolean
   modelValue?: boolean
   size?: QsGenericModalSize

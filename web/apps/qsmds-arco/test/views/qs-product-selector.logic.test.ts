@@ -14,6 +14,7 @@ import {
   createProductSelectorQueryKey,
   createSelectedProductItems,
   groupProductSelectorItems,
+  groupSelectedProductItems,
   mergeProductSelectorItems,
   removeProductFromSession,
   selectProductForSession,
@@ -109,6 +110,60 @@ test('按分类与产品头分组，同名产品头跨分类不合并', () => {
   ])
 })
 
+test('已选产品按供应商分组，未知供应商单独成组并可用候选页补齐', () => {
+  const items = [
+    {
+      origin: 'ADDED' as const,
+      productId: 'A',
+      productNo: 'SKU-A',
+      name: '产品 A',
+      quantity: '1',
+      supplierValue: 'SUPPLIER_A',
+    },
+    {
+      origin: 'EXISTING' as const,
+      productId: 'B',
+      productNo: 'SKU-B',
+      name: '产品 B',
+      quantity: '2',
+      supplierValue: null,
+    },
+    {
+      origin: 'ADDED' as const,
+      productId: 'C',
+      productNo: 'SKU-C',
+      name: '产品 C',
+      quantity: '1',
+      supplierValue: 'SUPPLIER_A',
+    },
+  ]
+
+  assert.deepEqual(groupSelectedProductItems(items).map(group => ({
+    supplierValue: group.supplierValue,
+    productIds: group.items.map(item => item.productId),
+  })), [{
+    supplierValue: 'SUPPLIER_A',
+    productIds: ['A', 'C'],
+  }, {
+    supplierValue: null,
+    productIds: ['B'],
+  }])
+
+  assert.deepEqual(groupSelectedProductItems(
+    items,
+    item => item.productId === 'B' ? 'SUPPLIER_B' : item.supplierValue,
+  ).map(group => ({
+    supplierValue: group.supplierValue,
+    productIds: group.items.map(item => item.productId),
+  })), [{
+    supplierValue: 'SUPPLIER_A',
+    productIds: ['A', 'C'],
+  }, {
+    supplierValue: 'SUPPLIER_B',
+    productIds: ['B'],
+  }])
+})
+
 test('打开会话时已有数据库产品完整回显到已选列表', () => {
   const existing: ExistingCatalogLine[] = [{
     key: 'line-a',
@@ -116,6 +171,7 @@ test('打开会话时已有数据库产品完整回显到已选列表', () => {
     productNo: 'SKU-A',
     name: '产品 A',
     quantity: '3',
+    supplierValue: 'SUPPLIER_A',
   }]
 
   assert.deepEqual(createSelectedProductItems(existing, []), [{
@@ -124,6 +180,7 @@ test('打开会话时已有数据库产品完整回显到已选列表', () => {
     productNo: 'SKU-A',
     name: '产品 A',
     quantity: '3',
+    supplierValue: 'SUPPLIER_A',
   }])
 })
 

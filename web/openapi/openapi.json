@@ -83906,6 +83906,10 @@
           "productName": {
             "type": "string"
           },
+          "supplierValue": {
+            "type": "string",
+            "nullable": true
+          },
           "description": {
             "type": "string",
             "nullable": true
@@ -83948,6 +83952,7 @@
           "productId",
           "productNo",
           "productName",
+          "supplierValue",
           "description",
           "standardUnitPriceAmount",
           "actualUnitPriceAmount",

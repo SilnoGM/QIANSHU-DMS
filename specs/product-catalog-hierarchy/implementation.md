@@ -85,7 +85,23 @@
 - 浏览器自动化套件 `test:browser:auth` 未整体运行；手工浏览器验收已覆盖关键路径。
 - 未推送到远端、未部署、未对生产库应用迁移。
 
-## 5. 后续可选
+## 6. 2026-10-18 UI 反馈迭代
+
+- 弹窗档位从 `2xl` 调整为 `3xl`（80rem），分类列从 `10rem` 加宽到 `12rem`。
+- `QsGenericModal` 增加可选 `fillHeight`：内容区改为 flex 约束，三列高度固定在弹窗内；
+  分类、产品、已选三个区块各自内部滚动，并通过 `qs-product-selector-scroll` 隐藏滚动条。
+- 产品总数条从 `px-4 py-3` 收紧为 `px-3 py-1.5`。
+- 已选产品按供应商分组；新增/会话内产品直接携带 `supplierValue`，已有明细可由候选页同
+  productId 补齐；销售订单编辑上下文的行 DTO 增加 `supplierValue` 以覆盖改写场景；
+  无法确定的归入「未设置供应商」。
+- 首屏 `pageSize` 从 20 降为 12；图片继续使用 `thumb` 变体，并增加 `loading="lazy"`、
+  `decoding="async"`、`fetchpriority="low"`。这仍会请求「全部供应商」的第一页，但不再
+  一次加载 20 个产品与图片。若需要完全消除首屏目录请求，可改为先选供应商/关键词再加载。
+
+验证：`pnpm -C web run check` 通过；Server 单元测试 3982 个通过；`contract:check` 通过；
+浏览器实测 3xl 布局、分类列宽度、区块内滚动、隐藏滚动条、总数条高度、供应商分组正常。
+
+## 7. 后续可选
 
 - 批量补录工具（CSV → dry-run → apply），仅在业务提供映射表后实施。
 - 存量补录完成后可另起迁移把两列改为 `NOT NULL`。
