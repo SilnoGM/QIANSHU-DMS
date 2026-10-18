@@ -13,6 +13,7 @@ import {
   createExistingCatalogLineIndex,
   createProductSelectorQueryKey,
   createSelectedProductItems,
+  groupProductSelectorItems,
   mergeProductSelectorItems,
   removeProductFromSession,
   selectProductForSession,
@@ -23,6 +24,8 @@ function product(id: string): ProductSelectorItem {
     id,
     productNo: `SKU-${id}`,
     name: `产品 ${id}`,
+    categoryName: '收纳包',
+    productHeadName: '城市旅行',
     supplierValue: 'SUPPLIER_A',
     attributes: [],
     standardUnitPriceAmount: '12.5000',
@@ -46,7 +49,23 @@ test('产品选择分页按稳定 ID 合并，并拒绝旧查询覆盖当前筛�
     supplierValue: 'SUPPLIER_A',
     page: 1,
     pageSize: 20,
-  }), 'TWD\u0000收纳\u0000SUPPLIER_A')
+  }), 'TWD\u0000收纳\u0000SUPPLIER_A\u0000\u0000')
+  assert.equal(createProductSelectorQueryKey({
+    currencyCode: 'TWD',
+    categoryName: '收纳',
+    page: 1,
+    pageSize: 20,
+  }), 'TWD\u0000\u0000\u0000收纳\u0000')
+  assert.notEqual(createProductSelectorQueryKey({
+    currencyCode: 'TWD',
+    page: 1,
+    pageSize: 20,
+  }), createProductSelectorQueryKey({
+    currencyCode: 'TWD',
+    unclassified: true,
+    page: 1,
+    pageSize: 20,
+  }))
   assert.equal(canApplyProductSelectorResponse({
     activeQueryKey: 'new',
     activeVersion: 3,
@@ -63,7 +82,31 @@ test('采购订单可以使用 CNY 构造稳定查询身份', () => {
     supplierValue: 'SUPPLIER_CN_01',
     page: 1,
     pageSize: 20,
-  }), 'CNY\u0000采购包材\u0000SUPPLIER_CN_01')
+  }), 'CNY\u0000采购包材\u0000SUPPLIER_CN_01\u0000\u0000')
+})
+
+test('按分类与产品头分组，同名产品头跨分类不合并', () => {
+  const groups = groupProductSelectorItems([
+    { ...product('A'), categoryName: '微耕机', productHeadName: '四驱四轮' },
+    { ...product('B'), categoryName: '微耕机', productHeadName: '四驱四轮' },
+    { ...product('C'), categoryName: '运输车', productHeadName: '四驱四轮' },
+    { ...product('D'), categoryName: null, productHeadName: null },
+  ])
+
+  assert.equal(groups.length, 3)
+  assert.deepEqual(groups.map(group => group.items.map(item => item.id)), [
+    ['A', 'B'],
+    ['C'],
+    ['D'],
+  ])
+  assert.deepEqual(groups.map(group => [
+    group.categoryName,
+    group.productHeadName,
+  ]), [
+    ['微耕机', '四驱四轮'],
+    ['运输车', '四驱四轮'],
+    [null, null],
+  ])
 })
 
 test('打开会话时已有数据库产品完整回显到已选列表', () => {

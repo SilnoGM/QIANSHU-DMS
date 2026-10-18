@@ -10,6 +10,8 @@ import {
 export interface ProductUpdateLockRecord {
   readonly id: string
   readonly name: string
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
   readonly productNo: string
   readonly status: ProductStatusValue
   readonly supplierValue: string | null
@@ -25,6 +27,8 @@ export interface ProductUpdateLockRecord {
 
 export interface ProductUpdateRecordData {
   readonly name?: string
+  readonly categoryName?: string | null
+  readonly productHeadName?: string | null
   readonly status?: ProductStatusValue
   readonly supplierValue?: string | null
   readonly twdSalePriceAmount?: string | null
@@ -48,6 +52,8 @@ export async function readProductForUpdate(
     SELECT
       "id",
       "name",
+      "category_name" AS "categoryName",
+      "product_head_name" AS "productHeadName",
       "product_no" AS "productNo",
       "status",
       "supplier_value" AS "supplierValue",

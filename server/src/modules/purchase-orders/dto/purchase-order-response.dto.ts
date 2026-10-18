@@ -307,6 +307,8 @@ export class PurchaseOrderProductOptionDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly productNo!: string
   @ApiProperty({ type: 'string' }) readonly name!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly categoryName!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly productHeadName!: string | null
   @ApiProperty({ type: 'array', items: { type: 'object', additionalProperties: true } })
   readonly attributes!: readonly Record<string, unknown>[]
   @ApiProperty({ type: 'string' }) readonly supplierValue!: string
@@ -316,9 +318,17 @@ export class PurchaseOrderProductOptionDto {
   readonly mainImage!: PurchaseOrderProductImageDto | null
 }
 
+export class PurchaseOrderProductOptionCategoryDto {
+  @ApiProperty({ type: 'string' }) readonly name!: string
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly count!: number
+}
+
 export class PurchaseOrderProductOptionsDto {
   @ApiProperty({ type: () => [PurchaseOrderProductOptionDto] })
   readonly items!: readonly PurchaseOrderProductOptionDto[]
+  @ApiProperty({ type: () => [PurchaseOrderProductOptionCategoryDto] })
+  readonly categories!: readonly PurchaseOrderProductOptionCategoryDto[]
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly unclassifiedCount!: number
   @ApiProperty({ type: 'integer' }) readonly page!: number
   @ApiProperty({ type: 'integer' }) readonly pageSize!: number
   @ApiProperty({ type: 'integer' }) readonly total!: number

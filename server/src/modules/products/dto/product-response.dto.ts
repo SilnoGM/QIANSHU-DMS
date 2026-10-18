@@ -109,6 +109,12 @@ export class ProductListItemDto {
   @ApiProperty({ type: 'string' })
   readonly name!: string
 
+  @ApiProperty({ type: 'string', nullable: true, maxLength: 64 })
+  readonly categoryName!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true, maxLength: 64 })
+  readonly productHeadName!: string | null
+
   @ApiProperty({ type: 'string' })
   readonly productNo!: string
 
@@ -161,4 +167,17 @@ export class ProductPageDto {
 
   @ApiProperty({ type: 'integer', minimum: 0 })
   readonly total!: number
+}
+
+export class ProductTaxonomyCategoryDto {
+  @ApiProperty({ type: 'string', maxLength: 64 })
+  readonly name!: string
+
+  @ApiProperty({ type: 'array', items: { type: 'string', maxLength: 64 } })
+  readonly productHeads!: readonly string[]
+}
+
+export class ProductTaxonomyOptionsDto {
+  @ApiProperty({ type: () => [ProductTaxonomyCategoryDto] })
+  readonly categories!: readonly ProductTaxonomyCategoryDto[]
 }

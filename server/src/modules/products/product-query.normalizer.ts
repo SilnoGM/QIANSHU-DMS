@@ -12,7 +12,9 @@ export interface NormalizedProductListQuery {
   readonly page: number
   readonly pageSize: number
   readonly skip: number
+  readonly categoryName?: string
   readonly keyword?: string
+  readonly productHeadName?: string
   readonly status?: ProductStatus
   readonly supplierValue?: string
 }
@@ -34,6 +36,8 @@ export function normalizeProductListQuery(
   const rawKeyword = query.keyword
   const status = query.status
   const supplierValue = query.supplierValue
+  const categoryName = query.categoryName
+  const productHeadName = query.productHeadName
   const keyword = typeof rawKeyword === 'string'
     ? rawKeyword.trim()
     : rawKeyword
@@ -64,6 +68,22 @@ export function normalizeProductListQuery(
         || Array.from(supplierValue).length > MAXIMUM_SUPPLIER_VALUE_LENGTH
       )
     )
+    || (
+      categoryName !== undefined
+      && (
+        typeof categoryName !== 'string'
+        || categoryName.trim().length === 0
+        || Array.from(categoryName).length > MAXIMUM_SUPPLIER_VALUE_LENGTH
+      )
+    )
+    || (
+      productHeadName !== undefined
+      && (
+        typeof productHeadName !== 'string'
+        || productHeadName.trim().length === 0
+        || Array.from(productHeadName).length > MAXIMUM_SUPPLIER_VALUE_LENGTH
+      )
+    )
   ) {
     throwValidationError()
   }
@@ -80,6 +100,8 @@ export function normalizeProductListQuery(
     ...(keyword === undefined ? {} : { keyword }),
     ...(status === undefined ? {} : { status: status as ProductStatus }),
     ...(supplierValue === undefined ? {} : { supplierValue }),
+    ...(categoryName === undefined ? {} : { categoryName }),
+    ...(productHeadName === undefined ? {} : { productHeadName }),
   }
 }
 

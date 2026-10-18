@@ -21,10 +21,16 @@ function createFixture(
 ) {
   const product = {
     count: jest.fn().mockResolvedValue(5),
+    groupBy: jest.fn().mockResolvedValue([
+      { categoryName: '收纳包', _count: { _all: 4 } },
+      { categoryName: null, _count: { _all: 1 } },
+    ]),
     findMany: jest.fn().mockResolvedValue([{
       id: PRODUCT_ID,
       productNo: 'SKU-TW-001',
       name: '城市旅行收纳包',
+      categoryName: '收纳包',
+      productHeadName: '城市旅行',
       supplierValue: 'SUPPLIER_TW_01',
       attributes: [{ key: 'color', value: 'green' }],
       twdSalePriceAmount,
@@ -548,6 +554,8 @@ describe('SalesOrderQueryService product options', () => {
         id: PRODUCT_ID,
         productNo: 'SKU-TW-001',
         name: '城市旅行收纳包',
+        categoryName: '收纳包',
+        productHeadName: '城市旅行',
         supplierValue: 'SUPPLIER_TW_01',
         attributes: [{ key: 'color', value: 'green' }],
         standardUnitPriceAmount: '1234.5000',
@@ -557,6 +565,8 @@ describe('SalesOrderQueryService product options', () => {
           contentUrl: `/api/sales-orders/product-options/${PRODUCT_ID}/main-image/${PRODUCT_MEDIA_ID}/content?currencyCode=TWD`,
         },
       }],
+      categories: [{ name: '收纳包', count: 4 }],
+      unclassifiedCount: 1,
       page: 2,
       pageSize: 2,
       total: 5,
@@ -571,15 +581,31 @@ describe('SalesOrderQueryService product options', () => {
       ],
     }
     expect(fixture.product.count).toHaveBeenCalledWith({ where: expectedWhere })
+    expect(fixture.product.groupBy).toHaveBeenCalledWith({
+      by: ['categoryName'],
+      where: {
+        status: 'ACTIVE',
+        supplierValue: 'SUPPLIER_TW_01',
+      },
+      orderBy: { categoryName: 'asc' },
+      _count: { _all: true },
+    })
     expect(fixture.product.findMany).toHaveBeenCalledWith({
       where: expectedWhere,
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      orderBy: [
+        { categoryName: 'asc' },
+        { productHeadName: 'asc' },
+        { name: 'asc' },
+        { id: 'asc' },
+      ],
       skip: 2,
       take: 2,
       select: {
         id: true,
         productNo: true,
         name: true,
+        categoryName: true,
+        productHeadName: true,
         supplierValue: true,
         attributes: true,
         twdSalePriceAmount: true,
@@ -609,12 +635,16 @@ describe('SalesOrderQueryService product options', () => {
         id: PRODUCT_ID,
         productNo: 'SKU-TW-001',
         name: '城市旅行收纳包',
+        categoryName: '收纳包',
+        productHeadName: '城市旅行',
         supplierValue: 'SUPPLIER_TW_01',
         attributes: [{ key: 'color', value: 'green' }],
         standardUnitPriceAmount: null,
         currencyCode: 'TWD',
         mainImage: null,
       }],
+      categories: [{ name: '收纳包', count: 4 }],
+      unclassifiedCount: 1,
       page: 1,
       pageSize: 20,
       total: 5,

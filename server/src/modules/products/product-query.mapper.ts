@@ -21,6 +21,8 @@ interface ProductActorRow {
 export interface ProductQueryRow {
   readonly id: string
   readonly name: string
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
   readonly productNo: string
   readonly status: ProductStatusValue
   readonly supplierValue: string | null
@@ -69,6 +71,8 @@ export interface ProductActor {
 export const PRODUCT_RESPONSE_SELECT = {
   id: true,
   name: true,
+  categoryName: true,
+  productHeadName: true,
   productNo: true,
   status: true,
   supplierValue: true,
@@ -89,6 +93,8 @@ export const PRODUCT_RESPONSE_SELECT = {
 export interface ProductListItem {
   readonly id: string
   readonly name: string
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
   readonly productNo: string
   readonly status: ProductStatusValue
   readonly supplier: ProductSupplier | null
@@ -119,6 +125,8 @@ export function mapProductListItem(
   return {
     id: row.id,
     name: row.name,
+    categoryName: row.categoryName,
+    productHeadName: row.productHeadName,
     productNo: row.productNo,
     status: row.status,
     supplier: mapSupplier(row.supplierValue, supplierResolution),

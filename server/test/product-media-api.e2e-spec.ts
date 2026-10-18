@@ -48,6 +48,8 @@ function productFixture() {
   return {
     id: PRODUCT_ID,
     name: '媒体 API 产品',
+    categoryName: null,
+    productHeadName: null,
     productNo: 'P-MEDIA-API',
     status: 'DRAFT' as const,
     media: { mainImage: null, images: [media], videos: [] },

@@ -27,6 +27,8 @@ export interface NormalizedProductCreateAttribute {
 
 export interface NormalizedProductCreateCommand {
   readonly name: string
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
   readonly status: ProductStatusValue
   readonly supplierValue: string | null
   readonly twdSalePrice: NormalizedProductCreateMoney
@@ -88,6 +90,15 @@ function normalizeSupplierValue(value: unknown): string | null {
     return validationFailure('supplierValue')
   }
   return normalized
+}
+
+function normalizeOptionalText(
+  value: unknown,
+  field: string,
+  maximumCodePoints: number,
+): string | null {
+  if (value === null) return null
+  return normalizeText(value, field, maximumCodePoints)
 }
 
 function normalizeMoney(
@@ -159,6 +170,8 @@ export function normalizeProductCreateCommand(
   const record = requireRecord(input, 'body')
   rejectUnknownKeys(record, [
     'name',
+    'categoryName',
+    'productHeadName',
     'status',
     'supplierValue',
     'twdSalePrice',
@@ -170,6 +183,12 @@ export function normalizeProductCreateCommand(
   const status = record.status
   if (typeof status !== 'string' || !PRODUCT_STATUSES.has(status as ProductStatusValue)) {
     return validationFailure('status')
+  }
+  const categoryName = normalizeOptionalText(record.categoryName, 'categoryName', 64)
+  const productHeadName = normalizeOptionalText(record.productHeadName, 'productHeadName', 64)
+  if ((categoryName === null) !== (productHeadName === null)) {
+    // 无独立字典表时仍坚持「分类 → 产品头」成对存储，避免半层级数据。
+    return validationFailure('productHeadName', '分类与产品头必须同时填写')
   }
   const supplierValue = normalizeSupplierValue(record.supplierValue)
   if (status === 'ACTIVE' && supplierValue === null) {
@@ -183,6 +202,8 @@ export function normalizeProductCreateCommand(
 
   return Object.freeze({
     name: normalizeText(record.name, 'name', 128),
+    categoryName,
+    productHeadName,
     status: status as ProductStatusValue,
     supplierValue,
     twdSalePrice: normalizeMoney(record.twdSalePrice, 'twdSalePrice', 'TWD'),

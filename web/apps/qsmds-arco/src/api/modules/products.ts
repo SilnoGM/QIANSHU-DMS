@@ -4,6 +4,7 @@ import type {
   ProductListItemDto,
   ProductPageDto,
   ProductsListData,
+  ProductTaxonomyOptionsDto,
   UpdateProductRequestDto,
 } from '../generated/types.gen'
 
@@ -32,6 +33,11 @@ export function createProductsApi(client: AxiosInstance) {
           signal,
         },
       ),
+    taxonomyOptions: (signal: AbortSignal) =>
+      client.get<ProductTaxonomyOptionsDto>('products/taxonomy-options', {
+        errorPresentation: 'local',
+        signal,
+      }),
     create: (
       data: CreateProductRequestDto,
       idempotencyKey: string,

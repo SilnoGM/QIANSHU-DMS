@@ -27,6 +27,8 @@ test('全部业务与审计列顺序固定，编号左固定且技术字段不�
   const expectedColumnIds = [
     'productNo',
     'name',
+    'categoryName',
+    'productHeadName',
     'status',
     'supplier',
     'mainImage',

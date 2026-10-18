@@ -2,6 +2,7 @@ import type {
   ExistingCatalogLine,
   ProductIncrementCandidate,
   ProductSelectionChange,
+  ProductSelectorGroup,
   ProductSelectorItem,
   ProductSelectorQuery,
   SelectedProductItem,
@@ -23,6 +24,8 @@ export function createProductSelectorQueryKey(
     query.currencyCode,
     normalizeProductSelectorKeyword(query.keyword ?? ''),
     query.supplierValue ?? '',
+    query.categoryName ?? '',
+    query.unclassified === true ? 'uncategorized' : '',
   ].join('\u0000')
 }
 
@@ -54,6 +57,40 @@ export function mergeProductSelectorItems(
     byId.set(item.id, item)
   }
   return [...byId.values()]
+}
+
+/**
+ * 分组键必须包含分类：文本型产品头允许跨分类同名，只按产品头分组会把
+ * 两个不同分类的同名系列错误合并。Map 保持服务端已有的分类/产品头顺序。
+ */
+export function groupProductSelectorItems(
+  items: readonly ProductSelectorItem[],
+): readonly ProductSelectorGroup[] {
+  const groups = new Map<string, {
+    categoryName: string | null
+    productHeadName: string | null
+    items: ProductSelectorItem[]
+  }>()
+  for (const item of items) {
+    const key = `${item.categoryName ?? ''}\u0000${item.productHeadName ?? ''}`
+    const existing = groups.get(key)
+    if (existing === undefined) {
+      groups.set(key, {
+        categoryName: item.categoryName,
+        productHeadName: item.productHeadName,
+        items: [item],
+      })
+    }
+    else {
+      existing.items.push(item)
+    }
+  }
+  return [...groups.entries()].map(([key, group]) => ({
+    key,
+    categoryName: group.categoryName,
+    productHeadName: group.productHeadName,
+    items: group.items,
+  }))
 }
 
 export function createExistingCatalogLineIndex(

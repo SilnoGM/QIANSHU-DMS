@@ -32,6 +32,8 @@ export async function createProductRecord(
   return transaction.product.create({
     data: {
       name: input.command.name,
+      categoryName: input.command.categoryName,
+      productHeadName: input.command.productHeadName,
       productNo: input.productNo,
       status: input.command.status,
       supplierValue: input.command.supplierValue,

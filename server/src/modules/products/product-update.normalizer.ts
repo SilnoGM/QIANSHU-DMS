@@ -10,6 +10,8 @@ import {
 const MAX_INT32 = 2_147_483_647
 const MUTABLE_FIELDS = [
   'name',
+  'categoryName',
+  'productHeadName',
   'status',
   'supplierValue',
   'twdSalePrice',
@@ -22,6 +24,8 @@ type ProductMutableField = typeof MUTABLE_FIELDS[number]
 
 export interface ProductUpdateCurrent {
   readonly name: string
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
   readonly status: ProductStatusValue
   readonly supplierValue: string | null
   readonly twdSalePrice: Readonly<{ amount: string | null; currency: string }>
@@ -33,6 +37,8 @@ export interface ProductUpdateCurrent {
 export interface NormalizedProductUpdatePatch {
   readonly expectedVersion: number
   readonly name?: unknown
+  readonly categoryName?: unknown
+  readonly productHeadName?: unknown
   readonly status?: unknown
   readonly supplierValue?: unknown
   readonly twdSalePrice?: unknown

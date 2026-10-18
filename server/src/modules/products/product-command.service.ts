@@ -316,6 +316,18 @@ export class ProductCommandService {
   ): Promise<ProductListItem> {
     const trusted = validateTrustedContext(context)
     const command = normalizeProductCreateCommand(input)
+    if (command.categoryName === null || command.productHeadName === null) {
+      // HTTP DTO 已要求新增必填；此处防止内部调用绕过契约创建无分类产品。
+      throw productException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'VALIDATION_FAILED',
+        '请求参数校验失败',
+        {
+          categoryName: ['分类不能为空'],
+          productHeadName: ['产品头不能为空'],
+        },
+      )
+    }
     const requestFingerprint = calculateProductCreateFingerprint(
       trusted.actorUserId,
       command,

@@ -850,6 +850,8 @@ model DictionaryItem {
 model Product {
   id                   String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                 String        @db.VarChar(128)
+  categoryName         String?       @map("category_name") @db.VarChar(64)
+  productHeadName      String?       @map("product_head_name") @db.VarChar(64)
   productNo            String        @unique(map: "products_product_no_key") @map("product_no") @db.VarChar(64)
   status               ProductStatus @default(DRAFT)
   supplierValue        String?       @map("supplier_value") @db.VarChar(64)
@@ -875,6 +877,7 @@ model Product {
   @@index([status, updatedAt(sort: Desc), id(sort: Desc)], map: "products_status_updated_at_id_idx")
   @@index([supplierValue, updatedAt(sort: Desc), id(sort: Desc)], map: "products_supplier_value_updated_at_id_idx")
   @@index([updatedAt(sort: Desc), id(sort: Desc)], map: "products_updated_at_id_idx")
+  @@index([categoryName, productHeadName, name], map: "products_category_head_name_idx")
   @@map("products")
 }
 

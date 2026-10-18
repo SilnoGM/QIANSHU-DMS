@@ -7,6 +7,8 @@ import {
 
 const current = {
   name: '原产品',
+  categoryName: '原分类',
+  productHeadName: '原产品头',
   status: ProductStatus.DRAFT,
   supplierValue: 'HISTORICAL',
   twdSalePrice: { amount: '10.0000', currency: 'TWD' },

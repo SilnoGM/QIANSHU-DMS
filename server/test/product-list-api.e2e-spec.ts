@@ -36,6 +36,8 @@ interface AuthContextBody {
 interface ProductListItemBody {
   readonly id: string
   readonly name: string
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
   readonly productNo: string
   readonly status: ProductStatus
   readonly supplier: {
@@ -267,6 +269,8 @@ describe('Product list API with isolated PostgreSQL', () => {
         {
           id: effectiveId,
           name: '有效供应商产品',
+          categoryName: '微耕机',
+          productHeadName: '旱地履带',
           productNo: `${PRODUCT_NO_PREFIX}001`,
           status: ProductStatus.ACTIVE,
           supplierValue: supplierValues.effective,
@@ -285,6 +289,8 @@ describe('Product list API with isolated PostgreSQL', () => {
         {
           id: disabledId,
           name: '停用供应商历史产品',
+          categoryName: '微耕机',
+          productHeadName: '四驱四轮',
           productNo: `${PRODUCT_NO_PREFIX}002`,
           status: ProductStatus.INACTIVE,
           supplierValue: supplierValues.disabled,
@@ -296,6 +302,8 @@ describe('Product list API with isolated PostgreSQL', () => {
         {
           id: unknownId,
           name: '未知供应商历史产品',
+          categoryName: '发电机',
+          productHeadName: '汽油发电机',
           productNo: `${PRODUCT_NO_PREFIX}003`,
           status: ProductStatus.INACTIVE,
           supplierValue: supplierValues.unknown,
@@ -439,6 +447,25 @@ describe('Product list API with isolated PostgreSQL', () => {
       .toMatchObject({ supplier: null })
   })
 
+  it('returns taxonomy options from existing product values', async () => {
+    const reader = await createLoggedInBrowser({ productsRead: true })
+    await seedProducts(reader.account.user.id)
+
+    const response = await reader.browser
+      .get('/api/products/taxonomy-options')
+      .expect(200)
+    const body = readResponseBody<{
+      categories: Array<{ name: string, productHeads: string[] }>
+    }>(response)
+    const byName = new Map(body.categories.map(category => [
+      category.name,
+      [...category.productHeads].sort(),
+    ]))
+    expect(byName.get('微耕机')).toEqual(['四驱四轮', '旱地履带'].sort())
+    expect(byName.get('发电机')).toEqual(['汽油发电机'])
+    expect(byName.has('未分类')).toBe(false)
+  })
+
   it('applies exact status and supplier filters, resets empty pages and rejects invalid queries', async () => {
     const reader = await createLoggedInBrowser({ productsRead: true })
     await seedProducts(reader.account.user.id)
@@ -474,6 +501,24 @@ describe('Product list API with isolated PostgreSQL', () => {
       items: [{ productNo: `${PRODUCT_NO_PREFIX}001` }],
     })
 
+    const categoryResponse = await reader.browser
+      .get('/api/products')
+      .query({ categoryName: '微耕机' })
+      .expect(200)
+    const categoryPage = readResponseBody<ProductPageBody>(categoryResponse)
+    expect(categoryPage).toMatchObject({ total: 2 })
+    expect(categoryPage.items.map(item => item.productHeadName).sort())
+      .toEqual(['四驱四轮', '旱地履带'])
+
+    const productHeadResponse = await reader.browser
+      .get('/api/products')
+      .query({ productHeadName: '旱地履带' })
+      .expect(200)
+    expect(readResponseBody<ProductPageBody>(productHeadResponse)).toMatchObject({
+      total: 1,
+      items: [{ productNo: `${PRODUCT_NO_PREFIX}001` }],
+    })
+
     const wrongCase = await reader.browser
       .get('/api/products')
       .query({ supplierValue: supplierValues.effective.toLowerCase() })
@@ -500,6 +545,8 @@ describe('Product list API with isolated PostgreSQL', () => {
       `keyword=${encodeURIComponent('😀'.repeat(129))}`,
       'status=UNKNOWN',
       'supplierValue=%20%20%20',
+      'categoryName=%20%20%20',
+      `productHeadName=${encodeURIComponent('😀'.repeat(65))}`,
     ]) {
       await reader.browser
         .get(`/api/products?${query}`)

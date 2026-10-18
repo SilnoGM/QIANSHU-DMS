@@ -26973,6 +26973,28 @@
             }
           },
           {
+            "name": "categoryName",
+            "required": false,
+            "in": "query",
+            "description": "产品分类精确匹配，不执行 trim 或大小写转换",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "productHeadName",
+            "required": false,
+            "in": "query",
+            "description": "产品头精确匹配，不执行 trim 或大小写转换",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
             "name": "status",
             "required": false,
             "in": "query",
@@ -27464,6 +27486,172 @@
                 "PRODUCT_SUPPLIER_REQUIRED",
                 "PRODUCT_SUPPLIER_UNAVAILABLE",
                 "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/products/taxonomy-options": {
+      "get": {
+        "operationId": "products_taxonomy_options",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductTaxonomyOptionsDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "products"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": false,
+          "session": "required",
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
               ]
             }
           ]
@@ -31394,6 +31582,24 @@
             }
           },
           {
+            "name": "categoryName",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "unclassified",
+            "required": false,
+            "in": "query",
+            "description": "只看未分类产品；与 categoryName 互斥",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "page",
             "required": false,
             "in": "query",
@@ -32205,6 +32411,24 @@
             "schema": {
               "maxLength": 128,
               "type": "string"
+            }
+          },
+          {
+            "name": "categoryName",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "unclassified",
+            "required": false,
+            "in": "query",
+            "description": "只看未分类产品；与 categoryName 互斥",
+            "schema": {
+              "type": "boolean"
             }
           },
           {
@@ -46503,6 +46727,24 @@
             "schema": {
               "maxLength": 128,
               "type": "string"
+            }
+          },
+          {
+            "name": "categoryName",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "unclassified",
+            "required": false,
+            "in": "query",
+            "description": "只看未分类产品；与 categoryName 互斥",
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -82391,6 +82633,16 @@
           "name": {
             "type": "string"
           },
+          "categoryName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 64
+          },
+          "productHeadName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 64
+          },
           "productNo": {
             "type": "string"
           },
@@ -82463,6 +82715,8 @@
         "required": [
           "id",
           "name",
+          "categoryName",
+          "productHeadName",
           "productNo",
           "status",
           "supplier",
@@ -82594,6 +82848,16 @@
             "minLength": 1,
             "maxLength": 128
           },
+          "categoryName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "productHeadName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -82627,12 +82891,48 @@
         },
         "required": [
           "name",
+          "categoryName",
+          "productHeadName",
           "status",
           "supplierValue",
           "twdSalePrice",
           "myrSalePrice",
           "purchaseCost",
           "attributes"
+        ]
+      },
+      "ProductTaxonomyCategoryDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "productHeads": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            }
+          }
+        },
+        "required": [
+          "name",
+          "productHeads"
+        ]
+      },
+      "ProductTaxonomyOptionsDto": {
+        "type": "object",
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductTaxonomyCategoryDto"
+            }
+          }
+        },
+        "required": [
+          "categories"
         ]
       },
       "UpdateProductRequestDto": {
@@ -82642,6 +82942,18 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128
+          },
+          "categoryName": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "productHeadName": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 64
           },
           "status": {
             "type": "string",
@@ -83354,6 +83666,14 @@
           "name": {
             "type": "string"
           },
+          "categoryName": {
+            "type": "string",
+            "nullable": true
+          },
+          "productHeadName": {
+            "type": "string",
+            "nullable": true
+          },
           "supplierValue": {
             "type": "string",
             "nullable": true
@@ -83398,10 +83718,28 @@
           "id",
           "productNo",
           "name",
+          "categoryName",
+          "productHeadName",
           "supplierValue",
           "attributes",
           "standardUnitPriceAmount",
           "currencyCode"
+        ]
+      },
+      "SalesOrderProductOptionCategoryDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "name",
+          "count"
         ]
       },
       "SalesOrderProductOptionsDto": {
@@ -83412,6 +83750,16 @@
             "items": {
               "$ref": "#/components/schemas/SalesOrderProductOptionDto"
             }
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalesOrderProductOptionCategoryDto"
+            }
+          },
+          "unclassifiedCount": {
+            "type": "integer",
+            "minimum": 0
           },
           "page": {
             "type": "integer"
@@ -83425,6 +83773,8 @@
         },
         "required": [
           "items",
+          "categories",
+          "unclassifiedCount",
           "page",
           "pageSize",
           "total"
@@ -86628,6 +86978,14 @@
           "name": {
             "type": "string"
           },
+          "categoryName": {
+            "type": "string",
+            "nullable": true
+          },
+          "productHeadName": {
+            "type": "string",
+            "nullable": true
+          },
           "attributes": {
             "type": "array",
             "items": {
@@ -86663,11 +87021,29 @@
           "id",
           "productNo",
           "name",
+          "categoryName",
+          "productHeadName",
           "attributes",
           "supplierValue",
           "referencePurchaseUnitPriceAmount",
           "currencyCode",
           "mainImage"
+        ]
+      },
+      "PurchaseOrderProductOptionCategoryDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "name",
+          "count"
         ]
       },
       "PurchaseOrderProductOptionsDto": {
@@ -86678,6 +87054,16 @@
             "items": {
               "$ref": "#/components/schemas/PurchaseOrderProductOptionDto"
             }
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderProductOptionCategoryDto"
+            }
+          },
+          "unclassifiedCount": {
+            "type": "integer",
+            "minimum": 0
           },
           "page": {
             "type": "integer"
@@ -86691,6 +87077,8 @@
         },
         "required": [
           "items",
+          "categories",
+          "unclassifiedCount",
           "page",
           "pageSize",
           "total"

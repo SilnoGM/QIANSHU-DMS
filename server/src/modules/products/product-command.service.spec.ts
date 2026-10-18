@@ -37,6 +37,8 @@ const IDEMPOTENCY_KEY = '22222222-2222-4222-8222-222222222222'
 function createInput(): Record<string, unknown> {
   return {
     name: ' Product ',
+    categoryName: ' 分类 ',
+    productHeadName: ' 产品头 ',
     status: 'DRAFT',
     supplierValue: 'SUPPLIER_A',
     twdSalePrice: { amount: '10.20', currency: 'TWD' },
@@ -50,6 +52,8 @@ function createRow(overrides: Partial<ProductQueryRow> = {}): ProductQueryRow {
   return {
     id: '33333333-3333-4333-8333-333333333333',
     name: 'Product',
+    categoryName: '分类',
+    productHeadName: '产品头',
     productNo: 'P202608120001',
     status: ProductStatus.DRAFT,
     supplierValue: 'SUPPLIER_A',

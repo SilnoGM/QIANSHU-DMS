@@ -40,6 +40,8 @@ interface AuthContextBody {
 interface ProductBody {
   readonly id: string
   readonly name: string
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
   readonly productNo: string
   readonly status: ProductStatus
   readonly supplier: {
@@ -513,6 +515,8 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
     const response = await updateProduct(administrator.browser, product.id, {
       expectedVersion: 1,
       name: '  更新后的产品  ',
+      categoryName: ' 新分类 ',
+      productHeadName: ' 新产品头 ',
       status: 'ACTIVE',
       supplierValue: supplierValues.effective,
       twdSalePrice: { amount: '1688.00', currency: 'TWD' },
@@ -525,6 +529,8 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
     expect(body).toMatchObject({
       id: product.id,
       name: '更新后的产品',
+      categoryName: '新分类',
+      productHeadName: '新产品头',
       status: ProductStatus.ACTIVE,
       supplier: { value: supplierValues.effective, state: 'EFFECTIVE' },
       media: { mainImage: null, images: [], videos: [] },
@@ -541,6 +547,8 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
     })
     expect(stored).toMatchObject({
       name: '更新后的产品',
+      categoryName: '新分类',
+      productHeadName: '新产品头',
       productNo: product.productNo,
       createdByUserId: administrator.userId,
       updatedByUserId: administrator.userId,
@@ -564,7 +572,7 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
       targetId: product.id,
       metadata: {
         productNo: product.productNo,
-        changedFields: 'attributes,myrSalePrice,name,purchaseCost,status,twdSalePrice',
+        changedFields: 'attributes,categoryName,myrSalePrice,name,productHeadName,purchaseCost,status,twdSalePrice',
         previousVersion: 1,
         version: 2,
         previousStatus: 'DRAFT',

@@ -46,6 +46,34 @@ export class ProductListQueryDto {
 
   @ApiPropertyOptional({
     type: 'string',
+    minLength: 1,
+    maxLength: 64,
+    description: '产品分类精确匹配，不执行 trim 或大小写转换',
+  })
+  @ValidateIf((_object: ProductListQueryDto, value: unknown) =>
+    value !== undefined,
+  )
+  @IsString({ message: '必须是字符串' })
+  @IsUnicodeCodePointLength(1, 64, { message: '长度必须为 1 到 64 个字符' })
+  @Matches(/\S/u, { message: '不能为空白文本' })
+  categoryName?: string
+
+  @ApiPropertyOptional({
+    type: 'string',
+    minLength: 1,
+    maxLength: 64,
+    description: '产品头精确匹配，不执行 trim 或大小写转换',
+  })
+  @ValidateIf((_object: ProductListQueryDto, value: unknown) =>
+    value !== undefined,
+  )
+  @IsString({ message: '必须是字符串' })
+  @IsUnicodeCodePointLength(1, 64, { message: '长度必须为 1 到 64 个字符' })
+  @Matches(/\S/u, { message: '不能为空白文本' })
+  productHeadName?: string
+
+  @ApiPropertyOptional({
+    type: 'string',
     enum: ProductStatus,
     description: '产品状态精确匹配',
   })

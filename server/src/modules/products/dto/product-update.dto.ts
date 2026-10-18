@@ -44,6 +44,8 @@ export class UpdateProductRequestDto {
     || (
       object.status === undefined
       && object.supplierValue === undefined
+      && object.categoryName === undefined
+      && object.productHeadName === undefined
       && object.twdSalePrice === undefined
       && object.myrSalePrice === undefined
       && object.purchaseCost === undefined
@@ -54,6 +56,36 @@ export class UpdateProductRequestDto {
   @IsUnicodeCodePointLength(1, 128, { message: '长度必须为 1 到 128 个字符' })
   @Matches(/\S/u, { message: '不能为空白文本' })
   name?: string
+
+  @ApiPropertyOptional({
+    type: 'string',
+    nullable: true,
+    minLength: 1,
+    maxLength: 64,
+  })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().normalize('NFC') : value)
+  @ValidateIf((_object: UpdateProductRequestDto, value: unknown) =>
+    value !== undefined && value !== null)
+  @IsString({ message: '必须是字符串或 null' })
+  @IsUnicodeCodePointLength(1, 64, { message: '长度必须为 1 到 64 个字符' })
+  @Matches(/\S/u, { message: '不能为空白文本' })
+  categoryName?: string | null
+
+  @ApiPropertyOptional({
+    type: 'string',
+    nullable: true,
+    minLength: 1,
+    maxLength: 64,
+  })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().normalize('NFC') : value)
+  @ValidateIf((_object: UpdateProductRequestDto, value: unknown) =>
+    value !== undefined && value !== null)
+  @IsString({ message: '必须是字符串或 null' })
+  @IsUnicodeCodePointLength(1, 64, { message: '长度必须为 1 到 64 个字符' })
+  @Matches(/\S/u, { message: '不能为空白文本' })
+  productHeadName?: string | null
 
   @ApiPropertyOptional({ type: 'string', enum: ProductStatus })
   @ValidateIf((_object: UpdateProductRequestDto, value: unknown) =>

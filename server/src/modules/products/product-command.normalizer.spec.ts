@@ -6,6 +6,8 @@ import {
 
 interface ProductInputFixture extends Record<string, unknown> {
   name: string
+  categoryName: string
+  productHeadName: string
   status: string
   supplierValue: null
   twdSalePrice: { amount: string; currency: string }
@@ -17,6 +19,8 @@ interface ProductInputFixture extends Record<string, unknown> {
 function validInput(): ProductInputFixture {
   return {
     name: ' Product ',
+    categoryName: ' 分类 ',
+    productHeadName: ' 产品头 ',
     status: 'DRAFT',
     supplierValue: null,
     twdSalePrice: { amount: '1.0', currency: 'TWD' },
@@ -62,6 +66,8 @@ describe('normalizeProductCreateCommand', () => {
 
     expect(normalized).toEqual({
       name: 'Café',
+      categoryName: '分类',
+      productHeadName: '产品头',
       status: 'DRAFT',
       supplierValue: null,
       twdSalePrice: {
@@ -113,9 +119,29 @@ describe('normalizeProductCreateCommand', () => {
     })
   })
 
+  it('rejects a half-filled taxonomy pair', () => {
+    const categoryOnly = captureApiException(() => normalizeProductCreateCommand({
+      ...validInput(),
+      productHeadName: null,
+    }))
+    expect(categoryOnly.fieldErrors).toEqual({
+      productHeadName: ['分类与产品头必须同时填写'],
+    })
+
+    const productHeadOnly = captureApiException(() => normalizeProductCreateCommand({
+      ...validInput(),
+      categoryName: null,
+    }))
+    expect(productHeadOnly.fieldErrors).toEqual({
+      productHeadName: ['分类与产品头必须同时填写'],
+    })
+  })
+
   it.each([
     ['name', { name: '   ' }],
     ['name', { name: '😀'.repeat(129) }],
+    ['categoryName', { categoryName: '   ' }],
+    ['productHeadName', { productHeadName: '😀'.repeat(65) }],
     ['status', { status: 'UNKNOWN' }],
     ['supplierValue', { supplierValue: '   ' }],
     ['supplierValue', { supplierValue: '😀'.repeat(65) }],

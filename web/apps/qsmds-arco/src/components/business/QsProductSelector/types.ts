@@ -4,6 +4,8 @@ export interface ProductSelectorQuery {
   readonly currencyCode: ProductSelectorCurrency
   readonly keyword?: string
   readonly supplierValue?: string
+  readonly categoryName?: string
+  readonly unclassified?: boolean
   readonly page: number
   readonly pageSize: number
 }
@@ -12,6 +14,8 @@ export interface ProductSelectorItem {
   readonly id: string
   readonly productNo: string
   readonly name: string
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
   readonly supplierValue: string | null
   readonly attributes: readonly Record<string, unknown>[]
   readonly standardUnitPriceAmount: string | null
@@ -22,11 +26,30 @@ export interface ProductSelectorItem {
   }
 }
 
+export interface ProductSelectorCategoryFacet {
+  readonly name: string
+  readonly count: number
+}
+
 export interface ProductSelectorPage {
   readonly items: readonly ProductSelectorItem[]
+  readonly categories: readonly ProductSelectorCategoryFacet[]
+  readonly unclassifiedCount: number
   readonly page: number
   readonly pageSize: number
   readonly total: number
+}
+
+export type ProductSelectorCategoryFilter
+  = | { readonly kind: 'all' }
+    | { readonly kind: 'unclassified' }
+    | { readonly kind: 'category', readonly name: string }
+
+export interface ProductSelectorGroup {
+  readonly key: string
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
+  readonly items: readonly ProductSelectorItem[]
 }
 
 export interface ExistingCatalogLine {

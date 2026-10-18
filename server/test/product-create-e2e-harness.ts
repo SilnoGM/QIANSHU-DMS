@@ -29,6 +29,8 @@ const PRODUCT_CONSUMER_CODE = 'PRODUCT.CREATE'
 
 export interface ProductCreateBody {
   readonly name: string
+  readonly categoryName: string
+  readonly productHeadName: string
   readonly status: 'ACTIVE' | 'DRAFT' | 'INACTIVE'
   readonly supplierValue: string | null
   readonly twdSalePrice: {
@@ -52,6 +54,8 @@ export interface ProductCreateBody {
 interface ProductResponseBody {
   readonly id: string
   readonly name: string
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
   readonly productNo: string
   readonly status: string
   readonly supplier: {
@@ -315,6 +319,8 @@ export class ProductCreateE2eHarness {
   validBody(overrides: Partial<ProductCreateBody> = {}): ProductCreateBody {
     return {
       name: ' Product E2E ',
+      categoryName: ' 农机 ',
+      productHeadName: ' 旱地履带 ',
       status: 'ACTIVE',
       supplierValue: this.supplierValue,
       twdSalePrice: { amount: '1280.50', currency: 'TWD' },
@@ -449,6 +455,8 @@ export class ProductCreateE2eHarness {
     const body = responseBody<ProductResponseBody>(response)
     expect(body).toMatchObject({
       name: 'Product E2E',
+      categoryName: '农机',
+      productHeadName: '旱地履带',
       status: 'ACTIVE',
       supplier: {
         value: this.supplierValue,
@@ -477,6 +485,8 @@ export class ProductCreateE2eHarness {
     })
     expect(product).toMatchObject({
       name: 'Product E2E',
+      categoryName: '农机',
+      productHeadName: '旱地履带',
       productNo: body.productNo,
       status: 'ACTIVE',
       supplierValue: this.supplierValue,

@@ -317,6 +317,8 @@ export interface SalesOrderProductOption {
   readonly id: string
   readonly productNo: string
   readonly name: string
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
   readonly supplierValue: string | null
   readonly attributes: readonly Record<string, unknown>[]
   readonly standardUnitPriceAmount: string | null
@@ -331,12 +333,21 @@ export interface SalesOrderProductOptionsQueryInput {
   readonly currencyCode: 'TWD' | 'MYR'
   readonly keyword?: string
   readonly supplierValue?: string
+  readonly categoryName?: string
+  readonly unclassified?: boolean
   readonly page?: number
   readonly pageSize?: number
 }
 
+export interface SalesOrderProductOptionCategory {
+  readonly name: string
+  readonly count: number
+}
+
 export interface SalesOrderProductOptionsPage {
   readonly items: readonly SalesOrderProductOption[]
+  readonly categories: readonly SalesOrderProductOptionCategory[]
+  readonly unclassifiedCount: number
   readonly page: number
   readonly pageSize: number
   readonly total: number
@@ -931,14 +942,29 @@ export class SalesOrderQueryService {
   async productOptions(
     input: SalesOrderProductOptionsQueryInput,
   ): Promise<SalesOrderProductOptionsPage> {
+    if (input.categoryName !== undefined && input.unclassified === true) {
+      throw new ApiException(
+        422,
+        'VALIDATION_FAILED',
+        '请求参数校验失败',
+        { categoryName: ['分类与未分类筛选不能同时使用'] },
+      )
+    }
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const normalizedKeyword = input.keyword?.trim().normalize('NFKC')
-    const where: Prisma.ProductWhereInput = {
+    const facetWhere: Prisma.ProductWhereInput = {
       status: 'ACTIVE',
       ...(input.supplierValue === undefined
         ? {}
         : { supplierValue: input.supplierValue }),
+    }
+    const where: Prisma.ProductWhereInput = {
+      ...facetWhere,
+      ...(input.categoryName === undefined
+        ? {}
+        : { categoryName: input.categoryName }),
+      ...(input.unclassified === true ? { categoryName: null } : {}),
       ...(normalizedKeyword === undefined || normalizedKeyword.length === 0
         ? {}
         : {
@@ -948,17 +974,24 @@ export class SalesOrderQueryService {
             ],
           }),
     }
-    const [total, rows] = await Promise.all([
+    const [total, rows, facets] = await Promise.all([
       this.prisma.product.count({ where }),
       this.prisma.product.findMany({
         where,
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        orderBy: [
+          { categoryName: 'asc' },
+          { productHeadName: 'asc' },
+          { name: 'asc' },
+          { id: 'asc' },
+        ],
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: {
           id: true,
           productNo: true,
           name: true,
+          categoryName: true,
+          productHeadName: true,
           supplierValue: true,
           attributes: true,
           twdSalePriceAmount: true,
@@ -977,6 +1010,7 @@ export class SalesOrderQueryService {
           },
         },
       }),
+      this.readProductOptionCategoryFacets(facetWhere),
     ])
     const items = rows.map(row => mapSalesOrderProductOption(
       row,
@@ -985,7 +1019,39 @@ export class SalesOrderQueryService {
         `/api/sales-orders/product-options/${productId}/main-image/${productMediaId}/content?currencyCode=${input.currencyCode}`
       ),
     ))
-    return { items, page, pageSize, total }
+    return {
+      items,
+      page,
+      pageSize,
+      total,
+      categories: facets.categories,
+      unclassifiedCount: facets.unclassifiedCount,
+    }
+  }
+
+  private async readProductOptionCategoryFacets(
+    where: Prisma.ProductWhereInput,
+  ): Promise<{
+    readonly categories: readonly SalesOrderProductOptionCategory[]
+    readonly unclassifiedCount: number
+  }> {
+    const rows = await this.prisma.product.groupBy({
+      by: ['categoryName'],
+      where,
+      orderBy: { categoryName: 'asc' },
+      _count: { _all: true },
+    })
+    let unclassifiedCount = 0
+    const categories: SalesOrderProductOptionCategory[] = []
+    for (const row of rows) {
+      if (row.categoryName === null) {
+        unclassifiedCount = row._count._all
+      }
+      else {
+        categories.push({ name: row.categoryName, count: row._count._all })
+      }
+    }
+    return { categories, unclassifiedCount }
   }
 
   async getById(salesOrderId: string): Promise<SalesOrderDetail> {

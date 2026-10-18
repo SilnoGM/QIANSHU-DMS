@@ -46,8 +46,10 @@ export function createProductEditFormModel(
       attribute.title,
       attribute.value,
     )),
+    categoryName: product.categoryName,
     myrSalePriceAmount: product.myrSalePrice.amount,
     name: product.name,
+    productHeadName: product.productHeadName,
     purchaseCostAmount: product.purchaseCost.amount,
     purchaseCostCurrency: product.purchaseCost.currency,
     status: product.status,
@@ -101,6 +103,12 @@ export function buildProductUpdateRequest(
   const baselineBody = baseline.request
   if (currentBody.name !== baselineBody.name) {
     request.name = currentBody.name
+  }
+  if (currentBody.categoryName !== baselineBody.categoryName) {
+    request.categoryName = currentBody.categoryName
+  }
+  if (currentBody.productHeadName !== baselineBody.productHeadName) {
+    request.productHeadName = currentBody.productHeadName
   }
   if (currentBody.status !== baselineBody.status) {
     request.status = currentBody.status
@@ -180,6 +188,18 @@ export function reconcileProductUpdateResult(
     return 'unknown'
   }
   if (request.name !== undefined && actual.name !== request.name) {
+    return 'unknown'
+  }
+  if (
+    request.categoryName !== undefined
+    && actual.categoryName !== request.categoryName
+  ) {
+    return 'unknown'
+  }
+  if (
+    request.productHeadName !== undefined
+    && actual.productHeadName !== request.productHeadName
+  ) {
     return 'unknown'
   }
   if (request.status !== undefined && actual.status !== request.status) {

@@ -13,8 +13,10 @@ export interface ProductAttributeRow {
 
 export interface ProductFormModel {
   attributes: ProductAttributeRow[]
+  categoryName: string | null
   myrSalePriceAmount: string | null
   name: string
+  productHeadName: string | null
   purchaseCostAmount: string | null
   purchaseCostCurrency: string
   status: ProductFormStatus
@@ -28,11 +30,31 @@ export interface ProductMoneyPrecisions {
   twdSalePricePrecision: number
 }
 
+/**
+ * 表单内部请求形状允许分类/产品头为 null：编辑历史产品需要保留存量空值，
+ * 新增边界再由 create wrapper 断言为必填字符串。
+ */
+export interface ProductFormRequest {
+  attributes: CreateProductRequestDto['attributes']
+  categoryName: string | null
+  myrSalePrice: CreateProductRequestDto['myrSalePrice']
+  name: string
+  productHeadName: string | null
+  purchaseCost: CreateProductRequestDto['purchaseCost']
+  status: ProductFormStatus
+  supplierValue: string | null
+  twdSalePrice: CreateProductRequestDto['twdSalePrice']
+}
+
 export type ProductFieldErrors = Readonly<Record<string, string>>
+
+export interface BuildProductFormRequestOptions {
+  readonly requireTaxonomy?: boolean
+}
 
 export type BuildProductFormRequestResult
   = | {
-    readonly request: CreateProductRequestDto
+    readonly request: ProductFormRequest
     readonly valid: true
   }
   | {
@@ -98,8 +120,10 @@ function normalizeMoney(
 export function createProductFormModel(): ProductFormModel {
   return {
     attributes: [],
+    categoryName: null,
     myrSalePriceAmount: null,
     name: '',
+    productHeadName: null,
     purchaseCostAmount: null,
     purchaseCostCurrency: 'CNY',
     status: 'DRAFT',
@@ -179,6 +203,8 @@ export function removeProductAttribute(
 
 export function hasProductFormChanges(model: ProductFormModel): boolean {
   return model.name !== ''
+    || model.categoryName !== null
+    || model.productHeadName !== null
     || model.status !== 'DRAFT'
     || model.supplierValue !== null
     || model.twdSalePriceAmount !== null
@@ -188,6 +214,17 @@ export function hasProductFormChanges(model: ProductFormModel): boolean {
     || model.attributes.length > 0
 }
 
+function normalizeOptionalText(
+  errors: Record<string, string>,
+  field: string,
+  value: string | null,
+  label: string,
+): string | null {
+  return value === null
+    ? null
+    : addTextError(errors, field, value, 64, label)
+}
+
 /**
  * 表单到传输契约的唯一边界。文本在这里 trim/NFC，金额直接消费
  * MoneyInput 纯校验结果；不使用 number，避免 DECIMAL 精度丢失。
@@ -195,9 +232,33 @@ export function hasProductFormChanges(model: ProductFormModel): boolean {
 export function buildProductFormRequest(
   model: ProductFormModel,
   precisions: ProductMoneyPrecisions,
+  options: BuildProductFormRequestOptions = {},
 ): BuildProductFormRequestResult {
   const fieldErrors: Record<string, string> = {}
   const name = addTextError(fieldErrors, 'name', model.name, 128, '产品名称')
+  const categoryName = normalizeOptionalText(
+    fieldErrors,
+    'categoryName',
+    model.categoryName,
+    '分类',
+  )
+  const productHeadName = normalizeOptionalText(
+    fieldErrors,
+    'productHeadName',
+    model.productHeadName,
+    '产品头',
+  )
+  if (options.requireTaxonomy === true) {
+    if (categoryName === null) {
+      fieldErrors.categoryName = '请选择分类'
+    }
+    if (productHeadName === null) {
+      fieldErrors.productHeadName = '请选择产品头'
+    }
+  }
+  else if ((categoryName === null) !== (productHeadName === null)) {
+    fieldErrors.productHeadName = '分类与产品头必须同时填写'
+  }
   if (!PRODUCT_STATUSES.has(model.status)) {
     fieldErrors.status = '产品状态不在白名单内'
   }
@@ -264,8 +325,10 @@ export function buildProductFormRequest(
   return {
     request: {
       attributes,
+      categoryName,
       myrSalePrice: { amount: myrSalePriceAmount, currency: 'MYR' },
       name,
+      productHeadName,
       purchaseCost: {
         amount: purchaseCostAmount,
         currency: model.purchaseCostCurrency,

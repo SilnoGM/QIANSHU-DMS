@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ProductListItemViewModel } from './product-list.logic'
+import type { ProductTaxonomyCategoryDto } from '@/api/generated/types.gen'
 import type {
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
@@ -63,10 +64,12 @@ const detailProduct = ref<ProductListItemViewModel | null>(null)
 const detailLoading = ref(false)
 const detailError = ref('')
 const detailRequestId = ref<string>()
+const taxonomyOptions = shallowRef<readonly ProductTaxonomyCategoryDto[]>([])
 let listRequestVersion = 0
 let listAbortController: AbortController | null = null
 let detailRequestVersion = 0
 let detailAbortController: AbortController | null = null
+let taxonomyAbortController: AbortController | null = null
 let queryRefreshPending = false
 
 const supplierCatalogLoading = computed(() => supplierCatalog.loading.value)
@@ -75,6 +78,21 @@ const supplierCatalogMissing = computed(() => supplierCatalog.missing.value)
 const supplierFilterOptions = computed(() => buildSupplierFilterOptions(
   supplierCatalog.catalog.value,
 ))
+const categoryFilterOptions = computed(() => taxonomyOptions.value.map(category => ({
+  label: category.name,
+  value: category.name,
+})))
+const productHeadFilterOptions = computed(() => {
+  const values = new Set<string>()
+  for (const category of taxonomyOptions.value) {
+    for (const productHead of category.productHeads) {
+      values.add(productHead)
+    }
+  }
+  return [...values]
+    .sort((left, right) => left.localeCompare(right, 'zh-Hans-CN'))
+    .map(value => ({ label: value, value }))
+})
 const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
   {
     key: 'status',
@@ -90,6 +108,18 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
     label: '供应商',
     options: supplierFilterOptions.value,
     placeholder: '选择供应商',
+  },
+  {
+    key: 'categoryName',
+    label: '分类',
+    options: categoryFilterOptions.value,
+    placeholder: '选择分类',
+  },
+  {
+    key: 'productHeadName',
+    label: '产品头',
+    options: productHeadFilterOptions.value,
+    placeholder: '选择产品头',
   },
 ])
 const listErrorDisplay = computed(() => {
@@ -110,6 +140,8 @@ const columns: QsGenericTableColumn<ProductListItemViewModel>[] = [
     title: '产品编号',
   },
   { accessorKey: 'name', id: 'name', minWidth: 180, title: '产品名称' },
+  { accessorKey: 'categoryName', id: 'categoryName', minWidth: 150, title: '分类' },
+  { accessorKey: 'productHeadName', id: 'productHeadName', minWidth: 150, title: '产品头' },
   { accessorKey: 'status', id: 'status', title: '产品状态', width: 120 },
   {
     accessorFn: item => item.supplier?.value ?? null,
@@ -186,6 +218,24 @@ function listResponseIsCurrent(
     latestRequestVersion: listRequestVersion,
     requestVersion,
   })
+}
+
+async function loadTaxonomyOptions(): Promise<void> {
+  taxonomyAbortController?.abort()
+  const controller = new AbortController()
+  taxonomyAbortController = controller
+  try {
+    const response = await productsApi.taxonomyOptions(controller.signal)
+    if (controller.signal.aborted || !canRead.value) {
+      return
+    }
+    taxonomyOptions.value = response.data.categories
+  }
+  catch {
+    if (!controller.signal.aborted) {
+      taxonomyOptions.value = []
+    }
+  }
 }
 
 async function loadProducts(): Promise<void> {
@@ -464,6 +514,7 @@ watch(
 onMounted(() => {
   if (canRead.value) {
     void loadProducts()
+    void loadTaxonomyOptions()
   }
 })
 
@@ -472,6 +523,8 @@ onBeforeUnmount(() => {
   listAbortController?.abort()
   detailRequestVersion += 1
   detailAbortController?.abort()
+  taxonomyAbortController?.abort()
+  taxonomyAbortController = null
 })
 </script>
 

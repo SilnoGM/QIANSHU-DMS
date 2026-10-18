@@ -101,6 +101,22 @@ export class CreateProductRequestDto {
   @Matches(/\S/u, { message: '不能为空白文本' })
   name!: string
 
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 64 })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().normalize('NFC') : value)
+  @IsString({ message: '必须是字符串' })
+  @IsUnicodeCodePointLength(1, 64, { message: '长度必须为 1 到 64 个字符' })
+  @Matches(/\S/u, { message: '不能为空白文本' })
+  categoryName!: string
+
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 64 })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().normalize('NFC') : value)
+  @IsString({ message: '必须是字符串' })
+  @IsUnicodeCodePointLength(1, 64, { message: '长度必须为 1 到 64 个字符' })
+  @Matches(/\S/u, { message: '不能为空白文本' })
+  productHeadName!: string
+
   @ApiProperty({ type: 'string', enum: ProductStatus })
   @IsEnum(ProductStatus, { message: '产品状态不在白名单内' })
   status!: ProductStatus

@@ -308,14 +308,30 @@ const submitReady = computed(() => (
 
 const loadPurchaseProducts: ProductPageLoader = async (query, signal) => {
   if (productMode !== 'CATALOG') {
-    return { items: [], page: query.page, pageSize: query.pageSize, total: 0 }
+    return {
+      items: [],
+      categories: [],
+      unclassifiedCount: 0,
+      page: query.page,
+      pageSize: query.pageSize,
+      total: 0,
+    }
   }
   const supplierValue = query.supplierValue ?? formModel.supplierValue
   if (supplierValue === null || supplierValue === undefined || supplierValue === '') {
-    return { items: [], page: query.page, pageSize: query.pageSize, total: 0 }
+    return {
+      items: [],
+      categories: [],
+      unclassifiedCount: 0,
+      page: query.page,
+      pageSize: query.pageSize,
+      total: 0,
+    }
   }
   const response = await purchaseOrdersApi.productOptions({
     ...(query.keyword === undefined ? {} : { keyword: query.keyword }),
+    ...(query.categoryName === undefined ? {} : { categoryName: query.categoryName }),
+    ...(query.unclassified === true ? { unclassified: true } : {}),
     page: query.page,
     pageSize: query.pageSize,
     supplierValue,

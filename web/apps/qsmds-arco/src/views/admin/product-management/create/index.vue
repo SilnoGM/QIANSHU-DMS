@@ -7,7 +7,7 @@ import type {
   ProductCreateSubmittingState,
   ProductCreateUnknownState,
 } from './product-create.logic'
-import type { CreateProductRequestDto } from '@/api/generated/types.gen'
+import type { CreateProductRequestDto, ProductTaxonomyCategoryDto } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 
 import productsApi from '@/api/modules/products'
@@ -62,10 +62,13 @@ const submitState = shallowRef<ProductCreateSubmissionState>(
 const fieldErrors = ref<ProductCreateFieldErrors>({})
 const formError = ref('')
 const formFailure = shallowRef<ProductCreateApiFailure | null>(null)
+const taxonomyOptions = shallowRef<readonly ProductTaxonomyCategoryDto[]>([])
+const taxonomyState = ref<ProductCreateCatalogState>('loading')
 const discardModalVisible = ref(false)
 const discardIntent = ref<DiscardConfirmationIntent | null>(null)
 let requestVersion = 0
 let submitAbortController: AbortController | null = null
+let taxonomyAbortController: AbortController | null = null
 let pendingNavigationResolver: ((allow: boolean) => void) | null = null
 
 const canCreate = computed(() => auth('products:create'))
@@ -112,6 +115,29 @@ const discardModalTitle = computed(() => discardIntent.value === 'unknown-abando
 const discardModalDescription = computed(() => discardIntent.value === 'unknown-abandon'
   ? '放弃后将清除当前幂等请求，无法再使用同一请求确认结果。'
   : '当前修改尚未保存，放弃后无法恢复。')
+
+async function loadTaxonomyOptions(): Promise<void> {
+  taxonomyAbortController?.abort()
+  const controller = new AbortController()
+  taxonomyAbortController = controller
+  taxonomyState.value = 'loading'
+  try {
+    const response = await productsApi.taxonomyOptions(controller.signal)
+    if (controller.signal.aborted || !canCreate.value) {
+      return
+    }
+    taxonomyOptions.value = response.data.categories
+    taxonomyState.value = response.data.categories.length === 0 ? 'empty' : 'ready'
+  }
+  catch {
+    if (controller.signal.aborted) {
+      return
+    }
+    // 选项接口需要 products:read；仅有 create 权限时降级为自由输入，不阻塞创建。
+    taxonomyOptions.value = []
+    taxonomyState.value = 'error'
+  }
+}
 
 function clearFeedback(): void {
   fieldErrors.value = {}
@@ -205,6 +231,7 @@ async function handleSuccess(
   formModel.value = createProductCreateFormModel()
   clearFeedback()
   toast.success(`产品 ${product.productNo} 创建成功`)
+  void loadTaxonomyOptions()
   if (canRead.value) {
     await router.push({ name: 'adminProductList' })
     return
@@ -412,11 +439,16 @@ watch(
 
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
+  if (canCreate.value) {
+    void loadTaxonomyOptions()
+  }
 })
 
 onBeforeUnmount(() => {
   requestVersion += 1
   submitAbortController?.abort()
+  taxonomyAbortController?.abort()
+  taxonomyAbortController = null
   window.removeEventListener('beforeunload', handleBeforeUnload)
   pendingNavigationResolver?.(false)
   pendingNavigationResolver = null
@@ -541,6 +573,8 @@ onBeforeUnmount(() => {
         :model-value="formModel"
         :currency-catalog-state="currencyCatalogState"
         :supplier-catalog-state="supplierCatalogState"
+        :taxonomy-catalog-state="taxonomyState"
+        :taxonomy-options="taxonomyOptions"
         :twd-currencies="twdCurrencies"
         :myr-currencies="myrCurrencies"
         :purchase-currencies="purchaseCurrencies"
@@ -553,6 +587,7 @@ onBeforeUnmount(() => {
         @cancel="requestCancel"
         @retry-currency-catalog="currencyCatalog.reload"
         @retry-supplier-catalog="supplierCatalog.retry"
+        @retry-taxonomy-catalog="loadTaxonomyOptions"
       />
     </FaPageMain>
 

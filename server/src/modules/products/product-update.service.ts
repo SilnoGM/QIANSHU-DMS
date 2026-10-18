@@ -177,6 +177,8 @@ function mapUpdateError(error: unknown): never {
 function toCurrentProduct(row: ProductUpdateLockRecord): ProductUpdateCurrent {
   return {
     name: row.name,
+    categoryName: row.categoryName,
+    productHeadName: row.productHeadName,
     status: row.status,
     supplierValue: row.supplierValue,
     twdSalePrice: {
@@ -205,6 +207,8 @@ function buildUpdateData(
   } = {}
 
   if (changed.has('name')) data.name = command.name
+  if (changed.has('categoryName')) data.categoryName = command.categoryName
+  if (changed.has('productHeadName')) data.productHeadName = command.productHeadName
   if (changed.has('status')) data.status = command.status
   if (changed.has('supplierValue')) data.supplierValue = command.supplierValue
   if (changed.has('twdSalePrice')) {

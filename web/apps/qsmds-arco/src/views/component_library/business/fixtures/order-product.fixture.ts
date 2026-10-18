@@ -41,6 +41,26 @@ const SUPPLIER_CATALOG: DictionaryCatalog = Object.freeze({
   items: Object.freeze(SUPPLIERS),
 })
 
+function taxonomyFor(index: number): {
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
+} {
+  // 保留少量未分类样本，验收存量留空补录的展示与筛选。
+  if (index % 11 === 0) {
+    return { categoryName: null, productHeadName: null }
+  }
+  if (index % 6 === 0 || index % 6 === 1) {
+    return {
+      categoryName: '配件',
+      productHeadName: index % 6 === 0 ? '挂件' : '肩带',
+    }
+  }
+  return {
+    categoryName: '收纳包',
+    productHeadName: index % 6 === 5 ? '商务通勤' : '城市旅行',
+  }
+}
+
 function product(index: number, currencyCode: ProductSelectorCurrency): ProductSelectorItem {
   const ordinal = String(index).padStart(3, '0')
   const supplier = SUPPLIERS[(index - 1) % SUPPLIERS.length]!
@@ -49,6 +69,7 @@ function product(index: number, currencyCode: ProductSelectorCurrency): ProductS
     id: `00000000-0000-4000-8000-${String(stableOrdinal).padStart(12, '0')}`,
     productNo: `SKU-${currencyCode}-TRAVEL-${ordinal}`,
     name: index % 3 === 0 ? `城市旅行收纳包 长款限定版 ${ordinal}` : `城市旅行收纳包 ${ordinal}`,
+    ...taxonomyFor(index),
     supplierValue: supplier.value,
     attributes: Object.freeze([]),
     // 每七个产品保留一个当前币种无标准价样本，用于验收“全部可选、售价手填”。
@@ -172,15 +193,37 @@ export function createOrderProductFixtureLoader(): ProductPageLoader {
       throw new DOMException('Aborted', 'AbortError')
     }
     const keyword = query.keyword?.toLocaleLowerCase() ?? ''
-    const filtered = ORDER_PRODUCT_FIXTURE_PRODUCTS.filter(item => (
+    const facetBase = ORDER_PRODUCT_FIXTURE_PRODUCTS.filter(item => (
       item.currencyCode === query.currencyCode
       && (query.supplierValue === undefined || item.supplierValue === query.supplierValue)
+    ))
+    const filtered = facetBase.filter(item => (
+      (query.categoryName === undefined || item.categoryName === query.categoryName)
+      && (query.unclassified !== true || item.categoryName === null)
       && (keyword === '' || item.name.toLocaleLowerCase().includes(keyword)
         || item.productNo.toLocaleLowerCase().includes(keyword))
+    )).sort((left, right) => (
+      (left.categoryName ?? '').localeCompare(right.categoryName ?? '', 'zh-Hans-CN')
+      || (left.productHeadName ?? '').localeCompare(right.productHeadName ?? '', 'zh-Hans-CN')
+      || left.name.localeCompare(right.name, 'zh-Hans-CN')
     ))
+    const categoryCounts = new Map<string, number>()
+    let unclassifiedCount = 0
+    for (const item of facetBase) {
+      if (item.categoryName === null) {
+        unclassifiedCount += 1
+      }
+      else {
+        categoryCounts.set(item.categoryName, (categoryCounts.get(item.categoryName) ?? 0) + 1)
+      }
+    }
     const start = (query.page - 1) * query.pageSize
     return {
       items: filtered.slice(start, start + query.pageSize),
+      categories: [...categoryCounts.entries()]
+        .sort(([left], [right]) => left.localeCompare(right, 'zh-Hans-CN'))
+        .map(([name, count]) => ({ name, count })),
+      unclassifiedCount,
       page: query.page,
       pageSize: query.pageSize,
       total: filtered.length,

@@ -179,14 +179,33 @@ export class SalesOrderProductEditQueryService {
 
   async productOptions(
     salesOrderId: string,
-    input: { readonly keyword?: string, readonly page?: number, readonly pageSize?: number },
+    input: {
+      readonly keyword?: string
+      readonly categoryName?: string
+      readonly unclassified?: boolean
+      readonly page?: number
+      readonly pageSize?: number
+    },
   ) {
+    if (input.categoryName !== undefined && input.unclassified === true) {
+      throw new ApiException(
+        422,
+        'VALIDATION_FAILED',
+        '请求参数校验失败',
+        { categoryName: ['分类与未分类筛选不能同时使用'] },
+      )
+    }
     const context = await this.context(salesOrderId)
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const keyword = input.keyword?.trim().normalize('NFKC')
+    const facetWhere: Prisma.ProductWhereInput = { status: 'ACTIVE' }
     const where: Prisma.ProductWhereInput = {
-      status: 'ACTIVE',
+      ...facetWhere,
+      ...(input.categoryName === undefined
+        ? {}
+        : { categoryName: input.categoryName }),
+      ...(input.unclassified === true ? { categoryName: null } : {}),
       ...(keyword === undefined || keyword.length === 0
         ? {}
         : { OR: [
@@ -194,17 +213,24 @@ export class SalesOrderProductEditQueryService {
             { name: { contains: keyword, mode: 'insensitive' } },
           ] }),
     }
-    const [total, rows] = await Promise.all([
+    const [total, rows, categories] = await Promise.all([
       this.prisma.product.count({ where }),
       this.prisma.product.findMany({
         where,
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        orderBy: [
+          { categoryName: 'asc' },
+          { productHeadName: 'asc' },
+          { name: 'asc' },
+          { id: 'asc' },
+        ],
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: {
           id: true,
           productNo: true,
           name: true,
+          categoryName: true,
+          productHeadName: true,
           supplierValue: true,
           attributes: true,
           twdSalePriceAmount: true,
@@ -222,6 +248,12 @@ export class SalesOrderProductEditQueryService {
           },
         },
       }),
+      this.prisma.product.groupBy({
+        by: ['categoryName'],
+        where: facetWhere,
+        orderBy: { categoryName: 'asc' },
+        _count: { _all: true },
+      }),
     ])
     const items = rows.map(row => mapSalesOrderProductOption(
       row,
@@ -230,6 +262,23 @@ export class SalesOrderProductEditQueryService {
         `/api/sales-orders/${salesOrderId}/product-edit-options/${productId}/main-image/${productMediaId}/content`
       ),
     ))
-    return { items, page, pageSize, total }
+    let unclassifiedCount = 0
+    const categoryFacets: { name: string, count: number }[] = []
+    for (const row of categories) {
+      if (row.categoryName === null) {
+        unclassifiedCount = row._count._all
+      }
+      else {
+        categoryFacets.push({ name: row.categoryName, count: row._count._all })
+      }
+    }
+    return {
+      items,
+      page,
+      pageSize,
+      total,
+      categories: categoryFacets,
+      unclassifiedCount,
+    }
   }
 }

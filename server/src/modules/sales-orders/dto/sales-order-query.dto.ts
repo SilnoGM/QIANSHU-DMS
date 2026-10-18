@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import {
+  IsBoolean,
   IsEnum,
   IsIn,
   IsInt,
@@ -22,6 +23,12 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u
 
 function optionalInteger(value: unknown): unknown {
   return typeof value === 'string' && /^\d+$/u.test(value) ? Number(value) : value
+}
+
+function optionalBoolean(value: unknown): unknown {
+  if (value === 'true') return true
+  if (value === 'false') return false
+  return value
 }
 
 export class SalesOrderListQueryDto {
@@ -108,6 +115,23 @@ export class SalesOrderProductOptionsQueryDto {
   @IsUnicodeCodePointLength(1, 64)
   supplierValue?: string
 
+  @ApiProperty({ type: 'string', maxLength: 64, required: false })
+  @IsOptional()
+  @IsString()
+  @IsUnicodeCodePointLength(1, 64)
+  @Matches(/\S/u)
+  categoryName?: string
+
+  @ApiProperty({
+    type: 'boolean',
+    required: false,
+    description: '只看未分类产品；与 categoryName 互斥',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => optionalBoolean(value))
+  @IsBoolean()
+  unclassified?: boolean
+
   @ApiProperty({ type: 'integer', minimum: 1, default: 1, required: false })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => optionalInteger(value))
@@ -149,6 +173,23 @@ export class SalesOrderProductEditOptionsQueryDto {
   @IsString()
   @IsUnicodeCodePointLength(1, 128)
   keyword?: string
+
+  @ApiProperty({ type: 'string', maxLength: 64, required: false })
+  @IsOptional()
+  @IsString()
+  @IsUnicodeCodePointLength(1, 64)
+  @Matches(/\S/u)
+  categoryName?: string
+
+  @ApiProperty({
+    type: 'boolean',
+    required: false,
+    description: '只看未分类产品；与 categoryName 互斥',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => optionalBoolean(value))
+  @IsBoolean()
+  unclassified?: boolean
 
   @ApiProperty({ type: 'integer', minimum: 1, default: 1, required: false })
   @IsOptional()

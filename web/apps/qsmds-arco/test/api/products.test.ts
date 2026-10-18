@@ -38,6 +38,8 @@ test('产品 API 列表读取带精确 query、AbortSignal 与局部呈错', asy
   const controller = new AbortController()
   const query = {
     keyword: 'Product-001',
+    categoryName: '微耕机',
+    productHeadName: '旱地履带',
     page: 2,
     pageSize: 50,
     status: 'ACTIVE' as const,
@@ -55,7 +57,23 @@ test('产品 API 列表读取带精确 query、AbortSignal 与局部呈错', asy
     method: 'get',
     url: 'products',
   }])
-  assert.deepEqual(Object.keys(products), ['list', 'getById', 'create', 'update'])
+  assert.deepEqual(Object.keys(products), [
+    'list',
+    'getById',
+    'taxonomyOptions',
+    'create',
+    'update',
+  ])
+
+  await products.taxonomyOptions(controller.signal)
+  assert.deepEqual(calls[1], {
+    config: {
+      errorPresentation: 'local',
+      signal: controller.signal,
+    },
+    method: 'get',
+    url: 'products/taxonomy-options',
+  })
 })
 
 test('产品详情与编辑使用资源路径、AbortSignal、局部呈错且 PATCH 禁止自动重试', async () => {

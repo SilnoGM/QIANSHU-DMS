@@ -10,6 +10,8 @@ import type { NormalizedProductCreateCommand } from './product-command.normalize
 function normalizedCommand(): NormalizedProductCreateCommand {
   return {
     name: '山茶精华',
+    categoryName: '护肤品',
+    productHeadName: '精华',
     status: ProductStatus.DRAFT,
     supplierValue: 'SUPPLIER_A',
     twdSalePrice: {
@@ -56,6 +58,8 @@ describe('product command persistence', () => {
     }
     expect(createInput.data).toEqual({
       name: '山茶精华',
+      categoryName: '护肤品',
+      productHeadName: '精华',
       productNo: 'P202608120001',
       status: ProductStatus.DRAFT,
       supplierValue: 'SUPPLIER_A',
@@ -75,6 +79,8 @@ describe('product command persistence', () => {
     })
     expect(createInput.select).toMatchObject({
       id: true,
+      categoryName: true,
+      productHeadName: true,
       productNo: true,
       createdBy: { select: { id: true, displayName: true } },
       updatedBy: { select: { id: true, displayName: true } },

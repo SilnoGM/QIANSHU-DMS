@@ -159,6 +159,14 @@ export function buildProductListQuery(input: {
     && input.filters.supplierValue.trim() !== ''
     ? input.filters.supplierValue
     : undefined
+  const categoryName = typeof input.filters.categoryName === 'string'
+    && input.filters.categoryName.trim() !== ''
+    ? input.filters.categoryName
+    : undefined
+  const productHeadName = typeof input.filters.productHeadName === 'string'
+    && input.filters.productHeadName.trim() !== ''
+    ? input.filters.productHeadName
+    : undefined
 
   return {
     page: Number.isSafeInteger(input.page) && input.page > 0 ? input.page : 1,
@@ -166,6 +174,8 @@ export function buildProductListQuery(input: {
     ...(keyword === '' ? {} : { keyword }),
     ...(status === undefined ? {} : { status }),
     ...(supplierValue === undefined ? {} : { supplierValue }),
+    ...(categoryName === undefined ? {} : { categoryName }),
+    ...(productHeadName === undefined ? {} : { productHeadName }),
   }
 }
 

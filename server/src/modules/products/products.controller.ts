@@ -45,6 +45,7 @@ import {
 import {
   ProductListItemDto,
   ProductPageDto,
+  ProductTaxonomyOptionsDto,
 } from './dto/product-response.dto'
 import { ProductCommandService } from './product-command.service'
 import { parseProductIdempotencyKey } from './product-command.normalizer'
@@ -63,6 +64,7 @@ import type { ProductListItem } from './product-query.mapper'
 import {
   ProductQueryService,
   type ProductPage,
+  type ProductTaxonomyOptions,
 } from './product-query.service'
 import { ProductUpdateService } from './product-update.service'
 
@@ -168,6 +170,29 @@ export class ProductsController {
       requestId: getRequestId(request),
       idempotencyKey,
     }, dto)
+  }
+
+  @Get('taxonomy-options')
+  @RequirePermissions('products:read')
+  @ApiContractResponse({
+    status: HttpStatus.OK,
+    type: ProductTaxonomyOptionsDto,
+  })
+  @ApiApplicationContract({
+    operationId: 'products_taxonomy_options',
+    session: 'required',
+    authorization: true,
+    badRequest: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'],
+      },
+    ],
+  })
+  taxonomyOptions(): Promise<ProductTaxonomyOptions> {
+    return this.products.taxonomyOptions()
   }
 
   @Get(':productId')

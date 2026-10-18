@@ -3734,6 +3734,15 @@
     ]
   },
   {
+    "name": "i-lucide:zoom-in",
+    "label": "i-lucide:zoom-in",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue"
+    ]
+  },
+  {
     "name": "i-material-symbols:arrow-drop-down-rounded",
     "label": "i-material-symbols:arrow-drop-down-rounded",
     "category": "通用图标",

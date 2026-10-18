@@ -11,6 +11,8 @@ const ACTOR_ID = '11111111-1111-4111-8111-111111111111'
 function payload(overrides: Record<string, unknown> = {}) {
   return normalizeProductCreateCommand({
     name: ' Cafe\u0301 ',
+    categoryName: ' 分类 ',
+    productHeadName: ' 产品头 ',
     status: 'DRAFT',
     supplierValue: null,
     twdSalePrice: { amount: '1.0', currency: 'TWD' },
@@ -25,10 +27,10 @@ function payload(overrides: Record<string, unknown> = {}) {
 }
 
 describe('calculateProductCreateFingerprint', () => {
-  it('uses the frozen product.create.v1 canonical field sequence', () => {
-    expect(PRODUCT_CREATE_FINGERPRINT_VERSION).toBe('product.create.v1')
+  it('uses the frozen product.create.v2 canonical field sequence', () => {
+    expect(PRODUCT_CREATE_FINGERPRINT_VERSION).toBe('product.create.v2')
     expect(calculateProductCreateFingerprint(ACTOR_ID, payload()))
-      .toBe('f1a460b23261ef36591879c1a78f0eaa57018d0595b208e96640b1df04b47112')
+      .toBe('48007e0983ad085c89f68d83a702f49b323e9bc24c94c8bbf6cc5d9deea2b81b')
   })
 
   it('treats equivalent decimal scale and NFC text as the same payload', () => {
@@ -62,6 +64,8 @@ describe('calculateProductCreateFingerprint', () => {
         ],
       })),
       calculateProductCreateFingerprint(ACTOR_ID, payload({ name: 'Other' })),
+      calculateProductCreateFingerprint(ACTOR_ID, payload({ categoryName: '其他分类' })),
+      calculateProductCreateFingerprint(ACTOR_ID, payload({ productHeadName: '其他产品头' })),
     ]
 
     expect(new Set([baseline, ...variants]).size).toBe(variants.length + 1)

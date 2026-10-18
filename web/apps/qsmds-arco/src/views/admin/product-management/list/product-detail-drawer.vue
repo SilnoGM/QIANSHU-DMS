@@ -125,6 +125,30 @@ function supplierDisplay(product: ProductListItemViewModel): string {
 
       <section class="p-4 border border-border rounded-lg min-w-0">
         <h3 class="qs-type-section-title m-0 mb-3">
+          分类与产品头
+        </h3>
+        <dl class="m-0 gap-3 grid grid-cols-1 sm:grid-cols-2">
+          <div class="p-3 border border-border rounded-lg bg-background min-w-0">
+            <dt class="qs-type-compact-label">
+              分类
+            </dt>
+            <dd class="qs-type-body-medium m-0 mt-1 break-words">
+              {{ product.categoryName ?? '未分类' }}
+            </dd>
+          </div>
+          <div class="p-3 border border-border rounded-lg bg-background min-w-0">
+            <dt class="qs-type-compact-label">
+              产品头
+            </dt>
+            <dd class="qs-type-body-medium m-0 mt-1 break-words">
+              {{ product.productHeadName ?? '未填写产品头' }}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="p-4 border border-border rounded-lg min-w-0">
+        <h3 class="qs-type-section-title m-0 mb-3">
           供应商
         </h3>
         <p class="qs-type-body-medium m-0 break-all">

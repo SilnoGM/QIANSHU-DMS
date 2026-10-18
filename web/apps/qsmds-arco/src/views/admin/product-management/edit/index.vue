@@ -5,6 +5,7 @@ import type {
 } from '../form/product-form.logic'
 import type {
   ProductListItemDto,
+  ProductTaxonomyCategoryDto,
   UpdateProductRequestDto,
 } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
@@ -64,9 +65,12 @@ const fieldErrors = ref<ProductFieldErrors>({})
 const pageError = ref('')
 const requestId = ref<string>()
 const discardVisible = ref(false)
+const taxonomyOptions = shallowRef<readonly ProductTaxonomyCategoryDto[]>([])
+const taxonomyState = ref<CatalogState>('loading')
 let pendingNavigationResolver: ((allow: boolean) => void) | null = null
 let operationVersion = 0
 let operationAbortController: AbortController | null = null
+let taxonomyAbortController: AbortController | null = null
 
 const productId = computed(() => typeof route.params.productId === 'string'
   ? route.params.productId
@@ -159,6 +163,28 @@ function handleMediaProductChange(product: ProductListItemDto): void {
     return
   }
   source.value = product
+}
+
+async function loadTaxonomyOptions(): Promise<void> {
+  taxonomyAbortController?.abort()
+  const controller = new AbortController()
+  taxonomyAbortController = controller
+  taxonomyState.value = 'loading'
+  try {
+    const response = await productsApi.taxonomyOptions(controller.signal)
+    if (controller.signal.aborted || !canManage.value) {
+      return
+    }
+    taxonomyOptions.value = response.data.categories
+    taxonomyState.value = response.data.categories.length === 0 ? 'empty' : 'ready'
+  }
+  catch {
+    if (controller.signal.aborted) {
+      return
+    }
+    taxonomyOptions.value = []
+    taxonomyState.value = 'error'
+  }
 }
 
 async function loadProduct(): Promise<void> {
@@ -402,12 +428,15 @@ onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
   if (canManage.value) {
     void loadProduct()
+    void loadTaxonomyOptions()
   }
 })
 
 onBeforeUnmount(() => {
   operationVersion += 1
   operationAbortController?.abort()
+  taxonomyAbortController?.abort()
+  taxonomyAbortController = null
   window.removeEventListener('beforeunload', handleBeforeUnload)
   pendingNavigationResolver?.(false)
   pendingNavigationResolver = null
@@ -483,6 +512,8 @@ onBeforeUnmount(() => {
           :model-value="formModel"
           :currency-catalog-state="currencyCatalogState"
           :supplier-catalog-state="supplierCatalogState"
+          :taxonomy-catalog-state="taxonomyState"
+          :taxonomy-options="taxonomyOptions"
           :twd-currencies="twdCurrencies"
           :myr-currencies="myrCurrencies"
           :purchase-currencies="purchaseCurrencies"
@@ -494,6 +525,7 @@ onBeforeUnmount(() => {
           @cancel="returnToList"
           @retry-currency-catalog="currencyCatalog.reload"
           @retry-supplier-catalog="supplierCatalog.retry"
+          @retry-taxonomy-catalog="loadTaxonomyOptions"
         />
 
         <ProductMediaPanel

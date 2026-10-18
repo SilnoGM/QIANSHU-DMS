@@ -19,6 +19,8 @@ function createRow(
   return {
     id,
     name: `Product ${id}`,
+    categoryName: null,
+    productHeadName: null,
     productNo: `NO-${id}`,
     status: ProductStatus.DRAFT,
     supplierValue,

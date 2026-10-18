@@ -89,9 +89,11 @@ export interface ProductCreateResponseGuardInput {
 const ATTRIBUTE_FIELD_PATTERN = /^attributes\.(?:\d|[1-4]\d)\.(?:title|value)$/u
 const SIMPLE_FIELD_PATHS = new Set([
   'idempotencyKey',
+  'categoryName',
   'myrSalePrice.amount',
   'myrSalePrice.currency',
   'name',
+  'productHeadName',
   'purchaseCost.amount',
   'purchaseCost.currency',
   'status',
@@ -122,8 +124,10 @@ function cloneAndFreezeRequest(
     Object.freeze({ title: attribute.title, value: attribute.value }))
   return Object.freeze({
     attributes: Object.freeze(attributes),
+    categoryName: request.categoryName,
     myrSalePrice: Object.freeze({ ...request.myrSalePrice }),
     name: request.name,
+    productHeadName: request.productHeadName,
     purchaseCost: Object.freeze({ ...request.purchaseCost }),
     status: request.status,
     supplierValue: request.supplierValue,
@@ -147,7 +151,21 @@ export function buildCreateProductRequest(
   model: ProductCreateFormModel,
   precisions: ProductCreateMoneyPrecisions,
 ) {
-  return buildProductFormRequest(model, precisions)
+  const result = buildProductFormRequest(model, precisions, {
+    requireTaxonomy: true,
+  })
+  if (!result.valid) {
+    return result
+  }
+  // requireTaxonomy 已在表单边界保证非空；这里把内部可空形状收窄为创建契约。
+  return {
+    request: {
+      ...result.request,
+      categoryName: result.request.categoryName as string,
+      productHeadName: result.request.productHeadName as string,
+    },
+    valid: true as const,
+  }
 }
 
 /** HTTP body 仍是不可信输入；未知字段路径只降级为表单级错误。 */

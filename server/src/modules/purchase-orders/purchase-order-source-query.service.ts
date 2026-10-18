@@ -21,6 +21,8 @@ const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 export interface PurchaseOrderProductOptionsInput {
   readonly supplierValue: string
   readonly keyword?: string
+  readonly categoryName?: string
+  readonly unclassified?: boolean
   readonly page?: number
   readonly pageSize?: number
 }
@@ -281,6 +283,14 @@ export class PurchaseOrderSourceQueryService {
   ) {}
 
   async productOptions(input: PurchaseOrderProductOptionsInput) {
+    if (input.categoryName !== undefined && input.unclassified === true) {
+      throw new ApiException(
+        422,
+        'VALIDATION_FAILED',
+        '请求参数校验失败',
+        { categoryName: ['分类与未分类筛选不能同时使用'] },
+      )
+    }
     let supplierValue: string
     try {
       supplierValue = normalizeDictionaryItemValue(input.supplierValue)
@@ -298,11 +308,18 @@ export class PurchaseOrderSourceQueryService {
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const keyword = input.keyword?.trim().normalize('NFKC')
-    const where: Prisma.ProductWhereInput = {
+    const facetWhere: Prisma.ProductWhereInput = {
       status: 'ACTIVE',
       supplierValue,
       purchaseCostAmount: { not: null },
       purchaseCostCurrency: 'CNY',
+    }
+    const where: Prisma.ProductWhereInput = {
+      ...facetWhere,
+      ...(input.categoryName === undefined
+        ? {}
+        : { categoryName: input.categoryName }),
+      ...(input.unclassified === true ? { categoryName: null } : {}),
       ...(keyword === undefined || keyword.length === 0
         ? {}
         : { OR: [
@@ -310,17 +327,24 @@ export class PurchaseOrderSourceQueryService {
             { name: { contains: keyword, mode: 'insensitive' } },
           ] }),
     }
-    const [total, rows] = await Promise.all([
+    const [total, rows, categoryRows] = await Promise.all([
       this.prisma.product.count({ where }),
       this.prisma.product.findMany({
         where,
-        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        orderBy: [
+          { categoryName: 'asc' },
+          { productHeadName: 'asc' },
+          { name: 'asc' },
+          { id: 'asc' },
+        ],
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: {
           id: true,
           productNo: true,
           name: true,
+          categoryName: true,
+          productHeadName: true,
           attributes: true,
           supplierValue: true,
           purchaseCostAmount: true,
@@ -338,7 +362,23 @@ export class PurchaseOrderSourceQueryService {
           },
         },
       }),
+      this.prisma.product.groupBy({
+        by: ['categoryName'],
+        where: facetWhere,
+        orderBy: { categoryName: 'asc' },
+        _count: { _all: true },
+      }),
     ])
+    let unclassifiedCount = 0
+    const categoryFacets: { name: string, count: number }[] = []
+    for (const row of categoryRows) {
+      if (row.categoryName === null) {
+        unclassifiedCount = row._count._all
+      }
+      else {
+        categoryFacets.push({ name: row.categoryName, count: row._count._all })
+      }
+    }
     return {
       items: rows.map((row) => {
         if (row.purchaseCostAmount === null) {
@@ -360,6 +400,8 @@ export class PurchaseOrderSourceQueryService {
           id: row.id,
           productNo: row.productNo,
           name: row.name,
+          categoryName: row.categoryName,
+          productHeadName: row.productHeadName,
           attributes: attributes(row.attributes),
           supplierValue: row.supplierValue as string,
           referencePurchaseUnitPriceAmount: normalizePurchaseOrderReferenceAmount(fixed4(row.purchaseCostAmount)),
@@ -373,6 +415,8 @@ export class PurchaseOrderSourceQueryService {
               },
         }
       }),
+      categories: categoryFacets,
+      unclassifiedCount,
       page,
       pageSize,
       total,

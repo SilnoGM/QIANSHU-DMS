@@ -20,6 +20,8 @@ const createDtoPipe = new ValidationPipe({
 function validCreateBody(): Record<string, unknown> {
   return {
     name: '测试产品',
+    categoryName: '微耕机',
+    productHeadName: '旱地履带',
     status: 'DRAFT',
     supplierValue: null,
     twdSalePrice: { amount: null, currency: 'TWD' },
@@ -38,6 +40,8 @@ describe('ProductListQueryDto', () => {
       pageSize: '100',
       status: 'ACTIVE',
       supplierValue: ' raw-value ',
+      categoryName: '微耕机',
+      productHeadName: '旱地履带',
     })
 
     expect(defaults).toMatchObject({ page: 1, pageSize: 20 })
@@ -47,6 +51,8 @@ describe('ProductListQueryDto', () => {
       pageSize: 100,
       status: 'ACTIVE',
       supplierValue: ' raw-value ',
+      categoryName: '微耕机',
+      productHeadName: '旱地履带',
     })
     expect(await validate(defaults)).toEqual([])
     expect(await validate(complete)).toEqual([])
@@ -61,6 +67,8 @@ describe('ProductListQueryDto', () => {
     { supplierValue: '' },
     { supplierValue: '   ' },
     { supplierValue: '😀'.repeat(65) },
+    { categoryName: '   ' },
+    { productHeadName: '😀'.repeat(65) },
   ])('rejects invalid public query input: %j', async (input) => {
     expect(await validate(plainToInstance(ProductListQueryDto, input)))
       .not.toHaveLength(0)
@@ -80,6 +88,10 @@ describe('CreateProductRequestDto', () => {
 
   it.each([
     ['name', { name: undefined }],
+    ['categoryName', { categoryName: undefined }],
+    ['productHeadName', { productHeadName: undefined }],
+    ['categoryName', { categoryName: '   ' }],
+    ['productHeadName', { productHeadName: '😀'.repeat(65) }],
     ['status', { status: 'UNKNOWN' }],
     ['supplierValue', { supplierValue: undefined }],
     ['twdSalePrice', { twdSalePrice: undefined }],

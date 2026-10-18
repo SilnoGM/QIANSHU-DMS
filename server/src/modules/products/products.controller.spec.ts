@@ -133,6 +133,8 @@ describe('ProductsController', () => {
     await fixture.controller.list(query)
     const dto = {
       name: 'Product',
+      categoryName: '分类',
+      productHeadName: '产品头',
       status: 'DRAFT' as const,
       supplierValue: null,
       twdSalePrice: { amount: null, currency: 'TWD' as const },
@@ -198,6 +200,7 @@ describe('ProductsController', () => {
         'getMediaContent',
         'headMediaContent',
         'list',
+        'taxonomyOptions',
         'update',
         'updateMediaLayout',
         'uploadMedia',
@@ -232,6 +235,7 @@ describe('ProductsController OpenAPI contract', () => {
     expect(Object.keys(document.paths).filter(path =>
       path.startsWith('/api/products')).sort()).toEqual([
       '/api/products',
+      '/api/products/taxonomy-options',
       '/api/products/{productId}',
       '/api/products/{productId}/media',
       '/api/products/{productId}/media/layout',
@@ -377,6 +381,8 @@ describe('ProductsController OpenAPI contract', () => {
       type: 'object',
       required: [
         'name',
+        'categoryName',
+        'productHeadName',
         'status',
         'supplierValue',
         'twdSalePrice',
@@ -387,6 +393,8 @@ describe('ProductsController OpenAPI contract', () => {
     })
     expect(Object.keys(createSchema.properties ?? {})).toEqual([
       'name',
+      'categoryName',
+      'productHeadName',
       'status',
       'supplierValue',
       'twdSalePrice',
@@ -504,6 +512,8 @@ describe('ProductsController OpenAPI contract', () => {
     expect(updateSchema.required).toEqual(['expectedVersion'])
     expect(Object.keys(updateSchema.properties ?? {})).toEqual([
       'name',
+      'categoryName',
+      'productHeadName',
       'status',
       'supplierValue',
       'twdSalePrice',

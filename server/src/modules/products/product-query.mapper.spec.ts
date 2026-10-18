@@ -14,6 +14,8 @@ function createRow(
   return {
     id: 'fd830f03-2b45-4e75-9857-06beea6513ba',
     name: '山茶精华',
+    categoryName: '护肤品',
+    productHeadName: '精华',
     productNo: 'P202608120001',
     status: ProductStatus.DRAFT,
     supplierValue: 'SUPPLIER_A',
@@ -68,6 +70,8 @@ describe('mapProductListItem', () => {
     }, EMPTY_MEDIA)).toEqual({
       id: 'fd830f03-2b45-4e75-9857-06beea6513ba',
       name: '山茶精华',
+      categoryName: '护肤品',
+      productHeadName: '精华',
       productNo: 'P202608120001',
       status: 'DRAFT',
       supplier: {

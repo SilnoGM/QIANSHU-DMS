@@ -32,6 +32,8 @@ function createLock(
   return {
     id: PRODUCT_ID,
     name: '原产品',
+    categoryName: '原分类',
+    productHeadName: '原产品头',
     productNo: 'P202608130001',
     status: ProductStatus.DRAFT,
     supplierValue: 'HISTORICAL',
@@ -53,6 +55,8 @@ function createResponse(
   return {
     id: PRODUCT_ID,
     name: '新产品',
+    categoryName: '原分类',
+    productHeadName: '原产品头',
     productNo: 'P202608130001',
     status: ProductStatus.ACTIVE,
     supplierValue: 'SUPPLIER_A',

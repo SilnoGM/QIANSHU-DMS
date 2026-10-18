@@ -12,8 +12,14 @@ import MoneyInput from '@/components/base/MoneyInput/index.vue'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 
 import ProductAttributesEditor from './product-attributes-editor.vue'
+import ProductTaxonomySelect from './product-taxonomy-select.vue'
 
 export type ProductFormCatalogState = 'empty' | 'error' | 'loading' | 'ready'
+
+export interface ProductTaxonomyCategoryOption {
+  readonly name: string
+  readonly productHeads: readonly string[]
+}
 
 export interface ProductFormExpose {
   applyFieldErrors: (
@@ -42,6 +48,8 @@ const props = withDefaults(defineProps<{
   showActions?: boolean
   submitting?: boolean
   supplierCatalogState?: ProductFormCatalogState
+  taxonomyCatalogState?: ProductFormCatalogState
+  taxonomyOptions?: readonly ProductTaxonomyCategoryOption[]
   twdCurrencies: readonly CurrencyDescriptor[]
 }>(), {
   currencyCatalogState: 'ready',
@@ -52,12 +60,15 @@ const props = withDefaults(defineProps<{
   showActions: true,
   submitting: false,
   supplierCatalogState: 'ready',
+  taxonomyCatalogState: 'ready',
+  taxonomyOptions: () => [],
 })
 
 const emit = defineEmits<{
   cancel: []
   retryCurrencyCatalog: []
   retrySupplierCatalog: []
+  retryTaxonomyCatalog: []
   submit: []
   patch: [value: Partial<ProductFormModel>]
 }>()
@@ -74,6 +85,8 @@ const STATUS_OPTIONS = [
   { label: '停用（INACTIVE）', value: 'INACTIVE' },
 ]
 const SIMPLE_FIELD_ORDER = Object.freeze([
+  'categoryName',
+  'productHeadName',
   'name',
   'status',
   'supplierValue',
@@ -100,6 +113,17 @@ const fixedCurrencyUnavailable = computed(() => (
   )
 ))
 const isEdit = computed(() => props.mode === 'edit')
+const categoryOptions = computed(() => (
+  props.taxonomyOptions.map(category => category.name)
+))
+const productHeadOptions = computed(() => (
+  props.taxonomyOptions.find(category => (
+    category.name === props.modelValue.categoryName
+  ))?.productHeads ?? []
+))
+const taxonomyDisabled = computed(() => (
+  submitLocked.value || props.taxonomyCatalogState === 'loading'
+))
 
 function updateModel(patch: Partial<ProductFormModel>): void {
   if (submitLocked.value) {
@@ -111,6 +135,23 @@ function updateModel(patch: Partial<ProductFormModel>): void {
    * 整个对象并覆盖同一批次内已经到达的金额或属性更新。
    */
   emit('patch', patch)
+}
+
+function handleCategoryUpdate(value: string | null): void {
+  const nextHeads = props.taxonomyOptions.find(category => (
+    category.name === value
+  ))?.productHeads ?? []
+  const keepHead = value !== null
+    && props.modelValue.productHeadName !== null
+    && nextHeads.includes(props.modelValue.productHeadName)
+  updateModel({
+    categoryName: value,
+    productHeadName: keepHead ? props.modelValue.productHeadName : null,
+  })
+}
+
+function handleProductHeadUpdate(value: string | null): void {
+  updateModel({ productHeadName: value })
 }
 
 function handleStatusUpdate(value: unknown): void {
@@ -257,6 +298,81 @@ defineExpose<ProductFormExpose>({
       class="min-w-0 lg:col-span-8"
       content-class="gap-4 grid"
     >
+      <div class="gap-4 grid sm:grid-cols-2">
+        <FaFormItem
+          name="categoryName"
+          label="分类"
+          :required="!isEdit"
+          :description="isEdit
+            ? '历史产品可暂不填写；填写时需与产品头同时有值。'
+            : '选择历史分类，或在下拉中新建。'"
+        >
+          <ProductTaxonomySelect
+            :model-value="modelValue.categoryName"
+            :options="categoryOptions"
+            create-label="新建分类"
+            placeholder="请选择分类"
+            select-label="分类"
+            :disabled="taxonomyDisabled"
+            @update:model-value="handleCategoryUpdate"
+          />
+        </FaFormItem>
+
+        <FaFormItem
+          name="productHeadName"
+          label="产品头"
+          :required="!isEdit"
+          :description="modelValue.categoryName === null
+            ? '请先选择分类，产品头选项会按分类过滤。'
+            : '仅显示当前分类下的产品头，也可新建。'"
+        >
+          <ProductTaxonomySelect
+            :model-value="modelValue.productHeadName"
+            :options="productHeadOptions"
+            create-label="新建产品头"
+            placeholder="请选择产品头"
+            select-label="产品头"
+            :disabled="taxonomyDisabled || modelValue.categoryName === null"
+            @update:model-value="handleProductHeadUpdate"
+          />
+        </FaFormItem>
+      </div>
+
+      <p
+        v-if="taxonomyCatalogState === 'loading'"
+        class="text-xs text-muted-foreground m-0"
+        role="status"
+      >
+        正在加载历史分类…
+      </p>
+      <FaAlert
+        v-else-if="taxonomyCatalogState === 'error'"
+        title="历史分类加载失败"
+        variant="destructive"
+        role="alert"
+      >
+        <template #description>
+          <p class="m-0">
+            仍可直接输入新的分类与产品头；已有选项需重试后加载。
+          </p>
+          <FaButton
+            type="button"
+            variant="outline"
+            class="mt-3 min-h-11 sm:min-h-9"
+            :disabled="submitLocked"
+            @click="emit('retryTaxonomyCatalog')"
+          >
+            重试分类
+          </FaButton>
+        </template>
+      </FaAlert>
+      <p
+        v-else-if="taxonomyCatalogState === 'empty'"
+        class="text-xs text-muted-foreground m-0"
+      >
+        暂无历史分类，可直接新建。
+      </p>
+
       <FaFormItem name="name" label="产品名称" required>
         <FaInput
           :model-value="modelValue.name"

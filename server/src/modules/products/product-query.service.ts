@@ -27,11 +27,22 @@ import {
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 
 export interface ProductListQuery {
+  readonly categoryName?: string
   readonly keyword?: string
   readonly page?: number
   readonly pageSize?: number
+  readonly productHeadName?: string
   readonly status?: ProductStatus
   readonly supplierValue?: string
+}
+
+export interface ProductTaxonomyCategory {
+  readonly name: string
+  readonly productHeads: readonly string[]
+}
+
+export interface ProductTaxonomyOptions {
+  readonly categories: readonly ProductTaxonomyCategory[]
 }
 
 export interface ProductPage {
@@ -91,6 +102,45 @@ export class ProductQueryService {
     }
   }
 
+  /**
+   * 分类与产品头没有独立字典表，选项来自现有产品去重。这里返回全部分类及
+   * 其产品头，供新增/编辑表单按分类级联选择；不写回任何目录数据。
+   */
+  async taxonomyOptions(): Promise<ProductTaxonomyOptions> {
+    try {
+      const rows = await this.prisma.product.findMany({
+        where: {
+          categoryName: { not: null },
+          productHeadName: { not: null },
+        },
+        select: {
+          categoryName: true,
+          productHeadName: true,
+        },
+        orderBy: [
+          { categoryName: 'asc' },
+          { productHeadName: 'asc' },
+        ],
+      })
+      const categories = new Map<string, Set<string>>()
+      for (const row of rows) {
+        if (row.categoryName === null || row.productHeadName === null) continue
+        const heads = categories.get(row.categoryName) ?? new Set<string>()
+        heads.add(row.productHeadName)
+        categories.set(row.categoryName, heads)
+      }
+      return {
+        categories: [...categories.entries()].map(([name, heads]) => ({
+          name,
+          productHeads: [...heads],
+        })),
+      }
+    }
+    catch {
+      throw new ApiException(500, 'INTERNAL_ERROR', '服务器内部错误')
+    }
+  }
+
   async list(input: ProductListQuery): Promise<ProductPage> {
     const query = normalizeProductListQuery(input)
     const where: Prisma.ProductWhereInput = {}
@@ -99,6 +149,12 @@ export class ProductQueryService {
     }
     if (query.supplierValue !== undefined) {
       where.supplierValue = query.supplierValue
+    }
+    if (query.categoryName !== undefined) {
+      where.categoryName = query.categoryName
+    }
+    if (query.productHeadName !== undefined) {
+      where.productHeadName = query.productHeadName
     }
     if (query.keyword !== undefined) {
       // status/supplierValue 位于顶层、名称和编号位于 OR；Prisma 会把这些
