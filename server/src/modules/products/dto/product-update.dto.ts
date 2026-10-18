@@ -31,6 +31,19 @@ export class ProductIdParamDto {
   productId!: string
 }
 
+/** 列表启停专用请求：只允许状态与乐观锁版本，复用产品更新事务。 */
+export class UpdateProductStatusRequestDto {
+  @ApiProperty({ type: 'string', enum: ProductStatus })
+  @IsEnum(ProductStatus, { message: '产品状态不在白名单内' })
+  status!: ProductStatus
+
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: MAX_INT32 })
+  @IsInt({ message: '必须是整数' })
+  @Min(1, { message: '不能小于 1' })
+  @Max(MAX_INT32, { message: '不能超过 2147483647' })
+  expectedVersion!: number
+}
+
 /**
  * 产品编辑只暴露本阶段获准修改的业务字段。媒体、编号、审计字段和 version
  * 不在 DTO 中，因此会被全局 whitelist 直接拒绝，防止调用方越过业务边界。

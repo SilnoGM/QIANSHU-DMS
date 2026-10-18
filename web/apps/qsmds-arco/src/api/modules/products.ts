@@ -6,6 +6,7 @@ import type {
   ProductsListData,
   ProductTaxonomyOptionsDto,
   UpdateProductRequestDto,
+  UpdateProductStatusRequestDto,
 } from '../generated/types.gen'
 
 import api from '../index'
@@ -58,6 +59,19 @@ export function createProductsApi(client: AxiosInstance) {
       {
         errorPresentation: 'local',
         // PATCH 没有幂等键；网络/5xx 后只能 GET 对账，绝不自动重放写请求。
+        retry: false,
+        signal,
+      },
+    ),
+    updateStatus: (
+      productId: string,
+      data: UpdateProductStatusRequestDto,
+      signal: AbortSignal,
+    ) => client.patch<ProductListItemDto>(
+      `products/${encodeURIComponent(productId)}/status`,
+      data,
+      {
+        errorPresentation: 'local',
         retry: false,
         signal,
       },

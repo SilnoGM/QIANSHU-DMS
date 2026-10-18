@@ -2,6 +2,7 @@ import type { AxiosInstance } from 'axios'
 import type {
   CreateProductRequestDto,
   UpdateProductRequestDto,
+  UpdateProductStatusRequestDto,
 } from '../../src/api/generated/types.gen'
 
 import assert from 'node:assert/strict'
@@ -63,6 +64,7 @@ test('产品 API 列表读取带精确 query、AbortSignal 与局部呈错', asy
     'taxonomyOptions',
     'create',
     'update',
+    'updateStatus',
   ])
 
   await products.taxonomyOptions(controller.signal)
@@ -99,9 +101,14 @@ test('产品详情与编辑使用资源路径、AbortSignal、局部呈错且 PA
     expectedVersion: 1,
     name: '新产品',
   }
+  const updateStatus: UpdateProductStatusRequestDto = {
+    expectedVersion: 2,
+    status: 'INACTIVE',
+  }
 
   await products.getById(productId, controller.signal)
   await products.update(productId, update, controller.signal)
+  await products.updateStatus(productId, updateStatus, controller.signal)
 
   assert.deepEqual(calls, [
     {
@@ -121,6 +128,16 @@ test('产品详情与编辑使用资源路径、AbortSignal、局部呈错且 PA
       data: update,
       method: 'patch',
       url: `products/${productId}`,
+    },
+    {
+      config: {
+        errorPresentation: 'local',
+        retry: false,
+        signal: controller.signal,
+      },
+      data: updateStatus,
+      method: 'patch',
+      url: `products/${productId}/status`,
     },
   ])
 })

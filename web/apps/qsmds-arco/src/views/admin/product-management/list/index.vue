@@ -580,7 +580,7 @@ async function submitStatusChange(): Promise<void> {
   let succeeded = false
   let reloadAfterConflict = false
   try {
-    const response = await productsApi.update(target.id, {
+    const response = await productsApi.updateStatus(target.id, {
       expectedVersion: target.version,
       status: nextStatus,
     }, controller.signal)

@@ -8,6 +8,7 @@ import { ProductListQueryDto } from './product-list-query.dto'
 import {
   ProductIdParamDto,
   UpdateProductRequestDto,
+  UpdateProductStatusRequestDto,
 } from './product-update.dto'
 
 const createDtoPipe = new ValidationPipe({
@@ -159,6 +160,33 @@ describe('Product detail and update DTOs', () => {
       name: '仅更新名称',
       expectedVersion: 3,
     })
+  })
+
+  it('accepts the status-only patch shape', async () => {
+    const transformed = await createDtoPipe.transform({
+      status: 'INACTIVE',
+      expectedVersion: 2,
+    }, {
+      type: 'body',
+      metatype: UpdateProductStatusRequestDto,
+    }) as UpdateProductStatusRequestDto
+    expect(transformed).toEqual({
+      status: 'INACTIVE',
+      expectedVersion: 2,
+    })
+  })
+
+  it.each([
+    { expectedVersion: 2 },
+    { status: 'ACTIVE' },
+    { status: 'DRAFT', expectedVersion: 2 },
+    { status: 'INACTIVE', expectedVersion: 0 },
+    { status: 'INACTIVE', expectedVersion: 2, name: '禁止混入' },
+  ])('rejects invalid status-only patch: %j', async (body) => {
+    await expect(createDtoPipe.transform(body, {
+      type: 'body',
+      metatype: UpdateProductStatusRequestDto,
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
   })
 
   it.each([

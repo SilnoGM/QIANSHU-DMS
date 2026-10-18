@@ -41,6 +41,7 @@ import {
 import {
   ProductIdParamDto,
   UpdateProductRequestDto,
+  UpdateProductStatusRequestDto,
 } from './dto/product-update.dto'
 import {
   ProductListItemDto,
@@ -270,6 +271,51 @@ export class ProductsController {
     return result.stream === undefined
       ? undefined
       : new StreamableFile(result.stream)
+  }
+
+  @Patch(':productId/status')
+  @RequirePermissions('products:update')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ProductListItemDto })
+  @ApiApplicationContract({
+    operationId: 'products_update_status',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: [
+          'CSRF_REJECTED',
+          'FORBIDDEN',
+          'PASSWORD_CHANGE_REQUIRED',
+        ],
+      },
+      { status: 404, codes: ['PRODUCT_NOT_FOUND'] },
+      { status: 409, codes: ['PRODUCT_STATE_CHANGED'] },
+      {
+        status: 422,
+        codes: [
+          'PRODUCT_CURRENCY_UNAVAILABLE',
+          'PRODUCT_SUPPLIER_UNAVAILABLE',
+          'VALIDATION_FAILED',
+        ],
+      },
+    ],
+  })
+  updateStatus(
+    @Param() params: ProductIdParamDto,
+    @Body() dto: UpdateProductStatusRequestDto,
+    @Req() request: object,
+  ): Promise<ProductListItem> {
+    return this.updates.update({
+      actorUserId: getRequestAuthContext(request).userId,
+      requestId: getRequestId(request),
+    }, params.productId, dto)
   }
 
   @Patch(':productId')

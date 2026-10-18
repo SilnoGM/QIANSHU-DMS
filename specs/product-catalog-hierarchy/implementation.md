@@ -26,10 +26,10 @@
 | 选品分类 | 左栏显示目录中的空分类/空产品头（0 项） |
 | 合同约束 | 所有外部输入查询使用 Prisma 参数绑定，不拼接 SQL |
 
-产品状态与权限补充：产品创建/编辑接口可能内联新建分类/产品头，因此服务端端点同时要求
+产品状态与权限补充：产品创建/编辑接口可能内联新建分类/产品头，因此通用创建/编辑端点同时要求
 `products:create|update` 与 `product-categories:create`；迁移会为已有产品维护角色补齐
-`product-categories:read/create`。产品列表的启停操作复用 `PATCH /api/products/:productId`，
-因此也走同一端点权限边界。
+`product-categories:read/create`。列表启停使用专用端点
+`PATCH /api/products/:productId/status`，只要求 `products:update`，不会因内联目录权限被阻断。
 
 ## 2. 提交
 
@@ -63,6 +63,8 @@
 
 ### 后端
 
+- 新增专用启停接口 `PATCH /api/products/:productId/status`（`products:update`），请求仅接受
+  `status` + `expectedVersion`；通用编辑接口仍要求 `product-categories:create`。
 - 新增 `ProductTaxonomyService` / `ProductTaxonomyController`：
   - `GET /api/product-categories?supplierValue=...`
   - `POST/PATCH/DELETE /api/product-categories`
@@ -91,7 +93,8 @@
   - 编辑请求不再提交 status。
 - 产品列表：
   - 分类/产品头筛选改为目录 ID，并按供应商作用域展示；
-  - 操作列新增“启用/停用”，带确认弹窗、版本冲突刷新和审计响应更新；
+  - 操作列新增“启用/停用”，走专用 `PATCH /api/products/:productId/status`，带确认弹窗、
+    版本冲突刷新和审计响应更新；
   - 状态筛选与标签移除 `DRAFT`。
 - 新增产品分类管理页：
   - 路由 `/admin/products/categories`，权限 `product-categories:read`；
@@ -139,7 +142,7 @@
 ## 5. 未完成 / 风险
 
 - 全量 e2e 的 `management-api` 偶发 500 属既有环境/负载问题，需后续单独观察；本次未修改该模块。
-- 产品编辑 PATCH 同时承担内联新建目录，端点要求 `product-categories:create`；未来若拆分状态专用
-  端点，可把启停权限收窄为仅 `products:update`。
+- 产品通用编辑 PATCH 仍承担内联新建目录，因此要求 `product-categories:create`；启停已拆分到
+  专用端点，只要求 `products:update`。
 - 菜单/权限分配页是否把四项分类权限加入默认角色，仍由角色权限管理按实际角色决定；迁移只补齐
   产品维护角色 read/create，update/delete 首期仅 `system_admin`。

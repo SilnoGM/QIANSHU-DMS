@@ -189,6 +189,10 @@ describe('ProductsController', () => {
       ProductsController.prototype.update,
     )).toEqual(['products:update', 'product-categories:create'])
     expect(reflector.get(
+      REQUIRED_PERMISSIONS_METADATA,
+      ProductsController.prototype.updateStatus,
+    )).toEqual(['products:update'])
+    expect(reflector.get(
       REQUIRE_AUTHENTICATED_SESSION_METADATA,
       ProductsController,
     )).toBeUndefined()
@@ -208,6 +212,7 @@ describe('ProductsController', () => {
         'taxonomyOptions',
         'update',
         'updateMediaLayout',
+        'updateStatus',
         'uploadMedia',
       ])
   })
@@ -242,6 +247,7 @@ describe('ProductsController OpenAPI contract', () => {
       '/api/products',
       '/api/products/taxonomy-options',
       '/api/products/{productId}',
+      '/api/products/{productId}/status',
       '/api/products/{productId}/media',
       '/api/products/{productId}/media/layout',
       '/api/products/{productId}/media/{productMediaId}',
@@ -526,6 +532,44 @@ describe('ProductsController OpenAPI contract', () => {
       'attributes',
       'expectedVersion',
     ])
+
+    const statusOperation = document.paths['/api/products/{productId}/status']?.patch
+    expect(statusOperation?.operationId).toBe('products_update_status')
+    expect(Reflect.get(statusOperation ?? {}, 'x-qianshu-contract')).toEqual({
+      kind: 'application',
+      authentication: true,
+      authorization: true,
+      resourceLocator: true,
+      conflict: true,
+      validation: true,
+      session: 'required',
+      csrf: true,
+      privateNoStore: true,
+      errors: [
+        {
+          status: 403,
+          codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'],
+        },
+        { status: 404, codes: ['PRODUCT_NOT_FOUND'] },
+        { status: 409, codes: ['PRODUCT_STATE_CHANGED'] },
+        {
+          status: 422,
+          codes: [
+            'PRODUCT_CURRENCY_UNAVAILABLE',
+            'PRODUCT_SUPPLIER_UNAVAILABLE',
+            'VALIDATION_FAILED',
+          ],
+        },
+      ],
+    })
+    expect(statusOperation?.requestBody).toEqual({
+      required: true,
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/UpdateProductStatusRequestDto' },
+        },
+      },
+    })
 
     const responseSchema = document.components?.schemas?.ProductListItemDto
     const mediaSchema = document.components?.schemas?.ProductMediaDto

@@ -137,9 +137,9 @@ test('属性和视频入口可聚焦，新增、查看与编辑接入精确路�
   assert.match(source, /<ProductDetailDrawer/u)
   assert.match(source, /name: 'adminProductEdit'/u)
   assert.match(source, /v-if="canUpdate"/u)
-  assert.match(source, /productsApi\.update/u)
+  assert.match(source, /productsApi\.updateStatus/u)
   assert.match(source, /requestStatusChange/u)
-  assert.doesNotMatch(source, /productsApi\.(?:create|delete)/u)
+  assert.doesNotMatch(source, /productsApi\.(?:update\(|create|delete)/u)
 })
 
 test('Task 15 列表以独立内容权限控制所有媒体 DOM 和预览入口', () => {
