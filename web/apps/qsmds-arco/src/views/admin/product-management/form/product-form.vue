@@ -3,7 +3,6 @@ import type { FormExpose } from '@fantastic-admin/components'
 import type {
   ProductFieldErrors,
   ProductFormModel,
-  ProductFormStatus,
 } from './product-form.logic'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 import type { MoneyValidationResult } from '@/components/base/MoneyInput/logic'
@@ -16,9 +15,16 @@ import ProductTaxonomySelect from './product-taxonomy-select.vue'
 
 export type ProductFormCatalogState = 'empty' | 'error' | 'loading' | 'ready'
 
-export interface ProductTaxonomyCategoryOption {
+export interface ProductTaxonomyHeadOption {
+  readonly id: string
   readonly name: string
-  readonly productHeads: readonly string[]
+}
+
+export interface ProductTaxonomyCategoryOption {
+  readonly id: string
+  readonly name: string
+  readonly supplierValue: string
+  readonly productHeads: readonly ProductTaxonomyHeadOption[]
 }
 
 export interface ProductFormExpose {
@@ -37,6 +43,7 @@ interface ProductAttributesEditorExpose {
 defineOptions({ name: 'ProductForm' })
 
 const props = withDefaults(defineProps<{
+  canCreateTaxonomy?: boolean
   currencyCatalogState?: ProductFormCatalogState
   disabled?: boolean
   fieldErrors?: ProductFieldErrors
@@ -52,6 +59,7 @@ const props = withDefaults(defineProps<{
   taxonomyOptions?: readonly ProductTaxonomyCategoryOption[]
   twdCurrencies: readonly CurrencyDescriptor[]
 }>(), {
+  canCreateTaxonomy: true,
   currencyCatalogState: 'ready',
   disabled: false,
   fieldErrors: () => ({}),
@@ -79,17 +87,11 @@ const localMoneyErrors = ref<ProductFieldErrors>({})
 const twdCurrency = ref('TWD')
 const myrCurrency = ref('MYR')
 
-const STATUS_OPTIONS = [
-  { label: '草稿（DRAFT）', value: 'DRAFT' },
-  { label: '启用（ACTIVE）', value: 'ACTIVE' },
-  { label: '停用（INACTIVE）', value: 'INACTIVE' },
-]
 const SIMPLE_FIELD_ORDER = Object.freeze([
+  'supplierValue',
   'categoryName',
   'productHeadName',
   'name',
-  'status',
-  'supplierValue',
   'twdSalePrice.amount',
   'twdSalePrice.currency',
   'myrSalePrice.amount',
@@ -113,13 +115,26 @@ const fixedCurrencyUnavailable = computed(() => (
   )
 ))
 const isEdit = computed(() => props.mode === 'edit')
+const scopedTaxonomyOptions = computed(() => (
+  props.taxonomyOptions.filter(category => (
+    category.supplierValue === props.modelValue.supplierValue
+  ))
+))
 const categoryOptions = computed(() => (
-  props.taxonomyOptions.map(category => category.name)
+  scopedTaxonomyOptions.value.map(category => category.name)
 ))
 const productHeadOptions = computed(() => (
-  props.taxonomyOptions.find(category => (
+  scopedTaxonomyOptions.value.find(category => (
     category.name === props.modelValue.categoryName
-  ))?.productHeads ?? []
+  ))?.productHeads.map(head => head.name) ?? []
+))
+const statusLabel = computed(() => (
+  props.modelValue.status === 'ACTIVE' ? '启用' : '停用'
+))
+const statusClass = computed(() => (
+  props.modelValue.status === 'ACTIVE'
+    ? 'border-primary/30 bg-primary/10 text-primary'
+    : 'border-border bg-muted text-muted-foreground'
 ))
 const taxonomyDisabled = computed(() => (
   submitLocked.value || props.taxonomyCatalogState === 'loading'
@@ -137,10 +152,18 @@ function updateModel(patch: Partial<ProductFormModel>): void {
   emit('patch', patch)
 }
 
+function handleSupplierUpdate(value: string | null): void {
+  updateModel({
+    categoryName: null,
+    productHeadName: null,
+    supplierValue: value,
+  })
+}
+
 function handleCategoryUpdate(value: string | null): void {
-  const nextHeads = props.taxonomyOptions.find(category => (
+  const nextHeads = scopedTaxonomyOptions.value.find(category => (
     category.name === value
-  ))?.productHeads ?? []
+  ))?.productHeads.map(head => head.name) ?? []
   const keepHead = value !== null
     && props.modelValue.productHeadName !== null
     && nextHeads.includes(props.modelValue.productHeadName)
@@ -152,12 +175,6 @@ function handleCategoryUpdate(value: string | null): void {
 
 function handleProductHeadUpdate(value: string | null): void {
   updateModel({ productHeadName: value })
-}
-
-function handleStatusUpdate(value: unknown): void {
-  if (value === 'DRAFT' || value === 'ACTIVE' || value === 'INACTIVE') {
-    updateModel({ status: value as ProductFormStatus })
-  }
 }
 
 function handleMoneyValidation(
@@ -298,6 +315,57 @@ defineExpose<ProductFormExpose>({
       class="min-w-0 lg:col-span-8"
       content-class="gap-4 grid"
     >
+      <FaFormItem
+        name="supplierValue"
+        label="供应商"
+        required
+        description="必填；分类与产品头选项按该供应商过滤。"
+      >
+        <QsDictionarySelect
+          :model-value="modelValue.supplierValue"
+          dictionary-code="service_provider.supplier"
+          :disabled="submitLocked"
+          placeholder="请选择供应商"
+          @update:model-value="handleSupplierUpdate"
+        />
+      </FaFormItem>
+
+      <p
+        v-if="supplierCatalogState === 'loading'"
+        class="text-xs text-muted-foreground m-0"
+        role="status"
+      >
+        正在加载供应商资料…
+      </p>
+      <FaAlert
+        v-else-if="supplierCatalogState === 'error'"
+        title="供应商资料加载失败"
+        variant="destructive"
+        role="alert"
+      >
+        <template #description>
+          <p class="m-0">
+            供应商为必填项；请重试后再选择。
+          </p>
+          <FaButton
+            type="button"
+            variant="outline"
+            class="mt-3 min-h-11 sm:min-h-9"
+            :disabled="submitLocked"
+            @click="emit('retrySupplierCatalog')"
+          >
+            重试
+          </FaButton>
+        </template>
+      </FaAlert>
+      <FaAlert
+        v-else-if="supplierCatalogState === 'empty'"
+        title="暂无可用供应商"
+        description="没有可用供应商时不能保存产品。"
+        variant="destructive"
+        role="alert"
+      />
+
       <div class="gap-4 grid sm:grid-cols-2">
         <FaFormItem
           name="categoryName"
@@ -305,15 +373,16 @@ defineExpose<ProductFormExpose>({
           :required="!isEdit"
           :description="isEdit
             ? '历史产品可暂不填写；填写时需与产品头同时有值。'
-            : '选择历史分类，或在下拉中新建。'"
+            : '先选择供应商，再选择该供应商下的分类。'"
         >
           <ProductTaxonomySelect
             :model-value="modelValue.categoryName"
             :options="categoryOptions"
+            :allow-create="canCreateTaxonomy"
             create-label="新建分类"
             placeholder="请选择分类"
             select-label="分类"
-            :disabled="taxonomyDisabled"
+            :disabled="taxonomyDisabled || modelValue.supplierValue === null"
             @update:model-value="handleCategoryUpdate"
           />
         </FaFormItem>
@@ -329,6 +398,7 @@ defineExpose<ProductFormExpose>({
           <ProductTaxonomySelect
             :model-value="modelValue.productHeadName"
             :options="productHeadOptions"
+            :allow-create="canCreateTaxonomy"
             create-label="新建产品头"
             placeholder="请选择产品头"
             select-label="产品头"
@@ -353,7 +423,7 @@ defineExpose<ProductFormExpose>({
       >
         <template #description>
           <p class="m-0">
-            仍可直接输入新的分类与产品头；已有选项需重试后加载。
+            已有分类与产品头选项需重试后加载；没有分类权限时只能选择已有值。
           </p>
           <FaButton
             type="button"
@@ -370,7 +440,7 @@ defineExpose<ProductFormExpose>({
         v-else-if="taxonomyCatalogState === 'empty'"
         class="text-xs text-muted-foreground m-0"
       >
-        暂无历史分类，可直接新建。
+        暂无分类目录；有新建权限时可直接创建。
       </p>
 
       <FaFormItem name="name" label="产品名称" required>
@@ -403,76 +473,18 @@ defineExpose<ProductFormExpose>({
     <aside class="min-w-0 lg:col-span-4 lg:row-span-4 lg:self-start">
       <div class="space-y-6 lg:top-4 lg:sticky">
         <FaCard
-          title="状态与供应商"
-          description="ACTIVE 产品必须选择当前有效的供应商。"
-          content-class="gap-4 grid"
+          title="产品状态"
+          :description="isEdit
+            ? '状态只可在产品列表操作列启用或停用，本页不提供状态修改。'
+            : '新建产品保存后默认为启用；之后可在产品列表操作列切换。'"
         >
-          <FaFormItem
-            name="status"
-            label="产品状态"
-            description="草稿可继续完善；启用表示可投入业务使用；停用用于保留历史资料。"
-            required
+          <FaTag
+            variant="outline"
+            class="qs-type-status-tag"
+            :class="statusClass"
           >
-            <FaSelect
-              :model-value="modelValue.status"
-              :options="STATUS_OPTIONS"
-              :disabled="submitLocked"
-              class="w-full"
-              @update:model-value="handleStatusUpdate"
-            />
-          </FaFormItem>
-
-          <FaFormItem
-            name="supplierValue"
-            label="供应商"
-            :required="modelValue.status === 'ACTIVE'"
-            description="保存系统字典的 stable value，不保存显示名称。"
-          >
-            <QsDictionarySelect
-              :model-value="modelValue.supplierValue"
-              dictionary-code="service_provider.supplier"
-              :clearable="modelValue.status !== 'ACTIVE'"
-              :disabled="submitLocked"
-              placeholder="请选择供应商"
-              @update:model-value="updateModel({ supplierValue: $event })"
-            />
-          </FaFormItem>
-
-          <p
-            v-if="supplierCatalogState === 'loading'"
-            class="text-xs text-muted-foreground m-0"
-            role="status"
-          >
-            正在加载供应商资料…
-          </p>
-          <FaAlert
-            v-else-if="supplierCatalogState === 'error'"
-            title="供应商资料加载失败"
-            variant="destructive"
-            role="alert"
-          >
-            <template #description>
-              <p class="m-0">
-                草稿或停用产品可在不选供应商时继续；启用产品请先重试。
-              </p>
-              <FaButton
-                type="button"
-                variant="outline"
-                class="mt-3 min-h-11 sm:min-h-9"
-                :disabled="submitLocked"
-                @click="emit('retrySupplierCatalog')"
-              >
-                重试
-              </FaButton>
-            </template>
-          </FaAlert>
-          <FaAlert
-            v-else-if="supplierCatalogState === 'empty'"
-            title="暂无可用供应商"
-            description="当前不能保存为 ACTIVE 产品。"
-            variant="destructive"
-            role="alert"
-          />
+            {{ statusLabel }}
+          </FaTag>
         </FaCard>
 
         <FaCard title="系统处理" content-class="gap-3 grid">

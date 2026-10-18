@@ -9,7 +9,7 @@ interface ProductInputFixture extends Record<string, unknown> {
   categoryName: string
   productHeadName: string
   status: string
-  supplierValue: null
+  supplierValue: string
   twdSalePrice: { amount: string; currency: string }
   myrSalePrice: { amount: null; currency: string }
   purchaseCost: { amount: string; currency: string }
@@ -21,8 +21,8 @@ function validInput(): ProductInputFixture {
     name: ' Product ',
     categoryName: ' 分类 ',
     productHeadName: ' 产品头 ',
-    status: 'DRAFT',
-    supplierValue: null,
+    status: 'INACTIVE',
+    supplierValue: 'SUPPLIER_A',
     twdSalePrice: { amount: '1.0', currency: 'TWD' },
     myrSalePrice: { amount: null, currency: 'MYR' },
     purchaseCost: { amount: '20.50', currency: 'CNY' },
@@ -68,8 +68,8 @@ describe('normalizeProductCreateCommand', () => {
       name: 'Café',
       categoryName: '分类',
       productHeadName: '产品头',
-      status: 'DRAFT',
-      supplierValue: null,
+      status: 'INACTIVE',
+      supplierValue: 'SUPPLIER_A',
       twdSalePrice: {
         amount: '1.0000',
         currency: 'TWD',
@@ -99,24 +99,28 @@ describe('normalizeProductCreateCommand', () => {
     expect(normalized.attributes[0]?.value).toBe('Réd')
   })
 
-  it('allows null supplier for DRAFT/INACTIVE but requires it for ACTIVE', () => {
-    expect(normalizeProductCreateCommand(validInput()).supplierValue).toBeNull()
+  it('requires a supplier for every status', () => {
+    expect(normalizeProductCreateCommand(validInput()).supplierValue)
+      .toBe('SUPPLIER_A')
     expect(normalizeProductCreateCommand({
       ...validInput(),
-      status: 'INACTIVE',
-    }).supplierValue).toBeNull()
-
-    const error = captureApiException(() => normalizeProductCreateCommand({
-      ...validInput(),
       status: 'ACTIVE',
-    }))
-    expect(error).toMatchObject({
-      code: 'PRODUCT_SUPPLIER_REQUIRED',
-      publicMessage: '启用产品必须选择供应商',
-    })
-    expect(error.fieldErrors).toEqual({
-      supplierValue: ['启用产品必须选择供应商'],
-    })
+    }).supplierValue).toBe('SUPPLIER_A')
+
+    for (const status of ['ACTIVE', 'INACTIVE'] as const) {
+      const error = captureApiException(() => normalizeProductCreateCommand({
+        ...validInput(),
+        status,
+        supplierValue: null,
+      }))
+      expect(error).toMatchObject({
+        code: 'PRODUCT_SUPPLIER_REQUIRED',
+        publicMessage: '请选择供应商',
+      })
+      expect(error.fieldErrors).toEqual({
+        supplierValue: ['请选择供应商'],
+      })
+    }
   })
 
   it('rejects a half-filled taxonomy pair', () => {

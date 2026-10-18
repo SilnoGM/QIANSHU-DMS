@@ -2,6 +2,7 @@
 defineOptions({ name: 'ProductTaxonomySelect' })
 
 const props = withDefaults(defineProps<{
+  allowCreate?: boolean
   createLabel: string
   disabled?: boolean
   modelValue: string | null
@@ -9,6 +10,7 @@ const props = withDefaults(defineProps<{
   placeholder: string
   selectLabel: string
 }>(), {
+  allowCreate: true,
   disabled: false,
 })
 
@@ -34,7 +36,9 @@ const selectOptions = computed(() => {
   ) {
     options.push({ label: props.modelValue, value: props.modelValue })
   }
-  options.push({ label: `＋ ${props.createLabel}`, value: CREATE_OPTION_VALUE })
+  if (props.allowCreate) {
+    options.push({ label: `＋ ${props.createLabel}`, value: CREATE_OPTION_VALUE })
+  }
   return options
 })
 
@@ -55,7 +59,7 @@ function handleSelect(value: unknown): void {
 }
 
 async function openCreate(): Promise<void> {
-  if (props.disabled) {
+  if (props.disabled || !props.allowCreate) {
     return
   }
   creating.value = true

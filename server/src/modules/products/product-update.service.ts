@@ -50,6 +50,10 @@ import {
   type ProductUpdateLockRecord,
   type ProductUpdateRecordData,
 } from './product-update.persistence'
+import {
+  ProductTaxonomyService,
+  type ResolvedProductTaxonomyIds,
+} from './product-taxonomy.service'
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 const REQUEST_ID_MAXIMUM_CODE_POINTS = 64
@@ -200,6 +204,7 @@ function toCurrentProduct(row: ProductUpdateLockRecord): ProductUpdateCurrent {
 function buildUpdateData(
   command: NormalizedProductCreateCommand,
   changedFields: readonly string[],
+  taxonomy: ResolvedProductTaxonomyIds | undefined,
 ): ProductUpdateRecordData {
   const changed = new Set(changedFields)
   const data: {
@@ -207,8 +212,10 @@ function buildUpdateData(
   } = {}
 
   if (changed.has('name')) data.name = command.name
-  if (changed.has('categoryName')) data.categoryName = command.categoryName
-  if (changed.has('productHeadName')) data.productHeadName = command.productHeadName
+  if (taxonomy !== undefined) {
+    data.categoryId = taxonomy.categoryId
+    data.productHeadId = taxonomy.productHeadId
+  }
   if (changed.has('status')) data.status = command.status
   if (changed.has('supplierValue')) data.supplierValue = command.supplierValue
   if (changed.has('twdSalePrice')) {
@@ -239,6 +246,7 @@ export class ProductUpdateService {
     private readonly dictionaryLookup: DictionaryLookupService,
     private readonly currencyLookup: CurrencyLookupService,
     private readonly audit: AuditService,
+    private readonly taxonomies: ProductTaxonomyService,
   ) {}
 
   async update(
@@ -269,15 +277,57 @@ export class ProductUpdateService {
           return this.readResponse(transaction, productId)
         }
 
+        if (
+          target.command.status === ProductStatus.ACTIVE
+          && current.status !== ProductStatus.ACTIVE
+          && (
+            target.command.categoryName === null
+            || target.command.productHeadName === null
+          )
+        ) {
+          throw productException(
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            'VALIDATION_FAILED',
+            '启用产品前必须补全分类与产品头',
+            {
+              categoryName: ['启用产品前必须补全分类'],
+              productHeadName: ['启用产品前必须补全产品头'],
+            },
+          )
+        }
+
         await this.requireChangedDependencies(
           transaction,
           target.command,
           target.changedFields,
         )
+        const taxonomyChanged = (
+          target.changedFields.includes('categoryName')
+          || target.changedFields.includes('productHeadName')
+          || target.changedFields.includes('supplierValue')
+        )
+        const taxonomy = taxonomyChanged
+          ? await this.taxonomies.resolveOrCreateInTransaction(
+              transaction,
+              {
+                actorUserId: trusted.actorUserId,
+                requestId: trusted.requestId,
+              },
+              {
+                supplierValue: target.command.supplierValue,
+                categoryName: target.command.categoryName,
+                productHeadName: target.command.productHeadName,
+              },
+            )
+          : undefined
         await updateProductRecord(transaction, {
           productId,
           actorUserId: trusted.actorUserId,
-          data: buildUpdateData(target.command, target.changedFields),
+          data: buildUpdateData(
+            target.command,
+            target.changedFields,
+            taxonomy,
+          ),
         })
         await this.audit.record(transaction, {
           eventType: AuditEventType.PRODUCT_UPDATED,
@@ -314,10 +364,7 @@ export class ProductUpdateService {
     const validatesAll = command.status === ProductStatus.ACTIVE
 
     // 全局锁序保持 Supplier Type/Item -> Currency codes，避免跨业务更新形成反向锁序。
-    if (
-      command.supplierValue !== null
-      && (validatesAll || changed.has('supplierValue'))
-    ) {
+    if (validatesAll || changed.has('supplierValue')) {
       await this.dictionaryLookup.requireEffectiveValue(transaction, {
         dictionaryCode: SUPPLIER_DICTIONARY_CODE,
         value: command.supplierValue,
@@ -371,11 +418,9 @@ export class ProductUpdateService {
     transaction: Prisma.TransactionClient,
     row: ProductQueryRow,
   ) {
-    return row.supplierValue === null
-      ? null
-      : this.dictionaryLookup.resolveStoredValueInTransaction(transaction, {
-          dictionaryCode: SUPPLIER_DICTIONARY_CODE,
-          value: row.supplierValue,
-        })
+    return this.dictionaryLookup.resolveStoredValueInTransaction(transaction, {
+      dictionaryCode: SUPPLIER_DICTIONARY_CODE,
+      value: row.supplierValue,
+    })
   }
 }

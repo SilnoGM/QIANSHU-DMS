@@ -39,7 +39,7 @@ test('属性编辑器覆盖 50 项、稳定 key、有序操作与可访问错误
   assert.doesNotMatch(source, /gradient|#[\dA-F]{3,8}/i)
 })
 
-test('产品表单组合基础资料、状态供应商、三组金额、属性和创建后媒体说明', async () => {
+test('产品表单组合基础资料、必填供应商、只读状态、三组金额、属性和创建后媒体说明', async () => {
   const source = await readFile(
     new URL('product-form.vue', FORM_ROOT),
     'utf8',
@@ -49,11 +49,14 @@ test('产品表单组合基础资料、状态供应商、三组金额、属性�
   assert.match(source, /aria-busy/)
   assert.match(source, /<FaCard[\s\S]*title="基础资料"/)
   assert.match(source, /label="产品名称"/)
-  assert.match(source, /DRAFT/)
-  assert.match(source, /ACTIVE/)
-  assert.match(source, /INACTIVE/)
+  assert.match(source, /title="产品状态"/)
+  assert.match(source, /statusLabel/)
+  assert.doesNotMatch(source, /name="status"/)
+  assert.doesNotMatch(source, /草稿（DRAFT）/u)
   assert.match(source, /dictionary-code="service_provider\.supplier"/)
-  assert.match(source, /:required="modelValue\.status === 'ACTIVE'"/)
+  assert.match(source, /name="supplierValue"[\s\S]*?required/u)
+  assert.match(source, /canCreateTaxonomy\?: boolean/)
+  assert.match(source, /:allow-create="canCreateTaxonomy"/)
   assert.equal((source.match(/<MoneyInput/g) ?? []).length, 3)
   assert.match(source, /name="twdSalePriceAmount"/)
   assert.match(source, /name="myrSalePriceAmount"/)
@@ -131,7 +134,9 @@ test('创建页编排页头、Catalog、表单、真实 API 与成功分流', as
   assert.match(source, /productsApi\.create/)
   assert.match(source, /@patch="handleModelPatch"/)
   assert.match(source, /formModel\.value = \{[\s\S]*\.\.\.formModel\.value,[\s\S]*\.\.\.patch/u)
-  assert.match(source, /auth\('products:create'\)/)
+  assert.match(source, /authAll\(\[/)
+  assert.match(source, /'products:create',/)
+  assert.match(source, /'product-categories:create',/)
   assert.match(source, /auth\('products:read'\)/)
   assert.match(source, /name: 'adminProductList'/)
   assert.match(source, /产品 \$\{product\.productNo\} 创建成功/)
@@ -167,7 +172,6 @@ test('创建页实施 Catalog 提交门禁、字段错误摘要与提交锁', as
   assert.match(source, /currencyCatalogState\.value !== 'ready'/)
   assert.match(source, /supplierCatalogState\.value !== 'ready'/)
   assert.match(source, /supplierCatalog\.resolve/)
-  assert.match(source, /status === 'ACTIVE'/)
   assert.match(source, /purchaseCostCurrency/)
   assert.match(source, /buildCreateProductRequest/)
   assert.match(source, /formRef\.value\?\.applyFieldErrors/)

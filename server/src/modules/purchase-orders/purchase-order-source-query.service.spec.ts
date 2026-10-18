@@ -64,22 +64,29 @@ function setup() {
   const prisma = {
     $queryRaw: jest.fn<Promise<unknown>, [unknown]>(),
     product: {
-      count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(1),
-      groupBy: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([
-        { categoryName: '农机', productHeadName: '微耕机', _count: { _all: 1 } },
-        { categoryName: null, productHeadName: null, _count: { _all: 0 } },
-      ]),
+      count: jest.fn<Promise<number>, [unknown]>().mockImplementation((args: unknown) => {
+        const where = (args as { where?: { categoryId?: unknown } }).where
+        return Promise.resolve(where?.categoryId === null ? 0 : 1)
+      }),
+      groupBy: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
       findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
         id: 'product-id',
         productNo: 'P-001',
         name: '采购产品',
-        categoryName: '农机',
-        productHeadName: '微耕机',
+        category: { name: '农机' },
+        productHead: { name: '微耕机' },
         attributes: [],
         supplierValue: 'SUPPLIER_A',
         purchaseCostAmount: decimal('12.34'),
         purchaseCostCurrency: 'CNY',
         media: [{ id: 'product-media-id' }],
+      }]),
+    },
+    productCategory: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
+        name: '农机',
+        _count: { products: 1 },
+        productHeads: [{ name: '微耕机', _count: { products: 1 } }],
       }]),
     },
     salesOrder: {

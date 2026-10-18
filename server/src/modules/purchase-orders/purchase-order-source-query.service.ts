@@ -323,11 +323,11 @@ export class PurchaseOrderSourceQueryService {
       ...facetWhere,
       ...(input.categoryName === undefined
         ? {}
-        : { categoryName: input.categoryName }),
+        : { category: { is: { name: input.categoryName } } }),
       ...(input.productHeadName === undefined
         ? {}
-        : { productHeadName: input.productHeadName }),
-      ...(input.unclassified === true ? { categoryName: null } : {}),
+        : { productHead: { is: { name: input.productHeadName } } }),
+      ...(input.unclassified === true ? { categoryId: null } : {}),
       ...(keyword === undefined || keyword.length === 0
         ? {}
         : { OR: [
@@ -340,8 +340,8 @@ export class PurchaseOrderSourceQueryService {
       this.prisma.product.findMany({
         where,
         orderBy: [
-          { categoryName: 'asc' },
-          { productHeadName: 'asc' },
+          { category: { name: 'asc' } },
+          { productHead: { name: 'asc' } },
           { name: 'asc' },
           { id: 'asc' },
         ],
@@ -351,8 +351,8 @@ export class PurchaseOrderSourceQueryService {
           id: true,
           productNo: true,
           name: true,
-          categoryName: true,
-          productHeadName: true,
+          category: { select: { name: true } },
+          productHead: { select: { name: true } },
           attributes: true,
           supplierValue: true,
           purchaseCostAmount: true,
@@ -370,7 +370,10 @@ export class PurchaseOrderSourceQueryService {
           },
         },
       }),
-      readProductOptionCategoryFacets(this.prisma, facetWhere),
+      readProductOptionCategoryFacets(this.prisma, {
+        supplierValue,
+        productWhere: facetWhere,
+      }),
     ])
     return {
       items: rows.map((row) => {
@@ -393,10 +396,10 @@ export class PurchaseOrderSourceQueryService {
           id: row.id,
           productNo: row.productNo,
           name: row.name,
-          categoryName: row.categoryName,
-          productHeadName: row.productHeadName,
+          categoryName: row.category?.name ?? null,
+          productHeadName: row.productHead?.name ?? null,
           attributes: attributes(row.attributes),
-          supplierValue: row.supplierValue as string,
+          supplierValue: row.supplierValue,
           referencePurchaseUnitPriceAmount: normalizePurchaseOrderReferenceAmount(fixed4(row.purchaseCostAmount)),
           currencyCode: 'CNY' as const,
           mainImage: mainImage === undefined

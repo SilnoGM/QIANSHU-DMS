@@ -118,7 +118,7 @@ describe('Sales order product-edit HTTP permission boundary', () => {
       .get(`/api/sales-orders/${SALES_ORDER_ID}/product-edit-context`)
       .expect(200)
     await request(requireApplication().getHttpServer())
-      .get(`/api/sales-orders/${SALES_ORDER_ID}/product-edit-options`)
+      .get(`/api/sales-orders/${SALES_ORDER_ID}/product-edit-options?supplierValue=SUPPLIER_E2E`)
       .expect(200)
   })
 
@@ -130,7 +130,7 @@ describe('Sales order product-edit HTTP permission boundary', () => {
       .expect(403)
       .expect(({ body }) => expect(body).toMatchObject({ code: 'FORBIDDEN' }))
     await request(requireApplication().getHttpServer())
-      .get(`/api/sales-orders/${SALES_ORDER_ID}/product-edit-options`)
+      .get(`/api/sales-orders/${SALES_ORDER_ID}/product-edit-options?supplierValue=SUPPLIER_E2E`)
       .expect(403)
       .expect(({ body }) => expect(body).toMatchObject({ code: 'FORBIDDEN' }))
     await request(requireApplication().getHttpServer())

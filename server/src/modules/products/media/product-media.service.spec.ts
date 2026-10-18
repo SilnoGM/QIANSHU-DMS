@@ -43,7 +43,7 @@ function lock(overrides: Partial<ProductMediaProductLock> = {}): ProductMediaPro
   return {
     id: PRODUCT_ID,
     productNo: 'P202608140001',
-    status: ProductStatus.DRAFT,
+    status: ProductStatus.INACTIVE,
     version: 1,
     ...overrides,
   }
@@ -292,11 +292,11 @@ describe('ProductMediaService', () => {
           action: 'UPLOAD_MEDIA',
           changedFields: 'media',
           mediaType: ProductMediaKind.IMAGE,
-          previousStatus: ProductStatus.DRAFT,
+          previousStatus: ProductStatus.INACTIVE,
           previousVersion: 1,
           productMediaId: IMAGE_MEDIA_ID,
           productNo: 'P202608140001',
-          status: ProductStatus.DRAFT,
+          status: ProductStatus.INACTIVE,
           version: 2,
         },
         outcome: AuditOutcome.SUCCESS,

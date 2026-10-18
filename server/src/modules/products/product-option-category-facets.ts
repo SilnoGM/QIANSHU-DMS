@@ -17,52 +17,60 @@ export interface ProductOptionCategoryFacets {
   readonly unclassifiedCount: number
 }
 
+export interface ProductOptionCategoryFacetInput {
+  readonly supplierValue: string
+  /**
+   * 不含关键词、分类、产品头与未分类条件的基础产品条件；facet 只统计该范围，
+   * 这样切换左侧分类时各分类计数保持稳定。
+   */
+  readonly productWhere: Prisma.ProductWhereInput
+}
+
 /**
- * 选品左栏的分类/产品头 facet。分类与产品头是自由文本，没有字典表；
- * 这里按 (category, head) 分组一次取出两级计数，忽略关键词与已选分类，
- * 但仍受调用方传入的 status/供应商/采购成本等基础条件约束。
+ * 选品左栏 facet 从分类目录读取，包含 0 项分类/产品头；产品计数仍按
+ * ACTIVE + 供应商（以及采购侧成本条件）等基础条件实时聚合。
  */
 export async function readProductOptionCategoryFacets(
   prisma: PrismaService,
-  where: Prisma.ProductWhereInput,
+  input: ProductOptionCategoryFacetInput,
 ): Promise<ProductOptionCategoryFacets> {
-  const rows = await prisma.product.groupBy({
-    by: ['categoryName', 'productHeadName'],
-    where,
-    orderBy: [
-      { categoryName: 'asc' },
-      { productHeadName: 'asc' },
-    ],
-    _count: { _all: true },
-  })
-  const categories = new Map<string, {
-    count: number
-    productHeads: ProductOptionCategoryHeadFacet[]
-  }>()
-  let unclassifiedCount = 0
-  for (const row of rows) {
-    if (row.categoryName === null) {
-      unclassifiedCount += row._count._all
-      continue
-    }
-    const category = categories.get(row.categoryName) ?? {
-      count: 0,
-      productHeads: [],
-    }
-    category.count += row._count._all
-    if (row.productHeadName !== null) {
-      category.productHeads.push({
-        name: row.productHeadName,
-        count: row._count._all,
-      })
-    }
-    categories.set(row.categoryName, category)
+  const productWhere: Prisma.ProductWhereInput = {
+    ...input.productWhere,
+    supplierValue: input.supplierValue,
   }
+  const [categories, unclassifiedCount] = await Promise.all([
+    prisma.productCategory.findMany({
+      where: { supplierValue: input.supplierValue },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      select: {
+        name: true,
+        _count: {
+          select: { products: { where: productWhere } },
+        },
+        productHeads: {
+          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+          select: {
+            name: true,
+            _count: {
+              select: { products: { where: productWhere } },
+            },
+          },
+        },
+      },
+    }),
+    prisma.product.count({
+      where: { ...productWhere, categoryId: null },
+    }),
+  ])
+
   return {
-    categories: [...categories.entries()].map(([name, category]) => ({
-      name,
-      count: category.count,
-      productHeads: category.productHeads,
+    categories: categories.map(category => ({
+      name: category.name,
+      count: category._count.products,
+      productHeads: category.productHeads.map(head => ({
+        name: head.name,
+        count: head._count.products,
+      })),
     })),
     unclassifiedCount,
   }

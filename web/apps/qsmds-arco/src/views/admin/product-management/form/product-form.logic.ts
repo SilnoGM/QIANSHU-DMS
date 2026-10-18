@@ -2,7 +2,7 @@ import type { CreateProductRequestDto } from '@/api/generated/types.gen'
 
 import { validateMoneyString } from '../../../../components/base/MoneyInput/logic'
 
-export type ProductFormStatus = CreateProductRequestDto['status']
+export type ProductFormStatus = NonNullable<CreateProductRequestDto['status']>
 export const MAX_PRODUCT_ATTRIBUTES = 50
 
 export interface ProductAttributeRow {
@@ -42,7 +42,7 @@ export interface ProductFormRequest {
   productHeadName: string | null
   purchaseCost: CreateProductRequestDto['purchaseCost']
   status: ProductFormStatus
-  supplierValue: string | null
+  supplierValue: string
   twdSalePrice: CreateProductRequestDto['twdSalePrice']
 }
 
@@ -63,7 +63,6 @@ export type BuildProductFormRequestResult
   }
 
 const PRODUCT_STATUSES = new Set<ProductFormStatus>([
-  'DRAFT',
   'ACTIVE',
   'INACTIVE',
 ])
@@ -126,7 +125,7 @@ export function createProductFormModel(): ProductFormModel {
     productHeadName: null,
     purchaseCostAmount: null,
     purchaseCostCurrency: 'CNY',
-    status: 'DRAFT',
+    status: 'ACTIVE',
     supplierValue: null,
     twdSalePriceAmount: null,
   }
@@ -205,7 +204,7 @@ export function hasProductFormChanges(model: ProductFormModel): boolean {
   return model.name !== ''
     || model.categoryName !== null
     || model.productHeadName !== null
-    || model.status !== 'DRAFT'
+    || model.status !== 'ACTIVE'
     || model.supplierValue !== null
     || model.twdSalePriceAmount !== null
     || model.myrSalePriceAmount !== null
@@ -266,14 +265,14 @@ export function buildProductFormRequest(
   const supplierValue = model.supplierValue === null
     ? null
     : model.supplierValue.trim()
-  if (supplierValue !== null) {
+  if (supplierValue === null) {
+    fieldErrors.supplierValue = '请选择供应商'
+  }
+  else {
     const supplierLength = codePointLength(supplierValue)
     if (supplierLength === 0 || supplierLength > 64) {
       fieldErrors.supplierValue = '请选择有效供应商'
     }
-  }
-  if (model.status === 'ACTIVE' && supplierValue === null) {
-    fieldErrors.supplierValue = '启用产品必须选择供应商'
   }
 
   const twdSalePriceAmount = normalizeMoney(
@@ -334,7 +333,8 @@ export function buildProductFormRequest(
         currency: model.purchaseCostCurrency,
       },
       status: model.status,
-      supplierValue,
+      // 上面的 supplierValue === null 分支已写入字段错误并在下方失败关闭。
+      supplierValue: supplierValue as string,
       twdSalePrice: { amount: twdSalePriceAmount, currency: 'TWD' },
     },
     valid: true,

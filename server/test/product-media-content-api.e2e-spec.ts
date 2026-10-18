@@ -28,6 +28,7 @@ import { ProductMediaContentService } from '../src/modules/products/media/produc
 import { ProductMediaHttpService } from '../src/modules/products/media/product-media-http.service'
 import { ProductCommandService } from '../src/modules/products/product-command.service'
 import { ProductQueryService } from '../src/modules/products/product-query.service'
+import { ProductTaxonomyService } from '../src/modules/products/product-taxonomy.service'
 import { ProductUpdateService } from '../src/modules/products/product-update.service'
 import { ProductsController } from '../src/modules/products/products.controller'
 
@@ -166,6 +167,9 @@ describe('Product media private content API', () => {
       }, ProductMediaContentService, {
         provide: ProductQueryService,
         useValue: { list: jest.fn(), getById: jest.fn() },
+      }, {
+        provide: ProductTaxonomyService,
+        useValue: { options: jest.fn() },
       }, {
         provide: ProductCommandService,
         useValue: { create: jest.fn() },

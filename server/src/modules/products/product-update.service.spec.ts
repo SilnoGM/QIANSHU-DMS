@@ -32,10 +32,12 @@ function createLock(
   return {
     id: PRODUCT_ID,
     name: '原产品',
+    categoryId: 'category-1',
     categoryName: '原分类',
+    productHeadId: 'head-1',
     productHeadName: '原产品头',
     productNo: 'P202608130001',
-    status: ProductStatus.DRAFT,
+    status: ProductStatus.INACTIVE,
     supplierValue: 'HISTORICAL',
     twdSalePriceAmount: '10',
     twdSalePriceCurrency: 'TWD',
@@ -55,8 +57,8 @@ function createResponse(
   return {
     id: PRODUCT_ID,
     name: '新产品',
-    categoryName: '原分类',
-    productHeadName: '原产品头',
+    category: { id: 'category-1', name: '原分类' },
+    productHead: { id: 'head-1', name: '原产品头' },
     productNo: 'P202608130001',
     status: ProductStatus.ACTIVE,
     supplierValue: 'SUPPLIER_A',
@@ -96,6 +98,10 @@ interface Fixture {
   readonly auditRecord: jest.Mock<
     Promise<Record<string, never>>,
     [Prisma.TransactionClient, RecordAuditEventInput]
+  >
+  readonly resolveOrCreateInTransaction: jest.Mock<
+    Promise<{ readonly categoryId: string, readonly productHeadId: string }>,
+    [Prisma.TransactionClient, { readonly actorUserId: string, readonly requestId: string }, unknown]
   >
 }
 
@@ -190,6 +196,16 @@ function createFixture(options: {
     events.push('audit')
     return Promise.resolve({})
   })
+  const resolveOrCreateInTransaction = jest.fn<
+    Promise<{ readonly categoryId: string, readonly productHeadId: string }>,
+    [Prisma.TransactionClient, { readonly actorUserId: string, readonly requestId: string }, unknown]
+  >(() => {
+    events.push('taxonomy')
+    return Promise.resolve({
+      categoryId: 'category-2',
+      productHeadId: 'head-2',
+    })
+  })
 
   return {
     service: new ProductUpdateService(
@@ -200,6 +216,7 @@ function createFixture(options: {
       } as unknown as DictionaryLookupService,
       { requireEnabledCodes },
       { record: auditRecord } as unknown as AuditService,
+      { resolveOrCreateInTransaction } as unknown as import('./product-taxonomy.service').ProductTaxonomyService,
     ),
     events,
     productUpdate,
@@ -208,6 +225,7 @@ function createFixture(options: {
     requireEnabledCodes,
     resolveStoredValueInTransaction,
     auditRecord,
+    resolveOrCreateInTransaction,
   }
 }
 
@@ -240,6 +258,7 @@ describe('ProductUpdateService', () => {
       'product.lock',
       'supplier',
       'currency',
+      'taxonomy',
       'product.update',
       'audit',
       'product.response',
@@ -256,6 +275,8 @@ describe('ProductUpdateService', () => {
     expect(updateCalls[0]?.[0]).toMatchObject({
       data: {
         name: '新产品',
+        categoryId: 'category-2',
+        productHeadId: 'head-2',
         status: ProductStatus.ACTIVE,
         supplierValue: 'SUPPLIER_A',
         updatedByUserId: ACTOR_ID,
@@ -277,7 +298,7 @@ describe('ProductUpdateService', () => {
         changedFields: 'name,status,supplierValue',
         previousVersion: 1,
         version: 2,
-        previousStatus: ProductStatus.DRAFT,
+        previousStatus: ProductStatus.INACTIVE,
         status: ProductStatus.ACTIVE,
       },
     })
@@ -304,7 +325,7 @@ describe('ProductUpdateService', () => {
     const fixture = createFixture({
       response: createResponse({
         name: '原产品',
-        status: ProductStatus.DRAFT,
+        status: ProductStatus.INACTIVE,
         supplierValue: 'HISTORICAL',
         version: 1,
       }),
@@ -346,7 +367,7 @@ describe('ProductUpdateService', () => {
 
   it('validates only actively changed dependencies on a non-Active target', async () => {
     const fixture = createFixture({
-      response: createResponse({ status: ProductStatus.DRAFT }),
+      response: createResponse({ status: ProductStatus.INACTIVE }),
     })
 
     await updateProduct(fixture, {

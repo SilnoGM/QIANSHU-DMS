@@ -15,7 +15,9 @@ import {
 function product(overrides: Partial<ProductListItemDto> = {}): ProductListItemDto {
   return {
     attributes: [{ title: '颜色', value: '红色' }],
+    categoryId: 'category-1',
     categoryName: '微耕机',
+    productHeadId: 'head-1',
     productHeadName: '旱地履带',
     createdAt: '2026-08-13T01:00:00.000Z',
     createdBy: null,
@@ -29,7 +31,7 @@ function product(overrides: Partial<ProductListItemDto> = {}): ProductListItemDt
     name: '原产品',
     productNo: 'P202608130001',
     purchaseCost: { amount: '5.5', currency: 'CNY' },
-    status: 'DRAFT',
+    status: 'INACTIVE',
     supplier: {
       label: null,
       state: 'UNKNOWN',
@@ -62,7 +64,7 @@ test('详情转换为编辑模型并保留未知历史供应商与稳定属性 k
     productHeadName: '旱地履带',
     purchaseCostAmount: '5.5',
     purchaseCostCurrency: 'CNY',
-    status: 'DRAFT',
+    status: 'INACTIVE',
     supplierValue: 'HISTORICAL',
     twdSalePriceAmount: '10',
   })

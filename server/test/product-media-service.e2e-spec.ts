@@ -85,6 +85,8 @@ describeExclusive('ProductMediaService with isolated PostgreSQL', () => {
         createdByUserId: actorId,
         name: `ProductMedia ${label}`,
         productNo: `PM-${suffix}-${label}`,
+        status: 'INACTIVE',
+        supplierValue: 'MEDIA_E2E_SUPPLIER',
         updatedByUserId: actorId,
       },
       select: { id: true },

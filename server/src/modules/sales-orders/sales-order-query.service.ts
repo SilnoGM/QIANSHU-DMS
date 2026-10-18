@@ -323,7 +323,7 @@ export interface SalesOrderProductOption {
   readonly name: string
   readonly categoryName: string | null
   readonly productHeadName: string | null
-  readonly supplierValue: string | null
+  readonly supplierValue: string
   readonly attributes: readonly Record<string, unknown>[]
   readonly standardUnitPriceAmount: string | null
   readonly currencyCode: 'TWD' | 'MYR'
@@ -336,7 +336,7 @@ export interface SalesOrderProductOption {
 export interface SalesOrderProductOptionsQueryInput {
   readonly currencyCode: 'TWD' | 'MYR'
   readonly keyword?: string
-  readonly supplierValue?: string
+  readonly supplierValue: string
   readonly categoryName?: string
   readonly productHeadName?: string
   readonly unclassified?: boolean
@@ -958,19 +958,17 @@ export class SalesOrderQueryService {
     const normalizedKeyword = input.keyword?.trim().normalize('NFKC')
     const facetWhere: Prisma.ProductWhereInput = {
       status: 'ACTIVE',
-      ...(input.supplierValue === undefined
-        ? {}
-        : { supplierValue: input.supplierValue }),
+      supplierValue: input.supplierValue,
     }
     const where: Prisma.ProductWhereInput = {
       ...facetWhere,
       ...(input.categoryName === undefined
         ? {}
-        : { categoryName: input.categoryName }),
+        : { category: { is: { name: input.categoryName } } }),
       ...(input.productHeadName === undefined
         ? {}
-        : { productHeadName: input.productHeadName }),
-      ...(input.unclassified === true ? { categoryName: null } : {}),
+        : { productHead: { is: { name: input.productHeadName } } }),
+      ...(input.unclassified === true ? { categoryId: null } : {}),
       ...(normalizedKeyword === undefined || normalizedKeyword.length === 0
         ? {}
         : {
@@ -985,8 +983,8 @@ export class SalesOrderQueryService {
       this.prisma.product.findMany({
         where,
         orderBy: [
-          { categoryName: 'asc' },
-          { productHeadName: 'asc' },
+          { category: { name: 'asc' } },
+          { productHead: { name: 'asc' } },
           { name: 'asc' },
           { id: 'asc' },
         ],
@@ -996,8 +994,8 @@ export class SalesOrderQueryService {
           id: true,
           productNo: true,
           name: true,
-          categoryName: true,
-          productHeadName: true,
+          category: { select: { name: true } },
+          productHead: { select: { name: true } },
           supplierValue: true,
           attributes: true,
           twdSalePriceAmount: true,
@@ -1016,7 +1014,10 @@ export class SalesOrderQueryService {
           },
         },
       }),
-      readProductOptionCategoryFacets(this.prisma, facetWhere),
+      readProductOptionCategoryFacets(this.prisma, {
+        supplierValue: input.supplierValue,
+        productWhere: facetWhere,
+      }),
     ])
     const items = rows.map(row => mapSalesOrderProductOption(
       row,

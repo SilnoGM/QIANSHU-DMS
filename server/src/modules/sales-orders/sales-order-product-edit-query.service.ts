@@ -184,6 +184,7 @@ export class SalesOrderProductEditQueryService {
     salesOrderId: string,
     input: {
       readonly keyword?: string
+      readonly supplierValue: string
       readonly categoryName?: string
       readonly productHeadName?: string
       readonly unclassified?: boolean
@@ -206,16 +207,19 @@ export class SalesOrderProductEditQueryService {
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const keyword = input.keyword?.trim().normalize('NFKC')
-    const facetWhere: Prisma.ProductWhereInput = { status: 'ACTIVE' }
+    const facetWhere: Prisma.ProductWhereInput = {
+      status: 'ACTIVE',
+      supplierValue: input.supplierValue,
+    }
     const where: Prisma.ProductWhereInput = {
       ...facetWhere,
       ...(input.categoryName === undefined
         ? {}
-        : { categoryName: input.categoryName }),
+        : { category: { is: { name: input.categoryName } } }),
       ...(input.productHeadName === undefined
         ? {}
-        : { productHeadName: input.productHeadName }),
-      ...(input.unclassified === true ? { categoryName: null } : {}),
+        : { productHead: { is: { name: input.productHeadName } } }),
+      ...(input.unclassified === true ? { categoryId: null } : {}),
       ...(keyword === undefined || keyword.length === 0
         ? {}
         : { OR: [
@@ -228,8 +232,8 @@ export class SalesOrderProductEditQueryService {
       this.prisma.product.findMany({
         where,
         orderBy: [
-          { categoryName: 'asc' },
-          { productHeadName: 'asc' },
+          { category: { name: 'asc' } },
+          { productHead: { name: 'asc' } },
           { name: 'asc' },
           { id: 'asc' },
         ],
@@ -239,8 +243,8 @@ export class SalesOrderProductEditQueryService {
           id: true,
           productNo: true,
           name: true,
-          categoryName: true,
-          productHeadName: true,
+          category: { select: { name: true } },
+          productHead: { select: { name: true } },
           supplierValue: true,
           attributes: true,
           twdSalePriceAmount: true,
@@ -258,7 +262,10 @@ export class SalesOrderProductEditQueryService {
           },
         },
       }),
-      readProductOptionCategoryFacets(this.prisma, facetWhere),
+      readProductOptionCategoryFacets(this.prisma, {
+        supplierValue: input.supplierValue,
+        productWhere: facetWhere,
+      }),
     ])
     const items = rows.map(row => mapSalesOrderProductOption(
       row,

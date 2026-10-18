@@ -12,7 +12,7 @@ function normalizedCommand(): NormalizedProductCreateCommand {
     name: '山茶精华',
     categoryName: '护肤品',
     productHeadName: '精华',
-    status: ProductStatus.DRAFT,
+    status: ProductStatus.INACTIVE,
     supplierValue: 'SUPPLIER_A',
     twdSalePrice: {
       amount: '1280.5000',
@@ -49,6 +49,8 @@ describe('product command persistence', () => {
     await expect(createProductRecord(transaction, {
       productNo: 'P202608120001',
       actorUserId: '11111111-1111-4111-8111-111111111111',
+      categoryId: '44444444-4444-4444-8444-444444444444',
+      productHeadId: '55555555-5555-4555-8555-555555555555',
       command,
     })).resolves.toBe(created)
 
@@ -58,10 +60,10 @@ describe('product command persistence', () => {
     }
     expect(createInput.data).toEqual({
       name: '山茶精华',
-      categoryName: '护肤品',
-      productHeadName: '精华',
+      categoryId: '44444444-4444-4444-8444-444444444444',
+      productHeadId: '55555555-5555-4555-8555-555555555555',
       productNo: 'P202608120001',
-      status: ProductStatus.DRAFT,
+      status: ProductStatus.INACTIVE,
       supplierValue: 'SUPPLIER_A',
       twdSalePriceAmount: '1280.5000',
       twdSalePriceCurrency: 'TWD',
@@ -79,8 +81,8 @@ describe('product command persistence', () => {
     })
     expect(createInput.select).toMatchObject({
       id: true,
-      categoryName: true,
-      productHeadName: true,
+      category: { select: { id: true, name: true } },
+      productHead: { select: { id: true, name: true } },
       productNo: true,
       createdBy: { select: { id: true, displayName: true } },
       updatedBy: { select: { id: true, displayName: true } },

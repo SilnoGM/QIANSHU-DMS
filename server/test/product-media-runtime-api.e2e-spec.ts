@@ -24,6 +24,7 @@ import { ProductMediaHttpService } from '../src/modules/products/media/product-m
 import { ProductMediaMultipartParser } from '../src/modules/products/media/product-media-multipart.parser'
 import { ProductCommandService } from '../src/modules/products/product-command.service'
 import { ProductQueryService } from '../src/modules/products/product-query.service'
+import { ProductTaxonomyService } from '../src/modules/products/product-taxonomy.service'
 import { ProductUpdateService } from '../src/modules/products/product-update.service'
 import { ProductsController } from '../src/modules/products/products.controller'
 import {
@@ -113,6 +114,9 @@ describeExclusive('Product media runtime HTTP with isolated PostgreSQL and local
       }, {
         provide: ProductQueryService,
         useValue: products,
+      }, {
+        provide: ProductTaxonomyService,
+        useValue: { options: jest.fn() },
       }, {
         provide: ProductCommandService,
         useValue: { create: jest.fn() },

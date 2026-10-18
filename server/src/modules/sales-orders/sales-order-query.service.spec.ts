@@ -20,7 +20,9 @@ function createFixture(
   myrSalePriceAmount: ReturnType<typeof decimal> | null = decimal('168.0000'),
 ) {
   const product = {
-    count: jest.fn().mockResolvedValue(5),
+    count: jest.fn().mockImplementation((args: { where?: { categoryId?: unknown } }) => (
+      Promise.resolve(args.where?.categoryId === null ? 1 : 5)
+    )),
     groupBy: jest.fn().mockResolvedValue([
       { categoryName: '收纳包', productHeadName: '城市旅行', _count: { _all: 4 } },
       { categoryName: null, productHeadName: null, _count: { _all: 1 } },
@@ -29,8 +31,8 @@ function createFixture(
       id: PRODUCT_ID,
       productNo: 'SKU-TW-001',
       name: '城市旅行收纳包',
-      categoryName: '收纳包',
-      productHeadName: '城市旅行',
+      category: { name: '收纳包' },
+      productHead: { name: '城市旅行' },
       supplierValue: 'SUPPLIER_TW_01',
       attributes: [{ key: 'color', value: 'green' }],
       twdSalePriceAmount,
@@ -38,8 +40,22 @@ function createFixture(
       media,
     }]),
   }
-  const service = new SalesOrderQueryService({ product } as unknown as PrismaService)
-  return { product, service }
+  const productCategory = {
+    findMany: jest.fn().mockResolvedValue([{
+      name: '收纳包',
+      _count: { products: 4 },
+      productHeads: [{
+        name: '城市旅行',
+        _count: { products: 4 },
+      }],
+    }, {
+      name: '空分类',
+      _count: { products: 0 },
+      productHeads: [],
+    }]),
+  }
+  const service = new SalesOrderQueryService({ product, productCategory } as unknown as PrismaService)
+  return { prisma: { product, productCategory }, product, productCategory, service }
 }
 
 function createListFixture() {
@@ -565,7 +581,10 @@ describe('SalesOrderQueryService product options', () => {
           contentUrl: `/api/sales-orders/product-options/${PRODUCT_ID}/main-image/${PRODUCT_MEDIA_ID}/content?currencyCode=TWD`,
         },
       }],
-      categories: [{ name: '收纳包', count: 4, productHeads: [{ name: '城市旅行', count: 4 }] }],
+      categories: [
+        { name: '收纳包', count: 4, productHeads: [{ name: '城市旅行', count: 4 }] },
+        { name: '空分类', count: 0, productHeads: [] },
+      ],
       unclassifiedCount: 1,
       page: 2,
       pageSize: 2,
@@ -581,23 +600,17 @@ describe('SalesOrderQueryService product options', () => {
       ],
     }
     expect(fixture.product.count).toHaveBeenCalledWith({ where: expectedWhere })
-    expect(fixture.product.groupBy).toHaveBeenCalledWith({
-      by: ['categoryName', 'productHeadName'],
-      where: {
-        status: 'ACTIVE',
-        supplierValue: 'SUPPLIER_TW_01',
-      },
-      orderBy: [
-        { categoryName: 'asc' },
-        { productHeadName: 'asc' },
-      ],
-      _count: { _all: true },
-    })
+    expect(fixture.productCategory.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { supplierValue: 'SUPPLIER_TW_01' },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      }),
+    )
     expect(fixture.product.findMany).toHaveBeenCalledWith({
       where: expectedWhere,
       orderBy: [
-        { categoryName: 'asc' },
-        { productHeadName: 'asc' },
+        { category: { name: 'asc' } },
+        { productHead: { name: 'asc' } },
         { name: 'asc' },
         { id: 'asc' },
       ],
@@ -607,8 +620,8 @@ describe('SalesOrderQueryService product options', () => {
         id: true,
         productNo: true,
         name: true,
-        categoryName: true,
-        productHeadName: true,
+        category: { select: { name: true } },
+        productHead: { select: { name: true } },
         supplierValue: true,
         attributes: true,
         twdSalePriceAmount: true,
@@ -633,6 +646,7 @@ describe('SalesOrderQueryService product options', () => {
 
     await expect(fixture.service.productOptions({
       currencyCode: 'TWD',
+      supplierValue: 'SUPPLIER_TW_01',
     })).resolves.toEqual({
       items: [{
         id: PRODUCT_ID,
@@ -646,7 +660,10 @@ describe('SalesOrderQueryService product options', () => {
         currencyCode: 'TWD',
         mainImage: null,
       }],
-      categories: [{ name: '收纳包', count: 4, productHeads: [{ name: '城市旅行', count: 4 }] }],
+      categories: [
+        { name: '收纳包', count: 4, productHeads: [{ name: '城市旅行', count: 4 }] },
+        { name: '空分类', count: 0, productHeads: [] },
+      ],
       unclassifiedCount: 1,
       page: 1,
       pageSize: 20,
@@ -654,7 +671,7 @@ describe('SalesOrderQueryService product options', () => {
     })
 
     expect(fixture.product.count).toHaveBeenCalledWith({
-      where: { status: 'ACTIVE' },
+      where: { status: 'ACTIVE', supplierValue: 'SUPPLIER_TW_01' },
     })
   })
 
@@ -666,6 +683,7 @@ describe('SalesOrderQueryService product options', () => {
 
     await expect(fixture.service.productOptions({
       currencyCode: 'MYR',
+      supplierValue: 'SUPPLIER_TW_01',
     })).rejects.toMatchObject({
       code: 'SALES_ORDER_STATE_CHANGED',
     })

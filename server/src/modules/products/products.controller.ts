@@ -45,8 +45,11 @@ import {
 import {
   ProductListItemDto,
   ProductPageDto,
-  ProductTaxonomyOptionsDto,
 } from './dto/product-response.dto'
+import {
+  ProductTaxonomyOptionsDto,
+  ProductTaxonomyOptionsQueryDto,
+} from './dto/product-taxonomy.dto'
 import { ProductCommandService } from './product-command.service'
 import { parseProductIdempotencyKey } from './product-command.normalizer'
 import { ApiProductMediaContentContract } from './media/product-media-content.contract'
@@ -64,8 +67,8 @@ import type { ProductListItem } from './product-query.mapper'
 import {
   ProductQueryService,
   type ProductPage,
-  type ProductTaxonomyOptions,
 } from './product-query.service'
+import { ProductTaxonomyService } from './product-taxonomy.service'
 import { ProductUpdateService } from './product-update.service'
 
 @ApiTags('products')
@@ -73,6 +76,7 @@ import { ProductUpdateService } from './product-update.service'
 export class ProductsController {
   constructor(
     private readonly products: ProductQueryService,
+    private readonly taxonomies: ProductTaxonomyService,
     private readonly commands: ProductCommandService,
     private readonly updates: ProductUpdateService,
     private readonly productMedia: ProductMediaHttpService,
@@ -105,7 +109,7 @@ export class ProductsController {
   }
 
   @Post()
-  @RequirePermissions('products:create')
+  @RequirePermissions('products:create', 'product-categories:create')
   @HttpCode(HttpStatus.CREATED)
   @ApiHeader({
     name: 'Idempotency-Key',
@@ -191,8 +195,10 @@ export class ProductsController {
       },
     ],
   })
-  taxonomyOptions(): Promise<ProductTaxonomyOptions> {
-    return this.products.taxonomyOptions()
+  taxonomyOptions(
+    @Query() query: ProductTaxonomyOptionsQueryDto,
+  ): Promise<ProductTaxonomyOptionsDto> {
+    return this.taxonomies.options(query.supplierValue)
   }
 
   @Get(':productId')
@@ -267,7 +273,7 @@ export class ProductsController {
   }
 
   @Patch(':productId')
-  @RequirePermissions('products:update')
+  @RequirePermissions('products:update', 'product-categories:create')
   @ApiContractResponse({ status: HttpStatus.OK, type: ProductListItemDto })
   @ApiApplicationContract({
     operationId: 'products_update',

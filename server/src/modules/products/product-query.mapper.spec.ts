@@ -14,10 +14,10 @@ function createRow(
   return {
     id: 'fd830f03-2b45-4e75-9857-06beea6513ba',
     name: '山茶精华',
-    categoryName: '护肤品',
-    productHeadName: '精华',
+    category: { id: 'category-1', name: '护肤品' },
+    productHead: { id: 'head-1', name: '精华' },
     productNo: 'P202608120001',
-    status: ProductStatus.DRAFT,
+    status: ProductStatus.INACTIVE,
     supplierValue: 'SUPPLIER_A',
     twdSalePriceAmount: { toString: () => '1280.5000' },
     twdSalePriceCurrency: 'TWD',
@@ -70,10 +70,12 @@ describe('mapProductListItem', () => {
     }, EMPTY_MEDIA)).toEqual({
       id: 'fd830f03-2b45-4e75-9857-06beea6513ba',
       name: '山茶精华',
+      categoryId: 'category-1',
       categoryName: '护肤品',
+      productHeadId: 'head-1',
       productHeadName: '精华',
       productNo: 'P202608120001',
-      status: 'DRAFT',
+      status: 'INACTIVE',
       supplier: {
         value: 'SUPPLIER_A',
         label: '供应商 A',
@@ -99,13 +101,7 @@ describe('mapProductListItem', () => {
     })
   })
 
-  it('maps null, disabled and unknown supplier history without changing raw values', () => {
-    expect(mapProductListItem(
-      createRow({ supplierValue: null }),
-      null,
-      EMPTY_MEDIA,
-    ).supplier)
-      .toBeNull()
+  it('maps disabled and unknown supplier history without changing raw values', () => {
     expect(mapProductListItem(createRow(), {
       known: true,
       dictionaryCode: 'service_provider.supplier',

@@ -129,8 +129,8 @@ describeExclusive('Product media cutover migration with isolated PostgreSQL', ()
       }
       await client.query(
         `
-          INSERT INTO "products" ("id", "name", "product_no")
-          VALUES ($1, 'Cutover E2E Product', 'CUTOVER-E2E-001')
+          INSERT INTO "products" ("id", "name", "product_no", "supplier_value")
+          VALUES ($1, 'Cutover E2E Product', 'CUTOVER-E2E-001', 'CUTOVER_SUPPLIER')
         `,
         [productId],
       )

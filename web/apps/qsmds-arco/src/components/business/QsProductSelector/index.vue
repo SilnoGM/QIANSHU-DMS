@@ -51,9 +51,9 @@ const emit = defineEmits<{
   'update:modelValue': [value: boolean]
 }>()
 
-// FaSelect 底层保留空字符串用于清空状态，不能把它作为 SelectItem 的 value。
-// 字典供应商值均为字符串，因此使用数值 0 作为仅限当前选择器 UI 的“全部”哨兵，不会与真实字典值冲突。
-const ALL_SUPPLIERS_OPTION_VALUE = 0 as const
+// FaSelect 在没有匹配值时会回退显示第一个 option；用不可选哨兵占住“未选择”
+// 状态，避免把第一个真实供应商误显示成已选项。真实供应商值均为字符串。
+const SUPPLIER_PLACEHOLDER_VALUE = '__QS_SELECT_SUPPLIER__' as const
 
 const supplierCatalog = useDictionaryCatalog('service_provider.supplier')
 const keywordDraft = ref('')
@@ -117,12 +117,23 @@ function supplierGroupLabel(value: string | null): string {
   }
   return supplierLabelByValue.value.get(value) ?? value
 }
-const supplierOptions = computed(() => [{ label: '全部供应商', value: ALL_SUPPLIERS_OPTION_VALUE }, ...(
-  supplierCatalog.catalog.value?.items ?? []
-).map(item => ({
-  label: item.effectiveEnabled ? item.label : `${item.label}（已停用）`,
-  value: item.value,
-}))])
+const supplierOptions = computed(() => [
+  {
+    label: '请选择供应商',
+    value: SUPPLIER_PLACEHOLDER_VALUE,
+    disabled: true,
+  },
+  ...(supplierCatalog.catalog.value?.items ?? []).map(item => ({
+    label: item.effectiveEnabled ? item.label : `${item.label}（已停用）`,
+    value: item.value,
+  })),
+])
+const supplierSelectValue = computed(() => (
+  supplierValue.value ?? SUPPLIER_PLACEHOLDER_VALUE
+))
+const hasSupplier = computed(() => (
+  (props.fixedSupplierValue ?? supplierValue.value) !== undefined
+))
 const hasNextPage = computed(() => items.value.length < total.value)
 const allCategoryCount = computed(() => (
   categories.value.reduce(
@@ -230,15 +241,28 @@ async function loadPage(targetPage: number, replace: boolean): Promise<void> {
   if (props.disabled || (!replace && (loading.value || loadingMore.value))) {
     return
   }
+  const supplier = props.fixedSupplierValue ?? supplierValue.value
+  if (supplier === undefined) {
+    // 供应商是选品的前置条件；未选择时不发请求，产品区显示引导空态。
+    activeController?.abort()
+    items.value = []
+    categories.value = []
+    unclassifiedCount.value = 0
+    page.value = 0
+    total.value = 0
+    loading.value = false
+    loadingMore.value = false
+    productError.value = ''
+    pageError.value = ''
+    return
+  }
   activeController?.abort()
   const controller = new AbortController()
   activeController = controller
   const query = {
     currencyCode: props.currency,
     ...(appliedKeyword.value === '' ? {} : { keyword: appliedKeyword.value }),
-    ...((props.fixedSupplierValue ?? supplierValue.value) === undefined
-      ? {}
-      : { supplierValue: props.fixedSupplierValue ?? supplierValue.value }),
+    supplierValue: supplier,
     ...(categoryFilter.value.kind === 'category'
       ? {
           categoryName: categoryFilter.value.name,
@@ -312,6 +336,8 @@ function refreshProducts(): void {
   items.value = []
   page.value = 0
   total.value = 0
+  categories.value = []
+  unclassifiedCount.value = 0
   void loadPage(1, true)
 }
 
@@ -331,7 +357,11 @@ function scheduleKeyword(): void {
 }
 
 function handleSupplierChange(value: unknown): void {
-  const next = typeof value === 'string' && value !== '' ? value : undefined
+  const next = typeof value === 'string'
+    && value !== ''
+    && value !== SUPPLIER_PLACEHOLDER_VALUE
+    ? value
+    : undefined
   if (next === supplierValue.value) {
     return
   }
@@ -483,7 +513,11 @@ watch(() => props.modelValue, (open) => {
     return
   }
   resetSession()
-  nextTick(() => void loadPage(1, true))
+  nextTick(() => {
+    if (hasSupplier.value) {
+      void loadPage(1, true)
+    }
+  })
 })
 
 watch(() => props.currency, closeUntrustedSession)
@@ -529,10 +563,10 @@ onBeforeUnmount(() => {
         />
         <FaSelect
           v-if="fixedSupplierValue === undefined"
-          :model-value="supplierValue ?? ALL_SUPPLIERS_OPTION_VALUE"
+          :model-value="supplierSelectValue"
           :options="supplierOptions"
-          placeholder="全部供应商"
-          aria-label="供应商筛选"
+          placeholder="请选择供应商"
+          aria-label="供应商"
           :disabled="disabled || supplierCatalog.loading.value || supplierCatalog.error.value !== null"
           @update:model-value="handleSupplierChange"
         />
@@ -541,7 +575,7 @@ onBeforeUnmount(() => {
           class="text-xs text-destructive flex gap-2 items-center sm:col-span-2"
           role="alert"
         >
-          <span>供应商选项加载失败，仍可按关键词查询。</span>
+          <span>供应商选项加载失败，请重试后选择供应商。</span>
           <FaButton type="button" variant="link" size="sm" @click="supplierCatalog.retry()">
             重试供应商
           </FaButton>
@@ -555,7 +589,16 @@ onBeforeUnmount(() => {
               产品分类
             </h3>
           </div>
-          <div class="qs-product-selector-scroll p-2 flex gap-1 overflow-x-auto xl:flex-1 xl:flex-col xl:gap-1 xl:min-h-0 xl:overflow-x-hidden xl:overflow-y-auto">
+          <div
+            v-if="!hasSupplier"
+            class="text-xs text-muted-foreground px-3 py-6 text-center"
+          >
+            请先选择供应商
+          </div>
+          <div
+            v-else
+            class="qs-product-selector-scroll p-2 flex gap-1 overflow-x-auto xl:flex-1 xl:flex-col xl:gap-1 xl:min-h-0 xl:overflow-x-hidden xl:overflow-y-auto"
+          >
             <button
               type="button"
               class="text-sm pl-1 pr-1.5 rounded-md flex shrink-0 gap-2 min-h-9 transition-colors items-center xl:w-full"
@@ -684,7 +727,14 @@ onBeforeUnmount(() => {
             aria-label="产品列表"
             @scroll="handleResultScroll"
           >
-            <div v-if="loading" class="gap-3 grid sm:grid-cols-2" role="status" aria-label="正在加载产品">
+            <FaEmpty
+              v-if="!hasSupplier"
+              icon="i-lucide:store"
+              title="请先选择供应商"
+              description="选择供应商后才会加载该供应商的分类与产品。"
+              class="py-16"
+            />
+            <div v-else-if="loading" class="gap-3 grid sm:grid-cols-2" role="status" aria-label="正在加载产品">
               <div v-for="index in 4" :key="index" class="p-3 border border-border rounded-xl gap-3 grid">
                 <div class="rounded-lg bg-muted aspect-[16/10] animate-pulse" />
                 <div class="rounded bg-muted h-5 w-2/3 animate-pulse" />

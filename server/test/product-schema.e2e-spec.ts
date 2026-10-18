@@ -23,7 +23,7 @@ async function expectConstraintRejection(
   client: Client,
   action: () => Promise<unknown>,
   constraint: string | undefined,
-  expectedCode: '22P02' | '23505' | '23514',
+  expectedCode: '22P02' | '23502' | '23505' | '23514',
   savepointIndex: number,
 ): Promise<void> {
   const savepoint = `expected_product_rejection_${savepointIndex}`
@@ -61,13 +61,13 @@ describe('Product schema constraints with isolated PostgreSQL', () => {
     await client.end()
   })
 
-  it('enforces status, money, attributes, active supplier and immutable identity', async () => {
+  it('enforces status, money, attributes, supplier and immutable identity', async () => {
     await client.query('BEGIN')
     try {
       const productNo = `PRODUCT-SCHEMA-${randomUUID()}`
       const inserted = await client.query<{ id: string }>(`
-        INSERT INTO "products" ("name", "product_no")
-        VALUES ('Schema E2E Product', $1)
+        INSERT INTO "products" ("name", "product_no", "supplier_value")
+        VALUES ('Schema E2E Product', $1, 'SUPPLIER_SCHEMA')
         RETURNING "id"
       `, [productNo])
       const productId = inserted.rows[0]?.id
@@ -75,84 +75,83 @@ describe('Product schema constraints with isolated PostgreSQL', () => {
 
       const cases: ReadonlyArray<{
         readonly action: () => Promise<unknown>
-        readonly code: '22P02' | '23505' | '23514'
+        readonly code: '22P02' | '23502' | '23505' | '23514'
         readonly constraint?: string
       }> = [
         {
           action: () => client.query(`
-            INSERT INTO "products" ("name", "product_no", "status")
-            VALUES ('Invalid Status', $1, 'ARCHIVED')
+            INSERT INTO "products" ("name", "product_no", "supplier_value", "status")
+            VALUES ('Invalid Status', $1, 'SUPPLIER_SCHEMA', 'ARCHIVED')
           `, [`PRODUCT-SCHEMA-${randomUUID()}`]),
           code: '22P02',
         },
         {
           action: () => client.query(`
-            INSERT INTO "products" ("name", "product_no", "status")
-            VALUES ('Active Without Supplier', $1, 'ACTIVE')
+            INSERT INTO "products" ("name", "product_no")
+            VALUES ('Missing Supplier', $1)
           `, [`PRODUCT-SCHEMA-${randomUUID()}`]),
-          code: '23514',
-          constraint: 'products_active_supplier_required_check',
+          code: '23502',
         },
         {
           action: () => client.query(`
-            INSERT INTO "products" ("name", "product_no", "twd_sale_price_amount")
-            VALUES ('Negative TWD', $1, -0.0001)
+            INSERT INTO "products" ("name", "product_no", "supplier_value", "twd_sale_price_amount")
+            VALUES ('Negative TWD', $1, 'SUPPLIER_SCHEMA', -0.0001)
           `, [`PRODUCT-SCHEMA-${randomUUID()}`]),
           code: '23514',
           constraint: 'products_twd_sale_price_amount_nonnegative_check',
         },
         {
           action: () => client.query(`
-            INSERT INTO "products" ("name", "product_no", "myr_sale_price_amount")
-            VALUES ('Negative MYR', $1, -1)
+            INSERT INTO "products" ("name", "product_no", "supplier_value", "myr_sale_price_amount")
+            VALUES ('Negative MYR', $1, 'SUPPLIER_SCHEMA', -1)
           `, [`PRODUCT-SCHEMA-${randomUUID()}`]),
           code: '23514',
           constraint: 'products_myr_sale_price_amount_nonnegative_check',
         },
         {
           action: () => client.query(`
-            INSERT INTO "products" ("name", "product_no", "purchase_cost_amount")
-            VALUES ('Negative Cost', $1, -1)
+            INSERT INTO "products" ("name", "product_no", "supplier_value", "purchase_cost_amount")
+            VALUES ('Negative Cost', $1, 'SUPPLIER_SCHEMA', -1)
           `, [`PRODUCT-SCHEMA-${randomUUID()}`]),
           code: '23514',
           constraint: 'products_purchase_cost_amount_nonnegative_check',
         },
         {
           action: () => client.query(`
-            INSERT INTO "products" ("name", "product_no", "twd_sale_price_currency")
-            VALUES ('Wrong TWD', $1, 'USD')
+            INSERT INTO "products" ("name", "product_no", "supplier_value", "twd_sale_price_currency")
+            VALUES ('Wrong TWD', $1, 'SUPPLIER_SCHEMA', 'USD')
           `, [`PRODUCT-SCHEMA-${randomUUID()}`]),
           code: '23514',
           constraint: 'products_twd_currency_check',
         },
         {
           action: () => client.query(`
-            INSERT INTO "products" ("name", "product_no", "myr_sale_price_currency")
-            VALUES ('Wrong MYR', $1, 'USD')
+            INSERT INTO "products" ("name", "product_no", "supplier_value", "myr_sale_price_currency")
+            VALUES ('Wrong MYR', $1, 'SUPPLIER_SCHEMA', 'USD')
           `, [`PRODUCT-SCHEMA-${randomUUID()}`]),
           code: '23514',
           constraint: 'products_myr_currency_check',
         },
         {
           action: () => client.query(`
-            INSERT INTO "products" ("name", "product_no", "purchase_cost_currency")
-            VALUES ('Wrong Cost Currency', $1, 'cnY')
+            INSERT INTO "products" ("name", "product_no", "supplier_value", "purchase_cost_currency")
+            VALUES ('Wrong Cost Currency', $1, 'SUPPLIER_SCHEMA', 'cnY')
           `, [`PRODUCT-SCHEMA-${randomUUID()}`]),
           code: '23514',
           constraint: 'products_purchase_currency_format_check',
         },
         {
           action: () => client.query(`
-            INSERT INTO "products" ("name", "product_no", "attributes")
-            VALUES ('Wrong Attributes', $1, '{"title":"颜色"}'::jsonb)
+            INSERT INTO "products" ("name", "product_no", "supplier_value", "attributes")
+            VALUES ('Wrong Attributes', $1, 'SUPPLIER_SCHEMA', '{"title":"颜色"}'::jsonb)
           `, [`PRODUCT-SCHEMA-${randomUUID()}`]),
           code: '23514',
           constraint: 'products_attributes_array_check',
         },
         {
           action: () => client.query(`
-            INSERT INTO "products" ("name", "product_no")
-            VALUES ('Duplicate Number', $1)
+            INSERT INTO "products" ("name", "product_no", "supplier_value")
+            VALUES ('Duplicate Number', $1, 'SUPPLIER_SCHEMA')
           `, [productNo]),
           code: '23505',
           constraint: 'products_product_no_key',
@@ -195,7 +194,7 @@ describe('Product schema constraints with isolated PostgreSQL', () => {
       expect(persisted.rows).toEqual([{
         id: productId,
         productNo,
-        status: 'DRAFT',
+        status: 'ACTIVE',
       }])
     }
     finally {

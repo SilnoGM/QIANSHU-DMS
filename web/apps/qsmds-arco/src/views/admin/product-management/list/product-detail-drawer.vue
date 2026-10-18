@@ -46,7 +46,7 @@ const description = computed(() => props.product === null
   : `产品编号 ${props.product.productNo}`)
 
 function statusLabel(status: ProductListItemViewModel['status']): string {
-  return { ACTIVE: '启用', DRAFT: '草稿', INACTIVE: '停用' }[status]
+  return { ACTIVE: '启用', INACTIVE: '停用' }[status]
 }
 
 function supplierStateLabel(product: ProductListItemViewModel): string {

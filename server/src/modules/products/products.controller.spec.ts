@@ -17,6 +17,7 @@ import {
 import { ProductMediaContentService } from './media/product-media-content.service'
 import { ProductMediaHttpService } from './media/product-media-http.service'
 import { ProductQueryService } from './product-query.service'
+import { ProductTaxonomyService } from './product-taxonomy.service'
 import {
   type ProductUpdateContext,
   ProductUpdateService,
@@ -83,6 +84,7 @@ function createController(): {
   return {
     controller: new ProductsController(
       { list, getById } as unknown as ProductQueryService,
+      { options: jest.fn() } as unknown as import('./product-taxonomy.service').ProductTaxonomyService,
       { create } as unknown as ProductCommandService,
       { update } as unknown as ProductUpdateService,
       {
@@ -104,6 +106,9 @@ function createController(): {
   providers: [{
     provide: ProductQueryService,
     useValue: { list: jest.fn(), getById: jest.fn() },
+  }, {
+    provide: ProductTaxonomyService,
+    useValue: { options: jest.fn() },
   }, {
     provide: ProductCommandService,
     useValue: { create: jest.fn() },
@@ -135,8 +140,8 @@ describe('ProductsController', () => {
       name: 'Product',
       categoryName: '分类',
       productHeadName: '产品头',
-      status: 'DRAFT' as const,
-      supplierValue: null,
+      status: 'INACTIVE' as const,
+      supplierValue: 'SUPPLIER_A',
       twdSalePrice: { amount: null, currency: 'TWD' as const },
       myrSalePrice: { amount: null, currency: 'MYR' as const },
       purchaseCost: { amount: null, currency: 'CNY' },
@@ -174,7 +179,7 @@ describe('ProductsController', () => {
     expect(reflector.get(
       REQUIRED_PERMISSIONS_METADATA,
       ProductsController.prototype.create,
-    )).toEqual(['products:create'])
+    )).toEqual(['products:create', 'product-categories:create'])
     expect(reflector.get(
       REQUIRED_PERMISSIONS_METADATA,
       ProductsController.prototype.getById,
@@ -182,7 +187,7 @@ describe('ProductsController', () => {
     expect(reflector.get(
       REQUIRED_PERMISSIONS_METADATA,
       ProductsController.prototype.update,
-    )).toEqual(['products:update'])
+    )).toEqual(['products:update', 'product-categories:create'])
     expect(reflector.get(
       REQUIRE_AUTHENTICATED_SESSION_METADATA,
       ProductsController,
@@ -276,7 +281,7 @@ describe('ProductsController OpenAPI contract', () => {
       name: 'status',
       required: false,
       schema: {
-        enum: ['DRAFT', 'ACTIVE', 'INACTIVE'],
+        enum: ['ACTIVE', 'INACTIVE'],
         type: 'string',
       },
     })
@@ -383,7 +388,6 @@ describe('ProductsController OpenAPI contract', () => {
         'name',
         'categoryName',
         'productHeadName',
-        'status',
         'supplierValue',
         'twdSalePrice',
         'myrSalePrice',

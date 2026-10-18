@@ -6,15 +6,17 @@ const DEFAULT_PAGE_SIZE = 20
 const MAXIMUM_PAGE_SIZE = 100
 const MAXIMUM_KEYWORD_LENGTH = 128
 const MAXIMUM_SUPPLIER_VALUE_LENGTH = 64
+const CANONICAL_UUID_V4_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 const PRODUCT_STATUS_VALUES = new Set<unknown>(Object.values(ProductStatus))
 
 export interface NormalizedProductListQuery {
   readonly page: number
   readonly pageSize: number
   readonly skip: number
-  readonly categoryName?: string
+  readonly categoryId?: string
   readonly keyword?: string
-  readonly productHeadName?: string
+  readonly productHeadId?: string
   readonly status?: ProductStatus
   readonly supplierValue?: string
 }
@@ -36,8 +38,8 @@ export function normalizeProductListQuery(
   const rawKeyword = query.keyword
   const status = query.status
   const supplierValue = query.supplierValue
-  const categoryName = query.categoryName
-  const productHeadName = query.productHeadName
+  const categoryId = query.categoryId
+  const productHeadId = query.productHeadId
   const keyword = typeof rawKeyword === 'string'
     ? rawKeyword.trim()
     : rawKeyword
@@ -69,19 +71,17 @@ export function normalizeProductListQuery(
       )
     )
     || (
-      categoryName !== undefined
+      categoryId !== undefined
       && (
-        typeof categoryName !== 'string'
-        || categoryName.trim().length === 0
-        || Array.from(categoryName).length > MAXIMUM_SUPPLIER_VALUE_LENGTH
+        typeof categoryId !== 'string'
+        || !CANONICAL_UUID_V4_PATTERN.test(categoryId)
       )
     )
     || (
-      productHeadName !== undefined
+      productHeadId !== undefined
       && (
-        typeof productHeadName !== 'string'
-        || productHeadName.trim().length === 0
-        || Array.from(productHeadName).length > MAXIMUM_SUPPLIER_VALUE_LENGTH
+        typeof productHeadId !== 'string'
+        || !CANONICAL_UUID_V4_PATTERN.test(productHeadId)
       )
     )
   ) {
@@ -100,8 +100,8 @@ export function normalizeProductListQuery(
     ...(keyword === undefined ? {} : { keyword }),
     ...(status === undefined ? {} : { status: status as ProductStatus }),
     ...(supplierValue === undefined ? {} : { supplierValue }),
-    ...(categoryName === undefined ? {} : { categoryName }),
-    ...(productHeadName === undefined ? {} : { productHeadName }),
+    ...(categoryId === undefined ? {} : { categoryId }),
+    ...(productHeadId === undefined ? {} : { productHeadId }),
   }
 }
 

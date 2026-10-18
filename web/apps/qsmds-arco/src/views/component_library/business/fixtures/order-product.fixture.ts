@@ -196,7 +196,7 @@ export function createOrderProductFixtureLoader(): ProductPageLoader {
     const keyword = query.keyword?.toLocaleLowerCase() ?? ''
     const facetBase = ORDER_PRODUCT_FIXTURE_PRODUCTS.filter(item => (
       item.currencyCode === query.currencyCode
-      && (query.supplierValue === undefined || item.supplierValue === query.supplierValue)
+      && item.supplierValue === query.supplierValue
     ))
     const filtered = facetBase.filter(item => (
       (query.categoryName === undefined || item.categoryName === query.categoryName)
@@ -235,7 +235,11 @@ export function createOrderProductFixtureLoader(): ProductPageLoader {
     const start = (query.page - 1) * query.pageSize
     return {
       items: filtered.slice(start, start + query.pageSize),
-      categories: [...categoryCounts.entries()]
+      categories: [
+        ...categoryCounts.entries(),
+        // 目录中存在的空分类同样显示为 0 项，供组件库验收空分类/空产品头展示。
+        ['空分类', { count: 0, heads: new Map([['空产品头', 0]]) }] as const,
+      ]
         .sort(([left], [right]) => left.localeCompare(right, 'zh-Hans-CN'))
         .map(([name, category]) => ({
           name,

@@ -12,6 +12,7 @@ import {
 } from './media/product-media-content.service'
 import { ProductMediaHttpService } from './media/product-media-http.service'
 import { ProductQueryService } from './product-query.service'
+import { ProductTaxonomyService } from './product-taxonomy.service'
 import { ProductUpdateService } from './product-update.service'
 import { ProductsController } from './products.controller'
 
@@ -39,6 +40,7 @@ function createController(result: unknown = READY_RESPONSE) {
   const resolve = jest.fn().mockResolvedValue(result)
   const controller = new ProductsController(
     { list: jest.fn(), getById: jest.fn() } as unknown as ProductQueryService,
+    { options: jest.fn() } as unknown as ProductTaxonomyService,
     { create: jest.fn() } as unknown as ProductCommandService,
     { update: jest.fn() } as unknown as ProductUpdateService,
     {
@@ -60,6 +62,9 @@ function createController(result: unknown = READY_RESPONSE) {
   providers: [{
     provide: ProductQueryService,
     useValue: { list: jest.fn(), getById: jest.fn() },
+  }, {
+    provide: ProductTaxonomyService,
+    useValue: { options: jest.fn() },
   }, {
     provide: ProductCommandService,
     useValue: { create: jest.fn() },

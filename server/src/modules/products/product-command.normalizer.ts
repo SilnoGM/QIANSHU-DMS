@@ -4,7 +4,6 @@ import type { ProductStatus as ProductStatusValue } from '../../generated/prisma
 import { ApiException } from '../../infrastructure/http/api.exception'
 
 const PRODUCT_STATUSES = new Set<ProductStatusValue>([
-  'DRAFT',
   'ACTIVE',
   'INACTIVE',
 ])
@@ -30,7 +29,7 @@ export interface NormalizedProductCreateCommand {
   readonly categoryName: string | null
   readonly productHeadName: string | null
   readonly status: ProductStatusValue
-  readonly supplierValue: string | null
+  readonly supplierValue: string
   readonly twdSalePrice: NormalizedProductCreateMoney
   readonly myrSalePrice: NormalizedProductCreateMoney
   readonly purchaseCost: NormalizedProductCreateMoney
@@ -80,9 +79,15 @@ function normalizeText(
   return normalized
 }
 
-function normalizeSupplierValue(value: unknown): string | null {
-  if (value === null) return null
-  if (typeof value !== 'string') return validationFailure('supplierValue')
+function normalizeSupplierValue(value: unknown): string {
+  if (typeof value !== 'string') {
+    throw new ApiException(
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      'PRODUCT_SUPPLIER_REQUIRED',
+      '请选择供应商',
+      { supplierValue: ['请选择供应商'] },
+    )
+  }
 
   // Dictionary Item value 是稳定身份，只去除表单边界空白，不改大小写或 Unicode。
   const normalized = value.trim()
@@ -180,25 +185,16 @@ export function normalizeProductCreateCommand(
     'attributes',
   ])
 
-  const status = record.status
+  const status = record.status ?? 'ACTIVE'
   if (typeof status !== 'string' || !PRODUCT_STATUSES.has(status as ProductStatusValue)) {
     return validationFailure('status')
   }
   const categoryName = normalizeOptionalText(record.categoryName, 'categoryName', 64)
   const productHeadName = normalizeOptionalText(record.productHeadName, 'productHeadName', 64)
   if ((categoryName === null) !== (productHeadName === null)) {
-    // 无独立字典表时仍坚持「分类 → 产品头」成对存储，避免半层级数据。
     return validationFailure('productHeadName', '分类与产品头必须同时填写')
   }
   const supplierValue = normalizeSupplierValue(record.supplierValue)
-  if (status === 'ACTIVE' && supplierValue === null) {
-    throw new ApiException(
-      HttpStatus.UNPROCESSABLE_ENTITY,
-      'PRODUCT_SUPPLIER_REQUIRED',
-      '启用产品必须选择供应商',
-      { supplierValue: ['启用产品必须选择供应商'] },
-    )
-  }
 
   return Object.freeze({
     name: normalizeText(record.name, 'name', 128),

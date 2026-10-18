@@ -22,8 +22,8 @@ function validCreateBody(): Record<string, unknown> {
     name: '测试产品',
     categoryName: '微耕机',
     productHeadName: '旱地履带',
-    status: 'DRAFT',
-    supplierValue: null,
+    status: 'INACTIVE',
+    supplierValue: 'SUPPLIER_A',
     twdSalePrice: { amount: null, currency: 'TWD' },
     myrSalePrice: { amount: '10.20', currency: 'MYR' },
     purchaseCost: { amount: '5', currency: 'CNY' },
@@ -40,8 +40,8 @@ describe('ProductListQueryDto', () => {
       pageSize: '100',
       status: 'ACTIVE',
       supplierValue: ' raw-value ',
-      categoryName: '微耕机',
-      productHeadName: '旱地履带',
+      categoryId: '11111111-1111-4111-8111-111111111111',
+      productHeadId: '22222222-2222-4222-8222-222222222222',
     })
 
     expect(defaults).toMatchObject({ page: 1, pageSize: 20 })
@@ -51,8 +51,8 @@ describe('ProductListQueryDto', () => {
       pageSize: 100,
       status: 'ACTIVE',
       supplierValue: ' raw-value ',
-      categoryName: '微耕机',
-      productHeadName: '旱地履带',
+      categoryId: '11111111-1111-4111-8111-111111111111',
+      productHeadId: '22222222-2222-4222-8222-222222222222',
     })
     expect(await validate(defaults)).toEqual([])
     expect(await validate(complete)).toEqual([])
@@ -67,8 +67,8 @@ describe('ProductListQueryDto', () => {
     { supplierValue: '' },
     { supplierValue: '   ' },
     { supplierValue: '😀'.repeat(65) },
-    { categoryName: '   ' },
-    { productHeadName: '😀'.repeat(65) },
+    { categoryId: 'not-a-uuid' },
+    { productHeadId: 'not-a-uuid' },
   ])('rejects invalid public query input: %j', async (input) => {
     expect(await validate(plainToInstance(ProductListQueryDto, input)))
       .not.toHaveLength(0)
@@ -136,7 +136,7 @@ describe('Product detail and update DTOs', () => {
 
     const transformed = await createDtoPipe.transform({
       name: '  更新产品  ',
-      supplierValue: null,
+      supplierValue: 'SUPPLIER_A',
       expectedVersion: 2,
     }, {
       type: 'body',
@@ -144,7 +144,7 @@ describe('Product detail and update DTOs', () => {
     }) as UpdateProductRequestDto
     expect(transformed).toMatchObject({
       name: '更新产品',
-      supplierValue: null,
+      supplierValue: 'SUPPLIER_A',
       expectedVersion: 2,
     })
 

@@ -31,11 +31,13 @@ describe('product list database schema', () => {
     const user = extractModel(schema, 'User')
 
     expect(schema).toMatch(
-      /enum ProductStatus \{\s+DRAFT\s+ACTIVE\s+INACTIVE\s+@@map\("product_status"\)\s+\}/u,
+      /enum ProductStatus \{\s+ACTIVE\s+INACTIVE\s+@@map\("product_status"\)\s+\}/u,
     )
     for (const field of [
       'id',
       'name',
+      'categoryId',
+      'productHeadId',
       'productNo',
       'status',
       'supplierValue',
@@ -51,6 +53,8 @@ describe('product list database schema', () => {
       'version',
       'createdAt',
       'updatedAt',
+      'category',
+      'productHead',
       'createdBy',
       'updatedBy',
       'media',

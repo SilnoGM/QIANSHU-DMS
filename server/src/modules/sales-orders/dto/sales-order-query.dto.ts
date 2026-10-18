@@ -109,11 +109,11 @@ export class SalesOrderProductOptionsQueryDto {
   @IsUnicodeCodePointLength(1, 128)
   keyword?: string
 
-  @ApiProperty({ type: 'string', maxLength: 64, required: false })
-  @IsOptional()
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 64 })
   @IsString()
   @IsUnicodeCodePointLength(1, 64)
-  supplierValue?: string
+  @Matches(/\S/u)
+  supplierValue!: string
 
   @ApiProperty({ type: 'string', maxLength: 64, required: false })
   @IsOptional()
@@ -180,6 +180,12 @@ export class SalesOrderProductEditOptionsQueryDto {
   @IsString()
   @IsUnicodeCodePointLength(1, 128)
   keyword?: string
+
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 64 })
+  @IsString()
+  @IsUnicodeCodePointLength(1, 64)
+  @Matches(/\S/u)
+  supplierValue!: string
 
   @ApiProperty({ type: 'string', maxLength: 64, required: false })
   @IsOptional()

@@ -9,7 +9,7 @@ const current = {
   name: '原产品',
   categoryName: '原分类',
   productHeadName: '原产品头',
-  status: ProductStatus.DRAFT,
+  status: ProductStatus.INACTIVE,
   supplierValue: 'HISTORICAL',
   twdSalePrice: { amount: '10.0000', currency: 'TWD' },
   myrSalePrice: { amount: null, currency: 'MYR' },
@@ -29,7 +29,7 @@ describe('product update normalizer', () => {
     expect(patch.expectedVersion).toBe(3)
     expect(target.command).toMatchObject({
       name: '新产品',
-      status: ProductStatus.DRAFT,
+      status: ProductStatus.INACTIVE,
       supplierValue: 'HISTORICAL',
       attributes: [{ title: '尺寸', value: 'XL' }],
     })
@@ -60,7 +60,7 @@ describe('product update normalizer', () => {
     })
     expect(buildProductUpdateTarget(current, patch)).toMatchObject({
       changedFields: ['name'],
-      command: { name: 'DTO 产品', status: ProductStatus.DRAFT },
+      command: { name: 'DTO 产品', status: ProductStatus.INACTIVE },
     })
   })
 
@@ -76,9 +76,8 @@ describe('product update normalizer', () => {
     }))
   })
 
-  it('rejects an Active target without a supplier after merging the patch', () => {
+  it('rejects clearing the supplier even on a non-Active target', () => {
     const patch = normalizeProductUpdatePatch({
-      status: ProductStatus.ACTIVE,
       supplierValue: null,
       expectedVersion: 1,
     })

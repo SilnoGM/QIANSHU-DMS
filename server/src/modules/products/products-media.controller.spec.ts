@@ -11,6 +11,7 @@ import { attachRequestAuthContext } from '../auth/auth-context'
 import { REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
 import { ProductCommandService } from './product-command.service'
 import { ProductQueryService } from './product-query.service'
+import { ProductTaxonomyService } from './product-taxonomy.service'
 import { ProductUpdateService } from './product-update.service'
 import {
   ProductMediaHttpService,
@@ -58,6 +59,7 @@ function createController() {
   >().mockResolvedValue({ id: PRODUCT_ID } as never)
   const controller = new ProductsController(
     { list: jest.fn(), getById: jest.fn() } as unknown as ProductQueryService,
+    { options: jest.fn() } as unknown as ProductTaxonomyService,
     { create: jest.fn() } as unknown as ProductCommandService,
     { update: jest.fn() } as unknown as ProductUpdateService,
     { upload, updateLayout, detach } as unknown as ProductMediaHttpService,
@@ -71,6 +73,9 @@ function createController() {
   providers: [{
     provide: ProductQueryService,
     useValue: { list: jest.fn(), getById: jest.fn() },
+  }, {
+    provide: ProductTaxonomyService,
+    useValue: { options: jest.fn() },
   }, {
     provide: ProductCommandService,
     useValue: { create: jest.fn() },

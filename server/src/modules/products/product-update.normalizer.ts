@@ -27,7 +27,7 @@ export interface ProductUpdateCurrent {
   readonly categoryName: string | null
   readonly productHeadName: string | null
   readonly status: ProductStatusValue
-  readonly supplierValue: string | null
+  readonly supplierValue: string
   readonly twdSalePrice: Readonly<{ amount: string | null; currency: string }>
   readonly myrSalePrice: Readonly<{ amount: string | null; currency: string }>
   readonly purchaseCost: Readonly<{ amount: string | null; currency: string }>

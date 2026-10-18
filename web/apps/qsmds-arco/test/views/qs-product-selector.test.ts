@@ -52,12 +52,15 @@ test('QsProductSelector 使用三列弹窗、分类筛选、滚动列表与局�
   assert.doesNotMatch(source, /salesOrdersApi/u)
 })
 
-test('QsProductSelector 的全部供应商选项不向 FaSelect 传递空字符串值', async () => {
+test('QsProductSelector 必须先选择供应商且不再提供全部供应商选项', async () => {
   const source = await readFile(SOURCE, 'utf8')
 
-  assert.match(source, /ALL_SUPPLIERS_OPTION_VALUE/u)
-  assert.doesNotMatch(source, /label: '全部供应商', value: ''/u)
-  assert.doesNotMatch(source, /:model-value="supplierValue \?\? ''"/u)
+  assert.match(source, /SUPPLIER_PLACEHOLDER_VALUE/u)
+  assert.match(source, /请选择供应商/u)
+  assert.match(source, /supplierSelectValue/u)
+  assert.match(source, /if \(supplier === undefined\)/u)
+  assert.doesNotMatch(source, /ALL_SUPPLIERS_OPTION_VALUE/u)
+  assert.doesNotMatch(source, /label: '全部供应商'/u)
 })
 
 test('QsProductSelector 使用组件标准 3xl 档位并约束已选产品名称与横向溢出', async () => {
@@ -93,6 +96,6 @@ test('QsProductSelector 支持由订单固定供应商并隐藏可变供应商�
 
   assert.match(source, /fixedSupplierValue\?: string/u)
   assert.match(source, /props\.fixedSupplierValue \?\? supplierValue\.value/u)
-  assert.match(source, /v-if="fixedSupplierValue === undefined"[\s\S]*?aria-label="供应商筛选"/u)
+  assert.match(source, /v-if="fixedSupplierValue === undefined"[\s\S]*?aria-label="供应商"/u)
   assert.match(source, /watch\(\(\) => props\.fixedSupplierValue, closeUntrustedSession\)/u)
 })

@@ -13,6 +13,8 @@ import { ProductMediaPersistence } from './media/product-media.persistence'
 import { ProductMediaService } from './media/product-media.service'
 import { ProductCommandService } from './product-command.service'
 import { ProductQueryService } from './product-query.service'
+import { ProductTaxonomyController } from './product-taxonomy.controller'
+import { ProductTaxonomyService } from './product-taxonomy.service'
 import { ProductUpdateService } from './product-update.service'
 import { ProductsController } from './products.controller'
 
@@ -26,11 +28,12 @@ import { ProductsController } from './products.controller'
     NumberingModule,
     MediaModule,
   ],
-  controllers: [ProductsController],
+  controllers: [ProductsController, ProductTaxonomyController],
   providers: [
     ProductQueryService,
     ProductCommandService,
     ProductUpdateService,
+    ProductTaxonomyService,
     ProductMediaPersistence,
     ProductMediaService,
     ProductMediaHttpService,

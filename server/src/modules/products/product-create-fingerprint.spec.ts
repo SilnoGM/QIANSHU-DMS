@@ -13,8 +13,8 @@ function payload(overrides: Record<string, unknown> = {}) {
     name: ' Cafe\u0301 ',
     categoryName: ' 分类 ',
     productHeadName: ' 产品头 ',
-    status: 'DRAFT',
-    supplierValue: null,
+    status: 'INACTIVE',
+    supplierValue: 'SUPPLIER_A',
     twdSalePrice: { amount: '1.0', currency: 'TWD' },
     myrSalePrice: { amount: null, currency: 'MYR' },
     purchaseCost: { amount: '20.50', currency: 'CNY' },
@@ -27,10 +27,10 @@ function payload(overrides: Record<string, unknown> = {}) {
 }
 
 describe('calculateProductCreateFingerprint', () => {
-  it('uses the frozen product.create.v2 canonical field sequence', () => {
-    expect(PRODUCT_CREATE_FINGERPRINT_VERSION).toBe('product.create.v2')
+  it('uses the frozen product.create.v3 canonical field sequence', () => {
+    expect(PRODUCT_CREATE_FINGERPRINT_VERSION).toBe('product.create.v3')
     expect(calculateProductCreateFingerprint(ACTOR_ID, payload()))
-      .toBe('48007e0983ad085c89f68d83a702f49b323e9bc24c94c8bbf6cc5d9deea2b81b')
+      .toBe('a27f0f92ba7b8cb25c6bbb31221a1598aa893fe8f4f2f95c6e5d04448a3540e0')
   })
 
   it('treats equivalent decimal scale and NFC text as the same payload', () => {

@@ -110,10 +110,10 @@ export function buildProductUpdateRequest(
   if (currentBody.productHeadName !== baselineBody.productHeadName) {
     request.productHeadName = currentBody.productHeadName
   }
-  if (currentBody.status !== baselineBody.status) {
-    request.status = currentBody.status
-  }
-  if (currentBody.supplierValue !== baselineBody.supplierValue) {
+  if (
+    currentBody.supplierValue !== null
+    && currentBody.supplierValue !== baselineBody.supplierValue
+  ) {
     request.supplierValue = currentBody.supplierValue
   }
   if (!sameValue(currentBody.twdSalePrice, baselineBody.twdSalePrice)) {

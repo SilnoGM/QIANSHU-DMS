@@ -10,11 +10,13 @@ import {
 export interface ProductUpdateLockRecord {
   readonly id: string
   readonly name: string
+  readonly categoryId: string | null
   readonly categoryName: string | null
+  readonly productHeadId: string | null
   readonly productHeadName: string | null
   readonly productNo: string
   readonly status: ProductStatusValue
-  readonly supplierValue: string | null
+  readonly supplierValue: string
   readonly twdSalePriceAmount: string | null
   readonly twdSalePriceCurrency: string
   readonly myrSalePriceAmount: string | null
@@ -27,10 +29,10 @@ export interface ProductUpdateLockRecord {
 
 export interface ProductUpdateRecordData {
   readonly name?: string
-  readonly categoryName?: string | null
-  readonly productHeadName?: string | null
+  readonly categoryId?: string | null
+  readonly productHeadId?: string | null
   readonly status?: ProductStatusValue
-  readonly supplierValue?: string | null
+  readonly supplierValue?: string
   readonly twdSalePriceAmount?: string | null
   readonly twdSalePriceCurrency?: string
   readonly myrSalePriceAmount?: string | null
@@ -50,27 +52,33 @@ export async function readProductForUpdate(
 ): Promise<ProductUpdateLockRecord | null> {
   const rows = await transaction.$queryRaw<ProductUpdateLockRecord[]>(Prisma.sql`
     SELECT
-      "id",
-      "name",
-      "category_name" AS "categoryName",
-      "product_head_name" AS "productHeadName",
-      "product_no" AS "productNo",
-      "status",
-      "supplier_value" AS "supplierValue",
-      CASE WHEN "twd_sale_price_amount" IS NULL THEN NULL
-        ELSE trim_scale("twd_sale_price_amount")::text END AS "twdSalePriceAmount",
-      "twd_sale_price_currency" AS "twdSalePriceCurrency",
-      CASE WHEN "myr_sale_price_amount" IS NULL THEN NULL
-        ELSE trim_scale("myr_sale_price_amount")::text END AS "myrSalePriceAmount",
-      "myr_sale_price_currency" AS "myrSalePriceCurrency",
-      CASE WHEN "purchase_cost_amount" IS NULL THEN NULL
-        ELSE trim_scale("purchase_cost_amount")::text END AS "purchaseCostAmount",
-      "purchase_cost_currency" AS "purchaseCostCurrency",
-      "attributes",
-      "version"
-    FROM "products"
-    WHERE "id" = CAST(${productId} AS uuid)
-    FOR UPDATE
+      product."id",
+      product."name",
+      product."category_id" AS "categoryId",
+      category."name" AS "categoryName",
+      product."product_head_id" AS "productHeadId",
+      head."name" AS "productHeadName",
+      product."product_no" AS "productNo",
+      product."status",
+      product."supplier_value" AS "supplierValue",
+      CASE WHEN product."twd_sale_price_amount" IS NULL THEN NULL
+        ELSE trim_scale(product."twd_sale_price_amount")::text END AS "twdSalePriceAmount",
+      product."twd_sale_price_currency" AS "twdSalePriceCurrency",
+      CASE WHEN product."myr_sale_price_amount" IS NULL THEN NULL
+        ELSE trim_scale(product."myr_sale_price_amount")::text END AS "myrSalePriceAmount",
+      product."myr_sale_price_currency" AS "myrSalePriceCurrency",
+      CASE WHEN product."purchase_cost_amount" IS NULL THEN NULL
+        ELSE trim_scale(product."purchase_cost_amount")::text END AS "purchaseCostAmount",
+      product."purchase_cost_currency" AS "purchaseCostCurrency",
+      product."attributes",
+      product."version"
+    FROM "products" AS product
+    LEFT JOIN "product_categories" AS category
+      ON category."id" = product."category_id"
+    LEFT JOIN "product_heads" AS head
+      ON head."id" = product."product_head_id"
+    WHERE product."id" = CAST(${productId} AS uuid)
+    FOR UPDATE OF product
   `)
   return rows[0] ?? null
 }

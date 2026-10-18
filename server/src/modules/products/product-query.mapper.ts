@@ -18,14 +18,24 @@ interface ProductActorRow {
   readonly displayName: string
 }
 
+export interface ProductCategoryRow {
+  readonly id: string
+  readonly name: string
+}
+
+export interface ProductHeadRow {
+  readonly id: string
+  readonly name: string
+}
+
 export interface ProductQueryRow {
   readonly id: string
   readonly name: string
-  readonly categoryName: string | null
-  readonly productHeadName: string | null
+  readonly category: ProductCategoryRow | null
+  readonly productHead: ProductHeadRow | null
   readonly productNo: string
   readonly status: ProductStatusValue
-  readonly supplierValue: string | null
+  readonly supplierValue: string
   readonly twdSalePriceAmount: DecimalStringSource | null
   readonly twdSalePriceCurrency: string
   readonly myrSalePriceAmount: DecimalStringSource | null
@@ -71,8 +81,8 @@ export interface ProductActor {
 export const PRODUCT_RESPONSE_SELECT = {
   id: true,
   name: true,
-  categoryName: true,
-  productHeadName: true,
+  category: { select: { id: true, name: true } },
+  productHead: { select: { id: true, name: true } },
   productNo: true,
   status: true,
   supplierValue: true,
@@ -93,7 +103,9 @@ export const PRODUCT_RESPONSE_SELECT = {
 export interface ProductListItem {
   readonly id: string
   readonly name: string
+  readonly categoryId: string | null
   readonly categoryName: string | null
+  readonly productHeadId: string | null
   readonly productHeadName: string | null
   readonly productNo: string
   readonly status: ProductStatusValue
@@ -122,11 +134,17 @@ export function mapProductListItem(
   supplierResolution: StoredDictionaryValueResolution | null,
   media: ProductMedia,
 ): ProductListItem {
+  if ((row.category === null) !== (row.productHead === null)) {
+    throw new ProductDataIntegrityError()
+  }
+
   return {
     id: row.id,
     name: row.name,
-    categoryName: row.categoryName,
-    productHeadName: row.productHeadName,
+    categoryId: row.category?.id ?? null,
+    categoryName: row.category?.name ?? null,
+    productHeadId: row.productHead?.id ?? null,
+    productHeadName: row.productHead?.name ?? null,
     productNo: row.productNo,
     status: row.status,
     supplier: mapSupplier(row.supplierValue, supplierResolution),
@@ -187,13 +205,9 @@ function mapDecimalAmount(amount: DecimalStringSource): string {
 }
 
 function mapSupplier(
-  rawValue: string | null,
+  rawValue: string,
   resolution: StoredDictionaryValueResolution | null,
-): ProductSupplier | null {
-  if (rawValue === null) {
-    if (resolution !== null) throw new ProductDataIntegrityError()
-    return null
-  }
+): ProductSupplier {
   if (resolution === null || resolution.value !== rawValue) {
     throw new ProductDataIntegrityError()
   }

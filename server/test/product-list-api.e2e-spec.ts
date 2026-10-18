@@ -144,6 +144,16 @@ describe('Product list API with isolated PostgreSQL', () => {
     await prisma.product.deleteMany({
       where: { productNo: { startsWith: PRODUCT_NO_PREFIX } },
     })
+    await prisma.productHead.deleteMany({
+      where: {
+        category: {
+          supplierValue: { in: Object.values(supplierValues) },
+        },
+      },
+    })
+    await prisma.productCategory.deleteMany({
+      where: { supplierValue: { in: Object.values(supplierValues) } },
+    })
     await prisma.$transaction(async (transaction) => {
       await transaction.dictionaryType.update({
         where: { id: supplierDictionaryTypeId },
@@ -253,24 +263,56 @@ describe('Product list API with isolated PostgreSQL', () => {
   }
 
   async function seedProducts(actorUserId: string): Promise<{
+    readonly categoryGeneratorId: string
+    readonly categoryMicroDisabledId: string
+    readonly categoryMicroEffectiveId: string
     readonly disabledId: string
     readonly effectiveId: string
-    readonly nullSupplierId: string
+    readonly emptyCategoryId: string
+    readonly emptyHeadId: string
+    readonly productHeadEffectiveId: string
+    readonly unclassifiedId: string
     readonly unknownId: string
   }> {
     const sharedUpdatedAt = new Date('2026-08-12T04:00:00.000Z')
     const effectiveId = randomUUID()
     const disabledId = randomUUID()
     const unknownId = randomUUID()
-    const nullSupplierId = randomUUID()
+    const unclassifiedId = randomUUID()
+
+    // 同名分类可存在于不同供应商；分类/产品头按稳定 ID 关联。
+    const categoryMicroEffective = await prisma.productCategory.create({
+      data: { name: '微耕机', supplierValue: supplierValues.effective },
+    })
+    const productHeadEffective = await prisma.productHead.create({
+      data: { categoryId: categoryMicroEffective.id, name: '旱地履带' },
+    })
+    const categoryMicroDisabled = await prisma.productCategory.create({
+      data: { name: '微耕机', supplierValue: supplierValues.disabled },
+    })
+    const productHeadDisabled = await prisma.productHead.create({
+      data: { categoryId: categoryMicroDisabled.id, name: '四驱四轮' },
+    })
+    const categoryGenerator = await prisma.productCategory.create({
+      data: { name: '发电机', supplierValue: supplierValues.unknown },
+    })
+    const productHeadGenerator = await prisma.productHead.create({
+      data: { categoryId: categoryGenerator.id, name: '汽油发电机' },
+    })
+    const emptyCategory = await prisma.productCategory.create({
+      data: { name: '空分类', supplierValue: supplierValues.effective },
+    })
+    const emptyHead = await prisma.productHead.create({
+      data: { categoryId: emptyCategory.id, name: '空产品头' },
+    })
 
     await prisma.product.createMany({
       data: [
         {
           id: effectiveId,
           name: '有效供应商产品',
-          categoryName: '微耕机',
-          productHeadName: '旱地履带',
+          categoryId: categoryMicroEffective.id,
+          productHeadId: productHeadEffective.id,
           productNo: `${PRODUCT_NO_PREFIX}001`,
           status: ProductStatus.ACTIVE,
           supplierValue: supplierValues.effective,
@@ -289,8 +331,8 @@ describe('Product list API with isolated PostgreSQL', () => {
         {
           id: disabledId,
           name: '停用供应商历史产品',
-          categoryName: '微耕机',
-          productHeadName: '四驱四轮',
+          categoryId: categoryMicroDisabled.id,
+          productHeadId: productHeadDisabled.id,
           productNo: `${PRODUCT_NO_PREFIX}002`,
           status: ProductStatus.INACTIVE,
           supplierValue: supplierValues.disabled,
@@ -302,25 +344,36 @@ describe('Product list API with isolated PostgreSQL', () => {
         {
           id: unknownId,
           name: '未知供应商历史产品',
-          categoryName: '发电机',
-          productHeadName: '汽油发电机',
+          categoryId: categoryGenerator.id,
+          productHeadId: productHeadGenerator.id,
           productNo: `${PRODUCT_NO_PREFIX}003`,
           status: ProductStatus.INACTIVE,
           supplierValue: supplierValues.unknown,
           updatedAt: new Date('2026-08-11T04:00:00.000Z'),
         },
         {
-          id: nullSupplierId,
-          name: '草稿产品',
+          id: unclassifiedId,
+          name: '未分类产品',
           productNo: `${PRODUCT_NO_PREFIX}004`,
-          status: ProductStatus.DRAFT,
-          supplierValue: null,
+          status: ProductStatus.INACTIVE,
+          supplierValue: supplierValues.effective,
           updatedAt: new Date('2026-08-09T04:00:00.000Z'),
         },
       ],
     })
 
-    return { disabledId, effectiveId, nullSupplierId, unknownId }
+    return {
+      categoryGeneratorId: categoryGenerator.id,
+      categoryMicroDisabledId: categoryMicroDisabled.id,
+      categoryMicroEffectiveId: categoryMicroEffective.id,
+      disabledId,
+      effectiveId,
+      emptyCategoryId: emptyCategory.id,
+      emptyHeadId: emptyHead.id,
+      productHeadEffectiveId: productHeadEffective.id,
+      unclassifiedId,
+      unknownId,
+    }
   }
 
   it('requires an authenticated normal session with products:read', async () => {
@@ -378,7 +431,7 @@ describe('Product list API with isolated PostgreSQL', () => {
     expect(page.items.map(item => item.id)).toEqual([
       ...[products.effectiveId, products.disabledId].sort().reverse(),
       products.unknownId,
-      products.nullSupplierId,
+      products.unclassifiedId,
     ])
     expect(resolveStoredValues).toHaveBeenCalledTimes(1)
     expect(resolveStoredValues).toHaveBeenCalledWith({
@@ -443,39 +496,61 @@ describe('Product list API with isolated PostgreSQL', () => {
           state: 'UNKNOWN',
         },
       })
-    expect(page.items.find(item => item.id === products.nullSupplierId))
-      .toMatchObject({ supplier: null })
+    expect(page.items.find(item => item.id === products.unclassifiedId))
+      .toMatchObject({
+        categoryId: null,
+        categoryName: null,
+        productHeadId: null,
+        productHeadName: null,
+        supplier: { value: supplierValues.effective },
+      })
   })
 
-  it('returns taxonomy options from existing product values', async () => {
+  it('returns taxonomy options scoped by supplier, including empty entries', async () => {
     const reader = await createLoggedInBrowser({ productsRead: true })
-    await seedProducts(reader.account.user.id)
+    const products = await seedProducts(reader.account.user.id)
 
     const response = await reader.browser
       .get('/api/products/taxonomy-options')
       .expect(200)
     const body = readResponseBody<{
-      categories: Array<{ name: string, productHeads: string[] }>
+      categories: Array<{
+        id: string
+        name: string
+        supplierValue: string
+        productHeads: Array<{ id: string, name: string }>
+      }>
     }>(response)
-    const byName = new Map(body.categories.map(category => [
-      category.name,
-      [...category.productHeads].sort(),
-    ]))
-    expect(byName.get('微耕机')).toEqual(['四驱四轮', '旱地履带'].sort())
-    expect(byName.get('发电机')).toEqual(['汽油发电机'])
-    expect(byName.has('未分类')).toBe(false)
+    const microCategories = body.categories.filter(category => category.name === '微耕机')
+    expect(microCategories).toHaveLength(2)
+    expect(microCategories.map(category => category.supplierValue).sort())
+      .toEqual([supplierValues.disabled, supplierValues.effective].sort())
+    expect(microCategories.flatMap(category => category.productHeads.map(head => head.name)).sort())
+      .toEqual(['四驱四轮', '旱地履带'].sort())
+    const generator = body.categories.find(category => category.id === products.categoryGeneratorId)
+    expect(generator).toMatchObject({
+      name: '发电机',
+      supplierValue: supplierValues.unknown,
+      productHeads: [{ name: '汽油发电机' }],
+    })
+    expect(body.categories.find(category => category.id === products.emptyCategoryId))
+      .toMatchObject({
+        name: '空分类',
+        productHeads: [{ id: products.emptyHeadId, name: '空产品头' }],
+      })
+    expect(body.categories.some(category => category.name === '未分类')).toBe(false)
   })
 
   it('applies exact status and supplier filters, resets empty pages and rejects invalid queries', async () => {
     const reader = await createLoggedInBrowser({ productsRead: true })
-    await seedProducts(reader.account.user.id)
+    const products = await seedProducts(reader.account.user.id)
 
     const filteredResponse = await reader.browser
       .get('/api/products')
       .query({ supplierValue: supplierValues.effective, page: 1, pageSize: 1 })
       .expect(200)
     const filtered = readResponseBody<ProductPageBody>(filteredResponse)
-    expect(filtered).toMatchObject({ page: 1, pageSize: 1, total: 1 })
+    expect(filtered).toMatchObject({ page: 1, pageSize: 1, total: 2 })
     expect(filtered.items.map(item => item.productNo)).toEqual([
       `${PRODUCT_NO_PREFIX}001`,
     ])
@@ -485,7 +560,7 @@ describe('Product list API with isolated PostgreSQL', () => {
       .query({ status: ProductStatus.INACTIVE })
       .expect(200)
     const inactive = readResponseBody<ProductPageBody>(inactiveResponse)
-    expect(inactive).toMatchObject({ total: 2 })
+    expect(inactive).toMatchObject({ total: 3 })
     expect(inactive.items.every(item => item.status === ProductStatus.INACTIVE))
       .toBe(true)
 
@@ -503,16 +578,16 @@ describe('Product list API with isolated PostgreSQL', () => {
 
     const categoryResponse = await reader.browser
       .get('/api/products')
-      .query({ categoryName: '微耕机' })
+      .query({ categoryId: products.categoryMicroEffectiveId })
       .expect(200)
-    const categoryPage = readResponseBody<ProductPageBody>(categoryResponse)
-    expect(categoryPage).toMatchObject({ total: 2 })
-    expect(categoryPage.items.map(item => item.productHeadName).sort())
-      .toEqual(['四驱四轮', '旱地履带'])
+    expect(readResponseBody<ProductPageBody>(categoryResponse)).toMatchObject({
+      total: 1,
+      items: [{ productNo: `${PRODUCT_NO_PREFIX}001` }],
+    })
 
     const productHeadResponse = await reader.browser
       .get('/api/products')
-      .query({ productHeadName: '旱地履带' })
+      .query({ productHeadId: products.productHeadEffectiveId })
       .expect(200)
     expect(readResponseBody<ProductPageBody>(productHeadResponse)).toMatchObject({
       total: 1,
@@ -545,8 +620,8 @@ describe('Product list API with isolated PostgreSQL', () => {
       `keyword=${encodeURIComponent('😀'.repeat(129))}`,
       'status=UNKNOWN',
       'supplierValue=%20%20%20',
-      'categoryName=%20%20%20',
-      `productHeadName=${encodeURIComponent('😀'.repeat(65))}`,
+      'categoryId=not-a-uuid',
+      'productHeadId=11111111-1111-4111-8111-11111111111A',
     ]) {
       await reader.browser
         .get(`/api/products?${query}`)
@@ -565,7 +640,7 @@ describe('Product list API with isolated PostgreSQL', () => {
 
     const byNameResponse = await reader.browser
       .get('/api/products')
-      .query({ keyword: '  草稿  ' })
+      .query({ keyword: '  未分类  ' })
       .expect(200)
     expect(readResponseBody<ProductPageBody>(byNameResponse)).toMatchObject({
       total: 1,

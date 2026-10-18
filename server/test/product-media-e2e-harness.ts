@@ -332,6 +332,8 @@ export class ProductMediaE2eHarness {
         createdByUserId: this.actorId,
         name: `ProductMedia ${label}`,
         productNo: `PM-${this.suffix}-${label}`.slice(0, 64),
+        status: 'INACTIVE',
+        supplierValue: 'MEDIA_E2E_SUPPLIER',
         updatedByUserId: this.actorId,
       },
       select: { id: true },

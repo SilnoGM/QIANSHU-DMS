@@ -432,7 +432,7 @@ export class SalesOrderProductOptionDto {
   @ApiProperty({ type: 'string' }) readonly name!: string
   @ApiProperty({ type: 'string', nullable: true }) readonly categoryName!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly productHeadName!: string | null
-  @ApiProperty({ type: 'string', nullable: true }) readonly supplierValue!: string | null
+  @ApiProperty({ type: 'string' }) readonly supplierValue!: string
   @ApiProperty({ type: 'array', items: { type: 'object', additionalProperties: true } }) readonly attributes!: readonly Record<string, unknown>[]
   @ApiProperty({ type: 'string', nullable: true }) readonly standardUnitPriceAmount!: string | null
   @ApiProperty({ enum: ['TWD', 'MYR'] }) readonly currencyCode!: string

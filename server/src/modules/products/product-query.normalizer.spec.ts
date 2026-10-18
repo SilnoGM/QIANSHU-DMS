@@ -12,15 +12,19 @@ describe('normalizeProductListQuery', () => {
 
   it('preserves the exact supplier raw value and calculates pagination', () => {
     expect(normalizeProductListQuery({
+      categoryId: '11111111-1111-4111-8111-111111111111',
       keyword: '  product-001  ',
       page: 3,
       pageSize: 50,
+      productHeadId: '22222222-2222-4222-8222-222222222222',
       status: 'INACTIVE',
       supplierValue: ' raw-value ',
     })).toEqual({
+      categoryId: '11111111-1111-4111-8111-111111111111',
       keyword: 'product-001',
       page: 3,
       pageSize: 50,
+      productHeadId: '22222222-2222-4222-8222-222222222222',
       skip: 100,
       status: 'INACTIVE',
       supplierValue: ' raw-value ',
@@ -50,6 +54,8 @@ describe('normalizeProductListQuery', () => {
     { supplierValue: '   ' },
     { supplierValue: '😀'.repeat(65) },
     { supplierValue: 123 },
+    { categoryId: 'not-a-uuid' },
+    { productHeadId: '11111111-1111-4111-8111-11111111111A' },
   ])('rejects invalid input with a stable 422 response: %j', (input) => {
     expect(() => normalizeProductListQuery(input)).toThrow(
       expect.objectContaining({

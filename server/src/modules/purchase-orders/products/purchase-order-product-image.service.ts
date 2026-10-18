@@ -47,7 +47,6 @@ export class PurchaseOrderProductImageService {
           product: {
             is: {
               status: 'ACTIVE',
-              supplierValue: { not: null },
               purchaseCostAmount: { not: null },
               purchaseCostCurrency: 'CNY',
             },

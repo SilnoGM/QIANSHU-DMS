@@ -93,20 +93,15 @@ export class UpdateProductRequestDto {
   @IsEnum(ProductStatus, { message: '产品状态不在白名单内' })
   status?: ProductStatus
 
-  @ApiPropertyOptional({
-    type: 'string',
-    nullable: true,
-    minLength: 1,
-    maxLength: 64,
-  })
+  @ApiPropertyOptional({ type: 'string', minLength: 1, maxLength: 64 })
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value)
   @ValidateIf((_object: UpdateProductRequestDto, value: unknown) =>
-    value !== undefined && value !== null)
-  @IsString({ message: '必须是字符串或 null' })
+    value !== undefined)
+  @IsString({ message: '必须是字符串' })
   @IsUnicodeCodePointLength(1, 64, { message: '长度必须为 1 到 64 个字符' })
   @Matches(/\S/u, { message: '不能为空白文本' })
-  supplierValue?: string | null
+  supplierValue?: string
 
   @ApiPropertyOptional({ type: () => ProductTwdSalePriceInputDto })
   @ValidateIf((_object: UpdateProductRequestDto, value: unknown) =>

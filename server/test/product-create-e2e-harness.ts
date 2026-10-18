@@ -31,8 +31,8 @@ export interface ProductCreateBody {
   readonly name: string
   readonly categoryName: string
   readonly productHeadName: string
-  readonly status: 'ACTIVE' | 'DRAFT' | 'INACTIVE'
-  readonly supplierValue: string | null
+  readonly status: 'ACTIVE' | 'INACTIVE'
+  readonly supplierValue: string
   readonly twdSalePrice: {
     readonly amount: string | null
     readonly currency: 'TWD'
@@ -54,7 +54,9 @@ export interface ProductCreateBody {
 interface ProductResponseBody {
   readonly id: string
   readonly name: string
+  readonly categoryId: string | null
   readonly categoryName: string | null
+  readonly productHeadId: string | null
   readonly productHeadName: string | null
   readonly productNo: string
   readonly status: string
@@ -482,11 +484,15 @@ export class ProductCreateE2eHarness {
 
     const product = await this.prisma.product.findUniqueOrThrow({
       where: { id: body.id },
+      include: {
+        category: { select: { name: true } },
+        productHead: { select: { name: true } },
+      },
     })
     expect(product).toMatchObject({
       name: 'Product E2E',
-      categoryName: '农机',
-      productHeadName: '旱地履带',
+      category: { name: '农机' },
+      productHead: { name: '旱地履带' },
       productNo: body.productNo,
       status: 'ACTIVE',
       supplierValue: this.supplierValue,
@@ -533,6 +539,7 @@ export class ProductCreateE2eHarness {
         productNo: body.productNo,
         status: 'ACTIVE',
         supplierSelected: true,
+        categorySelected: true,
         twdSalePriceProvided: true,
         myrSalePriceProvided: false,
         purchaseCostProvided: true,

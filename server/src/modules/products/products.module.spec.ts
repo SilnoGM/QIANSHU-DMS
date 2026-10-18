@@ -12,6 +12,8 @@ import { ProductMediaPersistence } from './media/product-media.persistence'
 import { ProductMediaService } from './media/product-media.service'
 import { ProductCommandService } from './product-command.service'
 import { ProductQueryService } from './product-query.service'
+import { ProductTaxonomyController } from './product-taxonomy.controller'
+import { ProductTaxonomyService } from './product-taxonomy.service'
 import { ProductUpdateService } from './product-update.service'
 import { ProductsController } from './products.controller'
 import { ProductsModule } from './products.module'
@@ -28,11 +30,13 @@ describe('ProductsModule metadata', () => {
     ])
     expect(Reflect.getMetadata('controllers', ProductsModule)).toEqual([
       ProductsController,
+      ProductTaxonomyController,
     ])
     expect(Reflect.getMetadata('providers', ProductsModule)).toEqual([
       ProductQueryService,
       ProductCommandService,
       ProductUpdateService,
+      ProductTaxonomyService,
       ProductMediaPersistence,
       ProductMediaService,
       ProductMediaHttpService,

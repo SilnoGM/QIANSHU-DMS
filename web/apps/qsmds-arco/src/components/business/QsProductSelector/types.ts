@@ -3,7 +3,7 @@ export type ProductSelectorCurrency = 'CNY' | 'MYR' | 'TWD'
 export interface ProductSelectorQuery {
   readonly currencyCode: ProductSelectorCurrency
   readonly keyword?: string
-  readonly supplierValue?: string
+  readonly supplierValue: string
   readonly categoryName?: string
   readonly productHeadName?: string
   readonly unclassified?: boolean

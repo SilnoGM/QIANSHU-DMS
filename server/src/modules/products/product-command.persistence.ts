@@ -16,6 +16,8 @@ const PRODUCT_NUMBER_UNIQUE_CONSTRAINT = 'products_product_no_key'
 export interface CreateProductRecordInput {
   readonly productNo: string
   readonly actorUserId: string
+  readonly categoryId: string | null
+  readonly productHeadId: string | null
   readonly command: NormalizedProductCreateCommand
 }
 
@@ -32,8 +34,8 @@ export async function createProductRecord(
   return transaction.product.create({
     data: {
       name: input.command.name,
-      categoryName: input.command.categoryName,
-      productHeadName: input.command.productHeadName,
+      categoryId: input.categoryId,
+      productHeadId: input.productHeadId,
       productNo: input.productNo,
       status: input.command.status,
       supplierValue: input.command.supplierValue,

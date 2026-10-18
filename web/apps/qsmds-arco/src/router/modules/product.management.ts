@@ -12,6 +12,7 @@ export const PRODUCT_MANAGEMENT_PERMISSIONS = [
   'products:read',
   'products:create',
   'products:update',
+  'product-categories:read',
 ] as const
 
 const routes: RouteRecordRaw = {
@@ -42,6 +43,16 @@ const routes: RouteRecordRaw = {
         title: '产品列表',
         icon: 'qs-product-list',
         auth: 'products:read',
+      },
+    },
+    {
+      path: 'categories',
+      name: 'adminProductCategories',
+      component: () => import('@/views/admin/product-management/categories/index.vue'),
+      meta: {
+        title: '产品分类',
+        icon: 'qs-product-list',
+        auth: 'product-categories:read',
       },
     },
     {

@@ -23,7 +23,7 @@ import { resolveProductMediaContentUrl } from '../../../../api/modules/product-m
 type ProductListQuery = NonNullable<ProductsListData['query']>
 type ProductListStatus = NonNullable<ProductListQuery['status']>
 
-const PRODUCT_LIST_STATUSES = new Set<unknown>(['DRAFT', 'ACTIVE', 'INACTIVE'])
+const PRODUCT_LIST_STATUSES = new Set<unknown>(['ACTIVE', 'INACTIVE'])
 
 /**
  * generated OpenAPI 3 nullable enum 当前不会把 null 写进 TS union；页面 view model
@@ -71,6 +71,7 @@ export interface ProductListResponseGuardInput {
 }
 
 export interface ProductListApiFailure {
+  readonly code: string | undefined
   readonly message: string
   readonly requestId: string | undefined
 }
@@ -159,13 +160,13 @@ export function buildProductListQuery(input: {
     && input.filters.supplierValue.trim() !== ''
     ? input.filters.supplierValue
     : undefined
-  const categoryName = typeof input.filters.categoryName === 'string'
-    && input.filters.categoryName.trim() !== ''
-    ? input.filters.categoryName
+  const categoryId = typeof input.filters.categoryId === 'string'
+    && input.filters.categoryId.trim() !== ''
+    ? input.filters.categoryId
     : undefined
-  const productHeadName = typeof input.filters.productHeadName === 'string'
-    && input.filters.productHeadName.trim() !== ''
-    ? input.filters.productHeadName
+  const productHeadId = typeof input.filters.productHeadId === 'string'
+    && input.filters.productHeadId.trim() !== ''
+    ? input.filters.productHeadId
     : undefined
 
   return {
@@ -174,12 +175,12 @@ export function buildProductListQuery(input: {
     ...(keyword === '' ? {} : { keyword }),
     ...(status === undefined ? {} : { status }),
     ...(supplierValue === undefined ? {} : { supplierValue }),
-    ...(categoryName === undefined ? {} : { categoryName }),
-    ...(productHeadName === undefined ? {} : { productHeadName }),
+    ...(categoryId === undefined ? {} : { categoryId }),
+    ...(productHeadId === undefined ? {} : { productHeadId }),
   }
 }
 
-/** 应用或清空产品状态条件都回到第一页；草稿属于 API 合法值，但当前 UI 不提供该筛选项。 */
+/** 应用或清空产品状态条件都回到第一页；DRAFT 已从状态域退役。 */
 export function applyProductStatusFilter(
   current: QsGenericTableFilterValues,
   status: ProductListStatus | undefined,
@@ -309,10 +310,15 @@ export function getProductListApiFailure(
   error: unknown,
 ): ProductListApiFailure {
   if (!isRecord(error)) {
-    return { message: '请求失败，请稍后重试', requestId: undefined }
+    return {
+      code: undefined,
+      message: '请求失败，请稍后重试',
+      requestId: undefined,
+    }
   }
   const body = isRecord(error.body) ? error.body : undefined
   return {
+    code: typeof body?.code === 'string' ? body.code : undefined,
     message: typeof body?.message === 'string'
       ? body.message
       : typeof error.message === 'string'

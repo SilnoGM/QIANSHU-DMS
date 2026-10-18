@@ -14,15 +14,15 @@ import {
 
 function createRow(
   id: string,
-  supplierValue: string | null,
+  supplierValue: string,
 ): ProductQueryRow {
   return {
     id,
     name: `Product ${id}`,
-    categoryName: null,
-    productHeadName: null,
+    category: null,
+    productHead: null,
     productNo: `NO-${id}`,
-    status: ProductStatus.DRAFT,
+    status: ProductStatus.INACTIVE,
     supplierValue,
     twdSalePriceAmount: null,
     twdSalePriceCurrency: 'TWD',
@@ -160,7 +160,7 @@ describe('ProductQueryService', () => {
   it('combines name/number search with exact status and supplier filtering and shares the where', async () => {
     const fixture = createFixture([
       createRow('1', 'SUPPLIER_A'),
-      createRow('2', null),
+      createRow('2', 'SUPPLIER_B'),
       createRow('3', 'SUPPLIER_A'),
       createRow('4', ' raw '),
     ])
@@ -216,12 +216,12 @@ describe('ProductQueryService', () => {
     expect(fixture.resolveStoredValues).toHaveBeenCalledTimes(1)
     expect(fixture.resolveStoredValues).toHaveBeenCalledWith({
       dictionaryCode: 'service_provider.supplier',
-      values: ['SUPPLIER_A', ' raw '],
+      values: ['SUPPLIER_A', 'SUPPLIER_B', ' raw '],
     })
     expect(result).toMatchObject({ page: 2, pageSize: 10, total: 4 })
     expect(result.items.map(item => item.supplier?.value ?? null)).toEqual([
       'SUPPLIER_A',
-      null,
+      'SUPPLIER_B',
       'SUPPLIER_A',
       ' raw ',
     ])
@@ -261,8 +261,8 @@ describe('ProductQueryService', () => {
 
   it('groups one batch of active ProductMedia into the matching products', async () => {
     const fixture = createFixture([
-      createRow('1', null),
-      createRow('2', null),
+      createRow('1', 'SUPPLIER_A'),
+      createRow('2', 'SUPPLIER_B'),
     ])
     fixture.productMediaFindMany.mockResolvedValue([
       {
