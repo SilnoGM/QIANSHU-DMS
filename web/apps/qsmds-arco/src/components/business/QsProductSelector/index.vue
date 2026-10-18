@@ -722,7 +722,7 @@ onBeforeUnmount(() => {
                 <button
                   v-if="item.mainImage && !failedImages.has(item.id)"
                   type="button"
-                  class="bg-muted shrink-0 h-24 w-28 relative overflow-hidden focus-visible:outline-2 focus-visible:outline-primary/50 focus-visible:outline-offset-[-2px] sm:h-28 sm:w-32"
+                  class="bg-muted shrink-0 h-24 w-28 cursor-zoom-in relative overflow-hidden focus-visible:outline-2 focus-visible:outline-primary/50 focus-visible:outline-offset-[-2px] sm:h-28 sm:w-32"
                   :aria-label="`放大查看 ${item.name} 产品图片`"
                   :data-zoom-product="item.id"
                   @click.stop="openProductImage(item)"
@@ -742,9 +742,6 @@ onBeforeUnmount(() => {
                   >
                     <FaIcon name="i-lucide:circle-check" class="size-3" aria-hidden="true" />
                     已选
-                  </span>
-                  <span class="text-muted-foreground border border-border/60 rounded-md bg-background/85 inline-grid size-8 pointer-events-none shadow-sm right-2 top-2 place-items-center absolute backdrop-blur">
-                    <FaIcon name="i-lucide:zoom-in" class="leading-none size-4" aria-hidden="true" />
                   </span>
                 </button>
                 <div v-else class="bg-muted flex shrink-0 h-24 w-28 items-center justify-center relative sm:h-28 sm:w-32">
@@ -809,11 +806,6 @@ onBeforeUnmount(() => {
                 重试
               </FaButton>
             </div>
-          </div>
-
-          <div class="px-3 py-1.5 border-t border-border bg-muted/20 flex shrink-0 items-center justify-between">
-            <span class="text-sm text-muted-foreground">产品总数</span>
-            <span class="text-sm qs-type-data-emphasis">共 {{ total }} 个产品</span>
           </div>
         </section>
 
@@ -884,18 +876,24 @@ onBeforeUnmount(() => {
     </div>
 
     <template #footer>
-      <div class="px-4 py-3 flex flex-col-reverse gap-2 sm:px-6 sm:flex-row sm:justify-end">
-        <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" @click="closeSelector">
-          取消
-        </FaButton>
-        <FaButton
-          type="button"
-          class="min-h-11 sm:min-h-9"
-          :disabled="disabled || changes.length === 0"
-          @click="confirmSession"
-        >
-          确认添加
-        </FaButton>
+      <div class="px-4 py-3 flex flex-col gap-2 w-full sm:px-6 sm:flex-row sm:items-center sm:justify-between">
+        <div class="text-sm text-muted-foreground flex gap-2 items-baseline">
+          <span>产品总数</span>
+          <span class="text-sm qs-type-data-emphasis">共 {{ total }} 个产品</span>
+        </div>
+        <div class="flex flex-col-reverse gap-2 sm:flex-row">
+          <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" @click="closeSelector">
+            取消
+          </FaButton>
+          <FaButton
+            type="button"
+            class="min-h-11 sm:min-h-9"
+            :disabled="disabled || changes.length === 0"
+            @click="confirmSession"
+          >
+            确认添加
+          </FaButton>
+        </div>
       </div>
     </template>
   </QsGenericModal>

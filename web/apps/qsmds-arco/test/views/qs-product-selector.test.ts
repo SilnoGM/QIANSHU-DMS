@@ -80,9 +80,8 @@ test('QsProductSelector 主图点击放大且不触发产品选择', async () =>
   assert.match(source, /imagePreview\.open\(item\.mainImage\.contentUrl, 0\)/u)
   assert.match(source, /data-zoom-product/u)
   assert.match(source, /@click\.stop="openProductImage\(item\)"/u)
-  assert.match(source, /inline-grid/u)
-  assert.match(source, /size-8/u)
-  assert.match(source, /leading-none/u)
+  assert.match(source, /cursor-zoom-in/u)
+  assert.doesNotMatch(source, /i-lucide:zoom-in/u)
   assert.ok(
     [...source.matchAll(/focus-visible:outline-offset-\[-2px\]/gu)].length >= 2,
     '图片与信息区按钮都需要内嵌焦点环',
