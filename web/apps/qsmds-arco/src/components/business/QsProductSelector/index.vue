@@ -135,9 +135,23 @@ function isCategoryExpanded(name: string): boolean {
   return expandedCategories.value.has(name)
 }
 
-function isCategoryActive(name: string): boolean {
+function isCategoryInFilter(name: string): boolean {
   return categoryFilter.value.kind === 'category'
     && categoryFilter.value.name === name
+}
+
+/** 分类自身是叶子选中：整行使用主色填充。 */
+function isCategoryActive(name: string): boolean {
+  return isCategoryInFilter(name)
+    && categoryFilter.value.kind === 'category'
+    && categoryFilter.value.productHeadName === undefined
+}
+
+/** 选中了该分类下的产品头：父级只保留路径文字，不铺底色。 */
+function isCategoryAncestorActive(name: string): boolean {
+  return isCategoryInFilter(name)
+    && categoryFilter.value.kind === 'category'
+    && categoryFilter.value.productHeadName !== undefined
 }
 
 function isProductHeadActive(
@@ -544,16 +558,21 @@ onBeforeUnmount(() => {
           <div class="qs-product-selector-scroll p-2 flex gap-1 overflow-x-auto xl:flex-1 xl:flex-col xl:gap-1 xl:min-h-0 xl:overflow-x-hidden xl:overflow-y-auto">
             <button
               type="button"
-              class="text-sm px-2.5 py-1.5 border rounded-lg flex shrink-0 gap-2 min-h-9 transition-colors items-center xl:w-full"
+              class="text-sm pl-1 pr-1.5 rounded-md flex shrink-0 gap-2 min-h-9 transition-colors items-center xl:w-full"
               :class="categoryFilter.kind === 'all'
-                ? 'border-primary/25 bg-primary/10 text-primary font-semibold'
-                : 'border-transparent hover:bg-background/70'"
+                ? 'bg-primary/10 text-primary'
+                : 'text-foreground hover:bg-background/70'"
               :aria-pressed="categoryFilter.kind === 'all'"
               @click="selectCategory({ kind: 'all' })"
             >
-              <span class="rounded-full bg-current opacity-60 shrink-0 size-1.5" aria-hidden="true" />
+              <span class="flex shrink-0 size-6 items-center justify-center" aria-hidden="true">
+                <span class="rounded-full bg-current opacity-60 size-1.5" />
+              </span>
               <span class="text-left flex-1 min-w-0 truncate">全部</span>
-              <span class="text-[11px] text-muted-foreground tabular-nums">{{ allCategoryCount }}</span>
+              <span
+                class="text-[11px] tabular-nums"
+                :class="categoryFilter.kind === 'all' ? 'text-primary' : 'text-muted-foreground'"
+              >{{ allCategoryCount }}</span>
             </button>
 
             <div
@@ -561,11 +580,17 @@ onBeforeUnmount(() => {
               :key="category.name"
               class="shrink-0 min-w-0 xl:w-full"
             >
-              <div class="flex gap-1 items-center">
+              <div
+                class="rounded-md flex gap-1 min-h-9 transition-colors items-center xl:w-full"
+                :class="isCategoryActive(category.name)
+                  ? 'bg-primary/10'
+                  : 'hover:bg-background/70'"
+              >
                 <button
                   v-if="category.productHeads.length > 0"
                   type="button"
-                  class="text-muted-foreground rounded-md shrink-0 size-7 hidden transition-colors place-items-center hover:bg-background/70 xl:grid"
+                  class="rounded-md shrink-0 size-6 hidden transition-colors place-items-center xl:grid"
+                  :class="isCategoryInFilter(category.name) ? 'text-primary' : 'text-muted-foreground'"
                   :aria-expanded="isCategoryExpanded(category.name)"
                   :aria-label="`${isCategoryExpanded(category.name) ? '收起' : '展开'}${category.name}的产品头`"
                   @click="toggleCategory(category.name)"
@@ -577,39 +602,55 @@ onBeforeUnmount(() => {
                     aria-hidden="true"
                   />
                 </button>
-                <span v-else class="shrink-0 size-7 hidden xl:block" aria-hidden="true" />
+                <span
+                  v-else
+                  class="shrink-0 size-6 hidden items-center justify-center xl:flex"
+                  aria-hidden="true"
+                >
+                  <span class="rounded-full bg-current opacity-60 size-1.5" />
+                </span>
                 <button
                   type="button"
-                  class="text-sm px-2.5 py-1.5 border rounded-lg flex flex-1 gap-2 min-h-9 min-w-0 transition-colors items-center"
-                  :class="isCategoryActive(category.name)
-                    ? 'border-primary/25 bg-primary/10 text-primary font-semibold'
-                    : 'border-transparent hover:bg-background/70'"
+                  class="text-sm pr-1.5 text-left flex flex-1 gap-2 min-h-9 min-w-0 transition-colors items-center"
                   :aria-pressed="isCategoryActive(category.name)"
                   @click="handleCategorySelect(category.name)"
                 >
-                  <span class="text-left flex-1 min-w-0 truncate">{{ category.name }}</span>
-                  <span class="text-[11px] text-muted-foreground tabular-nums">{{ category.count }}</span>
+                  <span
+                    class="flex-1 min-w-0 truncate"
+                    :class="isCategoryActive(category.name)
+                      ? 'text-primary font-semibold'
+                      : isCategoryAncestorActive(category.name)
+                        ? 'text-primary font-medium'
+                        : 'text-foreground'"
+                  >{{ category.name }}</span>
+                  <span
+                    class="text-[11px] tabular-nums"
+                    :class="isCategoryActive(category.name) ? 'text-primary' : 'text-muted-foreground'"
+                  >{{ category.count }}</span>
                 </button>
               </div>
 
               <div
                 v-if="category.productHeads.length > 0 && isCategoryExpanded(category.name)"
-                class="pb-1 pl-8 pr-1 gap-0.5 hidden xl:grid"
+                class="pb-1 pl-8 pt-0.5 gap-0.5 hidden xl:grid"
               >
                 <button
                   v-for="head in category.productHeads"
                   :key="head.name"
                   type="button"
-                  class="text-xs px-2 py-1.5 text-left rounded-md flex gap-2 min-h-8 min-w-0 transition-colors items-center"
+                  class="text-xs px-1.5 text-left rounded-md flex gap-2 min-h-8 min-w-0 transition-colors items-center"
                   :class="isProductHeadActive(category.name, head.name)
                     ? 'bg-primary/10 text-primary font-semibold'
                     : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'"
                   :aria-pressed="isProductHeadActive(category.name, head.name)"
                   @click="handleProductHeadSelect(category.name, head.name)"
                 >
-                  <span class="rounded-full bg-current opacity-50 shrink-0 size-1" aria-hidden="true" />
+                  <span class="rounded-full bg-current opacity-50 shrink-0 size-1.5" aria-hidden="true" />
                   <span class="flex-1 min-w-0 truncate">{{ head.name }}</span>
-                  <span class="text-[11px] tabular-nums">{{ head.count }}</span>
+                  <span
+                    class="text-[11px] tabular-nums"
+                    :class="isProductHeadActive(category.name, head.name) ? 'text-primary' : ''"
+                  >{{ head.count }}</span>
                 </button>
               </div>
             </div>
@@ -617,16 +658,21 @@ onBeforeUnmount(() => {
             <button
               v-if="unclassifiedCount > 0"
               type="button"
-              class="text-sm px-2.5 py-1.5 border rounded-lg flex shrink-0 gap-2 min-h-9 transition-colors items-center xl:w-full"
+              class="text-sm pl-1 pr-1.5 rounded-md flex shrink-0 gap-2 min-h-9 transition-colors items-center xl:w-full"
               :class="categoryFilter.kind === 'unclassified'
-                ? 'border-primary/25 bg-primary/10 text-primary font-semibold'
-                : 'border-transparent hover:bg-background/70'"
+                ? 'bg-primary/10 text-primary'
+                : 'text-foreground hover:bg-background/70'"
               :aria-pressed="categoryFilter.kind === 'unclassified'"
               @click="selectCategory({ kind: 'unclassified' })"
             >
-              <span class="rounded-full bg-current opacity-60 shrink-0 size-1.5" aria-hidden="true" />
+              <span class="flex shrink-0 size-6 items-center justify-center" aria-hidden="true">
+                <span class="rounded-full bg-current opacity-60 size-1.5" />
+              </span>
               <span class="text-left flex-1 min-w-0 truncate">未分类</span>
-              <span class="text-[11px] text-muted-foreground tabular-nums">{{ unclassifiedCount }}</span>
+              <span
+                class="text-[11px] tabular-nums"
+                :class="categoryFilter.kind === 'unclassified' ? 'text-primary' : 'text-muted-foreground'"
+              >{{ unclassifiedCount }}</span>
             </button>
           </div>
         </aside>
@@ -668,7 +714,7 @@ onBeforeUnmount(() => {
               <article
                 v-for="item in items"
                 :key="item.id"
-                class="border rounded-xl bg-background flex min-h-24 min-w-0 transition-[border-color,background-color,box-shadow] duration-200 overflow-hidden"
+                class="border rounded-xl bg-background flex min-h-24 min-w-0 transition-[border-color,background-color,box-shadow] duration-200 overflow-hidden sm:min-h-28"
                 :class="selectedByProductId.has(item.id)
                   ? 'border-primary bg-primary/5'
                   : 'border-border hover:border-primary/50'"
@@ -676,7 +722,7 @@ onBeforeUnmount(() => {
                 <button
                   v-if="item.mainImage && !failedImages.has(item.id)"
                   type="button"
-                  class="bg-muted shrink-0 w-28 self-stretch relative overflow-hidden sm:w-32"
+                  class="bg-muted shrink-0 h-24 w-28 relative overflow-hidden sm:h-28 sm:w-32"
                   :aria-label="`放大查看 ${item.name} 产品图片`"
                   :data-zoom-product="item.id"
                   @click.stop="openProductImage(item)"
@@ -684,7 +730,7 @@ onBeforeUnmount(() => {
                   <img
                     :src="mediaThumbnailUrl(item.mainImage.contentUrl) ?? item.mainImage.contentUrl"
                     :alt="item.name"
-                    class="size-full transition-transform duration-200 object-cover hover:scale-[1.025]"
+                    class="size-full transition-transform duration-200 inset-0 absolute object-cover hover:scale-[1.025]"
                     decoding="async"
                     fetchpriority="low"
                     loading="lazy"
@@ -697,11 +743,11 @@ onBeforeUnmount(() => {
                     <FaIcon name="i-lucide:circle-check" class="size-3" aria-hidden="true" />
                     已选
                   </span>
-                  <span class="text-muted-foreground p-1.5 border border-border/60 rounded-md bg-background/85 pointer-events-none shadow-sm right-2 top-2 absolute backdrop-blur">
-                    <FaIcon name="i-lucide:zoom-in" class="size-4" aria-hidden="true" />
+                  <span class="text-muted-foreground border border-border/60 rounded-md bg-background/85 inline-grid size-8 pointer-events-none shadow-sm right-2 top-2 place-items-center absolute backdrop-blur">
+                    <FaIcon name="i-lucide:zoom-in" class="leading-none size-4" aria-hidden="true" />
                   </span>
                 </button>
-                <div v-else class="bg-muted flex shrink-0 w-28 items-center self-stretch justify-center relative sm:w-32">
+                <div v-else class="bg-muted flex shrink-0 h-24 w-28 items-center justify-center relative sm:h-28 sm:w-32">
                   <FaIcon name="i-lucide:image" class="text-muted-foreground size-7" aria-hidden="true" />
                   <span
                     v-if="selectedByProductId.has(item.id)"
