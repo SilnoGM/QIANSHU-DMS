@@ -174,7 +174,7 @@ test('管理员工作台每个叶子仍各自声明业务权限', () => {
   assert.equal(basicDataRoutes.meta?.auth, undefined)
   assert.deepEqual(
     productManagementRoutes.meta?.auth,
-    ['products:read', 'products:create', 'products:update'],
+    ['products:read', 'products:create', 'products:update', 'product-categories:read'],
   )
   assert.deepEqual(userRolesRoutes.meta?.auth, ['users:read', 'roles:read'])
   assert.deepEqual(

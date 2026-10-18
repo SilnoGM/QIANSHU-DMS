@@ -24,6 +24,7 @@ import {
   clickVisibleRowButton,
   collectRuntimeIssues,
   loginThroughRealHttp,
+  pressKey,
   readConfiguration,
   selectRegionOption,
 } from './regions.browser.helpers.mjs'
@@ -47,6 +48,48 @@ async function runSalesOrderBrowserStep(label, action) {
       cause: error,
     })
   }
+}
+
+/** 销售选品必须先选供应商；通过公开 combobox/option 契约完成，不读组件内部状态。 */
+async function selectProductSelectorSupplier(page, optionText) {
+  const serializedOption = JSON.stringify(optionText)
+  const dialogSource = `([...document.querySelectorAll('[role="dialog"]')]
+    .find(candidate => candidate.getClientRects().length > 0
+      && candidate.textContent?.includes('选择数据库产品')))`
+  await page.waitFor(`(() => {
+    const dialog = ${dialogSource}
+    return [...(dialog?.querySelectorAll('[role="combobox"]') ?? [])]
+      .some(combo => (combo.getAttribute('aria-label') === '供应商'
+        || combo.textContent?.includes('请选择供应商'))
+        && combo.getClientRects().length > 0)
+  })()`)
+  await page.evaluate(`(() => {
+    const dialog = ${dialogSource}
+    const combo = [...(dialog?.querySelectorAll('[role="combobox"]') ?? [])]
+      .find(candidate => candidate.getAttribute('aria-label') === '供应商'
+        || candidate.textContent?.includes('请选择供应商'))
+    if (!combo) throw new Error('product selector supplier unavailable')
+    combo.focus({ preventScroll: true })
+    return true
+  })()`)
+  await pressKey(page, 'Enter')
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="option"]')]
+    .some(option => option.getClientRects().length > 0
+      && option.textContent?.trim() === ${serializedOption}))()`)
+  await page.evaluate(`(() => {
+    const option = [...document.querySelectorAll('[role="option"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.trim() === ${serializedOption})
+    if (!option) throw new Error('product selector supplier option unavailable')
+    option.focus({ preventScroll: true })
+    return true
+  })()`)
+  await pressKey(page, 'Enter')
+  await page.waitFor(`(() => {
+    const dialog = ${dialogSource}
+    return [...(dialog?.querySelectorAll('[role="combobox"]') ?? [])]
+      .some(combo => combo.textContent?.trim() === ${serializedOption})
+  })()`)
 }
 
 function labelledControlSource(labelText) {
@@ -342,6 +385,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     await page.waitFor(`document.body.innerText.includes('暂无产品明细')`)
     await clickVisibleButton(page, '添加数据库产品')
     await waitForVisibleDialog(page, '选择数据库产品')
+    await selectProductSelectorSupplier(page, 'Browser 有效供应商')
     await page.waitFor(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0

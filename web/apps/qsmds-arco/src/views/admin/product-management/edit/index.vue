@@ -5,6 +5,7 @@ import type {
 } from '../form/product-form.logic'
 import type {
   ProductListItemDto,
+  ProductTaxonomyCategoryOptionDto,
   UpdateProductRequestDto,
 } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
@@ -64,15 +65,23 @@ const fieldErrors = ref<ProductFieldErrors>({})
 const pageError = ref('')
 const requestId = ref<string>()
 const discardVisible = ref(false)
+const taxonomyOptions = shallowRef<readonly ProductTaxonomyCategoryOptionDto[]>([])
+const taxonomyState = ref<CatalogState>('loading')
 let pendingNavigationResolver: ((allow: boolean) => void) | null = null
 let operationVersion = 0
 let operationAbortController: AbortController | null = null
+let taxonomyAbortController: AbortController | null = null
 
 const productId = computed(() => typeof route.params.productId === 'string'
   ? route.params.productId
   : '')
-const canManage = computed(() => authAll(['products:read', 'products:update']))
+const canManage = computed(() => authAll([
+  'products:read',
+  'products:update',
+  'product-categories:create',
+]))
 const canUpdate = computed(() => auth('products:update'))
+const canCreateTaxonomy = computed(() => auth('product-categories:create'))
 const canReadProductMedia = computed(() => auth('product-media:read'))
 const purchaseCurrencies = computed<readonly CurrencyDescriptor[]>(() =>
   currencyCatalog.selectableCurrencies.value)
@@ -161,6 +170,28 @@ function handleMediaProductChange(product: ProductListItemDto): void {
   source.value = product
 }
 
+async function loadTaxonomyOptions(): Promise<void> {
+  taxonomyAbortController?.abort()
+  const controller = new AbortController()
+  taxonomyAbortController = controller
+  taxonomyState.value = 'loading'
+  try {
+    const response = await productsApi.taxonomyOptions(controller.signal)
+    if (controller.signal.aborted || !canManage.value) {
+      return
+    }
+    taxonomyOptions.value = response.data.categories
+    taxonomyState.value = response.data.categories.length === 0 ? 'empty' : 'ready'
+  }
+  catch {
+    if (controller.signal.aborted) {
+      return
+    }
+    taxonomyOptions.value = []
+    taxonomyState.value = 'error'
+  }
+}
+
 async function loadProduct(): Promise<void> {
   if (!canManage.value || productId.value === '') {
     return
@@ -197,14 +228,14 @@ async function loadProduct(): Promise<void> {
 function collectCatalogErrors(request: UpdateProductRequestDto): ProductFieldErrors {
   const errors: Record<string, string> = {}
   const validatesAll = formModel.value.status === 'ACTIVE'
-  const validatesSupplier = validatesAll || request.supplierValue !== undefined
-  if (validatesSupplier && formModel.value.supplierValue !== null) {
-    if (supplierCatalogState.value !== 'ready') {
-      errors.supplierValue = '请先完成供应商资料加载'
-    }
-    else if (supplierCatalog.resolve(formModel.value.supplierValue)?.status !== 'ACTIVE') {
-      errors.supplierValue = '请选择当前有效的供应商'
-    }
+  if (formModel.value.supplierValue === null) {
+    errors.supplierValue = '请选择供应商'
+  }
+  else if (supplierCatalogState.value !== 'ready') {
+    errors.supplierValue = '请先完成供应商资料加载'
+  }
+  else if (supplierCatalog.resolve(formModel.value.supplierValue)?.status !== 'ACTIVE') {
+    errors.supplierValue = '请选择当前有效的供应商'
   }
 
   const moneyFields = validatesAll
@@ -402,12 +433,15 @@ onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
   if (canManage.value) {
     void loadProduct()
+    void loadTaxonomyOptions()
   }
 })
 
 onBeforeUnmount(() => {
   operationVersion += 1
   operationAbortController?.abort()
+  taxonomyAbortController?.abort()
+  taxonomyAbortController = null
   window.removeEventListener('beforeunload', handleBeforeUnload)
   pendingNavigationResolver?.(false)
   pendingNavigationResolver = null
@@ -481,8 +515,11 @@ onBeforeUnmount(() => {
           mode="edit"
           :product-no="source.productNo"
           :model-value="formModel"
+          :can-create-taxonomy="canCreateTaxonomy"
           :currency-catalog-state="currencyCatalogState"
           :supplier-catalog-state="supplierCatalogState"
+          :taxonomy-catalog-state="taxonomyState"
+          :taxonomy-options="taxonomyOptions"
           :twd-currencies="twdCurrencies"
           :myr-currencies="myrCurrencies"
           :purchase-currencies="purchaseCurrencies"
@@ -494,6 +531,7 @@ onBeforeUnmount(() => {
           @cancel="returnToList"
           @retry-currency-catalog="currencyCatalog.reload"
           @retry-supplier-catalog="supplierCatalog.retry"
+          @retry-taxonomy-catalog="loadTaxonomyOptions"
         />
 
         <ProductMediaPanel

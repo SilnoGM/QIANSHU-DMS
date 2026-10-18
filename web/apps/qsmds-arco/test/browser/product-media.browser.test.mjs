@@ -858,13 +858,21 @@ test('真实 Chrome 覆盖产品媒体上传、布局、私有内容、响应式
 
     await login(page, configuration.baseUrl, 'browser_products_read', configuration.password)
     const readPermissions = await page.evaluate(storeSnapshotExpression())
-    assert.deepEqual(readPermissions.permissions, ['product-media:read', 'products:read'])
+    assert.deepEqual(readPermissions.permissions, [
+      'product-categories:read',
+      'product-media:read',
+      'products:read',
+    ])
     assert.equal((await page.evaluate(apiExpression(`/api/products/${product.id}`))).status, 200)
     assert.equal((await page.evaluate(contentRequestExpression(contentUrl))).status, 200)
     await logout(page)
 
     await login(page, configuration.baseUrl, 'browser_products_update', configuration.password)
-    assert.deepEqual((await page.evaluate(storeSnapshotExpression())).permissions, ['products:update'])
+    assert.deepEqual((await page.evaluate(storeSnapshotExpression())).permissions, [
+      'product-categories:create',
+      'product-categories:read',
+      'products:update',
+    ])
     assert.equal((await page.evaluate(apiExpression(`/api/products/${product.id}`))).status, 403)
     assert.equal((await page.evaluate(contentRequestExpression(contentUrl))).status, 403)
     await logout(page)

@@ -543,6 +543,8 @@ const loadSalesOrderProducts: ProductPageLoader = async (query, signal) => {
     page: response.data.page,
     pageSize: response.data.pageSize,
     total: response.data.total,
+    categories: response.data.categories,
+    unclassifiedCount: response.data.unclassifiedCount,
     items: response.data.items.map(item => ({
       ...item,
       // OpenAPI 对 nullable object 生成 optional；组件边界统一收敛为显式 null。

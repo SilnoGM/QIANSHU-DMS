@@ -108,6 +108,12 @@ enum AuditEventType {
   AUTH_RETENTION_PURGED
   PRODUCT_CREATED
   PRODUCT_UPDATED
+  PRODUCT_CATEGORY_CREATED
+  PRODUCT_CATEGORY_RENAMED
+  PRODUCT_CATEGORY_DELETED
+  PRODUCT_HEAD_CREATED
+  PRODUCT_HEAD_RENAMED
+  PRODUCT_HEAD_DELETED
   FUND_ACCOUNT_CREATED
   FUND_ACCOUNT_SHARE_RATE_UPDATED
   FUND_POSTING_TYPE_CREATED
@@ -245,7 +251,6 @@ enum DictionaryTone {
 }
 
 enum ProductStatus {
-  DRAFT
   ACTIVE
   INACTIVE
 
@@ -847,12 +852,44 @@ model DictionaryItem {
   @@map("dictionary_items")
 }
 
+model ProductCategory {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supplierValue String   @map("supplier_value") @db.VarChar(64)
+  name          String   @db.VarChar(64)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  productHeads ProductHead[]
+  products     Product[]
+
+  @@unique([supplierValue, name], map: "product_categories_supplier_value_name_key")
+  @@index([supplierValue, name], map: "product_categories_supplier_value_name_idx")
+  @@map("product_categories")
+}
+
+model ProductHead {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  categoryId String   @map("category_id") @db.Uuid
+  name       String   @db.VarChar(64)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  category ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  products Product[]
+
+  @@unique([categoryId, name], map: "product_heads_category_id_name_key")
+  @@index([categoryId, name], map: "product_heads_category_id_name_idx")
+  @@map("product_heads")
+}
+
 model Product {
   id                   String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                 String        @db.VarChar(128)
+  categoryId           String?       @map("category_id") @db.Uuid
+  productHeadId        String?       @map("product_head_id") @db.Uuid
   productNo            String        @unique(map: "products_product_no_key") @map("product_no") @db.VarChar(64)
-  status               ProductStatus @default(DRAFT)
-  supplierValue        String?       @map("supplier_value") @db.VarChar(64)
+  status               ProductStatus @default(ACTIVE)
+  supplierValue        String        @map("supplier_value") @db.VarChar(64)
   twdSalePriceAmount   Decimal?      @map("twd_sale_price_amount") @db.Decimal(30, 4)
   twdSalePriceCurrency String        @default("TWD") @map("twd_sale_price_currency") @db.Char(3)
   myrSalePriceAmount   Decimal?      @map("myr_sale_price_amount") @db.Decimal(30, 4)
@@ -866,6 +903,8 @@ model Product {
   createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  category        ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  productHead     ProductHead?     @relation(fields: [productHeadId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   createdBy       User?            @relation("ProductCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   updatedBy       User?            @relation("ProductUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   media           ProductMedia[]
@@ -875,6 +914,8 @@ model Product {
   @@index([status, updatedAt(sort: Desc), id(sort: Desc)], map: "products_status_updated_at_id_idx")
   @@index([supplierValue, updatedAt(sort: Desc), id(sort: Desc)], map: "products_supplier_value_updated_at_id_idx")
   @@index([updatedAt(sort: Desc), id(sort: Desc)], map: "products_updated_at_id_idx")
+  @@index([categoryId, name], map: "products_category_id_name_idx")
+  @@index([productHeadId, name], map: "products_product_head_id_name_idx")
   @@map("products")
 }
 

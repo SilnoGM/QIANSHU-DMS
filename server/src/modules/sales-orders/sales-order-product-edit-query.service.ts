@@ -11,6 +11,7 @@ import {
   parseSalesOrderAmountUnits,
 } from './domain/sales-order-decimal'
 import { mapSalesOrderProductOption } from './products/sales-order-product-option.mapper'
+import { readProductOptionCategoryFacets } from '../products/product-option-category-facets'
 
 const MAX_SALES_ORDER_LINES = 100
 
@@ -63,6 +64,7 @@ export class SalesOrderProductEditQueryService {
             lineTotalAmount: true,
             product: {
               select: {
+                supplierValue: true,
                 media: {
                   where: {
                     kind: 'IMAGE',
@@ -156,6 +158,7 @@ export class SalesOrderProductEditQueryService {
           productId: line.productId,
           productNo: line.productNoSnapshot,
           productName: line.productNameSnapshot,
+          supplierValue: line.product?.supplierValue ?? null,
           description: line.descriptionSnapshot,
           standardUnitPriceAmount: line.standardUnitPriceAmount === null
             ? null
@@ -179,14 +182,44 @@ export class SalesOrderProductEditQueryService {
 
   async productOptions(
     salesOrderId: string,
-    input: { readonly keyword?: string, readonly page?: number, readonly pageSize?: number },
+    input: {
+      readonly keyword?: string
+      readonly supplierValue: string
+      readonly categoryName?: string
+      readonly productHeadName?: string
+      readonly unclassified?: boolean
+      readonly page?: number
+      readonly pageSize?: number
+    },
   ) {
+    if (
+      input.unclassified === true
+      && (input.categoryName !== undefined || input.productHeadName !== undefined)
+    ) {
+      throw new ApiException(
+        422,
+        'VALIDATION_FAILED',
+        '请求参数校验失败',
+        { categoryName: ['未分类筛选不能与分类/产品头筛选同时使用'] },
+      )
+    }
     const context = await this.context(salesOrderId)
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const keyword = input.keyword?.trim().normalize('NFKC')
-    const where: Prisma.ProductWhereInput = {
+    const facetWhere: Prisma.ProductWhereInput = {
       status: 'ACTIVE',
+      supplierValue: input.supplierValue,
+    }
+    const where: Prisma.ProductWhereInput = {
+      ...facetWhere,
+      ...(input.categoryName === undefined
+        ? {}
+        : { category: { is: { name: input.categoryName } } }),
+      ...(input.productHeadName === undefined
+        ? {}
+        : { productHead: { is: { name: input.productHeadName } } }),
+      ...(input.unclassified === true ? { categoryId: null } : {}),
       ...(keyword === undefined || keyword.length === 0
         ? {}
         : { OR: [
@@ -194,17 +227,24 @@ export class SalesOrderProductEditQueryService {
             { name: { contains: keyword, mode: 'insensitive' } },
           ] }),
     }
-    const [total, rows] = await Promise.all([
+    const [total, rows, facets] = await Promise.all([
       this.prisma.product.count({ where }),
       this.prisma.product.findMany({
         where,
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        orderBy: [
+          { category: { name: 'asc' } },
+          { productHead: { name: 'asc' } },
+          { name: 'asc' },
+          { id: 'asc' },
+        ],
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: {
           id: true,
           productNo: true,
           name: true,
+          category: { select: { name: true } },
+          productHead: { select: { name: true } },
           supplierValue: true,
           attributes: true,
           twdSalePriceAmount: true,
@@ -222,6 +262,10 @@ export class SalesOrderProductEditQueryService {
           },
         },
       }),
+      readProductOptionCategoryFacets(this.prisma, {
+        supplierValue: input.supplierValue,
+        productWhere: facetWhere,
+      }),
     ])
     const items = rows.map(row => mapSalesOrderProductOption(
       row,
@@ -230,6 +274,13 @@ export class SalesOrderProductEditQueryService {
         `/api/sales-orders/${salesOrderId}/product-edit-options/${productId}/main-image/${productMediaId}/content`
       ),
     ))
-    return { items, page, pageSize, total }
+    return {
+      items,
+      page,
+      pageSize,
+      total,
+      categories: facets.categories,
+      unclassifiedCount: facets.unclassifiedCount,
+    }
   }
 }

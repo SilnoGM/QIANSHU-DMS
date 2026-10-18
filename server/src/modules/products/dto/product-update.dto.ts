@@ -31,6 +31,19 @@ export class ProductIdParamDto {
   productId!: string
 }
 
+/** 列表启停专用请求：只允许状态与乐观锁版本，复用产品更新事务。 */
+export class UpdateProductStatusRequestDto {
+  @ApiProperty({ type: 'string', enum: ProductStatus })
+  @IsEnum(ProductStatus, { message: '产品状态不在白名单内' })
+  status!: ProductStatus
+
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: MAX_INT32 })
+  @IsInt({ message: '必须是整数' })
+  @Min(1, { message: '不能小于 1' })
+  @Max(MAX_INT32, { message: '不能超过 2147483647' })
+  expectedVersion!: number
+}
+
 /**
  * 产品编辑只暴露本阶段获准修改的业务字段。媒体、编号、审计字段和 version
  * 不在 DTO 中，因此会被全局 whitelist 直接拒绝，防止调用方越过业务边界。
@@ -44,6 +57,8 @@ export class UpdateProductRequestDto {
     || (
       object.status === undefined
       && object.supplierValue === undefined
+      && object.categoryName === undefined
+      && object.productHeadName === undefined
       && object.twdSalePrice === undefined
       && object.myrSalePrice === undefined
       && object.purchaseCost === undefined
@@ -55,11 +70,20 @@ export class UpdateProductRequestDto {
   @Matches(/\S/u, { message: '不能为空白文本' })
   name?: string
 
-  @ApiPropertyOptional({ type: 'string', enum: ProductStatus })
+  @ApiPropertyOptional({
+    type: 'string',
+    nullable: true,
+    minLength: 1,
+    maxLength: 64,
+  })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().normalize('NFC') : value)
   @ValidateIf((_object: UpdateProductRequestDto, value: unknown) =>
-    value !== undefined)
-  @IsEnum(ProductStatus, { message: '产品状态不在白名单内' })
-  status?: ProductStatus
+    value !== undefined && value !== null)
+  @IsString({ message: '必须是字符串或 null' })
+  @IsUnicodeCodePointLength(1, 64, { message: '长度必须为 1 到 64 个字符' })
+  @Matches(/\S/u, { message: '不能为空白文本' })
+  categoryName?: string | null
 
   @ApiPropertyOptional({
     type: 'string',
@@ -68,13 +92,29 @@ export class UpdateProductRequestDto {
     maxLength: 64,
   })
   @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim() : value)
+    typeof value === 'string' ? value.trim().normalize('NFC') : value)
   @ValidateIf((_object: UpdateProductRequestDto, value: unknown) =>
     value !== undefined && value !== null)
   @IsString({ message: '必须是字符串或 null' })
   @IsUnicodeCodePointLength(1, 64, { message: '长度必须为 1 到 64 个字符' })
   @Matches(/\S/u, { message: '不能为空白文本' })
-  supplierValue?: string | null
+  productHeadName?: string | null
+
+  @ApiPropertyOptional({ type: 'string', enum: ProductStatus })
+  @ValidateIf((_object: UpdateProductRequestDto, value: unknown) =>
+    value !== undefined)
+  @IsEnum(ProductStatus, { message: '产品状态不在白名单内' })
+  status?: ProductStatus
+
+  @ApiPropertyOptional({ type: 'string', minLength: 1, maxLength: 64 })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value)
+  @ValidateIf((_object: UpdateProductRequestDto, value: unknown) =>
+    value !== undefined)
+  @IsString({ message: '必须是字符串' })
+  @IsUnicodeCodePointLength(1, 64, { message: '长度必须为 1 到 64 个字符' })
+  @Matches(/\S/u, { message: '不能为空白文本' })
+  supplierValue?: string
 
   @ApiPropertyOptional({ type: () => ProductTwdSalePriceInputDto })
   @ValidateIf((_object: UpdateProductRequestDto, value: unknown) =>

@@ -26,6 +26,17 @@ export const PRODUCT_MANAGEMENT_PERMISSION_CODES = [
 export const PRODUCT_MEDIA_PERMISSION_CODES = ['product-media:read'] as const
 
 /**
+ * 分类/产品头目录权限。读取供产品表单/列表使用，create 覆盖管理页与产品保存时的
+ * 内联新建；update/delete 只授予目录维护者。
+ */
+export const PRODUCT_TAXONOMY_PERMISSION_CODES = [
+  'product-categories:read',
+  'product-categories:create',
+  'product-categories:update',
+  'product-categories:delete',
+] as const
+
+/**
  * 资金账户管理的完整人工权限边界。
  *
  * 该域权限自 2026-10-01（迁移 `20261001140000_fund_account_permissions_delegable`）起
@@ -215,6 +226,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   'dictionaries:disable',
   ...PRODUCT_MEDIA_PERMISSION_CODES,
   ...PRODUCT_MANAGEMENT_PERMISSION_CODES,
+  ...PRODUCT_TAXONOMY_PERMISSION_CODES,
   ...FUND_ACCOUNT_PERMISSION_CODES,
   ...PERSONAL_FUND_PERMISSION_CODES,
   ...SALES_ORDER_PERMISSION_CODES,

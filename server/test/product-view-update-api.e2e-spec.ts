@@ -40,6 +40,8 @@ interface AuthContextBody {
 interface ProductBody {
   readonly id: string
   readonly name: string
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
   readonly productNo: string
   readonly status: ProductStatus
   readonly supplier: {
@@ -353,7 +355,7 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
       data: {
         name: '产品查看编辑 E2E',
         productNo: `${PRODUCT_NO_PREFIX}${randomUUID()}`,
-        status: ProductStatus.DRAFT,
+        status: ProductStatus.INACTIVE,
         supplierValue: supplierValues.effective,
         twdSalePriceAmount: '1280.50',
         twdSalePriceCurrency: 'TWD',
@@ -513,6 +515,8 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
     const response = await updateProduct(administrator.browser, product.id, {
       expectedVersion: 1,
       name: '  更新后的产品  ',
+      categoryName: ' 新分类 ',
+      productHeadName: ' 新产品头 ',
       status: 'ACTIVE',
       supplierValue: supplierValues.effective,
       twdSalePrice: { amount: '1688.00', currency: 'TWD' },
@@ -525,6 +529,8 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
     expect(body).toMatchObject({
       id: product.id,
       name: '更新后的产品',
+      categoryName: '新分类',
+      productHeadName: '新产品头',
       status: ProductStatus.ACTIVE,
       supplier: { value: supplierValues.effective, state: 'EFFECTIVE' },
       media: { mainImage: null, images: [], videos: [] },
@@ -538,9 +544,15 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
 
     const stored = await prisma.product.findUniqueOrThrow({
       where: { id: product.id },
+      include: {
+        category: { select: { name: true } },
+        productHead: { select: { name: true } },
+      },
     })
     expect(stored).toMatchObject({
       name: '更新后的产品',
+      category: { name: '新分类' },
+      productHead: { name: '新产品头' },
       productNo: product.productNo,
       createdByUserId: administrator.userId,
       updatedByUserId: administrator.userId,
@@ -564,10 +576,10 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
       targetId: product.id,
       metadata: {
         productNo: product.productNo,
-        changedFields: 'attributes,myrSalePrice,name,purchaseCost,status,twdSalePrice',
+        changedFields: 'attributes,categoryName,myrSalePrice,name,productHeadName,purchaseCost,status,twdSalePrice',
         previousVersion: 1,
         version: 2,
-        previousStatus: 'DRAFT',
+        previousStatus: 'INACTIVE',
         status: 'ACTIVE',
       },
     })
@@ -643,7 +655,7 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
     )
   })
 
-  it('preserves historical dependencies outside Active but validates changed or activated dependencies', async () => {
+  it('keeps supplier required and blocks activation until taxonomy is complete', async () => {
     const product = await createProduct({
       status: ProductStatus.INACTIVE,
       supplierValue: supplierValues.unknown,
@@ -659,32 +671,22 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
       version: 2,
     })
 
-    const changedSupplier = await updateProduct(administrator.browser, product.id, {
-      expectedVersion: 2,
-      supplierValue: supplierValues.unknown,
-    })
-    // 同值是 no-op；先改为 null，再验证重新写入未知值必须失败。
-    expect(changedSupplier.status).toBe(200)
-    await updateProduct(administrator.browser, product.id, {
-      expectedVersion: 2,
-      supplierValue: null,
-    }).then(response => expect(response.status).toBe(200))
     expectApiError(
       await updateProduct(administrator.browser, product.id, {
-        expectedVersion: 3,
-        supplierValue: supplierValues.unknown,
+        expectedVersion: 2,
+        supplierValue: null,
       }),
       422,
-      'PRODUCT_SUPPLIER_UNAVAILABLE',
+      'VALIDATION_FAILED',
     )
 
     expectApiError(
       await updateProduct(administrator.browser, product.id, {
-        expectedVersion: 3,
+        expectedVersion: 2,
         status: 'ACTIVE',
       }),
       422,
-      'PRODUCT_SUPPLIER_REQUIRED',
+      'VALIDATION_FAILED',
     )
   })
 

@@ -77,7 +77,7 @@ test('列表拥有详情请求竞态并将查看与编辑操作接入真实目�
 test('编辑页要求 read+update、GET 初始化、差异 PATCH、对账和离开守卫', async () => {
   const source = await readFile(new URL('edit/index.vue', ROOT), 'utf8')
 
-  assert.match(source, /authAll\(\['products:read', 'products:update'\]\)/u)
+  assert.match(source, /authAll\(\[[\s\S]*?'products:read',[\s\S]*?'products:update',[\s\S]*?'product-categories:create',[\s\S]*?\]\)/u)
   assert.match(source, /productsApi\.getById/u)
   assert.match(source, /productsApi\.update/u)
   assert.match(source, /buildProductUpdateRequest/u)

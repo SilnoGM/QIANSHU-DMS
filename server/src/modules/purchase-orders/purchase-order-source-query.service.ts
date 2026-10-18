@@ -7,6 +7,7 @@ import {
   DictionaryLookupService,
 } from '../dictionaries/dictionary-lookup.service'
 import { normalizeDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
+import { readProductOptionCategoryFacets } from '../products/product-option-category-facets'
 import { formatPurchaseOrderAmountUnits, normalizePurchaseOrderReferenceAmount, parsePurchaseOrderAmountUnits } from './domain/purchase-order-decimal'
 import {
   PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS,
@@ -21,6 +22,9 @@ const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 export interface PurchaseOrderProductOptionsInput {
   readonly supplierValue: string
   readonly keyword?: string
+  readonly categoryName?: string
+  readonly productHeadName?: string
+  readonly unclassified?: boolean
   readonly page?: number
   readonly pageSize?: number
 }
@@ -281,6 +285,17 @@ export class PurchaseOrderSourceQueryService {
   ) {}
 
   async productOptions(input: PurchaseOrderProductOptionsInput) {
+    if (
+      input.unclassified === true
+      && (input.categoryName !== undefined || input.productHeadName !== undefined)
+    ) {
+      throw new ApiException(
+        422,
+        'VALIDATION_FAILED',
+        '请求参数校验失败',
+        { categoryName: ['未分类筛选不能与分类/产品头筛选同时使用'] },
+      )
+    }
     let supplierValue: string
     try {
       supplierValue = normalizeDictionaryItemValue(input.supplierValue)
@@ -298,11 +313,21 @@ export class PurchaseOrderSourceQueryService {
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const keyword = input.keyword?.trim().normalize('NFKC')
-    const where: Prisma.ProductWhereInput = {
+    const facetWhere: Prisma.ProductWhereInput = {
       status: 'ACTIVE',
       supplierValue,
       purchaseCostAmount: { not: null },
       purchaseCostCurrency: 'CNY',
+    }
+    const where: Prisma.ProductWhereInput = {
+      ...facetWhere,
+      ...(input.categoryName === undefined
+        ? {}
+        : { category: { is: { name: input.categoryName } } }),
+      ...(input.productHeadName === undefined
+        ? {}
+        : { productHead: { is: { name: input.productHeadName } } }),
+      ...(input.unclassified === true ? { categoryId: null } : {}),
       ...(keyword === undefined || keyword.length === 0
         ? {}
         : { OR: [
@@ -310,17 +335,24 @@ export class PurchaseOrderSourceQueryService {
             { name: { contains: keyword, mode: 'insensitive' } },
           ] }),
     }
-    const [total, rows] = await Promise.all([
+    const [total, rows, facets] = await Promise.all([
       this.prisma.product.count({ where }),
       this.prisma.product.findMany({
         where,
-        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        orderBy: [
+          { category: { name: 'asc' } },
+          { productHead: { name: 'asc' } },
+          { name: 'asc' },
+          { id: 'asc' },
+        ],
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: {
           id: true,
           productNo: true,
           name: true,
+          category: { select: { name: true } },
+          productHead: { select: { name: true } },
           attributes: true,
           supplierValue: true,
           purchaseCostAmount: true,
@@ -337,6 +369,10 @@ export class PurchaseOrderSourceQueryService {
             select: { id: true },
           },
         },
+      }),
+      readProductOptionCategoryFacets(this.prisma, {
+        supplierValue,
+        productWhere: facetWhere,
       }),
     ])
     return {
@@ -360,8 +396,10 @@ export class PurchaseOrderSourceQueryService {
           id: row.id,
           productNo: row.productNo,
           name: row.name,
+          categoryName: row.category?.name ?? null,
+          productHeadName: row.productHead?.name ?? null,
           attributes: attributes(row.attributes),
-          supplierValue: row.supplierValue as string,
+          supplierValue: row.supplierValue,
           referencePurchaseUnitPriceAmount: normalizePurchaseOrderReferenceAmount(fixed4(row.purchaseCostAmount)),
           currencyCode: 'CNY' as const,
           mainImage: mainImage === undefined
@@ -373,6 +411,8 @@ export class PurchaseOrderSourceQueryService {
               },
         }
       }),
+      categories: facets.categories,
+      unclassifiedCount: facets.unclassifiedCount,
       page,
       pageSize,
       total,

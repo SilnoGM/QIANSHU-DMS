@@ -276,8 +276,8 @@ describe('media schema constraints with isolated PostgreSQL', () => {
       const productId = randomUUID()
       await client.query(
         `
-          INSERT INTO "products" ("id", "name", "product_no", "created_by_user_id")
-          VALUES ($1, 'Media Schema E2E Product', $2, $3)
+          INSERT INTO "products" ("id", "name", "product_no", "supplier_value", "created_by_user_id")
+          VALUES ($1, 'Media Schema E2E Product', $2, 'MEDIA_SCHEMA_SUPPLIER', $3)
         `,
         [productId, `MEDIA-E2E-${randomUUID()}`, actorUserId],
       )

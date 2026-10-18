@@ -37,7 +37,9 @@ const IDEMPOTENCY_KEY = '22222222-2222-4222-8222-222222222222'
 function createInput(): Record<string, unknown> {
   return {
     name: ' Product ',
-    status: 'DRAFT',
+    categoryName: ' 分类 ',
+    productHeadName: ' 产品头 ',
+    status: 'INACTIVE',
     supplierValue: 'SUPPLIER_A',
     twdSalePrice: { amount: '10.20', currency: 'TWD' },
     myrSalePrice: { amount: null, currency: 'MYR' },
@@ -50,8 +52,10 @@ function createRow(overrides: Partial<ProductQueryRow> = {}): ProductQueryRow {
   return {
     id: '33333333-3333-4333-8333-333333333333',
     name: 'Product',
+    category: { id: 'category-1', name: '分类' },
+    productHead: { id: 'head-1', name: '产品头' },
     productNo: 'P202608120001',
-    status: ProductStatus.DRAFT,
+    status: ProductStatus.INACTIVE,
     supplierValue: 'SUPPLIER_A',
     twdSalePriceAmount: { toString: () => '10.2000' },
     twdSalePriceCurrency: 'TWD',
@@ -96,6 +100,10 @@ interface Fixture {
   readonly productFindUnique: jest.Mock<
     Promise<ProductQueryRow | null>,
     [unknown]
+  >
+  readonly resolveOrCreateInTransaction: jest.Mock<
+    Promise<{ readonly categoryId: string, readonly productHeadId: string }>,
+    [Prisma.TransactionClient, { readonly actorUserId: string, readonly requestId: string }, unknown]
   >
   readonly resolveStoredValue: jest.Mock<
     Promise<StoredDictionaryValueResolution>,
@@ -185,6 +193,16 @@ function createFixture(options: {
     events.push('audit')
     return Promise.resolve({})
   })
+  const resolveOrCreateInTransaction = jest.fn<
+    Promise<{ readonly categoryId: string, readonly productHeadId: string }>,
+    [Prisma.TransactionClient, { readonly actorUserId: string, readonly requestId: string }, unknown]
+  >(() => {
+    events.push('taxonomy')
+    return Promise.resolve({
+      categoryId: 'category-1',
+      productHeadId: 'head-1',
+    })
+  })
   const resolveStoredValue = jest.fn<
     Promise<StoredDictionaryValueResolution>,
     [{ dictionaryCode: string; value: string }]
@@ -209,6 +227,7 @@ function createFixture(options: {
       { requireEnabledCodes },
       { generateScoped } as unknown as NumberingGeneratorService,
       { record: auditRecord } as unknown as AuditService,
+      { resolveOrCreateInTransaction } as unknown as import('./product-taxonomy.service').ProductTaxonomyService,
     ),
     events,
     transactions,
@@ -219,6 +238,7 @@ function createFixture(options: {
     productCreate,
     productFindUnique,
     resolveStoredValue,
+    resolveOrCreateInTransaction,
   }
 }
 
@@ -267,6 +287,7 @@ describe('ProductCommandService', () => {
       'timeout',
       'supplier',
       'currency',
+      'taxonomy',
       'product.create',
       'audit',
     ])
@@ -289,8 +310,9 @@ describe('ProductCommandService', () => {
         requestId: 'request-1',
         metadata: {
           productNo: 'P202608120001',
-          status: ProductStatus.DRAFT,
+          status: ProductStatus.INACTIVE,
           supplierSelected: true,
+          categorySelected: true,
           twdSalePriceProvided: true,
           myrSalePriceProvided: false,
           purchaseCostProvided: true,
@@ -464,21 +486,16 @@ describe('ProductCommandService', () => {
     expect(fixture.auditRecord).not.toHaveBeenCalled()
   })
 
-  it('skips supplier lookup for null supplier but still validates every currency', async () => {
+  it('rejects a null supplier before any dependency or numbering work', async () => {
     const fixture = createFixture()
-    fixture.productCreate.mockResolvedValue(createRow({ supplierValue: null }))
+
     await expect(createProduct(fixture, {
       ...createInput(),
       supplierValue: null,
-    })).resolves.toMatchObject({ supplier: null })
+    })).rejects.toMatchObject({ code: 'PRODUCT_SUPPLIER_REQUIRED' })
 
-    expect(fixture.requireEffectiveValue).not.toHaveBeenCalled()
-    expect(fixture.requireEnabledCodes).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      ['TWD', 'MYR', 'CNY'],
-    )
-    expect(fixture.requireEnabledCodes).toHaveBeenCalledTimes(2)
+    expect(fixture.transactions).not.toHaveBeenCalled()
+    expect(fixture.generateScoped).not.toHaveBeenCalled()
   })
 
   it('maps preflight dependency and transaction failures without issuing a number', async () => {

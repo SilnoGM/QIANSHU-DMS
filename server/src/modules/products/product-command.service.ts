@@ -58,6 +58,7 @@ import {
   type ProductListItem,
   type ProductQueryRow,
 } from './product-query.mapper'
+import { ProductTaxonomyService } from './product-taxonomy.service'
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 const REQUEST_ID_MAXIMUM_CODE_POINTS = 64
@@ -79,7 +80,7 @@ export interface ProductCommandContext {
 }
 
 interface EffectiveProductDependencies {
-  readonly supplier: EffectiveDictionaryValue | null
+  readonly supplier: EffectiveDictionaryValue
 }
 
 interface IssuedProductSnapshot {
@@ -235,20 +236,18 @@ function mapNumberingError(error: unknown): never {
 }
 
 function effectiveSupplierResolution(
-  supplier: EffectiveDictionaryValue | null,
-): StoredDictionaryValueResolution | null {
-  return supplier === null
-    ? null
-    : {
-        known: true,
-        dictionaryCode: supplier.dictionaryCode,
-        value: supplier.value,
-        label: supplier.label,
-        tone: supplier.tone,
-        typeEnabled: true,
-        itemEnabled: true,
-        effectiveEnabled: true,
-      }
+  supplier: EffectiveDictionaryValue,
+): StoredDictionaryValueResolution {
+  return {
+    known: true,
+    dictionaryCode: supplier.dictionaryCode,
+    value: supplier.value,
+    label: supplier.label,
+    tone: supplier.tone,
+    typeEnabled: true,
+    itemEnabled: true,
+    effectiveEnabled: true,
+  }
 }
 
 function persistedDecimalToCanonical(
@@ -281,6 +280,8 @@ function productMatchesCommand(
   return row.name === command.name
     && row.status === command.status
     && row.supplierValue === command.supplierValue
+    && row.category?.name === command.categoryName
+    && row.productHead?.name === command.productHeadName
     && persistedDecimalToCanonical(row.twdSalePriceAmount)
       === command.twdSalePrice.amount
     && row.twdSalePriceCurrency === command.twdSalePrice.currency
@@ -308,6 +309,7 @@ export class ProductCommandService {
     private readonly currencyLookup: CurrencyLookupService,
     private readonly numbering: NumberingGeneratorService,
     private readonly audit: AuditService,
+    private readonly taxonomies: ProductTaxonomyService,
   ) {}
 
   async create(
@@ -316,6 +318,18 @@ export class ProductCommandService {
   ): Promise<ProductListItem> {
     const trusted = validateTrustedContext(context)
     const command = normalizeProductCreateCommand(input)
+    if (command.categoryName === null || command.productHeadName === null) {
+      // HTTP DTO 已要求新增必填；此处防止内部调用绕过契约创建无分类产品。
+      throw productException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'VALIDATION_FAILED',
+        '请求参数校验失败',
+        {
+          categoryName: ['分类不能为空'],
+          productHeadName: ['产品头不能为空'],
+        },
+      )
+    }
     const requestFingerprint = calculateProductCreateFingerprint(
       trusted.actorUserId,
       command,
@@ -354,9 +368,23 @@ export class ProductCommandService {
       return await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
         const dependencies = await this.requireDependencies(transaction, command)
+        const taxonomy = await this.taxonomies.resolveOrCreateInTransaction(
+          transaction,
+          {
+            actorUserId: trusted.actorUserId,
+            requestId: trusted.requestId,
+          },
+          {
+            supplierValue: command.supplierValue,
+            categoryName: command.categoryName,
+            productHeadName: command.productHeadName,
+          },
+        )
         const row = await createProductRecord(transaction, {
           productNo: issuance.number,
           actorUserId: trusted.actorUserId,
+          categoryId: taxonomy.categoryId,
+          productHeadId: taxonomy.productHeadId,
           command,
         })
         await this.audit.record(transaction, {
@@ -370,7 +398,8 @@ export class ProductCommandService {
           metadata: {
             productNo: issuance.number,
             status: command.status,
-            supplierSelected: command.supplierValue !== null,
+            supplierSelected: true,
+            categorySelected: taxonomy.categoryId !== null,
             twdSalePriceProvided: command.twdSalePrice.amount !== null,
             myrSalePriceProvided: command.myrSalePrice.amount !== null,
             purchaseCostProvided: command.purchaseCost.amount !== null,
@@ -416,13 +445,11 @@ export class ProductCommandService {
     transaction: Prisma.TransactionClient,
     command: NormalizedProductCreateCommand,
   ): Promise<EffectiveProductDependencies> {
-    // 锁序固定为 Supplier Type/Item -> Currency code；null supplier 直接跳过。
-    const supplier = command.supplierValue === null
-      ? null
-      : await this.dictionaryLookup.requireEffectiveValue(transaction, {
-          dictionaryCode: SUPPLIER_DICTIONARY_CODE,
-          value: command.supplierValue,
-        })
+    // 锁序固定为 Supplier Type/Item -> Currency code；供应商现为必填。
+    const supplier = await this.dictionaryLookup.requireEffectiveValue(transaction, {
+      dictionaryCode: SUPPLIER_DICTIONARY_CODE,
+      value: command.supplierValue,
+    })
     const currencies = await this.currencyLookup.requireEnabledCodes(
       transaction,
       [
@@ -475,12 +502,10 @@ export class ProductCommandService {
   ): Promise<ProductListItem> {
     try {
       const { row } = snapshot
-      const supplierResolution = row.supplierValue === null
-        ? null
-        : await this.dictionaryLookup.resolveStoredValue({
-            dictionaryCode: SUPPLIER_DICTIONARY_CODE,
-            value: row.supplierValue,
-          })
+      const supplierResolution = await this.dictionaryLookup.resolveStoredValue({
+        dictionaryCode: SUPPLIER_DICTIONARY_CODE,
+        value: row.supplierValue,
+      })
       return mapProductListItem(
         row,
         supplierResolution,

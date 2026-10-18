@@ -8,7 +8,7 @@ import {
   type NormalizedProductCreateCommand,
 } from './product-command.normalizer'
 
-export const PRODUCT_CREATE_FINGERPRINT_VERSION = 'product.create.v1' as const
+export const PRODUCT_CREATE_FINGERPRINT_VERSION = 'product.create.v3' as const
 export const PRODUCT_NUMBERING_RULE_CODE = 'PRODUCT' as const
 export const PRODUCT_NUMBERING_CONSUMER_CODE = 'PRODUCT.CREATE' as const
 
@@ -27,6 +27,8 @@ function serializeProductCreateFingerprint(
     actorUserId,
     payload: {
       name: payload.name,
+      categoryName: payload.categoryName,
+      productHeadName: payload.productHeadName,
       status: payload.status,
       supplierValue: payload.supplierValue,
       twdSalePrice: {

@@ -4,7 +4,6 @@ import type { ProductStatus as ProductStatusValue } from '../../generated/prisma
 import { ApiException } from '../../infrastructure/http/api.exception'
 
 const PRODUCT_STATUSES = new Set<ProductStatusValue>([
-  'DRAFT',
   'ACTIVE',
   'INACTIVE',
 ])
@@ -27,8 +26,10 @@ export interface NormalizedProductCreateAttribute {
 
 export interface NormalizedProductCreateCommand {
   readonly name: string
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
   readonly status: ProductStatusValue
-  readonly supplierValue: string | null
+  readonly supplierValue: string
   readonly twdSalePrice: NormalizedProductCreateMoney
   readonly myrSalePrice: NormalizedProductCreateMoney
   readonly purchaseCost: NormalizedProductCreateMoney
@@ -78,9 +79,15 @@ function normalizeText(
   return normalized
 }
 
-function normalizeSupplierValue(value: unknown): string | null {
-  if (value === null) return null
-  if (typeof value !== 'string') return validationFailure('supplierValue')
+function normalizeSupplierValue(value: unknown): string {
+  if (typeof value !== 'string') {
+    throw new ApiException(
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      'PRODUCT_SUPPLIER_REQUIRED',
+      '请选择供应商',
+      { supplierValue: ['请选择供应商'] },
+    )
+  }
 
   // Dictionary Item value 是稳定身份，只去除表单边界空白，不改大小写或 Unicode。
   const normalized = value.trim()
@@ -88,6 +95,15 @@ function normalizeSupplierValue(value: unknown): string | null {
     return validationFailure('supplierValue')
   }
   return normalized
+}
+
+function normalizeOptionalText(
+  value: unknown,
+  field: string,
+  maximumCodePoints: number,
+): string | null {
+  if (value === null) return null
+  return normalizeText(value, field, maximumCodePoints)
 }
 
 function normalizeMoney(
@@ -159,6 +175,8 @@ export function normalizeProductCreateCommand(
   const record = requireRecord(input, 'body')
   rejectUnknownKeys(record, [
     'name',
+    'categoryName',
+    'productHeadName',
     'status',
     'supplierValue',
     'twdSalePrice',
@@ -167,22 +185,21 @@ export function normalizeProductCreateCommand(
     'attributes',
   ])
 
-  const status = record.status
+  const status = record.status ?? 'ACTIVE'
   if (typeof status !== 'string' || !PRODUCT_STATUSES.has(status as ProductStatusValue)) {
     return validationFailure('status')
   }
-  const supplierValue = normalizeSupplierValue(record.supplierValue)
-  if (status === 'ACTIVE' && supplierValue === null) {
-    throw new ApiException(
-      HttpStatus.UNPROCESSABLE_ENTITY,
-      'PRODUCT_SUPPLIER_REQUIRED',
-      '启用产品必须选择供应商',
-      { supplierValue: ['启用产品必须选择供应商'] },
-    )
+  const categoryName = normalizeOptionalText(record.categoryName, 'categoryName', 64)
+  const productHeadName = normalizeOptionalText(record.productHeadName, 'productHeadName', 64)
+  if ((categoryName === null) !== (productHeadName === null)) {
+    return validationFailure('productHeadName', '分类与产品头必须同时填写')
   }
+  const supplierValue = normalizeSupplierValue(record.supplierValue)
 
   return Object.freeze({
     name: normalizeText(record.name, 'name', 128),
+    categoryName,
+    productHeadName,
     status: status as ProductStatusValue,
     supplierValue,
     twdSalePrice: normalizeMoney(record.twdSalePrice, 'twdSalePrice', 'TWD'),

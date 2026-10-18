@@ -29,6 +29,7 @@ export interface SalesOrderProductEditModalExistingLine {
   readonly productId: string | null
   readonly productNo: string | null
   readonly productName: string
+  readonly supplierValue: string | null
   readonly description: string | null
   readonly standardUnitPriceAmount: string | null
   readonly actualUnitPriceAmount: string

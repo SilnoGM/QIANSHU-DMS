@@ -15,6 +15,10 @@ import {
 function product(overrides: Partial<ProductListItemDto> = {}): ProductListItemDto {
   return {
     attributes: [{ title: '颜色', value: '红色' }],
+    categoryId: 'category-1',
+    categoryName: '微耕机',
+    productHeadId: 'head-1',
+    productHeadName: '旱地履带',
     createdAt: '2026-08-13T01:00:00.000Z',
     createdBy: null,
     id: '11111111-1111-4111-8111-111111111111',
@@ -27,7 +31,7 @@ function product(overrides: Partial<ProductListItemDto> = {}): ProductListItemDt
     name: '原产品',
     productNo: 'P202608130001',
     purchaseCost: { amount: '5.5', currency: 'CNY' },
-    status: 'DRAFT',
+    status: 'INACTIVE',
     supplier: {
       label: null,
       state: 'UNKNOWN',
@@ -54,11 +58,13 @@ test('详情转换为编辑模型并保留未知历史供应商与稳定属性 k
 
   assert.deepEqual(model, {
     attributes: [{ key: 'row-1', title: '颜色', value: '红色' }],
+    categoryName: '微耕机',
     myrSalePriceAmount: null,
     name: '原产品',
+    productHeadName: '旱地履带',
     purchaseCostAmount: '5.5',
     purchaseCostCurrency: 'CNY',
-    status: 'DRAFT',
+    status: 'INACTIVE',
     supplierValue: 'HISTORICAL',
     twdSalePriceAmount: '10',
   })
@@ -69,14 +75,18 @@ test('只提交规范化后真实变化字段和 expectedVersion', () => {
   const source = product()
   const model = createProductEditFormModel(source, () => 'row-1')
   model.name = ' 新产品 '
+  model.categoryName = ' 新分类 '
+  model.productHeadName = ' 新产品头 '
   model.purchaseCostAmount = '7.2'
   model.attributes[0]!.value = ' 蓝色 '
 
   assert.deepEqual(buildProductUpdateRequest(model, source, precisions), {
     request: {
       attributes: [{ title: '颜色', value: '蓝色' }],
+      categoryName: '新分类',
       expectedVersion: 3,
       name: '新产品',
+      productHeadName: '新产品头',
       purchaseCost: { amount: '7.20', currency: 'CNY' },
     },
     valid: true,

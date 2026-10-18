@@ -167,8 +167,8 @@ describe('Product create API with isolated PostgreSQL', () => {
         key: randomUUID(),
       },
       {
-        body: harness.validBody({ supplierValue: null }),
-        code: 'PRODUCT_SUPPLIER_REQUIRED',
+        body: { ...harness.validBody(), supplierValue: null },
+        code: 'VALIDATION_FAILED',
         key: randomUUID(),
       },
       {
@@ -207,15 +207,14 @@ describe('Product create API with isolated PostgreSQL', () => {
     )
   })
 
-  it('allows a supplier-free Draft at the supported 26-digit money boundary', async () => {
+  it('creates an inactive product at the supported 26-digit money boundary', async () => {
     const idempotencyKey = randomUUID()
     const amount = `${'9'.repeat(26)}.12`
     const response = await harness.createProduct({
       browser: harness.creatorBrowser,
       idempotencyKey,
       body: harness.validBody({
-        status: 'DRAFT',
-        supplierValue: null,
+        status: 'INACTIVE',
         twdSalePrice: { amount, currency: 'TWD' },
         attributes: [],
       }),
@@ -223,8 +222,8 @@ describe('Product create API with isolated PostgreSQL', () => {
 
     expect(response.status).toBe(201)
     expect(response.body).toMatchObject({
-      status: 'DRAFT',
-      supplier: null,
+      status: 'INACTIVE',
+      supplier: { value: harness.supplierValue },
       twdSalePrice: { amount, currency: 'TWD' },
       attributes: [],
     })

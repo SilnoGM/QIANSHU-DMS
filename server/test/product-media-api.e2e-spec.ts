@@ -22,6 +22,7 @@ import { ProductMediaMultipartParser } from '../src/modules/products/media/produ
 import { ProductMediaService } from '../src/modules/products/media/product-media.service'
 import { ProductCommandService } from '../src/modules/products/product-command.service'
 import { ProductQueryService } from '../src/modules/products/product-query.service'
+import { ProductTaxonomyService } from '../src/modules/products/product-taxonomy.service'
 import { ProductUpdateService } from '../src/modules/products/product-update.service'
 import { ProductsController } from '../src/modules/products/products.controller'
 
@@ -48,8 +49,18 @@ function productFixture() {
   return {
     id: PRODUCT_ID,
     name: '媒体 API 产品',
+    categoryId: null,
+    categoryName: null,
+    productHeadId: null,
+    productHeadName: null,
     productNo: 'P-MEDIA-API',
-    status: 'DRAFT' as const,
+    status: 'INACTIVE' as const,
+    supplier: {
+      value: 'MEDIA_API_SUPPLIER',
+      label: '媒体测试供应商',
+      tone: 'DEFAULT' as const,
+      state: 'EFFECTIVE' as const,
+    },
     media: { mainImage: null, images: [media], videos: [] },
     twdSalePrice: { amount: null, currency: 'TWD' },
     myrSalePrice: { amount: null, currency: 'MYR' },
@@ -149,6 +160,9 @@ describe('Product media mutation API security and parsing', () => {
       }, {
         provide: ProductQueryService,
         useValue: { list: jest.fn(), getById: jest.fn().mockResolvedValue(product) },
+      }, {
+        provide: ProductTaxonomyService,
+        useValue: { options: jest.fn() },
       }, {
         provide: ProductCommandService,
         useValue: { create: jest.fn() },

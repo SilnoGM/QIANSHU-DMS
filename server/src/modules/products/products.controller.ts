@@ -41,11 +41,16 @@ import {
 import {
   ProductIdParamDto,
   UpdateProductRequestDto,
+  UpdateProductStatusRequestDto,
 } from './dto/product-update.dto'
 import {
   ProductListItemDto,
   ProductPageDto,
 } from './dto/product-response.dto'
+import {
+  ProductTaxonomyOptionsDto,
+  ProductTaxonomyOptionsQueryDto,
+} from './dto/product-taxonomy.dto'
 import { ProductCommandService } from './product-command.service'
 import { parseProductIdempotencyKey } from './product-command.normalizer'
 import { ApiProductMediaContentContract } from './media/product-media-content.contract'
@@ -64,6 +69,7 @@ import {
   ProductQueryService,
   type ProductPage,
 } from './product-query.service'
+import { ProductTaxonomyService } from './product-taxonomy.service'
 import { ProductUpdateService } from './product-update.service'
 
 @ApiTags('products')
@@ -71,6 +77,7 @@ import { ProductUpdateService } from './product-update.service'
 export class ProductsController {
   constructor(
     private readonly products: ProductQueryService,
+    private readonly taxonomies: ProductTaxonomyService,
     private readonly commands: ProductCommandService,
     private readonly updates: ProductUpdateService,
     private readonly productMedia: ProductMediaHttpService,
@@ -103,7 +110,7 @@ export class ProductsController {
   }
 
   @Post()
-  @RequirePermissions('products:create')
+  @RequirePermissions('products:create', 'product-categories:create')
   @HttpCode(HttpStatus.CREATED)
   @ApiHeader({
     name: 'Idempotency-Key',
@@ -168,6 +175,31 @@ export class ProductsController {
       requestId: getRequestId(request),
       idempotencyKey,
     }, dto)
+  }
+
+  @Get('taxonomy-options')
+  @RequirePermissions('products:read')
+  @ApiContractResponse({
+    status: HttpStatus.OK,
+    type: ProductTaxonomyOptionsDto,
+  })
+  @ApiApplicationContract({
+    operationId: 'products_taxonomy_options',
+    session: 'required',
+    authorization: true,
+    badRequest: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'],
+      },
+    ],
+  })
+  taxonomyOptions(
+    @Query() query: ProductTaxonomyOptionsQueryDto,
+  ): Promise<ProductTaxonomyOptionsDto> {
+    return this.taxonomies.options(query.supplierValue)
   }
 
   @Get(':productId')
@@ -241,8 +273,53 @@ export class ProductsController {
       : new StreamableFile(result.stream)
   }
 
-  @Patch(':productId')
+  @Patch(':productId/status')
   @RequirePermissions('products:update')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ProductListItemDto })
+  @ApiApplicationContract({
+    operationId: 'products_update_status',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: [
+          'CSRF_REJECTED',
+          'FORBIDDEN',
+          'PASSWORD_CHANGE_REQUIRED',
+        ],
+      },
+      { status: 404, codes: ['PRODUCT_NOT_FOUND'] },
+      { status: 409, codes: ['PRODUCT_STATE_CHANGED'] },
+      {
+        status: 422,
+        codes: [
+          'PRODUCT_CURRENCY_UNAVAILABLE',
+          'PRODUCT_SUPPLIER_UNAVAILABLE',
+          'VALIDATION_FAILED',
+        ],
+      },
+    ],
+  })
+  updateStatus(
+    @Param() params: ProductIdParamDto,
+    @Body() dto: UpdateProductStatusRequestDto,
+    @Req() request: object,
+  ): Promise<ProductListItem> {
+    return this.updates.update({
+      actorUserId: getRequestAuthContext(request).userId,
+      requestId: getRequestId(request),
+    }, params.productId, dto)
+  }
+
+  @Patch(':productId')
+  @RequirePermissions('products:update', 'product-categories:create')
   @ApiContractResponse({ status: HttpStatus.OK, type: ProductListItemDto })
   @ApiApplicationContract({
     operationId: 'products_update',

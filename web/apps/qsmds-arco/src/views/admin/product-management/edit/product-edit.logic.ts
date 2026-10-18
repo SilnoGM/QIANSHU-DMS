@@ -46,8 +46,10 @@ export function createProductEditFormModel(
       attribute.title,
       attribute.value,
     )),
+    categoryName: product.categoryName,
     myrSalePriceAmount: product.myrSalePrice.amount,
     name: product.name,
+    productHeadName: product.productHeadName,
     purchaseCostAmount: product.purchaseCost.amount,
     purchaseCostCurrency: product.purchaseCost.currency,
     status: product.status,
@@ -102,10 +104,16 @@ export function buildProductUpdateRequest(
   if (currentBody.name !== baselineBody.name) {
     request.name = currentBody.name
   }
-  if (currentBody.status !== baselineBody.status) {
-    request.status = currentBody.status
+  if (currentBody.categoryName !== baselineBody.categoryName) {
+    request.categoryName = currentBody.categoryName
   }
-  if (currentBody.supplierValue !== baselineBody.supplierValue) {
+  if (currentBody.productHeadName !== baselineBody.productHeadName) {
+    request.productHeadName = currentBody.productHeadName
+  }
+  if (
+    currentBody.supplierValue !== null
+    && currentBody.supplierValue !== baselineBody.supplierValue
+  ) {
     request.supplierValue = currentBody.supplierValue
   }
   if (!sameValue(currentBody.twdSalePrice, baselineBody.twdSalePrice)) {
@@ -180,6 +188,18 @@ export function reconcileProductUpdateResult(
     return 'unknown'
   }
   if (request.name !== undefined && actual.name !== request.name) {
+    return 'unknown'
+  }
+  if (
+    request.categoryName !== undefined
+    && actual.categoryName !== request.categoryName
+  ) {
+    return 'unknown'
+  }
+  if (
+    request.productHeadName !== undefined
+    && actual.productHeadName !== request.productHeadName
+  ) {
     return 'unknown'
   }
   if (request.status !== undefined && actual.status !== request.status) {

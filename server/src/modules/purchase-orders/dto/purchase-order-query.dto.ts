@@ -1,6 +1,7 @@
 import { ApiProperty, OmitType } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import {
+  IsBoolean,
   IsEnum,
   IsIn,
   IsInt,
@@ -141,6 +142,34 @@ export class PurchaseOrderProductOptionsQueryDto extends PurchaseOrderPageQueryD
   @IsString()
   @IsUnicodeCodePointLength(1, 128)
   keyword?: string
+
+  @ApiProperty({ type: 'string', maxLength: 64, required: false })
+  @IsOptional()
+  @IsString()
+  @IsUnicodeCodePointLength(1, 64)
+  @Matches(/\S/u)
+  categoryName?: string
+
+  @ApiProperty({ type: 'string', maxLength: 64, required: false })
+  @IsOptional()
+  @IsString()
+  @IsUnicodeCodePointLength(1, 64)
+  @Matches(/\S/u)
+  productHeadName?: string
+
+  @ApiProperty({
+    type: 'boolean',
+    required: false,
+    description: '只看未分类产品；与 categoryName、productHeadName 互斥',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
+  @IsBoolean()
+  unclassified?: boolean
 }
 
 export const PURCHASE_ORDER_SOURCE_PRODUCT_MODES = [

@@ -436,6 +436,66 @@ async function selectVisibleComboboxOption(page, labelText, optionText) {
   )))()`)
 }
 
+async function createVisibleTaxonomyValue(
+  page,
+  labelText,
+  createOptionText,
+  inputPlaceholder,
+  value,
+) {
+  const serializedLabel = JSON.stringify(labelText)
+  const serializedOption = JSON.stringify(createOptionText)
+  const serializedValue = JSON.stringify(value)
+  await page.waitFor(`(() => [...document.querySelectorAll('label')].some(label => (
+    label.getClientRects().length > 0
+    && label.textContent?.includes(${serializedLabel})
+    && (() => {
+      const trigger = label.parentElement?.querySelector('[role="combobox"]')
+      return trigger && !trigger.disabled
+    })()
+  )))()`)
+  await page.evaluate(`(() => {
+    const label = [...document.querySelectorAll('label')].find(candidate => (
+      candidate.getClientRects().length > 0
+      && candidate.textContent?.includes(${serializedLabel})
+      && (() => {
+        const trigger = candidate.parentElement?.querySelector('[role="combobox"]')
+        return trigger && !trigger.disabled
+      })()
+    ))
+    const trigger = label?.parentElement?.querySelector('[role="combobox"]')
+    if (!trigger) throw new Error('taxonomy combobox unavailable')
+    trigger.focus({ preventScroll: true })
+    return true
+  })()`)
+  await pressKey(page, 'Enter')
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="option"]')]
+    .some(option => option.getClientRects().length > 0
+      && option.textContent?.trim() === ${serializedOption}))()`)
+  await page.evaluate(`(() => {
+    const option = [...document.querySelectorAll('[role="option"]')].find(candidate => (
+      candidate.getClientRects().length > 0
+      && candidate.textContent?.trim() === ${serializedOption}
+    ))
+    if (!option) throw new Error('taxonomy create option unavailable')
+    option.focus({ preventScroll: true })
+    return true
+  })()`)
+  await pressKey(page, 'Enter')
+  await fillVisibleProductControl(
+    page,
+    `input[placeholder="${inputPlaceholder}"]`,
+    value,
+  )
+  await clickVisibleButton(page, '确定')
+  await page.waitFor(`(() => [...document.querySelectorAll('label')].some(label => (
+    label.getClientRects().length > 0
+    && label.textContent?.includes(${serializedLabel})
+    && label.parentElement?.querySelector('[role="combobox"]')?.textContent?.trim()
+      === ${serializedValue}
+  )))()`)
+}
+
 async function verifyProductCreate(page, baseUrl) {
   const productName = 'Browser 创建产品'
 
@@ -478,6 +538,11 @@ async function verifyProductCreate(page, baseUrl) {
     await page.disableRequestInterception()
   }
 
+  // 供应商现为必填且分类/产品头按供应商作用域加载，必须先选供应商。
+  await selectVisibleComboboxOption(page, '供应商', 'Browser 有效供应商')
+  await createVisibleTaxonomyValue(page, '分类', '＋ 新建分类', '输入分类名称', 'Browser 分类')
+  await createVisibleTaxonomyValue(page, '产品头', '＋ 新建产品头', '输入产品头名称', 'Browser 产品头')
+
   const defaultState = await page.evaluate(`(() => ({
     documentFits: document.documentElement.scrollWidth <= innerWidth,
     hasMediaInput: [...document.querySelectorAll('input')].some(input => (
@@ -485,18 +550,16 @@ async function verifyProductCreate(page, baseUrl) {
     )),
     name: document.querySelector('input[placeholder="请输入产品名称"]')?.value ?? null,
     purchaseCurrency: document.querySelector('input[data-currency="CNY"]') !== null,
-    showsDraft: document.body.innerText.includes('草稿（DRAFT）'),
+    showsDefaultActive: document.body.innerText.includes('新建产品保存后默认为启用'),
   }))()`)
   assert.deepEqual(defaultState, {
     documentFits: true,
     hasMediaInput: false,
     name: productName,
     purchaseCurrency: true,
-    showsDraft: true,
+    showsDefaultActive: true,
   })
 
-  await selectVisibleComboboxOption(page, '产品状态', '启用（ACTIVE）')
-  await selectVisibleComboboxOption(page, '供应商', 'Browser 有效供应商')
   await fillVisibleProductControl(page, 'input[data-currency="TWD"]', '1280.50')
   await fillVisibleProductControl(page, 'input[data-currency="MYR"]', '42.25')
   await fillVisibleProductControl(page, 'input[data-currency="CNY"]', '88.10')
@@ -541,7 +604,7 @@ async function verifyProductCreate(page, baseUrl) {
         TWD: visibleValues('input[data-currency="TWD"]'),
       },
       name: visibleValues('input[placeholder="请输入产品名称"]'),
-      status: selectedValue('产品状态'),
+      showsDefaultActive: document.body.innerText.includes('新建产品保存后默认为启用'),
       supplier: selectedValue('供应商'),
     }
   })()`)
@@ -555,7 +618,7 @@ async function verifyProductCreate(page, baseUrl) {
       TWD: ['1280.50'],
     },
     name: [productName],
-    status: '启用（ACTIVE）',
+    showsDefaultActive: true,
     supplier: 'Browser 有效供应商',
   })
 
@@ -716,9 +779,11 @@ async function verifyProductCreate(page, baseUrl) {
   const product = productResponse.body?.items?.find(item => item.name === productName)
   assert.deepEqual({
     attributes: product?.attributes,
+    categoryName: product?.categoryName,
     media: product?.media,
     myrSalePrice: product?.myrSalePrice,
     productNo: product?.productNo,
+    productHeadName: product?.productHeadName,
     purchaseCost: product?.purchaseCost,
     status: product?.status,
     supplierValue: product?.supplier?.value,
@@ -728,9 +793,11 @@ async function verifyProductCreate(page, baseUrl) {
       { title: '颜色', value: '墨黑' },
       { title: '尺寸', value: 'XL' },
     ],
+    categoryName: 'Browser 分类',
     media: { images: [], mainImage: null, videos: [] },
     myrSalePrice: { amount: '42.25', currency: 'MYR' },
     productNo: 'PRD-BRW-00000001',
+    productHeadName: 'Browser 产品头',
     purchaseCost: { amount: '88.1', currency: 'CNY' },
     status: 'ACTIVE',
     supplierValue: 'BROWSER_SUPPLIER_EFFECTIVE',
@@ -748,6 +815,7 @@ async function verifyProductCreate(page, baseUrl) {
   assert.equal(productAudits?.length, 1)
   assert.deepEqual(productAudits[0]?.metadata, {
     attributeCount: 2,
+    categorySelected: true,
     myrSalePriceProvided: true,
     productNo: product.productNo,
     purchaseCostProvided: true,
@@ -953,8 +1021,8 @@ async function verifyProductList(page, baseUrl) {
     })()`)
     assert.deepEqual(productDetailLayout, {
       fitsHorizontally: true,
-      labels: ['产品身份', '供应商', '价格资料', '产品属性（2）', '媒体资料', '审计信息'],
-      sectionCount: 6,
+      labels: ['产品身份', '分类与产品头', '供应商', '价格资料', '产品属性（2）', '媒体资料', '审计信息'],
+      sectionCount: 7,
       singleColumn: true,
       verticallyScrollable: true,
     })
@@ -1635,6 +1703,10 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'packaging-costs:create',
     'packaging-costs:pay',
     'packaging-costs:read',
+    'product-categories:create',
+    'product-categories:delete',
+    'product-categories:read',
+    'product-categories:update',
     'product-media:read',
     'products:create',
     'products:read',

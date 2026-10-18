@@ -27,9 +27,11 @@ import {
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 
 export interface ProductListQuery {
+  readonly categoryId?: string
   readonly keyword?: string
   readonly page?: number
   readonly pageSize?: number
+  readonly productHeadId?: string
   readonly status?: ProductStatus
   readonly supplierValue?: string
 }
@@ -77,12 +79,10 @@ export class ProductQueryService {
     }
 
     try {
-      const supplierResolution = row.supplierValue === null
-        ? null
-        : await this.dictionaryLookup.resolveStoredValue({
-            dictionaryCode: SUPPLIER_DICTIONARY_CODE,
-            value: row.supplierValue,
-          })
+      const supplierResolution = await this.dictionaryLookup.resolveStoredValue({
+        dictionaryCode: SUPPLIER_DICTIONARY_CODE,
+        value: row.supplierValue,
+      })
       return mapProductListItem(row, supplierResolution, media)
     }
     catch {
@@ -99,6 +99,12 @@ export class ProductQueryService {
     }
     if (query.supplierValue !== undefined) {
       where.supplierValue = query.supplierValue
+    }
+    if (query.categoryId !== undefined) {
+      where.categoryId = query.categoryId
+    }
+    if (query.productHeadId !== undefined) {
+      where.productHeadId = query.productHeadId
     }
     if (query.keyword !== undefined) {
       // status/supplierValue 位于顶层、名称和编号位于 OR；Prisma 会把这些
@@ -133,8 +139,7 @@ export class ProductQueryService {
         },
       )
 
-      const uniqueSupplierValues = [...new Set(rows.flatMap(row =>
-        row.supplierValue === null ? [] : [row.supplierValue]))]
+      const uniqueSupplierValues = [...new Set(rows.map(row => row.supplierValue))]
       const resolutions = uniqueSupplierValues.length === 0
         ? []
         : await this.dictionaryLookup.resolveStoredValues({
@@ -152,9 +157,7 @@ export class ProductQueryService {
       return {
         items: rows.map(row => mapProductListItem(
           row,
-          row.supplierValue === null
-            ? null
-            : resolutionsByValue.get(row.supplierValue) ?? null,
+          resolutionsByValue.get(row.supplierValue) ?? null,
           mediaByProduct.get(row.id) ?? mapProductMedia(row.id, []),
         )),
         page: query.page,

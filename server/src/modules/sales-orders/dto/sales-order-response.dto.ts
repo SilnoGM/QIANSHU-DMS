@@ -430,7 +430,9 @@ export class SalesOrderProductOptionDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly productNo!: string
   @ApiProperty({ type: 'string' }) readonly name!: string
-  @ApiProperty({ type: 'string', nullable: true }) readonly supplierValue!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly categoryName!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly productHeadName!: string | null
+  @ApiProperty({ type: 'string' }) readonly supplierValue!: string
   @ApiProperty({ type: 'array', items: { type: 'object', additionalProperties: true } }) readonly attributes!: readonly Record<string, unknown>[]
   @ApiProperty({ type: 'string', nullable: true }) readonly standardUnitPriceAmount!: string | null
   @ApiProperty({ enum: ['TWD', 'MYR'] }) readonly currencyCode!: string
@@ -449,9 +451,24 @@ export class SalesOrderProductOptionDto {
   } | null
 }
 
+export class SalesOrderProductOptionHeadDto {
+  @ApiProperty({ type: 'string' }) readonly name!: string
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly count!: number
+}
+
+export class SalesOrderProductOptionCategoryDto {
+  @ApiProperty({ type: 'string' }) readonly name!: string
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly count!: number
+  @ApiProperty({ type: () => [SalesOrderProductOptionHeadDto] })
+  readonly productHeads!: readonly SalesOrderProductOptionHeadDto[]
+}
+
 export class SalesOrderProductOptionsDto {
   @ApiProperty({ type: () => [SalesOrderProductOptionDto] })
   readonly items!: readonly SalesOrderProductOptionDto[]
+  @ApiProperty({ type: () => [SalesOrderProductOptionCategoryDto] })
+  readonly categories!: readonly SalesOrderProductOptionCategoryDto[]
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly unclassifiedCount!: number
   @ApiProperty({ type: 'integer' }) readonly page!: number
   @ApiProperty({ type: 'integer' }) readonly pageSize!: number
   @ApiProperty({ type: 'integer' }) readonly total!: number
@@ -487,6 +504,7 @@ export class SalesOrderProductEditExistingLineDto {
   readonly productId!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly productNo!: string | null
   @ApiProperty({ type: 'string' }) readonly productName!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly supplierValue!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly description!: string | null
   @ApiProperty({ type: 'string', nullable: true })
   readonly standardUnitPriceAmount!: string | null

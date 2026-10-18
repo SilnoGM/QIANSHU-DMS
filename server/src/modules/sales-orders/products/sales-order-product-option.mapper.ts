@@ -10,7 +10,9 @@ export interface SalesOrderProductOptionRow {
   readonly id: string
   readonly productNo: string
   readonly name: string
-  readonly supplierValue: string | null
+  readonly category: { readonly name: string } | null
+  readonly productHead: { readonly name: string } | null
+  readonly supplierValue: string
   readonly attributes: unknown
   readonly twdSalePriceAmount: DecimalValue | null
   readonly myrSalePriceAmount: DecimalValue | null
@@ -54,6 +56,8 @@ export function mapSalesOrderProductOption(
     id: row.id,
     productNo: row.productNo,
     name: row.name,
+    categoryName: row.category?.name ?? null,
+    productHeadName: row.productHead?.name ?? null,
     supplierValue: row.supplierValue,
     attributes: attributes(row.attributes),
     standardUnitPriceAmount: standardPrice === null

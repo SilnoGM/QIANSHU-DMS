@@ -31,7 +31,10 @@ function orderRow(overrides: Record<string, unknown> = {}) {
       actualUnitPriceAmount: decimal('50'),
       quantity: 2,
       lineTotalAmount: decimal('100'),
-      product: { media: [{ id: 'existing-product-media-id' }] },
+      product: {
+        supplierValue: 'SUPPLIER_A',
+        media: [{ id: 'existing-product-media-id' }],
+      },
     }, {
       id: 'sales-line-b',
       lineNumber: 2,
@@ -64,16 +67,29 @@ function setup() {
       }]),
     },
     product: {
-      count: jest.fn().mockResolvedValue(1),
+      count: jest.fn().mockImplementation((args: unknown) => {
+        const where = (args as { where?: { categoryId?: unknown } }).where
+        return Promise.resolve(where?.categoryId === null ? 0 : 1)
+      }),
+      groupBy: jest.fn().mockResolvedValue([]),
       findMany: jest.fn().mockResolvedValue([{
         id: 'product-id',
         productNo: 'P-001',
         name: '目录产品',
-        supplierValue: 'SUPPLIER_A',
+        category: { name: '收纳包' },
+        productHead: { name: '城市旅行' },
+        supplierValue: 'SUPPLIER_TW_01',
         attributes: [],
         twdSalePriceAmount: decimal('55'),
         myrSalePriceAmount: decimal('9'),
         media: [{ id: 'product-media-id' }],
+      }]),
+    },
+    productCategory: {
+      findMany: jest.fn().mockResolvedValue([{
+        name: '收纳包',
+        _count: { products: 1 },
+        productHeads: [{ name: '城市旅行', _count: { products: 1 } }],
       }]),
     },
   }
@@ -115,6 +131,7 @@ describe('SalesOrderProductEditQueryService', () => {
         productId: 'product-id',
         productNo: 'P-001',
         productName: '目录产品',
+        supplierValue: 'SUPPLIER_A',
         description: '备注',
         standardUnitPriceAmount: '55.0000',
         actualUnitPriceAmount: '50.0000',
@@ -181,11 +198,11 @@ describe('SalesOrderProductEditQueryService', () => {
     })
   })
 
-  it('returns every active catalog product without supplier filtering', async () => {
+  it('returns active catalog products scoped to the selected supplier', async () => {
     const fixture = setup()
 
     await expect(fixture.service.productOptions('sales-order-id', {
-      keyword: '目录', page: 2, pageSize: 10,
+      keyword: '目录', page: 2, pageSize: 10, supplierValue: 'SUPPLIER_TW_01',
     })).resolves.toEqual({
       items: [expect.objectContaining({
         id: 'product-id',
@@ -196,6 +213,8 @@ describe('SalesOrderProductEditQueryService', () => {
           contentUrl: '/api/sales-orders/sales-order-id/product-edit-options/product-id/main-image/product-media-id/content',
         },
       })],
+      categories: [{ name: '收纳包', count: 1, productHeads: [{ name: '城市旅行', count: 1 }] }],
+      unclassifiedCount: 0,
       page: 2,
       pageSize: 10,
       total: 1,
@@ -204,6 +223,7 @@ describe('SalesOrderProductEditQueryService', () => {
       expect.objectContaining({
         where: {
           status: 'ACTIVE',
+          supplierValue: 'SUPPLIER_TW_01',
           OR: [
             { productNo: { contains: '目录', mode: 'insensitive' } },
             { name: { contains: '目录', mode: 'insensitive' } },

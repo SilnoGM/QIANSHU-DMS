@@ -4,6 +4,7 @@ import type {
   ProductSelectionChange,
   ProductSelectorItem,
   ProductSelectorQuery,
+  SelectedProductGroup,
   SelectedProductItem,
 } from './types'
 
@@ -23,6 +24,9 @@ export function createProductSelectorQueryKey(
     query.currencyCode,
     normalizeProductSelectorKeyword(query.keyword ?? ''),
     query.supplierValue ?? '',
+    query.categoryName ?? '',
+    query.productHeadName ?? '',
+    query.unclassified === true ? 'uncategorized' : '',
   ].join('\u0000')
 }
 
@@ -56,6 +60,9 @@ export function mergeProductSelectorItems(
   return [...byId.values()]
 }
 
+/**
+ * 已有行以 productId 为稳定身份；重复行只保留第一条用于会话投影。
+ */
 export function createExistingCatalogLineIndex(
   lines: readonly ExistingCatalogLine[],
 ): ReadonlyMap<string, ExistingCatalogLine> {
@@ -110,6 +117,7 @@ export function createSelectedProductItems(
             line.quantity,
             incrementByProductId.get(line.productId) ?? 0,
           ),
+          supplierValue: line.supplierValue ?? null,
         }]
   ))
   const addedItems = changes.flatMap(change => (
@@ -120,10 +128,43 @@ export function createSelectedProductItems(
           productNo: change.product.productNo,
           name: change.product.name,
           quantity: String(change.quantity),
+          supplierValue: change.product.supplierValue,
         }]
       : []
   ))
   return [...existingItems, ...addedItems]
+}
+
+/**
+ * 右侧清单按供应商分组；已有明细可能没有供应商，调用方可用候选页同一
+ * productId 的供应商补齐，仍无法确定时归入 null 组（未设置供应商）。
+ */
+export function groupSelectedProductItems(
+  items: readonly SelectedProductItem[],
+  resolveSupplier: (item: SelectedProductItem) => string | null = item => (
+    item.supplierValue
+  ),
+): readonly SelectedProductGroup[] {
+  const groups = new Map<string, {
+    supplierValue: string | null
+    items: SelectedProductItem[]
+  }>()
+  for (const item of items) {
+    const supplierValue = resolveSupplier(item)
+    const key = supplierValue ?? ''
+    const group = groups.get(key)
+    if (group === undefined) {
+      groups.set(key, { supplierValue, items: [item] })
+    }
+    else {
+      group.items.push(item)
+    }
+  }
+  return [...groups.entries()].map(([key, group]) => ({
+    key,
+    supplierValue: group.supplierValue,
+    items: group.items,
+  }))
 }
 
 export function removeProductFromSession(

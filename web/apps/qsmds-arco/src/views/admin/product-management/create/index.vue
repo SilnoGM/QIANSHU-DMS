@@ -7,7 +7,7 @@ import type {
   ProductCreateSubmittingState,
   ProductCreateUnknownState,
 } from './product-create.logic'
-import type { CreateProductRequestDto } from '@/api/generated/types.gen'
+import type { CreateProductRequestDto, ProductTaxonomyCategoryOptionDto } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 
 import productsApi from '@/api/modules/products'
@@ -46,7 +46,7 @@ interface ProductCreateFormExpose {
 defineOptions({ name: 'AdminProductCreate' })
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
-const { auth } = useAppAuth()
+const { auth, authAll } = useAppAuth()
 const appAccountStore = useAppAccountStore()
 const router = useRouter()
 const toast = useQsToast()
@@ -62,13 +62,20 @@ const submitState = shallowRef<ProductCreateSubmissionState>(
 const fieldErrors = ref<ProductCreateFieldErrors>({})
 const formError = ref('')
 const formFailure = shallowRef<ProductCreateApiFailure | null>(null)
+const taxonomyOptions = shallowRef<readonly ProductTaxonomyCategoryOptionDto[]>([])
+const taxonomyState = ref<ProductCreateCatalogState>('loading')
 const discardModalVisible = ref(false)
 const discardIntent = ref<DiscardConfirmationIntent | null>(null)
 let requestVersion = 0
 let submitAbortController: AbortController | null = null
+let taxonomyAbortController: AbortController | null = null
 let pendingNavigationResolver: ((allow: boolean) => void) | null = null
 
-const canCreate = computed(() => auth('products:create'))
+const canCreate = computed(() => authAll([
+  'products:create',
+  'product-categories:create',
+]))
+const canCreateTaxonomy = computed(() => auth('product-categories:create'))
 const canRead = computed(() => auth('products:read'))
 const purchaseCurrencies = computed<readonly CurrencyDescriptor[]>(() =>
   currencyCatalog.selectableCurrencies.value)
@@ -112,6 +119,28 @@ const discardModalTitle = computed(() => discardIntent.value === 'unknown-abando
 const discardModalDescription = computed(() => discardIntent.value === 'unknown-abandon'
   ? '放弃后将清除当前幂等请求，无法再使用同一请求确认结果。'
   : '当前修改尚未保存，放弃后无法恢复。')
+
+async function loadTaxonomyOptions(): Promise<void> {
+  taxonomyAbortController?.abort()
+  const controller = new AbortController()
+  taxonomyAbortController = controller
+  taxonomyState.value = 'loading'
+  try {
+    const response = await productsApi.taxonomyOptions(controller.signal)
+    if (controller.signal.aborted || !canCreate.value) {
+      return
+    }
+    taxonomyOptions.value = response.data.categories
+    taxonomyState.value = response.data.categories.length === 0 ? 'empty' : 'ready'
+  }
+  catch {
+    if (controller.signal.aborted) {
+      return
+    }
+    taxonomyOptions.value = []
+    taxonomyState.value = 'error'
+  }
+}
 
 function clearFeedback(): void {
   fieldErrors.value = {}
@@ -165,20 +194,14 @@ function collectCatalogErrors(): ProductCreateFieldErrors {
     }
   }
 
-  const supplierRequired = formModel.value.status === 'ACTIVE'
-    || formModel.value.supplierValue !== null
-  if (supplierRequired) {
-    if (supplierCatalogState.value !== 'ready') {
-      errors.supplierValue = '请先完成供应商资料加载'
-    }
-    else {
-      const resolution = supplierCatalog.resolve(formModel.value.supplierValue)
-      if (resolution?.status !== 'ACTIVE') {
-        errors.supplierValue = formModel.value.status === 'ACTIVE'
-          ? '启用产品必须选择当前有效的供应商'
-          : '已选供应商当前不可用'
-      }
-    }
+  if (supplierCatalogState.value !== 'ready') {
+    errors.supplierValue = '请先完成供应商资料加载'
+  }
+  else if (formModel.value.supplierValue === null) {
+    errors.supplierValue = '请选择供应商'
+  }
+  else if (supplierCatalog.resolve(formModel.value.supplierValue)?.status !== 'ACTIVE') {
+    errors.supplierValue = '请选择当前有效的供应商'
   }
   return errors
 }
@@ -205,6 +228,7 @@ async function handleSuccess(
   formModel.value = createProductCreateFormModel()
   clearFeedback()
   toast.success(`产品 ${product.productNo} 创建成功`)
+  void loadTaxonomyOptions()
   if (canRead.value) {
     await router.push({ name: 'adminProductList' })
     return
@@ -412,11 +436,16 @@ watch(
 
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
+  if (canCreate.value) {
+    void loadTaxonomyOptions()
+  }
 })
 
 onBeforeUnmount(() => {
   requestVersion += 1
   submitAbortController?.abort()
+  taxonomyAbortController?.abort()
+  taxonomyAbortController = null
   window.removeEventListener('beforeunload', handleBeforeUnload)
   pendingNavigationResolver?.(false)
   pendingNavigationResolver = null
@@ -446,7 +475,7 @@ onBeforeUnmount(() => {
       <FaEmpty
         icon="i-lucide:shield-alert"
         title="无权新增产品"
-        description="当前身份缺少 products:create 权限。"
+        description="当前身份缺少 products:create 或 product-categories:create 权限。"
         class="py-12"
       />
     </FaPageMain>
@@ -539,8 +568,11 @@ onBeforeUnmount(() => {
         v-else
         ref="formRef"
         :model-value="formModel"
+        :can-create-taxonomy="canCreateTaxonomy"
         :currency-catalog-state="currencyCatalogState"
         :supplier-catalog-state="supplierCatalogState"
+        :taxonomy-catalog-state="taxonomyState"
+        :taxonomy-options="taxonomyOptions"
         :twd-currencies="twdCurrencies"
         :myr-currencies="myrCurrencies"
         :purchase-currencies="purchaseCurrencies"
@@ -553,6 +585,7 @@ onBeforeUnmount(() => {
         @cancel="requestCancel"
         @retry-currency-catalog="currencyCatalog.reload"
         @retry-supplier-catalog="supplierCatalog.retry"
+        @retry-taxonomy-catalog="loadTaxonomyOptions"
       />
     </FaPageMain>
 

@@ -72,6 +72,10 @@ describe('permission constants', () => {
       'products:read',
       'products:create',
       'products:update',
+      'product-categories:read',
+      'product-categories:create',
+      'product-categories:update',
+      'product-categories:delete',
       'fund-accounts:read',
       'fund-accounts:create',
       'fund-accounts:update-share-rate',
@@ -123,7 +127,7 @@ describe('permission constants', () => {
       'workbench:operations',
       'workbench:purchase-transport',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 91)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 95)
   })
 })
 

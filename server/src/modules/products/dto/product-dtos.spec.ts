@@ -8,6 +8,7 @@ import { ProductListQueryDto } from './product-list-query.dto'
 import {
   ProductIdParamDto,
   UpdateProductRequestDto,
+  UpdateProductStatusRequestDto,
 } from './product-update.dto'
 
 const createDtoPipe = new ValidationPipe({
@@ -20,8 +21,10 @@ const createDtoPipe = new ValidationPipe({
 function validCreateBody(): Record<string, unknown> {
   return {
     name: '测试产品',
-    status: 'DRAFT',
-    supplierValue: null,
+    categoryName: '微耕机',
+    productHeadName: '旱地履带',
+    status: 'INACTIVE',
+    supplierValue: 'SUPPLIER_A',
     twdSalePrice: { amount: null, currency: 'TWD' },
     myrSalePrice: { amount: '10.20', currency: 'MYR' },
     purchaseCost: { amount: '5', currency: 'CNY' },
@@ -38,6 +41,8 @@ describe('ProductListQueryDto', () => {
       pageSize: '100',
       status: 'ACTIVE',
       supplierValue: ' raw-value ',
+      categoryId: '11111111-1111-4111-8111-111111111111',
+      productHeadId: '22222222-2222-4222-8222-222222222222',
     })
 
     expect(defaults).toMatchObject({ page: 1, pageSize: 20 })
@@ -47,6 +52,8 @@ describe('ProductListQueryDto', () => {
       pageSize: 100,
       status: 'ACTIVE',
       supplierValue: ' raw-value ',
+      categoryId: '11111111-1111-4111-8111-111111111111',
+      productHeadId: '22222222-2222-4222-8222-222222222222',
     })
     expect(await validate(defaults)).toEqual([])
     expect(await validate(complete)).toEqual([])
@@ -61,6 +68,8 @@ describe('ProductListQueryDto', () => {
     { supplierValue: '' },
     { supplierValue: '   ' },
     { supplierValue: '😀'.repeat(65) },
+    { categoryId: 'not-a-uuid' },
+    { productHeadId: 'not-a-uuid' },
   ])('rejects invalid public query input: %j', async (input) => {
     expect(await validate(plainToInstance(ProductListQueryDto, input)))
       .not.toHaveLength(0)
@@ -80,6 +89,10 @@ describe('CreateProductRequestDto', () => {
 
   it.each([
     ['name', { name: undefined }],
+    ['categoryName', { categoryName: undefined }],
+    ['productHeadName', { productHeadName: undefined }],
+    ['categoryName', { categoryName: '   ' }],
+    ['productHeadName', { productHeadName: '😀'.repeat(65) }],
     ['status', { status: 'UNKNOWN' }],
     ['supplierValue', { supplierValue: undefined }],
     ['twdSalePrice', { twdSalePrice: undefined }],
@@ -124,7 +137,7 @@ describe('Product detail and update DTOs', () => {
 
     const transformed = await createDtoPipe.transform({
       name: '  更新产品  ',
-      supplierValue: null,
+      supplierValue: 'SUPPLIER_A',
       expectedVersion: 2,
     }, {
       type: 'body',
@@ -132,7 +145,7 @@ describe('Product detail and update DTOs', () => {
     }) as UpdateProductRequestDto
     expect(transformed).toMatchObject({
       name: '更新产品',
-      supplierValue: null,
+      supplierValue: 'SUPPLIER_A',
       expectedVersion: 2,
     })
 
@@ -147,6 +160,33 @@ describe('Product detail and update DTOs', () => {
       name: '仅更新名称',
       expectedVersion: 3,
     })
+  })
+
+  it('accepts the status-only patch shape', async () => {
+    const transformed = await createDtoPipe.transform({
+      status: 'INACTIVE',
+      expectedVersion: 2,
+    }, {
+      type: 'body',
+      metatype: UpdateProductStatusRequestDto,
+    }) as UpdateProductStatusRequestDto
+    expect(transformed).toEqual({
+      status: 'INACTIVE',
+      expectedVersion: 2,
+    })
+  })
+
+  it.each([
+    { expectedVersion: 2 },
+    { status: 'ACTIVE' },
+    { status: 'DRAFT', expectedVersion: 2 },
+    { status: 'INACTIVE', expectedVersion: 0 },
+    { status: 'INACTIVE', expectedVersion: 2, name: '禁止混入' },
+  ])('rejects invalid status-only patch: %j', async (body) => {
+    await expect(createDtoPipe.transform(body, {
+      type: 'body',
+      metatype: UpdateProductStatusRequestDto,
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
   })
 
   it.each([

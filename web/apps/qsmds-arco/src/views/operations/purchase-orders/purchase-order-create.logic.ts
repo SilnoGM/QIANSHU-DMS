@@ -349,14 +349,18 @@ export function adaptPurchaseOrderProductPage(
   return {
     items: page.items.map(item => ({
       attributes: item.attributes,
+      categoryName: item.categoryName,
       currencyCode: item.currencyCode,
       id: item.id,
       mainImage: item.mainImage,
       name: item.name,
+      productHeadName: item.productHeadName,
       productNo: item.productNo,
       standardUnitPriceAmount: item.referencePurchaseUnitPriceAmount,
       supplierValue: item.supplierValue,
     })),
+    categories: page.categories,
+    unclassifiedCount: page.unclassifiedCount,
     page: page.page,
     pageSize: page.pageSize,
     total: page.total,

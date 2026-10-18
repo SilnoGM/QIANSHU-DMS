@@ -27,6 +27,8 @@ test('全部业务与审计列顺序固定，编号左固定且技术字段不�
   const expectedColumnIds = [
     'productNo',
     'name',
+    'categoryName',
+    'productHeadName',
     'status',
     'supplier',
     'mainImage',
@@ -85,6 +87,8 @@ test('启用状态与供应商筛选复用表格筛选，供应商候选继续�
   assert.match(source, /useDictionaryCatalog\(SUPPLIER_DICTIONARY_CODE\)/u)
   assert.match(source, /buildSupplierFilterOptions/u)
   assert.match(source, /key: 'supplierValue'/u)
+  assert.match(source, /key: 'categoryId'/u)
+  assert.match(source, /key: 'productHeadId'/u)
   assert.match(source, /v-model:filters="filters"/u)
   assert.match(source, /@filter-change="handleFilterChange"/u)
   assert.match(source, /supplierCatalog\.retry/u)
@@ -116,7 +120,6 @@ test('特殊单元格从结构化 media 读取，并复用 ImageGroup、AmountDi
   assert.equal((source.match(/<AmountDisplay\b/gu) ?? []).length >= 6, true)
   assert.match(source, /useCurrencyCatalog\(\)/u)
   assert.match(source, /<FaTag\b/u)
-  assert.match(source, /草稿/u)
   assert.match(source, /启用/u)
   assert.match(source, /停用/u)
   assert.match(source, /未知/u)
@@ -134,7 +137,9 @@ test('属性和视频入口可聚焦，新增、查看与编辑接入精确路�
   assert.match(source, /<ProductDetailDrawer/u)
   assert.match(source, /name: 'adminProductEdit'/u)
   assert.match(source, /v-if="canUpdate"/u)
-  assert.doesNotMatch(source, /productsApi\.(?:create|update|delete)/u)
+  assert.match(source, /productsApi\.updateStatus/u)
+  assert.match(source, /requestStatusChange/u)
+  assert.doesNotMatch(source, /productsApi\.(?:update\(|create|delete)/u)
 })
 
 test('Task 15 列表以独立内容权限控制所有媒体 DOM 和预览入口', () => {

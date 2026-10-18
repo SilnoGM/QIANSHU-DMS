@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ProductListItemViewModel } from './product-list.logic'
+import type { ProductTaxonomyCategoryOptionDto } from '@/api/generated/types.gen'
 import type {
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
@@ -10,6 +11,8 @@ import productsApi from '@/api/modules/products'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
@@ -34,15 +37,19 @@ import ProductVideosModal from './product-videos-modal.vue'
 defineOptions({ name: 'AdminProductList' })
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
-const { auth } = useAppAuth()
+const { auth, authAll } = useAppAuth()
 const appAccountStore = useAppAccountStore()
 const router = useRouter()
 const supplierCatalog = useDictionaryCatalog(SUPPLIER_DICTIONARY_CODE)
 const { currencies } = useCurrencyCatalog()
+const toast = useQsToast()
 
 const canRead = computed(() => auth('products:read'))
 const canCreate = computed(() => auth('products:create'))
-const canUpdate = computed(() => auth('products:update'))
+const canUpdate = computed(() => authAll([
+  'products:update',
+  'product-categories:create',
+]))
 const canReadProductMedia = computed(() => auth('product-media:read'))
 const rows = ref<ProductListItemViewModel[]>([])
 const page = ref(1)
@@ -63,10 +70,19 @@ const detailProduct = ref<ProductListItemViewModel | null>(null)
 const detailLoading = ref(false)
 const detailError = ref('')
 const detailRequestId = ref<string>()
+const taxonomyOptions = shallowRef<readonly ProductTaxonomyCategoryOptionDto[]>([])
+const statusTarget = shallowRef<ProductListItemViewModel | null>(null)
+const statusNext = ref<'ACTIVE' | 'INACTIVE' | null>(null)
+const statusModalVisible = ref(false)
+const statusSubmitting = ref(false)
+const statusError = ref('')
+const statusRequestId = ref<string>()
 let listRequestVersion = 0
 let listAbortController: AbortController | null = null
 let detailRequestVersion = 0
 let detailAbortController: AbortController | null = null
+let taxonomyAbortController: AbortController | null = null
+let statusAbortController: AbortController | null = null
 let queryRefreshPending = false
 
 const supplierCatalogLoading = computed(() => supplierCatalog.loading.value)
@@ -75,6 +91,47 @@ const supplierCatalogMissing = computed(() => supplierCatalog.missing.value)
 const supplierFilterOptions = computed(() => buildSupplierFilterOptions(
   supplierCatalog.catalog.value,
 ))
+const supplierLabelByValue = computed(() => new Map(
+  supplierFilterOptions.value.map(option => [option.value, option.label]),
+))
+const selectedSupplierFilterValue = computed(() => (
+  typeof filters.value.supplierValue === 'string'
+  && filters.value.supplierValue !== ''
+    ? filters.value.supplierValue
+    : undefined
+))
+const selectedCategoryFilterId = computed(() => (
+  typeof filters.value.categoryId === 'string'
+  && filters.value.categoryId !== ''
+    ? filters.value.categoryId
+    : undefined
+))
+const categoryFilterOptions = computed(() => {
+  const supplierValue = selectedSupplierFilterValue.value
+  return taxonomyOptions.value
+    .filter(category => supplierValue === undefined
+      || category.supplierValue === supplierValue)
+    .map(category => ({
+      label: supplierValue === undefined
+        ? `${category.name}（${supplierLabelByValue.value.get(category.supplierValue) ?? category.supplierValue}）`
+        : category.name,
+      value: category.id,
+    }))
+})
+const productHeadFilterOptions = computed(() => {
+  const supplierValue = selectedSupplierFilterValue.value
+  const categoryId = selectedCategoryFilterId.value
+  const categories = taxonomyOptions.value.filter(category => (
+    (supplierValue === undefined || category.supplierValue === supplierValue)
+    && (categoryId === undefined || category.id === categoryId)
+  ))
+  return categories.flatMap(category => category.productHeads.map(productHead => ({
+    label: categoryId === undefined
+      ? `${productHead.name}（${category.name}）`
+      : productHead.name,
+    value: productHead.id,
+  })))
+})
 const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
   {
     key: 'status',
@@ -90,6 +147,18 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
     label: '供应商',
     options: supplierFilterOptions.value,
     placeholder: '选择供应商',
+  },
+  {
+    key: 'categoryId',
+    label: '分类',
+    options: categoryFilterOptions.value,
+    placeholder: '选择分类',
+  },
+  {
+    key: 'productHeadId',
+    label: '产品头',
+    options: productHeadFilterOptions.value,
+    placeholder: '选择产品头',
   },
 ])
 const listErrorDisplay = computed(() => {
@@ -110,6 +179,8 @@ const columns: QsGenericTableColumn<ProductListItemViewModel>[] = [
     title: '产品编号',
   },
   { accessorKey: 'name', id: 'name', minWidth: 180, title: '产品名称' },
+  { accessorKey: 'categoryName', id: 'categoryName', minWidth: 150, title: '分类' },
+  { accessorKey: 'productHeadName', id: 'productHeadName', minWidth: 150, title: '产品头' },
   { accessorKey: 'status', id: 'status', title: '产品状态', width: 120 },
   {
     accessorFn: item => item.supplier?.value ?? null,
@@ -188,6 +259,24 @@ function listResponseIsCurrent(
   })
 }
 
+async function loadTaxonomyOptions(): Promise<void> {
+  taxonomyAbortController?.abort()
+  const controller = new AbortController()
+  taxonomyAbortController = controller
+  try {
+    const response = await productsApi.taxonomyOptions(controller.signal)
+    if (controller.signal.aborted || !canRead.value) {
+      return
+    }
+    taxonomyOptions.value = response.data.categories
+  }
+  catch {
+    if (!controller.signal.aborted) {
+      taxonomyOptions.value = []
+    }
+  }
+}
+
 async function loadProducts(): Promise<void> {
   if (!canRead.value) {
     return
@@ -256,7 +345,20 @@ function handleFilterChange(nextFilters: QsGenericTableFilterValues): void {
   const supplierValue = typeof nextFilters.supplierValue === 'string'
     ? nextFilters.supplierValue
     : undefined
-  const supplierState = applyProductSupplierFilter(nextFilters, supplierValue)
+  const previousSupplier = typeof filters.value.supplierValue === 'string'
+    ? filters.value.supplierValue
+    : undefined
+  const previousCategory = filters.value.categoryId
+  const next = { ...nextFilters }
+  if (supplierValue !== previousSupplier) {
+    // 分类/产品头按供应商作用域读取；供应商变化后旧作用域筛选不再有效。
+    delete next.categoryId
+    delete next.productHeadId
+  }
+  if (next.categoryId !== previousCategory) {
+    delete next.productHeadId
+  }
+  const supplierState = applyProductSupplierFilter(next, supplierValue)
   const nextState = applyProductStatusFilter(supplierState.filters, status)
   filters.value = nextState.filters
   page.value = nextState.page
@@ -293,7 +395,6 @@ function supplierDisplay(item: ProductListItemViewModel): string {
 function statusLabel(status: ProductListItemViewModel['status']): string {
   return {
     ACTIVE: '启用',
-    DRAFT: '草稿',
     INACTIVE: '停用',
   }[status]
 }
@@ -301,7 +402,6 @@ function statusLabel(status: ProductListItemViewModel['status']): string {
 function statusClass(status: ProductListItemViewModel['status']): string {
   return {
     ACTIVE: 'border-primary/30 bg-primary/10 text-primary',
-    DRAFT: 'border-amber-500/30 bg-amber-500/8 text-amber-700 dark:text-amber-300',
     INACTIVE: 'border-border bg-muted text-muted-foreground',
   }[status]
 }
@@ -431,6 +531,98 @@ function navigateToEdit(productId: string): void {
   void router.push({ name: 'adminProductEdit', params: { productId } })
 }
 
+const statusModalTitle = computed(() => (
+  statusNext.value === 'ACTIVE' ? '启用产品' : '停用产品'
+))
+const statusModalDescription = computed(() => (
+  statusNext.value === 'ACTIVE'
+    ? '启用后该产品会重新出现在销售与采购选品中；启用前必须已有供应商、分类和产品头。'
+    : '停用后该产品不再出现在销售与采购选品中，已有订单明细不受影响。'
+))
+
+function requestStatusChange(product: ProductListItemViewModel): void {
+  if (!canUpdate.value) {
+    return
+  }
+  statusAbortController?.abort()
+  statusTarget.value = product
+  statusNext.value = product.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
+  statusError.value = ''
+  statusRequestId.value = undefined
+  statusModalVisible.value = true
+}
+
+function closeStatusModal(): void {
+  if (statusSubmitting.value) {
+    return
+  }
+  statusAbortController?.abort()
+  statusAbortController = null
+  statusModalVisible.value = false
+  statusTarget.value = null
+  statusNext.value = null
+  statusError.value = ''
+  statusRequestId.value = undefined
+}
+
+async function submitStatusChange(): Promise<void> {
+  const target = statusTarget.value
+  const nextStatus = statusNext.value
+  if (!canUpdate.value || target === null || nextStatus === null || statusSubmitting.value) {
+    return
+  }
+  statusAbortController?.abort()
+  const controller = new AbortController()
+  statusAbortController = controller
+  statusSubmitting.value = true
+  statusError.value = ''
+  statusRequestId.value = undefined
+  let succeeded = false
+  let reloadAfterConflict = false
+  try {
+    const response = await productsApi.updateStatus(target.id, {
+      expectedVersion: target.version,
+      status: nextStatus,
+    }, controller.signal)
+    if (controller.signal.aborted || !canUpdate.value) {
+      return
+    }
+    const updated = adaptProductListItemDto(response.data)
+    rows.value = rows.value.map(row => row.id === updated.id ? updated : row)
+    if (detailProduct.value?.id === updated.id) {
+      detailProduct.value = updated
+    }
+    succeeded = true
+  }
+  catch (error) {
+    if (isProductListAbortError(error) || controller.signal.aborted) {
+      return
+    }
+    const failure = getProductListApiFailure(error)
+    statusError.value = failure.message
+    statusRequestId.value = failure.requestId
+    reloadAfterConflict = failure.code === 'PRODUCT_STATE_CHANGED'
+  }
+  finally {
+    if (statusAbortController === controller) {
+      statusAbortController = null
+      statusSubmitting.value = false
+    }
+  }
+  if (succeeded) {
+    await nextTick()
+    toast.success(`产品 ${target.productNo} 已${nextStatus === 'ACTIVE' ? '启用' : '停用'}`)
+    closeStatusModal()
+    return
+  }
+  if (reloadAfterConflict) {
+    await nextTick()
+    closeStatusModal()
+    toast.error('产品已变化，列表已刷新，请重新操作')
+    void loadProducts()
+  }
+}
+
 watch(
   [() => appAccountStore.authEpoch, canRead],
   ([nextAuthEpoch, nextCanRead], [previousAuthEpoch]) => {
@@ -450,6 +642,14 @@ watch(
     detailLoading.value = false
     detailError.value = ''
     detailRequestId.value = undefined
+    statusAbortController?.abort()
+    statusAbortController = null
+    statusSubmitting.value = false
+    statusModalVisible.value = false
+    statusTarget.value = null
+    statusNext.value = null
+    statusError.value = ''
+    statusRequestId.value = undefined
     if (identityChanged) {
       filters.value = {}
       searchKeyword.value = ''
@@ -464,6 +664,7 @@ watch(
 onMounted(() => {
   if (canRead.value) {
     void loadProducts()
+    void loadTaxonomyOptions()
   }
 })
 
@@ -472,6 +673,10 @@ onBeforeUnmount(() => {
   listAbortController?.abort()
   detailRequestVersion += 1
   detailAbortController?.abort()
+  taxonomyAbortController?.abort()
+  taxonomyAbortController = null
+  statusAbortController?.abort()
+  statusAbortController = null
 })
 </script>
 
@@ -525,7 +730,7 @@ onBeforeUnmount(() => {
         v-model:filters="filters"
         data-testid="product-list-table"
         :row-key="item => item.id"
-        :action-column="{ fixed: 'right', width: 180 }"
+        :action-column="{ fixed: 'right', width: 280 }"
         :addable="false"
         :columns="columns"
         :data="rows"
@@ -680,6 +885,17 @@ onBeforeUnmount(() => {
           >
             <FaIcon name="i-lucide:pencil" />
             编辑
+          </FaButton>
+          <FaButton
+            v-if="canUpdate"
+            variant="ghost"
+            size="sm"
+            class="min-h-11 sm:min-h-9"
+            :aria-label="`${row.status === 'ACTIVE' ? '停用' : '启用'}第 ${rowNumber} 行产品 ${row.productNo}`"
+            @click="requestStatusChange(row)"
+          >
+            <FaIcon :name="row.status === 'ACTIVE' ? 'i-lucide:circle-pause' : 'i-lucide:circle-check'" />
+            {{ row.status === 'ACTIVE' ? '停用' : '启用' }}
           </FaButton>
         </template>
 
@@ -857,6 +1073,15 @@ onBeforeUnmount(() => {
             <FaButton v-if="canUpdate" variant="outline" class="min-h-11" @click="navigateToEdit(row.id)">
               <FaIcon name="i-lucide:pencil" />编辑
             </FaButton>
+            <FaButton
+              v-if="canUpdate"
+              variant="outline"
+              class="min-h-11"
+              @click="requestStatusChange(row)"
+            >
+              <FaIcon :name="row.status === 'ACTIVE' ? 'i-lucide:circle-pause' : 'i-lucide:circle-check'" />
+              {{ row.status === 'ACTIVE' ? '停用' : '启用' }}
+            </FaButton>
           </div>
         </template>
       </QsGenericTable>
@@ -885,5 +1110,53 @@ onBeforeUnmount(() => {
       @edit="navigateToEdit"
       @closed="closeProductDetail"
     />
+
+    <QsGenericModal
+      v-if="statusModalVisible"
+      :model-value="statusModalVisible"
+      :title="statusModalTitle"
+      :description="statusModalDescription"
+      :submitting="statusSubmitting"
+      size="sm"
+      @update:model-value="value => { if (!value) closeStatusModal() }"
+    >
+      <FaAlert
+        v-if="statusError"
+        title="状态更新失败"
+        variant="destructive"
+        role="alert"
+      >
+        <template #description>
+          <p class="m-0">
+            {{ statusError }}
+          </p>
+          <code v-if="statusRequestId" class="text-xs font-mono mt-2 block break-all">
+            requestId: {{ statusRequestId }}
+          </code>
+        </template>
+      </FaAlert>
+      <p v-else class="text-sm m-0">
+        请确认是否继续。状态变更会立即影响后续销售与采购的选品范围。
+      </p>
+      <template #footer>
+        <FaButton
+          type="button"
+          variant="outline"
+          class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+          :disabled="statusSubmitting"
+          @click="closeStatusModal"
+        >
+          取消
+        </FaButton>
+        <FaButton
+          type="button"
+          class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+          :loading="statusSubmitting"
+          @click="submitStatusChange"
+        >
+          确认{{ statusNext === 'ACTIVE' ? '启用' : '停用' }}
+        </FaButton>
+      </template>
+    </QsGenericModal>
   </div>
 </template>

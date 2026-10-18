@@ -14,6 +14,7 @@ test('管理员工作台注册产品管理的创建、列表与隐藏编辑路�
     'products:read',
     'products:create',
     'products:update',
+    'product-categories:read',
   ])
   assert.equal(productManagementRoutes.path, '/admin/products')
   assert.equal(productManagementRoutes.name, 'adminProductManagement')
@@ -37,6 +38,12 @@ test('管理员工作台注册产品管理的创建、列表与隐藏编辑路�
         name: 'adminProductList',
         path: 'list',
         title: '产品列表',
+      },
+      {
+        auth: 'product-categories:read',
+        name: 'adminProductCategories',
+        path: 'categories',
+        title: '产品分类',
       },
       {
         auth: 'products:update',
@@ -119,9 +126,14 @@ test('产品权限精确控制菜单和直接访问资格', () => {
   assert.deepEqual(visiblePaths(['products:create']), ['create'])
   assert.deepEqual(visiblePaths(['products:read']), ['list'])
   assert.deepEqual(visiblePaths(['products:update']), [])
+  assert.deepEqual(visiblePaths(['product-categories:read']), ['categories'])
   assert.deepEqual(
     visiblePaths(['products:read', 'products:create', 'products:update']),
     ['create', 'list'],
+  )
+  assert.deepEqual(
+    visiblePaths(['products:read', 'product-categories:read']),
+    ['list', 'categories'],
   )
   assert.deepEqual(visiblePaths([]), [])
 })

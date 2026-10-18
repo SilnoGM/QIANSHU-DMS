@@ -13,6 +13,7 @@ import {
   createExistingCatalogLineIndex,
   createProductSelectorQueryKey,
   createSelectedProductItems,
+  groupSelectedProductItems,
   mergeProductSelectorItems,
   removeProductFromSession,
   selectProductForSession,
@@ -23,6 +24,8 @@ function product(id: string): ProductSelectorItem {
     id,
     productNo: `SKU-${id}`,
     name: `产品 ${id}`,
+    categoryName: '收纳包',
+    productHeadName: '城市旅行',
     supplierValue: 'SUPPLIER_A',
     attributes: [],
     standardUnitPriceAmount: '12.5000',
@@ -46,7 +49,30 @@ test('产品选择分页按稳定 ID 合并，并拒绝旧查询覆盖当前筛�
     supplierValue: 'SUPPLIER_A',
     page: 1,
     pageSize: 20,
-  }), 'TWD\u0000收纳\u0000SUPPLIER_A')
+  }), 'TWD\u0000收纳\u0000SUPPLIER_A\u0000\u0000\u0000')
+  assert.equal(createProductSelectorQueryKey({
+    currencyCode: 'TWD',
+    categoryName: '收纳',
+    page: 1,
+    pageSize: 20,
+  }), 'TWD\u0000\u0000\u0000收纳\u0000\u0000')
+  assert.equal(createProductSelectorQueryKey({
+    currencyCode: 'TWD',
+    categoryName: '收纳',
+    productHeadName: '城市旅行',
+    page: 1,
+    pageSize: 20,
+  }), 'TWD\u0000\u0000\u0000收纳\u0000城市旅行\u0000')
+  assert.notEqual(createProductSelectorQueryKey({
+    currencyCode: 'TWD',
+    page: 1,
+    pageSize: 20,
+  }), createProductSelectorQueryKey({
+    currencyCode: 'TWD',
+    unclassified: true,
+    page: 1,
+    pageSize: 20,
+  }))
   assert.equal(canApplyProductSelectorResponse({
     activeQueryKey: 'new',
     activeVersion: 3,
@@ -63,7 +89,61 @@ test('采购订单可以使用 CNY 构造稳定查询身份', () => {
     supplierValue: 'SUPPLIER_CN_01',
     page: 1,
     pageSize: 20,
-  }), 'CNY\u0000采购包材\u0000SUPPLIER_CN_01')
+  }), 'CNY\u0000采购包材\u0000SUPPLIER_CN_01\u0000\u0000\u0000')
+})
+
+test('已选产品按供应商分组，未知供应商单独成组并可用候选页补齐', () => {
+  const items = [
+    {
+      origin: 'ADDED' as const,
+      productId: 'A',
+      productNo: 'SKU-A',
+      name: '产品 A',
+      quantity: '1',
+      supplierValue: 'SUPPLIER_A',
+    },
+    {
+      origin: 'EXISTING' as const,
+      productId: 'B',
+      productNo: 'SKU-B',
+      name: '产品 B',
+      quantity: '2',
+      supplierValue: null,
+    },
+    {
+      origin: 'ADDED' as const,
+      productId: 'C',
+      productNo: 'SKU-C',
+      name: '产品 C',
+      quantity: '1',
+      supplierValue: 'SUPPLIER_A',
+    },
+  ]
+
+  assert.deepEqual(groupSelectedProductItems(items).map(group => ({
+    supplierValue: group.supplierValue,
+    productIds: group.items.map(item => item.productId),
+  })), [{
+    supplierValue: 'SUPPLIER_A',
+    productIds: ['A', 'C'],
+  }, {
+    supplierValue: null,
+    productIds: ['B'],
+  }])
+
+  assert.deepEqual(groupSelectedProductItems(
+    items,
+    item => item.productId === 'B' ? 'SUPPLIER_B' : item.supplierValue,
+  ).map(group => ({
+    supplierValue: group.supplierValue,
+    productIds: group.items.map(item => item.productId),
+  })), [{
+    supplierValue: 'SUPPLIER_A',
+    productIds: ['A', 'C'],
+  }, {
+    supplierValue: 'SUPPLIER_B',
+    productIds: ['B'],
+  }])
 })
 
 test('打开会话时已有数据库产品完整回显到已选列表', () => {
@@ -73,6 +153,7 @@ test('打开会话时已有数据库产品完整回显到已选列表', () => {
     productNo: 'SKU-A',
     name: '产品 A',
     quantity: '3',
+    supplierValue: 'SUPPLIER_A',
   }]
 
   assert.deepEqual(createSelectedProductItems(existing, []), [{
@@ -81,6 +162,7 @@ test('打开会话时已有数据库产品完整回显到已选列表', () => {
     productNo: 'SKU-A',
     name: '产品 A',
     quantity: '3',
+    supplierValue: 'SUPPLIER_A',
   }])
 })
 

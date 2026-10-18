@@ -34,6 +34,8 @@ function validModel() {
   model.twdSalePriceAmount = '88.5'
   model.myrSalePriceAmount = '12.50'
   model.purchaseCostAmount = '10'
+  model.categoryName = ' 微耕机 '
+  model.productHeadName = ' 旱地履带 '
   model.attributes.push(createProductAttributeRow('row-1', ' 颜色 ', ' 黑色 '))
   return model
 }
@@ -52,11 +54,13 @@ test('默认 model 符合创建契约，属性 row key 稳定且 dirty 比较不
   const model = createProductCreateFormModel()
   assert.deepEqual(model, {
     attributes: [],
+    categoryName: null,
     myrSalePriceAmount: null,
     name: '',
+    productHeadName: null,
     purchaseCostAmount: null,
     purchaseCostCurrency: 'CNY',
-    status: 'DRAFT',
+    status: 'ACTIVE',
     supplierValue: null,
     twdSalePriceAmount: null,
   })
@@ -113,10 +117,12 @@ test('DTO builder 执行 trim/NFC、严格 MoneyInput 校验并丢弃 Vue row ke
   assert.deepEqual(result, {
     request: {
       attributes: [{ title: '颜色', value: '黑色' }],
+      categoryName: '微耕机',
       myrSalePrice: { amount: '12.50', currency: 'MYR' },
       name: 'Café 收纳包',
+      productHeadName: '旱地履带',
       purchaseCost: { amount: '10.00', currency: 'CNY' },
-      status: 'DRAFT',
+      status: 'ACTIVE',
       supplierValue: 'supplier-a',
       twdSalePrice: { amount: '88.50', currency: 'TWD' },
     },
@@ -135,8 +141,26 @@ test('DTO builder 执行 trim/NFC、严格 MoneyInput 校验并丢弃 Vue row ke
   }), {
     fieldErrors: {
       'attributes.0.title': '属性标题不能为空',
-      'supplierValue': '启用产品必须选择供应商',
+      'supplierValue': '请选择供应商',
       'twdSalePrice.amount': '请输入正确的金额，例如 1234.50',
+    },
+    valid: false,
+  })
+})
+
+test('创建时分类与产品头必填', () => {
+  const model = validModel()
+  model.categoryName = null
+  model.productHeadName = null
+
+  assert.deepEqual(buildCreateProductRequest(model, {
+    myrSalePricePrecision: 2,
+    purchaseCostPrecision: 2,
+    twdSalePricePrecision: 2,
+  }), {
+    fieldErrors: {
+      categoryName: '请选择分类',
+      productHeadName: '请选择产品头',
     },
     valid: false,
   })

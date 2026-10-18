@@ -320,7 +320,7 @@ describe('SalesOrdersController product options', () => {
       productId: PRODUCT_ID,
       productMediaId: PRODUCT_MEDIA_ID,
     }
-    const query = { keyword: '目录' }
+    const query = { keyword: '目录', supplierValue: 'SUPPLIER_TW_01' }
     const response = { status: jest.fn(), setHeader: jest.fn() }
 
     await expect(controller.productEditContext(params)).resolves.toMatchObject({
@@ -502,8 +502,12 @@ describe('SalesOrdersController product options OpenAPI', () => {
     expect(options).toMatchObject({
       operationId: 'sales_orders_get_product_edit_options',
     })
-    expect(options?.parameters).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ in: 'query', name: 'supplierValue' }),
+    expect(options?.parameters).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        in: 'query',
+        name: 'supplierValue',
+        required: true,
+      }),
     ]))
 
     const imagePath = document.paths[

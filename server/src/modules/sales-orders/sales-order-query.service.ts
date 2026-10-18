@@ -22,6 +22,10 @@ import {
   type SalesOrderCompletionHold,
 } from './domain/sales-order-reconciliation-state'
 import { mapSalesOrderProductOption } from './products/sales-order-product-option.mapper'
+import {
+  readProductOptionCategoryFacets,
+  type ProductOptionCategoryFacet,
+} from '../products/product-option-category-facets'
 
 const SALES_ORDER_DETAIL_INCLUDE = {
   issuer: { select: { id: true, displayName: true } },
@@ -317,7 +321,9 @@ export interface SalesOrderProductOption {
   readonly id: string
   readonly productNo: string
   readonly name: string
-  readonly supplierValue: string | null
+  readonly categoryName: string | null
+  readonly productHeadName: string | null
+  readonly supplierValue: string
   readonly attributes: readonly Record<string, unknown>[]
   readonly standardUnitPriceAmount: string | null
   readonly currencyCode: 'TWD' | 'MYR'
@@ -330,13 +336,18 @@ export interface SalesOrderProductOption {
 export interface SalesOrderProductOptionsQueryInput {
   readonly currencyCode: 'TWD' | 'MYR'
   readonly keyword?: string
-  readonly supplierValue?: string
+  readonly supplierValue: string
+  readonly categoryName?: string
+  readonly productHeadName?: string
+  readonly unclassified?: boolean
   readonly page?: number
   readonly pageSize?: number
 }
 
 export interface SalesOrderProductOptionsPage {
   readonly items: readonly SalesOrderProductOption[]
+  readonly categories: readonly ProductOptionCategoryFacet[]
+  readonly unclassifiedCount: number
   readonly page: number
   readonly pageSize: number
   readonly total: number
@@ -931,14 +942,33 @@ export class SalesOrderQueryService {
   async productOptions(
     input: SalesOrderProductOptionsQueryInput,
   ): Promise<SalesOrderProductOptionsPage> {
+    if (
+      input.unclassified === true
+      && (input.categoryName !== undefined || input.productHeadName !== undefined)
+    ) {
+      throw new ApiException(
+        422,
+        'VALIDATION_FAILED',
+        '请求参数校验失败',
+        { categoryName: ['未分类筛选不能与分类/产品头筛选同时使用'] },
+      )
+    }
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const normalizedKeyword = input.keyword?.trim().normalize('NFKC')
-    const where: Prisma.ProductWhereInput = {
+    const facetWhere: Prisma.ProductWhereInput = {
       status: 'ACTIVE',
-      ...(input.supplierValue === undefined
+      supplierValue: input.supplierValue,
+    }
+    const where: Prisma.ProductWhereInput = {
+      ...facetWhere,
+      ...(input.categoryName === undefined
         ? {}
-        : { supplierValue: input.supplierValue }),
+        : { category: { is: { name: input.categoryName } } }),
+      ...(input.productHeadName === undefined
+        ? {}
+        : { productHead: { is: { name: input.productHeadName } } }),
+      ...(input.unclassified === true ? { categoryId: null } : {}),
       ...(normalizedKeyword === undefined || normalizedKeyword.length === 0
         ? {}
         : {
@@ -948,17 +978,24 @@ export class SalesOrderQueryService {
             ],
           }),
     }
-    const [total, rows] = await Promise.all([
+    const [total, rows, facets] = await Promise.all([
       this.prisma.product.count({ where }),
       this.prisma.product.findMany({
         where,
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        orderBy: [
+          { category: { name: 'asc' } },
+          { productHead: { name: 'asc' } },
+          { name: 'asc' },
+          { id: 'asc' },
+        ],
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: {
           id: true,
           productNo: true,
           name: true,
+          category: { select: { name: true } },
+          productHead: { select: { name: true } },
           supplierValue: true,
           attributes: true,
           twdSalePriceAmount: true,
@@ -977,6 +1014,10 @@ export class SalesOrderQueryService {
           },
         },
       }),
+      readProductOptionCategoryFacets(this.prisma, {
+        supplierValue: input.supplierValue,
+        productWhere: facetWhere,
+      }),
     ])
     const items = rows.map(row => mapSalesOrderProductOption(
       row,
@@ -985,7 +1026,14 @@ export class SalesOrderQueryService {
         `/api/sales-orders/product-options/${productId}/main-image/${productMediaId}/content?currencyCode=${input.currencyCode}`
       ),
     ))
-    return { items, page, pageSize, total }
+    return {
+      items,
+      page,
+      pageSize,
+      total,
+      categories: facets.categories,
+      unclassifiedCount: facets.unclassifiedCount,
+    }
   }
 
   async getById(salesOrderId: string): Promise<SalesOrderDetail> {

@@ -4,6 +4,7 @@ import {
   IsInt,
   IsEnum,
   IsString,
+  IsUUID,
   Matches,
   Max,
   Min,
@@ -43,6 +44,28 @@ export class ProductListQueryDto {
   @IsUnicodeCodePointLength(1, 64, { message: '长度必须为 1 到 64 个字符' })
   @Matches(/\S/u, { message: '不能为空白文本' })
   supplierValue?: string
+
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'uuid',
+    description: '产品分类 ID 精确匹配',
+  })
+  @ValidateIf((_object: ProductListQueryDto, value: unknown) =>
+    value !== undefined,
+  )
+  @IsUUID('4', { message: 'categoryId 必须是 UUID v4' })
+  categoryId?: string
+
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'uuid',
+    description: '产品头 ID 精确匹配',
+  })
+  @ValidateIf((_object: ProductListQueryDto, value: unknown) =>
+    value !== undefined,
+  )
+  @IsUUID('4', { message: 'productHeadId 必须是 UUID v4' })
+  productHeadId?: string
 
   @ApiPropertyOptional({
     type: 'string',
