@@ -1,157 +1,145 @@
 # 产品分类与产品头改造：实施与验证记录
 
+> 本文件记录 **2026-10-18 最终实施口径**。本轮把此前“Product 文本列 + 自由文本去重”的方案升级为
+> “供应商 → 分类目录 → 产品头目录 → 产品外键”，并同步改造产品状态启停、选品供应商必选、
+> 产品分类管理页与权限/审计。更早的 `requirements.md` / `design.md` 中关于文本列、`2xl` 弹窗、
+> 「全部供应商」的段落属于历史方案，以本文件与两份文档顶部“最终口径”说明为准。
+
 ## 1. 已确认口径
 
 | 项 | 决定 |
 | --- | --- |
-| 新产品的分类/产品头 | 必填 |
-| 产品头隶属 | 产品头下拉按当前分类过滤；同名产品头允许跨分类存在，分组使用 `(分类, 产品头)` 复合键 |
-| 存量处理 | 留空补录；迁移不回填，UI 显示「未分类 / 未填写产品头」 |
-| 选品入口范围 | 销售创建、销售编辑、采购创建统一改造 |
-| 分类数量 | 保留，由服务端 facet `groupBy` 返回 |
-| 弹窗尺寸 | `QsGenericModal size="2xl"`，删除私有宽度覆盖 |
-| 产品列表 | 新增分类/产品头列与筛选项 |
-| 选项接口权限 | `products:read`；create-only 账号降级为自由输入 |
+| 层级 | 供应商 → 分类 → 产品头 → 产品 |
+| 分类唯一性 | `product_categories UNIQUE (supplier_value, name)`；不同供应商允许同名分类 |
+| 产品头唯一性 | `product_heads UNIQUE (category_id, name)`；不同分类允许同名产品头 |
+| 产品供应商 | 所有产品必须有供应商，`products.supplier_value NOT NULL` |
+| 产品分类/产品头 | 新建产品必填；产品保存时按供应商/分类 resolve-or-create，和产品同事务提交 |
+| 存量产品 | 保留历史空分类/产品头；启用产品前必须补全分类与产品头 |
+| 状态 | 只保留 `ACTIVE / INACTIVE`，默认 `ACTIVE`；历史 `DRAFT` 迁移为 `INACTIVE` |
+| 新建产品 | 不再手选状态，固定启用 |
+| 编辑产品 | 不再显示状态下拉，只读展示；状态只在产品列表操作列启停 |
+| 产品分类管理 | 管理员工作台 → 产品管理 → 产品分类 |
+| 删除规则 | 只删除空条目；有产品引用时 409；删除空分类可级联删除其空产品头 |
+| 分类权限 | `product-categories:read/create/update/delete` 四项 |
+| 分类审计 | 分类/产品头各三种事件：create / renamed / deleted，共 6 项 |
+| 选品供应商 | 删除「全部供应商」；供应商下拉为空，必须先选供应商才能选产品 |
+| 选品分类 | 左栏显示目录中的空分类/空产品头（0 项） |
+| 合同约束 | 所有外部输入查询使用 Prisma 参数绑定，不拼接 SQL |
+
+产品状态与权限补充：产品创建/编辑接口可能内联新建分类/产品头，因此服务端端点同时要求
+`products:create|update` 与 `product-categories:create`；迁移会为已有产品维护角色补齐
+`product-categories:read/create`。产品列表的启停操作复用 `PATCH /api/products/:productId`，
+因此也走同一端点权限边界。
 
 ## 2. 提交
 
-- `b179358e` `docs: 勘察产品分类与产品头改造方案并交付弹窗原型`
-- `09276d9f` `feat: 新增产品分类与产品头及选品分类分组`
+- `f969c881` `feat: 将产品分类与产品头改为目录实体并支持产品启停`
 
-未 push、未创建 PR、未合并。
+未 push、未创建 PR、未合并、未部署。
 
 ## 3. 实际改动
 
 ### 数据库
 
-- 新迁移 `server/prisma/migrations/20261018100000_product_category_head/`：
-  - `products.category_name varchar(64) NULL`
-  - `products.product_head_name varchar(64) NULL`
-  - 非空白 CHECK ×2
-  - `products_taxonomy_pair_check`：两列同时为空或同时有值
-  - `products_category_head_name_idx`
-- 纯 additive；存量产品两列保持 `NULL`。
-- 已登记到 `docs/后端文档/数据库迁移规范.md`（107 条）。
+新增四条迁移：
+
+- `20261018110000_product_taxonomy_catalog`
+  - 新增 `product_categories`、`product_heads` 及作用域唯一键；
+  - Product 新增 `category_id`、`product_head_id`，回填旧文本后删除 `category_name` / `product_head_name`；
+  - `products.supplier_value` 收紧为 `NOT NULL`；
+  - 成对 CHECK + `products_taxonomy_scope_guard` 触发器，保证分类属于产品供应商、产品头属于产品分类；
+  - 新增产品分类/产品头查询索引。
+- `20261018111000_product_status_remove_draft`
+  - `product_status` 收敛为 `ACTIVE / INACTIVE`，历史 `DRAFT` 映射为 `INACTIVE`，默认 `ACTIVE`。
+- `20261018112000_product_taxonomy_permissions`
+  - 新增四项 `product-categories:*` 权限并授予 `system_admin`；
+  - 为既有产品维护角色补齐 read/create。
+- `20261018113000_product_taxonomy_audit_events`
+  - 追加六项分类/产品头审计事件。
+
+已登记到 `docs/后端文档/数据库迁移规范.md`（111 条迁移，67 个持久化 model）。
+开发库已应用四条迁移；此前文本列迁移的备份
+`~/qianshu-db-backups/qianshu_dms_dev_pre_product_category_head_20261018T021055Z.dump` 保留。
 
 ### 后端
 
-- Product 创建/编辑/查询响应增加 `categoryName`、`productHeadName`。
-- 新增 `GET /api/products/taxonomy-options`（`products:read`），返回分类及产品头去重列表。
-- 产品列表支持 `categoryName` / `productHeadName` 精确筛选。
-- 三条选品接口（销售创建、销售编辑、采购创建）：
-  - item 增加分类/产品头；
-  - 支持 `categoryName` / `unclassified`（互斥）；
-  - 返回 `categories: [{ name, count }]` 与 `unclassifiedCount`；
-  - 排序改为分类/产品头/名称/ID，保证分组连续。
-- 创建指纹升级为 `product.create.v2`；创建服务防御性校验分类/产品头非空。
-- 所有查询走 Prisma `where` / `groupBy`，没有拼接 SQL。
+- 新增 `ProductTaxonomyService` / `ProductTaxonomyController`：
+  - `GET /api/product-categories?supplierValue=...`
+  - `POST/PATCH/DELETE /api/product-categories`
+  - `POST/PATCH/DELETE /api/product-heads`
+  - 列表包含 0 项分类/产品头与产品引用计数；
+  - 删除空分类时在同一事务内删除其空产品头；
+  - 所有写操作记录独立审计。
+- 产品创建/编辑按名称 resolve-or-create 分类/产品头，产品、目录与审计同一事务提交。
+- Product 查询响应增加 `categoryId` / `productHeadId`，名称从目录关系读取；产品列表按 ID 筛选。
+- 产品状态默认 `ACTIVE`；启用非 ACTIVE 产品时校验供应商、分类与产品头。
+- 产品创建指纹升级为 `product.create.v3`（供应商必填、目录字段、状态域变化）。
+- 销售创建/销售编辑/采购创建三条产品选项接口：
+  - 供应商必填；
+  - 分类/产品头筛选仍使用名称（供应商作用域内唯一）；
+  - facet 改为从目录表读取，包含 0 项分类/产品头；
+  - 排序改为目录名称关系排序。
+- `GET /api/products/taxonomy-options` 返回带 ID、供应商 value 与产品头对象的目录，供表单和列表筛选使用。
 
 ### 前端
 
-- 新增 `ProductTaxonomySelect`：下拉 + 「新建」内联输入；新值只进入表单，随产品保存落库。
-- 新增/编辑产品表单增加分类、产品头字段；产品头按分类级联；编辑历史产品允许两列都空。
-- 产品列表增加分类/产品头列与筛选；详情抽屉增加「分类与产品头」区块。
+- 产品表单：
+  - 供应商移到基础资料并始终必填；
+  - 分类/产品头按供应商/分类级联，选项来自目录；
+  - 分类/产品头“新建”受 `product-categories:create` 控制；
+  - 状态改为只读卡片，新建显示“默认启用”；
+  - 编辑请求不再提交 status。
+- 产品列表：
+  - 分类/产品头筛选改为目录 ID，并按供应商作用域展示；
+  - 操作列新增“启用/停用”，带确认弹窗、版本冲突刷新和审计响应更新；
+  - 状态筛选与标签移除 `DRAFT`。
+- 新增产品分类管理页：
+  - 路由 `/admin/products/categories`，权限 `product-categories:read`；
+  - 供应商选择后维护分类/产品头；
+  - 空分类/空产品头显示 0 项；
+  - 新建、重命名、删除；有产品引用时禁止删除；
+  - 分类删除会明确提示级联删除其空产品头。
 - `QsProductSelector`：
-  - `2xl` 三列布局（分类列 + 产品区 + 已选面板）；
-  - 分类 facet 与计数；
-  - `(分类, 产品头)` 分组；
-  - 主图独立按钮，调用 `useFaImagePreview()` 打开原图，不触发选择；
-  - 信息区按钮负责选择/加量，`FaPopover` 仍锚定信息区按钮；
-  - 三个 loader 同步返回分类 facet。
-- 组件库 fixture 增加分类/产品头与未分类样本。
+  - 删除“全部供应商”，供应商必须显式选择；
+  - 未选供应商时不发产品请求，分类区与产品区显示引导空态；
+  - 无图/有图卡片等高、分类手风琴、已选按供应商分组等既有视觉保留；
+  - fixture 增加空分类/空产品头样本。
+- 审计页面补充六项分类/产品头事件标签。
+- 新增产品分类 API 客户端与页面/API 结构测试。
 
 ## 4. 验证结果
 
-已执行：
+### 通过
 
-- `pnpm -C web run check`：通过（1803 个测试、typecheck、ESLint、Stylelint）。
-- `pnpm -C server test --runInBand`：通过（3982 个测试）。
-- `pnpm -C server typecheck`、`pnpm -C server lint`：通过。
-- `SHADOW_DATABASE_URL=... pnpm -C server prisma:drift:check`：`No difference detected`。
+- `pnpm -C server typecheck`：通过。
+- `pnpm -C server lint`：通过。
+- `pnpm -C server exec jest --runInBand`：**352 suites / 3988 tests 全通过**。
+- `pnpm -C web lint`：通过。
+- `pnpm -C web typecheck`：通过。
+- `pnpm -C web test:api`：**1806 tests 全通过**。
+- `pnpm -C web build`：通过（现有 rolldown/@vueuse 注释与 chunk 提示不阻塞）。
 - `node --run contract:check`：通过。
-- 隔离 PostgreSQL 全量 e2e：产品相关 `product-create-api`、`product-list-api`、`product-view-update-api`、`product-media-*`、`product-schema` 全部通过。
-- 开发库迁移：已应用 `20261018100000_product_category_head`，存量 `PROD/00001` 两列仍为 `NULL`。
-- 数据库备份：`~/qianshu-db-backups/qianshu_dms_dev_pre_product_category_head_20261018T021055Z.dump`（`pg_restore -l` 906 条 TOC，可读）。
-- 浏览器实测：
-  - 产品列表显示分类/产品头列与四个筛选项；
-  - 新增页可新建分类并级联新建产品头；
-  - 编辑历史产品显示「请选择分类/产品头」，产品头在未选分类时禁用；
-  - 选品弹窗三列、分类计数（全部/配件/收纳包/未分类）、产品头分组、图片放大、加量气泡均正常。
+- `prisma:drift:check`（临时 shadow DB）：`No difference detected`。
+- 隔离 PostgreSQL 定向 e2e：
+  - `product-list-api` 5/5；
+  - 产品/认证/媒体相关 8 个 suite、67 tests 通过（2 suites 按环境跳过）；
+  - `management-api` 单独重跑 8/8 通过。
+- 全量隔离 e2e：91/92 suites、659/661 tests 通过；唯一失败为 `management-api` 在高负载下的
+  两个 `/api/users` 500 偶发，单独重跑全绿，未归因到本次改动。
+- 开发库：四条迁移已应用；浏览器验收产生的空“测试分类/测试产品头”已清理，未留下产品测试数据。
 
-未执行/未覆盖：
+### 浏览器实测
 
-- `pnpm -C server check` 全量运行时，4 个与本改动无关的套件（OpenAPI 生成、采购图片渲染、DOCX 校验）因 5 秒默认超时失败；单独重跑这四个套件全部通过。此前的全量 `pnpm -C server test` 也全部通过，判断为本地并发/资源抖动。
-- 隔离库全量 e2e 仍有既有偶发失败（两次分别为 packaging-payment/regions、packaging-cost），产品相关套件均通过；单跑受媒体存储环境影响的 packaging 套件仍失败，属于既有环境问题。
-- 浏览器自动化套件 `test:browser:auth` 未整体运行；手工浏览器验收已覆盖关键路径。
-- 未推送到远端、未部署、未对生产库应用迁移。
+- 产品分类页：按供应商加载、空目录、空分类/空产品头、新建分类、新建产品头均实测成功。
+- 新增产品页：供应商必填、分类/产品头在供应商/分类未选时禁用、状态为只读“启用”均实测可见。
+- 受限项：当前 in-app browser 的 Reka 动画在关闭下拉/弹窗时偶发停在 `data-state=closed` 但
+  `display:flex`，会残留透明遮罩并阻塞后续点击；分类/产品头弹窗已通过 `v-if` 规避关闭残留。
+  产品选择器的完整浏览器点击链路未在该环境走完，已由组件测试、API 测试和契约测试覆盖。
 
-## 6. 2026-10-18 UI 反馈迭代
+## 5. 未完成 / 风险
 
-- 弹窗档位从 `2xl` 调整为 `3xl`（80rem），分类列从 `10rem` 加宽到 `12rem`。
-- `QsGenericModal` 增加可选 `fillHeight`：内容区改为 flex 约束，三列高度固定在弹窗内；
-  分类、产品、已选三个区块各自内部滚动，并通过 `qs-product-selector-scroll` 隐藏滚动条。
-- 产品总数条从 `px-4 py-3` 收紧为 `px-3 py-1.5`。
-- 已选产品按供应商分组；新增/会话内产品直接携带 `supplierValue`，已有明细可由候选页同
-  productId 补齐；销售订单编辑上下文的行 DTO 增加 `supplierValue` 以覆盖改写场景；
-  无法确定的归入「未设置供应商」。
-- 首屏 `pageSize` 从 20 降为 12；图片继续使用 `thumb` 变体，并增加 `loading="lazy"`、
-  `decoding="async"`、`fetchpriority="low"`。这仍会请求「全部供应商」的第一页，但不再
-  一次加载 20 个产品与图片。若需要完全消除首屏目录请求，可改为先选供应商/关键词再加载。
-
-验证：`pnpm -C web run check` 通过；Server 单元测试 3982 个通过；`contract:check` 通过；
-浏览器实测 3xl 布局、分类列宽度、区块内滚动、隐藏滚动条、总数条高度、供应商分组正常。
-
-## 7. 2026-10-18 分类手风琴与横向卡片
-
-- 选品左栏改为「分类 → 产品头」两级手风琴：分类行可展开/收起，产品头行
-  精确筛选 `categoryName + productHeadName`；分类行本身筛选整个分类。
-- 产品区移除产品头分组和组头，产品按服务端顺序平铺展示。
-- 产品卡片改为横向长条：左侧缩略图、右侧名称/编号/选择状态；图片点击仍独立放大。
-- 选品接口 facet 从 `categories: [{ name, count }]` 扩展为
-  `categories: [{ name, count, productHeads: [{ name, count }] }]`；三条接口
-  增加 `productHeadName` 查询参数，`unclassified` 与分类/产品头互斥。
-- 后端抽出 `readProductOptionCategoryFacets` 共享 facet 读取，销售创建、销售编辑、
-  采购创建统一使用。
-- 保留已选产品按供应商分组与「未设置供应商」回退。
-
-验证：Server 单元测试 3982 个通过；`contract:check` 通过；`pnpm -C web run check`
-通过；浏览器实测分类展开/收起、产品头筛选（肩带 7 项）、平铺横向卡片正常。
-
-## 8. 分类行与卡片细节收口
-
-- 分类行改为整行容器：展开箭头、名称和数量同属一块选中背景，箭头不再落在胶囊外。
-- 只高亮叶子节点：选中产品头时，父分类仅保留主色文字与箭头，不铺底色；选中整个分类
-  时才给分类行底色。
-- 分类/产品头移除外描边，统一 `bg-primary/10 + text-primary`；数量统一右对齐，
-  分类与产品头共用同一右边界。
-- 产品头行左侧缩进、行高 `min-h-8`，分类行 `min-h-9`，统一 `rounded-md`。
-- 放大入口改为固定 `size-8` 正方形（`inline-grid place-items-center`，去掉 padding）；
-  实测 32×32。
-- 卡片媒体区固定 `h-24 sm:h-28`、宽 `w-28 sm:w-32`，图片绝对定位覆盖媒体区；
-  有图/无图卡片实测均为 114px 高。
-- 图片与信息区按钮增加内嵌焦点环：`outline-2 + outline-offset-[-2px] +
-  outline-primary/50`。此前图片预览用 Esc 关闭后焦点回到图片按钮，浏览器默认
-  `outline: auto` 被卡片 `overflow-hidden` 裁切，只剩右侧一条竖线；改为内嵌焦点环后
-  四边都在媒体区内可见，且保持主色语义。
-
-验证：`pnpm -C web run check` 通过；浏览器实测仅产品头高亮、父分类无底色、数量
-右边界均为 202px、所有卡片同高；Esc 关闭预览后焦点环为
-`solid 2px primary/50 offset -2px`，不再出现右侧蓝色边线。
-
-## 9. 统计信息与放大图标收口
-
-- 产品总数从产品区内部条移到弹窗 footer 左侧，`取消 / 确认添加` 仍在右侧；
-  产品区滚动区域因此占满整个中间列高度。
-- 移除图片右上角的放大图标：主图区域任意位置点击仍打开预览，改用
-  `cursor-zoom-in` 作为轻量提示，避免图标与整图点击重复表达。
-- 图标清单重新生成，`i-lucide:zoom-in` 已无源码引用（384 条）。
-
-验证：`pnpm -C web run check` 通过；浏览器实测 footer 左侧显示「产品总数 共 37 个产品」，
-产品卡片无放大图标，点击图片仍正常打开预览。
-
-## 10. 后续可选
-
-- 批量补录工具（CSV → dry-run → apply），仅在业务提供映射表后实施。
-- 存量补录完成后可另起迁移把两列改为 `NOT NULL`。
-- 产品列表增加「未分类」筛选（当前只支持精确分类/产品头筛选）。
-- 分类/产品头改名与合并的治理工具（文本字段无稳定 ID）。
+- 全量 e2e 的 `management-api` 偶发 500 属既有环境/负载问题，需后续单独观察；本次未修改该模块。
+- 产品编辑 PATCH 同时承担内联新建目录，端点要求 `product-categories:create`；未来若拆分状态专用
+  端点，可把启停权限收窄为仅 `products:update`。
+- 菜单/权限分配页是否把四项分类权限加入默认角色，仍由角色权限管理按实际角色决定；迁移只补齐
+  产品维护角色 read/create，update/delete 首期仅 `system_admin`。
