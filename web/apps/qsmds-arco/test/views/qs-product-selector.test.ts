@@ -83,6 +83,10 @@ test('QsProductSelector 主图点击放大且不触发产品选择', async () =>
   assert.match(source, /inline-grid/u)
   assert.match(source, /size-8/u)
   assert.match(source, /leading-none/u)
+  assert.ok(
+    [...source.matchAll(/focus-visible:outline-offset-\[-2px\]/gu)].length >= 2,
+    '图片与信息区按钮都需要内嵌焦点环',
+  )
 })
 
 test('QsProductSelector 支持由订单固定供应商并隐藏可变供应商筛选', async () => {

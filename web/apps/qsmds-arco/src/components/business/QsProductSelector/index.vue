@@ -722,7 +722,7 @@ onBeforeUnmount(() => {
                 <button
                   v-if="item.mainImage && !failedImages.has(item.id)"
                   type="button"
-                  class="bg-muted shrink-0 h-24 w-28 relative overflow-hidden sm:h-28 sm:w-32"
+                  class="bg-muted shrink-0 h-24 w-28 relative overflow-hidden focus-visible:outline-2 focus-visible:outline-primary/50 focus-visible:outline-offset-[-2px] sm:h-28 sm:w-32"
                   :aria-label="`放大查看 ${item.name} 产品图片`"
                   :data-zoom-product="item.id"
                   @click.stop="openProductImage(item)"
@@ -766,7 +766,7 @@ onBeforeUnmount(() => {
                 >
                   <button
                     type="button"
-                    class="p-3 text-left flex flex-1 flex-col min-w-0 w-full justify-center disabled:opacity-60 disabled:cursor-not-allowed"
+                    class="p-3 text-left flex flex-1 flex-col min-w-0 w-full justify-center focus-visible:outline-2 focus-visible:outline-primary/50 focus-visible:outline-offset-[-2px] disabled:opacity-60 disabled:cursor-not-allowed"
                     :aria-pressed="selectedByProductId.has(item.id)"
                     :disabled="disabled"
                     @click="selectProduct(item)"
