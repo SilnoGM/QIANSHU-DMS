@@ -128,6 +128,16 @@ describe('ProductExportService', () => {
       '旱地履带-25马力',
       '刀片-65Mn',
     ])
+    expect(manifest.products[0]).toEqual(expect.objectContaining({
+      twdSalePriceAmount: '113000.00',
+      myrSalePriceAmount: '13500.00',
+      purchaseCostAmount: '9300.00',
+    }))
+    expect(manifest.products[1]).toEqual(expect.objectContaining({
+      twdSalePriceAmount: null,
+      myrSalePriceAmount: '12.50',
+      purchaseCostAmount: '3.00',
+    }))
     expect(manifest.products[0]?.sourceProductNo).toBe('PROD/00001')
     expect(manifest.incompleteProducts).toEqual([{
       supplierValue: 'QUANLIJIXIE',

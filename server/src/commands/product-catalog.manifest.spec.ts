@@ -76,6 +76,21 @@ describe('product catalog manifest', () => {
       .toThrow(expect.objectContaining({ code: 'MANIFEST_CHECKSUM_MISMATCH' }))
   })
 
+  it('rejects amounts with more decimals than the currency minor unit', () => {
+    const base = payload()
+    const overPrecise = {
+      ...base,
+      products: [{
+        ...base.products[0],
+        twdSalePriceAmount: '113000.0000',
+      }],
+    }
+    expect(() => parseProductCatalogManifest(manifest({
+      products: overPrecise.products.map(product => ({ ...product, sourceProductNo: 'PROD/00001' })),
+      dataChecksum: calculateProductCatalogChecksum(overPrecise),
+    }))).toThrow(expect.objectContaining({ code: 'MANIFEST_PRODUCT_TWD_SALE_PRICE_INVALID' }))
+  })
+
   it('rejects duplicate product business keys', () => {
     const base = payload()
     const duplicated = {
