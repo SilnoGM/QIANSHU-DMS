@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  buildCreateUserFundAccountInput,
   buildUserListQuery,
   canManageUserRoles,
   canSubmitRoleAssignment,
@@ -12,6 +13,7 @@ import {
   refreshAfterRoleAssignment,
   refreshAfterUserUpdate,
   resolveUserAdminActions,
+  validateFundAccountFields,
   validateIdentityFields,
   validatePasswordFields,
 } from '../../src/views/system/users/users.logic'
@@ -181,6 +183,30 @@ test('管理员设置密码使用 8 至 20 个 Unicode 字符并校验两次输�
   assert.deepEqual(validatePasswordFields('a'.repeat(8), 'b'.repeat(8)), {
     confirmPassword: '两次输入的密码不一致',
   })
+})
+
+test('资金账户比例只在勾选时校验，并规范化为两位小数', () => {
+  assert.deepEqual(validateFundAccountFields(false, ''), {})
+  assert.deepEqual(validateFundAccountFields(false, 'not-a-rate'), {})
+  assert.deepEqual(validateFundAccountFields(true, ''), {
+    userShareRate: '请输入用户分成比例',
+  })
+
+  for (const value of ['-1', '30.555', '100.01', 'abc', '010']) {
+    assert.deepEqual(validateFundAccountFields(true, value), {
+      userShareRate: '分成比例应为 0 到 100，最多两位小数',
+    })
+  }
+
+  for (const value of ['0', '100', '30', '30.5', '30.50', '100.00']) {
+    assert.deepEqual(validateFundAccountFields(true, value), {})
+  }
+
+  assert.equal(
+    buildCreateUserFundAccountInput(' 30.5 ').userShareRate,
+    '30.50',
+  )
+  assert.equal(buildCreateUserFundAccountInput('100').userShareRate, '100.00')
 })
 
 test('密码字段可集中清空，避免成功、关闭或未知结果后残留', () => {

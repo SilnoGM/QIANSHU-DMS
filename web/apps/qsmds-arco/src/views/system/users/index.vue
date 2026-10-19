@@ -39,6 +39,7 @@ const canDisable = computed(() => auth('users:disable'))
 const canAssignRoles = computed(() => auth('users:assign-roles'))
 const canResetPassword = computed(() => auth('users:reset-password'))
 const canReadRoles = computed(() => auth('roles:read'))
+const canCreateFundAccount = computed(() => auth('fund-accounts:create'))
 const canManageUserRoles = computed(() =>
   resolveCanManageUserRoles(canAssignRoles.value, canReadRoles.value))
 
@@ -711,6 +712,7 @@ onMounted(() => {
       v-model="formVisible"
       :mode="formMode"
       :user="formTarget"
+      :can-create-fund-account="canCreateFundAccount"
       @success="handleFormSuccess"
       @unknown-result="verifyUnknownCreate"
     />
