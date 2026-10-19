@@ -65,8 +65,12 @@ export class UsersController {
     validation: true,
     privateNoStore: true,
     errors: [
+      { status: 403, codes: ['FORBIDDEN'] },
       { status: 409, codes: ['USERNAME_ALREADY_EXISTS'] },
-      { status: 422, codes: ['PASSWORD_POLICY_VIOLATION'] },
+      {
+        status: 422,
+        codes: ['FUND_SHARE_RATE_INVALID', 'PASSWORD_POLICY_VIOLATION'],
+      },
       { status: 503, codes: ['AUTH_CAPACITY_UNAVAILABLE'] },
     ],
   })

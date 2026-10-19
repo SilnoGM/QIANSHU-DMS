@@ -5,7 +5,10 @@ import { validate } from 'class-validator'
 
 import { UserStatus } from '../../../generated/prisma/enums'
 import { createOpenApiDocument } from '../../../openapi/openapi-document.factory'
-import { CreateUserRequestDto } from './create-user-request.dto'
+import {
+  CreateUserFundAccountRequestDto,
+  CreateUserRequestDto,
+} from './create-user-request.dto'
 import { PasswordResetRequestDto } from './password-reset-request.dto'
 import { ReplaceUserRolesRequestDto } from './replace-user-roles-request.dto'
 import { UpdateUserRequestDto } from './update-user-request.dto'
@@ -145,6 +148,53 @@ describe('User request DTO validation', () => {
     expect(errorProperties(profileInput.errors)).toEqual(['email'])
   })
 
+  it('资金账户为可选嵌套对象，比例沿用资金域 0–100 两位小数格式', async () => {
+    const base = {
+      username: 'operator',
+      displayName: '操作员',
+      password: 'a'.repeat(8),
+      mustChangePassword: true,
+    }
+
+    const withoutAccount = await validatePlain(CreateUserRequestDto, base)
+    expect(withoutAccount.errors).toEqual([])
+    expect(withoutAccount.instance.fundAccount).toBeUndefined()
+
+    for (const userShareRate of ['0', '100', '30', '30.5', '30.50', '100.00']) {
+      const valid = await validatePlain(CreateUserRequestDto, {
+        ...base,
+        fundAccount: { userShareRate },
+      })
+      expect(valid.errors).toEqual([])
+    }
+
+    for (const userShareRate of ['', '30.555', '100.01', '-1', 'abc', 30]) {
+      const invalid = await validatePlain(CreateUserRequestDto, {
+        ...base,
+        fundAccount: { userShareRate },
+      })
+      expect(invalid.errors.map(error => error.property)).toEqual([
+        'fundAccount',
+      ])
+      expect(
+        invalid.errors[0]?.children?.map(child => child.property),
+      ).toEqual(['userShareRate'])
+    }
+
+    const unknownNestedKey = await validatePlain(CreateUserRequestDto, {
+      ...base,
+      fundAccount: {
+        userShareRate: '30',
+        reason: 'must-not-be-accepted',
+      },
+    })
+    expect(
+      unknownNestedKey.errors.flatMap(error =>
+        (error.children ?? []).map(child => child.property),
+      ),
+    ).toContain('reason')
+  })
+
   it('更新接受任意非空 User/Profile 子集和 nullable 清空值', async () => {
     const displayNameOnly = await validatePlain(UpdateUserRequestDto, {
       displayName: '新名称',
@@ -223,6 +273,32 @@ describe('User DTO OpenAPI contract', () => {
 
   beforeAll(async () => {
     document = await createOpenApiDocument(UsersDtoContractModule)
+  })
+
+  it('创建请求把资金账户声明为可选嵌套对象', () => {
+    const schema = requireSchema(document, CreateUserRequestDto.name)
+    expect(schema.required).toEqual(
+      expect.arrayContaining([
+        'username',
+        'displayName',
+        'password',
+        'mustChangePassword',
+      ]),
+    )
+    expect(schema.required).not.toContain('fundAccount')
+    expect(schema.properties).toHaveProperty('fundAccount')
+
+    const accountSchema = requireSchema(
+      document,
+      CreateUserFundAccountRequestDto.name,
+    )
+    expect(accountSchema.required).toEqual(['userShareRate'])
+    expect(accountSchema.properties).toMatchObject({
+      userShareRate: {
+        type: 'string',
+        pattern: '^(?:100(?:\\.0{1,2})?|(?:0|[1-9]\\d?)(?:\\.\\d{1,2})?)$',
+      },
+    })
   })
 
   it('响应仅暴露设计字段，不包含密码、authVersion 或禁用内部字段', () => {

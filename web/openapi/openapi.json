@@ -1999,6 +1999,12 @@
           "privateNoStore": true,
           "errors": [
             {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN"
+              ]
+            },
+            {
               "status": 409,
               "codes": [
                 "USERNAME_ALREADY_EXISTS"
@@ -2007,6 +2013,7 @@
             {
               "status": 422,
               "codes": [
+                "FUND_SHARE_RATE_INVALID",
                 "PASSWORD_POLICY_VIOLATION"
               ]
             },
@@ -81255,6 +81262,20 @@
           "total"
         ]
       },
+      "CreateUserFundAccountRequestDto": {
+        "type": "object",
+        "properties": {
+          "userShareRate": {
+            "type": "string",
+            "pattern": "^(?:100(?:\\.0{1,2})?|(?:0|[1-9]\\d?)(?:\\.\\d{1,2})?)$",
+            "example": "30.00",
+            "description": "用户分成比例；公司比例自动取剩余部分。"
+          }
+        },
+        "required": [
+          "userShareRate"
+        ]
+      },
       "CreateUserRequestDto": {
         "type": "object",
         "properties": {
@@ -81277,6 +81298,9 @@
           },
           "mustChangePassword": {
             "type": "boolean"
+          },
+          "fundAccount": {
+            "$ref": "#/components/schemas/CreateUserFundAccountRequestDto"
           }
         },
         "required": [

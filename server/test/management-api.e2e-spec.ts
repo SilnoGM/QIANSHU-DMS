@@ -201,6 +201,8 @@ describe('Management API with PostgreSQL', () => {
 
     const userIds = [...createdUserIds]
     if (userIds.length > 0) {
+      // 资金账户删除受 DB 触发器禁止；本套件不创建账户，成功开户路径见
+      // user-fund-account.e2e-spec.ts（在隔离库中保留账户与用户）。
       // Audit actor 使用 RESTRICT；User 还存在 createdBy/disabledBy 自关联，必须按序清理。
       await prisma.auditEvent.deleteMany({
         where: { actorUserId: { in: userIds } },
@@ -621,6 +623,118 @@ describe('Management API with PostgreSQL', () => {
     expect(
       readResponseBody<AuthContextBody>(relogin).user.mustChangePassword,
     ).toBe(true)
+  })
+
+  it('creates a user without a fund account and rejects invalid optional share rates', async () => {
+    const administrator = await createDirectUser({ systemAdmin: true })
+    const adminBrowser = request.agent(application.getHttpServer())
+    await login(
+      adminBrowser,
+      administrator.user.username,
+      administrator.password,
+    )
+
+    const suffix = randomUUID()
+    const plainUsername = `${USERNAME_PREFIX}plain-${suffix}`
+    const plainResponse = await adminBrowser
+      .post('/api/users')
+      .set(CSRF_HEADERS)
+      .send({
+        username: plainUsername,
+        displayName: '不带资金账户的用户',
+        password: createTestPassword('Plain'),
+        mustChangePassword: false,
+      })
+      .expect(201)
+    const plain = readResponseBody<UserBody>(plainResponse)
+    createdUserIds.add(plain.id)
+    await expect(
+      prisma.fundAccount.findUnique({ where: { userId: plain.id } }),
+    ).resolves.toBeNull()
+
+    const invalidUsername = `${USERNAME_PREFIX}invalid-${suffix}`
+    await adminBrowser
+      .post('/api/users')
+      .set(CSRF_HEADERS)
+      .send({
+        username: invalidUsername,
+        displayName: '比例非法的用户',
+        password: createTestPassword('Invalid'),
+        mustChangePassword: false,
+        fundAccount: { userShareRate: '30.555' },
+      })
+      .expect(422)
+      .expect((response) => {
+        expect(readResponseBody<ApiErrorBody>(response).code).toBe(
+          'VALIDATION_FAILED',
+        )
+      })
+    await expect(
+      prisma.user.count({
+        where: { usernameNormalized: invalidUsername.toLowerCase() },
+      }),
+    ).resolves.toBe(0)
+  })
+
+  it('requires fund-accounts:create when the optional fund account is requested', async () => {
+    const usersCreatePermission = await prisma.permission.findUniqueOrThrow({
+      where: { code: 'users:create' },
+    })
+    const role = await prisma.role.create({
+      data: {
+        code: `${ROLE_CODE_PREFIX}fund_${randomUUID().replaceAll('-', '')}`,
+        name: '仅用户创建角色',
+        permissions: {
+          create: { permissionId: usersCreatePermission.id },
+        },
+      },
+    })
+    createdRoleIds.add(role.id)
+
+    const operator = await createDirectUser()
+    await prisma.userRole.create({
+      data: { userId: operator.user.id, roleId: role.id },
+    })
+    const operatorBrowser = request.agent(application.getHttpServer())
+    await login(
+      operatorBrowser,
+      operator.user.username,
+      operator.password,
+    )
+
+    const plainUsername = `${USERNAME_PREFIX}perm-plain-${randomUUID()}`
+    const plainResponse = await operatorBrowser
+      .post('/api/users')
+      .set(CSRF_HEADERS)
+      .send({
+        username: plainUsername,
+        displayName: '无开户权限的普通用户',
+        password: createTestPassword('Plain'),
+        mustChangePassword: false,
+      })
+      .expect(201)
+    createdUserIds.add(readResponseBody<UserBody>(plainResponse).id)
+
+    const withAccountUsername = `${USERNAME_PREFIX}perm-fund-${randomUUID()}`
+    await operatorBrowser
+      .post('/api/users')
+      .set(CSRF_HEADERS)
+      .send({
+        username: withAccountUsername,
+        displayName: '不得开户的用户',
+        password: createTestPassword('Fund'),
+        mustChangePassword: false,
+        fundAccount: { userShareRate: '30' },
+      })
+      .expect(403)
+      .expect((response) => {
+        expect(readResponseBody<ApiErrorBody>(response).code).toBe('FORBIDDEN')
+      })
+    await expect(
+      prisma.user.count({
+        where: { usernameNormalized: withAccountUsername.toLowerCase() },
+      }),
+    ).resolves.toBe(0)
   })
 
   it('maps Email/Mobile conflicts to stable 409 without partial User or Audit writes', async () => {

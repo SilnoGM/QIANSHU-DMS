@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common'
 
 import { SYSTEM_ADMIN_ROLE_CODE } from '../access-control/permission.constants'
+import { AccessControlService } from '../access-control/access-control.service'
 import { AuditService } from '../audit/audit.service'
 import type { Prisma, UserStatus as UserStatusValue } from '../../generated/prisma/client'
 import {
@@ -24,9 +25,16 @@ import {
   PasswordProvider,
 } from '../auth/providers/password.provider'
 import { normalizeUsername } from '../auth/providers/username-normalizer'
+import { normalizeFundShareRateInput } from '../fund-accounts/application/fund-input.normalizer'
+import { createUserFundAccountInTransaction } from '../fund-accounts/application/fund-account-provisioning'
+import { FundPostingError } from '../fund-accounts/application/fund-posting.errors'
+import { mapFundHttpError } from '../fund-accounts/fund-http-error.mapper'
 import { UserProfileService } from '../profile/user-profile.service'
 import { createChangedFields } from '../profile/user-profile.normalizer'
-import type { CreateUserRequestDto } from './dto/create-user-request.dto'
+import type {
+  CreateUserFundAccountRequestDto,
+  CreateUserRequestDto,
+} from './dto/create-user-request.dto'
 import type { PasswordResetRequestDto } from './dto/password-reset-request.dto'
 import type { ReplaceUserRolesRequestDto } from './dto/replace-user-roles-request.dto'
 import type { UpdateUserRequestDto } from './dto/update-user-request.dto'
@@ -54,6 +62,7 @@ const LAST_SYSTEM_ADMIN_REQUIRED_CODE = 'LAST_SYSTEM_ADMIN_REQUIRED'
 const SELF_PASSWORD_RESET_NOT_ALLOWED_CODE =
   'SELF_PASSWORD_RESET_NOT_ALLOWED'
 const INTERNAL_ERROR_CODE = 'INTERNAL_ERROR'
+const FUND_ACCOUNT_CREATE_PERMISSION = 'fund-accounts:create'
 const ADMIN_PROFILE_UPDATE_FIELDS = [
   'email',
   'mobileE164',
@@ -108,6 +117,7 @@ export class UsersService {
     private readonly passwordPolicy: PasswordPolicyProvider,
     private readonly audit: AuditService,
     private readonly userProfiles: UserProfileService,
+    private readonly access: AccessControlService,
     private readonly metrics: AuthMetricLogger = NOOP_AUTH_METRIC_LOGGER,
   ) {}
 
@@ -177,6 +187,11 @@ export class UsersService {
       const normalizedUsername = normalizeUsername(input.username)
       this.assertValidUsername(normalizedUsername)
       const displayName = this.normalizeDisplayName(input.displayName)
+      // 比例规范化与权限检查放在密码哈希之前，非法开户请求不消耗 Argon2。
+      const userShareRate = await this.resolveNewUserFundAccount(
+        normalizedContext,
+        input.fundAccount,
+      )
       const acceptedPassword = this.passwordPolicy.assertAcceptable({
         password: input.password,
         fieldName: 'password',
@@ -213,6 +228,16 @@ export class UsersService {
           requestId: normalizedContext.requestId,
         })
 
+        if (userShareRate !== undefined) {
+          // 与用户创建共用同一个 transaction；账户或审计失败会连同 User 一起回滚。
+          await createUserFundAccountInTransaction(transaction, this.audit, {
+            userId: created.id,
+            userShareRate,
+            actorUserId: normalizedContext.actorUserId,
+            requestId: normalizedContext.requestId,
+          })
+        }
+
         return toUserDto(created)
       })
       this.metrics.recordPassword('create', 'success')
@@ -220,6 +245,10 @@ export class UsersService {
     }
     catch (error) {
       this.metrics.recordPassword('create', 'failure')
+      // 资金域错误必须先于通用 P2002 分支处理，避免账户唯一冲突被误报成用户名重复。
+      if (error instanceof FundPostingError) {
+        throw mapFundHttpError(error)
+      }
       if (this.isPrismaError(error, 'P2002')) {
         throw new ApiException(
           HttpStatus.CONFLICT,
@@ -799,6 +828,39 @@ export class UsersService {
       targetId,
       requestId: context.requestId,
     })
+  }
+
+  /**
+   * 资金账户是可选能力：只有请求携带 fundAccount 时才额外检查 fund-accounts:create。
+   * 静态 users:create 无法表达“仅部分调用者可以开户”，因此在这里做动态复核。
+   */
+  private async resolveNewUserFundAccount(
+    context: UsersCommandContext,
+    input: CreateUserFundAccountRequestDto | undefined,
+  ): Promise<string | undefined> {
+    if (input === undefined) {
+      return undefined
+    }
+
+    let userShareRate: string
+    try {
+      userShareRate = normalizeFundShareRateInput(input.userShareRate)
+    }
+    catch (error) {
+      // 资金域稳定错误直接翻译成 HTTP，避免被 rethrowKnownError 吞成 500。
+      throw mapFundHttpError(error)
+    }
+
+    const granted = await this.access.getPermissionCodes(context.actorUserId)
+    if (!this.access.hasAll(granted, [FUND_ACCOUNT_CREATE_PERMISSION])) {
+      throw new ApiException(
+        HttpStatus.FORBIDDEN,
+        'FORBIDDEN',
+        '权限不足',
+      )
+    }
+
+    return userShareRate
   }
 
   private normalizeDisplayName(displayName: unknown): string {
