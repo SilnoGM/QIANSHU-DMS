@@ -44,7 +44,7 @@ test('全部业务与审计列顺序固定，编号左固定且技术字段不�
     'updatedBy',
   ]
   const columnBlock = source.match(
-    /const columns:[\s\S]*?\n\]/u,
+    /const productColumns:[\s\S]*?\n\]/u,
   )?.[0]
   assert.ok(columnBlock)
   const actualColumnIds = [...columnBlock.matchAll(/\bid: '([^']+)'/gu)]
@@ -189,4 +189,41 @@ test('属性弹窗完整有序展示，视频弹窗消费领域 contentUrl 并�
   assert.doesNotMatch(videosModal, /new URL\(|url\.protocol|url\.username|url\.password/u)
   assert.match(videosModal, /pauseActiveVideo/u)
   assert.match(videosModal, /关闭视频/u)
+})
+
+test('批量设置图片入口受 products:update 控制，未选择产品时禁用', () => {
+  assert.match(
+    source,
+    /const canBatchSetImages = computed\(\(\) => auth\('products:update'\)\)/u,
+  )
+  assert.match(source, /v-if="canBatchSetImages"/u)
+  assert.match(source, /批量设置图片/u)
+  assert.match(source, /:disabled="selectedProductCount === 0"/u)
+  assert.match(source, /i-lucide:images/u)
+})
+
+test('列表提供固定左侧选择列、全选本页和 50 个选择上限', () => {
+  assert.match(source, /PRODUCT_BATCH_SELECTION_COLUMN_ID/u)
+  assert.match(source, /id: PRODUCT_BATCH_SELECTION_COLUMN_ID/u)
+  assert.match(source, /fixed: 'left'/u)
+  assert.match(source, /#header-selection/u)
+  assert.match(source, /#cell-selection/u)
+  assert.match(source, /PRODUCT_BATCH_SELECTION_LIMIT/u)
+  assert.match(source, /选择上限/u)
+  assert.match(source, /全选本页/u)
+  assert.match(source, /清空选择/u)
+  assert.match(source, /已选 \{\{ selectedProductCount \}\} 个产品/u)
+  assert.match(source, /:disabled="isProductSelectionDisabled\(/u)
+})
+
+test('搜索、筛选和分类树变化清空批量选择，弹窗消费选择快照', () => {
+  assert.match(source, /selectedProducts = ref<ReadonlyMap/u)
+  assert.match(source, /function clearProductSelection/u)
+  assert.match(source, /function handleSearch\(keyword: string\)[\s\S]{0,160}clearProductSelection\(\)/u)
+  assert.match(source, /function handleFilterChange\([\s\S]{0,260}clearProductSelection\(\)/u)
+  assert.match(source, /function applyTreeSelection\([\s\S]{0,160}clearProductSelection\(\)/u)
+  assert.match(source, /updateProductBatchSelectionSnapshot/u)
+  assert.match(source, /<ProductBatchImagesModal/u)
+  assert.match(source, /:products="selectedProductList"/u)
+  assert.match(source, /@finished="handleBatchImagesFinished"/u)
 })

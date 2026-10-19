@@ -1549,6 +1549,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/AppAccountButton/profile.vue",
+      "apps/qsmds-arco/src/components/AppAccountForm/login-collage.vue",
       "apps/qsmds-arco/src/components/business/QsGenericDrawer/index.vue",
       "apps/qsmds-arco/src/components/business/QsGenericModal/index.vue",
       "apps/qsmds-arco/src/components/business/QsGenericTable/index.vue",
@@ -2289,6 +2290,7 @@
       "apps/qsmds-arco/src/components/business/QsSalesOrderSelectorModal/SalesOrderProductPreview.vue",
       "apps/qsmds-arco/src/components/business/QsWarehouseReceiptModal/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/form/product-form.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-batch-image-card.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-payment-recipients.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-record-list.vue",
@@ -2306,6 +2308,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/business/QsPaymentRecipientEditor/QrImageUpload.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-batch-image-card.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-image.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-voucher-upload.vue",
@@ -2319,6 +2322,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-batch-images-modal.vue",
       "apps/qsmds-arco/src/views/component_library/basic/components/ImageGroupShowcase.vue",
       "apps/qsmds-arco/src/views/component_library/basic/image-group.vue"
     ]
@@ -2578,6 +2583,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/components/AppAccountForm/login-collage.vue",
       "apps/qsmds-arco/src/components/AppAccountForm/login.vue"
     ]
   },
@@ -3036,6 +3042,7 @@
       "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-transaction-filters.vue",
       "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/edit/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-batch-image-card.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue",
       "apps/qsmds-arco/src/views/admin/supplier-payment-profiles/index.vue",
       "apps/qsmds-arco/src/views/operations/personal-finance/fund-accounts/index.vue",
@@ -3231,6 +3238,7 @@
       "apps/qsmds-arco/src/views/admin/product-management/create/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/edit/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-batch-image-card.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/product-detail-drawer.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/product-videos-modal.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue",
@@ -3486,6 +3494,7 @@
       "apps/qsmds-arco/src/components/business/QsPartConfigurator/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/categories/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/form/product-attributes-editor.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-batch-image-card.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-video-board.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue",
@@ -3625,6 +3634,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/components/AppAccountForm/login-collage.vue",
       "apps/qsmds-arco/src/components/AppAccountForm/login.vue"
     ]
   },
