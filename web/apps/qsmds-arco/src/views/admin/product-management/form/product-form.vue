@@ -598,7 +598,7 @@ defineExpose<ProductFormExpose>({
 
     <aside class="min-w-0 lg:col-span-4 lg:row-span-4 lg:col-start-9 lg:row-start-1 lg:self-start">
       <div class="space-y-4 lg:top-4 lg:sticky">
-        <FaCard title="保存摘要" description="保存前核对产品身份与归属。">
+        <FaCard title="保存摘要" description="保存前核对产品身份与归属；新建产品保存后默认为启用。">
           <dl class="m-0 gap-3 grid">
             <div>
               <dt class="qs-type-compact-label">

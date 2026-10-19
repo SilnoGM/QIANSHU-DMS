@@ -972,11 +972,32 @@ async function verifyProductList(page, baseUrl) {
     ) !== null`)
     await clickVisibleButton(page, '恢复默认')
 
+    // 手工排序后“未知供应商”产品不再保证落在第一页；用搜索定位后再断言。
+    await fillVisibleInput(
+      page,
+      'input[placeholder="搜索产品名称或产品编号"]',
+      'PRODUCT-BROWSER-003',
+    )
+    await clickVisibleButton(page, '查询')
+    await waitForProductList(page, 'PRODUCT-BROWSER-003')
+    await page.waitFor(`document.body.innerText.includes('Browser 未知供应商产品')`)
+    assert.equal(await page.evaluate(
+      `document.body.innerText.includes('未知')`,
+    ), true)
+
+    await fillVisibleInput(
+      page,
+      'input[placeholder="搜索产品名称或产品编号"]',
+      '',
+    )
+    await clickVisibleButton(page, '查询')
+    await waitForProductList(page, productNo)
+    await page.waitFor(`document.body.innerText.includes('共 22 条')`)
+
     const visibleText = await page.evaluate('document.body.innerText')
     for (const text of [
       'Browser 有效供应商',
       'Browser 停用供应商',
-      '未知',
       'NT$1,234.57 TWD',
       '¥88.90 CNY',
       '10.5 ZZZ',
@@ -1021,8 +1042,8 @@ async function verifyProductList(page, baseUrl) {
     })()`)
     assert.deepEqual(productDetailLayout, {
       fitsHorizontally: true,
-      labels: ['产品身份', '分类与产品头', '供应商', '价格资料', '产品属性（2）', '媒体资料', '审计信息'],
-      sectionCount: 7,
+      labels: ['产品身份', '分类与产品头', '供应商', '价格资料', '产品属性（2）', '产品备注', '媒体资料', '审计信息'],
+      sectionCount: 8,
       singleColumn: true,
       verticallyScrollable: true,
     })
@@ -1139,7 +1160,13 @@ async function verifyProductList(page, baseUrl) {
       button.click()
       return true
     })()`)
-    await waitForProductList(page, 'PRODUCT-BROWSER-FILLER-01')
+    await page.waitFor(`(() => {
+      const next = document.querySelector('[data-slot="pagination-next"]')
+      const rows = [...document.querySelectorAll(
+        '[data-testid="product-list-table"] tbody tr',
+      )]
+      return next?.disabled === true && rows.length > 0
+    })()`)
     await fillVisibleInput(
       page,
       'input[placeholder="搜索产品名称或产品编号"]',
