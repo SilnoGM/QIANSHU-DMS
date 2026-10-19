@@ -19,6 +19,7 @@ export interface NormalizedProductListQuery {
   readonly productHeadId?: string
   readonly status?: ProductStatus
   readonly supplierValue?: string
+  readonly unclassified?: boolean
 }
 
 /**
@@ -40,6 +41,7 @@ export function normalizeProductListQuery(
   const supplierValue = query.supplierValue
   const categoryId = query.categoryId
   const productHeadId = query.productHeadId
+  const unclassified = query.unclassified
   const keyword = typeof rawKeyword === 'string'
     ? rawKeyword.trim()
     : rawKeyword
@@ -84,6 +86,10 @@ export function normalizeProductListQuery(
         || !CANONICAL_UUID_V4_PATTERN.test(productHeadId)
       )
     )
+    || (
+      unclassified !== undefined
+      && typeof unclassified !== 'boolean'
+    )
   ) {
     throwValidationError()
   }
@@ -102,6 +108,7 @@ export function normalizeProductListQuery(
     ...(supplierValue === undefined ? {} : { supplierValue }),
     ...(categoryId === undefined ? {} : { categoryId }),
     ...(productHeadId === undefined ? {} : { productHeadId }),
+    ...(unclassified === undefined ? {} : { unclassified }),
   }
 }
 

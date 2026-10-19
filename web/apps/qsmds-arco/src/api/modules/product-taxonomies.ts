@@ -2,6 +2,7 @@ import type { AxiosInstance } from 'axios'
 import type {
   CreateProductHeadRequestDto,
   CreateProductTaxonomyCategoryRequestDto,
+  MoveProductTaxonomyItemRequestDto,
   ProductCategoriesListData,
   ProductTaxonomyCategoryListDto,
   ProductTaxonomyCategoryListItemDto,
@@ -41,6 +42,15 @@ export function createProductTaxonomiesApi(client: AxiosInstance) {
       data,
       { errorPresentation: 'local', retry: false, signal },
     ),
+    moveCategory: (
+      categoryId: string,
+      data: MoveProductTaxonomyItemRequestDto,
+      signal: AbortSignal,
+    ) => client.patch<void>(
+      `product-categories/${encodeURIComponent(categoryId)}/move`,
+      data,
+      { errorPresentation: 'local', retry: false, signal },
+    ),
     deleteCategory: (
       categoryId: string,
       signal: AbortSignal,
@@ -62,6 +72,15 @@ export function createProductTaxonomiesApi(client: AxiosInstance) {
       signal: AbortSignal,
     ) => client.patch<ProductTaxonomyHeadListItemDto>(
       `product-heads/${encodeURIComponent(productHeadId)}`,
+      data,
+      { errorPresentation: 'local', retry: false, signal },
+    ),
+    moveHead: (
+      productHeadId: string,
+      data: MoveProductTaxonomyItemRequestDto,
+      signal: AbortSignal,
+    ) => client.patch<void>(
+      `product-heads/${encodeURIComponent(productHeadId)}/move`,
       data,
       { errorPresentation: 'local', retry: false, signal },
     ),

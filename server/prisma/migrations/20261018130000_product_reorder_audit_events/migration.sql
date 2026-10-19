@@ -1,0 +1,8 @@
+BEGIN;
+
+-- 分类、产品头与产品的手工排序是独立业务动作，不能复用 rename/update 审计。
+ALTER TYPE "audit_event_type" ADD VALUE IF NOT EXISTS 'PRODUCT_CATEGORY_REORDERED';
+ALTER TYPE "audit_event_type" ADD VALUE IF NOT EXISTS 'PRODUCT_HEAD_REORDERED';
+ALTER TYPE "audit_event_type" ADD VALUE IF NOT EXISTS 'PRODUCT_REORDERED';
+
+COMMIT;

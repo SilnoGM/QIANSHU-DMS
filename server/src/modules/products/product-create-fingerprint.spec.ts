@@ -27,10 +27,10 @@ function payload(overrides: Record<string, unknown> = {}) {
 }
 
 describe('calculateProductCreateFingerprint', () => {
-  it('uses the frozen product.create.v3 canonical field sequence', () => {
-    expect(PRODUCT_CREATE_FINGERPRINT_VERSION).toBe('product.create.v3')
+  it('uses the frozen product.create.v4 canonical field sequence', () => {
+    expect(PRODUCT_CREATE_FINGERPRINT_VERSION).toBe('product.create.v4')
     expect(calculateProductCreateFingerprint(ACTOR_ID, payload()))
-      .toBe('a27f0f92ba7b8cb25c6bbb31221a1598aa893fe8f4f2f95c6e5d04448a3540e0')
+      .toBe('427bdd177724752879b06040d4ec6a4b346e55cffa8db01d7282f839216c7fd4')
   })
 
   it('treats equivalent decimal scale and NFC text as the same payload', () => {

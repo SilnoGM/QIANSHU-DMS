@@ -4,6 +4,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsEnum,
+  IsIn,
   IsInt,
   IsString,
   IsUUID,
@@ -44,6 +45,12 @@ export class UpdateProductStatusRequestDto {
   expectedVersion!: number
 }
 
+export class MoveProductRequestDto {
+  @ApiProperty({ type: 'string', enum: ['up', 'down'] })
+  @IsIn(['up', 'down'], { message: 'direction 必须是 up 或 down' })
+  direction!: 'up' | 'down'
+}
+
 /**
  * 产品编辑只暴露本阶段获准修改的业务字段。媒体、编号、审计字段和 version
  * 不在 DTO 中，因此会被全局 whitelist 直接拒绝，防止调用方越过业务边界。
@@ -63,6 +70,7 @@ export class UpdateProductRequestDto {
       && object.myrSalePrice === undefined
       && object.purchaseCost === undefined
       && object.attributes === undefined
+      && object.remark === undefined
     ),
   )
   @IsString({ message: '必须是字符串' })
@@ -149,6 +157,20 @@ export class UpdateProductRequestDto {
   @ValidateNested({ each: true })
   @Type(() => ProductAttributeInputDto)
   attributes?: ProductAttributeInputDto[]
+
+  @ApiPropertyOptional({
+    type: 'string',
+    nullable: true,
+    maxLength: 512,
+  })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().normalize('NFC') : value)
+  @ValidateIf((_object: UpdateProductRequestDto, value: unknown) =>
+    value !== undefined && value !== null)
+  @IsString({ message: '必须是字符串或 null' })
+  @IsUnicodeCodePointLength(1, 512, { message: '长度必须为 1 到 512 个字符' })
+  @Matches(/\S/u, { message: '不能为空白文本' })
+  remark?: string | null
 
   @ApiProperty({ type: 'integer', minimum: 1, maximum: MAX_INT32 })
   @IsInt({ message: '必须是整数' })

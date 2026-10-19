@@ -429,9 +429,10 @@ describe('Product list API with isolated PostgreSQL', () => {
     const page = readResponseBody<ProductPageBody>(response)
     expect(page).toMatchObject({ page: 1, pageSize: 4, total: 4 })
     expect(page.items.map(item => item.id)).toEqual([
-      ...[products.effectiveId, products.disabledId].sort().reverse(),
-      products.unknownId,
+      products.effectiveId,
       products.unclassifiedId,
+      products.disabledId,
+      products.unknownId,
     ])
     expect(resolveStoredValues).toHaveBeenCalledTimes(1)
     expect(resolveStoredValues).toHaveBeenCalledWith({

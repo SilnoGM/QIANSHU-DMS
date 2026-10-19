@@ -41,9 +41,11 @@ test('产品分类 API 使用稳定资源路径、Supplier scoped query 与禁�
   await api.listCategories({ supplierValue: 'SUPPLIER_A' }, controller.signal)
   await api.createCategory({ name: '分类', supplierValue: 'SUPPLIER_A' }, controller.signal)
   await api.renameCategory(categoryId, { name: '新分类' }, controller.signal)
+  await api.moveCategory(categoryId, { direction: 'down' }, controller.signal)
   await api.deleteCategory(categoryId, controller.signal)
   await api.createHead({ categoryId, name: '产品头' }, controller.signal)
   await api.renameHead(headId, { name: '新产品头' }, controller.signal)
+  await api.moveHead(headId, { direction: 'up' }, controller.signal)
   await api.deleteHead(headId, controller.signal)
 
   assert.deepEqual(calls, [
@@ -70,6 +72,12 @@ test('产品分类 API 使用稳定资源路径、Supplier scoped query 与禁�
     },
     {
       config: { errorPresentation: 'local', retry: false, signal: controller.signal },
+      data: { direction: 'down' },
+      method: 'patch',
+      url: `product-categories/${categoryId}/move`,
+    },
+    {
+      config: { errorPresentation: 'local', retry: false, signal: controller.signal },
       method: 'delete',
       url: `product-categories/${categoryId}`,
     },
@@ -84,6 +92,12 @@ test('产品分类 API 使用稳定资源路径、Supplier scoped query 与禁�
       data: { name: '新产品头' },
       method: 'patch',
       url: `product-heads/${headId}`,
+    },
+    {
+      config: { errorPresentation: 'local', retry: false, signal: controller.signal },
+      data: { direction: 'up' },
+      method: 'patch',
+      url: `product-heads/${headId}/move`,
     },
     {
       config: { errorPresentation: 'local', retry: false, signal: controller.signal },

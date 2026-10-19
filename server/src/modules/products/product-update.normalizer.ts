@@ -18,6 +18,7 @@ const MUTABLE_FIELDS = [
   'myrSalePrice',
   'purchaseCost',
   'attributes',
+  'remark',
 ] as const
 
 type ProductMutableField = typeof MUTABLE_FIELDS[number]
@@ -32,6 +33,7 @@ export interface ProductUpdateCurrent {
   readonly myrSalePrice: Readonly<{ amount: string | null; currency: string }>
   readonly purchaseCost: Readonly<{ amount: string | null; currency: string }>
   readonly attributes: unknown
+  readonly remark: string | null
 }
 
 export interface NormalizedProductUpdatePatch {
@@ -45,6 +47,7 @@ export interface NormalizedProductUpdatePatch {
   readonly myrSalePrice?: unknown
   readonly purchaseCost?: unknown
   readonly attributes?: unknown
+  readonly remark?: unknown
 }
 
 export interface ProductUpdateTarget {

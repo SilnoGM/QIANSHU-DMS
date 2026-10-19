@@ -1,10 +1,12 @@
 import type { AxiosInstance } from 'axios'
 import type {
   CreateProductRequestDto,
+  MoveProductRequestDto,
   ProductListItemDto,
   ProductPageDto,
   ProductsListData,
   ProductTaxonomyOptionsDto,
+  ProductTaxonomyTreeDto,
   UpdateProductRequestDto,
   UpdateProductStatusRequestDto,
 } from '../generated/types.gen'
@@ -39,6 +41,24 @@ export function createProductsApi(client: AxiosInstance) {
         errorPresentation: 'local',
         signal,
       }),
+    taxonomyTree: (signal: AbortSignal) =>
+      client.get<ProductTaxonomyTreeDto>('products/taxonomy-tree', {
+        errorPresentation: 'local',
+        signal,
+      }),
+    move: (
+      productId: string,
+      data: MoveProductRequestDto,
+      signal: AbortSignal,
+    ) => client.patch<void>(
+      `products/${encodeURIComponent(productId)}/move`,
+      data,
+      {
+        errorPresentation: 'local',
+        retry: false,
+        signal,
+      },
+    ),
     create: (
       data: CreateProductRequestDto,
       idempotencyKey: string,

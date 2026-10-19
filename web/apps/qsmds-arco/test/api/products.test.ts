@@ -62,6 +62,8 @@ test('产品 API 列表读取带精确 query、AbortSignal 与局部呈错', asy
     'list',
     'getById',
     'taxonomyOptions',
+    'taxonomyTree',
+    'move',
     'create',
     'update',
     'updateStatus',
@@ -75,6 +77,28 @@ test('产品 API 列表读取带精确 query、AbortSignal 与局部呈错', asy
     },
     method: 'get',
     url: 'products/taxonomy-options',
+  })
+
+  const productId = '11111111-1111-4111-8111-111111111111'
+  await products.taxonomyTree(controller.signal)
+  assert.deepEqual(calls[2], {
+    config: {
+      errorPresentation: 'local',
+      signal: controller.signal,
+    },
+    method: 'get',
+    url: 'products/taxonomy-tree',
+  })
+  await products.move(productId, { direction: 'up' }, controller.signal)
+  assert.deepEqual(calls[3], {
+    config: {
+      errorPresentation: 'local',
+      retry: false,
+      signal: controller.signal,
+    },
+    data: { direction: 'up' },
+    method: 'patch',
+    url: `products/${productId}/move`,
   })
 })
 

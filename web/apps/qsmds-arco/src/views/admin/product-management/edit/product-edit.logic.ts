@@ -52,6 +52,7 @@ export function createProductEditFormModel(
     productHeadName: product.productHeadName,
     purchaseCostAmount: product.purchaseCost.amount,
     purchaseCostCurrency: product.purchaseCost.currency,
+    remark: product.remark ?? '',
     status: product.status,
     // 详情 DTO 的 supplier.value 是稳定身份；未知/停用历史值也必须原样回填。
     supplierValue: product.supplier?.value ?? null,
@@ -127,6 +128,9 @@ export function buildProductUpdateRequest(
   }
   if (!sameValue(currentBody.attributes, baselineBody.attributes)) {
     request.attributes = currentBody.attributes
+  }
+  if (currentBody.remark !== baselineBody.remark) {
+    request.remark = currentBody.remark
   }
 
   return Object.keys(request).length === 1
@@ -233,6 +237,9 @@ export function reconcileProductUpdateResult(
     request.attributes !== undefined
     && !sameValue(actual.attributes, request.attributes)
   ) {
+    return 'unknown'
+  }
+  if (request.remark !== undefined && actual.remark !== request.remark) {
     return 'unknown'
   }
   return 'success'

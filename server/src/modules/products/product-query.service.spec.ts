@@ -24,6 +24,7 @@ function createRow(
     productNo: `NO-${id}`,
     status: ProductStatus.INACTIVE,
     supplierValue,
+    sortOrder: 10,
     twdSalePriceAmount: null,
     twdSalePriceCurrency: 'TWD',
     myrSalePriceAmount: null,
@@ -31,6 +32,7 @@ function createRow(
     purchaseCostAmount: null,
     purchaseCostCurrency: 'CNY',
     attributes: [],
+    remark: null,
     createdBy: null,
     updatedBy: null,
     version: 1,
@@ -203,7 +205,16 @@ describe('ProductQueryService', () => {
     })
     expect(findManyInput.where).toBe(countInput.where)
     expect(findManyInput).toMatchObject({
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      orderBy: [
+        { supplierValue: 'asc' },
+        { category: { sortOrder: 'asc' } },
+        { category: { name: 'asc' } },
+        { productHead: { sortOrder: 'asc' } },
+        { productHead: { name: 'asc' } },
+        { sortOrder: 'asc' },
+        { name: 'asc' },
+        { id: 'asc' },
+      ],
       skip: 10,
       take: 10,
     })

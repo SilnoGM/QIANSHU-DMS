@@ -47,9 +47,9 @@ test('产品表单组合基础资料、必填供应商、只读状态、三组�
 
   assert.match(source, /<FaForm/)
   assert.match(source, /aria-busy/)
-  assert.match(source, /<FaCard[\s\S]*title="基础资料"/)
+  assert.match(source, /<FaCard[\s\S]*title="归属与识别"/)
   assert.match(source, /label="产品名称"/)
-  assert.match(source, /title="产品状态"/)
+  assert.match(source, /title="保存摘要"/)
   assert.match(source, /statusLabel/)
   assert.doesNotMatch(source, /name="status"/)
   assert.doesNotMatch(source, /草稿（DRAFT）/u)

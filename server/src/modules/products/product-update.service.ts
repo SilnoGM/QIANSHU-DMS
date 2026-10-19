@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common'
 
-import type { Prisma } from '../../generated/prisma/client'
+import { Prisma } from '../../generated/prisma/client'
 import {
   AuditActorType,
   AuditEventType,
@@ -50,6 +50,7 @@ import {
   type ProductUpdateLockRecord,
   type ProductUpdateRecordData,
 } from './product-update.persistence'
+import { readNextProductSortOrder } from './product-command.persistence'
 import {
   ProductTaxonomyService,
   type ResolvedProductTaxonomyIds,
@@ -198,6 +199,7 @@ function toCurrentProduct(row: ProductUpdateLockRecord): ProductUpdateCurrent {
       currency: row.purchaseCostCurrency,
     },
     attributes: row.attributes,
+    remark: row.remark,
   }
 }
 
@@ -205,6 +207,7 @@ function buildUpdateData(
   command: NormalizedProductCreateCommand,
   changedFields: readonly string[],
   taxonomy: ResolvedProductTaxonomyIds | undefined,
+  sortOrder: number | undefined,
 ): ProductUpdateRecordData {
   const changed = new Set(changedFields)
   const data: {
@@ -216,6 +219,7 @@ function buildUpdateData(
     data.categoryId = taxonomy.categoryId
     data.productHeadId = taxonomy.productHeadId
   }
+  if (sortOrder !== undefined) data.sortOrder = sortOrder
   if (changed.has('status')) data.status = command.status
   if (changed.has('supplierValue')) data.supplierValue = command.supplierValue
   if (changed.has('twdSalePrice')) {
@@ -231,6 +235,7 @@ function buildUpdateData(
     data.purchaseCostCurrency = command.purchaseCost.currency
   }
   if (changed.has('attributes')) data.attributes = command.attributes
+  if (changed.has('remark')) data.remark = command.remark
 
   return data
 }
@@ -320,6 +325,13 @@ export class ProductUpdateService {
               },
             )
           : undefined
+        const sortOrder = taxonomy !== undefined
+          && taxonomy.productHeadId !== current.productHeadId
+          ? await readNextProductSortOrder(transaction, {
+              productHeadId: taxonomy.productHeadId,
+              supplierValue: target.command.supplierValue,
+            })
+          : undefined
         await updateProductRecord(transaction, {
           productId,
           actorUserId: trusted.actorUserId,
@@ -327,6 +339,7 @@ export class ProductUpdateService {
             target.command,
             target.changedFields,
             taxonomy,
+            sortOrder,
           ),
         })
         await this.audit.record(transaction, {
@@ -355,8 +368,119 @@ export class ProductUpdateService {
     }
   }
 
-  private async requireChangedDependencies(
-    transaction: Prisma.TransactionClient,
+  async move(
+    context: ProductUpdateContext,
+    productId: string,
+    direction: 'up' | 'down',
+  ): Promise<void> {
+    const trusted = validateTrustedContext(context)
+    try {
+      await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
+        const current = await transaction.product.findUnique({
+          where: { id: productId },
+          select: {
+            id: true,
+            productNo: true,
+            name: true,
+            supplierValue: true,
+            productHeadId: true,
+            sortOrder: true,
+          },
+        })
+        if (current === null) {
+          throw productException(
+            HttpStatus.NOT_FOUND,
+            'PRODUCT_NOT_FOUND',
+            '产品不存在',
+          )
+        }
+
+        // 锁定同一产品头（无产品头时按供应商）的全部产品，串行化并发移动。
+        if (current.productHeadId === null) {
+          await transaction.$queryRaw(Prisma.sql`
+            SELECT "id"
+            FROM "products"
+            WHERE "supplier_value" = ${current.supplierValue}
+              AND "product_head_id" IS NULL
+            ORDER BY "sort_order" ASC, "name" ASC, "id" ASC
+            FOR UPDATE
+          `)
+        }
+        else {
+          await transaction.$queryRaw(Prisma.sql`
+            SELECT "id"
+            FROM "products"
+            WHERE "product_head_id" = CAST(${current.productHeadId} AS uuid)
+            ORDER BY "sort_order" ASC, "name" ASC, "id" ASC
+            FOR UPDATE
+          `)
+        }
+
+        const scope = current.productHeadId === null
+          ? { supplierValue: current.supplierValue, productHeadId: null }
+          : { productHeadId: current.productHeadId }
+        const rows = await transaction.product.findMany({
+          where: scope,
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+          select: { id: true, sortOrder: true },
+        })
+        const index = rows.findIndex(row => row.id === productId)
+        if (index < 0) throw internalProductError()
+        const targetIndex = direction === 'up' ? index - 1 : index + 1
+        if (targetIndex < 0 || targetIndex >= rows.length) {
+          throw productException(
+            HttpStatus.CONFLICT,
+            'PRODUCT_ORDER_BOUNDARY',
+            direction === 'up'
+              ? '已经是第一个，不能上移'
+              : '已经是最后一个，不能下移',
+          )
+        }
+
+        const ordered = [...rows]
+        const [moved] = ordered.splice(index, 1)
+        if (moved === undefined) throw internalProductError()
+        ordered.splice(targetIndex, 0, moved)
+        for (const [position, row] of ordered.entries()) {
+          const nextSortOrder = (position + 1) * 10
+          if (row.sortOrder !== nextSortOrder) {
+            await transaction.product.update({
+              where: { id: row.id },
+              data: { sortOrder: nextSortOrder },
+              select: { id: true },
+            })
+          }
+        }
+
+        await this.audit.record(transaction, {
+          eventType: AuditEventType.PRODUCT_REORDERED,
+          outcome: AuditOutcome.SUCCESS,
+          actorType: AuditActorType.USER,
+          actorUserId: trusted.actorUserId,
+          targetType: 'PRODUCT',
+          targetId: productId,
+          requestId: trusted.requestId,
+          metadata: {
+            productNo: current.productNo,
+            name: current.name,
+            productHeadId: current.productHeadId,
+            supplierValue: current.supplierValue,
+            direction,
+            previousSortOrder: moved.sortOrder,
+            nextSortOrder: (targetIndex + 1) * 10,
+            previousNeighborId: rows[index - 1]?.id ?? null,
+            nextNeighborId: rows[index + 1]?.id ?? null,
+          },
+        })
+      })
+    }
+    catch (error) {
+      return mapUpdateError(error)
+    }
+  }
+
+  private async requireChangedDependencies(    transaction: Prisma.TransactionClient,
     command: NormalizedProductCreateCommand,
     changedFields: readonly string[],
   ): Promise<void> {

@@ -34,6 +34,7 @@ export interface ProductListQuery {
   readonly productHeadId?: string
   readonly status?: ProductStatus
   readonly supplierValue?: string
+  readonly unclassified?: boolean
 }
 
 export interface ProductPage {
@@ -106,6 +107,10 @@ export class ProductQueryService {
     if (query.productHeadId !== undefined) {
       where.productHeadId = query.productHeadId
     }
+    if (query.unclassified === true) {
+      where.categoryId = null
+      where.productHeadId = null
+    }
     if (query.keyword !== undefined) {
       // status/supplierValue 位于顶层、名称和编号位于 OR；Prisma 会把这些
       // 条件组合为 AND，并让 count/findMany 复用同一个 where，避免分页总数与行集漂移。
@@ -126,7 +131,16 @@ export class ProductQueryService {
           const total = await transaction.product.count({ where })
           const rows = await transaction.product.findMany({
             where,
-            orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+            orderBy: [
+              { supplierValue: 'asc' },
+              { category: { sortOrder: 'asc' } },
+              { category: { name: 'asc' } },
+              { productHead: { sortOrder: 'asc' } },
+              { productHead: { name: 'asc' } },
+              { sortOrder: 'asc' },
+              { name: 'asc' },
+              { id: 'asc' },
+            ],
             skip: query.skip,
             take: query.pageSize,
             select: PRODUCT_RESPONSE_SELECT,

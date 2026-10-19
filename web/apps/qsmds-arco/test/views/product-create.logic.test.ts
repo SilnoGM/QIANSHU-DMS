@@ -60,6 +60,7 @@ test('默认 model 符合创建契约，属性 row key 稳定且 dirty 比较不
     productHeadName: null,
     purchaseCostAmount: null,
     purchaseCostCurrency: 'CNY',
+    remark: '',
     status: 'ACTIVE',
     supplierValue: null,
     twdSalePriceAmount: null,
@@ -122,6 +123,7 @@ test('DTO builder 执行 trim/NFC、严格 MoneyInput 校验并丢弃 Vue row ke
       name: 'Café 收纳包',
       productHeadName: '旱地履带',
       purchaseCost: { amount: '10.00', currency: 'CNY' },
+      remark: null,
       status: 'ACTIVE',
       supplierValue: 'supplier-a',
       twdSalePrice: { amount: '88.50', currency: 'TWD' },
@@ -146,6 +148,31 @@ test('DTO builder 执行 trim/NFC、严格 MoneyInput 校验并丢弃 Vue row ke
     },
     valid: false,
   })
+})
+
+test('产品备注 trim 后为空时提交 null，超过 512 字失败关闭', () => {
+  const precisions = {
+    myrSalePricePrecision: 2,
+    purchaseCostPrecision: 2,
+    twdSalePricePrecision: 2,
+  }
+  const model = validModel()
+  model.remark = '  适配 1.2 米机身  '
+  const result = buildCreateProductRequest(model, precisions)
+  assert.equal(result.valid, true)
+  assert.equal(result.request.remark, '适配 1.2 米机身')
+
+  const blank = validModel()
+  blank.remark = '   '
+  const blankResult = buildCreateProductRequest(blank, precisions)
+  assert.equal(blankResult.valid, true)
+  assert.equal(blankResult.request.remark, null)
+
+  const tooLong = validModel()
+  tooLong.remark = 'x'.repeat(513)
+  const failed = buildCreateProductRequest(tooLong, precisions)
+  assert.equal(failed.valid, false)
+  assert.equal(failed.fieldErrors.remark, '产品备注不能超过 512 个字符')
 })
 
 test('创建时分类与产品头必填', () => {

@@ -211,6 +211,18 @@ function supplierDisplay(product: ProductListItemViewModel): string {
         </dl>
       </section>
 
+      <section class="p-4 border border-border rounded-lg min-w-0" aria-labelledby="product-detail-remark-title">
+        <h3 id="product-detail-remark-title" class="qs-type-section-title m-0 mb-3">
+          产品备注
+        </h3>
+        <p v-if="product.remark" class="qs-type-body m-0 whitespace-pre-wrap break-words">
+          {{ product.remark }}
+        </p>
+        <p v-else class="qs-type-body text-muted-foreground m-0">
+          暂无备注
+        </p>
+      </section>
+
       <section class="p-4 border border-border rounded-lg min-w-0">
         <h3 class="qs-type-section-title m-0 mb-3">
           媒体资料

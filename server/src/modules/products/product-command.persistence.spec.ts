@@ -33,6 +33,7 @@ function normalizedCommand(): NormalizedProductCreateCommand {
       { title: '容量', value: '30ml' },
       { title: '产地', value: '中国台湾' },
     ],
+    remark: null,
   }
 }
 
@@ -51,6 +52,7 @@ describe('product command persistence', () => {
       actorUserId: '11111111-1111-4111-8111-111111111111',
       categoryId: '44444444-4444-4444-8444-444444444444',
       productHeadId: '55555555-5555-4555-8555-555555555555',
+      sortOrder: 10,
       command,
     })).resolves.toBe(created)
 
@@ -65,6 +67,7 @@ describe('product command persistence', () => {
       productNo: 'P202608120001',
       status: ProductStatus.INACTIVE,
       supplierValue: 'SUPPLIER_A',
+      sortOrder: 10,
       twdSalePriceAmount: '1280.5000',
       twdSalePriceCurrency: 'TWD',
       myrSalePriceAmount: null,
@@ -75,6 +78,7 @@ describe('product command persistence', () => {
         { title: '容量', value: '30ml' },
         { title: '产地', value: '中国台湾' },
       ],
+      remark: null,
       createdByUserId: '11111111-1111-4111-8111-111111111111',
       updatedByUserId: '11111111-1111-4111-8111-111111111111',
       version: 1,

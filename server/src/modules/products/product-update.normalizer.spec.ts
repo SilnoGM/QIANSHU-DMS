@@ -15,6 +15,7 @@ const current = {
   myrSalePrice: { amount: null, currency: 'MYR' },
   purchaseCost: { amount: '5.5000', currency: 'CNY' },
   attributes: [{ title: '颜色', value: '红色' }],
+  remark: null,
 }
 
 describe('product update normalizer', () => {

@@ -41,14 +41,14 @@ export async function readProductOptionCategoryFacets(
   const [categories, unclassifiedCount] = await Promise.all([
     prisma.productCategory.findMany({
       where: { supplierValue: input.supplierValue },
-      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
       select: {
         name: true,
         _count: {
           select: { products: { where: productWhere } },
         },
         productHeads: {
-          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
           select: {
             name: true,
             _count: {

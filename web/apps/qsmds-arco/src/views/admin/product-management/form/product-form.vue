@@ -308,10 +308,10 @@ defineExpose<ProductFormExpose>({
     @submit="submit"
   >
     <FaCard
-      title="基础资料"
+      title="归属与识别"
       :description="isEdit
-        ? '修改产品基础资料；产品编号是只读身份，不会随编辑改变。'
-        : '录入用于识别产品的基本信息，产品编号将由 PRODUCT 规则自动派发。'"
+        ? '供应商、分类与产品头决定产品的归属；产品编号是只读身份。'
+        : '供应商、分类与产品头决定产品归属，产品编号由系统自动派发。'"
       class="min-w-0 lg:col-span-8"
       content-class="gap-4 grid"
     >
@@ -455,85 +455,21 @@ defineExpose<ProductFormExpose>({
         />
       </FaFormItem>
 
-      <div class="p-4 border border-border rounded-lg bg-muted/25">
-        <p class="text-sm font-medium m-0">
-          产品编号
-        </p>
-        <p class="text-sm text-muted-foreground leading-6 m-0 mt-1">
-          {{ isEdit
-            ? '产品编号由系统维护，编辑时不可修改。'
-            : '提交成功后由系统自动派发，无需手工填写。' }}
-        </p>
-        <code class="text-sm text-muted-foreground font-mono mt-2 block">
-          {{ isEdit ? productNo : 'PRODUCT · AUTO' }}
-        </code>
-      </div>
+      <FaFormItem
+        name="remark"
+        label="产品备注"
+        description="可选；最多 512 个字符，用于记录型号说明、适配要求或随附配件。"
+      >
+        <FaTextarea
+          :model-value="modelValue.remark"
+          :disabled="submitLocked"
+          maxlength="512"
+          :rows="3"
+          placeholder="填写产品备注（可选）"
+          @update:model-value="updateModel({ remark: typeof $event === 'string' ? $event : '' })"
+        />
+      </FaFormItem>
     </FaCard>
-
-    <aside class="min-w-0 lg:col-span-4 lg:row-span-4 lg:self-start">
-      <div class="space-y-6 lg:top-4 lg:sticky">
-        <FaCard
-          title="产品状态"
-          :description="isEdit
-            ? '状态只可在产品列表操作列启用或停用，本页不提供状态修改。'
-            : '新建产品保存后默认为启用；之后可在产品列表操作列切换。'"
-        >
-          <FaTag
-            variant="outline"
-            class="qs-type-status-tag"
-            :class="statusClass"
-          >
-            {{ statusLabel }}
-          </FaTag>
-        </FaCard>
-
-        <FaCard title="系统处理" content-class="gap-3 grid">
-          <div class="p-3 border border-border rounded-lg bg-muted/25">
-            <p class="text-sm font-medium m-0">
-              自动编号
-            </p>
-            <p class="text-xs text-muted-foreground leading-5 m-0 mt-1">
-              {{ isEdit
-                ? '沿用已有产品编号，不重新发号。'
-                : '仅在有效提交后由 PRODUCT 规则派发，不回收已派发号码。' }}
-            </p>
-          </div>
-          <div class="p-3 border border-border rounded-lg bg-muted/25">
-            <p class="text-sm font-medium m-0">
-              审计留痕
-            </p>
-            <p class="text-xs text-muted-foreground leading-5 m-0 mt-1">
-              {{ isEdit
-                ? '真实变更成功后记录版本与变更字段，不记录金额或属性内容。'
-                : '创建成功后记录操作人与产品编号，不记录金额或属性内容。' }}
-            </p>
-          </div>
-        </FaCard>
-
-        <div
-          v-if="showActions"
-          class="p-4 border border-border rounded-xl bg-card gap-3 grid"
-        >
-          <FaButton
-            type="submit"
-            class="min-h-11 w-full sm:min-h-9"
-            :disabled="submitLocked"
-            :loading="submitting"
-          >
-            {{ isEdit ? '保存修改' : '创建产品' }}
-          </FaButton>
-          <FaButton
-            type="button"
-            variant="outline"
-            class="min-h-11 w-full sm:min-h-9"
-            :disabled="submitLocked"
-            @click="cancel"
-          >
-            取消
-          </FaButton>
-        </div>
-      </div>
-    </aside>
 
     <FaCard
       title="销售与采购价格"
@@ -659,5 +595,101 @@ defineExpose<ProductFormExpose>({
         icon="i-lucide:image-off"
       />
     </FaCard>
+
+    <aside class="min-w-0 lg:col-span-4 lg:row-span-4 lg:col-start-9 lg:row-start-1 lg:self-start">
+      <div class="space-y-4 lg:top-4 lg:sticky">
+        <FaCard title="保存摘要" description="保存前核对产品身份与归属；新建产品保存后默认为启用。">
+          <dl class="m-0 gap-3 grid">
+            <div>
+              <dt class="qs-type-compact-label">
+                产品编号
+              </dt>
+              <dd class="font-mono m-0 mt-1 break-all">
+                {{ isEdit ? productNo : 'PRODUCT · AUTO' }}
+              </dd>
+            </div>
+            <div>
+              <dt class="qs-type-compact-label">
+                状态
+              </dt>
+              <dd class="m-0 mt-1">
+                <FaTag variant="outline" class="qs-type-status-tag" :class="statusClass">
+                  {{ statusLabel }}
+                </FaTag>
+              </dd>
+            </div>
+            <div>
+              <dt class="qs-type-compact-label">
+                分类
+              </dt>
+              <dd class="m-0 mt-1 break-words">
+                {{ modelValue.categoryName ?? '未选择' }}
+              </dd>
+            </div>
+            <div>
+              <dt class="qs-type-compact-label">
+                产品头
+              </dt>
+              <dd class="m-0 mt-1 break-words">
+                {{ modelValue.productHeadName ?? '未选择' }}
+              </dd>
+            </div>
+          </dl>
+        </FaCard>
+
+        <div
+          v-if="showActions"
+          class="p-4 border border-border rounded-xl bg-card gap-3 hidden lg:grid"
+        >
+          <FaButton
+            type="submit"
+            class="min-h-11 w-full sm:min-h-9"
+            :disabled="submitLocked"
+            :loading="submitting"
+          >
+            {{ isEdit ? '保存修改' : '创建产品' }}
+          </FaButton>
+          <FaButton
+            type="button"
+            variant="outline"
+            class="min-h-11 w-full sm:min-h-9"
+            :disabled="submitLocked"
+            @click="cancel"
+          >
+            取消
+          </FaButton>
+        </div>
+
+        <p class="text-xs text-muted-foreground m-0 px-1">
+          产品编号由系统自动派发，审计留痕由系统处理。
+        </p>
+      </div>
+    </aside>
+
+    <FaFixedBar
+      v-if="showActions"
+      position="bottom"
+      class="pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-border bg-card lg:hidden"
+    >
+      <div class="px-4 py-3 flex gap-3 w-full">
+        <FaButton
+          type="button"
+          variant="outline"
+          class="flex-1 min-h-11"
+          :disabled="submitLocked"
+          @click="cancel"
+        >
+          取消
+        </FaButton>
+        <FaButton
+          type="submit"
+          class="flex-1 min-h-11"
+          :disabled="submitLocked"
+          :loading="submitting"
+        >
+          {{ isEdit ? '保存修改' : '创建产品' }}
+        </FaButton>
+      </div>
+    </FaFixedBar>
   </FaForm>
 </template>

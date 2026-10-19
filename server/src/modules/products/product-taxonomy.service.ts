@@ -24,6 +24,8 @@ import type {
   ProductTaxonomyCategoryListDto,
   ProductTaxonomyHeadListItemDto,
   ProductTaxonomyOptionsDto,
+  ProductTaxonomyTreeCategoryDto,
+  ProductTaxonomyTreeDto,
 } from './dto/product-taxonomy.dto'
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
@@ -130,11 +132,13 @@ function validateContext(
 function mapHead(row: {
   readonly id: string
   readonly name: string
+  readonly sortOrder: number
   readonly _count: { readonly products: number }
 }): ProductTaxonomyHeadListItemDto {
   return {
     id: row.id,
     name: row.name,
+    sortOrder: row.sortOrder,
     productCount: row._count.products,
   }
 }
@@ -142,17 +146,20 @@ function mapHead(row: {
 function mapCategory(row: {
   readonly id: string
   readonly name: string
+  readonly sortOrder: number
   readonly supplierValue: string
   readonly _count: { readonly products: number }
   readonly productHeads: readonly {
     readonly id: string
     readonly name: string
+    readonly sortOrder: number
     readonly _count: { readonly products: number }
   }[]
 }): ProductTaxonomyCategoryListItemDto {
   return {
     id: row.id,
     name: row.name,
+    sortOrder: row.sortOrder,
     supplierValue: row.supplierValue,
     productCount: row._count.products,
     productHeads: row.productHeads.map(mapHead),
@@ -175,17 +182,19 @@ export class ProductTaxonomyService {
     try {
       const rows = await this.prisma.productCategory.findMany({
         where: { supplierValue },
-        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
         select: {
           id: true,
           name: true,
+          sortOrder: true,
           supplierValue: true,
           _count: { select: { products: true } },
           productHeads: {
-            orderBy: [{ name: 'asc' }, { id: 'asc' }],
+            orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
             select: {
               id: true,
               name: true,
+              sortOrder: true,
               _count: { select: { products: true } },
             },
           },
@@ -204,16 +213,18 @@ export class ProductTaxonomyService {
         where: supplierValue === undefined ? {} : { supplierValue },
         orderBy: [
           { supplierValue: 'asc' },
+          { sortOrder: 'asc' },
           { name: 'asc' },
           { id: 'asc' },
         ],
         select: {
           id: true,
           name: true,
+          sortOrder: true,
           supplierValue: true,
           productHeads: {
-            orderBy: [{ name: 'asc' }, { id: 'asc' }],
-            select: { id: true, name: true },
+            orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+            select: { id: true, name: true, sortOrder: true },
           },
         },
       })
@@ -221,12 +232,108 @@ export class ProductTaxonomyService {
         categories: rows.map(row => ({
           id: row.id,
           name: row.name,
+          sortOrder: row.sortOrder,
           supplierValue: row.supplierValue,
           productHeads: row.productHeads.map(head => ({
             id: head.id,
             name: head.name,
+            sortOrder: head.sortOrder,
           })),
         })),
+      }
+    }
+    catch {
+      throw internalError()
+    }
+  }
+
+  async tree(): Promise<ProductTaxonomyTreeDto> {
+    try {
+      const [categories, unclassifiedRows, totalProducts] = await Promise.all([
+        this.prisma.productCategory.findMany({
+          orderBy: [
+            { supplierValue: 'asc' },
+            { sortOrder: 'asc' },
+            { name: 'asc' },
+            { id: 'asc' },
+          ],
+          select: {
+            id: true,
+            name: true,
+            sortOrder: true,
+            supplierValue: true,
+            _count: { select: { products: true } },
+            productHeads: {
+              orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+              select: {
+                id: true,
+                name: true,
+                sortOrder: true,
+                _count: { select: { products: true } },
+              },
+            },
+          },
+        }),
+        this.prisma.product.groupBy({
+          by: ['supplierValue'],
+          where: { categoryId: null },
+          _count: { _all: true },
+        }),
+        this.prisma.product.count(),
+      ])
+
+      const unclassifiedBySupplier = new Map(
+        unclassifiedRows.map(row => [row.supplierValue, row._count._all]),
+      )
+      const supplierMap = new Map<string, {
+        readonly categories: ProductTaxonomyTreeCategoryDto[]
+        readonly unclassifiedCount: number
+      }>()
+      for (const category of categories) {
+        const entry = supplierMap.get(category.supplierValue) ?? {
+          categories: [],
+          unclassifiedCount: unclassifiedBySupplier.get(category.supplierValue) ?? 0,
+        }
+        entry.categories.push({
+          id: category.id,
+          name: category.name,
+          sortOrder: category.sortOrder,
+          productCount: category._count.products,
+          productHeads: category.productHeads.map(head => ({
+            id: head.id,
+            name: head.name,
+            sortOrder: head.sortOrder,
+            productCount: head._count.products,
+          })),
+        })
+        supplierMap.set(category.supplierValue, entry)
+      }
+      for (const [supplierValue, count] of unclassifiedBySupplier) {
+        if (!supplierMap.has(supplierValue)) {
+          supplierMap.set(supplierValue, {
+            categories: [],
+            unclassifiedCount: count,
+          })
+        }
+      }
+
+      return {
+        suppliers: [...supplierMap.entries()]
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([supplierValue, entry]) => ({
+            supplierValue,
+            productCount: entry.categories.reduce(
+              (sum, category) => sum + category.productCount,
+              entry.unclassifiedCount,
+            ),
+            unclassifiedCount: entry.unclassifiedCount,
+            categories: entry.categories,
+          })),
+        totalProducts,
+        unclassifiedCount: unclassifiedRows.reduce(
+          (sum, row) => sum + row._count._all,
+          0,
+        ),
       }
     }
     catch {
@@ -509,6 +616,179 @@ export class ProductTaxonomyService {
     }
   }
 
+  async moveCategory(
+    rawContext: ProductTaxonomyCommandContext,
+    categoryId: string,
+    direction: 'up' | 'down',
+  ): Promise<void> {
+    const context = validateContext(rawContext)
+    try {
+      await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
+        const current = await transaction.productCategory.findUnique({
+          where: { id: categoryId },
+          select: { id: true, name: true, supplierValue: true },
+        })
+        if (current === null) throw notFound('category')
+        await transaction.$queryRaw(Prisma.sql`
+          SELECT "id"
+          FROM "product_categories"
+          WHERE "supplier_value" = ${current.supplierValue}
+          ORDER BY "sort_order" ASC, "name" ASC, "id" ASC
+          FOR UPDATE
+        `)
+        const rows = await transaction.productCategory.findMany({
+          where: { supplierValue: current.supplierValue },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+          select: { id: true, sortOrder: true },
+        })
+        const movement = await this.moveWithinScope(
+          rows,
+          categoryId,
+          direction,
+          'PRODUCT_CATEGORY_ORDER_BOUNDARY',
+          (id, sortOrder) => transaction.productCategory.update({
+            where: { id },
+            data: { sortOrder },
+            select: { id: true },
+          }),
+        )
+        await this.audit.record(transaction, {
+          eventType: AuditEventType.PRODUCT_CATEGORY_REORDERED,
+          outcome: AuditOutcome.SUCCESS,
+          actorType: AuditActorType.USER,
+          actorUserId: context.actorUserId,
+          targetType: 'PRODUCT_CATEGORY',
+          targetId: categoryId,
+          requestId: context.requestId,
+          metadata: {
+            categoryId,
+            supplierValue: current.supplierValue,
+            name: current.name,
+            direction,
+            ...movement,
+          },
+        })
+      })
+    }
+    catch (error) {
+      throw this.mapCommandError(error, 'category')
+    }
+  }
+
+  async moveHead(
+    rawContext: ProductTaxonomyCommandContext,
+    productHeadId: string,
+    direction: 'up' | 'down',
+  ): Promise<void> {
+    const context = validateContext(rawContext)
+    try {
+      await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
+        const current = await transaction.productHead.findUnique({
+          where: { id: productHeadId },
+          select: {
+            id: true,
+            name: true,
+            categoryId: true,
+            category: { select: { supplierValue: true } },
+          },
+        })
+        if (current === null) throw notFound('head')
+        await transaction.$queryRaw(Prisma.sql`
+          SELECT "id"
+          FROM "product_heads"
+          WHERE "category_id" = CAST(${current.categoryId} AS uuid)
+          ORDER BY "sort_order" ASC, "name" ASC, "id" ASC
+          FOR UPDATE
+        `)
+        const rows = await transaction.productHead.findMany({
+          where: { categoryId: current.categoryId },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+          select: { id: true, sortOrder: true },
+        })
+        const movement = await this.moveWithinScope(
+          rows,
+          productHeadId,
+          direction,
+          'PRODUCT_HEAD_ORDER_BOUNDARY',
+          (id, sortOrder) => transaction.productHead.update({
+            where: { id },
+            data: { sortOrder },
+            select: { id: true },
+          }),
+        )
+        await this.audit.record(transaction, {
+          eventType: AuditEventType.PRODUCT_HEAD_REORDERED,
+          outcome: AuditOutcome.SUCCESS,
+          actorType: AuditActorType.USER,
+          actorUserId: context.actorUserId,
+          targetType: 'PRODUCT_HEAD',
+          targetId: productHeadId,
+          requestId: context.requestId,
+          metadata: {
+            productHeadId,
+            categoryId: current.categoryId,
+            supplierValue: current.category.supplierValue,
+            name: current.name,
+            direction,
+            ...movement,
+          },
+        })
+      })
+    }
+    catch (error) {
+      throw this.mapCommandError(error, 'head')
+    }
+  }
+
+  /**
+   * 上下移动在当前作用域内交换相邻项，并把整组重写为 10 的倍数。
+   * 调用方必须先锁定该作用域，避免并发移动读到过期邻居。
+   */
+  private async moveWithinScope(
+    rows: readonly { readonly id: string; readonly sortOrder: number }[],
+    currentId: string,
+    direction: 'up' | 'down',
+    boundaryCode: string,
+    update: (id: string, sortOrder: number) => Promise<unknown>,
+  ): Promise<{
+    readonly previousSortOrder: number
+    readonly nextSortOrder: number
+    readonly previousNeighborId: string | null
+    readonly nextNeighborId: string | null
+  }> {
+    const index = rows.findIndex(row => row.id === currentId)
+    const current = rows[index]
+    if (index < 0 || current === undefined) throw internalError()
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= rows.length) {
+      throw taxonomyException(
+        HttpStatus.CONFLICT,
+        boundaryCode,
+        direction === 'up' ? '已经是第一个，不能上移' : '已经是最后一个，不能下移',
+      )
+    }
+
+    const ordered = [...rows]
+    const [moved] = ordered.splice(index, 1)
+    if (moved === undefined) throw internalError()
+    ordered.splice(targetIndex, 0, moved)
+    for (const [position, row] of ordered.entries()) {
+      const nextSortOrder = (position + 1) * 10
+      if (row.sortOrder !== nextSortOrder) {
+        await update(row.id, nextSortOrder)
+      }
+    }
+
+    return {
+      previousSortOrder: current.sortOrder,
+      nextSortOrder: (targetIndex + 1) * 10,
+      previousNeighborId: rows[index - 1]?.id ?? null,
+      nextNeighborId: rows[index + 1]?.id ?? null,
+    }
+  }
+
   /**
    * 产品保存时的 resolve-or-create。它只读/写当前产品事务，不另开事务，保证分类、
    * 产品头与产品、审计一起提交或一起回滚。
@@ -596,8 +876,16 @@ export class ProductTaxonomyService {
     conflictOnExisting: boolean,
   ): Promise<CategoryScope> {
     try {
+      const maximum = await transaction.productCategory.aggregate({
+        where: { supplierValue: input.supplierValue },
+        _max: { sortOrder: true },
+      })
       const created = await transaction.productCategory.create({
-        data: { supplierValue: input.supplierValue, name: input.name },
+        data: {
+          supplierValue: input.supplierValue,
+          name: input.name,
+          sortOrder: (maximum._max.sortOrder ?? 0) + 10,
+        },
         select: { id: true, name: true, supplierValue: true },
       })
       await this.audit.record(transaction, {
@@ -641,8 +929,16 @@ export class ProductTaxonomyService {
     conflictOnExisting: boolean,
   ): Promise<HeadScope> {
     try {
+      const maximum = await transaction.productHead.aggregate({
+        where: { categoryId: category.id },
+        _max: { sortOrder: true },
+      })
       const created = await transaction.productHead.create({
-        data: { categoryId: category.id, name },
+        data: {
+          categoryId: category.id,
+          name,
+          sortOrder: (maximum._max.sortOrder ?? 0) + 10,
+        },
         select: { id: true, name: true, categoryId: true },
       })
       await this.audit.record(transaction, {
@@ -695,13 +991,15 @@ export class ProductTaxonomyService {
       select: {
         id: true,
         name: true,
+        sortOrder: true,
         supplierValue: true,
         _count: { select: { products: true } },
         productHeads: {
-          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
           select: {
             id: true,
             name: true,
+            sortOrder: true,
             _count: { select: { products: true } },
           },
         },
@@ -720,6 +1018,7 @@ export class ProductTaxonomyService {
       select: {
         id: true,
         name: true,
+        sortOrder: true,
         _count: { select: { products: true } },
       },
     })

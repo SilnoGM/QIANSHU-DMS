@@ -127,6 +127,9 @@ export class ProductListItemDto {
   @ApiProperty({ enum: ProductStatus })
   readonly status!: ProductStatus
 
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly sortOrder!: number
+
   @ApiProperty({ type: () => ProductSupplierDto, nullable: true })
   readonly supplier!: ProductSupplierDto | null
 
@@ -144,6 +147,9 @@ export class ProductListItemDto {
 
   @ApiProperty({ type: () => [ProductAttributeDto] })
   readonly attributes!: readonly ProductAttributeDto[]
+
+  @ApiProperty({ type: 'string', nullable: true, maxLength: 512 })
+  readonly remark!: string | null
 
   @ApiProperty({ type: () => ProductActorDto, nullable: true })
   readonly createdBy!: ProductActorDto | null

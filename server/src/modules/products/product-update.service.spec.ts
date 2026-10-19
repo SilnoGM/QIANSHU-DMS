@@ -39,6 +39,7 @@ function createLock(
     productNo: 'P202608130001',
     status: ProductStatus.INACTIVE,
     supplierValue: 'HISTORICAL',
+    sortOrder: 10,
     twdSalePriceAmount: '10',
     twdSalePriceCurrency: 'TWD',
     myrSalePriceAmount: null,
@@ -46,6 +47,7 @@ function createLock(
     purchaseCostAmount: '5.5',
     purchaseCostCurrency: 'CNY',
     attributes: [{ title: '颜色', value: '红色' }],
+    remark: null,
     version: 1,
     ...overrides,
   }
@@ -62,6 +64,7 @@ function createResponse(
     productNo: 'P202608130001',
     status: ProductStatus.ACTIVE,
     supplierValue: 'SUPPLIER_A',
+    sortOrder: 10,
     twdSalePriceAmount: { toString: () => '10.0000' },
     twdSalePriceCurrency: 'TWD',
     myrSalePriceAmount: null,
@@ -69,6 +72,7 @@ function createResponse(
     purchaseCostAmount: { toString: () => '5.5000' },
     purchaseCostCurrency: 'CNY',
     attributes: [{ title: '颜色', value: '红色' }],
+    remark: null,
     createdBy: { id: ACTOR_ID, displayName: '管理员' },
     updatedBy: { id: ACTOR_ID, displayName: '管理员' },
     version: 2,
@@ -141,7 +145,11 @@ function createFixture(options: {
   })
   const transactionClient = {
     $queryRaw: queryRaw,
-    product: { update: productUpdate, findUnique: productFindUnique },
+    product: {
+      aggregate: jest.fn(() => Promise.resolve({ _max: { sortOrder: 0 } })),
+      update: productUpdate,
+      findUnique: productFindUnique,
+    },
     productMedia: { findMany: productMediaFindMany },
   } as unknown as Prisma.TransactionClient
   const transaction = jest.fn<

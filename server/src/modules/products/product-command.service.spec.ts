@@ -57,6 +57,7 @@ function createRow(overrides: Partial<ProductQueryRow> = {}): ProductQueryRow {
     productNo: 'P202608120001',
     status: ProductStatus.INACTIVE,
     supplierValue: 'SUPPLIER_A',
+    sortOrder: 10,
     twdSalePriceAmount: { toString: () => '10.2000' },
     twdSalePriceCurrency: 'TWD',
     myrSalePriceAmount: null,
@@ -64,6 +65,7 @@ function createRow(overrides: Partial<ProductQueryRow> = {}): ProductQueryRow {
     purchaseCostAmount: { toString: () => '5.0000' },
     purchaseCostCurrency: 'CNY',
     attributes: [{ title: 'Color', value: 'Red' }],
+    remark: null,
     createdBy: { id: ACTOR_ID, displayName: 'Admin' },
     updatedBy: { id: ACTOR_ID, displayName: 'Admin' },
     version: 1,
@@ -138,6 +140,7 @@ function createFixture(options: {
       return Promise.resolve([])
     }),
     product: {
+      aggregate: jest.fn(() => Promise.resolve({ _max: { sortOrder: 0 } })),
       create: productCreate,
       findUnique: productFindUnique,
     },

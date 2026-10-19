@@ -1152,7 +1152,9 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/categories/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/form/product-attributes-editor.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/slh-bill-conclusion.vue",
       "packages/components/src/basic/table/index.vue"
@@ -1218,7 +1220,9 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/categories/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/form/product-attributes-editor.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue",
       "packages/components/src/basic/table/index.vue"
     ]
@@ -1457,6 +1461,7 @@
       "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderRecords.vue",
       "apps/qsmds-arco/src/components/business/QsReconciliationLineSwitcher/index.vue",
       "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/OrderRecords.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-payment-recipients.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-marks-cell.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/index.vue",
@@ -1490,6 +1495,7 @@
       "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue",
       "apps/qsmds-arco/src/components/business/QsReconciliationLineSwitcher/index.vue",
       "apps/qsmds-arco/src/components/business/QsStatusSwitchToolbar/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
       "packages/components/src/basic/image-preview/preview.vue",
       "packages/components/src/basic/table/index.vue"
     ]
