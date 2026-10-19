@@ -27,6 +27,7 @@ import {
   ProductTaxonomyCategoryListQueryDto,
   ProductTaxonomyHeadIdParamDto,
   ProductTaxonomyHeadListItemDto,
+  MoveProductTaxonomyItemRequestDto,
   RenameProductHeadRequestDto,
   RenameProductTaxonomyCategoryRequestDto,
 } from './dto/product-taxonomy.dto'
@@ -172,6 +173,39 @@ export class ProductTaxonomyController {
     return this.taxonomies.deleteCategory(commandContext(request), params.categoryId)
   }
 
+  @Patch('product-categories/:categoryId/move')
+  @RequirePermissions('product-categories:update')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiContractResponse({ status: HttpStatus.NO_CONTENT })
+  @ApiApplicationContract({
+    operationId: 'product_categories_move',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_FORBIDDEN_CODES] },
+      { status: 404, codes: ['PRODUCT_CATEGORY_NOT_FOUND'] },
+      { status: 409, codes: ['PRODUCT_CATEGORY_ORDER_BOUNDARY'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  moveCategory(
+    @Param() params: ProductTaxonomyCategoryIdParamDto,
+    @Body() dto: MoveProductTaxonomyItemRequestDto,
+    @Req() request: object,
+  ): Promise<void> {
+    return this.taxonomies.moveCategory(
+      commandContext(request),
+      params.categoryId,
+      dto.direction,
+    )
+  }
+
   @Post('product-heads')
   @RequirePermissions('product-categories:create')
   @HttpCode(HttpStatus.CREATED)
@@ -263,5 +297,38 @@ export class ProductTaxonomyController {
     @Req() request: object,
   ): Promise<void> {
     return this.taxonomies.deleteHead(commandContext(request), params.productHeadId)
+  }
+
+  @Patch('product-heads/:productHeadId/move')
+  @RequirePermissions('product-categories:update')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiContractResponse({ status: HttpStatus.NO_CONTENT })
+  @ApiApplicationContract({
+    operationId: 'product_heads_move',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_FORBIDDEN_CODES] },
+      { status: 404, codes: ['PRODUCT_HEAD_NOT_FOUND'] },
+      { status: 409, codes: ['PRODUCT_HEAD_ORDER_BOUNDARY'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  moveHead(
+    @Param() params: ProductTaxonomyHeadIdParamDto,
+    @Body() dto: MoveProductTaxonomyItemRequestDto,
+    @Req() request: object,
+  ): Promise<void> {
+    return this.taxonomies.moveHead(
+      commandContext(request),
+      params.productHeadId,
+      dto.direction,
+    )
   }
 }

@@ -163,4 +163,18 @@ export class CreateProductRequestDto {
   @ValidateNested({ each: true })
   @Type(() => ProductAttributeInputDto)
   attributes!: ProductAttributeInputDto[]
+
+  @ApiPropertyOptional({
+    type: 'string',
+    nullable: true,
+    maxLength: 512,
+  })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().normalize('NFC') : value)
+  @ValidateIf((_object: CreateProductRequestDto, value: unknown) =>
+    value !== undefined && value !== null)
+  @IsString({ message: '必须是字符串或 null' })
+  @IsUnicodeCodePointLength(1, 512, { message: '长度必须为 1 到 512 个字符' })
+  @Matches(/\S/u, { message: '不能为空白文本' })
+  remark?: string | null
 }

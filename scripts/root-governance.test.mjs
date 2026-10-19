@@ -372,6 +372,9 @@ const supplierResidueAllowlist = Object.freeze([
   'server/src/cli/seed/seed.dataset.ts',
   'server/src/cli/seed/seed.service.ts',
   'server/test/seed.e2e-spec.ts',
+  // 产品批量导入命令按供应商字典稳定值创建产品；不恢复 Supplier 主数据。
+  'server/src/commands/product-import.service.spec.ts',
+  'server/src/commands/product-import.service.ts',
   // 对账详情按明细行展示装柜行匹配到的采购/销售来源：只读订单快照、金额与
   // 供应商字典标签，不新增供应商主数据入口，也不放开采采购/销售的写操作。
   'server/src/modules/slh-reconciliation-batches/slh-reconciliation-batch-query.service.ts',
@@ -387,6 +390,8 @@ const supplierResidueAllowlist = Object.freeze([
   // 分类/产品头是独立业务目录，不新增 Supplier 主数据表、权限或维护入口。
   'server/prisma/migrations/20261018110000_product_taxonomy_catalog/migration.sql',
   'server/prisma/migrations/20261018111000_product_status_remove_draft/migration.sql',
+  // 产品 sort_order 迁移只按 supplier_value 作用域回填分类/产品排序，不恢复 Supplier 主数据。
+  'server/prisma/migrations/20261018131000_product_sort_order/migration.sql',
   'server/src/modules/products/dto/product-taxonomy.dto.ts',
   'server/src/modules/products/product-option-category-facets.ts',
   'server/src/modules/products/product-taxonomy.controller.ts',

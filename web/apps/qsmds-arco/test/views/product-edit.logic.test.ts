@@ -31,6 +31,7 @@ function product(overrides: Partial<ProductListItemDto> = {}): ProductListItemDt
     name: '原产品',
     productNo: 'P202608130001',
     purchaseCost: { amount: '5.5', currency: 'CNY' },
+    remark: null,
     status: 'INACTIVE',
     supplier: {
       label: null,
@@ -64,6 +65,7 @@ test('详情转换为编辑模型并保留未知历史供应商与稳定属性 k
     productHeadName: '旱地履带',
     purchaseCostAmount: '5.5',
     purchaseCostCurrency: 'CNY',
+    remark: '',
     status: 'INACTIVE',
     supplierValue: 'HISTORICAL',
     twdSalePriceAmount: '10',
@@ -88,6 +90,39 @@ test('只提交规范化后真实变化字段和 expectedVersion', () => {
       name: '新产品',
       productHeadName: '新产品头',
       purchaseCost: { amount: '7.20', currency: 'CNY' },
+    },
+    valid: true,
+  })
+})
+
+test('备注变化只提交 remark，清空提交 null 并可对账', () => {
+  const source = product()
+  const model = createProductEditFormModel(source, () => 'row-1')
+  model.remark = ' 需加宽机身到 1.2 米 '
+
+  const result = buildProductUpdateRequest(model, source, precisions)
+  assert.deepEqual(result, {
+    request: {
+      expectedVersion: 3,
+      remark: '需加宽机身到 1.2 米',
+    },
+    valid: true,
+  })
+  assert.equal(reconcileProductUpdateResult(result.request, {
+    ...source,
+    remark: '需加宽机身到 1.2 米',
+    version: 4,
+  }), 'success')
+
+  model.remark = '   '
+  const sourceWithRemark = { ...source, remark: '需加宽机身到 1.2 米' }
+  const clearedModel = createProductEditFormModel(sourceWithRemark, () => 'row-1')
+  clearedModel.remark = '   '
+  const cleared = buildProductUpdateRequest(clearedModel, sourceWithRemark, precisions)
+  assert.deepEqual(cleared, {
+    request: {
+      expectedVersion: 3,
+      remark: null,
     },
     valid: true,
   })

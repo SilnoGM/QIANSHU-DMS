@@ -33,6 +33,7 @@ import {
 import {
   createProductRecord,
   isProductNumberUniqueViolation,
+  readNextProductSortOrder,
   readProductByNumber,
 } from './product-command.persistence'
 import {
@@ -292,6 +293,7 @@ function productMatchesCommand(
       === command.purchaseCost.amount
     && row.purchaseCostCurrency === command.purchaseCost.currency
     && JSON.stringify(row.attributes) === JSON.stringify(command.attributes)
+    && row.remark === command.remark
     && row.createdBy?.id === actorUserId
     && row.updatedBy?.id === actorUserId
     && row.version === 1
@@ -385,6 +387,10 @@ export class ProductCommandService {
           actorUserId: trusted.actorUserId,
           categoryId: taxonomy.categoryId,
           productHeadId: taxonomy.productHeadId,
+          sortOrder: await readNextProductSortOrder(transaction, {
+            productHeadId: taxonomy.productHeadId,
+            supplierValue: command.supplierValue,
+          }),
           command,
         })
         await this.audit.record(transaction, {

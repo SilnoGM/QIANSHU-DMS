@@ -19,6 +19,7 @@ export interface ProductFormModel {
   productHeadName: string | null
   purchaseCostAmount: string | null
   purchaseCostCurrency: string
+  remark: string
   status: ProductFormStatus
   supplierValue: string | null
   twdSalePriceAmount: string | null
@@ -41,6 +42,7 @@ export interface ProductFormRequest {
   name: string
   productHeadName: string | null
   purchaseCost: CreateProductRequestDto['purchaseCost']
+  remark: string | null
   status: ProductFormStatus
   supplierValue: string
   twdSalePrice: CreateProductRequestDto['twdSalePrice']
@@ -125,6 +127,7 @@ export function createProductFormModel(): ProductFormModel {
     productHeadName: null,
     purchaseCostAmount: null,
     purchaseCostCurrency: 'CNY',
+    remark: '',
     status: 'ACTIVE',
     supplierValue: null,
     twdSalePriceAmount: null,
@@ -210,6 +213,7 @@ export function hasProductFormChanges(model: ProductFormModel): boolean {
     || model.myrSalePriceAmount !== null
     || model.purchaseCostAmount !== null
     || model.purchaseCostCurrency !== 'CNY'
+    || model.remark.trim() !== ''
     || model.attributes.length > 0
 }
 
@@ -222,6 +226,23 @@ function normalizeOptionalText(
   return value === null
     ? null
     : addTextError(errors, field, value, 64, label)
+}
+
+function normalizeOptionalLongText(
+  errors: Record<string, string>,
+  field: string,
+  value: string,
+  maximumCodePoints: number,
+  label: string,
+): string | null {
+  const normalized = normalizeText(value)
+  if (normalized.length === 0) {
+    return null
+  }
+  if (codePointLength(normalized) > maximumCodePoints) {
+    errors[field] = `${label}不能超过 ${maximumCodePoints} 个字符`
+  }
+  return normalized
 }
 
 /**
@@ -316,6 +337,13 @@ export function buildProductFormRequest(
       '属性值',
     ),
   }))
+  const remark = normalizeOptionalLongText(
+    fieldErrors,
+    'remark',
+    model.remark,
+    512,
+    '产品备注',
+  )
 
   if (Object.keys(fieldErrors).length > 0) {
     return { fieldErrors: Object.freeze(fieldErrors), valid: false }
@@ -332,6 +360,7 @@ export function buildProductFormRequest(
         amount: purchaseCostAmount,
         currency: model.purchaseCostCurrency,
       },
+      remark,
       status: model.status,
       // 上面的 supplierValue === null 分支已写入字段错误并在下方失败关闭。
       supplierValue: supplierValue as string,

@@ -39,6 +39,7 @@ import {
   ProductMediaUploadResponseDto,
 } from './dto/product-media.dto'
 import {
+  MoveProductRequestDto,
   ProductIdParamDto,
   UpdateProductRequestDto,
   UpdateProductStatusRequestDto,
@@ -50,6 +51,7 @@ import {
 import {
   ProductTaxonomyOptionsDto,
   ProductTaxonomyOptionsQueryDto,
+  ProductTaxonomyTreeDto,
 } from './dto/product-taxonomy.dto'
 import { ProductCommandService } from './product-command.service'
 import { parseProductIdempotencyKey } from './product-command.normalizer'
@@ -202,6 +204,29 @@ export class ProductsController {
     return this.taxonomies.options(query.supplierValue)
   }
 
+  @Get('taxonomy-tree')
+  @RequirePermissions('products:read')
+  @ApiContractResponse({
+    status: HttpStatus.OK,
+    type: ProductTaxonomyTreeDto,
+  })
+  @ApiApplicationContract({
+    operationId: 'products_taxonomy_tree',
+    session: 'required',
+    authorization: true,
+    badRequest: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'],
+      },
+    ],
+  })
+  taxonomyTree(): Promise<ProductTaxonomyTreeDto> {
+    return this.taxonomies.tree()
+  }
+
   @Get(':productId')
   @RequirePermissions('products:read')
   @ApiContractResponse({ status: HttpStatus.OK, type: ProductListItemDto })
@@ -224,6 +249,49 @@ export class ProductsController {
   })
   getById(@Param() params: ProductIdParamDto): Promise<ProductListItem> {
     return this.products.getById(params.productId)
+  }
+
+  @Patch(':productId/move')
+  @RequirePermissions('products:update')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiContractResponse({ status: HttpStatus.NO_CONTENT })
+  @ApiApplicationContract({
+    operationId: 'products_move',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: [
+          'CSRF_REJECTED',
+          'FORBIDDEN',
+          'PASSWORD_CHANGE_REQUIRED',
+        ],
+      },
+      { status: 404, codes: ['PRODUCT_NOT_FOUND'] },
+      { status: 409, codes: ['PRODUCT_ORDER_BOUNDARY'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  move(
+    @Param() params: ProductIdParamDto,
+    @Body() dto: MoveProductRequestDto,
+    @Req() request: object,
+  ): Promise<void> {
+    return this.updates.move(
+      {
+        actorUserId: getRequestAuthContext(request).userId,
+        requestId: getRequestId(request),
+      },
+      params.productId,
+      dto.direction,
+    )
   }
 
   @Head(':productId/media/:productMediaId/content')

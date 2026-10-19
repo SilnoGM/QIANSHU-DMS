@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import {
+  IsIn,
   IsString,
   IsUUID,
   Matches,
@@ -65,6 +66,9 @@ export class ProductTaxonomyHeadOptionDto {
 
   @ApiProperty({ type: 'string', maxLength: 64 })
   readonly name!: string
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly sortOrder!: number
 }
 
 export class ProductTaxonomyCategoryOptionDto {
@@ -76,6 +80,9 @@ export class ProductTaxonomyCategoryOptionDto {
 
   @ApiProperty({ type: 'string', maxLength: 64 })
   readonly supplierValue!: string
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly sortOrder!: number
 
   @ApiProperty({ type: () => [ProductTaxonomyHeadOptionDto] })
   readonly productHeads!: readonly ProductTaxonomyHeadOptionDto[]
@@ -94,6 +101,9 @@ export class ProductTaxonomyHeadListItemDto {
   readonly name!: string
 
   @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly sortOrder!: number
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
   readonly productCount!: number
 }
 
@@ -106,6 +116,9 @@ export class ProductTaxonomyCategoryListItemDto {
 
   @ApiProperty({ type: 'string', maxLength: 64 })
   readonly supplierValue!: string
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly sortOrder!: number
 
   @ApiProperty({ type: 'integer', minimum: 0 })
   readonly productCount!: number
@@ -164,4 +177,66 @@ export class RenameProductHeadRequestDto {
   @IsUnicodeCodePointLength(1, 64, { message: '长度必须为 1 到 64 个字符' })
   @Matches(/\S/u, { message: '不能为空白文本' })
   name!: string
+}
+
+export class MoveProductTaxonomyItemRequestDto {
+  @ApiProperty({ type: 'string', enum: ['up', 'down'] })
+  @IsIn(['up', 'down'], { message: 'direction 必须是 up 或 down' })
+  direction!: 'up' | 'down'
+}
+
+export class ProductTaxonomyTreeHeadDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  readonly id!: string
+
+  @ApiProperty({ type: 'string', maxLength: 64 })
+  readonly name!: string
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly sortOrder!: number
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly productCount!: number
+}
+
+export class ProductTaxonomyTreeCategoryDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  readonly id!: string
+
+  @ApiProperty({ type: 'string', maxLength: 64 })
+  readonly name!: string
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly sortOrder!: number
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly productCount!: number
+
+  @ApiProperty({ type: () => [ProductTaxonomyTreeHeadDto] })
+  readonly productHeads!: readonly ProductTaxonomyTreeHeadDto[]
+}
+
+export class ProductTaxonomyTreeSupplierDto {
+  @ApiProperty({ type: 'string', maxLength: 64 })
+  readonly supplierValue!: string
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly productCount!: number
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly unclassifiedCount!: number
+
+  @ApiProperty({ type: () => [ProductTaxonomyTreeCategoryDto] })
+  readonly categories!: readonly ProductTaxonomyTreeCategoryDto[]
+}
+
+export class ProductTaxonomyTreeDto {
+  @ApiProperty({ type: () => [ProductTaxonomyTreeSupplierDto] })
+  readonly suppliers!: readonly ProductTaxonomyTreeSupplierDto[]
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly totalProducts!: number
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly unclassifiedCount!: number
 }

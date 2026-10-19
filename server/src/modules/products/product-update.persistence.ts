@@ -17,6 +17,7 @@ export interface ProductUpdateLockRecord {
   readonly productNo: string
   readonly status: ProductStatusValue
   readonly supplierValue: string
+  readonly sortOrder: number
   readonly twdSalePriceAmount: string | null
   readonly twdSalePriceCurrency: string
   readonly myrSalePriceAmount: string | null
@@ -24,6 +25,7 @@ export interface ProductUpdateLockRecord {
   readonly purchaseCostAmount: string | null
   readonly purchaseCostCurrency: string
   readonly attributes: unknown
+  readonly remark: string | null
   readonly version: number
 }
 
@@ -33,6 +35,7 @@ export interface ProductUpdateRecordData {
   readonly productHeadId?: string | null
   readonly status?: ProductStatusValue
   readonly supplierValue?: string
+  readonly sortOrder?: number
   readonly twdSalePriceAmount?: string | null
   readonly twdSalePriceCurrency?: string
   readonly myrSalePriceAmount?: string | null
@@ -40,6 +43,7 @@ export interface ProductUpdateRecordData {
   readonly purchaseCostAmount?: string | null
   readonly purchaseCostCurrency?: string
   readonly attributes?: readonly Readonly<{ title: string; value: string }>[]
+  readonly remark?: string | null
 }
 
 /**
@@ -61,6 +65,7 @@ export async function readProductForUpdate(
       product."product_no" AS "productNo",
       product."status",
       product."supplier_value" AS "supplierValue",
+      product."sort_order" AS "sortOrder",
       CASE WHEN product."twd_sale_price_amount" IS NULL THEN NULL
         ELSE trim_scale(product."twd_sale_price_amount")::text END AS "twdSalePriceAmount",
       product."twd_sale_price_currency" AS "twdSalePriceCurrency",
@@ -71,6 +76,7 @@ export async function readProductForUpdate(
         ELSE trim_scale(product."purchase_cost_amount")::text END AS "purchaseCostAmount",
       product."purchase_cost_currency" AS "purchaseCostCurrency",
       product."attributes",
+      product."remark",
       product."version"
     FROM "products" AS product
     LEFT JOIN "product_categories" AS category

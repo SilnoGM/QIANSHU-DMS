@@ -151,6 +151,7 @@ export function buildProductListQuery(input: {
   readonly page: number
   readonly pageSize: number
   readonly search: string
+  readonly unclassified?: boolean
 }): ProductListQuery {
   const keyword = input.search.trim()
   const status = PRODUCT_LIST_STATUSES.has(input.filters.status)
@@ -160,14 +161,18 @@ export function buildProductListQuery(input: {
     && input.filters.supplierValue.trim() !== ''
     ? input.filters.supplierValue
     : undefined
-  const categoryId = typeof input.filters.categoryId === 'string'
-    && input.filters.categoryId.trim() !== ''
-    ? input.filters.categoryId
-    : undefined
-  const productHeadId = typeof input.filters.productHeadId === 'string'
-    && input.filters.productHeadId.trim() !== ''
-    ? input.filters.productHeadId
-    : undefined
+  const categoryId = input.unclassified === true
+    ? undefined
+    : typeof input.filters.categoryId === 'string'
+      && input.filters.categoryId.trim() !== ''
+      ? input.filters.categoryId
+      : undefined
+  const productHeadId = input.unclassified === true
+    ? undefined
+    : typeof input.filters.productHeadId === 'string'
+      && input.filters.productHeadId.trim() !== ''
+      ? input.filters.productHeadId
+      : undefined
 
   return {
     page: Number.isSafeInteger(input.page) && input.page > 0 ? input.page : 1,
@@ -177,6 +182,7 @@ export function buildProductListQuery(input: {
     ...(supplierValue === undefined ? {} : { supplierValue }),
     ...(categoryId === undefined ? {} : { categoryId }),
     ...(productHeadId === undefined ? {} : { productHeadId }),
+    ...(input.unclassified === true ? { unclassified: true } : {}),
   }
 }
 

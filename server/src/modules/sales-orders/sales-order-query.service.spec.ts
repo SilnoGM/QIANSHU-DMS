@@ -603,14 +603,21 @@ describe('SalesOrderQueryService product options', () => {
     expect(fixture.productCategory.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { supplierValue: 'SUPPLIER_TW_01' },
-        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        orderBy: [
+          { sortOrder: 'asc' },
+          { name: 'asc' },
+          { id: 'asc' },
+        ],
       }),
     )
     expect(fixture.product.findMany).toHaveBeenCalledWith({
       where: expectedWhere,
       orderBy: [
+        { category: { sortOrder: 'asc' } },
         { category: { name: 'asc' } },
+        { productHead: { sortOrder: 'asc' } },
         { productHead: { name: 'asc' } },
+        { sortOrder: 'asc' },
         { name: 'asc' },
         { id: 'asc' },
       ],

@@ -19,6 +19,7 @@ function createRow(
     productNo: 'P202608120001',
     status: ProductStatus.INACTIVE,
     supplierValue: 'SUPPLIER_A',
+    sortOrder: 10,
     twdSalePriceAmount: { toString: () => '1280.5000' },
     twdSalePriceCurrency: 'TWD',
     myrSalePriceAmount: null,
@@ -29,6 +30,7 @@ function createRow(
       { title: '容量', value: '30ml', internal: 'must-not-leak' },
       { title: '产地', value: '中国台湾' },
     ],
+    remark: null,
     createdBy: {
       id: '42ad40d4-7fa5-46fb-81e4-1986bcebf8f1',
       displayName: '系统管理员',
@@ -82,6 +84,7 @@ describe('mapProductListItem', () => {
         tone: 'SUCCESS',
         state: 'EFFECTIVE',
       },
+      sortOrder: 10,
       media: EMPTY_MEDIA,
       twdSalePrice: { amount: '1280.5', currency: 'TWD' },
       myrSalePrice: { amount: null, currency: 'MYR' },
@@ -90,6 +93,7 @@ describe('mapProductListItem', () => {
         { title: '容量', value: '30ml' },
         { title: '产地', value: '中国台湾' },
       ],
+      remark: null,
       createdBy: {
         id: '42ad40d4-7fa5-46fb-81e4-1986bcebf8f1',
         displayName: '系统管理员',
@@ -101,8 +105,17 @@ describe('mapProductListItem', () => {
     })
   })
 
-  it('maps disabled and unknown supplier history without changing raw values', () => {
-    expect(mapProductListItem(createRow(), {
+  it('maps a non-null product remark', () => {
+    expect(mapProductListItem(createRow({
+      remark: '需加宽机身到 1.2 米',
+    }), {
+      known: false,
+      dictionaryCode: 'service_provider.supplier',
+      value: 'SUPPLIER_A',
+    }, EMPTY_MEDIA).remark).toBe('需加宽机身到 1.2 米')
+  })
+
+  it('maps disabled and unknown supplier history without changing raw values', () => {    expect(mapProductListItem(createRow(), {
       known: true,
       dictionaryCode: 'service_provider.supplier',
       value: 'SUPPLIER_A',

@@ -18,7 +18,25 @@ export interface CreateProductRecordInput {
   readonly actorUserId: string
   readonly categoryId: string | null
   readonly productHeadId: string | null
+  readonly sortOrder: number
   readonly command: NormalizedProductCreateCommand
+}
+
+/** 新产品追加到目标产品头末尾；无产品头的历史分组按供应商追加。 */
+export async function readNextProductSortOrder(
+  transaction: Prisma.TransactionClient,
+  input: {
+    readonly productHeadId: string | null
+    readonly supplierValue: string
+  },
+): Promise<number> {
+  const maximum = await transaction.product.aggregate({
+    where: input.productHeadId === null
+      ? { supplierValue: input.supplierValue, productHeadId: null }
+      : { productHeadId: input.productHeadId },
+    _max: { sortOrder: true },
+  })
+  return (maximum._max.sortOrder ?? 0) + 10
 }
 
 /** persistence 只接收规范化输入，并主动复制 JSON 数组，绝不持有调用方对象。 */
@@ -39,6 +57,7 @@ export async function createProductRecord(
       productNo: input.productNo,
       status: input.command.status,
       supplierValue: input.command.supplierValue,
+      sortOrder: input.sortOrder,
       twdSalePriceAmount: input.command.twdSalePrice.amount,
       twdSalePriceCurrency: input.command.twdSalePrice.currency,
       myrSalePriceAmount: input.command.myrSalePrice.amount,
@@ -46,6 +65,7 @@ export async function createProductRecord(
       purchaseCostAmount: input.command.purchaseCost.amount,
       purchaseCostCurrency: input.command.purchaseCost.currency,
       attributes,
+      remark: input.command.remark,
       createdByUserId: input.actorUserId,
       updatedByUserId: input.actorUserId,
       version: 1,

@@ -36,6 +36,7 @@ export interface ProductQueryRow {
   readonly productNo: string
   readonly status: ProductStatusValue
   readonly supplierValue: string
+  readonly sortOrder: number
   readonly twdSalePriceAmount: DecimalStringSource | null
   readonly twdSalePriceCurrency: string
   readonly myrSalePriceAmount: DecimalStringSource | null
@@ -43,6 +44,7 @@ export interface ProductQueryRow {
   readonly purchaseCostAmount: DecimalStringSource | null
   readonly purchaseCostCurrency: string
   readonly attributes: unknown
+  readonly remark: string | null
   readonly createdBy: ProductActorRow | null
   readonly updatedBy: ProductActorRow | null
   readonly version: number
@@ -86,6 +88,7 @@ export const PRODUCT_RESPONSE_SELECT = {
   productNo: true,
   status: true,
   supplierValue: true,
+  sortOrder: true,
   twdSalePriceAmount: true,
   twdSalePriceCurrency: true,
   myrSalePriceAmount: true,
@@ -93,6 +96,7 @@ export const PRODUCT_RESPONSE_SELECT = {
   purchaseCostAmount: true,
   purchaseCostCurrency: true,
   attributes: true,
+  remark: true,
   createdBy: { select: { id: true, displayName: true } },
   updatedBy: { select: { id: true, displayName: true } },
   version: true,
@@ -110,11 +114,13 @@ export interface ProductListItem {
   readonly productNo: string
   readonly status: ProductStatusValue
   readonly supplier: ProductSupplier | null
+  readonly sortOrder: number
   readonly media: ProductMedia
   readonly twdSalePrice: ProductMoney
   readonly myrSalePrice: ProductMoney
   readonly purchaseCost: ProductMoney
   readonly attributes: readonly ProductAttribute[]
+  readonly remark: string | null
   readonly createdBy: ProductActor | null
   readonly updatedBy: ProductActor | null
   readonly version: number
@@ -148,6 +154,7 @@ export function mapProductListItem(
     productNo: row.productNo,
     status: row.status,
     supplier: mapSupplier(row.supplierValue, supplierResolution),
+    sortOrder: row.sortOrder,
     media,
     twdSalePrice: mapMoney(
       row.twdSalePriceAmount,
@@ -162,6 +169,7 @@ export function mapProductListItem(
       row.purchaseCostCurrency,
     ),
     attributes: mapAttributes(row.attributes),
+    remark: row.remark,
     createdBy: mapActor(row.createdBy),
     updatedBy: mapActor(row.updatedBy),
     version: row.version,

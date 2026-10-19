@@ -209,7 +209,9 @@ describe('ProductsController', () => {
         'getMediaContent',
         'headMediaContent',
         'list',
+        'move',
         'taxonomyOptions',
+        'taxonomyTree',
         'update',
         'updateMediaLayout',
         'updateStatus',
@@ -246,7 +248,9 @@ describe('ProductsController OpenAPI contract', () => {
       path.startsWith('/api/products')).sort()).toEqual([
       '/api/products',
       '/api/products/taxonomy-options',
+      '/api/products/taxonomy-tree',
       '/api/products/{productId}',
+      '/api/products/{productId}/move',
       '/api/products/{productId}/status',
       '/api/products/{productId}/media',
       '/api/products/{productId}/media/layout',
@@ -411,6 +415,7 @@ describe('ProductsController OpenAPI contract', () => {
       'myrSalePrice',
       'purchaseCost',
       'attributes',
+      'remark',
     ])
     for (const response of Object.values(createOperation?.responses ?? {})) {
       if (response && !('$ref' in response)) {
@@ -530,6 +535,7 @@ describe('ProductsController OpenAPI contract', () => {
       'myrSalePrice',
       'purchaseCost',
       'attributes',
+      'remark',
       'expectedVersion',
     ])
 

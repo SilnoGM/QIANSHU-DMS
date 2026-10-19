@@ -47,6 +47,8 @@ const loading = ref(false)
 const loadError = ref('')
 const loadRequestId = ref<string>()
 let loadAbortController: AbortController | null = null
+const movingKey = ref<string | null>(null)
+let moveAbortController: AbortController | null = null
 
 const categoryModalVisible = ref(false)
 const categoryModalMode = ref<CategoryModalMode>('create')
@@ -514,6 +516,59 @@ async function submitDelete(): Promise<void> {
   }
 }
 
+async function moveCategory(
+  category: ProductTaxonomyCategoryListItemDto,
+  direction: 'up' | 'down',
+): Promise<void> {
+  if (!canUpdate.value || movingKey.value !== null) {
+    return
+  }
+  await submitMove(`category:${category.id}`, () => (
+    productTaxonomiesApi.moveCategory(category.id, { direction }, moveAbortController!.signal)
+  ))
+}
+
+async function moveHead(
+  head: ProductTaxonomyHeadListItemDto,
+  direction: 'up' | 'down',
+): Promise<void> {
+  if (!canUpdate.value || movingKey.value !== null) {
+    return
+  }
+  await submitMove(`head:${head.id}`, () => (
+    productTaxonomiesApi.moveHead(head.id, { direction }, moveAbortController!.signal)
+  ))
+}
+
+async function submitMove(
+  key: string,
+  request: () => Promise<unknown>,
+): Promise<void> {
+  moveAbortController?.abort()
+  const controller = new AbortController()
+  moveAbortController = controller
+  movingKey.value = key
+  try {
+    await request()
+    if (controller.signal.aborted) {
+      return
+    }
+    await loadCategories()
+  }
+  catch (error) {
+    if (isAbortError(error) || controller.signal.aborted) {
+      return
+    }
+    toast.error(getApiFailure(error).message)
+  }
+  finally {
+    if (moveAbortController === controller) {
+      moveAbortController = null
+      movingKey.value = null
+    }
+  }
+}
+
 watch(
   [() => appAccountStore.authEpoch, canRead],
   () => {
@@ -539,6 +594,7 @@ onBeforeUnmount(() => {
   categoryAbortController?.abort()
   headAbortController?.abort()
   deleteAbortController?.abort()
+  moveAbortController?.abort()
 })
 </script>
 
@@ -637,7 +693,7 @@ onBeforeUnmount(() => {
               class="py-10"
             />
             <div
-              v-for="category in categories"
+              v-for="(category, categoryIndex) in categories"
               :key="category.id"
               class="rounded-lg flex gap-1 transition-colors items-center"
               :class="category.id === selectedCategoryId
@@ -653,6 +709,30 @@ onBeforeUnmount(() => {
                 <span class="flex-1 min-w-0 truncate">{{ category.name }}</span>
                 <span class="text-[11px] text-muted-foreground tabular-nums">{{ category.productCount }}</span>
               </button>
+              <FaButton
+                v-if="canUpdate"
+                type="button"
+                variant="ghost"
+                size="icon"
+                class="shrink-0 size-8"
+                :disabled="movingKey !== null || categoryIndex === 0"
+                :aria-label="`上移分类 ${category.name}`"
+                @click.stop="moveCategory(category, 'up')"
+              >
+                <FaIcon name="i-lucide:arrow-up" class="size-4" aria-hidden="true" />
+              </FaButton>
+              <FaButton
+                v-if="canUpdate"
+                type="button"
+                variant="ghost"
+                size="icon"
+                class="shrink-0 size-8"
+                :disabled="movingKey !== null || categoryIndex === categories.length - 1"
+                :aria-label="`下移分类 ${category.name}`"
+                @click.stop="moveCategory(category, 'down')"
+              >
+                <FaIcon name="i-lucide:arrow-down" class="size-4" aria-hidden="true" />
+              </FaButton>
               <FaButton
                 v-if="canUpdate"
                 type="button"
@@ -718,7 +798,7 @@ onBeforeUnmount(() => {
             />
             <div v-else class="gap-2 grid">
               <div
-                v-for="head in selectedCategory.productHeads"
+                v-for="(head, headIndex) in selectedCategory.productHeads"
                 :key="head.id"
                 class="px-3 py-2 border border-border rounded-lg flex gap-2 items-center"
               >
@@ -730,6 +810,30 @@ onBeforeUnmount(() => {
                     {{ head.productCount }} 个产品
                   </p>
                 </div>
+                <FaButton
+                  v-if="canUpdate"
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  class="shrink-0 size-8"
+                  :disabled="movingKey !== null || headIndex === 0"
+                  :aria-label="`上移产品头 ${head.name}`"
+                  @click="moveHead(head, 'up')"
+                >
+                  <FaIcon name="i-lucide:arrow-up" class="size-4" aria-hidden="true" />
+                </FaButton>
+                <FaButton
+                  v-if="canUpdate"
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  class="shrink-0 size-8"
+                  :disabled="movingKey !== null || headIndex === selectedCategory.productHeads.length - 1"
+                  :aria-label="`下移产品头 ${head.name}`"
+                  @click="moveHead(head, 'down')"
+                >
+                  <FaIcon name="i-lucide:arrow-down" class="size-4" aria-hidden="true" />
+                </FaButton>
                 <FaButton
                   v-if="canUpdate"
                   type="button"

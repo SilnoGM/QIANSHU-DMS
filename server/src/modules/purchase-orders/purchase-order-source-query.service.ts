@@ -340,8 +340,11 @@ export class PurchaseOrderSourceQueryService {
       this.prisma.product.findMany({
         where,
         orderBy: [
+          { category: { sortOrder: 'asc' } },
           { category: { name: 'asc' } },
+          { productHead: { sortOrder: 'asc' } },
           { productHead: { name: 'asc' } },
+          { sortOrder: 'asc' },
           { name: 'asc' },
           { id: 'asc' },
         ],

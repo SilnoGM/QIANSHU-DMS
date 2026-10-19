@@ -89,6 +89,7 @@ describe('normalizeProductCreateCommand', () => {
         { title: 'Color', value: 'Réd' },
         { title: 'Color', value: 'Blue' },
       ],
+      remark: null,
     })
     expect(Object.isFrozen(normalized)).toBe(true)
     expect(Object.isFrozen(normalized.twdSalePrice)).toBe(true)
@@ -99,8 +100,19 @@ describe('normalizeProductCreateCommand', () => {
     expect(normalized.attributes[0]?.value).toBe('Réd')
   })
 
-  it('requires a supplier for every status', () => {
-    expect(normalizeProductCreateCommand(validInput()).supplierValue)
+  it('normalizes and preserves an optional remark', () => {
+    expect(normalizeProductCreateCommand(validInput()).remark).toBeNull()
+    expect(normalizeProductCreateCommand({
+      ...validInput(),
+      remark: '  需加宽机身到 1.2 米  ',
+    }).remark).toBe('需加宽机身到 1.2 米')
+    expect(() => normalizeProductCreateCommand({
+      ...validInput(),
+      remark: '   ',
+    })).toThrow(expect.objectContaining({ code: 'VALIDATION_FAILED' }))
+  })
+
+  it('requires a supplier for every status', () => {    expect(normalizeProductCreateCommand(validInput()).supplierValue)
       .toBe('SUPPLIER_A')
     expect(normalizeProductCreateCommand({
       ...validInput(),

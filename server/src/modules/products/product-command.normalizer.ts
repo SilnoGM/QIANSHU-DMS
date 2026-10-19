@@ -34,6 +34,7 @@ export interface NormalizedProductCreateCommand {
   readonly myrSalePrice: NormalizedProductCreateMoney
   readonly purchaseCost: NormalizedProductCreateMoney
   readonly attributes: readonly NormalizedProductCreateAttribute[]
+  readonly remark: string | null
 }
 
 function validationFailure(field: string, message = '字段校验失败'): never {
@@ -183,6 +184,7 @@ export function normalizeProductCreateCommand(
     'myrSalePrice',
     'purchaseCost',
     'attributes',
+    'remark',
   ])
 
   const status = record.status ?? 'ACTIVE'
@@ -206,6 +208,9 @@ export function normalizeProductCreateCommand(
     myrSalePrice: normalizeMoney(record.myrSalePrice, 'myrSalePrice', 'MYR'),
     purchaseCost: normalizeMoney(record.purchaseCost, 'purchaseCost'),
     attributes: normalizeAttributes(record.attributes),
+    remark: record.remark === undefined
+      ? null
+      : normalizeOptionalText(record.remark, 'remark', 512),
   })
 }
 

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type { ProductListItemViewModel } from './product-list.logic'
-import type { ProductTaxonomyCategoryOptionDto } from '@/api/generated/types.gen'
+import type {
+  ProductTaxonomyCategoryOptionDto,
+  ProductTaxonomyTreeDto,
+} from '@/api/generated/types.gen'
 import type {
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
@@ -71,6 +74,15 @@ const detailLoading = ref(false)
 const detailError = ref('')
 const detailRequestId = ref<string>()
 const taxonomyOptions = shallowRef<readonly ProductTaxonomyCategoryOptionDto[]>([])
+const taxonomyTree = shallowRef<ProductTaxonomyTreeDto | null>(null)
+const treeLoading = ref(false)
+const treeError = ref('')
+const treeExpandedSuppliers = ref<ReadonlySet<string>>(new Set())
+const treeExpandedCategories = ref<ReadonlySet<string>>(new Set())
+const unclassifiedOnly = ref(false)
+const productMovingId = ref<string | null>(null)
+let treeAbortController: AbortController | null = null
+let moveAbortController: AbortController | null = null
 const statusTarget = shallowRef<ProductListItemViewModel | null>(null)
 const statusNext = ref<'ACTIVE' | 'INACTIVE' | null>(null)
 const statusModalVisible = ref(false)
@@ -106,6 +118,28 @@ const selectedCategoryFilterId = computed(() => (
     ? filters.value.categoryId
     : undefined
 ))
+const selectedProductHeadFilterId = computed(() => (
+  typeof filters.value.productHeadId === 'string'
+  && filters.value.productHeadId !== ''
+    ? filters.value.productHeadId
+    : undefined
+))
+const selectedTreeKind = computed<'all' | 'supplier' | 'category' | 'head' | 'unclassified'>(() => {
+  if (unclassifiedOnly.value) {
+    return 'unclassified'
+  }
+  if (selectedCategoryFilterId.value !== undefined) {
+    return selectedProductHeadFilterId.value === undefined ? 'category' : 'head'
+  }
+  return selectedSupplierFilterValue.value === undefined ? 'all' : 'supplier'
+})
+const canOrderProducts = computed(() => (
+  canUpdate.value
+  && selectedTreeKind.value === 'head'
+  && searchKeyword.value.trim() === ''
+  && filters.value.status === undefined
+))
+const lastPage = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const categoryFilterOptions = computed(() => {
   const supplierValue = selectedSupplierFilterValue.value
   return taxonomyOptions.value
@@ -277,6 +311,187 @@ async function loadTaxonomyOptions(): Promise<void> {
   }
 }
 
+async function loadTaxonomyTree(): Promise<void> {
+  treeAbortController?.abort()
+  const controller = new AbortController()
+  treeAbortController = controller
+  treeLoading.value = true
+  treeError.value = ''
+  try {
+    const response = await productsApi.taxonomyTree(controller.signal)
+    if (controller.signal.aborted || !canRead.value) {
+      return
+    }
+    taxonomyTree.value = response.data
+  }
+  catch {
+    if (!controller.signal.aborted) {
+      taxonomyTree.value = null
+      treeError.value = '分类目录加载失败，请重试'
+    }
+  }
+  finally {
+    if (treeAbortController === controller) {
+      treeAbortController = null
+      treeLoading.value = false
+    }
+  }
+}
+
+function supplierLabel(supplierValue: string): string {
+  return supplierLabelByValue.value.get(supplierValue) ?? supplierValue
+}
+
+function toggleTreeSupplier(supplierValue: string): void {
+  const next = new Set(treeExpandedSuppliers.value)
+  if (next.has(supplierValue)) {
+    next.delete(supplierValue)
+  }
+  else { next.add(supplierValue) }
+  treeExpandedSuppliers.value = next
+}
+
+function toggleTreeCategory(categoryId: string): void {
+  const next = new Set(treeExpandedCategories.value)
+  if (next.has(categoryId)) {
+    next.delete(categoryId)
+  }
+  else { next.add(categoryId) }
+  treeExpandedCategories.value = next
+}
+
+function expandTreeSupplier(supplierValue: string): void {
+  if (!treeExpandedSuppliers.value.has(supplierValue)) {
+    treeExpandedSuppliers.value = new Set([
+      ...treeExpandedSuppliers.value,
+      supplierValue,
+    ])
+  }
+}
+
+function expandTreeCategory(categoryId: string): void {
+  if (!treeExpandedCategories.value.has(categoryId)) {
+    treeExpandedCategories.value = new Set([
+      ...treeExpandedCategories.value,
+      categoryId,
+    ])
+  }
+}
+
+function applyTreeSelection(
+  nextFilters: QsGenericTableFilterValues,
+  unclassified: boolean,
+): void {
+  unclassifiedOnly.value = unclassified
+  filters.value = nextFilters
+  page.value = 1
+  scheduleQueryRefresh()
+}
+
+function selectTreeAll(): void {
+  applyTreeSelection({}, false)
+}
+
+function selectTreeSupplier(supplierValue: string): void {
+  expandTreeSupplier(supplierValue)
+  applyTreeSelection({ supplierValue }, false)
+}
+
+function selectTreeCategory(supplierValue: string, categoryId: string): void {
+  expandTreeSupplier(supplierValue)
+  expandTreeCategory(categoryId)
+  applyTreeSelection({ supplierValue, categoryId }, false)
+}
+
+function selectTreeHead(
+  supplierValue: string,
+  categoryId: string,
+  productHeadId: string,
+): void {
+  expandTreeSupplier(supplierValue)
+  expandTreeCategory(categoryId)
+  applyTreeSelection({ supplierValue, categoryId, productHeadId }, false)
+}
+
+function selectTreeUnclassified(supplierValue?: string): void {
+  if (supplierValue !== undefined) {
+    expandTreeSupplier(supplierValue)
+  }
+  applyTreeSelection(
+    supplierValue === undefined ? {} : { supplierValue },
+    true,
+  )
+}
+
+function isTreeSupplierActive(supplierValue: string): boolean {
+  return selectedTreeKind.value === 'supplier'
+    && selectedSupplierFilterValue.value === supplierValue
+}
+
+function isTreeCategoryActive(categoryId: string): boolean {
+  return selectedTreeKind.value === 'category'
+    && selectedCategoryFilterId.value === categoryId
+}
+
+function isTreeHeadActive(productHeadId: string): boolean {
+  return selectedTreeKind.value === 'head'
+    && selectedProductHeadFilterId.value === productHeadId
+}
+
+function isTreeUnclassifiedActive(supplierValue?: string): boolean {
+  if (selectedTreeKind.value !== 'unclassified') {
+    return false
+  }
+  return supplierValue === undefined
+    ? selectedSupplierFilterValue.value === undefined
+    : selectedSupplierFilterValue.value === supplierValue
+}
+
+function rowIndex(productId: string): number {
+  return rows.value.findIndex(item => item.id === productId)
+}
+
+function isFirstProductRow(productId: string): boolean {
+  return page.value === 1 && rowIndex(productId) === 0
+}
+
+function isLastProductRow(productId: string): boolean {
+  return page.value >= lastPage.value
+    && rowIndex(productId) === rows.value.length - 1
+}
+
+async function moveProduct(
+  productId: string,
+  direction: 'up' | 'down',
+): Promise<void> {
+  if (!canOrderProducts.value || productMovingId.value !== null) {
+    return
+  }
+  moveAbortController?.abort()
+  const controller = new AbortController()
+  moveAbortController = controller
+  productMovingId.value = productId
+  try {
+    await productsApi.move(productId, { direction }, controller.signal)
+    if (controller.signal.aborted) {
+      return
+    }
+    await loadProducts()
+  }
+  catch (error) {
+    if (isProductListAbortError(error) || controller.signal.aborted) {
+      return
+    }
+    toast.error(getProductListApiFailure(error).message)
+  }
+  finally {
+    if (moveAbortController === controller) {
+      moveAbortController = null
+      productMovingId.value = null
+    }
+  }
+}
+
 async function loadProducts(): Promise<void> {
   if (!canRead.value) {
     return
@@ -297,6 +512,7 @@ async function loadProducts(): Promise<void> {
       page: page.value,
       pageSize: pageSize.value,
       search: searchKeyword.value,
+      unclassified: unclassifiedOnly.value,
     }), controller.signal)
     if (!listResponseIsCurrent(requestVersion, authEpoch, controller)) {
       return
@@ -339,6 +555,7 @@ function scheduleQueryRefresh(): void {
 }
 
 function handleFilterChange(nextFilters: QsGenericTableFilterValues): void {
+  unclassifiedOnly.value = false
   const status = nextFilters.status === 'ACTIVE' || nextFilters.status === 'INACTIVE'
     ? nextFilters.status
     : undefined
@@ -654,9 +871,11 @@ watch(
       filters.value = {}
       searchKeyword.value = ''
       page.value = 1
+      unclassifiedOnly.value = false
     }
     if (nextCanRead) {
       void loadProducts()
+      void loadTaxonomyTree()
     }
   },
 )
@@ -665,6 +884,7 @@ onMounted(() => {
   if (canRead.value) {
     void loadProducts()
     void loadTaxonomyOptions()
+    void loadTaxonomyTree()
   }
 })
 
@@ -675,6 +895,10 @@ onBeforeUnmount(() => {
   detailAbortController?.abort()
   taxonomyAbortController?.abort()
   taxonomyAbortController = null
+  treeAbortController?.abort()
+  treeAbortController = null
+  moveAbortController?.abort()
+  moveAbortController = null
   statusAbortController?.abort()
   statusAbortController = null
 })
@@ -723,368 +947,580 @@ onBeforeUnmount(() => {
         class="mb-4"
       />
 
-      <QsGenericTable
-        v-model:page="page"
-        v-model:page-size="pageSize"
-        v-model:search="searchKeyword"
-        v-model:filters="filters"
-        data-testid="product-list-table"
-        :row-key="item => item.id"
-        :action-column="{ fixed: 'right', width: 280 }"
-        :addable="false"
-        :columns="columns"
-        :data="rows"
-        empty-title="暂无产品"
-        empty-description="当前没有可展示的产品资料。"
-        :error="listErrorDisplay"
-        :filter-definitions="filterDefinitions"
-        :loading="loading"
-        :page-size-options="[20, 50, 100]"
-        search-placeholder="搜索产品名称或产品编号"
-        :searchable="true"
-        :show-column-settings="true"
-        :total="total"
-        table-class="min-w-[2360px]"
-        @filter-change="handleFilterChange"
-        @pagination-change="handlePaginationChange"
-        @retry="loadProducts"
-        @search="handleSearch"
-      >
-        <template #cell-productNo="{ row }">
-          <span class="qs-type-data font-mono">{{ row.original.productNo }}</span>
-        </template>
-        <template #cell-status="{ row }">
-          <FaTag
-            variant="outline"
-            class="qs-type-status-tag"
-            :class="statusClass(row.original.status)"
-          >
-            {{ statusLabel(row.original.status) }}
-          </FaTag>
-        </template>
-        <template #cell-supplier="{ row }">
-          <div class="flex flex-wrap gap-2 items-center">
-            <span class="break-all">{{ row.original.supplier?.label ?? row.original.supplier?.value ?? '—' }}</span>
-            <FaTag
-              v-if="supplierStateLabel(row.original)"
-              variant="outline"
-              class="qs-type-status-tag"
-              :class="supplierStateClass(row.original)"
-            >
-              {{ supplierStateLabel(row.original) }}
-            </FaTag>
+      <div class="gap-4 grid min-w-0 xl:grid-cols-[16rem_minmax(0,1fr)]">
+        <aside
+          class="border border-border rounded-xl bg-muted/15 flex-col min-h-0 min-w-0 hidden overflow-hidden xl:flex xl:max-h-[calc(100vh-8rem)] xl:top-4 xl:sticky"
+          aria-label="产品分类目录"
+        >
+          <div class="px-3 py-2 border-b border-border bg-muted/25 flex shrink-0 gap-2 items-center justify-between">
+            <h2 class="text-sm font-semibold m-0">
+              分类目录
+            </h2>
+            <span class="text-[11px] text-muted-foreground tabular-nums">
+              {{ taxonomyTree?.totalProducts ?? 0 }}
+            </span>
           </div>
-        </template>
-        <template #cell-mainImage="{ row }">
-          <ImageGroup
-            v-if="canReadProductMedia"
-            :items="buildProductMainImageItems(row.original, canReadProductMedia)"
-            :max-count="1"
-            radius="lg"
-            size="sm"
-          />
-          <span v-else class="qs-type-meta inline-flex gap-1 items-center">
-            <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
-          </span>
-        </template>
-        <template #cell-images="{ row }">
-          <ImageGroup
-            v-if="canReadProductMedia"
-            :items="buildProductImageItems(row.original, canReadProductMedia)"
-            :max-count="3"
-            radius="lg"
-            size="sm"
-          />
-          <span v-else class="qs-type-meta inline-flex gap-1 items-center">
-            <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
-          </span>
-        </template>
-        <template #cell-videos="{ row }">
-          <FaButton
-            v-if="canReadProductMedia && row.original.media.videos.length"
-            variant="ghost"
-            size="sm"
-            class="min-h-11 sm:min-h-9"
-            :aria-label="`查看产品 ${row.original.productNo} 的 ${row.original.media.videos.length} 个视频`"
-            @click="showVideos(row.original)"
-          >
-            <FaIcon name="i-lucide:video" />
-            {{ row.original.media.videos.length }} 个视频
-          </FaButton>
-          <span v-else-if="!canReadProductMedia" class="qs-type-meta inline-flex gap-1 items-center">
-            <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
-          </span>
-          <span v-else>—</span>
-        </template>
-        <template #cell-twdSalePrice="{ row }">
-          <AmountDisplay
-            :value="row.original.twdSalePrice.amount"
-            :currency="row.original.twdSalePrice.currency"
-            :currencies="currencies"
-          />
-        </template>
-        <template #cell-myrSalePrice="{ row }">
-          <AmountDisplay
-            :value="row.original.myrSalePrice.amount"
-            :currency="row.original.myrSalePrice.currency"
-            :currencies="currencies"
-          />
-        </template>
-        <template #cell-purchaseCost="{ row }">
-          <AmountDisplay
-            :value="row.original.purchaseCost.amount"
-            :currency="row.original.purchaseCost.currency"
-            :currencies="currencies"
-          />
-        </template>
-        <template #cell-attributes="{ row }">
-          <FaButton
-            v-if="row.original.attributes.length"
-            variant="ghost"
-            size="sm"
-            class="min-h-11 sm:min-h-9"
-            :aria-label="`查看产品 ${row.original.productNo} 的 ${row.original.attributes.length} 项属性`"
-            @click="showAttributes(row.original)"
-          >
-            <FaIcon name="i-lucide:list-tree" />
-            {{ row.original.attributes.length }} 项属性
-          </FaButton>
-          <span v-else>—</span>
-        </template>
-        <template #cell-createdAt="{ row }">
-          <DateTimeDisplay :value="row.original.createdAt" />
-        </template>
-        <template #cell-createdBy="{ row }">
-          {{ row.original.createdBy?.displayName ?? '—' }}
-        </template>
-        <template #cell-updatedAt="{ row }">
-          <DateTimeDisplay :value="row.original.updatedAt" />
-        </template>
-        <template #cell-updatedBy="{ row }">
-          {{ row.original.updatedBy?.displayName ?? '—' }}
-        </template>
-
-        <template #actions="{ row, rowNumber }">
-          <FaButton
-            variant="ghost"
-            size="sm"
-            class="min-h-11 sm:min-h-9"
-            :aria-label="`查看第 ${rowNumber} 行产品 ${row.productNo}`"
-            @click="showProductDetail(row)"
-          >
-            <FaIcon name="i-lucide:eye" />
-            查看
-          </FaButton>
-          <FaButton
-            v-if="canUpdate"
-            variant="ghost"
-            size="sm"
-            class="min-h-11 sm:min-h-9"
-            :aria-label="`编辑第 ${rowNumber} 行产品 ${row.productNo}`"
-            @click="navigateToEdit(row.id)"
-          >
-            <FaIcon name="i-lucide:pencil" />
-            编辑
-          </FaButton>
-          <FaButton
-            v-if="canUpdate"
-            variant="ghost"
-            size="sm"
-            class="min-h-11 sm:min-h-9"
-            :aria-label="`${row.status === 'ACTIVE' ? '停用' : '启用'}第 ${rowNumber} 行产品 ${row.productNo}`"
-            @click="requestStatusChange(row)"
-          >
-            <FaIcon :name="row.status === 'ACTIVE' ? 'i-lucide:circle-pause' : 'i-lucide:circle-check'" />
-            {{ row.status === 'ACTIVE' ? '停用' : '启用' }}
-          </FaButton>
-        </template>
-
-        <template #mobile-row="{ row, rowNumber }">
-          <div class="mb-4 pb-3 border-b border-border flex gap-3 items-start justify-between">
-            <div class="min-w-0">
-              <div class="qs-type-data-emphasis font-mono break-all">
-                {{ row.productNo }}
-              </div>
-              <div class="qs-type-body mt-1">
-                {{ row.name }}
-              </div>
+          <div class="p-2 flex-1 min-h-0 overflow-y-auto">
+            <div v-if="treeLoading" class="text-xs text-muted-foreground px-2 py-6 text-center" role="status">
+              正在加载分类…
             </div>
-            <span class="qs-type-meta shrink-0 tabular-nums">#{{ rowNumber }}</span>
+            <div v-else-if="treeError" class="px-2 py-4 text-center gap-2 grid">
+              <p class="text-xs text-destructive m-0">
+                {{ treeError }}
+              </p>
+              <FaButton type="button" variant="outline" size="sm" @click="loadTaxonomyTree">
+                重试
+              </FaButton>
+            </div>
+            <template v-else>
+              <button
+                type="button"
+                class="text-sm px-2 rounded-md flex gap-2 min-h-8 w-full transition-colors items-center"
+                :class="selectedTreeKind === 'all'
+                  ? 'bg-primary/10 text-primary font-semibold'
+                  : 'text-foreground hover:bg-background/70'"
+                :aria-pressed="selectedTreeKind === 'all'"
+                @click="selectTreeAll"
+              >
+                <span class="text-left flex-1 truncate">全部产品</span>
+                <span class="text-[11px] tabular-nums">{{ taxonomyTree?.totalProducts ?? 0 }}</span>
+              </button>
+
+              <div
+                v-for="supplier in taxonomyTree?.suppliers ?? []"
+                :key="supplier.supplierValue"
+                class="mt-1 min-w-0"
+              >
+                <div class="flex min-w-0 items-center">
+                  <button
+                    type="button"
+                    class="text-muted-foreground rounded-md shrink-0 grid size-6 place-items-center hover:text-foreground"
+                    :aria-label="`${treeExpandedSuppliers.has(supplier.supplierValue) ? '收起' : '展开'}供应商 ${supplierLabel(supplier.supplierValue)}`"
+                    :aria-expanded="treeExpandedSuppliers.has(supplier.supplierValue)"
+                    @click="toggleTreeSupplier(supplier.supplierValue)"
+                  >
+                    <FaIcon
+                      :name="treeExpandedSuppliers.has(supplier.supplierValue) ? 'i-lucide:chevron-down' : 'i-lucide:chevron-right'"
+                      class="size-3.5"
+                      aria-hidden="true"
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    class="text-sm px-1.5 rounded-md flex flex-1 gap-2 min-h-8 min-w-0 transition-colors items-center"
+                    :class="isTreeSupplierActive(supplier.supplierValue)
+                      ? 'bg-primary/10 text-primary font-semibold'
+                      : 'text-foreground hover:bg-background/70'"
+                    :aria-pressed="isTreeSupplierActive(supplier.supplierValue)"
+                    @click="selectTreeSupplier(supplier.supplierValue)"
+                  >
+                    <span class="text-left flex-1 truncate">{{ supplierLabel(supplier.supplierValue) }}</span>
+                    <span class="text-[11px] tabular-nums">{{ supplier.productCount }}</span>
+                  </button>
+                </div>
+
+                <div
+                  v-if="treeExpandedSuppliers.has(supplier.supplierValue)"
+                  class="pl-5 gap-0.5 grid min-w-0"
+                >
+                  <div
+                    v-for="category in supplier.categories"
+                    :key="category.id"
+                    class="min-w-0"
+                  >
+                    <div class="flex min-w-0 items-center">
+                      <button
+                        v-if="category.productHeads.length > 0"
+                        type="button"
+                        class="text-muted-foreground rounded-md shrink-0 grid size-5 place-items-center hover:text-foreground"
+                        :aria-label="`${treeExpandedCategories.has(category.id) ? '收起' : '展开'} ${category.name} 的产品头`"
+                        :aria-expanded="treeExpandedCategories.has(category.id)"
+                        @click="toggleTreeCategory(category.id)"
+                      >
+                        <FaIcon
+                          :name="treeExpandedCategories.has(category.id) ? 'i-lucide:chevron-down' : 'i-lucide:chevron-right'"
+                          class="size-3"
+                          aria-hidden="true"
+                        />
+                      </button>
+                      <span v-else class="shrink-0 size-5" aria-hidden="true" />
+                      <button
+                        type="button"
+                        class="text-xs px-1.5 rounded-md flex flex-1 gap-2 min-h-8 min-w-0 transition-colors items-center"
+                        :class="isTreeCategoryActive(category.id)
+                          ? 'bg-primary/10 text-primary font-semibold'
+                          : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'"
+                        :aria-pressed="isTreeCategoryActive(category.id)"
+                        @click="selectTreeCategory(supplier.supplierValue, category.id)"
+                      >
+                        <span class="text-left flex-1 truncate">{{ category.name }}</span>
+                        <span class="text-[11px] tabular-nums">{{ category.productCount }}</span>
+                      </button>
+                    </div>
+
+                    <div
+                      v-if="category.productHeads.length > 0 && treeExpandedCategories.has(category.id)"
+                      class="pl-5 gap-0.5 grid min-w-0"
+                    >
+                      <button
+                        v-for="head in category.productHeads"
+                        :key="head.id"
+                        type="button"
+                        class="text-xs px-1.5 rounded-md flex gap-2 min-h-8 min-w-0 transition-colors items-center"
+                        :class="isTreeHeadActive(head.id)
+                          ? 'bg-primary/10 text-primary font-semibold'
+                          : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'"
+                        :aria-pressed="isTreeHeadActive(head.id)"
+                        @click="selectTreeHead(supplier.supplierValue, category.id, head.id)"
+                      >
+                        <span class="text-left flex-1 truncate">{{ head.name }}</span>
+                        <span class="text-[11px] tabular-nums">{{ head.productCount }}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    v-if="supplier.unclassifiedCount > 0"
+                    type="button"
+                    class="text-xs px-1.5 rounded-md flex gap-2 min-h-8 min-w-0 transition-colors items-center"
+                    :class="isTreeUnclassifiedActive(supplier.supplierValue)
+                      ? 'bg-primary/10 text-primary font-semibold'
+                      : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'"
+                    :aria-pressed="isTreeUnclassifiedActive(supplier.supplierValue)"
+                    @click="selectTreeUnclassified(supplier.supplierValue)"
+                  >
+                    <span class="text-left flex-1 truncate">未分类</span>
+                    <span class="text-[11px] tabular-nums">{{ supplier.unclassifiedCount }}</span>
+                  </button>
+                </div>
+              </div>
+
+              <button
+                v-if="(taxonomyTree?.unclassifiedCount ?? 0) > 0"
+                type="button"
+                class="text-sm mt-1 px-2 rounded-md flex gap-2 min-h-8 w-full transition-colors items-center"
+                :class="isTreeUnclassifiedActive()
+                  ? 'bg-primary/10 text-primary font-semibold'
+                  : 'text-foreground hover:bg-background/70'"
+                :aria-pressed="isTreeUnclassifiedActive()"
+                @click="selectTreeUnclassified()"
+              >
+                <span class="text-left flex-1 truncate">未分类</span>
+                <span class="text-[11px] tabular-nums">{{ taxonomyTree?.unclassifiedCount ?? 0 }}</span>
+              </button>
+            </template>
           </div>
-          <dl class="m-0 gap-x-4 gap-y-3 grid grid-cols-2">
-            <div>
-              <dt class="qs-type-compact-label">
-                产品编号
-              </dt><dd class="font-mono m-0 break-all">
-                {{ row.productNo }}
-              </dd>
-            </div>
-            <div>
-              <dt class="qs-type-compact-label">
-                产品状态
-              </dt><dd class="m-0">
-                <FaTag variant="outline" class="qs-type-status-tag" :class="statusClass(row.status)">
-                  {{ statusLabel(row.status) }}
+        </aside>
+
+        <section class="min-w-0">
+          <QsGenericTable
+            v-model:page="page"
+            v-model:page-size="pageSize"
+            v-model:search="searchKeyword"
+            v-model:filters="filters"
+            data-testid="product-list-table"
+            :row-key="item => item.id"
+            :action-column="{ fixed: 'right', width: 360 }"
+            :addable="false"
+            :columns="columns"
+            :data="rows"
+            empty-title="暂无产品"
+            empty-description="当前没有可展示的产品资料。"
+            :error="listErrorDisplay"
+            :filter-definitions="filterDefinitions"
+            :loading="loading"
+            :page-size-options="[20, 50, 100]"
+            search-placeholder="搜索产品名称或产品编号"
+            :searchable="true"
+            :show-column-settings="true"
+            :total="total"
+            table-class="min-w-[2600px]"
+            @filter-change="handleFilterChange"
+            @pagination-change="handlePaginationChange"
+            @retry="loadProducts"
+            @search="handleSearch"
+          >
+            <template #cell-productNo="{ row }">
+              <span class="qs-type-data font-mono">{{ row.original.productNo }}</span>
+            </template>
+            <template #cell-status="{ row }">
+              <FaTag
+                variant="outline"
+                class="qs-type-status-tag"
+                :class="statusClass(row.original.status)"
+              >
+                {{ statusLabel(row.original.status) }}
+              </FaTag>
+            </template>
+            <template #cell-supplier="{ row }">
+              <div class="flex flex-wrap gap-2 items-center">
+                <span class="break-all">{{ row.original.supplier?.label ?? row.original.supplier?.value ?? '—' }}</span>
+                <FaTag
+                  v-if="supplierStateLabel(row.original)"
+                  variant="outline"
+                  class="qs-type-status-tag"
+                  :class="supplierStateClass(row.original)"
+                >
+                  {{ supplierStateLabel(row.original) }}
                 </FaTag>
-              </dd>
-            </div>
-            <div class="col-span-2">
-              <dt class="qs-type-compact-label">
-                供应商
-              </dt><dd class="m-0">
-                {{ supplierDisplay(row) }}
-              </dd>
-            </div>
-            <div>
-              <dt class="qs-type-compact-label mb-1">
-                产品主图
-              </dt><dd class="m-0">
-                <ImageGroup
-                  v-if="canReadProductMedia"
-                  :items="buildProductMainImageItems(row, canReadProductMedia)"
-                  :max-count="1"
-                  radius="lg"
-                  :size="44"
-                />
-                <span v-else class="qs-type-meta inline-flex gap-1 items-center">
-                  <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
-                </span>
-              </dd>
-            </div>
-            <div>
-              <dt class="qs-type-compact-label mb-1">
-                产品图片
-              </dt><dd class="m-0">
-                <ImageGroup
-                  v-if="canReadProductMedia"
-                  :items="buildProductImageItems(row, canReadProductMedia)"
-                  :max-count="3"
-                  radius="lg"
-                  :size="44"
-                />
-                <span v-else class="qs-type-meta inline-flex gap-1 items-center">
-                  <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
-                </span>
-              </dd>
-            </div>
-            <div>
-              <dt class="qs-type-compact-label">
-                产品视频
-              </dt><dd class="m-0">
+              </div>
+            </template>
+            <template #cell-mainImage="{ row }">
+              <ImageGroup
+                v-if="canReadProductMedia"
+                :items="buildProductMainImageItems(row.original, canReadProductMedia)"
+                :max-count="1"
+                radius="lg"
+                size="sm"
+              />
+              <span v-else class="qs-type-meta inline-flex gap-1 items-center">
+                <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
+              </span>
+            </template>
+            <template #cell-images="{ row }">
+              <ImageGroup
+                v-if="canReadProductMedia"
+                :items="buildProductImageItems(row.original, canReadProductMedia)"
+                :max-count="3"
+                radius="lg"
+                size="sm"
+              />
+              <span v-else class="qs-type-meta inline-flex gap-1 items-center">
+                <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
+              </span>
+            </template>
+            <template #cell-videos="{ row }">
+              <FaButton
+                v-if="canReadProductMedia && row.original.media.videos.length"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-9"
+                :aria-label="`查看产品 ${row.original.productNo} 的 ${row.original.media.videos.length} 个视频`"
+                @click="showVideos(row.original)"
+              >
+                <FaIcon name="i-lucide:video" />
+                {{ row.original.media.videos.length }} 个视频
+              </FaButton>
+              <span v-else-if="!canReadProductMedia" class="qs-type-meta inline-flex gap-1 items-center">
+                <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
+              </span>
+              <span v-else>—</span>
+            </template>
+            <template #cell-twdSalePrice="{ row }">
+              <AmountDisplay
+                :value="row.original.twdSalePrice.amount"
+                :currency="row.original.twdSalePrice.currency"
+                :currencies="currencies"
+              />
+            </template>
+            <template #cell-myrSalePrice="{ row }">
+              <AmountDisplay
+                :value="row.original.myrSalePrice.amount"
+                :currency="row.original.myrSalePrice.currency"
+                :currencies="currencies"
+              />
+            </template>
+            <template #cell-purchaseCost="{ row }">
+              <AmountDisplay
+                :value="row.original.purchaseCost.amount"
+                :currency="row.original.purchaseCost.currency"
+                :currencies="currencies"
+              />
+            </template>
+            <template #cell-attributes="{ row }">
+              <FaButton
+                v-if="row.original.attributes.length"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-9"
+                :aria-label="`查看产品 ${row.original.productNo} 的 ${row.original.attributes.length} 项属性`"
+                @click="showAttributes(row.original)"
+              >
+                <FaIcon name="i-lucide:list-tree" />
+                {{ row.original.attributes.length }} 项属性
+              </FaButton>
+              <span v-else>—</span>
+            </template>
+            <template #cell-createdAt="{ row }">
+              <DateTimeDisplay :value="row.original.createdAt" />
+            </template>
+            <template #cell-createdBy="{ row }">
+              {{ row.original.createdBy?.displayName ?? '—' }}
+            </template>
+            <template #cell-updatedAt="{ row }">
+              <DateTimeDisplay :value="row.original.updatedAt" />
+            </template>
+            <template #cell-updatedBy="{ row }">
+              {{ row.original.updatedBy?.displayName ?? '—' }}
+            </template>
+
+            <template #actions="{ row, rowNumber }">
+              <FaButton
+                v-if="canOrderProducts"
+                variant="ghost"
+                size="icon"
+                class="size-8"
+                :disabled="productMovingId !== null || isFirstProductRow(row.id)"
+                :aria-label="`上移产品 ${row.productNo}`"
+                @click="moveProduct(row.id, 'up')"
+              >
+                <FaIcon name="i-lucide:arrow-up" class="size-4" />
+              </FaButton>
+              <FaButton
+                v-if="canOrderProducts"
+                variant="ghost"
+                size="icon"
+                class="size-8"
+                :disabled="productMovingId !== null || isLastProductRow(row.id)"
+                :aria-label="`下移产品 ${row.productNo}`"
+                @click="moveProduct(row.id, 'down')"
+              >
+                <FaIcon name="i-lucide:arrow-down" class="size-4" />
+              </FaButton>
+              <FaButton
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-9"
+                :aria-label="`查看第 ${rowNumber} 行产品 ${row.productNo}`"
+                @click="showProductDetail(row)"
+              >
+                <FaIcon name="i-lucide:eye" />
+                查看
+              </FaButton>
+              <FaButton
+                v-if="canUpdate"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-9"
+                :aria-label="`编辑第 ${rowNumber} 行产品 ${row.productNo}`"
+                @click="navigateToEdit(row.id)"
+              >
+                <FaIcon name="i-lucide:pencil" />
+                编辑
+              </FaButton>
+              <FaButton
+                v-if="canUpdate"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-9"
+                :aria-label="`${row.status === 'ACTIVE' ? '停用' : '启用'}第 ${rowNumber} 行产品 ${row.productNo}`"
+                @click="requestStatusChange(row)"
+              >
+                <FaIcon :name="row.status === 'ACTIVE' ? 'i-lucide:circle-pause' : 'i-lucide:circle-check'" />
+                {{ row.status === 'ACTIVE' ? '停用' : '启用' }}
+              </FaButton>
+            </template>
+
+            <template #mobile-row="{ row, rowNumber }">
+              <div class="mb-4 pb-3 border-b border-border flex gap-3 items-start justify-between">
+                <div class="min-w-0">
+                  <div class="qs-type-data-emphasis font-mono break-all">
+                    {{ row.productNo }}
+                  </div>
+                  <div class="qs-type-body mt-1">
+                    {{ row.name }}
+                  </div>
+                </div>
+                <span class="qs-type-meta shrink-0 tabular-nums">#{{ rowNumber }}</span>
+              </div>
+              <dl class="m-0 gap-x-4 gap-y-3 grid grid-cols-2">
+                <div>
+                  <dt class="qs-type-compact-label">
+                    产品编号
+                  </dt><dd class="font-mono m-0 break-all">
+                    {{ row.productNo }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-compact-label">
+                    产品状态
+                  </dt><dd class="m-0">
+                    <FaTag variant="outline" class="qs-type-status-tag" :class="statusClass(row.status)">
+                      {{ statusLabel(row.status) }}
+                    </FaTag>
+                  </dd>
+                </div>
+                <div class="col-span-2">
+                  <dt class="qs-type-compact-label">
+                    供应商
+                  </dt><dd class="m-0">
+                    {{ supplierDisplay(row) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-compact-label mb-1">
+                    产品主图
+                  </dt><dd class="m-0">
+                    <ImageGroup
+                      v-if="canReadProductMedia"
+                      :items="buildProductMainImageItems(row, canReadProductMedia)"
+                      :max-count="1"
+                      radius="lg"
+                      :size="44"
+                    />
+                    <span v-else class="qs-type-meta inline-flex gap-1 items-center">
+                      <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-compact-label mb-1">
+                    产品图片
+                  </dt><dd class="m-0">
+                    <ImageGroup
+                      v-if="canReadProductMedia"
+                      :items="buildProductImageItems(row, canReadProductMedia)"
+                      :max-count="3"
+                      radius="lg"
+                      :size="44"
+                    />
+                    <span v-else class="qs-type-meta inline-flex gap-1 items-center">
+                      <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-compact-label">
+                    产品视频
+                  </dt><dd class="m-0">
+                    <FaButton
+                      v-if="canReadProductMedia && row.media.videos.length"
+                      variant="ghost"
+                      class="min-h-11"
+                      :aria-label="`查看产品 ${row.productNo} 的 ${row.media.videos.length} 个视频`"
+                      @click="showVideos(row)"
+                    >
+                      <FaIcon name="i-lucide:video" />
+                      {{ row.media.videos.length }} 个视频
+                    </FaButton>
+                    <span v-else-if="!canReadProductMedia" class="qs-type-meta inline-flex gap-1 items-center">
+                      <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
+                    </span>
+                    <span v-else>—</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-compact-label">
+                    产品属性
+                  </dt><dd class="m-0">
+                    <FaButton
+                      v-if="row.attributes.length"
+                      variant="ghost"
+                      class="min-h-11"
+                      :aria-label="`查看产品 ${row.productNo} 的 ${row.attributes.length} 项属性`"
+                      @click="showAttributes(row)"
+                    >
+                      <FaIcon name="i-lucide:list-tree" />
+                      {{ row.attributes.length }} 项属性
+                    </FaButton>
+                    <span v-else>—</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-compact-label">
+                    台币销售价
+                  </dt><dd class="m-0">
+                    <AmountDisplay
+                      :value="row.twdSalePrice.amount"
+                      :currency="row.twdSalePrice.currency"
+                      :currencies="currencies"
+                    />
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-compact-label">
+                    马币销售价
+                  </dt><dd class="m-0">
+                    <AmountDisplay
+                      :value="row.myrSalePrice.amount"
+                      :currency="row.myrSalePrice.currency"
+                      :currencies="currencies"
+                    />
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-compact-label">
+                    采购成本价
+                  </dt><dd class="m-0">
+                    <AmountDisplay
+                      :value="row.purchaseCost.amount"
+                      :currency="row.purchaseCost.currency"
+                      :currencies="currencies"
+                    />
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-compact-label">
+                    创建人
+                  </dt><dd class="m-0">
+                    {{ row.createdBy?.displayName ?? '—' }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-compact-label">
+                    创建时间
+                  </dt><dd class="m-0">
+                    <DateTimeDisplay :value="row.createdAt" />
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-compact-label">
+                    更新人
+                  </dt><dd class="m-0">
+                    {{ row.updatedBy?.displayName ?? '—' }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-compact-label">
+                    更新时间
+                  </dt><dd class="m-0">
+                    <DateTimeDisplay :value="row.updatedAt" />
+                  </dd>
+                </div>
+              </dl>
+              <div class="mt-4 pt-3 border-t border-border flex gap-2 justify-end">
                 <FaButton
-                  v-if="canReadProductMedia && row.media.videos.length"
-                  variant="ghost"
+                  v-if="canOrderProducts"
+                  variant="outline"
+                  size="icon"
                   class="min-h-11"
-                  :aria-label="`查看产品 ${row.productNo} 的 ${row.media.videos.length} 个视频`"
-                  @click="showVideos(row)"
+                  :disabled="productMovingId !== null || isFirstProductRow(row.id)"
+                  :aria-label="`上移产品 ${row.productNo}`"
+                  @click="moveProduct(row.id, 'up')"
                 >
-                  <FaIcon name="i-lucide:video" />
-                  {{ row.media.videos.length }} 个视频
+                  <FaIcon name="i-lucide:arrow-up" />
                 </FaButton>
-                <span v-else-if="!canReadProductMedia" class="qs-type-meta inline-flex gap-1 items-center">
-                  <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
-                </span>
-                <span v-else>—</span>
-              </dd>
-            </div>
-            <div>
-              <dt class="qs-type-compact-label">
-                产品属性
-              </dt><dd class="m-0">
                 <FaButton
-                  v-if="row.attributes.length"
-                  variant="ghost"
+                  v-if="canOrderProducts"
+                  variant="outline"
+                  size="icon"
                   class="min-h-11"
-                  :aria-label="`查看产品 ${row.productNo} 的 ${row.attributes.length} 项属性`"
-                  @click="showAttributes(row)"
+                  :disabled="productMovingId !== null || isLastProductRow(row.id)"
+                  :aria-label="`下移产品 ${row.productNo}`"
+                  @click="moveProduct(row.id, 'down')"
                 >
-                  <FaIcon name="i-lucide:list-tree" />
-                  {{ row.attributes.length }} 项属性
+                  <FaIcon name="i-lucide:arrow-down" />
                 </FaButton>
-                <span v-else>—</span>
-              </dd>
-            </div>
-            <div>
-              <dt class="qs-type-compact-label">
-                台币销售价
-              </dt><dd class="m-0">
-                <AmountDisplay
-                  :value="row.twdSalePrice.amount"
-                  :currency="row.twdSalePrice.currency"
-                  :currencies="currencies"
-                />
-              </dd>
-            </div>
-            <div>
-              <dt class="qs-type-compact-label">
-                马币销售价
-              </dt><dd class="m-0">
-                <AmountDisplay
-                  :value="row.myrSalePrice.amount"
-                  :currency="row.myrSalePrice.currency"
-                  :currencies="currencies"
-                />
-              </dd>
-            </div>
-            <div>
-              <dt class="qs-type-compact-label">
-                采购成本价
-              </dt><dd class="m-0">
-                <AmountDisplay
-                  :value="row.purchaseCost.amount"
-                  :currency="row.purchaseCost.currency"
-                  :currencies="currencies"
-                />
-              </dd>
-            </div>
-            <div>
-              <dt class="qs-type-compact-label">
-                创建人
-              </dt><dd class="m-0">
-                {{ row.createdBy?.displayName ?? '—' }}
-              </dd>
-            </div>
-            <div>
-              <dt class="qs-type-compact-label">
-                创建时间
-              </dt><dd class="m-0">
-                <DateTimeDisplay :value="row.createdAt" />
-              </dd>
-            </div>
-            <div>
-              <dt class="qs-type-compact-label">
-                更新人
-              </dt><dd class="m-0">
-                {{ row.updatedBy?.displayName ?? '—' }}
-              </dd>
-            </div>
-            <div>
-              <dt class="qs-type-compact-label">
-                更新时间
-              </dt><dd class="m-0">
-                <DateTimeDisplay :value="row.updatedAt" />
-              </dd>
-            </div>
-          </dl>
-          <div class="mt-4 pt-3 border-t border-border flex gap-2 justify-end">
-            <FaButton variant="outline" class="min-h-11" @click="showProductDetail(row)">
-              <FaIcon name="i-lucide:eye" />查看
-            </FaButton>
-            <FaButton v-if="canUpdate" variant="outline" class="min-h-11" @click="navigateToEdit(row.id)">
-              <FaIcon name="i-lucide:pencil" />编辑
-            </FaButton>
-            <FaButton
-              v-if="canUpdate"
-              variant="outline"
-              class="min-h-11"
-              @click="requestStatusChange(row)"
-            >
-              <FaIcon :name="row.status === 'ACTIVE' ? 'i-lucide:circle-pause' : 'i-lucide:circle-check'" />
-              {{ row.status === 'ACTIVE' ? '停用' : '启用' }}
-            </FaButton>
-          </div>
-        </template>
-      </QsGenericTable>
+                <FaButton variant="outline" class="min-h-11" @click="showProductDetail(row)">
+                  <FaIcon name="i-lucide:eye" />查看
+                </FaButton>
+                <FaButton v-if="canUpdate" variant="outline" class="min-h-11" @click="navigateToEdit(row.id)">
+                  <FaIcon name="i-lucide:pencil" />编辑
+                </FaButton>
+                <FaButton
+                  v-if="canUpdate"
+                  variant="outline"
+                  class="min-h-11"
+                  @click="requestStatusChange(row)"
+                >
+                  <FaIcon :name="row.status === 'ACTIVE' ? 'i-lucide:circle-pause' : 'i-lucide:circle-check'" />
+                  {{ row.status === 'ACTIVE' ? '停用' : '启用' }}
+                </FaButton>
+              </div>
+            </template>
+          </QsGenericTable>
+        </section>
+      </div>
     </FaPageMain>
 
     <ProductAttributesModal

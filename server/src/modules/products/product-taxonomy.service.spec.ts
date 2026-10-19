@@ -13,6 +13,7 @@ const CONTEXT = {
 
 function createFixture() {
   const productCategory = {
+    aggregate: jest.fn().mockResolvedValue({ _max: { sortOrder: 0 } }),
     create: jest.fn().mockResolvedValue({
       id: 'category-id',
       name: '分类',
@@ -23,6 +24,7 @@ function createFixture() {
     delete: jest.fn().mockResolvedValue({ id: 'category-id' }),
   }
   const productHead = {
+    aggregate: jest.fn().mockResolvedValue({ _max: { sortOrder: 0 } }),
     create: jest.fn().mockResolvedValue({
       id: 'head-id',
       name: '产品头',
@@ -91,11 +93,11 @@ describe('ProductTaxonomyService', () => {
       AuditEventType.PRODUCT_HEAD_CREATED,
     ])
     expect(fixture.mocks.productCategory.create).toHaveBeenCalledWith({
-      data: { name: '分类', supplierValue: 'SUPPLIER_A' },
+      data: { name: '分类', supplierValue: 'SUPPLIER_A', sortOrder: 10 },
       select: { id: true, name: true, supplierValue: true },
     })
     expect(fixture.mocks.productHead.create).toHaveBeenCalledWith({
-      data: { categoryId: 'category-id', name: '产品头' },
+      data: { categoryId: 'category-id', name: '产品头', sortOrder: 10 },
       select: { id: true, name: true, categoryId: true },
     })
   })

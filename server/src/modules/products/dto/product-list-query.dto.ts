@@ -1,8 +1,9 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform, Type } from 'class-transformer'
 import {
-  IsInt,
+  IsBoolean,
   IsEnum,
+  IsInt,
   IsString,
   IsUUID,
   Matches,
@@ -77,6 +78,21 @@ export class ProductListQueryDto {
   )
   @IsEnum(ProductStatus, { message: '产品状态不在白名单内' })
   status?: ProductStatus
+
+  @ApiPropertyOptional({
+    type: 'boolean',
+    description: '只看未分类产品（分类与产品头都为空）',
+  })
+  @Transform(({ value }: { value: unknown }) => {
+    if (value === true || value === 'true') return true
+    if (value === false || value === 'false') return false
+    return value
+  })
+  @ValidateIf((_object: ProductListQueryDto, value: unknown) =>
+    value !== undefined,
+  )
+  @IsBoolean({ message: '必须是布尔值' })
+  unclassified?: boolean
 
   @ApiPropertyOptional({
     type: 'integer',
