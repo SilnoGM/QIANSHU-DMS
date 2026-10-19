@@ -22,10 +22,11 @@ async function errorsFor<T extends object>(dto: new () => T, input: object) {
 describe('numbering purpose boundary', () => {
   it.each(['BUSINESS', 'SHIPPING_MARK'])('accepts explicit %s on creation only', async (purpose) => {
     expect(await errorsFor(CreateNumberingRuleRequestDto, { ...createInput, purpose })).toEqual([])
-    for (const dto of [UpdateNumberingRuleRequestDto, CloneNumberingRuleRequestDto]) {
-      const errors = await errorsFor(dto, { expectedVersion: 1, ruleCode: 'COPY', name: '复制', purpose })
-      expect(errors.map(error => error.property)).toContain('purpose')
-    }
+    const rejectedPurposeInput = { expectedVersion: 1, ruleCode: 'COPY', name: '复制', purpose }
+    const updateErrors = await errorsFor(UpdateNumberingRuleRequestDto, rejectedPurposeInput)
+    const cloneErrors = await errorsFor(CloneNumberingRuleRequestDto, rejectedPurposeInput)
+    expect(updateErrors.map(error => error.property)).toContain('purpose')
+    expect(cloneErrors.map(error => error.property)).toContain('purpose')
   })
 
   it.each([undefined, null, 'ALL', '', 'OTHER'])('rejects missing or invalid purpose %s', async (purpose) => {
