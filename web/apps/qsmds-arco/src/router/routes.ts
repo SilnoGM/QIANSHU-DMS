@@ -29,7 +29,7 @@ const constantRoutes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'login',
-    component: () => import('@/views/login.vue'),
+    component: () => import('@/views/login-collage.vue'),
     meta: {
       whiteList: true,
       title: $t('app.route.login'),

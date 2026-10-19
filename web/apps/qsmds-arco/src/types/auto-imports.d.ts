@@ -21,6 +21,7 @@ declare global {
   const createAuthLifecycleState: typeof import('../store/modules/app/auth-lifecycle').createAuthLifecycleState
   const createPinia: typeof import('pinia').createPinia
   const createProfileLifecycleState: typeof import('../store/modules/app/profile-lifecycle').createProfileLifecycleState
+  const createStartupMinimumDuration: typeof import('../composables/app/startup').createStartupMinimumDuration
   const customRef: typeof import('vue').customRef
   const defineAsyncComponent: typeof import('vue').defineAsyncComponent
   const defineComponent: typeof import('vue').defineComponent
@@ -102,6 +103,7 @@ declare global {
   const useAppPreferencesStore: typeof import('../store/modules/app/preferences').useAppPreferencesStore
   const useAppRouteStore: typeof import('../store/modules/app/route').useAppRouteStore
   const useAppSettingsStore: typeof import('../store/modules/app/settings').useAppSettingsStore
+  const useAppStartup: typeof import('../composables/app/startup').useAppStartup
   const useAppTabbar: typeof import('../composables/app/tabbar').useAppTabbar
   const useAppTabbarStore: typeof import('../store/modules/app/tabbar').useAppTabbarStore
   const useAppWatermarkStore: typeof import('../store/modules/app/watermark').useAppWatermarkStore

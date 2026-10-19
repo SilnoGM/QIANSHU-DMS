@@ -1,0 +1,1847 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录页重做原型 · 业务拼贴版</title>
+<style>
+  :root {
+    color-scheme: light;
+    --background: 1 0 0;
+    --foreground: 0.141 0.005 285.823;
+    --card: 1 0 0;
+    --muted: 0.967 0.001 286.375;
+    --muted-foreground: 0.552 0.016 285.938;
+    --border: 0.92 0.004 286.32;
+    --input: 0.92 0.004 286.32;
+    --ring: 0.705 0.015 286.067;
+    --primary: 0.527 0.154 150.069;
+    --primary-foreground: 0.982 0.018 155.826;
+    --destructive: 0.577 0.245 27.325;
+    --font-sans: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "Noto Sans Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --sales: oklch(0.72 0.15 55);
+    --purchase: oklch(0.65 0.12 235);
+    --finance: oklch(0.75 0.14 75);
+    --accent-text: oklch(var(--primary));
+  }
+
+  html.dark {
+    color-scheme: dark;
+    --background: 0.141 0.005 285.823;
+    --foreground: 0.985 0 0;
+    --card: 0.21 0.006 285.885;
+    --muted: 0.274 0.006 286.033;
+    --muted-foreground: 0.705 0.015 286.067;
+    --border: 0.252 0 0;
+    --input: 0.341 0 0;
+    --ring: 0.552 0.016 285.938;
+    --primary: 0.448 0.119 151.328;
+    --primary-foreground: 0.982 0.018 155.826;
+    --destructive: 0.704 0.191 22.216;
+    --accent-text: color-mix(in oklch, oklch(var(--primary)), white 38%);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    background: oklch(var(--background));
+    color: oklch(var(--foreground));
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  button,
+  input {
+    font: inherit;
+    color: inherit;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  :focus-visible {
+    outline: 2px solid oklch(var(--ring));
+    outline-offset: 2px;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* ------------------------------------------------------------------ 原型控制条 */
+  .proto-bar {
+    position: relative;
+    z-index: 20;
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 18px;
+    min-height: 54px;
+    padding: 8px 16px;
+    overflow-x: auto;
+    background: oklch(0.141 0.005 285.823);
+    color: oklch(0.985 0 0);
+    box-shadow: 0 1px 0 rgb(255 255 255 / 8%);
+  }
+
+  .proto-bar__title {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .proto-bar__title::before {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: oklch(0.723 0.219 149.579);
+    content: "";
+  }
+
+  .proto-bar__groups {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .proto-group {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    padding-left: 14px;
+    border-left: 1px solid rgb(255 255 255 / 14%);
+  }
+
+  .proto-group:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .proto-group__label {
+    margin-right: 4px;
+    color: rgb(255 255 255 / 45%);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .proto-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 26px;
+    padding: 0 9px;
+    border: 1px solid rgb(255 255 255 / 16%);
+    border-radius: 6px;
+    background: transparent;
+    color: rgb(255 255 255 / 72%);
+    font-size: 11px;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  }
+
+  .proto-chip:hover {
+    border-color: rgb(255 255 255 / 32%);
+    background: rgb(255 255 255 / 6%);
+    color: #fff;
+  }
+
+  .proto-chip[aria-pressed="true"] {
+    border-color: oklch(0.723 0.219 149.579);
+    background: oklch(0.527 0.154 150.069);
+    color: oklch(0.982 0.018 155.826);
+  }
+
+  .proto-link {
+    margin-left: 4px;
+    border-color: rgb(255 255 255 / 26%);
+    color: rgb(255 255 255 / 88%);
+  }
+
+  .proto-bar__collapse {
+    flex: none;
+    height: 26px;
+    margin-left: auto;
+    padding: 0 9px;
+    border: 1px solid rgb(255 255 255 / 14%);
+    border-radius: 6px;
+    background: transparent;
+    color: rgb(255 255 255 / 55%);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .proto-bar__collapse:hover {
+    color: #fff;
+    border-color: rgb(255 255 255 / 30%);
+  }
+
+  .proto-bar.is-collapsed .proto-bar__groups {
+    display: none;
+  }
+
+  .proto-bar__note {
+    flex: none;
+    color: rgb(255 255 255 / 30%);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .proto-bar.is-collapsed .proto-bar__note {
+    display: none;
+  }
+
+  /* ------------------------------------------------------------------ 预览舞台 */
+  .stage {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    background: oklch(var(--background));
+  }
+
+  .stage.is-device {
+    display: grid;
+    place-items: center;
+    padding: 22px;
+    background:
+      radial-gradient(circle at 50% 0%, rgb(255 255 255 / 6%), transparent 55%),
+      oklch(0.12 0.005 285.823);
+  }
+
+  .stage__frame {
+    width: 100%;
+    min-width: 0;
+    min-height: 100%;
+    container-name: collage;
+    container-type: inline-size;
+  }
+
+  .stage.is-device .stage__frame {
+    width: 390px;
+    height: 780px;
+    min-height: 0;
+    overflow: auto;
+    border: 1px solid rgb(255 255 255 / 12%);
+    border-radius: 28px;
+    background: oklch(var(--background));
+    box-shadow: 0 28px 80px rgb(0 0 0 / 45%);
+  }
+
+  /* ------------------------------------------------------------------ 页面 */
+  .page {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 8% 4%, oklch(var(--primary) / 10%), transparent 38%),
+      linear-gradient(135deg, color-mix(in oklch, oklch(var(--background)), oklch(var(--primary)) 10%) 0%, color-mix(in oklch, oklch(var(--background)), oklch(var(--primary)) 3%) 50%, color-mix(in oklch, oklch(var(--background)), oklch(var(--primary)) 9%) 100%);
+    color: oklch(var(--foreground));
+  }
+
+  .page-arc {
+    position: absolute;
+    bottom: -180px;
+    left: -150px;
+    z-index: 0;
+    width: 520px;
+    height: 520px;
+    color: oklch(var(--primary) / 8%);
+    pointer-events: none;
+  }
+
+  html.dark .page-arc {
+    color: oklch(var(--foreground) / 5%);
+  }
+
+  .topbar {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px 48px 12px;
+  }
+
+  .brand-lockup {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .brand-tile {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    padding: 6px;
+    border: 1px solid oklch(var(--primary) / 12%);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 4px 14px rgb(6 78 59 / 8%);
+  }
+
+  .brand-tile svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .brand-tile img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .brand-name {
+    margin: 0;
+    color: oklch(var(--foreground));
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 30px;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+
+  .brand-submark {
+    margin: 1px 0 0;
+    color: oklch(var(--muted-foreground));
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    line-height: 14px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .status-pill {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border: 1px solid oklch(var(--primary) / 12%);
+    border-radius: 999px;
+    background: color-mix(in oklch, oklch(var(--card)), transparent 25%);
+    color: oklch(var(--muted-foreground));
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    white-space: nowrap;
+    box-shadow: 0 2px 10px rgb(6 78 59 / 5%);
+    backdrop-filter: blur(8px);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-text);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent-text), transparent 88%);
+  }
+
+  .status-short {
+    display: none;
+  }
+
+  .main {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 48px 8px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(380px, 5fr);
+    gap: 48px;
+    align-items: center;
+    width: 100%;
+    max-width: 1220px;
+  }
+
+  .collage {
+    position: relative;
+    height: 500px;
+    min-width: 0;
+    user-select: none;
+  }
+
+  .collage-backdrop {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 0;
+    width: 480px;
+    height: 340px;
+    border: 1px solid oklch(var(--primary) / 10%);
+    border-radius: 16px;
+    background: oklch(var(--primary) / 5%);
+    transform: translate(-50%, -50%) translate(-24px, -26px);
+  }
+
+  .collage-toolbar {
+    position: absolute;
+    top: 54px;
+    left: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 58px;
+    padding: 10px;
+    border: 1px solid oklch(var(--border));
+    border-radius: 16px;
+    background: oklch(var(--card));
+    box-shadow: 0 12px 32px -4px rgb(6 78 59 / 10%);
+    animation: float-y 9s ease-in-out infinite;
+  }
+
+  .tool-icon {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+  }
+
+  .tool-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .tool-icon--sales {
+    color: var(--sales);
+    background: color-mix(in oklch, oklch(var(--card)), var(--sales) 10%);
+  }
+
+  .tool-icon--purchase {
+    color: var(--purchase);
+    background: color-mix(in oklch, oklch(var(--card)), var(--purchase) 10%);
+  }
+
+  .tool-icon--warehouse {
+    color: var(--accent-text);
+    background: color-mix(in oklch, var(--accent-text), transparent 92%);
+  }
+
+  .tool-icon--finance {
+    color: var(--finance);
+    background: color-mix(in oklch, oklch(var(--card)), var(--finance) 12%);
+  }
+
+  .collage-window {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 10;
+    width: 490px;
+    overflow: hidden;
+    border: 1px solid oklch(var(--border));
+    border-radius: 16px;
+    background: oklch(var(--card));
+    box-shadow: 0 24px 54px -18px rgb(6 78 59 / 16%), 0 0 15px rgb(6 78 59 / 4%);
+    transform: translate(-50%, -50%);
+  }
+
+  .window-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 14px;
+    background: linear-gradient(90deg, oklch(var(--primary)), color-mix(in oklch, oklch(var(--primary)), white 24%));
+  }
+
+  .window-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgb(255 255 255 / 60%);
+  }
+
+  .window-url {
+    margin-left: 8px;
+    color: rgb(255 255 255 / 90%);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  .window-body {
+    padding: 26px 32px 30px;
+  }
+
+  .window-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .window-logo {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 4px;
+    border: 1px solid oklch(var(--primary) / 10%);
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .window-logo svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .window-logo img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .window-name {
+    color: oklch(var(--foreground));
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 24px;
+    white-space: nowrap;
+  }
+
+  .window-badge {
+    padding: 2px 6px;
+    border: 1px solid color-mix(in oklch, var(--accent-text), transparent 78%);
+    border-radius: 4px;
+    background: color-mix(in oklch, var(--accent-text), transparent 93%);
+    color: var(--accent-text);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 12px;
+  }
+
+  .window-title {
+    margin: 0 0 20px;
+    color: oklch(var(--foreground));
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 40px;
+    letter-spacing: -0.02em;
+  }
+
+  .window-title span {
+    color: var(--accent-text);
+  }
+
+  .window-features {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+    color: oklch(var(--foreground));
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+  }
+
+  .feature {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .feature-check {
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: oklch(var(--primary));
+    color: oklch(var(--primary-foreground));
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .float-card {
+    position: absolute;
+    z-index: 20;
+    width: 208px;
+    overflow: hidden;
+    border: 1px solid oklch(var(--border));
+    border-radius: 14px;
+    background: oklch(var(--card));
+    box-shadow: 0 12px 32px -4px rgb(6 78 59 / 10%);
+  }
+
+  .float-card__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    padding: 0 12px;
+    color: rgb(255 255 255 / 94%);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 14px;
+  }
+
+  .float-card__bar i {
+    display: block;
+    width: 58px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 50%);
+  }
+
+  .float-card__body {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .float-avatar {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .float-lines {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .float-line {
+    height: 8px;
+    border-radius: 999px;
+    background: oklch(var(--muted));
+  }
+
+  .float-line--short {
+    width: 64%;
+    background: oklch(var(--muted) / 75%);
+  }
+
+  .float-card--inbound {
+    top: 0;
+    right: 0;
+    animation: float-y 8s ease-in-out 1.2s infinite;
+  }
+
+  .float-card--inbound .float-card__bar {
+    background: linear-gradient(90deg, color-mix(in oklch, oklch(var(--primary)), white 22%), oklch(var(--primary)));
+  }
+
+  .float-card--inbound .float-avatar {
+    background: oklch(var(--primary) / 10%);
+    color: oklch(var(--primary));
+  }
+
+  .float-card--finance {
+    right: 0;
+    bottom: 16px;
+    animation: float-y 9s ease-in-out 2s infinite;
+  }
+
+  .float-card--finance .float-card__bar {
+    background: linear-gradient(90deg, var(--finance), color-mix(in oklch, var(--finance), white 20%));
+  }
+
+  .float-card--finance .float-avatar {
+    background: color-mix(in oklch, oklch(var(--card)), var(--finance) 14%);
+    color: var(--finance);
+  }
+
+  .pie-card {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 238px;
+    padding: 14px;
+    border: 1px solid oklch(var(--border));
+    border-radius: 14px;
+    background: oklch(var(--card));
+    box-shadow: 0 12px 32px -4px rgb(6 78 59 / 10%);
+    animation: float-y 10s ease-in-out 0.8s infinite;
+  }
+
+  .pie-lines {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .pie-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pie-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 2px;
+  }
+
+  .pie-line span:last-child {
+    height: 6px;
+    border-radius: 999px;
+    background: oklch(var(--muted));
+  }
+
+  .pie-chart {
+    flex: none;
+    width: 66px;
+    height: 66px;
+    transform: rotate(-90deg);
+  }
+
+  .pie-chart circle {
+    fill: transparent;
+    stroke-width: 5;
+  }
+
+  .collage-link {
+    position: absolute;
+    top: 110px;
+    right: 86px;
+    bottom: 110px;
+    z-index: 8;
+    border-left: 2px dashed oklch(var(--primary) / 42%);
+  }
+
+  .collage-plus {
+    position: absolute;
+    top: 50%;
+    right: 62px;
+    z-index: 30;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid oklch(var(--primary) / 14%);
+    border-radius: 50%;
+    background: oklch(var(--card));
+    color: var(--sales);
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1;
+    box-shadow: 0 12px 32px -4px rgb(6 78 59 / 12%);
+    transform: translateY(-50%);
+  }
+
+  .collage-cursor {
+    position: absolute;
+    top: calc(50% + 18px);
+    right: 48px;
+    z-index: 31;
+    width: 26px;
+    height: 26px;
+    color: oklch(var(--primary));
+    filter: drop-shadow(0 4px 4px rgb(0 0 0 / 12%));
+    transform: rotate(-8deg);
+  }
+
+  /* ------------------------------------------------------------------ 登录卡 */
+  .login-panel {
+    display: flex;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+
+  .login-card {
+    width: 100%;
+    max-width: 400px;
+    padding: 40px;
+    border: 1px solid oklch(var(--card));
+    border-radius: 24px;
+    background: oklch(var(--card));
+    color: oklch(var(--foreground));
+    box-shadow: 0 25px 60px -15px rgb(6 78 59 / 12%), 0 4px 20px -2px rgb(0 0 0 / 3%);
+  }
+
+  html.dark .login-card {
+    border-color: oklch(var(--border));
+  }
+
+  .login-card h1 {
+    margin: 0;
+    color: oklch(var(--foreground));
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 32px;
+    letter-spacing: 0;
+  }
+
+  .card-sub {
+    margin: 6px 0 28px;
+    color: oklch(var(--muted-foreground));
+    font-size: 12px;
+    line-height: 18px;
+  }
+
+  .card-sub strong {
+    color: var(--accent-text);
+    font-weight: 500;
+  }
+
+  .alert {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    gap: 10px;
+    margin: 0 0 18px;
+    padding: 10px 12px;
+    border: 1px solid oklch(var(--destructive) / 22%);
+    border-radius: 12px;
+    background: oklch(var(--destructive) / 6%);
+    color: oklch(var(--foreground));
+    font-size: 13px;
+    line-height: 18px;
+  }
+
+  .alert__icon {
+    width: 16px;
+    height: 16px;
+    margin-top: 1px;
+    color: oklch(var(--destructive));
+  }
+
+  .alert__message {
+    margin: 0;
+  }
+
+  .alert__action {
+    margin-top: 5px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: oklch(var(--destructive));
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .alert__action:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  .alert__action:disabled {
+    opacity: 0.55;
+  }
+
+  .field + .field {
+    margin-top: 14px;
+  }
+
+  .field label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 6px;
+    padding: 0 1px;
+    color: oklch(var(--foreground));
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 20px;
+  }
+
+  .required-mark {
+    color: oklch(var(--destructive));
+    font-weight: 500;
+  }
+
+  .filled-input {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 48px;
+    padding: 0 14px;
+    border: 1px solid oklch(var(--input));
+    border-radius: 12px;
+    background: oklch(var(--muted) / 55%);
+    transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .filled-input:hover {
+    background: oklch(var(--muted) / 78%);
+  }
+
+  .filled-input:focus-within {
+    border-color: oklch(var(--primary) / 60%);
+    background: oklch(var(--background));
+    box-shadow: 0 0 0 4px oklch(var(--primary) / 10%);
+  }
+
+  .filled-input.is-invalid {
+    border-color: oklch(var(--destructive) / 65%);
+    background: oklch(var(--destructive) / 4%);
+  }
+
+  .filled-input.is-invalid:focus-within {
+    box-shadow: 0 0 0 4px oklch(var(--destructive) / 8%);
+  }
+
+  .filled-input.is-disabled {
+    opacity: 0.55;
+  }
+
+  .input-icon {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: oklch(var(--muted-foreground));
+  }
+
+  .filled-input input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: oklch(var(--foreground));
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .filled-input input::placeholder {
+    color: oklch(var(--muted-foreground) / 70%);
+  }
+
+  .filled-input input:-webkit-autofill {
+    -webkit-text-fill-color: oklch(var(--foreground));
+    box-shadow: 0 0 0 1000px oklch(var(--background)) inset;
+  }
+
+  .eye-button {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    margin-right: -8px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: oklch(var(--muted-foreground));
+    transition: background 120ms ease, color 120ms ease;
+  }
+
+  .eye-button:hover {
+    background: oklch(var(--muted) / 70%);
+    color: oklch(var(--foreground));
+  }
+
+  .eye-button svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .field-error {
+    min-height: 18px;
+    margin: 0;
+    padding: 3px 2px 0;
+    color: oklch(var(--destructive));
+    font-size: 12px;
+    line-height: 16px;
+  }
+
+  .success-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 0;
+    padding: 9px 12px;
+    border: 1px solid oklch(var(--primary) / 22%);
+    border-radius: 10px;
+    background: oklch(var(--primary) / 7%);
+    color: oklch(var(--foreground));
+    font-size: 12px;
+    line-height: 18px;
+  }
+
+  .success-note svg {
+    flex: none;
+    width: 15px;
+    height: 15px;
+    color: oklch(var(--primary));
+  }
+
+  .submit-button {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 48px;
+    margin-top: 18px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 12px;
+    background: oklch(var(--primary));
+    color: oklch(var(--primary-foreground));
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    box-shadow: 0 10px 24px -10px oklch(var(--primary) / 55%);
+    transition: background 150ms ease, opacity 150ms ease, transform 80ms ease;
+  }
+
+  .submit-button:hover:not(:disabled) {
+    background: color-mix(in oklch, oklch(var(--primary)), black 10%);
+  }
+
+  .submit-button:active:not(:disabled) {
+    background: color-mix(in oklch, oklch(var(--primary)), black 16%);
+    transform: scale(0.99);
+  }
+
+  .submit-button:disabled {
+    opacity: 0.55;
+    box-shadow: none;
+  }
+
+  .submit-button:focus-visible {
+    outline: 2px solid oklch(var(--primary));
+    outline-offset: 3px;
+  }
+
+  .submit-spinner {
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+    border: 2px solid currentcolor;
+    border-right-color: transparent;
+    border-radius: 999px;
+    opacity: 0.8;
+    animation: spin 720ms linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .forgot-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 2px;
+  }
+
+  .forgot-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent-text);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 18px;
+  }
+
+  .forgot-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .toast {
+    position: absolute;
+    bottom: 70px;
+    left: 50%;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: calc(100% - 32px);
+    padding: 10px 15px;
+    border-radius: 999px;
+    background: oklch(var(--foreground));
+    color: oklch(var(--background));
+    font-size: 12px;
+    line-height: 18px;
+    box-shadow: 0 14px 36px rgb(0 0 0 / 18%);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 8px);
+    transition: opacity 160ms ease, transform 160ms ease;
+  }
+
+  .toast.is-visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  .toast svg {
+    flex: none;
+    width: 15px;
+    height: 15px;
+    color: oklch(var(--primary));
+  }
+
+  .page-footer {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    width: 100%;
+    padding: 16px 24px;
+    color: oklch(var(--muted-foreground));
+    font-size: 11px;
+    line-height: 17px;
+    text-align: center;
+  }
+
+  @keyframes float-y {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+
+    50% {
+      transform: translateY(-5px);
+    }
+  }
+
+  /* ------------------------------------------------------------------ 窄屏 */
+  @container collage (max-width: 1199px) {
+    .layout {
+      grid-template-columns: minmax(0, 1fr);
+      max-width: 440px;
+    }
+
+    .collage {
+      display: none;
+    }
+
+    .login-panel {
+      justify-content: center;
+    }
+  }
+
+  @container collage (max-width: 640px) {
+    .topbar {
+      padding: 18px 20px 8px;
+    }
+
+    .brand-tile {
+      width: 42px;
+      height: 42px;
+      padding: 5px;
+      border-radius: 12px;
+    }
+
+    .brand-name {
+      font-size: 18px;
+      line-height: 26px;
+    }
+
+    .brand-submark {
+      font-size: 9px;
+      line-height: 12px;
+    }
+
+    .status-pill {
+      gap: 6px;
+      padding: 5px 9px;
+      font-size: 10px;
+      line-height: 14px;
+    }
+
+    .status-full {
+      display: none;
+    }
+
+    .status-short {
+      display: inline;
+    }
+
+    .main {
+      padding: 12px 16px 8px;
+    }
+
+    .login-card {
+      padding: 28px;
+      border-radius: 20px;
+    }
+
+    .login-card h1 {
+      font-size: 24px;
+      line-height: 32px;
+    }
+
+    .card-sub {
+      margin-bottom: 22px;
+    }
+
+    .page-footer {
+      padding: 12px 20px 16px;
+      font-size: 10px;
+      line-height: 16px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="proto-bar" id="protoBar">
+    <div class="proto-bar__title">登录页重做 · 业务拼贴版</div>
+    <div class="proto-bar__groups">
+      <div class="proto-group" role="group" aria-label="主题">
+        <span class="proto-group__label">主题</span>
+        <button class="proto-chip" type="button" data-theme="light" aria-pressed="true">亮色</button>
+        <button class="proto-chip" type="button" data-theme="dark" aria-pressed="false">暗色</button>
+      </div>
+      <div class="proto-group" role="group" aria-label="交互状态">
+        <span class="proto-group__label">状态</span>
+        <button class="proto-chip" type="button" data-demo="normal" aria-pressed="true">正常</button>
+        <button class="proto-chip" type="button" data-demo="invalid" aria-pressed="false">校验</button>
+        <button class="proto-chip" type="button" data-demo="credential" aria-pressed="false">凭证错误</button>
+        <button class="proto-chip" type="button" data-demo="unavailable" aria-pressed="false">服务不可用</button>
+        <button class="proto-chip" type="button" data-demo="loading" aria-pressed="false">提交中</button>
+      </div>
+      <div class="proto-group" role="group" aria-label="预览视口">
+        <span class="proto-group__label">视口</span>
+        <button class="proto-chip" type="button" data-viewport="desktop" aria-pressed="true">桌面</button>
+        <button class="proto-chip" type="button" data-viewport="device" aria-pressed="false">390</button>
+      </div>
+      <a class="proto-chip proto-link" href="./prototype.html">分栏版</a>
+      <a class="proto-chip proto-link" href="./prototype-centered.html">居中档案版</a>
+      <a class="proto-chip proto-link" href="./prototype-canvas.html">悬浮画布版</a>
+      <span class="proto-bar__note">原型控制不属于页面设计</span>
+    </div>
+    <button class="proto-bar__collapse" type="button" id="collapseProtoBar">收起</button>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="stage__frame">
+      <div class="page" id="loginPage">
+        <svg class="page-arc" viewBox="0 0 200 200" fill="none" aria-hidden="true">
+          <circle cx="100" cy="100" r="90" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="100" cy="100" r="65" stroke="currentColor" stroke-width="1"/>
+        </svg>
+
+        <header class="topbar">
+          <div class="brand-lockup">
+            <span class="brand-tile">
+              <img src="../../web/apps/qsmds-arco/src/assets/images/logo.svg" alt="千树数据管理系统 Logo">
+            </span>
+            <div class="brand-text">
+              <p class="brand-name">千树数据管理系统</p>
+              <p class="brand-submark">QIANSHU DMS</p>
+            </div>
+          </div>
+          <span class="status-pill">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span class="status-full">内部系统 · v0.8.4</span>
+            <span class="status-short">v0.8.4</span>
+          </span>
+        </header>
+
+        <main class="main">
+          <div class="layout">
+            <div class="collage" aria-hidden="true">
+              <div class="collage-backdrop"></div>
+
+              <div class="collage-toolbar">
+                <div class="tool-icon tool-icon--sales" title="销售订单">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+                </div>
+                <div class="tool-icon tool-icon--purchase" title="采购管理">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                </div>
+                <div class="tool-icon tool-icon--warehouse" title="仓储库存">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                </div>
+                <div class="tool-icon tool-icon--finance" title="财务资金">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+              </div>
+
+              <div class="collage-window">
+                <div class="window-bar">
+                  <span class="window-dot"></span>
+                  <span class="window-dot"></span>
+                  <span class="window-dot"></span>
+                  <span class="window-url">dms.qianshu.ltd</span>
+                </div>
+                <div class="window-body">
+                  <div class="window-brand">
+                    <span class="window-logo">
+                      <img src="../../web/apps/qsmds-arco/src/assets/images/logo.svg" alt="">
+                    </span>
+                    <span class="window-name">千树数据管理系统</span>
+                    <span class="window-badge">DMS</span>
+                  </div>
+                  <p class="window-title">产品流转与资金同频<br><span>业务协同与财务一体</span></p>
+                  <div class="window-features">
+                    <span class="feature"><span class="feature-check">✓</span>销售开单</span>
+                    <span class="feature"><span class="feature-check">✓</span>采购协同</span>
+                    <span class="feature"><span class="feature-check">✓</span>仓储联动</span>
+                    <span class="feature"><span class="feature-check">✓</span>财务归集</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="float-card float-card--inbound">
+                <div class="float-card__bar"><i></i>已入库</div>
+                <div class="float-card__body">
+                  <span class="float-avatar">货</span>
+                  <span class="float-lines"><span class="float-line"></span><span class="float-line float-line--short"></span></span>
+                </div>
+              </div>
+
+              <div class="collage-link"></div>
+              <div class="collage-plus">+</div>
+              <svg class="collage-cursor" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 2l16 10-7 2 4 7-3 1.5-4-7-5 4.5z"/></svg>
+
+              <div class="pie-card">
+                <span class="pie-lines">
+                  <span class="pie-line"><span class="pie-dot" style="background:#f0a23a"></span><span style="width:42px"></span></span>
+                  <span class="pie-line"><span class="pie-dot" style="background:#2fa86f"></span><span style="width:58px"></span></span>
+                  <span class="pie-line"><span class="pie-dot" style="background:#54c7b5"></span><span style="width:32px"></span></span>
+                </span>
+                <svg class="pie-chart" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="15.9" stroke="#eef2ef"></circle>
+                  <circle cx="18" cy="18" r="15.9" stroke="#2fa86f" stroke-dasharray="55 45" stroke-dashoffset="0"></circle>
+                  <circle cx="18" cy="18" r="15.9" stroke="#f0a23a" stroke-dasharray="28 72" stroke-dashoffset="-57"></circle>
+                  <circle cx="18" cy="18" r="15.9" stroke="#54c7b5" stroke-dasharray="15 85" stroke-dashoffset="-86"></circle>
+                </svg>
+              </div>
+
+              <div class="float-card float-card--finance">
+                <div class="float-card__bar"><i></i>已核算</div>
+                <div class="float-card__body">
+                  <span class="float-avatar">¥</span>
+                  <span class="float-lines"><span class="float-line"></span><span class="float-line float-line--short"></span></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="login-panel">
+              <section class="login-card" aria-labelledby="loginTitle">
+                <h1 id="loginTitle">欢迎登录</h1>
+                <p class="card-sub">内部业务数据工作台 · <strong>管理员分配账号登录</strong></p>
+
+                <div class="alert" id="globalAlert" role="alert" hidden>
+                  <svg class="alert__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 8v4"></path>
+                    <path d="M12 16h.01"></path>
+                  </svg>
+                  <div>
+                    <p class="alert__message" id="globalAlertMessage"></p>
+                    <button class="alert__action" type="button" id="checkLoginState" hidden>检查登录状态</button>
+                  </div>
+                </div>
+
+                <form id="loginForm" novalidate aria-busy="false">
+                  <div class="field" id="usernameField">
+                    <label for="username">账号 <span class="required-mark" aria-hidden="true">*</span></label>
+                    <div class="filled-input" id="usernameShell">
+                      <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                      </svg>
+                      <input
+                        id="username"
+                        name="username"
+                        type="text"
+                        placeholder="请输入账号"
+                        autocomplete="username"
+                        autocapitalize="off"
+                        spellcheck="false"
+                        enterkeyhint="next"
+                        required
+                        aria-required="true"
+                        aria-describedby="usernameError"
+                      >
+                    </div>
+                    <p class="field-error" id="usernameError" aria-live="polite"></p>
+                  </div>
+
+                  <div class="field" id="passwordField">
+                    <label for="password">密码 <span class="required-mark" aria-hidden="true">*</span></label>
+                    <div class="filled-input" id="passwordShell">
+                      <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                      </svg>
+                      <input
+                        id="password"
+                        name="password"
+                        type="password"
+                        placeholder="请输入登录密码"
+                        maxlength="20"
+                        autocomplete="current-password"
+                        autocapitalize="off"
+                        spellcheck="false"
+                        enterkeyhint="go"
+                        required
+                        aria-required="true"
+                        aria-describedby="passwordError"
+                      >
+                      <button class="eye-button" type="button" id="togglePassword" aria-label="显示密码" aria-pressed="false" title="显示密码">
+                        <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path>
+                          <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                      </button>
+                    </div>
+                    <p class="field-error" id="passwordError" aria-live="polite"></p>
+                  </div>
+
+                  <div class="forgot-row">
+                    <button class="forgot-link" type="button" id="forgotPassword">忘记密码？</button>
+                  </div>
+
+                  <div class="success-note" id="successNote" role="status" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M20 6 9 17l-5-5"></path>
+                    </svg>
+                    <span>登录成功，正在进入工作台…</span>
+                  </div>
+
+                  <button class="submit-button" type="submit" id="submitButton">
+                    <span class="submit-spinner" id="submitSpinner" hidden aria-hidden="true"></span>
+                    <span id="submitLabel">登录系统</span>
+                  </button>
+                </form>
+              </section>
+            </div>
+          </div>
+        </main>
+
+        <footer class="page-footer">
+          Copyright © 2023–2026 Liaocheng Qianshu Culture Media Co., Ltd. All Rights Reserved.
+        </footer>
+
+        <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 16v-4"></path>
+            <path d="M12 8h.01"></path>
+          </svg>
+          <span id="toastMessage"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const root = document.documentElement;
+  const protoBar = document.getElementById('protoBar');
+  const stage = document.getElementById('stage');
+  const form = document.getElementById('loginForm');
+  const usernameInput = document.getElementById('username');
+  const passwordInput = document.getElementById('password');
+  const usernameField = document.getElementById('usernameField');
+  const passwordField = document.getElementById('passwordField');
+  const usernameShell = document.getElementById('usernameShell');
+  const passwordShell = document.getElementById('passwordShell');
+  const usernameError = document.getElementById('usernameError');
+  const passwordError = document.getElementById('passwordError');
+  const globalAlert = document.getElementById('globalAlert');
+  const globalAlertMessage = document.getElementById('globalAlertMessage');
+  const checkLoginState = document.getElementById('checkLoginState');
+  const successNote = document.getElementById('successNote');
+  const submitButton = document.getElementById('submitButton');
+  const submitSpinner = document.getElementById('submitSpinner');
+  const submitLabel = document.getElementById('submitLabel');
+  const togglePassword = document.getElementById('togglePassword');
+  const eyeIcon = document.getElementById('eyeIcon');
+  const forgotPassword = document.getElementById('forgotPassword');
+  const toast = document.getElementById('toast');
+  const toastMessage = document.getElementById('toastMessage');
+  let toastTimer;
+
+  const state = {
+    demo: 'normal',
+    loading: false,
+    theme: 'light',
+    touched: {
+      password: false,
+      username: false,
+    },
+    viewport: 'desktop',
+  };
+
+  const icons = {
+    eye: '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path><circle cx="12" cy="12" r="3"></circle>',
+    eyeOff: '<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"></path><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"></path><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"></path><path d="m2 2 20 20"></path>',
+  };
+
+  function setPressed(attribute, activeValue) {
+    document.querySelectorAll(`[${attribute}]`).forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.getAttribute(attribute) === activeValue));
+    });
+  }
+
+  function render() {
+    root.classList.toggle('dark', state.theme === 'dark');
+    stage.classList.toggle('is-device', state.viewport === 'device');
+    setPressed('data-theme', state.theme);
+    setPressed('data-demo', state.demo);
+    setPressed('data-viewport', state.viewport);
+  }
+
+  function setLoading(loading) {
+    state.loading = loading;
+    submitButton.disabled = loading;
+    usernameInput.disabled = loading;
+    passwordInput.disabled = loading;
+    togglePassword.disabled = loading;
+    usernameShell.classList.toggle('is-disabled', loading);
+    passwordShell.classList.toggle('is-disabled', loading);
+    submitSpinner.hidden = !loading;
+    submitLabel.textContent = loading ? '登录中…' : '登录系统';
+    form.setAttribute('aria-busy', String(loading));
+  }
+
+  function clearFieldError(name) {
+    const field = name === 'username' ? usernameField : passwordField;
+    const shell = name === 'username' ? usernameShell : passwordShell;
+    const error = name === 'username' ? usernameError : passwordError;
+    const input = name === 'username' ? usernameInput : passwordInput;
+    field.classList.remove('has-error');
+    shell.classList.remove('is-invalid');
+    input.removeAttribute('aria-invalid');
+    error.textContent = '';
+  }
+
+  function setFieldError(name, message) {
+    const field = name === 'username' ? usernameField : passwordField;
+    const shell = name === 'username' ? usernameShell : passwordShell;
+    const error = name === 'username' ? usernameError : passwordError;
+    const input = name === 'username' ? usernameInput : passwordInput;
+    field.classList.toggle('has-error', Boolean(message));
+    shell.classList.toggle('is-invalid', Boolean(message));
+    input.setAttribute('aria-invalid', String(Boolean(message)));
+    error.textContent = message;
+  }
+
+  function validateField(name) {
+    const input = name === 'username' ? usernameInput : passwordInput;
+    let message = '';
+    if (input.value.length === 0) {
+      message = name === 'username' ? '请输入账号' : '请输入密码';
+    }
+    setFieldError(name, message);
+    return message === '';
+  }
+
+  function validateAll() {
+    state.touched.username = true;
+    state.touched.password = true;
+    const usernameValid = validateField('username');
+    const passwordValid = validateField('password');
+    if (!usernameValid) {
+      usernameInput.focus();
+      return false;
+    }
+    if (!passwordValid) {
+      passwordInput.focus();
+      return false;
+    }
+    return true;
+  }
+
+  function clearAlert() {
+    globalAlert.hidden = true;
+    globalAlertMessage.textContent = '';
+    checkLoginState.hidden = true;
+  }
+
+  function showAlert(message, withCheckAction) {
+    globalAlertMessage.textContent = message;
+    checkLoginState.hidden = !withCheckAction;
+    checkLoginState.disabled = false;
+    checkLoginState.textContent = '检查登录状态';
+    globalAlert.hidden = false;
+  }
+
+  function clearSuccess() {
+    successNote.hidden = true;
+  }
+
+  function syncPasswordToggle() {
+    const visible = passwordInput.type === 'text';
+    togglePassword.setAttribute('aria-pressed', String(visible));
+    togglePassword.setAttribute('aria-label', visible ? '隐藏密码' : '显示密码');
+    togglePassword.title = visible ? '隐藏密码' : '显示密码';
+    eyeIcon.innerHTML = visible ? icons.eyeOff : icons.eye;
+  }
+
+  function showToast(message) {
+    toastMessage.textContent = message;
+    toast.hidden = false;
+    window.requestAnimationFrame(() => toast.classList.add('is-visible'));
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => {
+      toast.classList.remove('is-visible');
+      window.setTimeout(() => {
+        toast.hidden = true;
+      }, 180);
+    }, 2600);
+  }
+
+  function applyDemo(demo) {
+    state.demo = demo;
+    clearAlert();
+    clearSuccess();
+    clearFieldError('username');
+    clearFieldError('password');
+    setLoading(false);
+    state.touched.username = false;
+    state.touched.password = false;
+    passwordInput.type = 'password';
+    syncPasswordToggle();
+
+    if (demo === 'normal') {
+      usernameInput.value = '';
+      passwordInput.value = '';
+      syncPasswordToggle();
+    }
+    else if (demo === 'invalid') {
+      usernameInput.value = '';
+      passwordInput.value = '';
+      syncPasswordToggle();
+      state.touched.username = true;
+      state.touched.password = true;
+      validateField('username');
+      validateField('password');
+    }
+    else if (demo === 'credential') {
+      usernameInput.value = 'operator';
+      passwordInput.value = '';
+      syncPasswordToggle();
+      showAlert('账号或密码错误', false);
+      passwordInput.focus();
+    }
+    else if (demo === 'unavailable') {
+      usernameInput.value = 'operator';
+      passwordInput.value = '';
+      syncPasswordToggle();
+      showAlert('认证服务暂时不可用', true);
+    }
+    else if (demo === 'loading') {
+      usernameInput.value = 'operator';
+      passwordInput.value = 'Qianshu2026';
+      syncPasswordToggle();
+      setLoading(true);
+    }
+
+    render();
+  }
+
+  document.querySelectorAll('[data-theme]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.theme = button.dataset.theme;
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-viewport]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.viewport = button.dataset.viewport;
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-demo]').forEach((button) => {
+    button.addEventListener('click', () => {
+      applyDemo(button.dataset.demo);
+    });
+  });
+
+  document.getElementById('collapseProtoBar').addEventListener('click', (event) => {
+    const collapsed = protoBar.classList.toggle('is-collapsed');
+    event.currentTarget.textContent = collapsed ? '展开' : '收起';
+  });
+
+  usernameInput.addEventListener('blur', () => {
+    state.touched.username = true;
+    validateField('username');
+  });
+
+  passwordInput.addEventListener('blur', () => {
+    state.touched.password = true;
+    validateField('password');
+  });
+
+  usernameInput.addEventListener('input', () => {
+    clearAlert();
+    clearSuccess();
+    if (state.touched.username || usernameError.textContent) {
+      validateField('username');
+    }
+  });
+
+  passwordInput.addEventListener('input', () => {
+    clearAlert();
+    clearSuccess();
+    if (passwordInput.value.length === 0 && passwordInput.type === 'text') {
+      passwordInput.type = 'password';
+    }
+    syncPasswordToggle();
+    if (state.touched.password || passwordError.textContent) {
+      validateField('password');
+    }
+  });
+
+  togglePassword.addEventListener('click', () => {
+    passwordInput.type = passwordInput.type === 'password' ? 'text' : 'password';
+    syncPasswordToggle();
+    passwordInput.focus();
+  });
+
+  forgotPassword.addEventListener('click', () => {
+    showToast('请联系管理员重置！');
+  });
+
+  checkLoginState.addEventListener('click', () => {
+    if (checkLoginState.disabled) {
+      return;
+    }
+    checkLoginState.disabled = true;
+    checkLoginState.textContent = '检查中…';
+    window.setTimeout(() => {
+      checkLoginState.disabled = false;
+      checkLoginState.textContent = '检查登录状态';
+      showAlert('当前仍未登录，可稍后再次检查或重新输入密码登录', true);
+    }, 800);
+  });
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (state.loading) {
+      return;
+    }
+    clearAlert();
+    clearSuccess();
+
+    if (!validateAll()) {
+      return;
+    }
+
+    setLoading(true);
+    const demo = state.demo;
+
+    window.setTimeout(() => {
+      setLoading(false);
+
+      if (demo === 'credential') {
+        passwordInput.value = '';
+        passwordInput.type = 'password';
+        syncPasswordToggle();
+        showAlert('账号或密码错误', false);
+        passwordInput.focus();
+        return;
+      }
+
+      if (demo === 'unavailable') {
+        passwordInput.value = '';
+        passwordInput.type = 'password';
+        syncPasswordToggle();
+        showAlert('认证服务暂时不可用', true);
+        return;
+      }
+
+      successNote.hidden = false;
+      submitButton.disabled = true;
+      window.setTimeout(() => {
+        successNote.hidden = true;
+        submitButton.disabled = false;
+      }, 1800);
+    }, 900);
+  });
+
+  syncPasswordToggle();
+  render();
+</script>
+</body>
+</html>

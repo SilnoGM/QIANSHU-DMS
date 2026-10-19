@@ -85,3 +85,31 @@ test('组件目录 Hero、原则标题和说明使用稳定语义角色', () => 
   assert.match(principleDescriptionTag, /\btext-muted-foreground\b/u)
   assert.doesNotMatch(principleDescriptionTag, /\b(?:text-sm|leading-6)\b/u)
 })
+
+test('独立拼贴登录页使用新页壳、Fa 表单和忘记密码提示', () => {
+  const page = readRelativeSource('../../src/views/login-collage.vue')
+  const form = readRelativeSource(
+    '../../src/components/AppAccountForm/login-collage.vue',
+  )
+  const collage = readRelativeSource(
+    '../../src/components/AppLoginCollage/index.vue',
+  )
+  const routes = readRelativeSource('../../src/router/routes.ts')
+
+  assert.match(page, /<AppLoginCollage\b/u)
+  assert.match(page, /<LoginCollageForm\b/u)
+  assert.match(page, /@on-login=/u)
+  assert.match(page, /<FaTextShiny\b/u)
+  assert.match(collage, /<FaTextShiny\b/u)
+  assert.match(routes, /views\/login-collage\.vue/u)
+
+  assert.match(form, /<FaForm\b/u)
+  assert.match(form, /<FaFormItem\b/u)
+  assert.match(form, /<FaInput\b/u)
+  assert.match(form, /<FaButton\b/u)
+  assert.match(form, /\bqs-type-page-title\b/u)
+  assert.match(form, /忘记密码/u)
+  assert.match(form, /请联系管理员重置/u)
+  assert.match(form, /登录系统/u)
+  assert.doesNotMatch(form, /card-logo/u)
+})

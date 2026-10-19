@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import AppAccountProfile from '@/components/AppAccountButton/profile.vue'
 import EditPassword from '@/components/AppAccountForm/edit-password.vue'
+import AppStartupSplash from '@/components/AppStartupSplash/index.vue'
+import { useAppStartup } from '@/composables/app/startup'
 import {
   resolveAuthRetryNavigation,
   resolveForcedPasswordCompletionNavigation,
@@ -24,6 +26,7 @@ const { locale } = useI18n()
 const { auth } = useAppAuth()
 const { auth: localeAuth } = useAppLocaleAuth()
 const { generateI18nTitle } = useAppMenu()
+const { visible: startupVisible, leaving: startupLeaving } = useAppStartup()
 const changePasswordVisible = ref(false)
 const profileVisible = ref(false)
 
@@ -181,5 +184,6 @@ watch(() => appSettingsStore.lang, () => {
     <FaToast :theme="appSettingsStore.currentColorScheme" />
     <AppCheckUpdates />
     <AppSystemInfo />
+    <AppStartupSplash v-if="startupVisible" :leaving="startupLeaving" />
   </Provider>
 </template>
