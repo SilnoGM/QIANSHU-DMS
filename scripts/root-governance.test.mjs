@@ -372,9 +372,18 @@ const supplierResidueAllowlist = Object.freeze([
   'server/src/cli/seed/seed.dataset.ts',
   'server/src/cli/seed/seed.service.ts',
   'server/test/seed.e2e-spec.ts',
-  // 产品批量导入命令按供应商字典稳定值创建产品；不恢复 Supplier 主数据。
+  // 产品批量导入/导出命令按供应商字典稳定值同步产品目录；不恢复 Supplier 主数据。
+  'server/src/commands/product-catalog.manifest.spec.ts',
+  'server/src/commands/product-catalog.manifest.ts',
+  'server/src/commands/product-export.service.spec.ts',
+  'server/src/commands/product-export.service.ts',
+  'server/src/commands/product-export.ts',
+  'server/src/commands/product-import.catalog.spec.ts',
   'server/src/commands/product-import.service.spec.ts',
   'server/src/commands/product-import.service.ts',
+  // 生产清理执行清单只引用既有 products/字典字段做基线与校验，不新增 Supplier 主数据。
+  'deploy/ops/production-data-reset/README.md',
+  'deploy/ops/production-data-reset/20-verify.sql',
   // 对账详情按明细行展示装柜行匹配到的采购/销售来源：只读订单快照、金额与
   // 供应商字典标签，不新增供应商主数据入口，也不放开采采购/销售的写操作。
   'server/src/modules/slh-reconciliation-batches/slh-reconciliation-batch-query.service.ts',

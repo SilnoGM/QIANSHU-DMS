@@ -4,11 +4,12 @@ import 'reflect-metadata'
 import { readFile } from 'node:fs/promises'
 
 import { ApiException } from '../infrastructure/http/api.exception'
+import { ProductCatalogManifestError } from './product-catalog.manifest'
 import {
-  parseProductImportManifest,
+  parseProductImportFile,
   ProductImportOperationError,
+  type ProductImportFile,
   type ProductImportResult,
-  type ProductImportRow,
 } from './product-import.service'
 
 interface ProductImportCliOptions {
@@ -52,9 +53,9 @@ function parseArguments(argv: readonly string[]): ProductImportCliOptions {
   return { apply, manifestPath }
 }
 
-async function readManifest(path: string): Promise<readonly ProductImportRow[]> {
+async function readManifest(path: string): Promise<ProductImportFile> {
   const raw = JSON.parse(await readFile(path, 'utf8')) as unknown
-  return parseProductImportManifest(raw)
+  return parseProductImportFile(raw)
 }
 
 async function runDefault(
@@ -69,7 +70,7 @@ async function runDefault(
     import('./product-import.module'),
     import('./product-import.service'),
   ])
-  const rows = await readManifest(options.manifestPath)
+  const input = await readManifest(options.manifestPath)
   const application = await NestFactory.createApplicationContext(ProductImportModule, {
     abortOnError: false,
     logger: false,
@@ -77,7 +78,7 @@ async function runDefault(
   try {
     return await application
       .get(ProductImportService)
-      .run({ apply: options.apply, rows })
+      .run({ apply: options.apply, ...input })
   }
   finally {
     await application.close()
@@ -108,9 +109,11 @@ export async function runProductImportCli(
         ? error.code
         : error instanceof ProductImportOperationError
           ? error.code
-          : error instanceof SyntaxError
-            ? 'MANIFEST_JSON_INVALID'
-            : 'PRODUCT_IMPORT_FAILED',
+          : error instanceof ProductCatalogManifestError
+            ? error.code
+            : error instanceof SyntaxError
+              ? 'MANIFEST_JSON_INVALID'
+              : 'PRODUCT_IMPORT_FAILED',
     }))
     dependencies.processRef.exitCode = 1
   }
