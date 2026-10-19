@@ -19,11 +19,11 @@ function expectValidationFailure(value: unknown): void {
 describe('exchange rate normalizer', () => {
   it('returns canonical positive decimal strings without using number', () => {
     expect(normalizeForeignUnitsPerCny('4.8')).toBe('4.8')
-    expect(normalizeForeignUnitsPerCny('4.800000000000')).toBe('4.8')
-    expect(normalizeForeignUnitsPerCny('0.000000000001'))
-      .toBe('0.000000000001')
-    expect(normalizeForeignUnitsPerCny('999999999999999999.123456789012'))
-      .toBe('999999999999999999.123456789012')
+    expect(normalizeForeignUnitsPerCny('4.8000')).toBe('4.8')
+    expect(normalizeForeignUnitsPerCny('0.0001'))
+      .toBe('0.0001')
+    expect(normalizeForeignUnitsPerCny('999999999999999999.1234'))
+      .toBe('999999999999999999.1234')
   })
 
   it('rejects zero, number, scientific notation and non-canonical syntax', () => {
@@ -45,8 +45,8 @@ describe('exchange rate normalizer', () => {
     }
   })
 
-  it('rejects more than 18 integer or 12 fractional digits', () => {
+  it('rejects more than 18 integer or 4 fractional digits', () => {
     expectValidationFailure('1000000000000000000')
-    expectValidationFailure('1.1234567890123')
+    expectValidationFailure('1.12345')
   })
 })

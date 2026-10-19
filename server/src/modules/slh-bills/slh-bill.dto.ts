@@ -199,7 +199,7 @@ export class SlhBillPageDto {
 
 export class SlhBillRateDto {
   @ApiProperty({ enum: SlhBillRateSourceDto }) source!: SlhBillRateSourceDto
-  @ApiProperty({ type: 'string', description: 'TWD per CNY, twelve decimals.' }) foreignUnitsPerCny!: string
+  @ApiProperty({ type: 'string', description: 'TWD per CNY, four decimals.' }) foreignUnitsPerCny!: string
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Rate embedded in the bill formula, when present.' }) embeddedForeignUnitsPerCny!: string | null
   @ApiPropertyOptional({ format: 'uuid', nullable: true }) exchangeRateId!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) capturedAt!: string | null

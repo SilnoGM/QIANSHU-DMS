@@ -753,10 +753,10 @@ test('对账信息弹窗：结算金额与金流费按所选汇率计算，横�
     ntdSurchargeAmountTwd: '6000.00',
     payableAmountCny: '4555.00',
   })
-  const summary = buildSettleSummary(member, '5.2', SETTLE_CURRENCIES, settleTranslate)
+  const summary = buildSettleSummary(member, '5.20', SETTLE_CURRENCIES, settleTranslate)
 
-  assert.equal(summary.rate, '5.2')
-  assert.equal(summary.rateBaseText, '[slhReconciliation.settle.baseRateText:5.2]')
+  assert.equal(summary.rate, '5.20')
+  assert.equal(summary.rateBaseText, '[slhReconciliation.settle.baseRateText:5.20]')
   const [settlement, paymentFee] = summary.blocks
 
   // 账单块分两组：前两项落在虚线分组里，运算符徽标挂在项上（首项没有）。
@@ -779,7 +779,7 @@ test('对账信息弹窗：结算金额与金流费按所选汇率计算，横�
   assert.deepEqual(
     settlement?.groups[1]?.terms.map(term => [term.label, term.unit, term.value, term.accent]),
     [
-      ['[slhReconciliation.settle.rateRow]', null, '5.2', true],
+      ['[slhReconciliation.settle.rateRow]', null, '5.20', true],
       ['[slhReconciliation.settle.payableTotal]', 'CNY', '4,555.00', false],
     ],
   )
@@ -801,13 +801,13 @@ test('对账信息弹窗：结算金额与金流费按所选汇率计算，横�
   assert.equal(settlement?.resultCurrencyCode, 'CNY')
   assert.equal(settlement?.resultTone, 'success')
 
-  // 金流费：500 ÷ 5.2 × 0.7% = 0.6730… → 0.67；口径是恒红（成本项），不按符号。
+  // 金流费：500 ÷ 5.2 × 7‰ = 0.6730… → 0.67；口径是恒红（成本项），不按符号。
   assert.deepEqual(
     paymentFee?.groups.map(group => group.terms.map(term => [term.id, term.operator, term.value, term.accent])),
     [[
       ['salesAmount', null, '500.00', false],
-      ['rate', '÷', '5.2', true],
-      ['feeRate', '×', '[slhReconciliation.settle.paymentFeeRateValue:0.7]', true],
+      ['rate', '÷', '5.20', true],
+      ['feeRate', '×', '[slhReconciliation.settle.paymentFeeRateValue:7]', true],
     ]],
   )
   assert.equal(paymentFee?.groups[0]?.dashed, false)
@@ -818,7 +818,7 @@ test('对账信息弹窗：结算金额与金流费按所选汇率计算，横�
 
   // 换汇率：两块结果都跟着走。
   // （129000 − 6000）÷ 4.8 − 4555 = 21070.00；500 ÷ 4.8 × 0.007 = 0.73。
-  const embedded = buildSettleSummary(member, '4.8', SETTLE_CURRENCIES, settleTranslate)
+  const embedded = buildSettleSummary(member, '4.80', SETTLE_CURRENCIES, settleTranslate)
   assert.equal(embedded.blocks[0]?.result, '21,070.00')
   assert.equal(embedded.blocks[1]?.result, '0.73')
 
@@ -840,7 +840,7 @@ test('对账信息弹窗：本行不涉及的金额按 0 代入结算，整行�
     codAmountTwd: null,
     ntdSurchargeAmountTwd: '2000.00',
     payableAmountCny: '0.00',
-  }), '5.2', SETTLE_CURRENCIES, settleTranslate)
+  }), '5.20', SETTLE_CURRENCIES, settleTranslate)
   // 卡片里代入的是实际参与计算的 0，而不是「本行不涉及」的占位符，读的人才能验算。
   assert.equal(missingCod.blocks[0]?.groups[0]?.terms[0]?.value, '0.00')
   assert.equal(missingCod.blocks[0]?.result, '-384.62')
@@ -861,7 +861,7 @@ test('对账信息弹窗：本行不涉及的金额按 0 代入结算，整行�
     codAmountTwd: '80000.00',
     ntdSurchargeAmountTwd: null,
     payableAmountCny: '3510.00',
-  }), '5.2', SETTLE_CURRENCIES, settleTranslate)
+  }), '5.20', SETTLE_CURRENCIES, settleTranslate)
   assert.equal(missingNtd.blocks[0]?.result, '11,874.62')
   assert.equal(missingNtd.blocks[0]?.resultTone, 'success')
 
@@ -871,7 +871,7 @@ test('对账信息弹窗：本行不涉及的金额按 0 代入结算，整行�
     codAmountTwd: null,
     ntdSurchargeAmountTwd: null,
     payableAmountCny: null,
-  }), '5.2', SETTLE_CURRENCIES, settleTranslate)
+  }), '5.20', SETTLE_CURRENCIES, settleTranslate)
   assert.equal(allMissing.blocks[0]?.groups[0]?.terms[0]?.value, '—')
   assert.equal(allMissing.blocks[0]?.result, '—')
   assert.equal(allMissing.blocks[0]?.noteKey, null)
@@ -885,13 +885,13 @@ test('对账信息弹窗：提交载荷是原始值（本行不涉及为 null）
     ntdSurchargeAmountTwd: '2000.00',
     payableAmountCny: '0.00',
   })
-  const summary = buildSettleSummary(member, '5.2', SETTLE_CURRENCIES, settleTranslate)
+  const summary = buildSettleSummary(member, '5.20', SETTLE_CURRENCIES, settleTranslate)
 
   assert.deepEqual(summary.payload, {
     codAmountTwd: null,
     ntdSurchargeAmountTwd: '2000.00',
     payableAmountCny: '0.00',
-    // （0 − 2000）÷ 5.2 − 0 = −384.62；10 ÷ 5.2 × 0.7% = 0.01。
+    // （0 − 2000）÷ 5.2 − 0 = −384.62；10 ÷ 5.2 × 7‰ = 0.01。
     settlementAmountCny: '-384.62',
     salesAmount: '10.0000',
     paymentFeeAmountCny: '0.01',
@@ -952,21 +952,21 @@ test('核对记录弹窗：卡片按「状态 / 汇率费率 / 六个金额 / �
   assert.equal(card.collapsedByDefault, false)
   assert.equal(card.summaryAmountLabelKey, 'slhReconciliation.records.amountAtThatTime')
   assert.deepEqual(card.summaryAmount, { value: '-384.62', currencyCode: 'CNY', tone: 'settlement' })
-  assert.equal(card.summaryRateText, '4.8')
-  assert.equal(card.summaryFeeRateText, '0.7%')
+  assert.equal(card.summaryRateText, '4.80')
+  assert.equal(card.summaryFeeRateText, '7‰')
 
   // 两个大区块：结算金额与金流费用，各自带区块内的汇率/费率辅助文字。
   assert.deepEqual(
     card.blocks.map(block => [block.id, block.labelKey, block.amount.value, block.amount.currencyCode, block.rateLabelKey, block.rateText]),
     [
-      ['settlement', 'slhReconciliation.settle.settlementResult', '-384.62', 'CNY', 'slhReconciliation.settle.rateRow', '4.8'],
-      ['paymentFee', 'slhReconciliation.settle.paymentFeeResult', '0.73', 'CNY', 'slhReconciliation.settle.paymentFeeRate', '0.7%'],
+      ['settlement', 'slhReconciliation.settle.settlementResult', '-384.62', 'CNY', 'slhReconciliation.settle.rateRow', '4.80'],
+      ['paymentFee', 'slhReconciliation.settle.paymentFeeResult', '0.73', 'CNY', 'slhReconciliation.settle.paymentFeeRate', '7‰'],
     ],
   )
   // 公式区域的两条计算式：代入后的数值；本行不涉及的代收保留占位符，不按 0 改写历史。
-  assert.equal(card.formulas.settlement, '（— − NT$2,000.00 TWD）÷ 4.8 − ¥0.00 CNY = -¥384.62 CNY')
+  assert.equal(card.formulas.settlement, '（— − NT$2,000.00 TWD）÷ 4.80 − ¥0.00 CNY = -¥384.62 CNY')
   // 销售额按币种精度收敛到两位小数（与 AmountDisplay 同一处规则）。
-  assert.equal(card.formulas.paymentFee, 'NT$500.00 TWD ÷ 4.8 × 0.7% = ¥0.73 CNY')
+  assert.equal(card.formulas.paymentFee, 'NT$500.00 TWD ÷ 4.80 × 7‰ = ¥0.73 CNY')
 
   // 三段来源信息：订单 / 运输 / 账单，组内缺值一律占位符。
   assert.deepEqual(
@@ -1033,7 +1033,7 @@ test('对账信息弹窗：结算结果舍入成负零时不带符号也不染�
     codAmountTwd: '0.00',
     ntdSurchargeAmountTwd: '0.01',
     payableAmountCny: '0.00',
-  }), '5.2', SETTLE_CURRENCIES, settleTranslate)
+  }), '5.20', SETTLE_CURRENCIES, settleTranslate)
 
   // （0 − 0.01）÷ 5.2 = −0.0019… → 舍入后是负零，输出按 0.00 处理，按符号着色也保持中性。
   assert.equal(negativeZero.blocks[0]?.result, '0.00')
@@ -1041,14 +1041,14 @@ test('对账信息弹窗：结算结果舍入成负零时不带符号也不染�
 })
 
 test('对账信息弹窗：两张汇率卡按来源与可用性给出，汇率去尾零展示', () => {
-  assert.equal(buildSettleRateCards(null, '4.800000000000')[1]?.rate, '4.8')
-  assert.equal(buildSettleRateCards('5.000000000000', null)[0]?.rate, '5')
-  const both = buildSettleRateCards('5.2', '4.8')
+  assert.equal(buildSettleRateCards(null, '4.800000000000')[1]?.rate, '4.80')
+  assert.equal(buildSettleRateCards('5.000000000000', null)[0]?.rate, '5.00')
+  const both = buildSettleRateCards('5.20', '4.80')
   assert.deepEqual(both.map(card => [card.source, card.rate, card.disabled]), [
-    ['SYSTEM', '5.2', false],
-    ['EMBEDDED', '4.8', false],
+    ['SYSTEM', '5.20', false],
+    ['EMBEDDED', '4.80', false],
   ])
-  assert.equal(buildSettleRateCards('5.2', null)[1]?.disabled, true)
+  assert.equal(buildSettleRateCards('5.20', null)[1]?.disabled, true)
   assert.deepEqual(buildSettleRateCards(null, null).map(card => card.disabled), [true, true])
 })
 
@@ -1178,7 +1178,7 @@ test('账单明细行面板：顶部信息块 + 货物明细 / 费用结算 / �
   assert.equal(cargo.fields[2]?.label, '[slhBill.line.packageCount]')
   assert.equal(cargo.fields[2]?.value, '12 箱')
   assert.equal(cargo.fields[3]?.label, '[slhBill.line.weight]')
-  assert.equal(cargo.fields[3]?.value, '120.50 KG')
+  assert.equal(cargo.fields[3]?.value, '121 KG')
   assert.equal(cargo.fields[4]?.value, '215×137×113 [slhBill.unit.cm]')
   // 材积主值取系统计算，括号里给与账单自报的差异（本例系统更大）。
   assert.equal(cargo.fields[5]?.value, '1.23 [slhBill.unit.cai]（[slhBill.line.volumeDifferenceCai] +0.03）')
@@ -1349,7 +1349,7 @@ test('装柜明细行面板：顶部信息块 + 货物明细 + 代收货款块 +
   assert.equal(panel.cargo.fields[2]?.label, '[slhBill.line.packageCount]')
   assert.equal(panel.cargo.fields[2]?.value, '12 箱')
   assert.equal(panel.cargo.fields[3]?.label, '[slhBill.line.weight]')
-  assert.equal(panel.cargo.fields[3]?.value, '120.50 KG')
+  assert.equal(panel.cargo.fields[3]?.value, '121 KG')
   assert.equal(panel.cargo.fields[4]?.value, '215×137×113 [slhBill.unit.cm]')
   // 系统计算 − 账单自报 = +0.03：括注与账单面板同一措辞。
   assert.equal(panel.cargo.fields[5]?.value, '1.23 [slhBill.unit.cai]（[slhBill.line.volumeDifferenceCai] +0.03）')

@@ -72,7 +72,7 @@ describe('packaging cost submission and payment over isolated PostgreSQL and rea
       shipmentId: shipment.part.id, shipmentNo: shipment.part.shipmentNo,
       shippingMarkText: shipment.part.shippingMarkText, purchaseOrderNo: shipment.order.orderNo,
       salesOrderNo: shipment.source!.orderNo, owner: { id: h.fixture.actor.id },
-      submittedBy: { id: creator.user.id }, status: 'PENDING_PAYMENT', amount: '280.5000', currencyCode: 'CNY',
+      submittedBy: { id: creator.user.id }, status: 'PENDING_PAYMENT', amount: '280.50', currencyCode: 'CNY',
       packagingTypeName: '木箱', packagingVendor: 'CHENGXIN', paidAt: null, paidBy: null, version: 1,
       packagingImage: { mediaAssetId: input.packagingImageMediaAssetId }, quotationImage: { mediaAssetId: input.quotationImageMediaAssetId },
     })
@@ -132,20 +132,20 @@ describe('packaging cost submission and payment over isolated PostgreSQL and rea
     }
     await creator.browser.patch(`/api/packaging-cost-requests/${randomUUID()}/amount`).set(packagingHeaders).send({ amount: '310.25', expectedVersion: 1 }).expect(404)
     const updated = await creator.browser.patch(url).set(packagingHeaders).send({ amount: '310.25', expectedVersion: 1 }).expect(200)
-    expect(updated.body as unknown).toMatchObject({ id: created.id, amount: '310.2500', version: 2, status: 'PENDING_PAYMENT' })
+    expect(updated.body as unknown).toMatchObject({ id: created.id, amount: '310.25', version: 2, status: 'PENDING_PAYMENT' })
     expect(updated.body as unknown).not.toHaveProperty('paymentRecipientProfile')
     expect(updated.headers['cache-control']).toBe('private, no-store')
     const after = await fundFacts(created.id)
     expect({ ...after, request: before.request }).toEqual(before)
     const audit = await h.prisma.auditEvent.findFirstOrThrow({ where: { targetId: created.id, eventType: 'PACKAGING_COST_AMOUNT_UPDATED' } })
-    expect(audit.metadata).toMatchObject({ previousAmount: '280.5000', amount: '310.2500', previousVersion: 1, version: 2 })
-    expect((await submit(creator.browser, input, key).expect(201)).body as unknown).toMatchObject({ id: created.id, amount: '310.2500', version: 2 })
+    expect(audit.metadata).toMatchObject({ previousAmount: '280.50', amount: '310.25', previousVersion: 1, version: 2 })
+    expect((await submit(creator.browser, input, key).expect(201)).body as unknown).toMatchObject({ id: created.id, amount: '310.25', version: 2 })
     await submit(creator.browser, { ...input, amount: '310.25' }, key).expect(409)
     await creator.browser.patch(url).set(packagingHeaders).send({ amount: '100', expectedVersion: 1 }).expect(409)
     await creator.browser.patch(url).set(packagingHeaders).send({ amount: '310.25', expectedVersion: 2 }).expect(200)
     expect(await h.prisma.auditEvent.count({ where: { targetId: created.id, eventType: 'PACKAGING_COST_AMOUNT_UPDATED' } })).toBe(1)
     const context = (await creator.browser.get(`/api/packaging-cost-requests/shipment-context/${shipment.part.id}`).expect(200)).body as PackagingCostShipmentContextDto
-    expect(context.existingRequests).toMatchObject([{ id: created.id, amount: '310.2500', version: 2 }])
+    expect(context.existingRequests).toMatchObject([{ id: created.id, amount: '310.25', version: 2 }])
     await pay(finance.browser, created.id, 1).expect(409)
     await pay(finance.browser, created.id, 2).expect(200)
     expect((await h.prisma.fundPostingBatch.findFirstOrThrow({ where: { businessId: created.id } })).businessAmount.toFixed(2)).toBe('310.25')
@@ -159,7 +159,7 @@ describe('packaging cost submission and payment over isolated PostgreSQL and rea
     const created = (await submit(actor.browser, await h.input(actor.browser, shipment.part.id)).expect(201)).body as PackagingCostRequestDto
     const before = await h.prisma.packagingCostRequest.findUniqueOrThrow({ where: { id: created.id } })
     const changes = [
-      { amount: '100' }, { amount: '100', version: 3 }, { amount: '0', version: 2 }, { amount: '1.234', version: 2 },
+      { amount: '100' }, { amount: '100', version: 3 }, { amount: '0', version: 2 },
       { amount: '100', version: 2, remark: 'changed' }, { amount: '100', version: 2, ownerUserId: actor.user.id },
       { amount: '100', version: 2, requestFingerprintHash: Buffer.alloc(32) },
       { amount: '100', version: 2, paymentRemark: 'spoof' },

@@ -99,6 +99,7 @@ export function formatCurrencyAmount(
   value: CurrencyAmountValue,
   currency: string,
   currencies: readonly CurrencyDescriptor[],
+  minorUnit?: CurrencyMinorUnit,
 ): string {
   const normalized = normalizeInput(value)
   const normalizedCurrency = currency.trim()
@@ -112,9 +113,10 @@ export function formatCurrencyAmount(
     return `${normalized} ${normalizedCurrency}`
   }
 
-  const rounded = roundToMinorUnit(normalized, descriptor.minorUnit)
+  const places = minorUnit ?? descriptor.minorUnit
+  const rounded = roundToMinorUnit(normalized, places)
   const groupedInteger = rounded.integer.replace(/\B(?=(\d{3})+(?!\d))/gu, ',')
-  const fraction = descriptor.minorUnit === 0
+  const fraction = places === 0
     ? ''
     : `.${rounded.fraction}`
 

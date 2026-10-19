@@ -38,7 +38,7 @@ function currencyFixture(overrides: Record<string, unknown> = {}) {
     exchangeRate: {
       id: RATE_ID,
       currencyId: TWD_ID,
-      foreignUnitsPerCny: decimal('4.800000000000'),
+      foreignUnitsPerCny: decimal('4.8000'),
       version: 3,
       createdAt: new Date('2026-07-28T00:00:00.000Z'),
       updatedAt: new Date('2026-07-29T00:00:00.000Z'),
@@ -261,7 +261,7 @@ describe('ExchangeRateQueryService getById', () => {
     prisma.exchangeRate.findUnique.mockResolvedValue({
       id: RATE_ID,
       currencyId: TWD_ID,
-      foreignUnitsPerCny: decimal('4.800000000000'),
+      foreignUnitsPerCny: decimal('4.8000'),
       version: 3,
       createdAt: new Date('2026-07-28T00:00:00.000Z'),
       updatedAt: new Date('2026-07-29T00:00:00.000Z'),

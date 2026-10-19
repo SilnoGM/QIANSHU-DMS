@@ -77,7 +77,7 @@ export class PackagingCostRequestDto {
   @ApiProperty() packagingType!: string
   @ApiProperty() packagingTypeName!: string
   @ApiProperty({ enum: PackagingCostVendorDto }) packagingVendor!: PackagingCostVendorDto
-  @ApiProperty({ description: 'CNY amount with four decimal places; editable while pending, immutable after payment.' }) amount!: string
+  @ApiProperty({ description: 'CNY amount with two decimal places; editable while pending, immutable after payment.' }) amount!: string
   @ApiProperty({ enum: ['CNY'] }) currencyCode!: 'CNY'
   @ApiProperty({ type: 'string', nullable: true }) remark!: string | null
   @ApiProperty({ enum: PackagingCostStatusDto }) status!: PackagingCostStatusDto
@@ -109,7 +109,7 @@ export class PackagingCostRequestSummaryDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty() packagingTypeName!: string
   @ApiProperty({ enum: PackagingCostVendorDto }) packagingVendor!: PackagingCostVendorDto
-  @ApiProperty({ description: 'CNY amount with four decimal places; editable while pending, immutable after payment.' }) amount!: string
+  @ApiProperty({ description: 'CNY amount with two decimal places; editable while pending, immutable after payment.' }) amount!: string
   @ApiProperty({ enum: ['CNY'] }) currencyCode!: 'CNY'
   @ApiProperty({ enum: PackagingCostStatusDto }) status!: PackagingCostStatusDto
   @ApiProperty({ type: () => PackagingCostPersonDto }) submittedBy!: PackagingCostPersonDto

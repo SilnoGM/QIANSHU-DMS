@@ -16,7 +16,7 @@ const LINE_B_ID = '44444444-4444-4444-8444-444444444444'
 const PRODUCT_ID = '55555555-5555-4555-8555-555555555555'
 
 function decimal(value: string) {
-  return { toFixed: () => Number(value).toFixed(4) }
+  return { toFixed: () => Number(value).toFixed(2) }
 }
 
 function orderRow(overrides: Record<string, unknown> = {}) {
@@ -229,17 +229,17 @@ describe('SalesOrderProductEditService', () => {
       updatedLineIds: [LINE_A_ID],
       removedLineIds: [LINE_B_ID],
       addedLineIds: [expect.any(String)],
-      amountDelta: '-90.0000',
+      amountDelta: '-90.00',
       fulfillmentStatus: 'PENDING',
       paymentStatus: 'PARTIALLY_PAID',
       depositReduced: false,
       amounts: {
-        lineSubtotalAmount: '210.0000',
-        agreedTotalAmount: '210.0000',
-        depositDueAmount: '100.0000',
-        balanceDueAmount: '110.0000',
-        paidAmount: '80.0000',
-        outstandingAmount: '130.0000',
+        lineSubtotalAmount: '210.00',
+        agreedTotalAmount: '210.00',
+        depositDueAmount: '100.00',
+        balanceDueAmount: '110.00',
+        paidAmount: '80.00',
+        outstandingAmount: '130.00',
       },
     })
 
@@ -256,9 +256,9 @@ describe('SalesOrderProductEditService', () => {
       data: {
         productNameSnapshot: '修改后的目录产品',
         descriptionSnapshot: '目录备注',
-        actualUnitPriceAmount: '60.0000',
+        actualUnitPriceAmount: '60.00',
         quantity: 3,
-        lineTotalAmount: '180.0000',
+        lineTotalAmount: '180.00',
       },
     })
     const removalWrite = fixture.transaction.salesOrderLine.update.mock.calls
@@ -267,10 +267,10 @@ describe('SalesOrderProductEditService', () => {
     expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
       where: { id: ORDER_ID },
       data: {
-        lineSubtotalAmount: '210.0000',
-        agreedTotalAmount: '210.0000',
-        depositDueAmount: '100.0000',
-        balanceDueAmount: '110.0000',
+        lineSubtotalAmount: '210.00',
+        agreedTotalAmount: '210.00',
+        depositDueAmount: '100.00',
+        balanceDueAmount: '110.00',
         fulfillmentStatus: 'PENDING',
         paymentStatus: 'PARTIALLY_PAID',
         version: { increment: 1 },
@@ -292,7 +292,7 @@ describe('SalesOrderProductEditService', () => {
       requestId: 'product-edit-1',
       metadata: {
         removedLineIds: [LINE_B_ID],
-        amountDelta: '-90.0000',
+        amountDelta: '-90.00',
         previousVersion: 4,
         version: 5,
       },
@@ -381,19 +381,19 @@ describe('SalesOrderProductEditService', () => {
       }],
       newLines: [],
     }))).resolves.toMatchObject({
-      amountDelta: '-40.0000',
+      amountDelta: '-40.00',
       updatedLineIds: [LINE_A_ID],
       removedLineIds: [],
-      amounts: { lineSubtotalAmount: '310.0000' },
+      amounts: { lineSubtotalAmount: '310.00' },
     })
     expect(fixture.transaction.salesOrderLine.update).toHaveBeenCalledWith({
       where: { id: LINE_A_ID },
       data: {
         productNameSnapshot: '销售快照新名称',
         descriptionSnapshot: '销售快照新备注',
-        actualUnitPriceAmount: '55.0000',
+        actualUnitPriceAmount: '55.00',
         quantity: 2,
-        lineTotalAmount: '110.0000',
+        lineTotalAmount: '110.00',
       },
     })
     expect(fixture.transaction.product.findMany).not.toHaveBeenCalled()
@@ -449,9 +449,9 @@ describe('SalesOrderProductEditService', () => {
       depositReduced: true,
       fulfillmentStatus: 'PREPARING',
       amounts: {
-        agreedTotalAmount: '100.0000',
-        depositDueAmount: '100.0000',
-        balanceDueAmount: '0.0000',
+        agreedTotalAmount: '100.00',
+        depositDueAmount: '100.00',
+        balanceDueAmount: '0.00',
       },
     })
   })

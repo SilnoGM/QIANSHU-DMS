@@ -509,7 +509,7 @@ export class SlhReconciliationBatchService {
       return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_SOURCE_MISSING', '这一行的销售订单已不可用，暂时无法入账', 409)
     }
     const received = formatSalesOrderAmountUnits(sumSalesOrderReceivedUnits(order.payments))
-    const newStatus = deriveSalesOrderPaymentStatus(order.agreedTotalAmount.toFixed(4), received)
+    const newStatus = deriveSalesOrderPaymentStatus(order.agreedTotalAmount.toFixed(2), received)
     if (newStatus !== order.paymentStatus) {
       await tx.salesOrder.update({
         where: { id: order.id },
@@ -521,7 +521,7 @@ export class SlhReconciliationBatchService {
           dimension: 'PAYMENT',
           fromStatus: order.paymentStatus,
           toStatus: newStatus,
-          reason: `顺联航账单 ${batch.bill.slhBillNo} 结算回填代收货款，重算累计有效收款 ${received}，约定总额 ${order.agreedTotalAmount.toFixed(4)}`,
+          reason: `顺联航账单 ${batch.bill.slhBillNo} 结算回填代收货款，重算累计有效收款 ${received}，约定总额 ${order.agreedTotalAmount.toFixed(2)}`,
           changedByUserId: context.actorUserId,
         },
       })
@@ -590,7 +590,7 @@ export class SlhReconciliationBatchService {
         return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_SOURCE_MISSING', '这一行的销售订单已不可用，暂时无法入账', 409)
       }
       const rateSource = settlement.rateSource
-      const foreignUnitsPerCny = settlement.foreignUnitsPerCny.toFixed(12)
+      const foreignUnitsPerCny = settlement.foreignUnitsPerCny.toFixed(4)
       const settlementAmount = settlement.settlementAmountCny
       if (settlementAmount !== null && !settlementAmount.isZero()) {
         entries.push({
@@ -749,7 +749,7 @@ export class SlhReconciliationBatchService {
           codAmountTwd: member.line.codAmountTwd?.toFixed(2) ?? null,
           ntdSurchargeAmountTwd: member.line.ntdSurchargeAmountTwd?.toFixed(2) ?? null,
           payableAmountCny: member.line.payableAmountCny?.toFixed(2) ?? null,
-          salesAmount: salesOrder.agreedTotalAmount.toFixed(4),
+          salesAmount: salesOrder.agreedTotalAmount.toFixed(2),
           rate,
           paymentFeeRate: PAYMENT_FEE_RATE,
         })
@@ -767,13 +767,13 @@ export class SlhReconciliationBatchService {
         })
         if (active !== null && isSameSettlement({
           rateSource: active.rateSource,
-          foreignUnitsPerCny: active.foreignUnitsPerCny.toFixed(12),
-          paymentFeeRate: active.paymentFeeRate.toFixed(12),
+          foreignUnitsPerCny: active.foreignUnitsPerCny.toFixed(4),
+          paymentFeeRate: active.paymentFeeRate.toFixed(3),
           codAmountTwd: active.codAmountTwd?.toFixed(2) ?? null,
           ntdSurchargeAmountTwd: active.ntdSurchargeAmountTwd?.toFixed(2) ?? null,
           payableAmountCny: active.payableAmountCny?.toFixed(2) ?? null,
           settlementAmountCny: active.settlementAmountCny?.toFixed(2) ?? null,
-          salesAmount: active.salesAmount?.toFixed(4) ?? null,
+          salesAmount: active.salesAmount?.toFixed(2) ?? null,
           paymentFeeAmountCny: active.paymentFeeAmountCny?.toFixed(2) ?? null,
         }, input.rateSource, rate, amounts)) {
           return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_UNCHANGED', '已有相同的结算结果，未重复记录', 409)
@@ -868,7 +868,7 @@ export class SlhReconciliationBatchService {
       if (embeddedRate === null) {
         return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_RATE_UNAVAILABLE', '该账单没有内嵌汇率，请改用系统当前汇率', 409)
       }
-      return embeddedRate.toFixed(12)
+      return embeddedRate.toFixed(4)
     }
     const rate = await tx.exchangeRate.findFirst({
       where: { currency: { code: SETTLEMENT_SYSTEM_RATE_CURRENCY } },
@@ -877,7 +877,7 @@ export class SlhReconciliationBatchService {
     if (rate === null) {
       return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_RATE_UNAVAILABLE', '当前没有可用的系统汇率', 409)
     }
-    return rate.foreignUnitsPerCny.toFixed(12)
+    return rate.foreignUnitsPerCny.toFixed(4)
   }
 
   /** 读回刚写入的结算结果，供接口返回（不额外暴露列表读接口）。 */
@@ -898,8 +898,8 @@ export class SlhReconciliationBatchService {
       batchLineId: row.batchLineId,
       status: row.status as SlhReconciliationSettlementDto['status'],
       rateSource: row.rateSource as SlhReconciliationSettlementDto['rateSource'],
-      foreignUnitsPerCny: row.foreignUnitsPerCny.toFixed(12),
-      paymentFeeRate: row.paymentFeeRate.toFixed(12),
+      foreignUnitsPerCny: row.foreignUnitsPerCny.toFixed(4),
+      paymentFeeRate: row.paymentFeeRate.toFixed(3),
       createdByDisplayName: row.createdBy.displayName,
       createdAt: row.createdAt.toISOString(),
     }

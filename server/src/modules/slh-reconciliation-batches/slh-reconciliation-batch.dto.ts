@@ -259,10 +259,10 @@ export enum SlhReconciliationSettlementRateSourceDto {
   SYSTEM = 'SYSTEM',
 }
 
-/** 结算金额以十进制字符串传输：允许负号（结算金额可为负），最多 4 位小数。 */
-const SETTLEMENT_AMOUNT_PATTERN = /^-?(?:0|[1-9]\d{0,25})(?:\.\d{1,4})?$/u
-/** 汇率与费率的契约精度是 12 位小数，按 30,12 收。 */
-const SETTLEMENT_RATE_PATTERN = /^-?(?:0|[1-9]\d{0,25})(?:\.\d{1,12})?$/u
+/** 结算金额以十进制字符串传输：允许负号（结算金额可为负），最多 2 位小数。 */
+const SETTLEMENT_AMOUNT_PATTERN = /^-?(?:0|[1-9]\d{0,25})(?:\.\d{1,2})?$/u
+/** 汇率的契约精度是 4 位小数，按 30,4 收。 */
+const SETTLEMENT_RATE_PATTERN = /^-?(?:0|[1-9]\d{0,25})(?:\.\d{1,4})?$/u
 
 /**
  * 「界面上看到的」六个金额：服务端按来源重取汇率并重算，任一项与重算结果不一致即拒绝。
@@ -281,7 +281,7 @@ export class SlhReconciliationSettlementAmountsDto {
   @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '（代收 − 杂费）÷ 汇率 − 合计应付，可为负；不可计算时为 null。' })
   @IsOptional() @IsString() @Matches(SETTLEMENT_AMOUNT_PATTERN) settlementAmountCny!: string | null
 
-  @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '销售订单的约定总额（订单币种，四位小数）。' })
+  @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '销售订单的约定总额（订单币种，两位小数）。' })
   @IsOptional() @IsString() @Matches(SETTLEMENT_AMOUNT_PATTERN) salesAmount!: string | null
 
   @ApiProperty({ type: 'string', nullable: true, pattern: SETTLEMENT_AMOUNT_PATTERN.source, description: '销售金额 ÷ 汇率 × 金流费率，两位小数人民币；不可计算时为 null。' })

@@ -11,9 +11,9 @@ const current = {
   productHeadName: '原产品头',
   status: ProductStatus.INACTIVE,
   supplierValue: 'HISTORICAL',
-  twdSalePrice: { amount: '10.0000', currency: 'TWD' },
+  twdSalePrice: { amount: '10.00', currency: 'TWD' },
   myrSalePrice: { amount: null, currency: 'MYR' },
-  purchaseCost: { amount: '5.5000', currency: 'CNY' },
+  purchaseCost: { amount: '5.50', currency: 'CNY' },
   attributes: [{ title: '颜色', value: '红色' }],
   remark: null,
 }

@@ -13,19 +13,19 @@ import {
 describe('invoice request amounts and settle window', () => {
   it('rounds the business tax to whole TWD with the fixed 5% rate', () => {
     // 票面示例：270000 × 5% = 13500。
-    expect(calculateTaxAmount(270_000)).toBe(13_500)
+    expect(calculateTaxAmount(270_000n)).toBe(13_500n)
     // 非整数时四舍五入到元，销售额 1 元时为 0（总计因此等于销售额）。
-    expect(calculateTaxAmount(1)).toBe(0)
-    expect(calculateTaxAmount(9)).toBe(0)
-    expect(calculateTaxAmount(10)).toBe(1)
-    expect(calculateTaxAmount(30)).toBe(2)
-    expect(calculateTaxAmount(270_001)).toBe(13_500)
+    expect(calculateTaxAmount(1n)).toBe(0n)
+    expect(calculateTaxAmount(9n)).toBe(0n)
+    expect(calculateTaxAmount(10n)).toBe(1n)
+    expect(calculateTaxAmount(30n)).toBe(2n)
+    expect(calculateTaxAmount(270_001n)).toBe(13_500n)
   })
 
   it('sums line amounts as quantity × unit price', () => {
-    expect(sumLineAmounts([{ quantity: 1, unitPrice: 90_000 }, { quantity: 1, unitPrice: 180_000 }])).toBe(270_000)
-    expect(sumLineAmounts([{ quantity: 3, unitPrice: 12_345 }])).toBe(37_035)
-    expect(sumLineAmounts([])).toBe(0)
+    expect(sumLineAmounts([{ quantity: 1, unitPrice: 90_000n }, { quantity: 1, unitPrice: 180_000n }])).toBe(270_000n)
+    expect(sumLineAmounts([{ quantity: 3, unitPrice: 12_345n }])).toBe(37_035n)
+    expect(sumLineAmounts([])).toBe(0n)
   })
 
   it('opens the settle window exactly 120 hours after the photo upload', () => {

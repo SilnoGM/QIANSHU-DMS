@@ -15,14 +15,14 @@ import {
 import { ProductStatus } from '../../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 
-const DECIMAL_INPUT_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d+)?$/u
+const DECIMAL_INPUT_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/u
 const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/u
 
 export class ProductTwdSalePriceInputDto {
   @ApiProperty({
     type: 'string',
     nullable: true,
-    pattern: '^(?:0|[1-9]\\d*)(?:\\.\\d+)?$',
+    pattern: '^(?:0|[1-9]\\d*)(?:\\.\\d{1,2})?$',
   })
   @ValidateIf((_object: ProductTwdSalePriceInputDto, value: unknown) =>
     value !== null,
@@ -40,7 +40,7 @@ export class ProductMyrSalePriceInputDto {
   @ApiProperty({
     type: 'string',
     nullable: true,
-    pattern: '^(?:0|[1-9]\\d*)(?:\\.\\d+)?$',
+    pattern: '^(?:0|[1-9]\\d*)(?:\\.\\d{1,2})?$',
   })
   @ValidateIf((_object: ProductMyrSalePriceInputDto, value: unknown) =>
     value !== null,
@@ -58,7 +58,7 @@ export class ProductPurchaseCostInputDto {
   @ApiProperty({
     type: 'string',
     nullable: true,
-    pattern: '^(?:0|[1-9]\\d*)(?:\\.\\d+)?$',
+    pattern: '^(?:0|[1-9]\\d*)(?:\\.\\d{1,2})?$',
   })
   @ValidateIf((_object: ProductPurchaseCostInputDto, value: unknown) =>
     value !== null,

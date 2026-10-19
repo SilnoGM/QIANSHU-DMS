@@ -41,13 +41,13 @@ function toIso(value: Date | null): string | null {
   return value === null ? null : value.toISOString()
 }
 
-function toLines(lines: readonly { lineNo: number, productName: string, quantity: number, unitPrice: bigint, amount: bigint }[]): InvoiceRequestLineDto[] {
+function toLines(lines: readonly { lineNo: number, productName: string, quantity: number, unitPrice: Prisma.Decimal, amount: Prisma.Decimal }[]): InvoiceRequestLineDto[] {
   return lines.map(line => ({
     lineNo: line.lineNo,
     productName: line.productName,
     quantity: line.quantity,
-    unitPrice: line.unitPrice.toString(),
-    amount: line.amount.toString(),
+    unitPrice: line.unitPrice.toFixed(0),
+    amount: line.amount.toFixed(0),
   }))
 }
 
@@ -65,9 +65,9 @@ function toListItem(row: RequestRow): InvoiceRequestListItemDto {
     status: row.status,
     buyerName: row.buyerName,
     buyerTaxId: row.buyerTaxId,
-    salesAmount: row.salesAmount.toString(),
-    taxAmount: row.taxAmount.toString(),
-    totalAmount: row.totalAmount.toString(),
+    salesAmount: row.salesAmount.toFixed(0),
+    taxAmount: row.taxAmount.toFixed(0),
+    totalAmount: row.totalAmount.toFixed(0),
     lineCount: row.lines.length,
     lineSummary,
     invoiceRemark: row.invoiceRemark,

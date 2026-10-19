@@ -2,7 +2,7 @@ import type { PrismaService } from '../../infrastructure/database/prisma.service
 import { SalesOrderProductEditQueryService } from './sales-order-product-edit-query.service'
 
 function decimal(value: string) {
-  return { toFixed: () => Number(value).toFixed(4) }
+  return { toFixed: () => Number(value).toFixed(2) }
 }
 
 function orderRow(overrides: Record<string, unknown> = {}) {
@@ -117,12 +117,12 @@ describe('SalesOrderProductEditQueryService', () => {
         version: 4,
       },
       amounts: {
-        lineSubtotalAmount: '300.0000',
-        agreedTotalAmount: '300.0000',
-        depositDueAmount: '100.0000',
-        balanceDueAmount: '200.0000',
-        paidAmount: '80.0000',
-        outstandingAmount: '220.0000',
+        lineSubtotalAmount: '300.00',
+        agreedTotalAmount: '300.00',
+        depositDueAmount: '100.00',
+        balanceDueAmount: '200.00',
+        paidAmount: '80.00',
+        outstandingAmount: '220.00',
       },
       existingLines: [{
         id: 'sales-line-a',
@@ -133,10 +133,10 @@ describe('SalesOrderProductEditQueryService', () => {
         productName: '目录产品',
         supplierValue: 'SUPPLIER_A',
         description: '备注',
-        standardUnitPriceAmount: '55.0000',
-        actualUnitPriceAmount: '50.0000',
+        standardUnitPriceAmount: '55.00',
+        actualUnitPriceAmount: '50.00',
         quantity: 2,
-        lineTotalAmount: '100.0000',
+        lineTotalAmount: '100.00',
         activePurchasedQuantity: 2,
         canDecrease: false,
         mainImage: {
@@ -206,7 +206,7 @@ describe('SalesOrderProductEditQueryService', () => {
     })).resolves.toEqual({
       items: [expect.objectContaining({
         id: 'product-id',
-        standardUnitPriceAmount: '55.0000',
+        standardUnitPriceAmount: '55.00',
         currencyCode: 'TWD',
         mainImage: {
           id: 'product-media-id',

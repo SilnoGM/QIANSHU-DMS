@@ -1,4 +1,4 @@
-import { importCellNumber, importPackageCount } from '../container-batches/import-parser.numbers'
+import { importCellNumber, importCellNumberCeil, importPackageCount } from '../container-batches/import-parser.numbers'
 import type { WorkbookCell, WorkbookSheet } from '../container-batches/import-parser.types'
 import { readContainerWorkbook } from '../container-batches/import-parser.workbook'
 import { formatDecimal, parseDecimal } from '../ocean-freight-calculation/ocean-decimal'
@@ -104,7 +104,10 @@ function embeddedRate(formula: string | null): string | null {
   if (formula === null) return null
   const divisors = [...new Set([...formula.matchAll(/\/(\d+(?:\.\d+)?)/gu)].map(match => match[1]))]
   if (divisors.length !== 1) return null
-  try { return formatDecimal(parseDecimal(divisors[0], 30, 12, 'rate'), 30, 12, 'rate') }
+  try {
+    const parsed = parseDecimal(divisors[0], 30, 12, 'rate')
+    return formatDecimal((parsed + 50_000_000n) / 100_000_000n, 30, 4, 'rate')
+  }
   catch { return null }
 }
 
@@ -116,6 +119,11 @@ function text(cell: WorkbookCell | undefined, label: string, maximum: number, er
 
 function numeric(cell: WorkbookCell | undefined, sheet: WorkbookSheet, label: string, scale: number, precision: number, errors: string[]): string | null {
   try { return importCellNumber(cell, sheet, scale, precision, false) }
+  catch { errors.push(`${label}必须为有效数值`); return null }
+}
+
+function dimension(cell: WorkbookCell | undefined, sheet: WorkbookSheet, label: string, errors: string[]): string | null {
+  try { return importCellNumberCeil(cell, sheet, 18, true) }
   catch { errors.push(`${label}必须为有效数值`); return null }
 }
 
@@ -150,13 +158,13 @@ function parseLine(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, W
 
   for (const [field, label] of [['lengthCm', '长'], ['widthCm', '宽'], ['heightCm', '高']] as const) {
     const places = sourceDecimalPlaces(cell(field)?.value ?? null)
-    if (places > 2) findings.push(finding('DIMENSION_PRECISION', 'warning', lineNumber, `${label}在来源里保留 ${places} 位小数，已按 2 位小数取整，材积复算可能有偏差`, rowNumber))
+    if (places > 0) findings.push(finding('DIMENSION_PRECISION', 'warning', lineNumber, `${label}在来源里保留 ${places} 位小数，已向上取整到整数厘米，材积复算可能有偏差`, rowNumber))
   }
 
-  const grossWeightKg = numeric(cell('grossWeightKg'), sheet, '出货重量', 3, 18, errors)
-  const lengthCm = numeric(cell('lengthCm'), sheet, '长', 2, 18, errors)
-  const widthCm = numeric(cell('widthCm'), sheet, '宽', 2, 18, errors)
-  const heightCm = numeric(cell('heightCm'), sheet, '高', 2, 18, errors)
+  const grossWeightKg = numeric(cell('grossWeightKg'), sheet, '出货重量', 0, 18, errors)
+  const lengthCm = dimension(cell('lengthCm'), sheet, '长', errors)
+  const widthCm = dimension(cell('widthCm'), sheet, '宽', errors)
+  const heightCm = dimension(cell('heightCm'), sheet, '高', errors)
   const reportedVolumeCai = numeric(cell('reportedVolumeCai'), sheet, '材数', 2, 24, errors)
   const unitPriceAmount = numeric(cell('unitPriceAmount'), sheet, '单价', 2, 30, errors)
   // 空单元格表示「本行不涉及此项」，与装柜明细同一口径；来源写 0 则保留 0，两者不再合并。

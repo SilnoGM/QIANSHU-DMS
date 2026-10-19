@@ -1062,14 +1062,9 @@ async function verifyProductList(page, baseUrl) {
         && !button.disabled
       ))
     ))()`)
-    // 该多媒体夹具刻意保留一项历史缺失金额，用于列表容错展示；编辑页应能
-    // 真实读取它，但本场景不提交修复。当前表单无法规范化该历史快照时按
-    // 保守脏状态处理，离开必须经过明确确认，避免误以为资料已安全保存。
+    // 该多媒体夹具刻意保留一项历史缺失金额，用于列表容错展示；编辑页读取
+    // 两位小数快照后无需改写表单，因此返回列表不再触发脏状态确认。
     await clickVisibleButton(page, '返回产品列表')
-    await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
-      .some(dialog => dialog.getClientRects().length > 0
-        && dialog.textContent?.includes('放弃未保存的产品修改？')))()`)
-    await clickVisibleModalButton(page, '确认放弃')
     await waitForProductList(page, productNo)
 
     // ImageGroup 第三个可见位是 +2，点击后从第三张进入完整四图预览。

@@ -71,6 +71,17 @@ export function importCellNumber(cell: WorkbookCell | undefined, sheet: Workbook
   if (!cell || (!cell.value?.trim() && cell.formula === null)) return null
   return formatRatio(cellRatio(cell, sheet, new Set()), scale, precision, positive)
 }
+/**
+ * 尺寸专用：来源可带小数，按整数厘米向上取整；公式仍走同一受限求值器。
+ */
+export function importCellNumberCeil(cell: WorkbookCell | undefined, sheet: WorkbookSheet, precision: number, positive: boolean): string | null {
+  if (!cell || (!cell.value?.trim() && cell.formula === null)) return null
+  const value = cellRatio(cell, sheet, new Set())
+  if (value.numerator < 0n || (positive && value.numerator === 0n)) throw new Error('Non-positive value')
+  const ceil = (value.numerator + value.denominator - 1n) / value.denominator
+  if (ceil.toString().length > precision || (positive && ceil === 0n)) throw new Error('Decimal out of range')
+  return ceil.toString()
+}
 export function importPackageCount(cell: WorkbookCell | undefined, sheet: WorkbookSheet): number {
   const value = cellRatio(cell, sheet, new Set())
   if (value.numerator % value.denominator !== 0n) throw new Error('Fractional package count')

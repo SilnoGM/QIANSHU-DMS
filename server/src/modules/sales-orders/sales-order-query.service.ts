@@ -353,8 +353,8 @@ export interface SalesOrderProductOptionsPage {
   readonly total: number
 }
 
-function decimalToFixed4(value: { toFixed(decimalPlaces: number): string }): string {
-  return value.toFixed(4)
+function decimalToFixed2(value: { toFixed(decimalPlaces: number): string }): string {
+  return value.toFixed(2)
 }
 
 function nullableAmountUnits(
@@ -362,7 +362,7 @@ function nullableAmountUnits(
 ): bigint {
   return value === null || value === undefined
     ? 0n
-    : parseSalesOrderAmountUnits(decimalToFixed4(value))
+    : parseSalesOrderAmountUnits(decimalToFixed2(value))
 }
 
 function standardSubtotalUnits(
@@ -378,7 +378,7 @@ function standardSubtotalUnits(
     line.standardUnitPriceAmount === null
       ? sum
       : sum
-        + parseSalesOrderAmountUnits(decimalToFixed4(line.standardUnitPriceAmount))
+        + parseSalesOrderAmountUnits(decimalToFixed2(line.standardUnitPriceAmount))
         * BigInt(line.quantity)
   ), 0n)
 }
@@ -559,7 +559,7 @@ function mapSalesOrderDetail(
   // 实际已收款口径下沉到领域模块：详情、列表与对账读取共用同一处累加规则。
   const receivedUnits = sumSalesOrderReceivedUnits(row.payments)
   const agreedUnits = parseSalesOrderAmountUnits(
-    decimalToFixed4(row.agreedTotalAmount),
+    decimalToFixed2(row.agreedTotalAmount),
   )
   return {
     id: row.id,
@@ -589,10 +589,10 @@ function mapSalesOrderDetail(
       fullAddress: row.customerFullAddressSnapshot,
     },
     amounts: {
-      lineSubtotalAmount: decimalToFixed4(row.lineSubtotalAmount),
+      lineSubtotalAmount: decimalToFixed2(row.lineSubtotalAmount),
       agreedTotalAmount: formatSalesOrderAmountUnits(agreedUnits),
-      depositDueAmount: decimalToFixed4(row.depositDueAmount),
-      balanceDueAmount: decimalToFixed4(row.balanceDueAmount),
+      depositDueAmount: decimalToFixed2(row.depositDueAmount),
+      balanceDueAmount: decimalToFixed2(row.balanceDueAmount),
       receivedAmount: formatSalesOrderAmountUnits(receivedUnits),
       outstandingAmount: formatSalesOrderAmountUnits(agreedUnits - receivedUnits),
     },
@@ -613,10 +613,10 @@ function mapSalesOrderDetail(
       description: line.descriptionSnapshot,
       standardUnitPriceAmount: line.standardUnitPriceAmount === null
         ? null
-        : decimalToFixed4(line.standardUnitPriceAmount),
-      actualUnitPriceAmount: decimalToFixed4(line.actualUnitPriceAmount),
+        : decimalToFixed2(line.standardUnitPriceAmount),
+      actualUnitPriceAmount: decimalToFixed2(line.actualUnitPriceAmount),
       quantity: line.quantity,
-      lineTotalAmount: decimalToFixed4(line.lineTotalAmount),
+      lineTotalAmount: decimalToFixed2(line.lineTotalAmount),
     })),
     payments: row.payments.map((payment) => {
       const voucher = row.documents.find(document => (
@@ -637,9 +637,9 @@ function mapSalesOrderDetail(
         origin: payment.origin,
         fundPostingBatchId: payment.fundPostingBatchId,
         fundReversalBatchId: payment.fundReversalBatchId,
-        foreignUnitsPerCnySnapshot: payment.foreignUnitsPerCnySnapshot?.toFixed(12) ?? null,
+        foreignUnitsPerCnySnapshot: payment.foreignUnitsPerCnySnapshot?.toFixed(4) ?? null,
         exchangeRateCapturedAt: payment.exchangeRateCapturedAt?.toISOString() ?? null,
-        amount: decimalToFixed4(payment.amount),
+        amount: decimalToFixed2(payment.amount),
         receivedAt: payment.receivedAt.toISOString(),
         paymentMethod: payment.paymentMethod,
         remark: payment.remark,
@@ -663,14 +663,14 @@ function mapSalesOrderDetail(
     })),
     amountRevisions: row.amountRevisions.map(revision => ({
       id: revision.id,
-      oldLineSubtotalAmount: decimalToFixed4(revision.oldLineSubtotalAmount),
-      oldAgreedTotalAmount: decimalToFixed4(revision.oldAgreedTotalAmount),
-      oldDepositDueAmount: decimalToFixed4(revision.oldDepositDueAmount),
-      oldBalanceDueAmount: decimalToFixed4(revision.oldBalanceDueAmount),
-      newLineSubtotalAmount: decimalToFixed4(revision.newLineSubtotalAmount),
-      newAgreedTotalAmount: decimalToFixed4(revision.newAgreedTotalAmount),
-      newDepositDueAmount: decimalToFixed4(revision.newDepositDueAmount),
-      newBalanceDueAmount: decimalToFixed4(revision.newBalanceDueAmount),
+      oldLineSubtotalAmount: decimalToFixed2(revision.oldLineSubtotalAmount),
+      oldAgreedTotalAmount: decimalToFixed2(revision.oldAgreedTotalAmount),
+      oldDepositDueAmount: decimalToFixed2(revision.oldDepositDueAmount),
+      oldBalanceDueAmount: decimalToFixed2(revision.oldBalanceDueAmount),
+      newLineSubtotalAmount: decimalToFixed2(revision.newLineSubtotalAmount),
+      newAgreedTotalAmount: decimalToFixed2(revision.newAgreedTotalAmount),
+      newDepositDueAmount: decimalToFixed2(revision.newDepositDueAmount),
+      newBalanceDueAmount: decimalToFixed2(revision.newBalanceDueAmount),
       reason: revision.reason,
       changedBy: mapActor(revision.changedBy),
       changedAt: revision.changedAt.toISOString(),
@@ -789,7 +789,7 @@ export class SalesOrderQueryService {
     return {
       items: rows.map((row) => {
         const agreedUnits = parseSalesOrderAmountUnits(
-          decimalToFixed4(row.agreedTotalAmount),
+          decimalToFixed2(row.agreedTotalAmount),
         )
         const receivedUnits = sumSalesOrderReceivedUnits(row.payments)
         return {
@@ -806,10 +806,10 @@ export class SalesOrderQueryService {
           standardSubtotalAmount: formatSalesOrderAmountUnits(
             standardSubtotalUnits(row.lines),
           ),
-          lineSubtotalAmount: decimalToFixed4(row.lineSubtotalAmount),
+          lineSubtotalAmount: decimalToFixed2(row.lineSubtotalAmount),
           agreedTotalAmount: formatSalesOrderAmountUnits(agreedUnits),
-          depositDueAmount: decimalToFixed4(row.depositDueAmount),
-          balanceDueAmount: decimalToFixed4(row.balanceDueAmount),
+          depositDueAmount: decimalToFixed2(row.depositDueAmount),
+          balanceDueAmount: decimalToFixed2(row.balanceDueAmount),
           receivedAmount: formatSalesOrderAmountUnits(receivedUnits),
           outstandingAmount: formatSalesOrderAmountUnits(
             agreedUnits - receivedUnits,

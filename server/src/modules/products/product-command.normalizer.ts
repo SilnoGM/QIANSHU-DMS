@@ -139,12 +139,12 @@ function normalizeMoney(
   }
 
   const [integerPart = '', fractionPart = ''] = record.amount.split('.')
-  if (integerPart.length > 26 || fractionPart.length > 4) {
+  if (integerPart.length > 26 || fractionPart.length > 2) {
     return validationFailure(`${field}.amount`)
   }
 
   return Object.freeze({
-    amount: `${integerPart}.${fractionPart.padEnd(4, '0')}`,
+    amount: `${integerPart}.${fractionPart.padEnd(2, '0')}`,
     currency,
     inputFractionDigits: fractionPart.length,
   })

@@ -29,7 +29,7 @@ function fixture(row: Record<string, unknown> = {}) {
     packagingCostRequest: { findUnique: jest.fn().mockResolvedValue({ id, status: 'PENDING_PAYMENT', version: 1, paidByUserId: null, ownerUserId: owner, shipmentNo: 'PKG00000001', amount: new Prisma.Decimal('120.50'), ...row }), update },
   }
   const prisma = { $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx) } as unknown as PrismaService
-  const query = { getById: jest.fn().mockResolvedValue({ id }), getSummaryById: jest.fn().mockResolvedValue({ id, version: 2, amount: '150.0000' }) } as unknown as PackagingCostQueryService
+  const query = { getById: jest.fn().mockResolvedValue({ id }), getSummaryById: jest.fn().mockResolvedValue({ id, version: 2, amount: '150.00' }) } as unknown as PackagingCostQueryService
   const access = { getPermissionCodesInTransaction: granted, hasAll: (codes: string[], required: string[]) => required.every(value => codes.includes(value)) } as unknown as AccessControlService
   const funds = { previewBusinessEventInTransaction: jest.fn().mockResolvedValue({ ruleVersionId: 'rule-1', userShareRate: '30.00' }), postBusinessEventInTransaction: jest.fn().mockResolvedValue({ batchId }) }
   const recipients = { resolveForPayment: jest.fn().mockResolvedValue({ snapshot: { id }, qrMediaAssetId: owner }) }
@@ -58,7 +58,7 @@ describe('PackagingCostService payment', () => {
     const f = fixture()
     await f.service.pay(context, id, payment)
     expect(f.update).toHaveBeenCalledWith({ where: { id }, data: expect.objectContaining({ status: 'PAID', paidByUserId: actor, paidAt: expect.any(Date) as unknown, version: { increment: 1 }, paymentVoucherMediaAssetId: batchId, recipientQrMediaAssetId: owner, paymentFingerprintHash: fingerprint }) as unknown })
-    expect(f.record).toHaveBeenCalledWith(f.tx, expect.objectContaining({ eventType: 'PACKAGING_COST_PAID', metadata: { amount: '120.5000', currencyCode: 'CNY', fundPostingBatchId: batchId } }))
+    expect(f.record).toHaveBeenCalledWith(f.tx, expect.objectContaining({ eventType: 'PACKAGING_COST_PAID', metadata: { amount: '120.50', currencyCode: 'CNY', fundPostingBatchId: batchId } }))
   })
   it('replays the same confirmed request without another write or audit', async () => {
     const f = fixture({ status: 'PAID', version: 2, paidByUserId: actor, paymentFingerprintHash: fingerprint })
@@ -104,9 +104,9 @@ describe('Packaging payment evidence boundaries', () => {
 describe('PackagingCostService amount correction', () => {
   it('updates only the pending amount and version with an audit, never posting funds', async () => {
     const f = fixture(); f.granted.mockResolvedValue(['packaging-costs:create'])
-    await expect(f.service.updateAmount(context, id, { amount: '150', expectedVersion: 1 })).resolves.toEqual({ id, version: 2, amount: '150.0000' })
-    expect(f.update).toHaveBeenCalledWith({ where: { id }, data: { amount: '150.0000', version: { increment: 1 } } })
-    expect(f.record).toHaveBeenCalledWith(f.tx, expect.objectContaining({ eventType: 'PACKAGING_COST_AMOUNT_UPDATED', metadata: { previousAmount: '120.5000', amount: '150.0000', currencyCode: 'CNY', previousVersion: 1, version: 2 } }))
+    await expect(f.service.updateAmount(context, id, { amount: '150', expectedVersion: 1 })).resolves.toEqual({ id, version: 2, amount: '150.00' })
+    expect(f.update).toHaveBeenCalledWith({ where: { id }, data: { amount: '150.00', version: { increment: 1 } } })
+    expect(f.record).toHaveBeenCalledWith(f.tx, expect.objectContaining({ eventType: 'PACKAGING_COST_AMOUNT_UPDATED', metadata: { previousAmount: '120.50', amount: '150.00', currencyCode: 'CNY', previousVersion: 1, version: 2 } }))
     expect(f.funds.previewBusinessEventInTransaction).not.toHaveBeenCalled()
     expect(f.funds.postBusinessEventInTransaction).not.toHaveBeenCalled()
   })

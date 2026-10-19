@@ -85,24 +85,24 @@ describe('normalizeSalesOrderCreateCommand', () => {
           lineNumber: 1,
           lineType: 'CATALOG',
           productId: '44444444-4444-4444-8444-444444444444',
-          actualUnitPriceAmount: '20.0000',
+          actualUnitPriceAmount: '20.00',
           quantity: 2,
-          lineTotalAmount: '40.0000',
+          lineTotalAmount: '40.00',
         },
         {
           lineNumber: 2,
           lineType: 'CUSTOM',
           name: '临时配件',
           description: '本单专用',
-          actualUnitPriceAmount: '10.0000',
+          actualUnitPriceAmount: '10.00',
           quantity: 1,
-          lineTotalAmount: '10.0000',
+          lineTotalAmount: '10.00',
         },
       ],
-      lineSubtotalAmount: '50.0000',
-      agreedTotalAmount: '50.0000',
-      depositDueAmount: '20.0000',
-      balanceDueAmount: '30.0000',
+      lineSubtotalAmount: '50.00',
+      agreedTotalAmount: '50.00',
+      depositDueAmount: '20.00',
+      balanceDueAmount: '30.00',
       issuanceVoucher: {
         mediaAssetId: '55555555-5555-4555-8555-555555555555',
       },
@@ -113,10 +113,10 @@ describe('normalizeSalesOrderCreateCommand', () => {
   })
 
   it.each([
-    ['0', '0.0000'],
-    ['1', '1.0000'],
-    ['1.2', '1.2000'],
-    ['1.23', '1.2300'],
+    ['0', '0.00'],
+    ['1', '1.00'],
+    ['1.2', '1.20'],
+    ['1.23', '1.23'],
   ])(
     'accepts actual unit price with at most two decimal places: %s',
     (actualUnitPriceAmount, normalizedAmount) => {

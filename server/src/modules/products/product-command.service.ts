@@ -261,11 +261,11 @@ function persistedDecimalToCanonical(
       toFixed?: (decimalPlaces: number) => string
     }
     const raw = typeof maybeFixed.toFixed === 'function'
-      ? maybeFixed.toFixed(4)
+      ? maybeFixed.toFixed(2)
       : value.toString()
-    const match = /^(0|[1-9]\d*)(?:\.(\d{1,4}))?$/u.exec(raw)
+    const match = raw.match(/^(0|[1-9]\d*)(?:\.(\d{1,2}))?$/u)
     if (match === null || match[1] === undefined) return undefined
-    return `${match[1]}.${(match[2] ?? '').padEnd(4, '0')}`
+    return `${match[1]}.${(match[2] ?? '').padEnd(2, '0')}`
   }
   catch {
     return undefined

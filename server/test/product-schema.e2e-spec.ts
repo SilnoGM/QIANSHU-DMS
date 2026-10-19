@@ -95,7 +95,7 @@ describe('Product schema constraints with isolated PostgreSQL', () => {
         {
           action: () => client.query(`
             INSERT INTO "products" ("name", "product_no", "supplier_value", "twd_sale_price_amount")
-            VALUES ('Negative TWD', $1, 'SUPPLIER_SCHEMA', -0.0001)
+            VALUES ('Negative TWD', $1, 'SUPPLIER_SCHEMA', -0.01)
           `, [`PRODUCT-SCHEMA-${randomUUID()}`]),
           code: '23514',
           constraint: 'products_twd_sale_price_amount_nonnegative_check',

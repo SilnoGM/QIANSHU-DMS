@@ -54,8 +54,8 @@ export function calculateSalesOrderPaymentProgress(
   receivedAmount: string | null,
   agreedTotalAmount: string | null,
 ): SalesOrderPaymentProgress | null {
-  const receivedResult = validateMoneyString(receivedAmount, { precision: 4 })
-  const totalResult = validateMoneyString(agreedTotalAmount, { precision: 4 })
+  const receivedResult = validateMoneyString(receivedAmount, { precision: 2 })
+  const totalResult = validateMoneyString(agreedTotalAmount, { precision: 2 })
 
   if (
     !receivedResult.valid

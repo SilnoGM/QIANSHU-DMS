@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CurrencyDescriptor } from '../currency'
+import type { CurrencyDescriptor, CurrencyMinorUnit } from '../currency'
 import type { CurrencyAmountValue } from './format'
 import { findCurrencyDescriptor } from '../currency'
 import { EMPTY_AMOUNT_TEXT, formatCurrencyAmount } from './format'
@@ -10,6 +10,7 @@ const props = defineProps<{
   currencies: readonly CurrencyDescriptor[]
   currency: string
   value: CurrencyAmountValue
+  minorUnit?: CurrencyMinorUnit
 }>()
 
 const currencyDescriptor = computed(() => findCurrencyDescriptor(
@@ -20,6 +21,7 @@ const formattedAmount = computed(() => formatCurrencyAmount(
   props.value,
   props.currency,
   props.currencies,
+  props.minorUnit,
 ))
 // 未解析币种仍保留可审计的原始金额，同时通过 aria-label 明确告知辅助技术。
 const ariaLabel = computed(() => formattedAmount.value === EMPTY_AMOUNT_TEXT

@@ -95,12 +95,12 @@ export class SalesReceiptService {
     const row = await tx.salesReceiptRequest.findUniqueOrThrow({ where: { id } })
     return { order, row }
   }
-  private async capacity(tx: Tx, salesOrderId: string, total: string, additional = '0.0000') {
+  private async capacity(tx: Tx, salesOrderId: string, total: string, additional = '0.00') {
     const [paid, pending] = await Promise.all([
       tx.salesOrderPayment.aggregate({ where: { salesOrderId, voidedAt: null }, _sum: { amount: true } }),
       tx.salesReceiptRequest.aggregate({ where: { salesOrderId, status: 'PENDING_REVIEW' }, _sum: { amount: true } }),
     ])
-    assertReceiptCapacity(total, paid._sum.amount?.toFixed(4) ?? '0.0000', pending._sum.amount?.toFixed(4) ?? '0.0000', additional)
+    assertReceiptCapacity(total, paid._sum.amount?.toFixed(2) ?? '0.00', pending._sum.amount?.toFixed(2) ?? '0.00', additional)
   }
   private auditEvent(tx: Tx, context: SalesOrderMutationContext, eventType: AuditEventType, targetId: string, salesOrderId: string) {
     return this.audit.record(tx, { eventType, outcome: AuditOutcome.SUCCESS, actorType: AuditActorType.USER,
@@ -111,7 +111,7 @@ export class SalesReceiptService {
   }
   private async updatePaymentStatus(tx: Tx, context: SalesOrderMutationContext, order: { id: string, agreedTotalAmount: Prisma.Decimal, paymentStatus: string }, advance: boolean, changeReason: string) {
     const paid = await tx.salesOrderPayment.aggregate({ where: { salesOrderId: order.id, voidedAt: null }, _sum: { amount: true } })
-    const paymentStatus = deriveSalesOrderPaymentStatus(order.agreedTotalAmount.toFixed(4), paid._sum.amount?.toFixed(4) ?? '0.0000')
+    const paymentStatus = deriveSalesOrderPaymentStatus(order.agreedTotalAmount.toFixed(2), paid._sum.amount?.toFixed(2) ?? '0.00')
     await tx.salesOrder.update({ where: { id: order.id }, data: { paymentStatus, version: { increment: 1 } } })
     if (paymentStatus !== order.paymentStatus) await tx.salesOrderStatusHistory.create({ data: { salesOrderId: order.id, dimension: 'PAYMENT', fromStatus: order.paymentStatus, toStatus: paymentStatus, reason: changeReason, changedByUserId: context.actorUserId } })
     if (advance) await this.automatic.advanceWhenEligible(tx, context, order.id, 'PAYMENT')
@@ -157,7 +157,7 @@ export class SalesReceiptService {
         if (previous) return previous.id
         this.assertOpen(order)
         const method = await this.dictionary.requireEffectiveValue(tx, { dictionaryCode: 'payment.method', value: normalized.paymentMethod })
-        await this.capacity(tx, salesOrderId, order.agreedTotalAmount.toFixed(4), amount)
+        await this.capacity(tx, salesOrderId, order.agreedTotalAmount.toFixed(2), amount)
         let reuse = false
         if (normalized.resubmittedFromId) {
           await this.authorize(tx, context, ['sales-orders:read'])
@@ -204,10 +204,10 @@ export class SalesReceiptService {
         if (row.status !== 'PENDING_REVIEW') receiptFailure('SALES_RECEIPT_STATE_CHANGED', '申请已处理', HttpStatus.CONFLICT)
         this.assertOpen(order)
         const rate = await this.rate(tx, row.currencyCode)
-        const amount = convertReceiptToCny(row.amount.toFixed(4), rate.rate.toFixed(12))
+        const amount = convertReceiptToCny(row.amount.toFixed(2), rate.rate.toFixed(4))
         const preview = await this.funds.previewBusinessEventInTransaction(tx, this.fundContext(context, 'APPROVE'), this.postingInput(row, order.orderNo, amount))
         return { expectedContext: { orderVersion: order.version, exchangeRateId: rate.id, exchangeRateVersion: rate.version, ruleVersionId: preview.ruleVersionId, userShareRate: preview.userShareRate ?? '0.00' },
-          foreignUnitsPerCny: rate.rate.toFixed(12), businessAmount: preview.businessAmount, userShareRate: preview.userShareRate, companyShareRate: preview.companyShareRate, entries: [...preview.entries] }
+          foreignUnitsPerCny: rate.rate.toFixed(4), businessAmount: preview.businessAmount, userShareRate: preview.userShareRate, companyShareRate: preview.companyShareRate, entries: [...preview.entries] }
       })
     } catch (error) { return mapError(error) }
   }
@@ -223,14 +223,14 @@ export class SalesReceiptService {
         if (row.status !== 'PENDING_REVIEW' || row.version !== input.expectedVersion) receiptFailure('SALES_RECEIPT_STATE_CHANGED', '申请已变化，请刷新后重试', HttpStatus.CONFLICT)
         this.assertOpen(order)
         if (order.version !== input.expectedContext.orderVersion) receiptFailure('SALES_RECEIPT_CONTEXT_CHANGED', '订单已变化，请重新核对', HttpStatus.CONFLICT)
-        await this.capacity(tx, order.id, order.agreedTotalAmount.toFixed(4))
+        await this.capacity(tx, order.id, order.agreedTotalAmount.toFixed(2))
         const rate = await this.rate(tx, row.currencyCode)
         if (rate.id !== input.expectedContext.exchangeRateId || rate.version !== input.expectedContext.exchangeRateVersion) receiptFailure('SALES_RECEIPT_CONTEXT_CHANGED', '当前汇率已变化，请重新核对', HttpStatus.CONFLICT)
         await tx.$queryRaw(Prisma.sql`SELECT id FROM media_assets WHERE id = ${row.voucherMediaAssetId}::uuid FOR SHARE`)
         const asset = await tx.mediaAsset.findFirst({ where: { id: row.voucherMediaAssetId, status: 'READY', deletedAt: null, objectKey: { not: null } } })
         if (!asset) receiptFailure('SALES_ORDER_DOCUMENT_UNAVAILABLE', '收款凭证当前不可用')
         await this.verifyVoucher(asset.objectKey!)
-        const amount = convertReceiptToCny(row.amount.toFixed(4), rate.rate.toFixed(12))
+        const amount = convertReceiptToCny(row.amount.toFixed(2), rate.rate.toFixed(4))
         const posting = await this.funds.postBusinessEventInTransaction(tx, this.fundContext(context, 'APPROVE'), this.postingInput(row, order.orderNo, amount), { ruleVersionId: input.expectedContext.ruleVersionId, userShareRate: input.expectedContext.userShareRate })
         const [{ now }] = await tx.$queryRaw<[{ now: Date }]>(Prisma.sql`SELECT clock_timestamp() AS now`)
         const payment = await tx.salesOrderPayment.create({ data: { salesOrderId: order.id, paymentType: row.paymentType, amount: row.amount, receivedAt: row.receivedAt, paymentMethod: row.paymentMethod, remark: row.remark, createdByUserId: context.actorUserId,

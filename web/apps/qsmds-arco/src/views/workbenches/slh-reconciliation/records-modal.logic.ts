@@ -100,20 +100,17 @@ function text(value: string | null): string {
   return value === null || value.trim() === '' ? MISSING : value
 }
 
-/** 汇率去尾零展示（契约 12 位小数，与结算弹窗同一口径）；空值给占位符。 */
-function trimDecimal(value: string | null): string {
+/** 汇率只读展示统一两位小数；空值给占位符。 */
+function rateText(value: string | null): string {
   if (value === null) {
     return MISSING
   }
-  if (!value.includes('.')) {
-    return value
-  }
-  return value.replace(/0+$/u, '').replace(/\.$/u, '')
+  return new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2)
 }
 
-/** 费率按百分比展示（0.007 → 0.7%）。 */
-function percentText(rate: string): string {
-  return `${new Decimal(rate).times(100).toString()}%`
+/** 费率按千分比展示（0.007 → 7‰）。 */
+function permilleText(rate: string): string {
+  return `${new Decimal(rate).times(1000).toFixed(0)}‰`
 }
 
 /** 计算式里的金额：与 AmountDisplay 同一处格式化（符号、千分位、精度）；空值保留占位符，不按 0 改写历史。 */
@@ -133,8 +130,8 @@ export function buildSlhReconciliationRecordCard(
   record: SlhReconciliationSettlementRecordDto,
   currencies: readonly CurrencyDescriptor[],
 ): SlhReconciliationRecordCard {
-  const rate = trimDecimal(record.foreignUnitsPerCny)
-  const feeRatePercent = percentText(record.paymentFeeRate)
+  const rate = rateText(record.foreignUnitsPerCny)
+  const feeRatePermille = permilleText(record.paymentFeeRate)
 
   return {
     id: record.id,
@@ -150,7 +147,7 @@ export function buildSlhReconciliationRecordCard(
     summaryRateText: rate,
     // 摘要里把汇率来源一并给出，免得看历史的人还要猜 5.2 是哪一份汇率。
     summaryRateSourceKey: RATE_SOURCE_SHORT_KEYS[record.rateSource],
-    summaryFeeRateText: feeRatePercent,
+    summaryFeeRateText: feeRatePermille,
     blocks: [
       {
         id: 'settlement',
@@ -165,12 +162,12 @@ export function buildSlhReconciliationRecordCard(
         labelKey: 'slhReconciliation.settle.paymentFeeResult',
         amount: amount(record.paymentFeeAmountCny, record.paymentFeeCurrency, 'paymentFee'),
         rateLabelKey: 'slhReconciliation.settle.paymentFeeRate',
-        rateText: feeRatePercent,
+        rateText: feeRatePermille,
       },
     ],
     formulas: {
       settlement: `（${showAmount(record.codAmountTwd, record.codAmountCurrency, currencies)} − ${showAmount(record.ntdSurchargeAmountTwd, record.ntdSurchargeCurrency, currencies)}）÷ ${rate} − ${showAmount(record.payableAmountCny, record.payableCurrency, currencies)} = ${showAmount(record.settlementAmountCny, record.settlementCurrency, currencies)}`,
-      paymentFee: `${showAmount(record.salesAmount, record.salesCurrency, currencies)} ÷ ${rate} × ${feeRatePercent} = ${showAmount(record.paymentFeeAmountCny, record.paymentFeeCurrency, currencies)}`,
+      paymentFee: `${showAmount(record.salesAmount, record.salesCurrency, currencies)} ÷ ${rate} × ${feeRatePermille} = ${showAmount(record.paymentFeeAmountCny, record.paymentFeeCurrency, currencies)}`,
     },
     // 费用是对整张销售订单收的：同一销售单的多行都记着同一个费用，实际入账只发生一次。
     blockNoteKeys: { paymentFee: 'slhReconciliation.settle.paymentFeeOncePerSalesOrder' },

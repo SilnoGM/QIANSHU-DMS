@@ -12,6 +12,7 @@ import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import { invalidateCurrencyCatalogCache } from '@/currency-catalog/default-provider'
+import { formatExchangeRate } from '@/utils/exchange-rate'
 
 import { hasVisibleTableColumn } from '../../shared/table-query'
 import ExchangeRateFormModal from './exchange-rate-form-modal.vue'
@@ -439,7 +440,7 @@ onBeforeUnmount(() => {
           >
             <span class="qs-type-meta">1 CNY =</span>
             <code class="qs-type-data-emphasis break-all tabular-nums">
-              {{ row.original.currentRate.foreignUnitsPerCny }}
+              {{ formatExchangeRate(row.original.currentRate.foreignUnitsPerCny) }}
             </code>
             <code class="qs-type-data-emphasis">
               {{ row.original.currency.code }}
@@ -452,7 +453,7 @@ onBeforeUnmount(() => {
           <span v-if="row.original.currentRate" class="qs-type-body">
             {{ row.original.currency.code }} 金额 ÷
             <code class="qs-type-data-emphasis tabular-nums">
-              {{ row.original.currentRate.foreignUnitsPerCny }}
+              {{ formatExchangeRate(row.original.currentRate.foreignUnitsPerCny) }}
             </code>
             = CNY
           </span>
@@ -514,7 +515,7 @@ onBeforeUnmount(() => {
                 </dt>
                 <dd class="qs-type-data-emphasis m-0 break-all tabular-nums">
                   {{ item.currentRate
-                    ? `1 CNY = ${item.currentRate.foreignUnitsPerCny} ${item.currency.code}`
+                    ? `1 CNY = ${formatExchangeRate(item.currentRate.foreignUnitsPerCny)} ${item.currency.code}`
                     : '未配置' }}
                 </dd>
               </div>
@@ -524,7 +525,7 @@ onBeforeUnmount(() => {
                 </dt>
                 <dd class="qs-type-body m-0 break-words">
                   {{ item.currentRate
-                    ? `${item.currency.code} 金额 ÷ ${item.currentRate.foreignUnitsPerCny} = CNY`
+                    ? `${item.currency.code} 金额 ÷ ${formatExchangeRate(item.currentRate.foreignUnitsPerCny)} = CNY`
                     : '配置比例后可换算' }}
                 </dd>
               </div>

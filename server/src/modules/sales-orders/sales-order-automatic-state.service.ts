@@ -81,7 +81,7 @@ export class SalesOrderAutomaticStateService {
       // 目标不是取消状态，activeReceivedAmount 不参与本次校验；仍统一经过状态机，
       // 防止后续调整订单流转图时自动路径绕过正式规则。
       assertSalesOrderStatusTransition(currentStatus, 'PENDING_RECONCILIATION', {
-        activeReceivedAmount: '0.0000',
+        activeReceivedAmount: '0.00',
         fulfillmentStatus: order.fulfillmentStatus,
         paymentStatus: order.paymentStatus,
       })
@@ -131,7 +131,7 @@ export class SalesOrderAutomaticStateService {
     }
     // 与手工时代相同的复核：完成前必须重新确认已签收且已付清（付款可能已被作废）。
     assertSalesOrderStatusTransition(currentStatus, 'COMPLETED', {
-      activeReceivedAmount: '0.0000',
+      activeReceivedAmount: '0.00',
       fulfillmentStatus: order.fulfillmentStatus,
       paymentStatus: order.paymentStatus,
     })

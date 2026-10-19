@@ -2,9 +2,9 @@ import { ApiException } from '../../infrastructure/http/api.exception'
 import { VOLUME_CAI_DIVISOR } from '../ocean-freight-calculation/ocean-freight-calculation'
 import { formatDecimal, parseDecimal, power, roundRatio } from '../ocean-freight-calculation/ocean-decimal'
 
-/** 账单来源数据的精度口径：尺寸 2 位、重量 3 位、金额 2 位、材积 2 位。 */
-export const SLH_DIMENSION_SCALE = 2
-export const SLH_WEIGHT_SCALE = 3
+/** 账单来源数据的精度口径：尺寸 0 位、重量 0 位、金额 2 位、材积 2 位。 */
+export const SLH_DIMENSION_SCALE = 0
+export const SLH_WEIGHT_SCALE = 0
 export const SLH_AMOUNT_SCALE = 2
 export const SLH_VOLUME_SCALE = 2
 export const SLH_AMOUNT_PRECISION = 30
@@ -47,7 +47,7 @@ export function slhVolumeRatio(input: SlhVolumeInput): { numerator: bigint, deno
   if (values.some(value => value === null)) return null
   if (!Number.isInteger(input.packageCount) || input.packageCount < 1) slhBillFailure('VALIDATION_FAILED', '箱数必须是正整数')
   const product = values.reduce<bigint>((result, value) => result * value!, BigInt(input.packageCount))
-  // 三个尺寸各放大 10^2，立方后为 10^6；分母保持同一 scale 才能直接比较。
+  // 尺寸按整数厘米存储，三个维度不再放大；分母即材积分母。
   return { numerator: product, denominator: SLH_VOLUME_DIVISOR * power(SLH_DIMENSION_SCALE * 3) }
 }
 

@@ -132,8 +132,8 @@ const SUMMARY_AMOUNT_FIELDS = [
   'outstandingAmount',
 ] as const
 
-const AMOUNT_SCALE = 10_000n
-const AMOUNT_PATTERN = /^(-?)(\d+)(?:\.(\d{1,4}))?$/u
+const AMOUNT_SCALE = 100n
+const AMOUNT_PATTERN = /^(-?)(\d+)(?:\.(\d{1,2}))?$/u
 
 export function getSalesOrderStatusItems(
   viewMode: SalesOrderListViewMode,
@@ -268,7 +268,7 @@ function parseAmountUnits(value: string): bigint {
   }
   const [, sign, integerPart = '0', fractionPart = ''] = match
   const units = BigInt(integerPart) * AMOUNT_SCALE
-    + BigInt(fractionPart.padEnd(4, '0'))
+    + BigInt(fractionPart.padEnd(2, '0'))
   return sign === '-' ? -units : units
 }
 
@@ -276,7 +276,7 @@ function formatAmountUnits(units: bigint): string {
   const sign = units < 0n ? '-' : ''
   const absolute = units < 0n ? -units : units
   const integerPart = absolute / AMOUNT_SCALE
-  const fractionPart = (absolute % AMOUNT_SCALE).toString().padStart(4, '0')
+  const fractionPart = (absolute % AMOUNT_SCALE).toString().padStart(2, '0')
   return `${sign}${integerPart}.${fractionPart}`
 }
 
@@ -307,14 +307,14 @@ export function summarizeSalesOrderItemsByCurrency(
 
   for (const item of items) {
     const current = grouped.get(item.currencyCode) ?? {
-      agreedTotalAmount: '0.0000',
-      balanceDueAmount: '0.0000',
+      agreedTotalAmount: '0.00',
+      balanceDueAmount: '0.00',
       currencyCode: item.currencyCode,
-      depositDueAmount: '0.0000',
+      depositDueAmount: '0.00',
       orderCount: 0,
-      outstandingAmount: '0.0000',
-      receivedAmount: '0.0000',
-      standardSubtotalAmount: '0.0000',
+      outstandingAmount: '0.00',
+      receivedAmount: '0.00',
+      standardSubtotalAmount: '0.00',
     }
     const next = { ...current, orderCount: current.orderCount + 1 }
     for (const field of SUMMARY_AMOUNT_FIELDS) {

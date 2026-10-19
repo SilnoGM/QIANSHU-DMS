@@ -20,7 +20,7 @@ import {
 } from '../../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 
-const AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,4})?$/u
+const AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,2})?$/u
 
 /**
  * 收款申请可提交的类型：COD_BALANCE 是代收回填收款专用（由账单结算产生），

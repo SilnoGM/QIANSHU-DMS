@@ -34,7 +34,7 @@ describe('sales receipt historical migration', () => {
         await client.query(readFileSync(resolve(migrationsPath, directory, 'migration.sql'), 'utf8'))
       }
       const payment = await client.query('SELECT amount::text,origin,fund_posting_batch_id,fund_reversal_batch_id FROM sales_order_payments WHERE id=$1',[paymentId])
-      expect(payment.rows).toEqual([{ amount:'100.0000',origin:'LEGACY',fund_posting_batch_id:null,fund_reversal_batch_id:null }])
+      expect(payment.rows).toEqual([{ amount:'100.00',origin:'LEGACY',fund_posting_batch_id:null,fund_reversal_batch_id:null }])
       const after = await client.query('SELECT id,balance FROM fund_accounts ORDER BY id')
       expect(after.rows).toEqual(before.rows)
       await expect(client.query(`INSERT INTO sales_order_payments (sales_order_id,payment_type,amount,received_at,created_by_user_id,origin)

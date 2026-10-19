@@ -131,7 +131,7 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
         // 产品快照测试只要求满足数据库的 ACTIVE 产品不变量；供应商字典有效性
         // 属于产品写服务边界，不在销售订单服务夹具中重复搭建。
         supplierValue: `SO-SUPPLIER-${suffix}`,
-        twdSalePriceAmount: '60.0000',
+        twdSalePriceAmount: '60.00',
         updatedByUserId: actor.id,
       },
       select: { id: true },
@@ -331,9 +331,9 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
         fullAddress: `测试国家${suffix}测试省${suffix}测试市${suffix}测试路100号`,
       },
       amounts: {
-        lineSubtotalAmount: '100.0000',
-        agreedTotalAmount: '100.0000',
-        receivedAmount: '0.0000',
+        lineSubtotalAmount: '100.00',
+        agreedTotalAmount: '100.00',
+        receivedAmount: '0.00',
       },
       paymentStatus: 'UNPAID',
     })

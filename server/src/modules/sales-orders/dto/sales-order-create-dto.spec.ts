@@ -51,9 +51,9 @@ describe('CreateSalesOrderRequestDto', () => {
         actualUnitPriceAmount: '100.00',
         quantity: 2,
       }],
-      agreedTotalAmount: '200.0000',
-      depositDueAmount: '50.0000',
-      balanceDueAmount: '150.0000',
+      agreedTotalAmount: '200.00',
+      depositDueAmount: '50.00',
+      balanceDueAmount: '150.00',
       issuanceVoucher: {
         mediaAssetId: '55555555-5555-4555-8555-555555555555',
       },

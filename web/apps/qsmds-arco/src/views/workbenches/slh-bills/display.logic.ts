@@ -58,16 +58,16 @@ export function resolveSlhBillContainerBatchPreview(
 }
 
 /**
- * 尺寸按整厘米读：去掉无意义的小数位（`240.00` → `240`），真有小数的原样保留
- * （不四舍五入，避免把 108.5 显示成 109）。非数值原样返回 null，由调用方给占位符。
+ * 尺寸按整数厘米展示：服务端已向上取整，兼容读时仍对带小数的历史值再 CEIL 一次。
+ * 非数值返回 null，由调用方给占位符。
  */
 export function formatSlhBillDimensionValue(value: string): string | null {
   const trimmed = value.trim()
   if (!/^[+-]?\d+(?:\.\d+)?$/u.test(trimmed)) {
     return null
   }
-  // 只在确实带小数点时剥尾零：整数不能剥，否则 100 会被剥成 1。
-  return trimmed.includes('.') ? trimmed.replace(/\.?0+$/u, '') : trimmed
+  const rounded = new Decimal(trimmed).ceil()
+  return (rounded.isZero() ? new Decimal(0) : rounded).toFixed(0)
 }
 
 /** 尺寸缺任一边即视为不完整，避免用 0 补位后冒充账单原始尺寸。 */
@@ -86,9 +86,9 @@ export function formatSlhBillDimensions(line: Pick<SlhBillLineDto, 'lengthCm' | 
   return sides.join('×')
 }
 
-/** 重量与单位同源展示；单位缺失时只显示数值，不猜测单位。数值按 2 位小数展示。 */
+/** 重量与单位同源展示；单位缺失时只显示数值。重量按整数 kg 展示。 */
 export function formatSlhBillWeight(line: Pick<SlhBillLineDto, 'grossWeightKg' | 'weightUnit'>): string | null {
-  const weight = formatSlhBillAmount(line.grossWeightKg ?? null)
+  const weight = formatContainerMeasurement(line.grossWeightKg ?? null, 0)
   if (weight === null) {
     return null
   }

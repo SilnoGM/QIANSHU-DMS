@@ -89,7 +89,7 @@ describe('sales order state machine', () => {
     expect(() => assertSalesOrderStatusTransition(
       orderStatus('CONFIRMED'),
       orderStatus('CANCELLED'),
-      orderContext({ activeReceivedAmount: '0.0001' }),
+      orderContext({ activeReceivedAmount: '0.01' }),
     )).toThrow(expect.objectContaining({
       code: 'SALES_ORDER_CANCEL_HAS_PAYMENTS',
     }))

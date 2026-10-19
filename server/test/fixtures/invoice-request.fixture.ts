@@ -99,6 +99,7 @@ export interface InvoiceRequestSeed {
   readonly salesAmount?: number
   readonly taxAmount?: number
   readonly totalAmount?: number
+  readonly withDefaultLine?: boolean
 }
 
 export async function insertInvoiceRequest(
@@ -131,6 +132,13 @@ export async function insertInvoiceRequest(
       seed.actorUserId,
     ],
   )
+  if (seed.withDefaultLine !== false) {
+    await insertInvoiceRequestLine(client, {
+      lineNo: 1,
+      requestId,
+      unitPrice: salesAmount,
+    })
+  }
   return { requestId, invoiceNo: issuance.invoiceNo }
 }
 

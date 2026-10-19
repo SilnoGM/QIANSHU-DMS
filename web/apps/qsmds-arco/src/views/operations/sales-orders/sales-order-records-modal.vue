@@ -160,8 +160,8 @@ const canRecordPayment = computed(() => (
 ))
 const actionLocked = computed(() => actionSubmitting.value || actionUploading.value)
 const paymentLocked = computed(() => actionLocked.value || receiptUnknown.value)
-// 收款原币契约保留四位小数，与资金账户人民币两位显示独立。
-const paymentCurrencies = computed(() => props.currencies.map(currency => ({ ...currency, minorUnit: 4 as const })))
+// 销售原币金额统一两位小数；资金账户人民币仍独立按两位展示。
+const paymentCurrencies = computed(() => props.currencies.map(currency => ({ ...currency, minorUnit: 2 as const })))
 const paymentTypeOptions: Array<{
   label: string
   value: SalesOrderPaymentDraft['paymentType']
@@ -478,7 +478,7 @@ async function submitPayment(): Promise<void> {
       receivedAt: paymentReceivedAt.value,
       remark: paymentRemark.value,
       voucherMediaAssetId: paymentVoucher.value?.mediaAssetId ?? null,
-    }, 4)
+    }, 2)
     if (!result.valid) {
       paymentErrors.value = result.fieldErrors
       actionError.value = t('salesReceipt.invalid')
@@ -1281,7 +1281,7 @@ onBeforeUnmount(() => {
               :currencies="paymentCurrencies"
               :disabled="paymentLocked"
               :currency-selectable="false"
-              min="0.0001"
+              min="0.01"
               @update:model-value="clearPaymentError('amount')"
             />
             <p v-if="paymentErrors.amount" class="text-xs text-destructive m-0 mt-1">

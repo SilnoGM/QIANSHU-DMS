@@ -9,7 +9,7 @@ import {
 } from './sales-order-command.normalizer'
 
 export const SALES_ORDER_CREATE_FINGERPRINT_VERSION =
-  'sales-order.create.v1' as const
+  'sales-order.create.v2' as const
 export const SALES_ORDER_NUMBERING_RULE_CODE = 'SALES_ORDER' as const
 export const SALES_ORDER_NUMBERING_CONSUMER_CODE = 'SALES_ORDER.CREATE' as const
 

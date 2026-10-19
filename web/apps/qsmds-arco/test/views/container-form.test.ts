@@ -30,30 +30,30 @@ test('new forms retain unknown measurements and default to one package', () => {
   assert.ok(!('volumeCai' in submission))
 })
 
-test('measurements retain exact decimal strings without Number conversion', () => {
+test('measurements retain exact integer strings without Number conversion', () => {
   const draft = createLoadingItemDraft()
-  Object.assign(draft, { goodsName: '炉', grossWeightKg: '999999999999999.999', reportedVolumeCai: '9999999999999999.99' })
+  Object.assign(draft, { goodsName: '炉', grossWeightKg: '999999999999999', reportedVolumeCai: '9999999999999999.99' })
   assert.deepEqual(validateLoadingItemDraft(draft), {})
   const submission = buildLoadingItemSubmission(draft)
-  assert.equal(submission.grossWeightKg, '999999999999999.999')
+  assert.equal(submission.grossWeightKg, '999999999999999')
   assert.equal(submission.reportedVolumeCai, '9999999999999999.99')
 })
 
 test('invalid precision, signs, exponent, zero and quantity are rejected; source zero is allowed', () => {
   const draft = createLoadingItemDraft()
   draft.goodsName = '炉'
-  for (const value of ['0', '-1', '1e3', '1.0001', '10000000000000000', 'Infinity', '0.001']) {
+  for (const value of ['0', '-1', '1e3', '1.0001', '1.001', '0.001', '1000000000000000000', 'Infinity']) {
     draft.lengthCm = value
     assert.ok(validateLoadingItemDraft(draft).lengthCm, value)
   }
-  // 尺寸两位小数，毛重仍三位小数：同一张表单里两种精度各自成立。
-  draft.lengthCm = '0.01'
-  draft.grossWeightKg = '0.001'
+  // 尺寸与毛重均按整数存储：同一张表单里不再接受小数。
+  draft.lengthCm = '1'
+  draft.grossWeightKg = '1'
   draft.reportedVolumeCai = '0'
   assert.deepEqual(validateLoadingItemDraft(draft), {})
-  draft.grossWeightKg = '0.0001'
+  draft.grossWeightKg = '0.1'
   assert.ok(validateLoadingItemDraft(draft).grossWeightKg)
-  draft.grossWeightKg = '0.001'
+  draft.grossWeightKg = '1'
   for (const value of ['0', '1.5', '1000001', '1e2']) {
     draft.packageCount = value
     assert.ok(validateLoadingItemDraft(draft).packageCount, value)

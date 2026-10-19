@@ -802,7 +802,7 @@ model Currency {
 model ExchangeRate {
   id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   currencyId         String   @unique(map: "exchange_rates_currency_id_key") @map("currency_id") @db.Uuid
-  foreignUnitsPerCny Decimal  @map("foreign_units_per_cny") @db.Decimal(30, 12)
+  foreignUnitsPerCny Decimal  @map("foreign_units_per_cny") @db.Decimal(30, 4)
   version            Int      @default(1)
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -898,11 +898,11 @@ model Product {
   status               ProductStatus @default(ACTIVE)
   supplierValue        String        @map("supplier_value") @db.VarChar(64)
   sortOrder            Int           @default(0) @map("sort_order")
-  twdSalePriceAmount   Decimal?      @map("twd_sale_price_amount") @db.Decimal(30, 4)
+  twdSalePriceAmount   Decimal?      @map("twd_sale_price_amount") @db.Decimal(30, 2)
   twdSalePriceCurrency String        @default("TWD") @map("twd_sale_price_currency") @db.Char(3)
-  myrSalePriceAmount   Decimal?      @map("myr_sale_price_amount") @db.Decimal(30, 4)
+  myrSalePriceAmount   Decimal?      @map("myr_sale_price_amount") @db.Decimal(30, 2)
   myrSalePriceCurrency String        @default("MYR") @map("myr_sale_price_currency") @db.Char(3)
-  purchaseCostAmount   Decimal?      @map("purchase_cost_amount") @db.Decimal(30, 4)
+  purchaseCostAmount   Decimal?      @map("purchase_cost_amount") @db.Decimal(30, 2)
   purchaseCostCurrency String        @default("CNY") @map("purchase_cost_currency") @db.Char(3)
   attributes           Json          @default("[]") @db.JsonB
   remark               String?       @db.VarChar(512)
@@ -1060,10 +1060,10 @@ model SalesOrder {
   customerCityNameSnapshot          String                      @map("customer_city_name_snapshot") @db.VarChar(128)
   customerAddressDetail             String                      @map("customer_address_detail") @db.VarChar(1000)
   customerFullAddressSnapshot       String                      @map("customer_full_address_snapshot") @db.VarChar(1500)
-  lineSubtotalAmount                Decimal                     @map("line_subtotal_amount") @db.Decimal(30, 4)
-  agreedTotalAmount                 Decimal                     @map("agreed_total_amount") @db.Decimal(30, 4)
-  depositDueAmount                  Decimal                     @map("deposit_due_amount") @db.Decimal(30, 4)
-  balanceDueAmount                  Decimal                     @map("balance_due_amount") @db.Decimal(30, 4)
+  lineSubtotalAmount                Decimal                     @map("line_subtotal_amount") @db.Decimal(30, 2)
+  agreedTotalAmount                 Decimal                     @map("agreed_total_amount") @db.Decimal(30, 2)
+  depositDueAmount                  Decimal                     @map("deposit_due_amount") @db.Decimal(30, 2)
+  balanceDueAmount                  Decimal                     @map("balance_due_amount") @db.Decimal(30, 2)
   orderStatus                       SalesOrderStatus            @default(DRAFT) @map("order_status")
   fulfillmentStatus                 SalesOrderFulfillmentStatus @default(PENDING) @map("fulfillment_status")
   paymentStatus                     SalesOrderPaymentStatus     @default(UNPAID) @map("payment_status")
@@ -1105,10 +1105,10 @@ model SalesOrderLine {
   productNameSnapshot       String             @map("product_name_snapshot") @db.VarChar(128)
   productAttributesSnapshot Json               @default("[]") @map("product_attributes_snapshot") @db.JsonB
   descriptionSnapshot       String?            @map("description_snapshot") @db.VarChar(1000)
-  standardUnitPriceAmount   Decimal?           @map("standard_unit_price_amount") @db.Decimal(30, 4)
-  actualUnitPriceAmount     Decimal            @map("actual_unit_price_amount") @db.Decimal(30, 4)
+  standardUnitPriceAmount   Decimal?           @map("standard_unit_price_amount") @db.Decimal(30, 2)
+  actualUnitPriceAmount     Decimal            @map("actual_unit_price_amount") @db.Decimal(30, 2)
   quantity                  Int
-  lineTotalAmount           Decimal            @map("line_total_amount") @db.Decimal(30, 4)
+  lineTotalAmount           Decimal            @map("line_total_amount") @db.Decimal(30, 2)
   removedAt                 DateTime?          @map("removed_at") @db.Timestamptz(6)
   createdAt                 DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
 
@@ -1125,7 +1125,7 @@ model SalesOrderPayment {
   id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   salesOrderId    String                @map("sales_order_id") @db.Uuid
   paymentType     SalesOrderPaymentType @map("payment_type")
-  amount          Decimal               @db.Decimal(30, 4)
+  amount          Decimal               @db.Decimal(30, 2)
   receivedAt      DateTime              @map("received_at") @db.Timestamptz(6)
   paymentMethod   String?               @map("payment_method") @db.VarChar(64)
   remark          String?               @db.VarChar(500)
@@ -1140,7 +1140,7 @@ model SalesOrderPayment {
   fundReversalBatchId String? @unique(map: "sales_order_payments_reversal_batch_key") @map("fund_reversal_batch_id") @db.Uuid
   exchangeRateId String? @map("exchange_rate_id") @db.Uuid
   exchangeRateVersionSnapshot Int? @map("exchange_rate_version_snapshot")
-  foreignUnitsPerCnySnapshot Decimal? @map("foreign_units_per_cny_snapshot") @db.Decimal(30, 12)
+  foreignUnitsPerCnySnapshot Decimal? @map("foreign_units_per_cny_snapshot") @db.Decimal(30, 4)
   exchangeRateCapturedAt DateTime? @map("exchange_rate_captured_at") @db.Timestamptz(6)
   /// 代收回填的溯源锚点：非空时唯一指向产生这笔收款的结算记录；其余来源恒为空。
   slhReconciliationSettlementId String? @unique(map: "sales_order_payments_reconciliation_settlement_key") @map("slh_reconciliation_settlement_id") @db.Uuid
@@ -1204,14 +1204,14 @@ model SalesOrderStatusHistory {
 model SalesOrderAmountRevision {
   id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   salesOrderId          String   @map("sales_order_id") @db.Uuid
-  oldLineSubtotalAmount Decimal  @map("old_line_subtotal_amount") @db.Decimal(30, 4)
-  oldAgreedTotalAmount  Decimal  @map("old_agreed_total_amount") @db.Decimal(30, 4)
-  oldDepositDueAmount   Decimal  @map("old_deposit_due_amount") @db.Decimal(30, 4)
-  oldBalanceDueAmount   Decimal  @map("old_balance_due_amount") @db.Decimal(30, 4)
-  newLineSubtotalAmount Decimal  @map("new_line_subtotal_amount") @db.Decimal(30, 4)
-  newAgreedTotalAmount  Decimal  @map("new_agreed_total_amount") @db.Decimal(30, 4)
-  newDepositDueAmount   Decimal  @map("new_deposit_due_amount") @db.Decimal(30, 4)
-  newBalanceDueAmount   Decimal  @map("new_balance_due_amount") @db.Decimal(30, 4)
+  oldLineSubtotalAmount Decimal  @map("old_line_subtotal_amount") @db.Decimal(30, 2)
+  oldAgreedTotalAmount  Decimal  @map("old_agreed_total_amount") @db.Decimal(30, 2)
+  oldDepositDueAmount   Decimal  @map("old_deposit_due_amount") @db.Decimal(30, 2)
+  oldBalanceDueAmount   Decimal  @map("old_balance_due_amount") @db.Decimal(30, 2)
+  newLineSubtotalAmount Decimal  @map("new_line_subtotal_amount") @db.Decimal(30, 2)
+  newAgreedTotalAmount  Decimal  @map("new_agreed_total_amount") @db.Decimal(30, 2)
+  newDepositDueAmount   Decimal  @map("new_deposit_due_amount") @db.Decimal(30, 2)
+  newBalanceDueAmount   Decimal  @map("new_balance_due_amount") @db.Decimal(30, 2)
   reason                String   @db.VarChar(500)
   changedByUserId       String   @map("changed_by_user_id") @db.Uuid
   changedAt             DateTime @default(now()) @map("changed_at") @db.Timestamptz(6)
@@ -1941,7 +1941,7 @@ model SalesReceiptRequest {
   salesOrderId String @map("sales_order_id") @db.Uuid
   accountOwnerUserId String @map("account_owner_user_id") @db.Uuid
   paymentType SalesOrderPaymentType @map("payment_type")
-  amount Decimal @db.Decimal(30, 4)
+  amount Decimal @db.Decimal(30, 2)
   currencyCode String @map("currency_code") @db.VarChar(3)
   receivedAt DateTime @map("received_at") @db.Timestamptz(6)
   paymentMethod String @map("payment_method") @db.VarChar(64)
@@ -1994,7 +1994,7 @@ model PackagingCostRequest {
   packagingType String @map("packaging_type") @db.VarChar(64)
   packagingTypeName String @map("packaging_type_name") @db.VarChar(128)
   packagingVendor PackagingCostVendor @map("packaging_vendor")
-  amount Decimal @db.Decimal(30, 4)
+  amount Decimal @db.Decimal(30, 2)
   currencyCode String @default("CNY") @map("currency_code") @db.Char(3)
   packagingImageMediaAssetId String @unique(map: "packaging_cost_requests_packaging_image_key") @map("packaging_image_media_asset_id") @db.Uuid
   quotationImageMediaAssetId String @unique(map: "packaging_cost_requests_quotation_image_key") @map("quotation_image_media_asset_id") @db.Uuid
@@ -2079,11 +2079,11 @@ model ContainerLoadingItem {
   goodsName String @map("goods_name") @db.VarChar(1000)
   packageCount Int @map("package_count")
   packageUnit String? @map("package_unit") @db.VarChar(32)
-  grossWeightKg Decimal? @map("gross_weight_kg") @db.Decimal(18, 3)
-  // 每件尺寸与账单表同口径：两位小数。
-  lengthCm Decimal? @map("length_cm") @db.Decimal(18, 2)
-  widthCm Decimal? @map("width_cm") @db.Decimal(18, 2)
-  heightCm Decimal? @map("height_cm") @db.Decimal(18, 2)
+  grossWeightKg Decimal? @map("gross_weight_kg") @db.Decimal(18, 0)
+  // 每件尺寸与账单表同口径：整数厘米。
+  lengthCm Decimal? @map("length_cm") @db.Decimal(18, 0)
+  widthCm Decimal? @map("width_cm") @db.Decimal(18, 0)
+  heightCm Decimal? @map("height_cm") @db.Decimal(18, 0)
   volumeCai Decimal? @map("volume_cai") @db.Decimal(24, 2)
   chargeableVolumeCai Int? @map("chargeable_volume_cai")
   reportedVolumeCai Decimal? @map("reported_volume_cai") @db.Decimal(24, 2)
@@ -2221,8 +2221,8 @@ model SlhBill {
   /// 确认入库时看到的差异与告警快照；明细行级差异也在这里，供详情页按类型分组呈现。
   importFindings Json @map("import_findings") @db.JsonB
   rateSource SlhBillRateSource? @map("rate_source")
-  foreignUnitsPerCnySnapshot Decimal? @map("foreign_units_per_cny_snapshot") @db.Decimal(30, 12)
-  embeddedForeignUnitsPerCny Decimal? @map("embedded_foreign_units_per_cny") @db.Decimal(30, 12)
+  foreignUnitsPerCnySnapshot Decimal? @map("foreign_units_per_cny_snapshot") @db.Decimal(30, 4)
+  embeddedForeignUnitsPerCny Decimal? @map("embedded_foreign_units_per_cny") @db.Decimal(30, 4)
   exchangeRateId String? @map("exchange_rate_id") @db.Uuid
   exchangeRateVersionSnapshot Int? @map("exchange_rate_version_snapshot")
   rateCapturedAt DateTime? @map("rate_captured_at") @db.Timestamptz(6)
@@ -2270,11 +2270,11 @@ model SlhBillLine {
   goodsName String @map("goods_name") @db.VarChar(255)
   packageCount Int @map("package_count")
   packageUnit String? @map("package_unit") @db.VarChar(32)
-  grossWeightKg Decimal? @map("gross_weight_kg") @db.Decimal(18, 3)
+  grossWeightKg Decimal? @map("gross_weight_kg") @db.Decimal(18, 0)
   weightUnit String? @map("weight_unit") @db.VarChar(32)
-  lengthCm Decimal? @map("length_cm") @db.Decimal(18, 2)
-  widthCm Decimal? @map("width_cm") @db.Decimal(18, 2)
-  heightCm Decimal? @map("height_cm") @db.Decimal(18, 2)
+  lengthCm Decimal? @map("length_cm") @db.Decimal(18, 0)
+  widthCm Decimal? @map("width_cm") @db.Decimal(18, 0)
+  heightCm Decimal? @map("height_cm") @db.Decimal(18, 0)
   volumeCai Decimal? @map("volume_cai") @db.Decimal(24, 2)
   reportedVolumeCai Decimal? @map("reported_volume_cai") @db.Decimal(24, 2)
   categoryCode String? @map("category_code") @db.VarChar(32)
@@ -2407,8 +2407,8 @@ model SlhReconciliationSettlement {
   salesOrderId String @map("sales_order_id") @db.Uuid
   status SlhReconciliationSettlementStatus @default(ACTIVE)
   rateSource SlhBillRateSource @map("rate_source")
-  foreignUnitsPerCny Decimal @map("foreign_units_per_cny") @db.Decimal(30, 12)
-  paymentFeeRate Decimal @map("payment_fee_rate") @db.Decimal(30, 12)
+  foreignUnitsPerCny Decimal @map("foreign_units_per_cny") @db.Decimal(30, 4)
+  paymentFeeRate Decimal @map("payment_fee_rate") @db.Decimal(30, 3)
   salesOrderNo String @map("sales_order_no") @db.VarChar(64)
   purchaseOrderNo String @map("purchase_order_no") @db.VarChar(64)
   containerBatchNo String @map("container_batch_no") @db.VarChar(128)
@@ -2424,7 +2424,7 @@ model SlhReconciliationSettlement {
   payableCurrency String @map("payable_currency") @db.Char(3)
   settlementAmountCny Decimal? @map("settlement_amount_cny") @db.Decimal(30, 2)
   settlementCurrency String @map("settlement_currency") @db.Char(3)
-  salesAmount Decimal? @map("sales_amount") @db.Decimal(30, 4)
+  salesAmount Decimal? @map("sales_amount") @db.Decimal(30, 2)
   salesCurrency String @map("sales_currency") @db.Char(3)
   paymentFeeAmountCny Decimal? @map("payment_fee_amount_cny") @db.Decimal(30, 2)
   paymentFeeCurrency String @map("payment_fee_currency") @db.Char(3)
@@ -2498,9 +2498,9 @@ model InvoiceRequest {
   status InvoiceRequestStatus @default(PENDING_REVIEW)
   buyerName String @map("buyer_name") @db.VarChar(200)
   buyerTaxId String @map("buyer_tax_id") @db.VarChar(8)
-  salesAmount BigInt @map("sales_amount") @db.BigInt
-  taxAmount BigInt @map("tax_amount") @db.BigInt
-  totalAmount BigInt @map("total_amount") @db.BigInt
+  salesAmount Decimal @map("sales_amount") @db.Decimal(30, 0)
+  taxAmount Decimal @map("tax_amount") @db.Decimal(30, 0)
+  totalAmount Decimal @map("total_amount") @db.Decimal(30, 0)
   invoiceRemark String? @map("invoice_remark") @db.VarChar(500)
   internalRemark String? @map("internal_remark") @db.VarChar(500)
   recipientName String @map("recipient_name") @db.Text
@@ -2519,7 +2519,7 @@ model InvoiceRequest {
   settleAmountCny Decimal? @map("settle_amount_cny") @db.Decimal(30, 2)
   exchangeRateId String? @map("exchange_rate_id") @db.Uuid
   exchangeRateVersionSnapshot Int? @map("exchange_rate_version_snapshot")
-  foreignUnitsPerCnySnapshot Decimal? @map("foreign_units_per_cny_snapshot") @db.Decimal(30, 12)
+  foreignUnitsPerCnySnapshot Decimal? @map("foreign_units_per_cny_snapshot") @db.Decimal(30, 4)
   rateCapturedAt DateTime? @map("rate_captured_at") @db.Timestamptz(6)
   fundPostingBatchId String? @unique(map: "invoice_requests_posting_batch_key") @map("fund_posting_batch_id") @db.Uuid
   cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(6)
@@ -2559,8 +2559,8 @@ model InvoiceRequestLine {
   lineNo Int @map("line_no")
   productName String @map("product_name") @db.VarChar(200)
   quantity Int
-  unitPrice BigInt @map("unit_price") @db.BigInt
-  amount BigInt
+  unitPrice Decimal @map("unit_price") @db.Decimal(30, 0)
+  amount Decimal @db.Decimal(30, 0)
   createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @map("updated_at") @default(now()) @updatedAt @db.Timestamptz(6)
 

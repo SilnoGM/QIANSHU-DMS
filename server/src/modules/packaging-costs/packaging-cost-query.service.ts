@@ -16,7 +16,7 @@ const summarySelect = {
 function mapSummary(row: Prisma.PackagingCostRequestGetPayload<{ select: typeof summarySelect }>): PackagingCostRequestSummaryDto {
   return {
     id: row.id, version: row.version, packagingTypeName: row.packagingTypeName, packagingVendor: row.packagingVendor as PackagingCostVendorDto,
-    amount: row.amount.toFixed(4), currencyCode: 'CNY', status: row.status as PackagingCostStatusDto,
+    amount: row.amount.toFixed(2), currencyCode: 'CNY', status: row.status as PackagingCostStatusDto,
     submittedBy: { id: row.submittedBy.id, name: row.submittedBy.displayName }, submittedAt: row.submittedAt.toISOString(),
     paidBy: row.paidBy ? { id: row.paidBy.id, name: row.paidBy.displayName } : null, paidAt: row.paidAt?.toISOString() ?? null, remark: row.remark,
   }
@@ -29,7 +29,7 @@ function map(row: Prisma.PackagingCostRequestGetPayload<{ include: typeof includ
     id: row.id, shipmentId: row.shipmentId, shipmentNo: row.shipmentNo, shippingMarkText: row.shippingMarkText,
     purchaseOrderId: row.purchaseOrderId, purchaseOrderNo: row.purchaseOrderNo, salesOrderId: row.salesOrderId, salesOrderNo: row.salesOrderNo,
     owner: who(row.owner), packagingType: row.packagingType, packagingTypeName: row.packagingTypeName, packagingVendor: row.packagingVendor as PackagingCostVendorDto,
-    amount: row.amount.toFixed(4), currencyCode: 'CNY', remark: row.remark, status: row.status as PackagingCostStatusDto,
+    amount: row.amount.toFixed(2), currencyCode: 'CNY', remark: row.remark, status: row.status as PackagingCostStatusDto,
     submittedBy: who(row.submittedBy), submittedAt: row.submittedAt.toISOString(), paidBy: row.paidBy ? who(row.paidBy) : null,
     paidAt: row.paidAt?.toISOString() ?? null, version: row.version, packagingImage: evidence(row.packagingImage), quotationImage: evidence(row.quotationImage),
   }

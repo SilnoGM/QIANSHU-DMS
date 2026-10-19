@@ -75,8 +75,8 @@ export interface SalesOrderProductsUpdateResult {
   }
 }
 
-function fixed4(value: { toFixed(decimalPlaces: number): string }): string {
-  return value.toFixed(4)
+function fixed2(value: { toFixed(decimalPlaces: number): string }): string {
+  return value.toFixed(2)
 }
 
 function failure(status: HttpStatus, code: string, message: string): ApiException {
@@ -131,7 +131,7 @@ function standardPriceFor(
   const amount = currencyCode === 'TWD'
     ? product.twdSalePriceAmount
     : product.myrSalePriceAmount
-  return amount === null ? null : fixed4(amount)
+  return amount === null ? null : fixed2(amount)
 }
 
 function normalizeAttributes(value: unknown): Prisma.InputJsonValue {
@@ -315,7 +315,7 @@ export class SalesOrderProductEditService {
           }
           const snapshotChanged = target.name !== line.productNameSnapshot
             || target.description !== line.descriptionSnapshot
-            || target.actualUnitPriceAmount !== fixed4(line.actualUnitPriceAmount)
+            || target.actualUnitPriceAmount !== fixed2(line.actualUnitPriceAmount)
           if (target.desiredQuantity !== line.quantity) {
             quantityChanges.push({
               lineId: line.id,
@@ -385,16 +385,16 @@ export class SalesOrderProductEditService {
           remainingQuantity += line.quantity
         }
         const oldLineSubtotalUnits = parseSalesOrderAmountUnits(
-          fixed4(order.lineSubtotalAmount),
+          fixed2(order.lineSubtotalAmount),
         )
         const amountDeltaUnits = newLineSubtotalUnits - oldLineSubtotalUnits
-        const oldAgreedUnits = parseSalesOrderAmountUnits(fixed4(order.agreedTotalAmount))
+        const oldAgreedUnits = parseSalesOrderAmountUnits(fixed2(order.agreedTotalAmount))
         const newAgreedUnits = oldAgreedUnits + amountDeltaUnits
         if (newAgreedUnits < 0n) throw productEditStateChanged()
 
         const paidAmount = paymentAggregate._sum.amount === null
-          ? '0.0000'
-          : fixed4(paymentAggregate._sum.amount)
+          ? '0.00'
+          : fixed2(paymentAggregate._sum.amount)
         const pending = await transaction.salesReceiptRequest.aggregate({ where: { salesOrderId: order.id, status: 'PENDING_REVIEW' }, _sum: { amount: true } })
         const paidUnits = parseSalesOrderAmountUnits(paidAmount)
         if (newAgreedUnits < paidUnits) {
@@ -404,8 +404,8 @@ export class SalesOrderProductEditService {
             '调整后的销售总价不能低于已收款金额',
           )
         }
-        assertReceiptCapacity(formatSalesOrderAmountUnits(newAgreedUnits), paidAmount, pending._sum.amount?.toFixed(4) ?? '0.0000')
-        const oldDepositUnits = parseSalesOrderAmountUnits(fixed4(order.depositDueAmount))
+        assertReceiptCapacity(formatSalesOrderAmountUnits(newAgreedUnits), paidAmount, pending._sum.amount?.toFixed(2) ?? '0.00')
+        const oldDepositUnits = parseSalesOrderAmountUnits(fixed2(order.depositDueAmount))
         const newDepositUnits = oldDepositUnits > newAgreedUnits
           ? newAgreedUnits
           : oldDepositUnits
@@ -448,7 +448,7 @@ export class SalesOrderProductEditService {
           else {
             const snapshotChanged = target.name !== line.productNameSnapshot
               || target.description !== line.descriptionSnapshot
-              || target.actualUnitPriceAmount !== fixed4(line.actualUnitPriceAmount)
+              || target.actualUnitPriceAmount !== fixed2(line.actualUnitPriceAmount)
             if (target.desiredQuantity === line.quantity && !snapshotChanged) continue
             const lineTotalAmount = formatSalesOrderAmountUnits(
               parseSalesOrderAmountUnits(target.actualUnitPriceAmount)
@@ -490,10 +490,10 @@ export class SalesOrderProductEditService {
         if (amountDeltaUnits !== 0n) {
           await transaction.salesOrderAmountRevision.create({ data: {
             salesOrderId,
-            oldLineSubtotalAmount: fixed4(order.lineSubtotalAmount),
-            oldAgreedTotalAmount: fixed4(order.agreedTotalAmount),
-            oldDepositDueAmount: fixed4(order.depositDueAmount),
-            oldBalanceDueAmount: fixed4(order.balanceDueAmount),
+            oldLineSubtotalAmount: fixed2(order.lineSubtotalAmount),
+            oldAgreedTotalAmount: fixed2(order.agreedTotalAmount),
+            oldDepositDueAmount: fixed2(order.depositDueAmount),
+            oldBalanceDueAmount: fixed2(order.balanceDueAmount),
             newLineSubtotalAmount,
             newAgreedTotalAmount,
             newDepositDueAmount,

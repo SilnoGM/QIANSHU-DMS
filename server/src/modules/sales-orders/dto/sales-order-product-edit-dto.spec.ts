@@ -82,21 +82,21 @@ describe('normalizeSalesOrderProductEditCommand', () => {
         lineId: '11111111-1111-4111-8111-111111111111',
         name: '目录产品快照',
         description: '修改后的备注',
-        actualUnitPriceAmount: '98.5000',
+        actualUnitPriceAmount: '98.50',
         desiredQuantity: 0,
       }, {
         lineId: '22222222-2222-4222-8222-222222222222',
         name: '临时产品快照',
         description: null,
-        actualUnitPriceAmount: '30.0000',
+        actualUnitPriceAmount: '30.00',
         desiredQuantity: 3,
       }],
       newLines: [{
         lineType: 'CATALOG',
         productId: '33333333-3333-4333-8333-333333333333',
-        actualUnitPriceAmount: '120.5000',
+        actualUnitPriceAmount: '120.50',
         quantity: 2,
-        lineTotalAmount: '241.0000',
+        lineTotalAmount: '241.00',
       }],
     })
   })

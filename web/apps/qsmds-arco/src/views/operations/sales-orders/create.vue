@@ -134,7 +134,7 @@ const issuerLabel = computed(() => resolveSalesOrderIssuerLabel(
   appAccountStore.account,
 ))
 const fixedCurrencyDescriptor = computed(() => fixedCurrencies.value[0] ?? null)
-const amountPrecision = computed(() => fixedCurrencyDescriptor.value?.minorUnit ?? 4)
+const amountPrecision = computed(() => fixedCurrencyDescriptor.value?.minorUnit ?? 2)
 const currencyUnavailable = computed(() => (
   currencyCatalog.loading.value
   || currencyCatalog.errorMessage.value !== null

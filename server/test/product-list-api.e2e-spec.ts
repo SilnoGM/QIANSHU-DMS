@@ -316,9 +316,9 @@ describe('Product list API with isolated PostgreSQL', () => {
           productNo: `${PRODUCT_NO_PREFIX}001`,
           status: ProductStatus.ACTIVE,
           supplierValue: supplierValues.effective,
-          twdSalePriceAmount: '12345678901234567890.1234',
+          twdSalePriceAmount: '12345678901234567890.12',
           myrSalePriceAmount: null,
-          purchaseCostAmount: '10.5000',
+          purchaseCostAmount: '10.50',
           attributes: [
             { title: '颜色', value: '墨黑' },
             { title: '尺寸', value: 'XL' },
@@ -337,7 +337,7 @@ describe('Product list API with isolated PostgreSQL', () => {
           status: ProductStatus.INACTIVE,
           supplierValue: supplierValues.disabled,
           twdSalePriceAmount: null,
-          myrSalePriceAmount: '88.1234',
+          myrSalePriceAmount: '88.12',
           purchaseCostAmount: null,
           updatedAt: sharedUpdatedAt,
         },
@@ -454,7 +454,7 @@ describe('Product list API with isolated PostgreSQL', () => {
       },
       media: { mainImage: null, images: [], videos: [] },
       twdSalePrice: {
-        amount: '12345678901234567890.1234',
+        amount: '12345678901234567890.12',
         currency: 'TWD',
       },
       myrSalePrice: { amount: null, currency: 'MYR' },
@@ -485,7 +485,7 @@ describe('Product list API with isolated PostgreSQL', () => {
           label: '已停用供应商',
           state: 'DISABLED',
         },
-        myrSalePrice: { amount: '88.1234', currency: 'MYR' },
+        myrSalePrice: { amount: '88.12', currency: 'MYR' },
         purchaseCost: { amount: null, currency: 'CNY' },
       })
     expect(page.items.find(item => item.id === products.unknownId))

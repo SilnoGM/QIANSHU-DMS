@@ -153,14 +153,14 @@ function optionalText(
     : requireText(value, field, maximum)
 }
 
-function fixed4(value: { toFixed(decimalPlaces: number): string }): string {
-  return value.toFixed(4)
+function fixed2(value: { toFixed(decimalPlaces: number): string }): string {
+  return value.toFixed(2)
 }
 
 function effectiveReceivedAmount(
   aggregate: { readonly _sum: { readonly amount: { toFixed(decimalPlaces: number): string } | null } },
 ): string {
-  return aggregate._sum.amount === null ? '0.0000' : fixed4(aggregate._sum.amount)
+  return aggregate._sum.amount === null ? '0.00' : fixed2(aggregate._sum.amount)
 }
 
 /**
@@ -345,24 +345,24 @@ export class SalesOrderMutationService {
         )
       }
       const amounts = validateSalesOrderAgreedAmounts({
-        lineSubtotalAmount: fixed4(order.lineSubtotalAmount),
+        lineSubtotalAmount: fixed2(order.lineSubtotalAmount),
         agreedTotalAmount: body.agreedTotalAmount,
         depositDueAmount: body.depositDueAmount,
         balanceDueAmount: body.balanceDueAmount,
       })
       const receivedAmount = await this.readReceivedAmount(transaction, salesOrderId)
       const pending = await transaction.salesReceiptRequest.aggregate({ where: { salesOrderId, status: 'PENDING_REVIEW' }, _sum: { amount: true } })
-      assertReceiptCapacity(amounts.agreedTotalAmount, receivedAmount, pending._sum.amount?.toFixed(4) ?? '0.0000')
+      assertReceiptCapacity(amounts.agreedTotalAmount, receivedAmount, pending._sum.amount?.toFixed(2) ?? '0.00')
       const newPaymentStatus = deriveSalesOrderPaymentStatus(
         amounts.agreedTotalAmount,
         receivedAmount,
       )
       await transaction.salesOrderAmountRevision.create({ data: {
         salesOrderId,
-        oldLineSubtotalAmount: fixed4(order.lineSubtotalAmount),
-        oldAgreedTotalAmount: fixed4(order.agreedTotalAmount),
-        oldDepositDueAmount: fixed4(order.depositDueAmount),
-        oldBalanceDueAmount: fixed4(order.balanceDueAmount),
+        oldLineSubtotalAmount: fixed2(order.lineSubtotalAmount),
+        oldAgreedTotalAmount: fixed2(order.agreedTotalAmount),
+        oldDepositDueAmount: fixed2(order.depositDueAmount),
+        oldBalanceDueAmount: fixed2(order.balanceDueAmount),
         newLineSubtotalAmount: amounts.lineSubtotalAmount,
         newAgreedTotalAmount: amounts.agreedTotalAmount,
         newDepositDueAmount: amounts.depositDueAmount,

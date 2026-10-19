@@ -15,8 +15,8 @@ import { readProductOptionCategoryFacets } from '../products/product-option-cate
 
 const MAX_SALES_ORDER_LINES = 100
 
-function fixed4(value: { toFixed(decimalPlaces: number): string }): string {
-  return value.toFixed(4)
+function fixed2(value: { toFixed(decimalPlaces: number): string }): string {
+  return value.toFixed(2)
 }
 
 function productEditNotAllowed(): never {
@@ -125,9 +125,9 @@ export class SalesOrderProductEditQueryService {
       )
     }
     const paidUnits = order.payments.reduce((sum, payment) => (
-      sum + parseSalesOrderAmountUnits(fixed4(payment.amount))
+      sum + parseSalesOrderAmountUnits(fixed2(payment.amount))
     ), 0n)
-    const agreedUnits = parseSalesOrderAmountUnits(fixed4(order.agreedTotalAmount))
+    const agreedUnits = parseSalesOrderAmountUnits(fixed2(order.agreedTotalAmount))
 
     return {
       salesOrder: {
@@ -141,10 +141,10 @@ export class SalesOrderProductEditQueryService {
         version: order.version,
       },
       amounts: {
-        lineSubtotalAmount: fixed4(order.lineSubtotalAmount),
-        agreedTotalAmount: fixed4(order.agreedTotalAmount),
-        depositDueAmount: fixed4(order.depositDueAmount),
-        balanceDueAmount: fixed4(order.balanceDueAmount),
+        lineSubtotalAmount: fixed2(order.lineSubtotalAmount),
+        agreedTotalAmount: fixed2(order.agreedTotalAmount),
+        depositDueAmount: fixed2(order.depositDueAmount),
+        balanceDueAmount: fixed2(order.balanceDueAmount),
         paidAmount: formatSalesOrderAmountUnits(paidUnits),
         outstandingAmount: formatSalesOrderAmountUnits(agreedUnits - paidUnits),
       },
@@ -162,10 +162,10 @@ export class SalesOrderProductEditQueryService {
           description: line.descriptionSnapshot,
           standardUnitPriceAmount: line.standardUnitPriceAmount === null
             ? null
-            : fixed4(line.standardUnitPriceAmount),
-          actualUnitPriceAmount: fixed4(line.actualUnitPriceAmount),
+            : fixed2(line.standardUnitPriceAmount),
+          actualUnitPriceAmount: fixed2(line.actualUnitPriceAmount),
           quantity: line.quantity,
-          lineTotalAmount: fixed4(line.lineTotalAmount),
+          lineTotalAmount: fixed2(line.lineTotalAmount),
           activePurchasedQuantity,
           canDecrease: activePurchasedQuantity < line.quantity,
           mainImage: line.productId === null || mainImage === undefined

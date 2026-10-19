@@ -18,6 +18,7 @@ import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useAppAuth } from '@/composables/app/auth'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { formatExchangeRate } from '@/utils/exchange-rate'
 import { calculateEstimatedCostCny } from '../invoice-cost.logic'
 import { buildInvoiceDocumentFilename, buildInvoiceDocumentItems, formatInvoiceDocumentFileSize } from '../invoice-document.logic'
 import { resolveInvoiceFailureKey } from '../invoice-failure.logic'
@@ -372,14 +373,14 @@ onMounted(load)
         <template #cell-salesAmount="{ row }">
           <QsTableStackedCell class="text-right justify-items-end">
             <QsTableStackedLine>
-              <AmountDisplay :value="row.original.salesAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+              <AmountDisplay :value="row.original.salesAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
         <template #cell-taxAmount="{ row }">
           <QsTableStackedCell class="text-right justify-items-end">
             <QsTableStackedLine>
-              <AmountDisplay :value="row.original.taxAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+              <AmountDisplay :value="row.original.taxAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -396,7 +397,7 @@ onMounted(load)
         <template #cell-totalAmount="{ row }">
           <QsTableStackedCell class="text-right justify-items-end">
             <QsTableStackedLine>
-              <AmountDisplay :value="row.original.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+              <AmountDisplay :value="row.original.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -453,7 +454,7 @@ onMounted(load)
                   {{ t('invoiceRequest.field.totalAmount') }}
                 </dt>
                 <dd class="m-0">
-                  <AmountDisplay :value="row.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+                  <AmountDisplay :value="row.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
                 </dd>
               </div>
               <div class="min-w-0">
@@ -461,8 +462,8 @@ onMounted(load)
                   {{ t('invoiceRequest.field.salesAmount') }} / {{ t('invoiceRequest.field.taxAmount') }}
                 </dt>
                 <dd class="m-0 flex flex-col gap-1 items-start">
-                  <AmountDisplay :value="row.salesAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
-                  <AmountDisplay :value="row.taxAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+                  <AmountDisplay :value="row.salesAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
+                  <AmountDisplay :value="row.taxAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
                 </dd>
               </div>
               <div class="col-span-2 min-w-0">
@@ -617,7 +618,7 @@ onMounted(load)
             </p>
             <!-- 窄屏兜底横向滚动；overflow-y-hidden 必须显式声明，否则 36px 字号的行内盒会被 auto 出竖向滚动条。 -->
             <div tabindex="0" class="flex max-w-full overflow-x-auto overflow-y-hidden [&_[data-currency]]:text-4xl [&_[data-currency]]:font-bold">
-              <AmountDisplay :value="target.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+              <AmountDisplay :value="target.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
             </div>
           </div>
         </section>
@@ -718,7 +719,7 @@ onMounted(load)
                 {{ t('invoiceRequest.approval.settleRate') }}
               </dt>
               <dd class="qs-type-data m-0">
-                {{ rate === null ? '—' : rate.foreignUnitsPerCny }}
+                {{ rate === null ? '—' : formatExchangeRate(rate.foreignUnitsPerCny) }}
               </dd>
             </div>
             <div class="min-w-0">

@@ -1,5 +1,5 @@
-import { importCellNumber, importPackageCount } from './import-parser.numbers'
-import { VOLUME_CAI_SCALE, VOLUME_DIMENSION_SCALE } from '../ocean-freight-calculation/ocean-freight-calculation'
+import { importCellNumber, importCellNumberCeil, importPackageCount } from './import-parser.numbers'
+import { VOLUME_CAI_SCALE } from '../ocean-freight-calculation/ocean-freight-calculation'
 import { ContainerWorkbookParseError, type ParsedContainerRow, type WorkbookCell, type WorkbookSheet } from './import-parser.types'
 import { readContainerWorkbook } from './import-parser.workbook'
 
@@ -81,6 +81,10 @@ function parseRow(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, Wo
     try { return importCellNumber(cell(field), sheet, scale, precision, positive) }
     catch { errors.push(`${label}${cell(field)?.formula !== null && cell(field)?.formula !== undefined ? '公式无法可靠解析或结果无效' : '必须为有效数值'}`); return null }
   }
+  const dimension = (field: Field, label: string) => {
+    try { return importCellNumberCeil(cell(field), sheet, 18, true) }
+    catch { errors.push(`${label}${cell(field)?.formula !== null && cell(field)?.formula !== undefined ? '公式无法可靠解析或结果无效' : '必须为有效数值'}`); return null }
+  }
   const goodsName = text('goodsName', '品名', 255) ?? ''
   if (!goodsName) errors.push('品名不能为空')
   let count = 0
@@ -88,10 +92,10 @@ function parseRow(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, Wo
   catch { errors.push('包装件数必须为 1 至 1000000 的整数') }
   const recipientPhone = text('recipientPhone', '收件人电话', 128)
   if (recipientPhone && cell('recipientPhone')?.type === 'n') warnings.push('电话以数字保存，可能已丢失前导零，请核对原始联系方式')
-  // 尺寸按记录精度取整，来源多余小数会被舍掉，因此逐列提示而不是静默处理。
+  // 尺寸按整数厘米向上取整，来源多余小数会被进位上取，因此逐列提示而不是静默处理。
   for (const [field, label] of [['lengthCm', '长'], ['widthCm', '宽'], ['heightCm', '高']] as const) {
     const places = sourceDecimalPlaces(cell(field)?.value)
-    if (places > VOLUME_DIMENSION_SCALE) warnings.push(`${label}在来源里保留 ${places} 位小数，已按 ${VOLUME_DIMENSION_SCALE} 位小数取整，材积复算可能有偏差`)
+    if (places > 0) warnings.push(`${label}在来源里保留 ${places} 位小数，已向上取整到整数厘米，材积复算可能有偏差`)
   }
   const sourceData: ParsedContainerRow['sourceData'] = { cells: {} }
   for (const value of cells.values()) {
@@ -107,8 +111,8 @@ function parseRow(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, Wo
     rowKey: `${sheet.index + 1}:${rowNumber}`, sourceSheetName: sheet.name, sourceRowNumber: rowNumber,
     containerBatchName, warehouseReceiptReference: text('warehouseReceiptReference', '入仓参考', 500), oceanShippingMarkText: text('oceanShippingMarkText', '海运唛头', 128),
     goodsName, packageCount: count, packageUnit: text('packageUnit', '包装单位', 32),
-    grossWeightKg: numeric('grossWeightKg', '整行毛重', 3, 18, true), lengthCm: numeric('lengthCm', '每件长度', VOLUME_DIMENSION_SCALE, 18, true),
-    widthCm: numeric('widthCm', '每件宽度', VOLUME_DIMENSION_SCALE, 18, true), heightCm: numeric('heightCm', '每件高度', VOLUME_DIMENSION_SCALE, 18, true),
+    grossWeightKg: numeric('grossWeightKg', '整行毛重', 0, 18, true), lengthCm: dimension('lengthCm', '每件长度'),
+    widthCm: dimension('widthCm', '每件宽度'), heightCm: dimension('heightCm', '每件高度'),
     reportedVolumeCai: numeric('reportedVolumeCai', '来源材积', VOLUME_CAI_SCALE, 24),
     recipientName: text('recipientName', '收件人', 128), recipientPhone, recipientAddress,
     codAmountTwd: numeric('codAmountTwd', '代收金额', 2, 30), remark, sourceData, errors, warnings,

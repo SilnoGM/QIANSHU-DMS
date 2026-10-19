@@ -109,7 +109,7 @@ export class PackagingCostService {
           currencyCode: 'CNY', submittedByUserId: context.actorUserId, idempotencyKeyHash, requestFingerprintHash,
         } })
         if (paymentRecipients) await this.recipients.createForRequest(tx, context.actorUserId, row.id, paymentRecipients)
-        await this.audit.record(tx, { eventType: 'PACKAGING_COST_SUBMITTED', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PACKAGING_COST_REQUEST', targetId: row.id, metadata: { shipmentId: row.shipmentId, amount: row.amount.toFixed(4), currencyCode: 'CNY' } })
+        await this.audit.record(tx, { eventType: 'PACKAGING_COST_SUBMITTED', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PACKAGING_COST_REQUEST', targetId: row.id, metadata: { shipmentId: row.shipmentId, amount: row.amount.toFixed(2), currencyCode: 'CNY' } })
         return row.id
       }, { timeout: 30_000 })
     } catch (error) {
@@ -138,7 +138,7 @@ export class PackagingCostService {
           // 原提交指纹保持不变，使原请求的网络重试仍定位同一提报，不产生第二笔费用。
           await tx.packagingCostRequest.update({ where: { id }, data: { amount: correction.amount, version: { increment: 1 } } })
           await this.audit.record(tx, { eventType: 'PACKAGING_COST_AMOUNT_UPDATED', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PACKAGING_COST_REQUEST', targetId: id,
-            metadata: { previousAmount: row.amount.toFixed(4), amount: correction.amount, currencyCode: 'CNY', previousVersion: row.version, version: row.version + 1 } })
+            metadata: { previousAmount: row.amount.toFixed(2), amount: correction.amount, currencyCode: 'CNY', previousVersion: row.version, version: row.version + 1 } })
         }
         return this.queries.getSummaryById(id, tx)
       }, { timeout: 30_000 })
@@ -183,7 +183,7 @@ export class PackagingCostService {
         const posting = await this.funds.postBusinessEventInTransaction(tx, fundContext, postingInput, preview)
         const [{ now }] = await tx.$queryRaw<[{ now: Date }]>(Prisma.sql`SELECT clock_timestamp() AS now`)
         await tx.packagingCostRequest.update({ where: { id }, data: { paymentVoucherMediaAssetId: voucher.id, recipientQrMediaAssetId: recipient.qrMediaAssetId, recipientSnapshot: recipient.snapshot as unknown as Prisma.InputJsonObject, paymentRemark: payment.remark, paymentFingerprintHash: fingerprint, status: 'PAID', paidByUserId: context.actorUserId, paidAt: now, version: { increment: 1 } } })
-        await this.audit.record(tx, { eventType: 'PACKAGING_COST_PAID', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PACKAGING_COST_REQUEST', targetId: id, metadata: { amount: row.amount.toFixed(4), currencyCode: 'CNY', fundPostingBatchId: posting.batchId } })
+        await this.audit.record(tx, { eventType: 'PACKAGING_COST_PAID', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PACKAGING_COST_REQUEST', targetId: id, metadata: { amount: row.amount.toFixed(2), currencyCode: 'CNY', fundPostingBatchId: posting.batchId } })
       }, { timeout: 30_000 })
     } catch (error) { return mapError(error) }
     return this.queries.getById(id)

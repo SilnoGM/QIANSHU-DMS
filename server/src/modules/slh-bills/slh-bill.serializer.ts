@@ -63,11 +63,11 @@ export function serializeSlhBillLine(row: Prisma.SlhBillLineGetPayload<{ include
     goodsName: row.goodsName,
     packageCount: row.packageCount,
     packageUnit: row.packageUnit,
-    grossWeightKg: row.grossWeightKg?.toFixed(3) ?? null,
+    grossWeightKg: row.grossWeightKg?.toFixed(0) ?? null,
     weightUnit: row.weightUnit,
-    lengthCm: row.lengthCm?.toFixed(2) ?? null,
-    widthCm: row.widthCm?.toFixed(2) ?? null,
-    heightCm: row.heightCm?.toFixed(2) ?? null,
+    lengthCm: row.lengthCm?.toFixed(0) ?? null,
+    widthCm: row.widthCm?.toFixed(0) ?? null,
+    heightCm: row.heightCm?.toFixed(0) ?? null,
     volumeCai: row.volumeCai?.toFixed(2) ?? null,
     reportedVolumeCai: row.reportedVolumeCai?.toFixed(2) ?? null,
     volumeDifferenceCai: volumeDifference,
@@ -148,8 +148,8 @@ function rate(row: SlhBillRow): SlhBillDto['rate'] {
   if (row.rateSource === null || row.foreignUnitsPerCnySnapshot === null || row.rateCapturedAt === null) return null
   return {
     source: row.rateSource as SlhBillRateSourceDto,
-    foreignUnitsPerCny: row.foreignUnitsPerCnySnapshot.toFixed(12),
-    embeddedForeignUnitsPerCny: row.embeddedForeignUnitsPerCny?.toFixed(12) ?? null,
+    foreignUnitsPerCny: row.foreignUnitsPerCnySnapshot.toFixed(4),
+    embeddedForeignUnitsPerCny: row.embeddedForeignUnitsPerCny?.toFixed(4) ?? null,
     exchangeRateId: row.exchangeRateId,
     capturedAt: row.rateCapturedAt.toISOString(),
   }
@@ -183,7 +183,7 @@ export function serializeSlhBill(row: SlhBillRow): SlhBillDto {
       payableAmountCny: row.reportedPayableAmountCny?.toFixed(2) ?? null,
       netAmountTwd: row.reportedNetAmountCell,
       netAmountFormula: row.reportedNetAmountFormula,
-      embeddedForeignUnitsPerCny: row.embeddedForeignUnitsPerCny?.toFixed(12) ?? null,
+      embeddedForeignUnitsPerCny: row.embeddedForeignUnitsPerCny?.toFixed(4) ?? null,
       reportedNetAmountTwd: row.reportedNetAmountTwd.toFixed(2),
     },
     findings: serializeStoredFindings(row.importFindings),
@@ -214,7 +214,7 @@ export function serializeSlhBillListItem(row: SlhBillListRow): SlhBillListItemDt
     ntdSurchargeTotalAmountTwd: row.ntdSurchargeTotalAmountTwd.toFixed(2),
     reportedNetAmountTwd: row.reportedNetAmountTwd.toFixed(2),
     // 列表要展示「折算净额」，把账单内嵌汇率一并给出，由前端按同一口径折算。
-    embeddedForeignUnitsPerCny: row.embeddedForeignUnitsPerCny?.toFixed(12) ?? null,
+    embeddedForeignUnitsPerCny: row.embeddedForeignUnitsPerCny?.toFixed(4) ?? null,
     rateSource: row.rateSource === null ? null : row.rateSource as SlhBillRateSourceDto,
     // 三态由已对账行数与账单行数汇总派生，与详情页的逐行二态同源。
     reconciliationStatus: resolveSlhBillReconciliationStatus({

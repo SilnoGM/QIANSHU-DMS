@@ -71,7 +71,7 @@ export function buildExchangeRateListQuery(input: {
 
 /**
  * 表单允许用户输入前导零，但提交前会在纯字符串边界归一化；全程不经过 number，
- * 避免 DECIMAL(30,12) 的大整数部分或小数部分发生精度损失。
+ * 避免 DECIMAL(30,4) 的大整数部分或小数部分发生精度损失。
  */
 export function normalizeForeignUnitsPerCny(value: string): string {
   const trimmed = value.trim()
@@ -94,8 +94,8 @@ export function validateForeignUnitsPerCny(value: string): string {
   if (integer.length > 18) {
     return '换算比例整数部分最多支持 18 位'
   }
-  if (fraction.length > 12) {
-    return '换算比例最多支持 12 位小数'
+  if (fraction.length > 4) {
+    return '换算比例最多支持 4 位小数'
   }
   if (!/[1-9]/u.test(normalized)) {
     return '换算比例必须大于 0'
@@ -148,8 +148,8 @@ export function formatConversionExample(
   const normalized = normalizeForeignUnitsPerCny(foreignUnitsPerCny)
   const converted = new Decimal(100)
     .div(normalized)
-    .toDecimalPlaces(6)
-    .toFixed()
+    .toDecimalPlaces(2)
+    .toFixed(2)
   return `例如：100 ${currencyCode} ÷ ${normalized} = ${converted} CNY`
 }
 

@@ -16,8 +16,8 @@ function decimal(value: string) {
 
 function createFixture(
   media = [{ id: PRODUCT_MEDIA_ID }],
-  twdSalePriceAmount: ReturnType<typeof decimal> | null = decimal('1234.5000'),
-  myrSalePriceAmount: ReturnType<typeof decimal> | null = decimal('168.0000'),
+  twdSalePriceAmount: ReturnType<typeof decimal> | null = decimal('1234.50'),
+  myrSalePriceAmount: ReturnType<typeof decimal> | null = decimal('168.00'),
 ) {
   const product = {
     count: jest.fn().mockImplementation((args: { where?: { categoryId?: unknown } }) => (
@@ -70,10 +70,10 @@ function createListFixture() {
     customerProvinceStateNameSnapshot: '台湾',
     customerCityNameSnapshot: '新北市',
     customerFullAddressSnapshot: '中国台湾台湾新北市板桥区测试路1号',
-    lineSubtotalAmount: decimal('1200.0000'),
-    agreedTotalAmount: decimal('1200.0000'),
-    depositDueAmount: decimal('200.0000'),
-    balanceDueAmount: decimal('1000.0000'),
+    lineSubtotalAmount: decimal('1200.00'),
+    agreedTotalAmount: decimal('1200.00'),
+    depositDueAmount: decimal('200.00'),
+    balanceDueAmount: decimal('1000.00'),
     remark: '客户要求周末送达',
     orderStatus: 'CONFIRMED',
     fulfillmentStatus: 'PREPARING',
@@ -86,13 +86,13 @@ function createListFixture() {
     version: 3,
     createdAt: new Date('2026-08-22T09:00:00.000Z'),
     updatedAt: new Date('2026-08-23T10:30:00.000Z'),
-    payments: [{ amount: decimal('200.0000') }],
+    payments: [{ amount: decimal('200.00') }],
     lines: [{
       id: SALES_ORDER_LINE_ID,
       lineType: 'CATALOG',
       productId: PRODUCT_ID,
       productNameSnapshot: '城市旅行收纳包',
-      standardUnitPriceAmount: decimal('600.0000'),
+      standardUnitPriceAmount: decimal('600.00'),
       quantity: 2,
       product: {
         media: [{ id: PRODUCT_MEDIA_ID }],
@@ -121,35 +121,35 @@ function createListFixture() {
       .mockResolvedValueOnce({
         _count: { _all: 1 },
         _sum: {
-          agreedTotalAmount: decimal('1200.0000'),
-          depositDueAmount: decimal('200.0000'),
-          balanceDueAmount: decimal('1000.0000'),
+          agreedTotalAmount: decimal('1200.00'),
+          depositDueAmount: decimal('200.00'),
+          balanceDueAmount: decimal('1000.00'),
         },
       })
       .mockResolvedValueOnce({
         _count: { _all: 1 },
         _sum: {
-          agreedTotalAmount: decimal('800.0000'),
-          depositDueAmount: decimal('300.0000'),
-          balanceDueAmount: decimal('500.0000'),
+          agreedTotalAmount: decimal('800.00'),
+          depositDueAmount: decimal('300.00'),
+          balanceDueAmount: decimal('500.00'),
         },
       }),
   }
   const salesOrderLine = {
     findMany: jest.fn()
       .mockResolvedValueOnce([{
-        standardUnitPriceAmount: decimal('600.0000'),
+        standardUnitPriceAmount: decimal('600.00'),
         quantity: 2,
       }])
       .mockResolvedValueOnce([{
-        standardUnitPriceAmount: decimal('400.0000'),
+        standardUnitPriceAmount: decimal('400.00'),
         quantity: 2,
       }]),
   }
   const salesOrderPayment = {
     aggregate: jest.fn()
-      .mockResolvedValueOnce({ _sum: { amount: decimal('200.0000') } })
-      .mockResolvedValueOnce({ _sum: { amount: decimal('300.0000') } }),
+      .mockResolvedValueOnce({ _sum: { amount: decimal('200.00') } })
+      .mockResolvedValueOnce({ _sum: { amount: decimal('300.00') } }),
   }
   const transaction = jest.fn(async (operations: readonly Promise<unknown>[]) => (
     Promise.all(operations)
@@ -195,13 +195,13 @@ describe('SalesOrderQueryService list summaries', () => {
         customerProvinceStateName: '台湾',
         customerCityName: '新北市',
         customerFullAddress: '中国台湾台湾新北市板桥区测试路1号',
-        standardSubtotalAmount: '1200.0000',
-        lineSubtotalAmount: '1200.0000',
-        agreedTotalAmount: '1200.0000',
-        depositDueAmount: '200.0000',
-        balanceDueAmount: '1000.0000',
-        receivedAmount: '200.0000',
-        outstandingAmount: '1000.0000',
+        standardSubtotalAmount: '1200.00',
+        lineSubtotalAmount: '1200.00',
+        agreedTotalAmount: '1200.00',
+        depositDueAmount: '200.00',
+        balanceDueAmount: '1000.00',
+        receivedAmount: '200.00',
+        outstandingAmount: '1000.00',
         remark: '客户要求周末送达',
         orderStatus: 'CONFIRMED',
         fulfillmentStatus: 'PREPARING',
@@ -246,21 +246,21 @@ describe('SalesOrderQueryService list summaries', () => {
       summariesByCurrency: [{
         currencyCode: 'TWD',
         orderCount: 1,
-        standardSubtotalAmount: '1200.0000',
-        agreedTotalAmount: '1200.0000',
-        depositDueAmount: '200.0000',
-        balanceDueAmount: '1000.0000',
-        receivedAmount: '200.0000',
-        outstandingAmount: '1000.0000',
+        standardSubtotalAmount: '1200.00',
+        agreedTotalAmount: '1200.00',
+        depositDueAmount: '200.00',
+        balanceDueAmount: '1000.00',
+        receivedAmount: '200.00',
+        outstandingAmount: '1000.00',
       }, {
         currencyCode: 'MYR',
         orderCount: 1,
-        standardSubtotalAmount: '800.0000',
-        agreedTotalAmount: '800.0000',
-        depositDueAmount: '300.0000',
-        balanceDueAmount: '500.0000',
-        receivedAmount: '300.0000',
-        outstandingAmount: '500.0000',
+        standardSubtotalAmount: '800.00',
+        agreedTotalAmount: '800.00',
+        depositDueAmount: '300.00',
+        balanceDueAmount: '500.00',
+        receivedAmount: '300.00',
+        outstandingAmount: '500.00',
       }],
       page: 1,
       pageSize: 20,
@@ -320,9 +320,9 @@ describe('SalesOrderQueryService list summaries', () => {
       .mockResolvedValueOnce({
         _count: { _all: 1 },
         _sum: {
-          agreedTotalAmount: decimal('1200.0000'),
-          depositDueAmount: decimal('200.0000'),
-          balanceDueAmount: decimal('1000.0000'),
+          agreedTotalAmount: decimal('1200.00'),
+          depositDueAmount: decimal('200.00'),
+          balanceDueAmount: decimal('1000.00'),
         },
       })
       .mockResolvedValueOnce({
@@ -335,7 +335,7 @@ describe('SalesOrderQueryService list summaries', () => {
       })
     fixture.salesOrderPayment.aggregate
       .mockReset()
-      .mockResolvedValueOnce({ _sum: { amount: decimal('200.0000') } })
+      .mockResolvedValueOnce({ _sum: { amount: decimal('200.00') } })
       .mockResolvedValueOnce({ _sum: { amount: null } })
 
     const result = await fixture.service.list({ currencyCode: 'TWD' })
@@ -343,12 +343,12 @@ describe('SalesOrderQueryService list summaries', () => {
     expect(result.summariesByCurrency).toEqual([{
       currencyCode: 'TWD',
       orderCount: 1,
-      standardSubtotalAmount: '1200.0000',
-      agreedTotalAmount: '1200.0000',
-      depositDueAmount: '200.0000',
-      balanceDueAmount: '1000.0000',
-      receivedAmount: '200.0000',
-      outstandingAmount: '1000.0000',
+      standardSubtotalAmount: '1200.00',
+      agreedTotalAmount: '1200.00',
+      depositDueAmount: '200.00',
+      balanceDueAmount: '1000.00',
+      receivedAmount: '200.00',
+      outstandingAmount: '1000.00',
     }])
   })
 
@@ -359,7 +359,7 @@ describe('SalesOrderQueryService list summaries', () => {
       lineType: 'CATALOG',
       productId: `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa${index}`,
       productNameSnapshot: `追加产品 ${index}`,
-      standardUnitPriceAmount: decimal(`${index}.0000`),
+      standardUnitPriceAmount: decimal(`${index}.00`),
       quantity: index,
       product: {
         media: [{ id: `bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb${index}` }],
@@ -574,7 +574,7 @@ describe('SalesOrderQueryService product options', () => {
         productHeadName: '城市旅行',
         supplierValue: 'SUPPLIER_TW_01',
         attributes: [{ key: 'color', value: 'green' }],
-        standardUnitPriceAmount: '1234.5000',
+        standardUnitPriceAmount: '1234.50',
         currencyCode: 'TWD',
         mainImage: {
           id: PRODUCT_MEDIA_ID,

@@ -62,7 +62,7 @@ describe('slh bill workbook parser', () => {
   it('extracts the embedded rate from the net amount formula', async () => {
     const result = await parseSlhBillWorkbook(createSlhBillFixture())
     expect(result.reported.netAmountFormula).toBe('=(V17-W17)/4.8')
-    expect(result.reported.embeddedForeignUnitsPerCny).toBe('4.800000000000')
+    expect(result.reported.embeddedForeignUnitsPerCny).toBe('4.8000')
     expect(result.findings).toEqual([])
   })
 

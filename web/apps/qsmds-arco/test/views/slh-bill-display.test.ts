@@ -52,15 +52,15 @@ test('汇率固定两位小数展示，未知值保持为空且不改变原始�
 })
 
 test('尺寸缺边或单位缺失时不用零或猜测单位补位', () => {
-  // 尺寸按整厘米读：整数值不带 .00，真有小数的原样保留（不四舍五入丢精度）。
+  // 尺寸按整数厘米向上取整：整数值不带 .00，带小数的一律进位。
   assert.equal(formatSlhBillDimensions({ heightCm: '108.00', lengthCm: '240.00', widthCm: '164.00' }), '240×164×108')
-  assert.equal(formatSlhBillDimensions({ heightCm: '108.5', lengthCm: '240', widthCm: '164.00' }), '240×164×108.5')
-  assert.equal(formatSlhBillDimensions({ heightCm: '108.25', lengthCm: '240.00', widthCm: '164.00' }), '240×164×108.25')
+  assert.equal(formatSlhBillDimensions({ heightCm: '108.5', lengthCm: '240', widthCm: '164.00' }), '240×164×109')
+  assert.equal(formatSlhBillDimensions({ heightCm: '108.25', lengthCm: '240.00', widthCm: '164.00' }), '240×164×109')
   assert.equal(formatSlhBillDimensions({ heightCm: null, lengthCm: '240.00', widthCm: '164.00' }), null)
   assert.equal(formatSlhBillDimensions({}), null)
-  // 重量与其它数值列一样收敛到两位小数。
-  assert.equal(formatSlhBillWeight({ grossWeightKg: '1173.000', weightUnit: 'KGS' }), '1173.00 KGS')
-  assert.equal(formatSlhBillWeight({ grossWeightKg: '1173.456' }), '1173.46')
+  // 重量与录入口径一致：整数 kg 展示。
+  assert.equal(formatSlhBillWeight({ grossWeightKg: '1173.000', weightUnit: 'KGS' }), '1173 KGS')
+  assert.equal(formatSlhBillWeight({ grossWeightKg: '1173.456' }), '1173')
   assert.equal(formatSlhBillWeight({ grossWeightKg: null, weightUnit: 'KGS' }), null)
 })
 
@@ -97,7 +97,7 @@ test('明细列覆盖账单全部字段并统一按两位小数与费别名展�
   // 序号是列表自己的计数，行号是原表行号；两者含义不同。
   // 行号取原表行号：表头在第 13 行时第一条明细是第 14 行。
   assert.equal(display('lineNumber', { sourceRowNumber: 14 }), 'slhBill.line.lineNumberValue(14)')
-  assert.equal(display('weight', { grossWeightKg: '1173.000', weightUnit: 'KGS' }), '1173.00 KGS')
+  assert.equal(display('weight', { grossWeightKg: '1173.000', weightUnit: 'KGS' }), '1173 KGS')
   assert.equal(display('dimensions', { heightCm: '108.00', lengthCm: '240.00', widthCm: '164.00' }), '240×164×108 slhBill.unit.cm')
   // 尺寸列与其它数值列一样右对齐（用户明确要求，别改成左对齐）。
   const dimensionsColumn = columns.find(column => column.id === 'dimensions')!

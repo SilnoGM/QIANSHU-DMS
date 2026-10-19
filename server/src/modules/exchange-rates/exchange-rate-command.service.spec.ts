@@ -125,7 +125,7 @@ describe('ExchangeRateCommandService', () => {
 
     await expect(service.create(context, {
       currencyId: CURRENCY_ID,
-      foreignUnitsPerCny: '4.800000000000',
+      foreignUnitsPerCny: '4.8000',
     })).resolves.toEqual(rateDto())
 
     expect(mockedApplyTransactionTimeouts).toHaveBeenCalledWith(transaction)
@@ -231,7 +231,7 @@ describe('ExchangeRateCommandService', () => {
     const { audit, service } = createFixture()
 
     await expect(service.update(context, RATE_ID, {
-      foreignUnitsPerCny: '4.800000000000',
+      foreignUnitsPerCny: '4.8000',
       expectedVersion: 1,
     })).resolves.toEqual(rateDto())
 
@@ -249,7 +249,7 @@ describe('ExchangeRateCommandService', () => {
     const { audit, service, transaction } = createFixture()
 
     await expect(service.update(context, RATE_ID, {
-      foreignUnitsPerCny: '5.250000000000',
+      foreignUnitsPerCny: '5.2500',
       expectedVersion: 1,
     })).resolves.toEqual(
       rateDto({

@@ -29,7 +29,7 @@ export function formatShippingInfoBalance(value: string | null | undefined, curr
   if (value === null || value === undefined) {
     return null
   }
-  const result = validateMoneyString(value, { precision: 4 })
+  const result = validateMoneyString(value, { precision: 2 })
   if (!result.valid || result.normalizedValue === null) {
     return null
   }

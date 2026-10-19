@@ -2,15 +2,15 @@ import { convertReceiptToCny, assertReceiptCapacity } from './sales-receipt-mone
 
 describe('receipt money', () => {
   it('divides foreign units per CNY and rounds HALF_UP at cents', () => {
-    expect(convertReceiptToCny('10000.0000', '4.800000000000')).toBe('2083.33')
-    expect(convertReceiptToCny('0.0100', '2.000000000000')).toBe('0.01')
+    expect(convertReceiptToCny('10000.00', '4.8000')).toBe('2083.33')
+    expect(convertReceiptToCny('0.01', '2.0000')).toBe('0.01')
   })
   it('rejects rounded zero and decimal overflow', () => {
-    expect(() => convertReceiptToCny('0.0001', '100.000000000000')).toThrow()
-    expect(() => convertReceiptToCny('99999999999999999999999999.9999', '0.000000000001')).toThrow()
+    expect(() => convertReceiptToCny('0.01', '100.0000')).toThrow()
+    expect(() => convertReceiptToCny('99999999999999999999999999.99', '0.0001')).toThrow()
   })
   it('reserves pending receipts separately from confirmed payments', () => {
-    expect(() => assertReceiptCapacity('100.0000', '40.0000', '50.0000', '10.0000')).not.toThrow()
-    expect(() => assertReceiptCapacity('100.0000', '40.0000', '50.0000', '10.0001')).toThrow()
+    expect(() => assertReceiptCapacity('100.00', '40.00', '50.00', '10.00')).not.toThrow()
+    expect(() => assertReceiptCapacity('100.00', '40.00', '50.00', '10.01')).toThrow()
   })
 })

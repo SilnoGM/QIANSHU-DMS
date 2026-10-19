@@ -7,7 +7,7 @@ const input = {
 
 describe('packaging cost submission normalization', () => {
   it('normalizes CNY without floats and preserves the configured vendor', () => {
-    expect(normalizePackagingCostCreate({ ...input, remark: '  加固  ' })).toEqual({ ...input, amount: '120.5000', remark: '加固' })
+    expect(normalizePackagingCostCreate({ ...input, remark: '  加固  ' })).toEqual({ ...input, amount: '120.50', remark: '加固' })
   })
   it.each(['0', '-1', '0.001', '1e3', 'NaN', '100000000000000000000000000'])('rejects an invalid CNY amount %s', amount => {
     expect(() => normalizePackagingCostCreate({ ...input, amount })).toThrow()
@@ -40,7 +40,7 @@ describe('packaging payment recipients', () => {
 
 describe('packaging cost amount correction normalization', () => {
   it('normalizes two-place CNY with a required integer version', () => {
-    expect(normalizePackagingCostAmountUpdate({ amount: '150.5', expectedVersion: 3 })).toEqual({ amount: '150.5000', expectedVersion: 3 })
+    expect(normalizePackagingCostAmountUpdate({ amount: '150.5', expectedVersion: 3 })).toEqual({ amount: '150.50', expectedVersion: 3 })
   })
   it.each([
     { amount: '0' }, { amount: '-1' }, { amount: '1.234' }, { amount: '1e3' }, { amount: 5 },

@@ -1,5 +1,5 @@
 import { ApiException } from '../../infrastructure/http/api.exception'
-import { normalizeOceanDecimal, VOLUME_CAI_SCALE, VOLUME_DIMENSION_SCALE } from '../ocean-freight-calculation/ocean-freight-calculation'
+import { normalizeOceanDecimal, normalizeOceanDecimalCeil, VOLUME_CAI_SCALE } from '../ocean-freight-calculation/ocean-freight-calculation'
 
 export interface ContainerCommandContext { actorUserId: string, requestId: string }
 export function containerFailure(code: string, message: string, status = 422): never {
@@ -52,10 +52,10 @@ export function normalizeLoadingItemCreate(raw: unknown) {
     warehouseReceiptReference: text(input.warehouseReceiptReference, 500),
     goodsName: text(input.goodsName, 255, true)!, packageCount: Number(input.packageCount),
     packageUnit: text(input.packageUnit, 32), remark: text(input.remark, 500),
-    grossWeightKg: normalizeOceanDecimal(input.grossWeightKg ?? null, 18, 3, 'grossWeightKg', true),
-    lengthCm: normalizeOceanDecimal(input.lengthCm ?? null, 18, VOLUME_DIMENSION_SCALE, 'lengthCm', true),
-    widthCm: normalizeOceanDecimal(input.widthCm ?? null, 18, VOLUME_DIMENSION_SCALE, 'widthCm', true),
-    heightCm: normalizeOceanDecimal(input.heightCm ?? null, 18, VOLUME_DIMENSION_SCALE, 'heightCm', true),
+    grossWeightKg: normalizeOceanDecimal(input.grossWeightKg ?? null, 18, 0, 'grossWeightKg', true),
+    lengthCm: normalizeOceanDecimalCeil(input.lengthCm ?? null, 18, 'lengthCm', true),
+    widthCm: normalizeOceanDecimalCeil(input.widthCm ?? null, 18, 'widthCm', true),
+    heightCm: normalizeOceanDecimalCeil(input.heightCm ?? null, 18, 'heightCm', true),
     reportedVolumeCai: normalizeOceanDecimal(input.reportedVolumeCai ?? null, 24, VOLUME_CAI_SCALE, 'reportedVolumeCai'),
   }
 }

@@ -8,9 +8,10 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { formatExchangeRate } from '@/utils/exchange-rate'
 import { getSalesOrderApiFailure } from '../../operations/sales-orders/sales-order-create.logic'
 import ReceiptDetailSection from './receipt-detail-section.vue'
-import { formatReceiptDecimal, paymentMethodClass, receiptAmountClass } from './receipt-display'
+import { paymentMethodClass, receiptAmountClass } from './receipt-display'
 import ReceiptPostingSummary from './receipt-posting-summary.vue'
 import ReceiptVoucher from './receipt-voucher.vue'
 
@@ -361,7 +362,7 @@ onBeforeUnmount(() => controller?.abort())
               <dt class="qs-type-compact-label mb-1.5">
                 {{ t('salesReceipt.rate') }}
               </dt><dd class="qs-type-data m-0 break-all" :title="detail.approvedPayment.foreignUnitsPerCnySnapshot ?? undefined">
-                {{ formatReceiptDecimal(detail.approvedPayment.foreignUnitsPerCnySnapshot) }} {{ detail.currencyCode }}/CNY
+                {{ formatExchangeRate(detail.approvedPayment.foreignUnitsPerCnySnapshot) }} {{ detail.currencyCode }}/CNY
               </dd>
             </div>
             <div class="min-w-0">
@@ -410,7 +411,7 @@ onBeforeUnmount(() => controller?.abort())
           <ReceiptPostingSummary :snapshot="context" :currencies="currencyCatalog.currencies.value" />
           <div class="p-3 border border-border rounded-lg bg-muted/15 space-y-2">
             <div class="qs-type-body flex flex-wrap gap-x-3 gap-y-1 justify-between">
-              <span class="text-muted-foreground">{{ t('salesReceipt.rate') }}</span><span class="font-mono break-all" :title="context.foreignUnitsPerCny">{{ formatReceiptDecimal(context.foreignUnitsPerCny) }} {{ detail.currencyCode }}/CNY</span>
+              <span class="text-muted-foreground">{{ t('salesReceipt.rate') }}</span><span class="font-mono break-all" :title="context.foreignUnitsPerCny">{{ formatExchangeRate(context.foreignUnitsPerCny) }} {{ detail.currencyCode }}/CNY</span>
             </div>
             <p class="qs-type-meta m-0">
               {{ t('salesReceipt.previewHint') }}

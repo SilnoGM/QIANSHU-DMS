@@ -145,11 +145,11 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
     for (const item of result.items) expect(Object.keys(item).sort()).toEqual(overviewKeys)
     expect(result.items[0]).toMatchObject({
       itemCount: 6, myItemCount: 3, loadingDate: '2026-09-20', warehouseValue: TEST_DESTINATION_WAREHOUSE,
-      grossWeightKgTotal: '2050.000', volumeCaiTotal: '206.22',
+      grossWeightKgTotal: '2050', volumeCaiTotal: '206.22',
     })
     expect(result.items[1]).toMatchObject({ itemCount: 2, myItemCount: 1, grossWeightKgTotal: null, volumeCaiTotal: null })
-    expect(result.items[2]).toMatchObject({ itemCount: 1, myItemCount: 0, grossWeightKgTotal: '12.000', volumeCaiTotal: '1.00' })
-    expect(result.items[3]).toMatchObject({ itemCount: 0, myItemCount: 0, grossWeightKgTotal: '0.000', volumeCaiTotal: '0.00' })
+    expect(result.items[2]).toMatchObject({ itemCount: 1, myItemCount: 0, grossWeightKgTotal: '12', volumeCaiTotal: '1.00' })
+    expect(result.items[3]).toMatchObject({ itemCount: 0, myItemCount: 0, grossWeightKgTotal: '0', volumeCaiTotal: '0.00' })
     expect(result.items[0].warehouseName).toBeTruthy()
     const first = (await alice.browser.get(basePath).query({ page: 1, pageSize: 2 }).expect(200)).body as Page<Overview>
     const second = (await alice.browser.get(basePath).query({ page: 2, pageSize: 2 }).expect(200)).body as Page<Overview>

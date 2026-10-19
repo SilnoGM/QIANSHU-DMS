@@ -24,7 +24,7 @@ const shipment = {
 const salesOrder = {
   currencyCode: 'TWD',
   customer: { name: '测试客户', phone: '0988545213', fullAddress: '台湾新北市板桥区中正路100号3楼' },
-  amounts: { balanceDueAmount: '90000.0000', outstandingAmount: '30000.0000' },
+  amounts: { balanceDueAmount: '90000.00', outstandingAmount: '30000.00' },
 } as unknown as SalesOrderDetailDto
 
 /** 复制模板必须与弹窗展示同源，因此直接读真实中文文案，缺失的键会以原键名出现在断言差异里。 */
@@ -39,8 +39,8 @@ test('产品名称按出货口径以加号连接，忽略空白项', () => {
 })
 
 test('代收尾款取约定尾款，两位小数并保留销售订单币种', () => {
-  assert.equal(formatShippingInfoBalance('90000.0000', 'TWD'), '90000.00 TWD')
-  assert.equal(formatShippingInfoBalance('1234.5656', 'MYR'), '1234.57 MYR')
+  assert.equal(formatShippingInfoBalance('90000.00', 'TWD'), '90000.00 TWD')
+  assert.equal(formatShippingInfoBalance('1234.50', 'MYR'), '1234.50 MYR')
   assert.equal(formatShippingInfoBalance(null, 'TWD'), null)
   assert.equal(formatShippingInfoBalance('not-a-number', 'TWD'), null)
 })

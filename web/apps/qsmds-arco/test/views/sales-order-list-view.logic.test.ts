@@ -215,24 +215,24 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
 
 test('全部待办按订单 ID 去重，并使用去重后的订单精确重算币种汇总', () => {
   const firstOrder = {
-    agreedTotalAmount: '100.1000',
-    balanceDueAmount: '60.0600',
+    agreedTotalAmount: '100.10',
+    balanceDueAmount: '60.06',
     currencyCode: 'TWD' as const,
-    depositDueAmount: '40.0400',
+    depositDueAmount: '40.04',
     id: 'order-1',
-    outstandingAmount: '70.0700',
-    receivedAmount: '30.0300',
-    standardSubtotalAmount: '120.1200',
+    outstandingAmount: '70.07',
+    receivedAmount: '30.03',
+    standardSubtotalAmount: '120.12',
   }
   const secondOrder = {
-    agreedTotalAmount: '0.2000',
-    balanceDueAmount: '0.1200',
+    agreedTotalAmount: '0.20',
+    balanceDueAmount: '0.12',
     currencyCode: 'TWD' as const,
-    depositDueAmount: '0.0800',
+    depositDueAmount: '0.08',
     id: 'order-2',
-    outstandingAmount: '0.1400',
-    receivedAmount: '0.0600',
-    standardSubtotalAmount: '0.2400',
+    outstandingAmount: '0.14',
+    receivedAmount: '0.06',
+    standardSubtotalAmount: '0.24',
   }
   const uniqueOrders = deduplicateSalesOrderItems([
     firstOrder,
@@ -242,13 +242,13 @@ test('全部待办按订单 ID 去重，并使用去重后的订单精确重算�
 
   assert.deepEqual(uniqueOrders.map(order => order.id), ['order-1', 'order-2'])
   assert.deepEqual(summarizeSalesOrderItemsByCurrency(uniqueOrders), [{
-    agreedTotalAmount: '100.3000',
-    balanceDueAmount: '60.1800',
+    agreedTotalAmount: '100.30',
+    balanceDueAmount: '60.18',
     currencyCode: 'TWD',
-    depositDueAmount: '40.1200',
+    depositDueAmount: '40.12',
     orderCount: 2,
-    outstandingAmount: '70.2100',
-    receivedAmount: '30.0900',
-    standardSubtotalAmount: '120.3600',
+    outstandingAmount: '70.21',
+    receivedAmount: '30.09',
+    standardSubtotalAmount: '120.36',
   }])
 })

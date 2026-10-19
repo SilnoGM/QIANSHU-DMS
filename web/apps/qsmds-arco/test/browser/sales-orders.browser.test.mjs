@@ -623,9 +623,9 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     const order = response.body?.items?.[0]
     assert.match(order?.orderNo ?? '', /^SO-BRW-\d{8}$/u)
     assert.equal(order?.currencyCode, 'TWD')
-    assert.equal(order?.agreedTotalAmount, '200.0000')
-    assert.equal(order?.receivedAmount, '0.0000')
-    assert.equal(order?.outstandingAmount, '200.0000')
+    assert.equal(order?.agreedTotalAmount, '200.00')
+    assert.equal(order?.receivedAmount, '0.00')
+    assert.equal(order?.outstandingAmount, '200.00')
 
     const detail = await page.evaluate(apiExpression(
       `/api/sales-orders/${encodeURIComponent(order.id)}`,
@@ -637,15 +637,15 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       '中国台湾台湾高雄市苓雅区中正一路100号3楼',
     )
     assert.deepEqual(detail.body?.amounts, {
-      agreedTotalAmount: '200.0000',
-      balanceDueAmount: '150.0000',
-      depositDueAmount: '50.0000',
-      lineSubtotalAmount: '200.0000',
-      outstandingAmount: '200.0000',
-      receivedAmount: '0.0000',
+      agreedTotalAmount: '200.00',
+      balanceDueAmount: '150.00',
+      depositDueAmount: '50.00',
+      lineSubtotalAmount: '200.00',
+      outstandingAmount: '200.00',
+      receivedAmount: '0.00',
     })
     assert.equal(detail.body?.lines?.[0]?.productNo, 'PRODUCT-BROWSER-001')
-    assert.equal(detail.body?.lines?.[0]?.actualUnitPriceAmount, '100.0000')
+    assert.equal(detail.body?.lines?.[0]?.actualUnitPriceAmount, '100.00')
     assert.equal(detail.body?.lines?.[0]?.quantity, 2)
 
     await clickVisibleAriaButton(page, `${order.orderNo}：查看详情`)

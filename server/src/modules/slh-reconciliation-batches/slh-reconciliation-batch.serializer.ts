@@ -159,10 +159,10 @@ function serializeBatchMember(
       goodsName: item.goodsName,
       packageCount: item.packageCount,
       packageUnit: item.packageUnit,
-      grossWeightKg: item.grossWeightKg?.toFixed(3) ?? null,
-      lengthCm: item.lengthCm?.toFixed(2) ?? null,
-      widthCm: item.widthCm?.toFixed(2) ?? null,
-      heightCm: item.heightCm?.toFixed(2) ?? null,
+      grossWeightKg: item.grossWeightKg?.toFixed(0) ?? null,
+      lengthCm: item.lengthCm?.toFixed(0) ?? null,
+      widthCm: item.widthCm?.toFixed(0) ?? null,
+      heightCm: item.heightCm?.toFixed(0) ?? null,
       volumeCai: item.volumeCai?.toFixed(2) ?? null,
       chargeableVolumeCai: item.chargeableVolumeCai,
       reportedVolumeCai: item.reportedVolumeCai?.toFixed(2) ?? null,
@@ -205,13 +205,13 @@ function serializeBatchMember(
       customerPhone: salesOrderRow.customerPhone,
       customerFullAddress: salesOrderRow.customerFullAddressSnapshot,
       // 销售金额与销售域同口径：四位小数订单币种金额。
-      agreedTotalAmount: salesOrderRow.agreedTotalAmount.toFixed(4),
-      depositDueAmount: salesOrderRow.depositDueAmount.toFixed(4),
-      balanceDueAmount: salesOrderRow.balanceDueAmount.toFixed(4),
+      agreedTotalAmount: salesOrderRow.agreedTotalAmount.toFixed(2),
+      depositDueAmount: salesOrderRow.depositDueAmount.toFixed(2),
+      balanceDueAmount: salesOrderRow.balanceDueAmount.toFixed(2),
       // 实际已收款/待收款沿用销售域的同一处口径：未作废收款累加，待收＝约定总额 − 已收。
       receivedAmount: formatSalesOrderAmountUnits(sumSalesOrderReceivedUnits(salesOrderRow.payments)),
       outstandingAmount: formatSalesOrderAmountUnits(
-        parseSalesOrderAmountUnits(salesOrderRow.agreedTotalAmount.toFixed(4))
+        parseSalesOrderAmountUnits(salesOrderRow.agreedTotalAmount.toFixed(2))
         - sumSalesOrderReceivedUnits(salesOrderRow.payments),
       ),
       fulfillmentStatus: salesOrderRow.fulfillmentStatus,

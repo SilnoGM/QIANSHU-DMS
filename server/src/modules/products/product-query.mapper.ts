@@ -190,21 +190,21 @@ function mapMoney(
 
 /**
  * Prisma Decimal 会在大数上让 `toString()` 返回科学计数法，而 Product HTTP
- * 契约必须始终返回普通十进制字符串。数据库列固定为 DECIMAL(30,4)，因此优先
- * 用 `toFixed(4)` 展开，再移除无意义尾零；不可信读模型一律失败关闭。
+ * 契约必须始终返回普通十进制字符串。数据库列固定为 DECIMAL(30,2)，因此优先
+ * 用 `toFixed(2)` 展开，再移除无意义尾零；不可信读模型一律失败关闭。
  */
 function mapDecimalAmount(amount: DecimalStringSource): string {
   let raw: string
   try {
     raw = typeof amount.toFixed === 'function'
-      ? amount.toFixed(4)
+      ? amount.toFixed(2)
       : amount.toString()
   }
   catch {
     throw new ProductDataIntegrityError()
   }
 
-  const match = /^(0|[1-9]\d{0,25})(?:\.(\d{1,4}))?$/u.exec(raw)
+  const match = raw.match(/^(0|[1-9]\d{0,25})(?:\.(\d{1,2}))?$/u)
   if (match === null || match[1] === undefined) {
     throw new ProductDataIntegrityError()
   }

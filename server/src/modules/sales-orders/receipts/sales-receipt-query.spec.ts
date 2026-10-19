@@ -55,7 +55,7 @@ describe('sales receipt finance views', () => {
       [{ where: { ...common, status: 'APPROVED', approvedPayment: { is: { voidedAt: { not: null } } } } }],
     ])
     expect(result.statusCounts).toEqual({ PENDING_REVIEW: 1, APPROVED: 2, REJECTED: 3, VOIDED: 4 })
-    expect(result.pendingAmount).toBe('3.0000')
+    expect(result.pendingAmount).toBe('3.00')
   })
 
   it('keeps legacy APPROVED status query inclusive of voided receipts', async () => {

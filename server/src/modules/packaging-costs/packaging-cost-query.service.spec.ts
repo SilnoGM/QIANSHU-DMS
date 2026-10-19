@@ -15,7 +15,7 @@ const history = {
   submittedAt, paidBy: null, paidAt: null, remark: '请确认付款',
 }
 const summary = {
-  ...history, amount: '280.5000', submittedBy: { id: 'submitter', name: '提报人' }, submittedAt: submittedAt.toISOString(),
+  ...history, amount: '280.50', submittedBy: { id: 'submitter', name: '提报人' }, submittedAt: submittedAt.toISOString(),
 }
 function setup(row: unknown, records: unknown[] = []) {
   const findMany = jest.fn().mockResolvedValue(records)

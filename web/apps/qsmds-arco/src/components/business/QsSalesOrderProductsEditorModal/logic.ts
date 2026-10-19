@@ -8,7 +8,7 @@ import type {
 
 import { validateMoneyString } from '../../base/MoneyInput/logic'
 
-const AMOUNT_SCALE = 10_000n
+const AMOUNT_SCALE = 100n
 const MAXIMUM_QUANTITY = 2_147_483_647
 const MAXIMUM_LINES = 100
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
@@ -33,12 +33,12 @@ function normalizeText(value: string): string {
 }
 
 function amountUnits(value: string): bigint | null {
-  const match = /^(0|[1-9]\d*)(?:\.(\d{1,4}))?$/u.exec(value)
+  const match = value.match(/^(0|[1-9]\d*)(?:\.(\d{1,2}))?$/u)
   if (match === null) {
     return null
   }
   return BigInt(match[1]!) * AMOUNT_SCALE
-    + BigInt((match[2] ?? '').padEnd(4, '0'))
+    + BigInt((match[2] ?? '').padEnd(2, '0'))
 }
 
 function formatAmountUnits(value: bigint, precision: number): string {
@@ -48,7 +48,7 @@ function formatAmountUnits(value: bigint, precision: number): string {
   if (precision === 0) {
     return `${sign}${integerPart}`
   }
-  const fractionPart = (absolute % AMOUNT_SCALE).toString().padStart(4, '0')
+  const fractionPart = (absolute % AMOUNT_SCALE).toString().padStart(2, '0')
   return `${sign}${integerPart}.${fractionPart.slice(0, precision)}`
 }
 

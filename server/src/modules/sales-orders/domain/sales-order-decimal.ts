@@ -1,9 +1,9 @@
 import type { SalesOrderPaymentStatus } from '../../../generated/prisma/enums'
 import { salesOrderRuleFailure } from './sales-order-errors'
 
-const SALES_ORDER_DECIMAL_SCALE = 10_000n
+const SALES_ORDER_DECIMAL_SCALE = 100n
 const SALES_ORDER_MAX_AMOUNT_UNITS = 10n ** 30n - 1n
-const SALES_ORDER_AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,4})?$/u
+const SALES_ORDER_AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,2})?$/u
 const POSTGRES_INTEGER_MAX = 2_147_483_647
 
 function invalidAmount(): never {
@@ -14,7 +14,7 @@ function invalidAmount(): never {
 }
 
 /**
- * 订单金额始终以四位最小单位参与运算。输入只接受规范十进制字符串，避免 number
+ * 订单金额始终以两位最小单位参与运算。输入只接受规范十进制字符串，避免 number
  * 在进入领域层之前已经发生精度损失。
  */
 export function parseSalesOrderAmountUnits(value: unknown): bigint {
@@ -23,7 +23,7 @@ export function parseSalesOrderAmountUnits(value: unknown): bigint {
   }
   const [integerPart = '', fractionPart = ''] = value.split('.')
   const units = BigInt(integerPart) * SALES_ORDER_DECIMAL_SCALE
-    + BigInt(fractionPart.padEnd(4, '0'))
+    + BigInt(fractionPart.padEnd(2, '0'))
   if (units > SALES_ORDER_MAX_AMOUNT_UNITS) return invalidAmount()
   return units
 }
@@ -35,7 +35,7 @@ export function formatSalesOrderAmountUnits(value: bigint): string {
   const integerPart = value / SALES_ORDER_DECIMAL_SCALE
   const fractionPart = (value % SALES_ORDER_DECIMAL_SCALE)
     .toString()
-    .padStart(4, '0')
+    .padStart(2, '0')
   return `${integerPart}.${fractionPart}`
 }
 
@@ -101,7 +101,7 @@ export function sumSalesOrderReceivedUnits(
 ): bigint {
   return payments.reduce(
     (sum, payment) => payment.voidedAt === undefined || payment.voidedAt === null
-      ? sum + parseSalesOrderAmountUnits(payment.amount.toFixed(4))
+      ? sum + parseSalesOrderAmountUnits(payment.amount.toFixed(2))
       : sum,
     0n,
   )

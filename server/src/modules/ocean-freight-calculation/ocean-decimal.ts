@@ -43,6 +43,23 @@ export function normalizeOceanDecimal(value: unknown, precision: number, scale: 
   return formatDecimal(parsed, precision, scale, field)
 }
 
+/**
+ * 尺寸类字段按整数厘米向上取整：来源可带小数，落库值为不小于原值的最小整数。
+ * 只接受非负十进制字符串；空值保持为空。
+ */
+export function normalizeOceanDecimalCeil(value: unknown, precision: number, field: string, positive = false): string | null {
+  if (value === null) return null
+  if (typeof value !== 'string') throw new OceanCalculationError(field)
+  const match = value.trim().match(/^(\d+)(?:\.(\d+))?$/u)
+  if (match === null) throw new OceanCalculationError(field)
+  const whole = BigInt(match[1])
+  const fraction = match[2] ?? ''
+  const ceil = fraction.split('').some(digit => digit !== '0') ? whole + 1n : whole
+  if (positive && ceil <= 0n) throw new OceanCalculationError(field)
+  if (ceil >= power(precision)) throw new OceanCalculationError(field, true)
+  return ceil.toString()
+}
+
 export function positiveInteger(value: number, field: string): number {
   if (!Number.isInteger(value) || value <= 0 || value > 2147483647) throw new OceanCalculationError(field)
   return value

@@ -48,7 +48,7 @@ function validModel() {
     productId: IDS.product,
     productNo: 'P-001',
     name: '收纳包',
-    standardUnitPriceAmount: '60.0000',
+    standardUnitPriceAmount: '60.00',
     actualUnitPriceAmount: '50',
     quantity: '2',
   }]
@@ -410,7 +410,6 @@ test('本单售价接受零和最多两位小数，第三位小数在构造请�
 test('只有精确零定金需要货到付款确认，非法值继续交由步骤校验拦截', () => {
   assert.equal(requiresSalesOrderCashOnDeliveryConfirmation('0', 2), true)
   assert.equal(requiresSalesOrderCashOnDeliveryConfirmation('0.00', 2), true)
-  assert.equal(requiresSalesOrderCashOnDeliveryConfirmation('0.0000', 4), true)
   assert.equal(requiresSalesOrderCashOnDeliveryConfirmation('0.01', 2), false)
   assert.equal(requiresSalesOrderCashOnDeliveryConfirmation(null, 2), false)
   assert.equal(requiresSalesOrderCashOnDeliveryConfirmation('invalid', 2), false)
@@ -436,7 +435,7 @@ test('真实售价乘数量精确汇总，手填总价或定金尾款不相等�
   }
 })
 
-test('未来出单日期被拦截，有效表单生成去空白客户快照和四位金额 DTO', () => {
+test('未来出单日期被拦截，有效表单生成去空白客户快照和两位金额 DTO', () => {
   const model = validModel()
   model.orderDate = '2026-08-21'
   let result = buildCreateSalesOrderRequest(model, 2, '2026-08-20')
@@ -457,9 +456,9 @@ test('未来出单日期被拦截，有效表单生成去空白客户快照和�
       cityId: IDS.city,
       addressDetail: '苓雅区中正一路100号3楼',
     })
-    assert.equal(result.request.agreedTotalAmount, '100.0000')
-    assert.equal(result.request.depositDueAmount, '30.0000')
-    assert.equal(result.request.balanceDueAmount, '70.0000')
+    assert.equal(result.request.agreedTotalAmount, '100.00')
+    assert.equal(result.request.depositDueAmount, '30.00')
+    assert.equal(result.request.balanceDueAmount, '70.00')
   }
 })
 

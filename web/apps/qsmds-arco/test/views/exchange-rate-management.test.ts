@@ -43,7 +43,7 @@ test('汇率值始终按十进制字符串校验和提交', () => {
   assert.equal(validateForeignUnitsPerCny(''), '请输入换算比例')
   assert.equal(validateForeignUnitsPerCny('0'), '换算比例必须大于 0')
   assert.equal(validateForeignUnitsPerCny('1e3'), '换算比例只能使用普通十进制数字')
-  assert.equal(validateForeignUnitsPerCny('1.1234567890123'), '换算比例最多支持 12 位小数')
+  assert.equal(validateForeignUnitsPerCny('1.12345'), '换算比例最多支持 4 位小数')
   assert.equal(validateForeignUnitsPerCny('0004.8000'), '')
 
   assert.deepEqual(buildExchangeRateSubmission({
@@ -77,7 +77,7 @@ test('汇率值始终按十进制字符串校验和提交', () => {
 test('换算说明不把需求示例作为表单默认值', () => {
   assert.equal(
     formatConversionExample('TWD', '4.8'),
-    '例如：100 TWD ÷ 4.8 = 20.833333 CNY',
+    '例如：100 TWD ÷ 4.8 = 20.83 CNY',
   )
   assert.equal(formatConversionExample('USD', ''), '填写比例后显示换算示例')
 

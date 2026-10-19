@@ -65,9 +65,9 @@ describe('product list database schema', () => {
     expect(product).toContain('@unique(map: "products_product_no_key")')
     expect(product).toContain('@map("supplier_value") @db.VarChar(64)')
     expect(product).not.toContain('@map("main_image")')
-    expect(product).toContain('@map("twd_sale_price_amount") @db.Decimal(30, 4)')
-    expect(product).toContain('@map("myr_sale_price_amount") @db.Decimal(30, 4)')
-    expect(product).toContain('@map("purchase_cost_amount") @db.Decimal(30, 4)')
+    expect(product).toContain('@map("twd_sale_price_amount") @db.Decimal(30, 2)')
+    expect(product).toContain('@map("myr_sale_price_amount") @db.Decimal(30, 2)')
+    expect(product).toContain('@map("purchase_cost_amount") @db.Decimal(30, 2)')
     expect(product).toContain('@default("[]") @db.JsonB')
     expect(product).toMatch(
       /createdBy\s+User\?\s+@relation\("ProductCreatedBy", fields: \[createdByUserId\], references: \[id\], onDelete: Restrict, onUpdate: Restrict\)/u,

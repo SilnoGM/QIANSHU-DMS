@@ -1,5 +1,5 @@
 import {
-  formatDecimal, money, normalizeOceanDecimal, OceanCalculationError,
+  formatDecimal, money, normalizeOceanDecimal, normalizeOceanDecimalCeil, OceanCalculationError,
   parseDecimal, parseMoney, positiveInteger, power, roundRatio,
 } from './ocean-decimal'
 import type {
@@ -7,7 +7,7 @@ import type {
   OceanLineInput, OceanLineResult, OceanVolumeInput,
 } from './ocean-freight-calculation.types'
 
-export { normalizeOceanDecimal, OceanCalculationError } from './ocean-decimal'
+export { normalizeOceanDecimal, normalizeOceanDecimalCeil, OceanCalculationError } from './ocean-decimal'
 export type * from './ocean-freight-calculation.types'
 
 /**
@@ -19,8 +19,8 @@ export const VOLUME_CAI_DIVISOR = 28316n
 /** 材积记录精度：与账单表口径一致，非按材积计价时保留两位小数。 */
 export const VOLUME_CAI_SCALE = 2
 
-/** 尺寸精度：账单表与装柜明细都按两位小数记录每件尺寸。 */
-export const VOLUME_DIMENSION_SCALE = 2
+/** 尺寸精度：账单表与装柜明细都按整数厘米记录每件尺寸。 */
+export const VOLUME_DIMENSION_SCALE = 0
 
 /**
  * 按记录精度比较两侧材积：两个入参都已是记录精度（两位小数）的定点值，直接相减。
@@ -32,7 +32,7 @@ export function volumeDifferenceAtRecordScale(volumeUnits: bigint, reportedUnits
 
 export function calculateOceanVolume(input: OceanVolumeInput) {
   const dimensions = ['lengthCm', 'widthCm', 'heightCm'] as const
-  const values = dimensions.map(field => normalizeOceanDecimal(input[field], 18, VOLUME_DIMENSION_SCALE, field, true))
+  const values = dimensions.map(field => normalizeOceanDecimalCeil(input[field], 18, field, true))
   const reported = normalizeOceanDecimal(input.reportedVolumeCai, 24, VOLUME_CAI_SCALE, 'reportedVolumeCai')
   if (input.packageCount !== null) positiveInteger(input.packageCount, 'packageCount')
   if (values.some(value => value === null) || input.packageCount === null) {
@@ -71,9 +71,9 @@ export function calculateOceanCharge(input: OceanChargeInput, cargo: OceanCharge
     unitPrice = parseDecimal(input.unitPriceAmount, 30, 6, 'unitPriceAmount')
     if (input.pricingBasis === 'WEIGHT') {
       if (cargo.grossWeightKg === null) throw new OceanCalculationError('grossWeightKg')
-      const weight = parseDecimal(cargo.grossWeightKg, 18, 3, 'grossWeightKg')
+      const weight = parseDecimal(cargo.grossWeightKg, 18, 0, 'grossWeightKg')
       if (weight <= 0n) throw new OceanCalculationError('grossWeightKg')
-      quantity = weight * power(5)
+      quantity = weight * power(8)
     } else {
       if (cargo.chargeableVolumeCai === null) throw new OceanCalculationError('chargeableVolumeCai')
       quantity = BigInt(positiveInteger(cargo.chargeableVolumeCai, 'chargeableVolumeCai')) * power(8)

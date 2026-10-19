@@ -35,28 +35,28 @@ test('汇总矩阵金额保留精确格式与币种符号，但不重复展示�
 })
 
 test('收款进度使用 Decimal 计算真实百分比，并把进度条值限制在 0 到 100', () => {
-  assert.deepEqual(calculateSalesOrderPaymentProgress('0.0000', '100.0000'), {
+  assert.deepEqual(calculateSalesOrderPaymentProgress('0.00', '100.00'), {
     formattedPercentage: '0.00%',
     progressValue: 0,
   })
-  assert.deepEqual(calculateSalesOrderPaymentProgress('1.0000', '3.0000'), {
+  assert.deepEqual(calculateSalesOrderPaymentProgress('1.00', '3.00'), {
     formattedPercentage: '33.33%',
     progressValue: 33.33,
   })
-  assert.deepEqual(calculateSalesOrderPaymentProgress('100.0000', '100.0000'), {
+  assert.deepEqual(calculateSalesOrderPaymentProgress('100.00', '100.00'), {
     formattedPercentage: '100.00%',
     progressValue: 100,
   })
-  assert.deepEqual(calculateSalesOrderPaymentProgress('120.0000', '100.0000'), {
+  assert.deepEqual(calculateSalesOrderPaymentProgress('120.00', '100.00'), {
     formattedPercentage: '120.00%',
     progressValue: 100,
   })
 })
 
 test('收款进度在金额缺失、非法或销售总价为零时保持空态', () => {
-  assert.equal(calculateSalesOrderPaymentProgress(null, '100.0000'), null)
-  assert.equal(calculateSalesOrderPaymentProgress('10.0000', null), null)
-  assert.equal(calculateSalesOrderPaymentProgress('10.0000', '0.0000'), null)
-  assert.equal(calculateSalesOrderPaymentProgress('invalid', '100.0000'), null)
-  assert.equal(calculateSalesOrderPaymentProgress('10.0000', 'invalid'), null)
+  assert.equal(calculateSalesOrderPaymentProgress(null, '100.00'), null)
+  assert.equal(calculateSalesOrderPaymentProgress('10.00', null), null)
+  assert.equal(calculateSalesOrderPaymentProgress('10.00', '0.00'), null)
+  assert.equal(calculateSalesOrderPaymentProgress('invalid', '100.00'), null)
+  assert.equal(calculateSalesOrderPaymentProgress('10.00', 'invalid'), null)
 })

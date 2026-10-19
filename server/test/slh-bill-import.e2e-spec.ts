@@ -101,7 +101,7 @@ describe('slh bill import with isolated PostgreSQL', () => {
       reportedNetAmountTwd: '121000.00',
     })
     // 账单公式自带除数 4.8，因此汇率来源是嵌入式，不读系统汇率。
-    expect(created.rate).toMatchObject({ source: 'EMBEDDED', foreignUnitsPerCny: '4.800000000000' })
+    expect(created.rate).toMatchObject({ source: 'EMBEDDED', foreignUnitsPerCny: '4.8000' })
     // 自报值与差异快照都要能读回来，详情页据此做同样的对比。
     expect(created.reported).toMatchObject({
       subtotalPayableAmountCny: '5825.00', subtotalCodAmountTwd: '129000.00', subtotalNtdSurchargeAmountTwd: '8000.00',

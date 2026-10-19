@@ -29,12 +29,12 @@ export interface SlhReconciliationSettleRateCard {
  */
 export const FULL_FLOW_FEE_RATE = 0.007
 
-/** 汇率只做显示裁剪：契约里固定 12 位小数（`4.800000000000`），展示按去尾零；数值不变。 */
+/** 汇率只读展示统一两位小数；数值仍用原始精度参与结算。 */
 export function trimRate(rate: string | null): string | null {
-  if (rate === null || !rate.includes('.')) {
-    return rate
+  if (rate === null) {
+    return null
   }
-  return rate.replace(/0+$/u, '').replace(/\.$/u, '')
+  return new Decimal(rate).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2)
 }
 
 /**
@@ -262,8 +262,8 @@ export function buildSettleSummary(
         .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
         .toFixed(2)
     : null
-  // 百分比用 Decimal 折算，避免 0.007 × 100 的浮点尾差。
-  const feePercentText = new Decimal(FULL_FLOW_FEE_RATE).times(100).toString()
+  // 千分比用 Decimal 折算，避免 0.007 × 1000 的浮点尾差。
+  const feePermilleText = new Decimal(FULL_FLOW_FEE_RATE).times(1000).toFixed(0)
 
   const rateTerm = (id: string, operator: string): SlhReconciliationSettleTerm => ({
     id,
@@ -329,7 +329,7 @@ export function buildSettleSummary(
             terms: [
               { id: 'salesAmount', operator: null, label: translate('slhReconciliation.detail.salesTotalAmount'), unit: orderCurrency === '' ? null : orderCurrency, value: bare(salesAmount, orderCurrency), currencyCode: salesAmount === null ? null : orderCurrency, accent: false, width: 'flex' },
               rateTerm('rate', '÷'),
-              { id: 'feeRate', operator: '×', label: translate('slhReconciliation.settle.paymentFeeRate'), unit: null, value: translate('slhReconciliation.settle.paymentFeeRateValue', { percent: feePercentText }), currencyCode: null, accent: true, width: 'rate' },
+              { id: 'feeRate', operator: '×', label: translate('slhReconciliation.settle.paymentFeeRate'), unit: null, value: translate('slhReconciliation.settle.paymentFeeRateValue', { permille: feePermilleText }), currencyCode: null, accent: true, width: 'rate' },
             ],
           },
         ],

@@ -82268,7 +82268,7 @@
           "foreignUnitsPerCny": {
             "type": "string",
             "example": "4.8",
-            "pattern": "^(?=.*[1-9])(?:0|[1-9]\\d{0,17})(?:\\.\\d{1,12})?$"
+            "pattern": "^(?=.*[1-9])(?:0|[1-9]\\d{0,17})(?:\\.\\d{1,4})?$"
           }
         },
         "required": [
@@ -82282,7 +82282,7 @@
           "foreignUnitsPerCny": {
             "type": "string",
             "example": "4.8",
-            "pattern": "^(?=.*[1-9])(?:0|[1-9]\\d{0,17})(?:\\.\\d{1,12})?$"
+            "pattern": "^(?=.*[1-9])(?:0|[1-9]\\d{0,17})(?:\\.\\d{1,4})?$"
           },
           "expectedVersion": {
             "type": "integer",
@@ -86073,7 +86073,7 @@
           "amount": {
             "type": "string",
             "nullable": true,
-            "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
+            "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d{1,2})?$"
           },
           "currency": {
             "type": "string",
@@ -86093,7 +86093,7 @@
           "amount": {
             "type": "string",
             "nullable": true,
-            "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
+            "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d{1,2})?$"
           },
           "currency": {
             "type": "string",
@@ -86113,7 +86113,7 @@
           "amount": {
             "type": "string",
             "nullable": true,
-            "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
+            "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d{1,2})?$"
           },
           "currency": {
             "type": "string",
@@ -88002,15 +88002,15 @@
           },
           "agreedTotalAmount": {
             "type": "string",
-            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$"
+            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$"
           },
           "depositDueAmount": {
             "type": "string",
-            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$"
+            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$"
           },
           "balanceDueAmount": {
             "type": "string",
-            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$"
+            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$"
           },
           "issuanceVoucher": {
             "$ref": "#/components/schemas/SalesOrderIssuanceVoucherInputDto"
@@ -88689,15 +88689,15 @@
         "properties": {
           "agreedTotalAmount": {
             "type": "string",
-            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$"
+            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$"
           },
           "depositDueAmount": {
             "type": "string",
-            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$"
+            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$"
           },
           "balanceDueAmount": {
             "type": "string",
-            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$"
+            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$"
           },
           "reason": {
             "type": "string",
@@ -88739,7 +88739,7 @@
           },
           "amount": {
             "type": "string",
-            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$"
+            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$"
           },
           "receivedAt": {
             "type": "string",
@@ -89330,7 +89330,7 @@
           },
           "amount": {
             "type": "string",
-            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$"
+            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$"
           },
           "receivedAt": {
             "type": "string",
@@ -94434,7 +94434,7 @@
           },
           "amount": {
             "type": "string",
-            "description": "CNY amount with four decimal places; editable while pending, immutable after payment."
+            "description": "CNY amount with two decimal places; editable while pending, immutable after payment."
           },
           "currencyCode": {
             "type": "string",
@@ -94580,7 +94580,7 @@
           },
           "amount": {
             "type": "string",
-            "description": "CNY amount with four decimal places; editable while pending, immutable after payment."
+            "description": "CNY amount with two decimal places; editable while pending, immutable after payment."
           },
           "currencyCode": {
             "type": "string",
@@ -96318,7 +96318,7 @@
           },
           "foreignUnitsPerCny": {
             "type": "string",
-            "description": "TWD per CNY, twelve decimals."
+            "description": "TWD per CNY, four decimals."
           },
           "embeddedForeignUnitsPerCny": {
             "type": "string",
@@ -98243,37 +98243,37 @@
           "codAmountTwd": {
             "type": "string",
             "nullable": true,
-            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$",
+            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$",
             "description": "账单行的代收货款台币；本行不涉及时为 null。"
           },
           "ntdSurchargeAmountTwd": {
             "type": "string",
             "nullable": true,
-            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$",
+            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$",
             "description": "账单行的 NTD 杂费；本行不涉及时为 null。"
           },
           "payableAmountCny": {
             "type": "string",
             "nullable": true,
-            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$",
+            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$",
             "description": "账单行的合计应付人民币；本行不涉及时为 null。"
           },
           "settlementAmountCny": {
             "type": "string",
             "nullable": true,
-            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$",
+            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$",
             "description": "（代收 − 杂费）÷ 汇率 − 合计应付，可为负；不可计算时为 null。"
           },
           "salesAmount": {
             "type": "string",
             "nullable": true,
-            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$",
-            "description": "销售订单的约定总额（订单币种，四位小数）。"
+            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$",
+            "description": "销售订单的约定总额（订单币种，两位小数）。"
           },
           "paymentFeeAmountCny": {
             "type": "string",
             "nullable": true,
-            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$",
+            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$",
             "description": "销售金额 ÷ 汇率 × 金流费率，两位小数人民币；不可计算时为 null。"
           }
         },
@@ -98304,7 +98304,7 @@
           },
           "rate": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,12})?$",
+            "pattern": "^-?(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$",
             "description": "界面上显示的汇率：服务端按来源重取当前值比对，不一致时要求重新确认。"
           },
           "amounts": {

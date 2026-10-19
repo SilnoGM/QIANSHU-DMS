@@ -8,9 +8,9 @@ import {
 
 describe('sales order decimal rules', () => {
   it.each([
-    ['0', '0.0000'],
-    ['1.2', '1.2000'],
-    ['99999999999999999999999999.9999', '99999999999999999999999999.9999'],
+    ['0', '0.00'],
+    ['1.2', '1.20'],
+    ['99999999999999999999999999.99', '99999999999999999999999999.99'],
   ])('normalizes the non-negative amount %s', (input, expected) => {
     expect(normalizeSalesOrderAmount(input)).toBe(expected)
   })
@@ -29,6 +29,7 @@ describe('sales order decimal rules', () => {
     '1.',
     '.1',
     '1.00000',
+    '1.001',
     '1e2',
     '100000000000000000000000000',
   ])('rejects an unsafe amount %p', (input) => {
@@ -49,21 +50,21 @@ describe('sales order decimal rules', () => {
   })
 
   it('calculates line totals without IEEE-754 arithmetic', () => {
-    expect(calculateSalesOrderLineTotal('19.9900', 3)).toBe('59.9700')
-    expect(calculateSalesOrderLineTotal('0.0001', 3)).toBe('0.0003')
+    expect(calculateSalesOrderLineTotal('19.99', 3)).toBe('59.97')
+    expect(calculateSalesOrderLineTotal('0.01', 3)).toBe('0.03')
   })
 
   it('hard-blocks both agreed amount equations', () => {
     expect(validateSalesOrderAgreedAmounts({
-      lineSubtotalAmount: '100.0000',
+      lineSubtotalAmount: '100.00',
       agreedTotalAmount: '100',
       depositDueAmount: '30',
       balanceDueAmount: '70',
     })).toEqual({
-      lineSubtotalAmount: '100.0000',
-      agreedTotalAmount: '100.0000',
-      depositDueAmount: '30.0000',
-      balanceDueAmount: '70.0000',
+      lineSubtotalAmount: '100.00',
+      agreedTotalAmount: '100.00',
+      depositDueAmount: '30.00',
+      balanceDueAmount: '70.00',
     })
 
     expect(() => validateSalesOrderAgreedAmounts({
@@ -86,10 +87,10 @@ describe('sales order decimal rules', () => {
 
   it('derives payment status and rejects overpayment', () => {
     expect(deriveSalesOrderPaymentStatus('100', '0')).toBe('UNPAID')
-    expect(deriveSalesOrderPaymentStatus('100', '0.0001'))
+    expect(deriveSalesOrderPaymentStatus('100', '0.01'))
       .toBe('PARTIALLY_PAID')
     expect(deriveSalesOrderPaymentStatus('100', '100')).toBe('PAID')
-    expect(() => deriveSalesOrderPaymentStatus('100', '100.0001')).toThrow(
+    expect(() => deriveSalesOrderPaymentStatus('100', '100.01')).toThrow(
       expect.objectContaining({ code: 'SALES_ORDER_PAYMENT_EXCEEDS_TOTAL' }),
     )
   })

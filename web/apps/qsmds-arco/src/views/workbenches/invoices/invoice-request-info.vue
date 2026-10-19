@@ -105,7 +105,7 @@ function lineAmount(line: InvoiceRequestLineDto): string {
               {{ t('invoiceRequest.field.salesAmount') }}
             </dt>
             <dd class="m-0">
-              <AmountDisplay :value="detail.salesAmount" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" />
+              <AmountDisplay :value="detail.salesAmount" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
             </dd>
           </div>
           <div class="flex gap-4 justify-between">
@@ -113,7 +113,7 @@ function lineAmount(line: InvoiceRequestLineDto): string {
               {{ t('invoiceRequest.field.taxAmount') }}
             </dt>
             <dd class="m-0">
-              <AmountDisplay :value="detail.taxAmount" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" />
+              <AmountDisplay :value="detail.taxAmount" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
             </dd>
           </div>
           <div class="p-4 border border-border rounded-xl bg-primary/5 flex gap-4 items-center justify-between">
@@ -121,7 +121,7 @@ function lineAmount(line: InvoiceRequestLineDto): string {
               {{ t('invoiceRequest.field.totalAmount') }}
             </dt>
             <dd class="m-0 max-w-full overflow-x-auto">
-              <AmountDisplay :value="detail.totalAmount" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" class="font-bold" />
+              <AmountDisplay :value="detail.totalAmount" :currency="invoiceCurrency" :currencies="currencyCatalog.currencies.value" :minor-unit="0" class="font-bold" />
             </dd>
           </div>
         </dl>

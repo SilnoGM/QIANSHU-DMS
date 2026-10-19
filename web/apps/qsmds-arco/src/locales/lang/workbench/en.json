@@ -433,7 +433,7 @@
       "rateRow": "Settlement rate",
       "payableTotal": "Total payable",
       "paymentFeeRate": "Fee rate",
-      "paymentFeeRateValue": "{percent}%",
+      "paymentFeeRateValue": "{permille}‰",
       "settlementFormula": "(COD amount − surcharge) ÷ rate − total payable",
       "paymentFeeFormula": "Sales amount ÷ settlement rate × fee rate",
       "settlementResult": "Settlement amount",

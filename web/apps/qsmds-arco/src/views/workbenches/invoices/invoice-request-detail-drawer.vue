@@ -8,6 +8,7 @@ import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { formatExchangeRate } from '@/utils/exchange-rate'
 import { resolveInvoiceFailureKey } from './invoice-failure.logic'
 import InvoiceRequestInfo from './invoice-request-info.vue'
 import { statusTagClass } from './invoice-status.logic'
@@ -253,7 +254,7 @@ const nodes = computed(() => {
                 {{ t('invoiceRequest.approval.settleRate') }}
               </dt>
               <dd class="qs-type-data m-0">
-                {{ detail.foreignUnitsPerCnySnapshot ?? '—' }}
+                {{ formatExchangeRate(detail.foreignUnitsPerCnySnapshot) ?? '—' }}
               </dd>
             </div>
             <div class="min-w-0">

@@ -71,7 +71,7 @@ describe('normalizeProductCreateCommand', () => {
       status: 'INACTIVE',
       supplierValue: 'SUPPLIER_A',
       twdSalePrice: {
-        amount: '1.0000',
+        amount: '1.00',
         currency: 'TWD',
         inputFractionDigits: 1,
       },
@@ -81,7 +81,7 @@ describe('normalizeProductCreateCommand', () => {
         inputFractionDigits: 0,
       },
       purchaseCost: {
-        amount: '20.5000',
+        amount: '20.50',
         currency: 'CNY',
         inputFractionDigits: 2,
       },
@@ -169,7 +169,7 @@ describe('normalizeProductCreateCommand', () => {
     ['twdSalePrice.amount', { twdSalePrice: { amount: '1e2', currency: 'TWD' } }],
     ['twdSalePrice.amount', { twdSalePrice: { amount: '1,000', currency: 'TWD' } }],
     ['twdSalePrice.amount', { twdSalePrice: { amount: `${'9'.repeat(27)}.0`, currency: 'TWD' } }],
-    ['twdSalePrice.amount', { twdSalePrice: { amount: '1.00000', currency: 'TWD' } }],
+    ['twdSalePrice.amount', { twdSalePrice: { amount: '1.000', currency: 'TWD' } }],
     ['attributes', { attributes: Array.from({ length: 51 }, () => ({ title: 'A', value: 'B' })) }],
     ['attributes.0.title', { attributes: [{ title: ' ', value: 'B' }] }],
     ['attributes.0.value', { attributes: [{ title: 'A', value: '😀'.repeat(513) }] }],

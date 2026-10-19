@@ -36,15 +36,15 @@ export function resolveInvoiceDocumentVariant(value: unknown): InvoiceDocumentVa
 }
 
 /** 营业税应税 = 四舍五入(销售额 × 5%)；整数运算，销售额 1 元时为 0。 */
-export function calculateTaxAmount(salesAmount: number): number {
-  return Math.floor((salesAmount * INVOICE_TAX_RATE_PERCENT + 50) / 100)
+export function calculateTaxAmount(salesAmount: bigint): bigint {
+  return (salesAmount * BigInt(INVOICE_TAX_RATE_PERCENT) + 50n) / 100n
 }
 
 /** 明细行金额合计；每行金额必须等于数量 × 单价（数据库侧另有同一条 CHECK）。 */
 export function sumLineAmounts(
-  lines: readonly { readonly quantity: number, readonly unitPrice: number }[],
-): number {
-  return lines.reduce((total, line) => total + line.quantity * line.unitPrice, 0)
+  lines: readonly { readonly quantity: number, readonly unitPrice: bigint }[],
+): bigint {
+  return lines.reduce((total, line) => total + line.unitPrice * BigInt(line.quantity), 0n)
 }
 
 /** 可结算时刻 = 上传时刻 + 120 小时。 */
@@ -65,7 +65,7 @@ export function isSettleable(documentUploadedAt: Date | null, now: Date): boolea
  * 严格按「先除汇率、再乘费率、最后加邮寄费」的顺序执行，结果按资金域口径给两位小数。
  */
 export function calculateSettleAmountCny(
-  totalAmount: bigint,
+  totalAmount: bigint | Prisma.Decimal,
   foreignUnitsPerCny: Prisma.Decimal,
 ): string {
   return new Prisma.Decimal(totalAmount.toString())
@@ -78,7 +78,7 @@ export function calculateSettleAmountCny(
 
 /** 完整算式文本，供结算弹窗与审计说明使用（保留计算顺序，便于人工复核）。 */
 export function describeSettleFormula(
-  totalAmount: bigint,
+  totalAmount: bigint | Prisma.Decimal,
   foreignUnitsPerCny: Prisma.Decimal,
 ): string {
   return [

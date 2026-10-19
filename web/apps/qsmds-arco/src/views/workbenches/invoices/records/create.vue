@@ -8,6 +8,7 @@ import invoiceRequestsApi from '@/api/modules/invoice-requests'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { formatExchangeRate } from '@/utils/exchange-rate'
 import { calculateEstimatedCostCny, INVOICE_MAILING_FEE_CNY, INVOICE_SERVICE_FEE_RATE } from '../invoice-cost.logic'
 import { resolveDuplicateFieldErrors, resolveInvoiceFailureKey } from '../invoice-failure.logic'
 import { buildInvoiceSubmitPayload, calculateInvoiceTotals, emptyInvoiceFormLine, formatLineAmount, INVOICE_REQUEST_LINE_LIMIT } from '../invoice-form.logic'
@@ -67,7 +68,7 @@ const costHint = computed(() => {
   if (costRateState.value === 'loading') {
     return ''
   }
-  return costRate.value === null ? t('invoiceRequest.cost.rateUnavailable') : t('invoiceRequest.cost.hint', { rate: costRate.value })
+  return costRate.value === null ? t('invoiceRequest.cost.rateUnavailable') : t('invoiceRequest.cost.hint', { rate: formatExchangeRate(costRate.value) })
 })
 
 function markDirty(): void {
@@ -414,6 +415,7 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
                 :value="totals.salesAmount === null ? null : String(totals.salesAmount)"
                 :currency="invoiceCurrency"
                 :currencies="currencyCatalog.currencies.value"
+                :minor-unit="0"
                 class="text-lg font-semibold self-end"
               />
             </div>
@@ -423,6 +425,7 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
                 :value="totals.taxAmount === null ? null : String(totals.taxAmount)"
                 :currency="invoiceCurrency"
                 :currencies="currencyCatalog.currencies.value"
+                :minor-unit="0"
                 class="text-lg font-semibold self-end"
               />
             </div>
@@ -432,6 +435,7 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
                 :value="totals.totalAmount === null ? null : String(totals.totalAmount)"
                 :currency="invoiceCurrency"
                 :currencies="currencyCatalog.currencies.value"
+                :minor-unit="0"
                 class="text-lg font-bold self-end"
               />
             </div>
@@ -527,6 +531,7 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
               :value="totals.totalAmount === null ? null : String(totals.totalAmount)"
               :currency="invoiceCurrency"
               :currencies="currencyCatalog.currencies.value"
+              :minor-unit="0"
               class="text-base font-bold"
             />
           </div>

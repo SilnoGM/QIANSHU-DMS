@@ -170,14 +170,14 @@ onMounted(load)
         <template #cell-salesAmount="{ row }">
           <QsTableStackedCell class="text-right justify-items-end">
             <QsTableStackedLine>
-              <AmountDisplay :value="row.original.salesAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+              <AmountDisplay :value="row.original.salesAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
         <template #cell-taxAmount="{ row }">
           <QsTableStackedCell class="text-right justify-items-end">
             <QsTableStackedLine>
-              <AmountDisplay :value="row.original.taxAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+              <AmountDisplay :value="row.original.taxAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -194,7 +194,7 @@ onMounted(load)
         <template #cell-totalAmount="{ row }">
           <QsTableStackedCell class="text-right justify-items-end">
             <QsTableStackedLine>
-              <AmountDisplay :value="row.original.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+              <AmountDisplay :value="row.original.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -243,7 +243,7 @@ onMounted(load)
                   {{ t('invoiceRequest.field.totalAmount') }}
                 </dt>
                 <dd class="m-0">
-                  <AmountDisplay :value="row.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+                  <AmountDisplay :value="row.totalAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
                 </dd>
               </div>
               <div class="min-w-0">
@@ -251,8 +251,8 @@ onMounted(load)
                   {{ t('invoiceRequest.field.salesAmount') }} / {{ t('invoiceRequest.field.taxAmount') }}
                 </dt>
                 <dd class="m-0 flex flex-col gap-1 items-start">
-                  <AmountDisplay :value="row.salesAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
-                  <AmountDisplay :value="row.taxAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" />
+                  <AmountDisplay :value="row.salesAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
+                  <AmountDisplay :value="row.taxAmount" currency="TWD" :currencies="currencyCatalog.currencies.value" :minor-unit="0" />
                 </dd>
               </div>
               <div class="col-span-2 min-w-0">

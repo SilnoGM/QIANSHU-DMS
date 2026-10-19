@@ -433,7 +433,7 @@
       "rateRow": "結算匯率",
       "payableTotal": "合計應付",
       "paymentFeeRate": "金流費率",
-      "paymentFeeRateValue": "{percent}%",
+      "paymentFeeRateValue": "{permille}‰",
       "settlementFormula": "(代收貨款 − 雜費) ÷ 匯率 − 合計應付",
       "paymentFeeFormula": "銷售金額 ÷ 結算匯率 × 費率",
       "settlementResult": "結算金額",

@@ -20,11 +20,11 @@ function createRow(
     status: ProductStatus.INACTIVE,
     supplierValue: 'SUPPLIER_A',
     sortOrder: 10,
-    twdSalePriceAmount: { toString: () => '1280.5000' },
+    twdSalePriceAmount: { toString: () => '1280.50' },
     twdSalePriceCurrency: 'TWD',
     myrSalePriceAmount: null,
     myrSalePriceCurrency: 'MYR',
-    purchaseCostAmount: { toString: () => '88.1250' },
+    purchaseCostAmount: { toString: () => '88.13' },
     purchaseCostCurrency: 'CNY',
     attributes: [
       { title: '容量', value: '30ml', internal: 'must-not-leak' },
@@ -46,7 +46,7 @@ function createRow(
 describe('mapProductListItem', () => {
   it('serializes a maximum Product decimal without scientific notation', () => {
     const maximumDecimal = {
-      toFixed: () => '99999999999999999999999999.1200',
+      toFixed: () => '99999999999999999999999999.12',
       toString: () => '9.999999999999999999999999912e+25',
     }
 
@@ -88,7 +88,7 @@ describe('mapProductListItem', () => {
       media: EMPTY_MEDIA,
       twdSalePrice: { amount: '1280.5', currency: 'TWD' },
       myrSalePrice: { amount: null, currency: 'MYR' },
-      purchaseCost: { amount: '88.125', currency: 'CNY' },
+      purchaseCost: { amount: '88.13', currency: 'CNY' },
       attributes: [
         { title: '容量', value: '30ml' },
         { title: '产地', value: '中国台湾' },

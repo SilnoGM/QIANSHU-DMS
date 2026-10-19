@@ -39,14 +39,14 @@ function payload(overrides: Record<string, unknown> = {}) {
 }
 
 describe('sales order create fingerprint', () => {
-  it('uses one stable SHA-256 v1 contract', () => {
+  it('uses one stable SHA-256 v2 contract', () => {
     expect(SALES_ORDER_CREATE_FINGERPRINT_VERSION)
-      .toBe('sales-order.create.v1')
+      .toBe('sales-order.create.v2')
     expect(calculateSalesOrderCreateFingerprint(ACTOR_ID, payload()))
       .toMatch(/^[0-9a-f]{64}$/u)
     expect(calculateSalesOrderCreateFingerprint(ACTOR_ID, payload()))
       .toBe(calculateSalesOrderCreateFingerprint(ACTOR_ID, payload({
-        agreedTotalAmount: '20.0000',
+        agreedTotalAmount: '20.00',
       })))
   })
 

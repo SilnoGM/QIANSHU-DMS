@@ -277,7 +277,7 @@ describe('Currency management API with PostgreSQL', () => {
       .set(CSRF_HEADERS)
       .send({
         currencyId: created.id,
-        foreignUnitsPerCny: '4.800000000000',
+        foreignUnitsPerCny: '4.8000',
       })
       .expect(201)
       .expect((response) => {
@@ -344,7 +344,7 @@ describe('Currency management API with PostgreSQL', () => {
         .patch(`/api/exchange-rates/${rateId}`)
         .set(CSRF_HEADERS)
         .send({
-          foreignUnitsPerCny: '5.250000000000',
+          foreignUnitsPerCny: '5.2500',
           expectedVersion: 1,
         }),
       adminBrowser

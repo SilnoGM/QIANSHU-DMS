@@ -79,7 +79,7 @@ describe('sales receipt HTTP permissions on real PostgreSQL', () => {
 
   it('old sales payment permission cannot bypass financial review or perform correction',async()=>{
     const {browser}=await browserWithPermissions(['sales-orders:payment','sales-orders:document'])
-    const response=await browser.post(`/api/sales-orders/${orderId}/payments`).set(headers).send({paymentType:'DEPOSIT',amount:'1.0000',receivedAt:new Date().toISOString(),paymentMethod:'bank_transfer',voucher:{mediaAssetId:randomUUID()}}).expect(409)
+    const response=await browser.post(`/api/sales-orders/${orderId}/payments`).set(headers).send({paymentType:'DEPOSIT',amount:'1.00',receivedAt:new Date().toISOString(),paymentMethod:'bank_transfer',voucher:{mediaAssetId:randomUUID()}}).expect(409)
     expect(response.body as unknown).toMatchObject({code:'SALES_ORDER_RECEIPT_REVIEW_REQUIRED'})
     await browser.post(`/api/sales-orders/${orderId}/payments/${randomUUID()}/void`).set(headers).send({reason:'仅销售权限',expectedOrderVersion:1}).expect(403)
   })

@@ -22,10 +22,10 @@ function setup() {
     paymentStatus: 'UNPAID',
     currencyCode: 'TWD',
     currency: { symbol: 'NT$', minorUnit: 2 },
-    lineSubtotalAmount: decimal('100.0000'),
-    agreedTotalAmount: decimal('100.0000'),
-    depositDueAmount: decimal('30.0000'),
-    balanceDueAmount: decimal('70.0000'),
+    lineSubtotalAmount: decimal('100.00'),
+    agreedTotalAmount: decimal('100.00'),
+    depositDueAmount: decimal('30.00'),
+    balanceDueAmount: decimal('70.00'),
     customerName: '王小明',
     version: 1,
   }
@@ -54,7 +54,7 @@ function setup() {
     salesReceiptRequest: { count: jest.fn().mockResolvedValue(0), aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }) },
     salesOrderPayment: {
       aggregate: jest.fn<Promise<unknown>, [unknown]>()
-        .mockResolvedValue({ _sum: { amount: decimal('0.0000') } }),
+        .mockResolvedValue({ _sum: { amount: decimal('0.00') } }),
       create: jest.fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue({ id: 'payment-id' }),
       findFirst: jest.fn<Promise<unknown>, [unknown]>(),
@@ -266,19 +266,19 @@ describe('SalesOrderMutationService', () => {
     const revisionCall = fixture.transaction.salesOrderAmountRevision.create
       .mock.calls[0]?.[0]
     expect(revisionCall).toMatchObject({ data: {
-        oldDepositDueAmount: '30.0000',
-        oldBalanceDueAmount: '70.0000',
-        newDepositDueAmount: '40.0000',
-        newBalanceDueAmount: '60.0000',
+        oldDepositDueAmount: '30.00',
+        oldBalanceDueAmount: '70.00',
+        newDepositDueAmount: '40.00',
+        newBalanceDueAmount: '60.00',
         reason: '客户调整付款计划',
         changedByUserId: ACTOR_ID,
       } })
   })
 
   it.each([
-    ['0.0000', 'UNPAID'],
-    ['50.0000', 'PARTIALLY_PAID'],
-    ['100.0000', 'PAID'],
+    ['0.00', 'UNPAID'],
+    ['50.00', 'PARTIALLY_PAID'],
+    ['100.00', 'PAID'],
   ] as const)(
     'recalculates payment status as %s received becomes %s after payment-term changes',
     async (receivedAmount, expectedStatus) => {
@@ -297,9 +297,9 @@ describe('SalesOrderMutationService', () => {
       expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
         where: { id: ORDER_ID },
         data: {
-          agreedTotalAmount: '100.0000',
-          depositDueAmount: '40.0000',
-          balanceDueAmount: '60.0000',
+          agreedTotalAmount: '100.00',
+          depositDueAmount: '40.00',
+          balanceDueAmount: '60.00',
           paymentStatus: expectedStatus,
           version: { increment: 1 },
         },
@@ -334,7 +334,7 @@ describe('SalesOrderMutationService', () => {
   it('blocks cancellation when effective payments exist', async () => {
     const fixture = setup()
     fixture.transaction.salesOrderPayment.aggregate.mockResolvedValue({
-      _sum: { amount: decimal('1.0000') },
+      _sum: { amount: decimal('1.00') },
     })
     await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
       toStatus: 'CANCELLED',
@@ -347,7 +347,7 @@ describe('SalesOrderMutationService', () => {
     fixture.order.fulfillmentStatus = 'SIGNED'
     fixture.order.paymentStatus = 'PAID'
     fixture.transaction.salesOrderPayment.aggregate.mockResolvedValue({
-      _sum: { amount: decimal('100.0000') },
+      _sum: { amount: decimal('100.00') },
     })
 
     await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
@@ -394,7 +394,7 @@ describe('SalesOrderMutationService', () => {
     fixture.order.fulfillmentStatus = 'SIGNED'
     fixture.order.paymentStatus = 'PAID'
     fixture.transaction.salesOrderPayment.aggregate.mockResolvedValue({
-      _sum: { amount: decimal('100.0000') },
+      _sum: { amount: decimal('100.00') },
     })
 
     // 即便已签收已付清，手工入口也不允许把订单置为已完成（无论当前处于哪个状态）。
@@ -423,7 +423,7 @@ describe('SalesOrderMutationService', () => {
     recordFixture.order.fulfillmentStatus = 'SIGNED'
     recordFixture.order.paymentStatus = 'PAID'
     recordFixture.transaction.salesOrderPayment.aggregate.mockResolvedValue({
-      _sum: { amount: decimal('100.0000') },
+      _sum: { amount: decimal('100.00') },
     })
     await expect(recordFixture.service.recordPayment(context, ORDER_ID, {
       paymentType: 'OTHER',
@@ -441,7 +441,7 @@ describe('SalesOrderMutationService', () => {
     voidFixture.order.paymentStatus = 'PAID'
     voidFixture.transaction.salesOrderPayment.findFirst.mockResolvedValue({
       id: 'payment-id',
-      amount: decimal('100.0000'),
+      amount: decimal('100.00'),
       voidedAt: null,
     })
     await expect(voidFixture.service.voidPayment(

@@ -34,7 +34,7 @@ function amountUnits(value: string | null): bigint | null {
   if (value === null) {
     return null
   }
-  const match = /^(0|[1-9]\d*)(?:\.(\d{1,4}))?$/u.exec(value)
+  const match = value.match(/^(0|[1-9]\d*)(?:\.(\d{1,4}))?$/u)
   if (match === null) {
     return null
   }

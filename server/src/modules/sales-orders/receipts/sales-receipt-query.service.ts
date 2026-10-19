@@ -20,7 +20,7 @@ function mapDetail(row: DetailRow): SalesReceiptRequestDetailDto {
   const batch = payment?.fundPostingBatch
   return {
     id: row.id, collectionNo: row.collectionNo, numberingIssuanceId: row.numberingIssuanceId, salesOrderId: row.salesOrderId, paymentType: row.paymentType,
-    amount: row.amount.toFixed(4), currencyCode: row.currencyCode, receivedAt: row.receivedAt.toISOString(),
+    amount: row.amount.toFixed(2), currencyCode: row.currencyCode, receivedAt: row.receivedAt.toISOString(),
     paymentMethod: row.paymentMethod, paymentMethodNameSnapshot: row.paymentMethodNameSnapshot,
     remark: row.remark, status: row.status as SalesReceiptStatusDto, submittedAt: row.submittedAt.toISOString(),
     reviewedAt: row.reviewedAt?.toISOString() ?? null, reviewRemark: row.reviewRemark, version: row.version,
@@ -32,7 +32,7 @@ function mapDetail(row: DetailRow): SalesReceiptRequestDetailDto {
       reversal: payment.fundReversalBatch ? { ruleVersionId: payment.fundReversalBatch.ruleVersionId, ruleRevisionSnapshot: payment.fundReversalBatch.ruleRevisionSnapshot, batchId: payment.fundReversalBatch.id, businessAmount: payment.fundReversalBatch.businessAmount.toFixed(2), userShareRate: payment.fundReversalBatch.userShareRateSnapshot?.toFixed(2) ?? null, companyShareRate: payment.fundReversalBatch.companyShareRateSnapshot?.toFixed(2) ?? null, entries: payment.fundReversalBatch.entries.map(entry => ({ accountTarget: entry.accountTarget, direction: entry.direction, amount: entry.amount.toFixed(2) })) } : null,
       id: payment.id, origin: payment.origin, voidedAt: payment.voidedAt?.toISOString() ?? null, voidReason: payment.voidReason,
       fundPostingBatchId: payment.fundPostingBatchId, fundReversalBatchId: payment.fundReversalBatchId,
-      foreignUnitsPerCnySnapshot: payment.foreignUnitsPerCnySnapshot?.toFixed(12) ?? null,
+      foreignUnitsPerCnySnapshot: payment.foreignUnitsPerCnySnapshot?.toFixed(4) ?? null,
       exchangeRateCapturedAt: payment.exchangeRateCapturedAt?.toISOString() ?? null,
       posting: batch ? { ruleVersionId: batch.ruleVersionId, ruleRevisionSnapshot: batch.ruleRevisionSnapshot, batchId: batch.id, businessAmount: batch.businessAmount.toFixed(2), userShareRate: batch.userShareRateSnapshot?.toFixed(2) ?? null,
         companyShareRate: batch.companyShareRateSnapshot?.toFixed(2) ?? null,
@@ -88,7 +88,7 @@ export class SalesReceiptQueryService {
       ])
       const statusCounts = { PENDING_REVIEW: pendingCount, APPROVED: approvedCount, REJECTED: rejectedCount, VOIDED: voidedCount }
       const pending = salesOrderId ? await tx.salesReceiptRequest.aggregate({ where: { salesOrderId, status: 'PENDING_REVIEW' }, _sum: { amount: true } }) : null
-      return { items: rows.map(mapDetail), total, page, pageSize, statusCounts, pendingAmount: salesOrderId ? pending?._sum.amount?.toFixed(4) ?? '0.0000' : null }
+      return { items: rows.map(mapDetail), total, page, pageSize, statusCounts, pendingAmount: salesOrderId ? pending?._sum.amount?.toFixed(2) ?? '0.00' : null }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
   }
 }

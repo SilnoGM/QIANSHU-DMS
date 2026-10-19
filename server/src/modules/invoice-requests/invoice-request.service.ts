@@ -92,7 +92,7 @@ function normalizeSubmit(input: InvoiceRequestSubmitDto): NormalizedSubmit {
     }
     return { productName: line.productName.trim(), quantity: line.quantity, unitPrice, amount: unitPrice * BigInt(line.quantity) }
   })
-  const salesAmount = sumLineAmounts(lines.map(line => ({ quantity: line.quantity, unitPrice: Number(line.unitPrice) })))
+  const salesAmount = sumLineAmounts(lines)
   const taxAmount = calculateTaxAmount(salesAmount)
   return {
     buyerName: input.buyerName.trim(),
@@ -103,9 +103,9 @@ function normalizeSubmit(input: InvoiceRequestSubmitDto): NormalizedSubmit {
     recipientPhone: input.recipientPhone.trim(),
     recipientAddress: input.recipientAddress.trim(),
     lines,
-    salesAmount: BigInt(salesAmount),
-    taxAmount: BigInt(taxAmount),
-    totalAmount: BigInt(salesAmount + taxAmount),
+    salesAmount,
+    taxAmount,
+    totalAmount: salesAmount + taxAmount,
     duplicateAcknowledged: input.duplicateAcknowledged === true,
   }
 }
@@ -181,9 +181,9 @@ export class InvoiceRequestService {
             numberingIssuanceId: issuance.issuanceId,
             buyerName: payload.buyerName,
             buyerTaxId: payload.buyerTaxId,
-            salesAmount: payload.salesAmount,
-            taxAmount: payload.taxAmount,
-            totalAmount: payload.totalAmount,
+            salesAmount: payload.salesAmount.toString(),
+            taxAmount: payload.taxAmount.toString(),
+            totalAmount: payload.totalAmount.toString(),
             invoiceRemark: payload.invoiceRemark,
             internalRemark: payload.internalRemark,
             recipientName: payload.recipientName,
@@ -192,7 +192,7 @@ export class InvoiceRequestService {
             lastSubmittedAt: new Date(),
             requestKeyHash: digest(requestKey),
             createdById: context.actorUserId,
-            lines: { create: payload.lines.map((line, index) => ({ lineNo: index + 1, productName: line.productName, quantity: line.quantity, unitPrice: line.unitPrice, amount: line.amount })) },
+            lines: { create: payload.lines.map((line, index) => ({ lineNo: index + 1, productName: line.productName, quantity: line.quantity, unitPrice: line.unitPrice.toString(), amount: line.amount.toString() })) },
           },
           select: { id: true, invoiceNo: true },
         })
@@ -232,7 +232,7 @@ export class InvoiceRequestService {
         }
         await tx.invoiceRequestLine.deleteMany({ where: { requestId: id } })
         await tx.invoiceRequestLine.createMany({
-          data: payload.lines.map((line, index) => ({ requestId: id, lineNo: index + 1, productName: line.productName, quantity: line.quantity, unitPrice: line.unitPrice, amount: line.amount })),
+          data: payload.lines.map((line, index) => ({ requestId: id, lineNo: index + 1, productName: line.productName, quantity: line.quantity, unitPrice: line.unitPrice.toString(), amount: line.amount.toString() })),
         })
         await tx.invoiceRequest.update({
           where: { id },
@@ -241,9 +241,9 @@ export class InvoiceRequestService {
             lastSubmittedAt: new Date(),
             buyerName: payload.buyerName,
             buyerTaxId: payload.buyerTaxId,
-            salesAmount: payload.salesAmount,
-            taxAmount: payload.taxAmount,
-            totalAmount: payload.totalAmount,
+            salesAmount: payload.salesAmount.toString(),
+            taxAmount: payload.taxAmount.toString(),
+            totalAmount: payload.totalAmount.toString(),
             invoiceRemark: payload.invoiceRemark,
             internalRemark: payload.internalRemark,
             recipientName: payload.recipientName,
@@ -466,7 +466,7 @@ export class InvoiceRequestService {
         await this.audit.record(tx, {
           eventType: 'INVOICE_REQUEST_SETTLED', outcome: 'SUCCESS', actorType: 'USER', actorUserId: context.actorUserId,
           requestId: context.requestId, targetType: 'INVOICE_REQUEST', targetId: id,
-          metadata: { invoiceNo: row.invoiceNo, settleAmountCny: amount, foreignUnitsPerCny: rate.foreignUnitsPerCny.toFixed(12) },
+          metadata: { invoiceNo: row.invoiceNo, settleAmountCny: amount, foreignUnitsPerCny: rate.foreignUnitsPerCny.toFixed(4) },
         })
       }, { timeout: 60_000 })
       return await this.queries.get(context.actorUserId, id)
@@ -482,7 +482,7 @@ export class InvoiceRequestService {
   private async postSettlement(
     tx: Prisma.TransactionClient,
     context: InvoiceRequestCommandContext,
-    input: { readonly amount: string, readonly id: string, readonly invoiceNo: string, readonly rate: { readonly foreignUnitsPerCny: Prisma.Decimal, readonly id: string, readonly version: number }, readonly taxAmount: bigint, readonly totalAmount: bigint },
+    input: { readonly amount: string, readonly id: string, readonly invoiceNo: string, readonly rate: { readonly foreignUnitsPerCny: Prisma.Decimal, readonly id: string, readonly version: number }, readonly taxAmount: Prisma.Decimal, readonly totalAmount: Prisma.Decimal },
   ): Promise<string> {
     const fundContext = {
       actorUserId: context.actorUserId,
@@ -504,7 +504,7 @@ export class InvoiceRequestService {
         taxAmountTwd: input.taxAmount.toString(),
         exchangeRateId: input.rate.id,
         exchangeRateVersion: input.rate.version,
-        foreignUnitsPerCny: input.rate.foreignUnitsPerCny.toFixed(12),
+        foreignUnitsPerCny: input.rate.foreignUnitsPerCny.toFixed(4),
         serviceFeeRate: INVOICE_SERVICE_FEE_RATE,
         mailingFeeCny: INVOICE_MAILING_FEE_CNY,
       },
@@ -547,8 +547,8 @@ export class InvoiceRequestService {
       where: {
         buyerName: payload.buyerName,
         buyerTaxId: payload.buyerTaxId,
-        taxAmount: payload.taxAmount,
-        totalAmount: payload.totalAmount,
+        taxAmount: payload.taxAmount.toString(),
+        totalAmount: payload.totalAmount.toString(),
         status: { in: [...INVOICE_REQUEST_DUPLICATE_POOL_STATUS_VALUES] },
         ...(excludeId === undefined ? {} : { id: { not: excludeId } }),
       },
@@ -569,8 +569,8 @@ export class InvoiceRequestService {
     readonly documentUploadedAt: Date | null
     readonly invoiceNo: string
     readonly status: InvoiceRequestStatusValue
-    readonly taxAmount: bigint
-    readonly totalAmount: bigint
+    readonly taxAmount: Prisma.Decimal
+    readonly totalAmount: Prisma.Decimal
     readonly version: number
   }> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`

@@ -257,7 +257,7 @@ function canonicalAmount(value: AmountSource | string | null): string | null {
   const raw = typeof value === 'string'
     ? value
     : typeof value.toFixed === 'function'
-      ? value.toFixed(4)
+      ? value.toFixed(2)
       : value.toString()
   const match = raw.match(/^(0|[1-9]\d*)(?:\.(\d{1,4}))?$/u)
   if (match === null) return raw

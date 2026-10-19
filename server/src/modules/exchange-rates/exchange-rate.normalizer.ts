@@ -3,7 +3,7 @@ import { HttpStatus } from '@nestjs/common'
 import { ApiException } from '../../infrastructure/http/api.exception'
 
 export const FOREIGN_UNITS_PER_CNY_PATTERN =
-  /^(?=.*[1-9])(?:0|[1-9]\d{0,17})(?:\.\d{1,12})?$/u
+  /^(?=.*[1-9])(?:0|[1-9]\d{0,17})(?:\.\d{1,4})?$/u
 
 function validationFailure(): never {
   throw new ApiException(
@@ -12,7 +12,7 @@ function validationFailure(): never {
     '请求参数校验失败',
     {
       foreignUnitsPerCny: [
-        '必须是大于 0 且最多 18 位整数、12 位小数的十进制字符串',
+        '必须是大于 0 且最多 18 位整数、4 位小数的十进制字符串',
       ],
     },
   )

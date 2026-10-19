@@ -27,17 +27,17 @@ function payload(overrides: Record<string, unknown> = {}) {
 }
 
 describe('calculateProductCreateFingerprint', () => {
-  it('uses the frozen product.create.v4 canonical field sequence', () => {
-    expect(PRODUCT_CREATE_FINGERPRINT_VERSION).toBe('product.create.v4')
+  it('uses the frozen product.create.v5 canonical field sequence', () => {
+    expect(PRODUCT_CREATE_FINGERPRINT_VERSION).toBe('product.create.v5')
     expect(calculateProductCreateFingerprint(ACTOR_ID, payload()))
-      .toBe('427bdd177724752879b06040d4ec6a4b346e55cffa8db01d7282f839216c7fd4')
+      .toBe('b82f740f3ba74259d1cb9c9e4faa1ec8f3a5f3cc8830405ce6d116f170399239')
   })
 
   it('treats equivalent decimal scale and NFC text as the same payload', () => {
     const canonical = calculateProductCreateFingerprint(ACTOR_ID, payload())
     const equivalent = calculateProductCreateFingerprint(ACTOR_ID, payload({
       name: 'Café',
-      twdSalePrice: { amount: '1.0000', currency: 'TWD' },
+      twdSalePrice: { amount: '1.00', currency: 'TWD' },
       attributes: [
         { title: 'Color', value: 'Réd' },
         { title: 'Color', value: 'Blue' },

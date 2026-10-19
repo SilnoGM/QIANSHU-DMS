@@ -153,7 +153,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
    * 夹具默认订单总额 10 元远小于账单代收，这里统一放宽成大额（金流费用随之变大，
    * 相关断言按 1,000,000 ÷ 5.2 × 0.007 = 1346.15 更新）；超收/收齐等边界由专项用例另行构造。
    */
-  const WIDE_SALES_TOTAL = '1000000.0000'
+  const WIDE_SALES_TOTAL = '1000000.00'
   async function widenSalesTotal(salesOrderId: string, total = WIDE_SALES_TOTAL): Promise<void> {
     // 订单小计与有效行合计是一对延迟约束触发器：行与订单必须同事务改写，提交时才校验；
     // 本 spec 的销售单都是单行订单，直接把唯一有效行改到同一总额。
@@ -164,7 +164,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       // 行总额必须等于单价 × 数量（CHECK 约束）：改总额时同步改单价。
       await tx.salesOrderLine.update({
         where: { id: line.id },
-        data: { lineTotalAmount: total, actualUnitPriceAmount: (Number(total) / line.quantity).toFixed(4) },
+        data: { lineTotalAmount: total, actualUnitPriceAmount: (Number(total) / line.quantity).toFixed(2) },
       })
       await tx.salesOrder.update({
         where: { id: salesOrderId },
@@ -193,10 +193,10 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       codAmountTwd: line.codAmountTwd?.toFixed(2) ?? null,
       ntdSurchargeAmountTwd: line.ntdSurchargeAmountTwd?.toFixed(2) ?? null,
       payableAmountCny: line.payableAmountCny?.toFixed(2) ?? null,
-      salesAmount: WIDE_SALES_TOTAL, rate: '5.200000000000', paymentFeeRate: PAYMENT_FEE_RATE,
+      salesAmount: WIDE_SALES_TOTAL, rate: '5.2000', paymentFeeRate: PAYMENT_FEE_RATE,
     })
     await browser.post(`${BASE}/${batchId}/settlements`).set(packagingHeaders).set('Idempotency-Key', randomUUID())
-      .send({ batchLineId: member.id, rateSource: 'SYSTEM', rate: '5.200000000000', amounts }).expect(201)
+      .send({ batchLineId: member.id, rateSource: 'SYSTEM', rate: '5.2000', amounts }).expect(201)
   }
 
   /** 把所有未核对的成员补齐结算：完成批次要求全部已核对。 */
@@ -308,7 +308,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     }
 
     // 完成批次要逐行入账，先备好系统汇率；销售出单人的资金账户与比例必须先存在，否则完成会被阻断。
-    await setSystemRate('5.200000000000')
+    await setSystemRate('5.2000')
     await h.setupFunds('30')
   })
   afterAll(async () => { await h?.dispose() })
@@ -554,13 +554,13 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       expect(['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED', 'SHIPPED', 'SIGNED']).toContain(member.purchaseOrder?.fulfillmentStatus)
       // 销售来源：四位小数订单币种金额，字段口径与销售域一致。
       expect(member.salesOrder).toMatchObject({ customerName: '包装客户', currencyCode: 'TWD', orderStatus: 'CONFIRMED' })
-      expect(member.salesOrder?.agreedTotalAmount).toMatch(/^\d+\.\d{4}$/u)
+      expect(member.salesOrder?.agreedTotalAmount).toMatch(/^\d+\.\d{2}$/u)
       expect(member.salesOrder?.customerPhone).toBe('12345678')
       expect(member.salesOrder?.customerFullAddress).toBe('国家省份城市测试地址')
-      expect(member.salesOrder?.depositDueAmount).toBe('0.0000')
+      expect(member.salesOrder?.depositDueAmount).toBe('0.00')
       expect(member.salesOrder?.balanceDueAmount).toBe(WIDE_SALES_TOTAL)
       // 夹具没有收款记录：实际已收款为 0，实际待收款等于约定总额（与销售域同一处累加口径）。
-      expect(member.salesOrder?.receivedAmount).toBe('0.0000')
+      expect(member.salesOrder?.receivedAmount).toBe('0.00')
       expect(member.salesOrder?.outstandingAmount).toBe(WIDE_SALES_TOTAL)
       expect(member.salesOrder?.paymentStatus).toBe('UNPAID')
       expect(member.salesOrder?.issuerDisplayName).toBeTruthy()
@@ -755,7 +755,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     }
     /** 夹具里每柜一个销售订单；beforeAll 统一把它们放宽为 WIDE_SALES_TOTAL（TWD），覆盖账单代收。 */
     const payload = (batchLineId: string, amounts: Record<string, string | null>) => ({
-      batchLineId, rateSource: 'SYSTEM', rate: '5.200000000000', amounts,
+      batchLineId, rateSource: 'SYSTEM', rate: '5.2000', amounts,
     })
     /** 结算金额由调用方给定（用于制造不一致场景）；金流费用随汇率变化，按服务端同一口径复算。 */
     const fullPayload = (batchLineId: string, rateSource: string, rate: string, settlementAmountCny: string) => {
@@ -773,7 +773,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     }
 
     it('写入结算结果：标记成员行与账单行、写审计事件，金额按「金额 + 币种」成对落库', async () => {
-      await setSystemRate('5.200000000000')
+      await setSystemRate('5.2000')
       const batchId = await pendingBatch()
       const member = await memberByCod(batchId, '129000.00')
       const response = await settle(batchId, randomUUID(), payload(member.id, {
@@ -781,7 +781,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
         settlementAmountCny: '19098.85', salesAmount: WIDE_SALES_TOTAL, paymentFeeAmountCny: '1346.15',
       })).expect(201)
       expect(response.body).toMatchObject({
-        batchLineId: member.id, status: 'ACTIVE', rateSource: 'SYSTEM', paymentFeeRate: '0.007000000000',
+        batchLineId: member.id, status: 'ACTIVE', rateSource: 'SYSTEM', paymentFeeRate: '0.007',
       })
 
       const row = await h.prisma.slhReconciliationSettlement.findFirstOrThrow({ where: { batchLineId: member.id } })
@@ -796,7 +796,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       expect(row.codAmountTwd?.toFixed(2)).toBe('129000.00')
       expect(row.settlementAmountCny?.toFixed(2)).toBe('19098.85')
       expect(row.paymentFeeAmountCny?.toFixed(2)).toBe('1346.15')
-      expect(row.foreignUnitsPerCny.toFixed(12)).toBe('5.200000000000')
+      expect(row.foreignUnitsPerCny.toFixed(4)).toBe('5.2000')
 
       // 首次核对才写留痕：成员行与账单行都要被标记，批次进度随之变化，切换器读到的行状态变成已对账。
       const memberRow = await h.prisma.slhReconciliationBatchLine.findUniqueOrThrow({ where: { id: member.id }, select: { reconciledAt: true, reconciledById: true } })
@@ -827,7 +827,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       expect(errorCode(mismatch)).toBe('SLH_RECON_SETTLEMENT_MISMATCH')
       expect((mismatch.body as { message: string }).message).toContain('结算金额')
 
-      const rateChanged = await settle(batchId, randomUUID(), fullPayload(member.id, 'SYSTEM', '5.100000000000', '19098.85')).expect(409)
+      const rateChanged = await settle(batchId, randomUUID(), fullPayload(member.id, 'SYSTEM', '5.1000', '19098.85')).expect(409)
       expect(errorCode(rateChanged)).toBe('SLH_RECON_SETTLEMENT_RATE_CHANGED')
 
       // 台币汇率行被删掉（没有可用汇率）：来源不可用必须失败关闭。
@@ -838,7 +838,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
         settlementAmountCny: '19098.85', salesAmount: WIDE_SALES_TOTAL, paymentFeeAmountCny: '1346.15',
       })).expect(409)
       expect(errorCode(unavailable)).toBe('SLH_RECON_SETTLEMENT_RATE_UNAVAILABLE')
-      await setSystemRate('5.200000000000')
+      await setSystemRate('5.2000')
 
       expect(await h.prisma.slhReconciliationSettlement.count()).toBe(before)
     })
@@ -856,7 +856,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
 
       // 换汇率来源 ⇒ 口径变了：旧记录失效、新记录有效，同一行始终只剩一条有效。
       const key = randomUUID()
-      const changed = await settle(batchId, key, fullPayload(member.id, 'EMBEDDED', '4.800000000000', '21070.00')).expect(201)
+      const changed = await settle(batchId, key, fullPayload(member.id, 'EMBEDDED', '4.8000', '21070.00')).expect(201)
       expect(changed.body).toMatchObject({ status: 'ACTIVE', rateSource: 'EMBEDDED' })
       const rows = await h.prisma.slhReconciliationSettlement.findMany({
         where: { batchLineId: member.id }, orderBy: { createdAt: 'asc' }, select: { id: true, status: true },
@@ -866,11 +866,11 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       expect(rows[1]?.id).toBe((changed.body as { id: string }).id)
 
       // 同键重放：返回同一条记录且不新增行；同键换载荷被拒。
-      const replay = await settle(batchId, key, fullPayload(member.id, 'EMBEDDED', '4.800000000000', '21070.00')).expect(201)
+      const replay = await settle(batchId, key, fullPayload(member.id, 'EMBEDDED', '4.8000', '21070.00')).expect(201)
       expect((replay.body as { id: string }).id).toBe((changed.body as { id: string }).id)
       expect(await h.prisma.slhReconciliationSettlement.count({ where: { batchLineId: member.id } })).toBe(2)
 
-      const reused = await settle(batchId, key, fullPayload(member.id, 'SYSTEM', '5.200000000000', '19098.85')).expect(409)
+      const reused = await settle(batchId, key, fullPayload(member.id, 'SYSTEM', '5.2000', '19098.85')).expect(409)
       expect(errorCode(reused)).toBe('SLH_RECON_SETTLEMENT_KEY_REUSED')
 
       // 重新结算不刷新「首次核对时刻」：留痕仍是第一次写入时的值。
@@ -899,8 +899,8 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       expect(page.items.map(item => item.status)).toEqual(['ACTIVE', 'SUPERSEDED'])
       expect(page.items.map(item => item.rateSource)).toEqual(['EMBEDDED', 'SYSTEM'])
       expect(page.items[0]).toMatchObject({
-        foreignUnitsPerCny: '4.800000000000',
-        paymentFeeRate: '0.007000000000',
+        foreignUnitsPerCny: '4.8000',
+        paymentFeeRate: '0.007',
         settlementAmountCny: '21070.00',
         settlementCurrency: 'CNY',
         codAmountTwd: '129000.00',
@@ -928,7 +928,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     it('权限、批次归属与完成状态都在写库前把关', async () => {
       const batchId = await pendingBatch()
       const member = await memberByCod(batchId, '129000.00')
-      const body = fullPayload(member.id, 'SYSTEM', '5.200000000000', '19098.85')
+      const body = fullPayload(member.id, 'SYSTEM', '5.2000', '19098.85')
 
       // 缺少 reconcile 权限：403；批次或成员不存在：404；非法幂等键：422。
       expect((await outsider.post(`${BASE}/${batchId}/settlements`).set(packagingHeaders).set('Idempotency-Key', randomUUID()).send(body)).status).toBe(403)
@@ -1028,8 +1028,8 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       const prepared = await preparedBatch('01', {
         issuerUserId: stranded.user.id, payableAmountCny: '4555', codAmountTwd: '129000',
       })
-      await setSystemRate('5.200000000000')
-      await settleWith(prepared.batchId, prepared.memberId, '5.200000000000', {
+      await setSystemRate('5.2000')
+      await settleWith(prepared.batchId, prepared.memberId, '5.2000', {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
       })
       const batchesBefore = await h.prisma.fundPostingBatch.count()
@@ -1053,9 +1053,9 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
 
     it('金流费用入账：绑定结算记录与批次编号，结算金额为 0 时跳过该笔', async () => {
       const prepared = await preparedBatch('02', { payableAmountCny: '10000', codAmountTwd: '52000', surchargeNtd: '0' })
-      await setSystemRate('5.200000000000')
+      await setSystemRate('5.2000')
       // (52000 − 0) ÷ 5.2 − 10000 = 0.00：结算金额为零，这一笔跳过，只剩金流费用。
-      const settlement = await settleWith(prepared.batchId, prepared.memberId, '5.200000000000', {
+      const settlement = await settleWith(prepared.batchId, prepared.memberId, '5.2000', {
         codAmountTwd: '52000.00', ntdSurchargeAmountTwd: '0.00', payableAmountCny: '10000.00',
       })
       const row = await h.prisma.slhReconciliationSettlement.findUniqueOrThrow({ where: { id: settlement.id } })
@@ -1091,8 +1091,8 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
 
     it('结算为正时用户与公司按比例分账并贷记，结算为负时两腿都出账', async () => {
       const prepared = await preparedBatch('03', { payableAmountCny: '4555', codAmountTwd: '129000' })
-      await setSystemRate('5.200000000000')
-      const settlement = await settleWith(prepared.batchId, prepared.memberId, '5.200000000000', {
+      await setSystemRate('5.2000')
+      const settlement = await settleWith(prepared.batchId, prepared.memberId, '5.2000', {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
       })
       const row = await h.prisma.slhReconciliationSettlement.findUniqueOrThrow({ where: { id: settlement.id } })
@@ -1136,7 +1136,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
 
       // 负结算金额：两腿都出账，金额取绝对值。
       const negative = await preparedBatch('04', { payableAmountCny: '60000', codAmountTwd: '129000' })
-      const negativeSettlement = await settleWith(negative.batchId, negative.memberId, '5.200000000000', {
+      const negativeSettlement = await settleWith(negative.batchId, negative.memberId, '5.2000', {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '60000.00',
       })
       const negativeRow = await h.prisma.slhReconciliationSettlement.findUniqueOrThrow({ where: { id: negativeSettlement.id } })
@@ -1154,8 +1154,8 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     it('金流费用为零时只入结算，金额全零的核对不产生流水', async () => {
       const prepared = await preparedBatch('05', { payableAmountCny: '4555', codAmountTwd: '129000' })
       // 汇率放大后 1,000,000 ÷ 2,000,000 × 0.007 量化为 0.00：金流费用为零，这一笔跳过。
-      await setSystemRate('2000000.000000000000')
-      const settlement = await settleWith(prepared.batchId, prepared.memberId, '2000000.000000000000', {
+      await setSystemRate('2000000.00')
+      const settlement = await settleWith(prepared.batchId, prepared.memberId, '2000000.00', {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
       })
       const row = await h.prisma.slhReconciliationSettlement.findUniqueOrThrow({ where: { id: settlement.id } })
@@ -1169,7 +1169,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
 
       // 金额全为零的核对（本行不涉及代收也不涉及应付，汇率下费用也量化为 0.00）：完成不产生任何资金流水。
       const zeroAmount = await preparedBatch('06', { payableAmountCny: null, codAmountTwd: null })
-      await settleWith(zeroAmount.batchId, zeroAmount.memberId, '2000000.000000000000', {
+      await settleWith(zeroAmount.batchId, zeroAmount.memberId, '2000000.00', {
         codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null,
       })
       const before = await h.prisma.fundPostingBatch.count()
@@ -1180,18 +1180,18 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       })
       expect((audit.metadata as { fundPostingBatchId: string | null, fundPostingCount: number }))
         .toMatchObject({ fundPostingBatchId: null, fundPostingCount: 0 })
-      await setSystemRate('5.200000000000')
+      await setSystemRate('5.2000')
     })
 
     it('完成回填代收货款收款：字段口径与来源固定，收齐且已签收时订单自动完成', async () => {
-      await setSystemRate('5.200000000000')
+      await setSystemRate('5.2000')
       const prepared = await preparedBatch('07', { payableAmountCny: '4555', codAmountTwd: '129000' })
-      const settlement = await settleWith(prepared.batchId, prepared.memberId, '5.200000000000', {
+      const settlement = await settleWith(prepared.batchId, prepared.memberId, '5.2000', {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
       })
       const salesOrderId = await salesOrderIdOfMember(prepared.memberId)
       // 订单总额压到恰好等于本行账单代收：回填后应「已付清」；履约置为已签收，验证自动推进。
-      await widenSalesTotal(salesOrderId, '129000.0000')
+      await widenSalesTotal(salesOrderId, '129000.00')
       await h.prisma.salesOrder.update({ where: { id: salesOrderId }, data: { fulfillmentStatus: 'SIGNED' } })
 
       await browser.post(`${BASE}/${prepared.batchId}/complete`).set(packagingHeaders).send({}).expect(200)
@@ -1213,7 +1213,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
         // 回填不经汇率（台币 1:1），也没有作废入口。
         voidedAt: null, voidReason: null, exchangeRateId: null, foreignUnitsPerCnySnapshot: null,
       })
-      expect(payment.amount.toFixed(4)).toBe('129000.0000')
+      expect(payment.amount.toFixed(2)).toBe('129000.00')
       expect(payment.receivedAt.toISOString()).toBe(settlementRow.createdAt.toISOString())
 
       // 付款状态由回填驱动：收齐即已付清；订单被本批次覆盖且没有其它进行中的批次，
@@ -1301,7 +1301,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     })
 
     it('多批次覆盖：仍有批次进行中时订单停留在待对账，全部结束后才自动完成', async () => {
-      await setSystemRate('5.200000000000')
+      await setSystemRate('5.2000')
       // 一条货件装柜时拆成四个唛头：甲行承载代收货款、乙丙两行不涉及金额、
       // 丁行留到订单完成之后再建批次，验证「已完成订单仍可继续对账」。
       const date = '2026-03-16'
@@ -1311,7 +1311,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       if (shipment.source === null) throw new Error('sales linked shipment must create a sales order')
       const salesOrderId = shipment.source.id
       // 订单总额压到恰好等于甲账单代收：甲批次完成后回填即可收齐。
-      await widenSalesTotal(salesOrderId, '129000.0000')
+      await widenSalesTotal(salesOrderId, '129000.00')
       await h.prisma.salesOrder.update({ where: { id: salesOrderId }, data: { fulfillmentStatus: 'SIGNED' } })
       await createContainer(containerBatchName, date, marks.map(mark => ({ mark, shipmentId: shipment.part.id })))
       const codRow = {
@@ -1352,7 +1352,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
         amounts: { codAmountTwd: string | null, ntdSurchargeAmountTwd: string | null, payableAmountCny: string | null },
       ) => {
         const resolved = resolveSettlementAmounts({
-          ...amounts, salesAmount: '129000.0000', rate, paymentFeeRate: PAYMENT_FEE_RATE,
+          ...amounts, salesAmount: '129000.00', rate, paymentFeeRate: PAYMENT_FEE_RATE,
         })
         await browser.post(`${BASE}/${batchId}/settlements`).set(packagingHeaders).set('Idempotency-Key', randomUUID())
           .send({ batchLineId: memberId, rateSource: 'SYSTEM', rate, amounts: resolved }).expect(201)
@@ -1360,7 +1360,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       const settlementOfPlainMember = (batchId: string, memberId: string) => settleFromOrderTotal(
         batchId,
         memberId,
-        '5.200000000000',
+        '5.2000',
         // 不涉及任何金额：结算金额为 0，费用由「按销售单只入一次」的去重挡住。
         { codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null },
       )
@@ -1369,7 +1369,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       })
 
       // 甲批次先核对并完成：代收回填让订单收齐，但乙丙批次仍在进行中 → 按口径 R3 停在待对账。
-      await settleFromOrderTotal(firstBatch.id, firstMember.id, '5.200000000000', {
+      await settleFromOrderTotal(firstBatch.id, firstMember.id, '5.2000', {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
       })
       await browser.post(`${BASE}/${firstBatch.id}/complete`).set(packagingHeaders).send({}).expect(200)
@@ -1418,16 +1418,16 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     })
 
     it('代收超收：相关行退回未核对、结算作废并拒绝完成，修复后可重新核对完成', async () => {
-      await setSystemRate('5.200000000000')
+      await setSystemRate('5.2000')
       const prepared = await preparedBatch('08', { payableAmountCny: '4555', codAmountTwd: '129000' })
-      const settlement = await settleWith(prepared.batchId, prepared.memberId, '5.200000000000', {
+      const settlement = await settleWith(prepared.batchId, prepared.memberId, '5.2000', {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
       })
       const salesOrderId = await salesOrderIdOfMember(prepared.memberId)
       const memberRow = await h.prisma.slhReconciliationBatchLine.findUniqueOrThrow({ where: { id: prepared.memberId }, select: { lineId: true } })
 
       // 订单总额压回夹具原值（10 元）：账单代收远超实际待收款＝超收，完成必须退回。
-      await widenSalesTotal(salesOrderId, '10.0000')
+      await widenSalesTotal(salesOrderId, '10.00')
       const rejected = await browser.post(`${BASE}/${prepared.batchId}/complete`).set(packagingHeaders).send({}).expect(409)
       expect(errorCode(rejected)).toBe('SLH_RECON_SETTLEMENT_COD_OVERCOLLECTED')
       const message = (rejected.body as { message: string }).message
@@ -1460,29 +1460,29 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     })
 
     it('少收不拦截：回填只写实收，订单停留部分付款并保留未收余额', async () => {
-      await setSystemRate('5.200000000000')
+      await setSystemRate('5.2000')
       const prepared = await preparedBatch('09', { payableAmountCny: '4555', codAmountTwd: '129000' })
-      await settleWith(prepared.batchId, prepared.memberId, '5.200000000000', {
+      await settleWith(prepared.batchId, prepared.memberId, '5.2000', {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
       })
       const salesOrderId = await salesOrderIdOfMember(prepared.memberId)
       // 总额比账单代收多 2000：回填只写实收，差额留给直付渠道追收。
-      await widenSalesTotal(salesOrderId, '131000.0000')
+      await widenSalesTotal(salesOrderId, '131000.00')
       await browser.post(`${BASE}/${prepared.batchId}/complete`).set(packagingHeaders).send({}).expect(200)
       expect((await h.prisma.salesOrderPayment.findFirstOrThrow({
         where: { salesOrderId, origin: 'COD_SETTLEMENT' }, select: { amount: true },
-      })).amount.toFixed(4)).toBe('129000.0000')
+      })).amount.toFixed(2)).toBe('129000.00')
       expect(await h.prisma.salesOrder.findUniqueOrThrow({
         where: { id: salesOrderId }, select: { paymentStatus: true, orderStatus: true },
       })).toMatchObject({ paymentStatus: 'PARTIALLY_PAID', orderStatus: 'CONFIRMED' })
       const detail = await salesOrderDetail(salesOrderId) as {
         amounts: { receivedAmount: string, outstandingAmount: string }
       }
-      expect(detail).toMatchObject({ amounts: { receivedAmount: '129000.0000', outstandingAmount: '2000.0000' } })
+      expect(detail).toMatchObject({ amounts: { receivedAmount: '129000.00', outstandingAmount: '2000.00' } })
     })
 
     it('完成门禁：整批未全部核对时拒绝完成，补齐后可完成', async () => {
-      await setSystemRate('5.200000000000')
+      await setSystemRate('5.2000')
       // 柜次身份是「入仓仓库 + 装柜日期 + 当日序号」：日期在用例之间必须互不重复。
       const date = '2026-03-12'
       const containerBatchName = '0312-01柜'
@@ -1515,9 +1515,9 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     })
 
     it('并发完成串行化：同一批次的两次完成只成功一次，回填只有一笔', async () => {
-      await setSystemRate('5.200000000000')
+      await setSystemRate('5.2000')
       const prepared = await preparedBatch('10', { payableAmountCny: '4555', codAmountTwd: '129000' })
-      await settleWith(prepared.batchId, prepared.memberId, '5.200000000000', {
+      await settleWith(prepared.batchId, prepared.memberId, '5.2000', {
         codAmountTwd: '129000.00', ntdSurchargeAmountTwd: '6000.00', payableAmountCny: '4555.00',
       })
       const responses = await Promise.all([
@@ -1633,10 +1633,10 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     async function settleLine(batchId: string, memberId: string, payable: number): Promise<{ id: string }> {
       const amounts = resolveSettlementAmounts({
         codAmountTwd: '52000.00', ntdSurchargeAmountTwd: '0.00', payableAmountCny: `${payable}.00`,
-        salesAmount: WIDE_SALES_TOTAL, rate: '5.200000000000', paymentFeeRate: PAYMENT_FEE_RATE,
+        salesAmount: WIDE_SALES_TOTAL, rate: '5.2000', paymentFeeRate: PAYMENT_FEE_RATE,
       })
       const response = await browser.post(`${BASE}/${batchId}/settlements`).set(packagingHeaders).set('Idempotency-Key', randomUUID())
-        .send({ batchLineId: memberId, rateSource: 'SYSTEM', rate: '5.200000000000', amounts }).expect(201)
+        .send({ batchLineId: memberId, rateSource: 'SYSTEM', rate: '5.2000', amounts }).expect(201)
       return response.body as { id: string }
     }
     const feePostings = (salesOrderId: string) => h.prisma.fundPostingBatch.findMany({
@@ -1646,7 +1646,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
 
     it('同一销售单的两行只入一笔费用，费用身份挂在销售单上；跨批次也不重复', async () => {
       const { firstBillId, secondBillId } = await splitShipmentBills()
-      await setSystemRate('5.200000000000')
+      await setSystemRate('5.2000')
 
       // 第一轮：甲账单的两行一起核对并完成。
       const firstBatch = (await createBatch(firstBillId, randomUUID()).expect(201)).body as BatchDetail

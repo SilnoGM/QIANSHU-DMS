@@ -83,7 +83,7 @@ function setup() {
         name: '标准产品',
         status: 'ACTIVE',
         attributes: [{ title: '颜色', value: '红' }],
-        twdSalePriceAmount: { toFixed: () => '60.0000' },
+        twdSalePriceAmount: { toFixed: () => '60.00' },
         myrSalePriceAmount: null,
       }]),
     },
@@ -183,10 +183,10 @@ describe('SalesOrderCommandService', () => {
         customerAddressDetail: '苓雅区中正一路100号',
         customerFullAddressSnapshot:
           '中国台湾台湾高雄市苓雅区中正一路100号',
-        lineSubtotalAmount: '100.0000',
-        agreedTotalAmount: '100.0000',
-        depositDueAmount: '30.0000',
-        balanceDueAmount: '70.0000',
+        lineSubtotalAmount: '100.00',
+        agreedTotalAmount: '100.00',
+        depositDueAmount: '30.00',
+        balanceDueAmount: '70.00',
         orderStatus: 'CONFIRMED',
         paymentStatus: 'UNPAID',
       },
@@ -199,9 +199,9 @@ describe('SalesOrderCommandService', () => {
         lineType: 'CATALOG',
         productNoSnapshot: 'P-001',
         productNameSnapshot: '标准产品',
-        standardUnitPriceAmount: '60.0000',
-        actualUnitPriceAmount: '50.0000',
-        lineTotalAmount: '100.0000',
+        standardUnitPriceAmount: '60.00',
+        actualUnitPriceAmount: '50.00',
+        lineTotalAmount: '100.00',
       }] })
     expect(fixture.media.activate).toHaveBeenCalledWith(
       fixture.transaction,
@@ -240,7 +240,7 @@ describe('SalesOrderCommandService', () => {
       status: 'ACTIVE',
       attributes: [],
       twdSalePriceAmount: null,
-      myrSalePriceAmount: { toFixed: () => '20.0000' },
+      myrSalePriceAmount: { toFixed: () => '20.00' },
     }])
 
     await expect(fixture.service.create({
@@ -261,7 +261,7 @@ describe('SalesOrderCommandService', () => {
       data: [expect.objectContaining({
         productNameSnapshot: '无台币标准价产品',
         standardUnitPriceAmount: null,
-        actualUnitPriceAmount: '50.0000',
+        actualUnitPriceAmount: '50.00',
       })],
     })
   })

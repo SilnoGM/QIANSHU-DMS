@@ -99,11 +99,11 @@ describe('container maintenance with isolated PostgreSQL', () => {
     const url = `/api/container-batches/${parent.id}/items/${row.id}`
     const input = { expectedVersion: 2, itemExpectedVersion: 1, shipmentId: shipment.part.id, goodsName: '履带', packageCount: 10, lengthCm: '128', widthCm: '19', heightCm: '15', grossWeightKg: '180', codAmountTwd: '200.01', recipientName: '客户', recipientPhone: '0900123456', recipientAddress: '地址' }
     const result = (await patch(url, input).expect(200)).body as ContainerLoadingItemDto
-    expect(result).toMatchObject({ volumeCai: '12.88', chargeableVolumeCai: 13, grossWeightKg: '180.000', codAmountTwd: '200.01', version: 2 })
+    expect(result).toMatchObject({ volumeCai: '12.88', chargeableVolumeCai: 13, grossWeightKg: '180', codAmountTwd: '200.01', version: 2 })
     await patch(url, input).expect(409)
     await patch(`/api/container-batches/${parent.id}/items/${randomUUID()}`, input).expect(404)
     const detail = (await browser.get(`/api/container-batches/${parent.id}`).expect(200)).body as ContainerBatchDto
-    expect(detail).toMatchObject({ version: 3, itemCount: 1, shipmentCount: 1, packageCountTotal: 10, grossWeightKgTotal: '180.000', volumeCaiTotal: '12.88', chargeableVolumeCaiTotal: 13 })
+    expect(detail).toMatchObject({ version: 3, itemCount: 1, shipmentCount: 1, packageCountTotal: 10, grossWeightKgTotal: '180', volumeCaiTotal: '12.88', chargeableVolumeCaiTotal: 13 })
     const authorized = (await browser.get(`/api/container-batches/${parent.id}/items`).expect(200)).body as { items: ContainerLoadingItemDto[] }
     expect(authorized.items[0]).toMatchObject({ shipmentNo: before.shipmentNo, shippingMark: before.shippingMarkText, purchaseOrderId: shipment.order.id, salesOrderId: expect.any(String) as unknown })
     const restricted = (await reader.get(`/api/container-batches/${parent.id}/items`).expect(200)).body as { items: ContainerLoadingItemDto[] }

@@ -66,7 +66,7 @@ const existingCatalogLines = computed(() => props.modelValue.flatMap(line => (
     : []
 )))
 const precision = computed(() => (
-  props.currencies.find(item => item.code === props.currency)?.minorUnit ?? 4
+  props.currencies.find(item => item.code === props.currency)?.minorUnit ?? 2
 ))
 const totals = computed(() => calculateOrderProductLineTotals(
   props.modelValue,

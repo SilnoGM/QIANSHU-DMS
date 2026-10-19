@@ -17,7 +17,7 @@ function normalizePackagingAmount(value: unknown) {
   if (typeof value !== 'string' || !/^(0|[1-9]\d{0,25})(\.\d{1,2})?$/u.test(value)) return packagingCostFailure('VALIDATION_FAILED', '金额必须为最多两位小数的人民币金额')
   const decimal = new Prisma.Decimal(value)
   if (decimal.lte(0)) return packagingCostFailure('VALIDATION_FAILED', '金额必须大于零')
-  return decimal.toFixed(4)
+  return decimal.toFixed(2)
 }
 export function normalizePackagingCostAmountUpdate(raw: unknown) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return packagingCostFailure('VALIDATION_FAILED', '金额修改内容无效')

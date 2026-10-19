@@ -126,7 +126,7 @@ describe('invoice request schema constraints with isolated PostgreSQL', () => {
     await client.query('BEGIN')
     try {
       const actorUserId = await insertUser(client, 'lifecycle')
-      const { requestId, invoiceNo } = await insertInvoiceRequest(client, { actorUserId })
+      const { requestId, invoiceNo } = await insertInvoiceRequest(client, { actorUserId, withDefaultLine: false })
       await insertInvoiceRequestLine(client, { lineNo: 1, requestId, unitPrice: 90_000 })
       await insertInvoiceRequestLine(client, { lineNo: 2, requestId, unitPrice: 180_000 })
 

@@ -110,7 +110,7 @@ const TAIWAN_TRADITIONAL_REGION_CHARACTER_PATTERN = /[國臺灣縣連門蘭雲�
 const MAXIMUM_AMOUNT_UNITS = 10n ** 30n - 1n
 const MAXIMUM_QUANTITY = 2_147_483_647
 const MAXIMUM_DOCUMENT_TITLE_LENGTH = 128
-const AMOUNT_SCALE = 10_000n
+const AMOUNT_SCALE = 100n
 const DEFAULT_FAILURE_MESSAGE = '销售订单保存失败，请检查后重试'
 const TAIWAN_COUNTRY_REGION_NAME = '中国台湾'
 const TAIWAN_TRADITIONAL_REGION_CHARACTER_FOLD: Readonly<Record<string, string>> = {
@@ -340,12 +340,12 @@ export function requiresSalesOrderCashOnDeliveryConfirmation(
 function amountUnits(value: string): bigint {
   const [integerPart = '0', fractionPart = ''] = value.split('.')
   return BigInt(integerPart) * AMOUNT_SCALE
-    + BigInt(fractionPart.padEnd(4, '0'))
+    + BigInt(fractionPart.padEnd(2, '0'))
 }
 
 function formatAmountUnits(value: bigint): string {
   const integerPart = value / AMOUNT_SCALE
-  const fractionPart = (value % AMOUNT_SCALE).toString().padStart(4, '0')
+  const fractionPart = (value % AMOUNT_SCALE).toString().padStart(2, '0')
   return `${integerPart}.${fractionPart}`
 }
 

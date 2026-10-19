@@ -15,7 +15,7 @@ function normalizedCommand(): NormalizedProductCreateCommand {
     status: ProductStatus.INACTIVE,
     supplierValue: 'SUPPLIER_A',
     twdSalePrice: {
-      amount: '1280.5000',
+      amount: '1280.50',
       currency: 'TWD',
       inputFractionDigits: 1,
     },
@@ -25,7 +25,7 @@ function normalizedCommand(): NormalizedProductCreateCommand {
       inputFractionDigits: 0,
     },
     purchaseCost: {
-      amount: '88.1250',
+      amount: '88.13',
       currency: 'CNY',
       inputFractionDigits: 3,
     },
@@ -68,11 +68,11 @@ describe('product command persistence', () => {
       status: ProductStatus.INACTIVE,
       supplierValue: 'SUPPLIER_A',
       sortOrder: 10,
-      twdSalePriceAmount: '1280.5000',
+      twdSalePriceAmount: '1280.50',
       twdSalePriceCurrency: 'TWD',
       myrSalePriceAmount: null,
       myrSalePriceCurrency: 'MYR',
-      purchaseCostAmount: '88.1250',
+      purchaseCostAmount: '88.13',
       purchaseCostCurrency: 'CNY',
       attributes: [
         { title: '容量', value: '30ml' },

@@ -62,7 +62,7 @@ export function mapSalesOrderProductOption(
     attributes: attributes(row.attributes),
     standardUnitPriceAmount: standardPrice === null
       ? null
-      : standardPrice.toFixed(4),
+      : standardPrice.toFixed(2),
     currencyCode,
     mainImage: mainImage === undefined
       ? null

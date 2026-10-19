@@ -143,8 +143,8 @@ function sameHash(left: Uint8Array, right: Uint8Array): boolean {
   return Buffer.from(left).equals(Buffer.from(right))
 }
 
-function decimalToFixed4(value: { toFixed(decimalPlaces: number): string }): string {
-  return value.toFixed(4)
+function decimalToFixed2(value: { toFixed(decimalPlaces: number): string }): string {
+  return value.toFixed(2)
 }
 
 function mapNumberingError(error: unknown): never {
@@ -212,7 +212,7 @@ function standardPriceFor(
   const value = currencyCode === 'TWD'
     ? row.twdSalePriceAmount
     : row.myrSalePriceAmount
-  return value === null ? null : decimalToFixed4(value)
+  return value === null ? null : decimalToFixed2(value)
 }
 
 @Injectable()

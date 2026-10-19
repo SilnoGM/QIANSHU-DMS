@@ -22,12 +22,13 @@ describe('海运计算的精确值与缺值边界', () => {
       .toBe('-0.02')
   })
 
-  it('向上取整不受两位小数记录舍入和浮点精度影响', () => {
-    expect(calculateOceanVolume({ lengthCm: '28316.01', widthCm: '0.01', heightCm: '0.01', packageCount: 10000, reportedVolumeCai: null }).chargeableVolumeCai).toBe(2)
+  it('尺寸向上取整到整数厘米后再计算材积与计费材数', () => {
+    expect(calculateOceanVolume({ lengthCm: '28316.01', widthCm: '0.01', heightCm: '0.01', packageCount: 10000, reportedVolumeCai: null }))
+      .toEqual({ volumeCai: '10000.35', chargeableVolumeCai: 10001, volumeDifferenceCai: null })
     expect(calculateOceanVolume({ lengthCm: '28316000.01', widthCm: '0.01', heightCm: '0.01', packageCount: 10000, reportedVolumeCai: null }))
-      .toEqual({ volumeCai: '1000.00', chargeableVolumeCai: 1001, volumeDifferenceCai: null })
-    const input = { lengthCm: '0.01', widthCm: '0.01', heightCm: '0.01', packageCount: 1, reportedVolumeCai: null }
-    // 库表要求材积为正；真实体积虽大于零，两位小数记录量化为零时必须提前明确拒绝。
+      .toEqual({ volumeCai: '10000000.35', chargeableVolumeCai: 10000001, volumeDifferenceCai: null })
+    const input = { lengthCm: '0', widthCm: '0.01', heightCm: '0.01', packageCount: 1, reportedVolumeCai: null }
+    // 库表要求材积为正；零尺寸不能被向上取整后仍当作有效材积。
     expect(() => calculateOceanVolume(input)).toThrow(OceanCalculationError)
     try { calculateOceanVolume(input) } catch (error) {
       expect(error).toMatchObject({ code: 'OCEAN_CALCULATION_INVALID' })
@@ -37,7 +38,7 @@ describe('海运计算的精确值与缺值边界', () => {
 
   it('未知尺寸返回null，零尺寸和超量程不能冒充有效材积', () => {
     expect(calculateOceanVolume({ lengthCm: null, widthCm: '1', heightCm: '1', packageCount: 1, reportedVolumeCai: null }).volumeCai).toBeNull()
-    for (const lengthCm of ['0', '-1', '1.001', '1.0001', '1000000000000000', '1e3']) {
+    for (const lengthCm of ['0', '-1', '1000000000000000000', '1e3']) {
       expect(() => calculateOceanVolume({ lengthCm, widthCm: '1', heightCm: '1', packageCount: 1, reportedVolumeCai: null })).toThrow()
     }
     expect(() => calculateOceanVolume({ lengthCm: '999999999999999', widthCm: '999999999999999', heightCm: '999999999999999', packageCount: 1, reportedVolumeCai: null })).toThrow()
@@ -129,7 +130,7 @@ describe('海运计算的精确值与缺值边界', () => {
     expect(() => normalizeOceanDecimal('10000000000000000', 24, 8, 'volumeCai')).toThrow()
     expect(normalizeOceanDecimal('9999999999999999999999999999.99', 30, 2, 'amount')).toBe('9999999999999999999999999999.99')
     expect(() => normalizeOceanDecimal('10000000000000000000000000000', 30, 2, 'amount')).toThrow()
-    expect(calculateOceanCharge({ pricingBasis: 'WEIGHT', currencyCode: 'CNY', chargeNature: 'NORMAL', unitPriceAmount: '0.000001' }, { grossWeightKg: '0.001', chargeableVolumeCai: null }).amount).toBe('0.00')
+    expect(calculateOceanCharge({ pricingBasis: 'WEIGHT', currencyCode: 'CNY', chargeNature: 'NORMAL', unitPriceAmount: '0.000001' }, { grossWeightKg: '1', chargeableVolumeCai: null }).amount).toBe('0.00')
     const input = { lengthCm: '2147483647', widthCm: '28316', heightCm: '1', packageCount: 1, reportedVolumeCai: null }
     expect(calculateOceanVolume(input).chargeableVolumeCai).toBe(2147483647)
     expect(() => calculateOceanVolume({ ...input, lengthCm: '2147483647.01' })).toThrow()

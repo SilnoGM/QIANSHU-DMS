@@ -81,7 +81,7 @@ describe('currency and current exchange-rate database schema', () => {
       expect(exchangeRate).toMatch(new RegExp(`\\n\\s*${field}\\s`, 'u'))
     }
     expect(exchangeRate).toContain(
-      '@map("foreign_units_per_cny") @db.Decimal(30, 12)',
+      '@map("foreign_units_per_cny") @db.Decimal(30, 4)',
     )
     expect(exchangeRate).toContain(
       '@unique(map: "exchange_rates_currency_id_key")',

@@ -209,7 +209,7 @@ watch(
           autocomplete="off"
           class="w-full"
           inputmode="decimal"
-          maxlength="31"
+          maxlength="23"
           placeholder="请输入大于 0 的十进制比例"
           spellcheck="false"
           @clear="foreignUnitsPerCny = ''"

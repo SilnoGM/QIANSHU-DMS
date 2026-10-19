@@ -13,10 +13,11 @@ function summarize(items: SummaryItem[]) {
   const total = (field: 'grossWeightKg' | 'volumeCai', scale: number) => {
     if (items.some(item => item[field] == null)) return null
     const sum = items.reduce((value, item) => value + BigInt(item[field]!.toFixed(scale).replace('.', '')), 0n)
+    if (scale === 0) return sum.toString()
     const text = sum.toString().padStart(scale + 1, '0')
     return `${text.slice(0, -scale)}.${text.slice(-scale)}`
   }
-  return { itemCount: items.length, shipmentCount: new Set(items.flatMap(item => item.shipmentId ? [item.shipmentId] : [])).size, packageCountTotal: items.reduce((sum, item) => sum + item.packageCount, 0), grossWeightKgTotal: total('grossWeightKg', 3), volumeCaiTotal: total('volumeCai', 2), chargeableVolumeCaiTotal: items.some(item => item.chargeableVolumeCai == null) ? null : items.reduce((sum, item) => sum + item.chargeableVolumeCai!, 0) }
+  return { itemCount: items.length, shipmentCount: new Set(items.flatMap(item => item.shipmentId ? [item.shipmentId] : [])).size, packageCountTotal: items.reduce((sum, item) => sum + item.packageCount, 0), grossWeightKgTotal: total('grossWeightKg', 0), volumeCaiTotal: total('volumeCai', 2), chargeableVolumeCaiTotal: items.some(item => item.chargeableVolumeCai == null) ? null : items.reduce((sum, item) => sum + item.chargeableVolumeCai!, 0) }
 }
 export function serializeContainerBatch(row: ContainerBatch & { items?: SummaryItem[] }): ContainerBatchDto {
   return { ...summarize(row.items ?? []), createdById: row.createdById, id: row.id, containerBatchNo: row.containerBatchNo, containerBatchName: row.containerBatchName, loadingDate: row.loadingDate.toISOString().slice(0, 10), sequenceInDay: row.sequenceInDay, warehouseValue: row.warehouseValue, sourceFileId: row.sourceFileId, remark: row.remark, version: row.version, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }
@@ -28,8 +29,8 @@ export function serializeContainerItem(row: ContainerLoadingItem & ItemReference
     salesOrderId: canPurchase && canSales ? row.shipment?.purchaseOrder.salesOrder?.id ?? null : null, salesOrderNo: canPurchase && canSales ? row.shipment?.purchaseOrder.salesOrder?.orderNo ?? null : null,
     recipientName: row.recipientName ?? null, recipientPhone: row.recipientPhone ?? null, recipientAddress: row.recipientAddress ?? null, codAmountTwd: row.codAmountTwd?.toFixed(2) ?? null,
     id: row.id, containerBatchId: row.containerBatchId, shipmentId: row.shipmentId, lineNumber: row.lineNumber, oceanShippingMarkText: row.oceanShippingMarkText, warehouseReceiptReference: row.warehouseReceiptReference, goodsName: row.goodsName, packageCount: row.packageCount, packageUnit: row.packageUnit, remark: row.remark, version: row.version,
-    grossWeightKg: row.grossWeightKg?.toFixed(3) ?? null,
-    lengthCm: row.lengthCm?.toFixed(2) ?? null, widthCm: row.widthCm?.toFixed(2) ?? null, heightCm: row.heightCm?.toFixed(2) ?? null,
+    grossWeightKg: row.grossWeightKg?.toFixed(0) ?? null,
+    lengthCm: row.lengthCm?.toFixed(0) ?? null, widthCm: row.widthCm?.toFixed(0) ?? null, heightCm: row.heightCm?.toFixed(0) ?? null,
     volumeCai: row.volumeCai?.toFixed(2) ?? null, chargeableVolumeCai: row.chargeableVolumeCai,
     reportedVolumeCai: row.reportedVolumeCai?.toFixed(2) ?? null,
     // 差异也按定点数相减，避免 Decimal 默认有效位数截掉大来源值的小数位。

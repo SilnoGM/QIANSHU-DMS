@@ -81,7 +81,7 @@ export class SlhBillService {
   private async previewRate(): Promise<string | null> {
     const currency = await this.prisma.currency.findUnique({ where: { code: TWD }, select: { enabled: true, exchangeRate: { select: { foreignUnitsPerCny: true } } } })
     if (!currency?.enabled || !currency.exchangeRate) return null
-    return currency.exchangeRate.foreignUnitsPerCny.toFixed(12)
+    return currency.exchangeRate.foreignUnitsPerCny.toFixed(4)
   }
 
   private async findDuplicate(periodStart: string, periodEnd: string, containerBatchNames: string) {
@@ -199,7 +199,7 @@ export class SlhBillService {
           }
           else {
             const current = await this.systemRate(tx)
-            rate = { source: 'SYSTEM', snapshot: current.rate.toFixed(12), embedded: null, exchangeRateId: current.id, version: current.version, capturedAt }
+            rate = { source: 'SYSTEM', snapshot: current.rate.toFixed(4), embedded: null, exchangeRateId: current.id, version: current.version, capturedAt }
           }
         }
         const { fileName: attachedName } = await this.sourceFiles.attach(tx, normalized.mediaAssetId, context.actorUserId)

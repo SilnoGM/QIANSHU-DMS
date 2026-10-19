@@ -442,7 +442,7 @@
       "rateRow": "结算汇率",
       "payableTotal": "合计应付",
       "paymentFeeRate": "金流费率",
-      "paymentFeeRateValue": "{percent}%",
+      "paymentFeeRateValue": "{permille}‰",
       "settlementFormula": "(代收货款 − 杂费) ÷ 汇率 − 合计应付",
       "paymentFeeFormula": "销售金额 ÷ 结算汇率 × 费率",
       "settlementResult": "结算金额",
