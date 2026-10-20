@@ -240,8 +240,8 @@ const productColumns: QsGenericTableColumn<ProductListItemViewModel>[] = [
   {
     accessorKey: 'productNo',
     id: 'productNo',
-    fixed: 'left',
-    minWidth: 180,
+    width: 150,
+    minWidth: 140,
     title: '产品编号',
   },
   { accessorKey: 'name', id: 'name', minWidth: 180, title: '产品名称' },
@@ -1304,7 +1304,7 @@ onBeforeUnmount(() => {
             v-model:filters="filters"
             data-testid="product-list-table"
             :row-key="item => item.id"
-            :action-column="{ fixed: 'right', width: 360 }"
+            :action-column="{ fixed: 'right', width: 320 }"
             :addable="false"
             :columns="columns"
             :data="rows"

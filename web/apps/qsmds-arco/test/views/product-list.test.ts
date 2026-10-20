@@ -50,7 +50,13 @@ test('全部业务与审计列顺序固定，编号左固定且技术字段不�
   const actualColumnIds = [...columnBlock.matchAll(/\bid: '([^']+)'/gu)]
     .map(match => match[1])
   assert.deepEqual(actualColumnIds, expectedColumnIds)
-  assert.match(columnBlock, /id: 'productNo',[\s\S]*?fixed: 'left'/u)
+  const productNoBlock = columnBlock.match(
+    /id: 'productNo',[\s\S]*?title: '产品编号'/u,
+  )?.[0]
+  assert.ok(productNoBlock)
+  assert.doesNotMatch(productNoBlock, /fixed: 'left'/u)
+  assert.match(productNoBlock, /width: 150/u)
+  assert.match(source, /:action-column="\{ fixed: 'right', width: 320 \}"/u)
   assert.doesNotMatch(columnBlock, /\bid: '(?:id|version)'/u)
   assert.match(source, /<template #actions=/u)
 })
