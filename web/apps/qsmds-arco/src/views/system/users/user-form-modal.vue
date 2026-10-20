@@ -7,6 +7,7 @@ import type {
 } from '@/utils/user-profile'
 
 import managementApi from '@/api/modules/management'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsAvatarUploader from '@/components/business/QsAvatarUploader/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { useChinaMobileField } from '@/composables/app/use-china-mobile-field'
@@ -319,7 +320,7 @@ async function submit(): Promise<void> {
       : createsFundAccount
         ? '用户与资金账户已创建'
         : '用户创建成功'
-    useFaToast().success(successMessage)
+    useQsToast().success(successMessage)
     emits('success', responseData)
     // QsGenericModal 在提交态拒绝程序化关闭，必须先让提交锁完成一次渲染。
     loading.value = false
