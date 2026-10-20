@@ -2,6 +2,7 @@ import { Controller, Get, HttpStatus, Param } from '@nestjs/common'
 import { ApiProperty, ApiTags } from '@nestjs/swagger'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
+import { CurrentUserId, resolveDataScopeActor } from '../auth/decorators/current-user-id.decorator'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
 import { PurchaseOrderIdParamDto } from './dto/purchase-order-query.dto'
 import { PurchaseOrderReviewContextService } from './purchase-order-review-context.service'
@@ -29,7 +30,10 @@ export class PurchaseOrderReviewContextController {
       { status: 422, codes: ['VALIDATION_FAILED'] },
     ],
   })
-  read(@Param() params: PurchaseOrderIdParamDto): Promise<PurchaseOrderReviewContextDto> {
-    return this.reviewContext.read(params.purchaseOrderId)
+  read(
+    @Param() params: PurchaseOrderIdParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
+  ): Promise<PurchaseOrderReviewContextDto> {
+    return this.reviewContext.read(params.purchaseOrderId, actorUserId)
   }
 }

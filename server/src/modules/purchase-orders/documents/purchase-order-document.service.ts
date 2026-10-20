@@ -12,6 +12,8 @@ import {
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../../infrastructure/http/api.exception'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
+import type { DataScope } from '../../access-control/data-scope'
 import { AuditService } from '../../audit/audit.service'
 import {
   MediaAssetLifecycleError,
@@ -24,6 +26,7 @@ import { purchaseOrderRuleFailure, purchaseOrderValidationFailure } from '../dom
 import { deliverCancelledPurchaseOrderImage } from '../order-images/purchase-order-image-cancellation'
 import { isCanonicalPurchaseOrderActorId } from '../purchase-order-command.normalizer'
 import type { PurchaseOrderMutationContext } from '../purchase-order-mutation.service'
+import { purchaseOrderScopeWhere } from '../purchase-order-access'
 import {
   PurchaseOrderQueryService,
   type PurchaseOrderDetail,
@@ -116,6 +119,7 @@ export class PurchaseOrderDocumentService {
     private readonly query: PurchaseOrderQueryService,
     private readonly multipart: PurchaseOrderDocumentMultipartParser,
     private readonly retention: MediaAssetRetentionService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
   uploadTemporary(
@@ -184,13 +188,8 @@ export class PurchaseOrderDocumentService {
     try {
       await this.prisma.$transaction(async transaction => {
         await applyTransactionTimeouts(transaction)
-        const locks = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-          SELECT "id" FROM "purchase_orders"
-          WHERE "id" = CAST(${purchaseOrderId} AS uuid) FOR UPDATE
-        `)
-        if (locks.length !== 1) {
-          throw new ApiException(HttpStatus.NOT_FOUND, 'PURCHASE_ORDER_NOT_FOUND', '采购订单不存在')
-        }
+        const scope = await this.dataScope.resolveInTransaction(transaction, context.actorUserId)
+        await this.lockVisibleOrder(transaction, purchaseOrderId, scope, context.actorUserId)
         // 订单行锁串行化同单归档请求，部分唯一索引再防守绕过服务的并发写入。
         if (documentType === 'ORDER_ISSUANCE_VOUCHER') {
           const existing = await transaction.purchaseOrderDocument.findFirst({
@@ -237,7 +236,7 @@ export class PurchaseOrderDocumentService {
       }
       throw error
     }
-    return this.query.getById(purchaseOrderId)
+    return this.query.getById(purchaseOrderId, context.actorUserId)
   }
 
   async detach(
@@ -250,19 +249,8 @@ export class PurchaseOrderDocumentService {
     const documentId = requireUuid(rawDocumentId, 'documentId')
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
-      const locks = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-        SELECT "id"
-        FROM "purchase_orders"
-        WHERE "id" = CAST(${purchaseOrderId} AS uuid)
-        FOR UPDATE
-      `)
-      if (locks.length !== 1) {
-        throw new ApiException(
-          HttpStatus.NOT_FOUND,
-          'PURCHASE_ORDER_NOT_FOUND',
-          '采购订单不存在',
-        )
-      }
+      const scope = await this.dataScope.resolveInTransaction(transaction, context.actorUserId)
+      await this.lockVisibleOrder(transaction, purchaseOrderId, scope, context.actorUserId)
       const document = await transaction.purchaseOrderDocument.findFirst({
         where: { id: documentId, purchaseOrderId, detachedAt: null },
         select: { id: true, documentType: true, mediaAssetId: true, paymentId: true },
@@ -306,7 +294,36 @@ export class PurchaseOrderDocumentService {
         metadata: { purchaseOrderId, documentType: document.documentType },
       })
     })
-    return this.query.getById(purchaseOrderId)
+    return this.query.getById(purchaseOrderId, context.actorUserId)
+  }
+
+  /** 采购单行锁与数据范围同一次查询完成；不可见订单不会进入附件写入。 */
+  private async lockVisibleOrder(
+    transaction: Prisma.TransactionClient,
+    purchaseOrderId: string,
+    scope: DataScope,
+    actorUserId: string = resolveDataScopeActor(),
+  ): Promise<void> {
+    const scopeFilter = scope === 'SELF'
+      ? Prisma.sql`
+          AND EXISTS (
+            SELECT 1
+            FROM "sales_orders" AS scope_order
+            WHERE scope_order."id" = purchase_order."sales_order_id"
+              AND scope_order."issuer_user_id" = CAST(${actorUserId} AS uuid)
+          )
+        `
+      : Prisma.empty
+    const locks = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT purchase_order."id"
+      FROM "purchase_orders" AS purchase_order
+      WHERE purchase_order."id" = CAST(${purchaseOrderId} AS uuid)
+      ${scopeFilter}
+      FOR UPDATE
+    `)
+    if (locks.length !== 1) {
+      throw new ApiException(HttpStatus.NOT_FOUND, 'PURCHASE_ORDER_NOT_FOUND', '采购订单不存在')
+    }
   }
 
   async resolveContent(
@@ -314,11 +331,14 @@ export class PurchaseOrderDocumentService {
     documentId: string,
     ifNoneMatch: unknown,
     method: 'GET' | 'HEAD',
+    actorUserId: string = resolveDataScopeActor(),
   ): Promise<PurchaseOrderDocumentContentResponse> {
+    const scope = await this.dataScope.resolve(actorUserId)
     const row = await this.prisma.purchaseOrderDocument.findFirst({
       where: {
         id: requireUuid(documentId, 'documentId'),
         purchaseOrderId: requireUuid(purchaseOrderId, 'purchaseOrderId'),
+        purchaseOrder: { is: purchaseOrderScopeWhere(scope, actorUserId) },
         detachedAt: null,
         mediaAsset: { status: 'READY', deletedAt: null },
       },

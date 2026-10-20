@@ -229,7 +229,7 @@ describe('PurchaseOrder HTTP API contract', () => {
     })
     expect(list).toHaveBeenLastCalledWith({
       view: 'pending', page: 2, pageSize: 10,
-    })
+    }, expect.any(String))
   })
 
   it('rejects a missing list view and unknown create fields before services', async () => {
@@ -254,7 +254,7 @@ describe('PurchaseOrder HTTP API contract', () => {
     expect(responseBody(response)).toMatchObject({
       salesOrder: { id: SALES_ORDER_ID }, items: [],
     })
-    expect(salesOrderLines).toHaveBeenCalledWith(SALES_ORDER_ID, { productMode: 'CUSTOM' })
+    expect(salesOrderLines).toHaveBeenCalledWith(SALES_ORDER_ID, { productMode: 'CUSTOM' }, expect.any(String))
     expect(getById).not.toHaveBeenCalled()
   })
 
@@ -317,6 +317,7 @@ describe('PurchaseOrder HTTP API contract', () => {
       undefined,
       'GET',
       undefined,
+      expect.any(String),
     )
     expect(getById).not.toHaveBeenCalled()
   })
@@ -353,7 +354,7 @@ describe('PurchaseOrder HTTP API contract', () => {
       }),
       expect.objectContaining({ purchaseType: 'STOCK' }),
     )
-    expect(getById).toHaveBeenCalledWith(ORDER_ID)
+    expect(getById).toHaveBeenCalledWith(ORDER_ID, expect.any(String))
     const callsBefore = create.mock.calls.length
     for (const invalid of [
       { ...payload, expectedShippingMarkResolution: undefined },

@@ -5,6 +5,7 @@ import { getRequestId } from '../../../infrastructure/http/request-id.middleware
 import { ApiApplicationContract } from '../../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../../auth/auth-context'
+import { CurrentUserId, resolveDataScopeActor } from '../../auth/decorators/current-user-id.decorator'
 import { RequirePermissions } from '../../auth/decorators/auth.decorators'
 import { PurchaseOrderIdParamDto } from '../dto/purchase-order-query.dto'
 import { PurchaseOrderGenerateImageDraftRequestDto, PurchaseOrderImageDraftDto, PurchaseOrderImageDraftIdParamDto, PurchaseOrderImageDraftResponseDto } from './purchase-order-image-draft.dto'
@@ -35,8 +36,11 @@ export class PurchaseOrderImageDraftController {
     badRequest: true, resourceLocator: true, validation: true, privateNoStore: true,
     errors: [{ status: 403, codes: FORBIDDEN_CODES }, { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] }, { status: 422, codes: ['VALIDATION_FAILED'] }],
   })
-  getDraft(@Param() params: PurchaseOrderIdParamDto): Promise<PurchaseOrderImageDraftResponseDto> {
-    return this.images.getDraft(params.purchaseOrderId)
+  getDraft(
+    @Param() params: PurchaseOrderIdParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
+  ): Promise<PurchaseOrderImageDraftResponseDto> {
+    return this.images.getDraft(params.purchaseOrderId, actorUserId)
   }
 
   @Post(':purchaseOrderId/order-image-drafts')
@@ -66,8 +70,8 @@ export class PurchaseOrderImageDraftController {
     operationId: 'purchase_orders_head_image_draft_content', session: 'required', authorization: true,
     badRequest: true, resourceLocator: true, validation: true, privateNoStore: true, errors: CONTENT_ERRORS,
   })
-  async headContent(@Param() params: PurchaseOrderImageDraftIdParamDto, @Headers('if-none-match') ifNoneMatch: unknown, @Res({ passthrough: true }) response: ImageContentHttpResponse): Promise<void> {
-    const result = await this.images.resolveContent(params.purchaseOrderId, params.draftId, ifNoneMatch, 'HEAD')
+  async headContent(@Param() params: PurchaseOrderImageDraftIdParamDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor(), @Headers('if-none-match') ifNoneMatch: unknown, @Res({ passthrough: true }) response: ImageContentHttpResponse): Promise<void> {
+    const result = await this.images.resolveContent(params.purchaseOrderId, params.draftId, ifNoneMatch, 'HEAD', actorUserId)
     for (const [key, value] of Object.entries(result.headers)) response.setHeader(key, value)
     response.status(result.status)
   }
@@ -80,8 +84,8 @@ export class PurchaseOrderImageDraftController {
     operationId: 'purchase_orders_get_image_draft_content', session: 'required', authorization: true,
     badRequest: true, resourceLocator: true, validation: true, privateNoStore: true, errors: CONTENT_ERRORS,
   })
-  async getContent(@Param() params: PurchaseOrderImageDraftIdParamDto, @Headers('if-none-match') ifNoneMatch: unknown, @Res({ passthrough: true }) response: ImageContentHttpResponse): Promise<StreamableFile | undefined> {
-    const result = await this.images.resolveContent(params.purchaseOrderId, params.draftId, ifNoneMatch, 'GET')
+  async getContent(@Param() params: PurchaseOrderImageDraftIdParamDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor(), @Headers('if-none-match') ifNoneMatch: unknown, @Res({ passthrough: true }) response: ImageContentHttpResponse): Promise<StreamableFile | undefined> {
+    const result = await this.images.resolveContent(params.purchaseOrderId, params.draftId, ifNoneMatch, 'GET', actorUserId)
     for (const [key, value] of Object.entries(result.headers)) response.setHeader(key, value)
     response.status(result.status)
     return result.stream === undefined ? undefined : new StreamableFile(result.stream)

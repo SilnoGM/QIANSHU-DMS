@@ -5,6 +5,9 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { ApiException } from '../../../infrastructure/http/api.exception'
 import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
 import { isNormalizableDictionaryItemValue, normalizeDictionaryItemValue } from '../../dictionaries/dictionary.normalizer'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
+import type { DataScope } from '../../access-control/data-scope'
+import { purchaseOrderPartScopeWhere } from '../purchase-order-access'
 import { purchaseOrderSupplierFromSources } from '../purchase-order-query.service'
 import type { PurchaseOrderSupplierDto } from '../dto/purchase-order-response.dto'
 import { PURCHASE_SHIPMENT_VIEWS } from './purchase-shipment.dto'
@@ -70,12 +73,13 @@ function validateFilters(input: PurchaseShipmentFilterDto): void {
 }
 
 /** 公共筛选始终限定货件自身的产品，避免一个采购单中的其他货件被同一产品关键词误命中。 */
-function baseWhere(input: PurchaseShipmentFilterDto): Prisma.PurchaseOrderPartWhereInput {
+function baseWhere(input: PurchaseShipmentFilterDto, scope: DataScope, actorUserId: string = resolveDataScopeActor()): Prisma.PurchaseOrderPartWhereInput {
   validateFilters(input)
   const rawKeyword = input.keyword?.trim()
   const keyword = rawKeyword?.normalize('NFKC')
   const match = { contains: keyword, mode: 'insensitive' } as const
   return {
+    ...purchaseOrderPartScopeWhere(scope, actorUserId),
     // 历史查询只匹配保存的稳定值，不以字典当前有效性排除停用或未知仓库。
     destinationWarehouseValue: input.destinationWarehouseMissing === true
       ? null
@@ -170,11 +174,12 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
 
 @Injectable()
 export class PurchaseShipmentQueryService {
-  constructor(private readonly prisma: PrismaService, private readonly dictionaryLookup: DictionaryLookupService) {}
+  constructor(private readonly prisma: PrismaService, private readonly dictionaryLookup: DictionaryLookupService, private readonly dataScope: DataScopeService = dataScopeFallback()) {}
 
-  async list(input: PurchaseShipmentListQueryDto): Promise<PurchaseShipmentPageDto> {
+  async list(input: PurchaseShipmentListQueryDto, actorUserId: string = resolveDataScopeActor()): Promise<PurchaseShipmentPageDto> {
     const page = input.page ?? 1, pageSize = input.pageSize ?? 20
-    const where: Prisma.PurchaseOrderPartWhereInput = { AND: [baseWhere(input), viewWhere(input.view ?? 'AWAITING_SHIPMENT')] }
+    const scope = await this.dataScope.resolve(actorUserId)
+    const where: Prisma.PurchaseOrderPartWhereInput = { AND: [baseWhere(input, scope, actorUserId), viewWhere(input.view ?? 'AWAITING_SHIPMENT')] }
     const orderBy = shipmentOrderBy(input.sort)
     // 分页与总数共享数据库快照；数量按货件计算，不先对采购单分页后在内存中拆分。
     const [total, rows] = await this.prisma.$transaction(async transaction => {
@@ -186,8 +191,9 @@ export class PurchaseShipmentQueryService {
     return { page, pageSize, total, items: rows.map(row => mapPart(row, suppliers.get(row.purchaseOrder.id)!, warehouses.get(row.destinationWarehouseValue) ?? null)) }
   }
 
-  async statusCounts(input: PurchaseShipmentFilterDto): Promise<PurchaseShipmentStatusCountsDto> {
-    const where = baseWhere(input)
+  async statusCounts(input: PurchaseShipmentFilterDto, actorUserId: string = resolveDataScopeActor()): Promise<PurchaseShipmentStatusCountsDto> {
+    const scope = await this.dataScope.resolve(actorUserId)
+    const where = baseWhere(input, scope, actorUserId)
     // 逐视图计数与列表共用同一份谓词，避免计数口径与列表细分再次漂移；代价是同一快照内的多次计数。
     const [counts, buyers] = await this.prisma.$transaction(async transaction => {
       const counts = new Map<PurchaseShipmentView, number>()
@@ -195,6 +201,7 @@ export class PurchaseShipmentQueryService {
         counts.set(view, await transaction.purchaseOrderPart.count({ where: { AND: [where, viewWhere(view)] } }))
       }
       // 直接查询存在货件采购单的人员，避免 ORM 先加载全部采购单再在内存去重。
+      // 出单人选项保持全量，不随数据范围收缩，避免筛选器缺失既有选项。
       const buyers = await transaction.user.findMany({
         where: { purchaseOrdersCreated: { some: { parts: { some: {} } } } },
         select: { id: true, displayName: true }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
@@ -204,8 +211,12 @@ export class PurchaseShipmentQueryService {
     return { items: PURCHASE_SHIPMENT_VIEWS.map(value => ({ value, count: counts.get(value) ?? 0 })), buyerOptions: buyers }
   }
 
-  async getById(partId: string): Promise<PurchaseShipmentDetailDto> {
-    const row = await this.prisma.purchaseOrderPart.findUnique({ where: { id: partId }, select: DETAIL_SELECT })
+  async getById(partId: string, actorUserId: string = resolveDataScopeActor()): Promise<PurchaseShipmentDetailDto> {
+    const scope = await this.dataScope.resolve(actorUserId)
+    const row = await this.prisma.purchaseOrderPart.findFirst({
+      where: { id: partId, ...purchaseOrderPartScopeWhere(scope, actorUserId) },
+      select: DETAIL_SELECT,
+    })
     if (row === null) throw new ApiException(HttpStatus.NOT_FOUND, 'PURCHASE_ORDER_PART_NOT_FOUND', '采购货件不存在')
     const [suppliers, warehouses] = await Promise.all([this.resolveSuppliers([row]), this.resolveWarehouses([row])])
     const mapped = mapPart(row, suppliers.get(row.purchaseOrder.id)!, warehouses.get(row.destinationWarehouseValue) ?? null)

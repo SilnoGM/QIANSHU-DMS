@@ -110,7 +110,7 @@ describe('factory shipment controllers', () => {
       PURCHASE_ORDER_ID,
       { partIds: [PURCHASE_ORDER_ID], destinationWarehouses: [PURCHASE_ORDER_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 2 },
     )
-    expect(query.getSalesOrderContext).toHaveBeenCalledWith(SALES_ORDER_ID)
+    expect(query.getSalesOrderContext).toHaveBeenCalledWith(SALES_ORDER_ID, expect.any(String))
     expect(service.shipSalesOrder).toHaveBeenCalledWith(
       expect.objectContaining({ actorUserId: ACTOR_ID }),
       SALES_ORDER_ID,

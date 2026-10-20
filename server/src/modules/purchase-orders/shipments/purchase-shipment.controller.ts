@@ -3,6 +3,7 @@ import { ApiTags } from '@nestjs/swagger'
 
 import { ApiApplicationContract } from '../../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../../openapi/contract-response.decorator'
+import { CurrentUserId, resolveDataScopeActor } from '../../auth/decorators/current-user-id.decorator'
 import { RequirePermissions } from '../../auth/decorators/auth.decorators'
 import { PurchaseShipmentDetailDto, PurchaseShipmentFilterDto, PurchaseShipmentIdParamDto, PurchaseShipmentListQueryDto, PurchaseShipmentPageDto, PurchaseShipmentStatusCountsDto } from './purchase-shipment.dto'
 import { PurchaseShipmentQueryService } from './purchase-shipment-query.service'
@@ -19,8 +20,11 @@ export class PurchaseShipmentController {
     operationId: 'purchase_shipments_list', session: 'required', authorization: true, badRequest: true, validation: true, privateNoStore: true,
     errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] }, { status: 422, codes: ['VALIDATION_FAILED'] }],
   })
-  list(@Query() query: PurchaseShipmentListQueryDto): Promise<PurchaseShipmentPageDto> {
-    return this.queries.list(query)
+  list(
+    @Query() query: PurchaseShipmentListQueryDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
+  ): Promise<PurchaseShipmentPageDto> {
+    return this.queries.list(query, actorUserId)
   }
 
   @Get('status-counts')
@@ -30,8 +34,11 @@ export class PurchaseShipmentController {
     operationId: 'purchase_shipments_status_counts', session: 'required', authorization: true, badRequest: true, validation: true, privateNoStore: true,
     errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] }, { status: 422, codes: ['VALIDATION_FAILED'] }],
   })
-  statusCounts(@Query() query: PurchaseShipmentFilterDto): Promise<PurchaseShipmentStatusCountsDto> {
-    return this.queries.statusCounts(query)
+  statusCounts(
+    @Query() query: PurchaseShipmentFilterDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
+  ): Promise<PurchaseShipmentStatusCountsDto> {
+    return this.queries.statusCounts(query, actorUserId)
   }
 
   @Get(':partId')
@@ -41,7 +48,10 @@ export class PurchaseShipmentController {
     operationId: 'purchase_shipments_detail', session: 'required', authorization: true, badRequest: true, validation: true, resourceLocator: true, privateNoStore: true,
     errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] }, { status: 404, codes: ['PURCHASE_ORDER_PART_NOT_FOUND'] }, { status: 422, codes: ['VALIDATION_FAILED'] }],
   })
-  detail(@Param() params: PurchaseShipmentIdParamDto): Promise<PurchaseShipmentDetailDto> {
-    return this.queries.getById(params.partId)
+  detail(
+    @Param() params: PurchaseShipmentIdParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
+  ): Promise<PurchaseShipmentDetailDto> {
+    return this.queries.getById(params.partId, actorUserId)
   }
 }

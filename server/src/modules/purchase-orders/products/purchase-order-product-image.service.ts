@@ -2,10 +2,13 @@ import { HttpStatus, Injectable } from '@nestjs/common'
 
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { ApiException } from '../../../infrastructure/http/api.exception'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
 import {
   ProductMediaContentService,
   type ProductMediaContentResponse,
 } from '../../products/media/product-media-content.service'
+import { salesOrderScopeWhere } from '../../sales-orders/sales-order-access'
+import { purchaseOrderScopeWhere } from '../purchase-order-access'
 
 function productImageNotFound(): ApiException {
   return new ApiException(
@@ -24,6 +27,7 @@ export class PurchaseOrderProductImageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly content: ProductMediaContentService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
   async resolve(
@@ -86,13 +90,18 @@ export class PurchaseOrderProductImageService {
     range: unknown,
     method: 'GET' | 'HEAD',
     variant: unknown,
+    actorUserId: string = resolveDataScopeActor(),
   ): Promise<ProductMediaContentResponse> {
+    const scope = await this.dataScope.resolve(actorUserId)
     let line: { readonly productId: string | null } | null
     try {
       line = await this.prisma.purchaseOrderLine.findFirst({
         where: {
           id: lineId,
           purchaseOrderId,
+          ...(scope === 'SELF'
+            ? { purchaseOrder: { is: purchaseOrderScopeWhere(scope, actorUserId) } }
+            : {}),
           lineType: 'CATALOG',
           productId: { not: null },
           product: {
@@ -144,7 +153,9 @@ export class PurchaseOrderProductImageService {
     range: unknown,
     method: 'GET' | 'HEAD',
     variant: unknown,
+    actorUserId: string = resolveDataScopeActor(),
   ): Promise<ProductMediaContentResponse> {
+    const scope = await this.dataScope.resolve(actorUserId)
     let line: { readonly productId: string | null } | null
     try {
       line = await this.prisma.salesOrderLine.findFirst({
@@ -154,7 +165,7 @@ export class PurchaseOrderProductImageService {
           removedAt: null,
           lineType: 'CATALOG',
           productId: { not: null },
-          salesOrder: { is: { orderStatus: 'CONFIRMED' } },
+          salesOrder: { is: { ...salesOrderScopeWhere(scope, actorUserId), orderStatus: 'CONFIRMED' } },
           product: {
             is: {
               media: {

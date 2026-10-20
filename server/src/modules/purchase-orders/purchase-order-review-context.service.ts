@@ -4,21 +4,24 @@ import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { hasPersistenceCode, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../access-control/data-scope.service'
 import { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import { PURCHASE_ORDER_CENTS_FINGERPRINT_VERSION, PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION, PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION, PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION, PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION } from './purchase-order-create-fingerprint'
+import { purchaseOrderScopeWhere } from './purchase-order-access'
 import { purchaseReviewSourceBlockReason } from './purchase-order-review-source'
 
 @Injectable()
 export class PurchaseOrderReviewContextService {
-  constructor(private readonly prisma: PrismaService, private readonly shippingMarks: PurchaseShippingMarkResolverService) {}
+  constructor(private readonly prisma: PrismaService, private readonly shippingMarks: PurchaseShippingMarkResolverService, private readonly dataScope: DataScopeService = dataScopeFallback()) {}
 
-  async read(purchaseOrderId: string): Promise<{ available: boolean, message: string | null }> {
+  async read(purchaseOrderId: string, actorUserId: string = resolveDataScopeActor()): Promise<{ available: boolean, message: string | null }> {
     try {
       // 只检查当下资格，不预留编号或锁定业务；正式审核仍在写事务内重新校验。
       return await this.prisma.$transaction(async transaction => {
         await applyTransactionTimeouts(transaction)
-        const order = await transaction.purchaseOrder.findUnique({
-          where: { id: purchaseOrderId },
+        const scope = await this.dataScope.resolveInTransaction(transaction, actorUserId)
+        const order = await transaction.purchaseOrder.findFirst({
+          where: { id: purchaseOrderId, ...purchaseOrderScopeWhere(scope, actorUserId) },
           select: {
             orderStatus: true, fulfillmentStatus: true, purchaseType: true,
             salesOrder: { select: { orderStatus: true } },

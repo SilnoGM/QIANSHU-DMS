@@ -7,6 +7,7 @@ import { Test } from '@nestjs/testing'
 import request from 'supertest'
 
 import { configureApplication } from '../src/app.setup'
+import { attachRequestAuthContext } from '../src/modules/auth/auth-context'
 import { Prisma } from '../src/generated/prisma/client'
 import { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-lookup.service'
 import { PurchaseOrderFactoryShipmentService } from '../src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment.service'
@@ -105,6 +106,20 @@ describe('arrival shipment filters and stable ordering over isolated PostgreSQL'
     const module = await Test.createTestingModule({ controllers: [PurchaseShipmentController], providers: [{ provide: PurchaseShipmentQueryService, useValue: service }] }).compile()
     application = module.createNestApplication()
     configureApplication(application, { nodeEnvironment: 'test' })
+    application.use((requestObject: object, _response: object, next: () => void) => {
+      attachRequestAuthContext(requestObject, {
+        id: '55555555-5555-4555-8555-555555555555',
+        userId: fixture.actor.id,
+        username: 'arrival_e2e',
+        displayName: '到仓 E2E',
+        mustChangePassword: false,
+        createdAt: new Date('2026-09-14T00:00:00.000Z'),
+        lastActivityAt: new Date('2026-09-14T00:00:00.000Z'),
+        idleExpiresAt: new Date('2026-09-15T00:00:00.000Z'),
+        absoluteExpiresAt: new Date('2026-10-14T00:00:00.000Z'),
+      })
+      next()
+    })
     await application.init()
     before = await facts()
   })

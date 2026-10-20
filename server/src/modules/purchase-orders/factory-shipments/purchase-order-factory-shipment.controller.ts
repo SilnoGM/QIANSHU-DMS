@@ -13,6 +13,7 @@ import { getRequestId } from '../../../infrastructure/http/request-id.middleware
 import { ApiApplicationContract } from '../../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../../auth/auth-context'
+import { CurrentUserId, resolveDataScopeActor } from '../../auth/decorators/current-user-id.decorator'
 import { RequirePermissions } from '../../auth/decorators/auth.decorators'
 import {
   PurchaseOrderIdParamDto,
@@ -121,8 +122,9 @@ export class SalesOrderFactoryShipmentController {
   })
   context(
     @Param() params: PurchaseOrderSourceSalesOrderIdParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
   ): Promise<SalesOrderFactoryShipmentContext> {
-    return this.queries.getSalesOrderContext(params.salesOrderId)
+    return this.queries.getSalesOrderContext(params.salesOrderId, actorUserId)
   }
 
   @Post(':salesOrderId/factory-shipments')

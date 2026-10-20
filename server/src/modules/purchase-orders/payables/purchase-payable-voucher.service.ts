@@ -1,16 +1,19 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
 import { PurchaseOrderDocumentService } from '../documents/purchase-order-document.service'
 import type { PurchaseOrderDocumentMultipartRequest } from '../documents/purchase-order-document-multipart.parser'
+import { purchaseOrderPayableScopeWhere } from '../purchase-order-access'
 import type { PurchaseOrderMutationContext } from '../purchase-order-mutation.service'
 import { payableFailure, summarizePayable } from './purchase-payable.logic'
 
 @Injectable()
 export class PurchasePayableVoucherService {
-  constructor(private readonly prisma: PrismaService, private readonly documents: PurchaseOrderDocumentService) {}
+  constructor(private readonly prisma: PrismaService, private readonly documents: PurchaseOrderDocumentService, private readonly dataScope: DataScopeService = dataScopeFallback()) {}
 
   async upload(context: PurchaseOrderMutationContext, payableId: string, request: PurchaseOrderDocumentMultipartRequest) {
-    const payable = await this.prisma.purchaseOrderPayable.findUnique({ where: { id: payableId }, include: {
+    const scope = await this.dataScope.resolve(context.actorUserId)
+    const payable = await this.prisma.purchaseOrderPayable.findFirst({ where: { id: payableId, ...purchaseOrderPayableScopeWhere(scope, context.actorUserId) }, include: {
       payments: { where: { voidedAt: null }, select: { amount: true } }, purchaseOrder: { select: { orderStatus: true } },
     } })
     if (!payable) return payableFailure('PURCHASE_PAYABLE_NOT_FOUND', '采购应付款不存在', 404)
@@ -20,12 +23,19 @@ export class PurchasePayableVoucherService {
     return { ...uploaded, mediaType: 'IMAGE' as const }
   }
 
-  async content(payableId: string, documentId: string, ifNoneMatch: unknown, method: 'GET' | 'HEAD') {
+  async content(payableId: string, documentId: string, ifNoneMatch: unknown, method: 'GET' | 'HEAD', actorUserId: string = resolveDataScopeActor()) {
+    const scope = await this.dataScope.resolve(actorUserId)
     // 财务只有付款权限时也能查看本笔凭证；不能通过此入口读取其他订单附件。
     const document = await this.prisma.purchaseOrderDocument.findFirst({ where: {
-      id: documentId, documentType: 'PAYMENT_VOUCHER', detachedAt: null, payment: { payableId },
+      id: documentId, documentType: 'PAYMENT_VOUCHER', detachedAt: null,
+      payment: { is: {
+        payableId,
+        ...(scope === 'SELF'
+          ? { payable: { is: purchaseOrderPayableScopeWhere(scope, actorUserId) } }
+          : {}),
+      } },
     }, select: { purchaseOrderId: true } })
     if (!document) return payableFailure('PURCHASE_ORDER_DOCUMENT_NOT_FOUND', '付款凭证不存在', 404)
-    return this.documents.resolveContent(document.purchaseOrderId, documentId, ifNoneMatch, method)
+    return this.documents.resolveContent(document.purchaseOrderId, documentId, ifNoneMatch, method, actorUserId)
   }
 }

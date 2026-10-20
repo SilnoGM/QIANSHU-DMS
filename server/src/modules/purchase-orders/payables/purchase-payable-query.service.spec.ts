@@ -18,10 +18,12 @@ function row() {
 function setup() {
   const order = row()
   const tx = {
-    purchaseOrder: { findMany: jest.fn().mockResolvedValue([order]), count: jest.fn().mockResolvedValue(5), findUnique: jest.fn().mockResolvedValue(order) },
-    purchaseOrderPayable: { findUnique: jest.fn().mockResolvedValue({ purchaseOrder: order }) },
+    purchaseOrder: { findMany: jest.fn().mockResolvedValue([order]), count: jest.fn().mockResolvedValue(5), findUnique: jest.fn().mockResolvedValue(order), findFirst: jest.fn().mockResolvedValue(order) },
+    purchaseOrderPayable: { findUnique: jest.fn().mockResolvedValue({ purchaseOrder: order }), findFirst: jest.fn().mockResolvedValue({ purchaseOrder: order }) },
   }
   const prisma = { $transaction: jest.fn((action: (tx: unknown) => Promise<unknown>) => action(tx)) }
+  ;(tx.purchaseOrder as Record<string, unknown>).findFirst = tx.purchaseOrder.findUnique
+  ;(tx.purchaseOrderPayable as Record<string, unknown>).findFirst = tx.purchaseOrderPayable.findUnique
   const dictionary = { resolveStoredValueInTransaction: jest.fn().mockResolvedValue({ known: true, label: '已停用历史供应商' }) }
   return { order, tx, prisma, dictionary, service: new PurchasePayableQueryService(prisma as unknown as PrismaService, dictionary as unknown as DictionaryLookupService, { getForOrder: jest.fn().mockResolvedValue(null) } as unknown as PaymentRecipientService) }
 }

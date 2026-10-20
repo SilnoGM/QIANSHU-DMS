@@ -149,6 +149,7 @@ function setup() {
         typeof operations === 'function' ? operations(prisma) : Promise.all(operations),
     ),
   }
+  ;(prisma.purchaseOrder as Record<string, unknown>).findFirst = prisma.purchaseOrder.findUnique
   const dictionaryLookup = {
     resolveStoredValues: jest.fn<Promise<unknown[]>, [unknown]>()
       .mockResolvedValue([{
@@ -902,5 +903,26 @@ describe('PurchaseOrderQueryService status counts', () => {
       expect.any(Function),
       { isolationLevel: 'RepeatableRead' },
     )
+  })
+
+  it('returns 404 for a SELF-scoped purchase order outside the sales owner chain', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null)
+    const service = new PurchaseOrderQueryService(
+      { purchaseOrder: { findFirst } } as unknown as PrismaService,
+      {} as DictionaryLookupService,
+      { getForOrder: jest.fn() } as unknown as PaymentRecipientService,
+      { resolve: jest.fn().mockResolvedValue('SELF') } as never,
+    )
+
+    await expect(service.getById('order-id', 'actor-id')).rejects.toMatchObject({
+      code: 'PURCHASE_ORDER_NOT_FOUND',
+      status: 404,
+    })
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        id: 'order-id',
+        salesOrder: { is: { issuerUserId: 'actor-id' } },
+      },
+    }))
   })
 })
