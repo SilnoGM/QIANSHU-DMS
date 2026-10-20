@@ -1,6 +1,6 @@
 {
   "name": "qianshu-dms",
-  "version": "0.8.4",
+  "version": "1.0.0",
   "private": true,
   "packageManager": "pnpm@11.9.0",
   "engines": {
