@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { cn } from '@/utils'
 import eventBus from '@/utils/eventBus'
@@ -74,7 +75,7 @@ async function submitLogout(scope: LogoutScope) {
     logoutDialogVisible.value = false
   }
   catch {
-    useFaToast().error('退出失败', {
+    useQsToast().error('退出失败', {
       description: '当前登录状态尚未确认，请稍后重试。',
     })
   }

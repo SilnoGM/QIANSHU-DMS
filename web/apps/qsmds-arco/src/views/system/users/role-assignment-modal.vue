@@ -2,6 +2,7 @@
 import type { RoleDto, UserDto } from '@/api/generated/types.gen'
 
 import managementApi from '@/api/modules/management'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 
 import { canSubmitRoleAssignment, getApiFailure } from './users.logic'
@@ -77,7 +78,7 @@ async function submit(): Promise<void> {
       roleIds: [...model.roleIds],
     })
     model.roleIds = []
-    useFaToast().success('用户角色已更新')
+    useQsToast().success('用户角色已更新')
     emits('success', response.data)
     // QsGenericModal 在提交态拒绝程序化关闭，必须先让提交锁完成一次渲染。
     loading.value = false

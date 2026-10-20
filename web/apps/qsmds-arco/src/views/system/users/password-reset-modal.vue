@@ -3,6 +3,7 @@ import type { FormExpose } from '@fantastic-admin/components'
 import type { UserDto } from '@/api/generated/types.gen'
 
 import managementApi from '@/api/modules/management'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 
 import {
@@ -91,7 +92,7 @@ async function submit(): Promise<void> {
     })
     resetModel()
     clearErrors()
-    useFaToast().success('密码已设置，用户现有登录已失效。')
+    useQsToast().success('密码已设置，用户现有登录已失效。')
     emits('success', response.data)
     // QsGenericModal 在提交态拒绝程序化关闭，必须先让提交锁完成一次渲染。
     loading.value = false

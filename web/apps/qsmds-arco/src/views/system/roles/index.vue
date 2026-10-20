@@ -12,6 +12,7 @@ import type {
 } from '@/components/business/QsGenericTable/logic'
 
 import managementApi from '@/api/modules/management'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import {
   filterRoleTableRows,
@@ -160,7 +161,7 @@ async function saveRole(payload:
     editorLoading.value = false
     await nextTick()
     editorVisible.value = false
-    useFaToast().success(payload.mode === 'create' ? '角色创建成功' : '角色修改成功')
+    useQsToast().success(payload.mode === 'create' ? '角色创建成功' : '角色修改成功')
   }
   catch (error) {
     editorError.value = safeErrorMessage(error, '角色保存失败，请稍后重试')
@@ -175,7 +176,7 @@ function openPermissions(role: RoleDto): void {
     return
   }
   if (!permissionCatalogReady.value) {
-    useFaToast().warning('权限目录尚未就绪', {
+    useQsToast().warning('权限目录尚未就绪', {
       description: '请先刷新并确认权限目录加载成功，再为角色分配权限。',
     })
     return
@@ -209,7 +210,7 @@ async function savePermissions(roleId: string, permissionIds: string[]): Promise
     // 再发起受控关闭，避免抽屉按关闭守卫回写 true 而与页面状态分叉。
     await nextTick()
     permissionDrawerVisible.value = false
-    useFaToast().success('角色权限已更新')
+    useQsToast().success('角色权限已更新')
   }
 }
 

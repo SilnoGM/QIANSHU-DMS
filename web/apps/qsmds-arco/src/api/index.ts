@@ -25,9 +25,14 @@ const api = createApiClient({
       ),
     handleAuthRevalidationRequired: () =>
       useAppAccountStore().revalidateAuth(),
-    notifyError: message => useFaToast().error('Error', {
-      description: message,
-    }),
+    notifyError: (message) => {
+      // API 层不能静态依赖 Vue 组件：动态加载轻提示，避免 Node 测试解析 .vue 失败。
+      void import('@/components/base/QsToast/useQsToast')
+        .then(({ useQsToast }) => {
+          useQsToast().error('Error', { description: message })
+        })
+        .catch(() => undefined)
+    },
   },
 })
 

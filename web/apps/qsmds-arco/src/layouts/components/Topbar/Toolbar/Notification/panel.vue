@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
+
 defineOptions({
   name: 'ToolbarNotificationPanel',
 })
@@ -11,11 +13,11 @@ const activeName = ref(appNotificationStore.types[0].name)
 
 function handleClick(item: any) {
   appNotificationStore.setRead(activeName.value, item.id)
-  useFaToast().info(t('app.layouts.topbar.toolbar.notification.todo'))
+  useQsToast().info(t('app.layouts.topbar.toolbar.notification.todo'))
 }
 
 function handleViewAll() {
-  useFaToast().info(t('app.layouts.topbar.toolbar.notification.todo'))
+  useQsToast().info(t('app.layouts.topbar.toolbar.notification.todo'))
 }
 </script>
 

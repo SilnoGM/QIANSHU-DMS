@@ -2,6 +2,7 @@
 import type { TabbarRecordRaw } from '@fantastic-admin/types'
 import { useMagicKeys } from '@vueuse/core'
 import Sortable from 'sortablejs'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import { useHotkeyBindings } from '@/hotkeys'
 import { useSlots } from '@/slots'
 import MoreAction from './moreAction.vue'
@@ -140,13 +141,12 @@ watch(() => route, (val) => {
 function tabbarScrollTip() {
   if (tabContainerRef.value?.$el.clientWidth > (tabsRef.value?.ref?.$el.clientWidth ?? 0) && !localStorage.has('tabbarScrollTip')) {
     localStorage.setItem('tabbarScrollTip', '')
-    const tips = useFaToast().info(t('app.layouts.topbar.tabbar.scrollTip.title'), {
+    const tips = useQsToast().info(t('app.layouts.topbar.tabbar.scrollTip.title'), {
       description: t('app.layouts.topbar.tabbar.scrollTip.description'),
-      position: 'top-center',
       duration: Infinity,
       action: {
         label: t('app.layouts.topbar.tabbar.scrollTip.action'),
-        onClick: () => useFaToast().dismiss(tips),
+        onClick: () => useQsToast().dismiss(tips),
       },
     })
   }

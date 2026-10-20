@@ -20,6 +20,7 @@ import type {
 import fundAccountsApi from '@/api/modules/fund-accounts'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 
@@ -453,7 +454,7 @@ async function createAccount(payload: CreateFundAccountRequestDto): Promise<void
     createSubmitting.value = false
     await nextTick()
     createVisible.value = false
-    useFaToast().success('资金账户已创建')
+    useQsToast().success('资金账户已创建')
     void loadAccounts()
   }
   catch (error) {
@@ -467,7 +468,7 @@ async function createAccount(payload: CreateFundAccountRequestDto): Promise<void
     }
     createFailure.value = getFundApiFailure(error)
     if (createFailure.value.unknownResult) {
-      useFaToast().warning('开户结果未知，已刷新账户与候选用户，请核对后再操作。')
+      useQsToast().warning('开户结果未知，已刷新账户与候选用户，请核对后再操作。')
       void loadAccounts()
       void loadCreateCandidates()
     }
@@ -511,7 +512,7 @@ async function updateShareRate(payload: UpdateFundShareRateRequestDto): Promise<
     await nextTick()
     shareVisible.value = false
     shareTarget.value = null
-    useFaToast().success('未来分成比例已更新')
+    useQsToast().success('未来分成比例已更新')
     void loadAccounts()
   }
   catch (error) {
@@ -529,7 +530,7 @@ async function updateShareRate(payload: UpdateFundShareRateRequestDto): Promise<
       await nextTick()
       shareVisible.value = false
       shareTarget.value = null
-      useFaToast().warning('比例修改结果未知，已刷新账户，请以最新比例为准。')
+      useQsToast().warning('比例修改结果未知，已刷新账户，请以最新比例为准。')
       void loadAccounts()
     }
   }
@@ -583,7 +584,7 @@ async function executeManualAdjustment(
     await nextTick()
     adjustmentVisible.value = false
     adjustmentTarget.value = null
-    useFaToast().success('手动调账已入账')
+    useQsToast().success('手动调账已入账')
     void loadAccounts()
     void loadCompanyAccount()
   }

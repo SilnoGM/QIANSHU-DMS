@@ -3,6 +3,7 @@ import type { FormExpose } from '@fantastic-admin/components'
 import { toTypedSchema } from '@vee-validate/zod'
 import { snapdom } from '@zumer/snapdom'
 import * as z from 'zod'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import FeedbackCanvas from './feedback-canvas.vue'
 
 const emits = defineEmits<{
@@ -47,7 +48,7 @@ function onSubmit(values: FeedbackModel) {
   // eslint-disable-next-line no-console
   console.log(result)
   emits('close')
-  useFaToast().success(t('app.components.accountButton.feedback.submitSuccess'))
+  useQsToast().success(t('app.components.accountButton.feedback.submitSuccess'))
 }
 
 defineExpose({

@@ -1,3 +1,5 @@
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
+
 export function useAppTabbar() {
   const route = useRoute()
   const router = useRouter()
@@ -83,27 +85,19 @@ export function useAppTabbar() {
     const index = appTabbarStore.list.findIndex(item => item.tabId === tabId)
     if (index < 0) {
       flag = false
-      !checkOnly && useFaToast().warning('关闭的标签页不存在', {
-        position: 'top-center',
-      })
+      !checkOnly && useQsToast().warning('关闭的标签页不存在')
     }
     else if (appTabbarStore.list.length <= 1) {
       flag = false
-      !checkOnly && useFaToast().warning('当前只有一个标签页，不可关闭', {
-        position: 'top-center',
-      })
+      !checkOnly && useQsToast().warning('当前只有一个标签页，不可关闭')
     }
     else if (appTabbarStore.list[index].tabPermanent) {
       flag = false
-      !checkOnly && useFaToast().warning('该标签页为常驻，不可关闭', {
-        position: 'top-center',
-      })
+      !checkOnly && useQsToast().warning('该标签页为常驻，不可关闭')
     }
     else if (appTabbarStore.list[index].isPin) {
       flag = false
-      !checkOnly && useFaToast().warning('该标签页为固定，不可关闭', {
-        position: 'top-center',
-      })
+      !checkOnly && useQsToast().warning('该标签页为固定，不可关闭')
     }
     return flag
   }

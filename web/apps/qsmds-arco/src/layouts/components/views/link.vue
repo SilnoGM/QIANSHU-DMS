@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useClipboard } from '@vueuse/core'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 
 defineOptions({
   name: 'LinkView',
@@ -10,7 +11,7 @@ const appSettingsStore = useAppSettingsStore()
 
 const { copy, copied } = useClipboard({ legacy: true })
 watch(copied, (val) => {
-  val && useFaToast().success('复制成功')
+  val && useQsToast().success('复制成功')
 })
 
 function open() {

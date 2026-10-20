@@ -2,6 +2,7 @@
 import type { UserDto } from '@/api/generated/types.gen'
 
 import managementApi from '@/api/modules/management'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 
 import { getApiFailure } from './users.logic'
@@ -42,7 +43,7 @@ async function submit(): Promise<void> {
     const response = isDisable.value
       ? await managementApi.users.disable(props.user.id)
       : await managementApi.users.enable(props.user.id)
-    useFaToast().success(isDisable.value ? '用户已禁用' : '用户已启用')
+    useQsToast().success(isDisable.value ? '用户已禁用' : '用户已启用')
     emits('success', response.data)
     // QsGenericModal 在提交态拒绝程序化关闭，必须先让提交锁完成一次渲染。
     loading.value = false

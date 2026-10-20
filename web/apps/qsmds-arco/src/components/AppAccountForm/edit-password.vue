@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 
 defineOptions({ name: 'ChangePasswordModal' })
@@ -119,7 +120,7 @@ async function submit(): Promise<void> {
       newPassword: model.newPassword,
     })
     clearPasswords()
-    useFaToast().success('密码修改成功')
+    useQsToast().success('密码修改成功')
     // QsGenericModal 在提交态拒绝程序化关闭，先释放锁并等待属性同步。
     loading.value = false
     await nextTick()
