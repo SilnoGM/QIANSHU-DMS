@@ -11,12 +11,12 @@ import { applyTransactionTimeouts } from '../../../infrastructure/database/trans
 import { DataScopeService, dataScopeFallback } from '../../access-control/data-scope.service'
 import { AuditService } from '../../audit/audit.service'
 import {
-  createFundAccountRecord,
   lockFundAccountForShareRateUpdate,
   readFundAccountCreateTarget,
   readFundAccountView,
   updateFundAccountShareRate,
 } from './fund-account-command.persistence'
+import { createUserFundAccountInTransaction } from './fund-account-provisioning'
 import type {
   FundAccountCommandContext,
   FundAccountCreateInput,
@@ -83,25 +83,22 @@ export class FundAccountCommandService {
         throw accountError(FUND_POSTING_ERROR_CODES.ACCOUNT_ALREADY_EXISTS)
       }
 
-      const created = await createFundAccountRecord(transaction, input)
+      const created = await createUserFundAccountInTransaction(
+        transaction,
+        this.audit,
+        {
+          userId: input.userId,
+          userShareRate: input.userShareRate,
+          actorUserId: context.actorUserId,
+          requestId: context.requestId,
+          ...(context.correlationId === undefined
+            ? {}
+            : { correlationId: context.correlationId }),
+        },
+      )
       const account = requireAccountView(
         await readFundAccountView(transaction, created.id),
       )
-
-      await this.audit.record(transaction, {
-        eventType: AuditEventType.FUND_ACCOUNT_CREATED,
-        outcome: AuditOutcome.SUCCESS,
-        actorType: AuditActorType.USER,
-        actorUserId: context.actorUserId,
-        targetType: 'FundAccount',
-        targetId: account.id,
-        requestId: context.requestId,
-        correlationId: context.correlationId,
-        metadata: {
-          userId: input.userId,
-          userShareRate: input.userShareRate,
-        },
-      })
 
       return account
     })

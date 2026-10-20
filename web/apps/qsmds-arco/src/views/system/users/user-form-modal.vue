@@ -15,20 +15,25 @@ import {
 } from '@/utils/user-profile'
 
 import {
+  buildCreateUserFundAccountInput,
   clearPasswordFields,
   createPasswordFields,
   getApiFailure,
   getApiFieldError,
   normalizeIdentityValue,
+  validateFundAccountFields,
   validateIdentityFields,
   validatePasswordFields,
 } from './users.logic'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
+  canCreateFundAccount?: boolean
   modelValue: boolean
   mode: 'create' | 'edit'
   user?: UserDto | null
-}>()
+}>(), {
+  canCreateFundAccount: false,
+})
 
 const emits = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -44,6 +49,8 @@ const fieldErrors = reactive<Record<string, string>>({})
 interface UserFormModel extends AdminUserProfileFormValue {
   username: string
   mustChangePassword: boolean
+  createFundAccount: boolean
+  userShareRate: string
   newPassword: string
   confirmPassword: string
 }
@@ -57,6 +64,8 @@ const model = reactive<UserFormModel>({
   avatarUrl: '',
   remark: '',
   mustChangePassword: true,
+  createFundAccount: false,
+  userShareRate: '',
   ...createPasswordFields(),
 })
 const initialAdminProfile = ref<AdminUserProfileValue | null>(null)
@@ -93,6 +102,8 @@ function clearModel(): void {
   model.avatarUrl = ''
   model.remark = ''
   model.mustChangePassword = true
+  model.createFundAccount = false
+  model.userShareRate = ''
   initialAdminProfile.value = null
   clearPasswordFields(model)
 }
@@ -148,6 +159,12 @@ function applyServerFieldErrors(error: unknown): void {
       serverErrors[field === 'password' ? 'newPassword' : field] = message
     }
   }
+  const shareRateMessage = getApiFieldError(error, 'fundAccount.userShareRate')
+    ?? getApiFieldError(error, 'userShareRate')
+    ?? getApiFieldError(error, 'shareRate')
+  if (shareRateMessage !== undefined) {
+    serverErrors.userShareRate = shareRateMessage
+  }
   const conflictField = getProfileConflictField(error)
   if (conflictField !== undefined && serverErrors[conflictField] === undefined) {
     serverErrors[conflictField] = conflictField === 'email'
@@ -163,12 +180,17 @@ async function submit(): Promise<void> {
   }
 
   const submissionMode = props.mode
+  const createsFundAccount = submissionMode === 'create' && model.createFundAccount
   clearErrors()
   setFieldErrors(
     submissionMode === 'create'
       ? {
           ...validateIdentityFields(model.username, model.displayName),
           ...validatePasswordFields(model.newPassword, model.confirmPassword),
+          ...validateFundAccountFields(
+            model.createFundAccount,
+            model.userShareRate,
+          ),
         }
       : validateAdminUserProfileFields(model),
   )
@@ -203,6 +225,9 @@ async function submit(): Promise<void> {
         displayName: normalizeIdentityValue(model.displayName),
         password: model.newPassword,
         mustChangePassword: model.mustChangePassword,
+        ...(createsFundAccount
+          ? { fundAccount: buildCreateUserFundAccountInput(model.userShareRate) }
+          : {}),
       })).data
     }
     else {
@@ -218,7 +243,12 @@ async function submit(): Promise<void> {
 
     clearModel()
     clearErrors()
-    useFaToast().success(submissionMode === 'create' ? '用户创建成功' : '用户信息已更新')
+    const successMessage = submissionMode === 'edit'
+      ? '用户信息已更新'
+      : createsFundAccount
+        ? '用户与资金账户已创建'
+        : '用户创建成功'
+    useFaToast().success(successMessage)
     emits('success', responseData)
     // QsGenericModal 在提交态拒绝程序化关闭，必须先让提交锁完成一次渲染。
     loading.value = false
@@ -251,6 +281,15 @@ function updateVisible(value: boolean): void {
   }
   close()
 }
+
+watch(() => model.createFundAccount, (enabled) => {
+  if (enabled) {
+    return
+  }
+  // 取消勾选后比例字段被移除，不能把旧错误留在表单状态里。
+  delete fieldErrors.userShareRate
+  formRef.value?.clearValidate('userShareRate')
+})
 
 watch(() => props.modelValue, (visible) => {
   if (visible) {
@@ -332,6 +371,42 @@ watch(() => props.modelValue, (visible) => {
             <FaCheckbox v-model="model.mustChangePassword">
               下次登录必须修改密码
             </FaCheckbox>
+          </FaFormItem>
+          <FaFormItem name="createFundAccount" label="资金账户" class="md:col-span-2">
+            <FaCheckbox
+              v-model="model.createFundAccount"
+              :disabled="!canCreateFundAccount"
+            >
+              同时创建资金账户
+            </FaCheckbox>
+            <p v-if="!canCreateFundAccount" class="qs-type-meta mt-1">
+              需要「新增资金账户」权限（fund-accounts:create）
+            </p>
+          </FaFormItem>
+          <FaFormItem
+            v-if="model.createFundAccount"
+            name="userShareRate"
+            label="用户分成比例"
+            required
+            class="md:col-span-2"
+            description="允许 0–100，最多两位小数；公司比例自动取剩余部分。"
+          >
+            <FaInput
+              v-model="model.userShareRate"
+              autocomplete="off"
+              class="w-full"
+              clearable
+              input-class="font-mono tabular-nums text-right min-h-11 sm:min-h-9"
+              inputmode="decimal"
+              maxlength="8"
+              placeholder="例如 30"
+              spellcheck="false"
+              @clear="model.userShareRate = ''"
+            >
+              <template #end>
+                <span class="qs-type-meta px-2">%</span>
+              </template>
+            </FaInput>
           </FaFormItem>
         </template>
 

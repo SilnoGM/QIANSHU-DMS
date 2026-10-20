@@ -4,6 +4,7 @@ import type { PrismaService } from '../../infrastructure/database/prisma.service
 import type { AuditService } from '../audit/audit.service'
 import type { PasswordPolicyProvider } from '../auth/providers/password-policy.provider'
 import type { PasswordProvider } from '../auth/providers/password.provider'
+import { Prisma } from '../../generated/prisma/client'
 import { SessionRevokedReason, UserStatus } from '../../generated/prisma/enums'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import type { AuthMetricLogger } from '../../infrastructure/observability/auth-metric.logger'
@@ -17,6 +18,7 @@ const SESSION_ID = '22ad40d4-7fa5-46fb-81e4-1986bcebf8f3'
 const SYSTEM_ROLE_ID = '32ad40d4-7fa5-46fb-81e4-1986bcebf8f4'
 const ROLE_A_ID = '42ad40d4-7fa5-46fb-81e4-1986bcebf8f5'
 const ROLE_B_ID = '52ad40d4-7fa5-46fb-81e4-1986bcebf8f6'
+const ACCOUNT_ID = '62ad40d4-7fa5-46fb-81e4-1986bcebf8f7'
 const DATABASE_NOW = new Date('2026-07-17T06:00:00.000Z')
 
 const context: UsersCommandContext = {
@@ -105,6 +107,7 @@ function expectTransactionTimeoutAppliedFirst(
     transaction.userRole.findMany,
     transaction.userRole.findUnique,
     transaction.authSession.updateMany,
+    transaction.fundAccount.create,
   ].flatMap((mock) => mock.mock.invocationCallOrder)
 
   expect(timeoutCallOrder).toBeDefined()
@@ -149,6 +152,9 @@ interface TransactionFixture {
   authSession: {
     updateMany: AsyncReaderMock
   }
+  fundAccount: {
+    create: AsyncReaderMock
+  }
 }
 
 interface PrismaFixture {
@@ -186,6 +192,11 @@ interface ProfileServiceFixture {
   updateInTransaction: jest.Mock<Promise<unknown>, [unknown, string, unknown, unknown]>
 }
 
+interface AccessControlFixture {
+  getPermissionCodes: jest.Mock<Promise<string[]>, [string]>
+  hasAll: jest.Mock<boolean, [readonly string[], readonly string[]]>
+}
+
 function userFixture(overrides: Partial<UserFixture> = {}): UserFixture {
   return {
     id: TARGET_ID,
@@ -220,6 +231,7 @@ interface ServiceFixture {
   passwordPolicy: PasswordPolicyFixture
   passwords: PasswordsFixture
   profile: ProfileServiceFixture
+  access: AccessControlFixture
   metrics: jest.Mocked<Pick<
     AuthMetricLogger,
     'recordPassword' | 'recordSessionRevoked'
@@ -248,6 +260,9 @@ function createServiceFixture(): ServiceFixture {
     },
     authSession: {
       updateMany: asyncReader(),
+    },
+    fundAccount: {
+      create: asyncReader(),
     },
   }
   const prisma: PrismaFixture = {
@@ -287,6 +302,13 @@ function createServiceFixture(): ServiceFixture {
       [unknown, string, unknown, unknown]
     >(),
   }
+  const access: AccessControlFixture = {
+    getPermissionCodes: jest.fn<Promise<string[]>, [string]>()
+      .mockResolvedValue(['users:create', 'fund-accounts:create']),
+    hasAll: jest.fn<boolean, [readonly string[], readonly string[]]>(
+      (granted, required) => required.every(code => granted.includes(code)),
+    ),
+  }
   const metrics: ServiceFixture['metrics'] = {
     recordPassword: jest.fn(),
     recordSessionRevoked: jest.fn(),
@@ -297,6 +319,7 @@ function createServiceFixture(): ServiceFixture {
     passwordPolicy as unknown as PasswordPolicyProvider,
     audit as AuditService,
     profile as never,
+    access as never,
     metrics as unknown as AuthMetricLogger,
   )
 
@@ -308,6 +331,7 @@ function createServiceFixture(): ServiceFixture {
     passwordPolicy,
     passwords,
     profile,
+    access,
     metrics,
   }
 }
@@ -502,6 +526,161 @@ describe('UsersService create and simple updates', () => {
       'USERNAME_ALREADY_EXISTS',
     )
     expect(metrics.recordPassword).toHaveBeenCalledWith('create', 'failure')
+  })
+
+  it('勾选创建资金账户时，用户、账户与两条审计在同一事务提交', async () => {
+    const { service, transaction, audit } = createServiceFixture()
+    transaction.$queryRaw.mockResolvedValue([{ now: DATABASE_NOW }])
+    transaction.user.create.mockResolvedValue(
+      userFixture({ authVersion: 0, roles: [] }),
+    )
+    transaction.fundAccount.create.mockResolvedValue({ id: ACCOUNT_ID })
+
+    const result = await service.create(context, {
+      username: 'Alice',
+      displayName: 'Alice',
+      password: 'correct horse power',
+      mustChangePassword: false,
+      fundAccount: { userShareRate: '30.5' },
+    })
+
+    expect(result.id).toBe(TARGET_ID)
+    const createArguments = transaction.fundAccount.create.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>
+      select: { id: boolean }
+    }
+    const { shareRateUpdatedAt, ...accountData } = createArguments.data
+    expect(shareRateUpdatedAt).toBeInstanceOf(Date)
+    expect(accountData).toEqual({
+      ownerType: 'USER',
+      userId: TARGET_ID,
+      currency: 'CNY',
+      balance: new Prisma.Decimal('0.00'),
+      userShareRate: new Prisma.Decimal('30.50'),
+      nextSequence: 1n,
+      version: 1,
+    })
+    expect(createArguments.select).toEqual({ id: true })
+    expect(audit.record).toHaveBeenCalledWith(
+      transaction,
+      expect.objectContaining({
+        eventType: 'USER_CREATED',
+        targetType: 'User',
+        targetId: TARGET_ID,
+      }),
+    )
+    expect(audit.record).toHaveBeenCalledWith(
+      transaction,
+      expect.objectContaining({
+        eventType: 'FUND_ACCOUNT_CREATED',
+        targetType: 'FundAccount',
+        targetId: ACCOUNT_ID,
+        metadata: { userId: TARGET_ID, userShareRate: '30.50' },
+      }),
+    )
+    expect(
+      transaction.user.create.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      transaction.fundAccount.create.mock.invocationCallOrder[0],
+    )
+    expectTransactionTimeoutAppliedFirst(transaction)
+  })
+
+  it('未勾选时不创建资金账户，只写 USER_CREATED 审计', async () => {
+    const { service, transaction, audit } = createServiceFixture()
+    transaction.$queryRaw.mockResolvedValue([{ now: DATABASE_NOW }])
+    transaction.user.create.mockResolvedValue(
+      userFixture({ authVersion: 0, roles: [] }),
+    )
+
+    await service.create(context, {
+      username: 'Alice',
+      displayName: 'Alice',
+      password: 'correct horse power',
+      mustChangePassword: false,
+    })
+
+    expect(transaction.fundAccount.create).not.toHaveBeenCalled()
+    expect(audit.record).toHaveBeenCalledTimes(1)
+    expect(audit.record.mock.calls[0]?.[1]).toMatchObject({
+      eventType: 'USER_CREATED',
+    })
+  })
+
+  it('资金账户比例非法时在密码哈希前失败，不写用户或账户', async () => {
+    const { service, transaction, passwords } = createServiceFixture()
+
+    await expectApiException(
+      service.create(context, {
+        username: 'Alice',
+        displayName: 'Alice',
+        password: 'correct horse power',
+        mustChangePassword: false,
+        fundAccount: { userShareRate: '30.555' },
+      }),
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      'FUND_SHARE_RATE_INVALID',
+    )
+
+    expect(passwords.hash).not.toHaveBeenCalled()
+    expect(transaction.user.create).not.toHaveBeenCalled()
+    expect(transaction.fundAccount.create).not.toHaveBeenCalled()
+  })
+
+  it('缺少 fund-accounts:create 时拒绝开户，且不写用户或账户', async () => {
+    const { service, access, transaction, passwords } = createServiceFixture()
+    access.getPermissionCodes.mockResolvedValue(['users:create'])
+    access.hasAll.mockReturnValue(false)
+
+    await expectApiException(
+      service.create(context, {
+        username: 'Alice',
+        displayName: 'Alice',
+        password: 'correct horse power',
+        mustChangePassword: false,
+        fundAccount: { userShareRate: '30' },
+      }),
+      HttpStatus.FORBIDDEN,
+      'FORBIDDEN',
+    )
+
+    expect(access.hasAll).toHaveBeenCalledWith(
+      ['users:create'],
+      ['fund-accounts:create'],
+    )
+    expect(passwords.hash).not.toHaveBeenCalled()
+    expect(transaction.user.create).not.toHaveBeenCalled()
+    expect(transaction.fundAccount.create).not.toHaveBeenCalled()
+  })
+
+  it('账户创建失败时交互式事务整体拒绝，用户不会被提交', async () => {
+    const { service, transaction, audit } = createServiceFixture()
+    transaction.$queryRaw.mockResolvedValue([{ now: DATABASE_NOW }])
+    transaction.user.create.mockResolvedValue(
+      userFixture({ authVersion: 0, roles: [] }),
+    )
+    transaction.fundAccount.create.mockRejectedValue(
+      new Error('fund account insert failed'),
+    )
+
+    await expectApiException(
+      service.create(context, {
+        username: 'Alice',
+        displayName: 'Alice',
+        password: 'correct horse power',
+        mustChangePassword: false,
+        fundAccount: { userShareRate: '30' },
+      }),
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      'FUND_INTERNAL_ERROR',
+    )
+
+    expect(transaction.user.create).toHaveBeenCalledTimes(1)
+    expect(transaction.fundAccount.create).toHaveBeenCalledTimes(1)
+    expect(audit.record).not.toHaveBeenCalledWith(
+      transaction,
+      expect.objectContaining({ eventType: 'FUND_ACCOUNT_CREATED' }),
+    )
   })
 
   it('Profile 嵌套创建失败时不继续写 Audit，并让外层事务整体失败', async () => {

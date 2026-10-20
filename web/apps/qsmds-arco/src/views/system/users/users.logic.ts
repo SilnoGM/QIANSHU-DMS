@@ -1,3 +1,5 @@
+import { normalizeFundShareRate } from '../../../utils/fund-share-rate'
+
 export interface UserListQuery {
   page: number
   pageSize: number
@@ -196,6 +198,41 @@ export function createPasswordFields(): PasswordFields {
 export function clearPasswordFields(fields: PasswordFields): void {
   fields.newPassword = ''
   fields.confirmPassword = ''
+}
+
+/**
+ * 分成比例只在勾选“同时创建资金账户”时必填；未勾选时彻底忽略输入值。
+ * 这里复用资金域的比例规范化，避免用户管理表单另立一套格式。
+ */
+export function validateFundAccountFields(
+  createFundAccount: boolean,
+  userShareRate: string,
+): FieldErrors {
+  if (!createFundAccount) {
+    return {}
+  }
+
+  const normalized = userShareRate.normalize('NFC').trim()
+  if (normalized === '') {
+    return { userShareRate: '请输入用户分成比例' }
+  }
+
+  try {
+    normalizeFundShareRate(normalized)
+  }
+  catch {
+    return { userShareRate: '分成比例应为 0 到 100，最多两位小数' }
+  }
+
+  return {}
+}
+
+export function buildCreateUserFundAccountInput(
+  userShareRate: string,
+): { userShareRate: string } {
+  return {
+    userShareRate: normalizeFundShareRate(userShareRate.normalize('NFC').trim()),
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

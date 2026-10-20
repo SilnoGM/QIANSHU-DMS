@@ -434,6 +434,28 @@ test('用户表单只在 edit 模式展示 Profile 字段，并保持一次原�
   )
 })
 
+test('用户表单按权限展示可选资金账户，勾选后才要求分成比例', () => {
+  const formSource = readRelativeSource(
+    '../../src/views/system/users/user-form-modal.vue',
+  )
+  const listSource = readRelativeSource('../../src/views/system/users/index.vue')
+
+  assert.match(
+    formSource,
+    /<FaCheckbox[\s\S]*?v-model="model\.createFundAccount"[\s\S]*?:disabled="!canCreateFundAccount"/u,
+  )
+  assert.match(formSource, /需要「新增资金账户」权限（fund-accounts:create）/u)
+  assert.match(
+    formSource,
+    /v-if="model\.createFundAccount"[\s\S]*?v-model="model\.userShareRate"/u,
+  )
+  assert.match(formSource, /validateFundAccountFields/u)
+  assert.match(formSource, /buildCreateUserFundAccountInput/u)
+  assert.match(formSource, /createsFundAccount[\s\S]*?fundAccount:/u)
+  assert.match(listSource, /auth\('fund-accounts:create'\)/u)
+  assert.match(listSource, /:can-create-fund-account="canCreateFundAccount"/u)
+})
+
 test('管理员编辑本人后刷新 AuthContext 与 Profile，移动端使用完整资料名称', () => {
   const source = readRelativeSource('../../src/views/system/users/index.vue')
 

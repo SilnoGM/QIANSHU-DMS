@@ -7,6 +7,12 @@ import type {
 
 import Decimal from 'decimal.js'
 
+import {
+  FundDecimal,
+  normalizeFundShareRate,
+  parseFundShareRate,
+} from '../../../../utils/fund-share-rate'
+
 type FundAdjustmentMode
   = CreateFundManualAdjustmentRequestDto['adjustmentMode']
 type FundAdjustmentMetadata
@@ -31,16 +37,6 @@ export interface FundAdjustmentPreview {
 }
 
 const FUND_AMOUNT_PATTERN = /^-?(?:0|[1-9]\d{0,25})(?:\.\d{1,2})?$/u
-const FUND_SHARE_RATE_PATTERN = /^(?:0|[1-9]\d{0,2})(?:\.\d{1,2})?$/u
-
-/**
- * 资金金额最多 26 位整数和 2 位小数；比例运算还会额外增加有效位。独立 clone
- * 防止修改 decimal.js 全局配置，同时为最大金额分账和余额相加保留充足精度。
- */
-const FundDecimal = Decimal.clone({
-  precision: 80,
-  rounding: Decimal.ROUND_HALF_UP,
-})
 
 function normalizeText(value: string, fieldName: string): string {
   const normalized = value.normalize('NFC').trim()
@@ -68,22 +64,6 @@ function normalizeNonZeroFundAmount(value: string): string {
     throw new RangeError('资金金额必须为非零值')
   }
   return amount.toFixed(2)
-}
-
-function parseFundShareRate(value: string): Decimal {
-  if (!FUND_SHARE_RATE_PATTERN.test(value)) {
-    throw new RangeError('资金分成比例无效')
-  }
-
-  const shareRate = new FundDecimal(value)
-  if (shareRate.greaterThan(100)) {
-    throw new RangeError('资金分成比例无效')
-  }
-  return shareRate
-}
-
-function normalizeFundShareRate(value: string): string {
-  return parseFundShareRate(value).toFixed(2)
 }
 
 function validVersion(value: number): boolean {
