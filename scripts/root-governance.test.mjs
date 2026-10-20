@@ -385,6 +385,10 @@ const supplierResidueAllowlist = Object.freeze([
   // 生产清理执行清单只引用既有 products/字典字段做基线与校验，不新增 Supplier 主数据。
   'deploy/ops/production-data-reset/README.md',
   'deploy/ops/production-data-reset/20-verify.sql',
+  // 时区修正只按历史表名修正 supplier_shipping_mark_rule_bindings 的时间列，
+  // 不新增 Supplier 主数据、表、权限或查询入口。
+  'deploy/ops/timezone-correction/10-correct.sql',
+  'deploy/ops/timezone-correction/README.md',
   // 对账详情按明细行展示装柜行匹配到的采购/销售来源：只读订单快照、金额与
   // 供应商字典标签，不新增供应商主数据入口，也不放开采采购/销售的写操作。
   'server/src/modules/slh-reconciliation-batches/slh-reconciliation-batch-query.service.ts',

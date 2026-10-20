@@ -258,6 +258,24 @@ ssh <服务器SSH用户>@<服务器公网IP> 'sudo chmod 0600 /srv/qianshu-dms/.
 sudo stat -c '%a %U:%G' /srv/qianshu-dms/.env /srv/qianshu-dms/server.env   # 应输出 600 root:root
 ```
 
+### 6.4 数据库时区（必须固定 UTC）
+
+`docker-compose.yml` 的 `db` 服务已固定：
+
+- `environment.TZ: UTC`
+- `command` 中 `-c timezone=UTC`
+
+不要改回 `Asia/Shanghai`。Prisma 的 PostgreSQL 适配器按 UTC 解释 `timestamptz`；会话时区非 UTC 会让 Prisma 直接写入的时间整体偏移，并让“数据库时间读回再写入”的字段在页面多 8 小时。服务端启动时会检查 `current_setting('TimeZone')`，不是 `UTC`/`Etc/UTC` 会拒绝启动。
+
+验证：
+
+```bash
+sudo docker compose -f /srv/qianshu-dms/docker-compose.yml exec -T db \
+  psql -U <数据库用户名> -d <数据库名> -c 'SHOW TimeZone;'   # 必须 UTC 或 Etc/UTC
+```
+
+**从 v0.8.4 及更早版本升级、且库中已有业务数据**：不能直接把时区改到 UTC。先按 [`deploy/ops/timezone-correction/README.md`](../../deploy/ops/timezone-correction/README.md) 在旧会话时区（`Asia/Shanghai`）下完成存量修正，再切换时区并启动新版本。空库首次部署不需要修正。
+
 ## 7. 数据库迁移：本地 SSH 隧道执行
 
 数据库此前为空库，迁移在建库后、启动 Server 前执行一次；更新版本时同样先迁移、后换镜像。
@@ -420,6 +438,8 @@ openssl s_client -connect <域名>:443 -servername <域名> </dev/null 2>/dev/nu
 5. **切换**：编辑 `/srv/qianshu-dms/.env` 的 `QIANSHU_IMAGE_TAG=<新tag>` → `sudo docker compose -f /srv/qianshu-dms/docker-compose.yml up -d`。
 6. **验证**：执行第 10 节中的「健康检查 / 前端 / 登录 / 媒体 / 订单图片」。
 7. **记录**：登记新 tag、镜像 digest、时间与结果。
+
+**从 v0.8.4 及更早版本升级、且库中已有业务数据**：版本更新前先按 [`deploy/ops/timezone-correction/README.md`](../../deploy/ops/timezone-correction/README.md) 完成存量时间偏移修正；确认数据库会话已切到 UTC 后，再执行第 5 步切换镜像。这是一次性操作，不能跳过，也不能重复执行。
 
 建议在低峰时段执行；更新前确认 `/srv/qianshu-dms/images/` 保留了上一版本的镜像归档，这就是回滚点。
 
