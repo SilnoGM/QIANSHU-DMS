@@ -241,7 +241,8 @@ export class SalesReceiptService {
         await this.verifyVoucher(asset.objectKey!)
         const amount = convertReceiptToCny(row.amount.toFixed(2), rate.rate.toFixed(4))
         const posting = await this.funds.postBusinessEventInTransaction(tx, this.fundContext(context, 'APPROVE'), this.postingInput(row, order.orderNo, amount), { ruleVersionId: input.expectedContext.ruleVersionId, userShareRate: input.expectedContext.userShareRate })
-        const [{ now }] = await tx.$queryRaw<[{ now: Date }]>(Prisma.sql`SELECT clock_timestamp() AS now`)
+        // 统一使用应用时钟：不再把数据库读出的时间再经 Prisma 写回，避免适配器按会话时区重解释。
+        const now = new Date()
         const payment = await tx.salesOrderPayment.create({ data: { salesOrderId: order.id, paymentType: row.paymentType, amount: row.amount, receivedAt: row.receivedAt, paymentMethod: row.paymentMethod, remark: row.remark, createdByUserId: context.actorUserId,
           origin: 'REVIEWED', fundPostingBatchId: posting.batchId, exchangeRateId: rate.id, exchangeRateVersionSnapshot: rate.version, foreignUnitsPerCnySnapshot: rate.rate, exchangeRateCapturedAt: now } })
         await tx.salesOrderDocument.create({ data: { salesOrderId: order.id, paymentId: payment.id, mediaAssetId: row.voucherMediaAssetId, documentType: 'PAYMENT_VOUCHER', title: row.voucherTitle, createdByUserId: context.actorUserId } })
@@ -262,7 +263,7 @@ export class SalesReceiptService {
       const { order, row } = await this.lockRequest(tx, id, context.actorUserId)
       if (row.status === 'REJECTED' && row.reviewedByUserId === context.actorUserId && row.reviewRemark === reviewRemark) return
       if (row.status !== 'PENDING_REVIEW' || row.version !== input.expectedVersion) receiptFailure('SALES_RECEIPT_STATE_CHANGED', '申请已变化，请刷新后重试', HttpStatus.CONFLICT)
-      const [{ now }] = await tx.$queryRaw<[{ now: Date }]>(Prisma.sql`SELECT clock_timestamp() AS now`)
+      const now = new Date()
       await tx.salesReceiptRequest.update({ where: { id }, data: { status: 'REJECTED', reviewedByUserId: context.actorUserId, reviewedAt: now, reviewRemark, version: { increment: 1 } } })
       await this.auditEvent(tx, context, AuditEventType.SALES_RECEIPT_REJECTED, id, order.id)
     })
@@ -289,7 +290,7 @@ export class SalesReceiptService {
           const reversed = await this.funds.reverseBusinessEventInTransaction(tx, this.fundContext(context, 'VOID'), { originalBatchId: payment.fundPostingBatch.id, amount: payment.fundPostingBatch.businessAmount.toFixed(2), reason: voidReason, idempotencyKey: payment.id })
           fundReversalBatchId = reversed.batchId
         }
-        const [{ now }] = await tx.$queryRaw<[{ now: Date }]>(Prisma.sql`SELECT clock_timestamp() AS now`)
+        const now = new Date()
         await tx.salesOrderPayment.update({ where: { id: paymentId }, data: { voidedAt: now, voidedByUserId: context.actorUserId, voidReason, fundReversalBatchId } })
         await this.updatePaymentStatus(tx, context, order, false, voidReason)
         await this.auditEvent(tx, context, AuditEventType.SALES_ORDER_PAYMENT_VOIDED, paymentId, salesOrderId)

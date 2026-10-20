@@ -44,6 +44,15 @@ function setupSalesLinked() {
 }
 
 describe('PurchaseOrderWarehouseReceiptService', () => {
+  beforeEach(() => {
+    jest.useFakeTimers()
+    jest.setSystemTime(now)
+  })
+
+  afterEach(() => {
+    jest.useRealTimers()
+  })
+
   it('advances the linked sales order with history and audit in the receipt transaction after all quantities arrive', async () => {
     const fixture = setupSalesLinked()
     await fixture.service.receive(context, orderId, { expectedVersion: 3, partIds: [partId] })

@@ -195,7 +195,8 @@ export class PackagingCostService {
         // 预览和入账共用当前事务及配置/账户锁；规则、比例、资金和付款审计任一失败均回滚。
         const preview = await this.funds.previewBusinessEventInTransaction(tx, fundContext, postingInput)
         const posting = await this.funds.postBusinessEventInTransaction(tx, fundContext, postingInput, preview)
-        const [{ now }] = await tx.$queryRaw<[{ now: Date }]>(Prisma.sql`SELECT clock_timestamp() AS now`)
+        // 统一使用应用时钟，避免数据库时间经 Prisma 回写时被适配器按会话时区重解释。
+        const now = new Date()
         await tx.packagingCostRequest.update({ where: { id }, data: { paymentVoucherMediaAssetId: voucher.id, recipientQrMediaAssetId: recipient.qrMediaAssetId, recipientSnapshot: recipient.snapshot as unknown as Prisma.InputJsonObject, paymentRemark: payment.remark, paymentFingerprintHash: fingerprint, status: 'PAID', paidByUserId: context.actorUserId, paidAt: now, version: { increment: 1 } } })
         await this.audit.record(tx, { eventType: 'PACKAGING_COST_PAID', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PACKAGING_COST_REQUEST', targetId: id, metadata: { amount: row.amount.toFixed(2), currencyCode: 'CNY', fundPostingBatchId: posting.batchId } })
       }, { timeout: 30_000 })

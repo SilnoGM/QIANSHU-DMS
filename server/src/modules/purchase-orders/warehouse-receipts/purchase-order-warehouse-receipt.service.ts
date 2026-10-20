@@ -77,8 +77,9 @@ export class PurchaseOrderWarehouseReceiptService {
         const parts = selected as WarehouseOrder['parts']
         if (parts.length === 0 || parts.some(part => part.warehouseReceivedAt !== null)) return stateChanged()
         if (!['PARTIALLY_SHIPPED', 'SHIPPED'].includes(order.fulfillmentStatus) || parts.some(part => part.shippedAt === null)) return notAllowed('只能确认已发货且尚未入仓的货件')
-        const rows = await transaction.$queryRaw<{ now: Date }[]>(Prisma.sql`SELECT clock_timestamp() AS now`)
-        const recordedAt = rows[0].now, receivedAt = input.receivedAt === null ? recordedAt : new Date(input.receivedAt)
+        // 记录时间使用应用时钟；数据库读出的时间再经 Prisma 写回会被适配器按会话时区重解释。
+        const recordedAt = new Date()
+        const receivedAt = input.receivedAt === null ? recordedAt : new Date(input.receivedAt)
         const partIds = parts.map(part => part.id).sort()
         // 历史 PostgreSQL 发货事实可带微秒，JS Date 会截断为毫秒；最终时间比较必须由数据库保留原精度。
         const precedesShipment = receivedAt <= recordedAt && await transaction.purchaseOrderPart.count({
