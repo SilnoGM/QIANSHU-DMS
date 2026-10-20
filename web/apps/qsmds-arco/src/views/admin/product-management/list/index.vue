@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ProductBatchRunResult } from './product-batch-images.logic'
 import type { ProductListItemViewModel } from './product-list.logic'
 import type {
   ProductTaxonomyCategoryOptionDto,
@@ -21,6 +22,17 @@ import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
 import ProductAttributesModal from './product-attributes-modal.vue'
+import ProductBatchImagesModal from './product-batch-images-modal.vue'
+import {
+  clearProductBatchPage,
+  getProductBatchPageSelectionState,
+  isProductBatchSelectionDisabled,
+  PRODUCT_BATCH_SELECTION_COLUMN_ID,
+  PRODUCT_BATCH_SELECTION_LIMIT,
+  selectProductBatchPage,
+  toggleProductBatchSelection,
+  updateProductBatchSelectionSnapshot,
+} from './product-batch-images.logic'
 import ProductDetailDrawer from './product-detail-drawer.vue'
 import {
   adaptProductListItemDto,
@@ -54,6 +66,9 @@ const canUpdate = computed(() => authAll([
   'product-categories:create',
 ]))
 const canReadProductMedia = computed(() => auth('product-media:read'))
+const canBatchSetImages = computed(() => auth('products:update'))
+const selectedProducts = ref<ReadonlyMap<string, ProductListItemViewModel>>(new Map())
+const batchImagesVisible = ref(false)
 const rows = ref<ProductListItemViewModel[]>([])
 const page = ref(1)
 const pageSize = ref(20)
@@ -204,7 +219,23 @@ const listErrorDisplay = computed(() => {
     : `${listError.value}（requestId: ${listRequestId.value}）`
 })
 
-const columns: QsGenericTableColumn<ProductListItemViewModel>[] = [
+const selectedProductCount = computed(() => selectedProducts.value.size)
+const selectedProductList = computed(() => [...selectedProducts.value.values()])
+const pageSelectionState = computed(() => getProductBatchPageSelectionState(
+  selectedProducts.value,
+  rows.value,
+))
+const selectionColumn: QsGenericTableColumn<ProductListItemViewModel> = {
+  accessorFn: item => item.id,
+  align: 'center',
+  enableHiding: false,
+  fixed: 'left',
+  id: PRODUCT_BATCH_SELECTION_COLUMN_ID,
+  title: '选择',
+  width: 56,
+}
+
+const productColumns: QsGenericTableColumn<ProductListItemViewModel>[] = [
   {
     accessorKey: 'productNo',
     id: 'productNo',
@@ -277,6 +308,12 @@ const columns: QsGenericTableColumn<ProductListItemViewModel>[] = [
     title: '更新人',
   },
 ]
+
+const columns = computed<QsGenericTableColumn<ProductListItemViewModel>[]>(() => (
+  canBatchSetImages.value
+    ? [selectionColumn, ...productColumns]
+    : productColumns
+))
 
 function listResponseIsCurrent(
   requestVersion: number,
@@ -382,6 +419,7 @@ function applyTreeSelection(
   nextFilters: QsGenericTableFilterValues,
   unclassified: boolean,
 ): void {
+  clearProductSelection()
   unclassifiedOnly.value = unclassified
   filters.value = nextFilters
   page.value = 1
@@ -520,6 +558,11 @@ async function loadProducts(): Promise<void> {
 
     const nextPage = adaptProductPageDto(response.data)
     rows.value = [...nextPage.items]
+    // 列表刷新只同步已选快照；分页切换时当前页之外的选择保持不变。
+    selectedProducts.value = updateProductBatchSelectionSnapshot(
+      selectedProducts.value,
+      nextPage.items,
+    )
     page.value = nextPage.page
     pageSize.value = nextPage.pageSize
     total.value = nextPage.total
@@ -554,7 +597,84 @@ function scheduleQueryRefresh(): void {
   })
 }
 
+function toggleProductSelection(
+  product: ProductListItemViewModel,
+  checked: boolean,
+): void {
+  const result = toggleProductBatchSelection(
+    selectedProducts.value,
+    product,
+    checked,
+  )
+  if (result.changed) {
+    selectedProducts.value = result.selected
+  }
+}
+
+function isProductSelectionDisabled(product: ProductListItemViewModel): boolean {
+  return isProductBatchSelectionDisabled(selectedProducts.value, product)
+}
+
+function selectCurrentPage(): void {
+  const result = selectProductBatchPage(selectedProducts.value, rows.value)
+  if (result.selected !== selectedProducts.value) {
+    selectedProducts.value = result.selected
+  }
+  if (result.limited) {
+    toast.warning(`单次最多选择 ${PRODUCT_BATCH_SELECTION_LIMIT} 个产品`)
+  }
+}
+
+function clearCurrentPageSelection(): void {
+  const next = clearProductBatchPage(selectedProducts.value, rows.value)
+  if (next !== selectedProducts.value) {
+    selectedProducts.value = next
+  }
+}
+
+function clearProductSelection(): void {
+  if (selectedProducts.value.size > 0) {
+    selectedProducts.value = new Map()
+  }
+}
+
+function toggleCurrentPageSelection(
+  value: boolean | 'indeterminate' | null | undefined,
+): void {
+  if (value === true) {
+    selectCurrentPage()
+    return
+  }
+  clearCurrentPageSelection()
+}
+
+function openBatchImages(): void {
+  if (!canBatchSetImages.value || selectedProductCount.value === 0) {
+    return
+  }
+  batchImagesVisible.value = true
+}
+
+function handleBatchImagesFinished(result: ProductBatchRunResult): void {
+  if (result.successfulProductIds.length === 0) {
+    return
+  }
+  const next = new Map(selectedProducts.value)
+  for (const productId of result.successfulProductIds) {
+    next.delete(productId)
+  }
+  selectedProducts.value = next
+}
+
+function handleBatchImagesClosed(changed: boolean): void {
+  batchImagesVisible.value = false
+  if (changed) {
+    void loadProducts()
+  }
+}
+
 function handleFilterChange(nextFilters: QsGenericTableFilterValues): void {
+  clearProductSelection()
   unclassifiedOnly.value = false
   const status = nextFilters.status === 'ACTIVE' || nextFilters.status === 'INACTIVE'
     ? nextFilters.status
@@ -584,6 +704,7 @@ function handleFilterChange(nextFilters: QsGenericTableFilterValues): void {
 
 /** 搜索由 QsGenericTable 在显式提交/清空时触发，不对输入过程逐键请求。 */
 function handleSearch(keyword: string): void {
+  clearProductSelection()
   searchKeyword.value = keyword
   page.value = 1
   scheduleQueryRefresh()
@@ -806,6 +927,10 @@ async function submitStatusChange(): Promise<void> {
     }
     const updated = adaptProductListItemDto(response.data)
     rows.value = rows.value.map(row => row.id === updated.id ? updated : row)
+    selectedProducts.value = updateProductBatchSelectionSnapshot(
+      selectedProducts.value,
+      [updated],
+    )
     if (detailProduct.value?.id === updated.id) {
       detailProduct.value = updated
     }
@@ -844,6 +969,8 @@ watch(
   [() => appAccountStore.authEpoch, canRead],
   ([nextAuthEpoch, nextCanRead], [previousAuthEpoch]) => {
     const identityChanged = nextAuthEpoch !== previousAuthEpoch
+    clearProductSelection()
+    batchImagesVisible.value = false
     listRequestVersion += 1
     listAbortController?.abort()
     detailRequestVersion += 1
@@ -880,6 +1007,13 @@ watch(
   },
 )
 
+watch(canBatchSetImages, (allowed) => {
+  if (!allowed) {
+    clearProductSelection()
+    batchImagesVisible.value = false
+  }
+})
+
 onMounted(() => {
   if (canRead.value) {
     void loadProducts()
@@ -910,6 +1044,17 @@ onBeforeUnmount(() => {
       title="产品列表"
       description="集中查看产品基础资料、供应商、媒体、价格与审计信息。"
     >
+      <FaButton
+        v-if="canBatchSetImages"
+        variant="outline"
+        class="min-h-11 sm:min-h-9"
+        :disabled="selectedProductCount === 0"
+        :aria-label="`批量设置图片，已选 ${selectedProductCount} 个产品`"
+        @click="openBatchImages"
+      >
+        <FaIcon name="i-lucide:images" />
+        批量设置图片<span v-if="selectedProductCount > 0">（{{ selectedProductCount }}）</span>
+      </FaButton>
       <FaButton v-if="canCreate" class="min-h-11 sm:min-h-9" @click="navigateToCreate">
         <FaIcon name="i-lucide:plus" />
         新增产品
@@ -1113,6 +1258,44 @@ onBeforeUnmount(() => {
         </aside>
 
         <section class="min-w-0">
+          <div
+            v-if="canBatchSetImages && selectedProductCount > 0"
+            class="mb-3 px-3 py-2 border border-border rounded-xl bg-muted/20 flex flex-wrap gap-2 items-center justify-between"
+          >
+            <p class="qs-type-meta m-0" aria-live="polite">
+              已选 {{ selectedProductCount }} 个产品（选择上限 {{ PRODUCT_BATCH_SELECTION_LIMIT }} 个）
+            </p>
+            <div class="flex flex-wrap gap-2 items-center">
+              <FaButton
+                type="button"
+                variant="outline"
+                size="sm"
+                class="min-h-11 sm:min-h-9"
+                @click="selectCurrentPage"
+              >
+                全选本页
+              </FaButton>
+              <FaButton
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-9"
+                @click="clearCurrentPageSelection"
+              >
+                取消本页选择
+              </FaButton>
+              <FaButton
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-9"
+                @click="clearProductSelection"
+              >
+                清空选择
+              </FaButton>
+            </div>
+          </div>
+
           <QsGenericTable
             v-model:page="page"
             v-model:page-size="pageSize"
@@ -1134,12 +1317,32 @@ onBeforeUnmount(() => {
             :searchable="true"
             :show-column-settings="true"
             :total="total"
-            table-class="min-w-[2600px]"
+            table-class="min-w-[2656px]"
             @filter-change="handleFilterChange"
             @pagination-change="handlePaginationChange"
             @retry="loadProducts"
             @search="handleSearch"
           >
+            <template #header-selection>
+              <FaCheckbox
+                :model-value="pageSelectionState"
+                :disabled="rows.length === 0"
+                class="justify-center"
+                @update:model-value="toggleCurrentPageSelection"
+              >
+                <span class="sr-only">全选当前页产品</span>
+              </FaCheckbox>
+            </template>
+            <template #cell-selection="{ row }">
+              <FaCheckbox
+                :model-value="selectedProducts.has(row.original.id)"
+                :disabled="isProductSelectionDisabled(row.original)"
+                class="justify-center"
+                @update:model-value="value => toggleProductSelection(row.original, value === true)"
+              >
+                <span class="sr-only">选择产品 {{ row.original.productNo }}</span>
+              </FaCheckbox>
+            </template>
             <template #cell-productNo="{ row }">
               <span class="qs-type-data font-mono">{{ row.original.productNo }}</span>
             </template>
@@ -1313,12 +1516,23 @@ onBeforeUnmount(() => {
 
             <template #mobile-row="{ row, rowNumber }">
               <div class="mb-4 pb-3 border-b border-border flex gap-3 items-start justify-between">
-                <div class="min-w-0">
-                  <div class="qs-type-data-emphasis font-mono break-all">
-                    {{ row.productNo }}
-                  </div>
-                  <div class="qs-type-body mt-1">
-                    {{ row.name }}
+                <div class="flex flex-1 gap-2 min-w-0 items-start">
+                  <FaCheckbox
+                    v-if="canBatchSetImages"
+                    :model-value="selectedProducts.has(row.id)"
+                    :disabled="isProductSelectionDisabled(row)"
+                    class="mt-0.5"
+                    @update:model-value="value => toggleProductSelection(row, value === true)"
+                  >
+                    <span class="sr-only">选择产品 {{ row.productNo }}</span>
+                  </FaCheckbox>
+                  <div class="min-w-0">
+                    <div class="qs-type-data-emphasis font-mono break-all">
+                      {{ row.productNo }}
+                    </div>
+                    <div class="qs-type-body mt-1">
+                      {{ row.name }}
+                    </div>
                   </div>
                 </div>
                 <span class="qs-type-meta shrink-0 tabular-nums">#{{ rowNumber }}</span>
@@ -1545,6 +1759,13 @@ onBeforeUnmount(() => {
       @retry="loadProductDetail"
       @edit="navigateToEdit"
       @closed="closeProductDetail"
+    />
+    <ProductBatchImagesModal
+      v-model="batchImagesVisible"
+      :content-readable="canReadProductMedia"
+      :products="selectedProductList"
+      @closed="handleBatchImagesClosed"
+      @finished="handleBatchImagesFinished"
     />
 
     <QsGenericModal
