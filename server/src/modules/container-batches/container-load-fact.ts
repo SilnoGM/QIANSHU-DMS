@@ -1,8 +1,8 @@
 import { Prisma } from '../../generated/prisma/client'
 import { AuditService } from '../audit/audit.service'
 
-/** 装柜事实的写入来源：单条新增、单条编辑、Excel 导入。 */
-export type ContainerLoadSource = 'ITEM_CREATE' | 'ITEM_UPDATE' | 'IMPORT'
+/** 装柜事实的写入来源：单条新增、单条编辑、Excel 导入与一次性历史回填。 */
+export type ContainerLoadSource = 'ITEM_CREATE' | 'ITEM_UPDATE' | 'IMPORT' | 'BACKFILL'
 
 /**
  * 关联即已装柜：在装柜明细的同一事务内、持有货件行锁之后写入一次装柜事实。
