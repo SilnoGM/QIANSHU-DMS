@@ -6,6 +6,7 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 
 import {
   buildProductImageItems,
@@ -276,7 +277,8 @@ function supplierDisplay(product: ProductListItemViewModel): string {
             <dt class="qs-type-compact-label">
               创建人
             </dt><dd class="m-0 mt-1 break-words">
-              {{ product.createdBy?.displayName ?? '—' }}
+              <QsPersonDisplay v-if="product.createdBy" :display-name="product.createdBy.displayName" size="sm" />
+              <span v-else class="text-muted-foreground">—</span>
             </dd>
           </div>
           <div class="min-w-0">
@@ -290,7 +292,8 @@ function supplierDisplay(product: ProductListItemViewModel): string {
             <dt class="qs-type-compact-label">
               更新人
             </dt><dd class="m-0 mt-1 break-words">
-              {{ product.updatedBy?.displayName ?? '—' }}
+              <QsPersonDisplay v-if="product.updatedBy" :display-name="product.updatedBy.displayName" size="sm" />
+              <span v-else class="text-muted-foreground">—</span>
             </dd>
           </div>
           <div class="min-w-0">

@@ -529,6 +529,9 @@ export class FundPostingBatchReversalDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   actorUserId!: string
 
+  @ApiProperty({ type: 'string' })
+  actorDisplayName!: string
+
   @ApiProperty({ type: 'string', format: 'date-time' })
   postedAt!: string
 }

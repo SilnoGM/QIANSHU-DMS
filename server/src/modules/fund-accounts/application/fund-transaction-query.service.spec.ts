@@ -205,6 +205,7 @@ describe('FundTransactionQueryService', () => {
           businessAmount: new Prisma.Decimal('-20'),
           reversalReason: '部分冲账',
           actorUserId: '10000000-0000-4000-8000-000000000032',
+          actor: { displayName: 'Admin' },
           postedAt: new Date('2026-08-18T02:00:00.000Z'),
         }],
       })
@@ -241,7 +242,7 @@ describe('FundTransactionQueryService', () => {
         originalAmount: '100.00',
         reversedAmount: '20.00',
         remainingAmount: '80.00',
-        reversals: [{ amount: '20.00', reason: '部分冲账' }],
+        reversals: [{ amount: '20.00', reason: '部分冲账', actorDisplayName: 'Admin' }],
       },
     })
   })

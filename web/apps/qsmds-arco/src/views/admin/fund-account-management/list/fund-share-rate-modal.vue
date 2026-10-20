@@ -5,6 +5,7 @@ import type {
 } from '@/api/generated/types.gen'
 
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 
 import { buildFundShareRateRequest } from '../shared/fund-money.logic'
 import { formatFundShareRate } from './fund-account-list.logic'
@@ -105,11 +106,15 @@ watch(() => props.submitting, (submitting) => {
   <QsGenericModal
     :model-value="modelValue"
     title="修改分成比例"
-    :description="account?.user === null ? '用户账户不可用' : `${account?.user?.displayName}（${account?.user?.username}）`"
+    :description="account?.user?.displayName ?? '用户账户不可用'"
     size="md"
     :submitting="locked"
     @update:model-value="updateVisible"
   >
+    <template #description>
+      <QsPersonDisplay v-if="account?.user" :display-name="account.user.displayName" size="sm" />
+      <span v-else>用户账户不可用</span>
+    </template>
     <FaAlert
       icon="i-lucide:info"
       title="只影响未来动账"

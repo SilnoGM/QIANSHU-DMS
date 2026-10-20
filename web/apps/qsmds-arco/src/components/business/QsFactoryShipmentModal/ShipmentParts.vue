@@ -4,6 +4,7 @@ import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { isPendingShipmentPart, validateShipmentTrackingNo } from './logic'
 
 const props = defineProps<{
@@ -147,7 +148,7 @@ function trackingError(partId: string): string | null {
           <p v-if="part.shippedAt" class="qs-type-meta text-muted-foreground m-0 whitespace-pre-wrap">
             发货时间：<DateTimeDisplay :value="part.shippedAt" /><br>
             记录时间：<DateTimeDisplay :value="part.shipmentRecordedAt" /><br>
-            操作人：{{ part.shippedBy?.displayName || '未记录' }}<br>
+            操作人：<QsPersonDisplay v-if="part.shippedBy" :display-name="part.shippedBy.displayName" size="sm" /><span v-else>未记录</span><br>
             发货说明：{{ part.shipmentRemark || '—' }}
           </p>
           <div v-for="product in part.products" :key="product.lineId" class="flex gap-3 items-start">

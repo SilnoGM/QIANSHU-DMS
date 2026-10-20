@@ -36,6 +36,7 @@ const emit = defineEmits<{
 
 const slots = defineSlots<{
   'default'?: () => VNode[]
+  'description'?: () => VNode[]
   'error-actions'?: () => VNode[]
   'footer'?: () => VNode[]
   'header-extra'?: () => VNode[]
@@ -232,12 +233,14 @@ onBeforeUnmount(() => {
             {{ title }}
           </h2>
           <p
-            v-if="description"
+            v-if="description || slots.description"
             data-slot="dialog-description"
             class="m-0 mt-1 break-words"
             aria-hidden="true"
           >
-            {{ description }}
+            <slot name="description">
+              {{ description }}
+            </slot>
           </p>
         </div>
 

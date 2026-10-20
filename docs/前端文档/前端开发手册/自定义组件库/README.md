@@ -11,7 +11,7 @@
 | 分类 | 职责 | 当前组件 |
 | --- | --- | --- |
 | 基础组件 | 封装稳定、低业务耦合的输入、展示与反馈规则，不读取业务 Store，不请求领域 API | [金额输入](./基础组件/金额输入.md)、[金额显示](./基础组件/金额显示.md)、[日期显示](./基础组件/日期显示.md)、[轻提示](./基础组件/轻提示.md)、[图片组](./基础组件/图片组.md) |
-| 业务组件 | 组合基础组件和 Fantastic-admin 能力，提供可复用的业务交互骨架，但不内置具体业务动作或数据副作用 | [通用表格](./业务组件/通用表格.md)、[通用抽屉](./业务组件/通用抽屉.md)、[通用模态框](./业务组件/通用模态框.md)、[产品提示](./业务组件/产品提示.md)、[海运柜次卡片](./业务组件/海运柜次卡片.md) |
+| 业务组件 | 组合基础组件和 Fantastic-admin 能力，提供可复用的业务交互骨架，但不内置具体业务动作或数据副作用 | [通用表格](./业务组件/通用表格.md)、[通用抽屉](./业务组件/通用抽屉.md)、[通用模态框](./业务组件/通用模态框.md)、[产品提示](./业务组件/产品提示.md)、[海运柜次卡片](./业务组件/海运柜次卡片.md)、[人员显示](./业务组件/人员显示.md) |
 
 页面模板仍按[组件库建设方案](../../组件库建设方案.md)治理；当前没有需要纳入本分册的稳定页面模板说明书。
 
@@ -31,7 +31,8 @@
     ├── 通用抽屉.md
     ├── 通用模态框.md
     ├── 产品提示.md
-    └── 海运柜次卡片.md
+    ├── 海运柜次卡片.md
+    └── 人员显示.md
 ```
 
 代码目录与文档分类保持一致：
@@ -49,7 +50,8 @@ web/apps/qsmds-arco/src/components/
     ├── QsGenericDrawer/
     ├── QsGenericModal/
     ├── QsGoodTooltip/
-    └── QsOceanContainerList/
+    ├── QsOceanContainerList/
+    └── QsPersonDisplay/
 ```
 
 ## 3. 使用边界
@@ -65,6 +67,7 @@ web/apps/qsmds-arco/src/components/
 - `QsToast` 通过 `useQsToast()` 提供受控轻提示 API；调用方只提供文案、时长和动作，不替换内部视觉组件。
 - `ImageGroup` 只管理图片缩略图、逐图 Tooltip、溢出和整组预览，不认识产品、SKU 或附件领域字段。
 - `QsGoodTooltip` 提供完整 Tooltip 包装器，`QsGoodTooltipContent` 提供可复用的左图右文内容层。`ImageGroup` 每张图片对应不同 SPU / SKU 时，通过逐项 `tooltip` 插槽按稳定 `item.key` 渲染内容层；只有整组对应同一产品、使用外层包装器时才传入 `:tooltip="false"`。
+- `QsPersonDisplay` 是系统人员的唯一展示出口，统一输出“头像 + 姓名”。业务人员字段不得在模板中直接插值姓名；纯文本例外仅限单据、打印、图片说明和表单只读字段，并必须在人员展示治理脚本中登记。
 - 组件内核不足以满足已确认需求时，先按[前端开发手册](../README.md#5-组件与代码边界)复核选型，再决定扩展现有组件或回退到下层能力。
 - 排版角色统一遵循[全局排版规范](../../全局排版规范.md)，不得按列名、文案或对齐方式猜测金额、单号、日期等数据语义。
 
@@ -83,6 +86,7 @@ web/apps/qsmds-arco/src/components/
 | 业务组件 | `QsGenericModal` | `/component-library/business/generic-modal` |
 | 业务组件 | `QsGoodTooltip` | `/component-library/business/good-tooltip` |
 | 业务组件 | `QsOceanContainerList` | `/component-library/business/ocean-container-list` |
+| 业务组件 | `QsPersonDisplay` | `/component-library/business/person-display` |
 
 组件库路由在开发环境自动注册。非开发构建只有在公开布尔变量 `VITE_ENABLE_COMPONENT_LIBRARY=true` 时才注册，生产环境默认不提供该入口。Showcase 用于接口和视觉验收，不代表组件已经接入真实业务页面。
 
@@ -126,8 +130,10 @@ pnpm -C web exec tsx --test \
   apps/qsmds-arco/test/views/generic-drawer.test.ts \
   apps/qsmds-arco/test/views/generic-drawer-showcase.test.ts \
   apps/qsmds-arco/test/views/generic-modal.test.ts \
-  apps/qsmds-arco/test/views/generic-modal-showcase.test.ts
+  apps/qsmds-arco/test/views/generic-modal-showcase.test.ts \
+  apps/qsmds-arco/test/views/qs-person-display.test.ts
 
+pnpm -C web exec node --test scripts/person-display-governance.test.mjs
 pnpm -C web exec node --test scripts/frontend-handbook.test.mjs
 pnpm -C web exec eslint scripts/frontend-handbook.test.mjs
 git diff --check

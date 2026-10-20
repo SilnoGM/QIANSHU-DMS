@@ -10,6 +10,7 @@ import { useMediaQuery } from '@vueuse/core'
 
 import managementApi from '@/api/modules/management'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 
 import { hasVisibleTableColumn } from '../shared/table-query'
 import PasswordResetModal from './password-reset-modal.vue'
@@ -508,6 +509,13 @@ onMounted(() => {
           <template #cell-username="{ row }">
             <span class="qs-type-data-emphasis">{{ row.original.username }}</span>
           </template>
+          <template #cell-displayName="{ row }">
+            <QsPersonDisplay
+              :display-name="row.original.displayName"
+              :avatar-url="row.original.profile.avatarUrl"
+              size="sm"
+            />
+          </template>
           <template #cell-status="{ row }">
             <FaTag
               variant="outline"
@@ -582,7 +590,12 @@ onMounted(() => {
                     显示名称
                   </dt>
                   <dd class="qs-type-body m-0 [overflow-wrap:anywhere]">
-                    {{ user.displayName }}
+                    <QsPersonDisplay
+                      :display-name="user.displayName"
+                      :avatar-url="user.profile.avatarUrl"
+                      size="sm"
+                      class="max-w-full"
+                    />
                   </dd>
                 </div>
                 <div v-if="hasVisibleTableColumn(visibleColumns, 'password-requirement')">

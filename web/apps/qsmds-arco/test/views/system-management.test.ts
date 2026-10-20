@@ -830,12 +830,13 @@ test('审计日志桌面与移动卡片区分时间、标识、普通重点值�
   )
   assert.match(
     source,
-    /<template #cell-actorDisplayName[\s\S]*?<span class="qs-type-body-medium">/u,
+    /<template #cell-actorDisplayName[\s\S]*?<QsPersonDisplay/u,
   )
   assert.equal(
-    source.match(/<template #cell-(?:actorUserId|target|requestId)[\s\S]*?<code class="qs-type-data-emphasis break-all">/gu)?.length,
-    3,
+    source.match(/<template #cell-(?:target|requestId)[\s\S]*?<code class="qs-type-data-emphasis break-all">/gu)?.length,
+    2,
   )
+  assert.doesNotMatch(source, /actorUserId/u)
   assert.match(
     source,
     /<strong class="qs-type-compact-title block break-words">/u,
@@ -846,7 +847,7 @@ test('审计日志桌面与移动卡片区分时间、标识、普通重点值�
   )
   assert.equal(
     source.match(/<dt class="qs-type-compact-label">/gu)?.length,
-    6,
+    5,
   )
   assert.match(
     source,
@@ -854,11 +855,11 @@ test('审计日志桌面与移动卡片区分时间、标识、普通重点值�
   )
   assert.match(
     source,
-    /<dd class="qs-type-body-medium m-0">[\s\S]*?formatAuditActorDisplayName/u,
+    /<dd class="qs-type-body-medium m-0">[\s\S]*?<QsPersonDisplay/u,
   )
   assert.equal(
     source.match(/<dd class="qs-type-data-emphasis m-0">/gu)?.length,
-    3,
+    2,
   )
   assert.match(
     source,

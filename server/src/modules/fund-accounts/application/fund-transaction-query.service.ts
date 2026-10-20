@@ -630,6 +630,7 @@ export class FundTransactionQueryService {
                 businessAmount: true,
                 reversalReason: true,
                 actorUserId: true,
+                actor: { select: { displayName: true } },
                 postedAt: true,
               },
             },
@@ -726,7 +727,11 @@ export class FundTransactionQueryService {
             reversedAmount: formatFundMinor(reversedMinor),
             remainingAmount: formatFundMinor(originalMinor - reversedMinor),
             reversals: Object.freeze(original.reversalBatches.map((reversal) => {
-              if (reversal.reversalReason === null || reversal.actorUserId === null) {
+              if (
+                reversal.reversalReason === null
+                || reversal.actorUserId === null
+                || reversal.actor === null
+              ) {
                 throw new FundPostingError(
                   FUND_POSTING_ERROR_CODES.REVERSAL_SNAPSHOT_INVALID,
                 )
@@ -737,6 +742,7 @@ export class FundTransactionQueryService {
                 amount: absoluteAmount(reversal.businessAmount.toFixed(2)),
                 reason: reversal.reversalReason,
                 actorUserId: reversal.actorUserId,
+                actorDisplayName: reversal.actor.displayName,
                 postedAt: reversal.postedAt.toISOString(),
               })
             })),

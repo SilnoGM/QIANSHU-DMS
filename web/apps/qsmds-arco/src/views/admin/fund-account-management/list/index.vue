@@ -22,6 +22,7 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 
 import {
@@ -832,14 +833,16 @@ onBeforeUnmount(() => {
               公司账户
             </FaTag>
           </div>
-          <div v-else class="min-w-0">
-            <div class="qs-type-data-emphasis break-words">
-              {{ row.original.user?.displayName ?? '未知用户' }}
-            </div>
-            <div class="qs-type-meta font-mono mt-1 break-all">
-              {{ row.original.user?.username ?? '—' }}
-              <span v-if="row.original.user?.status === 'DISABLED'"> · 已禁用</span>
-            </div>
+          <div v-else class="flex flex-wrap gap-2 min-w-0 items-center">
+            <QsPersonDisplay v-if="row.original.user" :display-name="row.original.user.displayName" size="sm" />
+            <span v-else class="qs-type-body">未知用户</span>
+            <FaTag
+              v-if="row.original.user?.status === 'DISABLED'"
+              variant="outline"
+              class="text-muted-foreground qs-type-status-tag border-border bg-muted"
+            >
+              已禁用
+            </FaTag>
           </div>
         </template>
 
@@ -908,9 +911,15 @@ onBeforeUnmount(() => {
             <header class="pb-3 border-b border-border flex gap-3 min-w-0 items-start justify-between">
               <div class="min-w-0">
                 <div class="flex flex-wrap gap-2 items-center">
-                  <span class="qs-type-data-emphasis break-words">
-                    {{ row.ownerType === 'COMPANY' ? '公司资金账户' : (row.user?.displayName ?? '未知用户') }}
+                  <QsPersonDisplay
+                    v-if="row.ownerType === 'USER' && row.user"
+                    :display-name="row.user.displayName"
+                    size="sm"
+                  />
+                  <span v-else-if="row.ownerType === 'COMPANY'" class="qs-type-data-emphasis break-words">
+                    公司资金账户
                   </span>
+                  <span v-else class="qs-type-body">未知用户</span>
                   <FaTag
                     v-if="row.ownerType === 'COMPANY'"
                     variant="outline"
@@ -918,9 +927,13 @@ onBeforeUnmount(() => {
                   >
                     公司账户
                   </FaTag>
-                </div>
-                <div v-if="row.ownerType === 'USER'" class="qs-type-meta font-mono mt-1 break-all">
-                  {{ row.user?.username ?? '—' }}<span v-if="row.user?.status === 'DISABLED'"> · 已禁用</span>
+                  <FaTag
+                    v-if="row.ownerType === 'USER' && row.user?.status === 'DISABLED'"
+                    variant="outline"
+                    class="text-muted-foreground qs-type-status-tag border-border bg-muted"
+                  >
+                    已禁用
+                  </FaTag>
                 </div>
               </div>
               <span class="qs-type-meta shrink-0 tabular-nums">#{{ rowNumber }}</span>

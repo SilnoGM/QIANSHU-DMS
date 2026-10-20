@@ -102,7 +102,9 @@ function partTitle(partNumber: number): string {
               </dt>
               <dd class="m-0 flex flex-wrap gap-x-2 min-h-7 min-w-0 items-center">
                 <DateTimeDisplay :value="part.shippedAt" />
-                <span>· {{ part.shippedBy?.displayName || '未记录操作人' }}</span>
+                <span aria-hidden="true">·</span>
+                <QsPersonDisplay v-if="part.shippedBy" :display-name="part.shippedBy.displayName" size="sm" />
+                <span v-else>未记录操作人</span>
               </dd>
               <dt class="whitespace-nowrap">
                 发货说明：

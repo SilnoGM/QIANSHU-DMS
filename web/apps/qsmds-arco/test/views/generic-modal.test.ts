@@ -83,6 +83,8 @@ test('QsGenericModal 以 FaModal 为内核并提供声明式状态与调用方 F
   assert.match(source, /<FaModal/u)
   assert.match(source, /:title="title"/u)
   assert.match(source, /:description="description"/u)
+  assert.match(source, /description \|\| slots\.description/u)
+  assert.match(source, /name="description"/u)
   assert.match(source, /:closable="false"/u)
   assert.match(source, /:loading="false"/u)
   assert.match(source, /:show-confirm-button="false"/u)

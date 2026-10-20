@@ -8,6 +8,7 @@ import type {
 
 import managementApi from '@/api/modules/management'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { hasVisibleTableColumn } from '../shared/table-query'
 import {
   AUDIT_EVENT_TYPES,
@@ -16,7 +17,6 @@ import {
 import {
   auditMetadataEntries,
   auditOutcomeTagPresentation,
-  formatAuditActorDisplayName,
   formatAuditEvent,
   formatAuditOutcome,
   formatAuditTime,
@@ -41,8 +41,7 @@ const columns: QsGenericTableColumn<AuditEventDto>[] = [
   { id: 'occurredAt', accessorKey: 'occurredAt', title: '时间', width: 190 },
   { id: 'eventType', accessorKey: 'eventType', title: '事件', width: 230 },
   { id: 'outcome', accessorKey: 'outcome', title: '结果', width: 90 },
-  { id: 'actorDisplayName', accessorKey: 'actorDisplayName', title: '用户展示名', width: 180 },
-  { id: 'actorUserId', accessorKey: 'actorUserId', title: '操作者 ID', width: 240 },
+  { id: 'actorDisplayName', accessorKey: 'actorDisplayName', title: '操作者', width: 180 },
   { id: 'target', title: '目标', width: 250 },
   { id: 'requestId', accessorKey: 'requestId', title: '请求 ID', width: 250 },
   { id: 'metadata', accessorKey: 'metadata', title: 'Metadata', width: 320 },
@@ -214,7 +213,7 @@ onMounted(loadEvents)
           empty-title="暂无审计记录"
           empty-description="当前查询范围内没有可展示的审计事件。"
           search-placeholder="输入完整请求 ID 搜索"
-          table-class="min-w-[1760px]"
+          table-class="min-w-[1520px]"
           :class="loading && events.length ? 'pointer-events-none' : undefined"
           @filter-change="scheduleQueryRefresh"
           @pagination-change="handlePaginationChange"
@@ -238,12 +237,12 @@ onMounted(loadEvents)
             </FaTag>
           </template>
           <template #cell-actorDisplayName="{ row }">
-            <span class="qs-type-body-medium">
-              {{ formatAuditActorDisplayName(row.original.actorType, row.original.actorDisplayName) }}
-            </span>
-          </template>
-          <template #cell-actorUserId="{ row }">
-            <code class="qs-type-data-emphasis break-all">{{ row.original.actorUserId || '—' }}</code>
+            <QsPersonDisplay
+              v-if="row.original.actorType === 'USER'"
+              :display-name="row.original.actorDisplayName ?? ''"
+              size="sm"
+            />
+            <span v-else class="qs-type-body-medium">—</span>
           </template>
           <template #cell-target="{ row }">
             <code class="qs-type-data-emphasis break-all">{{ targetLabel(row.original) }}</code>
@@ -306,21 +305,15 @@ onMounted(loadEvents)
                   class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start"
                 >
                   <dt class="qs-type-compact-label">
-                    用户展示名
+                    操作者
                   </dt>
                   <dd class="qs-type-body-medium m-0">
-                    {{ formatAuditActorDisplayName(event.actorType, event.actorDisplayName) }}
-                  </dd>
-                </div>
-                <div
-                  v-if="hasVisibleTableColumn(visibleColumns, 'actorUserId')"
-                  class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start"
-                >
-                  <dt class="qs-type-compact-label">
-                    操作者 ID
-                  </dt>
-                  <dd class="qs-type-data-emphasis m-0">
-                    <code class="break-all">{{ event.actorUserId || '—' }}</code>
+                    <QsPersonDisplay
+                      v-if="event.actorType === 'USER'"
+                      :display-name="event.actorDisplayName ?? ''"
+                      size="sm"
+                    />
+                    <span v-else>—</span>
                   </dd>
                 </div>
                 <div

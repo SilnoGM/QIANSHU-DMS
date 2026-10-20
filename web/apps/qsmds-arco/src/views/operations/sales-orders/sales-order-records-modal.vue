@@ -1017,8 +1017,9 @@ onBeforeUnmount(() => {
                       <p class="m-0 break-words">
                         作废原因：{{ optionalText(payment.voidReason) }}
                       </p>
-                      <p class="text-muted-foreground m-0 mt-1">
-                        {{ payment.voidedBy?.displayName ?? '未知用户' }} · <DateTimeDisplay :value="payment.voidedAt" />
+                      <p class="text-muted-foreground m-0 mt-1 flex flex-wrap gap-2 items-center">
+                        <QsPersonDisplay v-if="payment.voidedBy" :display-name="payment.voidedBy.displayName" size="sm" />
+                        <span v-else>未知用户</span> · <DateTimeDisplay :value="payment.voidedAt" />
                       </p>
                     </div>
                   </div>
