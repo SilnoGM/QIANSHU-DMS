@@ -5,6 +5,7 @@ import type { CurrencyDescriptor } from '@/components/base/currency'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 
 import {
   formatFundRateSnapshot,
@@ -259,8 +260,7 @@ function reverse(): void {
               关联用户
             </dt>
             <dd class="m-0">
-              <span>{{ detail.user.displayName }}</span>
-              <code class="qs-type-meta mt-1 block break-all">{{ detail.user.username }}</code>
+              <QsPersonDisplay :display-name="detail.user.displayName" size="sm" />
             </dd>
           </div>
           <div>
@@ -303,8 +303,12 @@ function reverse(): void {
                 </FaTag>
               </div>
               <div class="qs-type-meta mt-1 break-words">
-                {{ entry.account.user?.displayName ?? '公司资金账户' }}
-                <span v-if="entry.account.user"> · {{ entry.account.user.username }}</span>
+                <QsPersonDisplay
+                  v-if="entry.account.user"
+                  :display-name="entry.account.user.displayName"
+                  size="sm"
+                />
+                <span v-else>公司资金账户</span>
               </div>
               <code class="qs-type-meta mt-1 block break-all">{{ entry.account.id }}</code>
             </div>
@@ -398,9 +402,10 @@ function reverse(): void {
                 </div>
                 <AmountDisplay :value="item.amount" :currency="detail.currency" :currencies="currencies" />
               </div>
-              <div class="qs-type-meta mt-2 flex flex-wrap gap-3">
+              <div class="qs-type-meta mt-2 flex flex-wrap gap-3 items-center">
                 <DateTimeDisplay :value="item.postedAt" />
-                <code class="break-all">actor: {{ item.actorUserId }}</code>
+                <QsPersonDisplay v-if="item.actorDisplayName" :display-name="item.actorDisplayName" size="sm" />
+                <span v-else>—</span>
               </div>
             </li>
           </ol>

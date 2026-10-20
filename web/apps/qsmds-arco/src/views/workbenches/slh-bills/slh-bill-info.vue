@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SlhBillDto } from '@/api/generated/types.gen'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { formatSlhBillRate, resolveSlhBillContainerBatchPreview } from './display.logic'
 
 const props = defineProps<{
@@ -152,7 +153,7 @@ const visibleBatches = computed(() => batchesExpanded.value ? props.bill.contain
             {{ t('slhBill.column.created') }}
           </dt>
           <dd class="qs-type-body m-0 mt-1.5">
-            {{ bill.createdByDisplayName }}
+            <QsPersonDisplay :display-name="bill.createdByDisplayName" size="sm" />
           </dd>
         </div>
         <div class="min-w-0">

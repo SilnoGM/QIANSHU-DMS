@@ -5,6 +5,7 @@ import type {
 } from './types'
 import type { QsStatusSwitchItem } from '@/components/business/QsStatusSwitchToolbar/types'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import {
   formatSalesOrderLineCount,
@@ -358,7 +359,9 @@ watch(() => props.modelValue, (open) => {
               </span>
               <span class="min-w-0">
                 <strong class="qs-type-body-medium block truncate">{{ item.customerName }}</strong>
-                <span class="qs-type-meta text-muted-foreground mt-1 block truncate">{{ item.issuer.displayName }}</span>
+                <span class="mt-1 block">
+                  <QsPersonDisplay :display-name="item.issuer.displayName" size="sm" />
+                </span>
               </span>
               <SalesOrderProductPreview :previews="item.lineSummary.previews" />
               <span class="flex flex-col gap-1.5 min-w-0 items-end">
@@ -409,7 +412,9 @@ watch(() => props.modelValue, (open) => {
                 <span class="min-w-0">
                   <span class="qs-type-meta text-muted-foreground block">客户 / 出单人</span>
                   <strong class="qs-type-body-medium mt-1 block truncate">{{ item.customerName }}</strong>
-                  <span class="qs-type-meta text-muted-foreground block truncate">{{ item.issuer.displayName }}</span>
+                  <span class="mt-1 block">
+                    <QsPersonDisplay :display-name="item.issuer.displayName" size="sm" />
+                  </span>
                 </span>
                 <span class="min-w-0">
                   <span class="qs-type-meta text-muted-foreground block">产品明细</span>

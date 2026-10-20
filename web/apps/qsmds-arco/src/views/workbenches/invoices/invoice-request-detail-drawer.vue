@@ -325,7 +325,7 @@ const nodes = computed(() => {
             class="py-3 flex flex-wrap gap-x-6 gap-y-2 items-baseline justify-between first:pt-0 last:pb-0"
           >
             <div class="flex flex-wrap gap-x-4 gap-y-1 min-w-0 items-baseline">
-              <span class="qs-type-body-medium">{{ entry.actorName }}</span>
+              <QsPersonDisplay :display-name="entry.actorName" size="sm" />
               <span class="qs-type-body text-muted-foreground">{{ t('invoiceRequest.detail.actionVerb') }}</span>
               <span class="qs-type-body-medium">【{{ t(`invoiceRequest.detail.action.${entry.action}`) }}】</span>
               <span class="qs-type-meta px-1.5 py-0.5 rounded bg-muted/60 whitespace-nowrap">{{ statusTransition(entry) }}</span>

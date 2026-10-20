@@ -49,36 +49,62 @@ const voidPreview = computed(() => {
   const posting = detail.value?.approvedPayment?.posting
   return posting ? { ...posting, entries: posting.entries.map(entry => ({ ...entry, direction: 'DEBIT' })) } : null
 })
-const traceRows = computed(() => {
+interface TraceRow {
+  id: string
+  label: string
+  person?: { id: string, name: string }
+  value?: boolean | null | number | string
+}
+
+const traceRows = computed<TraceRow[]>(() => {
   const item = detail.value
   if (!item) {
     return []
   }
   const payment = item.approvedPayment
-  return [
-    [t('salesReceipt.traceLabel.requestId'), item.id],
-    [t('salesReceipt.traceLabel.numberingIssuanceId'), item.numberingIssuanceId],
-    [t('salesReceipt.traceLabel.requestVersion'), item.version],
-    [t('salesReceipt.traceLabel.salesOrderId'), item.salesOrderId],
-    [t('salesReceipt.traceLabel.orderVersion'), item.salesOrder.version],
-    [t('salesReceipt.traceLabel.accountOwnerId'), item.accountOwner.id],
-    [t('salesReceipt.traceLabel.submittedById'), item.submittedBy.id],
-    [t('salesReceipt.traceLabel.reviewedById'), item.reviewedBy?.id],
-    [t('salesReceipt.traceLabel.voucherMediaAssetId'), item.voucher.mediaAssetId],
-    [t('salesReceipt.traceLabel.resubmittedFromId'), item.resubmittedFromId],
-    [t('salesReceipt.traceLabel.paymentId'), payment?.id],
-    [t('salesReceipt.traceLabel.paymentOrigin'), payment?.origin],
-    [t('salesReceipt.traceLabel.paymentMethodValue'), item.paymentMethod],
-    [t('salesReceipt.traceLabel.fundPostingBatchId'), payment?.fundPostingBatchId],
-    [t('salesReceipt.traceLabel.fundReversalBatchId'), payment?.fundReversalBatchId],
-    [t('salesReceipt.traceLabel.exchangeRateId'), payment?.exchangeRateId],
-    [t('salesReceipt.traceLabel.exchangeRateVersion'), payment?.exchangeRateVersionSnapshot],
-    [t('salesReceipt.traceLabel.ruleVersionId'), payment?.posting?.ruleVersionId],
-    [t('salesReceipt.traceLabel.ruleRevision'), payment?.posting?.ruleRevisionSnapshot],
-    [t('salesReceipt.traceLabel.reversalRuleVersionId'), payment?.reversal?.ruleVersionId],
-    [t('salesReceipt.traceLabel.reversalRuleRevision'), payment?.reversal?.ruleRevisionSnapshot],
-    ...Object.entries(context.value?.expectedContext ?? {}).map(([key, value]) => [t(`salesReceipt.traceLabel.preview.${key}`), value]),
-  ].filter(([, value]) => value !== null && value !== undefined)
+  const rows: TraceRow[] = [
+    { id: 'requestId', label: t('salesReceipt.traceLabel.requestId'), value: item.id },
+    { id: 'numberingIssuanceId', label: t('salesReceipt.traceLabel.numberingIssuanceId'), value: item.numberingIssuanceId },
+    { id: 'requestVersion', label: t('salesReceipt.traceLabel.requestVersion'), value: item.version },
+    { id: 'salesOrderId', label: t('salesReceipt.traceLabel.salesOrderId'), value: item.salesOrderId },
+    { id: 'orderVersion', label: t('salesReceipt.traceLabel.orderVersion'), value: item.salesOrder.version },
+    {
+      id: 'accountOwner',
+      label: t('salesReceipt.traceLabel.accountOwner'),
+      person: { id: item.accountOwner.id, name: item.accountOwner.name },
+    },
+    {
+      id: 'submittedBy',
+      label: t('salesReceipt.traceLabel.submittedBy'),
+      person: { id: item.submittedBy.id, name: item.submittedBy.name },
+    },
+    ...(item.reviewedBy
+      ? [{
+          id: 'reviewedBy',
+          label: t('salesReceipt.traceLabel.reviewedBy'),
+          person: { id: item.reviewedBy.id, name: item.reviewedBy.name },
+        }]
+      : []),
+    { id: 'voucherMediaAssetId', label: t('salesReceipt.traceLabel.voucherMediaAssetId'), value: item.voucher.mediaAssetId },
+    { id: 'resubmittedFromId', label: t('salesReceipt.traceLabel.resubmittedFromId'), value: item.resubmittedFromId },
+    { id: 'paymentId', label: t('salesReceipt.traceLabel.paymentId'), value: payment?.id },
+    { id: 'paymentOrigin', label: t('salesReceipt.traceLabel.paymentOrigin'), value: payment?.origin },
+    { id: 'paymentMethodValue', label: t('salesReceipt.traceLabel.paymentMethodValue'), value: item.paymentMethod },
+    { id: 'fundPostingBatchId', label: t('salesReceipt.traceLabel.fundPostingBatchId'), value: payment?.fundPostingBatchId },
+    { id: 'fundReversalBatchId', label: t('salesReceipt.traceLabel.fundReversalBatchId'), value: payment?.fundReversalBatchId },
+    { id: 'exchangeRateId', label: t('salesReceipt.traceLabel.exchangeRateId'), value: payment?.exchangeRateId },
+    { id: 'exchangeRateVersion', label: t('salesReceipt.traceLabel.exchangeRateVersion'), value: payment?.exchangeRateVersionSnapshot },
+    { id: 'ruleVersionId', label: t('salesReceipt.traceLabel.ruleVersionId'), value: payment?.posting?.ruleVersionId },
+    { id: 'ruleRevision', label: t('salesReceipt.traceLabel.ruleRevision'), value: payment?.posting?.ruleRevisionSnapshot },
+    { id: 'reversalRuleVersionId', label: t('salesReceipt.traceLabel.reversalRuleVersionId'), value: payment?.reversal?.ruleVersionId },
+    { id: 'reversalRuleRevision', label: t('salesReceipt.traceLabel.reversalRuleRevision'), value: payment?.reversal?.ruleRevisionSnapshot },
+    ...Object.entries(context.value?.expectedContext ?? {}).map(([key, value]) => ({
+      id: `preview.${key}`,
+      label: t(`salesReceipt.traceLabel.preview.${key}`),
+      value,
+    })),
+  ]
+  return rows.filter(row => row.person !== undefined || (row.value !== null && row.value !== undefined))
 })
 async function load(): Promise<void> {
   controller?.abort()
@@ -436,11 +462,16 @@ onBeforeUnmount(() => controller?.abort())
           <span class="qs-type-compact-label p-4 flex gap-3 min-h-11 items-center justify-between"><span class="flex gap-2 items-center"><FaIcon name="i-lucide:scan-line" class="size-4" aria-hidden="true" />{{ t('salesReceipt.trace') }}</span><FaIcon name="i-lucide:chevron-down" class="size-4" :class="open ? 'rotate-180' : ''" /></span>
         </template>
         <dl class="m-0 p-4 border-t border-border gap-4 grid sm:grid-cols-2">
-          <div v-for="[label, value] in traceRows" :key="String(label)" class="min-w-0">
+          <div v-for="row in traceRows" :key="row.id" class="min-w-0">
             <dt class="qs-type-compact-label mb-1">
-              {{ label }}
-            </dt><dd class="qs-type-meta font-mono m-0 select-all break-all">
-              {{ value }}
+              {{ row.label }}
+            </dt>
+            <dd class="m-0">
+              <template v-if="row.person">
+                <QsPersonDisplay :display-name="row.person.name" size="sm" />
+                <code class="qs-type-meta font-mono mt-1 block select-all break-all">{{ row.person.id }}</code>
+              </template>
+              <span v-else class="qs-type-meta font-mono select-all break-all">{{ row.value }}</span>
             </dd>
           </div>
         </dl>

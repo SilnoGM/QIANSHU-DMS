@@ -234,7 +234,7 @@ onMounted(load)
                   {{ t('invoiceRequest.column.submittedAt') }}
                 </dt>
                 <dd class="text-sm m-0">
-                  {{ row.creatorName }}
+                  <QsPersonDisplay :display-name="row.creatorName" size="sm" />
                   <span class="text-muted-foreground block">{{ row.submittedAt.slice(0, 19).replace('T', ' ') }}</span>
                 </dd>
               </div>

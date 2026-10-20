@@ -41,7 +41,7 @@ test('两个入口以货件选择，选择与展开独立并保留动画', async
   assert.match(parts, /<FaCollapsible/u)
   assert.match(parts, /:max-count="3"/u)
   assert.match(parts, /transition-opacity duration-150/u)
-  assert.match(parts, /shippedBy\?\.displayName/u)
+  assert.match(parts, /<QsPersonDisplay v-if="part\.shippedBy" :display-name="part\.shippedBy\.displayName"/u)
 })
 
 test('采购发货使用最新详情核对基础唛头与货件，详情加载期间禁止提交', async () => {

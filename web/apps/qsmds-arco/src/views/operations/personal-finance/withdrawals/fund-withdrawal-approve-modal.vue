@@ -5,6 +5,7 @@ import fundWithdrawalsApi from '@/api/modules/fund-withdrawals'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 
 defineOptions({ name: 'FundWithdrawalApproveModal' })
@@ -174,8 +175,8 @@ function close(): void {
             <dt class="qs-type-compact-label">
               {{ t('fundWithdrawal.detail.applicant') }}
             </dt>
-            <dd class="qs-type-body-strong m-0">
-              {{ request.applicantName }}
+            <dd class="qs-type-body-strong m-0 flex flex-wrap gap-2 items-center">
+              <QsPersonDisplay :display-name="request.applicantName" size="sm" />
               <span class="qs-type-meta text-muted-foreground">（{{ request.applicantUsername }}）</span>
             </dd>
           </div>

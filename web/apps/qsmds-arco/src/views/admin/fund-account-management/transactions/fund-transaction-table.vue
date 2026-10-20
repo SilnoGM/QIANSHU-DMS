@@ -7,6 +7,7 @@ import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 
 import {
   formatFundRateSnapshot,
@@ -165,13 +166,16 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
     </template>
 
     <template #cell-subject="{ row }">
-      <div class="min-w-0">
-        <div class="font-medium break-words">
-          {{ row.original.account.user?.displayName ?? '公司资金账户' }}
-        </div>
-        <div class="qs-type-meta font-mono mt-1 break-all">
-          {{ row.original.account.user?.username ?? 'COMPANY' }} · {{ row.original.accountTarget === 'USER' ? '用户账户' : '公司账户' }}
-        </div>
+      <div class="flex flex-wrap gap-2 min-w-0 items-center">
+        <QsPersonDisplay
+          v-if="row.original.account.user"
+          :display-name="row.original.account.user.displayName"
+          size="sm"
+        />
+        <span v-else class="font-medium">公司资金账户</span>
+        <FaTag variant="outline" class="qs-type-status-tag">
+          {{ row.original.accountTarget === 'USER' ? '用户账户' : '公司账户' }}
+        </FaTag>
       </div>
     </template>
 
@@ -266,13 +270,16 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
         </header>
 
         <div class="flex flex-wrap gap-3 items-start justify-between">
-          <div class="min-w-0">
-            <div class="font-medium break-words">
-              {{ row.account.user?.displayName ?? '公司资金账户' }}
-            </div>
-            <div class="qs-type-meta font-mono mt-1 break-all">
-              {{ row.account.user?.username ?? 'COMPANY' }}
-            </div>
+          <div class="flex flex-wrap gap-2 min-w-0 items-center">
+            <QsPersonDisplay
+              v-if="row.account.user"
+              :display-name="row.account.user.displayName"
+              size="sm"
+            />
+            <span v-else class="font-medium">公司资金账户</span>
+            <FaTag variant="outline" class="qs-type-status-tag">
+              {{ row.accountTarget === 'USER' ? '用户账户' : '公司账户' }}
+            </FaTag>
           </div>
           <div class="flex flex-wrap gap-2 items-center justify-end">
             <span :class="getFundDirectionState(row.direction).tone === 'debit' ? 'text-destructive' : 'text-primary'" class="font-semibold">{{ getFundDirectionState(row.direction).sign }} {{ getFundDirectionState(row.direction).label }}</span>

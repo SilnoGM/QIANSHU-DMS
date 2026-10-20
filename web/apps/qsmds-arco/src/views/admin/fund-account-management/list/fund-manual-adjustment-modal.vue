@@ -8,6 +8,7 @@ import type { CurrencyDescriptor } from '@/components/base/currency'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 
 import {
   buildFundManualAdjustmentRequest,
@@ -183,7 +184,7 @@ watch(() => props.submitting, (submitting) => {
   <QsGenericModal
     :model-value="modelValue"
     title="管理员手动调账"
-    :description="account?.user === null ? '用户账户不可用' : `${account?.user?.displayName}（${account?.user?.username}）`"
+    :description="account?.user?.displayName ?? '用户账户不可用'"
     size="lg"
     :closable="!unknownResult"
     :dismiss-on-escape="!unknownResult"
@@ -191,6 +192,10 @@ watch(() => props.submitting, (submitting) => {
     :submitting="submitting"
     @update:model-value="updateVisible"
   >
+    <template #description>
+      <QsPersonDisplay v-if="account?.user" :display-name="account.user.displayName" size="sm" />
+      <span v-else>用户账户不可用</span>
+    </template>
     <FaAlert
       v-if="unknownResult"
       variant="destructive"

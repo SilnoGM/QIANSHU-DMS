@@ -84151,6 +84151,9 @@
             "type": "string",
             "format": "uuid"
           },
+          "actorDisplayName": {
+            "type": "string"
+          },
           "postedAt": {
             "type": "string",
             "format": "date-time"
@@ -84162,6 +84165,7 @@
           "amount",
           "reason",
           "actorUserId",
+          "actorDisplayName",
           "postedAt"
         ]
       },

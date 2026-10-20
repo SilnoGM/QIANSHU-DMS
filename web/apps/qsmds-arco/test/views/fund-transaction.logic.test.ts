@@ -103,6 +103,7 @@ function batchFixture(
       remainingAmount: '80.00',
       reversals: [{
         actorUserId: 'admin-id',
+        actorDisplayName: 'Admin',
         amount: '20.00',
         batchId: 'reversal-1',
         batchNo: 'FR202608180001',

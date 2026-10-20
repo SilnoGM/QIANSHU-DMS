@@ -18,6 +18,7 @@ import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
@@ -239,8 +240,8 @@ const productColumns: QsGenericTableColumn<ProductListItemViewModel>[] = [
   {
     accessorKey: 'productNo',
     id: 'productNo',
-    fixed: 'left',
-    minWidth: 180,
+    width: 150,
+    minWidth: 140,
     title: '产品编号',
   },
   { accessorKey: 'name', id: 'name', minWidth: 180, title: '产品名称' },
@@ -1303,7 +1304,7 @@ onBeforeUnmount(() => {
             v-model:filters="filters"
             data-testid="product-list-table"
             :row-key="item => item.id"
-            :action-column="{ fixed: 'right', width: 360 }"
+            :action-column="{ fixed: 'right', width: 320 }"
             :addable="false"
             :columns="columns"
             :data="rows"
@@ -1448,13 +1449,15 @@ onBeforeUnmount(() => {
               <DateTimeDisplay :value="row.original.createdAt" />
             </template>
             <template #cell-createdBy="{ row }">
-              {{ row.original.createdBy?.displayName ?? '—' }}
+              <QsPersonDisplay v-if="row.original.createdBy" :display-name="row.original.createdBy.displayName" size="sm" />
+              <span v-else class="text-muted-foreground">—</span>
             </template>
             <template #cell-updatedAt="{ row }">
               <DateTimeDisplay :value="row.original.updatedAt" />
             </template>
             <template #cell-updatedBy="{ row }">
-              {{ row.original.updatedBy?.displayName ?? '—' }}
+              <QsPersonDisplay v-if="row.original.updatedBy" :display-name="row.original.updatedBy.displayName" size="sm" />
+              <span v-else class="text-muted-foreground">—</span>
             </template>
 
             <template #actions="{ row, rowNumber }">
@@ -1667,7 +1670,8 @@ onBeforeUnmount(() => {
                   <dt class="qs-type-compact-label">
                     创建人
                   </dt><dd class="m-0">
-                    {{ row.createdBy?.displayName ?? '—' }}
+                    <QsPersonDisplay v-if="row.createdBy" :display-name="row.createdBy.displayName" size="sm" />
+                    <span v-else>—</span>
                   </dd>
                 </div>
                 <div>
@@ -1681,7 +1685,8 @@ onBeforeUnmount(() => {
                   <dt class="qs-type-compact-label">
                     更新人
                   </dt><dd class="m-0">
-                    {{ row.updatedBy?.displayName ?? '—' }}
+                    <QsPersonDisplay v-if="row.updatedBy" :display-name="row.updatedBy.displayName" size="sm" />
+                    <span v-else>—</span>
                   </dd>
                 </div>
                 <div>
