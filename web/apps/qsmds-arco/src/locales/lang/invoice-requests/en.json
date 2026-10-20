@@ -164,5 +164,8 @@
   "invoiceRequest.upload.imageOnly": "Only jpg, png or webp invoice photos are supported",
   "invoiceRequest.upload.imageEmpty": "This file is empty; choose another one",
   "invoiceRequest.upload.imageTooLarge": "The invoice photo must not exceed 10 MiB",
-  "invoiceRequest.upload.remove": "Remove photo"
+  "invoiceRequest.upload.remove": "Remove photo",
+  "invoiceRequest.duplicate.title": "Possible duplicate requests across all applicants",
+  "invoiceRequest.duplicate.description": "The following requests have the same buyer, tax ID, tax amount and total. This does not block the action; please review manually.",
+  "invoiceRequest.duplicate.item": "{invoiceNo} · {status} · {date}"
 }

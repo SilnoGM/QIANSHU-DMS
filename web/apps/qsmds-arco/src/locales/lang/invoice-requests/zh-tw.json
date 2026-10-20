@@ -164,5 +164,8 @@
   "invoiceRequest.upload.imageOnly": "只支援 jpg、png、webp 格式的發票照片",
   "invoiceRequest.upload.imageEmpty": "這個檔案是空的，請重新選擇",
   "invoiceRequest.upload.imageTooLarge": "發票照片不能超過 10 MiB",
-  "invoiceRequest.upload.remove": "刪除照片"
+  "invoiceRequest.upload.remove": "刪除照片",
+  "invoiceRequest.duplicate.title": "全庫存在疑似重複申請",
+  "invoiceRequest.duplicate.description": "以下申請與本單抬頭、統編、營業稅與總計完全一致；不會阻斷操作，請人工核對。",
+  "invoiceRequest.duplicate.item": "{invoiceNo} · {status} · {date}"
 }

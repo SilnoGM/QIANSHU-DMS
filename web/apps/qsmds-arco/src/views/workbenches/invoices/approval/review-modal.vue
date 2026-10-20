@@ -152,6 +152,28 @@ function close(): void {
     <div v-if="detail !== null && loadError === null" class="space-y-5">
       <FaSteps v-model="step" :steps="steps" class="w-full" />
 
+      <FaAlert
+        v-if="detail.duplicateSuspected === true"
+        icon="i-lucide:triangle-alert"
+        :title="t('invoiceRequest.duplicate.title')"
+        class="text-amber-700 border-amber-500/30 bg-amber-500/5 dark:text-amber-300"
+      >
+        <template #description>
+          <p class="m-0">
+            {{ t('invoiceRequest.duplicate.description') }}
+          </p>
+          <ul v-if="detail.duplicateSuspects?.length" class="m-0 mt-2 pl-4 space-y-1">
+            <li v-for="suspect in detail.duplicateSuspects" :key="suspect.invoiceNo">
+              {{ t('invoiceRequest.duplicate.item', {
+                invoiceNo: suspect.invoiceNo,
+                status: t(`invoiceRequest.status.${suspect.status}`),
+                date: suspect.createdAt.slice(0, 10),
+              }) }}
+            </li>
+          </ul>
+        </template>
+      </FaAlert>
+
       <FaAlert v-if="submitError !== null" variant="destructive" icon="i-lucide:circle-alert" :title="submitError" role="alert" />
 
       <template v-if="step === 0">

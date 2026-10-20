@@ -10,6 +10,7 @@ const RESOURCE_LABELS: Readonly<Record<string, string>> = {
   'audit': '安全审计',
   'container-batches': '柜次管理',
   'currencies': '货币管理',
+  'data-scope': '数据范围',
   'dictionaries': '字典管理',
   'exchange-rates': '当前汇率',
   'fund-accounts': '资金账户管理',

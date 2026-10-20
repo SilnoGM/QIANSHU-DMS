@@ -284,6 +284,7 @@ test('权限目录以中文展示现有业务资源', () => {
     'audit',
     'container-batches',
     'currencies',
+    'data-scope',
     'dictionaries',
     'exchange-rates',
     'fund-accounts',
@@ -309,6 +310,7 @@ test('权限目录以中文展示现有业务资源', () => {
   ])
   assert.equal(permissionResourceLabel('container-batches'), '柜次管理')
   assert.equal(permissionResourceLabel('currencies'), '货币管理')
+  assert.equal(permissionResourceLabel('data-scope'), '数据范围')
   assert.equal(permissionResourceLabel('exchange-rates'), '当前汇率')
   assert.equal(permissionResourceLabel('fund-accounts'), '资金账户管理')
   assert.equal(permissionResourceLabel('fund-business-sources'), '资金业务来源')
