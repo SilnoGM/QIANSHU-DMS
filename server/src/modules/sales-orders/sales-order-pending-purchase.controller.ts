@@ -4,6 +4,7 @@ import { ApiTags } from '@nestjs/swagger'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
+import { CurrentUserId, resolveDataScopeActor } from '../auth/decorators/current-user-id.decorator'
 import { SalesOrderPendingPurchaseProductsDto } from './dto/sales-order-pending-purchase.dto'
 import { SalesOrderIdParamDto } from './dto/sales-order-query.dto'
 import { SalesOrderPendingPurchaseQueryService } from './sales-order-pending-purchase-query.service'
@@ -26,7 +27,10 @@ export class SalesOrderPendingPurchaseController {
       { status: 422, codes: ['VALIDATION_FAILED'] },
     ],
   })
-  list(@Param() params: SalesOrderIdParamDto): Promise<SalesOrderPendingPurchaseProductsDto> {
-    return this.queries.list(params.salesOrderId)
+  list(
+    @Param() params: SalesOrderIdParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
+  ): Promise<SalesOrderPendingPurchaseProductsDto> {
+    return this.queries.list(params.salesOrderId, actorUserId)
   }
 }

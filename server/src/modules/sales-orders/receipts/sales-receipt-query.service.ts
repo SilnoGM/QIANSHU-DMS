@@ -1,6 +1,9 @@
 import { Injectable, HttpStatus } from '@nestjs/common'
 import { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
+import { salesOrderScopeWhere } from '../sales-order-access'
+import { salesReceiptScopeWhere } from './sales-receipt-access'
 import { SalesReceiptStatusDto, SalesReceiptViewDto, type SalesReceiptListQueryDto, type SalesReceiptRequestDetailDto, type SalesReceiptRequestPageDto } from '../dto/sales-receipt.dto'
 import { receiptFailure } from './sales-receipt-money'
 
@@ -51,13 +54,25 @@ function viewWhere(view: SalesReceiptViewDto): Prisma.SalesReceiptRequestWhereIn
 
 @Injectable()
 export class SalesReceiptQueryService {
-  constructor(private readonly prisma: PrismaService) {}
-  async getById(id: string): Promise<SalesReceiptRequestDetailDto> {
-    const row = await this.prisma.salesReceiptRequest.findUnique({ where: { id }, include: detailInclude })
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
+  ) {}
+  async getById(id: string, actorUserId: string = resolveDataScopeActor()): Promise<SalesReceiptRequestDetailDto> {
+    const scope = await this.dataScope.resolve(actorUserId)
+    const row = await this.prisma.salesReceiptRequest.findFirst({
+      where: { id, ...salesReceiptScopeWhere(scope, actorUserId) },
+      include: detailInclude,
+    })
     if (!row) return receiptFailure('SALES_RECEIPT_NOT_FOUND', '收款申请不存在', HttpStatus.NOT_FOUND)
     return mapDetail(row)
   }
-  async list(input: SalesReceiptListQueryDto, salesOrderId?: string): Promise<SalesReceiptRequestPageDto> {
+  async list(
+    input: SalesReceiptListQueryDto,
+    salesOrderId: string | undefined = undefined,
+    actorUserId: string = resolveDataScopeActor(),
+  ): Promise<SalesReceiptRequestPageDto> {
+    const scope = await this.dataScope.resolve(actorUserId)
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const date = (value: string | undefined): Date | undefined => {
@@ -75,9 +90,13 @@ export class SalesReceiptQueryService {
       ...(input.accountOwnerUserId ? { accountOwnerUserId: input.accountOwnerUserId } : {}),
       ...(from || to ? { submittedAt: { gte: from, lte: to } } : {}),
       ...(input.keyword ? { OR: [{ collectionNo: { contains: input.keyword, mode: 'insensitive' } }, { salesOrder: { OR: [{ orderNo: { contains: input.keyword, mode: 'insensitive' } }, { customerName: { contains: input.keyword, mode: 'insensitive' } }] } }] } : {}),
+      ...salesReceiptScopeWhere(scope, actorUserId),
     }
     return this.prisma.$transaction(async tx => {
-      if (salesOrderId && !await tx.salesOrder.findUnique({ where: { id: salesOrderId }, select: { id: true } })) {
+      if (salesOrderId && !await tx.salesOrder.findFirst({
+        where: { id: salesOrderId, ...salesOrderScopeWhere(scope, actorUserId) },
+        select: { id: true },
+      })) {
         receiptFailure('SALES_ORDER_NOT_FOUND', '销售订单不存在', HttpStatus.NOT_FOUND)
       }
       const where = { ...common, ...(input.view ? viewWhere(input.view) : input.status ? { status: input.status } : {}) }
@@ -87,7 +106,7 @@ export class SalesReceiptQueryService {
         ...Object.values(SalesReceiptViewDto).map(view => tx.salesReceiptRequest.count({ where: { ...common, ...viewWhere(view) } })),
       ])
       const statusCounts = { PENDING_REVIEW: pendingCount, APPROVED: approvedCount, REJECTED: rejectedCount, VOIDED: voidedCount }
-      const pending = salesOrderId ? await tx.salesReceiptRequest.aggregate({ where: { salesOrderId, status: 'PENDING_REVIEW' }, _sum: { amount: true } }) : null
+      const pending = salesOrderId ? await tx.salesReceiptRequest.aggregate({ where: { ...common, salesOrderId, status: 'PENDING_REVIEW' }, _sum: { amount: true } }) : null
       return { items: rows.map(mapDetail), total, page, pageSize, statusCounts, pendingAmount: salesOrderId ? pending?._sum.amount?.toFixed(2) ?? '0.00' : null }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
   }

@@ -14,6 +14,8 @@ import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
+import { DataScopeService, dataScopeFallback } from '../access-control/data-scope.service'
+import { salesOrderScopeWhere } from './sales-order-access'
 import {
   DictionaryLookupService,
 } from '../dictionaries/dictionary-lookup.service'
@@ -182,6 +184,7 @@ export class SalesOrderMutationService {
     @Optional()
     @Inject(SALES_ORDER_MUTATION_DEPENDENCIES)
     dependencyOverrides: Partial<SalesOrderMutationDependencies> = {},
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {
     this.dependencies = Object.freeze({
       ...DEFAULT_DEPENDENCIES,
@@ -214,7 +217,11 @@ export class SalesOrderMutationService {
     const reason = optionalText(body.reason, 'reason', 500)
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
-      const order = await this.lockOrder(transaction, salesOrderId)
+      const order = await this.lockOrder(
+        transaction,
+        salesOrderId,
+        trusted.actorUserId,
+      )
       const receivedAmount = await this.readReceivedAmount(transaction, salesOrderId)
       if (toStatus === 'CANCELLED' && await transaction.salesReceiptRequest.count({ where: { salesOrderId, status: 'PENDING_REVIEW' } }) > 0) {
         receiptFailure('SALES_RECEIPT_STATE_CHANGED', '订单仍有待审核收款，请先处理申请', HttpStatus.CONFLICT)
@@ -242,7 +249,7 @@ export class SalesOrderMutationService {
         metadata: { fromStatus: order.orderStatus, toStatus },
       })
     })
-    return this.query.getById(salesOrderId)
+    return this.query.getById(salesOrderId, trusted.actorUserId)
   }
 
   async updateFulfillmentStatus(
@@ -268,7 +275,11 @@ export class SalesOrderMutationService {
       if (toStatus === 'PREPARING' || toStatus === 'LAND_TRANSIT') {
         await lockSalesOrderPurchaseDependencies(transaction, salesOrderId)
       }
-      const order = await this.lockOrder(transaction, salesOrderId)
+      const order = await this.lockOrder(
+        transaction,
+        salesOrderId,
+        trusted.actorUserId,
+      )
       if (order.orderStatus === 'CANCELLED') {
         return salesOrderRuleFailure(
           'SALES_ORDER_CANCELLED',
@@ -323,7 +334,7 @@ export class SalesOrderMutationService {
         'FULFILLMENT',
       )
     })
-    return this.query.getById(salesOrderId)
+    return this.query.getById(salesOrderId, trusted.actorUserId)
   }
 
   async updatePaymentTerms(
@@ -337,7 +348,11 @@ export class SalesOrderMutationService {
     const reason = requireText(body.reason, 'reason', 500)
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
-      const order = await this.lockOrder(transaction, salesOrderId)
+      const order = await this.lockOrder(
+        transaction,
+        salesOrderId,
+        trusted.actorUserId,
+      )
       if (order.orderStatus !== 'CONFIRMED') {
         return salesOrderRuleFailure(
           'SALES_ORDER_PAYMENT_TERMS_NOT_EDITABLE',
@@ -402,7 +417,7 @@ export class SalesOrderMutationService {
         'PAYMENT_TERMS',
       )
     })
-    return this.query.getById(salesOrderId)
+    return this.query.getById(salesOrderId, trusted.actorUserId)
   }
 
   recordPayment(
@@ -432,11 +447,20 @@ export class SalesOrderMutationService {
   private async lockOrder(
     transaction: Prisma.TransactionClient,
     salesOrderId: string,
+    actorUserId: string,
   ): Promise<MutableOrderRow> {
+    const scope = await this.dataScope.resolveInTransaction(
+      transaction,
+      actorUserId,
+    )
+    const scopeSql = scope === 'SELF'
+      ? Prisma.sql`AND "issuer_user_id" = CAST(${actorUserId} AS uuid)`
+      : Prisma.sql``
     const locks = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT "id"
       FROM "sales_orders"
       WHERE "id" = CAST(${salesOrderId} AS uuid)
+      ${scopeSql}
       FOR UPDATE
     `)
     if (locks.length !== 1) {
@@ -446,8 +470,8 @@ export class SalesOrderMutationService {
         '销售订单不存在',
       )
     }
-    const order = await transaction.salesOrder.findUnique({
-      where: { id: salesOrderId },
+    const order = await transaction.salesOrder.findFirst({
+      where: { id: salesOrderId, ...salesOrderScopeWhere(scope, actorUserId) },
       select: {
         id: true,
         orderStatus: true,

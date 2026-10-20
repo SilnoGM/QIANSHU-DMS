@@ -24,6 +24,7 @@ import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
+import { CurrentUserId, resolveDataScopeActor } from '../auth/decorators/current-user-id.decorator'
 import { SalesOrderProductsUpdateRequestDto } from './dto/sales-order-product-edit.dto'
 import {
   SalesOrderDeliveryReceiptRequestDto,
@@ -150,8 +151,11 @@ export class SalesOrdersController {
       { status: 422, codes: ['VALIDATION_FAILED'] },
     ],
   })
-  list(@Query() query: SalesOrderListQueryDto): Promise<SalesOrderPage> {
-    return this.queries.list(query)
+  list(
+    @Query() query: SalesOrderListQueryDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
+  ): Promise<SalesOrderPage> {
+    return this.queries.list(query, actorUserId)
   }
 
   @Get('status-counts')
@@ -171,8 +175,9 @@ export class SalesOrdersController {
   })
   statusCounts(
     @Query() query: SalesOrderStatusCountsQueryDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
   ): Promise<SalesOrderStatusCounts> {
-    return this.queries.statusCounts(query)
+    return this.queries.statusCounts(query, actorUserId)
   }
 
   @Get('issuer-options')
@@ -233,11 +238,12 @@ export class SalesOrdersController {
   })
   productEditContext(
     @Param() params: SalesOrderIdParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
   ): Promise<SalesOrderProductEditContextDto> {
     if (this.productEditQueries === undefined) {
       throw new Error('SalesOrderProductEditQueryService is not configured')
     }
-    return this.productEditQueries.context(params.salesOrderId)
+    return this.productEditQueries.context(params.salesOrderId, actorUserId)
   }
 
   /**
@@ -308,11 +314,16 @@ export class SalesOrdersController {
   productEditOptions(
     @Param() params: SalesOrderIdParamDto,
     @Query() query: SalesOrderProductEditOptionsQueryDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
   ): Promise<SalesOrderProductOptionsDto> {
     if (this.productEditQueries === undefined) {
       throw new Error('SalesOrderProductEditQueryService is not configured')
     }
-    return this.productEditQueries.productOptions(params.salesOrderId, query)
+    return this.productEditQueries.productOptions(
+      params.salesOrderId,
+      query,
+      actorUserId,
+    )
   }
 
   @Head(':salesOrderId/product-edit-options/:productId/main-image/:productMediaId/content')
@@ -325,6 +336,7 @@ export class SalesOrdersController {
   })
   async headProductEditOptionMainImage(
     @Param() params: SalesOrderProductEditImageParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
     @Query('variant') variant: unknown,
@@ -338,6 +350,7 @@ export class SalesOrdersController {
       range,
       'HEAD',
       variant,
+      actorUserId,
     )
     applyProductMediaContentResponse(response, result)
   }
@@ -352,6 +365,7 @@ export class SalesOrdersController {
   })
   async getProductEditOptionMainImage(
     @Param() params: SalesOrderProductEditImageParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
     @Query('variant') variant: unknown,
@@ -365,6 +379,7 @@ export class SalesOrdersController {
       range,
       'GET',
       variant,
+      actorUserId,
     )
     applyProductMediaContentResponse(response, result)
     return result.stream === undefined
@@ -439,6 +454,7 @@ export class SalesOrdersController {
   })
   async headProductPreviewMainImage(
     @Param() params: SalesOrderLineProductImageParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
     @Query('variant') variant: unknown,
@@ -452,6 +468,7 @@ export class SalesOrdersController {
       range,
       'HEAD',
       variant,
+      actorUserId,
     )
     applyProductMediaContentResponse(response, result)
   }
@@ -466,6 +483,7 @@ export class SalesOrdersController {
   })
   async getProductPreviewMainImage(
     @Param() params: SalesOrderLineProductImageParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
     @Query('variant') variant: unknown,
@@ -479,6 +497,7 @@ export class SalesOrdersController {
       range,
       'GET',
       variant,
+      actorUserId,
     )
     applyProductMediaContentResponse(response, result)
     return result.stream === undefined
@@ -591,8 +610,11 @@ export class SalesOrdersController {
       { status: 422, codes: ['VALIDATION_FAILED'] },
     ],
   })
-  getById(@Param() params: SalesOrderIdParamDto): Promise<SalesOrderDetail> {
-    return this.queries.getById(params.salesOrderId)
+  getById(
+    @Param() params: SalesOrderIdParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
+  ): Promise<SalesOrderDetail> {
+    return this.queries.getById(params.salesOrderId, actorUserId)
   }
 
   @Patch(':salesOrderId/order-status')
@@ -759,7 +781,10 @@ export class SalesOrdersController {
       params.paymentId,
       dto,
     )
-    return this.queries.getById(params.salesOrderId)
+    return this.queries.getById(
+      params.salesOrderId,
+      getRequestAuthContext(request).userId,
+    )
   }
 
   @Post(':salesOrderId/delivery-receipts')
@@ -843,6 +868,7 @@ export class SalesOrdersController {
   })
   async headDocumentContent(
     @Param() params: SalesOrderDocumentIdParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Res({ passthrough: true }) response: SalesOrderDocumentHttpResponse,
   ): Promise<void> {
@@ -851,6 +877,7 @@ export class SalesOrdersController {
       params.documentId,
       ifNoneMatch,
       'HEAD',
+      actorUserId,
     )
     applyDocumentContentResponse(response, result)
   }
@@ -887,6 +914,7 @@ export class SalesOrdersController {
   })
   async getDocumentContent(
     @Param() params: SalesOrderDocumentIdParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Res({ passthrough: true }) response: SalesOrderDocumentHttpResponse,
   ): Promise<StreamableFile | undefined> {
@@ -895,6 +923,7 @@ export class SalesOrdersController {
       params.documentId,
       ifNoneMatch,
       'GET',
+      actorUserId,
     )
     applyDocumentContentResponse(response, result)
     return result.stream === undefined ? undefined : new StreamableFile(result.stream)

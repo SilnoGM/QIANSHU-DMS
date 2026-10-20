@@ -9,7 +9,10 @@ function fixture() {
   const findMany = jest.fn().mockResolvedValue([])
   const count = jest.fn().mockResolvedValue(2)
   const tx = {
-    salesOrder: { findUnique: jest.fn().mockResolvedValue({ id: 'order' }) },
+    salesOrder: {
+      findUnique: jest.fn().mockResolvedValue({ id: 'order' }),
+      findFirst: jest.fn().mockResolvedValue({ id: 'order' }),
+    },
     salesReceiptRequest: {
       findMany, count,
       groupBy: jest.fn().mockResolvedValue([]),

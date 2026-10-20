@@ -695,4 +695,20 @@ describe('SalesOrderQueryService product options', () => {
       code: 'SALES_ORDER_STATE_CHANGED',
     })
   })
+
+  it('returns 404 for a SELF-scoped order owned by another issuer', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null)
+    const service = new SalesOrderQueryService(
+      { salesOrder: { findFirst } } as unknown as PrismaService,
+      { resolve: jest.fn().mockResolvedValue('SELF') } as never,
+    )
+
+    await expect(service.getById(SALES_ORDER_ID, ISSUER_ID)).rejects.toMatchObject({
+      code: 'SALES_ORDER_NOT_FOUND',
+      status: 404,
+    })
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: SALES_ORDER_ID, issuerUserId: ISSUER_ID },
+    }))
+  })
 })

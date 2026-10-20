@@ -5,6 +5,7 @@ import { ApiApplicationContract } from '../../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../../auth/auth-context'
 import { RequirePermissions } from '../../auth/decorators/auth.decorators'
+import { CurrentUserId, resolveDataScopeActor } from '../../auth/decorators/current-user-id.decorator'
 import { SalesReceiptApprovalContextDto, SalesReceiptApproveDto, SalesReceiptIdDto, SalesReceiptListQueryDto, SalesReceiptOrderIdDto, SalesReceiptOrderVoucherIdDto, SalesReceiptRejectDto, SalesReceiptRequestCreateDto, SalesReceiptRequestDetailDto, SalesReceiptRequestPageDto } from '../dto/sales-receipt.dto'
 import { SalesReceiptService } from './sales-receipt.service'
 import { SalesReceiptQueryService } from './sales-receipt-query.service'
@@ -37,9 +38,9 @@ function voucherContract(operationId: string, head = false) {
 export class SalesReceiptController {
   constructor(private readonly commands: SalesReceiptService, private readonly queries: SalesReceiptQueryService, private readonly vouchers: SalesReceiptVoucherService) {}
   @Get() @RequirePermissions('sales-receipts:read') @ApiContractResponse({ status: 200, type: SalesReceiptRequestPageDto }) @contract('sales_receipts_list')
-  list(@Query() query: SalesReceiptListQueryDto) { return this.queries.list(query) }
+  list(@Query() query: SalesReceiptListQueryDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) { return this.queries.list(query, undefined, actorUserId) }
   @Get(':id') @RequirePermissions('sales-receipts:read') @ApiContractResponse({ status: 200, type: SalesReceiptRequestDetailDto }) @contract('sales_receipts_get')
-  detail(@Param() params: SalesReceiptIdDto) { return this.queries.getById(params.id) }
+  detail(@Param() params: SalesReceiptIdDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) { return this.queries.getById(params.id, actorUserId) }
   @Get(':id/approval-context') @RequirePermissions('sales-receipts:read', 'sales-receipts:review') @ApiContractResponse({ status: 200, type: SalesReceiptApprovalContextDto }) @contract('sales_receipts_approval_context')
   preview(@Param() params: SalesReceiptIdDto, @Req() request: object) { return this.commands.approvalContext(context(request), params.id) }
   @Post(':id/approve') @HttpCode(HttpStatus.OK) @RequirePermissions('sales-receipts:review') @ApiContractResponse({ status: 200, type: SalesReceiptRequestDetailDto }) @contract('sales_receipts_approve', true)
@@ -47,9 +48,9 @@ export class SalesReceiptController {
   @Post(':id/reject') @HttpCode(HttpStatus.OK) @RequirePermissions('sales-receipts:review') @ApiContractResponse({ status: 200, type: SalesReceiptRequestDetailDto }) @contract('sales_receipts_reject', true)
   reject(@Param() params: SalesReceiptIdDto, @Body() body: SalesReceiptRejectDto, @Req() request: object) { return this.commands.reject(context(request), params.id, body) }
   @Get(':id/voucher') @RequirePermissions('sales-receipts:read') @voucherContract('sales_receipts_get_voucher')
-  async voucher(@Param() params: SalesReceiptIdDto, @Headers('if-none-match') tag: unknown, @Res({ passthrough: true }) response: ContentResponse) { return contentResult(await this.vouchers.resolveContent(params.id, undefined, tag, 'GET'), response) }
+  async voucher(@Param() params: SalesReceiptIdDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor(), @Headers('if-none-match') tag: unknown, @Res({ passthrough: true }) response: ContentResponse) { return contentResult(await this.vouchers.resolveContent(params.id, undefined, tag, 'GET', actorUserId), response) }
   @Head(':id/voucher') @RequirePermissions('sales-receipts:read') @voucherContract('sales_receipts_head_voucher', true)
-  async headVoucher(@Param() params: SalesReceiptIdDto, @Headers('if-none-match') tag: unknown, @Res({ passthrough: true }) response: ContentResponse) { contentResult(await this.vouchers.resolveContent(params.id, undefined, tag, 'HEAD'), response) }
+  async headVoucher(@Param() params: SalesReceiptIdDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor(), @Headers('if-none-match') tag: unknown, @Res({ passthrough: true }) response: ContentResponse) { contentResult(await this.vouchers.resolveContent(params.id, undefined, tag, 'HEAD', actorUserId), response) }
 }
 
 @ApiTags('sales-orders')
@@ -59,9 +60,9 @@ export class SalesReceiptOrderController {
   @Post(':salesOrderId/receipt-requests') @HttpCode(HttpStatus.CREATED) @RequirePermissions('sales-orders:payment', 'sales-orders:document') @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } }) @ApiContractResponse({ status: 201, type: SalesReceiptRequestDetailDto }) @contract('sales_orders_submit_receipt_request', true)
   submit(@Param() params: SalesReceiptOrderIdDto, @Body() body: SalesReceiptRequestCreateDto, @Headers('idempotency-key') key: unknown, @Req() request: object) { return this.commands.submit(context(request), params.salesOrderId, body, key) }
   @Get(':salesOrderId/receipt-requests') @RequirePermissions('sales-orders:read') @ApiContractResponse({ status: 200, type: SalesReceiptRequestPageDto }) @contract('sales_orders_list_receipt_requests')
-  list(@Param() params: SalesReceiptOrderIdDto, @Query() query: SalesReceiptListQueryDto) { return this.queries.list(query, params.salesOrderId) }
+  list(@Param() params: SalesReceiptOrderIdDto, @Query() query: SalesReceiptListQueryDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) { return this.queries.list(query, params.salesOrderId, actorUserId) }
   @Get(':salesOrderId/receipt-requests/:requestId/voucher') @RequirePermissions('sales-orders:read') @voucherContract('sales_orders_get_receipt_voucher')
-  async voucher(@Param() params: SalesReceiptOrderVoucherIdDto, @Headers('if-none-match') tag: unknown, @Res({ passthrough: true }) response: ContentResponse) { return contentResult(await this.vouchers.resolveContent(params.requestId, params.salesOrderId, tag, 'GET'), response) }
+  async voucher(@Param() params: SalesReceiptOrderVoucherIdDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor(), @Headers('if-none-match') tag: unknown, @Res({ passthrough: true }) response: ContentResponse) { return contentResult(await this.vouchers.resolveContent(params.requestId, params.salesOrderId, tag, 'GET', actorUserId), response) }
   @Head(':salesOrderId/receipt-requests/:requestId/voucher') @RequirePermissions('sales-orders:read') @voucherContract('sales_orders_head_receipt_voucher', true)
-  async headVoucher(@Param() params: SalesReceiptOrderVoucherIdDto, @Headers('if-none-match') tag: unknown, @Res({ passthrough: true }) response: ContentResponse) { contentResult(await this.vouchers.resolveContent(params.requestId, params.salesOrderId, tag, 'HEAD'), response) }
+  async headVoucher(@Param() params: SalesReceiptOrderVoucherIdDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor(), @Headers('if-none-match') tag: unknown, @Res({ passthrough: true }) response: ContentResponse) { contentResult(await this.vouchers.resolveContent(params.requestId, params.salesOrderId, tag, 'HEAD', actorUserId), response) }
 }

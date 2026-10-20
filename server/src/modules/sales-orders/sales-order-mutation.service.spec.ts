@@ -34,6 +34,7 @@ function setup() {
       .mockResolvedValue([{ id: ORDER_ID }]),
     salesOrder: {
       findUnique: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(order),
+      findFirst: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(order),
       update: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
     },
     salesOrderLine: {

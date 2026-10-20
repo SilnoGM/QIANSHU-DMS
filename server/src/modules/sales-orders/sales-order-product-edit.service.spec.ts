@@ -116,6 +116,7 @@ function setup(overrides: {
     $queryRaw: queryRaw,
     salesOrder: {
       findUnique: jest.fn().mockResolvedValue(orderRow(overrides.order)),
+      findFirst: jest.fn().mockResolvedValue(orderRow(overrides.order)),
       update: jest.fn().mockResolvedValue({ id: ORDER_ID }),
     },
     salesOrderLine: {

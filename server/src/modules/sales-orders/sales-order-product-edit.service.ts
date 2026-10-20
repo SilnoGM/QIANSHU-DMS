@@ -19,6 +19,8 @@ import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
+import { DataScopeService, dataScopeFallback } from '../access-control/data-scope.service'
+import { salesOrderScopeWhere } from './sales-order-access'
 import {
   SALES_ORDER_PRE_SEA_FULFILLMENT_STATUSES,
 } from '../purchase-orders/domain/purchase-order-source-sales-order-view'
@@ -144,6 +146,7 @@ export class SalesOrderProductEditService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
   async updateProducts(
@@ -158,6 +161,17 @@ export class SalesOrderProductEditService {
     try {
       return await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
+        const scope = await this.dataScope.resolveInTransaction(
+          transaction,
+          trusted.actorUserId,
+        )
+        const accessibleOrder = await transaction.salesOrder.findFirst({
+          where: { id: salesOrderId, ...salesOrderScopeWhere(scope, trusted.actorUserId) },
+          select: { id: true },
+        })
+        if (accessibleOrder === null) {
+          throw failure(HttpStatus.NOT_FOUND, 'SALES_ORDER_NOT_FOUND', '销售订单不存在')
+        }
         /*
          * 与采购创建保持同一锁顺序：先按稳定 ID 锁有效销售明细，再锁订单主行。
          * 这样产品减少与新采购争用同一销售明细时不会形成反向等待。

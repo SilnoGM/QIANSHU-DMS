@@ -273,7 +273,7 @@ export class SalesOrderCommandService {
           '幂等键已用于不同的销售订单创建请求',
         )
       }
-      return this.query.getById(existing.id)
+      return this.query.getById(existing.id, trusted.actorUserId)
     }
 
     // 预检发生在发号前，常见的产品、地区、币种和临时资产问题不会消耗编号。
@@ -398,7 +398,7 @@ export class SalesOrderCommandService {
         })
         return created.id
       }, { isolationLevel: 'Serializable' })
-      return this.query.getById(salesOrderId)
+      return this.query.getById(salesOrderId, trusted.actorUserId)
     }
     catch (error) {
       if (error instanceof ApiException) throw error

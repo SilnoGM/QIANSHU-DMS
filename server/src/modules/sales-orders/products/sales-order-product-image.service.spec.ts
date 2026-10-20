@@ -161,7 +161,7 @@ describe('SalesOrderProductImageService', () => {
       undefined,
     )).resolves.toBe(RESPONSE)
 
-    expect(fixture.productEditQueries.context).toHaveBeenCalledWith(SALES_ORDER_ID)
+    expect(fixture.productEditQueries.context).toHaveBeenCalledWith(SALES_ORDER_ID, expect.any(String))
     expect(fixture.productMedia.findFirst).toHaveBeenLastCalledWith({
       where: {
         id: PRODUCT_MEDIA_ID,

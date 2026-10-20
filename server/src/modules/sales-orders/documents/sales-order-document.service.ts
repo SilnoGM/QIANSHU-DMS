@@ -13,6 +13,8 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../../infrastructure/http/api.exception'
 import { AuditService } from '../../audit/audit.service'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
+import { salesOrderScopeWhere } from '../sales-order-access'
 import {
   MediaAssetLifecycleError,
   MediaAssetService,
@@ -162,6 +164,7 @@ export class SalesOrderDocumentService {
     private readonly query: SalesOrderQueryService,
     private readonly multipart: SalesOrderDocumentMultipartParser,
     private readonly automaticState: SalesOrderAutomaticStateService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
   uploadTemporary(
@@ -211,10 +214,18 @@ export class SalesOrderDocumentService {
     try {
       await this.prisma.$transaction(async transaction => {
         await applyTransactionTimeouts(transaction)
+        const scope = await this.dataScope.resolveInTransaction(
+          transaction,
+          context.actorUserId,
+        )
+        const scopeSql = scope === 'SELF'
+          ? Prisma.sql`AND "issuer_user_id" = CAST(${context.actorUserId} AS uuid)`
+          : Prisma.sql``
         const locks = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`
           SELECT "id"
           FROM "sales_orders"
           WHERE "id" = CAST(${salesOrderId} AS uuid)
+          ${scopeSql}
           FOR UPDATE
         `)
         if (locks.length !== 1) {
@@ -224,8 +235,8 @@ export class SalesOrderDocumentService {
             '销售订单不存在',
           )
         }
-        const order = await transaction.salesOrder.findUnique({
-          where: { id: salesOrderId },
+        const order = await transaction.salesOrder.findFirst({
+          where: { id: salesOrderId, ...salesOrderScopeWhere(scope, context.actorUserId) },
           select: {
             id: true,
             customerName: true,
@@ -347,7 +358,7 @@ export class SalesOrderDocumentService {
       if (error instanceof MediaAssetLifecycleError) return mapUploadError(error)
       throw error
     }
-    return this.query.getById(salesOrderId)
+    return this.query.getById(salesOrderId, context.actorUserId)
   }
 
   async detach(
@@ -360,6 +371,13 @@ export class SalesOrderDocumentService {
     const documentId = requireUuid(rawDocumentId, 'documentId')
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
+      const scope = await this.dataScope.resolveInTransaction(
+        transaction,
+        context.actorUserId,
+      )
+      const scopeSql = scope === 'SELF'
+        ? Prisma.sql`AND "issuer_user_id" = CAST(${context.actorUserId} AS uuid)`
+        : Prisma.sql``
       const locks = await transaction.$queryRaw<Array<{
         id: string
         fulfillmentStatus: string
@@ -367,6 +385,7 @@ export class SalesOrderDocumentService {
         SELECT "id", "fulfillment_status" AS "fulfillmentStatus"
         FROM "sales_orders"
         WHERE "id" = CAST(${salesOrderId} AS uuid)
+        ${scopeSql}
         FOR UPDATE
       `)
       if (locks.length !== 1) {
@@ -433,7 +452,7 @@ export class SalesOrderDocumentService {
         metadata: { salesOrderId, documentType: document.documentType },
       })
     })
-    return this.query.getById(salesOrderId)
+    return this.query.getById(salesOrderId, context.actorUserId)
   }
 
   async resolveContent(
@@ -441,11 +460,14 @@ export class SalesOrderDocumentService {
     documentId: string,
     ifNoneMatch: unknown,
     method: 'GET' | 'HEAD',
+    actorUserId: string = resolveDataScopeActor(),
   ): Promise<SalesOrderDocumentContentResponse> {
+    const scope = await this.dataScope.resolve(actorUserId)
     const row = await this.prisma.salesOrderDocument.findFirst({
       where: {
         id: requireUuid(documentId, 'documentId'),
         salesOrderId: requireUuid(salesOrderId, 'salesOrderId'),
+        salesOrder: { is: salesOrderScopeWhere(scope, actorUserId) },
         detachedAt: null,
         mediaAsset: { status: 'READY', deletedAt: null },
       },
