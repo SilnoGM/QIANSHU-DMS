@@ -131,7 +131,7 @@ async function login(page, baseUrl, username, password) {
     const usernameInput = document.querySelector('input[autocomplete="username"]')
     const passwordInput = document.querySelector('input[autocomplete="current-password"]')
     const button = [...document.querySelectorAll('button')]
-      .find(candidate => candidate.textContent?.trim() === '登录')
+      .find(candidate => candidate.textContent?.trim() === '登录系统')
     const setValue = (input, value) => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value)
       input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }))

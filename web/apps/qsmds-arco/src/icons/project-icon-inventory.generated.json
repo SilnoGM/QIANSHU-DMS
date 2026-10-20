@@ -728,7 +728,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/AppAccountButton/index.vue",
-      "apps/qsmds-arco/src/components/AppAccountButton/profile.vue"
+      "apps/qsmds-arco/src/components/business/QsAvatarUploader/index.vue"
     ]
   },
   {
@@ -1428,6 +1428,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/components/business/QsAvatarUploader/index.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue"
     ]
   },
@@ -2541,6 +2542,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/base/QsToast/config.ts",
+      "apps/qsmds-arco/src/components/business/QsAvatarUploader/index.vue",
       "apps/qsmds-arco/src/components/business/QsDictionarySelect/index.vue",
       "apps/qsmds-arco/src/components/business/QsOceanContainerList/OceanContainerCard.vue",
       "apps/qsmds-arco/src/components/business/QsPaymentRecipientEditor/QrImageUpload.vue",

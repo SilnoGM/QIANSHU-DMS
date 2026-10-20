@@ -232,7 +232,7 @@ export async function loginThroughUi(
     const username = document.querySelector('input[autocomplete="username"]')
     const password = document.querySelector('input[autocomplete="current-password"]')
     const button = [...document.querySelectorAll('button')]
-      .find(candidate => candidate.textContent?.trim() === '登录')
+      .find(candidate => candidate.textContent?.trim() === '登录系统')
     if (!username || !password || !button) {
       throw new Error('login form unavailable')
     }

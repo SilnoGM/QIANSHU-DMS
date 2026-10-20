@@ -10,6 +10,7 @@ import {
   REQUIRED_PERMISSIONS_METADATA,
 } from '../auth/decorators/auth.decorators'
 import { ProfileController } from './profile.controller'
+import { ProfileAvatarService } from './profile-avatar.service'
 import { UserProfileService } from './user-profile.service'
 
 const USER_ID = '42ad40d4-7fa5-46fb-81e4-1986bcebf8f1'
@@ -54,9 +55,15 @@ function createFixture() {
       .mockResolvedValue(PROFILE),
   }
 
+  const avatars = {
+    content: jest.fn(),
+    upload: jest.fn(),
+  }
+
   return {
     controller: new ProfileController(
       service as unknown as UserProfileService,
+      avatars as unknown as ProfileAvatarService,
     ),
     service,
   }
@@ -84,6 +91,10 @@ function requireOperation(
     {
       provide: UserProfileService,
       useValue: { getCurrent: jest.fn(), updateCurrent: jest.fn() },
+    },
+    {
+      provide: ProfileAvatarService,
+      useValue: { content: jest.fn(), upload: jest.fn() },
     },
   ],
 })

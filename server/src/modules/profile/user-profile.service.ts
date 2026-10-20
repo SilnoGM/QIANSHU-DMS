@@ -11,6 +11,7 @@ import { applyTransactionTimeouts } from '../../infrastructure/database/transact
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
 import type { CurrentUserProfileDto } from './dto/current-user-profile.dto'
+import { ProfileAvatarService } from './profile-avatar.service'
 import {
   type NormalizedUserProfileUpdate,
   type NormalizeUserProfileUpdateOptions,
@@ -22,6 +23,7 @@ const CURRENT_USER_PROFILE_SELECT = {
   email: true,
   mobileE164: true,
   avatarUrl: true,
+  avatarMediaAssetId: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.UserProfileSelect
@@ -54,6 +56,19 @@ const MOBILE_UNIQUE_TARGETS = new Set([
   'mobile_e164',
   'user_profiles_mobile_e164_key',
 ])
+const AVATAR_UNIQUE_TARGETS = new Set([
+  'avatarMediaAssetId',
+  'avatar_media_asset_id',
+  'user_profiles_avatar_media_asset_id_key',
+])
+
+export interface UserProfileTransactionUpdateOptions extends NormalizeUserProfileUpdateOptions {
+  /**
+   * 头像上传者。本人更新时等于目标用户；管理员代传时是管理员。
+   * 只影响 UPLOADING 资产的所有权校验，不改变资料目标用户。
+   */
+  avatarActorUserId?: string
+}
 
 /**
  * 本人资料应用服务。查询始终使用受限 select；写入、Audit 与超时配置共享同一个
@@ -65,6 +80,7 @@ export class UserProfileService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly avatars: ProfileAvatarService,
   ) {}
 
   async getCurrent(userId: string): Promise<CurrentUserProfileDto> {
@@ -100,6 +116,7 @@ export class UserProfileService {
           transaction,
           userId,
           normalized,
+          { avatarActorUserId: userId },
         )
 
         await this.audit.record(transaction, {
@@ -130,7 +147,7 @@ export class UserProfileService {
     transaction: Prisma.TransactionClient,
     userId: string,
     input: unknown,
-    options: NormalizeUserProfileUpdateOptions = {},
+    options: UserProfileTransactionUpdateOptions = {},
   ): Promise<UserProfileTransactionUpdateResult> {
     const normalizedUserId = normalizeTrustedUserId(userId)
     const normalized = normalizeUserProfileUpdate(input, options)
@@ -138,6 +155,7 @@ export class UserProfileService {
       transaction,
       normalizedUserId,
       normalized,
+      options,
     )
 
     return { profile, changedFields: normalized.changedFields }
@@ -147,13 +165,50 @@ export class UserProfileService {
     transaction: Prisma.TransactionClient,
     userId: string,
     normalized: NormalizedUserProfileUpdate,
+    options: UserProfileTransactionUpdateOptions = {},
   ): Promise<CurrentUserProfileDto> {
     try {
+      const avatarSubmitted = normalized.data.avatarUrl !== undefined
+      let nextAvatarAssetId: string | null = null
+      let previousAvatarAssetId: string | null = null
+
+      if (avatarSubmitted) {
+        const current = await transaction.userProfile.findUnique({
+          where: { userId },
+          select: { avatarMediaAssetId: true },
+        })
+        if (current === null) {
+          throw internalError()
+        }
+        previousAvatarAssetId = current.avatarMediaAssetId
+        const avatarUrl = normalized.data.avatarUrl
+        nextAvatarAssetId = avatarUrl === null || avatarUrl === undefined
+          ? null
+          : await this.avatars.resolveUploadedAsset(transaction, {
+              actorUserId: options.avatarActorUserId ?? userId,
+              targetUserId: userId,
+              avatarUrl,
+            })
+        normalized.data.avatarMediaAssetId = nextAvatarAssetId
+      }
+
       const profile = await transaction.userProfile.update({
         where: { userId },
         data: normalized.data,
         select: CURRENT_USER_PROFILE_SELECT,
       })
+
+      if (avatarSubmitted) {
+        if (nextAvatarAssetId !== null) {
+          await this.avatars.activate(transaction, nextAvatarAssetId)
+        }
+        if (
+          previousAvatarAssetId !== null
+          && previousAvatarAssetId !== nextAvatarAssetId
+        ) {
+          await this.avatars.reclaim(transaction, previousAvatarAssetId)
+        }
+      }
 
       return toCurrentUserProfileDto(profile)
     }
@@ -185,6 +240,10 @@ function normalizeTrustedUserId(userId: string): string {
 }
 
 function mapProfileMutationError(error: unknown): ApiException {
+  if (error instanceof ApiException) {
+    return error
+  }
+
   if (hasErrorCode(error, 'P2002')) {
     const targets = readStructuredUniqueTargets(error)
     if (
@@ -207,6 +266,17 @@ function mapProfileMutationError(error: unknown): ApiException {
         HttpStatus.CONFLICT,
         'MOBILE_ALREADY_EXISTS',
         '手机号已被使用',
+      )
+    }
+    if (
+      targets !== null
+      && targets.length > 0
+      && targets.every(target => AVATAR_UNIQUE_TARGETS.has(target))
+    ) {
+      return new ApiException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'PROFILE_AVATAR_UNAVAILABLE',
+        '头像已被使用，请重新上传',
       )
     }
   }

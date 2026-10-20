@@ -318,7 +318,10 @@ export class UsersService {
             transaction,
             normalizedUserId,
             profileInput,
-            { allowRemark: true },
+            {
+              allowRemark: true,
+              avatarActorUserId: normalizedContext.actorUserId,
+            },
           )
           changedFields.push(
             ...profileUpdate.changedFields.split(',').filter(Boolean),

@@ -5,11 +5,13 @@ import type {
   UpdateCurrentUserProfileRequestDto,
 } from '@/api/generated/types.gen'
 
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import QsAvatarUploader from '@/components/business/QsAvatarUploader/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import { useChinaMobileField } from '@/composables/app/use-china-mobile-field'
 import {
   buildCurrentUserProfilePatch,
   getProfileConflictField,
-  resolveAvatarPreviewUrl,
   validateCurrentUserProfileFields,
 } from '@/utils/user-profile'
 
@@ -44,8 +46,40 @@ const errorMessage = ref('')
 const fieldErrors = reactive<Partial<Record<keyof ProfileFormModel, string>>>({})
 let openRequestVersion = 0
 
+const {
+  clearNotice: clearMobileNotice,
+  clearUnsupported: clearUnsupportedMobile,
+  inputNotice: mobileInputNotice,
+  national: mobileNational,
+  onInput: onMobileInput,
+  syncFromModel: syncMobileFromModel,
+  unsupported: mobileUnsupported,
+} = useChinaMobileField({
+  getInitial: () => initialProfile.value?.mobileE164 ?? null,
+  getValue: () => model.mobileE164,
+  setValue: (value) => {
+    model.mobileE164 = value
+  },
+})
+
+const mobileDescription = computed(() => {
+  if (mobileInputNotice.value === 'digits') {
+    return t('accountProfile.mobileDigitsHint')
+  }
+  if (mobileInputNotice.value === 'foreign') {
+    return t('accountProfile.mobileForeignHint')
+  }
+  if (mobileInputNotice.value === 'length') {
+    return t('accountProfile.mobileLengthHint')
+  }
+  if (mobileUnsupported.value) {
+    return t('accountProfile.mobileUnsupportedHint')
+  }
+  return t('accountProfile.mobileHint')
+})
+
 const loading = computed(() => appAccountStore.profileState === 'loading')
-const previewUrl = computed(() => resolveAvatarPreviewUrl(model.avatarUrl))
+const avatarUploading = ref(false)
 const hasChanges = computed(() => {
   if (initialProfile.value === null) {
     return false
@@ -58,6 +92,7 @@ const canSubmit = computed(() =>
   initialProfile.value !== null
   && !loading.value
   && !submitting.value
+  && !avatarUploading.value
   && hasChanges.value,
 )
 
@@ -89,6 +124,25 @@ function resetModel(profile: CurrentUserProfileDto | null): void {
   model.email = profile?.email ?? ''
   model.mobileE164 = profile?.mobileE164 ?? ''
   model.avatarUrl = profile?.avatarUrl ?? ''
+  clearMobileNotice()
+  syncMobileFromModel()
+}
+
+function handleMobileInput(value: string | number | undefined): void {
+  onMobileInput(value)
+  formRef.value?.clearValidate('mobileE164')
+}
+
+function clearMobile(): void {
+  model.mobileE164 = ''
+  clearMobileNotice()
+  syncMobileFromModel()
+  formRef.value?.clearValidate('mobileE164')
+}
+
+function handleClearUnsupportedMobile(): void {
+  clearUnsupportedMobile()
+  formRef.value?.clearValidate('mobileE164')
 }
 
 function readServerFieldErrors(
@@ -124,6 +178,7 @@ async function loadForOpen(): Promise<void> {
   const requestVersion = ++openRequestVersion
   clearErrors()
   loadFailed.value = false
+  avatarUploading.value = false
   resetModel(null)
 
   try {
@@ -151,6 +206,7 @@ function close(): void {
   openRequestVersion += 1
   clearErrors()
   loadFailed.value = false
+  avatarUploading.value = false
   resetModel(null)
   emits('update:modelValue', false)
 }
@@ -170,12 +226,31 @@ async function submit(): Promise<void> {
   }
 
   clearErrors()
+  if (mobileInputNotice.value === 'foreign') {
+    setFieldErrors({
+      mobileE164: t('accountProfile.validation.mobileForeignInvalid'),
+    })
+    return
+  }
+  if (mobileInputNotice.value === 'length') {
+    setFieldErrors({
+      mobileE164: t('accountProfile.validation.mobileLengthInvalid'),
+    })
+    return
+  }
   const validationErrors = validateCurrentUserProfileFields(model, {
     avatarUrlInvalid: t('accountProfile.validation.avatarUrlInvalid'),
     avatarUrlTooLong: t('accountProfile.validation.avatarUrlTooLong'),
     emailInvalid: t('accountProfile.validation.emailInvalid'),
     emailTooLong: t('accountProfile.validation.emailTooLong'),
+    mobileDigitsInvalid: t('accountProfile.validation.mobileDigitsInvalid'),
     mobileE164Invalid: t('accountProfile.validation.mobileE164Invalid'),
+    mobileForeignInvalid: t('accountProfile.validation.mobileForeignInvalid'),
+    mobileLengthInvalid: t('accountProfile.validation.mobileLengthInvalid'),
+    mobileSegmentInvalid: t('accountProfile.validation.mobileSegmentInvalid'),
+  }, {
+    requireChinaMainland: true,
+    preserveUnsupportedMobile: mobileUnsupported.value,
   })
   if (Object.keys(validationErrors).length > 0) {
     setFieldErrors(validationErrors)
@@ -192,7 +267,7 @@ async function submit(): Promise<void> {
   try {
     const profile = await appAccountStore.updateProfile(patch)
     resetModel(profile)
-    useFaToast().success(t('accountProfile.saved'))
+    useQsToast().success(t('accountProfile.saved'))
     // QsGenericModal 在提交态拒绝程序化关闭，先释放锁并等待属性同步。
     submitting.value = false
     await nextTick()
@@ -211,13 +286,30 @@ async function submit(): Promise<void> {
       return
     }
 
+    const code = safeErrorCode(error)
+    if (code === 'PROFILE_AVATAR_EXPIRED') {
+      errorMessage.value = t('accountProfile.avatarExpired')
+      return
+    }
+    if (code === 'PROFILE_AVATAR_UNAVAILABLE') {
+      errorMessage.value = t('accountProfile.avatarUnavailable')
+      return
+    }
+
     const serverErrors = readServerFieldErrors(error)
+    if (serverErrors.avatarUrl !== undefined) {
+      errorMessage.value = serverErrors.avatarUrl
+      delete serverErrors.avatarUrl
+      if (Object.keys(serverErrors).length === 0) {
+        return
+      }
+    }
     if (Object.keys(serverErrors).length > 0) {
       setFieldErrors(serverErrors)
       return
     }
 
-    errorMessage.value = safeErrorCode(error) === 'PROFILE_UPDATE_RESULT_UNKNOWN'
+    errorMessage.value = code === 'PROFILE_UPDATE_RESULT_UNKNOWN'
       ? t('accountProfile.resultUnknown')
       : t('accountProfile.updateFailed')
   }
@@ -234,6 +326,7 @@ watch(() => props.modelValue, (visible) => {
     openRequestVersion += 1
     clearErrors()
     loadFailed.value = false
+    avatarUploading.value = false
     resetModel(null)
   }
 }, { immediate: true })
@@ -283,13 +376,16 @@ watch(() => props.modelValue, (visible) => {
 
     <div class="gap-6 grid grid-cols-1 md:grid-cols-[160px_minmax(0,1fr)]">
       <aside class="p-4 text-center border border-border rounded-lg bg-muted/30 flex flex-col gap-3 items-center">
-        <FaAvatar
-          :src="previewUrl ?? ''"
-          class="border-4 border-background size-24 shadow-sm"
-        >
-          <FaIcon name="i-carbon:user-avatar-filled" class="text-muted-foreground size-12" />
-        </FaAvatar>
-        <div class="min-w-0 w-full space-y-1">
+        <QsAvatarUploader
+          v-model="model.avatarUrl"
+          v-model:uploading="avatarUploading"
+          :disabled="submitting || loadFailed || initialProfile === null"
+          layout="stacked"
+        />
+      </aside>
+
+      <section class="min-w-0">
+        <div class="mb-4 pb-4 border-b border-border space-y-1">
           <div class="text-foreground font-medium truncate">
             {{ appAccountStore.displayName }}
           </div>
@@ -297,12 +393,7 @@ watch(() => props.modelValue, (visible) => {
             {{ appAccountStore.account }}
           </div>
         </div>
-        <p class="text-xs text-muted-foreground leading-5">
-          {{ t('accountProfile.avatarPreview') }}
-        </p>
-      </aside>
 
-      <section class="min-w-0">
         <div v-if="loading && initialProfile === null" class="text-sm text-muted-foreground py-10 flex-center gap-2">
           <FaIcon name="i-svg-spinners:90-ring-with-bg" class="text-primary size-5" />
           {{ t('accountProfile.loading') }}
@@ -329,30 +420,41 @@ watch(() => props.modelValue, (visible) => {
                 @clear="model.email = ''"
               />
             </FaFormItem>
-            <FaFormItem name="mobileE164" :label="t('accountProfile.mobileE164')">
+            <FaFormItem
+              name="mobileE164"
+              :auto-bind="false"
+              :label="t('accountProfile.mobile')"
+            >
               <FaInput
-                v-model="model.mobileE164"
+                :model-value="mobileNational"
                 type="tel"
-                autocomplete="tel"
+                autocomplete="tel-national"
+                inputmode="numeric"
                 clearable
                 class="w-full"
                 :placeholder="t('accountProfile.mobilePlaceholder')"
-                @clear="model.mobileE164 = ''"
-              />
+                @update:model-value="handleMobileInput"
+                @clear="clearMobile"
+              >
+                <template #start>
+                  <span aria-hidden="true" class="text-sm text-muted-foreground font-medium">+86</span>
+                </template>
+              </FaInput>
+              <template #description>
+                <span>{{ mobileDescription }}</span>
+                <FaButton
+                  v-if="mobileUnsupported"
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  class="ml-1 p-0 align-baseline h-auto"
+                  @click="handleClearUnsupportedMobile"
+                >
+                  {{ t('accountProfile.mobileClearUnsupported') }}
+                </FaButton>
+              </template>
             </FaFormItem>
           </div>
-
-          <FaFormItem name="avatarUrl" :label="t('accountProfile.avatarUrl')">
-            <FaInput
-              v-model="model.avatarUrl"
-              type="url"
-              autocomplete="url"
-              clearable
-              class="w-full"
-              :placeholder="t('accountProfile.avatarPlaceholder')"
-              @clear="model.avatarUrl = ''"
-            />
-          </FaFormItem>
         </FaForm>
       </section>
     </div>

@@ -7,8 +7,8 @@ import {
 const ASSET_ID = '00000000-0000-4000-8000-000000000321'
 
 describe('MediaAssetReferenceRepository', () => {
-  it.each(['paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'fundWithdrawalRequest'])('retains recipient code through %s even after configuration changes', async target => {
-    const reader = Object.fromEntries(['productMedia', 'salesOrderDocument', 'purchaseOrderDocument', 'salesReceiptRequest', 'purchaseOrderImageDraft', 'packagingCostRequest', 'paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'invoiceRequest', 'fundWithdrawalRequest']
+  it.each(['paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'fundWithdrawalRequest', 'userProfile'])('retains a managed media asset through %s even after the referencing workflow changes', async target => {
+    const reader = Object.fromEntries(['productMedia', 'salesOrderDocument', 'purchaseOrderDocument', 'salesReceiptRequest', 'purchaseOrderImageDraft', 'packagingCostRequest', 'paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'invoiceRequest', 'fundWithdrawalRequest', 'userProfile']
       .map(name => [name, { findFirst: jest.fn().mockResolvedValue(name === target ? { id: 'reference' } : null) }])) as unknown as Prisma.TransactionClient
     await expect(new MediaAssetReferenceRepository().hasActiveReferences(reader, ASSET_ID)).resolves.toBe(true)
   })
@@ -81,6 +81,7 @@ describe('MediaAssetReferenceRepository', () => {
       'slh_bills',
       'invoice_requests',
       'fund_withdrawal_requests',
+      'user_profiles',
     ])
     expect(productMediaFindFirst).toHaveBeenCalledWith({
       where: {
@@ -129,6 +130,7 @@ describe('MediaAssetReferenceRepository', () => {
       slhBill: { findFirst: jest.fn().mockResolvedValue(null) },
       invoiceRequest: { findFirst: jest.fn().mockResolvedValue(null) },
       fundWithdrawalRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      userProfile: { findFirst: jest.fn().mockResolvedValue(null) },
     } as unknown as Prisma.TransactionClient
 
     await expect(

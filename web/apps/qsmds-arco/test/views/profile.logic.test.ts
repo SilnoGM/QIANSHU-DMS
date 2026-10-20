@@ -275,3 +275,80 @@ test('未知 mutation 结果只比较本次提交字段，不要求未提交字�
     mobileE164: null,
   }, {}), false)
 })
+
+test('个人资料大陆手机号模式区分长度、号段、非数字与外国号码', () => {
+  const messages = {
+    avatarUrlInvalid: 'avatar-invalid',
+    avatarUrlTooLong: 'avatar-too-long',
+    emailInvalid: 'email-invalid',
+    emailTooLong: 'email-too-long',
+    mobileE164Invalid: 'mobile-invalid',
+    mobileDigitsInvalid: 'mobile-digits',
+    mobileLengthInvalid: 'mobile-length',
+    mobileSegmentInvalid: 'mobile-segment',
+    mobileForeignInvalid: 'mobile-foreign',
+  }
+
+  assert.deepEqual(validateCurrentUserProfileFields({
+    avatarUrl: '',
+    email: '',
+    mobileE164: '+8613800138000',
+  }, messages, { requireChinaMainland: true }), {})
+
+  assert.deepEqual(validateCurrentUserProfileFields({
+    avatarUrl: '',
+    email: '',
+    mobileE164: '',
+  }, messages, { requireChinaMainland: true }), {})
+
+  assert.deepEqual(validateCurrentUserProfileFields({
+    avatarUrl: '',
+    email: '',
+    mobileE164: '+861380013800',
+  }, messages, { requireChinaMainland: true }), {
+    mobileE164: 'mobile-length',
+  })
+
+  assert.deepEqual(validateCurrentUserProfileFields({
+    avatarUrl: '',
+    email: '',
+    mobileE164: '+8612800138000',
+  }, messages, { requireChinaMainland: true }), {
+    mobileE164: 'mobile-segment',
+  })
+
+  assert.deepEqual(validateCurrentUserProfileFields({
+    avatarUrl: '',
+    email: '',
+    mobileE164: '+86abc',
+  }, messages, { requireChinaMainland: true }), {
+    mobileE164: 'mobile-digits',
+  })
+
+  assert.deepEqual(validateCurrentUserProfileFields({
+    avatarUrl: '',
+    email: '',
+    mobileE164: '+886912345678',
+  }, messages, { requireChinaMainland: true }), {
+    mobileE164: 'mobile-foreign',
+  })
+})
+
+test('未触碰的存量非大陆号码可跳过校验并保持原值', () => {
+  const messages = {
+    avatarUrlInvalid: 'avatar-invalid',
+    avatarUrlTooLong: 'avatar-too-long',
+    emailInvalid: 'email-invalid',
+    emailTooLong: 'email-too-long',
+    mobileE164Invalid: 'mobile-invalid',
+  }
+
+  assert.deepEqual(validateCurrentUserProfileFields({
+    avatarUrl: '',
+    email: '',
+    mobileE164: '+886912345678',
+  }, messages, {
+    requireChinaMainland: true,
+    preserveUnsupportedMobile: true,
+  }), {})
+})

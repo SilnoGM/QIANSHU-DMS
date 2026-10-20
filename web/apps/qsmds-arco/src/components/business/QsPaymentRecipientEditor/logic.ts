@@ -1,4 +1,5 @@
 import type { PaymentRecipientAccountInputDto, PaymentRecipientMethod } from '@/api/modules/payment-recipients'
+import { validateUploadImage } from '../../../utils/image-upload-rules'
 
 export const PAYMENT_RECIPIENT_METHODS: PaymentRecipientMethod[] = ['ALIPAY', 'WECHAT', 'BANK_TRANSFER']
 
@@ -38,10 +39,11 @@ export function validatePaymentRecipientAccounts(accounts: readonly PaymentRecip
   return null
 }
 export function validateRecipientImage(file: { type: string, size: number }): string | null {
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+  const failure = validateUploadImage(file)
+  if (failure === 'type') {
     return 'paymentRecipient.errors.imageType'
   }
-  return file.size <= 0 || file.size > 10 * 1024 * 1024 ? 'paymentRecipient.errors.imageSize' : null
+  return failure === null ? null : 'paymentRecipient.errors.imageSize'
 }
 export function paymentRecipientSaveFailure(error: unknown): 'editable' | 'refresh' | 'unknown' {
   if (typeof error === 'object' && error !== null && 'kind' in error && error.kind === 'http' && 'status' in error && typeof error.status === 'number') {

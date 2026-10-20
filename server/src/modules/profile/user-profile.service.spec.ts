@@ -3,9 +3,13 @@ import { HttpStatus } from '@nestjs/common'
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import type { AuditService } from '../audit/audit.service'
+import type { ProfileAvatarService } from './profile-avatar.service'
 import { UserProfileService } from './user-profile.service'
 
 const USER_ID = '42ad40d4-7fa5-46fb-81e4-1986bcebf8f1'
+const ADMIN_ID = '7c8f5f6e-2c4a-4f4b-9b8e-0d0f1e2a3b4c'
+const OLD_AVATAR_ID = '0f8fad5b-d9cb-469f-a165-70867728950e'
+const NEW_AVATAR_ID = '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d'
 const REQUEST_ID = 'req-profile-1'
 const CREATED_AT = new Date('2026-07-20T01:00:00.000Z')
 const UPDATED_AT = new Date('2026-07-20T02:00:00.000Z')
@@ -15,6 +19,7 @@ interface ProfileRow {
   email: string | null
   mobileE164: string | null
   avatarUrl: string | null
+  avatarMediaAssetId?: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -24,8 +29,15 @@ type AsyncMock = jest.Mock<Promise<unknown>, [unknown]>
 interface TransactionFixture {
   $queryRaw: AsyncMock
   userProfile: {
+    findUnique: AsyncMock
     update: AsyncMock
   }
+}
+
+interface AvatarFixture {
+  activate: jest.Mock<Promise<void>, [unknown, string]>
+  reclaim: jest.Mock<Promise<void>, [unknown, string]>
+  resolveUploadedAsset: jest.Mock<Promise<string | null>, [unknown, unknown]>
 }
 
 interface PrismaFixture {
@@ -48,6 +60,7 @@ function profileRow(overrides: Partial<ProfileRow> = {}): ProfileRow {
     email: 'User@Example.COM',
     mobileE164: '+8613812345678',
     avatarUrl: 'https://cdn.example.com/avatar.png',
+    avatarMediaAssetId: null,
     createdAt: CREATED_AT,
     updatedAt: UPDATED_AT,
     ...overrides,
@@ -59,9 +72,15 @@ function createFixture() {
     jest.fn<Promise<unknown>, [unknown]>()
   const transaction: TransactionFixture = {
     $queryRaw: asyncMock(),
-    userProfile: { update: asyncMock() },
+    userProfile: {
+      findUnique: asyncMock(),
+      update: asyncMock(),
+    },
   }
   transaction.$queryRaw.mockResolvedValue([])
+  transaction.userProfile.findUnique.mockResolvedValue({
+    avatarMediaAssetId: null,
+  })
   const prisma: PrismaFixture = {
     userProfile: { findUnique: asyncMock() },
     $transaction: jest.fn<
@@ -72,13 +91,21 @@ function createFixture() {
   const audit: AuditFixture = {
     record: jest.fn<Promise<unknown>, [unknown, unknown]>().mockResolvedValue({}),
   }
+  const avatars: AvatarFixture = {
+    activate: jest.fn<Promise<void>, [unknown, string]>().mockResolvedValue(undefined),
+    reclaim: jest.fn<Promise<void>, [unknown, string]>().mockResolvedValue(undefined),
+    resolveUploadedAsset: jest.fn<Promise<string | null>, [unknown, unknown]>()
+      .mockResolvedValue(null),
+  }
 
   return {
     audit,
+    avatars,
     prisma,
     service: new UserProfileService(
       prisma as unknown as PrismaService,
       audit as unknown as AuditService,
+      avatars as unknown as ProfileAvatarService,
     ),
     transaction,
   }
@@ -116,6 +143,7 @@ describe('UserProfileService reads', () => {
         email: true,
         mobileE164: true,
         avatarUrl: true,
+        avatarMediaAssetId: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -182,6 +210,7 @@ describe('UserProfileService updates', () => {
           emailNormalized: 'user@example.com',
           mobileE164: '+8613812345678',
           avatarUrl: 'https://cdn.example.com/avatar.png',
+          avatarMediaAssetId: null,
         },
       }),
     )
@@ -223,9 +252,119 @@ describe('UserProfileService updates', () => {
           emailNormalized: null,
           mobileE164: null,
           avatarUrl: null,
+          avatarMediaAssetId: null,
         },
       }),
     )
+  })
+
+  it('activates an uploaded avatar and reclaims the previous managed asset', async () => {
+    const { avatars, service, transaction } = createFixture()
+    const avatarUrl = `https://dms.example.com/api/profile/avatars/${NEW_AVATAR_ID}/content`
+    transaction.userProfile.findUnique.mockResolvedValue({
+      avatarMediaAssetId: OLD_AVATAR_ID,
+    })
+    transaction.userProfile.update.mockResolvedValue(profileRow({
+      avatarMediaAssetId: NEW_AVATAR_ID,
+      avatarUrl,
+    }))
+    avatars.resolveUploadedAsset.mockResolvedValue(NEW_AVATAR_ID)
+
+    await service.updateCurrent(
+      { actorUserId: USER_ID, requestId: REQUEST_ID },
+      { avatarUrl },
+    )
+
+    expect(avatars.resolveUploadedAsset).toHaveBeenCalledWith(
+      transaction,
+      {
+        actorUserId: USER_ID,
+        avatarUrl,
+        targetUserId: USER_ID,
+      },
+    )
+    expect(transaction.userProfile.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          avatarUrl,
+          avatarMediaAssetId: NEW_AVATAR_ID,
+        },
+      }),
+    )
+    expect(avatars.activate).toHaveBeenCalledWith(transaction, NEW_AVATAR_ID)
+    expect(avatars.reclaim).toHaveBeenCalledWith(transaction, OLD_AVATAR_ID)
+  })
+
+  it('reclaims the previous managed asset when the avatar is cleared', async () => {
+    const { avatars, service, transaction } = createFixture()
+    transaction.userProfile.findUnique.mockResolvedValue({
+      avatarMediaAssetId: OLD_AVATAR_ID,
+    })
+    transaction.userProfile.update.mockResolvedValue(profileRow({
+      avatarMediaAssetId: null,
+      avatarUrl: null,
+    }))
+
+    await service.updateCurrent(
+      { actorUserId: USER_ID, requestId: REQUEST_ID },
+      { avatarUrl: null },
+    )
+
+    expect(transaction.userProfile.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          avatarUrl: null,
+          avatarMediaAssetId: null,
+        },
+      }),
+    )
+    expect(avatars.activate).not.toHaveBeenCalled()
+    expect(avatars.reclaim).toHaveBeenCalledWith(transaction, OLD_AVATAR_ID)
+  })
+
+  it('passes the administrator uploader identity through the shared write primitive', async () => {
+    const { avatars, service, transaction } = createFixture()
+    const avatarUrl = `https://dms.example.com/api/profile/avatars/${NEW_AVATAR_ID}/content`
+    transaction.userProfile.update.mockResolvedValue(profileRow({
+      avatarMediaAssetId: NEW_AVATAR_ID,
+      avatarUrl,
+    }))
+    avatars.resolveUploadedAsset.mockResolvedValue(NEW_AVATAR_ID)
+
+    await service.updateInTransaction(
+      transaction as never,
+      USER_ID,
+      { avatarUrl },
+      { avatarActorUserId: ADMIN_ID },
+    )
+
+    expect(avatars.resolveUploadedAsset).toHaveBeenCalledWith(
+      transaction,
+      {
+        actorUserId: ADMIN_ID,
+        avatarUrl,
+        targetUserId: USER_ID,
+      },
+    )
+  })
+
+  it('propagates a safe avatar binding failure and does not update the profile', async () => {
+    const { avatars, service, transaction } = createFixture()
+    avatars.resolveUploadedAsset.mockRejectedValue(new ApiException(
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      'PROFILE_AVATAR_EXPIRED',
+      '头像上传已过期，请重新上传',
+    ))
+
+    await expectApiException(
+      service.updateCurrent(
+        { actorUserId: USER_ID, requestId: REQUEST_ID },
+        { avatarUrl: `https://dms.example.com/api/profile/avatars/${NEW_AVATAR_ID}/content` },
+      ),
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      'PROFILE_AVATAR_EXPIRED',
+    )
+    expect(transaction.userProfile.update).not.toHaveBeenCalled()
   })
 
   it('validates before opening a transaction', async () => {

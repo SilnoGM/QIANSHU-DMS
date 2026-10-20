@@ -636,11 +636,13 @@ model UserProfile {
   emailNormalized String?  @unique(map: "user_profiles_email_normalized_key") @map("email_normalized") @db.VarChar(254)
   mobileE164      String?  @unique(map: "user_profiles_mobile_e164_key") @map("mobile_e164") @db.VarChar(16)
   avatarUrl       String?  @map("avatar_url") @db.VarChar(2048)
+  avatarMediaAssetId String? @unique(map: "user_profiles_avatar_media_asset_id_key") @map("avatar_media_asset_id") @db.Uuid
   remark          String?  @db.Text
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  avatarMediaAsset MediaAsset? @relation("UserProfileAvatar", fields: [avatarMediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@map("user_profiles")
 }
@@ -991,6 +993,7 @@ model MediaAsset {
   slhBillSourceFiles  SlhBill[]
   invoiceRequestDocuments InvoiceRequest[]
   fundWithdrawalProofs FundWithdrawalRequest[] @relation("FundWithdrawalPaymentProof")
+  avatarProfile UserProfile? @relation("UserProfileAvatar")
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
   @@index([status, retentionUntil, id], map: "media_assets_status_retention_until_id_idx")

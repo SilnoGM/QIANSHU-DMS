@@ -1,5 +1,7 @@
 # 用户资料扩展技术设计
 
+> 2026-10-20 变更：头像从「URL 输入」改为「上传到统一媒体管线」；个人资料与管理端手机号改为固定 `+86` + 11 位输入，存储仍是 E.164。本文第 13 节中旧的 Avatar URL 描述以文末「17. 头像上传与手机号输入改造」为准；接口契约仍保持 `avatarUrl` 字符串与 `PATCH /api/profile` 不变。
+
 ## 1. 设计目标
 
 本设计在不扩大普通用户系统管理权限的前提下，为每个 `User` 建立一条逻辑上严格一对一的 `UserProfile`，并提供：
@@ -718,3 +720,26 @@ git diff --check
 5. Audit `changedFields` 使用排序后的逗号分隔字符串，不扩大 Audit metadata 公共结构。
 6. Profile 缓存在现有 `appAccount` 身份域，不扩张 `AuthContextDto`；跨标签只广播 `PROFILE_CHANGED` 事件类型。
 7. 部署 Profile migration 时暂停旧 Server 的用户创建写流量，不为滚动兼容引入 trigger。
+
+## 20. 2026-10-20 头像上传与手机号输入改造
+
+### 20.1 手机号
+
+- Web 表单使用 `FaInput` 的 `#start` 插槽渲染固定 `+86`，用户只输入 11 位。
+- 表单真值仍是 `mobileE164`；可写计算属性负责剥离/拼接，PATCH 契约不变。
+- 号段规则 `^1[3-9]\d{9}$`；错误区分为 `mobileLengthInvalid`、`mobileSegmentInvalid`、`mobileDigitsInvalid`、`mobileForeignInvalid`。
+- `parseStoredMobileE164` 识别存量：`+86` + 11 位可回显；其他值标记 `unsupported`。
+- 未触碰的存量非大陆号码保持原值，只改邮箱/头像不会把它清空；用户可显式清除或重新输入。不做自动转换或数据库回填。
+- 管理端用户表单复用同一 composable 与校验选项。
+
+### 20.2 头像
+
+- `UserProfile` 新增 `avatarMediaAssetId`（唯一索引、`media_assets` 外键 `ON DELETE RESTRICT`）；`MediaAsset` 增加反向关系。`avatar_url` 仍是公开地址，新列只用于 READY 引用保护与回收。
+- `media_assets_upload_purpose_check` 增加 `USER_AVATAR`；`enforce_ready_media_asset_reference()` 与 `user_profiles` 延迟约束触发器增加头像分支。
+- `POST /api/profile/avatar-uploads`：Session + CSRF、无需业务权限；multipart `mediaType=IMAGE` + `file`；复用 `SalesOrderDocumentMultipartParser`、`MediaAssetService.prepare`、现有 jpg/png/webp + 10 MiB + sharp 校验；返回 `{ mediaAssetId, avatarUrl }`，资产保持 `UPLOADING`。
+- `GET/HEAD /api/profile/avatars/:id/content`：Session 必需；`READY` 对所有已登录用户可读，`UPLOADING` 仅上传者本人可读；`private, no-store` + ETag。
+- `PATCH /api/profile` 收到 `avatarUrl` 时解析本系统同源内容 URL：校验用途/所有者/过期时间，绑定 `avatar_media_asset_id`，同事务 `activate`，并把旧资产 `markUnreferencedForTrash`。外部 URL 继续接受，但会解除媒体绑定。
+- 管理端 `PATCH /api/users/:userId` 复用同一绑定；`avatarActorUserId` 传管理员 id，允许管理员代传头像。
+- 浏览器上传前压缩为最大边 512px、质量 0.85 的 WebP；压不动/解码失败时回退原文件，服务端仍做真实内容与体积校验。
+- 共用 `FaImageUpload` 与新的 `QsAvatarUploader`；上传失败区分可重试（网络/503）与需重新选择（422）。
+- 布局：左侧 160px 区块只放头像上传，不再混排姓名/账号；显示名与账号移到右侧表单顶部，以分隔线与字段区隔开。

@@ -789,7 +789,10 @@ describe('UsersService create and simple updates', () => {
         mobileE164: '+8613800138000',
         remark: ' internal note ',
       },
-      { allowRemark: true },
+      {
+        allowRemark: true,
+        avatarActorUserId: ACTOR_ID,
+      },
     )
     expect(result.profile).toMatchObject({
       email: 'Operator@Example.com',
@@ -824,7 +827,10 @@ describe('UsersService create and simple updates', () => {
       transaction,
       TARGET_ID,
       { email: 'operator@example.com' },
-      { allowRemark: true },
+      {
+        allowRemark: true,
+        avatarActorUserId: ACTOR_ID,
+      },
     )
   })
 

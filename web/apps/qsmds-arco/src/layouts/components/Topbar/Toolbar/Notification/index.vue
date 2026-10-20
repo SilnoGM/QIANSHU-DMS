@@ -1,30 +1,27 @@
 <script setup lang="ts">
-import { isMockDataEnabled } from '@/api/mock-mode'
-import Panel from './panel.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 
 defineOptions({
   name: 'ToolbarNotification',
 })
 
-const appNotificationStore = useAppNotificationStore()
+const toast = useQsToast()
 
-// 通知数据只有 mock 来源；没有 mock 服务时不得发起请求，否则会打到不存在的 /fake/* 并报错。
-if (isMockDataEnabled) {
-  appNotificationStore.init()
+function showNoticePending(): void {
+  toast.info('通知功能将在后续版本中上线')
 }
 </script>
 
 <template>
-  <FaPopover class="p-0">
-    <FaButton variant="ghost" size="icon-sm" class="animation">
-      <FaBadge :value="appNotificationStore.total > 9 ? true : appNotificationStore.total">
-        <FaIcon name="i-ri:notification-3-line" class="icon size-4" />
-      </FaBadge>
-    </FaButton>
-    <template #panel>
-      <Panel />
-    </template>
-  </FaPopover>
+  <FaButton
+    variant="ghost"
+    size="icon-sm"
+    class="animation"
+    aria-label="通知"
+    @click="showNoticePending"
+  >
+    <FaIcon name="i-ri:notification-3-line" class="icon size-4" />
+  </FaButton>
 </template>
 
 <style scoped>

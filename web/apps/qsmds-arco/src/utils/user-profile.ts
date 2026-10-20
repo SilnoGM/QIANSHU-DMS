@@ -5,6 +5,8 @@ import type {
   UserDto,
 } from '@/api/generated/types.gen'
 
+import { validateChinaMobileNational } from './china-mobile'
+
 export type CurrentUserProfileValue = Pick<
   CurrentUserProfileDto,
   'avatarUrl' | 'email' | 'mobileE164'
@@ -40,6 +42,17 @@ export interface CurrentUserProfileValidationMessages {
   emailInvalid: string
   emailTooLong: string
   mobileE164Invalid: string
+  mobileDigitsInvalid?: string
+  mobileForeignInvalid?: string
+  mobileLengthInvalid?: string
+  mobileSegmentInvalid?: string
+}
+
+export interface CurrentUserProfileValidationOptions {
+  /** 个人资料/管理端表单使用：只接受 +86 + 11 位大陆手机号。 */
+  requireChinaMainland?: boolean
+  /** 未触碰的存量非大陆号码：跳过手机号校验，保存时保持原值。 */
+  preserveUnsupportedMobile?: boolean
 }
 
 const EMAIL_MAX_CODE_POINTS = 254
@@ -58,12 +71,16 @@ const EMAIL_LOCAL_PART_PATTERN
   = /^[\p{L}\p{M}\p{N}!#$%&'*+/=?^_`{|}~.-]+$/u
 const EMAIL_DOMAIN_LABEL_PATTERN
   = /^[\p{L}\p{M}\p{N}](?:[\p{L}\p{M}\p{N}-]*[\p{L}\p{M}\p{N}])?$/u
-const DEFAULT_VALIDATION_MESSAGES: CurrentUserProfileValidationMessages = {
+const DEFAULT_VALIDATION_MESSAGES: Required<CurrentUserProfileValidationMessages> = {
   avatarUrlInvalid: '请输入有效的 HTTP 或 HTTPS 绝对地址',
   avatarUrlTooLong: '头像地址不能超过 2048 个字符',
   emailInvalid: '请输入有效的邮箱地址',
   emailTooLong: '邮箱不能超过 254 个字符',
+  mobileDigitsInvalid: '手机号只能输入数字',
   mobileE164Invalid: '请输入有效的 E.164 手机号',
+  mobileForeignInvalid: '仅支持中国大陆 +86 手机号',
+  mobileLengthInvalid: '手机号应为 11 位',
+  mobileSegmentInvalid: '手机号号段不合法，请检查',
 }
 
 function codePointLength(value: string): number {
@@ -159,31 +176,52 @@ export function resolveAvatarPreviewUrl(value: string): string | null {
 export function validateCurrentUserProfileFields(
   value: CurrentUserProfileFormValue,
   messages: CurrentUserProfileValidationMessages = DEFAULT_VALIDATION_MESSAGES,
+  options: CurrentUserProfileValidationOptions = {},
 ): UserProfileFieldErrors {
   const errors: UserProfileFieldErrors = {}
+  const resolved = { ...DEFAULT_VALIDATION_MESSAGES, ...messages }
   const email = normalizeEmail(value.email)
   const mobileE164 = normalizeExactOptionalValue(value.mobileE164)
   const avatarUrl = normalizeExactOptionalValue(value.avatarUrl)
 
   if (email !== null) {
     if (codePointLength(email) > EMAIL_MAX_CODE_POINTS) {
-      errors.email = messages.emailTooLong
+      errors.email = resolved.emailTooLong
     }
     else if (!isEmailFormatValid(email)) {
-      errors.email = messages.emailInvalid
+      errors.email = resolved.emailInvalid
     }
   }
 
-  if (mobileE164 !== null && !MOBILE_E164_PATTERN.test(mobileE164)) {
-    errors.mobileE164 = messages.mobileE164Invalid
+  if (mobileE164 !== null && options.preserveUnsupportedMobile !== true) {
+    if (options.requireChinaMainland === true) {
+      if (!mobileE164.startsWith('+86')) {
+        errors.mobileE164 = resolved.mobileForeignInvalid
+      }
+      else {
+        const issue = validateChinaMobileNational(mobileE164.slice(3))
+        if (issue === 'digits') {
+          errors.mobileE164 = resolved.mobileDigitsInvalid
+        }
+        else if (issue === 'length') {
+          errors.mobileE164 = resolved.mobileLengthInvalid
+        }
+        else if (issue === 'segment') {
+          errors.mobileE164 = resolved.mobileSegmentInvalid
+        }
+      }
+    }
+    else if (!MOBILE_E164_PATTERN.test(mobileE164)) {
+      errors.mobileE164 = resolved.mobileE164Invalid
+    }
   }
 
   if (avatarUrl !== null) {
     if (codePointLength(avatarUrl) > AVATAR_URL_MAX_CODE_POINTS) {
-      errors.avatarUrl = messages.avatarUrlTooLong
+      errors.avatarUrl = resolved.avatarUrlTooLong
     }
     else if (resolveAvatarPreviewUrl(avatarUrl) === null) {
-      errors.avatarUrl = messages.avatarUrlInvalid
+      errors.avatarUrl = resolved.avatarUrlInvalid
     }
   }
 
@@ -192,8 +230,9 @@ export function validateCurrentUserProfileFields(
 
 export function validateAdminUserProfileFields(
   value: AdminUserProfileFormValue,
+  options: CurrentUserProfileValidationOptions = {},
 ): UserProfileFieldErrors {
-  const errors = validateCurrentUserProfileFields(value)
+  const errors = validateCurrentUserProfileFields(value, undefined, options)
   const displayName = normalizeRequiredText(value.displayName)
   const remark = normalizeRemark(value.remark)
 

@@ -787,7 +787,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   await waitForAuthState(restartedPage, 'authenticated')
 
   // 无管理权限用户通过账户菜单维护本人资料；真实 GET/PATCH、刷新持久化、
-  // 头像失败 fallback、移动端单列与暗色主题必须同时成立。
+  // 默认头像 fallback、移动端单列与暗色主题必须同时成立。
   const profileRequests = []
   const profileApiUrl = `${configuration.baseUrl}/api/profile`
   const removeProfileRequestListener = restartedPage.on(
@@ -799,16 +799,15 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
     },
   )
   const profileValues = {
-    email: 'browser.limited@example.com',
-    tel: '+8613800138000',
-    url: `${configuration.baseUrl}/missing-profile-avatar.png`,
+    'email': 'browser.limited@example.com',
+    'tel-national': '13800138000',
   }
+  const expectedMobileE164 = '+8613800138000'
   await openHeaderAccountMenu(restartedPage)
   await clickVisibleText(restartedPage, '个人资料')
   await restartedPage.waitFor(`(() => (
     document.querySelector('input[autocomplete="email"]')?.getClientRects().length > 0
-    && document.querySelector('input[autocomplete="tel"]')?.getClientRects().length > 0
-    && document.querySelector('input[autocomplete="url"]')?.getClientRects().length > 0
+    && document.querySelector('input[autocomplete="tel-national"]')?.getClientRects().length > 0
   ))()`)
   await fillVisibleProfileForm(restartedPage, profileValues)
   await clickVisibleButton(restartedPage, '保存修改')
@@ -817,8 +816,8 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
       && dialog.textContent?.includes('个人资料')))()`)
   await restartedPage.waitFor(authStoreExpression(`
     return store.profile?.email === ${JSON.stringify(profileValues.email)}
-      && store.profile?.mobileE164 === ${JSON.stringify(profileValues.tel)}
-      && store.profile?.avatarUrl === ${JSON.stringify(profileValues.url)}
+      && store.profile?.mobileE164 === ${JSON.stringify(expectedMobileE164)}
+      && store.profile?.avatarUrl === null
   `))
   assert.equal(
     profileRequests.filter(request => request.method === 'PATCH').length,
@@ -827,8 +826,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   const patchRequest = profileRequests.find(request => request.method === 'PATCH')
   const serializedPatch = patchRequest?.postData ?? ''
   assert.equal(serializedPatch.includes(profileValues.email), true)
-  assert.equal(serializedPatch.includes(profileValues.tel), true)
-  assert.equal(serializedPatch.includes(profileValues.url), true)
+  assert.equal(serializedPatch.includes(expectedMobileE164), true)
 
   const persistedProfile = await restartedPage.evaluate(
     apiExpression('/api/profile', 'GET'),
@@ -999,8 +997,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   )
   assert.deepEqual(profileMessages, [{ type: 'PROFILE_CHANGED' }])
   assert.equal(
-    JSON.stringify(profileMessages).includes(profileValues.tel)
-    || JSON.stringify(profileMessages).includes(profileValues.url)
+    JSON.stringify(profileMessages).includes(expectedMobileE164)
     || JSON.stringify(profileMessages).includes(synchronizedEmail),
     false,
   )

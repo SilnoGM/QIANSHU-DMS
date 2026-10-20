@@ -375,8 +375,6 @@ const clearableStringModelContracts = [
   { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.username' },
   { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.displayName' },
   { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.email' },
-  { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.mobileE164' },
-  { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.avatarUrl' },
   { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.newPassword' },
   { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.confirmPassword' },
   { file: '../../src/views/system/roles/role-editor-modal.vue', model: 'form.code' },
@@ -399,6 +397,17 @@ for (const contract of clearableStringModelContracts) {
   })
 }
 
+test('管理端手机号清空后恢复 E.164 字符串模型', () => {
+  const source = readRelativeSource(
+    '../../src/views/system/users/user-form-modal.vue',
+  )
+
+  assert.match(source, /@clear="clearMobile"/u)
+  assert.match(source, /model\.mobileE164 = ''/u)
+  assert.match(source, /:model-value="mobileNational"/u)
+  assert.match(source, /:auto-bind="false"/u)
+})
+
 test('角色分配提交期间锁定 auto-bind 之外的交互控件', () => {
   const source = readRelativeSource('../../src/views/system/users/role-assignment-modal.vue')
 
@@ -419,7 +428,7 @@ test('用户表单只在 edit 模式展示 Profile 字段，并保持一次原�
 
   assert.match(
     source,
-    /<template v-if="mode === 'edit'">[\s\S]*?model\.email[\s\S]*?model\.mobileE164[\s\S]*?model\.avatarUrl[\s\S]*?model\.remark[\s\S]*?<\/template>/u,
+    /<template v-if="mode === 'edit'">[\s\S]*?model\.email[\s\S]*?:model-value="mobileNational"[\s\S]*?v-model="model\.avatarUrl"[\s\S]*?model\.remark[\s\S]*?<\/template>/u,
   )
   assert.match(source, /props\.user\.profile\.email/u)
   assert.doesNotMatch(source, /props\.user\.profile\s*\?\?/u)

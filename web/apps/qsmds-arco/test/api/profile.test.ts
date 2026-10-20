@@ -7,7 +7,7 @@ import test from 'node:test'
 import { createProfileApi } from '../../src/api/modules/profile'
 
 interface Call {
-  method: 'get' | 'patch'
+  method: 'get' | 'patch' | 'post'
   url: string
   data?: unknown
   config?: unknown
@@ -23,6 +23,10 @@ function createClientRecorder(): { calls: Call[], client: AxiosInstance } {
     },
     patch(url: string, data?: unknown, config?: unknown) {
       calls.push({ method: 'patch', url, data, config })
+      return response
+    },
+    post(url: string, data?: unknown, config?: unknown) {
+      calls.push({ method: 'post', url, data, config })
       return response
     },
   } as unknown as AxiosInstance
@@ -82,4 +86,28 @@ test('本人资料 PATCH 使用本地错误展示且禁止自动重试', async (
       retry: false,
     },
   }])
+})
+
+test('头像上传使用固定 multipart 路径、mediaType 在 file 之前且禁止重试', async () => {
+  const fixture = createClientRecorder()
+  const profile = createProfileApi(fixture.client)
+  const controller = new AbortController()
+  const file = new File(['avatar'], 'avatar.webp', { type: 'image/webp' })
+
+  await profile.uploadAvatar(file, controller.signal)
+
+  const [call] = fixture.calls
+  assert.equal(call?.method, 'post')
+  assert.equal(call?.url, 'profile/avatar-uploads')
+  assert.ok(call?.data instanceof FormData)
+  assert.equal(call.data.get('mediaType'), 'IMAGE')
+  const uploaded = call.data.get('file')
+  assert.ok(uploaded instanceof File)
+  assert.equal(uploaded.name, 'avatar.webp')
+  assert.equal(uploaded.type, 'image/webp')
+  assert.deepEqual(call.config, {
+    errorPresentation: 'local',
+    retry: false,
+    signal: controller.signal,
+  })
 })

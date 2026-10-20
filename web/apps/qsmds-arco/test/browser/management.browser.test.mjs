@@ -1,6 +1,8 @@
 /* eslint-disable test/no-import-node-test */
 import assert from 'node:assert/strict'
 import { Buffer } from 'node:buffer'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import test from 'node:test'
@@ -144,7 +146,7 @@ async function loginThroughUi(
     const username = document.querySelector('input[autocomplete="username"]')
     const password = document.querySelector('input[autocomplete="current-password"]')
     const button = [...document.querySelectorAll('button')]
-      .find(candidate => candidate.textContent?.trim() === '登录')
+      .find(candidate => candidate.textContent?.trim() === '登录系统')
     if (!username || !password || !button) {
       throw new Error('login form unavailable')
     }
@@ -1514,15 +1516,29 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   const editedRoleName = 'Browser UI Operator'
   const editedDisplayName = 'Browser UI Managed Edited'
   const editedEmail = 'browser.ui.managed@example.com'
-  const editedMobile = '+8613900139000'
-  const editedAvatarUrl = 'https://example.com/browser-ui-managed.png'
+  const editedMobileNational = '13900139000'
+  const editedMobileE164 = '+8613900139000'
   const editedRemark = 'Browser UI administrator note'
+  let persistedAvatarUrl = ''
+  const avatarDirectory = await mkdtemp(
+    path.join(tmpdir(), 'qianshu-browser-avatar-'),
+  )
+  const avatarFixture = path.join(avatarDirectory, 'browser-avatar.png')
+  await writeFile(
+    avatarFixture,
+    Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAHElEQVQokWOoIBEwjGogAjAQowgZjGogBtA+lABjWWgQrlQ/lQAAAABJRU5ErkJggg==',
+      'base64',
+    ),
+    { mode: 0o600 },
+  )
   const browser = await launchChrome({
     executable: configuration.chromeExecutable,
     // 独立 Profile 让本场景不依赖上一场景最终留下的 Cookie 状态。
     userDataDirectory: `${configuration.profileDirectory}-management`,
   })
   t.after(async () => browser.close())
+  t.after(async () => rm(avatarDirectory, { force: true, recursive: true }))
 
   const page = await browser.newPage()
   // 角色编辑先验证桌面表格；Chrome 默认视口可能落入移动端断点，只渲染卡片。
@@ -1912,14 +1928,14 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   )
   await fillVisibleModalControl(
     page,
-    'input[placeholder="例如 +8613800138000"]',
-    editedMobile,
+    'input[placeholder="请输入 11 位手机号"]',
+    editedMobileNational,
   )
-  await fillVisibleModalControl(
-    page,
-    'input[placeholder="可选；请输入 HTTP 或 HTTPS 绝对地址"]',
-    editedAvatarUrl,
+  await page.setFiles(
+    '[role="dialog"]:has(textarea[placeholder="可选；仅系统管理员可见"]) input[type="file"]',
+    [avatarFixture],
   )
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"] img')].some(img => img.src.includes('/api/profile/avatars/')))()`)
   await fillVisibleModalControl(
     page,
     'textarea[placeholder="可选；仅系统管理员可见"]',
@@ -1937,11 +1953,16 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   ))
   managedUser = userResponse.body?.items?.find(user => user.username === managedUsername)
   assert.ok(managedUser)
-  assert.deepEqual(managedUser?.profile, {
-    avatarUrl: editedAvatarUrl,
+  persistedAvatarUrl = managedUser.profile.avatarUrl ?? ''
+  assert.match(
+    persistedAvatarUrl,
+    /\/api\/profile\/avatars\/[0-9a-f-]{36}\/content$/u,
+  )
+  assert.deepEqual(managedUser.profile, {
+    avatarUrl: persistedAvatarUrl,
     createdAt: managedUser.profile.createdAt,
     email: editedEmail,
-    mobileE164: editedMobile,
+    mobileE164: editedMobileE164,
     remark: editedRemark,
     updatedAt: managedUser.profile.updatedAt,
   })
@@ -1961,8 +1982,8 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   const serializedUpdateAudit = JSON.stringify(managedUserUpdateAudit?.metadata)
   for (const sensitiveValue of [
     editedEmail,
-    editedMobile,
-    editedAvatarUrl,
+    editedMobileE164,
+    persistedAvatarUrl,
     editedRemark,
   ]) {
     assert.equal(serializedUpdateAudit.includes(sensitiveValue), false)
@@ -1985,10 +2006,10 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.ok(managedUser)
   assert.equal(managedUser?.displayName, editedDisplayName)
   assert.deepEqual(managedUser?.profile, {
-    avatarUrl: editedAvatarUrl,
+    avatarUrl: persistedAvatarUrl,
     createdAt: managedUser.profile.createdAt,
     email: editedEmail,
-    mobileE164: editedMobile,
+    mobileE164: editedMobileE164,
     remark: editedRemark,
     updatedAt: managedUser.profile.updatedAt,
   })

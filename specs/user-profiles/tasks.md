@@ -175,3 +175,13 @@ flowchart TD
 | 10. 普通用户账户菜单自助维护 | 3, 7, 8, 10 |
 | 11. 普通用户不能访问 remark/他人资料 | 3, 4, 5, 6, 8, 10 |
 | 12. 管理员继续使用 users 权限 | 5, 6, 9, 10 |
+
+## 6. 2026-10-20 头像上传与手机号输入改造
+
+- [x] 1. 手机号纯逻辑与表单：`china-mobile.ts`、`useChinaMobileField`、个人资料与管理端 `+86` 输入、存量保留、单测。
+- [x] 2. 头像 schema/migration：`avatar_media_asset_id`、`USER_AVATAR` 用途、READY 引用函数与 `user_profiles` 延迟触发器、引用仓库/契约测试、迁移规范登记。
+- [x] 3. 头像接口：`POST /api/profile/avatar-uploads`、`GET/HEAD /api/profile/avatars/:id/content`、OpenAPI 契约同步。
+- [x] 4. 资料绑定：本人/管理员 PATCH 解析头像 URL、激活资产、回收旧资产；单元与 E2E。
+- [x] 5. 前端上传：`QsAvatarUploader`、浏览器 512px WebP 压缩、失败重试、个人资料弹窗接入。
+- [x] 6. 管理端用户表单接入同一上传组件与手机号输入，更新浏览器套件。
+- [ ] 7. 运行全量门禁、浏览器/真实存储验收并记录未验证项。

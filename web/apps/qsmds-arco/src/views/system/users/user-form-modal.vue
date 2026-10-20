@@ -7,7 +7,9 @@ import type {
 } from '@/utils/user-profile'
 
 import managementApi from '@/api/modules/management'
+import QsAvatarUploader from '@/components/business/QsAvatarUploader/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import { useChinaMobileField } from '@/composables/app/use-china-mobile-field'
 import {
   buildAdminUserProfilePatch,
   getProfileConflictField,
@@ -42,6 +44,7 @@ const emits = defineEmits<{
 }>()
 
 const loading = ref(false)
+const avatarUploading = ref(false)
 const errorMessage = ref('')
 const requestId = ref<string>()
 const fieldErrors = reactive<Record<string, string>>({})
@@ -69,6 +72,38 @@ const model = reactive<UserFormModel>({
   ...createPasswordFields(),
 })
 const initialAdminProfile = ref<AdminUserProfileValue | null>(null)
+const { t } = useI18n()
+const {
+  clearNotice: clearMobileNotice,
+  clearUnsupported: clearUnsupportedMobile,
+  inputNotice: mobileInputNotice,
+  national: mobileNational,
+  onInput: onMobileInput,
+  syncFromModel: syncMobileFromModel,
+  unsupported: mobileUnsupported,
+} = useChinaMobileField({
+  getInitial: () => initialAdminProfile.value?.mobileE164 ?? null,
+  getValue: () => model.mobileE164,
+  setValue: (value) => {
+    model.mobileE164 = value
+  },
+})
+
+const mobileDescription = computed(() => {
+  if (mobileInputNotice.value === 'digits') {
+    return t('accountProfile.mobileDigitsHint')
+  }
+  if (mobileInputNotice.value === 'foreign') {
+    return t('accountProfile.mobileForeignHint')
+  }
+  if (mobileInputNotice.value === 'length') {
+    return t('accountProfile.mobileLengthHint')
+  }
+  if (mobileUnsupported.value) {
+    return t('accountProfile.mobileUnsupportedHint')
+  }
+  return t('accountProfile.mobileHint')
+})
 const hasEditChanges = computed(() => {
   if (props.mode !== 'edit' || initialAdminProfile.value === null) {
     return false
@@ -105,7 +140,27 @@ function clearModel(): void {
   model.createFundAccount = false
   model.userShareRate = ''
   initialAdminProfile.value = null
+  avatarUploading.value = false
+  clearMobileNotice()
+  syncMobileFromModel()
   clearPasswordFields(model)
+}
+
+function handleMobileInput(value: string | number | undefined): void {
+  onMobileInput(value)
+  formRef.value?.clearValidate('mobileE164')
+}
+
+function clearMobile(): void {
+  model.mobileE164 = ''
+  clearMobileNotice()
+  syncMobileFromModel()
+  formRef.value?.clearValidate('mobileE164')
+}
+
+function handleClearUnsupportedMobile(): void {
+  clearUnsupportedMobile()
+  formRef.value?.clearValidate('mobileE164')
 }
 
 function initializeModel(): void {
@@ -132,6 +187,7 @@ function initializeModel(): void {
     avatarUrl: props.user.profile.avatarUrl,
     remark: props.user.profile.remark,
   }
+  syncMobileFromModel()
 }
 
 function close(): void {
@@ -175,13 +231,25 @@ function applyServerFieldErrors(error: unknown): void {
 }
 
 async function submit(): Promise<void> {
-  if (loading.value) {
+  if (loading.value || avatarUploading.value) {
     return
   }
 
   const submissionMode = props.mode
   const createsFundAccount = submissionMode === 'create' && model.createFundAccount
   clearErrors()
+  if (mobileInputNotice.value === 'foreign') {
+    setFieldErrors({
+      mobileE164: t('accountProfile.validation.mobileForeignInvalid'),
+    })
+    return
+  }
+  if (mobileInputNotice.value === 'length') {
+    setFieldErrors({
+      mobileE164: t('accountProfile.validation.mobileLengthInvalid'),
+    })
+    return
+  }
   setFieldErrors(
     submissionMode === 'create'
       ? {
@@ -192,7 +260,10 @@ async function submit(): Promise<void> {
             model.userShareRate,
           ),
         }
-      : validateAdminUserProfileFields(model),
+      : validateAdminUserProfileFields(model, {
+          requireChinaMainland: true,
+          preserveUnsupportedMobile: mobileUnsupported.value,
+        }),
   )
   if (Object.keys(fieldErrors).length > 0) {
     return
@@ -421,25 +492,46 @@ watch(() => props.modelValue, (visible) => {
               @clear="model.email = ''"
             />
           </FaFormItem>
-          <FaFormItem name="mobileE164" label="手机号">
+          <FaFormItem
+            name="mobileE164"
+            :auto-bind="false"
+            :label="t('accountProfile.mobile')"
+            :description="mobileDescription"
+          >
             <FaInput
-              v-model="model.mobileE164"
-              autocomplete="off"
+              :model-value="mobileNational"
+              autocomplete="tel-national"
               clearable
               class="w-full"
-              inputmode="tel"
-              placeholder="例如 +8613800138000"
-              @clear="model.mobileE164 = ''"
-            />
+              inputmode="numeric"
+              :placeholder="t('accountProfile.mobilePlaceholder')"
+              type="tel"
+              @update:model-value="handleMobileInput"
+              @clear="clearMobile"
+            >
+              <template #start>
+                <span aria-hidden="true" class="text-sm text-muted-foreground font-medium">+86</span>
+              </template>
+            </FaInput>
+            <template #description>
+              <span>{{ mobileDescription }}</span>
+              <FaButton
+                v-if="mobileUnsupported"
+                type="button"
+                variant="link"
+                size="sm"
+                class="ml-1 p-0 align-baseline h-auto"
+                @click="handleClearUnsupportedMobile"
+              >
+                {{ t('accountProfile.mobileClearUnsupported') }}
+              </FaButton>
+            </template>
           </FaFormItem>
-          <FaFormItem name="avatarUrl" label="头像 URL" class="md:col-span-2">
-            <FaInput
+          <FaFormItem name="avatarUrl" label="头像" class="md:col-span-2">
+            <QsAvatarUploader
               v-model="model.avatarUrl"
-              autocomplete="off"
-              clearable
-              class="w-full"
-              placeholder="可选；请输入 HTTP 或 HTTPS 绝对地址"
-              @clear="model.avatarUrl = ''"
+              v-model:uploading="avatarUploading"
+              :disabled="loading"
             />
           </FaFormItem>
           <FaFormItem name="remark" label="管理员备注" class="md:col-span-2">
@@ -468,7 +560,7 @@ watch(() => props.modelValue, (visible) => {
         type="button"
         class="min-h-11 w-full sm:min-h-9 sm:w-auto"
         :loading="loading"
-        :disabled="loading || (mode === 'edit' && !hasEditChanges)"
+        :disabled="loading || avatarUploading || (mode === 'edit' && !hasEditChanges)"
         @click="submit"
       >
         {{ mode === 'create' ? '创建用户' : '保存修改' }}

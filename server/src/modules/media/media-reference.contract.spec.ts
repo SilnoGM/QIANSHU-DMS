@@ -30,6 +30,7 @@ describe('media reference extension contract', () => {
       'prisma/migrations/20260827130000_purchase_order_media_reference_extension/migration.sql',
     ), 'utf8')
     const migration = [
+      readFileSync(resolve(serverRoot, 'prisma/migrations/20261020140000_user_profile_avatar_media/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20261017130000_fund_withdrawal_requests/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20261014094000_invoice_request_media_reference/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20260926130000_slh_bill_management/migration.sql'), 'utf8'),
@@ -44,7 +45,7 @@ describe('media reference extension contract', () => {
       purchaseOrderMediaReferenceMigration,
     ].join('\n')
     const referenceTables = modelBlocks(schema)
-      .filter(block => (/\bmediaAssetId\b/u.test(block) && (/\bdetachedAt\b/u.test(block) || /\binvalidatedAt\b/u.test(block))) || /\bvoucherMediaAssetId\b/u.test(block) || /\bpackagingImageMediaAssetId\b/u.test(block) || /\bqrMediaAssetId\b/u.test(block) || /\brecipientQrMediaAssetId\b/u.test(block) || /\bsourceFileId\b/u.test(block) || /\bdocumentMediaAssetId\b/u.test(block) || /\bpaymentProofMediaAssetId\b/u.test(block))
+      .filter(block => (/\bmediaAssetId\b/u.test(block) && (/\bdetachedAt\b/u.test(block) || /\binvalidatedAt\b/u.test(block))) || /\bvoucherMediaAssetId\b/u.test(block) || /\bpackagingImageMediaAssetId\b/u.test(block) || /\bqrMediaAssetId\b/u.test(block) || /\brecipientQrMediaAssetId\b/u.test(block) || /\bsourceFileId\b/u.test(block) || /\bdocumentMediaAssetId\b/u.test(block) || /\bpaymentProofMediaAssetId\b/u.test(block) || /\bavatarMediaAssetId\b/u.test(block))
       .map((block) => block.match(/@@map\("([^"]+)"\)/u)?.[1])
       .filter((value): value is string => value !== undefined)
       .sort()
@@ -77,6 +78,10 @@ describe('media reference extension contract', () => {
       }
       if (table === 'fund_withdrawal_requests') {
         expect(migration).toContain('FROM fund_withdrawal_requests reference WHERE reference.payment_proof_media_asset_id = reference_asset_id')
+        continue
+      }
+      if (table === 'user_profiles') {
+        expect(migration).toContain('FROM user_profiles reference WHERE reference.avatar_media_asset_id = reference_asset_id')
         continue
       }
       expect(migration).toContain(`FROM "${table}" AS reference`)

@@ -32,6 +32,7 @@ const UPLOAD_PURPOSE_POOLS: Readonly<Record<string, MediaStoragePool>> = Object.
   PAYMENT_RECIPIENT_QR: 'payment-recipient',
   PURCHASE_PAYMENT_VOUCHER: 'voucher',
   SLH_BILL_SOURCE_XLSX: 'bill',
+  USER_AVATAR: 'misc',
 })
 
 /**

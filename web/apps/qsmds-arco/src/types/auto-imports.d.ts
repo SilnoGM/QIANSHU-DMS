@@ -108,6 +108,7 @@ declare global {
   const useAppTabbarStore: typeof import('../store/modules/app/tabbar').useAppTabbarStore
   const useAppWatermarkStore: typeof import('../store/modules/app/watermark').useAppWatermarkStore
   const useAttrs: typeof import('vue').useAttrs
+  const useChinaMobileField: typeof import('../composables/app/use-china-mobile-field').useChinaMobileField
   const useConfetti: typeof import('@fantastic-admin/composables').useConfetti
   const useCssModule: typeof import('vue').useCssModule
   const useCssVars: typeof import('vue').useCssVars
@@ -148,4 +149,7 @@ declare global {
   // @ts-ignore
   export type { StaleProfileStateError, ProfileMutationResultUnknownError, ProfileLifecycleCoordinator, ProfileState, ProfileLifecycleState, ProfileIdentity, ProfileLifecycleDependencies, LoadProfileOptions } from '../store/modules/app/profile-lifecycle'
   import('../store/modules/app/profile-lifecycle')
+  // @ts-ignore
+  export type { ChinaMobileFieldOptions } from '../composables/app/use-china-mobile-field'
+  import('../composables/app/use-china-mobile-field')
 }

@@ -18,6 +18,8 @@ export type UserProfileUpdateData = {
   emailNormalized?: string | null
   mobileE164?: string | null
   avatarUrl?: string | null
+  /** 内部媒体引用；只由 Service 在解析上传 URL 后写入，不接受客户端直接提交。 */
+  avatarMediaAssetId?: string | null
   remark?: string | null
 }
 

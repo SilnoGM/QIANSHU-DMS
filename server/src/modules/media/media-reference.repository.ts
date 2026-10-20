@@ -19,11 +19,12 @@ export const MEDIA_ASSET_REFERENCE_TABLES = Object.freeze([
   'slh_bills',
   'invoice_requests',
   'fund_withdrawal_requests',
+  'user_profiles',
 ] as const)
 
 type MediaReferenceReader = Pick<
   Prisma.TransactionClient,
-  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest' | 'paymentRecipientAccount' | 'purchaseOrderPayment' | 'containerBatch' | 'slhBill' | 'invoiceRequest' | 'fundWithdrawalRequest'
+  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest' | 'paymentRecipientAccount' | 'purchaseOrderPayment' | 'containerBatch' | 'slhBill' | 'invoiceRequest' | 'fundWithdrawalRequest' | 'userProfile'
 >
 
 /**
@@ -87,6 +88,8 @@ export class MediaAssetReferenceRepository {
     if (await reader.invoiceRequest.findFirst({ where: { documentMediaAssetId: assetId }, select: { id: true } }) !== null) return true
     // 提款付款截图是财务付款事实的证据，申请单不可删，截图同样不可回收。
     if (await reader.fundWithdrawalRequest.findFirst({ where: { paymentProofMediaAssetId: assetId }, select: { id: true } }) !== null) return true
+    // 本人头像被资料引用期间不能被回收；换头像后由 Profile 事务主动置为 TRASHED。
+    if (await reader.userProfile.findFirst({ where: { avatarMediaAssetId: assetId }, select: { userId: true } }) !== null) return true
     // 账单原件是外部凭证的唯一留痕；账单本身不可删，原件同样不可回收。
     return await reader.slhBill.findFirst({ where: { sourceFileId: assetId }, select: { id: true } }) !== null
   }

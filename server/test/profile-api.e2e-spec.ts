@@ -15,6 +15,7 @@ import {
   AuditService,
   type RecordAuditEventInput,
 } from '../src/modules/audit/audit.service'
+import { MediaContentValidator } from '../src/modules/media/media-content-validator'
 import { PasswordProvider } from '../src/modules/auth/providers/password.provider'
 
 const APP_ORIGIN = 'http://127.0.0.1:9000'
@@ -24,10 +25,19 @@ const CSRF_HEADERS = {
   'Sec-Fetch-Site': 'same-origin',
 } as const
 const USERNAME_PREFIX = 'profile-api-e2e-'
+const AVATAR_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAHElEQVQokWOoIBEwjGogAjAQowgZjGogBtA+lABjWWgQrlQ/lQAAAABJRU5ErkJggg==',
+  'base64',
+)
 
 interface ApiErrorBody {
   code: string
   fieldErrors?: Record<string, string[]>
+}
+
+interface AvatarUploadBody {
+  avatarUrl: string
+  mediaAssetId: string
 }
 
 interface AuthContextBody {
@@ -70,9 +80,19 @@ describe('Profile API with Cookie Session and PostgreSQL', () => {
   let auditSpy: jest.SpyInstance | undefined
 
   beforeAll(async () => {
+    // file-type@21 是 ESM-only；Jest 29 的 resolver 无法通过 createRequire 加载真实实现。
+    // 生产构建走 Node 24 require(esm)；E2E 用固定 PNG 识别器，sharp 仍会验证真实图片内容。
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile()
+    })
+      .overrideProvider(MediaContentValidator)
+      .useValue(new MediaContentValidator(
+        { ffprobePath: 'ffprobe', qpdfPath: 'qpdf' },
+        {
+          detectFileType: () => Promise.resolve({ ext: 'png', mime: 'image/png' }),
+        },
+      ))
+      .compile()
     application = moduleRef.createNestApplication()
     configureApplication(application, { nodeEnvironment: 'test' })
     await application.init()
@@ -93,6 +113,41 @@ describe('Profile API with Cookie Session and PostgreSQL', () => {
     prefixedUsers.forEach(({ id }) => createdUserIds.add(id))
     const userIds = [...createdUserIds]
     if (userIds.length > 0) {
+      // 头像资产被资料引用时不能直接删 User：先在同一事务里解除引用并置 TRASHED，
+      // 再删除测试用户创建的媒体资产，最后才删 User。
+      const avatarProfiles = await prisma.userProfile.findMany({
+        where: {
+          userId: { in: userIds },
+          avatarMediaAssetId: { not: null },
+        },
+        select: { avatarMediaAssetId: true, userId: true },
+      })
+      if (avatarProfiles.length > 0) {
+        await prisma.$transaction(async (transaction) => {
+          for (const profile of avatarProfiles) {
+            await transaction.userProfile.update({
+              where: { userId: profile.userId },
+              data: { avatarMediaAssetId: null, avatarUrl: null },
+            })
+            if (profile.avatarMediaAssetId !== null) {
+              await transaction.mediaAsset.updateMany({
+                where: {
+                  id: profile.avatarMediaAssetId,
+                  status: 'READY',
+                },
+                data: {
+                  deletedAt: new Date(),
+                  retentionUntil: new Date(Date.now() + 30 * 86_400_000),
+                  status: 'TRASHED',
+                },
+              })
+            }
+          }
+        })
+      }
+      await prisma.mediaAsset.deleteMany({
+        where: { createdByUserId: { in: userIds } },
+      })
       await prisma.auditEvent.deleteMany({
         where: { actorUserId: { in: userIds } },
       })
@@ -143,6 +198,24 @@ describe('Profile API with Cookie Session and PostgreSQL', () => {
       .set(CSRF_HEADERS)
       .send({ username, password })
       .expect(200)
+  }
+
+  async function uploadAvatar(
+    browser: ReturnType<typeof request.agent>,
+    options: {
+      content?: Buffer
+      contentType?: string
+      mediaType?: string
+    } = {},
+  ) {
+    return await browser
+      .post('/api/profile/avatar-uploads')
+      .set(CSRF_HEADERS)
+      .field('mediaType', options.mediaType ?? 'IMAGE')
+      .attach('file', options.content ?? AVATAR_PNG, {
+        contentType: options.contentType ?? 'image/png',
+        filename: 'avatar.png',
+      })
   }
 
   it('requires Session but no management permission, and supports exact GET/PATCH/null-clear with PII-free Audit', async () => {
@@ -463,5 +536,181 @@ describe('Profile API with Cookie Session and PostgreSQL', () => {
         'INTERNAL_ERROR',
       )
     }
+  })
+
+  it('stages, binds, serves, replaces and clears a managed avatar', async () => {
+    const owner = await createUser()
+    const ownerBrowser = request.agent(application.getHttpServer())
+    await login(ownerBrowser, owner.user.username, owner.password)
+
+    const firstUploadResponse = await uploadAvatar(ownerBrowser)
+    expect(firstUploadResponse.status).toBe(201)
+    const firstUpload = readResponseBody<AvatarUploadBody>(firstUploadResponse)
+    expect(firstUpload.avatarUrl).toBe(
+      `${APP_ORIGIN}/api/profile/avatars/${firstUpload.mediaAssetId}/content`,
+    )
+    await expect(
+      prisma.mediaAsset.findUniqueOrThrow({
+        where: { id: firstUpload.mediaAssetId },
+      }),
+    ).resolves.toMatchObject({
+      status: 'UPLOADING',
+      uploadPurpose: 'USER_AVATAR',
+    })
+
+    const other = await createUser()
+    const otherBrowser = request.agent(application.getHttpServer())
+    await login(otherBrowser, other.user.username, other.password)
+    const firstPath = new URL(firstUpload.avatarUrl).pathname
+    await otherBrowser.get(firstPath).expect(404)
+
+    await ownerBrowser
+      .patch('/api/profile')
+      .set(CSRF_HEADERS)
+      .send({ avatarUrl: firstUpload.avatarUrl })
+      .expect(200)
+    await expect(
+      prisma.mediaAsset.findUniqueOrThrow({
+        where: { id: firstUpload.mediaAssetId },
+      }),
+    ).resolves.toMatchObject({ status: 'READY' })
+    await expect(
+      prisma.userProfile.findUniqueOrThrow({
+        where: { userId: owner.user.id },
+      }),
+    ).resolves.toMatchObject({
+      avatarMediaAssetId: firstUpload.mediaAssetId,
+      avatarUrl: firstUpload.avatarUrl,
+    })
+    await otherBrowser
+      .get(firstPath)
+      .expect(200)
+      .expect('Content-Type', /image\/png/u)
+
+    const secondUploadResponse = await uploadAvatar(ownerBrowser)
+    expect(secondUploadResponse.status).toBe(201)
+    const secondUpload = readResponseBody<AvatarUploadBody>(secondUploadResponse)
+    await ownerBrowser
+      .patch('/api/profile')
+      .set(CSRF_HEADERS)
+      .send({ avatarUrl: secondUpload.avatarUrl })
+      .expect(200)
+    await expect(
+      prisma.mediaAsset.findUniqueOrThrow({
+        where: { id: firstUpload.mediaAssetId },
+      }),
+    ).resolves.toMatchObject({ status: 'TRASHED' })
+    await expect(
+      prisma.mediaAsset.findUniqueOrThrow({
+        where: { id: secondUpload.mediaAssetId },
+      }),
+    ).resolves.toMatchObject({ status: 'READY' })
+
+    await ownerBrowser
+      .patch('/api/profile')
+      .set(CSRF_HEADERS)
+      .send({ avatarUrl: null })
+      .expect(200)
+    await expect(
+      prisma.mediaAsset.findUniqueOrThrow({
+        where: { id: secondUpload.mediaAssetId },
+      }),
+    ).resolves.toMatchObject({ status: 'TRASHED' })
+    await expect(
+      prisma.userProfile.findUniqueOrThrow({
+        where: { userId: owner.user.id },
+      }),
+    ).resolves.toMatchObject({
+      avatarMediaAssetId: null,
+      avatarUrl: null,
+    })
+  })
+
+  it('rejects invalid, foreign and expired avatar uploads', async () => {
+    const owner = await createUser()
+    const ownerBrowser = request.agent(application.getHttpServer())
+    await login(ownerBrowser, owner.user.username, owner.password)
+
+    const documentResponse = await uploadAvatar(ownerBrowser, { mediaType: 'DOCUMENT' })
+    expect(documentResponse.status).toBe(422)
+    expect(readResponseBody<ApiErrorBody>(documentResponse).code).toBe(
+      'PROFILE_AVATAR_INVALID',
+    )
+    const invalidContentResponse = await uploadAvatar(ownerBrowser, {
+      content: Buffer.from('not an image'),
+    })
+    expect(invalidContentResponse.status).toBe(422)
+    expect(readResponseBody<ApiErrorBody>(invalidContentResponse).code).toBe(
+      'PROFILE_AVATAR_INVALID',
+    )
+
+    const uploadedResponse = await uploadAvatar(ownerBrowser)
+    expect(uploadedResponse.status).toBe(201)
+    const uploaded = readResponseBody<AvatarUploadBody>(uploadedResponse)
+    const other = await createUser()
+    const otherBrowser = request.agent(application.getHttpServer())
+    await login(otherBrowser, other.user.username, other.password)
+    await otherBrowser
+      .patch('/api/profile')
+      .set(CSRF_HEADERS)
+      .send({ avatarUrl: uploaded.avatarUrl })
+      .expect(422)
+      .expect((response) => {
+        expect(readResponseBody<ApiErrorBody>(response).code).toBe(
+          'PROFILE_AVATAR_UNAVAILABLE',
+        )
+      })
+
+    await prisma.mediaAsset.update({
+      where: { id: uploaded.mediaAssetId },
+      data: { uploadExpiresAt: new Date(Date.now() - 1_000) },
+    })
+    await ownerBrowser
+      .patch('/api/profile')
+      .set(CSRF_HEADERS)
+      .send({ avatarUrl: uploaded.avatarUrl })
+      .expect(422)
+      .expect((response) => {
+        expect(readResponseBody<ApiErrorBody>(response).code).toBe(
+          'PROFILE_AVATAR_EXPIRED',
+        )
+      })
+  })
+
+  it('lets an administrator bind an avatar uploaded while editing another user', async () => {
+    const target = await createUser()
+    const admin = await createUser()
+    const adminRole = await prisma.role.findUniqueOrThrow({
+      where: { code: 'system_admin' },
+    })
+    await prisma.userRole.create({
+      data: { roleId: adminRole.id, userId: admin.user.id },
+    })
+
+    const adminBrowser = request.agent(application.getHttpServer())
+    await login(adminBrowser, admin.user.username, admin.password)
+    const uploadedResponse = await uploadAvatar(adminBrowser)
+    expect(uploadedResponse.status).toBe(201)
+    const uploaded = readResponseBody<AvatarUploadBody>(uploadedResponse)
+
+    await adminBrowser
+      .patch(`/api/users/${target.user.id}`)
+      .set(CSRF_HEADERS)
+      .send({ avatarUrl: uploaded.avatarUrl })
+      .expect(200)
+
+    await expect(
+      prisma.userProfile.findUniqueOrThrow({
+        where: { userId: target.user.id },
+      }),
+    ).resolves.toMatchObject({
+      avatarMediaAssetId: uploaded.mediaAssetId,
+      avatarUrl: uploaded.avatarUrl,
+    })
+    await expect(
+      prisma.mediaAsset.findUniqueOrThrow({
+        where: { id: uploaded.mediaAssetId },
+      }),
+    ).resolves.toMatchObject({ status: 'READY' })
   })
 })
