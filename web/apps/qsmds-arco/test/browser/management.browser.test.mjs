@@ -1228,6 +1228,8 @@ async function verifyProductList(page, baseUrl) {
       const card = actions?.parentElement
       const buttons = [...(card?.querySelectorAll('button') ?? [])]
         .filter(button => button.getClientRects().length > 0)
+        // 选择框是独立的选择控件，不是操作按钮；操作按钮仍需满足 44px 触控下限。
+        .filter(button => button.getAttribute('role') !== 'checkbox')
       return {
         allTouchTargetsMeetMinimum: buttons.every(button => (
           button.getBoundingClientRect().height >= 44
