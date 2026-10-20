@@ -199,5 +199,7 @@ export function formatAuditTime(value: string): string {
   return new Intl.DateTimeFormat('zh-CN', {
     dateStyle: 'medium',
     timeStyle: 'medium',
+    // 审计时间也按业务统一时区展示，不跟随操作者浏览器时区。
+    timeZone: 'Asia/Shanghai',
   }).format(timestamp)
 }

@@ -146,6 +146,8 @@ const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
   minute: '2-digit',
   second: '2-digit',
   hour12: false,
+  // 与 DateTimeDisplay 保持同一展示口径，不随浏览器所在时区漂移。
+  timeZone: 'Asia/Shanghai',
 })
 
 function formatDate(value: string | null): string {
