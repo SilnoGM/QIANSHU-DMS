@@ -215,7 +215,7 @@ defineProps<{
 
 .window-url {
   margin-left: 8px;
-  font-family: var(--font-mono);
+  font-family: var(--qs-font-mono);
   font-size: 10px;
   color: rgb(255 255 255 / 90%);
   letter-spacing: 0.04em;
@@ -255,7 +255,7 @@ defineProps<{
 
 .window-badge {
   padding: 2px 6px;
-  font-family: var(--font-mono);
+  font-family: var(--qs-font-mono);
   font-size: 9px;
   font-weight: 600;
   line-height: 12px;

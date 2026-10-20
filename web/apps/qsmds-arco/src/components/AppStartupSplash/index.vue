@@ -55,7 +55,7 @@ const copyright = computed(() => appSettingsStore.settings.app.copyright)
   place-items: center;
   padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
   overflow: hidden;
-  font-family: var(--font-sans);
+  font-family: var(--qs-font-sans);
   color: var(--startup-foreground);
   text-align: center;
   user-select: none;

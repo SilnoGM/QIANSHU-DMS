@@ -207,7 +207,7 @@ onBeforeUnmount(() => {
 
 .brand-submark {
   margin: 4px 0 0;
-  font-family: var(--font-mono);
+  font-family: var(--qs-font-mono);
   font-size: 11px;
   font-weight: 500;
   line-height: 15px;
