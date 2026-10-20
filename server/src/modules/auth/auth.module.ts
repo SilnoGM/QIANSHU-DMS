@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
 import { AccessControlService } from '../access-control/access-control.service'
+import { DataScopeService } from '../access-control/data-scope.service'
 import { AuditService } from '../audit/audit.service'
 import { PrismaModule } from '../../infrastructure/database/prisma.module'
 import { AuthMetricLogger } from '../../infrastructure/observability/auth-metric.logger'
@@ -48,6 +49,7 @@ const passwordProviderDefinition = {
     SessionCookieProvider,
     SessionTokenProvider,
     AccessControlService,
+    DataScopeService,
     AuditService,
     AuthMetricLogger,
     passwordProviderDefinition,
@@ -60,6 +62,7 @@ const passwordProviderDefinition = {
     PasswordProvider,
     SessionCookieProvider,
     AccessControlService,
+    DataScopeService,
     AuditService,
     AuthMetricLogger,
   ],

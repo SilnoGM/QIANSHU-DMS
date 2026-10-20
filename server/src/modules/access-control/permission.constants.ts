@@ -181,6 +181,18 @@ export const WORKBENCH_ACCESS_PERMISSION_CODES = [
 ] as const
 
 /**
+ * 业务数据范围开关：只收窄/放开查询结果，不替代接口权限。
+ *
+ * 运营内置角色持有 `data-scope:self`；财务、采运与管理员持有 `data-scope:all`。
+ * `data-scope:all` 优先，保证「运营+财务/采运」多角色用户仍能看全量。自定义角色
+ * 默认保持历史全量行为，只有显式授予 self 才会被收窄。
+ */
+export const DATA_SCOPE_PERMISSION_CODES = [
+  'data-scope:self',
+  'data-scope:all',
+] as const
+
+/**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
  * 顺序与数据库 seed 一致，既便于契约审查，也避免各业务模块各自拼写字符串。
@@ -239,6 +251,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...SLH_BILL_PERMISSION_CODES,
   ...INVOICE_REQUEST_PERMISSION_CODES,
   ...WORKBENCH_ACCESS_PERMISSION_CODES,
+  ...DATA_SCOPE_PERMISSION_CODES,
 ] as const
 
 export type ManagementPermissionCode =
