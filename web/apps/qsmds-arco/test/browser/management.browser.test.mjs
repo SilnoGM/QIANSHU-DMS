@@ -959,14 +959,14 @@ async function verifyProductList(page, baseUrl) {
     assert.deepEqual(desktopState, {
       actionPinned: 'right',
       createVisible: true,
-      productNoPinned: 'left',
+      productNoPinned: null,
       visibleDesktopTables: 1,
     })
 
-    // 列设置必须允许业务列显隐/固定，同时保持产品编号和操作列默认边界。
+    // 列设置必须允许业务列显隐/固定，同时保持产品编号不固定、操作列固定右侧的默认边界。
     await clickVisibleButton(page, '列设置')
     await page.waitFor(`document.querySelector(
-      '[aria-label="产品编号：固定在左侧"][aria-pressed="true"]',
+      '[aria-label="产品编号：不固定"][aria-pressed="true"]',
     ) !== null`)
     await clickVisibleAriaButton(page, '产品图片：固定在右侧')
     await page.waitFor(`document.querySelector(

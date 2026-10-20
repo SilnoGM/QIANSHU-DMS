@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 import type { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
@@ -6,6 +9,7 @@ import request from 'supertest'
 
 import { AppModule } from '../src/app.module'
 import { configureApplication } from '../src/app.setup'
+import mediaConfig, { createMediaConfiguration } from '../src/config/media.config'
 import {
   AuditEventType,
   UserStatus,
@@ -76,15 +80,20 @@ describe('Profile API with Cookie Session and PostgreSQL', () => {
   let prisma: PrismaService
   let passwords: PasswordProvider
   let audit: AuditService
+  let mediaRoot: string
   const createdUserIds = new Set<string>()
   let auditSpy: jest.SpyInstance | undefined
 
   beforeAll(async () => {
+    // CI 中默认媒体根不可写；头像上传需要独占的可写目录，结束时清理。
+    mediaRoot = await mkdtemp(join(homedir(), '.qianshu-profile-media-'))
     // file-type@21 是 ESM-only；Jest 29 的 resolver 无法通过 createRequire 加载真实实现。
     // 生产构建走 Node 24 require(esm)；E2E 用固定 PNG 识别器，sharp 仍会验证真实图片内容。
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     })
+      .overrideProvider(mediaConfig.KEY)
+      .useValue(createMediaConfiguration({ MEDIA_STORAGE_ROOT: mediaRoot }))
       .overrideProvider(MediaContentValidator)
       .useValue(new MediaContentValidator(
         { ffprobePath: 'ffprobe', qpdfPath: 'qpdf' },
@@ -167,6 +176,7 @@ describe('Profile API with Cookie Session and PostgreSQL', () => {
 
   afterAll(async () => {
     await application.close()
+    await rm(mediaRoot, { recursive: true, force: true })
   })
 
   async function createUser(options: { mustChangePassword?: boolean } = {}) {
