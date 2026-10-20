@@ -22,6 +22,7 @@ import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
+import { CurrentUserId, resolveDataScopeActor } from '../auth/decorators/current-user-id.decorator'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
 import { ApiProductMediaContentContract } from '../products/media/product-media-content.contract'
 import { PurchaseOrderShippingMarkResolutionDto, PurchaseOrderShippingMarkResolutionQueryDto } from '../purchase-shipping-marks/purchase-shipping-mark-resolution.dto'
@@ -142,8 +143,11 @@ export class PurchaseOrdersController {
       { status: 422, codes: ['VALIDATION_FAILED'] },
     ],
   })
-  list(@Query() query: PurchaseOrderListQueryDto): Promise<PurchaseOrderPage> {
-    return this.queries.list(query)
+  list(
+    @Query() query: PurchaseOrderListQueryDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
+  ): Promise<PurchaseOrderPage> {
+    return this.queries.list(query, actorUserId)
   }
 
   @Get('status-counts')
@@ -163,8 +167,9 @@ export class PurchaseOrdersController {
   })
   statusCounts(
     @Query() query: PurchaseOrderStatusCountsQueryDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
   ): Promise<PurchaseOrderStatusCounts> {
-    return this.queries.statusCounts(query)
+    return this.queries.statusCounts(query, actorUserId)
   }
 
   @Get('shipping-mark-resolution')
@@ -280,8 +285,9 @@ export class PurchaseOrdersController {
   })
   sourceSalesOrders(
     @Query() query: PurchaseOrderSourceSalesOrdersQueryDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
   ): ReturnType<PurchaseOrderSourceQueryService['salesOrders']> {
-    return this.sourceQueries.salesOrders(query)
+    return this.sourceQueries.salesOrders(query, actorUserId)
   }
 
   @Get('source-sales-orders/:salesOrderId/lines')
@@ -306,8 +312,9 @@ export class PurchaseOrdersController {
   sourceSalesOrderLines(
     @Param() params: PurchaseOrderSourceSalesOrderIdParamDto,
     @Query() query: PurchaseOrderSourceSalesOrderLinesQueryDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
   ): ReturnType<PurchaseOrderSourceQueryService['salesOrderLines']> {
-    return this.sourceQueries.salesOrderLines(params.salesOrderId, query)
+    return this.sourceQueries.salesOrderLines(params.salesOrderId, query, actorUserId)
   }
 
   @Head('source-sales-orders/:salesOrderId/lines/:lineId/main-image/:productMediaId/content')
@@ -320,6 +327,7 @@ export class PurchaseOrdersController {
   })
   async headSourceSalesOrderLineMainImage(
     @Param() params: PurchaseOrderSourceSalesOrderLineImageParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
     @Query('variant') variant: unknown,
@@ -333,6 +341,7 @@ export class PurchaseOrdersController {
       range,
       'HEAD',
       variant,
+      actorUserId,
     )
     applyProductMediaContentResponse(response, result)
   }
@@ -347,6 +356,7 @@ export class PurchaseOrdersController {
   })
   async getSourceSalesOrderLineMainImage(
     @Param() params: PurchaseOrderSourceSalesOrderLineImageParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
     @Query('variant') variant: unknown,
@@ -360,6 +370,7 @@ export class PurchaseOrdersController {
       range,
       'GET',
       variant,
+      actorUserId,
     )
     applyProductMediaContentResponse(response, result)
     return result.stream === undefined
@@ -377,6 +388,7 @@ export class PurchaseOrdersController {
   })
   async headProductPreviewMainImage(
     @Param() params: PurchaseOrderLineProductImageParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
     @Query('variant') variant: unknown,
@@ -390,6 +402,7 @@ export class PurchaseOrdersController {
       range,
       'HEAD',
       variant,
+      actorUserId,
     )
     applyProductMediaContentResponse(response, result)
   }
@@ -404,6 +417,7 @@ export class PurchaseOrdersController {
   })
   async getProductPreviewMainImage(
     @Param() params: PurchaseOrderLineProductImageParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
     @Query('variant') variant: unknown,
@@ -417,6 +431,7 @@ export class PurchaseOrdersController {
       range,
       'GET',
       variant,
+      actorUserId,
     )
     applyProductMediaContentResponse(response, result)
     return result.stream === undefined
@@ -470,6 +485,7 @@ export class PurchaseOrdersController {
     errors: [
       { status: 413, codes: ['PAYLOAD_TOO_LARGE'] },
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] },
       { status: 409, codes: [
         'PURCHASE_ORDER_CREATE_IDEMPOTENCY_CONFLICT',
         'PURCHASE_ORDER_NUMBER_CONFLICT',
@@ -508,11 +524,12 @@ export class PurchaseOrdersController {
     @Req() request: object,
     @Headers('idempotency-key') rawIdempotencyKey: unknown,
   ): Promise<PurchaseOrderDetail> {
+    const context = mutationContext(request)
     const purchaseOrderId = await this.commands.create({
-      ...mutationContext(request),
+      ...context,
       idempotencyKey: parsePurchaseOrderIdempotencyKey(rawIdempotencyKey),
     }, dto)
-    return this.queries.getById(purchaseOrderId)
+    return this.queries.getById(purchaseOrderId, context.actorUserId)
   }
 
   @Get(':purchaseOrderId')
@@ -528,8 +545,11 @@ export class PurchaseOrdersController {
       { status: 422, codes: ['VALIDATION_FAILED'] },
     ],
   })
-  getById(@Param() params: PurchaseOrderIdParamDto): Promise<PurchaseOrderDetail> {
-    return this.queries.getById(params.purchaseOrderId)
+  getById(
+    @Param() params: PurchaseOrderIdParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
+  ): Promise<PurchaseOrderDetail> {
+    return this.queries.getById(params.purchaseOrderId, actorUserId)
   }
 
   @Post(':purchaseOrderId/prepare-review-shipping-marks')
@@ -767,11 +787,12 @@ export class PurchaseOrdersController {
   })
   async headDocumentContent(
     @Param() params: PurchaseOrderDocumentIdParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Res({ passthrough: true }) response: PurchaseOrderDocumentHttpResponse,
   ): Promise<void> {
     const result = await this.documents.resolveContent(
-      params.purchaseOrderId, params.documentId, ifNoneMatch, 'HEAD',
+      params.purchaseOrderId, params.documentId, ifNoneMatch, 'HEAD', actorUserId,
     )
     applyDocumentContentResponse(response, result)
   }
@@ -808,11 +829,12 @@ export class PurchaseOrdersController {
   })
   async getDocumentContent(
     @Param() params: PurchaseOrderDocumentIdParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Res({ passthrough: true }) response: PurchaseOrderDocumentHttpResponse,
   ): Promise<StreamableFile | undefined> {
     const result = await this.documents.resolveContent(
-      params.purchaseOrderId, params.documentId, ifNoneMatch, 'GET',
+      params.purchaseOrderId, params.documentId, ifNoneMatch, 'GET', actorUserId,
     )
     applyDocumentContentResponse(response, result)
     return result.stream === undefined ? undefined : new StreamableFile(result.stream)

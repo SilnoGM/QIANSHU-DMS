@@ -10,6 +10,8 @@ import {
   formatSalesOrderAmountUnits,
   parseSalesOrderAmountUnits,
 } from './domain/sales-order-decimal'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../access-control/data-scope.service'
+import { salesOrderScopeWhere } from './sales-order-access'
 import { mapSalesOrderProductOption } from './products/sales-order-product-option.mapper'
 import { readProductOptionCategoryFacets } from '../products/product-option-category-facets'
 
@@ -29,11 +31,15 @@ function productEditNotAllowed(): never {
 
 @Injectable()
 export class SalesOrderProductEditQueryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
+  ) {}
 
-  async context(salesOrderId: string) {
-    const order = await this.prisma.salesOrder.findUnique({
-      where: { id: salesOrderId },
+  async context(salesOrderId: string, actorUserId: string = resolveDataScopeActor()) {
+    const scope = await this.dataScope.resolve(actorUserId)
+    const order = await this.prisma.salesOrder.findFirst({
+      where: { id: salesOrderId, ...salesOrderScopeWhere(scope, actorUserId) },
       select: {
         id: true,
         orderNo: true,
@@ -191,6 +197,7 @@ export class SalesOrderProductEditQueryService {
       readonly page?: number
       readonly pageSize?: number
     },
+    actorUserId: string = resolveDataScopeActor(),
   ) {
     if (
       input.unclassified === true
@@ -203,7 +210,7 @@ export class SalesOrderProductEditQueryService {
         { categoryName: ['未分类筛选不能与分类/产品头筛选同时使用'] },
       )
     }
-    const context = await this.context(salesOrderId)
+    const context = await this.context(salesOrderId, actorUserId)
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const keyword = input.keyword?.trim().normalize('NFKC')

@@ -17,6 +17,7 @@ import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
+import { CurrentUserId, resolveDataScopeActor } from '../auth/decorators/current-user-id.decorator'
 import type { FundAccountCommandContext } from './application/fund-account.contract'
 import { FundPostingApplicationService } from './application/fund-posting.service'
 import { FundTransactionQueryService } from './application/fund-transaction-query.service'
@@ -62,9 +63,10 @@ export class FundTransactionsController {
   })
   list(
     @Query() dto: FundTransactionListQueryDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
   ): Promise<FundTransactionPageDto> {
     return executeFundHttpOperation(() => (
-      this.transactions.listTransactions({ ...dto })
+      this.transactions.listTransactions({ ...dto }, actorUserId)
     ))
   }
 
@@ -145,9 +147,10 @@ export class FundTransactionsController {
   })
   getBatch(
     @Param() params: FundPostingBatchIdParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
   ): Promise<FundPostingBatchDetailDto> {
     return executeFundHttpOperation(() => (
-      this.transactions.getBatchDetail(params.batchId)
+      this.transactions.getBatchDetail(params.batchId, actorUserId)
     ))
   }
 

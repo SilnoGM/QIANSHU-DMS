@@ -18,6 +18,7 @@ import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
+import { CurrentUserId, resolveDataScopeActor } from '../auth/decorators/current-user-id.decorator'
 import { FundAccountCommandService } from './application/fund-account-command.service'
 import type { FundAccountCommandContext } from './application/fund-account.contract'
 import { FundAccountQueryService } from './application/fund-account-query.service'
@@ -65,8 +66,13 @@ export class FundAccountsController {
     privateNoStore: true,
     errors: [FUND_READ_FORBIDDEN, FUND_VALIDATION_ERRORS],
   })
-  list(@Query() dto: FundAccountListQueryDto): Promise<FundAccountPageDto> {
-    return executeFundHttpOperation(() => this.accounts.listAccounts({ ...dto }))
+  list(
+    @Query() dto: FundAccountListQueryDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
+  ): Promise<FundAccountPageDto> {
+    return executeFundHttpOperation(() => (
+      this.accounts.listAccounts({ ...dto }, actorUserId)
+    ))
   }
 
   /*
@@ -108,8 +114,12 @@ export class FundAccountsController {
     privateNoStore: true,
     errors: [FUND_READ_FORBIDDEN, FUND_VALIDATION_ERRORS],
   })
-  ownerCandidates(): Promise<FundAccountOwnerCandidateListDto> {
-    return executeFundHttpOperation(() => this.accounts.listOwnerCandidates())
+  ownerCandidates(
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
+  ): Promise<FundAccountOwnerCandidateListDto> {
+    return executeFundHttpOperation(() => (
+      this.accounts.listOwnerCandidates(actorUserId)
+    ))
   }
 
   @Post()

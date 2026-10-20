@@ -8,6 +8,7 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { hasPersistenceCode, readPersistenceErrorFacts } from '../../../infrastructure/database/persistence-error-facts'
 import { applyTransactionTimeouts } from '../../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../../infrastructure/http/api.exception'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
 import { AuditService, AuditWriteFailedError } from '../../audit/audit.service'
 import { MediaAssetLifecycleError, MediaAssetService } from '../../media/media-asset.service'
 import { MediaContentDeliveryService } from '../../media/media-content-delivery.service'
@@ -16,6 +17,7 @@ import { requireMediaObjectKeyNamespace } from '../../media/media-storage'
 import { purchaseOrderRuleFailure } from '../domain/purchase-order-errors'
 import type { PurchaseOrderDocumentContentResponse } from '../documents/purchase-order-document.service'
 import type { PurchaseOrderMutationContext } from '../purchase-order-mutation.service'
+import { purchaseOrderScopeWhere } from '../purchase-order-access'
 import { PurchaseOrderQueryService, type PurchaseOrderDetail } from '../purchase-order-query.service'
 import { deliverPurchaseOrderImage, readPurchaseOrderImageThumbnails } from './purchase-order-image-assets'
 import { deliverCancelledPurchaseOrderImage } from './purchase-order-image-cancellation'
@@ -87,11 +89,12 @@ export class PurchaseOrderImageDraftService {
     private readonly delivery: MediaContentDeliveryService,
     private readonly retention: MediaAssetRetentionService,
     private readonly audit: AuditService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
-  async getDraft(rawPurchaseOrderId: unknown): Promise<PurchaseOrderImageDraftResponseDto> {
+  async getDraft(rawPurchaseOrderId: unknown, actorUserId: string = resolveDataScopeActor()): Promise<PurchaseOrderImageDraftResponseDto> {
     const purchaseOrderId = requirePurchaseOrderImageUuid(rawPurchaseOrderId, 'purchaseOrderId')
-    const detail = await this.query.getById(purchaseOrderId)
+    const detail = await this.query.getById(purchaseOrderId, actorUserId)
     const row = await this.prisma.purchaseOrderImageDraft.findFirst({ where: { purchaseOrderId, ...CURRENT_DRAFT }, select: DRAFT_SELECT })
     if (row === null) return { draft: null }
     let isCurrent = false
@@ -110,7 +113,7 @@ export class PurchaseOrderImageDraftService {
     requirePurchaseOrderImageContext(context)
     const purchaseOrderId = requirePurchaseOrderImageUuid(rawPurchaseOrderId, 'purchaseOrderId')
     const command = normalizePurchaseOrderImageDraftInput(input)
-    const detail = await this.query.getById(purchaseOrderId)
+    const detail = await this.query.getById(purchaseOrderId, context.actorUserId)
     assertReviewable(detail, command.expectedVersion)
     assertMarks(detail)
     let snapshot: ReturnType<typeof createPurchaseOrderImageSnapshot>
@@ -137,7 +140,7 @@ export class PurchaseOrderImageDraftService {
         await applyTransactionTimeouts(transaction)
         const locks = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "purchase_orders" WHERE "id" = CAST(${purchaseOrderId} AS uuid) FOR UPDATE`)
         if (locks.length !== 1) throw new ApiException(HttpStatus.NOT_FOUND, 'PURCHASE_ORDER_NOT_FOUND', '采购订单不存在')
-        const currentDetail = await this.query.getById(purchaseOrderId, transaction)
+        const currentDetail = await this.query.getById(purchaseOrderId, context.actorUserId, transaction)
         assertReviewable(currentDetail, command.expectedVersion)
         assertMarks(currentDetail)
         if (hashPurchaseOrderImageSnapshot(createPurchaseOrderImageSnapshot(currentDetail)) !== snapshotHash) {
@@ -181,7 +184,7 @@ export class PurchaseOrderImageDraftService {
     requirePurchaseOrderImageContext(context)
     if (rawDraftId === undefined || rawDraftId === null) return purchaseOrderRuleFailure('PURCHASE_ORDER_IMAGE_REQUIRED', '请先生成采购单图片再确认审核')
     const draftId = requirePurchaseOrderImageUuid(rawDraftId, 'imageDraftId')
-    const detail = await this.query.getById(purchaseOrderId, transaction)
+    const detail = await this.query.getById(purchaseOrderId, context.actorUserId, transaction)
     assertReviewable(detail, expectedVersion)
     assertMarks(detail)
     const draft = await transaction.purchaseOrderImageDraft.findFirst({ where: { id: draftId, purchaseOrderId, ...CURRENT_DRAFT }, select: DRAFT_SELECT })
@@ -207,9 +210,17 @@ export class PurchaseOrderImageDraftService {
     for (const draft of drafts) await this.releaseAsset(transaction, draft.mediaAssetId)
   }
 
-  async resolveContent(purchaseOrderId: string, draftId: string, ifNoneMatch: unknown, method: 'GET' | 'HEAD'): Promise<PurchaseOrderDocumentContentResponse> {
+  async resolveContent(purchaseOrderId: string, draftId: string, ifNoneMatch: unknown, method: 'GET' | 'HEAD', actorUserId: string = resolveDataScopeActor()): Promise<PurchaseOrderDocumentContentResponse> {
+    const scope = await this.dataScope.resolve(actorUserId)
     const draft = await this.prisma.purchaseOrderImageDraft.findFirst({
-      where: { id: requirePurchaseOrderImageUuid(draftId, 'draftId'), purchaseOrderId: requirePurchaseOrderImageUuid(purchaseOrderId, 'purchaseOrderId'), invalidatedAt: null, mediaAsset: { status: 'READY', deletedAt: null, mimeType: 'image/png' } }, select: DRAFT_SELECT,
+      where: {
+        id: requirePurchaseOrderImageUuid(draftId, 'draftId'),
+        purchaseOrderId: requirePurchaseOrderImageUuid(purchaseOrderId, 'purchaseOrderId'),
+        purchaseOrder: { is: purchaseOrderScopeWhere(scope, actorUserId) },
+        invalidatedAt: null,
+        mediaAsset: { status: 'READY', deletedAt: null, mimeType: 'image/png' },
+      },
+      select: DRAFT_SELECT,
     })
     if (draft === null) throw new ApiException(HttpStatus.NOT_FOUND, 'PURCHASE_ORDER_IMAGE_DRAFT_NOT_FOUND', '采购单图片不存在')
     // 审核归档后的旧预览地址仍可读取，同样检查作废状态，避免绕过正式凭证的标记。

@@ -5,7 +5,7 @@ function fixture(lines: object[] = []) {
   const findUnique = jest.fn().mockResolvedValue({ id: 'order', lines })
   const findMany = jest.fn().mockResolvedValue([])
   const service = new SalesOrderPendingPurchaseQueryService({
-    salesOrder: { findUnique }, purchaseOrderLine: { findMany },
+    salesOrder: { findUnique, findFirst: findUnique }, purchaseOrderLine: { findMany },
   } as unknown as PrismaService)
   return { service, findUnique, findMany }
 }

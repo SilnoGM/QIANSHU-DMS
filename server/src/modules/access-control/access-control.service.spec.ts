@@ -126,8 +126,10 @@ describe('permission constants', () => {
       'workbench:finance',
       'workbench:operations',
       'workbench:purchase-transport',
+      'data-scope:self',
+      'data-scope:all',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 95)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 97)
   })
 })
 

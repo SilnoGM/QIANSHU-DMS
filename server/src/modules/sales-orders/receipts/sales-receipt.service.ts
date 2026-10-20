@@ -2,6 +2,8 @@ import { NumberingGeneratorService } from '../../numbering/numbering-generator.s
 import { NumberingGenerationError, NUMBERING_ERROR_CODES, NUMBERING_BOUNDARY_ERROR_CODES } from '../../numbering/numbering.errors'
 import { normalizeReceiptReason as reason } from './sales-receipt-normalizer'
 import { AccessControlService } from '../../access-control/access-control.service'
+import { DataScopeService, dataScopeFallback } from '../../access-control/data-scope.service'
+import { salesOrderScopeWhere } from '../sales-order-access'
 import { MediaContentDeliveryService } from '../../media/media-content-delivery.service'
 import { requireMediaObjectKeyNamespace } from '../../media/media-storage'
 import { createHash } from 'node:crypto'
@@ -61,6 +63,7 @@ export class SalesReceiptService {
     private readonly access: AccessControlService,
     private readonly delivery: MediaContentDeliveryService,
     private readonly numbering: NumberingGeneratorService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
   private async authorize(tx: Tx, context: SalesOrderMutationContext, codes: string[]) {
@@ -77,9 +80,15 @@ export class SalesReceiptService {
       receiptFailure('MEDIA_STORAGE_UNAVAILABLE', '凭证存储暂时不可用', HttpStatus.SERVICE_UNAVAILABLE)
     }
   }
-  private async lockOrder(tx: Tx, id: string) {
-    await tx.$queryRaw(Prisma.sql`SELECT id FROM sales_orders WHERE id = ${id}::uuid FOR UPDATE`)
-    const order = await tx.salesOrder.findUnique({ where: { id } })
+  private async lockOrder(tx: Tx, id: string, actorUserId: string) {
+    const scope = await this.dataScope.resolveInTransaction(tx, actorUserId)
+    const scopeSql = scope === 'SELF'
+      ? Prisma.sql`AND "issuer_user_id" = CAST(${actorUserId} AS uuid)`
+      : Prisma.sql``
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM sales_orders WHERE id = ${id}::uuid ${scopeSql} FOR UPDATE`)
+    const order = await tx.salesOrder.findFirst({
+      where: { id, ...salesOrderScopeWhere(scope, actorUserId) },
+    })
     if (!order) return receiptFailure('SALES_ORDER_NOT_FOUND', '销售订单不存在', HttpStatus.NOT_FOUND)
     return order
   }
@@ -87,10 +96,10 @@ export class SalesReceiptService {
     if (order.orderStatus === 'COMPLETED') receiptFailure('SALES_ORDER_COMPLETED', '已完成订单不能操作收款')
     if (order.orderStatus === 'CANCELLED') receiptFailure('SALES_ORDER_CANCELLED', '已取消订单不能操作收款')
   }
-  private async lockRequest(tx: Tx, id: string) {
+  private async lockRequest(tx: Tx, id: string, actorUserId: string) {
     const locator = await tx.salesReceiptRequest.findUnique({ where: { id }, select: { salesOrderId: true } })
     if (!locator) return receiptFailure('SALES_RECEIPT_NOT_FOUND', '收款申请不存在', HttpStatus.NOT_FOUND)
-    const order = await this.lockOrder(tx, locator.salesOrderId)
+    const order = await this.lockOrder(tx, locator.salesOrderId, actorUserId)
     await tx.$queryRaw(Prisma.sql`SELECT id FROM sales_receipt_requests WHERE id = ${id}::uuid FOR UPDATE`)
     const row = await tx.salesReceiptRequest.findUniqueOrThrow({ where: { id } })
     return { order, row }
@@ -152,7 +161,7 @@ export class SalesReceiptService {
       id = await this.prisma.$transaction(async tx => {
         await applyTransactionTimeouts(tx)
         await this.authorize(tx, context, ['sales-orders:payment', 'sales-orders:document'])
-        const order = await this.lockOrder(tx, salesOrderId)
+        const order = await this.lockOrder(tx, salesOrderId, context.actorUserId)
         const previous = await replay(tx)
         if (previous) return previous.id
         this.assertOpen(order)
@@ -188,11 +197,11 @@ export class SalesReceiptService {
       // 唯一键竞争使事务失效，必须在外层回滚结束后才读取已经提交的幂等结果。
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         const existing = await replay(this.prisma)
-        if (existing) return this.query.getById(existing.id)
+        if (existing) return this.query.getById(existing.id, context.actorUserId)
       }
       return mapError(error)
     }
-    return this.query.getById(id)
+    return this.query.getById(id, context.actorUserId)
   }
 
   async approvalContext(context: SalesOrderMutationContext, id: string): Promise<SalesReceiptApprovalContextDto> {
@@ -200,7 +209,7 @@ export class SalesReceiptService {
       return await this.prisma.$transaction(async tx => {
         await applyTransactionTimeouts(tx)
         await this.authorize(tx, context, ['sales-receipts:review'])
-        const { order, row } = await this.lockRequest(tx, id)
+        const { order, row } = await this.lockRequest(tx, id, context.actorUserId)
         if (row.status !== 'PENDING_REVIEW') receiptFailure('SALES_RECEIPT_STATE_CHANGED', '申请已处理', HttpStatus.CONFLICT)
         this.assertOpen(order)
         const rate = await this.rate(tx, row.currencyCode)
@@ -217,7 +226,7 @@ export class SalesReceiptService {
       await this.prisma.$transaction(async tx => {
         await applyTransactionTimeouts(tx)
         await this.authorize(tx, context, ['sales-receipts:review'])
-        const { order, row } = await this.lockRequest(tx, id)
+        const { order, row } = await this.lockRequest(tx, id, context.actorUserId)
         const reviewRemark = reason(input.reason)
         if (row.status === 'APPROVED' && row.reviewedByUserId === context.actorUserId && row.reviewRemark === reviewRemark) return
         if (row.status !== 'PENDING_REVIEW' || row.version !== input.expectedVersion) receiptFailure('SALES_RECEIPT_STATE_CHANGED', '申请已变化，请刷新后重试', HttpStatus.CONFLICT)
@@ -241,7 +250,7 @@ export class SalesReceiptService {
         await this.auditEvent(tx, context, AuditEventType.SALES_RECEIPT_APPROVED, id, order.id)
       })
     } catch (error) { return mapError(error) }
-    return this.query.getById(id)
+    return this.query.getById(id, context.actorUserId)
   }
 
   async reject(context: SalesOrderMutationContext, id: string, input: SalesReceiptRejectDto) {
@@ -250,14 +259,14 @@ export class SalesReceiptService {
     await this.prisma.$transaction(async tx => {
       await applyTransactionTimeouts(tx)
       await this.authorize(tx, context, ['sales-receipts:review'])
-      const { order, row } = await this.lockRequest(tx, id)
+      const { order, row } = await this.lockRequest(tx, id, context.actorUserId)
       if (row.status === 'REJECTED' && row.reviewedByUserId === context.actorUserId && row.reviewRemark === reviewRemark) return
       if (row.status !== 'PENDING_REVIEW' || row.version !== input.expectedVersion) receiptFailure('SALES_RECEIPT_STATE_CHANGED', '申请已变化，请刷新后重试', HttpStatus.CONFLICT)
       const [{ now }] = await tx.$queryRaw<[{ now: Date }]>(Prisma.sql`SELECT clock_timestamp() AS now`)
       await tx.salesReceiptRequest.update({ where: { id }, data: { status: 'REJECTED', reviewedByUserId: context.actorUserId, reviewedAt: now, reviewRemark, version: { increment: 1 } } })
       await this.auditEvent(tx, context, AuditEventType.SALES_RECEIPT_REJECTED, id, order.id)
     })
-    return this.query.getById(id)
+    return this.query.getById(id, context.actorUserId)
   }
 
   async voidPayment(context: SalesOrderMutationContext, salesOrderId: string, paymentId: string, input: { reason: string, expectedOrderVersion: number }) {
@@ -267,7 +276,7 @@ export class SalesReceiptService {
       await this.prisma.$transaction(async tx => {
         await applyTransactionTimeouts(tx)
         await this.authorize(tx, context, ['sales-receipts:void'])
-        const order = await this.lockOrder(tx, salesOrderId)
+        const order = await this.lockOrder(tx, salesOrderId, context.actorUserId)
         await tx.$queryRaw(Prisma.sql`SELECT id FROM sales_order_payments WHERE id = ${paymentId}::uuid FOR UPDATE`)
         const payment = await tx.salesOrderPayment.findFirst({ where: { id: paymentId, salesOrderId }, include: { fundPostingBatch: true } })
         if (!payment) receiptFailure('SALES_ORDER_PAYMENT_NOT_FOUND', '正式收款不存在', HttpStatus.NOT_FOUND)

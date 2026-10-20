@@ -11,6 +11,8 @@ import type {
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../access-control/data-scope.service'
+import { salesOrderScopeWhere } from './sales-order-access'
 import {
   formatSalesOrderAmountUnits,
   parseSalesOrderAmountUnits,
@@ -682,7 +684,10 @@ function mapSalesOrderDetail(
 
 @Injectable()
 export class SalesOrderQueryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
+  ) {}
 
   /**
    * 出单人选项直接读取用户主表，并保留停用账号以支持历史订单筛选。该接口只暴露
@@ -696,11 +701,16 @@ export class SalesOrderQueryService {
     return { items: users }
   }
 
-  async list(input: SalesOrderListQueryInput): Promise<SalesOrderPage> {
+  async list(
+    input: SalesOrderListQueryInput,
+    actorUserId: string = resolveDataScopeActor(),
+  ): Promise<SalesOrderPage> {
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
+    const scope = await this.dataScope.resolve(actorUserId)
     const where: Prisma.SalesOrderWhereInput = {
       ...buildSalesOrderBaseWhere(input),
+      ...salesOrderScopeWhere(scope, actorUserId),
       orderStatus: input.orderStatus,
       fulfillmentStatus: input.fulfillmentStatus,
     }
@@ -838,8 +848,13 @@ export class SalesOrderQueryService {
 
   async statusCounts(
     input: SalesOrderStatusCountsQueryInput,
+    actorUserId: string = resolveDataScopeActor(),
   ): Promise<SalesOrderStatusCounts> {
-    const baseWhere = buildSalesOrderBaseWhere(input)
+    const scope = await this.dataScope.resolve(actorUserId)
+    const baseWhere: Prisma.SalesOrderWhereInput = {
+      ...buildSalesOrderBaseWhere(input),
+      ...salesOrderScopeWhere(scope, actorUserId),
+    }
 
     if (input.view === 'all') {
       const statuses = [
@@ -1039,9 +1054,13 @@ export class SalesOrderQueryService {
     }
   }
 
-  async getById(salesOrderId: string): Promise<SalesOrderDetail> {
-    const row = await this.prisma.salesOrder.findUnique({
-      where: { id: salesOrderId },
+  async getById(
+    salesOrderId: string,
+    actorUserId: string = resolveDataScopeActor(),
+  ): Promise<SalesOrderDetail> {
+    const scope = await this.dataScope.resolve(actorUserId)
+    const row = await this.prisma.salesOrder.findFirst({
+      where: { id: salesOrderId, ...salesOrderScopeWhere(scope, actorUserId) },
       include: SALES_ORDER_DETAIL_INCLUDE,
     })
     if (row === null) {

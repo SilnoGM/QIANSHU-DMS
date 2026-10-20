@@ -6,7 +6,8 @@ import { PurchasePayableVoucherService } from './purchase-payable-voucher.servic
 
 function setup() {
   const payable = { dueAmount: new Prisma.Decimal(10), closedAt: null, payments: [], purchaseOrder: { orderStatus: 'CONFIRMED' } }
-  const prisma = { purchaseOrderPayable: { findUnique: jest.fn().mockResolvedValue(payable) }, purchaseOrderDocument: { findFirst: jest.fn().mockResolvedValue({ purchaseOrderId: 'order' }) } }
+  const prisma = { purchaseOrderPayable: { findUnique: jest.fn().mockResolvedValue(payable), findFirst: jest.fn().mockResolvedValue(payable) }, purchaseOrderDocument: { findFirst: jest.fn().mockResolvedValue({ purchaseOrderId: 'order' }) } }
+  ;(prisma.purchaseOrderPayable as Record<string, unknown>).findFirst = prisma.purchaseOrderPayable.findUnique
   const documents = { uploadTemporary: jest.fn().mockResolvedValue({ mediaAssetId: 'image', mediaType: 'IMAGE' }), resolveContent: jest.fn().mockResolvedValue({ status: 200, headers: {} }) }
   return { prisma, documents, service: new PurchasePayableVoucherService(prisma as unknown as PrismaService, documents as unknown as PurchaseOrderDocumentService) }
 }
@@ -25,8 +26,8 @@ describe('PurchasePayableVoucherService', () => {
   it('requires the exact payment-to-voucher association before delivering content', async () => {
     const h = setup()
     await h.service.content('payable', 'document', undefined, 'GET')
-    expect(h.prisma.purchaseOrderDocument.findFirst).toHaveBeenCalledWith({ where: { id: 'document', documentType: 'PAYMENT_VOUCHER', detachedAt: null, payment: { payableId: 'payable' } }, select: { purchaseOrderId: true } })
-    expect(h.documents.resolveContent).toHaveBeenCalledWith('order', 'document', undefined, 'GET')
+    expect(h.prisma.purchaseOrderDocument.findFirst).toHaveBeenCalledWith({ where: { id: 'document', documentType: 'PAYMENT_VOUCHER', detachedAt: null, payment: { is: { payableId: 'payable' } } }, select: { purchaseOrderId: true } })
+    expect(h.documents.resolveContent).toHaveBeenCalledWith('order', 'document', undefined, 'GET', expect.any(String))
     h.prisma.purchaseOrderDocument.findFirst.mockResolvedValue(null)
     await expect(h.service.content('other-payable', 'document', undefined, 'GET')).rejects.toMatchObject({ code: 'PURCHASE_ORDER_DOCUMENT_NOT_FOUND' })
     expect(h.documents.resolveContent).toHaveBeenCalledTimes(1)

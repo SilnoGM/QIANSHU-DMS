@@ -3,10 +3,12 @@ import type { Readable } from 'node:stream'
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../access-control/data-scope.service'
 import { MediaAssetLifecycleError, MediaAssetService } from '../media/media-asset.service'
 import { MediaContentDeliveryService } from '../media/media-content-delivery.service'
 import { requireMediaObjectKeyNamespace } from '../media/media-storage'
 import { SalesOrderDocumentMultipartParser, type SalesOrderDocumentMultipartRequest } from '../sales-orders/documents/sales-order-document-multipart.parser'
+import { packagingCostScopeWhere } from './packaging-cost-access'
 import { PackagingCostImageKindDto, type PackagingCostImageUploadDto } from './packaging-cost.dto'
 import { packagingCostFailure, type PackagingCostContext } from './packaging-cost.normalizer'
 
@@ -15,10 +17,12 @@ export interface PackagingCostImageContent { status: number, headers: Record<str
 @Injectable()
 export class PackagingCostImageService {
   private readonly multipart = new SalesOrderDocumentMultipartParser()
-  constructor(private readonly prisma: PrismaService, private readonly media: MediaAssetService, private readonly delivery: MediaContentDeliveryService) {}
+  constructor(private readonly prisma: PrismaService, private readonly media: MediaAssetService, private readonly delivery: MediaContentDeliveryService, private readonly dataScope: DataScopeService = dataScopeFallback()) {}
   async upload(context: PackagingCostContext, request: SalesOrderDocumentMultipartRequest, packagingCostId?: string): Promise<PackagingCostImageUploadDto> {
     if (packagingCostId) {
-      const row = await this.prisma.packagingCostRequest.findUnique({ where: { id: packagingCostId }, select: { status: true } })
+      // 付款凭证只能追加到当前用户可见的提报；SELF 按费用归属人校验，ALL 保持财务代付。
+      const scope = await this.dataScope.resolve(context.actorUserId)
+      const row = await this.prisma.packagingCostRequest.findFirst({ where: { id: packagingCostId, ...packagingCostScopeWhere(scope, context.actorUserId) }, select: { status: true } })
       if (!row) return packagingCostFailure('PACKAGING_COST_NOT_FOUND', '打木架提报不存在', 404)
       if (row.status !== 'PENDING_PAYMENT') return packagingCostFailure('PACKAGING_COST_STATE_CHANGED', '提报已付款，请刷新', 409)
     }
@@ -50,8 +54,10 @@ export class PackagingCostImageService {
       return packagingCostFailure('MEDIA_STORAGE_UNAVAILABLE', '截图存储暂时不可用', 503)
     }
   }
-  async content(id: string, kind: PackagingCostImageKindDto, ifNoneMatch: unknown, method: 'GET' | 'HEAD'): Promise<PackagingCostImageContent> {
-    const row = await this.prisma.packagingCostRequest.findUnique({ where: { id }, include: { packagingImage: true, quotationImage: true, paymentVoucher: true } })
+  async content(id: string, kind: PackagingCostImageKindDto, ifNoneMatch: unknown, method: 'GET' | 'HEAD', actorUserId: string = resolveDataScopeActor()): Promise<PackagingCostImageContent> {
+    // 图片内容沿用提报详情的数据范围：SELF 下他人提报与不存在的图片都返回 404。
+    const scope = await this.dataScope.resolve(actorUserId)
+    const row = await this.prisma.packagingCostRequest.findFirst({ where: { id, ...packagingCostScopeWhere(scope, actorUserId) }, include: { packagingImage: true, quotationImage: true, paymentVoucher: true } })
     const asset = kind === PackagingCostImageKindDto.PACKAGING ? row?.packagingImage : kind === PackagingCostImageKindDto.PAYMENT ? row?.paymentVoucher : row?.quotationImage
     if (!asset || asset.status !== 'READY' || asset.deletedAt || !asset.objectKey || !asset.checksumSha256 || !asset.mimeType || !MIME_TYPES.includes(asset.mimeType)) return packagingCostFailure('PACKAGING_COST_IMAGE_NOT_FOUND', '截图凭证不存在', 404)
     const key = requireMediaObjectKeyNamespace(asset.objectKey, 'assets')

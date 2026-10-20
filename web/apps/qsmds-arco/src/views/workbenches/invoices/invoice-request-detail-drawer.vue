@@ -155,6 +155,27 @@ const nodes = computed(() => {
     </template>
 
     <div v-if="detail !== null && error === null" class="space-y-5">
+      <FaAlert
+        v-if="detail.duplicateSuspected === true"
+        icon="i-lucide:triangle-alert"
+        :title="t('invoiceRequest.duplicate.title')"
+        class="text-amber-700 border-amber-500/30 bg-amber-500/5 dark:text-amber-300"
+      >
+        <template #description>
+          <p class="m-0">
+            {{ t('invoiceRequest.duplicate.description') }}
+          </p>
+          <ul v-if="detail.duplicateSuspects?.length" class="m-0 mt-2 pl-4 space-y-1">
+            <li v-for="suspect in detail.duplicateSuspects" :key="suspect.invoiceNo">
+              {{ t('invoiceRequest.duplicate.item', {
+                invoiceNo: suspect.invoiceNo,
+                status: t(`invoiceRequest.status.${suspect.status}`),
+                date: suspect.createdAt.slice(0, 10),
+              }) }}
+            </li>
+          </ul>
+        </template>
+      </FaAlert>
       <section class="p-4 border border-border rounded-xl bg-background min-w-0 space-y-4 sm:p-5">
         <header class="flex gap-2.5 items-center">
           <span class="text-muted-foreground rounded-lg bg-muted/60 flex shrink-0 size-8 items-center justify-center">

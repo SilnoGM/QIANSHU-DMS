@@ -19,7 +19,7 @@ describe('SalesOrderPendingPurchaseController', () => {
     expect(new Reflector().get(REQUIRED_PERMISSIONS_METADATA, SalesOrderPendingPurchaseController.prototype.list))
       .toEqual(['sales-orders:read', 'purchase-orders:create'])
     await expect(controller.list({ salesOrderId: 'order' })).resolves.toEqual({ items: [] })
-    expect(list).toHaveBeenCalledWith('order')
+    expect(list).toHaveBeenCalledWith('order', expect.any(String))
   })
 
   it('publishes the read-only response and protected error contract', async () => {

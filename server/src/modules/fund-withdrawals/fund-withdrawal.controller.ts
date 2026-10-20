@@ -7,6 +7,7 @@ import type { ApiContractErrorOptions } from '../../openapi/contract-metadata'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
+import { CurrentUserId, resolveDataScopeActor } from '../auth/decorators/current-user-id.decorator'
 import type { SalesOrderDocumentMultipartRequest } from '../sales-orders/documents/sales-order-document-multipart.parser'
 import {
   FUND_WITHDRAWAL_PERMISSION_CREATE,
@@ -127,24 +128,24 @@ export class FundWithdrawalController {
   @RequirePermissions(FUND_WITHDRAWAL_PERMISSION_REVIEW)
   @ApiContractResponse({ status: 200, type: FundWithdrawalPageDto })
   @contract('fund_withdrawals_list')
-  list(@Query() query: FundWithdrawalListQueryDto) {
-    return this.queries.listReview(query)
+  list(@Query() query: FundWithdrawalListQueryDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) {
+    return this.queries.listReview(query, actorUserId)
   }
 
   @Get(':id')
   @RequirePermissions(FUND_WITHDRAWAL_PERMISSION_REVIEW)
   @ApiContractResponse({ status: 200, type: FundWithdrawalDto })
   @contract('fund_withdrawals_get', false, [notFound])
-  get(@Param() params: FundWithdrawalIdDto) {
-    return this.queries.getReview(params.id)
+  get(@Param() params: FundWithdrawalIdDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) {
+    return this.queries.getReview(params.id, actorUserId)
   }
 
   @Get(':id/payment-proof')
   @RequirePermissions(FUND_WITHDRAWAL_PERMISSION_REVIEW)
   @contract('fund_withdrawals_get_payment_proof', false, [notFound, { status: 404, codes: ['FUND_WITHDRAWAL_PAYMENT_PROOF_UNAVAILABLE'] }, { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] }])
   @ApiContractResponse({ status: 200, description: 'Private payment proof bytes.', content: Object.fromEntries(['image/jpeg', 'image/png', 'image/webp'].map(mime => [mime, { schema: { type: 'string', format: 'binary' } }])) })
-  async getPaymentProof(@Param() params: FundWithdrawalIdDto, @Res({ passthrough: true }) response: ContentResponse) {
-    const asset = await this.queries.proofAssetReview(params.id)
+  async getPaymentProof(@Param() params: FundWithdrawalIdDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor(), @Res({ passthrough: true }) response: ContentResponse) {
+    const asset = await this.queries.proofAssetReview(params.id, actorUserId)
     return deliver(await this.documents.content(asset, 'GET'), response)
   }
 
@@ -152,8 +153,8 @@ export class FundWithdrawalController {
   @RequirePermissions(FUND_WITHDRAWAL_PERMISSION_REVIEW)
   @contract('fund_withdrawals_head_payment_proof', false, [notFound, { status: 404, codes: ['FUND_WITHDRAWAL_PAYMENT_PROOF_UNAVAILABLE'] }, { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] }])
   @ApiContractResponse({ status: 200, description: 'Private payment proof headers.' })
-  async headPaymentProof(@Param() params: FundWithdrawalIdDto, @Res({ passthrough: true }) response: ContentResponse) {
-    const asset = await this.queries.proofAssetReview(params.id)
+  async headPaymentProof(@Param() params: FundWithdrawalIdDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor(), @Res({ passthrough: true }) response: ContentResponse) {
+    const asset = await this.queries.proofAssetReview(params.id, actorUserId)
     return deliver(await this.documents.content(asset, 'HEAD'), response)
   }
 

@@ -30,7 +30,7 @@ import {
   INVOICE_REQUEST_SETTLE_CONSUMER,
 } from '../fund-accounts/application/fund-invoice-request'
 import { calculateSettleAmountCny, calculateTaxAmount, INVOICE_MAILING_FEE_CNY, INVOICE_SERVICE_FEE_RATE, isSettleable, resolveSettleableAt, sumLineAmounts } from './invoice-request.logic'
-import { InvoiceRequestQueryService } from './invoice-request-query.service'
+import { assertInvoiceRequestVisible, InvoiceRequestQueryService } from './invoice-request-query.service'
 
 export interface InvoiceRequestCommandContext {
   readonly actorUserId: string
@@ -166,8 +166,12 @@ export class InvoiceRequestService {
         if (previous !== null) {
           return previous.id
         }
+        const viewer = await resolveInvoiceRequestViewer(tx, context.actorUserId)
         if (!payload.duplicateAcknowledged) {
-          await this.assertNoDuplicate(tx, payload)
+          // 运营只能在本人的单据池里查重，避免用重复提示探测他人单据。
+          await this.assertNoDuplicate(tx, payload, viewer.canManageOthers
+            ? {}
+            : { ownerId: context.actorUserId })
         }
         const issuance = await this.numbering.generateScopedInTransaction(tx, {
           ruleCode: 'INVOICE_REQUEST',
@@ -228,7 +232,10 @@ export class InvoiceRequestService {
         this.assertStatus(row.status, ['RETURNED'], '只有已退回的申请单可以重新提交')
         this.assertVersion(row.version, input.expectedVersion)
         if (!payload.duplicateAcknowledged) {
-          await this.assertNoDuplicate(tx, payload, id)
+          await this.assertNoDuplicate(tx, payload, {
+            excludeId: id,
+            ...(viewer.canManageOthers ? {} : { ownerId: viewer.actorUserId }),
+          })
         }
         await tx.invoiceRequestLine.deleteMany({ where: { requestId: id } })
         await tx.invoiceRequestLine.createMany({
@@ -275,8 +282,9 @@ export class InvoiceRequestService {
   async returnForCorrection(context: InvoiceRequestCommandContext, id: string, input: InvoiceRequestReturnDto): Promise<InvoiceRequestDto> {
     try {
       await this.prisma.$transaction(async (tx) => {
-        await resolveInvoiceRequestViewer(tx, context.actorUserId)
+        const viewer = await resolveInvoiceRequestViewer(tx, context.actorUserId)
         const row = await this.lockRequest(tx, id)
+        assertInvoiceRequestVisible(row, viewer)
         this.assertStatus(row.status, ['PENDING_REVIEW'], '只有开票审核中的申请单可以退回')
         this.assertVersion(row.version, input.expectedVersion)
         await tx.invoiceRequest.update({
@@ -304,8 +312,9 @@ export class InvoiceRequestService {
   async notify(context: InvoiceRequestCommandContext, id: string, input: InvoiceRequestNotifyDto): Promise<InvoiceRequestDto> {
     try {
       await this.prisma.$transaction(async (tx) => {
-        await resolveInvoiceRequestViewer(tx, context.actorUserId)
+        const viewer = await resolveInvoiceRequestViewer(tx, context.actorUserId)
         const row = await this.lockRequest(tx, id)
+        assertInvoiceRequestVisible(row, viewer)
         this.assertStatus(row.status, ['PENDING_REVIEW'], '只有开票审核中的申请单可以审核并通知')
         this.assertVersion(row.version, input.expectedVersion)
         await tx.invoiceRequest.update({
@@ -379,8 +388,9 @@ export class InvoiceRequestService {
   async uploadDocument(context: InvoiceRequestCommandContext, id: string, mediaAssetId: string): Promise<InvoiceRequestDto> {
     try {
       await this.prisma.$transaction(async (tx) => {
-        await resolveInvoiceRequestViewer(tx, context.actorUserId)
+        const viewer = await resolveInvoiceRequestViewer(tx, context.actorUserId)
         const row = await this.lockRequest(tx, id)
+        assertInvoiceRequestVisible(row, viewer)
         this.assertStatus(row.status, ['NOTIFIED'], '只有已通知开票的申请单可以上传发票照片')
         if (row.documentMediaAssetId !== null) {
           invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.DOCUMENT_EXISTS, '这张申请单已经上传过发票照片，上传后不可替换', 409)
@@ -421,8 +431,9 @@ export class InvoiceRequestService {
   async settle(context: InvoiceRequestCommandContext, id: string, input: InvoiceRequestSettleDto): Promise<InvoiceRequestDto> {
     try {
       await this.prisma.$transaction(async (tx) => {
-        await resolveInvoiceRequestViewer(tx, context.actorUserId)
+        const viewer = await resolveInvoiceRequestViewer(tx, context.actorUserId)
         const row = await this.lockRequest(tx, id)
+        assertInvoiceRequestVisible(row, viewer)
         this.assertStatus(row.status, ['ISSUED'], '只有已开出邮寄的申请单可以结算入账')
         this.assertVersion(row.version, input.expectedVersion)
         if (row.documentUploadedAt === null) {
@@ -441,7 +452,7 @@ export class InvoiceRequestService {
           invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.RATE_CHANGED, '台币汇率已更新，请刷新后按最新汇率重新确认', 409)
         }
         const amount = calculateSettleAmountCny(row.totalAmount, rate.foreignUnitsPerCny)
-        const fundPostingBatchId = await this.postSettlement(tx, context, { id, invoiceNo: row.invoiceNo, totalAmount: row.totalAmount, taxAmount: row.taxAmount, amount, rate })
+        const fundPostingBatchId = await this.postSettlement(tx, context, { applicantUserId: row.createdById, id, invoiceNo: row.invoiceNo, totalAmount: row.totalAmount, taxAmount: row.taxAmount, amount, rate })
         const settledAt = new Date()
         // 批次 id 必须与状态流转写在同一条 UPDATE 里：触发器只放行 ISSUED → SETTLED 那一次写入。
         await tx.invoiceRequest.update({
@@ -482,8 +493,9 @@ export class InvoiceRequestService {
   private async postSettlement(
     tx: Prisma.TransactionClient,
     context: InvoiceRequestCommandContext,
-    input: { readonly amount: string, readonly id: string, readonly invoiceNo: string, readonly rate: { readonly foreignUnitsPerCny: Prisma.Decimal, readonly id: string, readonly version: number }, readonly taxAmount: Prisma.Decimal, readonly totalAmount: Prisma.Decimal },
+    input: { readonly amount: string, readonly applicantUserId: string, readonly id: string, readonly invoiceNo: string, readonly rate: { readonly foreignUnitsPerCny: Prisma.Decimal, readonly id: string, readonly version: number }, readonly taxAmount: Prisma.Decimal, readonly totalAmount: Prisma.Decimal },
   ): Promise<string> {
+    // 批次归属必须是被结算单据的申请人；财务只是操作人，不能把成本记到自己名下。
     const fundContext = {
       actorUserId: context.actorUserId,
       consumerCode: INVOICE_REQUEST_SETTLE_CONSUMER,
@@ -492,7 +504,7 @@ export class InvoiceRequestService {
     }
     const fundInput = {
       postingTypeCode: INVOICE_REQUEST_POSTING_TYPE,
-      userId: context.actorUserId,
+      userId: input.applicantUserId,
       amount: input.amount,
       businessId: input.id,
       businessNo: input.invoiceNo,
@@ -541,8 +553,14 @@ export class InvoiceRequestService {
    * 四项比对（抬头 + 统编 + 营业税 + 总计，字面完全一致，不做归一化）。
    * 命中即软提示：带 duplicateAcknowledged 重试即可继续提交。比对池不含已取消与已退回，
    * 因此「取消后新建」与「退回重填」都不会自己撞自己。
+   *
+   * `ownerId` 用于把无跨提交人权限的查重限制在本人单据池，提示里也只返回本人单号。
    */
-  private async assertNoDuplicate(tx: Prisma.TransactionClient, payload: NormalizedSubmit, excludeId?: string): Promise<void> {
+  private async assertNoDuplicate(
+    tx: Prisma.TransactionClient,
+    payload: NormalizedSubmit,
+    options: { readonly excludeId?: string, readonly ownerId?: string } = {},
+  ): Promise<void> {
     const suspects = await tx.invoiceRequest.findMany({
       where: {
         buyerName: payload.buyerName,
@@ -550,7 +568,8 @@ export class InvoiceRequestService {
         taxAmount: payload.taxAmount.toString(),
         totalAmount: payload.totalAmount.toString(),
         status: { in: [...INVOICE_REQUEST_DUPLICATE_POOL_STATUS_VALUES] },
-        ...(excludeId === undefined ? {} : { id: { not: excludeId } }),
+        ...(options.ownerId === undefined ? {} : { createdById: options.ownerId }),
+        ...(options.excludeId === undefined ? {} : { id: { not: options.excludeId } }),
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: 5,

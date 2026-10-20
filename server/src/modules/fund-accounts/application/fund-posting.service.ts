@@ -10,6 +10,8 @@ import {
 } from '../../../generated/prisma/enums'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../../infrastructure/database/transaction-timeouts'
+import type { DataScope } from '../../access-control/data-scope'
+import { DataScopeService, dataScopeFallback } from '../../access-control/data-scope.service'
 import { AuditService } from '../../audit/audit.service'
 import { NumberingGenerationError } from '../../numbering/numbering.errors'
 import { NumberingGeneratorService } from '../../numbering/numbering-generator.service'
@@ -488,6 +490,7 @@ export class FundPostingApplicationService extends FundPostingService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly numbering: NumberingGeneratorService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {
     super()
   }
@@ -669,9 +672,10 @@ export class FundPostingApplicationService extends FundPostingService {
   ): Promise<FundPostingResult> {
     const context = normalizeFundAccountCommandContext(rawContext)
     const request = normalizeFundManualAdjustmentRequest(rawInput)
+    const scope = await this.dataScope.resolve(context.actorUserId)
     try {
       return await this.prisma.$transaction(transaction => (
-        this.postManualAdjustmentInTransaction(transaction, context, request)
+        this.postManualAdjustmentInTransaction(transaction, context, request, scope)
       ))
     }
     catch (error) {
@@ -692,9 +696,13 @@ export class FundPostingApplicationService extends FundPostingService {
   ): Promise<FundPostingResult> {
     const context = normalizeFundAccountCommandContext(rawContext)
     const request = normalizeFundReversalRequest(rawInput)
+    const scope = await this.dataScope.resolve(context.actorUserId)
     try {
       return await this.prisma.$transaction(transaction => (
-        this.reverseInTransaction(transaction, context, request)
+        this.reverseInTransaction(transaction, context, request, undefined, {
+          actorUserId: context.actorUserId,
+          scope,
+        })
       ))
     }
     catch (error) {
@@ -709,6 +717,7 @@ export class FundPostingApplicationService extends FundPostingService {
     transaction: Prisma.TransactionClient,
     context: FundAccountCommandContext,
     request: NormalizedFundManualAdjustmentRequest,
+    scope: DataScope,
   ): Promise<FundPostingResult> {
     await applyTransactionTimeouts(transaction)
     const asOf = await readFundPostingTransactionTimestamp(transaction)
@@ -751,6 +760,10 @@ export class FundPostingApplicationService extends FundPostingService {
       requireCompanyAccount,
     })
     if (identities === null) {
+      throw postingError(FUND_POSTING_ERROR_CODES.ACCOUNT_NOT_FOUND)
+    }
+    // 防御 SELF 角色按账户 id 调他人余额：目标账户不属于本人即按不存在处理。
+    if (scope === 'SELF' && identities.userId !== context.actorUserId) {
       throw postingError(FUND_POSTING_ERROR_CODES.ACCOUNT_NOT_FOUND)
     }
     const accountIds = requireAccountIds(
@@ -913,8 +926,19 @@ export class FundPostingApplicationService extends FundPostingService {
     context: FundAccountCommandContext,
     request: NormalizedFundReversalRequest,
     business?: ControlledBusinessReversal,
+    access?: { readonly actorUserId: string, readonly scope: DataScope },
   ): Promise<FundPostingResult> {
     await applyTransactionTimeouts(transaction)
+    // 仅管理端冲账（有 access）做数据范围防御；受控业务域的冲账沿用业务域自身授权。
+    if (access !== undefined && access.scope === 'SELF') {
+      const target = await transaction.fundPostingBatch.findUnique({
+        where: { id: request.input.originalBatchId },
+        select: { userId: true },
+      })
+      if (target === null || target.userId !== access.actorUserId) {
+        throw postingError(FUND_POSTING_ERROR_CODES.POSTING_BATCH_NOT_FOUND)
+      }
+    }
     const asOf = await readFundPostingTransactionTimestamp(transaction)
     const identity = requireReversalIdentity(
       await readFundReversalTargetIdentity(

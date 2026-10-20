@@ -2,11 +2,14 @@ import { HttpStatus, Injectable } from '@nestjs/common'
 
 import { Prisma, type Prisma as PrismaTypes } from '../../generated/prisma/client'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import type { DataScope } from '../access-control/data-scope'
+import { DataScopeService, dataScopeFallback } from '../access-control/data-scope.service'
 import { AccessControlService } from '../access-control/access-control.service'
 import {
   DictionaryLookupService,
   DictionaryValueUnavailableError,
 } from '../dictionaries/dictionary-lookup.service'
+import { salesOrderScopeWhere } from '../sales-orders/sales-order-access'
 import type {
   NormalizedPurchaseOrderCatalogLine,
   NormalizedPurchaseOrderCreateCommand,
@@ -108,6 +111,7 @@ export class PurchaseOrderCreateDependencyService {
   constructor(
     private readonly dictionaryLookup: DictionaryLookupService,
     private readonly accessControl: AccessControlService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
   async requireDependencies(
@@ -143,6 +147,8 @@ export class PurchaseOrderCreateDependencyService {
       transaction,
       command,
       sourceIds,
+      await this.dataScope.resolveInTransaction(transaction, actorUserId),
+      actorUserId,
     )
     const productsById = await this.loadProducts(transaction, command)
     if (command.purchaseType === 'SALES_LINKED') {
@@ -239,11 +245,15 @@ export class PurchaseOrderCreateDependencyService {
     transaction: PrismaTypes.TransactionClient,
     command: NormalizedPurchaseOrderCreateCommand,
     sourceIds: readonly string[],
+    scope: DataScope,
+    actorUserId: string,
   ): Promise<ReadonlyMap<string, SalesLineSnapshot>> {
     if (command.purchaseType === 'STOCK') return new Map()
     const salesOrder = await transaction.salesOrder.findFirst({
       where: {
         id: command.salesOrderId ?? undefined,
+        // SELF 只能从本人出单的销售订单创建采购；ALL 保持原有来源可用性校验。
+        ...salesOrderScopeWhere(scope, actorUserId),
         orderStatus: 'CONFIRMED',
         fulfillmentStatus: {
           in: ['PENDING', 'PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED'],

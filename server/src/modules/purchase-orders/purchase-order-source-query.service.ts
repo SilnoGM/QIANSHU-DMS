@@ -3,11 +3,13 @@ import { HttpStatus, Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../access-control/data-scope.service'
 import {
   DictionaryLookupService,
 } from '../dictionaries/dictionary-lookup.service'
 import { normalizeDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
 import { readProductOptionCategoryFacets } from '../products/product-option-category-facets'
+import { salesOrderScopeWhere } from '../sales-orders/sales-order-access'
 import { formatPurchaseOrderAmountUnits, normalizePurchaseOrderReferenceAmount, parsePurchaseOrderAmountUnits } from './domain/purchase-order-decimal'
 import {
   PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS,
@@ -121,6 +123,7 @@ function sourceSalesOrderFactsSql(input: {
   readonly productMode: PurchaseOrderSourceProductMode
   readonly salesOrderId: string | undefined
   readonly supplierValue: string | null
+  readonly issuerUserId: string | null
 }): Prisma.Sql {
   const keyword = input.keyword
   const keywordFilter = keyword === undefined || keyword.length === 0
@@ -134,6 +137,10 @@ function sourceSalesOrderFactsSql(input: {
   const salesOrderFilter = input.salesOrderId === undefined
     ? Prisma.empty
     : Prisma.sql`AND source_order."id" = CAST(${input.salesOrderId} AS uuid)`
+  // 原生 SQL 只用于来源候选；数据范围必须在计数与分页主查询共用的 CTE 内收窄。
+  const issuerFilter = input.issuerUserId === null
+    ? Prisma.empty
+    : Prisma.sql`AND source_order."issuer_user_id" = CAST(${input.issuerUserId} AS uuid)`
   const targetProductFilter = input.productMode === 'CATALOG'
     ? Prisma.sql`
         source_line."line_type" = CAST(${input.productMode} AS sales_order_line_type)
@@ -245,6 +252,7 @@ function sourceSalesOrderFactsSql(input: {
           'WAREHOUSE_ARRIVED'::sales_order_fulfillment_status
         )
         ${salesOrderFilter}
+        ${issuerFilter}
         ${keywordFilter}
       GROUP BY
         source_order."id",
@@ -282,6 +290,7 @@ export class PurchaseOrderSourceQueryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly dictionaryLookup: DictionaryLookupService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
   async productOptions(input: PurchaseOrderProductOptionsInput) {
@@ -422,8 +431,12 @@ export class PurchaseOrderSourceQueryService {
     }
   }
 
-  async salesOrders(input: PurchaseOrderSourceSalesOrdersInput) {
+  async salesOrders(
+    input: PurchaseOrderSourceSalesOrdersInput,
+    actorUserId: string = resolveDataScopeActor(),
+  ) {
     const filter = await this.requireSourceProductFilter(input)
+    const scope = await this.dataScope.resolve(actorUserId)
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const keyword = input.keyword?.trim().normalize('NFKC')
@@ -431,6 +444,7 @@ export class PurchaseOrderSourceQueryService {
       ...filter,
       keyword,
       salesOrderId: input.salesOrderId,
+      issuerUserId: scope === 'SELF' ? actorUserId : null,
     })
     const [countRows, pageRows] = await Promise.all([
       this.prisma.$queryRaw<SourceSalesOrderCountRow[]>(Prisma.sql`
@@ -473,6 +487,7 @@ export class PurchaseOrderSourceQueryService {
       : await this.prisma.salesOrder.findMany({
         where: {
           id: { in: pageIds },
+          ...salesOrderScopeWhere(scope, actorUserId),
           lines: { some: { id: { in: targetLineIds }, removedAt: null } },
         },
         select: {
@@ -574,11 +589,14 @@ export class PurchaseOrderSourceQueryService {
   async salesOrderLines(
     salesOrderId: string,
     input: PurchaseOrderSourceSalesOrderLinesInput,
+    actorUserId: string = resolveDataScopeActor(),
   ) {
     const filter = await this.requireSourceProductFilter(input)
+    const scope = await this.dataScope.resolve(actorUserId)
     const salesOrder = await this.prisma.salesOrder.findFirst({
       where: {
         id: salesOrderId,
+        ...salesOrderScopeWhere(scope, actorUserId),
         orderStatus: 'CONFIRMED',
         fulfillmentStatus: {
           in: ['PENDING', 'PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED'],

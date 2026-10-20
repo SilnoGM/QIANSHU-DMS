@@ -31,6 +31,13 @@ function setup(
           fulfillmentStatus,
           orderStatus,
         }),
+      findFirst: jest.fn<Promise<unknown>, [unknown]>()
+        .mockResolvedValue({
+          id: ORDER_ID,
+          customerName: '王小明',
+          fulfillmentStatus,
+          orderStatus,
+        }),
       update: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
     },
     mediaAsset: {

@@ -12,6 +12,7 @@ import type {
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../access-control/data-scope.service'
 import {
   DictionaryLookupService,
   type StoredDictionaryValueResolution,
@@ -22,6 +23,7 @@ import {
   parsePurchaseOrderAmountUnits,
 } from './domain/purchase-order-decimal'
 import type { PurchaseOrderPendingTask, PurchaseOrderReviewView } from './dto/purchase-order-query.dto'
+import { purchaseOrderScopeWhere } from './purchase-order-access'
 import { summarizePurchaseOrderRecords, type PurchaseOrderRecordSummaries } from './purchase-order-record-summary'
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
@@ -613,11 +615,16 @@ export class PurchaseOrderQueryService {
     private readonly prisma: PrismaService,
     private readonly dictionaryLookup: DictionaryLookupService,
     private readonly recipients: PaymentRecipientService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
-  async list(input: PurchaseOrderListQueryInput): Promise<PurchaseOrderPage> {
+  async list(
+    input: PurchaseOrderListQueryInput,
+    actorUserId: string = resolveDataScopeActor(),
+  ): Promise<PurchaseOrderPage> {
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
+    const scope = await this.dataScope.resolve(actorUserId)
     // 待办任务允许交叉归类，因此直接由当前任务生成服务端谓词，而不在页面合并结果。
     const taskClauseByType: Readonly<Record<
       PurchaseOrderPendingTask,
@@ -655,6 +662,8 @@ export class PurchaseOrderQueryService {
           : { orderStatus: input.reviewView }
     const where: Prisma.PurchaseOrderWhereInput = {
       ...buildPurchaseOrderBaseWhere(input),
+      // 数据范围与筛选共用同一谓词，保证总数、当前页与金额汇总口径一致。
+      ...purchaseOrderScopeWhere(scope, actorUserId),
       orderStatus: input.orderStatus,
       AND: [pendingClause, reviewClause].filter(
         (value): value is Prisma.PurchaseOrderWhereInput => value !== undefined,
@@ -748,8 +757,13 @@ export class PurchaseOrderQueryService {
 
   async statusCounts(
     input: PurchaseOrderStatusCountsQueryInput,
+    actorUserId: string = resolveDataScopeActor(),
   ): Promise<PurchaseOrderStatusCounts> {
-    const baseWhere = buildPurchaseOrderBaseWhere(input)
+    const scope = await this.dataScope.resolve(actorUserId)
+    const baseWhere: Prisma.PurchaseOrderWhereInput = {
+      ...buildPurchaseOrderBaseWhere(input),
+      ...purchaseOrderScopeWhere(scope, actorUserId),
+    }
 
     if (input.view === 'all') {
       const statuses = ['PENDING_REVIEW', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
@@ -838,9 +852,17 @@ export class PurchaseOrderQueryService {
     }
   }
 
-  async getById(purchaseOrderId: string, transaction?: Prisma.TransactionClient): Promise<PurchaseOrderDetail> {
-    const row = await (transaction ?? this.prisma).purchaseOrder.findUnique({
-      where: { id: purchaseOrderId },
+  async getById(
+    purchaseOrderId: string,
+    actorUserId: string = resolveDataScopeActor(),
+    transaction?: Prisma.TransactionClient,
+  ): Promise<PurchaseOrderDetail> {
+    const scope = transaction === undefined
+      ? await this.dataScope.resolve(actorUserId)
+      : await this.dataScope.resolveInTransaction(transaction, actorUserId)
+    const row = await (transaction ?? this.prisma).purchaseOrder.findFirst({
+      // 不可见资源与不存在统一返回既有 404，避免数据范围探测。
+      where: { id: purchaseOrderId, ...purchaseOrderScopeWhere(scope, actorUserId) },
       select: PURCHASE_ORDER_DETAIL_SELECT,
     })
     if (row === null) {

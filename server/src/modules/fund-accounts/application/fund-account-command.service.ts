@@ -8,6 +8,7 @@ import {
 } from '../../../generated/prisma/enums'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../../infrastructure/database/transaction-timeouts'
+import { DataScopeService, dataScopeFallback } from '../../access-control/data-scope.service'
 import { AuditService } from '../../audit/audit.service'
 import {
   createFundAccountRecord,
@@ -58,6 +59,7 @@ export class FundAccountCommandService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
   async createUserAccount(
@@ -66,8 +68,13 @@ export class FundAccountCommandService {
   ): Promise<FundAccountView> {
     const context = normalizeFundAccountCommandContext(rawContext)
     const input = normalizeFundAccountCreate(rawInput)
+    const scope = await this.dataScope.resolve(context.actorUserId)
 
     return this.runMutation(async (transaction) => {
+      // SELF 角色只能为本人开户；目标用户不可见时与不存在同样返回 404。
+      if (scope === 'SELF' && input.userId !== context.actorUserId) {
+        throw accountError(FUND_POSTING_ERROR_CODES.USER_NOT_FOUND)
+      }
       const target = await readFundAccountCreateTarget(transaction, input.userId)
       if (target === null) {
         throw accountError(FUND_POSTING_ERROR_CODES.USER_NOT_FOUND)
@@ -106,6 +113,7 @@ export class FundAccountCommandService {
   ): Promise<FundAccountShareRateUpdateResult> {
     const context = normalizeFundAccountCommandContext(rawContext)
     const input = normalizeFundAccountShareRateUpdate(rawInput)
+    const scope = await this.dataScope.resolve(context.actorUserId)
 
     return this.runMutation(async (transaction) => {
       const currentRow = await lockFundAccountForShareRateUpdate(
@@ -113,6 +121,10 @@ export class FundAccountCommandService {
         input.accountId,
       )
       if (currentRow === null) {
+        throw accountError(FUND_POSTING_ERROR_CODES.ACCOUNT_NOT_FOUND)
+      }
+      // 防御 SELF 角色按账户 id 操作他人账户：不可见即按不存在处理。
+      if (scope === 'SELF' && currentRow.userId !== context.actorUserId) {
         throw accountError(FUND_POSTING_ERROR_CODES.ACCOUNT_NOT_FOUND)
       }
       if (currentRow.ownerType !== 'USER') {

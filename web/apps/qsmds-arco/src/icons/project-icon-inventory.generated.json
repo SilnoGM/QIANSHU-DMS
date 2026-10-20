@@ -1549,6 +1549,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/AppAccountButton/profile.vue",
+      "apps/qsmds-arco/src/components/AppAccountForm/login-collage.vue",
       "apps/qsmds-arco/src/components/business/QsGenericDrawer/index.vue",
       "apps/qsmds-arco/src/components/business/QsGenericModal/index.vue",
       "apps/qsmds-arco/src/components/business/QsGenericTable/index.vue",
@@ -2578,6 +2579,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/components/AppAccountForm/login-collage.vue",
       "apps/qsmds-arco/src/components/AppAccountForm/login.vue"
     ]
   },
@@ -3542,6 +3544,8 @@
       "apps/qsmds-arco/src/views/system/users/index.vue",
       "apps/qsmds-arco/src/views/system/users/password-reset-modal.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/slh-bill-comparison.vue",
@@ -3625,6 +3629,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/components/AppAccountForm/login-collage.vue",
       "apps/qsmds-arco/src/components/AppAccountForm/login.vue"
     ]
   },

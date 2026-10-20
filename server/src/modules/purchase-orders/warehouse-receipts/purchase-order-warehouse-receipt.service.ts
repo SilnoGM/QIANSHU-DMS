@@ -7,9 +7,12 @@ import { hasPersistenceCode, readPersistenceErrorFacts } from '../../../infrastr
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../../infrastructure/http/api.exception'
+import { DataScopeService, dataScopeFallback } from '../../access-control/data-scope.service'
+import type { DataScope } from '../../access-control/data-scope'
 import { AuditService, AuditWriteFailedError } from '../../audit/audit.service'
 import { derivePurchaseOrderStatus } from '../domain/purchase-order-state-machine'
 import { normalizeFactoryShipmentContext, requireFactoryShipmentUuid, type FactoryShipmentMutationContext } from '../factory-shipments/purchase-order-factory-shipment.normalizer'
+import { purchaseOrderScopeWhere } from '../purchase-order-access'
 import { PurchaseOrderQueryService } from '../purchase-order-query.service'
 import { normalizeWarehouseReceiptRequest, normalizeWarehouseRemark, type WarehouseReceiptInput } from './purchase-order-warehouse-receipt.normalizer'
 import { advanceSalesOrderWhenAllShipmentsReceived } from './sales-order-warehouse-progress'
@@ -31,19 +34,19 @@ function notAllowed(message = '当前采购订单不能确认入仓'): never {
 
 @Injectable()
 export class PurchaseOrderWarehouseReceiptService {
-  constructor(private readonly prisma: PrismaService, private readonly audit: AuditService, private readonly query: PurchaseOrderQueryService) {}
+  constructor(private readonly prisma: PrismaService, private readonly audit: AuditService, private readonly query: PurchaseOrderQueryService, private readonly dataScope: DataScopeService = dataScopeFallback()) {}
 
   async receive(rawContext: FactoryShipmentMutationContext, rawOrderId: unknown, rawInput: unknown) {
     const context = normalizeFactoryShipmentContext(rawContext), orderId = requireFactoryShipmentUuid(rawOrderId, 'purchaseOrderId')
     await this.write(context, orderId, normalizeWarehouseReceiptRequest(rawInput))
-    return this.query.getById(orderId)
+    return this.query.getById(orderId, context.actorUserId)
   }
 
   /** 旧签收没有版本字段，但仍进入相同父锁、逐件验证和审计流程；不能只推进采购单快照。 */
   async receiveAll(rawContext: FactoryShipmentMutationContext, rawOrderId: unknown, rawRemark: unknown) {
     const context = normalizeFactoryShipmentContext(rawContext), orderId = requireFactoryShipmentUuid(rawOrderId, 'purchaseOrderId')
     await this.write(context, orderId, { expectedVersion: null, partIds: null, receivedAt: null, remark: normalizeWarehouseRemark(rawRemark) })
-    return this.query.getById(orderId)
+    return this.query.getById(orderId, context.actorUserId)
   }
 
   private async write(context: FactoryShipmentMutationContext, orderId: string, input: WarehouseCommand): Promise<void> {
@@ -52,7 +55,8 @@ export class PurchaseOrderWarehouseReceiptService {
     try {
       await this.prisma.$transaction(async transaction => {
         await applyTransactionTimeouts(transaction)
-        const order = await this.lockOrder(transaction, orderId)
+        const scope = await this.dataScope.resolveInTransaction(transaction, context.actorUserId)
+        const order = await this.lockOrder(transaction, orderId, scope, context.actorUserId)
         if (!['CONFIRMED', 'COMPLETED'].includes(order.orderStatus)) return notAllowed()
         const active = order.parts.filter(part => part.status === 'ACTIVE')
         if (active.length === 0 || order.parts.some(part => part.status === 'PENDING_REVIEW')) return notAllowed()
@@ -135,8 +139,12 @@ export class PurchaseOrderWarehouseReceiptService {
     })
   }
 
-  private async lockOrder(transaction: Prisma.TransactionClient, orderId: string): Promise<WarehouseOrder> {
-    const candidate = await transaction.purchaseOrder.findUnique({ where: { id: orderId }, select: { purchaseType: true, salesOrderId: true } })
+  private async lockOrder(transaction: Prisma.TransactionClient, orderId: string, scope: DataScope, actorUserId: string): Promise<WarehouseOrder> {
+    // 先按数据范围定位父单；不可见与不存在统一返回既有 404，不进入货件锁和状态校验。
+    const candidate = await transaction.purchaseOrder.findFirst({
+      where: { id: orderId, ...purchaseOrderScopeWhere(scope, actorUserId) },
+      select: { purchaseType: true, salesOrderId: true },
+    })
     if (candidate === null) throw new ApiException(404, 'PURCHASE_ORDER_NOT_FOUND', '采购订单不存在')
     // 与工厂发货统一为“销售行 -> 同来源有效采购单 -> 销售主行 -> 货件”。
     // 入仓会同步销售履约，必须在持货件锁前锁销售主行，不能反向申请父锁。

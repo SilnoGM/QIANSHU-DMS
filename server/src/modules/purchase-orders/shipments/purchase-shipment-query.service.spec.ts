@@ -5,6 +5,7 @@ import type { PurchaseShipmentFilterDto, PurchaseShipmentListQueryDto } from './
 
 function fixture() {
   const part = { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), findUnique: jest.fn() }
+  ;(part as Record<string, unknown>).findFirst = part.findUnique
   const order = { findMany: jest.fn().mockResolvedValue([]) }
   const user = { findMany: jest.fn().mockResolvedValue([]) }
   const transaction = { purchaseOrderPart: part, purchaseOrder: order, user }
@@ -251,5 +252,27 @@ describe('PurchaseShipmentQueryService', () => {
     await expect(f.service.statusCounts({ orderDateFrom: '2026-09-14', orderDateTo: '2026-09-01' })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
     await expect(f.service.list({ supplierSource: 'CUSTOM_TEXT', supplierValue: 'SUPPLIER_A' })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
     expect(f.part.findMany).not.toHaveBeenCalled()
+  })
+
+  it('returns 404 for a SELF-scoped shipment outside the sales owner chain', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null)
+    const service = new PurchaseShipmentQueryService(
+      { purchaseOrderPart: { findFirst } } as unknown as PrismaService,
+      {} as DictionaryLookupService,
+      { resolve: jest.fn().mockResolvedValue('SELF') } as never,
+    )
+
+    await expect(service.getById('part-id', 'actor-id')).rejects.toMatchObject({
+      code: 'PURCHASE_ORDER_PART_NOT_FOUND',
+      status: 404,
+    })
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        id: 'part-id',
+        purchaseOrder: {
+          is: { salesOrder: { is: { issuerUserId: 'actor-id' } } },
+        },
+      },
+    }))
   })
 })

@@ -194,7 +194,7 @@ describe('SalesOrdersController product options', () => {
       view: 'all',
       items: [],
     })
-    expect(fixture.statusCounts).toHaveBeenCalledWith(query)
+    expect(fixture.statusCounts).toHaveBeenCalledWith(query, expect.any(String))
     const reflector = new Reflector()
     expect(reflector.get(
       REQUIRED_PERMISSIONS_METADATA,
@@ -264,19 +264,19 @@ describe('SalesOrdersController product options', () => {
     }
 
     await fixture.controller.headProductPreviewMainImage(
-      params, '"known"', 'bytes=0-0', undefined, fixture.response,
+      params, undefined, '"known"', 'bytes=0-0', undefined, fixture.response,
     )
     const body = await fixture.controller.getProductPreviewMainImage(
-      params, undefined, undefined, 'thumb', fixture.response,
+      params, undefined, undefined, undefined, 'thumb', fixture.response,
     )
 
     expect(fixture.resolveListPreview).toHaveBeenNthCalledWith(
       1, params.salesOrderId, params.lineId, PRODUCT_MEDIA_ID,
-      '"known"', 'bytes=0-0', 'HEAD', undefined,
+      '"known"', 'bytes=0-0', 'HEAD', undefined, expect.any(String),
     )
     expect(fixture.resolveListPreview).toHaveBeenNthCalledWith(
       2, params.salesOrderId, params.lineId, PRODUCT_MEDIA_ID,
-      undefined, undefined, 'GET', 'thumb',
+      undefined, undefined, 'GET', 'thumb', expect.any(String),
     )
     expect(body).toBeInstanceOf(StreamableFile)
 
@@ -330,13 +330,13 @@ describe('SalesOrdersController product options', () => {
       items: [],
     })
     await controller.headProductEditOptionMainImage(
-      params, '"known"', 'bytes=0-0', undefined, response,
+      params, undefined, '"known"', 'bytes=0-0', undefined, response,
     )
     const body = await controller.getProductEditOptionMainImage(
-      params, undefined, undefined, 'thumb', response,
+      params, undefined, undefined, undefined, 'thumb', response,
     )
-    expect(context).toHaveBeenCalledWith(params.salesOrderId)
-    expect(productOptions).toHaveBeenCalledWith(params.salesOrderId, query)
+    expect(context).toHaveBeenCalledWith(params.salesOrderId, expect.any(String))
+    expect(productOptions).toHaveBeenCalledWith(params.salesOrderId, query, expect.any(String))
     expect(resolveProductEditOption).toHaveBeenCalledTimes(2)
     expect(body).toBeInstanceOf(StreamableFile)
 

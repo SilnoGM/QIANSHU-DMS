@@ -16,12 +16,16 @@ import {
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../../infrastructure/http/api.exception'
+import { DataScopeService, dataScopeFallback } from '../../access-control/data-scope.service'
+import type { DataScope } from '../../access-control/data-scope'
 import { AuditService } from '../../audit/audit.service'
 import { DictionaryLookupService, DictionaryValueUnavailableError } from '../../dictionaries/dictionary-lookup.service'
+import { salesOrderScopeWhere } from '../../sales-orders/sales-order-access'
 import { purchaseOrderValidationFailure } from '../domain/purchase-order-errors'
 import {
   assertPurchaseOrderFulfillmentTransition,
 } from '../domain/purchase-order-state-machine'
+import { purchaseOrderScopeWhere } from '../purchase-order-access'
 import { SalesOrderPurchaseCoverageService } from '../sales-order-purchase-coverage.service'
 import {
   type FactoryShipmentDestinationWarehouse,
@@ -136,6 +140,7 @@ export class PurchaseOrderFactoryShipmentService {
     private readonly audit: AuditService,
     private readonly salesOrderCoverage: SalesOrderPurchaseCoverageService,
     private readonly dictionaryLookup: DictionaryLookupService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
   async shipPurchaseOrder(
@@ -152,31 +157,32 @@ export class PurchaseOrderFactoryShipmentService {
 
     return this.prisma.$transaction(async (transaction) => {
       await applyTransactionTimeouts(transaction)
-      const candidate = await this.readPurchaseOrder(transaction, purchaseOrderId)
+      const scope = await this.dataScope.resolveInTransaction(transaction, context.actorUserId)
+      const candidate = await this.readPurchaseOrder(transaction, purchaseOrderId, scope, context.actorUserId)
       if (candidate === null) return purchaseOrderNotFound()
 
-      let scope: readonly FactoryShipmentPurchaseOrder[]
+      let scopeOrders: readonly FactoryShipmentPurchaseOrder[]
       let salesOrder: FactoryShipmentSalesOrder | null = null
       if (candidate.purchaseType === 'SALES_LINKED') {
         if (candidate.salesOrderId === null) return targetInvalid()
         await this.lockSalesLines(transaction, candidate.salesOrderId)
         await this.lockActiveSalesPurchaseOrders(transaction, candidate.salesOrderId)
-        scope = await this.readActiveSalesPurchaseOrders(
+        scopeOrders = await this.readActiveSalesPurchaseOrders(
           transaction,
           candidate.salesOrderId,
         )
         await this.lockSalesOrder(transaction, candidate.salesOrderId)
-        salesOrder = await this.readSalesOrder(transaction, candidate.salesOrderId)
+        salesOrder = await this.readSalesOrder(transaction, candidate.salesOrderId, scope, context.actorUserId)
         if (salesOrder === null) return salesOrderNotFound()
       }
       else {
         await this.lockPurchaseOrders(transaction, [purchaseOrderId])
-        const locked = await this.readPurchaseOrder(transaction, purchaseOrderId)
+        const locked = await this.readPurchaseOrder(transaction, purchaseOrderId, scope, context.actorUserId)
         if (locked === null) return purchaseOrderNotFound()
-        scope = [locked]
+        scopeOrders = [locked]
       }
 
-      const order = scope.find(item => item.id === purchaseOrderId)
+      const order = scopeOrders.find(item => item.id === purchaseOrderId)
       if (order === undefined) return shipmentNotAllowed('采购订单已取消或不再有效')
       this.validatePendingTargetVersion(order, input.expectedVersion)
       this.validateShipmentTargetState(order)
@@ -192,7 +198,7 @@ export class PurchaseOrderFactoryShipmentService {
         input.destinationWarehouses,
         input.trackingNumbers,
       )
-      const statusById = new Map(scope.filter(item => item.orderStatus === 'CONFIRMED').map(item => [
+      const statusById = new Map(scopeOrders.filter(item => item.orderStatus === 'CONFIRMED').map(item => [
         item.id,
         item.id === order.id ? result.fulfillmentStatus : item.fulfillmentStatus,
       ]))
@@ -226,11 +232,18 @@ export class PurchaseOrderFactoryShipmentService {
 
     return this.prisma.$transaction(async (transaction) => {
       await applyTransactionTimeouts(transaction)
+      const scope = await this.dataScope.resolveInTransaction(transaction, context.actorUserId)
+      // 先按销售单归属确认可见性，再进入销售行与采购单锁序。
+      const visible = await transaction.salesOrder.findFirst({
+        where: { id: salesOrderId, ...salesOrderScopeWhere(scope, context.actorUserId) },
+        select: { id: true },
+      })
+      if (visible === null) return salesOrderNotFound()
       await this.lockSalesLines(transaction, salesOrderId)
       await this.lockActiveSalesPurchaseOrders(transaction, salesOrderId)
       const orders = await this.readActiveSalesPurchaseOrders(transaction, salesOrderId)
       await this.lockSalesOrder(transaction, salesOrderId)
-      const salesOrder = await this.readSalesOrder(transaction, salesOrderId)
+      const salesOrder = await this.readSalesOrder(transaction, salesOrderId, scope, context.actorUserId)
       if (salesOrder === null) return salesOrderNotFound()
 
       const orderById = new Map(orders.map(order => [order.id, order]))
@@ -524,9 +537,11 @@ export class PurchaseOrderFactoryShipmentService {
   private readPurchaseOrder(
     transaction: PrismaTypes.TransactionClient,
     purchaseOrderId: string,
+    scope: DataScope,
+    actorUserId: string,
   ): Promise<FactoryShipmentPurchaseOrder | null> {
-    return transaction.purchaseOrder.findUnique({
-      where: { id: purchaseOrderId },
+    return transaction.purchaseOrder.findFirst({
+      where: { id: purchaseOrderId, ...purchaseOrderScopeWhere(scope, actorUserId) },
       select: {
         id: true,
         orderNo: true,
@@ -567,9 +582,11 @@ export class PurchaseOrderFactoryShipmentService {
   private readSalesOrder(
     transaction: PrismaTypes.TransactionClient,
     salesOrderId: string,
+    scope: DataScope,
+    actorUserId: string,
   ): Promise<FactoryShipmentSalesOrder | null> {
-    return transaction.salesOrder.findUnique({
-      where: { id: salesOrderId },
+    return transaction.salesOrder.findFirst({
+      where: { id: salesOrderId, ...salesOrderScopeWhere(scope, actorUserId) },
       select: {
         id: true,
         orderNo: true,

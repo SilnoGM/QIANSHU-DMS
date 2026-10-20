@@ -4,7 +4,9 @@ import { Prisma } from '../../../generated/prisma/client'
 import type { PurchaseOrderFulfillmentStatus } from '../../../generated/prisma/enums'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { ApiException } from '../../../infrastructure/http/api.exception'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
 import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
+import { salesOrderScopeWhere } from '../../sales-orders/sales-order-access'
 import {
   purchaseOrderSupplierFromSources,
   type PurchaseOrderSupplier,
@@ -125,14 +127,17 @@ export class PurchaseOrderFactoryShipmentQueryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly dictionaryLookup: DictionaryLookupService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
   async getSalesOrderContext(
     rawSalesOrderId: unknown,
+    actorUserId: string = resolveDataScopeActor(),
   ): Promise<SalesOrderFactoryShipmentContext> {
     const salesOrderId = requireFactoryShipmentUuid(rawSalesOrderId, 'salesOrderId')
-    const salesOrder = await this.prisma.salesOrder.findUnique({
-      where: { id: salesOrderId },
+    const scope = await this.dataScope.resolve(actorUserId)
+    const salesOrder = await this.prisma.salesOrder.findFirst({
+      where: { id: salesOrderId, ...salesOrderScopeWhere(scope, actorUserId) },
       select: {
         id: true,
         orderNo: true,

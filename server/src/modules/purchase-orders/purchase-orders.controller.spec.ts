@@ -109,7 +109,7 @@ describe('PurchaseOrdersController', () => {
     const read = jest.fn().mockResolvedValue({ available: true, message: null })
     const controller = new PurchaseOrderReviewContextController({ read } as unknown as PurchaseOrderReviewContextService)
     await expect(controller.read({ purchaseOrderId: ORDER_ID })).resolves.toEqual({ available: true, message: null })
-    expect(read).toHaveBeenCalledWith(ORDER_ID)
+    expect(read).toHaveBeenCalledWith(ORDER_ID, expect.any(String))
     expect(new Reflector().get(REQUIRED_PERMISSIONS_METADATA, PurchaseOrderReviewContextController.prototype.read))
       .toEqual(['purchase-orders:review'])
   })
@@ -197,7 +197,7 @@ describe('PurchaseOrdersController', () => {
       }),
       input,
     )
-    expect(queries.getById).toHaveBeenCalledWith(ORDER_ID)
+    expect(queries.getById).toHaveBeenCalledWith(ORDER_ID, expect.any(String))
   })
 
   it('reads status counts with purchase-order read permission', async () => {
@@ -217,7 +217,7 @@ describe('PurchaseOrdersController', () => {
       view: 'pending',
       items: [],
     })
-    expect(statusCounts).toHaveBeenCalledWith(query)
+    expect(statusCounts).toHaveBeenCalledWith(query, expect.any(String))
     const reflector = new Reflector()
     expect(reflector.get(
       REQUIRED_PERMISSIONS_METADATA,
@@ -249,7 +249,7 @@ describe('PurchaseOrdersController', () => {
     await expect(controller.sourceSalesOrders(query)).resolves.toMatchObject({
       view: 'UNPURCHASED',
     })
-    expect(salesOrders).toHaveBeenCalledWith(query)
+    expect(salesOrders).toHaveBeenCalledWith(query, expect.any(String))
     expect(new Reflector().get(
       REQUIRED_PERMISSIONS_METADATA,
       PurchaseOrdersController.prototype.sourceSalesOrders,
@@ -340,10 +340,10 @@ describe('PurchaseOrdersController', () => {
     const response = { status: jest.fn(), setHeader: jest.fn() }
 
     await controller.headSourceSalesOrderLineMainImage(
-      params, '"known"', 'bytes=0-0', undefined, response,
+      params, undefined, '"known"', 'bytes=0-0', undefined, response,
     )
     const body = await controller.getSourceSalesOrderLineMainImage(
-      params, undefined, undefined, 'thumb', response,
+      params, undefined, undefined, undefined, 'thumb', response,
     )
 
     expect(resolveSourceLinePreview).toHaveBeenNthCalledWith(
@@ -355,6 +355,7 @@ describe('PurchaseOrdersController', () => {
       'bytes=0-0',
       'HEAD',
       undefined,
+      expect.any(String),
     )
     expect(resolveSourceLinePreview).toHaveBeenNthCalledWith(
       2,
@@ -365,6 +366,7 @@ describe('PurchaseOrdersController', () => {
       undefined,
       'GET',
       'thumb',
+      expect.any(String),
     )
     expect(body).toBeInstanceOf(StreamableFile)
     expect((body as StreamableFile).getStream()).toBe(stream)
@@ -410,10 +412,10 @@ describe('PurchaseOrdersController', () => {
     const response = { status: jest.fn(), setHeader: jest.fn() }
 
     await controller.headProductPreviewMainImage(
-      params, '"known"', 'bytes=0-0', undefined, response,
+      params, undefined, '"known"', 'bytes=0-0', undefined, response,
     )
     const body = await controller.getProductPreviewMainImage(
-      params, undefined, undefined, 'thumb', response,
+      params, undefined, undefined, undefined, 'thumb', response,
     )
 
     expect(resolveListPreview).toHaveBeenNthCalledWith(
@@ -425,6 +427,7 @@ describe('PurchaseOrdersController', () => {
       'bytes=0-0',
       'HEAD',
       undefined,
+      expect.any(String),
     )
     expect(resolveListPreview).toHaveBeenNthCalledWith(
       2,
@@ -435,6 +438,7 @@ describe('PurchaseOrdersController', () => {
       undefined,
       'GET',
       'thumb',
+      expect.any(String),
     )
     expect(body).toBeInstanceOf(StreamableFile)
 

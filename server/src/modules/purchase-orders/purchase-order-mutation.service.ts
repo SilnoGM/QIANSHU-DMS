@@ -22,6 +22,8 @@ import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { hasPersistenceCode, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import { DataScopeService, dataScopeFallback } from '../access-control/data-scope.service'
+import type { DataScope } from '../access-control/data-scope'
 import { AuditService, AuditWriteFailedError } from '../audit/audit.service'
 import {
   DictionaryLookupService,
@@ -48,6 +50,7 @@ import {
   derivePurchaseOrderStatus,
 } from './domain/purchase-order-state-machine'
 import { isCanonicalPurchaseOrderActorId } from './purchase-order-command.normalizer'
+import { purchaseOrderPayableScopeWhere, purchaseOrderScopeWhere } from './purchase-order-access'
 import {
   PurchaseOrderQueryService,
   type PurchaseOrderDetail,
@@ -220,6 +223,7 @@ export class PurchaseOrderMutationService {
     @Optional()
     @Inject(PURCHASE_ORDER_MUTATION_DEPENDENCIES)
     dependencyOverrides: Partial<PurchaseOrderMutationDependencies> = {},
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {
     this.dependencies = Object.freeze({
       ...DEFAULT_DEPENDENCIES,
@@ -244,8 +248,10 @@ export class PurchaseOrderMutationService {
     try {
       await this.prisma.$transaction(async transaction => {
         await applyTransactionTimeouts(transaction)
+        const scope = await this.dataScope.resolveInTransaction(transaction, trusted.actorUserId)
+        await this.requireVisibleOrder(transaction, purchaseOrderId, scope, trusted.actorUserId)
         await this.lockSourceSalesLines(transaction, purchaseOrderId)
-        const order = await this.lockOrder(transaction, purchaseOrderId)
+        const order = await this.lockOrder(transaction, purchaseOrderId, scope, trusted.actorUserId)
         if (order.version !== expectedVersion || order.orderStatus !== 'PENDING_REVIEW' || order.fulfillmentStatus !== 'ORDERED') {
           throw new ApiException(HttpStatus.CONFLICT, 'PURCHASE_ORDER_STATE_CHANGED', '采购订单已变化，请刷新后重新生成图片')
         }
@@ -282,7 +288,7 @@ export class PurchaseOrderMutationService {
       }
       throw error
     }
-    return this.query.getById(purchaseOrderId)
+    return this.query.getById(purchaseOrderId, trusted.actorUserId)
   }
 
   async review(
@@ -304,10 +310,12 @@ export class PurchaseOrderMutationService {
       : requireText(body.reason, 'reason', 500)
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
+      const scope = await this.dataScope.resolveInTransaction(transaction, trusted.actorUserId)
+      await this.requireVisibleOrder(transaction, purchaseOrderId, scope, trusted.actorUserId)
       // 与取消保持“销售来源行 -> 采购单 -> 销售单”锁序。采购行锁内重读版本和
       // 审核态，确保两个审核请求只能有一个写状态、历史并推进销售覆盖。
       await this.lockSourceSalesLines(transaction, purchaseOrderId)
-      const order = await this.lockOrder(transaction, purchaseOrderId)
+      const order = await this.lockOrder(transaction, purchaseOrderId, scope, trusted.actorUserId)
       if (order.version !== expectedVersion || order.orderStatus !== 'PENDING_REVIEW'
         || order.fulfillmentStatus !== 'ORDERED') {
         throw new ApiException(
@@ -373,7 +381,7 @@ export class PurchaseOrderMutationService {
       }
       throw error
     })
-    return this.query.getById(purchaseOrderId)
+    return this.query.getById(purchaseOrderId, trusted.actorUserId)
   }
 
   private async issueReviewShippingMark(transaction: Prisma.TransactionClient, order: MutablePurchaseOrder) {
@@ -412,9 +420,11 @@ export class PurchaseOrderMutationService {
     const reason = optionalText(body.reason, 'reason', 500)
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
+      const scope = await this.dataScope.resolveInTransaction(transaction, trusted.actorUserId)
+      await this.requireVisibleOrder(transaction, purchaseOrderId, scope, trusted.actorUserId)
       // 取消与创建使用同一“销售来源行 UUID 升序”锁序，确保释放数量不会穿透并发确认。
       await this.lockSourceSalesLines(transaction, purchaseOrderId)
-      const order = await this.lockOrder(transaction, purchaseOrderId)
+      const order = await this.lockOrder(transaction, purchaseOrderId, scope, trusted.actorUserId)
       if (['PARTIALLY_SHIPPED', 'SHIPPED', 'SIGNED'].includes(order.fulfillmentStatus)) {
         return purchaseOrderRuleFailure('PURCHASE_ORDER_STATUS_TRANSITION_INVALID', '已有货件发出的采购订单不能整单取消')
       }
@@ -459,7 +469,7 @@ export class PurchaseOrderMutationService {
         )
       }
     })
-    return this.query.getById(purchaseOrderId)
+    return this.query.getById(purchaseOrderId, trusted.actorUserId)
   }
 
   async updateFulfillmentStatus(
@@ -490,7 +500,8 @@ export class PurchaseOrderMutationService {
     }
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
-      const order = await this.lockOrder(transaction, purchaseOrderId)
+      const scope = await this.dataScope.resolveInTransaction(transaction, trusted.actorUserId)
+      const order = await this.lockOrder(transaction, purchaseOrderId, scope, trusted.actorUserId)
       assertPurchaseOrderFulfillmentTransition(
         order.fulfillmentStatus,
         toStatus,
@@ -532,7 +543,7 @@ export class PurchaseOrderMutationService {
         'FULFILLMENT',
       )
     })
-    return this.query.getById(purchaseOrderId)
+    return this.query.getById(purchaseOrderId, trusted.actorUserId)
   }
 
   async payBatch(context: PurchaseOrderMutationContext, rawInput: PurchasePayableBatchPayDto, rawKey: unknown): Promise<PurchasePayableBatchResultDto> {
@@ -542,10 +553,21 @@ export class PurchaseOrderMutationService {
     try {
       return await this.prisma.$transaction(async transaction => {
         await applyTransactionTimeouts(transaction)
+        const scope = await this.dataScope.resolveInTransaction(transaction, trusted.actorUserId)
+        // 批量付款在写资金前校验整批应付款归属，任一阶段不可见都按不存在拒绝。
+        if (scope === 'SELF') {
+          const ownedCount = await transaction.purchaseOrderPayable.count({
+            where: {
+              id: { in: input.items.map(item => item.payableId) },
+              ...purchaseOrderPayableScopeWhere(scope, trusted.actorUserId),
+            },
+          })
+          if (ownedCount !== input.items.length) return payableFailure('PURCHASE_PAYABLE_NOT_FOUND', '采购应付款不存在', 404)
+        }
         return executeBatchPayment(transaction, trusted, input, key, this.payables, {
           now: this.dependencies.now(),
           validatePaymentMethod: () => this.dictionaryLookup.requireEffectiveValue(transaction, { dictionaryCode: PAYMENT_METHOD_DICTIONARY_CODE, value: input.paymentMethod }),
-          lockOrder: id => this.lockOrder(transaction, id),
+          lockOrder: id => this.lockOrder(transaction, id, scope, trusted.actorUserId),
           writePayment: (order, paymentInput, confirmation, prepared) => this.writePaymentInTransaction(transaction, trusted, order, paymentInput, confirmation, prepared),
         })
       }, { timeout: 60_000 })
@@ -565,7 +587,10 @@ export class PurchaseOrderMutationService {
     const body = requireRecord(input)
     rejectUnknownKeys(body, ['expectedVersion', 'paymentMethod', 'remark', 'recipientAccountId', 'recipientProfileVersion', 'voucher'])
     if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) return purchaseOrderValidationFailure('expectedVersion')
-    const payable = await this.prisma.purchaseOrderPayable.findUnique({ where: { id } })
+    const scope = await this.dataScope.resolve(context.actorUserId)
+    const payable = await this.prisma.purchaseOrderPayable.findFirst({
+      where: { id, ...purchaseOrderPayableScopeWhere(scope, context.actorUserId) },
+    })
     if (!payable) return payableFailure('PURCHASE_PAYABLE_NOT_FOUND', '采购应付款不存在', 404)
     await this.recordPayment(context, payable.purchaseOrderId, {
       paymentType: payable.paymentType, amount: payable.dueAmount.toFixed(2),
@@ -621,7 +646,8 @@ export class PurchaseOrderMutationService {
     try {
       await this.prisma.$transaction(async transaction => {
         await applyTransactionTimeouts(transaction)
-        const order = await this.lockOrder(transaction, purchaseOrderId)
+        const scope = await this.dataScope.resolveInTransaction(transaction, trusted.actorUserId)
+        const order = await this.lockOrder(transaction, purchaseOrderId, scope, trusted.actorUserId)
         await this.writePaymentInTransaction(transaction, trusted, order,
           { paymentType, amount, paidAt, paymentMethod, remark, mediaAssetId, recipientAccountId, recipientProfileVersion }, confirmation)
       })
@@ -643,7 +669,7 @@ export class PurchaseOrderMutationService {
       }
       throw error
     }
-    return this.query.getById(purchaseOrderId)
+    return this.query.getById(purchaseOrderId, trusted.actorUserId)
   }
 
   private async writePaymentInTransaction(
@@ -779,7 +805,8 @@ export class PurchaseOrderMutationService {
     const now = this.dependencies.now()
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
-      const order = await this.lockOrder(transaction, purchaseOrderId)
+      const scope = await this.dataScope.resolveInTransaction(transaction, trusted.actorUserId)
+      const order = await this.lockOrder(transaction, purchaseOrderId, scope, trusted.actorUserId)
       const payment = await transaction.purchaseOrderPayment.findFirst({
         where: { id: paymentId, purchaseOrderId },
         select: { id: true, amount: true, voidedAt: true, payableId: true, fundPostingBatchId: true },
@@ -832,7 +859,7 @@ export class PurchaseOrderMutationService {
         metadata: { purchaseOrderId, reasonProvided: true },
       })
     })
-    return this.query.getById(purchaseOrderId)
+    return this.query.getById(purchaseOrderId, trusted.actorUserId)
   }
 
   private normalizeVoucher(value: unknown): string {
@@ -855,6 +882,26 @@ export class PurchaseOrderMutationService {
       )
     }
     return paidAt
+  }
+
+  /** 在锁定销售来源行之前先按数据范围确认采购单可见，避免为不可见订单加行锁。 */
+  private async requireVisibleOrder(
+    transaction: Prisma.TransactionClient,
+    purchaseOrderId: string,
+    scope: DataScope,
+    actorUserId: string,
+  ): Promise<void> {
+    const visible = await transaction.purchaseOrder.findFirst({
+      where: { id: purchaseOrderId, ...purchaseOrderScopeWhere(scope, actorUserId) },
+      select: { id: true },
+    })
+    if (visible === null) {
+      throw new ApiException(
+        HttpStatus.NOT_FOUND,
+        'PURCHASE_ORDER_NOT_FOUND',
+        '采购订单不存在',
+      )
+    }
   }
 
   private async lockSourceSalesLines(
@@ -882,11 +929,25 @@ export class PurchaseOrderMutationService {
   private async lockOrder(
     transaction: Prisma.TransactionClient,
     purchaseOrderId: string,
+    scope: DataScope,
+    actorUserId: string,
   ): Promise<MutablePurchaseOrder> {
+    // 行锁查询本身带上归属条件，不可见采购单不会进入后续状态和版本校验。
+    const scopeFilter = scope === 'SELF'
+      ? Prisma.sql`
+          AND EXISTS (
+            SELECT 1
+            FROM "sales_orders" AS scope_order
+            WHERE scope_order."id" = purchase_order."sales_order_id"
+              AND scope_order."issuer_user_id" = CAST(${actorUserId} AS uuid)
+          )
+        `
+      : Prisma.empty
     const locks = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-      SELECT "id"
-      FROM "purchase_orders"
-      WHERE "id" = CAST(${purchaseOrderId} AS uuid)
+      SELECT purchase_order."id"
+      FROM "purchase_orders" AS purchase_order
+      WHERE purchase_order."id" = CAST(${purchaseOrderId} AS uuid)
+      ${scopeFilter}
       FOR UPDATE
     `)
     if (locks.length !== 1) {
@@ -896,8 +957,8 @@ export class PurchaseOrderMutationService {
         '采购订单不存在',
       )
     }
-    const order = await transaction.purchaseOrder.findUnique({
-      where: { id: purchaseOrderId },
+    const order = await transaction.purchaseOrder.findFirst({
+      where: { id: purchaseOrderId, ...purchaseOrderScopeWhere(scope, actorUserId) },
       select: {
         id: true,
         orderNo: true,

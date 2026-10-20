@@ -20,6 +20,7 @@ const summary = {
 function setup(row: unknown, records: unknown[] = []) {
   const findMany = jest.fn().mockResolvedValue(records)
   const prisma = { purchaseOrderPart: { findUnique: jest.fn().mockResolvedValue(row) }, packagingCostRequest: { findMany } } as unknown as PrismaService
+  ;(prisma as unknown as { purchaseOrderPart: Record<string, unknown> }).purchaseOrderPart.findFirst = (prisma as unknown as { purchaseOrderPart: { findUnique: jest.Mock } }).purchaseOrderPart.findUnique
   return { query: new PackagingCostQueryService(prisma, {} as PackagingPaymentProfileService), findMany }
 }
 describe('PackagingCostQueryService shipment context', () => {

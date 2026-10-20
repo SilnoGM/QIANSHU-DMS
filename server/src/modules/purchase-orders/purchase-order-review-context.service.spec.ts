@@ -13,11 +13,15 @@ function setup() {
   }
   const transaction = {
     $queryRaw: jest.fn().mockResolvedValue([]),
-    purchaseOrder: { findUnique: jest.fn().mockResolvedValue(order) },
+    purchaseOrder: {
+      findUnique: jest.fn().mockResolvedValue(order),
+      findFirst: jest.fn().mockResolvedValue(order),
+    },
   }
   const prisma = { $transaction: jest.fn().mockImplementation((callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction)) }
   const resolver = { resolve: jest.fn().mockResolvedValue({ availability: 'AVAILABLE', message: '可派发' }) }
   const service = new PurchaseOrderReviewContextService(prisma as unknown as PrismaService, resolver as unknown as PurchaseShippingMarkResolverService)
+  ;(transaction.purchaseOrder as Record<string, unknown>).findFirst = transaction.purchaseOrder.findUnique
   return { service, prisma, resolver, transaction, order }
 }
 

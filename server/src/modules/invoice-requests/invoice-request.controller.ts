@@ -6,6 +6,7 @@ import type { ApiContractErrorOptions } from '../../openapi/contract-metadata'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
+import { CurrentUserId, resolveDataScopeActor } from '../auth/decorators/current-user-id.decorator'
 import type { SalesOrderDocumentMultipartRequest } from '../sales-orders/documents/sales-order-document-multipart.parser'
 import { InvoiceRequestDocumentService, type InvoiceRequestDocumentContent } from './invoice-request-document.service'
 import {
@@ -48,9 +49,6 @@ const settleErrors: ApiContractErrorOptions[] = [
 function context(request: object): InvoiceRequestCommandContext {
   return { actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) }
 }
-function actorUserId(request: object): string {
-  return getRequestAuthContext(request).userId
-}
 interface ContentResponse { status(value: number): unknown, setHeader(name: string, value: string): unknown }
 function deliver(result: InvoiceRequestDocumentContent, response: ContentResponse) {
   response.status(200)
@@ -69,16 +67,17 @@ export class InvoiceRequestController {
 
   @Get() @RequirePermissions('invoice-requests:read') @ApiContractResponse({ status: 200, type: InvoiceRequestPageDto })
   @contract('invoice_requests_list')
-  list(@Query() query: InvoiceRequestListQueryDto, @Req() request: object) { return this.queries.list(actorUserId(request), query) }
+  list(@Query() query: InvoiceRequestListQueryDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) { return this.queries.list(actorUserId, query) }
 
   // 必须排在 `:id` 之前，否则会被当成单据主键。
   @Get('status-counts') @RequirePermissions('invoice-requests:read') @ApiContractResponse({ status: 200, type: InvoiceRequestStatusCountsDto })
   @contract('invoice_requests_status_counts')
-  statusCounts(@Query() query: InvoiceRequestStatusCountsQueryDto, @Req() request: object) { return this.queries.statusCounts(actorUserId(request), query) }
+  statusCounts(@Query() query: InvoiceRequestStatusCountsQueryDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) { return this.queries.statusCounts(actorUserId, query) }
 
-  @Get(':id') @RequirePermissions('invoice-requests:read') @ApiContractResponse({ status: 200, type: InvoiceRequestDto })
+  @Get(':id') @RequirePermissions('invoice-requests:read')
+  @ApiContractResponse({ status: 200, type: InvoiceRequestDto, description: '详情。跨提交人权限的视角额外返回全库疑似重复提示（duplicateSuspected / duplicateSuspects），仅提示不阻断。' })
   @contract('invoice_requests_get', false, [notFound])
-  detail(@Param() params: InvoiceRequestIdDto, @Req() request: object) { return this.queries.get(actorUserId(request), params.id) }
+  detail(@Param() params: InvoiceRequestIdDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) { return this.queries.get(actorUserId, params.id) }
 
   @Post() @HttpCode(201) @RequirePermissions('invoice-requests:create')
   @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } })
@@ -115,15 +114,15 @@ export class InvoiceRequestController {
   @Get(':id/document') @RequirePermissions('invoice-requests:read') @contract('invoice_requests_get_document', false, [notFound, { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] }])
   @ApiQuery({ name: 'variant', required: false, enum: [...INVOICE_DOCUMENT_VARIANT_NAMES], description: '派生呈现变体：thumb（列表缩略图，webp）。按需派生并由浏览器长期私有缓存。' })
   @ApiContractResponse({ status: 200, description: 'Private invoice photo bytes.', content: Object.fromEntries(['image/jpeg', 'image/png', 'image/webp'].map(mime => [mime, { schema: { type: 'string', format: 'binary' } }])) })
-  async document(@Param() params: InvoiceRequestIdDto, @Query('variant') variant: unknown, @Req() request: object, @Res({ passthrough: true }) response: ContentResponse) {
-    return deliver(await this.documents.content(await this.queries.documentAsset(actorUserId(request), params.id), 'GET', variant), response)
+  async document(@Param() params: InvoiceRequestIdDto, @Query('variant') variant: unknown, @CurrentUserId() actorUserId: string = resolveDataScopeActor(), @Res({ passthrough: true }) response: ContentResponse) {
+    return deliver(await this.documents.content(await this.queries.documentAsset(actorUserId, params.id), 'GET', variant), response)
   }
 
   @Head(':id/document') @RequirePermissions('invoice-requests:read') @contract('invoice_requests_head_document', false, [notFound, { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] }])
   @ApiQuery({ name: 'variant', required: false, enum: [...INVOICE_DOCUMENT_VARIANT_NAMES], description: '派生呈现变体：thumb（列表缩略图，webp）。按需派生并由浏览器长期私有缓存。' })
   @ApiContractResponse({ status: 200, description: 'Private invoice photo headers.' })
-  async headDocument(@Param() params: InvoiceRequestIdDto, @Query('variant') variant: unknown, @Req() request: object, @Res({ passthrough: true }) response: ContentResponse) {
-    return deliver(await this.documents.content(await this.queries.documentAsset(actorUserId(request), params.id), 'HEAD', variant), response)
+  async headDocument(@Param() params: InvoiceRequestIdDto, @Query('variant') variant: unknown, @CurrentUserId() actorUserId: string = resolveDataScopeActor(), @Res({ passthrough: true }) response: ContentResponse) {
+    return deliver(await this.documents.content(await this.queries.documentAsset(actorUserId, params.id), 'HEAD', variant), response)
   }
 
   /**
@@ -131,7 +130,8 @@ export class InvoiceRequestController {
    * 所以单据 id 与请求体在同一个方法里串起来。
    */
   private async upload(id: string, request: SalesOrderDocumentMultipartRequest): Promise<InvoiceRequestDto> {
-    const staged = await this.documents.stage(actorUserId(request), request)
-    return await this.commands.uploadDocument(context(request), id, staged.mediaAssetId)
+    const commandContext = context(request)
+    const staged = await this.documents.stage(commandContext.actorUserId, request)
+    return await this.commands.uploadDocument(commandContext, id, staged.mediaAssetId)
   }
 }

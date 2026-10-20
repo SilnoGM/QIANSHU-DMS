@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common'
 
 import { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
+import { fundAccountScopeWhere } from './fund-account-access'
 import type {
   FundAccountListQuery,
   FundAccountOwnerCandidates,
@@ -77,12 +79,23 @@ function buildFundAccountWhere(
 /** 账户读取不返回 Prisma Decimal，并对底层异常统一使用固定安全错误。 */
 @Injectable()
 export class FundAccountQueryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
+  ) {}
 
-  async listAccounts(input: FundAccountListQuery): Promise<FundAccountPage> {
+  async listAccounts(
+    input: FundAccountListQuery,
+    actorUserId: string = resolveDataScopeActor(),
+  ): Promise<FundAccountPage> {
+    // 数据范围只收窄查询条件，不改动客户端筛选；SELF 下强制只返回本人账户。
+    const scope = await this.dataScope.resolve(actorUserId)
     try {
       const query = normalizeFundAccountListQuery(input)
-      const where = buildFundAccountWhere(query)
+      const where: Prisma.FundAccountWhereInput = {
+        ...buildFundAccountWhere(query),
+        ...fundAccountScopeWhere(scope, actorUserId),
+      }
       const [rows, total] = await Promise.all([
         this.prisma.fundAccount.findMany({
           where,
@@ -140,12 +153,19 @@ export class FundAccountQueryService {
    * 新建账户的候选归属人：还没有 USER 账户的用户，按展示名稳定排序。
    *
    * 该查询只服务于资金域的下拉选择，因此不返回用户档案等资金域无关字段，
-   * 让财务角色无需用户管理读取权限即可开立账户。
+   * 让财务角色无需用户管理读取权限即可开立账户。SELF 角色只可能为本人开户，
+   * 因此只回本人（本人已有账户时为空），不枚举其他用户。
    */
-  async listOwnerCandidates(): Promise<FundAccountOwnerCandidates> {
+  async listOwnerCandidates(
+    actorUserId: string = resolveDataScopeActor(),
+  ): Promise<FundAccountOwnerCandidates> {
+    const scope = await this.dataScope.resolve(actorUserId)
     try {
       const rows = await this.prisma.user.findMany({
-        where: { fundAccount: { is: null } },
+        where: {
+          ...(scope === 'SELF' ? { id: actorUserId } : {}),
+          fundAccount: { is: null },
+        },
         select: {
           id: true,
           username: true,

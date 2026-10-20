@@ -2,15 +2,24 @@ import { HttpStatus, Injectable } from '@nestjs/common'
 
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../access-control/data-scope.service'
+import { salesOrderScopeWhere } from './sales-order-access'
 import type { SalesOrderPendingPurchaseProductsDto } from './dto/sales-order-pending-purchase.dto'
 
 @Injectable()
 export class SalesOrderPendingPurchaseQueryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
+  ) {}
 
-  async list(salesOrderId: string): Promise<SalesOrderPendingPurchaseProductsDto> {
-    const order = await this.prisma.salesOrder.findUnique({
-      where: { id: salesOrderId },
+  async list(
+    salesOrderId: string,
+    actorUserId: string = resolveDataScopeActor(),
+  ): Promise<SalesOrderPendingPurchaseProductsDto> {
+    const scope = await this.dataScope.resolve(actorUserId)
+    const order = await this.prisma.salesOrder.findFirst({
+      where: { id: salesOrderId, ...salesOrderScopeWhere(scope, actorUserId) },
       select: {
         id: true,
         lines: {

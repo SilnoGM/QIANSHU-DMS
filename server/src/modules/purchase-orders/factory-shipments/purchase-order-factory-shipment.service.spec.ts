@@ -33,6 +33,7 @@ function setup(overrides: Record<string, unknown> = {}) {
       .mockResolvedValue([{ id: PURCHASE_ORDER_ID }]),
     purchaseOrder: {
       findUnique: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(first),
+      findFirst: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(first),
       findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue(orders),
       update: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
     },
@@ -42,6 +43,12 @@ function setup(overrides: Record<string, unknown> = {}) {
     },
     salesOrder: {
       findUnique: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({
+        id: SALES_ORDER_ID,
+        orderNo: 'SO/20260904-00001',
+        orderStatus: 'CONFIRMED',
+        fulfillmentStatus: 'PREPARING',
+      }),
+      findFirst: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({
         id: SALES_ORDER_ID,
         orderNo: 'SO/20260904-00001',
         orderStatus: 'CONFIRMED',

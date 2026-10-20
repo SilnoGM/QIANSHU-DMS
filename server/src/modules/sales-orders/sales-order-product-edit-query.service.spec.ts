@@ -60,6 +60,7 @@ function setup() {
   const prisma = {
     salesOrder: {
       findUnique,
+      findFirst: findUnique,
     },
     purchaseOrderLine: {
       findMany: jest.fn().mockResolvedValue([{

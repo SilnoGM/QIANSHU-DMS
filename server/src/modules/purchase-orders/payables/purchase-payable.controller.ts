@@ -7,6 +7,7 @@ import { getRequestId } from '../../../infrastructure/http/request-id.middleware
 import { ApiApplicationContract } from '../../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../../auth/auth-context'
+import { CurrentUserId, resolveDataScopeActor } from '../../auth/decorators/current-user-id.decorator'
 import { RequirePermissions } from '../../auth/decorators/auth.decorators'
 import { PurchaseOrderMutationService } from '../purchase-order-mutation.service'
 import { PurchasePayableQueryService } from './purchase-payable-query.service'
@@ -22,19 +23,19 @@ export class PurchasePayableController {
   @ApiContractResponse({ status: 200, type: PurchasePayableOrderPageDto })
   @ApiApplicationContract({ operationId: 'purchase_payables_list', session: 'required', authorization: true, badRequest: true, validation: true, privateNoStore: true,
     errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] }, { status: 422, codes: ['VALIDATION_FAILED', 'PURCHASE_PAYABLE_NOT_AVAILABLE'] }] })
-  list(@Query() query: PurchasePayableListQueryDto) { return this.queries.list(query) }
+  list(@Query() query: PurchasePayableListQueryDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) { return this.queries.list(query, actorUserId) }
   @Get('batch/suppliers')
   @RequirePermissions('purchase-orders:payment')
   @ApiContractResponse({ status: 200, type: PurchasePayableBatchSuppliersDto })
   @ApiApplicationContract({ operationId: 'purchase_payables_batch_suppliers', session: 'required', authorization: true, badRequest: true, privateNoStore: true,
     errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] }] })
-  batchSuppliers() { return this.queries.batchSuppliers() }
+  batchSuppliers(@CurrentUserId() actorUserId: string = resolveDataScopeActor()) { return this.queries.batchSuppliers(actorUserId) }
   @Get('batch/orders')
   @RequirePermissions('purchase-orders:payment')
   @ApiContractResponse({ status: 200, type: PurchasePayableBatchOrdersDto })
   @ApiApplicationContract({ operationId: 'purchase_payables_batch_orders', session: 'required', authorization: true, badRequest: true, validation: true, privateNoStore: true,
     errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] }, { status: 422, codes: ['VALIDATION_FAILED', 'PURCHASE_PAYABLE_NOT_AVAILABLE'] }] })
-  batchOrders(@Query() query: PurchasePayableBatchOrdersQueryDto) { return this.queries.batchOrders(query.supplierValue) }
+  batchOrders(@Query() query: PurchasePayableBatchOrdersQueryDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) { return this.queries.batchOrders(query.supplierValue, actorUserId) }
   @Post('batch/pay') @HttpCode(200)
   @RequirePermissions('purchase-orders:payment')
   @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } })
@@ -54,7 +55,7 @@ export class PurchasePayableController {
     errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] },
       { status: 404, codes: ['PURCHASE_PAYABLE_NOT_FOUND'] },
       { status: 422, codes: ['VALIDATION_FAILED', 'PURCHASE_PAYABLE_NOT_AVAILABLE'] }] })
-  orderDetail(@Param() params: PurchasePayableIdDto) { return this.queries.getOrder(params.id) }
+  orderDetail(@Param() params: PurchasePayableIdDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) { return this.queries.getOrder(params.id, actorUserId) }
   @Get(':id')
   @RequirePermissions('purchase-orders:payment')
   @ApiContractResponse({ status: 200, type: PurchasePayableOrderDto })
@@ -62,7 +63,7 @@ export class PurchasePayableController {
     errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] },
       { status: 404, codes: ['PURCHASE_PAYABLE_NOT_FOUND'] },
       { status: 422, codes: ['VALIDATION_FAILED', 'PURCHASE_PAYABLE_NOT_AVAILABLE'] }] })
-  detail(@Param() params: PurchasePayableIdDto) { return this.queries.getByPayableId(params.id) }
+  detail(@Param() params: PurchasePayableIdDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) { return this.queries.getByPayableId(params.id, actorUserId) }
   @Post(':id/pay') @HttpCode(200)
   @RequirePermissions('purchase-orders:payment')
   @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } })
@@ -73,8 +74,9 @@ export class PurchasePayableController {
       { status: 409, codes: ['PURCHASE_PAYABLE_STATE_CHANGED', 'PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT', 'PAYMENT_RECIPIENT_STATE_CHANGED'] },
       { status: 422, codes: ['VALIDATION_FAILED', 'PURCHASE_PAYABLE_NOT_AVAILABLE', 'PURCHASE_PAYABLE_POSTING_UNAVAILABLE', 'PURCHASE_ORDER_PAYMENT_METHOD_UNAVAILABLE', 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID', 'PURCHASE_ORDER_CANCELLED', 'PURCHASE_ORDER_PAYMENT_AMOUNT_INVALID', 'PURCHASE_ORDER_AMOUNT_INVALID', 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', 'PAYMENT_RECIPIENT_UNAVAILABLE', 'PAYMENT_RECIPIENT_IMAGE_UNAVAILABLE', 'PAYMENT_RECIPIENT_INVALID'] }] })
   async pay(@Param() params: PurchasePayableIdDto, @Body() input: PurchasePayablePayDto, @Headers('idempotency-key') key: unknown, @Req() request: object) {
-    const orderId = await this.mutations.payPayable({ actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) }, params.id, input, key)
-    return this.queries.getOrder(orderId)
+    const actorUserId = getRequestAuthContext(request).userId
+    const orderId = await this.mutations.payPayable({ actorUserId, requestId: getRequestId(request) }, params.id, input, key)
+    return this.queries.getOrder(orderId, actorUserId)
   }
   @Post(':id/voucher-uploads') @HttpCode(201)
   @RequirePermissions('purchase-orders:payment')
@@ -97,9 +99,9 @@ export class PurchasePayableController {
   @ApiApplicationContract({ operationId: 'purchase_payables_voucher_content', session: 'required', authorization: true, badRequest: true, validation: true, resourceLocator: true, privateNoStore: true,
     errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] }, { status: 404, codes: ['PURCHASE_ORDER_DOCUMENT_NOT_FOUND'] },
       { status: 422, codes: ['VALIDATION_FAILED'] }, { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] }] })
-  async voucherContent(@Param() params: PurchasePayableVoucherIdDto, @Headers('if-none-match') etag: unknown,
+  async voucherContent(@Param() params: PurchasePayableVoucherIdDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor(), @Headers('if-none-match') etag: unknown,
     @Res({ passthrough: true }) response: { status(code: number): unknown, setHeader(name: string, value: string): unknown }) {
-    const result = await this.vouchers.content(params.id, params.documentId, etag, 'GET')
+    const result = await this.vouchers.content(params.id, params.documentId, etag, 'GET', actorUserId)
     response.status(result.status)
     for (const [name, value] of Object.entries(result.headers)) response.setHeader(name, value)
     return result.stream ? new StreamableFile(result.stream) : undefined

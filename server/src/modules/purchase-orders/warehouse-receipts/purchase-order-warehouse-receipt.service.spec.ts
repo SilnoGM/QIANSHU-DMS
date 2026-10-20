@@ -14,8 +14,8 @@ function setup() {
   const order = { id: orderId, orderNo: 'PO-1', version: 3, purchaseType: 'STOCK', salesOrderId: null, orderStatus: 'CONFIRMED', fulfillmentStatus: 'SHIPPED', paymentStatus: 'UNPAID', parts: [part] }
   const tx = {
     $queryRaw: jest.fn().mockImplementation((query: { text: string }) => Promise.resolve(query.text.includes('clock_timestamp') ? [{ now }] : [{ id: orderId }])),
-    purchaseOrder: { findUnique: jest.fn().mockResolvedValue(order), findMany: jest.fn(), update: jest.fn().mockResolvedValue({}) },
-    salesOrder: { findUnique: jest.fn(), update: jest.fn().mockResolvedValue({}) },
+    purchaseOrder: { findUnique: jest.fn().mockResolvedValue(order), findFirst: jest.fn().mockResolvedValue(order), findMany: jest.fn(), update: jest.fn().mockResolvedValue({}) },
+    salesOrder: { findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn().mockResolvedValue({}) },
     salesOrderLine: { findMany: jest.fn() },
     salesOrderStatusHistory: { create: jest.fn().mockResolvedValue({}) },
     purchaseOrderPart: { count: jest.fn().mockImplementation((input: { where: { shippedAt: { gt: Date } } }) => Promise.resolve(order.parts.filter(item => item.shippedAt !== null && item.shippedAt > input.where.shippedAt.gt).length)), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },

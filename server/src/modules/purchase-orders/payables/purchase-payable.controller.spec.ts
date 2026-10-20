@@ -59,7 +59,7 @@ describe('PurchasePayableController', () => {
     const queries = { getOrder: jest.fn().mockResolvedValue(group), list: jest.fn(), getByPayableId: jest.fn() }
     const controller = new PurchasePayableController(queries as unknown as PurchasePayableQueryService, {} as PurchaseOrderMutationService, {} as PurchasePayableVoucherService)
     await expect(controller.orderDetail({ id: 'order' })).resolves.toEqual(group)
-    expect(queries.getOrder).toHaveBeenCalledWith('order')
+    expect(queries.getOrder).toHaveBeenCalledWith('order', expect.any(String))
     expect(queries.list).not.toHaveBeenCalled()
     expect(queries.getByPayableId).not.toHaveBeenCalled()
   })
@@ -67,7 +67,7 @@ describe('PurchasePayableController', () => {
     const queries = { getByPayableId: jest.fn().mockResolvedValue({ id: 'order', items: [{ id: 'payable', status: 'PAID' }] }), list: jest.fn(), getOrder: jest.fn() }
     const controller = new PurchasePayableController(queries as unknown as PurchasePayableQueryService, {} as PurchaseOrderMutationService, {} as PurchasePayableVoucherService)
     await expect(controller.detail({ id: 'payable' })).resolves.toEqual({ id: 'order', items: [{ id: 'payable', status: 'PAID' }] })
-    expect(queries.getByPayableId).toHaveBeenCalledWith('payable')
+    expect(queries.getByPayableId).toHaveBeenCalledWith('payable', expect.any(String))
     expect(queries.list).not.toHaveBeenCalled()
     expect(queries.getOrder).not.toHaveBeenCalled()
   })
@@ -108,6 +108,6 @@ describe('PurchasePayableController', () => {
     const input = { recipientAccountId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', recipientProfileVersion: 1, voucher: { mediaAssetId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }, expectedVersion: 1, paymentMethod: 'BANK' }
     await expect(controller.pay({ id: 'payable' }, input, 'idempotency-key', request)).resolves.toEqual({ id: 'order', items: [] })
     expect(mutations.payPayable).toHaveBeenCalledWith({ actorUserId: 'finance', requestId: expect.stringMatching(/^req_/) as unknown }, 'payable', input, 'idempotency-key')
-    expect(queries.getOrder).toHaveBeenCalledWith('order')
+    expect(queries.getOrder).toHaveBeenCalledWith('order', expect.any(String))
   })
 })

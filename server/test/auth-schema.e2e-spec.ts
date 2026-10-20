@@ -12,6 +12,8 @@ const MANAGEMENT_PERMISSION_CODES = [
   'currencies:enable',
   'currencies:read',
   'currencies:update',
+  'data-scope:all',
+  'data-scope:self',
   'dictionaries:create',
   'dictionaries:disable',
   'dictionaries:enable',

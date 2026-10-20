@@ -4,6 +4,7 @@ import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
+import { CurrentUserId, resolveDataScopeActor } from '../auth/decorators/current-user-id.decorator'
 import { ContainerBatchIdDto, ContainerBatchListQueryDto, ContainerLoadingItemIdDto } from './container-batch.dto'
 import { OperationsOceanContainerItemsQueryDto, OperationsOceanContainerLineDto, OperationsOceanContainerLinePageDto, OperationsOceanContainerPageDto } from './operations-ocean-container.dto'
 import { OperationsOceanContainerService } from './operations-ocean-container.service'
@@ -21,8 +22,8 @@ export class OperationsOceanContainerController {
   constructor(private readonly service: OperationsOceanContainerService) {}
 
   @Get() @RequirePermissions('sales-orders:read') @contract('operations_ocean_containers_list') @ApiContractResponse({ status: 200, type: OperationsOceanContainerPageDto })
-  list(@Query() query: ContainerBatchListQueryDto, @Req() request: object) {
-    return this.service.list(getRequestAuthContext(request).userId, query)
+  list(@Query() query: ContainerBatchListQueryDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) {
+    return this.service.list(actorUserId, query)
   }
 
   @Get(':id/items') @RequirePermissions('sales-orders:read') @contract('operations_ocean_container_items_list', true) @ApiContractResponse({ status: 200, type: OperationsOceanContainerLinePageDto })

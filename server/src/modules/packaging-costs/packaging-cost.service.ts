@@ -6,6 +6,7 @@ import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AccessControlService } from '../access-control/access-control.service'
+import { DataScopeService, dataScopeFallback } from '../access-control/data-scope.service'
 import { AuditService, AuditWriteFailedError } from '../audit/audit.service'
 import { DictionaryLookupService, DictionaryValueUnavailableError } from '../dictionaries/dictionary-lookup.service'
 import { FundPostingService } from '../fund-accounts/application/fund-posting.contract'
@@ -15,6 +16,8 @@ import { MediaAssetService, MediaAssetLifecycleError } from '../media/media-asse
 import { MediaContentDeliveryService } from '../media/media-content-delivery.service'
 import { requireMediaObjectKeyNamespace } from '../media/media-storage'
 import { PackagingPaymentProfileService } from '../payment-recipients/packaging-payment-profile.service'
+import { purchaseOrderPartScopeWhere } from '../purchase-orders/purchase-order-access'
+import { packagingCostScopeWhere } from './packaging-cost-access'
 import { PackagingCostQueryService } from './packaging-cost-query.service'
 import { normalizePackagingCostCreate, normalizePackagingCostAmountUpdate, normalizePackagingPayment, packagingCostFailure, packagingCostIdempotencyKey, packagingCostUuid, type PackagingCostContext } from './packaging-cost.normalizer'
 import type { PackagingCostRequestCreateDto, PackagingCostRequestPayDto, PackagingCostRequestUpdateAmountDto } from './packaging-cost.dto'
@@ -48,6 +51,7 @@ export class PackagingCostService {
     private readonly audit: AuditService,
     private readonly funds: FundPostingService,
     private readonly recipients: PackagingPaymentProfileService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
   private async authorize(tx: Prisma.TransactionClient, context: PackagingCostContext, permissions: string[]) {
     const user = await tx.user.findUnique({ where: { id: context.actorUserId }, select: { status: true } })
@@ -70,8 +74,12 @@ export class PackagingCostService {
         await this.authorize(tx, context, ['packaging-costs:create'])
         const previous = await replay(tx)
         if (previous) return previous.id
-        const locator = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, select: { purchaseOrderId: true } })
-        if (!locator) return packagingCostFailure('PACKAGING_COST_NOT_ALLOWED', '货件不存在或当前不能提报')
+        const scope = await this.dataScope.resolveInTransaction(tx, context.actorUserId)
+        const locator = await tx.purchaseOrderPart.findFirst({ where: { id: normalized.shipmentId, ...purchaseOrderPartScopeWhere(scope, context.actorUserId) }, select: { purchaseOrderId: true } })
+        // SELF 下不可见的货件与不存在的货件返回同一 404，避免探测他人销售归属。
+        if (!locator) return scope === 'SELF'
+          ? packagingCostFailure('PURCHASE_ORDER_PART_NOT_FOUND', '货件不存在', 404)
+          : packagingCostFailure('PACKAGING_COST_NOT_ALLOWED', '货件不存在或当前不能提报')
         // 与入仓/采购变更保持父单到货件的锁序；只读取销售身份，不倒序申请销售行写锁。
         await tx.$queryRaw(Prisma.sql`SELECT id FROM purchase_orders WHERE id = ${locator.purchaseOrderId}::uuid FOR UPDATE`)
         await tx.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id = ${normalized.shipmentId}::uuid FOR UPDATE`)
@@ -116,11 +124,11 @@ export class PackagingCostService {
       // 不同货件使用同一幂等键会在唯一约束竞争；只能在回滚后读取已提交结果。
       if (hasPersistenceCode(readPersistenceErrorFacts(error), 'P2002')) {
         const previous = await replay(this.prisma)
-        if (previous) return this.queries.getById(previous.id)
+        if (previous) return this.queries.getById(previous.id, context.actorUserId)
       }
       return mapError(error)
     }
-    return this.queries.getById(id)
+    return this.queries.getById(id, context.actorUserId)
   }
   async updateAmount(context: PackagingCostContext, rawId: string, input: PackagingCostRequestUpdateAmountDto) {
     const id = packagingCostUuid(rawId)
@@ -129,9 +137,12 @@ export class PackagingCostService {
       return await this.prisma.$transaction(async tx => {
         await applyTransactionTimeouts(tx)
         await this.authorize(tx, context, ['packaging-costs:create'])
+        const scope = await this.dataScope.resolveInTransaction(tx, context.actorUserId)
         // 修改与付款竞争同一行锁并校验版本：先付款即禁止修改，先修改则旧金额付款必须重新核对。
-        await tx.$queryRaw(Prisma.sql`SELECT id FROM packaging_cost_requests WHERE id = ${id}::uuid FOR UPDATE`)
-        const row = await tx.packagingCostRequest.findUnique({ where: { id } })
+        // SELF 下锁语句和读取都带归属人条件，他人提报与不存在同样返回 404。
+        const scopeSql = scope === 'SELF' ? Prisma.sql`AND "owner_user_id" = CAST(${context.actorUserId} AS uuid)` : Prisma.sql``
+        await tx.$queryRaw(Prisma.sql`SELECT id FROM packaging_cost_requests WHERE id = ${id}::uuid ${scopeSql} FOR UPDATE`)
+        const row = await tx.packagingCostRequest.findFirst({ where: { id, ...packagingCostScopeWhere(scope, context.actorUserId) } })
         if (!row) return packagingCostFailure('PACKAGING_COST_NOT_FOUND', '打木架提报不存在', 404)
         if (row.status !== 'PENDING_PAYMENT' || row.version !== correction.expectedVersion) return stateChanged()
         if (!row.amount.equals(correction.amount)) {
@@ -152,8 +163,11 @@ export class PackagingCostService {
       await this.prisma.$transaction(async tx => {
         await applyTransactionTimeouts(tx)
         await this.authorize(tx, context, ['packaging-costs:read', 'packaging-costs:pay'])
-        await tx.$queryRaw(Prisma.sql`SELECT id FROM packaging_cost_requests WHERE id = ${id}::uuid FOR UPDATE`)
-        const row = await tx.packagingCostRequest.findUnique({ where: { id } })
+        const scope = await this.dataScope.resolveInTransaction(tx, context.actorUserId)
+        // 财务等 ALL 角色保持全量付款；SELF 只能付款本人销售归属的提报。
+        const scopeSql = scope === 'SELF' ? Prisma.sql`AND "owner_user_id" = CAST(${context.actorUserId} AS uuid)` : Prisma.sql``
+        await tx.$queryRaw(Prisma.sql`SELECT id FROM packaging_cost_requests WHERE id = ${id}::uuid ${scopeSql} FOR UPDATE`)
+        const row = await tx.packagingCostRequest.findFirst({ where: { id, ...packagingCostScopeWhere(scope, context.actorUserId) } })
         if (!row) return packagingCostFailure('PACKAGING_COST_NOT_FOUND', '打木架提报不存在', 404)
         // 同一付款人对同一版本的网络重试可重放；其他付款人或不同版本不能覆盖已付款事实。
         if (row.status === 'PAID' && row.paidByUserId === context.actorUserId && row.version === payment.expectedVersion + 1 && row.paymentFingerprintHash && Buffer.from(row.paymentFingerprintHash).equals(fingerprint)) return
@@ -186,6 +200,6 @@ export class PackagingCostService {
         await this.audit.record(tx, { eventType: 'PACKAGING_COST_PAID', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PACKAGING_COST_REQUEST', targetId: id, metadata: { amount: row.amount.toFixed(2), currencyCode: 'CNY', fundPostingBatchId: posting.batchId } })
       }, { timeout: 30_000 })
     } catch (error) { return mapError(error) }
-    return this.queries.getById(id)
+    return this.queries.getById(id, context.actorUserId)
   }
 }

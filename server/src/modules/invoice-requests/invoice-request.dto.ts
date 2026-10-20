@@ -2,7 +2,11 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min, ValidateNested } from 'class-validator'
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
-import { INVOICE_REQUEST_LINE_LIMIT, type InvoiceRequestStatusValue } from './invoice-request.contract'
+import {
+  INVOICE_REQUEST_LINE_LIMIT,
+  INVOICE_REQUEST_STATUS_VALUES,
+  type InvoiceRequestStatusValue,
+} from './invoice-request.contract'
 import { INVOICE_REQUEST_STATUS_FILTER_VALUES, type InvoiceRequestStatusFilterValue } from './invoice-request-list-filter'
 
 // 台币金额与数量都是整数：金额用字符串传（仓库金额惯例），数量用整数。
@@ -155,7 +159,23 @@ export class InvoiceRequestListItemDto {
   @ApiProperty() recipientAddress!: string
 }
 
+/** 财务详情页的全库疑似重复提示项；只下发识别单据所需的三个字段。 */
+export class InvoiceRequestDuplicateSuspectDto {
+  @ApiProperty() invoiceNo!: string
+  @ApiProperty({ enum: INVOICE_REQUEST_STATUS_VALUES }) status!: InvoiceRequestStatusValue
+  @ApiProperty({ type: 'string', description: '申请创建时间，ISO 8601。' }) createdAt!: string
+}
+
 export class InvoiceRequestDto extends InvoiceRequestListItemDto {
+  @ApiPropertyOptional({
+    description: '全库是否存在抬头、统编、营业税与总计完全一致的申请单；仅跨提交人权限的详情返回。',
+  })
+  duplicateSuspected?: boolean
+  @ApiPropertyOptional({
+    type: [InvoiceRequestDuplicateSuspectDto],
+    description: '疑似重复的申请单，最多 5 条；仅跨提交人权限的详情返回，不阻断流程。',
+  })
+  duplicateSuspects?: InvoiceRequestDuplicateSuspectDto[]
   @ApiProperty({ type: [InvoiceRequestLineDto] }) lines!: InvoiceRequestLineDto[]
   @ApiProperty({ type: [InvoiceRequestHistoryDto] }) history!: InvoiceRequestHistoryDto[]
   @ApiPropertyOptional({ type: InvoiceRequestDocumentDto, nullable: true }) document!: InvoiceRequestDocumentDto | null

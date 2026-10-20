@@ -2,10 +2,9 @@ import { HttpStatus, Injectable } from '@nestjs/common'
 
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { ApiException } from '../../../infrastructure/http/api.exception'
-import {
-  ProductMediaContentService,
-  type ProductMediaContentResponse,
-} from '../../products/media/product-media-content.service'
+import { ProductMediaContentService, type ProductMediaContentResponse } from '../../products/media/product-media-content.service'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
+import { salesOrderScopeWhere } from '../sales-order-access'
 import { SalesOrderProductEditQueryService } from '../sales-order-product-edit-query.service'
 
 function productImageNotFound(): ApiException {
@@ -27,6 +26,7 @@ export class SalesOrderProductImageService {
     private readonly prisma: PrismaService,
     private readonly content: ProductMediaContentService,
     private readonly productEditQueries?: SalesOrderProductEditQueryService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
   async resolve(
@@ -61,13 +61,18 @@ export class SalesOrderProductImageService {
     range: unknown,
     method: 'GET' | 'HEAD',
     variant: unknown,
+    actorUserId: string = resolveDataScopeActor(),
   ): Promise<ProductMediaContentResponse> {
+    const scope = await this.dataScope.resolve(actorUserId)
     let line: { readonly productId: string | null } | null
     try {
       line = await this.prisma.salesOrderLine.findFirst({
         where: {
           id: lineId,
           salesOrderId,
+          ...(scope === 'SELF'
+            ? { salesOrder: { is: salesOrderScopeWhere(scope, actorUserId) } }
+            : {}),
           removedAt: null,
           lineType: 'CATALOG',
           productId: { not: null },
@@ -115,12 +120,13 @@ export class SalesOrderProductImageService {
     range: unknown,
     method: 'GET' | 'HEAD',
     variant: unknown,
+    actorUserId: string = resolveDataScopeActor(),
   ): Promise<ProductMediaContentResponse> {
     if (this.productEditQueries === undefined) {
       throw new Error('SalesOrderProductEditQueryService is not configured')
     }
     // 图片 URL 可能被长期缓存或复制，内容读取时必须重验订单修改资格与当前产品状态。
-    await this.productEditQueries.context(salesOrderId)
+    await this.productEditQueries.context(salesOrderId, actorUserId)
     let row: { readonly id: string } | null
     try {
       row = await this.prisma.productMedia.findFirst({

@@ -15,6 +15,14 @@ function setup() {
         fulfillmentStatus: 'PREPARING',
         version: 4,
       }),
+      findFirst: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({
+        id: SALES_ORDER_ID,
+        orderNo: 'SO/20260904-00001',
+        customerName: '客户甲',
+        orderStatus: 'CONFIRMED',
+        fulfillmentStatus: 'PREPARING',
+        version: 4,
+      }),
     },
     purchaseOrder: {
       findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
@@ -68,6 +76,7 @@ function setup() {
     prisma as unknown as PrismaService,
     dictionary as unknown as DictionaryLookupService,
   )
+  ;(prisma.salesOrder as Record<string, unknown>).findFirst = prisma.salesOrder.findUnique
   return { dictionary, prisma, service }
 }
 

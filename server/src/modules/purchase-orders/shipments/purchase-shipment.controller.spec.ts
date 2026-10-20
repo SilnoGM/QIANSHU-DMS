@@ -24,9 +24,9 @@ describe('PurchaseShipmentController contract', () => {
     const service = { list: jest.fn().mockResolvedValue({ items: [] }), statusCounts: jest.fn().mockResolvedValue({ items: [] }), getById: jest.fn().mockResolvedValue({ id: 'part' }) }
     const controller = new PurchaseShipmentController(service as unknown as PurchaseShipmentQueryService)
     await controller.list({ view: 'ALL' }); await controller.statusCounts({ supplierSource: 'CUSTOM_TEXT' }); await controller.detail({ partId: 'part' })
-    expect(service.list).toHaveBeenCalledWith({ view: 'ALL' })
-    expect(service.statusCounts).toHaveBeenCalledWith({ supplierSource: 'CUSTOM_TEXT' })
-    expect(service.getById).toHaveBeenCalledWith('part')
+    expect(service.list).toHaveBeenCalledWith({ view: 'ALL' }, expect.any(String))
+    expect(service.statusCounts).toHaveBeenCalledWith({ supplierSource: 'CUSTOM_TEXT' }, expect.any(String))
+    expect(service.getById).toHaveBeenCalledWith('part', expect.any(String))
   })
 
   it.each([

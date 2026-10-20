@@ -62,6 +62,7 @@ function setup() {
       .mockResolvedValue([{ id: ORDER_ID }]),
     purchaseOrder: {
       findUnique: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(order),
+      findFirst: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(order),
       update: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
     },
     salesOrder: { findUnique: jest.fn().mockResolvedValue({ orderStatus: 'CONFIRMED' }) },
@@ -100,6 +101,7 @@ function setup() {
       [(tx: typeof transaction) => Promise<unknown>]
     >(callback => callback(transaction)),
   }
+  ;(transaction.purchaseOrder as Record<string, unknown>).findFirst = transaction.purchaseOrder.findUnique
   const audit = {
     record: jest.fn<Promise<unknown>, [unknown, unknown]>().mockResolvedValue({}),
   }
@@ -331,6 +333,7 @@ describe('PurchaseOrderMutationService', () => {
     const fixture = setup()
     fixture.order.orderStatus = 'PENDING_REVIEW'
     fixture.transaction.purchaseOrder.findUnique
+      .mockResolvedValueOnce({ ...fixture.order })
       .mockResolvedValueOnce({ ...fixture.order })
       .mockResolvedValue({ ...fixture.order, orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING', version: 2 })
 

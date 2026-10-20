@@ -49196,6 +49196,32 @@
               }
             }
           },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "409": {
             "headers": {
               "X-Request-Id": {
@@ -49353,6 +49379,12 @@
                 "CSRF_REJECTED",
                 "FORBIDDEN",
                 "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "PURCHASE_ORDER_NOT_FOUND"
               ]
             },
             {
@@ -64549,7 +64581,8 @@
             {
               "status": 404,
               "codes": [
-                "PACKAGING_COST_NOT_FOUND"
+                "PACKAGING_COST_NOT_FOUND",
+                "PURCHASE_ORDER_PART_NOT_FOUND"
               ]
             },
             {
@@ -64701,6 +64734,32 @@
               }
             }
           },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "422": {
             "headers": {
               "X-Request-Id": {
@@ -64779,6 +64838,12 @@
               "codes": [
                 "FORBIDDEN",
                 "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "PURCHASE_ORDER_PART_NOT_FOUND"
               ]
             },
             {
@@ -78105,6 +78170,7 @@
         ],
         "responses": {
           "200": {
+            "description": "详情。跨提交人权限的视角额外返回全库疑似重复提示（duplicateSuspected / duplicateSuspects），仅提示不阻断。",
             "headers": {
               "X-Request-Id": {
                 "schema": {
@@ -78121,7 +78187,6 @@
                 }
               }
             },
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -95791,15 +95856,19 @@
         "type": "object",
         "properties": {
           "itemCount": {
-            "type": "number"
+            "type": "number",
+            "minimum": 0,
+            "description": "All loading lines in the container, independent of data scope."
           },
           "grossWeightKgTotal": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "Gross weight in kg. SELF: sum of the current user's lines; ALL: whole-container sum; null when any counted line is missing a value."
           },
           "volumeCaiTotal": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "Volume in cai. SELF: sum of the current user's lines; ALL: whole-container sum; null when any counted line is missing a value."
           },
           "id": {
             "type": "string",
@@ -98729,6 +98798,34 @@
           "statuses"
         ]
       },
+      "InvoiceRequestDuplicateSuspectDto": {
+        "type": "object",
+        "properties": {
+          "invoiceNo": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_REVIEW",
+              "RETURNED",
+              "NOTIFIED",
+              "ISSUED",
+              "SETTLED",
+              "CANCELLED"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "申请创建时间，ISO 8601。"
+          }
+        },
+        "required": [
+          "invoiceNo",
+          "status",
+          "createdAt"
+        ]
+      },
       "InvoiceRequestLineDto": {
         "type": "object",
         "properties": {
@@ -98942,6 +99039,17 @@
           },
           "recipientAddress": {
             "type": "string"
+          },
+          "duplicateSuspected": {
+            "type": "boolean",
+            "description": "全库是否存在抬头、统编、营业税与总计完全一致的申请单；仅跨提交人权限的详情返回。"
+          },
+          "duplicateSuspects": {
+            "description": "疑似重复的申请单，最多 5 条；仅跨提交人权限的详情返回，不阻断流程。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceRequestDuplicateSuspectDto"
+            }
           },
           "lines": {
             "type": "array",

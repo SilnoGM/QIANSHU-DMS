@@ -27,7 +27,7 @@ export function createImageReviewService(prisma: PrismaService, query: PurchaseO
 /** 在隔离 schema 中建立审核前置证据，仍受正式摘要校验、唯一性、引用和审核事务约束。 */
 export async function createImageReviewDraft(prisma: PrismaService, query: PurchaseOrderQueryService, actorUserId: string, purchaseOrderId: string) {
   return prisma.$transaction(async transaction => {
-    const detail = await query.getById(purchaseOrderId, transaction)
+    const detail = await query.getById(purchaseOrderId, actorUserId, transaction)
     const snapshot = createPurchaseOrderImageSnapshot(detail)
     const asset = await transaction.mediaAsset.create({ data: {
       mediaType: 'IMAGE', status: 'READY', storageDriver: 'local', objectKey: `assets/${randomUUID()}.png`,
