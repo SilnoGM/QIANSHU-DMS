@@ -6,6 +6,7 @@ import { PrismaService } from './prisma.service'
 
 const DATABASE_SHUTDOWN_ERROR_MESSAGE = 'Database shutdown failed'
 const DATABASE_INITIALIZATION_ERROR_MESSAGE = 'Database initialization failed'
+const DATABASE_TIME_ZONE_ERROR_MESSAGE = 'Database time zone must be UTC'
 const TEST_DATABASE_URL = 'postgresql://localhost:5432/qianshu_test'
 
 type PoolWithPromiseEnd = {
@@ -84,15 +85,77 @@ describe('PrismaService', () => {
     }
   })
 
-  it('connects Prisma when the Nest module initializes', async () => {
+  it('connects Prisma and verifies the UTC session time zone when the Nest module initializes', async () => {
     const { service } = createService()
     const connect = jest
       .spyOn(service, '$connect')
       .mockResolvedValue(undefined)
+    const queryRaw = jest
+      .spyOn(service, '$queryRaw')
+      .mockResolvedValue([{ timeZone: 'UTC' }] as never)
 
     await service.onModuleInit()
 
     expect(connect).toHaveBeenCalledTimes(1)
+    expect(queryRaw).toHaveBeenCalledTimes(1)
+  })
+
+  it('accepts the Etc/UTC alias used by containerized PostgreSQL', async () => {
+    const { service } = createService()
+    jest.spyOn(service, '$connect').mockResolvedValue(undefined)
+    jest
+      .spyOn(service, '$queryRaw')
+      .mockResolvedValue([{ timeZone: 'Etc/UTC' }] as never)
+
+    await expect(service.onModuleInit()).resolves.toBeUndefined()
+  })
+
+  it('releases resources and rejects a non-UTC database session time zone', async () => {
+    const { pool, service } = createService()
+    const callOrder: string[] = []
+    jest.spyOn(service, '$connect').mockResolvedValue(undefined)
+    jest.spyOn(service, '$queryRaw').mockResolvedValue([
+      { timeZone: 'Asia/Shanghai' },
+    ] as never)
+    jest
+      .spyOn(service, '$disconnect')
+      .mockImplementation(() => {
+        callOrder.push('$disconnect')
+        return Promise.resolve()
+      })
+    spyOnPoolEnd(pool).mockImplementation(() => {
+      callOrder.push('pool.end')
+      return Promise.resolve()
+    })
+
+    const error = await captureInitializationError(service)
+
+    expect(callOrder).toEqual(['$disconnect', 'pool.end'])
+    expect(error.message).toBe(DATABASE_TIME_ZONE_ERROR_MESSAGE)
+    expect(error.cause).toBeUndefined()
+  })
+
+  it('hides database time zone query details when the check cannot be completed', async () => {
+    const canary = 'timezone-query-sensitive-detail'
+    const { pool, service } = createService()
+    const connect = jest.spyOn(service, '$connect').mockResolvedValue(undefined)
+    const queryRaw = jest
+      .spyOn(service, '$queryRaw')
+      .mockRejectedValue(new Error(canary))
+    const disconnect = jest
+      .spyOn(service, '$disconnect')
+      .mockResolvedValue(undefined)
+    const end = spyOnPoolEnd(pool).mockResolvedValue(undefined)
+
+    const error = await captureInitializationError(service)
+
+    expect(connect).toHaveBeenCalledTimes(1)
+    expect(queryRaw).toHaveBeenCalledTimes(1)
+    expect(disconnect).toHaveBeenCalledTimes(1)
+    expect(end).toHaveBeenCalledTimes(1)
+    expect(error.message).toBe(DATABASE_TIME_ZONE_ERROR_MESSAGE)
+    expect(error.stack).not.toContain(canary)
+    expect(error.cause).toBeUndefined()
   })
 
   it('releases both resources and throws only a safe error when initialization fails', async () => {

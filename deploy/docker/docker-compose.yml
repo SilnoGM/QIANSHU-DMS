@@ -19,10 +19,15 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      TZ: Asia/Shanghai
+      # 会话必须保持 UTC：Prisma 的 pg 适配器按 UTC 解释 timestamptz，
+      # 业务展示再由前端固定转换为 Asia/Shanghai。
+      TZ: UTC
     # 小规格机器上的保守参数：3.6 GiB 内存需限制 postgres 的共享缓冲与连接数。
     command:
       - postgres
+      # 显式覆盖 pgdata 初始化时写入的 timezone；服务端启动守卫会拒绝非 UTC 会话。
+      - -c
+      - timezone=UTC
       - -c
       - shared_buffers=256MB
       - -c

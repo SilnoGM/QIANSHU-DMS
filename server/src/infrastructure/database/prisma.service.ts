@@ -14,8 +14,11 @@ const DATABASE_POOL_MAX = 10
 const DATABASE_CONNECTION_TIMEOUT_MS = 5_000
 const DATABASE_QUERY_TIMEOUT_MS = 5_000
 const DATABASE_INITIALIZATION_ERROR_MESSAGE = 'Database initialization failed'
+const DATABASE_TIME_ZONE_ERROR_MESSAGE = 'Database time zone must be UTC'
 const DATABASE_SHUTDOWN_ERROR_MESSAGE = 'Database shutdown failed'
 const DATABASE_IDLE_ERROR_MESSAGE = 'PostgreSQL idle client emitted an error'
+// Ubuntu/Container 默认可能返回 Etc/UTC；两者都是零偏移且无夏令时，适配器可按 UTC 解释。
+const ACCEPTED_DATABASE_TIME_ZONES = new Set(['UTC', 'Etc/UTC'])
 
 @Injectable()
 export class PrismaService
@@ -52,6 +55,25 @@ export class PrismaService
       // NestFactory 尚未返回 application 时，外层无法调用 close；服务必须自行收口部分初始化资源。
       await this.releaseDatabaseResources()
       throw new Error(DATABASE_INITIALIZATION_ERROR_MESSAGE)
+    }
+
+    try {
+      await this.assertDatabaseTimeZone()
+    } catch {
+      // PrismaPg 会把 timestamptz 按 UTC 解码；非 UTC 会话会让所有时间偏移且无告警。
+      // 这里用固定错误文本失败关闭，避免把连接信息或时区细节带进启动日志。
+      await this.releaseDatabaseResources()
+      throw new Error(DATABASE_TIME_ZONE_ERROR_MESSAGE)
+    }
+  }
+
+  private async assertDatabaseTimeZone(): Promise<void> {
+    const rows = await this.$queryRaw<Array<{ readonly timeZone: unknown }>>`
+      SELECT current_setting('TimeZone') AS "timeZone"
+    `
+    const timeZone = rows[0]?.timeZone
+    if (rows.length !== 1 || typeof timeZone !== 'string' || !ACCEPTED_DATABASE_TIME_ZONES.has(timeZone)) {
+      throw new Error(DATABASE_TIME_ZONE_ERROR_MESSAGE)
     }
   }
 
