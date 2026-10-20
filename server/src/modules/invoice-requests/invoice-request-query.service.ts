@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common'
 import type { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { resolveInvoiceRequestViewer, type InvoiceRequestViewer } from './invoice-request-access'
-import { INVOICE_REQUEST_STATUS_VALUES } from './invoice-request.contract'
+import {
+  INVOICE_REQUEST_DUPLICATE_POOL_STATUS_VALUES,
+  INVOICE_REQUEST_STATUS_VALUES,
+} from './invoice-request.contract'
 import {
   INVOICE_REQUEST_ERROR_CODES,
   invoiceRequestFailure,
@@ -11,6 +14,7 @@ import { buildInvoiceRequestListWhere, type InvoiceRequestListFilterInput } from
 import { resolveSettleableAt } from './invoice-request.logic'
 import type {
   InvoiceRequestDto,
+  InvoiceRequestDuplicateSuspectDto,
   InvoiceRequestLineDto,
   InvoiceRequestListQueryDto,
   InvoiceRequestListItemDto,
@@ -92,11 +96,17 @@ function toListItem(row: RequestRow): InvoiceRequestListItemDto {
   }
 }
 
+interface DuplicateHint {
+  readonly duplicateSuspected: boolean
+  readonly duplicateSuspects: InvoiceRequestDuplicateSuspectDto[]
+}
+
 /** 详情只在列表字段之上补明细与完整历史；历史不参与列表摘要。 */
-function toDetail(row: DetailRow): InvoiceRequestDto {
+function toDetail(row: DetailRow, duplicate?: DuplicateHint): InvoiceRequestDto {
   const base = toListItem({ ...row, statusHistory: [] })
   return {
     ...base,
+    ...(duplicate === undefined ? {} : duplicate),
     lines: toLines(row.lines),
     history: row.statusHistory.map(entry => ({
       action: entry.action,
@@ -174,7 +184,35 @@ export class InvoiceRequestQueryService {
       invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.NOT_FOUND, '开票申请不存在', 404)
     }
     assertInvoiceRequestVisible(row, viewer)
-    return toDetail(row)
+    // 跨提交人的全库查重只用于财务审核提示，不阻断流程；列表不做，避免逐行查询。
+    const duplicate = viewer.canManageOthers
+      ? await this.findDuplicateSuspects(row)
+      : undefined
+    return toDetail(row, duplicate)
+  }
+
+  private async findDuplicateSuspects(row: DetailRow): Promise<DuplicateHint> {
+    const suspects = await this.prisma.invoiceRequest.findMany({
+      where: {
+        id: { not: row.id },
+        buyerName: row.buyerName,
+        buyerTaxId: row.buyerTaxId,
+        taxAmount: row.taxAmount.toString(),
+        totalAmount: row.totalAmount.toString(),
+        status: { in: [...INVOICE_REQUEST_DUPLICATE_POOL_STATUS_VALUES] },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 5,
+      select: { invoiceNo: true, status: true, createdAt: true },
+    })
+    return {
+      duplicateSuspected: suspects.length > 0,
+      duplicateSuspects: suspects.map(suspect => ({
+        invoiceNo: suspect.invoiceNo,
+        status: suspect.status,
+        createdAt: suspect.createdAt.toISOString(),
+      })),
+    }
   }
 
   /**

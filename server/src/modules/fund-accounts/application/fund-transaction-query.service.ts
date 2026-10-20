@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../../infrastructure/database/transaction-timeouts'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
 import {
   FUND_ACCOUNT_TARGETS,
   FUND_ADJUSTMENT_MODES,
@@ -447,9 +448,49 @@ function absoluteAmount(value: string): string {
 /** 资金流水读取使用历史快照，不回查当前类型、来源名称或当前分成比例。 */
 @Injectable()
 export class FundTransactionQueryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
+  ) {}
 
+  /**
+   * 财务列表按数据范围收窄；SELF 下客户端传入的 accountId/userId 一律忽略，
+   * 先按会话解析本人账户再强制按 account_id 过滤，未开户返回空页。
+   */
   async listTransactions(
+    input: FundTransactionListQuery,
+    actorUserId: string = resolveDataScopeActor(),
+  ): Promise<FundTransactionPage> {
+    const scope = await this.dataScope.resolve(actorUserId)
+    if (scope === 'ALL') {
+      return this.queryTransactions(input)
+    }
+
+    const account = await this.prisma.fundAccount.findUnique({
+      where: { userId: actorUserId },
+      select: { id: true },
+    })
+    if (account === null) {
+      const query = normalizeFundTransactionListQuery({
+        ...input,
+        accountId: undefined,
+        userId: undefined,
+      })
+      return Object.freeze({
+        items: Object.freeze([]),
+        page: query.page,
+        pageSize: query.pageSize,
+        total: 0,
+      })
+    }
+    return this.queryTransactions({
+      ...input,
+      accountId: account.id,
+      userId: undefined,
+    })
+  }
+
+  private async queryTransactions(
     input: FundTransactionListQuery,
   ): Promise<FundTransactionPage> {
     const query = normalizeFundTransactionListQuery(input)
@@ -521,8 +562,12 @@ export class FundTransactionQueryService {
     }
   }
 
-  async getBatchDetail(batchId: string): Promise<FundPostingBatchDetailView> {
+  async getBatchDetail(
+    batchId: string,
+    actorUserId: string = resolveDataScopeActor(),
+  ): Promise<FundPostingBatchDetailView> {
     if (!UUID_V4_PATTERN.test(batchId)) return validationFailed('originalBatchId')
+    const scope = await this.dataScope.resolve(actorUserId)
     try {
       return await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
@@ -557,6 +602,15 @@ export class FundTransactionQueryService {
           },
         })
         if (batch === null) {
+          throw new FundPostingError(
+            FUND_POSTING_ERROR_CODES.POSTING_BATCH_NOT_FOUND,
+          )
+        }
+        // SELF 只能看到归属本人的批次，且只返回本人账户分录（不透出同批次公司分录）。
+        const entries = scope === 'SELF'
+          ? batch.entries.filter(entry => entry.account.userId === actorUserId)
+          : batch.entries
+        if (scope === 'SELF' && (batch.userId !== actorUserId || entries.length === 0)) {
           throw new FundPostingError(
             FUND_POSTING_ERROR_CODES.POSTING_BATCH_NOT_FOUND,
           )
@@ -642,7 +696,7 @@ export class FundTransactionQueryService {
           requestId: batch.requestId,
           correlationId: batch.correlationId,
           postedAt: batch.postedAt.toISOString(),
-          entries: Object.freeze(batch.entries.map(entry => Object.freeze({
+          entries: Object.freeze(entries.map(entry => Object.freeze({
             entryId: entry.id,
             lineNo: entry.lineNo,
             account: Object.freeze({
@@ -722,7 +776,7 @@ export class FundTransactionQueryService {
         })
       }
 
-      const page = await this.listTransactions({
+      const page = await this.queryTransactions({
         ...input,
         accountId: account.id,
       })

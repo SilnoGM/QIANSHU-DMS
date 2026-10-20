@@ -28,6 +28,7 @@ function fixture(row: Record<string, unknown> = {}) {
     user: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
     packagingCostRequest: { findUnique: jest.fn().mockResolvedValue({ id, status: 'PENDING_PAYMENT', version: 1, paidByUserId: null, ownerUserId: owner, shipmentNo: 'PKG00000001', amount: new Prisma.Decimal('120.50'), ...row }), update },
   }
+  ;(tx.packagingCostRequest as Record<string, unknown>).findFirst = tx.packagingCostRequest.findUnique
   const prisma = { $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx) } as unknown as PrismaService
   const query = { getById: jest.fn().mockResolvedValue({ id }), getSummaryById: jest.fn().mockResolvedValue({ id, version: 2, amount: '150.00' }) } as unknown as PackagingCostQueryService
   const access = { getPermissionCodesInTransaction: granted, hasAll: (codes: string[], required: string[]) => required.every(value => codes.includes(value)) } as unknown as AccessControlService

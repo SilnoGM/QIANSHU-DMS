@@ -8,6 +8,9 @@ export class OperationsOceanContainerDto extends PickType(ContainerBatchDto, [
 ] as const) {
   @ApiProperty({ description: 'Stored warehouse label, including disabled historical values.' }) warehouseName!: string
   @ApiProperty({ minimum: 0, description: 'Loading lines whose linked sales order was issued by the current authenticated user.' }) myItemCount!: number
+  @ApiProperty({ minimum: 0, type: Number, description: 'All loading lines in the container, independent of data scope.' }) declare itemCount: number
+  @ApiProperty({ type: String, nullable: true, description: 'Gross weight in kg. SELF: sum of the current user\'s lines; ALL: whole-container sum; null when any counted line is missing a value.' }) declare grossWeightKgTotal: string | null
+  @ApiProperty({ type: String, nullable: true, description: 'Volume in cai. SELF: sum of the current user\'s lines; ALL: whole-container sum; null when any counted line is missing a value.' }) declare volumeCaiTotal: string | null
 }
 
 export class OperationsOceanContainerPageDto {

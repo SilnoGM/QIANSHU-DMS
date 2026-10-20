@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common'
 
 import type { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../access-control/data-scope.service'
+import { fundWithdrawalScopeWhere } from './fund-withdrawal-access'
 import {
   FUND_WITHDRAWAL_ERROR_CODES,
   fundWithdrawalFailure,
@@ -72,7 +74,10 @@ function statusWhere(
 /** 本人与财务共用同一张表的读模型；归属由查询条件强制，不在客户端传入。 */
 @Injectable()
 export class FundWithdrawalQueryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
+  ) {}
 
   async listOwn(userId: string, query: FundWithdrawalListQueryDto): Promise<FundWithdrawalPageDto> {
     return this.list({ userId, ...statusWhere(query.status) }, query)
@@ -82,20 +87,32 @@ export class FundWithdrawalQueryService {
     return this.get({ id, userId })
   }
 
-  async listReview(query: FundWithdrawalListQueryDto): Promise<FundWithdrawalPageDto> {
-    return this.list(statusWhere(query.status), query)
+  async listReview(
+    query: FundWithdrawalListQueryDto,
+    actorUserId: string = resolveDataScopeActor(),
+  ): Promise<FundWithdrawalPageDto> {
+    const scope = await this.dataScope.resolve(actorUserId)
+    return this.list({
+      ...fundWithdrawalScopeWhere(scope, actorUserId),
+      ...statusWhere(query.status),
+    }, query)
   }
 
-  async getReview(id: string): Promise<FundWithdrawalDto> {
-    return this.get({ id })
+  async getReview(id: string, actorUserId: string = resolveDataScopeActor()): Promise<FundWithdrawalDto> {
+    const scope = await this.dataScope.resolve(actorUserId)
+    return this.get({ id, ...fundWithdrawalScopeWhere(scope, actorUserId) })
   }
 
   async proofAssetOwn(userId: string, id: string): Promise<FundWithdrawalProofAsset> {
     return this.proofAsset({ id, userId })
   }
 
-  async proofAssetReview(id: string): Promise<FundWithdrawalProofAsset> {
-    return this.proofAsset({ id })
+  async proofAssetReview(
+    id: string,
+    actorUserId: string = resolveDataScopeActor(),
+  ): Promise<FundWithdrawalProofAsset> {
+    const scope = await this.dataScope.resolve(actorUserId)
+    return this.proofAsset(scope === 'SELF' ? { id, userId: actorUserId } : { id })
   }
 
   private async list(

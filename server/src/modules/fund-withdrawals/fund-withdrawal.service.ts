@@ -4,6 +4,8 @@ import { Prisma } from '../../generated/prisma/client'
 import { AuditEventType } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
+import type { DataScope } from '../access-control/data-scope'
+import { DataScopeService, dataScopeFallback } from '../access-control/data-scope.service'
 import { AuditService } from '../audit/audit.service'
 import { FundPostingService } from '../fund-accounts/application/fund-posting.contract'
 import {
@@ -51,6 +53,7 @@ export class FundWithdrawalService {
     private readonly funds: FundPostingService,
     private readonly numbering: NumberingGeneratorService,
     private readonly audit: AuditService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
   /**
@@ -187,6 +190,8 @@ export class FundWithdrawalService {
       await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
         const row = await this.lock(transaction, id)
+        const scope = await this.dataScope.resolveInTransaction(transaction, context.actorUserId)
+        this.assertReviewVisible(row, scope, context.actorUserId)
         this.assertPendingVersion(row, input.expectedVersion)
         const reviewedAt = new Date()
         await transaction.fundWithdrawalRequest.update({
@@ -213,7 +218,7 @@ export class FundWithdrawalService {
           },
         })
       }, { timeout: 60_000 })
-      return await this.queries.getReview(id)
+      return await this.queries.getReview(id, context.actorUserId)
     }
     catch (error) {
       return mapFundWithdrawalError(error)
@@ -233,6 +238,8 @@ export class FundWithdrawalService {
       await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
         const row = await this.lock(transaction, id)
+        const scope = await this.dataScope.resolveInTransaction(transaction, context.actorUserId)
+        this.assertReviewVisible(row, scope, context.actorUserId)
         this.assertPendingVersion(row, input.expectedVersion)
         await this.documents.attach(transaction, {
           actorUserId: context.actorUserId,
@@ -289,10 +296,25 @@ export class FundWithdrawalService {
           },
         })
       }, { timeout: 60_000 })
-      return await this.queries.getReview(id)
+      return await this.queries.getReview(id, context.actorUserId)
     }
     catch (error) {
       return mapFundWithdrawalError(error)
+    }
+  }
+
+  /** SELF 视角下审批写操作同样不能按 id 操作他人申请；不可见按不存在处理。 */
+  private assertReviewVisible(
+    row: { readonly userId: string },
+    scope: DataScope,
+    actorUserId: string,
+  ): void {
+    if (scope === 'SELF' && row.userId !== actorUserId) {
+      fundWithdrawalFailure(
+        FUND_WITHDRAWAL_ERROR_CODES.NOT_FOUND,
+        '提款申请不存在',
+        404,
+      )
     }
   }
 

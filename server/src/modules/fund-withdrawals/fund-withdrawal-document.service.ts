@@ -6,6 +6,7 @@ import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import { DataScopeService, dataScopeFallback } from '../access-control/data-scope.service'
 import { MediaAssetLifecycleError, MediaAssetService } from '../media/media-asset.service'
 import { MediaContentDeliveryService } from '../media/media-content-delivery.service'
 import { requireMediaObjectKeyNamespace } from '../media/media-storage'
@@ -47,6 +48,7 @@ export class FundWithdrawalDocumentService {
     private readonly prisma: PrismaService,
     private readonly media: MediaAssetService,
     private readonly delivery: MediaContentDeliveryService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
   async stage(
@@ -54,15 +56,17 @@ export class FundWithdrawalDocumentService {
     requestId: string,
     request: SalesOrderDocumentMultipartRequest,
   ): Promise<FundWithdrawalProofUpload> {
+    const scope = await this.dataScope.resolve(actorUserId)
     const row = await this.prisma.fundWithdrawalRequest.findUnique({
       where: { id: requestId },
       select: {
         amount: true,
         status: true,
+        userId: true,
         user: { select: { displayName: true } },
       },
     })
-    if (row === null) {
+    if (row === null || (scope === 'SELF' && row.userId !== actorUserId)) {
       fundWithdrawalFailure(
         FUND_WITHDRAWAL_ERROR_CODES.NOT_FOUND,
         '提款申请不存在',
