@@ -1707,6 +1707,8 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'currencies:enable',
     'currencies:read',
     'currencies:update',
+    'data-scope:all',
+    'data-scope:self',
     'dictionaries:create',
     'dictionaries:disable',
     'dictionaries:enable',
