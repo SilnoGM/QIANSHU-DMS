@@ -171,7 +171,7 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
     expect((await service.list({ view: 'ALL', purchaseType: 'SALES_LINKED' })).total).toBe(1)
     const emptyCounts = await service.statusCounts({ orderDateFrom: '2026-09-08', createdByUserId: randomUUID() })
     expect(emptyCounts.items.every(item => item.count === 0)).toBe(true)
-    expect(emptyCounts.buyerOptions).toEqual([{ id: fixture.actor.id, displayName: fixture.actor.displayName }])
+    expect(emptyCounts.buyerOptions).toEqual([{ id: fixture.actor.id, displayName: fixture.actor.displayName, avatarUrl: null }])
   })
 
   it('returns full cancelled detail retaining marks/allocations and active shipment metadata independently', async () => {
