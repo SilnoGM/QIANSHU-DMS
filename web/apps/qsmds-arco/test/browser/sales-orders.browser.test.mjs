@@ -858,7 +858,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     await clickDialogButton(page, '货物签收', '确认货物签收')
     await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
       .some(toast => toast.getClientRects().length > 0
-        && toast.textContent?.includes('签收单上传成功，订单已进入已签收'))`)
+        && toast.textContent?.includes('签收单上传成功，订单及全部货件已签收'))`)
     await waitForNoVisibleDialog(page, '货物签收')
 
     const signedDetail = await page.evaluate(apiExpression(
@@ -879,7 +879,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         history.dimension === 'FULFILLMENT'
         && history.fromStatus === 'SEA_TRANSIT'
         && history.toStatus === 'SIGNED'
-        && history.reason === '业务人员上传签收单后自动确认签收'
+        && history.reason === '业务人员上传签收单后自动确认签收，并同步签收全部货件'
       )),
       true,
     )

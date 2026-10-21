@@ -8,12 +8,14 @@ import { getPurchaseOrderApiFailure } from '../../operations/purchase-orders/pur
 import { isShipmentPlaceholderView, shipmentCountsQuery } from './logic'
 
 /** 所有读取绑定当前视图与身份；列表、计数和详情独立取消，任一失败不遮蔽其他区域。 */
+type PurchaseShipmentReadApi = Pick<typeof purchaseShipmentsApi, 'getById' | 'list' | 'statusCounts'>
+
 export function useShipmentData(
   enabled: Readonly<Ref<boolean>>,
   epoch: Readonly<Ref<number>>,
   query: Readonly<Ref<ShipmentListQuery>>,
   onInvalidPage: (page: number) => void,
-  api = purchaseShipmentsApi,
+  api: PurchaseShipmentReadApi = purchaseShipmentsApi,
   orders = purchaseOrdersApi,
 ) {
   const rows = shallowRef<PurchaseShipmentListItemDto[]>([])

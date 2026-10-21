@@ -122,7 +122,7 @@ test('已装柜视图读取真实列表并取消旧视图请求', async (context
   assert.equal(f.state.rows.value.length, 0)
 })
 
-test('预留运输视图保持空态且不向现有列表接口传未实现状态，迟到旧列表不能混入', async (context) => {
+test('预留寄仓视图保持空态且不向现有列表接口传未实现状态，迟到旧列表不能混入', async (context) => {
   const f = fixture()
   context.after(() => f.scope.stop())
   let finish!: () => void
@@ -135,7 +135,7 @@ test('预留运输视图保持空态且不向现有列表接口传未实现状�
   f.enabled.value = true
   const finishOld = finish
   const oldSignal = signal
-  for (const view of ['OVERSEAS_STORAGE', 'DELIVERED'] as const) {
+  for (const view of ['OVERSEAS_STORAGE'] as const) {
     f.query.value = { view, page: 1, pageSize: 20 }
     await nextTick()
     assert.equal(f.state.rows.value.length, 0)
@@ -149,4 +149,16 @@ test('预留运输视图保持空态且不向现有列表接口传未实现状�
   assert.equal(oldSignal.aborted, true)
   assert.equal(f.state.rows.value.length, 0)
   assert.equal(f.calls.filter(value => value === 'list').length, 1)
+})
+
+test('已签收视图读取真实列表与计数', async (context) => {
+  const f = fixture()
+  context.after(() => f.scope.stop())
+  f.enabled.value = true
+  await nextTick()
+  f.query.value = { view: 'DELIVERED', page: 1, pageSize: 20 }
+  await nextTick()
+  assert.equal(f.state.rows.value[0]?.id, 'part-1')
+  assert.equal(f.state.total.value, 1)
+  assert.equal(f.state.counts.value[0]?.count, 1)
 })

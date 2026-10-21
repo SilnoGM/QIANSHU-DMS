@@ -636,7 +636,7 @@ async function submitDeliveryReceipt(): Promise<void> {
       previousOrderStatus === 'CONFIRMED'
       && response.data.orderStatus === 'PENDING_RECONCILIATION'
         ? '订单已签收且已付清，已自动进入待对账'
-        : '签收单上传成功，订单已进入已签收',
+        : '签收单上传成功，订单及全部货件已签收',
     )
   }
   catch (error) {
@@ -1394,7 +1394,7 @@ onBeforeUnmount(() => {
         role="alert"
       />
       <p class="text-sm text-muted-foreground m-0">
-        只需上传一份签收单。提交后作为订单级凭证保存，并自动将订单进度更新为已签收。
+        只需上传一份签收单。提交后作为订单级凭证保存，并自动将订单进度更新为已签收，同时签收该订单下全部货件。若仍有货件未装柜或待审核，提交会被阻断。
       </p>
       <FaForm :model="{ deliveryReceiptRemark }" :disabled="actionLocked" class="mt-4">
         <FaFormItem name="deliveryReceiptRemark" label="备注（选填）">

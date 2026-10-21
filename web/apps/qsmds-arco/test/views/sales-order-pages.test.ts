@@ -373,7 +373,7 @@ test('销售订单记录弹窗按需读取详情并分开展示收款、凭证�
   assert.match(source, /response\.data\.orderStatus === 'PENDING_RECONCILIATION'/u)
   assert.match(source, /订单已签收且已付清，已自动进入待对账/u)
   assert.match(source, /salesReceipt\.submitted/u)
-  assert.match(source, /签收单上传成功，订单已进入已签收/u)
+  assert.match(source, /签收单上传成功，订单及全部货件已签收/u)
   assert.doesNotMatch(source, /签收单上传成功，订单进度保持不变/u)
   assert.match(source, /提交后作为订单级凭证保存，并自动将订单进度更新为已签收/u)
   assert.match(source, /data-testid="sales-order-delivery-receipt-input"/u)

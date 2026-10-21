@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CalendarDateRangeValue } from '@fantastic-admin/components'
-import type { ShipmentListQuery, ShipmentView } from './logic'
+import type { ShipmentListQuery } from './logic'
 import type { PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn, QsGenericTableFilterDefinition, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 import { parseDate } from '@internationalized/date'
@@ -19,7 +19,8 @@ import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalo
 import PurchaseWarehouseReceiptAction from '@/views/operations/purchase-orders/purchase-warehouse-receipt-action.vue'
 import { buildWarehouseFilterOptions, warehouseFilterFromQuery, warehouseFilterToQuery } from '../../operations/warehouse-arrivals/logic'
 import { useWarehouseArrivalData } from '../../operations/warehouse-arrivals/use-warehouse-arrival-data'
-import { buildShipmentRouteQuery, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentPlaceholderAction, shipmentStatusClass } from './logic'
+import { buildShipmentRouteQuery, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentRowAction, shipmentStatusClass } from './logic'
+import ShipmentDeliverModal from './shipment-deliver-modal.vue'
 import ShipmentDetailDrawer from './shipment-detail-drawer.vue'
 import { getShipmentSourceEmptyKey } from './shipment-detail.logic'
 import ShipmentProducts from './shipment-products.vue'
@@ -88,6 +89,15 @@ const {
   openShipment,
   openOrder,
 } = useWarehouseArrivalData(enabled, computed(() => account.authEpoch), query, value => navigate({ ...query.value, page: value }, true), warehouseValues)
+const deliverTarget = shallowRef<PurchaseShipmentListItemDto | null>(null)
+const deliverVisible = computed({
+  get: () => deliverTarget.value !== null,
+  set: (value) => {
+    if (!value) {
+      deliverTarget.value = null
+    }
+  },
+})
 function navigate(next: ShipmentListQuery, replace = false): void {
   if (!enabled.value) {
     return
@@ -137,6 +147,7 @@ const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(()
   { id: 'shipped', title: t('purchaseShipments.shipped'), accessorKey: 'shippedAt', minWidth: 200 },
   { id: 'destinationWarehouse', title: t('purchaseShipments.destinationWarehouse'), accessorFn: row => formatDestinationWarehouse(row, t), minWidth: 180 },
   { id: 'received', title: t('purchaseWarehouseReceipt.receivedAt'), accessorKey: 'warehouseReceivedAt', minWidth: 200 },
+  { id: 'delivered', title: t('purchaseShipments.deliveredAt'), accessorKey: 'deliveredAt', minWidth: 200, defaultVisible: false },
   { id: 'loaded', title: t('purchaseShipments.loadedAt'), accessorKey: 'loadedAt', minWidth: 200, defaultVisible: false },
   { id: 'createdAt', title: t('purchaseShipments.createdAt'), accessorKey: 'createdAt', minWidth: 195, defaultVisible: false },
   { id: 'recordedAt', title: t('purchaseShipments.recordedAt'), accessorKey: 'shipmentRecordedAt', minWidth: 195, defaultVisible: false },
@@ -148,14 +159,24 @@ function warehouseUpdated(): void {
   void loadDetail()
 }
 
-function handleTransportAction(row: { viewStatus: Exclude<ShipmentView, 'ALL'> }, action: 'loadContainer' | 'seaExpress' | 'sign' | null = shipmentPlaceholderAction(activeView.value, row.viewStatus)): void {
+function handleTransportAction(row: PurchaseShipmentListItemDto, action: 'loadContainer' | 'seaExpress' | 'sign' | null = shipmentRowAction(activeView.value, row.viewStatus)): void {
   if (!enabled.value || !canReceive.value) {
     return
   }
-  const availableAction = shipmentPlaceholderAction(activeView.value, row.viewStatus)
+  const availableAction = shipmentRowAction(activeView.value, row.viewStatus)
+  if (action === 'sign' && availableAction === 'sign') {
+    deliverTarget.value = row
+    return
+  }
   if (action && (action === availableAction || (action === 'seaExpress' && availableAction === 'loadContainer'))) {
     toast.info(t(`purchaseShipments.${action}Unavailable`))
   }
+}
+
+function shipmentDelivered(): void {
+  deliverTarget.value = null
+  refresh()
+  void loadDetail()
 }
 
 function selectTab(value: string | number): void {
@@ -392,6 +413,15 @@ onBeforeUnmount(() => {
               </QsTableStackedLine>
             </QsTableStackedCell><span v-else class="qs-type-meta text-muted-foreground">—</span>
           </template>
+          <template #cell-delivered="{ row }">
+            <QsTableStackedCell v-if="row.original.deliveredAt">
+              <QsPersonDisplay v-if="row.original.deliveredBy" :display-name="row.original.deliveredBy.displayName" size="sm" :avatar-url="row.original.deliveredBy.avatarUrl" />
+              <QsTableStackedLine tone="muted">
+                <DateTimeDisplay :value="row.original.deliveredAt" />
+              </QsTableStackedLine>
+            </QsTableStackedCell>
+            <span v-else class="qs-type-meta text-muted-foreground">—</span>
+          </template>
           <template #cell-createdAt="{ row }">
             <DateTimeDisplay :value="row.original.createdAt" />
           </template>
@@ -405,7 +435,7 @@ onBeforeUnmount(() => {
           </template>
           <template #actions="{ row }">
             <div :class="showWarehouseFilter ? 'grid grid-cols-2 gap-1' : 'flex flex-wrap items-center gap-1'">
-              <FaButton v-if="canReceive && shipmentPlaceholderAction(activeView, row.viewStatus)" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" @click="handleTransportAction(row)">
+              <FaButton v-if="canReceive && shipmentRowAction(activeView, row.viewStatus)" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" @click="handleTransportAction(row)">
                 <FaIcon :name="activeView === 'WAREHOUSE_RECEIVED' ? 'i-lucide:container' : 'i-lucide:package-check'" aria-hidden="true" />{{ t(activeView === 'WAREHOUSE_RECEIVED' ? 'purchaseShipments.loadContainer' : 'purchaseShipments.sign') }}
               </FaButton>
               <FaButton v-if="canReceive && showWarehouseFilter && row.viewStatus === 'WAREHOUSE_RECEIVED'" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" @click="handleTransportAction(row, 'seaExpress')">
@@ -483,12 +513,18 @@ onBeforeUnmount(() => {
                 <QsPersonDisplay v-if="row.shippedBy" :display-name="row.shippedBy.displayName" size="sm" :avatar-url="row.shippedBy.avatarUrl" />
                 <span class="text-muted-foreground"><DateTimeDisplay :value="row.shippedAt" /></span>
               </div>
+              <div v-if="row.deliveredAt" class="flex flex-col gap-1 items-start">
+                <span class="qs-type-meta text-muted-foreground">{{ t('purchaseShipments.deliveredAt') }}</span>
+                <QsPersonDisplay v-if="row.deliveredBy" :display-name="row.deliveredBy.displayName" size="sm" :avatar-url="row.deliveredBy.avatarUrl" />
+                <span class="text-muted-foreground"><DateTimeDisplay :value="row.deliveredAt" /></span>
+              </div>
             </div>
           </template>
         </QsGenericTable>
       </template>
     </FaPageMain>
     <PurchaseWarehouseReceiptAction ref="warehouseActionRef" :active="enabled" @detail-updated="warehouseUpdated" />
+    <ShipmentDeliverModal v-model="deliverVisible" :shipment="deliverTarget" :active="enabled" @delivered="shipmentDelivered" />
     <ShipmentDetailDrawer v-model="shipmentVisible" :detail="detail" :loading="detailLoading" :error="detailError" @reload="loadDetail" @view-order="viewOrderFromShipment" @closed="shipmentClosed" />
     <QsPurchaseOrderDrawer v-model="orderVisible" :order="null" :detail="orderDetail" :currencies="currencyCatalog.currencies.value" :loading="detailLoading" :error="detailError" action-error="" :busy="false" :can-attach-document="false" @reload="loadDetail" />
   </div>

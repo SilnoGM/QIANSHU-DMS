@@ -7,7 +7,7 @@ import { parseDate } from '@internationalized/date'
 import ts from 'typescript'
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import { buildWarehouseFilterOptions, warehouseFilterFromQuery, warehouseFilterToQuery } from '../../src/views/operations/warehouse-arrivals/logic'
-import { buildShipmentRouteQuery, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentCountsQuery, shipmentPlaceholderAction, shipmentStatusClass } from '../../src/views/workbenches/shipments/logic'
+import { buildShipmentRouteQuery, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentCountsQuery, shipmentRowAction, shipmentStatusClass } from '../../src/views/workbenches/shipments/logic'
 
 test('货件默认待发货；非法 URL 参数不进入查询', () => {
   assert.deepEqual(parseShipmentQuery({}), { view: 'AWAITING_SHIPMENT', page: 1, pageSize: 20 })
@@ -43,7 +43,7 @@ test('货件序号不截断，状态绿色采用主题 primary', () => {
   assert.equal(parseShipmentQuery({ view: 'WAREHOUSE_RECEIVED' }).view, 'WAREHOUSE_RECEIVED')
 })
 
-test('运输预留视图可从 URL 恢复，保留筛选并具有状态颜色', () => {
+test('运输视图可从 URL 恢复，保留筛选并具有状态颜色', () => {
   for (const view of ['CONTAINER_LOADED', 'OVERSEAS_STORAGE', 'DELIVERED'] as const) {
     const query = parseShipmentQuery({ view, keyword: '货件', page: '2' })
     assert.equal(query.view, view)
@@ -54,18 +54,18 @@ test('运输预留视图可从 URL 恢复，保留筛选并具有状态颜色', 
   assert.deepEqual(SHIPMENT_VIEWS.slice(-4), ['CONTAINER_LOADED', 'DELIVERED', 'OVERSEAS_STORAGE', 'CANCELLED'])
 })
 
-test('装柜只出现在已到仓视图，签收只出现在已装柜视图；寄仓及终态暂不增加操作', () => {
-  assert.equal(shipmentPlaceholderAction('WAREHOUSE_RECEIVED', 'WAREHOUSE_RECEIVED'), 'loadContainer')
-  assert.equal(shipmentPlaceholderAction('CONTAINER_LOADED', 'CONTAINER_LOADED'), 'sign')
+test('装柜只出现在已到仓视图，签收只出现在已装柜视图；寄仓及终态不增加操作', () => {
+  assert.equal(shipmentRowAction('WAREHOUSE_RECEIVED', 'WAREHOUSE_RECEIVED'), 'loadContainer')
+  assert.equal(shipmentRowAction('CONTAINER_LOADED', 'CONTAINER_LOADED'), 'sign')
   for (const view of SHIPMENT_VIEWS) {
     if (view === 'WAREHOUSE_RECEIVED' || view === 'CONTAINER_LOADED') {
       continue
     }
-    assert.equal(shipmentPlaceholderAction(view, 'WAREHOUSE_RECEIVED'), null)
-    assert.equal(shipmentPlaceholderAction(view, 'CONTAINER_LOADED'), null)
+    assert.equal(shipmentRowAction(view, 'WAREHOUSE_RECEIVED'), null)
+    assert.equal(shipmentRowAction(view, 'CONTAINER_LOADED'), null)
   }
-  assert.equal(shipmentPlaceholderAction('WAREHOUSE_RECEIVED', 'SHIPPED'), null)
-  assert.equal(shipmentPlaceholderAction('CONTAINER_LOADED', 'DELIVERED'), null)
+  assert.equal(shipmentRowAction('WAREHOUSE_RECEIVED', 'SHIPPED'), null)
+  assert.equal(shipmentRowAction('CONTAINER_LOADED', 'DELIVERED'), null)
 })
 
 async function pageFixture() {
@@ -102,7 +102,7 @@ async function pageFixture() {
     openShipment: () => {},
     openOrder: () => {},
   }
-  const state = runInNewContext(ts.transpileModule(`${script}\n;({ keyword, filters, dateRange, page, pageSize, search, columns, handleTransportAction, selectTab, selectWarehouse, activeWarehouse, showWarehouseFilter, warehouseValues, warehouseTabs, tabs })`, {
+  const state = runInNewContext(ts.transpileModule(`${script}\n;({ keyword, filters, dateRange, page, pageSize, search, columns, handleTransportAction, selectTab, selectWarehouse, activeWarehouse, showWarehouseFilter, warehouseValues, warehouseTabs, tabs, deliverTarget, deliverVisible })`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
   }).outputText, {
     computed,
@@ -139,7 +139,7 @@ async function pageFixture() {
     formatShipmentNumber,
     parseShipmentQuery,
     shipmentStatusClass,
-    shipmentPlaceholderAction,
+    shipmentRowAction,
     SHIPMENT_VIEWS,
     getShipmentSourceEmptyKey: () => 'stock',
     onMounted: (callback: () => void) => lifecycle.mount = callback,
@@ -162,26 +162,31 @@ async function pageFixture() {
     tabs: { value: Array<{ value: string, count?: number }> }
     handleTransportAction: (row: { viewStatus: string }, action?: string) => void
     columns: { value: Array<{ id: string, fixed?: string, accessorKey?: string }> }
+    deliverTarget: { value: { viewStatus: string } | null }
+    deliverVisible: { value: boolean }
   }
   lifecycle.mount!()
   return { state, data, route, initialPath, initialQuery, permission, navigations, info, lifecycle, dispose: () => stops.forEach(stop => stop()) }
 }
 
-test('装柜和签收仅轻提示，撤权或页面停用不响应', async (context) => {
+test('装柜轻提示，签收打开确认弹窗；撤权或页面停用不响应', async (context) => {
   const f = await pageFixture()
   context.after(f.dispose)
-  for (const [view, message] of [['WAREHOUSE_RECEIVED', 'loadContainer'], ['CONTAINER_LOADED', 'sign']]) {
-    f.route.query.view = view!
-    f.state.handleTransportAction({ viewStatus: view! })
-    assert.equal(f.info.at(-1), `purchaseShipments.${message}Unavailable`)
-  }
+  f.route.query.view = 'WAREHOUSE_RECEIVED'
+  f.state.handleTransportAction({ viewStatus: 'WAREHOUSE_RECEIVED' })
+  assert.equal(f.info.at(-1), 'purchaseShipments.loadContainerUnavailable')
+  f.route.query.view = 'CONTAINER_LOADED'
+  f.state.handleTransportAction({ viewStatus: 'CONTAINER_LOADED' })
+  assert.equal(f.state.deliverTarget.value?.viewStatus, 'CONTAINER_LOADED')
+  f.state.deliverVisible.value = false
+  assert.equal(f.state.deliverTarget.value, null)
   f.state.handleTransportAction({ viewStatus: 'DELIVERED' })
   f.permission.value = false
   f.state.handleTransportAction({ viewStatus: 'CONTAINER_LOADED' })
   f.permission.value = true
   f.lifecycle.deactivate!()
   f.state.handleTransportAction({ viewStatus: 'CONTAINER_LOADED' })
-  assert.equal(f.info.length, 2)
+  assert.equal(f.info.length, 1)
   assert.equal(f.navigations.length, 0)
 })
 
@@ -238,6 +243,7 @@ test('正式货件编号位于最左并固定，所属采购单和产品列保�
   assert.equal(columns[0]?.fixed, 'left')
   assert.equal(columns[1]?.id, 'part')
   assert.equal(columns.some(column => column.id === 'products'), true)
+  assert.equal(columns.some(column => column.id === 'delivered'), true)
   assert.equal(columns.some(column => column.id === 'quantity'), false)
 })
 

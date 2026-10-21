@@ -6,13 +6,15 @@ import purchaseOrdersApi from '../../../api/modules/purchase-orders'
 import purchaseShipmentsApi from '../../../api/modules/purchase-shipments'
 import { useShipmentData } from '../../workbenches/shipments/use-shipment-data'
 
+type PurchaseShipmentReadApi = Pick<typeof purchaseShipmentsApi, 'getById' | 'list' | 'statusCounts'>
+
 export function useWarehouseArrivalData(
   enabled: Readonly<Ref<boolean>>,
   epoch: Readonly<Ref<number>>,
   query: Readonly<Ref<ShipmentListQuery>>,
   onInvalidPage: (page: number) => void,
   warehouseValues: Readonly<Ref<readonly string[]>>,
-  api = purchaseShipmentsApi,
+  api: PurchaseShipmentReadApi = purchaseShipmentsApi,
   orders = purchaseOrdersApi,
 ) {
   const warehouseCounts = shallowRef<{ value: string, items: PurchaseShipmentStatusCountsDto['items'] }[]>([])
