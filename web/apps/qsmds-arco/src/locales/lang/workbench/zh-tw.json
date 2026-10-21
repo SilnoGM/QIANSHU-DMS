@@ -3,6 +3,14 @@
     "realtimePayments": "即時收付",
     "finance": "千樹財務工作台",
     "purchase": "千樹採購工作台",
+    "mobile": {
+      "operations": "運營",
+      "finance": "財務",
+      "purchaseTransport": "財運",
+      "admin": "管理",
+      "system": "系統",
+      "component": "組件"
+    },
     "salesReceipts": "銷售收款",
     "purchasePayments": "採購付款",
     "purchaseReviews": "採購審核",

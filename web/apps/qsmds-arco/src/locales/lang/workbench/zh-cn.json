@@ -3,6 +3,14 @@
     "realtimePayments": "实收实付",
     "finance": "千树财务工作台",
     "purchaseTransport": "千树采运工作台",
+    "mobile": {
+      "operations": "运营",
+      "finance": "财务",
+      "purchaseTransport": "财运",
+      "admin": "管理",
+      "system": "系统",
+      "component": "组件"
+    },
     "salesReceipts": "销售收款",
     "purchasePayments": "采购付款",
     "purchaseReviews": "采购审核",

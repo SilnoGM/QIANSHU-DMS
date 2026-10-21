@@ -18,6 +18,29 @@ const appSettingsStore = useAppSettingsStore()
 const appMenuStore = useAppMenuStore()
 
 const { generateI18nTitle, switchTo } = useAppMenu()
+const { t } = useI18n()
+
+// 移动端窄栏只放短名；桌面端继续使用完整标题。这里按顶层标题映射 i18n 短名，避免写死中文。
+const MOBILE_MENU_TITLE_KEYS: Record<string, string> = {
+  '千树运营工作台': 'workbench.mobile.operations',
+  'workbench.finance': 'workbench.mobile.finance',
+  'workbench.purchaseTransport': 'workbench.mobile.purchaseTransport',
+  '管理员工作台': 'workbench.mobile.admin',
+  '系统管理': 'workbench.mobile.system',
+  '组件库': 'workbench.mobile.component',
+}
+const isMobile = computed(() => appSettingsStore.mode === 'mobile')
+
+function menuTitle(item: { meta?: { title?: unknown } | null }): string {
+  const title = item.meta?.title
+  if (isMobile.value && typeof title === 'string') {
+    const mobileTitleKey = MOBILE_MENU_TITLE_KEYS[title]
+    if (mobileTitleKey !== undefined) {
+      return t(mobileTitleKey)
+    }
+  }
+  return generateI18nTitle(typeof title === 'string' ? title : undefined)
+}
 
 useHotkeyBindings({
   'menu.next': () => {
@@ -70,7 +93,7 @@ function iconName(isActive: boolean, icon?: string | [string, string]) {
                   <div class="inline-flex flex-1 flex-col gap-1 w-full items-center justify-center">
                     <FaIcon v-if="iconName(index === appMenuStore.actived, item.meta?.icon)" :name="iconName(index === appMenuStore.actived, item.meta?.icon)!" class="menu-item-container-icon transition-transform group-hover-scale-120" :class="{ 'size-6!': iconName(index === appMenuStore.actived, item.meta?.icon)?.startsWith('qs-') }" />
                     <span class="text-sm text-center flex-1 w-full truncate transition-height transition-opacity transition-width empty:hidden">
-                      {{ generateI18nTitle(item.meta?.title) }}
+                      {{ menuTitle(item) }}
                     </span>
                   </div>
                   <FaBadge

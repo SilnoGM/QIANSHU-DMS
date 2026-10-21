@@ -3,6 +3,14 @@
     "realtimePayments": "Real-time payments",
     "finance": "Qianshu Finance Workbench",
     "purchase": "Qianshu Purchase Workbench",
+    "mobile": {
+      "operations": "Ops",
+      "finance": "Finance",
+      "purchaseTransport": "Logistics",
+      "admin": "Admin",
+      "system": "System",
+      "component": "Components"
+    },
     "salesReceipts": "Sales Receipts",
     "purchasePayments": "Purchase Payments",
     "purchaseReviews": "Purchase Review",
