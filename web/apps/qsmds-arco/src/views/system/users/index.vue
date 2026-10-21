@@ -513,7 +513,7 @@ onMounted(() => {
             <QsPersonDisplay
               :display-name="row.original.displayName"
               :avatar-url="row.original.profile.avatarUrl"
-              size="sm"
+              size="md"
             />
           </template>
           <template #cell-status="{ row }">
@@ -593,7 +593,7 @@ onMounted(() => {
                     <QsPersonDisplay
                       :display-name="user.displayName"
                       :avatar-url="user.profile.avatarUrl"
-                      size="sm"
+                      size="md"
                       class="max-w-full"
                     />
                   </dd>

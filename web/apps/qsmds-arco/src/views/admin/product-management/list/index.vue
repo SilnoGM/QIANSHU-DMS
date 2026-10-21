@@ -1449,14 +1449,14 @@ onBeforeUnmount(() => {
               <DateTimeDisplay :value="row.original.createdAt" />
             </template>
             <template #cell-createdBy="{ row }">
-              <QsPersonDisplay v-if="row.original.createdBy" :display-name="row.original.createdBy.displayName" size="sm" :avatar-url="row.original.createdBy.avatarUrl" />
+              <QsPersonDisplay v-if="row.original.createdBy" :display-name="row.original.createdBy.displayName" size="md" :avatar-url="row.original.createdBy.avatarUrl" />
               <span v-else class="text-muted-foreground">—</span>
             </template>
             <template #cell-updatedAt="{ row }">
               <DateTimeDisplay :value="row.original.updatedAt" />
             </template>
             <template #cell-updatedBy="{ row }">
-              <QsPersonDisplay v-if="row.original.updatedBy" :display-name="row.original.updatedBy.displayName" size="sm" :avatar-url="row.original.updatedBy.avatarUrl" />
+              <QsPersonDisplay v-if="row.original.updatedBy" :display-name="row.original.updatedBy.displayName" size="md" :avatar-url="row.original.updatedBy.avatarUrl" />
               <span v-else class="text-muted-foreground">—</span>
             </template>
 
@@ -1670,7 +1670,7 @@ onBeforeUnmount(() => {
                   <dt class="qs-type-compact-label">
                     创建人
                   </dt><dd class="m-0">
-                    <QsPersonDisplay v-if="row.createdBy" :display-name="row.createdBy.displayName" size="sm" :avatar-url="row.createdBy.avatarUrl" />
+                    <QsPersonDisplay v-if="row.createdBy" :display-name="row.createdBy.displayName" size="md" :avatar-url="row.createdBy.avatarUrl" />
                     <span v-else>—</span>
                   </dd>
                 </div>
@@ -1685,7 +1685,7 @@ onBeforeUnmount(() => {
                   <dt class="qs-type-compact-label">
                     更新人
                   </dt><dd class="m-0">
-                    <QsPersonDisplay v-if="row.updatedBy" :display-name="row.updatedBy.displayName" size="sm" :avatar-url="row.updatedBy.avatarUrl" />
+                    <QsPersonDisplay v-if="row.updatedBy" :display-name="row.updatedBy.displayName" size="md" :avatar-url="row.updatedBy.avatarUrl" />
                     <span v-else>—</span>
                   </dd>
                 </div>

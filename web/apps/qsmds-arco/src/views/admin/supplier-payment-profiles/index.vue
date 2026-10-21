@@ -147,7 +147,7 @@ onBeforeUnmount(keepEditing)
             </div>
           </template>
           <template #cell-updatedBy="{ row }">
-            <QsPersonDisplay v-if="row.original.updatedBy" :display-name="row.original.updatedBy.name" size="sm" :avatar-url="row.original.updatedBy.avatarUrl" /><span v-else class="text-muted-foreground">—</span>
+            <QsPersonDisplay v-if="row.original.updatedBy" :display-name="row.original.updatedBy.name" size="md" :avatar-url="row.original.updatedBy.avatarUrl" /><span v-else class="text-muted-foreground">—</span>
           </template>
           <template #cell-updatedAt="{ row }">
             <DateTimeDisplay v-if="row.original.updatedAt" :value="row.original.updatedAt" /><span v-else class="text-muted-foreground">—</span>

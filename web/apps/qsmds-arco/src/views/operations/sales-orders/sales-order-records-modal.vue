@@ -975,9 +975,9 @@ onBeforeUnmount(() => {
                         <dt class="text-muted-foreground inline">
                           记录人：
                         </dt>
-                        <dd class="m-0 inline-flex gap-2 items-center">
+                        <dd class="m-0 flex flex-col gap-1 items-start">
                           <QsPersonDisplay :display-name="payment.createdBy.displayName" size="sm" :avatar-url="payment.createdBy.avatarUrl" />
-                          <DateTimeDisplay :value="payment.createdAt" />
+                          <span class="text-muted-foreground"><DateTimeDisplay :value="payment.createdAt" /></span>
                         </dd>
                       </div>
                     </dl>
@@ -1017,10 +1017,11 @@ onBeforeUnmount(() => {
                       <p class="m-0 break-words">
                         作废原因：{{ optionalText(payment.voidReason) }}
                       </p>
-                      <p class="text-muted-foreground m-0 mt-1 flex flex-wrap gap-2 items-center">
+                      <div class="mt-1 flex flex-col gap-1 items-start">
                         <QsPersonDisplay v-if="payment.voidedBy" :display-name="payment.voidedBy.displayName" size="sm" :avatar-url="payment.voidedBy.avatarUrl" />
-                        <span v-else>未知用户</span> · <DateTimeDisplay :value="payment.voidedAt" />
-                      </p>
+                        <span v-else class="text-muted-foreground">未知用户</span>
+                        <span class="text-muted-foreground"><DateTimeDisplay :value="payment.voidedAt" /></span>
+                      </div>
                     </div>
                   </div>
                   <AmountDisplay

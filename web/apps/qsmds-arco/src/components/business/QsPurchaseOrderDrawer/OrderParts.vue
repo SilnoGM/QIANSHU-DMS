@@ -132,7 +132,7 @@ function partTitle(partNumber: number): string {
                 <dt class="text-muted-foreground mb-1">
                   {{ t('purchaseWarehouseReceipt.operator') }}
                 </dt><dd class="m-0">
-                  <QsPersonDisplay v-if="part.warehouseReceivedBy" :display-name="part.warehouseReceivedBy.displayName" size="md" :avatar-url="part.warehouseReceivedBy.avatarUrl" /><span v-else>—</span>
+                  <QsPersonDisplay v-if="part.warehouseReceivedBy" :display-name="part.warehouseReceivedBy.displayName" size="sm" :avatar-url="part.warehouseReceivedBy.avatarUrl" /><span v-else>—</span>
                 </dd>
               </div>
               <div>

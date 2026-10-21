@@ -48,23 +48,25 @@ const currencyCatalog = useCurrencyCatalog()
           {{ t('packagingPayment.owner') }}
         </dt>
         <dd class="m-0 mt-1">
-          <QsPersonDisplay :display-name="record.owner.name" size="sm" :avatar-url="record.owner.avatarUrl" />
+          <QsPersonDisplay :display-name="record.owner.name" size="md" :avatar-url="record.owner.avatarUrl" />
         </dd>
       </div>
       <div>
         <dt class="qs-type-meta text-muted-foreground">
           {{ t('packagingPayment.submitted') }}
         </dt>
-        <dd class="m-0 mt-1 flex flex-wrap gap-2 items-center">
-          <QsPersonDisplay :display-name="record.submittedBy.name" size="sm" :avatar-url="record.submittedBy.avatarUrl" /><DateTimeDisplay :value="record.submittedAt" />
+        <dd class="m-0 mt-1 flex flex-col gap-1 items-start">
+          <QsPersonDisplay :display-name="record.submittedBy.name" size="sm" :avatar-url="record.submittedBy.avatarUrl" />
+          <span class="text-muted-foreground"><DateTimeDisplay :value="record.submittedAt" /></span>
         </dd>
       </div>
       <div v-if="record.status === 'PAID'">
         <dt class="qs-type-meta text-muted-foreground">
           {{ t('packagingPayment.paid') }}
         </dt>
-        <dd class="m-0 mt-1 flex flex-wrap gap-2 items-center">
-          <QsPersonDisplay v-if="record.paidBy" :display-name="record.paidBy.name" size="sm" :avatar-url="record.paidBy.avatarUrl" /><DateTimeDisplay :value="record.paidAt" />
+        <dd class="m-0 mt-1 flex flex-col gap-1 items-start">
+          <QsPersonDisplay v-if="record.paidBy" :display-name="record.paidBy.name" size="sm" :avatar-url="record.paidBy.avatarUrl" />
+          <span class="text-muted-foreground"><DateTimeDisplay :value="record.paidAt" /></span>
         </dd>
       </div>
       <div v-if="record.remark">

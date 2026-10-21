@@ -241,7 +241,7 @@ onMounted(loadEvents)
               v-if="row.original.actorType === 'USER'"
               :display-name="row.original.actorDisplayName ?? ''"
               :avatar-url="row.original.actorAvatarUrl"
-              size="sm"
+              size="md"
             />
             <span v-else class="qs-type-body-medium">—</span>
           </template>
@@ -313,7 +313,7 @@ onMounted(loadEvents)
                       v-if="event.actorType === 'USER'"
                       :display-name="event.actorDisplayName ?? ''"
                       :avatar-url="event.actorAvatarUrl"
-                      size="sm"
+                      size="md"
                     />
                     <span v-else>—</span>
                   </dd>

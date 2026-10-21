@@ -70,6 +70,7 @@
   "salesReceipt.receiptInfo": "收款信息",
   "salesReceipt.paymentAndVoucher": "方式 / 凭证",
   "salesReceipt.reviewInfo": "审核状态 / 记录",
+  "salesReceipt.reviewStatus": "审核状态",
   "salesReceipt.notPosted": "尚未入账",
   "salesReceipt.resubmitted": "驳回重提",
   "salesReceipt.notes": "备注 / 审核说明",

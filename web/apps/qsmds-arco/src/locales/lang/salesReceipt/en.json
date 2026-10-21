@@ -70,6 +70,7 @@
   "salesReceipt.receiptInfo": "Receipt information",
   "salesReceipt.paymentAndVoucher": "Method / Voucher",
   "salesReceipt.reviewInfo": "Review status / History",
+  "salesReceipt.reviewStatus": "Review status",
   "salesReceipt.notPosted": "Not posted",
   "salesReceipt.resubmitted": "Resubmitted",
   "salesReceipt.notes": "Notes / Review comments",

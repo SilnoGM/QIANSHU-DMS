@@ -60,6 +60,43 @@ function findInterpolations(source) {
   return matches
 }
 
+/** 按 template 嵌套深度截取某个插槽块，用于检查单元格内部的人员与时间顺序。 */
+function findTemplateBlocks(source, slotPattern) {
+  const blocks = []
+  const opening = new RegExp(`<template[^>]*${slotPattern}[^>]*>`, 'gu')
+  for (const match of source.matchAll(opening)) {
+    let cursor = match.index + match[0].length
+    let depth = 1
+    const openTemplate = /<template\b[^>]*>/gu
+    const closeTemplate = /<\/template>/gu
+    while (depth > 0) {
+      openTemplate.lastIndex = cursor
+      closeTemplate.lastIndex = cursor
+      const nextOpen = openTemplate.exec(source)
+      const nextClose = closeTemplate.exec(source)
+      if (nextClose === null) {
+        break
+      }
+      if (nextOpen !== null && nextOpen.index < nextClose.index) {
+        depth += 1
+        cursor = nextOpen.index + nextOpen[0].length
+      }
+      else {
+        depth -= 1
+        cursor = nextClose.index + nextClose[0].length
+        if (depth === 0) {
+          blocks.push({ body: source.slice(match.index, cursor), index: match.index })
+        }
+      }
+    }
+  }
+  return blocks
+}
+
+function readPersonSize(tag) {
+  return tag.match(/:?size="([^"]+)"/u)?.[1] ?? 'md'
+}
+
 test('生产页面不得在模板插值中手写系统人员姓名或人员 ID', () => {
   const violations = []
   const scannedFiles = [
@@ -95,4 +132,76 @@ test('纯文本例外清单只包含仍然存在的文件与明确理由', () =>
       `${relativePath} 已不存在，请删除过期例外`,
     )
   }
+})
+
+test('表格单元格中人员尺寸与人员/时间顺序符合约定', () => {
+  const violations = []
+  const scannedFiles = [
+    ...collectVueFiles(path.join(applicationRoot, 'views')),
+    ...collectVueFiles(path.join(applicationRoot, 'components/business')),
+  ]
+
+  for (const absolutePath of scannedFiles) {
+    const relativePath = toRelativePath(absolutePath)
+    const source = readFileSync(absolutePath, 'utf8')
+    for (const block of findTemplateBlocks(source, '#cell-([\\w-]+)')) {
+      const persons = [...block.body.matchAll(/<QsPersonDisplay\b[^>]*>/gsu)]
+      if (persons.length === 0) {
+        continue
+      }
+      const line = source.slice(0, block.index).split('\n').length
+      const times = [...block.body.matchAll(/<DateTimeDisplay\b/gu)]
+      if (times.length > 0) {
+        if ((times[0].index ?? 0) < (persons[0].index ?? 0)) {
+          violations.push(`${relativePath}:${line} 人员与时间同格时人员必须在第一行`)
+        }
+        for (const person of persons) {
+          if (readPersonSize(person[0]) !== 'sm') {
+            violations.push(`${relativePath}:${line} 人员与时间同格时必须使用 sm`)
+          }
+        }
+      }
+      else {
+        for (const person of persons) {
+          if (readPersonSize(person[0]) !== 'md') {
+            violations.push(`${relativePath}:${line} 人员单独一列时必须使用 md`)
+          }
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(
+    violations,
+    [],
+    `以下表格单元格不符合人员显示尺寸约定：\n${violations.join('\n')}`,
+  )
+})
+
+test('弹窗与抽屉中的人员显示一律使用小尺寸', () => {
+  const violations = []
+  const scannedFiles = [
+    ...collectVueFiles(path.join(applicationRoot, 'views')),
+    ...collectVueFiles(path.join(applicationRoot, 'components/business')),
+  ]
+
+  for (const absolutePath of scannedFiles) {
+    const relativePath = toRelativePath(absolutePath)
+    if (!/(?:Drawer|drawer|Modal|modal)/u.test(relativePath)) {
+      continue
+    }
+    const source = readFileSync(absolutePath, 'utf8')
+    for (const person of source.matchAll(/<QsPersonDisplay\b[^>]*>/gsu)) {
+      if (readPersonSize(person[0]) !== 'sm') {
+        const line = source.slice(0, person.index).split('\n').length
+        violations.push(`${relativePath}:${line} 弹窗/抽屉必须使用 sm`)
+      }
+    }
+  }
+
+  assert.deepEqual(
+    violations,
+    [],
+    `以下弹窗/抽屉不符合人员显示尺寸约定：\n${violations.join('\n')}`,
+  )
 })

@@ -300,7 +300,7 @@ onBeforeUnmount(() => controller?.abort())
               <dt class="qs-type-compact-label mb-1.5">
                 {{ t('salesReceipt.owner') }}
               </dt><dd class="m-0 min-w-0">
-                <QsPersonDisplay :display-name="detail.accountOwner.name" size="md" class="max-w-full" :avatar-url="detail.accountOwner.avatarUrl" />
+                <QsPersonDisplay :display-name="detail.accountOwner.name" size="sm" class="max-w-full" :avatar-url="detail.accountOwner.avatarUrl" />
               </dd>
             </div>
             <div class="min-w-0">

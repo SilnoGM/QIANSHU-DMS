@@ -629,8 +629,9 @@ onBeforeUnmount(() => {
               <div>
                 <dt class="qs-type-meta text-muted-foreground">
                   {{ t('slhBill.column.created') }}
-                </dt><dd class="m-0 flex flex-wrap gap-2 items-center">
-                  <QsPersonDisplay :display-name="row.createdByDisplayName" size="sm" :avatar-url="row.createdByAvatarUrl" /> · <DateTimeDisplay :value="row.createdAt" />
+                </dt><dd class="m-0 flex flex-col gap-1 items-start">
+                  <QsPersonDisplay :display-name="row.createdByDisplayName" size="sm" :avatar-url="row.createdByAvatarUrl" />
+                  <span class="text-muted-foreground"><DateTimeDisplay :value="row.createdAt" /></span>
                 </dd>
               </div>
             </dl>

@@ -171,7 +171,7 @@ onBeforeUnmount(() => {
             <PackagingProof :record="row.original" />
           </template>
           <template #cell-owner="{ row }">
-            <QsPersonDisplay :display-name="row.original.owner.name" size="sm" :avatar-url="row.original.owner.avatarUrl" />
+            <QsPersonDisplay :display-name="row.original.owner.name" size="md" :avatar-url="row.original.owner.avatarUrl" />
           </template>
           <template #cell-submitted="{ row }">
             <QsTableStackedCell>

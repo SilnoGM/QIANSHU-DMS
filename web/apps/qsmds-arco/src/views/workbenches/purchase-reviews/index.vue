@@ -319,10 +319,10 @@ onBeforeUnmount(() => {
         </template>
         <template #cell-reviewSummary="{ row }">
           <QsTableStackedCell v-if="row.original.reviewSummary" class="max-w-96 w-full">
-            <div class="flex gap-3 min-w-0 whitespace-nowrap items-center">
-              <QsPersonDisplay :display-name="row.original.reviewSummary.reviewedBy.displayName" size="sm" class="max-w-32" :avatar-url="row.original.reviewSummary.reviewedBy.avatarUrl" />
-              <DateTimeDisplay :value="row.original.reviewSummary.reviewedAt" class="text-muted-foreground shrink-0" />
-            </div>
+            <QsPersonDisplay :display-name="row.original.reviewSummary.reviewedBy.displayName" size="sm" class="max-w-32" :avatar-url="row.original.reviewSummary.reviewedBy.avatarUrl" />
+            <QsTableStackedLine tone="muted" nowrap>
+              <DateTimeDisplay :value="row.original.reviewSummary.reviewedAt" />
+            </QsTableStackedLine>
             <QsTableStackedLine :label="t('purchaseReview.summary.reason')" nowrap content-class="flex-1 overflow-hidden">
               <FaTooltip :text="row.original.reviewSummary.reason || t('purchaseReview.summary.notRecorded')">
                 <span class="block truncate">{{ row.original.reviewSummary.reason || t('purchaseReview.summary.notRecorded') }}</span>

@@ -67,9 +67,9 @@ const documentTones = {
             <div class="sm:col-span-2">
               <dt class="text-muted-foreground inline">
                 {{ t('purchaseOrderDrawer.recordedBy') }}：
-              </dt><dd class="m-0 inline-flex flex-wrap gap-2 items-center">
+              </dt><dd class="m-0 flex flex-col gap-1 items-start">
                 <QsPersonDisplay :display-name="payment.createdBy.displayName" size="sm" :avatar-url="payment.createdBy.avatarUrl" />
-                <DateTimeDisplay :value="payment.createdAt" />
+                <span class="text-muted-foreground"><DateTimeDisplay :value="payment.createdAt" /></span>
               </dd>
             </div>
           </dl>
@@ -94,9 +94,9 @@ const documentTones = {
             <p class="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
               {{ t('purchaseOrderDrawer.voidReason') }}：{{ optionalText(payment.voidReason) }}
             </p>
-            <div class="text-muted-foreground mt-1 flex flex-wrap gap-2 items-center">
+            <div class="mt-1 flex flex-col gap-1 items-start">
               <QsPersonDisplay :display-name="payment.voidedBy?.displayName ?? '-'" size="sm" :avatar-url="payment.voidedBy?.avatarUrl" />
-              <DateTimeDisplay :value="payment.voidedAt" />
+              <span class="text-muted-foreground"><DateTimeDisplay :value="payment.voidedAt" /></span>
             </div>
           </div>
         </div>

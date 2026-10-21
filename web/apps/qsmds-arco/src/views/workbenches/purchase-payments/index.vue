@@ -164,7 +164,7 @@ onBeforeUnmount(() => {
               <span class="flex gap-1 items-center">
                 <span class="text-muted-foreground">{{ t('purchasePayment.owner') }}：</span>
                 <span v-if="row.order.accountOwnerType === 'COMPANY'">{{ t('purchasePayment.companyAccount') }}</span>
-                <QsPersonDisplay v-else-if="row.order.owner" :display-name="row.order.owner.name" size="sm" :avatar-url="row.order.owner.avatarUrl" />
+                <QsPersonDisplay v-else-if="row.order.owner" :display-name="row.order.owner.name" size="md" :avatar-url="row.order.owner.avatarUrl" />
                 <span v-else>{{ t('purchasePayment.ownerUnavailable') }}</span>
               </span>
             </div>
@@ -212,9 +212,9 @@ onBeforeUnmount(() => {
                 </dd>
               </div>
             </dl>
-            <div v-if="row.payable.paidAt" class="text-muted-foreground mt-3 flex flex-wrap gap-2 items-center">
+            <div v-if="row.payable.paidAt" class="mt-3 flex flex-col gap-1 items-start">
               <QsPersonDisplay v-if="row.payable.paidBy" :display-name="row.payable.paidBy.name" size="sm" :avatar-url="row.payable.paidBy.avatarUrl" />
-              <DateTimeDisplay :value="row.payable.paidAt" />
+              <span class="text-muted-foreground"><DateTimeDisplay :value="row.payable.paidAt" /></span>
             </div>
           </template>
         </template>

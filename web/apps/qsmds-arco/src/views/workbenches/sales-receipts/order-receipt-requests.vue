@@ -46,9 +46,9 @@ function changePage(delta: number): void {
             </FaTag>
             <AmountDisplay :value="item.amount" :currency="item.currencyCode" :currencies="currencies" class="font-semibold" />
           </div>
-          <div class="qs-type-meta flex flex-wrap gap-x-3 gap-y-2 items-center">
-            <DateTimeDisplay :value="item.submittedAt" />
+          <div class="qs-type-meta flex flex-col gap-1 items-start">
             <QsPersonDisplay :display-name="item.submittedBy.name" size="sm" :avatar-url="item.submittedBy.avatarUrl" />
+            <span class="text-muted-foreground"><DateTimeDisplay :value="item.submittedAt" /></span>
           </div>
           <p v-if="item.reviewRemark" class="text-sm m-0 break-words">
             {{ t('salesReceipt.reviewRemark') }}: {{ item.reviewRemark }}

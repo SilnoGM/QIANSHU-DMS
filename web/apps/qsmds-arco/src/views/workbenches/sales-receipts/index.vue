@@ -48,7 +48,8 @@ const columns = computed<QsGenericTableColumn<SalesReceiptRequestDetailDto>[]>((
   { id: 'voucher', accessorFn: item => item.voucher?.title, title: t('salesReceipt.voucherTitle'), minWidth: 180 },
   { id: 'owner', accessorFn: item => item.accountOwner.name, title: t('salesReceipt.owner'), minWidth: 155 },
   { id: 'submitted', accessorKey: 'submittedAt', title: t('salesReceipt.submittedAt'), minWidth: 185 },
-  { id: 'review', accessorKey: 'status', title: t('salesReceipt.reviewInfo'), minWidth: 200 },
+  { id: 'reviewStatus', accessorKey: 'status', title: t('salesReceipt.reviewStatus'), minWidth: 140 },
+  { id: 'review', accessorFn: item => item.reviewedAt, title: t('salesReceipt.reviewedAt'), minWidth: 200 },
   { id: 'notes', accessorKey: 'remark', title: t('salesReceipt.notes'), minWidth: 220 },
   ...(status.value === 'VOIDED'
     ? [
@@ -140,7 +141,7 @@ onBeforeUnmount(() => controller?.abort())
         v-model:search="keyword"
         v-model:filters="filters"
         row-key="id"
-        table-class="min-w-[2040px]"
+        table-class="min-w-[2180px]"
         :show-row-number="false"
         :columns="columns"
         :data="items"
@@ -217,19 +218,18 @@ onBeforeUnmount(() => controller?.abort())
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
+        <template #cell-reviewStatus="{ row }">
+          <FaTag variant="outline" class="qs-type-status-tag" :class="statusClass(row.original)">
+            {{ t(`salesReceipt.status.${row.original.status}`) }}
+          </FaTag>
+          <FaTag v-if="row.original.approvedPayment?.voidedAt" variant="outline" class="text-destructive qs-type-status-tag ml-1 border-destructive/30">
+            {{ t('salesReceipt.voided') }}
+          </FaTag>
+        </template>
         <template #cell-review="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine>
-              <FaTag variant="outline" class="qs-type-status-tag" :class="statusClass(row.original)">
-                {{ t(`salesReceipt.status.${row.original.status}`) }}
-              </FaTag>
-              <FaTag v-if="row.original.approvedPayment?.voidedAt" variant="outline" class="text-destructive qs-type-status-tag ml-1 border-destructive/30">
-                {{ t('salesReceipt.voided') }}
-              </FaTag>
-            </QsTableStackedLine>
-            <QsTableStackedLine v-if="row.original.reviewedBy">
-              <QsPersonDisplay :display-name="row.original.reviewedBy.name" size="sm" :avatar-url="row.original.reviewedBy.avatarUrl" />
-            </QsTableStackedLine>
+            <QsPersonDisplay v-if="row.original.reviewedBy" :display-name="row.original.reviewedBy.name" size="sm" :avatar-url="row.original.reviewedBy.avatarUrl" />
+            <span v-else class="qs-type-meta">—</span>
             <QsTableStackedLine v-if="row.original.reviewedAt" tone="muted">
               <DateTimeDisplay :value="row.original.reviewedAt" />
             </QsTableStackedLine>
@@ -305,18 +305,18 @@ onBeforeUnmount(() => controller?.abort())
               <div>
                 <dt class="qs-type-meta">
                   {{ t('salesReceipt.submittedAt') }}
-                </dt><dd class="m-0 flex flex-wrap gap-2 items-center">
+                </dt><dd class="m-0 flex flex-col gap-1 items-start">
                   <QsPersonDisplay :display-name="row.submittedBy.name" size="sm" :avatar-url="row.submittedBy.avatarUrl" />
-                  <span class="inline-flex gap-2 items-center"><span aria-hidden="true">·</span><DateTimeDisplay :value="row.submittedAt" /></span>
+                  <span class="text-muted-foreground block"><DateTimeDisplay :value="row.submittedAt" /></span>
                 </dd>
               </div>
               <div v-if="row.reviewedAt">
                 <dt class="qs-type-meta">
                   {{ t('salesReceipt.reviewedAt') }}
-                </dt><dd class="m-0 flex flex-wrap gap-2 items-center">
+                </dt><dd class="m-0 flex flex-col gap-1 items-start">
                   <QsPersonDisplay v-if="row.reviewedBy" :display-name="row.reviewedBy.name" size="sm" :avatar-url="row.reviewedBy.avatarUrl" />
                   <span v-else class="qs-type-meta">—</span>
-                  <span class="inline-flex gap-2 items-center"><span aria-hidden="true">·</span><DateTimeDisplay :value="row.reviewedAt" /></span>
+                  <span class="text-muted-foreground block"><DateTimeDisplay :value="row.reviewedAt" /></span>
                 </dd>
               </div>
               <div v-if="row.approvedPayment?.posting">

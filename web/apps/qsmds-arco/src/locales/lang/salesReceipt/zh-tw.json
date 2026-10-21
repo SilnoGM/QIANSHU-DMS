@@ -70,6 +70,7 @@
   "salesReceipt.receiptInfo": "收款資訊",
   "salesReceipt.paymentAndVoucher": "方式 / 憑證",
   "salesReceipt.reviewInfo": "審核狀態 / 紀錄",
+  "salesReceipt.reviewStatus": "審核狀態",
   "salesReceipt.notPosted": "尚未入帳",
   "salesReceipt.resubmitted": "駁回重提",
   "salesReceipt.notes": "備註 / 審核說明",

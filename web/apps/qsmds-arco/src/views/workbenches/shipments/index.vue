@@ -374,8 +374,10 @@ onBeforeUnmount(() => {
           </template>
           <template #cell-shipped="{ row }">
             <QsTableStackedCell v-if="row.original.shippedAt">
-              <DateTimeDisplay :value="row.original.shippedAt" />
-              <QsPersonDisplay v-if="row.original.shippedBy" :display-name="row.original.shippedBy.displayName" size="md" :avatar-url="row.original.shippedBy.avatarUrl" />
+              <QsPersonDisplay v-if="row.original.shippedBy" :display-name="row.original.shippedBy.displayName" size="sm" :avatar-url="row.original.shippedBy.avatarUrl" />
+              <QsTableStackedLine tone="muted">
+                <DateTimeDisplay :value="row.original.shippedAt" />
+              </QsTableStackedLine>
             </QsTableStackedCell>
             <span v-else class="qs-type-meta">{{ t('purchaseShipments.notShipped') }}</span>
           </template>
@@ -384,7 +386,10 @@ onBeforeUnmount(() => {
           </template>
           <template #cell-received="{ row }">
             <QsTableStackedCell v-if="row.original.warehouseReceivedAt">
-              <DateTimeDisplay :value="row.original.warehouseReceivedAt" /><QsPersonDisplay v-if="row.original.warehouseReceivedBy" :display-name="row.original.warehouseReceivedBy.displayName" size="md" :avatar-url="row.original.warehouseReceivedBy.avatarUrl" />
+              <QsPersonDisplay v-if="row.original.warehouseReceivedBy" :display-name="row.original.warehouseReceivedBy.displayName" size="sm" :avatar-url="row.original.warehouseReceivedBy.avatarUrl" />
+              <QsTableStackedLine tone="muted">
+                <DateTimeDisplay :value="row.original.warehouseReceivedAt" />
+              </QsTableStackedLine>
             </QsTableStackedCell><span v-else class="qs-type-meta text-muted-foreground">—</span>
           </template>
           <template #cell-createdAt="{ row }">
@@ -469,11 +474,14 @@ onBeforeUnmount(() => {
                 <span class="text-muted-foreground">{{ t('purchaseShipments.destinationWarehouse') }}：</span>
                 <span class="[overflow-wrap:anywhere]">{{ formatDestinationWarehouse(row, t) }}</span>
               </div>
-              <div v-if="row.warehouseReceivedAt" class="flex flex-wrap gap-2 items-center">
-                <span class="qs-type-meta text-muted-foreground">{{ t('purchaseWarehouseReceipt.receivedAt') }}</span><DateTimeDisplay :value="row.warehouseReceivedAt" /><QsPersonDisplay v-if="row.warehouseReceivedBy" :display-name="row.warehouseReceivedBy.displayName" size="md" :avatar-url="row.warehouseReceivedBy.avatarUrl" />
+              <div v-if="row.warehouseReceivedAt" class="flex flex-col gap-1 items-start">
+                <span class="qs-type-meta text-muted-foreground">{{ t('purchaseWarehouseReceipt.receivedAt') }}</span>
+                <QsPersonDisplay v-if="row.warehouseReceivedBy" :display-name="row.warehouseReceivedBy.displayName" size="sm" :avatar-url="row.warehouseReceivedBy.avatarUrl" />
+                <span class="text-muted-foreground"><DateTimeDisplay :value="row.warehouseReceivedAt" /></span>
               </div>
-              <div v-if="row.shippedAt" class="flex flex-wrap gap-2 items-center">
-                <DateTimeDisplay :value="row.shippedAt" /><QsPersonDisplay v-if="row.shippedBy" :display-name="row.shippedBy.displayName" size="md" :avatar-url="row.shippedBy.avatarUrl" />
+              <div v-if="row.shippedAt" class="flex flex-col gap-1 items-start">
+                <QsPersonDisplay v-if="row.shippedBy" :display-name="row.shippedBy.displayName" size="sm" :avatar-url="row.shippedBy.avatarUrl" />
+                <span class="text-muted-foreground"><DateTimeDisplay :value="row.shippedAt" /></span>
               </div>
             </div>
           </template>

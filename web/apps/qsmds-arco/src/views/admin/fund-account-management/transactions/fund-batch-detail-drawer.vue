@@ -402,10 +402,10 @@ function reverse(): void {
                 </div>
                 <AmountDisplay :value="item.amount" :currency="detail.currency" :currencies="currencies" />
               </div>
-              <div class="qs-type-meta mt-2 flex flex-wrap gap-3 items-center">
-                <DateTimeDisplay :value="item.postedAt" />
+              <div class="qs-type-meta mt-2 flex flex-col gap-1 items-start">
                 <QsPersonDisplay v-if="item.actorDisplayName" :display-name="item.actorDisplayName" size="sm" :avatar-url="item.actorAvatarUrl" />
                 <span v-else>—</span>
+                <span class="text-muted-foreground"><DateTimeDisplay :value="item.postedAt" /></span>
               </div>
             </li>
           </ol>
