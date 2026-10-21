@@ -175,7 +175,7 @@ async function clickVisibleButton(page, text) {
 }
 
 // 无菜单身份（例如尚未分配角色的新用户）不会渲染侧边栏，账号菜单只能从头部右上角
-// 的头像按钮进入；该按钮是纯图标按钮、没有可读文本，因此以头部最后一个可见按钮定位。
+// 的账号入口进入；桌面为身份胶囊、移动端为头像，以头部最后一个可见按钮定位。
 async function openHeaderAccountMenu(page) {
   const accountButton = `(() => {
     const buttons = [...document.querySelectorAll('header button')].filter((button) => (

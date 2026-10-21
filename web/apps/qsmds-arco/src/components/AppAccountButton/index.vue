@@ -12,6 +12,8 @@ defineOptions({
 
 const props = withDefaults(defineProps<{
   onlyAvatar?: boolean
+  identity?: boolean
+  showMenuIdentity?: boolean
   dropdownAlign?: 'start' | 'center' | 'end'
   dropdownSide?: 'left' | 'right' | 'top' | 'bottom'
   buttonVariant?: 'secondary' | 'ghost'
@@ -20,6 +22,7 @@ const props = withDefaults(defineProps<{
   dropdownAlign: 'end',
   dropdownSide: 'right',
   buttonVariant: 'ghost',
+  showMenuIdentity: true,
 })
 
 const router = useRouter()
@@ -34,6 +37,9 @@ const accountUsername = computed(() => {
   const username = appAccountStore.account.trim()
   return username !== '' && username !== accountDisplayName.value ? username : ''
 })
+const accountLabel = computed(() => accountUsername.value === ''
+  ? accountDisplayName.value
+  : `${accountDisplayName.value}（${accountUsername.value}）`)
 
 const { t } = useI18n()
 const { generateI18nTitle } = useAppMenu()
@@ -115,7 +121,7 @@ async function submitLogout(scope: LogoutScope) {
       ],
     ]" class="flex-center"
   >
-    <template #header>
+    <template v-if="showMenuIdentity" #header>
       <div class="w-[174px] space-y-2">
         <div class="text-xs text-secondary-foreground/50 font-light">
           {{ t('app.components.accountButton.index.current_account') }}
@@ -136,14 +142,21 @@ async function submitLogout(scope: LogoutScope) {
       </div>
     </template>
     <FaButton
-      :variant="buttonVariant" size="icon-sm" :class="cn('flex-center gap-1 p-2', {
-        'p-1': onlyAvatar,
-      }, props.class)"
+      :variant="buttonVariant" :size="identity ? 'sm' : 'icon-sm'" :aria-label="accountLabel" :class="cn(
+        'flex-center gap-1',
+        identity ? 'h-12 gap-2.5 rounded-2xl px-3' : 'p-2',
+        { 'p-1': onlyAvatar },
+        props.class,
+      )"
     >
-      <FaAvatar :src="appAccountStore.avatar" :class="cn('size-6', { 'size-full': onlyAvatar })">
+      <FaAvatar :src="appAccountStore.avatar" :class="cn('shrink-0', identity ? 'size-10' : 'size-6', { 'size-full': onlyAvatar })">
         <FaIcon name="i-carbon:user-avatar-filled" class="text-secondary-foreground/50 size-6" />
       </FaAvatar>
-      <div v-if="!onlyAvatar" class="flex-center-between flex-1 gap-2 min-w-0">
+      <div v-if="identity" class="leading-tight text-start flex flex-col max-w-36 min-w-0">
+        <span class="text-sm text-[var(--g-header-color)] font-semibold truncate">{{ accountDisplayName }}</span>
+        <span v-if="accountUsername" class="text-xs text-[var(--g-header-menu-color)] truncate">{{ accountUsername }}</span>
+      </div>
+      <div v-else-if="!onlyAvatar" class="flex-center-between flex-1 gap-2 min-w-0">
         <div class="text-start flex-1 truncate">
           {{ appAccountStore.account }}
         </div>

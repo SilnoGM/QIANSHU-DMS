@@ -98,6 +98,23 @@ test('账户菜单通过根 App 管理唯一的个人资料 Modal 生命周期',
   )
 })
 
+test('顶栏身份胶囊与菜单身份块按空间互补显示', () => {
+  const buttonSource = readRelativeSource(
+    '../../src/components/AppAccountButton/index.vue',
+  )
+  const headerSource = readRelativeSource(
+    '../../src/layouts/components/Header/index.vue',
+  )
+
+  assert.match(buttonSource, /identity\?: boolean/u)
+  assert.match(buttonSource, /showMenuIdentity\?: boolean/u)
+  assert.match(buttonSource, /v-if="showMenuIdentity" #header/u)
+  assert.match(buttonSource, /v-if="identity"[\s\S]*?accountDisplayName/u)
+  assert.match(headerSource, /useMediaQuery\('\(max-width: 1365px\)'\)/u)
+  assert.match(headerSource, /:identity="!compactAccount"/u)
+  assert.match(headerSource, /:show-menu-identity="compactAccount"/u)
+})
+
 test('账户头像缺失时统一使用用户图标，不再生成文字头像', () => {
   const profileSource = readRelativeSource(
     '../../src/components/AppAccountButton/profile.vue',

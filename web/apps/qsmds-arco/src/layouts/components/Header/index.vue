@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useMediaQuery } from '@vueuse/core'
 import { useSlots } from '@/slots'
 import Logo from '../Logo/index.vue'
 import Menu from '../Menu/index.vue'
@@ -15,6 +16,9 @@ const route = useRoute()
 
 const appSettingsStore = useAppSettingsStore()
 const appMenuStore = useAppMenuStore()
+
+// 顶栏空间不足时退回单头像；菜单身份块跟随该状态显示，避免身份信息完全消失。
+const compactAccount = useMediaQuery('(max-width: 1365px)')
 
 const { generateI18nTitle, switchTo } = useAppMenu()
 
@@ -85,7 +89,13 @@ function iconName(isActive: boolean, icon?: string | [string, string]) {
         </FaScrollArea>
         <Component :is="useSlots('header-after-menu')" />
         <div class="flex-center">
-          <AppAccountButton only-avatar dropdown-side="bottom" class="p-2 size-12" />
+          <AppAccountButton
+            :identity="!compactAccount"
+            :only-avatar="compactAccount"
+            :show-menu-identity="compactAccount"
+            :class="compactAccount ? 'p-2 size-12' : ''"
+            dropdown-side="bottom"
+          />
         </div>
         <Component :is="useSlots('header-end')" />
       </div>
