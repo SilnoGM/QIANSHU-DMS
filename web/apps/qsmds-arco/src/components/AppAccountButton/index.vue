@@ -143,18 +143,21 @@ async function submitLogout(scope: LogoutScope) {
     </template>
     <FaButton
       :variant="buttonVariant" :size="identity ? 'sm' : 'icon-sm'" :aria-label="accountLabel" :class="cn(
-        'flex-center gap-1',
-        identity ? 'h-12 gap-2.5 rounded-2xl px-3' : 'p-2',
+        'flex-center gap-2',
+        identity ? 'h-11 rounded-full bg-muted/40 px-3 hover:bg-background hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)]' : 'p-2',
         { 'p-1': onlyAvatar },
         props.class,
       )"
     >
-      <FaAvatar :src="appAccountStore.avatar" :class="cn('shrink-0', identity ? 'size-10' : 'size-6', { 'size-full': onlyAvatar })">
-        <FaIcon name="i-carbon:user-avatar-filled" class="text-secondary-foreground/50 size-6" />
+      <FaAvatar :src="appAccountStore.avatar" :class="cn('shrink-0', identity ? 'size-8' : 'size-6', { 'size-full': onlyAvatar })">
+        <FaIcon name="i-carbon:user-avatar-filled" class="text-secondary-foreground/50" :class="identity ? 'size-5' : 'size-6'" />
       </FaAvatar>
-      <div v-if="identity" class="leading-tight text-start flex flex-col max-w-36 min-w-0">
-        <span class="text-sm text-[var(--g-header-color)] font-semibold truncate">{{ accountDisplayName }}</span>
-        <span v-if="accountUsername" class="text-xs text-[var(--g-header-menu-color)] truncate">{{ accountUsername }}</span>
+      <div v-if="identity" class="flex gap-2 max-w-36 min-w-0 items-center">
+        <div class="leading-tight text-start flex flex-col min-w-0">
+          <span class="text-[13px] text-[var(--g-header-color)] font-medium truncate">{{ accountDisplayName }}</span>
+          <span v-if="accountUsername" class="text-[11px] text-muted-foreground truncate">{{ accountUsername }}</span>
+        </div>
+        <FaIcon name="i-lucide:chevron-down" class="account-identity-chevron text-muted-foreground/70 shrink-0 size-4 transition-transform duration-200 motion-reduce:transition-none" aria-hidden="true" />
       </div>
       <div v-else-if="!onlyAvatar" class="flex-center-between flex-1 gap-2 min-w-0">
         <div class="text-start flex-1 truncate">
@@ -236,3 +239,10 @@ async function submitLogout(scope: LogoutScope) {
     </template>
   </QsGenericModal>
 </template>
+
+<style scoped>
+/* 触发器由 reka-ui 写入 data-state；用祖先状态驱动箭头，避免额外维护菜单开关状态。 */
+[data-state="open"] .account-identity-chevron {
+  transform: rotate(180deg);
+}
+</style>
