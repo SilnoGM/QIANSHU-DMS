@@ -38,6 +38,7 @@ describe('arrival shipment filters and stable ordering over isolated PostgreSQL'
   let fixture: AtomicityFixture
   let application: INestApplication
   let service: PurchaseShipmentQueryService
+  let lookup: DictionaryLookupService
   let legacyId: string, unknownId: string
   let parts: string[]
   let before: unknown
@@ -54,7 +55,7 @@ describe('arrival shipment filters and stable ordering over isolated PostgreSQL'
     await fixture.migrateWarehouseReceipt()
     legacyId = (await fixture.prisma.purchaseOrderPart.findFirstOrThrow({ where: { purchaseOrderId: legacyOrderId }, select: { id: true } })).id
 
-    const lookup = new DictionaryLookupService(fixture.prisma)
+    lookup = new DictionaryLookupService(fixture.prisma)
     const orders = new PurchaseOrderQueryService(fixture.prisma, lookup, createPaymentRecipientFixture(fixture.prisma))
     const shipping = new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress, lookup)
     const receipts = new PurchaseOrderWarehouseReceiptService(fixture.prisma, fixture.audit, orders)
@@ -215,6 +216,24 @@ describe('arrival shipment filters and stable ordering over isolated PostgreSQL'
     }
     const counts = await service.statusCounts({ destinationWarehouseValue: TEST_DESTINATION_WAREHOUSE, keyword: 'SF-SHARED' })
     expect(counts.items.filter(item => item.count > 0)).toEqual([{ value: 'ALL', count: 2 }, { value: 'SHIPPED', count: 1 }, { value: 'WAREHOUSE_RECEIVED', count: 1 }])
+  })
+
+  it('applies the SELF sales-owner scope to list and counts consistently with detail', async () => {
+    const outsider = '99999999-9999-4999-8999-999999999999'
+    const scoped = new PurchaseShipmentQueryService(
+      fixture.prisma,
+      lookup,
+      { resolve: jest.fn().mockResolvedValue('SELF') } as never,
+    )
+    const all = await scoped.list({ view: 'ALL' }, outsider)
+    expect(all.total).toBe(0)
+    expect(all.items).toEqual([])
+    const counts = await scoped.statusCounts({}, outsider)
+    expect(counts.items.every(item => item.count === 0)).toBe(true)
+    await expect(scoped.getById(parts[0], outsider)).rejects.toMatchObject({ code: 'PURCHASE_ORDER_PART_NOT_FOUND' })
+    // 该夹具的采购单全部是 STOCK，没有销售归属人，SELF 下连本单也不可见。
+    expect((await scoped.list({ view: 'ALL' }, fixture.actor.id)).total).toBe(0)
+    expect((await service.list({ view: 'ALL' })).total).toBe(7)
   })
 
   it('parses HTTP missing-value booleans strictly and rejects invalid or conflicting filters', async () => {

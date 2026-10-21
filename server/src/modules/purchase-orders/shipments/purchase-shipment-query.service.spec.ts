@@ -3,7 +3,7 @@ import type { DictionaryLookupService } from '../../dictionaries/dictionary-look
 import { PurchaseShipmentQueryService } from './purchase-shipment-query.service'
 import type { PurchaseShipmentFilterDto, PurchaseShipmentListQueryDto } from './purchase-shipment.dto'
 
-function fixture() {
+function fixture(scope: 'ALL' | 'SELF' = 'ALL') {
   const part = { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), findUnique: jest.fn() }
   ;(part as Record<string, unknown>).findFirst = part.findUnique
   const order = { findMany: jest.fn().mockResolvedValue([]) }
@@ -11,7 +11,8 @@ function fixture() {
   const transaction = { purchaseOrderPart: part, purchaseOrder: order, user }
   const prisma = { ...transaction, $transaction: jest.fn(async (run: (tx: typeof transaction) => Promise<unknown>) => run(transaction)) }
   const lookup = { resolveStoredValues: jest.fn().mockResolvedValue([]) }
-  return { part, order, user, prisma, lookup, service: new PurchaseShipmentQueryService(prisma as unknown as PrismaService, lookup as unknown as DictionaryLookupService) }
+  const dataScope = { resolve: jest.fn().mockResolvedValue(scope) }
+  return { part, order, user, prisma, lookup, dataScope, service: new PurchaseShipmentQueryService(prisma as unknown as PrismaService, lookup as unknown as DictionaryLookupService, dataScope as never) }
 }
 
 function row() {
@@ -252,6 +253,34 @@ describe('PurchaseShipmentQueryService', () => {
     await expect(f.service.statusCounts({ orderDateFrom: '2026-09-14', orderDateTo: '2026-09-01' })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
     await expect(f.service.list({ supplierSource: 'CUSTOM_TEXT', supplierValue: 'SUPPLIER_A' })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
     expect(f.part.findMany).not.toHaveBeenCalled()
+  })
+
+  it('keeps the SELF ownership predicate when list and counts also carry order filters', async () => {
+    const f = fixture('SELF')
+    const filters = { purchaseType: 'SALES_LINKED' as const, keyword: '配件' }
+    await f.service.list({ ...filters, view: 'WAREHOUSE_RECEIVED' }, 'actor-id')
+    await f.service.statusCounts(filters, 'actor-id')
+    const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
+    const countCall = f.part.count.mock.calls[1] as [{ where: { AND: unknown[] } }]
+    const listWhere = listCall[0].where.AND[0]
+    expect(countCall[0].where.AND[0]).toEqual(listWhere)
+    expect(listWhere).toMatchObject({
+      purchaseOrder: { is: {
+        salesOrder: { is: { issuerUserId: 'actor-id' } },
+        purchaseType: 'SALES_LINKED',
+      } },
+    })
+  })
+
+  it('does not narrow list or counts for an ALL-scoped actor', async () => {
+    const f = fixture('ALL')
+    await f.service.list({ purchaseType: 'SALES_LINKED' }, 'actor-id')
+    await f.service.statusCounts({ purchaseType: 'SALES_LINKED' }, 'actor-id')
+    const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
+    const countCall = f.part.count.mock.calls[1] as [{ where: { AND: unknown[] } }]
+    expect(countCall[0].where.AND[0]).toEqual(listCall[0].where.AND[0])
+    expect(listCall[0].where.AND[0]).toMatchObject({ purchaseOrder: { is: { purchaseType: 'SALES_LINKED' } } })
+    expect(listCall[0].where.AND[0]).not.toHaveProperty('purchaseOrder.is.salesOrder')
   })
 
   it('returns 404 for a SELF-scoped shipment outside the sales owner chain', async () => {

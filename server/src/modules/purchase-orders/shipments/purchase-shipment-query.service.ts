@@ -12,7 +12,7 @@ import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.se
 import { isNormalizableDictionaryItemValue, normalizeDictionaryItemValue } from '../../dictionaries/dictionary.normalizer'
 import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
 import type { DataScope } from '../../access-control/data-scope'
-import { purchaseOrderPartScopeWhere } from '../purchase-order-access'
+import { purchaseOrderPartScopeWhere, purchaseOrderScopeWhere } from '../purchase-order-access'
 import { purchaseOrderSupplierFromSources } from '../purchase-order-query.service'
 import type { PurchaseOrderSupplierDto } from '../dto/purchase-order-response.dto'
 import { PURCHASE_SHIPMENT_VIEWS } from './purchase-shipment.dto'
@@ -84,12 +84,13 @@ function baseWhere(input: PurchaseShipmentFilterDto, scope: DataScope, actorUser
   const keyword = rawKeyword?.normalize('NFKC')
   const match = { contains: keyword, mode: 'insensitive' } as const
   return {
-    ...purchaseOrderPartScopeWhere(scope, actorUserId),
     // 历史查询只匹配保存的稳定值，不以字典当前有效性排除停用或未知仓库。
     destinationWarehouseValue: input.destinationWarehouseMissing === true
       ? null
       : input.destinationWarehouseValue === undefined ? undefined : normalizeDictionaryItemValue(input.destinationWarehouseValue),
     purchaseOrder: { is: {
+      // 归属谓词必须与订单筛选写在同一个 purchaseOrder 对象里：外层再放一个同名键会把它静默覆盖。
+      ...purchaseOrderScopeWhere(scope, actorUserId),
       purchaseType: input.purchaseType,
       createdByUserId: input.createdByUserId,
       supplierValue: input.supplierValue ?? (input.supplierSource === 'CUSTOM_TEXT' ? null : input.supplierSource === 'DICTIONARY' ? { not: null } : undefined),

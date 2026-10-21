@@ -30,7 +30,7 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
   let service: PurchaseShipmentQueryService
   let orders: PurchaseOrderQueryService
   let receipts: PurchaseOrderWarehouseReceiptService
-  let pendingId: string, activeId: string, cancelledId: string, linkedId: string
+  let pendingId: string, activeId: string, cancelledId: string, linkedId: string, linkedPartId: string
   let shippedPartId: string, cancelledPartId: string, receivedPartId: string, unshippedPartId: string
   let activeVersion: number
   let authenticated = true
@@ -79,6 +79,7 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
     await fixture.prisma.dictionaryType.update({ where: { code: 'service_provider.supplier' }, data: { enabled: false } })
     const linked = await prepareSalesSource(fixture)
     linkedId = await commands.create(fixture.context(), linked.input)
+    linkedPartId = (await fixture.prisma.purchaseOrderPart.findFirstOrThrow({ where: { purchaseOrderId: linkedId }, select: { id: true } })).id
     await fixture.prisma.user.create({ data: {
       username: 'shipment-unassigned', usernameNormalized: 'shipment-unassigned', displayName: 'Unassigned user',
       passwordChangedAt: new Date(), passwordHash: 'e2e-only-not-a-real-password-hash',
@@ -172,6 +173,24 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
     const emptyCounts = await service.statusCounts({ orderDateFrom: '2026-09-08', createdByUserId: randomUUID() })
     expect(emptyCounts.items.every(item => item.count === 0)).toBe(true)
     expect(emptyCounts.buyerOptions).toEqual([{ id: fixture.actor.id, displayName: fixture.actor.displayName, avatarUrl: null }])
+  })
+
+  it('keeps list and status counts inside the sales owner scope for SELF actors', async () => {
+    const outsider = '99999999-9999-4999-8999-999999999999'
+    const scoped = new PurchaseShipmentQueryService(
+      fixture.prisma,
+      new DictionaryLookupService(fixture.prisma),
+      { resolve: jest.fn().mockResolvedValue('SELF') } as never,
+    )
+    const own = await scoped.list({ view: 'ALL' }, fixture.actor.id)
+    expect(own.items.map(item => item.id)).toEqual([linkedPartId])
+    expect(own.total).toBe(1)
+    const counts = await scoped.statusCounts({}, fixture.actor.id)
+    expect(counts.items.find(item => item.value === 'ALL')?.count).toBe(1)
+    expect(counts.items.filter(item => item.value !== 'ALL').reduce((sum, item) => sum + item.count, 0)).toBe(1)
+    expect((await scoped.list({ view: 'ALL' }, outsider)).total).toBe(0)
+    expect((await scoped.statusCounts({}, outsider)).items.every(item => item.count === 0)).toBe(true)
+    await expect(scoped.getById(linkedPartId, outsider)).rejects.toMatchObject({ code: 'PURCHASE_ORDER_PART_NOT_FOUND' })
   })
 
   it('returns full cancelled detail retaining marks/allocations and active shipment metadata independently', async () => {
