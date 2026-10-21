@@ -463,7 +463,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
       && routeStore?.isGenerate === true
       && menuStore?.sidebarMenus?.length > 0
       && router?.currentRoute?.value?.name !== 'login'
-      && document.body.innerText.includes('系统管理')
+      && document.body.innerText.split('\\n').some(line => ['系统', '系统管理'].includes(line.trim()))
   })()`)
 
   // 模拟同一用户的 Session 轮换先清空身份域；随后服务端广播重新验证必须
@@ -738,7 +738,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
       closeButtons: closeButtons.length,
       currentPasswordInputs: document.querySelectorAll('input[autocomplete="current-password"]').length,
       newPasswordInputs: document.querySelectorAll('input[autocomplete="new-password"]').length,
-      showsBusinessMenu: document.body.innerText.includes('系统管理'),
+      showsBusinessMenu: document.body.innerText.split('\\n').some(line => ['系统', '系统管理'].includes(line.trim())),
       showsExit: document.body.innerText.includes('退出登录'),
     }
   })()`)

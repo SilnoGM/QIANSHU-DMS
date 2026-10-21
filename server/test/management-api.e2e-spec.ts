@@ -962,6 +962,7 @@ describe('Management API with PostgreSQL', () => {
       metadata: { visible: 'yes' },
     })
     expect(Object.keys(auditFirstPage.items[0] ?? {}).sort()).toEqual([
+      'actorAvatarUrl',
       'actorDisplayName',
       'actorType',
       'actorUserId',

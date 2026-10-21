@@ -1453,6 +1453,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/index.vue",
       "apps/qsmds-arco/src/components/business/QsFactoryShipmentModal/ShipmentParts.vue",
       "apps/qsmds-arco/src/components/business/QsGenericTable/GroupHeader.vue",
       "apps/qsmds-arco/src/components/business/QsOceanContainerList/OceanContainerCard.vue",
