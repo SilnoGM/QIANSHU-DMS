@@ -94,12 +94,18 @@ export async function lockFundAccountForShareRateUpdate(
             'id', users."id",
             'username', users."username",
             'displayName', users."display_name",
-            'status', users."status"::text
+            'status', users."status"::text,
+            'profile', CASE
+              WHEN profile."user_id" IS NULL THEN NULL
+              ELSE jsonb_build_object('avatarUrl', profile."avatar_url")
+            END
           )
         END AS "user"
       FROM "fund_accounts" AS account
       LEFT JOIN "users" AS users
         ON users."id" = account."user_id"
+      LEFT JOIN "user_profiles" AS profile
+        ON profile."user_id" = users."id"
       WHERE account."id" = CAST(${accountId} AS uuid)
       FOR UPDATE OF account
     `,
