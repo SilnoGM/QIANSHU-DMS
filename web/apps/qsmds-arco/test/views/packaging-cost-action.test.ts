@@ -79,7 +79,7 @@ test('费用表单展示销售归属，失败不复制不关闭，成功复制�
   const f = await fixture()
   context.after(f.dispose)
   const { state, eligible, permission, unavailableReason, success, submitted, events } = f
-  assert.deepEqual(JSON.parse(JSON.stringify(state.context.value)), { shipmentId: 'part-1', shipmentNo: 'PKG-1', shippingMarkText: 'MARK-1', purchaseOrderNo: 'PO-1', salesOrderNo: 'SO-1', ownerName: '销售出单人' })
+  assert.deepEqual(JSON.parse(JSON.stringify(state.context.value)), { shipmentId: 'part-1', shipmentNo: 'PKG-1', shippingMarkText: 'MARK-1', purchaseOrderNo: 'PO-1', salesOrderNo: 'SO-1', ownerName: '销售出单人', ownerAvatarUrl: null })
   await state.submit({ amount: '10.00' })
   assert.equal(state.visible.value, true)
   assert.equal(success.length, 0)

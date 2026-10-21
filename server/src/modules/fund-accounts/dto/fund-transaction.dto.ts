@@ -532,6 +532,9 @@ export class FundPostingBatchReversalDto {
   @ApiProperty({ type: 'string' })
   actorDisplayName!: string
 
+  @ApiProperty({ type: 'string', nullable: true })
+  actorAvatarUrl!: string | null
+
   @ApiProperty({ type: 'string', format: 'date-time' })
   postedAt!: string
 }

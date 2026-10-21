@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma, type PaymentRecipientAccount } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import {
+  PERSON_REFERENCE_SELECT,
+  toNullablePersonReference,
+  type PersonReferenceRow,
+} from '../../infrastructure/database/person-reference'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { hasPersistenceCode, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
 import { ApiException } from '../../infrastructure/http/api.exception'
@@ -16,9 +21,13 @@ import { PAYMENT_RECIPIENT_METHODS } from './payment-recipient.dto'
 import { normalizePaymentRecipientAccounts, recipientFailure, recipientStateChanged, type NormalizedPaymentRecipientAccount } from './payment-recipient.normalizer'
 
 export interface PaymentRecipientOrder { readonly id: string, readonly supplierValue: string | null, readonly productMode: string }
-export const profileInclude = { accounts: true, updatedBy: { select: { id: true, displayName: true } } } satisfies Prisma.PaymentRecipientProfileInclude
+export const profileInclude = { accounts: true, updatedBy: { select: PERSON_REFERENCE_SELECT } } satisfies Prisma.PaymentRecipientProfileInclude
 type Profile = Prisma.PaymentRecipientProfileGetPayload<{ include: typeof profileInclude }>
 export const recipientContentUrl = (id: string) => `/api/payment-recipient-images/${id}/content`
+function toRecipientPerson(value: PersonReferenceRow) {
+  const reference = toNullablePersonReference(value)!
+  return { id: reference.id, name: reference.displayName, avatarUrl: reference.avatarUrl }
+}
 export function mapRecipientAccount(row: Pick<PaymentRecipientAccount, 'id' | 'paymentMethod' | 'recipientName' | 'qrMediaAssetId' | 'bankName' | 'bankAccount' | 'bankBranch'>): PaymentRecipientAccountDto {
   return { id: row.id, paymentMethod: row.paymentMethod as PaymentRecipientAccountDto['paymentMethod'], recipientName: row.recipientName,
     qrMediaAssetId: row.qrMediaAssetId, qrContentUrl: row.qrMediaAssetId ? recipientContentUrl(row.qrMediaAssetId) : null,
@@ -126,7 +135,7 @@ export class PaymentRecipientService {
 
   private supplierDto(supplierValue: string, supplierName: string, supplierEnabled: boolean, profile: Profile | null): SupplierPaymentProfileDto {
     return { supplierValue, supplierName, supplierEnabled, version: profile?.version ?? 0, accounts: profile ? mapProfile(profile).accounts : [],
-      updatedAt: profile?.updatedAt.toISOString() ?? null, updatedBy: profile ? { id: profile.updatedBy.id, name: profile.updatedBy.displayName } : null }
+      updatedAt: profile?.updatedAt.toISOString() ?? null, updatedBy: profile ? toRecipientPerson(profile.updatedBy) : null }
   }
   async writeAccounts(tx: Prisma.TransactionClient, profileId: string, accounts: NormalizedPaymentRecipientAccount[]) {
     await tx.paymentRecipientAccount.updateMany({ where: { profileId }, data: { enabled: false } })

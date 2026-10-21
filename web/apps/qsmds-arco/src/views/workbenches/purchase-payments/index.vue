@@ -164,7 +164,7 @@ onBeforeUnmount(() => {
               <span class="flex gap-1 items-center">
                 <span class="text-muted-foreground">{{ t('purchasePayment.owner') }}：</span>
                 <span v-if="row.order.accountOwnerType === 'COMPANY'">{{ t('purchasePayment.companyAccount') }}</span>
-                <QsPersonDisplay v-else-if="row.order.owner" :display-name="row.order.owner.name" size="sm" />
+                <QsPersonDisplay v-else-if="row.order.owner" :display-name="row.order.owner.name" size="sm" :avatar-url="row.order.owner.avatarUrl" />
                 <span v-else>{{ t('purchasePayment.ownerUnavailable') }}</span>
               </span>
             </div>
@@ -183,7 +183,7 @@ onBeforeUnmount(() => {
         </template>
         <template #cell-paid="{ row }">
           <div v-if="row.original.payable?.paidAt" class="flex flex-col gap-1 items-start">
-            <QsPersonDisplay v-if="row.original.payable.paidBy" :display-name="row.original.payable.paidBy.name" size="sm" />
+            <QsPersonDisplay v-if="row.original.payable.paidBy" :display-name="row.original.payable.paidBy.name" size="sm" :avatar-url="row.original.payable.paidBy.avatarUrl" />
             <DateTimeDisplay :value="row.original.payable.paidAt" class="text-muted-foreground" />
           </div>
           <span v-else class="text-muted-foreground">—</span>
@@ -213,7 +213,7 @@ onBeforeUnmount(() => {
               </div>
             </dl>
             <div v-if="row.payable.paidAt" class="text-muted-foreground mt-3 flex flex-wrap gap-2 items-center">
-              <QsPersonDisplay v-if="row.payable.paidBy" :display-name="row.payable.paidBy.name" size="sm" />
+              <QsPersonDisplay v-if="row.payable.paidBy" :display-name="row.payable.paidBy.name" size="sm" :avatar-url="row.payable.paidBy.avatarUrl" />
               <DateTimeDisplay :value="row.payable.paidAt" />
             </div>
           </template>

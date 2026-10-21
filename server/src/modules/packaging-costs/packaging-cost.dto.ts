@@ -47,6 +47,7 @@ export class PackagingCostRequestPayDto {
 export class PackagingCostPersonDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty() name!: string
+  @ApiProperty({ type: 'string', nullable: true }) avatarUrl!: string | null
 }
 export class PackagingCostImageDto {
   @ApiProperty({ format: 'uuid' }) mediaAssetId!: string

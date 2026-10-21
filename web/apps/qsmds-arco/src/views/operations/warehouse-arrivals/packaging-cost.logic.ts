@@ -10,6 +10,7 @@ export interface PackagingCostContext {
   purchaseOrderNo: string | null
   salesOrderNo: string | null
   ownerName: string | null
+  ownerAvatarUrl: string | null
 }
 
 export interface PackagingCostInput {

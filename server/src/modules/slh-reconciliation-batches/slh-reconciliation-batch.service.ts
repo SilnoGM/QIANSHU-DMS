@@ -887,7 +887,7 @@ export class SlhReconciliationBatchService {
       select: {
         id: true, batchLineId: true, status: true, rateSource: true,
         foreignUnitsPerCny: true, paymentFeeRate: true, createdAt: true,
-        createdBy: { select: { displayName: true } },
+        createdBy: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
       },
     })
     if (row === null) {
@@ -901,6 +901,7 @@ export class SlhReconciliationBatchService {
       foreignUnitsPerCny: row.foreignUnitsPerCny.toFixed(4),
       paymentFeeRate: row.paymentFeeRate.toFixed(3),
       createdByDisplayName: row.createdBy.displayName,
+      createdByAvatarUrl: row.createdBy.profile?.avatarUrl ?? null,
       createdAt: row.createdAt.toISOString(),
     }
   }

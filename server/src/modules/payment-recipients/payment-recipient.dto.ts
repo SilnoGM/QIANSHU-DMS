@@ -31,6 +31,7 @@ export class PaymentRecipientProfileDto {
 export class PaymentRecipientPersonDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty() name!: string
+  @ApiProperty({ type: 'string', nullable: true }) avatarUrl!: string | null
 }
 export class SupplierPaymentProfileDto {
   @ApiProperty() supplierValue!: string

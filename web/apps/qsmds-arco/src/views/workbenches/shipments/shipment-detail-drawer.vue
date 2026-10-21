@@ -130,7 +130,7 @@ const hasShipmentInformation = computed(() => props.detail && (
               {{ t('purchaseShipmentDetail.purchaser') }}
             </dt>
             <dd class="m-0">
-              <QsPersonDisplay :display-name="detail.purchaseOrder.createdBy.displayName" size="md" />
+              <QsPersonDisplay :display-name="detail.purchaseOrder.createdBy.displayName" size="md" :avatar-url="detail.purchaseOrder.createdBy.avatarUrl" />
             </dd>
           </div>
           <div>
@@ -273,7 +273,7 @@ const hasShipmentInformation = computed(() => props.detail && (
               {{ t('purchaseShipmentDetail.shippedBy') }}
             </dt>
             <dd class="m-0">
-              <QsPersonDisplay v-if="detail.shippedBy" :display-name="detail.shippedBy.displayName" size="md" /><span v-else>—</span>
+              <QsPersonDisplay v-if="detail.shippedBy" :display-name="detail.shippedBy.displayName" size="md" :avatar-url="detail.shippedBy.avatarUrl" /><span v-else>—</span>
             </dd>
           </div>
           <div class="sm:col-span-2">
@@ -314,7 +314,7 @@ const hasShipmentInformation = computed(() => props.detail && (
             <dt class="qs-type-meta text-muted-foreground mb-1">
               {{ t('purchaseWarehouseReceipt.operator') }}
             </dt><dd class="m-0">
-              <QsPersonDisplay v-if="detail.warehouseReceivedBy" :display-name="detail.warehouseReceivedBy.displayName" size="md" /><span v-else>—</span>
+              <QsPersonDisplay v-if="detail.warehouseReceivedBy" :display-name="detail.warehouseReceivedBy.displayName" size="md" :avatar-url="detail.warehouseReceivedBy.avatarUrl" /><span v-else>—</span>
             </dd>
           </div>
           <div>
@@ -352,7 +352,7 @@ const hasShipmentInformation = computed(() => props.detail && (
             <dt class="qs-type-meta text-muted-foreground mb-1">
               {{ t('purchaseShipmentDetail.loadedBy') }}
             </dt><dd class="m-0">
-              <QsPersonDisplay v-if="detail.loadedBy" :display-name="detail.loadedBy.displayName" size="md" /><span v-else>—</span>
+              <QsPersonDisplay v-if="detail.loadedBy" :display-name="detail.loadedBy.displayName" size="md" :avatar-url="detail.loadedBy.avatarUrl" /><span v-else>—</span>
             </dd>
           </div>
           <div>

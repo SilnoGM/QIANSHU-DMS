@@ -145,9 +145,11 @@ export class SlhReconciliationBatchListItemDto {
   @ApiProperty({ description: 'Member line count of this batch.' }) memberCount!: number
   @ApiProperty({ description: 'Members already reconciled in this batch.' }) reconciledMemberCount!: number
   @ApiProperty({ type: 'string' }) createdByDisplayName!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) createdByAvatarUrl!: string | null
   @ApiProperty({ type: 'string' }) createdAt!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) completedAt!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) completedByDisplayName!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) completedByAvatarUrl!: string | null
 }
 
 export class SlhReconciliationBatchPageDto {
@@ -203,6 +205,7 @@ export class SlhReconciliationMatchedPurchaseOrderDto {
   @ApiPropertyOptional({ type: 'string', nullable: true }) shippingMarkText!: string | null
   @ApiProperty({ type: () => PurchaseOrderSupplierDto }) supplier!: PurchaseOrderSupplierDto
   @ApiProperty({ type: 'string', description: '采购人：采购订单创建人的显示名' }) creatorDisplayName!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) creatorAvatarUrl!: string | null
 }
 
 /**
@@ -225,6 +228,7 @@ export class SlhReconciliationMatchedSalesOrderDto {
   @ApiProperty({ enum: SalesOrderFulfillmentStatus }) fulfillmentStatus!: SalesOrderFulfillmentStatus
   @ApiProperty({ enum: SalesOrderPaymentStatus }) paymentStatus!: SalesOrderPaymentStatus
   @ApiProperty({ type: 'string' }) issuerDisplayName!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) issuerAvatarUrl!: string | null
 }
 
 /** 成员行：账单明细行的全部字段 + 本批次的匹配依据、柜次侧可比字段、来源摘要与核对留痕。 */
@@ -240,6 +244,7 @@ export class SlhReconciliationBatchMemberDto extends SlhBillLineDto {
   @ApiPropertyOptional({ type: () => SlhReconciliationMatchedSalesOrderDto, nullable: true, description: 'Sales source of the purchase order; null only for damaged data.' }) salesOrder!: SlhReconciliationMatchedSalesOrderDto | null
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Null means this batch has not reconciled the line yet.' }) reconciledAt!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) reconciledByDisplayName!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) reconciledByAvatarUrl!: string | null
 }
 
 export class SlhReconciliationBatchDetailDto extends SlhReconciliationBatchListItemDto {
@@ -308,6 +313,7 @@ export class SlhReconciliationSettlementDto {
   @ApiProperty({ type: 'string' }) foreignUnitsPerCny!: string
   @ApiProperty({ type: 'string' }) paymentFeeRate!: string
   @ApiProperty({ type: 'string' }) createdByDisplayName!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) createdByAvatarUrl!: string | null
   @ApiProperty({ type: 'string' }) createdAt!: string
 }
 
@@ -346,6 +352,7 @@ export class SlhReconciliationSettlementRecordDto {
   @ApiProperty({ type: 'string', nullable: true }) warehouseReceiptReference!: string | null
   @ApiProperty({ type: 'string', nullable: true }) shippingMarkText!: string | null
   @ApiProperty({ type: 'string' }) createdByDisplayName!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) createdByAvatarUrl!: string | null
   @ApiProperty({ type: 'string' }) createdAt!: string
 }
 

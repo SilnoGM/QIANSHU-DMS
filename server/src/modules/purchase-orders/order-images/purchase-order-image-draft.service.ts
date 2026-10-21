@@ -5,6 +5,7 @@ import { HttpStatus, Injectable } from '@nestjs/common'
 import { Prisma } from '../../../generated/prisma/client'
 import { AuditActorType, AuditEventType, AuditOutcome } from '../../../generated/prisma/enums'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
+import { toPersonReference } from '../../../infrastructure/database/person-reference'
 import { hasPersistenceCode, readPersistenceErrorFacts } from '../../../infrastructure/database/persistence-error-facts'
 import { applyTransactionTimeouts } from '../../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../../infrastructure/http/api.exception'
@@ -29,7 +30,7 @@ import { createPurchaseOrderImageSnapshot, hashPurchaseOrderImageSnapshot, PURCH
 const DRAFT_SELECT = {
   id: true, purchaseOrderId: true, mediaAssetId: true, orderVersion: true,
   snapshotHash: true, templateVersion: true, createdAt: true, invalidatedAt: true, archivedAt: true,
-  generatedBy: { select: { id: true, displayName: true } },
+  generatedBy: { select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } } },
   purchaseOrder: { select: { orderStatus: true } },
   mediaAsset: { select: { status: true, deletedAt: true, mimeType: true, objectKey: true, checksumSha256: true, sizeBytes: true } },
 } as const satisfies Prisma.PurchaseOrderImageDraftSelect
@@ -62,7 +63,7 @@ function isMatching(row: DraftRow, detail: PurchaseOrderDetail, snapshotHash: st
 function toDto(row: DraftRow, isCurrent: boolean): PurchaseOrderImageDraftDto {
   return {
     id: row.id, purchaseOrderId: row.purchaseOrderId, orderVersion: row.orderVersion,
-    templateVersion: row.templateVersion, generatedAt: row.createdAt.toISOString(), generatedBy: row.generatedBy,
+    templateVersion: row.templateVersion, generatedAt: row.createdAt.toISOString(), generatedBy: toPersonReference(row.generatedBy),
     contentUrl: `/api/purchase-orders/${row.purchaseOrderId}/order-image-drafts/${row.id}/content`, isCurrent,
   }
 }

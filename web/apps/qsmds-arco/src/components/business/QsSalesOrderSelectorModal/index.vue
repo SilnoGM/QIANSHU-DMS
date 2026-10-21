@@ -360,7 +360,7 @@ watch(() => props.modelValue, (open) => {
               <span class="min-w-0">
                 <strong class="qs-type-body-medium block truncate">{{ item.customerName }}</strong>
                 <span class="mt-1 block">
-                  <QsPersonDisplay :display-name="item.issuer.displayName" size="sm" />
+                  <QsPersonDisplay :display-name="item.issuer.displayName" size="sm" :avatar-url="item.issuer.avatarUrl" />
                 </span>
               </span>
               <SalesOrderProductPreview :previews="item.lineSummary.previews" />
@@ -413,7 +413,7 @@ watch(() => props.modelValue, (open) => {
                   <span class="qs-type-meta text-muted-foreground block">客户 / 出单人</span>
                   <strong class="qs-type-body-medium mt-1 block truncate">{{ item.customerName }}</strong>
                   <span class="mt-1 block">
-                    <QsPersonDisplay :display-name="item.issuer.displayName" size="sm" />
+                    <QsPersonDisplay :display-name="item.issuer.displayName" size="sm" :avatar-url="item.issuer.avatarUrl" />
                   </span>
                 </span>
                 <span class="min-w-0">

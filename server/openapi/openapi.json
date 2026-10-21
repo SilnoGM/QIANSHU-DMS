@@ -83232,6 +83232,10 @@
           "displayName": {
             "type": "string"
           },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -83244,6 +83248,7 @@
           "id",
           "username",
           "displayName",
+          "avatarUrl",
           "status"
         ]
       },
@@ -84154,6 +84159,10 @@
           "actorDisplayName": {
             "type": "string"
           },
+          "actorAvatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "postedAt": {
             "type": "string",
             "format": "date-time"
@@ -84166,6 +84175,7 @@
           "reason",
           "actorUserId",
           "actorDisplayName",
+          "actorAvatarUrl",
           "postedAt"
         ]
       },
@@ -86081,6 +86091,10 @@
           "applicantUsername": {
             "type": "string"
           },
+          "applicantAvatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "amount": {
             "type": "string"
           },
@@ -86108,6 +86122,10 @@
             "nullable": true
           },
           "reviewerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "reviewerAvatarUrl": {
             "type": "string",
             "nullable": true
           },
@@ -86828,11 +86846,16 @@
           },
           "displayName": {
             "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
           "id",
-          "displayName"
+          "displayName",
+          "avatarUrl"
         ]
       },
       "ProductListItemDto": {
@@ -87749,11 +87772,16 @@
           },
           "displayName": {
             "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
           "id",
-          "displayName"
+          "displayName",
+          "avatarUrl"
         ]
       },
       "SalesOrderCompletionHoldDto": {
@@ -89770,11 +89798,16 @@
           },
           "name": {
             "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
           "id",
-          "name"
+          "name",
+          "avatarUrl"
         ]
       },
       "SalesReceiptVoucherDto": {
@@ -90376,11 +90409,16 @@
           },
           "name": {
             "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
           "id",
-          "name"
+          "name",
+          "avatarUrl"
         ]
       },
       "PurchasePayableVoucherDto": {
@@ -90854,11 +90892,16 @@
           },
           "displayName": {
             "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
           "id",
-          "displayName"
+          "displayName",
+          "avatarUrl"
         ]
       },
       "PurchaseOrderReviewSummaryDto": {
@@ -93341,11 +93384,16 @@
           },
           "displayName": {
             "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
           "id",
-          "displayName"
+          "displayName",
+          "avatarUrl"
         ]
       },
       "PurchaseOrderImageDraftDto": {
@@ -94596,11 +94644,16 @@
           },
           "name": {
             "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
           "id",
-          "name"
+          "name",
+          "avatarUrl"
         ]
       },
       "PackagingPaymentProfileDto": {
@@ -95135,6 +95188,10 @@
             "maxLength": 128,
             "nullable": true
           },
+          "actorAvatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "targetType": {
             "type": "string",
             "maxLength": 128,
@@ -95185,6 +95242,7 @@
           "actorType",
           "actorUserId",
           "actorDisplayName",
+          "actorAvatarUrl",
           "targetType",
           "targetId",
           "requestId",
@@ -95289,11 +95347,16 @@
           },
           "name": {
             "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
           "id",
-          "name"
+          "name",
+          "avatarUrl"
         ]
       },
       "PackagingCostRequestDto": {
@@ -97126,6 +97189,10 @@
           },
           "createdByDisplayName": {
             "type": "string"
+          },
+          "createdByAvatarUrl": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -97464,6 +97531,10 @@
           },
           "createdByDisplayName": {
             "type": "string"
+          },
+          "createdByAvatarUrl": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -98220,6 +98291,10 @@
           "createdByDisplayName": {
             "type": "string"
           },
+          "createdByAvatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string"
           },
@@ -98228,6 +98303,10 @@
             "nullable": true
           },
           "completedByDisplayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "completedByAvatarUrl": {
             "type": "string",
             "nullable": true
           }
@@ -98379,6 +98458,10 @@
           },
           "createdByDisplayName": {
             "type": "string"
+          },
+          "createdByAvatarUrl": {
+            "type": "string",
+            "nullable": true
           },
           "selectable": {
             "type": "boolean",
@@ -98746,6 +98829,10 @@
           "creatorDisplayName": {
             "type": "string",
             "description": "采购人：采购订单创建人的显示名"
+          },
+          "creatorAvatarUrl": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -98836,6 +98923,10 @@
           },
           "issuerDisplayName": {
             "type": "string"
+          },
+          "issuerAvatarUrl": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -99074,6 +99165,10 @@
           "reconciledByDisplayName": {
             "type": "string",
             "nullable": true
+          },
+          "reconciledByAvatarUrl": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -99131,6 +99226,10 @@
           "createdByDisplayName": {
             "type": "string"
           },
+          "createdByAvatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string"
           },
@@ -99139,6 +99238,10 @@
             "nullable": true
           },
           "completedByDisplayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "completedByAvatarUrl": {
             "type": "string",
             "nullable": true
           },
@@ -99290,6 +99393,10 @@
           "createdByDisplayName": {
             "type": "string"
           },
+          "createdByAvatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string"
           }
@@ -99402,6 +99509,10 @@
           "createdByDisplayName": {
             "type": "string"
           },
+          "createdByAvatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string"
           }
@@ -99512,6 +99623,10 @@
           },
           "creatorName": {
             "type": "string"
+          },
+          "creatorAvatarUrl": {
+            "type": "string",
+            "nullable": true
           },
           "submittedAt": {
             "type": "string",
@@ -99743,6 +99858,10 @@
           "actorName": {
             "type": "string"
           },
+          "actorAvatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "occurredAt": {
             "type": "string",
             "description": "ISO 8601。"
@@ -99840,6 +99959,10 @@
           },
           "creatorName": {
             "type": "string"
+          },
+          "creatorAvatarUrl": {
+            "type": "string",
+            "nullable": true
           },
           "submittedAt": {
             "type": "string",

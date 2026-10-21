@@ -193,7 +193,7 @@ watch(() => props.submitting, (submitting) => {
     @update:model-value="updateVisible"
   >
     <template #description>
-      <QsPersonDisplay v-if="account?.user" :display-name="account.user.displayName" size="sm" />
+      <QsPersonDisplay v-if="account?.user" :display-name="account.user.displayName" size="sm" :avatar-url="account.user.avatarUrl" />
       <span v-else>用户账户不可用</span>
     </template>
     <FaAlert

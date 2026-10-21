@@ -1515,7 +1515,7 @@ onBeforeUnmount(() => {
           <QsPersonDisplay
             :display-name="row.original.issuer.displayName"
             size="md"
-            class="max-w-[9rem]"
+            class="max-w-[9rem]" :avatar-url="row.original.issuer.avatarUrl"
           />
         </template>
 
@@ -1939,7 +1939,7 @@ onBeforeUnmount(() => {
                   <QsPersonDisplay
                     :display-name="row.issuer.displayName"
                     size="md"
-                    class="max-w-full"
+                    class="max-w-full" :avatar-url="row.issuer.avatarUrl"
                   />
                 </dd>
               </div>

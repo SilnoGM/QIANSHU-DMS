@@ -15,9 +15,9 @@ import type {
 } from './fund-withdrawal.dto'
 
 const ROW_INCLUDE = {
-  user: { select: { displayName: true, username: true } },
+  user: { select: { displayName: true, username: true, profile: { select: { avatarUrl: true } } } },
   account: { select: { balance: true } },
-  reviewedBy: { select: { displayName: true } },
+  reviewedBy: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
   paymentProofMediaAsset: { select: { id: true, originalFilename: true, createdAt: true } },
   fundPostingBatch: { select: { batchNo: true } },
 } satisfies Prisma.FundWithdrawalRequestInclude
@@ -44,6 +44,7 @@ function toDto(row: Row): FundWithdrawalDto {
     userId: row.userId,
     applicantName: row.user.displayName,
     applicantUsername: row.user.username,
+    applicantAvatarUrl: row.user.profile?.avatarUrl ?? null,
     amount: row.amount.toFixed(2),
     currency: row.currency,
     status: row.status,
@@ -51,6 +52,7 @@ function toDto(row: Row): FundWithdrawalDto {
     submittedAt: row.submittedAt.toISOString(),
     reviewedAt: toIso(row.reviewedAt),
     reviewerName: row.reviewedBy?.displayName ?? null,
+    reviewerAvatarUrl: row.reviewedBy?.profile?.avatarUrl ?? null,
     rejectReason: row.rejectReason,
     paymentProof: row.paymentProofMediaAsset === null
       ? null

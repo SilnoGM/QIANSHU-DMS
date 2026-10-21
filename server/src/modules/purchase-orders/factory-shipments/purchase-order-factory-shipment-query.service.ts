@@ -3,6 +3,10 @@ import { HttpStatus, Injectable } from '@nestjs/common'
 import { Prisma } from '../../../generated/prisma/client'
 import type { PurchaseOrderFulfillmentStatus } from '../../../generated/prisma/enums'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
+import {
+  PERSON_REFERENCE_SELECT,
+  toNullablePersonReference,
+} from '../../../infrastructure/database/person-reference'
 import { ApiException } from '../../../infrastructure/http/api.exception'
 import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
 import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
@@ -53,9 +57,9 @@ const CONTEXT_PURCHASE_ORDER_SELECT = {
     select: {
       id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true,
       shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true, destinationWarehouseValue: true,
-      shippedBy: { select: { id: true, displayName: true } },
+      shippedBy: { select: PERSON_REFERENCE_SELECT },
       warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true,
-      warehouseReceivedBy: { select: { id: true, displayName: true } },
+      warehouseReceivedBy: { select: PERSON_REFERENCE_SELECT },
 
       items: { orderBy: { line: { lineNumber: 'asc' } }, select: {
         purchaseOrderLineId: true, quantity: true, line: { select: { lineNumber: true } },
@@ -234,7 +238,7 @@ export class PurchaseOrderFactoryShipmentQueryService {
         id: part.id, shipmentNo: part.shipmentNo, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
         shippedAt: part.shippedAt?.toISOString() ?? null,
         shippedById: part.shippedById,
-        shippedBy: part.shippedBy,
+        shippedBy: toNullablePersonReference(part.shippedBy),
         shipmentRecordedAt: part.shipmentRecordedAt?.toISOString() ?? null,
         shipmentRemark: part.shipmentRemark,
         trackingNo: part.trackingNo ?? null,
@@ -243,7 +247,7 @@ export class PurchaseOrderFactoryShipmentQueryService {
         warehouseReceivedById: part.warehouseReceivedById,
         warehouseRecordedAt: part.warehouseRecordedAt?.toISOString() ?? null,
         warehouseRemark: part.warehouseRemark,
-        warehouseReceivedBy: part.warehouseReceivedBy,
+        warehouseReceivedBy: toNullablePersonReference(part.warehouseReceivedBy),
         items: part.items.map(item => ({ purchaseOrderLineId: item.purchaseOrderLineId, lineNumber: item.line.lineNumber, quantity: item.quantity })),
       })),
       lineSummary: {

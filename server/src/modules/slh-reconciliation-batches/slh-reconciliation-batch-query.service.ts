@@ -174,7 +174,7 @@ export class SlhReconciliationBatchQueryService {
         slhBillNo: true, salesOrderNo: true, purchaseOrderNo: true, containerBatchNo: true,
         shipmentNo: true, warehouseReceiptReference: true, shippingMarkText: true,
         createdAt: true,
-        createdBy: { select: { displayName: true } },
+        createdBy: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
       },
     })
     return {
@@ -204,6 +204,7 @@ export class SlhReconciliationBatchQueryService {
         warehouseReceiptReference: row.warehouseReceiptReference,
         shippingMarkText: row.shippingMarkText,
         createdByDisplayName: row.createdBy.displayName,
+        createdByAvatarUrl: row.createdBy.profile?.avatarUrl ?? null,
         createdAt: row.createdAt.toISOString(),
       })),
     }

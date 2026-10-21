@@ -170,7 +170,7 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
         <QsPersonDisplay
           v-if="row.original.account.user"
           :display-name="row.original.account.user.displayName"
-          size="sm"
+          size="sm" :avatar-url="row.original.account.user.avatarUrl"
         />
         <span v-else class="font-medium">公司资金账户</span>
         <FaTag variant="outline" class="qs-type-status-tag">
@@ -274,7 +274,7 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
             <QsPersonDisplay
               v-if="row.account.user"
               :display-name="row.account.user.displayName"
-              size="sm"
+              size="sm" :avatar-url="row.account.user.avatarUrl"
             />
             <span v-else class="font-medium">公司资金账户</span>
             <FaTag variant="outline" class="qs-type-status-tag">

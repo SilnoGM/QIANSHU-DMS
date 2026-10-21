@@ -81,7 +81,7 @@ const productPageDto = {
       { title: '尺寸', value: 'XL' },
     ],
     createdBy: null,
-    updatedBy: { id: 'user-1', displayName: '运营人员' },
+    updatedBy: { id: 'user-1', displayName: '运营人员', avatarUrl: null },
     version: 1,
     createdAt: '2026-08-10T04:00:00.000Z',
     updatedAt: '2026-08-12T04:00:00.000Z',

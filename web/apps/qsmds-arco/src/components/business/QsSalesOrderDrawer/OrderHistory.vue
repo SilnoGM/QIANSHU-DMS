@@ -58,7 +58,7 @@ function statusLabel(value: string) {
             {{ t('salesOrderDrawer.reason') }}：{{ entry.record.reason || '-' }}
           </p>
           <div class="qs-type-meta mt-2 flex gap-1 items-center">
-            {{ t('salesOrderDrawer.changedBy') }}：<QsPersonDisplay :display-name="entry.record.changedBy.displayName" size="sm" />
+            {{ t('salesOrderDrawer.changedBy') }}：<QsPersonDisplay :display-name="entry.record.changedBy.displayName" size="sm" :avatar-url="entry.record.changedBy.avatarUrl" />
           </div>
         </div>
       </li>

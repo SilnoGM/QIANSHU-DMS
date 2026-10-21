@@ -191,7 +191,7 @@ function completed(): void {
         @retry="load"
       >
         <template #cell-applicant="{ row }">
-          <QsPersonDisplay :display-name="row.original.applicantName" size="sm" />
+          <QsPersonDisplay :display-name="row.original.applicantName" size="sm" :avatar-url="row.original.applicantAvatarUrl" />
         </template>
 
         <template #cell-amount="{ row }">

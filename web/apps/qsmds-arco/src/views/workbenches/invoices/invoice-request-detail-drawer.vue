@@ -114,13 +114,17 @@ function statusTransition(entry: InvoiceRequestHistoryDto): string {
   return entry.fromStatus === null ? target : `${t(`invoiceRequest.status.${entry.fromStatus}`)} → ${target}`
 }
 
-/** 节点操作人：取流程历史里最近一次该动作的 actorName（退回可多次，取最新；未发生则为 null）。 */
+/** 节点操作人：取流程历史里最近一次该动作的 actor（退回可多次，取最新；未发生则为 null）。 */
 const nodes = computed(() => {
   const history = detail.value?.history ?? []
-  const actor = (action: InvoiceRequestHistoryDto['action']): string | null =>
-    history.filter(entry => entry.action === action).at(-1)?.actorName ?? null
+  const actor = (action: InvoiceRequestHistoryDto['action']): { name: string, avatarUrl: string | null } | null => {
+    const entry = history.filter(item => item.action === action).at(-1)
+    return entry === undefined ? null : { name: entry.actorName, avatarUrl: entry.actorAvatarUrl ?? null }
+  }
   return {
-    applicant: detail.value?.creatorName ?? null,
+    applicant: detail.value === null
+      ? null
+      : { name: detail.value.creatorName, avatarUrl: detail.value.creatorAvatarUrl ?? null },
     notifier: actor('NOTIFY'),
     uploader: actor('UPLOAD_DOCUMENT'),
     settler: actor('SETTLE'),
@@ -191,7 +195,7 @@ const nodes = computed(() => {
               {{ t('invoiceRequest.detail.node.applicant') }}
             </dt>
             <dd class="m-0 flex flex-col gap-1 items-start">
-              <QsPersonDisplay v-if="nodes.applicant !== null" :display-name="nodes.applicant" size="sm" />
+              <QsPersonDisplay v-if="nodes.applicant !== null" :display-name="nodes.applicant.name" :avatar-url="nodes.applicant.avatarUrl" size="sm" />
               <span v-else class="qs-type-body">—</span>
               <DateTimeDisplay :value="detail.submittedAt" class="text-muted-foreground" />
             </dd>
@@ -201,7 +205,7 @@ const nodes = computed(() => {
               {{ t('invoiceRequest.detail.node.notifier') }}
             </dt>
             <dd class="m-0 flex flex-col gap-1 items-start">
-              <QsPersonDisplay v-if="nodes.notifier !== null" :display-name="nodes.notifier" size="sm" />
+              <QsPersonDisplay v-if="nodes.notifier !== null" :display-name="nodes.notifier.name" :avatar-url="nodes.notifier.avatarUrl" size="sm" />
               <span v-else class="qs-type-body">—</span>
               <DateTimeDisplay :value="detail.notifiedAt" class="text-muted-foreground" />
             </dd>
@@ -211,7 +215,7 @@ const nodes = computed(() => {
               {{ t('invoiceRequest.detail.node.uploader') }}
             </dt>
             <dd class="m-0 flex flex-col gap-1 items-start">
-              <QsPersonDisplay v-if="nodes.uploader !== null" :display-name="nodes.uploader" size="sm" />
+              <QsPersonDisplay v-if="nodes.uploader !== null" :display-name="nodes.uploader.name" :avatar-url="nodes.uploader.avatarUrl" size="sm" />
               <span v-else class="qs-type-body">—</span>
               <DateTimeDisplay :value="detail.documentUploadedAt" class="text-muted-foreground" />
             </dd>
@@ -221,7 +225,7 @@ const nodes = computed(() => {
               {{ t('invoiceRequest.detail.node.settler') }}
             </dt>
             <dd class="m-0 flex flex-col gap-1 items-start">
-              <QsPersonDisplay v-if="nodes.settler !== null" :display-name="nodes.settler" size="sm" />
+              <QsPersonDisplay v-if="nodes.settler !== null" :display-name="nodes.settler.name" :avatar-url="nodes.settler.avatarUrl" size="sm" />
               <span v-else class="qs-type-body">—</span>
               <DateTimeDisplay :value="detail.settledAt" class="text-muted-foreground" />
             </dd>
@@ -325,7 +329,7 @@ const nodes = computed(() => {
             class="py-3 flex flex-wrap gap-x-6 gap-y-2 items-baseline justify-between first:pt-0 last:pb-0"
           >
             <div class="flex flex-wrap gap-x-4 gap-y-1 min-w-0 items-baseline">
-              <QsPersonDisplay :display-name="entry.actorName" size="sm" />
+              <QsPersonDisplay :display-name="entry.actorName" size="sm" :avatar-url="entry.actorAvatarUrl" />
               <span class="qs-type-body text-muted-foreground">{{ t('invoiceRequest.detail.actionVerb') }}</span>
               <span class="qs-type-body-medium">【{{ t(`invoiceRequest.detail.action.${entry.action}`) }}】</span>
               <span class="qs-type-meta px-1.5 py-0.5 rounded bg-muted/60 whitespace-nowrap">{{ statusTransition(entry) }}</span>

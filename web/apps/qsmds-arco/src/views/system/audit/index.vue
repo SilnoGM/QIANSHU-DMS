@@ -240,6 +240,7 @@ onMounted(loadEvents)
             <QsPersonDisplay
               v-if="row.original.actorType === 'USER'"
               :display-name="row.original.actorDisplayName ?? ''"
+              :avatar-url="row.original.actorAvatarUrl"
               size="sm"
             />
             <span v-else class="qs-type-body-medium">—</span>
@@ -311,6 +312,7 @@ onMounted(loadEvents)
                     <QsPersonDisplay
                       v-if="event.actorType === 'USER'"
                       :display-name="event.actorDisplayName ?? ''"
+                      :avatar-url="event.actorAvatarUrl"
                       size="sm"
                     />
                     <span v-else>—</span>

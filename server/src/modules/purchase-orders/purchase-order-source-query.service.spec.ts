@@ -277,7 +277,7 @@ describe('PurchaseOrderSourceQueryService', () => {
         id: 'sales-order-id',
         orderNo: 'SO-001',
         orderDate: '2026-08-26',
-        issuer: { id: 'issuer-id', displayName: '出单人甲' },
+        issuer: { id: 'issuer-id', displayName: '出单人甲', avatarUrl: null },
         customerName: '客户甲',
         salesTotalAmount: '100.0000',
         orderStatus: 'CONFIRMED',

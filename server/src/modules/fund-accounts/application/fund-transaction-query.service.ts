@@ -77,6 +77,7 @@ interface TransactionDatabaseRow {
   readonly userId: unknown
   readonly username: unknown
   readonly displayName: unknown
+  readonly avatarUrl: unknown
   readonly userStatus: unknown
   readonly accountTarget: unknown
   readonly postingTypeId: unknown
@@ -298,6 +299,7 @@ function transactionFromWhereSql(
     INNER JOIN "fund_posting_batches" AS batch ON batch."id" = entry."batch_id"
     INNER JOIN "fund_accounts" AS account ON account."id" = entry."account_id"
     LEFT JOIN "users" AS owner_user ON owner_user."id" = account."user_id"
+    LEFT JOIN "user_profiles" AS owner_profile ON owner_profile."user_id" = owner_user."id"
     LEFT JOIN (
       SELECT
         reversal."reversal_of_batch_id" AS "originalBatchId",
@@ -364,6 +366,7 @@ function mapTransactionRow(row: TransactionDatabaseRow): FundTransactionView {
   const userId = nullableString(row.userId)
   const username = nullableString(row.username)
   const displayName = nullableString(row.displayName)
+  const avatarUrl = nullableString(row.avatarUrl)
   const userStatus = row.userStatus === null
     ? null
     : requiredEnum(row.userStatus, USER_STATUSES)
@@ -393,6 +396,7 @@ function mapTransactionRow(row: TransactionDatabaseRow): FundTransactionView {
         id: userId,
         username: username as string,
         displayName: displayName as string,
+        avatarUrl,
         status: userStatus as FundAccountUserStatus,
       }),
     }),
@@ -516,6 +520,7 @@ export class FundTransactionQueryService {
               owner_user."id" AS "userId",
               owner_user."username",
               owner_user."display_name" AS "displayName",
+              owner_profile."avatar_url" AS "avatarUrl",
               owner_user."status"::text AS "userStatus",
               entry."account_target"::text AS "accountTarget",
               batch."posting_type_id" AS "postingTypeId",
@@ -579,6 +584,7 @@ export class FundTransactionQueryService {
                 id: true,
                 username: true,
                 displayName: true,
+                profile: { select: { avatarUrl: true } },
                 status: true,
               },
             },
@@ -592,6 +598,7 @@ export class FundTransactionQueryService {
                         id: true,
                         username: true,
                         displayName: true,
+                        profile: { select: { avatarUrl: true } },
                         status: true,
                       },
                     },
@@ -630,7 +637,7 @@ export class FundTransactionQueryService {
                 businessAmount: true,
                 reversalReason: true,
                 actorUserId: true,
-                actor: { select: { displayName: true } },
+                actor: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
                 postedAt: true,
               },
             },
@@ -674,6 +681,7 @@ export class FundTransactionQueryService {
             id: batch.user.id,
             username: batch.user.username,
             displayName: batch.user.displayName,
+            avatarUrl: batch.user.profile?.avatarUrl ?? null,
             status: batch.user.status,
           }),
           businessAmount: batch.businessAmount.toFixed(2),
@@ -707,6 +715,7 @@ export class FundTransactionQueryService {
                 id: entry.account.user.id,
                 username: entry.account.user.username,
                 displayName: entry.account.user.displayName,
+                avatarUrl: entry.account.user.profile?.avatarUrl ?? null,
                 status: entry.account.user.status,
               }),
             }),
@@ -743,6 +752,7 @@ export class FundTransactionQueryService {
                 reason: reversal.reversalReason,
                 actorUserId: reversal.actorUserId,
                 actorDisplayName: reversal.actor.displayName,
+                actorAvatarUrl: reversal.actor.profile?.avatarUrl ?? null,
                 postedAt: reversal.postedAt.toISOString(),
               })
             })),

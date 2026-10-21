@@ -79,6 +79,7 @@ describe('FundTransactionQueryService', () => {
         userId: '10000000-0000-4000-8000-000000000014',
         username: 'alice',
         displayName: 'Alice',
+        avatarUrl: null,
         userStatus: 'ACTIVE',
         accountTarget: 'USER',
         postingTypeId: '10000000-0000-4000-8000-000000000015',

@@ -117,6 +117,7 @@ export class InvoiceRequestHistoryDto {
   @ApiPropertyOptional({ type: 'string', nullable: true, description: '退回与取消必填。' }) reason!: string | null
   @ApiProperty() actorUserId!: string
   @ApiProperty() actorName!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) actorAvatarUrl!: string | null
   @ApiProperty({ type: 'string', description: 'ISO 8601。' }) occurredAt!: string
 }
 
@@ -142,6 +143,7 @@ export class InvoiceRequestListItemDto {
   @ApiPropertyOptional({ type: 'string', nullable: true }) internalRemark!: string | null
   @ApiProperty({ format: 'uuid' }) creatorUserId!: string
   @ApiProperty() creatorName!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) creatorAvatarUrl!: string | null
   @ApiProperty({ type: 'string', description: '申请日期（= 记录创建时间），ISO 8601。' }) submittedAt!: string
   @ApiProperty({ type: 'string', description: '最近一次提交时间，ISO 8601。' }) lastSubmittedAt!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) notifiedAt!: string | null

@@ -148,7 +148,7 @@ onMounted(load)
         </template>
         <template #cell-submittedAt="{ row }">
           <QsTableStackedCell>
-            <QsPersonDisplay :display-name="row.original.creatorName" size="sm" />
+            <QsPersonDisplay :display-name="row.original.creatorName" size="sm" :avatar-url="row.original.creatorAvatarUrl" />
             <QsTableStackedLine tone="muted">
               <DateTimeDisplay :value="row.original.submittedAt" />
             </QsTableStackedLine>
@@ -234,7 +234,7 @@ onMounted(load)
                   {{ t('invoiceRequest.column.submittedAt') }}
                 </dt>
                 <dd class="text-sm m-0">
-                  <QsPersonDisplay :display-name="row.creatorName" size="sm" />
+                  <QsPersonDisplay :display-name="row.creatorName" size="sm" :avatar-url="row.creatorAvatarUrl" />
                   <span class="text-muted-foreground block">{{ row.submittedAt.slice(0, 19).replace('T', ' ') }}</span>
                 </dd>
               </div>

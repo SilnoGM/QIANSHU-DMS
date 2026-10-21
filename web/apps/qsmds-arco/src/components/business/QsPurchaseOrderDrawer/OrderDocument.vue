@@ -51,7 +51,7 @@ const fileSize = computed(() => {
           {{ t('purchaseOrderDrawer.uploadedBy') }}
         </dt>
         <dd class="m-0 min-w-0">
-          <QsPersonDisplay :display-name="document.createdBy.displayName" size="sm" />
+          <QsPersonDisplay :display-name="document.createdBy.displayName" size="sm" :avatar-url="document.createdBy.avatarUrl" />
         </dd>
         <dt class="text-muted-foreground">
           {{ t('purchaseOrderDrawer.uploadedAt') }}

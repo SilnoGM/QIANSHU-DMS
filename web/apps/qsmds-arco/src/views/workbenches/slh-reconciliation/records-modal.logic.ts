@@ -58,6 +58,7 @@ export interface SlhReconciliationRecordCard {
   readonly headerClass: string
   readonly createdAt: string
   readonly createdByDisplayName: string
+  readonly createdByAvatarUrl: string | null
   /** 已被取代的记录默认折起，展开后与当前有效同一套版式。 */
   readonly collapsedByDefault: boolean
   /** 折叠态摘要：当时结算金额 + 汇率（含来源）+ 费率。 */
@@ -141,6 +142,7 @@ export function buildSlhReconciliationRecordCard(
     headerClass: HEADER_CLASSES[record.status],
     createdAt: record.createdAt,
     createdByDisplayName: record.createdByDisplayName,
+    createdByAvatarUrl: record.createdByAvatarUrl ?? null,
     collapsedByDefault: record.status === 'SUPERSEDED',
     summaryAmountLabelKey: 'slhReconciliation.records.amountAtThatTime',
     summaryAmount: amount(record.settlementAmountCny, record.settlementCurrency, 'settlement'),

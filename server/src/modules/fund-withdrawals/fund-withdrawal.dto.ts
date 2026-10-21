@@ -60,6 +60,7 @@ export class FundWithdrawalDto {
   @ApiProperty({ format: 'uuid' }) userId!: string
   @ApiProperty() applicantName!: string
   @ApiProperty() applicantUsername!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) applicantAvatarUrl!: string | null
   @ApiProperty({ type: 'string' }) amount!: string
   @ApiProperty() currency!: string
   @ApiProperty({ enum: FUND_WITHDRAWAL_STATUS_VALUES }) status!: FundWithdrawalStatusValue
@@ -67,6 +68,7 @@ export class FundWithdrawalDto {
   @ApiProperty({ type: 'string', description: '提交时间，ISO 8601。' }) submittedAt!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) reviewedAt!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) reviewerName!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) reviewerAvatarUrl!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) rejectReason!: string | null
   @ApiPropertyOptional({ type: FundWithdrawalProofDto, nullable: true }) paymentProof!: FundWithdrawalProofDto | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) fundPostingBatchNo!: string | null

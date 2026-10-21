@@ -25,6 +25,7 @@ export class PurchaseOrderImageDraftIdParamDto extends PurchaseOrderIdParamDto {
 export class PurchaseOrderImageGeneratedByDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly displayName!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly avatarUrl!: string | null
 }
 
 export class PurchaseOrderImageDraftDto {

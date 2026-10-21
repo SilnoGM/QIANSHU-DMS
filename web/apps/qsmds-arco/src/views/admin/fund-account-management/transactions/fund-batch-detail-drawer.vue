@@ -260,7 +260,7 @@ function reverse(): void {
               关联用户
             </dt>
             <dd class="m-0">
-              <QsPersonDisplay :display-name="detail.user.displayName" size="sm" />
+              <QsPersonDisplay :display-name="detail.user.displayName" size="sm" :avatar-url="detail.user.avatarUrl" />
             </dd>
           </div>
           <div>
@@ -306,7 +306,7 @@ function reverse(): void {
                 <QsPersonDisplay
                   v-if="entry.account.user"
                   :display-name="entry.account.user.displayName"
-                  size="sm"
+                  size="sm" :avatar-url="entry.account.user.avatarUrl"
                 />
                 <span v-else>公司资金账户</span>
               </div>
@@ -404,7 +404,7 @@ function reverse(): void {
               </div>
               <div class="qs-type-meta mt-2 flex flex-wrap gap-3 items-center">
                 <DateTimeDisplay :value="item.postedAt" />
-                <QsPersonDisplay v-if="item.actorDisplayName" :display-name="item.actorDisplayName" size="sm" />
+                <QsPersonDisplay v-if="item.actorDisplayName" :display-name="item.actorDisplayName" size="sm" :avatar-url="item.actorAvatarUrl" />
                 <span v-else>—</span>
               </div>
             </li>

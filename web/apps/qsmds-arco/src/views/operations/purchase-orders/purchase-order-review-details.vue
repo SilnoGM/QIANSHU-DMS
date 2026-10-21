@@ -65,7 +65,7 @@ const amounts = computed(() => [
             {{ t('purchaseReview.buyer') }}
           </dt>
           <dd class="m-0 mt-1 min-w-0">
-            <QsPersonDisplay :display-name="detail.createdBy.displayName" size="sm" />
+            <QsPersonDisplay :display-name="detail.createdBy.displayName" size="sm" :avatar-url="detail.createdBy.avatarUrl" />
           </dd>
         </div>
         <div class="min-w-0">

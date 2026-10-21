@@ -34,8 +34,8 @@ const batchHeaderInclude = {
       _count: { select: { lines: { where: { reconciledAt: { not: null } } } } },
     },
   },
-  createdBy: { select: { displayName: true } },
-  completedBy: { select: { displayName: true } },
+  createdBy: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
+  completedBy: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
   members: { select: { reconciledAt: true } },
 } satisfies Prisma.SlhReconciliationBatchInclude
 
@@ -72,7 +72,7 @@ export const slhReconciliationBatchDetailInclude = {
                   // 实际已付款沿用采购域的累加口径，需要未作废的付款记录。
                   payments: { select: { amount: true, voidedAt: true } },
                   // 采购人是采购列表那一列的同源字段。
-                  createdBy: { select: { displayName: true } },
+                  createdBy: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
                   salesOrder: {
                     select: {
                       id: true, orderNo: true, orderStatus: true,
@@ -82,7 +82,7 @@ export const slhReconciliationBatchDetailInclude = {
                       fulfillmentStatus: true, paymentStatus: true,
                       // 实际已收款沿用销售域的累加口径，需要未作废的收款记录。
                       payments: { select: { amount: true, voidedAt: true } },
-                      issuer: { select: { displayName: true } },
+                      issuer: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
                     },
                   },
                 },
@@ -91,7 +91,7 @@ export const slhReconciliationBatchDetailInclude = {
           },
         },
       },
-      reconciledBy: { select: { displayName: true } },
+      reconciledBy: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
     },
   },
 } satisfies Prisma.SlhReconciliationBatchInclude
@@ -125,9 +125,11 @@ function serializeBatchHeader(row: BatchHeaderRow): SlhReconciliationBatchListIt
     memberCount: row.members.length,
     reconciledMemberCount: row.members.filter(member => member.reconciledAt !== null).length,
     createdByDisplayName: row.createdBy.displayName,
+    createdByAvatarUrl: row.createdBy.profile?.avatarUrl ?? null,
     createdAt: iso(row.createdAt),
     completedAt: row.completedAt === null ? null : iso(row.completedAt),
     completedByDisplayName: row.completedBy?.displayName ?? null,
+    completedByAvatarUrl: row.completedBy?.profile?.avatarUrl ?? null,
   }
 }
 
@@ -195,6 +197,7 @@ function serializeBatchMember(
         supplierResolutions.get(purchaseOrderRow.id),
       ),
       creatorDisplayName: purchaseOrderRow.createdBy.displayName,
+      creatorAvatarUrl: purchaseOrderRow.createdBy.profile?.avatarUrl ?? null,
     },
     salesOrder: salesOrderRow === null ? null : {
       id: salesOrderRow.id,
@@ -217,9 +220,11 @@ function serializeBatchMember(
       fulfillmentStatus: salesOrderRow.fulfillmentStatus,
       paymentStatus: salesOrderRow.paymentStatus,
       issuerDisplayName: salesOrderRow.issuer.displayName,
+      issuerAvatarUrl: salesOrderRow.issuer.profile?.avatarUrl ?? null,
     },
     reconciledAt: row.reconciledAt === null ? null : iso(row.reconciledAt),
     reconciledByDisplayName: row.reconciledBy?.displayName ?? null,
+    reconciledByAvatarUrl: row.reconciledBy?.profile?.avatarUrl ?? null,
   }
 }
 

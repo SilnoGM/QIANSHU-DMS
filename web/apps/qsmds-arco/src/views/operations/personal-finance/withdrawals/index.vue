@@ -334,7 +334,7 @@ function openDetail(row: FundWithdrawalDto): void {
         </template>
 
         <template #cell-reviewer="{ row }">
-          <QsPersonDisplay v-if="row.original.reviewerName" :display-name="row.original.reviewerName" size="sm" />
+          <QsPersonDisplay v-if="row.original.reviewerName" :display-name="row.original.reviewerName" size="sm" :avatar-url="row.original.reviewerAvatarUrl" />
           <span v-else class="text-muted-foreground">—</span>
         </template>
 

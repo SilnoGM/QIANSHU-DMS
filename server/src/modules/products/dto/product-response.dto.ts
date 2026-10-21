@@ -51,6 +51,9 @@ export class ProductActorDto {
 
   @ApiProperty({ type: 'string' })
   readonly displayName!: string
+
+  @ApiProperty({ type: 'string', nullable: true })
+  readonly avatarUrl!: string | null
 }
 
 export class ProductMediaItemDto {

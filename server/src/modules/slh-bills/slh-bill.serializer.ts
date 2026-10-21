@@ -35,11 +35,11 @@ export function serializeStoredFindings(value: Prisma.JsonValue): SlhBillFinding
 
 export const slhBillRateInclude = {
   exchangeRate: { select: { id: true, foreignUnitsPerCny: true, version: true } },
-  createdBy: { select: { id: true, displayName: true } },
+  createdBy: { select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } } },
 } satisfies Prisma.SlhBillInclude
 
 export const slhBillListInclude = {
-  createdBy: { select: { id: true, displayName: true } },
+  createdBy: { select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } } },
   // 账单级对账状态由明细行汇总派生，不为它单独存列：这里只数已对账的行数。
   _count: { select: { lines: { where: { reconciledAt: { not: null } } } } },
 } satisfies Prisma.SlhBillInclude
@@ -194,6 +194,7 @@ export function serializeSlhBill(row: SlhBillRow): SlhBillDto {
     version: row.version,
     createdAt: row.createdAt.toISOString(),
     createdByDisplayName: row.createdBy.displayName,
+    createdByAvatarUrl: row.createdBy.profile?.avatarUrl ?? null,
   }
 }
 
@@ -225,5 +226,6 @@ export function serializeSlhBillListItem(row: SlhBillListRow): SlhBillListItemDt
     sourceFileName: row.sourceFileName,
     createdAt: row.createdAt.toISOString(),
     createdByDisplayName: row.createdBy.displayName,
+    createdByAvatarUrl: row.createdBy.profile?.avatarUrl ?? null,
   }
 }

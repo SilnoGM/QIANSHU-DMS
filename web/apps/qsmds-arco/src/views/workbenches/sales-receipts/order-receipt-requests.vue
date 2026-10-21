@@ -48,7 +48,7 @@ function changePage(delta: number): void {
           </div>
           <div class="qs-type-meta flex flex-wrap gap-x-3 gap-y-2 items-center">
             <DateTimeDisplay :value="item.submittedAt" />
-            <QsPersonDisplay :display-name="item.submittedBy.name" size="sm" />
+            <QsPersonDisplay :display-name="item.submittedBy.name" size="sm" :avatar-url="item.submittedBy.avatarUrl" />
           </div>
           <p v-if="item.reviewRemark" class="text-sm m-0 break-words">
             {{ t('salesReceipt.reviewRemark') }}: {{ item.reviewRemark }}

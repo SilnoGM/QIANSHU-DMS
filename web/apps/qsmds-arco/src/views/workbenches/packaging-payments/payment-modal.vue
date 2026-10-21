@@ -83,7 +83,7 @@ async function pay() {
             {{ t('packagingPayment.owner') }}
           </dt>
           <dd class="m-0 mt-1">
-            <QsPersonDisplay :display-name="detail.owner.name" size="sm" />
+            <QsPersonDisplay :display-name="detail.owner.name" size="sm" :avatar-url="detail.owner.avatarUrl" />
           </dd>
         </div>
       </dl>

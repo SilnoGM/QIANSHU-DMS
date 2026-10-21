@@ -481,6 +481,7 @@ onBeforeUnmount(() => {
                       <QsPersonDisplay
                         v-if="field.person"
                         :display-name="field.person"
+                        :avatar-url="field.personAvatarUrl ?? null"
                         size="sm"
                         class="max-w-full"
                       />

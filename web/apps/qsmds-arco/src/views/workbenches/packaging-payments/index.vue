@@ -171,11 +171,11 @@ onBeforeUnmount(() => {
             <PackagingProof :record="row.original" />
           </template>
           <template #cell-owner="{ row }">
-            <QsPersonDisplay :display-name="row.original.owner.name" size="sm" />
+            <QsPersonDisplay :display-name="row.original.owner.name" size="sm" :avatar-url="row.original.owner.avatarUrl" />
           </template>
           <template #cell-submitted="{ row }">
             <QsTableStackedCell>
-              <QsPersonDisplay :display-name="row.original.submittedBy.name" size="sm" />
+              <QsPersonDisplay :display-name="row.original.submittedBy.name" size="sm" :avatar-url="row.original.submittedBy.avatarUrl" />
               <QsTableStackedLine tone="muted">
                 <DateTimeDisplay :value="row.original.submittedAt" />
               </QsTableStackedLine>
@@ -183,7 +183,7 @@ onBeforeUnmount(() => {
           </template>
           <template #cell-paid="{ row }">
             <QsTableStackedCell>
-              <QsPersonDisplay v-if="row.original.paidBy" :display-name="row.original.paidBy.name" size="sm" />
+              <QsPersonDisplay v-if="row.original.paidBy" :display-name="row.original.paidBy.name" size="sm" :avatar-url="row.original.paidBy.avatarUrl" />
               <QsTableStackedLine tone="muted">
                 <DateTimeDisplay :value="row.original.paidAt" />
               </QsTableStackedLine>

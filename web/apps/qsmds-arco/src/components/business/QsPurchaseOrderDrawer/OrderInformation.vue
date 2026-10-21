@@ -66,7 +66,7 @@ const amountItems = computed(() => [
           <dt class="text-muted-foreground">
             {{ t('purchaseOrderDesc.fields.issuer') }}
           </dt><dd class="m-0 min-w-0">
-            <QsPersonDisplay :display-name="detail.createdBy.displayName" size="sm" />
+            <QsPersonDisplay :display-name="detail.createdBy.displayName" size="sm" :avatar-url="detail.createdBy.avatarUrl" />
           </dd>
         </div>
         <div class="gap-3 grid grid-cols-[5rem_minmax(0,1fr)] items-baseline">

@@ -170,6 +170,7 @@ export class FundAccountQueryService {
           id: true,
           username: true,
           displayName: true,
+          profile: { select: { avatarUrl: true } },
           status: true,
         },
         orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
@@ -180,6 +181,7 @@ export class FundAccountQueryService {
           id: row.id,
           username: row.username,
           displayName: row.displayName,
+          avatarUrl: row.profile?.avatarUrl ?? null,
           status: row.status,
         }))),
       })

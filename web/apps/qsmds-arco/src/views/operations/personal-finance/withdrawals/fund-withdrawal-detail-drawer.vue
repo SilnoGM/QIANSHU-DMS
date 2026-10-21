@@ -109,7 +109,7 @@ function close(): void {
               {{ t('fundWithdrawal.detail.applicant') }}
             </dt>
             <dd class="m-0">
-              <QsPersonDisplay :display-name="request.applicantName" size="sm" />
+              <QsPersonDisplay :display-name="request.applicantName" size="sm" :avatar-url="request.applicantAvatarUrl" />
             </dd>
           </div>
           <div>
@@ -150,7 +150,7 @@ function close(): void {
               {{ t('fundWithdrawal.detail.reviewer') }}
             </dt>
             <dd class="m-0">
-              <QsPersonDisplay v-if="request.reviewerName" :display-name="request.reviewerName" size="sm" />
+              <QsPersonDisplay v-if="request.reviewerName" :display-name="request.reviewerName" size="sm" :avatar-url="request.reviewerAvatarUrl" />
               <span v-else class="qs-type-meta">{{ t('fundWithdrawal.detail.noValue') }}</span>
             </dd>
           </div>

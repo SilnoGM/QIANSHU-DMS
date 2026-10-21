@@ -56,7 +56,7 @@ function statusLabel(value: string) {
             {{ t('purchaseOrderDrawer.reason') }}：{{ entry.record.reason?.trim() || t('purchaseOrderDrawer.reasonNotRecorded') }}
           </p>
           <div class="qs-type-meta mt-2 flex gap-1 items-center">
-            {{ t('purchaseOrderDrawer.changedBy') }}：<QsPersonDisplay :display-name="entry.record.changedBy.displayName" size="sm" />
+            {{ t('purchaseOrderDrawer.changedBy') }}：<QsPersonDisplay :display-name="entry.record.changedBy.displayName" size="sm" :avatar-url="entry.record.changedBy.avatarUrl" />
           </div>
         </div>
       </li>

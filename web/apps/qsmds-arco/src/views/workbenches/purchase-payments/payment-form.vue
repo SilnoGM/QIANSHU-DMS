@@ -111,7 +111,7 @@ onBeforeUnmount(() => emit('lockChange', false))
           <span v-if="selection.order.accountOwnerType === 'COMPANY'" class="flex gap-2 items-center">
             <FaIcon name="i-lucide:building-2" class="text-muted-foreground size-4" aria-hidden="true" />{{ t('purchasePayment.companyAccount') }}
           </span>
-          <QsPersonDisplay v-else-if="selection.order.owner" :display-name="selection.order.owner.name" size="sm" />
+          <QsPersonDisplay v-else-if="selection.order.owner" :display-name="selection.order.owner.name" size="sm" :avatar-url="selection.order.owner.avatarUrl" />
           <span v-else class="text-muted-foreground">{{ t('purchasePayment.ownerUnavailable') }}</span>
         </dd>
       </dl>
@@ -217,7 +217,7 @@ onBeforeUnmount(() => emit('lockChange', false))
             {{ t('purchasePayment.paidBy') }}
           </dt>
           <dd class="m-0">
-            <QsPersonDisplay :display-name="selection.item.paidBy.name" size="sm" />
+            <QsPersonDisplay :display-name="selection.item.paidBy.name" size="sm" :avatar-url="selection.item.paidBy.avatarUrl" />
           </dd>
         </div>
       </dl>

@@ -275,7 +275,7 @@ onBeforeUnmount(() => {
           </QsTableStackedCell>
         </template>
         <template #cell-buyer="{ row }">
-          <QsPersonDisplay :display-name="row.original.createdBy.displayName" size="md" />
+          <QsPersonDisplay :display-name="row.original.createdBy.displayName" size="md" :avatar-url="row.original.createdBy.avatarUrl" />
         </template>
         <template #cell-products="{ row }">
           <QsTableStackedCell>
@@ -320,7 +320,7 @@ onBeforeUnmount(() => {
         <template #cell-reviewSummary="{ row }">
           <QsTableStackedCell v-if="row.original.reviewSummary" class="max-w-96 w-full">
             <div class="flex gap-3 min-w-0 whitespace-nowrap items-center">
-              <QsPersonDisplay :display-name="row.original.reviewSummary.reviewedBy.displayName" size="sm" class="max-w-32" />
+              <QsPersonDisplay :display-name="row.original.reviewSummary.reviewedBy.displayName" size="sm" class="max-w-32" :avatar-url="row.original.reviewSummary.reviewedBy.avatarUrl" />
               <DateTimeDisplay :value="row.original.reviewSummary.reviewedAt" class="text-muted-foreground shrink-0" />
             </div>
             <QsTableStackedLine :label="t('purchaseReview.summary.reason')" nowrap content-class="flex-1 overflow-hidden">

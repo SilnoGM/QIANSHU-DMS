@@ -976,7 +976,7 @@ onBeforeUnmount(() => {
                           记录人：
                         </dt>
                         <dd class="m-0 inline-flex gap-2 items-center">
-                          <QsPersonDisplay :display-name="payment.createdBy.displayName" size="sm" />
+                          <QsPersonDisplay :display-name="payment.createdBy.displayName" size="sm" :avatar-url="payment.createdBy.avatarUrl" />
                           <DateTimeDisplay :value="payment.createdAt" />
                         </dd>
                       </div>
@@ -1018,7 +1018,7 @@ onBeforeUnmount(() => {
                         作废原因：{{ optionalText(payment.voidReason) }}
                       </p>
                       <p class="text-muted-foreground m-0 mt-1 flex flex-wrap gap-2 items-center">
-                        <QsPersonDisplay v-if="payment.voidedBy" :display-name="payment.voidedBy.displayName" size="sm" />
+                        <QsPersonDisplay v-if="payment.voidedBy" :display-name="payment.voidedBy.displayName" size="sm" :avatar-url="payment.voidedBy.avatarUrl" />
                         <span v-else>未知用户</span> · <DateTimeDisplay :value="payment.voidedAt" />
                       </p>
                     </div>
@@ -1143,7 +1143,7 @@ onBeforeUnmount(() => {
               </div>
               <div class="qs-type-meta mt-3 flex flex-wrap gap-x-4 gap-y-2 items-center">
                 <span class="inline-flex gap-2 items-center">
-                  上传人：<QsPersonDisplay :display-name="document.createdBy.displayName" size="sm" />
+                  上传人：<QsPersonDisplay :display-name="document.createdBy.displayName" size="sm" :avatar-url="document.createdBy.avatarUrl" />
                 </span>
                 <span>上传时间：<DateTimeDisplay :value="document.createdAt" /></span>
                 <span>{{ documentAssociationLabel(document) }}</span>
@@ -1194,7 +1194,7 @@ onBeforeUnmount(() => {
                   >{{ segment.text }}</span>
                 </p>
                 <div class="qs-type-meta mt-2 inline-flex gap-2 items-center">
-                  操作人：<QsPersonDisplay :display-name="history.changedBy.displayName" size="sm" />
+                  操作人：<QsPersonDisplay :display-name="history.changedBy.displayName" size="sm" :avatar-url="history.changedBy.avatarUrl" />
                 </div>
               </li>
             </ul>
@@ -1236,7 +1236,7 @@ onBeforeUnmount(() => {
                   原因：{{ revision.reason }}
                 </p>
                 <div class="qs-type-meta mt-2 inline-flex gap-2 items-center">
-                  操作人：<QsPersonDisplay :display-name="revision.changedBy.displayName" size="sm" />
+                  操作人：<QsPersonDisplay :display-name="revision.changedBy.displayName" size="sm" :avatar-url="revision.changedBy.avatarUrl" />
                 </div>
               </li>
             </ul>

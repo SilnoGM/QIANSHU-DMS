@@ -18,7 +18,7 @@ interface AuditEventQueryRow {
   occurredAt: Date
   actorType: AuditActorType
   actorUserId: string | null
-  actorUser: { displayName: string } | null
+  actorUser: { displayName: string, profile: { avatarUrl: string | null } | null } | null
   targetType: string | null
   targetId: string | null
   requestId: string
@@ -37,7 +37,7 @@ function createRow(
     occurredAt: new Date('2026-07-17T08:30:00.000Z'),
     actorType: AuditActorType.USER,
     actorUserId: ACTOR_USER_ID,
-    actorUser: { displayName: '系统管理员' },
+    actorUser: { displayName: '系统管理员', profile: null },
     targetType: 'User',
     targetId: ACTOR_USER_ID,
     requestId: 'req-123',
@@ -193,6 +193,7 @@ describe('AuditQueryService', () => {
         actorType: AuditActorType.USER,
         actorUserId: ACTOR_USER_ID,
         actorDisplayName: '系统管理员',
+        actorAvatarUrl: null,
         targetType: 'User',
         targetId: ACTOR_USER_ID,
         requestId: 'req-123',
@@ -207,9 +208,10 @@ describe('AuditQueryService', () => {
     }
     expect(query.select.sourceIpHash).toBeUndefined()
     expect(query.select.actorUser).toEqual({
-      select: { displayName: true },
+      select: { displayName: true, profile: { select: { avatarUrl: true } } },
     })
     expect(Object.keys(result.items[0] ?? {}).sort()).toEqual([
+      'actorAvatarUrl',
       'actorDisplayName',
       'actorType',
       'actorUserId',

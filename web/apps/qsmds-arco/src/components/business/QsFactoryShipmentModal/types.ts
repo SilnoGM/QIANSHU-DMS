@@ -31,7 +31,7 @@ export interface FactoryShipmentPart {
   readonly shippingMarkText: string | null
   readonly shippedAt: string | null
   readonly shippedById: string | null
-  readonly shippedBy?: { readonly id: string, readonly displayName: string } | null
+  readonly shippedBy?: { readonly id: string, readonly displayName: string, readonly avatarUrl: string | null } | null
   readonly shipmentRecordedAt: string | null
   readonly shipmentRemark: string | null
   readonly trackingNo?: string | null

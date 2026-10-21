@@ -44,6 +44,7 @@ const AUDIT_EVENT_PUBLIC_SELECT = {
   actorUser: {
     select: {
       displayName: true,
+      profile: { select: { avatarUrl: true } },
     },
   },
   targetType: true,
@@ -202,6 +203,7 @@ function mapAuditEvent(row: AuditEventPublicRow): AuditEventDto {
     actorType: row.actorType,
     actorUserId: row.actorUserId,
     actorDisplayName: row.actorUser?.displayName ?? null,
+    actorAvatarUrl: row.actorUser?.profile?.avatarUrl ?? null,
     targetType: row.targetType,
     targetId: row.targetId,
     requestId: row.requestId,

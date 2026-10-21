@@ -65,7 +65,7 @@ const { t } = useI18n()
     </div>
     <div v-if="view === 'WAREHOUSE_RECEIVED'" class="flex gap-2 items-center">
       <span class="qs-type-meta text-muted-foreground">{{ t('warehouseArrivals.receivedBy') }}</span>
-      <QsPersonDisplay v-if="row.warehouseReceivedBy" :display-name="row.warehouseReceivedBy.displayName" size="md" /><span v-else>—</span>
+      <QsPersonDisplay v-if="row.warehouseReceivedBy" :display-name="row.warehouseReceivedBy.displayName" size="md" :avatar-url="row.warehouseReceivedBy.avatarUrl" /><span v-else>—</span>
     </div>
   </div>
 </template>

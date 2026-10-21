@@ -117,7 +117,7 @@ onBeforeUnmount(() => {
               {{ t('packagingPayment.owner') }}
             </dt>
             <dd class="m-0 max-w-full min-w-0">
-              <QsPersonDisplay :display-name="detail.owner.name" size="sm" />
+              <QsPersonDisplay :display-name="detail.owner.name" size="sm" :avatar-url="detail.owner.avatarUrl" />
             </dd>
           </dl>
           <section class="mt-6 pt-5 border-t border-border space-y-4" :aria-label="t('packagingPayment.imagesTitle')">
@@ -212,7 +212,7 @@ onBeforeUnmount(() => {
                   {{ t('packagingPayment.paidBy') }}
                 </dt>
                 <dd class="m-0">
-                  <QsPersonDisplay :display-name="detail.paidBy.name" size="sm" />
+                  <QsPersonDisplay :display-name="detail.paidBy.name" size="sm" :avatar-url="detail.paidBy.avatarUrl" />
                 </dd>
               </div>
             </dl>

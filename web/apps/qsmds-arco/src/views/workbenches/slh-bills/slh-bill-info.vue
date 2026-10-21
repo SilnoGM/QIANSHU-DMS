@@ -153,7 +153,7 @@ const visibleBatches = computed(() => batchesExpanded.value ? props.bill.contain
             {{ t('slhBill.column.created') }}
           </dt>
           <dd class="qs-type-body m-0 mt-1.5">
-            <QsPersonDisplay :display-name="bill.createdByDisplayName" size="sm" />
+            <QsPersonDisplay :display-name="bill.createdByDisplayName" size="sm" :avatar-url="bill.createdByAvatarUrl" />
           </dd>
         </div>
         <div class="min-w-0">

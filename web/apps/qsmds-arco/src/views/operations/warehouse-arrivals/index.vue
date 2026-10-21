@@ -247,7 +247,7 @@ onBeforeUnmount(() => activated.value = false)
             <DateTimeDisplay :value="row.original.warehouseReceivedAt" />
           </template>
           <template #cell-warehouseReceivedBy="{ row }">
-            <QsPersonDisplay v-if="row.original.warehouseReceivedBy" :display-name="row.original.warehouseReceivedBy.displayName" size="md" /><span v-else>—</span>
+            <QsPersonDisplay v-if="row.original.warehouseReceivedBy" :display-name="row.original.warehouseReceivedBy.displayName" size="md" :avatar-url="row.original.warehouseReceivedBy.avatarUrl" /><span v-else>—</span>
           </template>
           <template #actions="{ row }">
             <FaButton v-for="action in warehouseArrivalActions(activeView, row.viewStatus, row.destinationWarehouseValue).filter(value => (value !== 'woodenFrame' || canCreatePackaging) && (value !== 'shippingInfo' || canReadShippingInfo))" :key="action" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.shipmentNo || t('purchaseShipments.unnumbered')}：${t(`warehouseArrivals.${action}`)}`" @click="handleAction(action, row)">

@@ -174,6 +174,7 @@ export interface FundPostingBatchReversalView {
   readonly reason: string
   readonly actorUserId: string
   readonly actorDisplayName: string
+  readonly actorAvatarUrl: string | null
   readonly postedAt: string
 }
 

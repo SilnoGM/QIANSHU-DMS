@@ -31,6 +31,7 @@ const context = computed<PackagingCostContext>(() => ({
   purchaseOrderNo: source.value ? source.value.purchaseOrderNo : props.shipment.purchaseOrder.orderNo,
   salesOrderNo: source.value ? source.value.salesOrderNo : props.shipment.salesSource?.orderNo ?? null,
   ownerName: source.value?.owner?.name ?? null,
+  ownerAvatarUrl: source.value?.owner?.avatarUrl ?? null,
 }))
 const submitDisabledHint = computed(() => !loading.value && !error.value && unavailableReason.value
   ? t(`warehousePackagingCost.${unavailableReason.value}`)

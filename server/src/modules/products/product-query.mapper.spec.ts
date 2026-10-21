@@ -34,6 +34,7 @@ function createRow(
     createdBy: {
       id: '42ad40d4-7fa5-46fb-81e4-1986bcebf8f1',
       displayName: '系统管理员',
+      profile: null,
     },
     updatedBy: null,
     version: 1,
@@ -97,6 +98,7 @@ describe('mapProductListItem', () => {
       createdBy: {
         id: '42ad40d4-7fa5-46fb-81e4-1986bcebf8f1',
         displayName: '系统管理员',
+        avatarUrl: null,
       },
       updatedBy: null,
       version: 1,

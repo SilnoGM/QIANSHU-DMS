@@ -277,7 +277,7 @@ function supplierDisplay(product: ProductListItemViewModel): string {
             <dt class="qs-type-compact-label">
               创建人
             </dt><dd class="m-0 mt-1 break-words">
-              <QsPersonDisplay v-if="product.createdBy" :display-name="product.createdBy.displayName" size="sm" />
+              <QsPersonDisplay v-if="product.createdBy" :display-name="product.createdBy.displayName" size="sm" :avatar-url="product.createdBy.avatarUrl" />
               <span v-else class="text-muted-foreground">—</span>
             </dd>
           </div>
@@ -292,7 +292,7 @@ function supplierDisplay(product: ProductListItemViewModel): string {
             <dt class="qs-type-compact-label">
               更新人
             </dt><dd class="m-0 mt-1 break-words">
-              <QsPersonDisplay v-if="product.updatedBy" :display-name="product.updatedBy.displayName" size="sm" />
+              <QsPersonDisplay v-if="product.updatedBy" :display-name="product.updatedBy.displayName" size="sm" :avatar-url="product.updatedBy.avatarUrl" />
               <span v-else class="text-muted-foreground">—</span>
             </dd>
           </div>

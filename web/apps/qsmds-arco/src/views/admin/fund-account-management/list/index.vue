@@ -834,7 +834,7 @@ onBeforeUnmount(() => {
             </FaTag>
           </div>
           <div v-else class="flex flex-wrap gap-2 min-w-0 items-center">
-            <QsPersonDisplay v-if="row.original.user" :display-name="row.original.user.displayName" size="sm" />
+            <QsPersonDisplay v-if="row.original.user" :display-name="row.original.user.displayName" size="sm" :avatar-url="row.original.user.avatarUrl" />
             <span v-else class="qs-type-body">未知用户</span>
             <FaTag
               v-if="row.original.user?.status === 'DISABLED'"
@@ -914,7 +914,7 @@ onBeforeUnmount(() => {
                   <QsPersonDisplay
                     v-if="row.ownerType === 'USER' && row.user"
                     :display-name="row.user.displayName"
-                    size="sm"
+                    size="sm" :avatar-url="row.user.avatarUrl"
                   />
                   <span v-else-if="row.ownerType === 'COMPANY'" class="qs-type-data-emphasis break-words">
                     公司资金账户

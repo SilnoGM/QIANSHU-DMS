@@ -80,7 +80,7 @@ watch(() => props.detail.id, () => {
                 {{ t('purchaseOrderDrawer.recordedBy') }}
               </dt>
               <dd class="m-0 min-w-0">
-                <QsPersonDisplay :display-name="payment.createdBy.displayName" size="sm" />
+                <QsPersonDisplay :display-name="payment.createdBy.displayName" size="sm" :avatar-url="payment.createdBy.avatarUrl" />
               </dd>
             </div>
             <div data-slot="payment-recorded-at" class="gap-3 grid grid-cols-[4.5rem_minmax(0,1fr)] items-start sm:col-span-2">

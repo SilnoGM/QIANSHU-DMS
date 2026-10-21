@@ -42,6 +42,7 @@ export interface FundAccountUserView {
   readonly id: string
   readonly username: string
   readonly displayName: string
+  readonly avatarUrl: string | null
   readonly status: FundAccountUserStatus
 }
 

@@ -103,7 +103,7 @@ function partTitle(partNumber: number): string {
               <dd class="m-0 flex flex-wrap gap-x-2 min-h-7 min-w-0 items-center">
                 <DateTimeDisplay :value="part.shippedAt" />
                 <span aria-hidden="true">·</span>
-                <QsPersonDisplay v-if="part.shippedBy" :display-name="part.shippedBy.displayName" size="sm" />
+                <QsPersonDisplay v-if="part.shippedBy" :display-name="part.shippedBy.displayName" size="sm" :avatar-url="part.shippedBy.avatarUrl" />
                 <span v-else>未记录操作人</span>
               </dd>
               <dt class="whitespace-nowrap">
@@ -132,7 +132,7 @@ function partTitle(partNumber: number): string {
                 <dt class="text-muted-foreground mb-1">
                   {{ t('purchaseWarehouseReceipt.operator') }}
                 </dt><dd class="m-0">
-                  <QsPersonDisplay v-if="part.warehouseReceivedBy" :display-name="part.warehouseReceivedBy.displayName" size="md" /><span v-else>—</span>
+                  <QsPersonDisplay v-if="part.warehouseReceivedBy" :display-name="part.warehouseReceivedBy.displayName" size="md" :avatar-url="part.warehouseReceivedBy.avatarUrl" /><span v-else>—</span>
                 </dd>
               </div>
               <div>

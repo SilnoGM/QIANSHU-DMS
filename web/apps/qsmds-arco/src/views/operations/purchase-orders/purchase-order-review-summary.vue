@@ -23,7 +23,7 @@ const { t } = useI18n()
           {{ t('purchaseReview.summary.reviewer') }}
         </dt>
         <dd class="m-0 mt-1 min-w-0">
-          <QsPersonDisplay v-if="summary" :display-name="summary.reviewedBy.displayName" size="sm" />
+          <QsPersonDisplay v-if="summary" :display-name="summary.reviewedBy.displayName" size="sm" :avatar-url="summary.reviewedBy.avatarUrl" />
           <span v-else class="text-muted-foreground">{{ t('purchaseReview.summary.notRecorded') }}</span>
         </dd>
       </div>

@@ -50,6 +50,7 @@ export class SalesReceiptApproveDto {
 export class SalesReceiptPersonDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty() name!: string
+  @ApiProperty({ type: 'string', nullable: true }) avatarUrl!: string | null
 }
 export class SalesReceiptOrderDto {
   @ApiProperty({ format: 'uuid' }) id!: string

@@ -1,4 +1,10 @@
 import type { Prisma } from '../../generated/prisma/client'
+import {
+  PERSON_REFERENCE_SELECT,
+  toNullablePersonReference,
+  type PersonReference,
+  type PersonReferenceRow,
+} from '../../infrastructure/database/person-reference'
 import type {
   DictionaryTone as DictionaryToneValue,
   ProductStatus as ProductStatusValue,
@@ -13,10 +19,7 @@ export interface DecimalStringSource {
   toString(): string
 }
 
-interface ProductActorRow {
-  readonly id: string
-  readonly displayName: string
-}
+type ProductActorRow = PersonReferenceRow
 
 export interface ProductCategoryRow {
   readonly id: string
@@ -71,10 +74,7 @@ export interface ProductAttribute {
   readonly value: string
 }
 
-export interface ProductActor {
-  readonly id: string
-  readonly displayName: string
-}
+export type ProductActor = PersonReference
 
 /**
  * Product 查询与创建响应共用同一份白名单 select，避免 Command 另建一套响应
@@ -97,8 +97,8 @@ export const PRODUCT_RESPONSE_SELECT = {
   purchaseCostCurrency: true,
   attributes: true,
   remark: true,
-  createdBy: { select: { id: true, displayName: true } },
-  updatedBy: { select: { id: true, displayName: true } },
+  createdBy: { select: PERSON_REFERENCE_SELECT },
+  updatedBy: { select: PERSON_REFERENCE_SELECT },
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -267,7 +267,5 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function mapActor(actor: ProductActorRow | null): ProductActor | null {
-  return actor === null
-    ? null
-    : { id: actor.id, displayName: actor.displayName }
+  return toNullablePersonReference(actor)
 }

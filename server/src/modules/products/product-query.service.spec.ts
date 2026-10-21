@@ -219,10 +219,10 @@ describe('ProductQueryService', () => {
       take: 10,
     })
     expect(findManyInput.select.createdBy).toEqual({
-      select: { id: true, displayName: true },
+      select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } },
     })
     expect(findManyInput.select.updatedBy).toEqual({
-      select: { id: true, displayName: true },
+      select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } },
     })
     expect(fixture.resolveStoredValues).toHaveBeenCalledTimes(1)
     expect(fixture.resolveStoredValues).toHaveBeenCalledWith({

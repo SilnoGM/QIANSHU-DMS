@@ -148,7 +148,7 @@ function trackingError(partId: string): string | null {
           <p v-if="part.shippedAt" class="qs-type-meta text-muted-foreground m-0 whitespace-pre-wrap">
             发货时间：<DateTimeDisplay :value="part.shippedAt" /><br>
             记录时间：<DateTimeDisplay :value="part.shipmentRecordedAt" /><br>
-            操作人：<QsPersonDisplay v-if="part.shippedBy" :display-name="part.shippedBy.displayName" size="sm" /><span v-else>未记录</span><br>
+            操作人：<QsPersonDisplay v-if="part.shippedBy" :display-name="part.shippedBy.displayName" size="sm" :avatar-url="part.shippedBy.avatarUrl" /><span v-else>未记录</span><br>
             发货说明：{{ part.shipmentRemark || '—' }}
           </p>
           <div v-for="product in part.products" :key="product.lineId" class="flex gap-3 items-start">

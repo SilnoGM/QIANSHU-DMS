@@ -105,8 +105,9 @@ export interface SlhReconciliationLineField {
   readonly value: string
   /** 金额行才有：原始金额与币种（由 AmountDisplay 负责符号、千分位与币种精度）。 */
   readonly amount?: SlhReconciliationAmountValue
-  /** 人员行才有：交给 QsPersonDisplay 渲染的显示名；缺名时不下发，模板回落占位符文本。 */
+  /** 人员行才有：交给 QsPersonDisplay 渲染的显示名与头像；缺名时不下发，模板回落占位符文本。 */
   readonly person?: string
+  readonly personAvatarUrl?: string | null
   /** 金额块里才有的位置标记：总额行（大号加粗）与余额行（非零时染红），其余金额行不下发。 */
   readonly emphasis?: 'total' | 'balance'
   /** 长文本字段才有：单行截断，超长时悬停给完整值（模板按需挂浮层）。 */
@@ -242,9 +243,14 @@ function createFieldFormatters(translate: SlhReconciliationTranslate) {
       return formatted === null ? missing : `${formatted} ${cai}`
     },
     /** 人员行：有名字时下发 person 让模板改用 QsPersonDisplay，缺名字仍走占位符。 */
-    person: (name: string | null | undefined): { readonly value: string, readonly person?: string } => {
+    person: (
+      name: string | null | undefined,
+      avatarUrl: string | null | undefined,
+    ): { readonly value: string, readonly person?: string, readonly personAvatarUrl?: string | null } => {
       const displayName = text(name)
-      return displayName === missing ? { value: displayName } : { value: displayName, person: displayName }
+      return displayName === missing
+        ? { value: displayName }
+        : { value: displayName, person: displayName, personAvatarUrl: avatarUrl ?? null }
     },
     /** 收费材积在装柜行是整数材数，与其它材积字段一样带单位展示。 */
     chargeableVolume: (value: number | null | undefined) => (
@@ -639,7 +645,7 @@ export function buildSlhReconciliationOrderSections(
         merged('customer', 'salesOrderDesc.sections.customer', [sales?.customerName, sales?.customerPhone]),
         { id: 'customerFullAddress', label: translate('salesOrderDesc.fields.fullAddress'), value: text(withoutAddressCountryPrefix(sales?.customerFullAddress)), truncate: true },
         // 出单人是人员信息：交给 QsPersonDisplay（头像位 + 名称截断），文案仍取销售域键。
-        { id: 'issuer', label: translate('salesOrderDesc.fields.issuer'), ...person(sales?.issuerDisplayName) },
+        { id: 'issuer', label: translate('salesOrderDesc.fields.issuer'), ...person(sales?.issuerDisplayName, sales?.issuerAvatarUrl) },
       ],
       amountFields: [
         amountField('salesTotalAmount', 'slhReconciliation.detail.salesTotalAmount', salesCurrency, sales?.agreedTotalAmount, 'total'),
@@ -658,7 +664,7 @@ export function buildSlhReconciliationOrderSections(
         { id: 'supplier', label: translate('slhReconciliation.detail.supplier'), value: text(purchase?.supplier.label), truncate: true },
         { id: 'shippingMark', label: translate('purchaseOrderDesc.fields.shippingMark'), value: text(purchase?.shippingMarkText), truncate: true },
         // 采购人＝采购订单的创建人，与销售侧出单人一样交给 QsPersonDisplay。
-        { id: 'purchaseCreator', label: translate('slhReconciliation.detail.purchaseCreator'), ...person(purchase?.creatorDisplayName) },
+        { id: 'purchaseCreator', label: translate('slhReconciliation.detail.purchaseCreator'), ...person(purchase?.creatorDisplayName, purchase?.creatorAvatarUrl) },
       ],
       amountFields: [
         amountField('purchaseTotalAmount', 'slhReconciliation.detail.purchaseTotalAmount', 'CNY', purchase?.purchaseTotalAmount, 'total'),

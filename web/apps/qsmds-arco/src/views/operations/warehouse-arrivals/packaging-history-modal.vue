@@ -98,7 +98,7 @@ async function saveAmount() {
                 {{ t('warehousePackagingCost.history.submittedBy') }}
               </dt>
               <dd class="m-0 mt-1">
-                <QsPersonDisplay :display-name="record.submittedBy.name" size="sm" />
+                <QsPersonDisplay :display-name="record.submittedBy.name" size="sm" :avatar-url="record.submittedBy.avatarUrl" />
               </dd>
             </div>
             <div>
@@ -115,7 +115,7 @@ async function saveAmount() {
                   {{ t('warehousePackagingCost.history.paidBy') }}
                 </dt>
                 <dd class="m-0 mt-1">
-                  <QsPersonDisplay v-if="record.paidBy" :display-name="record.paidBy.name" size="sm" /><span v-else>—</span>
+                  <QsPersonDisplay v-if="record.paidBy" :display-name="record.paidBy.name" size="sm" :avatar-url="record.paidBy.avatarUrl" /><span v-else>—</span>
                 </dd>
               </div>
               <div>

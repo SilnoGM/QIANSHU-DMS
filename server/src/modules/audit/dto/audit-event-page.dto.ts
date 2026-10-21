@@ -34,6 +34,9 @@ export class AuditEventDto {
   @ApiProperty({ type: 'string', maxLength: 128, nullable: true })
   actorDisplayName!: string | null
 
+  @ApiProperty({ type: 'string', nullable: true })
+  actorAvatarUrl!: string | null
+
   @ApiProperty({ type: 'string', maxLength: 128, nullable: true })
   targetType!: string | null
 

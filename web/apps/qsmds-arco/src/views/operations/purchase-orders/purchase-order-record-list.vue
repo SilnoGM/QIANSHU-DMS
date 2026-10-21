@@ -68,7 +68,7 @@ const documentTones = {
               <dt class="text-muted-foreground inline">
                 {{ t('purchaseOrderDrawer.recordedBy') }}：
               </dt><dd class="m-0 inline-flex flex-wrap gap-2 items-center">
-                <QsPersonDisplay :display-name="payment.createdBy.displayName" size="sm" />
+                <QsPersonDisplay :display-name="payment.createdBy.displayName" size="sm" :avatar-url="payment.createdBy.avatarUrl" />
                 <DateTimeDisplay :value="payment.createdAt" />
               </dd>
             </div>
@@ -95,7 +95,7 @@ const documentTones = {
               {{ t('purchaseOrderDrawer.voidReason') }}：{{ optionalText(payment.voidReason) }}
             </p>
             <div class="text-muted-foreground mt-1 flex flex-wrap gap-2 items-center">
-              <QsPersonDisplay :display-name="payment.voidedBy?.displayName ?? '-'" size="sm" />
+              <QsPersonDisplay :display-name="payment.voidedBy?.displayName ?? '-'" size="sm" :avatar-url="payment.voidedBy?.avatarUrl" />
               <DateTimeDisplay :value="payment.voidedAt" />
             </div>
           </div>
@@ -152,7 +152,7 @@ const documentTones = {
           </div>
           <div class="qs-type-meta mt-3 flex flex-wrap gap-x-4 gap-y-2 items-center">
             <span class="inline-flex gap-2 items-center">
-              {{ t('purchaseOrderDrawer.uploadedBy') }}：<QsPersonDisplay :display-name="document.createdBy.displayName" size="sm" />
+              {{ t('purchaseOrderDrawer.uploadedBy') }}：<QsPersonDisplay :display-name="document.createdBy.displayName" size="sm" :avatar-url="document.createdBy.avatarUrl" />
             </span>
             <span>{{ t('purchaseOrderDrawer.uploadedAt') }}：<DateTimeDisplay :value="document.createdAt" /></span>
             <span>{{ t(document.paymentId === null ? 'purchaseOrderList.records.orderDocument' : 'purchaseOrderList.records.paymentDocument') }}</span>

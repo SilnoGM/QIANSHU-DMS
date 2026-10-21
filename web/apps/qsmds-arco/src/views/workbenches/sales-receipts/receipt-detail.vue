@@ -52,7 +52,7 @@ const voidPreview = computed(() => {
 interface TraceRow {
   id: string
   label: string
-  person?: { id: string, name: string }
+  person?: { avatarUrl: string | null, id: string, name: string }
   value?: boolean | null | number | string
 }
 
@@ -71,18 +71,18 @@ const traceRows = computed<TraceRow[]>(() => {
     {
       id: 'accountOwner',
       label: t('salesReceipt.traceLabel.accountOwner'),
-      person: { id: item.accountOwner.id, name: item.accountOwner.name },
+      person: { id: item.accountOwner.id, name: item.accountOwner.name, avatarUrl: item.accountOwner.avatarUrl },
     },
     {
       id: 'submittedBy',
       label: t('salesReceipt.traceLabel.submittedBy'),
-      person: { id: item.submittedBy.id, name: item.submittedBy.name },
+      person: { id: item.submittedBy.id, name: item.submittedBy.name, avatarUrl: item.submittedBy.avatarUrl },
     },
     ...(item.reviewedBy
       ? [{
           id: 'reviewedBy',
           label: t('salesReceipt.traceLabel.reviewedBy'),
-          person: { id: item.reviewedBy.id, name: item.reviewedBy.name },
+          person: { id: item.reviewedBy.id, name: item.reviewedBy.name, avatarUrl: item.reviewedBy.avatarUrl },
         }]
       : []),
     { id: 'voucherMediaAssetId', label: t('salesReceipt.traceLabel.voucherMediaAssetId'), value: item.voucher.mediaAssetId },
@@ -300,7 +300,7 @@ onBeforeUnmount(() => controller?.abort())
               <dt class="qs-type-compact-label mb-1.5">
                 {{ t('salesReceipt.owner') }}
               </dt><dd class="m-0 min-w-0">
-                <QsPersonDisplay :display-name="detail.accountOwner.name" size="md" class="max-w-full" />
+                <QsPersonDisplay :display-name="detail.accountOwner.name" size="md" class="max-w-full" :avatar-url="detail.accountOwner.avatarUrl" />
               </dd>
             </div>
             <div class="min-w-0">
@@ -356,7 +356,7 @@ onBeforeUnmount(() => controller?.abort())
             <dt class="qs-type-compact-label mb-1.5">
               {{ t('salesReceipt.submittedAt') }}
             </dt><dd class="m-0 min-w-0 space-y-2">
-              <QsPersonDisplay :display-name="detail.submittedBy.name" size="sm" class="max-w-full" /><div class="overflow-x-auto">
+              <QsPersonDisplay :display-name="detail.submittedBy.name" size="sm" class="max-w-full" :avatar-url="detail.submittedBy.avatarUrl" /><div class="overflow-x-auto">
                 <DateTimeDisplay :value="detail.submittedAt" />
               </div>
             </dd>
@@ -365,7 +365,7 @@ onBeforeUnmount(() => controller?.abort())
             <dt class="qs-type-compact-label mb-1.5">
               {{ t('salesReceipt.reviewedAt') }}
             </dt><dd class="m-0 min-w-0 space-y-2">
-              <QsPersonDisplay v-if="detail.reviewedBy" :display-name="detail.reviewedBy.name" size="sm" class="max-w-full" /><span v-else class="qs-type-meta">—</span><div v-if="detail.reviewedAt" class="overflow-x-auto">
+              <QsPersonDisplay v-if="detail.reviewedBy" :display-name="detail.reviewedBy.name" size="sm" class="max-w-full" :avatar-url="detail.reviewedBy.avatarUrl" /><span v-else class="qs-type-meta">—</span><div v-if="detail.reviewedAt" class="overflow-x-auto">
                 <DateTimeDisplay :value="detail.reviewedAt" />
               </div>
             </dd>
@@ -468,7 +468,7 @@ onBeforeUnmount(() => controller?.abort())
             </dt>
             <dd class="m-0">
               <template v-if="row.person">
-                <QsPersonDisplay :display-name="row.person.name" size="sm" />
+                <QsPersonDisplay :display-name="row.person.name" size="sm" :avatar-url="row.person.avatarUrl" />
                 <code class="qs-type-meta font-mono mt-1 block select-all break-all">{{ row.person.id }}</code>
               </template>
               <span v-else class="qs-type-meta font-mono select-all break-all">{{ row.value }}</span>

@@ -11,6 +11,13 @@ import type {
   PurchaseOrderType,
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import {
+  PERSON_REFERENCE_SELECT,
+  toNullablePersonReference,
+  toPersonReference,
+  type PersonReference,
+  type PersonReferenceRow,
+} from '../../infrastructure/database/person-reference'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../access-control/data-scope.service'
 import {
@@ -90,7 +97,7 @@ const PURCHASE_ORDER_LIST_SELECT = {
   version: true,
   createdAt: true,
   updatedAt: true,
-  createdBy: { select: { id: true, displayName: true } },
+  createdBy: { select: PERSON_REFERENCE_SELECT },
   salesOrder: {
     select: { id: true, orderNo: true, customerName: true },
   },
@@ -112,9 +119,9 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
     select: {
       id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true,
       shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true, destinationWarehouseValue: true,
-      shippedBy: { select: { id: true, displayName: true } },
+      shippedBy: { select: PERSON_REFERENCE_SELECT },
       warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true,
-      warehouseReceivedBy: { select: { id: true, displayName: true } },
+      warehouseReceivedBy: { select: PERSON_REFERENCE_SELECT },
 
       items: { orderBy: { line: { lineNumber: 'asc' } }, select: {
         purchaseOrderLineId: true, quantity: true, line: { select: { lineNumber: true } },
@@ -148,8 +155,8 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
       createdAt: true,
       voidedAt: true,
       voidReason: true,
-      createdBy: { select: { id: true, displayName: true } },
-      voidedBy: { select: { id: true, displayName: true } },
+      createdBy: { select: PERSON_REFERENCE_SELECT },
+      voidedBy: { select: PERSON_REFERENCE_SELECT },
     },
   },
   documents: {
@@ -171,8 +178,8 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
           sizeBytes: true,
         },
       },
-      createdBy: { select: { id: true, displayName: true } },
-      detachedBy: { select: { id: true, displayName: true } },
+      createdBy: { select: PERSON_REFERENCE_SELECT },
+      detachedBy: { select: PERSON_REFERENCE_SELECT },
     },
   },
   statusHistory: {
@@ -184,7 +191,7 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
       toStatus: true,
       reason: true,
       changedAt: true,
-      changedBy: { select: { id: true, displayName: true } },
+      changedBy: { select: PERSON_REFERENCE_SELECT },
     },
   },
   amountRevisions: {
@@ -195,7 +202,7 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
       oldDepositDueAmount: true, oldBalanceDueAmount: true,
       newLineSubtotalAmount: true, newPurchaseTotalAmount: true,
       newDepositDueAmount: true, newBalanceDueAmount: true,
-      changedBy: { select: { id: true, displayName: true } },
+      changedBy: { select: PERSON_REFERENCE_SELECT },
     },
   },
 } as const satisfies Prisma.PurchaseOrderSelect
@@ -230,7 +237,7 @@ export interface PurchaseOrderSupplier {
 
 export interface PurchaseOrderReviewSummary {
   readonly reviewedAt: string
-  readonly reviewedBy: { readonly id: string, readonly displayName: string }
+  readonly reviewedBy: PersonReference
   readonly reason: string | null
 }
 
@@ -243,7 +250,7 @@ export interface PurchaseOrderListItem extends PurchaseOrderRecordSummaries {
   readonly salesOrderNo: string | null
   readonly customerName: string | null
   readonly supplier: PurchaseOrderSupplier
-  readonly createdBy: { readonly id: string, readonly displayName: string }
+  readonly createdBy: PersonReference
   readonly lineSummary: {
     readonly lineCount: number
     readonly totalQuantity: number
@@ -330,12 +337,12 @@ export interface PurchaseOrderDetail extends PurchaseOrderListItem {
     readonly shipmentRemark: string | null
     readonly trackingNo: string | null
     readonly destinationWarehouseValue: string | null
-    readonly shippedBy: { readonly id: string, readonly displayName: string } | null
+    readonly shippedBy: PersonReference | null
     readonly warehouseReceivedAt: string | null
     readonly warehouseReceivedById: string | null
     readonly warehouseRecordedAt: string | null
     readonly warehouseRemark: string | null
-    readonly warehouseReceivedBy: { readonly id: string, readonly displayName: string } | null
+    readonly warehouseReceivedBy: PersonReference | null
     readonly items: readonly { readonly purchaseOrderLineId: string, readonly lineNumber: number, readonly quantity: number }[]
   }[]
   readonly sourceSalesOrder: {
@@ -406,8 +413,8 @@ export function purchaseOrderSupplierFromSources(
   }
 }
 
-function actor(value: { readonly id: string, readonly displayName: string } | null) {
-  return value === null ? null : { id: value.id, displayName: value.displayName }
+function actor(value: PersonReferenceRow | null) {
+  return toNullablePersonReference(value)
 }
 
 function paidUnits(value: { toFixed(decimalPlaces: number): string } | null): bigint {
@@ -553,12 +560,12 @@ function mapLineSummary(
 
 function mapReviewSummary(history: {
   readonly changedAt: Date
-  readonly changedBy: { readonly id: string, readonly displayName: string }
+  readonly changedBy: PersonReferenceRow
   readonly reason: string | null
 } | undefined): PurchaseOrderReviewSummary | null {
   return history === undefined ? null : {
     reviewedAt: history.changedAt.toISOString(),
-    reviewedBy: history.changedBy,
+    reviewedBy: toPersonReference(history.changedBy),
     reason: history.reason,
   }
 }
@@ -583,7 +590,7 @@ function mapListItem(
     salesOrderNo: row.salesOrder?.orderNo ?? null,
     customerName: row.salesOrder?.customerName ?? null,
     supplier,
-    createdBy: row.createdBy,
+    createdBy: toPersonReference(row.createdBy),
     lineSummary: mapLineSummary(row),
     partCount: row._count.parts,
     shippedPartCount: row.parts.filter(part => part.shippedAt != null).length,
@@ -718,7 +725,7 @@ export class PurchaseOrderQueryService {
           distinct: ['purchaseOrderId'],
           select: {
             purchaseOrderId: true, changedAt: true, reason: true,
-            changedBy: { select: { id: true, displayName: true } },
+            changedBy: { select: PERSON_REFERENCE_SELECT },
           },
         })
         return [total, rows, orderAggregate, referencePriceLines, paymentAggregate,
@@ -904,12 +911,12 @@ export class PurchaseOrderQueryService {
         shipmentRemark: part.shipmentRemark ?? null,
         trackingNo: part.trackingNo ?? null,
         destinationWarehouseValue: part.destinationWarehouseValue ?? null,
-        shippedBy: part.shippedBy ?? null,
+        shippedBy: toNullablePersonReference(part.shippedBy),
         warehouseReceivedAt: part.warehouseReceivedAt?.toISOString() ?? null,
         warehouseReceivedById: part.warehouseReceivedById ?? null,
         warehouseRecordedAt: part.warehouseRecordedAt?.toISOString() ?? null,
         warehouseRemark: part.warehouseRemark ?? null,
-        warehouseReceivedBy: part.warehouseReceivedBy ?? null,
+        warehouseReceivedBy: toNullablePersonReference(part.warehouseReceivedBy),
 
         items: part.items.map(item => ({
           purchaseOrderLineId: item.purchaseOrderLineId, lineNumber: item.line.lineNumber, quantity: item.quantity,

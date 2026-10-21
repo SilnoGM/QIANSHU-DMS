@@ -85,7 +85,7 @@ function cloneMoney(value: ProductMoneyDto): ProductMoneyDto {
 function cloneActor(value: ProductActorDto | null): ProductActorDto | null {
   return value === null
     ? null
-    : { displayName: value.displayName, id: value.id }
+    : { displayName: value.displayName, id: value.id, avatarUrl: value.avatarUrl }
 }
 
 function cloneMediaItem(

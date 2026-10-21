@@ -3,6 +3,11 @@ import type { PaymentRecipientAccountDto } from '../../payment-recipients/paymen
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
+import {
+  PERSON_REFERENCE_SELECT,
+  toNullablePersonReference,
+  type PersonReferenceRow,
+} from '../../../infrastructure/database/person-reference'
 import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
 import type { DataScope } from '../../access-control/data-scope'
 import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
@@ -11,7 +16,7 @@ import type { PurchasePayableBatchOrdersDto, PurchasePayableBatchSuppliersDto, P
 import { payableFailure, summarizePayable } from './purchase-payable.logic'
 import { normalizeBatchSupplier } from './purchase-payable-batch.logic'
 
-const person = { select: { id: true, displayName: true } }
+const person = { select: PERSON_REFERENCE_SELECT }
 const include = {
   salesOrder: { select: { orderNo: true } },
   payables: { include: { owner: person, payments: { where: { voidedAt: null }, include: { createdBy: person, documents: { where: { detachedAt: null, documentType: 'PAYMENT_VOUCHER' }, take: 1 } }, orderBy: [{ paidAt: 'desc' as const }, { id: 'desc' as const }] } } },
@@ -20,6 +25,11 @@ type Order = Prisma.PurchaseOrderGetPayload<{ include: typeof include }>
 const outstandingOrders = {
   orderStatus: 'CONFIRMED', paymentStatus: { not: 'PAID' }, payables: { some: { closedAt: null, dueAmount: { gt: 0 } } },
 } satisfies Prisma.PurchaseOrderWhereInput
+
+function toPayablePerson(value: PersonReferenceRow) {
+  const reference = toNullablePersonReference(value)!
+  return { id: reference.id, name: reference.displayName, avatarUrl: reference.avatarUrl }
+}
 @Injectable()
 export class PurchasePayableQueryService {
   constructor(private readonly prisma: PrismaService, private readonly dictionary: DictionaryLookupService, private readonly recipients: PaymentRecipientService, private readonly dataScope: DataScopeService = dataScopeFallback()) {}
@@ -66,7 +76,7 @@ export class PurchasePayableQueryService {
       id: row.id, orderNo: row.orderNo, orderDate: row.orderDate.toISOString().slice(0, 10), purchaseType: row.purchaseType,
       supplierName: row.customSupplierName ?? (supplier?.known ? supplier.label : row.supplierValue ?? '—'),
       salesOrderNo: row.salesOrder?.orderNo ?? null, purchaseTotalAmount: row.purchaseTotalAmount.toFixed(2), currencyCode: 'CNY',
-      accountOwnerType: owner.accountOwnerType, owner: owner.owner ? { id: owner.owner.id, name: owner.owner.displayName } : null,
+      accountOwnerType: owner.accountOwnerType, owner: owner.owner ? toPayablePerson(owner.owner) : null,
       items: payables.map(payable => {
         const last = payable.payments[0]
         const document = last?.documents[0]
@@ -78,7 +88,7 @@ export class PurchasePayableQueryService {
           id: payable.id, paymentType: payable.paymentType as 'DEPOSIT' | 'BALANCE', dueAmount: payable.dueAmount.toFixed(2),
           ...summarizePayable(payable.dueAmount.toFixed(2), payable.payments.map(payment => payment.amount.toFixed(2)), payable.closedAt !== null),
           version: payable.version, paidAt: last?.paidAt.toISOString() ?? null,
-          paidBy: last ? { id: last.createdBy.id, name: last.createdBy.displayName } : null }
+          paidBy: last ? toPayablePerson(last.createdBy) : null }
       }),
     }
   }

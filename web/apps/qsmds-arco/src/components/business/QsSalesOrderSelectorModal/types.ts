@@ -38,6 +38,7 @@ export interface SalesOrderSelectorItem {
   readonly issuer: {
     readonly id: string
     readonly displayName: string
+    readonly avatarUrl: string | null
   }
   readonly customerName: string
   readonly orderStatus: SalesOrderSelectorOrderStatus

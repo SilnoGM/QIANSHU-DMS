@@ -186,6 +186,9 @@ export class FundAccountUserDto {
   @ApiProperty({ type: 'string' })
   displayName!: string
 
+  @ApiProperty({ type: 'string', nullable: true })
+  avatarUrl!: string | null
+
   @ApiProperty({ type: 'string', enum: ['ACTIVE', 'DISABLED'] })
   status!: 'ACTIVE' | 'DISABLED'
 }

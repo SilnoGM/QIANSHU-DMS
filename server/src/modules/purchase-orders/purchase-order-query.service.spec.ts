@@ -187,7 +187,7 @@ describe('PurchaseOrderQueryService', () => {
     const fixture = setup()
     const reviewedAt = new Date('2026-09-13T03:00:00.000Z')
     const laterChangedAt = new Date('2026-09-14T03:00:00.000Z')
-    const reviewedBy = { id: 'reviewer-id', displayName: '采购主管' }
+    const reviewedBy = { id: 'reviewer-id', displayName: '采购主管', avatarUrl: null }
     fixture.prisma.purchaseOrder.findMany.mockResolvedValue([
       orderRow({
         id: 'approved-order',
@@ -220,7 +220,7 @@ describe('PurchaseOrderQueryService', () => {
       distinct: ['purchaseOrderId'],
       select: {
         purchaseOrderId: true, changedAt: true, reason: true,
-        changedBy: { select: { id: true, displayName: true } },
+        changedBy: { select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } } },
       },
     })
     expect(fixture.prisma.purchaseOrder.findUnique).not.toHaveBeenCalled()
@@ -237,7 +237,7 @@ describe('PurchaseOrderQueryService', () => {
   it('derives detail review facts only from the exact persisted approval transition', async () => {
     const fixture = setup()
     const reviewedAt = new Date('2026-09-13T03:00:00.000Z')
-    const reviewedBy = { id: 'reviewer-id', displayName: '采购主管' }
+    const reviewedBy = { id: 'reviewer-id', displayName: '采购主管', avatarUrl: null }
     fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
       statusHistory: [
         { id: 'cancel', dimension: 'ORDER', fromStatus: 'CONFIRMED', toStatus: 'CANCELLED', changedAt: new Date('2026-09-14T03:00:00Z'), changedBy: reviewedBy, reason: '后续取消' },

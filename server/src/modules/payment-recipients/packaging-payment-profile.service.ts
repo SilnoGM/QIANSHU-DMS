@@ -84,6 +84,6 @@ export class PackagingPaymentProfileService {
     return { snapshot: mapRecipientAccount(account), qrMediaAssetId: account.qrMediaAssetId }
   }
   private dto(profile: Prisma.PaymentRecipientProfileGetPayload<{ include: typeof profileInclude }> | null): PackagingPaymentProfileDto {
-    return { vendor: 'CHENGXIN', vendorName: '沙井·诚信木箱', version: profile?.version ?? 0, accounts: profile ? mapProfile(profile).accounts : [], updatedAt: profile?.updatedAt.toISOString() ?? null, updatedBy: profile ? { id: profile.updatedBy.id, name: profile.updatedBy.displayName } : null }
+    return { vendor: 'CHENGXIN', vendorName: '沙井·诚信木箱', version: profile?.version ?? 0, accounts: profile ? mapProfile(profile).accounts : [], updatedAt: profile?.updatedAt.toISOString() ?? null, updatedBy: profile ? { id: profile.updatedBy.id, name: profile.updatedBy.displayName, avatarUrl: profile.updatedBy.profile?.avatarUrl ?? null } : null }
   }
 }

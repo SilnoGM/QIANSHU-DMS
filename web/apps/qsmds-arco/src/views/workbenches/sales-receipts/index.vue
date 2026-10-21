@@ -207,11 +207,11 @@ onBeforeUnmount(() => controller?.abort())
           <ReceiptVoucher :voucher="row.original.voucher" :url="voucherUrl(row.original)" />
         </template>
         <template #cell-owner="{ row }">
-          <QsPersonDisplay :display-name="row.original.accountOwner.name" size="md" />
+          <QsPersonDisplay :display-name="row.original.accountOwner.name" size="md" :avatar-url="row.original.accountOwner.avatarUrl" />
         </template>
         <template #cell-submitted="{ row }">
           <QsTableStackedCell>
-            <QsPersonDisplay :display-name="row.original.submittedBy.name" size="sm" />
+            <QsPersonDisplay :display-name="row.original.submittedBy.name" size="sm" :avatar-url="row.original.submittedBy.avatarUrl" />
             <QsTableStackedLine tone="muted">
               <DateTimeDisplay :value="row.original.submittedAt" />
             </QsTableStackedLine>
@@ -228,7 +228,7 @@ onBeforeUnmount(() => controller?.abort())
               </FaTag>
             </QsTableStackedLine>
             <QsTableStackedLine v-if="row.original.reviewedBy">
-              <QsPersonDisplay :display-name="row.original.reviewedBy.name" size="sm" />
+              <QsPersonDisplay :display-name="row.original.reviewedBy.name" size="sm" :avatar-url="row.original.reviewedBy.avatarUrl" />
             </QsTableStackedLine>
             <QsTableStackedLine v-if="row.original.reviewedAt" tone="muted">
               <DateTimeDisplay :value="row.original.reviewedAt" />
@@ -283,7 +283,7 @@ onBeforeUnmount(() => controller?.abort())
                 <dt class="qs-type-meta">
                   {{ t('salesReceipt.owner') }}
                 </dt><dd class="m-0 mt-1">
-                  <QsPersonDisplay :display-name="row.accountOwner.name" size="md" />
+                  <QsPersonDisplay :display-name="row.accountOwner.name" size="md" :avatar-url="row.accountOwner.avatarUrl" />
                 </dd>
               </div>
               <div>
@@ -306,7 +306,7 @@ onBeforeUnmount(() => controller?.abort())
                 <dt class="qs-type-meta">
                   {{ t('salesReceipt.submittedAt') }}
                 </dt><dd class="m-0 flex flex-wrap gap-2 items-center">
-                  <QsPersonDisplay :display-name="row.submittedBy.name" size="sm" />
+                  <QsPersonDisplay :display-name="row.submittedBy.name" size="sm" :avatar-url="row.submittedBy.avatarUrl" />
                   <span class="inline-flex gap-2 items-center"><span aria-hidden="true">·</span><DateTimeDisplay :value="row.submittedAt" /></span>
                 </dd>
               </div>
@@ -314,7 +314,7 @@ onBeforeUnmount(() => controller?.abort())
                 <dt class="qs-type-meta">
                   {{ t('salesReceipt.reviewedAt') }}
                 </dt><dd class="m-0 flex flex-wrap gap-2 items-center">
-                  <QsPersonDisplay v-if="row.reviewedBy" :display-name="row.reviewedBy.name" size="sm" />
+                  <QsPersonDisplay v-if="row.reviewedBy" :display-name="row.reviewedBy.name" size="sm" :avatar-url="row.reviewedBy.avatarUrl" />
                   <span v-else class="qs-type-meta">—</span>
                   <span class="inline-flex gap-2 items-center"><span aria-hidden="true">·</span><DateTimeDisplay :value="row.reviewedAt" /></span>
                 </dd>

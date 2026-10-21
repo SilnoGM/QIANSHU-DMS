@@ -176,7 +176,7 @@ function close(): void {
               {{ t('fundWithdrawal.detail.applicant') }}
             </dt>
             <dd class="qs-type-body-strong m-0 flex flex-wrap gap-2 items-center">
-              <QsPersonDisplay :display-name="request.applicantName" size="sm" />
+              <QsPersonDisplay :display-name="request.applicantName" size="sm" :avatar-url="request.applicantAvatarUrl" />
               <span class="qs-type-meta text-muted-foreground">（{{ request.applicantUsername }}）</span>
             </dd>
           </div>

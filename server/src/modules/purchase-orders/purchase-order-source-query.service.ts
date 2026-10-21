@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common'
 
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { toPersonReference } from '../../infrastructure/database/person-reference'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../access-control/data-scope.service'
 import {
@@ -494,7 +495,7 @@ export class PurchaseOrderSourceQueryService {
           id: true,
           orderNo: true,
           orderDate: true,
-          issuer: { select: { id: true, displayName: true } },
+          issuer: { select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } } },
           customerName: true,
           lineSubtotalAmount: true,
           orderStatus: true,
@@ -567,7 +568,7 @@ export class PurchaseOrderSourceQueryService {
           id: row.id,
           orderNo: row.orderNo,
           orderDate: row.orderDate.toISOString().slice(0, 10),
-          issuer: row.issuer,
+          issuer: toPersonReference(row.issuer),
           customerName: row.customerName,
           salesTotalAmount: fixed4(row.lineSubtotalAmount),
           orderStatus: row.orderStatus,

@@ -2,6 +2,11 @@ import { HttpStatus, Injectable } from '@nestjs/common'
 
 import { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
+import {
+  PERSON_REFERENCE_SELECT,
+  toNullablePersonReference,
+  toPersonReference,
+} from '../../../infrastructure/database/person-reference'
 import { ApiException } from '../../../infrastructure/http/api.exception'
 import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
 import { isNormalizableDictionaryItemValue, normalizeDictionaryItemValue } from '../../dictionaries/dictionary.normalizer'
@@ -23,14 +28,14 @@ const LINE_SELECT = {
 
 const PART_SELECT = {
   id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true, createdAt: true,
-  shippedAt: true, shippedBy: { select: { id: true, displayName: true } }, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true, destinationWarehouseValue: true,
+  shippedAt: true, shippedBy: { select: PERSON_REFERENCE_SELECT }, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true, destinationWarehouseValue: true,
   warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true,
-  warehouseReceivedBy: { select: { id: true, displayName: true } },
-  loadedAt: true, loadedRecordedAt: true, loadedBy: { select: { id: true, displayName: true } },
+  warehouseReceivedBy: { select: PERSON_REFERENCE_SELECT },
+  loadedAt: true, loadedRecordedAt: true, loadedBy: { select: PERSON_REFERENCE_SELECT },
   purchaseOrder: { select: {
     id: true, version: true, orderNo: true, orderDate: true, purchaseType: true, productMode: true, orderStatus: true,
     shippingMarkText: true, supplierValue: true, customSupplierName: true,
-    createdBy: { select: { id: true, displayName: true } },
+    createdBy: { select: PERSON_REFERENCE_SELECT },
     salesOrder: { select: { id: true, orderNo: true, customerName: true } },
   } },
   items: { orderBy: { line: { lineNumber: 'asc' } }, select: { purchaseOrderLineId: true, quantity: true, line: { select: LINE_SELECT } } },
@@ -143,19 +148,19 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
       ? row.loadedAt !== null ? 'CONTAINER_LOADED' : row.warehouseReceivedAt !== null ? 'WAREHOUSE_RECEIVED' : row.shippedAt === null ? 'AWAITING_SHIPMENT' : 'SHIPPED'
       : row.status,
     shippingMarkText: row.shippingMarkText, createdAt: row.createdAt.toISOString(),
-    shippedAt: row.shippedAt?.toISOString() ?? null, shippedBy: row.shippedBy,
+    shippedAt: row.shippedAt?.toISOString() ?? null, shippedBy: toNullablePersonReference(row.shippedBy),
     shipmentRecordedAt: row.shipmentRecordedAt?.toISOString() ?? null, shipmentRemark: row.shipmentRemark,
     trackingNo: row.trackingNo ?? null,
     destinationWarehouseValue: row.destinationWarehouseValue ?? null, destinationWarehouse,
     warehouseReceivedAt: row.warehouseReceivedAt?.toISOString() ?? null, warehouseReceivedById: row.warehouseReceivedById,
     warehouseRecordedAt: row.warehouseRecordedAt?.toISOString() ?? null, warehouseRemark: row.warehouseRemark,
-    warehouseReceivedBy: row.warehouseReceivedBy,
-    loadedAt: row.loadedAt?.toISOString() ?? null, loadedBy: row.loadedBy,
+    warehouseReceivedBy: toNullablePersonReference(row.warehouseReceivedBy),
+    loadedAt: row.loadedAt?.toISOString() ?? null, loadedBy: toNullablePersonReference(row.loadedBy),
     loadedRecordedAt: row.loadedRecordedAt?.toISOString() ?? null,
     purchaseOrder: {
       id: order.id, version: order.version, orderNo: order.orderNo, orderDate: order.orderDate.toISOString().slice(0, 10),
       purchaseType: order.purchaseType, productMode: order.productMode, orderStatus: order.orderStatus,
-      shippingMarkText: order.shippingMarkText, createdBy: order.createdBy,
+      shippingMarkText: order.shippingMarkText, createdBy: toPersonReference(order.createdBy),
     },
     supplier, salesSource: order.salesOrder,
     lineSummary: {
@@ -204,11 +209,11 @@ export class PurchaseShipmentQueryService {
       // 出单人选项保持全量，不随数据范围收缩，避免筛选器缺失既有选项。
       const buyers = await transaction.user.findMany({
         where: { purchaseOrdersCreated: { some: { parts: { some: {} } } } },
-        select: { id: true, displayName: true }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+        select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
       })
       return [counts, buyers] as const
     }, { isolationLevel: 'RepeatableRead' })
-    return { items: PURCHASE_SHIPMENT_VIEWS.map(value => ({ value, count: counts.get(value) ?? 0 })), buyerOptions: buyers }
+    return { items: PURCHASE_SHIPMENT_VIEWS.map(value => ({ value, count: counts.get(value) ?? 0 })), buyerOptions: buyers.map(toPersonReference) }
   }
 
   async getById(partId: string, actorUserId: string = resolveDataScopeActor()): Promise<PurchaseShipmentDetailDto> {

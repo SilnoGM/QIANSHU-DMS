@@ -27,16 +27,16 @@ type RequestRow = Prisma.InvoiceRequestGetPayload<{ include: typeof LIST_INCLUDE
 
 const LIST_INCLUDE = {
   lines: { orderBy: { lineNo: 'asc' } },
-  createdBy: { select: { id: true, displayName: true } },
+  createdBy: { select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } } },
   documentMediaAsset: { select: { id: true, originalFilename: true } },
   statusHistory: { where: { action: 'RETURN' }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 1 },
 } satisfies Prisma.InvoiceRequestInclude
 
 const DETAIL_INCLUDE = {
   lines: { orderBy: { lineNo: 'asc' } },
-  createdBy: { select: { id: true, displayName: true } },
+  createdBy: { select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } } },
   documentMediaAsset: { select: { id: true, originalFilename: true } },
-  statusHistory: { orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }], include: { actor: { select: { displayName: true } } } },
+  statusHistory: { orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }], include: { actor: { select: { displayName: true, profile: { select: { avatarUrl: true } } } } } },
 } satisfies Prisma.InvoiceRequestInclude
 
 type DetailRow = Prisma.InvoiceRequestGetPayload<{ include: typeof DETAIL_INCLUDE }>
@@ -78,6 +78,7 @@ function toListItem(row: RequestRow): InvoiceRequestListItemDto {
     internalRemark: row.internalRemark,
     creatorUserId: row.createdById,
     creatorName: row.createdBy.displayName,
+    creatorAvatarUrl: row.createdBy.profile?.avatarUrl ?? null,
     submittedAt: row.createdAt.toISOString(),
     lastSubmittedAt: row.lastSubmittedAt.toISOString(),
     notifiedAt: toIso(row.notifiedAt),
@@ -115,6 +116,7 @@ function toDetail(row: DetailRow, duplicate?: DuplicateHint): InvoiceRequestDto 
       reason: entry.reason,
       actorUserId: entry.actorUserId,
       actorName: entry.actor.displayName,
+      actorAvatarUrl: entry.actor.profile?.avatarUrl ?? null,
       occurredAt: entry.occurredAt.toISOString(),
     })),
     document: row.documentMediaAsset === null || row.documentUploadedAt === null

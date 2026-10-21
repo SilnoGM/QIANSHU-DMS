@@ -1,6 +1,11 @@
 import { Injectable, HttpStatus } from '@nestjs/common'
 import { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
+import {
+  PERSON_REFERENCE_SELECT,
+  toNullablePersonReference,
+  type PersonReferenceRow,
+} from '../../../infrastructure/database/person-reference'
 import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
 import { salesOrderScopeWhere } from '../sales-order-access'
 import { salesReceiptScopeWhere } from './sales-receipt-access'
@@ -10,14 +15,17 @@ import { receiptFailure } from './sales-receipt-money'
 const detailInclude = {
   voucherMediaAsset: { select: { mediaType: true, mimeType: true } },
   salesOrder: { select: { id: true, orderNo: true, version: true, customerName: true, orderStatus: true } },
-  accountOwner: { select: { id: true, displayName: true } },
-  submittedBy: { select: { id: true, displayName: true } },
-  reviewedBy: { select: { id: true, displayName: true } },
+  accountOwner: { select: PERSON_REFERENCE_SELECT },
+  submittedBy: { select: PERSON_REFERENCE_SELECT },
+  reviewedBy: { select: PERSON_REFERENCE_SELECT },
   approvedPayment: { include: { fundReversalBatch: { include: { entries: { orderBy: { lineNo: 'asc' as const } } } }, fundPostingBatch: { include: { entries: { orderBy: { lineNo: 'asc' as const } } } } } },
 } satisfies Prisma.SalesReceiptRequestInclude
 
 type DetailRow = Prisma.SalesReceiptRequestGetPayload<{ include: typeof detailInclude }>
-function person(row: { id: string, displayName: string }) { return { id: row.id, name: row.displayName } }
+function person(row: PersonReferenceRow) {
+  const reference = toNullablePersonReference(row)!
+  return { id: reference.id, name: reference.displayName, avatarUrl: reference.avatarUrl }
+}
 function mapDetail(row: DetailRow): SalesReceiptRequestDetailDto {
   const payment = row.approvedPayment
   const batch = payment?.fundPostingBatch

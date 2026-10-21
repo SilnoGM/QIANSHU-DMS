@@ -10,6 +10,12 @@ import type {
   UserStatus,
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import {
+  PERSON_REFERENCE_SELECT,
+  toNullablePersonReference,
+  type PersonReference,
+  type PersonReferenceRow,
+} from '../../infrastructure/database/person-reference'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../access-control/data-scope.service'
 import { salesOrderScopeWhere } from './sales-order-access'
@@ -30,13 +36,13 @@ import {
 } from '../products/product-option-category-facets'
 
 const SALES_ORDER_DETAIL_INCLUDE = {
-  issuer: { select: { id: true, displayName: true } },
+  issuer: { select: PERSON_REFERENCE_SELECT },
   lines: { where: { removedAt: null }, orderBy: { lineNumber: 'asc' } },
   payments: {
     orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
     include: {
-      createdBy: { select: { id: true, displayName: true } },
-      voidedBy: { select: { id: true, displayName: true } },
+      createdBy: { select: PERSON_REFERENCE_SELECT },
+      voidedBy: { select: PERSON_REFERENCE_SELECT },
     },
   },
   documents: {
@@ -51,20 +57,20 @@ const SALES_ORDER_DETAIL_INCLUDE = {
           sizeBytes: true,
         },
       },
-      createdBy: { select: { id: true, displayName: true } },
-      detachedBy: { select: { id: true, displayName: true } },
+      createdBy: { select: PERSON_REFERENCE_SELECT },
+      detachedBy: { select: PERSON_REFERENCE_SELECT },
     },
   },
   statusHistory: {
     orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
     include: {
-      changedBy: { select: { id: true, displayName: true } },
+      changedBy: { select: PERSON_REFERENCE_SELECT },
     },
   },
   amountRevisions: {
     orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
     include: {
-      changedBy: { select: { id: true, displayName: true } },
+      changedBy: { select: PERSON_REFERENCE_SELECT },
     },
   },
 } satisfies Prisma.SalesOrderInclude
@@ -78,7 +84,7 @@ const SALES_ORDER_LIST_SELECT = {
   id: true,
   orderNo: true,
   orderDate: true,
-  issuer: { select: { id: true, displayName: true } },
+  issuer: { select: PERSON_REFERENCE_SELECT },
   currencyCode: true,
   customerName: true,
   customerPhone: true,
@@ -152,10 +158,7 @@ type SalesOrderListRow = Prisma.SalesOrderGetPayload<{
   select: typeof SALES_ORDER_LIST_SELECT
 }>
 
-interface SalesOrderActor {
-  readonly id: string
-  readonly displayName: string
-}
+type SalesOrderActor = PersonReference
 
 export interface SalesOrderDetail {
   readonly id: string
@@ -527,8 +530,8 @@ function mapCurrencySummary(
   }
 }
 
-function mapActor(actor: SalesOrderActor | null): SalesOrderActor | null {
-  return actor === null ? null : { id: actor.id, displayName: actor.displayName }
+function mapActor(actor: PersonReferenceRow | null): SalesOrderActor | null {
+  return toNullablePersonReference(actor)
 }
 
 function mapDetailDocument(
@@ -806,7 +809,7 @@ export class SalesOrderQueryService {
           id: row.id,
           orderNo: row.orderNo,
           orderDate: row.orderDate.toISOString().slice(0, 10),
-          issuer: row.issuer,
+          issuer: mapActor(row.issuer) as SalesOrderActor,
           currencyCode: row.currencyCode,
           customerName: row.customerName,
           customerPhone: row.customerPhone,

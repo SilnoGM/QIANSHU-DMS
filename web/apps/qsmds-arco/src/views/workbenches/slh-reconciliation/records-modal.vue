@@ -146,7 +146,7 @@ function selectBlock(card: SlhReconciliationRecordCard, id: SlhReconciliationRec
           <span class="text-sm">
             {{ t('slhReconciliation.records.checkedAt') }}：<DateTimeDisplay :value="card.createdAt" class="text-sm" />
           </span>
-          <QsPersonDisplay :display-name="card.createdByDisplayName" size="sm" class="ml-auto" />
+          <QsPersonDisplay :display-name="card.createdByDisplayName" size="sm" class="ml-auto" :avatar-url="card.createdByAvatarUrl" />
         </header>
 
         <!-- 折叠态摘要：当时结算金额 / 汇率（含来源）/ 费率 + 展开入口。 -->

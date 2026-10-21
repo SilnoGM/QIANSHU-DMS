@@ -189,7 +189,7 @@ onBeforeUnmount(releasePreviews)
               {{ t('warehousePackagingCost.owner') }}
             </dt>
             <dd class="mt-1 flex min-h-6 items-center">
-              <QsPersonDisplay v-if="context.ownerName" :display-name="context.ownerName" size="sm" class="max-w-full" />
+              <QsPersonDisplay v-if="context.ownerName" :display-name="context.ownerName" :avatar-url="context.ownerAvatarUrl" size="sm" class="max-w-full" />
               <span v-else class="qs-type-meta text-muted-foreground">{{ t('warehousePackagingCost.notRecorded') }}</span>
             </dd>
           </div>

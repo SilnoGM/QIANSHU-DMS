@@ -517,7 +517,7 @@ onBeforeUnmount(() => {
         </template>
         <template #cell-created="{ row }">
           <QsTableStackedCell>
-            <QsPersonDisplay :display-name="row.original.createdByDisplayName" size="sm" />
+            <QsPersonDisplay :display-name="row.original.createdByDisplayName" size="sm" :avatar-url="row.original.createdByAvatarUrl" />
             <QsTableStackedLine tone="muted">
               <DateTimeDisplay :value="row.original.createdAt" />
             </QsTableStackedLine>
@@ -630,7 +630,7 @@ onBeforeUnmount(() => {
                 <dt class="qs-type-meta text-muted-foreground">
                   {{ t('slhBill.column.created') }}
                 </dt><dd class="m-0 flex flex-wrap gap-2 items-center">
-                  <QsPersonDisplay :display-name="row.createdByDisplayName" size="sm" /> · <DateTimeDisplay :value="row.createdAt" />
+                  <QsPersonDisplay :display-name="row.createdByDisplayName" size="sm" :avatar-url="row.createdByAvatarUrl" /> · <DateTimeDisplay :value="row.createdAt" />
                 </dd>
               </div>
             </dl>

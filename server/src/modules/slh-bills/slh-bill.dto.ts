@@ -188,6 +188,7 @@ export class SlhBillListItemDto {
   @ApiProperty() sourceFileName!: string
   @ApiProperty({ type: 'string' }) createdAt!: string
   @ApiProperty({ type: 'string' }) createdByDisplayName!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) createdByAvatarUrl!: string | null
 }
 
 export class SlhBillPageDto {
@@ -244,6 +245,7 @@ export class SlhBillDto {
   @ApiProperty() version!: number
   @ApiProperty({ type: 'string' }) createdAt!: string
   @ApiProperty({ type: 'string' }) createdByDisplayName!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) createdByAvatarUrl!: string | null
 }
 
 export class SlhBillPreviewLineDto extends SlhBillLineDto {

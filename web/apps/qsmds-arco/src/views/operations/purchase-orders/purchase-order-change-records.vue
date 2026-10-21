@@ -61,7 +61,7 @@ function statusLabel(value: string) {
               {{ t('purchaseOrderDrawer.reason') }}：{{ history.reason?.trim() || t('purchaseOrderDrawer.reasonNotRecorded') }}
             </p>
             <div class="qs-type-meta mt-2 inline-flex gap-2 items-center">
-              {{ t('purchaseOrderDrawer.changedBy') }}：<QsPersonDisplay :display-name="history.changedBy.displayName" size="sm" />
+              {{ t('purchaseOrderDrawer.changedBy') }}：<QsPersonDisplay :display-name="history.changedBy.displayName" size="sm" :avatar-url="history.changedBy.avatarUrl" />
             </div>
           </li>
         </ul>
@@ -92,7 +92,7 @@ function statusLabel(value: string) {
               {{ t('purchaseOrderDrawer.reason') }}：{{ revision.reason }}
             </p>
             <div class="qs-type-meta mt-2 inline-flex gap-2 items-center">
-              {{ t('purchaseOrderDrawer.changedBy') }}：<QsPersonDisplay :display-name="revision.changedBy.displayName" size="sm" />
+              {{ t('purchaseOrderDrawer.changedBy') }}：<QsPersonDisplay :display-name="revision.changedBy.displayName" size="sm" :avatar-url="revision.changedBy.avatarUrl" />
             </div>
           </li>
         </ul>

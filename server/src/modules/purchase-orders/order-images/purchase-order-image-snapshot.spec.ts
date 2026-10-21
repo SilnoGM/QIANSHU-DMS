@@ -6,7 +6,7 @@ export function imageOrderFixture(): SnapshotInput {
   return {
     id: 'order-1', orderNo: 'PO/20260915-00001', orderDate: '2026-09-15', currencyCode: 'CNY',
     supplier: { source: 'CUSTOM_TEXT', value: null, label: '千树设备有限公司', tone: null, known: null, effectiveEnabled: null },
-    createdBy: { id: 'user-1', displayName: '采购经办人' }, shippingMarkText: 'TEST/20260915-0001', remark: '请按货件分别包装。',
+    createdBy: { id: 'user-1', displayName: '采购经办人', avatarUrl: null }, shippingMarkText: 'TEST/20260915-0001', remark: '请按货件分别包装。',
     lineSummary: { lineCount: 1, totalQuantity: 2, previews: [{ lineId: 'line-1', productName: '环保设备', mainImage: { id: 'image-1', contentUrl: '/api/products/product-1/media/image-1/content' } }] },
     amounts: { lineSubtotalAmount: '1234.5600', purchaseTotalAmount: '1234.5600', depositDueAmount: '234.5600', balanceDueAmount: '1000.0000', paidAmount: '0.0000', outstandingAmount: '1234.5600' },
     lines: [{ id: 'line-1', lineNumber: 1, productNo: 'PROD/00001', productName: '环保设备', productAttributes: [{ title: '颜色', value: '绿色' }], description: '请附带说明书', quantity: 2, actualPurchaseUnitPriceAmount: '617.2800', lineTotalAmount: '1234.5600' }],

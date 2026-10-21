@@ -189,7 +189,7 @@ describe('PurchaseShipmentQueryService', () => {
     for (const total of [11, 2, 2, 1, 2, 1, 4]) f.part.count.mockResolvedValueOnce(total)
     f.user.findMany.mockResolvedValue([{ id: 'buyer-1', displayName: '采购员' }])
     const result = await f.service.statusCounts({ keyword: '厂', supplierSource: 'CUSTOM_TEXT' })
-    expect(result).toEqual({ items: [{ value: 'ALL', count: 11 }, { value: 'PENDING_REVIEW', count: 2 }, { value: 'AWAITING_SHIPMENT', count: 2 }, { value: 'SHIPPED', count: 1 }, { value: 'WAREHOUSE_RECEIVED', count: 2 }, { value: 'CONTAINER_LOADED', count: 1 }, { value: 'CANCELLED', count: 4 }], buyerOptions: [{ id: 'buyer-1', displayName: '采购员' }] })
+    expect(result).toEqual({ items: [{ value: 'ALL', count: 11 }, { value: 'PENDING_REVIEW', count: 2 }, { value: 'AWAITING_SHIPMENT', count: 2 }, { value: 'SHIPPED', count: 1 }, { value: 'WAREHOUSE_RECEIVED', count: 2 }, { value: 'CONTAINER_LOADED', count: 1 }, { value: 'CANCELLED', count: 4 }], buyerOptions: [{ id: 'buyer-1', displayName: '采购员', avatarUrl: null }] })
     expect(f.part.count.mock.calls.map(call => (call as [{ where: { AND: unknown[] } }])[0].where.AND[1])).toEqual([
       {}, { status: 'PENDING_REVIEW' },
       { status: 'ACTIVE', loadedAt: null, shippedAt: null },
@@ -198,7 +198,7 @@ describe('PurchaseShipmentQueryService', () => {
       { status: 'ACTIVE', loadedAt: { not: null } },
       { status: 'CANCELLED' },
     ])
-    expect(f.user.findMany).toHaveBeenCalledWith({ where: { purchaseOrdersCreated: { some: { parts: { some: {} } } } }, select: { id: true, displayName: true }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }] })
+    expect(f.user.findMany).toHaveBeenCalledWith({ where: { purchaseOrdersCreated: { some: { parts: { some: {} } } } }, select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }] })
     expect(f.order.findMany).not.toHaveBeenCalled()
   })
 

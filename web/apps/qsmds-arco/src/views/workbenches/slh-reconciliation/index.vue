@@ -237,7 +237,7 @@ onBeforeUnmount(() => {
           <SlhBillReconciliationStatusTag :status="row.original.bill.reconciliationStatus" />
         </template>
         <template #cell-createdBy="{ row }">
-          <QsPersonDisplay :display-name="row.original.createdByDisplayName" size="sm" />
+          <QsPersonDisplay :display-name="row.original.createdByDisplayName" size="sm" :avatar-url="row.original.createdByAvatarUrl" />
         </template>
         <template #cell-created="{ row }">
           <span class="qs-type-data whitespace-nowrap">

@@ -1009,7 +1009,7 @@ onBeforeUnmount(() => {
           <QsPersonDisplay
             :display-name="row.original.createdBy.displayName"
             size="md"
-            class="max-w-[9rem]"
+            class="max-w-[9rem]" :avatar-url="row.original.createdBy.avatarUrl"
           />
         </template>
 
@@ -1380,7 +1380,7 @@ onBeforeUnmount(() => {
                   <QsPersonDisplay
                     :display-name="row.createdBy.displayName"
                     size="md"
-                    class="max-w-full"
+                    class="max-w-full" :avatar-url="row.createdBy.avatarUrl"
                   />
                 </dd>
               </div>

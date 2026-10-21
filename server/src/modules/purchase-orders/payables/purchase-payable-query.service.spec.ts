@@ -87,7 +87,7 @@ describe('PurchasePayableQueryService', () => {
     expect(h.tx.purchaseOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 2, take: 2, where: {
       orderStatus: 'CONFIRMED', paymentStatus: { not: 'PAID' }, payables: { some: { closedAt: null, dueAmount: { gt: 0 } } }, OR: [
       { orderNo: { contains: 'PO/2026', mode: 'insensitive' } }, { customSupplierName: { contains: 'PO/2026', mode: 'insensitive' } }, { salesOrder: { orderNo: { contains: 'PO/2026', mode: 'insensitive' } } },
-    ] }, include: expect.objectContaining({ payables: { include: expect.objectContaining({ payments: { where: { voidedAt: null }, include: { documents: { where: { detachedAt: null, documentType: 'PAYMENT_VOUCHER' }, take: 1 }, createdBy: { select: { id: true, displayName: true } } }, orderBy: [{ paidAt: 'desc' }, { id: 'desc' }] } }) as unknown } }) as unknown }))
+    ] }, include: expect.objectContaining({ payables: { include: expect.objectContaining({ payments: { where: { voidedAt: null }, include: { documents: { where: { detachedAt: null, documentType: 'PAYMENT_VOUCHER' }, take: 1 }, createdBy: { select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } } } }, orderBy: [{ paidAt: 'desc' }, { id: 'desc' }] } }) as unknown } }) as unknown }))
     expect(h.tx.purchaseOrder.count).toHaveBeenCalledWith({ where: (h.tx.purchaseOrder.findMany.mock.calls[0] as [{ where: unknown }])[0].where })
     expect(h.order.payables[0].id).toBe('balance')
   })
