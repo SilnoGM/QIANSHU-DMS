@@ -313,6 +313,36 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
   })
   afterAll(async () => { await h?.dispose() })
 
+
+  /** 已签收订单夹具：数据库要求已签收订单下的有效货件全部有签收事实；按真实生命周期先装柜再签收。 */
+  async function signOrderWithShipments(salesOrderId: string, extra: { readonly orderStatus?: 'CONFIRMED' | 'PENDING_RECONCILIATION' } = {}) {
+    const now = new Date()
+    const parts = await h.prisma.purchaseOrderPart.findMany({
+      where: {
+        purchaseOrder: { is: { salesOrderId, purchaseType: 'SALES_LINKED', orderStatus: { not: 'CANCELLED' } } },
+        status: 'ACTIVE',
+      },
+      select: { id: true, loadedAt: true },
+    })
+    const unloaded = parts.filter(part => part.loadedAt === null).map(part => part.id)
+    if (unloaded.length > 0) {
+      await h.prisma.purchaseOrderPart.updateMany({
+        where: { id: { in: unloaded } },
+        data: { loadedAt: now, loadedById: h.fixture.actor.id, loadedRecordedAt: now },
+      })
+    }
+    if (parts.length > 0) {
+      await h.prisma.purchaseOrderPart.updateMany({
+        where: { id: { in: parts.map(part => part.id) } },
+        data: { deliveredAt: now, deliveredById: h.fixture.actor.id, deliveredRecordedAt: now },
+      })
+    }
+    await h.prisma.salesOrder.update({
+      where: { id: salesOrderId },
+      data: { fulfillmentStatus: 'SIGNED', ...(extra.orderStatus === undefined ? {} : { orderStatus: extra.orderStatus }) },
+    })
+  }
+
   it('候选账单：只保留生效中且仍有未对账行、又没有进行中批次的账单', async () => {
     const response = await browser.get(`${BASE}/candidates`).query({ pageSize: 100 }).expect(200)
     const page = response.body as { items: Array<{ id: string, reconciliationStatus: string, supersededById: string | null }>, total: number }
@@ -1192,7 +1222,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       const salesOrderId = await salesOrderIdOfMember(prepared.memberId)
       // 订单总额压到恰好等于本行账单代收：回填后应「已付清」；履约置为已签收，验证自动推进。
       await widenSalesTotal(salesOrderId, '129000.00')
-      await h.prisma.salesOrder.update({ where: { id: salesOrderId }, data: { fulfillmentStatus: 'SIGNED' } })
+      await signOrderWithShipments(salesOrderId)
 
       await browser.post(`${BASE}/${prepared.batchId}/complete`).set(packagingHeaders).send({}).expect(200)
 
@@ -1251,10 +1281,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       if (shipment.source === null) throw new Error('sales linked shipment must create a sales order')
       // 即便已签收，手工置为已完成也要被拒：该状态是派生态，只由自动状态服务推进
       // （付款状态不动：订单的付款状态必须与实收一致，数据库触发器会核对）。
-      await h.prisma.salesOrder.update({
-        where: { id: shipment.source.id },
-        data: { orderStatus: 'PENDING_RECONCILIATION', fulfillmentStatus: 'SIGNED' },
-      })
+      await signOrderWithShipments(shipment.source.id, { orderStatus: 'PENDING_RECONCILIATION' })
       const rejected = await updater.patch(`/api/sales-orders/${shipment.source.id}/order-status`)
         .set(packagingHeaders).send({ toStatus: 'COMPLETED', reason: '手工完成' }).expect(422)
       expect(errorCode(rejected)).toBe('SALES_ORDER_COMPLETION_IS_AUTOMATIC')
@@ -1279,10 +1306,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       expect((await detailOf()).completionHold).toBeNull()
 
       // 待对账但未收齐：付清前置先于对账完备性（收款被作废后的回退形态）。
-      await h.prisma.salesOrder.update({
-        where: { id: salesOrderId },
-        data: { orderStatus: 'PENDING_RECONCILIATION', fulfillmentStatus: 'SIGNED' },
-      })
+      await signOrderWithShipments(salesOrderId, { orderStatus: 'PENDING_RECONCILIATION' })
       expect(await detailOf()).toMatchObject({
         orderStatus: 'PENDING_RECONCILIATION',
         completionHold: { reason: 'PAYMENT_INCOMPLETE', pendingBatchCount: 0, unreconciledMemberCount: 0 },
@@ -1312,7 +1336,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       const salesOrderId = shipment.source.id
       // 订单总额压到恰好等于甲账单代收：甲批次完成后回填即可收齐。
       await widenSalesTotal(salesOrderId, '129000.00')
-      await h.prisma.salesOrder.update({ where: { id: salesOrderId }, data: { fulfillmentStatus: 'SIGNED' } })
+      await signOrderWithShipments(salesOrderId)
       await createContainer(containerBatchName, date, marks.map(mark => ({ mark, shipmentId: shipment.part.id })))
       const codRow = {
         B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: 'WG-0316-0001', F: marks[0],

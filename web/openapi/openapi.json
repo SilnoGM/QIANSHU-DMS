@@ -41113,12 +41113,19 @@
               ]
             },
             {
+              "status": 409,
+              "codes": [
+                "SALES_ORDER_SHIPMENTS_CHANGED"
+              ]
+            },
+            {
               "status": 422,
               "codes": [
                 "SALES_ORDER_CANCELLED",
                 "SALES_ORDER_COMPLETED",
                 "SALES_ORDER_DELIVERY_RECEIPT_REQUIRED",
                 "SALES_ORDER_FULFILLMENT_TRANSITION_INVALID",
+                "SALES_ORDER_SHIPMENTS_NOT_READY",
                 "VALIDATION_FAILED"
               ]
             }
@@ -42336,12 +42343,19 @@
               ]
             },
             {
+              "status": 409,
+              "codes": [
+                "SALES_ORDER_SHIPMENTS_CHANGED"
+              ]
+            },
+            {
               "status": 422,
               "codes": [
                 "SALES_ORDER_CANCELLED",
                 "SALES_ORDER_COMPLETED",
                 "SALES_ORDER_DOCUMENT_UNAVAILABLE",
                 "SALES_ORDER_FULFILLMENT_TRANSITION_INVALID",
+                "SALES_ORDER_SHIPMENTS_NOT_READY",
                 "VALIDATION_FAILED"
               ]
             },
@@ -60839,6 +60853,7 @@
                 "SHIPPED",
                 "WAREHOUSE_RECEIVED",
                 "CONTAINER_LOADED",
+                "DELIVERED",
                 "CANCELLED"
               ]
             }
@@ -61596,6 +61611,304 @@
             {
               "status": 422,
               "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/purchase-order-parts/{partId}/deliver": {
+      "post": {
+        "operationId": "purchase_shipments_deliver",
+        "parameters": [
+          {
+            "name": "partId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseShipmentDeliverRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseShipmentDeliverResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "purchase-order-parts"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "PURCHASE_ORDER_PART_NOT_FOUND",
+                "SALES_ORDER_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "PURCHASE_SHIPMENT_DELIVERY_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "PURCHASE_SHIPMENT_DELIVERY_NOT_ALLOWED",
+                "SALES_ORDER_FULFILLMENT_TRANSITION_INVALID",
                 "VALIDATION_FAILED"
               ]
             }
@@ -64656,6 +64969,7 @@
                 "PURCHASE_SHIPMENT_NUMBER_ASSIGNED",
                 "PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED",
                 "PURCHASE_SHIPMENT_CONTAINER_LOADED",
+                "PURCHASE_SHIPMENT_DELIVERED",
                 "PURCHASE_ORDER_REVIEW_MARKS_PREPARED",
                 "PURCHASE_ORDER_IMAGE_GENERATED",
                 "PURCHASE_ORDER_ORDER_STATUS_CHANGED",
@@ -94112,6 +94426,7 @@
               "SHIPPED",
               "WAREHOUSE_RECEIVED",
               "CONTAINER_LOADED",
+              "DELIVERED",
               "CANCELLED"
             ]
           },
@@ -94217,6 +94532,31 @@
             "format": "date-time",
             "nullable": true
           },
+          "deliveredAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "客户签收时间；签收后不可回退"
+          },
+          "deliveredBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseOrderActorDto"
+              }
+            ]
+          },
+          "deliveredRecordedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deliveryRemark": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          },
           "purchaseOrder": {
             "$ref": "#/components/schemas/PurchaseShipmentOrderDto"
           },
@@ -94259,6 +94599,10 @@
           "loadedAt",
           "loadedBy",
           "loadedRecordedAt",
+          "deliveredAt",
+          "deliveredBy",
+          "deliveredRecordedAt",
+          "deliveryRemark",
           "purchaseOrder",
           "supplier",
           "salesSource",
@@ -94306,6 +94650,7 @@
               "SHIPPED",
               "WAREHOUSE_RECEIVED",
               "CONTAINER_LOADED",
+              "DELIVERED",
               "CANCELLED"
             ]
           },
@@ -94441,6 +94786,7 @@
               "SHIPPED",
               "WAREHOUSE_RECEIVED",
               "CONTAINER_LOADED",
+              "DELIVERED",
               "CANCELLED"
             ]
           },
@@ -94546,6 +94892,31 @@
             "format": "date-time",
             "nullable": true
           },
+          "deliveredAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "客户签收时间；签收后不可回退"
+          },
+          "deliveredBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseOrderActorDto"
+              }
+            ]
+          },
+          "deliveredRecordedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deliveryRemark": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          },
           "purchaseOrder": {
             "$ref": "#/components/schemas/PurchaseShipmentOrderDto"
           },
@@ -94594,11 +94965,53 @@
           "loadedAt",
           "loadedBy",
           "loadedRecordedAt",
+          "deliveredAt",
+          "deliveredBy",
+          "deliveredRecordedAt",
+          "deliveryRemark",
           "purchaseOrder",
           "supplier",
           "salesSource",
           "lineSummary",
           "items"
+        ]
+      },
+      "PurchaseShipmentDeliverRequestDto": {
+        "type": "object",
+        "properties": {
+          "remark": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true,
+            "description": "签收备注；仅随签收事实一次保存"
+          }
+        }
+      },
+      "PurchaseShipmentDeliverResultDto": {
+        "type": "object",
+        "properties": {
+          "shipment": {
+            "$ref": "#/components/schemas/PurchaseShipmentDetailDto"
+          },
+          "salesOrderSigned": {
+            "type": "boolean",
+            "description": "本次签收后销售订单是否已签收"
+          },
+          "remainingShipmentCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "同一销售订单下仍未签收的有效货件数；库存采购固定为 0"
+          },
+          "salesOrderReceiptRequired": {
+            "type": "boolean",
+            "description": "全部货件已签收但缺少有效签收单时为 true；此时货件已签收，订单保持待签收"
+          }
+        },
+        "required": [
+          "shipment",
+          "salesOrderSigned",
+          "remainingShipmentCount",
+          "salesOrderReceiptRequired"
         ]
       },
       "PurchaseOrderWarehouseReceiptRequestDto": {
@@ -95141,6 +95554,7 @@
               "PURCHASE_SHIPMENT_NUMBER_ASSIGNED",
               "PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED",
               "PURCHASE_SHIPMENT_CONTAINER_LOADED",
+              "PURCHASE_SHIPMENT_DELIVERED",
               "PURCHASE_ORDER_REVIEW_MARKS_PREPARED",
               "PURCHASE_ORDER_IMAGE_GENERATED",
               "PURCHASE_ORDER_ORDER_STATUS_CHANGED",

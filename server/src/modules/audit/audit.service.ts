@@ -281,8 +281,8 @@ function validateMetadata(
       }
       metadata[key] = [...(ids as string[])]
     }
-    else if ((eventType === AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED || eventType === AuditEventType.PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED) && key === 'partIds') {
-      // 分批发货、入仓仅开放这些事件的货件 ID 清单，不能借此写入其他结构化或敏感数据。
+    else if ((eventType === AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED || eventType === AuditEventType.PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED || eventType === AuditEventType.PURCHASE_SHIPMENT_DELIVERED) && key === 'partIds') {
+      // 分批发货、入仓与订单签收联动仅开放这些事件的货件 ID 清单，不能借此写入其他结构化或敏感数据。
       const ids: unknown = descriptor.value
       if (!Array.isArray(ids) || ids.length < 1 || ids.length > 1000
         || !ids.every((id: unknown) => typeof id === 'string' && UUID_PATTERN.test(id))
@@ -297,7 +297,7 @@ function validateMetadata(
   if (
     Buffer.byteLength(JSON.stringify(metadata), 'utf8')
     > (eventType === AuditEventType.PURCHASE_ORDER_CREATED
-        || ((eventType === AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED || eventType === AuditEventType.PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED) && 'partIds' in metadata)
+        || ((eventType === AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED || eventType === AuditEventType.PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED || eventType === AuditEventType.PURCHASE_SHIPMENT_DELIVERED) && 'partIds' in metadata)
         ? MAX_PURCHASE_PART_AUDIT_METADATA_SERIALIZED_BYTES
         : allowStructured
         ? MAX_PRODUCT_CHANGE_AUDIT_METADATA_SERIALIZED_BYTES

@@ -1185,7 +1185,33 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         })
       }
 
+      const markShipmentsDelivered = async () => {
+        const parts = await prisma.purchaseOrderPart.findMany({
+          where: {
+            purchaseOrder: { is: { salesOrderId, purchaseType: 'SALES_LINKED', orderStatus: { not: 'CANCELLED' } } },
+            status: 'ACTIVE',
+          },
+          select: { id: true, loadedAt: true },
+        })
+        const now = new Date()
+        const unloaded = parts.filter(part => part.loadedAt === null).map(part => part.id)
+        if (unloaded.length > 0) {
+          await prisma.purchaseOrderPart.updateMany({
+            where: { id: { in: unloaded } },
+            data: { loadedAt: now, loadedById: actorUserId, loadedRecordedAt: now },
+          })
+        }
+        if (parts.length > 0) {
+          await prisma.purchaseOrderPart.updateMany({
+            where: { id: { in: parts.map(part => part.id) } },
+            data: { deliveredAt: now, deliveredById: actorUserId, deliveredRecordedAt: now },
+          })
+        }
+      }
       for (const fulfillmentStatus of ['SEA_TRANSIT', 'SIGNED'] as const) {
+        if (fulfillmentStatus === 'SIGNED') {
+          await markShipmentsDelivered()
+        }
         await prisma.salesOrder.update({
           where: { id: salesOrderId },
           data: { fulfillmentStatus },

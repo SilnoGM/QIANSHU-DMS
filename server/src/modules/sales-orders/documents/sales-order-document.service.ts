@@ -29,6 +29,7 @@ import { createSalesOrderDocumentTitle } from '../domain/sales-order-document-ti
 import { assertSalesOrderFulfillmentTransition } from '../domain/sales-order-state-machine'
 import { isCanonicalSalesOrderActorId } from '../sales-order-command.normalizer'
 import { SalesOrderAutomaticStateService } from '../sales-order-automatic-state.service'
+import { deliverAllShipmentsForOrderSign } from '../sales-order-shipment-delivery'
 import type { SalesOrderMutationContext } from '../sales-order-mutation.service'
 import {
   SalesOrderQueryService,
@@ -304,6 +305,13 @@ export class SalesOrderDocumentService {
           },
           select: { id: true },
         })
+        // 订单签收必须同步签收其下全部有效货件；任一货件未装柜或待审核则整单回滚。
+        const deliveredPartCount = await deliverAllShipmentsForOrderSign(
+          transaction,
+          this.audit,
+          context,
+          salesOrderId,
+        )
         await transaction.salesOrder.update({
           where: { id: salesOrderId },
           data: {
@@ -317,7 +325,7 @@ export class SalesOrderDocumentService {
             dimension: 'FULFILLMENT',
             fromStatus: order.fulfillmentStatus,
             toStatus: 'SIGNED',
-            reason: '业务人员上传签收单后自动确认签收',
+            reason: '业务人员上传签收单后自动确认签收，并同步签收全部货件',
             changedByUserId: context.actorUserId,
           },
         })
@@ -342,6 +350,7 @@ export class SalesOrderDocumentService {
           metadata: {
             fromStatus: order.fulfillmentStatus,
             toStatus: 'SIGNED',
+            deliveredPartCount,
           },
         })
         // 签收状态与可能已存在的付清状态必须在同一事务中共同派生待对账。

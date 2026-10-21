@@ -7,7 +7,7 @@ import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-leng
 import { isNormalizableDictionaryItemValue, normalizeDictionaryItemValue } from '../../dictionaries/dictionary.normalizer'
 import { PurchaseOrderActorDto, PurchaseOrderListImageDto, PurchaseOrderSourceSalesOrderDto, PurchaseOrderSupplierDto } from '../dto/purchase-order-response.dto'
 
-export const PURCHASE_SHIPMENT_VIEWS = ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CONTAINER_LOADED', 'CANCELLED'] as const
+export const PURCHASE_SHIPMENT_VIEWS = ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CONTAINER_LOADED', 'DELIVERED', 'CANCELLED'] as const
 export type PurchaseShipmentView = typeof PURCHASE_SHIPMENT_VIEWS[number]
 export const PURCHASE_SHIPMENT_SORTS = ['CREATED_DESC', 'SHIPPED_DESC', 'WAREHOUSE_RECEIVED_DESC'] as const
 export type PurchaseShipmentSort = typeof PURCHASE_SHIPMENT_SORTS[number]
@@ -139,6 +139,10 @@ export class PurchaseShipmentListItemDto {
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true, description: '被装柜明细关联的装柜时间；未装柜时为空，关联移除后不回退' }) readonly loadedAt!: string | null
   @ApiProperty({ type: () => PurchaseOrderActorDto, nullable: true }) readonly loadedBy!: PurchaseOrderActorDto | null
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly loadedRecordedAt!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true, description: '客户签收时间；签收后不可回退' }) readonly deliveredAt!: string | null
+  @ApiProperty({ type: () => PurchaseOrderActorDto, nullable: true }) readonly deliveredBy!: PurchaseOrderActorDto | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly deliveredRecordedAt!: string | null
+  @ApiProperty({ type: 'string', maxLength: 500, nullable: true }) readonly deliveryRemark!: string | null
   @ApiProperty({ type: () => PurchaseShipmentOrderDto }) readonly purchaseOrder!: PurchaseShipmentOrderDto
   @ApiProperty({ type: () => PurchaseOrderSupplierDto }) readonly supplier!: PurchaseOrderSupplierDto
   @ApiProperty({ type: () => PurchaseOrderSourceSalesOrderDto, nullable: true }) readonly salesSource!: PurchaseOrderSourceSalesOrderDto | null
@@ -160,6 +164,19 @@ export class PurchaseShipmentItemDto {
 
 export class PurchaseShipmentDetailDto extends PurchaseShipmentListItemDto {
   @ApiProperty({ type: () => [PurchaseShipmentItemDto] }) readonly items!: readonly PurchaseShipmentItemDto[]
+}
+
+export class PurchaseShipmentDeliverRequestDto {
+  @ApiProperty({ type: 'string', maxLength: 500, nullable: true, required: false, description: '签收备注；仅随签收事实一次保存' })
+  @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 500)
+  remark?: string | null
+}
+
+export class PurchaseShipmentDeliverResultDto {
+  @ApiProperty({ type: () => PurchaseShipmentDetailDto }) readonly shipment!: PurchaseShipmentDetailDto
+  @ApiProperty({ type: 'boolean', description: '本次签收后销售订单是否已签收' }) readonly salesOrderSigned!: boolean
+  @ApiProperty({ type: 'integer', minimum: 0, description: '同一销售订单下仍未签收的有效货件数；库存采购固定为 0' }) readonly remainingShipmentCount!: number
+  @ApiProperty({ type: 'boolean', description: '全部货件已签收但缺少有效签收单时为 true；此时货件已签收，订单保持待签收' }) readonly salesOrderReceiptRequired!: boolean
 }
 
 export class PurchaseShipmentPageDto {

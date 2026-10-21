@@ -13,6 +13,7 @@ import { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-
 import { PurchaseOrderFactoryShipmentService } from '../src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment.service'
 import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
 import { PurchaseShipmentController } from '../src/modules/purchase-orders/shipments/purchase-shipment.controller'
+import { PurchaseShipmentDeliveryService } from '../src/modules/purchase-orders/shipments/purchase-shipment-delivery.service'
 import type { PurchaseShipmentFilterDto, PurchaseShipmentPageDto, PurchaseShipmentSort, PurchaseShipmentStatusCountsDto } from '../src/modules/purchase-orders/shipments/purchase-shipment.dto'
 import { PurchaseShipmentQueryService } from '../src/modules/purchase-orders/shipments/purchase-shipment-query.service'
 import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
@@ -104,7 +105,7 @@ describe('arrival shipment filters and stable ordering over isolated PostgreSQL'
     })
 
     service = new PurchaseShipmentQueryService(fixture.prisma, lookup)
-    const module = await Test.createTestingModule({ controllers: [PurchaseShipmentController], providers: [{ provide: PurchaseShipmentQueryService, useValue: service }] }).compile()
+    const module = await Test.createTestingModule({ controllers: [PurchaseShipmentController], providers: [{ provide: PurchaseShipmentQueryService, useValue: service }, { provide: PurchaseShipmentDeliveryService, useValue: {} }] }).compile()
     application = module.createNestApplication()
     configureApplication(application, { nodeEnvironment: 'test' })
     application.use((requestObject: object, _response: object, next: () => void) => {

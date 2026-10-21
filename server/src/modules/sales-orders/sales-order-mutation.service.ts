@@ -40,6 +40,7 @@ import {
   assertSalesOrderPurchaseFulfillment,
   lockSalesOrderPurchaseDependencies,
 } from './sales-order-purchase-fulfillment'
+import { deliverAllShipmentsForOrderSign } from './sales-order-shipment-delivery'
 import {
   SalesOrderQueryService,
   type SalesOrderDetail,
@@ -309,6 +310,15 @@ export class SalesOrderMutationService {
       if (toStatus === 'PREPARING' || toStatus === 'LAND_TRANSIT') {
         await assertSalesOrderPurchaseFulfillment(transaction, salesOrderId, toStatus)
       }
+      // 订单签收必须同步签收其下全部有效货件；任一货件未装柜或待审核则整单回滚。
+      const deliveredPartCount = toStatus === 'SIGNED'
+        ? await deliverAllShipmentsForOrderSign(
+            transaction,
+            this.audit,
+            trusted,
+            salesOrderId,
+          )
+        : 0
       await transaction.salesOrder.update({
         where: { id: salesOrderId },
         data: { fulfillmentStatus: toStatus, version: { increment: 1 } },
@@ -324,7 +334,11 @@ export class SalesOrderMutationService {
       await this.recordAudit(transaction, trusted, {
         eventType: AuditEventType.SALES_ORDER_FULFILLMENT_STATUS_CHANGED,
         targetId: salesOrderId,
-        metadata: { fromStatus: order.fulfillmentStatus, toStatus },
+        metadata: {
+          fromStatus: order.fulfillmentStatus,
+          toStatus,
+          ...(toStatus === 'SIGNED' ? { deliveredPartCount } : {}),
+        },
       })
       // 在同一事务内重新读取更新后的三个状态维度，避免调用方凭旧快照判断。
       await this.automaticState.advanceWhenEligible(
