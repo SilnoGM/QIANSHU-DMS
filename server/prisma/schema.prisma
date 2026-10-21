@@ -151,6 +151,7 @@ enum AuditEventType {
   PURCHASE_SHIPMENT_NUMBER_ASSIGNED
   PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED
   PURCHASE_SHIPMENT_CONTAINER_LOADED
+  PURCHASE_SHIPMENT_DELIVERED
   PURCHASE_ORDER_REVIEW_MARKS_PREPARED
   PURCHASE_ORDER_IMAGE_GENERATED
   PURCHASE_ORDER_ORDER_STATUS_CHANGED
@@ -616,6 +617,7 @@ model User {
   purchaseOrderPartsShipped         PurchaseOrderPart[] @relation("PurchaseOrderPartShippedBy")
   purchaseOrderPartsWarehouseReceived PurchaseOrderPart[] @relation("PurchaseOrderPartWarehouseReceivedBy")
   purchaseOrderPartsLoaded          PurchaseOrderPart[] @relation("PurchaseOrderPartLoadedBy")
+  purchaseOrderPartsDelivered       PurchaseOrderPart[] @relation("PurchaseOrderPartDeliveredBy")
   purchaseOrderPaymentsCreated      PurchaseOrderPayment[]       @relation("PurchaseOrderPaymentCreatedBy")
   purchaseOrderPaymentsVoided       PurchaseOrderPayment[]       @relation("PurchaseOrderPaymentVoidedBy")
   purchaseOrderDocumentsCreated     PurchaseOrderDocument[]      @relation("PurchaseOrderDocumentCreatedBy")
@@ -1350,6 +1352,12 @@ model PurchaseOrderPart {
   loadedById String? @map("loaded_by_id") @db.Uuid
   loadedRecordedAt DateTime? @map("loaded_recorded_at") @db.Timestamptz(6)
   loadedBy User? @relation("PurchaseOrderPartLoadedBy", fields: [loadedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  // 客户签收事实：装柜后一次写入，签收后不可改写、不可清空。
+  deliveredAt DateTime? @map("delivered_at") @db.Timestamptz(6)
+  deliveredById String? @map("delivered_by_id") @db.Uuid
+  deliveredRecordedAt DateTime? @map("delivered_recorded_at") @db.Timestamptz(6)
+  deliveryRemark String? @map("delivery_remark") @db.VarChar(500)
+  deliveredBy User? @relation("PurchaseOrderPartDeliveredBy", fields: [deliveredById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   items PurchaseOrderPartItem[]
 
   @@unique([id, purchaseOrderId], map: "purchase_order_parts_id_order_id_key")

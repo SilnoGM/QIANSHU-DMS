@@ -51,8 +51,8 @@ export function appRouteUrl(baseUrl, routePath) {
   return `${baseUrl}/#${routePath}`
 }
 
-export function apiExpression(pathname, method = 'GET', body) {
-  const request = JSON.stringify({ body, method, pathname })
+export function apiExpression(pathname, method = 'GET', body, extraHeaders = {}) {
+  const request = JSON.stringify({ body, extraHeaders, method, pathname })
   return `(async () => {
     const input = ${request}
     const response = await fetch(input.pathname, {
@@ -61,6 +61,7 @@ export function apiExpression(pathname, method = 'GET', body) {
       headers: input.method === 'GET' ? {} : {
         'Content-Type': 'application/json',
         'X-Qianshu-CSRF': '1',
+        ...input.extraHeaders,
       },
       ...(input.method === 'GET' ? {} : { body: JSON.stringify(input.body ?? {}) }),
     })

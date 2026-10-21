@@ -127,8 +127,9 @@ export async function createPackagingCostHarness(options: { nativeImageProbe?: b
       await withDatabaseBusinessClock(fixture.prisma, async () => new PurchaseOrderFactoryShipmentService(prisma, fixture.audit, fixture.salesProgress, new DictionaryLookupService(prisma))
         .shipPurchaseOrder(fixture.context(), id, { expectedVersion: order.version, partIds, destinationWarehouses: destinationWarehouses(partIds) }))
       if (options.received !== false) {
-        await new PurchaseOrderWarehouseReceiptService(prisma, fixture.audit, query)
-          .receive(fixture.context(), id, { expectedVersion: (await query.getById(id)).version, partIds })
+        const expectedVersion = (await query.getById(id)).version
+        await withDatabaseBusinessClock(fixture.prisma, () => new PurchaseOrderWarehouseReceiptService(prisma, fixture.audit, query)
+          .receive(fixture.context(), id, { expectedVersion, partIds }))
       }
       const parts = await prisma.purchaseOrderPart.findMany({ where: { id: { in: partIds } }, orderBy: { partNumber: 'asc' } })
       return { part: parts[0], parts, order, source }

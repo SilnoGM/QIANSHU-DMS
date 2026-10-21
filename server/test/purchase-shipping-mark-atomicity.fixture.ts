@@ -29,10 +29,10 @@ import { createPurchaseShippingMarkDatabase, createTestShippingMarkRule } from '
 
 export const MARK_CONSUMER = 'PURCHASE_ORDER.REVIEW_SHIPPING_MARK'
 
-export async function createAtomicityFixture(deferPartsMigration = false, deferReviewMigration = false, deferShipmentNumbers = false, deferWarehouseReceipt = false) {
+export async function createAtomicityFixture(deferPartsMigration = false, deferReviewMigration = false, deferShipmentNumbers = false, deferWarehouseReceipt = false, deferShipmentDelivery = false) {
   // 隔离回放的前置条件先失败：历史迁移在 public 里自校验顺联航账单表，缺表时只会给出一句看不出原因的错。
   await assertIsolatedReplayPrecondition()
-  const database = await createPurchaseShippingMarkDatabase(deferPartsMigration, deferReviewMigration, deferShipmentNumbers, deferWarehouseReceipt)
+  const database = await createPurchaseShippingMarkDatabase(deferPartsMigration, deferReviewMigration, deferShipmentNumbers, deferWarehouseReceipt, false, deferShipmentDelivery)
   const prisma = new IsolatedNumberingPrismaService(database) as unknown as PrismaService
   try {
     await prisma.onModuleInit()
@@ -75,6 +75,7 @@ export async function createAtomicityFixture(deferPartsMigration = false, deferR
       migrateReview: database.applyReviewMigration,
       migrateShipmentNumbers: database.applyShipmentNumbers,
       migrateWarehouseReceipt: database.applyWarehouseReceipt,
+      migrateShipmentDelivery: database.applyShipmentDeliveryMigration,
       context: (idempotencyKey = randomUUID()) => ({
         actorUserId: actor.id, idempotencyKey, requestId: randomUUID(),
       }),

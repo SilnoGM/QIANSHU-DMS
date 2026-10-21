@@ -21,6 +21,7 @@ function row() {
     shippedAt: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, trackingNo: null,
     warehouseReceivedAt: null, warehouseReceivedById: null, warehouseRecordedAt: null, warehouseRemark: null, warehouseReceivedBy: null,
     loadedAt: null, loadedById: null, loadedRecordedAt: null, loadedBy: null,
+    deliveredAt: null, deliveredById: null, deliveredRecordedAt: null, deliveryRemark: null, deliveredBy: null,
     purchaseOrder: {
       id: 'order-1', version: 3, orderNo: 'PO/01', orderDate: new Date('2026-09-14'), purchaseType: 'STOCK', productMode: 'CUSTOM', orderStatus: 'CONFIRMED',
       shippingMarkText: 'MARK', supplierValue: null, customSupplierName: '临时工厂', createdBy: { id: 'buyer-1', displayName: '采购员' }, salesOrder: null,
@@ -167,7 +168,7 @@ describe('PurchaseShipmentQueryService', () => {
     const f = fixture()
     f.part.findMany.mockResolvedValue([row()]); f.part.count.mockResolvedValue(3)
     const page = await f.service.list({ page: 2, pageSize: 1 })
-    expect(f.part.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { AND: [expect.any(Object) as unknown, { status: 'ACTIVE', loadedAt: null, shippedAt: null }] }, skip: 1, take: 1 }))
+    expect(f.part.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { AND: [expect.any(Object) as unknown, { status: 'ACTIVE', deliveredAt: null, loadedAt: null, shippedAt: null }] }, skip: 1, take: 1 }))
     expect(page).toMatchObject({ page: 2, pageSize: 1, total: 3, items: [{ viewStatus: 'AWAITING_SHIPMENT', supplier: { source: 'CUSTOM_TEXT', label: '临时工厂' }, salesSource: null, lineSummary: { lineCount: 1, totalQuantity: 2, previews: [{ quantity: 2, mainImage: null }] } }] })
     expect(f.prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'RepeatableRead' })
   })
@@ -187,16 +188,17 @@ describe('PurchaseShipmentQueryService', () => {
   it('counts every view with its own exclusive predicate, cancellation taking precedence over facts', async () => {
     const f = fixture()
     // 逐视图计数，合计等于全部货件；互斥语义由谓词本身保证。
-    for (const total of [11, 2, 2, 1, 2, 1, 4]) f.part.count.mockResolvedValueOnce(total)
+    for (const total of [11, 2, 2, 1, 2, 1, 3, 4]) f.part.count.mockResolvedValueOnce(total)
     f.user.findMany.mockResolvedValue([{ id: 'buyer-1', displayName: '采购员' }])
     const result = await f.service.statusCounts({ keyword: '厂', supplierSource: 'CUSTOM_TEXT' })
-    expect(result).toEqual({ items: [{ value: 'ALL', count: 11 }, { value: 'PENDING_REVIEW', count: 2 }, { value: 'AWAITING_SHIPMENT', count: 2 }, { value: 'SHIPPED', count: 1 }, { value: 'WAREHOUSE_RECEIVED', count: 2 }, { value: 'CONTAINER_LOADED', count: 1 }, { value: 'CANCELLED', count: 4 }], buyerOptions: [{ id: 'buyer-1', displayName: '采购员', avatarUrl: null }] })
+    expect(result).toEqual({ items: [{ value: 'ALL', count: 11 }, { value: 'PENDING_REVIEW', count: 2 }, { value: 'AWAITING_SHIPMENT', count: 2 }, { value: 'SHIPPED', count: 1 }, { value: 'WAREHOUSE_RECEIVED', count: 2 }, { value: 'CONTAINER_LOADED', count: 1 }, { value: 'DELIVERED', count: 3 }, { value: 'CANCELLED', count: 4 }], buyerOptions: [{ id: 'buyer-1', displayName: '采购员', avatarUrl: null }] })
     expect(f.part.count.mock.calls.map(call => (call as [{ where: { AND: unknown[] } }])[0].where.AND[1])).toEqual([
       {}, { status: 'PENDING_REVIEW' },
-      { status: 'ACTIVE', loadedAt: null, shippedAt: null },
-      { status: 'ACTIVE', loadedAt: null, shippedAt: { not: null }, warehouseReceivedAt: null },
-      { status: 'ACTIVE', loadedAt: null, warehouseReceivedAt: { not: null } },
-      { status: 'ACTIVE', loadedAt: { not: null } },
+      { status: 'ACTIVE', deliveredAt: null, loadedAt: null, shippedAt: null },
+      { status: 'ACTIVE', deliveredAt: null, loadedAt: null, shippedAt: { not: null }, warehouseReceivedAt: null },
+      { status: 'ACTIVE', deliveredAt: null, loadedAt: null, warehouseReceivedAt: { not: null } },
+      { status: 'ACTIVE', deliveredAt: null, loadedAt: { not: null } },
+      { status: 'ACTIVE', deliveredAt: { not: null } },
       { status: 'CANCELLED' },
     ])
     expect(f.user.findMany).toHaveBeenCalledWith({ where: { purchaseOrdersCreated: { some: { parts: { some: {} } } } }, select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }] })
@@ -225,15 +227,19 @@ describe('PurchaseShipmentQueryService', () => {
     const f = fixture()
     await f.service.list({ view: 'SHIPPED' })
     expect(f.part.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { AND: [expect.any(Object) as unknown, {
-      status: 'ACTIVE', loadedAt: null, shippedAt: { not: null }, warehouseReceivedAt: null,
+      status: 'ACTIVE', deliveredAt: null, loadedAt: null, shippedAt: { not: null }, warehouseReceivedAt: null,
     }] } }))
     await f.service.list({ view: 'WAREHOUSE_RECEIVED' })
     expect(f.part.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { AND: [expect.any(Object) as unknown, {
-      status: 'ACTIVE', loadedAt: null, warehouseReceivedAt: { not: null },
+      status: 'ACTIVE', deliveredAt: null, loadedAt: null, warehouseReceivedAt: { not: null },
     }] } }))
     await f.service.list({ view: 'CONTAINER_LOADED' })
     expect(f.part.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { AND: [expect.any(Object) as unknown, {
-      status: 'ACTIVE', loadedAt: { not: null },
+      status: 'ACTIVE', deliveredAt: null, loadedAt: { not: null },
+    }] } }))
+    await f.service.list({ view: 'DELIVERED' })
+    expect(f.part.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { AND: [expect.any(Object) as unknown, {
+      status: 'ACTIVE', deliveredAt: { not: null },
     }] } }))
     f.part.findUnique.mockResolvedValue({ ...row(), shippedAt: new Date('2026-09-14T01:00:00Z'),
       warehouseReceivedAt: new Date('2026-09-14T02:00:00Z'), warehouseRecordedAt: new Date('2026-09-14T03:00:00Z'),
@@ -243,6 +249,28 @@ describe('PurchaseShipmentQueryService', () => {
       viewStatus: 'WAREHOUSE_RECEIVED', warehouseReceivedAt: '2026-09-14T02:00:00.000Z',
       warehouseRecordedAt: '2026-09-14T03:00:00.000Z', warehouseReceivedById: 'receiver-1',
       warehouseReceivedBy: { id: 'receiver-1', displayName: '收货员' }, warehouseRemark: '外箱完好', purchaseOrder: { version: 3 },
+    })
+  })
+
+  it('maps delivered facts ahead of loading and keeps the delivered view terminal', async () => {
+    const f = fixture()
+    f.part.findUnique.mockResolvedValue({
+      ...row(),
+      loadedAt: new Date('2026-09-14T04:00:00Z'),
+      loadedRecordedAt: new Date('2026-09-14T04:00:00Z'),
+      loadedBy: { id: 'loader-1', displayName: '装柜员', profile: null },
+      deliveredAt: new Date('2026-10-21T09:00:00Z'),
+      deliveredRecordedAt: new Date('2026-10-21T09:00:00Z'),
+      deliveredBy: { id: 'signer-1', displayName: '签收人', profile: null },
+      deliveryRemark: '客户已收',
+    })
+    expect(await f.service.getById('part-1')).toMatchObject({
+      viewStatus: 'DELIVERED',
+      deliveredAt: '2026-10-21T09:00:00.000Z',
+      deliveredRecordedAt: '2026-10-21T09:00:00.000Z',
+      deliveredBy: { id: 'signer-1', displayName: '签收人', avatarUrl: null },
+      deliveryRemark: '客户已收',
+      loadedAt: '2026-09-14T04:00:00.000Z',
     })
   })
 

@@ -13,6 +13,7 @@ import { MediaModule } from '../media/media.module'
 import { NumberingModule } from '../numbering/numbering.module'
 import { ProductsModule } from '../products/products.module'
 import { PurchaseShippingMarksModule } from '../purchase-shipping-marks/purchase-shipping-marks.module'
+import { SalesOrdersModule } from '../sales-orders/sales-orders.module'
 import { PurchaseOrderDocumentMultipartParser } from './documents/purchase-order-document-multipart.parser'
 import { PurchaseOrderDocumentService } from './documents/purchase-order-document.service'
 import { PurchaseOrderImageDraftController } from './order-images/purchase-order-image-draft.controller'
@@ -37,6 +38,7 @@ import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-covera
 import { PurchaseShipmentNumberingService } from './shipments/purchase-shipment-numbering.service'
 import { PurchaseShipmentNumberBackfillService } from './shipments/purchase-shipment-number-backfill.service'
 import { PurchaseShipmentController } from './shipments/purchase-shipment.controller'
+import { PurchaseShipmentDeliveryService } from './shipments/purchase-shipment-delivery.service'
 import { PurchaseShipmentQueryService } from './shipments/purchase-shipment-query.service'
 
 import { PurchaseOrderWarehouseReceiptController } from './warehouse-receipts/purchase-order-warehouse-receipt.controller'
@@ -53,6 +55,7 @@ import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purch
     NumberingModule,
     ProductsModule,
     PurchaseShippingMarksModule,
+    SalesOrdersModule,
   ],
   controllers: [
     PurchasePayableController,
@@ -82,6 +85,7 @@ import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purch
     PurchaseOrderImageRenderer,
     PurchaseOrderProductImageService,
     PurchaseShipmentQueryService,
+    PurchaseShipmentDeliveryService,
     PurchaseShipmentNumberingService,
     PurchaseShipmentNumberBackfillService,
     PurchaseOrderWarehouseReceiptService,

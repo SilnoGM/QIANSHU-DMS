@@ -76,6 +76,19 @@ function setup() {
     salesOrderAmountRevision: {
       create: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
     },
+    purchaseOrderPart: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
+        id: 'part-1',
+        purchaseOrderId: 'po-1',
+        shipmentNo: 'PKG/20261021-00001',
+        partNumber: 1,
+        status: 'ACTIVE',
+        loadedAt: new Date('2026-08-20T00:30:00.000Z'),
+        deliveredAt: null,
+      }]),
+      updateMany: jest.fn<Promise<{ count: number }>, [unknown]>()
+        .mockResolvedValue({ count: 1 }),
+    },
   }
   const prisma = {
     $transaction: jest.fn<

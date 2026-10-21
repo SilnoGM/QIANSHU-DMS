@@ -32,6 +32,7 @@ const PART_SELECT = {
   warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true,
   warehouseReceivedBy: { select: PERSON_REFERENCE_SELECT },
   loadedAt: true, loadedRecordedAt: true, loadedBy: { select: PERSON_REFERENCE_SELECT },
+  deliveredAt: true, deliveredRecordedAt: true, deliveryRemark: true, deliveredBy: { select: PERSON_REFERENCE_SELECT },
   purchaseOrder: { select: {
     id: true, version: true, orderNo: true, orderDate: true, purchaseType: true, productMode: true, orderStatus: true,
     shippingMarkText: true, supplierValue: true, customSupplierName: true,
@@ -114,15 +115,16 @@ function baseWhere(input: PurchaseShipmentFilterDto, scope: DataScope, actorUser
   }
 }
 
-/** 视图谓词是列表与计数的唯一口径：装柜事实优先于到仓、发货事实，四者互斥且合计等于全部有效货件。 */
+/** 视图谓词是列表与计数的唯一口径：签收优先于装柜、到仓、发货事实，各视图互斥且合计等于全部有效货件。 */
 function viewWhere(view: PurchaseShipmentView): Prisma.PurchaseOrderPartWhereInput {
   switch (view) {
     case 'ALL': return {}
     case 'PENDING_REVIEW': return { status: 'PENDING_REVIEW' }
-    case 'AWAITING_SHIPMENT': return { status: 'ACTIVE', loadedAt: null, shippedAt: null }
-    case 'SHIPPED': return { status: 'ACTIVE', loadedAt: null, shippedAt: { not: null }, warehouseReceivedAt: null }
-    case 'WAREHOUSE_RECEIVED': return { status: 'ACTIVE', loadedAt: null, warehouseReceivedAt: { not: null } }
-    case 'CONTAINER_LOADED': return { status: 'ACTIVE', loadedAt: { not: null } }
+    case 'AWAITING_SHIPMENT': return { status: 'ACTIVE', deliveredAt: null, loadedAt: null, shippedAt: null }
+    case 'SHIPPED': return { status: 'ACTIVE', deliveredAt: null, loadedAt: null, shippedAt: { not: null }, warehouseReceivedAt: null }
+    case 'WAREHOUSE_RECEIVED': return { status: 'ACTIVE', deliveredAt: null, loadedAt: null, warehouseReceivedAt: { not: null } }
+    case 'CONTAINER_LOADED': return { status: 'ACTIVE', deliveredAt: null, loadedAt: { not: null } }
+    case 'DELIVERED': return { status: 'ACTIVE', deliveredAt: { not: null } }
     case 'CANCELLED': return { status: 'CANCELLED' }
   }
 }
@@ -144,9 +146,9 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
   const order = row.purchaseOrder
   return {
     id: row.id, shipmentNo: row.shipmentNo, partNumber: row.partNumber, status: row.status,
-    // 先按货件生命周期归类，仅 ACTIVE 再按装柜、入仓、发货事实细分，保证各状态视图互斥。
+    // 先判终态签收，再按装柜、入仓、发货事实细分，保证各状态视图互斥。
     viewStatus: row.status === 'ACTIVE'
-      ? row.loadedAt !== null ? 'CONTAINER_LOADED' : row.warehouseReceivedAt !== null ? 'WAREHOUSE_RECEIVED' : row.shippedAt === null ? 'AWAITING_SHIPMENT' : 'SHIPPED'
+      ? row.deliveredAt !== null ? 'DELIVERED' : row.loadedAt !== null ? 'CONTAINER_LOADED' : row.warehouseReceivedAt !== null ? 'WAREHOUSE_RECEIVED' : row.shippedAt === null ? 'AWAITING_SHIPMENT' : 'SHIPPED'
       : row.status,
     shippingMarkText: row.shippingMarkText, createdAt: row.createdAt.toISOString(),
     shippedAt: row.shippedAt?.toISOString() ?? null, shippedBy: toNullablePersonReference(row.shippedBy),
@@ -158,6 +160,8 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
     warehouseReceivedBy: toNullablePersonReference(row.warehouseReceivedBy),
     loadedAt: row.loadedAt?.toISOString() ?? null, loadedBy: toNullablePersonReference(row.loadedBy),
     loadedRecordedAt: row.loadedRecordedAt?.toISOString() ?? null,
+    deliveredAt: row.deliveredAt?.toISOString() ?? null, deliveredBy: toNullablePersonReference(row.deliveredBy),
+    deliveredRecordedAt: row.deliveredRecordedAt?.toISOString() ?? null, deliveryRemark: row.deliveryRemark,
     purchaseOrder: {
       id: order.id, version: order.version, orderNo: order.orderNo, orderDate: order.orderDate.toISOString().slice(0, 10),
       purchaseType: order.purchaseType, productMode: order.productMode, orderStatus: order.orderStatus,

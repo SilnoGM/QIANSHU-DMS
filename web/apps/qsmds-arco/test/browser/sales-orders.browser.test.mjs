@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import test from 'node:test'
@@ -241,6 +241,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
   await mkdir(fixtureDirectory, { mode: 0o700, recursive: true })
   const voucherFixture = path.join(fixtureDirectory, 'browser-sales-order-voucher.png')
   await writeFile(voucherFixture, Buffer.from(voucherFixtureBase64, 'base64'), { mode: 0o600 })
+  const containerSourceBase64 = (await readFile(new URL('./fixtures/container-source.xlsx.b64', import.meta.url), 'utf8')).trim()
   const browser = await launchChrome({
     executable: configuration.chromeExecutable,
     userDataDirectory: `${configuration.profileDirectory}-sales-orders`,
@@ -819,13 +820,54 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     const arrivedSales = await page.evaluate(apiExpression(`/api/sales-orders/${encodeURIComponent(order.id)}`))
     assert.equal(arrivedSales.status, 200)
     assert.equal(arrivedSales.body?.fulfillmentStatus, 'WAREHOUSE_ARRIVED')
-    const transition = await page.evaluate(apiExpression(
-      `/api/sales-orders/${encodeURIComponent(order.id)}/fulfillment-status`,
-      'PATCH',
-      { toStatus: 'SEA_TRANSIT', reason: 'Browser 签收自动推进验收' },
+    // 真实装柜关联货件：上传源文件 → 建柜次 → 添加装柜明细，自动写入装柜事实并推进订单到海运在途。
+    const sourceUpload = await page.evaluate(`(async () => {
+      const bytes = Uint8Array.from(atob(${JSON.stringify(containerSourceBase64)}), character => character.charCodeAt(0))
+      const form = new FormData()
+      form.append('mediaType', 'DOCUMENT')
+      form.append('file', new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'container-source.xlsx')
+      const response = await fetch('/api/container-batches/source-file-uploads', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'X-Qianshu-CSRF': '1' },
+        body: form,
+      })
+      return { body: await response.json().catch(() => null), status: response.status }
+    })()`)
+    assert.equal(sourceUpload.status, 201, JSON.stringify(sourceUpload.body))
+    assert.equal(typeof sourceUpload.body?.mediaAssetId, 'string')
+    const shanghaiDateParts = new Intl.DateTimeFormat('en-CA', {
+      day: '2-digit',
+      month: '2-digit',
+      timeZone: 'Asia/Shanghai',
+    }).formatToParts(new Date())
+    const containerBatchName = `${shanghaiDateParts.find(part => part.type === 'month')?.value ?? '01'}${shanghaiDateParts.find(part => part.type === 'day')?.value ?? '01'}柜`
+    const container = await page.evaluate(apiExpression(
+      '/api/container-batches',
+      'POST',
+      {
+        containerBatchName,
+        warehouseValue: warehouse.value,
+        sourceFileId: sourceUpload.body.mediaAssetId,
+      },
+      { 'Idempotency-Key': randomUUID() },
     ))
-    assert.equal(transition.status, 200)
-    assert.equal(transition.body?.fulfillmentStatus, 'SEA_TRANSIT')
+    assert.equal(container.status, 201, JSON.stringify(container.body))
+    const loadingItem = await page.evaluate(apiExpression(
+      `/api/container-batches/${encodeURIComponent(container.body.id)}/items`,
+      'POST',
+      {
+        expectedVersion: container.body.version,
+        shipmentId: shippedPurchase.body.parts[0].id,
+        goodsName: '浏览器签收测试',
+        packageCount: 1,
+      },
+      { 'Idempotency-Key': randomUUID() },
+    ))
+    assert.equal(loadingItem.status, 201, JSON.stringify(loadingItem.body))
+    const loadedSales = await page.evaluate(apiExpression(`/api/sales-orders/${encodeURIComponent(order.id)}`))
+    assert.equal(loadedSales.status, 200)
+    assert.equal(loadedSales.body?.fulfillmentStatus, 'SEA_TRANSIT')
 
     await page.navigate(appRouteUrl(
       configuration.baseUrl,
@@ -858,7 +900,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     await clickDialogButton(page, '货物签收', '确认货物签收')
     await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
       .some(toast => toast.getClientRects().length > 0
-        && toast.textContent?.includes('签收单上传成功，订单已进入已签收'))`)
+        && toast.textContent?.includes('签收单上传成功，订单及全部货件已签收'))`)
     await waitForNoVisibleDialog(page, '货物签收')
 
     const signedDetail = await page.evaluate(apiExpression(
@@ -879,7 +921,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         history.dimension === 'FULFILLMENT'
         && history.fromStatus === 'SEA_TRANSIT'
         && history.toStatus === 'SIGNED'
-        && history.reason === '业务人员上传签收单后自动确认签收'
+        && history.reason === '业务人员上传签收单后自动确认签收，并同步签收全部货件'
       )),
       true,
     )

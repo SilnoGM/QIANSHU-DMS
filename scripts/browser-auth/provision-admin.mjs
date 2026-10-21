@@ -377,6 +377,63 @@ const provisionBrowserShippingMarkFixtures = ${provisionBrowserShippingMarkFixtu
       [purchaseOrderRule.rows[0].id],
     )
 
+    // 签收 Browser 场景通过真实装柜关联货件；柜次编号规则必须在准备阶段启用。
+    const containerBatchRule = await client.query(
+      [
+        'INSERT INTO numbering_rules (rule_code, name, status, version, purpose)',
+        'VALUES (\'CONTAINER_BATCH_NO\', \'Browser Container Batch Rule\', \'DRAFT\', 1, \'BUSINESS\')',
+        'RETURNING id',
+      ].join(' '),
+    )
+    const containerBatchRuleVersion = await client.query(
+      [
+        'INSERT INTO numbering_rule_versions (',
+        'rule_id, revision, status, reset_policy, timezone, config_fingerprint',
+        ') VALUES ($1, 1, \'DRAFT\', \'NEVER\', \'Asia/Shanghai\', repeat(\'d\', 64))',
+        'RETURNING id',
+      ].join(' '),
+      [containerBatchRule.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, fixed_value',
+        ') VALUES ($1, 0, \'FIXED\', \'CTN\')',
+      ].join(' '),
+      [containerBatchRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, separator_value',
+        ') VALUES ($1, 1, \'SEPARATOR\', \'-\')',
+      ].join(' '),
+      [containerBatchRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, sequence_width, sequence_start_value, sequence_step',
+        ') VALUES ($1, 2, \'SEQUENCE\', 3, 1, 1)',
+      ].join(' '),
+      [containerBatchRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'UPDATE numbering_rule_versions',
+        'SET status = \'ACTIVE\', published_at = clock_timestamp()',
+        'WHERE id = $1',
+      ].join(' '),
+      [containerBatchRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'UPDATE numbering_rules SET status = \'ENABLED\', version = 3,',
+        'updated_at = clock_timestamp() WHERE id = $1',
+      ].join(' '),
+      [containerBatchRule.rows[0].id],
+    )
+
     fixtureFailureCode = 'PURCHASE_SHIPPING_MARK_RULES'
     const shippingMarkFixtures = await provisionBrowserShippingMarkFixtures(client, user.rows[0].id)
 

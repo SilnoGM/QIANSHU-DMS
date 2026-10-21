@@ -51,7 +51,8 @@
       "SHIPPED": "已发货",
       "CANCELLED": "已取消",
       "WAREHOUSE_RECEIVED": "已入仓",
-      "CONTAINER_LOADED": "已装柜"
+      "CONTAINER_LOADED": "已装柜",
+      "DELIVERED": "已签收"
     },
     "warehouse": "入仓记录",
     "notReceived": "尚未确认入仓",
@@ -59,6 +60,12 @@
     "loadedAt": "装柜时间",
     "loadedBy": "装柜操作人",
     "loadedRecordedAt": "装柜记录时间",
-    "notLoaded": "尚未装柜。货件被装柜明细关联后自动记录，关联解除后也不回退"
+    "notLoaded": "尚未装柜。货件被装柜明细关联后自动记录，关联解除后也不回退",
+    "delivery": "签收记录",
+    "deliveredAt": "签收时间",
+    "deliveredBy": "签收操作人",
+    "deliveredRecordedAt": "签收记录时间",
+    "deliveryRemark": "签收备注",
+    "notDelivered": "暂无签收记录"
   }
 }

@@ -1,7 +1,7 @@
 import { plainToInstance } from 'class-transformer'
 import { validate } from 'class-validator'
 
-import { PurchaseShipmentFilterDto, PurchaseShipmentListQueryDto } from './purchase-shipment.dto'
+import { PurchaseShipmentDeliverRequestDto, PurchaseShipmentFilterDto, PurchaseShipmentListQueryDto } from './purchase-shipment.dto'
 
 const validationOptions = { whitelist: true, forbidNonWhitelisted: true }
 
@@ -42,5 +42,14 @@ describe('purchase shipment read filters', () => {
   it('keeps new filters optional for existing consumers', async () => {
     expect(await validate(plainToInstance(PurchaseShipmentFilterDto, {}), validationOptions)).toEqual([])
     expect(await validate(plainToInstance(PurchaseShipmentListQueryDto, { view: 'ALL', page: '2' }), validationOptions)).toEqual([])
+    expect(await validate(plainToInstance(PurchaseShipmentListQueryDto, { view: 'DELIVERED' }), validationOptions)).toEqual([])
+  })
+
+  it('accepts an optional delivery remark and rejects malformed remarks', async () => {
+    expect(await validate(plainToInstance(PurchaseShipmentDeliverRequestDto, {}), validationOptions)).toEqual([])
+    expect(await validate(plainToInstance(PurchaseShipmentDeliverRequestDto, { remark: null }), validationOptions)).toEqual([])
+    expect(await validate(plainToInstance(PurchaseShipmentDeliverRequestDto, { remark: '客户已收' }), validationOptions)).toEqual([])
+    expect((await validate(plainToInstance(PurchaseShipmentDeliverRequestDto, { remark: 'x'.repeat(501) }), validationOptions)).map(error => error.property)).toEqual(['remark'])
+    expect((await validate(plainToInstance(PurchaseShipmentDeliverRequestDto, { unexpected: true }), validationOptions)).map(error => error.property)).toEqual(['unexpected'])
   })
 })

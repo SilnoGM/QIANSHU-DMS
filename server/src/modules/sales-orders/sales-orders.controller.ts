@@ -659,11 +659,13 @@ export class SalesOrdersController {
     errors: [
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
+      { status: 409, codes: ['SALES_ORDER_SHIPMENTS_CHANGED'] },
       { status: 422, codes: [
         'SALES_ORDER_CANCELLED',
         'SALES_ORDER_COMPLETED',
         'SALES_ORDER_DELIVERY_RECEIPT_REQUIRED',
         'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID',
+        'SALES_ORDER_SHIPMENTS_NOT_READY',
         'VALIDATION_FAILED',
       ] },
     ],
@@ -798,11 +800,13 @@ export class SalesOrdersController {
     errors: [
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
+      { status: 409, codes: ['SALES_ORDER_SHIPMENTS_CHANGED'] },
       { status: 422, codes: [
         'SALES_ORDER_CANCELLED',
         'SALES_ORDER_COMPLETED',
         'SALES_ORDER_DOCUMENT_UNAVAILABLE',
         'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID',
+        'SALES_ORDER_SHIPMENTS_NOT_READY',
         'VALIDATION_FAILED',
       ] },
       { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },

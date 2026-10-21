@@ -57,6 +57,19 @@ function setup(
     salesOrderStatusHistory: {
       create: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
     },
+    purchaseOrderPart: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
+        id: 'part-1',
+        purchaseOrderId: 'po-1',
+        shipmentNo: 'PKG/20261021-00001',
+        partNumber: 1,
+        status: 'ACTIVE',
+        loadedAt: new Date('2026-08-20T00:30:00.000Z'),
+        deliveredAt: null,
+      }]),
+      updateMany: jest.fn<Promise<{ count: number }>, [unknown]>()
+        .mockResolvedValue({ count: 1 }),
+    },
   }
   const prisma = {
     $transaction: jest.fn<
@@ -178,11 +191,40 @@ describe('SalesOrderDocumentService', () => {
         dimension: 'FULFILLMENT',
         fromStatus: 'SEA_TRANSIT',
         toStatus: 'SIGNED',
-        reason: '业务人员上传签收单后自动确认签收',
+        reason: '业务人员上传签收单后自动确认签收，并同步签收全部货件',
         changedByUserId: ACTOR_ID,
       },
     })
-    expect(fixture.audit.record).toHaveBeenNthCalledWith(2, fixture.transaction, {
+    expect(fixture.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['part-1'] },
+        status: 'ACTIVE',
+        loadedAt: { not: null },
+        deliveredAt: null,
+      },
+      data: {
+        deliveredAt: expect.any(Date) as unknown,
+        deliveredById: ACTOR_ID,
+        deliveredRecordedAt: expect.any(Date) as unknown,
+      },
+    })
+    expect(fixture.audit.record).toHaveBeenNthCalledWith(1, fixture.transaction, {
+      eventType: 'PURCHASE_SHIPMENT_DELIVERED',
+      outcome: 'SUCCESS',
+      actorType: 'USER',
+      actorUserId: ACTOR_ID,
+      requestId: 'request-1',
+      targetType: 'PURCHASE_ORDER',
+      targetId: 'po-1',
+      metadata: {
+        salesOrderId: ORDER_ID,
+        partIds: ['part-1'],
+        deliveredAt: expect.any(String) as unknown,
+        recordedAt: expect.any(String) as unknown,
+        source: 'SALES_ORDER_SIGN',
+      },
+    })
+    expect(fixture.audit.record).toHaveBeenNthCalledWith(3, fixture.transaction, {
       eventType: 'SALES_ORDER_FULFILLMENT_STATUS_CHANGED',
       outcome: 'SUCCESS',
       actorType: 'USER',
@@ -190,7 +232,7 @@ describe('SalesOrderDocumentService', () => {
       targetType: 'SALES_ORDER',
       targetId: ORDER_ID,
       requestId: 'request-1',
-      metadata: { fromStatus: 'SEA_TRANSIT', toStatus: 'SIGNED' },
+      metadata: { fromStatus: 'SEA_TRANSIT', toStatus: 'SIGNED', deliveredPartCount: 1 },
     })
     expect(fixture.automaticState.advanceWhenEligible)
       .toHaveBeenCalledWith(

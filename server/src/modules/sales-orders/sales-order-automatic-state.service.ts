@@ -18,6 +18,8 @@ export type SalesOrderAutomaticReconciliationTrigger
     | 'FULFILLMENT'
     | 'PAYMENT'
     | 'PAYMENT_TERMS'
+    /// 最后一个有效货件签收后自动确认订单签收。
+    | 'SHIPMENT_SIGNED'
     /// 顺联航账单对账完成时的代收货款回填。
     | 'RECONCILIATION'
 
