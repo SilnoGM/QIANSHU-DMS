@@ -1,6 +1,6 @@
 {
   "name": "@qianshu-dms/server",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "files": [
     "deploy/",
