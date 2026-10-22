@@ -280,13 +280,13 @@ export class SalesReceiptService {
         const order = await this.lockOrder(tx, salesOrderId, context.actorUserId)
         await tx.$queryRaw(Prisma.sql`SELECT id FROM sales_order_payments WHERE id = ${paymentId}::uuid FOR UPDATE`)
         const payment = await tx.salesOrderPayment.findFirst({ where: { id: paymentId, salesOrderId }, include: { fundPostingBatch: true } })
-        if (!payment) receiptFailure('SALES_ORDER_PAYMENT_NOT_FOUND', '正式收款不存在', HttpStatus.NOT_FOUND)
+        if (!payment) receiptFailure('SALES_ORDER_PAYMENT_NOT_FOUND', '收款记录不存在', HttpStatus.NOT_FOUND)
         if (payment.voidedAt && payment.voidedByUserId === context.actorUserId && payment.voidReason === voidReason) return
-        if (payment.voidedAt || order.version !== input.expectedOrderVersion) receiptFailure('SALES_RECEIPT_STATE_CHANGED', '订单或正式收款已变化，请刷新后重试', HttpStatus.CONFLICT)
+        if (payment.voidedAt || order.version !== input.expectedOrderVersion) receiptFailure('SALES_RECEIPT_STATE_CHANGED', '订单或收款记录已变化，请刷新后重试', HttpStatus.CONFLICT)
         if (order.orderStatus === 'COMPLETED') receiptFailure('SALES_ORDER_COMPLETED', '已完成订单不能作废收款')
         let fundReversalBatchId: string | null = null
         if (payment.origin === 'REVIEWED') {
-          if (!payment.fundPostingBatch) receiptFailure('SALES_RECEIPT_REVERSAL_CONFLICT', '正式收款缺少原入账记录', HttpStatus.CONFLICT)
+          if (!payment.fundPostingBatch) receiptFailure('SALES_RECEIPT_REVERSAL_CONFLICT', '表外收款缺少原入账记录', HttpStatus.CONFLICT)
           const reversed = await this.funds.reverseBusinessEventInTransaction(tx, this.fundContext(context, 'VOID'), { originalBatchId: payment.fundPostingBatch.id, amount: payment.fundPostingBatch.businessAmount.toFixed(2), reason: voidReason, idempotencyKey: payment.id })
           fundReversalBatchId = reversed.batchId
         }

@@ -48,7 +48,7 @@ export function normalizePositiveSalesOrderAmount(value: unknown): string {
   if (units === 0n) {
     return salesOrderRuleFailure(
       'SALES_ORDER_PAYMENT_AMOUNT_INVALID',
-      '实际收款金额必须大于零',
+      '表外收款金额必须大于零',
     )
   }
   return formatSalesOrderAmountUnits(units)
