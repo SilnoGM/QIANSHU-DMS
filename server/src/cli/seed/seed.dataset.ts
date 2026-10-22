@@ -195,8 +195,8 @@ export const SEED_ROLES: readonly SeedRole[] = [
   },
   {
     code: 'purchasing_staff',
-    name: '采购人员',
-    description: '采购人员（千树采运工作台）',
+    name: '采运人员',
+    description: '采运人员（千树采运工作台）',
     permissionCodes: [
       'container-batches:create',
       'container-batches:read',
