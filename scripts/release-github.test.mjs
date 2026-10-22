@@ -31,7 +31,7 @@ const version = '1.2.3'
 const sourceCommit = 'b'.repeat(40)
 const tagObjectSha = 'a'.repeat(40)
 // 用户视角的 Release 文案样本；写入 release/notes/<tag>.md 后由发布步骤读取。
-const releaseNotes = '功能新增\n- 用户能看到的新能力\n\n功能优化\n- 无\n\n缺陷修复\n- 无\n\n已知问题\n- 无'
+const releaseNotes = '本版影响角色：运营人员\n\n功能新增\n- 【运营人员】用户能看到的新能力\n\n功能优化\n- 无\n\n缺陷修复\n- 无\n\n已知问题\n- 无'
 const artifactDigest = `sha256:${'f'.repeat(64)}`
 const runId = '123456789'
 const artifactId = '456'

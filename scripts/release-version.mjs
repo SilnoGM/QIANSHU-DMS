@@ -444,8 +444,56 @@ async function verifyCurrentTag(input, dependencies) {
  */
 const releaseNotesSections = Object.freeze(['功能新增', '功能优化', '缺陷修复', '已知问题'])
 
-function assertReleaseNotesSections(releaseNotes) {
-  const lines = releaseNotes.split('\n').map(line => line.trim())
+/**
+ * 角色标签表示该角色能打开相关界面并使用该能力（含查看、筛选、导出），不是权限承诺。
+ * 系统管理员当前持有全部权限，业务工作台的功能不逐条标注它；仅管理员工作台改动才使用该标签。
+ * 头行声明的集合必须与所有条目标签的并集一致，防止漏标、虚标与头行失真。
+ */
+const releaseNotesAudiences = Object.freeze([
+  '运营人员',
+  '财务人员',
+  '采运人员',
+  '系统管理员',
+])
+const releaseNotesAudienceHeaderPrefix = '本版影响角色：'
+const releaseNotesAudienceNone = '无'
+const releaseNotesItemNone = '- 无'
+const releaseNotesItemPattern = /^- 【([^】]+)】(.*)$/u
+const releaseNotesAudienceSeparator = '、'
+
+function splitReleaseNoteLines(releaseNotes) {
+  return releaseNotes.split('\n').map(line => line.trim())
+}
+
+function parseReleaseNoteAudiences(value, context) {
+  if (value === '') {
+    throw new Error(`${context} must not be empty`)
+  }
+  const roles = value.split(releaseNotesAudienceSeparator)
+  const seen = new Set()
+  let previousIndex = -1
+  for (const role of roles) {
+    const index = releaseNotesAudiences.indexOf(role)
+    if (index === -1) {
+      throw new Error(`${context} contains an unknown audience: ${role}`)
+    }
+    if (seen.has(role)) {
+      throw new Error(`${context} must not repeat audience: ${role}`)
+    }
+    if (index <= previousIndex) {
+      throw new Error(`${context} must keep the documented audience order`)
+    }
+    seen.add(role)
+    previousIndex = index
+  }
+  return roles
+}
+
+/**
+ * 四个分类标题是结构锚点，先统一拦截缺失、重复与顺序错乱；正文是否非空由调用方判断。
+ */
+function locateReleaseNotesSections(lines) {
+  const sections = []
   let previousHeadingIndex = -1
   for (const section of releaseNotesSections) {
     const headingIndexes = lines.flatMap((line, position) => (line === section ? [position] : []))
@@ -462,10 +510,95 @@ function assertReleaseNotesSections(releaseNotes) {
     const nextHeadingIndex = lines.findIndex(
       (line, position) => position > headingIndex && releaseNotesSections.includes(line),
     )
-    const body = lines.slice(headingIndex + 1, nextHeadingIndex === -1 ? lines.length : nextHeadingIndex)
+    sections.push({
+      section,
+      body: lines.slice(headingIndex + 1, nextHeadingIndex === -1 ? lines.length : nextHeadingIndex),
+    })
+  }
+  return sections
+}
+
+function assertReleaseNotesSections(lines) {
+  for (const { section, body } of locateReleaseNotesSections(lines)) {
     if (body.every(line => line === '')) {
       throw new Error(`Release notes section "${section}" must not be empty; write 无 when nothing changed`)
     }
+  }
+}
+
+function assertReleaseNotesAudiences(lines) {
+  const headerIndexes = lines.flatMap((line, position) => (
+    line.startsWith(releaseNotesAudienceHeaderPrefix) ? [position] : []
+  ))
+  if (headerIndexes.length !== 1) {
+    throw new Error(
+      `Release notes must have exactly one "${releaseNotesAudienceHeaderPrefix}" header, found ${headerIndexes.length}`,
+    )
+  }
+  const headerIndex = headerIndexes[0]
+  const firstContentIndex = lines.findIndex(line => line !== '')
+  if (firstContentIndex !== headerIndex) {
+    throw new Error('Release notes must start with the audience header')
+  }
+
+  const sections = locateReleaseNotesSections(lines)
+  const firstSectionIndex = lines.findIndex(line => line === releaseNotesSections[0])
+  const contentBeforeFirstSection = lines
+    .slice(headerIndex + 1, firstSectionIndex)
+    .filter(line => line !== '')
+  if (contentBeforeFirstSection.length > 0) {
+    throw new Error('Release notes must not contain content between the audience header and the first section')
+  }
+
+  const headerValue = lines[headerIndex]
+    .slice(releaseNotesAudienceHeaderPrefix.length)
+    .trim()
+  const declaredAudiences = headerValue === releaseNotesAudienceNone
+    ? []
+    : parseReleaseNoteAudiences(headerValue, 'Release notes audience header')
+
+  const labeledAudiences = new Set()
+  for (const { section, body } of sections) {
+    let noneItems = 0
+    let labeledItems = 0
+    for (const line of body) {
+      if (line === '') {
+        continue
+      }
+      if (line === releaseNotesItemNone) {
+        noneItems += 1
+        continue
+      }
+      const match = line.match(releaseNotesItemPattern)
+      if (match === null) {
+        throw new Error(`Release notes section "${section}" items must start with an audience label`)
+      }
+      const text = match[2].trim()
+      if (text === '') {
+        throw new Error(`Release notes item in "${section}" must have content after the audience label`)
+      }
+      if (text === releaseNotesAudienceNone) {
+        throw new Error(`Release notes item in "${section}" must not be only 无 after an audience label`)
+      }
+      for (const role of parseReleaseNoteAudiences(match[1], `Release notes section "${section}"`)) {
+        labeledAudiences.add(role)
+      }
+      labeledItems += 1
+    }
+    if (noneItems > 1) {
+      throw new Error(`Release notes section "${section}" must contain exactly one 无`)
+    }
+    if (noneItems > 0 && labeledItems > 0) {
+      throw new Error(`Release notes section "${section}" must not mix 无 with labeled items`)
+    }
+  }
+
+  const expectedAudiences = releaseNotesAudiences.filter(role => labeledAudiences.has(role))
+  if (
+    declaredAudiences.length !== expectedAudiences.length
+    || declaredAudiences.some((role, index) => role !== expectedAudiences[index])
+  ) {
+    throw new Error('Release notes audience header must match the labeled items')
   }
 }
 
@@ -473,7 +606,9 @@ function assertUserFacingReleaseNotes(releaseNotes) {
   if (releaseNotes.includes(ownershipMarkerPrefix)) {
     throw new Error('Release notes must not contain the ownership marker')
   }
-  assertReleaseNotesSections(releaseNotes)
+  const lines = splitReleaseNoteLines(releaseNotes)
+  assertReleaseNotesSections(lines)
+  assertReleaseNotesAudiences(lines)
   const asciiMatch = releaseNotes.match(forbiddenReleaseNotesAsciiPattern)
   if (asciiMatch !== null) {
     throw new Error(

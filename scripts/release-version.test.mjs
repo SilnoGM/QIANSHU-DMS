@@ -20,7 +20,7 @@ import {
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const entrypoint = path.join(scriptsDirectory, 'release-version.mjs')
 // 用户视角的 Release 文案样本：不含技术词汇、代码标识符、路径或提交号。
-const releaseNotesFixture = '功能新增\n- 订单列表可以直接按柜号筛选\n\n功能优化\n- 无\n\n缺陷修复\n- 修复了登录状态过期后部分页面出错的问题\n\n已知问题\n- 无'
+const releaseNotesFixture = '本版影响角色：运营人员\n\n功能新增\n- 【运营人员】订单列表可以直接按柜号筛选\n\n功能优化\n- 无\n\n缺陷修复\n- 【运营人员】修复了登录状态过期后部分页面出错的问题\n\n已知问题\n- 无'
 
 function gitResult(repositoryRoot, args, options = {}) {
   const result = spawnSync('git', args, {
@@ -605,11 +605,11 @@ test('Tag 技术文案不能为空', async (t) => {
 })
 
 test('用户文案缺失、为空、非文本或含技术痕迹时失败关闭', async (t) => {
-  // 技术词用例必须先把四个分类补齐：否则会先被分类闸门拦下，测不到词表。
-  const notesWithBody = (body, section = '缺陷修复') => {
+  // 技术词用例必须先把四个分类与角色标注补齐：否则会先被结构闸门拦下，测不到词表。
+  const notesWithBody = (text, section = '缺陷修复') => {
     const sections = { 功能新增: '- 无', 功能优化: '- 无', 缺陷修复: '- 无', 已知问题: '- 无' }
-    sections[section] = body
-    return Object.entries(sections).map(([title, content]) => `${title}\n${content}`).join('\n\n')
+    sections[section] = `- 【运营人员】${text}`
+    return `本版影响角色：运营人员\n\n${Object.entries(sections).map(([title, content]) => `${title}\n${content}`).join('\n\n')}`
   }
   const cases = [
     { name: 'missing file', notes: null, expected: /ENOENT/u },
@@ -620,13 +620,13 @@ test('用户文案缺失、为空、非文本或含技术痕迹时失败关闭',
       notes: '<!-- qianshu-release:{"schemaVersion":1} -->\n',
       expected: /ownership marker/u,
     },
-    { name: 'chinese jargon', notes: notesWithBody('- 修复了缓存导致的加载慢'), expected: /technical vocabulary: 缓存/u },
-    { name: 'ascii jargon', notes: notesWithBody('- 修复了 API 返回异常'), expected: /API/u },
-    { name: 'identifier', notes: notesWithBody('- 修复了 prepare() 的问题'), expected: /function call/u },
-    { name: 'file path', notes: notesWithBody('- 修复了 libs/utils 的问题'), expected: /file path/u },
-    { name: 'file name', notes: notesWithBody('- 修复了 types.gen.ts 的问题'), expected: /file name/u },
-    { name: 'constant', notes: notesWithBody('- 修复了 MEDIA_STORAGE_ENV 的问题'), expected: /constant name/u },
-    { name: 'commit hash', notes: notesWithBody('- 修复了 1b8e02ca 引入的问题'), expected: /commit hash/u },
+    { name: 'chinese jargon', notes: notesWithBody('修复了缓存导致的加载慢'), expected: /technical vocabulary: 缓存/u },
+    { name: 'ascii jargon', notes: notesWithBody('修复了 API 返回异常'), expected: /API/u },
+    { name: 'identifier', notes: notesWithBody('修复了 prepare() 的问题'), expected: /function call/u },
+    { name: 'file path', notes: notesWithBody('修复了 libs/utils 的问题'), expected: /file path/u },
+    { name: 'file name', notes: notesWithBody('修复了 types.gen.ts 的问题'), expected: /file name/u },
+    { name: 'constant', notes: notesWithBody('修复了 MEDIA_STORAGE_ENV 的问题'), expected: /constant name/u },
+    { name: 'commit hash', notes: notesWithBody('修复了 1b8e02ca 引入的问题'), expected: /commit hash/u },
   ]
   for (const fixtureCase of cases) {
     const fixture = await createValidReleaseFixture(t)
@@ -649,7 +649,10 @@ test('用户文案必须按四个分类组织：缺分类、重复分类、顺�
     ['缺陷修复', '- 无'],
     ['已知问题', '- 无'],
   ]
-  const render = sections => sections.map(([title, content]) => `${title}\n${content}`).join('\n\n')
+  const render = sections => [
+    '本版影响角色：无',
+    ...sections.map(([title, content]) => `${title}\n${content}`),
+  ].join('\n\n')
   const cases = [
     { name: 'missing section', notes: render(complete.slice(0, 3)), expected: /exactly one "已知问题" section, found 0/u },
     { name: 'missing first section', notes: render(complete.slice(1)), expected: /exactly one "功能新增" section, found 0/u },
@@ -659,6 +662,164 @@ test('用户文案必须按四个分类组织：缺分类、重复分类、顺�
     { name: 'only the last section empty', notes: render(complete.map(([title, content], index) => [title, index === 3 ? '   ' : content])), expected: /section "已知问题" must not be empty/u },
   ]
   for (const fixtureCase of cases) {
+    const fixture = await createValidReleaseFixture(t)
+    await rewriteReleaseNotes(fixture, fixtureCase.notes)
+    await assert.rejects(
+      verifyReleaseVersion(
+        verificationInput(fixture),
+        verificationDependencies(fixture),
+      ),
+      fixtureCase.expected,
+      fixtureCase.name,
+    )
+  }
+})
+
+test('用户文案必须按角色标注：头行、标签、并集与「无」的独占性', async (t) => {
+  const render = (header, sections) => [
+    `本版影响角色：${header}`,
+    ...sections.flatMap(([title, body]) => ['', title, body]),
+  ].join('\n')
+  const complete = [
+    ['功能新增', '- 【运营人员】新增了按柜号筛选订单的能力'],
+    ['功能优化', '- 无'],
+    ['缺陷修复', '- 【运营人员】修复了登录状态过期后部分页面出错的问题'],
+    ['已知问题', '- 无'],
+  ]
+  const withSection = (title, body) => complete.map(([sectionTitle, sectionBody]) => (
+    sectionTitle === title ? [sectionTitle, body] : [sectionTitle, sectionBody]
+  ))
+  const validCases = [
+    { name: 'single audience', notes: render('运营人员', complete) },
+    {
+      name: 'multiple audiences',
+      notes: render('运营人员、财务人员', withSection('功能优化', '- 【财务人员】付款列表打开更快')),
+    },
+    {
+      name: 'multi-role item',
+      notes: render(
+        '运营人员、财务人员、采运人员',
+        withSection(
+          '功能新增',
+          '- 【运营人员、财务人员、采运人员】新增了三个业务角色都能使用的入口',
+        ),
+      ),
+    },
+    {
+      name: 'admin workbench item',
+      notes: render(
+        '系统管理员',
+        complete.map(([title]) => [
+          title,
+          title === '功能优化'
+            ? '- 【系统管理员】用户管理新增了按角色筛选的能力'
+            : '- 无',
+        ]),
+      ),
+    },
+    {
+      name: 'no audience',
+      notes: render('无', complete.map(([title]) => [title, '- 无'])),
+    },
+  ]
+  for (const fixtureCase of validCases) {
+    const fixture = await createValidReleaseFixture(t)
+    await rewriteReleaseNotes(fixture, fixtureCase.notes)
+    await verifyReleaseVersion(
+      verificationInput(fixture),
+      verificationDependencies(fixture),
+    )
+  }
+
+  const invalidCases = [
+    {
+      name: 'missing header',
+      notes: complete.map(([title, body]) => `${title}\n${body}`).join('\n\n'),
+      expected: /exactly one "本版影响角色："/u,
+    },
+    {
+      name: 'header not first',
+      notes: `千树 DMS 1.2.3\n\n${render('运营人员', complete)}`,
+      expected: /must start with the audience header/u,
+    },
+    {
+      name: 'unknown header audience',
+      notes: render('包装人员', complete),
+      expected: /unknown audience: 包装人员/u,
+    },
+    {
+      name: 'duplicated header audience',
+      notes: render('运营人员、运营人员', complete),
+      expected: /must not repeat audience: 运营人员/u,
+    },
+    {
+      name: 'header audience order',
+      notes: render('财务人员、运营人员', complete),
+      expected: /must keep the documented audience order/u,
+    },
+    {
+      name: 'bullet without label',
+      notes: render('运营人员', withSection('功能新增', '- 新增了按柜号筛选订单的能力')),
+      expected: /must start with an audience label/u,
+    },
+    {
+      name: 'unknown bullet audience',
+      notes: render('运营人员', withSection('功能新增', '- 【包装人员】新增了按柜号筛选订单的能力')),
+      expected: /unknown audience: 包装人员/u,
+    },
+    {
+      name: 'bullet audience order',
+      notes: render(
+        '运营人员、财务人员',
+        withSection('功能新增', '- 【财务人员、运营人员】新增了按柜号筛选订单的能力'),
+      ),
+      expected: /must keep the documented audience order/u,
+    },
+    {
+      name: 'empty bullet body',
+      notes: render('运营人员', withSection('功能新增', '- 【运营人员】')),
+      expected: /must have content after the audience label/u,
+    },
+    {
+      name: 'bullet body is 无',
+      notes: render('运营人员', withSection('功能新增', '- 【运营人员】无')),
+      expected: /must not be only 无/u,
+    },
+    {
+      name: 'header does not cover bullets',
+      notes: render('运营人员、财务人员', complete),
+      expected: /must match the labeled items/u,
+    },
+    {
+      name: 'header covers unlabeled roles',
+      notes: render('无', complete),
+      expected: /must match the labeled items/u,
+    },
+    {
+      name: 'mix 无 with labeled item',
+      notes: render('运营人员', withSection('功能优化', '- 无\n- 【运营人员】付款列表打开更快')),
+      expected: /must not mix 无 with labeled items/u,
+    },
+    {
+      name: 'duplicated 无',
+      notes: render('无', withSection('功能优化', '- 无\n- 无')),
+      expected: /must contain exactly one 无/u,
+    },
+    {
+      name: 'wrapped continuation',
+      notes: render(
+        '运营人员',
+        withSection('功能新增', '- 【运营人员】新增了按柜号筛选订单的能力\n第二行没有标签'),
+      ),
+      expected: /must start with an audience label/u,
+    },
+    {
+      name: 'half-width header colon',
+      notes: `本版影响角色: 运营人员\n\n${complete.map(([title, body]) => `${title}\n${body}`).join('\n\n')}`,
+      expected: /exactly one "本版影响角色："/u,
+    },
+  ]
+  for (const fixtureCase of invalidCases) {
     const fixture = await createValidReleaseFixture(t)
     await rewriteReleaseNotes(fixture, fixtureCase.notes)
     await assert.rejects(
