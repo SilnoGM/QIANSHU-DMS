@@ -153,10 +153,15 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     customResolution = (await markResolver.read({ productMode: 'CUSTOM' })).resolutionToken!
     issuanceVoucherMediaAssetId = (await prisma.mediaAsset.create({
       data: {
-        mediaType: 'DOCUMENT',
+        mediaType: 'IMAGE',
         status: 'UPLOADING',
-        objectKey: `assets/purchase-service-e2e-${suffix.toLowerCase()}.pdf`,
-        originalFilename: 'issuance.pdf',
+        width: 1,
+        height: 1,
+        objectKey: `assets/purchase-service-e2e-${suffix.toLowerCase()}-issuance.png`,
+        originalFilename: 'issuance.png',
+        mimeType: 'image/png',
+        sizeBytes: 128n,
+        checksumSha256: 'e'.repeat(64),
         uploadExpiresAt: new Date('2099-01-01T00:00:00.000Z'),
         createdByUserId: actor.id,
       },
