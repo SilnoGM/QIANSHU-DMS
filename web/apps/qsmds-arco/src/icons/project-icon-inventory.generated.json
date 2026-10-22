@@ -1478,6 +1478,7 @@
       "apps/qsmds-arco/src/views/system/basic-data/numbering/index.vue",
       "apps/qsmds-arco/src/views/system/users/index.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/container-remark.vue",
+      "apps/qsmds-arco/src/views/workbenches/containers/import/shipment-source-summary.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-orders.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/records-modal.vue",
@@ -1519,6 +1520,7 @@
     "usages": [
       "apps/qsmds-arco/src/components/business/QsReconciliationLineSwitcher/index.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/container-remark.vue",
+      "apps/qsmds-arco/src/views/workbenches/containers/import/shipment-source-summary.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/records-modal.vue"
     ]
   },
@@ -1614,6 +1616,9 @@
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
       "apps/qsmds-arco/src/views/system/users/status-change-modal.vue",
       "apps/qsmds-arco/src/views/system/users/user-form-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/containers/import/shipment-match-drawer.vue",
+      "apps/qsmds-arco/src/views/workbenches/containers/shipment-candidate-card.vue",
+      "apps/qsmds-arco/src/views/workbenches/containers/shipment-picker.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue"
@@ -1634,6 +1639,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list-payment-action.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/packaging-history-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/workbenches/containers/import/shipment-match-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-form.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-voucher-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-form.vue",
@@ -2363,6 +2369,7 @@
       "apps/qsmds-arco/src/views/component_library/basic/components/QsToastShowcase.vue",
       "apps/qsmds-arco/src/views/component_library/business/components/GenericDrawerShowcase.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue",
+      "apps/qsmds-arco/src/views/operations/ocean-containers/ocean-container-line-drawer.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-mark-summary.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
@@ -3207,6 +3214,7 @@
       "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-list.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/containers/import/shipment-match-drawer.vue",
       "packages/components/src/pro/tree/index.vue"
     ]
   },
@@ -3563,6 +3571,7 @@
       "apps/qsmds-arco/src/views/system/users/index.vue",
       "apps/qsmds-arco/src/views/system/users/password-reset-modal.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/containers/import/shipment-match-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-page.vue",

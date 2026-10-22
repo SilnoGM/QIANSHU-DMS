@@ -216,7 +216,7 @@ onBeforeUnmount(() => {
           </div>
         </FaFixedBar>
       </template>
-      <ShipmentMatchDrawer v-model="drawerOpen" :row="selectedRow" :warehouse-value="preview.warehouseValue" :enabled="enabled" :disabled="locked" @select="state.select" />
+      <ShipmentMatchDrawer v-model="drawerOpen" :row="selectedRow" :warehouse-value="preview.warehouseValue" :batch-id="preview.containerBatchId" :enabled="enabled" :disabled="locked" @select="state.select" />
     </template>
     <QsGenericModal :model-value="leaveOpen" size="sm" :title="t('containerImport.leaveTitle')" :description="t('containerImport.leaveHint')" @update:model-value="!$event && finishLeave(false)">
       <template #footer>

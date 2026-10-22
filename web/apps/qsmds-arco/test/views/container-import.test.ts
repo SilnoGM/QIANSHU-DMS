@@ -5,7 +5,7 @@ import test from 'node:test'
 import { effectScope, nextTick, ref } from 'vue'
 import { useContainerImport } from '../../src/views/workbenches/containers/import/use-container-import'
 
-const candidate: ContainerImportCandidateDto = { id: 'shipment-1', shipmentNo: 'PKG/1', shippingMarkText: 'MARK/1', trackingNo: '001', warehouseValue: 'b5', goodsName: '机器', purchaseOrderNo: 'PO/1', salesOrderNo: 'SO/1', eligible: true, ineligibleReason: null }
+const candidate: ContainerImportCandidateDto = { id: 'shipment-1', shipmentNo: 'PKG/1', shippingMarkText: 'MARK/1', trackingNo: '001', warehouseValue: 'b5', goodsName: '机器', purchaseOrderNo: 'PO/1', salesOrderNo: 'SO/1', customerName: '王小明', purchaseType: 'SALES_LINKED', viewStatus: 'WAREHOUSE_RECEIVED', warehouseReceivedAt: '2026-10-02T00:00:00.000Z', containerBatch: null, matchFields: ['trackingNo'], eligible: true, ineligibleReason: null }
 function row(overrides: Partial<ContainerImportRowDto> = {}): ContainerImportRowDto {
   return { rowKey: 'row-1', sourceSheetName: 'Sheet1', sourceRowNumber: 3, containerBatchName: '0919柜', warehouseReceiptReference: '001', oceanShippingMarkText: 'L-001', goodsName: '机器', packageCount: 1, packageUnit: 'CTN', grossWeightKg: '10', lengthCm: '20', widthCm: '30', heightCm: '40', reportedVolumeCai: '1', volumeCai: '0.85', chargeableVolumeCai: 1, recipientName: null, recipientPhone: null, recipientAddress: null, codAmountTwd: null, remark: null, errors: [], warnings: [], candidates: [candidate], matchedShipmentId: candidate.id, matchStatus: 'MATCHED', matchReason: '物流单号精确匹配', ...overrides }
 }
