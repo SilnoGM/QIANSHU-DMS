@@ -19,6 +19,7 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useAppAuth } from '@/composables/app/auth'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { formatExchangeRate } from '@/utils/exchange-rate'
+import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
 import { calculateEstimatedCostCny } from '../invoice-cost.logic'
 import { buildInvoiceDocumentFilename, buildInvoiceDocumentItems, formatInvoiceDocumentFileSize } from '../invoice-document.logic'
 import { resolveInvoiceFailureKey } from '../invoice-failure.logic'
@@ -668,6 +669,7 @@ onMounted(load)
                 <div class="flex justify-center">
                   <FaImageUpload
                     v-model="images"
+                    :accept="IMAGE_ONLY_ACCEPT"
                     :max="1"
                     :width="144"
                     :height="104"

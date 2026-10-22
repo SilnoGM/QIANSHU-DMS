@@ -24,6 +24,11 @@ import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsRegionSelector from '@/components/business/QsRegionSelector/index.vue'
 import QsSalesOrderDesc from '@/components/business/QsSalesOrderDesc/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import {
+  SALES_ISSUANCE_VOUCHER_ACCEPT,
+  UPLOAD_POLICIES,
+  validateUploadFile,
+} from '@/utils/upload-policy'
 
 import { mapSalesOrderCreateFormToDesc } from './sales-order-create-view.logic'
 import {
@@ -604,6 +609,18 @@ async function uploadFiles(files: readonly File[]): Promise<void> {
     return
   }
   const file = files[0]!
+  const failure = validateUploadFile(
+    file,
+    UPLOAD_POLICIES.SALES_ISSUANCE_VOUCHER,
+  )
+  if (failure !== null) {
+    documentUploadError.value = failure === 'too-large'
+      ? '出单凭证不能超过 50 MiB'
+      : failure === 'empty'
+        ? '出单凭证文件为空'
+        : '仅支持 JPG/PNG/WebP 图片或 PDF/DOCX/XLSX 文档'
+    return
+  }
   documentAbortController?.abort()
   const controller = new AbortController()
   documentAbortController = controller
@@ -1372,7 +1389,7 @@ onBeforeUnmount(() => {
                     ref="fileInputRef"
                     data-testid="sales-order-issuance-voucher-input"
                     type="file"
-                    accept="image/*,.pdf,.doc,.docx"
+                    :accept="SALES_ISSUANCE_VOUCHER_ACCEPT"
                     class="sr-only"
                     :disabled="submitLocked || documentUploading"
                     @change="handleFileInput"

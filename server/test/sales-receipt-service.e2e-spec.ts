@@ -72,7 +72,7 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     await prisma.userRole.create({ data: { userId: fixture.userId, roleId: role.id } })
     await ensureReceiptNumberingRule(prisma, fixture.userId)
     const account = await app.get(FundAccountCommandService).createUserAccount(context(fixture.userId), { userId: fixture.userId, userShareRate: share })
-    const media = await prisma.mediaAsset.create({ data: { createdByUserId: fixture.userId, mediaType: 'DOCUMENT', status: 'UPLOADING', originalFilename: 'receipt.pdf', objectKey: `assets/${randomUUID()}.pdf`, mimeType: 'application/pdf', sizeBytes: 128n, checksumSha256: 'b'.repeat(64), uploadExpiresAt: new Date(Date.now() + 3600000) } })
+    const media = await prisma.mediaAsset.create({ data: { createdByUserId: fixture.userId, mediaType: 'IMAGE', status: 'UPLOADING', width: 1, height: 1, originalFilename: 'receipt.png', objectKey: `assets/${randomUUID()}.png`, mimeType: 'image/png', sizeBytes: 128n, checksumSha256: 'b'.repeat(64), uploadExpiresAt: new Date(Date.now() + 3600000) } })
     const root = mediaRoot
     await mkdir(join(root, 'assets'), { recursive: true, mode: 0o700 })
     await chmod(root, 0o700)
@@ -124,7 +124,7 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     expect(await prisma.fundPostingBatch.count({ where: { businessId: submitted.id, kind: 'BUSINESS' } })).toBe(1)
     // 同一订单同时保留四类记录，验证关系筛选发生在分页前，且四个视图不重复计数。
     async function newReceiptInput(amount: string): Promise<SalesReceiptRequestCreateDto> {
-      const media = await prisma.mediaAsset.create({ data: { createdByUserId: f.userId, mediaType: 'DOCUMENT', status: 'UPLOADING', originalFilename: 'receipt.pdf', objectKey: `assets/${randomUUID()}.pdf`, mimeType: 'application/pdf', sizeBytes: 128n, checksumSha256: 'b'.repeat(64), uploadExpiresAt: new Date(Date.now() + 3600000) } })
+      const media = await prisma.mediaAsset.create({ data: { createdByUserId: f.userId, mediaType: 'IMAGE', status: 'UPLOADING', width: 1, height: 1, originalFilename: 'receipt.png', objectKey: `assets/${randomUUID()}.png`, mimeType: 'image/png', sizeBytes: 128n, checksumSha256: 'b'.repeat(64), uploadExpiresAt: new Date(Date.now() + 3600000) } })
       await writeFile(join(mediaRoot, media.objectKey!), Buffer.alloc(128), { mode: 0o600 })
       await app.get(MediaContentDeliveryService).stat(media.objectKey!)
       return { ...f.input, amount, voucher: { mediaAssetId: media.id } }
@@ -189,6 +189,15 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     expect((await prisma.fundAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balance.toFixed(2)).toBe('0.00')
     expect(await prisma.fundPostingBatch.count({ where: { businessId: request.id } })).toBe(0)
   })
+  it('rejects a document voucher for a new receipt request', async () => {
+    const f = await fixture()
+    const documentVoucher = await prisma.mediaAsset.create({ data: { createdByUserId: f.userId, mediaType: 'DOCUMENT', status: 'UPLOADING', originalFilename: 'legacy.pdf', objectKey: `assets/${randomUUID()}.pdf`, mimeType: 'application/pdf', sizeBytes: 128n, checksumSha256: 'd'.repeat(64), uploadExpiresAt: new Date(Date.now() + 3600000) } })
+    await expect(service.submit(context(f.userId), f.salesOrderId, {
+      ...f.input,
+      voucher: { mediaAssetId: documentVoucher.id },
+    }, randomUUID())).rejects.toMatchObject({ code: 'SALES_ORDER_DOCUMENT_UNAVAILABLE' })
+    expect(await prisma.salesReceiptRequest.count({ where: { voucherMediaAssetId: documentVoucher.id } })).toBe(0)
+  })
   it('rejects stale rate preview and legacy direct endpoint service', async () => {
     const f = await fixture()
     const request = await service.submit(context(f.userId), f.salesOrderId, f.input, randomUUID())
@@ -199,7 +208,7 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
   })
   it('serializes competing submissions and approve versus reject without duplicate postings', async () => {
     const f = await fixture()
-    const secondVoucher = await prisma.mediaAsset.create({ data: { createdByUserId: f.userId, mediaType: 'DOCUMENT', status: 'UPLOADING', originalFilename: 'second.pdf', objectKey: `assets/${randomUUID()}.pdf`, mimeType: 'application/pdf', sizeBytes: 128n, checksumSha256: 'c'.repeat(64), uploadExpiresAt: new Date(Date.now() + 3600000) } })
+    const secondVoucher = await prisma.mediaAsset.create({ data: { createdByUserId: f.userId, mediaType: 'IMAGE', status: 'UPLOADING', width: 1, height: 1, originalFilename: 'second.png', objectKey: `assets/${randomUUID()}.png`, mimeType: 'image/png', sizeBytes: 128n, checksumSha256: 'c'.repeat(64), uploadExpiresAt: new Date(Date.now() + 3600000) } })
     await writeFile(join(mediaRoot, secondVoucher.objectKey!), Buffer.alloc(128), { mode: 0o600 })
     const inputs = [{ ...f.input, amount: '600' }, { ...f.input, amount: '600', voucher: { mediaAssetId: secondVoucher.id } }]
     const outcomes = await Promise.allSettled(inputs.map(input => service.submit(context(f.userId), f.salesOrderId, input, randomUUID())))

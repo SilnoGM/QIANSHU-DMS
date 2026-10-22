@@ -9,6 +9,7 @@ import { validatePaymentRecipientAccounts } from '@/components/business/QsPaymen
 import RecipientImage from '@/components/business/QsPaymentRecipientEditor/RecipientImage.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
 import { PACKAGING_DEFAULT_VENDOR, PACKAGING_IMAGE_LIMIT, PACKAGING_RECIPIENT_METHODS, validatePackagingCost } from './packaging-cost.logic'
 import { createPackagingImagePreview } from './packaging-image-preview'
 import { usePackagingVendorProfile } from './use-packaging-vendor-profile'
@@ -278,6 +279,7 @@ onBeforeUnmount(releasePreviews)
             <FaFormItem v-for="group in imageGroups" :key="group" :name="group" :label="t(`warehousePackagingCost.${group}`)" :rules="rules[group]" :auto-bind="false" required>
               <FaImageUpload
                 v-model="imageUrls[group]"
+                :accept="IMAGE_ONLY_ACCEPT"
                 :disabled="submitting || draftLocked"
                 :max="PACKAGING_IMAGE_LIMIT"
                 :width="88"

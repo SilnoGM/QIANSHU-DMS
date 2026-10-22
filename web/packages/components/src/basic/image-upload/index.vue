@@ -29,6 +29,7 @@ const props = withDefaults(defineProps<{
   afterUpload?: (response: any) => string | Promise<string>
   beforeUpload?: (file: File) => boolean | Promise<boolean>
   httpRequest?: (options: UploadRequestOptions) => any | Promise<any>
+  accept?: string
   multiple?: boolean
   max?: number
   width?: number
@@ -41,6 +42,7 @@ const props = withDefaults(defineProps<{
   headers: () => ({}),
   data: () => ({}),
   name: 'file',
+  accept: 'image/*',
   multiple: false,
   max: 1,
   width: 100,
@@ -339,7 +341,7 @@ function onBeforeLeave(el: Element) {
         <input
           ref="fileInputRef"
           type="file"
-          accept="image/*"
+          :accept="props.accept"
           :multiple="props.directory || props.multiple"
           :webkitdirectory="props.directory || undefined"
           :directory="props.directory || undefined"

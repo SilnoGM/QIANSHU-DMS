@@ -3,6 +3,11 @@ import type { PurchaseOrderDetailDto, PurchaseOrderDocumentAttachRequestDto, Pur
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import {
+  IMAGE_ONLY_ACCEPT,
+  UPLOAD_POLICIES,
+  validateUploadFile,
+} from '@/utils/upload-policy'
 import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError } from './purchase-order-list.logic'
 
 const props = defineProps<{ detail: PurchaseOrderDetailDto, modelValue: boolean }>()
@@ -90,18 +95,26 @@ async function onFileChange(event: Event) {
   if (!file) {
     return
   }
+  const failure = validateUploadFile(file, UPLOAD_POLICIES.IMAGE_ONLY)
+  if (failure !== null) {
+    error.value = failure === 'too-large'
+      ? '凭证图片不能超过 10 MiB'
+      : failure === 'empty'
+        ? '凭证图片为空'
+        : '仅支持 JPG/PNG/WebP 图片'
+    return
+  }
   await run(async (signal, orderId) => {
     uploading.value = true
     uploaded.value = null
     clearPreview()
     const epoch = account.authEpoch
-    const mediaType = file.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT'
-    const response = await purchaseOrdersApi.uploadTemporaryDocument(file, mediaType, signal)
+    const response = await purchaseOrdersApi.uploadTemporaryDocument(file, signal)
     if (signal.aborted || !visible.value || props.detail.id !== orderId || account.authEpoch !== epoch) {
       return
     }
     uploaded.value = response.data
-    previewUrl.value = response.data.mediaType === 'IMAGE' ? URL.createObjectURL(file) : null
+    previewUrl.value = URL.createObjectURL(file)
   })
 }
 
@@ -145,7 +158,7 @@ onBeforeUnmount(reset)
       <div class="space-y-2">
         <label class="qs-type-body-medium flex flex-col gap-2">
           {{ t('purchaseOrderDrawer.documentFile') }}
-          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" :disabled="busy" class="text-sm p-3 border border-border rounded-lg w-full" @change="onFileChange">
+          <input type="file" :accept="IMAGE_ONLY_ACCEPT" :disabled="busy" class="text-sm p-3 border border-border rounded-lg w-full" @change="onFileChange">
         </label>
         <p v-if="uploading" role="status" class="qs-type-meta">
           {{ t('purchaseOrderDrawer.uploading') }}

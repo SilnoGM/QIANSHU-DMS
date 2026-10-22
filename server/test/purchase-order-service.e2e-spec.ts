@@ -164,10 +164,15 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     })).id
     paymentVoucherMediaAssetId = (await prisma.mediaAsset.create({
       data: {
-        mediaType: 'DOCUMENT',
+        mediaType: 'IMAGE',
         status: 'UPLOADING',
-        objectKey: `assets/purchase-service-e2e-${suffix.toLowerCase()}-payment.pdf`,
-        originalFilename: 'payment.pdf',
+        width: 1,
+        height: 1,
+        objectKey: `assets/purchase-service-e2e-${suffix.toLowerCase()}-payment.png`,
+        originalFilename: 'payment.png',
+        mimeType: 'image/png',
+        sizeBytes: 128n,
+        checksumSha256: 'e'.repeat(64),
         uploadExpiresAt: new Date('2099-01-01T00:00:00.000Z'),
         createdByUserId: actor.id,
       },

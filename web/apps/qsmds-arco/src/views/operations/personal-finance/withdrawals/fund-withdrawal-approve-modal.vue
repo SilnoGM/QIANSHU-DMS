@@ -7,6 +7,7 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
 
 defineOptions({ name: 'FundWithdrawalApproveModal' })
 
@@ -215,7 +216,7 @@ function close(): void {
           ref="fileInput"
           class="sr-only"
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          :accept="IMAGE_ONLY_ACCEPT"
           @change="handleFile"
         >
         <div v-if="previewUrl === null" class="p-6 text-center border border-border rounded-xl border-dashed">

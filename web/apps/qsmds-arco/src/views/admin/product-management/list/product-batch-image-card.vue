@@ -3,6 +3,7 @@ import type { ProductBatchImageCardState } from './product-batch-images.logic'
 
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 
+import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
 import { MAX_PRODUCT_IMAGES } from '../media/product-media-common.logic'
 import { formatProductMediaBytes } from '../media/product-media-view.logic'
 import {
@@ -195,7 +196,7 @@ function handlePrimaryChange(value: unknown): void {
         :id="inputId"
         ref="inputRef"
         type="file"
-        accept=".jpg,.jpeg,.png,.webp"
+        :accept="IMAGE_ONLY_ACCEPT"
         class="sr-only"
         :disabled="!canChooseFile"
         :aria-describedby="hintId"

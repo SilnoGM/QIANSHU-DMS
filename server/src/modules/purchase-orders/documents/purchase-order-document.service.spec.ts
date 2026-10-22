@@ -66,9 +66,9 @@ function setup() {
     activate: jest.fn<Promise<void>, [unknown, string]>().mockResolvedValue(undefined),
     prepare: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({
       id: MEDIA_ID,
-      mediaType: 'DOCUMENT',
+      mediaType: 'IMAGE',
       trustedMetadata: {
-        mimeType: 'application/pdf',
+        mimeType: 'image/png',
         sizeBytes: 100n,
       },
     }),
@@ -91,9 +91,9 @@ function setup() {
   const multipart = {
     parse: jest.fn<Promise<unknown>, [unknown, (input: never) => Promise<unknown>]>()
       .mockImplementation(async (_request, handler) => handler({
-        declaredMimeType: 'application/pdf',
-        mediaType: 'DOCUMENT',
-        originalFilename: 'proof.pdf',
+        declaredMimeType: 'image/png',
+        mediaType: 'IMAGE',
+        originalFilename: 'voucher.png',
         stream: new PassThrough(),
       } as never)),
   }
@@ -123,7 +123,7 @@ describe('PurchaseOrderDocumentService', () => {
     expect(fixture.transaction.mediaAsset.findFirst).toHaveBeenCalledWith({
       where: {
         id: MEDIA_ID, createdByUserId: ACTOR_ID, status: 'UPLOADING',
-        mediaType: { in: ['IMAGE', 'DOCUMENT'] }, deletedAt: null, objectKey: { not: null },
+        mediaType: 'IMAGE', deletedAt: null, objectKey: { not: null },
       },
       select: { id: true },
     })
@@ -158,21 +158,35 @@ describe('PurchaseOrderDocumentService', () => {
     expect(fixture.transaction.purchaseOrderDocument.create).not.toHaveBeenCalled()
   })
 
-  it('prepares an unassociated optional payment voucher', async () => {
+  it('prepares an image voucher for the generic upload entry', async () => {
     const fixture = setup()
     await expect(fixture.service.uploadTemporary(context, {} as never)).resolves.toEqual({
       mediaAssetId: MEDIA_ID,
-      mediaType: 'DOCUMENT',
-      mimeType: 'application/pdf',
+      mediaType: 'IMAGE',
+      mimeType: 'image/png',
       sizeBytes: '100',
-      originalFilename: 'proof.pdf',
+      originalFilename: 'voucher.png',
     })
     expect(fixture.media.prepare).toHaveBeenCalledWith(
       expect.objectContaining({
         actorUserId: ACTOR_ID,
-        allowedTypes: ['IMAGE', 'DOCUMENT'],
+        allowedTypes: ['IMAGE'],
       }),
     )
+  })
+
+  it('rejects document uploads before preparing media', async () => {
+    const fixture = setup()
+    fixture.multipart.parse.mockImplementation(async (_request, handler) => handler({
+      declaredMimeType: 'application/pdf',
+      mediaType: 'DOCUMENT',
+      originalFilename: 'voucher.pdf',
+      stream: new PassThrough(),
+    } as never))
+    await expect(fixture.service.uploadTemporary(context, {} as never)).rejects.toMatchObject({
+      code: 'PURCHASE_ORDER_DOCUMENT_CONTENT_UNSUPPORTED',
+    })
+    expect(fixture.media.prepare).not.toHaveBeenCalled()
   })
 
   it('retains a voucher linked to an actual payment', async () => {

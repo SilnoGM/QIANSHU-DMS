@@ -19,6 +19,7 @@ const props = withDefaults(defineProps<{
   afterUpload?: (response: any) => string | Promise<string>
   beforeUpload?: (file: File) => boolean | Promise<boolean>
   httpRequest?: (options: FileUploadRequestOptions) => any | Promise<any>
+  accept?: string
   multiple?: boolean
   max?: number
   directory?: boolean
@@ -30,6 +31,7 @@ const props = withDefaults(defineProps<{
   headers: () => ({}),
   data: () => ({}),
   name: 'file',
+  accept: '',
   multiple: false,
   max: 0,
   directory: false,
@@ -271,6 +273,7 @@ function removeFile(idx: number) {
       <input
         ref="fileInputRef"
         type="file"
+        :accept="props.accept || undefined"
         :multiple="props.directory || props.multiple"
         :webkitdirectory="props.directory || undefined"
         :directory="props.directory || undefined"

@@ -31,6 +31,11 @@ import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
 import { mediaThumbnailUrl } from '@/utils/media-variant'
+import {
+  IMAGE_ONLY_ACCEPT,
+  UPLOAD_POLICIES,
+  validateUploadFile,
+} from '@/utils/upload-policy'
 import OrderReceiptRequests from '../../workbenches/sales-receipts/order-receipt-requests.vue'
 import { findReceiptSourcePage } from '../../workbenches/sales-receipts/order-receipt-summary.logic'
 import { freezeReceiptSubmission, isReceiptResultUnknown } from '../../workbenches/sales-receipts/submission.logic'
@@ -385,6 +390,15 @@ async function uploadActionVoucher(
   file: File,
   target: 'payment' | 'receipt',
 ): Promise<void> {
+  const failure = validateUploadFile(file, UPLOAD_POLICIES.IMAGE_ONLY)
+  if (failure !== null) {
+    actionError.value = failure === 'too-large'
+      ? '凭证图片不能超过 10 MiB'
+      : failure === 'empty'
+        ? '凭证图片为空'
+        : '仅支持 JPG/PNG/WebP 图片'
+    return
+  }
   actionAbortController?.abort()
   const controller = new AbortController()
   actionAbortController = controller
@@ -393,10 +407,10 @@ async function uploadActionVoucher(
   try {
     const response = await salesOrdersApi.uploadTemporaryDocument(
       file,
-      file.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT',
+      'IMAGE',
       controller.signal,
-      // 收款凭证落到资金凭证池；签收单不声明用途，沿用普通订单凭证池。
-      target === 'payment' ? 'PAYMENT_VOUCHER' : undefined,
+      // 收款凭证落资金凭证池；签收单落普通销售凭证池，两者都只允许图片。
+      target === 'payment' ? 'PAYMENT_VOUCHER' : 'DELIVERY_RECEIPT',
     )
     if (controller.signal.aborted) {
       return
@@ -542,14 +556,23 @@ function resubmitReceipt(request: SalesReceiptRequestDetailDto): void {
   paymentMethod.value = request.paymentMethod
   paymentRemark.value = request.remark ?? ''
   resubmittedFromId.value = request.id
-  // 重提复用服务端冻结凭证；不得撤销原申请的凭证引用。
-  paymentVoucher.value = {
-    mediaAssetId: request.voucher.mediaAssetId,
-    originalFilename: request.voucher.title,
-    mediaType: 'DOCUMENT',
-    mimeType: '',
-    sizeBytes: '',
-    previewUrl: null,
+  // 新提交只允许图片；历史 DOCUMENT 凭证仅保留只读展示，重提时必须重新上传图片。
+  if (request.voucher.mediaType !== 'IMAGE') {
+    paymentVoucher.value = null
+    paymentErrors.value = {
+      voucher: '原收款凭证为文档，请重新上传 JPG/PNG/WebP 图片后提交',
+    }
+  }
+  else {
+    // 重提复用服务端冻结的图片凭证；不得撤销原申请的凭证引用。
+    paymentVoucher.value = {
+      mediaAssetId: request.voucher.mediaAssetId,
+      originalFilename: request.voucher.title,
+      mediaType: 'IMAGE',
+      mimeType: request.voucher.mimeType ?? '',
+      sizeBytes: '',
+      previewUrl: null,
+    }
   }
   modalState.value = { origin: 'records', view: 'create-payment' }
 }
@@ -1337,12 +1360,12 @@ onBeforeUnmount(() => {
           收款凭证 <span class="text-destructive" aria-hidden="true">*</span>
         </h3>
         <p class="qs-type-meta m-0 mt-1">
-          每笔收款必须上传且只能上传一份凭证；系统提交时自动按“客户名-凭证类型-时间戳”命名。
+          每笔收款必须上传且只能上传一份凭证，仅支持 JPG/PNG/WebP 图片；系统提交时自动按“客户名-凭证类型-时间戳”命名。
         </p>
         <input
           ref="paymentFileInputRef"
           type="file"
-          accept="image/*,.pdf,.doc,.docx"
+          :accept="IMAGE_ONLY_ACCEPT"
           class="sr-only"
           :disabled="paymentLocked"
           @change="handlePaymentFileInput"
@@ -1397,7 +1420,7 @@ onBeforeUnmount(() => {
         role="alert"
       />
       <p class="text-sm text-muted-foreground m-0">
-        只需上传一份签收单。提交后作为订单级凭证保存，并自动将订单进度更新为已签收，同时签收该订单下全部货件。若仍有货件未装柜或待审核，提交会被阻断。
+        只需上传一份签收单，仅支持 JPG/PNG/WebP 图片。提交后作为订单级凭证保存，并自动将订单进度更新为已签收，同时签收该订单下全部货件。若仍有货件未装柜或待审核，提交会被阻断。
       </p>
       <FaForm :model="{ deliveryReceiptRemark }" :disabled="actionLocked" class="mt-4">
         <FaFormItem name="deliveryReceiptRemark" label="备注（选填）">
@@ -1418,7 +1441,7 @@ onBeforeUnmount(() => {
         ref="receiptFileInputRef"
         data-testid="sales-order-delivery-receipt-input"
         type="file"
-        accept="image/*,.pdf,.doc,.docx"
+        :accept="IMAGE_ONLY_ACCEPT"
         class="sr-only"
         :disabled="actionLocked"
         @change="handleReceiptFileInput"

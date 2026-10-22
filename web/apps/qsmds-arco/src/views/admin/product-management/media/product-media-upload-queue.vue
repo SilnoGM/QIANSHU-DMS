@@ -3,6 +3,7 @@ import type { FileItem } from '@fantastic-admin/components'
 import type { ProductMediaUploadQueueItem } from './product-media-upload.logic'
 import type { ProductMediaSelectionFeedback } from './product-media-view.logic'
 
+import { PRODUCT_MEDIA_ACCEPT } from '@/utils/upload-policy'
 import {
   getProductMediaFilenameParts,
   validateProductMediaFilenameStem,
@@ -189,7 +190,7 @@ defineExpose({ focusFirstError, focusUpload })
           id="product-media-upload-input"
           ref="inputRef"
           type="file"
-          accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.m4v,.webm"
+          :accept="PRODUCT_MEDIA_ACCEPT"
           multiple
           class="sr-only"
           :disabled="locked"
@@ -208,6 +209,7 @@ defineExpose({ focusFirstError, focusUpload })
 
       <FaFileUpload
         v-model="uploadPrimitiveItems"
+        :accept="PRODUCT_MEDIA_ACCEPT"
         :disabled="locked"
         :before-upload="interceptPrimitiveFile"
         :max="25"

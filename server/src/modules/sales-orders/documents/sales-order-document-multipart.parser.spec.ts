@@ -53,10 +53,13 @@ describe('SalesOrderDocumentMultipartParser', () => {
     })
   })
 
-  it('carries the declared payment-voucher purpose through to the handler', async () => {
-    await expect(parse(fileForm({ extraFields: { purpose: 'PAYMENT_VOUCHER' } })))
-      .resolves.toMatchObject({ purpose: 'PAYMENT_VOUCHER' })
-  })
+  it.each(['PAYMENT_VOUCHER', 'DELIVERY_RECEIPT'] as const)(
+    'carries the declared %s purpose through to the handler',
+    async purpose => {
+      await expect(parse(fileForm({ extraFields: { purpose } })))
+        .resolves.toMatchObject({ purpose })
+    },
+  )
 
   it.each([
     ['an unsupported purpose', { extraFields: { purpose: 'RECEIPT' } }],

@@ -89190,7 +89190,8 @@
           "purpose": {
             "type": "string",
             "enum": [
-              "PAYMENT_VOUCHER"
+              "PAYMENT_VOUCHER",
+              "DELIVERY_RECEIPT"
             ]
           },
           "file": {
@@ -90170,7 +90171,12 @@
         "type": "object",
         "properties": {
           "mediaType": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "IMAGE",
+              "VIDEO",
+              "DOCUMENT"
+            ]
           },
           "mimeType": {
             "type": "string",
@@ -92470,8 +92476,7 @@
           "mediaType": {
             "type": "string",
             "enum": [
-              "IMAGE",
-              "DOCUMENT"
+              "IMAGE"
             ]
           },
           "file": {
@@ -92494,8 +92499,7 @@
           "mediaType": {
             "type": "string",
             "enum": [
-              "IMAGE",
-              "DOCUMENT"
+              "IMAGE"
             ]
           },
           "mimeType": {

@@ -119,10 +119,10 @@ export function createSalesOrdersApi(client: AxiosInstance) {
       mediaType: 'IMAGE' | 'DOCUMENT',
       signal: AbortSignal,
       /**
-       * 收款凭证必须声明用途：它与出单凭证共用本入口，而对象键在上传瞬间物化且不可改写。
-       * 缺省＝出单凭证 / 签收单。
+       * 收款凭证与签收单必须声明用途：它们与出单凭证共用本入口，
+       * 而对象键在上传瞬间物化且不可改写。缺省＝出单凭证。
        */
-      purpose?: 'PAYMENT_VOUCHER',
+      purpose?: 'PAYMENT_VOUCHER' | 'DELIVERY_RECEIPT',
     ) => {
       const body = new FormData()
       // Server 的流式 parser 要求 mediaType field 位于单个 file part 之前。

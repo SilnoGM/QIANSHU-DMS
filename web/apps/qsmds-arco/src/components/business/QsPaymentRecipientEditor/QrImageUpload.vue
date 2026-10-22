@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import api from '@/api/modules/payment-recipients'
+import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
 import { paymentRecipientErrorMessage, validateRecipientImage } from './logic'
 import RecipientImage from './RecipientImage.vue'
 
@@ -77,7 +78,7 @@ onBeforeUnmount(() => {
     <div v-if="mediaAssetId && compact" class="flex flex-wrap gap-3 items-center">
       <RecipientImage :media-asset-id="mediaAssetId" thumbnail :thumbnail-size="96" />
       <div class="flex flex-col gap-2 items-start">
-        <FaImageUpload v-model="images" :disabled="disabled || busy || !uploadAllowed" :max="1" :width="120" :height="32" :before-upload="beforeUpload" :http-request="upload">
+        <FaImageUpload v-model="images" :accept="IMAGE_ONLY_ACCEPT" :disabled="disabled || busy || !uploadAllowed" :max="1" :width="120" :height="32" :before-upload="beforeUpload" :http-request="upload">
           <span class="text-sm px-3 border border-border rounded-md flex gap-2 size-full items-center justify-center">
             <FaIcon v-if="busy" name="i-lucide:loader-circle" class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
             {{ t(busy ? 'paymentRecipient.uploading' : 'paymentRecipient.replaceQr') }}
@@ -94,7 +95,7 @@ onBeforeUnmount(() => {
         {{ t('paymentRecipient.replaceQr') }}
       </FaButton>
     </template>
-    <FaImageUpload v-else v-model="images" :disabled="disabled || busy || !uploadAllowed" :max="1" :width="compact ? 96 : 112" :height="compact ? 96 : 112" :before-upload="beforeUpload" :http-request="upload">
+    <FaImageUpload v-else v-model="images" :accept="IMAGE_ONLY_ACCEPT" :disabled="disabled || busy || !uploadAllowed" :max="1" :width="compact ? 96 : 112" :height="compact ? 96 : 112" :before-upload="beforeUpload" :http-request="upload">
       <span class="text-sm text-muted-foreground border-2 border-border rounded-lg border-dashed flex flex-col gap-2 size-full items-center justify-center">
         <FaIcon :name="busy ? 'i-lucide:loader-circle' : 'i-lucide:image-plus'" :class="{ 'animate-spin': busy }" class="size-6" aria-hidden="true" />
         {{ t(busy ? 'paymentRecipient.uploading' : 'paymentRecipient.uploadQr') }}

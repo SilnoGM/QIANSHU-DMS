@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
+import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
 import { usePurchasePaymentVoucher } from './use-purchase-payment-voucher'
 
 const props = defineProps<{ modelValue: string | null, payableId: string, enabled: boolean, disabled: boolean }>()
@@ -40,7 +41,7 @@ onBeforeUnmount(() => emit('busyChange', false))
           </p>
         </div>
       </div>
-      <FaImageUpload v-else v-model="images" :max="1" :width="192" :height="144" :disabled="disabled || uploading || !enabled" :http-request="requestUpload" :aria-label="t('purchasePayment.uploadVoucher')">
+      <FaImageUpload v-else v-model="images" :accept="IMAGE_ONLY_ACCEPT" :max="1" :width="192" :height="144" :disabled="disabled || uploading || !enabled" :http-request="requestUpload" :aria-label="t('purchasePayment.uploadVoucher')">
         <span class="text-muted-foreground border border-border rounded-lg border-dashed flex flex-col gap-2 size-full items-center justify-center">
           <FaIcon :name="uploading ? 'i-lucide:loader-circle' : 'i-lucide:image-plus'" class="size-7" :class="{ 'animate-spin': uploading }" aria-hidden="true" />
           <span class="qs-type-meta">{{ t(uploading ? 'purchasePayment.uploading' : 'purchasePayment.uploadVoucher') }}</span>

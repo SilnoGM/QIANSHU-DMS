@@ -9,11 +9,15 @@ export class SalesOrderDocumentUploadRequestDto {
   readonly mediaType!: Extract<MediaType, 'IMAGE' | 'DOCUMENT'>
 
   /**
-   * 可选的凭证用途。只有收款凭证需要显式声明：它与出单凭证共用本入口，而对象键由本入口在
-   * 上传瞬间物化且不可改写。缺省＝出单凭证 / 签收单。
+   * 可选的凭证用途。收款凭证与签收单必须显式声明，才能在上传瞬间收紧为图片：
+   * 它们与出单凭证共用本入口，而对象键一旦物化不可改写。缺省＝出单凭证。
    */
-  @ApiProperty({ type: 'string', enum: ['PAYMENT_VOUCHER'], required: false })
-  readonly purpose?: 'PAYMENT_VOUCHER'
+  @ApiProperty({
+    type: 'string',
+    enum: ['PAYMENT_VOUCHER', 'DELIVERY_RECEIPT'],
+    required: false,
+  })
+  readonly purpose?: 'PAYMENT_VOUCHER' | 'DELIVERY_RECEIPT'
 
   @ApiProperty({ type: 'string', format: 'binary' })
   readonly file!: string

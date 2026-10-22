@@ -175,12 +175,23 @@ export class SalesOrderDocumentService {
     requireContext(context)
     return this.multipart.parse(request, async input => {
       try {
+        // 收款凭证与签收单只允许图片；缺省用途是出单凭证，仍沿用图片或文档。
+        if (input.purpose !== null && input.mediaType !== 'IMAGE') {
+          return salesOrderRuleFailure(
+            'SALES_ORDER_DOCUMENT_CONTENT_UNSUPPORTED',
+            input.purpose === 'PAYMENT_VOUCHER'
+              ? '收款凭证仅支持图片（JPG/PNG/WebP）'
+              : '签收单仅支持图片（JPG/PNG/WebP）',
+          )
+        }
         const prepared = await this.mediaAsset.prepare({
           actorUserId: context.actorUserId,
-          allowedTypes: ['IMAGE', 'DOCUMENT'],
+          allowedTypes: input.purpose === null
+            ? ['IMAGE', 'DOCUMENT']
+            : ['IMAGE'],
           declaredMimeType: input.declaredMimeType,
           originalFilename: input.originalFilename,
-          // 共用上传入口：客户端声明收款凭证用途时落 voucher 池，缺省是普通订单凭证（出单凭证 / 签收单）。
+          // 共用上传入口：收款凭证落 voucher 池，其余凭证落 sales 池。
           // 用途只影响对象键布局，不影响权限与敏感级——那些由服务端按业务主体独立校验。
           pool: input.purpose === 'PAYMENT_VOUCHER' ? 'voucher' : 'sales',
           requestedType: input.mediaType,
@@ -276,7 +287,7 @@ export class SalesOrderDocumentService {
             id: mediaAssetId,
             createdByUserId: context.actorUserId,
             status: 'UPLOADING',
-            mediaType: { in: ['IMAGE', 'DOCUMENT'] },
+            mediaType: 'IMAGE',
             deletedAt: null,
             objectKey: { not: null },
           },
@@ -285,7 +296,7 @@ export class SalesOrderDocumentService {
         if (asset === null) {
           return salesOrderRuleFailure(
             'SALES_ORDER_DOCUMENT_UNAVAILABLE',
-            '所选签收单当前不可用',
+            '所选签收单不可用；签收单仅支持图片（JPG/PNG/WebP）',
           )
         }
         await this.mediaAsset.activate(transaction, mediaAssetId)

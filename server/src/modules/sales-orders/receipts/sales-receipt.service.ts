@@ -175,8 +175,9 @@ export class SalesReceiptService {
           reuse = source.voucherMediaAssetId === normalized.voucherMediaAssetId
         }
         await tx.$queryRaw(Prisma.sql`SELECT id FROM media_assets WHERE id = ${normalized.voucherMediaAssetId}::uuid FOR UPDATE`)
-        const asset = await tx.mediaAsset.findFirst({ where: { id: normalized.voucherMediaAssetId, status: reuse ? 'READY' : 'UPLOADING', ...(reuse ? {} : { createdByUserId: context.actorUserId }), mediaType: { in: ['IMAGE', 'DOCUMENT'] }, deletedAt: null, objectKey: { not: null } } })
-        if (!asset) receiptFailure('SALES_ORDER_DOCUMENT_UNAVAILABLE', '所选收款凭证当前不可用')
+        // 新提交与重提都只接受图片；历史 DOCUMENT 申请仍可在审批侧读取，但不能再作为新申请凭证。
+        const asset = await tx.mediaAsset.findFirst({ where: { id: normalized.voucherMediaAssetId, status: reuse ? 'READY' : 'UPLOADING', ...(reuse ? {} : { createdByUserId: context.actorUserId }), mediaType: 'IMAGE', deletedAt: null, objectKey: { not: null } } })
+        if (!asset) receiptFailure('SALES_ORDER_DOCUMENT_UNAVAILABLE', '所选收款凭证不可用；收款凭证仅支持图片（JPG/PNG/WebP）')
         if (!reuse && await tx.salesReceiptRequest.count({ where: { voucherMediaAssetId: asset.id } }) > 0) receiptFailure('SALES_ORDER_DOCUMENT_UNAVAILABLE', '收款凭证已关联其他申请')
         await this.verifyVoucher(asset.objectKey!)
         await this.media.activate(tx, asset.id)
@@ -236,6 +237,7 @@ export class SalesReceiptService {
         const rate = await this.rate(tx, row.currencyCode)
         if (rate.id !== input.expectedContext.exchangeRateId || rate.version !== input.expectedContext.exchangeRateVersion) receiptFailure('SALES_RECEIPT_CONTEXT_CHANGED', '当前汇率已变化，请重新核对', HttpStatus.CONFLICT)
         await tx.$queryRaw(Prisma.sql`SELECT id FROM media_assets WHERE id = ${row.voucherMediaAssetId}::uuid FOR SHARE`)
+        // 不改媒体类型过滤：改动前已提交的历史 DOCUMENT 收款申请必须仍可审批，避免在途申请卡死。
         const asset = await tx.mediaAsset.findFirst({ where: { id: row.voucherMediaAssetId, status: 'READY', deletedAt: null, objectKey: { not: null } } })
         if (!asset) receiptFailure('SALES_ORDER_DOCUMENT_UNAVAILABLE', '收款凭证当前不可用')
         await this.verifyVoucher(asset.objectKey!)

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
+import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
 
 const props = defineProps<{ modelValue: File | null, disabled: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [file: File | null] }>()
@@ -64,7 +65,7 @@ onBeforeUnmount(clearPreview)
           </p>
         </div>
       </div>
-      <FaImageUpload v-else v-model="images" :max="1" :width="144" :height="104" :disabled="disabled" :http-request="select" :aria-label="t('packagingPayment.voucher.uploadVoucher')" class="max-w-full">
+      <FaImageUpload v-else v-model="images" :accept="IMAGE_ONLY_ACCEPT" :max="1" :width="144" :height="104" :disabled="disabled" :http-request="select" :aria-label="t('packagingPayment.voucher.uploadVoucher')" class="max-w-full">
         <span class="text-muted-foreground border border-border rounded-lg border-dashed flex flex-col gap-2 size-full items-center justify-center">
           <FaIcon name="i-lucide:image-plus" class="size-6" aria-hidden="true" />
           <span class="qs-type-meta">{{ t('packagingPayment.voucher.uploadVoucher') }}</span>
