@@ -446,6 +446,7 @@ const releaseNotesSections = Object.freeze(['功能新增', '功能优化', '缺
 
 /**
  * 角色标签表示该角色能打开相关界面并使用该能力（含查看、筛选、导出），不是权限承诺。
+ * 系统管理员当前持有全部权限，业务工作台的功能不逐条标注它；仅管理员工作台改动才使用该标签。
  * 头行声明的集合必须与所有条目标签的并集一致，防止漏标、虚标与头行失真。
  */
 const releaseNotesAudiences = Object.freeze([
