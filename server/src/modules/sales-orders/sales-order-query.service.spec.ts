@@ -115,7 +115,7 @@ function createListFixture() {
     }],
   }
   const salesOrder = {
-    count: jest.fn().mockResolvedValue(1),
+    count: jest.fn<Promise<number>, [{ where: unknown }]>().mockResolvedValue(1),
     findMany: jest.fn().mockResolvedValue([listRow]),
     aggregate: jest.fn()
       .mockResolvedValueOnce({
@@ -157,11 +157,13 @@ function createListFixture() {
   const slhReconciliationBatchLine = {
     findMany: jest.fn().mockResolvedValue([]),
   }
+  const queryRaw = jest.fn().mockResolvedValue([])
   const service = new SalesOrderQueryService({
     salesOrder,
     salesOrderLine,
     salesOrderPayment,
     slhReconciliationBatchLine,
+    $queryRaw: queryRaw,
     $transaction: transaction,
   } as unknown as PrismaService)
   return {
@@ -171,6 +173,7 @@ function createListFixture() {
     salesOrderPayment,
     service,
     slhReconciliationBatchLine,
+    queryRaw,
     transaction,
   }
 }
@@ -207,6 +210,7 @@ describe('SalesOrderQueryService list summaries', () => {
         fulfillmentStatus: 'PREPARING',
         paymentStatus: 'PARTIALLY_PAID',
         completionHold: null,
+        purchaseHold: null,
         paymentRecordCount: 2,
         statusChangeRecordCount: 3,
         amountChangeRecordCount: 1,
@@ -313,6 +317,51 @@ describe('SalesOrderQueryService list summaries', () => {
     expect(confirmed.slhReconciliationBatchLine.findMany).not.toHaveBeenCalled()
   })
 
+  it('moves orders whose quantity is fully preempted by pending review into their own bucket', async () => {
+    const awaiting = createListFixture()
+    awaiting.listRow.orderStatus = 'CONFIRMED'
+    awaiting.listRow.fulfillmentStatus = 'PENDING'
+    awaiting.queryRaw.mockResolvedValue([{
+      salesOrderId: SALES_ORDER_ID,
+      pendingReviewOrderCount: 2,
+    }])
+
+    const awaitingPage = await awaiting.service.list({
+      page: 1,
+      pageSize: 20,
+      purchaseHold: 'AWAITING_PURCHASE_REVIEW',
+    })
+
+    expect(awaitingPage.items[0]?.purchaseHold).toEqual({
+      reason: 'AWAITING_PURCHASE_REVIEW',
+      pendingReviewOrderCount: 2,
+    })
+    const awaitingWhere = awaiting.salesOrder.count.mock.calls[0]?.[0] as {
+      where: { id?: { in?: readonly string[] } }
+    }
+    expect(awaitingWhere.where.id).toEqual({ in: [SALES_ORDER_ID] })
+    // 分类只读取一次，不随当页行数增长。
+    expect(awaiting.queryRaw).toHaveBeenCalledTimes(1)
+
+    const purchasable = createListFixture()
+    purchasable.queryRaw.mockResolvedValue([{
+      salesOrderId: SALES_ORDER_ID,
+      pendingReviewOrderCount: 1,
+    }])
+
+    await purchasable.service.list({
+      page: 1,
+      pageSize: 20,
+      purchaseHold: 'EXCLUDE_AWAITING_PURCHASE_REVIEW',
+    })
+
+    // 待采购必须排除审核中订单，两个分类互斥。
+    const purchasableWhere = purchasable.salesOrder.count.mock.calls[0]?.[0] as {
+      where: { id?: { notIn?: readonly string[] } }
+    }
+    expect(purchasableWhere.where.id).toEqual({ notIn: [SALES_ORDER_ID] })
+  })
+
   it('omits currencies that have no orders in the filtered result', async () => {
     const fixture = createListFixture()
     fixture.salesOrder.aggregate
@@ -411,18 +460,20 @@ describe('SalesOrderQueryService status counts', () => {
       count: jest.fn(),
       groupBy: jest.fn(),
     }
+    const queryRaw = jest.fn().mockResolvedValue([])
     const transaction = jest.fn(async (
-      operation: (client: { salesOrder: typeof salesOrder }) => Promise<unknown>,
+      operation: (client: { salesOrder: typeof salesOrder, $queryRaw: typeof queryRaw }) => Promise<unknown>,
       options?: { isolationLevel?: string },
     ) => {
       void options
-      return operation({ salesOrder })
+      return operation({ salesOrder, $queryRaw: queryRaw })
     })
     const service = new SalesOrderQueryService({
       salesOrder,
+      $queryRaw: queryRaw,
       $transaction: transaction,
     } as unknown as PrismaService)
-    return { salesOrder, service, transaction }
+    return { salesOrder, queryRaw, service, transaction }
   }
 
   it('counts only formal order statuses for the all view and fills missing groups with zero', async () => {
@@ -502,6 +553,7 @@ describe('SalesOrderQueryService status counts', () => {
       items: [
         { value: 'ALL', count: 11 },
         { value: 'PENDING', count: 4 },
+        { value: 'AWAITING_PURCHASE_REVIEW', count: 0 },
         { value: 'PREPARING', count: 3 },
         { value: 'LAND_TRANSIT', count: 0 },
         { value: 'WAREHOUSE_ARRIVED', count: 0 },
@@ -552,6 +604,38 @@ describe('SalesOrderQueryService status counts', () => {
       expect.any(Function),
       { isolationLevel: 'RepeatableRead' },
     )
+  })
+
+  it('moves awaiting-review orders out of the pending count into their own bucket', async () => {
+    const fixture = createStatusCountsFixture()
+    fixture.salesOrder.groupBy
+      .mockResolvedValueOnce([
+        { fulfillmentStatus: 'PENDING', _count: { _all: 4 } },
+        { fulfillmentStatus: 'PREPARING', _count: { _all: 3 } },
+      ])
+      .mockResolvedValueOnce([{ paymentStatus: 'UNPAID', _count: { _all: 2 } }])
+    fixture.queryRaw.mockResolvedValue([{
+      salesOrderId: SALES_ORDER_ID,
+      pendingReviewOrderCount: 1,
+    }])
+    fixture.salesOrder.count
+      .mockResolvedValueOnce(9)
+      .mockResolvedValueOnce(3)
+
+    const counts = await fixture.service.statusCounts({ view: 'pending' })
+    const countByValue = new Map(counts.items.map(item => [item.value, item.count]))
+
+    expect(countByValue.get('PENDING')).toBe(1)
+    expect(countByValue.get('AWAITING_PURCHASE_REVIEW')).toBe(3)
+    // 分类计数必须和列表共用同一份覆盖判定，避免角标与列表条数漂移。
+    expect(fixture.salesOrder.count).toHaveBeenNthCalledWith(2, {
+      where: {
+        AND: [
+          expect.any(Object),
+          { fulfillmentStatus: 'PENDING', id: { in: [SALES_ORDER_ID] } },
+        ],
+      },
+    })
   })
 })
 

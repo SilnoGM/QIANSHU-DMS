@@ -891,6 +891,24 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       where: { salesOrderId, orderStatus: 'PENDING_REVIEW' },
       orderBy: { id: 'asc' }, select: { id: true, version: true },
     })
+    // 采购已覆盖全部待采购数量但尚未审核：销售订单必须落在「采购审核中」分桶，
+    // 而不是继续留在待采购里给出一个必然失败的“新增采购”入口。
+    const salesQuery = new SalesOrderQueryService(prisma)
+    const awaitingBucket = await salesQuery.list({
+      page: 1,
+      pageSize: 50,
+      purchaseHold: 'AWAITING_PURCHASE_REVIEW',
+    })
+    expect(awaitingBucket.items.find(item => item.id === salesOrderId)?.purchaseHold).toEqual({
+      reason: 'AWAITING_PURCHASE_REVIEW',
+      pendingReviewOrderCount: pendingOrders.length,
+    })
+    const purchasableBucket = await salesQuery.list({
+      page: 1,
+      pageSize: 50,
+      purchaseHold: 'EXCLUDE_AWAITING_PURCHASE_REVIEW',
+    })
+    expect(purchasableBucket.items.some(item => item.id === salesOrderId)).toBe(false)
     for (const [index, order] of pendingOrders.entries()) {
       await mutations.review(context(), order.id, await imageReviewInput(order.id))
       if (index < pendingOrders.length - 1) {
@@ -930,6 +948,15 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       toStatus: 'PREPARING',
       trigger: 'PURCHASE_COVERAGE',
     })
+    // 审核通过后订单进入备货中，停留原因必须消失，两个分桶都不再收录它。
+    const afterReview = await salesQuery.list({ page: 1, pageSize: 50 })
+    expect(afterReview.items.find(item => item.id === salesOrderId)?.purchaseHold).toBeNull()
+    const awaitingAfterReview = await salesQuery.list({
+      page: 1,
+      pageSize: 50,
+      purchaseHold: 'AWAITING_PURCHASE_REVIEW',
+    })
+    expect(awaitingAfterReview.items.some(item => item.id === salesOrderId)).toBe(false)
     await expectNoSourceView()
   })
 

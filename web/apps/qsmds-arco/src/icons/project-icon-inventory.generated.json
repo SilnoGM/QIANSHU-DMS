@@ -1302,6 +1302,15 @@
     ]
   },
   {
+    "name": "i-lucide:bell-ring",
+    "label": "i-lucide:bell-ring",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-list-view.logic.ts"
+    ]
+  },
+  {
     "name": "i-lucide:binary",
     "label": "i-lucide:binary",
     "category": "通用图标",

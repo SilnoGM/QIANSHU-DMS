@@ -72,6 +72,7 @@ test('销售状态计数查询只保留视图和非工具栏基础筛选', () =>
     page: 2,
     pageSize: 50,
     paymentStatus: 'PARTIALLY_PAID',
+    purchaseHold: 'AWAITING_PURCHASE_REVIEW',
   }, 'all'), {
     currencyCode: 'TWD',
     issuerUserId: '11111111-1111-4111-8111-111111111111',
@@ -87,6 +88,7 @@ test('待办视图不展示全部待办，并以待采购作为首个有效分�
     getSalesOrderStatusItems('pending').map(item => [item.value, item.label]),
     [
       ['PENDING', '待采购'],
+      ['AWAITING_PURCHASE_REVIEW', '采购审核中'],
       ['PREPARING', '待发货'],
       ['LAND_TRANSIT', '待入仓'],
       ['WAREHOUSE_ARRIVED', '待装柜'],
@@ -94,9 +96,16 @@ test('待办视图不展示全部待办，并以待采购作为首个有效分�
       ['WAITING_PAYMENT', '待收款'],
     ],
   )
-  assert.deepEqual(resolveSalesOrderQueryTargets('pending', 'PENDING'), [
-    { orderStatus: 'CONFIRMED', fulfillmentStatus: 'PENDING' },
-  ])
+  assert.deepEqual(resolveSalesOrderQueryTargets('pending', 'PENDING'), [{
+    orderStatus: 'CONFIRMED',
+    fulfillmentStatus: 'PENDING',
+    purchaseHold: 'EXCLUDE_AWAITING_PURCHASE_REVIEW',
+  }])
+  assert.deepEqual(resolveSalesOrderQueryTargets('pending', 'AWAITING_PURCHASE_REVIEW'), [{
+    orderStatus: 'CONFIRMED',
+    fulfillmentStatus: 'PENDING',
+    purchaseHold: 'AWAITING_PURCHASE_REVIEW',
+  }])
   assert.deepEqual(resolveSalesOrderQueryTargets('pending', 'SEA_TRANSIT'), [
     { orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' },
   ])
@@ -133,6 +142,10 @@ test('全部订单视图排除草稿，并把四类正式状态映射到可信�
 
 test('URL 中缺失、非法或跨视图状态回退到当前视图默认状态', () => {
   assert.equal(normalizeSalesOrderStatusSelection('pending', 'PREPARING'), 'PREPARING')
+  assert.equal(
+    normalizeSalesOrderStatusSelection('pending', 'AWAITING_PURCHASE_REVIEW'),
+    'AWAITING_PURCHASE_REVIEW',
+  )
   assert.equal(normalizeSalesOrderStatusSelection('pending', undefined), 'PENDING')
   assert.equal(normalizeSalesOrderStatusSelection('pending', 'ALL'), 'PENDING')
   assert.equal(normalizeSalesOrderStatusSelection('pending', 'CANCELLED'), 'PENDING')
@@ -144,6 +157,15 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
   const pendingAndUnpaid = {
     fulfillmentStatus: 'PENDING' as const,
     paymentStatus: 'UNPAID' as const,
+    purchaseHold: null,
+  }
+  const awaitingReview = {
+    fulfillmentStatus: 'PENDING' as const,
+    paymentStatus: 'UNPAID' as const,
+    purchaseHold: {
+      reason: 'AWAITING_PURCHASE_REVIEW' as const,
+      pendingReviewOrderCount: 1,
+    },
   }
   assert.deepEqual(
     resolvePendingSalesOrderActions('PENDING', pendingAndUnpaid).map(action => action.key),
@@ -153,10 +175,21 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
     resolvePendingSalesOrderActions('PENDING', pendingAndUnpaid).map(action => action.label),
     ['新增采购'],
   )
+  // 待采购里若因并发仍出现审核中订单，也不再给出必然失败的入口。
+  assert.deepEqual(
+    resolvePendingSalesOrderActions('PENDING', awaitingReview).map(action => action.key),
+    ['URGE_PURCHASE_REVIEW'],
+  )
+  assert.deepEqual(
+    resolvePendingSalesOrderActions('AWAITING_PURCHASE_REVIEW', awaitingReview)
+      .map(action => [action.key, action.label]),
+    [['URGE_PURCHASE_REVIEW', '催办']],
+  )
   assert.deepEqual(
     resolvePendingSalesOrderActions('PREPARING', {
       fulfillmentStatus: 'PREPARING',
       paymentStatus: 'PARTIALLY_PAID',
+      purchaseHold: null,
     }).map(action => action.key),
     ['FACTORY_SHIPMENT'],
   )
@@ -164,6 +197,7 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
     resolvePendingSalesOrderActions('LAND_TRANSIT', {
       fulfillmentStatus: 'LAND_TRANSIT',
       paymentStatus: 'PAID',
+      purchaseHold: null,
     }).map(action => action.key),
     ['WAREHOUSE_RECEIPT'],
   )
@@ -172,6 +206,7 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
     resolvePendingSalesOrderActions('WAREHOUSE_ARRIVED', {
       fulfillmentStatus: 'WAREHOUSE_ARRIVED',
       paymentStatus: 'UNPAID',
+      purchaseHold: null,
     }).map(action => action.key),
     [],
   )
@@ -179,6 +214,7 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
     resolvePendingSalesOrderActions('SEA_TRANSIT', {
       fulfillmentStatus: 'SEA_TRANSIT',
       paymentStatus: 'UNPAID',
+      purchaseHold: null,
     }).map(action => action.key),
     ['DELIVERY_RECEIPT'],
   )
@@ -186,6 +222,7 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
     resolvePendingSalesOrderActions('WAITING_PAYMENT', {
       fulfillmentStatus: 'SIGNED',
       paymentStatus: 'PARTIALLY_PAID',
+      purchaseHold: null,
     }).map(action => action.key),
     ['RECORD_PAYMENT'],
   )
@@ -194,6 +231,7 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
     resolvePendingSalesOrderActions('ALL', {
       fulfillmentStatus: 'SEA_TRANSIT',
       paymentStatus: 'UNPAID',
+      purchaseHold: null,
     }).map(action => action.key),
     ['DELIVERY_RECEIPT', 'RECORD_PAYMENT'],
   )
@@ -201,6 +239,7 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
     resolvePendingSalesOrderActions('ALL', {
       fulfillmentStatus: 'SIGNED',
       paymentStatus: 'UNPAID',
+      purchaseHold: null,
     }).map(action => action.key),
     ['RECORD_PAYMENT'],
   )
@@ -208,8 +247,14 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
     resolvePendingSalesOrderActions('ALL', {
       fulfillmentStatus: 'PENDING',
       paymentStatus: 'PAID',
+      purchaseHold: null,
     }).map(action => action.key),
     ['SUBMIT_PURCHASE'],
+  )
+  // 全部待办仍按订单事实给出催办，不再给新增采购，收款入口照旧按付款状态派生。
+  assert.deepEqual(
+    resolvePendingSalesOrderActions('ALL', awaitingReview).map(action => action.key),
+    ['URGE_PURCHASE_REVIEW', 'RECORD_PAYMENT'],
   )
 })
 

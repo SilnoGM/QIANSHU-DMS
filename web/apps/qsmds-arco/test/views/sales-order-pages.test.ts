@@ -663,6 +663,42 @@ test('销售待采购通过权限受控的采购前置弹窗复核并快捷新�
   assert.match(handler[0], /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u)
 })
 
+test('采购审核中分类只保留查看与催办，催办为未建设的轻提示占位', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+  const logic = await readFile(new URL('sales-order-list-view.logic.ts', ROOT), 'utf8')
+
+  assert.match(logic, /\{ label: '采购审核中', value: 'AWAITING_PURCHASE_REVIEW' \}/u)
+  assert.match(logic, /selection === 'AWAITING_PURCHASE_REVIEW'[\s\S]*?return \[URGE_PURCHASE_REVIEW_ACTION\]/u)
+  assert.match(logic, /purchaseHold: 'AWAITING_PURCHASE_REVIEW'/u)
+
+  const handler = source.match(
+    /function handleSalesOrderRowAction\([\s\S]*?\n\}/u,
+  )
+  assert.ok(handler, '应存在销售待办动作处理函数')
+  assert.match(
+    handler[0],
+    /URGE_PURCHASE_REVIEW'\)[\s\S]*?toast\.info\('催办功能开发中'\)[\s\S]*?return/u,
+    '催办只提示功能未建设，不打开表单也不写数据',
+  )
+
+  // 催办不写数据，因此不叠加采购权限门；其余动作仍按原权限收敛。
+  const gate = source.match(
+    /function canShowSalesOrderRowAction\([\s\S]*?\n\}/u,
+  )
+  assert.ok(gate, '应存在待办动作权限判断')
+  assert.doesNotMatch(gate[0], /URGE_PURCHASE_REVIEW/u)
+
+  // 行内以「采购状态」显示审核中事实，桌面表格与移动卡片各一处。
+  assert.equal(
+    [...source.matchAll(/label="采购状态"/gu)].length,
+    2,
+    '桌面与移动卡片都要展示采购审核中状态',
+  )
+  assert.match(source, /function purchaseHoldLabel\(/u)
+  assert.match(source, /function purchaseHoldHint\(/u)
+  assert.match(source, /审核通过后自动进入待发货/u)
+})
+
 test('销售待发货使用双更新权限打开聚合发货弹窗并保持后续动作占位', async () => {
   const source = await readFile(new URL('index.vue', ROOT), 'utf8')
 
