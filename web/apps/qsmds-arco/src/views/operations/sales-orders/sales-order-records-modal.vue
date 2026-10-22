@@ -124,7 +124,7 @@ const recordsModalTitle = computed(() => ({
   changes: '变更记录',
 })[props.kind])
 const modalTitle = computed(() => ({
-  'create-payment': t('salesReceipt.submit'),
+  'create-payment': t('salesReceipt.create'),
   'create-receipt': '货物签收',
   'records': recordsModalTitle.value,
 })[modalState.value.view])
@@ -184,10 +184,10 @@ function paymentTypeLabel(value: SalesOrderPaymentDto['paymentType']): string {
   }[value]
 }
 
-/** 收款来源标签：代收回填由对账结算产生，历史收款是接入审核前的遗留数据。 */
+/** 收款来源标签：代收回填由对账结算产生，属于表内代收；历史收款是接入审核前的遗留数据。 */
 function paymentOriginLabel(value: SalesOrderPaymentDto['origin']): string {
   return {
-    COD_SETTLEMENT: '代收回填',
+    COD_SETTLEMENT: '表内代收',
     LEGACY: '历史收款',
     REVIEWED: '财务审核',
   }[value]
@@ -862,7 +862,7 @@ onBeforeUnmount(() => {
         size="sm"
         @click="openPaymentModal"
       >
-        <FaIcon name="i-lucide:circle-plus" aria-hidden="true" />{{ t('salesReceipt.submit') }}
+        <FaIcon name="i-lucide:circle-plus" aria-hidden="true" />{{ t('salesReceipt.create') }}
       </FaButton>
     </template>
 
@@ -899,6 +899,9 @@ onBeforeUnmount(() => {
         </dl>
         <p class="qs-type-meta m-0">
           待审核金额不计入有效已收款，也不抵扣待收金额。
+        </p>
+        <p class="qs-type-meta m-0">
+          表内代收由顺联航账单结算自动回填，不能手工新增。
         </p>
         <FaAlert v-if="sourceError" variant="destructive" :title="sourceError" />
         <FaTabs :model-value="activeReceiptTab" :list="receiptTabs" list-class="h-auto min-h-11 w-full" content-class="mt-4 min-w-0" @update:model-value="handleReceiptTab">

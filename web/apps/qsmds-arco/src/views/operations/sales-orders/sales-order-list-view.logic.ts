@@ -123,7 +123,7 @@ const PENDING_ACTION_BY_FULFILLMENT_STATUS: Partial<Record<
 const RECORD_PAYMENT_ACTION: SalesOrderPendingActionItem = {
   icon: 'i-lucide:hand-coins',
   key: 'RECORD_PAYMENT',
-  label: '新增实际收款',
+  label: '新增表外收款',
 }
 
 /**

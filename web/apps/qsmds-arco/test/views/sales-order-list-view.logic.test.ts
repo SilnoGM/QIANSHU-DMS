@@ -226,6 +226,15 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
     }).map(action => action.key),
     ['RECORD_PAYMENT'],
   )
+  // 表外收款是与代收（表内）相对的口径；入口文案必须点明，避免又落回泛化的“实际收款”。
+  assert.deepEqual(
+    resolvePendingSalesOrderActions('WAITING_PAYMENT', {
+      fulfillmentStatus: 'SIGNED',
+      paymentStatus: 'PARTIALLY_PAID',
+      purchaseHold: null,
+    }).map(action => action.label),
+    ['新增表外收款'],
+  )
 
   assert.deepEqual(
     resolvePendingSalesOrderActions('ALL', {
