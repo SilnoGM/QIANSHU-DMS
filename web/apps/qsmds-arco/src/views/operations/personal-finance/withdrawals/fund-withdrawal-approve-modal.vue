@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FundWithdrawalDto, FundWithdrawalProofUploadDto } from '@/api/generated/types.gen'
+import { useFileDrop } from '@fantastic-admin/components'
 import { getApiClientErrorMessage } from '@/api/errors'
 import fundWithdrawalsApi from '@/api/modules/fund-withdrawals'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
@@ -7,7 +8,11 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
-import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
+import {
+  IMAGE_ONLY_ACCEPT,
+  UPLOAD_POLICIES,
+  validateUploadFile,
+} from '@/utils/upload-policy'
 
 defineOptions({ name: 'FundWithdrawalApproveModal' })
 
@@ -31,8 +36,6 @@ const uploading = ref(false)
 const submitting = ref(false)
 const error = ref('')
 let uploadController: AbortController | null = null
-
-const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
 
 function releasePreview(): void {
   if (previewUrl.value !== null) {
@@ -74,17 +77,11 @@ function chooseFile(): void {
   fileInput.value?.click()
 }
 
-async function handleFile(event: Event): Promise<void> {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (file === undefined || props.request === null) {
+async function uploadProofFile(file: File): Promise<void> {
+  if (props.request === null) {
     return
   }
-  if (!allowedTypes.includes(file.type)) {
-    error.value = t('fundWithdrawal.approve.proofHint')
-    return
-  }
-  if (file.size > 10 * 1024 * 1024) {
+  if (validateUploadFile(file, UPLOAD_POLICIES.IMAGE_ONLY) !== null) {
     error.value = t('fundWithdrawal.approve.proofHint')
     return
   }
@@ -116,6 +113,36 @@ async function handleFile(event: Event): Promise<void> {
     }
   }
 }
+
+function handleFile(event: Event): void {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  target.value = ''
+  if (file !== undefined) {
+    void uploadProofFile(file)
+  }
+}
+
+const {
+  handlers: proofDropHandlers,
+  isDragging: proofDragging,
+} = useFileDrop({
+  accept: IMAGE_ONLY_ACCEPT,
+  disabled: computed(() => (
+    props.request === null
+    || uploading.value
+    || submitting.value
+  )),
+  onFiles: (files) => {
+    const file = files[0]
+    if (file !== undefined) {
+      void uploadProofFile(file)
+    }
+  },
+  onInvalid: () => {
+    error.value = t('fundWithdrawal.approve.proofHint')
+  },
+})
 
 async function submit(): Promise<void> {
   const request = props.request
@@ -210,31 +237,37 @@ function close(): void {
           {{ t('fundWithdrawal.approve.proof') }}
         </h3>
         <p class="qs-type-meta text-muted-foreground m-0 mb-3">
-          {{ t('fundWithdrawal.approve.proofHint') }}
+          {{ t('fundWithdrawal.approve.proofHint') }} 可拖入图片，或点击选择。
         </p>
-        <input
-          ref="fileInput"
-          class="sr-only"
-          type="file"
-          :accept="IMAGE_ONLY_ACCEPT"
-          @change="handleFile"
+        <div
+          v-bind="proofDropHandlers"
+          class="p-2 rounded-xl transition-shadow duration-150"
+          :class="proofDragging ? 'ring-2 ring-primary/40 ring-offset-2 bg-primary/5' : ''"
         >
-        <div v-if="previewUrl === null" class="p-6 text-center border border-border rounded-xl border-dashed">
-          <FaButton type="button" variant="outline" :loading="uploading" @click="chooseFile">
-            <FaIcon name="i-lucide:upload" aria-hidden="true" />
-            {{ t('fundWithdrawal.approve.proof') }}
-          </FaButton>
-        </div>
-        <div v-else class="gap-3 grid">
-          <img :src="previewUrl" :alt="upload?.fileName ?? t('fundWithdrawal.approve.proof')" class="mx-auto border border-border rounded-xl max-h-72 max-w-full object-contain">
-          <div class="flex flex-wrap gap-3 items-center justify-between">
-            <p class="qs-type-meta text-muted-foreground m-0 break-all">
-              {{ upload?.fileName ?? t('fundWithdrawal.loading') }}
-            </p>
-            <div class="flex gap-2">
-              <FaButton type="button" variant="outline" size="sm" :disabled="uploading || submitting" @click="chooseFile">
-                {{ t('fundWithdrawal.action.changeProof') }}
-              </FaButton>
+          <input
+            ref="fileInput"
+            class="sr-only"
+            type="file"
+            :accept="IMAGE_ONLY_ACCEPT"
+            @change="handleFile"
+          >
+          <div v-if="previewUrl === null" class="p-6 text-center border border-border rounded-xl border-dashed">
+            <FaButton type="button" variant="outline" :loading="uploading" @click="chooseFile">
+              <FaIcon name="i-lucide:upload" aria-hidden="true" />
+              {{ t('fundWithdrawal.approve.proof') }}
+            </FaButton>
+          </div>
+          <div v-else class="gap-3 grid">
+            <img :src="previewUrl" :alt="upload?.fileName ?? t('fundWithdrawal.approve.proof')" class="mx-auto border border-border rounded-xl max-h-72 max-w-full object-contain">
+            <div class="flex flex-wrap gap-3 items-center justify-between">
+              <p class="qs-type-meta text-muted-foreground m-0 break-all">
+                {{ upload?.fileName ?? t('fundWithdrawal.loading') }}
+              </p>
+              <div class="flex gap-2">
+                <FaButton type="button" variant="outline" size="sm" :disabled="uploading || submitting" @click="chooseFile">
+                  {{ t('fundWithdrawal.action.changeProof') }}
+                </FaButton>
+              </div>
             </div>
           </div>
         </div>

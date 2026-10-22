@@ -19,6 +19,7 @@ import type {
   SalesReceiptRequestDetailDto,
 } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
+import { useFileDrop } from '@fantastic-admin/components'
 import salesOrdersApi from '@/api/modules/sales-orders'
 import salesReceiptsApi from '@/api/modules/sales-receipts'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
@@ -165,6 +166,38 @@ const canRecordPayment = computed(() => (
 ))
 const actionLocked = computed(() => actionSubmitting.value || actionUploading.value)
 const paymentLocked = computed(() => actionLocked.value || receiptUnknown.value)
+const {
+  handlers: paymentDropHandlers,
+  isDragging: paymentDragging,
+} = useFileDrop({
+  accept: IMAGE_ONLY_ACCEPT,
+  disabled: computed(() => paymentLocked.value || paymentVoucher.value !== null),
+  onFiles: (files) => {
+    const file = files[0]
+    if (file !== undefined) {
+      void uploadActionVoucher(file, 'payment')
+    }
+  },
+  onInvalid: () => {
+    actionError.value = '仅支持 JPG/PNG/WebP 图片'
+  },
+})
+const {
+  handlers: receiptDropHandlers,
+  isDragging: receiptDragging,
+} = useFileDrop({
+  accept: IMAGE_ONLY_ACCEPT,
+  disabled: computed(() => actionLocked.value || deliveryReceipt.value !== null),
+  onFiles: (files) => {
+    const file = files[0]
+    if (file !== undefined) {
+      void uploadActionVoucher(file, 'receipt')
+    }
+  },
+  onInvalid: () => {
+    actionError.value = '仅支持 JPG/PNG/WebP 图片'
+  },
+})
 // 销售原币金额统一两位小数；资金账户人民币仍独立按两位展示。
 const paymentCurrencies = computed(() => props.currencies.map(currency => ({ ...currency, minorUnit: 2 as const })))
 const paymentTypeOptions: Array<{
@@ -1359,52 +1392,58 @@ onBeforeUnmount(() => {
           收款凭证 <span class="text-destructive" aria-hidden="true">*</span>
         </h3>
         <p class="qs-type-meta m-0 mt-1">
-          每笔收款必须上传且只能上传一份凭证，仅支持 JPG/PNG/WebP 图片；系统提交时自动按“客户名-凭证类型-时间戳”命名。
+          每笔收款必须上传且只能上传一份凭证，仅支持 JPG/PNG/WebP 图片；可拖入或点击上传，系统提交时自动按“客户名-凭证类型-时间戳”命名。
         </p>
-        <input
-          ref="paymentFileInputRef"
-          type="file"
-          :accept="IMAGE_ONLY_ACCEPT"
-          class="sr-only"
-          :disabled="paymentLocked"
-          @change="handlePaymentFileInput"
+        <div
+          v-bind="paymentDropHandlers"
+          class="mt-3 p-2 rounded-lg transition-shadow duration-150"
+          :class="paymentDragging ? 'ring-2 ring-primary/40 ring-offset-2 bg-primary/5' : ''"
         >
-        <FaButton
-          v-if="paymentVoucher === null"
-          type="button"
-          variant="outline"
-          class="mt-3 min-h-11 w-full"
-          :loading="actionUploading"
-          :disabled="paymentLocked"
-          @click="openPaymentFilePicker"
-        >
-          <FaIcon name="i-lucide:upload-cloud" aria-hidden="true" />上传收款凭证
-        </FaButton>
-        <div v-else class="mt-3 p-3 border border-border rounded-lg flex gap-3 min-w-0 items-center">
-          <FaImagePreview
-            v-if="paymentVoucher.previewUrl"
-            :src="paymentVoucher.previewUrl"
-            class="rounded-md shrink-0 size-16 object-cover"
-            :aria-label="`待提交收款凭证 ${paymentVoucher.originalFilename}`"
-          />
-          <div v-else class="border border-border rounded-md bg-muted/30 flex shrink-0 size-16 items-center justify-center">
-            <FaIcon name="i-lucide:file-text" class="text-muted-foreground size-7" aria-hidden="true" />
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium m-0 truncate">
-              {{ paymentVoucher.originalFilename }}
-            </p>
-            <p v-if="paymentVoucher.mimeType" class="qs-type-meta m-0 mt-1">
-              {{ paymentVoucher.mimeType }} · {{ paymentVoucher.sizeBytes }} bytes
-            </p>
-          </div>
-          <FaButton type="button" variant="ghost" size="sm" :disabled="paymentLocked" @click="removePaymentVoucher">
-            移除
+          <input
+            ref="paymentFileInputRef"
+            type="file"
+            :accept="IMAGE_ONLY_ACCEPT"
+            class="sr-only"
+            :disabled="paymentLocked"
+            @change="handlePaymentFileInput"
+          >
+          <FaButton
+            v-if="paymentVoucher === null"
+            type="button"
+            variant="outline"
+            class="min-h-11 w-full"
+            :loading="actionUploading"
+            :disabled="paymentLocked"
+            @click="openPaymentFilePicker"
+          >
+            <FaIcon name="i-lucide:upload-cloud" aria-hidden="true" />上传收款凭证
           </FaButton>
+          <div v-else class="p-3 border border-border rounded-lg flex gap-3 min-w-0 items-center">
+            <FaImagePreview
+              v-if="paymentVoucher.previewUrl"
+              :src="paymentVoucher.previewUrl"
+              class="rounded-md shrink-0 size-16 object-cover"
+              :aria-label="`待提交收款凭证 ${paymentVoucher.originalFilename}`"
+            />
+            <div v-else class="border border-border rounded-md bg-muted/30 flex shrink-0 size-16 items-center justify-center">
+              <FaIcon name="i-lucide:file-text" class="text-muted-foreground size-7" aria-hidden="true" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium m-0 truncate">
+                {{ paymentVoucher.originalFilename }}
+              </p>
+              <p v-if="paymentVoucher.mimeType" class="qs-type-meta m-0 mt-1">
+                {{ paymentVoucher.mimeType }} · {{ paymentVoucher.sizeBytes }} bytes
+              </p>
+            </div>
+            <FaButton type="button" variant="ghost" size="sm" :disabled="paymentLocked" @click="removePaymentVoucher">
+              移除
+            </FaButton>
+          </div>
+          <p v-if="paymentErrors.voucher" class="text-xs text-destructive m-0 mt-1">
+            {{ paymentErrors.voucher }}
+          </p>
         </div>
-        <p v-if="paymentErrors.voucher" class="text-xs text-destructive m-0 mt-1">
-          {{ paymentErrors.voucher }}
-        </p>
       </section>
     </template>
 
@@ -1419,7 +1458,7 @@ onBeforeUnmount(() => {
         role="alert"
       />
       <p class="text-sm text-muted-foreground m-0">
-        只需上传一份签收单，仅支持 JPG/PNG/WebP 图片。提交后作为订单级凭证保存，并自动将订单进度更新为已签收，同时签收该订单下全部货件。若仍有货件未装柜或待审核，提交会被阻断。
+        只需上传一份签收单，仅支持 JPG/PNG/WebP 图片；可拖入或点击上传。提交后作为订单级凭证保存，并自动将订单进度更新为已签收，同时签收该订单下全部货件。若仍有货件未装柜或待审核，提交会被阻断。
       </p>
       <FaForm :model="{ deliveryReceiptRemark }" :disabled="actionLocked" class="mt-4">
         <FaFormItem name="deliveryReceiptRemark" label="备注（选填）">
@@ -1436,47 +1475,53 @@ onBeforeUnmount(() => {
           </p>
         </FaFormItem>
       </FaForm>
-      <input
-        ref="receiptFileInputRef"
-        data-testid="sales-order-delivery-receipt-input"
-        type="file"
-        :accept="IMAGE_ONLY_ACCEPT"
-        class="sr-only"
-        :disabled="actionLocked"
-        @change="handleReceiptFileInput"
+      <div
+        v-bind="receiptDropHandlers"
+        class="p-2 rounded-lg transition-shadow duration-150"
+        :class="receiptDragging ? 'ring-2 ring-primary/40 ring-offset-2 bg-primary/5' : ''"
       >
-      <FaButton
-        v-if="deliveryReceipt === null"
-        type="button"
-        variant="outline"
-        class="min-h-11 w-full"
-        :loading="actionUploading"
-        :disabled="actionLocked"
-        @click="openReceiptFilePicker"
-      >
-        <FaIcon name="i-lucide:upload-cloud" aria-hidden="true" />上传签收单
-      </FaButton>
-      <div v-else class="mt-4 p-3 border border-border rounded-lg flex gap-3 min-w-0 items-center">
-        <FaImagePreview
-          v-if="deliveryReceipt.previewUrl"
-          :src="deliveryReceipt.previewUrl"
-          class="rounded-md shrink-0 size-16 object-cover"
-          :aria-label="`待提交签收单 ${deliveryReceipt.originalFilename}`"
-        />
-        <div v-else class="border border-border rounded-md bg-muted/30 flex shrink-0 size-16 items-center justify-center">
-          <FaIcon name="i-lucide:file-text" class="text-muted-foreground size-7" aria-hidden="true" />
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium m-0 truncate">
-            {{ deliveryReceipt.originalFilename }}
-          </p>
-          <p class="qs-type-meta m-0 mt-1">
-            {{ deliveryReceipt.mimeType }} · {{ deliveryReceipt.sizeBytes }} bytes
-          </p>
-        </div>
-        <FaButton type="button" variant="ghost" size="sm" :disabled="actionLocked" @click="removeDeliveryReceipt">
-          移除
+        <input
+          ref="receiptFileInputRef"
+          data-testid="sales-order-delivery-receipt-input"
+          type="file"
+          :accept="IMAGE_ONLY_ACCEPT"
+          class="sr-only"
+          :disabled="actionLocked"
+          @change="handleReceiptFileInput"
+        >
+        <FaButton
+          v-if="deliveryReceipt === null"
+          type="button"
+          variant="outline"
+          class="min-h-11 w-full"
+          :loading="actionUploading"
+          :disabled="actionLocked"
+          @click="openReceiptFilePicker"
+        >
+          <FaIcon name="i-lucide:upload-cloud" aria-hidden="true" />上传签收单
         </FaButton>
+        <div v-else class="mt-4 p-3 border border-border rounded-lg flex gap-3 min-w-0 items-center">
+          <FaImagePreview
+            v-if="deliveryReceipt.previewUrl"
+            :src="deliveryReceipt.previewUrl"
+            class="rounded-md shrink-0 size-16 object-cover"
+            :aria-label="`待提交签收单 ${deliveryReceipt.originalFilename}`"
+          />
+          <div v-else class="border border-border rounded-md bg-muted/30 flex shrink-0 size-16 items-center justify-center">
+            <FaIcon name="i-lucide:file-text" class="text-muted-foreground size-7" aria-hidden="true" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium m-0 truncate">
+              {{ deliveryReceipt.originalFilename }}
+            </p>
+            <p class="qs-type-meta m-0 mt-1">
+              {{ deliveryReceipt.mimeType }} · {{ deliveryReceipt.sizeBytes }} bytes
+            </p>
+          </div>
+          <FaButton type="button" variant="ghost" size="sm" :disabled="actionLocked" @click="removeDeliveryReceipt">
+            移除
+          </FaButton>
+        </div>
       </div>
       <p v-if="receiptErrors.receipt" class="text-xs text-destructive m-0 mt-1">
         {{ receiptErrors.receipt }}

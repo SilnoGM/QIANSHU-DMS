@@ -12,6 +12,7 @@ import type {
 } from './sales-order-create.logic'
 import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
 import type { RegionSelectorChange } from '@/components/business/QsRegionSelector/types'
+import { useFileDrop } from '@fantastic-admin/components'
 
 import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
 import { useMediaQuery } from '@vueuse/core'
@@ -225,6 +226,22 @@ const salesOrderDescModel = computed(() => mapSalesOrderCreateFormToDesc(
   },
 ))
 const submitLocked = computed(() => submission.value.phase !== 'editing')
+const {
+  handlers: issuanceDropHandlers,
+  isDragging: issuanceDragging,
+} = useFileDrop({
+  accept: IMAGE_ONLY_ACCEPT,
+  disabled: computed(() => (
+    !canManageDocuments.value
+    || submitLocked.value
+    || documentUploading.value
+    || formModel.value.issuanceVoucher !== null
+  )),
+  onFiles: files => void uploadFiles(files),
+  onInvalid: () => {
+    documentUploadError.value = '仅支持 JPG/PNG/WebP 图片'
+  },
+})
 const shouldConfirmDiscard = computed(() => (
   submission.value.phase === 'unknown'
   || (
@@ -1381,28 +1398,34 @@ onBeforeUnmount(() => {
                 content-class="gap-4 grid"
               >
                 <template v-if="canManageDocuments">
-                  <input
-                    ref="fileInputRef"
-                    data-testid="sales-order-issuance-voucher-input"
-                    type="file"
-                    :accept="IMAGE_ONLY_ACCEPT"
-                    class="sr-only"
-                    :disabled="submitLocked || documentUploading"
-                    @change="handleFileInput"
+                  <div
+                    v-bind="issuanceDropHandlers"
+                    class="p-3 rounded-lg transition-shadow duration-150"
+                    :class="issuanceDragging ? 'ring-2 ring-primary/40 ring-offset-2 bg-primary/5' : ''"
                   >
-                  <FaButton
-                    type="button"
-                    variant="outline"
-                    class="min-h-11 w-full"
-                    :loading="documentUploading"
-                    :disabled="submitLocked || formModel.issuanceVoucher !== null"
-                    @click="openFilePicker"
-                  >
-                    <FaIcon name="i-lucide:upload-cloud" aria-hidden="true" />上传出单凭证
-                  </FaButton>
-                  <p class="text-xs text-muted-foreground m-0">
-                    移除只取消本订单关联，未使用的临时文件由系统后续清理。
-                  </p>
+                    <input
+                      ref="fileInputRef"
+                      data-testid="sales-order-issuance-voucher-input"
+                      type="file"
+                      :accept="IMAGE_ONLY_ACCEPT"
+                      class="sr-only"
+                      :disabled="submitLocked || documentUploading"
+                      @change="handleFileInput"
+                    >
+                    <FaButton
+                      type="button"
+                      variant="outline"
+                      class="min-h-11 w-full"
+                      :loading="documentUploading"
+                      :disabled="submitLocked || formModel.issuanceVoucher !== null"
+                      @click="openFilePicker"
+                    >
+                      <FaIcon name="i-lucide:upload-cloud" aria-hidden="true" />上传出单凭证
+                    </FaButton>
+                    <p class="text-xs text-muted-foreground m-0 mt-2">
+                      可拖入图片，或点击选择；移除只取消本订单关联，未使用的临时文件由系统后续清理。
+                    </p>
+                  </div>
                 </template>
                 <p v-else class="text-sm text-muted-foreground m-0">
                   当前身份没有 sales-orders:document 权限，无法创建销售订单。

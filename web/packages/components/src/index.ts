@@ -54,6 +54,8 @@ export { Toast as FaToast } from './basic/toast'
 export { useToast as useFaToast } from './basic/toast'
 export { Tooltip as FaTooltip } from './basic/tooltip'
 export { Trend as FaTrend } from './basic/trend'
+export { useFileDrop } from './composables/use-file-drop'
+export type { FileDropHandlers, FileDropInvalidReason, UseFileDropOptions } from './composables/use-file-drop'
 
 // 专业版组件
 export { AnimatedBeam as FaAnimatedBeam } from './pro/animated-beam'

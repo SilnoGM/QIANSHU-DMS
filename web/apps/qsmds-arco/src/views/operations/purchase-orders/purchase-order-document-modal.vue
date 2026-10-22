@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { PurchaseOrderDetailDto, PurchaseOrderDocumentAttachRequestDto, PurchaseOrderTemporaryDocumentDto } from '@/api/generated/types.gen'
+import { useFileDrop } from '@fantastic-admin/components'
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
@@ -96,13 +97,7 @@ async function run(action: (signal: AbortSignal, orderId: string) => Promise<voi
   }
 }
 
-async function onFileChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) {
-    return
-  }
+async function handleFile(file: File) {
   const failure = validateUploadFile(file, UPLOAD_POLICIES.IMAGE_ONLY)
   if (failure !== null) {
     error.value = failure === 'too-large'
@@ -126,6 +121,37 @@ async function onFileChange(event: Event) {
     previewUrl.value = URL.createObjectURL(file)
   })
 }
+
+function onFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (file !== undefined) {
+    void handleFile(file)
+  }
+}
+
+const {
+  handlers: fileDropHandlers,
+  isDragging: fileDragging,
+} = useFileDrop({
+  accept: IMAGE_ONLY_ACCEPT,
+  disabled: computed(() => (
+    busy.value
+    || !visible.value
+    || props.detail.orderStatus === 'PENDING_REVIEW'
+  )),
+  onFiles: (files) => {
+    const file = files[0]
+    if (file !== undefined) {
+      void handleFile(file)
+    }
+  },
+  onInvalid: () => {
+    error.value = '仅支持 JPG/PNG/WebP 图片'
+    errorHint.value = null
+  },
+})
 
 async function save() {
   const asset = uploaded.value
@@ -164,11 +190,18 @@ onBeforeUnmount(reset)
         <span class="qs-type-body-medium">{{ t('purchaseOrderDrawer.documentType') }}</span>
         <FaSelect v-model="documentType" :options="options" :disabled="busy" class="w-full" />
       </label>
-      <div class="space-y-2">
+      <div
+        v-bind="fileDropHandlers"
+        class="p-3 rounded-lg transition-shadow duration-150 space-y-2"
+        :class="fileDragging ? 'ring-2 ring-primary/40 ring-offset-2 bg-primary/5' : ''"
+      >
         <label class="qs-type-body-medium flex flex-col gap-2">
           {{ t('purchaseOrderDrawer.documentFile') }}
           <input type="file" :accept="IMAGE_ONLY_ACCEPT" :disabled="busy" class="text-sm p-3 border border-border rounded-lg w-full" @change="onFileChange">
         </label>
+        <p class="qs-type-meta m-0">
+          可拖入图片，或点击选择。
+        </p>
         <p v-if="uploading" role="status" class="qs-type-meta">
           {{ t('purchaseOrderDrawer.uploading') }}
         </p>
