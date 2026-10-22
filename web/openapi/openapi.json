@@ -68689,13 +68689,17 @@
                 "CONTAINER_IDEMPOTENCY_CONFLICT",
                 "CONTAINER_NUMBERING_UNAVAILABLE",
                 "CONTAINER_SHIPMENT_ALREADY_ASSIGNED",
+                "CONTAINER_SHIPMENT_ALREADY_LOADED",
                 "CONTAINER_STATE_CHANGED"
               ]
             },
             {
               "status": 422,
               "codes": [
+                "CONTAINER_SHIPMENT_DELIVERED",
+                "CONTAINER_SHIPMENT_NOT_RECEIVED",
                 "CONTAINER_SHIPMENT_UNAVAILABLE",
+                "CONTAINER_SHIPMENT_WAREHOUSE_MISMATCH",
                 "CONTAINER_SOURCE_FILE_LOCKED",
                 "CONTAINER_WAREHOUSE_UNAVAILABLE",
                 "OCEAN_CALCULATION_INVALID",
@@ -69261,13 +69265,17 @@
                 "CONTAINER_IDEMPOTENCY_CONFLICT",
                 "CONTAINER_NUMBERING_UNAVAILABLE",
                 "CONTAINER_SHIPMENT_ALREADY_ASSIGNED",
+                "CONTAINER_SHIPMENT_ALREADY_LOADED",
                 "CONTAINER_STATE_CHANGED"
               ]
             },
             {
               "status": 422,
               "codes": [
+                "CONTAINER_SHIPMENT_DELIVERED",
+                "CONTAINER_SHIPMENT_NOT_RECEIVED",
                 "CONTAINER_SHIPMENT_UNAVAILABLE",
+                "CONTAINER_SHIPMENT_WAREHOUSE_MISMATCH",
                 "CONTAINER_SOURCE_FILE_LOCKED",
                 "CONTAINER_WAREHOUSE_UNAVAILABLE",
                 "OCEAN_CALCULATION_INVALID",
@@ -69882,13 +69890,17 @@
                 "CONTAINER_IDEMPOTENCY_CONFLICT",
                 "CONTAINER_NUMBERING_UNAVAILABLE",
                 "CONTAINER_SHIPMENT_ALREADY_ASSIGNED",
+                "CONTAINER_SHIPMENT_ALREADY_LOADED",
                 "CONTAINER_STATE_CHANGED"
               ]
             },
             {
               "status": 422,
               "codes": [
+                "CONTAINER_SHIPMENT_DELIVERED",
+                "CONTAINER_SHIPMENT_NOT_RECEIVED",
                 "CONTAINER_SHIPMENT_UNAVAILABLE",
+                "CONTAINER_SHIPMENT_WAREHOUSE_MISMATCH",
                 "CONTAINER_SOURCE_FILE_LOCKED",
                 "CONTAINER_WAREHOUSE_UNAVAILABLE",
                 "OCEAN_CALCULATION_INVALID",
@@ -70229,13 +70241,17 @@
                 "CONTAINER_IDEMPOTENCY_CONFLICT",
                 "CONTAINER_NUMBERING_UNAVAILABLE",
                 "CONTAINER_SHIPMENT_ALREADY_ASSIGNED",
+                "CONTAINER_SHIPMENT_ALREADY_LOADED",
                 "CONTAINER_STATE_CHANGED"
               ]
             },
             {
               "status": 422,
               "codes": [
+                "CONTAINER_SHIPMENT_DELIVERED",
+                "CONTAINER_SHIPMENT_NOT_RECEIVED",
                 "CONTAINER_SHIPMENT_UNAVAILABLE",
+                "CONTAINER_SHIPMENT_WAREHOUSE_MISMATCH",
                 "CONTAINER_SOURCE_FILE_LOCKED",
                 "CONTAINER_WAREHOUSE_UNAVAILABLE",
                 "OCEAN_CALCULATION_INVALID",
@@ -71950,6 +71966,7 @@
                 "CONTAINER_IMPORT_ALREADY_IMPORTED",
                 "CONTAINER_IMPORT_SOURCE_CHANGED",
                 "CONTAINER_SHIPMENT_ALREADY_ASSIGNED",
+                "CONTAINER_SHIPMENT_ALREADY_LOADED",
                 "CONTAINER_STATE_CHANGED"
               ]
             },
@@ -71959,6 +71976,8 @@
                 "CONTAINER_IMPORT_ROWS_INVALID",
                 "CONTAINER_IMPORT_SOURCE_INVALID",
                 "CONTAINER_IMPORT_UNMATCHED",
+                "CONTAINER_SHIPMENT_DELIVERED",
+                "CONTAINER_SHIPMENT_NOT_RECEIVED",
                 "CONTAINER_SHIPMENT_UNAVAILABLE",
                 "CONTAINER_SHIPMENT_WAREHOUSE_MISMATCH",
                 "OCEAN_CALCULATION_INVALID",
@@ -72298,6 +72317,7 @@
                 "CONTAINER_IMPORT_ALREADY_IMPORTED",
                 "CONTAINER_IMPORT_SOURCE_CHANGED",
                 "CONTAINER_SHIPMENT_ALREADY_ASSIGNED",
+                "CONTAINER_SHIPMENT_ALREADY_LOADED",
                 "CONTAINER_STATE_CHANGED"
               ]
             },
@@ -72307,6 +72327,8 @@
                 "CONTAINER_IMPORT_ROWS_INVALID",
                 "CONTAINER_IMPORT_SOURCE_INVALID",
                 "CONTAINER_IMPORT_UNMATCHED",
+                "CONTAINER_SHIPMENT_DELIVERED",
+                "CONTAINER_SHIPMENT_NOT_RECEIVED",
                 "CONTAINER_SHIPMENT_UNAVAILABLE",
                 "CONTAINER_SHIPMENT_WAREHOUSE_MISMATCH",
                 "OCEAN_CALCULATION_INVALID",
@@ -94311,6 +94333,26 @@
           "effectiveEnabled"
         ]
       },
+      "PurchaseShipmentContainerBatchDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "containerBatchNo": {
+            "type": "string"
+          },
+          "containerBatchName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "containerBatchNo",
+          "containerBatchName"
+        ]
+      },
       "PurchaseShipmentOrderDto": {
         "type": "object",
         "properties": {
@@ -94601,6 +94643,16 @@
             "maxLength": 500,
             "nullable": true
           },
+          "containerBatch": {
+            "nullable": true,
+            "description": "货件当前所在装柜柜次；未装柜或历史解绑后为空",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseShipmentContainerBatchDto"
+              }
+            ]
+          },
           "purchaseOrder": {
             "$ref": "#/components/schemas/PurchaseShipmentOrderDto"
           },
@@ -94647,6 +94699,7 @@
           "deliveredBy",
           "deliveredRecordedAt",
           "deliveryRemark",
+          "containerBatch",
           "purchaseOrder",
           "supplier",
           "salesSource",
@@ -94961,6 +95014,16 @@
             "maxLength": 500,
             "nullable": true
           },
+          "containerBatch": {
+            "nullable": true,
+            "description": "货件当前所在装柜柜次；未装柜或历史解绑后为空",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseShipmentContainerBatchDto"
+              }
+            ]
+          },
           "purchaseOrder": {
             "$ref": "#/components/schemas/PurchaseShipmentOrderDto"
           },
@@ -95013,6 +95076,7 @@
           "deliveredBy",
           "deliveredRecordedAt",
           "deliveryRemark",
+          "containerBatch",
           "purchaseOrder",
           "supplier",
           "salesSource",
@@ -96924,6 +96988,57 @@
             "type": "string",
             "nullable": true
           },
+          "customerName": {
+            "type": "string",
+            "nullable": true,
+            "description": "销售订单客户名；库存采购为空。按采购域口径随 purchase-orders:read 返回。"
+          },
+          "purchaseType": {
+            "type": "string",
+            "enum": [
+              "SALES_LINKED",
+              "STOCK"
+            ]
+          },
+          "viewStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING_REVIEW",
+              "AWAITING_SHIPMENT",
+              "SHIPPED",
+              "WAREHOUSE_RECEIVED",
+              "CONTAINER_LOADED",
+              "DELIVERED",
+              "CANCELLED"
+            ]
+          },
+          "warehouseReceivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "containerBatch": {
+            "nullable": true,
+            "description": "货件当前所在柜次；未装柜为空。",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseShipmentContainerBatchDto"
+              }
+            ]
+          },
+          "matchFields": {
+            "type": "array",
+            "description": "该候选命中的精确标识字段。",
+            "items": {
+              "type": "string",
+              "enum": [
+                "shippingMarkText",
+                "trackingNo",
+                "shipmentNo"
+              ]
+            }
+          },
           "eligible": {
             "type": "boolean"
           },
@@ -96941,6 +97056,12 @@
           "goodsName",
           "purchaseOrderNo",
           "salesOrderNo",
+          "customerName",
+          "purchaseType",
+          "viewStatus",
+          "warehouseReceivedAt",
+          "containerBatch",
+          "matchFields",
           "eligible",
           "ineligibleReason"
         ]

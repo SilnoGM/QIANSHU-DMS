@@ -15,7 +15,7 @@ function harness() {
     $queryRaw: jest.fn().mockResolvedValue([]), user: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
     containerBatch: { findUnique: jest.fn().mockResolvedValue(batch), update: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...batch, ...data, version: 5 })) },
     containerLoadingItem: { findFirst: jest.fn().mockResolvedValue(item), update: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...item, ...data, version: 3, ...Object.fromEntries(['grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'reportedVolumeCai', 'codAmountTwd'].map(field => [field, typeof data[field] === 'string' ? new Prisma.Decimal(data[field]) : null])) })) },
-    purchaseOrderPart: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
+    purchaseOrderPart: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE', deliveredAt: null, loadedAt: null, warehouseReceivedAt: new Date('2026-09-18T00:00:00Z'), destinationWarehouseValue: 'B5', containerLoadingItems: [] }) },
     // 销售履约推进按现状判断；默认非候选状态，仅关联货件本身不改变订单。
     salesOrder: { findUnique: jest.fn().mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'LAND_TRANSIT' }) },
   }
@@ -53,16 +53,17 @@ describe('Container maintenance commands', () => {
   })
   it('checks active shipment and rejects assignment to another container', async () => {
     const h = harness(), shipmentId = randomUUID()
-    h.tx.purchaseOrderPart.findUnique.mockResolvedValueOnce({ status: 'CANCELLED' })
+    h.tx.purchaseOrderPart.findUnique.mockResolvedValueOnce({ status: 'CANCELLED', deliveredAt: null, loadedAt: null, warehouseReceivedAt: null, destinationWarehouseValue: 'B5', containerLoadingItems: [] })
     await expect(h.service.updateItem(h.context, h.id, h.itemId, { ...fields, shipmentId })).rejects.toMatchObject({ code: 'CONTAINER_SHIPMENT_UNAVAILABLE' })
-    h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce(h.item).mockResolvedValueOnce({ id: randomUUID() })
+    h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce(h.item)
+    h.tx.purchaseOrderPart.findUnique.mockResolvedValueOnce({ status: 'ACTIVE', deliveredAt: null, loadedAt: null, warehouseReceivedAt: new Date('2026-09-18T00:00:00Z'), destinationWarehouseValue: 'B5', containerLoadingItems: [{ containerBatchId: randomUUID() }] })
     await expect(h.service.updateItem(h.context, h.id, h.itemId, { ...fields, shipmentId })).rejects.toMatchObject({ code: 'CONTAINER_SHIPMENT_ALREADY_ASSIGNED' })
     expect(h.tx.containerLoadingItem.update).not.toHaveBeenCalled()
   })
   it('locks the sales order chain before the shipment and evaluates the advance afterwards', async () => {
     const h = harness(), shipmentId = randomUUID()
     h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ purchaseOrder: { salesOrderId: 'so-1' } }])
-    h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce(h.item).mockResolvedValueOnce(null)
+    h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce(h.item)
     await h.service.updateItem(h.context, h.id, h.itemId, { ...fields, shipmentId })
     // 锁序必须与发货、入仓一致：销售明细 → 采购单 → 销售主行 → 货件，装柜不能反向申请。
     const statements = h.tx.$queryRaw.mock.calls.map(call => (call as [{ sql: string }])[0].sql.replace(/\s+/gu, ' '))

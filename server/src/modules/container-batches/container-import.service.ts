@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
-import { hasPersistenceCode, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
+import { hasPersistenceCode, hasPersistenceConstraint, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AccessControlService } from '../access-control/access-control.service'
 import { AuditService } from '../audit/audit.service'
@@ -64,11 +64,21 @@ export class ContainerImportService {
             matchReason: imported ? '该来源行已导入，本次跳过，已有明细保持不变' : '当前柜次已存在相同海运唛头的明细，本次跳过，已有明细保持不变' }
         }
         const match = matchContainerShipment(row.warehouseReceiptReference, shipments)
-        const candidates = shipments.filter(candidate => match.candidateIds.includes(candidate.id)).map(candidate => serializeImportCandidate(candidate, id, batch.warehouseValue, codes.includes('sales-orders:read')))
+        const candidates = shipments.filter(candidate => match.candidateIds.includes(candidate.id)).map(candidate => serializeImportCandidate(
+          candidate,
+          id,
+          batch.warehouseValue,
+          codes.includes('sales-orders:read'),
+          match.evidence.filter(evidence => evidence.shipmentId === candidate.id).map(evidence => evidence.field),
+        ))
         const eligibleMatch = candidates.find(candidate => candidate.id === match.shipmentId && candidate.eligible)
         const errors = [...row.errors]
         const fieldNames = { shippingMarkText: '货件唛头', trackingNo: '物流单号', shipmentNo: '货件编号' }
-        const matchReason = eligibleMatch ? [...new Set(match.evidence.filter(evidence => evidence.shipmentId === eligibleMatch.id).map(evidence => fieldNames[evidence.field]))].join('、') + '精确匹配' : candidates.find(candidate => !candidate.eligible)?.ineligibleReason ?? match.reason
+        // 只有全部候选都不可选时才把原因提升为行级原因；混合候选仍应提示人工核对多个命中。
+        const allIneligibleReason = candidates.length > 0 && candidates.every(candidate => !candidate.eligible)
+          ? candidates[0]?.ineligibleReason ?? null
+          : null
+        const matchReason = eligibleMatch ? [...new Set(match.evidence.filter(evidence => evidence.shipmentId === eligibleMatch.id).map(evidence => fieldNames[evidence.field]))].join('、') + '精确匹配' : allIneligibleReason ?? match.reason
         return { ...row, errors, candidates, matchedShipmentId: errors.length ? null : eligibleMatch?.id ?? null,
           matchStatus: errors.length ? 'INVALID' : eligibleMatch ? 'MATCHED' : candidates.length ? 'AMBIGUOUS' : 'UNMATCHED',
           matchReason }
@@ -147,6 +157,7 @@ export class ContainerImportService {
     } catch (error) {
       if (error instanceof ApiException) throw error
       const facts = readPersistenceErrorFacts(error)
+      if (hasPersistenceConstraint(facts, 'container_loading_items_shipment_delivered_check')) return containerFailure('CONTAINER_SHIPMENT_DELIVERED', '货件已签收，不能装柜', 422)
       if (['P2002', '23505', 'P2034', '40001', '40P01', '55P03', '57014'].some(code => hasPersistenceCode(facts, code))) return containerFailure('CONTAINER_STATE_CHANGED', '柜次或货件正在处理，请刷新后重试', 409)
       throw error
     }

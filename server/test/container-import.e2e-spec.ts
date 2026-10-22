@@ -42,7 +42,12 @@ describe('container source import with isolated PostgreSQL', () => {
     const result = await preview(parent.id)
     expect(result).toMatchObject({ containerBatchId: parent.id, warehouseValue: parent.warehouseValue, alreadyImported: false, expectedVersion: 1 })
     expect(result.rows[0]).toMatchObject({ matchStatus: 'MATCHED', matchedShipmentId: shipment.part.id, volumeCai: '12.88', chargeableVolumeCai: 13,
-      candidates: [expect.objectContaining({ id: shipment.part.id, eligible: true, salesOrderNo: shipment.source!.orderNo }) as unknown] })
+      candidates: [expect.objectContaining({
+        id: shipment.part.id, eligible: true, salesOrderNo: shipment.source!.orderNo,
+        customerName: '包装客户', purchaseType: 'SALES_LINKED', viewStatus: 'WAREHOUSE_RECEIVED',
+        warehouseReceivedAt: expect.any(String) as unknown, containerBatch: null,
+        matchFields: expect.arrayContaining(['shippingMarkText']) as unknown,
+      }) as unknown] })
     expect(JSON.stringify(result)).not.toMatch(/sourceData|objectKey|checksumSha256|password/u)
     expect(await h.prisma.containerLoadingItem.count({ where: { containerBatchId: parent.id } })).toBe(0)
     expect(await h.prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: shipment.part.id } })).toEqual(before)
@@ -56,11 +61,54 @@ describe('container source import with isolated PostgreSQL', () => {
     const limited = (await h.browserWithPermissions(permissions.filter(code => code !== 'sales-orders:read'))).browser
     const data = await preview(parent.id, limited)
     expect(data.rows[0].candidates[0].salesOrderNo).toBeNull()
+    expect(data.rows[0].candidates[0].customerName).toBe('包装客户')
     const body = input(data)
     await reader.post(`${path}/import`).set(packagingHeaders).set('Idempotency-Key', randomUUID()).send(body).expect(403)
     await browser.post(`${path}/import`).send(body).expect(403)
     await browser.post(`${path}/import`).set(packagingHeaders).send(body).expect(422)
     await post(`${path}/import`, { ...body, rows: [{ ...body.rows[0], goodsName: 'forged' }] }).expect(422)
+  })
+
+  it('rejects delivered, other-batch and unlinked loaded shipments before writing loading items', async () => {
+    const delivered = await h.shipment(), deliveredBatch = await batch([{ B: delivered.part.shippingMarkText! }])
+    await post(`/api/container-batches/${deliveredBatch.id}/import`, input(await preview(deliveredBatch.id))).expect(200)
+    const deliveredLoad = await h.prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: delivered.part.id }, select: { loadedAt: true } })
+    const deliveredAt = new Date(deliveredLoad.loadedAt!.getTime() + 1)
+    await h.prisma.purchaseOrderPart.update({ where: { id: delivered.part.id }, data: {
+      deliveredAt, deliveredById: h.fixture.actor.id, deliveredRecordedAt: new Date(deliveredAt.getTime() + 1),
+    } })
+    const deliveredTarget = await batch([{ B: delivered.part.shippingMarkText! }]), deliveredData = await preview(deliveredTarget.id)
+    expect(deliveredData.rows[0].candidates[0]).toMatchObject({
+      eligible: false, ineligibleReason: '货件已签收，不能装柜', viewStatus: 'DELIVERED', containerBatch: { id: deliveredBatch.id },
+    })
+    const deliveredResponse = await post(`/api/container-batches/${deliveredTarget.id}/import`, {
+      ...input(deliveredData, true), rows: deliveredData.rows.map(row => ({ rowKey: row.rowKey, shipmentId: delivered.part.id })),
+    }).expect(422)
+    expect((deliveredResponse.body as { code: string }).code).toBe('CONTAINER_SHIPMENT_DELIVERED')
+
+    const loaded = await h.shipment(), loadedBatch = await batch([{ B: loaded.part.shippingMarkText! }])
+    await post(`/api/container-batches/${loadedBatch.id}/import`, input(await preview(loadedBatch.id))).expect(200)
+    const loadedTarget = await batch([{ B: loaded.part.shippingMarkText! }]), loadedData = await preview(loadedTarget.id)
+    expect(loadedData.rows[0].candidates[0]).toMatchObject({
+      eligible: false, ineligibleReason: '货件已分配到其他柜次，不能跨柜拆分', viewStatus: 'CONTAINER_LOADED', containerBatch: { id: loadedBatch.id },
+    })
+    const loadedResponse = await post(`/api/container-batches/${loadedTarget.id}/import`, {
+      ...input(loadedData, true), rows: loadedData.rows.map(row => ({ rowKey: row.rowKey, shipmentId: loaded.part.id })),
+    }).expect(409)
+    expect((loadedResponse.body as { code: string }).code).toBe('CONTAINER_SHIPMENT_ALREADY_ASSIGNED')
+
+    const unlinked = await h.shipment(), loadedAt = new Date(Date.now() - 60_000)
+    await h.prisma.purchaseOrderPart.update({ where: { id: unlinked.part.id }, data: {
+      loadedAt, loadedById: h.fixture.actor.id, loadedRecordedAt: new Date(loadedAt.getTime() + 1000),
+    } })
+    const unlinkedBatch = await batch([{ B: unlinked.part.shippingMarkText! }]), unlinkedData = await preview(unlinkedBatch.id)
+    expect(unlinkedData.rows[0].candidates[0]).toMatchObject({
+      eligible: false, ineligibleReason: '货件已装柜，不能关联新的柜次', viewStatus: 'CONTAINER_LOADED', containerBatch: null,
+    })
+    const unlinkedResponse = await post(`/api/container-batches/${unlinkedBatch.id}/import`, {
+      ...input(unlinkedData, true), rows: unlinkedData.rows.map(row => ({ rowKey: row.rowKey, shipmentId: unlinked.part.id })),
+    }).expect(409)
+    expect((unlinkedResponse.body as { code: string }).code).toBe('CONTAINER_SHIPMENT_ALREADY_LOADED')
   })
 
   it('previews and persists address notes separately while keeping original source cells', async () => {

@@ -1,29 +1,53 @@
 import { Prisma } from '../../generated/prisma/client'
+import { resolvePurchaseShipmentViewStatus } from '../purchase-orders/shipments/purchase-shipment-view'
 import { containerFailure } from './container-batch.normalizer'
 import type { ContainerImportCandidateDto } from './container-import.dto'
-import { extractContainerReferenceTokens } from './import-matching'
+import { containerShipmentEligibilitySelect, resolveContainerShipmentEligibility } from './container-shipment-eligibility'
+import { extractContainerReferenceTokens, type ReferenceField } from './import-matching'
 
 const shipmentSelect = {
-  id: true, shipmentNo: true, shippingMarkText: true, trackingNo: true, destinationWarehouseValue: true, status: true, warehouseReceivedAt: true,
-  purchaseOrder: { select: { orderNo: true, salesOrder: { select: { orderNo: true } } } },
+  ...containerShipmentEligibilitySelect,
+  id: true, shipmentNo: true, shippingMarkText: true, trackingNo: true, shippedAt: true,
+  purchaseOrder: {
+    select: { orderNo: true, purchaseType: true, salesOrder: { select: { orderNo: true, customerName: true } } },
+  },
   items: { select: { line: { select: { productNameSnapshot: true } } } },
-  containerLoadingItems: { select: { containerBatchId: true } },
+  containerLoadingItems: {
+    select: {
+      containerBatchId: true,
+      containerBatch: { select: { id: true, containerBatchNo: true, containerBatchName: true } },
+    },
+  },
 } satisfies Prisma.PurchaseOrderPartSelect
 export type ImportShipment = Prisma.PurchaseOrderPartGetPayload<{ select: typeof shipmentSelect }>
 export function shipmentEligibility(shipment: ImportShipment, batchId: string, warehouseValue: string) {
-  if (shipment.status !== 'ACTIVE') return '货件尚未生效或已取消'
-  // 装柜是到仓后的作业：未到仓货件不能进柜，发货事实由到仓事实隐含。
-  if (shipment.warehouseReceivedAt === null) return '货件尚未到仓，不能装柜'
-  if (shipment.destinationWarehouseValue !== warehouseValue) return '货件目的地仓库与柜次装柜仓库不一致'
-  if (shipment.containerLoadingItems.some(item => item.containerBatchId !== batchId)) return '货件已分配到其他柜次，不能跨柜拆分'
-  return null
+  return resolveContainerShipmentEligibility(shipment, batchId, warehouseValue)?.message ?? null
 }
-export function serializeImportCandidate(shipment: ImportShipment, batchId: string, warehouseValue: string, canSales: boolean): ContainerImportCandidateDto {
-  const ineligibleReason = shipmentEligibility(shipment, batchId, warehouseValue)
-  return { id: shipment.id, shipmentNo: shipment.shipmentNo, shippingMarkText: shipment.shippingMarkText, trackingNo: shipment.trackingNo,
-    warehouseValue: shipment.destinationWarehouseValue, goodsName: [...new Set(shipment.items.map(item => item.line.productNameSnapshot))].join(' + '),
-    purchaseOrderNo: shipment.purchaseOrder.orderNo, salesOrderNo: canSales ? shipment.purchaseOrder.salesOrder?.orderNo ?? null : null,
-    eligible: ineligibleReason === null, ineligibleReason }
+export function serializeImportCandidate(
+  shipment: ImportShipment,
+  batchId: string,
+  warehouseValue: string,
+  canSales: boolean,
+  matchFields: readonly ReferenceField[],
+): ContainerImportCandidateDto {
+  const failure = resolveContainerShipmentEligibility(shipment, batchId, warehouseValue)
+  return {
+    id: shipment.id, shipmentNo: shipment.shipmentNo, shippingMarkText: shipment.shippingMarkText, trackingNo: shipment.trackingNo,
+    warehouseValue: shipment.destinationWarehouseValue,
+    goodsName: [...new Set(shipment.items.map(item => item.line.productNameSnapshot))].join(' + '),
+    purchaseOrderNo: shipment.purchaseOrder.orderNo,
+    salesOrderNo: canSales ? shipment.purchaseOrder.salesOrder?.orderNo ?? null : null,
+    // 客户名按采购域口径返回：采购读者已经在采购单/货件列表见过同一字段，不再按 sales-orders:read 二次门控。
+    customerName: shipment.purchaseOrder.salesOrder?.customerName ?? null,
+    purchaseType: shipment.purchaseOrder.purchaseType,
+    viewStatus: resolvePurchaseShipmentViewStatus(shipment),
+    warehouseReceivedAt: shipment.warehouseReceivedAt?.toISOString() ?? null,
+    // 同一货件只能落在一个柜次（数据库触发器保证），取首条即可；同柜多行时柜次相同。
+    containerBatch: shipment.containerLoadingItems[0]?.containerBatch ?? null,
+    matchFields: [...new Set(matchFields)],
+    eligible: failure === null,
+    ineligibleReason: failure?.message ?? null,
+  }
 }
 export async function findImportCandidates(tx: Prisma.TransactionClient, references: (string | null)[]) {
   const tokens = [...new Set(references.flatMap(extractContainerReferenceTokens))]
@@ -45,9 +69,8 @@ export async function lockImportShipments(tx: Prisma.TransactionClient, shipment
   const found = await tx.purchaseOrderPart.findMany({ where: { id: { in: ids } }, select: shipmentSelect })
   for (const id of ids) {
     const row = found.find(shipment => shipment.id === id)
-    if (!row || row.status !== 'ACTIVE') return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '所选货件不存在、尚未生效或已取消')
-    if (row.warehouseReceivedAt === null) return containerFailure('CONTAINER_SHIPMENT_NOT_RECEIVED', '所选货件尚未到仓，不能装柜')
-    if (row.destinationWarehouseValue !== warehouseValue) return containerFailure('CONTAINER_SHIPMENT_WAREHOUSE_MISMATCH', '所选货件目的地仓库与柜次仓库不一致')
-    if (row.containerLoadingItems.some(item => item.containerBatchId !== batchId)) return containerFailure('CONTAINER_SHIPMENT_ALREADY_ASSIGNED', '所选货件已分配到其他柜次，不能跨柜拆分', 409)
+    if (!row) return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '所选货件不存在、尚未生效或已取消')
+    const failure = resolveContainerShipmentEligibility(row, batchId, warehouseValue)
+    if (failure) return containerFailure(failure.code, failure.message, failure.status)
   }
 }

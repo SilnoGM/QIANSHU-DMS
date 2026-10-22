@@ -116,6 +116,12 @@ export class PurchaseShipmentDestinationWarehouseDto {
   @ApiProperty({ type: 'boolean' }) readonly effectiveEnabled!: boolean
 }
 
+export class PurchaseShipmentContainerBatchDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string' }) readonly containerBatchNo!: string
+  @ApiProperty({ type: 'string' }) readonly containerBatchName!: string
+}
+
 export class PurchaseShipmentListItemDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string', nullable: true, maxLength: 64, description: 'SHIPMENT_NO 派发的永久货件编号；未补号历史货件为空' }) readonly shipmentNo!: string | null
@@ -143,6 +149,7 @@ export class PurchaseShipmentListItemDto {
   @ApiProperty({ type: () => PurchaseOrderActorDto, nullable: true }) readonly deliveredBy!: PurchaseOrderActorDto | null
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly deliveredRecordedAt!: string | null
   @ApiProperty({ type: 'string', maxLength: 500, nullable: true }) readonly deliveryRemark!: string | null
+  @ApiProperty({ type: () => PurchaseShipmentContainerBatchDto, nullable: true, description: '货件当前所在装柜柜次；未装柜或历史解绑后为空' }) readonly containerBatch!: PurchaseShipmentContainerBatchDto | null
   @ApiProperty({ type: () => PurchaseShipmentOrderDto }) readonly purchaseOrder!: PurchaseShipmentOrderDto
   @ApiProperty({ type: () => PurchaseOrderSupplierDto }) readonly supplier!: PurchaseOrderSupplierDto
   @ApiProperty({ type: () => PurchaseOrderSourceSalesOrderDto, nullable: true }) readonly salesSource!: PurchaseOrderSourceSalesOrderDto | null
