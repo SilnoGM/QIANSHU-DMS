@@ -1336,8 +1336,9 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       const salesOrderId = shipment.source.id
       // 订单总额压到恰好等于甲账单代收：甲批次完成后回填即可收齐。
       await widenSalesTotal(salesOrderId, '129000.00')
-      await signOrderWithShipments(salesOrderId)
+      // 真实生命周期先装柜再签收；已签收货件不允许再新增或换绑装柜明细。
       await createContainer(containerBatchName, date, marks.map(mark => ({ mark, shipmentId: shipment.part.id })))
+      await signOrderWithShipments(salesOrderId)
       const codRow = {
         B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: 'WG-0316-0001', F: marks[0],
         G: '农用四轮微耕机', H: '1', I: 'CTN',

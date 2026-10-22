@@ -57,6 +57,7 @@ interface ProfileBody {
   email: string | null
   mobileE164: string | null
   avatarUrl: string | null
+  issuerPrefix: string | null
   createdAt: string
   updatedAt: string
 }
@@ -258,6 +259,7 @@ describe('Profile API with Cookie Session and PostgreSQL', () => {
       'avatarUrl',
       'createdAt',
       'email',
+      'issuerPrefix',
       'mobileE164',
       'updatedAt',
       'userId',
@@ -267,6 +269,7 @@ describe('Profile API with Cookie Session and PostgreSQL', () => {
       email: null,
       mobileE164: null,
       avatarUrl: null,
+      issuerPrefix: null,
     })
     expect(initial).not.toHaveProperty('remark')
     expect(initial).not.toHaveProperty('emailNormalized')
@@ -278,6 +281,7 @@ describe('Profile API with Cookie Session and PostgreSQL', () => {
         mobileE164: '+8613812345678',
         email: ' E2E.User@Example.COM ',
         avatarUrl: 'https://cdn.example.com/profile-e2e.png',
+        issuerPrefix: '李华',
       })
       .expect(200)
     const updated = readResponseBody<ProfileBody>(patchResponse)
@@ -287,12 +291,14 @@ describe('Profile API with Cookie Session and PostgreSQL', () => {
       email: 'E2E.User@Example.COM',
       mobileE164: '+8613812345678',
       avatarUrl: 'https://cdn.example.com/profile-e2e.png',
+      issuerPrefix: '李华',
     })
 
     const stored = await prisma.userProfile.findUniqueOrThrow({
       where: { userId: user.id },
     })
     expect(stored.emailNormalized).toBe('e2e.user@example.com')
+    expect(stored.issuerPrefix).toBe('李华')
     const auditEvent = await prisma.auditEvent.findFirstOrThrow({
       where: {
         actorUserId: user.id,
@@ -302,7 +308,7 @@ describe('Profile API with Cookie Session and PostgreSQL', () => {
       orderBy: { occurredAt: 'desc' },
     })
     expect(auditEvent.metadata).toEqual({
-      changedFields: 'avatarUrl,email,mobileE164',
+      changedFields: 'avatarUrl,email,issuerPrefix,mobileE164',
     })
     const serializedAudit = JSON.stringify(auditEvent.metadata)
     expect(serializedAudit).not.toContain('E2E.User')
@@ -312,13 +318,14 @@ describe('Profile API with Cookie Session and PostgreSQL', () => {
     await browser
       .patch('/api/profile')
       .set(CSRF_HEADERS)
-      .send({ email: null, mobileE164: null, avatarUrl: null })
+      .send({ email: null, mobileE164: null, avatarUrl: null, issuerPrefix: null })
       .expect(200)
       .expect((response) => {
         expect(readResponseBody<ProfileBody>(response)).toMatchObject({
           email: null,
           mobileE164: null,
           avatarUrl: null,
+          issuerPrefix: null,
         })
       })
   })
