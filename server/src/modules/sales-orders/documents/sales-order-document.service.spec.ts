@@ -110,11 +110,12 @@ const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
 
 describe('SalesOrderDocumentService', () => {
   it.each([
-    [null, 'sales'],
-    ['PAYMENT_VOUCHER', 'voucher'],
+    [null, 'sales', ['IMAGE']],
+    ['PAYMENT_VOUCHER', 'voucher', ['IMAGE']],
+    ['DELIVERY_RECEIPT', 'sales', ['IMAGE']],
   ] as const)(
     'lands a temporary upload with purpose %s in the %s pool',
-    async (purpose, expectedPool) => {
+    async (purpose, expectedPool, expectedAllowedTypes) => {
       const prepare = jest.fn().mockResolvedValue({
         id: MEDIA_ASSET_ID,
         mediaType: 'IMAGE',
@@ -148,8 +149,40 @@ describe('SalesOrderDocumentService', () => {
         Object.assign(Readable.from([Buffer.from('')]), { headers: {} }),
       )
 
-      // 用途只影响键布局：权限与敏感级仍由服务端按业务主体独立校验。
-      expect(prepare).toHaveBeenCalledWith(expect.objectContaining({ pool: expectedPool }))
+      // 用途只决定对象键布局；出单凭证、收款凭证与签收单都只允许图片。
+      expect(prepare).toHaveBeenCalledWith(expect.objectContaining({
+        allowedTypes: expectedAllowedTypes,
+        pool: expectedPool,
+      }))
+    },
+  )
+
+  it.each([null, 'PAYMENT_VOUCHER', 'DELIVERY_RECEIPT'] as const)(
+    'rejects document uploads for purpose %s before preparing media',
+    async purpose => {
+      const prepare = jest.fn()
+      const parser = {
+        parse: async (
+          _request: unknown,
+          handler: (input: unknown) => Promise<unknown>,
+        ) => handler({
+          declaredMimeType: 'application/pdf',
+          mediaType: 'DOCUMENT',
+          originalFilename: 'voucher.pdf',
+          purpose,
+          stream: Readable.from([Buffer.from('abc')]),
+        }),
+      } as unknown as SalesOrderDocumentMultipartParser
+      const fixture = setup('DELIVERY_RECEIPT', 'SEA_TRANSIT', 'CONFIRMED', parser)
+      Object.assign(fixture.media, { prepare })
+
+      await expect(fixture.service.uploadTemporary(
+        context,
+        Object.assign(Readable.from([Buffer.from('')]), { headers: {} }),
+      )).rejects.toMatchObject({
+        code: 'SALES_ORDER_DOCUMENT_CONTENT_UNSUPPORTED',
+      })
+      expect(prepare).not.toHaveBeenCalled()
     },
   )
 
@@ -162,6 +195,17 @@ describe('SalesOrderDocumentService', () => {
       { mediaAssetId: MEDIA_ASSET_ID, remark: '  外箱完好，数量已核对  ' },
     )).resolves.toEqual(fixture.detail)
 
+    expect(fixture.transaction.mediaAsset.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: MEDIA_ASSET_ID,
+        createdByUserId: ACTOR_ID,
+        status: 'UPLOADING',
+        mediaType: 'IMAGE',
+        deletedAt: null,
+        objectKey: { not: null },
+      },
+      select: { id: true, createdAt: true },
+    })
     expect(fixture.media.activate).toHaveBeenCalledWith(
       fixture.transaction,
       MEDIA_ASSET_ID,
@@ -241,6 +285,20 @@ describe('SalesOrderDocumentService', () => {
         ORDER_ID,
         'DELIVERY_RECEIPT',
       )
+  })
+
+  it('rejects a document media asset as delivery receipt before activation', async () => {
+    const fixture = setup()
+    fixture.transaction.mediaAsset.findFirst.mockResolvedValue(null)
+
+    await expect(fixture.service.submitDeliveryReceipt(
+      context,
+      ORDER_ID,
+      { mediaAssetId: MEDIA_ASSET_ID, remark: null },
+    )).rejects.toMatchObject({ code: 'SALES_ORDER_DOCUMENT_UNAVAILABLE' })
+
+    expect(fixture.media.activate).not.toHaveBeenCalled()
+    expect(fixture.transaction.salesOrderDocument.create).not.toHaveBeenCalled()
   })
 
   it('does not return a successful detail when receipt-derived state fails', async () => {

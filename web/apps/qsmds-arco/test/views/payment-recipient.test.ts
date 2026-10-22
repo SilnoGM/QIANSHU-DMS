@@ -25,9 +25,9 @@ test('保存只携带当前方式字段，修剪输入，不误传历史id或内
   ])
 })
 test('图片限制格式和体积，失败不产生可保存资料', () => {
-  assert.equal(validateRecipientImage({ type: 'image/png', size: 20 }), null)
-  assert.equal(validateRecipientImage({ type: 'image/svg+xml', size: 20 }), 'paymentRecipient.errors.imageType')
-  assert.equal(validateRecipientImage({ type: 'image/png', size: 10 * 1024 * 1024 + 1 }), 'paymentRecipient.errors.imageSize')
+  assert.equal(validateRecipientImage({ name: 'qr.png', type: 'image/png', size: 20 }), null)
+  assert.equal(validateRecipientImage({ name: 'qr.svg', type: 'image/svg+xml', size: 20 }), 'paymentRecipient.errors.imageType')
+  assert.equal(validateRecipientImage({ name: 'qr.png', type: 'image/png', size: 10 * 1024 * 1024 + 1 }), 'paymentRecipient.errors.imageSize')
 })
 test('保存冲突或未知结果先核对，不盲重试旧版本；校验错误可改正', () => {
   assert.equal(paymentRecipientSaveFailure({ kind: 'network' }), 'unknown')

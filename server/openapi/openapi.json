@@ -34635,6 +34635,18 @@
             }
           },
           {
+            "name": "purchaseHold",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "AWAITING_PURCHASE_REVIEW",
+                "EXCLUDE_AWAITING_PURCHASE_REVIEW"
+              ]
+            }
+          },
+          {
             "name": "issuerUserId",
             "required": false,
             "in": "query",
@@ -88124,6 +88136,25 @@
           "unreconciledMemberCount"
         ]
       },
+      "SalesOrderPurchaseHoldDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "AWAITING_PURCHASE_REVIEW"
+            ]
+          },
+          "pendingReviewOrderCount": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "reason",
+          "pendingReviewOrderCount"
+        ]
+      },
       "SalesOrderLinePreviewDto": {
         "type": "object",
         "properties": {
@@ -88349,6 +88380,15 @@
               }
             ]
           },
+          "purchaseHold": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SalesOrderPurchaseHoldDto"
+              }
+            ]
+          },
           "paymentRecordCount": {
             "type": "integer",
             "minimum": 0
@@ -88403,6 +88443,7 @@
           "fulfillmentStatus",
           "paymentStatus",
           "completionHold",
+          "purchaseHold",
           "paymentRecordCount",
           "statusChangeRecordCount",
           "amountChangeRecordCount",
@@ -88502,6 +88543,7 @@
               "CANCELLED",
               "COMPLETED",
               "PENDING",
+              "AWAITING_PURCHASE_REVIEW",
               "PREPARING",
               "LAND_TRANSIT",
               "WAREHOUSE_ARRIVED",
@@ -89141,14 +89183,14 @@
           "mediaType": {
             "type": "string",
             "enum": [
-              "IMAGE",
-              "DOCUMENT"
+              "IMAGE"
             ]
           },
           "purpose": {
             "type": "string",
             "enum": [
-              "PAYMENT_VOUCHER"
+              "PAYMENT_VOUCHER",
+              "DELIVERY_RECEIPT"
             ]
           },
           "file": {
@@ -89171,8 +89213,7 @@
           "mediaType": {
             "type": "string",
             "enum": [
-              "IMAGE",
-              "DOCUMENT"
+              "IMAGE"
             ]
           },
           "mimeType": {
@@ -90128,7 +90169,12 @@
         "type": "object",
         "properties": {
           "mediaType": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "IMAGE",
+              "VIDEO",
+              "DOCUMENT"
+            ]
           },
           "mimeType": {
             "type": "string",
@@ -92428,8 +92474,7 @@
           "mediaType": {
             "type": "string",
             "enum": [
-              "IMAGE",
-              "DOCUMENT"
+              "IMAGE"
             ]
           },
           "file": {
@@ -92452,8 +92497,7 @@
           "mediaType": {
             "type": "string",
             "enum": [
-              "IMAGE",
-              "DOCUMENT"
+              "IMAGE"
             ]
           },
           "mimeType": {

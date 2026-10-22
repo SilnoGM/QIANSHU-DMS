@@ -853,6 +853,11 @@ function handleSalesOrderRowAction(
     openSalesFactoryShipment(order)
     return
   }
+  // 催办尚无通知通道：只提示能力状态，不写数据、不打开任何表单。
+  if (action.key === 'URGE_PURCHASE_REVIEW') {
+    toast.info('催办功能开发中')
+    return
+  }
   toast.info(`${action.label}功能正在建设中`)
 }
 
@@ -1269,6 +1274,24 @@ function completionHoldHint(hold: SalesOrderListItemDto['completionHold']): stri
   return '该订单尚未被账单对账覆盖，账单对账完成后自动完成'
 }
 
+/**
+ * 采购审核中原因与停留原因同构：短标签进单元格、完整解释放 tooltip。
+ * 该原因只由服务端按采购覆盖事实下发，前端不根据本地状态重新推断。
+ */
+function purchaseHoldLabel(hold: SalesOrderListItemDto['purchaseHold']): string {
+  if (hold === null) {
+    return ''
+  }
+  return { AWAITING_PURCHASE_REVIEW: '采购审核中' }[hold.reason]
+}
+
+function purchaseHoldHint(hold: SalesOrderListItemDto['purchaseHold']): string {
+  if (hold === null) {
+    return ''
+  }
+  return `该订单的待采购数量已被 ${hold.pendingReviewOrderCount} 张采购单占用，审核通过后自动进入待发货`
+}
+
 // 与币种选择卡片保持相同的视觉身份，文字仍作为主要识别信息，颜色仅用于快速区分。
 function currencyTagClass(value: SalesOrderListItemDto['currencyCode']): string {
   return value === 'TWD'
@@ -1681,6 +1704,18 @@ onBeforeUnmount(() => {
               <FaTooltip :text="completionHoldHint(row.original.completionHold)">
                 <span class="qs-type-meta underline underline-offset-4 decoration-dotted">
                   {{ completionHoldLabel(row.original.completionHold) }}
+                </span>
+              </FaTooltip>
+            </QsTableStackedLine>
+            <QsTableStackedLine
+              v-if="row.original.purchaseHold"
+              label="采购状态"
+              tone="muted"
+              nowrap
+            >
+              <FaTooltip :text="purchaseHoldHint(row.original.purchaseHold)">
+                <span class="qs-type-meta underline underline-offset-4 decoration-dotted">
+                  {{ purchaseHoldLabel(row.original.purchaseHold) }}
                 </span>
               </FaTooltip>
             </QsTableStackedLine>
@@ -2127,6 +2162,18 @@ onBeforeUnmount(() => {
                       <FaTooltip :text="completionHoldHint(row.completionHold)">
                         <span class="qs-type-meta underline underline-offset-4 decoration-dotted">
                           {{ completionHoldLabel(row.completionHold) }}
+                        </span>
+                      </FaTooltip>
+                    </QsTableStackedLine>
+                    <QsTableStackedLine
+                      v-if="row.purchaseHold"
+                      label="采购状态"
+                      tone="muted"
+                      nowrap
+                    >
+                      <FaTooltip :text="purchaseHoldHint(row.purchaseHold)">
+                        <span class="qs-type-meta underline underline-offset-4 decoration-dotted">
+                          {{ purchaseHoldLabel(row.purchaseHold) }}
                         </span>
                       </FaTooltip>
                     </QsTableStackedLine>

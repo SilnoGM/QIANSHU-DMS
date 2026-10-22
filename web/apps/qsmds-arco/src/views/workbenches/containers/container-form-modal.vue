@@ -5,6 +5,7 @@ import type { ContainerBatchDto } from '@/api/generated/types.gen'
 import sourceFilesApi from '@/api/modules/container-source-files'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import { XLSX_ACCEPT } from '@/utils/upload-policy'
 import { buildContainerSubmission, createContainerDraft, inferContainerNameFromFilename, previewContainerDate, validateContainerDraft } from './form.logic'
 import { useContainerCreateSource } from './use-container-create-source'
 
@@ -127,7 +128,7 @@ async function submit() {
       </FaFormItem>
       <FaFormItem v-if="!batch" name="sourceFileId" :label="t('containerSource.title')" :description="t('containerSource.createHint')" :rules="rule('sourceFileId')" :auto-bind="false" required>
         <div class="min-w-0 space-y-2" :aria-busy="uploading">
-          <FaFileUpload v-if="!selectedFile" v-model="uploadFiles" :max="1" :disabled="locked || retryOnly" :before-upload="source.selectFile" :description="t('containerSource.upload')" class="[&>button]:px-3 [&>button]:py-4 [&>button]:h-auto [&>button]:min-h-20">
+          <FaFileUpload v-if="!selectedFile" v-model="uploadFiles" :accept="XLSX_ACCEPT" :max="1" :disabled="locked || retryOnly" :before-upload="source.selectFile" :description="t('containerSource.upload')" class="[&>button]:px-3 [&>button]:py-4 [&>button]:h-auto [&>button]:min-h-20">
             <span class="qs-type-body-medium flex gap-2 items-center justify-center">
               <FaIcon name="i-lucide:upload" class="size-5" aria-hidden="true" />{{ t('containerSource.upload') }}
             </span>

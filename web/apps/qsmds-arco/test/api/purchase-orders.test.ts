@@ -283,7 +283,7 @@ test('采购凭证上传和私有内容读取覆盖剩余公共操作', async ()
   const controller = new AbortController()
   const file = new File(['proof'], 'payment.png', { type: 'image/png' })
 
-  await api.uploadTemporaryDocument(file, 'IMAGE', controller.signal)
+  await api.uploadTemporaryDocument(file, controller.signal)
   await api.headDocumentContent('purchase/id', 'document/id', controller.signal)
   await api.getDocumentContent('purchase/id', 'document/id', controller.signal)
 

@@ -12,6 +12,14 @@ import type { PaymentRecipientImageUploadDto } from './payment-recipient.dto'
 import { recipientFailure } from './payment-recipient.normalizer'
 
 const MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+
+/** 收款码上传入口同时服务收款资料维护、采购发起和打木架提报三条业务链。 */
+export const PAYMENT_RECIPIENT_IMAGE_UPLOAD_PERMISSIONS = Object.freeze([
+  'supplier-payment-profiles:update',
+  'purchase-orders:create',
+  'packaging-costs:create',
+] as const)
+
 export interface PaymentRecipientImageContent { status: number, headers: Record<string, string>, stream?: Readable }
 @Injectable()
 export class PaymentRecipientImageService {
@@ -24,7 +32,8 @@ export class PaymentRecipientImageService {
   }
   async upload(actorUserId: string, request: SalesOrderDocumentMultipartRequest): Promise<PaymentRecipientImageUploadDto> {
     const permissions = await this.permissions(actorUserId)
-    if (!permissions.some(code => ['supplier-payment-profiles:update', 'purchase-orders:create', 'packaging-costs:create'].includes(code))) return recipientFailure('FORBIDDEN', '权限不足', 403)
+    // 路由层已用 RequireAnyPermissions 声明同一组权限；服务层保留防御性检查，避免直接调用时绕过。
+    if (!this.access.hasAny(permissions, PAYMENT_RECIPIENT_IMAGE_UPLOAD_PERMISSIONS)) return recipientFailure('FORBIDDEN', '权限不足', 403)
     try {
       return await this.multipart.parse(request, async input => {
         if (input.mediaType !== 'IMAGE' || !MIME_TYPES.includes(input.declaredMimeType ?? '')) return recipientFailure('PAYMENT_RECIPIENT_IMAGE_INVALID', '仅支持 JPEG、PNG、WebP 收款码图片')

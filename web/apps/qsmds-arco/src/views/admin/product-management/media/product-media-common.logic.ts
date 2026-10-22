@@ -1,4 +1,5 @@
 import type { ProductMediaItemDto } from '../../../../api/generated/types.gen'
+import { findUploadFormat, UPLOAD_POLICIES } from '../../../../utils/upload-policy'
 
 export type ProductMediaKind = ProductMediaItemDto['kind']
 
@@ -46,56 +47,12 @@ export type ProductMediaSelectionResult
 
 export const MAX_PRODUCT_IMAGES = 20
 export const MAX_PRODUCT_VIDEOS = 5
-export const MAX_PRODUCT_IMAGE_BYTES = 10 * 1024 * 1024
-export const MAX_PRODUCT_VIDEO_BYTES = 500 * 1024 * 1024
 
 const DOCUMENT_EXTENSIONS = new Set(['docx', 'pdf', 'xlsx'])
 const DOCUMENT_MIME_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-])
-const ISO_VIDEO_EXTENSIONS = new Set(['m4v', 'mov', 'mp4'])
-const ALLOWED_TYPE_PAIRS = new Map<string, {
-  readonly extensions: ReadonlySet<string>
-  readonly kind: ProductMediaKind
-  readonly maxBytes: number
-}>([
-  ['image/jpeg', {
-    extensions: new Set(['jpeg', 'jpg']),
-    kind: 'IMAGE',
-    maxBytes: MAX_PRODUCT_IMAGE_BYTES,
-  }],
-  ['image/png', {
-    extensions: new Set(['png']),
-    kind: 'IMAGE',
-    maxBytes: MAX_PRODUCT_IMAGE_BYTES,
-  }],
-  ['image/webp', {
-    extensions: new Set(['webp']),
-    kind: 'IMAGE',
-    maxBytes: MAX_PRODUCT_IMAGE_BYTES,
-  }],
-  ['video/mp4', {
-    extensions: ISO_VIDEO_EXTENSIONS,
-    kind: 'VIDEO',
-    maxBytes: MAX_PRODUCT_VIDEO_BYTES,
-  }],
-  ['video/quicktime', {
-    extensions: ISO_VIDEO_EXTENSIONS,
-    kind: 'VIDEO',
-    maxBytes: MAX_PRODUCT_VIDEO_BYTES,
-  }],
-  ['video/x-m4v', {
-    extensions: ISO_VIDEO_EXTENSIONS,
-    kind: 'VIDEO',
-    maxBytes: MAX_PRODUCT_VIDEO_BYTES,
-  }],
-  ['video/webm', {
-    extensions: new Set(['webm']),
-    kind: 'VIDEO',
-    maxBytes: MAX_PRODUCT_VIDEO_BYTES,
-  }],
 ])
 
 function selectionError(
@@ -146,41 +103,42 @@ export function validateProductMediaSelection(
     )
   }
 
-  const rule = ALLOWED_TYPE_PAIRS.get(mimeType)
-  if (rule === undefined || !rule.extensions.has(extension)) {
+  if (!Number.isSafeInteger(file.size) || file.size <= 0) {
+    return selectionError('MEDIA_CONTENT_INVALID', '文件内容为空或大小无效')
+  }
+  const format = findUploadFormat(file, UPLOAD_POLICIES.PRODUCT_MEDIA)
+  if (format === undefined) {
     return selectionError(
       'MEDIA_TYPE_UNSUPPORTED',
       '仅支持 JPEG、PNG、WebP 图片或 MP4、MOV、M4V、WebM 视频',
     )
   }
-  if (!Number.isSafeInteger(file.size) || file.size <= 0) {
-    return selectionError('MEDIA_CONTENT_INVALID', '文件内容为空或大小无效')
-  }
-  if (file.size > rule.maxBytes) {
+  const kind: ProductMediaKind = mimeType.startsWith('image/') ? 'IMAGE' : 'VIDEO'
+  if (file.size > format.maxBytes) {
     return selectionError(
       'MEDIA_FILE_TOO_LARGE',
-      rule.kind === 'IMAGE'
+      kind === 'IMAGE'
         ? '单张图片不得超过 10MiB'
         : '单个视频不得超过 500MiB',
     )
   }
 
-  const used = rule.kind === 'IMAGE'
+  const used = kind === 'IMAGE'
     ? capacity.currentImageCount + capacity.queuedImageCount
     : capacity.currentVideoCount + capacity.queuedVideoCount
-  const maximum = rule.kind === 'IMAGE'
+  const maximum = kind === 'IMAGE'
     ? MAX_PRODUCT_IMAGES
     : MAX_PRODUCT_VIDEOS
   if (used >= maximum) {
     return selectionError(
       'PRODUCT_MEDIA_LIMIT_EXCEEDED',
-      rule.kind === 'IMAGE'
+      kind === 'IMAGE'
         ? '每个产品最多 20 张图片'
         : '每个产品最多 5 个视频',
     )
   }
 
-  return Object.freeze({ accepted: true, kind: rule.kind })
+  return Object.freeze({ accepted: true, kind })
 }
 
 /**

@@ -70,19 +70,25 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
       select: { id: true },
     })
     actorUserId = actor.id
-    const createTemporaryVoucher = (name: string) => prisma.mediaAsset.create({
-      data: {
-        mediaType: 'DOCUMENT',
-        status: 'UPLOADING',
-        objectKey: `assets/sales-order-e2e-${suffix.toLowerCase()}-${name}.pdf`,
-        originalFilename: `${name}.pdf`,
-        uploadExpiresAt: new Date('2099-01-01T00:00:00.000Z'),
-        createdByUserId: actor.id,
-      },
-      select: { id: true },
-    })
-    issuanceVoucherMediaAssetId = (await createTemporaryVoucher('issuance')).id
-    paymentVoucherMediaAssetId = (await createTemporaryVoucher('payment')).id
+    const createTemporaryVoucher = (name: string, checksumChar: string) =>
+      prisma.mediaAsset.create({
+        data: {
+          mediaType: 'IMAGE',
+          status: 'UPLOADING',
+          width: 1,
+          height: 1,
+          objectKey: `assets/sales-order-e2e-${suffix.toLowerCase()}-${name}.png`,
+          originalFilename: `${name}.png`,
+          mimeType: 'image/png',
+          sizeBytes: 128n,
+          checksumSha256: checksumChar.repeat(64),
+          uploadExpiresAt: new Date('2099-01-01T00:00:00.000Z'),
+          createdByUserId: actor.id,
+        },
+        select: { id: true },
+      })
+    issuanceVoucherMediaAssetId = (await createTemporaryVoucher('issuance', 'a')).id
+    paymentVoucherMediaAssetId = (await createTemporaryVoucher('payment', 'b')).id
     const country = await prisma.region.create({
       data: {
         administrativeType: 'COUNTRY_REGION',

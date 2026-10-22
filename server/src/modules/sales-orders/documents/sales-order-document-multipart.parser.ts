@@ -16,16 +16,16 @@ export interface SalesOrderDocumentMultipartRequest extends Readable {
 }
 
 /**
- * 订单凭证的用途标记。只有收款凭证需要它：出单凭证与收款凭证共用同一个上传入口，
- * 而对象键一旦物化不可改写，所以「这份临时文件最终会被当成什么」必须在上传瞬间由客户端声明。
+ * 订单凭证的用途标记。收款凭证与签收单必须显式声明：它们与出单凭证共用同一个上传入口，
+ * 且对象键一旦物化不可改写，所以「这份临时文件最终会被当成什么」必须在上传瞬间由客户端声明。
  */
-export type SalesOrderDocumentPurpose = 'PAYMENT_VOUCHER'
+export type SalesOrderDocumentPurpose = 'PAYMENT_VOUCHER' | 'DELIVERY_RECEIPT'
 
 export interface SalesOrderDocumentUploadInput {
   readonly declaredMimeType: string | null
   readonly mediaType: Extract<MediaType, 'IMAGE' | 'DOCUMENT'>
   readonly originalFilename: string
-  /** 缺省表示普通订单凭证（出单凭证 / 签收单）；只接受白名单取值。 */
+  /** 缺省表示出单凭证；只接受白名单取值。 */
   readonly purpose: SalesOrderDocumentPurpose | null
   readonly stream: Readable
 }
@@ -60,7 +60,9 @@ function normalizeMediaType(value: string | undefined): 'IMAGE' | 'DOCUMENT' | n
 }
 
 function normalizePurpose(value: string): SalesOrderDocumentPurpose | null {
-  return value === 'PAYMENT_VOUCHER' ? value : null
+  return value === 'PAYMENT_VOUCHER' || value === 'DELIVERY_RECEIPT'
+    ? value
+    : null
 }
 
 /** 单文件流式解析；完整 multipart framing 验证通过后才向媒体领域发送 EOF。 */

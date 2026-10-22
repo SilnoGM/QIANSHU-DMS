@@ -1,6 +1,7 @@
 import type { Ref } from 'vue'
 import { onScopeDispose, ref, watch } from 'vue'
 import purchaseOrderPayablesApi from '../../../api/modules/purchase-order-payables'
+import { UPLOAD_POLICIES, validateUploadFile } from '../../../utils/upload-policy'
 import { getPurchaseOrderMutationFailure } from '../../operations/purchase-orders/purchase-order-create.logic'
 
 /** 每笔款项独立持有临时凭证；切款项、登出和销毁时中断上传并回收预览。 */
@@ -44,7 +45,7 @@ export function usePurchasePaymentVoucher(
       return
     }
     reset()
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    if (validateUploadFile(file, UPLOAD_POLICIES.IMAGE_ONLY) !== null) {
       error.value = 'purchasePayment.imageOnly'
       return
     }

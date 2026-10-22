@@ -41,7 +41,7 @@ const UUID_V4_PATTERN =
 
 export interface PurchaseOrderTemporaryDocument {
   readonly mediaAssetId: string
-  readonly mediaType: 'IMAGE' | 'DOCUMENT'
+  readonly mediaType: 'IMAGE'
   readonly mimeType: string
   readonly sizeBytes: string
   readonly originalFilename: string
@@ -130,9 +130,17 @@ export class PurchaseOrderDocumentService {
     requireContext(context)
     return this.multipart.parse(request, async input => {
       try {
+        if (input.mediaType !== 'IMAGE') {
+          return purchaseOrderRuleFailure(
+            'PURCHASE_ORDER_DOCUMENT_CONTENT_UNSUPPORTED',
+            paymentUpload
+              ? '付款凭证仅支持图片（JPG/PNG/WebP）'
+              : '采购单和签收单仅支持图片（JPG/PNG/WebP）',
+          )
+        }
         const prepared = await this.mediaAsset.prepare({
           actorUserId: context.actorUserId,
-          allowedTypes: paymentUpload ? ['IMAGE'] : ['IMAGE', 'DOCUMENT'],
+          allowedTypes: ['IMAGE'],
           declaredMimeType: input.declaredMimeType,
           originalFilename: input.originalFilename,
           // 同一个上传器承载普通凭证与付款凭证：付款截图属于资金凭证池，键一旦物化不可改写。
@@ -149,7 +157,7 @@ export class PurchaseOrderDocumentService {
         }
         return {
           mediaAssetId: prepared.id,
-          mediaType: prepared.mediaType as 'IMAGE' | 'DOCUMENT',
+          mediaType: 'IMAGE',
           mimeType: prepared.trustedMetadata.mimeType,
           sizeBytes: prepared.trustedMetadata.sizeBytes.toString(),
           originalFilename: input.originalFilename,
@@ -202,12 +210,12 @@ export class PurchaseOrderDocumentService {
         const asset = await transaction.mediaAsset.findFirst({
           where: {
             id: mediaAssetId, createdByUserId: context.actorUserId, status: 'UPLOADING',
-            mediaType: { in: ['IMAGE', 'DOCUMENT'] }, deletedAt: null, objectKey: { not: null },
+            mediaType: 'IMAGE', deletedAt: null, objectKey: { not: null },
           },
           select: { id: true },
         })
         if (asset === null) {
-          return purchaseOrderRuleFailure('PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', '所选订单凭证当前不可用')
+          return purchaseOrderRuleFailure('PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', '所选订单凭证不可用；采购单和签收单仅支持图片（JPG/PNG/WebP）')
         }
         await this.mediaAsset.activate(transaction, mediaAssetId)
         const document = await transaction.purchaseOrderDocument.create({

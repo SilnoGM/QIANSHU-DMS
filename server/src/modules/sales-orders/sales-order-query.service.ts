@@ -29,6 +29,11 @@ import {
   resolveSalesOrderCompletionHold,
   type SalesOrderCompletionHold,
 } from './domain/sales-order-reconciliation-state'
+import {
+  resolveSalesOrderPurchaseHold,
+  type SalesOrderPurchaseHold,
+} from './domain/sales-order-purchase-hold'
+import { readAwaitingPurchaseReviewSalesOrders } from './sales-order-purchase-hold-query'
 import { mapSalesOrderProductOption } from './products/sales-order-product-option.mapper'
 import {
   readProductOptionCategoryFacets,
@@ -209,10 +214,12 @@ export interface SalesOrderListQueryInput {
   readonly paymentStatus?: SalesOrderPaymentStatus
   readonly orderDateFrom?: string
   readonly orderDateTo?: string
+  readonly purchaseHold?: 'AWAITING_PURCHASE_REVIEW' | 'EXCLUDE_AWAITING_PURCHASE_REVIEW'
 }
 
 export type SalesOrderStatusCountValue
   = | 'ALL'
+    | 'AWAITING_PURCHASE_REVIEW'
     | 'CANCELLED'
     | 'COMPLETED'
     | 'CONFIRMED'
@@ -226,7 +233,7 @@ export type SalesOrderStatusCountValue
 
 export interface SalesOrderStatusCountsQueryInput extends Omit<
   SalesOrderListQueryInput,
-  'fulfillmentStatus' | 'orderStatus' | 'page' | 'pageSize'
+  'fulfillmentStatus' | 'orderStatus' | 'page' | 'pageSize' | 'purchaseHold'
 > {
   readonly view: 'all' | 'pending'
 }
@@ -270,6 +277,7 @@ export interface SalesOrderListItem {
   readonly fulfillmentStatus: SalesOrderFulfillmentStatus
   readonly paymentStatus: SalesOrderPaymentStatus
   readonly completionHold: SalesOrderCompletionHold | null
+  readonly purchaseHold: SalesOrderPurchaseHold | null
   readonly paymentRecordCount: number
   readonly statusChangeRecordCount: number
   readonly amountChangeRecordCount: number
@@ -711,11 +719,22 @@ export class SalesOrderQueryService {
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const scope = await this.dataScope.resolve(actorUserId)
+    // 「采购审核中」是采购覆盖事实的派生分桶，不是持久化状态：一次读取全量判定结果，
+    // 再用主键集合参与列表过滤与停留原因装配，避免为分桶复制一套原生分页与聚合。
+    // 集合规模等于“已被审核中采购占满的待采购订单”，属于瞬时窗口，保持轻量。
+    const awaitingReviewByOrder = await readAwaitingPurchaseReviewSalesOrders(this.prisma)
+    const purchaseHoldFilter: Prisma.SalesOrderWhereInput
+      = input.purchaseHold === 'AWAITING_PURCHASE_REVIEW'
+        ? { id: { in: [...awaitingReviewByOrder.keys()] } }
+        : input.purchaseHold === 'EXCLUDE_AWAITING_PURCHASE_REVIEW'
+          ? { id: { notIn: [...awaitingReviewByOrder.keys()] } }
+          : {}
     const where: Prisma.SalesOrderWhereInput = {
       ...buildSalesOrderBaseWhere(input),
       ...salesOrderScopeWhere(scope, actorUserId),
       orderStatus: input.orderStatus,
       fulfillmentStatus: input.fulfillmentStatus,
+      ...purchaseHoldFilter,
     }
     const twdWhere = listCurrencyWhere(where, 'TWD')
     const myrWhere = listCurrencyWhere(where, 'MYR')
@@ -832,6 +851,10 @@ export class SalesOrderQueryService {
           fulfillmentStatus: row.fulfillmentStatus,
           paymentStatus: row.paymentStatus,
           completionHold: resolveSalesOrderCompletionHold(row, reconciliationStates.get(row.id)),
+          purchaseHold: resolveSalesOrderPurchaseHold(
+            row,
+            awaitingReviewByOrder.get(row.id),
+          ),
           paymentRecordCount: row._count.payments,
           statusChangeRecordCount: row._count.statusHistory,
           amountChangeRecordCount: row._count.amountRevisions,
@@ -896,33 +919,50 @@ export class SalesOrderQueryService {
     const pendingBaseWhere: Prisma.SalesOrderWhereInput = {
       AND: [baseWhere, { orderStatus: 'CONFIRMED' }],
     }
-    const { fulfillmentRows, paymentRows, allCount } = await this.prisma.$transaction(
-      async (transaction) => {
-        const fulfillmentRows = await transaction.salesOrder.groupBy({
-          by: ['fulfillmentStatus'],
-          where: pendingBaseWhere,
-          _count: { _all: true },
-        })
-        const paymentRows = await transaction.salesOrder.groupBy({
-          by: ['paymentStatus'],
-          where: pendingBaseWhere,
-          _count: { _all: true },
-        })
-        const allCount = await transaction.salesOrder.count({
-          where: {
-            AND: [
-              pendingBaseWhere,
-              { OR: [
-                { fulfillmentStatus: { in: [...fulfillmentStatuses] } },
-                { paymentStatus: { in: [...paymentStatuses] } },
-              ] },
-            ],
-          },
-        })
-        return { fulfillmentRows, paymentRows, allCount }
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
-    )
+    const { fulfillmentRows, paymentRows, allCount, awaitingPurchaseReviewCount }
+      = await this.prisma.$transaction(
+        async (transaction) => {
+          const fulfillmentRows = await transaction.salesOrder.groupBy({
+            by: ['fulfillmentStatus'],
+            where: pendingBaseWhere,
+            _count: { _all: true },
+          })
+          const paymentRows = await transaction.salesOrder.groupBy({
+            by: ['paymentStatus'],
+            where: pendingBaseWhere,
+            _count: { _all: true },
+          })
+          const allCount = await transaction.salesOrder.count({
+            where: {
+              AND: [
+                pendingBaseWhere,
+                { OR: [
+                  { fulfillmentStatus: { in: [...fulfillmentStatuses] } },
+                  { paymentStatus: { in: [...paymentStatuses] } },
+                ] },
+              ],
+            },
+          })
+          // 「采购审核中」从待采购计数中扣除，两个分类互斥；覆盖判定与列表共用同一份
+          // 只读查询，保证角标与列表条数始终一致。
+          const awaitingOrders = await readAwaitingPurchaseReviewSalesOrders(transaction)
+          const awaitingPurchaseReviewCount = awaitingOrders.size === 0
+            ? 0
+            : await transaction.salesOrder.count({
+                where: {
+                  AND: [
+                    pendingBaseWhere,
+                    {
+                      fulfillmentStatus: 'PENDING',
+                      id: { in: [...awaitingOrders.keys()] },
+                    },
+                  ],
+                },
+              })
+          return { fulfillmentRows, paymentRows, allCount, awaitingPurchaseReviewCount }
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+      )
     const fulfillmentCounts = groupedCount(
       fulfillmentRows.map(row => ({
         value: row.fulfillmentStatus,
@@ -942,10 +982,21 @@ export class SalesOrderQueryService {
       view: 'pending',
       items: [
         { value: 'ALL', count: allCount },
-        ...fulfillmentStatuses.map(value => ({
-          value,
-          count: fulfillmentCounts.get(value) ?? 0,
-        })),
+        {
+          value: 'PENDING',
+          // 待采购只保留真正还能发起采购的订单，审核中订单单独成桶。
+          count: Math.max(
+            0,
+            (fulfillmentCounts.get('PENDING') ?? 0) - awaitingPurchaseReviewCount,
+          ),
+        },
+        { value: 'AWAITING_PURCHASE_REVIEW', count: awaitingPurchaseReviewCount },
+        ...fulfillmentStatuses
+          .filter(value => value !== 'PENDING')
+          .map(value => ({
+            value,
+            count: fulfillmentCounts.get(value) ?? 0,
+          })),
         {
           value: 'WAITING_PAYMENT',
           count: paymentStatuses.reduce(

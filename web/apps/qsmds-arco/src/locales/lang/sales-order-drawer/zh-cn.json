@@ -63,7 +63,7 @@
     "paymentOrigins": {
       "LEGACY": "历史收款",
       "REVIEWED": "财务审核",
-      "COD_SETTLEMENT": "代收回填"
+      "COD_SETTLEMENT": "表内代收"
     },
     "completionHolds": {
       "PAYMENT_INCOMPLETE": "等待收齐款项",

@@ -7,6 +7,7 @@ import ts from 'typescript'
 import * as Vue from 'vue'
 import { compileScript, parse } from 'vue/compiler-sfc'
 import * as logic from '../../src/components/business/QsPaymentRecipientEditor/logic'
+import { IMAGE_ONLY_ACCEPT } from '../../src/utils/upload-policy'
 
 interface HostNode { tag: string, parent: HostNode | null, children: HostNode[], props: Record<string, any>, text: string }
 const { createRenderer, defineComponent, h, nextTick, reactive, ref } = Vue
@@ -43,6 +44,9 @@ function fixture(compact = false, initial?: string) {
       }
       if (specifier === './RecipientImage.vue') {
         return { __esModule: true, default: element('recipient-preview') }
+      }
+      if (specifier === '@/utils/upload-policy') {
+        return { IMAGE_ONLY_ACCEPT }
       }
       if (specifier.includes('api/modules/payment-recipients')) {
         return { __esModule: true, default: { upload: (file: File, signal?: AbortSignal) => {

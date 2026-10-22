@@ -12,6 +12,7 @@ import type { QsStatusSwitchItem } from '@/components/business/QsStatusSwitchToo
 export type SalesOrderListViewMode = 'all' | 'pending'
 export type SalesOrderListStatusSelection
   = | 'ALL'
+    | 'AWAITING_PURCHASE_REVIEW'
     | 'CANCELLED'
     | 'COMPLETED'
     | 'CONFIRMED'
@@ -25,7 +26,7 @@ export type SalesOrderListStatusSelection
 
 export type SalesOrderQueryTarget = Pick<
   SalesOrderListQuery,
-  'fulfillmentStatus' | 'orderStatus' | 'paymentStatus'
+  'fulfillmentStatus' | 'orderStatus' | 'paymentStatus' | 'purchaseHold'
 >
 
 export type SalesOrderPendingActionKey
@@ -33,6 +34,7 @@ export type SalesOrderPendingActionKey
     | 'FACTORY_SHIPMENT'
     | 'RECORD_PAYMENT'
     | 'SUBMIT_PURCHASE'
+    | 'URGE_PURCHASE_REVIEW'
     | 'WAREHOUSE_RECEIPT'
 
 export interface SalesOrderPendingActionItem {
@@ -43,7 +45,7 @@ export interface SalesOrderPendingActionItem {
 
 type SalesOrderPendingActionSource = Pick<
   SalesOrderListItemDto,
-  'fulfillmentStatus' | 'paymentStatus'
+  'fulfillmentStatus' | 'paymentStatus' | 'purchaseHold'
 >
 
 type SalesOrderSummarySource = Pick<
@@ -60,6 +62,7 @@ type SalesOrderSummarySource = Pick<
 
 const PENDING_STATUS_ITEMS: readonly QsStatusSwitchItem[] = [
   { label: '待采购', value: 'PENDING' },
+  { label: '采购审核中', value: 'AWAITING_PURCHASE_REVIEW' },
   { label: '待发货', value: 'PREPARING' },
   { label: '待入仓', value: 'LAND_TRANSIT' },
   { label: '待装柜', value: 'WAREHOUSE_ARRIVED' },
@@ -120,7 +123,23 @@ const PENDING_ACTION_BY_FULFILLMENT_STATUS: Partial<Record<
 const RECORD_PAYMENT_ACTION: SalesOrderPendingActionItem = {
   icon: 'i-lucide:hand-coins',
   key: 'RECORD_PAYMENT',
-  label: '新增实际收款',
+  label: '新增表外收款',
+}
+
+/**
+ * 催办只是占位动作：当前没有通知通道，点击后只给轻提示；它不写数据，
+ * 因此不需要额外权限点。
+ */
+const URGE_PURCHASE_REVIEW_ACTION: SalesOrderPendingActionItem = {
+  icon: 'i-lucide:bell-ring',
+  key: 'URGE_PURCHASE_REVIEW',
+  label: '催办',
+}
+
+/** 旧服务端响应没有该字段时按“无停留原因”处理，保证混合版本部署期间行为不退化。 */
+function isAwaitingPurchaseReview(order: SalesOrderPendingActionSource): boolean {
+  const hold = order.purchaseHold ?? null
+  return hold?.reason === 'AWAITING_PURCHASE_REVIEW'
 }
 
 const SUMMARY_AMOUNT_FIELDS = [
@@ -151,6 +170,7 @@ export function buildSalesOrderStatusCountsQuery(
     orderStatus: _orderStatus,
     page: _page,
     pageSize: _pageSize,
+    purchaseHold: _purchaseHold,
     ...baseQuery
   } = listQuery
   return { ...baseQuery, view }
@@ -184,11 +204,21 @@ export function resolvePendingSalesOrderActions(
   selection: SalesOrderListStatusSelection,
   order: SalesOrderPendingActionSource,
 ): readonly SalesOrderPendingActionItem[] {
+  // 「采购审核中」是独立分类：采购已提交但未审核，唯一可做的是催办，
+  // 不再提供必然失败的「新增采购」，也不与收款等其它待办动作复合。
+  if (selection === 'AWAITING_PURCHASE_REVIEW') {
+    return [URGE_PURCHASE_REVIEW_ACTION]
+  }
+
   if (selection === 'WAITING_PAYMENT') {
     return order.paymentStatus === 'PAID' ? [] : [RECORD_PAYMENT_ACTION]
   }
 
   if (selection !== 'ALL') {
+    // 待采购已按服务端分桶排除审核中订单；若因并发仍出现该行，也不给出必然失败的入口。
+    if (selection === 'PENDING' && isAwaitingPurchaseReview(order)) {
+      return [URGE_PURCHASE_REVIEW_ACTION]
+    }
     const fulfillmentAction = PENDING_ACTION_BY_FULFILLMENT_STATUS[
       selection as SalesOrderListItemDto['fulfillmentStatus']
     ]
@@ -196,9 +226,14 @@ export function resolvePendingSalesOrderActions(
   }
 
   const actions: SalesOrderPendingActionItem[] = []
-  const fulfillmentAction = PENDING_ACTION_BY_FULFILLMENT_STATUS[order.fulfillmentStatus]
-  if (fulfillmentAction !== undefined) {
-    actions.push(fulfillmentAction)
+  if (isAwaitingPurchaseReview(order)) {
+    actions.push(URGE_PURCHASE_REVIEW_ACTION)
+  }
+  else {
+    const fulfillmentAction = PENDING_ACTION_BY_FULFILLMENT_STATUS[order.fulfillmentStatus]
+    if (fulfillmentAction !== undefined) {
+      actions.push(fulfillmentAction)
+    }
   }
   if (order.paymentStatus !== 'PAID') {
     actions.push(RECORD_PAYMENT_ACTION)
@@ -238,12 +273,24 @@ export function resolveSalesOrderQueryTargets(
     if (selection === 'WAITING_PAYMENT') {
       return paymentTargets
     }
+    // 「采购审核中」是待采购的互斥分桶：服务端按覆盖事实过滤，不是持久化状态。
+    if (selection === 'AWAITING_PURCHASE_REVIEW') {
+      return [{
+        fulfillmentStatus: 'PENDING',
+        orderStatus: 'CONFIRMED',
+        purchaseHold: 'AWAITING_PURCHASE_REVIEW',
+      }]
+    }
     const statuses = selection === 'ALL'
       ? PENDING_FULFILLMENT_STATUSES
       : PENDING_FULFILLMENT_STATUSES.filter(status => status === selection)
     const fulfillmentTargets: SalesOrderQueryTarget[] = statuses.map(fulfillmentStatus => ({
       fulfillmentStatus,
       orderStatus: 'CONFIRMED',
+      // 单看「待采购」时排除审核中订单；「全部待办」仍是所有分桶的并集。
+      ...(selection === 'PENDING'
+        ? { purchaseHold: 'EXCLUDE_AWAITING_PURCHASE_REVIEW' as const }
+        : {}),
     }))
     return selection === 'ALL'
       ? [...fulfillmentTargets, ...paymentTargets]

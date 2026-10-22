@@ -1,19 +1,22 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { IsOptional, IsString, IsUUID } from 'class-validator'
 
-import { MediaType } from '../../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 
 export class SalesOrderDocumentUploadRequestDto {
-  @ApiProperty({ type: 'string', enum: ['IMAGE', 'DOCUMENT'] })
-  readonly mediaType!: Extract<MediaType, 'IMAGE' | 'DOCUMENT'>
+  @ApiProperty({ type: 'string', enum: ['IMAGE'] })
+  readonly mediaType!: 'IMAGE'
 
   /**
-   * 可选的凭证用途。只有收款凭证需要显式声明：它与出单凭证共用本入口，而对象键由本入口在
-   * 上传瞬间物化且不可改写。缺省＝出单凭证 / 签收单。
+   * 可选的凭证用途。出单凭证、收款凭证与签收单共用本入口，且全部只允许图片；
+   * 用途只决定对象池与业务归属，对象键一旦物化不可改写。缺省＝出单凭证。
    */
-  @ApiProperty({ type: 'string', enum: ['PAYMENT_VOUCHER'], required: false })
-  readonly purpose?: 'PAYMENT_VOUCHER'
+  @ApiProperty({
+    type: 'string',
+    enum: ['PAYMENT_VOUCHER', 'DELIVERY_RECEIPT'],
+    required: false,
+  })
+  readonly purpose?: 'PAYMENT_VOUCHER' | 'DELIVERY_RECEIPT'
 
   @ApiProperty({ type: 'string', format: 'binary' })
   readonly file!: string
@@ -23,8 +26,8 @@ export class SalesOrderTemporaryDocumentDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   readonly mediaAssetId!: string
 
-  @ApiProperty({ enum: ['IMAGE', 'DOCUMENT'] })
-  readonly mediaType!: Extract<MediaType, 'IMAGE' | 'DOCUMENT'>
+  @ApiProperty({ enum: ['IMAGE'] })
+  readonly mediaType!: 'IMAGE'
 
   @ApiProperty({ type: 'string' })
   readonly mimeType!: string

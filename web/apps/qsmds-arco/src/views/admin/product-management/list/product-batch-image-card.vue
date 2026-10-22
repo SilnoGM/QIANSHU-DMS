@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { ProductBatchImageCardState } from './product-batch-images.logic'
 
+import { useFileDrop } from '@fantastic-admin/components'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 
+import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
 import { MAX_PRODUCT_IMAGES } from '../media/product-media-common.logic'
 import { formatProductMediaBytes } from '../media/product-media-view.logic'
 import {
@@ -136,6 +138,18 @@ const statusClass = computed(() => {
   return 'border-border bg-muted text-muted-foreground'
 })
 const progressLabel = computed(() => `${props.card.product.name} ${statusText.value}`)
+const {
+  handlers: fileDropHandlers,
+  isDragging: fileDragging,
+} = useFileDrop({
+  disabled: computed(() => !canChooseFile.value),
+  onFiles: (files) => {
+    const file = files[0]
+    if (file !== undefined) {
+      emit('selectFile', file)
+    }
+  },
+})
 
 function openFilePicker(): void {
   if (!canChooseFile.value) {
@@ -190,12 +204,16 @@ function handlePrimaryChange(value: unknown): void {
       </FaTag>
     </header>
 
-    <div class="gap-2 grid min-w-0">
+    <div
+      v-bind="fileDropHandlers"
+      class="p-2 rounded-lg gap-2 grid min-w-0 transition-shadow duration-150"
+      :class="fileDragging ? 'ring-2 ring-primary/40 ring-offset-2 bg-primary/5' : ''"
+    >
       <input
         :id="inputId"
         ref="inputRef"
         type="file"
-        accept=".jpg,.jpeg,.png,.webp"
+        :accept="IMAGE_ONLY_ACCEPT"
         class="sr-only"
         :disabled="!canChooseFile"
         :aria-describedby="hintId"
@@ -257,7 +275,7 @@ function handlePrimaryChange(value: unknown): void {
         @click="openFilePicker"
       >
         <FaIcon name="i-lucide:image-plus" class="text-muted-foreground" aria-hidden="true" />
-        <span class="text-sm font-medium">选择图片</span>
+        <span class="text-sm font-medium">选择或拖入图片</span>
         <span class="qs-type-meta">JPEG / PNG / WebP，单张不超过 10 MiB</span>
       </button>
 

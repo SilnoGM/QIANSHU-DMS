@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import type { PurchaseOrderDetailDto, PurchaseOrderDocumentAttachRequestDto, PurchaseOrderTemporaryDocumentDto } from '@/api/generated/types.gen'
+import { useFileDrop } from '@fantastic-admin/components'
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import {
+  IMAGE_ONLY_ACCEPT,
+  UPLOAD_POLICIES,
+  validateUploadFile,
+} from '@/utils/upload-policy'
 import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError } from './purchase-order-list.logic'
 
 const props = defineProps<{ detail: PurchaseOrderDetailDto, modelValue: boolean }>()
@@ -22,6 +28,7 @@ const previewUrl = ref<string | null>(null)
 const busy = ref(false)
 const uploading = ref(false)
 const error = ref('')
+const errorHint = ref<string | null>(null)
 let controller: AbortController | null = null
 const visible = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
 const hasIssuance = computed(() => props.detail.documents.some(item => item.documentType === 'ORDER_ISSUANCE_VOUCHER' && item.detachedAt === null))
@@ -46,6 +53,7 @@ function reset() {
   uploaded.value = null
   remark.value = ''
   error.value = ''
+  errorHint.value = null
   documentType.value = 'DELIVERY_RECEIPT'
 }
 
@@ -64,13 +72,19 @@ async function run(action: (signal: AbortSignal, orderId: string) => Promise<voi
   controller = request
   busy.value = true
   error.value = ''
+  errorHint.value = null
   emit('busyChange', true)
   try {
     await action(request.signal, orderId)
   }
   catch (failure) {
     if (!request.signal.aborted && !isPurchaseOrderAbortError(failure) && epoch === account.authEpoch && orderId === props.detail.id && visible.value) {
-      error.value = getPurchaseOrderApiFailure(failure).message
+      const mapped = getPurchaseOrderApiFailure(failure)
+      error.value = mapped.message
+      // 已知业务错误已有明确 message；只有结果不明确时才提示重新加载核对。
+      errorHint.value = mapped.requestId === undefined
+        ? t('purchaseOrderDrawer.refreshBeforeRetry')
+        : null
     }
   }
   finally {
@@ -83,11 +97,15 @@ async function run(action: (signal: AbortSignal, orderId: string) => Promise<voi
   }
 }
 
-async function onFileChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) {
+async function handleFile(file: File) {
+  const failure = validateUploadFile(file, UPLOAD_POLICIES.IMAGE_ONLY)
+  if (failure !== null) {
+    error.value = failure === 'too-large'
+      ? '凭证图片不能超过 10 MiB'
+      : failure === 'empty'
+        ? '凭证图片为空'
+        : '仅支持 JPG/PNG/WebP 图片'
+    errorHint.value = null
     return
   }
   await run(async (signal, orderId) => {
@@ -95,15 +113,45 @@ async function onFileChange(event: Event) {
     uploaded.value = null
     clearPreview()
     const epoch = account.authEpoch
-    const mediaType = file.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT'
-    const response = await purchaseOrdersApi.uploadTemporaryDocument(file, mediaType, signal)
+    const response = await purchaseOrdersApi.uploadTemporaryDocument(file, signal)
     if (signal.aborted || !visible.value || props.detail.id !== orderId || account.authEpoch !== epoch) {
       return
     }
     uploaded.value = response.data
-    previewUrl.value = response.data.mediaType === 'IMAGE' ? URL.createObjectURL(file) : null
+    previewUrl.value = URL.createObjectURL(file)
   })
 }
+
+function onFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (file !== undefined) {
+    void handleFile(file)
+  }
+}
+
+const {
+  handlers: fileDropHandlers,
+  isDragging: fileDragging,
+} = useFileDrop({
+  accept: IMAGE_ONLY_ACCEPT,
+  disabled: computed(() => (
+    busy.value
+    || !visible.value
+    || props.detail.orderStatus === 'PENDING_REVIEW'
+  )),
+  onFiles: (files) => {
+    const file = files[0]
+    if (file !== undefined) {
+      void handleFile(file)
+    }
+  },
+  onInvalid: () => {
+    error.value = '仅支持 JPG/PNG/WebP 图片'
+    errorHint.value = null
+  },
+})
 
 async function save() {
   const asset = uploaded.value
@@ -134,7 +182,7 @@ onBeforeUnmount(reset)
 <template>
   <QsGenericModal v-model="visible" size="md" :title="t('purchaseOrderDrawer.attachDocument')" :description="detail.orderNo" :submitting="busy">
     <div class="space-y-5">
-      <FaAlert v-if="error" :title="error" :description="t('purchaseOrderDrawer.refreshBeforeRetry')" variant="destructive" />
+      <FaAlert v-if="error" :title="error" :description="errorHint ?? undefined" variant="destructive" />
       <p class="qs-type-description m-0">
         {{ t('purchaseOrderDrawer.attachDocumentNotice') }}
       </p>
@@ -142,11 +190,18 @@ onBeforeUnmount(reset)
         <span class="qs-type-body-medium">{{ t('purchaseOrderDrawer.documentType') }}</span>
         <FaSelect v-model="documentType" :options="options" :disabled="busy" class="w-full" />
       </label>
-      <div class="space-y-2">
+      <div
+        v-bind="fileDropHandlers"
+        class="p-3 rounded-lg transition-shadow duration-150 space-y-2"
+        :class="fileDragging ? 'ring-2 ring-primary/40 ring-offset-2 bg-primary/5' : ''"
+      >
         <label class="qs-type-body-medium flex flex-col gap-2">
           {{ t('purchaseOrderDrawer.documentFile') }}
-          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" :disabled="busy" class="text-sm p-3 border border-border rounded-lg w-full" @change="onFileChange">
+          <input type="file" :accept="IMAGE_ONLY_ACCEPT" :disabled="busy" class="text-sm p-3 border border-border rounded-lg w-full" @change="onFileChange">
         </label>
+        <p class="qs-type-meta m-0">
+          可拖入图片，或点击选择。
+        </p>
         <p v-if="uploading" role="status" class="qs-type-meta">
           {{ t('purchaseOrderDrawer.uploading') }}
         </p>

@@ -4,6 +4,7 @@ import type { ApiClientError } from '@/api/errors'
 import type { ContainerSourceFileDto } from '@/api/generated/types.gen'
 import { getApiClientErrorMessage } from '@/api/errors'
 import sourceFilesApi from '@/api/modules/container-source-files'
+import { XLSX_ACCEPT } from '@/utils/upload-policy'
 
 const props = defineProps<{ batchId: string, sourceFileId: string | null, canEdit: boolean, disabled?: boolean, loading?: boolean }>()
 const emit = defineEmits<{ uploaded: [mediaAssetId: string], busyChange: [busy: boolean] }>()
@@ -165,7 +166,7 @@ onBeforeUnmount(() => {
           {{ t('containerSource.retryAttach') }}
         </FaButton>
       </div>
-      <FaFileUpload v-else-if="canEdit && !sourceFileId" v-model="files" :max="1" :disabled="locked" :before-upload="validate" :http-request="upload" :description="t('containerSource.upload')" class="flex-1 min-w-0 [&>button]:px-3 [&>button]:py-2 [&>button]:border [&>button]:h-auto [&>button]:min-h-16">
+      <FaFileUpload v-else-if="canEdit && !sourceFileId" v-model="files" :accept="XLSX_ACCEPT" :max="1" :disabled="locked" :before-upload="validate" :http-request="upload" :description="t('containerSource.upload')" class="flex-1 min-w-0 [&>button]:px-3 [&>button]:py-2 [&>button]:border [&>button]:h-auto [&>button]:min-h-16">
         <div class="flex flex-wrap gap-x-3 gap-y-1 items-center justify-center">
           <span class="qs-type-body-medium flex gap-2 items-center"><FaIcon name="i-lucide:upload" class="size-4" aria-hidden="true" />{{ t('containerSource.upload') }}</span>
           <span class="qs-type-meta text-muted-foreground">{{ t('containerSource.hint') }}</span>

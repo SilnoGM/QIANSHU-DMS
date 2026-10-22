@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
+import { IMAGE_ONLY_ACCEPT, UPLOAD_POLICIES, validateUploadFile } from '@/utils/upload-policy'
 
 const props = defineProps<{ modelValue: File | null, disabled: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [file: File | null] }>()
@@ -19,16 +20,15 @@ function select({ file }: { file: File }) {
     return null
   }
   error.value = ''
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    error.value = t('packagingPayment.voucher.imageOnly')
-    return null
-  }
-  if (file.size === 0) {
-    error.value = t('packagingPayment.voucher.imageEmpty')
-    return null
-  }
-  if (file.size > 10 * 1024 * 1024) {
-    error.value = t('packagingPayment.voucher.imageTooLarge')
+  const failure = validateUploadFile(file, UPLOAD_POLICIES.IMAGE_ONLY)
+  if (failure !== null) {
+    error.value = t(
+      failure === 'too-large'
+        ? 'packagingPayment.voucher.imageTooLarge'
+        : failure === 'empty'
+          ? 'packagingPayment.voucher.imageEmpty'
+          : 'packagingPayment.voucher.imageOnly',
+    )
     return null
   }
   emit('update:modelValue', file)
@@ -64,7 +64,7 @@ onBeforeUnmount(clearPreview)
           </p>
         </div>
       </div>
-      <FaImageUpload v-else v-model="images" :max="1" :width="144" :height="104" :disabled="disabled" :http-request="select" :aria-label="t('packagingPayment.voucher.uploadVoucher')" class="max-w-full">
+      <FaImageUpload v-else v-model="images" :accept="IMAGE_ONLY_ACCEPT" :max="1" :width="144" :height="104" :disabled="disabled" :http-request="select" :aria-label="t('packagingPayment.voucher.uploadVoucher')" class="max-w-full">
         <span class="text-muted-foreground border border-border rounded-lg border-dashed flex flex-col gap-2 size-full items-center justify-center">
           <FaIcon name="i-lucide:image-plus" class="size-6" aria-hidden="true" />
           <span class="qs-type-meta">{{ t('packagingPayment.voucher.uploadVoucher') }}</span>

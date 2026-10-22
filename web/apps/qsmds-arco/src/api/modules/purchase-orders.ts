@@ -145,12 +145,11 @@ export function createPurchaseOrdersApi(client: AxiosInstance) {
       ),
     uploadTemporaryDocument: (
       file: File,
-      mediaType: 'DOCUMENT' | 'IMAGE',
       signal: AbortSignal,
     ) => {
       const body = new FormData()
-      // Server 流式 multipart parser 要求 mediaType 位于单个 file part 之前。
-      body.append('mediaType', mediaType)
+      // 采购单和签收单只接受图片；流式 parser 要求 mediaType 位于 file part 之前。
+      body.append('mediaType', 'IMAGE')
       body.append('file', file, file.name)
       return client.post<PurchaseOrderTemporaryDocumentDto>(
         'purchase-orders/document-uploads',

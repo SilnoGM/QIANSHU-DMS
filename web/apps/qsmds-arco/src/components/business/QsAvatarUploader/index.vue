@@ -2,6 +2,7 @@
 import profileApi from '@/api/modules/profile'
 import { compressAvatarFile } from '@/utils/image-compression'
 import { validateUploadImage } from '@/utils/image-upload-rules'
+import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
 import { resolveAvatarPreviewUrl } from '@/utils/user-profile'
 
 defineOptions({ name: 'QsAvatarUploader' })
@@ -224,6 +225,7 @@ onBeforeUnmount(() => {
   <div :class="rootClass">
     <FaImageUpload
       v-model="images"
+      :accept="IMAGE_ONLY_ACCEPT"
       :aria-label="actionLabel"
       :disabled="disabled || uploading"
       :height="size"

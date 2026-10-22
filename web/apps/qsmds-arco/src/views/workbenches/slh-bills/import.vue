@@ -6,6 +6,7 @@ import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/
 import slhBillsApi from '@/api/modules/slh-bills'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import { XLSX_ACCEPT } from '@/utils/upload-policy'
 import { containerFailure } from '../containers/use-container-resource'
 import { collectSlhBillFlaggedRowNumbers, pageForSlhBillLine, SLH_BILL_FLAGGED_ROW_CLASS } from './comparison.logic'
 import { formatSlhBillRate } from './display.logic'
@@ -307,6 +308,7 @@ onBeforeUnmount(() => controller?.abort())
         <FaFileUpload
           v-else
           v-model="files"
+          :accept="XLSX_ACCEPT"
           :max="1"
           :disabled="busy"
           :before-upload="validate"

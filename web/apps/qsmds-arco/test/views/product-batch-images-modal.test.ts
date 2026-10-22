@@ -38,7 +38,7 @@ test('弹窗复用现有上传与布局接口，不另建上传通道', () => {
 })
 
 test('单产品卡片只允许选图，不提供文件名或产品名编辑', () => {
-  assert.match(cardSource, /accept="\.jpg,\.jpeg,\.png,\.webp"/u)
+  assert.match(cardSource, /:accept="IMAGE_ONLY_ACCEPT"/u)
   assert.match(cardSource, /type="file"/u)
   assert.match(cardSource, /<FaCheckbox/u)
   assert.match(cardSource, /设置为主图/u)

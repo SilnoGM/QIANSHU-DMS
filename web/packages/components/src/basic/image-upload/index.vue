@@ -2,6 +2,7 @@
 import axios from 'axios'
 import { computed, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { cn } from '#utils'
+import { useFileDrop } from '../../composables/use-file-drop'
 import Icon from '../icon/index.vue'
 import { useImagePreview } from '../image-preview'
 import Progress from '../progress/index.vue'
@@ -29,6 +30,7 @@ const props = withDefaults(defineProps<{
   afterUpload?: (response: any) => string | Promise<string>
   beforeUpload?: (file: File) => boolean | Promise<boolean>
   httpRequest?: (options: UploadRequestOptions) => any | Promise<any>
+  accept?: string
   multiple?: boolean
   max?: number
   width?: number
@@ -41,6 +43,7 @@ const props = withDefaults(defineProps<{
   headers: () => ({}),
   data: () => ({}),
   name: 'file',
+  accept: 'image/*',
   multiple: false,
   max: 1,
   width: 100,
@@ -75,6 +78,19 @@ const canHandlePaste = computed(() =>
   && !props.directory
   && (isHoveringContainer.value || isContainerFocused.value),
 )
+const {
+  handlers: fileDropHandlers,
+  isDragging: isFileDragging,
+} = useFileDrop({
+  accept: computed(() => props.accept),
+  disabled: computed(() => (
+    props.disabled
+    || isUploading.value
+    || (props.max > 0 && images.value.length >= props.max)
+  )),
+  multiple: computed(() => props.directory || props.multiple),
+  onFiles: files => handleFiles(files),
+})
 
 watch(images, (currentImages) => {
   const reusableItems = new Map<string, ImageItem[]>()
@@ -269,7 +285,10 @@ function onBeforeLeave(el: Element) {
 <template>
   <div
     ref="containerRef"
-    class="space-y-2"
+    v-bind="fileDropHandlers"
+    class="transition-shadow duration-150 space-y-2"
+    :class="isFileDragging ? 'ring-2 ring-primary/40 ring-offset-2 rounded-lg' : ''"
+    :data-dragging="isFileDragging ? 'true' : undefined"
     :tabindex="props.disabled ? undefined : 0"
     @mouseenter="isHoveringContainer = true"
     @mouseleave="isHoveringContainer = false"
@@ -339,7 +358,7 @@ function onBeforeLeave(el: Element) {
         <input
           ref="fileInputRef"
           type="file"
-          accept="image/*"
+          :accept="props.accept"
           :multiple="props.directory || props.multiple"
           :webkitdirectory="props.directory || undefined"
           :directory="props.directory || undefined"

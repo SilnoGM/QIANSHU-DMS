@@ -58,6 +58,22 @@ export class SalesOrderListQueryDto {
   @IsIn(['TWD', 'MYR'])
   currencyCode?: 'TWD' | 'MYR'
 
+  /**
+   * 待采购分桶：`AWAITING_PURCHASE_REVIEW` 只看采购审核中的订单，
+   * `EXCLUDE_AWAITING_PURCHASE_REVIEW` 只看真正还有可采购余额的订单。
+   * 缺省不做任何覆盖过滤，保持既有调用方的查询语义。
+   */
+  @ApiProperty({
+    enum: ['AWAITING_PURCHASE_REVIEW', 'EXCLUDE_AWAITING_PURCHASE_REVIEW'],
+    required: false,
+  })
+  @IsOptional()
+  @IsIn([
+    'AWAITING_PURCHASE_REVIEW',
+    'EXCLUDE_AWAITING_PURCHASE_REVIEW',
+  ])
+  purchaseHold?: 'AWAITING_PURCHASE_REVIEW' | 'EXCLUDE_AWAITING_PURCHASE_REVIEW'
+
   @ApiProperty({ type: 'string', format: 'uuid', required: false })
   @IsOptional()
   @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u)
@@ -91,7 +107,7 @@ export class SalesOrderListQueryDto {
 
 export class SalesOrderStatusCountsQueryDto extends OmitType(
   SalesOrderListQueryDto,
-  ['page', 'pageSize', 'orderStatus', 'fulfillmentStatus'] as const,
+  ['page', 'pageSize', 'orderStatus', 'fulfillmentStatus', 'purchaseHold'] as const,
 ) {
   @ApiProperty({ enum: ['all', 'pending'] })
   @IsIn(['all', 'pending'])

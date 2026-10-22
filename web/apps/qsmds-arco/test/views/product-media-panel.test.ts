@@ -180,7 +180,7 @@ test('上传队列拥有可见 label、上传前重命名、显式开始、真�
   assert.match(source, /id="product-media-upload-input"/u)
   assert.match(source, /type="file"/u)
   assert.match(source, /multiple/u)
-  assert.match(source, /accept="\.jpg,\.jpeg,\.png,\.webp,\.mp4,\.mov,\.m4v,\.webm"/u)
+  assert.match(source, /:accept="PRODUCT_MEDIA_ACCEPT"/u)
   assert.match(source, /<FaFileUpload/u)
   assert.match(source, /:before-upload="interceptPrimitiveFile"/u)
   assert.match(source, /<FaProgress/u)

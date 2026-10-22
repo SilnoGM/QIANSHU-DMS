@@ -80,6 +80,9 @@ test('凭证弹窗限定归档类型，换单与退出登录取消请求、释�
   assert.match(source, /account\.authEpoch/u)
   assert.match(source, /onBeforeUnmount\(reset\)/u)
   assert.match(source, /:submitting="busy"/u)
+  assert.match(source, /:accept="IMAGE_ONLY_ACCEPT"/u)
+  assert.match(source, /uploadTemporaryDocument\(file, signal\)/u)
+  assert.doesNotMatch(source, /application\/msword|application\/pdf/u)
   assert.doesNotMatch(source, /updateFulfillmentStatus|recordPayment|paymentId/u)
 })
 

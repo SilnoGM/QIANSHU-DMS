@@ -5,7 +5,6 @@ import {
   AuditActorType,
   AuditEventType,
   AuditOutcome,
-  type MediaType,
   type RegionLevel,
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
@@ -501,7 +500,7 @@ export class SalesOrderCommandService {
         id: { in: [command.issuanceVoucher.mediaAssetId] },
         createdByUserId: actorUserId,
         status: 'UPLOADING',
-        mediaType: { in: ['IMAGE', 'DOCUMENT'] satisfies MediaType[] },
+        mediaType: 'IMAGE',
         deletedAt: null,
         objectKey: { not: null },
       },

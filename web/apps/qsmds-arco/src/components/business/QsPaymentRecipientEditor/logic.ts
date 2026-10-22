@@ -38,7 +38,7 @@ export function validatePaymentRecipientAccounts(accounts: readonly PaymentRecip
   }
   return null
 }
-export function validateRecipientImage(file: { type: string, size: number }): string | null {
+export function validateRecipientImage(file: { name?: string, type: string, size: number }): string | null {
   const failure = validateUploadImage(file)
   if (failure === 'type') {
     return 'paymentRecipient.errors.imageType'

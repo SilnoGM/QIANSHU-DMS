@@ -271,6 +271,22 @@ export class SalesOrderCompletionHoldDto {
   readonly unreconciledMemberCount!: number
 }
 
+export const SALES_ORDER_PURCHASE_HOLD_REASONS = [
+  'AWAITING_PURCHASE_REVIEW',
+] as const
+
+/**
+ * 待采购订单停留在「采购审核中」的原因：有效采购（含审核中）已占满全部待采购
+ * 数量，订单无法继续采购，但要等采购审核通过才会进入备货中。
+ */
+export class SalesOrderPurchaseHoldDto {
+  @ApiProperty({ enum: SALES_ORDER_PURCHASE_HOLD_REASONS })
+  readonly reason!: typeof SALES_ORDER_PURCHASE_HOLD_REASONS[number]
+
+  @ApiProperty({ type: 'integer', minimum: 1 })
+  readonly pendingReviewOrderCount!: number
+}
+
 export class SalesOrderDetailDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly orderNo!: string
@@ -378,6 +394,8 @@ export class SalesOrderListItemDto {
   @ApiProperty({ enum: SalesOrderPaymentStatus }) readonly paymentStatus!: SalesOrderPaymentStatus
   @ApiProperty({ type: () => SalesOrderCompletionHoldDto, nullable: true })
   readonly completionHold!: SalesOrderCompletionHoldDto | null
+  @ApiProperty({ type: () => SalesOrderPurchaseHoldDto, nullable: true })
+  readonly purchaseHold!: SalesOrderPurchaseHoldDto | null
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly paymentRecordCount!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly statusChangeRecordCount!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly amountChangeRecordCount!: number
@@ -406,6 +424,7 @@ export const SALES_ORDER_STATUS_COUNT_VALUES = [
   'CANCELLED',
   'COMPLETED',
   'PENDING',
+  'AWAITING_PURCHASE_REVIEW',
   'PREPARING',
   'LAND_TRANSIT',
   'WAREHOUSE_ARRIVED',

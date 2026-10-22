@@ -5,12 +5,16 @@ import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import type { ApiContractErrorOptions } from '../../openapi/contract-metadata'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
-import { RequireAuthenticatedSession, RequirePermissions } from '../auth/decorators/auth.decorators'
+import { RequireAnyPermissions, RequireAuthenticatedSession, RequirePermissions } from '../auth/decorators/auth.decorators'
 import type { SalesOrderDocumentMultipartRequest } from '../sales-orders/documents/sales-order-document-multipart.parser'
 import { PackagingPaymentProfileDto, PaymentRecipientImageParamDto, PaymentRecipientImageUploadDto, SupplierPaymentProfileDto, SupplierPaymentProfilePageDto, SupplierPaymentProfileParamDto, SupplierPaymentProfileQueryDto, SupplierPaymentProfileSaveDto } from './payment-recipient.dto'
 import { PackagingPaymentProfileService } from './packaging-payment-profile.service'
 import { PaymentRecipientService } from './payment-recipient.service'
-import { PaymentRecipientImageService, type PaymentRecipientImageContent } from './payment-recipient-image.service'
+import {
+  PAYMENT_RECIPIENT_IMAGE_UPLOAD_PERMISSIONS,
+  PaymentRecipientImageService,
+  type PaymentRecipientImageContent,
+} from './payment-recipient-image.service'
 
 function contract(operationId: string, mutation = false, errors: ApiContractErrorOptions[] = []) {
   return ApiApplicationContract({ operationId, session: 'required', authorization: true, csrf: mutation, badRequest: true, validation: true, privateNoStore: true,
@@ -44,8 +48,10 @@ function imageContract(operationId: string, head = false) {
 @Controller('payment-recipient-images')
 export class PaymentRecipientImageController {
   constructor(private readonly images: PaymentRecipientImageService) {}
-  // 通用 Session Guard 后，领域服务显式检查配置更新或采购创建权限；不误用 AND 权限装饰器。
-  @Post() @HttpCode(201) @RequireAuthenticatedSession() @ApiConsumes('multipart/form-data')
+  @Post()
+  @HttpCode(201)
+  @RequireAnyPermissions(...PAYMENT_RECIPIENT_IMAGE_UPLOAD_PERMISSIONS)
+  @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', required: ['mediaType', 'file'], additionalProperties: false, properties: { mediaType: { type: 'string', enum: ['IMAGE'] }, file: { type: 'string', format: 'binary' } } } })
   @ApiContractResponse({ status: 201, type: PaymentRecipientImageUploadDto })
   @contract('payment_recipient_images_upload', true, [{ status: 422, codes: ['VALIDATION_FAILED', 'PAYMENT_RECIPIENT_IMAGE_INVALID', 'PAYMENT_RECIPIENT_IMAGE_TOO_LARGE', 'PAYMENT_RECIPIENT_IMAGE_UNAVAILABLE'] }, { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] }])

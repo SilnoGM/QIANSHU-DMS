@@ -5,10 +5,12 @@ import {
   OPTIONAL_SESSION_METADATA,
   PUBLIC_ROUTE_METADATA,
   REQUIRE_AUTHENTICATED_SESSION_METADATA,
+  REQUIRED_ANY_PERMISSIONS_METADATA,
   REQUIRED_PERMISSIONS_METADATA,
   AllowPasswordChangeRequired,
   OptionalSession,
   Public,
+  RequireAnyPermissions,
   RequireAuthenticatedSession,
   RequirePermissions,
 } from './auth.decorators'
@@ -25,6 +27,9 @@ class DecoratorFixture {
 
   @RequirePermissions('users:read', 'users:update')
   permissionRoute(): void {}
+
+  @RequireAnyPermissions('users:read', 'audit:read')
+  anyPermissionRoute(): void {}
 
   @RequireAuthenticatedSession()
   authenticatedSessionRoute(): void {}
@@ -68,6 +73,16 @@ describe('auth decorators', () => {
 
     expect(requiredPermissions).toEqual(['users:read', 'users:update'])
     expect(Object.isFrozen(requiredPermissions)).toBe(true)
+  })
+
+  it('stores any-of permissions as an immutable snapshot', () => {
+    const requiredAnyPermissions = reflector.get<readonly string[]>(
+      REQUIRED_ANY_PERMISSIONS_METADATA,
+      DecoratorFixture.prototype.anyPermissionRoute,
+    )
+
+    expect(requiredAnyPermissions).toEqual(['users:read', 'audit:read'])
+    expect(Object.isFrozen(requiredAnyPermissions)).toBe(true)
   })
 
   it('marks a method that requires a normal authenticated Session without business permissions', () => {

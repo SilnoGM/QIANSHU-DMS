@@ -1,4 +1,4 @@
-import { SalesOrderPaymentType } from '../../../generated/prisma/enums'
+import { MediaType, SalesOrderPaymentType } from '../../../generated/prisma/enums'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import { IsDefined, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from 'class-validator'
@@ -60,7 +60,9 @@ export class SalesReceiptOrderDto {
   @ApiProperty() orderStatus!: string
 }
 export class SalesReceiptVoucherDto {
-  @ApiProperty() mediaType!: string
+  /** 历史收款凭证可能仍是 DOCUMENT；新提交已收紧为 IMAGE。 */
+  @ApiProperty({ enum: MediaType })
+  mediaType!: MediaType
   @ApiProperty({ type: 'string', nullable: true }) mimeType!: string | null
   @ApiProperty({ format: 'uuid' }) mediaAssetId!: string
   @ApiProperty() title!: string

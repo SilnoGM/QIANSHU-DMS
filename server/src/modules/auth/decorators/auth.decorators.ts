@@ -15,6 +15,9 @@ export const REQUIRE_AUTHENTICATED_SESSION_METADATA = Symbol(
 export const REQUIRED_PERMISSIONS_METADATA = Symbol(
   'qianshu.auth.required-permissions',
 )
+export const REQUIRED_ANY_PERMISSIONS_METADATA = Symbol(
+  'qianshu.auth.required-any-permissions',
+)
 
 export const Public = (): MethodDecorator & ClassDecorator =>
   SetMetadata(PUBLIC_ROUTE_METADATA, true)
@@ -43,5 +46,18 @@ export const RequirePermissions = (
   SetMetadata(
     REQUIRED_PERMISSIONS_METADATA,
     // 防止装饰器调用方随后修改原数组，导致运行期授权要求漂移。
+    Object.freeze([...permissionCodes]),
+  )
+
+/**
+ * 任一业务权限即可访问。用于同一入口服务多个业务来源、但不应要求同时具备全部权限的路由。
+ * 不能与 RequirePermissions 或 RequireAuthenticatedSession 同时声明。
+ */
+export const RequireAnyPermissions = (
+  ...permissionCodes: readonly string[]
+): MethodDecorator & ClassDecorator =>
+  SetMetadata(
+    REQUIRED_ANY_PERMISSIONS_METADATA,
+    // 与 all 语义一样冻结快照，防止调用方后续修改数组。
     Object.freeze([...permissionCodes]),
   )

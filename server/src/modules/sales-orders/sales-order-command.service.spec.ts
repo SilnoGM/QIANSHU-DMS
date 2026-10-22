@@ -160,6 +160,9 @@ describe('SalesOrderCommandService', () => {
       idempotencyKey: IDEMPOTENCY_KEY,
     }, input())).resolves.toEqual(fixture.detail)
 
+    const mediaQuery = fixture.transaction.mediaAsset.findMany
+      .mock.calls[0]?.[0] as { where?: { mediaType?: string } } | undefined
+    expect(mediaQuery?.where?.mediaType).toBe('IMAGE')
     const numberingCall = fixture.numbering.generateScoped.mock.calls[0]?.[0]
     expect(numberingCall).toMatchObject({
       ruleCode: 'SALES_ORDER',
