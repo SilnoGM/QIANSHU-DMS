@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
-import { hasPersistenceCode, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
+import { hasPersistenceCode, hasPersistenceConstraint, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AccessControlService } from '../access-control/access-control.service'
 import { AuditService } from '../audit/audit.service'
@@ -17,6 +17,7 @@ import { markShipmentsContainerLoaded } from './container-load-fact'
 import { advanceSalesOrdersWhenAllShipmentsLoaded, lockSalesOrderChains, salesOrderIdsOfShipments } from '../purchase-orders/shipments/sales-order-container-load-progress'
 import type { ContainerBatchDto, ContainerBatchListQueryDto, ContainerLoadingItemCreateDto, ContainerLoadingItemDto } from './container-batch.dto'
 import { containerFailure, containerUuid, deriveContainerDate, normalizeContainerCreate, normalizeLoadingItemCreate, normalizeContainerUpdate, normalizeLoadingItemUpdate, requireContainerVersion, type ContainerCommandContext } from './container-batch.normalizer'
+import { containerShipmentEligibilitySelect, resolveContainerShipmentEligibility } from './container-shipment-eligibility'
 
 const hash = (input: unknown) => createHash('sha256').update(JSON.stringify(input)).digest('hex')
 function mapError(error: unknown): never {
@@ -24,6 +25,7 @@ function mapError(error: unknown): never {
   if (error instanceof DictionaryValueUnavailableError) return containerFailure('CONTAINER_WAREHOUSE_UNAVAILABLE', '目的地仓库当前不可用')
   if (error instanceof NumberingGenerationError) return containerFailure('CONTAINER_NUMBERING_UNAVAILABLE', '柜次编号暂时无法派发，请检查编号规则后重试', 409)
   const facts = readPersistenceErrorFacts(error)
+  if (hasPersistenceConstraint(facts, 'container_loading_items_shipment_delivered_check')) return containerFailure('CONTAINER_SHIPMENT_DELIVERED', '货件已签收，不能装柜', 422)
   if (['P2002', '23505'].some(code => hasPersistenceCode(facts, code))) return containerFailure('CONTAINER_BATCH_CONFLICT', '该仓库同日同序号柜次或装柜记录已经存在', 409)
   if (['P2034', '40001', '40P01', '55P03', '57014'].some(code => hasPersistenceCode(facts, code))) return containerFailure('CONTAINER_STATE_CHANGED', '资料已变化或正在处理，请刷新后重试', 409)
   throw error
@@ -132,12 +134,10 @@ export class ContainerBatchService {
           salesOrderIds = await salesOrderIdsOfShipments(tx, [normalized.shipmentId])
           await lockSalesOrderChains(tx, salesOrderIds)
           await tx.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id = ${normalized.shipmentId}::uuid FOR UPDATE`)
-          const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, select: { status: true, warehouseReceivedAt: true } })
-          if (!shipment || shipment.status !== 'ACTIVE') return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '货件不存在或已经取消')
-          // 装柜是到仓后的作业：未到仓货件不能进柜，发货事实由到仓事实隐含。
-          if (shipment.warehouseReceivedAt === null) return containerFailure('CONTAINER_SHIPMENT_NOT_RECEIVED', '货件尚未到仓，不能装柜')
-          const elsewhere = await tx.containerLoadingItem.findFirst({ where: { shipmentId: normalized.shipmentId, containerBatchId: { not: id } }, select: { id: true } })
-          if (elsewhere) return containerFailure('CONTAINER_SHIPMENT_ALREADY_ASSIGNED', '该货件已分配到其他柜次，首版不允许跨柜拆分', 409)
+          const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, select: containerShipmentEligibilitySelect })
+          if (!shipment) return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '货件不存在或已经取消')
+          const failure = resolveContainerShipmentEligibility(shipment, id, batch.warehouseValue)
+          if (failure) return containerFailure(failure.code, failure.message, failure.status)
           // 关联即已装柜：先写一次装柜事实，再由数据库触发器保证关联前提。
           await markShipmentsContainerLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, shipmentIds: [normalized.shipmentId], source: 'ITEM_CREATE' })
         }
@@ -197,10 +197,13 @@ export class ContainerBatchService {
           salesOrderIds = await salesOrderIdsOfShipments(tx, [normalized.shipmentId])
           await lockSalesOrderChains(tx, salesOrderIds)
           await tx.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id = ${normalized.shipmentId}::uuid FOR UPDATE`)
-          const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, select: { status: true, warehouseReceivedAt: true } })
-          if (!shipment || shipment.status !== 'ACTIVE') return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '货件不存在或已经取消')
-          if (shipment.warehouseReceivedAt === null) return containerFailure('CONTAINER_SHIPMENT_NOT_RECEIVED', '货件尚未到仓，不能装柜')
-          if (await tx.containerLoadingItem.findFirst({ where: { shipmentId: normalized.shipmentId, containerBatchId: { not: id } }, select: { id: true } })) return containerFailure('CONTAINER_SHIPMENT_ALREADY_ASSIGNED', '该货件已分配到其他柜次，首版不允许跨柜拆分', 409)
+          // 只有真正换绑才复核资格；已有关联不因货件后续被签收/装柜而锁死其他字段的编辑。
+          if (normalized.shipmentId !== previous.shipmentId) {
+            const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, select: containerShipmentEligibilitySelect })
+            if (!shipment) return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '货件不存在或已经取消')
+            const failure = resolveContainerShipmentEligibility(shipment, id, batch.warehouseValue)
+            if (failure) return containerFailure(failure.code, failure.message, failure.status)
+          }
           // 换绑同样先写新货件的装柜事实；旧货件的事实保留，清空关联也不回退。
           await markShipmentsContainerLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, loadingItemId: itemId, shipmentIds: [normalized.shipmentId], source: 'ITEM_UPDATE' })
         }

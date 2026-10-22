@@ -340,8 +340,8 @@ watch(itemData, (result) => {
     </template>
     <ContainerFormModal v-model="batchOpen" :batch="editingBatch" :submitting="batchMutation.submitting.value" :retry-only="batchMutation.retryOnly.value" :error="batchMutation.error.value" :field-errors="batchMutation.fieldErrors.value" @submit="saveBatch" />
     <LoadingItemFormDrawer v-model="itemOpen" :item="editingItem" :shipment="selectedShipment" :submitting="itemMutation.submitting.value" :retry-only="itemMutation.retryOnly.value" :error="itemMutation.error.value" :field-errors="itemMutation.fieldErrors.value" @submit="saveItem" @select-shipment="pickerOpen = true">
-      <template #shipment-picker>
-        <ShipmentPicker v-if="pickerOpen && batch" :warehouse-value="batch.warehouseValue" :disabled="itemMutation.submitting.value || itemMutation.retryOnly.value" @select="chooseShipment" @close="pickerOpen = false" />
+      <template #shipment-picker="{ recipientName, selectedShipmentId }">
+        <ShipmentPicker v-if="pickerOpen && batch" :warehouse-value="batch.warehouseValue" :batch-id="batch.id" :recipient-name="recipientName" :selected-shipment-id="selectedShipmentId" :disabled="itemMutation.submitting.value || itemMutation.retryOnly.value" @select="chooseShipment" @close="pickerOpen = false" />
       </template>
     </LoadingItemFormDrawer>
     <ContainerRelatedDrawers :id="referenceId" :enabled="enabled" :kind="referenceKind" @close="referenceKind = null" @purchase="reference('purchase', $event)" />

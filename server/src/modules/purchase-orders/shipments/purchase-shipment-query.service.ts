@@ -16,6 +16,7 @@ import { purchaseOrderPartScopeWhere, purchaseOrderScopeWhere } from '../purchas
 import { purchaseOrderSupplierFromSources } from '../purchase-order-query.service'
 import type { PurchaseOrderSupplierDto } from '../dto/purchase-order-response.dto'
 import { PURCHASE_SHIPMENT_VIEWS } from './purchase-shipment.dto'
+import { resolvePurchaseShipmentViewStatus } from './purchase-shipment-view'
 import type { PurchaseShipmentDestinationWarehouseDto, PurchaseShipmentDetailDto, PurchaseShipmentFilterDto, PurchaseShipmentListItemDto, PurchaseShipmentListQueryDto, PurchaseShipmentPageDto, PurchaseShipmentStatusCountsDto, PurchaseShipmentSort, PurchaseShipmentView } from './purchase-shipment.dto'
 
 const LINE_SELECT = {
@@ -40,6 +41,8 @@ const PART_SELECT = {
     salesOrder: { select: { id: true, orderNo: true, customerName: true } },
   } },
   items: { orderBy: { line: { lineNumber: 'asc' } }, select: { purchaseOrderLineId: true, quantity: true, line: { select: LINE_SELECT } } },
+  // 数据库触发器保证一个货件只属于一个柜次，取首条即可；用于列表/手动匹配显示「本柜/他柜」。
+  containerLoadingItems: { take: 1, select: { containerBatch: { select: { id: true, containerBatchNo: true, containerBatchName: true } } } },
 } as const satisfies Prisma.PurchaseOrderPartSelect
 
 const DETAIL_SELECT = {
@@ -146,10 +149,8 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
   const order = row.purchaseOrder
   return {
     id: row.id, shipmentNo: row.shipmentNo, partNumber: row.partNumber, status: row.status,
-    // 先判终态签收，再按装柜、入仓、发货事实细分，保证各状态视图互斥。
-    viewStatus: row.status === 'ACTIVE'
-      ? row.deliveredAt !== null ? 'DELIVERED' : row.loadedAt !== null ? 'CONTAINER_LOADED' : row.warehouseReceivedAt !== null ? 'WAREHOUSE_RECEIVED' : row.shippedAt === null ? 'AWAITING_SHIPMENT' : 'SHIPPED'
-      : row.status,
+    // 状态派生统一复用 helper，导入候选与列表保持同一口径。
+    viewStatus: resolvePurchaseShipmentViewStatus(row),
     shippingMarkText: row.shippingMarkText, createdAt: row.createdAt.toISOString(),
     shippedAt: row.shippedAt?.toISOString() ?? null, shippedBy: toNullablePersonReference(row.shippedBy),
     shipmentRecordedAt: row.shipmentRecordedAt?.toISOString() ?? null, shipmentRemark: row.shipmentRemark,
@@ -162,6 +163,7 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
     loadedRecordedAt: row.loadedRecordedAt?.toISOString() ?? null,
     deliveredAt: row.deliveredAt?.toISOString() ?? null, deliveredBy: toNullablePersonReference(row.deliveredBy),
     deliveredRecordedAt: row.deliveredRecordedAt?.toISOString() ?? null, deliveryRemark: row.deliveryRemark,
+    containerBatch: row.containerLoadingItems[0]?.containerBatch ?? null,
     purchaseOrder: {
       id: order.id, version: order.version, orderNo: order.orderNo, orderDate: order.orderDate.toISOString().slice(0, 10),
       purchaseType: order.purchaseType, productMode: order.productMode, orderStatus: order.orderStatus,

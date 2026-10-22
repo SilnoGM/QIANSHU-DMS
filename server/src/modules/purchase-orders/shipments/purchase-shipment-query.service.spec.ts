@@ -29,6 +29,7 @@ function row() {
     items: [{ purchaseOrderLineId: 'line-1', quantity: 2, line: {
       lineNumber: 1, lineType: 'CUSTOM', productId: null, productNoSnapshot: null, productNameSnapshot: '无图产品', productAttributesSnapshot: [], descriptionSnapshot: '临时规格', product: null,
     } }],
+    containerLoadingItems: [],
   }
 }
 

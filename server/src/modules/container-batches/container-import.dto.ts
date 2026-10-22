@@ -1,7 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsString, IsUUID, Matches, Max, Min, ValidateIf, ValidateNested } from 'class-validator'
+import { PurchaseOrderType } from '../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
+import { PURCHASE_SHIPMENT_VIEWS, PurchaseShipmentContainerBatchDto, type PurchaseShipmentView } from '../purchase-orders/shipments/purchase-shipment.dto'
+import type { ReferenceField } from './import-matching'
 
 export class ContainerImportCandidateDto {
   @ApiProperty({ format: 'uuid' }) id!: string
@@ -12,6 +15,12 @@ export class ContainerImportCandidateDto {
   @ApiProperty() goodsName!: string
   @ApiProperty({ type: String, nullable: true }) purchaseOrderNo!: string | null
   @ApiProperty({ type: String, nullable: true }) salesOrderNo!: string | null
+  @ApiProperty({ type: String, nullable: true, description: '销售订单客户名；库存采购为空。按采购域口径随 purchase-orders:read 返回。' }) customerName!: string | null
+  @ApiProperty({ enum: PurchaseOrderType }) purchaseType!: PurchaseOrderType
+  @ApiProperty({ enum: PURCHASE_SHIPMENT_VIEWS.filter(value => value !== 'ALL') }) viewStatus!: Exclude<PurchaseShipmentView, 'ALL'>
+  @ApiProperty({ type: String, format: 'date-time', nullable: true }) warehouseReceivedAt!: string | null
+  @ApiProperty({ type: () => PurchaseShipmentContainerBatchDto, nullable: true, description: '货件当前所在柜次；未装柜为空。' }) containerBatch!: PurchaseShipmentContainerBatchDto | null
+  @ApiProperty({ enum: ['shippingMarkText', 'trackingNo', 'shipmentNo'], isArray: true, description: '该候选命中的精确标识字段。' }) matchFields!: ReferenceField[]
   @ApiProperty() eligible!: boolean
   @ApiProperty({ type: String, nullable: true }) ineligibleReason!: string | null
 }

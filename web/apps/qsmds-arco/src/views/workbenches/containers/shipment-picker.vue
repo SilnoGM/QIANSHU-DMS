@@ -1,52 +1,107 @@
 <script setup lang="ts">
+import type { CandidateViewContext, ShipmentCandidateView } from './shipment-candidate.logic'
 import type { PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
-import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
+import { useDebounceFn } from '@vueuse/core'
 import shipmentApi from '@/api/modules/purchase-shipments'
-import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
-import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
-import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
+import ShipmentCandidateCard from './shipment-candidate-card.vue'
+import { buildSearchCandidateView } from './shipment-candidate.logic'
 import { useContainerResource } from './use-container-resource'
 
-const props = defineProps<{
+defineOptions({ name: 'ShipmentPicker' })
+
+const props = withDefaults(defineProps<{
   warehouseValue: string
+  batchId: string
+  recipientName?: string | null
+  selectedShipmentId?: string | null
   disabled?: boolean
-}>()
+}>(), {
+  recipientName: null,
+  selectedShipmentId: null,
+  disabled: false,
+})
 const emit = defineEmits<{
-  select: [
-        shipment: PurchaseShipmentListItemDto,
-  ]
-  close: [
-  ]
+  select: [shipment: PurchaseShipmentListItemDto]
+  close: []
 }>()
+
 const { t } = useI18n()
 const { auth } = useAppAuth()
 const account = useAppAccountStore()
 const enabled = computed(() => auth('purchase-orders:read') && !props.disabled)
 const page = ref(1)
+const pageSize = 20
+const searchDraft = ref('')
 const search = ref('')
-const query = computed(() => ({ page: page.value, pageSize: 10, keyword: search.value || undefined, destinationWarehouseValue: props.warehouseValue, view: 'ALL' as const }))
+const query = computed(() => ({
+  page: page.value,
+  pageSize,
+  keyword: search.value || undefined,
+  destinationWarehouseValue: props.warehouseValue,
+  view: 'ALL' as const,
+  sort: 'WAREHOUSE_RECEIVED_DESC' as const,
+}))
 const resource = useContainerResource(enabled, computed(() => account.authEpoch), query, async signal => (await shipmentApi.list(query.value, signal)).data)
 const { data, loading, error } = resource
-function shipmentLabel(row: PurchaseShipmentListItemDto) {
-  return row.shippingMarkText || row.shipmentNo || `${t('containerPage.shipment')}-${String(row.partNumber).padStart(2, '0')}`
+
+const context = computed<CandidateViewContext>(() => ({
+  batchId: props.batchId,
+  warehouseValue: props.warehouseValue,
+  recipientName: props.recipientName,
+  selectedId: props.selectedShipmentId,
+  matchedId: null,
+  manuallySelected: false,
+  canViewSalesOrder: true,
+}))
+const cards = computed(() => (data.value?.items ?? []).map(item => buildSearchCandidateView(item, context.value)))
+const total = computed(() => data.value?.total ?? 0)
+
+const debouncedSearch = useDebounceFn(() => applySearch(), 250)
+watch(searchDraft, () => debouncedSearch())
+
+function applySearch() {
+  search.value = searchDraft.value.trim()
+  page.value = 1
 }
-/** 装柜是到仓后的作业：只有已到仓的有效货件可选，与服务端资格校验同一口径。 */
-function selectable(row: PurchaseShipmentListItemDto) {
-  return row.status === 'ACTIVE' && row.warehouseReceivedAt !== null
+
+function clearSearch() {
+  searchDraft.value = ''
+  applySearch()
 }
-const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(() => [
-  { id: 'shipment', title: t('containerManagement.shipmentAndSource'), accessorFn: shipmentLabel, minWidth: 255 },
-  { id: 'goods', title: t('purchaseShipments.products'), accessorFn: row => row.lineSummary.previews.map(item => item.productName).join('、'), minWidth: 150 },
-  { id: 'status', title: t('purchaseShipments.status'), accessorFn: row => t(`purchaseShipments.${row.viewStatus}`), minWidth: 90 },
-])
+
+function searchByRecipient() {
+  if (!props.recipientName) {
+    return
+  }
+  searchDraft.value = props.recipientName
+  applySearch()
+}
+
+function changePage(next: number) {
+  if (next === page.value) {
+    return
+  }
+  page.value = next
+}
+
+function choose(candidate: ShipmentCandidateView) {
+  if (!enabled.value || !candidate.eligible) {
+    return
+  }
+  const item = data.value?.items.find(entry => entry.id === candidate.id)
+  if (item) {
+    emit('select', item)
+  }
+}
 </script>
 
 <template>
   <section class="mt-4 pt-4 border-t border-border min-w-0">
     <div class="mb-3 flex gap-3 items-center justify-between">
-      <h3 class="qs-type-component-title">
+      <h3 class="qs-type-component-title m-0">
         {{ t('containerPage.shipmentSelect') }}
-      </h3><FaButton type="button" variant="ghost" size="sm" @click="emit('close')">
+      </h3>
+      <FaButton type="button" variant="ghost" size="sm" @click="emit('close')">
         {{ t('containerPage.cancelSelect') }}
       </FaButton>
     </div>
@@ -54,57 +109,67 @@ const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(()
       {{ t('containerPage.shipmentHint') }}
     </p>
     <FaAlert v-if="!auth('purchase-orders:read')" :title="t('containerPage.shipmentPermission')" />
-    <QsGenericTable v-else v-model:page="page" v-model:search="search" :page-size="10" :page-size-options="[10]" :columns="columns" :data="data?.items ?? []" :total="data?.total ?? 0" :loading="loading" :error="error" :addable="false" :show-column-settings="false" :show-row-number="false" :search-placeholder="t('containerPage.shipmentSearch')" :action-column="{ width: 100 }" @retry="resource.reload">
-      <template #cell-shipment="{ row }">
-        <QsTableStackedCell>
-          <QsTableStackedLine content-class="qs-type-data-emphasis [overflow-wrap:anywhere]">
-            {{ shipmentLabel(row.original) }}
-          </QsTableStackedLine>
-          <QsTableStackedLine v-if="row.original.shipmentNo && row.original.shipmentNo !== shipmentLabel(row.original)" tone="muted" content-class="qs-type-data">
-            {{ row.original.shipmentNo }}
-          </QsTableStackedLine>
-          <QsTableStackedLine :label="t('containerManagement.purchaseSource')" tone="muted" content-class="qs-type-data">
-            {{ row.original.purchaseOrder.orderNo }}
-          </QsTableStackedLine>
-          <QsTableStackedLine v-if="row.original.salesSource" :label="t('containerManagement.salesSource')" tone="muted" content-class="qs-type-data">
-            {{ row.original.salesSource.orderNo }}
-          </QsTableStackedLine>
-        </QsTableStackedCell>
-      </template>
-      <template #cell-goods="{ row }">
-        <span class="[overflow-wrap:anywhere] line-clamp-2" :title="row.original.lineSummary.previews.map(item => item.productName).join('、')">{{ row.original.lineSummary.previews.map(item => item.productName).join('、') || '—' }}</span>
-      </template>
-      <template #cell-status="{ row }">
-        <FaTag variant="outline" class="qs-type-status-tag whitespace-nowrap" :class="row.original.status === 'ACTIVE' ? 'text-primary border-primary/25 bg-primary/5' : 'text-muted-foreground'">
-          {{ t(`purchaseShipments.${row.original.viewStatus}`) }}
-        </FaTag>
-      </template>
-      <template #mobile-row="{ row }">
-        <div class="[overflow-wrap:anywhere] space-y-2">
-          <div class="flex gap-3 items-start justify-between">
-            <strong class="qs-type-data-emphasis min-w-0">{{ shipmentLabel(row) }}</strong>
-            <FaTag variant="outline" class="qs-type-status-tag shrink-0">
-              {{ t(`purchaseShipments.${row.viewStatus}`) }}
-            </FaTag>
-          </div>
-          <p class="qs-type-body m-0">
-            {{ row.lineSummary.previews.map(item => item.productName).join('、') || '—' }}
-          </p>
-          <QsTableStackedCell>
-            <QsTableStackedLine :label="t('containerManagement.purchaseSource')" tone="muted" content-class="qs-type-data">
-              {{ row.purchaseOrder.orderNo }}
-            </QsTableStackedLine>
-            <QsTableStackedLine v-if="row.salesSource" :label="t('containerManagement.salesSource')" tone="muted" content-class="qs-type-data">
-              {{ row.salesSource.orderNo }}
-            </QsTableStackedLine>
-          </QsTableStackedCell>
-        </div>
-      </template>
-      <template #actions="{ row }">
-        <FaButton type="button" size="sm" variant="outline" :disabled="disabled || !selectable(row)" @click="emit('select', row)">
-          {{ t(selectable(row) ? 'containerPage.select' : row.status === 'ACTIVE' ? 'containerManagement.shipmentNotReceived' : 'containerManagement.shipmentUnavailable') }}
+    <template v-else>
+      <div class="flex flex-wrap gap-2 items-center">
+        <FaInput
+          v-model="searchDraft"
+          class="flex-1 min-w-48"
+          clearable
+          :placeholder="t('containerImport.shipmentSearch')"
+          @keyup.enter="applySearch"
+          @clear="clearSearch"
+        />
+        <FaButton type="button" variant="outline" @click="applySearch">
+          {{ t('containerImport.searchAction') }}
         </FaButton>
-      </template>
-    </QsGenericTable>
+      </div>
+      <div v-if="recipientName && !searchDraft" class="mt-2 flex flex-wrap gap-2 items-center">
+        <span class="qs-type-meta text-muted-foreground">{{ t('containerImport.searchByRecipientHint') }}</span>
+        <FaButton type="button" variant="outline" size="sm" @click="searchByRecipient">
+          {{ t('containerImport.searchByRecipient', { name: recipientName }) }}
+        </FaButton>
+      </div>
+      <p v-if="!searchDraft" class="qs-type-meta text-muted-foreground mb-0 mt-2">
+        {{ t('containerImport.searchAllHint') }}
+      </p>
+      <p v-if="total" class="qs-type-meta text-muted-foreground mb-0 mt-2">
+        {{ t('containerImport.resultCount', { count: total }) }}
+      </p>
+
+      <div v-if="loading" class="mt-3 flex flex-col gap-2" role="status" :aria-label="t('containerImport.loadingCandidates')">
+        <div v-for="index in 3" :key="index" class="rounded-lg bg-muted/40 h-24 animate-pulse" aria-hidden="true" />
+      </div>
+      <div v-else-if="error" class="py-8 flex flex-col gap-3 items-center">
+        <FaEmpty icon="i-lucide:circle-alert" :title="t('containerImport.loadFailed')" :description="error" />
+        <FaButton type="button" variant="outline" @click="resource.reload">
+          {{ t('containerImport.retryLoad') }}
+        </FaButton>
+      </div>
+      <div v-else-if="cards.length" role="radiogroup" :aria-label="t('containerImport.manualSearch')" class="mt-3 flex flex-col gap-2">
+        <ShipmentCandidateCard
+          v-for="candidate in cards"
+          :key="candidate.id"
+          :candidate="candidate"
+          :disabled="!enabled"
+          @select="choose(candidate)"
+        />
+      </div>
+      <FaEmpty
+        v-else
+        class="py-8"
+        :title="t(searchDraft ? 'containerImport.searchEmpty' : 'containerImport.searchNoKeyword')"
+        :description="searchDraft ? t('containerImport.searchEmptyHint') : t('containerImport.noSearchResults')"
+      />
+      <FaPagination
+        v-if="total > pageSize"
+        class="mt-3"
+        :page="page"
+        :size="pageSize"
+        :total="total"
+        layout="total, prev, pager, next"
+        :text-templates="{ total: value => t('containerImport.resultCount', { count: value }) }"
+        @update:page="changePage"
+      />
+    </template>
   </section>
 </template>

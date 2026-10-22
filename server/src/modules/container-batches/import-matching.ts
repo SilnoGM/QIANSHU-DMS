@@ -4,7 +4,7 @@ export interface ContainerShipmentCandidate {
   trackingNo: string | null
   shipmentNo: string | null
 }
-type ReferenceField = 'shippingMarkText' | 'trackingNo' | 'shipmentNo'
+export type ReferenceField = 'shippingMarkText' | 'trackingNo' | 'shipmentNo'
 export interface ContainerShipmentMatch {
   status: 'MATCHED' | 'AMBIGUOUS' | 'UNMATCHED'
   shipmentId: string | null

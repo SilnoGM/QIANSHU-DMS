@@ -2,12 +2,15 @@
 import type { ImportDisplayRow } from './use-container-import'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
+import { resolveRowMatchState } from '../shipment-candidate.logic'
 
-defineProps<{ row: ImportDisplayRow }>()
+const props = defineProps<{ row: ImportDisplayRow }>()
 const { t } = useI18n()
+const displayStatus = computed(() => resolveRowMatchState(props.row) === 'UNAVAILABLE' ? 'UNAVAILABLE' : props.row.displayStatus)
 const tones = {
   MATCHED: 'text-primary border-primary/25 bg-primary/5',
   AMBIGUOUS: 'text-amber-700 dark:text-amber-400 border-amber-500/25 bg-amber-500/5',
+  UNAVAILABLE: 'text-amber-700 dark:text-amber-400 border-amber-500/25 bg-amber-500/5',
   UNMATCHED: 'text-muted-foreground border-border bg-muted/40',
   INVALID: 'text-destructive border-destructive/25 bg-destructive/5',
   SKIPPED: 'text-muted-foreground border-border bg-muted/40',
@@ -17,8 +20,8 @@ const tones = {
 <template>
   <QsTableStackedCell class="min-w-0 w-full whitespace-normal">
     <QsTableStackedLine>
-      <FaTag variant="outline" class="qs-type-status-tag whitespace-nowrap" :class="tones[row.displayStatus]">
-        {{ t(`containerImport.status.${row.displayStatus}`) }}
+      <FaTag variant="outline" class="qs-type-status-tag whitespace-nowrap" :class="tones[displayStatus]">
+        {{ t(`containerImport.status.${displayStatus}`) }}
       </FaTag>
     </QsTableStackedLine>
     <QsTableStackedLine v-if="row.displayStatus === 'INVALID' && row.errors[0]" content-class="text-destructive [overflow-wrap:anywhere]">

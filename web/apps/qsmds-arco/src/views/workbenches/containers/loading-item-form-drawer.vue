@@ -139,7 +139,7 @@ async function submit() {
         <p v-if="fieldErrors.shipmentId" class="text-sm text-destructive mt-2" role="alert">
           {{ fieldErrors.shipmentId }}
         </p>
-        <slot name="shipment-picker" />
+        <slot name="shipment-picker" :recipient-name="draft.recipientName" :selected-shipment-id="draft.shipmentId" />
       </section>
       <section :aria-label="t('containerManagement.goodsSection')" class="min-w-0">
         <h3 class="qs-type-component-title m-0 mb-4 flex gap-2 items-center">
