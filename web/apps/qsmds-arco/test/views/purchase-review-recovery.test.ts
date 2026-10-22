@@ -138,7 +138,7 @@ test('点击复制使用已加载的采购详情，不提交审核、不派号�
   assert.equal(fixture.copied.length, 1)
   assert.match(fixture.copied[0]!, /【PO\/20260916-00016】\n供应商：示例供应商/u)
   assert.match(fixture.copied[0]!, /金额小计：10\.00\*2=20\.00/u)
-  assert.match(fixture.copied[0]!, /货件-01：木桌\n此货件唛头：TEST\/货件-01/u)
+  assert.match(fixture.copied[0]!, /货件-01：木桌\n此货件唛头：【TEST\/货件-01】/u)
   finish()
   await pending
   assert.equal(fixture.state.copying.value, false)

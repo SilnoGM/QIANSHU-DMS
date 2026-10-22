@@ -67,6 +67,7 @@ const ADMIN_PROFILE_UPDATE_FIELDS = [
   'email',
   'mobileE164',
   'avatarUrl',
+  'issuerPrefix',
   'remark',
 ] as const
 

@@ -229,7 +229,7 @@ class PurchaseOrderImageCanvas {
     this.place(number, MARGIN + CONTENT_WIDTH - 856, this.y + 14, 840)
     this.advance(Math.max(label.height, number.height) + 44)
     const [mark, hint] = await Promise.all([
-      this.text(`唛头：${part.shippingMarkText}`, CONTENT_WIDTH - 32, 24, COLORS.primary, true),
+      this.text(`唛头：【${part.shippingMarkText}】${snapshot.shippingMarkSuffix}`, CONTENT_WIDTH - 32, 24, COLORS.primary, true),
       this.text('（请将此货件唛头贴到包装箱 / 货物上）', CONTENT_WIDTH - 32, 24, COLORS.destructive, true),
     ])
     this.place(mark, MARGIN + 16, this.y)

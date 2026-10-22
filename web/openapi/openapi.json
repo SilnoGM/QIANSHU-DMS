@@ -82319,6 +82319,12 @@
             "maxLength": 2048,
             "nullable": true
           },
+          "issuerPrefix": {
+            "type": "string",
+            "maxLength": 3,
+            "nullable": true,
+            "description": "出单人前缀；最多 3 个汉字"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -82333,6 +82339,7 @@
           "email",
           "mobileE164",
           "avatarUrl",
+          "issuerPrefix",
           "createdAt",
           "updatedAt"
         ]
@@ -82357,6 +82364,13 @@
             "minLength": 1,
             "maxLength": 2048,
             "nullable": true
+          },
+          "issuerPrefix": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3,
+            "nullable": true,
+            "description": "出单人前缀；最多 3 个汉字"
           }
         }
       },
@@ -82395,6 +82409,12 @@
             "maxLength": 2048,
             "nullable": true
           },
+          "issuerPrefix": {
+            "type": "string",
+            "maxLength": 3,
+            "nullable": true,
+            "description": "出单人前缀；最多 3 个汉字"
+          },
           "remark": {
             "type": "string",
             "maxLength": 2000,
@@ -82413,6 +82433,7 @@
           "email",
           "mobileE164",
           "avatarUrl",
+          "issuerPrefix",
           "remark",
           "createdAt",
           "updatedAt"
@@ -82584,6 +82605,13 @@
             "minLength": 1,
             "maxLength": 2048,
             "nullable": true
+          },
+          "issuerPrefix": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3,
+            "nullable": true,
+            "description": "出单人前缀；最多 3 个汉字"
           },
           "remark": {
             "type": "string",
@@ -92351,12 +92379,19 @@
           },
           "customerName": {
             "type": "string"
+          },
+          "issuerPrefix": {
+            "type": "string",
+            "maxLength": 3,
+            "nullable": true,
+            "description": "销售订单出单人前缀；最多 3 个汉字"
           }
         },
         "required": [
           "id",
           "orderNo",
-          "customerName"
+          "customerName",
+          "issuerPrefix"
         ]
       },
       "PurchaseOrderSourcePurchasedLineDto": {

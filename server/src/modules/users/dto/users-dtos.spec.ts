@@ -203,12 +203,14 @@ describe('User request DTO validation', () => {
       email: 'operator@example.com',
       mobileE164: '+8613800138000',
       avatarUrl: 'https://example.com/avatar.png',
+      issuerPrefix: '李华',
       remark: '仅管理员可见',
     })
     const nullableProfile = await validatePlain(UpdateUserRequestDto, {
       email: null,
       mobileE164: null,
       avatarUrl: null,
+      issuerPrefix: null,
       remark: null,
     })
     const emptyPatch = await validatePlain(UpdateUserRequestDto, {})
@@ -217,6 +219,7 @@ describe('User request DTO validation', () => {
       email: '',
       mobileE164: '',
       avatarUrl: '',
+      issuerPrefix: '',
       remark: '',
     })
     const extra = await validatePlain(UpdateUserRequestDto, {
@@ -234,6 +237,7 @@ describe('User request DTO validation', () => {
       'avatarUrl',
       'displayName',
       'email',
+      'issuerPrefix',
       'mobileE164',
       'remark',
     ])
@@ -346,6 +350,7 @@ describe('User DTO OpenAPI contract', () => {
         email: { type: 'string', maxLength: 254, nullable: true },
         mobileE164: { type: 'string', maxLength: 16, nullable: true },
         avatarUrl: { type: 'string', maxLength: 2048, nullable: true },
+        issuerPrefix: { type: 'string', maxLength: 3, nullable: true, description: '出单人前缀；最多 3 个汉字' },
         remark: { type: 'string', maxLength: 2000, nullable: true },
         createdAt: { type: 'string', format: 'date-time' },
         updatedAt: { type: 'string', format: 'date-time' },
@@ -354,6 +359,7 @@ describe('User DTO OpenAPI contract', () => {
         'email',
         'mobileE164',
         'avatarUrl',
+        'issuerPrefix',
         'remark',
         'createdAt',
         'updatedAt',
@@ -361,7 +367,7 @@ describe('User DTO OpenAPI contract', () => {
     })
   })
 
-  it('管理员 PATCH 文档保持五个扁平可选字段', () => {
+  it('管理员 PATCH 文档保持六个扁平可选字段', () => {
     expect(requireSchema(document, UpdateUserRequestDto.name)).toEqual({
       type: 'object',
       properties: {
@@ -387,6 +393,13 @@ describe('User DTO OpenAPI contract', () => {
           minLength: 1,
           maxLength: 2048,
           nullable: true,
+        },
+        issuerPrefix: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 3,
+          nullable: true,
+          description: '出单人前缀；最多 3 个汉字',
         },
         remark: {
           type: 'string',

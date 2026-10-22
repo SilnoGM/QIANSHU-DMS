@@ -6,7 +6,9 @@ import { ApiException } from '../../infrastructure/http/api.exception'
 const EMAIL_MAX_CODE_POINTS = 254
 const AVATAR_URL_MAX_CODE_POINTS = 2048
 const REMARK_MAX_CODE_POINTS = 2000
+const ISSUER_PREFIX_MAX_CODE_POINTS = 3
 const MOBILE_E164_PATTERN = /^\+[1-9]\d{7,14}$/u
+const ISSUER_PREFIX_PATTERN = /^\p{Script=Han}+$/u
 
 export type NormalizedEmail = Readonly<{
   email: string | null
@@ -20,6 +22,7 @@ export type UserProfileUpdateData = {
   avatarUrl?: string | null
   /** 内部媒体引用；只由 Service 在解析上传 URL 后写入，不接受客户端直接提交。 */
   avatarMediaAssetId?: string | null
+  issuerPrefix?: string | null
   remark?: string | null
 }
 
@@ -113,6 +116,31 @@ export function normalizeAvatarUrl(value: unknown): string | null {
   return value
 }
 
+/**
+ * 出单人前缀只用于采购单复制信息和采购单图片展示；统一 NFC 与 trim，
+ * 只接受 1 到 3 个汉字，空值用 null 清除。
+ */
+export function normalizeIssuerPrefix(value: unknown): string | null {
+  if (value === null) {
+    return null
+  }
+  if (typeof value !== 'string') {
+    throw validationFailed('issuerPrefix', '出单人前缀最多 3 个汉字')
+  }
+
+  const prefix = value.normalize('NFC').trim()
+  const length = codePointLength(prefix)
+  if (
+    length < 1
+    || length > ISSUER_PREFIX_MAX_CODE_POINTS
+    || !ISSUER_PREFIX_PATTERN.test(prefix)
+  ) {
+    throw validationFailed('issuerPrefix', '出单人前缀最多 3 个汉字')
+  }
+
+  return prefix
+}
+
 /** 管理员备注使用稳定 Unicode 形式，但保留内部换行与空白。 */
 export function normalizeRemark(value: unknown): string | null {
   if (value === null) {
@@ -167,6 +195,10 @@ export function normalizeUserProfileUpdate(
   if (hasSubmittedField(record, 'avatarUrl')) {
     data.avatarUrl = normalizeAvatarUrl(record.avatarUrl)
     changedFields.push('avatarUrl')
+  }
+  if (hasSubmittedField(record, 'issuerPrefix')) {
+    data.issuerPrefix = normalizeIssuerPrefix(record.issuerPrefix)
+    changedFields.push('issuerPrefix')
   }
   if (hasSubmittedField(record, 'remark')) {
     if (options.allowRemark !== true) {

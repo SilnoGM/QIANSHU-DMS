@@ -10,16 +10,18 @@ import { validateChinaMobileNational } from './china-mobile'
 export type CurrentUserProfileValue = Pick<
   CurrentUserProfileDto,
   'avatarUrl' | 'email' | 'mobileE164'
->
+> & { issuerPrefix?: string | null }
 
 export interface CurrentUserProfileFormValue {
   avatarUrl: string
   email: string
+  /** 旧调用方可以省略；省略时构造 PATCH 会保留原值，不误清空已有前缀。 */
+  issuerPrefix?: string
   mobileE164: string
 }
 
 export type AdminUserProfileValue = Pick<UserDto, 'displayName'>
-  & Pick<UserDto['profile'], 'avatarUrl' | 'email' | 'mobileE164' | 'remark'>
+  & Pick<UserDto['profile'], 'avatarUrl' | 'email' | 'issuerPrefix' | 'mobileE164' | 'remark'>
 
 export interface AdminUserProfileFormValue extends CurrentUserProfileFormValue {
   displayName: string
@@ -29,10 +31,10 @@ export interface AdminUserProfileFormValue extends CurrentUserProfileFormValue {
 export type CurrentUserProfilePatch = UpdateCurrentUserProfileRequestDto
 export type AdminUserProfilePatch = Pick<
   UpdateUserRequestDto,
-  'avatarUrl' | 'displayName' | 'email' | 'mobileE164' | 'remark'
+  'avatarUrl' | 'displayName' | 'email' | 'issuerPrefix' | 'mobileE164' | 'remark'
 >
 export type UserProfileFieldErrors = Partial<Record<
-  'avatarUrl' | 'displayName' | 'email' | 'mobileE164' | 'remark',
+  'avatarUrl' | 'displayName' | 'email' | 'issuerPrefix' | 'mobileE164' | 'remark',
   string
 >>
 
@@ -41,6 +43,7 @@ export interface CurrentUserProfileValidationMessages {
   avatarUrlTooLong: string
   emailInvalid: string
   emailTooLong: string
+  issuerPrefixInvalid?: string
   mobileE164Invalid: string
   mobileDigitsInvalid?: string
   mobileForeignInvalid?: string
@@ -61,10 +64,13 @@ const EMAIL_DOMAIN_LABEL_MAX_CODE_POINTS = 63
 const AVATAR_URL_MAX_CODE_POINTS = 2048
 const DISPLAY_NAME_MAX_CODE_POINTS = 128
 const REMARK_MAX_CODE_POINTS = 2000
+const ISSUER_PREFIX_MAX_CODE_POINTS = 3
 const MOBILE_E164_PATTERN = /^\+[1-9]\d{7,14}$/u
+const ISSUER_PREFIX_PATTERN = /^\p{Script=Han}+$/u
 const PROFILE_PATCH_FIELDS = new Set([
   'avatarUrl',
   'email',
+  'issuerPrefix',
   'mobileE164',
 ])
 const EMAIL_LOCAL_PART_PATTERN
@@ -76,6 +82,7 @@ const DEFAULT_VALIDATION_MESSAGES: Required<CurrentUserProfileValidationMessages
   avatarUrlTooLong: '头像地址不能超过 2048 个字符',
   emailInvalid: '请输入有效的邮箱地址',
   emailTooLong: '邮箱不能超过 254 个字符',
+  issuerPrefixInvalid: '出单人前缀最多 3 个汉字',
   mobileDigitsInvalid: '手机号只能输入数字',
   mobileE164Invalid: '请输入有效的 E.164 手机号',
   mobileForeignInvalid: '仅支持中国大陆 +86 手机号',
@@ -144,6 +151,11 @@ function normalizeRemark(value: string): string | null {
   return normalized === '' ? null : normalized
 }
 
+function normalizeIssuerPrefix(value: string): string | null {
+  const normalized = value.normalize('NFC').trim()
+  return normalized === '' ? null : normalized
+}
+
 /**
  * 头像预览会直接触发浏览器网络请求，因此只有完整通过与 Server 相同的协议边界后
  * 才返回原值。输入中的首尾空白不做隐式清理，避免预览值和最终保存值发生漂移。
@@ -183,6 +195,7 @@ export function validateCurrentUserProfileFields(
   const email = normalizeEmail(value.email)
   const mobileE164 = normalizeExactOptionalValue(value.mobileE164)
   const avatarUrl = normalizeExactOptionalValue(value.avatarUrl)
+  const issuerPrefix = normalizeIssuerPrefix(value.issuerPrefix ?? '')
 
   if (email !== null) {
     if (codePointLength(email) > EMAIL_MAX_CODE_POINTS) {
@@ -225,6 +238,16 @@ export function validateCurrentUserProfileFields(
     }
   }
 
+  if (
+    issuerPrefix !== null
+    && (
+      codePointLength(issuerPrefix) > ISSUER_PREFIX_MAX_CODE_POINTS
+      || !ISSUER_PREFIX_PATTERN.test(issuerPrefix)
+    )
+  ) {
+    errors.issuerPrefix = resolved.issuerPrefixInvalid
+  }
+
   return errors
 }
 
@@ -255,14 +278,18 @@ export function buildCurrentUserProfilePatch(
   initial: CurrentUserProfileValue,
   form: CurrentUserProfileFormValue,
 ): CurrentUserProfilePatch {
+  const issuerPrefix = Object.hasOwn(form, 'issuerPrefix')
+    ? normalizeIssuerPrefix(form.issuerPrefix ?? '')
+    : initial.issuerPrefix
   const desired: CurrentUserProfileValue = {
     avatarUrl: normalizeExactOptionalValue(form.avatarUrl),
     email: normalizeEmail(form.email),
+    issuerPrefix,
     mobileE164: normalizeExactOptionalValue(form.mobileE164),
   }
   const patch: CurrentUserProfilePatch = {}
 
-  for (const field of ['avatarUrl', 'email', 'mobileE164'] as const) {
+  for (const field of ['avatarUrl', 'email', 'issuerPrefix', 'mobileE164'] as const) {
     if (desired[field] !== initial[field]) {
       patch[field] = desired[field]
     }

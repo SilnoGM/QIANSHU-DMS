@@ -53,6 +53,7 @@ export class PurchaseOrderSourceSalesOrderDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly orderNo!: string
   @ApiProperty({ type: 'string' }) readonly customerName!: string
+  @ApiProperty({ type: 'string', maxLength: 3, nullable: true, description: '销售订单出单人前缀；最多 3 个汉字' }) readonly issuerPrefix!: string | null
 }
 
 export class PurchaseOrderLineDto {

@@ -44,6 +44,7 @@ interface UserFixture {
     email: string | null
     mobileE164: string | null
     avatarUrl: string | null
+    issuerPrefix: string | null
     remark: string | null
     createdAt: Date
     updatedAt: Date
@@ -215,6 +216,7 @@ function userFixture(overrides: Partial<UserFixture> = {}): UserFixture {
       email: null,
       mobileE164: null,
       avatarUrl: null,
+      issuerPrefix: null,
       remark: null,
       createdAt: new Date('2026-07-01T01:00:00.000Z'),
       updatedAt: new Date('2026-07-02T01:00:00.000Z'),
@@ -377,6 +379,7 @@ describe('UsersService reads', () => {
             email: null,
             mobileE164: null,
             avatarUrl: null,
+            issuerPrefix: null,
             remark: null,
             createdAt: '2026-07-01T01:00:00.000Z',
             updatedAt: '2026-07-02T01:00:00.000Z',
@@ -762,6 +765,7 @@ describe('UsersService create and simple updates', () => {
         email: 'Operator@Example.com',
         mobileE164: '+8613800138000',
         avatarUrl: null,
+        issuerPrefix: '李华',
         remark: 'internal note',
         createdAt: new Date('2026-07-01T01:00:00.000Z'),
         updatedAt: new Date('2026-07-03T01:00:00.000Z'),

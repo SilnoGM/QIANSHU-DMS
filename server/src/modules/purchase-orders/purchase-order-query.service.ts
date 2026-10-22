@@ -114,6 +114,14 @@ const AWAITING_WAREHOUSE_WHERE = {
 
 const PURCHASE_ORDER_DETAIL_SELECT = {
   ...PURCHASE_ORDER_LIST_SELECT,
+  salesOrder: {
+    select: {
+      id: true,
+      orderNo: true,
+      customerName: true,
+      issuer: { select: { profile: { select: { issuerPrefix: true } } } },
+    },
+  },
   parts: {
     orderBy: { partNumber: 'asc' },
     select: {
@@ -349,6 +357,7 @@ export interface PurchaseOrderDetail extends PurchaseOrderListItem {
     readonly id: string
     readonly orderNo: string
     readonly customerName: string
+    readonly issuerPrefix: string | null
   } | null
   readonly shippingMarkText: string | null
   readonly amounts: {
@@ -902,7 +911,12 @@ export class PurchaseOrderQueryService {
     return {
       ...summary,
       paymentRecipientProfile: await this.recipients.getForOrder(transaction ?? this.prisma, row),
-      sourceSalesOrder: row.salesOrder,
+      sourceSalesOrder: row.salesOrder === null ? null : {
+        id: row.salesOrder.id,
+        orderNo: row.salesOrder.orderNo,
+        customerName: row.salesOrder.customerName,
+        issuerPrefix: row.salesOrder.issuer.profile?.issuerPrefix ?? null,
+      },
       parts: row.parts.map(part => ({
         id: part.id, shipmentNo: part.shipmentNo, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
         shippedAt: part.shippedAt?.toISOString() ?? null,

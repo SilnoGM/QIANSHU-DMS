@@ -64,6 +64,7 @@ function orderRow(overrides: Record<string, unknown> = {}) {
       id: 'sales-order-id',
       orderNo: 'SO-001',
       customerName: '客户甲',
+      issuer: { profile: { issuerPrefix: '李华' } },
     },
     lines: [],
     payments: [],
@@ -667,6 +668,7 @@ describe('PurchaseOrderQueryService', () => {
         id: 'sales-order-id',
         orderNo: 'SO-001',
         customerName: '客户甲',
+        issuerPrefix: '李华',
       },
       amounts: {
         lineSubtotalAmount: '100.00',

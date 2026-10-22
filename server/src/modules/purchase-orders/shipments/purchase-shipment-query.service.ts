@@ -38,7 +38,14 @@ const PART_SELECT = {
     id: true, version: true, orderNo: true, orderDate: true, purchaseType: true, productMode: true, orderStatus: true,
     shippingMarkText: true, supplierValue: true, customSupplierName: true,
     createdBy: { select: PERSON_REFERENCE_SELECT },
-    salesOrder: { select: { id: true, orderNo: true, customerName: true } },
+    salesOrder: {
+      select: {
+        id: true,
+        orderNo: true,
+        customerName: true,
+        issuer: { select: { profile: { select: { issuerPrefix: true } } } },
+      },
+    },
   } },
   items: { orderBy: { line: { lineNumber: 'asc' } }, select: { purchaseOrderLineId: true, quantity: true, line: { select: LINE_SELECT } } },
   // 数据库触发器保证一个货件只属于一个柜次，取首条即可；用于列表/手动匹配显示「本柜/他柜」。
@@ -169,7 +176,12 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
       purchaseType: order.purchaseType, productMode: order.productMode, orderStatus: order.orderStatus,
       shippingMarkText: order.shippingMarkText, createdBy: toPersonReference(order.createdBy),
     },
-    supplier, salesSource: order.salesOrder,
+    supplier, salesSource: order.salesOrder === null ? null : {
+      id: order.salesOrder.id,
+      orderNo: order.salesOrder.orderNo,
+      customerName: order.salesOrder.customerName,
+      issuerPrefix: order.salesOrder.issuer.profile?.issuerPrefix ?? null,
+    },
     lineSummary: {
       lineCount: row.items.length, totalQuantity: row.items.reduce((total, item) => total + item.quantity, 0),
       previews: row.items.map(item => {

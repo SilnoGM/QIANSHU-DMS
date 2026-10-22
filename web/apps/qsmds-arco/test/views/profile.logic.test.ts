@@ -35,7 +35,7 @@ test('Profile 请求和响应值直接绑定 OpenAPI 生成类型', () => {
   assert.doesNotMatch(source, /interface CurrentUserProfileValue/u)
 })
 
-test('本人资料只构造三个允许字段，并把经过规范化的空值转换为 null', () => {
+test('本人资料只构造允许字段，并把经过规范化的空值转换为 null', () => {
   const patch = buildCurrentUserProfilePatch(
     { avatarUrl: null, email: null, mobileE164: null },
     {
@@ -79,6 +79,50 @@ test('本人资料只提交实际变化字段，无差异时返回空 patch', ()
     email: '  user@example.com  ',
     mobileE164: initial.mobileE164,
   }), {})
+})
+
+test('出单人前缀只在实际变化时提交，省略时保留原值', () => {
+  assert.deepEqual(buildCurrentUserProfilePatch(
+    { avatarUrl: null, email: null, mobileE164: null, issuerPrefix: null },
+    { avatarUrl: '', email: '', mobileE164: '', issuerPrefix: ' 李华 ' },
+  ), { issuerPrefix: '李华' })
+
+  assert.deepEqual(buildCurrentUserProfilePatch(
+    { avatarUrl: null, email: null, mobileE164: null, issuerPrefix: '李华' },
+    { avatarUrl: '', email: '', mobileE164: '' },
+  ), {})
+
+  assert.deepEqual(buildCurrentUserProfilePatch(
+    { avatarUrl: null, email: null, mobileE164: null, issuerPrefix: '李华' },
+    { avatarUrl: '', email: '', mobileE164: '', issuerPrefix: '' },
+  ), { issuerPrefix: null })
+})
+
+test('出单人前缀只接受 1 到 3 个汉字，空值不报错', () => {
+  assert.deepEqual(validateCurrentUserProfileFields({
+    avatarUrl: '',
+    email: '',
+    mobileE164: '',
+    issuerPrefix: '李华',
+  }), {})
+
+  for (const issuerPrefix of ['', ' 李华 ', '李华华']) {
+    assert.deepEqual(validateCurrentUserProfileFields({
+      avatarUrl: '',
+      email: '',
+      mobileE164: '',
+      issuerPrefix,
+    }), {})
+  }
+
+  for (const issuerPrefix of ['李华华华', 'LH', '李1', '李 华', '😀']) {
+    assert.deepEqual(validateCurrentUserProfileFields({
+      avatarUrl: '',
+      email: '',
+      mobileE164: '',
+      issuerPrefix,
+    }), { issuerPrefix: '出单人前缀最多 3 个汉字' })
+  }
 })
 
 test('本人资料校验 Email 的 NFC、格式与 Unicode code point 上限', () => {

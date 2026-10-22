@@ -36,8 +36,8 @@ function render(snapshot: PurchaseOrderImageSnapshot, images: ReadonlyMap<string
 
 function snapshot(): PurchaseOrderImageSnapshot {
   return {
-    templateVersion: '1', purchaseOrderId: 'order-1', orderNo: 'PO/20260915-00001', orderDate: '2026-09-15', currencyCode: 'CNY', supplierName: '千树设备有限公司', purchaserName: '采购经办人',
-    shippingMarkText: 'TEST/20260915-0001', purchaseTotalAmount: '1234.5600', depositDueAmount: '234.5600', balanceDueAmount: '1000.0000', remark: '请按货件分别包装。',
+    templateVersion: '5', purchaseOrderId: 'order-1', orderNo: 'PO/20260915-00001', orderDate: '2026-09-15', currencyCode: 'CNY', supplierName: '千树设备有限公司', purchaserName: '采购经办人',
+    shippingMarkText: 'TEST/20260915-0001', shippingMarkSuffix: '李华-赖文寿', purchaseTotalAmount: '1234.5600', depositDueAmount: '234.5600', balanceDueAmount: '1000.0000', remark: '请按货件分别包装。',
     lines: [{ id: 'line-1', lineNumber: 1, productNo: 'PROD/00001', productName: '环保设备', attributes: ['颜色：绿色'], description: '请附带说明书', mainImageId: null, quantity: 2, unitPrice: '617.2800', amount: '1234.5600' }],
     parts: [{ id: 'part-1', shipmentNo: 'PKG/20260915-00001', partNumber: 1, shippingMarkText: 'TEST/20260915-0001', items: [{ purchaseOrderLineId: 'line-1', quantity: 2 }] }],
   }

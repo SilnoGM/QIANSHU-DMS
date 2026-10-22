@@ -22,14 +22,22 @@ export function buildPurchaseOrderCopyText(detail: PurchaseOrderDetailDto, t: Tr
     unitPrice: money(line.actualPurchaseUnitPriceAmount),
     subtotal: money(line.lineTotalAmount),
   })).join('\n\n') || t('purchaseReview.detail.noProducts')
+  // 出单人前缀和客户名只用于贴标展示，不参与唛头编号；缺一项时不留多余分隔符。
+  const labelSuffix = [
+    text(detail.sourceSalesOrder?.issuerPrefix, ''),
+    text(detail.sourceSalesOrder?.customerName ?? detail.customerName, ''),
+  ].filter(Boolean).join('-')
   // 只给当前有效货件提供贴标信息；复制不派发编号或唛头，也不推断尚未生成的值。
   const partsText = detail.parts.filter(part => part.status !== 'CANCELLED')
     .sort((a, b) => a.partNumber - b.partNumber)
-    .map(part => t('purchaseReview.copy.part', {
-      partLabel: t('purchaseReview.copy.partLabel', { number: String(part.partNumber).padStart(2, '0') }),
-      products: [...part.items].sort((a, b) => a.lineNumber - b.lineNumber).map(item => products.get(item.purchaseOrderLineId) || t('purchaseReview.copy.productUnavailable')).join('+') || t('purchaseReview.copy.productUnavailable'),
-      shippingMark: text(part.shippingMarkText, t('purchaseReview.copy.pendingMark')),
-    }))
+    .map((part) => {
+      const mark = text(part.shippingMarkText, '')
+      return t('purchaseReview.copy.part', {
+        partLabel: t('purchaseReview.copy.partLabel', { number: String(part.partNumber).padStart(2, '0') }),
+        products: [...part.items].sort((a, b) => a.lineNumber - b.lineNumber).map(item => products.get(item.purchaseOrderLineId) || t('purchaseReview.copy.productUnavailable')).join('+') || t('purchaseReview.copy.productUnavailable'),
+        shippingMark: mark ? `【${mark}】${labelSuffix}` : t('purchaseReview.copy.pendingMark'),
+      })
+    })
     .join('\n\n') || t('purchaseReview.copy.noParts')
 
   return [

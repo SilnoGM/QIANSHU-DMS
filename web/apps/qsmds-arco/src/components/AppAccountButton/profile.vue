@@ -28,6 +28,7 @@ const emits = defineEmits<{
 interface ProfileFormModel {
   avatarUrl: string
   email: string
+  issuerPrefix: string
   mobileE164: string
 }
 
@@ -37,6 +38,7 @@ const formRef = useTemplateRef<FormExpose<ProfileFormModel>>('formRef')
 const model = reactive<ProfileFormModel>({
   avatarUrl: '',
   email: '',
+  issuerPrefix: '',
   mobileE164: '',
 })
 const initialProfile = shallowRef<CurrentUserProfileDto | null>(null)
@@ -124,6 +126,7 @@ function resetModel(profile: CurrentUserProfileDto | null): void {
   model.email = profile?.email ?? ''
   model.mobileE164 = profile?.mobileE164 ?? ''
   model.avatarUrl = profile?.avatarUrl ?? ''
+  model.issuerPrefix = profile?.issuerPrefix ?? ''
   clearMobileNotice()
   syncMobileFromModel()
 }
@@ -153,7 +156,7 @@ function readServerFieldErrors(
   }
 
   const errors: Partial<Record<keyof ProfileFormModel, string>> = {}
-  for (const field of ['avatarUrl', 'email', 'mobileE164'] as const) {
+  for (const field of ['avatarUrl', 'email', 'issuerPrefix', 'mobileE164'] as const) {
     const messages = error.body.fieldErrors[field]
     if (Array.isArray(messages) && typeof messages[0] === 'string') {
       errors[field] = messages[0]
@@ -243,6 +246,7 @@ async function submit(): Promise<void> {
     avatarUrlTooLong: t('accountProfile.validation.avatarUrlTooLong'),
     emailInvalid: t('accountProfile.validation.emailInvalid'),
     emailTooLong: t('accountProfile.validation.emailTooLong'),
+    issuerPrefixInvalid: t('accountProfile.validation.issuerPrefixInvalid'),
     mobileDigitsInvalid: t('accountProfile.validation.mobileDigitsInvalid'),
     mobileE164Invalid: t('accountProfile.validation.mobileE164Invalid'),
     mobileForeignInvalid: t('accountProfile.validation.mobileForeignInvalid'),
@@ -455,6 +459,19 @@ watch(() => props.modelValue, (visible) => {
               </template>
             </FaFormItem>
           </div>
+          <FaFormItem name="issuerPrefix" :label="t('accountProfile.issuerPrefix')">
+            <FaInput
+              v-model="model.issuerPrefix"
+              maxlength="3"
+              clearable
+              class="w-full sm:max-w-40"
+              :placeholder="t('accountProfile.issuerPrefixPlaceholder')"
+              @clear="model.issuerPrefix = ''"
+            />
+            <template #description>
+              {{ t('accountProfile.issuerPrefixHint') }}
+            </template>
+          </FaFormItem>
         </FaForm>
       </section>
     </div>

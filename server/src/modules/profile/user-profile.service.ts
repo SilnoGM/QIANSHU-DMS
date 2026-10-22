@@ -24,6 +24,7 @@ const CURRENT_USER_PROFILE_SELECT = {
   mobileE164: true,
   avatarUrl: true,
   avatarMediaAssetId: true,
+  issuerPrefix: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.UserProfileSelect
@@ -226,6 +227,7 @@ function toCurrentUserProfileDto(
     email: profile.email,
     mobileE164: profile.mobileE164,
     avatarUrl: profile.avatarUrl,
+    issuerPrefix: profile.issuerPrefix,
     createdAt: profile.createdAt.toISOString(),
     updatedAt: profile.updatedAt.toISOString(),
   }
