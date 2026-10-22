@@ -7,6 +7,9 @@
     "username": "用户名",
     "email": "邮箱",
     "mobile": "手机号",
+    "issuerPrefix": "出单人前缀",
+    "issuerPrefixPlaceholder": "最多 3 个汉字",
+    "issuerPrefixHint": "用于采购单复制信息和采购单图片的唛头标注，最多 3 个汉字。",
     "avatar": "头像",
     "emailPlaceholder": "name{'@'}example.com",
     "mobilePlaceholder": "请输入 11 位手机号",
@@ -41,6 +44,7 @@
     "validation": {
       "emailInvalid": "请输入有效的邮箱地址",
       "emailTooLong": "邮箱不能超过 254 个字符",
+      "issuerPrefixInvalid": "出单人前缀最多 3 个汉字",
       "mobileE164Invalid": "请输入有效的 E.164 手机号",
       "mobileLengthInvalid": "手机号应为 11 位",
       "mobileSegmentInvalid": "手机号号段不合法，请检查",

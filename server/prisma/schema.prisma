@@ -639,6 +639,8 @@ model UserProfile {
   mobileE164      String?  @unique(map: "user_profiles_mobile_e164_key") @map("mobile_e164") @db.VarChar(16)
   avatarUrl       String?  @map("avatar_url") @db.VarChar(2048)
   avatarMediaAssetId String? @unique(map: "user_profiles_avatar_media_asset_id_key") @map("avatar_media_asset_id") @db.Uuid
+  // 采购单复制信息与采购单图片中的出单人前缀；最多 3 个汉字，不参与编号或发号。
+  issuerPrefix    String?  @map("issuer_prefix") @db.VarChar(3)
   remark          String?  @db.Text
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)

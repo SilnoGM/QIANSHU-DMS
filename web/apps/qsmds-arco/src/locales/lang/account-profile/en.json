@@ -7,6 +7,9 @@
     "username": "Username",
     "email": "Email",
     "mobile": "Mobile",
+    "issuerPrefix": "Issuer prefix",
+    "issuerPrefixPlaceholder": "Up to 3 Han characters",
+    "issuerPrefixHint": "Used in the shipping-mark label for copied purchase orders and purchase order images. Up to 3 Han characters.",
     "avatar": "Avatar",
     "emailPlaceholder": "name{'@'}example.com",
     "mobilePlaceholder": "Enter an 11-digit mobile number",
@@ -41,6 +44,7 @@
     "validation": {
       "emailInvalid": "Enter a valid email address",
       "emailTooLong": "Email must not exceed 254 characters",
+      "issuerPrefixInvalid": "Issuer prefix must be at most 3 Han characters",
       "mobileE164Invalid": "Enter a valid E.164 mobile number",
       "mobileLengthInvalid": "Mobile number must be 11 digits",
       "mobileSegmentInvalid": "Mobile number segment is invalid",

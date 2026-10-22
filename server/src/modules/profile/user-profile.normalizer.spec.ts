@@ -5,6 +5,7 @@ import {
   createChangedFields,
   normalizeAvatarUrl,
   normalizeEmail,
+  normalizeIssuerPrefix,
   normalizeMobileE164,
   normalizeRemark,
   normalizeUserProfileUpdate,
@@ -108,6 +109,15 @@ describe('user profile field normalizers', () => {
     expectValidationFailure(() => normalizeRemark(''), 'remark')
     expectValidationFailure(() => normalizeRemark('😀'.repeat(2001)), 'remark')
   })
+
+  it('normalizes the issuer prefix to at most three Han characters', () => {
+    expect(normalizeIssuerPrefix('  李华  ')).toBe('李华')
+    expect(normalizeIssuerPrefix('李华华')).toBe('李华华')
+    expect(normalizeIssuerPrefix(null)).toBeNull()
+    for (const invalid of ['', '   ', '李华华华', 'LH', '李1', '李 华', '😀']) {
+      expectValidationFailure(() => normalizeIssuerPrefix(invalid), 'issuerPrefix')
+    }
+  })
 })
 
 describe('normalizeUserProfileUpdate', () => {
@@ -121,6 +131,17 @@ describe('normalizeUserProfileUpdate', () => {
     expect(normalizeUserProfileUpdate(input)).toEqual({
       data: { avatarUrl: null },
       changedFields: 'avatarUrl',
+    })
+  })
+
+  it('accepts issuer-prefix-only updates and explicit clearing', () => {
+    expect(normalizeUserProfileUpdate({ issuerPrefix: ' 李华 ' })).toEqual({
+      data: { issuerPrefix: '李华' },
+      changedFields: 'issuerPrefix',
+    })
+    expect(normalizeUserProfileUpdate({ issuerPrefix: null })).toEqual({
+      data: { issuerPrefix: null },
+      changedFields: 'issuerPrefix',
     })
   })
 

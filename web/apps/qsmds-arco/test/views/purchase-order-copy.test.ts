@@ -13,6 +13,7 @@ function fixture(): PurchaseOrderDetailDto {
     orderNo: 'PO/20260916-00016',
     orderDate: '2026-09-16',
     supplier: { label: '示例供应商' },
+    sourceSalesOrder: { id: 'sales-order-id', orderNo: 'SO/20260916-00001', customerName: '赖文寿', issuerPrefix: '李华' },
     amounts: { purchaseTotalAmount: '160.0000', depositDueAmount: '30.0000', balanceDueAmount: '130.0000', paidAmount: '100.0000', outstandingAmount: '60.0000' },
     lines: [
       { id: 'b', lineNumber: 2, productName: '椅子', actualPurchaseUnitPriceAmount: '30.0000', referencePurchaseUnitPriceAmount: '99', quantity: 2, lineTotalAmount: '60.0000' },
@@ -45,10 +46,10 @@ test('完整复制模板按采购行和货件顺序输出，以真实行 ID 关�
 
 出货请贴货物唛头：
 货件-01：木桌+椅子
-此货件唛头：TEST/00016/货件-01
+此货件唛头：【TEST/00016/货件-01】李华-赖文寿
 
 货件-02：椅子
-此货件唛头：TEST/00016/货件-02`)
+此货件唛头：【TEST/00016/货件-02】李华-赖文寿`)
   assert.equal(JSON.stringify(detail), before)
 })
 
@@ -73,6 +74,17 @@ test('货件序号不依赖 PKG 编号，未派发唛头明确标注，已取消
   assert.ok(!text.includes('PKG/'))
   detail.parts = []
   assert.ok(buildPurchaseOrderCopyText(detail, t).endsWith('出货请贴货物唛头：\n暂无预定义货件'))
+})
+
+test('出单人前缀为空时只拼客户名，STOCK 采购单只输出方括号唛头', () => {
+  const salesLinked = fixture()
+  salesLinked.sourceSalesOrder!.issuerPrefix = null
+  assert.ok(buildPurchaseOrderCopyText(salesLinked, t).includes('此货件唛头：【TEST/00016/货件-01】赖文寿'))
+
+  const stock = fixture()
+  stock.sourceSalesOrder = null
+  stock.customerName = null
+  assert.ok(buildPurchaseOrderCopyText(stock, t).includes('此货件唛头：【TEST/00016/货件-01】'))
 })
 
 test('复制字段内换行归一，缺失产品和金额保留明确占位', () => {

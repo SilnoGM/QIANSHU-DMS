@@ -55,7 +55,7 @@ function requireSchema(
 }
 
 describe('UpdateCurrentUserProfileRequestDto', () => {
-  it('accepts any non-empty subset and explicit null for all three writable fields', async () => {
+  it('accepts any non-empty subset and explicit null for all four writable fields', async () => {
     await expect(validatePlain({ email: 'user@example.com' })).resolves.toEqual(
       [],
     )
@@ -63,8 +63,10 @@ describe('UpdateCurrentUserProfileRequestDto', () => {
       validatePlain({ mobileE164: null, avatarUrl: null }),
     ).resolves.toEqual([])
     await expect(
-      validatePlain({ email: null, mobileE164: null, avatarUrl: null }),
+      validatePlain({ email: null, mobileE164: null, avatarUrl: null, issuerPrefix: null }),
     ).resolves.toEqual([])
+    await expect(validatePlain({ issuerPrefix: '李华' })).resolves.toEqual([])
+    await expect(validatePlain({ issuerPrefix: '李华华' })).resolves.toEqual([])
   })
 
   it('rejects an empty PATCH and empty supplied strings', async () => {
@@ -73,14 +75,24 @@ describe('UpdateCurrentUserProfileRequestDto', () => {
       email: '',
       mobileE164: '',
       avatarUrl: '',
+      issuerPrefix: '',
     })
 
     expect(emptyPatch).not.toHaveLength(0)
     expect(errorProperties(emptyValues)).toEqual([
       'avatarUrl',
       'email',
+      'issuerPrefix',
       'mobileE164',
     ])
+  })
+
+  it('rejects an issuer prefix longer than three Han characters or containing non-Han characters', async () => {
+    for (const issuerPrefix of ['李华华华', 'LH', '李1', '李 华', '😀', ' 李华 ']) {
+      expect(errorProperties(await validatePlain({ issuerPrefix }))).toEqual([
+        'issuerPrefix',
+      ])
+    }
   })
 
   it('rejects fields outside the self-service allowlist', async () => {
@@ -124,7 +136,7 @@ describe('CurrentUserProfileDto OpenAPI contract', () => {
     document = await createOpenApiDocument(ProfileDtoContractModule)
   })
 
-  it('exposes only the six self-service response fields', () => {
+  it('exposes only the seven self-service response fields', () => {
     expect(requireSchema(document, CurrentUserProfileDto.name)).toEqual({
       type: 'object',
       properties: {
@@ -140,6 +152,12 @@ describe('CurrentUserProfileDto OpenAPI contract', () => {
           maxLength: 2048,
           nullable: true,
         },
+        issuerPrefix: {
+          type: 'string',
+          maxLength: 3,
+          nullable: true,
+          description: '出单人前缀；最多 3 个汉字',
+        },
         createdAt: { type: 'string', format: 'date-time' },
         updatedAt: { type: 'string', format: 'date-time' },
       },
@@ -148,13 +166,14 @@ describe('CurrentUserProfileDto OpenAPI contract', () => {
         'email',
         'mobileE164',
         'avatarUrl',
+        'issuerPrefix',
         'createdAt',
         'updatedAt',
       ],
     })
   })
 
-  it('documents exactly three optional nullable update fields', () => {
+  it('documents exactly four optional nullable update fields', () => {
     expect(
       requireSchema(document, UpdateCurrentUserProfileRequestDto.name),
     ).toEqual({
@@ -177,6 +196,13 @@ describe('CurrentUserProfileDto OpenAPI contract', () => {
           minLength: 1,
           maxLength: 2048,
           nullable: true,
+        },
+        issuerPrefix: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 3,
+          nullable: true,
+          description: '出单人前缀；最多 3 个汉字',
         },
       },
     })

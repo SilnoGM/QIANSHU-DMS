@@ -20,6 +20,7 @@ interface ProfileRow {
   mobileE164: string | null
   avatarUrl: string | null
   avatarMediaAssetId?: string | null
+  issuerPrefix?: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -61,6 +62,7 @@ function profileRow(overrides: Partial<ProfileRow> = {}): ProfileRow {
     mobileE164: '+8613812345678',
     avatarUrl: 'https://cdn.example.com/avatar.png',
     avatarMediaAssetId: null,
+    issuerPrefix: '李华',
     createdAt: CREATED_AT,
     updatedAt: UPDATED_AT,
     ...overrides,
@@ -133,6 +135,7 @@ describe('UserProfileService reads', () => {
       email: 'User@Example.COM',
       mobileE164: '+8613812345678',
       avatarUrl: 'https://cdn.example.com/avatar.png',
+      issuerPrefix: '李华',
       createdAt: CREATED_AT.toISOString(),
       updatedAt: UPDATED_AT.toISOString(),
     })
@@ -144,6 +147,7 @@ describe('UserProfileService reads', () => {
         mobileE164: true,
         avatarUrl: true,
         avatarMediaAssetId: true,
+        issuerPrefix: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -154,6 +158,20 @@ describe('UserProfileService reads', () => {
     expect(
       JSON.stringify(prisma.userProfile.findUnique.mock.calls[0]?.[0]),
     ).not.toContain('emailNormalized')
+  })
+
+  it('writes the issuer prefix through the self-service update', async () => {
+    const { service, transaction } = createFixture()
+    transaction.userProfile.update.mockResolvedValue(profileRow({ issuerPrefix: '李华' }))
+
+    await service.updateCurrent(
+      { actorUserId: USER_ID, requestId: REQUEST_ID },
+      { issuerPrefix: '李华' },
+    )
+
+    expect(transaction.userProfile.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { issuerPrefix: '李华' } }),
+    )
   })
 
   it('treats a missing Profile as an internal invariant failure', async () => {
@@ -398,6 +416,7 @@ describe('UserProfileService updates', () => {
         email: 'User@Example.COM',
         mobileE164: '+8613812345678',
         avatarUrl: 'https://cdn.example.com/avatar.png',
+        issuerPrefix: '李华',
         createdAt: CREATED_AT.toISOString(),
         updatedAt: UPDATED_AT.toISOString(),
       },

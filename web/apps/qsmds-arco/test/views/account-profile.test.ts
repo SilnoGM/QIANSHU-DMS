@@ -55,6 +55,7 @@ test('普通用户资料组件只展示本人公开字段，不出现内部资�
   assert.match(source, /model\.email/u)
   assert.match(source, /model\.mobileE164/u)
   assert.match(source, /model\.avatarUrl/u)
+  assert.match(source, /model\.issuerPrefix/u)
   assert.doesNotMatch(source, /\bremark\b/u)
   assert.doesNotMatch(source, /emailNormalized/u)
   assert.match(
@@ -172,6 +173,8 @@ test('locale 提供大陆手机号与头像上传文案', () => {
       'mobile',
       'mobileHint',
       'mobileUnsupportedHint',
+      'issuerPrefix',
+      'issuerPrefixHint',
       'avatarUploadHint',
       'avatarFormatHint',
       'avatarRetry',
@@ -188,6 +191,7 @@ test('locale 提供大陆手机号与头像上传文案', () => {
       'mobileSegmentInvalid',
       'mobileDigitsInvalid',
       'mobileForeignInvalid',
+      'issuerPrefixInvalid',
     ]) {
       assert.equal(
         typeof validation[key],

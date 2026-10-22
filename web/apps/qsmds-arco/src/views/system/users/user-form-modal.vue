@@ -66,6 +66,7 @@ const model = reactive<UserFormModel>({
   email: '',
   mobileE164: '',
   avatarUrl: '',
+  issuerPrefix: '',
   remark: '',
   mustChangePassword: true,
   createFundAccount: false,
@@ -136,6 +137,7 @@ function clearModel(): void {
   model.email = ''
   model.mobileE164 = ''
   model.avatarUrl = ''
+  model.issuerPrefix = ''
   model.remark = ''
   model.mustChangePassword = true
   model.createFundAccount = false
@@ -180,12 +182,14 @@ function initializeModel(): void {
   model.email = props.user.profile.email ?? ''
   model.mobileE164 = props.user.profile.mobileE164 ?? ''
   model.avatarUrl = props.user.profile.avatarUrl ?? ''
+  model.issuerPrefix = props.user.profile.issuerPrefix ?? ''
   model.remark = props.user.profile.remark ?? ''
   initialAdminProfile.value = {
     displayName: props.user.displayName,
     email: props.user.profile.email,
     mobileE164: props.user.profile.mobileE164,
     avatarUrl: props.user.profile.avatarUrl,
+    issuerPrefix: props.user.profile.issuerPrefix,
     remark: props.user.profile.remark,
   }
   syncMobileFromModel()
@@ -208,6 +212,7 @@ function applyServerFieldErrors(error: unknown): void {
     'email',
     'mobileE164',
     'avatarUrl',
+    'issuerPrefix',
     'remark',
     'password',
   ] as const) {
@@ -533,6 +538,16 @@ watch(() => props.modelValue, (visible) => {
               v-model="model.avatarUrl"
               v-model:uploading="avatarUploading"
               :disabled="loading"
+            />
+          </FaFormItem>
+          <FaFormItem name="issuerPrefix" label="出单人前缀" class="md:col-span-2">
+            <FaInput
+              v-model="model.issuerPrefix"
+              maxlength="3"
+              clearable
+              class="w-full md:max-w-40"
+              placeholder="最多 3 个汉字"
+              @clear="model.issuerPrefix = ''"
             />
           </FaFormItem>
           <FaFormItem name="remark" label="管理员备注" class="md:col-span-2">

@@ -21,6 +21,7 @@ const PROFILE = {
   email: null,
   mobileE164: null,
   avatarUrl: null,
+  issuerPrefix: null,
   createdAt: '2026-07-20T01:00:00.000Z',
   updatedAt: '2026-07-20T01:00:00.000Z',
 }

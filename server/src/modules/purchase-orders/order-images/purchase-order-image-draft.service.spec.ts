@@ -19,7 +19,7 @@ const cancellation = jest.requireMock<{ deliverCancelledPurchaseOrderImage: jest
 )
 
 jest.mock('./purchase-order-image-snapshot', () => ({
-  PURCHASE_ORDER_IMAGE_TEMPLATE_VERSION: '1',
+  PURCHASE_ORDER_IMAGE_TEMPLATE_VERSION: '5',
   createPurchaseOrderImageSnapshot: (detail: { content: string }) => ({ content: detail.content, lines: [] }),
   hashPurchaseOrderImageSnapshot: (snapshot: { content: string }) => snapshot.content,
 }))
@@ -34,7 +34,7 @@ const now = new Date('2026-09-15T01:00:00.000Z')
 
 function setup() {
   const detail = { id: ORDER_ID, orderNo: 'PO/20260915-00001', orderStatus: 'PENDING_REVIEW', version: 3, content: 'hash-one', shippingMarkText: 'BASE-1', parts: [{ status: 'PENDING_REVIEW', shipmentNo: 'PKG-1', shippingMarkText: 'BASE-1' }] }
-  const existing = { id: DRAFT_ID, purchaseOrderId: ORDER_ID, purchaseOrder: { orderStatus: 'PENDING_REVIEW' }, mediaAssetId: ASSET_ID, orderVersion: 3, snapshotHash: 'hash-one', templateVersion: '1', generatedByUserId: ACTOR_ID, generatedBy: { id: ACTOR_ID, displayName: '审核人' }, createdAt: now, invalidatedAt: null, archivedAt: null, mediaAsset: { status: 'READY', deletedAt: null, mimeType: 'image/png', objectKey: 'assets/2026/09/image.png', checksumSha256: 'a'.repeat(64), originalFilename: 'purchase.png', sizeBytes: 3n } }
+  const existing = { id: DRAFT_ID, purchaseOrderId: ORDER_ID, purchaseOrder: { orderStatus: 'PENDING_REVIEW' }, mediaAssetId: ASSET_ID, orderVersion: 3, snapshotHash: 'hash-one', templateVersion: '5', generatedByUserId: ACTOR_ID, generatedBy: { id: ACTOR_ID, displayName: '审核人' }, createdAt: now, invalidatedAt: null, archivedAt: null, mediaAsset: { status: 'READY', deletedAt: null, mimeType: 'image/png', objectKey: 'assets/2026/09/image.png', checksumSha256: 'a'.repeat(64), originalFilename: 'purchase.png', sizeBytes: 3n } }
   const transaction = {
     $queryRaw: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue([{ id: ORDER_ID }]),
     purchaseOrderImageDraft: {

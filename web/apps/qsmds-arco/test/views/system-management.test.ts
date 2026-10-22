@@ -375,6 +375,7 @@ const clearableStringModelContracts = [
   { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.username' },
   { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.displayName' },
   { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.email' },
+  { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.issuerPrefix' },
   { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.newPassword' },
   { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.confirmPassword' },
   { file: '../../src/views/system/roles/role-editor-modal.vue', model: 'form.code' },
