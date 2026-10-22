@@ -44,7 +44,7 @@ const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 export interface SalesOrderTemporaryDocument {
   readonly mediaAssetId: string
-  readonly mediaType: 'IMAGE' | 'DOCUMENT'
+  readonly mediaType: 'IMAGE'
   readonly mimeType: string
   readonly sizeBytes: string
   readonly originalFilename: string
@@ -175,20 +175,20 @@ export class SalesOrderDocumentService {
     requireContext(context)
     return this.multipart.parse(request, async input => {
       try {
-        // 收款凭证与签收单只允许图片；缺省用途是出单凭证，仍沿用图片或文档。
-        if (input.purpose !== null && input.mediaType !== 'IMAGE') {
+        // 共用上传入口的所有用途都已收紧为图片；用途只决定对象池。
+        if (input.mediaType !== 'IMAGE') {
           return salesOrderRuleFailure(
             'SALES_ORDER_DOCUMENT_CONTENT_UNSUPPORTED',
             input.purpose === 'PAYMENT_VOUCHER'
               ? '收款凭证仅支持图片（JPG/PNG/WebP）'
-              : '签收单仅支持图片（JPG/PNG/WebP）',
+              : input.purpose === 'DELIVERY_RECEIPT'
+                ? '签收单仅支持图片（JPG/PNG/WebP）'
+                : '出单凭证仅支持图片（JPG/PNG/WebP）',
           )
         }
         const prepared = await this.mediaAsset.prepare({
           actorUserId: context.actorUserId,
-          allowedTypes: input.purpose === null
-            ? ['IMAGE', 'DOCUMENT']
-            : ['IMAGE'],
+          allowedTypes: ['IMAGE'],
           declaredMimeType: input.declaredMimeType,
           originalFilename: input.originalFilename,
           // 共用上传入口：收款凭证落 voucher 池，其余凭证落 sales 池。
@@ -199,7 +199,7 @@ export class SalesOrderDocumentService {
         })
         return {
           mediaAssetId: prepared.id,
-          mediaType: prepared.mediaType as 'IMAGE' | 'DOCUMENT',
+          mediaType: 'IMAGE',
           mimeType: prepared.trustedMetadata.mimeType,
           sizeBytes: prepared.trustedMetadata.sizeBytes.toString(),
           originalFilename: input.originalFilename,

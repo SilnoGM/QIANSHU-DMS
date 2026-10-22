@@ -9,6 +9,7 @@ import ts from 'typescript'
 import { computed, effectScope, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 import { parse } from 'vue/compiler-sfc'
 import { sumMoneyValues } from '../../src/components/base/MoneyInput/logic'
+import { UPLOAD_POLICIES, validateUploadFile } from '../../src/utils/upload-policy'
 import { canPayPurchasePayable } from '../../src/views/workbenches/purchase-payments/purchase-payments.logic'
 
 const ROOT = new URL('../../src/views/workbenches/purchase-payments/', import.meta.url)
@@ -17,7 +18,10 @@ const PROFILE: PaymentRecipientProfileDto = {
   version: 3,
   accounts: [{ id: 'account-a', paymentMethod: 'ALIPAY', recipientName: '供应商甲', qrMediaAssetId: 'qr-a', qrContentUrl: null, bankName: null, bankAccount: null, bankBranch: null }],
 }
-const file = (size = 4, type = 'image/png') => new File([new Uint8Array(size)], 'voucher.png', { type })
+function file(size = 4, type = 'image/png') {
+  const extension = type === 'image/jpeg' ? 'jpg' : type.split('/')[1] || 'bin'
+  return new File([new Uint8Array(size)], `voucher.${extension}`, { type })
+}
 function installment(id: string, amount: string, status: PurchasePayableDto['status'] = 'PENDING_PAYMENT'): PurchasePayableDto {
   return { id, paymentReceipt: null, paymentType: id.includes('deposit') ? 'DEPOSIT' : 'BALANCE', dueAmount: amount, paidAmount: '0.00', remainingAmount: amount, status, version: 1, paidAt: null, paidBy: null }
 }
@@ -40,6 +44,8 @@ async function execute<T>(name: string, props: object, expose: string[], onEvent
     watch,
     sumMoneyValues,
     canPayPurchasePayable,
+    UPLOAD_POLICIES,
+    validateUploadFile,
     defineProps: () => props,
     defineEmits: () => (name: string, payload: unknown) => {
       events.push([name, payload])

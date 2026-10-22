@@ -2,6 +2,7 @@ import type { PackagingCostRequestDto, PaymentRecipientAccountInputDto } from '@
 import Decimal from 'decimal.js'
 import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 import { normalizePaymentRecipientAccounts, validatePaymentRecipientAccounts } from '../../../components/business/QsPaymentRecipientEditor/logic'
+import { UPLOAD_POLICIES, validateUploadFile } from '../../../utils/upload-policy'
 
 export interface PackagingCostContext {
   shipmentId: string
@@ -38,7 +39,6 @@ export type PackagingCostField = keyof PackagingCostInput
 export type PackagingImageError = 'invalidImageType' | 'imageTooLarge' | 'tooManyImages' | 'previewFailed'
 export type PackagingCostError = PackagingImageError | 'requiredPackagingType' | 'requiredVendor' | 'requiredAmount' | 'invalidAmount' | 'requiredImages' | 'remarkTooLong' | 'invalidRecipients'
 export const PACKAGING_IMAGE_LIMIT = 1
-export const PACKAGING_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 export const PACKAGING_DEFAULT_VENDOR = '沙井·诚信木箱'
 export const PACKAGING_RECIPIENT_METHODS = ['ALIPAY', 'WECHAT'] as const
 
@@ -49,10 +49,11 @@ export function buildPackagingPaymentRequestText(request: Pick<PackagingCostRequ
 }
 
 export function validatePackagingImage(file: File): PackagingImageError | null {
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    return 'invalidImageType'
+  const failure = validateUploadFile(file, UPLOAD_POLICIES.IMAGE_ONLY)
+  if (failure === 'too-large') {
+    return 'imageTooLarge'
   }
-  return file.size > PACKAGING_IMAGE_MAX_BYTES ? 'imageTooLarge' : null
+  return failure === null ? null : 'invalidImageType'
 }
 
 export function validatePackagingCost(input: PackagingCostInput, precision = 2): {

@@ -110,7 +110,7 @@ const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
 
 describe('SalesOrderDocumentService', () => {
   it.each([
-    [null, 'sales', ['IMAGE', 'DOCUMENT']],
+    [null, 'sales', ['IMAGE']],
     ['PAYMENT_VOUCHER', 'voucher', ['IMAGE']],
     ['DELIVERY_RECEIPT', 'sales', ['IMAGE']],
   ] as const)(
@@ -149,7 +149,7 @@ describe('SalesOrderDocumentService', () => {
         Object.assign(Readable.from([Buffer.from('')]), { headers: {} }),
       )
 
-      // 用途决定对象键布局；收款凭证与签收单只允许图片。
+      // 用途只决定对象键布局；出单凭证、收款凭证与签收单都只允许图片。
       expect(prepare).toHaveBeenCalledWith(expect.objectContaining({
         allowedTypes: expectedAllowedTypes,
         pool: expectedPool,
@@ -157,7 +157,7 @@ describe('SalesOrderDocumentService', () => {
     },
   )
 
-  it.each(['PAYMENT_VOUCHER', 'DELIVERY_RECEIPT'] as const)(
+  it.each([null, 'PAYMENT_VOUCHER', 'DELIVERY_RECEIPT'] as const)(
     'rejects document uploads for purpose %s before preparing media',
     async purpose => {
       const prepare = jest.fn()

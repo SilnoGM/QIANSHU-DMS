@@ -4,7 +4,10 @@ import test from 'node:test'
 import { buildPackagingPaymentRequestText, validatePackagingCost } from '../../src/views/operations/warehouse-arrivals/packaging-cost.logic'
 import { createPackagingImagePreview } from '../../src/views/operations/warehouse-arrivals/packaging-image-preview'
 
-const photo = (type = 'image/png', size = 8) => new File([new Uint8Array(size)], 'proof.png', { type })
+function photo(type = 'image/png', size = 8) {
+  const extension = type === 'image/jpeg' ? 'jpg' : type.split('/')[1] || 'bin'
+  return new File([new Uint8Array(size)], `proof.${extension}`, { type })
+}
 const validInput = () => ({ packagingTypeValue: 'WOODEN_BOX', vendor: 'CHENGXIN', amount: '12.3', packagingImages: [photo()], quotationImages: [photo()], remark: '  已确认  ' })
 
 test('付款申请使用保存后的唛头、厂商和包装类型，金额两位小数，链接与标签同行', () => {

@@ -25,7 +25,7 @@ import QsRegionSelector from '@/components/business/QsRegionSelector/index.vue'
 import QsSalesOrderDesc from '@/components/business/QsSalesOrderDesc/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import {
-  SALES_ISSUANCE_VOUCHER_ACCEPT,
+  IMAGE_ONLY_ACCEPT,
   UPLOAD_POLICIES,
   validateUploadFile,
 } from '@/utils/upload-policy'
@@ -609,16 +609,13 @@ async function uploadFiles(files: readonly File[]): Promise<void> {
     return
   }
   const file = files[0]!
-  const failure = validateUploadFile(
-    file,
-    UPLOAD_POLICIES.SALES_ISSUANCE_VOUCHER,
-  )
+  const failure = validateUploadFile(file, UPLOAD_POLICIES.IMAGE_ONLY)
   if (failure !== null) {
     documentUploadError.value = failure === 'too-large'
-      ? '出单凭证不能超过 50 MiB'
+      ? '出单凭证不能超过 10 MiB'
       : failure === 'empty'
-        ? '出单凭证文件为空'
-        : '仅支持 JPG/PNG/WebP 图片或 PDF/DOCX/XLSX 文档'
+        ? '出单凭证图片为空'
+        : '仅支持 JPG/PNG/WebP 图片'
     return
   }
   documentAbortController?.abort()
@@ -627,8 +624,7 @@ async function uploadFiles(files: readonly File[]): Promise<void> {
   documentUploading.value = true
   documentUploadError.value = ''
   try {
-    const mediaType = file.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT'
-    const response = await salesOrdersApi.uploadTemporaryDocument(file, mediaType, controller.signal)
+    const response = await salesOrdersApi.uploadTemporaryDocument(file, controller.signal)
     if (controller.signal.aborted) {
       return
     }
@@ -1381,7 +1377,7 @@ onBeforeUnmount(() => {
             >
               <FaCard
                 title="出单凭证"
-                description="出单凭证必传且只能上传一份；上传不会派发订单编号，正式保存时才关联。"
+                description="出单凭证必传且只能上传一份，仅支持 JPG/PNG/WebP 图片；上传不会派发订单编号，正式保存时才关联。"
                 content-class="gap-4 grid"
               >
                 <template v-if="canManageDocuments">
@@ -1389,7 +1385,7 @@ onBeforeUnmount(() => {
                     ref="fileInputRef"
                     data-testid="sales-order-issuance-voucher-input"
                     type="file"
-                    :accept="SALES_ISSUANCE_VOUCHER_ACCEPT"
+                    :accept="IMAGE_ONLY_ACCEPT"
                     class="sr-only"
                     :disabled="submitLocked || documentUploading"
                     @change="handleFileInput"

@@ -1,16 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { IsOptional, IsString, IsUUID } from 'class-validator'
 
-import { MediaType } from '../../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 
 export class SalesOrderDocumentUploadRequestDto {
-  @ApiProperty({ type: 'string', enum: ['IMAGE', 'DOCUMENT'] })
-  readonly mediaType!: Extract<MediaType, 'IMAGE' | 'DOCUMENT'>
+  @ApiProperty({ type: 'string', enum: ['IMAGE'] })
+  readonly mediaType!: 'IMAGE'
 
   /**
-   * 可选的凭证用途。收款凭证与签收单必须显式声明，才能在上传瞬间收紧为图片：
-   * 它们与出单凭证共用本入口，而对象键一旦物化不可改写。缺省＝出单凭证。
+   * 可选的凭证用途。出单凭证、收款凭证与签收单共用本入口，且全部只允许图片；
+   * 用途只决定对象池与业务归属，对象键一旦物化不可改写。缺省＝出单凭证。
    */
   @ApiProperty({
     type: 'string',
@@ -27,8 +26,8 @@ export class SalesOrderTemporaryDocumentDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   readonly mediaAssetId!: string
 
-  @ApiProperty({ enum: ['IMAGE', 'DOCUMENT'] })
-  readonly mediaType!: Extract<MediaType, 'IMAGE' | 'DOCUMENT'>
+  @ApiProperty({ enum: ['IMAGE'] })
+  readonly mediaType!: 'IMAGE'
 
   @ApiProperty({ type: 'string' })
   readonly mimeType!: string

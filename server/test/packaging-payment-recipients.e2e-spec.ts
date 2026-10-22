@@ -34,6 +34,13 @@ describe('packaging recipients, targeted payment voucher and immutable history',
     await procurement.browser.get(profile.accounts[0].qrContentUrl!).expect(404)
     await request(h.app.getHttpServer()).get('/api/packaging-payment-profiles/CHENGXIN').expect(401)
   })
+  it('requires one of the three originating permissions to upload a QR', async () => {
+    const none = await h.browserWithPermissions([])
+    await none.browser.post('/api/payment-recipient-images').set(packagingHeaders)
+      .field('mediaType', 'IMAGE')
+      .attach('file', Buffer.from('not-an-image'), { filename: 'qr.png', contentType: 'image/png' })
+      .expect(403)
+  })
   it('requires one owned QR for OTHER and freezes it on the request', async () => {
     const actor = await h.browserWithPermissions()
     const stranger = await h.browserWithPermissions(['packaging-costs:create'])

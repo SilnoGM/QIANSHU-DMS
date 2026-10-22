@@ -13,7 +13,11 @@ function fixture(permissions: string[], overrides: Record<string, unknown> = {})
   const delivery = { stat: jest.fn().mockResolvedValue({ sizeBytes: 100n }), mode: 'stream' }
   const media = { prepare: jest.fn() }
   const service = new PaymentRecipientImageService(prisma as unknown as PrismaService, media as unknown as MediaAssetService, delivery as unknown as MediaContentDeliveryService,
-    { getPermissionCodes: jest.fn().mockResolvedValue(permissions) } as unknown as AccessControlService)
+    {
+      getPermissionCodes: jest.fn().mockResolvedValue(permissions),
+      hasAny: (granted: readonly string[], required: readonly string[]) =>
+        required.some(code => granted.includes(code)),
+    } as unknown as AccessControlService)
   return { service, delivery, media, prisma }
 }
 describe('Payment recipient image authorization', () => {

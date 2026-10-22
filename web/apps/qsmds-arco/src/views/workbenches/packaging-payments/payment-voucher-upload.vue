@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
-import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
+import { IMAGE_ONLY_ACCEPT, UPLOAD_POLICIES, validateUploadFile } from '@/utils/upload-policy'
 
 const props = defineProps<{ modelValue: File | null, disabled: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [file: File | null] }>()
@@ -20,16 +20,15 @@ function select({ file }: { file: File }) {
     return null
   }
   error.value = ''
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    error.value = t('packagingPayment.voucher.imageOnly')
-    return null
-  }
-  if (file.size === 0) {
-    error.value = t('packagingPayment.voucher.imageEmpty')
-    return null
-  }
-  if (file.size > 10 * 1024 * 1024) {
-    error.value = t('packagingPayment.voucher.imageTooLarge')
+  const failure = validateUploadFile(file, UPLOAD_POLICIES.IMAGE_ONLY)
+  if (failure !== null) {
+    error.value = t(
+      failure === 'too-large'
+        ? 'packagingPayment.voucher.imageTooLarge'
+        : failure === 'empty'
+          ? 'packagingPayment.voucher.imageEmpty'
+          : 'packagingPayment.voucher.imageOnly',
+    )
     return null
   }
   emit('update:modelValue', file)

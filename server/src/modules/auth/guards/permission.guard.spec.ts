@@ -8,6 +8,7 @@ import { attachRequestAuthContext } from '../auth-context'
 import type { AuthenticatedSession } from '../auth-session.service'
 import {
   AllowPasswordChangeRequired,
+  RequireAnyPermissions,
   RequireAuthenticatedSession,
   RequirePermissions,
 } from '../decorators/auth.decorators'
@@ -39,12 +40,26 @@ class RouteFixture {
   @RequirePermissions('users:read')
   conflictingAuthenticatedSessionRoute(): void {}
 
+  @RequireAnyPermissions('users:read', 'audit:read')
+  anyPermissionRoute(): void {}
+
+  @RequireAnyPermissions()
+  emptyAnyPermissionRoute(): void {}
+
+  @RequirePermissions('users:read')
+  @RequireAnyPermissions('audit:read')
+  conflictingAllAndAnyRoute(): void {}
+
+  @RequireAuthenticatedSession()
+  @RequireAnyPermissions('users:read')
+  conflictingAuthenticatedSessionAndAnyRoute(): void {}
+
   noPermissionRoute(): void {}
 }
 
 type AccessControlMock = Pick<
   AccessControlService,
-  'getPermissionCodes' | 'hasAll'
+  'getPermissionCodes' | 'hasAll' | 'hasAny'
 >
 
 function createContext(request: object, handler: () => void): ExecutionContext {
@@ -62,6 +77,9 @@ function createGuard() {
     getPermissionCodes: jest.fn(),
     hasAll: jest.fn((granted, required) =>
       required.every((code) => granted.includes(code)),
+    ),
+    hasAny: jest.fn((granted, required) =>
+      required.some((code) => granted.includes(code)),
     ),
   }
 
@@ -235,5 +253,90 @@ describe('PermissionGuard', () => {
     })
     expect((error as ApiException).getStatus()).toBe(HttpStatus.UNAUTHORIZED)
     expect(accessControl.getPermissionCodes).not.toHaveBeenCalled()
+  })
+
+  it('allows a route when at least one any-of permission is granted', async () => {
+    const { accessControl, guard } = createGuard()
+    const request = {}
+    attachRequestAuthContext(request, SESSION)
+    accessControl.getPermissionCodes.mockResolvedValue(['audit:read'])
+
+    await expect(
+      guard.canActivate(
+        createContext(request, RouteFixture.prototype.anyPermissionRoute),
+      ),
+    ).resolves.toBe(true)
+    expect(accessControl.hasAny).toHaveBeenCalledWith(
+      ['audit:read'],
+      ['users:read', 'audit:read'],
+    )
+    expect(accessControl.hasAll).not.toHaveBeenCalled()
+  })
+
+  it('rejects a route when no any-of permission is granted', async () => {
+    const { accessControl, guard } = createGuard()
+    const request = {}
+    attachRequestAuthContext(request, SESSION)
+    accessControl.getPermissionCodes.mockResolvedValue(['users:update'])
+
+    await expect(
+      guard.canActivate(
+        createContext(request, RouteFixture.prototype.anyPermissionRoute),
+      ),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      publicMessage: '权限不足',
+    })
+    expect(accessControl.hasAny).toHaveBeenCalled()
+    expect(accessControl.hasAll).not.toHaveBeenCalled()
+  })
+
+  it('denies an empty any-of declaration without loading permissions', async () => {
+    const { accessControl, guard } = createGuard()
+
+    await expect(
+      guard.canActivate(
+        createContext({}, RouteFixture.prototype.emptyAnyPermissionRoute),
+      ),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      publicMessage: '权限不足',
+    })
+    expect(accessControl.getPermissionCodes).not.toHaveBeenCalled()
+    expect(accessControl.hasAny).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when all-of and any-of permissions are declared together', async () => {
+    const { accessControl, guard } = createGuard()
+
+    await expect(
+      guard.canActivate(
+        createContext({}, RouteFixture.prototype.conflictingAllAndAnyRoute),
+      ),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      publicMessage: '权限不足',
+    })
+    expect(accessControl.getPermissionCodes).not.toHaveBeenCalled()
+    expect(accessControl.hasAll).not.toHaveBeenCalled()
+    expect(accessControl.hasAny).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when authenticated-session and any-of permissions are declared together', async () => {
+    const { accessControl, guard } = createGuard()
+
+    await expect(
+      guard.canActivate(
+        createContext(
+          {},
+          RouteFixture.prototype.conflictingAuthenticatedSessionAndAnyRoute,
+        ),
+      ),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      publicMessage: '权限不足',
+    })
+    expect(accessControl.getPermissionCodes).not.toHaveBeenCalled()
+    expect(accessControl.hasAny).not.toHaveBeenCalled()
   })
 })

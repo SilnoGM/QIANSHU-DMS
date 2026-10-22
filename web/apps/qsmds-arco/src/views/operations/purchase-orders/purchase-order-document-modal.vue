@@ -27,6 +27,7 @@ const previewUrl = ref<string | null>(null)
 const busy = ref(false)
 const uploading = ref(false)
 const error = ref('')
+const errorHint = ref<string | null>(null)
 let controller: AbortController | null = null
 const visible = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
 const hasIssuance = computed(() => props.detail.documents.some(item => item.documentType === 'ORDER_ISSUANCE_VOUCHER' && item.detachedAt === null))
@@ -51,6 +52,7 @@ function reset() {
   uploaded.value = null
   remark.value = ''
   error.value = ''
+  errorHint.value = null
   documentType.value = 'DELIVERY_RECEIPT'
 }
 
@@ -69,13 +71,19 @@ async function run(action: (signal: AbortSignal, orderId: string) => Promise<voi
   controller = request
   busy.value = true
   error.value = ''
+  errorHint.value = null
   emit('busyChange', true)
   try {
     await action(request.signal, orderId)
   }
   catch (failure) {
     if (!request.signal.aborted && !isPurchaseOrderAbortError(failure) && epoch === account.authEpoch && orderId === props.detail.id && visible.value) {
-      error.value = getPurchaseOrderApiFailure(failure).message
+      const mapped = getPurchaseOrderApiFailure(failure)
+      error.value = mapped.message
+      // 已知业务错误已有明确 message；只有结果不明确时才提示重新加载核对。
+      errorHint.value = mapped.requestId === undefined
+        ? t('purchaseOrderDrawer.refreshBeforeRetry')
+        : null
     }
   }
   finally {
@@ -102,6 +110,7 @@ async function onFileChange(event: Event) {
       : failure === 'empty'
         ? '凭证图片为空'
         : '仅支持 JPG/PNG/WebP 图片'
+    errorHint.value = null
     return
   }
   await run(async (signal, orderId) => {
@@ -147,7 +156,7 @@ onBeforeUnmount(reset)
 <template>
   <QsGenericModal v-model="visible" size="md" :title="t('purchaseOrderDrawer.attachDocument')" :description="detail.orderNo" :submitting="busy">
     <div class="space-y-5">
-      <FaAlert v-if="error" :title="error" :description="t('purchaseOrderDrawer.refreshBeforeRetry')" variant="destructive" />
+      <FaAlert v-if="error" :title="error" :description="errorHint ?? undefined" variant="destructive" />
       <p class="qs-type-description m-0">
         {{ t('purchaseOrderDrawer.attachDocumentNotice') }}
       </p>

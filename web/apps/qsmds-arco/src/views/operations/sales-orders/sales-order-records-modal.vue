@@ -407,7 +407,6 @@ async function uploadActionVoucher(
   try {
     const response = await salesOrdersApi.uploadTemporaryDocument(
       file,
-      'IMAGE',
       controller.signal,
       // 收款凭证落资金凭证池；签收单落普通销售凭证池，两者都只允许图片。
       target === 'payment' ? 'PAYMENT_VOUCHER' : 'DELIVERY_RECEIPT',

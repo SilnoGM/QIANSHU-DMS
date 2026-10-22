@@ -434,7 +434,7 @@ test('新增页使用四步表单与独立双栏实时订单详情', async () =>
   assert.doesNotMatch(source, />\s*搜索产品\s*</u)
   assert.match(source, /<MoneyInput/g)
   assert.match(source, /salesOrdersApi\.uploadTemporaryDocument/)
-  assert.match(source, /:accept="SALES_ISSUANCE_VOUCHER_ACCEPT"/u)
+  assert.match(source, /:accept="IMAGE_ONLY_ACCEPT"/u)
   assert.match(source, /salesOrdersApi\.create/)
   assert.match(source, /beginSalesOrderSubmission/)
   assert.match(source, /useTemplateRef<FormExpose<SalesOrderFormModel>>\('formRef'\)/u)

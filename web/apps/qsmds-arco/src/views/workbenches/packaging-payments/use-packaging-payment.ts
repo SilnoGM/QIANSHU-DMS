@@ -2,6 +2,7 @@ import type { Ref } from 'vue'
 import type { PackagingCostRequestDto, PackagingCostRequestPayDto } from '@/api/generated/types.gen'
 import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 import packagingCostsApi from '../../../api/modules/packaging-costs'
+import { UPLOAD_POLICIES, validateUploadFile } from '../../../utils/upload-policy'
 import { getPurchaseOrderMutationFailure } from '../../operations/purchase-orders/purchase-order-create.logic'
 import { getPurchaseOrderApiFailure } from '../../operations/purchase-orders/purchase-order-list.logic'
 
@@ -93,7 +94,7 @@ export function usePackagingPayment(
         fieldError.value = 'recipient'
         return false
       }
-      if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || !file.size || file.size > 10 * 1024 * 1024) {
+      if (!file || validateUploadFile(file, UPLOAD_POLICIES.IMAGE_ONLY) !== null) {
         fieldError.value = 'voucher'
         return false
       }

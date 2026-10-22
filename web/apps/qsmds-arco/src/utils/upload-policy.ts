@@ -30,6 +30,7 @@ const IMAGE_FORMATS: readonly UploadFormat[] = [
   },
 ]
 
+// XLSX 只保留给柜次源文件与顺联航账单；业务凭证不再接受文档。
 const XLSX_FORMAT: UploadFormat = {
   extensions: ['.xlsx'],
   maxBytes: 50 * MEBIBYTE,
@@ -37,22 +38,6 @@ const XLSX_FORMAT: UploadFormat = {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   ],
 }
-
-const DOCUMENT_FORMATS: readonly UploadFormat[] = [
-  {
-    extensions: ['.pdf'],
-    maxBytes: 50 * MEBIBYTE,
-    mimeTypes: ['application/pdf'],
-  },
-  {
-    extensions: ['.docx'],
-    maxBytes: 50 * MEBIBYTE,
-    mimeTypes: [
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ],
-  },
-  XLSX_FORMAT,
-]
 
 const PRODUCT_VIDEO_FORMATS: readonly UploadFormat[] = [
   {
@@ -69,13 +54,10 @@ const PRODUCT_VIDEO_FORMATS: readonly UploadFormat[] = [
 
 /**
  * 前端上传策略只负责文件选择器与即时反馈；真实内容、magic bytes 与解码仍以服务端为准。
- * 格式集合必须与服务端媒体校验保持一致，销售出单凭证是唯一仍允许文档的业务上传。
+ * 业务上传目前只剩图片、产品视频和 Excel 源文件三类格式。
  */
 export const UPLOAD_POLICIES = {
   IMAGE_ONLY: { formats: IMAGE_FORMATS },
-  SALES_ISSUANCE_VOUCHER: {
-    formats: [...IMAGE_FORMATS, ...DOCUMENT_FORMATS],
-  },
   PRODUCT_MEDIA: {
     formats: [...IMAGE_FORMATS, ...PRODUCT_VIDEO_FORMATS],
   },
@@ -106,6 +88,19 @@ export function policyAccept(name: UploadPolicyName): string {
   return uploadAccept(UPLOAD_POLICIES[name])
 }
 
+/** 找到与文件 MIME/扩展名精确配对的策略项；配对规则不允许跨格式借用。 */
+export function findUploadFormat(
+  file: { readonly name?: string, readonly type: string },
+  policy: UploadPolicy = UPLOAD_POLICIES.IMAGE_ONLY,
+): UploadFormat | undefined {
+  const extension = extensionOf(file.name ?? '')
+  const mimeType = file.type.toLocaleLowerCase('en-US')
+  return policy.formats.find(candidate =>
+    candidate.mimeTypes.includes(mimeType)
+    && candidate.extensions.includes(extension),
+  )
+}
+
 /**
  * 浏览器即时反馈：MIME 与扩展名必须落在同一个格式项内，避免只改后缀或只伪造 MIME。
  * 空文件与超过策略上限的文件在这里直接拒绝；服务端仍会重复校验。
@@ -117,12 +112,7 @@ export function validateUploadFile(
   if (file.size <= 0) {
     return 'empty'
   }
-  const extension = extensionOf(file.name ?? '')
-  const mimeType = file.type.toLocaleLowerCase('en-US')
-  const format = policy.formats.find(candidate =>
-    candidate.mimeTypes.includes(mimeType)
-    && candidate.extensions.includes(extension),
-  )
+  const format = findUploadFormat(file, policy)
   if (format === undefined) {
     return 'type'
   }
@@ -130,6 +120,5 @@ export function validateUploadFile(
 }
 
 export const IMAGE_ONLY_ACCEPT = policyAccept('IMAGE_ONLY')
-export const SALES_ISSUANCE_VOUCHER_ACCEPT = policyAccept('SALES_ISSUANCE_VOUCHER')
 export const PRODUCT_MEDIA_ACCEPT = policyAccept('PRODUCT_MEDIA')
 export const XLSX_ACCEPT = policyAccept('XLSX_ONLY')

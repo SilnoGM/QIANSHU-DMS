@@ -19,7 +19,7 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useAppAuth } from '@/composables/app/auth'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { formatExchangeRate } from '@/utils/exchange-rate'
-import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
+import { IMAGE_ONLY_ACCEPT, UPLOAD_POLICIES, validateUploadFile } from '@/utils/upload-policy'
 import { calculateEstimatedCostCny } from '../invoice-cost.logic'
 import { buildInvoiceDocumentFilename, buildInvoiceDocumentItems, formatInvoiceDocumentFileSize } from '../invoice-document.logic'
 import { resolveInvoiceFailureKey } from '../invoice-failure.logic'
@@ -196,8 +196,6 @@ const settlePreview = computed(() => {
   return cost === null ? null : String(cost)
 })
 
-const ALLOWED_IMAGE_TYPES: readonly string[] = ['image/jpeg', 'image/png', 'image/webp']
-
 /** 暂存照片的本地预览：object URL 跟随 pickedFile 生命周期，替换或关闭弹窗时立即回收。 */
 watch(pickedFile, (file) => {
   if (pickedPreviewUrl.value !== null) {
@@ -225,16 +223,15 @@ function clearPick(): void {
  */
 function selectFile({ file }: { file: File }): null {
   uploadError.value = null
-  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-    uploadError.value = t('invoiceRequest.upload.imageOnly')
-    return null
-  }
-  if (file.size <= 0) {
-    uploadError.value = t('invoiceRequest.upload.imageEmpty')
-    return null
-  }
-  if (file.size > 10 * 1024 * 1024) {
-    uploadError.value = t('invoiceRequest.upload.imageTooLarge')
+  const failure = validateUploadFile(file, UPLOAD_POLICIES.IMAGE_ONLY)
+  if (failure !== null) {
+    uploadError.value = t(
+      failure === 'too-large'
+        ? 'invoiceRequest.upload.imageTooLarge'
+        : failure === 'empty'
+          ? 'invoiceRequest.upload.imageEmpty'
+          : 'invoiceRequest.upload.imageOnly',
+    )
     return null
   }
   pickedFile.value = file

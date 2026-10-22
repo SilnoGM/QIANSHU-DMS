@@ -237,7 +237,7 @@ test('临时凭证上传只发送 multipart，不携带订单编号或幂等 Key
   const controller = new AbortController()
   const file = new File(['proof'], 'deposit.png', { type: 'image/png' })
 
-  await api.uploadTemporaryDocument(file, 'IMAGE', controller.signal)
+  await api.uploadTemporaryDocument(file, controller.signal)
 
   assert.equal(calls.length, 1)
   const call = calls[0]!
@@ -262,7 +262,7 @@ for (const purpose of ['PAYMENT_VOUCHER', 'DELIVERY_RECEIPT'] as const) {
     const controller = new AbortController()
     const file = new File(['proof'], 'voucher.png', { type: 'image/png' })
 
-    await api.uploadTemporaryDocument(file, 'IMAGE', controller.signal, purpose)
+    await api.uploadTemporaryDocument(file, controller.signal, purpose)
 
     const call = calls[0]!
     assert.ok(call.data instanceof FormData)

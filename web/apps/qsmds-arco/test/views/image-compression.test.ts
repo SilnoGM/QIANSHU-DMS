@@ -33,18 +33,18 @@ test('头像尺寸拒绝非法输入', () => {
 })
 
 test('图片上传规则只接受 jpg/png/webp 且不超过 10 MiB', () => {
-  assert.equal(validateUploadImage({ size: 20, type: 'image/png' }), null)
-  assert.equal(validateUploadImage({ size: 20, type: 'image/jpeg' }), null)
-  assert.equal(validateUploadImage({ size: 20, type: 'image/webp' }), null)
-  assert.equal(validateUploadImage({ size: 20, type: 'image/gif' }), 'type')
-  assert.equal(validateUploadImage({ size: 20, type: 'image/svg+xml' }), 'type')
-  assert.equal(validateUploadImage({ size: 0, type: 'image/png' }), 'empty')
+  assert.equal(validateUploadImage({ name: 'a.png', size: 20, type: 'image/png' }), null)
+  assert.equal(validateUploadImage({ name: 'a.jpg', size: 20, type: 'image/jpeg' }), null)
+  assert.equal(validateUploadImage({ name: 'a.webp', size: 20, type: 'image/webp' }), null)
+  assert.equal(validateUploadImage({ name: 'a.gif', size: 20, type: 'image/gif' }), 'type')
+  assert.equal(validateUploadImage({ name: 'a.svg', size: 20, type: 'image/svg+xml' }), 'type')
+  assert.equal(validateUploadImage({ name: 'a.png', size: 0, type: 'image/png' }), 'empty')
   assert.equal(
-    validateUploadImage({ size: UPLOAD_IMAGE_MAX_BYTES + 1, type: 'image/png' }),
+    validateUploadImage({ name: 'a.png', size: UPLOAD_IMAGE_MAX_BYTES + 1, type: 'image/png' }),
     'too-large',
   )
   assert.equal(
-    validateUploadImage({ size: UPLOAD_IMAGE_MAX_BYTES, type: 'image/png' }),
+    validateUploadImage({ name: 'a.png', size: UPLOAD_IMAGE_MAX_BYTES, type: 'image/png' }),
     null,
   )
 })

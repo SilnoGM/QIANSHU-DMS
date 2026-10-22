@@ -89183,8 +89183,7 @@
           "mediaType": {
             "type": "string",
             "enum": [
-              "IMAGE",
-              "DOCUMENT"
+              "IMAGE"
             ]
           },
           "purpose": {
@@ -89214,8 +89213,7 @@
           "mediaType": {
             "type": "string",
             "enum": [
-              "IMAGE",
-              "DOCUMENT"
+              "IMAGE"
             ]
           },
           "mimeType": {
