@@ -2,6 +2,10 @@ import type {
   DictionaryCatalogIdentitySource,
 } from '@/dictionary-catalog/types'
 
+// 此副作用导入必须先于 App、Router、Pinia 与 Storage proxy 的模块求值。
+import '@/auth/legacy-auth-bootstrap'
+
+// eslint-disable-next-line perfectionist/sort-imports -- value imports 必须晚于上面的启动清理求值。
 import {
   installDefaultRegionSelectorProvider,
   regionSelectorProviderKey,
@@ -31,8 +35,6 @@ import i18n from './locales'
 
 import router from './router'
 import pinia from './store'
-// 此副作用导入必须先于 App、Router、Pinia 与 Storage proxy 的模块求值。
-import '@/auth/legacy-auth-bootstrap'
 import '@/utils/storage'
 
 // UnoCSS
