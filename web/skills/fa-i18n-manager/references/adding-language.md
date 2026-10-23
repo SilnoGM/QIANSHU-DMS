@@ -28,7 +28,7 @@ const localesInfo = createLocalesInfo(messages, {
 
 ### Step 3：同步 UI 组件库 locale
 
-如果应用使用 Element Plus、Ant Design Vue、Naive UI 等三方 UI 组件库，在 `apps/qsmds-arco/src/ui/provider/index.ts` 中补充对应语言映射。语言代码需与 `localesInfo` 保持一致。
+`apps/qsmds-arco` 已移除 Arco 等三方 UI 组件库，只使用 Fantastic-admin 与 Fa 组件，因此不需要同步第三方 locale。若未来在正式应用重新接入三方组件库，必须先完成依赖与 provider 评审，再在其统一 Provider 中补充语言映射；语言代码需与 `localesInfo` 保持一致。
 
 ### Step 4：同步 dayjs locale（可选）
 

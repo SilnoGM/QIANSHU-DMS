@@ -1,17 +1,17 @@
 # Arco Design Vue 开发手册
 
-本分册面向千树 DMS 唯一正式 Web 应用 `web/apps/qsmds-arco`，适用版本为 `@arco-design/web-vue@2.58.0`，核对日期为 2026-07-15。组件家族总数固定为 74；Task 6 已完成首批 28 个家族，Task 7 已完成数据展示、反馈、导航与其他共 46 个家族，五个组件分册现已完整覆盖全部家族。
+`web/apps/qsmds-arco` 仍是千树 DMS 唯一正式 Web 应用，但已移除 Arco 依赖；本分册只描述 `web/examples/core-arco-design-vue` 参考应用的 Arco 接入，适用版本为 `@arco-design/web-vue@2.58.0`，核对日期为 2026-07-15。组件家族总数固定为 74；Task 6 已完成首批 28 个家族，Task 7 已完成数据展示、反馈、导航与其他共 46 个家族，五个组件分册现已完整覆盖全部家族。
 
 ## 真相源与适用边界
 
 - [当前官网入门](https://arco.design/vue/docs/start)用于理解库的当前推荐意图；官网内容会随时间更新，不能单独证明 2.58.0 的 API。
 - [2.58.0 tag](https://github.com/arco-design/arco-design-vue/tree/2.58.0)与本地已安装包用于锁定 API；官方 tag commit 已核对为 `5a707cc60c1130d8dae3aefb2e93616541952a66`。
-- `web/pnpm-lock.yaml` 的 catalog resolved version 与正式应用依赖共同证明当前项目版本；升级后必须同步复核本文档。
-- 本手册只描述当前项目真实接入与通用静态示例，不虚构业务 API、路由、权限或服务端字段。
+- `web/pnpm-lock.yaml` 的 catalog resolved version 与 `web/examples/core-arco-design-vue` 的依赖共同证明参考应用版本；升级后必须同步复核本文档。
+- 本手册只描述参考应用的真实接入与通用静态示例，不虚构业务 API、路由、权限或服务端字段；正式应用没有 Arco 全局组件，不能按本文直接写 `A*` 标签。
 
 ## 阅读顺序
 
-1. [Fantastic-admin 内置组件选型规则](../Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)：先按项目职责矩阵核对 Fa 公开能力，确认存在能力缺口后再继续阅读 Arco 回退资料。
+1. [Fantastic-admin 内置组件选型规则](../Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)：先按项目职责矩阵核对 Fa 公开能力，确认需要参考 Arco 实现后再继续阅读。
 2. [接入基础与全局配置](./接入基础与全局配置.md)：理解 Arco 的全局注册、样式、语言、主题和命令式 API 边界。
 3. [通用与布局组件](./通用与布局组件.md)：核对按钮、文字、栅格和页面布局的回退能力。
 4. [数据录入组件](./数据录入组件.md)：按受控值、校验、可访问性和安全边界实现回退表单。
@@ -21,16 +21,16 @@
 
 ## 命名与选型
 
-矩阵中的“英文家族”是文档治理键，不等于单一 Vue 组件。模板实际使用全局注册的 `A*` 名称；例如 `Typography` 家族包含 `ATypographyTitle`、`ATypographyParagraph` 和 `ATypographyText`，`Grid` 家族包含 `ARow` 与 `ACol`。TypeScript 类型、命令式反馈 API、动态组件引用与测试代码仍应从 `@arco-design/web-vue` 显式导入。
+矩阵中的“英文家族”是文档治理键，不等于单一 Vue 组件。参考应用模板使用全局注册的 `A*` 名称；例如 `Typography` 家族包含 `ATypographyTitle`、`ATypographyParagraph` 和 `ATypographyText`，`Grid` 家族包含 `ARow` 与 `ACol`。TypeScript 类型、命令式反馈 API、动态组件引用与测试代码仍应从 `@arco-design/web-vue` 显式导入。
 
-标准业务 UI 优先使用 Fantastic-admin 内置组件；已核对本地 Fa API 且确认无法满足需求时，才使用本分册中的 Arco Design Vue 能力。回退不能只做名称替换，尤其要完整迁移表单模型、验证事件和插槽契约。
+正式应用的标准业务 UI 只使用 Fantastic-admin 内置组件与 Fa 组件；需要参考 Arco 实现时使用本分册，但不能在正式应用直接写 `A*` 标签。重新接入 Arco 必须作为依赖变更评审，且不能只做名称替换，尤其要完整迁移表单模型、验证事件和插槽契约。
 
 ## 维护触发条件
 
 出现以下任一变化时，必须重新核对矩阵、章节锚点和示例：
 
-- `web/pnpm-lock.yaml` 或正式应用 `package.json` 中 Arco 版本变化；
-- `src/ui/provider/`、应用入口、语言代码或主题属性变化；
+- `web/pnpm-lock.yaml` 或 `web/examples/core-arco-design-vue/package.json` 中 Arco 版本变化；
+- 参考应用的 `src/ui/provider/`、应用入口、语言代码或主题属性变化；
 - Vite resolver / auto-import 配置变化；
 - 组件家族新增、移除、重命名，或 2.58.0 的固定契约被升级版本替代；
 - Fantastic-admin 与 Arco 的职责矩阵变化。

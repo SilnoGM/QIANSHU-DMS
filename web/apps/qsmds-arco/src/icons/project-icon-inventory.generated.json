@@ -1540,6 +1540,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/component_library/business/components/GenericTableGroupShowcase.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/shipping-mark-rule-picker.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue"
     ]
   },
@@ -1562,7 +1563,9 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/AppAccountButton/profile.vue",
+      "apps/qsmds-arco/src/components/AppAccountForm/edit-password.vue",
       "apps/qsmds-arco/src/components/AppAccountForm/login-collage.vue",
+      "apps/qsmds-arco/src/components/AppAccountForm/login.vue",
       "apps/qsmds-arco/src/components/business/QsGenericDrawer/index.vue",
       "apps/qsmds-arco/src/components/business/QsGenericModal/index.vue",
       "apps/qsmds-arco/src/components/business/QsGenericTable/index.vue",
@@ -1817,6 +1820,15 @@
       "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
       "apps/qsmds-arco/src/views/component_library/basic/components/DateTimeDisplayShowcase.vue",
       "apps/qsmds-arco/src/views/component_library/basic/date-time-display.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:cloud-alert",
+    "label": "i-lucide:cloud-alert",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/App.vue"
     ]
   },
   {
@@ -3548,6 +3560,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/components/AppAccountForm/edit-password.vue",
       "apps/qsmds-arco/src/components/base/QsToast/config.ts",
       "apps/qsmds-arco/src/components/business/QsGenericTable/CopyCellButton.vue",
       "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",

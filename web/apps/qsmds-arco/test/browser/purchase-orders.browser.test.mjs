@@ -106,7 +106,7 @@ async function openShippingMarkDetails(page) {
   await page.evaluate(`document.querySelector('button[aria-label="唛头规则详细配置"]').click()`)
   await page.waitFor(`document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.getClientRects().length > 0`)
   await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
-  await page.waitFor(`document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.closest('.arco-trigger-popup')
+  await page.waitFor(`document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.closest('[data-slot="popover-content"]')
     ?.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')`)
 }
 
@@ -182,9 +182,9 @@ async function assertShippingMarkDetailsInteraction(page) {
   await page.waitFor(`document.querySelector('button[aria-label="唛头规则详细配置"]')?.matches(':hover')`)
   await page.waitFor(`document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.getClientRects().length > 0`)
   await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
-  // Arco 入场动画期间会禁用浮层 pointer-events，必须等可交互后再移动真实鼠标。
+  // 浮层入场动画期间可能仍不可交互，必须等动画结束再移动真实鼠标。
   await page.waitFor(`(() => {
-    const popup = document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.closest('.arco-trigger-popup')
+    const popup = document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.closest('[data-slot="popover-content"]')
     return popup && getComputedStyle(popup).pointerEvents === 'auto'
       && popup.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')
   })()`)
@@ -320,7 +320,7 @@ async function assertCompactShippingMarkAppearance(page, scope, expected, surfac
     }
     await page.waitFor(`${trigger}.getAttribute('aria-expanded') === 'true' && Boolean(${visibleDetails})`)
     await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
-    await page.waitFor(`${visibleDetails}?.closest('.arco-trigger-popup')?.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')`)
+    await page.waitFor(`${visibleDetails}?.closest('[data-slot="popover-content"]')?.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')`)
     const details = await page.evaluate(`(() => {
       const details = ${visibleDetails}
       const rect = details.getBoundingClientRect()

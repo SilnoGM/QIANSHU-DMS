@@ -76,11 +76,12 @@ export async function verifyShippingMarkBindings(page, configuration) {
     await page.waitFor('!!document.querySelector("[data-testid=shipping-mark-binding-editor]")')
   }
   async function choose(code) {
-    await page.waitFor('!!document.querySelector("[data-testid=shipping-mark-rule-picker] .arco-select-view")')
-    await page.evaluate('document.querySelector("[data-testid=shipping-mark-rule-picker] .arco-select-view").click()')
-    await page.waitFor(`(() => [...document.querySelectorAll('.arco-select-option')].some(option => option.getClientRects().length && option.textContent.includes('${code}')))()`)
-    await page.evaluate(`(() => [...document.querySelectorAll('.arco-select-option')].find(option => option.getClientRects().length && option.textContent.includes('${code}')).click())()`)
-    await page.waitFor(`(() => ![...document.querySelectorAll('.arco-select-dropdown')].some(dropdown => dropdown.getClientRects().length && Number(getComputedStyle(dropdown).opacity) > 0))()`)
+    const trigger = '[data-testid=shipping-mark-rule-picker] button[aria-haspopup="listbox"]'
+    await page.waitFor(`!!document.querySelector('${trigger}')`)
+    await page.evaluate(`document.querySelector('${trigger}').click()`)
+    await page.waitFor(`(() => [...document.querySelectorAll('[data-slot="popover-content"] [role="option"]')].some(option => option.getClientRects().length && option.textContent.includes('${code}')))()`)
+    await page.evaluate(`(() => [...document.querySelectorAll('[data-slot="popover-content"] [role="option"]')].find(option => option.getClientRects().length && option.textContent.includes('${code}')).click())()`)
+    await page.waitFor(`(() => [...document.querySelectorAll('[data-slot="popover-content"] [role="option"]')].every(option => !option.getClientRects().length))()`)
   }
   await edit()
   await choose('BROWSER_WGJ_MARK')

@@ -29,7 +29,7 @@ Fantastic-admin 内置组件是标准业务 UI 的第一优先级，同时承担
 
 ### 3.3 Arco Design Vue
 
-Arco Design Vue 是 Fantastic-admin 无法满足需求时的回退组件库，包括通用与布局、数据录入、数据展示、反馈、导航及其他组件。该知识域以 `@arco-design/web-vue@2.58.0` 为固定版本，说明组件在正式应用中的接入状态、高频 API、项目化示例，以及与 Fantastic-admin 内置组件重叠时的回退依据。
+Arco Design Vue 已从正式应用 `web/apps/qsmds-arco` 移除，仅保留在 `web/examples/core-arco-design-vue` 参考应用中作为历史回退资料，包括通用与布局、数据录入、数据展示、反馈、导航及其他组件。该知识域以 `@arco-design/web-vue@2.58.0` 为固定版本，说明参考应用中的接入状态、高频 API 与项目化示例；正式应用的标准业务 UI 只使用 Fantastic-admin 内置组件和 `web/packages/components` 中的 Fa 组件。确需回退 Arco 时必须先作为依赖变更评审并重新接入 provider，不能直接引用示例应用源码。
 
 ### 3.4 千树 DMS 自定义组件库
 
@@ -56,7 +56,7 @@ Arco Design Vue 是 Fantastic-admin 无法满足需求时的回退组件库，�
 | 标准业务 UI | 表单、表格、数据展示、反馈、弹出层等通用后台交互；优先使用 Fantastic-admin 内置组件 | `web/apps/qsmds-arco/src/views/` 及页面内组件 | 替代框架导航、布局或保活机制 |
 | 领域组件 | 封装带有千树 DMS 业务语义、权限或流程的交互 | `web/apps/qsmds-arco/src/components/` | 伪装成通用能力进入共享包 |
 
-同一页面可以组合不同职责的组件，但不得仅为视觉差异混用同类基础控件。选型固定按 Fantastic-admin 内置组件、Arco Design Vue 组件、基于 Arco Design Vue 的应用级自定义组件、基于原生 Vue 的自定义组件的顺序逐级回退。只有至少两个真实调用方、接口稳定且不含领域语义的能力，才评估进入 `web/packages/*`，并继续遵循 YAGNI。
+同一页面可以组合不同职责的组件，但不得仅为视觉差异混用同类基础控件。选型固定按 Fantastic-admin 内置组件、Arco Design Vue 组件、基于 Arco Design Vue 的应用级自定义组件、基于原生 Vue 的自定义组件的顺序逐级回退；后两级中的 Arco 能力只在 `web/examples/` 参考应用或完成依赖接入评审后可用，正式应用当前不具备。只有至少两个真实调用方、接口稳定且不含领域语义的能力，才评估进入 `web/packages/*`，并继续遵循 YAGNI。
 
 ## 6. 按任务阅读
 
@@ -64,7 +64,7 @@ Arco Design Vue 是 Fantastic-admin 无法满足需求时的回退组件库，�
 
 制作或接入导航图标时，阅读[图标制作与使用规范](../图标制作与使用规范.md)。项目沿用 `FaIcon` 渲染本地品牌 SVG，组件库 `/component-library/basic/icons` 提供当前图标清单与用法预览。
 
-四个知识域均已建立本地分册：框架开发从 [Fantastic-admin 开发手册](./Fantastic-admin/README.md)进入，标准业务 UI 先从 [Fantastic-admin 内置组件手册](./Fantastic-admin内置组件/README.md)和[选型与使用规则](./Fantastic-admin内置组件/选型与使用规则.md)进入；经核对 Fa 能力无法满足已确认契约时，再查 [Arco Design Vue 手册](./Arco-Design-Vue/README.md)作为回退资料。复用正式应用已有能力时，从[自定义组件库手册](./自定义组件库/README.md)核对真实接口和使用边界。下面的任务导航把常见工作直接映射到本地章节和正式应用核对点。
+四个知识域均已建立本地分册：框架开发从 [Fantastic-admin 开发手册](./Fantastic-admin/README.md)进入，标准业务 UI 先从 [Fantastic-admin 内置组件手册](./Fantastic-admin内置组件/README.md)和[选型与使用规则](./Fantastic-admin内置组件/选型与使用规则.md)进入；[Arco Design Vue 手册](./Arco-Design-Vue/README.md)只描述 `web/examples/` 参考应用，正式应用已不再安装 Arco。复用正式应用已有能力时，从[自定义组件库手册](./自定义组件库/README.md)核对真实接口和使用边界。下面的任务导航把常见工作直接映射到本地章节和正式应用核对点。
 
 | 任务 | 阅读入口 | 正式应用核对点与边界 |
 | --- | --- | --- |
@@ -73,10 +73,10 @@ Arco Design Vue 是 Fantastic-admin 无法满足需求时的回退组件库，�
 | 接入登录 | 阅读[登录相关](./Fantastic-admin/服务端交互与登录.md#登录相关)与[接口接入规范](../接口接入规范.md)。 | 从 `web/apps/qsmds-arco/src/api/modules/auth.ts`、`web/apps/qsmds-arco/src/store/modules/app/account.ts` 和 `web/apps/qsmds-arco/src/router/guards.ts` 核对真实 Cookie Session、启动 `/api/auth/me`、六态生命周期和 Server 权限边界。 |
 | 实现权限 | 阅读[权限验证](./Fantastic-admin/权限保活与国际化.md#权限验证)，再回查路由与登录链路。 | 以 `web/apps/qsmds-arco/src/router/guards.ts`、`web/apps/qsmds-arco/src/store/modules/app/account.ts` 和 `web/apps/qsmds-arco/src/settings.ts` 为准；前端可见性不能替代 Server 授权。 |
 | 选择表单 | 先读[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)与 [FaForm 回退到 AForm 的语义迁移](./Fantastic-admin内置组件/选型与使用规则.md#7-faform-与-aform-不是名称替换)。 | `web/apps/qsmds-arco/src/views/` 的标准业务表单优先 `FaForm`；无法满足已确认契约时才回退 `AForm`，并完整重写校验、字段、提交和 slot 语义。 |
-| 选择表格 | 先按[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)判断；通用查询列表优先核对[通用表格](./自定义组件库/业务组件/通用表格.md)，仍有能力缺口时再查 [Arco Table](./Arco-Design-Vue/数据展示组件.md#table)。 | `web/apps/qsmds-arco/src/views/` 的通用查询列表优先复用 `web/apps/qsmds-arco/src/components/business/QsGenericTable/`；标准数据展示优先 `FaTable`，其无法满足已确认表格能力时才回退 `ATable`，窄屏优先卡片或抽屉式明细。 |
-| 上传文件 | 先读[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)与[选型安全规则](./Fantastic-admin内置组件/选型与使用规则.md#10-安全规则)。 | `web/apps/qsmds-arco/src/api/` 当前没有可凭空引用的上传端点；优先核对 Fa request 契约，不足时才回退 Arco，鉴权始终走统一 client。 |
-| 反馈状态 | 任务型侧滑流程先核对[通用抽屉](./自定义组件库/业务组件/通用抽屉.md)，聚焦式当前页任务先核对[通用模态框](./自定义组件库/业务组件/通用模态框.md)；其他反馈先读[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)，再按能力不足查 [Arco Message](./Arco-Design-Vue/反馈组件.md#message)与 [Modal](./Arco-Design-Vue/反馈组件.md#modal)。 | `web/apps/qsmds-arco/src/views/` 的任务抽屉优先复用 `QsGenericDrawer`，聚焦式模态任务优先复用 `QsGenericModal`；Footer、权限和写入均由页面负责。其他反馈优先 Fa 组件与 composable，回退 Arco 时要区分静态方法与实例注入 context，异步失败必须释放 loading。 |
-| 主题配置 | 先读 Fantastic-admin [主题](./Fantastic-admin/应用配置.md#主题)，再核对 Arco [全局配置、语言与主题](./Arco-Design-Vue/接入基础与全局配置.md#全局配置语言与主题)。 | 主题入口为 `web/apps/qsmds-arco/src/settings.ts`，Arco 同步位于 `web/apps/qsmds-arco/src/ui/provider/`；不得只改一套 token 造成明暗主题分裂。 |
+| 选择表格 | 先按[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)判断；通用查询列表优先核对[通用表格](./自定义组件库/业务组件/通用表格.md)，仍有能力缺口时再查 [Arco Table](./Arco-Design-Vue/数据展示组件.md#table) 的参考应用用法。 | `web/apps/qsmds-arco/src/views/` 的通用查询列表优先复用 `web/apps/qsmds-arco/src/components/business/QsGenericTable/`；标准数据展示优先 `FaTable`，正式应用不再提供 `ATable`，能力不足时先扩展 Fa 组件，窄屏优先卡片或抽屉式明细。 |
+| 上传文件 | 先读[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)与[选型安全规则](./Fantastic-admin内置组件/选型与使用规则.md#10-安全规则)。 | `web/apps/qsmds-arco/src/api/` 当前没有可凭空引用的上传端点；优先核对 `web/apps/qsmds-arco/src/components/base/` 的 Fa request 契约，不在正式应用直接引入 Arco，鉴权始终走统一 client。 |
+| 反馈状态 | 任务型侧滑流程先核对[通用抽屉](./自定义组件库/业务组件/通用抽屉.md)，聚焦式当前页任务先核对[通用模态框](./自定义组件库/业务组件/通用模态框.md)；其他反馈先读[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)，再按能力不足查 [Arco Message](./Arco-Design-Vue/反馈组件.md#message)与 [Modal](./Arco-Design-Vue/反馈组件.md#modal) 的参考应用用法。 | `web/apps/qsmds-arco/src/views/` 的任务抽屉优先复用 `QsGenericDrawer`，聚焦式模态任务优先复用 `QsGenericModal`；Footer、权限和写入均由页面负责。其他反馈使用 `FaToast`/`useFaToast` 等 Fa 组件与 composable；正式应用不使用 Arco 静态方法，异步失败必须释放 loading。 |
+| 主题配置 | 先读 Fantastic-admin [主题](./Fantastic-admin/应用配置.md#主题)，再核对 [主题定义](../../../web/packages/themes/index.ts)。 | 主题入口为 `web/apps/qsmds-arco/src/settings.ts` 与 `web/packages/themes/`；正式应用已移除 Arco，明暗模式全部由主题 token 驱动，不得只改一套 token 造成明暗主题分裂。 |
 | 构建升级 | 先读[构建与预览](./Fantastic-admin/工程基础.md#构建与预览)和[框架更新](./Fantastic-admin/高级能力构建与升级.md#框架更新)，并结合 [Web 工作区说明](../../../web/README.md)。 | 从 `web/apps/qsmds-arco/package.json` 和 `web/pnpm-lock.yaml` 验证正式应用；升级同时复核 Provider、路由、Store、内置导出、74 家族矩阵与本手册基线。 |
 
 ## 7. 更新触发条件
@@ -86,7 +86,7 @@ Arco Design Vue 是 Fantastic-admin 无法满足需求时的回退组件库，�
 - `web/package.json.version` 所代表的 Fantastic-admin 上游基座版本变化。
 - `web/pnpm-lock.yaml` 中 `@arco-design/web-vue` 锁定版本变化。
 - `web/packages/components/src/index.ts` 新增、删除或重命名公开导出。
-- 正式应用的 UI Provider、自动导入、主题、路由、权限、认证或 `web/apps/qsmds-arco/src/settings.ts` 入口变化。
+- 正式应用的主题、自动导入、路由、权限、认证或 `web/apps/qsmds-arco/src/settings.ts` 入口变化。
 - 对应版本的官方源码或当前官网出现会改变既有结论的修正说明。
 
 维护时应先核对本地真相源，只更新受影响的知识域、覆盖关系、来源链接和最后核对日期。版本差异应明确记录，不通过长期堆叠旧兼容说明来掩盖当前推荐路径。
