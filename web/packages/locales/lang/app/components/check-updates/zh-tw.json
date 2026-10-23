@@ -4,10 +4,13 @@
       "checkUpdates": {
         "message": "有新版本可用",
         "messageWithVersion": "發現新版本 v{version}",
-        "versionSummary": "目前版本 v{current}，新版本 v{next}。",
+        "currentVersion": "目前版本",
+        "latestVersion": "最新版本",
+        "audience": "適用：{roles}",
+        "contentLabel": "版本更新內容",
         "description": "點擊刷新按鈕取得最新版本",
-        "confirm": "刷新",
-        "cancel": "稍後"
+        "refreshNow": "立即重新整理",
+        "later": "稍後提醒"
       }
     }
   }

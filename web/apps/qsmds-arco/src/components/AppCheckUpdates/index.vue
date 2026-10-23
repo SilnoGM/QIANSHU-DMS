@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import type { ReleaseManifest } from './logic'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
-import { isNewerVersion, normalizeReleaseManifest } from './logic'
+import {
+  isAllReleaseAudience,
+  isNewerVersion,
+  normalizeReleaseManifest,
+  parseReleaseNoteItem,
+  resolveReleaseSectionAudience,
+} from './logic'
 
 defineOptions({
   name: 'AppCheckUpdates',
@@ -18,15 +24,30 @@ const checking = ref(false)
 const checkUpdatesInterval = ref(Number.NaN)
 let releaseRequest: AbortController | null = null
 
+const SECTION_PRESENTATION: Record<string, { icon: string, tone: string }> = {
+  功能新增: { icon: 'i-lucide:sparkles', tone: 'text-primary' },
+  功能优化: { icon: 'i-lucide:trending-up', tone: 'text-primary' },
+  缺陷修复: { icon: 'i-lucide:wrench', tone: 'text-amber-600 dark:text-amber-300' },
+  已知问题: { icon: 'i-lucide:triangle-alert', tone: 'text-amber-600 dark:text-amber-300' },
+}
+const DEFAULT_SECTION_PRESENTATION = { icon: 'i-lucide:info', tone: 'text-muted-foreground' }
+
 const updateTitle = computed(() => releaseInfo.value === null
   ? t('app.components.checkUpdates.message')
   : t('app.components.checkUpdates.messageWithVersion', { version: releaseInfo.value.version }))
-const versionSummary = computed(() => releaseInfo.value === null
-  ? ''
-  : t('app.components.checkUpdates.versionSummary', {
-      current: currentVersion,
-      next: releaseInfo.value.version,
-    }))
+const releaseSections = computed(() => (releaseInfo.value?.sections ?? []).map((section) => {
+  const items = section.items.map(parseReleaseNoteItem)
+  return {
+    title: section.title,
+    items,
+    audience: resolveReleaseSectionAudience(items),
+    presentation: SECTION_PRESENTATION[section.title] ?? DEFAULT_SECTION_PRESENTATION,
+  }
+}))
+
+function releaseRolesLabel(roles: readonly string[]): string {
+  return roles.join('、')
+}
 
 /**
  * 发布清单是唯一的新版本真相源。它跟随 Web 镜像发布，旧页面也能读取到新版本；
@@ -132,35 +153,90 @@ onUnmounted(() => {
   <QsGenericModal
     v-model="updateNoticeVisible"
     :title="updateTitle"
-    size="md"
+    size="lg"
     :closable="false"
     :dismiss-on-overlay="false"
   >
-    <div class="space-y-4">
-      <p v-if="versionSummary" class="text-sm text-muted-foreground m-0">
-        {{ versionSummary }}
-      </p>
+    <template #header-leading>
+      <FaIcon name="i-lucide:sparkles" class="size-4" aria-hidden="true" />
+    </template>
 
-      <div
-        v-if="releaseInfo && releaseInfo.sections.length > 0"
-        class="pe-1 max-h-[50vh] overflow-y-auto space-y-4"
+    <template #description>
+      <span class="inline-flex flex-wrap gap-x-2 gap-y-1 items-center">
+        <span>{{ t('app.components.checkUpdates.currentVersion') }}</span>
+        <span class="font-qs-data-mono text-xs text-muted-foreground px-2 py-0.5 rounded-md bg-muted">
+          v{{ currentVersion }}
+        </span>
+        <FaIcon name="i-lucide:arrow-right" class="text-muted-foreground size-3.5" aria-hidden="true" />
+        <span>{{ t('app.components.checkUpdates.latestVersion') }}</span>
+        <span class="font-qs-data-mono text-xs text-primary font-semibold px-2 py-0.5 rounded-md bg-primary/10">
+          v{{ releaseInfo?.version }}
+        </span>
+      </span>
+    </template>
+
+    <div
+      v-if="releaseSections.length > 0"
+      class="pe-2 max-h-[min(52vh,30rem)] [scrollbar-gutter:stable] overflow-y-auto space-y-3"
+      tabindex="0"
+      :aria-label="t('app.components.checkUpdates.contentLabel')"
+    >
+      <section
+        v-for="section in releaseSections"
+        :key="section.title"
+        class="p-3 border rounded-lg sm:p-4"
+        :class="section.title === '已知问题'
+          ? 'border-amber-500/30 bg-amber-500/5'
+          : 'border-border/70 bg-muted/20'"
       >
-        <section v-for="section in releaseInfo.sections" :key="section.title">
-          <h4 class="text-sm font-semibold m-0 mb-2">
+        <div class="mb-2 flex gap-2 items-center">
+          <FaIcon
+            :name="section.presentation.icon"
+            class="shrink-0 size-4"
+            :class="section.presentation.tone"
+            aria-hidden="true"
+          />
+          <h3 class="text-sm font-semibold m-0">
             {{ section.title }}
-          </h4>
-          <ul class="text-sm text-muted-foreground m-0 ps-4 space-y-1.5">
-            <li v-for="(item, index) in section.items" :key="`${section.title}-${index}`">
-              {{ item }}
-            </li>
-          </ul>
-        </section>
-      </div>
+          </h3>
+          <FaTag variant="secondary" class="text-xs ms-auto tabular-nums" aria-hidden="true">
+            {{ section.items.length }}
+          </FaTag>
+        </div>
 
-      <p v-else class="text-sm text-muted-foreground m-0">
-        {{ t('app.components.checkUpdates.description') }}
-      </p>
+        <p
+          v-if="section.audience.commonRoles"
+          class="text-xs text-muted-foreground m-0 mb-2"
+        >
+          {{ t('app.components.checkUpdates.audience', { roles: releaseRolesLabel(section.audience.commonRoles) }) }}
+        </p>
+
+        <ul class="m-0 p-0 list-none space-y-2">
+          <li
+            v-for="(item, index) in section.items"
+            :key="`${section.title}-${index}`"
+            class="flex gap-2"
+          >
+            <span class="mt-2 rounded-full bg-primary/70 shrink-0 size-1.5" aria-hidden="true" />
+            <div class="min-w-0">
+              <p class="text-sm text-foreground leading-6 m-0 break-words">
+                {{ item.text }}
+              </p>
+              <p
+                v-if="section.audience.showItemRoles && item.roles.length > 0 && !isAllReleaseAudience(item.roles)"
+                class="text-xs text-muted-foreground m-0 mt-0.5"
+              >
+                {{ t('app.components.checkUpdates.audience', { roles: releaseRolesLabel(item.roles) }) }}
+              </p>
+            </div>
+          </li>
+        </ul>
+      </section>
     </div>
+
+    <p v-else class="text-sm text-muted-foreground m-0">
+      {{ t('app.components.checkUpdates.description') }}
+    </p>
 
     <template #footer>
       <FaButton
@@ -169,14 +245,15 @@ onUnmounted(() => {
         class="min-h-11 w-full sm:min-h-9 sm:w-auto"
         @click="closeUpdateNotice"
       >
-        {{ t('app.components.checkUpdates.cancel') }}
+        {{ t('app.components.checkUpdates.later') }}
       </FaButton>
       <FaButton
         type="button"
         class="min-h-11 w-full sm:min-h-9 sm:w-auto"
         @click="reloadPage"
       >
-        {{ t('app.components.checkUpdates.confirm') }}
+        <FaIcon name="i-lucide:refresh-cw" class="size-4" aria-hidden="true" />
+        {{ t('app.components.checkUpdates.refreshNow') }}
       </FaButton>
     </template>
   </QsGenericModal>

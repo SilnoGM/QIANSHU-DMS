@@ -1202,6 +1202,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/AppAccountButton/feedback-canvas.vue",
+      "apps/qsmds-arco/src/components/AppCheckUpdates/index.vue",
       "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderHistory.vue",
       "apps/qsmds-arco/src/components/business/QsPurchaseStartModal/index.vue",
       "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/OrderHistory.vue",
@@ -2372,6 +2373,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/components/AppCheckUpdates/index.vue",
       "apps/qsmds-arco/src/components/base/QsToast/config.ts",
       "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue",
       "apps/qsmds-arco/src/components/business/QsPurchaseStartModal/pending-purchase-products.vue",
@@ -3062,6 +3064,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/components/AppCheckUpdates/index.vue",
       "apps/qsmds-arco/src/components/business/QsFactoryShipmentModal/index.vue",
       "apps/qsmds-arco/src/components/business/QsPaymentRecipientEditor/RecipientImage.vue",
       "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",
@@ -3412,6 +3415,15 @@
     ]
   },
   {
+    "name": "i-lucide:sparkles",
+    "label": "i-lucide:sparkles",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppCheckUpdates/index.vue"
+    ]
+  },
+  {
     "name": "i-lucide:split",
     "label": "i-lucide:split",
     "category": "通用图标",
@@ -3550,6 +3562,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/components/AppCheckUpdates/index.vue",
       "apps/qsmds-arco/src/views/operations/personal-finance/fund-accounts/ledger.logic.ts",
       "apps/qsmds-arco/src/views/operations/sales-orders/index.vue"
     ]
@@ -3561,6 +3574,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/AppAccountForm/edit-password.vue",
+      "apps/qsmds-arco/src/components/AppCheckUpdates/index.vue",
       "apps/qsmds-arco/src/components/base/QsToast/config.ts",
       "apps/qsmds-arco/src/components/business/QsGenericTable/CopyCellButton.vue",
       "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",
@@ -3796,6 +3810,15 @@
       "apps/qsmds-arco/src/views/component_library/business/purchase-order-desc.vue",
       "apps/qsmds-arco/src/views/component_library/business/sales-order-products-editor-modal.vue",
       "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:wrench",
+    "label": "i-lucide:wrench",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppCheckUpdates/index.vue"
     ]
   },
   {
