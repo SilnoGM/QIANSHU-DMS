@@ -1304,6 +1304,17 @@ onMounted(() => {
     scheduleQueryRefresh(true)
   }
 })
+// 页面被 KeepAlive 缓存后，返回时 onMounted 不会再次触发；首次激活由 onMounted 负责。
+let pageActivated = false
+onActivated(() => {
+  if (!pageActivated) {
+    pageActivated = true
+    return
+  }
+  if (ensureCanonicalSalesOrderStatusQuery()) {
+    scheduleQueryRefresh(true)
+  }
+})
 onBeforeUnmount(() => {
   requestVersion += 1
   countRequestVersion += 1

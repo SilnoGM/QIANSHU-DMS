@@ -211,7 +211,8 @@ const enableAppSetting = import.meta.env.VITE_APP_SETTING
           </div>
           <RouterView v-slot="{ Component, route }">
             <Transition :name="!appSettingsStore.isReloading ? appSettingsStore.settings.page.transitionMode : ''" mode="out-in">
-              <KeepAlive :include="appKeepAliveStore.list">
+              <!-- 只保活显式声明的列表页；max 防止筛选组合无限占用内存。 -->
+              <KeepAlive :include="appKeepAliveStore.list" :max="8">
                 <Component :is="Component" v-show="!(isIframe || isLink)" :key="route.fullPath" />
               </KeepAlive>
             </Transition>
