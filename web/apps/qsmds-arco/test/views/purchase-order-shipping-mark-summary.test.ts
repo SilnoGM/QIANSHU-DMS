@@ -24,11 +24,11 @@ test('详情通过可选展示插槽接入，历史唛头纯文本与中立 View
 
 test('唛头摘要只内联关键内容，配置浮层支持键盘、触控与不可用原因', () => {
   const source = read('../../src/views/operations/purchase-orders/purchase-order-shipping-mark-summary.vue')
-  const popup = source.slice(source.indexOf('<template #content>'), source.indexOf('</APopover>'))
+  const popup = source.slice(source.indexOf('<template #panel>'), source.indexOf('</QsHoverPopover>'))
   const inline = source.replace(popup, '')
   assert.match(source, /useMediaQuery\('\(hover: hover\) and \(pointer: fine\)'\)/u)
-  assert.match(source, /:trigger="supportsHover \? \['hover', 'click'\] : \['click'\]"/u)
-  assert.match(source, /:style="\{ zIndex: 2001, pointerEvents: 'auto' \}"/u)
+  assert.match(source, /:hover="supportsHover"/u)
+  assert.match(source, /class="p-3! z-2001!"/u)
   assert.match(source, /aria-label="查看唛头规则详情"/u)
   assert.match(source, /size-11 sm:size-7/u)
   assert.match(source, /event.key === 'Escape'/u)

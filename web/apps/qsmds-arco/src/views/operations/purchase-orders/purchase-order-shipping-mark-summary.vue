@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import type { PurchaseOrderShippingMarkResolutionDto } from '@/api/generated/types.gen'
-import { Popover as APopover } from '@arco-design/web-vue'
 import { useEventListener, useMediaQuery } from '@vueuse/core'
 import { computed, ref, useId, watch } from 'vue'
+import QsHoverPopover from '@/components/business/QsHoverPopover/index.vue'
 import { formatNumberingRuleStructure, numberingResetPolicyLabel } from '../../system/basic-data/numbering/numbering-list.logic'
 import { isPurchaseOrderShippingMarkAvailable, PURCHASE_SHIPPING_MARK_DISPATCH_HINT } from './purchase-order-shipping-mark.logic'
-import '@arco-design/web-vue/es/popover/style/css.js'
 
 const props = defineProps<{
   resolution: PurchaseOrderShippingMarkResolutionDto | null
@@ -55,19 +54,12 @@ useEventListener('keydown', (event: KeyboardEvent) => {
         >
           {{ available ? '可用' : '不可用' }}
         </FaTag>
-        <!-- 不在焦点进入时展开，避免模态自动聚焦直接弹出详情；键盘通过 Enter/Space 激活按钮。
-             使用透传 style 覆盖 Arco 内部层级：高于 FaModal 的 2000，并恢复模态期间的指针交互。 -->
-        <APopover
+        <!-- 桌面悬停/点击、触控与键盘聚焦都可打开；层级高于 FaModal，保证模态内可见。 -->
+        <QsHoverPopover
           v-if="resolution"
-          v-model:popup-visible="detailsOpen"
-          :trigger="supportsHover ? ['hover', 'click'] : ['click']"
-          :click-to-close="false"
-          :mouse-enter-delay="200"
-          :mouse-leave-delay="150"
-          :style="{ zIndex: 2001, pointerEvents: 'auto' }"
-          position="br"
-          content-class="bg-background! border-border! p-3!"
-          arrow-class="bg-background! border-border!"
+          v-model:open="detailsOpen"
+          :hover="supportsHover"
+          class="p-3! z-2001!"
         >
           <FaButton
             type="button"
@@ -81,7 +73,7 @@ useEventListener('keydown', (event: KeyboardEvent) => {
           >
             <FaIcon name="i-lucide:info" class="size-4" aria-hidden="true" />
           </FaButton>
-          <template #content>
+          <template #panel>
             <div :id="detailsId" class="text-foreground max-w-[calc(100vw-64px)] w-72" role="dialog" aria-label="唛头规则详情" data-testid="shipping-mark-summary-details">
               <dl class="text-sm leading-6 m-0 gap-x-3 gap-y-1 grid grid-cols-[auto_minmax(0,1fr)]">
                 <dt class="text-muted-foreground">
@@ -128,7 +120,7 @@ useEventListener('keydown', (event: KeyboardEvent) => {
               </p>
             </div>
           </template>
-        </APopover>
+        </QsHoverPopover>
       </div>
       <p v-if="structure" class="font-qs-data-mono text-sm leading-5 m-0 mt-1 [overflow-wrap:anywhere]" aria-label="编号结构" data-testid="shipping-mark-summary-structure">
         {{ structure }}

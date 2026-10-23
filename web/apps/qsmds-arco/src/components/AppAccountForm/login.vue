@@ -1,9 +1,6 @@
 <script setup lang="ts">
-import { Alert as AAlert, Button as AButton } from '@arco-design/web-vue'
 import { toTypedSchema } from '@vee-validate/zod'
 import * as z from 'zod'
-import '@arco-design/web-vue/es/alert/style/css.js'
-import '@arco-design/web-vue/es/button/style/css.js'
 
 defineOptions({ name: 'LoginForm' })
 
@@ -122,14 +119,21 @@ async function checkLoginState() {
         {{ title }}
       </p>
     </FaBlurReveal>
-    <AAlert v-if="displayedErrorMessage" type="error" class="mb-4">
-      {{ displayedErrorMessage }}
-      <template v-if="resultUnknown || appAccountStore.authState === 'unavailable'" #action>
-        <AButton size="mini" @click="checkLoginState">
-          检查登录状态
-        </AButton>
+    <FaAlert v-if="displayedErrorMessage" variant="destructive" icon="i-lucide:circle-alert" class="mb-4">
+      <template #description>
+        <div class="flex flex-wrap gap-2 items-center justify-between">
+          <span>{{ displayedErrorMessage }}</span>
+          <FaButton
+            v-if="resultUnknown || appAccountStore.authState === 'unavailable'"
+            variant="outline"
+            size="sm"
+            @click="checkLoginState"
+          >
+            检查登录状态
+          </FaButton>
+        </div>
       </template>
-    </AAlert>
+    </FaAlert>
     <FaForm :model="model" :validation-schema="validationSchema" @submit="onSubmit">
       <FaFormItem name="username">
         <FaInput type="text" placeholder="用户名" autocomplete="username" class="h-11 w-full" input-class="h-full">

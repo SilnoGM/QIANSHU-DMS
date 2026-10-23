@@ -40,7 +40,6 @@
     "disable-devtool": "catalog:",
     "eruda": "catalog:",
     "es-toolkit": "catalog:",
-    "medium-zoom": "catalog:",
     "mitt": "catalog:",
     "nprogress": "catalog:",
     "path-browserify": "catalog:",
@@ -55,7 +54,6 @@
     "tailwind-merge": "catalog:",
     "type-fest": "catalog:",
     "ua-parser-js": "catalog:",
-    "v-wave": "catalog:",
     "vconsole": "catalog:",
     "vee-validate": "catalog:",
     "vue": "catalog:",
@@ -65,7 +63,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@arco-design/web-vue": "catalog:arco-design-vue",
     "@faker-js/faker": "catalog:",
     "@fantastic-admin/copyright": "workspace:*",
     "@fantastic-admin/iconify-tools": "workspace:*",

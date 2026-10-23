@@ -44,8 +44,8 @@ const available: PurchaseOrderShippingMarkResolutionDto = {
 test('采购唛头将低频配置收进同一浮层，保留结构、短说明与行内异常', async () => {
   const source = await readFile(new URL('../../src/views/operations/purchase-orders/create.vue', import.meta.url), 'utf8')
   const field = source.match(/<FaFormItem name="expectedShippingMarkResolution"[\s\S]*?<\/FaFormItem>/u)?.[0] ?? ''
-  assert.match(field, /<APopover[\s\S]*?:trigger="\['hover', 'click', 'focus'\]"/u)
-  const popup = field.match(/<APopover[\s\S]*?<\/APopover>/u)?.[0] ?? ''
+  assert.match(field, /<QsHoverPopover[\s\S]*?:hover="supportsHover"/u)
+  const popup = field.match(/<QsHoverPopover[\s\S]*?<\/QsHoverPopover>/u)?.[0] ?? ''
   for (const label of ['规则编码', '生效版本', '重置周期', '时区', '最长']) {
     assert.ok(popup.includes(label), `${label} 应位于信息浮层内`)
   }

@@ -1,15 +1,6 @@
 <script setup lang="ts">
-import {
-  Alert as AAlert,
-  Form as AForm,
-  FormItem as AFormItem,
-  InputPassword as AInputPassword,
-} from '@arco-design/web-vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
-import '@arco-design/web-vue/es/alert/style/css.js'
-import '@arco-design/web-vue/es/form/style/css.js'
-import '@arco-design/web-vue/es/input/style/css.js'
 
 defineOptions({ name: 'ChangePasswordModal' })
 
@@ -188,31 +179,58 @@ watch(() => props.modelValue, (visible) => {
     :before-close="canCloseModal"
     @update:model-value="updateVisible"
   >
-    <AAlert v-if="forced" type="warning" class="mb-4">
-      管理员要求你修改密码后才能进入系统。
-    </AAlert>
-    <AAlert v-if="errorMessage" type="error" class="mb-4">
-      {{ errorMessage }}
-    </AAlert>
-    <AForm
-      id="change-password-form"
-      :model="model"
-      layout="vertical"
-      @submit-success="submit"
-    >
-      <AFormItem v-if="!forced" field="currentPassword" label="当前密码" required>
-        <AInputPassword v-model="model.currentPassword" autocomplete="current-password" allow-clear />
-      </AFormItem>
-      <AFormItem field="newPassword" label="新密码" required>
-        <AInputPassword v-model="model.newPassword" autocomplete="new-password" allow-clear />
-        <template #extra>
+    <FaAlert
+      v-if="forced"
+      variant="default"
+      icon="i-lucide:triangle-alert"
+      title="管理员要求你修改密码后才能进入系统。"
+      class="mb-4"
+    />
+    <FaAlert
+      v-if="errorMessage"
+      variant="destructive"
+      icon="i-lucide:circle-alert"
+      :title="errorMessage"
+      class="mb-4"
+    />
+    <form id="change-password-form" class="space-y-4" @submit.prevent="submit">
+      <div v-if="!forced" class="space-y-1.5">
+        <label for="change-password-current" class="qs-type-compact-label">当前密码</label>
+        <FaInput
+          id="change-password-current"
+          v-model="model.currentPassword"
+          type="password"
+          autocomplete="current-password"
+          placeholder="请输入当前密码"
+          clearable
+        />
+      </div>
+      <div class="space-y-1.5">
+        <label for="change-password-new" class="qs-type-compact-label">新密码</label>
+        <FaInput
+          id="change-password-new"
+          v-model="model.newPassword"
+          type="password"
+          autocomplete="new-password"
+          placeholder="请输入新密码"
+          clearable
+        />
+        <p class="text-xs text-muted-foreground m-0">
           8 至 20 个字符，支持空格与 Unicode。
-        </template>
-      </AFormItem>
-      <AFormItem field="confirmPassword" label="确认新密码" required>
-        <AInputPassword v-model="model.confirmPassword" autocomplete="new-password" allow-clear />
-      </AFormItem>
-    </AForm>
+        </p>
+      </div>
+      <div class="space-y-1.5">
+        <label for="change-password-confirm" class="qs-type-compact-label">确认新密码</label>
+        <FaInput
+          id="change-password-confirm"
+          v-model="model.confirmPassword"
+          type="password"
+          autocomplete="new-password"
+          placeholder="请再次输入新密码"
+          clearable
+        />
+      </div>
+    </form>
 
     <template #footer>
       <FaButton
