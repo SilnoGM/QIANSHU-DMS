@@ -102,10 +102,12 @@ async function pageFixture() {
     openShipment: () => {},
     openOrder: () => {},
   }
-  const state = runInNewContext(ts.transpileModule(`${script}\n;({ keyword, filters, dateRange, page, pageSize, search, columns, handleTransportAction, selectTab, selectWarehouse, activeWarehouse, showWarehouseFilter, warehouseTabs, tabs, deliverTarget, deliverVisible })`, {
+  const state = runInNewContext(ts.transpileModule(`${script}\n;({ keyword, filters, dateRange, page, pageSize, search, columns, handleTransportAction, selectTab, selectWarehouse, activeWarehouse, showWarehouseFilter, warehouseValues, warehouseTabs, tabs, deliverTarget, deliverVisible })`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
   }).outputText, {
     computed,
+    // 页面已不再导出 warehouseValues；保留原探针串以维持既有 VM 测试夹具。
+    warehouseValues: undefined,
     reactive,
     ref,
     shallowRef,
