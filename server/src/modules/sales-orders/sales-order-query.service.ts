@@ -714,35 +714,12 @@ function mapSalesOrderDetail(
   }
 }
 
-const AWAITING_REVIEW_CACHE_TTL_MS = 3_000
-
 @Injectable()
 export class SalesOrderQueryService {
-  private awaitingReviewCache: {
-    readonly expiresAt: number
-    readonly value: ReadonlyMap<string, number>
-  } | null = null
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
-
-  /**
-   * 审核中占用是派生事实，列表与状态计数会在同一页面加载里各读一次。
-   * 3 秒 TTL 只用于吸收同一次加载的重复读取；超过窗口仍以数据库为准。
-   */
-  private async readAwaitingReviewOrders(
-    client: Prisma.TransactionClient | PrismaService,
-  ): Promise<ReadonlyMap<string, number>> {
-    const now = Date.now()
-    if (this.awaitingReviewCache !== null && now < this.awaitingReviewCache.expiresAt) {
-      return this.awaitingReviewCache.value
-    }
-    const value = await readAwaitingPurchaseReviewSalesOrders(client)
-    this.awaitingReviewCache = { expiresAt: now + AWAITING_REVIEW_CACHE_TTL_MS, value }
-    return value
-  }
 
   /**
    * 出单人选项直接读取用户主表，并保留停用账号以支持历史订单筛选。该接口只暴露
@@ -802,7 +779,7 @@ export class SalesOrderQueryService {
     // 「采购审核中」是采购覆盖事实的派生分桶，不是持久化状态：一次读取全量判定结果，
     // 再用主键集合参与列表过滤与停留原因装配，避免为分桶复制一套原生分页与聚合。
     // 集合规模等于“已被审核中采购占满的待采购订单”，属于瞬时窗口，保持轻量。
-    const awaitingReviewByOrder = await this.readAwaitingReviewOrders(this.prisma)
+    const awaitingReviewByOrder = await readAwaitingPurchaseReviewSalesOrders(this.prisma)
     const usesStatusSelection = input.statusSelection !== undefined || input.view !== undefined
     if (
       usesStatusSelection
@@ -1031,7 +1008,7 @@ export class SalesOrderQueryService {
           })
           // 「采购审核中」从待采购计数中扣除，两个分类互斥；覆盖判定与列表共用同一份
           // 只读查询，保证角标与列表条数始终一致。
-          const awaitingOrders = await this.readAwaitingReviewOrders(transaction)
+          const awaitingOrders = await readAwaitingPurchaseReviewSalesOrders(transaction)
           const awaitingPurchaseReviewCount = awaitingOrders.size === 0
             ? 0
             : await transaction.salesOrder.count({
