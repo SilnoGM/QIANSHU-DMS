@@ -135,6 +135,9 @@ function setup() {
         referencePurchaseUnitPriceAmount: decimal('10'),
       }]),
     },
+    // 参考价小计已改为数据库内 SUM；夹具返回与旧明细求和一致的 40.0000。
+    $queryRaw: jest.fn<Promise<unknown[]>, [unknown]>()
+      .mockResolvedValue([{ total: decimal('40') }]),
     purchaseOrderPayment: {
       aggregate: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({
         _sum: { amount: decimal('30') },
@@ -350,7 +353,8 @@ describe('PurchaseOrderQueryService', () => {
         kind: 'AMOUNT', changedAt: changedAt.toISOString(), reason: '调整采购约定',
       } },
     })
-    expect(fixture.prisma.purchaseOrder.findMany).toHaveBeenCalledTimes(1)
+    // 当前页一次，参考价汇总再取一次订单 ID。
+    expect(fixture.prisma.purchaseOrder.findMany).toHaveBeenCalledTimes(2)
     expect(fixture.prisma.purchaseOrder.findUnique).not.toHaveBeenCalled()
     expect(fixture.prisma.purchaseOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({
       skip: 5, take: 5,
@@ -539,10 +543,9 @@ describe('PurchaseOrderQueryService', () => {
       createdBy: { select: { id: true, displayName: true } },
       shippingMarkText: true,
     })
-    expect(fixture.prisma.purchaseOrderLine.findMany).toHaveBeenCalledWith({
-      where: { purchaseOrder: { is: where?.where } },
-      select: { quantity: true, referencePurchaseUnitPriceAmount: true },
-    })
+    // 参考价汇总走数据库 SUM，不再把明细行读入 Node。
+    expect(fixture.prisma.$queryRaw).toHaveBeenCalled()
+    expect(fixture.prisma.purchaseOrderLine.findMany).not.toHaveBeenCalled()
     expect(fixture.prisma.purchaseOrderPayment.aggregate).toHaveBeenCalledWith({
       where: { purchaseOrder: { is: where?.where }, voidedAt: null },
       _sum: { amount: true },

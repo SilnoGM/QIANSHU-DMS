@@ -34614,6 +34614,40 @@
             }
           },
           {
+            "name": "view",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "pending"
+              ]
+            }
+          },
+          {
+            "name": "statusSelection",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ALL",
+                "PENDING",
+                "PREPARING",
+                "LAND_TRANSIT",
+                "WAREHOUSE_ARRIVED",
+                "SEA_TRANSIT",
+                "WAITING_PAYMENT",
+                "AWAITING_PURCHASE_REVIEW",
+                "CONFIRMED",
+                "PENDING_RECONCILIATION",
+                "CANCELLED",
+                "COMPLETED"
+              ]
+            }
+          },
+          {
             "name": "keyword",
             "required": false,
             "in": "query",
@@ -86537,6 +86571,27 @@
           "submittedAt"
         ]
       },
+      "FundWithdrawalStatusCountDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "APPROVED",
+              "REJECTED"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "status",
+          "count"
+        ]
+      },
       "FundWithdrawalPageDto": {
         "type": "object",
         "properties": {
@@ -86554,13 +86609,21 @@
           },
           "pageSize": {
             "type": "number"
+          },
+          "statusCounts": {
+            "description": "同一数据范围与筛选下的各状态数量；与当前分页、状态筛选相互独立",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FundWithdrawalStatusCountDto"
+            }
           }
         },
         "required": [
           "items",
           "total",
           "page",
-          "pageSize"
+          "pageSize",
+          "statusCounts"
         ]
       },
       "CreateFundWithdrawalDto": {
@@ -94796,6 +94859,24 @@
           "count"
         ]
       },
+      "PurchaseShipmentWarehouseStatusCountsDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseShipmentStatusCountDto"
+            }
+          }
+        },
+        "required": [
+          "value",
+          "items"
+        ]
+      },
       "PurchaseShipmentStatusCountsDto": {
         "type": "object",
         "properties": {
@@ -94810,6 +94891,13 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PurchaseOrderActorDto"
+            }
+          },
+          "warehouseCounts": {
+            "description": "已到仓视图下按目的地仓库分组的各视图计数；一次请求替代逐仓库计数",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseShipmentWarehouseStatusCountsDto"
             }
           }
         },
@@ -98936,6 +99024,27 @@
           "createdAt"
         ]
       },
+      "SlhReconciliationBatchStatusCountDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "IN_PROGRESS",
+              "COMPLETED",
+              "all"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "status",
+          "count"
+        ]
+      },
       "SlhReconciliationBatchPageDto": {
         "type": "object",
         "properties": {
@@ -98953,13 +99062,21 @@
           },
           "pageSize": {
             "type": "number"
+          },
+          "statusCounts": {
+            "description": "同一关键词下的进行中、已完成与全部数量；与当前分页、状态筛选相互独立",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhReconciliationBatchStatusCountDto"
+            }
           }
         },
         "required": [
           "items",
           "total",
           "page",
-          "pageSize"
+          "pageSize",
+          "statusCounts"
         ]
       },
       "SlhBillLineUnmatchedReasonCountDto": {

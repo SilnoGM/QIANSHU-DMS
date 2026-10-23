@@ -3,7 +3,6 @@ import type { CalendarDateRangeValue } from '@fantastic-admin/components'
 import type {
   SalesOrderListViewMode,
   SalesOrderPendingActionItem,
-  SalesOrderQueryTarget,
 } from './sales-order-list-view.logic'
 import type { SalesOrderPaymentProgress } from './sales-order-list.logic'
 import type {
@@ -17,7 +16,6 @@ import type {
   SalesOrderIssuerOptionDto,
   SalesOrderLinePreviewDto,
   SalesOrderListItemDto,
-  SalesOrderPageDto,
   SalesOrderStatusCountItemDto,
 } from '@/api/generated/types.gen'
 import type { SalesOrderListQuery } from '@/api/modules/sales-orders'
@@ -83,13 +81,10 @@ import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-c
 import SalesOrderDetailDrawer from './sales-order-detail-drawer.vue'
 import {
   buildSalesOrderStatusCountsQuery,
-  deduplicateSalesOrderItems,
   formatSalesFactoryShipmentSuccess,
   getSalesOrderStatusItems,
   normalizeSalesOrderStatusSelection,
   resolvePendingSalesOrderActions,
-  resolveSalesOrderQueryTargets,
-  summarizeSalesOrderItemsByCurrency,
 } from './sales-order-list-view.logic'
 import {
   buildSalesOrderCustomerCopyText,
@@ -255,9 +250,9 @@ const actionColumn = computed<QsGenericTableActionColumn>(() => {
 /**
  * 状态切换写入 URL，保证刷新与浏览器前进/后退可恢复；“全部”使用无查询参数的规范地址。
  */
-const selectedStatus = computed<string>({
+const selectedStatus = computed({
   get: () => normalizeSalesOrderStatusSelection(props.viewMode, route.query.status),
-  set: (value) => {
+  set: (value: string) => {
     const normalized = normalizeSalesOrderStatusSelection(props.viewMode, value)
     if (normalized === selectedStatus.value) {
       return
@@ -956,92 +951,6 @@ function buildListQuery(): SalesOrderListQuery {
   }
 }
 
-async function loadCompleteQueryTarget(
-  baseQuery: SalesOrderListQuery,
-  target: SalesOrderQueryTarget,
-  signal: AbortSignal,
-): Promise<SalesOrderPageDto> {
-  const firstResponse = await salesOrdersApi.list({
-    ...baseQuery,
-    ...target,
-    page: 1,
-    pageSize: 100,
-  }, signal)
-  const firstPage = firstResponse.data
-  const pageCount = Math.ceil(firstPage.total / firstPage.pageSize)
-  if (pageCount <= 1) {
-    return firstPage
-  }
-
-  // 同一状态的汇总在每页响应中一致，只读取第一页汇总；其余请求仅补齐明细行。
-  const remainingPages = await Promise.all(
-    Array.from({ length: pageCount - 1 }, (_, index) => salesOrdersApi.list({
-      ...baseQuery,
-      ...target,
-      page: index + 2,
-      pageSize: 100,
-    }, signal)),
-  )
-  return {
-    ...firstPage,
-    items: [
-      ...firstPage.items,
-      ...remainingPages.flatMap(response => response.data.items),
-    ],
-  }
-}
-
-/**
- * 单状态沿用服务端分页；“全部待办/全部订单”需要合并多个互斥状态，先完整读取各目标，
- * 再按服务端相同顺序排序、精确汇总并在前端切页，保证总数与汇总不被当前页截断。
- */
-async function loadSalesOrderPage(
-  signal: AbortSignal,
-): Promise<{ data: SalesOrderPageDto }> {
-  const selection = normalizeSalesOrderStatusSelection(
-    props.viewMode,
-    route.query.status,
-  )
-  const targets = resolveSalesOrderQueryTargets(props.viewMode, selection)
-  const baseQuery = buildListQuery()
-
-  if (targets.length === 0) {
-    return {
-      data: {
-        items: [],
-        page: page.value,
-        pageSize: pageSize.value,
-        summariesByCurrency: [],
-        total: 0,
-      },
-    }
-  }
-  if (targets.length === 1) {
-    return salesOrdersApi.list({ ...baseQuery, ...targets[0] }, signal)
-  }
-
-  const targetPages = await Promise.all(
-    targets.map(target => loadCompleteQueryTarget(baseQuery, target, signal)),
-  )
-  const allItems = deduplicateSalesOrderItems(
-    targetPages.flatMap(result => result.items),
-  )
-    .sort((left, right) => (
-      right.orderDate.localeCompare(left.orderDate)
-      || right.id.localeCompare(left.id)
-    ))
-  const start = (page.value - 1) * pageSize.value
-  return {
-    data: {
-      items: allItems.slice(start, start + pageSize.value),
-      page: page.value,
-      pageSize: pageSize.value,
-      summariesByCurrency: summarizeSalesOrderItemsByCurrency(allItems),
-      total: allItems.length,
-    },
-  }
-}
-
 async function loadOrders(): Promise<void> {
   if (!canRead.value) {
     return
@@ -1058,7 +967,11 @@ async function loadOrders(): Promise<void> {
     // 出单人选项只在当前页面生命周期内加载一次，并与首屏列表共用取消与鉴权世代边界。
     // 这样既不会要求用户额外拥有 users:read，也能保留已停用历史出单人的筛选能力。
     const [response, issuerOptionsResponse] = await Promise.all([
-      loadSalesOrderPage(controller.signal),
+      salesOrdersApi.list({
+        ...buildListQuery(),
+        view: props.viewMode,
+        statusSelection: selectedStatus.value,
+      }, controller.signal),
       issuerFilterOptionsLoaded.value
         ? Promise.resolve(null)
         : salesOrdersApi.issuerOptions(controller.signal),

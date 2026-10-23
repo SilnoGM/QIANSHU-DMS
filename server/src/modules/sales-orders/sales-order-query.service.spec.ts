@@ -157,7 +157,19 @@ function createListFixture() {
   const slhReconciliationBatchLine = {
     findMany: jest.fn().mockResolvedValue([]),
   }
-  const queryRaw = jest.fn().mockResolvedValue([])
+  let awaitingReviewRows: unknown[] = []
+  let summaryQueryCount = 0
+  // 同一个 $queryRaw 同时服务「审核中覆盖」与「标准价小计」，按 SQL 形状分流。
+  const queryRaw = jest.fn().mockImplementation((query: { strings?: readonly string[] }) => {
+    const sql = query?.strings?.join(' ') ?? ''
+    if (sql.includes('standard_unit_price_amount')) {
+      summaryQueryCount += 1
+      return Promise.resolve([{
+        total: decimal(summaryQueryCount % 2 === 1 ? '1200.00' : '800.00'),
+      }])
+    }
+    return Promise.resolve(awaitingReviewRows)
+  })
   const service = new SalesOrderQueryService({
     salesOrder,
     salesOrderLine,
@@ -172,6 +184,9 @@ function createListFixture() {
     salesOrderLine,
     salesOrderPayment,
     service,
+    setAwaitingReviewRows: (rows: unknown[]) => {
+      awaitingReviewRows = rows
+    },
     slhReconciliationBatchLine,
     queryRaw,
     transaction,
@@ -272,9 +287,10 @@ describe('SalesOrderQueryService list summaries', () => {
     })
 
     expect(fixture.transaction).toHaveBeenCalledTimes(1)
-    expect(fixture.salesOrder.findMany).toHaveBeenCalledTimes(1)
+    // 当前页一次，TWD/MYR 标准价汇总各取一次订单 ID。
+    expect(fixture.salesOrder.findMany).toHaveBeenCalledTimes(3)
     expect(fixture.salesOrder.aggregate).toHaveBeenCalledTimes(2)
-    expect(fixture.salesOrderLine.findMany).toHaveBeenCalledTimes(2)
+    expect(fixture.salesOrderLine.findMany).not.toHaveBeenCalled()
     expect(fixture.salesOrderPayment.aggregate).toHaveBeenCalledTimes(2)
     expect(fixture.salesOrder.count).toHaveBeenCalledWith({
       where: {
@@ -286,6 +302,33 @@ describe('SalesOrderQueryService list summaries', () => {
         paymentStatus: undefined,
       },
     })
+  })
+
+  it('uses one wrapped OR predicate for the all-orders selection', async () => {
+    const fixture = createListFixture()
+
+    await fixture.service.list({
+      view: 'all',
+      statusSelection: 'ALL',
+      page: 1,
+      pageSize: 20,
+    })
+
+    const countArgs = fixture.salesOrder.count.mock.calls[0]?.[0] as {
+      where: { AND?: Array<{ OR?: unknown[] }> }
+    }
+    expect(countArgs.where.AND?.[0]?.OR).toEqual([
+      { orderStatus: 'CONFIRMED' },
+      { orderStatus: 'PENDING_RECONCILIATION' },
+      { orderStatus: 'CANCELLED' },
+      { orderStatus: 'COMPLETED' },
+    ])
+    // 单条 OR 谓词同时服务总数、当前页与汇总，不再按状态拆成多次查询。
+    expect(fixture.salesOrder.count).toHaveBeenCalledTimes(1)
+    const listArgs = (fixture.salesOrder.findMany.mock.calls[0] as [
+      { where?: { AND?: unknown[] } },
+    ] | undefined)?.[0]
+    expect(Array.isArray(listArgs?.where?.AND)).toBe(true)
   })
 
   it('adds the reconciliation hold for pending orders with one batched coverage read', async () => {
@@ -321,7 +364,7 @@ describe('SalesOrderQueryService list summaries', () => {
     const awaiting = createListFixture()
     awaiting.listRow.orderStatus = 'CONFIRMED'
     awaiting.listRow.fulfillmentStatus = 'PENDING'
-    awaiting.queryRaw.mockResolvedValue([{
+    awaiting.setAwaitingReviewRows([{
       salesOrderId: SALES_ORDER_ID,
       pendingReviewOrderCount: 2,
     }])
@@ -340,11 +383,11 @@ describe('SalesOrderQueryService list summaries', () => {
       where: { id?: { in?: readonly string[] } }
     }
     expect(awaitingWhere.where.id).toEqual({ in: [SALES_ORDER_ID] })
-    // 分类只读取一次，不随当页行数增长。
-    expect(awaiting.queryRaw).toHaveBeenCalledTimes(1)
+    // 分类只读取一次；另外两次是 TWD/MYR 标准价汇总。
+    expect(awaiting.queryRaw).toHaveBeenCalledTimes(3)
 
     const purchasable = createListFixture()
-    purchasable.queryRaw.mockResolvedValue([{
+    purchasable.setAwaitingReviewRows([{
       salesOrderId: SALES_ORDER_ID,
       pendingReviewOrderCount: 1,
     }])
