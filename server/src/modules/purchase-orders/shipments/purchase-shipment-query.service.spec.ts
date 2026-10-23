@@ -4,7 +4,7 @@ import { PurchaseShipmentQueryService } from './purchase-shipment-query.service'
 import type { PurchaseShipmentFilterDto, PurchaseShipmentListQueryDto } from './purchase-shipment.dto'
 
 function fixture(scope: 'ALL' | 'SELF' = 'ALL') {
-  const part = { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), findUnique: jest.fn() }
+  const part = { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), groupBy: jest.fn().mockResolvedValue([]), findUnique: jest.fn() }
   ;(part as Record<string, unknown>).findFirst = part.findUnique
   const order = { findMany: jest.fn().mockResolvedValue([]) }
   const user = { findMany: jest.fn().mockResolvedValue([]) }
@@ -39,7 +39,7 @@ describe('PurchaseShipmentQueryService', () => {
     await f.service.list(input)
     await f.service.statusCounts(input)
     const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
-    const countCall = f.part.count.mock.calls[1] as [{ where: { AND: unknown[] } }]
+    const countCall = f.part.groupBy.mock.calls[0] as [{ where: { AND: unknown[] } }]
     expect(listCall[0].where.AND[0]).toEqual(countCall[0].where.AND[0])
     expect(countCall[0].where.AND[0]).toMatchObject({ OR: expect.arrayContaining([
       { trackingNo: { contains: 'ＳＦ-123', mode: 'insensitive' } },
@@ -55,7 +55,7 @@ describe('PurchaseShipmentQueryService', () => {
     await f.service.list(query)
     await f.service.statusCounts(filters)
     const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
-    const countCall = f.part.count.mock.calls[1] as [{ where: { AND: unknown[] } }]
+    const countCall = f.part.groupBy.mock.calls[0] as [{ where: { AND: unknown[] } }]
     expect(listCall[0].where.AND[0]).toEqual(countCall[0].where.AND[0])
     expect(countCall[0].where.AND[0]).toMatchObject({ destinationWarehouseValue: 'RETIRED-A', OR: expect.arrayContaining([
       { trackingNo: { contains: 'SF123', mode: 'insensitive' } },
@@ -70,7 +70,7 @@ describe('PurchaseShipmentQueryService', () => {
     await f.service.list(filters)
     await f.service.statusCounts(filters)
     const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: [{ destinationWarehouseValue?: unknown }] } }]
-    const countCall = f.part.count.mock.calls[1] as [{ where: { AND: [{ destinationWarehouseValue?: unknown }] } }]
+    const countCall = f.part.groupBy.mock.calls[0] as [{ where: { AND: [{ destinationWarehouseValue?: unknown }] } }]
     expect(listCall[0].where.AND[0]).toEqual(countCall[0].where.AND[0])
     expect(listCall[0].where.AND[0].destinationWarehouseValue).toBe(destinationWarehouseMissing === true ? null : undefined)
   })
@@ -158,7 +158,7 @@ describe('PurchaseShipmentQueryService', () => {
     await f.service.list({ keyword: '  ＰＫＧ/20260914-00001  ', view: 'ALL' })
     await f.service.statusCounts({ keyword: '  ＰＫＧ/20260914-00001  ' })
     const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
-    const countCall = f.part.count.mock.calls[1] as [{ where: { AND: unknown[] } }]
+    const countCall = f.part.groupBy.mock.calls[0] as [{ where: { AND: unknown[] } }]
     expect(countCall[0].where.AND[0]).toEqual(listCall[0].where.AND[0])
     expect(countCall[0].where.AND[0]).toMatchObject({ OR: expect.arrayContaining([
       { shipmentNo: { contains: 'PKG/20260914-00001', mode: 'insensitive' } },
@@ -188,12 +188,17 @@ describe('PurchaseShipmentQueryService', () => {
 
   it('counts every view with its own exclusive predicate, cancellation taking precedence over facts', async () => {
     const f = fixture()
-    // 逐视图计数，合计等于全部货件；互斥语义由谓词本身保证。
-    for (const total of [11, 2, 2, 1, 2, 1, 3, 4]) f.part.count.mockResolvedValueOnce(total)
+    // 逐视图按仓库分组，合计等于全部货件；互斥语义由谓词本身保证。
+    for (const total of [11, 2, 2, 1, 2, 1, 3, 4]) {
+      f.part.groupBy.mockResolvedValueOnce([{
+        destinationWarehouseValue: null,
+        _count: { _all: total },
+      }])
+    }
     f.user.findMany.mockResolvedValue([{ id: 'buyer-1', displayName: '采购员' }])
     const result = await f.service.statusCounts({ keyword: '厂', supplierSource: 'CUSTOM_TEXT' })
-    expect(result).toEqual({ items: [{ value: 'ALL', count: 11 }, { value: 'PENDING_REVIEW', count: 2 }, { value: 'AWAITING_SHIPMENT', count: 2 }, { value: 'SHIPPED', count: 1 }, { value: 'WAREHOUSE_RECEIVED', count: 2 }, { value: 'CONTAINER_LOADED', count: 1 }, { value: 'DELIVERED', count: 3 }, { value: 'CANCELLED', count: 4 }], buyerOptions: [{ id: 'buyer-1', displayName: '采购员', avatarUrl: null }] })
-    expect(f.part.count.mock.calls.map(call => (call as [{ where: { AND: unknown[] } }])[0].where.AND[1])).toEqual([
+    expect(result).toEqual({ items: [{ value: 'ALL', count: 11 }, { value: 'PENDING_REVIEW', count: 2 }, { value: 'AWAITING_SHIPMENT', count: 2 }, { value: 'SHIPPED', count: 1 }, { value: 'WAREHOUSE_RECEIVED', count: 2 }, { value: 'CONTAINER_LOADED', count: 1 }, { value: 'DELIVERED', count: 3 }, { value: 'CANCELLED', count: 4 }], buyerOptions: [{ id: 'buyer-1', displayName: '采购员', avatarUrl: null }], warehouseCounts: [] })
+    expect(f.part.groupBy.mock.calls.map(call => (call as [{ where: { AND: unknown[] } }])[0].where.AND[1])).toEqual([
       {}, { status: 'PENDING_REVIEW' },
       { status: 'ACTIVE', deliveredAt: null, loadedAt: null, shippedAt: null },
       { status: 'ACTIVE', deliveredAt: null, loadedAt: null, shippedAt: { not: null }, warehouseReceivedAt: null },
@@ -211,7 +216,7 @@ describe('PurchaseShipmentQueryService', () => {
     const filters = { keyword: '  配件  ', orderDateFrom: '2026-09-01', orderDateTo: '2026-09-14', purchaseType: 'STOCK' as const, createdByUserId: 'buyer-1', supplierValue: 'SUPPLIER_A', supplierSource: 'DICTIONARY' as const }
     await f.service.list({ ...filters, view: 'SHIPPED' }); await f.service.statusCounts(filters)
     const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
-    const countCall = f.part.count.mock.calls[1] as [{ where: { AND: unknown[] } }]
+    const countCall = f.part.groupBy.mock.calls[0] as [{ where: { AND: unknown[] } }]
     const listWhere = listCall[0].where.AND[0]
     expect(countCall[0].where.AND[0]).toEqual(listWhere)
     expect(listWhere).toMatchObject({ purchaseOrder: { is: { purchaseType: 'STOCK', createdByUserId: 'buyer-1', supplierValue: 'SUPPLIER_A', orderDate: { gte: new Date('2026-09-01'), lte: new Date('2026-09-14') } } } })
@@ -290,7 +295,7 @@ describe('PurchaseShipmentQueryService', () => {
     await f.service.list({ ...filters, view: 'WAREHOUSE_RECEIVED' }, 'actor-id')
     await f.service.statusCounts(filters, 'actor-id')
     const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
-    const countCall = f.part.count.mock.calls[1] as [{ where: { AND: unknown[] } }]
+    const countCall = f.part.groupBy.mock.calls[0] as [{ where: { AND: unknown[] } }]
     const listWhere = listCall[0].where.AND[0]
     expect(countCall[0].where.AND[0]).toEqual(listWhere)
     expect(listWhere).toMatchObject({
@@ -306,7 +311,7 @@ describe('PurchaseShipmentQueryService', () => {
     await f.service.list({ purchaseType: 'SALES_LINKED' }, 'actor-id')
     await f.service.statusCounts({ purchaseType: 'SALES_LINKED' }, 'actor-id')
     const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
-    const countCall = f.part.count.mock.calls[1] as [{ where: { AND: unknown[] } }]
+    const countCall = f.part.groupBy.mock.calls[0] as [{ where: { AND: unknown[] } }]
     expect(countCall[0].where.AND[0]).toEqual(listCall[0].where.AND[0])
     expect(listCall[0].where.AND[0]).toMatchObject({ purchaseOrder: { is: { purchaseType: 'SALES_LINKED' } } })
     expect(listCall[0].where.AND[0]).not.toHaveProperty('purchaseOrder.is.salesOrder')

@@ -18,6 +18,10 @@ import {
   SalesOrderStatus,
 } from '../../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
+import {
+  SALES_ORDER_LIST_STATUS_SELECTIONS,
+  type SalesOrderListStatusSelection,
+} from '../sales-order-list-selection.logic'
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u
 
@@ -46,6 +50,20 @@ export class SalesOrderListQueryDto {
   @Min(1)
   @Max(100)
   pageSize?: number
+
+  /**
+   * 列表视图与工具栏状态选择。二者必须同时出现；服务端据此生成单条 OR 谓词，
+   * 不再让前端按状态拆成多次全量查询。
+   */
+  @ApiProperty({ enum: ['all', 'pending'], required: false })
+  @IsOptional()
+  @IsIn(['all', 'pending'])
+  view?: 'all' | 'pending'
+
+  @ApiProperty({ enum: SALES_ORDER_LIST_STATUS_SELECTIONS, required: false })
+  @IsOptional()
+  @IsIn(SALES_ORDER_LIST_STATUS_SELECTIONS)
+  statusSelection?: SalesOrderListStatusSelection
 
   @ApiProperty({ type: 'string', maxLength: 128, required: false })
   @IsOptional()
@@ -107,7 +125,7 @@ export class SalesOrderListQueryDto {
 
 export class SalesOrderStatusCountsQueryDto extends OmitType(
   SalesOrderListQueryDto,
-  ['page', 'pageSize', 'orderStatus', 'fulfillmentStatus', 'purchaseHold'] as const,
+  ['page', 'pageSize', 'orderStatus', 'fulfillmentStatus', 'purchaseHold', 'statusSelection', 'view'] as const,
 ) {
   @ApiProperty({ enum: ['all', 'pending'] })
   @IsIn(['all', 'pending'])

@@ -261,7 +261,7 @@ test('采购列表使用销售列表同构的三槽产品主图与产品提示',
     '桌面和移动图片均应展示同构产品提示',
   )
   assert.match(source, />采购产品</u)
-  assert.match(source, /<dt class="qs-type-compact-label mb-1">\s+产品\s+<\/dt>[\s\S]*?<ImageGroup :items="productImageItems\(row\)"/u)
+  assert.match(source, /<dt class="qs-type-compact-label mb-1">\s+产品\s+<\/dt>[\s\S]*?<ImageGroup :items="productImageItemsByOrderId\.get\(row\.id\) \?\? \[\]"/u)
 })
 
 test('采购创建页作为受保护隐藏路由并保持全部采购菜单激活', async () => {

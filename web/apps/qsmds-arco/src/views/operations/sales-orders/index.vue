@@ -3,7 +3,6 @@ import type { CalendarDateRangeValue } from '@fantastic-admin/components'
 import type {
   SalesOrderListViewMode,
   SalesOrderPendingActionItem,
-  SalesOrderQueryTarget,
 } from './sales-order-list-view.logic'
 import type { SalesOrderPaymentProgress } from './sales-order-list.logic'
 import type {
@@ -17,7 +16,6 @@ import type {
   SalesOrderIssuerOptionDto,
   SalesOrderLinePreviewDto,
   SalesOrderListItemDto,
-  SalesOrderPageDto,
   SalesOrderStatusCountItemDto,
 } from '@/api/generated/types.gen'
 import type { SalesOrderListQuery } from '@/api/modules/sales-orders'
@@ -83,13 +81,10 @@ import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-c
 import SalesOrderDetailDrawer from './sales-order-detail-drawer.vue'
 import {
   buildSalesOrderStatusCountsQuery,
-  deduplicateSalesOrderItems,
   formatSalesFactoryShipmentSuccess,
   getSalesOrderStatusItems,
   normalizeSalesOrderStatusSelection,
   resolvePendingSalesOrderActions,
-  resolveSalesOrderQueryTargets,
-  summarizeSalesOrderItemsByCurrency,
 } from './sales-order-list-view.logic'
 import {
   buildSalesOrderCustomerCopyText,
@@ -255,9 +250,9 @@ const actionColumn = computed<QsGenericTableActionColumn>(() => {
 /**
  * 状态切换写入 URL，保证刷新与浏览器前进/后退可恢复；“全部”使用无查询参数的规范地址。
  */
-const selectedStatus = computed<string>({
+const selectedStatus = computed({
   get: () => normalizeSalesOrderStatusSelection(props.viewMode, route.query.status),
-  set: (value) => {
+  set: (value: string) => {
     const normalized = normalizeSalesOrderStatusSelection(props.viewMode, value)
     if (normalized === selectedStatus.value) {
       return
@@ -286,6 +281,15 @@ const statusItems = computed(() => withStatusSwitchCounts(
  * 再加载列表，避免界面已经回落到默认项而地址栏仍保留失效状态。
  */
 function ensureCanonicalSalesOrderStatusQuery(): boolean {
+  // 全部订单与待办订单共用本组件；另一个视图在 KeepAlive 停用期间仍可能读到
+  // 新路由的查询参数，必须只让当前视图处理自己的状态值，避免把对方的 status 删掉。
+  const ownRouteName = props.viewMode === 'pending'
+    ? 'qsOperationsPendingSalesOrders'
+    : 'qsOperationsSalesOrders'
+  if (route.name !== ownRouteName) {
+    return false
+  }
+  // 无 status 时仍要继续加载默认视图；只有查询参数需要规范化时才处理 URL。
   if (route.query.status === undefined) {
     return true
   }
@@ -411,6 +415,11 @@ function productImageItems(row: SalesOrderListItemDto): readonly ImageGroupItem[
         tooltip: preview.productName,
       }])
 }
+
+// 行数据不变时复用同一份图片数组，避免每次渲染都触发 ImageGroup 的深度监听。
+const productImageItemsByOrderId = computed(() => new Map(
+  rows.value.map(row => [row.id, productImageItems(row)] as const),
+))
 
 function resolveProductPreview(
   row: SalesOrderListItemDto,
@@ -951,92 +960,6 @@ function buildListQuery(): SalesOrderListQuery {
   }
 }
 
-async function loadCompleteQueryTarget(
-  baseQuery: SalesOrderListQuery,
-  target: SalesOrderQueryTarget,
-  signal: AbortSignal,
-): Promise<SalesOrderPageDto> {
-  const firstResponse = await salesOrdersApi.list({
-    ...baseQuery,
-    ...target,
-    page: 1,
-    pageSize: 100,
-  }, signal)
-  const firstPage = firstResponse.data
-  const pageCount = Math.ceil(firstPage.total / firstPage.pageSize)
-  if (pageCount <= 1) {
-    return firstPage
-  }
-
-  // 同一状态的汇总在每页响应中一致，只读取第一页汇总；其余请求仅补齐明细行。
-  const remainingPages = await Promise.all(
-    Array.from({ length: pageCount - 1 }, (_, index) => salesOrdersApi.list({
-      ...baseQuery,
-      ...target,
-      page: index + 2,
-      pageSize: 100,
-    }, signal)),
-  )
-  return {
-    ...firstPage,
-    items: [
-      ...firstPage.items,
-      ...remainingPages.flatMap(response => response.data.items),
-    ],
-  }
-}
-
-/**
- * 单状态沿用服务端分页；“全部待办/全部订单”需要合并多个互斥状态，先完整读取各目标，
- * 再按服务端相同顺序排序、精确汇总并在前端切页，保证总数与汇总不被当前页截断。
- */
-async function loadSalesOrderPage(
-  signal: AbortSignal,
-): Promise<{ data: SalesOrderPageDto }> {
-  const selection = normalizeSalesOrderStatusSelection(
-    props.viewMode,
-    route.query.status,
-  )
-  const targets = resolveSalesOrderQueryTargets(props.viewMode, selection)
-  const baseQuery = buildListQuery()
-
-  if (targets.length === 0) {
-    return {
-      data: {
-        items: [],
-        page: page.value,
-        pageSize: pageSize.value,
-        summariesByCurrency: [],
-        total: 0,
-      },
-    }
-  }
-  if (targets.length === 1) {
-    return salesOrdersApi.list({ ...baseQuery, ...targets[0] }, signal)
-  }
-
-  const targetPages = await Promise.all(
-    targets.map(target => loadCompleteQueryTarget(baseQuery, target, signal)),
-  )
-  const allItems = deduplicateSalesOrderItems(
-    targetPages.flatMap(result => result.items),
-  )
-    .sort((left, right) => (
-      right.orderDate.localeCompare(left.orderDate)
-      || right.id.localeCompare(left.id)
-    ))
-  const start = (page.value - 1) * pageSize.value
-  return {
-    data: {
-      items: allItems.slice(start, start + pageSize.value),
-      page: page.value,
-      pageSize: pageSize.value,
-      summariesByCurrency: summarizeSalesOrderItemsByCurrency(allItems),
-      total: allItems.length,
-    },
-  }
-}
-
 async function loadOrders(): Promise<void> {
   if (!canRead.value) {
     return
@@ -1053,7 +976,11 @@ async function loadOrders(): Promise<void> {
     // 出单人选项只在当前页面生命周期内加载一次，并与首屏列表共用取消与鉴权世代边界。
     // 这样既不会要求用户额外拥有 users:read，也能保留已停用历史出单人的筛选能力。
     const [response, issuerOptionsResponse] = await Promise.all([
-      loadSalesOrderPage(controller.signal),
+      salesOrdersApi.list({
+        ...buildListQuery(),
+        view: props.viewMode,
+        statusSelection: selectedStatus.value,
+      }, controller.signal),
       issuerFilterOptionsLoaded.value
         ? Promise.resolve(null)
         : salesOrdersApi.issuerOptions(controller.signal),
@@ -1386,6 +1313,17 @@ onMounted(() => {
     scheduleQueryRefresh(true)
   }
 })
+// 页面被 KeepAlive 缓存后，返回时 onMounted 不会再次触发；首次激活由 onMounted 负责。
+let pageActivated = false
+onActivated(() => {
+  if (!pageActivated) {
+    pageActivated = true
+    return
+  }
+  if (ensureCanonicalSalesOrderStatusQuery()) {
+    scheduleQueryRefresh(true)
+  }
+})
 onBeforeUnmount(() => {
   requestVersion += 1
   countRequestVersion += 1
@@ -1560,10 +1498,11 @@ onBeforeUnmount(() => {
 
         <template #cell-productSummary="{ row }">
           <ImageGroup
-            :items="productImageItems(row.original)"
+            :items="productImageItemsByOrderId.get(row.original.id) ?? []"
             :max-count="3"
             :size="40"
             radius="md"
+            tooltip-mode="native"
           >
             <template #tooltip="{ item, index, total: imageTotal }">
               <QsGoodTooltipContent
@@ -1997,7 +1936,7 @@ onBeforeUnmount(() => {
                   产品
                 </dt>
                 <dd class="m-0">
-                  <ImageGroup :items="productImageItems(row)" :max-count="3" :size="40" radius="md">
+                  <ImageGroup :items="productImageItemsByOrderId.get(row.id) ?? []" :max-count="3" :size="40" radius="md" tooltip-mode="native">
                     <template #tooltip="{ item, index, total: imageTotal }">
                       <QsGoodTooltipContent
                         :image-src="item.src"

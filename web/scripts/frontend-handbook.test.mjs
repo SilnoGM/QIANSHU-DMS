@@ -45,12 +45,13 @@ const arcoDesignVueHandbookPaths = {
 }
 const arcoDesignVueIntegrationSourcePaths = {
   componentTypes: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/components.d.ts', import.meta.url)),
-  main: fileURLToPath(new URL('../apps/qsmds-arco/src/main.ts', import.meta.url)),
+  main: fileURLToPath(new URL('../examples/core-arco-design-vue/src/main.ts', import.meta.url)),
+  formalMain: fileURLToPath(new URL('../apps/qsmds-arco/src/main.ts', import.meta.url)),
   message: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/message/index.js', import.meta.url)),
   modal: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/modal/index.js', import.meta.url)),
   notification: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/notification/index.js', import.meta.url)),
-  providerPlugin: fileURLToPath(new URL('../apps/qsmds-arco/src/ui/provider/index.ts', import.meta.url)),
-  providerComponent: fileURLToPath(new URL('../apps/qsmds-arco/src/ui/provider/index.vue', import.meta.url)),
+  providerPlugin: fileURLToPath(new URL('../examples/core-arco-design-vue/src/ui/provider/index.ts', import.meta.url)),
+  providerComponent: fileURLToPath(new URL('../examples/core-arco-design-vue/src/ui/provider/index.vue', import.meta.url)),
   vitePlugins: fileURLToPath(new URL('../apps/qsmds-arco/vite/plugins.ts', import.meta.url)),
 }
 const arcoDesignVueTask6SourcePaths = {
@@ -2244,8 +2245,8 @@ test('前端开发手册入口固定正式应用、技术基线与组件职责',
     '手册必须明确 Fantastic-admin 内置组件是标准业务 UI 第一优先级',
   )
   assert.ok(
-    handbook.includes('Arco Design Vue 是 Fantastic-admin 无法满足需求时的回退组件库'),
-    '手册必须明确 Arco Design Vue 只在 Fantastic-admin 无法满足时回退使用',
+    handbook.includes('Arco Design Vue 已从正式应用 `web/apps/qsmds-arco` 移除'),
+    '手册必须明确 Arco Design Vue 已从正式应用移除，只保留参考应用',
   )
   assert.ok(
     handbook.includes('web/apps/qsmds-arco/src/router/'),
@@ -3383,7 +3384,8 @@ test('Fantastic-admin AI Skill 遵循应用定位与 Fa-first 业务 UI 契约',
     assert.ok(commonRules.includes(requiredPhrase), `共同规则缺少 Fa-first 执行契约：${requiredPhrase}`)
   }
   assert.ok(commonRules.includes('FaPageMain'), '共同规则必须明确框架页面壳 FaPageMain 可以保留')
-  assert.ok(commonRules.includes('app.use(ArcoVue)'), '共同规则必须记录正式应用的 Arco 全局注册事实')
+  assert.ok(commonRules.includes('正式应用已移除 Arco'), '共同规则必须记录正式应用已移除 Arco')
+  assert.doesNotMatch(commonRules, /app\.use\(ArcoVue\)/u, '共同规则不得再把 Arco 全局注册写成正式应用事实')
 
   for (const [sourceContract, arcoContract] of [
     ['validation-schema', 'rules'],
@@ -4153,7 +4155,7 @@ test('Arco Design Vue Task 7 其他组件分册固定 Icon 类型缺口与底层
   const runtimeInventory = readArcoRuntimeInventory(arcoVueSource)
   assert.equal(runtimeInventory.get('Icon'), 'icon-component', 'ArcoVue 必须从 icon-component 安装 Icon')
   assert.match(arcoVueSource, /const ArcoVue\s*=\s*\{\s*\.\.\.components/u, 'ArcoVue 默认导出必须继承主 components 注册对象')
-  assert.doesNotMatch(providerPluginSource, /ArcoVueIcon/u, '正式应用 Provider 不得虚构独立 ArcoVueIcon plugin')
+  assert.doesNotMatch(providerPluginSource, /ArcoVueIcon/u, '参考应用 Provider 不得虚构独立 ArcoVueIcon plugin')
 
   assert.doesNotMatch(componentTypesSource, /\bA(?:Icon|OverflowList|Scrollbar)\b/u, '全局模板类型没有声明三类底层组件')
   for (const runtimeName of ['Scrollbar', 'Icon', 'OverflowList']) {
@@ -4235,16 +4237,18 @@ test('Arco Design Vue Task 7 其他组件分册固定 Icon 类型缺口与底层
   assert.doesNotMatch(extractVueFences(configProviderSection)[0].source, /component-config=/u, 'ConfigProvider 示例不得使用虚构 component-config prop')
 })
 
-test('Arco Design Vue 接入基础分册锁定正式应用的真实安装、语言与主题链路', () => {
+test('Arco Design Vue 接入基础分册锁定参考应用链路与正式应用移除事实', () => {
   const integration = readRequiredFile(arcoDesignVueHandbookPaths.integration)
   const componentTypesSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.componentTypes)
   const mainSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.main)
+  const formalMainSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.formalMain)
   const messageSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.message)
   const modalSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.modal)
   const notificationSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.notification)
   const pluginSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.providerPlugin)
   const providerSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.providerComponent)
   const vitePluginsSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.vitePlugins)
+  const formalManifest = JSON.parse(readRequiredFile(qsmdsArcoManifestPath))
   const installSection = readSecondLevelSection(integration, '当前安装与启动链路')
   const providerSection = readSecondLevelSection(integration, '全局配置、语言与主题')
   const feedbackSection = readSecondLevelSection(integration, '命令式反馈 API')
@@ -4258,15 +4262,22 @@ test('Arco Design Vue 接入基础分册锁定正式应用的真实安装、语�
     'import zhTW from \'@arco-design/web-vue/es/locale/lang/zh-tw\'',
     'app.use(ArcoVue)',
   ]) {
-    assert.ok(pluginSource.includes(requiredSourcePhrase), `正式应用 Arco plugin 源码事实漂移：${requiredSourcePhrase}`)
+    assert.ok(pluginSource.includes(requiredSourcePhrase), `参考应用 Arco plugin 源码事实漂移：${requiredSourcePhrase}`)
   }
-  assert.ok(mainSource.includes('app.use(uiProvider)'), '正式应用入口必须继续安装 uiProvider')
+  assert.ok(mainSource.includes('app.use(uiProvider)'), '参考应用入口必须安装 uiProvider')
+  assert.doesNotMatch(formalMainSource, /@arco-design\/web-vue|uiProvider/u, '正式应用入口不得再安装 Arco 或 uiProvider')
+  assert.equal(
+    Object.hasOwn(formalManifest.dependencies ?? {}, '@arco-design/web-vue')
+      || Object.hasOwn(formalManifest.devDependencies ?? {}, '@arco-design/web-vue'),
+    false,
+    '正式应用 package.json 不得声明 @arco-design/web-vue',
+  )
   for (const requiredSourcePhrase of [
     '<AConfigProvider :locale="locales[appSettingsStore.lang]">',
     'window.matchMedia(\'(prefers-color-scheme: dark)\')',
     'document.body.setAttribute(\'arco-theme\', \'dark\')',
   ]) {
-    assert.ok(providerSource.includes(requiredSourcePhrase), `正式应用 Provider 源码事实漂移：${requiredSourcePhrase}`)
+    assert.ok(providerSource.includes(requiredSourcePhrase), `参考应用 Provider 源码事实漂移：${requiredSourcePhrase}`)
   }
   assert.ok(
     vitePluginsSource.includes('FantasticAdminComponentsResolver()'),

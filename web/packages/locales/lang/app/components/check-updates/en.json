@@ -3,6 +3,8 @@
     "components": {
       "checkUpdates": {
         "message": "The new version is available",
+        "messageWithVersion": "New version v{version} is available",
+        "versionSummary": "Current version v{current}; new version v{next}.",
         "description": "Click the refresh button to get the latest version",
         "confirm": "Refresh",
         "cancel": "Later"

@@ -107,7 +107,7 @@ test('账户相关弹窗统一使用 QsGenericModal', () => {
   assert.match(accountButtonSource, /const feedbackVisible = ref\(false\)/u)
   assert.match(accountButtonSource, /:dismiss-on-overlay="false"/u)
   assert.match(accountButtonSource, /:dismiss-on-escape="false"/u)
-  assert.match(accountButtonSource, /<Feedback @close="feedbackVisible = false"/u)
+  assert.match(accountButtonSource, /<Feedback v-if="feedbackMounted" @close="feedbackVisible = false"/u)
   assert.match(accountButtonSource, /:submitting="logoutPending"/u)
 
   const profileSource = readRelativeSource(

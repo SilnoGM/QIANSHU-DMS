@@ -33,6 +33,10 @@ import {
   resolveSalesOrderPurchaseHold,
   type SalesOrderPurchaseHold,
 } from './domain/sales-order-purchase-hold'
+import {
+  resolveSalesOrderQueryTargets,
+  type SalesOrderListStatusSelection,
+} from './sales-order-list-selection.logic'
 import { readAwaitingPurchaseReviewSalesOrders } from './sales-order-purchase-hold-query'
 import { mapSalesOrderProductOption } from './products/sales-order-product-option.mapper'
 import {
@@ -215,6 +219,8 @@ export interface SalesOrderListQueryInput {
   readonly orderDateFrom?: string
   readonly orderDateTo?: string
   readonly purchaseHold?: 'AWAITING_PURCHASE_REVIEW' | 'EXCLUDE_AWAITING_PURCHASE_REVIEW'
+  readonly view?: 'all' | 'pending'
+  readonly statusSelection?: SalesOrderListStatusSelection
 }
 
 export type SalesOrderStatusCountValue
@@ -233,7 +239,7 @@ export type SalesOrderStatusCountValue
 
 export interface SalesOrderStatusCountsQueryInput extends Omit<
   SalesOrderListQueryInput,
-  'fulfillmentStatus' | 'orderStatus' | 'page' | 'pageSize' | 'purchaseHold'
+  'fulfillmentStatus' | 'orderStatus' | 'page' | 'pageSize' | 'purchaseHold' | 'statusSelection'
 > {
   readonly view: 'all' | 'pending'
 }
@@ -438,6 +444,26 @@ function buildSalesOrderBaseWhere(
   }
 }
 
+/** 工具栏选择只生成一个 OR 谓词；单表 OR 不会重复订单，总数与汇总才能一次算准。 */
+function buildSalesOrderSelectionWhere(
+  view: 'all' | 'pending',
+  selection: SalesOrderListStatusSelection,
+  awaitingReviewByOrder: ReadonlyMap<string, number>,
+): Prisma.SalesOrderWhereInput {
+  return {
+    OR: resolveSalesOrderQueryTargets(view, selection).map(target => ({
+      ...(target.orderStatus === undefined ? {} : { orderStatus: target.orderStatus }),
+      ...(target.fulfillmentStatus === undefined ? {} : { fulfillmentStatus: target.fulfillmentStatus }),
+      ...(target.paymentStatus === undefined ? {} : { paymentStatus: target.paymentStatus }),
+      ...(target.purchaseHold === undefined
+        ? {}
+        : target.purchaseHold === 'AWAITING_PURCHASE_REVIEW'
+          ? { id: { in: [...awaitingReviewByOrder.keys()] } }
+          : { id: { notIn: [...awaitingReviewByOrder.keys()] } }),
+    })),
+  }
+}
+
 function groupedCount<T extends string>(
   rows: readonly { readonly value: string, readonly count: number }[],
   values: readonly T[],
@@ -505,12 +531,7 @@ function mapCurrencySummary(
       } | null
     }
   },
-  standardPriceLines: readonly {
-    readonly standardUnitPriceAmount: {
-      toFixed(decimalPlaces: number): string
-    } | null
-    readonly quantity: number
-  }[],
+  standardSubtotalUnitsValue: bigint,
   paymentAggregate: {
     readonly _sum: {
       readonly amount: { toFixed(decimalPlaces: number): string } | null
@@ -524,7 +545,7 @@ function mapCurrencySummary(
     currencyCode,
     orderCount: orderAggregate._count._all,
     standardSubtotalAmount: formatSalesOrderAmountUnits(
-      standardSubtotalUnits(standardPriceLines),
+      standardSubtotalUnitsValue,
     ),
     agreedTotalAmount: formatSalesOrderAmountUnits(agreedUnits),
     depositDueAmount: formatSalesOrderAmountUnits(
@@ -712,6 +733,42 @@ export class SalesOrderQueryService {
     return { items: users }
   }
 
+  /**
+   * 标准价小计在数据库内完成乘法与求和，只把订单 ID 和最终金额带入 Node。
+   *
+   * 按 500 个 ID 分块，避免大筛选结果生成超长 SQL；旧实现会把过滤集的所有明细行
+   * 读进内存再逐行乘加，数据量增长后列表接口的耗时和内存都会线性上升。
+   */
+  private async sumStandardSubtotalUnits(
+    where: Prisma.SalesOrderWhereInput,
+  ): Promise<bigint> {
+    const orders = await this.prisma.salesOrder.findMany({
+      where,
+      select: { id: true },
+    })
+    if (orders.length === 0) {
+      return 0n
+    }
+
+    let totalUnits = 0n
+    for (let offset = 0; offset < orders.length; offset += 500) {
+      const ids = orders
+        .slice(offset, offset + 500)
+        .map(row => row.id)
+      const rows = await this.prisma.$queryRaw<Array<{
+        total: { toFixed: (decimalPlaces: number) => string } | null
+      }>>(Prisma.sql`
+        SELECT COALESCE(SUM(line."quantity"::numeric * line."standard_unit_price_amount"), 0) AS "total"
+        FROM "sales_order_lines" AS line
+        WHERE line."removed_at" IS NULL
+          AND line."standard_unit_price_amount" IS NOT NULL
+          AND line."sales_order_id" IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))})
+      `)
+      totalUnits += parseSalesOrderAmountUnits(rows[0]?.total?.toFixed(2) ?? '0.00')
+    }
+    return totalUnits
+  }
+
   async list(
     input: SalesOrderListQueryInput,
     actorUserId: string = resolveDataScopeActor(),
@@ -723,92 +780,98 @@ export class SalesOrderQueryService {
     // 再用主键集合参与列表过滤与停留原因装配，避免为分桶复制一套原生分页与聚合。
     // 集合规模等于“已被审核中采购占满的待采购订单”，属于瞬时窗口，保持轻量。
     const awaitingReviewByOrder = await readAwaitingPurchaseReviewSalesOrders(this.prisma)
+    const usesStatusSelection = input.statusSelection !== undefined || input.view !== undefined
+    if (
+      usesStatusSelection
+      && (input.statusSelection === undefined
+        || input.view === undefined
+        || input.orderStatus !== undefined
+        || input.fulfillmentStatus !== undefined
+        || input.purchaseHold !== undefined)
+    ) {
+      throw new ApiException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'VALIDATION_FAILED',
+        '视图与状态选择必须同时提供，且不能与单状态参数混用',
+      )
+    }
     const purchaseHoldFilter: Prisma.SalesOrderWhereInput
       = input.purchaseHold === 'AWAITING_PURCHASE_REVIEW'
         ? { id: { in: [...awaitingReviewByOrder.keys()] } }
         : input.purchaseHold === 'EXCLUDE_AWAITING_PURCHASE_REVIEW'
           ? { id: { notIn: [...awaitingReviewByOrder.keys()] } }
           : {}
+    const selectionWhere = input.statusSelection !== undefined && input.view !== undefined
+      ? buildSalesOrderSelectionWhere(input.view, input.statusSelection, awaitingReviewByOrder)
+      : null
     const where: Prisma.SalesOrderWhereInput = {
       ...buildSalesOrderBaseWhere(input),
       ...salesOrderScopeWhere(scope, actorUserId),
-      orderStatus: input.orderStatus,
-      fulfillmentStatus: input.fulfillmentStatus,
-      ...purchaseHoldFilter,
+      ...(selectionWhere === null
+        ? {
+            orderStatus: input.orderStatus,
+            fulfillmentStatus: input.fulfillmentStatus,
+            ...purchaseHoldFilter,
+          }
+        : { AND: [selectionWhere] }),
     }
     const twdWhere = listCurrencyWhere(where, 'TWD')
     const myrWhere = listCurrencyWhere(where, 'MYR')
     // 支持币种固定为 TWD/MYR，因此使用固定数量聚合查询，避免随列表行数增长的 N+1 查询。
+    // 标准价小计在 SQL 内按数量汇总，不再把所有明细行拉进 Node 求和。
     const [
-      total,
-      rows,
-      twdOrders,
-      twdStandardPriceLines,
-      twdPayments,
-      myrOrders,
-      myrStandardPriceLines,
-      myrPayments,
-    ] = await this.prisma.$transaction([
-      this.prisma.salesOrder.count({ where }),
-      this.prisma.salesOrder.findMany({
-        where,
-        orderBy: [{ orderDate: 'desc' }, { id: 'desc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        select: SALES_ORDER_LIST_SELECT,
-      }),
-      this.prisma.salesOrder.aggregate({
-        where: twdWhere,
-        _count: { _all: true },
-        _sum: {
-          agreedTotalAmount: true,
-          depositDueAmount: true,
-          balanceDueAmount: true,
-        },
-      }),
-      this.prisma.salesOrderLine.findMany({
-        where: {
-          removedAt: null,
-          standardUnitPriceAmount: { not: null },
-          salesOrder: { is: twdWhere },
-        },
-        select: { standardUnitPriceAmount: true, quantity: true },
-      }),
-      this.prisma.salesOrderPayment.aggregate({
-        where: {
-          voidedAt: null,
-          salesOrder: { is: twdWhere },
-        },
-        _sum: { amount: true },
-      }),
-      this.prisma.salesOrder.aggregate({
-        where: myrWhere,
-        _count: { _all: true },
-        _sum: {
-          agreedTotalAmount: true,
-          depositDueAmount: true,
-          balanceDueAmount: true,
-        },
-      }),
-      this.prisma.salesOrderLine.findMany({
-        where: {
-          removedAt: null,
-          standardUnitPriceAmount: { not: null },
-          salesOrder: { is: myrWhere },
-        },
-        select: { standardUnitPriceAmount: true, quantity: true },
-      }),
-      this.prisma.salesOrderPayment.aggregate({
-        where: {
-          voidedAt: null,
-          salesOrder: { is: myrWhere },
-        },
-        _sum: { amount: true },
-      }),
+      [total, rows, twdOrders, twdPayments, myrOrders, myrPayments],
+      twdStandardSubtotalUnits,
+      myrStandardSubtotalUnits,
+    ] = await Promise.all([
+      this.prisma.$transaction([
+        this.prisma.salesOrder.count({ where }),
+        this.prisma.salesOrder.findMany({
+          where,
+          orderBy: [{ orderDate: 'desc' }, { id: 'desc' }],
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          select: SALES_ORDER_LIST_SELECT,
+        }),
+        this.prisma.salesOrder.aggregate({
+          where: twdWhere,
+          _count: { _all: true },
+          _sum: {
+            agreedTotalAmount: true,
+            depositDueAmount: true,
+            balanceDueAmount: true,
+          },
+        }),
+        this.prisma.salesOrderPayment.aggregate({
+          where: {
+            voidedAt: null,
+            salesOrder: { is: twdWhere },
+          },
+          _sum: { amount: true },
+        }),
+        this.prisma.salesOrder.aggregate({
+          where: myrWhere,
+          _count: { _all: true },
+          _sum: {
+            agreedTotalAmount: true,
+            depositDueAmount: true,
+            balanceDueAmount: true,
+          },
+        }),
+        this.prisma.salesOrderPayment.aggregate({
+          where: {
+            voidedAt: null,
+            salesOrder: { is: myrWhere },
+          },
+          _sum: { amount: true },
+        }),
+      ]),
+      this.sumStandardSubtotalUnits(twdWhere),
+      this.sumStandardSubtotalUnits(myrWhere),
     ])
     const summariesByCurrency = [
-      mapCurrencySummary('TWD', twdOrders, twdStandardPriceLines, twdPayments),
-      mapCurrencySummary('MYR', myrOrders, myrStandardPriceLines, myrPayments),
+      mapCurrencySummary('TWD', twdOrders, twdStandardSubtotalUnits, twdPayments),
+      mapCurrencySummary('MYR', myrOrders, myrStandardSubtotalUnits, myrPayments),
     ].filter(summary => summary !== null)
     // 停留原因只对待对账订单有意义：一次读取当页全部待对账订单的对账状态（口径 R3），
     // 避免逐行查询；其它状态的订单不参与读取。

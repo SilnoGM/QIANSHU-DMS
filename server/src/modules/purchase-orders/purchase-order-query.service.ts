@@ -430,20 +430,6 @@ function paidUnits(value: { toFixed(decimalPlaces: number): string } | null): bi
   return value === null ? 0n : parsePurchaseOrderAmountUnits(decimalToFixed4(value))
 }
 
-function referenceSubtotalAmount(lines: readonly {
-  readonly quantity: number
-  readonly referencePurchaseUnitPriceAmount: {
-    toFixed(decimalPlaces: number): string
-  }
-}[]): string {
-  // 历史参考价只是成本快照，保留原四位汇总；不得把它当作两位实际应付重新舍入。
-  const total = lines.reduce((sum, line) => {
-    const [integer, fraction] = normalizePurchaseOrderSnapshotAmount(decimalToFixed4(line.referencePurchaseUnitPriceAmount)).split('.')
-    return sum + (BigInt(integer) * 10_000n + BigInt(fraction)) * BigInt(line.quantity)
-  }, 0n)
-  return normalizePurchaseOrderSnapshotAmount(`${total / 10_000n}.${(total % 10_000n).toString().padStart(4, '0')}`)
-}
-
 function mapCurrencySummary(
   orderAggregate: {
     readonly _count: { readonly _all: number }
@@ -459,12 +445,7 @@ function mapCurrencySummary(
       } | null
     }
   },
-  referencePriceLines: readonly {
-    readonly quantity: number
-    readonly referencePurchaseUnitPriceAmount: {
-      toFixed(decimalPlaces: number): string
-    }
-  }[],
+  referenceSubtotalAmountValue: string,
   paymentAggregate: {
     readonly _sum: {
       readonly amount: { toFixed(decimalPlaces: number): string } | null
@@ -477,7 +458,7 @@ function mapCurrencySummary(
   return {
     currencyCode: 'CNY',
     orderCount: orderAggregate._count._all,
-    referenceSubtotalAmount: referenceSubtotalAmount(referencePriceLines),
+    referenceSubtotalAmount: referenceSubtotalAmountValue,
     purchaseTotalAmount: formatPurchaseOrderAmountUnits(purchaseTotalUnits),
     depositDueAmount: formatPurchaseOrderAmountUnits(
       paidUnits(orderAggregate._sum.depositDueAmount),
@@ -634,6 +615,44 @@ export class PurchaseOrderQueryService {
     private readonly dataScope: DataScopeService = dataScopeFallback(),
   ) {}
 
+  /**
+   * 参考价小计在数据库内求和，避免把过滤集全部采购明细读入 Node。
+   * 采购买卖历史保留四位精度，分块执行防止大规模筛选生成超长 SQL。
+   */
+  private async sumReferenceSubtotal(
+    client: Prisma.TransactionClient,
+    where: Prisma.PurchaseOrderWhereInput,
+  ): Promise<string> {
+    const orders = await client.purchaseOrder.findMany({
+      where,
+      select: { id: true },
+    })
+    if (orders.length === 0) {
+      return '0.0000'
+    }
+
+    let totalUnits = 0n
+    for (let offset = 0; offset < orders.length; offset += 500) {
+      const ids = orders
+        .slice(offset, offset + 500)
+        .map(row => row.id)
+      const rows = await client.$queryRaw<Array<{
+        total: { toFixed: (decimalPlaces: number) => string } | null
+      }>>(Prisma.sql`
+        SELECT COALESCE(SUM(line."quantity"::numeric * line."reference_purchase_unit_price_amount"), 0) AS "total"
+        FROM "purchase_order_lines" AS line
+        WHERE line."purchase_order_id" IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))})
+      `)
+      const [integer, fraction] = normalizePurchaseOrderSnapshotAmount(
+        rows[0]?.total?.toFixed(4) ?? '0.0000',
+      ).split('.')
+      totalUnits += BigInt(integer) * 10_000n + BigInt(fraction)
+    }
+    return normalizePurchaseOrderSnapshotAmount(
+      `${totalUnits / 10_000n}.${(totalUnits % 10_000n).toString().padStart(4, '0')}`,
+    )
+  }
+
   async list(
     input: PurchaseOrderListQueryInput,
     actorUserId: string = resolveDataScopeActor(),
@@ -688,9 +707,9 @@ export class PurchaseOrderQueryService {
     // 列表数量、当前页与金额汇总必须共享同一份筛选谓词，并在一个事务快照内读取，
     // 显式使用 RepeatableRead，避免默认 ReadCommitted 下并发付款或订单变更
     // 令“共 N 张”、分类付款与金额矩阵读到不同快照而出现瞬时错位。
-    const [total, rows, orderAggregate, referencePriceLines, paymentAggregate, reviewByOrderId]
+    const [total, rows, orderAggregate, referenceSubtotalAmount, paymentAggregate, reviewByOrderId]
       = await this.prisma.$transaction(async transaction => {
-        const [total, rows, orderAggregate, referencePriceLines, paymentAggregate] = await Promise.all([
+        const [total, rows, orderAggregate, referenceSubtotalAmount, paymentAggregate] = await Promise.all([
           transaction.purchaseOrder.count({ where }),
           transaction.purchaseOrder.findMany({
             where,
@@ -708,13 +727,7 @@ export class PurchaseOrderQueryService {
               balanceDueAmount: true,
             },
           }),
-          transaction.purchaseOrderLine.findMany({
-            where: { purchaseOrder: { is: where } },
-            select: {
-              referencePurchaseUnitPriceAmount: true,
-              quantity: true,
-            },
-          }),
+          this.sumReferenceSubtotal(transaction, where),
           transaction.purchaseOrderPayment.aggregate({
             where: {
               voidedAt: null,
@@ -737,7 +750,7 @@ export class PurchaseOrderQueryService {
             changedBy: { select: PERSON_REFERENCE_SELECT },
           },
         })
-        return [total, rows, orderAggregate, referencePriceLines, paymentAggregate,
+        return [total, rows, orderAggregate, referenceSubtotalAmount, paymentAggregate,
           new Map(reviewHistory.map(history => [history.purchaseOrderId, mapReviewSummary(history)])),
         ] as const
       }, { isolationLevel: 'RepeatableRead' })
@@ -755,7 +768,7 @@ export class PurchaseOrderQueryService {
     ]))
     const currencySummary = mapCurrencySummary(
       orderAggregate,
-      referencePriceLines,
+      referenceSubtotalAmount,
       paymentAggregate,
     )
     return {

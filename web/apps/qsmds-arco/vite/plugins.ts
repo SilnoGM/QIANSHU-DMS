@@ -23,6 +23,7 @@ import { envParse, parseLoadedEnv } from 'vite-plugin-env-parse'
 import { vitePluginFakeServer } from 'vite-plugin-fake-server'
 import VueDevTools from 'vite-plugin-vue-devtools'
 import { createSnapdomFontIsolationPlugin } from '../../../scripts/sanitize-snapdom'
+import { createReleaseManifestPlugin } from './release-manifest'
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -119,6 +120,12 @@ export default function createVitePlugins(mode: string, isBuild: boolean, appLoa
 
     viteEnv.VITE_BUILD_ARCHIVE && Archiver({
       archiveType: viteEnv.VITE_BUILD_ARCHIVE,
+    }),
+
+    // 更新弹窗读取新版本清单；它必须在 dist 根目录稳定存在，不能进 /assets/ 的 immutable 缓存。
+    createReleaseManifestPlugin({
+      version: appLoadingData.version,
+      notesDirectory: path.resolve(appRoot, '../../..', 'release/notes'),
     }),
 
     AppLoading('loading.html'),

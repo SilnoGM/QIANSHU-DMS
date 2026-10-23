@@ -340,6 +340,11 @@ function productImageItems(row: PurchaseOrderListItemDto): readonly ImageGroupIt
       }])
 }
 
+// 行数据不变时复用同一份图片数组，避免每次渲染都触发 ImageGroup 的深度监听。
+const productImageItemsByOrderId = computed(() => new Map(
+  rows.value.map(row => [row.id, productImageItems(row)] as const),
+))
+
 function resolveProductPreview(
   row: PurchaseOrderListItemDto,
   item: ImageGroupItem,
@@ -826,6 +831,18 @@ onMounted(() => {
   }
 })
 
+// KeepAlive 返回列表时刷新，避免停留在离开前的数据快照；首次激活由 onMounted 负责。
+let pageActivated = false
+onActivated(() => {
+  if (!pageActivated) {
+    pageActivated = true
+    return
+  }
+  if (canRead.value) {
+    refreshOrdersAndCounts()
+  }
+})
+
 onBeforeUnmount(() => {
   requestVersion += 1
   countRequestVersion += 1
@@ -1015,8 +1032,9 @@ onBeforeUnmount(() => {
 
         <template #cell-productSummary="{ row }">
           <ImageGroup
-            :items="productImageItems(row.original)"
+            :items="productImageItemsByOrderId.get(row.original.id) ?? []"
             :max-count="3"
+            tooltip-mode="native"
             :size="40"
             radius="md"
           >
@@ -1389,7 +1407,7 @@ onBeforeUnmount(() => {
                   产品
                 </dt>
                 <dd class="m-0">
-                  <ImageGroup :items="productImageItems(row)" :max-count="3" :size="40" radius="md">
+                  <ImageGroup :items="productImageItemsByOrderId.get(row.id) ?? []" :max-count="3" :size="40" radius="md" tooltip-mode="native">
                     <template #tooltip="{ item, index, total: imageTotal }">
                       <QsGoodTooltipContent
                         :image-src="item.src"

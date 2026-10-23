@@ -3,6 +3,8 @@
     "components": {
       "checkUpdates": {
         "message": "有新版本可用",
+        "messageWithVersion": "發現新版本 v{version}",
+        "versionSummary": "目前版本 v{current}，新版本 v{next}。",
         "description": "點擊刷新按鈕取得最新版本",
         "confirm": "刷新",
         "cancel": "稍後"

@@ -106,6 +106,8 @@ async function pageFixture() {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
   }).outputText, {
     computed,
+    // 页面已不再导出 warehouseValues；保留原探针串以维持既有 VM 测试夹具。
+    warehouseValues: undefined,
     reactive,
     ref,
     shallowRef,
@@ -157,7 +159,6 @@ async function pageFixture() {
     selectWarehouse: (value: string) => void
     activeWarehouse: { value: string }
     showWarehouseFilter: { value: boolean }
-    warehouseValues: { value: string[] }
     warehouseTabs: { value: Array<{ value: string, count?: number }> }
     tabs: { value: Array<{ value: string, count?: number }> }
     handleTransportAction: (row: { viewStatus: string }, action?: string) => void
@@ -262,12 +263,10 @@ test('已到仓显示两层数量，切仓保留查询并回第一页；其他�
   const f = await pageFixture()
   context.after(f.dispose)
   assert.equal(f.state.showWarehouseFilter.value, false)
-  assert.deepEqual(Array.from(f.state.warehouseValues.value), [])
   f.state.selectWarehouse('warehouse:north')
   assert.equal(f.navigations.length, 0)
   f.route.query = { view: 'WAREHOUSE_RECEIVED', page: '3', pageSize: '50', keyword: '柜子', supplierValue: 'supplier-1', orderDateFrom: '2026-09-01' } as typeof f.route.query
   assert.equal(f.state.showWarehouseFilter.value, true)
-  assert.deepEqual(Array.from(f.state.warehouseValues.value), ['north', 'QITA'])
   assert.deepEqual(Array.from(f.state.warehouseTabs.value, item => item.count), [7, 2, 5])
   f.state.selectWarehouse('warehouse:north')
   assert.deepEqual({ ...f.navigations.at(-1) }, { ...f.route.query, page: '1', destinationWarehouseValue: 'north' })
@@ -283,7 +282,6 @@ test('已到仓显示两层数量，切仓保留查询并回第一页；其他�
   assert.equal(f.navigations.at(-1)?.page, '1')
   f.route.query = { ...f.route.query, view: 'SHIPPED' }
   assert.equal(f.state.showWarehouseFilter.value, false)
-  assert.deepEqual(Array.from(f.state.warehouseValues.value), [])
 })
 
 test('未知选择不导航，仓库统计未完成或失败时不伪造零；失活及撤权不允许切换', async (context) => {

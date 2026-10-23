@@ -82,7 +82,7 @@ export class FundWithdrawalQueryService {
   ) {}
 
   async listOwn(userId: string, query: FundWithdrawalListQueryDto): Promise<FundWithdrawalPageDto> {
-    return this.list({ userId, ...statusWhere(query.status) }, query)
+    return this.list({ userId }, query)
   }
 
   async getOwn(userId: string, id: string): Promise<FundWithdrawalDto> {
@@ -94,10 +94,7 @@ export class FundWithdrawalQueryService {
     actorUserId: string = resolveDataScopeActor(),
   ): Promise<FundWithdrawalPageDto> {
     const scope = await this.dataScope.resolve(actorUserId)
-    return this.list({
-      ...fundWithdrawalScopeWhere(scope, actorUserId),
-      ...statusWhere(query.status),
-    }, query)
+    return this.list(fundWithdrawalScopeWhere(scope, actorUserId), query)
   }
 
   async getReview(id: string, actorUserId: string = resolveDataScopeActor()): Promise<FundWithdrawalDto> {
@@ -118,22 +115,44 @@ export class FundWithdrawalQueryService {
   }
 
   private async list(
-    where: Prisma.FundWithdrawalRequestWhereInput,
+    baseWhere: Prisma.FundWithdrawalRequestWhereInput,
     query: FundWithdrawalListQueryDto,
   ): Promise<FundWithdrawalPageDto> {
     const page = query.page ?? 1
     const pageSize = query.pageSize ?? 20
-    const [rows, total] = await this.prisma.$transaction([
+    const pageWhere: Prisma.FundWithdrawalRequestWhereInput = {
+      ...baseWhere,
+      ...statusWhere(query.status),
+    }
+    // 计数按基础范围分组，不能被当前状态筛选或分页截断；前端因此无需为每个状态再发一次列表。
+    const [rows, total, statusRows] = await this.prisma.$transaction([
       this.prisma.fundWithdrawalRequest.findMany({
-        where,
+        where: pageWhere,
         include: ROW_INCLUDE,
         orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
-      this.prisma.fundWithdrawalRequest.count({ where }),
+      this.prisma.fundWithdrawalRequest.count({ where: pageWhere }),
+      this.prisma.fundWithdrawalRequest.groupBy({
+        by: ['status'],
+        where: baseWhere,
+        orderBy: { status: 'asc' },
+        _count: { _all: true },
+      }),
     ])
-    return { items: rows.map(toDto), total, page, pageSize }
+    return {
+      items: rows.map(toDto),
+      total,
+      page,
+      pageSize,
+      statusCounts: statusRows.map(row => ({
+        status: row.status,
+        count: typeof row._count === 'object' && row._count !== null
+          ? row._count._all ?? 0
+          : 0,
+      })),
+    }
   }
 
   private async get(where: Prisma.FundWithdrawalRequestWhereInput): Promise<FundWithdrawalDto> {

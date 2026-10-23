@@ -115,6 +115,50 @@ export class PaymentRecipientService {
     return profile ? mapProfile(profile) : null
   }
 
+  /**
+   * 批量读取一组订单的收款资料：CATALOG 按供应商、CUSTOM 按采购单各自命中。
+   * 列表/批量页一次查询即可，避免每个订单两次往返。
+   */
+  async getForOrders(
+    tx: Prisma.TransactionClient,
+    orders: readonly PaymentRecipientOrder[],
+  ): Promise<ReadonlyMap<string, PaymentRecipientProfileDto | null>> {
+    const supplierValues = [...new Set(orders.flatMap(order => (
+      order.productMode === 'CUSTOM' || order.supplierValue === null ? [] : [order.supplierValue]
+    )))]
+    const purchaseOrderIds = orders
+      .filter(order => order.productMode === 'CUSTOM')
+      .map(order => order.id)
+    const profiles = supplierValues.length === 0 && purchaseOrderIds.length === 0
+      ? []
+      : await tx.paymentRecipientProfile.findMany({
+          where: {
+            OR: [
+              ...(supplierValues.length === 0 ? [] : [{ supplierValue: { in: supplierValues } }]),
+              ...(purchaseOrderIds.length === 0 ? [] : [{ purchaseOrderId: { in: purchaseOrderIds } }]),
+            ],
+          },
+          include: profileInclude,
+        })
+    const bySupplier = new Map<string, PaymentRecipientProfileDto>()
+    const byPurchaseOrder = new Map<string, PaymentRecipientProfileDto>()
+    for (const profile of profiles) {
+      const mapped = mapProfile(profile)
+      if (profile.supplierValue !== null) {
+        bySupplier.set(profile.supplierValue, mapped)
+      }
+      if (profile.purchaseOrderId !== null) {
+        byPurchaseOrder.set(profile.purchaseOrderId, mapped)
+      }
+    }
+    return new Map(orders.map(order => [
+      order.id,
+      order.productMode === 'CUSTOM'
+        ? byPurchaseOrder.get(order.id) ?? null
+        : (order.supplierValue === null ? null : bySupplier.get(order.supplierValue) ?? null),
+    ]))
+  }
+
   async resolveForPayment(tx: Prisma.TransactionClient, order: PaymentRecipientOrder, input: { recipientAccountId: string, recipientProfileVersion: number, paymentMethod: string }): Promise<{ snapshot: PaymentRecipientAccountDto, qrMediaAssetId: string | null }> {
     const where = profileWhere(order)
     if (!where) return recipientFailure('PAYMENT_RECIPIENT_UNAVAILABLE', '该采购单尚未配置收款方式')

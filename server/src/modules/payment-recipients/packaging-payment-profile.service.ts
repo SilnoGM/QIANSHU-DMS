@@ -66,6 +66,45 @@ export class PackagingPaymentProfileService {
     const profile = await tx.paymentRecipientProfile.findUnique({ where: row.packagingVendor === 'CHENGXIN' ? { packagingVendor: 'CHENGXIN' } : { packagingRequestId: row.id }, include: profileInclude })
     return profile ? mapProfile(profile) : null
   }
+
+  /** 列表一次取回本页所有提报与诚信木箱的收款资料，避免逐行 findUnique。 */
+  async getForRequests(
+    tx: Pick<Prisma.TransactionClient, 'paymentRecipientProfile'>,
+    rows: readonly PackagingRecipientSource[],
+  ): Promise<ReadonlyMap<string, ReturnType<typeof mapProfile> | null>> {
+    const requestIds = rows
+      .filter(row => row.packagingVendor !== 'CHENGXIN')
+      .map(row => row.id)
+    const profiles = rows.length === 0
+      ? []
+      : await tx.paymentRecipientProfile.findMany({
+          where: {
+            OR: [
+              ...(rows.some(row => row.packagingVendor === 'CHENGXIN')
+                ? [{ packagingVendor: 'CHENGXIN' as const }]
+                : []),
+              ...(requestIds.length === 0 ? [] : [{ packagingRequestId: { in: requestIds } }]),
+            ],
+          },
+          include: profileInclude,
+        })
+    let chengxin: ReturnType<typeof mapProfile> | null = null
+    const byRequestId = new Map<string, ReturnType<typeof mapProfile>>()
+    for (const profile of profiles) {
+      if (profile.packagingVendor === 'CHENGXIN') {
+        chengxin = mapProfile(profile)
+      }
+      if (profile.packagingRequestId !== null) {
+        byRequestId.set(profile.packagingRequestId, mapProfile(profile))
+      }
+    }
+    return new Map(rows.map(row => [
+      row.id,
+      row.packagingVendor === 'CHENGXIN'
+        ? chengxin
+        : byRequestId.get(row.id) ?? null,
+    ]))
+  }
   async requireConfigured(tx: Prisma.TransactionClient) {
     const profile = await this.getForRequest(tx, { id: '', packagingVendor: 'CHENGXIN' })
     if (!profile?.accounts.length) return recipientFailure('PAYMENT_RECIPIENT_UNAVAILABLE', '诚信木箱尚未配置收款方式，请联系管理员')

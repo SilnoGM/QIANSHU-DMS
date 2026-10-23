@@ -47,13 +47,6 @@ const activeView = computed(() => query.value.view ?? 'AWAITING_SHIPMENT')
 const showWarehouseFilter = computed(() => activeView.value === 'WAREHOUSE_RECEIVED')
 const activeWarehouse = computed(() => warehouseFilterFromQuery(query.value))
 const warehouseOptions = computed(() => buildWarehouseFilterOptions(warehouseCatalog.catalog.value, query.value.destinationWarehouseValue, t))
-// 仓库统计只供已到仓视图使用，其他视图继续只读取状态总数。
-const warehouseValues = computed(() => showWarehouseFilter.value
-  ? warehouseOptions.value.flatMap((item) => {
-      const { destinationWarehouseValue } = warehouseFilterToQuery(item.value)
-      return destinationWarehouseValue === undefined ? [] : [destinationWarehouseValue]
-    })
-  : [])
 const keyword = ref(query.value.keyword ?? '')
 const filters = ref<QsGenericTableFilterValues>({
   supplierValue: query.value.supplierValue,
@@ -88,7 +81,7 @@ const {
   loadDetail,
   openShipment,
   openOrder,
-} = useWarehouseArrivalData(enabled, computed(() => account.authEpoch), query, value => navigate({ ...query.value, page: value }, true), warehouseValues)
+} = useWarehouseArrivalData(enabled, computed(() => account.authEpoch), query, value => navigate({ ...query.value, page: value }, true))
 const deliverTarget = shallowRef<PurchaseShipmentListItemDto | null>(null)
 const deliverVisible = computed({
   get: () => deliverTarget.value !== null,

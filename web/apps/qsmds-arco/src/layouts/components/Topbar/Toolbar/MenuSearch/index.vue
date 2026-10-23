@@ -1,13 +1,22 @@
 <script setup lang="ts">
 import { useHotkeyBindings } from '@/hotkeys'
-import Search from './search.vue'
 
 defineOptions({
   name: 'ToolbarMenuSearch',
 })
 
+// 搜索面板带 pinyin-pro；首次打开前不加载，避免把拼音字典塞进布局首屏。
+const Search = defineAsyncComponent(() => import('./search.vue'))
+
 const appSettingsStore = useAppSettingsStore()
 const isShow = ref(false)
+// 首次打开后保持挂载，关闭动画仍由弹层自身控制；未打开过时连 chunk 都不加载。
+const searchMounted = ref(false)
+watch(isShow, (value) => {
+  if (value) {
+    searchMounted.value = true
+  }
+})
 
 const useMobileStyle = computed(() => {
   return appSettingsStore.mode !== 'pc' || !appSettingsStore.settings.toolbar.menuSearch.hotkeys
@@ -30,5 +39,5 @@ useHotkeyBindings({
       </FaKbdGroup>
     </template>
   </FaButton>
-  <Search v-model="isShow" />
+  <Search v-if="searchMounted" v-model="isShow" />
 </template>

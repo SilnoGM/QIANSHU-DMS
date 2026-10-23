@@ -34,9 +34,9 @@
 
 主色当前为亮色 `oklch(0.527 0.154 150.069)`、暗色 `oklch(0.448 0.119 151.328)`；这些值用于识别现有主题，开发时仍消费 token。状态色沿用对应领域现有映射，不额外创建一套全项目状态色枚举，也不把 Green 主色等同于所有“成功”状态。
 
-实现支持亮色、暗色与跟随系统，但默认工具栏未启用明暗切换按钮，不能只根据 `toolbar.layout` 中有 `colorScheme` 就判断入口已显示。Arco Provider 同步明暗模式；这不代表 Arco 的所有品牌色已映射为 Fa 的 Green 主色，使用回退组件时仍须检查实际外观。
+实现支持亮色、暗色与跟随系统，但默认工具栏未启用明暗切换按钮，不能只根据 `toolbar.layout` 中有 `colorScheme` 就判断入口已显示。主题模式由应用设置驱动，通过 `web/packages/themes` 的 CSS 变量生效；界面组件统一使用 Fa 组件，不再依赖第三方组件库的主题同步。
 
-来源：[应用设置](../../web/apps/qsmds-arco/src/settings.ts)、[基础色选择](../../web/apps/qsmds-arco/src/settings.theme.ts)、[框架默认设置](../../web/packages/settings/src/default.ts)、[主题定义](../../web/packages/themes/index.ts)、[Arco Provider](../../web/apps/qsmds-arco/src/ui/provider/index.vue)。
+来源：[应用设置](../../web/apps/qsmds-arco/src/settings.ts)、[基础色选择](../../web/apps/qsmds-arco/src/settings.theme.ts)、[框架默认设置](../../web/packages/settings/src/default.ts)、[主题定义](../../web/packages/themes/index.ts)。
 
 ### 2.2 字体与排版
 

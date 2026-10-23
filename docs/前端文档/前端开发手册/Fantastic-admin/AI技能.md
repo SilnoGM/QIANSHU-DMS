@@ -15,12 +15,12 @@ Fantastic-admin 将高频开发任务写成可审查的 `SKILL.md`，让 Agent �
 3. **先确认输入和文件清单**：不从模糊需求推测 API、路由、字段、权限或数据结构；写入前读取已有目标，防止覆盖用户工作。
 4. **不扩大授权**：Skill 触发只代表应使用对应工作流，不代表已获准修改公共 API、数据结构、数据库 schema 或删除文件；这些动作仍须单独确认。
 5. **不泄露敏感信息**：不向提示、代码、日志或生成文件写入真实 token、密码、连接字符串、Cookie、`.env` 内容或专业版授权信息。
-6. **遵守 UI 四级优先级**：Fantastic-admin 内置组件是标准业务 UI 的第一优先级；只有本地 Fa 真实 API 无法满足已确认契约时，才依次回退到 Arco Design Vue、基于 Arco 的应用级自定义组件、基于原生 Vue 的自定义组件。
+6. **遵守 UI 四级优先级**：Fantastic-admin 内置组件是标准业务 UI 的第一优先级；只有本地 Fa 真实 API 无法满足已确认契约时，才依次评估 Arco Design Vue、基于 Arco 的应用级自定义组件、基于原生 Vue 的自定义组件。正式应用已移除 Arco，后两级当前只适用于 `web/examples/` 参考应用；若要在正式应用使用，必须先完成依赖与 provider 接入评审。
 7. **复用当前主题**：样式优先使用当前主题 token 与语义类，不在页面中默认硬编码颜色，并验证亮色与暗色主题。
-8. **保留框架页面壳**：业务页面改造时保留 Fantastic-admin 的 `FaPageMain` 等框架页面壳；只替换壳层内部的业务 UI，不用 Arco 或自定义容器重建框架布局。
+8. **保留框架页面壳**：业务页面改造时保留 Fantastic-admin 的 `FaPageMain` 等框架页面壳；只替换壳层内部的业务 UI，不用非框架容器重建框架布局。
 9. **人工负责验收**：官方 Skill 页没有为每个 Skill 规定独立验证命令。本手册将本地 Skill 契约、项目通用检查与运行时回归组合为验收方案，Agent 输出不能替代人工代码审查。
 
-正式应用的 Fa 组件通过 Fantastic-admin resolver 接入；Arco Design Vue 仅作能力回退，并已由 `web/apps/qsmds-arco/src/ui/provider/index.ts` 的 `app.use(ArcoVue)` 全局注册。执行会生成或改写页面 UI 的 Skill 时，优先使用 Skill 提供的 Fa* 业务 UI，并用本地 README、源码和类型核对真实契约。下表只在 Fantastic-admin 无法满足需求时作为 Arco 回退映射，不得只替换组件名；表单还必须完成后续 props、校验、提交和插槽语义适配。
+正式应用的 Fa 组件通过 Fantastic-admin resolver 接入，主题由 `web/apps/qsmds-arco/src/settings.ts` 与主题 token 驱动；正式应用已移除 Arco，不再全局注册 Arco，也不存在 `web/apps/qsmds-arco/src/ui/provider/`。执行会生成或改写页面 UI 的 Skill 时，优先使用 Skill 提供的 Fa* 业务 UI，并用本地 README、源码和类型核对真实契约。下表只保留 Arco 参考应用的 API 对照，不得据此在正式应用直接替换组件名；确需新增 Arco 依赖时，表单还必须完成后续 props、校验、提交和插槽语义适配。
 
 | 优先的 Fa 输出 | Fa 能力无法满足时的 Arco 回退 |
 | --- | --- |

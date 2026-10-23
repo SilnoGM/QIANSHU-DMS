@@ -238,6 +238,7 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
         icon: 'qs-factory-shipment',
         singleMenu: true,
         auth: 'purchase-orders:read',
+        keepAlive: true,
       },
     },
     {

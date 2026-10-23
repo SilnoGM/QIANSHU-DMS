@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import { IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min, ValidateIf } from 'class-validator'
 
@@ -198,7 +198,16 @@ export class PurchaseShipmentStatusCountDto {
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly count!: number
 }
 
+export class PurchaseShipmentWarehouseStatusCountsDto {
+  @ApiProperty({ type: 'string' }) readonly value!: string
+  @ApiProperty({ type: () => [PurchaseShipmentStatusCountDto] }) readonly items!: readonly PurchaseShipmentStatusCountDto[]
+}
+
 export class PurchaseShipmentStatusCountsDto {
   @ApiProperty({ type: () => [PurchaseShipmentStatusCountDto] }) readonly items!: readonly PurchaseShipmentStatusCountDto[]
   @ApiProperty({ type: () => [PurchaseOrderActorDto], description: '有货件的采购单采购人，不受当前筛选影响' }) readonly buyerOptions!: readonly PurchaseOrderActorDto[]
+  @ApiPropertyOptional({
+    type: () => [PurchaseShipmentWarehouseStatusCountsDto],
+    description: '已到仓视图下按目的地仓库分组的各视图计数；一次请求替代逐仓库计数',
+  }) readonly warehouseCounts?: readonly PurchaseShipmentWarehouseStatusCountsDto[]
 }

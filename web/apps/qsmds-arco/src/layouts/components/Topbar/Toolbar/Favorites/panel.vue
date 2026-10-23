@@ -19,19 +19,21 @@ const { generateI18nTitle } = useAppMenu()
 const favoritesContainerRef = useTemplateRef('favoritesContainerRef')
 
 watch(() => favoritesContainerRef.value, (val) => {
-  if (val) {
-    // eslint-disable-next-line no-new
-    new Sortable(val, {
-      animation: 200,
-      ghostClass: 'op-0',
-      draggable: '.draggable-item',
-      onUpdate: (e) => {
-        if (e.newIndex !== undefined && e.oldIndex !== undefined) {
-          appFavoritesStore.sort(e.newIndex, e.oldIndex)
-        }
-      },
-    })
+  if (!val) {
+    return
   }
+  const sortable = new Sortable(val, {
+    animation: 200,
+    ghostClass: 'op-0',
+    draggable: '.draggable-item',
+    onUpdate: (e) => {
+      if (e.newIndex !== undefined && e.oldIndex !== undefined) {
+        appFavoritesStore.sort(e.newIndex, e.oldIndex)
+      }
+    },
+  })
+  // 面板每次打开都会重新挂载；不销毁会让 document 级拖拽监听随打开次数累积。
+  onWatcherCleanup(() => sortable.destroy())
 })
 
 function handleChoose(fullPath: string) {

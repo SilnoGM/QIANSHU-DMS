@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { ShippingMarkRuleSummaryDto } from '@/api/generated/types.gen'
-import { Select as ArcoSelect } from '@arco-design/web-vue'
 import api from '@/api/modules/shipping-mark-bindings'
 import { bindingErrorMessage, canApplyBindingResponse, isBindableRule } from './shipping-mark-binding.logic'
 
@@ -17,6 +16,8 @@ const error = ref('')
 const page = ref(0)
 const total = ref(0)
 const keyword = ref('')
+const searchDraft = ref('')
+const dropdownOpen = ref(false)
 let generation = 0
 let controller: AbortController | undefined
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -28,10 +29,17 @@ const choices = computed(() => {
   }
   return rows.map(rule => ({ value: rule.id, label: `${rule.name} · ${rule.ruleCode}`, disabled: !isBindableRule(rule) }))
 })
-function select(value: unknown) {
-  if (typeof value === 'string') {
-    selection.value = options.value.find(rule => rule.id === value) ?? selection.value
+const selectedLabel = computed(() => {
+  const rule = options.value.find(row => row.id === selection.value?.id) ?? selection.value
+  return rule ? `${rule.name} · ${rule.ruleCode}` : null
+})
+function selectRule(value: string) {
+  const rule = options.value.find(row => row.id === value)
+    ?? (selection.value?.id === value ? selection.value : undefined)
+  if (rule) {
+    selection.value = rule
   }
+  dropdownOpen.value = false
 }
 async function load(append = false) {
   controller?.abort()
@@ -63,8 +71,8 @@ async function load(append = false) {
     }
   }
 }
-function search(value: string) {
-  keyword.value = value.trim().slice(0, 128)
+function search(value: string | undefined) {
+  keyword.value = (value ?? '').trim().slice(0, 128)
   clearTimeout(timer)
   controller?.abort()
   generation += 1
@@ -89,33 +97,61 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="min-w-0 space-y-2" data-testid="shipping-mark-rule-picker">
-    <ArcoSelect
-      :model-value="selection?.id"
-      :options="choices"
-      :disabled="props.disabled"
-      :loading="loading"
-      :filter-option="false"
-      allow-search
-      class="max-w-full min-w-0 w-full"
-      :placeholder="t('shippingMarkBinding.selectRule')"
-      :aria-label="t('shippingMarkBinding.selectRule')"
-      @change="select"
-      @search="search"
-      @dropdown-reach-bottom="more"
-    />
+    <FaPopover v-model:open="dropdownOpen" class="w-[min(32rem,calc(100vw-2rem))] p-3!">
+      <FaButton
+        type="button"
+        variant="outline"
+        class="max-w-full min-w-0 w-full justify-between"
+        :disabled="props.disabled"
+        :aria-label="t('shippingMarkBinding.selectRule')"
+        aria-haspopup="listbox"
+        :aria-expanded="dropdownOpen"
+      >
+        <span class="truncate">{{ selectedLabel ?? t('shippingMarkBinding.selectRule') }}</span>
+        <FaIcon name="i-lucide:chevrons-up-down" class="text-muted-foreground shrink-0 size-4" aria-hidden="true" />
+      </FaButton>
+      <template #panel>
+        <div class="space-y-2">
+          <FaInput
+            v-model="searchDraft"
+            placeholder="搜索规则名称或编码"
+            clearable
+            :aria-label="t('shippingMarkBinding.selectRule')"
+            @update:model-value="search"
+          />
+          <div class="max-h-72 overflow-y-auto" role="listbox" :aria-label="t('shippingMarkBinding.selectRule')">
+            <button
+              v-for="rule in choices"
+              :key="rule.value"
+              type="button"
+              role="option"
+              :aria-selected="selection?.id === rule.value"
+              :disabled="rule.disabled"
+              class="text-sm px-3 py-2 text-left rounded-md w-full hover:bg-accent disabled:opacity-50"
+              @click="selectRule(rule.value)"
+            >
+              {{ rule.label }}
+            </button>
+            <p v-if="loading" class="text-sm text-muted-foreground m-0 px-3 py-2">
+              加载中…
+            </p>
+            <p v-else-if="!options.length" class="text-sm text-muted-foreground m-0 px-3 py-2">
+              {{ t('shippingMarkBinding.noOptions') }}
+            </p>
+          </div>
+          <div class="text-xs text-muted-foreground flex flex-wrap gap-2 items-center justify-between">
+            <span>{{ t('shippingMarkBinding.loaded', { count: options.length, total }) }}</span>
+            <FaButton v-if="page * 20 < total" variant="link" size="sm" :disabled="loading || disabled" @click="more">
+              {{ t('shippingMarkBinding.more') }}
+            </FaButton>
+          </div>
+        </div>
+      </template>
+    </FaPopover>
     <p v-if="error" class="text-sm text-destructive m-0" role="alert">
       {{ error }} <FaButton variant="link" size="sm" :disabled="loading || disabled" @click="load()">
         {{ t('shippingMarkBinding.retry') }}
       </FaButton>
     </p>
-    <p v-else-if="!loading && !options.length" class="text-sm text-muted-foreground m-0">
-      {{ t('shippingMarkBinding.noOptions') }}
-    </p>
-    <div v-else class="text-xs text-muted-foreground flex flex-wrap gap-2 items-center">
-      <span>{{ t('shippingMarkBinding.loaded', { count: options.length, total }) }}</span>
-      <FaButton v-if="page * 20 < total" variant="link" size="sm" :disabled="loading || disabled" @click="more">
-        {{ t('shippingMarkBinding.more') }}
-      </FaButton>
-    </div>
   </div>
 </template>

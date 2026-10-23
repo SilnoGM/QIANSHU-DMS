@@ -24,17 +24,17 @@ import type {
 import type { PartConfiguration } from '@/components/business/QsPartConfigurator/types'
 
 import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
-import { Popover as APopover } from '@arco-design/web-vue'
 import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
 import { onKeyStroke, useMediaQuery } from '@vueuse/core'
-
 import { useId } from 'vue'
+
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsHoverPopover from '@/components/business/QsHoverPopover/index.vue'
 import QsOrderProductLineEditor from '@/components/business/QsOrderProductLineEditor/index.vue'
 import QsPartConfigurator from '@/components/business/QsPartConfigurator/index.vue'
 import QsPaymentRecipientEditor from '@/components/business/QsPaymentRecipientEditor/index.vue'
@@ -61,11 +61,11 @@ import {
   synchronizePurchaseOrderSourceLines,
   validatePurchaseOrderCreateStep,
 } from './purchase-order-create.logic'
-
 import {
   mapPurchaseOrderCreateToDesc,
   resolvePurchaseOrderIssuerLabel,
 } from './purchase-order-desc.logic'
+
 import {
   getPurchaseOrderApiFailure,
   isPurchaseOrderAbortError,
@@ -179,6 +179,7 @@ const stepNavigationRef = useTemplateRef<HTMLElement>('stepNavigationRef')
 const reviewHeadingRef = useTemplateRef<HTMLElement>('reviewHeadingRef')
 const supplierSelectRef = useTemplateRef<InstanceType<typeof QsDictionarySelect>>('supplierSelectRef')
 const isDesktopSummary = useMediaQuery('(min-width: 1280px)')
+const supportsHover = useMediaQuery('(hover: hover) and (pointer: fine)')
 const submission = shallowRef<PurchaseOrderSubmissionState>(createPurchaseOrderEditingState())
 const partProducts = computed(() => submission.value.phase === 'editing'
   ? mapPurchaseOrderPartProducts(formModel.lines)
@@ -1463,17 +1464,13 @@ onBeforeUnmount(() => {
                             >
                               {{ shippingMarkAvailable ? '可用' : '不可用' }}
                             </FaTag>
-                            <!-- FaPopover 仅封装点击触发；此处使用现有 Arco 多触发浮层统一悬停、点击与键盘焦点。 -->
-                            <APopover
+                            <!-- 桌面悬停/点击、触控与键盘聚焦都可打开；层级高于 FaModal。 -->
+                            <QsHoverPopover
                               v-if="shippingMarkResolution"
-                              v-model:popup-visible="shippingMarkDetailsOpen"
-                              :trigger="['hover', 'click', 'focus']"
-                              :click-to-close="false"
-                              :mouse-enter-delay="200"
-                              :mouse-leave-delay="150"
-                              position="br"
-                              content-class="bg-background! border-border! p-3!"
-                              arrow-class="bg-background! border-border!"
+                              v-model:open="shippingMarkDetailsOpen"
+                              :hover="supportsHover"
+                              open-on-focus
+                              class="p-3! z-2001!"
                             >
                               <FaButton
                                 type="button"
@@ -1487,7 +1484,7 @@ onBeforeUnmount(() => {
                               >
                                 <FaIcon name="i-lucide:info" class="size-4" />
                               </FaButton>
-                              <template #content>
+                              <template #panel>
                                 <div :id="shippingMarkDetailsId" class="text-foreground max-w-[calc(100vw-64px)] w-72" role="dialog" aria-label="唛头规则详细配置" data-testid="purchase-order-shipping-mark-details">
                                   <dl class="text-sm leading-6 m-0 gap-x-3 gap-y-1 grid grid-cols-[auto_minmax(0,1fr)]">
                                     <dt class="text-muted-foreground">
@@ -1534,7 +1531,7 @@ onBeforeUnmount(() => {
                                   </p>
                                 </div>
                               </template>
-                            </APopover>
+                            </QsHoverPopover>
                           </div>
                           <p v-if="shippingMarkResolution?.activeConfig" class="font-qs-data-mono text-sm text-foreground leading-5 m-0 mt-1 break-all" aria-label="编号结构" data-testid="purchase-order-shipping-mark-structure">
                             {{ formatNumberingRuleStructure(shippingMarkResolution.activeConfig) }}

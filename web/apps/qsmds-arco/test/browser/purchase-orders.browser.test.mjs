@@ -105,9 +105,9 @@ async function readAvailableShippingMarkSummary(page, productMode) {
 async function openShippingMarkDetails(page) {
   await page.evaluate(`document.querySelector('button[aria-label="唛头规则详细配置"]').click()`)
   await page.waitFor(`document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.getClientRects().length > 0`)
+  // FaPopover 的入场动画不参与业务断言；等待稳定帧后直接核对面板可交互性。
   await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
-  await page.waitFor(`document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.closest('.arco-trigger-popup')
-    ?.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')`)
+  await page.waitFor(`document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.closest('[data-state="open"]') !== null`)
 }
 
 async function closeShippingMarkDetails(page) {
@@ -182,11 +182,10 @@ async function assertShippingMarkDetailsInteraction(page) {
   await page.waitFor(`document.querySelector('button[aria-label="唛头规则详细配置"]')?.matches(':hover')`)
   await page.waitFor(`document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.getClientRects().length > 0`)
   await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
-  // Arco 入场动画期间会禁用浮层 pointer-events，必须等可交互后再移动真实鼠标。
+  // FaPopover 打开后应立即可交互；只核对 pointer-events，不依赖动画结束状态。
   await page.waitFor(`(() => {
-    const popup = document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.closest('.arco-trigger-popup')
+    const popup = document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.closest('[data-state="open"]')
     return popup && getComputedStyle(popup).pointerEvents === 'auto'
-      && popup.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')
   })()`)
   const detailsPoint = await page.evaluate(`(() => {
     const rect = document.querySelector('[data-testid="purchase-order-shipping-mark-details"]').getBoundingClientRect()
@@ -320,7 +319,7 @@ async function assertCompactShippingMarkAppearance(page, scope, expected, surfac
     }
     await page.waitFor(`${trigger}.getAttribute('aria-expanded') === 'true' && Boolean(${visibleDetails})`)
     await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
-    await page.waitFor(`${visibleDetails}?.closest('.arco-trigger-popup')?.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')`)
+    await page.waitFor(`${visibleDetails}?.closest('[data-state="open"]') !== null`)
     const details = await page.evaluate(`(() => {
       const details = ${visibleDetails}
       const rect = details.getBoundingClientRect()
@@ -768,8 +767,9 @@ async function readPurchaseOrders(page, view = 'all') {
 
 async function waitForPurchaseList(page, expectedText) {
   await waitForAfterAuthentication(page, `(() => {
-    const table = document.querySelector('[data-testid="purchase-order-list-table"]')
-    return table?.getClientRects().length > 0
+    const table = [...document.querySelectorAll('[data-testid="purchase-order-list-table"]')]
+      .find(candidate => candidate.getClientRects().length > 0)
+    return table !== undefined
       && !table.querySelector('[aria-busy="true"]')
       && table.textContent?.includes(${JSON.stringify(expectedText)})
   })()`)
@@ -781,10 +781,10 @@ async function waitForPurchaseList(page, expectedText) {
  */
 async function waitForStatusToolbarCounts(page, ariaLabel, expectedCounts) {
   await page.waitFor(`(() => {
-    const toolbar = document.querySelector(
+    const toolbar = [...document.querySelectorAll(
       '[data-slot="qs-status-switch-toolbar"][aria-label='
         + CSS.escape(${JSON.stringify(ariaLabel)}) + ']',
-    )
+    )].find(candidate => candidate.getClientRects().length > 0)
     if (!toolbar) return false
     const counts = Object.fromEntries(
       [...toolbar.querySelectorAll('[data-slot="qs-status-switch-item"]')]
@@ -1341,7 +1341,8 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
     await clickDialogButton(page, '确认提交采购订单？', '确认提交订单')
     await waitForPurchaseList(page, salesCustomerName)
     await page.waitFor(`(() => {
-      const table = document.querySelector('[data-testid="purchase-order-list-table"]')
+      const table = [...document.querySelectorAll('[data-testid="purchase-order-list-table"]')]
+        .find(candidate => candidate.getClientRects().length > 0)
       return [...(table?.querySelectorAll('[data-slot="qs-person-display-name"]') ?? [])]
         .some(name => name.textContent?.trim() === 'Browser Auth Admin')
     })()`)
@@ -1391,13 +1392,14 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
       '/qs-operations/sales/pending-sales-orders',
     ))
     await waitForAfterAuthentication(page, `(() => {
-      const table = document.querySelector('[data-testid="sales-order-list-table"]')
-      const action = document.querySelector(
+      const table = [...document.querySelectorAll('[data-testid="sales-order-list-table"]')]
+        .find(candidate => candidate.getClientRects().length > 0)
+      const action = [...document.querySelectorAll(
         'button[aria-label=' + CSS.escape(${JSON.stringify(`${salesOrderNo}：新增采购`)}) + ']',
-      )
-      return table?.getClientRects().length > 0
+      )].find(candidate => candidate.getClientRects().length > 0)
+      return table !== undefined
         && table.textContent?.includes(${JSON.stringify(salesCustomerName)})
-        && action?.getClientRects().length > 0
+        && action !== undefined
     })()`)
     await clickVisibleAriaButton(page, `${salesOrderNo}：新增采购`)
     await waitForVisibleDialog(page, '选择采购产品类型')

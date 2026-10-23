@@ -152,11 +152,20 @@ export class SlhReconciliationBatchListItemDto {
   @ApiPropertyOptional({ type: 'string', nullable: true }) completedByAvatarUrl!: string | null
 }
 
+export class SlhReconciliationBatchStatusCountDto {
+  @ApiProperty({ enum: SlhReconciliationBatchFilterDto }) status!: SlhReconciliationBatchFilterDto
+  @ApiProperty({ type: 'integer', minimum: 0 }) count!: number
+}
+
 export class SlhReconciliationBatchPageDto {
   @ApiProperty({ type: [SlhReconciliationBatchListItemDto] }) items!: SlhReconciliationBatchListItemDto[]
   @ApiProperty() total!: number
   @ApiProperty() page!: number
   @ApiProperty() pageSize!: number
+  @ApiProperty({
+    type: [SlhReconciliationBatchStatusCountDto],
+    description: '同一关键词下的进行中、已完成与全部数量；与当前分页、状态筛选相互独立',
+  }) statusCounts!: SlhReconciliationBatchStatusCountDto[]
 }
 
 /**

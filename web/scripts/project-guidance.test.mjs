@@ -228,14 +228,13 @@ test('主 Skill 直接引用的工作说明不再包含旧应用占位符', () =
   }
 })
 
-test('正式应用与已授权 Arco 参考应用的 locale 导入路径使用精确小写文件名', () => {
+test('已授权 Arco 参考应用的 locale 导入路径使用精确小写文件名', () => {
   const providerPaths = [
-    'apps/qsmds-arco/src/ui/provider/index.ts',
     'examples/core-arco-design-vue/src/ui/provider/index.ts',
   ]
 
-  // macOS 默认文件系统不区分大小写，错误路径会在本地假通过；这里同时锁定
-  // 正式应用与 CI 会检查的参考应用，确保路径匹配 Linux Runner 上的真实文件名。
+  // macOS 默认文件系统不区分大小写，错误路径会在本地假通过；这里锁定
+  // CI 会检查的参考应用，确保路径匹配 Linux Runner 上的真实文件名。
   for (const providerPath of providerPaths) {
     const provider = readRequiredFile(`${webRoot}/${providerPath}`)
 

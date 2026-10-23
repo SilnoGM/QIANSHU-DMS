@@ -263,9 +263,9 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     await loginThroughRealHttp(page, configuration)
     await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
     await waitForAfterAuthentication(page, `(() => {
-      const table = document.querySelector('[data-testid="sales-order-list-table"]')
-      return table?.getClientRects().length > 0
-        && !table.querySelector('[aria-busy="true"]')
+      const table = [...document.querySelectorAll('[data-testid="sales-order-list-table"]')]
+        .find(candidate => candidate.getClientRects().length > 0)
+      return table !== undefined && !table.querySelector('[aria-busy="true"]')
     })()`)
     const response = await readOrders(page)
     assert.equal(response.status, 200)
@@ -611,8 +611,9 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     await clickDialogButton(page, '确认提交销售订单？', '确认提交订单')
     await waitForAfterAuthentication(page, `(() => (
       location.hash === ${JSON.stringify(`#${listRoute}`)}
-      && document.querySelector('[data-testid="sales-order-list-table"]')
-        ?.textContent?.includes(${JSON.stringify(customerName)})
+      && [...document.querySelectorAll('[data-testid="sales-order-list-table"]')]
+        .some(table => table.getClientRects().length > 0
+          && table.textContent?.includes(${JSON.stringify(customerName)}))
       && document.body.innerText.includes('已确认')
       && document.body.innerText.includes('待采购')
       && document.body.innerText.includes('未付款')
@@ -874,8 +875,9 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       '/qs-operations/sales/pending-sales-orders?status=SEA_TRANSIT',
     ))
     await waitForAfterAuthentication(page, `(() => {
-      const table = document.querySelector('[data-testid="sales-order-list-table"]')
-      return table?.getClientRects().length > 0
+      const table = [...document.querySelectorAll('[data-testid="sales-order-list-table"]')]
+        .find(candidate => candidate.getClientRects().length > 0)
+      return table !== undefined
         && !table.querySelector('[aria-busy="true"]')
         && table.textContent?.includes(${JSON.stringify(order.orderNo)})
     })()`)

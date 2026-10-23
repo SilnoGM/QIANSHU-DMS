@@ -4,7 +4,6 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { cn } from '@/utils'
 import eventBus from '@/utils/eventBus'
-import Feedback from './feedback.vue'
 
 defineOptions({
   name: 'AppAccountButton',
@@ -24,6 +23,9 @@ const props = withDefaults(defineProps<{
   buttonVariant: 'ghost',
   showMenuIdentity: true,
 })
+
+// 反馈弹窗内嵌 snapdom（截图导出）；首次打开前不加载，避免进入首屏包。
+const Feedback = defineAsyncComponent(() => import('./feedback.vue'))
 
 const router = useRouter()
 
@@ -47,6 +49,12 @@ const { generateI18nTitle } = useAppMenu()
 type LogoutScope = 'current' | 'all'
 
 const feedbackVisible = ref(false)
+const feedbackMounted = ref(false)
+watch(feedbackVisible, (value) => {
+  if (value) {
+    feedbackMounted.value = true
+  }
+})
 const logoutDialogVisible = ref(false)
 const logoutAction = ref<LogoutScope | null>(null)
 const logoutPending = computed(() => logoutAction.value !== null)
@@ -175,7 +183,7 @@ async function submitLogout(scope: LogoutScope) {
     :dismiss-on-overlay="false"
     :dismiss-on-escape="false"
   >
-    <Feedback @close="feedbackVisible = false" />
+    <Feedback v-if="feedbackMounted" @close="feedbackVisible = false" />
   </QsGenericModal>
 
   <QsGenericModal

@@ -70,8 +70,8 @@ const columns = computed<QsGenericTableColumn<FundWithdrawalDto>[]>(() => [
 ])
 
 /**
- * 状态计数复用列表接口：当前状态用整页查询，其余状态各取一页总量。
- * 四个请求共享同一个 AbortSignal，避免筛选切换后旧计数覆盖新状态。
+ * 列表与各状态计数来自同一个服务端快照；不再为其余状态各发一次列表请求。
+ * 请求共享同一个 AbortSignal，避免筛选切换后旧计数覆盖新状态。
  */
 async function load(): Promise<void> {
   controller?.abort()
@@ -83,30 +83,23 @@ async function load(): Promise<void> {
   loading.value = true
   loadError.value = ''
   const selectedStatus = status.value
-  const countStatuses = FUND_WITHDRAWAL_STATUS_FILTER_OPTIONS.filter(
-    item => item.value !== selectedStatus,
-  )
   try {
     const query: FundWithdrawalListSelfQuery = {
       page: page.value,
       pageSize: pageSize.value,
       status: selectedStatus,
     }
-    const [list, ...countResponses] = await Promise.all([
-      fundWithdrawalsApi.listSelf(query, request.signal),
-      ...countStatuses.map(item => fundWithdrawalsApi.listSelf({
-        page: 1,
-        pageSize: 1,
-        status: item.value,
-      }, request.signal)),
-    ])
+    const list = await fundWithdrawalsApi.listSelf(query, request.signal)
     if (!request.signal.aborted && controller === request) {
       items.value = list.data.items
       total.value = list.data.total
-      const nextCounts: Record<string, number> = { [selectedStatus]: list.data.total }
-      countStatuses.forEach((item, index) => {
-        nextCounts[item.value] = countResponses[index]?.data.total ?? 0
-      })
+      const nextCounts: Record<string, number> = {}
+      let allCount = 0
+      for (const entry of list.data.statusCounts) {
+        nextCounts[entry.status] = entry.count
+        allCount += entry.count
+      }
+      nextCounts.ALL = allCount
       counts.value = nextCounts
     }
   }

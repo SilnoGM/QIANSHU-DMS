@@ -72,7 +72,8 @@ test('销售订单列表通过路由视图模式和状态工具栏切换待办�
   assert.match(source, /import QsStatusSwitchToolbar from '@\/components\/business\/QsStatusSwitchToolbar\/index\.vue'/u)
   assert.match(source, /getSalesOrderStatusItems/u)
   assert.match(source, /normalizeSalesOrderStatusSelection/u)
-  assert.match(source, /resolveSalesOrderQueryTargets/u)
+  assert.match(source, /statusSelection: selectedStatus\.value/u)
+  assert.match(source, /view: props\.viewMode/u)
   assert.match(source, /route\.query\.status/u)
   assert.match(source, /router\.push\(\{ query: nextQuery \}\)/u)
   assert.match(source, /function ensureCanonicalSalesOrderStatusQuery\(\): boolean/u)
@@ -83,9 +84,9 @@ test('销售订单列表通过路由视图模式和状态工具栏切换待办�
   assert.ok(tableStart > toolbarStart, '订单表格应位于状态切换工具栏之后')
   assert.match(source, /v-model="selectedStatus"/u)
   assert.match(source, /:items="statusItems"/u)
-  assert.match(source, /loadSalesOrderPage/u)
-  assert.match(source, /deduplicateSalesOrderItems/u)
-  assert.match(source, /summarizeSalesOrderItemsByCurrency/u)
+  // 状态分桶已交给服务端单条 OR 谓词，页面不再合并多次全量查询。
+  assert.doesNotMatch(source, /loadSalesOrderPage/u)
+  assert.doesNotMatch(source, /deduplicateSalesOrderItems/u)
 })
 
 test('销售全部与待办状态工具栏使用服务端全量计数', async () => {

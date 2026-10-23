@@ -30,8 +30,19 @@ async function fixture(initialQuery: Record<string, string> = {}) {
     statusCounts: async (query: PurchaseShipmentListQuery, signal: AbortSignal): Promise<any> => {
       calls.push({ kind: 'counts', query, signal })
       const totals: Record<string, [number, number]> = { 'WH-01': [2, 3], 'WH-02': [3, 4], 'QITA': [0, 0] }
-      const [shipped, received] = query.destinationWarehouseValue ? totals[query.destinationWarehouseValue] ?? [0, 0] : [5, 7]
-      return { data: { items: [{ value: 'SHIPPED', count: shipped }, { value: 'WAREHOUSE_RECEIVED', count: received }], buyerOptions: [] } }
+      return {
+        data: {
+          items: [{ value: 'SHIPPED', count: 5 }, { value: 'WAREHOUSE_RECEIVED', count: 7 }],
+          buyerOptions: [],
+          warehouseCounts: Object.entries(totals).map(([value, [shipped, received]]) => ({
+            value,
+            items: [
+              { value: 'SHIPPED', count: shipped },
+              { value: 'WAREHOUSE_RECEIVED', count: received },
+            ],
+          })),
+        },
+      }
     },
     getById: async (id: string, signal: AbortSignal): Promise<any> => {
       calls.push({ kind: `detail:${id}`, signal })
@@ -68,7 +79,7 @@ async function fixture(initialQuery: Record<string, string> = {}) {
       { value: 'WH-02', label: '深圳仓', effectiveEnabled: true },
       { value: 'QITA', label: '其他', effectiveEnabled: true },
     ] }), error: ref(null), missing: ref(false) }),
-    useWarehouseArrivalData: (...args: Parameters<typeof useWarehouseArrivalData>) => useWarehouseArrivalData(args[0], args[1], args[2], args[3], args[4], api, api),
+    useWarehouseArrivalData: (...args: Parameters<typeof useWarehouseArrivalData>) => useWarehouseArrivalData(args[0], args[1], args[2], args[3], api, api),
     useShippingInfoData: (...args: Parameters<typeof useShippingInfoData>) => useShippingInfoData(args[0], args[1], salesApi),
     defineOptions: () => {},
     onMounted: (callback: () => void) => lifecycle.mount = callback,
@@ -137,20 +148,16 @@ test('上方显示全部仓库的状态数量，下方显示当前状态各仓�
   }
 })
 
-test('仓库计数失败不显示假零，全局数量和其他仓库数量保持可用', async (context) => {
+test('计数请求失败时各层都不显示假零', async (context) => {
   const f = await fixture()
   context.after(f.dispose)
-  const statusCounts = f.api.statusCounts
-  f.api.statusCounts = async (query, signal) => {
-    if (query.destinationWarehouseValue === 'WH-02') {
-      throw new Error('warehouse counts unavailable')
-    }
-    return statusCounts(query, signal)
+  f.api.statusCounts = async () => {
+    throw new Error('counts unavailable')
   }
   f.state.refresh()
   await new Promise<void>(resolve => setImmediate(resolve))
-  assert.deepEqual(Array.from(f.state.tabs.value, item => item.count), [5, 7])
-  assert.deepEqual(Array.from(f.state.warehouseTabs.value, item => item.count), [7, 3, undefined, 0])
+  assert.deepEqual(Array.from(f.state.tabs.value, item => item.count), [undefined, undefined])
+  assert.deepEqual(Array.from(f.state.warehouseTabs.value, item => item.count), [undefined, undefined, undefined, undefined])
 })
 
 test('第二层仓库切换即时更新筛选，保留到仓视图和搜索并重置页码；无权限或停用页面不跳转', async (context) => {

@@ -11,7 +11,6 @@ import {
 import dayjs from '@/utils/dayjs'
 import eventBus from '@/utils/eventBus'
 import { ua } from '@/utils/ua'
-import Provider from './ui/provider/index.vue'
 import 'dayjs/locale/en'
 import 'dayjs/locale/zh-cn'
 import 'dayjs/locale/zh-tw'
@@ -59,16 +58,19 @@ watch([
   deep: true,
 })
 
+function handleWindowResize() {
+  appSettingsStore.setMode(document.documentElement.clientWidth)
+}
+
 onMounted(() => {
   appSettingsStore.setMode(document.documentElement.clientWidth)
-  window.addEventListener('resize', () => {
-    appSettingsStore.setMode(document.documentElement.clientWidth)
-  })
+  window.addEventListener('resize', handleWindowResize)
   eventBus.on('global-change-password-visible', openChangePassword)
   eventBus.on('global-profile-visible', openProfile)
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleWindowResize)
   eventBus.off('global-change-password-visible', openChangePassword)
   eventBus.off('global-profile-visible', openProfile)
 })
@@ -145,45 +147,46 @@ watch(() => appSettingsStore.lang, () => {
 </script>
 
 <template>
-  <Provider>
-    <div v-if="appAccountStore.authState === 'loading'" class="bg-background flex-center min-h-screen">
-      <div class="flex-col-center gap-4">
-        <FaIcon name="i-svg-spinners:90-ring-with-bg" class="text-primary size-10" />
-        <span class="text-sm text-muted-foreground">正在确认登录状态…</span>
-      </div>
+  <div v-if="appAccountStore.authState === 'loading'" class="bg-background flex-center min-h-screen">
+    <div class="flex-col-center gap-4">
+      <FaIcon name="i-svg-spinners:90-ring-with-bg" class="text-primary size-10" />
+      <span class="text-sm text-muted-foreground">正在确认登录状态…</span>
     </div>
-    <div v-else-if="appAccountStore.authState === 'unavailable'" class="p-6 bg-background flex-center min-h-screen">
-      <AResult status="warning" title="暂时无法确认登录状态" subtitle="系统不会把网络故障当作退出登录，请检查连接后重试。">
-        <template #extra>
-          <AButton type="primary" @click="retryAuthentication">
-            重新检查身份
-          </AButton>
-        </template>
-      </AResult>
-    </div>
-    <div v-else-if="appAccountStore.authState === 'password_change_required'" class="bg-muted/30 min-h-screen">
-      <EditPassword :model-value="true" forced />
-    </div>
-    <template v-else>
-      <RouterView v-slot="{ Component }">
-        <AppNotSupportedMobile v-if="!appSettingsStore.settings.app.mobile && appSettingsStore.mode === 'mobile'" />
-        <Component :is="Component" v-else-if="isAuth" />
-        <AppNotAllowed v-else />
-      </RouterView>
-      <AppBackToTop />
-    </template>
-    <EditPassword
-      v-if="appAccountStore.authState === 'authenticated'"
-      v-model="changePasswordVisible"
-      @success="handleNormalPasswordSuccess"
-    />
-    <AppAccountProfile
-      v-if="appAccountStore.authState === 'authenticated'"
-      v-model="profileVisible"
-    />
-    <FaToast :theme="appSettingsStore.currentColorScheme" />
-    <AppCheckUpdates />
-    <AppSystemInfo />
-    <AppStartupSplash v-if="startupVisible" :leaving="startupLeaving" />
-  </Provider>
+  </div>
+  <div v-else-if="appAccountStore.authState === 'unavailable'" class="p-6 bg-background flex-center min-h-screen">
+    <FaEmpty
+      icon="i-lucide:cloud-alert"
+      title="暂时无法确认登录状态"
+      description="系统不会把网络故障当作退出登录，请检查连接后重试。"
+      class="py-12"
+    >
+      <FaButton type="button" @click="retryAuthentication">
+        重新检查身份
+      </FaButton>
+    </FaEmpty>
+  </div>
+  <div v-else-if="appAccountStore.authState === 'password_change_required'" class="bg-muted/30 min-h-screen">
+    <EditPassword :model-value="true" forced />
+  </div>
+  <template v-else>
+    <RouterView v-slot="{ Component }">
+      <AppNotSupportedMobile v-if="!appSettingsStore.settings.app.mobile && appSettingsStore.mode === 'mobile'" />
+      <Component :is="Component" v-else-if="isAuth" />
+      <AppNotAllowed v-else />
+    </RouterView>
+    <AppBackToTop />
+  </template>
+  <EditPassword
+    v-if="appAccountStore.authState === 'authenticated'"
+    v-model="changePasswordVisible"
+    @success="handleNormalPasswordSuccess"
+  />
+  <AppAccountProfile
+    v-if="appAccountStore.authState === 'authenticated'"
+    v-model="profileVisible"
+  />
+  <FaToast :theme="appSettingsStore.currentColorScheme" />
+  <AppCheckUpdates />
+  <AppSystemInfo />
+  <AppStartupSplash v-if="startupVisible" :leaving="startupLeaving" />
 </template>

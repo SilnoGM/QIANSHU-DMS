@@ -27,6 +27,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '待办订单',
           icon: 'qs-pending',
+          keepAlive: true,
         },
       },
       {
@@ -37,6 +38,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '全部订单',
           icon: 'qs-all-orders',
+          keepAlive: true,
         },
       },
       {
@@ -69,6 +71,7 @@ const routes: RouteRecordRaw[] = [
           title: '待办采购',
           icon: 'qs-pending',
           auth: 'purchase-orders:read',
+          keepAlive: true,
         },
       },
       {
@@ -79,6 +82,7 @@ const routes: RouteRecordRaw[] = [
           title: '全部采购',
           icon: 'qs-all-orders',
           auth: 'purchase-orders:read',
+          keepAlive: true,
         },
       },
       {
@@ -108,7 +112,7 @@ const routes: RouteRecordRaw[] = [
         path: 'warehouse-arrivals',
         name: 'qsOperationsWarehouseArrivals',
         component: () => import('@/views/operations/warehouse-arrivals/index.vue'),
-        meta: { title: '到仓货件', icon: 'qs-warehouse-arrivals', auth: 'purchase-orders:read' },
+        meta: { title: '到仓货件', icon: 'qs-warehouse-arrivals', auth: 'purchase-orders:read', keepAlive: true },
       },
       {
         path: 'ocean-containers',
@@ -168,13 +172,13 @@ const routes: RouteRecordRaw[] = [
         path: 'fund-accounts',
         name: 'qsOperationsPersonalFinanceFundAccounts',
         component: () => import('@/views/operations/personal-finance/fund-accounts/index.vue'),
-        meta: { title: '资金账户', icon: 'qs-fund-account-list', auth: 'fund-accounts:read-self' },
+        meta: { title: '资金账户', icon: 'qs-fund-account-list', auth: 'fund-accounts:read-self', keepAlive: true },
       },
       {
         path: 'withdrawals',
         name: 'qsOperationsPersonalFinanceWithdrawals',
         component: () => import('@/views/operations/personal-finance/withdrawals/index.vue'),
-        meta: { title: '提款申请', icon: 'qs-fund-withdrawal', auth: 'fund-withdrawals:create' },
+        meta: { title: '提款申请', icon: 'qs-fund-withdrawal', auth: 'fund-withdrawals:create', keepAlive: true },
       },
     ],
   },

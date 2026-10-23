@@ -24,8 +24,19 @@ function setup() {
   const prisma = { $transaction: jest.fn((action: (tx: unknown) => Promise<unknown>) => action(tx)) }
   ;(tx.purchaseOrder as Record<string, unknown>).findFirst = tx.purchaseOrder.findUnique
   ;(tx.purchaseOrderPayable as Record<string, unknown>).findFirst = tx.purchaseOrderPayable.findUnique
-  const dictionary = { resolveStoredValueInTransaction: jest.fn().mockResolvedValue({ known: true, label: '已停用历史供应商' }) }
-  return { order, tx, prisma, dictionary, service: new PurchasePayableQueryService(prisma as unknown as PrismaService, dictionary as unknown as DictionaryLookupService, { getForOrder: jest.fn().mockResolvedValue(null) } as unknown as PaymentRecipientService) }
+  const dictionary = {
+    resolveStoredValueInTransaction: jest.fn().mockResolvedValue({ known: true, label: '已停用历史供应商' }),
+    resolveStoredValuesInTransaction: jest.fn().mockImplementation(
+      (_tx: unknown, input: { values: readonly string[] }) => Promise.resolve(
+        input.values.map(() => ({ known: true, label: '已停用历史供应商' })),
+      ),
+    ),
+  }
+  const recipients = {
+    getForOrder: jest.fn().mockResolvedValue(null),
+    getForOrders: jest.fn().mockResolvedValue(new Map()),
+  }
+  return { order, tx, prisma, dictionary, recipients, service: new PurchasePayableQueryService(prisma as unknown as PrismaService, dictionary as unknown as DictionaryLookupService, recipients as unknown as PaymentRecipientService) }
 }
 describe('PurchasePayableQueryService', () => {
   it('lists historical outstanding dictionary supplier values and excludes custom suppliers', async () => {
