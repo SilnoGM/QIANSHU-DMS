@@ -27,8 +27,8 @@ import type { ProductPageLoader } from '@/components/business/QsProductSelector/
 import { Popover as APopover } from '@arco-design/web-vue'
 import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
 import { onKeyStroke, useMediaQuery } from '@vueuse/core'
-
 import { useId } from 'vue'
+
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
@@ -61,11 +61,11 @@ import {
   synchronizePurchaseOrderSourceLines,
   validatePurchaseOrderCreateStep,
 } from './purchase-order-create.logic'
-
 import {
   mapPurchaseOrderCreateToDesc,
   resolvePurchaseOrderIssuerLabel,
 } from './purchase-order-desc.logic'
+
 import {
   getPurchaseOrderApiFailure,
   isPurchaseOrderAbortError,
@@ -82,6 +82,7 @@ import {
   PURCHASE_SHIPPING_MARK_DISPATCH_HINT,
 } from './purchase-order-shipping-mark.logic'
 import PurchaseSourceSalesOrderSelector from './purchase-source-sales-order-selector.vue'
+import '@arco-design/web-vue/es/popover/style/css.js'
 
 defineOptions({ name: 'OperationsPurchaseOrderCreate' })
 

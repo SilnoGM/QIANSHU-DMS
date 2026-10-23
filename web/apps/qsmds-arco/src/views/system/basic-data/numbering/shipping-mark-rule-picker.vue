@@ -3,6 +3,7 @@ import type { ShippingMarkRuleSummaryDto } from '@/api/generated/types.gen'
 import { Select as ArcoSelect } from '@arco-design/web-vue'
 import api from '@/api/modules/shipping-mark-bindings'
 import { bindingErrorMessage, canApplyBindingResponse, isBindableRule } from './shipping-mark-binding.logic'
+import '@arco-design/web-vue/es/select/style/css.js'
 
 const props = defineProps<{
   disabled?: boolean

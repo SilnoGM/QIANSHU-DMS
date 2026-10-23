@@ -340,6 +340,11 @@ function productImageItems(row: PurchaseOrderListItemDto): readonly ImageGroupIt
       }])
 }
 
+// 行数据不变时复用同一份图片数组，避免每次渲染都触发 ImageGroup 的深度监听。
+const productImageItemsByOrderId = computed(() => new Map(
+  rows.value.map(row => [row.id, productImageItems(row)] as const),
+))
+
 function resolveProductPreview(
   row: PurchaseOrderListItemDto,
   item: ImageGroupItem,
@@ -1015,8 +1020,9 @@ onBeforeUnmount(() => {
 
         <template #cell-productSummary="{ row }">
           <ImageGroup
-            :items="productImageItems(row.original)"
+            :items="productImageItemsByOrderId.get(row.original.id) ?? []"
             :max-count="3"
+            tooltip-mode="native"
             :size="40"
             radius="md"
           >
@@ -1389,7 +1395,7 @@ onBeforeUnmount(() => {
                   产品
                 </dt>
                 <dd class="m-0">
-                  <ImageGroup :items="productImageItems(row)" :max-count="3" :size="40" radius="md">
+                  <ImageGroup :items="productImageItemsByOrderId.get(row.id) ?? []" :max-count="3" :size="40" radius="md" tooltip-mode="native">
                     <template #tooltip="{ item, index, total: imageTotal }">
                       <QsGoodTooltipContent
                         :image-src="item.src"

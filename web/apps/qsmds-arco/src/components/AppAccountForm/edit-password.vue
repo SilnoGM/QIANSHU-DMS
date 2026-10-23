@@ -1,6 +1,15 @@
 <script setup lang="ts">
+import {
+  Alert as AAlert,
+  Form as AForm,
+  FormItem as AFormItem,
+  InputPassword as AInputPassword,
+} from '@arco-design/web-vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import '@arco-design/web-vue/es/alert/style/css.js'
+import '@arco-design/web-vue/es/form/style/css.js'
+import '@arco-design/web-vue/es/input/style/css.js'
 
 defineOptions({ name: 'ChangePasswordModal' })
 

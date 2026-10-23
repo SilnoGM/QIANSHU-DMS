@@ -5,6 +5,7 @@ import { useEventListener, useMediaQuery } from '@vueuse/core'
 import { computed, ref, useId, watch } from 'vue'
 import { formatNumberingRuleStructure, numberingResetPolicyLabel } from '../../system/basic-data/numbering/numbering-list.logic'
 import { isPurchaseOrderShippingMarkAvailable, PURCHASE_SHIPPING_MARK_DISPATCH_HINT } from './purchase-order-shipping-mark.logic'
+import '@arco-design/web-vue/es/popover/style/css.js'
 
 const props = defineProps<{
   resolution: PurchaseOrderShippingMarkResolutionDto | null

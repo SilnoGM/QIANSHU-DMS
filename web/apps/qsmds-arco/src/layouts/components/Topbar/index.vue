@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useElementSize, useScroll } from '@vueuse/core'
 import eventBus from '@/utils/eventBus'
-import Tabbar from './Tabbar/index.vue'
 import Toolbar from './Toolbar/index.vue'
 
 defineOptions({
@@ -13,6 +12,9 @@ defineProps<{
   enableTabbar: boolean
   enableToolbar: boolean
 }>()
+
+// 标签栏默认关闭；异步组件让 sortablejs/pinyin-pro 只在真正启用标签栏时才加载。
+const Tabbar = defineAsyncComponent(() => import('./Tabbar/index.vue'))
 
 const appSettingsStore = useAppSettingsStore()
 

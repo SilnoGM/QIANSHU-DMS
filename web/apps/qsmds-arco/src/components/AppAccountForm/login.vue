@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { Alert as AAlert, Button as AButton } from '@arco-design/web-vue'
 import { toTypedSchema } from '@vee-validate/zod'
 import * as z from 'zod'
+import '@arco-design/web-vue/es/alert/style/css.js'
+import '@arco-design/web-vue/es/button/style/css.js'
 
 defineOptions({ name: 'LoginForm' })
 

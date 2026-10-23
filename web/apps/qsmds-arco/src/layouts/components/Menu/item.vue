@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SubMenuItemProps } from './types'
 import { cn } from '@/utils'
+import { prefetchRouteComponent } from '@/utils/route-prefetch'
 import { rootMenuInjectionKey } from './types'
 
 defineOptions({
@@ -18,6 +19,7 @@ const props = withDefaults(
 )
 
 const { generateI18nTitle } = useAppMenu()
+const router = useRouter()
 
 const rootMenu = inject(rootMenuInjectionKey)!
 
@@ -50,6 +52,14 @@ function getQueryString(query?: Record<string, any>) {
   return query ? `?${new URLSearchParams(query).toString()}` : ''
 }
 
+/** 子菜单和外部链接没有可懒加载的路由组件，悬停预取只对真正的叶子路由生效。 */
+function prefetchRoute(): void {
+  if (props.subMenu || props.item.meta?.link || !props.uniqueKey.length) {
+    return
+  }
+  prefetchRouteComponent(router, (props.uniqueKey.at(-1) ?? '') + getQueryString(props.item.meta?.query))
+}
+
 defineExpose({
   ref: itemRef,
 })
@@ -71,6 +81,7 @@ defineExpose({
         }
       ),
     })"
+    @mouseenter="prefetchRoute" @focusin="prefetchRoute"
   >
     <router-link v-slot="{ href, navigate }" custom :to="(uniqueKey.at(-1) ?? '') + getQueryString(item.meta?.query)">
       <FaTooltip :disabled="!generateI18nTitle(item.meta?.title) || (rootMenu.props.variant === 'panel' ? (level !== 0 || subMenu) : (!rootMenu.isMenuPopup || level !== 0 || subMenu))" :text="generateI18nTitle(item.meta?.title)" :side="rootMenu.props.mode === 'vertical' ? 'right' : 'bottom'" class="h-full w-full">

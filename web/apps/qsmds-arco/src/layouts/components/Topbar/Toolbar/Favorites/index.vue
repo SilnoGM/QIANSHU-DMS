@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import Panel from './panel.vue'
-
 defineOptions({
   name: 'ToolbarFavorites',
 })
+
+// 面板内含 sortablejs；只在用户第一次打开收藏时加载。
+const Panel = defineAsyncComponent(() => import('./panel.vue'))
 
 const open = ref(false)
 
@@ -18,7 +19,7 @@ appFavoritesStore.recoveryStorage()
       <FaIcon name="i-uiw:star-off" class="size-4" />
     </FaButton>
     <template #panel>
-      <Panel @on-choose="open = false" />
+      <Panel v-if="open" @on-choose="open = false" />
     </template>
   </FaPopover>
 </template>

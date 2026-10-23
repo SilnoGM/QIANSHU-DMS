@@ -2,16 +2,11 @@ import type {
   DictionaryCatalogIdentitySource,
 } from '@/dictionary-catalog/types'
 
-// 此副作用导入必须先于 App、Router、Pinia 与 Storage proxy 的模块求值。
-import '@/auth/legacy-auth-bootstrap'
-
-// eslint-disable-next-line perfectionist/sort-imports -- 外部依赖必须晚于上面的启动清理求值。
-import VWave from 'v-wave'
-
 import {
   installDefaultRegionSelectorProvider,
   regionSelectorProviderKey,
 } from '@/components/business/QsRegionSelector/provider'
+
 import {
   installDefaultCurrencyCatalogProvider,
 } from '@/currency-catalog/default-provider'
@@ -28,17 +23,16 @@ import {
 import { downloadAndInstall } from '@/iconify'
 import icons from '@/iconify/index.json'
 import { useAppAccountStore } from '@/store/modules/app/account'
-
-// 自定义指令
-import directive from '@/utils/directive'
 // 错误日志上报
 import errorLog from '@/utils/errorLog'
-import App from './App.vue'
 
+import App from './App.vue'
 import i18n from './locales'
+
 import router from './router'
 import pinia from './store'
-import uiProvider from './ui/provider'
+// 此副作用导入必须先于 App、Router、Pinia 与 Storage proxy 的模块求值。
+import '@/auth/legacy-auth-bootstrap'
 import '@/utils/storage'
 
 // UnoCSS
@@ -47,13 +41,10 @@ import 'virtual:uno.css'
 import '@/assets/styles/globals.css'
 
 const app = createApp(App)
-app.use(VWave, {})
 app.use(pinia)
 
 app.use(router)
-app.use(uiProvider)
 app.use(i18n)
-directive(app)
 errorLog(app)
 if (icons.isOfflineUse) {
   for (const info of icons.collections) {

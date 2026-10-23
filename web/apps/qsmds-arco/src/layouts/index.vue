@@ -151,8 +151,12 @@ const { y } = useScroll(window)
 const { height: fixedContentBeforeAreaHeight } = useElementSize(useTemplateRef('fixedContentBeforeAreaRef'))
 const { height: fixedContentAfterAreaHeight } = useElementSize(useTemplateRef('fixedContentAfterAreaRef'))
 const topbarScrollVisibleOrHidden = ref(false)
-eventBus.on('topbar-scroll-visible-or-hidden', (val) => {
+function handleTopbarScrollVisibility(val: boolean) {
   topbarScrollVisibleOrHidden.value = val
+}
+eventBus.on('topbar-scroll-visible-or-hidden', handleTopbarScrollVisibility)
+onBeforeUnmount(() => {
+  eventBus.off('topbar-scroll-visible-or-hidden', handleTopbarScrollVisibility)
 })
 
 const enableAppSetting = import.meta.env.VITE_APP_SETTING
@@ -383,13 +387,13 @@ const enableAppSetting = import.meta.env.VITE_APP_SETTING
   }
 }
 
-/* 主内容区动画 */
+/* 主内容区动画：短过渡只承担页面切换的连续性，不把导航延迟放大到可感知。 */
 .fade-enter-active,
 .slide-left-enter-active,
 .slide-right-enter-active,
 .slide-top-enter-active,
 .slide-bottom-enter-active {
-  transition: 0.2s;
+  transition: 0.12s;
 }
 
 .fade-leave-active,
@@ -397,7 +401,22 @@ const enableAppSetting = import.meta.env.VITE_APP_SETTING
 .slide-right-leave-active,
 .slide-top-leave-active,
 .slide-bottom-leave-active {
-  transition: 0.15s;
+  transition: 0.1s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-enter-active,
+  .fade-leave-active,
+  .slide-left-enter-active,
+  .slide-left-leave-active,
+  .slide-right-enter-active,
+  .slide-right-leave-active,
+  .slide-top-enter-active,
+  .slide-top-leave-active,
+  .slide-bottom-enter-active,
+  .slide-bottom-leave-active {
+    transition: none;
+  }
 }
 
 .fade-enter-from {

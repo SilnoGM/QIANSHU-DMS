@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Button as AButton, Result as AResult } from '@arco-design/web-vue'
 import AppAccountProfile from '@/components/AppAccountButton/profile.vue'
 import EditPassword from '@/components/AppAccountForm/edit-password.vue'
 import AppStartupSplash from '@/components/AppStartupSplash/index.vue'
@@ -12,6 +13,8 @@ import dayjs from '@/utils/dayjs'
 import eventBus from '@/utils/eventBus'
 import { ua } from '@/utils/ua'
 import Provider from './ui/provider/index.vue'
+import '@arco-design/web-vue/es/button/style/css.js'
+import '@arco-design/web-vue/es/result/style/css.js'
 import 'dayjs/locale/en'
 import 'dayjs/locale/zh-cn'
 import 'dayjs/locale/zh-tw'
@@ -59,16 +62,19 @@ watch([
   deep: true,
 })
 
+function handleWindowResize() {
+  appSettingsStore.setMode(document.documentElement.clientWidth)
+}
+
 onMounted(() => {
   appSettingsStore.setMode(document.documentElement.clientWidth)
-  window.addEventListener('resize', () => {
-    appSettingsStore.setMode(document.documentElement.clientWidth)
-  })
+  window.addEventListener('resize', handleWindowResize)
   eventBus.on('global-change-password-visible', openChangePassword)
   eventBus.on('global-profile-visible', openProfile)
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleWindowResize)
   eventBus.off('global-change-password-visible', openChangePassword)
   eventBus.off('global-profile-visible', openProfile)
 })

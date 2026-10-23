@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ConfigProvider as AConfigProvider } from '@arco-design/web-vue'
 import { locales } from './index'
+import '@arco-design/web-vue/es/config-provider/style/css.js'
 
 const appSettingsStore = useAppSettingsStore()
 

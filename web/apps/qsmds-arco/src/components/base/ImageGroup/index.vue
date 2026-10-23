@@ -33,6 +33,7 @@ const props = withDefaults(defineProps<ImageGroupProps>(), {
   size: 'md',
   tooltip: true,
   tooltipDelay: 300,
+  tooltipMode: 'rich',
 })
 
 const emit = defineEmits<{
@@ -116,6 +117,16 @@ function getTooltipImageStyle(): CSSProperties {
   return {
     borderRadius: resolvedRadius.value.style,
   }
+}
+
+/** 原生模式不挂富浮层，用 title 保留产品名；表格内大量缩略图时明显更轻。 */
+function nativeTooltipText(entry: ImageGroupEntry): string | undefined {
+  if (!props.tooltip || props.tooltipMode !== 'native') {
+    return undefined
+  }
+  return entry.type === 'image'
+    ? (entry.image.item.tooltip ?? entry.image.item.alt)
+    : `另有 ${entry.hiddenCount} 张图片`
 }
 
 function setTriggerElement(value: unknown, index: number) {
@@ -239,7 +250,7 @@ function getTriggerAriaLabel(entry: ImageGroupEntry): string {
       v-for="(entry, displayIndex) in entries"
       :key="entry.type === 'image' ? entry.image.key : 'image-group-overflow'"
       :delay="tooltipDelay"
-      :disabled="!tooltip"
+      :disabled="!tooltip || tooltipMode === 'native'"
       side="top"
       align="center"
     >
@@ -248,6 +259,7 @@ function getTriggerAriaLabel(entry: ImageGroupEntry): string {
         :ref="getTriggerRef(displayIndex)"
         :type="preview ? 'button' : undefined"
         :tabindex="focusedEntryIndex === displayIndex ? 0 : -1"
+        :title="nativeTooltipText(entry)"
         :aria-label="getTriggerAriaLabel(entry)"
         :class="resolvedRadius.className"
         :style="getEntryStyle(displayIndex)"
