@@ -1366,6 +1366,9 @@ model PurchaseOrderPart {
   @@unique([purchaseOrderId, key], map: "purchase_order_parts_order_id_key_key")
   @@unique([purchaseOrderId, partNumber], map: "purchase_order_parts_order_id_number_key")
   @@index([shippingMarkText], map: "purchase_order_parts_shipping_mark_text_idx")
+  // 货件列表与计数按状态 + 到仓/发货时间过滤；仓库筛选按目的地仓库。
+  @@index([status, warehouseReceivedAt, shippedAt], map: "purchase_order_parts_shipment_view_idx")
+  @@index([destinationWarehouseValue], map: "purchase_order_parts_destination_warehouse_idx")
   @@map("purchase_order_parts")
 }
 
