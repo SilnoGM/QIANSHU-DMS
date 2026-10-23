@@ -43,6 +43,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f 90-rollback.sql
 
 ## 当前状态
 
-- 2026-10-23：索引脚本已准备，**未在任何环境执行**。
+- 2026-10-23：已在**本地 dev 库**执行并验证 6 个 trigram 索引存在；
+  测试机与生产**尚未执行**，需在维护窗口由有权限账号运行。
 - 仓库的 Prisma schema 只包含 `purchase_order_parts` 的两个 B-tree 索引；
   trigram 索引不进入 schema/drift gate，避免 CI 重放失败。
