@@ -3,5 +3,4 @@ DROP INDEX CONCURRENTLY IF EXISTS "sales_orders_order_no_trgm_idx";
 DROP INDEX CONCURRENTLY IF EXISTS "sales_orders_customer_name_trgm_idx";
 DROP INDEX CONCURRENTLY IF EXISTS "sales_orders_customer_phone_trgm_idx";
 DROP INDEX CONCURRENTLY IF EXISTS "purchase_orders_order_no_trgm_idx";
-DROP INDEX CONCURRENTLY IF EXISTS "purchase_orders_custom_supplier_name_trgm_idx";
 DROP INDEX CONCURRENTLY IF EXISTS "purchase_order_parts_shipping_mark_text_trgm_idx";
