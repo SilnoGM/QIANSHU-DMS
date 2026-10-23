@@ -218,11 +218,28 @@ export class PurchaseShipmentQueryService {
   async statusCounts(input: PurchaseShipmentFilterDto, actorUserId: string = resolveDataScopeActor()): Promise<PurchaseShipmentStatusCountsDto> {
     const scope = await this.dataScope.resolve(actorUserId)
     const where = baseWhere(input, scope, actorUserId)
-    // 逐视图计数与列表共用同一份谓词，避免计数口径与列表细分再次漂移；代价是同一快照内的多次计数。
-    const [counts, buyers] = await this.prisma.$transaction(async transaction => {
+    // 逐视图按目的地仓库分组：同一批查询同时给出各视图总数与逐仓库计数，
+    // 替代前端按仓库并发发起 N 个 status-counts 请求。
+    const [counts, warehouseCounts, buyers] = await this.prisma.$transaction(async transaction => {
       const counts = new Map<PurchaseShipmentView, number>()
+      const warehouseByValue = new Map<string, Map<PurchaseShipmentView, number>>()
       for (const view of PURCHASE_SHIPMENT_VIEWS) {
-        counts.set(view, await transaction.purchaseOrderPart.count({ where: { AND: [where, viewWhere(view)] } }))
+        const groups = await transaction.purchaseOrderPart.groupBy({
+          by: ['destinationWarehouseValue'],
+          where: { AND: [where, viewWhere(view)] },
+          _count: { _all: true },
+        })
+        let total = 0
+        for (const group of groups) {
+          total += group._count._all
+          if (group.destinationWarehouseValue === null) {
+            continue
+          }
+          const byView = warehouseByValue.get(group.destinationWarehouseValue) ?? new Map<PurchaseShipmentView, number>()
+          byView.set(view, group._count._all)
+          warehouseByValue.set(group.destinationWarehouseValue, byView)
+        }
+        counts.set(view, total)
       }
       // 直接查询存在货件采购单的人员，避免 ORM 先加载全部采购单再在内存去重。
       // 出单人选项保持全量，不随数据范围收缩，避免筛选器缺失既有选项。
@@ -230,9 +247,20 @@ export class PurchaseShipmentQueryService {
         where: { purchaseOrdersCreated: { some: { parts: { some: {} } } } },
         select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
       })
-      return [counts, buyers] as const
+      const warehouseCounts = [...warehouseByValue.entries()].map(([value, byView]) => ({
+        value,
+        items: PURCHASE_SHIPMENT_VIEWS.map(view => ({
+          value: view,
+          count: byView.get(view) ?? 0,
+        })),
+      }))
+      return [counts, warehouseCounts, buyers] as const
     }, { isolationLevel: 'RepeatableRead' })
-    return { items: PURCHASE_SHIPMENT_VIEWS.map(value => ({ value, count: counts.get(value) ?? 0 })), buyerOptions: buyers.map(toPersonReference) }
+    return {
+      items: PURCHASE_SHIPMENT_VIEWS.map(value => ({ value, count: counts.get(value) ?? 0 })),
+      buyerOptions: buyers.map(toPersonReference),
+      warehouseCounts,
+    }
   }
 
   async getById(partId: string, actorUserId: string = resolveDataScopeActor()): Promise<PurchaseShipmentDetailDto> {

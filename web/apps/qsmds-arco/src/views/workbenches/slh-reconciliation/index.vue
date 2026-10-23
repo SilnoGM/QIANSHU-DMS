@@ -45,7 +45,6 @@ const loading = ref(false)
 const error = ref('')
 const billSelectOpen = ref(false)
 let controller: AbortController | null = null
-let countsController: AbortController | null = null
 
 const statusItems = computed(() => withStatusSwitchCounts(
   SLH_RECONCILIATION_BATCH_FILTERS.map(value => ({ value, label: t(`slhReconciliation.filter.${value}`) })),
@@ -95,6 +94,9 @@ async function load(): Promise<void> {
     }
     items.value = response.data.items
     total.value = response.data.total
+    counts.value = Object.fromEntries(
+      response.data.statusCounts.map(entry => [entry.status, entry.count]),
+    )
   }
   catch (failure) {
     if (!current.signal.aborted) {
@@ -110,35 +112,6 @@ async function load(): Promise<void> {
   }
 }
 
-/**
- * 另外两档的计数：与列表解耦（自己一条控制器、失败静默），但必须跟着列表走——
- * 每次先把旧值清空，切了筛选或关键词后旧数字绝不停留。
- */
-async function loadCounts(): Promise<void> {
-  countsController?.abort()
-  counts.value = {}
-  if (!canReconcile.value) {
-    return
-  }
-  const current = new AbortController()
-  countsController = current
-  const others = SLH_RECONCILIATION_BATCH_FILTERS.filter(value => value !== status.value)
-  await Promise.all(others.map(async (value) => {
-    try {
-      const response = await slhReconciliationBatchesApi.list(
-        buildSlhReconciliationBatchListQuery({ page: 1, pageSize: 1, keyword: keyword.value, status: value }),
-        current.signal,
-      )
-      if (!current.signal.aborted) {
-        counts.value = { ...counts.value, [value]: response.data.total }
-      }
-    }
-    catch {
-      // 计数取不到就不显示这一档的数字（切换器回落 0），不打扰列表与页面错误态。
-    }
-  }))
-}
-
 function search(): void {
   page.value = 1
   refresh()
@@ -150,10 +123,9 @@ function selectStatus(value: string): void {
   refresh()
 }
 
-/** 列表与计数一起刷新：计数依赖当前状态与关键词，换任一个都要重取另外两档。 */
+/** 列表响应同时带回三档计数，切筛选或关键词只需刷新一次。 */
 function refresh(): void {
   void load()
-  void loadCounts()
 }
 
 function viewBatch(id: string): void {
@@ -169,11 +141,9 @@ function handleBatchCreated(batch: SlhReconciliationBatchDetailDto): void {
 watch([canReconcile, () => accountStore.authEpoch], () => {
   // 进页面、换身份（或权限变化）都要把列表与切换器计数一起取回。
   void load()
-  void loadCounts()
 }, { immediate: true })
 onBeforeUnmount(() => {
   controller?.abort()
-  countsController?.abort()
 })
 </script>
 

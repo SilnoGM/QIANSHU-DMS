@@ -250,8 +250,15 @@ test('提款申请与审批页面接入状态切换、序号和业务表格', ()
     assert.match(source, /<FaPageMain/u)
     assert.match(source, /<QsGenericTable/u)
     assert.match(source, /<QsStatusSwitchToolbar/u)
-    assert.match(source, /countStatuses/u)
-    assert.match(source, /pageSize: 1/u)
+    if (componentName === 'FinanceFundWithdrawalApprovals') {
+      assert.match(source, /countStatuses/u)
+      assert.match(source, /pageSize: 1/u)
+    }
+    else {
+      // 个人提款页的计数随列表响应一起返回，不再逐状态补发列表请求。
+      assert.match(source, /statusCounts/u)
+      assert.doesNotMatch(source, /pageSize: 1/u)
+    }
     assert.match(source, /fundWithdrawal\.action\.view/u)
     assert.doesNotMatch(source, /FundWithdrawalDetailModal|fund-withdrawal-detail-modal/u)
     assert.doesNotMatch(source, /:show-row-number="false"/u)

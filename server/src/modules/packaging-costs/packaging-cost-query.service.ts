@@ -96,7 +96,20 @@ export class PackagingCostQueryService {
         tx.packagingCostRequest.count({ where: { ...scoped, status: 'PENDING_PAYMENT' } }),
         tx.packagingCostRequest.count({ where: { ...scoped, status: 'PAID' } }),
       ])
-      return { items: await Promise.all(rows.map(async row => ({ ...map(row), paymentRecipientProfile: await this.recipients.getForRequest(tx, row) }))), total, page, pageSize, statusCounts: { PENDING_PAYMENT: pending, PAID: paid } }
+      const profiles = await this.recipients.getForRequests(
+        tx,
+        rows.map(row => ({ id: row.id, packagingVendor: row.packagingVendor })),
+      )
+      return {
+        items: rows.map(row => ({
+          ...map(row),
+          paymentRecipientProfile: profiles.get(row.id) ?? null,
+        })),
+        total,
+        page,
+        pageSize,
+        statusCounts: { PENDING_PAYMENT: pending, PAID: paid },
+      }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
   }
 }

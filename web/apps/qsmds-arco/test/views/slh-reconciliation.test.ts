@@ -268,21 +268,17 @@ test('列表页按名称跳详情，并复用账单状态标签', async () => {
   assert.match(source, /SlhBillReconciliationStatusTag/u)
 })
 
-test('切换器带三档计数：当前档用列表 total，另两档各发一次 pageSize=1 的列表请求', async () => {
+test('切换器带三档计数：列表响应一次带回，不再为其余状态各发请求', async () => {
   const source = await readPageSource('index.vue')
-  // 计数写进切换器项：同一套 withStatusSwitchCounts，选中项用 total 校准，避免两个请求打架。
+  // 计数写进切换器项：同一套 withStatusSwitchCounts，选中项仍用 total 校准。
   assert.match(source, /withStatusSwitchCounts\(/u)
   assert.match(source, /\{ selectedCount: loading\.value \? undefined : total\.value, selectedValue: status\.value \}/u)
-  // 另外两档各一次小请求，关键词跟着筛选走；失败静默、不打扰列表。
-  assert.match(source, /const others = SLH_RECONCILIATION_BATCH_FILTERS\.filter\(value => value !== status\.value\)/u)
-  assert.match(source, /buildSlhReconciliationBatchListQuery\(\{ page: 1, pageSize: 1, keyword: keyword\.value, status: value \}\)/u)
-  assert.match(source, /counts\.value = \{ \.\.\.counts\.value, \[value\]: response\.data\.total \}/u)
-  assert.match(source, /counts\.value = \{\}/u)
-  // 计数有自己的控制器：切换与卸载都要收掉在途请求。
-  assert.match(source, /countsController\?\.abort\(\)/u)
-  assert.match(source, /onBeforeUnmount\(\(\) => \{[\s\S]{0,120}?countsController\?\.abort\(\)/u)
-  // 列表、计数与重试都走同一条 refresh：换筛选或关键词后两处一起更新。
-  assert.match(source, /function refresh\(\): void \{\n\s+void load\(\)\n\s+void loadCounts\(\)/u)
+  // 三档计数来自列表响应的 statusCounts，切筛选或关键词只刷新一次。
+  assert.match(source, /response\.data\.statusCounts\.map\(entry => \[entry\.status, entry\.count\]\)/u)
+  assert.doesNotMatch(source, /pageSize: 1/u)
+  assert.doesNotMatch(source, /loadCounts/u)
+  assert.doesNotMatch(source, /countsController/u)
+  assert.match(source, /function refresh\(\): void \{\n\s+void load\(\)\n\}/u)
   assert.match(source, /@retry="refresh"/u)
 })
 

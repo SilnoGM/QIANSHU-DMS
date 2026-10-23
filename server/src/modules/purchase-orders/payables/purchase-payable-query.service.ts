@@ -1,5 +1,5 @@
 import { PaymentRecipientService } from '../../payment-recipients/payment-recipient.service'
-import type { PaymentRecipientAccountDto } from '../../payment-recipients/payment-recipient.dto'
+import type { PaymentRecipientAccountDto, PaymentRecipientProfileDto } from '../../payment-recipients/payment-recipient.dto'
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
@@ -10,7 +10,7 @@ import {
 } from '../../../infrastructure/database/person-reference'
 import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
 import type { DataScope } from '../../access-control/data-scope'
-import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
+import { DictionaryLookupService, type StoredDictionaryValueResolution } from '../../dictionaries/dictionary-lookup.service'
 import { purchaseOrderPayableScopeWhere } from '../purchase-order-access'
 import type { PurchasePayableBatchOrdersDto, PurchasePayableBatchSuppliersDto, PurchasePayableListQueryDto, PurchasePayableOrderDto, PurchasePayableOrderPageDto } from './purchase-payable.dto'
 import { payableFailure, summarizePayable } from './purchase-payable.logic'
@@ -39,12 +39,17 @@ export class PurchasePayableQueryService {
       // 待结清历史供应商仍需付款，不能用当前有效字典选项过滤掉已停用条目。
       const rows = await tx.purchaseOrder.findMany({ where: { ...this.outstandingOrderWhere(scope, actorUserId), productMode: 'CATALOG', supplierValue: { not: null } },
         distinct: ['supplierValue'], select: { supplierValue: true }, orderBy: { supplierValue: 'asc' } })
-      const items = await Promise.all(rows.map(async row => {
-        const value = row.supplierValue!
-        const supplier = await this.dictionary.resolveStoredValueInTransaction(tx, { dictionaryCode: 'service_provider.supplier', value })
-        return { value, label: supplier.known ? supplier.label : value }
-      }))
-      return { items }
+      const values = rows.map(row => row.supplierValue!)
+      const resolved = await this.dictionary.resolveStoredValuesInTransaction(tx, {
+        dictionaryCode: 'service_provider.supplier',
+        values,
+      })
+      return {
+        items: values.map((value, index) => ({
+          value,
+          label: resolved[index]?.known === true ? resolved[index].label : value,
+        })),
+      }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
   }
   async batchOrders(rawSupplier: string, actorUserId: string = resolveDataScopeActor()): Promise<PurchasePayableBatchOrdersDto> {
@@ -53,7 +58,25 @@ export class PurchasePayableQueryService {
     return this.prisma.$transaction(async tx => {
       const rows = await tx.purchaseOrder.findMany({ where: { ...this.outstandingOrderWhere(scope, actorUserId), productMode: 'CATALOG', supplierValue }, include,
         orderBy: [{ orderDate: 'desc' }, { id: 'desc' }] })
-      return { items: await Promise.all(rows.map(row => this.map(tx, row))) }
+      const supplierValues = rows.flatMap(row => row.supplierValue === null ? [] : [row.supplierValue])
+      const [supplierResolutions, recipientsByOrderId] = await Promise.all([
+        this.dictionary.resolveStoredValuesInTransaction(tx, {
+          dictionaryCode: 'service_provider.supplier',
+          values: supplierValues,
+        }),
+        this.recipients.getForOrders(tx, rows),
+      ])
+      const supplierByValue = new Map(supplierValues.map((value, index) => [
+        value,
+        supplierResolutions[index],
+      ] as const))
+      return {
+        items: rows.map(row => this.map(
+          row,
+          row.supplierValue === null ? undefined : supplierByValue.get(row.supplierValue),
+          recipientsByOrderId.get(row.id) ?? null,
+        )),
+      }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
   }
   /**
@@ -66,13 +89,30 @@ export class PurchasePayableQueryService {
       payables: { some: { closedAt: null, dueAmount: { gt: 0 }, ...purchaseOrderPayableScopeWhere(scope, actorUserId) } },
     }
   }
-  private async map(tx: Prisma.TransactionClient, row: Order): Promise<PurchasePayableOrderDto> {
+  /** 单条详情仍按需读取；列表与批量页走 getForOrders 一次取回。 */
+  private async mapOrder(
+    tx: Prisma.TransactionClient,
+    row: Order,
+  ): Promise<PurchasePayableOrderDto> {
+    const supplier = row.supplierValue === null
+      ? undefined
+      : await this.dictionary.resolveStoredValueInTransaction(tx, {
+          dictionaryCode: 'service_provider.supplier',
+          value: row.supplierValue,
+        })
+    return this.map(row, supplier, await this.recipients.getForOrder(tx, row))
+  }
+
+  private map(
+    row: Order,
+    supplier: StoredDictionaryValueResolution | undefined,
+    paymentRecipientProfile: PaymentRecipientProfileDto | null,
+  ): PurchasePayableOrderDto {
     const payables = [...row.payables].sort((a, b) => a.paymentType === b.paymentType ? 0 : a.paymentType === 'DEPOSIT' ? -1 : 1)
     const owner = payables[0]
     if (!owner || payables.length !== 2) return payableFailure('PURCHASE_PAYABLE_NOT_AVAILABLE', '采购应付款记录不完整，请核对')
-    const supplier = row.supplierValue ? await this.dictionary.resolveStoredValueInTransaction(tx, { dictionaryCode: 'service_provider.supplier', value: row.supplierValue }) : null
     return {
-      paymentRecipientProfile: await this.recipients.getForOrder(tx, row),
+      paymentRecipientProfile,
       id: row.id, orderNo: row.orderNo, orderDate: row.orderDate.toISOString().slice(0, 10), purchaseType: row.purchaseType,
       supplierName: row.customSupplierName ?? (supplier?.known ? supplier.label : row.supplierValue ?? '—'),
       salesOrderNo: row.salesOrder?.orderNo ?? null, purchaseTotalAmount: row.purchaseTotalAmount.toFixed(2), currencyCode: 'CNY',
@@ -104,7 +144,7 @@ export class PurchasePayableQueryService {
         include,
       })
       if (!order || !order.payables.length) return payableFailure('PURCHASE_PAYABLE_NOT_FOUND', '采购应付款不存在', 404)
-      return this.map(tx, order)
+      return this.mapOrder(tx, order)
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
   }
   async getByPayableId(id: string, actorUserId: string = resolveDataScopeActor()): Promise<PurchasePayableOrderDto> {
@@ -116,7 +156,7 @@ export class PurchasePayableQueryService {
         select: { purchaseOrder: { include } },
       })
       if (!payable) return payableFailure('PURCHASE_PAYABLE_NOT_FOUND', '采购应付款不存在', 404)
-      return this.map(tx, payable.purchaseOrder)
+      return this.mapOrder(tx, payable.purchaseOrder)
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
   }
   async list(input: PurchasePayableListQueryDto, actorUserId: string = resolveDataScopeActor()): Promise<PurchasePayableOrderPageDto> {
@@ -137,7 +177,28 @@ export class PurchasePayableQueryService {
         tx.purchaseOrder.findMany({ where, include, orderBy: [{ orderDate: 'desc' }, { id: 'desc' }], skip: (page - 1) * pageSize, take: pageSize }),
         tx.purchaseOrder.count({ where }),
       ])
-      return { items: await Promise.all(rows.map(row => this.map(tx, row))), total, page, pageSize }
+      const supplierValues = rows.flatMap(row => row.supplierValue === null ? [] : [row.supplierValue])
+      const [supplierResolutions, recipientsByOrderId] = await Promise.all([
+        this.dictionary.resolveStoredValuesInTransaction(tx, {
+          dictionaryCode: 'service_provider.supplier',
+          values: supplierValues,
+        }),
+        this.recipients.getForOrders(tx, rows),
+      ])
+      const supplierByValue = new Map(supplierValues.map((value, index) => [
+        value,
+        supplierResolutions[index],
+      ] as const))
+      return {
+        items: rows.map(row => this.map(
+          row,
+          row.supplierValue === null ? undefined : supplierByValue.get(row.supplierValue),
+          recipientsByOrderId.get(row.id) ?? null,
+        )),
+        total,
+        page,
+        pageSize,
+      }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
   }
 }

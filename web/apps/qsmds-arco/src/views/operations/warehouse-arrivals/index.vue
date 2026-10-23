@@ -49,11 +49,7 @@ const page = ref(query.value.page ?? 1)
 const pageSize = ref(query.value.pageSize ?? 20)
 const packagingShipment = shallowRef<PurchaseShipmentListItemDto | null>(null)
 const warehouseOptions = computed(() => buildWarehouseFilterOptions(warehouseCatalog.catalog.value, query.value.destinationWarehouseValue, t))
-const warehouseValues = computed(() => warehouseOptions.value.flatMap((item) => {
-  const { destinationWarehouseValue } = warehouseFilterToQuery(item.value)
-  return destinationWarehouseValue === undefined ? [] : [destinationWarehouseValue]
-}))
-const { rows, total, loading, error, counts, countsError, warehouseCounts, warehouseCountsError, detail, orderDetail, detailKind, detailLoading, detailError, refresh, loadCounts, loadDetail, openShipment, openOrder } = useWarehouseArrivalData(enabled, computed(() => account.authEpoch), query, value => navigate({ ...query.value, page: value }, true), warehouseValues)
+const { rows, total, loading, error, counts, countsError, warehouseCounts, warehouseCountsError, detail, orderDetail, detailKind, detailLoading, detailError, refresh, loadCounts, loadDetail, openShipment, openOrder } = useWarehouseArrivalData(enabled, computed(() => account.authEpoch), query, value => navigate({ ...query.value, page: value }, true))
 const { shipment: shippingInfoShipment, salesOrder: shippingInfoSalesOrder, loading: shippingInfoLoading, error: shippingInfoError, open: openShippingInfo, load: loadShippingInfo, close: closeShippingInfo } = useShippingInfoData(enabled, computed(() => account.authEpoch))
 const shippingInfoVisible = computed({ get: () => shippingInfoShipment.value !== null, set: (value) => {
   if (!value) {

@@ -239,6 +239,32 @@ export class DictionaryLookupService {
       itemsByValue.get(rawValue) ?? null,
     ))
   }
+
+  /** 事务内的批量解析；语义与 resolveStoredValues 完全一致，避免批量页逐条查询。 */
+  async resolveStoredValuesInTransaction(
+    transaction: Prisma.TransactionClient,
+    input: DictionaryStoredValuesLookupInput,
+  ): Promise<readonly StoredDictionaryValueResolution[]> {
+    const normalizedCode = normalizeLookupCode(input)
+    const rawValues = readRawStoredValues(input)
+    const uniqueValues = [...new Set(rawValues)]
+    if (uniqueValues.length === 0) return []
+
+    const items = await transaction.dictionaryItem.findMany({
+      where: {
+        value: { in: uniqueValues },
+        dictionaryType: { code: normalizedCode },
+      },
+      select: storedDictionaryValueSelect,
+    })
+    const itemsByValue = new Map(items.map(item => [item.value, item]))
+
+    return rawValues.map(rawValue => mapStoredDictionaryValue(
+      normalizedCode,
+      rawValue,
+      itemsByValue.get(rawValue) ?? null,
+    ))
+  }
 }
 
 function mapStoredDictionaryValue(

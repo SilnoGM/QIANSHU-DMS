@@ -86,24 +86,39 @@ export class SlhReconciliationBatchQueryService {
     const page = query.page ?? 1
     const pageSize = query.pageSize ?? DEFAULT_PAGE_SIZE
     const keyword = query.keyword?.trim()
+    const baseWhere: Prisma.SlhReconciliationBatchWhereInput = keyword === undefined || keyword === ''
+      ? {}
+      : {
+          OR: [
+            { batchNo: { contains: keyword, mode: 'insensitive' } },
+            { bill: { slhBillNo: { contains: keyword, mode: 'insensitive' } } },
+            { bill: { billName: { contains: keyword, mode: 'insensitive' } } },
+          ],
+        }
     const where: Prisma.SlhReconciliationBatchWhereInput = {
+      ...baseWhere,
       ...batchStatusWhere(query.status ?? SlhReconciliationBatchFilterDto.IN_PROGRESS),
-      ...(keyword === undefined || keyword === '' ? {} : {
-        OR: [
-          { batchNo: { contains: keyword, mode: 'insensitive' } },
-          { bill: { slhBillNo: { contains: keyword, mode: 'insensitive' } } },
-          { bill: { billName: { contains: keyword, mode: 'insensitive' } } },
-        ],
-      }),
     }
-    const [items, total] = await this.prisma.$transaction([
+    const [items, total, allCount, inProgressCount] = await this.prisma.$transaction([
       this.prisma.slhReconciliationBatch.findMany({
         where, include: slhReconciliationBatchListInclude,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * pageSize, take: pageSize,
       }),
       this.prisma.slhReconciliationBatch.count({ where }),
+      this.prisma.slhReconciliationBatch.count({ where: baseWhere }),
+      this.prisma.slhReconciliationBatch.count({ where: { ...baseWhere, completedAt: null } }),
     ])
-    return { items: items.map(serializeSlhReconciliationBatchListItem), total, page, pageSize }
+    return {
+      items: items.map(serializeSlhReconciliationBatchListItem),
+      total,
+      page,
+      pageSize,
+      statusCounts: [
+        { status: SlhReconciliationBatchFilterDto.IN_PROGRESS, count: inProgressCount },
+        { status: SlhReconciliationBatchFilterDto.COMPLETED, count: allCount - inProgressCount },
+        { status: SlhReconciliationBatchFilterDto.ALL, count: allCount },
+      ],
+    }
   }
 
   /**

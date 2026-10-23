@@ -74,11 +74,20 @@ export class FundWithdrawalDto {
   @ApiPropertyOptional({ type: 'string', nullable: true }) fundPostingBatchNo!: string | null
 }
 
+export class FundWithdrawalStatusCountDto {
+  @ApiProperty({ enum: FUND_WITHDRAWAL_STATUS_VALUES }) status!: FundWithdrawalStatusValue
+  @ApiProperty({ type: 'integer', minimum: 0 }) count!: number
+}
+
 export class FundWithdrawalPageDto {
   @ApiProperty({ type: [FundWithdrawalDto] }) items!: FundWithdrawalDto[]
   @ApiProperty() total!: number
   @ApiProperty() page!: number
   @ApiProperty() pageSize!: number
+  @ApiProperty({
+    type: [FundWithdrawalStatusCountDto],
+    description: '同一数据范围与筛选下的各状态数量；与当前分页、状态筛选相互独立',
+  }) statusCounts!: FundWithdrawalStatusCountDto[]
 }
 
 export class FundWithdrawalProofUploadDto {
