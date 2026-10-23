@@ -143,6 +143,13 @@ test('body 显式接管 Sans 14/20/400 根排版', () => {
   assert.match(bodyRule, /line-height:\s*var\(--qs-type-leading-sm\)/u)
 })
 
+test('全局字体保持灰度抗锯齿，避免移除 Arco normalize 后字重变粗', () => {
+  const htmlRule = readRuleContaining(globalStyles, '(?:^|\\n)html', 'font-synthesis')
+
+  assert.match(htmlRule, /-webkit-font-smoothing:\s*antialiased/u)
+  assert.match(htmlRule, /-moz-osx-font-smoothing:\s*grayscale/u)
+})
+
 test('UnoCSS 提供完整语义角色并为应用 Token 设置静态 fallback', () => {
   const requiredShortcuts = [
     'qs-type-display-title',

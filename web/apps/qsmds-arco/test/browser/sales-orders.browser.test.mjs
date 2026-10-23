@@ -272,6 +272,27 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     assert.equal(response.body?.total, 0)
   })
 
+  await runSalesOrderBrowserStep('client-side route change keeps page rendered', async () => {
+    await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
+    await waitForAfterAuthentication(page, `document.querySelector('[data-testid="sales-order-list-page"]')?.getClientRects().length > 0`)
+    const pushRoute = path => page.evaluate(`(async () => {
+      const router = document.querySelector('#app').__vue_app__.config.globalProperties.$router
+      await router.push(${JSON.stringify(path)})
+    })()`)
+    await pushRoute('/qs-operations/sales/pending-sales-orders')
+    await waitForAfterAuthentication(page, `(() => {
+      const page = document.querySelector('[data-testid="sales-order-list-page"]')
+      return page?.getClientRects().length > 0
+        && document.querySelector('#app-content')?.innerText.includes('待办订单')
+    })()`)
+    await pushRoute('/qs-operations/sales/sales-orders')
+    await waitForAfterAuthentication(page, `(() => {
+      const page = document.querySelector('[data-testid="sales-order-list-page"]')
+      return page?.getClientRects().length > 0
+        && document.querySelector('#app-content')?.innerText.includes('全部订单')
+    })()`)
+  })
+
   const runtime = collectRuntimeIssues(page, {
     sensitiveValues: [configuration.password],
   })

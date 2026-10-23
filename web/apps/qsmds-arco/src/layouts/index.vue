@@ -209,10 +209,8 @@ const enableAppSetting = import.meta.env.VITE_APP_SETTING
             <FaIcon name="i-ri:logout-box-line" class="inset-b-4 inset-s-4 absolute" />
           </div>
           <RouterView v-slot="{ Component, route }">
-            <!-- 默认不缓存页面：筛选页的新实例由路由参数驱动，缓存会留下隐藏副本和过期数据。 -->
-            <Transition :name="!appSettingsStore.isReloading ? appSettingsStore.settings.page.transitionMode : ''" mode="out-in">
-              <Component :is="Component" v-show="!(isIframe || isLink)" :key="route.fullPath" />
-            </Transition>
+            <!-- 默认不缓存页面；直接渲染可避免离场过渡卡住或新旧页面重叠。 -->
+            <Component :is="Component" v-show="!(isIframe || isLink)" :key="route.fullPath" />
           </RouterView>
           <IframeView v-show="isIframe && !isLink" />
           <LinkView v-if="isLink" />

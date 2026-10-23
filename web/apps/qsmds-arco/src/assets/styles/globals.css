@@ -111,6 +111,10 @@ body {
 html {
   font-family: var(--qs-font-sans);
 
+  /* 移除 Arco normalize 后仍保持 1.1.1 的灰度抗锯齿，避免 macOS 文本变粗。 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
   /* 禁止浏览器伪造未提供的粗体或斜体，保持不同设备的字形来源一致。 */
   font-synthesis: none;
 }
