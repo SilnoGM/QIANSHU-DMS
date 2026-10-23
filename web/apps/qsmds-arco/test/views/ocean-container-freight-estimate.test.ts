@@ -1,5 +1,6 @@
 import type { FreightEstimateInput } from '../../src/views/operations/ocean-containers/freight-estimate.logic'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 // eslint-disable-next-line test/no-import-node-test -- 校验运费预估的计费材积、取大值与固定费用口径。
 import test from 'node:test'
 import { calculateChargeableVolume, calculateFreightEstimate } from '../../src/views/operations/ocean-containers/freight-estimate.logic'
@@ -124,4 +125,20 @@ test('非法毛重不参与比较，也不触发附加费', () => {
   assert.equal(result.freightBasis, 'VOLUME')
   assert.equal(result.surcharge, null)
   assert.equal(result.total, '420.00')
+})
+
+test('tooltip 内金额覆盖气泡反色，避免与 bg-foreground 气泡同色', async () => {
+  const source = await readFile(new URL('../../src/views/operations/ocean-containers/ocean-container-line-drawer.vue', import.meta.url), 'utf8')
+  const start = source.indexOf('<template #content>')
+  const end = source.indexOf('</template>', start)
+  assert.notEqual(start, -1)
+  assert.notEqual(end, -1)
+  const tooltip = source.slice(start, end)
+  const amounts = [...tooltip.matchAll(/<AmountDisplay\b[^>]*>/gu)].map(match => match[0])
+  assert.ok(amounts.length > 0)
+  for (const amount of amounts) {
+    assert.match(amount, /!text-background/u)
+  }
+  // 气泡内部不能沿用页面前的 foreground/muted 语义，否则深色气泡上会看不清。
+  assert.doesNotMatch(tooltip, /text-muted-foreground/u)
 })
