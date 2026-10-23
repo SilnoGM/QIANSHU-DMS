@@ -831,6 +831,18 @@ onMounted(() => {
   }
 })
 
+// KeepAlive 返回列表时刷新，避免停留在离开前的数据快照；首次激活由 onMounted 负责。
+let pageActivated = false
+onActivated(() => {
+  if (!pageActivated) {
+    pageActivated = true
+    return
+  }
+  if (canRead.value) {
+    refreshOrdersAndCounts()
+  }
+})
+
 onBeforeUnmount(() => {
   requestVersion += 1
   countRequestVersion += 1

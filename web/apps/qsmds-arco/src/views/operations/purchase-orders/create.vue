@@ -1469,6 +1469,7 @@ onBeforeUnmount(() => {
                               v-if="shippingMarkResolution"
                               v-model:open="shippingMarkDetailsOpen"
                               :hover="supportsHover"
+                              open-on-focus
                               class="p-3! z-2001!"
                             >
                               <FaButton

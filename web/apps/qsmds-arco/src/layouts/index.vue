@@ -21,7 +21,6 @@ defineOptions({
 const routeInfo = useRoute()
 
 const appSettingsStore = useAppSettingsStore()
-const appKeepAliveStore = useAppKeepAliveStore()
 const appMenuStore = useAppMenuStore()
 useAppWatermarkStore()
 
@@ -210,11 +209,9 @@ const enableAppSetting = import.meta.env.VITE_APP_SETTING
             <FaIcon name="i-ri:logout-box-line" class="inset-b-4 inset-s-4 absolute" />
           </div>
           <RouterView v-slot="{ Component, route }">
+            <!-- 默认不缓存页面：筛选页的新实例由路由参数驱动，缓存会留下隐藏副本和过期数据。 -->
             <Transition :name="!appSettingsStore.isReloading ? appSettingsStore.settings.page.transitionMode : ''" mode="out-in">
-              <!-- 只保活显式声明的列表页；max 防止筛选组合无限占用内存。 -->
-              <KeepAlive :include="appKeepAliveStore.list" :max="8">
-                <Component :is="Component" v-show="!(isIframe || isLink)" :key="route.fullPath" />
-              </KeepAlive>
+              <Component :is="Component" v-show="!(isIframe || isLink)" :key="route.fullPath" />
             </Transition>
           </RouterView>
           <IframeView v-show="isIframe && !isLink" />

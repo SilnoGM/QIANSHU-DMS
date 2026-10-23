@@ -281,6 +281,15 @@ const statusItems = computed(() => withStatusSwitchCounts(
  * 再加载列表，避免界面已经回落到默认项而地址栏仍保留失效状态。
  */
 function ensureCanonicalSalesOrderStatusQuery(): boolean {
+  // 全部订单与待办订单共用本组件；另一个视图在 KeepAlive 停用期间仍可能读到
+  // 新路由的查询参数，必须只让当前视图处理自己的状态值，避免把对方的 status 删掉。
+  const ownRouteName = props.viewMode === 'pending'
+    ? 'qsOperationsPendingSalesOrders'
+    : 'qsOperationsSalesOrders'
+  if (route.name !== ownRouteName) {
+    return false
+  }
+  // 无 status 时仍要继续加载默认视图；只有查询参数需要规范化时才处理 URL。
   if (route.query.status === undefined) {
     return true
   }
