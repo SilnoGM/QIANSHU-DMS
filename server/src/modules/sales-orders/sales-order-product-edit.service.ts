@@ -35,6 +35,13 @@ import {
   parseSalesOrderAmountUnits,
 } from './domain/sales-order-decimal'
 import {
+  deriveProductEditFulfillmentStatus,
+  productEditFulfillmentReason,
+  productEditFulfillmentSteps,
+  salesOrderFulfillmentStageRank,
+} from './domain/sales-order-product-edit-fulfillment'
+import { assertSalesOrderFulfillmentTransition } from './domain/sales-order-state-machine'
+import {
   normalizeSalesOrderProductEditCommand,
 } from './sales-order-product-edit.normalizer'
 
@@ -265,7 +272,12 @@ export class SalesOrderProductEditService {
         }
 
         const sourceIds = order.lines.map(line => line.id)
-        const [approvedPurchaseOrderCount, purchasedRows, paymentAggregate] = await Promise.all([
+        const [
+          approvedPurchaseOrderCount,
+          purchasedRows,
+          paymentAggregate,
+          purchaseOrders,
+        ] = await Promise.all([
           transaction.purchaseOrder.count({
             where: {
               purchaseType: 'SALES_LINKED',
@@ -291,6 +303,24 @@ export class SalesOrderProductEditService {
           transaction.salesOrderPayment.aggregate({
             where: { salesOrderId, voidedAt: null },
             _sum: { amount: true },
+          }),
+          // 履约阶段必须由采购与货件的真实进度派生，不能只看采购数量是否覆盖。
+          transaction.purchaseOrder.findMany({
+            where: {
+              salesOrderId,
+              purchaseType: 'SALES_LINKED',
+              orderStatus: { not: 'CANCELLED' },
+            },
+            select: {
+              orderStatus: true,
+              fulfillmentStatus: true,
+              parts: { select: {
+                status: true,
+                shippedAt: true,
+                warehouseReceivedAt: true,
+                loadedAt: true,
+              } },
+            },
           }),
         ])
         const purchasedByLine = new Map<string, number>()
@@ -442,11 +472,34 @@ export class SalesOrderProductEditService {
           newAgreedTotalAmount,
           paidAmount,
         )
-        const fulfillmentStatus: SalesOrderFulfillmentStatus = remainingQuantity > 0
-          ? 'PENDING'
-          : order.fulfillmentStatus === 'PENDING' && approvedPurchaseOrderCount > 0
-            ? 'PREPARING'
-            : order.fulfillmentStatus
+        const activeParts = purchaseOrders.flatMap(purchaseOrder => (
+          purchaseOrder.parts.filter(part => part.status === 'ACTIVE')
+        ))
+        const fulfillmentStatus: SalesOrderFulfillmentStatus
+          = deriveProductEditFulfillmentStatus({
+            currentStatus: order.fulfillmentStatus,
+            remainingQuantity,
+            approvedPurchaseOrderCount,
+            activePurchaseOrderCount: purchaseOrders.length,
+            allPurchaseOrdersApproved: purchaseOrders.every(purchaseOrder => (
+              purchaseOrder.orderStatus === 'CONFIRMED'
+              || purchaseOrder.orderStatus === 'COMPLETED'
+            )),
+            hasPendingReviewParts: purchaseOrders.some(purchaseOrder => (
+              purchaseOrder.parts.some(part => part.status === 'PENDING_REVIEW')
+            )),
+            activePartCount: activeParts.length,
+            shippedPartCount: activeParts.filter(part => part.shippedAt !== null).length,
+            receivedPartCount: activeParts.filter(part => (
+              part.warehouseReceivedAt !== null
+            )).length,
+            loadedPartCount: activeParts.filter(part => part.loadedAt !== null).length,
+            hasShippedPurchaseOrder: purchaseOrders.some(purchaseOrder => (
+              purchaseOrder.fulfillmentStatus === 'PARTIALLY_SHIPPED'
+              || purchaseOrder.fulfillmentStatus === 'SHIPPED'
+              || purchaseOrder.fulfillmentStatus === 'SIGNED'
+            )),
+          })
 
         const removedAt = new Date()
         for (const line of order.lines) {
@@ -526,15 +579,27 @@ export class SalesOrderProductEditService {
             changedByUserId: trusted.actorUserId,
           } })
         }
-        if (fulfillmentStatus !== order.fulfillmentStatus) {
+        const fulfillmentSteps = productEditFulfillmentSteps(
+          order.fulfillmentStatus,
+          fulfillmentStatus,
+        )
+        for (const step of fulfillmentSteps) {
+          // 前向补齐逐级校验状态机；尚未发货时的 PREPARING → PENDING 是产品
+          // 编辑的既有语义，状态机本身只表达单向流转。
+          if (
+            salesOrderFulfillmentStageRank(step.toStatus)
+            > salesOrderFulfillmentStageRank(step.fromStatus)
+          ) {
+            assertSalesOrderFulfillmentTransition(step.fromStatus, step.toStatus, {
+              hasActiveDeliveryReceipt: false,
+            })
+          }
           await transaction.salesOrderStatusHistory.create({ data: {
             salesOrderId,
             dimension: 'FULFILLMENT',
-            fromStatus: order.fulfillmentStatus,
-            toStatus: fulfillmentStatus,
-            reason: remainingQuantity > 0
-              ? '销售产品修改后存在待采购数量'
-              : '销售产品修改后已完成采购覆盖',
+            fromStatus: step.fromStatus,
+            toStatus: step.toStatus,
+            reason: productEditFulfillmentReason(step.toStatus),
             changedByUserId: trusted.actorUserId,
           } })
         }

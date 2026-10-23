@@ -100,6 +100,7 @@ interface TestLineUpdateInput {
 function setup(overrides: {
   readonly order?: Record<string, unknown>
   readonly purchasedRows?: readonly Record<string, unknown>[]
+  readonly purchaseOrders?: readonly Record<string, unknown>[]
   readonly activePurchaseOrderCount?: number
   readonly paidAmount?: string
 } = {}) {
@@ -117,7 +118,13 @@ function setup(overrides: {
     salesOrder: {
       findUnique: jest.fn().mockResolvedValue(orderRow(overrides.order)),
       findFirst: jest.fn().mockResolvedValue(orderRow(overrides.order)),
-      update: jest.fn().mockResolvedValue({ id: ORDER_ID }),
+      update: jest.fn<
+        Promise<{ readonly id: string }>,
+        [{
+          readonly where: { readonly id: string }
+          readonly data: Record<string, unknown>
+        }]
+      >().mockResolvedValue({ id: ORDER_ID }),
     },
     salesOrderLine: {
       update: lineUpdate,
@@ -125,6 +132,7 @@ function setup(overrides: {
     },
     purchaseOrder: {
       count: jest.fn().mockResolvedValue(overrides.activePurchaseOrderCount ?? 1),
+      findMany: jest.fn().mockResolvedValue(overrides.purchaseOrders ?? []),
     },
     purchaseOrderLine: {
       findMany: jest.fn().mockResolvedValue(overrides.purchasedRows ?? [{
@@ -216,6 +224,95 @@ describe('SalesOrderProductEditService', () => {
       )
     },
   )
+
+  it.each([
+    { expectedStatus: 'LAND_TRANSIT', received: false, loaded: false },
+    { expectedStatus: 'WAREHOUSE_ARRIVED', received: true, loaded: false },
+    { expectedStatus: 'SEA_TRANSIT', received: true, loaded: true },
+  ])(
+    'derives $expectedStatus from shipped, received and loaded part facts',
+    async ({ expectedStatus, received, loaded }) => {
+      const fixture = setup({
+        order: { fulfillmentStatus: 'PENDING' },
+        purchasedRows: [{
+          sourceSalesOrderLineId: LINE_A_ID,
+          quantity: 2,
+          purchaseOrder: { orderStatus: 'COMPLETED' },
+        }],
+        purchaseOrders: [{
+          orderStatus: 'COMPLETED',
+          fulfillmentStatus: 'SIGNED',
+          parts: [{
+            status: 'ACTIVE',
+            shippedAt: new Date('2026-10-22T03:42:30.644Z'),
+            warehouseReceivedAt: received ? new Date('2026-10-22T03:42:54.053Z') : null,
+            loadedAt: loaded ? new Date('2026-10-23T01:25:32.622Z') : null,
+          }],
+        }],
+      })
+      const result = await fixture.service.updateProducts({
+        actorUserId: ACTOR_ID,
+        requestId: 'product-edit-derive-stage',
+      }, ORDER_ID, input({
+        existingLines: [{
+          lineId: LINE_A_ID,
+          name: '原目录产品',
+          description: null,
+          actualUnitPriceAmount: '50',
+          desiredQuantity: 2,
+        }, {
+          lineId: LINE_B_ID,
+          name: '原临时产品',
+          description: '原备注',
+          actualUnitPriceAmount: '200',
+          desiredQuantity: 0,
+        }],
+        newLines: [],
+      }))
+
+      expect(result.fulfillmentStatus).toBe(expectedStatus)
+      const updateData = fixture.transaction.salesOrder.update.mock.calls[0]?.[0].data
+      expect(updateData?.fulfillmentStatus).toBe(expectedStatus)
+      const stageOrder = ['PENDING', 'PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED', 'SEA_TRANSIT']
+      const expectedHistory = stageOrder
+        .slice(1, stageOrder.indexOf(expectedStatus) + 1)
+        .map((toStatus, index) => [stageOrder[index], toStatus])
+      const fulfillmentHistory = fixture.transaction.salesOrderStatusHistory.create.mock.calls
+        .map(([write]) => write.data)
+        .filter(write => write.dimension === 'FULFILLMENT')
+        .map(write => [write.fromStatus, write.toStatus])
+      expect(fulfillmentHistory).toEqual(expectedHistory)
+    },
+  )
+
+  it('never moves a shipped order back to PENDING when an uncovered line is added', async () => {
+    const fixture = setup({
+      order: { fulfillmentStatus: 'LAND_TRANSIT' },
+      purchaseOrders: [{
+        orderStatus: 'COMPLETED',
+        fulfillmentStatus: 'SIGNED',
+        parts: [{
+          status: 'ACTIVE',
+          shippedAt: new Date('2026-10-22T03:42:30.644Z'),
+          warehouseReceivedAt: new Date('2026-10-22T03:42:54.053Z'),
+          loadedAt: null,
+        }],
+      }],
+    })
+
+    const result = await fixture.service.updateProducts({
+      actorUserId: ACTOR_ID,
+      requestId: 'product-edit-shipped-backward-guard',
+    }, ORDER_ID, input())
+
+    expect(result.fulfillmentStatus).toBe('LAND_TRANSIT')
+    const updateData = fixture.transaction.salesOrder.update.mock.calls[0]?.[0].data
+    expect(updateData?.fulfillmentStatus).toBe('LAND_TRANSIT')
+    const fulfillmentHistory = fixture.transaction.salesOrderStatusHistory.create.mock.calls
+      .map(([write]) => write.data)
+      .filter(write => write.dimension === 'FULFILLMENT')
+    expect(fulfillmentHistory).toEqual([])
+  })
 
   it('locks lines before order and atomically updates products, amounts and fulfillment', async () => {
     const fixture = setup()
