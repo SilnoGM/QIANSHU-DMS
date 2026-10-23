@@ -4,10 +4,13 @@
       "checkUpdates": {
         "message": "The new version is available",
         "messageWithVersion": "New version v{version} is available",
-        "versionSummary": "Current version v{current}; new version v{next}.",
+        "currentVersion": "Current",
+        "latestVersion": "Latest",
+        "audience": "For: {roles}",
+        "contentLabel": "Release update details",
         "description": "Click the refresh button to get the latest version",
-        "confirm": "Refresh",
-        "cancel": "Later"
+        "refreshNow": "Refresh now",
+        "later": "Remind me later"
       }
     }
   }
