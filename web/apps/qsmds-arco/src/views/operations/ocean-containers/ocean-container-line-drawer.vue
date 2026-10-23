@@ -249,40 +249,41 @@ async function copyRecipient() {
                 <FaIcon name="i-lucide:info" class="size-3.5" aria-hidden="true" />
               </button>
               <template #content>
+                <!-- FaTooltip 气泡是「前景色底 + 背景色字」，内部文字与金额必须改用 text-background，不能沿用页面前的 foreground 语义。 -->
                 <div class="gap-1.5 grid max-w-96" role="group" :aria-label="t('operationsOcean.freightEstimate.tooltipTitle')">
                   <div v-if="estimate.volumeCai !== null" class="gap-x-2 grid grid-cols-[auto_1fr]">
-                    <span class="text-muted-foreground">{{ t('operationsOcean.freightEstimate.chargeableVolume') }}</span>
+                    <span class="text-background/80">{{ t('operationsOcean.freightEstimate.chargeableVolume') }}</span>
                     <span>{{ t('operationsOcean.freightEstimate.volumeFormula', { formula: volumeFormula, volume: estimate.volumeCai }) }}</span>
                   </div>
                   <div v-if="estimate.weightKg !== null" class="gap-x-2 grid grid-cols-[auto_1fr]">
-                    <span class="text-muted-foreground">{{ t('operationsOcean.freightEstimate.chargeableWeight') }}</span>
+                    <span class="text-background/80">{{ t('operationsOcean.freightEstimate.chargeableWeight') }}</span>
                     <span>{{ t('operationsOcean.freightEstimate.weightFormula', { weight: estimate.weightKg }) }}</span>
                   </div>
                   <div v-if="estimate.byVolume !== null" class="flex gap-4 items-baseline justify-between">
-                    <span class="text-muted-foreground">{{ t('operationsOcean.freightEstimate.byVolume', { volume: estimate.volumeCai, rate: volumeRateLabel }) }}</span>
-                    <AmountDisplay :value="estimate.byVolume" currency="CNY" :currencies="currencies" class="text-xs" />
+                    <span class="text-background/80">{{ t('operationsOcean.freightEstimate.byVolume', { volume: estimate.volumeCai, rate: volumeRateLabel }) }}</span>
+                    <AmountDisplay :value="estimate.byVolume" currency="CNY" :currencies="currencies" class="!text-xs !text-background" />
                   </div>
                   <div v-if="estimate.byWeight !== null" class="flex gap-4 items-baseline justify-between">
-                    <span class="text-muted-foreground">{{ t('operationsOcean.freightEstimate.byWeight', { weight: estimate.weightKg, rate: weightRateLabel }) }}</span>
-                    <AmountDisplay :value="estimate.byWeight" currency="CNY" :currencies="currencies" class="text-xs" />
+                    <span class="text-background/80">{{ t('operationsOcean.freightEstimate.byWeight', { weight: estimate.weightKg, rate: weightRateLabel }) }}</span>
+                    <AmountDisplay :value="estimate.byWeight" currency="CNY" :currencies="currencies" class="!text-xs !text-background" />
                   </div>
                   <div v-if="estimate.freight !== null" class="flex gap-4 items-baseline justify-between">
-                    <span class="text-muted-foreground">{{ freightLabel }}</span>
-                    <AmountDisplay :value="estimate.freight" currency="CNY" :currencies="currencies" class="text-xs" />
+                    <span class="text-background/80">{{ freightLabel }}</span>
+                    <AmountDisplay :value="estimate.freight" currency="CNY" :currencies="currencies" class="!text-xs !text-background" />
                   </div>
                   <div v-if="estimate.surcharge !== null" class="flex gap-4 items-baseline justify-between">
-                    <span class="text-muted-foreground">{{ surchargeLabel }}</span>
-                    <AmountDisplay :value="estimate.surcharge" currency="CNY" :currencies="currencies" class="text-xs" />
+                    <span class="text-background/80">{{ surchargeLabel }}</span>
+                    <AmountDisplay :value="estimate.surcharge" currency="CNY" :currencies="currencies" class="!text-xs !text-background" />
                   </div>
                   <div v-if="estimate.codHandling !== null" class="flex gap-4 items-baseline justify-between">
-                    <span class="text-muted-foreground">{{ t('operationsOcean.freightEstimate.codHandling') }}</span>
-                    <AmountDisplay :value="estimate.codHandling" currency="CNY" :currencies="currencies" class="text-xs" />
+                    <span class="text-background/80">{{ t('operationsOcean.freightEstimate.codHandling') }}</span>
+                    <AmountDisplay :value="estimate.codHandling" currency="CNY" :currencies="currencies" class="!text-xs !text-background" />
                   </div>
                   <div class="pt-1.5 border-t border-border flex gap-4 items-baseline justify-between">
                     <span class="font-semibold">{{ t('operationsOcean.freightEstimate.totalRow') }}</span>
-                    <AmountDisplay :value="estimate.total" currency="CNY" :currencies="currencies" class="text-xs font-semibold" />
+                    <AmountDisplay :value="estimate.total" currency="CNY" :currencies="currencies" class="!text-xs !text-background !font-semibold" />
                   </div>
-                  <p class="text-muted-foreground m-0 mt-1">
+                  <p class="text-background/70 m-0 mt-1">
                     {{ t('operationsOcean.freightEstimate.note') }}
                   </p>
                 </div>
