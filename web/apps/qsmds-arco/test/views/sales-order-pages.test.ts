@@ -248,7 +248,7 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.match(source, /#cell-remarkSummary[\s\S]*?<FaTooltip[\s\S]*?row\.original\.remark/u)
   assert.match(source, /#cell-changeRecordsSummary[\s\S]*?changeRecordCount[\s\S]*?openRecordsModal\('changes'/u)
   assert.match(source, /const actionColumn = computed<QsGenericTableActionColumn>/u)
-  assert.match(source, /props\.viewMode === 'all' \? 290 : 260/u)
+  assert.match(source, /props\.viewMode === 'all' \? 304 : 208/u)
   assert.match(source, /:action-column="actionColumn"/u)
   assert.match(source, /<template #actions="\{ row \}">[\s\S]*?查看[\s\S]*?<template[\s\S]*?v-if="props\.viewMode === 'pending'"[\s\S]*?v-for="action in salesOrderRowActions\(row\)"/u)
   assert.match(source, /function salesOrderRowActions\([\s\S]*?props\.viewMode !== 'pending'[\s\S]*?return \[\]/u)

@@ -248,8 +248,9 @@ const tableEmptyDescription = computed(() => {
     : '当前筛选条件下没有可展示的销售订单。'
 })
 const actionColumn = computed<QsGenericTableActionColumn>(() => {
-  // 「全部订单」新增取消入口后最多同时出现查看、修改产品、取消订单三个动作。
-  const width = props.viewMode === 'all' ? 290 : 260
+  // 「全部订单」最多同时出现查看、修改产品、取消订单三个动作，304px 才能不换行；
+  // 待办视图只有查看和一个履约动作，208px 足够。
+  const width = props.viewMode === 'all' ? 304 : 208
   return { fixed: 'right', minWidth: width, title: '操作', width }
 })
 

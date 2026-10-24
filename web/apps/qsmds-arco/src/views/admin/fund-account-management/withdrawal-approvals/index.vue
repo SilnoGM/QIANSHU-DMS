@@ -184,7 +184,7 @@ function completed(): void {
         :page-size-options="[20, 50, 100]"
         :empty-title="t('fundWithdrawal.empty.review')"
         :empty-description="t('fundWithdrawal.empty.reviewHint')"
-        :action-column="{ fixed: 'right', width: 230, title: t('fundWithdrawal.column.action') }"
+        :action-column="{ fixed: 'right', minWidth: 180, width: 180, title: t('fundWithdrawal.column.action') }"
         table-class="w-max min-w-full"
         :aria-label="t('fundWithdrawal.approvalPageTitle')"
         @pagination-change="load"
