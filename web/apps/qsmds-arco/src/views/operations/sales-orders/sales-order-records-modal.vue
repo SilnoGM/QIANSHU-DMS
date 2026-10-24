@@ -1387,18 +1387,20 @@ onBeforeUnmount(() => {
         </div>
       </FaForm>
 
-      <section class="mt-2" aria-labelledby="payment-voucher-title">
+      <section
+        v-bind="paymentDropHandlers"
+        class="mt-2 rounded-lg transition-shadow duration-150"
+        :class="paymentDragging ? 'ring-2 ring-primary/40 ring-offset-2 bg-primary/5' : ''"
+        :data-dragging="paymentDragging ? 'true' : undefined"
+        aria-labelledby="payment-voucher-title"
+      >
         <h3 id="payment-voucher-title" class="qs-type-section-title m-0">
           收款凭证 <span class="text-destructive" aria-hidden="true">*</span>
         </h3>
         <p class="qs-type-meta m-0 mt-1">
           每笔收款必须上传且只能上传一份凭证，仅支持 JPG/PNG/WebP 图片；可拖入或点击上传，系统提交时自动按“客户名-凭证类型-时间戳”命名。
         </p>
-        <div
-          v-bind="paymentDropHandlers"
-          class="mt-3 p-2 rounded-lg transition-shadow duration-150"
-          :class="paymentDragging ? 'ring-2 ring-primary/40 ring-offset-2 bg-primary/5' : ''"
-        >
+        <div class="mt-3 p-2 rounded-lg">
           <input
             ref="paymentFileInputRef"
             type="file"
@@ -1457,78 +1459,81 @@ onBeforeUnmount(() => {
         class="mb-4"
         role="alert"
       />
-      <p class="text-sm text-muted-foreground m-0">
-        只需上传一份签收单，仅支持 JPG/PNG/WebP 图片；可拖入或点击上传。提交后作为订单级凭证保存，并自动将订单进度更新为已签收，同时签收该订单下全部货件。若仍有货件未装柜或待审核，提交会被阻断。
-      </p>
-      <FaForm :model="{ deliveryReceiptRemark }" :disabled="actionLocked" class="mt-4">
-        <FaFormItem name="deliveryReceiptRemark" label="备注（选填）">
-          <FaTextarea
-            v-model="deliveryReceiptRemark"
-            :maxlength="500"
-            class="w-full"
-            input-class="min-h-20 max-h-36"
-            placeholder="填写本次货物签收说明"
-            @update:model-value="clearReceiptError('remark')"
-          />
-          <p v-if="receiptErrors.remark" class="text-xs text-destructive m-0 mt-1">
-            {{ receiptErrors.remark }}
-          </p>
-        </FaFormItem>
-      </FaForm>
       <div
         v-bind="receiptDropHandlers"
-        class="p-2 rounded-lg transition-shadow duration-150"
+        class="rounded-lg transition-shadow duration-150"
         :class="receiptDragging ? 'ring-2 ring-primary/40 ring-offset-2 bg-primary/5' : ''"
+        :data-dragging="receiptDragging ? 'true' : undefined"
       >
-        <input
-          ref="receiptFileInputRef"
-          data-testid="sales-order-delivery-receipt-input"
-          type="file"
-          :accept="IMAGE_ONLY_ACCEPT"
-          class="sr-only"
-          :disabled="actionLocked"
-          @change="handleReceiptFileInput"
-        >
-        <FaButton
-          v-if="deliveryReceipt === null"
-          type="button"
-          variant="outline"
-          class="min-h-11 w-full"
-          :loading="actionUploading"
-          :disabled="actionLocked"
-          @click="openReceiptFilePicker"
-        >
-          <FaIcon name="i-lucide:upload-cloud" aria-hidden="true" />上传签收单
-        </FaButton>
-        <div v-else class="mt-4 p-3 border border-border rounded-lg flex gap-3 min-w-0 items-center">
-          <FaImagePreview
-            v-if="deliveryReceipt.previewUrl"
-            :src="deliveryReceipt.previewUrl"
-            class="rounded-md shrink-0 size-16 object-cover"
-            :aria-label="`待提交签收单 ${deliveryReceipt.originalFilename}`"
-          />
-          <div v-else class="border border-border rounded-md bg-muted/30 flex shrink-0 size-16 items-center justify-center">
-            <FaIcon name="i-lucide:file-text" class="text-muted-foreground size-7" aria-hidden="true" />
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium m-0 truncate">
-              {{ deliveryReceipt.originalFilename }}
+        <p class="text-sm text-muted-foreground m-0">
+          只需上传一份签收单，仅支持 JPG/PNG/WebP 图片；可拖入或点击上传。提交后作为订单级凭证保存，并自动将订单进度更新为已签收，同时签收该订单下全部货件。若仍有货件未装柜或待审核，提交会被阻断。
+        </p>
+        <FaForm :model="{ deliveryReceiptRemark }" :disabled="actionLocked" class="mt-4">
+          <FaFormItem name="deliveryReceiptRemark" label="备注（选填）">
+            <FaTextarea
+              v-model="deliveryReceiptRemark"
+              :maxlength="500"
+              class="w-full"
+              input-class="min-h-20 max-h-36"
+              placeholder="填写本次货物签收说明"
+              @update:model-value="clearReceiptError('remark')"
+            />
+            <p v-if="receiptErrors.remark" class="text-xs text-destructive m-0 mt-1">
+              {{ receiptErrors.remark }}
             </p>
-            <p class="qs-type-meta m-0 mt-1">
-              {{ deliveryReceipt.mimeType }} · {{ deliveryReceipt.sizeBytes }} bytes
-            </p>
-          </div>
-          <FaButton type="button" variant="ghost" size="sm" :disabled="actionLocked" @click="removeDeliveryReceipt">
-            移除
+          </FaFormItem>
+        </FaForm>
+        <div class="p-2 rounded-lg">
+          <input
+            ref="receiptFileInputRef"
+            data-testid="sales-order-delivery-receipt-input"
+            type="file"
+            :accept="IMAGE_ONLY_ACCEPT"
+            class="sr-only"
+            :disabled="actionLocked"
+            @change="handleReceiptFileInput"
+          >
+          <FaButton
+            v-if="deliveryReceipt === null"
+            type="button"
+            variant="outline"
+            class="min-h-11 w-full"
+            :loading="actionUploading"
+            :disabled="actionLocked"
+            @click="openReceiptFilePicker"
+          >
+            <FaIcon name="i-lucide:upload-cloud" aria-hidden="true" />上传签收单
           </FaButton>
+          <div v-else class="mt-4 p-3 border border-border rounded-lg flex gap-3 min-w-0 items-center">
+            <FaImagePreview
+              v-if="deliveryReceipt.previewUrl"
+              :src="deliveryReceipt.previewUrl"
+              class="rounded-md shrink-0 size-16 object-cover"
+              :aria-label="`待提交签收单 ${deliveryReceipt.originalFilename}`"
+            />
+            <div v-else class="border border-border rounded-md bg-muted/30 flex shrink-0 size-16 items-center justify-center">
+              <FaIcon name="i-lucide:file-text" class="text-muted-foreground size-7" aria-hidden="true" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium m-0 truncate">
+                {{ deliveryReceipt.originalFilename }}
+              </p>
+              <p class="qs-type-meta m-0 mt-1">
+                {{ deliveryReceipt.mimeType }} · {{ deliveryReceipt.sizeBytes }} bytes
+              </p>
+            </div>
+            <FaButton type="button" variant="ghost" size="sm" :disabled="actionLocked" @click="removeDeliveryReceipt">
+              移除
+            </FaButton>
+          </div>
         </div>
+        <p v-if="receiptErrors.receipt" class="text-xs text-destructive m-0 mt-1">
+          {{ receiptErrors.receipt }}
+        </p>
+        <p class="qs-type-meta m-0 mt-3">
+          系统提交时自动按“客户名-签收单-时间戳”命名。
+        </p>
       </div>
-      <p v-if="receiptErrors.receipt" class="text-xs text-destructive m-0 mt-1">
-        {{ receiptErrors.receipt }}
-      </p>
-      <p class="qs-type-meta m-0 mt-3">
-        系统提交时自动按“客户名-签收单-时间戳”命名。
-      </p>
     </template>
 
     <template #footer>

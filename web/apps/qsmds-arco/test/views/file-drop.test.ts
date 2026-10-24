@@ -104,6 +104,29 @@ test('单文件区域只取第一个，多文件区域保留全部', async () =>
   assert.deepEqual(multiple, [[a, b]])
 })
 
+test('销售订单收款与签收单的拖放区覆盖可见提示文字', () => {
+  const root = new URL('../../../../', import.meta.url)
+  const source = readFileSync(
+    new URL('apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue', root),
+    'utf8',
+  )
+  const paymentSection = source.match(
+    /<section[^>]*aria-labelledby="payment-voucher-title"[^>]*>/u,
+  )?.[0]
+
+  assert.ok(paymentSection, '收款凭证应保留独立的 section')
+  assert.match(paymentSection, /v-bind="paymentDropHandlers"/u)
+
+  const receiptDropIndex = source.indexOf('v-bind="receiptDropHandlers"')
+  const receiptHintIndex = source.indexOf('只需上传一份签收单')
+  const receiptUploadIndex = source.indexOf('上传签收单', receiptDropIndex)
+  assert.ok(receiptDropIndex >= 0, '签收单应接入拖放')
+  assert.ok(
+    receiptDropIndex < receiptHintIndex && receiptHintIndex < receiptUploadIndex,
+    '签收单拖放区必须覆盖提示文字和上传入口',
+  )
+})
+
 test('业务上传组件均接入共享拖放能力', () => {
   const root = new URL('../../../../', import.meta.url)
   const cases = [
