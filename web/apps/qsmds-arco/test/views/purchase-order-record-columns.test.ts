@@ -23,7 +23,7 @@ test('采购记录三列使用服务端摘要，并保留原有金额、固定�
 test('采购列表按内容横向展开，编号和金额保留安全列宽，操作按钮不折行', async () => {
   const source = await readFile(new URL('index.vue', root), 'utf8')
   const minimumWidths = {
-    orderSummary: 260,
+    orderSummary: 218,
     sourceSummary: 260,
     buyerSummary: 140,
     amountSummary: 200,
@@ -41,7 +41,7 @@ test('采购列表按内容横向展开，编号和金额保留安全列宽，�
 
 test('运营采购保留查看入口，不挂载审核和取消入口', async () => {
   const source = await readFile(new URL('index.vue', root), 'utf8')
-  assert.match(source, /const actionColumnWidth = 200/u)
+  assert.match(source, /const actionColumnWidth = computed\(\(\) => props\.viewMode === 'pending' \? 208 : 104\)/u)
   assert.doesNotMatch(source, /PurchaseOrderReviewModal|openPurchaseOrderReview|canReview/u)
   assert.match(source, /@click="openPurchaseOrderDetail\(row\)"/u)
   assert.doesNotMatch(source, /canCancelPurchaseOrderFromList|openPurchaseOrderCancellation/u)

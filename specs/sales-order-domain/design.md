@@ -30,7 +30,7 @@
 ```text
 SalesOrderStatus: DRAFT -> CONFIRMED
                   DRAFT -> CANCELLED
-                  CONFIRMED -> CANCELLED（仅无有效收款）
+                  CONFIRMED -> CANCELLED（仅未签收、无有效收款且无未取消的销售关联采购单）
 
 SalesOrderFulfillmentStatus:
 PENDING -> PREPARING -> LAND_TRANSIT -> WAREHOUSE_ARRIVED -> SEA_TRANSIT -> SIGNED
@@ -177,13 +177,14 @@ sequenceDiagram
 - 创建页固定币种，分为基础信息、客户地址、产品明细、凭证和备注五个区块。
 - 产品明细支持数据库产品搜索和临时产品行，价格与数量变化立即更新展示汇总，但最终以服务端校验为准。
 - 右侧摘要展示明细汇总、约定总价、定金、尾款及等式状态。
+- 全部订单的操作列提供“取消订单”入口：仅对满足取消门禁的订单显示，确认弹窗必填原因，成功后刷新列表与状态计数。
 - 日期上限为今天；出单人只读显示当前用户。
 - 未保存离开使用明确确认，不依赖浏览器 history 返回。
 
 ## 9. 测试策略
 
 - 纯函数：金额十进制、地址规范化、防重、请求摘要、状态机。
-- Service 单元测试：幂等、状态漂移、产品快照、地区快照、付款派生、取消门禁、签收凭证门禁。
+- Service 单元测试：幂等、状态漂移、产品快照、地区快照、付款派生、取消门禁（收款/签收/未取消采购单）、签收凭证门禁。
 - Schema E2E：命名约束、外键、索引、金额等式、正整数、媒体引用、不可变历史。
 - API E2E：权限、CSRF、错误矩阵、并发 Key、订单全流程。
 - Web 源码/逻辑测试：币种弹窗、路由门禁、表单映射、错误回显、金额硬拦截。

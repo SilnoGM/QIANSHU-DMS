@@ -184,7 +184,8 @@ const statusItems = computed(() => withStatusSwitchCounts(
   },
 ))
 
-const actionColumnWidth = 200
+// 全部视图只有「查看」，待办视图固定是「查看 + 一个任务动作」，宽度跟随视图而不是统一预留。
+const actionColumnWidth = computed(() => props.viewMode === 'pending' ? 208 : 104)
 
 const supplierFilterOptions = computed(() => (
   supplierCatalog.catalog.value?.items ?? []
@@ -234,7 +235,7 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   accessorKey: 'orderNo',
   fixed: 'left',
   id: 'orderSummary',
-  minWidth: 260,
+  minWidth: 218,
   title: '采购订单',
 }, {
   accessorKey: 'salesOrderNo',

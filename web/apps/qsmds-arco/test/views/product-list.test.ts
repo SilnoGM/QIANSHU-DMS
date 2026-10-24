@@ -55,7 +55,8 @@ test('全部业务与审计列顺序固定，编号左固定且技术字段不�
   )?.[0]
   assert.ok(productNoBlock)
   assert.doesNotMatch(productNoBlock, /fixed: 'left'/u)
-  assert.match(productNoBlock, /width: 150/u)
+  assert.match(productNoBlock, /width: 123/u)
+  assert.match(productNoBlock, /minWidth: 123/u)
   assert.match(source, /:action-column="\{ fixed: 'right', width: 320 \}"/u)
   assert.doesNotMatch(columnBlock, /\bid: '(?:id|version)'/u)
   assert.match(source, /<template #actions=/u)

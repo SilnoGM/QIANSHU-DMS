@@ -127,8 +127,10 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
   { key: 'createdByUserId', label: t('purchaseShipments.buyer'), options: buyerOptions.value.map(user => ({ value: user.id, label: user.displayName })) },
   { key: 'purchaseType', label: t('purchaseShipments.purchaseType'), options: ['SALES_LINKED', 'STOCK'].map(value => ({ value, label: t(`purchaseShipments.${value}`) })) },
 ])
+// 行内最多四个动作，固定两列网格按两行排布；240px 覆盖两列 4 字按钮、间距和内边距。
+const actionColumnWidth = 240
 const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(() => [
-  { id: 'shipmentNo', title: t('purchaseShipments.shipmentNo'), accessorKey: 'shipmentNo', fixed: 'left', minWidth: 255 },
+  { id: 'shipmentNo', title: t('purchaseShipments.shipmentNo'), accessorKey: 'shipmentNo', fixed: 'left', minWidth: 227 },
   { id: 'part', title: t('purchaseShipments.part'), accessorFn: row => `${row.purchaseOrder.orderNo} / ${formatShipmentNumber(row.partNumber)}`, minWidth: 260 },
   { id: 'mark', title: t('purchaseShipments.mark'), accessorKey: 'shippingMarkText', minWidth: 300 },
   { id: 'baseMark', title: t('purchaseShipments.baseMark'), accessorFn: row => row.purchaseOrder.shippingMarkText, minWidth: 245 },
@@ -324,7 +326,7 @@ onBeforeUnmount(() => {
           :loading="loading" :error="error" :addable="false" :page-size-options="[20, 50, 100]"
           :filter-definitions="filterDefinitions" :search-placeholder="t('purchaseShipments.search')"
           :empty-title="t('purchaseShipments.empty')" :empty-description="t('purchaseShipments.emptyDescription')"
-          :action-column="{ fixed: 'right', minWidth: showWarehouseFilter ? 260 : canReceive ? 350 : 245, width: showWarehouseFilter ? 260 : canReceive ? 350 : 245 }" table-class="w-max min-w-full"
+          :action-column="{ fixed: 'right', minWidth: actionColumnWidth, width: actionColumnWidth }" table-class="w-max min-w-full"
           @search="search" @filter-change="search" @pagination-change="paginate" @retry="refresh"
         >
           <template #query-leading>
@@ -427,7 +429,7 @@ onBeforeUnmount(() => {
             </FaTooltip>
           </template>
           <template #actions="{ row }">
-            <div :class="showWarehouseFilter ? 'grid grid-cols-2 gap-1' : 'flex flex-wrap items-center gap-1'">
+            <div class="gap-1 grid grid-cols-2">
               <FaButton v-if="canReceive && shipmentRowAction(activeView, row.viewStatus)" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" @click="handleTransportAction(row)">
                 <FaIcon :name="activeView === 'WAREHOUSE_RECEIVED' ? 'i-lucide:container' : 'i-lucide:package-check'" aria-hidden="true" />{{ t(activeView === 'WAREHOUSE_RECEIVED' ? 'purchaseShipments.loadContainer' : 'purchaseShipments.sign') }}
               </FaButton>

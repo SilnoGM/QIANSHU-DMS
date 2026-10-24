@@ -71,7 +71,7 @@ const businessCategoryTagClasses: Record<FundTransactionDto['businessCategory'],
 }
 
 const columns: QsGenericTableColumn<FundTransactionDto>[] = [
-  { accessorKey: 'batchNo', fixed: 'left', id: 'batch', minWidth: 210, title: '批次' },
+  { accessorKey: 'batchNo', fixed: 'left', id: 'batch', minWidth: 199, title: '批次' },
   {
     accessorFn: transaction => transaction.account.user?.displayName ?? '公司资金账户',
     id: 'subject',

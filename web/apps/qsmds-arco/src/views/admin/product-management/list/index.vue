@@ -240,8 +240,8 @@ const productColumns: QsGenericTableColumn<ProductListItemViewModel>[] = [
   {
     accessorKey: 'productNo',
     id: 'productNo',
-    width: 150,
-    minWidth: 140,
+    width: 123,
+    minWidth: 123,
     title: '产品编号',
   },
   { accessorKey: 'name', id: 'name', minWidth: 180, title: '产品名称' },

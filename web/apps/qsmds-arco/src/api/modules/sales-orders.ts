@@ -20,6 +20,7 @@ import type {
   SalesOrdersProductOptionsData,
   SalesOrdersStatusCountsData,
   SalesOrderStatusCountsDto,
+  SalesOrderStatusRequestDto,
   SalesOrderTemporaryDocumentDto,
 } from '../generated/types.gen'
 
@@ -155,6 +156,16 @@ export function createSalesOrdersApi(client: AxiosInstance) {
         `sales-orders/${encodeURIComponent(salesOrderId)}`,
         { errorPresentation: 'local', signal },
       ),
+    updateOrderStatus: (
+      salesOrderId: string,
+      data: SalesOrderStatusRequestDto,
+      signal: AbortSignal,
+    ) => client.patch<SalesOrderDetailDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/order-status`,
+      data,
+      // 取消不是幂等操作：网络结果未知时禁止自动重放，避免重复提交。
+      { errorPresentation: 'local', retry: false, signal },
+    ),
     recordPayment: (
       salesOrderId: string,
       data: SalesOrderPaymentRequestDto,

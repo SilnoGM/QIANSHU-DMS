@@ -70,7 +70,7 @@ function totals(row: ContainerBatchDto) {
   ]
 }
 const columns = computed<QsGenericTableColumn<ContainerBatchDto>[]>(() => [
-  { id: 'containerBatchNo', title: t('containerPage.number'), accessorKey: 'containerBatchNo', width: 180, minWidth: 180, maxWidth: 180, fixed: 'left', cellClass: 'qs-type-data-emphasis whitespace-nowrap' },
+  { id: 'containerBatchNo', title: t('containerPage.number'), accessorKey: 'containerBatchNo', width: 140, minWidth: 140, maxWidth: 140, fixed: 'left', cellClass: 'qs-type-data-emphasis whitespace-nowrap' },
   { id: 'containerBatchName', title: t('containerPage.name'), accessorKey: 'containerBatchName', width: 160, minWidth: 140 },
   { id: 'loadingDate', title: t('containerPage.date'), accessorKey: 'loadingDate', width: 132, minWidth: 132, cellClass: 'qs-type-data' },
   { id: 'warehouse', title: t('containerPage.warehouse'), accessorFn: row => warehouseLabel(row.warehouseValue), width: 275, minWidth: 220 },

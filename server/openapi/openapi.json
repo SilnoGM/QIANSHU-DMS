@@ -40869,6 +40869,8 @@
               "status": 422,
               "codes": [
                 "SALES_ORDER_CANCEL_HAS_PAYMENTS",
+                "SALES_ORDER_CANCEL_HAS_PURCHASE_ORDERS",
+                "SALES_ORDER_CANCEL_SIGNED",
                 "SALES_ORDER_COMPLETION_IS_AUTOMATIC",
                 "SALES_ORDER_RECONCILIATION_CONDITIONS_NOT_MET",
                 "SALES_ORDER_STATUS_TRANSITION_INVALID",
@@ -88502,6 +88504,10 @@
               }
             ]
           },
+          "activePurchaseOrderCount": {
+            "type": "integer",
+            "minimum": 0
+          },
           "paymentRecordCount": {
             "type": "integer",
             "minimum": 0
@@ -88557,6 +88563,7 @@
           "paymentStatus",
           "completionHold",
           "purchaseHold",
+          "activePurchaseOrderCount",
           "paymentRecordCount",
           "statusChangeRecordCount",
           "amountChangeRecordCount",

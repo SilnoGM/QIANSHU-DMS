@@ -95,6 +95,31 @@ describe('sales order state machine', () => {
     }))
   })
 
+  it('blocks cancellation after signing', () => {
+    expect(() => assertSalesOrderStatusTransition(
+      orderStatus('CONFIRMED'),
+      orderStatus('CANCELLED'),
+      orderContext({ fulfillmentStatus: 'SIGNED', paymentStatus: 'UNPAID' }),
+    )).toThrow(expect.objectContaining({
+      code: 'SALES_ORDER_CANCEL_SIGNED',
+    }))
+  })
+
+  // 签收不可逆、收款可作废；两个条件同时成立时先报签收。
+  it('reports signing before payments when both block cancellation', () => {
+    expect(() => assertSalesOrderStatusTransition(
+      orderStatus('CONFIRMED'),
+      orderStatus('CANCELLED'),
+      orderContext({
+        activeReceivedAmount: '0.01',
+        fulfillmentStatus: 'SIGNED',
+        paymentStatus: 'PARTIALLY_PAID',
+      }),
+    )).toThrow(expect.objectContaining({
+      code: 'SALES_ORDER_CANCEL_SIGNED',
+    }))
+  })
+
   it.each([
     ['CONFIRMED', 'DRAFT'],
     ['CONFIRMED', 'COMPLETED'],

@@ -77,6 +77,8 @@ import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchTool
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { mediaThumbnailUrl } from '@/utils/media-variant'
 import { getPurchaseOrderApiFailure } from '../purchase-orders/purchase-order-list.logic'
+import SalesOrderCancelModal from './sales-order-cancel-modal.vue'
+import { isSalesOrderCancellable } from './sales-order-cancel.logic'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import SalesOrderDetailDrawer from './sales-order-detail-drawer.vue'
 import {
@@ -140,6 +142,7 @@ const toast = useQsToast()
 const canRead = computed(() => auth('sales-orders:read'))
 const canCreate = computed(() => auth('sales-orders:create'))
 const canUpdateProducts = computed(() => auth('sales-orders:update'))
+const canCancelOrders = computed(() => auth('sales-orders:update'))
 const canCreatePurchase = computed(() => auth('purchase-orders:create'))
 const canFactoryShipment = computed(() => (
   auth('sales-orders:update')
@@ -175,6 +178,8 @@ const recordsModalVisible = ref(false)
 const recordsModalKind = ref<SalesOrderRecordsKind>('payments')
 const recordsModalOrder = ref<SalesOrderListItemDto | null>(null)
 const recordsModalInitialAction = ref<SalesOrderRecordsInitialAction>(null)
+const cancelModalVisible = ref(false)
+const cancelOrder = shallowRef<SalesOrderListItemDto | null>(null)
 const productEditVisible = ref(false)
 const purchaseStartVisible = ref(false)
 const purchaseStartPreset = shallowRef<PurchaseStartPresetSalesOrder | null>(null)
@@ -243,7 +248,9 @@ const tableEmptyDescription = computed(() => {
     : '当前筛选条件下没有可展示的销售订单。'
 })
 const actionColumn = computed<QsGenericTableActionColumn>(() => {
-  const width = props.viewMode === 'all' ? 210 : 260
+  // 「全部订单」最多同时出现查看、修改产品、取消订单三个动作，304px 才能不换行；
+  // 待办视图只有查看和一个履约动作，208px 足够。
+  const width = props.viewMode === 'all' ? 304 : 208
   return { fixed: 'right', minWidth: width, title: '操作', width }
 })
 
@@ -360,7 +367,7 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     accessorKey: 'orderNo',
     id: 'orderSummary',
     fixed: 'left',
-    minWidth: 230,
+    minWidth: 218,
     title: '订单',
   },
   { accessorFn: item => item.issuer.displayName, id: 'issuerSummary', minWidth: 180, title: '出单人' },
@@ -482,6 +489,26 @@ function openRecordsModal(
 function openSalesOrderDetail(order: SalesOrderListItemDto): void {
   detailOrder.value = { ...order }
   detailVisible.value = true
+}
+
+function canCancelSalesOrder(order: SalesOrderListItemDto): boolean {
+  return isSalesOrderCancellable({
+    viewMode: props.viewMode,
+    canUpdate: canCancelOrders.value,
+    orderStatus: order.orderStatus,
+    fulfillmentStatus: order.fulfillmentStatus,
+    paymentStatus: order.paymentStatus,
+    activePurchaseOrderCount: order.activePurchaseOrderCount,
+  })
+}
+
+function openSalesOrderCancel(order: SalesOrderListItemDto): void {
+  cancelOrder.value = { ...order }
+  cancelModalVisible.value = true
+}
+
+function handleSalesOrderCancelled(): void {
+  scheduleQueryRefresh(true)
 }
 
 const PRODUCT_EDIT_FULFILLMENT_STATUSES = new Set([
@@ -1430,6 +1457,17 @@ onBeforeUnmount(() => {
             >
               <FaIcon name="i-lucide:list-restart" aria-hidden="true" />修改产品
             </FaButton>
+            <FaButton
+              v-if="canCancelSalesOrder(row)"
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="text-destructive min-h-11 sm:min-h-8"
+              :aria-label="`${row.orderNo}：取消订单`"
+              @click="openSalesOrderCancel(row)"
+            >
+              <FaIcon name="i-lucide:circle-x" aria-hidden="true" />取消订单
+            </FaButton>
             <template v-if="props.viewMode === 'pending'">
               <template
                 v-for="action in salesOrderRowActions(row)"
@@ -2190,6 +2228,13 @@ onBeforeUnmount(() => {
       :order="recordsModalOrder"
       :currencies="currencyCatalog.currencies.value"
       @detail-updated="handleSalesOrderDetailUpdated"
+    />
+
+    <SalesOrderCancelModal
+      v-model="cancelModalVisible"
+      :order="cancelOrder"
+      :currencies="currencyCatalog.currencies.value"
+      @cancelled="handleSalesOrderCancelled"
     />
 
     <QsSalesOrderProductsEditorModal

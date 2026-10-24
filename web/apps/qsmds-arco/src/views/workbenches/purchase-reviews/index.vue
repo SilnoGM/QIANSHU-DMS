@@ -51,8 +51,10 @@ let listController: AbortController | null = null
 let countController: AbortController | null = null
 let detailController: AbortController | null = null
 const tabs = computed(() => (['PENDING_REVIEW', 'APPROVED', 'CANCELLED'] as const).map(value => ({ value, label: t(`purchaseReview.${value}`), count: countsError.value ? undefined : counts.value[value] })))
+// 审核中/已取消只有单动作；已通过且可审核时才有「查看 + 取消订单」两个动作。
+const actionColumnWidth = computed(() => status.value === 'APPROVED' && canReview.value ? 208 : 104)
 const columns = computed<QsGenericTableColumn<PurchaseOrderListItemDto>[]>(() => [
-  { id: 'orderNo', accessorKey: 'orderNo', title: t('purchaseReview.orderNo'), minWidth: 240, fixed: 'left', copyable: true },
+  { id: 'orderNo', accessorKey: 'orderNo', title: t('purchaseReview.orderNo'), minWidth: 214, fixed: 'left', copyable: true },
   { id: 'source', accessorKey: 'salesOrderNo', title: t('purchaseReview.source'), minWidth: 230 },
   { id: 'supplier', accessorFn: row => row.supplier.label, title: t('purchaseReview.supplier'), minWidth: 130 },
   { id: 'buyer', accessorFn: row => row.createdBy.displayName, title: t('purchaseReview.buyer'), minWidth: 150 },
@@ -244,7 +246,7 @@ onBeforeUnmount(() => {
         row-key="id" :show-row-number="false" :columns="columns" :data="items"
         :loading="loading" :error="error || undefined" :total="total" :addable="false"
         :search-placeholder="t('purchaseReview.search')" :empty-title="t('purchaseReview.empty')"
-        :page-size-options="[20, 50, 100]" :action-column="{ fixed: 'right', minWidth: status === 'APPROVED' && canReview ? 230 : 145 }"
+        :page-size-options="[20, 50, 100]" :action-column="{ fixed: 'right', minWidth: actionColumnWidth, width: actionColumnWidth }"
         @search="search" @pagination-change="load" @retry="refresh"
       >
         <template #cell-orderNo="{ row }">

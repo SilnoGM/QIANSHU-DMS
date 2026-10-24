@@ -40,7 +40,7 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [{
   options: [{ label: 'TWD', value: 'TWD' }, { label: 'MYR', value: 'MYR' }],
 }])
 const columns = computed<QsGenericTableColumn<SalesReceiptRequestDetailDto>[]>(() => [
-  { id: 'collectionNo', accessorKey: 'collectionNo', title: t('salesReceipt.collectionNo'), width: 225, minWidth: 225, fixed: 'left', copyable: true },
+  { id: 'collectionNo', accessorKey: 'collectionNo', title: t('salesReceipt.collectionNo'), width: 214, minWidth: 214, fixed: 'left', copyable: true },
   { id: 'order', accessorFn: item => item.salesOrder.orderNo, title: t('salesReceipt.order'), minWidth: 235, copyable: true },
   { id: 'receipt', accessorKey: 'paymentType', title: t('salesReceipt.receiptInfo'), minWidth: 185 },
   { id: 'amount', accessorKey: 'amount', title: t('salesReceipt.amount'), minWidth: 205, align: 'right' },
