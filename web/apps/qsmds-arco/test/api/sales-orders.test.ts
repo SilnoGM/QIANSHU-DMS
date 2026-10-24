@@ -341,6 +341,29 @@ test('销售产品修改读取不依赖供应商，PATCH 写入局部呈错且�
   }])
 })
 
+test('销售订单取消使用订单状态接口，局部呈错且禁止自动重试', async () => {
+  const calls: Call[] = []
+  const api = createSalesOrdersApi(createRecorder(calls))
+  const controller = new AbortController()
+
+  await api.updateOrderStatus(
+    'order/id',
+    { toStatus: 'CANCELLED', reason: '客户取消' },
+    controller.signal,
+  )
+
+  assert.deepEqual(calls, [{
+    config: {
+      errorPresentation: 'local',
+      retry: false,
+      signal: controller.signal,
+    },
+    data: { toStatus: 'CANCELLED', reason: '客户取消' },
+    method: 'patch',
+    url: 'sales-orders/order%2Fid/order-status',
+  }])
+})
+
 test('待采购产品查询使用订单级只读接口并传递取消信号', async () => {
   const calls: Call[] = []
   const api = createSalesOrdersApi(createRecorder(calls))

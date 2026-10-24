@@ -1758,6 +1758,8 @@
     "usages": [
       "apps/qsmds-arco/src/components/base/QsToast/config.ts",
       "apps/qsmds-arco/src/views/component_library/basic/components/QsToastShowcase.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-cancel-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-reviews/cancellation-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-reviews/index.vue"

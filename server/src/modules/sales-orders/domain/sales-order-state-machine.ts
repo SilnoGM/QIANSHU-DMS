@@ -40,6 +40,13 @@ export function assertSalesOrderStatusTransition(
       '订单状态流转无效',
     )
   }
+  // 签收不可逆，放在收款之前：先告知调用方无法通过作废收款解除的阻塞。
+  if (to === 'CANCELLED' && context.fulfillmentStatus === 'SIGNED') {
+    return salesOrderRuleFailure(
+      'SALES_ORDER_CANCEL_SIGNED',
+      '订单已签收，不能取消',
+    )
+  }
   if (
     to === 'CANCELLED'
     && parseSalesOrderAmountUnits(context.activeReceivedAmount) > 0n

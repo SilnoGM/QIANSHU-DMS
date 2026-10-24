@@ -114,6 +114,13 @@ const SALES_ORDER_LIST_SELECT = {
       payments: true,
       statusHistory: true,
       amountRevisions: true,
+      // 取消资格只统计未取消的销售关联采购单；已取消采购单属于历史记录。
+      purchaseOrders: {
+        where: {
+          purchaseType: 'SALES_LINKED',
+          orderStatus: { not: 'CANCELLED' },
+        },
+      },
     },
   },
   version: true,
@@ -284,6 +291,8 @@ export interface SalesOrderListItem {
   readonly paymentStatus: SalesOrderPaymentStatus
   readonly completionHold: SalesOrderCompletionHold | null
   readonly purchaseHold: SalesOrderPurchaseHold | null
+  /** 未取消的销售关联采购单数量；用于前端判断是否提供取消入口。 */
+  readonly activePurchaseOrderCount: number
   readonly paymentRecordCount: number
   readonly statusChangeRecordCount: number
   readonly amountChangeRecordCount: number
@@ -918,6 +927,7 @@ export class SalesOrderQueryService {
             row,
             awaitingReviewByOrder.get(row.id),
           ),
+          activePurchaseOrderCount: row._count.purchaseOrders,
           paymentRecordCount: row._count.payments,
           statusChangeRecordCount: row._count.statusHistory,
           amountChangeRecordCount: row._count.amountRevisions,

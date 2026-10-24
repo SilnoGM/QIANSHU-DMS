@@ -51,6 +51,7 @@ function setup() {
           { sourceSalesOrderLineId: 'line-b', quantity: 1 },
         ],
       }]),
+      count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(0),
     },
     salesReceiptRequest: { count: jest.fn().mockResolvedValue(0), aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }) },
     salesOrderPayment: {
@@ -354,6 +355,68 @@ describe('SalesOrderMutationService', () => {
       toStatus: 'CANCELLED',
       reason: '取消',
     })).rejects.toMatchObject({ code: 'SALES_ORDER_CANCEL_HAS_PAYMENTS' })
+  })
+
+  it('blocks cancellation while active purchase orders exist', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.count.mockResolvedValue(1)
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'CANCELLED',
+      reason: '取消',
+    })).rejects.toMatchObject({ code: 'SALES_ORDER_CANCEL_HAS_PURCHASE_ORDERS' })
+
+    expect(fixture.transaction.purchaseOrder.count).toHaveBeenCalledWith({
+      where: {
+        salesOrderId: ORDER_ID,
+        purchaseType: 'SALES_LINKED',
+        orderStatus: { not: 'CANCELLED' },
+      },
+    })
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+    expect(fixture.transaction.salesOrderStatusHistory.create)
+      .not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+  })
+
+  it('allows cancellation when every purchase order is cancelled', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.count.mockResolvedValue(0)
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'CANCELLED',
+      reason: '客户取消',
+    })).resolves.toEqual(fixture.detail)
+
+    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: { orderStatus: 'CANCELLED', version: { increment: 1 } },
+    })
+    expect(fixture.transaction.salesOrderStatusHistory.create)
+      .toHaveBeenCalledWith({
+        data: {
+          salesOrderId: ORDER_ID,
+          dimension: 'ORDER',
+          fromStatus: 'CONFIRMED',
+          toStatus: 'CANCELLED',
+          reason: '客户取消',
+          changedByUserId: ACTOR_ID,
+        },
+      })
+    expect(fixture.audit.record).toHaveBeenCalled()
+  })
+
+  it('blocks cancellation after signing before querying purchase orders', async () => {
+    const fixture = setup()
+    fixture.order.fulfillmentStatus = 'SIGNED'
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'CANCELLED',
+      reason: '取消',
+    })).rejects.toMatchObject({ code: 'SALES_ORDER_CANCEL_SIGNED' })
+
+    expect(fixture.transaction.purchaseOrder.count).not.toHaveBeenCalled()
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
   })
 
   it('enters reconciliation and records ordered history only after signed and paid', async () => {

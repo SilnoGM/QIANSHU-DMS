@@ -232,6 +232,22 @@ export class SalesOrderMutationService {
         fulfillmentStatus: order.fulfillmentStatus,
         paymentStatus: order.paymentStatus,
       })
+      if (toStatus === 'CANCELLED') {
+        // 已取消的采购单属于历史记录，不再占用销售订单的取消资格。
+        const activePurchaseOrderCount = await transaction.purchaseOrder.count({
+          where: {
+            salesOrderId,
+            purchaseType: 'SALES_LINKED',
+            orderStatus: { not: 'CANCELLED' },
+          },
+        })
+        if (activePurchaseOrderCount > 0) {
+          return salesOrderRuleFailure(
+            'SALES_ORDER_CANCEL_HAS_PURCHASE_ORDERS',
+            `该销售订单下仍有 ${activePurchaseOrderCount} 张未取消的采购单，请先处理采购单后再取消订单`,
+          )
+        }
+      }
       await transaction.salesOrder.update({
         where: { id: salesOrderId },
         data: { orderStatus: toStatus, version: { increment: 1 } },

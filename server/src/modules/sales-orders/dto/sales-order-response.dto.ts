@@ -396,6 +396,8 @@ export class SalesOrderListItemDto {
   readonly completionHold!: SalesOrderCompletionHoldDto | null
   @ApiProperty({ type: () => SalesOrderPurchaseHoldDto, nullable: true })
   readonly purchaseHold!: SalesOrderPurchaseHoldDto | null
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly activePurchaseOrderCount!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly paymentRecordCount!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly statusChangeRecordCount!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly amountChangeRecordCount!: number
