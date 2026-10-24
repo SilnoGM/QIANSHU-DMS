@@ -366,7 +366,7 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     accessorKey: 'orderNo',
     id: 'orderSummary',
     fixed: 'left',
-    minWidth: 230,
+    minWidth: 218,
     title: '订单',
   },
   { accessorFn: item => item.issuer.displayName, id: 'issuerSummary', minWidth: 180, title: '出单人' },

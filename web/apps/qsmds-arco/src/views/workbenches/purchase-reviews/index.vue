@@ -52,7 +52,7 @@ let countController: AbortController | null = null
 let detailController: AbortController | null = null
 const tabs = computed(() => (['PENDING_REVIEW', 'APPROVED', 'CANCELLED'] as const).map(value => ({ value, label: t(`purchaseReview.${value}`), count: countsError.value ? undefined : counts.value[value] })))
 const columns = computed<QsGenericTableColumn<PurchaseOrderListItemDto>[]>(() => [
-  { id: 'orderNo', accessorKey: 'orderNo', title: t('purchaseReview.orderNo'), minWidth: 240, fixed: 'left', copyable: true },
+  { id: 'orderNo', accessorKey: 'orderNo', title: t('purchaseReview.orderNo'), minWidth: 214, fixed: 'left', copyable: true },
   { id: 'source', accessorKey: 'salesOrderNo', title: t('purchaseReview.source'), minWidth: 230 },
   { id: 'supplier', accessorFn: row => row.supplier.label, title: t('purchaseReview.supplier'), minWidth: 130 },
   { id: 'buyer', accessorFn: row => row.createdBy.displayName, title: t('purchaseReview.buyer'), minWidth: 150 },

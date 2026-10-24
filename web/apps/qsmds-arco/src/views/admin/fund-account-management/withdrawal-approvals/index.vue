@@ -48,7 +48,7 @@ const toolbarItems = computed(() => FUND_WITHDRAWAL_STATUS_FILTER_OPTIONS.map(it
   count: counts.value[item.value] ?? 0,
 })))
 const columns = computed<QsGenericTableColumn<FundWithdrawalDto>[]>(() => [
-  { id: 'withdrawalNo', accessorKey: 'withdrawalNo', title: t('fundWithdrawal.column.withdrawalNo'), minWidth: 190, fixed: 'left' },
+  { id: 'withdrawalNo', accessorKey: 'withdrawalNo', title: t('fundWithdrawal.column.withdrawalNo'), minWidth: 174, fixed: 'left' },
   { id: 'applicant', accessorKey: 'applicantName', title: t('fundWithdrawal.column.applicant'), minWidth: 190 },
   { id: 'amount', accessorKey: 'amount', title: t('fundWithdrawal.column.amount'), minWidth: 200, align: 'right' },
   { id: 'accountBalance', accessorKey: 'accountBalance', title: t('fundWithdrawal.column.accountBalance'), minWidth: 190, align: 'right' },

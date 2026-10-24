@@ -60,7 +60,7 @@ const toolbarItems = computed(() => FUND_WITHDRAWAL_STATUS_FILTER_OPTIONS.map(it
   count: counts.value[item.value] ?? 0,
 })))
 const columns = computed<QsGenericTableColumn<FundWithdrawalDto>[]>(() => [
-  { id: 'withdrawalNo', accessorKey: 'withdrawalNo', title: t('fundWithdrawal.column.withdrawalNo'), minWidth: 190, fixed: 'left' },
+  { id: 'withdrawalNo', accessorKey: 'withdrawalNo', title: t('fundWithdrawal.column.withdrawalNo'), minWidth: 174, fixed: 'left' },
   { id: 'amount', accessorKey: 'amount', title: t('fundWithdrawal.column.amount'), minWidth: 220, align: 'right' },
   { id: 'paymentProof', accessorFn: row => row.paymentProof?.mediaAssetId ?? '', title: t('fundWithdrawal.column.paymentProof'), minWidth: 110 },
   { id: 'status', accessorKey: 'status', title: t('fundWithdrawal.column.status'), minWidth: 120 },
