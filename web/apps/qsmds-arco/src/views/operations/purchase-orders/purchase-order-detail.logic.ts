@@ -6,12 +6,11 @@ import type {
   PurchaseOrderPaymentRequestDto,
   PurchaseOrderPaymentVoidRequestDto,
   PurchaseOrderReviewRequestDto,
-  PurchaseOrderStatusRequestDto,
 } from '../../../api/generated/types.gen'
 
 import Decimal from 'decimal.js'
 
-import { canCancelPurchaseOrderFromList, nextPurchaseOrderFulfillmentStatus } from './purchase-order-list.logic'
+import { nextPurchaseOrderFulfillmentStatus } from './purchase-order-list.logic'
 
 export interface PurchaseOrderPaymentDraft {
   readonly amount: string | null
@@ -198,34 +197,6 @@ export function buildPurchaseOrderReviewRequest(
       imageDraftId: imageDraft.id,
       ...(normalizedReason.value === null ? {} : { reason: normalizedReason.value }),
     },
-  }
-}
-
-export function buildPurchaseOrderCancellationRequest(
-  detail: PurchaseOrderDetailDto,
-  reason: string,
-): PurchaseOrderMutationBuildResult<PurchaseOrderStatusRequestDto> {
-  if (!canCancelPurchaseOrderFromList(detail)) {
-    return { fieldError: '只有审核中或已确认订单可以取消', valid: false }
-  }
-  try {
-    if (!new Decimal(detail.paidAmount).isZero()) {
-      return { fieldError: '存在有效付款，请先作废全部付款记录', valid: false }
-    }
-  }
-  catch {
-    return { fieldError: '当前付款金额不可用，请刷新详情后重试', valid: false }
-  }
-  const normalizedReason = optionalReason(reason)
-  if (!normalizedReason.ok) {
-    return { fieldError: '取消原因最多 500 个字符', valid: false }
-  }
-  return {
-    request: {
-      toStatus: 'CANCELLED',
-      ...(normalizedReason.value === null ? {} : { reason: normalizedReason.value }),
-    },
-    valid: true,
   }
 }
 

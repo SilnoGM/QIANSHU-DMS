@@ -203,15 +203,48 @@ test('全部与待办采购均使用带计数的状态工具栏', async () => {
   assert.match(source, /if \(action\.key === 'WAREHOUSE_RECEIPT'\)/u)
   assert.match(source, /warehouseActionRef\.value\?\.open\(order\.id\)/u)
   assert.match(source, />发货|action\.label/u)
-  assert.doesNotMatch(source, /canCancelPurchaseOrderFromList|openPurchaseOrderCancellation/u)
-  assert.doesNotMatch(source, /cancelLoadingOrderId|cancelActionsRef/u)
-  assert.doesNotMatch(source, /openPurchaseOrderDetail\(row, 'cancel'\)/u)
-  assert.doesNotMatch(source, /i-lucide:circle-x/u)
+  assert.match(source, /const canCancel = computed\(\(\) => auth\('purchase-orders:update'\) \|\| auth\('purchase-orders:review'\)\)/u)
+  assert.match(source, /import PurchaseOrderCancelModal from '.\/purchase-order-cancel-modal\.vue'/u)
+  assert.match(source, /getPurchaseOrderCancelBlockedReason/u)
+  assert.match(source, /purchaseOrderCancelBlockedMessage/u)
+  assert.match(source, /<PurchaseOrderCancelModal[\s\S]*?@cancelled="handlePurchaseOrderCancelled"/u)
   assert.doesNotMatch(
     source,
     /v-else-if="canUpdate && nextPurchaseOrderFulfillmentStatus\(row\)"/u,
   )
   assert.doesNotMatch(source, /props\.viewMode === 'all' && canManagePayment/u)
+})
+
+test('全部采购为 update 或 review 提供固定槽位取消入口', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+
+  assert.match(
+    source,
+    /<template v-if="props\.viewMode === 'all'">[\s\S]*?:aria-label="`\$\{row\.orderNo\}：取消采购单`"/u,
+  )
+  assert.match(
+    source,
+    /:text="purchaseOrderCancelBlockedReason\(row\) \?\? ''"[\s\S]*?:disabled="purchaseOrderCancelBlockedReason\(row\) === null"/u,
+  )
+  assert.match(source, /:disabled="purchaseOrderCancelBlockedReason\(row\) !== null"/u)
+  assert.match(source, /@click="openPurchaseOrderCancel\(row\)"/u)
+  assert.match(source, /@click="openPurchaseOrderCancel\(row\)"[\s\S]*?取消/u)
+  assert.match(
+    source,
+    /function purchaseOrderCancelBlockedReason\(order: PurchaseOrderListItemDto\): string \| null \{[\s\S]*?allowPendingReview: true/u,
+  )
+  assert.match(
+    source,
+    /canUpdate\.value && canCancel\.value[\s\S]*?\{ kind: 'icon' \}/u,
+  )
+  assert.match(
+    source,
+    /v-if="canUpdate && canCancel"[\s\S]*?:aria-label="`\$\{row\.orderNo\}：更多操作`"/u,
+  )
+  assert.match(
+    source,
+    /v-if="!\(canUpdate && canCancel\)"[\s\S]*?:aria-label="`\$\{row\.orderNo\}：详情`"/u,
+  )
 })
 
 test('采购日期范围位于搜索框前并以内嵌叉号清除', async () => {

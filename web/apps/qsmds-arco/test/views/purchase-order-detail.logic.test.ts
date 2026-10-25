@@ -5,7 +5,6 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
-  buildPurchaseOrderCancellationRequest,
   buildPurchaseOrderFulfillmentRequest,
   buildPurchaseOrderPaymentRequest,
   buildPurchaseOrderPaymentVoidRequest,
@@ -146,7 +145,7 @@ test('付款时间允许早于或等于当前时间，仅拒绝晚于当前时�
   }
 })
 
-test('履约只能顺序推进，取消必须先作废有效付款', () => {
+test('履约只能顺序推进', () => {
   assert.deepEqual(buildPurchaseOrderFulfillmentRequest(
     createDetail(),
     'PREPARING',
@@ -160,18 +159,6 @@ test('履约只能顺序推进，取消必须先作废有效付款', () => {
     'SHIPPED',
     '',
   ).valid, false)
-
-  assert.deepEqual(buildPurchaseOrderCancellationRequest(createDetail(), ''), {
-    fieldError: '存在有效付款，请先作废全部付款记录',
-    valid: false,
-  })
-  assert.deepEqual(buildPurchaseOrderCancellationRequest(createDetail({
-    paidAmount: '0.0000',
-    paymentStatus: 'UNPAID',
-  }), '  客户取消 '), {
-    valid: true,
-    request: { reason: '客户取消', toStatus: 'CANCELLED' },
-  })
 })
 
 test('付款作废强制填写原因并固定采购状态中文语义', () => {
@@ -211,6 +198,5 @@ test('审核提交绑定最新版本，限定审核中状态并规范化审核�
   assert.equal(buildPurchaseOrderReviewRequest(detail, '', { ...image, orderVersion: 6 }).valid, false)
   assert.equal(buildPurchaseOrderReviewRequest(detail, '', { ...image, isCurrent: false }).valid, false)
   assert.equal(buildPurchaseOrderReviewRequest(detail, '', { ...image, purchaseOrderId: 'other-order' }).valid, false)
-  assert.equal(buildPurchaseOrderCancellationRequest(detail, '').valid, true)
   assert.equal(purchaseOrderStatusHistoryValueLabel('PENDING_REVIEW'), '采购审核中')
 })

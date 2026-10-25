@@ -20,6 +20,7 @@ import type {
   FactoryShipmentIntent,
   FactoryShipmentModalContext,
 } from '@/components/business/QsFactoryShipmentModal/types'
+import type { ActionMenuItem, ActionWidthSpec } from '@/components/business/QsGenericTable/action-column-width'
 import type {
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
@@ -54,6 +55,11 @@ import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchTool
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import { mediaThumbnailUrl } from '@/utils/media-variant'
+import PurchaseOrderCancelModal from './purchase-order-cancel-modal.vue'
+import {
+  getPurchaseOrderCancelBlockedReason,
+  purchaseOrderCancelBlockedMessage,
+} from './purchase-order-cancel.logic'
 import PurchaseOrderDetailDrawer from './purchase-order-detail-drawer.vue'
 import PurchaseOrderListPaymentAction from './purchase-order-list-payment-action.vue'
 import {
@@ -106,6 +112,7 @@ const canRead = computed(() => auth('purchase-orders:read'))
 const canCreate = computed(() => auth('purchase-orders:create'))
 const canCreateStock = computed(() => auth('purchase-orders:create-stock'))
 const canUpdate = computed(() => auth('purchase-orders:update'))
+const canCancel = computed(() => auth('purchase-orders:update') || auth('purchase-orders:review'))
 const canManagePayment = computed(() => auth('purchase-orders:payment'))
 const pageTitle = computed(() => props.viewMode === 'pending' ? '待办采购' : '全部采购')
 const pageDescription = computed(() => props.viewMode === 'pending'
@@ -156,6 +163,8 @@ const listError = ref('')
 const requestId = ref<string>()
 const detailVisible = ref(false)
 const selectedOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
+const cancelModalVisible = ref(false)
+const cancelOrderId = ref<string | null>(null)
 const recordsModalVisible = ref(false)
 const recordsModalKind = ref<PurchaseOrderRecordsKind>('payments')
 const recordsModalOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
@@ -189,12 +198,24 @@ const statusItems = computed(() => withStatusSwitchCounts(
   },
 ))
 
-// 详情固定行内展示；业务动作只按权限/当前 Tab 决定槽位，不按行状态增删。
+// 详情始终可达；双权限时桌面收进更多菜单，移动端保持行内，避免操作列过宽。
 const actionColumnWidth = computed(() => {
   if (props.viewMode === 'all') {
-    return resolveActionColumnWidth(canUpdate.value
-      ? [{ chars: 2, kind: 'text' }, { chars: 2, kind: 'text' }]
-      : [{ chars: 2, kind: 'text' }])
+    const actions: ActionWidthSpec[] = []
+    if (canUpdate.value && canCancel.value) {
+      actions.push(
+        { chars: 2, kind: 'text' },
+        { chars: 2, kind: 'text' },
+        { kind: 'icon' },
+      )
+    }
+    else if (canUpdate.value || canCancel.value) {
+      actions.push({ chars: 2, kind: 'text' }, { chars: 2, kind: 'text' })
+    }
+    else {
+      actions.push({ chars: 2, kind: 'text' })
+    }
+    return resolveActionColumnWidth(actions)
   }
   const task = normalizePurchaseOrderStatusSelection(
     'pending',
@@ -555,6 +576,39 @@ async function enterPurchaseCreate(selection: PurchaseStartSelection): Promise<v
 function openPurchaseOrderDetail(order: PurchaseOrderListItemDto): void {
   selectedOrder.value = { ...order }
   detailVisible.value = true
+}
+
+function purchaseOrderCancelBlockedReason(order: PurchaseOrderListItemDto): string | null {
+  if (props.viewMode !== 'all') {
+    return '待办视图不提供取消采购单入口'
+  }
+  if (!canCancel.value) {
+    return '当前账号无权取消采购单'
+  }
+  const blockedReason = getPurchaseOrderCancelBlockedReason(order, {
+    allowPendingReview: true,
+  })
+  return blockedReason === null
+    ? null
+    : purchaseOrderCancelBlockedMessage(blockedReason)
+}
+
+function openPurchaseOrderCancel(order: PurchaseOrderListItemDto): void {
+  const blockedReason = purchaseOrderCancelBlockedReason(order)
+  if (blockedReason !== null) {
+    toast.info(blockedReason)
+    return
+  }
+  cancelOrderId.value = order.id
+  cancelModalVisible.value = true
+}
+
+function handlePurchaseOrderCancelled(): void {
+  refreshOrdersAndCounts()
+}
+
+function detailMenuItems(order: PurchaseOrderListItemDto): ActionMenuItem[][] {
+  return [[{ label: '详情', handle: () => openPurchaseOrderDetail(order) }]]
 }
 
 function currentPendingTask(): PurchaseOrderPendingTask {
@@ -1013,7 +1067,27 @@ onBeforeUnmount(() => {
               >
                 入仓
               </FaButton>
+              <FaTooltip
+                v-if="canCancel"
+                :text="purchaseOrderCancelBlockedReason(row) ?? ''"
+                :disabled="purchaseOrderCancelBlockedReason(row) === null"
+              >
+                <span class="inline-flex">
+                  <FaButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="text-destructive min-h-11 sm:min-h-8"
+                    :disabled="purchaseOrderCancelBlockedReason(row) !== null"
+                    :aria-label="`${row.orderNo}：取消采购单`"
+                    @click="openPurchaseOrderCancel(row)"
+                  >
+                    取消
+                  </FaButton>
+                </span>
+              </FaTooltip>
               <FaButton
+                v-if="!(canUpdate && canCancel)"
                 type="button"
                 variant="ghost"
                 size="sm"
@@ -1023,6 +1097,32 @@ onBeforeUnmount(() => {
               >
                 详情
               </FaButton>
+              <FaButton
+                v-if="canUpdate && canCancel"
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-8 md:hidden"
+                :aria-label="`${row.orderNo}：详情`"
+                @click="openPurchaseOrderDetail(row)"
+              >
+                详情
+              </FaButton>
+              <FaDropdown
+                v-if="canUpdate && canCancel"
+                :items="detailMenuItems(row)"
+                align="end"
+              >
+                <FaButton
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  class="min-h-11 min-w-11 hidden md:inline-flex sm:min-h-8 sm:min-w-8"
+                  :aria-label="`${row.orderNo}：更多操作`"
+                >
+                  <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
+                </FaButton>
+              </FaDropdown>
             </template>
             <template v-else>
               <FaButton
@@ -1620,6 +1720,12 @@ onBeforeUnmount(() => {
       :order="selectedOrder"
       :currencies="currencyCatalog.currencies.value"
       @detail-updated="handleDetailUpdated"
+    />
+
+    <PurchaseOrderCancelModal
+      v-model="cancelModalVisible"
+      :order-id="cancelOrderId"
+      @cancelled="handlePurchaseOrderCancelled"
     />
 
     <PurchaseWarehouseReceiptAction ref="warehouseActionRef" :active="canRead" @detail-updated="handleDetailUpdated" />

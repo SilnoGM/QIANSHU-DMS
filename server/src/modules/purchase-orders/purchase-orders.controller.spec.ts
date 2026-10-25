@@ -7,7 +7,7 @@ import type { OpenAPIObject } from '@nestjs/swagger'
 import { requestIdMiddleware } from '../../infrastructure/http/request-id.middleware'
 import { createOpenApiDocument } from '../../openapi/openapi-document.factory'
 import { attachRequestAuthContext } from '../auth/auth-context'
-import { REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
+import { REQUIRED_ANY_PERMISSIONS_METADATA, REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
 import type { ProductMediaContentResponse } from '../products/media/product-media-content.service'
 import { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import { PurchaseOrderDocumentService } from './documents/purchase-order-document.service'
@@ -85,7 +85,7 @@ const providers = [{
 class PurchaseOrdersContractModule {}
 
 describe('PurchaseOrdersController', () => {
-  it('reserves purchase cancellation for reviewers and accepts an omitted reason', async () => {
+  it('allows purchase cancellation for editors or reviewers and accepts an omitted reason', async () => {
     const updateOrderStatus = jest.fn().mockResolvedValue({ id: ORDER_ID, orderStatus: 'CANCELLED' })
     const controller = new PurchaseOrdersController(
       {} as PurchaseOrderQueryService,
@@ -101,8 +101,8 @@ describe('PurchaseOrdersController', () => {
     await expect(controller.updateOrderStatus({ purchaseOrderId: ORDER_ID }, input, createRequest()))
       .resolves.toEqual({ id: ORDER_ID, orderStatus: 'CANCELLED' })
     expect(updateOrderStatus).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, input)
-    expect(new Reflector().get(REQUIRED_PERMISSIONS_METADATA, PurchaseOrdersController.prototype.updateOrderStatus))
-      .toEqual(['purchase-orders:review'])
+    expect(new Reflector().get(REQUIRED_ANY_PERMISSIONS_METADATA, PurchaseOrdersController.prototype.updateOrderStatus))
+      .toEqual(['purchase-orders:update', 'purchase-orders:review'])
   })
 
   it('requires review permission for the read-only eligibility check', async () => {

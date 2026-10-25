@@ -23,7 +23,7 @@ import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { CurrentUserId, resolveDataScopeActor } from '../auth/decorators/current-user-id.decorator'
-import { RequirePermissions } from '../auth/decorators/auth.decorators'
+import { RequireAnyPermissions, RequirePermissions } from '../auth/decorators/auth.decorators'
 import { ApiProductMediaContentContract } from '../products/media/product-media-content.contract'
 import { PurchaseOrderShippingMarkResolutionDto, PurchaseOrderShippingMarkResolutionQueryDto } from '../purchase-shipping-marks/purchase-shipping-mark-resolution.dto'
 import { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
@@ -600,7 +600,7 @@ export class PurchaseOrdersController {
   }
 
   @Patch(':purchaseOrderId/order-status')
-  @RequirePermissions('purchase-orders:review')
+  @RequireAnyPermissions('purchase-orders:update', 'purchase-orders:review')
   @ApiContractResponse({ status: HttpStatus.OK, type: PurchaseOrderDetailDto })
   @ApiApplicationContract({
     operationId: 'purchase_orders_update_order_status',

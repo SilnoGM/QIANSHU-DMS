@@ -462,16 +462,16 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
 
   afterAll(async () => { await application?.close() })
 
-  it('rejects cancellation from an operations updater before the mutation service runs', async () => {
+  it('allows cancellation from an operations updater without review permission', async () => {
     grantedPermissions = ['purchase-orders:read', 'purchase-orders:update']
     const response = await request(application.getHttpServer())
       .patch(`/api/purchase-orders/${ORDER_ID}/order-status`).set(mutationHeaders).set('Cookie', cookie)
-      .send({ toStatus: 'CANCELLED' }).expect(403)
-    expect(responseBody(response)).toMatchObject({ code: 'FORBIDDEN' })
-    expect(updateOrderStatus).not.toHaveBeenCalled()
+      .send({ toStatus: 'CANCELLED' }).expect(200)
+    expect(responseBody(response)).toMatchObject({ id: ORDER_ID, orderStatus: 'CANCELLED' })
+    expect(updateOrderStatus).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, { toStatus: 'CANCELLED' })
   })
 
-  it('allows reviewer cancellation without a reason and applies permission revocation immediately', async () => {
+  it('allows reviewer cancellation without a reason and rejects after both cancellation permissions are removed', async () => {
     grantedPermissions = ['purchase-orders:review']
     const submit = () => request(application.getHttpServer())
       .patch(`/api/purchase-orders/${ORDER_ID}/order-status`).set(mutationHeaders).set('Cookie', cookie)
@@ -479,7 +479,7 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
     const response = await submit().expect(200)
     expect(responseBody(response)).toMatchObject({ id: ORDER_ID, orderStatus: 'CANCELLED' })
     expect(updateOrderStatus).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, { toStatus: 'CANCELLED' })
-    grantedPermissions = ['purchase-orders:update']
+    grantedPermissions = ['purchase-orders:read']
     await submit().expect(403)
     expect(updateOrderStatus).toHaveBeenCalledTimes(1)
     expect(roleRows).toHaveBeenCalledTimes(2)
