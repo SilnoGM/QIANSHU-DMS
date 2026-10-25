@@ -4,19 +4,24 @@ import type { OperationsOceanContainerApi, OperationsOceanContainerQuery } from 
 import type { OceanContainerDetailPage, OceanContainerItemsRequest } from '@/components/business/QsOceanContainerList/types'
 import { onScopeDispose, ref, shallowRef, watch } from 'vue'
 
+/** 个人页按服务端解析的数据范围决定柜次/明细范围；全部柜次页固定 ALL。 */
+export type OperationsOceanContainerMode = 'personal' | 'all'
+
 /** 个人数据只由服务端授权的接口提供；缓存仅活在当前页面、查询和登录身份中。 */
 export function useOperationsOceanContainers(
   enabled: Readonly<Ref<boolean>>,
   epoch: Readonly<Ref<number>>,
   query: Readonly<Ref<OperationsOceanContainerQuery>>,
-  api: Pick<OperationsOceanContainerApi, 'list' | 'items' | 'item'>,
+  api: Pick<OperationsOceanContainerApi, 'list' | 'listAll' | 'items' | 'allItems' | 'item' | 'allItem'>,
   onInvalidPage: (page: number) => void,
   messages: { list: string, items: string, detail: string },
+  mode: OperationsOceanContainerMode = 'personal',
 ) {
   const rows = shallowRef<OperationsOceanContainerDto[]>([])
   const total = ref(0)
   const loading = ref(false)
   const error = ref('')
+  const scope = ref<'SELF' | 'ALL'>(mode === 'all' ? 'ALL' : 'SELF')
   const expandedIds = ref<string[]>([])
   const details = ref<Record<string, OceanContainerDetailPage>>({})
   const drawerOpen = ref(false)
@@ -33,6 +38,10 @@ export function useOperationsOceanContainers(
 
   function current(controller: AbortController, identity: number): boolean {
     return !disposed && enabled.value && !controller.signal.aborted && epoch.value === identity
+  }
+
+  function hasItems(row: OperationsOceanContainerDto): boolean {
+    return scope.value === 'ALL' ? row.itemCount > 0 : row.myItemCount > 0
   }
 
   function closeDrawer(): void {
@@ -56,6 +65,7 @@ export function useOperationsOceanContainers(
     total.value = 0
     loading.value = false
     error.value = ''
+    scope.value = mode === 'all' ? 'ALL' : 'SELF'
     details.value = {}
     expandedIds.value = []
     closeDrawer()
@@ -71,10 +81,13 @@ export function useOperationsOceanContainers(
     const identity = epoch.value
     loading.value = true
     try {
-      const response = await api.list(query.value, controller.signal)
+      const response = mode === 'all'
+        ? await api.listAll(query.value, controller.signal)
+        : await api.list(query.value, controller.signal)
       if (!current(controller, identity)) {
         return
       }
+      scope.value = mode === 'all' ? 'ALL' : response.data.dataScope
       rows.value = response.data.items
       total.value = response.data.total
       if ((query.value.page ?? 1) > 1 && rows.value.length === 0) {
@@ -96,7 +109,7 @@ export function useOperationsOceanContainers(
 
   async function requestItems(request: OceanContainerItemsRequest): Promise<void> {
     const { containerId, page, pageSize } = request
-    if (disposed || !enabled.value || loading.value || !rows.value.some(row => row.id === containerId && row.myItemCount > 0)) {
+    if (disposed || !enabled.value || loading.value || !rows.value.some(row => row.id === containerId && hasItems(row))) {
       return
     }
     const previous = details.value[containerId]
@@ -114,22 +127,28 @@ export function useOperationsOceanContainers(
     const controller = new AbortController()
     itemControllers.set(containerId, controller)
     const identity = epoch.value
+    const usesAllItems = scope.value === 'ALL'
     details.value[containerId] = { status: 'loading', items: [], total: previous?.total ?? 0, page, pageSize }
     try {
-      const response = await api.items(containerId, { page, pageSize }, controller.signal)
+      const response = usesAllItems
+        ? await api.allItems(containerId, { page, pageSize }, controller.signal)
+        : await api.items(containerId, { page, pageSize }, controller.signal)
       if (!current(controller, identity)) {
         return
       }
       const authoritativeTotal = response.data.total
-      const knownTotal = rows.value.find(row => row.id === containerId)?.myItemCount
+      const targetRow = rows.value.find(row => row.id === containerId)
+      const knownTotal = usesAllItems ? targetRow?.itemCount : targetRow?.myItemCount
       if (authoritativeTotal !== knownTotal) {
-        // 新的个人计数意味着归属集合可能变化，先丢弃该柜所有旧页，才能安全纠正越界分页。
+        // 新的权威计数意味着归属或整柜集合可能变化，先丢弃该柜所有旧页，才能安全纠正越界分页。
         for (const cachedKey of cache.keys()) {
           if (cachedKey.startsWith(`${containerId}:`)) {
             cache.delete(cachedKey)
           }
         }
-        rows.value = rows.value.map(row => row.id === containerId ? { ...row, myItemCount: authoritativeTotal } : row)
+        rows.value = rows.value.map(row => row.id !== containerId
+          ? row
+          : usesAllItems ? { ...row, itemCount: authoritativeTotal } : { ...row, myItemCount: authoritativeTotal })
         details.value[containerId] = { status: 'loading', items: [], total: authoritativeTotal, page, pageSize }
         if (selectedTarget?.containerId === containerId) {
           closeDrawer()
@@ -175,9 +194,12 @@ export function useOperationsOceanContainers(
     selectedLine.value = null
     detailError.value = ''
     detailLoading.value = true
+    const usesAllItems = scope.value === 'ALL'
     try {
-      // 查看动作总是重新请求，不从已展开行构造完整详情，确保服务端重新校验销售归属。
-      const response = await api.item(target.containerId, target.itemId, controller.signal)
+      // 查看动作总是重新请求，不从已展开行构造完整详情，确保服务端重新校验范围。
+      const response = usesAllItems
+        ? await api.allItem(target.containerId, target.itemId, controller.signal)
+        : await api.item(target.containerId, target.itemId, controller.signal)
       if (current(controller, identity)) {
         selectedLine.value = response.data
       }
@@ -219,7 +241,7 @@ export function useOperationsOceanContainers(
 
   async function openLine(containerId: string, itemId: string): Promise<void> {
     const container = rows.value.find(row => row.id === containerId)
-    if (disposed || !enabled.value || !container || !container.myItemCount) {
+    if (disposed || !enabled.value || !container || !hasItems(container)) {
       return
     }
     selectedTarget = { containerId, itemId }
@@ -237,5 +259,5 @@ export function useOperationsOceanContainers(
     reset()
   })
 
-  return { rows, total, loading, error, expandedIds, details, drawerOpen, selectedLine, selectedContainerName, detailLoading, detailError, reload, requestItems, refreshItems, openLine, closeDrawer, loadDetail }
+  return { rows, total, loading, error, scope, expandedIds, details, drawerOpen, selectedLine, selectedContainerName, detailLoading, detailError, reload, requestItems, refreshItems, openLine, closeDrawer, loadDetail }
 }

@@ -1,5 +1,9 @@
 import type { CurrencyDescriptor } from '@/components/base/currency'
 
+/** 卡片明细的读取范围；全部柜次页用 all 展示他人行，写入授权仍由服务端个人接口负责。 */
+export type OceanContainerDetailScope = 'mine' | 'all'
+export type OceanContainerMeasureScope = 'mine' | 'all'
+
 /** 整柜概览与个人明细计数分开；调用方提供经过服务端授权的数据。 */
 export interface OceanContainerSummary {
   id: string
@@ -29,6 +33,8 @@ export interface OceanContainerLine {
   recipientPhone: string | null
   recipientAddress: string | null
   codAmountTwd: string | null
+  /** 全部柜次页由服务端返回；个人页省略，视为本人。 */
+  mine?: boolean
 }
 
 export interface OceanContainerDetailPage {
@@ -71,4 +77,12 @@ export interface OceanContainerListProps {
   canViewSales?: boolean
   canViewPurchase?: boolean
   canModify?: boolean
+  detailScope?: OceanContainerDetailScope
+  measureScope?: OceanContainerMeasureScope
+  /** 全部柜次页按每行 mine 逐行禁用操作；个人页保持 false。 */
+  restrictLineActions?: boolean
+  /** 全部柜次页不展示销售/采购来源列与详情入口；个人页保持 true。 */
+  showSource?: boolean
+  /** 覆盖空态说明；个人页用于解释「仅显示含本人明细的柜次」。 */
+  emptyDescription?: string
 }

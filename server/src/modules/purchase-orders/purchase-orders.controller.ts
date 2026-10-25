@@ -23,7 +23,7 @@ import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { CurrentUserId, resolveDataScopeActor } from '../auth/decorators/current-user-id.decorator'
-import { RequirePermissions } from '../auth/decorators/auth.decorators'
+import { RequireAnyPermissions, RequirePermissions } from '../auth/decorators/auth.decorators'
 import { ApiProductMediaContentContract } from '../products/media/product-media-content.contract'
 import { PurchaseOrderShippingMarkResolutionDto, PurchaseOrderShippingMarkResolutionQueryDto } from '../purchase-shipping-marks/purchase-shipping-mark-resolution.dto'
 import { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
@@ -49,6 +49,7 @@ import {
   PurchaseOrderFulfillmentStatusRequestDto,
   PurchaseOrderPaymentRequestDto,
   PurchaseOrderPaymentVoidRequestDto,
+  PurchaseOrderRejectRequestDto,
   PurchaseOrderReviewRequestDto,
   PurchaseOrderPrepareReviewShippingMarksRequestDto,
   PurchaseOrderStatusRequestDto,
@@ -599,8 +600,35 @@ export class PurchaseOrdersController {
     return this.mutations.review(mutationContext(request), params.purchaseOrderId, dto)
   }
 
-  @Patch(':purchaseOrderId/order-status')
+  @Post(':purchaseOrderId/reject')
   @RequirePermissions('purchase-orders:review')
+  @HttpCode(HttpStatus.OK)
+  @ApiContractResponse({ status: HttpStatus.OK, type: PurchaseOrderDetailDto })
+  @ApiApplicationContract({
+    operationId: 'purchase_orders_reject',
+    session: 'required', authorization: true, csrf: true, badRequest: true,
+    resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] },
+      { status: 409, codes: ['PURCHASE_ORDER_STATE_CHANGED'] },
+      { status: 422, codes: [
+        'PURCHASE_ORDER_CANCEL_HAS_PAYMENTS',
+        'PURCHASE_ORDER_STATUS_TRANSITION_INVALID',
+        'VALIDATION_FAILED',
+      ] },
+    ],
+  })
+  reject(
+    @Param() params: PurchaseOrderIdParamDto,
+    @Body() dto: PurchaseOrderRejectRequestDto,
+    @Req() request: object,
+  ): Promise<PurchaseOrderDetail> {
+    return this.mutations.reject(mutationContext(request), params.purchaseOrderId, dto)
+  }
+
+  @Patch(':purchaseOrderId/order-status')
+  @RequireAnyPermissions('purchase-orders:update', 'purchase-orders:review')
   @ApiContractResponse({ status: HttpStatus.OK, type: PurchaseOrderDetailDto })
   @ApiApplicationContract({
     operationId: 'purchase_orders_update_order_status',

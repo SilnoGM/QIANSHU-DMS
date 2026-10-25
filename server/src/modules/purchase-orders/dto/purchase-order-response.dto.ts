@@ -158,14 +158,23 @@ export class PurchaseOrderLineSummaryDto {
 }
 
 export class PurchaseOrderReviewSummaryDto {
+  @ApiProperty({ enum: ['APPROVED', 'REJECTED'] }) readonly decision!: 'APPROVED' | 'REJECTED'
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly reviewedAt!: string
   @ApiProperty({ type: () => PurchaseOrderActorDto }) readonly reviewedBy!: PurchaseOrderActorDto
   @ApiProperty({ type: 'string', nullable: true }) readonly reason!: string | null
 }
 
+export class PurchaseOrderRejectionDto {
+  @ApiProperty({ type: 'string', format: 'date-time' }) readonly rejectedAt!: string
+  @ApiProperty({ type: () => PurchaseOrderActorDto }) readonly rejectedBy!: PurchaseOrderActorDto
+  @ApiProperty({ type: 'string' }) readonly reason!: string
+}
+
 export class PurchaseOrderListItemDto {
-  @ApiProperty({ type: () => PurchaseOrderReviewSummaryDto, nullable: true, description: '精确取自采购待审核到已确认的订单状态变更；无对应历史时为 null' })
+  @ApiProperty({ type: () => PurchaseOrderReviewSummaryDto, nullable: true, description: '审核结果（通过或驳回）；无对应记录时为 null' })
   readonly reviewSummary!: PurchaseOrderReviewSummaryDto | null
+  @ApiProperty({ type: () => PurchaseOrderRejectionDto, nullable: true, description: '审核驳回详情；手工取消或未驳回时为 null' })
+  readonly rejection!: PurchaseOrderRejectionDto | null
   @ApiProperty({ type: () => PurchaseOrderPaymentRecordSummaryDto }) readonly paymentRecordSummary!: PurchaseOrderPaymentRecordSummaryDto
   @ApiProperty({ type: () => PurchaseOrderDocumentSummaryDto }) readonly documentSummary!: PurchaseOrderDocumentSummaryDto
   @ApiProperty({ type: () => PurchaseOrderChangeSummaryDto }) readonly changeSummary!: PurchaseOrderChangeSummaryDto
@@ -278,6 +287,7 @@ export const PURCHASE_ORDER_STATUS_COUNT_VALUES = [
   'CONFIRMED',
   'COMPLETED',
   'CANCELLED',
+  'REJECTED',
   'AWAITING_REVIEW',
   'AWAITING_SHIPMENT',
   'AWAITING_WAREHOUSE',

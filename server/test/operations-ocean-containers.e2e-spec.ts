@@ -32,12 +32,18 @@ interface PersonalLine {
   purchaseOrderNo: string | null
 }
 
+interface AllLine extends PersonalLine {
+  mine: boolean
+}
+
 interface Page<T> { items: T[], total: number }
+interface OverviewPage extends Page<Overview> { dataScope: 'SELF' | 'ALL' }
 
 const basePath = '/api/operations/ocean-containers'
 const overviewKeys = ['id', 'containerBatchNo', 'containerBatchName', 'loadingDate', 'warehouseValue', 'warehouseName', 'itemCount', 'myItemCount', 'grossWeightKgTotal', 'volumeCaiTotal'].sort()
 // shipmentNo 是「可查看采购」的查看者才拿到的辅助字段（货件唛头下的 PKG 编号），DTO 增列后这里必须同步。
 const personalLineKeys = ['id', 'containerBatchId', 'version', 'lineNumber', 'oceanShippingMarkText', 'goodsName', 'shippingMark', 'shipmentNo', 'salesOrderId', 'salesOrderNo', 'purchaseOrderId', 'purchaseOrderNo', 'recipientName', 'codAmountTwd', 'warehouseReceiptReference', 'recipientPhone', 'recipientAddress', 'packageCount', 'packageUnit', 'grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'remark'].sort()
+const allLineKeys = [...personalLineKeys, 'mine'].sort()
 const forbiddenKeys = ['sourceData', 'sourceFileId', 'sourceFile', 'sourceSheetName', 'sourceRowNumber', 'billLines', 'bills', 'creationRequestKey', 'creationPayloadHash', 'createdById', 'updatedById', 'issuerUserId']
 
 describe('operations ocean containers with isolated PostgreSQL', () => {
@@ -130,7 +136,14 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
   afterAll(async () => { await h?.dispose() })
 
   it('requires authentication and sales read permission on every read entry point', async () => {
-    const paths = [basePath, `${basePath}/${mixedId}/items`, `${basePath}/${mixedId}/items/${ownIds[0]}`]
+    const paths = [
+      basePath,
+      `${basePath}/all`,
+      `${basePath}/all/${mixedId}/items`,
+      `${basePath}/all/${mixedId}/items/${hiddenIds[0]}`,
+      `${basePath}/${mixedId}/items`,
+      `${basePath}/${mixedId}/items/${ownIds[0]}`,
+    ]
     for (const path of paths) {
       await request(h.app.getHttpServer()).get(path).expect(401)
       await transportReader.browser.get(path).expect(403)
@@ -138,8 +151,9 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
     }
   })
 
-  it('returns all container overviews with whole-container totals, personal counts, and a strict public field list', async () => {
-    const result = (await alice.browser.get(basePath).expect(200)).body as Page<Overview>
+  it('returns all container overviews with whole-container totals for ALL scope and a strict public field list', async () => {
+    const result = (await alice.browser.get(basePath).expect(200)).body as OverviewPage
+    expect(result.dataScope).toBe('ALL')
     expect(result.total).toBe(4)
     expect(result.items.map(item => item.id)).toEqual([mixedId, incompleteId, noPersonalId, emptyId])
     for (const item of result.items) expect(Object.keys(item).sort()).toEqual(overviewKeys)
@@ -151,8 +165,8 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
     expect(result.items[2]).toMatchObject({ itemCount: 1, myItemCount: 0, grossWeightKgTotal: '12', volumeCaiTotal: '1.00' })
     expect(result.items[3]).toMatchObject({ itemCount: 0, myItemCount: 0, grossWeightKgTotal: '0', volumeCaiTotal: '0.00' })
     expect(result.items[0].warehouseName).toBeTruthy()
-    const first = (await alice.browser.get(basePath).query({ page: 1, pageSize: 2 }).expect(200)).body as Page<Overview>
-    const second = (await alice.browser.get(basePath).query({ page: 2, pageSize: 2 }).expect(200)).body as Page<Overview>
+    const first = (await alice.browser.get(basePath).query({ page: 1, pageSize: 2 }).expect(200)).body as OverviewPage
+    const second = (await alice.browser.get(basePath).query({ page: 2, pageSize: 2 }).expect(200)).body as OverviewPage
     expect(first.total).toBe(4)
     expect(second.total).toBe(4)
     expect([...first.items, ...second.items].map(item => item.id)).toEqual(result.items.map(item => item.id))
@@ -184,14 +198,48 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
     }
   })
 
+  it('filters containers and totals for SELF scope while ALL scope keeps full data', async () => {
+    const withoutSelfScope = (await alice.browser.get(basePath).expect(200)).body as OverviewPage
+    expect(withoutSelfScope.dataScope).toBe('ALL')
+    expect(withoutSelfScope.total).toBe(4)
+
+    const selfScope = await h.prisma.permission.findUniqueOrThrow({ where: { code: 'data-scope:self' }, select: { id: true } })
+    await h.prisma.rolePermission.create({ data: { roleId: alice.role.id, permissionId: selfScope.id } })
+    try {
+      const result = (await alice.browser.get(basePath).expect(200)).body as OverviewPage
+      expect(result.dataScope).toBe('SELF')
+      expect(result.total).toBe(2)
+      expect(result.items.map(item => item.id)).toEqual([mixedId, incompleteId])
+      expect(result.items.every(item => item.myItemCount > 0)).toBe(true)
+      // SELF 的合计取本人明细：mixedId 的 3 行完整；incompleteId 的本人行缺毛重。
+      expect(result.items[0]).toMatchObject({ itemCount: 6, myItemCount: 3, grossWeightKgTotal: '1400', volumeCaiTotal: '170.10' })
+      expect(result.items[1]).toMatchObject({ itemCount: 2, myItemCount: 1, grossWeightKgTotal: null, volumeCaiTotal: '9.00' })
+      const first = (await alice.browser.get(basePath).query({ page: 1, pageSize: 1 }).expect(200)).body as OverviewPage
+      const second = (await alice.browser.get(basePath).query({ page: 2, pageSize: 1 }).expect(200)).body as OverviewPage
+      expect(first.total).toBe(2)
+      expect(second.total).toBe(2)
+      expect([...first.items, ...second.items].map(item => item.id)).toEqual([mixedId, incompleteId])
+    }
+    finally {
+      await h.prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: alice.role.id, permissionId: selfScope.id } } }).catch(() => undefined)
+    }
+    const afterRemoval = (await alice.browser.get(basePath).expect(200)).body as OverviewPage
+    expect(afterRemoval.dataScope).toBe('ALL')
+    expect(afterRemoval.total).toBe(4)
+  })
+
   it('uses the authenticated sales owner for each user including the system administrator', async () => {
-    const bobList = (await bob.browser.get(basePath).expect(200)).body as Page<Overview>
+    const bobList = (await bob.browser.get(basePath).expect(200)).body as OverviewPage
+    expect(bobList.dataScope).toBe('ALL')
+    expect(bobList.total).toBe(4)
     expect(bobList.items.find(item => item.id === mixedId)?.myItemCount).toBe(1)
     expect(bobList.items.find(item => item.id === mixedId)?.itemCount).toBe(6)
     const bobItems = (await bob.browser.get(`${basePath}/${mixedId}/items`).expect(200)).body as Page<PersonalLine>
     expect(bobItems.total).toBe(1)
     expect(bobItems.items.map(item => item.id)).toEqual([hiddenIds[0]])
-    const adminList = (await admin.browser.get(basePath).expect(200)).body as Page<Overview>
+    const adminList = (await admin.browser.get(basePath).expect(200)).body as OverviewPage
+    expect(adminList.dataScope).toBe('ALL')
+    expect(adminList.total).toBe(4)
     expect(adminList.items.every(item => item.myItemCount === 0)).toBe(true)
     expect((await admin.browser.get(`${basePath}/${mixedId}/items`).expect(200)).body as Page<PersonalLine>)
       .toMatchObject({ total: 0, items: [] })
@@ -218,8 +266,53 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
     await bob.browser.get(`${basePath}/${mixedId}/items/${ownIds[0]}`).expect(404)
   })
 
+  it('returns every container and all loading lines with per-line ownership for the all view', async () => {
+    const allList = (await alice.browser.get(`${basePath}/all`).expect(200)).body as OverviewPage
+    expect(allList.dataScope).toBe('ALL')
+    expect(allList.total).toBe(4)
+    expect(allList.items.map(item => item.id)).toEqual([mixedId, incompleteId, noPersonalId, emptyId])
+    for (const item of allList.items) expect(Object.keys(item).sort()).toEqual(overviewKeys)
+    expect(allList.items[0]).toMatchObject({ itemCount: 6, myItemCount: 3, grossWeightKgTotal: '2050', volumeCaiTotal: '206.22' })
+    expect(allList.items[2]).toMatchObject({ itemCount: 1, myItemCount: 0 })
+    expect(allList.items[3]).toMatchObject({ itemCount: 0, myItemCount: 0, grossWeightKgTotal: '0', volumeCaiTotal: '0.00' })
+    const searched = (await alice.browser.get(`${basePath}/all`).query({ search: '0919' }).expect(200)).body as OverviewPage
+    expect(searched.items.map(item => item.id)).toEqual([incompleteId])
+
+    const allLines = (await alice.browser.get(`${basePath}/all/${mixedId}/items`).expect(200)).body as Page<AllLine>
+    expect(allLines.total).toBe(6)
+    expect(allLines.items.map(item => item.id)).toEqual([...ownIds, ...hiddenIds])
+    expect(allLines.items.map(item => item.mine)).toEqual([true, true, true, false, false, false])
+    for (const item of allLines.items) {
+      expect(Object.keys(item).sort()).toEqual(allLineKeys)
+      for (const key of forbiddenKeys) expect(item).not.toHaveProperty(key)
+    }
+    const secondPage = (await alice.browser.get(`${basePath}/all/${mixedId}/items`).query({ page: 2, pageSize: 2 }).expect(200)).body as Page<AllLine>
+    expect(secondPage).toMatchObject({ total: 6 })
+    expect(secondPage.items.map(item => item.id)).toEqual([ownIds[2], hiddenIds[0]])
+    const beyond = (await alice.browser.get(`${basePath}/all/${mixedId}/items`).query({ page: 4, pageSize: 2 }).expect(200)).body as Page<AllLine>
+    expect(beyond).toMatchObject({ total: 6, items: [] })
+
+    const noPersonal = (await alice.browser.get(`${basePath}/all/${noPersonalId}/items`).expect(200)).body as Page<AllLine>
+    expect(noPersonal).toMatchObject({ total: 1 })
+    expect(noPersonal.items[0].mine).toBe(false)
+    expect((await alice.browser.get(`${basePath}/all/${emptyId}/items`).expect(200)).body as Page<AllLine>)
+      .toMatchObject({ total: 0, items: [] })
+    await alice.browser.get(`${basePath}/all/${randomUUID()}/items`).expect(404)
+
+    const ownDetail = (await alice.browser.get(`${basePath}/all/${mixedId}/items/${ownIds[0]}`).expect(200)).body as AllLine
+    expect(ownDetail).toMatchObject({ id: ownIds[0], mine: true })
+    expect(Object.keys(ownDetail).sort()).toEqual(allLineKeys)
+    const otherDetail = (await alice.browser.get(`${basePath}/all/${mixedId}/items/${hiddenIds[0]}`).expect(200)).body as AllLine
+    expect(otherDetail).toMatchObject({ id: hiddenIds[0], mine: false })
+    expect(Object.keys(otherDetail).sort()).toEqual(allLineKeys)
+    for (const key of forbiddenKeys) expect(otherDetail).not.toHaveProperty(key)
+    await alice.browser.get(`${basePath}/all/${emptyId}/items/${ownIds[0]}`).expect(404)
+    await alice.browser.get(`${basePath}/all/${randomUUID()}/items/${ownIds[0]}`).expect(404)
+    await alice.browser.get(`${basePath}/all/${mixedId}/items/${randomUUID()}`).expect(404)
+  })
+
   it('rejects client-supplied owner filters instead of widening access', async () => {
-    for (const path of [basePath, `${basePath}/${mixedId}/items`]) {
+    for (const path of [basePath, `${basePath}/all`, `${basePath}/${mixedId}/items`, `${basePath}/all/${mixedId}/items`]) {
       await alice.browser.get(path).query({ issuerUserId: bob.user.id }).expect(422)
       await alice.browser.get(path).query({ ownerUserId: bob.user.id }).expect(422)
     }
@@ -233,7 +326,10 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
     })
     const before = await facts()
     await alice.browser.get(basePath).expect(200)
+    await alice.browser.get(`${basePath}/all`).expect(200)
     await alice.browser.get(`${basePath}/${mixedId}/items`).expect(200)
+    await alice.browser.get(`${basePath}/all/${mixedId}/items`).expect(200)
+    await alice.browser.get(`${basePath}/all/${mixedId}/items/${hiddenIds[0]}`).expect(200)
     await alice.browser.get(`${basePath}/${mixedId}/items/${ownIds[0]}`).expect(200)
     expect(await facts()).toEqual(before)
     expect(before.fundBatches).toBe(0)
@@ -245,9 +341,19 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
     await alice.browser.get(`${basePath}/${mixedId}/items/${ownIds[0]}`).expect(404)
     expect((await alice.browser.get(`${basePath}/${mixedId}/items`).expect(200)).body as Page<PersonalLine>)
       .toMatchObject({ total: 0, items: [] })
-    const aliceList = (await alice.browser.get(basePath).expect(200)).body as Page<Overview>
+    const aliceList = (await alice.browser.get(basePath).expect(200)).body as OverviewPage
+    expect(aliceList.dataScope).toBe('ALL')
+    expect(aliceList.total).toBe(4)
     expect(aliceList.items.find(item => item.id === mixedId)?.myItemCount).toBe(0)
     await bob.browser.get(`${basePath}/${mixedId}/items/${ownIds[0]}`).expect(200)
     expect((await bob.browser.get(`${basePath}/${mixedId}/items`).expect(200)).body as Page<PersonalLine>).toMatchObject({ total: 4 })
+    const aliceAll = (await alice.browser.get(`${basePath}/all/${mixedId}/items`).expect(200)).body as Page<AllLine>
+    expect(aliceAll.items.every(item => item.mine === false)).toBe(true)
+    expect((await alice.browser.get(`${basePath}/all/${mixedId}/items/${ownIds[0]}`).expect(200)).body as AllLine)
+      .toMatchObject({ id: ownIds[0], mine: false })
+    const bobAll = (await bob.browser.get(`${basePath}/all/${mixedId}/items`).expect(200)).body as Page<AllLine>
+    expect(bobAll.items.filter(item => item.mine)).toHaveLength(4)
+    expect((await bob.browser.get(`${basePath}/all/${mixedId}/items/${ownIds[0]}`).expect(200)).body as AllLine)
+      .toMatchObject({ id: ownIds[0], mine: true })
   })
 })

@@ -37,7 +37,7 @@ const state = useOperationsOceanContainers(enabled, computed(() => account.authE
   items: t('operationsOcean.itemsError'),
   detail: t('operationsOcean.detailError'),
 })
-const { rows, total, loading, error, expandedIds, details, selectedLine, selectedContainerName, detailLoading, detailError } = state
+const { rows, total, loading, error, scope, expandedIds, details, selectedLine, selectedContainerName, detailLoading, detailError } = state
 const drawerVisible = computed({ get: () => state.drawerOpen.value, set: value => !value && state.closeDrawer() })
 const source = useOceanContainerSource(enabled, computed(() => account.authEpoch), canRead, canViewPurchase, {
   item: operationsOceanApi.item,
@@ -63,6 +63,9 @@ function navigate(next: OperationsOceanContainerQuery, replace = false): void {
 function search(): void {
   navigate({ ...query.value, search: keyword.value.trim() || undefined, page: 1 })
 }
+function openAllContainers(): void {
+  void router.push({ name: 'qsOperationsOceanContainersAll' })
+}
 function paginate(value: { page: number, pageSize: number }): void {
   navigate({ ...query.value, ...value })
 }
@@ -71,12 +74,19 @@ function viewLine(value: { containerId: string, line: OceanContainerLine }): voi
   void state.openLine(value.containerId, value.line.id)
 }
 function viewSource(value: OceanContainerSourceRequest): void {
+  const line = details.value[value.containerId]?.items.find(item => item.id === value.lineId)
+  // ALL 范围会展示他人明细；来源入口只对本人行生效。
+  if (scope.value === 'ALL' && line?.mine !== true) {
+    return
+  }
   state.closeDrawer()
   void source.open(value)
 }
 function changeLine(value: OceanContainerChangeRequest): void {
   const container = rows.value.find(row => row.id === value.containerId)
-  if (!enabled.value || !canModify.value || !container?.myItemCount) {
+  const line = details.value[value.containerId]?.items.find(item => item.id === value.lineId)
+  // 写接口只接受本人明细；ALL 范围下也必须拦住他人行。
+  if (!enabled.value || !canModify.value || !container?.myItemCount || (scope.value === 'ALL' && line?.mine !== true)) {
     return
   }
   state.closeDrawer()
@@ -109,7 +119,11 @@ onBeforeUnmount(() => active.value = false)
 
 <template>
   <div class="min-w-0">
-    <FaPageHeader :title="t('operationsOcean.title')" :description="t('operationsOcean.description')" />
+    <FaPageHeader main-class="min-w-0" default-class="w-full min-w-0 sm:w-auto" :title="t('operationsOcean.title')" :description="t('operationsOcean.description')">
+      <FaButton v-if="canRead" variant="outline" class="w-full sm:w-auto" @click="openAllContainers">
+        <FaIcon name="i-lucide:list" aria-hidden="true" />{{ t('operationsOcean.viewAllContainers') }}
+      </FaButton>
+    </FaPageHeader>
     <FaPageMain class="min-w-0">
       <FaEmpty v-if="!canRead" icon="i-lucide:shield-alert" :title="t('operationsOcean.noAccess')" :description="t('operationsOcean.noAccessDescription')" class="py-12" />
       <div v-else class="min-w-0 space-y-5">
@@ -130,11 +144,21 @@ onBeforeUnmount(() => active.value = false)
           v-model:expanded-ids="expandedIds"
           :items="rows" :details="details" :currencies="currencyCatalog.currencies.value"
           :can-view-sales="canRead" :can-view-purchase="canViewPurchase" :can-modify="canModify"
+          :detail-scope="scope === 'ALL' ? 'all' : 'mine'"
+          :measure-scope="scope === 'ALL' ? 'all' : 'mine'"
+          :restrict-line-actions="scope === 'ALL'"
           :total="total" :page="query.page" :page-size="query.pageSize" :loading="loading" :error="error"
+          :empty-description="scope === 'SELF' ? t('operationsOcean.filteredEmptyHint') : undefined"
           @request-items="state.requestItems" @page-change="paginate" @retry="state.reload" @view-line="viewLine"
           @view-source="viewSource"
           @change-line="changeLine"
-        />
+        >
+          <template #empty-action>
+            <FaButton v-if="canRead" variant="outline" @click="openAllContainers">
+              {{ t('operationsOcean.viewAllContainers') }}
+            </FaButton>
+          </template>
+        </QsOceanContainerList>
       </div>
     </FaPageMain>
     <OceanContainerLineDrawer

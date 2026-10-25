@@ -27,6 +27,7 @@ const emit = defineEmits<{
 
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
+const router = useRouter()
 const detail = shallowRef<PurchaseOrderDetailDto | null>(null)
 const loading = ref(false)
 const loadError = ref<string | null>(null)
@@ -43,6 +44,34 @@ const drawerVisible = computed({
 })
 const canReceiveWarehouse = computed(() => auth('purchase-orders:update') && !!detail.value && eligibleWarehouseParts(detail.value).length > 0)
 const canAttachDocument = computed(() => auth('purchase-orders:document') && detail.value !== null && detail.value.orderStatus !== 'PENDING_REVIEW')
+const canRework = computed(() => {
+  const order = detail.value
+  return auth('purchase-orders:create')
+    && order !== null
+    && order.rejection !== null
+    && order.productMode !== 'MIXED'
+    && (order.purchaseType === 'STOCK' || order.sourceSalesOrder !== null)
+    && (order.productMode === 'CUSTOM' || order.supplier.value !== null)
+})
+function reworkRejectedOrder(): void {
+  const order = detail.value
+  if (order === null || order.rejection === null) {
+    return
+  }
+  const query: Record<string, string> = {
+    type: order.purchaseType,
+    productMode: order.productMode,
+    copyFrom: order.id,
+    ...(order.productMode === 'CATALOG'
+      ? { supplierValue: order.supplier.value! }
+      : { customSupplierName: order.supplier.label }),
+    ...(order.purchaseType === 'SALES_LINKED' && order.sourceSalesOrder !== null
+      ? { salesOrderId: order.sourceSalesOrder.id, salesOrderNo: order.sourceSalesOrder.orderNo }
+      : {}),
+  }
+  drawerVisible.value = false
+  void router.push({ name: 'operationsPurchaseOrderCreate', query })
+}
 function cancelDetailRequest(): void {
   requestVersion += 1
   detailAbortController?.abort()
@@ -141,7 +170,9 @@ onBeforeUnmount(() => {
     :busy="actionLocked"
     :can-attach-document="canAttachDocument"
     :can-receive-warehouse="canReceiveWarehouse"
+    :can-rework="canRework"
     @receive-warehouse="detailActionsRef?.openWarehouseDialog()"
+    @rework="reworkRejectedOrder"
     @reload="loadDetail"
     @attach-document="documentModalVisible = canAttachDocument && !actionLocked"
   />

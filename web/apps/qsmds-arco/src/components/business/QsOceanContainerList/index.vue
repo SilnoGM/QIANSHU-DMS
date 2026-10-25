@@ -4,7 +4,20 @@ import OceanContainerCard from './OceanContainerCard.vue'
 import { useOceanContainerList } from './use-ocean-container-list'
 
 defineOptions({ name: 'QsOceanContainerList' })
-const props = withDefaults(defineProps<OceanContainerListProps>(), { page: 1, pageSize: 10, loading: false, error: null, canViewSales: false, canViewPurchase: false, canModify: false })
+const props = withDefaults(defineProps<OceanContainerListProps>(), {
+  page: 1,
+  pageSize: 10,
+  loading: false,
+  error: null,
+  canViewSales: false,
+  canViewPurchase: false,
+  canModify: false,
+  detailScope: 'mine',
+  measureScope: 'mine',
+  restrictLineActions: false,
+  showSource: true,
+  emptyDescription: undefined,
+})
 const emit = defineEmits<{
   requestItems: [request: OceanContainerItemsRequest]
   pageChange: [page: { page: number, pageSize: number }]
@@ -15,7 +28,14 @@ const emit = defineEmits<{
 }>()
 const expandedIds = defineModel<string[]>('expandedIds', { default: () => [] })
 const { t } = useI18n()
-const state = useOceanContainerList(computed(() => props.items), computed(() => props.details), expandedIds, computed(() => props.loading || Boolean(props.error)), value => emit('requestItems', value))
+const state = useOceanContainerList(
+  computed(() => props.items),
+  computed(() => props.details),
+  expandedIds,
+  computed(() => props.loading || Boolean(props.error)),
+  value => emit('requestItems', value),
+  computed(() => props.detailScope),
+)
 function changePage(page: number, pageSize = props.pageSize) {
   if (!props.loading && !props.error && (page !== props.page || pageSize !== props.pageSize)) {
     emit('pageChange', { page, pageSize })
@@ -39,7 +59,9 @@ function changePage(page: number, pageSize = props.pageSize) {
         {{ t('qsOceanContainer.retry') }}
       </FaButton>
     </div>
-    <FaEmpty v-else-if="!items.length" icon="i-lucide:container" :title="t('qsOceanContainer.empty')" :description="t('qsOceanContainer.emptyHint')" class="py-12" />
+    <FaEmpty v-else-if="!items.length" icon="i-lucide:container" :title="t('qsOceanContainer.empty')" :description="emptyDescription ?? t('qsOceanContainer.emptyHint')" class="py-12">
+      <slot name="empty-action" />
+    </FaEmpty>
     <template v-else>
       <div class="flex flex-col gap-4">
         <OceanContainerCard
@@ -47,6 +69,8 @@ function changePage(page: number, pageSize = props.pageSize) {
           :item="item" :detail="details[item.id]" :currencies="currencies"
           :expanded="expandedIds.includes(item.id)"
           :can-view-sales="canViewSales" :can-view-purchase="canViewPurchase" :can-modify="canModify"
+          :detail-scope="detailScope" :measure-scope="measureScope" :restrict-line-actions="restrictLineActions"
+          :show-source="showSource"
           @toggle="state.toggle(item.id, $event)" @retry="state.retry(item.id)" @page-change="state.paginate(item.id, $event)"
           @view-line="emit('viewLine', { containerId: item.id, line: $event })"
           @view-source="emit('viewSource', { containerId: item.id, ...$event })"

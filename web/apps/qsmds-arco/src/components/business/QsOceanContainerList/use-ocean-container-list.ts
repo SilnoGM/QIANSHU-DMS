@@ -1,6 +1,7 @@
 import type { Ref } from 'vue'
-import type { OceanContainerDetailPage, OceanContainerItemsRequest, OceanContainerSummary } from './types'
-import { watch } from 'vue'
+import type { OceanContainerDetailPage, OceanContainerDetailScope, OceanContainerItemsRequest, OceanContainerSummary } from './types'
+import { ref, watch } from 'vue'
+import { hasOceanContainerDetails } from './logic'
 
 /** 展开只发出加载意图；请求、归属鉴权和缓存由调用方负责。 */
 export function useOceanContainerList(
@@ -9,9 +10,12 @@ export function useOceanContainerList(
   expanded: Ref<string[]>,
   disabled: Readonly<Ref<boolean>>,
   request: (value: OceanContainerItemsRequest) => void,
+  detailScope: Readonly<Ref<OceanContainerDetailScope>> = ref('mine'),
 ) {
   const available = (id: string) => !disabled.value && items.value.some(item => item.id === id)
-  const canLoad = (id: string) => available(id) && items.value.some(item => item.id === id && item.myItemCount > 0) && details.value[id]?.status !== 'loading'
+  const canLoad = (id: string) => available(id)
+    && items.value.some(item => item.id === id && hasOceanContainerDetails(item, detailScope.value))
+    && details.value[id]?.status !== 'loading'
 
   watch(items, (value) => {
     const ids = new Set(value.map(item => item.id))

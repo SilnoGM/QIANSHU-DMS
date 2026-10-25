@@ -209,7 +209,7 @@ describe('PurchaseOrderQueryService', () => {
     const page = await fixture.service.list({ view: 'all' })
 
     expect(page.items[0]).toMatchObject({
-      reviewSummary: { reviewedAt: reviewedAt.toISOString(), reviewedBy, reason: '价格和货件核对通过' },
+      reviewSummary: { decision: 'APPROVED', reviewedAt: reviewedAt.toISOString(), reviewedBy, reason: '价格和货件核对通过' },
       changeSummary: { latest: { kind: 'STATUS', changedAt: laterChangedAt.toISOString(), reason: '货件已发出' } },
     })
     expect(page.items[1]).toHaveProperty('reviewSummary', null)
@@ -238,6 +238,33 @@ describe('PurchaseOrderQueryService', () => {
     expect(fixture.prisma.purchaseOrderStatusHistory.findMany).not.toHaveBeenCalled()
   })
 
+  it('maps rejected orders to a rejected review summary and rejection detail', async () => {
+    const fixture = setup()
+    const rejectedAt = new Date('2026-10-25T03:00:00.000Z')
+    const rejectedBy = { id: 'reviewer-id', displayName: '审核人', avatarUrl: 'https://example.test/avatar.png' }
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
+      orderStatus: 'CANCELLED',
+      rejectedAt,
+      rejectedBy: { id: rejectedBy.id, displayName: rejectedBy.displayName, profile: { avatarUrl: rejectedBy.avatarUrl } },
+      rejectionReason: '价格需要修改',
+    })])
+
+    const page = await fixture.service.list({ view: 'all' })
+    expect(page.items[0]).toMatchObject({
+      rejection: {
+        rejectedAt: rejectedAt.toISOString(),
+        rejectedBy,
+        reason: '价格需要修改',
+      },
+      reviewSummary: {
+        decision: 'REJECTED',
+        reviewedAt: rejectedAt.toISOString(),
+        reviewedBy: rejectedBy,
+        reason: '价格需要修改',
+      },
+    })
+  })
+
   it('derives detail review facts only from the exact persisted approval transition', async () => {
     const fixture = setup()
     const reviewedAt = new Date('2026-09-13T03:00:00.000Z')
@@ -251,7 +278,7 @@ describe('PurchaseOrderQueryService', () => {
       ],
     }))
     const detail = await fixture.service.getById('order-id')
-    expect(detail).toHaveProperty('reviewSummary', { reviewedAt: reviewedAt.toISOString(), reviewedBy, reason: null })
+    expect(detail).toHaveProperty('reviewSummary', { decision: 'APPROVED', reviewedAt: reviewedAt.toISOString(), reviewedBy, reason: null })
     expect(fixture.prisma.purchaseOrderStatusHistory.findMany).not.toHaveBeenCalled()
 
     fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({ orderStatus: 'CONFIRMED', updatedAt: reviewedAt }))
@@ -813,6 +840,7 @@ describe('PurchaseOrderQueryService status counts', () => {
         { value: 'CONFIRMED', count: 5 },
         { value: 'COMPLETED', count: 2 },
         { value: 'CANCELLED', count: 0 },
+        { value: 'REJECTED', count: 3 },
       ],
     })
 

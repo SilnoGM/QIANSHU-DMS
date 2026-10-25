@@ -37,7 +37,7 @@ export const PURCHASE_ORDER_PENDING_TASKS = [
   'AWAITING_PAYMENT',
 ] as const
 
-export const PURCHASE_ORDER_REVIEW_VIEWS = ['PENDING_REVIEW', 'APPROVED', 'CANCELLED'] as const
+export const PURCHASE_ORDER_REVIEW_VIEWS = ['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'CANCELLED'] as const
 export type PurchaseOrderReviewView = typeof PURCHASE_ORDER_REVIEW_VIEWS[number]
 
 export type PurchaseOrderPendingTask = typeof PURCHASE_ORDER_PENDING_TASKS[number]

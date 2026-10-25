@@ -5,13 +5,13 @@ import type {
   PurchaseOrderPaymentDto,
   PurchaseOrderPaymentRequestDto,
   PurchaseOrderPaymentVoidRequestDto,
+  PurchaseOrderRejectRequestDto,
   PurchaseOrderReviewRequestDto,
-  PurchaseOrderStatusRequestDto,
 } from '../../../api/generated/types.gen'
 
 import Decimal from 'decimal.js'
 
-import { canCancelPurchaseOrderFromList, nextPurchaseOrderFulfillmentStatus } from './purchase-order-list.logic'
+import { nextPurchaseOrderFulfillmentStatus } from './purchase-order-list.logic'
 
 export interface PurchaseOrderPaymentDraft {
   readonly amount: string | null
@@ -201,31 +201,30 @@ export function buildPurchaseOrderReviewRequest(
   }
 }
 
-export function buildPurchaseOrderCancellationRequest(
-  detail: PurchaseOrderDetailDto,
+/** 审核驳回必须带原因和最新版本；原单会进入 CANCELLED 终态。 */
+export function buildPurchaseOrderRejectRequest(
+  detail: Pick<PurchaseOrderDetailDto, 'orderStatus' | 'version'>,
   reason: string,
-): PurchaseOrderMutationBuildResult<PurchaseOrderStatusRequestDto> {
-  if (!canCancelPurchaseOrderFromList(detail)) {
-    return { fieldError: '只有审核中或已确认订单可以取消', valid: false }
+): PurchaseOrderMutationBuildResult<PurchaseOrderRejectRequestDto> {
+  if (detail.orderStatus !== 'PENDING_REVIEW') {
+    return { valid: false, fieldError: '采购订单已不处于审核中，请刷新列表' }
   }
-  try {
-    if (!new Decimal(detail.paidAmount).isZero()) {
-      return { fieldError: '存在有效付款，请先作废全部付款记录', valid: false }
-    }
-  }
-  catch {
-    return { fieldError: '当前付款金额不可用，请刷新详情后重试', valid: false }
+  if (!Number.isSafeInteger(detail.version) || detail.version < 1) {
+    return { valid: false, fieldError: '当前订单版本不可用，请重新加载详情' }
   }
   const normalizedReason = optionalReason(reason)
   if (!normalizedReason.ok) {
-    return { fieldError: '取消原因最多 500 个字符', valid: false }
+    return { valid: false, fieldError: '驳回原因最多 500 个字符' }
+  }
+  if (normalizedReason.value === null) {
+    return { valid: false, fieldError: '请填写驳回原因' }
   }
   return {
-    request: {
-      toStatus: 'CANCELLED',
-      ...(normalizedReason.value === null ? {} : { reason: normalizedReason.value }),
-    },
     valid: true,
+    request: {
+      expectedVersion: detail.version,
+      reason: normalizedReason.value,
+    },
   }
 }
 

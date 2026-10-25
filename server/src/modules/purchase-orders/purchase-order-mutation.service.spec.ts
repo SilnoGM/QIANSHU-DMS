@@ -218,6 +218,64 @@ describe('PurchaseOrderMutationService', () => {
     expect(fixture.payables.closeForCancellation).toHaveBeenCalledWith(fixture.transaction, ORDER_ID)
   })
 
+  it('rejects a pending review order with reason and skips sales coverage recalculation', async () => {
+    const fixture = setup()
+    fixture.order.orderStatus = 'PENDING_REVIEW'
+
+    await fixture.service.reject(context, ORDER_ID, {
+      expectedVersion: 1,
+      reason: '  价格需要修改 ',
+    })
+
+    expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: expect.objectContaining({
+        orderStatus: 'CANCELLED',
+        rejectedAt: expect.any(Date) as unknown,
+        rejectedByUserId: ACTOR_ID,
+        rejectionReason: '价格需要修改',
+        version: { increment: 1 },
+      }) as Record<string, unknown>,
+    })
+    expect(fixture.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledWith({
+      where: { purchaseOrderId: ORDER_ID, status: { not: 'CANCELLED' } },
+      data: { status: 'CANCELLED' },
+    })
+    expect(fixture.payables.closeForCancellation).toHaveBeenCalledWith(fixture.transaction, ORDER_ID)
+    expect(fixture.imageDrafts.invalidateForOrder).toHaveBeenCalledWith(fixture.transaction, ORDER_ID)
+    expect(fixture.coverage.recalculateAfterPurchaseCancellation).not.toHaveBeenCalled()
+    expect(fixture.transaction.purchaseOrderStatusHistory.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        dimension: 'ORDER',
+        fromStatus: 'PENDING_REVIEW',
+        toStatus: 'CANCELLED',
+        reason: '价格需要修改',
+      }) as Record<string, unknown>,
+    })
+    expect(fixture.audit.record).toHaveBeenCalledWith(fixture.transaction, expect.objectContaining({
+      eventType: 'PURCHASE_ORDER_REJECTED',
+      metadata: expect.objectContaining({ action: 'REJECT', reason: '价格需要修改' }) as Record<string, unknown>,
+    }) as Record<string, unknown>)
+  })
+
+  it('refuses rejection after review or with a stale version', async () => {
+    const reviewed = setup()
+    reviewed.order.orderStatus = 'CONFIRMED'
+    await expect(reviewed.service.reject(context, ORDER_ID, {
+      expectedVersion: 1,
+      reason: '价格需要修改',
+    })).rejects.toMatchObject({ status: 409, code: 'PURCHASE_ORDER_STATE_CHANGED' })
+    expect(reviewed.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+
+    const stale = setup()
+    stale.order.orderStatus = 'PENDING_REVIEW'
+    await expect(stale.service.reject(context, ORDER_ID, {
+      expectedVersion: 2,
+      reason: '价格需要修改',
+    })).rejects.toMatchObject({ status: 409, code: 'PURCHASE_ORDER_STATE_CHANGED' })
+    expect(stale.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+  })
+
   it('propagates payable creation failure from the review transaction before returning success', async () => {
     const fixture = setup()
     fixture.order.orderStatus = 'PENDING_REVIEW'

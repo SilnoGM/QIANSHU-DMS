@@ -55,14 +55,15 @@ test('采购订单编号第二行使用关联/备货短标签和日期', async (
   assert.doesNotMatch(source, /orderDate \}\} · \{\{ purchaseTypeLabel/u)
 })
 
-test('运营采购保留查看入口，不挂载审核和取消入口', async () => {
+test('运营采购保留查看入口，不挂载审核入口，全部采购提供取消', async () => {
   const source = await readFile(new URL('index.vue', root), 'utf8')
   assert.match(source, /const actionColumnWidth = computed\(\(\) => \{/u)
   assert.match(source, /resolvePurchaseOrderPendingActionSlot\(currentPendingTask\(\)\)/u)
   assert.match(source, /resolveActionColumnWidth/u)
   assert.doesNotMatch(source, /PurchaseOrderReviewModal|openPurchaseOrderReview|canReview/u)
   assert.match(source, /@click="openPurchaseOrderDetail\(row\)"/u)
-  assert.doesNotMatch(source, /canCancelPurchaseOrderFromList|openPurchaseOrderCancellation/u)
+  assert.match(source, /openPurchaseOrderCancel/u)
+  assert.match(source, /getPurchaseOrderCancelBlockedReason/u)
   // 入仓入口按权限固定行内展示，行状态不满足时由点击守卫提示。
   assert.match(source, /v-if="canUpdate"[\s\S]*?openPurchaseWarehouseReceipt\(row\)[\s\S]*?入仓/u)
   assert.match(source, /resolvePurchaseOrderWarehouseReceiptBlockedReason/u)

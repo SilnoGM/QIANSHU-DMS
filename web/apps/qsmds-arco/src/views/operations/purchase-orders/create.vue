@@ -10,6 +10,7 @@ import type {
 import type { PurchaseOrderShippingMarkState } from './purchase-order-shipping-mark.logic'
 import type { PurchaseSourceSalesOrderSelection } from './purchase-source-sales-order-selector.types'
 import type {
+  PurchaseOrderDetailDto,
   PurchaseOrderShippingMarkResolutionDto,
   PurchaseOrderSourceSalesOrderLineDto,
   PurchaseOrderSourceSalesOrderListItemDto,
@@ -51,6 +52,7 @@ import {
   createPurchaseOrderEditingState,
   getPurchaseOrderMutationFailure,
   hasPurchasablePurchaseOrderSourceLines,
+  mapRejectedPurchaseCopy,
   parsePurchaseOrderCreateContext,
   PURCHASE_ORDER_CREATE_REVIEW_STEP,
   replayUnknownPurchaseOrderSubmission,
@@ -122,6 +124,15 @@ const createContext = parsePurchaseOrderCreateContext({
 const purchaseType = createContext?.purchaseType ?? null
 const productMode = createContext?.productMode ?? null
 const sourceShortcut = createContext?.sourceShortcut ?? null
+const copyFromId = typeof route.query.copyFrom === 'string' && route.query.copyFrom.trim() !== ''
+  ? route.query.copyFrom.trim()
+  : null
+const copySourceOrderNo = ref<string | null>(null)
+const copyError = ref('')
+const copyLoading = ref(false)
+let copyController: AbortController | null = null
+let copyApplied = false
+let copySourceSalesOrderId: string | null = null
 
 const lineLabels: OrderProductLineLabels = {
   actualSubtotal: '本单采购小计',
@@ -504,8 +515,8 @@ async function selectSourceSalesOrder(
   item: PurchaseOrderSourceSalesOrderListItemDto,
 ): Promise<void> {
   const previousSalesOrderId = selectedSalesOrder.value?.id ?? null
-  const sourceChanged = previousSalesOrderId !== null
-    && previousSalesOrderId !== item.id
+  const sourceChanged = (previousSalesOrderId !== null && previousSalesOrderId !== item.id)
+    || (copyApplied && copySourceSalesOrderId !== null && item.id !== copySourceSalesOrderId)
   sourceAbortController?.abort()
   const controller = new AbortController()
   sourceAbortController = controller
@@ -515,6 +526,12 @@ async function selectSourceSalesOrder(
   if (sourceChanged) {
     // 产品、付款约定和销售明细映射都依赖原销售订单，换单后必须一起失效；
     // 重选同一订单则保留用户已填写内容，只刷新该订单的剩余可采购明细。
+    if (copyApplied) {
+      copyApplied = false
+      copySourceOrderNo.value = null
+      copySourceSalesOrderId = null
+      copyError.value = ''
+    }
     formModel.lines = []
     purchasedSourceLines.value = []
     formModel.depositDueAmount = null
@@ -624,6 +641,99 @@ async function bindSourceSalesOrderFromShortcut(): Promise<void> {
   finally {
     if (shortcutAbortController === controller) {
       shortcutAbortController = null
+    }
+  }
+}
+
+function normalizeCopySupplier(value: string): string {
+  return value.trim().normalize('NFKC')
+}
+
+/** 把已驳回采购单的行、货件、收款和付款约定映射到新单草稿；不复用原单号与唛头。 */
+function applyRejectedPurchaseCopy(source: PurchaseOrderDetailDto): void {
+  const draft = mapRejectedPurchaseCopy(
+    source,
+    new Map(sourceSalesOrderLines.value.map(item => [item.id, item.remainingQuantity])),
+  )
+  formModel.lines = [...draft.lines]
+  partConfigurations.value = draft.parts
+  sourceSalesOrderLineIdByKey.value = draft.sourceSalesOrderLineIdByKey
+  maximumQuantityByKey.value = draft.maximumQuantityByKey
+  purchasedSourceLines.value = []
+  formModel.depositDueAmount = draft.depositDueAmount
+  formModel.balanceDueAmount = draft.balanceDueAmount
+  formModel.remark = draft.remark
+  paymentAccounts.value = [...draft.paymentAccounts]
+  copyApplied = true
+  toast.info(`已载入驳回单 ${source.orderNo}，请核对并修改后重新提交`)
+}
+
+async function loadRejectedPurchaseCopy(): Promise<void> {
+  if (copyFromId === null) {
+    return
+  }
+  const controller = new AbortController()
+  copyController = controller
+  const epoch = appAccountStore.authEpoch
+  copyLoading.value = true
+  copyError.value = ''
+  try {
+    const response = await purchaseOrdersApi.getById(copyFromId, controller.signal)
+    if (controller.signal.aborted || epoch !== appAccountStore.authEpoch) {
+      return
+    }
+    const source = response.data
+    if (source.orderStatus !== 'CANCELLED' || source.rejection === null) {
+      copyError.value = '原采购单不是已驳回状态，无法基于它修改'
+      return
+    }
+    if (source.productMode === 'MIXED') {
+      copyError.value = '混合采购历史单不支持一键修改，请手工新建采购单'
+      return
+    }
+    if (source.purchaseType !== purchaseType || source.productMode !== productMode) {
+      copyError.value = '原采购单与当前创建类型不一致，请从采购详情重新进入'
+      return
+    }
+    if (
+      source.purchaseType === 'SALES_LINKED'
+      && (
+        source.sourceSalesOrder === null
+        || sourceShortcut === null
+        || source.sourceSalesOrder.id !== sourceShortcut.salesOrderId
+        || source.sourceSalesOrder.orderNo !== sourceShortcut.salesOrderNo
+      )
+    ) {
+      copyError.value = '原采购单的销售来源与当前入口不一致，请从采购详情重新进入'
+      return
+    }
+    if (source.productMode === 'CATALOG' && (source.supplier.value === null || source.supplier.value !== formModel.supplierValue)) {
+      copyError.value = '原采购单供应商与当前入口不一致，请从采购详情重新进入'
+      return
+    }
+    if (source.productMode === 'CUSTOM' && normalizeCopySupplier(source.supplier.label) !== normalizeCopySupplier(formModel.customSupplierName ?? '')) {
+      copyError.value = '原采购单供应商与当前入口不一致，请从采购详情重新进入'
+      return
+    }
+    copySourceOrderNo.value = source.orderNo
+    copySourceSalesOrderId = source.sourceSalesOrder?.id ?? null
+    if (source.purchaseType === 'SALES_LINKED') {
+      await bindSourceSalesOrderFromShortcut()
+      if (controller.signal.aborted || epoch !== appAccountStore.authEpoch) {
+        return
+      }
+    }
+    applyRejectedPurchaseCopy(source)
+  }
+  catch (failure) {
+    if (!controller.signal.aborted && epoch === appAccountStore.authEpoch && !isPurchaseOrderAbortError(failure)) {
+      copyError.value = getPurchaseOrderApiFailure(failure).message
+    }
+  }
+  finally {
+    if (copyController === controller) {
+      copyController = null
+      copyLoading.value = false
     }
   }
 }
@@ -1100,6 +1210,13 @@ watch(() => appAccountStore.authEpoch, () => {
   sourceAbortController?.abort()
   synchronizeAbortController?.abort()
   submitAbortController?.abort()
+  copyController?.abort()
+  copyController = null
+  copyLoading.value = false
+  copyApplied = false
+  copySourceOrderNo.value = null
+  copySourceSalesOrderId = null
+  copyError.value = ''
   supplierChangeConfirmVisible.value = false
   pendingSupplierChange.value = null
   void router.replace({ name: 'qsOperationsPurchaseOrders' })
@@ -1145,7 +1262,12 @@ onMounted(() => {
   }
   window.addEventListener('beforeunload', handleBeforeUnload)
   refreshShippingMarkResolution()
-  void bindSourceSalesOrderFromShortcut()
+  if (copyFromId === null) {
+    void bindSourceSalesOrderFromShortcut()
+  }
+  else {
+    void loadRejectedPurchaseCopy()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -1154,6 +1276,7 @@ onBeforeUnmount(() => {
   sourceAbortController?.abort()
   synchronizeAbortController?.abort()
   submitAbortController?.abort()
+  copyController?.abort()
   window.removeEventListener('beforeunload', handleBeforeUnload)
   pendingNavigationResolver?.(false)
   pendingNavigationResolver = null
@@ -1186,6 +1309,26 @@ onBeforeUnmount(() => {
         'purchase-order-create-layout--review': steppedCreate && createSurface === 'review',
       }"
     >
+      <div v-if="copyLoading || copyError || copySourceOrderNo" class="purchase-order-alert-stack">
+        <FaAlert
+          v-if="copyLoading"
+          title="正在载入驳回单"
+          description="正在预填原采购单的产品、货件与付款约定。"
+        />
+        <FaAlert
+          v-else-if="copyError"
+          title="无法载入驳回单"
+          :description="copyError"
+          variant="destructive"
+          role="alert"
+        />
+        <FaAlert
+          v-else-if="copySourceOrderNo"
+          :title="`基于已驳回采购单 ${copySourceOrderNo} 修改`"
+          description="提交后生成新的采购单号；原单、原唛头和货件编号不会变更。"
+        />
+      </div>
+
       <div v-if="formError" class="purchase-order-alert-stack">
         <FaAlert
           title="采购订单尚不能提交"
