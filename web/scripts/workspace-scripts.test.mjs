@@ -71,6 +71,8 @@ test('认证、产品媒体、销售订单、采购订单、地区、字典与�
       .sort(),
     [
       'test:browser:auth',
+      'test:browser:auth:shard-1',
+      'test:browser:auth:shard-2',
       'test:browser:dictionaries',
       'test:browser:fund-accounts',
       'test:browser:numbering',
@@ -81,6 +83,14 @@ test('认证、产品媒体、销售订单、采购订单、地区、字典与�
   assert.equal(
     scripts['test:browser:auth'],
     'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/auth.browser.test.mjs apps/qsmds-arco/test/browser/product-media.browser.test.mjs apps/qsmds-arco/test/browser/management.browser.test.mjs apps/qsmds-arco/test/browser/sales-orders.browser.test.mjs apps/qsmds-arco/test/browser/purchase-orders.browser.test.mjs',
+  )
+  assert.equal(
+    scripts['test:browser:auth:shard-1'],
+    'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/management.browser.test.mjs apps/qsmds-arco/test/browser/purchase-orders.browser.test.mjs',
+  )
+  assert.equal(
+    scripts['test:browser:auth:shard-2'],
+    'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/auth.browser.test.mjs apps/qsmds-arco/test/browser/product-media.browser.test.mjs apps/qsmds-arco/test/browser/sales-orders.browser.test.mjs',
   )
   assert.equal(
     scripts['test:browser:regions'],
@@ -95,6 +105,8 @@ test('认证、产品媒体、销售订单、采购订单、地区、字典与�
     'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/fund-accounts.browser.test.mjs',
   )
   assert.equal(scripts['test:browser:auth'].includes('*.browser.test.mjs'), false)
+  assert.equal(scripts['test:browser:auth:shard-1'].includes('*.browser.test.mjs'), false)
+  assert.equal(scripts['test:browser:auth:shard-2'].includes('*.browser.test.mjs'), false)
   assert.equal(scripts['test:browser:dictionaries'].includes('*.browser.test.mjs'), false)
   assert.equal(scripts['test:browser:fund-accounts'].includes('*.browser.test.mjs'), false)
 })

@@ -427,6 +427,21 @@ export async function selectDialogOption(
     return true
   })()`)
   await pressKey(page, 'Enter')
+  // Enter 只负责提交选项，Vue 模型更新是异步的；紧随其后的「添加片段」若在
+  // Linux 上抢跑会沿用上一个片段类型。等 combobox 显示新值后再返回。
+  await page.waitFor(dialogExpression(title, `
+    try {
+      ${labelLookup}
+      const displayed = [
+        control?.textContent ?? '',
+        typeof control?.value === 'string' ? control.value : '',
+        control?.getAttribute('aria-valuetext') ?? '',
+      ].join(' ')
+      return displayed.includes(${JSON.stringify(optionText)})
+    } catch {
+      return false
+    }
+  `), 5_000)
 }
 
 export async function clickSegmentMove(
