@@ -88512,6 +88512,14 @@
             "type": "integer",
             "minimum": 0
           },
+          "validPaymentRecordCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pendingReceiptRequestCount": {
+            "type": "integer",
+            "minimum": 0
+          },
           "statusChangeRecordCount": {
             "type": "integer",
             "minimum": 0
@@ -88565,6 +88573,8 @@
           "purchaseHold",
           "activePurchaseOrderCount",
           "paymentRecordCount",
+          "validPaymentRecordCount",
+          "pendingReceiptRequestCount",
           "statusChangeRecordCount",
           "amountChangeRecordCount",
           "version",

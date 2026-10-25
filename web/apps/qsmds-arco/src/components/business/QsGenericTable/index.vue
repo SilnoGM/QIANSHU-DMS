@@ -36,6 +36,7 @@ import {
   reconcileColumnSettings,
   resolveVisibleTableColumns,
 } from './logic'
+import QsCopyableText from './QsCopyableText.vue'
 
 defineOptions({ name: 'QsGenericTable' })
 
@@ -734,10 +735,18 @@ watch([tableColumns, isNarrow], () => {
           <div v-if="column.copyable" :class="getCopyCellClass(column)">
             <div class="min-w-0">
               <slot :name="`cell-${column.id}`" v-bind="scope">
-                {{ getMobileValue(scope.row.original, column, scope.row.index) }}
+                <QsCopyableText
+                  v-if="column.copyMode === 'text'"
+                  :label="column.title"
+                  :text="getMobileValue(scope.row.original, column, scope.row.index)"
+                />
+                <template v-else>
+                  {{ getMobileValue(scope.row.original, column, scope.row.index) }}
+                </template>
               </slot>
             </div>
             <CopyCellButton
+              v-if="column.copyMode !== 'text'"
               :label="column.title"
               :text="getMobileValue(scope.row.original, column, scope.row.index)"
             />
@@ -870,11 +879,16 @@ watch([tableColumns, isNarrow], () => {
                   <dt class="qs-type-compact-label mb-1">
                     {{ column.title }}
                   </dt>
-                  <dd class="qs-type-body m-0 break-words">
+                  <dd class="m-0 break-words" :class="column.mobileCellClass ?? 'qs-type-body'">
                     <div :class="getCopyCellClass(column)">
-                      <span>{{ getMobileValue(row, column, index) }}</span>
+                      <QsCopyableText
+                        v-if="column.copyable && column.copyMode === 'text'"
+                        :label="column.title"
+                        :text="getMobileValue(row, column, index)"
+                      />
+                      <span v-else>{{ getMobileValue(row, column, index) }}</span>
                       <CopyCellButton
-                        v-if="column.copyable"
+                        v-if="column.copyable && column.copyMode !== 'text'"
                         always-visible
                         :label="column.title"
                         :text="getMobileValue(row, column, index)"

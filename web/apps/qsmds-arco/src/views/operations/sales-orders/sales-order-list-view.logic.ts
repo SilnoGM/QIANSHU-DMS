@@ -48,6 +48,11 @@ type SalesOrderPendingActionSource = Pick<
   'fulfillmentStatus' | 'paymentStatus' | 'purchaseHold'
 >
 
+type SalesOrderPendingActionGuardSource = Pick<
+  SalesOrderListItemDto,
+  'fulfillmentStatus' | 'orderStatus' | 'paymentStatus' | 'purchaseHold'
+>
+
 type SalesOrderSummarySource = Pick<
   SalesOrderListItemDto,
   | 'agreedTotalAmount'
@@ -123,7 +128,7 @@ const PENDING_ACTION_BY_FULFILLMENT_STATUS: Partial<Record<
 const RECORD_PAYMENT_ACTION: SalesOrderPendingActionItem = {
   icon: 'i-lucide:hand-coins',
   key: 'RECORD_PAYMENT',
-  label: '新增表外收款',
+  label: '表外收款',
 }
 
 /**
@@ -239,6 +244,71 @@ export function resolvePendingSalesOrderActions(
     actions.push(RECORD_PAYMENT_ACTION)
   }
   return actions
+}
+
+/**
+ * 待办操作列固定占用一个业务动作槽位。这里不按付款状态裁掉收款入口，
+ * 让同一 Tab 的按钮位置保持稳定；是否可执行由点击守卫说明原因。
+ */
+export function resolvePendingSalesOrderActionSlot(
+  selection: SalesOrderListStatusSelection,
+  order: SalesOrderPendingActionSource,
+): SalesOrderPendingActionItem | null {
+  if (selection === 'AWAITING_PURCHASE_REVIEW') {
+    return URGE_PURCHASE_REVIEW_ACTION
+  }
+  if (selection === 'WAITING_PAYMENT') {
+    return RECORD_PAYMENT_ACTION
+  }
+  if (selection === 'PENDING') {
+    return isAwaitingPurchaseReview(order)
+      ? URGE_PURCHASE_REVIEW_ACTION
+      : PENDING_ACTION_BY_FULFILLMENT_STATUS.PENDING ?? null
+  }
+  return PENDING_ACTION_BY_FULFILLMENT_STATUS[
+    selection as SalesOrderListItemDto['fulfillmentStatus']
+  ] ?? null
+}
+
+/**
+ * 列表快照只用于点击前提示；采购审核中、待审核收款等并发事实仍以服务端拒绝为准。
+ */
+export function resolvePendingSalesOrderActionBlockedReason(
+  key: SalesOrderPendingActionKey,
+  order: SalesOrderPendingActionGuardSource,
+): string | null {
+  if (key === 'URGE_PURCHASE_REVIEW') {
+    return null
+  }
+  if (order.orderStatus !== 'CONFIRMED') {
+    return '只有已确认订单可以执行该操作'
+  }
+  if (key === 'SUBMIT_PURCHASE') {
+    if (isAwaitingPurchaseReview(order)) {
+      return '采购正在审核中，请先催办'
+    }
+    return order.fulfillmentStatus === 'PENDING'
+      ? null
+      : '订单当前不在待采购阶段'
+  }
+  if (key === 'FACTORY_SHIPMENT') {
+    return order.fulfillmentStatus === 'PREPARING'
+      ? null
+      : '订单当前不在待发货阶段'
+  }
+  if (key === 'WAREHOUSE_RECEIPT') {
+    return order.fulfillmentStatus === 'LAND_TRANSIT'
+      ? null
+      : '订单当前不在待入仓阶段'
+  }
+  if (key === 'DELIVERY_RECEIPT') {
+    return order.fulfillmentStatus === 'SEA_TRANSIT'
+      ? null
+      : '订单当前不在待签收阶段'
+  }
+  return order.paymentStatus === 'PAID'
+    ? '订单已付清，无需再登记收款'
+    : null
 }
 
 /**

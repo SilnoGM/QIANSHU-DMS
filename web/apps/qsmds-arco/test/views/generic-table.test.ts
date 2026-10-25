@@ -421,7 +421,7 @@ test('通用表格消费全局角色且只由显式业务语义启用结构化�
   assert.match(tableSource, /cellClass:\s*'qs-type-meta tabular-nums'/u)
   assert.match(tableSource, /class="qs-type-meta tabular-nums"/u)
   assert.match(tableSource, /<dt class="qs-type-compact-label mb-1">/u)
-  assert.match(tableSource, /<dd class="qs-type-body m-0 break-words">/u)
+  assert.match(tableSource, /<dd class="m-0 break-words" :class="column\.mobileCellClass \?\? 'qs-type-body'">/u)
   assert.match(tableSource, /<span class="qs-type-meta">/u)
   assert.match(tableSource, /<strong v-else class="qs-type-data-emphasis"/u)
   assert.match(tableSource, /\[data-slot="pagination"\][\s\S]*?font-variant-numeric: tabular-nums/u)
@@ -550,7 +550,7 @@ test('列设置面板使用紧凑矩阵区分固定与对齐操作', () => {
   ]), 6)
 })
 
-test('列级 copyable 配置为桌面与窄屏提供剪贴板复制反馈', () => {
+test('列级 copyable 支持按钮与点击文字两种复制反馈', () => {
   const logicSource = readRelativeSource(
     '../../src/components/business/QsGenericTable/logic.ts',
   )
@@ -562,8 +562,12 @@ test('列级 copyable 配置为桌面与窄屏提供剪贴板复制反馈', () =
   )
 
   assert.match(logicSource, /copyable\?: boolean/u)
+  assert.match(logicSource, /copyMode\?: 'button' \| 'text'/u)
+  assert.match(logicSource, /mobileCellClass\?: string/u)
   assert.match(tableSource, /column\.copyable/u)
+  assert.match(tableSource, /column\.mobileCellClass/u)
   assert.match(tableSource, /<CopyCellButton/u)
+  assert.match(tableSource, /<QsCopyableText/u)
   assert.match(showcaseSource, /copyable: true/u)
 
   const buttonSource = readRelativeSource(
@@ -575,6 +579,19 @@ test('列级 copyable 配置为桌面与窄屏提供剪贴板复制反馈', () =
   assert.match(buttonSource, /i-lucide:triangle-alert/u)
   assert.match(buttonSource, /@click\.stop/u)
   assert.match(buttonSource, /aria-live="polite"/u)
+
+  const textSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/QsCopyableText.vue',
+  )
+  assert.match(textSource, /navigator\.clipboard\.writeText/u)
+  assert.match(textSource, /点击可复制/u)
+  assert.match(textSource, /type="button"/u)
+  assert.match(textSource, /cursor-pointer/u)
+  assert.match(textSource, /\[font:inherit\]/u)
+  assert.match(textSource, /@click\.stop/u)
+  assert.match(textSource, /aria-live="polite"/u)
+  assert.match(textSource, /useQsToast/u)
+  assert.match(textSource, /toast\.success/u)
 })
 
 test('双行单元格支持主次内容、逐行样式与尾部操作', () => {

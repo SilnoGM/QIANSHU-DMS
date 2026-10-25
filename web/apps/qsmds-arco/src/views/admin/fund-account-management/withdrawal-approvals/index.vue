@@ -48,7 +48,7 @@ const toolbarItems = computed(() => FUND_WITHDRAWAL_STATUS_FILTER_OPTIONS.map(it
   count: counts.value[item.value] ?? 0,
 })))
 const columns = computed<QsGenericTableColumn<FundWithdrawalDto>[]>(() => [
-  { id: 'withdrawalNo', accessorKey: 'withdrawalNo', title: t('fundWithdrawal.column.withdrawalNo'), minWidth: 174, fixed: 'left' },
+  { id: 'withdrawalNo', accessorKey: 'withdrawalNo', title: t('fundWithdrawal.column.withdrawalNo'), minWidth: 160, fixed: 'left', cellClass: 'qs-type-data-emphasis', mobileCellClass: 'qs-type-data-emphasis' },
   { id: 'applicant', accessorKey: 'applicantName', title: t('fundWithdrawal.column.applicant'), minWidth: 190 },
   { id: 'amount', accessorKey: 'amount', title: t('fundWithdrawal.column.amount'), minWidth: 200, align: 'right' },
   { id: 'accountBalance', accessorKey: 'accountBalance', title: t('fundWithdrawal.column.accountBalance'), minWidth: 190, align: 'right' },
@@ -184,7 +184,7 @@ function completed(): void {
         :page-size-options="[20, 50, 100]"
         :empty-title="t('fundWithdrawal.empty.review')"
         :empty-description="t('fundWithdrawal.empty.reviewHint')"
-        :action-column="{ fixed: 'right', minWidth: 180, width: 180, title: t('fundWithdrawal.column.action') }"
+        :action-column="{ fixed: 'right', minWidth: 140, width: 140, title: t('fundWithdrawal.column.action') }"
         table-class="w-max min-w-full"
         :aria-label="t('fundWithdrawal.approvalPageTitle')"
         @pagination-change="load"
@@ -233,8 +233,7 @@ function completed(): void {
               class="min-h-11 sm:min-h-8"
               @click="openApprove(row)"
             >
-              <FaIcon name="i-lucide:check" aria-hidden="true" />
-              {{ t('fundWithdrawal.action.approve') }}
+              通过
             </FaButton>
             <FaButton
               variant="ghost"
@@ -242,8 +241,7 @@ function completed(): void {
               class="text-destructive min-h-11 sm:min-h-8"
               @click="openReject(row)"
             >
-              <FaIcon name="i-lucide:x" aria-hidden="true" />
-              {{ t('fundWithdrawal.action.reject') }}
+              驳回
             </FaButton>
           </div>
           <FaButton
@@ -253,8 +251,7 @@ function completed(): void {
             class="min-h-11 sm:min-h-8"
             @click="openDetail(row)"
           >
-            <FaIcon name="i-lucide:eye" aria-hidden="true" />
-            {{ t('fundWithdrawal.action.view') }}
+            详情
           </FaButton>
         </template>
       </QsGenericTable>

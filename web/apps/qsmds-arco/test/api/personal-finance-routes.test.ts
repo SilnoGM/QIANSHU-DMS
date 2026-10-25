@@ -259,7 +259,7 @@ test('提款申请与审批页面接入状态切换、序号和业务表格', ()
       assert.match(source, /statusCounts/u)
       assert.doesNotMatch(source, /pageSize: 1/u)
     }
-    assert.match(source, /fundWithdrawal\.action\.view/u)
+    assert.match(source, /详情/u)
     assert.doesNotMatch(source, /FundWithdrawalDetailModal|fund-withdrawal-detail-modal/u)
     assert.doesNotMatch(source, /:show-row-number="false"/u)
     assert.doesNotMatch(source, /<FaSelect/u)

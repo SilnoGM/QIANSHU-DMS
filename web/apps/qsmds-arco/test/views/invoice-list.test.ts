@@ -123,7 +123,7 @@ test('两张列表的列与口径符合 2026-10-15 拍板：照片用 ImageGroup
   const approval = await readPageSource('approval')
   assert.equal(approval.includes('#cell-creatorName'), false, '审批页提交人并入提交时间列')
   // R12.2 的剩余时间落点：结算按钮禁用并以 tooltip 展示等待提示。
-  assert.match(approval, /FaTooltip[\s\S]{0,400}row\.status === 'ISSUED'[\s\S]{0,400}settleHint\(row\)/u)
+  assert.match(approval, /v-else-if="row\.status === 'ISSUED'"[\s\S]{0,400}<FaTooltip[\s\S]{0,400}settleHint\(row\)/u)
   assert.match(approval, /:disabled="!canSettleRow\(row\)"/u)
 })
 

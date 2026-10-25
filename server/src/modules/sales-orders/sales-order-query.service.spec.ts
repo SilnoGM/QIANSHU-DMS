@@ -80,6 +80,7 @@ function createListFixture() {
     paymentStatus: 'PARTIALLY_PAID',
     _count: {
       payments: 2,
+      receiptRequests: 1,
       statusHistory: 3,
       amountRevisions: 1,
       purchaseOrders: 1,
@@ -229,6 +230,8 @@ describe('SalesOrderQueryService list summaries', () => {
         purchaseHold: null,
         activePurchaseOrderCount: 1,
         paymentRecordCount: 2,
+        validPaymentRecordCount: 1,
+        pendingReceiptRequestCount: 1,
         statusChangeRecordCount: 3,
         amountChangeRecordCount: 1,
         version: 3,

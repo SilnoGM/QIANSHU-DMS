@@ -1,11 +1,13 @@
 import type {
   SalesOrderDeliveryReceiptRequestDto,
   SalesOrderPaymentRequestDto,
+  SalesReceiptStatusCountsDto,
 } from '@/api/generated/types.gen'
 
 import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 
 export type SalesOrderRecordsKind = 'payments' | 'documents' | 'changes'
+export type SalesOrderReceiptTab = 'payments' | 'requests'
 export type SalesOrderRecordsInitialAction = 'payment' | 'receipt' | null
 export type SalesOrderModalView = 'records' | 'create-payment' | 'create-receipt'
 export type SalesOrderModalOrigin = 'records' | 'table-action'
@@ -50,6 +52,28 @@ export function splitSalesOrderPaymentStatusReason(
 export interface SalesOrderModalState {
   readonly origin: SalesOrderModalOrigin
   readonly view: SalesOrderModalView
+}
+
+/** 实际收款列表同时包含已作废记录；有效笔数按与列表标签相同的 voidedAt 判据统计。 */
+export function countValidSalesOrderPayments(
+  payments: readonly { readonly voidedAt: string | null }[],
+): number {
+  return payments.filter(payment => payment.voidedAt === null).length
+}
+
+export function countPendingReceiptRequests(
+  counts: SalesReceiptStatusCountsDto,
+): number {
+  return counts.PENDING_REVIEW
+}
+
+export function countTotalReceiptRequests(
+  counts: SalesReceiptStatusCountsDto,
+): number {
+  return counts.PENDING_REVIEW
+    + counts.APPROVED
+    + counts.REJECTED
+    + counts.VOIDED
 }
 
 /** 表格快捷操作直接进入表单视图，避免先渲染记录弹窗再切换造成闪屏。 */

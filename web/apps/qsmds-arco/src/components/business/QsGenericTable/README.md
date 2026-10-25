@@ -25,13 +25,15 @@
 - `defaultVisible`：列是否默认显示。
 - `fixed`：默认固定到 `left` 或 `right`。
 - `align`：默认内容对齐，可选 `left`、`center`、`right`，未设置时使用 `left`。
-- `copyable`：是否显示单元格复制入口，默认关闭。
+- `copyable`：是否启用单元格复制入口，默认关闭。
+- `copyMode`：复制入口形态，`button`（默认）显示复制图标，`text` 直接让单元格文本可点击复制，适合编号列。
+- `mobileCellClass`：窄屏通用卡片的取值排版类；不传时沿用 `qs-type-body`，编号列可传 `qs-type-data-emphasis` 保持等宽字体。
 - `sortable`：是否允许排序。
 - `summary`：支持 `count`、`average`、`sum`，可通过 `component` 和 `componentProps` 指定汇总渲染组件。
 
 行号列由组件生成，默认固定在最左侧且不参与列设置。`showRowNumber` 默认 `true`；业务编号需要作为最左列时可设为 `false`，同时隐藏桌面行号和默认移动卡片行号。其他页面不传此参数时保持原样，移动插槽的 `row-number` 仍可读取。行号按照 `(page - 1) * pageSize + rowIndex + 1` 连续计算。
 
-`copyable: true` 会为桌面单元格追加复制按钮，按钮在悬停或键盘聚焦时显示；默认窄屏卡片始终显示复制入口。复制内容取自列 `accessorKey` 或 `accessorFn` 的当前值，成功后图标短暂变为勾选，失败时显示错误状态。使用自定义 `mobile-row` 插槽时，业务页面可以像组件库示例一样组合 `CopyCellButton`，让自定义卡片保持同样的反馈。
+`copyable: true` 默认会为桌面单元格追加复制按钮，按钮在悬停或键盘聚焦时显示；默认窄屏卡片始终显示复制入口。设置 `copyMode: 'text'` 后不再渲染按钮，而是让单元格文本本身可点击复制，并在悬停时提示“点击可复制”，适合订单号等编号列；成功和失败反馈由文本组件的 tooltip 与 `aria-live` 承担。复制内容取自列 `accessorKey` 或 `accessorFn` 的当前值。使用自定义 `mobile-row` 插槽时，业务页面可以按需组合 `CopyCellButton` 或 `QsCopyableText`。
 
 “列设置”支持在运行时调整显隐、左右固定与内容对齐，表头、单元格和汇总内容会同步更新。“恢复默认”会还原 `columns` 中声明的初始状态。`columnSettingsChange` 事件返回每列的 `visible`、`fixed` 和 `align` 状态，业务页面可按需持久化。
 

@@ -2,6 +2,7 @@
 import type { CalendarDateRangeValue } from '@fantastic-admin/components'
 import type { ShipmentListQuery } from './logic'
 import type { PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
+import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 import type { QsGenericTableColumn, QsGenericTableFilterDefinition, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 import { parseDate } from '@internationalized/date'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
@@ -9,6 +10,7 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDateRangeFilter from '@/components/business/QsDateRangeFilter/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
@@ -127,10 +129,10 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
   { key: 'createdByUserId', label: t('purchaseShipments.buyer'), options: buyerOptions.value.map(user => ({ value: user.id, label: user.displayName })) },
   { key: 'purchaseType', label: t('purchaseShipments.purchaseType'), options: ['SALES_LINKED', 'STOCK'].map(value => ({ value, label: t(`purchaseShipments.${value}`) })) },
 ])
-// 行内最多四个动作，固定两列网格按两行排布；240px 覆盖两列 4 字按钮、间距和内边距。
-const actionColumnWidth = 240
+// 两列网格按最多两个业务动作加一个详情菜单计算。
+const actionColumnWidth = 196
 const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(() => [
-  { id: 'shipmentNo', title: t('purchaseShipments.shipmentNo'), accessorKey: 'shipmentNo', fixed: 'left', minWidth: 227 },
+  { id: 'shipmentNo', title: t('purchaseShipments.shipmentNo'), accessorKey: 'shipmentNo', fixed: 'left', minWidth: 177 },
   { id: 'part', title: t('purchaseShipments.part'), accessorFn: row => `${row.purchaseOrder.orderNo} / ${formatShipmentNumber(row.partNumber)}`, minWidth: 260 },
   { id: 'mark', title: t('purchaseShipments.mark'), accessorKey: 'shippingMarkText', minWidth: 300 },
   { id: 'baseMark', title: t('purchaseShipments.baseMark'), accessorFn: row => row.purchaseOrder.shippingMarkText, minWidth: 245 },
@@ -152,6 +154,50 @@ const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(()
 function warehouseUpdated(): void {
   refresh()
   void loadDetail()
+}
+
+function shipmentBusinessActions(row: PurchaseShipmentListItemDto) {
+  const actions: { key: 'transport' | 'seaExpress' | 'warehouse', label: string }[] = []
+  if (canReceive.value && shipmentRowAction(activeView.value, row.viewStatus)) {
+    actions.push({
+      key: 'transport',
+      label: activeView.value === 'WAREHOUSE_RECEIVED' ? '装柜' : '签收',
+    })
+  }
+  if (canReceive.value && showWarehouseFilter.value && row.viewStatus === 'WAREHOUSE_RECEIVED') {
+    actions.push({ key: 'seaExpress', label: '海快' })
+  }
+  if (canReceive.value && row.viewStatus === 'SHIPPED') {
+    actions.push({ key: 'warehouse', label: '入仓' })
+  }
+  return actions
+}
+
+function handleShipmentBusinessAction(
+  action: 'transport' | 'seaExpress' | 'warehouse',
+  row: PurchaseShipmentListItemDto,
+): void {
+  if (action === 'transport') {
+    handleTransportAction(row)
+    return
+  }
+  if (action === 'seaExpress') {
+    handleTransportAction(row, 'seaExpress')
+    return
+  }
+  warehouseActionRef.value?.open(row.purchaseOrder.id, [row.id])
+}
+
+function shipmentDetailItems(
+  row: PurchaseShipmentListItemDto,
+  includeShipment: boolean,
+): ActionMenuItem[][] {
+  const items: ActionMenuItem[] = []
+  if (includeShipment) {
+    items.push({ label: '货件详情', handle: () => openShipment(row.id) })
+  }
+  items.push({ label: '采购详情', handle: () => openOrder(row.purchaseOrder.id) })
+  return [items]
 }
 
 function handleTransportAction(row: PurchaseShipmentListItemDto, action: 'loadContainer' | 'seaExpress' | 'sign' | null = shipmentRowAction(activeView.value, row.viewStatus)): void {
@@ -333,9 +379,9 @@ onBeforeUnmount(() => {
             <QsDateRangeFilter v-model="dateRange" :calendar-label="t('purchaseShipments.orderDate')" :placeholder="t('purchaseShipments.orderDate')" @complete="search" @clear="search" />
           </template>
           <template #cell-shipmentNo="{ row }">
-            <div class="group flex gap-2 items-center">
-              <span class="qs-type-data-emphasis whitespace-nowrap" :class="!row.original.shipmentNo && 'text-muted-foreground'">{{ row.original.shipmentNo || t('purchaseShipments.unnumbered') }}</span>
-              <CopyCellButton v-if="row.original.shipmentNo" :text="row.original.shipmentNo" :label="t('purchaseShipments.shipmentNo')" />
+            <div class="qs-type-data-emphasis flex gap-2 items-center">
+              <QsCopyableText v-if="row.original.shipmentNo" :text="row.original.shipmentNo" :label="t('purchaseShipments.shipmentNo')" />
+              <span v-else class="text-muted-foreground whitespace-nowrap">{{ t('purchaseShipments.unnumbered') }}</span>
             </div>
           </template>
           <template #cell-part="{ row }">
@@ -430,21 +476,38 @@ onBeforeUnmount(() => {
           </template>
           <template #actions="{ row }">
             <div class="gap-1 grid grid-cols-2">
-              <FaButton v-if="canReceive && shipmentRowAction(activeView, row.viewStatus)" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" @click="handleTransportAction(row)">
-                <FaIcon :name="activeView === 'WAREHOUSE_RECEIVED' ? 'i-lucide:container' : 'i-lucide:package-check'" aria-hidden="true" />{{ t(activeView === 'WAREHOUSE_RECEIVED' ? 'purchaseShipments.loadContainer' : 'purchaseShipments.sign') }}
+              <FaButton
+                v-for="action in shipmentBusinessActions(row)"
+                :key="action.key"
+                variant="ghost"
+                size="sm"
+                class="text-primary min-h-11 sm:min-h-8"
+                @click="handleShipmentBusinessAction(action.key, row)"
+              >
+                {{ action.label }}
               </FaButton>
-              <FaButton v-if="canReceive && showWarehouseFilter && row.viewStatus === 'WAREHOUSE_RECEIVED'" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" @click="handleTransportAction(row, 'seaExpress')">
-                <FaIcon name="i-lucide:truck" aria-hidden="true" />{{ t('purchaseShipments.seaExpress') }}
+              <FaButton v-if="shipmentBusinessActions(row).length <= 1" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.purchaseOrder.orderNo} ${formatShipmentNumber(row.partNumber)}：货件详情`" @click="openShipment(row.id)">
+                货件详情
               </FaButton>
-              <FaButton v-if="canReceive && row.viewStatus === 'SHIPPED'" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" :disabled="!!warehouseActionRef?.loadingOrderId" @click="warehouseActionRef?.open(row.purchaseOrder.id, [row.id])">
-                <FaIcon name="i-lucide:warehouse" aria-hidden="true" />{{ t('purchaseWarehouseReceipt.action') }}
+              <FaButton v-if="shipmentBusinessActions(row).length === 0" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.purchaseOrder.orderNo}：采购详情`" @click="openOrder(row.purchaseOrder.id)">
+                采购详情
               </FaButton>
-              <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.purchaseOrder.orderNo} ${formatShipmentNumber(row.partNumber)}：${t('purchaseShipments.view')}`" @click="openShipment(row.id)">
-                <FaIcon name="i-lucide:package-search" aria-hidden="true" />{{ t('purchaseShipments.view') }}
+              <FaButton v-if="shipmentBusinessActions(row).length === 2" variant="ghost" size="sm" class="min-h-11 sm:min-h-8 md:hidden" :aria-label="`${row.purchaseOrder.orderNo} ${formatShipmentNumber(row.partNumber)}：货件详情`" @click="openShipment(row.id)">
+                货件详情
               </FaButton>
-              <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.purchaseOrder.orderNo}：${t('purchaseShipments.viewOrder')}`" @click="openOrder(row.purchaseOrder.id)">
-                <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('purchaseShipments.viewOrder') }}
+              <FaButton v-if="shipmentBusinessActions(row).length > 0" variant="ghost" size="sm" class="min-h-11 sm:min-h-8 md:hidden" :aria-label="`${row.purchaseOrder.orderNo}：采购详情`" @click="openOrder(row.purchaseOrder.id)">
+                采购详情
               </FaButton>
+              <FaDropdown v-if="shipmentBusinessActions(row).length > 0" :items="shipmentDetailItems(row, shipmentBusinessActions(row).length === 2)" align="end">
+                <FaButton
+                  variant="ghost"
+                  size="icon-sm"
+                  class="min-h-11 min-w-11 hidden md:inline-flex sm:min-h-8 sm:min-w-8"
+                  :aria-label="`${row.purchaseOrder.orderNo}：更多操作`"
+                >
+                  <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
+                </FaButton>
+              </FaDropdown>
             </div>
           </template>
           <template #mobile-row="{ row }">
@@ -452,9 +515,9 @@ onBeforeUnmount(() => {
               <div class="flex gap-2 items-start justify-between">
                 <QsTableStackedCell>
                   <QsTableStackedLine content-class="qs-type-data-emphasis [overflow-wrap:anywhere]" :tone="row.shipmentNo ? 'default' : 'muted'">
-                    {{ row.shipmentNo || t('purchaseShipments.unnumbered') }}
-                    <template v-if="row.shipmentNo" #suffix>
-                      <CopyCellButton always-visible :text="row.shipmentNo" :label="t('purchaseShipments.shipmentNo')" />
+                    <QsCopyableText v-if="row.shipmentNo" :text="row.shipmentNo" :label="t('purchaseShipments.shipmentNo')" />
+                    <template v-else>
+                      {{ t('purchaseShipments.unnumbered') }}
                     </template>
                   </QsTableStackedLine>
                   <QsTableStackedLine content-class="qs-type-data-emphasis [overflow-wrap:anywhere]">

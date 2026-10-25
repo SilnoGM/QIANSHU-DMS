@@ -235,7 +235,7 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
               :aria-label="`更多图片操作 ${item.originalFilename}`"
               data-focus-anchor
             >
-              <FaIcon name="i-lucide:ellipsis" class="size-5" aria-hidden="true" />
+              <FaIcon name="i-lucide:ellipsis-vertical" class="size-5" aria-hidden="true" />
             </FaButton>
           </FaDropdown>
         </div>

@@ -3,6 +3,7 @@ import type { WarehouseArrivalView } from './logic'
 import type { PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
+import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { formatDestinationWarehouse, shipmentStatusClass } from '../../workbenches/shipments/logic'
 import { getShipmentSourceEmptyKey } from '../../workbenches/shipments/shipment-detail.logic'
@@ -15,9 +16,9 @@ const { t } = useI18n()
 <template>
   <div class="min-w-0 space-y-3">
     <div class="flex gap-2 items-start justify-between">
-      <div class="flex gap-2 min-w-0 items-start">
-        <strong class="qs-type-data-emphasis min-w-0 [overflow-wrap:anywhere]">{{ row.shipmentNo || t('purchaseShipments.unnumbered') }}</strong>
-        <CopyCellButton v-if="row.shipmentNo" always-visible :text="row.shipmentNo" :label="t('purchaseShipments.shipmentNo')" />
+      <div class="qs-type-data-emphasis flex gap-2 min-w-0 items-start">
+        <QsCopyableText v-if="row.shipmentNo" :text="row.shipmentNo" :label="t('purchaseShipments.shipmentNo')" />
+        <strong v-else class="min-w-0 [overflow-wrap:anywhere]">{{ t('purchaseShipments.unnumbered') }}</strong>
       </div>
       <FaTag variant="outline" class="qs-type-status-tag shrink-0" :class="shipmentStatusClass(view)">
         {{ t(`warehouseArrivals.${view}`) }}

@@ -146,7 +146,7 @@ onBeforeUnmount(() => {
         row-key="id" :columns="columns" :data="groups" :grouping="grouping" :total="total" :loading="loading" :error="error || undefined"
         :summary-values="summaryValues" :addable="false" :page-size-options="[20, 50, 100]" :search-placeholder="t('purchasePayment.search')"
         :empty-title="t('purchasePayment.empty')" :empty-description="t('purchasePayment.emptyDescription')" :pagination-unit="t('purchasePayment.paginationUnit')"
-        :action-column="{ fixed: 'right', width: 110 }" table-class="min-w-[1030px]"
+        :action-column="{ fixed: 'right', minWidth: 84, width: 84 }" table-class="min-w-[1030px]"
         @search="search" @pagination-change="load" @retry="load"
       >
         <template #group-header="{ row }">
@@ -190,7 +190,7 @@ onBeforeUnmount(() => {
         </template>
         <template #actions="{ row }">
           <FaButton v-if="row.payable && canPayPurchasePayable(row.payable)" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :disabled="loading || !enabled" :aria-label="t('purchasePayment.payLabel', { orderNo: row.order.orderNo, paymentType: t(`purchasePayment.types.${row.payable.paymentType}`) })" @click="openPayment(row)">
-            <FaIcon name="i-lucide:wallet" aria-hidden="true" />{{ t('purchasePayment.pay') }}
+            {{ t('purchasePayment.pay') }}
           </FaButton>
           <span v-else-if="row.payable" class="text-muted-foreground">{{ t(`purchasePayment.status.${row.payable.status}`) }}</span>
         </template>

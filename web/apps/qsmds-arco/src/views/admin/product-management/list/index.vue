@@ -5,18 +5,20 @@ import type {
   ProductTaxonomyCategoryOptionDto,
   ProductTaxonomyTreeDto,
 } from '@/api/generated/types.gen'
+import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
+
 import type {
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
   QsGenericTableFilterValues,
 } from '@/components/business/QsGenericTable/logic'
-
 import productsApi from '@/api/modules/products'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import { resolveActionColumnWidth } from '@/components/business/QsGenericTable/action-column-width'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
@@ -155,6 +157,11 @@ const canOrderProducts = computed(() => (
   && searchKeyword.value.trim() === ''
   && filters.value.status === undefined
 ))
+const actionColumnWidth = computed(() => resolveActionColumnWidth(
+  canUpdate.value
+    ? [{ chars: 2, kind: 'text' }, { chars: 2, kind: 'text' }, { kind: 'icon' }]
+    : [{ chars: 2, kind: 'text' }],
+))
 const lastPage = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const categoryFilterOptions = computed(() => {
   const supplierValue = selectedSupplierFilterValue.value
@@ -240,8 +247,8 @@ const productColumns: QsGenericTableColumn<ProductListItemViewModel>[] = [
   {
     accessorKey: 'productNo',
     id: 'productNo',
-    width: 123,
-    minWidth: 123,
+    width: 109,
+    minWidth: 109,
     title: '产品编号',
   },
   { accessorKey: 'name', id: 'name', minWidth: 180, title: '产品名称' },
@@ -879,6 +886,31 @@ const statusModalDescription = computed(() => (
     : '停用后该产品不再出现在销售与采购选品中，已有订单明细不受影响。'
 ))
 
+function productMenuItems(product: ProductListItemViewModel): ActionMenuItem[][] {
+  const active = product.status === 'ACTIVE'
+  const items: ActionMenuItem[] = []
+  if (canOrderProducts.value) {
+    items.push(
+      {
+        label: '上移',
+        disabled: productMovingId.value !== null || isFirstProductRow(product.id),
+        handle: () => moveProduct(product.id, 'up'),
+      },
+      {
+        label: '下移',
+        disabled: productMovingId.value !== null || isLastProductRow(product.id),
+        handle: () => moveProduct(product.id, 'down'),
+      },
+    )
+  }
+  items.push({
+    label: active ? '停用' : '启用',
+    variant: active ? 'destructive' : 'default',
+    handle: () => requestStatusChange(product),
+  })
+  return [items]
+}
+
 function requestStatusChange(product: ProductListItemViewModel): void {
   if (!canUpdate.value) {
     return
@@ -1304,7 +1336,7 @@ onBeforeUnmount(() => {
             v-model:filters="filters"
             data-testid="product-list-table"
             :row-key="item => item.id"
-            :action-column="{ fixed: 'right', width: 320 }"
+            :action-column="{ fixed: 'right', minWidth: actionColumnWidth, width: actionColumnWidth }"
             :addable="false"
             :columns="columns"
             :data="rows"
@@ -1345,7 +1377,7 @@ onBeforeUnmount(() => {
               </FaCheckbox>
             </template>
             <template #cell-productNo="{ row }">
-              <span class="qs-type-data font-mono">{{ row.original.productNo }}</span>
+              <span class="qs-type-data-emphasis">{{ row.original.productNo }}</span>
             </template>
             <template #cell-status="{ row }">
               <FaTag
@@ -1465,7 +1497,7 @@ onBeforeUnmount(() => {
                 v-if="canOrderProducts"
                 variant="ghost"
                 size="icon"
-                class="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8"
+                class="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 md:hidden"
                 :disabled="productMovingId !== null || isFirstProductRow(row.id)"
                 :aria-label="`上移产品 ${row.productNo}`"
                 @click="moveProduct(row.id, 'up')"
@@ -1476,7 +1508,7 @@ onBeforeUnmount(() => {
                 v-if="canOrderProducts"
                 variant="ghost"
                 size="icon"
-                class="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8"
+                class="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 md:hidden"
                 :disabled="productMovingId !== null || isLastProductRow(row.id)"
                 :aria-label="`下移产品 ${row.productNo}`"
                 @click="moveProduct(row.id, 'down')"
@@ -1487,11 +1519,10 @@ onBeforeUnmount(() => {
                 variant="ghost"
                 size="sm"
                 class="min-h-11 sm:min-h-9"
-                :aria-label="`查看第 ${rowNumber} 行产品 ${row.productNo}`"
+                :aria-label="`查看第 ${rowNumber} 行产品 ${row.productNo}：详情`"
                 @click="showProductDetail(row)"
               >
-                <FaIcon name="i-lucide:eye" />
-                查看
+                详情
               </FaButton>
               <FaButton
                 v-if="canUpdate"
@@ -1501,20 +1532,32 @@ onBeforeUnmount(() => {
                 :aria-label="`编辑第 ${rowNumber} 行产品 ${row.productNo}`"
                 @click="navigateToEdit(row.id)"
               >
-                <FaIcon name="i-lucide:pencil" />
                 编辑
               </FaButton>
               <FaButton
                 v-if="canUpdate"
                 variant="ghost"
                 size="sm"
-                class="min-h-11 sm:min-h-9"
+                class="min-h-11 sm:min-h-9 md:hidden"
                 :aria-label="`${row.status === 'ACTIVE' ? '停用' : '启用'}第 ${rowNumber} 行产品 ${row.productNo}`"
                 @click="requestStatusChange(row)"
               >
-                <FaIcon :name="row.status === 'ACTIVE' ? 'i-lucide:circle-pause' : 'i-lucide:circle-check'" />
                 {{ row.status === 'ACTIVE' ? '停用' : '启用' }}
               </FaButton>
+              <FaDropdown
+                v-if="canUpdate"
+                :items="productMenuItems(row)"
+                align="end"
+              >
+                <FaButton
+                  variant="ghost"
+                  size="icon-sm"
+                  class="min-h-11 min-w-11 hidden md:inline-flex sm:min-h-8 sm:min-w-8"
+                  :aria-label="`${row.productNo}：更多操作`"
+                >
+                  <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
+                </FaButton>
+              </FaDropdown>
             </template>
 
             <template #mobile-row="{ row, rowNumber }">
@@ -1530,7 +1573,7 @@ onBeforeUnmount(() => {
                     <span class="sr-only">选择产品 {{ row.productNo }}</span>
                   </FaCheckbox>
                   <div class="min-w-0">
-                    <div class="qs-type-data-emphasis font-mono break-all">
+                    <div class="qs-type-data-emphasis break-all">
                       {{ row.productNo }}
                     </div>
                     <div class="qs-type-body mt-1">
@@ -1544,7 +1587,7 @@ onBeforeUnmount(() => {
                 <div>
                   <dt class="qs-type-compact-label">
                     产品编号
-                  </dt><dd class="font-mono m-0 break-all">
+                  </dt><dd class="qs-type-data-emphasis m-0 break-all">
                     {{ row.productNo }}
                   </dd>
                 </div>

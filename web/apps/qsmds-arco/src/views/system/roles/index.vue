@@ -268,7 +268,7 @@ onMounted(loadData)
         :data="tableRows"
         :filter-definitions="filterDefinitions"
         :loading="loading"
-        :action-column="{ width: 180 }"
+        :action-column="{ minWidth: 140, width: 140 }"
         :searchable="true"
         :addable="false"
         :show-column-settings="true"
@@ -312,7 +312,7 @@ onMounted(loadData)
               :disabled="loading || !permissionCatalogReady"
               @click="openPermissions(role)"
             >
-              分配权限
+              授权
             </FaButton>
           </template>
           <span v-else class="text-muted-foreground">{{ role.isSystem ? '系统角色只读' : '—' }}</span>

@@ -8,8 +8,9 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { formatDateTime } from '@/components/base/DateTimeDisplay/format'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
-import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
+import { resolveActionColumnWidth } from '@/components/business/QsGenericTable/action-column-width'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
@@ -52,10 +53,14 @@ let countController: AbortController | null = null
 let detailController: AbortController | null = null
 const tabs = computed(() => (['PENDING_REVIEW', 'APPROVED', 'CANCELLED'] as const).map(value => ({ value, label: t(`purchaseReview.${value}`), count: countsError.value ? undefined : counts.value[value] })))
 // 审核中/已取消只有单动作；已通过且可审核时才有「查看 + 取消订单」两个动作。
-const actionColumnWidth = computed(() => status.value === 'APPROVED' && canReview.value ? 208 : 104)
+const actionColumnWidth = computed(() => resolveActionColumnWidth(
+  status.value === 'APPROVED' && canReview.value
+    ? [{ chars: 2, kind: 'text' }, { chars: 2, kind: 'text' }]
+    : [{ chars: 2, kind: 'text' }],
+))
 const columns = computed<QsGenericTableColumn<PurchaseOrderListItemDto>[]>(() => [
-  { id: 'orderNo', accessorKey: 'orderNo', title: t('purchaseReview.orderNo'), minWidth: 214, fixed: 'left', copyable: true },
-  { id: 'source', accessorKey: 'salesOrderNo', title: t('purchaseReview.source'), minWidth: 230 },
+  { id: 'orderNo', accessorKey: 'orderNo', title: t('purchaseReview.orderNo'), minWidth: 168, fixed: 'left', copyable: true, copyMode: 'text', mobileCellClass: 'qs-type-data-emphasis' },
+  { id: 'source', accessorKey: 'salesOrderNo', title: t('purchaseReview.source'), minWidth: 230, copyable: true, copyMode: 'text', mobileCellClass: 'qs-type-data-emphasis' },
   { id: 'supplier', accessorFn: row => row.supplier.label, title: t('purchaseReview.supplier'), minWidth: 130 },
   { id: 'buyer', accessorFn: row => row.createdBy.displayName, title: t('purchaseReview.buyer'), minWidth: 150 },
   { id: 'products', accessorFn: row => row.lineSummary.lineCount, title: t('purchaseReview.products'), minWidth: 185 },
@@ -198,6 +203,7 @@ function view(row: PurchaseOrderListItemDto): void {
   detailVisible.value = true
   void loadDetail()
 }
+
 watch(detailVisible, (visible) => {
   if (!visible) {
     detailController?.abort()
@@ -251,8 +257,8 @@ onBeforeUnmount(() => {
       >
         <template #cell-orderNo="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine content-class="qs-type-data-emphasis font-mono">
-              {{ row.original.orderNo }}
+            <QsTableStackedLine content-class="qs-type-data-emphasis">
+              <QsCopyableText :label="t('purchaseReview.orderNo')" :text="row.original.orderNo" />
             </QsTableStackedLine>
             <QsTableStackedLine tone="muted">
               {{ purchaseTypeLabel(row.original.purchaseType) }}
@@ -261,14 +267,14 @@ onBeforeUnmount(() => {
         </template>
         <template #cell-source="{ row }">
           <QsTableStackedCell class="group">
-            <QsTableStackedLine content-class="qs-type-data-emphasis font-mono">
-              {{ row.original.salesOrderNo ?? t('purchaseReview.stock') }}
-              <template #suffix>
-                <CopyCellButton
-                  v-if="row.original.salesOrderNo"
-                  :label="t('purchaseReview.source')"
-                  :text="row.original.salesOrderNo"
-                />
+            <QsTableStackedLine content-class="qs-type-data-emphasis">
+              <QsCopyableText
+                v-if="row.original.salesOrderNo"
+                :label="t('purchaseReview.source')"
+                :text="row.original.salesOrderNo"
+              />
+              <template v-else>
+                {{ t('purchaseReview.stock') }}
               </template>
             </QsTableStackedLine>
             <QsTableStackedLine v-if="row.original.customerName" tone="muted">
@@ -335,13 +341,18 @@ onBeforeUnmount(() => {
         </template>
         <template #actions="{ row }">
           <FaButton v-if="row.orderStatus === 'PENDING_REVIEW' && canReview" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" @click="openReview(row)">
-            <FaIcon name="i-lucide:clipboard-check" aria-hidden="true" />{{ t('purchaseReview.review') }}
+            审核
           </FaButton>
+          <template v-else-if="status === 'APPROVED' && canReview">
+            <FaButton variant="ghost" size="sm" class="text-destructive min-h-11 sm:min-h-8" :aria-label="`${row.orderNo}：${t('purchaseReview.cancellation.action')}`" @click="openCancellation(row)">
+              取消
+            </FaButton>
+            <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.orderNo}：详情`" @click="view(row)">
+              详情
+            </FaButton>
+          </template>
           <FaButton v-else variant="ghost" size="sm" class="min-h-11 sm:min-h-8" @click="view(row)">
-            <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('purchaseReview.view') }}
-          </FaButton>
-          <FaButton v-if="status === 'APPROVED' && canReview" variant="ghost" size="sm" class="text-destructive min-h-11 sm:min-h-8" :aria-label="`${row.orderNo}：${t('purchaseReview.cancellation.action')}`" @click="openCancellation(row)">
-            <FaIcon name="i-lucide:circle-x" aria-hidden="true" />{{ t('purchaseReview.cancellation.action') }}
+            详情
           </FaButton>
         </template>
       </QsGenericTable>

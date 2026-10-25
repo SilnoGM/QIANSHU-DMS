@@ -48,7 +48,7 @@ const toolbarItems = computed(() => statusSwitchItems().map(item => ({
 })))
 
 const columns = computed<QsGenericTableColumn<InvoiceRequestListItemDto>[]>(() => [
-  { id: 'invoiceNo', accessorKey: 'invoiceNo', title: t('invoiceRequest.column.invoiceNo'), minWidth: 190, fixed: 'left' },
+  { id: 'invoiceNo', accessorKey: 'invoiceNo', title: t('invoiceRequest.column.invoiceNo'), minWidth: 168, fixed: 'left' },
   { id: 'document', accessorFn: row => row.documentMediaAssetId, title: t('invoiceRequest.column.document'), minWidth: 96 },
   { id: 'status', accessorFn: row => row.status, title: t('invoiceRequest.column.status'), minWidth: 130 },
   { id: 'buyer', accessorFn: row => row.buyerName, title: t('invoiceRequest.column.buyer'), minWidth: 190 },
@@ -134,7 +134,7 @@ onMounted(load)
         :search-placeholder="t('invoiceRequest.list.searchPlaceholder')"
         :empty-title="t('invoiceRequest.list.empty')"
         :empty-description="t('invoiceRequest.list.emptyDescription')"
-        :action-column="{ fixed: 'right', minWidth: 210 }"
+        :action-column="{ fixed: 'right', minWidth: 140, width: 140 }"
         @pagination-change="load"
         @search="load"
         @retry="load"
@@ -284,7 +284,7 @@ onMounted(load)
             :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.viewDetail')}`"
             @click="openDetail(row)"
           >
-            <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('invoiceRequest.action.viewDetail') }}
+            详情
           </FaButton>
           <FaButton
             v-if="row.status === 'RETURNED'"
@@ -294,7 +294,7 @@ onMounted(load)
             :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.refill')}`"
             @click="refill(row)"
           >
-            <FaIcon name="i-lucide:pencil-line" aria-hidden="true" />{{ t('invoiceRequest.action.refill') }}
+            补开
           </FaButton>
         </template>
       </QsGenericTable>

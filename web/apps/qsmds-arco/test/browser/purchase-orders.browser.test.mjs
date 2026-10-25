@@ -637,7 +637,7 @@ async function payPurchaseInstallments(page, configuration, order, installments,
   }
   await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
   await waitForPurchaseList(page, order.orderNo)
-  await clickVisibleAriaButton(page, `${order.orderNo}：查看详情`)
+  await clickVisibleAriaButton(page, `${order.orderNo}：详情`)
   await page.waitFor(`document.querySelector('[data-testid="purchase-order-detail-drawer"]')?.getClientRects().length > 0`)
 }
 
@@ -733,7 +733,7 @@ async function openWorkbenchReview(page, orderNo) {
   const source = `(() => [...document.querySelectorAll('tr')]
     .filter(row => row.getClientRects().length > 0 && row.textContent.includes(${JSON.stringify(orderNo)}))
     .flatMap(row => [...row.querySelectorAll('button')])
-    .find(button => button.getClientRects().length > 0 && !button.disabled && button.textContent.trim() === '审核采购'))()`
+    .find(button => button.getClientRects().length > 0 && !button.disabled && button.textContent.trim() === '审核'))()`
   await page.waitFor(`${source} !== undefined`)
   await page.evaluate(`(() => { const button = ${source}; button.focus({ preventScroll: true }); button.click(); return true })()`)
 }
@@ -1378,7 +1378,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
       [{ lineNumber: 1, quantity: 1 }],
     ])
     assert.equal(detail.body.amounts.lineSubtotalAmount, '160.00', '拆件不得重复计订单金额')
-    await clickVisibleAriaButton(page, `${catalogLinkedOrder.orderNo}：查看详情`)
+    await clickVisibleAriaButton(page, `${catalogLinkedOrder.orderNo}：详情`)
     await assertPurchasePartDetail(page, detail.body, true)
     await clickVisibleAriaButton(page, '关闭抽屉')
     await page.waitFor(`!document.querySelector('[data-testid="purchase-order-detail-drawer"]')?.getClientRects().length`)
@@ -1747,7 +1747,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
   await runPurchaseOrderBrowserStep('operations purchase list does not offer cancellation', async () => {
     const actionsSource = purchaseOrderActionButtonsSource(order.orderNo)
     await page.waitFor(`${actionsSource}.length === 1`)
-    assert.deepEqual(await page.evaluate(`${actionsSource}.map(button => button.textContent.trim())`), ['查看'])
+    assert.deepEqual(await page.evaluate(`${actionsSource}.map(button => button.textContent.trim())`), ['详情'])
     assert.equal(await page.evaluate(`(() => [...document.querySelectorAll(
       '[data-slot="qs-generic-drawer"]',
     )].filter(drawer => drawer.getClientRects().length > 0).length)()`), 0)
@@ -1761,7 +1761,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
       已完成: 0,
       已取消: 0,
     })
-    await clickVisibleAriaButton(page, `${order.orderNo}：查看详情`)
+    await clickVisibleAriaButton(page, `${order.orderNo}：详情`)
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-detail-drawer"]')?.textContent.includes('采购审核中')`)
     assert.equal(await page.evaluate(`(() => {
       const drawer = document.querySelector('[data-testid="purchase-order-detail-drawer"]')
@@ -1779,7 +1779,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
     })
     const pendingActionsSource = purchaseOrderActionButtonsSource(order.orderNo)
     await page.waitFor(`${pendingActionsSource}.length === 1`)
-    assert.deepEqual(await page.evaluate(`${pendingActionsSource}.map(button => button.textContent.trim())`), ['查看'])
+    assert.deepEqual(await page.evaluate(`${pendingActionsSource}.map(button => button.textContent.trim())`), ['详情'])
   })
 
   await runPurchaseOrderBrowserStep('review requires confirmation, recovers conflict, and refreshes both views', async () => {
@@ -1796,7 +1796,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
       if (index === 0) {
         const allActionsSource = purchaseOrderActionButtonsSource(target.orderNo)
         await page.waitFor(`${allActionsSource}.length === 1`)
-        assert.deepEqual(await page.evaluate(`${allActionsSource}.map(button => button.textContent.trim())`), ['查看'])
+        assert.deepEqual(await page.evaluate(`${allActionsSource}.map(button => button.textContent.trim())`), ['详情'])
         const rowActionLayout = await page.evaluate(`(() => {
           const buttons = ${allActionsSource}
           const rects = buttons.map(button => button.getBoundingClientRect())
@@ -1954,7 +1954,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
         await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
         await waitForPurchaseList(page, target.orderNo)
         await assertPurchaseShippingMarksInteraction(page, target)
-        await clickVisibleAriaButton(page, `${target.orderNo}：查看详情`)
+        await clickVisibleAriaButton(page, `${target.orderNo}：详情`)
         await assertPurchasePartDetail(page, reviewed.body, true)
         await clickVisibleAriaButton(page, '关闭抽屉')
         await page.waitFor(`!document.querySelector('[data-testid="purchase-order-detail-drawer"]')?.getClientRects().length`)
@@ -1968,7 +1968,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
   })
 
   await runPurchaseOrderBrowserStep('detail and full payment', async () => {
-    await clickVisibleAriaButton(page, `${order.orderNo}：查看详情`)
+    await clickVisibleAriaButton(page, `${order.orderNo}：详情`)
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-detail-drawer"] section[aria-label="采购产品列表"]') !== null`)
     // 产品图片采用懒加载；先滚动至产品区再验证真实图像加载，避免离屏图片尚未请求。
     await page.evaluate(`(() => {
@@ -2243,7 +2243,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
   await runPurchaseOrderBrowserStep('historical MIXED payment, missing-part shipment guard, and cancellation', async () => {
     await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
     await waitForPurchaseList(page, historicalMixedActiveOrderNo)
-    await clickVisibleAriaButton(page, `${historicalMixedActiveOrderNo}：查看详情`)
+    await clickVisibleAriaButton(page, `${historicalMixedActiveOrderNo}：详情`)
     await page.waitFor(`(() => {
       const drawer = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
@@ -2369,7 +2369,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
     await waitForPurchaseList(page, pending.body.orderNo)
     const pendingActionsSource = purchaseOrderActionButtonsSource(pending.body.orderNo)
     await page.waitFor(`${pendingActionsSource}.length === 1`)
-    assert.deepEqual(await page.evaluate(`${pendingActionsSource}.map(button => button.textContent.trim())`), ['查看'])
+    assert.deepEqual(await page.evaluate(`${pendingActionsSource}.map(button => button.textContent.trim())`), ['详情'])
     const unchanged = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(pending.body.id)}`))
     assert.equal(unchanged.status, 200)
     assert.equal(unchanged.body.orderStatus, 'PENDING_REVIEW')
@@ -2418,7 +2418,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
       )
       const rowButtons = [...(mobileActions?.querySelectorAll('button') ?? [])]
         .filter(button => button.getClientRects().length > 0
-          && button.textContent?.trim() === '查看')
+          && button.textContent?.trim() === '详情')
       const buttons = [...headerButtons, ...rowButtons]
       const rect = card?.getBoundingClientRect()
       return {

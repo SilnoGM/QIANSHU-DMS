@@ -140,7 +140,7 @@ test('采购列表展示可复制唛头、备注和可复制销售来源', async
   )
   assert.ok(sourceCell, '应存在销售来源单元格')
   assert.match(sourceCell[1] ?? '', /<QsTableStackedCell class="group">/u)
-  assert.match(sourceCell[1] ?? '', /qs-type-data-emphasis font-mono/u)
+  assert.match(sourceCell[1] ?? '', /qs-type-data-emphasis/u)
   assert.match(
     sourceCell[1] ?? '',
     /<CopyCellButton[\s\S]*?label="销售订单号"[\s\S]*?:text="row\.original\.salesOrderNo \?\? ''"/u,
@@ -191,12 +191,12 @@ test('全部与待办采购均使用带计数的状态工具栏', async () => {
   assert.doesNotMatch(source, /<QsStatusSwitchToolbar[^>]*v-if=/u)
   assert.match(source, /:aria-label="`\$\{pageTitle\}状态筛选`"/u)
   assert.match(source, /props\.viewMode === 'pending'/u)
-  assert.match(source, /resolvePurchaseOrderPendingActions/u)
+  assert.match(source, /resolvePurchaseOrderPendingActionSlot/u)
   assert.match(source, /import QsFactoryShipmentModal from '@\/components\/business\/QsFactoryShipmentModal\/index\.vue'/u)
   assert.match(source, /purchaseOrdersApi\.factoryShipment/u)
   assert.match(source, /if \(action\.key === 'SHIPMENT'\)/u)
   assert.match(source, /openPurchaseFactoryShipment\(order\)/u)
-  assert.match(source, /@click="handlePendingAction\(action, row\)"/u)
+  assert.match(source, /@click="handlePendingActionFromRow\(action, row\)"/u)
   assert.match(source, /<QsFactoryShipmentModal[\s\S]*?mode="PURCHASE_ORDER"/u)
   assert.match(source, /@submit="submitPurchaseFactoryShipment"/u)
   assert.match(source, /formatPurchaseFactoryShipmentSuccess/u)

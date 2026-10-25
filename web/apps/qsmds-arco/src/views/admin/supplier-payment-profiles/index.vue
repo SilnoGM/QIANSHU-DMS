@@ -130,7 +130,7 @@ onBeforeUnmount(keepEditing)
         <QsGenericTable
           v-else v-model:page="page" v-model:page-size="pageSize" v-model:search="search"
           row-key="supplierValue" :columns="columns" :data="rows" :total="total" :loading="loading" :error="error || undefined"
-          :addable="false" :show-column-settings="false" :action-column="{ width: 120, align: 'right' }"
+          :addable="false" :show-column-settings="false" :action-column="{ width: 84, minWidth: 84, align: 'right' }"
           :search-placeholder="t('supplierPaymentProfile.search')" :empty-title="t('supplierPaymentProfile.empty')" :empty-description="t('supplierPaymentProfile.emptyHint')"
           @search="query" @pagination-change="load" @retry="load"
         >

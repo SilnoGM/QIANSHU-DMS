@@ -1013,7 +1013,7 @@ async function verifyProductList(page, baseUrl) {
       )))()`)
     await clickVisibleButton(page, '返回产品列表')
     await waitForProductList(page, productNo)
-    await clickVisibleTableRowButton(page, productNo, '查看')
+    await clickVisibleTableRowButton(page, productNo, '详情')
     await page.waitFor(`(() => {
       const drawer = document.querySelector('[data-testid="product-detail-drawer"]')
       return drawer?.getClientRects().length > 0
@@ -1627,7 +1627,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.equal(fundAccountReadPermission?.systemOnly, false)
   assert.equal(usersReadPermission?.systemOnly, true)
 
-  await clickVisibleTableRowButton(page, roleCode, '分配权限')
+  await clickVisibleTableRowButton(page, roleCode, '授权')
   await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => (
     dialog.getClientRects().length > 0
     && dialog.textContent?.includes('分配权限')
@@ -1788,7 +1788,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   await page.setViewport(390, 844, true)
   await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/roles'))
   await page.waitFor(`document.body.innerText.includes(${JSON.stringify(roleCode)})`)
-  await clickVisibleCardButton(page, 'role-card', roleCode, '分配权限')
+  await clickVisibleCardButton(page, 'role-card', roleCode, '授权')
   await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => {
     const rect = dialog.getBoundingClientRect()
     return dialog.getClientRects().length > 0
@@ -1828,7 +1828,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.equal(narrowPermissionDrawer.hasHorizontalOverflow, false)
   await clickVisibleModalButton(page, '取消')
   await waitForNoVisibleModal(page, '分配权限')
-  await page.waitFor(`document.activeElement?.textContent?.trim() === '分配权限'`)
+  await page.waitFor(`document.activeElement?.textContent?.trim() === '授权'`)
 
   // 继续在 390px 真机指标下从用户卡片进入重置密码，验证 Drawer -> Modal 的
   // 关键操作链和弹窗宽度；之后再切回桌面表格完成编辑、角色与状态操作。
@@ -1984,7 +1984,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     assert.equal(serializedUpdateAudit.includes(sensitiveValue), false)
   }
 
-  await clickVisibleTableRowButton(page, managedUsername, '分配角色')
+  await clickVisibleTableRowButton(page, managedUsername, '授权')
   await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => (
     dialog.getClientRects().length > 0
     && dialog.textContent?.includes('分配角色')
@@ -2011,8 +2011,8 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   })
   assert.deepEqual(managedUser?.roleIds, [managedRole.id])
 
-  await clickVisibleTableRowButton(page, managedUsername, '更多')
-  await clickVisibleText(page, '禁用用户')
+  await clickVisibleAriaButton(page, `更多用户操作 · ${managedUsername}`)
+  await clickVisibleText(page, '禁用')
   await clickVisibleModalButton(page, '确认禁用')
   await waitForNoVisibleModal(page, '确认禁用用户')
   userResponse = await page.evaluate(apiExpression(
@@ -2022,8 +2022,8 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   managedUser = userResponse.body?.items?.find(user => user.username === managedUsername)
   assert.equal(managedUser?.status, 'DISABLED')
 
-  await clickVisibleTableRowButton(page, managedUsername, '更多')
-  await clickVisibleText(page, '启用用户')
+  await clickVisibleAriaButton(page, `更多用户操作 · ${managedUsername}`)
+  await clickVisibleText(page, '启用')
   await clickVisibleModalButton(page, '确认启用')
   await waitForNoVisibleModal(page, '确认启用用户')
   userResponse = await page.evaluate(apiExpression(

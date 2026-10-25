@@ -5,6 +5,7 @@ import packagingCostsApi from '@/api/modules/packaging-costs'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
@@ -37,7 +38,7 @@ const error = ref('')
 let controller: AbortController | null = null
 const tabs = computed(() => (['PENDING_PAYMENT', 'PAID'] as const).map(value => ({ value, label: t(`packagingPayment.status.${value}`), count: counts.value[value] })))
 const columns = computed<QsGenericTableColumn<PackagingCostRequestDto>[]>(() => [
-  { id: 'shipmentNo', accessorKey: 'shipmentNo', title: t('packagingPayment.shipmentNo'), minWidth: 230, fixed: 'left', copyable: true },
+  { id: 'shipmentNo', accessorKey: 'shipmentNo', title: t('packagingPayment.shipmentNo'), minWidth: 177, fixed: 'left', copyable: true, copyMode: 'text' },
   { id: 'shippingMarkText', accessorKey: 'shippingMarkText', title: t('packagingPayment.shippingMarkText'), minWidth: 250, copyable: true },
   { id: 'source', title: t('packagingPayment.source'), minWidth: 240 },
   { id: 'packaging', title: t('packagingPayment.packagingInfo'), minWidth: 165 },
@@ -135,11 +136,16 @@ onBeforeUnmount(() => {
           row-key="id" :show-row-number="false" :columns="columns" :data="items" :total="total" :loading="loading" :error="error || undefined"
           :addable="false" :page-size-options="[20, 50, 100]" :search-placeholder="t('packagingPayment.search')"
           :empty-title="t('packagingPayment.empty')" :empty-description="t(`packagingPayment.emptyDescription.${status}`)"
-          :action-column="{ fixed: 'right', width: 110 }" table-class="w-max min-w-full"
+          :action-column="{ fixed: 'right', minWidth: 84, width: 84 }" table-class="w-max min-w-full"
           @search="search" @pagination-change="load" @retry="load"
         >
           <template #cell-shipmentNo="{ row }">
-            <span class="qs-type-data-emphasis whitespace-nowrap">{{ row.original.shipmentNo || '—' }}</span>
+            <QsCopyableText
+              v-if="row.original.shipmentNo"
+              :label="t('packagingPayment.shipmentNo')"
+              :text="row.original.shipmentNo"
+            />
+            <span v-else class="qs-type-data-emphasis whitespace-nowrap">—</span>
           </template>
           <template #cell-shippingMarkText="{ row }">
             <span class="qs-type-data break-all">{{ row.original.shippingMarkText || '—' }}</span>
@@ -194,10 +200,10 @@ onBeforeUnmount(() => {
           </template>
           <template #actions="{ row }">
             <FaButton v-if="canPay && row.status === 'PENDING_PAYMENT'" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.shipmentNo}：${t('packagingPayment.pay')}`" @click="openPayment(row)">
-              <FaIcon name="i-lucide:wallet" aria-hidden="true" />{{ t('packagingPayment.pay') }}
+              {{ t('packagingPayment.pay') }}
             </FaButton>
             <FaButton v-else-if="row.status === 'PAID'" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.shipmentNo}：${t('packagingPayment.view')}`" @click="openPaidDetail(row)">
-              <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('packagingPayment.view') }}
+              {{ t('packagingPayment.view') }}
             </FaButton>
             <span v-else class="text-muted-foreground">—</span>
           </template>

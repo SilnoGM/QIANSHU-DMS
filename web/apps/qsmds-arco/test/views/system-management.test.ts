@@ -253,10 +253,10 @@ test('用户管理将分配角色直接展示在桌面操作列', () => {
 
   assert.ok(moreActionItemsSource)
   assert.doesNotMatch(moreActionItemsSource, /分配角色/u)
-  assert.match(source, /:action-column="\{ width: 230 \}"/u)
+  assert.match(source, /:action-column="\{ minWidth: 176, width: 176 \}"/u)
   assert.match(
     source,
-    /<FaButton\s+v-if="userActions\(user\)\.canAssignRoles"[\s\S]*?@click="openRoleAssignment\(user\)"[\s\S]*?>\s*分配角色\s*<\/FaButton>/u,
+    /<FaButton\s+v-if="userActions\(user\)\.canAssignRoles"[\s\S]*?@click="openRoleAssignment\(user\)"[\s\S]*?>\s*授权\s*<\/FaButton>/u,
   )
 })
 

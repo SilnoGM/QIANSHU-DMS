@@ -254,7 +254,7 @@ const columns: QsGenericTableColumn<NumberingRuleListItemDto>[] = [
   {
     accessorFn: item => item.statistics.nextNumberPreview,
     id: 'nextNumber',
-    minWidth: 230,
+    minWidth: 185,
     title: '下一编号',
   },
   {
@@ -777,7 +777,7 @@ onBeforeUnmount(() => {
           data-testid="numbering-rule-table"
           row-key="id"
           :addable="false"
-          :action-column="{ align: 'right', title: '操作', width: 220 }"
+          :action-column="{ align: 'right', title: '操作', minWidth: 176, width: 176 }"
           :columns="columns"
           :data="rows"
           empty-title="暂无编号规则"
@@ -896,7 +896,7 @@ onBeforeUnmount(() => {
                 :aria-label="`查看详情 · ${item.name}`"
                 @click="requestRuleAction(item, 'detail')"
               >
-                查看详情
+                详情
               </FaButton>
               <FaButton
                 v-if="ruleActions(item).canEdit"
@@ -914,11 +914,11 @@ onBeforeUnmount(() => {
               >
                 <FaButton
                   variant="ghost"
-                  size="sm"
+                  size="icon-sm"
+                  class="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8"
                   :aria-label="`更多操作 · ${item.name}`"
                 >
-                  更多
-                  <FaIcon name="i-lucide:chevron-down" />
+                  <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
                 </FaButton>
               </FaDropdown>
             </div>

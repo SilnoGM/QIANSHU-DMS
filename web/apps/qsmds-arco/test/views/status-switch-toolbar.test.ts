@@ -67,6 +67,9 @@ test('状态切换工具栏组件保持受控模型、可访问按钮与自动�
   )
 
   assert.match(source, /defineOptions\(\{ name: 'QsStatusSwitchToolbar' \}\)/u)
+  assert.match(source, /stretch\?: boolean/u)
+  assert.match(source, /stretch \? 'w-full min-w-0'/u)
+  assert.match(source, /stretch \? 'flex-1 min-w-0'/u)
   assert.match(source, /defineModel<string>\(\{ required: true \}\)/u)
   assert.match(source, /useResizeObserver/u)
   assert.match(source, /aria-pressed/u)

@@ -9,7 +9,9 @@ import {
   formatSalesFactoryShipmentSuccess,
   getSalesOrderStatusItems,
   normalizeSalesOrderStatusSelection,
+  resolvePendingSalesOrderActionBlockedReason,
   resolvePendingSalesOrderActions,
+  resolvePendingSalesOrderActionSlot,
   resolveSalesOrderQueryTargets,
   summarizeSalesOrderItemsByCurrency,
 } from '../../src/views/operations/sales-orders/sales-order-list-view.logic'
@@ -233,7 +235,7 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
       paymentStatus: 'PARTIALLY_PAID',
       purchaseHold: null,
     }).map(action => action.label),
-    ['新增表外收款'],
+    ['表外收款'],
   )
 
   assert.deepEqual(
@@ -264,6 +266,64 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
   assert.deepEqual(
     resolvePendingSalesOrderActions('ALL', awaitingReview).map(action => action.key),
     ['URGE_PURCHASE_REVIEW', 'RECORD_PAYMENT'],
+  )
+})
+
+test('待办槽位不因付款或状态变化消失，点击守卫返回具体原因', () => {
+  assert.equal(
+    resolvePendingSalesOrderActionSlot('WAITING_PAYMENT', {
+      fulfillmentStatus: 'SIGNED',
+      paymentStatus: 'PAID',
+      purchaseHold: null,
+    })?.key,
+    'RECORD_PAYMENT',
+  )
+  assert.equal(
+    resolvePendingSalesOrderActionSlot('WAREHOUSE_ARRIVED', {
+      fulfillmentStatus: 'WAREHOUSE_ARRIVED',
+      paymentStatus: 'UNPAID',
+      purchaseHold: null,
+    }),
+    null,
+  )
+  assert.equal(
+    resolvePendingSalesOrderActionBlockedReason('RECORD_PAYMENT', {
+      fulfillmentStatus: 'SIGNED',
+      orderStatus: 'CONFIRMED',
+      paymentStatus: 'PAID',
+      purchaseHold: null,
+    }),
+    '订单已付清，无需再登记收款',
+  )
+  assert.equal(
+    resolvePendingSalesOrderActionBlockedReason('FACTORY_SHIPMENT', {
+      fulfillmentStatus: 'PENDING',
+      orderStatus: 'CONFIRMED',
+      paymentStatus: 'UNPAID',
+      purchaseHold: null,
+    }),
+    '订单当前不在待发货阶段',
+  )
+  assert.equal(
+    resolvePendingSalesOrderActionBlockedReason('SUBMIT_PURCHASE', {
+      fulfillmentStatus: 'PENDING',
+      orderStatus: 'CONFIRMED',
+      paymentStatus: 'UNPAID',
+      purchaseHold: {
+        reason: 'AWAITING_PURCHASE_REVIEW',
+        pendingReviewOrderCount: 1,
+      },
+    }),
+    '采购正在审核中，请先催办',
+  )
+  assert.equal(
+    resolvePendingSalesOrderActionBlockedReason('WAREHOUSE_RECEIPT', {
+      fulfillmentStatus: 'LAND_TRANSIT',
+      orderStatus: 'CONFIRMED',
+      paymentStatus: 'UNPAID',
+      purchaseHold: null,
+    }),
+    null,
   )
 })
 

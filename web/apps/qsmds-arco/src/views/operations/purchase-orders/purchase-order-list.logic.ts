@@ -36,6 +36,11 @@ export interface PurchaseOrderPendingActionItem {
   readonly label: string
 }
 
+type PurchaseOrderActionGuardSource = Pick<
+  PurchaseOrderListItemDto,
+  'fulfillmentStatus' | 'orderStatus' | 'paymentStatus' | 'pendingWarehousePartCount'
+>
+
 export interface PurchaseOrderListDateRange {
   readonly orderDateFrom?: string
   readonly orderDateTo?: string
@@ -163,6 +168,51 @@ export function resolvePurchaseOrderPendingActions(
   return [TASK_ACTION[task]]
 }
 
+/**
+ * 待办操作列固定占用一个任务槽位；已付清或状态已变化的陈旧行也保留按钮，
+ * 由点击守卫解释不可执行原因，避免同一 Tab 内按钮忽有忽无。
+ */
+export function resolvePurchaseOrderPendingActionSlot(
+  task: PurchaseOrderPendingTask,
+): PurchaseOrderPendingActionItem | null {
+  if (task === 'AWAITING_REVIEW') {
+    return null
+  }
+  return task === 'AWAITING_PAYMENT' ? PAYMENT_ACTION : TASK_ACTION[task]
+}
+
+export function resolvePurchaseOrderWarehouseReceiptBlockedReason(
+  order: PurchaseOrderActionGuardSource,
+): string | null {
+  if (order.orderStatus !== 'CONFIRMED') {
+    return '只有已确认采购单可以入仓'
+  }
+  if (order.pendingWarehousePartCount <= 0) {
+    return '当前采购单没有待入仓货件'
+  }
+  return null
+}
+
+export function resolvePurchaseOrderPendingActionBlockedReason(
+  key: PurchaseOrderPendingActionKey,
+  order: PurchaseOrderActionGuardSource,
+): string | null {
+  if (key === 'WAREHOUSE_RECEIPT') {
+    return resolvePurchaseOrderWarehouseReceiptBlockedReason(order)
+  }
+  if (order.orderStatus !== 'CONFIRMED') {
+    return '只有已确认采购单可以执行该操作'
+  }
+  if (key === 'PAYMENT') {
+    return order.paymentStatus === 'PAID'
+      ? '采购单已付清，无需再申请付款'
+      : null
+  }
+  return ['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED'].includes(order.fulfillmentStatus)
+    ? null
+    : '采购单当前不在待发货阶段'
+}
+
 /** 审核中与已确认订单可取消，最终提交前仍由详情接口重新校验最新状态。 */
 export function canCancelPurchaseOrderFromList(
   order: Pick<PurchaseOrderListItemDto, 'orderStatus' | 'fulfillmentStatus'>,
@@ -275,6 +325,20 @@ export function purchaseTypeLabel(
   value: PurchaseOrderListItemDto['purchaseType'],
 ): string {
   return value === 'SALES_LINKED' ? '销售关联采购' : '备货采购'
+}
+
+export function purchaseTypeShortLabel(
+  value: PurchaseOrderListItemDto['purchaseType'],
+): string {
+  return value === 'SALES_LINKED' ? '关联' : '备货'
+}
+
+export function purchaseTypeTagClass(
+  value: PurchaseOrderListItemDto['purchaseType'],
+): string {
+  return value === 'SALES_LINKED'
+    ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300'
+    : 'border-blue-500/30 bg-blue-500/8 text-blue-700 dark:text-blue-300'
 }
 
 export function orderStatusLabel(

@@ -23,7 +23,12 @@ import {
   orderStatusTagClass,
   paymentStatusLabel,
   purchaseTypeLabel,
+  purchaseTypeShortLabel,
+  purchaseTypeTagClass,
+  resolvePurchaseOrderPendingActionBlockedReason,
   resolvePurchaseOrderPendingActions,
+  resolvePurchaseOrderPendingActionSlot,
+  resolvePurchaseOrderWarehouseReceiptBlockedReason,
 } from '../../src/views/operations/purchase-orders/purchase-order-list.logic'
 
 const currencies: readonly CurrencyDescriptor[] = [
@@ -119,6 +124,10 @@ test('采购状态计数查询排除分页、订单状态和待办任务', () =>
 test('采购列表标签完整覆盖类型、订单、履约与付款状态', () => {
   assert.equal(purchaseTypeLabel('SALES_LINKED'), '销售关联采购')
   assert.equal(purchaseTypeLabel('STOCK'), '备货采购')
+  assert.equal(purchaseTypeShortLabel('SALES_LINKED'), '关联')
+  assert.equal(purchaseTypeShortLabel('STOCK'), '备货')
+  assert.match(purchaseTypeTagClass('SALES_LINKED'), /emerald/u)
+  assert.match(purchaseTypeTagClass('STOCK'), /blue/u)
   assert.equal(orderStatusLabel('CONFIRMED'), '已确认')
   assert.equal(orderStatusLabel('COMPLETED'), '已完成')
   assert.equal(orderStatusLabel('CANCELLED'), '已取消')
@@ -209,6 +218,49 @@ test('待办采购操作严格只返回当前任务对应的唯一处理动作',
     orderStatus: 'CONFIRMED',
     paymentStatus: 'PAID',
   }), [])
+})
+
+test('采购待办槽位不因付款或状态变化消失，点击守卫返回具体原因', () => {
+  assert.equal(resolvePurchaseOrderPendingActionSlot('AWAITING_REVIEW'), null)
+  assert.equal(resolvePurchaseOrderPendingActionSlot('AWAITING_PAYMENT')?.key, 'PAYMENT')
+  assert.equal(resolvePurchaseOrderPendingActionSlot('AWAITING_SHIPMENT')?.key, 'SHIPMENT')
+  assert.equal(resolvePurchaseOrderPendingActionSlot('AWAITING_WAREHOUSE')?.key, 'WAREHOUSE_RECEIPT')
+  assert.equal(
+    resolvePurchaseOrderPendingActionBlockedReason('PAYMENT', {
+      fulfillmentStatus: 'ORDERED',
+      orderStatus: 'CONFIRMED',
+      paymentStatus: 'PAID',
+      pendingWarehousePartCount: 0,
+    }),
+    '采购单已付清，无需再申请付款',
+  )
+  assert.equal(
+    resolvePurchaseOrderPendingActionBlockedReason('SHIPMENT', {
+      fulfillmentStatus: 'SHIPPED',
+      orderStatus: 'CONFIRMED',
+      paymentStatus: 'UNPAID',
+      pendingWarehousePartCount: 0,
+    }),
+    '采购单当前不在待发货阶段',
+  )
+  assert.equal(
+    resolvePurchaseOrderWarehouseReceiptBlockedReason({
+      fulfillmentStatus: 'ORDERED',
+      orderStatus: 'CONFIRMED',
+      paymentStatus: 'UNPAID',
+      pendingWarehousePartCount: 0,
+    }),
+    '当前采购单没有待入仓货件',
+  )
+  assert.equal(
+    resolvePurchaseOrderWarehouseReceiptBlockedReason({
+      fulfillmentStatus: 'ORDERED',
+      orderStatus: 'CONFIRMED',
+      paymentStatus: 'UNPAID',
+      pendingWarehousePartCount: 2,
+    }),
+    null,
+  )
 })
 
 test('全部采购仅允许审核中与已确认订单从操作列进入取消流程', () => {

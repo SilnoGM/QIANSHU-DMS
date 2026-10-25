@@ -399,6 +399,8 @@ export class SalesOrderListItemDto {
   @ApiProperty({ type: 'integer', minimum: 0 })
   readonly activePurchaseOrderCount!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly paymentRecordCount!: number
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly validPaymentRecordCount!: number
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly pendingReceiptRequestCount!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly statusChangeRecordCount!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly amountChangeRecordCount!: number
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number

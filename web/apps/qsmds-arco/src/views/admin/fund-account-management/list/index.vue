@@ -11,16 +11,18 @@ import type {
   FundAccountUserDto,
   UpdateFundShareRateRequestDto,
 } from '@/api/generated/types.gen'
+import type { ActionMenuItem, ActionWidthSpec } from '@/components/business/QsGenericTable/action-column-width'
 import type {
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
   QsGenericTableFilterValues,
 } from '@/components/business/QsGenericTable/logic'
-
 import fundAccountsApi from '@/api/modules/fund-accounts'
+
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import { resolveActionColumnWidth } from '@/components/business/QsGenericTable/action-column-width'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
@@ -61,6 +63,23 @@ const canRead = computed(() => auth('fund-accounts:read'))
 const canCreate = computed(() => auth('fund-accounts:create'))
 const canUpdateShareRate = computed(() => auth('fund-accounts:update-share-rate'))
 const canManualAdjust = computed(() => auth('fund-accounts:manual-adjust'))
+const actionColumnWidth = computed(() => {
+  const actions: ActionWidthSpec[] = [{ chars: 2, kind: 'text' }]
+  if (canManualAdjust.value) {
+    actions.push({ chars: 2, kind: 'text' })
+  }
+  if (canUpdateShareRate.value) {
+    actions.push({ kind: 'icon' })
+  }
+  return resolveActionColumnWidth(actions)
+})
+
+function shareMenuItems(row: FundAccountDto): ActionMenuItem[][] {
+  return [[{
+    label: '比例',
+    handle: () => openShareModal(row),
+  }]]
+}
 const canManagePostingTypes = computed(() => auth('fund-posting-types:manage'))
 const canManageBusinessSources = computed(() => auth('fund-business-sources:manage'))
 const canConfigure = computed(() => canRead.value && (
@@ -806,7 +825,7 @@ onBeforeUnmount(() => {
         v-model:sorting="sorting"
         data-testid="fund-account-list-table"
         row-key="id"
-        :action-column="{ fixed: 'right', minWidth: 260, width: 260 }"
+        :action-column="{ fixed: 'right', minWidth: actionColumnWidth, width: actionColumnWidth }"
         :addable="false"
         :columns="columns"
         :data="accounts"
@@ -876,14 +895,13 @@ onBeforeUnmount(() => {
 
         <template #actions="{ row, rowNumber }">
           <FaButton
-            v-if="canUpdateShareRate && row.ownerType === 'USER'"
             variant="ghost"
             size="sm"
             class="shrink-0 min-h-11 whitespace-nowrap sm:min-h-9"
-            :aria-label="`修改第 ${rowNumber} 行 ${row.user?.username ?? ''} 的分成比例`"
-            @click="openShareModal(row)"
+            :aria-label="`查看第 ${rowNumber} 行账户流水`"
+            @click="navigateToTransactions(row)"
           >
-            <FaIcon name="i-lucide:percent" />比例
+            流水
           </FaButton>
           <FaButton
             v-if="canManualAdjust && row.ownerType === 'USER'"
@@ -893,17 +911,32 @@ onBeforeUnmount(() => {
             :aria-label="`调整第 ${rowNumber} 行 ${row.user?.username ?? ''} 的资金余额`"
             @click="openAdjustmentModal(row)"
           >
-            <FaIcon name="i-lucide:circle-dollar-sign" />调账
+            调账
           </FaButton>
           <FaButton
+            v-if="canUpdateShareRate && row.ownerType === 'USER'"
             variant="ghost"
             size="sm"
-            class="shrink-0 min-h-11 whitespace-nowrap sm:min-h-9"
-            :aria-label="`查看第 ${rowNumber} 行账户流水`"
-            @click="navigateToTransactions(row)"
+            class="shrink-0 min-h-11 whitespace-nowrap sm:min-h-9 md:hidden"
+            :aria-label="`修改第 ${rowNumber} 行 ${row.user?.username ?? ''} 的分成比例`"
+            @click="openShareModal(row)"
           >
-            <FaIcon name="i-lucide:scroll-text" />流水
+            比例
           </FaButton>
+          <FaDropdown
+            v-if="canUpdateShareRate && row.ownerType === 'USER'"
+            :items="shareMenuItems(row)"
+            align="end"
+          >
+            <FaButton
+              variant="ghost"
+              size="icon-sm"
+              class="min-h-11 min-w-11 hidden md:inline-flex sm:min-h-8 sm:min-w-8"
+              :aria-label="`${row.user?.username ?? '账户'}：更多操作`"
+            >
+              <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
+            </FaButton>
+          </FaDropdown>
         </template>
 
         <template #mobile-row="{ row, rowNumber }">

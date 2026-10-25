@@ -54,8 +54,10 @@ export interface QsGenericTableActionColumn {
 export type QsGenericTableColumn<TData extends object = Record<string, unknown>, TValue = unknown>
   = TableColumn<TData, TValue> & {
     copyable?: boolean
+    copyMode?: 'button' | 'text'
     defaultVisible?: boolean
     id: string
+    mobileCellClass?: string
     sortable?: boolean
     summary?: QsGenericTableSummaryDefinition<TData>
     title: string

@@ -5,6 +5,7 @@ import salesReceiptsApi from '@/api/modules/sales-receipts'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
@@ -40,8 +41,8 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [{
   options: [{ label: 'TWD', value: 'TWD' }, { label: 'MYR', value: 'MYR' }],
 }])
 const columns = computed<QsGenericTableColumn<SalesReceiptRequestDetailDto>[]>(() => [
-  { id: 'collectionNo', accessorKey: 'collectionNo', title: t('salesReceipt.collectionNo'), width: 214, minWidth: 214, fixed: 'left', copyable: true },
-  { id: 'order', accessorFn: item => item.salesOrder.orderNo, title: t('salesReceipt.order'), minWidth: 235, copyable: true },
+  { id: 'collectionNo', accessorKey: 'collectionNo', title: t('salesReceipt.collectionNo'), width: 168, minWidth: 168, fixed: 'left', copyable: true, copyMode: 'text' },
+  { id: 'order', accessorFn: item => item.salesOrder.orderNo, title: t('salesReceipt.order'), minWidth: 168, copyable: true, copyMode: 'text' },
   { id: 'receipt', accessorKey: 'paymentType', title: t('salesReceipt.receiptInfo'), minWidth: 185 },
   { id: 'amount', accessorKey: 'amount', title: t('salesReceipt.amount'), minWidth: 205, align: 'right' },
   { id: 'method', accessorKey: 'paymentMethodNameSnapshot', title: t('salesReceipt.method'), minWidth: 140 },
@@ -64,6 +65,16 @@ function actionLabel(item: SalesReceiptRequestDetailDto): string {
     return t(item.approvedPayment?.voidedAt ? 'salesReceipt.viewDetails' : 'salesReceipt.voidAction')
   }
   return t(item.status === 'REJECTED' ? 'salesReceipt.viewDetails' : 'salesReceipt.view')
+}
+
+function actionShortLabel(item: SalesReceiptRequestDetailDto): string {
+  if (item.status === 'APPROVED' && !item.approvedPayment?.voidedAt) {
+    return '作废'
+  }
+  if (item.status === 'PENDING_REVIEW') {
+    return '审核'
+  }
+  return '详情'
 }
 function statusClass(item: SalesReceiptRequestDetailDto): string {
   if (item.status === 'REJECTED') {
@@ -153,20 +164,24 @@ onBeforeUnmount(() => controller?.abort())
         :search-placeholder="t('salesReceipt.search')"
         :page-size-options="[20, 50, 100]"
         :empty-title="t('salesReceipt.empty')"
-        :action-column="{ fixed: 'right', minWidth: 130 }"
+        :action-column="{ fixed: 'right', minWidth: 84, width: 84 }"
         @search="search"
         @filter-change="search"
         @pagination-change="load"
         @retry="load"
       >
         <template #cell-collectionNo="{ row }">
-          <span v-if="row.original.collectionNo" class="qs-type-data-emphasis font-mono break-all">{{ row.original.collectionNo }}</span>
+          <QsCopyableText
+            v-if="row.original.collectionNo"
+            :label="t('salesReceipt.collectionNo')"
+            :text="row.original.collectionNo"
+          />
           <span v-else class="qs-type-meta">{{ t('salesReceipt.unnumbered') }}</span>
         </template>
         <template #cell-order="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine content-class="qs-type-data-emphasis font-mono break-all whitespace-normal">
-              {{ row.original.salesOrder.orderNo }}
+            <QsTableStackedLine content-class="qs-type-data-emphasis break-all whitespace-normal">
+              <QsCopyableText :label="t('salesReceipt.order')" :text="row.original.salesOrder.orderNo" />
             </QsTableStackedLine>
             <QsTableStackedLine tone="muted">
               {{ row.original.salesOrder.customerName }}
@@ -257,13 +272,16 @@ onBeforeUnmount(() => controller?.abort())
         </template>
         <template #actions="{ row }">
           <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.collectionNo || row.salesOrder.orderNo} · ${actionLabel(row)}`" @click="selectedId = row.id">
-            <FaIcon :name="row.status === 'APPROVED' && !row.approvedPayment?.voidedAt ? 'i-lucide:circle-slash' : 'i-lucide:eye'" aria-hidden="true" />{{ actionLabel(row) }}
+            {{ actionShortLabel(row) }}
           </FaButton>
         </template>
         <template #mobile-row="{ row }">
           <article class="min-w-0 space-y-4">
             <div class="flex flex-wrap gap-2 items-center justify-between">
-              <span class="qs-type-data-emphasis font-mono break-all">{{ row.collectionNo || t('salesReceipt.unnumbered') }}</span>
+              <span v-if="row.collectionNo" class="qs-type-data-emphasis break-all">
+                <QsCopyableText :label="t('salesReceipt.collectionNo')" :text="row.collectionNo" />
+              </span>
+              <span v-else class="qs-type-data-emphasis break-all">{{ t('salesReceipt.unnumbered') }}</span>
               <FaTag variant="outline" class="qs-type-status-tag" :class="statusClass(row)">
                 {{ t(`salesReceipt.status.${row.status}`) }}
               </FaTag>
@@ -272,7 +290,10 @@ onBeforeUnmount(() => controller?.abort())
               </FaTag>
             </div>
             <p class="qs-type-body m-0">
-              {{ row.salesOrder.orderNo }} · {{ row.salesOrder.customerName }}
+              <span class="qs-type-data-emphasis">
+                <QsCopyableText :label="t('salesReceipt.order')" :text="row.salesOrder.orderNo" />
+              </span>
+              <span> · {{ row.salesOrder.customerName }}</span>
             </p>
             <div class="p-3 rounded-lg bg-muted/30 flex flex-wrap gap-2 items-center justify-between">
               <span>{{ t(`salesReceipt.type.${row.paymentType}`) }}</span>

@@ -84,7 +84,7 @@ export function warehouseArrivalActions(view: WarehouseArrivalView, status: Purc
 
 export function createWarehouseArrivalColumns(view: WarehouseArrivalView, translate: (key: string) => string): QsGenericTableColumn<PurchaseShipmentListItemDto>[] {
   const columns: QsGenericTableColumn<PurchaseShipmentListItemDto>[] = [
-    { id: 'shipmentNo', title: translate('purchaseShipments.shipmentNo'), accessorKey: 'shipmentNo', fixed: 'left', minWidth: 227 },
+    { id: 'shipmentNo', title: translate('purchaseShipments.shipmentNo'), accessorKey: 'shipmentNo', fixed: 'left', minWidth: 177 },
     { id: 'mark', title: translate('purchaseShipments.mark'), accessorKey: 'shippingMarkText', minWidth: 250 },
     { id: 'destinationWarehouse', title: translate('purchaseShipments.destinationWarehouse'), accessorFn: row => formatDestinationWarehouse(row, translate), minWidth: 170 },
     { id: 'products', title: translate('purchaseShipments.products'), accessorFn: row => row.lineSummary.previews.map(item => item.productName).join('、'), minWidth: 200 },
