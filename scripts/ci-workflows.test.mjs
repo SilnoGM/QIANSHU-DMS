@@ -42,6 +42,7 @@ const requiredJobIds = Object.freeze([
   'web-check-build',
   'browser-auth-e2e',
   'browser-dictionaries-e2e',
+  'browser-business-e2e',
   'ci-gate',
 ])
 const validationJobIds = requiredJobIds.slice(0, -1)
@@ -318,11 +319,12 @@ test('ci.yml Required Job、runner、timeout 与 tracked diff 精确', async () 
 test('ci.yml 只使用固定 Action SHA 且 cache owner 唯一', async () => {
   const source = await readCiWorkflow()
   const references = usesFrom(source)
-  assert.equal(references.filter(value => value === checkoutAction).length, 7)
-  assert.equal(references.filter(value => value === pnpmSetupAction).length, 6)
-  assert.equal(references.filter(value => value === setupNodeAction).length, 7)
-  assert.equal(references.length, 20)
-  assert.equal((source.match(/          cache: pnpm$/gmu) ?? []).length, 6)
+  assert.equal(references.filter(value => value === checkoutAction).length, 8)
+  assert.equal(references.filter(value => value === pnpmSetupAction).length, 7)
+  assert.equal(references.filter(value => value === setupNodeAction).length, 8)
+  assert.equal(references.filter(value => value === uploadArtifactAction).length, 2)
+  assert.equal(references.length, 25)
+  assert.equal((source.match(/          cache: pnpm$/gmu) ?? []).length, 7)
   assert.equal(source.includes('services:'), false)
   assert.equal(source.includes('postgres:'), false)
 })
@@ -344,11 +346,11 @@ test('root-governance 不安装依赖并保持根依赖域为空', async () => {
   ], 'root-governance')
 })
 
-test('ci-gate always 汇总七个验证 Job 且拒绝所有非 success 状态', async () => {
+test('ci-gate always 汇总八个验证 Job 且拒绝所有非 success 状态', async () => {
   const gate = extractJobs(await readCiWorkflow()).get('ci-gate')
   assert.match(
     gate,
-    /\n    needs: \[root-governance, server-check-build, server-e2e, contract, web-check-build, browser-auth-e2e, browser-dictionaries-e2e\](?:\n|$)/u,
+    /\n    needs: \[root-governance, server-check-build, server-e2e, contract, web-check-build, browser-auth-e2e, browser-dictionaries-e2e, browser-business-e2e\](?:\n|$)/u,
   )
   assert.match(gate, /\n    if: always\(\)(?:\n|$)/u)
   assert.match(gate, /\n          NEEDS_JSON: \$\{\{ toJSON\(needs\) \}\}(?:\n|$)/u)
@@ -395,9 +397,21 @@ test('server-check-build 使用 Server cache 并执行固定检查构建顺序',
     '            --tag "$package_tag" \\',
     '            --archive "$archive"',
   ].join('\n'))
+  const mediaTools = findNamedStep(job, 'Install media tools')
+  for (const fact of [
+    'https://archive.ubuntu.com/ubuntu/',
+    'https://security.ubuntu.com/ubuntu/',
+    'Acquire::Retries=3',
+    'sudo timeout 5m apt-get "${apt_options[@]}" update',
+    'sudo timeout 15m apt-get "${apt_options[@]}" install --yes --no-install-recommends ffmpeg',
+    'test -x /usr/bin/ffmpeg',
+  ]) {
+    assert.ok(mediaTools.includes(fact), `Server media tools 缺少：${fact}`)
+  }
+  assert.equal(mediaTools.includes('azure.archive.ubuntu.com'), false)
   assertTextOrder(job, [
     'run: pnpm -C server install --frozen-lockfile',
-    'run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg',
+    'sudo timeout 5m apt-get "${apt_options[@]}" update',
     'run: pnpm -C server check',
     'run: pnpm -C server build',
     '      - name: Verify Server entrypoint',
@@ -415,9 +429,20 @@ test('server-check-build 使用 Server cache 并执行固定检查构建顺序',
   assert.equal(job.includes('DATABASE_URL'), false)
 })
 
-test('server-e2e 只通过固定 PostgreSQL wrapper 执行隔离 E2E', async () => {
+test('server-e2e 以两片 matrix 通过固定 PostgreSQL wrapper 执行隔离 E2E', async () => {
   const job = extractJobs(await readCiWorkflow()).get('server-e2e')
   assertDependencySetup(job, ['server/pnpm-lock.yaml'])
+  assert.match(job, /\n    name: Server E2E \(\$\{\{ matrix\.shard \}\}\/2\)(?:\n|$)/u)
+  assert.equal(extractBlock(job, 'strategy', 4), [
+    '    strategy:',
+    '      fail-fast: false',
+    '      matrix:',
+    '        shard: [1, 2]',
+  ].join('\n'))
+  assert.match(
+    job,
+    /\n      QIANSHU_SERVER_E2E_SHARD: \$\{\{ matrix\.shard \}\}\/2(?:\n|$)/u,
+  )
   assertTextOrder(job, [
     'run: pnpm -C server install --frozen-lockfile',
     'run: node --run ci:server-e2e',
@@ -474,12 +499,19 @@ test('web-check-build 只使用 Web cache 并验证正式应用产物', async ()
   assert.equal(job.includes('build:examples'), false)
 })
 
-test('browser-auth-e2e 通过隔离官方源安装运行依赖并在 Xvfb 中调用隔离根入口', async () => {
+test('browser-auth-e2e 以两片 matrix 安装运行依赖并在 Xvfb 中调用隔离根入口', async () => {
   const job = extractJobs(await readCiWorkflow()).get('browser-auth-e2e')
   assertDependencySetup(job, [
     'server/pnpm-lock.yaml',
     'web/pnpm-lock.yaml',
   ])
+  assert.match(job, /\n    name: Browser auth E2E \(\$\{\{ matrix\.shard \}\}\/2\)(?:\n|$)/u)
+  assert.equal(extractBlock(job, 'strategy', 4), [
+    '    strategy:',
+    '      fail-fast: false',
+    '      matrix:',
+    '        shard: [1, 2]',
+  ].join('\n'))
   const ffmpegDependency = findNamedStep(job, 'Install browser runtime dependencies')
   assert.equal(ffmpegDependency, [
     '      - name: Install browser runtime dependencies',
@@ -522,10 +554,18 @@ test('browser-auth-e2e 通过隔离官方源安装运行依赖并在 Xvfb 中调
     'sudo timeout 5m apt-get "${apt_options[@]}" update',
     'run: pnpm -C server install --frozen-lockfile',
     'run: pnpm -C web install --frozen-lockfile',
+    'run: mkdir -p "$RUNNER_TEMP/browser-artifacts"',
+    'QIANSHU_BROWSER_AUTH_SHARD: ${{ matrix.shard }}/2',
     "QIANSHU_BROWSER_USE_X11: '1'",
+    'TMPDIR: ${{ runner.temp }}/browser-artifacts',
     'run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24 -nolisten tcp" node --run ci:browser-auth-e2e',
+    'name: Upload browser failure artifacts',
     'run: git diff --exit-code -- .',
   ], 'browser-auth-e2e')
+  const upload = findUseStep(job, uploadArtifactAction)
+  assert.ok(upload.includes('if: failure()'))
+  assert.ok(upload.includes('retention-days: 3'))
+  assert.ok(upload.includes('path: ${{ runner.temp }}/browser-artifacts/*-ui-*'))
   assert.equal(job.includes('services:'), false)
   assert.equal(job.includes('DATABASE_URL'), false)
   assert.equal(job.includes('QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD'), false)
@@ -545,6 +585,46 @@ test('browser-dictionaries-e2e 安装双依赖域并只调用字典隔离根入�
     'run: node --run ci:browser-dictionaries-e2e',
     'run: git diff --exit-code -- .',
   ], 'browser-dictionaries-e2e')
+  assert.equal(job.includes('services:'), false)
+  assert.equal(job.includes('DATABASE_URL'), false)
+  assert.equal(job.includes('QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD'), false)
+})
+
+test('browser-business-e2e 以 matrix 覆盖可稳定执行的业务浏览器验收', async () => {
+  const job = extractJobs(await readCiWorkflow()).get('browser-business-e2e')
+  assertDependencySetup(job, [
+    'server/pnpm-lock.yaml',
+    'web/pnpm-lock.yaml',
+  ])
+  assert.equal(extractBlock(job, 'strategy', 4), [
+    '    strategy:',
+    '      fail-fast: false',
+    '      matrix:',
+    '        suite: [numbering, regions]',
+  ].join('\n'))
+  assert.match(job, /\n    name: Browser business E2E \(\$\{\{ matrix\.suite \}\}\)(?:\n|$)/u)
+  for (const fact of [
+    'https://archive.ubuntu.com/ubuntu/',
+    'sudo timeout 5m apt-get "${apt_options[@]}" update',
+    'sudo timeout 15m apt-get "${apt_options[@]}" install --yes --no-install-recommends ffmpeg',
+    'test -x /usr/bin/ffprobe',
+  ]) {
+    assert.ok(job.includes(fact), `Browser business 缺少：${fact}`)
+  }
+  assert.equal(job.includes('azure.archive.ubuntu.com'), false)
+  assert.equal(job.includes('xvfb-run'), false)
+  assertTextOrder(job, [
+    'run: pnpm -C server install --frozen-lockfile',
+    'run: pnpm -C web install --frozen-lockfile',
+    'run: mkdir -p "$RUNNER_TEMP/browser-artifacts"',
+    'TMPDIR: ${{ runner.temp }}/browser-artifacts',
+    'run: node --run ci:browser-${{ matrix.suite }}-e2e',
+    'name: Upload browser failure artifacts',
+    'run: git diff --exit-code -- .',
+  ], 'browser-business-e2e')
+  const upload = findUseStep(job, uploadArtifactAction)
+  assert.ok(upload.includes('if: failure()'))
+  assert.ok(upload.includes('retention-days: 3'))
   assert.equal(job.includes('services:'), false)
   assert.equal(job.includes('DATABASE_URL'), false)
   assert.equal(job.includes('QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD'), false)
@@ -1058,9 +1138,27 @@ test('Workflow 引用的根脚本都在根 package.json 中存在', async () => 
     ['examples.yml', await readExamplesWorkflow()],
     ['release.yml', await readReleaseWorkflow()],
   ]
+  const browserBusinessScripts = [
+    'ci:browser-numbering-e2e',
+    'ci:browser-regions-e2e',
+  ]
   let referenceCount = 0
   for (const [label, source] of sources) {
-    for (const match of source.matchAll(/node --run ([a-z0-9:_-]+)/gu)) {
+    const references = source.matchAll(
+      /node --run (ci:browser-\$\{\{ matrix\.suite \}\}-e2e|[a-z0-9:_-]+)/gu,
+    )
+    for (const match of references) {
+      if (match[1] === 'ci:browser-${{ matrix.suite }}-e2e') {
+        for (const script of browserBusinessScripts) {
+          referenceCount += 1
+          assert.equal(
+            scripts.has(script),
+            true,
+            `${label} 引用了根 package.json 中不存在的脚本：${script}`,
+          )
+        }
+        continue
+      }
       referenceCount += 1
       assert.equal(
         scripts.has(match[1]),

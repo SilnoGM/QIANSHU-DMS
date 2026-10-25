@@ -5,6 +5,7 @@ import { isDirectEntry } from '../run-command.mjs'
 
 const bootstrapProgram = String.raw`
 const argon2 = require('argon2')
+const { randomBytes, randomUUID } = require('node:crypto')
 const { Client } = require('pg')
 
 let fixtureStage = 'PASSWORD'
@@ -19,6 +20,51 @@ const LOSS_BATCH_ID = '40000000-0000-4000-8000-000000000002'
 const COMPANY_ACCOUNT_ID = '00000000-0000-4000-8000-000000002001'
 const ORDER_TYPE_ID = '00000000-0000-4000-8000-000000002201'
 const ORDER_RULE_ID = '00000000-0000-4000-8000-000000002301'
+
+/**
+ * 直写 SQL 的资金批次必须同时登记与 batch_no 一致的 FUND_POSTING 发号记录，
+ * 否则 20261017120000 迁移建立的 BEFORE INSERT 身份触发器会拒绝夹具。
+ */
+async function insertFundPostingBatchIssuance(client, generatedNumber) {
+  const rule = await client.query([
+    'SELECT rule."id" AS "ruleId",',
+    'version."id" AS "versionId",',
+    'to_char(transaction_timestamp() AT TIME ZONE \'Asia/Shanghai\', \'YYYY\') AS "periodKey"',
+    'FROM "numbering_rules" AS rule',
+    'JOIN "numbering_rule_versions" AS version',
+    'ON version."rule_id" = rule."id" AND version."status" = \'ACTIVE\'',
+    'WHERE rule."rule_code" = \'FUND_POSTING_BATCH_NO\'',
+    'AND rule."status" = \'ENABLED\' AND rule."purpose" = \'BUSINESS\'',
+    'LIMIT 1',
+  ].join(' '))
+  const row = rule.rows[0]
+  if (!row) throw new Error('FUND_POSTING_BATCH_NO is unavailable')
+
+  await client.query([
+    'INSERT INTO "numbering_period_states" (',
+    '"rule_id", "period_key", "next_sequence_value", "used_count"',
+    ') VALUES ($1, $2, NULL, 0)',
+    'ON CONFLICT ("rule_id", "period_key") DO NOTHING',
+  ].join(' '), [row.ruleId, row.periodKey])
+
+  const issuanceId = randomUUID()
+  await client.query([
+    'INSERT INTO "numbering_issuances" (',
+    '"id", "rule_id", "rule_version_id", "period_key",',
+    '"generated_number", "sequence_value", "consumer_code",',
+    '"idempotency_key_hash", "request_fingerprint_hash"',
+    ') VALUES ($1, $2, $3, $4, $5, NULL, \'FUND_POSTING\', $6, $7)',
+  ].join(' '), [
+    issuanceId,
+    row.ruleId,
+    row.versionId,
+    row.periodKey,
+    generatedNumber,
+    randomBytes(32),
+    randomBytes(32),
+  ])
+  return issuanceId
+}
 
 ;(async () => {
   const passwordHash = await argon2.hash(
@@ -128,10 +174,12 @@ const ORDER_RULE_ID = '00000000-0000-4000-8000-000000002301'
     ]
     for (const batch of batches) {
       fixtureStage = 'POSTING_BATCH'
+      const numberingIssuanceId =
+        await insertFundPostingBatchIssuance(client, batch.batchNo)
       await client.query(
         [
           'INSERT INTO fund_posting_batches (',
-          'id, batch_no, kind, posting_type_id,',
+          'id, batch_no, numbering_issuance_id, kind, posting_type_id,',
           'posting_type_code_snapshot, posting_type_name_snapshot,',
           'business_category_snapshot, business_source_id,',
           'business_source_code_snapshot, business_source_name_snapshot,',
@@ -141,7 +189,7 @@ const ORDER_RULE_ID = '00000000-0000-4000-8000-000000002301'
           'consumer_code, idempotency_key_hash, request_fingerprint_hash,',
           'request_id, posted_at',
           ') VALUES (',
-          '$1, $2, \'BUSINESS\', $3, \'ORDER_SETTLEMENT\', \'订单结算\',',
+          '$1, $2, $15, \'BUSINESS\', $3, \'ORDER_SETTLEMENT\', \'订单结算\',',
           '\'REVENUE\', $4, \'BROWSER_ORDER_DOMAIN\', \'浏览器订单域\',',
           '$5, 1, $6, $7, 30, 70, $8, $9, $10,',
           'jsonb_build_object(\'fixture\', true),',
@@ -166,6 +214,7 @@ const ORDER_RULE_ID = '00000000-0000-4000-8000-000000002301'
           batch.hashByte,
           batch.hashByte === '11' ? 'aa' : 'bb',
           'browser_fixture_' + batch.sequence,
+          numberingIssuanceId,
         ],
       )
       fixtureStage = 'LEDGER_ENTRIES'
