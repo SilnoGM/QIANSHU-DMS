@@ -600,7 +600,7 @@ test('browser-business-e2e 以 matrix 覆盖可稳定执行的业务浏览器验
     '    strategy:',
     '      fail-fast: false',
     '      matrix:',
-    '        suite: [numbering, regions]',
+    '        suite: [numbering, regions, fund-accounts]',
   ].join('\n'))
   assert.match(job, /\n    name: Browser business E2E \(\$\{\{ matrix\.suite \}\}\)(?:\n|$)/u)
   for (const fact of [
@@ -1141,6 +1141,7 @@ test('Workflow 引用的根脚本都在根 package.json 中存在', async () => 
   const browserBusinessScripts = [
     'ci:browser-numbering-e2e',
     'ci:browser-regions-e2e',
+    'ci:browser-fund-accounts-e2e',
   ]
   let referenceCount = 0
   for (const [label, source] of sources) {

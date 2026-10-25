@@ -429,7 +429,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [numbering, regions]
+        suite: [numbering, regions, fund-accounts]
     env:
       NODE_OPTIONS: --max-old-space-size=6144
     steps:

@@ -109,7 +109,7 @@ env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null node --run build
 
 根目录仍不执行 `pnpm install`；以下入口只使用 Node.js 标准库编排两个独立依赖域：
 
-- CI 验证入口：`node --run ci:server-e2e`（可用 `QIANSHU_SERVER_E2E_SHARD=1/2` 分片）、`node --run ci:browser-auth-e2e`（可用 `QIANSHU_BROWSER_AUTH_SHARD=1/2` 分片）、`node --run ci:browser-dictionaries-e2e`、`node --run ci:browser-numbering-e2e`、`node --run ci:browser-regions-e2e`、`node --run ci:contract`。
+- CI 验证入口：`node --run ci:server-e2e`（可用 `QIANSHU_SERVER_E2E_SHARD=1/2` 分片）、`node --run ci:browser-auth-e2e`（可用 `QIANSHU_BROWSER_AUTH_SHARD=1/2` 分片）、`node --run ci:browser-dictionaries-e2e`、`node --run ci:browser-numbering-e2e`、`node --run ci:browser-regions-e2e`、`node --run ci:browser-fund-accounts-e2e`、`node --run ci:contract`。
 - Release 准备与打包入口：`node --run release:check`、`node --run release:package:web`、`node --run release:package:server`、`node --run release:smoke:server`。
 - Release 清单与发布入口：`node --run release:manifest`、`node --run release:publish`。
 

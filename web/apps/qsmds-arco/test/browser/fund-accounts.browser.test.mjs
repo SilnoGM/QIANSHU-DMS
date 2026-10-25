@@ -27,7 +27,7 @@ import {
 
 const accountListRoute = '/qs-finance/fund-accounts/list'
 const transactionRoute = '/qs-finance/fund-accounts/transactions'
-const flowUsername = 'fund_browser_flow_user'
+const flowDisplayName = '资金浏览器调账用户'
 const limitedUsername = 'fund_browser_limited'
 const profitBusinessNo = 'E2E-ORDER-PROFIT'
 
@@ -83,6 +83,41 @@ async function waitForAccountSurface(page, marker) {
       && !root.querySelector('[aria-busy="true"]')
       && records.some(record => record.getClientRects().length > 0
         && record.textContent?.includes(${serialized}))
+  })()`)
+}
+
+/** 桌面操作列把「比例」收进更多菜单，移动端才保留直接按钮。 */
+async function clickDesktopShareRateAction(page, marker) {
+  const serializedMarker = JSON.stringify(marker)
+  await page.evaluate(`(() => {
+    const row = [...document.querySelectorAll('tr')].find(candidate => (
+      candidate.getClientRects().length > 0
+      && candidate.textContent?.includes(${serializedMarker})
+    ))
+    const trigger = [...(row?.querySelectorAll('button') ?? [])].find(button => (
+      button.getClientRects().length > 0
+      && !button.disabled
+      && button.getAttribute('aria-label')?.includes('更多操作')
+    ))
+    if (!trigger) throw new Error('fund share rate trigger unavailable')
+    trigger.focus({ preventScroll: true })
+    trigger.click()
+    return true
+  })()`)
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="menuitem"]')]
+    .some(item => item.getClientRects().length > 0
+      && item.textContent?.trim() === '比例'
+      && item.getAttribute('aria-disabled') !== 'true'))()`)
+  await page.evaluate(`(() => {
+    const item = [...document.querySelectorAll('[role="menuitem"]')].find(candidate => (
+      candidate.getClientRects().length > 0
+      && candidate.textContent?.trim() === '比例'
+      && candidate.getAttribute('aria-disabled') !== 'true'
+    ))
+    if (!item) throw new Error('fund share rate action unavailable')
+    item.focus({ preventScroll: true })
+    item.click()
+    return true
   })()`)
 }
 
@@ -154,7 +189,7 @@ async function fillDialogPlaceholder(page, title, placeholder, value) {
 }
 
 async function openManualAdjustment(page) {
-  await clickVisibleRowButton(page, flowUsername, '调账')
+  await clickVisibleRowButton(page, flowDisplayName, '调账')
   await waitForVisibleDialog(page, '管理员手动调账')
 }
 
@@ -179,8 +214,26 @@ async function submitManualAdjustment(page, { amount, mode, reason }) {
     reason,
   )
   await clickDialogButton(page, '管理员手动调账', '确认调账')
-  await waitForNoVisibleDialog(page, '管理员手动调账')
-  await waitForAccountSurface(page, flowUsername)
+  try {
+    await waitForNoVisibleDialog(page, '管理员手动调账')
+  }
+  catch (error) {
+    const alertText = await page.evaluate(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .filter(candidate => candidate.getClientRects().length > 0)
+        .reverse()
+        .find(candidate => candidate.textContent?.includes('管理员手动调账'))
+      return [...(dialog?.querySelectorAll('[role="alert"]') ?? [])]
+        .filter(alert => alert.getClientRects().length > 0)
+        .map(alert => alert.innerText)
+        .join('\\n')
+    })()`)
+    throw new Error(
+      `Manual adjustment dialog did not close: ${JSON.stringify(alertText)}`,
+      { cause: error },
+    )
+  }
+  await waitForAccountSurface(page, flowDisplayName)
 }
 
 test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与响应式语义', {
@@ -237,12 +290,12 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
     )
     await clickDialogButton(page, '创建资金账户', '创建账户')
     await waitForNoVisibleDialog(page, '创建资金账户')
-    await waitForAccountSurface(page, flowUsername)
-    await waitForAccountRowText(page, flowUsername, '30.00%')
+    await waitForAccountSurface(page, flowDisplayName)
+    await waitForAccountRowText(page, flowDisplayName, '30.00%')
   })
 
   await runFundBrowserStep('update future share rate', async () => {
-    await clickVisibleRowButton(page, flowUsername, '比例')
+    await clickDesktopShareRateAction(page, flowDisplayName)
     await waitForVisibleDialog(page, '修改分成比例')
     await fillDialogControl(
       page,
@@ -258,7 +311,7 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
     )
     await clickDialogButton(page, '修改分成比例', '保存新比例')
     await waitForNoVisibleDialog(page, '修改分成比例')
-    await waitForAccountRowText(page, flowUsername, '45.00%')
+    await waitForAccountRowText(page, flowDisplayName, '45.00%')
   })
 
   await runFundBrowserStep('positive user-only adjustment', async () => {
@@ -267,7 +320,7 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
       mode: '只调整选定用户账户',
       reason: 'Browser 用户账户正向调账',
     })
-    await waitForAccountRowText(page, flowUsername, '100.00')
+    await waitForAccountRowText(page, flowDisplayName, '100.00')
   })
 
   await runFundBrowserStep('negative shared adjustment', async () => {
@@ -276,7 +329,7 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
       mode: '按当前比例一同调整用户与公司账户',
       reason: 'Browser 用户公司按比例负向调账',
     })
-    await waitForAccountRowText(page, flowUsername, '82.00')
+    await waitForAccountRowText(page, flowDisplayName, '82.00')
     await waitForAccountRowText(page, '公司资金账户', '13.00')
   })
 
@@ -315,7 +368,7 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
       profitRows: 2,
     })
 
-    await clickVisibleRowButton(page, profitBusinessNo, '查看详情')
+    await clickVisibleRowButton(page, profitBusinessNo, '详情')
     await waitForVisibleDialog(page, profitBusinessNo)
     const detail = await page.evaluate(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
@@ -360,27 +413,38 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
   await runFundBrowserStep('compact account actions stay on one row', async () => {
     await clickDialogButton(page, profitBusinessNo, '关闭')
     await page.navigate(appRouteUrl(configuration.baseUrl, accountListRoute))
-    await waitForAccountSurface(page, flowUsername)
+    await waitForAccountSurface(page, flowDisplayName)
     const actions = await page.evaluate(`(() => {
       const row = [...document.querySelectorAll(
         '[data-testid="fund-account-list-table"] tbody tr',
       )].find(candidate => candidate.getClientRects().length > 0
-        && candidate.textContent?.includes(${JSON.stringify(flowUsername)}))
-      const expectedLabels = ['比例', '调账', '流水']
-      const buttons = [...(row?.querySelectorAll('button') ?? [])]
+        && candidate.textContent?.includes(${JSON.stringify(flowDisplayName)}))
+      const expectedLabels = ['流水', '调账']
+      const visibleButtons = [...(row?.querySelectorAll('button') ?? [])]
+        .filter(button => button.getClientRects().length > 0)
+      const textButtons = visibleButtons
         .filter(button => expectedLabels.includes(button.textContent?.trim()))
+      // 桌面「比例」收进更多菜单，紧凑操作列同时容纳两个文字按钮和一个图标触发器。
+      const moreTrigger = visibleButtons
+        .find(button => button.getAttribute('aria-label')?.includes('更多操作'))
+      const buttons = [...textButtons, ...(moreTrigger ? [moreTrigger] : [])]
       const buttonRects = buttons.map(button => button.getBoundingClientRect())
-      const actionCell = buttons[0]?.closest('td')
+      const center = rect => rect.top + rect.height / 2
+      const actionCell = textButtons[0]?.closest('td')
       return {
         actionCellWidth: actionCell?.getBoundingClientRect().width ?? 0,
-        labels: buttons.map(button => button.textContent?.trim()),
-        sameRow: buttonRects.length === expectedLabels.length
-          && buttonRects.every(rect => Math.abs(rect.top - buttonRects[0].top) <= 1),
+        hasMoreTrigger: Boolean(moreTrigger),
+        labels: textButtons.map(button => button.textContent?.trim()),
+        sameRow: buttons.length === 3
+          && buttonRects.every(rect => (
+            Math.abs(center(rect) - center(buttonRects[0])) <= 1
+          )),
       }
     })()`)
-    assert.deepEqual(actions.labels, ['比例', '调账', '流水'])
+    assert.deepEqual(actions.labels, ['流水', '调账'])
+    assert.equal(actions.hasMoreTrigger, true)
     assert.equal(actions.sameRow, true)
-    assert.ok(actions.actionCellWidth >= 250 && actions.actionCellWidth <= 280)
+    assert.ok(actions.actionCellWidth >= 170 && actions.actionCellWidth <= 182)
   })
 
   await runFundBrowserStep('390x844, themes, reduced motion and touch targets', async () => {
@@ -388,11 +452,11 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
     // 桌面检查已经位于同一个 hash 路由；切换 mobile emulation 后必须重载
     // 当前完整地址，让 Chrome 对新文档重新应用 viewport meta，避免页面缩放。
     await page.navigate(await page.evaluate('location.href'))
-    await waitForAccountSurface(page, flowUsername)
+    await waitForAccountSurface(page, flowDisplayName)
     await page.waitFor(`window.innerWidth === 390
       && matchMedia('(max-width: 767px)').matches`)
     await page.waitFor(`(() => {
-      const actionLabels = ['创建资金账户', '比例', '调账', '流水']
+      const actionLabels = ['创建资金账户', '流水', '调账', '比例']
       const targets = [...document.querySelectorAll('button')]
         .filter(button => button.getClientRects().length > 0
           && actionLabels.includes(button.textContent?.trim()))
@@ -403,9 +467,9 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
     const mobile = await page.evaluate(`(() => {
       const card = [...document.querySelectorAll('[data-testid="fund-account-card"]')]
         .find(candidate => candidate.getClientRects().length > 0
-          && candidate.textContent?.includes(${JSON.stringify(flowUsername)}))
+          && candidate.textContent?.includes(${JSON.stringify(flowDisplayName)}))
       const actionLabels = [
-        '创建资金账户', '比例', '调账', '流水',
+        '创建资金账户', '流水', '调账', '比例',
       ]
       const targets = [...document.querySelectorAll('button')]
         .filter(button => button.getClientRects().length > 0
@@ -452,7 +516,7 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
     await page.waitFor(`!document.documentElement.classList.contains('dark')`)
     const light = await page.evaluate(`(() => {
       const card = [...document.querySelectorAll('[data-testid="fund-account-card"]')]
-        .find(candidate => candidate.textContent?.includes(${JSON.stringify(flowUsername)}))
+        .find(candidate => candidate.textContent?.includes(${JSON.stringify(flowDisplayName)}))
       const style = card?.parentElement ? getComputedStyle(card.parentElement) : null
       return { background: style?.backgroundColor, color: style?.color }
     })()`)
@@ -465,7 +529,7 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
     await page.waitFor(`document.documentElement.classList.contains('dark')`)
     const dark = await page.evaluate(`(() => {
       const card = [...document.querySelectorAll('[data-testid="fund-account-card"]')]
-        .find(candidate => candidate.textContent?.includes(${JSON.stringify(flowUsername)}))
+        .find(candidate => candidate.textContent?.includes(${JSON.stringify(flowDisplayName)}))
       const style = card?.parentElement ? getComputedStyle(card.parentElement) : null
       return { background: style?.backgroundColor, color: style?.color }
     })()`)
