@@ -105,11 +105,11 @@ env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null node --run build
 
 ## CI 与发布
 
-当前仓库只有三份 GitHub Actions workflow：`.github/workflows/ci.yml` 负责 Root、Server、PostgreSQL E2E、Contract、Web 和 Browser auth E2E 六个验证 Job，`.github/workflows/examples.yml` 负责三个参考应用，`.github/workflows/release.yml` 负责严格 SemVer Annotated Tag 触发的统一产品发布。正式 Release 始终从同一个 Tag Commit 重新构建 Web 与 Server，不复用普通 CI 产物，也不允许两端选择性沿用旧版本。
+当前仓库只有三份 GitHub Actions workflow：`.github/workflows/ci.yml` 负责 Root、Server、PostgreSQL E2E、Contract、Web、Browser auth E2E、Browser dictionaries E2E 与 Browser business E2E 八个验证 Job（Server E2E 与 Browser auth E2E 各分两片并行），`.github/workflows/examples.yml` 负责三个参考应用，`.github/workflows/release.yml` 负责严格 SemVer Annotated Tag 触发的统一产品发布。正式 Release 始终从同一个 Tag Commit 重新构建 Web 与 Server，不复用普通 CI 产物，也不允许两端选择性沿用旧版本。
 
 根目录仍不执行 `pnpm install`；以下入口只使用 Node.js 标准库编排两个独立依赖域：
 
-- CI 验证入口：`node --run ci:server-e2e`、`node --run ci:browser-auth-e2e`、`node --run ci:contract`。
+- CI 验证入口：`node --run ci:server-e2e`（可用 `QIANSHU_SERVER_E2E_SHARD=1/2` 分片）、`node --run ci:browser-auth-e2e`（可用 `QIANSHU_BROWSER_AUTH_SHARD=1/2` 分片）、`node --run ci:browser-dictionaries-e2e`、`node --run ci:browser-numbering-e2e`、`node --run ci:browser-regions-e2e`、`node --run ci:contract`。
 - Release 准备与打包入口：`node --run release:check`、`node --run release:package:web`、`node --run release:package:server`、`node --run release:smoke:server`。
 - Release 清单与发布入口：`node --run release:manifest`、`node --run release:publish`。
 

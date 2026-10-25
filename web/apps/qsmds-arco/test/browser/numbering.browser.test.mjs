@@ -1237,6 +1237,17 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
   await page.waitFor(`document.querySelector(
     '[data-testid="numbering-detail-drawer"]',
   )?.textContent?.includes(${JSON.stringify(mainRuleCode)})`)
+  // 抽屉入场动画期间 rect 仍在屏幕外，先等布局稳定再测量宽度与触控目标。
+  await page.waitFor(`(() => {
+    const detail = document.querySelector(
+      '[data-testid="numbering-detail-drawer"]',
+    )
+    const dialog = detail?.closest('[role="dialog"]')
+    const rect = dialog?.getBoundingClientRect()
+    return Boolean(rect)
+      && rect.left >= 0
+      && rect.right <= document.documentElement.clientWidth
+  })()`)
   const mobileDrawer = await page.evaluate(`(() => {
     const detail = document.querySelector(
       '[data-testid="numbering-detail-drawer"]',
@@ -1245,7 +1256,7 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     const rect = dialog?.getBoundingClientRect()
     const buttons = [...(dialog?.querySelectorAll('button') ?? [])]
       .filter(button => button.getClientRects().length > 0)
-    const panel = document.querySelector('.qs-generic-drawer-panel')
+    const panel = dialog?.querySelector('.qs-generic-drawer-panel') ?? dialog
     const style = panel ? getComputedStyle(panel) : null
     const seconds = value => value.split(',').map((part) => {
       const text = part.trim()

@@ -113,6 +113,84 @@ test('Server E2E 固定执行公共与媒体专属验收并复用唯一安全 ch
   assert.deepEqual(sourceEnv, originalEnv)
 })
 
+test('Server E2E 分片只把 shard 传给 Jest 且媒体专属验收只跑首片', async () => {
+  const shardedJest = shard => [
+    'pnpm',
+    [
+      '-C', 'server', 'exec', 'jest',
+      '--config', 'test/jest-e2e.json',
+      '--runInBand',
+      `--shard=${shard}`,
+    ],
+  ]
+  const shardedCommands = [
+    ...expectedCommands.slice(0, 3),
+    ['pnpm', ['-C', 'server', 'exec', 'prisma', 'generate']],
+    shardedJest('1/2'),
+    ...expectedCommands.slice(4),
+  ]
+  const firstCalls = []
+
+  await runServerE2e({
+    env: {
+      DATABASE_URL: databaseUrl,
+      QIANSHU_SERVER_E2E_SHARD: '1/2',
+    },
+    async run(command, args, options) {
+      firstCalls.push({ args, command, options })
+    },
+  })
+
+  assert.deepEqual(
+    firstCalls.map(({ command, args }) => [command, args]),
+    shardedCommands,
+  )
+  assert.equal(
+    Object.hasOwn(firstCalls[0].options.env, 'QIANSHU_SERVER_E2E_SHARD'),
+    false,
+  )
+
+  const secondCalls = []
+  await runServerE2e({
+    env: {
+      DATABASE_URL: databaseUrl,
+      QIANSHU_SERVER_E2E_SHARD: '2/2',
+    },
+    async run(command, args, options) {
+      secondCalls.push({ args, command, options })
+    },
+  })
+
+  assert.deepEqual(
+    secondCalls.map(({ command, args }) => [command, args]),
+    [
+      ...expectedCommands.slice(0, 3),
+      ['pnpm', ['-C', 'server', 'exec', 'prisma', 'generate']],
+      shardedJest('2/2'),
+    ],
+  )
+})
+
+test('非法 Server E2E 分片在任何 child 命令前失败', async () => {
+  for (const value of ['0/2', '3/2', '1', '1/0', '1/2/3', 'a/b']) {
+    const calls = []
+
+    await assert.rejects(
+      runServerE2e({
+        env: {
+          DATABASE_URL: databaseUrl,
+          QIANSHU_SERVER_E2E_SHARD: value,
+        },
+        async run(...args) {
+          calls.push(args)
+        },
+      }),
+      { message: 'CI E2E shard is invalid' },
+    )
+    assert.deepEqual(calls, [])
+  }
+})
+
 test('任一 migration、status 或 E2E 失败后立即短路并保留原错误', async () => {
   for (let failureIndex = 0; failureIndex < expectedCommands.length; failureIndex += 1) {
     const failure = Object.assign(new Error('safe test failure'), {
