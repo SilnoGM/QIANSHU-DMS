@@ -61,6 +61,21 @@ export function validateBrowserAuthDatabaseUrl(rawValue) {
   return rawValue
 }
 
+const BROWSER_TEST_SHARD_SCRIPTS = Object.freeze({
+  '1/2': 'test:browser:auth:shard-1',
+  '2/2': 'test:browser:auth:shard-2',
+})
+
+export function validateBrowserTestShard(rawValue) {
+  if (rawValue === undefined || rawValue === '') {
+    return undefined
+  }
+  if (!Object.hasOwn(BROWSER_TEST_SHARD_SCRIPTS, rawValue)) {
+    throw fixedError('Browser auth E2E shard is invalid')
+  }
+  return rawValue
+}
+
 function safeEnvironment(source, overrides = {}) {
   const environment = {
     ...source,
@@ -94,6 +109,7 @@ function service(name, entrypoint, env, readyUrl) {
  */
 export function createBrowserAuthPlan(input) {
   const {
+    browserTestShard,
     chromeExecutable,
     databaseUrl,
     ffprobePath,
@@ -103,6 +119,10 @@ export function createBrowserAuthPlan(input) {
     sessionDirectory,
     sourceEnv = process.env,
   } = input
+  const validatedBrowserTestShard = validateBrowserTestShard(browserTestShard)
+  const browserTestScript = validatedBrowserTestShard === undefined
+    ? 'test:browser:auth'
+    : BROWSER_TEST_SHARD_SCRIPTS[validatedBrowserTestShard]
   const devBaseUrl = baseUrl('http', ports.devProxy)
   const prodBaseUrl = baseUrl('https', ports.prodProxy)
   const webOrigin = baseUrl('http', ports.web)
@@ -263,7 +283,7 @@ export function createBrowserAuthPlan(input) {
   const runner = Object.freeze({
     name: 'browser-runner',
     command: 'pnpm',
-    args: Object.freeze(['-C', 'web', 'test:browser:auth']),
+    args: Object.freeze(['-C', 'web', browserTestScript]),
     env: safeEnvironment(sourceEnv, {
       QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD: secrets.adminPassword,
       QIANSHU_BROWSER_AUTH_ADMIN_USERNAME: 'browser_admin',
@@ -536,6 +556,9 @@ async function runManagedRunner(definition, state) {
 
 async function runProductionBrowserAuthE2e() {
   const databaseUrl = validateBrowserAuthDatabaseUrl(process.env.DATABASE_URL)
+  const browserTestShard = validateBrowserTestShard(
+    process.env.QIANSHU_BROWSER_AUTH_SHARD,
+  )
   const sessionDirectory = await mkdtemp(
     path.join(os.tmpdir(), 'qianshu-browser-auth-e2e-'),
   )
@@ -565,6 +588,7 @@ async function runProductionBrowserAuthE2e() {
     const ffprobePath = await resolveFfprobeExecutable()
     const ports = await allocatePorts()
     const plan = createBrowserAuthPlan({
+      browserTestShard,
       chromeExecutable,
       databaseUrl,
       ffprobePath,

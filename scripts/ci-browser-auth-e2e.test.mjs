@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 import process from 'node:process'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 
 import {
   createBrowserAuthPlan,
@@ -9,8 +12,34 @@ import {
   validateBrowserAuthDatabaseUrl,
 } from './ci-browser-auth-e2e.mjs'
 
+const repositoryRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+)
 const databaseUrl =
   'postgresql://qianshu_ci:test-password@127.0.0.1:54321/qianshu_ci?schema=public'
+
+function planInput(overrides = {}) {
+  return {
+    chromeExecutable: '/opt/google/chrome/chrome',
+    databaseUrl,
+    ffprobePath: '/opt/media/bin/ffprobe',
+    mediaStorageRoot: '/var/tmp/qianshu-browser-media',
+    ports: {
+      devProxy: 41001,
+      devServer: 41002,
+      prodProxy: 41003,
+      prodServer: 41004,
+      web: 41005,
+    },
+    secrets: {
+      adminPassword: 'fixture-password',
+      hmacKeys: ['a'.repeat(43), 'b'.repeat(43), 'c'.repeat(43)],
+    },
+    sessionDirectory: '/tmp/qianshu-browser-auth-session',
+    ...overrides,
+  }
+}
 
 test('只接受 ci-postgres 注入的隔离 PostgreSQL URL', () => {
   assert.equal(validateBrowserAuthDatabaseUrl(databaseUrl), databaseUrl)
@@ -137,6 +166,47 @@ test('固定计划使用真实构建、双环境 Server、同源代理和外部 
       .includes('fixture-password'),
     false,
   )
+})
+
+test('Browser auth 分片选择对应的 Web runner 脚本', () => {
+  for (const [shard, script] of [
+    ['1/2', 'test:browser:auth:shard-1'],
+    ['2/2', 'test:browser:auth:shard-2'],
+  ]) {
+    const plan = createBrowserAuthPlan(planInput({ browserTestShard: shard }))
+    assert.deepEqual(
+      [plan.runner.command, plan.runner.args],
+      ['pnpm', ['-C', 'web', script]],
+    )
+  }
+})
+
+test('Browser auth 两个分片脚本精确覆盖完整清单', async () => {
+  const manifest = JSON.parse(
+    await readFile(path.join(repositoryRoot, 'web', 'package.json'), 'utf8'),
+  )
+  const browserFiles = script => [
+    ...script.matchAll(
+      /apps\/qsmds-arco\/test\/browser\/[a-z0-9-]+\.browser\.test\.mjs/gu,
+    ),
+  ].map(match => match[0])
+  const complete = browserFiles(manifest.scripts['test:browser:auth'])
+  const sharded = [
+    ...browserFiles(manifest.scripts['test:browser:auth:shard-1']),
+    ...browserFiles(manifest.scripts['test:browser:auth:shard-2']),
+  ]
+
+  assert.equal(new Set(complete).size, complete.length)
+  assert.deepEqual([...sharded].sort(), [...complete].sort())
+})
+
+test('非法 Browser auth 分片在计划阶段失败', () => {
+  for (const value of ['0/2', '3/2', '1', '1/0', '1/3', 'x/y']) {
+    assert.throws(
+      () => createBrowserAuthPlan(planInput({ browserTestShard: value })),
+      { message: 'Browser auth E2E shard is invalid' },
+    )
+  }
 })
 
 test('runner 失败时按逆序停止全部服务并清理唯一临时目录', async () => {

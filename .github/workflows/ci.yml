@@ -81,9 +81,39 @@ jobs:
         run: pnpm -C server install --frozen-lockfile
 
       # 媒体派生变体有一条用真实 ffmpeg 抽视频封面的集成测试，生产镜像也内置 ffmpeg。
-      # GitHub ubuntu-24.04 镜像不带 ffmpeg，这里显式安装，保持与生产一致的验证口径。
+      # GitHub ubuntu-24.04 镜像不带 ffmpeg；这里复用与浏览器 Job 相同的隔离索引和
+      # Ubuntu 官方 HTTPS 源，避免 Runner 的 Azure 镜像异常时把 Job 拖到超时。
       - name: Install media tools
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+        run: |
+          if test ! -x /usr/bin/ffmpeg; then
+            sudo tee /etc/apt/sources.list.d/qianshu-ubuntu.sources >/dev/null <<'EOF'
+          Types: deb
+          URIs: https://archive.ubuntu.com/ubuntu/
+          Suites: noble noble-updates noble-backports
+          Components: main restricted universe multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+          Types: deb
+          URIs: https://security.ubuntu.com/ubuntu/
+          Suites: noble-security
+          Components: main restricted universe multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+            apt_lists=/var/lib/apt/lists/qianshu-server-check
+            sudo install -d -m 0755 -o root -g root "${apt_lists}"
+            sudo install -d -m 0700 -o _apt -g root "${apt_lists}/partial"
+            apt_options=(
+              -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/qianshu-ubuntu.sources
+              -o Dir::Etc::sourceparts=-
+              -o "Dir::State::lists=${apt_lists}"
+              -o Acquire::Retries=3
+              -o Acquire::https::Timeout=30
+            )
+            sudo timeout 5m apt-get "${apt_options[@]}" update
+            sudo timeout 15m apt-get "${apt_options[@]}" install --yes --no-install-recommends ffmpeg
+          fi
+          test -x /usr/bin/ffmpeg
+          /usr/bin/ffmpeg -version >/dev/null
 
       - name: Check Server
         run: pnpm -C server check
@@ -120,13 +150,18 @@ jobs:
         run: git diff --exit-code -- .
 
   server-e2e:
-    name: Server E2E
+    name: Server E2E (${{ matrix.shard }}/2)
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     # jest --runInBand 顺序加载全部 e2e 套件，ts-jest 常驻内存随套件数累积，
     # 会吃满默认堆（实测套件全部 PASS 后仍 OOM，退出 134）；与 Web 侧同口径提高上限。
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     env:
       NODE_OPTIONS: --max-old-space-size=6144
+      QIANSHU_SERVER_E2E_SHARD: ${{ matrix.shard }}/2
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -251,9 +286,13 @@ jobs:
         run: git diff --exit-code -- .
 
   browser-auth-e2e:
-    name: Browser auth E2E
+    name: Browser auth E2E (${{ matrix.shard }}/2)
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     env:
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
@@ -321,10 +360,24 @@ jobs:
       - name: Install Web dependencies
         run: pnpm -C web install --frozen-lockfile
 
+      - name: Prepare browser failure artifact directory
+        run: mkdir -p "$RUNNER_TEMP/browser-artifacts"
+
       - name: Run isolated browser authentication E2E
         env:
+          QIANSHU_BROWSER_AUTH_SHARD: ${{ matrix.shard }}/2
           QIANSHU_BROWSER_USE_X11: '1'
+          TMPDIR: ${{ runner.temp }}/browser-artifacts
         run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24 -nolisten tcp" node --run ci:browser-auth-e2e
+
+      - name: Upload browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-artifacts-${{ github.run_id }}-${{ github.run_attempt }}-auth-${{ matrix.shard }}
+          path: ${{ runner.temp }}/browser-artifacts/*-ui-*
+          if-no-files-found: warn
+          retention-days: 3
 
       - name: Verify tracked files are unchanged
         run: git diff --exit-code -- .
@@ -369,9 +422,103 @@ jobs:
       - name: Verify tracked files are unchanged
         run: git diff --exit-code -- .
 
+  browser-business-e2e:
+    name: Browser business E2E (${{ matrix.suite }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [numbering, regions]
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 11.9.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: |
+            server/pnpm-lock.yaml
+            web/pnpm-lock.yaml
+
+      # 三个业务套件只需要 headless Chrome 与真实 Server 的 ffprobe；与字典 Job
+      # 一致不开 X11，避免引入额外的 Xvfb 依赖。apt 仍使用隔离索引和官方 HTTPS 源。
+      - name: Install browser runtime dependencies
+        run: |
+          if test ! -x /usr/bin/ffprobe; then
+            # GitHub Runner 的 mirror+file 会优先选择 Azure 镜像；该镜像异常时可能持续阻塞到 Job 超时。
+            # 这里使用隔离索引和 Ubuntu 官方 HTTPS 源，避免旧索引、第三方源或云镜像参与解析。
+            sudo tee /etc/apt/sources.list.d/qianshu-ubuntu.sources >/dev/null <<'EOF'
+          Types: deb
+          URIs: https://archive.ubuntu.com/ubuntu/
+          Suites: noble noble-updates noble-backports
+          Components: main restricted universe multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+          Types: deb
+          URIs: https://security.ubuntu.com/ubuntu/
+          Suites: noble-security
+          Components: main restricted universe multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+            apt_lists=/var/lib/apt/lists/qianshu-browser-business
+            sudo install -d -m 0755 -o root -g root "${apt_lists}"
+            sudo install -d -m 0700 -o _apt -g root "${apt_lists}/partial"
+            apt_options=(
+              -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/qianshu-ubuntu.sources
+              -o Dir::Etc::sourceparts=-
+              -o "Dir::State::lists=${apt_lists}"
+              -o Acquire::Retries=3
+              -o Acquire::https::Timeout=30
+            )
+            sudo timeout 5m apt-get "${apt_options[@]}" update
+            sudo timeout 15m apt-get "${apt_options[@]}" install --yes --no-install-recommends ffmpeg
+          fi
+          test -x /usr/bin/ffprobe
+          /usr/bin/ffprobe -version
+
+      - name: Install Server dependencies
+        run: pnpm -C server install --frozen-lockfile
+
+      - name: Install Web dependencies
+        run: pnpm -C web install --frozen-lockfile
+
+      - name: Prepare browser failure artifact directory
+        run: mkdir -p "$RUNNER_TEMP/browser-artifacts"
+
+      - name: Run isolated business browser E2E
+        env:
+          TMPDIR: ${{ runner.temp }}/browser-artifacts
+        run: node --run ci:browser-${{ matrix.suite }}-e2e
+
+      - name: Upload browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-artifacts-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.suite }}
+          path: ${{ runner.temp }}/browser-artifacts/*-ui-*
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Verify tracked files are unchanged
+        run: git diff --exit-code -- .
+
   ci-gate:
     name: CI gate
-    needs: [root-governance, server-check-build, server-e2e, contract, web-check-build, browser-auth-e2e, browser-dictionaries-e2e]
+    needs: [root-governance, server-check-build, server-e2e, contract, web-check-build, browser-auth-e2e, browser-dictionaries-e2e, browser-business-e2e]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -379,4 +526,4 @@ jobs:
       - name: Require every validation Job to succeed
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-        run: node -e "const needs=JSON.parse(process.env.NEEDS_JSON);const results=Object.values(needs).map(entry=>entry.result);if(results.length!==7||results.some(result=>result!=='success'))process.exit(1)"
+        run: node -e "const needs=JSON.parse(process.env.NEEDS_JSON);const results=Object.values(needs).map(entry=>entry.result);if(results.length!==8||results.some(result=>result!=='success'))process.exit(1)"
