@@ -42,6 +42,18 @@ const amountItems = computed(() => [
 
 <template>
   <div class="pb-2 space-y-6">
+    <FaAlert v-if="detail.rejection" variant="destructive" title="采购单已被驳回">
+      <template #description>
+        <p class="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
+          {{ detail.rejection.reason }}
+        </p>
+        <div class="qs-type-meta mt-2 flex flex-wrap gap-2 items-center">
+          <QsPersonDisplay :display-name="detail.rejection.rejectedBy.displayName" size="sm" :avatar-url="detail.rejection.rejectedBy.avatarUrl" />
+          <DateTimeDisplay :value="detail.rejection.rejectedAt" />
+          <span>请基于原单新建修订单后重新提交。</span>
+        </div>
+      </template>
+    </FaAlert>
     <section data-slot="purchase-order-drawer-basic" :aria-label="t('purchaseOrderDesc.sections.basic')">
       <h3 class="qs-type-component-title m-0 mb-3 flex gap-2 items-center">
         <span class="rounded-full bg-primary shrink-0 h-5 w-1" aria-hidden="true" />

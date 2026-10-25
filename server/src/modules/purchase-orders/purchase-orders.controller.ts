@@ -49,6 +49,7 @@ import {
   PurchaseOrderFulfillmentStatusRequestDto,
   PurchaseOrderPaymentRequestDto,
   PurchaseOrderPaymentVoidRequestDto,
+  PurchaseOrderRejectRequestDto,
   PurchaseOrderReviewRequestDto,
   PurchaseOrderPrepareReviewShippingMarksRequestDto,
   PurchaseOrderStatusRequestDto,
@@ -597,6 +598,33 @@ export class PurchaseOrdersController {
     @Req() request: object,
   ): Promise<PurchaseOrderDetail> {
     return this.mutations.review(mutationContext(request), params.purchaseOrderId, dto)
+  }
+
+  @Post(':purchaseOrderId/reject')
+  @RequirePermissions('purchase-orders:review')
+  @HttpCode(HttpStatus.OK)
+  @ApiContractResponse({ status: HttpStatus.OK, type: PurchaseOrderDetailDto })
+  @ApiApplicationContract({
+    operationId: 'purchase_orders_reject',
+    session: 'required', authorization: true, csrf: true, badRequest: true,
+    resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] },
+      { status: 409, codes: ['PURCHASE_ORDER_STATE_CHANGED'] },
+      { status: 422, codes: [
+        'PURCHASE_ORDER_CANCEL_HAS_PAYMENTS',
+        'PURCHASE_ORDER_STATUS_TRANSITION_INVALID',
+        'VALIDATION_FAILED',
+      ] },
+    ],
+  })
+  reject(
+    @Param() params: PurchaseOrderIdParamDto,
+    @Body() dto: PurchaseOrderRejectRequestDto,
+    @Req() request: object,
+  ): Promise<PurchaseOrderDetail> {
+    return this.mutations.reject(mutationContext(request), params.purchaseOrderId, dto)
   }
 
   @Patch(':purchaseOrderId/order-status')

@@ -105,6 +105,26 @@ describe('PurchaseOrdersController', () => {
       .toEqual(['purchase-orders:update', 'purchase-orders:review'])
   })
 
+  it('reserves purchase rejection for reviewers and requires a versioned reason', async () => {
+    const reject = jest.fn().mockResolvedValue({ id: ORDER_ID, orderStatus: 'CANCELLED' })
+    const controller = new PurchaseOrdersController(
+      {} as PurchaseOrderQueryService,
+      {} as PurchaseOrderSourceQueryService,
+      {} as PurchaseOrderCommandService,
+      { reject } as unknown as PurchaseOrderMutationService,
+      {} as PurchaseOrderDocumentService,
+      {} as PurchaseOrderProductImageService,
+      {} as PurchaseShippingMarkResolverService,
+    )
+    const input = { expectedVersion: 3, reason: '价格需要修改' }
+
+    await expect(controller.reject({ purchaseOrderId: ORDER_ID }, input, createRequest()))
+      .resolves.toEqual({ id: ORDER_ID, orderStatus: 'CANCELLED' })
+    expect(reject).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, input)
+    expect(new Reflector().get(REQUIRED_PERMISSIONS_METADATA, PurchaseOrdersController.prototype.reject))
+      .toEqual(['purchase-orders:review'])
+  })
+
   it('requires review permission for the read-only eligibility check', async () => {
     const read = jest.fn().mockResolvedValue({ available: true, message: null })
     const controller = new PurchaseOrderReviewContextController({ read } as unknown as PurchaseOrderReviewContextService)

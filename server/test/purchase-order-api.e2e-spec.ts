@@ -54,6 +54,8 @@ const review = jest.fn<Promise<unknown>, [unknown, unknown, unknown]>()
   .mockResolvedValue({ id: ORDER_ID, orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING', version: 2 })
 const updateOrderStatus = jest.fn<Promise<unknown>, [unknown, unknown, unknown]>()
   .mockResolvedValue({ id: ORDER_ID, orderStatus: 'CANCELLED', version: 3 })
+const reject = jest.fn<Promise<unknown>, [unknown, unknown, unknown]>()
+  .mockResolvedValue({ id: ORDER_ID, orderStatus: 'CANCELLED', rejection: { reason: '价格需要修改' } })
 const attach = jest.fn<Promise<unknown>, [unknown, unknown, unknown]>()
   .mockResolvedValue({ id: ORDER_ID, amountRevisions: [] })
 const salesOrderLines = jest.fn().mockResolvedValue({
@@ -98,6 +100,7 @@ const readShippingMarkResolution = jest.fn().mockResolvedValue(resolutionRespons
     useValue: {
       review,
       updateOrderStatus,
+      reject,
       updateFulfillmentStatus: jest.fn(),
       recordPayment: jest.fn(),
       voidPayment: jest.fn(),
@@ -457,6 +460,7 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
     create.mockClear()
     review.mockClear()
     updateOrderStatus.mockClear()
+    reject.mockClear()
     readShippingMarkResolution.mockClear()
   })
 
@@ -492,6 +496,47 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
     await request(application.getHttpServer()).patch(`/api/purchase-orders/${ORDER_ID}/order-status`)
       .set('Cookie', cookie).send({ toStatus: 'CANCELLED' }).expect(403)
     expect(updateOrderStatus).not.toHaveBeenCalled()
+  })
+
+  it('reserves purchase rejection for reviewers and requires a versioned reason', async () => {
+    grantedPermissions = ['purchase-orders:review']
+    const input = { expectedVersion: 3, reason: '价格需要修改' }
+    const response = await request(application.getHttpServer())
+      .post(`/api/purchase-orders/${ORDER_ID}/reject`).set(mutationHeaders).set('Cookie', cookie)
+      .send(input).expect(200)
+    expect(responseBody(response)).toMatchObject({ id: ORDER_ID, orderStatus: 'CANCELLED' })
+    expect(reject).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, input)
+
+    grantedPermissions = ['purchase-orders:read', 'purchase-orders:update']
+    await request(application.getHttpServer())
+      .post(`/api/purchase-orders/${ORDER_ID}/reject`).set(mutationHeaders).set('Cookie', cookie)
+      .send(input).expect(403)
+    expect(reject).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects invalid rejection payloads before the service runs', async () => {
+    grantedPermissions = ['purchase-orders:review']
+    for (const body of [
+      { expectedVersion: 1 },
+      { expectedVersion: 0, reason: '价格需要修改' },
+      { expectedVersion: 1, reason: 'x'.repeat(501) },
+    ]) {
+      const response = await request(application.getHttpServer())
+        .post(`/api/purchase-orders/${ORDER_ID}/reject`).set(mutationHeaders).set('Cookie', cookie)
+        .send(body).expect(422)
+      expect(responseBody(response)).toMatchObject({ code: 'VALIDATION_FAILED' })
+    }
+    expect(reject).not.toHaveBeenCalled()
+  })
+
+  it('enforces session and CSRF before purchase rejection', async () => {
+    grantedPermissions = ['purchase-orders:review']
+    const body = { expectedVersion: 1, reason: '价格需要修改' }
+    await request(application.getHttpServer()).post(`/api/purchase-orders/${ORDER_ID}/reject`)
+      .set(mutationHeaders).send(body).expect(401)
+    await request(application.getHttpServer()).post(`/api/purchase-orders/${ORDER_ID}/reject`)
+      .set('Cookie', cookie).send(body).expect(403)
+    expect(reject).not.toHaveBeenCalled()
   })
 
   it('requires the independent review permission even when all other purchase capabilities are granted', async () => {

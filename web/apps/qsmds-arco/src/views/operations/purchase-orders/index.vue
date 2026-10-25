@@ -1306,7 +1306,7 @@ onBeforeUnmount(() => {
           <QsTableStackedCell>
             <QsTableStackedLine label="订单状态" nowrap>
               <FaTag variant="outline" class="qs-type-status-tag" :class="orderStatusTagClass(row.original.orderStatus)">
-                {{ orderStatusLabel(row.original.orderStatus) }}
+                {{ row.original.rejection ? '已驳回' : orderStatusLabel(row.original.orderStatus) }}
               </FaTag>
             </QsTableStackedLine>
             <QsTableStackedLine label="履约状态" tone="muted" nowrap>
@@ -1636,7 +1636,7 @@ onBeforeUnmount(() => {
                 </dt>
                 <dd class="m-0">
                   <FaTag variant="outline" :class="orderStatusTagClass(row.orderStatus)">
-                    {{ orderStatusLabel(row.orderStatus) }}
+                    {{ row.rejection ? '已驳回' : orderStatusLabel(row.orderStatus) }}
                   </FaTag>
                 </dd>
               </div>

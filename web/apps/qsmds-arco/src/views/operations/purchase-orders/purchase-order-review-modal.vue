@@ -7,7 +7,7 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import OrderParts from '@/components/business/QsPurchaseOrderDrawer/OrderParts.vue'
 import { buildPurchaseOrderCopyText } from './purchase-order-copy.logic'
-import { buildPurchaseOrderReviewRequest } from './purchase-order-detail.logic'
+import { buildPurchaseOrderRejectRequest, buildPurchaseOrderReviewRequest } from './purchase-order-detail.logic'
 import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError } from './purchase-order-list.logic'
 import PurchaseOrderReviewDetails from './purchase-order-review-details.vue'
 import PurchaseOrderReviewImage from './purchase-order-review-image.vue'
@@ -34,9 +34,15 @@ const error = ref('')
 const loading = ref(false)
 const submitting = ref(false)
 const copying = ref(false)
+const rejectVisible = ref(false)
+const rejectReason = ref('')
+const rejectReasonError = ref('')
+const rejectError = ref('')
+const rejecting = ref(false)
 let copySequence = 0
 let loadController: AbortController | null = null
 let mutationController: AbortController | null = null
+let rejectController: AbortController | null = null
 
 const canReview = computed(() => auth('purchase-orders:read') && auth('purchase-orders:review'))
 const visible = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
@@ -46,12 +52,23 @@ const image = usePurchaseOrderImageGeneration({
   enabled: computed(() => visible.value && canReview.value),
   epoch: computed(() => account.authEpoch),
 })
-const busy = computed(() => submitting.value || image.generating.value)
+const busy = computed(() => submitting.value || rejecting.value || image.generating.value)
 const canCopy = computed(() => visible.value && canReview.value && !loading.value && !busy.value && !copying.value && detail.value !== null && detail.value.id === props.orderId)
 const canGenerate = computed(() => canReview.value && !loading.value && !busy.value && detail.value?.orderStatus === 'PENDING_REVIEW' && reviewContext.value?.available === true)
 const canConfirm = computed(() => canGenerate.value && image.ready.value)
+const canReject = computed(() => (
+  visible.value
+  && canReview.value
+  && !loading.value
+  && !busy.value
+  && detail.value?.orderStatus === 'PENDING_REVIEW'
+  && detail.value.id === props.orderId
+))
 const generationStep = ref(0)
 const terminalNotice = computed(() => {
+  if (detail.value?.rejection !== null && detail.value?.rejection !== undefined) {
+    return t('purchaseReview.recovery.rejected')
+  }
   if (detail.value?.orderStatus === 'CANCELLED') {
     return t('purchaseReview.recovery.cancelled')
   }
@@ -64,6 +81,13 @@ const terminalNotice = computed(() => {
 function reset(): void {
   copySequence += 1
   copying.value = false
+  rejectController?.abort()
+  rejectController = null
+  rejectVisible.value = false
+  rejectReason.value = ''
+  rejectReasonError.value = ''
+  rejectError.value = ''
+  rejecting.value = false
   image.reset()
   loadController?.abort()
   mutationController?.abort()
@@ -223,6 +247,70 @@ async function submit(): Promise<void> {
   }
 }
 
+function openRejectDialog(): void {
+  if (!canReject.value) {
+    return
+  }
+  rejectReason.value = ''
+  rejectReasonError.value = ''
+  rejectError.value = ''
+  rejectVisible.value = true
+}
+
+function closeRejectDialog(value: boolean): void {
+  if (rejecting.value) {
+    return
+  }
+  rejectVisible.value = value
+  if (!value) {
+    rejectReason.value = ''
+    rejectReasonError.value = ''
+    rejectError.value = ''
+  }
+}
+
+async function submitReject(): Promise<void> {
+  const current = detail.value
+  if (!canReject.value || current === null || rejecting.value) {
+    return
+  }
+  const result = buildPurchaseOrderRejectRequest(current, rejectReason.value)
+  if (!result.valid) {
+    rejectReasonError.value = result.fieldError
+    return
+  }
+  rejectReasonError.value = ''
+  rejectError.value = ''
+  const controller = new AbortController()
+  rejectController = controller
+  const epoch = account.authEpoch
+  rejecting.value = true
+  try {
+    const response = await purchaseOrdersApi.reject(current.id, result.request, controller.signal)
+    if (controller.signal.aborted || epoch !== account.authEpoch || props.orderId !== current.id || !visible.value || !canReview.value) {
+      return
+    }
+    emit('detailUpdated', response.data)
+    toast.success(t('purchaseReview.reject.success'))
+    rejecting.value = false
+    rejectVisible.value = false
+    visible.value = false
+  }
+  catch (failure) {
+    if (!controller.signal.aborted && epoch === account.authEpoch && props.orderId === current.id && visible.value && !isPurchaseOrderAbortError(failure)) {
+      // 驳回与审核互斥；冲突时关闭驳回弹窗并重新读取，让主弹窗展示最新终态。
+      rejectVisible.value = false
+      await loadDetail(failureMessage(failure))
+    }
+  }
+  finally {
+    if (rejectController === controller) {
+      rejectController = null
+      rejecting.value = false
+    }
+  }
+}
+
 watch(() => [props.modelValue, props.orderId] as const, ([open]) => {
   reset()
   if (open) {
@@ -292,10 +380,50 @@ onBeforeUnmount(reset)
         <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" :disabled="busy" @click="visible = false">
           {{ t('purchaseReview.image.close') }}
         </FaButton>
+        <FaButton v-if="detail?.orderStatus === 'PENDING_REVIEW'" type="button" variant="outline" class="text-destructive min-h-11 sm:min-h-9" :disabled="!canReject" @click="openRejectDialog">
+          {{ t('purchaseReview.reject.action') }}
+        </FaButton>
         <FaButton v-if="detail?.orderStatus === 'PENDING_REVIEW'" type="button" class="min-h-11 sm:min-h-9" :disabled="!canConfirm" :loading="submitting" @click="submit">
           {{ t('purchaseOrderList.review.confirm') }}
         </FaButton>
       </div>
+    </template>
+  </QsGenericModal>
+  <QsGenericModal
+    :model-value="rejectVisible"
+    :title="t('purchaseReview.reject.title')"
+    :description="t('purchaseReview.reject.description')"
+    size="sm"
+    :submitting="rejecting"
+    @update:model-value="closeRejectDialog"
+  >
+    <div class="space-y-4">
+      <FaAlert v-if="rejectError" :description="rejectError" variant="destructive" />
+      <div>
+        <label for="purchase-order-reject-reason" class="text-sm font-medium">
+          {{ t('purchaseReview.reject.reason') }} <span class="text-destructive" aria-hidden="true">*</span>
+        </label>
+        <FaTextarea
+          id="purchase-order-reject-reason"
+          v-model="rejectReason"
+          class="mt-2"
+          :rows="3"
+          :maxlength="500"
+          :placeholder="t('purchaseReview.reject.placeholder')"
+          :disabled="rejecting"
+        />
+        <p v-if="rejectReasonError" class="text-xs text-destructive m-0 mt-1">
+          {{ rejectReasonError }}
+        </p>
+      </div>
+    </div>
+    <template #footer>
+      <FaButton type="button" variant="outline" :disabled="rejecting" @click="closeRejectDialog(false)">
+        {{ t('purchaseReview.reject.back') }}
+      </FaButton>
+      <FaButton type="button" variant="destructive" :loading="rejecting" :disabled="rejecting" @click="submitReject">
+        {{ t('purchaseReview.reject.confirm') }}
+      </FaButton>
     </template>
   </QsGenericModal>
   <FaMultiStepLoader

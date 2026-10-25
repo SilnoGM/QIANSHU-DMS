@@ -107,3 +107,13 @@ test('采购两视图切换时旧实例不改写目标查询，返回自身路�
     }
   }
 })
+
+test('审核弹窗提供驳回原因入口并提交最新版本', async () => {
+  const source = await read('purchase-order-review-modal.vue')
+  assert.match(source, /buildPurchaseOrderRejectRequest/u)
+  assert.match(source, /purchaseOrdersApi\.reject/u)
+  assert.match(source, /id="purchase-order-reject-reason"/u)
+  assert.match(source, /t\('purchaseReview\.reject\.action'\)/u)
+  assert.match(source, /purchaseReview\.recovery\.rejected/u)
+  assert.match(source, /detail\.value\?\.rejection/u)
+})

@@ -2439,6 +2439,70 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
     await waitForPurchaseList(page, pending.body.orderNo)
   })
 
+  await runPurchaseOrderBrowserStep('reviewer rejects a purchase and operations prefill a revision', async () => {
+    const resolution = await page.evaluate(apiExpression('/api/purchase-orders/shipping-mark-resolution?productMode=CUSTOM'))
+    assert.equal(resolution.status, 200)
+    const rejected = await page.evaluate(`(async () => {
+      const response = await fetch('/api/purchase-orders', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-Qianshu-CSRF': '1', 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({
+          purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: 'Browser 驳回修改供应商',
+          paymentAccounts: [${JSON.stringify(customBankAccount)}],
+          orderDate: ${JSON.stringify(order.orderDate)}, expectedShippingMarkResolution: ${JSON.stringify(resolution.body.resolutionToken)},
+          lines: [{ lineType: 'CUSTOM', name: 'Browser 驳回修改产品', referencePurchaseUnitPriceAmount: '1', actualPurchaseUnitPriceAmount: '1', quantity: 1 }],
+          parts: [{ key: crypto.randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] }],
+          purchaseTotalAmount: '1', depositDueAmount: '0', balanceDueAmount: '1',
+        }),
+      })
+      return { status: response.status, body: await response.json() }
+    })()`)
+    assert.equal(rejected.status, 201)
+    const rejectedOrderNo = rejected.body.orderNo
+
+    await page.navigate(appRouteUrl(configuration.baseUrl, '/qs-purchase-transport/reviews'))
+    await openWorkbenchReview(page, rejectedOrderNo)
+    await waitForVisibleDialog(page, '审核采购订单？')
+    await clickDialogButton(page, '审核采购订单？', '驳回修改')
+    await waitForVisibleDialog(page, '驳回采购单？')
+    await fillLabelledControl(page, '驳回原因', 'Browser 审核驳回 请修改采购价格')
+    await clickDialogButton(page, '驳回采购单？', '确认驳回')
+    await waitForNoVisibleDialog(page, '驳回采购单？')
+    await waitForNoVisibleDialog(page, '审核采购订单？')
+    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
+      .some(toast => toast.getClientRects().length > 0
+        && toast.textContent?.includes('采购单已驳回'))`)
+    const rejectedDetail = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(rejected.body.id)}`))
+    assert.equal(rejectedDetail.status, 200)
+    assert.equal(rejectedDetail.body.orderStatus, 'CANCELLED')
+    assert.equal(rejectedDetail.body.rejection.reason, 'Browser 审核驳回 请修改采购价格')
+    assert.equal(rejectedDetail.body.rejection.rejectedBy.displayName, 'Browser Auth Admin')
+    assert.ok(rejectedDetail.body.rejection.rejectedAt)
+    assert.equal(rejectedDetail.body.parts[0].status, 'CANCELLED')
+
+    await page.navigate(appRouteUrl(configuration.baseUrl, `${listRoute}?status=CANCELLED`))
+    await waitForPurchaseList(page, rejectedOrderNo)
+    await page.waitFor(`(() => {
+      const table = [...document.querySelectorAll('[data-testid="purchase-order-list-table"]')]
+        .find(candidate => candidate.getClientRects().length > 0)
+      return table?.textContent?.includes(${JSON.stringify(rejectedOrderNo)})
+        && table.textContent.includes('已驳回')
+    })()`)
+    await clickVisiblePurchaseOrderDetail(page, rejectedOrderNo)
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-detail-drawer"]')?.textContent.includes('采购单已被驳回')`)
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-detail-drawer"]')?.textContent.includes('Browser 审核驳回 请修改采购价格')`)
+    await clickVisibleButton(page, '基于此单新建')
+    await page.waitFor(`location.hash.includes('/qs-operations/purchase/purchase-orders/create?')
+      && new URLSearchParams(location.hash.split('?')[1] ?? '').get('copyFrom') === ${JSON.stringify(rejected.body.id)}`)
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-create-page"]')?.textContent.includes(${JSON.stringify(`基于已驳回采购单 ${rejectedOrderNo} 修改`)})`)
+    // 预填页是脏表单，先走真实丢弃守卫，避免影响后续移动端用例。
+    await clickVisibleButton(page, '返回全部采购')
+    await waitForVisibleDialog(page, '放弃当前采购订单？')
+    await clickDialogButton(page, '放弃当前采购订单？', '确认放弃')
+    await waitForNoVisibleDialog(page, '放弃当前采购订单？')
+    await waitForPurchaseList(page, order.orderNo)
+  })
+
   await runPurchaseOrderBrowserStep('390x844 light dark and touch targets', async () => {
     await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
     await waitForPurchaseList(page, order.orderNo)

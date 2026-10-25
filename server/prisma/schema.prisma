@@ -170,6 +170,8 @@ enum AuditEventType {
   INVOICE_REQUEST_DOCUMENT_UPLOADED
   INVOICE_REQUEST_SETTLED
   INVOICE_REQUEST_CANCELLED
+  /// 采购审核驳回事件。追加在末尾与数据库枚举顺序一致。
+  PURCHASE_ORDER_REJECTED
 
   @@map("audit_event_type")
 }
@@ -614,6 +616,7 @@ model User {
   salesOrderStatusesChanged   SalesOrderStatusHistory[]  @relation("SalesOrderStatusChangedBy")
   salesOrderAmountsChanged    SalesOrderAmountRevision[] @relation("SalesOrderAmountChangedBy")
   purchaseOrdersCreated             PurchaseOrder[]              @relation("PurchaseOrderCreatedBy")
+  purchaseOrdersRejected            PurchaseOrder[]              @relation("PurchaseOrderRejectedBy")
   purchaseOrderPartsShipped         PurchaseOrderPart[] @relation("PurchaseOrderPartShippedBy")
   purchaseOrderPartsWarehouseReceived PurchaseOrderPart[] @relation("PurchaseOrderPartWarehouseReceivedBy")
   purchaseOrderPartsLoaded          PurchaseOrderPart[] @relation("PurchaseOrderPartLoadedBy")
@@ -1255,6 +1258,9 @@ model PurchaseOrder {
   orderStatus                  PurchaseOrderStatus            @default(PENDING_REVIEW) @map("order_status")
   fulfillmentStatus            PurchaseOrderFulfillmentStatus @default(ORDERED) @map("fulfillment_status")
   paymentStatus                PurchaseOrderPaymentStatus     @default(UNPAID) @map("payment_status")
+  rejectedAt                   DateTime?                      @map("rejected_at") @db.Timestamptz(6)
+  rejectedByUserId             String?                        @map("rejected_by_user_id") @db.Uuid
+  rejectionReason              String?                        @map("rejection_reason") @db.VarChar(500)
   createdByUserId              String                         @map("created_by_user_id") @db.Uuid
   remark                       String?                        @db.VarChar(1000)
   version                      Int                            @default(1)
@@ -1265,6 +1271,7 @@ model PurchaseOrder {
   shippingMarkIssuance NumberingIssuance?    @relation(fields: [shippingMarkIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   currency     Currency                     @relation(fields: [currencyCode], references: [code], onDelete: Restrict, onUpdate: Restrict)
   createdBy    User                         @relation("PurchaseOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  rejectedBy   User?                        @relation("PurchaseOrderRejectedBy", fields: [rejectedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   lines        PurchaseOrderLine[]
   parts        PurchaseOrderPart[]
   payables     PurchaseOrderPayable[]

@@ -3,6 +3,7 @@
     "intro": "集中审核采购订单，核对产品、采购金额和预定义货件。",
     "PENDING_REVIEW": "待审核",
     "APPROVED": "已通过",
+    "REJECTED": "已驳回",
     "CANCELLED": "已取消",
     "orderNo": "采购订单编号",
     "source": "销售来源",
@@ -36,6 +37,16 @@
       "copyHeader": "【订单取消：{orderNo}】\n供应商：{supplier}\n采购日期：{orderDate}",
       "copyProducts": "[采购产品明细]\n产品名：{products}",
       "copyAmounts": "总价：{total}\n已支付：{paid}\n未支付：{unpaid}"
+    },
+    "reject": {
+      "action": "驳回修改",
+      "title": "驳回采购单？",
+      "description": "驳回后原采购单终止，需基于原单新建修订单；请填写需要修改的内容。",
+      "reason": "驳回原因",
+      "placeholder": "请填写需要修改的内容（最多 500 字）",
+      "confirm": "确认驳回",
+      "back": "返回",
+      "success": "采购单已驳回，请基于原单新建修订单"
     },
     "detailTitle": "采购审核详情",
     "search": "搜索采购单号、销售单号、客户或唛头",
@@ -90,6 +101,7 @@
     "recovery": {
       "pending": "当前仍待审核，已重新加载最新订单，请再次核对后确认审核。",
       "approved": "当前采购订单已审核通过，无需再次审核",
+      "rejected": "当前采购订单已驳回，不能继续审核",
       "cancelled": "当前采购订单已取消，不能继续审核",
       "unavailable": "当前审核条件不可用，请重新检查或联系管理员",
       "checkRequired": "请先处理审核提示"

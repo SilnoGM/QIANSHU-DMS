@@ -91,6 +91,9 @@ const PURCHASE_ORDER_LIST_SELECT = {
   orderStatus: true,
   fulfillmentStatus: true,
   paymentStatus: true,
+  rejectedAt: true,
+  rejectionReason: true,
+  rejectedBy: { select: PERSON_REFERENCE_SELECT },
   shippingMarkText: true,
   parts: { orderBy: { partNumber: 'asc' }, select: { shippingMarkText: true, shippedAt: true, warehouseReceivedAt: true, status: true } },
   remark: true,
@@ -244,13 +247,21 @@ export interface PurchaseOrderSupplier {
 }
 
 export interface PurchaseOrderReviewSummary {
+  readonly decision: 'APPROVED' | 'REJECTED'
   readonly reviewedAt: string
   readonly reviewedBy: PersonReference
   readonly reason: string | null
 }
 
+export interface PurchaseOrderRejection {
+  readonly rejectedAt: string
+  readonly rejectedBy: PersonReference
+  readonly reason: string
+}
+
 export interface PurchaseOrderListItem extends PurchaseOrderRecordSummaries {
   readonly reviewSummary: PurchaseOrderReviewSummary | null
+  readonly rejection: PurchaseOrderRejection | null
   readonly id: string
   readonly orderNo: string
   readonly purchaseType: PurchaseOrderType
@@ -315,6 +326,7 @@ export interface PurchaseOrderCurrencySummary {
 
 export type PurchaseOrderStatusCountValue =
   | 'ALL'
+  | 'REJECTED'
   | PurchaseOrderStatus
   | PurchaseOrderPendingTask
 
@@ -554,17 +566,42 @@ function mapReviewSummary(history: {
   readonly reason: string | null
 } | undefined): PurchaseOrderReviewSummary | null {
   return history === undefined ? null : {
+    decision: 'APPROVED',
     reviewedAt: history.changedAt.toISOString(),
     reviewedBy: toPersonReference(history.changedBy),
     reason: history.reason,
   }
 }
 
+function mapRejection(row: {
+  readonly rejectedAt: Date | null | undefined
+  readonly rejectedBy: PersonReferenceRow | null | undefined
+  readonly rejectionReason: string | null | undefined
+}): PurchaseOrderRejection | null {
+  if (row.rejectedAt === null || row.rejectedAt === undefined
+    || row.rejectedBy === null || row.rejectedBy === undefined
+    || row.rejectionReason === null || row.rejectionReason === undefined) return null
+  return {
+    rejectedAt: row.rejectedAt.toISOString(),
+    rejectedBy: toPersonReference(row.rejectedBy),
+    reason: row.rejectionReason,
+  }
+}
+
 function mapListItem(
   row: PurchaseOrderListRow,
   supplier: PurchaseOrderSupplier,
-  reviewSummary: PurchaseOrderReviewSummary | null,
+  approvedReviewSummary: PurchaseOrderReviewSummary | null,
 ): PurchaseOrderListItem {
+  const rejection = mapRejection(row)
+  const reviewSummary = rejection === null
+    ? approvedReviewSummary
+    : {
+        decision: 'REJECTED' as const,
+        reviewedAt: rejection.rejectedAt,
+        reviewedBy: rejection.rejectedBy,
+        reason: rejection.reason,
+      }
   const records = summarizePurchaseOrderRecords(row)
   const activePaidUnits = parsePurchaseOrderAmountUnits(records.paidAmount)
   const totalUnits = parsePurchaseOrderAmountUnits(
@@ -573,6 +610,7 @@ function mapListItem(
   return {
     ...records,
     reviewSummary,
+    rejection,
     id: row.id,
     orderNo: row.orderNo,
     purchaseType: row.purchaseType,
@@ -694,7 +732,11 @@ export class PurchaseOrderQueryService {
         ? undefined
         : input.reviewView === 'APPROVED'
           ? { orderStatus: { in: ['CONFIRMED', 'COMPLETED'] } }
-          : { orderStatus: input.reviewView }
+          : input.reviewView === 'REJECTED'
+            ? { orderStatus: 'CANCELLED', rejectedAt: { not: null } }
+            : input.reviewView === 'CANCELLED'
+              ? { orderStatus: 'CANCELLED', rejectedAt: null }
+              : { orderStatus: input.reviewView }
     const where: Prisma.PurchaseOrderWhereInput = {
       ...buildPurchaseOrderBaseWhere(input),
       // 数据范围与筛选共用同一谓词，保证总数、当前页与金额汇总口径一致。
@@ -796,11 +838,18 @@ export class PurchaseOrderQueryService {
 
     if (input.view === 'all') {
       const statuses = ['PENDING_REVIEW', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
-      const rows = await this.prisma.purchaseOrder.groupBy({
-        by: ['orderStatus'] as const,
-        where: baseWhere,
-        _count: { _all: true } as const,
-      })
+      const [rows, rejectedCount] = await Promise.all([
+        this.prisma.purchaseOrder.groupBy({
+          by: ['orderStatus'] as const,
+          where: baseWhere,
+          _count: { _all: true } as const,
+        }),
+        this.prisma.purchaseOrder.count({
+          where: {
+            AND: [baseWhere, { orderStatus: 'CANCELLED', rejectedAt: { not: null } }],
+          },
+        }),
+      ])
       const counts = groupedCount(rows.map(row => ({
         value: row.orderStatus,
         count: row._count._all,
@@ -811,6 +860,9 @@ export class PurchaseOrderQueryService {
         items: [
           { value: 'ALL', count: items.reduce((sum, item) => sum + item.count, 0) },
           ...items,
+          // 已驳回是 CANCELLED 的派生过滤，单独计数供审核工作台页签使用；
+          // ALL 仍只累加真实订单状态，避免重复计数。
+          { value: 'REJECTED', count: rejectedCount },
         ],
       }
     }

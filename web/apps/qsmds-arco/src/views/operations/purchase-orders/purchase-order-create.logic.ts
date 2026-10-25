@@ -488,6 +488,88 @@ export function calculatePurchaseOrderDraftTotal(
   return formatAmountUnits(totalUnits)
 }
 
+export interface RejectedPurchaseCopyDraft {
+  readonly lines: readonly OrderProductLineModel[]
+  readonly parts: readonly PartConfiguration[]
+  readonly sourceSalesOrderLineIdByKey: Readonly<Record<string, string>>
+  readonly maximumQuantityByKey: Readonly<Record<string, number>>
+  readonly depositDueAmount: string
+  readonly balanceDueAmount: string
+  readonly remark: string
+  readonly paymentAccounts: readonly PaymentRecipientAccountInputDto[]
+}
+
+/**
+ * 已驳回采购单 → 新单草稿。只复制业务资料，不复用原单号、唛头、货件编号或支付事实。
+ * 行 key 由原行 ID 派生，货件 items 通过原行 ID 映射到新的行 key。
+ */
+export function mapRejectedPurchaseCopy(
+  source: PurchaseOrderDetailDto,
+  remainingBySourceId: ReadonlyMap<string, number>,
+): RejectedPurchaseCopyDraft {
+  const lineKeyByOriginalId = new Map<string, string>()
+  const lines = [...source.lines]
+    .sort((left, right) => left.lineNumber - right.lineNumber)
+    .map((line) => {
+      const key = `copy-${line.id}`
+      lineKeyByOriginalId.set(line.id, key)
+      return {
+        key,
+        lineType: line.lineType,
+        productId: line.productId,
+        productNo: line.productNo,
+        name: line.productName,
+        description: line.description ?? '',
+        standardUnitPriceAmount: line.referencePurchaseUnitPriceAmount,
+        actualUnitPriceAmount: line.actualPurchaseUnitPriceAmount,
+        quantity: String(line.quantity),
+        mainImage: null,
+      }
+    })
+  const sourceSalesOrderLineIdByKey: Record<string, string> = {}
+  const maximumQuantityByKey: Record<string, number> = {}
+  for (const line of source.lines) {
+    const key = lineKeyByOriginalId.get(line.id)
+    if (key === undefined || line.sourceSalesOrderLineId === null) {
+      continue
+    }
+    sourceSalesOrderLineIdByKey[key] = line.sourceSalesOrderLineId
+    const remaining = remainingBySourceId.get(line.sourceSalesOrderLineId)
+    if (remaining !== undefined) {
+      maximumQuantityByKey[key] = remaining
+    }
+  }
+  const parts = source.parts
+    .map(part => ({
+      key: globalThis.crypto.randomUUID(),
+      items: part.items.flatMap((item) => {
+        const key = lineKeyByOriginalId.get(item.purchaseOrderLineId)
+        return key === undefined ? [] : [{ productKey: key, quantity: item.quantity }]
+      }),
+    }))
+    .filter(part => part.items.length > 0)
+  const paymentAccounts = source.productMode === 'CUSTOM'
+    ? (source.paymentRecipientProfile?.accounts ?? []).map(account => ({
+        paymentMethod: account.paymentMethod,
+        recipientName: account.recipientName,
+        qrMediaAssetId: account.qrMediaAssetId,
+        bankName: account.bankName,
+        bankAccount: account.bankAccount,
+        bankBranch: account.bankBranch,
+      }))
+    : []
+  return {
+    lines,
+    parts,
+    sourceSalesOrderLineIdByKey,
+    maximumQuantityByKey,
+    depositDueAmount: source.depositDueAmount,
+    balanceDueAmount: source.balanceDueAmount,
+    remark: source.remark ?? '',
+    paymentAccounts,
+  }
+}
+
 export function buildPurchaseOrderCreateRequest(
   source: PurchaseOrderCreateSource,
 ): PurchaseOrderCreateBuildResult {

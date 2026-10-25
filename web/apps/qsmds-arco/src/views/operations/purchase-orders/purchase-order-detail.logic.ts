@@ -5,6 +5,7 @@ import type {
   PurchaseOrderPaymentDto,
   PurchaseOrderPaymentRequestDto,
   PurchaseOrderPaymentVoidRequestDto,
+  PurchaseOrderRejectRequestDto,
   PurchaseOrderReviewRequestDto,
 } from '../../../api/generated/types.gen'
 
@@ -196,6 +197,33 @@ export function buildPurchaseOrderReviewRequest(
       expectedVersion: detail.version,
       imageDraftId: imageDraft.id,
       ...(normalizedReason.value === null ? {} : { reason: normalizedReason.value }),
+    },
+  }
+}
+
+/** 审核驳回必须带原因和最新版本；原单会进入 CANCELLED 终态。 */
+export function buildPurchaseOrderRejectRequest(
+  detail: Pick<PurchaseOrderDetailDto, 'orderStatus' | 'version'>,
+  reason: string,
+): PurchaseOrderMutationBuildResult<PurchaseOrderRejectRequestDto> {
+  if (detail.orderStatus !== 'PENDING_REVIEW') {
+    return { valid: false, fieldError: '采购订单已不处于审核中，请刷新列表' }
+  }
+  if (!Number.isSafeInteger(detail.version) || detail.version < 1) {
+    return { valid: false, fieldError: '当前订单版本不可用，请重新加载详情' }
+  }
+  const normalizedReason = optionalReason(reason)
+  if (!normalizedReason.ok) {
+    return { valid: false, fieldError: '驳回原因最多 500 个字符' }
+  }
+  if (normalizedReason.value === null) {
+    return { valid: false, fieldError: '请填写驳回原因' }
+  }
+  return {
+    valid: true,
+    request: {
+      expectedVersion: detail.version,
+      reason: normalizedReason.value,
     },
   }
 }

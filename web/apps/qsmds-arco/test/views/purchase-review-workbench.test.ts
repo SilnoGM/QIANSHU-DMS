@@ -12,8 +12,9 @@ test('审核工作台已通过采用服务端合并状态分页，搜索去除�
   assert.equal(buildReviewQuery('PENDING_REVIEW', '', 1, 20).keyword, undefined)
 })
 test('审核视图计数合并已确认和已完成，不将全部数加入', () => {
-  assert.deepEqual(countReviewViews([{ value: 'ALL', count: 10 }, { value: 'PENDING_REVIEW', count: 2 }, { value: 'CONFIRMED', count: 3 }, { value: 'COMPLETED', count: 4 }, { value: 'CANCELLED', count: 1 }]), { PENDING_REVIEW: 2, APPROVED: 7, CANCELLED: 1 })
-  assert.deepEqual(countReviewViews([]), { PENDING_REVIEW: 0, APPROVED: 0, CANCELLED: 0 })
+  assert.deepEqual(countReviewViews([{ value: 'ALL', count: 10 }, { value: 'PENDING_REVIEW', count: 2 }, { value: 'CONFIRMED', count: 3 }, { value: 'COMPLETED', count: 4 }, { value: 'CANCELLED', count: 1 }, { value: 'REJECTED', count: 0 }]), { PENDING_REVIEW: 2, APPROVED: 7, REJECTED: 0, CANCELLED: 1 })
+  assert.deepEqual(countReviewViews([{ value: 'CANCELLED', count: 3 }, { value: 'REJECTED', count: 2 }]), { PENDING_REVIEW: 0, APPROVED: 0, REJECTED: 2, CANCELLED: 1 })
+  assert.deepEqual(countReviewViews([]), { PENDING_REVIEW: 0, APPROVED: 0, REJECTED: 0, CANCELLED: 0 })
 })
 test('审核工作台编号列使用点击复制并保持桌面与移动端等宽字体', async () => {
   const source = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
@@ -85,4 +86,12 @@ test('旧身份的列表响应不回写，最后一页审核后自动回到有�
   assert.equal(page.value, 2)
   assert.deepEqual(calls, [3, 3, 2])
   assert.deepEqual(items.value, [{ id: 'remaining' }])
+})
+
+test('审核工作台提供已驳回页签、标签和独立计数', async () => {
+  const source = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
+  assert.match(source, /'PENDING_REVIEW', 'APPROVED', 'REJECTED', 'CANCELLED'/u)
+  assert.match(source, /row\.original\.rejection \? t\('purchaseReview\.REJECTED'\)/u)
+  assert.match(source, /value === 'REJECTED'/u)
+  assert.match(source, /counts\.value\[value\]/u)
 })

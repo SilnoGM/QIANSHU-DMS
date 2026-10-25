@@ -8,6 +8,7 @@ import {
   buildPurchaseOrderFulfillmentRequest,
   buildPurchaseOrderPaymentRequest,
   buildPurchaseOrderPaymentVoidRequest,
+  buildPurchaseOrderRejectRequest,
   buildPurchaseOrderReviewRequest,
   formatPurchaseOrderLocalDateTime,
   purchaseOrderPaymentTypeLabel,
@@ -178,6 +179,17 @@ test('本地付款时间格式供 datetime-local 稳定回显', () => {
     formatPurchaseOrderLocalDateTime(new Date(2026, 7, 28, 9, 7)),
     '2026-08-28T09:07',
   )
+})
+
+test('驳回要求审核中、最新版本和必填原因', () => {
+  const detail = createDetail({ orderStatus: 'PENDING_REVIEW', version: 7 })
+  assert.deepEqual(buildPurchaseOrderRejectRequest(detail, '  价格需要修改 '), {
+    valid: true,
+    request: { expectedVersion: 7, reason: '价格需要修改' },
+  })
+  assert.equal(buildPurchaseOrderRejectRequest(detail, '   ').valid, false)
+  assert.equal(buildPurchaseOrderRejectRequest({ ...detail, orderStatus: 'CONFIRMED' }, '价格需要修改').valid, false)
+  assert.equal(buildPurchaseOrderRejectRequest({ ...detail, version: 0 }, '价格需要修改').valid, false)
 })
 
 test('审核提交绑定最新版本，限定审核中状态并规范化审核说明', () => {

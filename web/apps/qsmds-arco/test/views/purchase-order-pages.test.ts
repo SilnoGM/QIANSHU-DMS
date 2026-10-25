@@ -469,8 +469,8 @@ test('销售关联采购仅在切换不同订单时重置产品和付款依赖',
   assert.match(handlerSource, /const previousSalesOrderId = selectedSalesOrder\.value\?\.id \?\? null/u)
   assert.match(
     handlerSource,
-    /const sourceChanged = previousSalesOrderId !== null\s+&& previousSalesOrderId !== item\.id/u,
-    '首次选择和重选同一订单不得清空已经填写的下游资料',
+    /const sourceChanged = \(previousSalesOrderId !== null && previousSalesOrderId !== item\.id\)\s+\|\| \(copyApplied && copySourceSalesOrderId !== null && item\.id !== copySourceSalesOrderId\)/u,
+    '首次选择和重选同一订单不得清空已经填写的下游资料；仅驳回预填后切换到其他来源才重置',
   )
   assert.match(
     handlerSource,
@@ -641,4 +641,24 @@ test('销售快捷入口首次视图未命中时只回退部分采购视图', as
   assert.match(source, /const shortcutViews = \['UNPURCHASED', 'PARTIALLY_PURCHASED'\] as const/u)
   assert.match(source, /for \(const view of shortcutViews\)/u)
   assert.doesNotMatch(source, /shortcutViews = \[[^\]]*COMPLETED_PURCHASE_ADD_ON/u)
+})
+
+test('已驳回采购单可预填创建页而不复用原单号与唛头', async () => {
+  const source = await readFile(new URL('create.vue', ROOT), 'utf8')
+
+  assert.match(source, /const copyFromId = typeof route\.query\.copyFrom/u)
+  assert.match(source, /purchaseOrdersApi\.getById\(copyFromId/u)
+  assert.match(source, /mapRejectedPurchaseCopy/u)
+  assert.match(source, /source\.orderStatus !== 'CANCELLED' \|\| source\.rejection === null/u)
+  assert.match(source, /基于已驳回采购单/u)
+  assert.match(source, /copySourceOrderNo/u)
+})
+
+test('驳回单详情提供基于原单新建入口', async () => {
+  const source = await readFile(new URL('purchase-order-detail-drawer.vue', ROOT), 'utf8')
+
+  assert.match(source, /const canRework = computed/u)
+  assert.match(source, /function reworkRejectedOrder/u)
+  assert.match(source, /copyFrom: order\.id/u)
+  assert.match(source, /@rework="reworkRejectedOrder"/u)
 })

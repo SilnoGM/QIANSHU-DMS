@@ -51,7 +51,7 @@ const detailError = ref<string | null>(null)
 let listController: AbortController | null = null
 let countController: AbortController | null = null
 let detailController: AbortController | null = null
-const tabs = computed(() => (['PENDING_REVIEW', 'APPROVED', 'CANCELLED'] as const).map(value => ({ value, label: t(`purchaseReview.${value}`), count: countsError.value ? undefined : counts.value[value] })))
+const tabs = computed(() => (['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'CANCELLED'] as const).map(value => ({ value, label: t(`purchaseReview.${value}`), count: countsError.value ? undefined : counts.value[value] })))
 // 审核中/已取消只有单动作；已通过且可审核时才有「查看 + 取消订单」两个动作。
 const actionColumnWidth = computed(() => resolveActionColumnWidth(
   status.value === 'APPROVED' && canReview.value
@@ -149,7 +149,7 @@ function search(): void {
   refresh()
 }
 function selectTab(value: string | number): void {
-  if (value === 'PENDING_REVIEW' || value === 'APPROVED' || value === 'CANCELLED') {
+  if (value === 'PENDING_REVIEW' || value === 'APPROVED' || value === 'REJECTED' || value === 'CANCELLED') {
     status.value = value
     page.value = 1
     items.value = []
@@ -322,7 +322,7 @@ onBeforeUnmount(() => {
         </template>
         <template #cell-status="{ row }">
           <FaTag variant="outline" :class="orderStatusTagClass(row.original.orderStatus)">
-            {{ orderStatusLabel(row.original.orderStatus) }}
+            {{ row.original.rejection ? t('purchaseReview.REJECTED') : orderStatusLabel(row.original.orderStatus) }}
           </FaTag>
         </template>
         <template #cell-reviewSummary="{ row }">
