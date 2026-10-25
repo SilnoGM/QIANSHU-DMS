@@ -2,10 +2,13 @@
 import type { WarehouseArrivalAction, WarehouseArrivalView } from './logic'
 import type { PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
 import type { PurchaseShipmentListQuery } from '@/api/modules/purchase-shipments'
+import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import { resolveActionColumnWidth } from '@/components/business/QsGenericTable/action-column-width'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
@@ -56,7 +59,14 @@ const shippingInfoVisible = computed({ get: () => shippingInfoShipment.value !==
     closeShippingInfo()
   }
 } })
-const actionIcons: Record<WarehouseArrivalAction, string> = { view: 'i-lucide:eye', seaExpress: 'i-lucide:truck', woodenFrame: 'i-lucide:hammer', shippingInfo: 'i-lucide:clipboard-list' }
+const actionColumnWidth = computed(() => {
+  if (activeView.value === 'SHIPPED') {
+    return resolveActionColumnWidth([{ chars: 2, kind: 'text' }])
+  }
+  return resolveActionColumnWidth(canReadShippingInfo.value
+    ? [{ chars: 2, kind: 'text' }, { chars: 2, kind: 'text' }, { kind: 'icon' }]
+    : [{ chars: 2, kind: 'text' }, { chars: 2, kind: 'text' }])
+})
 const tabs = computed(() => WAREHOUSE_ARRIVAL_VIEWS.map(value => ({ value, label: t(`warehouseArrivals.${value}`), count: countsError.value || counts.value.length === 0 ? undefined : counts.value.find(item => item.value === value)?.count ?? 0 })))
 const columns = computed(() => createWarehouseArrivalColumns(activeView.value, t))
 const warehouseTabs = computed(() => warehouseOptions.value.map((item) => {
@@ -101,6 +111,29 @@ function search(): void {
 function paginate(value: { page: number, pageSize: number }): void {
   navigate({ ...query.value, ...value })
 }
+function visibleArrivalActions(row: PurchaseShipmentListItemDto): WarehouseArrivalAction[] {
+  return warehouseArrivalActions(activeView.value, row.viewStatus, row.destinationWarehouseValue)
+    .filter(value => (value !== 'woodenFrame' || canCreatePackaging.value)
+      && (value !== 'shippingInfo' || canReadShippingInfo.value))
+}
+
+function arrivalBusinessActions(row: PurchaseShipmentListItemDto): WarehouseArrivalAction[] {
+  return visibleArrivalActions(row).filter(action => action !== 'view')
+}
+
+function shortArrivalActionLabel(action: WarehouseArrivalAction): string {
+  switch (action) {
+    case 'view': return '详情'
+    case 'shippingInfo': return '出货'
+    case 'woodenFrame': return '木架'
+    case 'seaExpress': return '海快'
+  }
+}
+
+function arrivalDetailItems(row: PurchaseShipmentListItemDto): ActionMenuItem[][] {
+  return [[{ label: '详情', handle: () => handleAction('view', row) }]]
+}
+
 function handleAction(action: WarehouseArrivalAction, row: PurchaseShipmentListItemDto): void {
   if (!enabled.value || !warehouseArrivalActions(activeView.value, row.viewStatus, row.destinationWarehouseValue).includes(action)) {
     return
@@ -199,13 +232,13 @@ onBeforeUnmount(() => activated.value = false)
           row-key="id" :show-row-number="false" :columns="columns" :data="rows" :total="total" :loading="loading" :error="error"
           :addable="false" :page-size-options="[20, 50, 100]" :search-placeholder="t('warehouseArrivals.search')"
           :empty-title="t('warehouseArrivals.empty')" :empty-description="t('warehouseArrivals.emptyDescription')"
-          :action-column="{ fixed: 'right', width: activeView === 'SHIPPED' ? 130 : 350 }" table-class="w-max min-w-full"
+          :action-column="{ fixed: 'right', minWidth: actionColumnWidth, width: actionColumnWidth }" table-class="w-max min-w-full"
           @search="search" @pagination-change="paginate" @retry="refresh"
         >
           <template #cell-shipmentNo="{ row }">
-            <div class="group flex gap-2 items-center">
-              <span class="qs-type-data-emphasis whitespace-nowrap" :class="!row.original.shipmentNo && 'text-muted-foreground'">{{ row.original.shipmentNo || t('purchaseShipments.unnumbered') }}</span>
-              <CopyCellButton v-if="row.original.shipmentNo" :text="row.original.shipmentNo" :label="t('purchaseShipments.shipmentNo')" />
+            <div class="qs-type-data-emphasis flex gap-2 items-center">
+              <QsCopyableText v-if="row.original.shipmentNo" :text="row.original.shipmentNo" :label="t('purchaseShipments.shipmentNo')" />
+              <span v-else class="text-muted-foreground whitespace-nowrap">{{ t('purchaseShipments.unnumbered') }}</span>
             </div>
           </template>
           <template #cell-mark="{ row }">
@@ -246,9 +279,53 @@ onBeforeUnmount(() => activated.value = false)
             <QsPersonDisplay v-if="row.original.warehouseReceivedBy" :display-name="row.original.warehouseReceivedBy.displayName" size="md" :avatar-url="row.original.warehouseReceivedBy.avatarUrl" /><span v-else>—</span>
           </template>
           <template #actions="{ row }">
-            <FaButton v-for="action in warehouseArrivalActions(activeView, row.viewStatus, row.destinationWarehouseValue).filter(value => (value !== 'woodenFrame' || canCreatePackaging) && (value !== 'shippingInfo' || canReadShippingInfo))" :key="action" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.shipmentNo || t('purchaseShipments.unnumbered')}：${t(`warehouseArrivals.${action}`)}`" @click="handleAction(action, row)">
-              <FaIcon :name="actionIcons[action]" aria-hidden="true" />{{ t(`warehouseArrivals.${action}`) }}
-            </FaButton>
+            <div class="flex flex-wrap gap-1 items-center">
+              <FaButton
+                v-for="action in arrivalBusinessActions(row)"
+                :key="action"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-8"
+                :aria-label="`${row.shipmentNo || t('purchaseShipments.unnumbered')}：${t(`warehouseArrivals.${action}`)}`"
+                @click="handleAction(action, row)"
+              >
+                {{ shortArrivalActionLabel(action) }}
+              </FaButton>
+              <FaButton
+                v-if="arrivalBusinessActions(row).length <= 1"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-8"
+                :aria-label="`${row.shipmentNo || t('purchaseShipments.unnumbered')}：详情`"
+                @click="handleAction('view', row)"
+              >
+                详情
+              </FaButton>
+              <FaButton
+                v-if="arrivalBusinessActions(row).length === 2"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-8 md:hidden"
+                :aria-label="`${row.shipmentNo || t('purchaseShipments.unnumbered')}：详情`"
+                @click="handleAction('view', row)"
+              >
+                详情
+              </FaButton>
+              <FaDropdown
+                v-if="arrivalBusinessActions(row).length === 2"
+                :items="arrivalDetailItems(row)"
+                align="end"
+              >
+                <FaButton
+                  variant="ghost"
+                  size="icon-sm"
+                  class="min-h-11 min-w-11 hidden md:inline-flex sm:min-h-8 sm:min-w-8"
+                  :aria-label="`${row.shipmentNo || t('purchaseShipments.unnumbered')}：更多操作`"
+                >
+                  <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
+                </FaButton>
+              </FaDropdown>
+            </div>
           </template>
           <template #mobile-row="{ row }">
             <ArrivalMobileRow :row="row" :view="activeView" />

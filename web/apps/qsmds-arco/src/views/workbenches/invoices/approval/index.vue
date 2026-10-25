@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { InvoiceRequestStatusValue } from '../invoice-status.logic'
 import type { InvoiceRequestListItemDto } from '@/api/generated/types.gen'
+import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -100,7 +101,7 @@ function canSettleRow(row: InvoiceRequestListItemDto): boolean {
 }
 
 const columns = computed<QsGenericTableColumn<InvoiceRequestListItemDto>[]>(() => [
-  { id: 'invoiceNo', accessorKey: 'invoiceNo', title: t('invoiceRequest.column.invoiceNo'), minWidth: 190, fixed: 'left' },
+  { id: 'invoiceNo', accessorKey: 'invoiceNo', title: t('invoiceRequest.column.invoiceNo'), minWidth: 168, fixed: 'left' },
   { id: 'document', accessorFn: row => row.documentMediaAssetId, title: t('invoiceRequest.column.document'), minWidth: 96 },
   { id: 'status', accessorFn: row => row.status, title: t('invoiceRequest.column.status'), minWidth: 130 },
   { id: 'buyer', accessorFn: row => row.buyerName, title: t('invoiceRequest.column.buyer'), minWidth: 190 },
@@ -146,6 +147,19 @@ function changeStatus(): void {
 function openDetail(row: InvoiceRequestListItemDto): void {
   detailId.value = row.id
   detailOpen.value = true
+}
+
+function approvalMenuItems(row: InvoiceRequestListItemDto): ActionMenuItem[][] {
+  if (row.status === 'PENDING_REVIEW') {
+    return [[
+      { label: '取消', variant: 'destructive', handle: () => void openAction(row, 'cancel') },
+      { label: '详情', handle: () => openDetail(row) },
+    ]]
+  }
+  if (row.status === 'NOTIFIED' || row.status === 'ISSUED') {
+    return [[{ label: '详情', handle: () => openDetail(row) }]]
+  }
+  return []
 }
 
 function openReview(row: InvoiceRequestListItemDto): void {
@@ -343,7 +357,7 @@ onMounted(load)
         :search-placeholder="t('invoiceRequest.list.searchPlaceholder')"
         :empty-title="t('invoiceRequest.list.empty')"
         :empty-description="t('invoiceRequest.list.emptyDescription')"
-        :action-column="{ fixed: 'right', minWidth: 300 }"
+        :action-column="{ fixed: 'right', minWidth: 176, width: 176 }"
         @pagination-change="load"
         @search="load"
         @retry="load"
@@ -486,68 +500,131 @@ onMounted(load)
         </template>
 
         <template #actions="{ row }">
-          <FaButton
-            v-if="row.status === 'PENDING_REVIEW'"
-            variant="ghost"
-            size="sm"
-            class="min-h-11 sm:min-h-8"
-            :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.review')}`"
-            @click="openReview(row)"
-          >
-            <FaIcon name="i-lucide:clipboard-check" aria-hidden="true" />{{ t('invoiceRequest.action.review') }}
-          </FaButton>
-          <FaButton
-            v-if="row.status === 'PENDING_REVIEW'"
-            variant="ghost"
-            size="sm"
-            class="min-h-11 sm:min-h-8"
-            :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.return')}`"
-            @click="openAction(row, 'return')"
-          >
-            <FaIcon name="i-lucide:undo-2" aria-hidden="true" />{{ t('invoiceRequest.action.return') }}
-          </FaButton>
-          <FaButton
-            v-if="row.status === 'NOTIFIED'"
-            variant="ghost"
-            size="sm"
-            class="min-h-11 sm:min-h-8"
-            :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.document')}`"
-            @click="openAction(row, 'document')"
-          >
-            <FaIcon name="i-lucide:image-plus" aria-hidden="true" />{{ t('invoiceRequest.action.document') }}
-          </FaButton>
-          <FaTooltip v-if="row.status === 'ISSUED'" :text="settleHint(row)">
-            <span class="inline-flex">
-              <FaButton
-                variant="ghost"
-                size="sm"
-                class="min-h-11 sm:min-h-8"
-                :disabled="!canSettleRow(row)"
-                :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.settle')}`"
-                @click="openAction(row, 'settle')"
-              >
-                <FaIcon name="i-lucide:landmark" aria-hidden="true" />{{ t('invoiceRequest.action.settle') }}
+          <template v-if="row.status === 'PENDING_REVIEW'">
+            <FaButton
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8"
+              :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.review')}`"
+              @click="openReview(row)"
+            >
+              审核
+            </FaButton>
+            <FaButton
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8"
+              :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.return')}`"
+              @click="openAction(row, 'return')"
+            >
+              退回
+            </FaButton>
+            <FaButton
+              variant="ghost"
+              size="sm"
+              class="text-destructive min-h-11 sm:min-h-8 md:hidden"
+              :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.cancel')}`"
+              @click="openAction(row, 'cancel')"
+            >
+              取消
+            </FaButton>
+            <FaButton
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8 md:hidden"
+              :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.viewDetail')}`"
+              @click="openDetail(row)"
+            >
+              详情
+            </FaButton>
+            <FaDropdown :items="approvalMenuItems(row)" align="end">
+              <FaButton variant="ghost" size="icon-sm" class="min-h-11 min-w-11 hidden md:inline-flex sm:min-h-8 sm:min-w-8" :aria-label="`${row.invoiceNo}：更多操作`">
+                <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
               </FaButton>
-            </span>
-          </FaTooltip>
+            </FaDropdown>
+          </template>
+          <template v-else-if="row.status === 'NOTIFIED'">
+            <FaButton
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8"
+              :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.document')}`"
+              @click="openAction(row, 'document')"
+            >
+              上传
+            </FaButton>
+            <FaButton
+              variant="ghost"
+              size="sm"
+              class="text-destructive min-h-11 sm:min-h-8"
+              :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.cancel')}`"
+              @click="openAction(row, 'cancel')"
+            >
+              取消
+            </FaButton>
+            <FaButton
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8 md:hidden"
+              :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.viewDetail')}`"
+              @click="openDetail(row)"
+            >
+              详情
+            </FaButton>
+            <FaDropdown :items="approvalMenuItems(row)" align="end">
+              <FaButton variant="ghost" size="icon-sm" class="min-h-11 min-w-11 hidden md:inline-flex sm:min-h-8 sm:min-w-8" :aria-label="`${row.invoiceNo}：更多操作`">
+                <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
+              </FaButton>
+            </FaDropdown>
+          </template>
+          <template v-else-if="row.status === 'ISSUED'">
+            <FaTooltip :text="settleHint(row)">
+              <span class="inline-flex">
+                <FaButton
+                  variant="ghost"
+                  size="sm"
+                  class="min-h-11 sm:min-h-8"
+                  :disabled="!canSettleRow(row)"
+                  :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.settle')}`"
+                  @click="openAction(row, 'settle')"
+                >
+                  结算
+                </FaButton>
+              </span>
+            </FaTooltip>
+            <FaButton
+              variant="ghost"
+              size="sm"
+              class="text-destructive min-h-11 sm:min-h-8"
+              :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.cancel')}`"
+              @click="openAction(row, 'cancel')"
+            >
+              取消
+            </FaButton>
+            <FaButton
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8 md:hidden"
+              :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.viewDetail')}`"
+              @click="openDetail(row)"
+            >
+              详情
+            </FaButton>
+            <FaDropdown :items="approvalMenuItems(row)" align="end">
+              <FaButton variant="ghost" size="icon-sm" class="min-h-11 min-w-11 hidden md:inline-flex sm:min-h-8 sm:min-w-8" :aria-label="`${row.invoiceNo}：更多操作`">
+                <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
+              </FaButton>
+            </FaDropdown>
+          </template>
           <FaButton
-            v-if="row.status !== 'SETTLED' && row.status !== 'CANCELLED'"
-            variant="ghost"
-            size="sm"
-            class="text-destructive min-h-11 sm:min-h-8"
-            :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.cancel')}`"
-            @click="openAction(row, 'cancel')"
-          >
-            <FaIcon name="i-lucide:circle-x" aria-hidden="true" />{{ t('invoiceRequest.action.cancel') }}
-          </FaButton>
-          <FaButton
+            v-else
             variant="ghost"
             size="sm"
             class="min-h-11 sm:min-h-8"
             :aria-label="`${row.invoiceNo} · ${t('invoiceRequest.action.viewDetail')}`"
             @click="openDetail(row)"
           >
-            <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('invoiceRequest.action.viewDetail') }}
+            详情
           </FaButton>
         </template>
       </QsGenericTable>

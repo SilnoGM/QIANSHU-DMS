@@ -6,6 +6,7 @@ import test from 'node:test'
 
 import {
   buildSalesOrderCancelRequest,
+  getSalesOrderCancelBlockedReason,
   isSalesOrderCancellable,
 } from '../../src/views/operations/sales-orders/sales-order-cancel.logic'
 
@@ -41,6 +42,38 @@ test('已签收、已有收款或存在未取消采购单的订单不提供取�
   assert.equal(isSalesOrderCancellable(eligibility({ paymentStatus: 'PARTIALLY_PAID' })), false)
   assert.equal(isSalesOrderCancellable(eligibility({ paymentStatus: 'PAID' })), false)
   assert.equal(isSalesOrderCancellable(eligibility({ activePurchaseOrderCount: 1 })), false)
+})
+
+test('取消按钮常显时返回可读的禁用原因', () => {
+  assert.equal(getSalesOrderCancelBlockedReason(eligibility()), null)
+  assert.equal(
+    getSalesOrderCancelBlockedReason(eligibility({ viewMode: 'pending' })),
+    '待办视图不提供取消订单入口',
+  )
+  assert.equal(
+    getSalesOrderCancelBlockedReason(eligibility({ canUpdate: false })),
+    '当前账号无权取消订单',
+  )
+  assert.equal(
+    getSalesOrderCancelBlockedReason(eligibility({ orderStatus: 'CANCELLED' })),
+    '订单已取消',
+  )
+  assert.equal(
+    getSalesOrderCancelBlockedReason(eligibility({ orderStatus: 'COMPLETED' })),
+    '订单已完成，不能取消',
+  )
+  assert.equal(
+    getSalesOrderCancelBlockedReason(eligibility({ fulfillmentStatus: 'SIGNED' })),
+    '订单已签收，不能取消',
+  )
+  assert.equal(
+    getSalesOrderCancelBlockedReason(eligibility({ paymentStatus: 'PAID' })),
+    '订单已有收款，不能取消',
+  )
+  assert.equal(
+    getSalesOrderCancelBlockedReason(eligibility({ activePurchaseOrderCount: 2 })),
+    '仍有 2 张未取消的采购单，请先处理采购单',
+  )
 })
 
 test('取消原因必填并在规范化后按 Unicode code point 限制 500 字', () => {

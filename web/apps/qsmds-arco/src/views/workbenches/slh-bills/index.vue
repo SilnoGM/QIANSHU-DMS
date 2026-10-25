@@ -161,7 +161,7 @@ const columns = computed<QsGenericTableColumn<SlhBillListItemDto>[]>(() => [
  * 操作列宽度按「查看详情 + 开始对账」并排算：左右内边距各 12、两个按钮各 100、间距 4，
  * 合计 228，取 232 留一点余量；不传宽度时组件默认 160 会把两个按钮挤成两行。
  */
-const actionColumn = { fixed: 'right' as const, minWidth: 232, width: 232 }
+const actionColumn = { fixed: 'right' as const, minWidth: 168, width: 168 }
 async function load(): Promise<void> {
   controller?.abort()
   if (!canRead.value) {
@@ -439,7 +439,7 @@ onBeforeUnmount(() => {
         </template>
         <template #cell-slhBillNo="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine content-class="qs-type-data-emphasis font-mono break-all">
+            <QsTableStackedLine content-class="qs-type-data-emphasis break-all">
               {{ row.original.slhBillNo }}
               <template #suffix>
                 <CopyCellButton :text="row.original.slhBillNo" :label="t('slhBill.column.slhBillNo')" />
@@ -526,7 +526,7 @@ onBeforeUnmount(() => {
         <template #mobile-row="{ row }">
           <article class="min-w-0 space-y-3">
             <div class="flex flex-wrap gap-2 items-center justify-between">
-              <span class="qs-type-data-emphasis font-mono break-all">{{ row.slhBillNo }}</span>
+              <span class="qs-type-data-emphasis break-all">{{ row.slhBillNo }}</span>
               <FaTag v-if="row.supersededById" variant="outline" class="text-amber-700 qs-type-status-tag border-amber-500/30 dark:text-amber-300">
                 {{ t('slhBill.superseded') }}
               </FaTag>
@@ -639,7 +639,7 @@ onBeforeUnmount(() => {
         </template>
         <template #actions="{ row }">
           <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.slhBillNo} · ${t('slhBill.viewDetail')}`" @click="viewBill(row.id)">
-            <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('slhBill.viewDetail') }}
+            详情
           </FaButton>
           <!--
             对账入口按「有没有进行中批次」出现：有批次就是「继续对账」（回那条批次继续核对），
@@ -656,7 +656,7 @@ onBeforeUnmount(() => {
             :aria-label="`${row.slhBillNo} · ${t(resolveSlhBillReconciliationEntryLabelKey(entryOf(row) ?? 'START'))}`"
             @click="requestReconciliation(row)"
           >
-            <FaIcon name="i-lucide:scale" aria-hidden="true" />{{ t(resolveSlhBillReconciliationEntryLabelKey(entryOf(row) ?? 'START')) }}
+            {{ t(resolveSlhBillReconciliationEntryLabelKey(entryOf(row) ?? 'START')) }}
           </FaButton>
         </template>
       </QsGenericTable>

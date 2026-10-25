@@ -231,6 +231,35 @@ async function clickVisibleAriaButton(page, label) {
   })()`)
 }
 
+/**
+ * 全部订单在同时具备编辑与取消权限时把详情收进「更多」；没有该权限组合时
+ * 详情仍是行内按钮。两种形态都必须走真实用户入口，不能直接调用抽屉。
+ */
+async function clickVisibleSalesOrderDetail(page, orderNo) {
+  const detailLabel = `${orderNo}：详情`
+  const directVisible = await page.evaluate(`(() => [...document.querySelectorAll(
+    '[aria-label=${JSON.stringify(detailLabel)}]'
+  )].some(element => element.getClientRects().length > 0 && !element.disabled))()`)
+  if (!directVisible) {
+    await clickVisibleAriaButton(page, `${orderNo}：更多操作`)
+    await page.waitFor(`(() => [...document.querySelectorAll('[role="menuitem"]')].some(item => (
+      item.getClientRects().length > 0 && item.textContent?.trim() === '详情'
+    )))()`)
+    await page.evaluate(`(() => {
+      const item = [...document.querySelectorAll('[role="menuitem"]')].find(candidate => (
+        candidate.getClientRects().length > 0 && candidate.textContent?.trim() === '详情'
+      ))
+      if (!(item instanceof HTMLElement)) {
+        throw new Error('sales order detail menu item unavailable')
+      }
+      item.click()
+      return true
+    })()`)
+    return
+  }
+  await clickVisibleAriaButton(page, detailLabel)
+}
+
 test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截及正式派号', {
   timeout: 600_000,
 }, async (t) => {
@@ -671,7 +700,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     assert.equal(detail.body?.lines?.[0]?.actualUnitPriceAmount, '100.00')
     assert.equal(detail.body?.lines?.[0]?.quantity, 2)
 
-    await clickVisibleAriaButton(page, `${order.orderNo}：查看详情`)
+    await clickVisibleSalesOrderDetail(page, order.orderNo)
     await page.waitFor(`(() => {
       const drawer = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
@@ -714,7 +743,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         && dialog.textContent?.includes(${JSON.stringify(order.orderNo)}))`)
 
     // 再次打开同一订单，覆盖抽屉关闭后清理状态并重新请求详情的生命周期。
-    await clickVisibleAriaButton(page, `${order.orderNo}：查看详情`)
+    await clickVisibleSalesOrderDetail(page, order.orderNo)
     await page.waitFor(`(() => {
       const drawer = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
@@ -902,7 +931,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         && !table.querySelector('[aria-busy="true"]')
         && table.textContent?.includes(${JSON.stringify(order.orderNo)})
     })()`)
-    await clickVisibleRowButton(page, order.orderNo, '货物签收')
+    await clickVisibleRowButton(page, order.orderNo, '签收')
     await waitForVisibleDialog(page, '货物签收')
     await page.waitFor(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]

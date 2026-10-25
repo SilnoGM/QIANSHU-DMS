@@ -333,17 +333,17 @@ function moreActionItems(user: UserDto): UserActionMenuItem[][] {
   const actions = userActions(user)
   const items: UserActionMenuItem[] = []
   if (actions.canResetPassword) {
-    items.push({ label: '设置密码', handle: () => openPasswordReset(user) })
+    items.push({ label: '改密', handle: () => openPasswordReset(user) })
   }
   if (actions.canDisable) {
     items.push({
-      label: '禁用用户',
+      label: '禁用',
       variant: 'destructive',
       handle: () => openStatusChange(user, 'disable'),
     })
   }
   if (actions.canEnable) {
-    items.push({ label: '启用用户', handle: () => openStatusChange(user, 'enable') })
+    items.push({ label: '启用', handle: () => openStatusChange(user, 'enable') })
   }
   return [items]
 }
@@ -491,7 +491,7 @@ onMounted(() => {
           v-model:filters="filters"
           data-testid="user-table"
           row-key="id"
-          :action-column="{ width: 230 }"
+          :action-column="{ minWidth: 176, width: 176 }"
           :addable="false"
           :columns="columns"
           :data="users"
@@ -662,12 +662,16 @@ onMounted(() => {
                 size="sm"
                 @click="openRoleAssignment(user)"
               >
-                分配角色
+                授权
               </FaButton>
               <FaDropdown v-if="hasMoreAction(user)" :items="moreActionItems(user)" align="end">
-                <FaButton variant="ghost" size="sm">
-                  更多
-                  <FaIcon name="i-lucide:chevron-down" />
+                <FaButton
+                  variant="ghost"
+                  size="icon-sm"
+                  class="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8"
+                  :aria-label="`更多用户操作 · ${user.username}`"
+                >
+                  <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
                 </FaButton>
               </FaDropdown>
             </div>

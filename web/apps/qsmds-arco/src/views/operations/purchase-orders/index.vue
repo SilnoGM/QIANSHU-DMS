@@ -29,18 +29,20 @@ import type {
   PurchaseStartPurchaseType,
   PurchaseStartSelection,
 } from '@/components/business/QsPurchaseStartModal/types'
-
 import { getLocalTimeZone, today } from '@internationalized/date'
 
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
+
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDateRangeFilter from '@/components/business/QsDateRangeFilter/index.vue'
 import QsFactoryShipmentModal from '@/components/business/QsFactoryShipmentModal/index.vue'
+import { resolveActionColumnWidth } from '@/components/business/QsGenericTable/action-column-width'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTooltipContent.vue'
@@ -70,8 +72,11 @@ import {
   orderStatusTagClass,
   paymentStatusLabel,
   paymentStatusTagClass,
-  purchaseTypeLabel,
-  resolvePurchaseOrderPendingActions,
+  purchaseTypeShortLabel,
+  purchaseTypeTagClass,
+  resolvePurchaseOrderPendingActionBlockedReason,
+  resolvePurchaseOrderPendingActionSlot,
+  resolvePurchaseOrderWarehouseReceiptBlockedReason,
 } from './purchase-order-list.logic'
 import PurchaseOrderRecordSummaryCell from './purchase-order-record-summary-cell.vue'
 import PurchaseOrderRecordsModal from './purchase-order-records-modal.vue'
@@ -184,8 +189,22 @@ const statusItems = computed(() => withStatusSwitchCounts(
   },
 ))
 
-// 全部视图只有「查看」，待办视图固定是「查看 + 一个任务动作」，宽度跟随视图而不是统一预留。
-const actionColumnWidth = computed(() => props.viewMode === 'pending' ? 208 : 104)
+// 详情固定行内展示；业务动作只按权限/当前 Tab 决定槽位，不按行状态增删。
+const actionColumnWidth = computed(() => {
+  if (props.viewMode === 'all') {
+    return resolveActionColumnWidth(canUpdate.value
+      ? [{ chars: 2, kind: 'text' }, { chars: 2, kind: 'text' }]
+      : [{ chars: 2, kind: 'text' }])
+  }
+  const task = normalizePurchaseOrderStatusSelection(
+    'pending',
+    selectedStatus.value,
+  ) as PurchaseOrderPendingTask
+  const slotAction = resolvePurchaseOrderPendingActionSlot(task)
+  return resolveActionColumnWidth(slotAction !== null && canShowPendingAction(slotAction)
+    ? [{ chars: 2, kind: 'text' }, { chars: 2, kind: 'text' }]
+    : [{ chars: 2, kind: 'text' }])
+})
 
 const supplierFilterOptions = computed(() => (
   supplierCatalog.catalog.value?.items ?? []
@@ -235,7 +254,7 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   accessorKey: 'orderNo',
   fixed: 'left',
   id: 'orderSummary',
-  minWidth: 218,
+  minWidth: 168,
   title: '采购订单',
 }, {
   accessorKey: 'salesOrderNo',
@@ -538,18 +557,40 @@ function openPurchaseOrderDetail(order: PurchaseOrderListItemDto): void {
   detailVisible.value = true
 }
 
-function pendingActions(order: PurchaseOrderListItemDto) {
-  return resolvePurchaseOrderPendingActions(
-    normalizePurchaseOrderStatusSelection(
-      'pending',
-      route.query.task,
-    ) as PurchaseOrderPendingTask,
-    order,
-  )
+function currentPendingTask(): PurchaseOrderPendingTask {
+  return normalizePurchaseOrderStatusSelection(
+    'pending',
+    selectedStatus.value,
+  ) as PurchaseOrderPendingTask
 }
 
 function canShowPendingAction(action: PurchaseOrderPendingActionItem): boolean {
   return action.key === 'PAYMENT' ? canManagePayment.value : canUpdate.value
+}
+
+function pendingSlotActions(): PurchaseOrderPendingActionItem[] {
+  if (props.viewMode !== 'pending') {
+    return []
+  }
+  const action = resolvePurchaseOrderPendingActionSlot(currentPendingTask())
+  return action === null || !canShowPendingAction(action) ? [] : [action]
+}
+
+function openPurchaseWarehouseReceipt(order: PurchaseOrderListItemDto): void {
+  const blockedReason = resolvePurchaseOrderWarehouseReceiptBlockedReason(order)
+  if (blockedReason !== null) {
+    toast.info(blockedReason)
+    return
+  }
+  void warehouseActionRef.value?.open(order.id)
+}
+
+function shortPendingActionLabel(action: PurchaseOrderPendingActionItem): string {
+  switch (action.key) {
+    case 'PAYMENT': return '付款'
+    case 'SHIPMENT': return '发货'
+    case 'WAREHOUSE_RECEIPT': return '入仓'
+  }
 }
 
 function createPurchaseShipmentContext(
@@ -702,6 +743,18 @@ async function retryPurchaseFactoryShipment(): Promise<void> {
 }
 
 /** 待办付款先选择定金或尾款，再复制对应付款信息；发货与入仓进入对应业务入口。 */
+function handlePendingActionFromRow(
+  action: PurchaseOrderPendingActionItem,
+  order: PurchaseOrderListItemDto,
+): void {
+  const blockedReason = resolvePurchaseOrderPendingActionBlockedReason(action.key, order)
+  if (blockedReason !== null) {
+    toast.info(blockedReason)
+    return
+  }
+  handlePendingAction(action, order)
+}
+
 function handlePendingAction(
   action: PurchaseOrderPendingActionItem,
   order: PurchaseOrderListItemDto,
@@ -947,49 +1000,73 @@ onBeforeUnmount(() => {
 
         <template #actions="{ row }">
           <div class="flex flex-wrap gap-1 items-center">
-            <FaButton
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="min-h-11 sm:min-h-8"
-              :aria-label="`${row.orderNo}：查看详情`"
-              @click="openPurchaseOrderDetail(row)"
-            >
-              <FaIcon name="i-lucide:eye" aria-hidden="true" />查看
-            </FaButton>
-            <template v-if="props.viewMode === 'pending'">
-              <template v-for="action in pendingActions(row)" :key="action.key">
-                <FaButton
-                  v-if="canShowPendingAction(action)"
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  class="min-h-11 sm:min-h-8"
-                  :aria-label="`${row.orderNo}：${action.label}`"
-                  :loading="(action.key === 'PAYMENT' && paymentLoadingOrderId === row.id) || (action.key === 'WAREHOUSE_RECEIPT' && warehouseLoadingOrderId === row.id)"
-                  :disabled="(action.key === 'PAYMENT' && paymentLoadingOrderId !== null) || (action.key === 'WAREHOUSE_RECEIPT' && warehouseLoadingOrderId !== null)"
-                  @click="handlePendingAction(action, row)"
-                >
-                  <FaIcon :name="action.icon" aria-hidden="true" />{{ action.label }}
-                </FaButton>
-              </template>
+            <template v-if="props.viewMode === 'all'">
+              <FaButton
+                v-if="canUpdate"
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="text-primary min-h-11 sm:min-h-8"
+                :loading="warehouseLoadingOrderId === row.id"
+                :disabled="warehouseLoadingOrderId !== null"
+                @click="openPurchaseWarehouseReceipt(row)"
+              >
+                入仓
+              </FaButton>
+              <FaButton
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-8"
+                :aria-label="`${row.orderNo}：详情`"
+                @click="openPurchaseOrderDetail(row)"
+              >
+                详情
+              </FaButton>
             </template>
-            <FaButton v-if="props.viewMode === 'all' && canUpdate && row.orderStatus === 'CONFIRMED' && row.pendingWarehousePartCount > 0" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" :loading="warehouseLoadingOrderId === row.id" :disabled="warehouseLoadingOrderId !== null" @click="warehouseActionRef?.open(row.id)">
-              <FaIcon name="i-lucide:warehouse" />{{ t('purchaseWarehouseReceipt.action') }}
-            </FaButton>
+            <template v-else>
+              <FaButton
+                v-for="action in pendingSlotActions()"
+                :key="action.key"
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-8"
+                :aria-label="`${row.orderNo}：${action.label}`"
+                :loading="(action.key === 'PAYMENT' && paymentLoadingOrderId === row.id) || (action.key === 'WAREHOUSE_RECEIPT' && warehouseLoadingOrderId === row.id)"
+                :disabled="(action.key === 'PAYMENT' && paymentLoadingOrderId !== null) || (action.key === 'WAREHOUSE_RECEIPT' && warehouseLoadingOrderId !== null)"
+                @click="handlePendingActionFromRow(action, row)"
+              >
+                {{ shortPendingActionLabel(action) }}
+              </FaButton>
+              <FaButton
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-8"
+                :aria-label="`${row.orderNo}：详情`"
+                @click="openPurchaseOrderDetail(row)"
+              >
+                详情
+              </FaButton>
+            </template>
           </div>
         </template>
 
         <template #cell-orderSummary="{ row }">
           <QsTableStackedCell class="group">
-            <QsTableStackedLine nowrap content-class="qs-type-data-emphasis font-mono">
-              {{ row.original.orderNo }}
-              <template #suffix>
-                <CopyCellButton label="采购订单号" :text="row.original.orderNo" />
-              </template>
+            <QsTableStackedLine nowrap content-class="qs-type-data-emphasis">
+              <QsCopyableText label="采购订单号" :text="row.original.orderNo" />
             </QsTableStackedLine>
-            <QsTableStackedLine tone="muted" content-class="qs-type-meta" nowrap>
-              {{ row.original.orderDate }} · {{ purchaseTypeLabel(row.original.purchaseType) }}
+            <QsTableStackedLine content-class="qs-type-meta inline-flex gap-2 items-center" nowrap>
+              <FaTag
+                variant="outline"
+                class="qs-type-status-tag px-1.5 py-0 shrink-0 !text-[10px] !leading-4"
+                :class="purchaseTypeTagClass(row.original.purchaseType)"
+              >
+                {{ purchaseTypeShortLabel(row.original.purchaseType) }}
+              </FaTag>
+              <span class="text-muted-foreground">{{ row.original.orderDate }}</span>
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -999,7 +1076,7 @@ onBeforeUnmount(() => {
             <QsTableStackedLine
               :content-class="row.original.salesOrderNo === null
                 ? 'font-medium'
-                : 'qs-type-data-emphasis font-mono'"
+                : 'qs-type-data-emphasis'"
               nowrap
             >
               {{ row.original.salesOrderNo ?? '独立备货' }}
@@ -1346,12 +1423,18 @@ onBeforeUnmount(() => {
           <article data-testid="purchase-order-mobile-summary">
             <div class="mb-4 pb-3 border-b border-border flex gap-3 items-start justify-between">
               <div class="group min-w-0">
-                <div class="qs-type-data-emphasis font-mono flex gap-2 break-all items-center">
-                  {{ row.orderNo }}
-                  <CopyCellButton always-visible label="采购订单号" :text="row.orderNo" />
+                <div class="qs-type-data-emphasis flex gap-2 break-all items-center">
+                  <QsCopyableText label="采购订单号" :text="row.orderNo" />
                 </div>
-                <div class="qs-type-meta mt-1">
-                  {{ row.orderDate }} · {{ purchaseTypeLabel(row.purchaseType) }}
+                <div class="qs-type-meta mt-1 inline-flex gap-2 items-center">
+                  <FaTag
+                    variant="outline"
+                    class="qs-type-status-tag px-1.5 py-0 shrink-0 !text-[10px] !leading-4"
+                    :class="purchaseTypeTagClass(row.purchaseType)"
+                  >
+                    {{ purchaseTypeShortLabel(row.purchaseType) }}
+                  </FaTag>
+                  <span class="text-muted-foreground">{{ row.orderDate }}</span>
                 </div>
               </div>
               <span class="qs-type-meta shrink-0">#{{ rowNumber }}</span>
@@ -1367,7 +1450,7 @@ onBeforeUnmount(() => {
                       class="min-w-0 break-all"
                       :class="row.salesOrderNo === null
                         ? 'font-medium'
-                        : 'qs-type-data-emphasis font-mono'"
+                        : 'qs-type-data-emphasis'"
                     >
                       {{ row.salesOrderNo ?? '独立备货' }}
                     </span>

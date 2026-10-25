@@ -70,17 +70,19 @@ test('页面组合开户、比例修改、手动调账 Modal 和账户流水跳�
   assert.doesNotMatch(pageSource, /全部用户/u)
 })
 
-test('桌面操作列使用三个两字按钮并保持紧凑单行展示', () => {
+test('桌面流水与调账保持行内，比例收进更多菜单', () => {
   assert.match(
     pageSource,
-    /:action-column="\{ fixed: 'right', minWidth: 260, width: 260 \}"/u,
+    /:action-column="\{ fixed: 'right', minWidth: actionColumnWidth, width: actionColumnWidth \}"/u,
   )
-  assert.match(pageSource, /<FaIcon name="i-lucide:percent" \/>比例/u)
-  assert.match(pageSource, /<FaIcon name="i-lucide:circle-dollar-sign" \/>调账/u)
-  assert.match(pageSource, /<FaIcon name="i-lucide:scroll-text" \/>流水/u)
+  assert.match(pageSource, /比例/u)
+  assert.match(pageSource, /调账/u)
+  assert.match(pageSource, /流水/u)
+  assert.match(pageSource, /<FaDropdown[\s\S]*?shareMenuItems\(row\)[\s\S]*?align="end"/u)
+  assert.match(pageSource, /hidden md:inline-flex/u)
   assert.equal(
     pageSource.match(/class="shrink-0 min-h-11 whitespace-nowrap sm:min-h-9"/gu)?.length,
-    3,
+    2,
   )
 })
 

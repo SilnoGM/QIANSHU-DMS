@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import type { CalendarDateRangeValue } from '@fantastic-admin/components'
 import type {
+  SalesOrderListStatusSelection,
   SalesOrderListViewMode,
   SalesOrderPendingActionItem,
+  SalesOrderPendingActionKey,
 } from './sales-order-list-view.logic'
 import type { SalesOrderPaymentProgress } from './sales-order-list.logic'
 import type {
+  SalesOrderReceiptTab,
   SalesOrderRecordsInitialAction,
   SalesOrderRecordsKind,
 } from './sales-order-records-modal.logic'
@@ -28,6 +31,7 @@ import type {
   FactoryShipmentIntent,
   FactoryShipmentModalContext,
 } from '@/components/business/QsFactoryShipmentModal/types'
+import type { ActionMenuItem, ActionWidthSpec } from '@/components/business/QsGenericTable/action-column-width'
 import type {
   QsGenericTableActionColumn,
   QsGenericTableColumn,
@@ -41,11 +45,11 @@ import type {
   PurchaseStartPresetValidationResult,
   PurchaseStartSelection,
 } from '@/components/business/QsPurchaseStartModal/types'
-
 import type {
   SalesOrderProductEditIntent,
   SalesOrderProductEditModalContext,
 } from '@/components/business/QsSalesOrderProductsEditorModal/types'
+
 import { getLocalTimeZone, today } from '@internationalized/date'
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import salesOrdersApi from '@/api/modules/sales-orders'
@@ -57,8 +61,10 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDateRangeFilter from '@/components/business/QsDateRangeFilter/index.vue'
 import QsFactoryShipmentModal from '@/components/business/QsFactoryShipmentModal/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import { resolveActionColumnWidth } from '@/components/business/QsGenericTable/action-column-width'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTooltipContent.vue'
@@ -78,7 +84,7 @@ import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { mediaThumbnailUrl } from '@/utils/media-variant'
 import { getPurchaseOrderApiFailure } from '../purchase-orders/purchase-order-list.logic'
 import SalesOrderCancelModal from './sales-order-cancel-modal.vue'
-import { isSalesOrderCancellable } from './sales-order-cancel.logic'
+import { getSalesOrderCancelBlockedReason } from './sales-order-cancel.logic'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import SalesOrderDetailDrawer from './sales-order-detail-drawer.vue'
 import {
@@ -86,7 +92,8 @@ import {
   formatSalesFactoryShipmentSuccess,
   getSalesOrderStatusItems,
   normalizeSalesOrderStatusSelection,
-  resolvePendingSalesOrderActions,
+  resolvePendingSalesOrderActionBlockedReason,
+  resolvePendingSalesOrderActionSlot,
 } from './sales-order-list-view.logic'
 import {
   buildSalesOrderCustomerCopyText,
@@ -178,6 +185,7 @@ const recordsModalVisible = ref(false)
 const recordsModalKind = ref<SalesOrderRecordsKind>('payments')
 const recordsModalOrder = ref<SalesOrderListItemDto | null>(null)
 const recordsModalInitialAction = ref<SalesOrderRecordsInitialAction>(null)
+const recordsModalInitialReceiptTab = ref<SalesOrderReceiptTab>('payments')
 const cancelModalVisible = ref(false)
 const cancelOrder = shallowRef<SalesOrderListItemDto | null>(null)
 const productEditVisible = ref(false)
@@ -247,13 +255,6 @@ const tableEmptyDescription = computed(() => {
     ? '当前筛选条件下没有需要处理的销售订单。'
     : '当前筛选条件下没有可展示的销售订单。'
 })
-const actionColumn = computed<QsGenericTableActionColumn>(() => {
-  // 「全部订单」最多同时出现查看、修改产品、取消订单三个动作，304px 才能不换行；
-  // 待办视图只有查看和一个履约动作，208px 足够。
-  const width = props.viewMode === 'all' ? 304 : 208
-  return { fixed: 'right', minWidth: width, title: '操作', width }
-})
-
 /**
  * 状态切换写入 URL，保证刷新与浏览器前进/后退可恢复；“全部”使用无查询参数的规范地址。
  */
@@ -274,6 +275,41 @@ const selectedStatus = computed({
     void router.push({ query: nextQuery })
   },
 })
+/**
+ * 待办每个 Tab 固定一个任务槽位 + 详情；待装柜没有行内任务，只保留详情。
+ * 槽位按权限而不是行状态决定，避免同一 Tab 内按钮忽有忽无。
+ */
+const actionColumn = computed<QsGenericTableActionColumn>(() => {
+  const actions: ActionWidthSpec[] = []
+  if (props.viewMode === 'all') {
+    if (canUpdateProducts.value && canCancelOrders.value) {
+      actions.push(
+        { chars: 2, kind: 'text' },
+        { chars: 2, kind: 'text' },
+        { kind: 'icon' },
+      )
+    }
+    else if (canUpdateProducts.value || canCancelOrders.value) {
+      actions.push({ chars: 2, kind: 'text' }, { chars: 2, kind: 'text' })
+    }
+    else {
+      actions.push({ chars: 2, kind: 'text' })
+    }
+  }
+  else {
+    const slotKey = pendingSlotActionKey(selectedStatus.value)
+    if (slotKey !== null && canShowSalesOrderRowActionKey(slotKey)) {
+      actions.push({
+        chars: slotKey === 'RECORD_PAYMENT' ? 4 : 2,
+        kind: 'text',
+      })
+    }
+    actions.push({ chars: 2, kind: 'text' })
+  }
+  const width = resolveActionColumnWidth(actions)
+  return { fixed: 'right', maxWidth: width, minWidth: width, title: '操作', width }
+})
+
 const statusItems = computed(() => withStatusSwitchCounts(
   getSalesOrderStatusItems(props.viewMode),
   statusCountItems.value,
@@ -367,7 +403,7 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     accessorKey: 'orderNo',
     id: 'orderSummary',
     fixed: 'left',
-    minWidth: 218,
+    minWidth: 168,
     title: '订单',
   },
   { accessorFn: item => item.issuer.displayName, id: 'issuerSummary', minWidth: 180, title: '出单人' },
@@ -401,7 +437,7 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     minWidth: 230,
     title: '实际收款',
   },
-  { accessorKey: 'paymentRecordCount', id: 'paymentRecordsSummary', minWidth: 180, title: '实际收款记录' },
+  { accessorKey: 'paymentRecordCount', align: 'right', id: 'paymentRecordsSummary', minWidth: 180, title: '收款申请记录' },
   { accessorKey: 'paymentStatus', id: 'paymentStatusSummary', minWidth: 170, title: '付款状态' },
   { accessorKey: 'orderStatus', id: 'orderStatusSummary', minWidth: 210, title: '订单状态' },
   { accessorFn: item => item.documentSummary.count, id: 'documentSummary', minWidth: 170, title: '订单凭证' },
@@ -479,11 +515,34 @@ function discountRateTrendIcon(trend: MoneyDiscountRateTrend | undefined): strin
 function openRecordsModal(
   kind: SalesOrderRecordsKind,
   order: SalesOrderListItemDto,
+  initialReceiptTab: SalesOrderReceiptTab = 'payments',
 ): void {
   recordsModalInitialAction.value = null
+  recordsModalInitialReceiptTab.value = initialReceiptTab
   recordsModalKind.value = kind
   recordsModalOrder.value = order
   recordsModalVisible.value = true
+}
+
+function paymentRecordRows(order: SalesOrderListItemDto) {
+  return [
+    {
+      ariaLabel: `查看 ${order.validPaymentRecordCount} 项有效实际收款记录`,
+      count: order.validPaymentRecordCount,
+      countClass: order.validPaymentRecordCount > 0 ? 'text-primary' : 'text-foreground',
+      key: 'valid',
+      label: '有效',
+      tab: 'payments' as const,
+    },
+    {
+      ariaLabel: `查看 ${order.pendingReceiptRequestCount} 项待审收款申请`,
+      count: order.pendingReceiptRequestCount,
+      countClass: order.pendingReceiptRequestCount > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-foreground',
+      key: 'pending',
+      label: '待审',
+      tab: 'requests' as const,
+    },
+  ]
 }
 
 function openSalesOrderDetail(order: SalesOrderListItemDto): void {
@@ -491,8 +550,8 @@ function openSalesOrderDetail(order: SalesOrderListItemDto): void {
   detailVisible.value = true
 }
 
-function canCancelSalesOrder(order: SalesOrderListItemDto): boolean {
-  return isSalesOrderCancellable({
+function salesOrderCancelBlockedReason(order: SalesOrderListItemDto): string | null {
+  return getSalesOrderCancelBlockedReason({
     viewMode: props.viewMode,
     canUpdate: canCancelOrders.value,
     orderStatus: order.orderStatus,
@@ -503,12 +562,21 @@ function canCancelSalesOrder(order: SalesOrderListItemDto): boolean {
 }
 
 function openSalesOrderCancel(order: SalesOrderListItemDto): void {
+  const blockedReason = salesOrderCancelBlockedReason(order)
+  if (blockedReason !== null) {
+    toast.info(blockedReason)
+    return
+  }
   cancelOrder.value = { ...order }
   cancelModalVisible.value = true
 }
 
 function handleSalesOrderCancelled(): void {
   scheduleQueryRefresh(true)
+}
+
+function detailMenuItems(order: SalesOrderListItemDto): ActionMenuItem[][] {
+  return [[{ label: '详情', handle: () => openSalesOrderDetail(order) }]]
 }
 
 const PRODUCT_EDIT_FULFILLMENT_STATUSES = new Set([
@@ -518,11 +586,19 @@ const PRODUCT_EDIT_FULFILLMENT_STATUSES = new Set([
   'WAREHOUSE_ARRIVED',
 ])
 
-function canEditSalesOrderProducts(order: SalesOrderListItemDto): boolean {
-  return props.viewMode === 'all'
-    && canUpdateProducts.value
-    && order.orderStatus === 'CONFIRMED'
-    && PRODUCT_EDIT_FULFILLMENT_STATUSES.has(order.fulfillmentStatus)
+function salesOrderProductEditBlockedReason(order: SalesOrderListItemDto): string | null {
+  if (props.viewMode !== 'all') {
+    return '待办视图不提供修改产品入口'
+  }
+  if (!canUpdateProducts.value) {
+    return '当前账号无权修改销售订单产品'
+  }
+  if (order.orderStatus !== 'CONFIRMED') {
+    return '只有已确认订单可以修改产品'
+  }
+  return PRODUCT_EDIT_FULFILLMENT_STATUSES.has(order.fulfillmentStatus)
+    ? null
+    : '订单已进入海运或已签收，不能修改产品'
 }
 
 function copyProductEditContext(
@@ -585,7 +661,9 @@ async function loadProductEditContext(preserveDraft = false): Promise<void> {
 }
 
 function openProductEdit(order: SalesOrderListItemDto): void {
-  if (!canEditSalesOrderProducts(order)) {
+  const blockedReason = salesOrderProductEditBlockedReason(order)
+  if (blockedReason !== null) {
+    toast.info(blockedReason)
     return
   }
   productEditOrder.value = { ...order }
@@ -695,38 +773,66 @@ function openRecordsAction(
   order: SalesOrderListItemDto,
 ): void {
   recordsModalInitialAction.value = action
+  recordsModalInitialReceiptTab.value = 'payments'
   recordsModalKind.value = action === 'payment' ? 'payments' : 'documents'
   recordsModalOrder.value = order
   recordsModalVisible.value = true
 }
 
-function salesOrderRowActions(
-  order: SalesOrderListItemDto,
-): readonly SalesOrderPendingActionItem[] {
-  if (props.viewMode !== 'pending') {
-    return []
+function pendingSlotActionKey(
+  selection: SalesOrderListStatusSelection,
+): SalesOrderPendingActionKey | null {
+  switch (selection) {
+    case 'AWAITING_PURCHASE_REVIEW': return 'URGE_PURCHASE_REVIEW'
+    case 'WAITING_PAYMENT': return 'RECORD_PAYMENT'
+    case 'PENDING': return 'SUBMIT_PURCHASE'
+    case 'PREPARING': return 'FACTORY_SHIPMENT'
+    case 'LAND_TRANSIT': return 'WAREHOUSE_RECEIPT'
+    case 'SEA_TRANSIT': return 'DELIVERY_RECEIPT'
+    default: return null
   }
-  return resolvePendingSalesOrderActions(
-    normalizeSalesOrderStatusSelection(props.viewMode, route.query.status),
-    order,
-  )
 }
 
 /** 已落地动作继续遵守原权限；占位动作不改变数据，仅向有读取权限的用户说明建设状态。 */
-function canShowSalesOrderRowAction(action: SalesOrderPendingActionItem): boolean {
-  if (action.key === 'SUBMIT_PURCHASE') {
+function canShowSalesOrderRowActionKey(key: SalesOrderPendingActionKey): boolean {
+  if (key === 'SUBMIT_PURCHASE') {
     return canCreatePurchase.value
   }
-  if (action.key === 'RECORD_PAYMENT') {
+  if (key === 'RECORD_PAYMENT') {
     return canRecordPayment.value
   }
-  if (action.key === 'DELIVERY_RECEIPT') {
+  if (key === 'DELIVERY_RECEIPT') {
     return canSubmitDeliveryReceipt.value
   }
-  if (action.key === 'FACTORY_SHIPMENT') {
+  if (key === 'FACTORY_SHIPMENT') {
     return canFactoryShipment.value
   }
   return true
+}
+
+function pendingSlotActions(order: SalesOrderListItemDto): SalesOrderPendingActionItem[] {
+  if (props.viewMode !== 'pending') {
+    return []
+  }
+  const selection = selectedStatus.value
+  const slotKey = pendingSlotActionKey(selection)
+  if (slotKey === null || !canShowSalesOrderRowActionKey(slotKey)) {
+    return []
+  }
+  const action = resolvePendingSalesOrderActionSlot(selection, order)
+  return action === null ? [] : [action]
+}
+
+function shortPendingActionLabel(action: SalesOrderPendingActionItem): string {
+  switch (action.key) {
+    case 'SUBMIT_PURCHASE': return '采购'
+    case 'FACTORY_SHIPMENT': return '发货'
+    case 'WAREHOUSE_RECEIPT': return '入仓'
+    case 'DELIVERY_RECEIPT': return '签收'
+    case 'RECORD_PAYMENT': return '表外收款'
+    case 'URGE_PURCHASE_REVIEW': return '催办'
+  }
+  return action.label
 }
 
 function copyFactoryShipmentContext(
@@ -871,6 +977,15 @@ function handleSalesOrderRowAction(
   action: SalesOrderPendingActionItem,
   order: SalesOrderListItemDto,
 ): void {
+  if (!canShowSalesOrderRowActionKey(action.key)) {
+    toast.info('当前账号无权执行该操作')
+    return
+  }
+  const blockedReason = resolvePendingSalesOrderActionBlockedReason(action.key, order)
+  if (blockedReason !== null) {
+    toast.info(blockedReason)
+    return
+  }
   if (action.key === 'SUBMIT_PURCHASE') {
     const { id, orderNo } = order
     purchaseStartPreset.value = { id, orderNo }
@@ -878,7 +993,7 @@ function handleSalesOrderRowAction(
     return
   }
   if (action.key === 'RECORD_PAYMENT') {
-    openRecordsAction('payment', order)
+    openRecordsModal('payments', order)
     return
   }
   if (action.key === 'DELIVERY_RECEIPT') {
@@ -1417,7 +1532,7 @@ onBeforeUnmount(() => {
         :searchable="true"
         :show-column-settings="true"
         :total="total"
-        table-class="min-w-[3360px]"
+        table-class="w-max min-w-full"
         @filter-change="handleFilterChange"
         @pagination-change="handlePaginationChange"
         @retry="retryOrders"
@@ -1436,66 +1551,106 @@ onBeforeUnmount(() => {
 
         <template #actions="{ row }">
           <div class="flex flex-wrap gap-1 items-center">
-            <FaButton
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="min-h-11 sm:min-h-8"
-              :aria-label="`${row.orderNo}：查看详情`"
-              @click="openSalesOrderDetail(row)"
-            >
-              <FaIcon name="i-lucide:eye" aria-hidden="true" />查看
-            </FaButton>
-            <FaButton
-              v-if="canEditSalesOrderProducts(row)"
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="min-h-11 sm:min-h-8"
-              :aria-label="`${row.orderNo}：修改产品`"
-              @click="openProductEdit(row)"
-            >
-              <FaIcon name="i-lucide:list-restart" aria-hidden="true" />修改产品
-            </FaButton>
-            <FaButton
-              v-if="canCancelSalesOrder(row)"
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="text-destructive min-h-11 sm:min-h-8"
-              :aria-label="`${row.orderNo}：取消订单`"
-              @click="openSalesOrderCancel(row)"
-            >
-              <FaIcon name="i-lucide:circle-x" aria-hidden="true" />取消订单
-            </FaButton>
-            <template v-if="props.viewMode === 'pending'">
-              <template
-                v-for="action in salesOrderRowActions(row)"
-                :key="action.key"
+            <template v-if="props.viewMode === 'all'">
+              <FaButton
+                v-if="canUpdateProducts"
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-8"
+                :aria-label="`${row.orderNo}：编辑`"
+                @click="openProductEdit(row)"
+              >
+                编辑
+              </FaButton>
+              <FaTooltip
+                v-if="canCancelOrders"
+                :text="salesOrderCancelBlockedReason(row) ?? ''"
+                :disabled="salesOrderCancelBlockedReason(row) === null"
+              >
+                <span class="inline-flex">
+                  <FaButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="text-destructive min-h-11 sm:min-h-8"
+                    :disabled="salesOrderCancelBlockedReason(row) !== null"
+                    :aria-label="`${row.orderNo}：取消订单`"
+                    @click="openSalesOrderCancel(row)"
+                  >
+                    取消
+                  </FaButton>
+                </span>
+              </FaTooltip>
+              <FaButton
+                v-if="!(canUpdateProducts && canCancelOrders)"
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-8"
+                :aria-label="`${row.orderNo}：详情`"
+                @click="openSalesOrderDetail(row)"
+              >
+                详情
+              </FaButton>
+              <FaButton
+                v-if="canUpdateProducts && canCancelOrders"
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-8 md:hidden"
+                :aria-label="`${row.orderNo}：详情`"
+                @click="openSalesOrderDetail(row)"
+              >
+                详情
+              </FaButton>
+              <FaDropdown
+                v-if="canUpdateProducts && canCancelOrders"
+                :items="detailMenuItems(row)"
+                align="end"
               >
                 <FaButton
-                  v-if="canShowSalesOrderRowAction(action)"
                   type="button"
                   variant="ghost"
-                  size="sm"
-                  class="min-h-11 sm:min-h-8"
-                  :aria-label="`${row.orderNo}：${action.label}`"
-                  @click="handleSalesOrderRowAction(action, row)"
+                  size="icon-sm"
+                  class="min-h-11 min-w-11 hidden md:inline-flex sm:min-h-8 sm:min-w-8"
+                  :aria-label="`${row.orderNo}：更多操作`"
                 >
-                  <FaIcon :name="action.icon" aria-hidden="true" />{{ action.label }}
+                  <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
                 </FaButton>
-              </template>
+              </FaDropdown>
+            </template>
+            <template v-else>
+              <FaButton
+                v-for="action in pendingSlotActions(row)"
+                :key="action.key"
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-8"
+                :aria-label="`${row.orderNo}：${action.label}`"
+                @click="handleSalesOrderRowAction(action, row)"
+              >
+                {{ shortPendingActionLabel(action) }}
+              </FaButton>
+              <FaButton
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-8"
+                :aria-label="`${row.orderNo}：详情`"
+                @click="openSalesOrderDetail(row)"
+              >
+                详情
+              </FaButton>
             </template>
           </div>
         </template>
 
         <template #cell-orderSummary="{ row }">
           <QsTableStackedCell class="group">
-            <QsTableStackedLine nowrap content-class="qs-type-data-emphasis font-mono">
-              {{ row.original.orderNo }}
-              <template #suffix>
-                <CopyCellButton label="订单编号" :text="row.original.orderNo" />
-              </template>
+            <QsTableStackedLine nowrap content-class="qs-type-data-emphasis">
+              <QsCopyableText label="订单编号" :text="row.original.orderNo" />
             </QsTableStackedLine>
             <QsTableStackedLine content-class="qs-type-meta inline-flex gap-2 items-center" nowrap>
               <FaTag
@@ -1613,16 +1768,27 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-paymentRecordsSummary="{ row }">
-          <FaButton
-            type="button"
-            variant="ghost"
-            class="font-medium px-2 py-1.5 gap-2 h-auto"
-            :aria-label="`查看 ${row.original.paymentRecordCount} 项实际收款记录`"
-            @click="openRecordsModal('payments', row.original)"
-          >
-            <FaIcon name="i-lucide:hand-coins" class="text-primary size-4" aria-hidden="true" />
-            {{ row.original.paymentRecordCount }} 项记录
-          </FaButton>
+          <QsTableStackedCell class="w-full">
+            <button
+              v-for="item in paymentRecordRows(row.original)"
+              :key="item.key"
+              type="button"
+              class="group px-1 py-0.5 text-left border-0 rounded-sm bg-transparent flex gap-3 w-full transition-colors items-center justify-end -mx-1 focus-visible:outline-none hover:bg-muted/50 focus-visible:ring-1 focus-visible:ring-primary/40"
+              :aria-label="item.ariaLabel"
+              @click="openRecordsModal('payments', row.original, item.tab)"
+            >
+              <span class="qs-type-meta shrink-0">{{ item.label }}</span>
+              <span class="flex gap-1 items-baseline">
+                <span class="qs-type-data-emphasis" :class="item.countClass">{{ item.count }}</span>
+                <span class="text-xs text-foreground">项记录</span>
+              </span>
+              <FaIcon
+                name="i-lucide:chevron-right"
+                class="text-muted-foreground shrink-0 size-3"
+                aria-hidden="true"
+              />
+            </button>
+          </QsTableStackedCell>
         </template>
 
         <template #cell-paymentStatusSummary="{ row }">
@@ -1922,11 +2088,8 @@ onBeforeUnmount(() => {
           <article data-testid="sales-order-mobile-summary">
             <div class="mb-4 pb-3 border-b border-border flex gap-3 items-start justify-between">
               <QsTableStackedCell class="group min-w-0">
-                <QsTableStackedLine content-class="qs-type-data-emphasis font-mono break-all">
-                  {{ row.orderNo }}
-                  <template #suffix>
-                    <CopyCellButton always-visible label="订单编号" :text="row.orderNo" />
-                  </template>
+                <QsTableStackedLine content-class="qs-type-data-emphasis break-all">
+                  <QsCopyableText label="订单编号" :text="row.orderNo" />
                 </QsTableStackedLine>
                 <QsTableStackedLine content-class="qs-type-meta inline-flex gap-2 items-center">
                   <FaTag
@@ -2064,15 +2227,27 @@ onBeforeUnmount(() => {
                   实际收款记录
                 </dt>
                 <dd class="m-0">
-                  <FaButton
-                    type="button"
-                    variant="ghost"
-                    class="font-medium px-2 py-1.5 gap-2 h-auto"
-                    @click="openRecordsModal('payments', row)"
-                  >
-                    <FaIcon name="i-lucide:hand-coins" class="text-primary size-4" aria-hidden="true" />
-                    {{ row.paymentRecordCount }} 项记录
-                  </FaButton>
+                  <QsTableStackedCell class="w-full">
+                    <button
+                      v-for="item in paymentRecordRows(row)"
+                      :key="item.key"
+                      type="button"
+                      class="group px-1 py-1 text-left border-0 rounded-sm bg-transparent flex gap-3 w-full transition-colors items-center justify-end -mx-1 focus-visible:outline-none hover:bg-muted/50 focus-visible:ring-1 focus-visible:ring-primary/40"
+                      :aria-label="item.ariaLabel"
+                      @click="openRecordsModal('payments', row, item.tab)"
+                    >
+                      <span class="qs-type-meta shrink-0">{{ item.label }}</span>
+                      <span class="flex gap-1 items-baseline">
+                        <span class="qs-type-data-emphasis" :class="item.countClass">{{ item.count }}</span>
+                        <span class="text-xs text-foreground">项记录</span>
+                      </span>
+                      <FaIcon
+                        name="i-lucide:chevron-right"
+                        class="text-muted-foreground shrink-0 size-3"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  </QsTableStackedCell>
                 </dd>
               </div>
               <div>
@@ -2225,6 +2400,7 @@ onBeforeUnmount(() => {
       v-model="recordsModalVisible"
       :kind="recordsModalKind"
       :initial-action="recordsModalInitialAction"
+      :initial-receipt-tab="recordsModalInitialReceiptTab"
       :order="recordsModalOrder"
       :currencies="currencyCatalog.currencies.value"
       @detail-updated="handleSalesOrderDetailUpdated"

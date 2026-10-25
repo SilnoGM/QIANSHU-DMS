@@ -60,7 +60,7 @@ const toolbarItems = computed(() => FUND_WITHDRAWAL_STATUS_FILTER_OPTIONS.map(it
   count: counts.value[item.value] ?? 0,
 })))
 const columns = computed<QsGenericTableColumn<FundWithdrawalDto>[]>(() => [
-  { id: 'withdrawalNo', accessorKey: 'withdrawalNo', title: t('fundWithdrawal.column.withdrawalNo'), minWidth: 174, fixed: 'left' },
+  { id: 'withdrawalNo', accessorKey: 'withdrawalNo', title: t('fundWithdrawal.column.withdrawalNo'), minWidth: 160, fixed: 'left', cellClass: 'qs-type-data-emphasis', mobileCellClass: 'qs-type-data-emphasis' },
   { id: 'amount', accessorKey: 'amount', title: t('fundWithdrawal.column.amount'), minWidth: 220, align: 'right' },
   { id: 'paymentProof', accessorFn: row => row.paymentProof?.mediaAssetId ?? '', title: t('fundWithdrawal.column.paymentProof'), minWidth: 110 },
   { id: 'status', accessorKey: 'status', title: t('fundWithdrawal.column.status'), minWidth: 120 },
@@ -288,7 +288,7 @@ function openDetail(row: FundWithdrawalDto): void {
         :page-size-options="[20, 50, 100]"
         :empty-title="t('fundWithdrawal.empty.own')"
         :empty-description="t('fundWithdrawal.empty.ownHint')"
-        :action-column="{ fixed: 'right', width: 120, title: t('fundWithdrawal.column.action') }"
+        :action-column="{ fixed: 'right', minWidth: 84, width: 84, title: t('fundWithdrawal.column.action') }"
         table-class="w-max min-w-full"
         :aria-label="t('fundWithdrawal.pageTitle')"
         @pagination-change="load"
@@ -339,8 +339,7 @@ function openDetail(row: FundWithdrawalDto): void {
             :aria-label="`${row.withdrawalNo} · ${t('fundWithdrawal.action.view')}`"
             @click="openDetail(row)"
           >
-            <FaIcon name="i-lucide:eye" aria-hidden="true" />
-            {{ t('fundWithdrawal.action.view') }}
+            详情
           </FaButton>
         </template>
       </QsGenericTable>

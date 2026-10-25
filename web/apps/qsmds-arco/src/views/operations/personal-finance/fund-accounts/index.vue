@@ -378,7 +378,7 @@ onBeforeUnmount(() => {
         :page-size-options="[20, 50, 100]"
         :empty-title="t('personalFinanceLedger.empty')"
         :empty-description="t('personalFinanceLedger.emptyHint')"
-        :action-column="{ fixed: 'right', width: 130, title: t('personalFinanceLedger.column.action') }"
+        :action-column="{ fixed: 'right', minWidth: 84, width: 84, title: t('personalFinanceLedger.column.action') }"
         table-class="w-max min-w-full"
         :aria-label="t('personalFinanceLedger.ariaLabel')"
         @pagination-change="loadTransactions"
@@ -527,8 +527,7 @@ onBeforeUnmount(() => {
             :aria-label="`${t('personalFinanceLedger.viewDetail')} #${row.accountSequence}`"
             @click="viewTransactionDetail(row)"
           >
-            <FaIcon name="i-lucide:eye" aria-hidden="true" />
-            {{ t('personalFinanceLedger.viewDetail') }}
+            详情
           </FaButton>
         </template>
       </QsGenericTable>

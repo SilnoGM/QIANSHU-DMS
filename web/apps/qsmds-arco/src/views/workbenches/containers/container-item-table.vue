@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ContainerLoadingItemDto } from '@/api/generated/types.gen'
+import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
@@ -33,6 +34,27 @@ const pageSize = defineModel<number>('pageSize', { required: true })
 const search = defineModel<string>('search', { required: true })
 const { t } = useI18n()
 const { auth } = useAppAuth()
+const inlineDetailCount = computed(() => props.canEdit ? 1 : 2)
+
+function detailActions(row: ContainerLoadingItemDto): ActionMenuItem[] {
+  const actions: ActionMenuItem[] = []
+  if (row.shipmentId && auth('purchase-orders:read')) {
+    actions.push({ label: '货件详情', handle: () => emit('reference', 'shipment', row.shipmentId!) })
+  }
+  const purchaseOrderId = row.purchaseOrderId
+  if (purchaseOrderId && auth('purchase-orders:read')) {
+    actions.push({ label: '采购详情', handle: () => emit('reference', 'purchase', purchaseOrderId) })
+  }
+  const salesOrderId = row.salesOrderId
+  if (salesOrderId && auth('sales-orders:read')) {
+    actions.push({ label: '销售详情', handle: () => emit('reference', 'sales', salesOrderId) })
+  }
+  return actions
+}
+
+function detailMenuItems(row: ContainerLoadingItemDto): ActionMenuItem[][] {
+  return [detailActions(row).slice(inlineDetailCount.value)]
+}
 const { currencies, errorMessage: currencyError, reload: reloadCurrencies } = useCurrencyCatalog()
 const value = (input: string | number | null) => input ?? t('containerPage.unknown')
 const measurement = (input: string | null, places: 0 | 2 = 0) => value(formatContainerMeasurement(input, places))
@@ -66,7 +88,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
       </div>
     </template>
   </FaAlert>
-  <QsGenericTable v-model:page="page" v-model:page-size="pageSize" v-model:search="search" row-key="id" :columns="columns" :data="props.rows" :total="total" :loading="loading" :error="error" :addable="false" :page-size-options="[20, 50, 100]" :search-placeholder="t('containerPage.itemSearch')" :empty-title="t('containerPage.emptyItems')" :empty-description="t('containerPage.emptyItemsDescription')" :action-column="{ width: 190, minWidth: 190, maxWidth: 190, fixed: 'right' }" table-class="w-max min-w-full" @retry="emit('retry')">
+  <QsGenericTable v-model:page="page" v-model:page-size="pageSize" v-model:search="search" row-key="id" :columns="columns" :data="props.rows" :total="total" :loading="loading" :error="error" :addable="false" :page-size-options="[20, 50, 100]" :search-placeholder="t('containerPage.itemSearch')" :empty-title="t('containerPage.emptyItems')" :empty-description="t('containerPage.emptyItemsDescription')" :action-column="{ width: 196, minWidth: 196, fixed: 'right' }" table-class="w-max min-w-full" @retry="emit('retry')">
     <template #cell-goods="{ row }">
       <QsTableStackedCell class="max-w-full">
         <QsTableStackedLine weight="medium" content-class="[overflow-wrap:anywhere]">
@@ -207,19 +229,45 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
       </div>
     </template>
     <template #actions="{ row }">
-      <div class="gap-1.5 grid grid-cols-2">
+      <div class="gap-1 grid grid-cols-2">
         <FaButton v-if="canEdit" size="sm" variant="ghost" @click="emit('edit', row)">
-          {{ t('containerPage.editItem') }}
+          编辑
         </FaButton>
-        <FaButton v-if="row.shipmentId && auth('purchase-orders:read')" size="sm" variant="ghost" @click="emit('reference', 'shipment', row.shipmentId)">
-          {{ t('containerPage.viewShipment') }}
+        <FaButton
+          v-for="(action, index) in detailActions(row)"
+          v-show="index < inlineDetailCount"
+          :key="action.label"
+          size="sm"
+          variant="ghost"
+          @click="action.handle()"
+        >
+          {{ action.label }}
         </FaButton>
-        <FaButton v-if="row.purchaseOrderId && auth('purchase-orders:read')" size="sm" variant="ghost" @click="emit('reference', 'purchase', row.purchaseOrderId)">
-          {{ t('containerPage.viewPurchase') }}
+        <FaButton
+          v-for="(action, index) in detailActions(row)"
+          v-show="index >= inlineDetailCount"
+          :key="`mobile-${action.label}`"
+          size="sm"
+          variant="ghost"
+          class="md:hidden"
+          @click="action.handle()"
+        >
+          {{ action.label }}
         </FaButton>
-        <FaButton v-if="row.salesOrderId && auth('sales-orders:read')" size="sm" variant="ghost" @click="emit('reference', 'sales', row.salesOrderId)">
-          {{ t('containerPage.viewSales') }}
-        </FaButton>
+        <FaDropdown
+          v-if="detailActions(row).length > inlineDetailCount"
+          :items="detailMenuItems(row)"
+          align="end"
+        >
+          <FaButton
+            variant="ghost"
+            size="icon-sm"
+            class="min-h-11 min-w-11 hidden md:inline-flex sm:min-h-8 sm:min-w-8"
+            aria-label="更多详情"
+          >
+            <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
+          </FaButton>
+        </FaDropdown>
       </div>
     </template>
   </QsGenericTable>

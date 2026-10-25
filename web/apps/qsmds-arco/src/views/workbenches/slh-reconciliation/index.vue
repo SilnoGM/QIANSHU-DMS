@@ -5,8 +5,8 @@ import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
-import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
@@ -60,9 +60,9 @@ const query = computed(() => buildSlhReconciliationBatchListQuery({
 }))
 const columns = computed<QsGenericTableColumn<SlhReconciliationBatchListItemDto>[]>(() => [
   // 批次编号是批次的唯一标识，固定在最左；账单信息紧随其后。
-  { id: 'batchNo', title: t('slhReconciliation.column.batchNo'), accessorKey: 'batchNo', width: 205, minWidth: 205, fixed: 'left' },
+  { id: 'batchNo', title: t('slhReconciliation.column.batchNo'), accessorKey: 'batchNo', width: 160, minWidth: 160, fixed: 'left', copyable: true, copyMode: 'text', mobileCellClass: 'qs-type-data-emphasis' },
   { id: 'status', title: t('slhReconciliation.column.status'), accessorKey: 'status', minWidth: 120 },
-  { id: 'billNo', title: t('slhBill.column.slhBillNo'), accessorFn: item => item.bill.slhBillNo, width: 215, minWidth: 215 },
+  { id: 'billNo', title: t('slhBill.column.slhBillNo'), accessorFn: item => item.bill.slhBillNo, width: 215, minWidth: 215, cellClass: 'qs-type-data-emphasis', mobileCellClass: 'qs-type-data-emphasis' },
   { id: 'billName', title: t('slhBill.column.billName'), accessorFn: item => item.bill.billName, width: 240, minWidth: 240 },
   { id: 'period', title: t('slhBill.column.period'), accessorFn: item => `${item.bill.periodStart} ~ ${item.bill.periodEnd}`, minWidth: 205 },
   // 两个进度数：看批次收了什么活、账单还剩多少活（口径与详情页一致）。
@@ -73,8 +73,8 @@ const columns = computed<QsGenericTableColumn<SlhReconciliationBatchListItemDto>
   { id: 'createdBy', title: t('slhBill.column.created'), accessorFn: item => item.createdByDisplayName, minWidth: 140 },
   { id: 'created', title: t('slhBill.column.createdAt'), accessorFn: item => item.createdAt, minWidth: 190 },
 ])
-/** 操作列只有「查看详情」一个按钮：宽度按按钮 100 + 左右内边距 24 估算。 */
-const actionColumn = { fixed: 'right' as const, width: 128, minWidth: 128 }
+/** 操作列只有「详情」一个两字按钮。 */
+const actionColumn = { fixed: 'right' as const, width: 84, minWidth: 84 }
 
 async function load(): Promise<void> {
   controller?.abort()
@@ -181,11 +181,8 @@ onBeforeUnmount(() => {
       >
         <template #cell-batchNo="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine content-class="qs-type-data-emphasis font-mono break-all">
-              {{ row.original.batchNo }}
-              <template #suffix>
-                <CopyCellButton :text="row.original.batchNo" :label="t('slhReconciliation.column.batchNo')" />
-              </template>
+            <QsTableStackedLine content-class="qs-type-data-emphasis break-all">
+              <QsCopyableText :text="row.original.batchNo" :label="t('slhReconciliation.column.batchNo')" />
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -216,7 +213,7 @@ onBeforeUnmount(() => {
         </template>
         <template #actions="{ row }">
           <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" @click="viewBatch(row.id)">
-            <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('slhBill.viewDetail') }}
+            详情
           </FaButton>
         </template>
       </QsGenericTable>

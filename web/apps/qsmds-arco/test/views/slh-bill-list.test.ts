@@ -124,7 +124,7 @@ test('操作列宽度容得下两个按钮并排，不再换行', async () => {
   const widths = [...config.matchAll(/(?:width|minWidth):\s*(\d+)/gu)].map(match => Number(match[1]))
   assert.equal(widths.length, 2)
   for (const width of widths) {
-    assert.ok(width >= 228, `操作列宽度 ${width} 放不下「查看详情 + 开始对账」`)
+    assert.ok(width >= 168, `操作列宽度 ${width} 放不下「详情 + 开始对账」`)
   }
   // 让表格吃这个常量，别再写回内联对象（写成行内属性时宽度容易又被默默改小）。
   assert.match(source, /:action-column="actionColumn"/u)
@@ -179,9 +179,10 @@ test('进入详情只剩操作列的查看详情按钮，整行点击不再跳�
   // 行内不再有"整行可点"的光标暗示（行级类只在 table-class 上出现；
   // 单元格内的按钮仍应保留 cursor-pointer，那是按钮该有的表现）。
   assert.equal(source.includes('[&_tbody_tr]:cursor-pointer'), false)
-  // 按钮文案与无障碍名都用「查看详情」，旧的「查看」不再出现。
-  assert.equal(source.match(/slhBill\.viewDetail/gu)?.length, 2)
+  // 按钮文案改为「详情」，无障碍名仍保留完整「查看详情」。
+  assert.equal(source.match(/slhBill\.viewDetail/gu)?.length, 1)
   assert.equal(source.includes(`t('slhBill.view')`), false)
+  assert.match(source, />\s*详情\s*</u)
 })
 
 test('「当前可核对」列紧跟在明细行数之后，右对齐', async () => {

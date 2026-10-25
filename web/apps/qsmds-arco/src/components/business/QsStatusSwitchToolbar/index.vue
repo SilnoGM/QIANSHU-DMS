@@ -12,8 +12,10 @@ defineOptions({ name: 'QsStatusSwitchToolbar' })
 const props = withDefaults(defineProps<{
   ariaLabel?: string
   items: readonly QsStatusSwitchItem[]
+  stretch?: boolean
 }>(), {
   ariaLabel: '状态筛选',
+  stretch: false,
 })
 
 const modelValue = defineModel<string>({ required: true })
@@ -124,17 +126,23 @@ onMounted(async () => {
       class="qs-status-switch-toolbar__viewport h-10 overflow-x-auto overflow-y-hidden"
       @scroll.passive="syncOverflowState"
     >
-      <div class="flex gap-1 h-10 min-w-max items-stretch">
+      <div
+        class="flex gap-1 h-10 items-stretch"
+        :class="stretch ? 'w-full min-w-0' : 'min-w-max'"
+      >
         <button
           v-for="item in items"
           :key="item.value"
           :ref="element => setItemElement(item.value, element)"
           type="button"
           data-slot="qs-status-switch-item"
-          class="group px-3.5 rounded-lg inline-flex shrink-0 gap-2 h-10 min-w-35 w-max transition-colors items-center justify-center relative focus-visible:outline-none disabled:opacity-45 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          :class="modelValue === item.value
-            ? 'text-primary bg-primary/8'
-            : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'"
+          class="group px-3.5 rounded-lg inline-flex gap-2 h-10 transition-colors items-center justify-center relative focus-visible:outline-none disabled:opacity-45 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          :class="[
+            modelValue === item.value
+              ? 'text-primary bg-primary/8'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/70',
+            stretch ? 'flex-1 min-w-0' : 'shrink-0 min-w-35 w-max',
+          ]"
           :aria-pressed="modelValue === item.value"
           :disabled="item.disabled"
           @click="selectItem(item)"

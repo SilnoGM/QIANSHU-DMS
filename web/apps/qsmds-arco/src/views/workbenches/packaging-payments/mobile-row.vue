@@ -2,6 +2,7 @@
 import type { PackagingCostRequestDto } from '@/api/generated/types.gen'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import PackagingProof from './packaging-proof.vue'
@@ -14,7 +15,10 @@ const currencyCatalog = useCurrencyCatalog()
 <template>
   <article class="min-w-0 space-y-4">
     <div class="flex flex-wrap gap-2 items-start justify-between">
-      <strong class="qs-type-data-emphasis break-all">{{ record.shipmentNo || '—' }}</strong>
+      <span class="qs-type-data-emphasis break-all">
+        <QsCopyableText v-if="record.shipmentNo" :label="t('packagingPayment.shipmentNo')" :text="record.shipmentNo" />
+        <template v-else>—</template>
+      </span>
       <FaTag variant="outline" class="qs-type-status-tag shrink-0" :class="record.status === 'PAID' ? 'text-primary border-primary/30 bg-primary/10' : 'text-muted-foreground'">
         {{ t(`packagingPayment.status.${record.status}`) }}
       </FaTag>
@@ -31,7 +35,7 @@ const currencyCatalog = useCurrencyCatalog()
         <dt class="qs-type-meta text-muted-foreground">
           {{ t(`packagingPayment.${field}`) }}
         </dt>
-        <dd class="qs-type-data m-0 mt-1 break-all">
+        <dd class="qs-type-data-emphasis m-0 mt-1 break-all">
           {{ record[field] }}
         </dd>
       </div>

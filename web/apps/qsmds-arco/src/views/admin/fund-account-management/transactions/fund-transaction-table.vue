@@ -71,7 +71,7 @@ const businessCategoryTagClasses: Record<FundTransactionDto['businessCategory'],
 }
 
 const columns: QsGenericTableColumn<FundTransactionDto>[] = [
-  { accessorKey: 'batchNo', fixed: 'left', id: 'batch', minWidth: 199, title: '批次' },
+  { accessorKey: 'batchNo', fixed: 'left', id: 'batch', minWidth: 185, title: '批次' },
   {
     accessorFn: transaction => transaction.account.user?.displayName ?? '公司资金账户',
     id: 'subject',
@@ -132,7 +132,7 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
     v-model:sorting="sorting"
     data-testid="fund-transaction-table"
     row-key="entryId"
-    :action-column="{ fixed: 'right', minWidth: 128, width: 148 }"
+    :action-column="{ fixed: 'right', minWidth: 84, width: 84 }"
     :addable="false"
     :columns="columns"
     :data="items"
@@ -151,7 +151,7 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
   >
     <template #cell-batch="{ row }">
       <div class="min-w-0">
-        <div class="qs-type-data-emphasis font-mono break-all">
+        <div class="qs-type-data-emphasis break-all">
           {{ row.original.batchNo }}
         </div>
         <div class="mt-1 flex flex-wrap gap-1.5 items-center">
@@ -228,7 +228,7 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
 
     <template #cell-business="{ row }">
       <div class="min-w-0">
-        <div class="qs-type-data-emphasis font-mono break-all">
+        <div class="qs-type-data-emphasis break-all">
           {{ row.original.businessNo ?? '—' }}
         </div>
         <p class="qs-type-meta m-0 mt-1 break-words line-clamp-2">
@@ -246,7 +246,7 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
 
     <template #actions="{ row, rowNumber }">
       <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-9" :aria-label="`查看第 ${rowNumber} 行批次 ${row.batchNo} 的详情`" @click="emit('detail', row)">
-        <FaIcon name="i-lucide:panel-right-open" />查看详情
+        详情
       </FaButton>
     </template>
 
@@ -254,7 +254,7 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
       <article data-testid="fund-transaction-card" class="gap-4 grid min-w-0">
         <header class="pb-3 border-b border-border flex gap-3 min-w-0 items-start justify-between">
           <div class="min-w-0">
-            <div class="qs-type-data-emphasis font-mono break-all">
+            <div class="qs-type-data-emphasis break-all">
               {{ row.batchNo }}
             </div>
             <div class="mt-1 flex flex-wrap gap-1.5 items-center">
@@ -331,7 +331,7 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
           <div>
             <dt class="qs-type-compact-label mb-1">
               业务单号
-            </dt><dd class="qs-type-data-emphasis font-mono m-0 break-all">
+            </dt><dd class="qs-type-data-emphasis m-0 break-all">
               {{ row.businessNo ?? '—' }}
             </dd>
           </div>

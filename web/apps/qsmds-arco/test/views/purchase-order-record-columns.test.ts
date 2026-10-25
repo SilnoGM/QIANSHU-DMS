@@ -23,7 +23,7 @@ test('采购记录三列使用服务端摘要，并保留原有金额、固定�
 test('采购列表按内容横向展开，编号和金额保留安全列宽，操作按钮不折行', async () => {
   const source = await readFile(new URL('index.vue', root), 'utf8')
   const minimumWidths = {
-    orderSummary: 218,
+    orderSummary: 168,
     sourceSummary: 260,
     buyerSummary: 140,
     amountSummary: 200,
@@ -39,12 +39,35 @@ test('采购列表按内容横向展开，编号和金额保留安全列宽，�
   assert.match(source, /:action-column="\{ fixed: 'right', minWidth: actionColumnWidth, title: '操作', width: actionColumnWidth \}"/u)
 })
 
+test('采购订单编号列使用点击复制文本并按文本宽度收紧', async () => {
+  const source = await readFile(new URL('index.vue', root), 'utf8')
+  assert.match(source, /id: 'orderSummary',[\s\S]*?minWidth: 168/u)
+  assert.match(source, /<QsCopyableText label="采购订单号" :text="row\.original\.orderNo" \/>/u)
+  assert.doesNotMatch(source, /<CopyCellButton label="采购订单号"/u)
+})
+
+test('采购订单编号第二行使用关联/备货短标签和日期', async () => {
+  const source = await readFile(new URL('index.vue', root), 'utf8')
+  assert.match(source, /purchaseTypeTagClass\(row\.original\.purchaseType\)/u)
+  assert.match(source, /purchaseTypeShortLabel\(row\.original\.purchaseType\)/u)
+  assert.match(source, /purchaseTypeTagClass\(row\.purchaseType\)/u)
+  assert.match(source, /purchaseTypeShortLabel\(row\.purchaseType\)/u)
+  assert.doesNotMatch(source, /orderDate \}\} · \{\{ purchaseTypeLabel/u)
+})
+
 test('运营采购保留查看入口，不挂载审核和取消入口', async () => {
   const source = await readFile(new URL('index.vue', root), 'utf8')
-  assert.match(source, /const actionColumnWidth = computed\(\(\) => props\.viewMode === 'pending' \? 208 : 104\)/u)
+  assert.match(source, /const actionColumnWidth = computed\(\(\) => \{/u)
+  assert.match(source, /resolvePurchaseOrderPendingActionSlot\(currentPendingTask\(\)\)/u)
+  assert.match(source, /resolveActionColumnWidth/u)
   assert.doesNotMatch(source, /PurchaseOrderReviewModal|openPurchaseOrderReview|canReview/u)
   assert.match(source, /@click="openPurchaseOrderDetail\(row\)"/u)
   assert.doesNotMatch(source, /canCancelPurchaseOrderFromList|openPurchaseOrderCancellation/u)
+  // 入仓入口按权限固定行内展示，行状态不满足时由点击守卫提示。
+  assert.match(source, /v-if="canUpdate"[\s\S]*?openPurchaseWarehouseReceipt\(row\)[\s\S]*?入仓/u)
+  assert.match(source, /resolvePurchaseOrderWarehouseReceiptBlockedReason/u)
+  assert.match(source, /v-for="action in pendingSlotActions\(\)"/u)
+  assert.match(source, /resolvePurchaseOrderPendingActionBlockedReason/u)
 })
 
 test('三列与销售一致使用可点击的图标数量按钮，零记录不禁用', async () => {

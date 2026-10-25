@@ -15,6 +15,14 @@ test('审核视图计数合并已确认和已完成，不将全部数加入', ()
   assert.deepEqual(countReviewViews([{ value: 'ALL', count: 10 }, { value: 'PENDING_REVIEW', count: 2 }, { value: 'CONFIRMED', count: 3 }, { value: 'COMPLETED', count: 4 }, { value: 'CANCELLED', count: 1 }]), { PENDING_REVIEW: 2, APPROVED: 7, CANCELLED: 1 })
   assert.deepEqual(countReviewViews([]), { PENDING_REVIEW: 0, APPROVED: 0, CANCELLED: 0 })
 })
+test('审核工作台编号列使用点击复制并保持桌面与移动端等宽字体', async () => {
+  const source = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
+  assert.match(source, /copyMode: 'text', mobileCellClass: 'qs-type-data-emphasis'/u)
+  assert.match(source, /<QsCopyableText :label="t\('purchaseReview\.orderNo'\)" :text="row\.original\.orderNo" \/>/u)
+  assert.match(source, /<QsCopyableText[\s\S]{0,160}:label="t\('purchaseReview\.source'\)"[\s\S]{0,160}:text="row\.original\.salesOrderNo"/u)
+  assert.doesNotMatch(source, /CopyCellButton/u)
+})
+
 test('工作台审核完成刷新列表与计数，详情抽屉不提供资金或凭证写入', async () => {
   const source = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
   assert.match(source, /auth\('purchase-orders:read'\)/u)
@@ -27,7 +35,7 @@ test('工作台审核完成刷新列表与计数，详情抽屉不提供资金�
 
 test('取消采购只在审核已通过视图对审核人员提供，完成后刷新列表和计数', async () => {
   const source = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
-  assert.match(source, /v-if="status === 'APPROVED' && canReview"/u)
+  assert.match(source, /v-else-if="status === 'APPROVED' && canReview"/u)
   assert.match(source, /@click="openCancellation\(row\)"/u)
   assert.match(source, /<PurchaseCancellationModal[^>]*@cancelled="refresh"/u)
 })

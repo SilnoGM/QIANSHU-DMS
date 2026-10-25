@@ -5,6 +5,9 @@ import test from 'node:test'
 import {
   buildSalesOrderDeliveryReceiptRequest,
   buildSalesOrderPaymentRequest,
+  countPendingReceiptRequests,
+  countTotalReceiptRequests,
+  countValidSalesOrderPayments,
   formatSalesOrderLocalDateTime,
   resolveSalesOrderModalCancelAction,
   resolveSalesOrderModalInitialState,
@@ -82,6 +85,18 @@ test('销售订单操作先确定唯一弹窗视图，并按来源决定取消�
     origin: 'table-action',
     view: 'create-receipt',
   }), 'close')
+})
+
+test('收款页签按有效实际收款与待审申请统计', () => {
+  assert.equal(countValidSalesOrderPayments([
+    { voidedAt: null },
+    { voidedAt: '2026-10-22T10:00:00.000Z' },
+  ]), 1)
+  assert.equal(countValidSalesOrderPayments([]), 0)
+
+  const counts = { PENDING_REVIEW: 1, APPROVED: 2, REJECTED: 1, VOIDED: 1 }
+  assert.equal(countPendingReceiptRequests(counts), 1)
+  assert.equal(countTotalReceiptRequests(counts), 5)
 })
 
 test('货物签收请求接收一个有效签收单媒体 ID 与选填备注', () => {

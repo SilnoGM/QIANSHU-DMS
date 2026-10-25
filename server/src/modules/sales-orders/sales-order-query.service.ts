@@ -114,6 +114,10 @@ const SALES_ORDER_LIST_SELECT = {
       payments: true,
       statusHistory: true,
       amountRevisions: true,
+      // 列表只展示仍在审核中的收款申请数量；已审结申请由弹窗明细承担。
+      receiptRequests: {
+        where: { status: 'PENDING_REVIEW' },
+      },
       // 取消资格只统计未取消的销售关联采购单；已取消采购单属于历史记录。
       purchaseOrders: {
         where: {
@@ -293,7 +297,12 @@ export interface SalesOrderListItem {
   readonly purchaseHold: SalesOrderPurchaseHold | null
   /** 未取消的销售关联采购单数量；用于前端判断是否提供取消入口。 */
   readonly activePurchaseOrderCount: number
+  /** 全部实际收款记录数，包含已作废记录。 */
   readonly paymentRecordCount: number
+  /** 未作废的实际收款记录数。 */
+  readonly validPaymentRecordCount: number
+  /** 待审核的收款申请数。 */
+  readonly pendingReceiptRequestCount: number
   readonly statusChangeRecordCount: number
   readonly amountChangeRecordCount: number
   readonly version: number
@@ -929,6 +938,8 @@ export class SalesOrderQueryService {
           ),
           activePurchaseOrderCount: row._count.purchaseOrders,
           paymentRecordCount: row._count.payments,
+          validPaymentRecordCount: row.payments.length,
+          pendingReceiptRequestCount: row._count.receiptRequests,
           statusChangeRecordCount: row._count.statusHistory,
           amountChangeRecordCount: row._count.amountRevisions,
           version: row.version,
