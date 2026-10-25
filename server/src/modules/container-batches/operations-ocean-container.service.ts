@@ -5,7 +5,7 @@ import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../a
 import { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
 import type { ContainerBatchListQueryDto } from './container-batch.dto'
 import { containerFailure, containerUuid } from './container-batch.normalizer'
-import type { OperationsOceanContainerItemsQueryDto, OperationsOceanContainerLineDto, OperationsOceanContainerLinePageDto, OperationsOceanContainerPageDto } from './operations-ocean-container.dto'
+import type { OperationsOceanContainerAllLineDto, OperationsOceanContainerAllLinePageDto, OperationsOceanContainerItemsQueryDto, OperationsOceanContainerLineDto, OperationsOceanContainerLinePageDto, OperationsOceanContainerPageDto } from './operations-ocean-container.dto'
 
 const overviewSelect = { id: true, containerBatchNo: true, containerBatchName: true, loadingDate: true, warehouseValue: true } satisfies Prisma.ContainerBatchSelect
 export const operationsOceanLineSelect = {
@@ -13,7 +13,7 @@ export const operationsOceanLineSelect = {
   recipientName: true, recipientPhone: true, recipientAddress: true, codAmountTwd: true,
   warehouseReceiptReference: true, packageCount: true, packageUnit: true, grossWeightKg: true,
   lengthCm: true, widthCm: true, heightCm: true, volumeCai: true, remark: true,
-  shipment: { select: { shipmentNo: true, shippingMarkText: true, purchaseOrder: { select: { id: true, orderNo: true, salesOrder: { select: { id: true, orderNo: true } } } } } },
+  shipment: { select: { shipmentNo: true, shippingMarkText: true, purchaseOrder: { select: { id: true, orderNo: true, salesOrder: { select: { id: true, orderNo: true, issuerUserId: true } } } } } },
 } satisfies Prisma.ContainerLoadingItemSelect
 const lineSelect = operationsOceanLineSelect
 type PersonalLine = Prisma.ContainerLoadingItemGetPayload<{ select: typeof lineSelect }>
@@ -36,6 +36,11 @@ export function serializeOperationsOceanLine(row: PersonalLine): OperationsOcean
   }
 }
 
+export function serializeOperationsOceanAllLine(row: PersonalLine, actorUserId: string): OperationsOceanContainerAllLineDto {
+  // issuerUserId 只用于生成 mine，不进入响应；序列化仍沿用个人明细的字段白名单。
+  return { ...serializeOperationsOceanLine(row), mine: row.shipment?.purchaseOrder.salesOrder?.issuerUserId === actorUserId }
+}
+
 const personalWhere = personalOceanLineWhere
 const serializeLine = serializeOperationsOceanLine
 
@@ -45,16 +50,35 @@ export class OperationsOceanContainerService {
 
   async list(actorUserId: string = resolveDataScopeActor(), query: ContainerBatchListQueryDto): Promise<OperationsOceanContainerPageDto> {
     const scope = await this.dataScope.resolve(actorUserId)
+    // SELF 只保留含本人明细的柜次与本人合计；ALL 保留全量柜次与整柜合计。
+    return this.readOverview(actorUserId, query, {
+      personalOnly: scope === 'SELF',
+      measure: scope === 'SELF' ? 'own' : 'all',
+      dataScope: scope,
+    })
+  }
+
+  /** 全部柜次页显式跨人员读取；不解析 dataScope，权限由接口层控制。 */
+  async listAll(actorUserId: string = resolveDataScopeActor(), query: ContainerBatchListQueryDto): Promise<OperationsOceanContainerPageDto> {
+    return this.readOverview(actorUserId, query, { personalOnly: false, measure: 'all', dataScope: 'ALL' })
+  }
+
+  private async readOverview(
+    actorUserId: string,
+    query: ContainerBatchListQueryDto,
+    options: { personalOnly: boolean, measure: 'own' | 'all', dataScope: 'SELF' | 'ALL' },
+  ): Promise<OperationsOceanContainerPageDto> {
     const personal = personalWhere(actorUserId)
     const search = query.search?.trim()
     const where: Prisma.ContainerBatchWhereInput = {
+      ...(options.personalOnly ? { items: { some: personal } } : {}),
       ...(query.warehouseValue ? { warehouseValue: query.warehouseValue } : {}),
       ...(search ? { OR: [{ containerBatchName: { contains: search, mode: 'insensitive' } }, { containerBatchNo: { contains: search, mode: 'insensitive' } }] } : {}),
     }
     return this.prisma.$transaction(async tx => {
       const rows = await tx.containerBatch.findMany({ where, select: overviewSelect, skip: (query.page - 1) * query.pageSize, take: query.pageSize, orderBy: [{ loadingDate: 'desc' }, { id: 'desc' }] })
       const total = await tx.containerBatch.count({ where })
-      if (!rows.length) return { items: [], total }
+      if (!rows.length) return { dataScope: options.dataScope, items: [], total }
       const containerBatchId = { in: rows.map(row => row.id) }
       // 整柜统计只聚合数量与合计，不加载其他销售员的客户和货品明细。
       // 两组统计与列表处于同一快照，不能让并发匹配造成“我的明细”超过整柜行数。
@@ -67,12 +91,12 @@ export class OperationsOceanContainerService {
         const stored = await this.dictionary.resolveStoredValueInTransaction(tx, { dictionaryCode: 'mainland.warehouse', value })
         warehouses.set(value, stored.known ? stored.label : value)
       }
-      return { total, items: rows.map(row => {
+      return { dataScope: options.dataScope, total, items: rows.map(row => {
         const summary = summaries.get(row.id), count = summary?._count._all ?? 0
         const ownSummary = ownSummaries.get(row.id), myItemCount = ownSummary?._count._all ?? 0
-        // 柜次头在两种范围下都返回；SELF 只是把重量、体积合计收窄为本人明细，不能借列表推断整柜装载量。
-        const measure = scope === 'SELF' ? ownSummary : summary
-        const measureCount = scope === 'SELF' ? myItemCount : count
+        // 个人列表只保留含本人明细的柜次；全部柜次列表保留全量柜次并取整柜合计。
+        const measure = options.measure === 'own' ? ownSummary : summary
+        const measureCount = options.measure === 'own' ? myItemCount : count
         return {
           ...row, loadingDate: row.loadingDate.toISOString().slice(0, 10), warehouseName: warehouses.get(row.warehouseValue)!,
           itemCount: count, myItemCount,
@@ -92,6 +116,24 @@ export class OperationsOceanContainerService {
       const total = await tx.containerLoadingItem.count({ where })
       return { items: rows.map(serializeLine), total }
     }, { isolationLevel: 'RepeatableRead' })
+  }
+
+  async itemsAll(actorUserId: string = resolveDataScopeActor(), rawId: string, query: OperationsOceanContainerItemsQueryDto): Promise<OperationsOceanContainerAllLinePageDto> {
+    const id = containerUuid(rawId), normalizedActor = containerUuid(actorUserId), where = { containerBatchId: id }
+    return this.prisma.$transaction(async tx => {
+      if (!await tx.containerBatch.findUnique({ where: { id }, select: { id: true } })) return containerFailure('CONTAINER_BATCH_NOT_FOUND', '柜次不存在', 404)
+      const rows = await tx.containerLoadingItem.findMany({ where, select: lineSelect, skip: (query.page - 1) * query.pageSize, take: query.pageSize, orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }] })
+      const total = await tx.containerLoadingItem.count({ where })
+      return { items: rows.map(row => serializeOperationsOceanAllLine(row, normalizedActor)), total }
+    }, { isolationLevel: 'RepeatableRead' })
+  }
+
+  /** 全部柜次页的只读明细详情；不按本人归属过滤，但仍要求柜次与明细属于同一柜。 */
+  async itemAll(actorUserId: string = resolveDataScopeActor(), rawId: string, rawItemId: string): Promise<OperationsOceanContainerAllLineDto> {
+    const where = { id: containerUuid(rawItemId), containerBatchId: containerUuid(rawId) }
+    const row = await this.prisma.containerLoadingItem.findFirst({ where, select: lineSelect })
+    if (!row) return containerFailure('CONTAINER_LOADING_ITEM_NOT_FOUND', '装柜明细不存在', 404)
+    return serializeOperationsOceanAllLine(row, containerUuid(actorUserId))
   }
 
   async item(actorUserId: string = resolveDataScopeActor(), rawId: string, rawItemId: string): Promise<OperationsOceanContainerLineDto> {

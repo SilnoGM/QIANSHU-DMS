@@ -6,15 +6,16 @@ import { effectScope, ref } from 'vue'
 import { useOceanContainerList } from '../../src/components/business/QsOceanContainerList/use-ocean-container-list'
 
 const summary = (id: string, myItemCount = 22): OceanContainerSummary => ({ id, myItemCount, itemCount: 30, containerBatchName: '0917柜', containerBatchNo: `CTN/${id}`, loadingDate: '2026-09-17', warehouseName: '测试仓库', grossWeightKgTotal: '1234', volumeCaiTotal: '150.125' })
-function setup() {
+function setup(detailScopeValue: 'mine' | 'all' = 'mine') {
   const items = ref([summary('first'), summary('second'), summary('empty', 0)])
   const details = ref<Record<string, OceanContainerDetailPage | undefined>>({})
   const expanded = ref<string[]>([])
   const disabled = ref(false)
+  const detailScope = ref<'mine' | 'all'>(detailScopeValue)
   const requests: OceanContainerItemsRequest[] = []
   const scope = effectScope()
-  const state = scope.run(() => useOceanContainerList(items, details, expanded, disabled, request => requests.push(request)))!
-  return { items, details, expanded, disabled, requests, state, stop: () => scope.stop() }
+  const state = scope.run(() => useOceanContainerList(items, details, expanded, disabled, request => requests.push(request), detailScope))!
+  return { items, details, expanded, disabled, detailScope, requests, state, stop: () => scope.stop() }
 }
 
 test('默认收起；首次展开才加载，重复展开或收起不触发请求', () => {
@@ -50,6 +51,17 @@ test('无本人明细仍可展开整柜空态，未知柜次不触发加载', ()
   s.state.toggle('unknown', true)
   assert.deepEqual(s.expanded.value, ['empty'])
   assert.deepEqual(s.requests, [])
+  s.stop()
+})
+
+test('全部柜次模式按整柜计数加载，零明细柜次不请求', () => {
+  const s = setup('all')
+  s.state.toggle('empty', true)
+  assert.deepEqual(s.requests, [{ containerId: 'empty', page: 1, pageSize: 20 }])
+  s.items.value = [...s.items.value, { ...summary('zero', 0), itemCount: 0 }]
+  s.state.toggle('zero', true)
+  assert.equal(s.requests.length, 1)
+  assert.deepEqual(s.expanded.value, ['empty', 'zero'])
   s.stop()
 })
 

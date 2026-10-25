@@ -1,5 +1,5 @@
 import type { AxiosResponse } from 'axios'
-import type { OperationsOceanContainerDto, OperationsOceanContainerLineDto, OperationsOceanContainerLinePageDto, OperationsOceanContainerPageDto } from '../../src/api/generated/types.gen'
+import type { OperationsOceanContainerAllLineDto, OperationsOceanContainerAllLinePageDto, OperationsOceanContainerDto, OperationsOceanContainerLineDto, OperationsOceanContainerLinePageDto, OperationsOceanContainerPageDto } from '../../src/api/generated/types.gen'
 import type { OperationsOceanContainerApi } from '../../src/api/modules/operations-ocean-containers'
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 验证身份隔离、按需读取及取消后的旧响应不能回写。
@@ -25,12 +25,20 @@ function setup() {
   const epoch = ref(1)
   const query = ref({ page: 1, pageSize: 10, search: undefined as string | undefined })
   const lists: { signal: AbortSignal, result: ReturnType<typeof deferred<OperationsOceanContainerPageDto>> }[] = []
+  const allLists: typeof lists = []
   const items: { id: string, page: number, signal: AbortSignal, result: ReturnType<typeof deferred<OperationsOceanContainerLinePageDto>> }[] = []
+  const allItems: { id: string, page: number, signal: AbortSignal, result: ReturnType<typeof deferred<OperationsOceanContainerAllLinePageDto>> }[] = []
   const lines: { id: string, signal: AbortSignal, result: ReturnType<typeof deferred<OperationsOceanContainerLineDto>> }[] = []
-  const api: Pick<OperationsOceanContainerApi, 'list' | 'items' | 'item'> = {
+  const allLines: { id: string, signal: AbortSignal, result: ReturnType<typeof deferred<OperationsOceanContainerAllLineDto>> }[] = []
+  const api: Pick<OperationsOceanContainerApi, 'list' | 'listAll' | 'items' | 'allItems' | 'item' | 'allItem'> = {
     list: (_query, signal) => {
       const result = deferred<OperationsOceanContainerPageDto>()
       lists.push({ signal, result })
+      return result.promise
+    },
+    listAll: (_query, signal) => {
+      const result = deferred<OperationsOceanContainerPageDto>()
+      allLists.push({ signal, result })
       return result.promise
     },
     items: (id, query, signal) => {
@@ -38,21 +46,126 @@ function setup() {
       items.push({ id, page: query.page ?? 1, signal, result })
       return result.promise
     },
+    allItems: (id, query, signal) => {
+      const result = deferred<OperationsOceanContainerAllLinePageDto>()
+      allItems.push({ id, page: query.page ?? 1, signal, result })
+      return result.promise
+    },
     item: (_containerId, id, signal) => {
       const result = deferred<OperationsOceanContainerLineDto>()
       lines.push({ id, signal, result })
+      return result.promise
+    },
+    allItem: (_containerId, id, signal) => {
+      const result = deferred<OperationsOceanContainerAllLineDto>()
+      allLines.push({ id, signal, result })
       return result.promise
     },
   }
   const invalidPages: number[] = []
   const scope = effectScope()
   const state = scope.run(() => useOperationsOceanContainers(enabled, epoch, query, api, page => invalidPages.push(page), { list: '列表失败', items: '明细失败', detail: '详情失败' }))!
-  const ready = async () => {
-    lists.at(-1)!.result.resolve({ items: [summary('first'), summary('second')], total: 2 })
+  const ready = async (
+    dataScope: 'SELF' | 'ALL' = 'SELF',
+    data: OperationsOceanContainerDto[] = [summary('first'), summary('second')],
+    total = data.length,
+  ) => {
+    lists.at(-1)!.result.resolve({ dataScope, items: data, total })
     await Promise.resolve()
   }
-  return { enabled, epoch, query, lists, items, lines, state, ready, invalidPages, stop: () => scope.stop() }
+  return { enabled, epoch, query, lists, allLists, items, allItems, lines, allLines, state, ready, invalidPages, stop: () => scope.stop() }
 }
+
+function setupAll() {
+  const enabled = ref(true)
+  const epoch = ref(1)
+  const query = ref({ page: 1, pageSize: 10, search: undefined as string | undefined })
+  const lists: { signal: AbortSignal, result: ReturnType<typeof deferred<OperationsOceanContainerPageDto>> }[] = []
+  const items: { id: string, page: number, signal: AbortSignal, result: ReturnType<typeof deferred<OperationsOceanContainerAllLinePageDto>> }[] = []
+  const lines: { id: string, signal: AbortSignal, result: ReturnType<typeof deferred<OperationsOceanContainerAllLineDto>> }[] = []
+  const unused = () => Promise.reject(new Error('personal read must not be called in all mode'))
+  const api: Pick<OperationsOceanContainerApi, 'list' | 'listAll' | 'items' | 'allItems' | 'item' | 'allItem'> = {
+    list: unused,
+    listAll: (_query, signal) => {
+      const result = deferred<OperationsOceanContainerPageDto>()
+      lists.push({ signal, result })
+      return result.promise
+    },
+    items: unused,
+    allItems: (id, query, signal) => {
+      const result = deferred<OperationsOceanContainerAllLinePageDto>()
+      items.push({ id, page: query.page ?? 1, signal, result })
+      return result.promise
+    },
+    item: unused,
+    allItem: (_containerId, id, signal) => {
+      const result = deferred<OperationsOceanContainerAllLineDto>()
+      lines.push({ id, signal, result })
+      return result.promise
+    },
+  }
+  const scope = effectScope()
+  const state = scope.run(() => useOperationsOceanContainers(enabled, epoch, query, api, () => {}, { list: '列表失败', items: '明细失败', detail: '详情失败' }, 'all'))!
+  const ready = async () => {
+    lists.at(-1)!.result.resolve({ dataScope: 'ALL', items: [{ ...summary('first'), myItemCount: 0 }], total: 1 })
+    await Promise.resolve()
+  }
+  return { enabled, epoch, query, lists, items, lines, state, ready, stop: () => scope.stop() }
+}
+
+test('全部柜次模式允许加载无本人明细的柜次，并用整柜总数纠正分页', async () => {
+  const s = setupAll()
+  await s.ready()
+  assert.equal(s.state.rows.value[0].itemCount, 30)
+  assert.equal(s.state.rows.value[0].myItemCount, 0)
+  const request = { containerId: 'first', page: 1, pageSize: 20 }
+  const pending = s.state.requestItems(request)
+  assert.equal(s.items.length, 1)
+  s.items[0].result.resolve({ items: [{ ...line('mine'), mine: true }], total: 2 })
+  await pending
+  assert.equal(s.state.rows.value[0].itemCount, 2)
+  assert.equal(s.state.rows.value[0].myItemCount, 0)
+  assert.equal(s.state.details.value.first.total, 2)
+  s.stop()
+})
+
+test('全部柜次模式允许打开任意明细，详情由服务端校验', async () => {
+  const s = setupAll()
+  await s.ready()
+  const loaded = s.state.requestItems({ containerId: 'first', page: 1, pageSize: 20 })
+  s.items[0].result.resolve({ items: [{ ...line('mine'), mine: true }, { ...line('other'), mine: false }], total: 2 })
+  await loaded
+  const openingOther = s.state.openLine('first', 'other')
+  assert.equal(s.lines.length, 1)
+  s.lines[0].result.resolve({ ...line('other'), mine: false })
+  await openingOther
+  assert.equal(s.state.selectedLine.value?.id, 'other')
+  const openingMine = s.state.openLine('first', 'mine')
+  assert.equal(s.lines.length, 2)
+  s.lines[1].result.resolve({ ...line('mine'), mine: true })
+  await openingMine
+  assert.equal(s.state.selectedLine.value?.id, 'mine')
+  s.stop()
+})
+
+test('个人页在 ALL 范围读取全量明细并使用 all 详情接口', async () => {
+  const s = setup()
+  await s.ready('ALL', [{ ...summary('first'), myItemCount: 0 }], 1)
+  assert.equal(s.state.scope.value, 'ALL')
+  const pending = s.state.requestItems({ containerId: 'first', page: 1, pageSize: 20 })
+  assert.equal(s.allItems.length, 1)
+  assert.equal(s.items.length, 0)
+  s.allItems[0].result.resolve({ items: [{ ...line('other'), mine: false }], total: 1 })
+  await pending
+  assert.equal(s.state.details.value.first.items[0].id, 'other')
+  const opening = s.state.openLine('first', 'other')
+  assert.equal(s.allLines.length, 1)
+  assert.equal(s.lines.length, 0)
+  s.allLines[0].result.resolve({ ...line('other'), mine: false })
+  await opening
+  assert.equal(s.state.selectedLine.value?.id, 'other')
+  s.stop()
+})
 
 test('首次只读概览；明细并行且重复请求合并，往返分页复用缓存', async () => {
   const s = setup()
@@ -115,7 +228,7 @@ test('搜索和翻页立即清空旧缓存，取消旧请求；晚到结果不�
   s.items[0].result.resolve({ items: [line()], total: 23 })
   await pending
   assert.deepEqual(s.state.details.value, {})
-  s.lists[1].result.resolve({ items: [summary('new')], total: 1 })
+  s.lists[1].result.resolve({ dataScope: 'SELF', items: [summary('new')], total: 1 })
   await Promise.resolve()
   assert.equal(s.state.rows.value[0].id, 'new')
   s.stop()
@@ -138,7 +251,7 @@ test('离开、撤权和换身份同步清除敏感数据并终止全部读取',
   assert.deepEqual(s.state.details.value, {})
   s.enabled.value = false
   assert.equal(s.lists.at(-1)!.signal.aborted, true)
-  s.lists.at(-1)!.result.resolve({ items: [summary('late')], total: 1 })
+  s.lists.at(-1)!.result.resolve({ dataScope: 'SELF', items: [summary('late')], total: 1 })
   await Promise.resolve()
   assert.deepEqual(s.state.rows.value, [])
   await s.state.reload()
@@ -185,7 +298,7 @@ test('单柜明细失败不影响其他柜次，可原页重试；列表越界�
   await retry
   assert.equal(s.state.details.value.first.status, 'ready')
   s.query.value = { page: 9, pageSize: 10, search: undefined }
-  s.lists[1].result.resolve({ items: [], total: 12 })
+  s.lists[1].result.resolve({ dataScope: 'SELF', items: [], total: 12 })
   await Promise.resolve()
   assert.deepEqual(s.invalidPages, [2])
   s.stop()
@@ -217,9 +330,9 @@ test('后发列表响应先到时，不允许旧列表响应覆盖新查询结�
   const s = setup()
   s.query.value = { page: 2, pageSize: 10, search: undefined }
   assert.equal(s.lists[0].signal.aborted, true)
-  s.lists[1].result.resolve({ items: [summary('new')], total: 12 })
+  s.lists[1].result.resolve({ dataScope: 'SELF', items: [summary('new')], total: 12 })
   await Promise.resolve()
-  s.lists[0].result.resolve({ items: [summary('old')], total: 20 })
+  s.lists[0].result.resolve({ dataScope: 'SELF', items: [summary('old')], total: 20 })
   await Promise.resolve()
   assert.equal(s.state.rows.value[0].id, 'new')
   assert.equal(s.state.total.value, 12)
