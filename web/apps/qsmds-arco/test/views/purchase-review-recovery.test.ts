@@ -9,6 +9,7 @@ import { createI18n } from 'vue-i18n'
 import messages from '../../src/locales/lang/purchase-review/zh-cn.json'
 import { buildPurchaseOrderCopyText } from '../../src/views/operations/purchase-orders/purchase-order-copy.logic'
 import { buildPurchaseOrderReviewRequest } from '../../src/views/operations/purchase-orders/purchase-order-detail.logic'
+import { usePurchaseOrderImageCopy } from '../../src/views/operations/purchase-orders/use-purchase-order-image-copy'
 
 const i18n = createI18n({ legacy: false, locale: 'zh-cn', messages: { 'zh-cn': messages } })
 
@@ -96,6 +97,8 @@ async function createFixture() {
     buildPurchaseOrderReviewRequest,
     buildPurchaseOrderCopyText,
     usePurchaseOrderImageGeneration,
+    usePurchaseOrderImageCopy,
+    copyPurchaseOrderImageToClipboard: async () => undefined,
     getPurchaseOrderApiFailure: (failure: Error) => ({ message: failure.message }),
     isPurchaseOrderAbortError: () => false,
   }) as {

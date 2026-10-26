@@ -89,7 +89,18 @@
       "line": "产品名：{productName}*{quantity}\n金额小计：{unitPrice}*{quantity}={subtotal}",
       "amounts": "总价：{total}\n订金：{deposit}\n尾款：{balance}",
       "shippingTitle": "出货请贴货物唛头：",
-      "part": "{partLabel}：{products}\n此货件唛头：{shippingMark}"
+      "part": "{partLabel}：{products}\n此货件唛头：{shippingMark}",
+      "title": "复制采购信息",
+      "textTitle": "采购信息文本",
+      "copyText": "复制文本",
+      "copyImage": "复制图片",
+      "imageSuccess": "采购单图片已复制",
+      "imageFailed": "复制图片失败，请重试",
+      "imageClipboardUnavailable": "当前浏览器不支持复制图片，请手动保存图片后发送",
+      "imageMissing": "请先生成采购单图片，再复制图片",
+      "imageStale": "采购单内容已变化，请重新生成图片后再复制",
+      "imageUnavailable": "当前订单不在审核中，无采购单图片可复制",
+      "imageLoadFailed": "采购单图片加载失败，请重新加载"
     },
     "summary": {
       "title": "审核结果",

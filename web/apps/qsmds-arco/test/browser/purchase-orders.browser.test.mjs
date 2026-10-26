@@ -1863,7 +1863,18 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
       assert.deepEqual(await readPurchaseShippingMarkLedger(page), beforeLedger, '审核确认弹窗不得预占唛头')
       assert.equal(await page.evaluate(`document.querySelector('[data-testid="purchase-order-review-confirmation"]')?.textContent.includes(${JSON.stringify(target.supplier.label)})`), true)
       assert.equal(await page.evaluate(`[...document.querySelectorAll('button')].find(button => button.getClientRects().length > 0 && button.textContent.trim() === '确认审核')?.disabled`), true, '没有采购单图片不得审核')
-      await clickDialogButton(page, '审核采购订单？', '生成采购单图片')
+      if (index === 0) {
+        await page.waitFor(`document.querySelector('[data-testid="purchase-order-review-footer-generate"]')?.disabled === false`)
+        await page.evaluate(`(() => {
+          const button = document.querySelector('[data-testid="purchase-order-review-footer-generate"]')
+          if (!button) throw new Error('purchase review footer generate unavailable')
+          button.click()
+          return true
+        })()`)
+      }
+      else {
+        await clickDialogButton(page, '审核采购订单？', '生成采购单图片')
+      }
       await page.waitFor(`document.querySelector('[data-slot="purchase-order-review-image"] img')?.naturalWidth > 0
         && [...document.querySelectorAll('button')].find(button => button.getClientRects().length > 0 && button.textContent.trim() === '确认审核')?.disabled === false`)
       const prepared = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(target.id)}`))
@@ -1923,6 +1934,49 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
         await page.setViewport(1440, 900, false)
         await page.waitFor(`innerWidth === 1440 && !document.documentElement.classList.contains('dark')`)
         await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+        await page.connection.send('Browser.grantPermissions', {
+          origin: new URL(configuration.baseUrl).origin,
+          permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'],
+        })
+        await clickDialogButton(page, '审核采购订单？', '复制采购信息')
+        await page.waitFor(`(() => {
+          const content = document.querySelector('[data-testid="purchase-order-copy-info"]')
+          return content?.getClientRects().length > 0
+            && content.textContent.includes(${JSON.stringify(target.orderNo)})
+            && content.querySelector('img')?.naturalWidth > 0
+        })()`)
+        assert.equal(await page.evaluate(`document.querySelector('[data-testid="purchase-order-copy-info"]')?.textContent.includes(${JSON.stringify(target.supplier.label)})`), true)
+        await saveNumberingScreenshot(page, 'purchase-review-copy-info-light')
+        const clickCopyInfoButton = text => page.evaluate(`(() => {
+          const content = document.querySelector('[data-testid="purchase-order-copy-info"]')
+          const dialog = content?.closest('[role="dialog"]')
+          const button = dialog && [...dialog.querySelectorAll('button')].find(candidate => (
+            candidate.getClientRects().length > 0
+            && candidate.textContent.trim() === ${JSON.stringify(text)}
+            && !candidate.disabled
+          ))
+          if (!button) throw new Error('copy info button unavailable')
+          button.click()
+          return true
+        })()`)
+        await clickCopyInfoButton('复制文本')
+        await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
+          .some(toast => toast.getClientRects().length > 0 && toast.textContent?.includes('采购信息已复制'))`)
+        const copiedPurchaseInfo = await page.evaluate('navigator.clipboard.readText()')
+        assert.ok(copiedPurchaseInfo.startsWith(`【${target.orderNo}】`))
+        assert.ok(copiedPurchaseInfo.includes(target.supplier.label))
+        await clickCopyInfoButton('复制图片')
+        await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
+          .some(toast => toast.getClientRects().length > 0 && toast.textContent?.includes('采购单图片已复制'))`)
+        const copiedPurchaseImageTypes = await page.evaluate('navigator.clipboard.read().then(items => items.flatMap(item => item.types))')
+        assert.ok(copiedPurchaseImageTypes.includes('image/png'), '复制图片必须写入 image/png')
+        await page.evaluate(`(() => {
+          const content = document.querySelector('[data-testid="purchase-order-copy-info"]')
+          const button = content?.closest('[role="dialog"]')?.querySelector('button[aria-label="关闭模态框"]')
+          button?.click()
+          return true
+        })()`)
+        await page.waitFor(`!document.querySelector('[data-testid="purchase-order-copy-info"]')?.getClientRects().length`)
         await clickDialogButton(page, '审核采购订单？', '关闭')
         await waitForNoVisibleDialog(page, '审核采购订单？')
         assert.equal(reviewRequests.length, before, '关闭不应提交审核')

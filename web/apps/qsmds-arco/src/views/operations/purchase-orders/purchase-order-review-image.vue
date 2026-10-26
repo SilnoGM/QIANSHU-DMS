@@ -41,7 +41,7 @@ function openFocusedPreview(event: KeyboardEvent): void {
             {{ t(draft.isCurrent ? 'purchaseReview.image.ready' : 'purchaseReview.image.outdated') }}
           </FaTag>
         </div>
-        <FaButton type="button" :variant="draft ? 'outline' : 'default'" size="sm" class="min-h-11 sm:min-h-8" :disabled="busy || !canGenerate" @click="emit('generate', draft !== null)">
+        <FaButton type="button" :variant="draft ? 'outline' : 'default'" size="sm" data-testid="purchase-order-review-image-generate" class="min-h-11 sm:min-h-8" :disabled="busy || !canGenerate" @click="emit('generate', draft !== null)">
           <FaIcon :name="draft ? 'i-lucide:refresh-cw' : 'i-lucide:image-plus'" aria-hidden="true" />
           {{ t(draft ? 'purchaseReview.image.regenerate' : 'purchaseReview.image.generate') }}
         </FaButton>

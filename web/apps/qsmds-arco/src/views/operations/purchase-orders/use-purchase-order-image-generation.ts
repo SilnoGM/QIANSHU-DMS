@@ -27,6 +27,7 @@ type ImageGenerationApi = Pick<typeof purchaseOrdersApi, 'getById' | 'orderImage
 export function usePurchaseOrderImageGeneration(options: ImageGenerationOptions, api: ImageGenerationApi = purchaseOrdersApi) {
   const draft = shallowRef<PurchaseOrderImageDraftDto | null>(null)
   const previewUrl = ref<string | null>(null)
+  const previewBlob = shallowRef<Blob | null>(null)
   const imageLoaded = ref(false)
   const imageFailed = ref(false)
   const generating = ref(false)
@@ -47,6 +48,7 @@ export function usePurchaseOrderImageGeneration(options: ImageGenerationOptions,
       URL.revokeObjectURL(previewUrl.value)
     }
     previewUrl.value = null
+    previewBlob.value = null
     imageLoaded.value = false
     imageFailed.value = false
   }
@@ -73,6 +75,7 @@ export function usePurchaseOrderImageGeneration(options: ImageGenerationOptions,
     // 使用唯一 API Client 读取权限保护的 PNG，401/403 与 Blob 错误沿用统一会话治理。
     const response = await api.getOrderImageDraftContent(current.orderId, value.id, current.controller.signal)
     assertCurrent(current)
+    previewBlob.value = response.data
     previewUrl.value = URL.createObjectURL(response.data)
   }
   async function restore(detail: PurchaseOrderDetailDto, signal: AbortSignal): Promise<void> {
@@ -170,5 +173,5 @@ export function usePurchaseOrderImageGeneration(options: ImageGenerationOptions,
     }
   }
   onScopeDispose(reset)
-  return { draft, previewUrl, imageLoaded, imageFailed, ready, generating, steps, sequence, restore, start, complete, fail, reset, markLoaded, markFailed }
+  return { draft, previewUrl, previewBlob, imageLoaded, imageFailed, ready, generating, steps, sequence, restore, start, complete, fail, reset, markLoaded, markFailed }
 }
