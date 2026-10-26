@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { ContainerLoadingItemDto } from '@/api/generated/types.gen'
 import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
-import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
+import type { QsGenericTableActionColumn, QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { CONTAINER_ITEM_ACTION_COLUMN_WIDTH } from './action-column.logic'
 import ContainerRemark from './container-remark.vue'
 import { formatContainerMeasurement } from './display.logic'
 
@@ -55,6 +56,11 @@ function detailActions(row: ContainerLoadingItemDto): ActionMenuItem[] {
 function detailMenuItems(row: ContainerLoadingItemDto): ActionMenuItem[][] {
   return [detailActions(row).slice(inlineDetailCount.value)]
 }
+const actionColumn = computed<QsGenericTableActionColumn>(() => ({
+  fixed: 'right',
+  minWidth: CONTAINER_ITEM_ACTION_COLUMN_WIDTH,
+  width: CONTAINER_ITEM_ACTION_COLUMN_WIDTH,
+}))
 const { currencies, errorMessage: currencyError, reload: reloadCurrencies } = useCurrencyCatalog()
 const value = (input: string | number | null) => input ?? t('containerPage.unknown')
 const measurement = (input: string | null, places: 0 | 2 = 0) => value(formatContainerMeasurement(input, places))
@@ -88,7 +94,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
       </div>
     </template>
   </FaAlert>
-  <QsGenericTable v-model:page="page" v-model:page-size="pageSize" v-model:search="search" row-key="id" :columns="columns" :data="props.rows" :total="total" :loading="loading" :error="error" :addable="false" :page-size-options="[20, 50, 100]" :search-placeholder="t('containerPage.itemSearch')" :empty-title="t('containerPage.emptyItems')" :empty-description="t('containerPage.emptyItemsDescription')" :action-column="{ width: 196, minWidth: 196, fixed: 'right' }" table-class="w-max min-w-full" @retry="emit('retry')">
+  <QsGenericTable v-model:page="page" v-model:page-size="pageSize" v-model:search="search" row-key="id" :columns="columns" :data="props.rows" :total="total" :loading="loading" :error="error" :addable="false" :page-size-options="[20, 50, 100]" :search-placeholder="t('containerPage.itemSearch')" :empty-title="t('containerPage.emptyItems')" :empty-description="t('containerPage.emptyItemsDescription')" :action-column="actionColumn" table-class="w-max min-w-full" @retry="emit('retry')">
     <template #cell-goods="{ row }">
       <QsTableStackedCell class="max-w-full">
         <QsTableStackedLine weight="medium" content-class="[overflow-wrap:anywhere]">
@@ -229,7 +235,7 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
       </div>
     </template>
     <template #actions="{ row }">
-      <div class="gap-1 grid grid-cols-2">
+      <div class="gap-1 grid grid-cols-2 md:flex md:flex-wrap md:items-center">
         <FaButton v-if="canEdit" size="sm" variant="ghost" @click="emit('edit', row)">
           编辑
         </FaButton>

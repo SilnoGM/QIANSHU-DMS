@@ -5,6 +5,7 @@ import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import { computed, effectScope, ref, shallowRef, watch } from 'vue'
+import { CONTAINER_ITEM_ACTION_COLUMN_WIDTH } from '../../src/views/workbenches/containers/action-column.logic'
 import { formatContainerMeasurement } from '../../src/views/workbenches/containers/display.logic'
 
 test('装柜尺寸和重量以整数显示，按十进制四舍五入且不丢失大数精度', () => {
@@ -51,6 +52,21 @@ test('装柜明细默认展示所有业务列，桌面数值采用指定精度',
   assert.equal(display('reportedVolumeCai', { reportedVolumeCai: null }), 'containerPage.unknown')
   assert.ok(!columns.some(column => ['purchaseOrderNo', 'salesOrderNo'].includes(column.id)))
   assert.equal(display('source', { salesOrderNo: 'SO/001', purchaseOrderNo: 'PO/001' }), 'SO/001 PO/001')
+})
+
+test('装柜明细桌面操作列单行容纳两个四字详情与更多菜单', async () => {
+  // 24px 内边距 + 80 + 4 + 80 + 4 + 32 + 8px 缓冲。
+  assert.equal(CONTAINER_ITEM_ACTION_COLUMN_WIDTH, 232)
+  const source = await readFile(new URL('../../src/views/workbenches/containers/container-item-table.vue', import.meta.url), 'utf8')
+  assert.match(source, /:action-column="actionColumn"/u)
+
+  // 固定两列网格会让第三个子项（更多）掉到第二行；桌面端必须覆盖为单行 flex。
+  const wrapperClass = source.match(/<template #actions="\{ row \}">\s*<div class="([^"]+)">/u)?.[1] ?? ''
+  const wrapperClasses = wrapperClass.split(/\s+/u)
+  assert.ok(wrapperClasses.includes('grid-cols-2'), '移动端保留两列操作区')
+  assert.ok(wrapperClasses.includes('md:flex'), '桌面端必须改成单行 flex')
+  assert.ok(wrapperClasses.includes('md:flex-wrap'))
+  assert.ok(wrapperClasses.includes('md:items-center'))
 })
 
 test('柜次详情汇总按整数重量和两位材积展示，缺值不会被当成零', async (context) => {
