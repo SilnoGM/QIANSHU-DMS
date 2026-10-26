@@ -33,6 +33,9 @@ export async function clickOrderDrawerTab(page, drawerTestId, label) {
   await page.evaluate(`document.querySelector(
     '[data-testid=${JSON.stringify(drawerTestId)}]',
   ).parentElement.scrollTo({ top: 0, behavior: 'instant' })`)
+  // 付款等步骤可能留下悬停暂停的 toast；等其自然消失，避免点击瞬间被浮层截获。
+  await page.waitFor(`[...document.querySelectorAll('[data-qs-toast]')]
+    .every(toast => toast.getClientRects().length === 0)`)
   // 抽屉仍在过渡时元素虽有尺寸，却可能不在最终点击位置；只在位置稳定且可命中时操作。
   try {
     await page.waitFor(`(async () => {
@@ -102,6 +105,10 @@ export async function clickOrderDrawerTab(page, drawerTestId, label) {
     buttons: 0,
     pointerType: 'mouse',
   })
+  // 让 hover 状态、toast 暂停与页签过渡先完成，再按真实指针点击。
+  await page.evaluate(`new Promise(resolve => requestAnimationFrame(
+    () => requestAnimationFrame(resolve),
+  ))`)
   await page.connection.send('Input.dispatchMouseEvent', {
     ...point,
     type: 'mousePressed',
@@ -119,12 +126,32 @@ export async function clickOrderDrawerTab(page, drawerTestId, label) {
     pointerType: 'mouse',
   })
   // 同时验证页签语义和实际关联面板，避免仅颜色变化或隐藏副本令测试误通过。
-  await page.waitFor(`(() => {
-    const tab = ${source}
-    const panel = document.getElementById(tab?.getAttribute('aria-controls') ?? '')
-    return tab?.getAttribute('aria-selected') === 'true'
-      && tab.getAttribute('data-state') === 'active'
-      && panel?.getAttribute('role') === 'tabpanel'
-      && panel.getClientRects().length > 0
-  })()`)
+  try {
+    await page.waitFor(`(() => {
+      const tab = ${source}
+      const panel = document.getElementById(tab?.getAttribute('aria-controls') ?? '')
+      return tab?.getAttribute('aria-selected') === 'true'
+        && tab.getAttribute('data-state') === 'active'
+        && panel?.getAttribute('role') === 'tabpanel'
+        && panel.getClientRects().length > 0
+    })()`)
+  }
+  catch (cause) {
+    const state = await page.evaluate(`(() => {
+      const tab = ${source}
+      const panel = document.getElementById(tab?.getAttribute('aria-controls') ?? '')
+      return {
+        selected: tab?.getAttribute('aria-selected'),
+        state: tab?.getAttribute('data-state'),
+        panelRole: panel?.getAttribute('role'),
+        panelRects: panel?.getClientRects().length ?? 0,
+        activeRole: document.activeElement?.getAttribute('role'),
+        activeTag: document.activeElement?.tagName,
+      }
+    })()`)
+    throw new Error(
+      `Order drawer tab did not activate: ${JSON.stringify(state)}`,
+      { cause },
+    )
+  }
 }
