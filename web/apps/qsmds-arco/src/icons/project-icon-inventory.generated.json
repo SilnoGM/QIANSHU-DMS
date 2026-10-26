@@ -2307,6 +2307,7 @@
       "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue",
       "apps/qsmds-arco/src/components/business/QsPartConfigurator/PartProductSummary.vue",
       "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue"
     ]
   },
@@ -2350,6 +2351,7 @@
       "apps/qsmds-arco/src/components/business/QsPaymentRecipientEditor/QrImageUpload.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/product-batch-image-card.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-image.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-voucher-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-voucher-upload.vue",
