@@ -8,7 +8,7 @@
 - `{zodSchema}` — zod 字段定义
 - `{initialValues}` — `model` 表单初始值
 - `{formItems}` — FaFormItem 列表
-- `{imports}` — 需要手动 import 的组件
+- `{imports}` — 需要手动 import 的组件；使用日期/日期时间模板时必须包含 `import QsDateTimeField from '@/components/business/QsDateTimeField/index.vue'`
 - `{maxWidth}` — 单列 `max-w-600px` / 双列 `max-w-1200px`
 - `{gridClass}` — 双列时 `grid grid-cols-1 gap-x-8 gap-y-6 items-start md:grid-cols-2` / 单列时 `grid gap-6`
 
@@ -141,12 +141,12 @@ function handleCancel() {
 
 <!-- 日期 -->
 <FaFormItem name="{field}" label="{label}" required>
-  <FaInput type="date" class="w-full" />
+  <QsDateTimeField precision="date" disable-future :aria-label="{label}" />
 </FaFormItem>
 
-<!-- 日期时间 -->
+<!-- 日期时间（需要秒时改为 precision="second"） -->
 <FaFormItem name="{field}" label="{label}" required>
-  <FaInput type="datetime-local" class="w-full" />
+  <QsDateTimeField precision="minute" disable-future :aria-label="{label}" />
 </FaFormItem>
 
 <!-- FaImageUpload -->
@@ -230,11 +230,13 @@ Fantastic-admin 应用默认通过组件解析器自动导入 `Fa*` 组件，通
 | 下拉、选择、类型、分类、状态（枚举值） | `FaSelect` | 生成 options 数组占位 |
 | 开关、启用、禁用、是否、boolean | `FaSwitch` | |
 | 复选、多选 | `FaCheckbox`（多个） | 每个选项一个 FaCheckbox，手动维护数组 |
-| 日期 | `FaInput type="date"` | |
-| 日期时间 | `FaInput type="datetime-local"` | |
+| 日期 | `QsDateTimeField precision="date"` | 输出 `YYYY-MM-DD`，固定上海墙钟 |
+| 日期时间 | `QsDateTimeField precision="minute"` | 输出规范化 UTC ISO；需要秒时用 `precision="second"` |
 | 图片、头像、封面、缩略图 | `FaImageUpload` | |
 | 文件、附件 | `FaFileUpload` | |
 | 图标 | `FaIconPicker` | |
 | 数字、金额、数量、年龄 | `FaNumberField` | |
 
 字段类型不明确时，默认使用 `FaInput`。
+
+业务日期与日期时间统一使用 `QsDateTimeField`，不要生成 `FaInput type="date"` 或 `type="datetime-local"`。`v-model` 的日期值格式为 `YYYY-MM-DD`，时间值为规范化 UTC ISO；固定按 `Asia/Shanghai` 墙钟选择，边界与空值语义见组件 README。

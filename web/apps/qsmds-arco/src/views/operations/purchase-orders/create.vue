@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { StepsItem } from '@fantastic-admin/components'
-import type { DateValue } from '@internationalized/date'
 import type {
   PurchaseOrderCreateStep,
   PurchaseOrderFormStep,
@@ -25,13 +24,14 @@ import type {
 import type { PartConfiguration } from '@/components/business/QsPartConfigurator/types'
 
 import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
-import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
 import { onKeyStroke, useMediaQuery } from '@vueuse/core'
 import { useId } from 'vue'
 
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import QsDateTimeField from '@/components/business/QsDateTimeField/index.vue'
+import { businessToday } from '@/components/business/QsDateTimeField/logic'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
@@ -108,8 +108,6 @@ const toast = useQsToast()
 const { t } = useI18n()
 const currencyCatalog = useCurrencyCatalog()
 const supplierCatalog = useDictionaryCatalog('service_provider.supplier')
-const todayDate = today(getLocalTimeZone())
-const todayIso = todayDate.toString()
 const canCreate = computed(() => auth('purchase-orders:create'))
 const canCreateStock = computed(() => auth('purchase-orders:create-stock'))
 const createContext = parsePurchaseOrderCreateContext({
@@ -149,7 +147,7 @@ const formModel = reactive({
   balanceDueAmount: null as string | null,
   depositDueAmount: null as string | null,
   lines: [] as OrderProductLineModel[],
-  orderDate: todayIso,
+  orderDate: businessToday(),
   remark: '',
   supplierValue: createContext?.supplierValue ?? null,
   customSupplierName: createContext?.customSupplierName ?? null,
@@ -224,7 +222,6 @@ const currencyUnavailable = computed(() => (
   || currencyCatalog.errorMessage.value !== null
   || fixedCurrencies.value[0]?.enabled !== true
 ))
-const orderDateValue = computed(() => parseDate(formModel.orderDate))
 const purchaseTotalAmount = computed(() => calculatePurchaseOrderDraftTotal(formModel.lines))
 const selectedSupplierDisplayLabel = computed(() => (
   productMode === 'CUSTOM'
@@ -377,14 +374,6 @@ function refreshShippingMarkResolution(): void {
   void shippingMarkResolver.refresh(productMode === 'CUSTOM'
     ? { productMode: 'CUSTOM' }
     : { productMode: 'CATALOG', supplierValue: formModel.supplierValue! })
-}
-
-function updateOrderDate(value: DateValue | DateValue[] | undefined): void {
-  if (value === undefined || Array.isArray(value) || editingLocked.value) {
-    return
-  }
-  formModel.orderDate = value.toString()
-  clearFeedback()
 }
 
 function handleSupplierUpdate(value: string | null): void {
@@ -834,7 +823,7 @@ function buildCurrentSource() {
     supplierValue: formModel.supplierValue,
     customSupplierName: formModel.customSupplierName,
     paymentAccounts: paymentAccounts.value,
-    today: todayIso,
+    today: businessToday(),
   } as const
 }
 
@@ -1394,15 +1383,13 @@ onBeforeUnmount(() => {
                     </p>
                   </div>
                   <FaFormItem name="orderDate" label="采购日期" required :auto-bind="false">
-                    <FaDate
-                      aria-label="采购日期"
-                      :model-value="orderDateValue"
-                      :max-value="todayDate"
+                    <QsDateTimeField
+                      v-model="formModel.orderDate"
+                      precision="date"
+                      disable-future
                       :disabled="submitLocked"
-                      picker
-                      prevent-deselect
-                      trigger-class="w-full min-h-11 sm:min-h-9"
-                      @update:model-value="updateOrderDate"
+                      aria-label="采购日期"
+                      @change="clearFeedback()"
                     />
                     <p v-if="fieldErrors.orderDate" class="text-xs text-destructive m-0 mt-1" role="alert">
                       {{ fieldErrors.orderDate }}

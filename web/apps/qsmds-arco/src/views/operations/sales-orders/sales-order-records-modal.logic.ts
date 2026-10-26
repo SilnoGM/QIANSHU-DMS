@@ -132,22 +132,20 @@ function normalizedOptionalText(value: string, maximum: number): string | null {
   return normalized === '' || [...normalized].length > maximum ? null : normalized
 }
 
-/** datetime-local 没有时区；提交时按浏览器本地时区解释并统一为服务端要求的 UTC ISO。 */
+/** 字段组件输出的 UTC ISO；只接受规范化 ISO 且不晚于当前时间。 */
 export function toSalesOrderPaymentReceivedAt(
   value: string,
   now: Date = new Date(),
 ): string | null {
+  if (value.trim() === '') {
+    return null
+  }
   const parsed = new Date(value)
-  return value.trim() !== ''
-    && Number.isFinite(parsed.getTime())
+  return Number.isFinite(parsed.getTime())
+    && parsed.toISOString() === value
     && parsed.getTime() <= now.getTime()
-    ? parsed.toISOString()
+    ? value
     : null
-}
-
-export function formatSalesOrderLocalDateTime(value: Date): string {
-  const pad = (part: number) => String(part).padStart(2, '0')
-  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`
 }
 
 export function buildSalesOrderPaymentRequest(

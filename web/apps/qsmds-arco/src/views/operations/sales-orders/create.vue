@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { FormExpose, StepsItem } from '@fantastic-admin/components'
-import type { DateValue } from '@internationalized/date'
 import type {
   SalesOrderApiFailure,
   SalesOrderCreateStep,
@@ -15,12 +14,13 @@ import type { ProductPageLoader } from '@/components/business/QsProductSelector/
 import type { RegionSelectorChange } from '@/components/business/QsRegionSelector/types'
 import { useFileDrop } from '@fantastic-admin/components'
 
-import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
 import { useMediaQuery } from '@vueuse/core'
 import salesOrdersApi from '@/api/modules/sales-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import QsDateTimeField from '@/components/business/QsDateTimeField/index.vue'
+import { businessToday } from '@/components/business/QsDateTimeField/logic'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsRegionSelector from '@/components/business/QsRegionSelector/index.vue'
@@ -96,8 +96,6 @@ const toast = useQsToast()
 const currencyCatalog = useCurrencyCatalog()
 const selectedCurrency = parseSalesOrderCurrency(route.query.currency)
 const initialCurrency = selectedCurrency ?? 'TWD'
-const todayDate = today(getLocalTimeZone())
-const todayIso = todayDate.toString()
 
 const canCreate = computed(() => auth('sales-orders:create'))
 const canRead = computed(() => auth('sales-orders:read'))
@@ -151,9 +149,6 @@ const currencyUnavailable = computed(() => (
   || currencyCatalog.errorMessage.value !== null
   || fixedCurrencyDescriptor.value?.enabled !== true
 ))
-const orderDateValue = computed(() => (
-  formModel.value.orderDate === '' ? undefined : parseDate(formModel.value.orderDate)
-))
 const lineSubtotalAmount = computed(() => calculateSalesOrderLineSubtotal(
   formModel.value.lines,
   amountPrecision.value,
@@ -165,7 +160,7 @@ const fullAddressPreview = computed(() => [
 const fullValidation = computed(() => buildCreateSalesOrderRequest(
   formModel.value,
   amountPrecision.value,
-  todayIso,
+  businessToday(),
 ))
 const completedStepStates = computed(() => salesOrderSteps.map((_step, index) => {
   const step = index as SalesOrderCreateStep
@@ -304,7 +299,7 @@ function enterSalesOrderReview(): void {
     return
   }
 
-  const result = buildCreateSalesOrderRequest(formModel.value, amountPrecision.value, todayIso)
+  const result = buildCreateSalesOrderRequest(formModel.value, amountPrecision.value, businessToday())
   if (!result.valid) {
     // 完整客户端校验仍采用增量覆盖，避免抹掉其他步骤尚未编辑清除的服务端错误。
     const mergedErrors = { ...fieldErrors.value, ...result.fieldErrors }
@@ -375,7 +370,7 @@ function nextStep(): void {
     formModel.value,
     activeStep.value,
     amountPrecision.value,
-    todayIso,
+    businessToday(),
   )
   if (!result.valid) {
     // 当前步骤的客户端错误只做增量覆盖，保留其他步骤尚未被用户编辑清除的服务端错误。
@@ -532,14 +527,6 @@ function handleAgreedTotalAmountUpdate(): void {
 function handleDepositDueAmountUpdate(): void {
   clearFeedback('depositDueAmount')
   clearFeedback('balanceDueAmount')
-}
-
-function updateOrderDate(value: DateValue | DateValue[] | undefined): void {
-  if (Array.isArray(value) || value === undefined || submitLocked.value) {
-    return
-  }
-  formModel.value.orderDate = value.toString()
-  clearFeedback('orderDate')
 }
 
 function handleRegionChange(change: RegionSelectorChange): void {
@@ -916,7 +903,7 @@ function requestSubmitConfirmation(): void {
     formError.value = '请先依次完成左侧全部填写步骤'
     return
   }
-  const result = buildCreateSalesOrderRequest(formModel.value, amountPrecision.value, todayIso)
+  const result = buildCreateSalesOrderRequest(formModel.value, amountPrecision.value, businessToday())
   if (!result.valid) {
     replaceFieldErrors(result.fieldErrors)
     formError.value = '部分资料未通过校验，请修正后再正式保存'
@@ -989,7 +976,7 @@ async function confirmSubmitOrder(): Promise<void> {
   }
 
   // 弹窗打开后仍重新构建快照，不使用打开弹窗时的过期数据。
-  const result = buildCreateSalesOrderRequest(formModel.value, amountPrecision.value, todayIso)
+  const result = buildCreateSalesOrderRequest(formModel.value, amountPrecision.value, businessToday())
   if (!result.valid) {
     replaceFieldErrors(result.fieldErrors)
     formError.value = '订单资料已变更，请修正后再提交'
@@ -1276,14 +1263,13 @@ onBeforeUnmount(() => {
                   <code class="text-sm text-muted-foreground font-mono mt-2 block">SALES_ORDER · AUTO</code>
                 </div>
                 <FaFormItem name="orderDate" label="出单日期" required :auto-bind="false">
-                  <FaDate
-                    :model-value="orderDateValue"
-                    :max-value="todayDate"
+                  <QsDateTimeField
+                    v-model="formModel.orderDate"
+                    precision="date"
+                    disable-future
                     :disabled="submitLocked"
-                    picker
-                    prevent-deselect
-                    trigger-class="w-full min-h-11 sm:min-h-9"
-                    @update:model-value="updateOrderDate"
+                    aria-label="出单日期"
+                    @change="clearFeedback('orderDate')"
                   />
                 </FaFormItem>
                 <FaFormItem name="issuer" label="出单人" :auto-bind="false">

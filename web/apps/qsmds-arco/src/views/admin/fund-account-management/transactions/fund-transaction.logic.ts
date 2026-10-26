@@ -100,10 +100,11 @@ function optionalIsoDate(value: string | undefined, field: string): string | und
     return undefined
   }
   const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) {
+  // 字段组件只输出规范化 UTC ISO；无时区或非规范化值直接拒绝，避免服务端按 UTC 误读。
+  if (!Number.isFinite(date.getTime()) || date.toISOString() !== value) {
     throw new RangeError(`${field}无效`)
   }
-  return date.toISOString()
+  return value
 }
 
 /** 只输出 generated query 已声明的字段，空筛选不会发送给 Server。 */

@@ -2,10 +2,12 @@
 import type { PurchaseOrderDetailDto, PurchaseOrderWarehouseReceiptRequestDto } from '@/api/generated/types.gen'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
+import QsDateTimeField from '@/components/business/QsDateTimeField/index.vue'
+import { currentDateTimeValue } from '@/components/business/QsDateTimeField/logic'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import { getPurchaseOrderPartRecords } from '@/components/business/QsPurchaseOrderDrawer/logic'
-import { buildWarehouseReceiptRequest, eligibleWarehouseParts, formatWarehouseLocalTime } from './logic'
+import { buildWarehouseReceiptRequest, eligibleWarehouseParts } from './logic'
 
 const props = defineProps<{
   modelValue: boolean
@@ -23,7 +25,7 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const selectedIds = ref<string[]>([])
-const receivedAtLocal = ref('')
+const receivedAt = ref('')
 const remark = ref('')
 const validationError = ref('')
 const parts = computed(() => {
@@ -32,6 +34,22 @@ const parts = computed(() => {
   }
   const ids = new Set(eligibleWarehouseParts(props.detail, props.scopeIds).map(part => part.id))
   return getPurchaseOrderPartRecords(props.detail).filter(part => ids.has(part.id))
+})
+const minimumShippedAt = computed(() => {
+  if (!props.detail) {
+    return undefined
+  }
+  const selected = eligibleWarehouseParts(props.detail, props.scopeIds)
+    .filter(part => selectedIds.value.includes(part.id))
+  const shippedAtValues = selected
+    .map(part => part.shippedAt)
+    .filter((value): value is string => value !== null)
+  return shippedAtValues.reduce<string | undefined>(
+    (minimum, value) => minimum === undefined || Date.parse(value) < Date.parse(minimum)
+      ? value
+      : minimum,
+    undefined,
+  )
 })
 const locked = computed(() => props.loading || props.submitting || props.needsReload || !!props.error)
 function toggle(id: string): void {
@@ -44,7 +62,7 @@ function submit(): void {
   if (locked.value || !props.detail) {
     return
   }
-  const result = buildWarehouseReceiptRequest({ detail: props.detail, scopeIds: props.scopeIds, selectedIds: selectedIds.value, receivedAtLocal: receivedAtLocal.value, remark: remark.value, now: new Date() })
+  const result = buildWarehouseReceiptRequest({ detail: props.detail, scopeIds: props.scopeIds, selectedIds: selectedIds.value, receivedAt: receivedAt.value, remark: remark.value, now: new Date() })
   if (!result.valid) {
     validationError.value = t(result.error)
     return
@@ -55,7 +73,7 @@ function submit(): void {
 watch(() => [props.modelValue, props.detail] as const, ([open]) => {
   if (open) {
     selectedIds.value = parts.value.length === 1 ? [parts.value[0]!.id] : []
-    receivedAtLocal.value = formatWarehouseLocalTime(new Date())
+    receivedAt.value = currentDateTimeValue('second')
     remark.value = ''
     validationError.value = ''
   }
@@ -121,7 +139,17 @@ watch(() => [props.modelValue, props.detail] as const, ([open]) => {
         </p>
       </div>
       <div class="space-y-2">
-        <label for="warehouse-received-at" class="qs-type-body-medium">{{ t('purchaseWarehouseReceipt.receivedAt') }} <span class="text-destructive">*</span></label><FaInput id="warehouse-received-at" v-model="receivedAtLocal" type="datetime-local" step="0.001" class="w-full sm:w-80" :disabled="locked || !parts.length" />
+        <label for="warehouse-received-at" class="qs-type-body-medium">{{ t('purchaseWarehouseReceipt.receivedAt') }} <span class="text-destructive">*</span></label>
+        <QsDateTimeField
+          id="warehouse-received-at"
+          v-model="receivedAt"
+          precision="second"
+          disable-future
+          :min="minimumShippedAt"
+          :disabled="locked || !parts.length"
+          :aria-label="t('purchaseWarehouseReceipt.receivedAt')"
+          @change="validationError = ''"
+        />
       </div>
       <div class="space-y-2">
         <label for="warehouse-remark" class="qs-type-body-medium">{{ t('purchaseWarehouseReceipt.remark') }}</label><FaTextarea id="warehouse-remark" v-model="remark" :rows="3" :placeholder="t('purchaseWarehouseReceipt.remarkPlaceholder')" :disabled="locked || !parts.length" /><div class="qs-type-meta text-muted-foreground text-end" :class="[...remark.trim()].length > 500 && 'text-destructive'">

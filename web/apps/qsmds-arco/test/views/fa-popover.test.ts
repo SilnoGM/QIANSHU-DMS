@@ -15,4 +15,8 @@ test('FaPopover 默认阻止自动聚焦，只有 autoFocus=true 才允许进入
   assert.match(source, /autoFocus: false/u)
   assert.match(source, /if \(!props\.autoFocus\)\s*\{\s*e\.preventDefault\(\)/u)
   assert.match(source, /@open-auto-focus="handleOpenAutoFocus"/u)
+  assert.match(source, /sticky\?: PopoverContentProps\['sticky'\]/u)
+  assert.match(source, /prioritizePosition\?: PopoverContentProps\['prioritizePosition'\]/u)
+  assert.match(source, /:sticky/u)
+  assert.match(source, /:prioritize-position/u)
 })

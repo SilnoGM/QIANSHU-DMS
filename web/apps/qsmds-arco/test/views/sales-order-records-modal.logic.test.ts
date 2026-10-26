@@ -8,7 +8,6 @@ import {
   countPendingReceiptRequests,
   countTotalReceiptRequests,
   countValidSalesOrderPayments,
-  formatSalesOrderLocalDateTime,
   resolveSalesOrderModalCancelAction,
   resolveSalesOrderModalInitialState,
   splitSalesOrderPaymentStatusReason,
@@ -19,7 +18,7 @@ const VOUCHER_ID = '11111111-1111-4111-8111-111111111111'
 
 test('实际收款请求包含五类收款、精确金额与唯一凭证且不包含交易流水号', () => {
   const now = new Date(2026, 7, 25, 14, 30, 0)
-  const receivedAt = formatSalesOrderLocalDateTime(new Date(2026, 7, 25, 13, 20, 0))
+  const receivedAt = new Date(2026, 7, 25, 13, 20, 0).toISOString()
   const result = buildSalesOrderPaymentRequest({
     amount: '100.5',
     paymentMethod: ' BANK_TRANSFER ',
@@ -49,7 +48,7 @@ test('实际收款硬拦截零金额、未来时间和缺失凭证', () => {
     amount: '0',
     paymentMethod: '',
     paymentType: 'DEPOSIT',
-    receivedAt: formatSalesOrderLocalDateTime(new Date(2026, 7, 25, 14, 31, 0)),
+    receivedAt: new Date(2026, 7, 25, 14, 31, 0).toISOString(),
     remark: '',
     voucherMediaAssetId: null,
   }, 2, now)
@@ -62,6 +61,11 @@ test('实际收款硬拦截零金额、未来时间和缺失凭证', () => {
     assert.equal(result.fieldErrors.voucher, '每笔收款必须上传且只能上传一份凭证')
   }
   assert.equal(toSalesOrderPaymentReceivedAt('', now), null)
+  assert.equal(toSalesOrderPaymentReceivedAt('2026-08-25T13:20', now), null)
+  assert.equal(
+    toSalesOrderPaymentReceivedAt(new Date(2026, 7, 25, 13, 20, 0).toISOString(), now),
+    new Date(2026, 7, 25, 13, 20, 0).toISOString(),
+  )
 })
 
 test('销售订单操作先确定唯一弹窗视图，并按来源决定取消行为', () => {

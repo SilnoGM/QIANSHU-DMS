@@ -19,6 +19,8 @@ const props = withDefaults(defineProps<{
   side?: PopoverContentProps['side']
   sideOffset?: PopoverContentProps['sideOffset']
   collisionPadding?: PopoverContentProps['collisionPadding']
+  prioritizePosition?: PopoverContentProps['prioritizePosition']
+  sticky?: PopoverContentProps['sticky']
   class?: HTMLAttributes['class']
 }>(), {
   autoFocus: false,
@@ -41,7 +43,7 @@ const open = defineModel<boolean>('open', {
     <PopoverTrigger as-child>
       <slot />
     </PopoverTrigger>
-    <PopoverContent :align :align-offset :side :side-offset :collision-padding :class="cn('z-2000 w-unset min-w-72', props.class)" @open-auto-focus="handleOpenAutoFocus">
+    <PopoverContent :align :align-offset :side :side-offset :collision-padding :prioritize-position :sticky :class="cn('z-2000 w-unset min-w-72', props.class)" @open-auto-focus="handleOpenAutoFocus">
       <slot name="panel" />
     </PopoverContent>
   </Popover>

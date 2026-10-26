@@ -27,6 +27,8 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import QsDateTimeField from '@/components/business/QsDateTimeField/index.vue'
+import { currentDateTimeValue } from '@/components/business/QsDateTimeField/logic'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
@@ -49,7 +51,6 @@ import {
   countPendingReceiptRequests,
   countTotalReceiptRequests,
   countValidSalesOrderPayments,
-  formatSalesOrderLocalDateTime,
   resolveSalesOrderModalCancelAction,
   resolveSalesOrderModalInitialState,
   splitSalesOrderPaymentStatusReason,
@@ -367,7 +368,7 @@ function resetPaymentForm(): void {
   releaseUploadedVoucher(paymentVoucher.value)
   paymentType.value = 'DEPOSIT'
   paymentAmount.value = null
-  paymentReceivedAt.value = formatSalesOrderLocalDateTime(new Date())
+  paymentReceivedAt.value = currentDateTimeValue('minute')
   paymentMethod.value = null
   paymentRemark.value = ''
   paymentVoucher.value = null
@@ -599,7 +600,7 @@ function resubmitReceipt(request: SalesReceiptRequestDetailDto): void {
     paymentType.value = request.paymentType
   }
   paymentAmount.value = request.amount
-  paymentReceivedAt.value = formatSalesOrderLocalDateTime(new Date(request.receivedAt))
+  paymentReceivedAt.value = request.receivedAt
   paymentMethod.value = request.paymentMethod
   paymentRemark.value = request.remark ?? ''
   resubmittedFromId.value = request.id
@@ -1366,12 +1367,13 @@ onBeforeUnmount(() => {
               {{ paymentErrors.amount }}
             </p>
           </FaFormItem>
-          <FaFormItem name="paymentReceivedAt" label="收款时间" required>
-            <FaInput
+          <FaFormItem name="paymentReceivedAt" label="收款时间" required :auto-bind="false">
+            <QsDateTimeField
               v-model="paymentReceivedAt"
-              type="datetime-local"
-              class="min-h-11 w-full sm:min-h-9"
-              @update:model-value="clearPaymentError('receivedAt')"
+              precision="minute"
+              disable-future
+              aria-label="收款时间"
+              @change="clearPaymentError('receivedAt')"
             />
             <p v-if="paymentErrors.receivedAt" class="text-xs text-destructive m-0 mt-1">
               {{ paymentErrors.receivedAt }}

@@ -1367,6 +1367,7 @@
     "usages": [
       "apps/qsmds-arco/src/views/component_library/basic/date-time-display.vue",
       "apps/qsmds-arco/src/views/component_library/basic/money-input.vue",
+      "apps/qsmds-arco/src/views/component_library/business/date-time-field.vue",
       "apps/qsmds-arco/src/views/component_library/business/good-tooltip.vue",
       "apps/qsmds-arco/src/views/component_library/business/purchase-order-desc.vue",
       "apps/qsmds-arco/src/views/component_library/business/sales-order-desc.vue"
@@ -1412,6 +1413,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/business/QsDateRangeFilter/index.vue",
+      "apps/qsmds-arco/src/components/business/QsDateTimeField/index.vue",
       "apps/qsmds-arco/src/components/business/QsPersonalFundAccountCard/index.vue",
       "packages/components/src/pro/calendar-date-range/index.vue",
       "packages/components/src/pro/calendar-date/index.vue",
@@ -1420,6 +1422,17 @@
       "packages/components/src/pro/calendar-year-range/index.vue",
       "packages/components/src/pro/calendar-year/index.vue",
       "packages/components/src/pro/date/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:calendar-clock",
+    "label": "i-lucide:calendar-clock",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsDateTimeField/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/DateTimeFieldShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/date-time-field.vue"
     ]
   },
   {
@@ -1501,6 +1514,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/components/business/QsDateTimeField/index.vue",
       "apps/qsmds-arco/src/components/business/QsGenericTable/GroupHeader.vue",
       "apps/qsmds-arco/src/components/business/QsPartConfigurator/index.vue",
       "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue",
@@ -1796,6 +1810,15 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-list-view.logic.ts"
+    ]
+  },
+  {
+    "name": "i-lucide:clock",
+    "label": "i-lucide:clock",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsDateTimeField/index.vue"
     ]
   },
   {
@@ -2221,6 +2244,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/component_library/basic/date-time-display.vue",
+      "apps/qsmds-arco/src/views/component_library/business/date-time-field.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/region-scope-tree.vue"
     ]
   },
@@ -3297,6 +3321,7 @@
       "apps/qsmds-arco/src/views/component_library/basic/date-time-display.vue",
       "apps/qsmds-arco/src/views/component_library/basic/money-input.vue",
       "apps/qsmds-arco/src/views/component_library/basic/toast.vue",
+      "apps/qsmds-arco/src/views/component_library/business/date-time-field.vue",
       "apps/qsmds-arco/src/views/component_library/business/factory-shipment-modal.vue",
       "apps/qsmds-arco/src/views/component_library/business/generic-drawer.vue",
       "apps/qsmds-arco/src/views/component_library/business/generic-modal.vue",
@@ -3798,6 +3823,7 @@
     "usages": [
       "apps/qsmds-arco/src/components/base/QsToast/index.vue",
       "apps/qsmds-arco/src/components/business/QsDateRangeFilter/index.vue",
+      "apps/qsmds-arco/src/components/business/QsDateTimeField/index.vue",
       "apps/qsmds-arco/src/components/business/QsGenericDrawer/index.vue",
       "apps/qsmds-arco/src/components/business/QsGenericModal/index.vue",
       "apps/qsmds-arco/src/components/business/QsPartConfigurator/index.vue",

@@ -156,6 +156,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'date-time-field',
+        name: 'componentLibraryQsDateTimeField',
+        component: () => import('@/views/component_library/business/date-time-field.vue'),
+        meta: {
+          title: '日期时间字段',
+          icon: 'qs-date-time',
+        },
+      },
+      {
         path: 'ocean-container-list',
         name: 'componentLibraryQsOceanContainerList',
         component: () => import('@/views/component_library/business/ocean-container-list.vue'),

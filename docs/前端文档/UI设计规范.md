@@ -131,6 +131,7 @@
 | 普通中文值 | 默认 Sans；重点文字用 `qs-type-body-medium` |
 | 单号 / 编码 | 桌面列 `cellClass: 'qs-type-data-emphasis'`；需要复制时使用 `copyable` 或 `CopyCellButton` |
 | 金额 / 日期 | 优先 `AmountDisplay` / `DateTimeDisplay`；不要在每个页面重复拼接格式 |
+| 日期 / 日期时间输入 | 统一 `QsDateTimeField`；日期输出 `YYYY-MM-DD`，时间输出规范化 UTC ISO，不使用原生 `datetime-local` 或在页面内自行转换时区 |
 | 一列多行信息 | `QsTableStackedCell + QsTableStackedLine`，明确主信息、辅助信息和数值角色 |
 | 图片与产品提示 | `ImageGroup`；逐项 `tooltip` slot 使用无浮层的 `QsGoodTooltipContent`，按稳定图片 key 映射产品 |
 | 业务状态 | `FaTag` 等既有展示组件 + `qs-type-status-tag` + 文字状态 |

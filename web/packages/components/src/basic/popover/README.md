@@ -21,6 +21,8 @@
 | `sideOffset` | `number` | `4` | 与触发元素的偏移距离 |
 | `alignOffset` | `number` | `0` | 对齐偏移量 |
 | `collisionPadding` | `number` | `0` | 与视口边缘的碰撞内边距 |
+| `prioritizePosition` | `boolean` | `false` | 优先保证弹出位置；开启后先翻转再位移，适合内容高于可用空间、需要整体移动的场景 |
+| `sticky` | `'partial' \| 'always'` | `'partial'` | `partial` 只在触发器仍部分可见时保证面板不溢出；`always` 允许面板整体移动以完整显示内容 |
 | `class` | `HTMLAttributes['class']` | - | 弹出面板 CSS 类 |
 
 ## Slots

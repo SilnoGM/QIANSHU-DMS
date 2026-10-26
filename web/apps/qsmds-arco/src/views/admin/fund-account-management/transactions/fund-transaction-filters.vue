@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FundTransactionFilterState } from './fund-transaction.logic'
+import QsDateTimeField from '@/components/business/QsDateTimeField/index.vue'
 
 defineOptions({ name: 'FundTransactionFilters' })
 
@@ -261,27 +262,29 @@ watch(() => props.modelValue, (value) => {
         />
       </label>
 
-      <label class="gap-1.5 grid min-w-0 md:col-span-1 xl:col-span-2">
+      <div class="gap-1.5 grid min-w-0 md:col-span-1 xl:col-span-2">
         <span class="qs-type-compact-label">发生时间从</span>
-        <FaInput
-          :model-value="draft.occurredFrom"
-          type="datetime-local"
-          class="min-h-11 w-full sm:min-h-9"
+        <QsDateTimeField
+          :model-value="draft.occurredFrom ?? ''"
+          precision="minute"
+          clearable
           :disabled="disabled"
+          aria-label="发生时间从"
           @update:model-value="value => updateDraft('occurredFrom', value)"
         />
-      </label>
+      </div>
 
-      <label class="gap-1.5 grid min-w-0 md:col-span-1 xl:col-span-2">
+      <div class="gap-1.5 grid min-w-0 md:col-span-1 xl:col-span-2">
         <span class="qs-type-compact-label">发生时间至</span>
-        <FaInput
-          :model-value="draft.occurredTo"
-          type="datetime-local"
-          class="min-h-11 w-full sm:min-h-9"
+        <QsDateTimeField
+          :model-value="draft.occurredTo ?? ''"
+          precision="minute"
+          clearable
           :disabled="disabled"
+          aria-label="发生时间至"
           @update:model-value="value => updateDraft('occurredTo', value)"
         />
-      </label>
+      </div>
     </div>
 
     <footer class="p-3 border-t border-border/70 bg-muted/20 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">

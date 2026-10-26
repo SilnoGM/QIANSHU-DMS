@@ -457,8 +457,9 @@ test('新增页使用四步表单与独立双栏实时订单详情', async () =>
   const source = await readFile(new URL('create.vue', ROOT), 'utf8')
 
   assert.match(source, /parseSalesOrderCurrency\(route\.query\.currency\)/)
-  assert.match(source, /<FaDate/)
-  assert.match(source, /:max-value="todayDate"/)
+  assert.match(source, /<QsDateTimeField/)
+  assert.match(source, /precision="date"/)
+  assert.match(source, /disable-future/)
   assert.match(source, /resolveSalesOrderIssuerLabel\(/)
   assert.match(source, /appAccountStore\.account/)
   assert.match(source, /<QsRegionSelector/)

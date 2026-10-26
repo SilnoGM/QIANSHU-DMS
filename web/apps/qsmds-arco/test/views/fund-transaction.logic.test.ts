@@ -130,8 +130,8 @@ function batchFixture(
 }
 
 test('流水查询只输出服务端支持的稳定分页、筛选和 ISO 时间字段', () => {
-  const occurredFrom = '2026-08-18T09:00'
-  const occurredTo = '2026-08-18T18:30'
+  const occurredFrom = '2026-08-18T09:00:00.000Z'
+  const occurredTo = '2026-08-18T18:30:00.000Z'
   assert.deepEqual(buildFundTransactionQuery({
     filters: {
       accountId: USER_ACCOUNT_ID,
@@ -155,8 +155,8 @@ test('流水查询只输出服务端支持的稳定分页、筛选和 ISO 时间
     businessNo: '0000011',
     businessSourceId: SOURCE_ID,
     direction: 'CREDIT',
-    occurredFrom: new Date(occurredFrom).toISOString(),
-    occurredTo: new Date(occurredTo).toISOString(),
+    occurredFrom,
+    occurredTo,
     page: 3,
     pageSize: 50,
     postingTypeId: TYPE_ID,
@@ -180,8 +180,17 @@ test('流水查询只输出服务端支持的稳定分页、筛选和 ISO 时间
   })
   assert.throws(() => buildFundTransactionQuery({
     filters: {
-      occurredFrom: '2026-08-19T00:00',
-      occurredTo: '2026-08-18T00:00',
+      occurredFrom: '2026-08-19T00:00:00.000Z',
+      occurredTo: '2026-08-18T00:00:00.000Z',
+    },
+    page: 1,
+    pageSize: 20,
+    sortBy: 'postedAt',
+    sortOrder: 'desc',
+  }))
+  assert.throws(() => buildFundTransactionQuery({
+    filters: {
+      occurredFrom: '2026-08-18T09:00',
     },
     page: 1,
     pageSize: 20,
