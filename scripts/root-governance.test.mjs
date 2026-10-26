@@ -311,6 +311,15 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/test/api/purchase-orders.test.ts',
   'web/apps/qsmds-arco/test/browser/purchase-orders.browser.test.mjs',
   'web/apps/qsmds-arco/test/browser/sales-orders.browser.test.mjs',
+  // 销售级入仓上下文与弹窗只读取采购单已保存的供应商快照与展示标签，
+  // 不新增供应商主数据、增删改入口或独立查询通道。
+  'server/src/modules/purchase-orders/warehouse-receipts/sales-order-warehouse-receipt-query.service.spec.ts',
+  'server/src/modules/purchase-orders/warehouse-receipts/sales-order-warehouse-receipt-query.service.ts',
+  'server/src/modules/purchase-orders/warehouse-receipts/sales-order-warehouse-receipt.dto.ts',
+  'web/apps/qsmds-arco/src/views/operations/sales-orders/sales-order-warehouse-receipt-modal.vue',
+  'web/apps/qsmds-arco/src/views/operations/sales-orders/sales-order-warehouse-receipt.logic.ts',
+  'web/apps/qsmds-arco/test/views/sales-order-warehouse-receipt-action.test.ts',
+  'web/apps/qsmds-arco/test/views/sales-order-warehouse-receipt.logic.test.ts',
   'web/apps/qsmds-arco/test/views/purchase-order-cancel-flow.test.ts',
   'web/apps/qsmds-arco/test/views/purchase-order-cancel.logic.test.ts',
   'web/apps/qsmds-arco/test/views/purchase-order-create.logic.test.ts',
