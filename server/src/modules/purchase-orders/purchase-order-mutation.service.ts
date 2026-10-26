@@ -645,7 +645,9 @@ export class PurchaseOrderMutationService {
           now: this.dependencies.now(),
           validatePaymentMethod: () => this.dictionaryLookup.requireEffectiveValue(transaction, { dictionaryCode: PAYMENT_METHOD_DICTIONARY_CODE, value: input.paymentMethod }),
           lockOrder: id => this.lockOrder(transaction, id, scope, trusted.actorUserId),
-          writePayment: (order, paymentInput, confirmation, prepared) => this.writePaymentInTransaction(transaction, trusted, order, paymentInput, confirmation, prepared),
+          writePayment: (order, paymentInput, confirmation, prepared) => this.writePaymentInTransaction(transaction, trusted, order, paymentInput, confirmation, prepared,
+            // 整批共用一张截图时，凭证绑定本批任一应付款都视为合法；单笔付款仍按阶段独占消费。
+            new Set(input.items.map(item => item.payableId))),
         })
       }, { timeout: 60_000 })
     } catch (error) {
@@ -756,6 +758,7 @@ export class PurchaseOrderMutationService {
     input: PurchasePayablePaymentInput,
     confirmation?: PayableConfirmation,
     suppliedPreparation?: PreparedPayablePayment,
+    voucherPayableIds?: ReadonlySet<string>,
   ): Promise<void> {
     const purchaseOrderId = order.id
     const { paymentType, paidAt, paymentMethod, remark, mediaAssetId, recipientAccountId, recipientProfileVersion } = input
@@ -782,19 +785,24 @@ export class PurchaseOrderMutationService {
       { dictionaryCode: PAYMENT_METHOD_DICTIONARY_CODE, value: paymentMethod },
     )
     if (mediaAssetId !== null) {
-      // 临时截图只能消费一次；不同款项并发使用同一图片时，后到者必须重新上传。
+      // 批量付款允许同一张截图归档到本批多个阶段，凭证必须仍属于本批且处于可用状态；
+      // 单笔付款继续按阶段独占消费，防止其他阶段的临时截图被并发挪用。
       await transaction.$queryRaw(Prisma.sql`SELECT id FROM media_assets WHERE id = ${mediaAssetId}::uuid FOR UPDATE`)
       const asset = await transaction.mediaAsset.findFirst({
         where: {
           id: mediaAssetId,
           createdByUserId: trusted.actorUserId,
-          status: 'UPLOADING',
           mediaType: 'IMAGE',
           uploadPurpose: 'PURCHASE_PAYMENT_VOUCHER',
-          purchasePayableUploadId: prepared.payable!.id,
-          uploadExpiresAt: { gt: now },
           deletedAt: null,
           objectKey: { not: null },
+          ...(voucherPayableIds === undefined
+            ? { status: 'UPLOADING', purchasePayableUploadId: prepared.payable!.id, uploadExpiresAt: { gt: now } }
+            : {
+                purchasePayableUploadId: { in: [...voucherPayableIds] },
+                // 首次消费后资产转为 READY 且不再有上传过期时间，批内后续阶段直接复用。
+                OR: [{ status: 'READY' }, { status: 'UPLOADING', uploadExpiresAt: { gt: now } }],
+              }),
         },
         select: { id: true },
       })

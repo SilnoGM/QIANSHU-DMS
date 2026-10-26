@@ -33,7 +33,8 @@ export function normalizeBatchPayment(input: unknown): PurchasePayableBatchPayDt
     return { payableId: id(item.payableId, `items.${index}.payableId`), expectedVersion: version(item.expectedVersion, `items.${index}.expectedVersion`),
       voucher: { mediaAssetId: id(voucher.mediaAssetId, `items.${index}.voucher.mediaAssetId`) } }
   }).sort((a, b) => a.payableId.localeCompare(b.payableId))
-  if (new Set(items.map(item => item.payableId)).size !== items.length || new Set(items.map(item => item.voucher.mediaAssetId)).size !== items.length) return purchaseOrderValidationFailure('items')
+  // 一笔付款只对应一个应付阶段，但整批可以共用同一张付款截图；资产是否属于本批在事务内校验。
+  if (new Set(items.map(item => item.payableId)).size !== items.length) return purchaseOrderValidationFailure('items')
   return { supplierValue: normalizeBatchSupplier(body.supplierValue), recipientAccountId: id(body.recipientAccountId, 'recipientAccountId'),
     recipientProfileVersion: version(body.recipientProfileVersion, 'recipientProfileVersion'), paymentMethod, items }
 }

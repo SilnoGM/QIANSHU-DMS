@@ -64,8 +64,25 @@ export async function executeBatchPayment<TOrder extends BatchOrder>(
   }
   // 所有父单、共同收款资料和图片先锁定，之后才申请资金账户，避免跨订单倒序取锁。
   await dependencies.validatePaymentMethod()
-  const mediaIds = input.items.map(item => item.voucher.mediaAssetId).sort()
+  const voucherPayableIds = new Set(input.items.map(item => item.payableId))
+  const mediaIds = [...new Set(input.items.map(item => item.voucher.mediaAssetId))].sort()
   await tx.$queryRaw(Prisma.sql`SELECT id FROM media_assets WHERE id IN (${Prisma.join(mediaIds.map(id => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR UPDATE`)
+  // 一张截图可以归档到本批全部阶段，但必须由本人上传、仍属于本批且未被其他业务消费；
+  // 在申请资金账户前一次性校验，避免写到最后一张单才发现凭证无效。
+  const vouchers = await tx.mediaAsset.findMany({
+    where: {
+      id: { in: mediaIds },
+      createdByUserId: context.actorUserId,
+      mediaType: 'IMAGE',
+      uploadPurpose: 'PURCHASE_PAYMENT_VOUCHER',
+      purchasePayableUploadId: { in: [...voucherPayableIds] },
+      deletedAt: null,
+      objectKey: { not: null },
+      OR: [{ status: 'READY' }, { status: 'UPLOADING', uploadExpiresAt: { gt: dependencies.now } }],
+    },
+    select: { id: true },
+  })
+  if (vouchers.length !== mediaIds.length) return payableFailure('PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', '所选付款凭证当前不可用')
   await payables.lockPaymentAccounts(tx, context, preparedEntries.map(entry => ({ prepared: entry.prepared, orderNo: entry.order.orderNo })))
   for (const entry of preparedEntries) {
     // 同单定金写入后重读已持锁父单，使尾款状态历史从最新付款状态继续推进。
