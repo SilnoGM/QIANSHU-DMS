@@ -43,6 +43,9 @@ import { PurchaseShipmentQueryService } from './shipments/purchase-shipment-quer
 
 import { PurchaseOrderWarehouseReceiptController } from './warehouse-receipts/purchase-order-warehouse-receipt.controller'
 import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purchase-order-warehouse-receipt.service'
+import { SalesOrderWarehouseReceiptController } from './warehouse-receipts/sales-order-warehouse-receipt.controller'
+import { SalesOrderWarehouseReceiptQueryService } from './warehouse-receipts/sales-order-warehouse-receipt-query.service'
+import { SalesOrderWarehouseReceiptService } from './warehouse-receipts/sales-order-warehouse-receipt.service'
 
 @Module({
   imports: [
@@ -66,6 +69,7 @@ import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purch
     SalesOrderFactoryShipmentController,
     PurchaseShipmentController,
     PurchaseOrderWarehouseReceiptController,
+    SalesOrderWarehouseReceiptController,
   ],
   providers: [
     PurchasePayableVoucherService,
@@ -89,6 +93,8 @@ import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purch
     PurchaseShipmentNumberingService,
     PurchaseShipmentNumberBackfillService,
     PurchaseOrderWarehouseReceiptService,
+    SalesOrderWarehouseReceiptQueryService,
+    SalesOrderWarehouseReceiptService,
     {
       provide: PurchaseOrderDocumentMultipartParser,
       useFactory: (): PurchaseOrderDocumentMultipartParser =>

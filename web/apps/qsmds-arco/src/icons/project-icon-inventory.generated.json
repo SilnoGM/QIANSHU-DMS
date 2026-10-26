@@ -2331,6 +2331,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-record-list.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-details.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-warehouse-receipt-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-voucher.vue",
       "apps/qsmds-arco/src/views/workbenches/shipments/shipment-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/shipments/shipment-products.vue"
@@ -2506,7 +2507,8 @@
       "apps/qsmds-arco/src/views/component_library/business/components/SalesOrderSelectorModalShowcase.vue",
       "apps/qsmds-arco/src/views/component_library/business/factory-shipment-modal.vue",
       "apps/qsmds-arco/src/views/component_library/business/product-selector.vue",
-      "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue"
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-warehouse-receipt-modal.vue"
     ]
   },
   {
@@ -3084,6 +3086,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-image.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-warehouse-receipt-modal.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
       "apps/qsmds-arco/src/views/system/roles/index.vue",
@@ -3441,7 +3444,8 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/AppAccountButton/feedback-canvas.vue",
-      "apps/qsmds-arco/src/components/business/QsWarehouseReceiptModal/index.vue"
+      "apps/qsmds-arco/src/components/business/QsWarehouseReceiptModal/index.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-warehouse-receipt-modal.vue"
     ]
   },
   {
@@ -3450,7 +3454,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/components/business/QsWarehouseReceiptModal/index.vue"
+      "apps/qsmds-arco/src/components/business/QsWarehouseReceiptModal/index.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-warehouse-receipt-modal.vue"
     ]
   },
   {
@@ -3770,7 +3775,8 @@
       "apps/qsmds-arco/src/components/business/QsWarehouseReceiptModal/index.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/index.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list.logic.ts",
-      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-list-view.logic.ts"
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-list-view.logic.ts",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-warehouse-receipt-modal.vue"
     ]
   },
   {

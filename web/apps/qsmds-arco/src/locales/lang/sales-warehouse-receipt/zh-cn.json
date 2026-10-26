@@ -1,0 +1,36 @@
+{
+  "salesWarehouseReceipt": {
+    "title": "确认货件入仓范围",
+    "description": "选择本次实际到仓的货件，未选择的货件可后续入仓。",
+    "reload": "重新加载",
+    "cancel": "取消",
+    "confirm": "确认入仓（{count} 件）",
+    "selection": "本次入仓 {selected} 件 · 待入仓 {total} 件",
+    "selectAll": "全选待入仓",
+    "order": "销售订单",
+    "customer": "客户",
+    "shipped": "已发货",
+    "receivedCount": "已入仓 {count} 件",
+    "shipmentNo": "货件编号",
+    "unnumbered": "未编号",
+    "part": "货件-{number}",
+    "shippedAt": "发货时间",
+    "mark": "唛头：{value}",
+    "noMark": "未生成唛头",
+    "tracking": "物流单号",
+    "noTracking": "未记录",
+    "quantity": "本货件数量 {quantity}",
+    "descriptionLine": "备注：{value}",
+    "empty": "暂无可入仓货件",
+    "emptyDescription": "仅已发货且尚未入仓的有效货件可以确认入仓。",
+    "receivedAt": "入仓时间",
+    "remark": "入仓说明（可选）",
+    "remarkPlaceholder": "填写本次到仓需要留档的说明",
+    "validation": {
+      "selection": "请选择有效的待入仓货件",
+      "time": "请填写有效的入仓时间",
+      "timeRange": "入仓时间不能晚于当前时间，也不能早于所选货件的发货时间",
+      "remark": "入仓说明不能超过 500 个字符"
+    }
+  }
+}

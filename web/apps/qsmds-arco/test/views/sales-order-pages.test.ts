@@ -281,7 +281,7 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.match(source, /<SalesOrderCancelModal[\s\S]*?@cancelled="handleSalesOrderCancelled"/u)
   assert.match(source, /action\.key === 'RECORD_PAYMENT'[\s\S]*?openRecordsModal\('payments', order\)/u)
   assert.match(source, /action\.key === 'DELIVERY_RECEIPT'[\s\S]*?openRecordsAction\('receipt', order\)/u)
-  assert.match(source, /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u)
+  assert.match(source, /action\.key === 'WAREHOUSE_RECEIPT'[\s\S]*?openWarehouseReceipt\(order\.id\)/u)
   assert.match(source, /<SalesOrderRecordsModal/u)
   assert.match(source, /:initial-action="recordsModalInitialAction"/u)
   assert.match(source, /#cell-priceSummary[\s\S]*?label="实际售价"[\s\S]*?row\.original\.agreedTotalAmount/u)
@@ -698,7 +698,7 @@ test('销售待采购通过权限受控的采购前置弹窗复核并快捷新�
   assert.ok(handler, '应存在销售待办动作处理函数')
   assert.match(handler[0], /SUBMIT_PURCHASE/u)
   assert.match(handler[0], /purchaseStartVisible\.value = true/u)
-  assert.match(handler[0], /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u)
+  assert.match(handler[0], /WAREHOUSE_RECEIPT'\)[\s\S]*?openWarehouseReceipt\(order\.id\)/u)
 })
 
 test('采购审核中分类只保留查看与催办，催办为未建设的轻提示占位', async () => {
@@ -715,7 +715,7 @@ test('采购审核中分类只保留查看与催办，催办为未建设的轻�
   assert.ok(handler, '应存在销售待办动作处理函数')
   assert.match(
     handler[0],
-    /URGE_PURCHASE_REVIEW'\)[\s\S]*?toast\.info\('催办功能开发中'\)[\s\S]*?return/u,
+    /URGE_PURCHASE_REVIEW'\)[\s\S]*?toast\.info\('催办功能开发中'\)/u,
     '催办只提示功能未建设，不打开表单也不写数据',
   )
 
@@ -737,7 +737,7 @@ test('采购审核中分类只保留查看与催办，催办为未建设的轻�
   assert.match(source, /审核通过后自动进入待发货/u)
 })
 
-test('销售待发货使用双更新权限打开聚合发货弹窗并保持后续动作占位', async () => {
+test('销售待发货使用双更新权限打开聚合发货弹窗', async () => {
   const source = await readFile(new URL('index.vue', ROOT), 'utf8')
 
   assert.match(source, /import QsFactoryShipmentModal from '@\/components\/business\/QsFactoryShipmentModal\/index\.vue'/u)
@@ -760,9 +760,32 @@ test('销售待发货使用双更新权限打开聚合发货弹窗并保持后�
     source,
     /action\.key === 'FACTORY_SHIPMENT'[\s\S]*?openSalesFactoryShipment\(order\)/u,
   )
+})
+
+test('销售待入仓使用双更新权限打开货件入仓范围弹窗', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+
   assert.match(
     source,
-    /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u,
-    '货物入仓与装柜出货仍应保持建设中提示',
+    /import SalesOrderWarehouseReceiptModal from '\.\/sales-order-warehouse-receipt-modal\.vue'/u,
   )
+  assert.match(
+    source,
+    /const canWarehouseReceipt = computed\(\(\) => \([\s\S]*?auth\('sales-orders:update'\)[\s\S]*?auth\('purchase-orders:update'\)/u,
+    '货件入仓操作必须同时持有销售与采购更新权限',
+  )
+  assert.match(
+    source,
+    /key === 'WAREHOUSE_RECEIPT'[\s\S]*?return canWarehouseReceipt\.value/u,
+  )
+  assert.match(source, /useSalesWarehouseReceipt\(/u)
+  assert.match(source, /formatSalesWarehouseReceiptSuccess/u)
+  assert.match(source, /<SalesOrderWarehouseReceiptModal[\s\S]*?:context="warehouseReceiptContext"/u)
+  assert.match(source, /@submit="submitWarehouseReceipt"/u)
+  assert.match(source, /@retry="reloadWarehouseReceipt"/u)
+  assert.match(
+    source,
+    /action\.key === 'WAREHOUSE_RECEIPT'[\s\S]*?openWarehouseReceipt\(order\.id\)/u,
+  )
+  assert.doesNotMatch(source, /功能正在建设中/u)
 })

@@ -1,0 +1,272 @@
+import { HttpStatus, Injectable } from '@nestjs/common'
+
+import { Prisma } from '../../../generated/prisma/client'
+import { PrismaService } from '../../../infrastructure/database/prisma.service'
+import {
+  PERSON_REFERENCE_SELECT,
+  toNullablePersonReference,
+} from '../../../infrastructure/database/person-reference'
+import { ApiException } from '../../../infrastructure/http/api.exception'
+import {
+  DataScopeService,
+  dataScopeFallback,
+  resolveDataScopeActor,
+} from '../../access-control/data-scope.service'
+import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
+import { salesOrderScopeWhere } from '../../sales-orders/sales-order-access'
+import {
+  purchaseOrderSupplierFromSources,
+  type PurchaseOrderSupplier,
+} from '../purchase-order-query.service'
+import type { PurchaseOrderPartDto } from '../dto/purchase-order-response.dto'
+import { requireFactoryShipmentUuid } from '../factory-shipments/purchase-order-factory-shipment.normalizer'
+
+const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
+
+const CONTEXT_LINE_SELECT = {
+  id: true,
+  productId: true,
+  productNoSnapshot: true,
+  productNameSnapshot: true,
+  descriptionSnapshot: true,
+  quantity: true,
+  product: {
+    select: {
+      media: {
+        where: {
+          kind: 'IMAGE',
+          isPrimary: true,
+          detachedAt: null,
+          mediaAsset: { is: { status: 'READY' } },
+        },
+        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+        take: 1,
+        select: { id: true },
+      },
+    },
+  },
+} as const satisfies Prisma.PurchaseOrderLineSelect
+
+const CONTEXT_PURCHASE_ORDER_SELECT = {
+  id: true,
+  orderNo: true,
+  orderDate: true,
+  productMode: true,
+  supplierValue: true,
+  customSupplierName: true,
+  fulfillmentStatus: true,
+  version: true,
+  shippingMarkText: true,
+  parts: {
+    orderBy: { partNumber: 'asc' },
+    select: {
+      id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true,
+      shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true, destinationWarehouseValue: true,
+      shippedBy: { select: PERSON_REFERENCE_SELECT },
+      warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true,
+      warehouseReceivedBy: { select: PERSON_REFERENCE_SELECT },
+      items: { orderBy: { line: { lineNumber: 'asc' } }, select: {
+        purchaseOrderLineId: true, quantity: true, line: { select: { lineNumber: true } },
+      } },
+    },
+  },
+  lines: {
+    orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+    select: CONTEXT_LINE_SELECT,
+  },
+} as const satisfies Prisma.PurchaseOrderSelect
+
+type ContextPurchaseOrderRow = Prisma.PurchaseOrderGetPayload<{
+  select: typeof CONTEXT_PURCHASE_ORDER_SELECT
+}>
+
+export interface SalesOrderWarehouseReceiptContext {
+  readonly salesOrder: {
+    readonly id: string
+    readonly orderNo: string
+    readonly customerName: string
+    readonly fulfillmentStatus: 'LAND_TRANSIT'
+    readonly version: number
+  }
+  readonly purchaseOrders: readonly {
+    readonly id: string
+    readonly orderNo: string
+    readonly orderDate: string
+    readonly supplier: PurchaseOrderSupplier
+    readonly fulfillmentStatus: ContextPurchaseOrderRow['fulfillmentStatus']
+    readonly version: number
+    readonly shippingMarkText: string | null
+    readonly receivedPartCount: number
+    readonly parts: readonly PurchaseOrderPartDto[]
+    readonly lineSummary: {
+      readonly lineCount: number
+      readonly totalQuantity: number
+      readonly previews: readonly {
+        readonly lineId: string
+        readonly productName: string
+        readonly productNo: string | null
+        readonly description: string | null
+        readonly quantity: number
+        readonly mainImage: {
+          readonly id: string
+          readonly contentUrl: string
+        } | null
+      }[]
+    }
+  }[]
+  readonly pendingReceiptPartCount: number
+}
+
+@Injectable()
+export class SalesOrderWarehouseReceiptQueryService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dictionaryLookup: DictionaryLookupService,
+    private readonly dataScope: DataScopeService = dataScopeFallback(),
+  ) {}
+
+  async getContext(
+    rawSalesOrderId: unknown,
+    actorUserId: string = resolveDataScopeActor(),
+  ): Promise<SalesOrderWarehouseReceiptContext> {
+    const salesOrderId = requireFactoryShipmentUuid(rawSalesOrderId, 'salesOrderId')
+    const scope = await this.dataScope.resolve(actorUserId)
+    const salesOrder = await this.prisma.salesOrder.findFirst({
+      where: { id: salesOrderId, ...salesOrderScopeWhere(scope, actorUserId) },
+      select: {
+        id: true,
+        orderNo: true,
+        customerName: true,
+        orderStatus: true,
+        fulfillmentStatus: true,
+        version: true,
+      },
+    })
+    if (salesOrder === null) {
+      throw new ApiException(
+        HttpStatus.NOT_FOUND,
+        'SALES_ORDER_NOT_FOUND',
+        '销售订单不存在',
+      )
+    }
+    if (
+      salesOrder.orderStatus !== 'CONFIRMED'
+      || salesOrder.fulfillmentStatus !== 'LAND_TRANSIT'
+    ) {
+      throw new ApiException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'SALES_WAREHOUSE_RECEIPT_NOT_ALLOWED',
+        '销售订单当前不处于待入仓状态',
+      )
+    }
+
+    const rows = await this.prisma.purchaseOrder.findMany({
+      where: {
+        salesOrderId,
+        purchaseType: 'SALES_LINKED',
+        orderStatus: { in: ['CONFIRMED', 'COMPLETED'] },
+      },
+      orderBy: [{ orderDate: 'asc' }, { orderNo: 'asc' }, { id: 'asc' }],
+      select: CONTEXT_PURCHASE_ORDER_SELECT,
+    })
+    // 只保留还有待入仓货件且审核已落定的采购单；存在待审核货件时单采购单入口也会拒绝。
+    const pendingRows = rows.filter(row => (
+      !row.parts.some(part => part.status === 'PENDING_REVIEW')
+      && row.parts.some(part => (
+        part.status === 'ACTIVE'
+        && part.shippedAt !== null
+        && part.warehouseReceivedAt === null
+      ))
+    ))
+    const dictionarySupplierRows = pendingRows.filter(
+      (row): row is typeof row & { readonly supplierValue: string } =>
+        row.supplierValue !== null,
+    )
+    const resolutions = await this.dictionaryLookup.resolveStoredValues({
+      dictionaryCode: SUPPLIER_DICTIONARY_CODE,
+      values: dictionarySupplierRows.map(row => row.supplierValue),
+    })
+    const supplierByOrderId = new Map(dictionarySupplierRows.map((row, index) => [
+      row.id,
+      purchaseOrderSupplierFromSources(row, resolutions[index]),
+    ]))
+    const purchaseOrders = pendingRows.map(row => this.mapPurchaseOrder(
+      row,
+      supplierByOrderId.get(row.id) ?? purchaseOrderSupplierFromSources(row, undefined),
+    ))
+    return {
+      salesOrder: {
+        id: salesOrder.id,
+        orderNo: salesOrder.orderNo,
+        customerName: salesOrder.customerName,
+        fulfillmentStatus: 'LAND_TRANSIT',
+        version: salesOrder.version,
+      },
+      purchaseOrders,
+      pendingReceiptPartCount: purchaseOrders.reduce(
+        (sum, order) => sum + order.parts.length,
+        0,
+      ),
+    }
+  }
+
+  private mapPurchaseOrder(
+    row: ContextPurchaseOrderRow,
+    resolvedSupplier: PurchaseOrderSupplier,
+  ): SalesOrderWarehouseReceiptContext['purchaseOrders'][number] {
+    const active = row.parts.filter(part => part.status === 'ACTIVE')
+    return {
+      id: row.id,
+      orderNo: row.orderNo,
+      orderDate: row.orderDate.toISOString().slice(0, 10),
+      supplier: resolvedSupplier,
+      fulfillmentStatus: row.fulfillmentStatus,
+      version: row.version,
+      shippingMarkText: row.shippingMarkText,
+      receivedPartCount: active.filter(part => part.warehouseReceivedAt !== null).length,
+      parts: active
+        .filter(part => part.shippedAt !== null && part.warehouseReceivedAt === null)
+        .map(part => ({
+          id: part.id, shipmentNo: part.shipmentNo, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
+          shippedAt: part.shippedAt!.toISOString(),
+          shippedById: part.shippedById,
+          shippedBy: toNullablePersonReference(part.shippedBy),
+          shipmentRecordedAt: part.shipmentRecordedAt?.toISOString() ?? null,
+          shipmentRemark: part.shipmentRemark,
+          trackingNo: part.trackingNo ?? null,
+          destinationWarehouseValue: part.destinationWarehouseValue ?? null,
+          warehouseReceivedAt: null,
+          warehouseReceivedById: null,
+          warehouseRecordedAt: null,
+          warehouseRemark: null,
+          warehouseReceivedBy: null,
+          items: part.items.map(item => ({
+            purchaseOrderLineId: item.purchaseOrderLineId,
+            lineNumber: item.line.lineNumber,
+            quantity: item.quantity,
+          })),
+        })),
+      lineSummary: {
+        lineCount: row.lines.length,
+        totalQuantity: row.lines.reduce((sum, line) => sum + line.quantity, 0),
+        previews: row.lines.map((line) => {
+          const image = line.product?.media[0]
+          return {
+            lineId: line.id,
+            productName: line.productNameSnapshot,
+            productNo: line.productNoSnapshot,
+            description: line.descriptionSnapshot,
+            quantity: line.quantity,
+            mainImage: line.productId === null || image === undefined
+              ? null
+              : {
+                  id: image.id,
+                  contentUrl:
+                    `/api/purchase-orders/${row.id}/lines/${line.id}/main-image/${image.id}/content`,
+                },
+          }
+        }),
+      },
+    }
+  }
+}

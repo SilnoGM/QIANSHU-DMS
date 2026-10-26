@@ -22,6 +22,9 @@ import type {
   SalesOrderStatusCountsDto,
   SalesOrderStatusRequestDto,
   SalesOrderTemporaryDocumentDto,
+  SalesOrderWarehouseReceiptContextDto,
+  SalesOrderWarehouseReceiptRequestDto,
+  SalesOrderWarehouseReceiptResultDto,
 } from '../generated/types.gen'
 
 import api from '../index'
@@ -90,6 +93,20 @@ export function createSalesOrdersApi(client: AxiosInstance) {
       signal: AbortSignal,
     ) => client.post<FactoryShipmentResultDto>(
       `sales-orders/${encodeURIComponent(salesOrderId)}/factory-shipments`,
+      data,
+      { errorPresentation: 'local', retry: false, signal },
+    ),
+    warehouseReceiptContext: (salesOrderId: string, signal: AbortSignal) =>
+      client.get<SalesOrderWarehouseReceiptContextDto>(
+        `sales-orders/${encodeURIComponent(salesOrderId)}/warehouse-receipt-context`,
+        { errorPresentation: 'local', signal },
+      ),
+    warehouseReceipt: (
+      salesOrderId: string,
+      data: SalesOrderWarehouseReceiptRequestDto,
+      signal: AbortSignal,
+    ) => client.post<SalesOrderWarehouseReceiptResultDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/warehouse-receipts`,
       data,
       { errorPresentation: 'local', retry: false, signal },
     ),

@@ -101,6 +101,9 @@ import {
   formatSalesOrderSummaryAmount,
 } from './sales-order-list.logic'
 import SalesOrderRecordsModal from './sales-order-records-modal.vue'
+import SalesOrderWarehouseReceiptModal from './sales-order-warehouse-receipt-modal.vue'
+import { formatSalesWarehouseReceiptSuccess } from './sales-order-warehouse-receipt.logic'
+import { useSalesWarehouseReceipt } from './use-sales-warehouse-receipt'
 
 defineOptions({ name: 'OperationsSalesOrders' })
 
@@ -152,6 +155,11 @@ const canUpdateProducts = computed(() => auth('sales-orders:update'))
 const canCancelOrders = computed(() => auth('sales-orders:update'))
 const canCreatePurchase = computed(() => auth('purchase-orders:create'))
 const canFactoryShipment = computed(() => (
+  auth('sales-orders:update')
+  && auth('purchase-orders:update')
+  && auth('purchase-orders:read')
+))
+const canWarehouseReceipt = computed(() => (
   auth('sales-orders:update')
   && auth('purchase-orders:update')
   && auth('purchase-orders:read')
@@ -215,6 +223,25 @@ let shipmentSubmitAbortController: AbortController | null = null
 let queryRefreshPending = false
 let queryRefreshIncludesCounts = false
 const todayDate = today(getLocalTimeZone())
+
+const {
+  visible: warehouseReceiptVisible,
+  context: warehouseReceiptContext,
+  loading: warehouseReceiptLoading,
+  submitting: warehouseReceiptSubmitting,
+  error: warehouseReceiptError,
+  open: openWarehouseReceipt,
+  reload: reloadWarehouseReceipt,
+  submit: submitWarehouseReceipt,
+  setVisible: setWarehouseReceiptVisible,
+} = useSalesWarehouseReceipt(
+  canWarehouseReceipt,
+  computed(() => appAccountStore.authEpoch),
+  (result) => {
+    toast.success(formatSalesWarehouseReceiptSuccess(result))
+    scheduleQueryRefresh(true)
+  },
+)
 
 const availableOrderCurrencies = computed(() => currencyCatalog.selectableCurrencies.value.filter(
   currency => currency.code === 'TWD' || currency.code === 'MYR',
@@ -793,7 +820,7 @@ function pendingSlotActionKey(
   }
 }
 
-/** 已落地动作继续遵守原权限；占位动作不改变数据，仅向有读取权限的用户说明建设状态。 */
+/** 已落地动作继续遵守原权限；催办不改变数据，仅向有读取权限的用户说明能力状态。 */
 function canShowSalesOrderRowActionKey(key: SalesOrderPendingActionKey): boolean {
   if (key === 'SUBMIT_PURCHASE') {
     return canCreatePurchase.value
@@ -806,6 +833,9 @@ function canShowSalesOrderRowActionKey(key: SalesOrderPendingActionKey): boolean
   }
   if (key === 'FACTORY_SHIPMENT') {
     return canFactoryShipment.value
+  }
+  if (key === 'WAREHOUSE_RECEIPT') {
+    return canWarehouseReceipt.value
   }
   return true
 }
@@ -1004,12 +1034,14 @@ function handleSalesOrderRowAction(
     openSalesFactoryShipment(order)
     return
   }
+  if (action.key === 'WAREHOUSE_RECEIPT') {
+    void openWarehouseReceipt(order.id)
+    return
+  }
   // 催办尚无通知通道：只提示能力状态，不写数据、不打开任何表单。
   if (action.key === 'URGE_PURCHASE_REVIEW') {
     toast.info('催办功能开发中')
-    return
   }
-  toast.info(`${action.label}功能正在建设中`)
 }
 
 async function validatePresetPurchaseSource(
@@ -2441,6 +2473,17 @@ onBeforeUnmount(() => {
       @submit="submitSalesFactoryShipment"
       @cancel="closeSalesFactoryShipment"
       @retry="loadSalesFactoryShipmentContext"
+    />
+
+    <SalesOrderWarehouseReceiptModal
+      :model-value="warehouseReceiptVisible"
+      :context="warehouseReceiptContext"
+      :loading="warehouseReceiptLoading"
+      :submitting="warehouseReceiptSubmitting"
+      :error="warehouseReceiptError"
+      @update:model-value="setWarehouseReceiptVisible"
+      @submit="submitWarehouseReceipt"
+      @retry="reloadWarehouseReceipt"
     />
 
     <QsPurchaseStartModal

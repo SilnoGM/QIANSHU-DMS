@@ -5,6 +5,8 @@ import { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-
 import { PurchaseOrderFactoryShipmentService } from '../src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment.service'
 import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
 import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
+import { SalesOrderWarehouseReceiptQueryService } from '../src/modules/purchase-orders/warehouse-receipts/sales-order-warehouse-receipt-query.service'
+import { SalesOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/sales-order-warehouse-receipt.service'
 import { withDatabaseBusinessClock } from './fixtures/database-business-clock.fixture'
 import { createPaymentRecipientFixture } from './fixtures/payment-recipient.fixture'
 import { destinationWarehouses } from './purchase-destination-warehouse.fixture'
@@ -22,6 +24,17 @@ describe('sales fulfillment after warehouse receipt with isolated PostgreSQL', (
   function receipts(audit = fixture.audit) {
     return new PurchaseOrderWarehouseReceiptService(fixture.prisma, audit,
       new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma), createPaymentRecipientFixture(fixture.prisma)))
+  }
+
+  function salesReceipts(audit = fixture.audit) {
+    return new SalesOrderWarehouseReceiptService(fixture.prisma, audit, receipts(audit))
+  }
+
+  function salesContext() {
+    return new SalesOrderWarehouseReceiptQueryService(
+      fixture.prisma,
+      new DictionaryLookupService(fixture.prisma),
+    )
   }
 
   async function prepare(quantities: number[]) {
@@ -59,6 +72,18 @@ describe('sales fulfillment after warehouse receipt with isolated PostgreSQL', (
         targetId: salesOrderId, eventType: 'SALES_ORDER_FULFILLMENT_STATUS_CHANGED',
         metadata: { path: ['trigger'], equals: 'PURCHASE_WAREHOUSE_RECEIPT' },
       } }),
+    }
+  }
+
+  async function batchTargets(salesOrderId: string) {
+    const context = await salesContext().getContext(salesOrderId)
+    return {
+      context,
+      targets: context.purchaseOrders.map(order => ({
+        purchaseOrderId: order.id,
+        expectedVersion: order.version,
+        partIds: order.parts.map(part => part.id),
+      })),
     }
   }
 
@@ -109,6 +134,143 @@ describe('sales fulfillment after warehouse receipt with isolated PostgreSQL', (
     expect(await fixture.prisma.purchaseOrderStatusHistory.count({ where: { purchaseOrderId: order.id } })).toBe(purchaseHistoryBefore)
     expect(await fixture.prisma.auditEvent.count({ where: { targetId: order.id, eventType: 'PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED' } })).toBe(0)
     await receipts().receive(fixture.context(), order.id, input)
+    expect((await progress(salesOrder.id)).order.fulfillmentStatus).toBe('WAREHOUSE_ARRIVED')
+  })
+
+  it('receives every selected purchase order in one transaction and replays without a second transition', async () => {
+    const { salesOrder, orders } = await prepare([1, 1])
+    const { context, targets } = await batchTargets(salesOrder.id)
+    expect(context.purchaseOrders).toHaveLength(2)
+    expect(context.pendingReceiptPartCount).toBe(2)
+    const service = salesReceipts()
+    const request = { targets }
+    const result = await withDatabaseBusinessClock(
+      fixture.prisma,
+      () => service.receive(fixture.context(), salesOrder.id, request),
+    )
+    expect(result).toMatchObject({
+      receivedPartCount: 2,
+      changedPurchaseOrderCount: 2,
+      remainingPendingReceiptCount: 0,
+      salesOrder: {
+        id: salesOrder.id,
+        fulfillmentStatus: 'WAREHOUSE_ARRIVED',
+        advancedToWarehouseArrived: true,
+      },
+    })
+    expect(result.purchaseOrders).toHaveLength(2)
+    const after = await progress(salesOrder.id)
+    expect(after.order).toMatchObject({ fulfillmentStatus: 'WAREHOUSE_ARRIVED', version: salesOrder.version + 1 })
+    expect(after.history).toHaveLength(1)
+    expect(after.audit).toHaveLength(1)
+    for (const order of orders) {
+      expect(await fixture.prisma.purchaseOrderPart.count({
+        where: { purchaseOrderId: order.id, warehouseReceivedAt: null },
+      })).toBe(0)
+    }
+    await expect(salesContext().getContext(salesOrder.id)).rejects.toMatchObject({
+      code: 'SALES_WAREHOUSE_RECEIPT_NOT_ALLOWED',
+    })
+
+    const replay = await withDatabaseBusinessClock(
+      fixture.prisma,
+      () => service.receive(fixture.context(), salesOrder.id, request),
+    )
+    expect(replay).toMatchObject({
+      receivedPartCount: 0,
+      changedPurchaseOrderCount: 0,
+      remainingPendingReceiptCount: 0,
+      salesOrder: { fulfillmentStatus: 'WAREHOUSE_ARRIVED', advancedToWarehouseArrived: false },
+    })
+    expect(await progress(salesOrder.id)).toEqual(after)
+  })
+
+  it('keeps the sales order in transit after a partial range and advances on the remaining range', async () => {
+    const { salesOrder, orders } = await prepare([1, 1])
+    const { targets } = await batchTargets(salesOrder.id)
+    const service = salesReceipts()
+    const partial = await withDatabaseBusinessClock(
+      fixture.prisma,
+      () => service.receive(fixture.context(), salesOrder.id, { targets: [targets[0]] }),
+    )
+    expect(partial).toMatchObject({
+      receivedPartCount: 1,
+      changedPurchaseOrderCount: 1,
+      remainingPendingReceiptCount: 1,
+      salesOrder: { fulfillmentStatus: 'LAND_TRANSIT', advancedToWarehouseArrived: false },
+    })
+    expect((await progress(salesOrder.id)).order.fulfillmentStatus).toBe('LAND_TRANSIT')
+    const remainingContext = await salesContext().getContext(salesOrder.id)
+    expect(remainingContext.purchaseOrders).toHaveLength(1)
+    expect(remainingContext.purchaseOrders[0].id).not.toBe(targets[0].purchaseOrderId)
+
+    const final = await withDatabaseBusinessClock(
+      fixture.prisma,
+      () => service.receive(fixture.context(), salesOrder.id, { targets: [targets[1]] }),
+    )
+    expect(final).toMatchObject({
+      receivedPartCount: 1,
+      changedPurchaseOrderCount: 1,
+      remainingPendingReceiptCount: 0,
+      salesOrder: { fulfillmentStatus: 'WAREHOUSE_ARRIVED', advancedToWarehouseArrived: true },
+    })
+    expect((await progress(salesOrder.id)).order.fulfillmentStatus).toBe('WAREHOUSE_ARRIVED')
+    expect(orders).toHaveLength(2)
+  })
+
+  it('rejects stale versions, foreign parts and times before shipment without persisting any target', async () => {
+    const { salesOrder, orders } = await prepare([1, 1])
+    const { targets } = await batchTargets(salesOrder.id)
+    const service = salesReceipts()
+    await expect(service.receive(fixture.context(), salesOrder.id, {
+      targets: [{ ...targets[0], expectedVersion: targets[0].expectedVersion + 1 }],
+    })).rejects.toMatchObject({ code: 'SALES_WAREHOUSE_RECEIPT_STATE_CHANGED' })
+    await expect(service.receive(fixture.context(), salesOrder.id, {
+      targets: [{ purchaseOrderId: orders[0].id, expectedVersion: orders[0].version, partIds: [orders[1].parts[0].id] }],
+    })).rejects.toMatchObject({ code: 'SALES_WAREHOUSE_RECEIPT_TARGET_INVALID' })
+    const earliestShippedAt = Math.min(...orders.flatMap(order => order.parts.map(part => new Date(part.shippedAt!).getTime())))
+    await expect(service.receive(fixture.context(), salesOrder.id, {
+      targets,
+      receivedAt: new Date(earliestShippedAt - 60_000).toISOString(),
+    })).rejects.toMatchObject({ code: 'SALES_WAREHOUSE_RECEIPT_TIME_INVALID' })
+    expect(await fixture.prisma.purchaseOrderPart.count({
+      where: { purchaseOrderId: { in: orders.map(order => order.id) }, warehouseReceivedAt: { not: null } },
+    })).toBe(0)
+    expect(await fixture.prisma.auditEvent.count({
+      where: {
+        targetId: { in: orders.map(order => order.id) },
+        eventType: 'PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED',
+      },
+    })).toBe(0)
+    expect((await progress(salesOrder.id)).order.fulfillmentStatus).toBe('LAND_TRANSIT')
+  })
+
+  it('rolls every purchase order back when the single sales transition audit fails', async () => {
+    const { salesOrder, orders } = await prepare([1, 1])
+    const { targets } = await batchTargets(salesOrder.id)
+    const audit = new AuditService(), realRecord = audit.record.bind(audit)
+    jest.spyOn(audit, 'record').mockImplementation((transaction, input) => {
+      if (input.eventType === 'SALES_ORDER_FULFILLMENT_STATUS_CHANGED') throw new AuditWriteFailedError()
+      return realRecord(transaction, input)
+    })
+    await expect(withDatabaseBusinessClock(
+      fixture.prisma,
+      () => salesReceipts(audit).receive(fixture.context(), salesOrder.id, { targets }),
+    )).rejects.toBeInstanceOf(AuditWriteFailedError)
+    expect(await fixture.prisma.purchaseOrderPart.count({
+      where: { purchaseOrderId: { in: orders.map(order => order.id) }, warehouseReceivedAt: { not: null } },
+    })).toBe(0)
+    expect(await fixture.prisma.auditEvent.count({
+      where: {
+        targetId: { in: orders.map(order => order.id) },
+        eventType: 'PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED',
+      },
+    })).toBe(0)
+    expect((await progress(salesOrder.id)).order.fulfillmentStatus).toBe('LAND_TRANSIT')
+    await withDatabaseBusinessClock(
+      fixture.prisma,
+      () => salesReceipts().receive(fixture.context(), salesOrder.id, { targets }),
+    )
     expect((await progress(salesOrder.id)).order.fulfillmentStatus).toBe('WAREHOUSE_ARRIVED')
   })
 })
