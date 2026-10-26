@@ -6,7 +6,7 @@ import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
 import { CurrentUserId, resolveDataScopeActor } from '../auth/decorators/current-user-id.decorator'
 import { ContainerBatchIdDto, ContainerBatchListQueryDto, ContainerLoadingItemIdDto } from './container-batch.dto'
-import { OperationsOceanContainerItemsQueryDto, OperationsOceanContainerLineDto, OperationsOceanContainerLinePageDto, OperationsOceanContainerPageDto } from './operations-ocean-container.dto'
+import { OperationsOceanContainerAllLineDto, OperationsOceanContainerAllLinePageDto, OperationsOceanContainerItemsQueryDto, OperationsOceanContainerLineDto, OperationsOceanContainerLinePageDto, OperationsOceanContainerPageDto } from './operations-ocean-container.dto'
 import { OperationsOceanContainerService } from './operations-ocean-container.service'
 
 function contract(operationId: string, resourceLocator = false) {
@@ -24,6 +24,21 @@ export class OperationsOceanContainerController {
   @Get() @RequirePermissions('sales-orders:read') @contract('operations_ocean_containers_list') @ApiContractResponse({ status: 200, type: OperationsOceanContainerPageDto })
   list(@Query() query: ContainerBatchListQueryDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) {
     return this.service.list(actorUserId, query)
+  }
+
+  @Get('all') @RequirePermissions('sales-orders:read') @contract('operations_ocean_containers_all_list') @ApiContractResponse({ status: 200, type: OperationsOceanContainerPageDto })
+  listAll(@Query() query: ContainerBatchListQueryDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) {
+    return this.service.listAll(actorUserId, query)
+  }
+
+  @Get('all/:id/items') @RequirePermissions('sales-orders:read') @contract('operations_ocean_container_all_items_list', true) @ApiContractResponse({ status: 200, type: OperationsOceanContainerAllLinePageDto })
+  itemsAll(@Param() params: ContainerBatchIdDto, @Query() query: OperationsOceanContainerItemsQueryDto, @Req() request: object) {
+    return this.service.itemsAll(getRequestAuthContext(request).userId, params.id, query)
+  }
+
+  @Get('all/:id/items/:itemId') @RequirePermissions('sales-orders:read') @contract('operations_ocean_container_all_items_get', true) @ApiContractResponse({ status: 200, type: OperationsOceanContainerAllLineDto })
+  itemAll(@Param() params: ContainerLoadingItemIdDto, @Req() request: object) {
+    return this.service.itemAll(getRequestAuthContext(request).userId, params.id, params.itemId)
   }
 
   @Get(':id/items') @RequirePermissions('sales-orders:read') @contract('operations_ocean_container_items_list', true) @ApiContractResponse({ status: 200, type: OperationsOceanContainerLinePageDto })

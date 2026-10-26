@@ -31,3 +31,21 @@ test('金额修改携带版本和原幂等键，金额字符串不转浮点', as
   assert.deepEqual(calls[0], ['operations/ocean-containers/batch%2F1/items/line%2F1/changes', payload, { signal, errorPresentation: 'local', retry: false }])
   assert.deepEqual(calls[0], calls[1])
 })
+
+test('全部柜次读取使用显式 all 路径，明细详情可读取他人行', async () => {
+  const calls: unknown[][] = []
+  const api = createOperationsOceanContainersApi({ get: (...args: unknown[]) => {
+    calls.push(args)
+    return Promise.resolve({ data: {} })
+  } } as unknown as AxiosInstance)
+  const signal = new AbortController().signal
+  const query = { page: 1, pageSize: 10 }
+  await api.listAll(query, signal)
+  await api.allItems('batch/1', query, signal)
+  await api.allItem('batch/1', 'line/1', signal)
+  assert.deepEqual(calls, [
+    ['operations/ocean-containers/all', { signal, errorPresentation: 'local', params: query }],
+    ['operations/ocean-containers/all/batch%2F1/items', { signal, errorPresentation: 'local', params: query }],
+    ['operations/ocean-containers/all/batch%2F1/items/line%2F1', { signal, errorPresentation: 'local' }],
+  ])
+})

@@ -18,6 +18,7 @@ import {
   createPurchaseOrderEditingState,
   getPurchaseOrderMutationFailure,
   hasPurchasablePurchaseOrderSourceLines,
+  mapRejectedPurchaseCopy,
   parsePurchaseOrderCreateContext,
   parsePurchaseOrderCreateType,
   replayUnknownPurchaseOrderSubmission,
@@ -788,4 +789,97 @@ test('自定义采购基础步骤至少需要一种完整收款资料，错误�
   assert.equal(resolvePurchaseOrderCreateStepForField('paymentAccounts.0.bankName'), 0)
   assert.equal(validatePurchaseOrderCreateStep({ ...source, paymentAccounts: [{ paymentMethod: 'BANK_TRANSFER', recipientName: '收款人', bankName: '银行', bankAccount: '1234' }] }, 0).valid, true)
   assert.equal(validatePurchaseOrderCreateStep({ ...source, paymentAccounts: [{ paymentMethod: 'WECHAT', recipientName: '收款人' }] }, 0).valid, false)
+})
+
+test('已驳回采购单映射为修订单草稿并保留行号、货件和来源数量上限', () => {
+  const detail = {
+    orderNo: 'PO/20261025-00001',
+    purchaseType: 'SALES_LINKED',
+    productMode: 'CUSTOM',
+    orderStatus: 'CANCELLED',
+    rejection: {
+      rejectedAt: '2026-10-25T01:00:00.000Z',
+      rejectedBy: { id: 'user-1', displayName: '审核人', avatarUrl: null },
+      reason: '价格需要修改',
+    },
+    supplier: { label: '测试供应商', value: null },
+    depositDueAmount: '10.00',
+    balanceDueAmount: '10.00',
+    remark: '原单备注',
+    paymentRecipientProfile: {
+      id: 'profile-1',
+      version: 1,
+      accounts: [{
+        id: 'account-1',
+        paymentMethod: 'BANK_TRANSFER',
+        recipientName: '收款人',
+        qrMediaAssetId: null,
+        qrContentUrl: null,
+        bankName: '银行',
+        bankAccount: '6222',
+        bankBranch: null,
+      }],
+    },
+    lines: [{
+      id: 'line-2',
+      lineNumber: 2,
+      lineType: 'CUSTOM',
+      productId: null,
+      sourceSalesOrderLineId: null,
+      productNo: null,
+      productName: '椅子',
+      description: null,
+      referencePurchaseUnitPriceAmount: '10.00',
+      actualPurchaseUnitPriceAmount: '10.00',
+      quantity: 2,
+      lineTotalAmount: '20.00',
+    }, {
+      id: 'line-1',
+      lineNumber: 1,
+      lineType: 'CUSTOM',
+      productId: null,
+      sourceSalesOrderLineId: 'source-line-1',
+      productNo: null,
+      productName: '桌子',
+      description: '说明',
+      referencePurchaseUnitPriceAmount: '10.00',
+      actualPurchaseUnitPriceAmount: '10.00',
+      quantity: 1,
+      lineTotalAmount: '10.00',
+    }],
+    parts: [{
+      id: 'part-1',
+      shipmentNo: 'SHIP-1',
+      partNumber: 1,
+      status: 'CANCELLED',
+      shippingMarkText: null,
+      items: [
+        { purchaseOrderLineId: 'line-1', lineNumber: 1, quantity: 1 },
+        { purchaseOrderLineId: 'line-2', lineNumber: 2, quantity: 2 },
+      ],
+    }],
+  } as PurchaseOrderDetailDto
+
+  const draft = mapRejectedPurchaseCopy(detail, new Map([['source-line-1', 5]]))
+  assert.deepEqual(draft.lines.map(line => [line.key, line.name, line.quantity]), [
+    ['copy-line-1', '桌子', '1'],
+    ['copy-line-2', '椅子', '2'],
+  ])
+  assert.deepEqual(draft.sourceSalesOrderLineIdByKey, { 'copy-line-1': 'source-line-1' })
+  assert.deepEqual(draft.maximumQuantityByKey, { 'copy-line-1': 5 })
+  assert.deepEqual(draft.parts.map(part => part.items), [[
+    { productKey: 'copy-line-1', quantity: 1 },
+    { productKey: 'copy-line-2', quantity: 2 },
+  ]])
+  assert.equal(draft.depositDueAmount, '10.00')
+  assert.equal(draft.balanceDueAmount, '10.00')
+  assert.equal(draft.remark, '原单备注')
+  assert.deepEqual(draft.paymentAccounts, [{
+    paymentMethod: 'BANK_TRANSFER',
+    recipientName: '收款人',
+    qrMediaAssetId: null,
+    bankName: '银行',
+    bankAccount: '6222',
+    bankBranch: null,
+  }])
 })

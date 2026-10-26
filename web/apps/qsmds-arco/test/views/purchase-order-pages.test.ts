@@ -203,15 +203,48 @@ test('全部与待办采购均使用带计数的状态工具栏', async () => {
   assert.match(source, /if \(action\.key === 'WAREHOUSE_RECEIPT'\)/u)
   assert.match(source, /warehouseActionRef\.value\?\.open\(order\.id\)/u)
   assert.match(source, />发货|action\.label/u)
-  assert.doesNotMatch(source, /canCancelPurchaseOrderFromList|openPurchaseOrderCancellation/u)
-  assert.doesNotMatch(source, /cancelLoadingOrderId|cancelActionsRef/u)
-  assert.doesNotMatch(source, /openPurchaseOrderDetail\(row, 'cancel'\)/u)
-  assert.doesNotMatch(source, /i-lucide:circle-x/u)
+  assert.match(source, /const canCancel = computed\(\(\) => auth\('purchase-orders:update'\) \|\| auth\('purchase-orders:review'\)\)/u)
+  assert.match(source, /import PurchaseOrderCancelModal from '.\/purchase-order-cancel-modal\.vue'/u)
+  assert.match(source, /getPurchaseOrderCancelBlockedReason/u)
+  assert.match(source, /purchaseOrderCancelBlockedMessage/u)
+  assert.match(source, /<PurchaseOrderCancelModal[\s\S]*?@cancelled="handlePurchaseOrderCancelled"/u)
   assert.doesNotMatch(
     source,
     /v-else-if="canUpdate && nextPurchaseOrderFulfillmentStatus\(row\)"/u,
   )
   assert.doesNotMatch(source, /props\.viewMode === 'all' && canManagePayment/u)
+})
+
+test('全部采购为 update 或 review 提供固定槽位取消入口', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+
+  assert.match(
+    source,
+    /<template v-if="props\.viewMode === 'all'">[\s\S]*?:aria-label="`\$\{row\.orderNo\}：取消采购单`"/u,
+  )
+  assert.match(
+    source,
+    /:text="purchaseOrderCancelBlockedReason\(row\) \?\? ''"[\s\S]*?:disabled="purchaseOrderCancelBlockedReason\(row\) === null"/u,
+  )
+  assert.match(source, /:disabled="purchaseOrderCancelBlockedReason\(row\) !== null"/u)
+  assert.match(source, /@click="openPurchaseOrderCancel\(row\)"/u)
+  assert.match(source, /@click="openPurchaseOrderCancel\(row\)"[\s\S]*?取消/u)
+  assert.match(
+    source,
+    /function purchaseOrderCancelBlockedReason\(order: PurchaseOrderListItemDto\): string \| null \{[\s\S]*?allowPendingReview: true/u,
+  )
+  assert.match(
+    source,
+    /canUpdate\.value && canCancel\.value[\s\S]*?\{ kind: 'icon' \}/u,
+  )
+  assert.match(
+    source,
+    /v-if="canUpdate && canCancel"[\s\S]*?:aria-label="`\$\{row\.orderNo\}：更多操作`"/u,
+  )
+  assert.match(
+    source,
+    /v-if="!\(canUpdate && canCancel\)"[\s\S]*?:aria-label="`\$\{row\.orderNo\}：详情`"/u,
+  )
 })
 
 test('采购日期范围位于搜索框前并以内嵌叉号清除', async () => {
@@ -436,8 +469,8 @@ test('销售关联采购仅在切换不同订单时重置产品和付款依赖',
   assert.match(handlerSource, /const previousSalesOrderId = selectedSalesOrder\.value\?\.id \?\? null/u)
   assert.match(
     handlerSource,
-    /const sourceChanged = previousSalesOrderId !== null\s+&& previousSalesOrderId !== item\.id/u,
-    '首次选择和重选同一订单不得清空已经填写的下游资料',
+    /const sourceChanged = \(previousSalesOrderId !== null && previousSalesOrderId !== item\.id\)\s+\|\| \(copyApplied && copySourceSalesOrderId !== null && item\.id !== copySourceSalesOrderId\)/u,
+    '首次选择和重选同一订单不得清空已经填写的下游资料；仅驳回预填后切换到其他来源才重置',
   )
   assert.match(
     handlerSource,
@@ -608,4 +641,24 @@ test('销售快捷入口首次视图未命中时只回退部分采购视图', as
   assert.match(source, /const shortcutViews = \['UNPURCHASED', 'PARTIALLY_PURCHASED'\] as const/u)
   assert.match(source, /for \(const view of shortcutViews\)/u)
   assert.doesNotMatch(source, /shortcutViews = \[[^\]]*COMPLETED_PURCHASE_ADD_ON/u)
+})
+
+test('已驳回采购单可预填创建页而不复用原单号与唛头', async () => {
+  const source = await readFile(new URL('create.vue', ROOT), 'utf8')
+
+  assert.match(source, /const copyFromId = typeof route\.query\.copyFrom/u)
+  assert.match(source, /purchaseOrdersApi\.getById\(copyFromId/u)
+  assert.match(source, /mapRejectedPurchaseCopy/u)
+  assert.match(source, /source\.orderStatus !== 'CANCELLED' \|\| source\.rejection === null/u)
+  assert.match(source, /基于已驳回采购单/u)
+  assert.match(source, /copySourceOrderNo/u)
+})
+
+test('驳回单详情提供基于原单新建入口', async () => {
+  const source = await readFile(new URL('purchase-order-detail-drawer.vue', ROOT), 'utf8')
+
+  assert.match(source, /const canRework = computed/u)
+  assert.match(source, /function reworkRejectedOrder/u)
+  assert.match(source, /copyFrom: order\.id/u)
+  assert.match(source, /@rework="reworkRejectedOrder"/u)
 })

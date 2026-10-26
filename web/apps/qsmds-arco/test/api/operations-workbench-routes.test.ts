@@ -16,6 +16,7 @@ test('仓储运输接入到仓和海运柜次业务页，海外寄仓保留占�
   assert.deepEqual(warehouseRoute?.children?.map(route => ({ name: route.name, path: route.path, title: route.meta?.title })), [
     { name: 'qsOperationsWarehouseArrivals', path: 'warehouse-arrivals', title: '到仓货件' },
     { name: 'qsOperationsOceanContainers', path: 'ocean-containers', title: '海运柜次' },
+    { name: 'qsOperationsOceanContainersAll', path: 'ocean-containers/all', title: '全部海运柜次' },
     { name: 'qsOperationsOverseasStorage', path: 'overseas-storage', title: '海外寄仓' },
   ])
   const arrivals = warehouseRoute?.children?.[0]
@@ -24,7 +25,12 @@ test('仓储运输接入到仓和海运柜次业务页，海外寄仓保留占�
   const ocean = warehouseRoute?.children?.[1]
   assert.match(String(ocean?.component), /operations\/ocean-containers\/index\.vue/u)
   assert.equal(ocean?.meta?.auth, 'sales-orders:read')
-  const overseas = warehouseRoute?.children?.[2]
+  const oceanAll = warehouseRoute?.children?.[2]
+  assert.match(String(oceanAll?.component), /operations\/ocean-containers\/all\.vue/u)
+  assert.equal(oceanAll?.meta?.auth, 'sales-orders:read')
+  assert.equal(oceanAll?.meta?.menu, false)
+  assert.equal(oceanAll?.meta?.activeMenu, '/qs-operations/warehouse-transport/ocean-containers')
+  const overseas = warehouseRoute?.children?.[3]
   assert.match(String(overseas?.component), /workbenches\/placeholder\.vue/u)
   assert.equal(overseas?.meta?.auth, undefined)
 

@@ -14,6 +14,7 @@ import type {
   PurchaseOrderPaymentVoidRequestDto,
   PurchaseOrderPrepareReviewShippingMarksRequestDto,
   PurchaseOrderProductOptionsDto,
+  PurchaseOrderRejectRequestDto,
   PurchaseOrderReviewContextDto,
   PurchaseOrderReviewRequestDto,
   PurchaseOrderShippingMarkResolutionDto,
@@ -97,6 +98,12 @@ export function createPurchaseOrdersApi(client: AxiosInstance) {
       }),
     review: (purchaseOrderId: string, data: PurchaseOrderReviewRequestDto, signal: AbortSignal) =>
       client.post<PurchaseOrderDetailDto>(`${orderPath(purchaseOrderId)}/review`, data, {
+        errorPresentation: 'local',
+        retry: false,
+        signal,
+      }),
+    reject: (purchaseOrderId: string, data: PurchaseOrderRejectRequestDto, signal: AbortSignal) =>
+      client.post<PurchaseOrderDetailDto>(`${orderPath(purchaseOrderId)}/reject`, data, {
         errorPresentation: 'local',
         retry: false,
         signal,

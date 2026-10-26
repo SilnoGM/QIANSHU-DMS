@@ -1,6 +1,6 @@
 # QsOceanContainerList
 
-面向运营、销售视角的柜次卡片列表。每柜一张卡片，概览展示整柜资料，展开后只展示调用方提供的本人装柜明细。对外只有列表入口，内部按单柜次卡片拆分。
+面向运营、销售视角的柜次卡片列表。每柜一张卡片，概览展示整柜资料；个人页展开后只展示调用方提供的本人装柜明细，全部柜次页展开后展示整柜明细并按 `mine` 区分本人行。对外只有列表入口，内部按单柜次卡片拆分。
 
 ## 边界
 
@@ -60,6 +60,11 @@ const details = ref<Record<string, OceanContainerDetailPage>>({})
 | `canViewSales` | `boolean` | `false`，具有对应权限且销售订单 ID、编号齐全时显示来源按钮 |
 | `canViewPurchase` | `boolean` | `false`，具有对应权限且采购订单 ID、编号齐全时显示来源按钮 |
 | `canModify` | `boolean` | `false`，允许显示“修改代收 / 修改信息 / 取消代收”；业务权限与归属由调用方及服务端校验 |
+| `detailScope` | `'mine' \| 'all'` | `'mine'`，决定明细加载门槛与空态/分页文案；`all` 用整柜 `itemCount` 判断是否加载 |
+| `measureScope` | `'mine' \| 'all'` | `'mine'`，切换“我的总毛重/总材积”与“整柜总毛重/总材积” |
+| `restrictLineActions` | `boolean` | `false`，为 `true` 时按每行 `mine` 禁用修改与来源入口；查看详情始终可用 |
+| `showSource` | `boolean` | `true`，为 `false` 时隐藏来源列和销售/采购订单入口；全部柜次页使用 |
+| `emptyDescription` | `string` | 无，覆盖空态说明；个人页用于解释“仅显示含本人明细的柜次” |
 | `v-model:expanded-ids` | `string[]` | 已展开柜次 ID；允许同时展开多柜 |
 
 类型定义见 [types.ts](./types.ts)。`OceanContainerDetailPage.status` 支持 `idle / loading / ready / error`；每页包含 `items / total / page / pageSize` 及可选的 `error`。默认首次请求个人明细第 1 页、每页 20 条。
@@ -83,7 +88,7 @@ const details = ref<Record<string, OceanContainerDetailPage>>({})
 
 ## 正式页面接入
 
-页面要求登录且具有 `sales-orders:read`。整柜概览与个人计数分别由服务端提供；个人明细仅返回关联销售订单出单人为当前用户的记录，管理员也不自动放宽此范围。查看完整详情时重新请求接口，重新校验归属。
+页面要求登录且具有 `sales-orders:read`。`data-scope:self` 下柜次列表与明细都只返回关联销售订单出单人为当前用户的记录，管理员也不放宽此范围；`data-scope:all` 下主页面保留全量柜次与全部明细，但修改与来源入口仍然只对本人明细开放，他人行禁用。全量柜次与全部明细也可从隐藏的「全部柜次」页进入。整柜概览与个人计数分别由服务端提供。查看完整详情时重新请求接口，重新校验范围。
 
 销售、采购来源分别复用 `QsSalesOrderDrawer`、`QsPurchaseOrderDrawer`；采购读取仍要求 `purchase-orders:read`。每次点击或重试先读取运营个人明细，确认归属后才使用返回的最新订单 ID 请求详情。两个阶段共享取消信号，关闭、撤权或身份切换后不能继续加载或回填旧内容。
 
@@ -92,6 +97,15 @@ const details = ref<Record<string, OceanContainerDetailPage>>({})
 正式页面的装柜明细抽屉顶部突出海运唛头与代收货款，货件唛头和品名单独标注。收件人区可一键复制当前明细的客户姓名、客户电话、收件地址及备注；缺失字段保留空值，多行内容保持换行，复制成功后保留抽屉。
 
 具有 `sales-orders:update` 的用户可在本人明细操作列选择“修改信息”“修改代收”或“取消代收”，桌面和手机入口一致。修改信息与代收使用四步弹窗完成编辑、对比并复制、确认已发送到群、成功提示；取消代收使用三步弹窗完成取消确认并复制、确认已发送到群、成功提示，将代收金额更新为零。取消发送确认不会修改数据库。成功页倒数 5 秒关闭，期间可撤销本次更改，恢复修改前的字段；撤销带版本保护，不能覆盖他人后续修改。写请求使用原始版本和幂等键，未知结果可原样重试。弹窗最终关闭后刷新该柜当前页并失效其所有旧分页缓存，保持柜次展开状态。
+
+### 全部柜次页（隐藏路由）
+
+`/qs-operations/warehouse-transport/ocean-containers/all` 只从主页面「查看全部柜次」进入，`meta.menu: false` 不进菜单。页面通过 `operations/ocean-containers/all` 与 `/all/:id/items` 读取所有柜次和全部明细，卡片使用 `detail-scope="all"`、`measure-scope="all"`、`restrict-line-actions`、`:show-source="false"`：
+
+- 本人柜次（`myItemCount > 0`）用「本人柜次」标签标识，他人柜次用「他人柜次」标签标识，卡片本身不加底色
+- 本人明细行（`mine === true`）加浅绿底色
+- 非本人明细行无底色，但同样可以打开装柜明细抽屉查看资料；修改操作仍只在个人页提供
+- 不显示来源列，也不挂载销售/采购详情抽屉；装柜明细抽屉仍复用个人 `:id/items/:itemId`，服务端重新校验归属
 
 ## 组件库验收
 

@@ -14,6 +14,9 @@ export class OperationsOceanContainerDto extends PickType(ContainerBatchDto, [
 }
 
 export class OperationsOceanContainerPageDto {
+  @ApiProperty({ enum: ['SELF', 'ALL'], description: 'Effective data scope used for the container list and item reads.' })
+  dataScope!: 'SELF' | 'ALL'
+
   @ApiProperty({ type: [OperationsOceanContainerDto] }) items!: OperationsOceanContainerDto[]
   @ApiProperty({ minimum: 0 }) total!: number
 }
@@ -30,5 +33,16 @@ export class OperationsOceanContainerLineDto extends PickType(ContainerLoadingIt
 
 export class OperationsOceanContainerLinePageDto {
   @ApiProperty({ type: [OperationsOceanContainerLineDto] }) items!: OperationsOceanContainerLineDto[]
+  @ApiProperty({ minimum: 0 }) total!: number
+}
+
+/** 全部柜次页读取整柜明细；mine 只用于前端逐行禁用操作，不替代服务端写接口授权。 */
+export class OperationsOceanContainerAllLineDto extends OperationsOceanContainerLineDto {
+  @ApiProperty({ description: 'Whether the linked sales order was issued by the current authenticated user.' })
+  mine!: boolean
+}
+
+export class OperationsOceanContainerAllLinePageDto {
+  @ApiProperty({ type: [OperationsOceanContainerAllLineDto] }) items!: OperationsOceanContainerAllLineDto[]
   @ApiProperty({ minimum: 0 }) total!: number
 }

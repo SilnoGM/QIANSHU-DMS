@@ -95,8 +95,12 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
       const directory = resolve(__dirname, '../prisma/migrations')
       try {
         for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name) && name >= '20261021170000_purchase_shipment_delivery').sort()) {
-          // 前缀迁移已在初始 schema 提前应用，避免当前查询代码在签收回填前缺列。
-          if (migration === '20261022130000_user_profile_issuer_prefix') continue
+          // 出单人前缀与采购驳回迁移已在初始 schema 提前应用；重放签收迁移时
+          // 跳过，避免对已存在的列再次执行 ALTER。
+          if (
+            migration === '20261022130000_user_profile_issuer_prefix'
+            || migration === '20261025120000_purchase_order_rejection'
+          ) continue
           await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
         }
       }

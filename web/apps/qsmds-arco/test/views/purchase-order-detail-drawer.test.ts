@@ -118,7 +118,7 @@ test('采购详情动作精确受 update、payment 和 document 权限控制', a
   assert.doesNotMatch(source, /activeDialog === 'cancel'|取消采购订单？/u)
 })
 
-test('运营采购列表保留详情抽屉，全部及待办视图均不提供取消入口', async () => {
+test('运营采购列表保留详情抽屉，全部视图提供取消入口，待办视图不提供', async () => {
   const source = await readFile(new URL(
     '../../src/views/operations/purchase-orders/index.vue',
     import.meta.url,
@@ -131,7 +131,13 @@ test('运营采购列表保留详情抽屉，全部及待办视图均不提供�
   assert.match(source, /openPurchaseOrderDetail/u)
   assert.doesNotMatch(source, /loadPurchaseOrderForCancellation|cancellationDetail|cancelLoadingOrderId/u)
   assert.match(source, /purchaseOrdersApi\.getById/u)
-  assert.doesNotMatch(source, /cancelActionsRef|openPurchaseOrderCancellation|canCancelPurchaseOrderFromList/u)
+  assert.match(source, /import PurchaseOrderCancelModal from '.\/purchase-order-cancel-modal\.vue'/u)
+  assert.match(source, /openPurchaseOrderCancel/u)
+  assert.match(source, /getPurchaseOrderCancelBlockedReason/u)
+  assert.match(
+    source,
+    /<template v-if="props\.viewMode === 'all'">[\s\S]*?:aria-label="`\$\{row\.orderNo\}：取消采购单`"/u,
+  )
   assert.doesNotMatch(source, /openPurchaseOrderDetail\(row, 'cancel'\)/u)
   assert.doesNotMatch(source, /:initial-action=/u)
   assert.match(source, /@detail-updated=/u)

@@ -20,6 +20,7 @@ const props = defineProps<{
   busy: boolean
   canAttachDocument?: boolean
   canReceiveWarehouse?: boolean
+  canRework?: boolean
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -27,6 +28,7 @@ const emit = defineEmits<{
   'closed': []
   'attachDocument': []
   'receiveWarehouse': []
+  'rework': []
 }>()
 const { t } = useI18n()
 const toast = useQsToast()
@@ -125,6 +127,9 @@ function onClosed() {
       <div class="flex gap-2 justify-end">
         <FaButton v-if="canReceiveWarehouse" variant="ghost" class="text-primary" :disabled="busy || loading || !detail || Boolean(error)" @click="emit('receiveWarehouse')">
           <FaIcon name="i-lucide:warehouse" class="size-4" />{{ t('purchaseWarehouseReceipt.action') }}
+        </FaButton>
+        <FaButton v-if="canRework" type="button" variant="outline" size="sm" class="px-3 h-8" :disabled="busy || loading || !detail || Boolean(error)" @click="emit('rework')">
+          <FaIcon name="i-lucide:copy-plus" class="size-4" aria-hidden="true" />基于此单新建
         </FaButton>
         <FaButton type="button" variant="outline" size="sm" class="px-3 h-8" :disabled="busy || loading || !detail || Boolean(error)" @click="toast.info(t('purchaseOrderDrawer.printNotice'))">
           <FaIcon name="i-lucide:printer" class="size-4" aria-hidden="true" />{{ t('purchaseOrderDrawer.print') }}

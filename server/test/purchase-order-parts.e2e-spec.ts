@@ -273,10 +273,22 @@ describe('purchase parts with isolated PostgreSQL', () => {
         shippingMarkText: true, shippingMarkIssuanceId: true, shippingMarkKeyHash: true,
         createdAt: true, items: true,
       } } as const
-      const before = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { parts: historicalParts } })
+      // 历史 schema 尚未应用采购驳回迁移；显式选择当时存在的列，
+      // 避免 Prisma 默认全列查询引用 rejected_at。
+      const historicalOrder = {
+        select: {
+          id: true,
+          orderNo: true,
+          orderStatus: true,
+          fulfillmentStatus: true,
+          version: true,
+          parts: historicalParts,
+        },
+      } as const
+      const before = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, ...historicalOrder })
       const ledger = await fixture.prisma.numberingIssuance.findMany()
       await fixture.migrateReview()
-      expect(await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { parts: historicalParts } })).toEqual(before)
+      expect(await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, ...historicalOrder })).toEqual(before)
       jest.spyOn(fixture.resolver, 'resolve').mockRejectedValue(new Error('Historical v4 must not resolve current rules'))
       await expect(createCommands(fixture).create(context, input)).resolves.toBe(id)
       await expect(createCommands(fixture).create(context, { ...input, parts: [{ ...input.parts[0], key: randomUUID() }] }))

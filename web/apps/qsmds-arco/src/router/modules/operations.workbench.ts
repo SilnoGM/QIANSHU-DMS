@@ -121,6 +121,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '海运柜次', icon: 'qs-ocean-containers', auth: 'sales-orders:read' },
       },
       {
+        // 隐藏页只从海运柜次的「查看全部柜次」进入；activeMenu 保持侧边栏高亮，不新增菜单项。
+        path: 'ocean-containers/all',
+        name: 'qsOperationsOceanContainersAll',
+        component: () => import('@/views/operations/ocean-containers/all.vue'),
+        meta: {
+          title: '全部海运柜次',
+          auth: 'sales-orders:read',
+          activeMenu: '/qs-operations/warehouse-transport/ocean-containers',
+          menu: false,
+        },
+      },
+      {
         path: 'overseas-storage',
         name: 'qsOperationsOverseasStorage',
         component: () => import('@/views/workbenches/placeholder.vue'),

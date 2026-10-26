@@ -12,7 +12,6 @@ import {
   buildPurchaseOrderListQuery,
   buildPurchaseOrderStatusCountsQuery,
   calculatePurchaseOrderPaymentProgress,
-  canCancelPurchaseOrderFromList,
   formatPurchaseFactoryShipmentSuccess,
   formatPurchaseOrderSummaryAmount,
   fulfillmentStatusLabel,
@@ -261,15 +260,6 @@ test('采购待办槽位不因付款或状态变化消失，点击守卫返回�
     }),
     null,
   )
-})
-
-test('全部采购仅允许审核中与已确认订单从操作列进入取消流程', () => {
-  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'PENDING_REVIEW', fulfillmentStatus: 'ORDERED' }), true)
-  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING' }), true)
-  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'PARTIALLY_SHIPPED' }), false)
-  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'SHIPPED' }), false)
-  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'COMPLETED', fulfillmentStatus: 'SIGNED' }), false)
-  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CANCELLED', fulfillmentStatus: 'ORDERED' }), false)
 })
 
 test('采购审核中的标签、独立查询和待办动作不允许提前履约', () => {

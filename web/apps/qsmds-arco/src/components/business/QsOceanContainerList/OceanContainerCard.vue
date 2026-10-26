@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { OceanContainerDetailPage, OceanContainerLine, OceanContainerSummary } from './types'
+import type { OceanContainerDetailPage, OceanContainerDetailScope, OceanContainerLine, OceanContainerMeasureScope, OceanContainerSummary } from './types'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 import { Decimal } from 'decimal.js'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
+import { hasOceanContainerDetails, isOceanContainerLineActionable, isOceanContainerLineHighlighted, isOwnOceanContainer, visibleOceanContainerColumns } from './logic'
 import OceanContainerRecipient from './OceanContainerRecipient.vue'
 import OceanContainerSource from './OceanContainerSource.vue'
 
@@ -15,6 +16,10 @@ const props = defineProps<{
   canViewSales: boolean
   canViewPurchase: boolean
   canModify: boolean
+  detailScope: OceanContainerDetailScope
+  measureScope: OceanContainerMeasureScope
+  restrictLineActions: boolean
+  showSource: boolean
 }>()
 const emit = defineEmits<{
   toggle: [open: boolean]
@@ -27,8 +32,20 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const id = useId()
 const toggleLabel = computed(() => t('qsOceanContainer.toggle', { action: t(props.expanded ? 'qsOceanContainer.collapse' : 'qsOceanContainer.expand'), name: props.item.containerBatchName }))
-const hasPersonal = computed(() => props.item.myItemCount > 0)
-const isLoading = computed(() => hasPersonal.value && (!props.detail || ['idle', 'loading'].includes(props.detail.status)))
+const ownContainer = computed(() => isOwnOceanContainer(props.item))
+const hasDetails = computed(() => hasOceanContainerDetails(props.item, props.detailScope))
+const isLoading = computed(() => hasDetails.value && (!props.detail || ['idle', 'loading'].includes(props.detail.status)))
+const detailLabel = computed(() => t(props.detailScope === 'all' ? 'qsOceanContainer.allDetails' : 'qsOceanContainer.myDetails'))
+const columns = computed(() => visibleOceanContainerColumns(props.showSource))
+const loadingItemsLabel = computed(() => t(props.detailScope === 'all' ? 'qsOceanContainer.loadingAllItems' : 'qsOceanContainer.loadingItems'))
+const weightLabel = computed(() => t(props.measureScope === 'all' ? 'qsOceanContainer.weightAll' : 'qsOceanContainer.weight'))
+const volumeLabel = computed(() => t(props.measureScope === 'all' ? 'qsOceanContainer.volumeAll' : 'qsOceanContainer.volume'))
+function lineActionable(line: OceanContainerLine): boolean {
+  return isOceanContainerLineActionable(line, props.restrictLineActions)
+}
+function lineHighlighted(line: OceanContainerLine): boolean {
+  return isOceanContainerLineHighlighted(line, props.detailScope)
+}
 function measurement(value: string | null, precision: number) {
   if (value == null) {
     return '—'
@@ -55,6 +72,9 @@ function measurement(value: string | null, precision: number) {
                 {{ item.containerBatchName }}
               </h3>
               <span class="qs-type-data text-muted-foreground [overflow-wrap:anywhere]">{{ item.containerBatchNo }}</span>
+              <FaTag v-if="detailScope === 'all'" variant="outline" :class="ownContainer ? 'text-primary border-primary/40' : 'text-muted-foreground border-border'">
+                {{ t(ownContainer ? 'qsOceanContainer.ownContainer' : 'qsOceanContainer.otherContainer') }}
+              </FaTag>
             </div>
           </div>
           <FaButton variant="ghost" size="sm" class="shrink-0" :aria-label="toggleLabel" :aria-expanded="expanded" :aria-controls="`${id}-details`" @click="emit('toggle', !expanded)">
@@ -93,10 +113,10 @@ function measurement(value: string | null, precision: number) {
           </dd>
         </div>
         <div class="flex gap-2 items-baseline">
-          <dt class="ocean-accent qs-type-meta">
+          <dt class="qs-type-meta" :class="ownContainer ? 'ocean-accent' : 'text-muted-foreground'">
             {{ t('qsOceanContainer.myItems') }}
           </dt>
-          <dd class="ocean-accent qs-type-data-emphasis m-0">
+          <dd class="qs-type-data-emphasis m-0" :class="ownContainer ? 'ocean-accent' : 'text-muted-foreground'">
             {{ t('qsOceanContainer.count', { count: item.myItemCount }) }}
           </dd>
         </div>
@@ -104,7 +124,7 @@ function measurement(value: string | null, precision: number) {
       <dl class="m-0 flex flex-wrap gap-x-5 gap-y-2">
         <div class="flex gap-2 items-baseline">
           <dt class="qs-type-meta text-muted-foreground">
-            {{ t('qsOceanContainer.weight') }}
+            {{ weightLabel }}
           </dt>
           <dd class="qs-type-data m-0">
             {{ measurement(item.grossWeightKgTotal, 0) }}<span v-if="item.grossWeightKgTotal !== null" class="qs-type-meta text-muted-foreground ml-1">kg</span>
@@ -112,7 +132,7 @@ function measurement(value: string | null, precision: number) {
         </div>
         <div class="flex gap-2 items-baseline">
           <dt class="qs-type-meta text-muted-foreground">
-            {{ t('qsOceanContainer.volume') }}
+            {{ volumeLabel }}
           </dt>
           <dd class="qs-type-data m-0">
             {{ measurement(item.volumeCaiTotal, 2) }}<span v-if="item.volumeCaiTotal !== null" class="qs-type-meta text-muted-foreground ml-1">{{ t('qsOceanContainer.volumeUnit') }}</span>
@@ -121,35 +141,35 @@ function measurement(value: string | null, precision: number) {
       </dl>
     </div>
     <FaCollapsible :model-value="expanded" @update:model-value="emit('toggle', $event)">
-      <section :id="`${id}-details`" :aria-label="`${item.containerBatchName} · ${t('qsOceanContainer.myDetails')}`" :aria-busy="isLoading" class="border-t border-border">
+      <section :id="`${id}-details`" :aria-label="`${item.containerBatchName} · ${detailLabel}`" :aria-busy="isLoading" class="border-t border-border">
         <div v-if="isLoading" role="status" class="qs-type-description text-muted-foreground px-5 py-10 flex gap-2 items-center justify-center">
-          <FaIcon name="i-lucide:loader-circle" class="size-4 motion-safe:animate-spin" aria-hidden="true" />{{ t('qsOceanContainer.loadingItems') }}
+          <FaIcon name="i-lucide:loader-circle" class="size-4 motion-safe:animate-spin" aria-hidden="true" />{{ loadingItemsLabel }}
         </div>
-        <div v-else-if="hasPersonal && detail?.status === 'error'" class="px-4 py-8 flex flex-col gap-3 items-center">
+        <div v-else-if="hasDetails && detail?.status === 'error'" class="px-4 py-8 flex flex-col gap-3 items-center">
           <FaEmpty icon="i-lucide:circle-alert" :title="t('qsOceanContainer.itemsError')" :description="detail.error" />
           <FaButton variant="outline" size="sm" @click="emit('retry')">
             {{ t('qsOceanContainer.retryItems') }}
           </FaButton>
         </div>
         <FaEmpty
-          v-else-if="!hasPersonal || !detail?.items.length"
+          v-else-if="!hasDetails || !detail?.items.length"
           icon="i-lucide:package-open" class="px-4 py-8"
-          :title="t(item.itemCount === 0 ? 'qsOceanContainer.noItems' : 'qsOceanContainer.noPersonal')"
-          :description="t(item.itemCount === 0 ? 'qsOceanContainer.noItemsHint' : 'qsOceanContainer.noPersonalHint')"
+          :title="t(detailScope === 'all' || item.itemCount === 0 ? 'qsOceanContainer.noItems' : 'qsOceanContainer.noPersonal')"
+          :description="t(detailScope === 'all' || item.itemCount === 0 ? 'qsOceanContainer.noItemsHint' : 'qsOceanContainer.noPersonalHint')"
         />
         <template v-else>
           <div class="ocean-lines-desktop">
             <table class="qs-type-body text-left w-full border-collapse table-fixed">
-              <colgroup><col class="w-[calc(6em+2rem)]"><col class="w-[15%]"><col class="w-[calc(12em+2rem)]"><col><col class="w-[184px]"><col class="w-[218px]"><col :class="canModify ? 'w-48' : 'w-24'"></colgroup>
+              <colgroup><col class="w-[calc(6em+2rem)]"><col class="w-[15%]"><col class="w-[calc(12em+2rem)]"><col><col class="w-[184px]"><col v-if="showSource" class="w-[218px]"><col :class="canModify ? 'w-48' : 'w-24'"></colgroup>
               <thead class="qs-type-meta text-muted-foreground bg-muted/10">
                 <tr>
-                  <th v-for="key in ['recipient', 'mark', 'goods', 'shippingMark', 'cod', 'source', 'actions']" :key="key" scope="col" class="font-medium px-4 py-3" :class="key === 'cod' && 'text-right'">
+                  <th v-for="key in columns" :key="key" scope="col" class="font-medium px-4 py-3" :class="key === 'cod' && 'text-right'">
                     {{ t(`qsOceanContainer.${key}`) }}
                   </th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="line in detail.items" :key="line.id" class="group border-t border-border hover:bg-muted/20">
+                <tr v-for="line in detail.items" :key="line.id" class="group border-t border-border hover:bg-muted/20" :class="lineHighlighted(line) && 'bg-primary/10 dark:bg-primary/15'">
                   <td class="px-4 py-3">
                     <OceanContainerRecipient :line="line" />
                   </td>
@@ -181,13 +201,13 @@ function measurement(value: string | null, precision: number) {
                   <td class="px-4 py-3 text-right">
                     <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent ocean-emphasis" />
                   </td>
-                  <td class="px-4 py-3">
-                    <OceanContainerSource :line="line" :can-view-sales="canViewSales" :can-view-purchase="canViewPurchase" @view="emit('viewSource', { lineId: line.id, kind: $event })" />
+                  <td v-if="showSource" class="px-4 py-3">
+                    <OceanContainerSource :line="line" :can-view-sales="canViewSales && lineActionable(line)" :can-view-purchase="canViewPurchase && lineActionable(line)" @view="emit('viewSource', { lineId: line.id, kind: $event })" />
                   </td>
                   <td class="px-2 py-3">
                     <div class="gap-1" :class="canModify ? 'grid grid-cols-2' : 'flex items-center'">
                       <template v-if="canModify">
-                        <FaButton v-for="kind in (['COD', 'RECIPIENT', 'CANCEL_COD'] as const)" :key="kind" variant="ghost" size="sm" class="text-foreground px-2" :aria-label="t('qsOceanContainer.changeLabel', { action: t(`qsOceanContainer.change${kind}`), mark: line.oceanShippingMarkText ?? line.goodsName })" @click="emit('changeLine', { lineId: line.id, kind })">
+                        <FaButton v-for="kind in (['COD', 'RECIPIENT', 'CANCEL_COD'] as const)" :key="kind" variant="ghost" size="sm" class="text-foreground px-2" :disabled="!lineActionable(line)" :aria-label="t('qsOceanContainer.changeLabel', { action: t(`qsOceanContainer.change${kind}`), mark: line.oceanShippingMarkText ?? line.goodsName })" @click="emit('changeLine', { lineId: line.id, kind })">
                           {{ t(`qsOceanContainer.change${kind}`) }}
                         </FaButton>
                       </template>
@@ -201,7 +221,7 @@ function measurement(value: string | null, precision: number) {
             </table>
           </div>
           <div class="ocean-lines-mobile">
-            <div v-for="line in detail.items" :key="line.id" class="p-4 border-b border-border flex flex-col gap-2 last:border-b-0">
+            <div v-for="line in detail.items" :key="line.id" class="p-4 border-b border-border flex flex-col gap-2 last:border-b-0" :class="lineHighlighted(line) && 'bg-primary/10 dark:bg-primary/15'">
               <div class="flex gap-2 min-w-0 items-center justify-between">
                 <div class="flex gap-1 min-w-0 items-center">
                   <FaTooltip align="center" :text="line.oceanShippingMarkText ?? ''" :disabled="!line.oceanShippingMarkText">
@@ -219,7 +239,7 @@ function measurement(value: string | null, precision: number) {
               <div v-if="line.shipmentNo" class="qs-type-meta text-muted-foreground break-all">
                 {{ line.shipmentNo }}
               </div>
-              <OceanContainerSource :line="line" :can-view-sales="canViewSales" :can-view-purchase="canViewPurchase" @view="emit('viewSource', { lineId: line.id, kind: $event })" />
+              <OceanContainerSource v-if="showSource" :line="line" :can-view-sales="canViewSales && lineActionable(line)" :can-view-purchase="canViewPurchase && lineActionable(line)" @view="emit('viewSource', { lineId: line.id, kind: $event })" />
               <div class="flex flex-wrap gap-2 items-center justify-between">
                 <OceanContainerRecipient :line="line" />
                 <AmountDisplay :value="line.codAmountTwd" currency="TWD" :currencies="currencies" class="ocean-accent ocean-emphasis" />
@@ -227,7 +247,7 @@ function measurement(value: string | null, precision: number) {
               <div class="pt-2 border-t border-border flex justify-end">
                 <div class="gap-1" :class="canModify ? 'grid grid-cols-2' : 'flex'">
                   <template v-if="canModify">
-                    <FaButton v-for="kind in (['COD', 'RECIPIENT', 'CANCEL_COD'] as const)" :key="kind" variant="ghost" size="sm" class="text-foreground px-2 min-h-11" :aria-label="t('qsOceanContainer.changeLabel', { action: t(`qsOceanContainer.change${kind}`), mark: line.oceanShippingMarkText ?? line.goodsName })" @click="emit('changeLine', { lineId: line.id, kind })">
+                    <FaButton v-for="kind in (['COD', 'RECIPIENT', 'CANCEL_COD'] as const)" :key="kind" variant="ghost" size="sm" class="text-foreground px-2 min-h-11" :disabled="!lineActionable(line)" :aria-label="t('qsOceanContainer.changeLabel', { action: t(`qsOceanContainer.change${kind}`), mark: line.oceanShippingMarkText ?? line.goodsName })" @click="emit('changeLine', { lineId: line.id, kind })">
                       {{ t(`qsOceanContainer.change${kind}`) }}
                     </FaButton>
                   </template>
@@ -239,7 +259,7 @@ function measurement(value: string | null, precision: number) {
             </div>
           </div>
           <nav v-if="detail.total > detail.pageSize" :aria-label="t('qsOceanContainer.itemPagination', { name: item.containerBatchName })" class="px-4 py-3 border-t border-border overflow-x-auto">
-            <FaPagination :page="detail.page" :size="detail.pageSize" :total="detail.total" layout="total, ->, pager" :text-templates="{ total: value => t('qsOceanContainer.totalItems', { count: value }) }" @update:page="emit('pageChange', $event)" />
+            <FaPagination :page="detail.page" :size="detail.pageSize" :total="detail.total" layout="total, ->, pager" :text-templates="{ total: value => t(detailScope === 'all' ? 'qsOceanContainer.totalAllItems' : 'qsOceanContainer.totalItems', { count: value }) }" @update:page="emit('pageChange', $event)" />
           </nav>
         </template>
       </section>

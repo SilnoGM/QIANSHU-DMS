@@ -213,13 +213,6 @@ export function resolvePurchaseOrderPendingActionBlockedReason(
     : '采购单当前不在待发货阶段'
 }
 
-/** 审核中与已确认订单可取消，最终提交前仍由详情接口重新校验最新状态。 */
-export function canCancelPurchaseOrderFromList(
-  order: Pick<PurchaseOrderListItemDto, 'orderStatus' | 'fulfillmentStatus'>,
-): boolean {
-  return order.orderStatus === 'PENDING_REVIEW' || (order.orderStatus === 'CONFIRMED' && ['ORDERED', 'PREPARING'].includes(order.fulfillmentStatus))
-}
-
 /**
  * 发货结果的销售联动只能以 Server 返回值为准。Web 不根据当前列表自行推断
  * 销售订单是否进入陆运中，避免并发采购变化时展示错误业务事实。

@@ -432,44 +432,121 @@ export class PurchaseOrderMutationService {
       assertPurchaseOrderStatusTransition(order.orderStatus, 'CANCELLED', {
         activePaidAmount: paidAmount,
       })
-      await transaction.purchaseOrder.update({
-        where: { id: purchaseOrderId },
-        data: { orderStatus: 'CANCELLED', version: { increment: 1 } },
-      })
-      // 取消只改变可用性，原唛头与产品分配继续留存供历史追溯。
-      await transaction.purchaseOrderPart.updateMany({
-        where: { purchaseOrderId, status: { not: 'CANCELLED' } },
-        data: { status: 'CANCELLED' },
-      })
-      await this.payables.closeForCancellation(transaction, purchaseOrderId)
-      await this.imageDrafts.invalidateForOrder(transaction, purchaseOrderId)
-      await transaction.purchaseOrderStatusHistory.create({ data: {
-        purchaseOrderId,
-        dimension: 'ORDER',
-        fromStatus: order.orderStatus,
-        toStatus: 'CANCELLED',
-        reason: reason ?? '用户取消采购订单',
-        changedByUserId: trusted.actorUserId,
-      } })
-      await this.recordAudit(transaction, trusted, {
-        eventType: AuditEventType.PURCHASE_ORDER_ORDER_STATUS_CHANGED,
-        targetId: purchaseOrderId,
-        metadata: { fromStatus: order.orderStatus, toStatus: 'CANCELLED' },
-      })
-      if (order.purchaseType === 'SALES_LINKED' && order.salesOrderId !== null) {
-        await this.salesOrderCoverage.recalculateAfterPurchaseCancellation(
-          transaction,
-          {
-            actorUserId: trusted.actorUserId,
-            purchaseOrderId,
-            purchaseOrderNo: order.orderNo,
-            requestId: trusted.requestId,
-            salesOrderId: order.salesOrderId,
-          },
-        )
-      }
+      await this.closePurchaseOrderAsCancelled(
+        transaction,
+        order,
+        trusted,
+        reason ?? '用户取消采购订单',
+        null,
+      )
     })
     return this.query.getById(purchaseOrderId, trusted.actorUserId)
+  }
+
+  /**
+   * 审核驳回：只允许待审核订单。原单进入 CANCELLED 终态并写入驳回元数据，
+   * 货件、图片草稿与应付款沿用取消清理；不重算销售覆盖（待审核单本就不计入覆盖）。
+   */
+  async reject(
+    context: PurchaseOrderMutationContext,
+    rawPurchaseOrderId: unknown,
+    input: unknown,
+  ): Promise<PurchaseOrderDetail> {
+    const trusted = validateContext(context)
+    const purchaseOrderId = requireUuid(rawPurchaseOrderId, 'purchaseOrderId')
+    const body = requireRecord(input)
+    rejectUnknownKeys(body, ['expectedVersion', 'reason'])
+    const expectedVersion = body.expectedVersion
+    if (typeof expectedVersion !== 'number' || !Number.isSafeInteger(expectedVersion) || expectedVersion < 1) {
+      return purchaseOrderValidationFailure('expectedVersion')
+    }
+    const reason = requireText(body.reason, 'reason', 500)
+    await this.prisma.$transaction(async transaction => {
+      await applyTransactionTimeouts(transaction)
+      const scope = await this.dataScope.resolveInTransaction(transaction, trusted.actorUserId)
+      await this.requireVisibleOrder(transaction, purchaseOrderId, scope, trusted.actorUserId)
+      await this.lockSourceSalesLines(transaction, purchaseOrderId)
+      const order = await this.lockOrder(transaction, purchaseOrderId, scope, trusted.actorUserId)
+      if (order.version !== expectedVersion || order.orderStatus !== 'PENDING_REVIEW' || order.fulfillmentStatus !== 'ORDERED') {
+        throw new ApiException(
+          HttpStatus.CONFLICT,
+          'PURCHASE_ORDER_STATE_CHANGED',
+          '采购订单已变化或已完成审核，请刷新后重试',
+        )
+      }
+      const paidAmount = await this.readPaidAmount(transaction, purchaseOrderId)
+      assertPurchaseOrderStatusTransition(order.orderStatus, 'CANCELLED', {
+        activePaidAmount: paidAmount,
+      })
+      await this.closePurchaseOrderAsCancelled(
+        transaction,
+        order,
+        trusted,
+        reason,
+        { reason },
+      )
+    })
+    return this.query.getById(purchaseOrderId, trusted.actorUserId)
+  }
+
+  private async closePurchaseOrderAsCancelled(
+    transaction: Prisma.TransactionClient,
+    order: MutablePurchaseOrder,
+    trusted: PurchaseOrderMutationContext,
+    reason: string,
+    rejection: { readonly reason: string } | null,
+  ): Promise<void> {
+    await transaction.purchaseOrder.update({
+      where: { id: order.id },
+      data: {
+        orderStatus: 'CANCELLED',
+        ...(rejection === null
+          ? {}
+          : {
+              rejectedAt: new Date(),
+              rejectedByUserId: trusted.actorUserId,
+              rejectionReason: rejection.reason,
+            }),
+        version: { increment: 1 },
+      },
+    })
+    // 取消/驳回只改变可用性，原唛头与产品分配继续留存供历史追溯。
+    await transaction.purchaseOrderPart.updateMany({
+      where: { purchaseOrderId: order.id, status: { not: 'CANCELLED' } },
+      data: { status: 'CANCELLED' },
+    })
+    await this.payables.closeForCancellation(transaction, order.id)
+    await this.imageDrafts.invalidateForOrder(transaction, order.id)
+    await transaction.purchaseOrderStatusHistory.create({ data: {
+      purchaseOrderId: order.id,
+      dimension: 'ORDER',
+      fromStatus: order.orderStatus,
+      toStatus: 'CANCELLED',
+      reason,
+      changedByUserId: trusted.actorUserId,
+    } })
+    await this.recordAudit(transaction, trusted, {
+      eventType: rejection === null
+        ? AuditEventType.PURCHASE_ORDER_ORDER_STATUS_CHANGED
+        : AuditEventType.PURCHASE_ORDER_REJECTED,
+      targetId: order.id,
+      metadata: rejection === null
+        ? { fromStatus: order.orderStatus, toStatus: 'CANCELLED' }
+        : { action: 'REJECT', fromStatus: order.orderStatus, toStatus: 'CANCELLED', reason: rejection.reason },
+    })
+    // 审核驳回不改变销售覆盖：待审核采购从未计入覆盖。取消仍需按来源重算。
+    if (rejection === null && order.purchaseType === 'SALES_LINKED' && order.salesOrderId !== null) {
+      await this.salesOrderCoverage.recalculateAfterPurchaseCancellation(
+        transaction,
+        {
+          actorUserId: trusted.actorUserId,
+          purchaseOrderId: order.id,
+          purchaseOrderNo: order.orderNo,
+          requestId: trusted.requestId,
+          salesOrderId: order.salesOrderId,
+        },
+      )
+    }
   }
 
   async updateFulfillmentStatus(

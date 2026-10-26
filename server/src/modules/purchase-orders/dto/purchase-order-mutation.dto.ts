@@ -61,6 +61,19 @@ export class PurchaseOrderStatusRequestDto {
   reason?: string | null
 }
 
+export class PurchaseOrderRejectRequestDto {
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER })
+  @IsInt()
+  @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
+  expectedVersion!: number
+
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 500, description: '驳回修改要求，必填并写入状态历史' })
+  @IsString()
+  @IsUnicodeCodePointLength(1, 500)
+  reason!: string
+}
+
 export class PurchaseOrderFulfillmentStatusRequestDto {
   @ApiProperty({ enum: PurchaseOrderFulfillmentStatus })
   @IsEnum(PurchaseOrderFulfillmentStatus)
