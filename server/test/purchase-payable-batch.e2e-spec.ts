@@ -108,22 +108,38 @@ describe('atomic purchase payable batches with isolated PostgreSQL', () => {
     expect(payments).toHaveLength(2)
     expect(payments.every(payment => payment.fundPostingBatch?.consumerCode === 'PURCHASE_PAYMENT.PAY' && payment.fundPostingBatch.userId === h.actor.id)).toBe(true)
   })
-  it('rejects omitted installments, different suppliers, custom orders, stale versions and mismatched vouchers before any committed mutation', async () => {
+  it('rejects omitted installments, different suppliers, custom orders, stale versions and vouchers bound outside the batch before any committed mutation', async () => {
     const group = await order(), body = await input([group])
     const customId = await createCommands(h).create(h.context(), await customInput(h))
     await createReviewMutations(h).review(h.context(), customId, await prepareImageReview(h, customId))
     const custom = await input([await queries.getOrder(customId)])
+    const foreign = await input([await order()])
     const before = await facts()
     for (const [invalid, code] of [
       [{ ...body, items: body.items.slice(0, 1) }, 'PURCHASE_PAYABLE_STATE_CHANGED'],
       [{ ...body, supplierValue: 'DIFFERENT' }, 'PURCHASE_PAYABLE_NOT_AVAILABLE'], [custom, 'PURCHASE_PAYABLE_NOT_AVAILABLE'],
       [{ ...body, recipientProfileVersion: profile.version + 1 }, 'PAYMENT_RECIPIENT_STATE_CHANGED'],
       [{ ...body, items: body.items.map((item, index) => index ? item : { ...item, expectedVersion: 99 }) }, 'PURCHASE_PAYABLE_STATE_CHANGED'],
-      [{ ...body, items: body.items.map((item, index) => ({ ...item, voucher: body.items[1 - index].voucher })) }, 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE'],
+      [{ ...body, items: body.items.map((item, index) => index ? item : { ...item, voucher: foreign.items[0].voucher }) }, 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE'],
     ] as const) {
       await expect(createReviewMutations(h).payBatch(h.context(), invalid, randomUUID())).rejects.toMatchObject({ code })
       expect(await facts()).toEqual(before)
     }
+  })
+  it('archives one shared voucher on every installment of the same batch', async () => {
+    const groups = [await order(), await order('0', '10')], body = await input(groups)
+    const shared = body.items[0].voucher
+    // 同一张付款截图归档到本批全部阶段：应付款仍各自记账，媒体资产只保留一条。
+    const result = await createReviewMutations(h).payBatch(h.context(), { ...body, items: body.items.map(item => ({ ...item, voucher: shared })) }, randomUUID())
+    expect(result.paymentCount).toBe(3)
+    const documents = await h.prisma.purchaseOrderDocument.findMany({
+      where: { purchaseOrderId: { in: result.orderIds }, documentType: 'PAYMENT_VOUCHER' },
+      include: { mediaAsset: true },
+    })
+    expect(documents).toHaveLength(3)
+    expect(new Set(documents.map(document => document.mediaAssetId))).toEqual(new Set([shared.mediaAssetId]))
+    expect(documents.every(document => document.mediaAsset.status === 'READY' && document.mediaAsset.purchasePayableUploadId === body.items[0].payableId)).toBe(true)
+    expect(await h.prisma.mediaAsset.count({ where: { id: shared.mediaAssetId } })).toBe(1)
   })
   it('rolls earlier fund postings, receipts, media activation and statuses back when the last payment fails', async () => {
     const body = await input([await order(), await order()]), before = await facts()

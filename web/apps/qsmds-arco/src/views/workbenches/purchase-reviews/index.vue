@@ -19,6 +19,7 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getPurchaseOrderApiFailure, orderStatusLabel, orderStatusTagClass, purchaseTypeLabel } from '../../operations/purchase-orders/purchase-order-list.logic'
 import PurchaseOrderReviewModal from '../../operations/purchase-orders/purchase-order-review-modal.vue'
+import PurchaseAmountRevisionModal from './amount-revision-modal.vue'
 import PurchaseCancellationModal from './cancellation-modal.vue'
 import { buildReviewQuery, countReviewViews } from './logic'
 
@@ -43,6 +44,7 @@ const reviewVisible = ref(false)
 const reviewId = ref<string | null>(null)
 const cancellationVisible = ref(false)
 const cancellationId = ref<string | null>(null)
+const amountRevisionVisible = ref(false)
 const detailVisible = ref(false)
 const selectedOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
 const detail = shallowRef<PurchaseOrderDetailDto | null>(null)
@@ -169,6 +171,22 @@ function openCancellation(row: PurchaseOrderListItemDto): void {
     cancellationVisible.value = true
   }
 }
+const canReviseAmount = computed(() => (
+  status.value === 'APPROVED'
+  && canReview.value
+  && detail.value !== null
+))
+function openAmountRevision(): void {
+  if (canReviseAmount.value) {
+    amountRevisionVisible.value = true
+  }
+}
+function handleAmountRevisionUpdated(
+  updated: PurchaseOrderDetailDto,
+): void {
+  detail.value = updated
+  refresh()
+}
 async function loadDetail(): Promise<void> {
   detailController?.abort()
   const orderId = selectedOrder.value?.id
@@ -208,6 +226,7 @@ watch(detailVisible, (visible) => {
   if (!visible) {
     detailController?.abort()
     detail.value = null
+    amountRevisionVisible.value = false
   }
 })
 watch(() => [canRead.value, canReview.value, account.authEpoch], () => {
@@ -218,6 +237,7 @@ watch(() => [canRead.value, canReview.value, account.authEpoch], () => {
   reviewId.value = null
   cancellationVisible.value = false
   cancellationId.value = null
+  amountRevisionVisible.value = false
   detailVisible.value = false
   selectedOrder.value = null
   detail.value = null
@@ -359,10 +379,17 @@ onBeforeUnmount(() => {
     </FaPageMain>
     <PurchaseOrderReviewModal v-model="reviewVisible" :order-id="reviewId" :currencies="currencyCatalog.currencies.value" @detail-updated="refresh" />
     <PurchaseCancellationModal v-model="cancellationVisible" :order-id="cancellationId" @cancelled="refresh" />
+    <PurchaseAmountRevisionModal
+      v-model="amountRevisionVisible"
+      :detail="detail"
+      :currencies="currencyCatalog.currencies.value"
+      @updated="handleAmountRevisionUpdated"
+    />
     <QsPurchaseOrderDrawer
       v-model="detailVisible" :order="selectedOrder" :detail="detail" :currencies="currencyCatalog.currencies.value"
       :loading="detailLoading" :error="detailError" action-error="" :busy="false"
-      :can-attach-document="false" @reload="loadDetail"
+      :can-attach-document="false" :can-revise-amount="canReviseAmount" @reload="loadDetail"
+      @revise-amount="openAmountRevision"
     />
   </div>
 </template>

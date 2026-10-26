@@ -4,6 +4,8 @@ import { FundAccountsModule } from '../fund-accounts/fund-accounts.module'
 import { PurchasePayableService } from './payables/purchase-payable.service'
 import { PurchasePayableQueryService } from './payables/purchase-payable-query.service'
 import { PurchasePayableController } from './payables/purchase-payable.controller'
+import { PurchasePaymentController } from './payables/purchase-payment.controller'
+import { PurchasePaymentQueryService } from './payables/purchase-payment-query.service'
 import { Module } from '@nestjs/common'
 
 import { PrismaModule } from '../../infrastructure/database/prisma.module'
@@ -62,6 +64,7 @@ import { SalesOrderWarehouseReceiptService } from './warehouse-receipts/sales-or
   ],
   controllers: [
     PurchasePayableController,
+    PurchasePaymentController,
     PurchaseOrdersController,
     PurchaseOrderImageDraftController,
     PurchaseOrderReviewContextController,
@@ -75,6 +78,7 @@ import { SalesOrderWarehouseReceiptService } from './warehouse-receipts/sales-or
     PurchasePayableVoucherService,
     PurchasePayableService,
     PurchasePayableQueryService,
+    PurchasePaymentQueryService,
     PurchaseOrderQueryService,
     PurchaseOrderReviewContextService,
     PurchaseOrderSourceQueryService,

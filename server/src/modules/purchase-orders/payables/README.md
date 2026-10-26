@@ -51,3 +51,10 @@
 两类链接均不携带金额、账户或授权凭据。打开链接后从服务端重新读取；未登录先登录并返回原链接，无 `purchase-orders:payment` 权限时禁止访问。
 
 页面沿用固定金额、版本校验和幂等付款。请求结果未知时锁定输入并保留原请求键，可原样重试；版本冲突时重新核对服务端数据。打开链接或加载页面不会触发付款。
+
+## 付款记录与审核后金额修订
+
+- `GET /purchase-order-payments` 是财务“采购付款记录”的只读列表，按实际付款记录平铺分页，默认 `paidAt DESC, id DESC`；`status` 支持 `ALL/ACTIVE/VOIDED`，关键词匹配采购单号、自定义供应商、销售单号和付款备注。权限复用 `purchase-orders:payment`；`SELF` 数据范围按应付款 `ownerUserId` 过滤，历史无应付款的付款按采购单销售来源归属兜底。
+- `POST /purchase-orders/:purchaseOrderId/amount-revisions` 由审核人员（`purchase-orders:review`）在采购审核已通过视图发起，只修改实际单价和手工定金，数量、货件与采购行身份保持冻结。请求携带 `expectedVersion`、原因和全部采购行；服务端重算行小计、总价和尾款，不信任客户端总额。
+- 金额修订要求采购单为 `CONFIRMED`/`COMPLETED` 且没有任何有效付款；已付款必须先通过付款记录作废。修订、采购行、订单头、两条应付与审计共用一个事务；`purchase_order_amount_revisions` 保存修订前后四个订单金额，数据库触发器另行限制 `due_amount` 只能在无有效付款时受控更新。
+- 已发货/已签收订单允许修订，但只更新当前订单和应付，不回写货件、归档采购单图片或历史对账单。行间调价但订单总额、定金和尾款都未变化时，现有修订快照没有可持久化差异，接口明确拒绝。

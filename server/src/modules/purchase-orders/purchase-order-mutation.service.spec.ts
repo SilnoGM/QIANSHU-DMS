@@ -49,7 +49,10 @@ function setup() {
     orderStatus: 'CONFIRMED',
     fulfillmentStatus: 'ORDERED',
     paymentStatus: 'UNPAID',
+    lineSubtotalAmount: decimal('100'),
     purchaseTotalAmount: decimal('100'),
+    depositDueAmount: decimal('30'),
+    balanceDueAmount: decimal('70'),
     purchaseType: 'SALES_LINKED',
     salesOrderId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
     version: 1,
@@ -70,6 +73,15 @@ function setup() {
     purchaseOrderLine: {
       findMany: jest.fn<Promise<unknown[]>, [unknown]>()
         .mockResolvedValue([{ sourceSalesOrderLineId: SOURCE_LINE_ID }]),
+      update: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
+    },
+    purchaseOrderAmountRevision: {
+      create: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
+    },
+    purchaseOrderPayable: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>()
+        .mockResolvedValue([]),
+      update: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
     },
     purchaseOrderStatusHistory: {
       create: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
@@ -77,6 +89,7 @@ function setup() {
     purchaseOrderPayment: {
       aggregate: jest.fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue({ _sum: { amount: null } }),
+      count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(0),
       create: jest.fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue({ id: PAYMENT_ID }),
       findFirst: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({
@@ -942,5 +955,211 @@ describe('PurchaseOrderMutationService', () => {
       .rejects.toMatchObject({ code: 'PURCHASE_PAYABLE_POSTING_UNAVAILABLE' })
     expect(fixture.transaction.purchaseOrderPayment.update).not.toHaveBeenCalled()
     expect(fixture.query.getById).not.toHaveBeenCalled()
+  })
+})
+
+describe('PurchaseOrderMutationService amount revision', () => {
+  const LINE_A = '33333333-3333-4333-8333-333333333333'
+  const LINE_B = '44444444-4444-4444-8444-444444444444'
+  const depositPayable = {
+    id: '55555555-5555-4555-8555-555555555555',
+    paymentType: 'DEPOSIT',
+    dueAmount: decimal('30'),
+    version: 1,
+    closedAt: null,
+  }
+  const balancePayable = {
+    id: '66666666-6666-4666-8666-666666666666',
+    paymentType: 'BALANCE',
+    dueAmount: decimal('70'),
+    version: 1,
+    closedAt: null,
+  }
+
+  function input(overrides: Record<string, unknown> = {}) {
+    return {
+      expectedVersion: 1,
+      reason: '价格录入错误',
+      depositDueAmount: '20.00',
+      lines: [
+        { lineId: LINE_A, actualUnitPriceAmount: '30.00' },
+        { lineId: LINE_B, actualUnitPriceAmount: '60.00' },
+      ],
+      ...overrides,
+    }
+  }
+
+  function fixtureForRevision() {
+    const fixture = setup()
+    fixture.transaction.purchaseOrderLine.findMany.mockResolvedValue([
+      {
+        id: LINE_A,
+        lineType: 'CATALOG',
+        quantity: 1,
+        actualPurchaseUnitPriceAmount: decimal('30'),
+        lineTotalAmount: decimal('30'),
+      },
+      {
+        id: LINE_B,
+        lineType: 'CUSTOM',
+        quantity: 2,
+        actualPurchaseUnitPriceAmount: decimal('35'),
+        lineTotalAmount: decimal('70'),
+      },
+    ])
+    fixture.transaction.purchaseOrderPayable.findMany.mockResolvedValue([
+      depositPayable,
+      balancePayable,
+    ])
+    return fixture
+  }
+
+  it('updates lines, order, payables, revision history and audit atomically', async () => {
+    const fixture = fixtureForRevision()
+    await expect(fixture.service.reviseAmount(context, ORDER_ID, input()))
+      .resolves.toEqual(fixture.detail)
+
+    expect(fixture.transaction.purchaseOrderAmountRevision.create).toHaveBeenCalledWith({
+      data: {
+        purchaseOrderId: ORDER_ID,
+        oldLineSubtotalAmount: '100.00',
+        oldPurchaseTotalAmount: '100.00',
+        oldDepositDueAmount: '30.00',
+        oldBalanceDueAmount: '70.00',
+        newLineSubtotalAmount: '150.00',
+        newPurchaseTotalAmount: '150.00',
+        newDepositDueAmount: '20.00',
+        newBalanceDueAmount: '130.00',
+        reason: '价格录入错误',
+        changedByUserId: ACTOR_ID,
+      },
+    })
+    expect(fixture.transaction.purchaseOrderLine.update).toHaveBeenCalledTimes(1)
+    expect(fixture.transaction.purchaseOrderLine.update).toHaveBeenCalledWith({
+      where: { id: LINE_B },
+      data: {
+        actualPurchaseUnitPriceAmount: '60.00',
+        referencePurchaseUnitPriceAmount: '60.00',
+        lineTotalAmount: '120.00',
+      },
+    })
+    expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: {
+        lineSubtotalAmount: '150.00',
+        purchaseTotalAmount: '150.00',
+        depositDueAmount: '20.00',
+        balanceDueAmount: '130.00',
+        paymentStatus: 'UNPAID',
+        orderStatus: 'CONFIRMED',
+        version: { increment: 1 },
+      },
+    })
+    expect(fixture.transaction.purchaseOrderPayable.update).toHaveBeenCalledWith({
+      where: { id: depositPayable.id },
+      data: { dueAmount: '20.00', version: { increment: 1 } },
+    })
+    expect(fixture.transaction.purchaseOrderPayable.update).toHaveBeenCalledWith({
+      where: { id: balancePayable.id },
+      data: { dueAmount: '130.00', version: { increment: 1 } },
+    })
+    expect(fixture.audit.record).toHaveBeenCalledWith(
+      fixture.transaction,
+      expect.objectContaining({
+        eventType: 'PURCHASE_ORDER_AMOUNT_REVISED',
+        targetId: ORDER_ID,
+        metadata: expect.objectContaining({
+          oldTotal: '100.00',
+          newTotal: '150.00',
+          oldDeposit: '30.00',
+          newDeposit: '20.00',
+          oldBalance: '70.00',
+          newBalance: '130.00',
+          lineCount: 2,
+        }) as unknown,
+      }),
+    )
+  })
+
+  it('refuses revision while any active payment remains', async () => {
+    const fixture = fixtureForRevision()
+    fixture.transaction.purchaseOrderPayment.count.mockResolvedValue(1)
+    await expect(fixture.service.reviseAmount(context, ORDER_ID, input()))
+      .rejects.toMatchObject({
+        code: 'PURCHASE_ORDER_AMOUNT_REVISION_HAS_PAYMENTS',
+        status: 409,
+      })
+    expect(fixture.transaction.purchaseOrderAmountRevision.create)
+      .not.toHaveBeenCalled()
+    expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects a stale order version before writing', async () => {
+    const fixture = fixtureForRevision()
+    await expect(fixture.service.reviseAmount(context, ORDER_ID, input({
+      expectedVersion: 2,
+    }))).rejects.toMatchObject({
+      code: 'PURCHASE_ORDER_STATE_CHANGED',
+      status: 409,
+    })
+    expect(fixture.transaction.purchaseOrderAmountRevision.create)
+      .not.toHaveBeenCalled()
+  })
+
+  it('rejects an unchanged amount revision', async () => {
+    const fixture = fixtureForRevision()
+    await expect(fixture.service.reviseAmount(context, ORDER_ID, input({
+      depositDueAmount: '30.00',
+      lines: [
+        { lineId: LINE_A, actualUnitPriceAmount: '30.00' },
+        { lineId: LINE_B, actualUnitPriceAmount: '35.00' },
+      ],
+    }))).rejects.toMatchObject({
+      code: 'PURCHASE_ORDER_AMOUNT_REVISION_UNCHANGED',
+    })
+    expect(fixture.transaction.purchaseOrderAmountRevision.create)
+      .not.toHaveBeenCalled()
+  })
+
+  it('rejects line-only repricing when order totals, deposit and balance do not change', async () => {
+    const fixture = fixtureForRevision()
+    await expect(fixture.service.reviseAmount(context, ORDER_ID, input({
+      depositDueAmount: '30.00',
+      lines: [
+        { lineId: LINE_A, actualUnitPriceAmount: '50.00' },
+        { lineId: LINE_B, actualUnitPriceAmount: '25.00' },
+      ],
+    }))).rejects.toMatchObject({
+      code: 'PURCHASE_ORDER_AMOUNT_REVISION_UNCHANGED',
+    })
+    expect(fixture.transaction.purchaseOrderAmountRevision.create)
+      .not.toHaveBeenCalled()
+  })
+
+  it('rejects a deposit above the recalculated total', async () => {
+    const fixture = fixtureForRevision()
+    await expect(fixture.service.reviseAmount(context, ORDER_ID, input({
+      depositDueAmount: '151.00',
+    }))).rejects.toMatchObject({
+      code: 'PURCHASE_ORDER_AMOUNT_INVALID',
+    })
+    expect(fixture.transaction.purchaseOrderAmountRevision.create)
+      .not.toHaveBeenCalled()
+  })
+
+  it('rejects cancelled orders and incomplete line sets', async () => {
+    const cancelled = fixtureForRevision()
+    cancelled.order.orderStatus = 'CANCELLED'
+    await expect(cancelled.service.reviseAmount(context, ORDER_ID, input()))
+      .rejects.toMatchObject({
+        code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID',
+      })
+
+    const incomplete = fixtureForRevision()
+    await expect(incomplete.service.reviseAmount(context, ORDER_ID, input({
+      lines: [{ lineId: LINE_A, actualUnitPriceAmount: '30.00' }],
+    }))).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(incomplete.transaction.purchaseOrderAmountRevision.create)
+      .not.toHaveBeenCalled()
   })
 })

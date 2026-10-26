@@ -35,10 +35,13 @@ import {
   MediaAssetService,
 } from '../media/media-asset.service'
 import {
+  calculatePurchaseOrderLineTotal,
   derivePurchaseOrderPaymentStatus,
   formatPurchaseOrderAmountUnits,
   normalizePositivePurchaseOrderAmount,
+  normalizePurchaseOrderAmount,
   parsePurchaseOrderAmountUnits,
+  sumPurchaseOrderAmounts,
 } from './domain/purchase-order-decimal'
 import {
   purchaseOrderRuleFailure,
@@ -102,7 +105,7 @@ const PURCHASE_ORDER_MUTATION_DEPENDENCIES = Symbol(
   'qianshu.purchase-order.mutation-dependencies',
 )
 
-type AutomaticOrderStatusTrigger = 'FULFILLMENT' | 'PAYMENT'
+type AutomaticOrderStatusTrigger = 'AMOUNT_REVISION' | 'FULFILLMENT' | 'PAYMENT'
 
 type MutablePurchaseOrder = Prisma.PurchaseOrderGetPayload<{
   select: {
@@ -111,7 +114,10 @@ type MutablePurchaseOrder = Prisma.PurchaseOrderGetPayload<{
     orderStatus: true
     fulfillmentStatus: true
     paymentStatus: true
+    lineSubtotalAmount: true
     purchaseTotalAmount: true
+    depositDueAmount: true
+    balanceDueAmount: true
     purchaseType: true
     salesOrderId: true
     version: true
@@ -645,7 +651,9 @@ export class PurchaseOrderMutationService {
           now: this.dependencies.now(),
           validatePaymentMethod: () => this.dictionaryLookup.requireEffectiveValue(transaction, { dictionaryCode: PAYMENT_METHOD_DICTIONARY_CODE, value: input.paymentMethod }),
           lockOrder: id => this.lockOrder(transaction, id, scope, trusted.actorUserId),
-          writePayment: (order, paymentInput, confirmation, prepared) => this.writePaymentInTransaction(transaction, trusted, order, paymentInput, confirmation, prepared),
+          writePayment: (order, paymentInput, confirmation, prepared) => this.writePaymentInTransaction(transaction, trusted, order, paymentInput, confirmation, prepared,
+            // 整批共用一张截图时，凭证绑定本批任一应付款都视为合法；单笔付款仍按阶段独占消费。
+            new Set(input.items.map(item => item.payableId))),
         })
       }, { timeout: 60_000 })
     } catch (error) {
@@ -756,6 +764,7 @@ export class PurchaseOrderMutationService {
     input: PurchasePayablePaymentInput,
     confirmation?: PayableConfirmation,
     suppliedPreparation?: PreparedPayablePayment,
+    voucherPayableIds?: ReadonlySet<string>,
   ): Promise<void> {
     const purchaseOrderId = order.id
     const { paymentType, paidAt, paymentMethod, remark, mediaAssetId, recipientAccountId, recipientProfileVersion } = input
@@ -782,19 +791,24 @@ export class PurchaseOrderMutationService {
       { dictionaryCode: PAYMENT_METHOD_DICTIONARY_CODE, value: paymentMethod },
     )
     if (mediaAssetId !== null) {
-      // 临时截图只能消费一次；不同款项并发使用同一图片时，后到者必须重新上传。
+      // 批量付款允许同一张截图归档到本批多个阶段，凭证必须仍属于本批且处于可用状态；
+      // 单笔付款继续按阶段独占消费，防止其他阶段的临时截图被并发挪用。
       await transaction.$queryRaw(Prisma.sql`SELECT id FROM media_assets WHERE id = ${mediaAssetId}::uuid FOR UPDATE`)
       const asset = await transaction.mediaAsset.findFirst({
         where: {
           id: mediaAssetId,
           createdByUserId: trusted.actorUserId,
-          status: 'UPLOADING',
           mediaType: 'IMAGE',
           uploadPurpose: 'PURCHASE_PAYMENT_VOUCHER',
-          purchasePayableUploadId: prepared.payable!.id,
-          uploadExpiresAt: { gt: now },
           deletedAt: null,
           objectKey: { not: null },
+          ...(voucherPayableIds === undefined
+            ? { status: 'UPLOADING', purchasePayableUploadId: prepared.payable!.id, uploadExpiresAt: { gt: now } }
+            : {
+                purchasePayableUploadId: { in: [...voucherPayableIds] },
+                // 首次消费后资产转为 READY 且不再有上传过期时间，批内后续阶段直接复用。
+                OR: [{ status: 'READY' }, { status: 'UPLOADING', uploadExpiresAt: { gt: now } }],
+              }),
         },
         select: { id: true },
       })
@@ -939,6 +953,325 @@ export class PurchaseOrderMutationService {
     return this.query.getById(purchaseOrderId, trusted.actorUserId)
   }
 
+  /**
+   * 审核后金额修订：只改实际单价和定金，数量与采购行身份保持冻结。
+   * 已付款必须先由采购付款记录作废；应付金额的受控更新由数据库触发器再次校验。
+   */
+  async reviseAmount(
+    context: PurchaseOrderMutationContext,
+    rawPurchaseOrderId: unknown,
+    input: unknown,
+  ): Promise<PurchaseOrderDetail> {
+    const trusted = validateContext(context)
+    const purchaseOrderId = requireUuid(rawPurchaseOrderId, 'purchaseOrderId')
+    const body = requireRecord(input)
+    rejectUnknownKeys(body, [
+      'expectedVersion',
+      'reason',
+      'depositDueAmount',
+      'lines',
+    ])
+    const expectedVersion = body.expectedVersion
+    if (
+      typeof expectedVersion !== 'number'
+      || !Number.isSafeInteger(expectedVersion)
+      || expectedVersion < 1
+    ) {
+      return purchaseOrderValidationFailure('expectedVersion')
+    }
+    const reason = requireText(body.reason, 'reason', 500)
+    const depositDueAmount = normalizePurchaseOrderAmount(
+      body.depositDueAmount,
+    )
+    if (!Array.isArray(body.lines) || body.lines.length < 1) {
+      return purchaseOrderValidationFailure('lines')
+    }
+    const requestedLines = body.lines.map((value) => {
+      const line = requireRecord(value, 'lines')
+      rejectUnknownKeys(
+        line,
+        ['lineId', 'actualUnitPriceAmount'],
+        'lines',
+      )
+      return {
+        lineId: requireUuid(line.lineId, 'lines.lineId'),
+        actualUnitPriceAmount: normalizePurchaseOrderAmount(
+          line.actualUnitPriceAmount,
+        ),
+      }
+    })
+    if (
+      new Set(requestedLines.map(item => item.lineId)).size
+      !== requestedLines.length
+    ) {
+      return purchaseOrderValidationFailure('lines', '采购行不能重复')
+    }
+
+    await this.prisma.$transaction(async (transaction) => {
+      await applyTransactionTimeouts(transaction)
+      const scope = await this.dataScope.resolveInTransaction(
+        transaction,
+        trusted.actorUserId,
+      )
+      const order = await this.lockOrder(
+        transaction,
+        purchaseOrderId,
+        scope,
+        trusted.actorUserId,
+      )
+      if (order.version !== expectedVersion) {
+        throw new ApiException(
+          HttpStatus.CONFLICT,
+          'PURCHASE_ORDER_STATE_CHANGED',
+          '采购订单已变化，请刷新后重新核对',
+        )
+      }
+      if (
+        order.orderStatus !== 'CONFIRMED'
+        && order.orderStatus !== 'COMPLETED'
+      ) {
+        return purchaseOrderRuleFailure(
+          'PURCHASE_ORDER_STATUS_TRANSITION_INVALID',
+          '只有已确认或已完成的采购订单可以修改金额',
+        )
+      }
+      const activePaymentCount = await transaction.purchaseOrderPayment.count({
+        where: { purchaseOrderId, voidedAt: null },
+      })
+      if (activePaymentCount > 0) {
+        return payableFailure(
+          'PURCHASE_ORDER_AMOUNT_REVISION_HAS_PAYMENTS',
+          '该采购单仍有有效付款，请先作废付款后再修改金额',
+          409,
+        )
+      }
+      const lines = await transaction.purchaseOrderLine.findMany({
+        where: { purchaseOrderId },
+        select: {
+          id: true,
+          lineType: true,
+          quantity: true,
+          actualPurchaseUnitPriceAmount: true,
+          lineTotalAmount: true,
+        },
+        orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+      })
+      const requestedById = new Map(
+        requestedLines.map(item => [item.lineId, item] as const),
+      )
+      if (
+        lines.length !== requestedLines.length
+        || lines.some(line => !requestedById.has(line.id))
+      ) {
+        return purchaseOrderValidationFailure(
+          'lines',
+          '必须提交该采购单全部采购行',
+        )
+      }
+      const newLineAmounts = lines.map((line) => {
+        const requested = requestedById.get(line.id)!
+        return {
+          line,
+          actualUnitPriceAmount: requested.actualUnitPriceAmount,
+          lineTotalAmount: calculatePurchaseOrderLineTotal(
+            requested.actualUnitPriceAmount,
+            line.quantity,
+          ),
+        }
+      })
+      const lineSubtotalAmount = sumPurchaseOrderAmounts(
+        newLineAmounts.map(item => item.lineTotalAmount),
+      )
+      const purchaseTotalAmount = lineSubtotalAmount
+      if (
+        parsePurchaseOrderAmountUnits(depositDueAmount)
+        > parsePurchaseOrderAmountUnits(purchaseTotalAmount)
+      ) {
+        return purchaseOrderRuleFailure(
+          'PURCHASE_ORDER_AMOUNT_INVALID',
+          '定金不能超过采购总价',
+          'depositDueAmount',
+        )
+      }
+      const balanceDueAmount = formatPurchaseOrderAmountUnits(
+        parsePurchaseOrderAmountUnits(purchaseTotalAmount)
+        - parsePurchaseOrderAmountUnits(depositDueAmount),
+      )
+      const sameLines = newLineAmounts.every((item) => {
+        return item.actualUnitPriceAmount
+          === fixed2(item.line.actualPurchaseUnitPriceAmount)
+          && item.lineTotalAmount === fixed2(item.line.lineTotalAmount)
+      })
+      if (
+        sameLines
+        && depositDueAmount === fixed2(order.depositDueAmount)
+      ) {
+        return purchaseOrderRuleFailure(
+          'PURCHASE_ORDER_AMOUNT_REVISION_UNCHANGED',
+          '采购金额没有变化，无需修订',
+        )
+      }
+      if (
+        purchaseTotalAmount === fixed2(order.purchaseTotalAmount)
+        && depositDueAmount === fixed2(order.depositDueAmount)
+        && balanceDueAmount === fixed2(order.balanceDueAmount)
+      ) {
+        // 现有修订表只保存订单级四个金额；行间调价但总额、定金和尾款
+        // 完全不变时没有可持久化的差异，明确拒绝而不是静默丢弃历史。
+        return purchaseOrderRuleFailure(
+          'PURCHASE_ORDER_AMOUNT_REVISION_UNCHANGED',
+          '行间调价但订单总额、定金和尾款未变化，当前修订记录无法保存；请调整总额或定金',
+        )
+      }
+      const payables = await transaction.purchaseOrderPayable.findMany({
+        where: { purchaseOrderId },
+        select: {
+          id: true,
+          paymentType: true,
+          dueAmount: true,
+          version: true,
+          closedAt: true,
+        },
+      })
+      const depositPayable = payables.find(
+        item => item.paymentType === 'DEPOSIT',
+      )
+      const balancePayable = payables.find(
+        item => item.paymentType === 'BALANCE',
+      )
+      if (
+        payables.length !== 2
+        || depositPayable === undefined
+        || balancePayable === undefined
+        || depositPayable.closedAt !== null
+        || balancePayable.closedAt !== null
+      ) {
+        return payableFailure(
+          'PURCHASE_PAYABLE_NOT_AVAILABLE',
+          '采购应付款记录不完整，请核对后重试',
+        )
+      }
+
+      await transaction.purchaseOrderAmountRevision.create({
+        data: {
+          purchaseOrderId,
+          oldLineSubtotalAmount: fixed2(order.lineSubtotalAmount),
+          oldPurchaseTotalAmount: fixed2(order.purchaseTotalAmount),
+          oldDepositDueAmount: fixed2(order.depositDueAmount),
+          oldBalanceDueAmount: fixed2(order.balanceDueAmount),
+          newLineSubtotalAmount: lineSubtotalAmount,
+          newPurchaseTotalAmount: purchaseTotalAmount,
+          newDepositDueAmount: depositDueAmount,
+          newBalanceDueAmount: balanceDueAmount,
+          reason,
+          changedByUserId: trusted.actorUserId,
+        },
+      })
+      for (const item of newLineAmounts) {
+        const currentActual = fixed2(
+          item.line.actualPurchaseUnitPriceAmount,
+        )
+        const currentTotal = fixed2(item.line.lineTotalAmount)
+        if (
+          currentActual === item.actualUnitPriceAmount
+          && currentTotal === item.lineTotalAmount
+        ) {
+          continue
+        }
+        await transaction.purchaseOrderLine.update({
+          where: { id: item.line.id },
+          data: {
+            actualPurchaseUnitPriceAmount: item.actualUnitPriceAmount,
+            // CUSTOM 行必须保持参考价与实际价相等。
+            ...(item.line.lineType === 'CUSTOM'
+              ? { referencePurchaseUnitPriceAmount: item.actualUnitPriceAmount }
+              : {}),
+            lineTotalAmount: item.lineTotalAmount,
+          },
+        })
+      }
+      const newPaymentStatus = derivePurchaseOrderPaymentStatus(
+        purchaseTotalAmount,
+        '0.00',
+      )
+      const newOrderStatus = derivePurchaseOrderStatus({
+        orderStatus: order.orderStatus,
+        fulfillmentStatus: order.fulfillmentStatus,
+        paymentStatus: newPaymentStatus,
+      })
+      await transaction.purchaseOrder.update({
+        where: { id: purchaseOrderId },
+        data: {
+          lineSubtotalAmount,
+          purchaseTotalAmount,
+          depositDueAmount,
+          balanceDueAmount,
+          paymentStatus: newPaymentStatus,
+          orderStatus: newOrderStatus,
+          version: { increment: 1 },
+        },
+      })
+      await transaction.purchaseOrderPayable.update({
+        where: { id: depositPayable.id },
+        data: { dueAmount: depositDueAmount, version: { increment: 1 } },
+      })
+      await transaction.purchaseOrderPayable.update({
+        where: { id: balancePayable.id },
+        data: { dueAmount: balanceDueAmount, version: { increment: 1 } },
+      })
+      if (newPaymentStatus !== order.paymentStatus) {
+        await transaction.purchaseOrderStatusHistory.create({
+          data: {
+            purchaseOrderId,
+            dimension: 'PAYMENT',
+            fromStatus: order.paymentStatus,
+            toStatus: newPaymentStatus,
+            reason: `金额修订后重新计算付款状态：采购总价 ${purchaseTotalAmount} CNY`,
+            changedByUserId: trusted.actorUserId,
+          },
+        })
+      }
+      await this.recordAutomaticOrderStatusChange(
+        transaction,
+        trusted,
+        order,
+        newOrderStatus,
+        'AMOUNT_REVISION',
+      )
+      await this.recordAudit(transaction, trusted, {
+        eventType: AuditEventType.PURCHASE_ORDER_AMOUNT_REVISED,
+        targetId: purchaseOrderId,
+        metadata: {
+          oldTotal: fixed2(order.purchaseTotalAmount),
+          newTotal: purchaseTotalAmount,
+          oldDeposit: fixed2(order.depositDueAmount),
+          newDeposit: depositDueAmount,
+          oldBalance: fixed2(order.balanceDueAmount),
+          newBalance: balanceDueAmount,
+          lineCount: newLineAmounts.length,
+          reasonProvided: true,
+        },
+      })
+    }).catch((error: unknown) => {
+      if (error instanceof ApiException) throw error
+      const facts = readPersistenceErrorFacts(error)
+      if (
+        (error instanceof AuditWriteFailedError && error.transactionConflict)
+        || ['P2034', '40001', '40P01', '55P03', '57014']
+          .some(code => hasPersistenceCode(facts, code))
+        || hasPersistenceCode(facts, '23514')
+      ) {
+        throw new ApiException(
+          HttpStatus.CONFLICT,
+          'PURCHASE_ORDER_STATE_CHANGED',
+          '采购或应付款状态已变化，请刷新后重新核对',
+        )
+      }
+      throw error
+    })
+    return this.query.getById(purchaseOrderId, trusted.actorUserId)
+  }
+
   private normalizeVoucher(value: unknown): string {
     const voucher = requireRecord(value, 'voucher')
     rejectUnknownKeys(voucher, ['mediaAssetId'], 'voucher')
@@ -1042,7 +1375,10 @@ export class PurchaseOrderMutationService {
         orderStatus: true,
         fulfillmentStatus: true,
         paymentStatus: true,
+        lineSubtotalAmount: true,
         purchaseTotalAmount: true,
+        depositDueAmount: true,
+        balanceDueAmount: true,
         purchaseType: true,
         salesOrderId: true,
         version: true,
@@ -1132,8 +1468,10 @@ export class PurchaseOrderMutationService {
       toStatus: newStatus,
       // 只为本次真实发生的自动转换生成原因；历史空值由展示层明确标记，不回填。
       reason: newStatus === 'COMPLETED'
-        ? `${trigger === 'FULFILLMENT' ? '签收' : '付款'}后满足已签收且已付清，系统自动完成采购订单`
-        : '付款作废后不再满足已付清，系统将采购订单恢复为已确认',
+        ? `${trigger === 'FULFILLMENT' ? '签收' : trigger === 'PAYMENT' ? '付款' : '金额修订'}后满足已签收且已付清，系统自动完成采购订单`
+        : trigger === 'AMOUNT_REVISION'
+          ? '金额修订后不再满足已付清，系统将采购订单恢复为已确认'
+          : '付款作废后不再满足已付清，系统将采购订单恢复为已确认',
       changedByUserId: context.actorUserId,
     } })
     await this.recordAudit(transaction, context, {

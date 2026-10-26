@@ -55,6 +55,7 @@ async function fixture() {
   }) as (options: unknown, apiClient: typeof api) => {
     draft: { value: typeof draft | null }
     previewUrl: { value: string | null }
+    previewBlob: { value: Blob | null }
     imageLoaded: { value: boolean }
     ready: { value: boolean }
     generating: { value: boolean }
@@ -76,10 +77,13 @@ test('恢复草稿只读图片，真实图片加载成功且版本匹配后才�
   await f.state.restore(f.detail.value, new AbortController().signal)
   assert.equal(f.state.ready.value, false)
   assert.equal(f.state.previewUrl.value, 'blob:preview-1')
+  assert.ok(f.state.previewBlob.value instanceof Blob)
+  assert.equal(f.state.previewBlob.value?.type, 'image/png')
   f.state.markLoaded('blob:preview-1')
   assert.equal(f.state.ready.value, true)
   f.state.reset()
   assert.equal(f.state.ready.value, false)
+  assert.equal(f.state.previewBlob.value, null)
   assert.deepEqual(f.revoked, ['blob:preview-1'])
   assert.deepEqual(f.calls.map(call => call.name), ['draft', 'content'], '关闭不能删除服务端草稿或回收唛头')
 })
@@ -111,6 +115,7 @@ test('加载器执行真实三步，派号返回新版本用于生成；仅明�
   assert.deepEqual(JSON.parse(JSON.stringify(f.calls[1]?.body)), { expectedVersion: 3 })
   assert.deepEqual(JSON.parse(JSON.stringify(f.calls[2]?.body)), { expectedVersion: 4, regenerate: true })
   assert.equal(f.detail.value.version, 4)
+  assert.equal(f.state.previewBlob.value?.size, 3)
   f.state.complete()
   assert.equal(f.state.generating.value, false)
   assert.equal(f.state.ready.value, false)

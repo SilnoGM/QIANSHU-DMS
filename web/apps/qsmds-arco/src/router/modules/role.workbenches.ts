@@ -54,6 +54,18 @@ export const financeWorkbench: RouteRecordMainRaw = {
           },
         },
         {
+          path: 'purchase-payment-records',
+          name: 'qsFinanceRealtimePurchasePaymentRecords',
+          component: () => import('@/views/workbenches/purchase-payments/payment-records-page.vue'),
+          meta: {
+            title: 'purchasePayment.records.title',
+            icon: 'qs-purchase-payments',
+            menu: false,
+            activeMenu: '/qs-finance/realtime-payments/purchase-payments',
+            auth: 'purchase-orders:payment',
+          },
+        },
+        {
           path: 'purchase-payments/batch',
           name: 'qsFinanceRealtimePurchaseBatchPayment',
           component: () => import('@/views/workbenches/purchase-payments/batch-payment-page.vue'),

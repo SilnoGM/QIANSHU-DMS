@@ -172,6 +172,8 @@ enum AuditEventType {
   INVOICE_REQUEST_CANCELLED
   /// 采购审核驳回事件。追加在末尾与数据库枚举顺序一致。
   PURCHASE_ORDER_REJECTED
+  /// 审核后采购金额修订事件。追加在末尾与数据库枚举顺序一致。
+  PURCHASE_ORDER_AMOUNT_REVISED
 
   @@map("audit_event_type")
 }
@@ -955,12 +957,12 @@ enum PackagingCostVendor {
 model MediaAsset {
   containerBatchSources ContainerBatch[]
 
-  // 付款截图准备时绑定具体定金/尾款阶段，不能被另一阶段消费。
   packagingCostUploadId String? @map("packaging_cost_upload_id") @db.Uuid
   packagingCostUpload PackagingCostRequest? @relation("PackagingCostVoucherUpload", fields: [packagingCostUploadId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  // 单笔付款上传时绑定具体定金/尾款阶段并独占消费；批量付款绑定本批任一阶段，允许整批共用同一截图。
   purchasePayableUploadId String? @map("purchase_payable_upload_id") @db.Uuid
   purchasePayableUpload PurchaseOrderPayable? @relation("PurchasePayableVoucherUpload", fields: [purchasePayableUploadId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "media_assets_purchase_payable_upload_fkey")
-  // 仅专用收款码/付款截图上传标记用途，消费方不能互相复用临时文件。
+  // 仅专用收款码/付款截图上传标记用途；批量付款在 payBatch 事务内自行校验凭证属于本批。
   uploadPurpose String? @map("upload_purpose") @db.VarChar(64)
   paymentRecipientAccounts PaymentRecipientAccount[]
   paymentRecipientSnapshots PurchaseOrderPayment[] @relation("PurchasePaymentRecipientQr")

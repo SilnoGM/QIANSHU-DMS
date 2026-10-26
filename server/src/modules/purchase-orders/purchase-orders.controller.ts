@@ -46,6 +46,7 @@ import {
   PurchaseOrderTemporaryDocumentDto,
 } from './dto/purchase-order-document.dto'
 import {
+  PurchaseOrderAmountRevisionRequestDto,
   PurchaseOrderFulfillmentStatusRequestDto,
   PurchaseOrderPaymentRequestDto,
   PurchaseOrderPaymentVoidRequestDto,
@@ -747,6 +748,40 @@ export class PurchaseOrdersController {
   ): Promise<PurchaseOrderDetail> {
     return this.mutations.voidPayment(
       mutationContext(request), params.purchaseOrderId, params.paymentId, dto,
+    )
+  }
+
+  @Post(':purchaseOrderId/amount-revisions')
+  @RequirePermissions('purchase-orders:review')
+  @HttpCode(HttpStatus.OK)
+  @ApiContractResponse({ status: HttpStatus.OK, type: PurchaseOrderDetailDto })
+  @ApiApplicationContract({
+    operationId: 'purchase_orders_revise_amount',
+    session: 'required', authorization: true, csrf: true, badRequest: true,
+    resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] },
+      { status: 409, codes: [
+        'PURCHASE_ORDER_STATE_CHANGED',
+        'PURCHASE_ORDER_AMOUNT_REVISION_HAS_PAYMENTS',
+      ] },
+      { status: 422, codes: [
+        'PURCHASE_ORDER_AMOUNT_INVALID',
+        'PURCHASE_ORDER_AMOUNT_REVISION_UNCHANGED',
+        'PURCHASE_ORDER_STATUS_TRANSITION_INVALID',
+        'PURCHASE_PAYABLE_NOT_AVAILABLE',
+        'VALIDATION_FAILED',
+      ] },
+    ],
+  })
+  reviseAmount(
+    @Param() params: PurchaseOrderIdParamDto,
+    @Body() dto: PurchaseOrderAmountRevisionRequestDto,
+    @Req() request: object,
+  ): Promise<PurchaseOrderDetail> {
+    return this.mutations.reviseAmount(
+      mutationContext(request), params.purchaseOrderId, dto,
     )
   }
 

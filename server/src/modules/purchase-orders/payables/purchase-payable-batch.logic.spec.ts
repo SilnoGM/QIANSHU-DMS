@@ -29,9 +29,14 @@ describe('purchase payable batch normalization', () => {
     for (const invalid of [null, { ...input, items: [] }, { ...input, amount: '0.01' },
       { ...input, recipientProfileVersion: 0 }, { ...input, supplierValue: '' },
       { ...input, items: [input.items[0], input.items[0]] },
-      { ...input, items: input.items.map(item => ({ ...item, voucher: input.items[0].voucher })) },
       { ...input, items: [{ ...input.items[0], expectedVersion: 0 }] },
       { ...input, items: [{ ...input.items[0], voucher: { mediaAssetId: randomUUID(), amount: '1' } }] },
     ]) expect(() => normalizeBatchPayment(invalid)).toThrow(expect.objectContaining({ code: 'VALIDATION_FAILED' }))
+  })
+  it('allows the same voucher on every stage while keeping payable identities unique', () => {
+    const input = request()
+    const normalized = normalizeBatchPayment({ ...input, items: input.items.map(item => ({ ...item, voucher: input.items[0].voucher })) })
+    expect(normalized.items.map(item => item.payableId)).toEqual(input.items.map(item => item.payableId).sort())
+    expect(new Set(normalized.items.map(item => item.voucher.mediaAssetId))).toEqual(new Set([input.items[0].voucher.mediaAssetId]))
   })
 })

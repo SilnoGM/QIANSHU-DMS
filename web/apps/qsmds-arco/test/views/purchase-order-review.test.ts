@@ -108,6 +108,26 @@ test('采购两视图切换时旧实例不改写目标查询，返回自身路�
   }
 })
 
+test('审核弹窗提供页脚生成快捷入口和复制信息弹窗', async () => {
+  const source = await read('purchase-order-review-modal.vue')
+  const imageCard = await read('purchase-order-review-image.vue')
+  const reviewFooter = source.slice(source.indexOf('<template #footer>'))
+  assert.match(source, /data-testid="purchase-order-review-footer-generate"/u)
+  assert.match(imageCard, /data-testid="purchase-order-review-image-generate"/u)
+  assert.ok(
+    reviewFooter.indexOf('data-testid="purchase-order-review-footer-generate"') < reviewFooter.indexOf('purchaseReview.copy.label'),
+    '页脚生成入口必须在复制采购信息之前',
+  )
+  assert.match(source, /@click="openCopyInfo"/u)
+  assert.match(source, /data-testid="purchase-order-copy-info"/u)
+  assert.match(source, /size="2xl"/u)
+  assert.match(source, /v-text="copyText"/u)
+  assert.match(source, /purchaseReview\.copy\.copyText/u)
+  assert.match(source, /purchaseReview\.copy\.copyImage/u)
+  assert.match(source, /usePurchaseOrderImageCopy/u)
+  assert.match(source, /previewBlob: image\.previewBlob/u)
+})
+
 test('审核弹窗提供驳回原因入口并提交最新版本', async () => {
   const source = await read('purchase-order-review-modal.vue')
   assert.match(source, /buildPurchaseOrderRejectRequest/u)

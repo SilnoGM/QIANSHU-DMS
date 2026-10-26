@@ -13,7 +13,24 @@ export interface PurchaseBatchPaymentInput {
   file: File
 }
 
+export interface PurchaseBatchPaymentLabels {
+  verify: string
+  upload: string
+  submit: string
+  retry: string
+}
+
+interface BatchStep { text: string, action: () => Promise<void> }
 type BatchApi = Pick<typeof purchaseOrderPayablesApi, 'batchSuppliers' | 'batchOrders' | 'uploadVoucher' | 'payBatch'>
+type BatchPhase = 'verify' | 'upload' | 'submit'
+
+/** 提交前重读发现版本或金额已变化；与后端 409 共用「重新核对」提示。 */
+class BatchStaleError extends Error {
+  constructor() {
+    super('PURCHASE_PAYABLE_STATE_CHANGED')
+    this.name = 'BatchStaleError'
+  }
+}
 
 export function usePurchaseBatchPayment(
   enabled: Readonly<Ref<boolean>>,
@@ -32,10 +49,13 @@ export function usePurchaseBatchPayment(
   const completed = ref(false)
   const error = ref('')
   const errorKey = ref('')
+  const steps = shallowRef<BatchStep[]>([])
+  const result = shallowRef<PurchasePayableBatchResultDto | null>(null)
   const active = computed(() => enabled.value)
   let readController: AbortController | null = null
   let paymentController: AbortController | null = null
   let attempt: { key: string, body: PurchasePayableBatchPayDto } | null = null
+  let phase: BatchPhase | null = null
 
   function reset() {
     readController?.abort()
@@ -43,6 +63,7 @@ export function usePurchaseBatchPayment(
     readController = null
     paymentController = null
     attempt = null
+    phase = null
     supplier.value = null
     suppliers.value = []
     orders.value = []
@@ -54,6 +75,8 @@ export function usePurchaseBatchPayment(
     completed.value = false
     error.value = ''
     errorKey.value = ''
+    steps.value = []
+    result.value = null
   }
 
   async function read() {
@@ -137,74 +160,152 @@ export function usePurchaseBatchPayment(
     return selected.flatMap(order => order.items.filter(canPayPurchasePayable)).sort((a, b) => a.id.localeCompare(b.id))
   }
 
-  async function execute(input?: PurchaseBatchPaymentInput): Promise<PurchasePayableBatchResultDto | null> {
-    if (!active.value || busy.value || loading.value || stale.value || completed.value) {
-      return null
+  /**
+   * 提交前重读同一供应商的最新待付账单，只核对金额与版本，不回写列表状态：
+   * 回写会触发列表重置，把用户已选好的收款方式和截图清空。
+   */
+  async function verify(ordersToPay: PurchasePayableOrderDto[], signal: AbortSignal) {
+    const response = await api.batchOrders(supplier.value!, signal)
+    const latest = new Map(response.data.items.map(order => [order.id, order]))
+    for (const order of ordersToPay) {
+      const current = latest.get(order.id)
+      if (!current) {
+        throw new BatchStaleError()
+      }
+      for (const item of order.items.filter(canPayPurchasePayable)) {
+        const stage = current.items.find(candidate => candidate.id === item.id)
+        if (!stage || stage.version !== item.version || stage.remainingAmount !== item.remainingAmount) {
+          throw new BatchStaleError()
+        }
+      }
     }
-    const items = attempt === null && input ? selection(input) : null
-    if (attempt === null && (!input || !items)) {
+  }
+
+  /**
+   * 启动三步流程；实际步骤由 FaMultiStepLoader 依次执行，这里只准备身份与闭包。
+   * attempt 在全部准备完成前保持为空，失败后重试不会复用未完成的请求。
+   */
+  function start(input: PurchaseBatchPaymentInput, labels: PurchaseBatchPaymentLabels): boolean {
+    if (!active.value || busy.value || loading.value || unknown.value || stale.value || completed.value) {
+      return false
+    }
+    const items = selection(input)
+    if (!items) {
       errorKey.value = 'purchasePayment.batch.invalidSelection'
-      return null
+      return false
     }
     const request = new AbortController()
     const requestEpoch = epoch.value
+    const supplierValue = supplier.value!
     paymentController = request
     busy.value = true
     error.value = ''
     errorKey.value = ''
-    let confirming = false
-    const current = () => paymentController === request && !request.signal.aborted && active.value && epoch.value === requestEpoch
-    try {
-      if (attempt === null && input && items) {
-        const body: PurchasePayableBatchPayDto = {
-          supplierValue: supplier.value!,
-          recipientAccountId: input.recipientAccountId,
-          recipientProfileVersion: input.recipientProfileVersion,
-          paymentMethod: input.paymentMethod,
-          items: [],
-        }
-        // 每份资产绑定对应应付款。所有上传结束前不写财务，失败遗留的临时资产由既有到期清理回收。
-        for (const item of items) {
-          const uploaded = await api.uploadVoucher(item.id, input.file, request.signal)
-          if (!current()) {
-            return null
-          }
-          body.items.push({ payableId: item.id, expectedVersion: item.version, voucher: { mediaAssetId: uploaded.data.mediaAssetId } })
-        }
-        attempt = { key: createKey(), body }
+    result.value = null
+    attempt = null
+    phase = null
+    const current = () => {
+      if (paymentController !== request || request.signal.aborted || !active.value || epoch.value !== requestEpoch) {
+        throw new DOMException('Batch payment aborted', 'AbortError')
       }
-      if (!current() || !attempt) {
-        return null
-      }
-      confirming = true
-      const response = await api.payBatch(attempt.body, attempt.key, request.signal)
-      if (!current()) {
-        return null
-      }
-      unknown.value = false
-      completed.value = true
-      return response.data
     }
-    catch (failure) {
-      if (current()) {
-        const normalized = getPurchaseOrderMutationFailure(failure)
-        error.value = normalized.message
-        // 上传失败尚未发起财务写入；只有确认请求结果未知时才锁住原请求并允许幂等核对。
-        unknown.value = confirming && normalized.unknownResult
-        const status = typeof failure === 'object' && failure !== null && 'status' in failure ? failure.status : undefined
-        stale.value = status === 409 || status === 404
-        if (!unknown.value) {
-          attempt = null
+    steps.value = [
+      { text: labels.verify, action: async () => {
+        phase = 'verify'
+        await verify(input.orders, request.signal)
+        current()
+      } },
+      { text: labels.upload, action: async () => {
+        phase = 'upload'
+        // 整批共用一张截图；上传时绑定本批第一个应付款，事务内允许本批其他阶段复用。
+        const uploaded = await api.uploadVoucher(items[0]!.id, input.file, request.signal)
+        current()
+        attempt = { key: createKey(), body: { supplierValue, recipientAccountId: input.recipientAccountId, recipientProfileVersion: input.recipientProfileVersion, paymentMethod: input.paymentMethod, items: items.map(item => ({ payableId: item.id, expectedVersion: item.version, voucher: { mediaAssetId: uploaded.data.mediaAssetId } })) } }
+      } },
+      { text: labels.submit, action: async () => {
+        if (!attempt) {
+          throw new BatchStaleError()
         }
+        phase = 'submit'
+        const response = await api.payBatch(attempt.body, attempt.key, request.signal)
+        current()
+        result.value = response.data
+        completed.value = true
+      } },
+    ]
+    return true
+  }
+
+  /** 结果未知时沿用原幂等键重发同一批；不重新核对也不再上传凭证。 */
+  function retrySubmit(labels: Pick<PurchaseBatchPaymentLabels, 'retry'>): boolean {
+    if (!active.value || busy.value || !unknown.value || !attempt) {
+      return false
+    }
+    const request = new AbortController()
+    const requestEpoch = epoch.value
+    const body = attempt.body
+    const key = attempt.key
+    paymentController = request
+    busy.value = true
+    error.value = ''
+    errorKey.value = ''
+    phase = 'submit'
+    const current = () => {
+      if (paymentController !== request || request.signal.aborted || !active.value || epoch.value !== requestEpoch) {
+        throw new DOMException('Batch payment aborted', 'AbortError')
       }
+    }
+    steps.value = [{ text: labels.retry, action: async () => {
+      const response = await api.payBatch(body, key, request.signal)
+      current()
+      result.value = response.data
+      completed.value = true
+    } }]
+    return true
+  }
+
+  /** 三步都成功后解除锁定并交出结果；页面负责提示与重新加载。 */
+  function complete(): PurchasePayableBatchResultDto | null {
+    if (!busy.value || !completed.value || !active.value) {
       return null
     }
-    finally {
-      if (paymentController === request) {
-        paymentController = null
-        busy.value = false
-      }
+    paymentController = null
+    // 整批结果已经确定，未知与状态变化都不再阻塞后续重新加载。
+    unknown.value = false
+    stale.value = false
+    busy.value = false
+    steps.value = []
+    return result.value
+  }
+
+  function fail(failure: unknown, _index: number): void {
+    if (failure instanceof DOMException && failure.name === 'AbortError') {
+      return
     }
+    // reset 已经清理本次流程时，迟到错误不能再覆盖新一轮状态。
+    if (!busy.value) {
+      return
+    }
+    const normalized = getPurchaseOrderMutationFailure(failure)
+    const status = typeof failure === 'object' && failure !== null && 'status' in failure ? (failure as { status?: number }).status : undefined
+    if (failure instanceof BatchStaleError) {
+      stale.value = true
+      error.value = ''
+    }
+    else {
+      error.value = normalized.message
+      // 只有已经发出财务写入的提交阶段，失败才可能留下未知结果。
+      unknown.value = phase === 'submit' && normalized.unknownResult
+      stale.value = status === 409 || status === 404
+    }
+    if (!unknown.value) {
+      attempt = null
+    }
+    completed.value = false
+    phase = null
+    paymentController = null
+    busy.value = false
+    steps.value = []
   }
 
   watch([enabled, epoch], () => {
@@ -214,5 +315,5 @@ export function usePurchaseBatchPayment(
     }
   }, { immediate: true, flush: 'sync' })
   onScopeDispose(reset)
-  return { supplier, suppliers, orders, suppliersLoading, loading, busy, unknown, stale, error, errorKey, changeSupplier, reload, submit: (input: PurchaseBatchPaymentInput) => execute(input), retrySubmit: () => execute() }
+  return { supplier, suppliers, orders, suppliersLoading, loading, busy, unknown, stale, completed, error, errorKey, steps, result, changeSupplier, reload, start, retrySubmit, complete, fail }
 }

@@ -1,6 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import {
+  IsArray,
+  ArrayMaxSize,
+  ArrayMinSize,
   IsEnum,
   IsDefined,
   IsIn,
@@ -133,4 +136,56 @@ export class PurchaseOrderPaymentVoidRequestDto {
   @IsString()
   @IsUnicodeCodePointLength(1, 500)
   reason!: string
+}
+
+export class PurchaseOrderAmountRevisionLineDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @IsUUID('4')
+  lineId!: string
+
+  @ApiProperty({
+    type: 'string',
+    pattern: AMOUNT_PATTERN.source,
+    description: '新的实际采购单价，数量保持不变。',
+  })
+  @Matches(AMOUNT_PATTERN)
+  actualUnitPriceAmount!: string
+}
+
+export class PurchaseOrderAmountRevisionRequestDto {
+  @ApiProperty({
+    type: 'integer',
+    minimum: 1,
+    maximum: Number.MAX_SAFE_INTEGER,
+  })
+  @IsInt()
+  @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
+  expectedVersion!: number
+
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 500 })
+  @IsString()
+  @IsUnicodeCodePointLength(1, 500)
+  reason!: string
+
+  @ApiProperty({
+    type: 'string',
+    pattern: AMOUNT_PATTERN.source,
+    description: '修改后的定金；尾款由总价减定金计算。',
+  })
+  @Matches(AMOUNT_PATTERN)
+  depositDueAmount!: string
+
+  @ApiProperty({
+    type: [PurchaseOrderAmountRevisionLineDto],
+    minItems: 1,
+    maxItems: 1000,
+    description: '必须覆盖该采购单全部采购行，数量不可修改。',
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  @ValidateNested({ each: true })
+  @Type(() => PurchaseOrderAmountRevisionLineDto)
+  lines!: PurchaseOrderAmountRevisionLineDto[]
 }

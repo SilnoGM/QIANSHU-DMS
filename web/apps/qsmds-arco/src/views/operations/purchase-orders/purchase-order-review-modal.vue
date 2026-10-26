@@ -8,10 +8,12 @@ import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import OrderParts from '@/components/business/QsPurchaseOrderDrawer/OrderParts.vue'
 import { buildPurchaseOrderCopyText } from './purchase-order-copy.logic'
 import { buildPurchaseOrderRejectRequest, buildPurchaseOrderReviewRequest } from './purchase-order-detail.logic'
+import { copyPurchaseOrderImageToClipboard } from './purchase-order-image-copy.logic'
 import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError } from './purchase-order-list.logic'
 import PurchaseOrderReviewDetails from './purchase-order-review-details.vue'
 import PurchaseOrderReviewImage from './purchase-order-review-image.vue'
 import PurchaseOrderReviewSummary from './purchase-order-review-summary.vue'
+import { usePurchaseOrderImageCopy } from './use-purchase-order-image-copy'
 import { usePurchaseOrderImageGeneration } from './use-purchase-order-image-generation'
 
 const props = defineProps<{
@@ -34,6 +36,7 @@ const error = ref('')
 const loading = ref(false)
 const submitting = ref(false)
 const copying = ref(false)
+const copyInfoVisible = ref(false)
 const rejectVisible = ref(false)
 const rejectReason = ref('')
 const rejectReasonError = ref('')
@@ -54,6 +57,52 @@ const image = usePurchaseOrderImageGeneration({
 })
 const busy = computed(() => submitting.value || rejecting.value || image.generating.value)
 const canCopy = computed(() => visible.value && canReview.value && !loading.value && !busy.value && !copying.value && detail.value !== null && detail.value.id === props.orderId)
+const copyText = computed(() => detail.value === null ? '' : buildPurchaseOrderCopyText(detail.value, t))
+const copyDescription = computed(() => detail.value === null ? undefined : `${detail.value.orderNo} · ${detail.value.supplier.label}`)
+const canCopyText = computed(() => copyInfoVisible.value && canCopy.value && copyText.value.length > 0)
+const draftCurrent = computed(() => {
+  const draft = image.draft.value
+  const current = detail.value
+  return draft !== null && current !== null && draft.isCurrent && draft.orderVersion === current.version
+})
+const copyImageHint = computed(() => {
+  if (detail.value === null) {
+    return ''
+  }
+  if (image.draft.value === null) {
+    return detail.value.orderStatus === 'PENDING_REVIEW'
+      ? t('purchaseReview.copy.imageMissing')
+      : t('purchaseReview.copy.imageUnavailable')
+  }
+  if (!draftCurrent.value) {
+    return t('purchaseReview.copy.imageStale')
+  }
+  if (image.imageFailed.value || image.previewUrl.value === null) {
+    return t('purchaseReview.copy.imageLoadFailed')
+  }
+  if (!image.imageLoaded.value) {
+    return t('purchaseReview.image.loading')
+  }
+  return ''
+})
+const imageCopy = usePurchaseOrderImageCopy({
+  busy,
+  canReview,
+  copyInfoVisible,
+  detail,
+  draft: image.draft,
+  epoch: computed(() => account.authEpoch),
+  imageReady: image.ready,
+  loading,
+  orderId: computed(() => props.orderId),
+  previewBlob: image.previewBlob,
+  previewUrl: image.previewUrl,
+  visible,
+}, {
+  copy: copyPurchaseOrderImageToClipboard,
+  onFailure: key => toast.error(t(key)),
+  onSuccess: () => toast.success(t('purchaseReview.copy.imageSuccess')),
+})
 const canGenerate = computed(() => canReview.value && !loading.value && !busy.value && detail.value?.orderStatus === 'PENDING_REVIEW' && reviewContext.value?.available === true)
 const canConfirm = computed(() => canGenerate.value && image.ready.value)
 const canReject = computed(() => (
@@ -81,6 +130,8 @@ const terminalNotice = computed(() => {
 function reset(): void {
   copySequence += 1
   copying.value = false
+  imageCopy.reset()
+  copyInfoVisible.value = false
   rejectController?.abort()
   rejectController = null
   rejectVisible.value = false
@@ -101,6 +152,13 @@ function reset(): void {
   error.value = ''
 }
 
+function openCopyInfo(): void {
+  if (!canCopy.value) {
+    return
+  }
+  copyInfoVisible.value = true
+}
+
 async function copyPurchaseInfo(): Promise<void> {
   const current = detail.value
   if (!canCopy.value || current === null) {
@@ -111,7 +169,7 @@ async function copyPurchaseInfo(): Promise<void> {
   const isCurrent = () => sequence === copySequence && epoch === account.authEpoch && visible.value && canReview.value && props.orderId === current.id
   copying.value = true
   try {
-    await navigator.clipboard.writeText(buildPurchaseOrderCopyText(current, t))
+    await navigator.clipboard.writeText(copyText.value)
     if (isCurrent()) {
       toast.success(t('purchaseReview.copy.success'))
     }
@@ -129,6 +187,26 @@ async function copyPurchaseInfo(): Promise<void> {
   }
 }
 
+function markCopyImageLoaded(): void {
+  const url = image.previewUrl.value
+  if (url !== null) {
+    image.markLoaded(url)
+  }
+}
+
+function markCopyImageFailed(): void {
+  const url = image.previewUrl.value
+  if (url !== null) {
+    image.markFailed(url)
+  }
+}
+
+function openCopyImagePreview(event: KeyboardEvent): void {
+  if (image.imageLoaded.value && event.currentTarget instanceof HTMLElement) {
+    event.currentTarget.querySelector('img')?.click()
+  }
+}
+
 function failureMessage(failure: unknown): string {
   const result = getPurchaseOrderApiFailure(failure)
   return result.requestId ? `${result.message}（requestId: ${result.requestId}）` : result.message
@@ -140,6 +218,8 @@ async function loadDetail(previousFailure = ''): Promise<void> {
   if (!visible.value || orderId === null || !canReview.value) {
     return
   }
+  // 重取详情会清空图片预览；先收起复制弹窗，避免展示一半文本、一半空图片。
+  copyInfoVisible.value = false
   loadController?.abort()
   image.reset()
   const controller = new AbortController()
@@ -373,7 +453,19 @@ onBeforeUnmount(reset)
     </div>
     <template #footer>
       <div class="flex flex-wrap gap-2 w-full items-center justify-end">
-        <FaButton type="button" variant="outline" class="min-h-11 w-full sm:mr-auto sm:min-h-9 sm:w-auto" :disabled="!canCopy" :loading="copying" @click="copyPurchaseInfo">
+        <FaButton
+          v-if="detail?.orderStatus === 'PENDING_REVIEW'"
+          type="button"
+          variant="outline"
+          data-testid="purchase-order-review-footer-generate"
+          class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+          :disabled="!canGenerate"
+          @click="generateImage(image.draft.value !== null)"
+        >
+          <FaIcon :name="image.draft.value ? 'i-lucide:refresh-cw' : 'i-lucide:image-plus'" aria-hidden="true" />
+          {{ t(image.draft.value ? 'purchaseReview.image.regenerate' : 'purchaseReview.image.generate') }}
+        </FaButton>
+        <FaButton type="button" variant="outline" class="min-h-11 w-full sm:mr-auto sm:min-h-9 sm:w-auto" :disabled="!canCopy" @click="openCopyInfo">
           <FaIcon name="i-lucide:copy" aria-hidden="true" />
           {{ t('purchaseReview.copy.label') }}
         </FaButton>
@@ -385,6 +477,71 @@ onBeforeUnmount(reset)
         </FaButton>
         <FaButton v-if="detail?.orderStatus === 'PENDING_REVIEW'" type="button" class="min-h-11 sm:min-h-9" :disabled="!canConfirm" :loading="submitting" @click="submit">
           {{ t('purchaseOrderList.review.confirm') }}
+        </FaButton>
+      </div>
+    </template>
+  </QsGenericModal>
+  <QsGenericModal
+    v-model="copyInfoVisible"
+    :title="t('purchaseReview.copy.title')"
+    :description="copyDescription"
+    size="2xl"
+  >
+    <div data-testid="purchase-order-copy-info" class="gap-4 grid md:grid-cols-2 md:h-[60vh] md:max-h-[40rem]">
+      <section class="p-3 border border-border/70 rounded-xl bg-muted/15 flex flex-col gap-2 min-h-0">
+        <h3 class="qs-type-body-medium m-0">
+          {{ t('purchaseReview.copy.textTitle') }}
+        </h3>
+        <div
+          tabindex="0"
+          role="region"
+          :aria-label="t('purchaseReview.copy.textTitle')"
+          class="text-sm m-0 p-3 rounded-lg bg-background/60 h-[36vh] min-h-0 whitespace-pre-wrap [overflow-wrap:anywhere] overflow-auto md:flex-1 md:h-auto"
+          v-text="copyText"
+        />
+      </section>
+      <section class="p-3 border border-border/70 rounded-xl bg-muted/15 flex flex-col gap-2 min-h-0">
+        <div class="flex flex-wrap gap-2 items-center justify-between">
+          <h3 class="qs-type-body-medium m-0">
+            {{ t('purchaseReview.image.title') }}
+          </h3>
+          <FaTag v-if="image.draft.value" variant="outline" :class="draftCurrent ? 'border-primary/30 bg-primary/5 text-primary' : 'border-destructive/30 bg-destructive/5 text-destructive'">
+            {{ t(draftCurrent ? 'purchaseReview.image.ready' : 'purchaseReview.image.outdated') }}
+          </FaTag>
+        </div>
+        <div class="p-2 rounded-lg bg-white flex h-[46vh] min-h-0 items-center justify-center overflow-hidden md:flex-1 md:h-auto">
+          <FaImagePreview
+            v-if="image.previewUrl.value"
+            :key="image.previewUrl.value"
+            :src="image.previewUrl.value"
+            :aria-label="t('purchaseReview.image.preview')"
+            :aria-disabled="!image.imageLoaded.value"
+            role="button"
+            tabindex="0"
+            class="h-auto max-h-[40vh] max-w-full w-auto object-contain md:max-h-[48vh] sm:max-h-[44vh]"
+            @load="markCopyImageLoaded"
+            @error="markCopyImageFailed"
+            @keydown.enter.prevent="openCopyImagePreview"
+            @keydown.space.prevent="openCopyImagePreview"
+          />
+          <p v-else class="qs-type-meta text-muted-foreground m-0 p-4 text-center">
+            {{ copyImageHint }}
+          </p>
+        </div>
+        <p v-if="image.previewUrl.value && copyImageHint" class="qs-type-meta m-0" :class="image.imageFailed.value ? 'text-destructive' : 'text-muted-foreground'">
+          {{ copyImageHint }}
+        </p>
+      </section>
+    </div>
+    <template #footer>
+      <div class="gap-2 grid w-full md:gap-4 md:grid-cols-2">
+        <FaButton type="button" class="min-h-11 w-full sm:min-h-9" :disabled="!canCopyText" :loading="copying" @click="copyPurchaseInfo">
+          <FaIcon name="i-lucide:copy" aria-hidden="true" />
+          {{ t('purchaseReview.copy.copyText') }}
+        </FaButton>
+        <FaButton type="button" class="min-h-11 w-full sm:min-h-9" :disabled="!imageCopy.canCopy.value" :loading="imageCopy.copying.value" @click="imageCopy.copy">
+          <FaIcon name="i-lucide:image" aria-hidden="true" />
+          {{ t('purchaseReview.copy.copyImage') }}
         </FaButton>
       </div>
     </template>

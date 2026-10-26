@@ -55,6 +55,40 @@ const historicalMixedCancelableOrderNo = 'PO-BRW-MIXED-CANCEL'
 const historicalMixedCatalogProductName = 'Browser 历史混合目录产品'
 const historicalMixedCustomProductName = 'Browser 历史混合临时产品'
 
+/** 复制信息弹窗在桌面与窄屏都必须可容纳正文和两个复制按钮。 */
+async function assertPurchaseCopyInfoLayout(page, label) {
+  // 等弹窗淡入与按钮过渡完成后再做命中测试，避免把动画中的坐标当成最终布局。
+  await page.evaluate('document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))')
+  await page.waitFor(`(() => {
+    const content = document.querySelector('[data-testid="purchase-order-copy-info"]')
+    const dialog = content?.closest('[role="dialog"]')
+    return dialog?.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')
+  })()`)
+  const layout = await page.evaluate(`(() => {
+    const content = document.querySelector('[data-testid="purchase-order-copy-info"]')
+    const dialog = content?.closest('[role="dialog"]')
+    if (!content || !dialog) throw new Error('purchase copy info dialog unavailable')
+    const rect = dialog.getBoundingClientRect()
+    const minimumButtonHeight = innerWidth < 640 ? 44 : 36
+    const buttons = [...dialog.querySelectorAll('[data-slot="qs-generic-modal-footer"] button')]
+      .filter(button => ['复制文本', '复制图片'].includes(button.textContent.trim()))
+    return {
+      dialogFits: rect.left >= 0 && rect.right <= document.documentElement.clientWidth + 1 && rect.top >= 0 && rect.bottom <= innerHeight + 1,
+      contentFits: content.scrollWidth <= content.clientWidth + 1,
+      documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      buttonsReachable: buttons.length === 2 && buttons.every(button => {
+        const bounds = button.getBoundingClientRect()
+        const hit = document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+        return !button.disabled && bounds.width >= 44 && bounds.height + 0.001 >= minimumButtonHeight
+          && bounds.top >= 0 && bounds.bottom <= innerHeight
+          && hit !== null && button.contains(hit)
+      }),
+    }
+  })()`)
+  assert.deepEqual(layout, { dialogFits: true, contentFits: true, documentFits: true, buttonsReachable: true }, label)
+  await saveNumberingScreenshot(page, label)
+}
+
 /** 日志只保留固定步骤名，不输出 Cookie、密码、付款草稿或幂等键。 */
 async function runPurchaseOrderBrowserStep(label, action) {
   try {
@@ -1863,7 +1897,18 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
       assert.deepEqual(await readPurchaseShippingMarkLedger(page), beforeLedger, '审核确认弹窗不得预占唛头')
       assert.equal(await page.evaluate(`document.querySelector('[data-testid="purchase-order-review-confirmation"]')?.textContent.includes(${JSON.stringify(target.supplier.label)})`), true)
       assert.equal(await page.evaluate(`[...document.querySelectorAll('button')].find(button => button.getClientRects().length > 0 && button.textContent.trim() === '确认审核')?.disabled`), true, '没有采购单图片不得审核')
-      await clickDialogButton(page, '审核采购订单？', '生成采购单图片')
+      if (index === 0) {
+        await page.waitFor(`document.querySelector('[data-testid="purchase-order-review-footer-generate"]')?.disabled === false`)
+        await page.evaluate(`(() => {
+          const button = document.querySelector('[data-testid="purchase-order-review-footer-generate"]')
+          if (!button) throw new Error('purchase review footer generate unavailable')
+          button.click()
+          return true
+        })()`)
+      }
+      else {
+        await clickDialogButton(page, '审核采购订单？', '生成采购单图片')
+      }
       await page.waitFor(`document.querySelector('[data-slot="purchase-order-review-image"] img')?.naturalWidth > 0
         && [...document.querySelectorAll('button')].find(button => button.getClientRects().length > 0 && button.textContent.trim() === '确认审核')?.disabled === false`)
       const prepared = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(target.id)}`))
@@ -1923,6 +1968,62 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
         await page.setViewport(1440, 900, false)
         await page.waitFor(`innerWidth === 1440 && !document.documentElement.classList.contains('dark')`)
         await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+        await page.connection.send('Browser.grantPermissions', {
+          origin: new URL(configuration.baseUrl).origin,
+          permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'],
+        })
+        await clickDialogButton(page, '审核采购订单？', '复制采购信息')
+        await page.waitFor(`(() => {
+          const content = document.querySelector('[data-testid="purchase-order-copy-info"]')
+          return content?.getClientRects().length > 0
+            && content.textContent.includes(${JSON.stringify(target.orderNo)})
+            && content.querySelector('img')?.naturalWidth > 0
+        })()`)
+        assert.equal(await page.evaluate(`document.querySelector('[data-testid="purchase-order-copy-info"]')?.textContent.includes(${JSON.stringify(target.supplier.label)})`), true)
+        await assertPurchaseCopyInfoLayout(page, 'purchase-review-copy-info-light')
+        await page.setViewport(390, 844, true)
+        await page.evaluate(`document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('appSettings').setColorScheme('light')`)
+        await page.waitFor(`innerWidth === 390 && !document.documentElement.classList.contains('dark')`)
+        await page.evaluate('document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))')
+        await page.waitFor(`(() => {
+          const content = document.querySelector('[data-testid="purchase-order-copy-info"]')
+          const dialog = content?.closest('[role="dialog"]')
+          return dialog?.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')
+        })()`)
+        await assertPurchaseCopyInfoLayout(page, 'purchase-review-copy-info-mobile')
+        await page.setViewport(1440, 900, false)
+        await page.waitFor(`innerWidth === 1440 && !document.documentElement.classList.contains('dark')`)
+        await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+        const clickCopyInfoButton = text => page.evaluate(`(() => {
+          const content = document.querySelector('[data-testid="purchase-order-copy-info"]')
+          const dialog = content?.closest('[role="dialog"]')
+          const button = dialog && [...dialog.querySelectorAll('button')].find(candidate => (
+            candidate.getClientRects().length > 0
+            && candidate.textContent.trim() === ${JSON.stringify(text)}
+            && !candidate.disabled
+          ))
+          if (!button) throw new Error('copy info button unavailable')
+          button.click()
+          return true
+        })()`)
+        await clickCopyInfoButton('复制文本')
+        await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
+          .some(toast => toast.getClientRects().length > 0 && toast.textContent?.includes('采购信息已复制'))`)
+        const copiedPurchaseInfo = await page.evaluate('navigator.clipboard.readText()')
+        assert.ok(copiedPurchaseInfo.startsWith(`【${target.orderNo}】`))
+        assert.ok(copiedPurchaseInfo.includes(target.supplier.label))
+        await clickCopyInfoButton('复制图片')
+        await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
+          .some(toast => toast.getClientRects().length > 0 && toast.textContent?.includes('采购单图片已复制'))`)
+        const copiedPurchaseImageTypes = await page.evaluate('navigator.clipboard.read().then(items => items.flatMap(item => item.types))')
+        assert.ok(copiedPurchaseImageTypes.includes('image/png'), '复制图片必须写入 image/png')
+        await page.evaluate(`(() => {
+          const content = document.querySelector('[data-testid="purchase-order-copy-info"]')
+          const button = content?.closest('[role="dialog"]')?.querySelector('button[aria-label="关闭模态框"]')
+          button?.click()
+          return true
+        })()`)
+        await page.waitFor(`!document.querySelector('[data-testid="purchase-order-copy-info"]')?.getClientRects().length`)
         await clickDialogButton(page, '审核采购订单？', '关闭')
         await waitForNoVisibleDialog(page, '审核采购订单？')
         assert.equal(reviewRequests.length, before, '关闭不应提交审核')
