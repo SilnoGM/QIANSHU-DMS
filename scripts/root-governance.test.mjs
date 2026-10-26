@@ -109,9 +109,10 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/test/views/purchase-payment-statement.test.ts',
   'web/apps/qsmds-arco/test/views/purchase-review-cancellation.test.ts',
   'web/apps/qsmds-arco/test/views/purchase-review-recovery.test.ts',
-  // 审核确认摘要仅展示已存采购供应商，不新增供应商主数据。
+  // 审核确认摘要与复制信息弹窗仅展示已存采购供应商，不新增供应商主数据。
   'web/apps/qsmds-arco/src/locales/lang/purchase-order-list/zh-cn.json',
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-details.vue',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue',
   'web/apps/qsmds-arco/src/locales/lang/purchase-review/zh-cn.json',
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-shipment-summary.vue',
   'web/apps/qsmds-arco/src/views/workbenches/purchase-reviews/index.vue',
