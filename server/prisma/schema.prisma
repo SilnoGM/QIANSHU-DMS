@@ -172,6 +172,8 @@ enum AuditEventType {
   INVOICE_REQUEST_CANCELLED
   /// 采购审核驳回事件。追加在末尾与数据库枚举顺序一致。
   PURCHASE_ORDER_REJECTED
+  /// 审核后采购金额修订事件。追加在末尾与数据库枚举顺序一致。
+  PURCHASE_ORDER_AMOUNT_REVISED
 
   @@map("audit_event_type")
 }

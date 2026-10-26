@@ -122,6 +122,7 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   PURCHASE_SHIPMENT_DELIVERED: '采购货件已签收',
   PURCHASE_ORDER_ORDER_STATUS_CHANGED: '采购订单状态已变更',
   PURCHASE_ORDER_REJECTED: '采购订单审核已驳回',
+  PURCHASE_ORDER_AMOUNT_REVISED: '采购订单金额已修订',
   PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED: '采购订单履约状态已变更',
   PURCHASE_ORDER_PAYMENT_RECORDED: '采购订单付款已记录',
   PURCHASE_ORDER_PAYMENT_VOIDED: '采购订单付款已作废',

@@ -8,6 +8,7 @@ import { FundAccountCommandService } from '../src/modules/fund-accounts/applicat
 import { FundPostingApplicationService } from '../src/modules/fund-accounts/application/fund-posting.service'
 import { NumberingGeneratorService } from '../src/modules/numbering/numbering-generator.service'
 import { PurchasePayableQueryService } from '../src/modules/purchase-orders/payables/purchase-payable-query.service'
+import { PurchasePaymentQueryService } from '../src/modules/purchase-orders/payables/purchase-payment-query.service'
 import { createAtomicityFixture, createCommands, createReviewMutations, customInput, prepareImageReview, prepareSalesSource, type AtomicityFixture } from './purchase-shipping-mark-atomicity.fixture'
 
 /** 全量正式迁移落在临时 schema；除权限查询与图片存储探测外，采购、资金、锁及约束均为正式实现。 */
@@ -357,5 +358,156 @@ describe('Purchase payables with isolated PostgreSQL', () => {
     const account = await h.prisma.fundAccount.findFirstOrThrow({ where: { userId: h.actor.id } })
     const result = await new FundPostingApplicationService(h.prisma, h.audit, new NumberingGeneratorService(h.prisma)).postManualAdjustment(finance(), { userAccountId: account.id, amount: '1', adjustmentMode: 'USER_ONLY', reason: 'Unrelated adjustment regression', idempotencyKey: randomUUID() })
     expect(result).toMatchObject({ postingTypeCode: 'ADMIN_MANUAL_ADJUSTMENT', businessAmount: '1.00' })
+  })
+
+  it('revises reviewed amounts with payables kept in sync', async () => {
+    const group = await reviewed('3', '7')
+    const orderId = group.id
+    const line = await h.prisma.purchaseOrderLine.findFirstOrThrow({
+      where: { purchaseOrderId: orderId },
+      select: { id: true },
+    })
+    const before = await h.prisma.purchaseOrder.findUniqueOrThrow({
+      where: { id: orderId },
+      select: { version: true },
+    })
+    const mutations = createReviewMutations(h)
+    const revised = await mutations.reviseAmount(h.context(), orderId, {
+      expectedVersion: before.version,
+      reason: '采购价格录入错误',
+      depositDueAmount: '4',
+      lines: [{ lineId: line.id, actualUnitPriceAmount: '20' }],
+    })
+    expect(revised.amounts).toMatchObject({
+      lineSubtotalAmount: '20.00',
+      purchaseTotalAmount: '20.00',
+      depositDueAmount: '4.00',
+      balanceDueAmount: '16.00',
+      paidAmount: '0.00',
+      outstandingAmount: '20.00',
+    })
+    expect(revised.lines).toEqual([
+      expect.objectContaining({
+        id: line.id,
+        actualPurchaseUnitPriceAmount: '20.00',
+        lineTotalAmount: '20.00',
+      }),
+    ])
+    const payables = await h.prisma.purchaseOrderPayable.findMany({
+      where: { purchaseOrderId: orderId },
+      orderBy: { paymentType: 'asc' },
+      select: { paymentType: true, dueAmount: true, version: true },
+    })
+    expect(payables.map(item => [
+      item.paymentType,
+      item.dueAmount.toFixed(2),
+      item.version,
+    ])).toEqual([
+      ['DEPOSIT', '4.00', 2],
+      ['BALANCE', '16.00', 2],
+    ])
+    const revision = await h.prisma.purchaseOrderAmountRevision.findFirstOrThrow({
+      where: { purchaseOrderId: orderId },
+      orderBy: { changedAt: 'desc' },
+    })
+    expect({
+      oldTotal: revision.oldPurchaseTotalAmount.toFixed(2),
+      newTotal: revision.newPurchaseTotalAmount.toFixed(2),
+      oldDeposit: revision.oldDepositDueAmount.toFixed(2),
+      newDeposit: revision.newDepositDueAmount.toFixed(2),
+      oldBalance: revision.oldBalanceDueAmount.toFixed(2),
+      newBalance: revision.newBalanceDueAmount.toFixed(2),
+      reason: revision.reason,
+    }).toEqual({
+      oldTotal: '10.00',
+      newTotal: '20.00',
+      oldDeposit: '3.00',
+      newDeposit: '4.00',
+      oldBalance: '7.00',
+      newBalance: '16.00',
+      reason: '采购价格录入错误',
+    })
+    expect(await h.prisma.auditEvent.findFirst({
+      where: { eventType: 'PURCHASE_ORDER_AMOUNT_REVISED', targetId: orderId },
+    })).not.toBeNull()
+  })
+
+  it('blocks amount revision while an active payment exists', async () => {
+    const group = await reviewed('3', '7')
+    const deposit = group.items.find(item => item.paymentType === 'DEPOSIT')!
+    await pay(deposit.id)
+    const line = await h.prisma.purchaseOrderLine.findFirstOrThrow({
+      where: { purchaseOrderId: group.id },
+      select: { id: true },
+    })
+    const order = await h.prisma.purchaseOrder.findUniqueOrThrow({
+      where: { id: group.id },
+      select: { version: true },
+    })
+    await expect(createReviewMutations(h).reviseAmount(h.context(), group.id, {
+      expectedVersion: order.version,
+      reason: '有效付款存在时不允许改价',
+      depositDueAmount: '4',
+      lines: [{ lineId: line.id, actualUnitPriceAmount: '20' }],
+    })).rejects.toMatchObject({
+      code: 'PURCHASE_ORDER_AMOUNT_REVISION_HAS_PAYMENTS',
+      status: 409,
+    })
+    expect(await h.prisma.purchaseOrderAmountRevision.count({
+      where: { purchaseOrderId: group.id },
+    })).toBe(0)
+  })
+
+  it('lists flat payment records with active, voided and all filters', async () => {
+    const group = await reviewed('3', '7')
+    const deposit = group.items.find(item => item.paymentType === 'DEPOSIT')!
+    await pay(deposit.id)
+    const paymentQueries = new PurchasePaymentQueryService(
+      h.prisma,
+      new DictionaryLookupService(h.prisma),
+    )
+    const active = await paymentQueries.list({
+      page: 1,
+      pageSize: 20,
+      keyword: group.orderNo,
+      status: 'ACTIVE',
+    })
+    expect(active.total).toBe(1)
+    expect(active.items[0]).toMatchObject({
+      purchaseOrderId: group.id,
+      payableId: deposit.id,
+      orderNo: group.orderNo,
+      supplierName: 'Custom supplier',
+      paymentType: 'DEPOSIT',
+      amount: '3.00',
+      voidedAt: null,
+      voidedBy: null,
+      voidReason: null,
+    })
+    const payment = await h.prisma.purchaseOrderPayment.findFirstOrThrow({
+      where: { purchaseOrderId: group.id, voidedAt: null },
+    })
+    await createReviewMutations(h).voidPayment(finance(), group.id, payment.id, {
+      reason: 'Remove payment',
+    })
+    const voided = await paymentQueries.list({
+      page: 1,
+      pageSize: 20,
+      keyword: group.orderNo,
+      status: 'VOIDED',
+    })
+    expect(voided.total).toBe(1)
+    expect(voided.items[0]).toMatchObject({
+      id: payment.id,
+      voidedAt: expect.any(String) as unknown,
+      voidReason: 'Remove payment',
+    })
+    const all = await paymentQueries.list({
+      page: 1,
+      pageSize: 20,
+      keyword: group.orderNo,
+    })
+    expect(all.total).toBe(1)
+    expect(all.items[0]).toMatchObject({ id: payment.id })
   })
 })

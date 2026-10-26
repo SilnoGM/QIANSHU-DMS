@@ -2,6 +2,7 @@ import type { AxiosInstance } from 'axios'
 import type {
   CreatePurchaseOrderRequestDto,
   FactoryShipmentResultDto,
+  PurchaseOrderAmountRevisionRequestDto,
   PurchaseOrderDetailDto,
   PurchaseOrderDocumentAttachRequestDto,
   PurchaseOrderFactoryShipmentRequestDto,
@@ -231,6 +232,15 @@ export function createPurchaseOrdersApi(client: AxiosInstance) {
       signal: AbortSignal,
     ) => client.post<PurchaseOrderDetailDto>(
       `${orderPath(purchaseOrderId)}/payments/${encodeURIComponent(paymentId)}/void`,
+      data,
+      { errorPresentation: 'local', retry: false, signal },
+    ),
+    reviseAmount: (
+      purchaseOrderId: string,
+      data: PurchaseOrderAmountRevisionRequestDto,
+      signal: AbortSignal,
+    ) => client.post<PurchaseOrderDetailDto>(
+      `${orderPath(purchaseOrderId)}/amount-revisions`,
       data,
       { errorPresentation: 'local', retry: false, signal },
     ),

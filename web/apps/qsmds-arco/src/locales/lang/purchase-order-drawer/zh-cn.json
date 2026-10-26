@@ -38,6 +38,7 @@
     "refreshBeforeRetry": "若提交结果不明确，请关闭弹窗并重新加载订单详情核对后再操作。",
     "amountChange": "采购约定金额变更",
     "amountFields": { "lineSubtotalAmount": "产品明细汇总", "purchaseTotalAmount": "采购总价", "depositDueAmount": "定金", "balanceDueAmount": "尾款" },
+    "reviseAmount": "修改金额",
     "changedTo": "变更为",
     "reasonNotRecorded": "未记录原因",
     "noPayments": "暂无实际付款记录",

@@ -98,6 +98,11 @@ function openBatchPayment() {
     void router.push({ name: 'qsFinanceRealtimePurchaseBatchPayment' })
   }
 }
+function openPaymentRecords() {
+  if (enabled.value && !loading.value) {
+    void router.push({ name: 'qsFinanceRealtimePurchasePaymentRecords' })
+  }
+}
 function openPayment(row: PurchasePayableRow) {
   if (!enabled.value || loading.value || !row.payable || !canPayPurchasePayable(row.payable)) {
     return
@@ -134,6 +139,9 @@ onBeforeUnmount(() => {
 <template>
   <div class="min-w-0">
     <FaPageHeader :title="t('workbench.purchasePayments')" :description="t('purchasePayment.intro')">
+      <FaButton v-if="canPay" variant="outline" :disabled="!enabled || loading" @click="openPaymentRecords">
+        <FaIcon name="i-lucide:receipt-text" aria-hidden="true" />{{ t('purchasePayment.records.title') }}
+      </FaButton>
       <FaButton v-if="canPay" :disabled="!enabled || loading" @click="openBatchPayment">
         <FaIcon name="i-lucide:wallet-cards" aria-hidden="true" />{{ t('purchasePayment.batch.title') }}
       </FaButton>

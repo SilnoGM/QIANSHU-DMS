@@ -20,6 +20,7 @@ const props = defineProps<{
   busy: boolean
   canAttachDocument?: boolean
   canReceiveWarehouse?: boolean
+  canReviseAmount?: boolean
   canRework?: boolean
 }>()
 const emit = defineEmits<{
@@ -28,6 +29,7 @@ const emit = defineEmits<{
   'closed': []
   'attachDocument': []
   'receiveWarehouse': []
+  'reviseAmount': []
   'rework': []
 }>()
 const { t } = useI18n()
@@ -130,6 +132,9 @@ function onClosed() {
         </FaButton>
         <FaButton v-if="canRework" type="button" variant="outline" size="sm" class="px-3 h-8" :disabled="busy || loading || !detail || Boolean(error)" @click="emit('rework')">
           <FaIcon name="i-lucide:copy-plus" class="size-4" aria-hidden="true" />基于此单新建
+        </FaButton>
+        <FaButton v-if="canReviseAmount" type="button" variant="outline" size="sm" class="px-3 h-8" :disabled="busy || loading || !detail || Boolean(error)" @click="emit('reviseAmount')">
+          <FaIcon name="i-lucide:badge-dollar-sign" class="size-4" aria-hidden="true" />{{ t('purchaseOrderDrawer.reviseAmount') }}
         </FaButton>
         <FaButton type="button" variant="outline" size="sm" class="px-3 h-8" :disabled="busy || loading || !detail || Boolean(error)" @click="toast.info(t('purchaseOrderDrawer.printNotice'))">
           <FaIcon name="i-lucide:printer" class="size-4" aria-hidden="true" />{{ t('purchaseOrderDrawer.print') }}

@@ -210,6 +210,7 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
   for (const path of [
     '/qs-finance/realtime-payments/sales-receipts',
     '/qs-finance/realtime-payments/purchase-payments/batch',
+    '/qs-finance/realtime-payments/purchase-payment-records',
     '/qs-finance/bill-reconciliation/slh-bill-management/import',
     '/qs-finance/fund-accounts/transactions',
     '/qs-finance/fund-accounts/withdrawal-approvals',

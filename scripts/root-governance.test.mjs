@@ -66,7 +66,11 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/test/views/system-management.test.ts',
   // 应付与批量付款按采购单已存 supplierValue 选单、解析历史字典标签；
   // 复制、取消、对账单只展示订单快照或自定义名称，不提供供应商增删改入口。
+  // 付款记录列表与审核后金额修订同样只读取采购单快照和字典标签。
   'server/src/modules/purchase-orders/payables/README.md',
+  'server/src/modules/purchase-orders/payables/purchase-payment-query.service.spec.ts',
+  'server/src/modules/purchase-orders/payables/purchase-payment-query.service.ts',
+  'server/src/modules/purchase-orders/payables/purchase-payment.dto.ts',
   'server/src/modules/purchase-orders/payables/purchase-payable-batch.logic.spec.ts',
   'server/src/modules/purchase-orders/payables/purchase-payable-batch.logic.ts',
   'server/src/modules/purchase-orders/payables/purchase-payable-batch.transaction.ts',
@@ -86,6 +90,7 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/batch-payment-page.vue',
   'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/index.vue',
   'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-form.vue',
+  'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-records-page.vue',
   'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-form.vue',
   'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-payment-statement-action.vue',
   'web/apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-payment-statement-image.ts',

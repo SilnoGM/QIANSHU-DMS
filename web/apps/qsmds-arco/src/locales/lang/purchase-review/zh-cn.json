@@ -125,6 +125,33 @@
         "marks": "申请与派发唛头",
         "image": "生成采购单图片"
       }
+    },
+    "amountRevision": {
+      "title": "修改采购金额",
+      "description": "只修改实际单价与定金，数量、货件和历史凭证保持不变。",
+      "lines": "采购产品单价",
+      "linesHint": "数量保持不变；行小计与采购总价按新单价实时计算。",
+      "product": "产品",
+      "temporaryProduct": "临时产品",
+      "quantity": "数量",
+      "currentPrice": "当前单价",
+      "newPrice": "新单价",
+      "lineTotal": "行小计",
+      "purchaseTotal": "采购总价",
+      "deposit": "定金",
+      "balance": "尾款",
+      "depositHint": "尾款 = 采购总价 − 定金；定金不能超过采购总价。",
+      "reason": "修订原因",
+      "reasonPlaceholder": "请填写明确、可审计的金额修订原因",
+      "note": "保存后订单金额、定金/尾款应付会同步更新；归档采购单图片和历史对账单不重生成。若提交结果不明确，请重新加载详情核对。",
+      "hasPaymentsTitle": "仍有有效付款，不能修改金额",
+      "hasPayments": "该采购单有 {count} 笔有效付款，请先由财务在「采购付款记录」中作废后再修改金额。",
+      "shippedTitle": "该采购单已发货或已签收",
+      "shipped": "修改金额只更新当前订单与应付，不回写货件、归档采购单图片和历史对账单。",
+      "failed": "金额修订失败",
+      "success": "采购金额已修订",
+      "cancel": "取消",
+      "confirm": "确认修改"
     }
   }
 }

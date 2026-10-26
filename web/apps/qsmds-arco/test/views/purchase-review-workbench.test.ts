@@ -34,6 +34,15 @@ test('工作台审核完成刷新列表与计数，详情抽屉不提供资金�
   assert.match(source, /epoch !== account.authEpoch/u)
 })
 
+test('已通过详情允许审核人员修改金额，但继续不提供付款或凭证写入', async () => {
+  const source = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
+  assert.match(source, /:can-revise-amount="canReviseAmount"/u)
+  assert.match(source, /@revise-amount="openAmountRevision"/u)
+  assert.match(source, /<PurchaseAmountRevisionModal/u)
+  assert.match(source, /@updated="handleAmountRevisionUpdated"/u)
+  assert.doesNotMatch(source, /recordPayment|voidPayment/u)
+})
+
 test('取消采购只在审核已通过视图对审核人员提供，完成后刷新列表和计数', async () => {
   const source = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
   assert.match(source, /v-else-if="status === 'APPROVED' && canReview"/u)
