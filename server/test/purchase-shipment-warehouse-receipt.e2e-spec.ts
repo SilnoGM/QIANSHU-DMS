@@ -176,7 +176,12 @@ describe('purchase shipment warehouse receipt with isolated PostgreSQL', () => {
       // 按旧 schema 原有审核、发货写入构造历史事实；新图片生成器不能运行在旧 schema。
       await reviewHistoricalPurchase(legacy, id)
       await shipHistoricalPurchase(legacy, id)
-      await legacy.prisma.purchaseOrder.update({ where: { id }, data: { fulfillmentStatus: 'SIGNED' } })
+      // 历史 schema 尚未应用采购驳回迁移，默认返回全部列会引用 rejected_at。
+      await legacy.prisma.purchaseOrder.update({
+        where: { id },
+        data: { fulfillmentStatus: 'SIGNED' },
+        select: { id: true },
+      })
       const snapshot = () => legacy.prisma.$queryRaw(Prisma.sql`SELECT to_jsonb(orders) AS data FROM purchase_orders orders WHERE id = ${id}::uuid`)
       const before = await snapshot()
       await expect(legacy.migrateWarehouseReceipt()).rejects.toMatchObject({ code: '23514', constraint: 'purchase_warehouse_historical_signed_check' })
