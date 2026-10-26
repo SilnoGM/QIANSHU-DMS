@@ -428,20 +428,21 @@ export async function selectDialogOption(
   })()`)
   await pressKey(page, 'Enter')
   // Enter 只负责提交选项，Vue 模型更新是异步的；紧随其后的「添加片段」若在
-  // Linux 上抢跑会沿用上一个片段类型。等 combobox 显示新值后再返回。
-  await page.waitFor(dialogExpression(title, `
-    try {
-      ${labelLookup}
-      const displayed = [
-        control?.textContent ?? '',
-        typeof control?.value === 'string' ? control.value : '',
-        control?.getAttribute('aria-valuetext') ?? '',
-      ].join(' ')
-      return displayed.includes(${JSON.stringify(optionText)})
-    } catch {
-      return false
+  // Linux 上抢跑会沿用上一个片段类型。先等选项列表关闭，再等两帧渲染与微任务
+  // 稳定；不依赖 combobox 的显示文本，避免自定义 Select 不暴露文本时误超时。
+  await page.waitFor(`!(() => [...document.querySelectorAll('[role="option"]')]
+    .some(option => option.getClientRects().length > 0))()`, 5_000)
+  await page.evaluate(`new Promise(resolve => {
+    let settled = false
+    const done = () => {
+      if (!settled) {
+        settled = true
+        resolve(true)
+      }
     }
-  `), 5_000)
+    requestAnimationFrame(() => requestAnimationFrame(done))
+    setTimeout(done, 250)
+  })`)
 }
 
 export async function clickSegmentMove(
