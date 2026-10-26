@@ -14,6 +14,7 @@ import {
   formatSalesOrderDocumentTitleTimestamp,
   getSalesOrderApiFailure,
   hasSalesOrderChanges,
+  loadSalesOrderDefaultRegion,
   normalizeSalesOrderAddressDetail,
   parseSalesOrderCurrency,
   refreshSalesOrderDocumentAutoTitle,
@@ -126,6 +127,45 @@ test('尚未填写售价不能通过产品步骤或提交，明确输入零金�
   if (saved.valid) {
     assert.deepEqual(saved.request.lines.map(line => line.actualUnitPriceAmount), ['0.00', '0.00'])
   }
+})
+
+test('TWD 订单默认中国台湾/台湾，MYR 订单只默认马来西亚', async () => {
+  const requestedParents: (null | string)[] = []
+  const loadOptions = async (parentId: string | null) => {
+    requestedParents.push(parentId)
+    if (parentId === null) {
+      return [
+        { id: 'tw', name: '中国台湾' },
+        { id: 'my', name: '马来西亚' },
+      ]
+    }
+    return parentId === 'tw' ? [{ id: 'tw-province', name: '台湾' }] : []
+  }
+
+  assert.deepEqual(await loadSalesOrderDefaultRegion('TWD', loadOptions), {
+    region: { countryRegionId: 'tw', provinceStateId: 'tw-province', cityId: null },
+    regionNames: ['中国台湾', '台湾'],
+  })
+  assert.deepEqual(requestedParents, [null, 'tw'])
+
+  requestedParents.length = 0
+  assert.deepEqual(await loadSalesOrderDefaultRegion('MYR', loadOptions), {
+    region: { countryRegionId: 'my', provinceStateId: null, cityId: null },
+    regionNames: ['马来西亚'],
+  })
+  assert.deepEqual(requestedParents, [null])
+})
+
+test('地区种子缺少默认国家或省/州时不猜测 ID', async () => {
+  assert.equal(await loadSalesOrderDefaultRegion('TWD', async () => []), null)
+
+  const countryOnly = await loadSalesOrderDefaultRegion('TWD', async parentId => (
+    parentId === null ? [{ id: 'tw', name: '中国台湾' }] : []
+  ))
+  assert.deepEqual(countryOnly, {
+    region: { countryRegionId: 'tw', provinceStateId: null, cityId: null },
+    regionNames: ['中国台湾'],
+  })
 })
 
 test('空白产品行的售价空值不被视为录入，用户填写的零金额仍算变更', () => {

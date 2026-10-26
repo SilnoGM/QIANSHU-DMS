@@ -406,6 +406,17 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
   })
 
   await runSalesOrderBrowserStep('customer snapshot and duplicate address block', async () => {
+    // TWD 订单进入第二步前已按币种预选国家/地区与省/州，城市仍待用户选择。
+    await page.waitFor(`(() => {
+      const root = document.querySelector(
+        '[data-testid="${regionSelectorTestId}"]',
+      )
+      const trigger = level => root?.querySelector(
+        '[data-region-level="' + level + '"] [data-slot="select-trigger"]',
+      )?.textContent?.trim()
+      return trigger('COUNTRY_REGION') === '中国台湾'
+        && trigger('PROVINCE_STATE') === '台湾'
+    })()`)
     await fillLabelledControl(page, '客户姓名', customerName)
     await fillLabelledControl(page, '客户电话', customerPhone)
     await selectRegionOption(

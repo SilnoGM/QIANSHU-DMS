@@ -10,6 +10,7 @@ import type {
   SalesOrderSubmittingState,
   SalesOrderUnknownState,
 } from './sales-order-create.logic'
+import type { SalesOrderCurrency } from '@/api/modules/sales-orders'
 import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
 import type { RegionSelectorChange } from '@/components/business/QsRegionSelector/types'
 import { useFileDrop } from '@fantastic-admin/components'
@@ -23,6 +24,7 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsRegionSelector from '@/components/business/QsRegionSelector/index.vue'
+import { regionSelectorProviderKey } from '@/components/business/QsRegionSelector/provider'
 import QsSalesOrderDesc from '@/components/business/QsSalesOrderDesc/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import {
@@ -45,6 +47,7 @@ import {
   getSalesOrderApiFailure,
   hasSalesOrderChanges,
   isSalesOrderAbortError,
+  loadSalesOrderDefaultRegion,
   normalizeSalesOrderAddressDetail,
   parseSalesOrderCurrency,
   refreshSalesOrderDocumentAutoTitle,
@@ -88,6 +91,7 @@ const route = useRoute()
 const router = useRouter()
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
+const regionProvider = inject(regionSelectorProviderKey)
 const toast = useQsToast()
 const currencyCatalog = useCurrencyCatalog()
 const selectedCurrency = parseSalesOrderCurrency(route.query.currency)
@@ -131,6 +135,7 @@ const documentPreviewSnapshot = shallowRef<Readonly<Record<string, string>>>({})
 let submitRequestVersion = 0
 let submitAbortController: AbortController | null = null
 let documentAbortController: AbortController | null = null
+let defaultRegionController: AbortController | null = null
 let pendingNavigationResolver: ((allow: boolean) => void) | null = null
 
 const fixedCurrencies = computed(() => currencyCatalog.currencies.value.filter(currency =>
@@ -546,6 +551,52 @@ function handleRegionChange(change: RegionSelectorChange): void {
   clearFeedback('customer.addressDetail')
 }
 
+/**
+ * 地区默认值只是填单初值：等选择器使用的同一 Provider 加载完名称后按 UUID 回填。
+ * 用户已选地区或请求失败时保持空值，绝不覆盖用户操作。
+ */
+async function applyDefaultRegion(currency: SalesOrderCurrency): Promise<void> {
+  if (!regionProvider || formModel.value.region.countryRegionId !== null) {
+    return
+  }
+  defaultRegionController?.abort()
+  const controller = new AbortController()
+  defaultRegionController = controller
+  const provider = regionProvider
+  try {
+    const selection = await loadSalesOrderDefaultRegion(
+      currency,
+      async parentId => provider.listChildren({
+        parentId,
+        signal: controller.signal,
+      }),
+    )
+    if (
+      selection === null
+      || controller.signal.aborted
+      || formModel.value.region.countryRegionId !== null
+    ) {
+      return
+    }
+    formModel.value.region = { ...selection.region }
+    formModel.value.regionNames = [...selection.regionNames]
+    clearFeedback('customer.countryRegionId')
+    clearFeedback('customer.provinceStateId')
+    clearFeedback('customer.cityId')
+  }
+  catch (error) {
+    if (controller.signal.aborted || isSalesOrderAbortError(error)) {
+      return
+    }
+    // 地区列表加载失败由选择器自身展示错误与重试；默认值失败时保持空值。
+  }
+  finally {
+    if (defaultRegionController === controller) {
+      defaultRegionController = null
+    }
+  }
+}
+
 function handleLinesUpdate(lines: typeof formModel.value.lines): void {
   formModel.value.lines = lines
   clearFeedback('lines')
@@ -730,6 +781,7 @@ function resetSalesOrderForm(): void {
   deferredOverlayAction.value = null
   pendingSubmissionFeedback.value = null
   clearFeedback()
+  void applyDefaultRegion(initialCurrency)
 }
 
 async function waitForOverlayFocusRestore(): Promise<void> {
@@ -1086,6 +1138,7 @@ onMounted(() => {
     void router.replace({ name: 'qsOperationsSalesOrders' })
     return
   }
+  void applyDefaultRegion(initialCurrency)
   window.addEventListener('beforeunload', handleBeforeUnload)
 })
 
@@ -1093,6 +1146,7 @@ onBeforeUnmount(() => {
   submitRequestVersion += 1
   submitAbortController?.abort()
   documentAbortController?.abort()
+  defaultRegionController?.abort()
   clearDocumentPreviews()
   window.removeEventListener('beforeunload', handleBeforeUnload)
   pendingNavigationResolver?.(false)

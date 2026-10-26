@@ -113,6 +113,8 @@ const MAXIMUM_DOCUMENT_TITLE_LENGTH = 128
 const AMOUNT_SCALE = 100n
 const DEFAULT_FAILURE_MESSAGE = '销售订单保存失败，请检查后重试'
 const TAIWAN_COUNTRY_REGION_NAME = '中国台湾'
+const TAIWAN_PROVINCE_STATE_NAME = '台湾'
+const MALAYSIA_COUNTRY_REGION_NAME = '马来西亚'
 const TAIWAN_TRADITIONAL_REGION_CHARACTER_FOLD: Readonly<Record<string, string>> = {
   國: '国',
   臺: '台',
@@ -412,6 +414,57 @@ export function createSalesOrderFormModel(
     balanceDueAmount: null,
     issuanceVoucher: null,
     remark: '',
+  }
+}
+
+export interface SalesOrderRegionOption {
+  readonly id: string
+  readonly name: string
+}
+
+export interface SalesOrderDefaultRegionSelection {
+  readonly region: RegionSelectorValue
+  readonly regionNames: readonly string[]
+}
+
+export type SalesOrderRegionOptionsLoader = (
+  parentId: string | null,
+) => Promise<readonly SalesOrderRegionOption[]>
+
+/**
+ * TWD 订单默认「中国台湾 / 台湾」，MYR 订单默认「马来西亚」，城市留待用户选择。
+ * 名称必须与地区种子一致；找不到国家/地区时返回 null，不猜测 ID。
+ */
+export async function loadSalesOrderDefaultRegion(
+  currency: SalesOrderCurrency,
+  loadOptions: SalesOrderRegionOptionsLoader,
+): Promise<SalesOrderDefaultRegionSelection | null> {
+  const countryName = currency === 'TWD'
+    ? TAIWAN_COUNTRY_REGION_NAME
+    : MALAYSIA_COUNTRY_REGION_NAME
+  const provinceName = currency === 'TWD'
+    ? TAIWAN_PROVINCE_STATE_NAME
+    : null
+  const country = (await loadOptions(null)).find(
+    node => node.name === countryName,
+  )
+  if (!country) {
+    return null
+  }
+  const province = provinceName === null
+    ? null
+    : (await loadOptions(country.id)).find(
+        node => node.name === provinceName,
+      ) ?? null
+  return {
+    region: Object.freeze({
+      countryRegionId: country.id,
+      provinceStateId: province?.id ?? null,
+      cityId: null,
+    }),
+    regionNames: Object.freeze(province === null
+      ? [country.name]
+      : [country.name, province.name]),
   }
 }
 
