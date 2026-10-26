@@ -10,7 +10,8 @@ import {
 } from '../../src/views/operations/sales-orders/sales-order-create.logic'
 
 test('创建表单映射为独立订单详情模型并按行计算小计', () => {
-  const model = createSalesOrderFormModel('TWD', '2026-08-21')
+  const model = createSalesOrderFormModel('TWD')
+  model.orderDate = '2026-08-21'
   model.customerName = ' 林晓芳 '
   model.customerPhone = ' +886 912 345 678 '
   model.regionNames = ['中国台湾', '台湾', '高雄市']
@@ -128,7 +129,7 @@ test('创建表单映射为独立订单详情模型并按行计算小计', () =>
 })
 
 test('空白表单映射为稳定空态且不伪造产品行或小计', () => {
-  const model = createSalesOrderFormModel('MYR', '2026-08-21')
+  const model = createSalesOrderFormModel('MYR')
   model.orderDate = '   '
   model.regionNames = [' ', '马来西亚']
 

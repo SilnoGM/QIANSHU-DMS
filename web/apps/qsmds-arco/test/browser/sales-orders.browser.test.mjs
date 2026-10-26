@@ -376,6 +376,29 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     await waitForNoVisibleDialog(page, '已填销售订单详情')
     await page.setViewport(1440, 900, false)
 
+    // 出单日期默认空值，进入下一步前必须由用户手选；选择今天以匹配页面 max-value。
+    await clickVisibleButton(page, '选择日期')
+    await page.waitFor(`document.querySelector(
+      '[data-slot="calendar-cell-trigger"][data-today]',
+    )?.getClientRects().length > 0`)
+    await page.evaluate(`(() => {
+      const todayCell = document.querySelector(
+        '[data-slot="calendar-cell-trigger"][data-today]',
+      )
+      if (!todayCell) throw new Error('sales order today cell unavailable')
+      todayCell.click()
+      return true
+    })()`)
+    await page.waitFor(`(() => {
+      const now = new Date()
+      const iso = now.getFullYear()
+        + '-' + String(now.getMonth() + 1).padStart(2, '0')
+        + '-' + String(now.getDate()).padStart(2, '0')
+      return [...document.querySelectorAll('button')]
+        .some(button => button.getClientRects().length > 0
+          && button.textContent?.trim() === iso)
+    })()`)
+
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.querySelector(
       '[data-testid="sales-order-step-customer"]',

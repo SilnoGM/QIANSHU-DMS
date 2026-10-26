@@ -98,7 +98,7 @@ const todayIso = todayDate.toString()
 const canCreate = computed(() => auth('sales-orders:create'))
 const canRead = computed(() => auth('sales-orders:read'))
 const canManageDocuments = computed(() => auth('sales-orders:document'))
-const formModel = ref(createSalesOrderFormModel(initialCurrency, todayIso))
+const formModel = ref(createSalesOrderFormModel(initialCurrency))
 const createSurface = ref<SalesOrderCreateSurface>('form')
 const activeStep = ref<SalesOrderCreateStep>(0)
 const furthestReachedStep = ref<SalesOrderCreateStep>(0)
@@ -146,7 +146,9 @@ const currencyUnavailable = computed(() => (
   || currencyCatalog.errorMessage.value !== null
   || fixedCurrencyDescriptor.value?.enabled !== true
 ))
-const orderDateValue = computed(() => parseDate(formModel.value.orderDate))
+const orderDateValue = computed(() => (
+  formModel.value.orderDate === '' ? undefined : parseDate(formModel.value.orderDate)
+))
 const lineSubtotalAmount = computed(() => calculateSalesOrderLineSubtotal(
   formModel.value.lines,
   amountPrecision.value,
@@ -246,7 +248,7 @@ const shouldConfirmDiscard = computed(() => (
   submission.value.phase === 'unknown'
   || (
     submission.value.phase !== 'success'
-    && hasSalesOrderChanges(formModel.value, todayIso)
+    && hasSalesOrderChanges(formModel.value)
   )
 ))
 const discardTitle = computed(() => discardIntent.value === 'unknown-abandon'
@@ -718,7 +720,7 @@ function clearDocumentPreviews(): void {
  */
 function resetSalesOrderForm(): void {
   clearDocumentPreviews()
-  formModel.value = createSalesOrderFormModel(initialCurrency, todayIso)
+  formModel.value = createSalesOrderFormModel(initialCurrency)
   createSurface.value = 'form'
   activeStep.value = 0
   furthestReachedStep.value = 0

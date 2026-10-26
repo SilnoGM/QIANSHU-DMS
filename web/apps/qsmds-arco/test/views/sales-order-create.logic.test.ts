@@ -33,7 +33,8 @@ const IDS = {
 }
 
 function validModel() {
-  const model = createSalesOrderFormModel('TWD', '2026-08-20')
+  const model = createSalesOrderFormModel('TWD')
+  model.orderDate = '2026-08-20'
   model.customerName = ' 王小明 '
   model.customerPhone = ' 0912345678 '
   model.region = {
@@ -86,10 +87,11 @@ test('币种路由只接受单值 TWD/MYR，缺失、数组与其他币种均拒
   assert.equal(parseSalesOrderCurrency('CNY'), null)
 })
 
-test('新增销售订单默认使用空明细，普通产品和临时产品的新行售价均待填写', () => {
-  const model = createSalesOrderFormModel('TWD', '2026-08-20')
+test('新增销售订单默认使用空明细与空出单日期，新行售价待填写', () => {
+  const model = createSalesOrderFormModel('TWD')
 
   assert.deepEqual(model.lines, [])
+  assert.equal(model.orderDate, '')
   assert.equal(createCatalogSalesOrderLine('catalog').actualUnitPriceAmount, null)
   assert.equal(createCustomSalesOrderLine('custom').actualUnitPriceAmount, null)
 })
@@ -127,11 +129,11 @@ test('尚未填写售价不能通过产品步骤或提交，明确输入零金�
 })
 
 test('空白产品行的售价空值不被视为录入，用户填写的零金额仍算变更', () => {
-  const model = createSalesOrderFormModel('TWD', '2026-08-20')
+  const model = createSalesOrderFormModel('TWD')
   model.lines = [createCatalogSalesOrderLine('blank')]
-  assert.equal(hasSalesOrderChanges(model, '2026-08-20'), false)
+  assert.equal(hasSalesOrderChanges(model), false)
   model.lines[0]!.actualUnitPriceAmount = '0.00'
-  assert.equal(hasSalesOrderChanges(model, '2026-08-20'), true)
+  assert.equal(hasSalesOrderChanges(model), true)
 })
 
 test('出单人优先显示当前用户显示名，缺失时回退用户名', () => {
@@ -432,6 +434,23 @@ test('真实售价乘数量精确汇总，手填总价或定金尾款不相等�
   assert.equal(result.valid, false)
   if (!result.valid) {
     assert.equal(result.fieldErrors.balanceDueAmount, '定金与尾款之和必须等于销售总价')
+  }
+})
+
+test('未选择出单日期时提示手选，未来日期仍按今天拦截', () => {
+  const model = validModel()
+  model.orderDate = ''
+  const missing = buildCreateSalesOrderRequest(model, 2, '2026-08-20')
+  assert.equal(missing.valid, false)
+  if (!missing.valid) {
+    assert.equal(missing.fieldErrors.orderDate, '请选择出单日期')
+  }
+
+  model.orderDate = '2026-08-21'
+  const future = buildCreateSalesOrderRequest(model, 2, '2026-08-20')
+  assert.equal(future.valid, false)
+  if (!future.valid) {
+    assert.equal(future.fieldErrors.orderDate, '出单日期只能选择今天或历史日期')
   }
 })
 

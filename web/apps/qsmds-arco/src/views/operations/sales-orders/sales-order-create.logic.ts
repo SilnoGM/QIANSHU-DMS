@@ -391,10 +391,10 @@ export function createCustomSalesOrderLine(
 
 export function createSalesOrderFormModel(
   currencyCode: SalesOrderCurrency,
-  today: string,
 ): SalesOrderFormModel {
   return {
-    orderDate: today,
+    // 出单日期必须由用户手选，不能默认为今天。
+    orderDate: '',
     currencyCode,
     customerName: '',
     customerPhone: '',
@@ -653,7 +653,10 @@ export function buildCreateSalesOrderRequest(
   today: string = model.orderDate,
 ): BuildSalesOrderRequestResult {
   const errors: Record<string, string> = {}
-  if (!isValidDate(model.orderDate) || model.orderDate > today) {
+  if (!isValidDate(model.orderDate)) {
+    errors.orderDate = '请选择出单日期'
+  }
+  else if (model.orderDate > today) {
     errors.orderDate = '出单日期只能选择今天或历史日期'
   }
   const customerName = requireText(
@@ -798,8 +801,8 @@ export function validateSalesOrderCreateStep(
     : { valid: false, fieldErrors: Object.freeze(fieldErrors) }
 }
 
-export function hasSalesOrderChanges(model: SalesOrderFormModel, today: string): boolean {
-  return model.orderDate !== today
+export function hasSalesOrderChanges(model: SalesOrderFormModel): boolean {
+  return model.orderDate !== ''
     || model.customerName !== ''
     || model.customerPhone !== ''
     || model.region.countryRegionId !== null
