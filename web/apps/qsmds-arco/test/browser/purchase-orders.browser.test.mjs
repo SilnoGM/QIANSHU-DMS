@@ -55,6 +55,40 @@ const historicalMixedCancelableOrderNo = 'PO-BRW-MIXED-CANCEL'
 const historicalMixedCatalogProductName = 'Browser 历史混合目录产品'
 const historicalMixedCustomProductName = 'Browser 历史混合临时产品'
 
+/** 复制信息弹窗在桌面与窄屏都必须可容纳正文和两个复制按钮。 */
+async function assertPurchaseCopyInfoLayout(page, label) {
+  // 等弹窗淡入与按钮过渡完成后再做命中测试，避免把动画中的坐标当成最终布局。
+  await page.evaluate('document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))')
+  await page.waitFor(`(() => {
+    const content = document.querySelector('[data-testid="purchase-order-copy-info"]')
+    const dialog = content?.closest('[role="dialog"]')
+    return dialog?.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')
+  })()`)
+  const layout = await page.evaluate(`(() => {
+    const content = document.querySelector('[data-testid="purchase-order-copy-info"]')
+    const dialog = content?.closest('[role="dialog"]')
+    if (!content || !dialog) throw new Error('purchase copy info dialog unavailable')
+    const rect = dialog.getBoundingClientRect()
+    const minimumButtonHeight = innerWidth < 640 ? 44 : 36
+    const buttons = [...dialog.querySelectorAll('[data-slot="qs-generic-modal-footer"] button')]
+      .filter(button => ['复制文本', '复制图片'].includes(button.textContent.trim()))
+    return {
+      dialogFits: rect.left >= 0 && rect.right <= document.documentElement.clientWidth + 1 && rect.top >= 0 && rect.bottom <= innerHeight + 1,
+      contentFits: content.scrollWidth <= content.clientWidth + 1,
+      documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      buttonsReachable: buttons.length === 2 && buttons.every(button => {
+        const bounds = button.getBoundingClientRect()
+        const hit = document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+        return !button.disabled && bounds.width >= 44 && bounds.height + 0.001 >= minimumButtonHeight
+          && bounds.top >= 0 && bounds.bottom <= innerHeight
+          && hit !== null && button.contains(hit)
+      }),
+    }
+  })()`)
+  assert.deepEqual(layout, { dialogFits: true, contentFits: true, documentFits: true, buttonsReachable: true }, label)
+  await saveNumberingScreenshot(page, label)
+}
+
 /** 日志只保留固定步骤名，不输出 Cookie、密码、付款草稿或幂等键。 */
 async function runPurchaseOrderBrowserStep(label, action) {
   try {
@@ -1946,7 +1980,20 @@ test('真实 Chrome 覆盖采购创建、双视图审核、审核侧取消、独
             && content.querySelector('img')?.naturalWidth > 0
         })()`)
         assert.equal(await page.evaluate(`document.querySelector('[data-testid="purchase-order-copy-info"]')?.textContent.includes(${JSON.stringify(target.supplier.label)})`), true)
-        await saveNumberingScreenshot(page, 'purchase-review-copy-info-light')
+        await assertPurchaseCopyInfoLayout(page, 'purchase-review-copy-info-light')
+        await page.setViewport(390, 844, true)
+        await page.evaluate(`document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('appSettings').setColorScheme('light')`)
+        await page.waitFor(`innerWidth === 390 && !document.documentElement.classList.contains('dark')`)
+        await page.evaluate('document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))')
+        await page.waitFor(`(() => {
+          const content = document.querySelector('[data-testid="purchase-order-copy-info"]')
+          const dialog = content?.closest('[role="dialog"]')
+          return dialog?.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')
+        })()`)
+        await assertPurchaseCopyInfoLayout(page, 'purchase-review-copy-info-mobile')
+        await page.setViewport(1440, 900, false)
+        await page.waitFor(`innerWidth === 1440 && !document.documentElement.classList.contains('dark')`)
+        await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
         const clickCopyInfoButton = text => page.evaluate(`(() => {
           const content = document.querySelector('[data-testid="purchase-order-copy-info"]')
           const dialog = content?.closest('[role="dialog"]')
