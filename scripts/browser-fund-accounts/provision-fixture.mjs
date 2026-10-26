@@ -43,7 +43,8 @@ async function insertFundPostingBatchIssuance(client, generatedNumber) {
   await client.query([
     'INSERT INTO "numbering_period_states" (',
     '"rule_id", "period_key", "next_sequence_value", "used_count"',
-    ') VALUES ($1, $2, NULL, 0)',
+    // 后续真实调账会复用该规则发号；NULL 会让生成器判定编号不可用。
+    ') VALUES ($1, $2, 1, 0)',
     'ON CONFLICT ("rule_id", "period_key") DO NOTHING',
   ].join(' '), [row.ruleId, row.periodKey])
 
