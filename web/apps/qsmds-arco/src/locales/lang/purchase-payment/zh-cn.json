@@ -183,7 +183,13 @@
       "uploadVoucher": "上传付款凭证",
       "replaceVoucher": "替换截图",
       "removeVoucher": "移除",
-      "voucherHint": "仅需一张截图，确认成功后归档到所有选中订单。"
+      "voucherHint": "仅需一张截图，确认成功后归档到所有选中订单。",
+      "steps": {
+        "verify": "校验账单金额",
+        "upload": "上传付款凭证",
+        "submit": "提交付款",
+        "retry": "确认付款结果"
+      }
     }
   }
 }
