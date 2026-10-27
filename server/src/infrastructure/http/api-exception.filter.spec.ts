@@ -78,7 +78,7 @@ function createFilterContext(path = '/api/contracts') {
 
 describe('ApiExceptionFilter', () => {
   it('keeps the complete Terminus health failure body unchanged', () => {
-    const logger = { error: jest.fn() }
+    const logger = { error: jest.fn(), warn: jest.fn() }
     const metrics = { recordHttpError: jest.fn() }
     const filter = new ApiExceptionFilter(
       logger,
@@ -104,7 +104,7 @@ describe('ApiExceptionFilter', () => {
   it.each([401, 403, 429, 503] as const)(
     'counts non-health HTTP %s exactly once with no request data Label',
     (status) => {
-      const logger = { error: jest.fn() }
+      const logger = { error: jest.fn(), warn: jest.fn() }
       const metrics = { recordHttpError: jest.fn() }
       const filter = new ApiExceptionFilter(
         logger,
@@ -126,7 +126,7 @@ describe('ApiExceptionFilter', () => {
   )
 
   it('does not count statuses outside the designed HTTP metric set', () => {
-    const logger = { error: jest.fn() }
+    const logger = { error: jest.fn(), warn: jest.fn() }
     const metrics = { recordHttpError: jest.fn() }
     const filter = new ApiExceptionFilter(
       logger,
@@ -140,7 +140,7 @@ describe('ApiExceptionFilter', () => {
   })
 
   it('preserves an explicit ApiException safe contract', () => {
-    const logger = { error: jest.fn() }
+    const logger = { error: jest.fn(), warn: jest.fn() }
     const filter = new ApiExceptionFilter(logger)
     const { host, requestId, response } = createFilterContext()
 
@@ -165,8 +165,40 @@ describe('ApiExceptionFilter', () => {
     expect(logger.error).not.toHaveBeenCalled()
   })
 
+  it('logs traceable business rejections with request id and route', () => {
+    const logger = { error: jest.fn(), warn: jest.fn() }
+    const filter = new ApiExceptionFilter(logger)
+    const { host, requestId } = createFilterContext(
+      '/api/purchase-orders/00000000-0000-4000-8000-000000000000/warehouse-receipts',
+    )
+
+    filter.catch(
+      new ApiException(422, 'PURCHASE_WAREHOUSE_RECEIPT_TIME_FUTURE', SENSITIVE_CANARY),
+      host,
+    )
+
+    expect(logger.error).not.toHaveBeenCalled()
+    expect(logger.warn).toHaveBeenCalledTimes(1)
+    const [line] = logger.warn.mock.calls[0] as [string]
+    expect(line).toBe(
+      `Business request rejected requestId=${requestId} status=422 code=PURCHASE_WAREHOUSE_RECEIPT_TIME_FUTURE method=GET path=/api/purchase-orders/00000000-0000-4000-8000-000000000000/warehouse-receipts`,
+    )
+    // 业务文案可能含边界值，但日志只保留 code 与路由，避免把用户输入写进日志。
+    expect(line).not.toContain(SENSITIVE_CANARY)
+  })
+
+  it('keeps authentication rejections out of the business warning log', () => {
+    const logger = { error: jest.fn(), warn: jest.fn() }
+    const filter = new ApiExceptionFilter(logger)
+    const { host } = createFilterContext('/api/auth/protected')
+
+    filter.catch(new ApiException(401, 'AUTHENTICATION_REQUIRED', '未登录'), host)
+
+    expect(logger.warn).not.toHaveBeenCalled()
+  })
+
   it('sanitizes a standard HttpException response', () => {
-    const logger = { error: jest.fn() }
+    const logger = { error: jest.fn(), warn: jest.fn() }
     const filter = new ApiExceptionFilter(logger)
     const { host, requestId, response } = createFilterContext()
 
@@ -191,7 +223,7 @@ describe('ApiExceptionFilter', () => {
   })
 
   it('sanitizes and safely logs an unknown exception', () => {
-    const logger = { error: jest.fn() }
+    const logger = { error: jest.fn(), warn: jest.fn() }
     const filter = new ApiExceptionFilter(logger)
     const { host, requestId, response } = createFilterContext()
 
@@ -213,7 +245,7 @@ describe('ApiExceptionFilter', () => {
   })
 
   it('does not exempt a health-like 503 response on another path', () => {
-    const logger = { error: jest.fn() }
+    const logger = { error: jest.fn(), warn: jest.fn() }
     const filter = new ApiExceptionFilter(logger)
     const { host, requestId, response } = createFilterContext(
       '/api/contracts/health-like',
