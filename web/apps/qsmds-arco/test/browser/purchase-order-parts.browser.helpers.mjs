@@ -147,6 +147,26 @@ export async function assertPartConfiguratorMergeShowcase(page) {
   ])
   assert.equal(await page.evaluate(`${card}.textContent.includes('1 种产品 · 数量 2')`), true)
   await saveNumberingScreenshot(page, 'purchase-parts-merge-item-removed')
+
+  // 全选只改勾选状态：数量草稿保持原值，取消全选后回到未选状态。
+  const selectAll = `${root}.querySelector('button[data-action="select-all"]')`
+  const partCheckboxes = `[...${root}.querySelectorAll('[data-slot="part-product"] [role="checkbox"]')]`
+  await page.waitFor(`${selectAll}?.getClientRects().length > 0`)
+  assert.equal(await page.evaluate(`${selectAll}.textContent.trim()`), '全选')
+  await activateControl(page, selectAll, false)
+  await page.waitFor(`${partCheckboxes}.every(box => box.getAttribute('aria-checked') === 'true')`)
+  assert.equal(await page.evaluate(`${root}.textContent.includes('已选 2 种产品')`), true)
+  assert.equal(await page.evaluate(`${create}.disabled`), false)
+  assert.equal(await page.evaluate(`${selectAll}.textContent.trim()`), '取消全选')
+  assert.deepEqual(await readPending(), [
+    { key: products[0].key, remaining: 3, draft: '1' },
+    { key: products[1].key, remaining: 3, draft: '1' },
+  ])
+  await activateControl(page, selectAll, false)
+  await page.waitFor(`${partCheckboxes}.every(box => box.getAttribute('aria-checked') !== 'true')`)
+  assert.equal(await page.evaluate(`${selectAll}.textContent.trim()`), '全选')
+  assert.equal(await page.evaluate(`${create}.disabled`), true)
+  assert.equal(await page.evaluate(`${root}.textContent.includes('已选 0 种产品')`), true)
 }
 
 async function setAppearance(page, theme, mobile = false) {

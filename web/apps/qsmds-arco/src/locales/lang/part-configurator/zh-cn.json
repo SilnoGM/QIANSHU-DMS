@@ -5,6 +5,8 @@
     "selectionHelp": "勾选产品并填写本次装入数量，可合并多种产品，也可将同一产品分装至不同货件。",
     "allocated": "全部产品已装入货件",
     "selected": "已选 {count} 种产品",
+    "selectAll": "全选",
+    "clearSelection": "取消全选",
     "remaining": "剩余数量",
     "loadQuantity": "本次装入数量",
     "selectProduct": "选择 {name}",

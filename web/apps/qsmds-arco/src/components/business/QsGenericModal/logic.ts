@@ -23,9 +23,18 @@ export interface QsGenericModalProps {
   size?: QsGenericModalSize
   submitting?: boolean
   title: string
+  /**
+   * 覆盖 FaModal 默认层级，仅用于弹窗从抽屉内打开、必须压住同页抽屉的场景。
+   * 全站浮层默认同为 2000，平级时的绘制顺序由 Teleport 挂载顺序决定，
+   * 与打开先后无关；调用方需要显式抬高时，弹窗内不能再放 FaSelect、
+   * FaDropdown 等同样是 2000 的浮层，否则它们会掉到弹窗下面。
+   */
+  zIndex?: number
 }
 
 export const QS_GENERIC_MODAL_DEFAULT_SIZE: QsGenericModalSize = 'md'
+
+export const QS_GENERIC_MODAL_DEFAULT_Z_INDEX = 2000
 
 const SIZE_CLASSES: Record<QsGenericModalSize, string> = {
   'sm': 'sm:max-w-[30rem]',

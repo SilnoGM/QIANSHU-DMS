@@ -2508,6 +2508,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/business/QsFactoryShipmentModal/index.vue",
+      "apps/qsmds-arco/src/components/business/QsPartConfigurator/index.vue",
       "apps/qsmds-arco/src/components/business/QsWarehouseReceiptModal/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
       "apps/qsmds-arco/src/views/component_library/basic/index.vue",

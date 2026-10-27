@@ -8,6 +8,7 @@ import {
   canCloseGenericModal,
   createGenericModalContentClass,
   QS_GENERIC_MODAL_DEFAULT_SIZE,
+  QS_GENERIC_MODAL_DEFAULT_Z_INDEX,
   resolveFaModalCloseReason,
 } from './logic'
 
@@ -26,6 +27,7 @@ const props = withDefaults(defineProps<QsGenericModalProps>(), {
   modelValue: false,
   size: QS_GENERIC_MODAL_DEFAULT_SIZE,
   submitting: false,
+  zIndex: QS_GENERIC_MODAL_DEFAULT_Z_INDEX,
 })
 
 const emit = defineEmits<{
@@ -208,6 +210,7 @@ onBeforeUnmount(() => {
     :border="false"
     align-center
     open-auto-focus
+    :z-index="zIndex"
     :destroy-on-close="destroyOnClose"
     :close-on-click-overlay="dismissOnOverlay && !submitting"
     :close-on-press-escape="dismissOnEscape && !submitting"

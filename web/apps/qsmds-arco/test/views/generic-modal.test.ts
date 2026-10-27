@@ -7,6 +7,7 @@ import {
   canCloseGenericModal,
   createGenericModalContentClass,
   QS_GENERIC_MODAL_DEFAULT_SIZE,
+  QS_GENERIC_MODAL_DEFAULT_Z_INDEX,
   resolveFaModalCloseReason,
 } from '../../src/components/business/QsGenericModal/logic'
 
@@ -43,6 +44,17 @@ test('通用模态框默认使用 md，并提供六档响应式宽度与动态�
       new RegExp(widthClass.replaceAll('[', '\\[').replaceAll(']', '\\]'), 'u'),
     )
   })
+})
+
+test('通用模态框默认沿用 FaModal 的 2000 层级，并把调用方的覆盖值传到底层', () => {
+  assert.equal(QS_GENERIC_MODAL_DEFAULT_Z_INDEX, 2000)
+
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericModal/index.vue',
+  )
+
+  assert.match(source, /zIndex: QS_GENERIC_MODAL_DEFAULT_Z_INDEX/u)
+  assert.match(source, /:z-index="zIndex"/u)
 })
 
 test('通用模态框关闭守卫支持同步和异步结果，异常时保持打开', async () => {
