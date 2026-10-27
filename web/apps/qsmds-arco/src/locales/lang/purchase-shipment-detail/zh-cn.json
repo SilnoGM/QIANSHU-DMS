@@ -60,7 +60,7 @@
     "loadedAt": "装柜时间",
     "loadedBy": "装柜操作人",
     "loadedRecordedAt": "装柜记录时间",
-    "notLoaded": "尚未装柜。货件被装柜明细关联后自动记录，关联解除后也不回退",
+    "notLoaded": "尚未装柜。货件被装柜明细关联后自动记录，解除最后一条关联后清空",
     "delivery": "签收记录",
     "deliveredAt": "签收时间",
     "deliveredBy": "签收操作人",

@@ -53,6 +53,7 @@
     "retryHint": "上次提交结果待确认，重试将使用原提交内容。",
     "retryConfirm": "重试确认",
     "linkedShipment": "已关联货件，当前无可展示的货件资料。",
+    "unbindHint": "解除本柜最后一条关联后，货件退回已到仓并可重新装柜；已签收的货件不能解除。",
     "loadingDatePreview": "推断装柜日期：{date}",
     "loadingDate": "推断装柜日期",
     "remarkHint": "填写需要补充的信息（选填）",
