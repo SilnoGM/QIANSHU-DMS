@@ -537,7 +537,7 @@ describe('PurchaseOrdersController OpenAPI', () => {
       'x-qianshu-contract': { conflict: true, errors: expect.arrayContaining([
         { status: 409, codes: ['PURCHASE_WAREHOUSE_RECEIPT_STATE_CHANGED'] },
         expect.objectContaining({ status: 422, codes: expect.arrayContaining([
-          'PURCHASE_WAREHOUSE_RECEIPT_NOT_ALLOWED', 'PURCHASE_WAREHOUSE_RECEIPT_TARGET_INVALID', 'PURCHASE_WAREHOUSE_RECEIPT_TIME_INVALID',
+          'PURCHASE_WAREHOUSE_RECEIPT_NOT_ALLOWED', 'PURCHASE_WAREHOUSE_RECEIPT_TARGET_INVALID', 'PURCHASE_WAREHOUSE_RECEIPT_TIME_FUTURE', 'PURCHASE_WAREHOUSE_RECEIPT_TIME_BEFORE_SHIPMENT',
         ]) as unknown }),
       ]) as unknown },
     })

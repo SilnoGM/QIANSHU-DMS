@@ -91,7 +91,8 @@ export class SalesOrderWarehouseReceiptController {
       { status: 422, codes: [
         'SALES_WAREHOUSE_RECEIPT_NOT_ALLOWED',
         'SALES_WAREHOUSE_RECEIPT_TARGET_INVALID',
-        'SALES_WAREHOUSE_RECEIPT_TIME_INVALID',
+        'SALES_WAREHOUSE_RECEIPT_TIME_FUTURE',
+        'SALES_WAREHOUSE_RECEIPT_TIME_BEFORE_SHIPMENT',
         'VALIDATION_FAILED',
       ] },
     ],
