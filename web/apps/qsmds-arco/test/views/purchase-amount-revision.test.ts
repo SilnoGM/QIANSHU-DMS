@@ -3,9 +3,11 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 // eslint-disable-next-line test/no-import-node-test -- 验证采购金额修订逻辑与页面契约。
 import test from 'node:test'
+import { QS_GENERIC_MODAL_DEFAULT_Z_INDEX } from '../../src/components/business/QsGenericModal/logic'
 import {
   buildPurchaseAmountRevisionRequest,
   calculatePurchaseAmountRevisionPreview,
+  PURCHASE_AMOUNT_REVISION_MODAL_Z_INDEX,
 } from '../../src/views/workbenches/purchase-reviews/amount-revision.logic'
 
 function detail(): PurchaseOrderDetailDto {
@@ -139,6 +141,13 @@ test('金额修订原因必填且最多 500 字', () => {
   assert.equal(tooLong.fieldError, '金额修订原因最多 500 个字符')
 })
 
+test('金额修订弹窗显式压在采购详情抽屉之上，不依赖模板声明顺序', () => {
+  assert.ok(
+    PURCHASE_AMOUNT_REVISION_MODAL_Z_INDEX > QS_GENERIC_MODAL_DEFAULT_Z_INDEX,
+    '金额修订弹窗必须高于抽屉默认的 2000 层级',
+  )
+})
+
 test('采购审核已通过详情接入了金额修订抽屉动作和弹窗', async () => {
   const read = (path: string) => readFile(
     new URL(`../../src/${path}`, import.meta.url),
@@ -157,5 +166,6 @@ test('采购审核已通过详情接入了金额修订抽屉动作和弹窗', as
   assert.match(drawer, /emit\('reviseAmount'\)/u)
   assert.match(modal, /purchaseOrdersApi\.reviseAmount/u)
   assert.match(modal, /hasActivePayments/u)
+  assert.match(modal, /:z-index="PURCHASE_AMOUNT_REVISION_MODAL_Z_INDEX"/u)
   assert.match(api, /amount-revisions/u)
 })

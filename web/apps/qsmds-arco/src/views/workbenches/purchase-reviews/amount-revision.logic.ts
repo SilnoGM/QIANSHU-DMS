@@ -6,6 +6,20 @@ import {
   sumMoneyValues,
   validateMoneyString,
 } from '../../../components/base/MoneyInput/logic'
+import { QS_GENERIC_MODAL_DEFAULT_Z_INDEX } from '../../../components/business/QsGenericModal/logic'
+
+/**
+ * 本弹窗从采购详情抽屉（FaDrawer，默认 2000）内部打开，必须压在抽屉及其遮罩之上。
+ *
+ * 全站浮层默认同为 2000，平级时的绘制顺序由 Teleport 在页面加载时的挂载顺序决定，
+ * 与本弹窗、抽屉谁先打开无关；本弹窗在页面模板中比抽屉先挂载，会被抽屉压住并被
+ * 抽屉遮罩压暗。这里显式抬高 100 层，不再依赖模板声明顺序。
+ *
+ * 因此该弹窗内不要再放 FaSelect、FaDropdown 等同样是 2000 的浮层，否则它们会掉到
+ * 弹窗下面。
+ */
+export const PURCHASE_AMOUNT_REVISION_MODAL_Z_INDEX
+  = QS_GENERIC_MODAL_DEFAULT_Z_INDEX + 100
 
 export interface PurchaseAmountRevisionPreview {
   readonly balanceDueAmount: string

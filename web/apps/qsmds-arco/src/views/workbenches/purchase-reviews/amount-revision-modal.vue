@@ -13,6 +13,7 @@ import { getPurchaseOrderApiFailure } from '../../operations/purchase-orders/pur
 import {
   buildPurchaseAmountRevisionRequest,
   calculatePurchaseAmountRevisionPreview,
+  PURCHASE_AMOUNT_REVISION_MODAL_Z_INDEX,
 } from './amount-revision.logic'
 
 defineOptions({ name: 'PurchaseAmountRevisionModal' })
@@ -174,6 +175,7 @@ async function submit(): Promise<void> {
     :title="t('purchaseReview.amountRevision.title')"
     :description="detail ? `${detail.orderNo} · ${t('purchaseReview.amountRevision.description')}` : undefined"
     size="lg"
+    :z-index="PURCHASE_AMOUNT_REVISION_MODAL_Z_INDEX"
     :closable="!submitting"
     :dismiss-on-escape="!submitting"
     :dismiss-on-overlay="!submitting"

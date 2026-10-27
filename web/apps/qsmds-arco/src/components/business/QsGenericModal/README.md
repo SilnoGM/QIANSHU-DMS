@@ -29,10 +29,13 @@
 - `dismissOnOverlay?: boolean`
 - `dismissOnEscape?: boolean`
 - `beforeClose?: (reason) => boolean | Promise<boolean>`
+- `zIndex?: number`（默认 `2000`，与 `FaDrawer` 相同）
 
 Events 仅提供 `update:modelValue`、`opened`、`closed`。Slots 仅提供 `default`、`header-leading`、`header-extra`、`loading`、`error-actions` 和 `footer`。
 
 不要新增固定的取消、确定、保存或删除事件。业务按钮、权限、校验和写入副作用属于 Footer 调用方。
+
+`zIndex` 只用于“弹窗从抽屉内打开、必须压住同页抽屉”这一种场景。全站浮层默认同为 `2000`，平级时的绘制顺序由 `Teleport` 的挂载顺序决定，与打开先后无关；因此抽屉内弹窗不能依赖模板声明顺序，需要显式抬高。抬高后该弹窗内不能再放 `FaSelect`、`FaDropdown` 等同样是 `2000` 的浮层，否则它们会掉到弹窗下面。当前唯一使用方是采购金额修订弹窗（`views/workbenches/purchase-reviews/amount-revision-modal.vue`）。
 
 ## 响应式规则
 
@@ -50,6 +53,7 @@ Events 仅提供 `update:modelValue`、`opened`、`closed`。Slots 仅提供 `de
 - 自定义 Header 时仍必须把真实 `title` 与 `description` 传入 `FaModal`，由隐藏的 `DialogTitle` / `DialogDescription` 提供可访问名称。
 - `FaModal` 的 `beforeClose` 只把遮罩和 `Escape` 表示为 `close`，来源区分由本组件的真实键盘捕获完成。
 - 不读取 `data-modal-id` 等私有 DOM，不自行实现第二套 Overlay、焦点锁或滚动锁。
+- `zIndex` 不是浮层栈管理：组件不按打开顺序分配序号、不改 `FaDrawer` 的层级，也不接管 `FaSelect` / `FaDropdown` 的 `2000` 基准。
 - 第一版不支持命令式 Service、嵌套模态框栈、拖拽、最大化或可变 class 逃生口。
 
 ## 验证
