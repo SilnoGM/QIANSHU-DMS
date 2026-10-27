@@ -24,6 +24,7 @@
     "products:export": "node dist/commands/product-export.js",
     "purchase-shipments:backfill-numbers": "node dist/commands/purchase-shipment-number-backfill.js",
     "containers:backfill-shipments": "node dist/commands/container-shipment-backfill.js",
+    "containers:clear-orphan-loads": "node dist/commands/container-shipment-orphan-cleanup.js",
     "fund-batches:backfill-numbers": "node dist/commands/fund-posting-batch-number-backfill.js",
     "slh-bills:backfill-recipients": "node dist/commands/slh-bill-recipient-backfill.js",
     "slh-bills:backfill-amounts": "node dist/commands/slh-bill-amount-backfill.js",
