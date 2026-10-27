@@ -14,10 +14,26 @@ function harness() {
   const tx = {
     $queryRaw: jest.fn().mockResolvedValue([]), user: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
     containerBatch: { findUnique: jest.fn().mockResolvedValue(batch), update: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...batch, ...data, version: 5 })) },
-    containerLoadingItem: { findFirst: jest.fn().mockResolvedValue(item), update: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...item, ...data, version: 3, ...Object.fromEntries(['grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'reportedVolumeCai', 'codAmountTwd'].map(field => [field, typeof data[field] === 'string' ? new Prisma.Decimal(data[field]) : null])) })) },
-    purchaseOrderPart: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE', deliveredAt: null, loadedAt: null, warehouseReceivedAt: new Date('2026-09-18T00:00:00Z'), destinationWarehouseValue: 'B5', containerLoadingItems: [] }) },
+    containerLoadingItem: {
+      findFirst: jest.fn().mockResolvedValue(item),
+      count: jest.fn().mockResolvedValue(0),
+      update: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...item, ...data, version: 3, ...Object.fromEntries(['grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'reportedVolumeCai', 'codAmountTwd'].map(field => [field, typeof data[field] === 'string' ? new Prisma.Decimal(data[field]) : null])) })),
+    },
+    purchaseOrderPart: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE', deliveredAt: null, loadedAt: null, warehouseReceivedAt: new Date('2026-09-18T00:00:00Z'), destinationWarehouseValue: 'B5', containerLoadingItems: [] }),
+      count: jest.fn().mockResolvedValue(0),
+    },
+    salesOrderLine: { findMany: jest.fn().mockResolvedValue([{ id: 'line-1', quantity: 1 }]) },
+    salesOrderDocument: { count: jest.fn().mockResolvedValue(0) },
+    salesOrderStatusHistory: { create: jest.fn().mockResolvedValue({}) },
     // 销售履约推进按现状判断；默认非候选状态，仅关联货件本身不改变订单。
-    salesOrder: { findUnique: jest.fn().mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'LAND_TRANSIT' }) },
+    salesOrder: {
+      findUnique: jest.fn().mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'LAND_TRANSIT' }),
+      update: jest.fn().mockResolvedValue({}),
+    },
+    // 装柜聚合评估按采购单现状；默认没有有效采购，不足以推进或回退。
+    purchaseOrder: { findMany: jest.fn().mockResolvedValue([]) },
   }
   const prisma = { $transaction: jest.fn((callback: (value: typeof tx) => unknown) => callback(tx)) }
   const access = { getPermissionCodesInTransaction: jest.fn().mockResolvedValue(['container-batches:update']), hasAll: jest.fn().mockReturnValue(true) }
@@ -76,6 +92,77 @@ describe('Container maintenance commands', () => {
     }
     // 关联后按现状评估销售履约；非候选状态保持不动。
     expect(h.tx.salesOrder.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'so-1' } }))
+  })
+  it('clears the loading fact when the last item is unbound', async () => {
+    const h = harness(), shipmentId = randomUUID(), previousLoadedAt = new Date('2026-09-19T00:00:00Z')
+    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ purchaseOrder: { salesOrderId: 'so-1' } }])
+    h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce({ ...h.item, shipmentId })
+    h.tx.$queryRaw.mockImplementation((statement: { sql: string }) => Promise.resolve(statement.sql.includes('SET loaded_at = NULL')
+      ? [{ id: shipmentId, previousLoadedAt, previousLoadedById: h.context.actorUserId }]
+      : []))
+    await h.service.updateItem(h.context, h.id, h.itemId, fields)
+    const statements = h.tx.$queryRaw.mock.calls.map(call => (call as [{ sql: string }])[0].sql.replace(/\s+/gu, ' '))
+    expect(statements.some(statement => statement.includes('SET loaded_at = NULL'))).toBe(true)
+    // 只有确认没有任何装柜明细时才撤销事实；查询在明细更新之后。
+    expect(h.tx.containerLoadingItem.count).toHaveBeenCalledWith({ where: { shipmentId } })
+    const auditCalls = h.audit.record.mock.calls as Array<[unknown, { eventType: string, targetId: string, requestId: string, metadata: Record<string, unknown> }]>
+    const unload = auditCalls.find(call => call[1].eventType === 'PURCHASE_SHIPMENT_CONTAINER_UNLOADED')
+    expect(unload?.[1]).toMatchObject({
+      targetId: shipmentId, requestId: h.context.requestId,
+      metadata: { containerBatchId: h.id, loadingItemId: h.itemId, previousLoadedAt: previousLoadedAt.toISOString(), previousLoadedById: h.context.actorUserId, source: 'ITEM_UPDATE' },
+    })
+    // 订单不在候选状态时不产生回退写入。
+    expect(h.tx.salesOrder.update).not.toHaveBeenCalled()
+  })
+  it('keeps the loading fact while another item of the same shipment remains', async () => {
+    const h = harness(), shipmentId = randomUUID()
+    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ purchaseOrder: { salesOrderId: 'so-1' } }])
+    h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce({ ...h.item, shipmentId })
+    h.tx.containerLoadingItem.count.mockResolvedValueOnce(1)
+    await h.service.updateItem(h.context, h.id, h.itemId, fields)
+    const statements = h.tx.$queryRaw.mock.calls.map(call => (call as [{ sql: string }])[0].sql.replace(/\s+/gu, ' '))
+    expect(statements.some(statement => statement.includes('SET loaded_at = NULL'))).toBe(false)
+    expect(h.audit.record).toHaveBeenCalledTimes(1)
+    expect(h.tx.salesOrder.update).not.toHaveBeenCalled()
+  })
+  it('rejects unbinding a delivered shipment before any write', async () => {
+    const h = harness(), shipmentId = randomUUID()
+    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ purchaseOrder: { salesOrderId: 'so-1' } }])
+    h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce({ ...h.item, shipmentId })
+    h.tx.purchaseOrderPart.findUnique.mockResolvedValueOnce({ status: 'ACTIVE', deliveredAt: new Date('2026-09-20T00:00:00Z'), loadedAt: new Date('2026-09-19T00:00:00Z'), warehouseReceivedAt: new Date('2026-09-18T00:00:00Z'), destinationWarehouseValue: 'B5', containerLoadingItems: [] })
+    await expect(h.service.updateItem(h.context, h.id, h.itemId, fields)).rejects.toMatchObject({ code: 'CONTAINER_SHIPMENT_UNLOAD_FORBIDDEN', status: 422 })
+    expect(h.tx.containerLoadingItem.update).not.toHaveBeenCalled()
+    expect(h.tx.containerLoadingItem.count).not.toHaveBeenCalled()
+    expect(h.audit.record).not.toHaveBeenCalled()
+  })
+  it('clears the previous shipment and retreats its sales order when an item is rebound', async () => {
+    const h = harness(), previousShipmentId = randomUUID(), nextShipmentId = randomUUID()
+    h.tx.purchaseOrderPart.findMany.mockResolvedValue([{ purchaseOrder: { salesOrderId: 'so-1' } }])
+    h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce({ ...h.item, shipmentId: previousShipmentId })
+    h.tx.salesOrder.findUnique.mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' })
+    h.tx.$queryRaw.mockImplementation((statement: { sql: string }) => Promise.resolve(statement.sql.includes('SET loaded_at = NULL')
+      ? [{ id: previousShipmentId, previousLoadedAt: new Date('2026-09-19T00:00:00Z'), previousLoadedById: h.context.actorUserId }]
+      : statement.sql.includes('SET loaded_at = clock_timestamp()') ? [{ id: nextShipmentId }] : []))
+    await h.service.updateItem(h.context, h.id, h.itemId, { ...fields, shipmentId: nextShipmentId })
+    const statements = h.tx.$queryRaw.mock.calls.map(call => (call as [{ sql: string }])[0].sql.replace(/\s+/gu, ' '))
+    expect(statements.some(statement => statement.includes('SET loaded_at = clock_timestamp()'))).toBe(true)
+    expect(statements.some(statement => statement.includes('SET loaded_at = NULL'))).toBe(true)
+    expect(h.audit.record.mock.calls.map(call => (call as [unknown, { eventType: string }])[1].eventType)).toEqual(expect.arrayContaining([
+      'PURCHASE_SHIPMENT_CONTAINER_LOADED', 'PURCHASE_SHIPMENT_CONTAINER_UNLOADED',
+    ]))
+    // 不再满足全部装柜且没有签收事实：订单回退到已到仓并留痕。
+    expect(h.tx.salesOrder.update).toHaveBeenCalledWith({ where: { id: 'so-1' }, data: { fulfillmentStatus: 'WAREHOUSE_ARRIVED', version: { increment: 1 } } })
+    expect(h.tx.salesOrderStatusHistory.create).toHaveBeenCalledWith({ data: expect.objectContaining({ salesOrderId: 'so-1', fromStatus: 'SEA_TRANSIT', toStatus: 'WAREHOUSE_ARRIVED', changedByUserId: h.context.actorUserId }) as unknown })
+  })
+  it('keeps the sales order in sea transit when the unloaded order already has delivery facts', async () => {
+    const h = harness(), shipmentId = randomUUID()
+    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ purchaseOrder: { salesOrderId: 'so-1' } }])
+    h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce({ ...h.item, shipmentId })
+    h.tx.salesOrder.findUnique.mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' })
+    h.tx.purchaseOrderPart.count.mockResolvedValueOnce(1)
+    await h.service.updateItem(h.context, h.id, h.itemId, fields)
+    expect(h.tx.salesOrder.update).not.toHaveBeenCalled()
+    expect(h.tx.salesOrderStatusHistory.create).not.toHaveBeenCalled()
   })
   it('prevents source detach, but permits a remark change', async () => {
     const h = harness(), sourceFileId = randomUUID()

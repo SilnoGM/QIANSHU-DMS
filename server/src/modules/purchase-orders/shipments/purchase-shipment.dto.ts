@@ -142,7 +142,7 @@ export class PurchaseShipmentListItemDto {
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly warehouseRecordedAt!: string | null
   @ApiProperty({ type: 'string', maxLength: 500, nullable: true }) readonly warehouseRemark!: string | null
   @ApiProperty({ type: () => PurchaseOrderActorDto, nullable: true }) readonly warehouseReceivedBy!: PurchaseOrderActorDto | null
-  @ApiProperty({ type: 'string', format: 'date-time', nullable: true, description: '被装柜明细关联的装柜时间；未装柜时为空，关联移除后不回退' }) readonly loadedAt!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true, description: '被装柜明细关联的装柜时间；未装柜时为空。解绑最后一条明细且货件未签收时撤销并清空，已签收货件不可解绑' }) readonly loadedAt!: string | null
   @ApiProperty({ type: () => PurchaseOrderActorDto, nullable: true }) readonly loadedBy!: PurchaseOrderActorDto | null
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly loadedRecordedAt!: string | null
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true, description: '客户签收时间；签收后不可回退' }) readonly deliveredAt!: string | null

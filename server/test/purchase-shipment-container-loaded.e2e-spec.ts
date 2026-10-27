@@ -37,6 +37,7 @@ describe('shipment container loading fact over isolated PostgreSQL', () => {
   }
   const unloaded = { loadedAt: null, loadedById: null, loadedRecordedAt: null }
   const loadEvents = (partId: string) => h.prisma.auditEvent.count({ where: { eventType: 'PURCHASE_SHIPMENT_CONTAINER_LOADED', targetId: partId } })
+  const unloadEvents = (partId: string) => h.prisma.auditEvent.count({ where: { eventType: 'PURCHASE_SHIPMENT_CONTAINER_UNLOADED', targetId: partId } })
   const loadedCount = async () => {
     const counts = (await reference<PurchaseShipmentStatusCountsDto>('/api/purchase-order-parts/status-counts'))
     return counts.items.find(entry => entry.value === 'CONTAINER_LOADED')?.count
@@ -60,7 +61,7 @@ describe('shipment container loading fact over isolated PostgreSQL', () => {
   })
   afterAll(async () => { await h?.dispose() })
 
-  it('marks the shipment on the first association, stays idempotent and never reverts', async () => {
+  it('marks the shipment on the first association, stays idempotent and reverses on the last unbind', async () => {
     const parent = await batch(), shipment = await h.shipment({ salesLinked: true })
     const before = await loadedCount()
     expect(await fact(shipment.part.id)).toEqual(unloaded)
@@ -73,7 +74,7 @@ describe('shipment container loading fact over isolated PostgreSQL', () => {
 
     // 同柜再挂一行以及原行重存都不得改写事实或重复记审计。
     const second = await item(parent.id, { shipmentId: shipment.part.id })
-    await patch(`/api/container-batches/${parent.id}/items/${second.id}`, { expectedVersion: (await reference<ContainerBatchDto>(`/api/container-batches/${parent.id}`)).version, itemExpectedVersion: second.version, shipmentId: shipment.part.id, goodsName: '履带', packageCount: 12 })
+    const resaved = (await patch(`/api/container-batches/${parent.id}/items/${second.id}`, { expectedVersion: (await reference<ContainerBatchDto>(`/api/container-batches/${parent.id}`)).version, itemExpectedVersion: second.version, shipmentId: shipment.part.id, goodsName: '履带', packageCount: 12 }).expect(200)).body as ContainerLoadingItemDto
     expect(await fact(shipment.part.id)).toEqual(marked)
     expect(await loadEvents(shipment.part.id)).toBe(1)
 
@@ -82,21 +83,54 @@ describe('shipment container loading fact over isolated PostgreSQL', () => {
     expect(listed.items[0]).toMatchObject({ id: shipment.part.id, viewStatus: 'CONTAINER_LOADED', loadedAt: marked.loadedAt, loadedBy: { id: actorUserId }, warehouseReceivedAt: expect.any(String) as unknown })
     expect(await loadedCount()).toBe(before! + 1)
 
-    // 解除关联与换绑都不回退：事实保留、视图仍在已装柜。
+    // 同柜还有第二行时解绑一行：事实保留，货件仍算已装柜。
     const parentVersion = (await reference<ContainerBatchDto>(`/api/container-batches/${parent.id}`)).version
-    const cleared = (await patch(`/api/container-batches/${parent.id}/items/${first.id}`, { expectedVersion: parentVersion, itemExpectedVersion: first.version, goodsName: '履带', packageCount: 10 }).expect(200)).body as ContainerLoadingItemDto
-    expect(cleared.shipmentId).toBeNull()
+    const clearedFirst = (await patch(`/api/container-batches/${parent.id}/items/${first.id}`, { expectedVersion: parentVersion, itemExpectedVersion: first.version, goodsName: '履带', packageCount: 10 }).expect(200)).body as ContainerLoadingItemDto
+    expect(clearedFirst.shipmentId).toBeNull()
     expect(await fact(shipment.part.id)).toEqual(marked)
     expect((await browser.get('/api/purchase-order-parts').query({ view: 'CONTAINER_LOADED', keyword: shipment.part.shipmentNo! }).expect(200)).body as PurchaseShipmentPageDto).toMatchObject({ total: 1 })
+
+    // 解绑最后一条明细即撤销装柜事实：货件退回已到仓，可重新装柜。
+    const secondVersion = (await reference<ContainerBatchDto>(`/api/container-batches/${parent.id}`)).version
+    const cleared = (await patch(`/api/container-batches/${parent.id}/items/${second.id}`, { expectedVersion: secondVersion, itemExpectedVersion: resaved.version, goodsName: '履带', packageCount: 12 }).expect(200)).body as ContainerLoadingItemDto
+    expect(cleared.shipmentId).toBeNull()
+    expect(await fact(shipment.part.id)).toEqual(unloaded)
+    expect(await loadEvents(shipment.part.id)).toBe(1)
+    expect(await unloadEvents(shipment.part.id)).toBe(1)
+    expect((await browser.get('/api/purchase-order-parts').query({ view: 'CONTAINER_LOADED', keyword: shipment.part.shipmentNo! }).expect(200)).body as PurchaseShipmentPageDto).toMatchObject({ total: 0 })
+    expect((await browser.get('/api/purchase-order-parts').query({ view: 'WAREHOUSE_RECEIVED', keyword: shipment.part.shipmentNo! }).expect(200)).body as PurchaseShipmentPageDto).toMatchObject({ total: 1 })
+    expect(await loadedCount()).toBe(before)
+
+    // 撤销后可以重新装柜到另一个柜次，并写新的装柜事实。
+    const other = await batch()
+    const reloaded = await item(other.id, { shipmentId: shipment.part.id })
+    expect(reloaded.shipmentId).toBe(shipment.part.id)
+    expect(await fact(shipment.part.id)).toMatchObject({ loadedById: actorUserId, loadedAt: expect.any(String) as unknown })
+    expect(await loadEvents(shipment.part.id)).toBe(2)
+    expect(await unloadEvents(shipment.part.id)).toBe(1)
   })
 
-  it('keeps the container loading fact write-once at the database level', async () => {
+  it('keeps the loading fact write-once, and refuses to clear it while an item or delivery exists', async () => {
     const parent = await batch(), shipment = await h.shipment()
-    await item(parent.id, { shipmentId: shipment.part.id })
+    const first = await item(parent.id, { shipmentId: shipment.part.id })
     const marked = await fact(shipment.part.id)
     await expect(h.prisma.$executeRaw`UPDATE purchase_order_parts SET loaded_at = NULL WHERE id = ${shipment.part.id}::uuid`).rejects.toThrow(/Purchase part configuration is immutable/u)
     await expect(h.prisma.$executeRaw`UPDATE purchase_order_parts SET loaded_recorded_at = clock_timestamp(), loaded_by_id = NULL WHERE id = ${shipment.part.id}::uuid`).rejects.toThrow(/Purchase part configuration is immutable/u)
     expect(await fact(shipment.part.id)).toEqual(marked)
+
+    // 仍有明细时，即使未签收也不能直接清空事实。
+    await expect(h.prisma.$executeRaw`UPDATE purchase_order_parts SET loaded_at = NULL, loaded_by_id = NULL, loaded_recorded_at = NULL WHERE id = ${shipment.part.id}::uuid`).rejects.toThrow(/Purchase part configuration is immutable/u)
+
+    // 已签收的货件保持装柜事实：解绑走服务端拒绝，裸 SQL 同样被触发器拦住。
+    const delivered = await h.shipment({ salesLinked: false }), deliveredItem = await item(parent.id, { shipmentId: delivered.part.id })
+    await h.prisma.$executeRaw`UPDATE purchase_order_parts SET delivered_at = now(), delivered_by_id = ${h.fixture.actor.id}::uuid, delivered_recorded_at = now() WHERE id = ${delivered.part.id}::uuid`
+    await expect(h.prisma.$executeRaw`UPDATE purchase_order_parts SET loaded_at = NULL, loaded_by_id = NULL, loaded_recorded_at = NULL WHERE id = ${delivered.part.id}::uuid`).rejects.toThrow(/Purchase part configuration is immutable/u)
+    const unbindDelivered = await patch(`/api/container-batches/${parent.id}/items/${deliveredItem.id}`, {
+      expectedVersion: (await reference<ContainerBatchDto>(`/api/container-batches/${parent.id}`)).version, itemExpectedVersion: deliveredItem.version, goodsName: '履带', packageCount: 10,
+    }).expect(422)
+    expect(unbindDelivered.body as { code: string }).toMatchObject({ code: 'CONTAINER_SHIPMENT_UNLOAD_FORBIDDEN' })
+    expect(await h.prisma.containerLoadingItem.count({ where: { shipmentId: delivered.part.id } })).toBe(1)
+    expect(await fact(delivered.part.id)).not.toEqual(unloaded)
 
     // 绕过服务端直写关联同样被拒绝：装柜事实必须先于关联存在。
     const unreceived = await h.shipment({ received: false })
@@ -105,6 +139,12 @@ describe('shipment container loading fact over isolated PostgreSQL', () => {
       creationRequestKey: randomUUID(), creationPayloadHash: 'f'.repeat(64), createdById: h.fixture.actor.id, updatedById: h.fixture.actor.id,
     } })).rejects.toThrow(/Shipment must record the container loading fact before allocation/u)
     expect(await fact(unreceived.part.id)).toEqual(unloaded)
+    // 未签收且已无明细时，服务端解绑路径会撤销事实；直接清空因此不再有对象。
+    const cleared = await patch(`/api/container-batches/${parent.id}/items/${first.id}`, {
+      expectedVersion: (await reference<ContainerBatchDto>(`/api/container-batches/${parent.id}`)).version, itemExpectedVersion: first.version, goodsName: '履带', packageCount: 10,
+    }).expect(200)
+    expect(cleared.body as ContainerLoadingItemDto).toMatchObject({ shipmentId: null })
+    expect(await fact(shipment.part.id)).toEqual(unloaded)
   })
 
   it('rejects container loading before the shipment is warehouse-received on every entry', async () => {
@@ -145,7 +185,7 @@ describe('shipment container loading fact over isolated PostgreSQL', () => {
     expect(received.total).toBe(0)
   })
 
-  it('advances the sales order only after every shipment is loaded, and never reverts', async () => {
+  it('advances the sales order only after every shipment is loaded, and reverses on the last unbind', async () => {
     const parent = await batch(), order = await h.shipment({ partCount: 2, salesLinked: true })
     const salesOrderId = order.source!.id, [first, second] = order.parts
     // 入仓已把订单推进到待装柜；单个货件装柜不足以推进。
@@ -159,18 +199,25 @@ describe('shipment container loading fact over isolated PostgreSQL', () => {
     expect(await h.prisma.salesOrderStatusHistory.findFirstOrThrow({ where: { salesOrderId, toStatus: 'SEA_TRANSIT' } })).toMatchObject({ fromStatus: 'WAREHOUSE_ARRIVED' })
     expect(await loadEventsOfOrder(salesOrderId)).toBe(1)
 
-    // 幂等：已推进后再关联同一货件不重复推进、不重复记审计。
-    await item(parent.id, { shipmentId: second.id })
+    // 幂等：已推进后重存同一明细不重复推进、不重复记审计。
+    const items = (await browser.get(`/api/container-batches/${parent.id}/items`).expect(200)).body as { items: ContainerLoadingItemDto[] }
+    const target = items.items.find(entry => entry.shipmentId === second.id)!
+    const batchVersion = async () => (await reference<ContainerBatchDto>(`/api/container-batches/${parent.id}`)).version
+    const resaved = (await patch(`/api/container-batches/${parent.id}/items/${target.id}`, { expectedVersion: await batchVersion(), itemExpectedVersion: target.version, shipmentId: second.id, goodsName: '履带', packageCount: 10 }).expect(200)).body as ContainerLoadingItemDto
     expect(await h.prisma.salesOrderStatusHistory.count({ where: { salesOrderId, toStatus: 'SEA_TRANSIT' } })).toBe(1)
     expect(await loadEventsOfOrder(salesOrderId)).toBe(1)
 
-    // 不回退：解除关联后销售订单保持海运在途。
-    const items = (await browser.get(`/api/container-batches/${parent.id}/items`).expect(200)).body as { items: ContainerLoadingItemDto[] }
-    const target = items.items.find(entry => entry.shipmentId === second.id)!
-    const batchVersion = (await reference<ContainerBatchDto>(`/api/container-batches/${parent.id}`)).version
-    await patch(`/api/container-batches/${parent.id}/items/${target.id}`, { expectedVersion: batchVersion, itemExpectedVersion: target.version, goodsName: '履带', packageCount: 10 }).expect(200)
+    // 解绑最后一条明细：撤销装柜事实，订单回退到已到仓；重新装柜后再次推进。
+    await patch(`/api/container-batches/${parent.id}/items/${target.id}`, { expectedVersion: await batchVersion(), itemExpectedVersion: resaved.version, goodsName: '履带', packageCount: 10 }).expect(200)
+    expect(await fact(second.id)).toEqual(unloaded)
+    expect(await unloadEvents(second.id)).toBe(1)
+    expect(await salesStatus(salesOrderId)).toBe('WAREHOUSE_ARRIVED')
+    expect(await h.prisma.salesOrderStatusHistory.count({ where: { salesOrderId, dimension: 'FULFILLMENT', fromStatus: 'SEA_TRANSIT', toStatus: 'WAREHOUSE_ARRIVED' } })).toBe(1)
+    expect(await h.prisma.auditEvent.count({ where: { eventType: 'SALES_ORDER_FULFILLMENT_STATUS_CHANGED', targetId: salesOrderId, metadata: { path: ['trigger'], equals: 'CONTAINER_UNLOAD' } } })).toBe(1)
+
+    await item(parent.id, { shipmentId: second.id })
     expect(await salesStatus(salesOrderId)).toBe('SEA_TRANSIT')
-    expect(await fact(second.id)).not.toEqual(unloaded)
+    expect(await h.prisma.salesOrderStatusHistory.count({ where: { salesOrderId, dimension: 'FULFILLMENT', toStatus: 'SEA_TRANSIT' } })).toBe(2)
   })
 
   it('keeps the order in warehouse-arrived when the sales lines are no longer covered', async () => {
