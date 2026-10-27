@@ -10,6 +10,29 @@ export function eligibleWarehouseParts(detail: PurchaseOrderDetailDto, scopeIds?
   return detail.parts.filter(part => part.status === 'ACTIVE' && part.shippedAt !== null && part.warehouseReceivedAt === null && (!scopeIds || scopeIds.includes(part.id)))
 }
 
+/**
+ * 入仓时间下限取所选货件中**最晚**的发货时间：入仓不可能早于任何一件所选货件离厂。
+ * 向上取整到整秒，因为时间字段只能选到秒；否则选择器会把"看起来等于发货时间"的一秒
+ * 当作合法值，而服务端按库里的微秒精度仍会判成早于发货。
+ */
+export function minimumWarehouseReceivedAt(
+  detail: PurchaseOrderDetailDto,
+  scopeIds: readonly string[] | undefined,
+  selectedIds: readonly string[],
+): string | undefined {
+  const selected = new Set(selectedIds)
+  const timestamps = eligibleWarehouseParts(detail, scopeIds)
+    .filter(part => selected.has(part.id))
+    .map(part => part.shippedAt)
+    .filter((value): value is string => value !== null)
+    .map(value => Date.parse(value))
+    .filter(value => Number.isFinite(value))
+  if (timestamps.length === 0) {
+    return undefined
+  }
+  return new Date(Math.ceil(Math.max(...timestamps) / 1000) * 1000).toISOString()
+}
+
 export function buildWarehouseReceiptRequest(input: {
   detail: PurchaseOrderDetailDto
   scopeIds?: readonly string[]

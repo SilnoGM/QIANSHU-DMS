@@ -7,7 +7,8 @@ import { currentDateTimeValue } from '@/components/business/QsDateTimeField/logi
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import { getPurchaseOrderPartRecords } from '@/components/business/QsPurchaseOrderDrawer/logic'
-import { buildWarehouseReceiptRequest, eligibleWarehouseParts } from './logic'
+import { serverNow } from '@/utils/server-clock'
+import { buildWarehouseReceiptRequest, eligibleWarehouseParts, minimumWarehouseReceivedAt } from './logic'
 
 const props = defineProps<{
   modelValue: boolean
@@ -17,11 +18,13 @@ const props = defineProps<{
   submitting: boolean
   error: string | null
   needsReload: boolean
+  timeError?: string | null
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   'reload': []
   'submit': [request: PurchaseOrderWarehouseReceiptRequestDto]
+  'dismissTimeError': []
 }>()
 const { t } = useI18n()
 const selectedIds = ref<string[]>([])
@@ -35,22 +38,9 @@ const parts = computed(() => {
   const ids = new Set(eligibleWarehouseParts(props.detail, props.scopeIds).map(part => part.id))
   return getPurchaseOrderPartRecords(props.detail).filter(part => ids.has(part.id))
 })
-const minimumShippedAt = computed(() => {
-  if (!props.detail) {
-    return undefined
-  }
-  const selected = eligibleWarehouseParts(props.detail, props.scopeIds)
-    .filter(part => selectedIds.value.includes(part.id))
-  const shippedAtValues = selected
-    .map(part => part.shippedAt)
-    .filter((value): value is string => value !== null)
-  return shippedAtValues.reduce<string | undefined>(
-    (minimum, value) => minimum === undefined || Date.parse(value) < Date.parse(minimum)
-      ? value
-      : minimum,
-    undefined,
-  )
-})
+const minimumReceivedAt = computed(() => props.detail === null
+  ? undefined
+  : minimumWarehouseReceivedAt(props.detail, props.scopeIds, selectedIds.value))
 const locked = computed(() => props.loading || props.submitting || props.needsReload || !!props.error)
 function toggle(id: string): void {
   if (!locked.value) {
@@ -58,11 +48,15 @@ function toggle(id: string): void {
     validationError.value = ''
   }
 }
+function dismissTimeError(): void {
+  validationError.value = ''
+  emit('dismissTimeError')
+}
 function submit(): void {
   if (locked.value || !props.detail) {
     return
   }
-  const result = buildWarehouseReceiptRequest({ detail: props.detail, scopeIds: props.scopeIds, selectedIds: selectedIds.value, receivedAt: receivedAt.value, remark: remark.value, now: new Date() })
+  const result = buildWarehouseReceiptRequest({ detail: props.detail, scopeIds: props.scopeIds, selectedIds: selectedIds.value, receivedAt: receivedAt.value, remark: remark.value, now: serverNow() })
   if (!result.valid) {
     validationError.value = t(result.error)
     return
@@ -73,7 +67,8 @@ function submit(): void {
 watch(() => [props.modelValue, props.detail] as const, ([open]) => {
   if (open) {
     selectedIds.value = parts.value.length === 1 ? [parts.value[0]!.id] : []
-    receivedAt.value = currentDateTimeValue('second')
+    // 默认值取服务端时钟的保守估值：浏览器时钟偏快时，本地"此刻"会被服务端判成未来。
+    receivedAt.value = currentDateTimeValue('second', serverNow())
     remark.value = ''
     validationError.value = ''
   }
@@ -81,7 +76,7 @@ watch(() => [props.modelValue, props.detail] as const, ([open]) => {
 </script>
 
 <template>
-  <QsGenericModal :model-value="modelValue" :title="t('purchaseWarehouseReceipt.title')" :description="t('purchaseWarehouseReceipt.description')" size="xl" :loading="loading" :error="error" :submitting="submitting" @update:model-value="emit('update:modelValue', $event)">
+  <QsGenericModal :model-value="modelValue" :title="t('purchaseWarehouseReceipt.title')" :description="t('purchaseWarehouseReceipt.description')" size="xl" :loading="loading" :error="error" :error-title="t('purchaseWarehouseReceipt.submitFailed')" :submitting="submitting" @update:model-value="emit('update:modelValue', $event)">
     <template #header-leading>
       <FaIcon name="i-lucide:warehouse" class="size-4" aria-hidden="true" />
     </template>
@@ -145,10 +140,10 @@ watch(() => [props.modelValue, props.detail] as const, ([open]) => {
           v-model="receivedAt"
           precision="second"
           disable-future
-          :min="minimumShippedAt"
+          :min="minimumReceivedAt"
           :disabled="locked || !parts.length"
           :aria-label="t('purchaseWarehouseReceipt.receivedAt')"
-          @change="validationError = ''"
+          @change="dismissTimeError"
         />
       </div>
       <div class="space-y-2">
@@ -156,8 +151,8 @@ watch(() => [props.modelValue, props.detail] as const, ([open]) => {
           {{ [...remark.trim()].length }}/500
         </div>
       </div>
-      <p v-if="validationError" role="alert" class="qs-type-meta text-destructive m-0">
-        {{ validationError }}
+      <p v-if="timeError || validationError" role="alert" class="qs-type-meta text-destructive m-0">
+        {{ timeError || validationError }}
       </p>
     </div>
     <template #footer>

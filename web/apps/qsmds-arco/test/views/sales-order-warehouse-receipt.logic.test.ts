@@ -135,7 +135,7 @@ test('按采购单分组、按货件序号排序，并用产品预览回填图�
   assert.deepEqual(defaultWarehouseReceiptSelection([orders[1]!]), [THIRD_PART_ID])
 })
 
-test('入仓时间下限取所选货件发货时间的最大值', () => {
+test('入仓时间下限取所选货件发货时间的最大值，并向上取整到整秒', () => {
   const orders = createWarehouseReceiptOrders(context)
   assert.equal(
     warehouseReceiptMinimumReceivedAt(orders, [FIRST_PART_ID, SECOND_PART_ID]),
@@ -146,6 +146,18 @@ test('入仓时间下限取所选货件发货时间的最大值', () => {
     '2026-10-20T02:00:00.000Z',
   )
   assert.equal(warehouseReceiptMinimumReceivedAt(orders, []), undefined)
+
+  // 发货事实带毫秒/微秒时，下限必须进到下一整秒：选择器只能选到秒，
+  // 否则用户点中的那一秒会早于库内发货时间，提交后才被服务端拒绝。
+  const fractionalPartId = '66666666-6666-4666-8666-666666666666'
+  const fractional: typeof orders = [{
+    ...orders[0]!,
+    parts: [{ ...orders[0]!.parts[0]!, id: fractionalPartId, shippedAt: '2026-10-21T02:00:00.812345Z' }],
+  }]
+  assert.equal(
+    warehouseReceiptMinimumReceivedAt(fractional, [fractionalPartId]),
+    '2026-10-21T02:00:01.000Z',
+  )
 })
 
 test('按采购单构造目标，排序货件并保留每个采购单的版本', () => {

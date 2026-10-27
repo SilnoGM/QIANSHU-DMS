@@ -6,6 +6,7 @@
     "action": "确认入仓",
     "cancel": "取消",
     "reload": "重新加载",
+    "submitFailed": "提交失败",
     "selectAll": "全选待入仓",
     "selection": "本次入仓 {selected} 件 · 待入仓 {total} 件",
     "empty": "暂无可入仓货件",

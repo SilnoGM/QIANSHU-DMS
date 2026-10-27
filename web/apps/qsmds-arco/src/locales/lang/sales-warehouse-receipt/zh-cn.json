@@ -3,6 +3,7 @@
     "title": "确认货件入仓范围",
     "description": "选择本次实际到仓的货件，未选择的货件可后续入仓。",
     "reload": "重新加载",
+    "submitFailed": "提交失败",
     "cancel": "取消",
     "confirm": "确认入仓（{count} 件）",
     "selection": "本次入仓 {selected} 件 · 待入仓 {total} 件",

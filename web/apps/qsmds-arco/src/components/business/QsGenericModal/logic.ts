@@ -17,6 +17,11 @@ export interface QsGenericModalProps {
   dismissOnEscape?: boolean
   dismissOnOverlay?: boolean
   error?: null | string
+  /**
+   * 错误卡片标题。读取失败与提交失败是两类不同问题，调用方需要能区分；
+   * 缺省保持「加载失败」，兼容只做读取的既有弹窗。
+   */
+  errorTitle?: string
   fillHeight?: boolean
   loading?: boolean
   modelValue?: boolean
