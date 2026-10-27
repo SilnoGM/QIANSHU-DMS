@@ -43,6 +43,8 @@ const canCreate = computed(() => editable.value
   && !itemLimitReached.value
   && selectedItems.value.length > 0
   && selectedItems.value.every(item => item.quantity > 0 && item.quantity <= remaining(item.productKey)))
+const allPendingSelected = computed(() => pendingProducts.value.length > 0
+  && pendingProducts.value.every(product => selectedKeys.value.includes(product.key)))
 
 function remaining(key: string): number {
   return allocation.value.remainingByProduct.get(key) ?? 0
@@ -74,6 +76,16 @@ function updateQuantity(key: string, quantity: string | number | undefined): voi
 
 function resetDrafts(keys: readonly string[]): void {
   quantities.value = Object.fromEntries(Object.entries(quantities.value).filter(([key]) => !keys.includes(key)))
+}
+
+// 全选只改勾选状态，不改写用户已填或默认的本次装入数量。
+function toggleSelectAll(): void {
+  if (!editable.value || pendingProducts.value.length === 0) {
+    return
+  }
+  selectedKeys.value = allPendingSelected.value
+    ? []
+    : pendingProducts.value.map(product => product.key)
 }
 
 function createPart(): void {
@@ -183,6 +195,10 @@ watch(allocation, () => {
         <FaButton type="button" :disabled="!canCreate" data-action="create-part" @click="createPart">
           <FaIcon name="i-lucide:package-plus" class="size-4" aria-hidden="true" />
           {{ t('partConfigurator.create') }}
+        </FaButton>
+        <FaButton v-if="pendingProducts.length > 0" type="button" variant="outline" :disabled="!editable" data-action="select-all" @click="toggleSelectAll">
+          <FaIcon name="i-lucide:list-checks" class="size-4" aria-hidden="true" />
+          {{ t(allPendingSelected ? 'partConfigurator.clearSelection' : 'partConfigurator.selectAll') }}
         </FaButton>
         <span class="text-xs text-muted-foreground" aria-live="polite">{{ t('partConfigurator.selected', { count: selectedKeys.length }) }}</span>
         <span v-if="modelValue.length >= MAX_PART_CONFIGURATIONS" class="text-xs text-muted-foreground">{{ t('partConfigurator.limit', { count: MAX_PART_CONFIGURATIONS }) }}</span>
