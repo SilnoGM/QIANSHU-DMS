@@ -107,7 +107,11 @@ export function defaultWarehouseReceiptSelection(
   return parts.length === 1 ? [parts[0]!.id] : []
 }
 
-/** 入仓时间必须不早于所有已选货件的发货时间，因此下限取最大值而不是最小值。 */
+/**
+ * 入仓时间必须不早于所有已选货件的发货时间，因此下限取最大值而不是最小值。
+ * 顶层向上取整到整秒：时间字段只能选到秒，否则选择器会把"看起来等于发货时间"的一秒
+ * 当作合法值，而服务端按库里的微秒精度仍会判成早于发货。
+ */
 export function warehouseReceiptMinimumReceivedAt(
   orders: readonly WarehouseReceiptOrderView[],
   selectedIds: readonly string[],
@@ -121,7 +125,7 @@ export function warehouseReceiptMinimumReceivedAt(
   if (timestamps.length === 0) {
     return undefined
   }
-  return new Date(Math.max(...timestamps)).toISOString()
+  return new Date(Math.ceil(Math.max(...timestamps) / 1000) * 1000).toISOString()
 }
 
 export function buildSalesWarehouseReceiptIntent(input: {

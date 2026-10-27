@@ -9,6 +9,15 @@ interface WarehouseApi {
   recordWarehouseReceipt: (id: string, body: PurchaseOrderWarehouseReceiptRequestDto, signal: AbortSignal) => Promise<{ data: PurchaseOrderDetailDto }>
 }
 
+/**
+ * 时间边界是用户可自行修正的输入问题：保留已选货件与填写内容，只把服务端边界放到时间字段下。
+ * 其余拒绝/未知结果仍按“先重读再写”处理，避免用陈旧版本重复提交。
+ */
+const TIME_BOUND_ERROR_CODES: ReadonlySet<string> = new Set([
+  'PURCHASE_WAREHOUSE_RECEIPT_TIME_BEFORE_SHIPMENT',
+  'PURCHASE_WAREHOUSE_RECEIPT_TIME_FUTURE',
+])
+
 /** 两个业务入口共用目标读取与写入生命周期；失败后必须重读，避免不确定结果重复写入。 */
 export function useWarehouseReceipt(enabled: Readonly<Ref<boolean>>, epoch: Readonly<Ref<number>>, onSuccess: (detail: PurchaseOrderDetailDto) => void, api: WarehouseApi = purchaseOrdersApi) {
   const visible = ref(false)
@@ -18,6 +27,7 @@ export function useWarehouseReceipt(enabled: Readonly<Ref<boolean>>, epoch: Read
   const orderId = ref<string | null>(null)
   const submitting = ref(false)
   const error = ref<string | null>(null)
+  const timeError = ref<string | null>(null)
   const needsReload = ref(false)
   let controller: AbortController | null = null
 
@@ -30,6 +40,7 @@ export function useWarehouseReceipt(enabled: Readonly<Ref<boolean>>, epoch: Read
     detail.value = null
     orderId.value = null
     error.value = null
+    timeError.value = null
     needsReload.value = false
   }
   function isCurrent(request: AbortController, requestEpoch: number): boolean {
@@ -50,6 +61,7 @@ export function useWarehouseReceipt(enabled: Readonly<Ref<boolean>>, epoch: Read
     loadingOrderId.value = orderId.value
     detail.value = null
     error.value = null
+    timeError.value = null
     needsReload.value = true
     try {
       const response = await api.getById(orderId.value, request.signal)
@@ -89,6 +101,7 @@ export function useWarehouseReceipt(enabled: Readonly<Ref<boolean>>, epoch: Read
     const requestEpoch = epoch.value
     submitting.value = true
     error.value = null
+    timeError.value = null
     try {
       const response = await api.recordWarehouseReceipt(detail.value.id, payload, request.signal)
       if (isCurrent(request, requestEpoch)) {
@@ -100,9 +113,16 @@ export function useWarehouseReceipt(enabled: Readonly<Ref<boolean>>, epoch: Read
     }
     catch (failure) {
       if (isCurrent(request, requestEpoch) && !isPurchaseOrderAbortError(failure)) {
-        reportFailure(failure)
-        // 未知结果也必须读取最新状态，不自动重放可能已经成功的入仓操作。
-        needsReload.value = true
+        const result = getPurchaseOrderApiFailure(failure)
+        if (result.code !== undefined && TIME_BOUND_ERROR_CODES.has(result.code)) {
+          // 422 是确定性拒绝：服务端没有写入任何货件，用户可以改完时间直接重提，不必重读整单。
+          timeError.value = result.message
+        }
+        else {
+          reportFailure(failure)
+          // 未知结果也必须读取最新状态，不自动重放可能已经成功的入仓操作。
+          needsReload.value = true
+        }
       }
     }
     finally {
@@ -113,7 +133,12 @@ export function useWarehouseReceipt(enabled: Readonly<Ref<boolean>>, epoch: Read
     }
   }
 
+  /** 用户改了入仓时间就撤掉上一次的服务端边界提示，避免红字停留误导。 */
+  function dismissTimeError(): void {
+    timeError.value = null
+  }
+
   watch([enabled, epoch], reset)
   onScopeDispose(reset)
-  return { visible, detail, scopeIds, loadingOrderId, submitting, error, needsReload, open, reload, submit, reset }
+  return { visible, detail, scopeIds, loadingOrderId, submitting, error, timeError, needsReload, open, reload, submit, reset, dismissTimeError }
 }

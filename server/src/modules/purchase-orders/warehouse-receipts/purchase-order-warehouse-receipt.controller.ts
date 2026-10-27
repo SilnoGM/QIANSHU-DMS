@@ -28,7 +28,7 @@ export class PurchaseOrderWarehouseReceiptController {
       { status: 403, codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] },
       { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] },
       { status: 409, codes: ['PURCHASE_WAREHOUSE_RECEIPT_STATE_CHANGED'] },
-      { status: 422, codes: ['PURCHASE_WAREHOUSE_RECEIPT_NOT_ALLOWED', 'PURCHASE_WAREHOUSE_RECEIPT_TARGET_INVALID', 'PURCHASE_WAREHOUSE_RECEIPT_TIME_INVALID', 'VALIDATION_FAILED'] },
+      { status: 422, codes: ['PURCHASE_WAREHOUSE_RECEIPT_NOT_ALLOWED', 'PURCHASE_WAREHOUSE_RECEIPT_TARGET_INVALID', 'PURCHASE_WAREHOUSE_RECEIPT_TIME_FUTURE', 'PURCHASE_WAREHOUSE_RECEIPT_TIME_BEFORE_SHIPMENT', 'VALIDATION_FAILED'] },
     ],
   })
   receive(@Param() params: PurchaseOrderIdParamDto, @Body() dto: PurchaseOrderWarehouseReceiptRequestDto, @Req() request: object) {

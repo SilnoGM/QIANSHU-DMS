@@ -67,6 +67,52 @@ test('不确定写入失败禁止直接重发，必须重新读取最新版本�
   state.stop()
 })
 
+/** Axios 归一化后的业务错误形状：Error 实例上挂 body。 */
+function businessFailure(body: { code: string, message: string, requestId: string }): Error {
+  return Object.assign(new Error(body.message), { body })
+}
+
+test('时间边界 422 只提示服务端边界，保留表单与已选货件并允许直接重提', async () => {
+  let writes = 0
+  const state = setup({ getById: async () => ({ data: detail }), recordWarehouseReceipt: async () => {
+    writes++
+    throw businessFailure({
+      code: 'PURCHASE_WAREHOUSE_RECEIPT_TIME_FUTURE',
+      message: '入仓时间不能晚于当前时间（当前时间 2026-10-27 12:00:00）',
+      requestId: 'req_time',
+    })
+  } })
+  await state.action.open('order', ['part'])
+  await state.action.submit(payload)
+
+  // 确定性拒绝：不进入“结果未知必须重读”的锁定路径，弹窗保持可操作。
+  assert.equal(state.action.needsReload.value, false)
+  assert.equal(state.action.error.value, null)
+  assert.equal(state.action.visible.value, true)
+  assert.equal(state.action.timeError.value, '入仓时间不能晚于当前时间（当前时间 2026-10-27 12:00:00）')
+
+  // 用户改完时间可以直接再提交，不需要重新加载整单。
+  await state.action.submit(payload)
+  assert.equal(writes, 2)
+
+  state.action.dismissTimeError()
+  assert.equal(state.action.timeError.value, null)
+  state.stop()
+})
+
+test('其他业务拒绝仍要求先重读最新状态', async () => {
+  const state = setup({ getById: async () => ({ data: detail }), recordWarehouseReceipt: async () => {
+    throw businessFailure({ code: 'PURCHASE_WAREHOUSE_RECEIPT_STATE_CHANGED', message: '入仓范围或订单版本已变化，请刷新后重新核对', requestId: 'req_state' })
+  } })
+  await state.action.open('order', ['part'])
+  await state.action.submit(payload)
+
+  assert.equal(state.action.needsReload.value, true)
+  assert.equal(state.action.timeError.value, null)
+  assert.match(state.action.error.value ?? '', /入仓范围或订单版本已变化/u)
+  state.stop()
+})
+
 test('无权限不读写；关闭与身份变更取消请求并丢弃迟到结果', async () => {
   const request = deferred<{ data: PurchaseOrderDetailDto }>()
   let calls = 0

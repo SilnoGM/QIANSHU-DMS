@@ -32,9 +32,13 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
     await client.query(`SET search_path TO ${quoted}, public`)
     const directory = resolve(__dirname, '../prisma/migrations')
     for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name)).sort()) {
-      // 签收迁移及其后续装柜签收守卫都依赖新增的签收列，必须一起延后；
+      // 签收迁移、装柜签收守卫与撤销装柜迁移都依赖新增的签收列，必须一起延后；
       // 出单人前缀迁移与签收无关，提前应用才能让当前查询代码读取它。
-      if (deferShipmentDelivery && (migration === '20261021170000_purchase_shipment_delivery' || migration === '20261022120000_container_loading_delivered_guard')) continue
+      if (deferShipmentDelivery && (
+        migration === '20261021170000_purchase_shipment_delivery'
+        || migration === '20261022120000_container_loading_delivered_guard'
+        || migration === '20261027120000_purchase_shipment_container_unload'
+      )) continue
       if (deferPayablesMigration && migration >= '20260916160000_purchase_order_payables') continue
       if (deferShipmentNumbers && migration >= '20260914091234_purchase_shipment_number') continue
       if (deferWarehouseReceipt && migration >= '20260915020459_purchase_shipment_warehouse_receipt') continue

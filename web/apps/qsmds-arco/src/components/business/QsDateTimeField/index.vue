@@ -3,6 +3,7 @@ import type { CalendarDate, DateValue } from '@internationalized/date'
 import type { QsDateTimeBounds, QsDateTimePrecision } from './types'
 import { toCalendarDate } from '@internationalized/date'
 import { cn } from '@/utils'
+import { serverNow } from '@/utils/server-clock'
 import {
   currentDateTimeParts,
   formatDateTimeValue,
@@ -134,7 +135,9 @@ const draftErrorMessage = computed(() => {
 const canConfirm = computed(() => Boolean(draftDate.value && !props.disabled))
 
 function syncNow(): void {
-  nowDate.value = new Date()
+  // 上限必须跟服务端时钟对齐：浏览器时钟偏快时，默认值和服务端"当前时间"会差出几分钟，
+  // 提交后才被服务端判成未来时间。
+  nowDate.value = serverNow()
 }
 
 function initializeDraft(): void {

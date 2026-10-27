@@ -18,7 +18,15 @@ function setup() {
     salesOrder: { findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn().mockResolvedValue({}) },
     salesOrderLine: { findMany: jest.fn() },
     salesOrderStatusHistory: { create: jest.fn().mockResolvedValue({}) },
-    purchaseOrderPart: { count: jest.fn().mockImplementation((input: { where: { shippedAt: { gt: Date } } }) => Promise.resolve(order.parts.filter(item => item.shippedAt !== null && item.shippedAt > input.where.shippedAt.gt).length)), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    purchaseOrderPart: {
+      findFirst: jest.fn().mockImplementation((input: { where: { shippedAt: { gt: Date } } }) => {
+        const preceding = order.parts
+          .filter(item => item.shippedAt !== null && item.shippedAt > input.where.shippedAt.gt)
+          .sort((left, right) => right.shippedAt!.getTime() - left.shippedAt!.getTime())
+        return Promise.resolve(preceding[0] === undefined ? null : { partNumber: preceding[0].partNumber, shippedAt: preceding[0].shippedAt })
+      }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
     purchaseOrderStatusHistory: { create: jest.fn().mockResolvedValue({}) },
     auditEvent: { findFirst: jest.fn().mockResolvedValue(null) },
   }
@@ -163,11 +171,26 @@ describe('PurchaseOrderWarehouseReceiptService', () => {
     expect(fixture.tx.purchaseOrder.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ orderStatus: 'COMPLETED', fulfillmentStatus: 'SIGNED' }) as unknown }))
   })
 
-  it.each(['2026-09-15T00:59:59Z', '2026-09-15T02:00:01Z'])('rejects receipt time outside the shipment/current-time bounds: %s', async receivedAt => {
+  it('rejects a receipt time before the shipment with the offending part and its bound', async () => {
     const fixture = setup()
-    await expect(fixture.service.receive(context, orderId, { expectedVersion: 3, partIds: [partId], receivedAt })).rejects.toMatchObject({ code: 'PURCHASE_WAREHOUSE_RECEIPT_TIME_INVALID' })
+    await expect(fixture.service.receive(context, orderId, { expectedVersion: 3, partIds: [partId], receivedAt: '2026-09-15T00:59:59Z' })).rejects.toMatchObject({
+      code: 'PURCHASE_WAREHOUSE_RECEIPT_TIME_BEFORE_SHIPMENT',
+      publicMessage: '入仓时间不能早于货件-01 的发货时间（2026-09-15 09:00:00）',
+    })
     expect(fixture.tx.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
     expect(fixture.audit.record).not.toHaveBeenCalled()
+  })
+
+  it('rejects a receipt time after the server clock and names the server bound', async () => {
+    const fixture = setup()
+    await expect(fixture.service.receive(context, orderId, { expectedVersion: 3, partIds: [partId], receivedAt: '2026-09-15T02:00:01Z' })).rejects.toMatchObject({
+      code: 'PURCHASE_WAREHOUSE_RECEIPT_TIME_FUTURE',
+      publicMessage: '入仓时间不能晚于当前时间（当前时间 2026-09-15 10:00:00）',
+    })
+    expect(fixture.tx.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+    // 未来时间不需要再查发货事实，边界值本身就足以定位。
+    expect(fixture.tx.purchaseOrderPart.findFirst).not.toHaveBeenCalled()
   })
 
   it('rejects stale versions and a mixture of old and new receipt facts without overwriting anything', async () => {

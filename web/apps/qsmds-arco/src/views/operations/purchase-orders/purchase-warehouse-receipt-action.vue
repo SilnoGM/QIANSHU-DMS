@@ -11,7 +11,7 @@ const { auth } = useAppAuth()
 const account = useAppAccountStore()
 const toast = useQsToast()
 const enabled = computed(() => props.active && auth('purchase-orders:read') && auth('purchase-orders:update'))
-const { visible, detail, scopeIds, loadingOrderId, submitting, error, needsReload, open, reload, submit, reset } = useWarehouseReceipt(enabled, computed(() => account.authEpoch), (updated) => {
+const { visible, detail, scopeIds, loadingOrderId, submitting, error, timeError, needsReload, open, reload, submit, reset, dismissTimeError } = useWarehouseReceipt(enabled, computed(() => account.authEpoch), (updated) => {
   emit('detailUpdated', updated)
   toast.success(t('purchaseWarehouseReceipt.success'))
 })
@@ -26,5 +26,5 @@ defineExpose({ open, reset, loadingOrderId })
 </script>
 
 <template>
-  <QsWarehouseReceiptModal :model-value="visible" :detail="detail" :scope-ids="scopeIds" :loading="loadingOrderId !== null" :submitting="submitting" :error="error" :needs-reload="needsReload" @update:model-value="setVisible" @reload="reload" @submit="submit" />
+  <QsWarehouseReceiptModal :model-value="visible" :detail="detail" :scope-ids="scopeIds" :loading="loadingOrderId !== null" :submitting="submitting" :error="error" :time-error="timeError" :needs-reload="needsReload" @update:model-value="setVisible" @reload="reload" @submit="submit" @dismiss-time-error="dismissTimeError" />
 </template>

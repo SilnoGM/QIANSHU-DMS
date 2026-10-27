@@ -2,7 +2,7 @@ import type { PurchaseOrderDetailDto } from '../../src/api/generated/types.gen'
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 入仓目标和时间约束使用内置 runner。
 import test from 'node:test'
-import { buildWarehouseReceiptRequest, eligibleWarehouseParts } from '../../src/components/business/QsWarehouseReceiptModal/logic'
+import { buildWarehouseReceiptRequest, eligibleWarehouseParts, minimumWarehouseReceivedAt } from '../../src/components/business/QsWarehouseReceiptModal/logic'
 
 const now = new Date('2026-09-15T06:30:00.123Z')
 function order() {
@@ -39,4 +39,21 @@ test('入仓时间不得未来、无时区或早于选中货件发货时间，�
   }
   assert.equal(buildWarehouseReceiptRequest({ detail: order(), selectedIds: ['ready'], receivedAt: now.toISOString(), remark: '😀'.repeat(500), now }).valid, true)
   assert.equal(buildWarehouseReceiptRequest({ detail: order(), selectedIds: ['ready'], receivedAt: now.toISOString(), remark: '😀'.repeat(501), now }).valid, false)
+})
+
+test('入仓时间下限取所选货件最晚发货时间，并向上取整到整秒避免亚毫秒误判', () => {
+  const detail = { ...order(), parts: [
+    { id: 'early', status: 'ACTIVE', shippedAt: '2026-09-15T05:00:00.000Z', warehouseReceivedAt: null },
+    { id: 'late', status: 'ACTIVE', shippedAt: '2026-09-15T06:00:00.812345Z', warehouseReceivedAt: null },
+    { id: 'unshipped', status: 'ACTIVE', shippedAt: null, warehouseReceivedAt: null },
+  ] } as unknown as PurchaseOrderDetailDto
+
+  // 只选早发货的货件时，下限是它自己（第 0 毫秒无需进位）。
+  assert.equal(minimumWarehouseReceivedAt(detail, undefined, ['early']), '2026-09-15T05:00:00.000Z')
+  // 多选时取最晚的一件；812 毫秒必须进到下一整秒，否则选择器会给出早于库内发货时间的秒。
+  assert.equal(minimumWarehouseReceivedAt(detail, undefined, ['early', 'late']), '2026-09-15T06:00:01.000Z')
+  assert.equal(minimumWarehouseReceivedAt(detail, undefined, ['early', 'unshipped']), '2026-09-15T05:00:00.000Z')
+  // 未选择或范围不包含可选货件时不设下限。
+  assert.equal(minimumWarehouseReceivedAt(detail, undefined, []), undefined)
+  assert.equal(minimumWarehouseReceivedAt(detail, ['unshipped'], ['early']), undefined)
 })

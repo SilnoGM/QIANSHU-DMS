@@ -16,6 +16,15 @@ interface SalesWarehouseReceiptApi {
 }
 
 /**
+ * 时间边界是用户可自行修正的输入问题：保留已选货件与填写内容，只把服务端边界放到时间字段下。
+ * 其余拒绝/未知结果仍按“先重读再写”处理，避免用陈旧版本重复提交。
+ */
+const TIME_BOUND_ERROR_CODES: ReadonlySet<string> = new Set([
+  'SALES_WAREHOUSE_RECEIPT_TIME_BEFORE_SHIPMENT',
+  'SALES_WAREHOUSE_RECEIPT_TIME_FUTURE',
+])
+
+/**
  * 销售级入仓弹窗的读取与写入生命周期。
  * 写入结果未知时必须先重读上下文，避免把可能已经成功的入仓再提交一次。
  */
@@ -31,6 +40,7 @@ export function useSalesWarehouseReceipt(
   const loading = ref(false)
   const submitting = ref(false)
   const error = ref<string | null>(null)
+  const timeError = ref<string | null>(null)
   const needsReload = ref(false)
   let controller: AbortController | null = null
 
@@ -43,6 +53,7 @@ export function useSalesWarehouseReceipt(
     loading.value = false
     submitting.value = false
     error.value = null
+    timeError.value = null
     needsReload.value = false
   }
 
@@ -72,6 +83,7 @@ export function useSalesWarehouseReceipt(
     const requestOrderId = orderId.value
     loading.value = true
     error.value = null
+    timeError.value = null
     needsReload.value = false
     context.value = null
     try {
@@ -122,6 +134,7 @@ export function useSalesWarehouseReceipt(
     const requestEpoch = epoch.value
     submitting.value = true
     error.value = null
+    timeError.value = null
     try {
       const response = await api.warehouseReceipt(
         requestOrderId,
@@ -137,9 +150,16 @@ export function useSalesWarehouseReceipt(
     }
     catch (failure) {
       if (isCurrent(request, requestEpoch) && !isSalesOrderAbortError(failure)) {
-        reportFailure(failure)
-        // 未知结果也必须读取最新状态，不自动重放可能已经成功的入仓操作。
-        needsReload.value = true
+        const result = getSalesOrderApiFailure(failure)
+        if (result.code !== undefined && TIME_BOUND_ERROR_CODES.has(result.code)) {
+          // 422 是确定性拒绝：服务端没有写入任何货件，用户可以改完时间直接重提，不必重读整单。
+          timeError.value = result.message
+        }
+        else {
+          reportFailure(failure)
+          // 未知结果也必须读取最新状态，不自动重放可能已经成功的入仓操作。
+          needsReload.value = true
+        }
       }
     }
     finally {
@@ -156,6 +176,11 @@ export function useSalesWarehouseReceipt(
     }
   }
 
+  /** 用户改了入仓时间就撤掉上一次的服务端边界提示，避免红字停留误导。 */
+  function dismissTimeError(): void {
+    timeError.value = null
+  }
+
   watch([enabled, epoch], reset)
   onScopeDispose(reset)
   return {
@@ -164,11 +189,13 @@ export function useSalesWarehouseReceipt(
     loading,
     submitting,
     error,
+    timeError,
     needsReload,
     open,
     reload: loadContext,
     submit,
     reset,
     setVisible,
+    dismissTimeError,
   }
 }

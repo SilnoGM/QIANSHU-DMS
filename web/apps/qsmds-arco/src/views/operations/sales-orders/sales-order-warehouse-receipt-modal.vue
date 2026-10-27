@@ -7,6 +7,7 @@ import QsDateTimeField from '@/components/business/QsDateTimeField/index.vue'
 import { currentDateTimeValue } from '@/components/business/QsDateTimeField/logic'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
+import { serverNow } from '@/utils/server-clock'
 import {
   buildSalesWarehouseReceiptIntent,
   countWarehouseReceiptParts,
@@ -21,11 +22,13 @@ const props = defineProps<{
   loading: boolean
   submitting: boolean
   error: string | null
+  timeError?: string | null
 }>()
 const emit = defineEmits<{
   'retry': []
   'submit': [intent: SalesWarehouseReceiptIntent]
   'update:modelValue': [value: boolean]
+  'dismissTimeError': []
 }>()
 const { t } = useI18n()
 const selectedIds = ref<string[]>([])
@@ -48,7 +51,8 @@ const canSubmit = computed(() => !locked.value && selectedIds.value.length > 0)
 
 function resetDraft(): void {
   selectedIds.value = defaultWarehouseReceiptSelection(orders.value)
-  receivedAt.value = currentDateTimeValue('second')
+  // 默认值取服务端时钟的保守估值：浏览器时钟偏快时，本地"此刻"会被服务端判成未来。
+  receivedAt.value = currentDateTimeValue('second', serverNow())
   remark.value = ''
   validationError.value = ''
 }
@@ -71,6 +75,11 @@ function selectAll(): void {
   validationError.value = ''
 }
 
+function dismissTimeError(): void {
+  validationError.value = ''
+  emit('dismissTimeError')
+}
+
 function submit(): void {
   if (!canSubmit.value || props.context === null) {
     return
@@ -81,7 +90,7 @@ function submit(): void {
     selectedIds: selectedIds.value,
     receivedAt: receivedAt.value,
     remark: remark.value,
-    now: new Date(),
+    now: serverNow(),
   })
   if (!result.valid) {
     validationError.value = t(`salesWarehouseReceipt.validation.${result.error}`)
@@ -110,6 +119,7 @@ watch(
     size="xl"
     :loading="loading"
     :error="error"
+    :error-title="t('salesWarehouseReceipt.submitFailed')"
     :submitting="submitting"
     :dismiss-on-overlay="!submitting"
     :dismiss-on-escape="!submitting"
@@ -253,7 +263,7 @@ watch(
           :min="minimumReceivedAt"
           :disabled="locked || totalPartCount === 0"
           :aria-label="t('salesWarehouseReceipt.receivedAt')"
-          @change="validationError = ''"
+          @change="dismissTimeError"
         />
       </div>
       <div class="space-y-2">
@@ -270,8 +280,8 @@ watch(
           {{ [...remark.trim()].length }}/500
         </div>
       </div>
-      <p v-if="validationError" role="alert" class="qs-type-meta text-destructive m-0">
-        {{ validationError }}
+      <p v-if="timeError || validationError" role="alert" class="qs-type-meta text-destructive m-0">
+        {{ timeError || validationError }}
       </p>
     </div>
     <template #footer>

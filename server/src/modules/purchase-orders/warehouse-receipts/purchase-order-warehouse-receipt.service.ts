@@ -38,6 +38,16 @@ function notAllowed(message = '当前采购订单不能确认入仓'): never {
   throw new ApiException(422, 'PURCHASE_WAREHOUSE_RECEIPT_NOT_ALLOWED', message)
 }
 
+const WAREHOUSE_TIME_FORMAT = new Intl.DateTimeFormat('en-CA-u-ca-gregory-nu-latn', {
+  day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', second: '2-digit', timeZone: 'Asia/Shanghai', year: 'numeric',
+})
+
+/** 边界值按上海墙钟展示，与前端 DateTimeDisplay 的口径一致；只用于公开文案。 */
+function formatWarehouseTime(value: Date): string {
+  const parts = new Map(WAREHOUSE_TIME_FORMAT.formatToParts(value).map(part => [part.type, part.value]))
+  return `${parts.get('year')}-${parts.get('month')}-${parts.get('day')} ${parts.get('hour')}:${parts.get('minute')}:${parts.get('second')}`
+}
+
 @Injectable()
 export class PurchaseOrderWarehouseReceiptService {
   constructor(private readonly prisma: PrismaService, private readonly audit: AuditService, private readonly query: PurchaseOrderQueryService, private readonly dataScope: DataScopeService = dataScopeFallback()) {}
@@ -113,13 +123,20 @@ export class PurchaseOrderWarehouseReceiptService {
     // 记录时间使用应用时钟；数据库读出的时间再经 Prisma 写回会被适配器按会话时区重解释。
     const recordedAt = new Date()
     const receivedAt = input.receivedAt === null ? recordedAt : new Date(input.receivedAt)
+    // 两个边界必须分开报错：合并文案让一线无法区分“操作电脑时钟偏差”和“货件发货时间更晚”，
+    // 2026-10-27 生产反馈的“明明满足仍报错”就是被合并文案掩盖的。
+    if (receivedAt > recordedAt) {
+      throw new ApiException(422, 'PURCHASE_WAREHOUSE_RECEIPT_TIME_FUTURE', `入仓时间不能晚于当前时间（当前时间 ${formatWarehouseTime(recordedAt)}）`)
+    }
     const partIds = parts.map(part => part.id).sort()
     // 历史 PostgreSQL 发货事实可带微秒，JS Date 会截断为毫秒；最终时间比较必须由数据库保留原精度。
-    const precedesShipment = receivedAt <= recordedAt && await transaction.purchaseOrderPart.count({
+    const precedingShipment = await transaction.purchaseOrderPart.findFirst({
       where: { id: { in: partIds }, shippedAt: { gt: receivedAt } },
-    }) > 0
-    if (receivedAt > recordedAt || precedesShipment) {
-      throw new ApiException(422, 'PURCHASE_WAREHOUSE_RECEIPT_TIME_INVALID', '入仓时间不能早于所选货件发货时间或晚于当前时间')
+      orderBy: [{ shippedAt: 'desc' }],
+      select: { partNumber: true, shippedAt: true },
+    })
+    if (precedingShipment !== null && precedingShipment.shippedAt !== null) {
+      throw new ApiException(422, 'PURCHASE_WAREHOUSE_RECEIPT_TIME_BEFORE_SHIPMENT', `入仓时间不能早于货件-${String(precedingShipment.partNumber).padStart(2, '0')} 的发货时间（${formatWarehouseTime(precedingShipment.shippedAt)}）`)
     }
     const updated = await transaction.purchaseOrderPart.updateMany({
       where: { purchaseOrderId: order.id, id: { in: partIds }, status: 'ACTIVE', shippedAt: { not: null }, warehouseReceivedAt: null },

@@ -230,10 +230,12 @@ const {
   loading: warehouseReceiptLoading,
   submitting: warehouseReceiptSubmitting,
   error: warehouseReceiptError,
+  timeError: warehouseReceiptTimeError,
   open: openWarehouseReceipt,
   reload: reloadWarehouseReceipt,
   submit: submitWarehouseReceipt,
   setVisible: setWarehouseReceiptVisible,
+  dismissTimeError: dismissWarehouseReceiptTimeError,
 } = useSalesWarehouseReceipt(
   canWarehouseReceipt,
   computed(() => appAccountStore.authEpoch),
@@ -2481,9 +2483,11 @@ onBeforeUnmount(() => {
       :loading="warehouseReceiptLoading"
       :submitting="warehouseReceiptSubmitting"
       :error="warehouseReceiptError"
+      :time-error="warehouseReceiptTimeError"
       @update:model-value="setWarehouseReceiptVisible"
       @submit="submitWarehouseReceipt"
       @retry="reloadWarehouseReceipt"
+      @dismiss-time-error="dismissWarehouseReceiptTimeError"
     />
 
     <QsPurchaseStartModal

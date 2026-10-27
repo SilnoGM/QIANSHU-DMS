@@ -62,6 +62,7 @@ export interface PurchaseOrderPaymentProgress {
 }
 
 export interface PurchaseOrderApiFailure {
+  readonly code?: string
   readonly message: string
   readonly requestId?: string
 }
@@ -467,6 +468,11 @@ export function getPurchaseOrderApiFailure(error: unknown): PurchaseOrderApiFail
   }
   const body = isRecord(error.body) ? error.body : undefined
   return {
+    code: typeof body?.code === 'string'
+      ? body.code
+      : typeof error.code === 'string'
+        ? error.code
+        : undefined,
     message: typeof body?.message === 'string'
       ? body.message
       : typeof error.message === 'string'

@@ -136,6 +136,9 @@ async function submit() {
             </FaButton>
           </div>
         </div>
+        <p v-if="draft.shipmentId" class="qs-type-meta text-muted-foreground m-0 mt-2">
+          {{ t('containerManagement.unbindHint') }}
+        </p>
         <p v-if="fieldErrors.shipmentId" class="text-sm text-destructive mt-2" role="alert">
           {{ fieldErrors.shipmentId }}
         </p>

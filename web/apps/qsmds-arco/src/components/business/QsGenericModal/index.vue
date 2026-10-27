@@ -22,6 +22,7 @@ const props = withDefaults(defineProps<QsGenericModalProps>(), {
   dismissOnEscape: true,
   dismissOnOverlay: true,
   error: null,
+  errorTitle: '加载失败',
   fillHeight: false,
   loading: false,
   modelValue: false,
@@ -301,7 +302,7 @@ onBeforeUnmount(() => {
           <FaAlert
             variant="destructive"
             icon="i-lucide:circle-alert"
-            title="加载失败"
+            :title="errorTitle"
           >
             <template #description>
               <div class="gap-3 grid">

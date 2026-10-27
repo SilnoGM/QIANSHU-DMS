@@ -110,8 +110,8 @@ describe('purchase shipment warehouse receipt with isolated PostgreSQL', () => {
       [{ ...base, partIds: [order.parts[1].id] }, 'PURCHASE_WAREHOUSE_RECEIPT_NOT_ALLOWED'],
       [{ ...base, partIds: [other.parts[0].id] }, 'PURCHASE_WAREHOUSE_RECEIPT_TARGET_INVALID'],
       [{ ...base, expectedVersion: current.version - 1 }, 'PURCHASE_WAREHOUSE_RECEIPT_STATE_CHANGED'],
-      [{ ...base, receivedAt: '2000-01-01T00:00:00Z' }, 'PURCHASE_WAREHOUSE_RECEIPT_TIME_INVALID'],
-      [{ ...base, receivedAt: '2999-01-01T00:00:00Z' }, 'PURCHASE_WAREHOUSE_RECEIPT_TIME_INVALID'],
+      [{ ...base, receivedAt: '2000-01-01T00:00:00Z' }, 'PURCHASE_WAREHOUSE_RECEIPT_TIME_BEFORE_SHIPMENT'],
+      [{ ...base, receivedAt: '2999-01-01T00:00:00Z' }, 'PURCHASE_WAREHOUSE_RECEIPT_TIME_FUTURE'],
     ] as const
     for (const [request, code] of cases) await expect(receipts.receive(fixture.context(), order.id, request)).rejects.toMatchObject({ code })
     await expect(createReviewMutations(fixture).updateFulfillmentStatus(fixture.context(), order.id, { toStatus: 'SIGNED' })).rejects.toMatchObject({ code: 'PURCHASE_WAREHOUSE_RECEIPT_NOT_ALLOWED' })
@@ -125,7 +125,7 @@ describe('purchase shipment warehouse receipt with isolated PostgreSQL', () => {
       await transaction.purchaseOrder.update({ where: { id: order.id }, data: { fulfillmentStatus: 'SHIPPED' } })
     })
     const before = await facts(fixture, order.id)
-    await expect(receiptService(fixture).receive(fixture.context(), order.id, { expectedVersion: before.order.version, partIds: [order.parts[0].id], receivedAt: '2000-01-01T00:00:00.000Z' })).rejects.toMatchObject({ code: 'PURCHASE_WAREHOUSE_RECEIPT_TIME_INVALID' })
+    await expect(receiptService(fixture).receive(fixture.context(), order.id, { expectedVersion: before.order.version, partIds: [order.parts[0].id], receivedAt: '2000-01-01T00:00:00.000Z' })).rejects.toMatchObject({ code: 'PURCHASE_WAREHOUSE_RECEIPT_TIME_BEFORE_SHIPMENT' })
     expect(await facts(fixture, order.id)).toEqual(before)
   })
 

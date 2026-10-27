@@ -57234,7 +57234,8 @@
                 "PURCHASE_ORDER_STATUS_TRANSITION_INVALID",
                 "PURCHASE_WAREHOUSE_RECEIPT_NOT_ALLOWED",
                 "PURCHASE_WAREHOUSE_RECEIPT_TARGET_INVALID",
-                "PURCHASE_WAREHOUSE_RECEIPT_TIME_INVALID",
+                "PURCHASE_WAREHOUSE_RECEIPT_TIME_BEFORE_SHIPMENT",
+                "PURCHASE_WAREHOUSE_RECEIPT_TIME_FUTURE",
                 "VALIDATION_FAILED"
               ]
             }
@@ -63094,7 +63095,8 @@
               "codes": [
                 "PURCHASE_WAREHOUSE_RECEIPT_NOT_ALLOWED",
                 "PURCHASE_WAREHOUSE_RECEIPT_TARGET_INVALID",
-                "PURCHASE_WAREHOUSE_RECEIPT_TIME_INVALID",
+                "PURCHASE_WAREHOUSE_RECEIPT_TIME_BEFORE_SHIPMENT",
+                "PURCHASE_WAREHOUSE_RECEIPT_TIME_FUTURE",
                 "VALIDATION_FAILED"
               ]
             }
@@ -63633,7 +63635,8 @@
               "codes": [
                 "SALES_WAREHOUSE_RECEIPT_NOT_ALLOWED",
                 "SALES_WAREHOUSE_RECEIPT_TARGET_INVALID",
-                "SALES_WAREHOUSE_RECEIPT_TIME_INVALID",
+                "SALES_WAREHOUSE_RECEIPT_TIME_BEFORE_SHIPMENT",
+                "SALES_WAREHOUSE_RECEIPT_TIME_FUTURE",
                 "VALIDATION_FAILED"
               ]
             }
@@ -66396,6 +66399,7 @@
                 "PURCHASE_SHIPMENT_NUMBER_ASSIGNED",
                 "PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED",
                 "PURCHASE_SHIPMENT_CONTAINER_LOADED",
+                "PURCHASE_SHIPMENT_CONTAINER_UNLOADED",
                 "PURCHASE_SHIPMENT_DELIVERED",
                 "PURCHASE_ORDER_REVIEW_MARKS_PREPARED",
                 "PURCHASE_ORDER_IMAGE_GENERATED",
@@ -70116,6 +70120,7 @@
                 "CONTAINER_SHIPMENT_DELIVERED",
                 "CONTAINER_SHIPMENT_NOT_RECEIVED",
                 "CONTAINER_SHIPMENT_UNAVAILABLE",
+                "CONTAINER_SHIPMENT_UNLOAD_FORBIDDEN",
                 "CONTAINER_SHIPMENT_WAREHOUSE_MISMATCH",
                 "CONTAINER_SOURCE_FILE_LOCKED",
                 "CONTAINER_WAREHOUSE_UNAVAILABLE",
@@ -70692,6 +70697,7 @@
                 "CONTAINER_SHIPMENT_DELIVERED",
                 "CONTAINER_SHIPMENT_NOT_RECEIVED",
                 "CONTAINER_SHIPMENT_UNAVAILABLE",
+                "CONTAINER_SHIPMENT_UNLOAD_FORBIDDEN",
                 "CONTAINER_SHIPMENT_WAREHOUSE_MISMATCH",
                 "CONTAINER_SOURCE_FILE_LOCKED",
                 "CONTAINER_WAREHOUSE_UNAVAILABLE",
@@ -71317,6 +71323,7 @@
                 "CONTAINER_SHIPMENT_DELIVERED",
                 "CONTAINER_SHIPMENT_NOT_RECEIVED",
                 "CONTAINER_SHIPMENT_UNAVAILABLE",
+                "CONTAINER_SHIPMENT_UNLOAD_FORBIDDEN",
                 "CONTAINER_SHIPMENT_WAREHOUSE_MISMATCH",
                 "CONTAINER_SOURCE_FILE_LOCKED",
                 "CONTAINER_WAREHOUSE_UNAVAILABLE",
@@ -71668,6 +71675,7 @@
                 "CONTAINER_SHIPMENT_DELIVERED",
                 "CONTAINER_SHIPMENT_NOT_RECEIVED",
                 "CONTAINER_SHIPMENT_UNAVAILABLE",
+                "CONTAINER_SHIPMENT_UNLOAD_FORBIDDEN",
                 "CONTAINER_SHIPMENT_WAREHOUSE_MISMATCH",
                 "CONTAINER_SOURCE_FILE_LOCKED",
                 "CONTAINER_WAREHOUSE_UNAVAILABLE",
@@ -97112,7 +97120,7 @@
             "type": "string",
             "format": "date-time",
             "nullable": true,
-            "description": "被装柜明细关联的装柜时间；未装柜时为空，关联移除后不回退"
+            "description": "被装柜明细关联的装柜时间；未装柜时为空。解绑最后一条明细且货件未签收时撤销并清空，已签收货件不可解绑"
           },
           "loadedBy": {
             "nullable": true,
@@ -97508,7 +97516,7 @@
             "type": "string",
             "format": "date-time",
             "nullable": true,
-            "description": "被装柜明细关联的装柜时间；未装柜时为空，关联移除后不回退"
+            "description": "被装柜明细关联的装柜时间；未装柜时为空。解绑最后一条明细且货件未签收时撤销并清空，已签收货件不可解绑"
           },
           "loadedBy": {
             "nullable": true,
@@ -98538,6 +98546,7 @@
               "PURCHASE_SHIPMENT_NUMBER_ASSIGNED",
               "PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED",
               "PURCHASE_SHIPMENT_CONTAINER_LOADED",
+              "PURCHASE_SHIPMENT_CONTAINER_UNLOADED",
               "PURCHASE_SHIPMENT_DELIVERED",
               "PURCHASE_ORDER_REVIEW_MARKS_PREPARED",
               "PURCHASE_ORDER_IMAGE_GENERATED",

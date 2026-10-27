@@ -11,6 +11,7 @@ import axios, {
   CanceledError,
 } from 'axios'
 
+import { recordServerClockSample } from '../utils/server-clock'
 import {
   getApiClientErrorMessage,
   normalizeAxiosError,
@@ -303,6 +304,19 @@ async function invokeSideEffectSafely(action: () => void): Promise<void> {
 }
 
 /**
+ * 服务端时钟校准是 best-effort 副作用：Date 头缺失、被代理改写或取时钟 hook 抛错，
+ * 都不能影响请求本身的成功与否。
+ */
+function recordServerClock(dateHeader: unknown, now: Now): void {
+  try {
+    recordServerClockSample(dateHeader, now())
+  }
+  catch {
+    // 校准失败保持上一个样本。
+  }
+}
+
+/**
  * 创建不依赖 Pinia/store 的 Axios Client，所有运行时状态通过 hooks 即时读取。
  *
  * factory 只配置当前实例，不修改 Axios 全局 defaults；因此单元测试、fake Client
@@ -364,6 +378,7 @@ export function createApiClient(
 
   instance.interceptors.response.use(
     (response) => {
+      recordServerClock(response.headers?.date, now)
       throwIfAuthEpochStale(response.config, options.hooks)
       return response
     },
@@ -372,6 +387,7 @@ export function createApiClient(
         ? error
         : undefined
       const config = axiosError?.config
+      recordServerClock(axiosError?.response?.headers?.date, now)
 
       // Axios 原生取消必须保留对象身份，禁止转换、toast、登出或继续重试。
       if (isAxiosCancellation(error, axiosError)) {

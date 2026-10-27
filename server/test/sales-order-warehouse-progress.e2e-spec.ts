@@ -232,7 +232,7 @@ describe('sales fulfillment after warehouse receipt with isolated PostgreSQL', (
     await expect(service.receive(fixture.context(), salesOrder.id, {
       targets,
       receivedAt: new Date(earliestShippedAt - 60_000).toISOString(),
-    })).rejects.toMatchObject({ code: 'SALES_WAREHOUSE_RECEIPT_TIME_INVALID' })
+    })).rejects.toMatchObject({ code: 'SALES_WAREHOUSE_RECEIPT_TIME_BEFORE_SHIPMENT' })
     expect(await fixture.prisma.purchaseOrderPart.count({
       where: { purchaseOrderId: { in: orders.map(order => order.id) }, warehouseReceivedAt: { not: null } },
     })).toBe(0)
