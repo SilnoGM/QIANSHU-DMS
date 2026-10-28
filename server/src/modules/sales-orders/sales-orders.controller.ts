@@ -8,6 +8,7 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  Optional,
   Param,
   Patch,
   Post,
@@ -53,6 +54,10 @@ import {
   SalesOrderStatusCountsQueryDto,
 } from './dto/sales-order-query.dto'
 import {
+  SalesOrderTerminationContextDto,
+  SalesOrderTerminationRequestDto,
+} from './dto/sales-order-termination.dto'
+import {
   SalesOrderDetailDto,
   SalesOrderIssuerOptionsDto,
   SalesOrderPageDto,
@@ -69,6 +74,7 @@ import {
 import { SalesOrderCommandService } from './sales-order-command.service'
 import { parseSalesOrderIdempotencyKey } from './sales-order-command.normalizer'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
+import { SalesOrderTerminationService } from './sales-order-termination.service'
 import { ApiProductMediaContentContract } from '../products/media/product-media-content.contract'
 import {
   applyProductMediaContentResponse,
@@ -134,6 +140,8 @@ export class SalesOrdersController {
     private readonly productImages: SalesOrderProductImageService,
     private readonly productEditQueries?: SalesOrderProductEditQueryService,
     private readonly productEditService?: SalesOrderProductEditService,
+    @Optional()
+    private readonly termination?: SalesOrderTerminationService,
   ) {}
 
   @Get()
@@ -591,6 +599,57 @@ export class SalesOrdersController {
       ...mutationContext(request),
       idempotencyKey: parseSalesOrderIdempotencyKey(rawIdempotencyKey),
     }, dto)
+  }
+
+  @Get(':salesOrderId/termination-context')
+  @RequirePermissions('sales-orders:update')
+  @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderTerminationContextDto })
+  @ApiApplicationContract({
+    operationId: 'sales_order_termination_context',
+    session: 'required',
+    authorization: true,
+    badRequest: true,
+    resourceLocator: true,
+    privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
+    ],
+  })
+  terminationContext(
+    @Param() params: SalesOrderIdParamDto,
+    @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
+  ): Promise<SalesOrderTerminationContextDto> {
+    return this.termination!.getContext({ actorUserId }, params.salesOrderId)
+  }
+
+  @Post(':salesOrderId/termination')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('sales-orders:update', 'shipment-storage:release')
+  @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderDetailDto })
+  @ApiApplicationContract({
+    operationId: 'sales_order_terminate',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
+      { status: 409, codes: ['SALES_RECEIPT_STATE_CHANGED', 'SALES_ORDER_TERMINATION_STATUS_FAILED'] },
+      { status: 422, codes: ['SALES_ORDER_TERMINATION_NOT_ALLOWED', 'SALES_ORDER_TERMINATE_SIGNED', 'SALES_ORDER_TERMINATION_SHIPMENTS_MISMATCH', 'SALES_ORDER_TERMINATION_SHIPMENT_NOT_RELEASABLE', 'SALES_ORDER_TERMINATION_WAREHOUSE_REQUIRED', 'VALIDATION_FAILED'] },
+    ],
+  })
+  terminate(
+    @Param() params: SalesOrderIdParamDto,
+    @Body() dto: SalesOrderTerminationRequestDto,
+    @Req() request: object,
+  ): Promise<SalesOrderDetail> {
+    return this.termination!.terminate(mutationContext(request), params.salesOrderId, dto)
   }
 
   @Get(':salesOrderId')
