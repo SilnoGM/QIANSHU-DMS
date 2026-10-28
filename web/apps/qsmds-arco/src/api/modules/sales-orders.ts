@@ -22,6 +22,8 @@ import type {
   SalesOrderStatusCountsDto,
   SalesOrderStatusRequestDto,
   SalesOrderTemporaryDocumentDto,
+  SalesOrderTerminationContextDto,
+  SalesOrderTerminationRequestDto,
   SalesOrderWarehouseReceiptContextDto,
   SalesOrderWarehouseReceiptRequestDto,
   SalesOrderWarehouseReceiptResultDto,
@@ -181,6 +183,20 @@ export function createSalesOrdersApi(client: AxiosInstance) {
       `sales-orders/${encodeURIComponent(salesOrderId)}/order-status`,
       data,
       // 取消不是幂等操作：网络结果未知时禁止自动重放，避免重复提交。
+      { errorPresentation: 'local', retry: false, signal },
+    ),
+    terminationContext: (salesOrderId: string, signal: AbortSignal) =>
+      client.get<SalesOrderTerminationContextDto>(
+        `sales-orders/${encodeURIComponent(salesOrderId)}/termination-context`,
+        { errorPresentation: 'local', signal },
+      ),
+    terminate: (
+      salesOrderId: string,
+      data: SalesOrderTerminationRequestDto,
+      signal: AbortSignal,
+    ) => client.post<SalesOrderDetailDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/termination`,
+      data,
       { errorPresentation: 'local', retry: false, signal },
     ),
     recordPayment: (

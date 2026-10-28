@@ -24,9 +24,11 @@ const emit = defineEmits<{
 }>()
 
 const appAccountStore = useAppAccountStore()
+const { auth } = useAppAuth()
 const detail = shallowRef<SalesOrderDetailDto | null>(null)
 const loading = ref(false)
 const loadError = ref<string | null>(null)
+const terminationHint = ref<string | null>(null)
 let requestVersion = 0
 let detailAbortController: AbortController | null = null
 
@@ -59,6 +61,7 @@ async function loadDetail(): Promise<void> {
   loading.value = true
   loadError.value = null
   detail.value = null
+  terminationHint.value = null
 
   try {
     const response = await salesOrdersApi.getById(orderId, controller.signal)
@@ -72,6 +75,25 @@ async function loadDetail(): Promise<void> {
       return
     }
     detail.value = response.data
+    if (auth('sales-orders:update')) {
+      void salesOrdersApi.terminationContext(orderId, controller.signal)
+        .then((contextResponse) => {
+          if (controller.signal.aborted || version !== requestVersion || props.order?.id !== orderId) {
+            return
+          }
+          const context = contextResponse.data
+          terminationHint.value = context.allShipmentsProcessed
+            && context.orderStatus === 'CONFIRMED'
+            && context.fulfillmentStatus !== 'SIGNED'
+            ? '全部有效货件已处理，可以终止订单。'
+            : null
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            terminationHint.value = null
+          }
+        })
+    }
   }
   catch (error) {
     if (controller.signal.aborted || isSalesOrderAbortError(error)) {
@@ -120,6 +142,7 @@ onBeforeUnmount(cancelDetailRequest)
     :currencies="currencies"
     :loading="loading"
     :error="loadError"
+    :termination-hint="terminationHint"
     @reload="loadDetail"
     @closed="emit('closed')"
   />
