@@ -4,8 +4,9 @@ export type ShipmentStorageStatus = ShipmentStorageListItemDto['status']
 export type ShipmentStorageLocationScope = ShipmentStorageListItemDto['locationScope']
 export type StorageScopeFilter = 'ALL' | ShipmentStorageLocationScope
 
-export const STORAGE_STATUS_TABS = ['ALL', 'IN_STORAGE', 'CLAIMED', 'VOIDED'] as const
+export const STORAGE_STATUS_TABS = ['IN_STORAGE', 'CLAIMED', 'VOIDED', 'ALL'] as const
 export type StorageStatusTab = typeof STORAGE_STATUS_TABS[number]
+export const DEFAULT_STORAGE_STATUS: StorageStatusTab = 'IN_STORAGE'
 
 export const STORAGE_SCOPE_OPTIONS = [
   { value: 'ALL', label: '全部位置' },
@@ -15,9 +16,9 @@ export const STORAGE_SCOPE_OPTIONS = [
 
 export function storageStatusLabel(status: ShipmentStorageStatus): string {
   switch (status) {
-    case 'IN_STORAGE': return '在仓'
+    case 'IN_STORAGE': return '寄仓中'
     case 'RESERVED': return '已预留'
-    case 'CLAIMED': return '已认领'
+    case 'CLAIMED': return '已调货'
     case 'VOIDED': return '已作废'
     default: return '未知'
   }

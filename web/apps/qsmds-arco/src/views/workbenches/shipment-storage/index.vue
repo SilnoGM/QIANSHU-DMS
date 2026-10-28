@@ -13,7 +13,7 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import ShipmentStorageClaimModal from './claim-modal.vue'
-import { buildStorageQuery, canRelocate, locationLabel, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageStatusClass, storageStatusLabel } from './logic'
+import { buildStorageQuery, canRelocate, DEFAULT_STORAGE_STATUS, locationLabel, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageStatusClass, storageStatusLabel } from './logic'
 
 defineOptions({ name: 'QsOperationsShipmentStorage' })
 
@@ -26,7 +26,7 @@ const canRead = computed(() => auth('shipment-storage:read'))
 const canRelocatePermission = computed(() => auth('shipment-storage:relocate'))
 const canClaimPermission = computed(() => auth('shipment-storage:claim'))
 
-const status = ref<StorageStatusTab>('ALL')
+const status = ref<StorageStatusTab>(DEFAULT_STORAGE_STATUS)
 const scope = ref<StorageScopeFilter>('ALL')
 const warehouseValue = ref('ALL')
 const keyword = ref('')
