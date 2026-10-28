@@ -59,6 +59,11 @@ function setup() {
     },
     purchaseOrderPart: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     purchaseOrderPartItem: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    shipmentOwnershipEvent: {
+      aggregate: jest.fn().mockResolvedValue({ _max: { sequence: null } }),
+      create: jest.fn().mockResolvedValue({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }),
+    },
+    shipmentOwnershipCurrent: { findUnique: jest.fn(), findMany: jest.fn() },
   }
   const prisma = {
     purchaseOrder: {
@@ -171,6 +176,15 @@ describe('PurchaseOrderCommandService', () => {
       shipmentNo: 'SHIP/0001', numberingIssuanceId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
       shippingMarkText: null, shippingMarkIssuanceId: null, shippingMarkKeyHash: null,
     })] })
+    expect(fixture.transaction.shipmentOwnershipEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        sequence: 1,
+        ownerType: 'SALES_ORDER',
+        ownerSalesOrderId: '11111111-1111-4111-8111-111111111111',
+        reason: 'PURCHASE_CREATED',
+        actorUserId: ACTOR_ID,
+      }) as unknown,
+    }))
   })
 
   it('retains the locked configuration precheck without reserving a mark or audit issuance', async () => {
