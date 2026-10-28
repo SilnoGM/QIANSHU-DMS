@@ -463,6 +463,7 @@ export class ShipmentStorageService {
     includeStatus = true,
   ): Prisma.ShipmentStorageRecordWhereInput {
     const where: Prisma.ShipmentStorageRecordWhereInput = {
+      id: query.storageId,
       ...(includeStatus && query.status !== undefined ? { status: query.status } : {}),
       locationScope: query.locationScope,
       warehouseValue: query.warehouseValue,

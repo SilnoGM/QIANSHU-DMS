@@ -50,6 +50,13 @@ const PART_SELECT = {
   items: { orderBy: { line: { lineNumber: 'asc' } }, select: { purchaseOrderLineId: true, quantity: true, line: { select: LINE_SELECT } } },
   // 数据库触发器保证一个货件只属于一个柜次，取首条即可；用于列表/手动匹配显示「本柜/他柜」。
   containerLoadingItems: { take: 1, select: { containerBatch: { select: { id: true, containerBatchNo: true, containerBatchName: true } } } },
+  // 寄仓状态只取当前在仓/已调货记录；作废记录不遮挡当前归属。
+  storageRecords: {
+    where: { status: { in: ['IN_STORAGE', 'CLAIMED'] } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: 1,
+    select: { id: true, status: true, locationScope: true, warehouseValue: true },
+  },
 } as const satisfies Prisma.PurchaseOrderPartSelect
 
 const DETAIL_SELECT = {
@@ -171,6 +178,14 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
     deliveredAt: row.deliveredAt?.toISOString() ?? null, deliveredBy: toNullablePersonReference(row.deliveredBy),
     deliveredRecordedAt: row.deliveredRecordedAt?.toISOString() ?? null, deliveryRemark: row.deliveryRemark,
     containerBatch: row.containerLoadingItems[0]?.containerBatch ?? null,
+    storage: row.storageRecords[0] === undefined
+      ? null
+      : {
+          id: row.storageRecords[0].id,
+          status: row.storageRecords[0].status,
+          locationScope: row.storageRecords[0].locationScope,
+          warehouseValue: row.storageRecords[0].warehouseValue,
+        },
     purchaseOrder: {
       id: order.id, version: order.version, orderNo: order.orderNo, orderDate: order.orderDate.toISOString().slice(0, 10),
       purchaseType: order.purchaseType, productMode: order.productMode, orderStatus: order.orderStatus,

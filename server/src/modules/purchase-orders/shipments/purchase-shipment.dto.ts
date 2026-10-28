@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import { IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min, ValidateIf } from 'class-validator'
 
-import { PurchaseOrderLineType, PurchaseOrderPartStatus, PurchaseOrderProductMode, PurchaseOrderStatus, PurchaseOrderType } from '../../../generated/prisma/enums'
+import { PurchaseOrderLineType, PurchaseOrderPartStatus, PurchaseOrderProductMode, PurchaseOrderStatus, PurchaseOrderType, ShipmentStorageLocationScope, ShipmentStorageStatus } from '../../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 import { isNormalizableDictionaryItemValue, normalizeDictionaryItemValue } from '../../dictionaries/dictionary.normalizer'
 import { PurchaseOrderActorDto, PurchaseOrderListImageDto, PurchaseOrderSourceSalesOrderDto, PurchaseOrderSupplierDto } from '../dto/purchase-order-response.dto'
@@ -122,6 +122,13 @@ export class PurchaseShipmentContainerBatchDto {
   @ApiProperty({ type: 'string' }) readonly containerBatchName!: string
 }
 
+export class PurchaseShipmentStorageDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ enum: ShipmentStorageStatus }) readonly status!: ShipmentStorageStatus
+  @ApiProperty({ enum: ShipmentStorageLocationScope }) readonly locationScope!: ShipmentStorageLocationScope
+  @ApiProperty({ type: 'string', maxLength: 64 }) readonly warehouseValue!: string
+}
+
 export class PurchaseShipmentListItemDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string', nullable: true, maxLength: 64, description: 'SHIPMENT_NO 派发的永久货件编号；未补号历史货件为空' }) readonly shipmentNo!: string | null
@@ -150,6 +157,7 @@ export class PurchaseShipmentListItemDto {
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly deliveredRecordedAt!: string | null
   @ApiProperty({ type: 'string', maxLength: 500, nullable: true }) readonly deliveryRemark!: string | null
   @ApiProperty({ type: () => PurchaseShipmentContainerBatchDto, nullable: true, description: '货件当前所在装柜柜次；未装柜或历史解绑后为空' }) readonly containerBatch!: PurchaseShipmentContainerBatchDto | null
+  @ApiProperty({ type: () => PurchaseShipmentStorageDto, nullable: true, description: '最新一条在仓或已调货的寄仓记录；无寄仓归属时为空' }) readonly storage!: PurchaseShipmentStorageDto | null
   @ApiProperty({ type: () => PurchaseShipmentOrderDto }) readonly purchaseOrder!: PurchaseShipmentOrderDto
   @ApiProperty({ type: () => PurchaseOrderSupplierDto }) readonly supplier!: PurchaseOrderSupplierDto
   @ApiProperty({ type: () => PurchaseOrderSourceSalesOrderDto, nullable: true }) readonly salesSource!: PurchaseOrderSourceSalesOrderDto | null

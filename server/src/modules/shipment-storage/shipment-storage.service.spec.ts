@@ -104,4 +104,17 @@ describe('ShipmentStorageService', () => {
       { value: 'VOIDED', count: 0 },
     ])
   })
+
+  it('scopes storageId to list and status counts', async () => {
+    const groupBy = jest.fn().mockResolvedValue([])
+    const prisma = {
+      shipmentStorageRecord: { groupBy },
+    }
+
+    await service(prisma).statusCounts({ storageId: RECORD_ID })
+
+    expect(groupBy).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: RECORD_ID }) as unknown,
+    }))
+  })
 })

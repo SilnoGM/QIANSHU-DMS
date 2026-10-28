@@ -84171,6 +84171,16 @@
         "operationId": "shipment_storage_list",
         "parameters": [
           {
+            "name": "storageId",
+            "required": false,
+            "in": "query",
+            "description": "精确查看单条寄仓记录；用于从货件列表跳转",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
             "name": "status",
             "required": false,
             "in": "query",
@@ -84435,6 +84445,16 @@
       "get": {
         "operationId": "shipment_storage_status_counts",
         "parameters": [
+          {
+            "name": "storageId",
+            "required": false,
+            "in": "query",
+            "description": "精确查看单条寄仓记录；用于从货件列表跳转",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
           {
             "name": "status",
             "required": false,
@@ -98484,6 +98504,41 @@
           "containerBatchName"
         ]
       },
+      "PurchaseShipmentStorageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "IN_STORAGE",
+              "RESERVED",
+              "CLAIMED",
+              "VOIDED"
+            ]
+          },
+          "locationScope": {
+            "type": "string",
+            "enum": [
+              "MAINLAND",
+              "OVERSEAS"
+            ]
+          },
+          "warehouseValue": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "locationScope",
+          "warehouseValue"
+        ]
+      },
       "PurchaseShipmentOrderDto": {
         "type": "object",
         "properties": {
@@ -98784,6 +98839,16 @@
               }
             ]
           },
+          "storage": {
+            "nullable": true,
+            "description": "最新一条在仓或已调货的寄仓记录；无寄仓归属时为空",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseShipmentStorageDto"
+              }
+            ]
+          },
           "purchaseOrder": {
             "$ref": "#/components/schemas/PurchaseShipmentOrderDto"
           },
@@ -98831,6 +98896,7 @@
           "deliveredRecordedAt",
           "deliveryRemark",
           "containerBatch",
+          "storage",
           "purchaseOrder",
           "supplier",
           "salesSource",
@@ -99180,6 +99246,16 @@
               }
             ]
           },
+          "storage": {
+            "nullable": true,
+            "description": "最新一条在仓或已调货的寄仓记录；无寄仓归属时为空",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseShipmentStorageDto"
+              }
+            ]
+          },
           "purchaseOrder": {
             "$ref": "#/components/schemas/PurchaseShipmentOrderDto"
           },
@@ -99233,6 +99309,7 @@
           "deliveredRecordedAt",
           "deliveryRemark",
           "containerBatch",
+          "storage",
           "purchaseOrder",
           "supplier",
           "salesSource",

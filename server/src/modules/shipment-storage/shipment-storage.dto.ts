@@ -26,6 +26,11 @@ export const SHIPMENT_STORAGE_REASONS = ['CUSTOMER_CANCEL', 'CUSTOMER_REJECT', '
 const WAREHOUSE_VALUE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u
 
 export class ShipmentStorageListQueryDto {
+  @ApiProperty({ type: 'string', format: 'uuid', required: false, description: '精确查看单条寄仓记录；用于从货件列表跳转' })
+  @IsOptional()
+  @IsUUID('4')
+  storageId?: string
+
   @ApiProperty({ enum: SHIPMENT_STORAGE_STATUSES, required: false })
   @IsOptional()
   @IsIn(SHIPMENT_STORAGE_STATUSES)

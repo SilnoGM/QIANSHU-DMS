@@ -30,10 +30,37 @@ function row() {
       lineNumber: 1, lineType: 'CUSTOM', productId: null, productNoSnapshot: null, productNameSnapshot: '无图产品', productAttributesSnapshot: [], descriptionSnapshot: '临时规格', product: null,
     } }],
     containerLoadingItems: [],
+    storageRecords: [],
   }
 }
 
 describe('PurchaseShipmentQueryService', () => {
+  it('maps the latest active storage record and keeps null without one', async () => {
+    const f = fixture()
+    f.part.findMany.mockResolvedValue([
+      {
+        ...row(),
+        storageRecords: [{
+          id: 'storage-1',
+          status: 'CLAIMED',
+          locationScope: 'OVERSEAS',
+          warehouseValue: 'RF_TZ',
+        }],
+      },
+      { ...row(), id: 'part-2', storageRecords: [] },
+    ])
+
+    const page = await f.service.list({ view: 'ALL' })
+
+    expect(page.items[0]?.storage).toEqual({
+      id: 'storage-1',
+      status: 'CLAIMED',
+      locationScope: 'OVERSEAS',
+      warehouseValue: 'RF_TZ',
+    })
+    expect(page.items[1]?.storage).toBeNull()
+  })
+
   it('preserves full-width tracking identifiers while normalizing other keyword fields for both rows and counts', async () => {
     const f = fixture(), input = { keyword: '  ＳＦ-123  ' }
     await f.service.list(input)
