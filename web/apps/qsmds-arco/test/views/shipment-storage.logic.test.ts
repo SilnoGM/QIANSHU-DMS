@@ -51,3 +51,24 @@ test('具体位置与仓库保留筛选值', () => {
     warehouseValue: 'RF_TZ',
   })
 })
+
+test('storageId 精确过滤只在指定时进入请求', () => {
+  const storageId = '00000000-0000-4000-8000-000000000601'
+  assert.equal(buildStorageQuery({
+    page: 1,
+    pageSize: 20,
+    keyword: '',
+    status: 'ALL',
+    locationScope: 'ALL',
+    warehouseValue: 'ALL',
+    storageId,
+  }).storageId, storageId)
+  assert.equal('storageId' in buildStorageQuery({
+    page: 1,
+    pageSize: 20,
+    keyword: '',
+    status: 'ALL',
+    locationScope: 'ALL',
+    warehouseValue: 'ALL',
+  }), false)
+})

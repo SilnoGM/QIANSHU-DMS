@@ -7,7 +7,7 @@ import { parseDate } from '@internationalized/date'
 import ts from 'typescript'
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import { buildWarehouseFilterOptions, warehouseFilterFromQuery, warehouseFilterToQuery } from '../../src/views/operations/warehouse-arrivals/logic'
-import { buildShipmentRouteQuery, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentCountsQuery, shipmentRowAction, shipmentStatusClass } from '../../src/views/workbenches/shipments/logic'
+import { buildShipmentRouteQuery, canOpenStorage, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentCountsQuery, shipmentRowAction, shipmentStatusClass, storageStatusClass, storageStatusLabel } from '../../src/views/workbenches/shipments/logic'
 
 test('货件默认待发货；非法 URL 参数不进入查询', () => {
   assert.deepEqual(parseShipmentQuery({}), { view: 'AWAITING_SHIPMENT', page: 1, pageSize: 20 })
@@ -44,14 +44,26 @@ test('货件序号不截断，状态绿色采用主题 primary', () => {
 })
 
 test('运输视图可从 URL 恢复，保留筛选并具有状态颜色', () => {
-  for (const view of ['CONTAINER_LOADED', 'OVERSEAS_STORAGE', 'DELIVERED'] as const) {
+  for (const view of ['CONTAINER_LOADED', 'DELIVERED'] as const) {
     const query = parseShipmentQuery({ view, keyword: '货件', page: '2' })
     assert.equal(query.view, view)
     assert.equal(buildShipmentRouteQuery(query).view, view)
     assert.deepEqual(shipmentCountsQuery(query), { keyword: '货件' })
     assert.ok(shipmentStatusClass(view))
   }
-  assert.deepEqual(SHIPMENT_VIEWS.slice(-4), ['CONTAINER_LOADED', 'DELIVERED', 'OVERSEAS_STORAGE', 'CANCELLED'])
+  assert.deepEqual(SHIPMENT_VIEWS.slice(-3), ['CONTAINER_LOADED', 'DELIVERED', 'CANCELLED'])
+  assert.equal(parseShipmentQuery({ view: 'OVERSEAS_STORAGE' }).view, 'AWAITING_SHIPMENT')
+})
+
+test('寄仓状态只展示在仓与已调货，旧作废状态不可点击', () => {
+  assert.equal(storageStatusLabel('IN_STORAGE'), '寄仓中')
+  assert.equal(storageStatusLabel('CLAIMED'), '已调货')
+  assert.equal(storageStatusLabel('VOIDED'), '—')
+  assert.ok(storageStatusClass('IN_STORAGE'))
+  assert.ok(storageStatusClass('CLAIMED'))
+  assert.equal(canOpenStorage('IN_STORAGE'), true)
+  assert.equal(canOpenStorage('CLAIMED'), true)
+  assert.equal(canOpenStorage('VOIDED'), false)
 })
 
 test('装柜只出现在已到仓视图，签收只出现在已装柜视图；寄仓及终态不增加操作', () => {

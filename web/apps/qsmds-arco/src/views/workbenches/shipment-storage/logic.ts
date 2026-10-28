@@ -53,6 +53,7 @@ export function buildStorageQuery(input: {
   status: StorageStatusTab
   locationScope: StorageScopeFilter
   warehouseValue: string
+  storageId?: string
 }) {
   return {
     page: input.page,
@@ -61,5 +62,6 @@ export function buildStorageQuery(input: {
     status: input.status === 'ALL' ? undefined : input.status,
     locationScope: input.locationScope === 'ALL' ? undefined : input.locationScope,
     warehouseValue: input.warehouseValue === 'ALL' ? undefined : input.warehouseValue,
+    ...(input.storageId === undefined ? {} : { storageId: input.storageId }),
   }
 }

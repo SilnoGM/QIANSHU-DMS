@@ -1,14 +1,11 @@
+import type { PurchaseShipmentStorageDto } from '@/api/generated/types.gen'
 import type { PurchaseShipmentListQuery } from '@/api/modules/purchase-shipments'
 
-export const SHIPMENT_VIEWS = ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CONTAINER_LOADED', 'DELIVERED', 'OVERSEAS_STORAGE', 'CANCELLED'] as const
+export const SHIPMENT_VIEWS = ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CONTAINER_LOADED', 'DELIVERED', 'CANCELLED'] as const
 export type ShipmentView = typeof SHIPMENT_VIEWS[number]
 export type ShipmentListQuery = Omit<PurchaseShipmentListQuery, 'view'> & { view?: ShipmentView }
 
-/** 已到仓→已装柜；已装柜可签收，已签收为终态。仅海外寄仓仍为预留视图。 */
-export function isShipmentPlaceholderView(view: ShipmentView | undefined): view is 'OVERSEAS_STORAGE' {
-  return view === 'OVERSEAS_STORAGE'
-}
-
+/** 已到仓→已装柜；已装柜可签收，已签收为终态。 */
 export function shipmentRowAction(view: ShipmentView, status: Exclude<ShipmentView, 'ALL'>): 'loadContainer' | 'sign' | null {
   if (view === 'WAREHOUSE_RECEIVED' && status === 'WAREHOUSE_RECEIVED') {
     return 'loadContainer'
@@ -89,10 +86,35 @@ export function shipmentStatusClass(status: Exclude<ShipmentView, 'ALL'>): strin
     SHIPPED: 'border-violet-500/35 bg-violet-500/10 text-violet-700 dark:text-violet-300',
     WAREHOUSE_RECEIVED: 'border-primary/35 bg-primary/10 text-primary',
     CONTAINER_LOADED: 'border-cyan-500/35 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300',
-    OVERSEAS_STORAGE: 'border-orange-500/35 bg-orange-500/10 text-orange-700 dark:text-orange-300',
     DELIVERED: 'border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
     CANCELLED: 'border-destructive/35 bg-destructive/10 text-destructive',
   }[status]
+}
+
+export type ShipmentStorageStatus = PurchaseShipmentStorageDto['status']
+
+export function storageStatusLabel(status: ShipmentStorageStatus): string {
+  if (status === 'IN_STORAGE') {
+    return '寄仓中'
+  }
+  if (status === 'CLAIMED') {
+    return '已调货'
+  }
+  return '—'
+}
+
+export function storageStatusClass(status: ShipmentStorageStatus): string {
+  if (status === 'IN_STORAGE') {
+    return 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+  }
+  if (status === 'CLAIMED') {
+    return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+  }
+  return ''
+}
+
+export function canOpenStorage(status: ShipmentStorageStatus): status is 'IN_STORAGE' | 'CLAIMED' {
+  return status === 'IN_STORAGE' || status === 'CLAIMED'
 }
 
 /** 历史货件保留 raw value；停用和未知状态以服务端当前字典解释为准。 */

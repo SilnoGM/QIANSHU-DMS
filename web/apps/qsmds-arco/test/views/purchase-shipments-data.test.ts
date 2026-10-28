@@ -122,35 +122,6 @@ test('已装柜视图读取真实列表并取消旧视图请求', async (context
   assert.equal(f.state.rows.value.length, 0)
 })
 
-test('预留寄仓视图保持空态且不向现有列表接口传未实现状态，迟到旧列表不能混入', async (context) => {
-  const f = fixture()
-  context.after(() => f.scope.stop())
-  let finish!: () => void
-  let signal!: AbortSignal
-  f.api.list = (_query, requestSignal) => new Promise((resolve) => {
-    f.calls.push('list')
-    signal = requestSignal
-    finish = () => resolve({ data: { items: [{ id: 'stale' }], total: 1 } })
-  })
-  f.enabled.value = true
-  const finishOld = finish
-  const oldSignal = signal
-  for (const view of ['OVERSEAS_STORAGE'] as const) {
-    f.query.value = { view, page: 1, pageSize: 20 }
-    await nextTick()
-    assert.equal(f.state.rows.value.length, 0)
-    assert.equal(f.state.total.value, 0)
-    assert.equal(f.state.loading.value, false)
-    assert.equal(f.state.error.value, '')
-    assert.equal(f.state.counts.value[0]?.count, 1)
-  }
-  finishOld()
-  await nextTick()
-  assert.equal(oldSignal.aborted, true)
-  assert.equal(f.state.rows.value.length, 0)
-  assert.equal(f.calls.filter(value => value === 'list').length, 1)
-})
-
 test('已签收视图读取真实列表与计数', async (context) => {
   const f = fixture()
   context.after(() => f.scope.stop())

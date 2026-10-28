@@ -21,6 +21,7 @@ defineOptions({ name: 'QsOperationsShipmentStorage' })
 useI18n()
 
 const { auth } = useAppAuth()
+const route = useRoute()
 const toast = useQsToast()
 const currencyCatalog = useCurrencyCatalog()
 const mainlandCatalog = useDictionaryCatalog('mainland.warehouse')
@@ -29,10 +30,19 @@ const canRead = computed(() => auth('shipment-storage:read'))
 const canRelocatePermission = computed(() => auth('shipment-storage:relocate'))
 const canClaimPermission = computed(() => auth('shipment-storage:claim'))
 
-const status = ref<StorageStatusTab>(DEFAULT_STORAGE_STATUS)
+const UUID_PATTERN = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu
+const queryStorageId = typeof route.query.storageId === 'string' && UUID_PATTERN.test(route.query.storageId)
+  ? route.query.storageId
+  : undefined
+const queryStatus = typeof route.query.status === 'string'
+  && STORAGE_STATUS_TABS.includes(route.query.status as StorageStatusTab)
+  ? route.query.status as StorageStatusTab
+  : undefined
+const storageId = ref<string | undefined>(queryStorageId)
+const status = ref<StorageStatusTab>(queryStatus ?? (queryStorageId === undefined ? DEFAULT_STORAGE_STATUS : 'ALL'))
 const scope = ref<StorageScopeFilter>('ALL')
 const warehouseValue = ref('ALL')
-const keyword = ref('')
+const keyword = ref(typeof route.query.keyword === 'string' ? route.query.keyword : '')
 const page = ref(1)
 const pageSize = ref(20)
 const rows = ref<ShipmentStorageListItemDto[]>([])
@@ -84,6 +94,7 @@ function query() {
     status: status.value,
     locationScope: scope.value,
     warehouseValue: warehouseValue.value,
+    storageId: storageId.value,
   })
 }
 
@@ -124,6 +135,7 @@ async function load(): Promise<void> {
 
 function selectStatus(value: StorageStatusTab): void {
   status.value = value
+  storageId.value = undefined
   page.value = 1
   void load()
 }
@@ -131,18 +143,27 @@ function selectStatus(value: StorageStatusTab): void {
 function changeScope(value: string): void {
   scope.value = value as StorageScopeFilter
   warehouseValue.value = 'ALL'
+  storageId.value = undefined
   page.value = 1
   void load()
 }
 
 function changeWarehouse(value: string): void {
   warehouseValue.value = value
+  storageId.value = undefined
+  page.value = 1
+  void load()
+}
+
+function clearStorageFilter(): void {
+  storageId.value = undefined
   page.value = 1
   void load()
 }
 
 watch([page, pageSize], load)
 watch(keyword, () => {
+  storageId.value = undefined
   page.value = 1
   void load()
 })
@@ -248,6 +269,15 @@ onMounted(() => {
   <div class="min-w-0">
     <FaPageHeader title="寄仓管理" description="内地仓与海外仓的寄仓货件、成本与位置记录。" />
     <FaPageMain class="min-w-0">
+      <div
+        v-if="storageId"
+        class="mb-4 px-4 py-3 border border-primary/25 rounded-lg bg-primary/5 flex flex-wrap gap-3 items-center justify-between"
+      >
+        <span class="text-sm">正在查看指定寄仓记录。</span>
+        <FaButton size="sm" variant="outline" @click="clearStorageFilter">
+          查看全部
+        </FaButton>
+      </div>
       <QsStatusSwitchToolbar
         :model-value="status"
         :items="statusTabs"
