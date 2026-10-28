@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CalendarDateRangeValue } from '@fantastic-admin/components'
 import type { ShipmentListQuery } from './logic'
-import type { PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
+import type { PurchaseShipmentDetailDto, PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
 import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 import type { QsGenericTableColumn, QsGenericTableFilterDefinition, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 import { parseDate } from '@internationalized/date'
@@ -26,6 +26,7 @@ import ShipmentDeliverModal from './shipment-deliver-modal.vue'
 import ShipmentDetailDrawer from './shipment-detail-drawer.vue'
 import { getShipmentSourceEmptyKey } from './shipment-detail.logic'
 import ShipmentProducts from './shipment-products.vue'
+import ShipmentStorageReleaseModal from './shipment-storage-release-modal.vue'
 
 defineOptions({ name: 'QsPurchaseTransportShipments' })
 const route = useRoute()
@@ -93,6 +94,19 @@ const deliverVisible = computed({
     }
   },
 })
+const canReleaseStorage = computed(() => auth('shipment-storage:release'))
+const storageReleaseVisible = ref(false)
+const storageReleaseShipment = shallowRef<PurchaseShipmentDetailDto | null>(null)
+
+function openStorageRelease(shipment: PurchaseShipmentDetailDto): void {
+  storageReleaseShipment.value = shipment
+  storageReleaseVisible.value = true
+}
+
+function storageReleased(): void {
+  storageReleaseVisible.value = false
+  refresh()
+}
 function navigate(next: ShipmentListQuery, replace = false): void {
   if (!enabled.value) {
     return
@@ -583,7 +597,8 @@ onBeforeUnmount(() => {
     </FaPageMain>
     <PurchaseWarehouseReceiptAction ref="warehouseActionRef" :active="enabled" @detail-updated="warehouseUpdated" />
     <ShipmentDeliverModal v-model="deliverVisible" :shipment="deliverTarget" :active="enabled" @delivered="shipmentDelivered" />
-    <ShipmentDetailDrawer v-model="shipmentVisible" :detail="detail" :loading="detailLoading" :error="detailError" @reload="loadDetail" @view-order="viewOrderFromShipment" @closed="shipmentClosed" />
+    <ShipmentDetailDrawer v-model="shipmentVisible" :detail="detail" :loading="detailLoading" :error="detailError" :can-release="canReleaseStorage" @reload="loadDetail" @release="openStorageRelease" @view-order="viewOrderFromShipment" @closed="shipmentClosed" />
+    <ShipmentStorageReleaseModal v-model="storageReleaseVisible" :shipment="storageReleaseShipment" @released="storageReleased" />
     <QsPurchaseOrderDrawer v-model="orderVisible" :order="null" :detail="orderDetail" :currencies="currencyCatalog.currencies.value" :loading="detailLoading" :error="detailError" action-error="" :busy="false" :can-attach-document="false" @reload="loadDetail" />
   </div>
 </template>
