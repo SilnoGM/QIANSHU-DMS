@@ -287,8 +287,10 @@ BEGIN
     RAISE EXCEPTION 'Shipment storage permissions are incomplete'
       USING ERRCODE = '23514', CONSTRAINT = 'shipment_storage_permissions_check';
   END IF;
+  -- 必须限定当前 schema：e2e 在独立 schema 重放迁移时，public 中的同名类型会让计数翻倍。
   IF (SELECT count(*) FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
-      WHERE t.typname = 'audit_event_type'
+      WHERE t.typnamespace = current_schema()::regnamespace
+        AND t.typname = 'audit_event_type'
         AND e.enumlabel IN (
           'SHIPMENT_OWNERSHIP_RELEASED',
           'SHIPMENT_STORAGE_RECORDED',
