@@ -42,7 +42,6 @@ export const HTTP_MODULES = [
   ProductsModule,
   SalesOrdersModule,
   PurchaseOrdersModule,
-  ShipmentStorageModule,
   PurchaseShippingMarksModule,
   AuditModule,
   PackagingCostModule,
@@ -51,4 +50,5 @@ export const HTTP_MODULES = [
   SlhBillModule,
   SlhReconciliationBatchModule,
   InvoiceRequestModule,
+  ShipmentStorageModule,
 ] as const
