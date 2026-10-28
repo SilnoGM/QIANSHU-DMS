@@ -10,7 +10,7 @@
 | 最后更新 | 2026-10-28 |
 | 依据 | GeWeAPI 官网与文档站公开页面；业务方 2026-10-28 补充口径 |
 | 结论 | 技术可行，仅建议作为补充通道 |
-| 关联落地设计 | [千树小助理通知落地设计](../../specs/qianshu-assistant-notification/design.md)、[接口契约](../../specs/qianshu-assistant-notification/api.md) |
+| 关联落地设计 | [通知中心与千树小助理落地设计](../../specs/notification-center/design.md)、[接口契约](../../specs/notification-center/api.md) |
 
 ### 依据等级
 
