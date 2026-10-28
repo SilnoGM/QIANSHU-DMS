@@ -49,6 +49,10 @@ function setup(overrides: {
     readonly salesOrderLineId: string
     readonly quantity: number
   }[]
+  readonly unownedRows?: readonly {
+    readonly quantity: number
+    readonly line: { readonly sourceSalesOrderLineId: string | null }
+  }[]
   readonly salesLines?: readonly {
     readonly id: string
     readonly quantity: number
@@ -103,6 +107,12 @@ function setup(overrides: {
       findMany: jest.fn<Promise<unknown[]>, [unknown]>(() => {
         calls.push('claims')
         return Promise.resolve([...(overrides.claimedRows ?? [])])
+      }),
+    },
+    purchaseOrderPartItem: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>(() => {
+        calls.push('unowned')
+        return Promise.resolve([...(overrides.unownedRows ?? [])])
       }),
     },
     purchaseOrder: {
@@ -178,7 +188,7 @@ describe('SalesOrderPurchaseCoverageService', () => {
       input(),
     )
 
-    expect(fixture.calls).toEqual(['lock', 'sales-lines', 'purchases', 'claims'])
+    expect(fixture.calls).toEqual(['lock', 'sales-lines', 'purchases', 'unowned', 'claims'])
     expect(fixture.transaction.salesOrderLine.findMany).toHaveBeenCalledWith({
       where: { salesOrderId: SALES_ORDER_ID, removedAt: null },
       select: { id: true, quantity: true },
@@ -306,6 +316,23 @@ describe('SalesOrderPurchaseCoverageService', () => {
 
     expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
     expect(fixture.transaction.salesOrderStatusHistory.create).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+  })
+
+  it('does not count purchase quantities whose shipments were released to storage', async () => {
+    const fixture = setup({
+      unownedRows: [{
+        line: { sourceSalesOrderLineId: SALES_LINE_A_ID },
+        quantity: 2,
+      }],
+    })
+
+    await fixture.service.advanceWhenFullyCovered(
+      fixture.transactionClient,
+      input(),
+    )
+
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
     expect(fixture.audit.record).not.toHaveBeenCalled()
   })
 

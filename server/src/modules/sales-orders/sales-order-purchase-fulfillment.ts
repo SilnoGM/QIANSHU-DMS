@@ -3,6 +3,8 @@ import { salesOrderRuleFailure } from './domain/sales-order-errors'
 import {
   mergeClaimedCoverage,
   readClaimedQuantitiesBySalesLine,
+  readUnownedQuantitiesBySalesLine,
+  subtractUnownedCoverage,
 } from './sales-order-claim-coverage'
 
 /**
@@ -62,12 +64,17 @@ export async function assertSalesOrderPurchaseFulfillment(
         (approvedBySource.get(line.sourceSalesOrderLineId) ?? 0) + line.quantity)
     }
   }
+  const salesLineIds = salesLines.map(line => line.id)
+  const effectivePurchases = subtractUnownedCoverage(
+    approvedBySource,
+    await readUnownedQuantitiesBySalesLine(transaction, salesOrderId, salesLineIds),
+  )
   const claimedBySalesLine = await readClaimedQuantitiesBySalesLine(
     transaction,
     salesOrderId,
-    salesLines.map(line => line.id),
+    salesLineIds,
   )
-  const coverage = mergeClaimedCoverage(approvedBySource, claimedBySalesLine)
+  const coverage = mergeClaimedCoverage(effectivePurchases, claimedBySalesLine)
   const fullyCovered = salesLines.length > 0 && salesLines.every(line => (
     (coverage.get(line.id) ?? 0) >= line.quantity
   ))

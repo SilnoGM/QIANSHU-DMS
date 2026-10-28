@@ -15,6 +15,8 @@ import { AuditService, type AuditMetadata } from '../audit/audit.service'
 import {
   mergeClaimedCoverage,
   readClaimedQuantitiesBySalesLine,
+  readUnownedQuantitiesBySalesLine,
+  subtractUnownedCoverage,
 } from '../sales-orders/sales-order-claim-coverage'
 import {
   assertSalesOrderFulfillmentTransition,
@@ -149,14 +151,19 @@ export async function advanceToPreparingWhenCovered(
       )
     }
   }
+  const salesLineIds = salesLines.map(line => line.id)
+  const effectivePurchases = subtractUnownedCoverage(
+    purchasedBySource,
+    await readUnownedQuantitiesBySalesLine(transaction, input.salesOrderId, salesLineIds),
+  )
   const claimedBySalesLine = await readClaimedQuantitiesBySalesLine(
     transaction,
     input.salesOrderId,
-    salesLines.map(line => line.id),
+    salesLineIds,
   )
   if (!isSalesOrderPurchaseFullyCovered(
     salesLines,
-    mergeClaimedCoverage(purchasedBySource, claimedBySalesLine),
+    mergeClaimedCoverage(effectivePurchases, claimedBySalesLine),
   )) {
     return { status: 'NOT_COVERED' }
   }
@@ -275,15 +282,20 @@ export class SalesOrderPurchaseCoverageService {
         )
       }
     }
-    // 认领货件不随采购取消失效；只按采购重算会把仍被认领覆盖的订单错误退回待采购。
+    // 认领货件不随采购取消失效；已转出的货件也不能再为原单充数。
+    const salesLineIds = salesLines.map(line => line.id)
+    const effectivePurchases = subtractUnownedCoverage(
+      purchasedBySource,
+      await readUnownedQuantitiesBySalesLine(transaction, input.salesOrderId, salesLineIds),
+    )
     const claimedBySalesLine = await readClaimedQuantitiesBySalesLine(
       transaction,
       input.salesOrderId,
-      salesLines.map(line => line.id),
+      salesLineIds,
     )
     const fullyCovered = isSalesOrderPurchaseFullyCovered(
       salesLines,
-      mergeClaimedCoverage(purchasedBySource, claimedBySalesLine),
+      mergeClaimedCoverage(effectivePurchases, claimedBySalesLine),
     )
     const toStatus: SalesOrderFulfillmentStatus = fullyCovered
       ? (order.fulfillmentStatus === 'PENDING' ? 'PREPARING' : order.fulfillmentStatus)
@@ -376,10 +388,15 @@ export class SalesOrderPurchaseCoverageService {
         )
       }
     }
+    const salesLineIds = salesLines.map(line => line.id)
+    const effectivePurchases = subtractUnownedCoverage(
+      purchasedBySource,
+      await readUnownedQuantitiesBySalesLine(transaction, input.salesOrderId, salesLineIds),
+    )
     const claimedBySalesLine = await readClaimedQuantitiesBySalesLine(
       transaction,
       input.salesOrderId,
-      salesLines.map(line => line.id),
+      salesLineIds,
     )
     const activePurchaseOrders = await transaction.purchaseOrder.findMany({
       where: {
@@ -393,7 +410,7 @@ export class SalesOrderPurchaseCoverageService {
     const hasClaimedCoverage = claimedBySalesLine.size > 0
     const ready = isSalesOrderPurchaseFullyCovered(
       salesLines,
-      mergeClaimedCoverage(purchasedBySource, claimedBySalesLine),
+      mergeClaimedCoverage(effectivePurchases, claimedBySalesLine),
     )
       && (activePurchaseOrders.length > 0 || hasClaimedCoverage)
       && activePurchaseOrders.every(purchaseOrder => (

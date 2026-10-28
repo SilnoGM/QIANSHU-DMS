@@ -17,6 +17,10 @@ interface PurchaseFact {
 function setup(overrides: {
   readonly claimedRows?: readonly { readonly salesOrderLineId: string, readonly quantity: number }[]
   readonly purchases?: readonly PurchaseFact[]
+  readonly unownedRows?: readonly {
+    readonly quantity: number
+    readonly line: { readonly sourceSalesOrderLineId: string | null }
+  }[]
 } = {}) {
   const transaction = {
     salesOrderLine: {
@@ -27,6 +31,9 @@ function setup(overrides: {
     },
     purchaseOrder: {
       findMany: jest.fn().mockResolvedValue([...(overrides.purchases ?? [])]),
+    },
+    purchaseOrderPartItem: {
+      findMany: jest.fn().mockResolvedValue([...(overrides.unownedRows ?? [])]),
     },
     shipmentClaimLine: {
       findMany: jest.fn().mockResolvedValue([...(overrides.claimedRows ?? [])]),
@@ -78,6 +85,27 @@ describe('assertSalesOrderPurchaseFulfillment', () => {
       SALES_ORDER_ID,
       'LAND_TRANSIT',
     )).resolves.toBeUndefined()
+  })
+
+  it('rejects coverage whose shipments were released to storage', async () => {
+    const { transaction } = setup({
+      claimedRows: [{ salesOrderLineId: SALES_LINE_B_ID, quantity: 1 }],
+      purchases: [{
+        fulfillmentStatus: 'SHIPPED',
+        orderStatus: 'CONFIRMED',
+        lines: [{ sourceSalesOrderLineId: SALES_LINE_A_ID, quantity: 2 }],
+      }],
+      unownedRows: [{
+        line: { sourceSalesOrderLineId: SALES_LINE_A_ID },
+        quantity: 2,
+      }],
+    })
+
+    await expect(assertSalesOrderPurchaseFulfillment(
+      transaction,
+      SALES_ORDER_ID,
+      'PREPARING',
+    )).rejects.toMatchObject({ code: 'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID' })
   })
 
   it('still requires every active purchase to ship', async () => {

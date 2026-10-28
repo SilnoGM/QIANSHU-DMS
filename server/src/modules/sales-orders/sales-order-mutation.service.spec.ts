@@ -56,6 +56,9 @@ function setup() {
     shipmentClaimLine: {
       findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
     },
+    purchaseOrderPartItem: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
+    },
     salesReceiptRequest: { count: jest.fn().mockResolvedValue(0), aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }) },
     salesOrderPayment: {
       aggregate: jest.fn<Promise<unknown>, [unknown]>()
