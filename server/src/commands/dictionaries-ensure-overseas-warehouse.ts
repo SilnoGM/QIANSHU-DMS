@@ -61,7 +61,7 @@ async function runDefault(apply: boolean): Promise<EnsureResult> {
       throw new ApiException(409, 'DICTIONARY_ENSURE_ACTOR_MISSING', '缺少系统管理员账号，无法写入字典')
     }
     const context = { actorUserId: admin.userId, requestId: `cli-overseas-warehouse-${Date.now()}` }
-    let type = await prisma.dictionaryType.findUnique({
+    const type = await prisma.dictionaryType.findUnique({
       where: { code: OVERSEAS_WAREHOUSE_TYPE.code },
       include: { items: true },
     })
