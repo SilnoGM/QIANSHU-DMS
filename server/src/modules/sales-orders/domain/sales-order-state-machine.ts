@@ -8,10 +8,11 @@ import { salesOrderRuleFailure } from './sales-order-errors'
 
 const ORDER_TRANSITIONS: Readonly<Record<SalesOrderStatus, readonly SalesOrderStatus[]>> = {
   DRAFT: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['PENDING_RECONCILIATION', 'CANCELLED'],
+  CONFIRMED: ['PENDING_RECONCILIATION', 'CANCELLED', 'TERMINATED'],
   PENDING_RECONCILIATION: ['COMPLETED'],
   COMPLETED: [],
   CANCELLED: [],
+  TERMINATED: [],
 }
 
 const FULFILLMENT_TRANSITIONS: Readonly<
@@ -45,6 +46,13 @@ export function assertSalesOrderStatusTransition(
     return salesOrderRuleFailure(
       'SALES_ORDER_CANCEL_SIGNED',
       '订单已签收，不能取消',
+    )
+  }
+  // 终止用于未签收订单把货件转入寄仓；已签收是物理流程终点，不允许再终止。
+  if (to === 'TERMINATED' && context.fulfillmentStatus === 'SIGNED') {
+    return salesOrderRuleFailure(
+      'SALES_ORDER_TERMINATE_SIGNED',
+      '订单已签收，不能终止',
     )
   }
   if (

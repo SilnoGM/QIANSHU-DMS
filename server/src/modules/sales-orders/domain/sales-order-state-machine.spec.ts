@@ -29,6 +29,7 @@ describe('sales order state machine', () => {
     ['DRAFT', 'CONFIRMED'],
     ['DRAFT', 'CANCELLED'],
     ['CONFIRMED', 'CANCELLED'],
+    ['CONFIRMED', 'TERMINATED'],
   ] as const)('allows order transition %s -> %s', (from, to) => {
     expect(() => assertSalesOrderStatusTransition(
       orderStatus(from),
@@ -120,6 +121,16 @@ describe('sales order state machine', () => {
     }))
   })
 
+  it('blocks termination after signing', () => {
+    expect(() => assertSalesOrderStatusTransition(
+      orderStatus('CONFIRMED'),
+      orderStatus('TERMINATED'),
+      orderContext({ fulfillmentStatus: 'SIGNED', paymentStatus: 'PAID' }),
+    )).toThrow(expect.objectContaining({
+      code: 'SALES_ORDER_TERMINATE_SIGNED',
+    }))
+  })
+
   it.each([
     ['CONFIRMED', 'DRAFT'],
     ['CONFIRMED', 'COMPLETED'],
@@ -128,6 +139,8 @@ describe('sales order state machine', () => {
     ['COMPLETED', 'PENDING_RECONCILIATION'],
     ['COMPLETED', 'CANCELLED'],
     ['CANCELLED', 'DRAFT'],
+    ['TERMINATED', 'CONFIRMED'],
+    ['TERMINATED', 'CANCELLED'],
     ['DRAFT', 'DRAFT'],
   ] as const)('blocks order transition %s -> %s', (from, to) => {
     expect(() => assertSalesOrderStatusTransition(

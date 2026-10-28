@@ -21,7 +21,7 @@ function extractPrismaEnum(source: string, name: string): readonly string[] {
 }
 
 describe('sales order reconciliation status schema', () => {
-  it('publishes the five-state order enum in business order', () => {
+  it('publishes the six-state order enum in business order', () => {
     const schema = readFileSync(schemaPath, 'utf8')
 
     expect(extractPrismaEnum(schema, 'SalesOrderStatus')).toEqual([
@@ -30,6 +30,7 @@ describe('sales order reconciliation status schema', () => {
       'PENDING_RECONCILIATION',
       'COMPLETED',
       'CANCELLED',
+      'TERMINATED',
     ])
   })
 

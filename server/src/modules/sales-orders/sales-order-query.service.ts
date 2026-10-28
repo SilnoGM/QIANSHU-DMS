@@ -245,6 +245,7 @@ export type SalesOrderStatusCountValue
     | 'PENDING_RECONCILIATION'
     | 'PREPARING'
     | 'SEA_TRANSIT'
+    | 'TERMINATED'
     | 'WAITING_PAYMENT'
     | 'WAREHOUSE_ARRIVED'
 
@@ -972,6 +973,7 @@ export class SalesOrderQueryService {
         'PENDING_RECONCILIATION',
         'CANCELLED',
         'COMPLETED',
+        'TERMINATED',
       ] as const
       const rows = await this.prisma.salesOrder.groupBy({
         by: ['orderStatus'] as const,

@@ -52,6 +52,7 @@ const ORDER_STATUSES = new Set<SalesOrderStatus>([
   'PENDING_RECONCILIATION',
   'COMPLETED',
   'CANCELLED',
+  'TERMINATED',
 ])
 const FULFILLMENT_STATUSES = new Set<SalesOrderFulfillmentStatus>([
   'PENDING',
@@ -216,6 +217,12 @@ export class SalesOrderMutationService {
       )
     }
     const reason = optionalText(body.reason, 'reason', 500)
+    if (toStatus === 'TERMINATED' && reason === null) {
+      return salesOrderRuleFailure(
+        'SALES_ORDER_TERMINATION_REASON_REQUIRED',
+        '终止订单必须填写原因',
+      )
+    }
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
       const order = await this.lockOrder(
@@ -224,7 +231,8 @@ export class SalesOrderMutationService {
         trusted.actorUserId,
       )
       const receivedAmount = await this.readReceivedAmount(transaction, salesOrderId)
-      if (toStatus === 'CANCELLED' && await transaction.salesReceiptRequest.count({ where: { salesOrderId, status: 'PENDING_REVIEW' } }) > 0) {
+      if ((toStatus === 'CANCELLED' || toStatus === 'TERMINATED')
+        && await transaction.salesReceiptRequest.count({ where: { salesOrderId, status: 'PENDING_REVIEW' } }) > 0) {
         receiptFailure('SALES_RECEIPT_STATE_CHANGED', '订单仍有待审核收款，请先处理申请', HttpStatus.CONFLICT)
       }
       assertSalesOrderStatusTransition(order.orderStatus, toStatus, {
@@ -261,9 +269,15 @@ export class SalesOrderMutationService {
         changedByUserId: trusted.actorUserId,
       } })
       await this.recordAudit(transaction, trusted, {
-        eventType: AuditEventType.SALES_ORDER_ORDER_STATUS_CHANGED,
+        eventType: toStatus === 'TERMINATED'
+          ? AuditEventType.SALES_ORDER_TERMINATED
+          : AuditEventType.SALES_ORDER_ORDER_STATUS_CHANGED,
         targetId: salesOrderId,
-        metadata: { fromStatus: order.orderStatus, toStatus },
+        metadata: {
+          fromStatus: order.orderStatus,
+          toStatus,
+          ...(reason === null ? {} : { reason }),
+        },
       })
     })
     return this.query.getById(salesOrderId, trusted.actorUserId)

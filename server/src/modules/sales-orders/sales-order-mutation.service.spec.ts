@@ -419,6 +419,59 @@ describe('SalesOrderMutationService', () => {
     expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
   })
 
+  it('terminates a confirmed order without cancelling purchase orders', async () => {
+    const fixture = setup()
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'TERMINATED',
+      reason: '客户取消待调货',
+    })).resolves.toEqual(fixture.detail)
+
+    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: { orderStatus: 'TERMINATED', version: { increment: 1 } },
+    })
+    expect(fixture.transaction.salesOrderStatusHistory.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        salesOrderId: ORDER_ID,
+        dimension: 'ORDER',
+        fromStatus: 'CONFIRMED',
+        toStatus: 'TERMINATED',
+        reason: '客户取消待调货',
+      }) as unknown,
+    })
+    expect(fixture.transaction.purchaseOrder.count).not.toHaveBeenCalled()
+    expect(fixture.audit.record).toHaveBeenCalledWith(
+      fixture.transaction,
+      expect.objectContaining({
+        eventType: 'SALES_ORDER_TERMINATED',
+        metadata: expect.objectContaining({ toStatus: 'TERMINATED', reason: '客户取消待调货' }) as unknown,
+      }),
+    )
+  })
+
+  it('requires a reason to terminate an order', async () => {
+    const fixture = setup()
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'TERMINATED',
+    })).rejects.toMatchObject({ code: 'SALES_ORDER_TERMINATION_REASON_REQUIRED' })
+
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('blocks termination after signing', async () => {
+    const fixture = setup()
+    fixture.order.fulfillmentStatus = 'SIGNED'
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'TERMINATED',
+      reason: '客户取消待调货',
+    })).rejects.toMatchObject({ code: 'SALES_ORDER_TERMINATE_SIGNED' })
+
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
   it('enters reconciliation and records ordered history only after signed and paid', async () => {
     const fixture = setup()
     fixture.order.fulfillmentStatus = 'SIGNED'
