@@ -1,12 +1,7 @@
 import type { Prisma } from '../../../generated/prisma/client'
 import type { AuditService } from '../../audit/audit.service'
 import { assertSalesOrderFulfillmentTransition } from '../../sales-orders/domain/sales-order-state-machine'
-import {
-  mergeClaimedCoverage,
-  readClaimedQuantitiesBySalesLine,
-} from '../../sales-orders/sales-order-claim-coverage'
-import { readSalesOrderShipmentParts } from '../../sales-orders/sales-order-owned-shipments'
-import { isSalesOrderPurchaseFullyCovered } from '../sales-order-purchase-coverage.service'
+import { readSalesOrderShipmentFacts } from '../../sales-orders/sales-order-owned-shipments'
 
 /**
  * 调用方须先按销售明细、关联采购单、销售主行、货件的顺序加锁。
@@ -23,32 +18,9 @@ export async function advanceSalesOrderWhenAllShipmentsReceived(
   })
   if (order?.orderStatus !== 'CONFIRMED' || order.fulfillmentStatus !== 'LAND_TRANSIT') return
 
-  const salesLines = await transaction.salesOrderLine.findMany({
-    where: { salesOrderId: input.salesOrderId, removedAt: null },
-    select: { id: true, quantity: true },
-  })
   // 货件集合按当前归属读取：释放后转池的货件不再推进原订单，认领货件参与新订单到仓。
-  const parts = await readSalesOrderShipmentParts(transaction, input.salesOrderId)
-  if (parts.length === 0 || salesLines.length === 0) return
-  const receivedBySource = new Map<string, number>()
-  for (const part of parts) {
-    if (part.status !== 'ACTIVE') return
-    if (part.shippedAt === null || part.warehouseReceivedAt === null) return
-    // 按销售明细分别累计实收数量；取消货件、其他明细的多余数量不能补足缺口。
-    for (const item of part.items) {
-      const sourceId = item.line.sourceSalesOrderLineId
-      if (sourceId !== null) receivedBySource.set(sourceId, (receivedBySource.get(sourceId) ?? 0) + item.quantity)
-    }
-  }
-  const claimedBySalesLine = await readClaimedQuantitiesBySalesLine(
-    transaction,
-    input.salesOrderId,
-    salesLines.map(line => line.id),
-  )
-  if (!isSalesOrderPurchaseFullyCovered(
-    salesLines,
-    mergeClaimedCoverage(receivedBySource, claimedBySalesLine),
-  )) return
+  const facts = await readSalesOrderShipmentFacts(transaction, input.salesOrderId)
+  if (!facts.allReceived || !facts.covered) return
 
   assertSalesOrderFulfillmentTransition('LAND_TRANSIT', 'WAREHOUSE_ARRIVED', { hasActiveDeliveryReceipt: false })
   await transaction.salesOrder.update({

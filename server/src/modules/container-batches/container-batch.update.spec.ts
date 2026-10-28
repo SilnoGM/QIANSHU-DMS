@@ -25,6 +25,7 @@ function harness() {
       count: jest.fn().mockResolvedValue(0),
     },
     salesOrderLine: { findMany: jest.fn().mockResolvedValue([{ id: 'line-1', quantity: 1 }]) },
+    shipmentClaimLine: { findMany: jest.fn().mockResolvedValue([]) },
     salesOrderDocument: { count: jest.fn().mockResolvedValue(0) },
     salesOrderStatusHistory: { create: jest.fn().mockResolvedValue({}) },
     // 销售履约推进按现状判断；默认非候选状态，仅关联货件本身不改变订单。

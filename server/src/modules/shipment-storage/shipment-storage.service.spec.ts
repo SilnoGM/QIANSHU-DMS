@@ -27,6 +27,16 @@ function claimFixture(options: {
         orderStatus: options.orderStatus ?? 'CONFIRMED',
       }]),
     purchaseOrderLine: { groupBy: jest.fn().mockResolvedValue([]) },
+    purchaseOrderPart: {
+      findMany: jest.fn().mockResolvedValue([{
+        id: SHIPMENT_ID,
+        items: [],
+        loadedAt: null,
+        shippedAt: new Date('2026-10-20T00:00:00Z'),
+        status: 'ACTIVE',
+        warehouseReceivedAt: new Date('2026-10-21T00:00:00Z'),
+      }]),
+    },
     salesOrder: {
       findUnique: jest.fn().mockResolvedValue({
         id: SALES_ORDER_ID,
@@ -176,7 +186,7 @@ describe('ShipmentStorageService', () => {
     ])
   })
 
-  it('advances the claiming sales order to preparing when claims cover every line', async () => {
+  it('advances the claiming sales order to the stage implied by the claimed shipment', async () => {
     const fixture = claimFixture()
 
     await fixture.instance.claim(context, RECORD_ID, {
@@ -187,15 +197,16 @@ describe('ShipmentStorageService', () => {
 
     expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
       where: { id: SALES_ORDER_ID },
-      data: { fulfillmentStatus: 'PREPARING', version: { increment: 1 } },
+      data: { fulfillmentStatus: 'WAREHOUSE_ARRIVED', version: { increment: 1 } },
     })
-    expect(fixture.transaction.salesOrderStatusHistory.create).toHaveBeenCalledWith({
+    expect(fixture.transaction.salesOrderStatusHistory.create).toHaveBeenCalledTimes(3)
+    expect(fixture.transaction.salesOrderStatusHistory.create).toHaveBeenLastCalledWith({
       data: {
         salesOrderId: SALES_ORDER_ID,
         dimension: 'FULFILLMENT',
-        fromStatus: 'PENDING',
-        toStatus: 'PREPARING',
-        reason: '认领寄仓货件后已覆盖全部销售产品',
+        fromStatus: 'LAND_TRANSIT',
+        toStatus: 'WAREHOUSE_ARRIVED',
+        reason: '认领寄仓货件后按货件事实推进',
         changedByUserId: ACTOR_ID,
       },
     })
@@ -204,6 +215,7 @@ describe('ShipmentStorageService', () => {
       expect.objectContaining({
         metadata: expect.objectContaining({
           storageRecordId: RECORD_ID,
+          toStatus: 'WAREHOUSE_ARRIVED',
           trigger: 'SHIPMENT_CLAIM',
         }) as unknown,
       }),

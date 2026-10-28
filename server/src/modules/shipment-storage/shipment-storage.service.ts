@@ -15,9 +15,7 @@ import {
   DictionaryLookupService,
   DictionaryValueUnavailableError,
 } from '../dictionaries/dictionary-lookup.service'
-import {
-  advanceToPreparingWhenCovered,
-} from '../purchase-orders/sales-order-purchase-coverage.service'
+import { advanceSalesOrderAfterClaim } from '../sales-orders/sales-order-claim-progress'
 import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
 import type {
   ClaimShipmentStorageRequestDto,
@@ -712,20 +710,16 @@ export class ShipmentStorageService {
           claimedQuantity,
         },
       })
-      // 认领与覆盖推进必须同一事务：状态落后会让新订单停在待采购并继续显示缺口。
-      const coverage = await advanceToPreparingWhenCovered(transaction, this.audit, {
+      // 认领与履约推进必须同一事务：认领的是已发货、已到仓的既有货件，
+      // 新订单应直接对齐这些事实，否则会停在待采购或无法继续签收。
+      const progress = await advanceSalesOrderAfterClaim(transaction, this.audit, {
         actorUserId: context.actorUserId,
-        auditMetadata: {
-          salesOrderId: input.salesOrderId,
-          shipmentId: record.shipmentId,
-          storageRecordId,
-          trigger: 'SHIPMENT_CLAIM',
-        },
-        historyReason: '认领寄仓货件后已覆盖全部销售产品',
         requestId: context.requestId,
         salesOrderId: input.salesOrderId,
+        shipmentId: record.shipmentId,
+        storageRecordId,
       })
-      if (coverage.status === 'ORDER_STATE_CHANGED') {
+      if (progress === 'ORDER_STATE_CHANGED') {
         storageFailure('SHIPMENT_STORAGE_STATE_CHANGED', '销售订单状态已变化，请刷新后重试', HttpStatus.CONFLICT)
       }
     }, { timeout: 30_000 })

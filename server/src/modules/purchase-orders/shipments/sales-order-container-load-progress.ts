@@ -1,12 +1,7 @@
 import { Prisma } from '../../../generated/prisma/client'
 import { AuditService } from '../../audit/audit.service'
 import { assertSalesOrderFulfillmentTransition } from '../../sales-orders/domain/sales-order-state-machine'
-import {
-  mergeClaimedCoverage,
-  readClaimedQuantitiesBySalesLine,
-} from '../../sales-orders/sales-order-claim-coverage'
-import { readSalesOrderShipmentParts } from '../../sales-orders/sales-order-owned-shipments'
-import { isSalesOrderPurchaseFullyCovered } from '../sales-order-purchase-coverage.service'
+import { readSalesOrderShipmentFacts } from '../../sales-orders/sales-order-owned-shipments'
 
 /**
  * 关联即已装柜：货件装柜事实写入后，汇总推进其销售订单。
@@ -66,38 +61,9 @@ async function readSalesOrderLoadState(
   transaction: Prisma.TransactionClient,
   salesOrderId: string,
 ): Promise<SalesOrderLoadState> {
-  const salesLines = await transaction.salesOrderLine.findMany({
-    where: { salesOrderId, removedAt: null },
-    select: { id: true, quantity: true },
-  })
-  const parts = await readSalesOrderShipmentParts(transaction, salesOrderId)
-  if (parts.length === 0 || salesLines.length === 0) return { allLoaded: false, covered: false }
-
-  let allLoaded = true
-  const receivedBySource = new Map<string, number>()
-  for (const part of parts) {
-    if (part.status !== 'ACTIVE') { allLoaded = false; break }
-    // 装柜以到仓为前提，两侧事实都要求，历史回填数据也不会被误判。
-    if (part.loadedAt === null || part.warehouseReceivedAt === null) { allLoaded = false; break }
-    for (const item of part.items) {
-      const sourceId = item.line.sourceSalesOrderLineId
-      if (sourceId !== null) receivedBySource.set(sourceId, (receivedBySource.get(sourceId) ?? 0) + item.quantity)
-    }
-  }
-  if (!allLoaded) return { allLoaded: false, covered: false }
-  const claimedBySalesLine = await readClaimedQuantitiesBySalesLine(
-    transaction,
-    salesOrderId,
-    salesLines.map(line => line.id),
-  )
   // 装柜后销售明细可能被追加或改量，覆盖判断必须按持锁后的现状重新计算。
-  return {
-    allLoaded: true,
-    covered: isSalesOrderPurchaseFullyCovered(
-      salesLines,
-      mergeClaimedCoverage(receivedBySource, claimedBySalesLine),
-    ),
-  }
+  const facts = await readSalesOrderShipmentFacts(transaction, salesOrderId)
+  return { allLoaded: facts.allLoaded, covered: facts.covered }
 }
 
 /** 调用方须已按上锁序持有销售链条锁；判定与写入都基于持锁后重读的数据。 */
