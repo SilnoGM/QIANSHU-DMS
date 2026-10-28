@@ -15,6 +15,14 @@ import {
   DictionaryLookupService,
   DictionaryValueUnavailableError,
 } from '../dictionaries/dictionary-lookup.service'
+import {
+  recalculateAfterShipmentRelease,
+} from '../purchase-orders/sales-order-purchase-coverage.service'
+import {
+  readClaimedQuantitiesBySalesLine,
+  readUnownedQuantitiesBySalesLine,
+  subtractUnownedCoverage,
+} from '../sales-orders/sales-order-claim-coverage'
 import { advanceSalesOrderAfterClaim } from '../sales-orders/sales-order-claim-progress'
 import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
 import type {
@@ -247,7 +255,7 @@ export class ShipmentStorageService {
       if (!Buffer.from(existing.payloadHash).equals(hash)) {
         storageFailure('SHIPMENT_STORAGE_IDEMPOTENCY_CONFLICT', '该提交标识已用于不同的释放内容', HttpStatus.CONFLICT)
       }
-      return this.loadBatchRecords(existing.id)
+      return this.finalizeRelease(await this.loadBatchRecords(existing.id), context)
     }
 
     let createdIds: string[]
@@ -409,7 +417,7 @@ export class ShipmentStorageService {
           select: { id: true, payloadHash: true },
         })
         if (batch !== null && Buffer.from(batch.payloadHash).equals(hash)) {
-          return this.loadBatchRecords(batch.id)
+          return this.finalizeRelease(await this.loadBatchRecords(batch.id), context)
         }
       }
       throw error
@@ -420,7 +428,39 @@ export class ShipmentStorageService {
       select: STORAGE_RECORD_SELECT,
       orderBy: { createdAt: 'asc' },
     })
-    return records.map(detailDto)
+    return this.finalizeRelease(records.map(detailDto), context)
+  }
+
+  /**
+   * 释放提交后再重算原销售单覆盖。必须放在释放事务之外：释放先锁货件，
+   * 销售链条的其他写入先锁销售明细/主行，放进同一事务会形成反向锁序。
+   * 重算失败时释放事实已成立；同一 requestKey 重试会重放释放并再次执行重算。
+   */
+  private async finalizeRelease(
+    records: readonly ShipmentStorageDetailDto[],
+    context: ShipmentStorageMutationContext,
+  ): Promise<readonly ShipmentStorageDetailDto[]> {
+    const salesOrderIds = [...new Set(records.map(record => record.originSalesOrderId))].sort()
+    for (const salesOrderId of salesOrderIds) {
+      try {
+        await this.prisma.$transaction(async transaction => {
+          await applyTransactionTimeouts(transaction)
+          await recalculateAfterShipmentRelease(transaction, this.audit, {
+            actorUserId: context.actorUserId,
+            requestId: context.requestId,
+            salesOrderId,
+          })
+        }, { timeout: 30_000 })
+      }
+      catch {
+        throw new ApiException(
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          'SHIPMENT_STORAGE_RELEASE_RECALC_FAILED',
+          '货件已释放，但原销售订单覆盖重算失败，请重试',
+        )
+      }
+    }
+    return records
   }
 
   async list(query: ShipmentStorageListQueryDto): Promise<ShipmentStoragePageDto> {
@@ -662,6 +702,44 @@ export class ShipmentStorageService {
       const claimedQuantity = input.lines.reduce((sum, line) => sum + line.quantity, 0)
       if (shipmentQuantity <= 0 || claimedQuantity !== shipmentQuantity) {
         storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '寄仓货件必须整件认领')
+      }
+      // 认领不能把销售行补成“超量”：已审核采购与既有认领之外的余量才是可认领上限。
+      const salesLineIds = lines.map(line => line.id)
+      const purchasedRows = await transaction.purchaseOrderLine.groupBy({
+        by: ['sourceSalesOrderLineId'],
+        where: {
+          sourceSalesOrderLineId: { in: salesLineIds },
+          purchaseOrder: {
+            orderStatus: { in: ['CONFIRMED', 'COMPLETED'] },
+            purchaseType: 'SALES_LINKED',
+            salesOrderId: input.salesOrderId,
+          },
+        },
+        _sum: { quantity: true },
+      })
+      const purchasedBySource = new Map<string, number>()
+      for (const row of purchasedRows) {
+        if (row.sourceSalesOrderLineId !== null) {
+          purchasedBySource.set(row.sourceSalesOrderLineId, row._sum.quantity ?? 0)
+        }
+      }
+      const effectivePurchases = subtractUnownedCoverage(
+        purchasedBySource,
+        await readUnownedQuantitiesBySalesLine(transaction, input.salesOrderId, salesLineIds),
+      )
+      const existingClaims = await readClaimedQuantitiesBySalesLine(
+        transaction,
+        input.salesOrderId,
+        salesLineIds,
+      )
+      for (const claimed of input.lines) {
+        const line = lineById.get(claimed.salesOrderLineId)
+        const remaining = (line?.quantity ?? 0)
+          - (effectivePurchases.get(claimed.salesOrderLineId) ?? 0)
+          - (existingClaims.get(claimed.salesOrderLineId) ?? 0)
+        if (claimed.quantity > remaining) {
+          storageFailure('SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE', '认领数量超过该销售行的未覆盖余量')
+        }
       }
       const now = new Date()
       await transaction.shipmentStorageRecord.update({

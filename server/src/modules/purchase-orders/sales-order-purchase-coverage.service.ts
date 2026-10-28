@@ -91,6 +91,109 @@ export interface AdvanceToPreparingWhenCoveredInput {
   readonly salesOrderId: string
 }
 
+export interface RecalculateAfterShipmentReleaseInput {
+  readonly actorUserId: string
+  readonly requestId: string
+  readonly salesOrderId: string
+}
+
+/**
+ * 释放进寄仓后，原销售单的采购行数量不会变化，但对应货件已转出。
+ * 只在发货前阶段重算：备货且覆盖不再完整时退回待采购；一旦进入陆运及之后，
+ * 物流事实已经成立，不因覆盖变化倒退。
+ */
+export async function recalculateAfterShipmentRelease(
+  transaction: PrismaTypes.TransactionClient,
+  audit: AuditService,
+  input: RecalculateAfterShipmentReleaseInput,
+): Promise<void> {
+  const locked = await transaction.$queryRaw<LockedSalesOrder[]>(Prisma.sql`
+    SELECT
+      "id",
+      "order_status" AS "orderStatus",
+      "fulfillment_status" AS "fulfillmentStatus"
+    FROM "sales_orders"
+    WHERE "id" = CAST(${input.salesOrderId} AS uuid)
+    FOR UPDATE
+  `)
+  const order = locked[0]
+  if (
+    locked.length !== 1
+    || order?.orderStatus !== 'CONFIRMED'
+    || order.fulfillmentStatus !== 'PREPARING'
+  ) {
+    return
+  }
+
+  const salesLines = await transaction.salesOrderLine.findMany({
+    where: { salesOrderId: input.salesOrderId, removedAt: null },
+    select: { id: true, quantity: true },
+  })
+  if (salesLines.length === 0) return
+  const purchasedRows = await transaction.purchaseOrderLine.groupBy({
+    by: ['sourceSalesOrderLineId'],
+    where: {
+      sourceSalesOrderLineId: { in: salesLines.map(line => line.id) },
+      purchaseOrder: {
+        salesOrderId: input.salesOrderId,
+        purchaseType: 'SALES_LINKED',
+        orderStatus: { in: ['CONFIRMED', 'COMPLETED'] },
+      },
+    },
+    _sum: { quantity: true },
+  })
+  const purchasedBySource = new Map<string, number>()
+  for (const row of purchasedRows) {
+    if (row.sourceSalesOrderLineId !== null) {
+      purchasedBySource.set(row.sourceSalesOrderLineId, row._sum.quantity ?? 0)
+    }
+  }
+  const salesLineIds = salesLines.map(line => line.id)
+  const effectivePurchases = subtractUnownedCoverage(
+    purchasedBySource,
+    await readUnownedQuantitiesBySalesLine(transaction, input.salesOrderId, salesLineIds),
+  )
+  const claimedBySalesLine = await readClaimedQuantitiesBySalesLine(
+    transaction,
+    input.salesOrderId,
+    salesLineIds,
+  )
+  if (isSalesOrderPurchaseFullyCovered(
+    salesLines,
+    mergeClaimedCoverage(effectivePurchases, claimedBySalesLine),
+  )) {
+    return
+  }
+
+  await transaction.salesOrder.update({
+    where: { id: input.salesOrderId },
+    data: { fulfillmentStatus: 'PENDING', version: { increment: 1 } },
+  })
+  await transaction.salesOrderStatusHistory.create({ data: {
+    salesOrderId: input.salesOrderId,
+    dimension: 'FULFILLMENT',
+    fromStatus: 'PREPARING',
+    toStatus: 'PENDING',
+    reason: '货件释放进寄仓后重新计算销售产品采购覆盖',
+    changedByUserId: input.actorUserId,
+  } })
+  await audit.record(transaction, {
+    eventType: AuditEventType.SALES_ORDER_FULFILLMENT_STATUS_CHANGED,
+    outcome: AuditOutcome.SUCCESS,
+    actorType: AuditActorType.USER,
+    actorUserId: input.actorUserId,
+    targetType: 'SALES_ORDER',
+    targetId: input.salesOrderId,
+    requestId: input.requestId,
+    metadata: {
+      automatic: true,
+      fromStatus: 'PREPARING',
+      toStatus: 'PENDING',
+      trigger: 'SHIPMENT_RELEASE',
+    },
+  })
+}
+
 export type CoverageAdvanceResult =
   | { readonly status: 'ADVANCED' | 'NOT_PENDING' | 'NOT_COVERED' }
   | { readonly status: 'ORDER_STATE_CHANGED', readonly orderStatus: SalesOrderStatus | null }

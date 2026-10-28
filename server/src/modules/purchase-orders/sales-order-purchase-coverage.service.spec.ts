@@ -3,6 +3,7 @@ import type { AuditService } from '../audit/audit.service'
 import {
   advanceToPreparingWhenCovered,
   isSalesOrderPurchaseFullyCovered,
+  recalculateAfterShipmentRelease,
   SalesOrderPurchaseCoverageService,
 } from './sales-order-purchase-coverage.service'
 
@@ -495,6 +496,80 @@ describe('SalesOrderPurchaseCoverageService', () => {
       advancedToLandTransit: false,
       fulfillmentStatus: 'PREPARING',
     })
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+})
+
+describe('recalculateAfterShipmentRelease', () => {
+  const releaseInput = {
+    actorUserId: ACTOR_ID,
+    requestId: 'release-coverage-test',
+    salesOrderId: SALES_ORDER_ID,
+  }
+
+  it('returns a preparing order to pending when released shipments break coverage', async () => {
+    const fixture = setup({
+      fulfillmentStatus: 'PREPARING',
+      unownedRows: [{ line: { sourceSalesOrderLineId: SALES_LINE_A_ID }, quantity: 2 }],
+    })
+
+    await recalculateAfterShipmentRelease(
+      fixture.transactionClient,
+      fixture.audit as unknown as AuditService,
+      releaseInput,
+    )
+
+    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: SALES_ORDER_ID },
+      data: { fulfillmentStatus: 'PENDING', version: { increment: 1 } },
+    })
+    expect(fixture.transaction.salesOrderStatusHistory.create).toHaveBeenCalledWith({
+      data: {
+        salesOrderId: SALES_ORDER_ID,
+        dimension: 'FULFILLMENT',
+        fromStatus: 'PREPARING',
+        toStatus: 'PENDING',
+        reason: '货件释放进寄仓后重新计算销售产品采购覆盖',
+        changedByUserId: ACTOR_ID,
+      },
+    })
+    expect(fixture.audit.record).toHaveBeenCalledWith(
+      fixture.transactionClient,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          fromStatus: 'PREPARING',
+          toStatus: 'PENDING',
+          trigger: 'SHIPMENT_RELEASE',
+        }) as unknown,
+      }),
+    )
+  })
+
+  it('keeps the order preparing while the remaining shipments still cover every line', async () => {
+    const fixture = setup({ fulfillmentStatus: 'PREPARING' })
+
+    await recalculateAfterShipmentRelease(
+      fixture.transactionClient,
+      fixture.audit as unknown as AuditService,
+      releaseInput,
+    )
+
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+  })
+
+  it('never retreats an order that already left the pre-shipping stages', async () => {
+    const fixture = setup({
+      fulfillmentStatus: 'WAREHOUSE_ARRIVED',
+      unownedRows: [{ line: { sourceSalesOrderLineId: SALES_LINE_A_ID }, quantity: 2 }],
+    })
+
+    await recalculateAfterShipmentRelease(
+      fixture.transactionClient,
+      fixture.audit as unknown as AuditService,
+      releaseInput,
+    )
+
     expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
   })
 })

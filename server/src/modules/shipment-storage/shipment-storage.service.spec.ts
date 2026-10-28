@@ -17,6 +17,7 @@ function claimFixture(options: {
   readonly orderStatus?: 'CONFIRMED' | 'CANCELLED'
 } = {}) {
   const claimedQuantity = options.claimedQuantity ?? 2
+  let claimedWritten = false
   const transaction = {
     $queryRaw: jest.fn()
       .mockResolvedValueOnce([])
@@ -27,6 +28,7 @@ function claimFixture(options: {
         orderStatus: options.orderStatus ?? 'CONFIRMED',
       }]),
     purchaseOrderLine: { groupBy: jest.fn().mockResolvedValue([]) },
+    purchaseOrderPartItem: { findMany: jest.fn().mockResolvedValue([]) },
     purchaseOrderPart: {
       findMany: jest.fn().mockResolvedValue([{
         id: SHIPMENT_ID,
@@ -54,11 +56,16 @@ function claimFixture(options: {
     },
     salesOrderStatusHistory: { create: jest.fn().mockResolvedValue({}) },
     shipmentClaimLine: {
-      createMany: jest.fn().mockResolvedValue({ count: 1 }),
-      findMany: jest.fn().mockResolvedValue([{
-        salesOrderLineId: SALES_LINE_ID,
-        quantity: claimedQuantity,
-      }]),
+      // 认领写入前余量校验只能看到既有认领；写入后履约推进才应看到本次认领。
+      createMany: jest.fn().mockImplementation(() => {
+        claimedWritten = true
+        return Promise.resolve({ count: 1 })
+      }),
+      findMany: jest.fn().mockImplementation(() => Promise.resolve(
+        claimedWritten
+          ? [{ salesOrderLineId: SALES_LINE_ID, quantity: claimedQuantity }]
+          : [],
+      )),
     },
     shipmentOwnershipCurrent: {
       findUnique: jest.fn().mockResolvedValue({ ownerType: 'STORAGE_POOL', state: 'ACTIVE' }),
@@ -220,6 +227,24 @@ describe('ShipmentStorageService', () => {
         }) as unknown,
       }),
     )
+  })
+
+  it('rejects a claim that would push the line beyond its remaining coverage', async () => {
+    const fixture = claimFixture()
+    const groupBy = fixture.transaction.purchaseOrderLine.groupBy as unknown as jest.Mock
+    groupBy.mockResolvedValue([{
+      _sum: { quantity: 2 },
+      sourceSalesOrderLineId: SALES_LINE_ID,
+    }])
+
+    await expect(fixture.instance.claim(context, RECORD_ID, {
+      lines: [{ quantity: 2, salesOrderLineId: SALES_LINE_ID }],
+      requestKey: REQUEST_KEY,
+      salesOrderId: SALES_ORDER_ID,
+    })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE' })
+
+    expect(fixture.transaction.shipmentStorageRecord.update).not.toHaveBeenCalled()
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
   })
 
   it('keeps the claiming order pending when claims leave a line uncovered', async () => {
