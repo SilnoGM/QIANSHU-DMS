@@ -16,6 +16,7 @@ import { NumberingModule } from '../numbering/numbering.module'
 import { ProductsModule } from '../products/products.module'
 import { PurchaseShippingMarksModule } from '../purchase-shipping-marks/purchase-shipping-marks.module'
 import { SalesOrdersModule } from '../sales-orders/sales-orders.module'
+import { ShipmentOwnershipModule } from '../shipment-ownership/shipment-ownership.module'
 import { PurchaseOrderDocumentMultipartParser } from './documents/purchase-order-document-multipart.parser'
 import { PurchaseOrderDocumentService } from './documents/purchase-order-document.service'
 import { PurchaseOrderImageDraftController } from './order-images/purchase-order-image-draft.controller'
@@ -61,6 +62,7 @@ import { SalesOrderWarehouseReceiptService } from './warehouse-receipts/sales-or
     ProductsModule,
     PurchaseShippingMarksModule,
     SalesOrdersModule,
+    ShipmentOwnershipModule,
   ],
   controllers: [
     PurchasePayableController,

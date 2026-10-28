@@ -428,6 +428,34 @@ enum PurchaseOrderStatusDimension {
   @@map("purchase_order_status_dimension")
 }
 
+/// 货件当前业务归属。来源采购单永久保留，归属只由追加事件改变。
+enum ShipmentOwnerType {
+  SALES_ORDER
+  STORAGE_POOL
+  COMPANY
+
+  @@map("shipment_owner_type")
+}
+
+enum ShipmentOwnershipState {
+  ACTIVE
+  VOIDED
+
+  @@map("shipment_ownership_state")
+}
+
+enum ShipmentOwnershipReason {
+  PURCHASE_CREATED
+  ORDER_CANCELLED
+  CUSTOMER_CANCEL
+  CUSTOMER_REJECT
+  RELEASE
+  CLAIM
+  CORRECTION
+
+  @@map("shipment_ownership_reason")
+}
+
 enum MediaType {
   IMAGE
   VIDEO
@@ -631,6 +659,7 @@ model User {
   purchaseOrderDocumentsDetached    PurchaseOrderDocument[]      @relation("PurchaseOrderDocumentDetachedBy")
   purchaseOrderStatusesChanged      PurchaseOrderStatusHistory[] @relation("PurchaseOrderStatusChangedBy")
   purchaseOrderAmountsChanged       PurchaseOrderAmountRevision[] @relation("PurchaseOrderAmountChangedBy")
+  shipmentOwnershipEventsActed      ShipmentOwnershipEvent[]      @relation("ShipmentOwnershipEventActor")
   shippingMarkBindingsCreated       SupplierShippingMarkRuleBinding[] @relation("ShippingMarkBindingCreatedBy")
   shippingMarkBindingsUpdated       SupplierShippingMarkRuleBinding[] @relation("ShippingMarkBindingUpdatedBy")
 
@@ -1097,6 +1126,8 @@ model SalesOrder {
   statusHistory   SalesOrderStatusHistory[]
   amountRevisions SalesOrderAmountRevision[]
   purchaseOrders  PurchaseOrder[]
+  shipmentOwnershipEvents  ShipmentOwnershipEvent[]   @relation("ShipmentOwnershipEventSalesOrder")
+  shipmentOwnershipCurrent ShipmentOwnershipCurrent[] @relation("ShipmentOwnershipCurrentSalesOrder")
 
   @@index([orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_order_date_id_idx")
   @@index([orderStatus, fulfillmentStatus, paymentStatus, orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_statuses_order_date_id_idx")
@@ -1371,6 +1402,8 @@ model PurchaseOrderPart {
   deliveryRemark String? @map("delivery_remark") @db.VarChar(500)
   deliveredBy User? @relation("PurchaseOrderPartDeliveredBy", fields: [deliveredById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   items PurchaseOrderPartItem[]
+  ownershipEvents  ShipmentOwnershipEvent[]
+  ownershipCurrent ShipmentOwnershipCurrent?
 
   @@unique([id, purchaseOrderId], map: "purchase_order_parts_id_order_id_key")
   @@unique([purchaseOrderId, key], map: "purchase_order_parts_order_id_key_key")
@@ -1396,6 +1429,51 @@ model PurchaseOrderPartItem {
   @@index([purchaseOrderLineId, purchaseOrderId], map: "purchase_order_part_items_line_order_idx")
   @@index([purchaseOrderId], map: "purchase_order_part_items_order_idx")
   @@map("purchase_order_part_items")
+}
+
+/// 货件归属事实：只追加，不修改、不删除；sequence 在同一货件内连续。
+model ShipmentOwnershipEvent {
+  id                String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shipmentId        String                  @map("shipment_id") @db.Uuid
+  sequence          Int
+  ownerType         ShipmentOwnerType       @map("owner_type")
+  ownerSalesOrderId String?                 @map("owner_sales_order_id") @db.Uuid
+  state             ShipmentOwnershipState  @default(ACTIVE)
+  reason            ShipmentOwnershipReason
+  releaseBatchId    String?                 @map("release_batch_id") @db.Uuid
+  occurredAt        DateTime                @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  actorUserId       String                  @map("actor_user_id") @db.Uuid
+  requestKey        String                  @map("request_key") @db.Uuid
+  payloadHash       Bytes                   @map("payload_hash") @db.ByteA
+
+  shipment        PurchaseOrderPart       @relation(fields: [shipmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ownerSalesOrder SalesOrder?             @relation("ShipmentOwnershipEventSalesOrder", fields: [ownerSalesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  actor           User                    @relation("ShipmentOwnershipEventActor", fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  current         ShipmentOwnershipCurrent? @relation("ShipmentOwnershipCurrentEvent")
+
+  @@unique([shipmentId, sequence], map: "shipment_ownership_events_shipment_sequence_key")
+  @@unique([actorUserId, requestKey], map: "shipment_ownership_events_actor_request_key")
+  @@index([shipmentId, sequence(sort: Desc)], map: "shipment_ownership_events_shipment_sequence_idx")
+  @@index([ownerSalesOrderId, occurredAt(sort: Desc)], map: "shipment_ownership_events_owner_occurred_idx")
+  @@map("shipment_ownership_events")
+}
+
+/// 当前归属投影：由事件触发器维护，供列表筛选与解析直接联表。
+model ShipmentOwnershipCurrent {
+  shipmentId        String                 @id @map("shipment_id") @db.Uuid
+  eventId           String                 @unique(map: "shipment_ownership_current_event_key") @map("event_id") @db.Uuid
+  ownerType         ShipmentOwnerType      @map("owner_type")
+  ownerSalesOrderId String?                @map("owner_sales_order_id") @db.Uuid
+  state             ShipmentOwnershipState
+  updatedAt         DateTime               @map("updated_at") @db.Timestamptz(6)
+
+  shipment        PurchaseOrderPart     @relation(fields: [shipmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  event           ShipmentOwnershipEvent @relation("ShipmentOwnershipCurrentEvent", fields: [eventId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ownerSalesOrder SalesOrder?            @relation("ShipmentOwnershipCurrentSalesOrder", fields: [ownerSalesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([ownerSalesOrderId], map: "shipment_ownership_current_owner_idx")
+  @@index([ownerType, state], map: "shipment_ownership_current_type_state_idx")
+  @@map("shipment_ownership_current")
 }
 
 model PurchaseOrderPayable {
