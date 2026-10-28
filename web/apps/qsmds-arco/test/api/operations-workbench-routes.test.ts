@@ -7,7 +7,7 @@ import { matchesAuthorization } from '../../src/composables/app/auth'
 import operationsWorkbenchRoutes from '../../src/router/modules/operations.workbench'
 import { filterAccessibleMenus } from '../../src/store/modules/app/menu.logic'
 
-test('仓储运输接入到仓和海运柜次业务页，海外寄仓保留占位', () => {
+test('仓储运输接入到仓、海运柜次与寄仓管理业务页', () => {
   const warehouseRoute = operationsWorkbenchRoutes.find(route => route.name === 'qsOperationsWarehouseTransport')
   assert.equal(warehouseRoute?.path, '/qs-operations/warehouse-transport')
   assert.equal(warehouseRoute?.meta?.title, '仓储运输')
@@ -17,7 +17,7 @@ test('仓储运输接入到仓和海运柜次业务页，海外寄仓保留占�
     { name: 'qsOperationsWarehouseArrivals', path: 'warehouse-arrivals', title: '到仓货件' },
     { name: 'qsOperationsOceanContainers', path: 'ocean-containers', title: '海运柜次' },
     { name: 'qsOperationsOceanContainersAll', path: 'ocean-containers/all', title: '全部海运柜次' },
-    { name: 'qsOperationsOverseasStorage', path: 'overseas-storage', title: '海外寄仓' },
+    { name: 'qsOperationsOverseasStorage', path: 'overseas-storage', title: '寄仓管理' },
   ])
   const arrivals = warehouseRoute?.children?.[0]
   assert.match(String(arrivals?.component), /operations\/warehouse-arrivals\/index\.vue/u)
@@ -30,9 +30,9 @@ test('仓储运输接入到仓和海运柜次业务页，海外寄仓保留占�
   assert.equal(oceanAll?.meta?.auth, 'sales-orders:read')
   assert.equal(oceanAll?.meta?.menu, false)
   assert.equal(oceanAll?.meta?.activeMenu, '/qs-operations/warehouse-transport/ocean-containers')
-  const overseas = warehouseRoute?.children?.[3]
-  assert.match(String(overseas?.component), /workbenches\/placeholder\.vue/u)
-  assert.equal(overseas?.meta?.auth, undefined)
+  const storage = warehouseRoute?.children?.[3]
+  assert.match(String(storage?.component), /workbenches\/shipment-storage\/index\.vue/u)
+  assert.equal(storage?.meta?.auth, 'shipment-storage:read')
 
   const canSeeOcean = (permissions: string[]) => filterAccessibleMenus(
     operationsWorkbenchRoutes,

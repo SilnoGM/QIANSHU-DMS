@@ -34700,7 +34700,8 @@
                 "CONFIRMED",
                 "PENDING_RECONCILIATION",
                 "COMPLETED",
-                "CANCELLED"
+                "CANCELLED",
+                "TERMINATED"
               ]
             }
           },
@@ -66257,6 +66258,1043 @@
         }
       }
     },
+    "/api/shipment-storage": {
+      "get": {
+        "operationId": "shipment_storage_list",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "IN_STORAGE",
+                "RESERVED",
+                "CLAIMED",
+                "VOIDED"
+              ]
+            }
+          },
+          {
+            "name": "locationScope",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "MAINLAND",
+                "OVERSEAS"
+              ]
+            }
+          },
+          {
+            "name": "warehouseValue",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "货件编号、唛头、来源销售单号、来源采购单号或客户名称",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentStoragePageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "shipment-storage"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/shipment-storage/{storageRecordId}": {
+      "get": {
+        "operationId": "shipment_storage_detail",
+        "parameters": [
+          {
+            "name": "storageRecordId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentStorageDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "shipment-storage"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": false,
+          "validation": false,
+          "session": "required",
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SHIPMENT_STORAGE_NOT_FOUND"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/shipment-storage/releases": {
+      "post": {
+        "operationId": "shipment_storage_release",
+        "parameters": [
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseShipmentStorageRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShipmentStorageDetailDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "shipment-storage"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "SHIPMENT_STORAGE_ALREADY_ACTIVE",
+                "SHIPMENT_STORAGE_IDEMPOTENCY_CONFLICT"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "SHIPMENT_STORAGE_DELIVERED",
+                "SHIPMENT_STORAGE_DESTINATION_MISSING",
+                "SHIPMENT_STORAGE_LOCATION_INVALID",
+                "SHIPMENT_STORAGE_NOT_ALLOWED",
+                "SHIPMENT_STORAGE_NOT_RECEIVED",
+                "SHIPMENT_STORAGE_NOT_SHIPPED",
+                "SHIPMENT_STORAGE_PACKAGING_UNPAID",
+                "SHIPMENT_STORAGE_PURCHASE_UNPAID",
+                "SHIPMENT_STORAGE_SHARE_RATE_MISSING",
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/shipment-storage/{storageRecordId}/location": {
+      "post": {
+        "operationId": "shipment_storage_relocate",
+        "parameters": [
+          {
+            "name": "storageRecordId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelocateShipmentStorageRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentStorageDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "shipment-storage"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SHIPMENT_STORAGE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "SHIPMENT_STORAGE_IDEMPOTENCY_CONFLICT",
+                "SHIPMENT_STORAGE_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "SHIPMENT_STORAGE_LOCATION_INVALID",
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "/api/audit-events": {
       "get": {
         "operationId": "audit_events_list",
@@ -66384,6 +67422,7 @@
                 "FUND_WITHDRAWAL_REJECTED",
                 "SALES_ORDER_CREATED",
                 "SALES_ORDER_ORDER_STATUS_CHANGED",
+                "SALES_ORDER_TERMINATED",
                 "SALES_ORDER_FULFILLMENT_STATUS_CHANGED",
                 "SALES_ORDER_PAYMENT_TERMS_UPDATED",
                 "SALES_ORDER_PAYMENT_RECORDED",
@@ -66401,6 +67440,11 @@
                 "PURCHASE_SHIPMENT_CONTAINER_LOADED",
                 "PURCHASE_SHIPMENT_CONTAINER_UNLOADED",
                 "PURCHASE_SHIPMENT_DELIVERED",
+                "SHIPMENT_OWNERSHIP_RELEASED",
+                "SHIPMENT_STORAGE_RECORDED",
+                "SHIPMENT_STORAGE_LOCATION_CHANGED",
+                "SHIPMENT_STORAGE_CLAIMED",
+                "SHIPMENT_COST_TRANSFERRED",
                 "PURCHASE_ORDER_REVIEW_MARKS_PREPARED",
                 "PURCHASE_ORDER_IMAGE_GENERATED",
                 "PURCHASE_ORDER_ORDER_STATUS_CHANGED",
@@ -90587,7 +91631,8 @@
               "CONFIRMED",
               "PENDING_RECONCILIATION",
               "COMPLETED",
-              "CANCELLED"
+              "CANCELLED",
+              "TERMINATED"
             ]
           },
           "fulfillmentStatus": {
@@ -90795,6 +91840,7 @@
               "PENDING_RECONCILIATION",
               "CANCELLED",
               "COMPLETED",
+              "TERMINATED",
               "PENDING",
               "AWAITING_PURCHASE_REVIEW",
               "PREPARING",
@@ -91050,7 +92096,8 @@
               "CONFIRMED",
               "PENDING_RECONCILIATION",
               "COMPLETED",
-              "CANCELLED"
+              "CANCELLED",
+              "TERMINATED"
             ]
           },
           "fulfillmentStatus": {
@@ -92099,7 +93146,8 @@
               "CONFIRMED",
               "PENDING_RECONCILIATION",
               "COMPLETED",
-              "CANCELLED"
+              "CANCELLED",
+              "TERMINATED"
             ]
           },
           "fulfillmentStatus": {
@@ -92210,7 +93258,8 @@
               "CONFIRMED",
               "PENDING_RECONCILIATION",
               "COMPLETED",
-              "CANCELLED"
+              "CANCELLED",
+              "TERMINATED"
             ]
           },
           "reason": {
@@ -94686,7 +95735,8 @@
               "CONFIRMED",
               "PENDING_RECONCILIATION",
               "COMPLETED",
-              "CANCELLED"
+              "CANCELLED",
+              "TERMINATED"
             ]
           },
           "fulfillmentStatus": {
@@ -98436,6 +99486,405 @@
           "expectedVersion"
         ]
       },
+      "ShipmentStorageCostDto": {
+        "type": "object",
+        "properties": {
+          "purchaseCostCny": {
+            "type": "string"
+          },
+          "packagingCostCny": {
+            "type": "string"
+          },
+          "totalCostCny": {
+            "type": "string"
+          },
+          "originalShareRate": {
+            "type": "string"
+          },
+          "userLegCny": {
+            "type": "string"
+          },
+          "companyLegCny": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "purchaseCostCny",
+          "packagingCostCny",
+          "totalCostCny",
+          "originalShareRate",
+          "userLegCny",
+          "companyLegCny"
+        ]
+      },
+      "ShipmentStorageListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "shipmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "IN_STORAGE",
+              "RESERVED",
+              "CLAIMED",
+              "VOIDED"
+            ]
+          },
+          "locationScope": {
+            "type": "string",
+            "enum": [
+              "MAINLAND",
+              "OVERSEAS"
+            ]
+          },
+          "warehouseValue": {
+            "type": "string"
+          },
+          "warehouseLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "shipmentNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "shippingMarkText": {
+            "type": "string",
+            "nullable": true
+          },
+          "originPurchaseOrderNo": {
+            "type": "string"
+          },
+          "originSalesOrderNo": {
+            "type": "string"
+          },
+          "originCustomerName": {
+            "type": "string"
+          },
+          "originSalesOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "originIssuerUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cost": {
+            "$ref": "#/components/schemas/ShipmentStorageCostDto"
+          },
+          "snapshotAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "locationUpdatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "claimedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "claimedSalesOrderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "shipmentId",
+          "status",
+          "locationScope",
+          "warehouseValue",
+          "warehouseLabel",
+          "shipmentNo",
+          "shippingMarkText",
+          "originPurchaseOrderNo",
+          "originSalesOrderNo",
+          "originCustomerName",
+          "originSalesOrderId",
+          "originIssuerUserId",
+          "cost",
+          "snapshotAt",
+          "locationUpdatedAt",
+          "claimedAt",
+          "claimedSalesOrderId",
+          "createdAt"
+        ]
+      },
+      "ShipmentStoragePageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShipmentStorageListItemDto"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "ShipmentStorageLocationEventDto": {
+        "type": "object",
+        "properties": {
+          "sequence": {
+            "type": "integer"
+          },
+          "locationScope": {
+            "type": "string",
+            "enum": [
+              "MAINLAND",
+              "OVERSEAS"
+            ]
+          },
+          "warehouseValue": {
+            "type": "string"
+          },
+          "warehouseLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "sequence",
+          "locationScope",
+          "warehouseValue",
+          "warehouseLabel",
+          "reason",
+          "occurredAt"
+        ]
+      },
+      "ShipmentStorageDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "shipmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "IN_STORAGE",
+              "RESERVED",
+              "CLAIMED",
+              "VOIDED"
+            ]
+          },
+          "locationScope": {
+            "type": "string",
+            "enum": [
+              "MAINLAND",
+              "OVERSEAS"
+            ]
+          },
+          "warehouseValue": {
+            "type": "string"
+          },
+          "warehouseLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "shipmentNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "shippingMarkText": {
+            "type": "string",
+            "nullable": true
+          },
+          "originPurchaseOrderNo": {
+            "type": "string"
+          },
+          "originSalesOrderNo": {
+            "type": "string"
+          },
+          "originCustomerName": {
+            "type": "string"
+          },
+          "originSalesOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "originIssuerUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cost": {
+            "$ref": "#/components/schemas/ShipmentStorageCostDto"
+          },
+          "snapshotAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "locationUpdatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "claimedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "claimedSalesOrderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "originAllocations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "containerSnapshot": {
+            "type": "object",
+            "additionalProperties": true,
+            "nullable": true
+          },
+          "locationEvents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShipmentStorageLocationEventDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "shipmentId",
+          "status",
+          "locationScope",
+          "warehouseValue",
+          "warehouseLabel",
+          "shipmentNo",
+          "shippingMarkText",
+          "originPurchaseOrderNo",
+          "originSalesOrderNo",
+          "originCustomerName",
+          "originSalesOrderId",
+          "originIssuerUserId",
+          "cost",
+          "snapshotAt",
+          "locationUpdatedAt",
+          "claimedAt",
+          "claimedSalesOrderId",
+          "createdAt",
+          "originAllocations",
+          "containerSnapshot",
+          "locationEvents"
+        ]
+      },
+      "ReleaseShipmentStorageRequestDto": {
+        "type": "object",
+        "properties": {
+          "shipmentIds": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "locationScope": {
+            "type": "string",
+            "enum": [
+              "MAINLAND",
+              "OVERSEAS"
+            ]
+          },
+          "overseasWarehouseValue": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "仅 OVERSEAS 使用：overseas.warehouse 的稳定 value"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "CUSTOMER_CANCEL",
+              "CUSTOMER_REJECT",
+              "OTHER"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "requestKey": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "shipmentIds",
+          "locationScope",
+          "reason",
+          "requestKey"
+        ]
+      },
+      "RelocateShipmentStorageRequestDto": {
+        "type": "object",
+        "properties": {
+          "warehouseValue": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "overseas.warehouse 的稳定 value"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "requestKey": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "warehouseValue",
+          "reason",
+          "requestKey"
+        ]
+      },
       "AuditEventDto": {
         "type": "object",
         "properties": {
@@ -98531,6 +99980,7 @@
               "FUND_WITHDRAWAL_REJECTED",
               "SALES_ORDER_CREATED",
               "SALES_ORDER_ORDER_STATUS_CHANGED",
+              "SALES_ORDER_TERMINATED",
               "SALES_ORDER_FULFILLMENT_STATUS_CHANGED",
               "SALES_ORDER_PAYMENT_TERMS_UPDATED",
               "SALES_ORDER_PAYMENT_RECORDED",
@@ -98548,6 +99998,11 @@
               "PURCHASE_SHIPMENT_CONTAINER_LOADED",
               "PURCHASE_SHIPMENT_CONTAINER_UNLOADED",
               "PURCHASE_SHIPMENT_DELIVERED",
+              "SHIPMENT_OWNERSHIP_RELEASED",
+              "SHIPMENT_STORAGE_RECORDED",
+              "SHIPMENT_STORAGE_LOCATION_CHANGED",
+              "SHIPMENT_STORAGE_CLAIMED",
+              "SHIPMENT_COST_TRANSFERRED",
               "PURCHASE_ORDER_REVIEW_MARKS_PREPARED",
               "PURCHASE_ORDER_IMAGE_GENERATED",
               "PURCHASE_ORDER_ORDER_STATUS_CHANGED",
@@ -102527,7 +103982,8 @@
               "CONFIRMED",
               "PENDING_RECONCILIATION",
               "COMPLETED",
-              "CANCELLED"
+              "CANCELLED",
+              "TERMINATED"
             ]
           },
           "currencyCode": {

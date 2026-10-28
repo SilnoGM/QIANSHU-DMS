@@ -86,6 +86,7 @@ const rolePermissions: Record<string, string[]> = {
     'sales-orders:read',
     'sales-orders:update',
     'sales-receipts:void',
+    'shipment-storage:read',
     OPERATIONS_WORKBENCH_PERMISSION,
   ],
   finance_staff: [

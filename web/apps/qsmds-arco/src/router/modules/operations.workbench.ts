@@ -135,8 +135,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'overseas-storage',
         name: 'qsOperationsOverseasStorage',
-        component: () => import('@/views/workbenches/placeholder.vue'),
-        meta: { title: '海外寄仓', icon: 'qs-overseas-storage' },
+        component: () => import('@/views/workbenches/shipment-storage/index.vue'),
+        meta: { title: '寄仓管理', icon: 'qs-overseas-storage', auth: 'shipment-storage:read' },
       },
     ],
   },

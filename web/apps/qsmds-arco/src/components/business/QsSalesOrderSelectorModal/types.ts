@@ -8,6 +8,7 @@ export type SalesOrderSelectorOrderStatus
     | 'PENDING_RECONCILIATION'
     | 'COMPLETED'
     | 'CANCELLED'
+    | 'TERMINATED'
 
 export type SalesOrderSelectorFulfillmentStatus
   = | 'PENDING'

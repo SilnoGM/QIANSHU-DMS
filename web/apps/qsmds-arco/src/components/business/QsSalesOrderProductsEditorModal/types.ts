@@ -7,7 +7,7 @@ export interface SalesOrderProductEditModalOrder {
   readonly orderNo: string
   readonly customerName: string
   readonly currencyCode: Extract<ProductSelectorCurrency, 'MYR' | 'TWD'>
-  readonly orderStatus: 'DRAFT' | 'CONFIRMED' | 'PENDING_RECONCILIATION' | 'COMPLETED' | 'CANCELLED'
+  readonly orderStatus: 'DRAFT' | 'CONFIRMED' | 'PENDING_RECONCILIATION' | 'COMPLETED' | 'CANCELLED' | 'TERMINATED'
   readonly fulfillmentStatus: 'PENDING' | 'PREPARING' | 'LAND_TRANSIT' | 'WAREHOUSE_ARRIVED' | 'SEA_TRANSIT' | 'SIGNED'
   readonly paymentStatus: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID'
   readonly version: number

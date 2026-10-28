@@ -1329,6 +1329,7 @@ function orderStatusLabel(value: SalesOrderListItemDto['orderStatus']): string {
     PENDING_RECONCILIATION: '待对账',
     COMPLETED: '已完成',
     CANCELLED: '已取消',
+    TERMINATED: '已终止',
   }[value]
 }
 
@@ -1410,6 +1411,7 @@ function orderStatusTagClass(value: SalesOrderListItemDto['orderStatus']): strin
     PENDING_RECONCILIATION: 'border-amber-500/30 bg-amber-500/8 text-amber-700 dark:text-amber-300',
     COMPLETED: 'border-primary/30 bg-primary/10 text-primary',
     CANCELLED: 'border-destructive/30 bg-destructive/10 text-destructive',
+    TERMINATED: 'border-muted-foreground/30 bg-muted text-muted-foreground',
   }[value]
 }
 
