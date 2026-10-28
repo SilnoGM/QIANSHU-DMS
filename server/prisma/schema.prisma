@@ -154,6 +154,11 @@ enum AuditEventType {
   PURCHASE_SHIPMENT_CONTAINER_LOADED
   PURCHASE_SHIPMENT_CONTAINER_UNLOADED
   PURCHASE_SHIPMENT_DELIVERED
+  SHIPMENT_OWNERSHIP_RELEASED
+  SHIPMENT_STORAGE_RECORDED
+  SHIPMENT_STORAGE_LOCATION_CHANGED
+  SHIPMENT_STORAGE_CLAIMED
+  SHIPMENT_COST_TRANSFERRED
   PURCHASE_ORDER_REVIEW_MARKS_PREPARED
   PURCHASE_ORDER_IMAGE_GENERATED
   PURCHASE_ORDER_ORDER_STATUS_CHANGED
@@ -454,8 +459,32 @@ enum ShipmentOwnershipReason {
   RELEASE
   CLAIM
   CORRECTION
+  OTHER
 
   @@map("shipment_ownership_reason")
+}
+
+enum ShipmentStorageStatus {
+  IN_STORAGE
+  RESERVED
+  CLAIMED
+  VOIDED
+
+  @@map("shipment_storage_status")
+}
+
+enum ShipmentStorageLocationScope {
+  MAINLAND
+  OVERSEAS
+
+  @@map("shipment_storage_location_scope")
+}
+
+enum ShipmentCostDirection {
+  RELEASE
+  CLAIM
+
+  @@map("shipment_cost_direction")
 }
 
 enum MediaType {
@@ -1406,6 +1435,7 @@ model PurchaseOrderPart {
   items PurchaseOrderPartItem[]
   ownershipEvents  ShipmentOwnershipEvent[]
   ownershipCurrent ShipmentOwnershipCurrent?
+  storageRecords   ShipmentStorageRecord[]
 
   @@unique([id, purchaseOrderId], map: "purchase_order_parts_id_order_id_key")
   @@unique([purchaseOrderId, key], map: "purchase_order_parts_order_id_key_key")
@@ -1476,6 +1506,118 @@ model ShipmentOwnershipCurrent {
   @@index([ownerSalesOrderId], map: "shipment_ownership_current_owner_idx")
   @@index([ownerType, state], map: "shipment_ownership_current_type_state_idx")
   @@map("shipment_ownership_current")
+}
+
+/// 一次释放动作的分组；跨多张销售单时 originSalesOrderId 为空，以各寄仓记录为准。
+model ShipmentReleaseBatch {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reason            String   @db.VarChar(32)
+  originSalesOrderId String? @map("origin_sales_order_id") @db.Uuid
+  actorUserId       String   @map("actor_user_id") @db.Uuid
+  occurredAt        DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  requestKey        String   @map("request_key") @db.Uuid
+  payloadHash       Bytes    @map("payload_hash") @db.ByteA
+  note              String?  @db.VarChar(500)
+
+  records ShipmentStorageRecord[]
+
+  @@unique([actorUserId, requestKey], map: "shipment_release_batches_actor_request_key")
+  @@index([occurredAt(sort: Desc), id(sort: Desc)], map: "shipment_release_batches_occurred_idx")
+  @@map("shipment_release_batches")
+}
+
+/// 寄仓记录：释放时冻结来源、数量、物流与成本快照；后续只追加位置/认领/成本事件。
+model ShipmentStorageRecord {
+  id                       String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shipmentId               String                       @map("shipment_id") @db.Uuid
+  releaseBatchId           String                       @map("release_batch_id") @db.Uuid
+  status                   ShipmentStorageStatus        @default(IN_STORAGE)
+  locationScope            ShipmentStorageLocationScope @map("location_scope")
+  warehouseValue           String                       @map("warehouse_value") @db.VarChar(64)
+  warehouseLabelSnapshot   String?                      @map("warehouse_label_snapshot") @db.VarChar(128)
+  locationUpdatedAt        DateTime                     @map("location_updated_at") @db.Timestamptz(6)
+  shipmentNoSnapshot       String?                      @map("shipment_no_snapshot") @db.VarChar(64)
+  shippingMarkSnapshot     String?                      @map("shipping_mark_snapshot") @db.VarChar(72)
+  originPurchaseOrderId    String                       @map("origin_purchase_order_id") @db.Uuid
+  originPurchaseOrderNoSnapshot String                  @map("origin_purchase_order_no_snapshot") @db.VarChar(64)
+  originSalesOrderId       String                       @map("origin_sales_order_id") @db.Uuid
+  originSalesOrderNoSnapshot String                     @map("origin_sales_order_no_snapshot") @db.VarChar(64)
+  originCustomerNameSnapshot String                     @map("origin_customer_name_snapshot") @db.VarChar(128)
+  originIssuerUserId       String                       @map("origin_issuer_user_id") @db.Uuid
+  originAllocations        Json                         @map("origin_allocations") @db.JsonB
+  containerSnapshot        Json?                        @map("container_snapshot") @db.JsonB
+  costSnapshot             Json                         @map("cost_snapshot") @db.JsonB
+  snapshotAt               DateTime                     @map("snapshot_at") @db.Timestamptz(6)
+  claimedSalesOrderId      String?                      @map("claimed_sales_order_id") @db.Uuid
+  claimedAt                DateTime?                    @map("claimed_at") @db.Timestamptz(6)
+  claimedBy                String?                      @map("claimed_by") @db.Uuid
+  createdAt                DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  shipment      PurchaseOrderPart @relation(fields: [shipmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  releaseBatch  ShipmentReleaseBatch @relation(fields: [releaseBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  locationEvents ShipmentStorageLocationEvent[]
+  claimLines    ShipmentClaimLine[]
+  costEvents    ShipmentCostEvent[]
+
+  @@index([status, locationScope, warehouseValue], map: "shipment_storage_records_status_location_idx")
+  @@index([shipmentId, createdAt(sort: Desc)], map: "shipment_storage_records_shipment_created_idx")
+  @@index([originSalesOrderId, createdAt(sort: Desc)], map: "shipment_storage_records_origin_order_idx")
+  @@map("shipment_storage_records")
+}
+
+model ShipmentStorageLocationEvent {
+  id                     String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  storageRecordId        String                       @map("storage_record_id") @db.Uuid
+  sequence               Int
+  locationScope          ShipmentStorageLocationScope @map("location_scope")
+  warehouseValue         String                       @map("warehouse_value") @db.VarChar(64)
+  warehouseLabelSnapshot String?                      @map("warehouse_label_snapshot") @db.VarChar(128)
+  reason                 String                       @db.VarChar(500)
+  occurredAt             DateTime                     @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  actorUserId            String                       @map("actor_user_id") @db.Uuid
+  requestKey             String                       @map("request_key") @db.Uuid
+  payloadHash            Bytes                        @map("payload_hash") @db.ByteA
+
+  storageRecord ShipmentStorageRecord @relation(fields: [storageRecordId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([storageRecordId, sequence], map: "shipment_storage_location_events_record_sequence_key")
+  @@unique([actorUserId, requestKey], map: "shipment_storage_location_events_actor_request_key")
+  @@map("shipment_storage_location_events")
+}
+
+model ShipmentClaimLine {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  storageRecordId String   @map("storage_record_id") @db.Uuid
+  salesOrderLineId String  @map("sales_order_line_id") @db.Uuid
+  quantity        Int
+  claimedAt       DateTime @default(now()) @map("claimed_at") @db.Timestamptz(6)
+  claimedBy       String   @map("claimed_by") @db.Uuid
+
+  storageRecord ShipmentStorageRecord @relation(fields: [storageRecordId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([storageRecordId, salesOrderLineId], map: "shipment_claim_lines_record_line_key")
+  @@map("shipment_claim_lines")
+}
+
+model ShipmentCostEvent {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  storageRecordId    String               @map("storage_record_id") @db.Uuid
+  direction          ShipmentCostDirection
+  transferGroupId    String               @map("transfer_group_id") @db.Uuid
+  fundPostingBatchIds Json                @map("fund_posting_batch_ids") @db.JsonB
+  amountCny          Decimal              @map("amount_cny") @db.Decimal(30, 2)
+  legsSnapshot       Json                 @map("legs_snapshot") @db.JsonB
+  occurredAt         DateTime             @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  actorUserId        String               @map("actor_user_id") @db.Uuid
+  requestKey         String               @map("request_key") @db.Uuid
+  payloadHash        Bytes                @map("payload_hash") @db.ByteA
+
+  storageRecord ShipmentStorageRecord @relation(fields: [storageRecordId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([storageRecordId, direction], map: "shipment_cost_events_record_direction_key")
+  @@unique([actorUserId, requestKey], map: "shipment_cost_events_actor_request_key")
+  @@map("shipment_cost_events")
 }
 
 model PurchaseOrderPayable {

@@ -90,6 +90,15 @@ export const SEED_DICTIONARIES: readonly SeedDictionaryType[] = [
     ],
   },
   {
+    code: 'overseas.warehouse',
+    name: '海外仓库',
+    sortOrder: 0,
+    items: [
+      { value: 'RF_TZ', label: '瑞锋-台中仓', tone: DictionaryTone.PRIMARY, sortOrder: 0 },
+      { value: 'RF_LK', label: '瑞锋-林口仓', tone: DictionaryTone.PRIMARY, sortOrder: 10 },
+    ],
+  },
+  {
     code: 'payment.method',
     name: '付款方式',
     sortOrder: 0,

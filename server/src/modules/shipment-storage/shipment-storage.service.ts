@@ -1,0 +1,672 @@
+import { createHash } from 'node:crypto'
+
+import { HttpStatus, Injectable } from '@nestjs/common'
+
+import { Prisma } from '../../generated/prisma/client'
+import type {
+  ShipmentStorageLocationScope,
+} from '../../generated/prisma/enums'
+import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
+import { ApiException } from '../../infrastructure/http/api.exception'
+import { AuditService } from '../audit/audit.service'
+import {
+  DictionaryLookupService,
+  DictionaryValueUnavailableError,
+} from '../dictionaries/dictionary-lookup.service'
+import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
+import type {
+  RelocateShipmentStorageRequestDto,
+  ReleaseShipmentStorageRequestDto,
+  ShipmentStorageCostDto,
+  ShipmentStorageDetailDto,
+  ShipmentStorageListItemDto,
+  ShipmentStoragePageDto,
+} from './shipment-storage.dto'
+import type { ShipmentStorageListQueryDto } from './shipment-storage.dto'
+
+export interface ShipmentStorageMutationContext {
+  readonly actorUserId: string
+  readonly requestId: string
+}
+
+const RELEASE_PART_SELECT = {
+  id: true,
+  status: true,
+  shippedAt: true,
+  warehouseReceivedAt: true,
+  deliveredAt: true,
+  destinationWarehouseValue: true,
+  shipmentNo: true,
+  shippingMarkText: true,
+  purchaseOrderId: true,
+  purchaseOrder: {
+    select: {
+      id: true,
+      orderNo: true,
+      orderStatus: true,
+      paymentStatus: true,
+      purchaseType: true,
+    },
+  },
+  ownershipCurrent: {
+    select: {
+      ownerType: true,
+      ownerSalesOrderId: true,
+      state: true,
+      ownerSalesOrder: {
+        select: { id: true, orderNo: true, customerName: true, issuerUserId: true },
+      },
+    },
+  },
+  items: {
+    select: {
+      quantity: true,
+      line: {
+        select: {
+          id: true,
+          lineNumber: true,
+          actualPurchaseUnitPriceAmount: true,
+          productNameSnapshot: true,
+        },
+      },
+    },
+  },
+  containerLoadingItems: {
+    take: 1,
+    select: {
+      recipientName: true,
+      recipientPhone: true,
+      recipientAddress: true,
+      codAmountTwd: true,
+      grossWeightKg: true,
+      lengthCm: true,
+      widthCm: true,
+      heightCm: true,
+      volumeCai: true,
+      containerBatch: {
+        select: { id: true, containerBatchNo: true, containerBatchName: true, loadingDate: true },
+      },
+    },
+  },
+} as const satisfies Prisma.PurchaseOrderPartSelect
+
+type ReleasePart = Prisma.PurchaseOrderPartGetPayload<{ select: typeof RELEASE_PART_SELECT }>
+
+const STORAGE_RECORD_SELECT = {
+  id: true,
+  shipmentId: true,
+  status: true,
+  locationScope: true,
+  warehouseValue: true,
+  warehouseLabelSnapshot: true,
+  locationUpdatedAt: true,
+  shipmentNoSnapshot: true,
+  shippingMarkSnapshot: true,
+  originPurchaseOrderId: true,
+  originPurchaseOrderNoSnapshot: true,
+  originSalesOrderId: true,
+  originSalesOrderNoSnapshot: true,
+  originCustomerNameSnapshot: true,
+  originIssuerUserId: true,
+  originAllocations: true,
+  containerSnapshot: true,
+  costSnapshot: true,
+  snapshotAt: true,
+  claimedSalesOrderId: true,
+  claimedAt: true,
+  createdAt: true,
+  locationEvents: {
+    orderBy: { sequence: 'asc' },
+    select: {
+      sequence: true,
+      locationScope: true,
+      warehouseValue: true,
+      warehouseLabelSnapshot: true,
+      reason: true,
+      occurredAt: true,
+    },
+  },
+} as const satisfies Prisma.ShipmentStorageRecordSelect
+
+type StorageRecordRow = Prisma.ShipmentStorageRecordGetPayload<{ select: typeof STORAGE_RECORD_SELECT }>
+
+function storageFailure(code: string, message: string, status: number = HttpStatus.UNPROCESSABLE_ENTITY): never {
+  throw new ApiException(status, code, message)
+}
+
+function payloadHash(payload: unknown): Uint8Array<ArrayBuffer> {
+  const digest = createHash('sha256').update(JSON.stringify(payload), 'utf8').digest()
+  const result = new Uint8Array(new ArrayBuffer(digest.byteLength))
+  result.set(digest)
+  return result
+}
+
+function decimalString(value: unknown, fallback = '0.00'): string {
+  return typeof value === 'string' ? value : fallback
+}
+
+function costFromSnapshot(snapshot: Prisma.JsonValue): ShipmentStorageCostDto {
+  const value = typeof snapshot === 'object' && snapshot !== null && !Array.isArray(snapshot)
+    ? snapshot as Record<string, unknown>
+    : {}
+  return {
+    purchaseCostCny: decimalString(value.purchaseCostCny),
+    packagingCostCny: decimalString(value.packagingCostCny),
+    totalCostCny: decimalString(value.totalCostCny),
+    originalShareRate: decimalString(value.originalShareRate),
+    userLegCny: decimalString(value.userLegCny),
+    companyLegCny: decimalString(value.companyLegCny),
+  }
+}
+
+function baseRecordDto(row: StorageRecordRow): ShipmentStorageListItemDto {
+  return {
+    id: row.id,
+    shipmentId: row.shipmentId,
+    status: row.status,
+    locationScope: row.locationScope,
+    warehouseValue: row.warehouseValue,
+    warehouseLabel: row.warehouseLabelSnapshot,
+    shipmentNo: row.shipmentNoSnapshot,
+    shippingMarkText: row.shippingMarkSnapshot,
+    originPurchaseOrderNo: row.originPurchaseOrderNoSnapshot,
+    originSalesOrderNo: row.originSalesOrderNoSnapshot,
+    originCustomerName: row.originCustomerNameSnapshot,
+    originSalesOrderId: row.originSalesOrderId,
+    originIssuerUserId: row.originIssuerUserId,
+    cost: costFromSnapshot(row.costSnapshot),
+    snapshotAt: row.snapshotAt.toISOString(),
+    locationUpdatedAt: row.locationUpdatedAt.toISOString(),
+    claimedAt: row.claimedAt?.toISOString() ?? null,
+    claimedSalesOrderId: row.claimedSalesOrderId,
+    createdAt: row.createdAt.toISOString(),
+  }
+}
+
+function detailDto(row: StorageRecordRow): ShipmentStorageDetailDto {
+  return {
+    ...baseRecordDto(row),
+    originAllocations: Array.isArray(row.originAllocations)
+      ? row.originAllocations
+      : [],
+    containerSnapshot: row.containerSnapshot ?? null,
+    locationEvents: row.locationEvents.map(event => ({
+      sequence: event.sequence,
+      locationScope: event.locationScope,
+      warehouseValue: event.warehouseValue,
+      warehouseLabel: event.warehouseLabelSnapshot,
+      reason: event.reason,
+      occurredAt: event.occurredAt.toISOString(),
+    })),
+  }
+}
+
+@Injectable()
+export class ShipmentStorageService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+    private readonly dictionary: DictionaryLookupService,
+    private readonly ownership: ShipmentOwnershipService,
+  ) {}
+
+  async release(
+    context: ShipmentStorageMutationContext,
+    input: ReleaseShipmentStorageRequestDto,
+  ): Promise<readonly ShipmentStorageDetailDto[]> {
+    const shipmentIds = [...new Set(input.shipmentIds)].sort()
+    if (shipmentIds.length === 0 || shipmentIds.length > 50) {
+      storageFailure('VALIDATION_FAILED', '请选择 1 到 50 个货件')
+    }
+    if (input.locationScope === 'OVERSEAS' && input.overseasWarehouseValue === undefined) {
+      storageFailure('VALIDATION_FAILED', '海外寄仓必须选择海外仓库')
+    }
+    if (input.locationScope === 'MAINLAND' && input.overseasWarehouseValue !== undefined) {
+      storageFailure('VALIDATION_FAILED', '内地寄仓不能指定海外仓库')
+    }
+    const payload = {
+      format: 'shipment-storage.release.v1',
+      shipmentIds,
+      locationScope: input.locationScope,
+      overseasWarehouseValue: input.overseasWarehouseValue ?? null,
+      reason: input.reason,
+      note: input.note ?? null,
+    }
+    const hash = payloadHash(payload)
+
+    const existing = await this.prisma.shipmentReleaseBatch.findFirst({
+      where: { actorUserId: context.actorUserId, requestKey: input.requestKey },
+      select: { id: true, payloadHash: true },
+    })
+    if (existing !== null) {
+      if (!Buffer.from(existing.payloadHash).equals(hash)) {
+        storageFailure('SHIPMENT_STORAGE_IDEMPOTENCY_CONFLICT', '该提交标识已用于不同的释放内容', HttpStatus.CONFLICT)
+      }
+      return this.loadBatchRecords(existing.id)
+    }
+
+    const createdIds = await this.prisma.$transaction(async transaction => {
+      await applyTransactionTimeouts(transaction)
+      for (const shipmentId of shipmentIds) {
+        await transaction.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id = ${shipmentId}::uuid FOR UPDATE`)
+      }
+      const parts = await transaction.purchaseOrderPart.findMany({
+        where: { id: { in: shipmentIds } },
+        select: RELEASE_PART_SELECT,
+      })
+      if (parts.length !== shipmentIds.length) {
+        storageFailure('SHIPMENT_STORAGE_NOT_ALLOWED', '部分货件不存在或不可见')
+      }
+      const activeStorage = await transaction.shipmentStorageRecord.findMany({
+        where: {
+          shipmentId: { in: shipmentIds },
+          status: { in: ['IN_STORAGE', 'RESERVED'] },
+        },
+        select: { shipmentId: true },
+      })
+      if (activeStorage.length > 0) {
+        storageFailure('SHIPMENT_STORAGE_ALREADY_ACTIVE', '部分货件已在寄仓中', HttpStatus.CONFLICT)
+      }
+      for (const part of parts) this.assertReleasable(part, input.locationScope, input.overseasWarehouseValue)
+
+      const packagingPending = await transaction.packagingCostRequest.count({
+        where: { shipmentId: { in: shipmentIds }, status: 'PENDING_PAYMENT' },
+      })
+      if (packagingPending > 0) {
+        storageFailure('SHIPMENT_STORAGE_PACKAGING_UNPAID', '货件仍有待付款的包装费，请先结清')
+      }
+      const packagingRows = await transaction.packagingCostRequest.findMany({
+        where: { shipmentId: { in: shipmentIds }, status: 'PAID' },
+        select: { id: true, shipmentId: true, amount: true },
+      })
+      const issuerUserIds = [...new Set(parts.map(part => part.ownershipCurrent!.ownerSalesOrder!.issuerUserId))]
+      const accounts = await transaction.fundAccount.findMany({
+        where: { userId: { in: issuerUserIds } },
+        select: { userId: true, userShareRate: true },
+      })
+      const rateByUser = new Map<string, Prisma.Decimal | null>()
+      for (const account of accounts) {
+        if (account.userId !== null) rateByUser.set(account.userId, account.userShareRate)
+      }
+      for (const userId of issuerUserIds) {
+        if (rateByUser.get(userId) === null || rateByUser.get(userId) === undefined) {
+          storageFailure('SHIPMENT_STORAGE_SHARE_RATE_MISSING', '原出单人缺少资金账户比例，无法转移成本')
+        }
+      }
+      const purchaseOrderIds = [...new Set(parts.map(part => part.purchaseOrderId))]
+      const payments = await transaction.purchaseOrderPayment.findMany({
+        where: { purchaseOrderId: { in: purchaseOrderIds }, voidedAt: null },
+        select: { purchaseOrderId: true, fundPostingBatchId: true },
+      })
+      const warehouse = await this.resolveWarehouse(transaction, input, parts)
+
+      const originSalesOrderIds = [...new Set(parts.map(part => part.ownershipCurrent!.ownerSalesOrderId!))]
+      const batch = await transaction.shipmentReleaseBatch.create({
+        data: {
+          reason: input.reason,
+          originSalesOrderId: originSalesOrderIds.length === 1 ? originSalesOrderIds[0] : null,
+          actorUserId: context.actorUserId,
+          requestKey: input.requestKey,
+          payloadHash: hash,
+          note: input.note?.trim() || null,
+        },
+        select: { id: true },
+      })
+      const now = new Date()
+      const recordIds: string[] = []
+      for (const part of parts) {
+        const record = await transaction.shipmentStorageRecord.create({
+          data: {
+            shipmentId: part.id,
+            releaseBatchId: batch.id,
+            status: 'IN_STORAGE',
+            locationScope: input.locationScope,
+            warehouseValue: warehouse.valueFor(part),
+            warehouseLabelSnapshot: warehouse.labelFor(part),
+            locationUpdatedAt: now,
+            shipmentNoSnapshot: part.shipmentNo,
+            shippingMarkSnapshot: part.shippingMarkText,
+            originPurchaseOrderId: part.purchaseOrderId,
+            originPurchaseOrderNoSnapshot: part.purchaseOrder.orderNo,
+            originSalesOrderId: part.ownershipCurrent!.ownerSalesOrder!.id,
+            originSalesOrderNoSnapshot: part.ownershipCurrent!.ownerSalesOrder!.orderNo,
+            originCustomerNameSnapshot: part.ownershipCurrent!.ownerSalesOrder!.customerName,
+            originIssuerUserId: part.ownershipCurrent!.ownerSalesOrder!.issuerUserId,
+            originAllocations: part.items.map(item => ({
+              purchaseOrderLineId: item.line.id,
+              lineNumber: item.line.lineNumber,
+              productName: item.line.productNameSnapshot,
+              quantity: item.quantity,
+              unitPriceCny: item.line.actualPurchaseUnitPriceAmount.toFixed(2),
+            })),
+            containerSnapshot: this.containerSnapshot(part) ?? Prisma.DbNull,
+            costSnapshot: this.costSnapshot(part, packagingRows, payments, rateByUser, now),
+            snapshotAt: now,
+          },
+          select: { id: true },
+        })
+        recordIds.push(record.id)
+      }
+      await this.ownership.recordMany(transaction, parts.map(part => ({
+        shipmentId: part.id,
+        ownerType: 'STORAGE_POOL',
+        ownerSalesOrderId: null,
+        reason: input.reason,
+        actorUserId: context.actorUserId,
+        releaseBatchId: batch.id,
+        payload: {
+          format: 'shipment-ownership.release.v1',
+          shipmentId: part.id,
+          releaseBatchId: batch.id,
+          reason: input.reason,
+        },
+      })))
+      for (let index = 0; index < parts.length; index += 1) {
+        const part = parts[index]
+        const storageRecordId = recordIds[index]
+        await this.audit.record(transaction, {
+          eventType: 'SHIPMENT_OWNERSHIP_RELEASED',
+          outcome: 'SUCCESS',
+          actorType: 'USER',
+          actorUserId: context.actorUserId,
+          requestId: context.requestId,
+          targetType: 'PURCHASE_ORDER_PART',
+          targetId: part.id,
+          metadata: {
+            releaseBatchId: batch.id,
+            storageRecordId,
+            reason: input.reason,
+            locationScope: input.locationScope,
+            warehouseValue: warehouse.valueFor(part),
+          },
+        })
+        await this.audit.record(transaction, {
+          eventType: 'SHIPMENT_STORAGE_RECORDED',
+          outcome: 'SUCCESS',
+          actorType: 'USER',
+          actorUserId: context.actorUserId,
+          requestId: context.requestId,
+          targetType: 'SHIPMENT_STORAGE_RECORD',
+          targetId: storageRecordId,
+          metadata: { releaseBatchId: batch.id, shipmentId: part.id },
+        })
+      }
+      return recordIds
+    }, { timeout: 30_000 })
+
+    const records = await this.prisma.shipmentStorageRecord.findMany({
+      where: { id: { in: createdIds } },
+      select: STORAGE_RECORD_SELECT,
+      orderBy: { createdAt: 'asc' },
+    })
+    return records.map(detailDto)
+  }
+
+  async list(query: ShipmentStorageListQueryDto): Promise<ShipmentStoragePageDto> {
+    const page = query.page ?? 1
+    const pageSize = query.pageSize ?? 20
+    const where: Prisma.ShipmentStorageRecordWhereInput = {
+      status: query.status,
+      locationScope: query.locationScope,
+      warehouseValue: query.warehouseValue,
+    }
+    const keyword = query.keyword?.trim()
+    if (keyword !== undefined && keyword !== '') {
+      const match = { contains: keyword, mode: 'insensitive' as const }
+      where.OR = [
+        { shipmentNoSnapshot: match },
+        { shippingMarkSnapshot: match },
+        { originSalesOrderNoSnapshot: match },
+        { originPurchaseOrderNoSnapshot: match },
+        { originCustomerNameSnapshot: match },
+      ]
+    }
+    const [total, rows] = await this.prisma.$transaction([
+      this.prisma.shipmentStorageRecord.count({ where }),
+      this.prisma.shipmentStorageRecord.findMany({
+        where,
+        select: STORAGE_RECORD_SELECT,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ])
+    return { items: rows.map(baseRecordDto), page, pageSize, total }
+  }
+
+  async getById(storageRecordId: string): Promise<ShipmentStorageDetailDto> {
+    const row = await this.prisma.shipmentStorageRecord.findUnique({
+      where: { id: storageRecordId },
+      select: STORAGE_RECORD_SELECT,
+    })
+    if (row === null) {
+      storageFailure('SHIPMENT_STORAGE_NOT_FOUND', '寄仓记录不存在', HttpStatus.NOT_FOUND)
+    }
+    return detailDto(row)
+  }
+
+  async relocate(
+    context: ShipmentStorageMutationContext,
+    storageRecordId: string,
+    input: RelocateShipmentStorageRequestDto,
+  ): Promise<ShipmentStorageDetailDto> {
+    const hash = payloadHash({
+      format: 'shipment-storage.relocate.v1',
+      storageRecordId,
+      warehouseValue: input.warehouseValue,
+      reason: input.reason,
+    })
+    await this.prisma.$transaction(async transaction => {
+      await applyTransactionTimeouts(transaction)
+      await transaction.$queryRaw(Prisma.sql`SELECT id FROM shipment_storage_records WHERE id = ${storageRecordId}::uuid FOR UPDATE`)
+      const record = await transaction.shipmentStorageRecord.findUnique({
+        where: { id: storageRecordId },
+        select: { id: true, status: true, locationScope: true, warehouseValue: true },
+      })
+      if (record === null) {
+        storageFailure('SHIPMENT_STORAGE_NOT_FOUND', '寄仓记录不存在', HttpStatus.NOT_FOUND)
+      }
+      if (record.status !== 'IN_STORAGE') {
+        storageFailure('SHIPMENT_STORAGE_STATE_CHANGED', '只有寄仓中的记录可以移动位置', HttpStatus.CONFLICT)
+      }
+      if (record.locationScope !== 'OVERSEAS') {
+        storageFailure('SHIPMENT_STORAGE_LOCATION_INVALID', '只有海外仓之间可以移动')
+      }
+      if (record.warehouseValue === input.warehouseValue) {
+        storageFailure('SHIPMENT_STORAGE_LOCATION_INVALID', '目标仓库与当前位置相同')
+      }
+      const resolved = await this.resolveWarehouseValue(transaction, 'overseas.warehouse', input.warehouseValue)
+      const existingEvent = await transaction.shipmentStorageLocationEvent.findFirst({
+        where: { actorUserId: context.actorUserId, requestKey: input.requestKey },
+        select: { payloadHash: true },
+      })
+      if (existingEvent !== null) {
+        if (!Buffer.from(existingEvent.payloadHash).equals(hash)) {
+          storageFailure('SHIPMENT_STORAGE_IDEMPOTENCY_CONFLICT', '该提交标识已用于不同的移动内容', HttpStatus.CONFLICT)
+        }
+        return
+      }
+      const aggregate = await transaction.shipmentStorageLocationEvent.aggregate({
+        where: { storageRecordId },
+        _max: { sequence: true },
+      })
+      await transaction.shipmentStorageLocationEvent.create({
+        data: {
+          storageRecordId,
+          sequence: (aggregate._max.sequence ?? 0) + 1,
+          locationScope: 'OVERSEAS',
+          warehouseValue: resolved.value,
+          warehouseLabelSnapshot: resolved.label,
+          reason: input.reason,
+          actorUserId: context.actorUserId,
+          requestKey: input.requestKey,
+          payloadHash: hash,
+        },
+      })
+      await transaction.shipmentStorageRecord.update({
+        where: { id: storageRecordId },
+        data: {
+          locationScope: 'OVERSEAS',
+          warehouseValue: resolved.value,
+          warehouseLabelSnapshot: resolved.label,
+          locationUpdatedAt: new Date(),
+        },
+      })
+      await this.audit.record(transaction, {
+        eventType: 'SHIPMENT_STORAGE_LOCATION_CHANGED',
+        outcome: 'SUCCESS',
+        actorType: 'USER',
+        actorUserId: context.actorUserId,
+        requestId: context.requestId,
+        targetType: 'SHIPMENT_STORAGE_RECORD',
+        targetId: storageRecordId,
+        metadata: {
+          fromWarehouseValue: record.warehouseValue,
+          toWarehouseValue: resolved.value,
+          reason: input.reason,
+        },
+      })
+    }, { timeout: 30_000 })
+    return this.getById(storageRecordId)
+  }
+
+  private async loadBatchRecords(batchId: string): Promise<readonly ShipmentStorageDetailDto[]> {
+    const rows = await this.prisma.shipmentStorageRecord.findMany({
+      where: { releaseBatchId: batchId },
+      select: STORAGE_RECORD_SELECT,
+      orderBy: { createdAt: 'asc' },
+    })
+    return rows.map(detailDto)
+  }
+
+  private assertReleasable(
+    part: ReleasePart,
+    locationScope: ShipmentStorageLocationScope,
+    overseasWarehouseValue: string | undefined,
+  ): void {
+    if (part.status !== 'ACTIVE') {
+      storageFailure('SHIPMENT_STORAGE_NOT_ALLOWED', '只有有效货件可以释放')
+    }
+    if (part.deliveredAt !== null) {
+      storageFailure('SHIPMENT_STORAGE_DELIVERED', '已签收货件不能释放')
+    }
+    if (part.shippedAt === null) {
+      storageFailure('SHIPMENT_STORAGE_NOT_SHIPPED', '未发货货件不能释放')
+    }
+    if (part.warehouseReceivedAt === null) {
+      storageFailure('SHIPMENT_STORAGE_NOT_RECEIVED', '未到仓货件不能释放')
+    }
+    if (part.purchaseOrder.paymentStatus !== 'PAID') {
+      storageFailure('SHIPMENT_STORAGE_PURCHASE_UNPAID', '采购单未付清，不能释放')
+    }
+    const owner = part.ownershipCurrent
+    if (owner === null || owner.state !== 'ACTIVE' || owner.ownerType !== 'SALES_ORDER' || owner.ownerSalesOrder === null || owner.ownerSalesOrderId === null) {
+      storageFailure('SHIPMENT_STORAGE_NOT_ALLOWED', '只有归属销售单的有效货件可以释放')
+    }
+    if (locationScope === 'MAINLAND' && part.destinationWarehouseValue === null) {
+      storageFailure('SHIPMENT_STORAGE_DESTINATION_MISSING', '货件缺少目的地仓库，无法内地寄仓')
+    }
+    if (locationScope === 'OVERSEAS' && overseasWarehouseValue === undefined) {
+      storageFailure('SHIPMENT_STORAGE_LOCATION_INVALID', '请选择海外仓库')
+    }
+  }
+
+  private async resolveWarehouse(
+    transaction: Prisma.TransactionClient,
+    input: ReleaseShipmentStorageRequestDto,
+    parts: readonly ReleasePart[],
+  ): Promise<{ valueFor(part: ReleasePart): string, labelFor(part: ReleasePart): string | null }> {
+    if (input.locationScope === 'MAINLAND') {
+      const labels = new Map<string, string | null>()
+      for (const part of parts) {
+        const value = part.destinationWarehouseValue!
+        if (!labels.has(value)) {
+          const resolved = await this.resolveWarehouseValue(transaction, 'mainland.warehouse', value)
+          labels.set(value, resolved.label)
+        }
+      }
+      return {
+        valueFor: part => part.destinationWarehouseValue!,
+        labelFor: part => labels.get(part.destinationWarehouseValue!) ?? null,
+      }
+    }
+    const resolved = await this.resolveWarehouseValue(transaction, 'overseas.warehouse', input.overseasWarehouseValue!)
+    return {
+      valueFor: () => resolved.value,
+      labelFor: () => resolved.label,
+    }
+  }
+
+  private async resolveWarehouseValue(
+    transaction: Prisma.TransactionClient,
+    dictionaryCode: 'mainland.warehouse' | 'overseas.warehouse',
+    value: string,
+  ): Promise<{ value: string, label: string | null }> {
+    try {
+      const item = await this.dictionary.requireEffectiveValue(transaction, { dictionaryCode, value })
+      return { value: item.value, label: item.label }
+    }
+    catch (error) {
+      if (error instanceof DictionaryValueUnavailableError) {
+        storageFailure('SHIPMENT_STORAGE_LOCATION_INVALID', '仓库不可用，请重新选择')
+      }
+      throw error
+    }
+  }
+
+  private containerSnapshot(part: ReleasePart): Prisma.InputJsonValue | null {
+    const item = part.containerLoadingItems[0]
+    if (item === undefined) return null
+    return {
+      containerBatch: {
+        id: item.containerBatch.id,
+        containerBatchNo: item.containerBatch.containerBatchNo,
+        containerBatchName: item.containerBatch.containerBatchName,
+        loadingDate: item.containerBatch.loadingDate.toISOString().slice(0, 10),
+      },
+      recipientName: item.recipientName,
+      recipientPhone: item.recipientPhone,
+      recipientAddress: item.recipientAddress,
+      codAmountTwd: item.codAmountTwd?.toFixed(2) ?? null,
+      grossWeightKg: item.grossWeightKg?.toFixed(0) ?? null,
+      lengthCm: item.lengthCm?.toFixed(0) ?? null,
+      widthCm: item.widthCm?.toFixed(0) ?? null,
+      heightCm: item.heightCm?.toFixed(0) ?? null,
+      volumeCai: item.volumeCai?.toFixed(2) ?? null,
+    }
+  }
+
+  private costSnapshot(
+    part: ReleasePart,
+    packagingRows: readonly { id: string, shipmentId: string, amount: Prisma.Decimal }[],
+    payments: readonly { purchaseOrderId: string, fundPostingBatchId: string | null }[],
+    rateByUser: ReadonlyMap<string, Prisma.Decimal | null>,
+    now: Date,
+  ): Prisma.InputJsonValue {
+    const zero = new Prisma.Decimal(0)
+    const purchaseCost = part.items.reduce(
+      (sum, item) => sum.plus(new Prisma.Decimal(item.line.actualPurchaseUnitPriceAmount).times(item.quantity)),
+      zero,
+    ).toDecimalPlaces(2)
+    const packaging = packagingRows.filter(row => row.shipmentId === part.id)
+    const packagingCost = packaging.reduce((sum, row) => sum.plus(row.amount), zero).toDecimalPlaces(2)
+    const total = purchaseCost.plus(packagingCost).toDecimalPlaces(2)
+    const rate = rateByUser.get(part.ownershipCurrent!.ownerSalesOrder!.issuerUserId) ?? zero
+    const userLeg = total.times(rate).div(100).toDecimalPlaces(2)
+    const companyLeg = total.minus(userLeg).toDecimalPlaces(2)
+    return {
+      purchaseCostCny: purchaseCost.toFixed(2),
+      packagingCostCny: packagingCost.toFixed(2),
+      totalCostCny: total.toFixed(2),
+      originalShareRate: rate.toFixed(2),
+      userLegCny: userLeg.toFixed(2),
+      companyLegCny: companyLeg.toFixed(2),
+      purchasePaymentBatchIds: payments
+        .filter(payment => payment.purchaseOrderId === part.purchaseOrderId && payment.fundPostingBatchId !== null)
+        .map(payment => payment.fundPostingBatchId),
+      packagingCostRequestIds: packaging.map(row => row.id),
+      snapshotAt: now.toISOString(),
+    }
+  }
+}
