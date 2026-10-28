@@ -36,10 +36,13 @@ const rows = ref<ShipmentStorageListItemDto[]>([])
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
+const statusCounts = ref<{ value: string, count: number }[]>([])
 
+const countByValue = computed(() => new Map(statusCounts.value.map(item => [item.value, item.count])))
 const statusTabs = computed(() => STORAGE_STATUS_TABS.map(value => ({
   value,
   label: value === 'ALL' ? '全部' : storageStatusLabel(value),
+  count: countByValue.value.get(value),
 })))
 
 const warehouseOptions = computed(() => {
@@ -90,6 +93,13 @@ async function load(): Promise<void> {
   controller = request
   loading.value = true
   error.value = ''
+  void shipmentStorageApi.statusCounts({ ...query(), status: undefined }, request.signal)
+    .then((response) => {
+      if (!request.signal.aborted) {
+        statusCounts.value = response.data.items
+      }
+    })
+    .catch(() => undefined)
   try {
     const response = await shipmentStorageApi.list(query(), request.signal)
     if (!request.signal.aborted) {
@@ -261,20 +271,22 @@ onMounted(() => {
       @retry="load"
     >
       <template #query-leading>
-        <FaSelect
-          :model-value="scope"
-          :options="[...STORAGE_SCOPE_OPTIONS]"
-          class="w-36"
-          aria-label="位置范围"
-          @update:model-value="changeScope(String($event))"
-        />
-        <FaSelect
-          :model-value="warehouseValue"
-          :options="warehouseOptions"
-          class="w-52"
-          aria-label="仓库"
-          @update:model-value="changeWarehouse(String($event))"
-        />
+        <div class="flex flex-wrap gap-3 items-center">
+          <FaSelect
+            :model-value="scope"
+            :options="[...STORAGE_SCOPE_OPTIONS]"
+            class="w-36"
+            aria-label="位置范围"
+            @update:model-value="changeScope(String($event))"
+          />
+          <FaSelect
+            :model-value="warehouseValue"
+            :options="warehouseOptions"
+            class="w-52"
+            aria-label="仓库"
+            @update:model-value="changeWarehouse(String($event))"
+          />
+        </div>
       </template>
 
       <template #cell-status="{ row }">

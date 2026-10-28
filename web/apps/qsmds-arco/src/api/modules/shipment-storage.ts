@@ -6,6 +6,7 @@ import type {
   ShipmentStorageDetailDto,
   ShipmentStorageListData,
   ShipmentStoragePageDto,
+  ShipmentStorageStatusCountsDto,
 } from '../generated/types.gen'
 import api from '../index'
 
@@ -17,6 +18,8 @@ export function createShipmentStorageApi(client: AxiosInstance) {
   return {
     list: (query: ShipmentStorageListQuery, signal: AbortSignal) =>
       client.get<ShipmentStoragePageDto>('shipment-storage', { errorPresentation: 'local', params: query, signal }),
+    statusCounts: (query: ShipmentStorageListQuery, signal: AbortSignal) =>
+      client.get<ShipmentStorageStatusCountsDto>('shipment-storage/status-counts', { errorPresentation: 'local', params: query, signal }),
     detail: (id: string, signal: AbortSignal) =>
       client.get<ShipmentStorageDetailDto>(path(id), { errorPresentation: 'local', signal }),
     release: (data: ReleaseShipmentStorageRequestDto, signal: AbortSignal) =>

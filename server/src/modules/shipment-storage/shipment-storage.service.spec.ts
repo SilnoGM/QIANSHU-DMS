@@ -84,4 +84,24 @@ describe('ShipmentStorageService', () => {
       requestKey: REQUEST_KEY,
     })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_LOCATION_INVALID' })
   })
+
+  it('returns zero-filled status counts with an ALL total', async () => {
+    const prisma = {
+      shipmentStorageRecord: {
+        groupBy: jest.fn().mockResolvedValue([
+          { status: 'IN_STORAGE', _count: { _all: 2 } },
+          { status: 'CLAIMED', _count: { _all: 1 } },
+        ]),
+      },
+    }
+
+    const result = await service(prisma).statusCounts({})
+
+    expect(result.items).toEqual([
+      { value: 'ALL', count: 3 },
+      { value: 'IN_STORAGE', count: 2 },
+      { value: 'CLAIMED', count: 1 },
+      { value: 'VOIDED', count: 0 },
+    ])
+  })
 })

@@ -24,6 +24,7 @@ import type {
   ShipmentStorageDetailDto,
   ShipmentStorageListItemDto,
   ShipmentStoragePageDto,
+  ShipmentStorageStatusCountsDto,
 } from './shipment-storage.dto'
 import type { ShipmentStorageListQueryDto } from './shipment-storage.dto'
 
@@ -424,8 +425,45 @@ export class ShipmentStorageService {
   async list(query: ShipmentStorageListQueryDto): Promise<ShipmentStoragePageDto> {
     const page = query.page ?? 1
     const pageSize = query.pageSize ?? 20
+    const where = this.storageWhere(query)
+    const [total, rows] = await this.prisma.$transaction([
+      this.prisma.shipmentStorageRecord.count({ where }),
+      this.prisma.shipmentStorageRecord.findMany({
+        where,
+        select: STORAGE_RECORD_SELECT,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ])
+    return { items: rows.map(baseRecordDto), page, pageSize, total }
+  }
+
+  async statusCounts(query: ShipmentStorageListQueryDto): Promise<ShipmentStorageStatusCountsDto> {
+    const where = this.storageWhere({ ...query, status: undefined })
+    const rows = await this.prisma.shipmentStorageRecord.groupBy({
+      by: ['status'],
+      where,
+      _count: { _all: true },
+    })
+    const counts = new Map(rows.map(row => [row.status, row._count._all]))
+    const all = rows.reduce((sum, row) => sum + row._count._all, 0)
+    return {
+      items: [
+        { value: 'ALL', count: all },
+        { value: 'IN_STORAGE', count: counts.get('IN_STORAGE') ?? 0 },
+        { value: 'CLAIMED', count: counts.get('CLAIMED') ?? 0 },
+        { value: 'VOIDED', count: counts.get('VOIDED') ?? 0 },
+      ],
+    }
+  }
+
+  private storageWhere(
+    query: ShipmentStorageListQueryDto,
+    includeStatus = true,
+  ): Prisma.ShipmentStorageRecordWhereInput {
     const where: Prisma.ShipmentStorageRecordWhereInput = {
-      status: query.status,
+      ...(includeStatus && query.status !== undefined ? { status: query.status } : {}),
       locationScope: query.locationScope,
       warehouseValue: query.warehouseValue,
     }
@@ -440,17 +478,7 @@ export class ShipmentStorageService {
         { originCustomerNameSnapshot: match },
       ]
     }
-    const [total, rows] = await this.prisma.$transaction([
-      this.prisma.shipmentStorageRecord.count({ where }),
-      this.prisma.shipmentStorageRecord.findMany({
-        where,
-        select: STORAGE_RECORD_SELECT,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-    ])
-    return { items: rows.map(baseRecordDto), page, pageSize, total }
+    return where
   }
 
   async getById(storageRecordId: string): Promise<ShipmentStorageDetailDto> {

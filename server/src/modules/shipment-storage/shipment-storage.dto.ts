@@ -197,3 +197,14 @@ export class ShipmentStoragePageDto {
   @ApiProperty({ type: 'integer' }) readonly pageSize!: number
   @ApiProperty({ type: 'integer' }) readonly total!: number
 }
+
+export const SHIPMENT_STORAGE_COUNT_VALUES = ['ALL', 'IN_STORAGE', 'CLAIMED', 'VOIDED'] as const
+
+export class ShipmentStorageStatusCountDto {
+  @ApiProperty({ enum: SHIPMENT_STORAGE_COUNT_VALUES }) readonly value!: typeof SHIPMENT_STORAGE_COUNT_VALUES[number]
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly count!: number
+}
+
+export class ShipmentStorageStatusCountsDto {
+  @ApiProperty({ type: () => [ShipmentStorageStatusCountDto] }) readonly items!: readonly ShipmentStorageStatusCountDto[]
+}

@@ -14,6 +14,7 @@ import {
   ShipmentStorageIdParamDto,
   ShipmentStorageListQueryDto,
   ShipmentStoragePageDto,
+  ShipmentStorageStatusCountsDto,
 } from './shipment-storage.dto'
 import { ShipmentStorageService } from './shipment-storage.service'
 
@@ -39,6 +40,25 @@ export class ShipmentStorageController {
   })
   list(@Query() query: ShipmentStorageListQueryDto): Promise<ShipmentStoragePageDto> {
     return this.storage.list(query)
+  }
+
+  @Get('status-counts')
+  @RequirePermissions('shipment-storage:read')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ShipmentStorageStatusCountsDto })
+  @ApiApplicationContract({
+    operationId: 'shipment_storage_status_counts',
+    session: 'required',
+    authorization: true,
+    badRequest: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      { status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  statusCounts(@Query() query: ShipmentStorageListQueryDto): Promise<ShipmentStorageStatusCountsDto> {
+    return this.storage.statusCounts(query)
   }
 
   @Get(':storageRecordId')
