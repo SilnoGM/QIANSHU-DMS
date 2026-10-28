@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ShipmentStorageLocationScope, StorageStatusTab } from './logic'
+import type { StorageScopeFilter, StorageStatusTab } from './logic'
 import type { ShipmentStorageDetailDto, ShipmentStorageListItemDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import shipmentStorageApi from '@/api/modules/shipment-storage'
@@ -27,8 +27,8 @@ const canRelocatePermission = computed(() => auth('shipment-storage:relocate'))
 const canClaimPermission = computed(() => auth('shipment-storage:claim'))
 
 const status = ref<StorageStatusTab>('ALL')
-const scope = ref<'' | ShipmentStorageLocationScope>('')
-const warehouseValue = ref('')
+const scope = ref<StorageScopeFilter>('ALL')
+const warehouseValue = ref('ALL')
 const keyword = ref('')
 const page = ref(1)
 const pageSize = ref(20)
@@ -51,7 +51,7 @@ const warehouseOptions = computed(() => {
       ? overseas
       : [...mainland, ...overseas]
   return [
-    { value: '', label: '全部仓库' },
+    { value: 'ALL', label: '全部仓库' },
     ...items.map(item => ({ value: item.value, label: item.label })),
   ]
 })
@@ -116,8 +116,8 @@ function selectStatus(value: StorageStatusTab): void {
 }
 
 function changeScope(value: string): void {
-  scope.value = value as '' | ShipmentStorageLocationScope
-  warehouseValue.value = ''
+  scope.value = value as StorageScopeFilter
+  warehouseValue.value = 'ALL'
   page.value = 1
   void load()
 }
@@ -262,6 +262,7 @@ onMounted(() => {
       :loading="loading"
       :error="error"
       :action-column="{ width: 100 }"
+      :addable="false"
       :show-row-number="false"
       row-key="id"
       search-placeholder="货件编号、唛头、销售单、采购单或客户"

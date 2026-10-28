@@ -2,12 +2,13 @@ import type { ShipmentStorageListItemDto } from '@/api/generated/types.gen'
 
 export type ShipmentStorageStatus = ShipmentStorageListItemDto['status']
 export type ShipmentStorageLocationScope = ShipmentStorageListItemDto['locationScope']
+export type StorageScopeFilter = 'ALL' | ShipmentStorageLocationScope
 
 export const STORAGE_STATUS_TABS = ['ALL', 'IN_STORAGE', 'CLAIMED', 'VOIDED'] as const
 export type StorageStatusTab = typeof STORAGE_STATUS_TABS[number]
 
 export const STORAGE_SCOPE_OPTIONS = [
-  { value: '', label: '全部位置' },
+  { value: 'ALL', label: '全部位置' },
   { value: 'MAINLAND', label: '内地仓' },
   { value: 'OVERSEAS', label: '海外仓' },
 ] as const
@@ -49,7 +50,7 @@ export function buildStorageQuery(input: {
   pageSize: number
   keyword: string
   status: StorageStatusTab
-  locationScope: '' | ShipmentStorageLocationScope
+  locationScope: StorageScopeFilter
   warehouseValue: string
 }) {
   return {
@@ -57,7 +58,7 @@ export function buildStorageQuery(input: {
     pageSize: input.pageSize,
     keyword: input.keyword.trim() || undefined,
     status: input.status === 'ALL' ? undefined : input.status,
-    locationScope: input.locationScope || undefined,
-    warehouseValue: input.warehouseValue || undefined,
+    locationScope: input.locationScope === 'ALL' ? undefined : input.locationScope,
+    warehouseValue: input.warehouseValue === 'ALL' ? undefined : input.warehouseValue,
   }
 }
