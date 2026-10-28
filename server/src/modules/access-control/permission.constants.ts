@@ -192,6 +192,14 @@ export const DATA_SCOPE_PERMISSION_CODES = [
   'data-scope:all',
 ] as const
 
+/** 寄仓与调货：读取、释放、位置移动与认领分别授予；运营默认只读。 */
+export const SHIPMENT_STORAGE_PERMISSION_CODES = [
+  'shipment-storage:read',
+  'shipment-storage:release',
+  'shipment-storage:relocate',
+  'shipment-storage:claim',
+] as const
+
 /**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
@@ -243,6 +251,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...PERSONAL_FUND_PERMISSION_CODES,
   ...SALES_ORDER_PERMISSION_CODES,
   ...SALES_RECEIPT_PERMISSION_CODES,
+  ...SHIPMENT_STORAGE_PERMISSION_CODES,
   ...PURCHASE_ORDER_PERMISSION_CODES,
   ...PURCHASE_SHIPPING_MARK_PERMISSION_CODES,
   ...PACKAGING_COST_PERMISSION_CODES,

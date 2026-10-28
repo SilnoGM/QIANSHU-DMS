@@ -27,6 +27,10 @@ const expectedDictionaries: ReadonlyArray<readonly [string, readonly string[]]> 
     'YJ.594540.DGHM.ZTBHCG.B.DXM',
     'QITA',
   ]],
+  ['overseas.warehouse', [
+    'RF_TZ',
+    'RF_LK',
+  ]],
   ['payment.method', [
     'ALIPAY',
     'WECHAT',
@@ -42,7 +46,7 @@ const expectedDictionaries: ReadonlyArray<readonly [string, readonly string[]]> 
 ]
 const expectedRoles: ReadonlyArray<readonly [string, number]> = [
   ['finance_staff', 27],
-  ['operations_staff', 20],
+  ['operations_staff', 21],
   ['purchasing_staff', 9],
 ]
 const expectedRuleShapes: Readonly<Record<string, string>> = {
