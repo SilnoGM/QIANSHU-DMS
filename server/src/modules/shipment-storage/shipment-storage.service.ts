@@ -7,6 +7,7 @@ import type {
   ShipmentStorageLocationScope,
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { hasPersistenceCode, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
@@ -246,7 +247,9 @@ export class ShipmentStorageService {
       return this.loadBatchRecords(existing.id)
     }
 
-    const createdIds = await this.prisma.$transaction(async transaction => {
+    let createdIds: string[]
+    try {
+      createdIds = await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
       for (const shipmentId of shipmentIds) {
         await transaction.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id = ${shipmentId}::uuid FOR UPDATE`)
@@ -393,7 +396,21 @@ export class ShipmentStorageService {
         })
       }
       return recordIds
-    }, { timeout: 30_000 })
+      }, { timeout: 30_000 })
+    }
+    catch (error) {
+      // 并发重放可能同时越过前置幂等检查；唯一约束冲突时按同一请求返回已提交结果。
+      if (hasPersistenceCode(readPersistenceErrorFacts(error), 'P2002')) {
+        const batch = await this.prisma.shipmentReleaseBatch.findFirst({
+          where: { actorUserId: context.actorUserId, requestKey: input.requestKey },
+          select: { id: true, payloadHash: true },
+        })
+        if (batch !== null && Buffer.from(batch.payloadHash).equals(hash)) {
+          return this.loadBatchRecords(batch.id)
+        }
+      }
+      throw error
+    }
 
     const records = await this.prisma.shipmentStorageRecord.findMany({
       where: { id: { in: createdIds } },
