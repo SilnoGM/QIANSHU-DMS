@@ -34643,7 +34643,8 @@
                 "CONFIRMED",
                 "PENDING_RECONCILIATION",
                 "CANCELLED",
-                "COMPLETED"
+                "COMPLETED",
+                "TERMINATED"
               ]
             }
           },

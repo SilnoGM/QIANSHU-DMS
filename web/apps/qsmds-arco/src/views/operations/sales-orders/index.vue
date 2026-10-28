@@ -101,6 +101,7 @@ import {
   formatSalesOrderSummaryAmount,
 } from './sales-order-list.logic'
 import SalesOrderRecordsModal from './sales-order-records-modal.vue'
+import SalesOrderTerminateModal from './sales-order-terminate-modal.vue'
 import SalesOrderWarehouseReceiptModal from './sales-order-warehouse-receipt-modal.vue'
 import { formatSalesWarehouseReceiptSuccess } from './sales-order-warehouse-receipt.logic'
 import { useSalesWarehouseReceipt } from './use-sales-warehouse-receipt'
@@ -196,6 +197,8 @@ const recordsModalInitialAction = ref<SalesOrderRecordsInitialAction>(null)
 const recordsModalInitialReceiptTab = ref<SalesOrderReceiptTab>('payments')
 const cancelModalVisible = ref(false)
 const cancelOrder = shallowRef<SalesOrderListItemDto | null>(null)
+const terminateModalVisible = ref(false)
+const terminateOrder = shallowRef<SalesOrderListItemDto | null>(null)
 const productEditVisible = ref(false)
 const purchaseStartVisible = ref(false)
 const purchaseStartPreset = shallowRef<PurchaseStartPresetSalesOrder | null>(null)
@@ -604,8 +607,28 @@ function handleSalesOrderCancelled(): void {
   scheduleQueryRefresh(true)
 }
 
+function canTerminateOrder(order: SalesOrderListItemDto): boolean {
+  return props.viewMode === 'all'
+    && canCancelOrders.value
+    && order.orderStatus === 'CONFIRMED'
+    && order.fulfillmentStatus !== 'SIGNED'
+}
+
+function openSalesOrderTerminate(order: SalesOrderListItemDto): void {
+  terminateOrder.value = { ...order }
+  terminateModalVisible.value = true
+}
+
+function handleSalesOrderTerminated(): void {
+  scheduleQueryRefresh(true)
+}
+
 function detailMenuItems(order: SalesOrderListItemDto): ActionMenuItem[][] {
-  return [[{ label: '详情', handle: () => openSalesOrderDetail(order) }]]
+  const items: ActionMenuItem[] = [{ label: '详情', handle: () => openSalesOrderDetail(order) }]
+  if (canTerminateOrder(order)) {
+    items.push({ label: '终止', handle: () => openSalesOrderTerminate(order) })
+  }
+  return [items]
 }
 
 const PRODUCT_EDIT_FULFILLMENT_STATUSES = new Set([
@@ -2447,6 +2470,12 @@ onBeforeUnmount(() => {
       :order="cancelOrder"
       :currencies="currencyCatalog.currencies.value"
       @cancelled="handleSalesOrderCancelled"
+    />
+
+    <SalesOrderTerminateModal
+      v-model="terminateModalVisible"
+      :order="terminateOrder"
+      @terminated="handleSalesOrderTerminated"
     />
 
     <QsSalesOrderProductsEditorModal
