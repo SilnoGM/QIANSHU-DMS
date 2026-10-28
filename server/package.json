@@ -23,6 +23,8 @@
     "products:import": "node dist/commands/product-import.js",
     "products:export": "node dist/commands/product-export.js",
     "purchase-shipments:backfill-numbers": "node dist/commands/purchase-shipment-number-backfill.js",
+    "shipments:backfill-ownership": "node dist/commands/shipment-ownership-backfill.js",
+    "shipments:ownership-parity": "node dist/commands/shipment-ownership-parity.js",
     "containers:backfill-shipments": "node dist/commands/container-shipment-backfill.js",
     "containers:clear-orphan-loads": "node dist/commands/container-shipment-orphan-cleanup.js",
     "fund-batches:backfill-numbers": "node dist/commands/fund-posting-batch-number-backfill.js",
