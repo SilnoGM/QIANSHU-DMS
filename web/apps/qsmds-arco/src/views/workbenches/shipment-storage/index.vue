@@ -232,18 +232,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-4 min-w-0 sm:p-6">
-    <div class="mb-4 flex flex-wrap gap-3 items-start justify-between">
-      <div class="min-w-0">
-        <h1 class="qs-type-page-title m-0">
-          寄仓管理
-        </h1>
-        <p class="qs-type-meta text-muted-foreground mb-0 mt-1">
-          内地仓与海外仓的寄仓货件、成本与位置记录。
-        </p>
-      </div>
-    </div>
-
+  <FaPageHeader title="寄仓管理" description="内地仓与海外仓的寄仓货件、成本与位置记录。" />
+  <FaPageMain class="min-w-0">
     <QsStatusSwitchToolbar
       :model-value="status"
       :items="statusTabs"
@@ -505,5 +495,5 @@ onMounted(() => {
       :storage-record="claimRecord"
       @claimed="claimed"
     />
-  </div>
+  </FaPageMain>
 </template>
