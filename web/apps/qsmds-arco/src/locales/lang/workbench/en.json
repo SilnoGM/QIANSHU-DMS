@@ -303,6 +303,7 @@
       "MARK_NOT_FOUND_IN_CONTAINER": "No row with this shipping mark inside the container",
       "LOADING_ITEM_AMBIGUOUS": "Duplicate shipping mark inside the container",
       "SHIPMENT_NOT_MATCHED": "Container row has no shipment",
+      "SHIPMENT_IN_STORAGE": "Shipment is in storage; settle after claim",
       "PURCHASE_SOURCE_MISSING": "Shipment has no purchase source",
       "SALES_SOURCE_MISSING": "Shipment has no sales source"
     },

@@ -17,6 +17,7 @@ import {
 } from '../dictionaries/dictionary-lookup.service'
 import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
 import type {
+  ClaimShipmentStorageRequestDto,
   RelocateShipmentStorageRequestDto,
   ReleaseShipmentStorageRequestDto,
   ShipmentStorageCostDto,
@@ -467,8 +468,7 @@ export class ShipmentStorageService {
     context: ShipmentStorageMutationContext,
     storageRecordId: string,
     input: RelocateShipmentStorageRequestDto,
-  ): Promise<ShipmentStorageDetailDto> {
-    const hash = payloadHash({
+  ): Promise<ShipmentStorageDetailDto> {    const hash = payloadHash({
       format: 'shipment-storage.relocate.v1',
       storageRecordId,
       warehouseValue: input.warehouseValue,
@@ -542,6 +542,142 @@ export class ShipmentStorageService {
           fromWarehouseValue: record.warehouseValue,
           toWarehouseValue: resolved.value,
           reason: input.reason,
+        },
+      })
+    }, { timeout: 30_000 })
+    return this.getById(storageRecordId)
+  }
+
+  async claim(
+    context: ShipmentStorageMutationContext,
+    storageRecordId: string,
+    input: ClaimShipmentStorageRequestDto,
+  ): Promise<ShipmentStorageDetailDto> {
+    await this.prisma.$transaction(async transaction => {
+      await applyTransactionTimeouts(transaction)
+      await transaction.$queryRaw(Prisma.sql`SELECT id FROM shipment_storage_records WHERE id = ${storageRecordId}::uuid FOR UPDATE`)
+      const record = await transaction.shipmentStorageRecord.findUnique({
+        where: { id: storageRecordId },
+        select: {
+          id: true,
+          shipmentId: true,
+          status: true,
+          originSalesOrderId: true,
+          originAllocations: true,
+          claimedSalesOrderId: true,
+          claimedBy: true,
+        },
+      })
+      if (record === null) {
+        storageFailure('SHIPMENT_STORAGE_NOT_FOUND', '寄仓记录不存在', HttpStatus.NOT_FOUND)
+      }
+      if (record.status === 'CLAIMED') {
+        if (record.claimedSalesOrderId === input.salesOrderId && record.claimedBy === context.actorUserId) {
+          return
+        }
+        storageFailure('SHIPMENT_STORAGE_STATE_CHANGED', '寄仓记录已被认领', HttpStatus.CONFLICT)
+      }
+      if (record.status !== 'IN_STORAGE') {
+        storageFailure('SHIPMENT_STORAGE_STATE_CHANGED', '只有寄仓中的记录可以认领', HttpStatus.CONFLICT)
+      }
+      const ownership = await transaction.shipmentOwnershipCurrent.findUnique({
+        where: { shipmentId: record.shipmentId },
+        select: { ownerType: true, state: true },
+      })
+      if (ownership?.ownerType !== 'STORAGE_POOL' || ownership.state !== 'ACTIVE') {
+        storageFailure('SHIPMENT_STORAGE_STATE_CHANGED', '货件归属已变化，请刷新后重试', HttpStatus.CONFLICT)
+      }
+      const order = await transaction.salesOrder.findUnique({
+        where: { id: input.salesOrderId },
+        select: { id: true, orderNo: true, orderStatus: true },
+      })
+      if (order === null) {
+        storageFailure('SALES_ORDER_NOT_FOUND', '目标销售订单不存在', HttpStatus.NOT_FOUND)
+      }
+      if (order.orderStatus !== 'CONFIRMED') {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '只有已确认的销售订单可以认领寄仓货件')
+      }
+      if (input.salesOrderId === record.originSalesOrderId) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '不能把货件认领回原销售订单')
+      }
+      const requestedLineIds = input.lines.map(line => line.salesOrderLineId)
+      if (new Set(requestedLineIds).size !== requestedLineIds.length) {
+        storageFailure('VALIDATION_FAILED', '认领明细行不能重复')
+      }
+      const lines = await transaction.salesOrderLine.findMany({
+        where: {
+          id: { in: requestedLineIds },
+          salesOrderId: input.salesOrderId,
+          removedAt: null,
+        },
+        select: { id: true, lineNumber: true, quantity: true },
+      })
+      if (lines.length !== requestedLineIds.length) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '目标销售明细行不存在或已移除')
+      }
+      const lineById = new Map(lines.map(line => [line.id, line]))
+      for (const claimed of input.lines) {
+        const line = lineById.get(claimed.salesOrderLineId)
+        if (line === undefined || claimed.quantity > line.quantity) {
+          storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '认领数量超过目标销售行数量')
+        }
+      }
+      const shipmentQuantity = Array.isArray(record.originAllocations)
+        ? record.originAllocations.reduce<number>((sum, allocation) => {
+          if (typeof allocation !== 'object' || allocation === null || Array.isArray(allocation)) return sum
+          const quantity = (allocation as Record<string, unknown>).quantity
+          return sum + (typeof quantity === 'number' ? quantity : 0)
+        }, 0)
+        : 0
+      const claimedQuantity = input.lines.reduce((sum, line) => sum + line.quantity, 0)
+      if (shipmentQuantity <= 0 || claimedQuantity !== shipmentQuantity) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '寄仓货件必须整件认领')
+      }
+      const now = new Date()
+      await transaction.shipmentStorageRecord.update({
+        where: { id: storageRecordId },
+        data: {
+          status: 'CLAIMED',
+          claimedSalesOrderId: input.salesOrderId,
+          claimedAt: now,
+          claimedBy: context.actorUserId,
+        },
+      })
+      await transaction.shipmentClaimLine.createMany({
+        data: input.lines.map(line => ({
+          storageRecordId,
+          salesOrderLineId: line.salesOrderLineId,
+          quantity: line.quantity,
+          claimedAt: now,
+          claimedBy: context.actorUserId,
+        })),
+      })
+      await this.ownership.recordMany(transaction, [{
+        shipmentId: record.shipmentId,
+        ownerType: 'SALES_ORDER',
+        ownerSalesOrderId: input.salesOrderId,
+        reason: 'CLAIM',
+        actorUserId: context.actorUserId,
+        payload: {
+          format: 'shipment-ownership.claim.v1',
+          shipmentId: record.shipmentId,
+          storageRecordId,
+          salesOrderId: input.salesOrderId,
+        },
+      }])
+      await this.audit.record(transaction, {
+        eventType: 'SHIPMENT_STORAGE_CLAIMED',
+        outcome: 'SUCCESS',
+        actorType: 'USER',
+        actorUserId: context.actorUserId,
+        requestId: context.requestId,
+        targetType: 'SHIPMENT_STORAGE_RECORD',
+        targetId: storageRecordId,
+        metadata: {
+          shipmentId: record.shipmentId,
+          salesOrderId: input.salesOrderId,
+          salesOrderNo: order.orderNo,
+          claimedQuantity,
         },
       })
     }, { timeout: 30_000 })

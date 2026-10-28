@@ -312,6 +312,7 @@
       "MARK_NOT_FOUND_IN_CONTAINER": "柜次内没有同唛头的行",
       "LOADING_ITEM_AMBIGUOUS": "柜次内同唛头行重复",
       "SHIPMENT_NOT_MATCHED": "柜次行未匹配货件",
+      "SHIPMENT_IN_STORAGE": "货件在寄仓中，待认领后结算",
       "PURCHASE_SOURCE_MISSING": "货件缺少采购来源",
       "SALES_SOURCE_MISSING": "货件缺少销售来源"
     },

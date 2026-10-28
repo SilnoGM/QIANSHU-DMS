@@ -7,6 +7,7 @@ import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
 import {
+  ClaimShipmentStorageRequestDto,
   RelocateShipmentStorageRequestDto,
   ReleaseShipmentStorageRequestDto,
   ShipmentStorageDetailDto,
@@ -83,6 +84,39 @@ export class ShipmentStorageController {
   ): Promise<readonly ShipmentStorageDetailDto[]> {
     return this.storage.release(
       { actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) },
+      dto,
+    )
+  }
+
+  @Post(':storageRecordId/claim')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('shipment-storage:claim')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ShipmentStorageDetailDto })
+  @ApiApplicationContract({
+    operationId: 'shipment_storage_claim',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      { status: 403, codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] },
+      { status: 404, codes: ['SHIPMENT_STORAGE_NOT_FOUND', 'SALES_ORDER_NOT_FOUND'] },
+      { status: 409, codes: ['SHIPMENT_STORAGE_STATE_CHANGED'] },
+      { status: 422, codes: ['SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', 'VALIDATION_FAILED'] },
+    ],
+  })
+  claim(
+    @Param() params: ShipmentStorageIdParamDto,
+    @Body() dto: ClaimShipmentStorageRequestDto,
+    @Req() request: object,
+  ): Promise<ShipmentStorageDetailDto> {
+    return this.storage.claim(
+      { actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) },
+      params.storageRecordId,
       dto,
     )
   }

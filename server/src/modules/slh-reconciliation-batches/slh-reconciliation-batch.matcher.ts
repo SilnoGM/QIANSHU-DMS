@@ -49,7 +49,7 @@ export async function matchBillUnreconciledLines(
       items: {
         select: {
           id: true, lineNumber: true, oceanShippingMarkText: true,
-          shipment: { select: { purchaseOrderId: true, ownershipCurrent: { select: { ownerSalesOrderId: true } } } },
+          shipment: { select: { purchaseOrderId: true, ownershipCurrent: { select: { ownerType: true, ownerSalesOrderId: true } } } },
         },
       },
     },
@@ -64,6 +64,7 @@ export async function matchBillUnreconciledLines(
       shipment: item.shipment === null ? null : {
         purchaseOrderId: item.shipment.purchaseOrderId,
         salesOrderId: item.shipment?.ownershipCurrent?.ownerSalesOrderId ?? null,
+        ownerType: item.shipment?.ownershipCurrent?.ownerType,
       },
     })),
   }))

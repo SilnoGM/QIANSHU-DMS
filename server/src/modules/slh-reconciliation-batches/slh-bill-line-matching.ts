@@ -24,6 +24,7 @@ export type SlhBillLineUnmatchedReason =
   | 'MARK_NOT_FOUND_IN_CONTAINER'
   | 'LOADING_ITEM_AMBIGUOUS'
   | 'SHIPMENT_NOT_MATCHED'
+  | 'SHIPMENT_IN_STORAGE'
   | 'PURCHASE_SOURCE_MISSING'
   | 'SALES_SOURCE_MISSING'
 
@@ -37,6 +38,7 @@ export const SLH_BILL_LINE_UNMATCHED_REASONS = [
   'MARK_NOT_FOUND_IN_CONTAINER',
   'LOADING_ITEM_AMBIGUOUS',
   'SHIPMENT_NOT_MATCHED',
+  'SHIPMENT_IN_STORAGE',
   'PURCHASE_SOURCE_MISSING',
   'SALES_SOURCE_MISSING',
 ] as const satisfies readonly SlhBillLineUnmatchedReason[]
@@ -45,7 +47,7 @@ export interface SlhBillContainerItemInput {
   id: string
   oceanShippingMarkText: string | null
   /** null 表示柜次行没有匹配货件；有货件时再校验采购来源与销售来源。 */
-  shipment: { purchaseOrderId: string | null, salesOrderId: string | null } | null
+  shipment: { purchaseOrderId: string | null, salesOrderId: string | null, ownerType?: 'SALES_ORDER' | 'STORAGE_POOL' | 'COMPANY' } | null
 }
 
 export interface SlhBillContainerBatchInput {
@@ -196,6 +198,10 @@ function unmatched(lineId: string, reason: SlhBillLineUnmatchedReason): SlhBillL
 export function resolveLoadingItemIneligibility(item: SlhBillContainerItemInput): SlhBillLineUnmatchedReason | null {
   if (item.shipment === null) {
     return 'SHIPMENT_NOT_MATCHED'
+  }
+  // 寄仓中的货件没有当前销售归属；等认领后再结算，不能用原销售单强行入账。
+  if (item.shipment.ownerType === 'STORAGE_POOL') {
+    return 'SHIPMENT_IN_STORAGE'
   }
   // 采购来源在库结构上必填（货件必有采购订单），此处仍显式判定，规则不依赖库表形状。
   if (item.shipment.purchaseOrderId === null || item.shipment.purchaseOrderId === '') {

@@ -303,6 +303,7 @@
       "MARK_NOT_FOUND_IN_CONTAINER": "櫃次內沒有同嘜頭的行",
       "LOADING_ITEM_AMBIGUOUS": "櫃次內同嘜頭行重複",
       "SHIPMENT_NOT_MATCHED": "櫃次行未匹配貨件",
+      "SHIPMENT_IN_STORAGE": "貨件在寄倉中，待認領後結算",
       "PURCHASE_SOURCE_MISSING": "貨件缺少採購來源",
       "SALES_SOURCE_MISSING": "貨件缺少銷售來源"
     },

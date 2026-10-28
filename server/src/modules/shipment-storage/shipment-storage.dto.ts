@@ -112,6 +112,33 @@ export class RelocateShipmentStorageRequestDto {
   requestKey!: string
 }
 
+export class ClaimShipmentStorageLineDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @IsUUID('4')
+  salesOrderLineId!: string
+
+  @ApiProperty({ type: 'integer', minimum: 1 })
+  @IsInt()
+  @Min(1)
+  quantity!: number
+}
+
+export class ClaimShipmentStorageRequestDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @IsUUID('4')
+  salesOrderId!: string
+
+  @ApiProperty({ type: () => [ClaimShipmentStorageLineDto] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(100)
+  lines!: ClaimShipmentStorageLineDto[]
+
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @IsUUID('4')
+  requestKey!: string
+}
+
 export class ShipmentStorageIdParamDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   @IsUUID('4')
