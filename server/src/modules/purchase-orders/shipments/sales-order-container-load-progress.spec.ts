@@ -196,8 +196,10 @@ describe('container loading sales order locks and resolution', () => {
   it('resolves deduplicated sales orders of the associated shipments', async () => {
     const f = fixture()
     f.purchaseOrderPart.findMany.mockResolvedValue([
-      { purchaseOrder: { salesOrderId: 'so-2' } }, { purchaseOrder: { salesOrderId: 'so-1' } },
-      { purchaseOrder: { salesOrderId: 'so-2' } }, { purchaseOrder: { salesOrderId: null } },
+      { ownershipCurrent: { ownerSalesOrderId: 'so-2' } },
+      { ownershipCurrent: { ownerSalesOrderId: 'so-1' } },
+      { ownershipCurrent: { ownerSalesOrderId: 'so-2' } },
+      { ownershipCurrent: null },
     ])
     expect(await salesOrderIdsOfShipments(f.transaction as unknown as PrismaService, ['part-2', 'part-1'])).toEqual(['so-1', 'so-2'])
     f.purchaseOrderPart.findMany.mockClear()

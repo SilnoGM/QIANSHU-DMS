@@ -27,14 +27,21 @@ function part(overrides: Record<string, unknown> = {}) {
 }
 
 function lockedPart(overrides: Record<string, unknown> = {}) {
+  const purchaseOrder = (overrides.purchaseOrder as Record<string, unknown> | undefined) ?? {
+    id: 'po-1',
+    purchaseType: 'SALES_LINKED',
+    orderStatus: 'CONFIRMED',
+    salesOrderId: ORDER_ID,
+  }
+  const ownershipCurrent = overrides.ownershipCurrent ?? (
+    purchaseOrder.purchaseType === 'SALES_LINKED' && purchaseOrder.salesOrderId !== null
+      ? { ownerType: 'SALES_ORDER', ownerSalesOrderId: purchaseOrder.salesOrderId }
+      : { ownerType: 'COMPANY', ownerSalesOrderId: null }
+  )
   return {
     ...part(),
-    purchaseOrder: {
-      id: 'po-1',
-      purchaseType: 'SALES_LINKED',
-      orderStatus: 'CONFIRMED',
-      salesOrderId: ORDER_ID,
-    },
+    purchaseOrder,
+    ownershipCurrent,
     ...overrides,
   }
 }
@@ -245,13 +252,35 @@ describe('PurchaseShipmentDeliveryService', () => {
     expect(f.transaction.salesOrder.update).not.toHaveBeenCalled()
   })
 
+  it('resolves the sales order from current ownership instead of the purchase source', async () => {
+    const f = fixture()
+    const ownershipSalesOrderId = '33333333-3333-4333-8333-333333333333'
+    const overridden = lockedPart({
+      purchaseOrder: {
+        id: 'po-1',
+        purchaseType: 'SALES_LINKED',
+        orderStatus: 'CONFIRMED',
+        salesOrderId: '44444444-4444-4444-8444-444444444444',
+      },
+      ownershipCurrent: { ownerType: 'SALES_ORDER', ownerSalesOrderId: ownershipSalesOrderId },
+    })
+    f.transaction.purchaseOrderPart.findFirst.mockResolvedValue(overridden)
+    f.transaction.purchaseOrderPart.findUnique.mockResolvedValue(overridden)
+
+    await f.service.deliver(context, PART_ID, {})
+
+    expect(f.transaction.salesOrder.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: ownershipSalesOrderId },
+    }))
+  })
+
   it('returns 404 for a shipment outside the actor scope', async () => {
     const f = fixture({ scope: 'SELF' })
     f.transaction.purchaseOrderPart.findFirst.mockResolvedValue(null)
     await expect(f.service.deliver(context, PART_ID, {})).rejects.toMatchObject({ code: 'PURCHASE_ORDER_PART_NOT_FOUND' })
     expect(f.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
     expect(f.transaction.purchaseOrderPart.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ purchaseOrder: { is: { salesOrder: { is: { issuerUserId: ACTOR_ID } } } } }) as unknown,
+      where: expect.objectContaining({ ownershipCurrent: { ownerSalesOrder: { is: { issuerUserId: ACTOR_ID } } } }) as unknown,
     }))
   })
 

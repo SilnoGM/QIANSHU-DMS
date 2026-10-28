@@ -85,8 +85,8 @@ export class PackagingCostService {
         await tx.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id = ${normalized.shipmentId}::uuid FOR UPDATE`)
         const raced = await replay(tx)
         if (raced) return raced.id
-        const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, include: { purchaseOrder: { include: { salesOrder: true } } } })
-        const order = shipment?.purchaseOrder, source = order?.salesOrder
+        const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, include: { purchaseOrder: true, ownershipCurrent: { include: { ownerSalesOrder: true } } } })
+        const order = shipment?.purchaseOrder, source = shipment?.ownershipCurrent?.ownerSalesOrder
         if (!shipment || shipment.status !== 'ACTIVE' || !shipment.warehouseReceivedAt || !shipment.shippedAt || !shipment.shipmentNo || !shipment.shippingMarkText
           || !order || !['CONFIRMED', 'COMPLETED'].includes(order.orderStatus) || !source) return packagingCostFailure('PACKAGING_COST_NOT_ALLOWED', '仅已到仓且有销售来源的有效货件可以提报')
         if (normalized.packagingVendor === 'CHENGXIN') await this.recipients.requireConfigured(tx)

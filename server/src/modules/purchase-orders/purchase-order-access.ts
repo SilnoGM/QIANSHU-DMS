@@ -20,10 +20,11 @@ export function purchaseOrderPartScopeWhere(
   scope: DataScope,
   actorUserId: string,
 ): Prisma.PurchaseOrderPartWhereInput {
+  // 货件归属以当前归属投影为准；来源采购单只在创建时写入，不再是可见性真相源。
   return scope === 'SELF'
     ? {
-        purchaseOrder: {
-          is: { salesOrder: { is: { issuerUserId: actorUserId } } },
+        ownershipCurrent: {
+          ownerSalesOrder: { is: { issuerUserId: actorUserId } },
         },
       }
     : {}

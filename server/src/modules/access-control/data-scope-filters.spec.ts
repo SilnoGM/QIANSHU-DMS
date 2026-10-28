@@ -30,7 +30,7 @@ describe('data scope where builders', () => {
       salesOrder: { is: { issuerUserId: ACTOR } },
     })
     expect(purchaseOrderPartScopeWhere('SELF', ACTOR)).toEqual({
-      purchaseOrder: { is: { salesOrder: { is: { issuerUserId: ACTOR } } } },
+      ownershipCurrent: { ownerSalesOrder: { is: { issuerUserId: ACTOR } } },
     })
     expect(purchaseOrderPayableScopeWhere('SELF', ACTOR)).toEqual({ ownerUserId: ACTOR })
     expect(salesReceiptScopeWhere('SELF', ACTOR)).toEqual({ accountOwnerUserId: ACTOR })

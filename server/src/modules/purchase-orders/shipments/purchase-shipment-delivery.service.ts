@@ -31,6 +31,7 @@ const PART_LOCK_SELECT = {
     orderStatus: true,
     salesOrderId: true,
   } },
+  ownershipCurrent: { select: { ownerType: true, ownerSalesOrderId: true } },
 } as const satisfies Prisma.PurchaseOrderPartSelect
 
 const STOCK_SIGNED_OUTCOME: SalesOrderShipmentSignOutcome = {
@@ -92,8 +93,8 @@ export class PurchaseShipmentDeliveryService {
         )
       }
 
-      const salesOrderId = candidate.purchaseOrder.purchaseType === 'SALES_LINKED'
-        ? candidate.purchaseOrder.salesOrderId
+      const salesOrderId = candidate.ownershipCurrent?.ownerType === 'SALES_ORDER'
+        ? candidate.ownershipCurrent.ownerSalesOrderId
         : null
       let lockedOrder: {
         readonly orderStatus: string

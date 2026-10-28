@@ -13,7 +13,7 @@ export const operationsOceanLineSelect = {
   recipientName: true, recipientPhone: true, recipientAddress: true, codAmountTwd: true,
   warehouseReceiptReference: true, packageCount: true, packageUnit: true, grossWeightKg: true,
   lengthCm: true, widthCm: true, heightCm: true, volumeCai: true, remark: true,
-  shipment: { select: { shipmentNo: true, shippingMarkText: true, purchaseOrder: { select: { id: true, orderNo: true, salesOrder: { select: { id: true, orderNo: true, issuerUserId: true } } } } } },
+  shipment: { select: { shipmentNo: true, shippingMarkText: true, purchaseOrder: { select: { id: true, orderNo: true } }, ownershipCurrent: { select: { ownerSalesOrder: { select: { id: true, orderNo: true, issuerUserId: true } } } } } },
 } satisfies Prisma.ContainerLoadingItemSelect
 const lineSelect = operationsOceanLineSelect
 type PersonalLine = Prisma.ContainerLoadingItemGetPayload<{ select: typeof lineSelect }>
@@ -21,14 +21,14 @@ type PersonalLine = Prisma.ContainerLoadingItemGetPayload<{ select: typeof lineS
 export function personalOceanLineWhere(actorUserId: string = resolveDataScopeActor()): Prisma.ContainerLoadingItemWhereInput {
   // 归属只取服务器会话身份，不接受查询参数指定人员；管理员也不跳过此限制。
   // 未匹配货件、独立备货和没有销售来源的行自然被关系过滤排除。
-  return { shipment: { purchaseOrder: { salesOrder: { issuerUserId: containerUuid(actorUserId) } } } }
+  return { shipment: { ownershipCurrent: { ownerSalesOrder: { issuerUserId: containerUuid(actorUserId) } } } }
 }
 
 export function serializeOperationsOceanLine(row: PersonalLine): OperationsOceanContainerLineDto {
   const { shipment, codAmountTwd, grossWeightKg, lengthCm, widthCm, heightCm, volumeCai, ...fields } = row
   return {
     ...fields, shipmentNo: shipment?.shipmentNo ?? null, shippingMark: shipment?.shippingMarkText ?? null,
-    salesOrderId: shipment?.purchaseOrder.salesOrder?.id ?? null, salesOrderNo: shipment?.purchaseOrder.salesOrder?.orderNo ?? null,
+    salesOrderId: shipment?.ownershipCurrent?.ownerSalesOrder?.id ?? null, salesOrderNo: shipment?.ownershipCurrent?.ownerSalesOrder?.orderNo ?? null,
     purchaseOrderId: shipment?.purchaseOrder.id ?? null, purchaseOrderNo: shipment?.purchaseOrder.orderNo ?? null,
     codAmountTwd: codAmountTwd?.toFixed(2) ?? null, grossWeightKg: grossWeightKg?.toFixed(0) ?? null,
     lengthCm: lengthCm?.toFixed(0) ?? null, widthCm: widthCm?.toFixed(0) ?? null, heightCm: heightCm?.toFixed(0) ?? null,
@@ -38,7 +38,7 @@ export function serializeOperationsOceanLine(row: PersonalLine): OperationsOcean
 
 export function serializeOperationsOceanAllLine(row: PersonalLine, actorUserId: string): OperationsOceanContainerAllLineDto {
   // issuerUserId 只用于生成 mine，不进入响应；序列化仍沿用个人明细的字段白名单。
-  return { ...serializeOperationsOceanLine(row), mine: row.shipment?.purchaseOrder.salesOrder?.issuerUserId === actorUserId }
+  return { ...serializeOperationsOceanLine(row), mine: row.shipment?.ownershipCurrent?.ownerSalesOrder?.issuerUserId === actorUserId }
 }
 
 const personalWhere = personalOceanLineWhere

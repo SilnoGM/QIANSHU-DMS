@@ -332,8 +332,8 @@ describe('PurchaseShipmentQueryService', () => {
     expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: {
         id: 'part-id',
-        purchaseOrder: {
-          is: { salesOrder: { is: { issuerUserId: 'actor-id' } } },
+        ownershipCurrent: {
+          ownerSalesOrder: { is: { issuerUserId: 'actor-id' } },
         },
       },
     }))

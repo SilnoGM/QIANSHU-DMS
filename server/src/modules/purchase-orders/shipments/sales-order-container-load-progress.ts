@@ -21,9 +21,12 @@ export async function salesOrderIdsOfShipments(
   if (!ids.length) return []
   const rows = await transaction.purchaseOrderPart.findMany({
     where: { id: { in: ids } },
-    select: { purchaseOrder: { select: { salesOrderId: true } } },
+    select: { ownershipCurrent: { select: { ownerSalesOrderId: true } } },
   })
-  return [...new Set(rows.flatMap(row => row.purchaseOrder.salesOrderId === null ? [] : [row.purchaseOrder.salesOrderId]))].sort()
+  const ownerSalesOrderIds = rows
+    .map(row => row.ownershipCurrent?.ownerSalesOrderId)
+    .filter((id): id is string => typeof id === 'string')
+  return [...new Set(ownerSalesOrderIds)].sort()
 }
 
 /**
