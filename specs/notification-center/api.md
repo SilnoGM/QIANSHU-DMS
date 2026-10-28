@@ -8,6 +8,7 @@
 | 方案定位 | 通知中心（系统通知）的统一接口；千树小助理是其中的微信出站渠道 |
 | 关联文档 | [落地设计](./design.md)、[GeWeAPI 微信通知接入评估](../../docs/技术评估/GeWeAPI微信通知接入评估.md) |
 | 最后更新 | 2026-10-28 |
+| 关键决策 | 阶段 1 不接回调；首批 3 个事件；管理员绑定；进程内循环 + 数据库租约 |
 | 适用范围 | `server/src/modules/notifications`、`web/apps/qsmds-arco/src/api/modules/notifications.ts` |
 
 本文中的 TypeScript 片段是契约示意，不是最终代码；表结构、权限与迁移以评审通过的实施方案为准。
@@ -112,6 +113,7 @@ export interface SystemNotificationPublishResult {
 
 - `source.type` 使用大写蛇形业务对象名，例如 `PURCHASE_ORDER`、`SLH_RECONCILIATION_BATCH`。
 - `variables` 只允许一层字符串、数字或 `null`；key 最多 20 个，单值最长 200 字符；`null` 渲染为空字符串。
+- 阶段 1 的 3 个事件允许金额与客户名称；1:1 只发给已验证绑定，群必须 `internal_only`。
 - `dedupeKey` 最长 200 字符，只允许 `A-Z a-z 0-9 : _ -`，不得包含姓名、手机号等个人信息。
 - `expiresAt` 必须晚于当前时间；已过期时站外投递直接落 `EXPIRED`，站内收件箱仍然创建。
 
@@ -138,6 +140,8 @@ export interface SystemNotificationPublishResult {
 | `ROLE` | 两者 | 用策略里的 `roleCodes` 覆盖命令目标 |
 | `PERMISSION` | 两者 | 用策略里的 `permissionCode` 覆盖命令目标 |
 | `GROUP` | 仅 `ASSISTANT` | 发到已登记的群目标，忽略个人收件人；`IN_APP` 出现该值视为策略非法 |
+
+当渠道策略 `allow_sensitive = true` 且 `target_mode = GROUP` 时，只能选择 `internal_only = true` 的群；`COMMAND_TARGET` 的 1:1 只发给 `verified_at` 非空的绑定。
 
 这条规则把「谁应该知道」和「发到哪里」分开：业务模块只知道人，群路由属于千树小助理的渠道配置。
 
@@ -185,17 +189,17 @@ export interface SystemNotificationPublishResult {
 
 ### 2.7 事件目录（首批候选，需业务确认）
 
-| eventType | source.type | 默认渠道 | 千树小助理目标 | templateKey | 优先级 | 站外 TTL |
-| --- | --- | --- | --- | --- | --- | --- |
-| `PURCHASE_REVIEW_PENDING` | `PURCHASE_ORDER` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.review.pending` | HIGH | 24h |
-| `FUND_WITHDRAWAL_REVIEW_PENDING` | `FUND_WITHDRAWAL` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `fund.withdrawal.pending` | HIGH | 24h |
-| `INVOICE_REQUEST_REVIEW_PENDING` | `INVOICE_REQUEST` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `invoice.review.pending` | HIGH | 24h |
-| `PACKAGING_COST_PAYMENT_PENDING` | `PACKAGING_COST` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `packaging.payment.pending` | NORMAL | 48h |
-| `PURCHASE_PAYABLE_DUE` | `PURCHASE_ORDER_PAYABLE` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.payable.due` | NORMAL | 24h |
-| `SLH_RECONCILIATION_COMPLETED` | `SLH_RECONCILIATION_BATCH` | `IN_APP` + `ASSISTANT` | `GROUP`（`finance`） | `slh.reconciliation.completed` | NORMAL | 8h |
-| `SHIPMENT_ARRIVED` | `PURCHASE_SHIPMENT` | `IN_APP` + `ASSISTANT` | `GROUP`（`operations`） | `shipment.arrived` | NORMAL | 8h |
+| eventType | source.type | 默认渠道 | 千树小助理目标 | templateKey | 优先级 | 站外 TTL | 阶段 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `PURCHASE_REVIEW_PENDING` | `PURCHASE_ORDER` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.review.pending` | HIGH | 24h | 1 |
+| `FUND_WITHDRAWAL_REVIEW_PENDING` | `FUND_WITHDRAWAL` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `fund.withdrawal.pending` | HIGH | 24h | 2 |
+| `INVOICE_REQUEST_REVIEW_PENDING` | `INVOICE_REQUEST` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `invoice.review.pending` | HIGH | 24h | 2 |
+| `PACKAGING_COST_PAYMENT_PENDING` | `PACKAGING_COST` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `packaging.payment.pending` | NORMAL | 48h | 2 |
+| `PURCHASE_PAYABLE_DUE` | `PURCHASE_ORDER_PAYABLE` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.payable.due` | NORMAL | 24h | 2 |
+| `SLH_RECONCILIATION_COMPLETED` | `SLH_RECONCILIATION_BATCH` | `IN_APP` + `ASSISTANT` | `GROUP`（`finance`） | `slh.reconciliation.completed` | NORMAL | 8h | 1 |
+| `SHIPMENT_ARRIVED` | `PURCHASE_SHIPMENT` | `IN_APP` + `ASSISTANT` | `GROUP`（`operations`） | `shipment.arrived` | NORMAL | 8h | 1 |
 
-表中「默认渠道」是阶段 4 的目标状态；阶段 1 只启用 `ASSISTANT`，`IN_APP` 渠道保持关闭，发布时返回 `CHANNEL_DISABLED` 警告且不创建收件箱条目。
+表中「默认渠道」是阶段 3 的目标状态；阶段 1 只启用 `ASSISTANT` 与表中阶段为 1 的 3 个事件，`IN_APP` 渠道保持关闭，发布时返回 `CHANNEL_DISABLED` 警告且不创建收件箱条目。
 
 事件目录是稳定的对外契约：新增事件只追加，不修改既有 `eventType` 语义；删除事件需要先停止所有调用方。
 
@@ -256,30 +260,33 @@ export interface SystemNotificationPublishResult {
 | PATCH | `/api/assistant/accounts/:id` | `assistant-account:operate` | `assistant_accounts_update` | 备注名、区域、代理、启停 |
 | POST | `/api/assistant/accounts/:id/login` | `assistant-account:operate` | `assistant_accounts_login_start` | 获取二维码 |
 | GET | `/api/assistant/accounts/:id/login-status` | `assistant-account:operate` | `assistant_accounts_login_status` | 轮询扫码状态 |
+| GET | `/api/assistant/accounts/:id/qrcode` | `assistant-account:read` | `assistant_accounts_qrcode` | 获取公司号个人二维码，供员工扫码添加好友 |
 | POST | `/api/assistant/accounts/:id/reconnect` | `assistant-account:operate` | `assistant_accounts_reconnect` | 掉线重连 |
 | POST | `/api/assistant/accounts/:id/logout` | `assistant-account:operate` | `assistant_accounts_logout` | 退出登录 |
+| GET | `/api/assistant/contacts` | `assistant-binding:read` | `assistant_contacts_list` | 公司号好友列表，供管理员选择绑定对象 |
 | GET | `/api/assistant/bindings` | `assistant-binding:read` | `assistant_bindings_list` | 绑定列表 |
-| POST | `/api/assistant/bindings/codes` | `assistant-binding:manage` | `assistant_bindings_code_create` | 生成一次性绑定码，明文只返回一次 |
+| POST | `/api/assistant/bindings` | `assistant-binding:manage` | `assistant_bindings_create` | 管理员创建绑定（员工 + 好友 `wxid`） |
+| POST | `/api/assistant/bindings/:id/verify` | `assistant-binding:manage` | `assistant_bindings_verify` | 发送测试消息并标记已验证 |
 | DELETE | `/api/assistant/bindings/:id` | `assistant-binding:manage` | `assistant_bindings_delete` | 解绑 |
 | POST | `/api/assistant/bindings/check` | `assistant-binding:manage` | `assistant_bindings_check` | 触发好友关系巡检 |
 | GET | `/api/assistant/targets` | `assistant-target:read` | `assistant_targets_list` | 群目标列表 |
 | POST | `/api/assistant/targets/sync` | `assistant-target:manage` | `assistant_targets_sync` | 从公司号通讯录同步群 |
 | PATCH | `/api/assistant/targets/:id` | `assistant-target:manage` | `assistant_targets_update` | 命名、启用停用 |
 | POST | `/api/assistant/deliveries/:id/retry` | `assistant-delivery:resend` | `assistant_deliveries_retry` | 重试单条站外交付；过期拒绝 |
-| GET | `/api/assistant/callback-events` | `assistant-callback:read` | `assistant_callback_events_list` | 回调记录 |
-| GET | `/api/assistant/callback-events/:id` | `assistant-callback:read` | `assistant_callback_events_get` | 回调详情；原始报文脱敏 |
+| GET | `/api/assistant/callback-events` | `assistant-callback:read` | `assistant_callback_events_list` | 回调记录（可选，回调引入后） |
+| GET | `/api/assistant/callback-events/:id` | `assistant-callback:read` | `assistant_callback_events_get` | 回调详情；原始报文脱敏（可选） |
 
 ### 4.3 关键响应示例
 
 ```json
-// GET /api/notifications/overview
+// GET /api/notifications/overview（阶段 1）
 {
   "settingsEnabled": true,
   "channels": [
     {
       "channel": "IN_APP",
-      "enabled": true,
-      "today": { "published": 42, "unread": 17 }
+      "enabled": false,
+      "today": { "published": 0, "unread": 0 }
     },
     {
       "channel": "ASSISTANT",
@@ -340,9 +347,9 @@ export interface SystemNotificationPublishResult {
 }
 ```
 
-## 5. 员工自助接口
+## 5. 员工侧接口（站内阶段 3 预留）
 
-### 5.1 站内通知（阶段 4 预留）
+### 5.1 站内通知（阶段 3 预留）
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -351,34 +358,22 @@ export interface SystemNotificationPublishResult {
 | POST | `/api/notifications/me/inbox/:id/read` | 标记已读 |
 | POST | `/api/notifications/me/inbox/:id/archive` | 归档 |
 
-该组接口在阶段 4 实现，本文只冻结路径与语义。
+该组接口在阶段 3 实现，本文只冻结路径与语义。
 
 ### 5.2 千树小助理绑定
 
-仅要求登录，不额外要求管理权限。
+员工侧**没有自助绑定接口**。绑定、解绑、换号由管理员通过第 4.2 节的 `/api/assistant/bindings` 完成；员工只负责在微信里添加公司号并接收消息。
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/api/assistant/me/binding` | 本人绑定状态、公司号名称、绑定时间、好友状态 |
-| GET | `/api/assistant/me/binding/qrcode` | 公司号二维码，用于员工添加好友 |
-| POST | `/api/assistant/me/binding/codes` | 生成本人绑定码，10 分钟内有效 |
-| DELETE | `/api/assistant/me/binding` | 解绑本人微信 |
+管理员绑定流程对应接口：
 
-响应示例：
+1. `GET /api/assistant/contacts` 获取公司号好友列表。
+2. `POST /api/assistant/bindings` 选择员工与好友 `wxid`，创建绑定。
+3. `POST /api/assistant/bindings/:id/verify` 发送测试消息；员工确认后标记 `verified_at`。
+4. 只有 `verified_at` 非空的绑定可以接收 1:1 消息，尤其是金额与客户名称。
 
-```json
-// GET /api/assistant/me/binding
-{
-  "status": "ACTIVE",
-  "accountName": "公司号-01",
-  "wechatNickname": "李华",
-  "boundAt": "2026-10-20T08:00:00.000Z",
-  "friendStatus": "NORMAL",
-  "lastCheckedAt": "2026-10-28T01:00:00.000Z"
-}
-```
+## 6. 机器回调契约（可选，阶段 1 不实现）
 
-## 6. 机器回调契约
+> 阶段 1 不接回调。本节仅作为后续引入实时掉线/联系人事件时的契约草案；届时先完成 CSRF 安全评审。
 
 ### 6.1 路由与要求
 
@@ -449,7 +444,7 @@ export interface SystemNotificationPublishResult {
 
 | 事件 | 处理 |
 | --- | --- |
-| 绑定码消息 | 校验一次性码，写入绑定，可选回复「绑定成功」 |
+| 文本消息 | 阶段 1 无回调；引入后只入库，不处理（绑定由管理员完成） |
 | 掉线与登录事件 | 更新账号状态，写审计，触发告警；不改业务数据 |
 | 联系人删除事件 | 将对应绑定置为 `INVALID` |
 | 其他消息 | 只入库，不触发业务动作 |

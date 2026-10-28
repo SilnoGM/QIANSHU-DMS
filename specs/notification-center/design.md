@@ -4,12 +4,22 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档状态 | 设计稿，待评审；未实施 |
+| 文档状态 | 设计稿，关键决策已确认，待实施 |
 | 方案定位 | 通知中心（系统通知）为统一能力；站内通知与千树小助理是两个渠道 |
 | 关联文档 | [接口契约](./api.md)、[GeWeAPI 微信通知接入评估](../../docs/技术评估/GeWeAPI微信通知接入评估.md) |
 | 适用范围 | `server/src/modules/notifications`、`web/apps/qsmds-arco` |
 | 最后更新 | 2026-10-28 |
 | 实施边界 | 本文不含迁移 SQL、接口实现与页面代码；表结构、权限与迁移需单独评审批准 |
+
+## 0. 已确认决策
+
+| 决策 | 结论 | 影响 |
+| --- | --- | --- |
+| 回调 | 阶段 1 不接；只有需要实时掉线/联系人事件时再引入，届时单独做 CSRF 安全评审 | 阶段 1 无公网回调入口，不改 `CsrfProtectionGuard` |
+| 首批事件 | 3 个：`PURCHASE_REVIEW_PENDING`（1:1）、`SLH_RECONCILIATION_COMPLETED`（财务群）、`SHIPMENT_ARRIVED`（运营群） | 其余 4 个放阶段 2 |
+| 敏感内容 | 这 3 个事件允许金额与客户名称；1:1 与内部群都可发；群必须 `internal_only`，1:1 只发给已验证绑定 | 模板按事件 × 渠道开启 `allow_sensitive` |
+| 派发器 | 进程内循环 + 数据库租约；5 秒轮询、批量 20、租约 30 秒 | 不新增 systemd 服务，不引入 Redis |
+| 绑定 | 取消员工自助绑定；全部由管理员在后台完成，测试消息确认后置 `verified_at` | 不需要绑定码表，也不需要回调处理绑定消息 |
 
 ## 1. 目标与非目标
 
@@ -18,13 +28,14 @@
 - 业务模块只调用一个统一接口 `SystemNotificationService.publish()`，不感知渠道。
 - 通知中心同时支持两个渠道：站内通知（`IN_APP`）与千树小助理（`ASSISTANT`，微信经 GeWe）。
 - 千树小助理只承担「站外提醒」：失败不影响业务事务，业务侧始终有站内或其他降级路径。
-- 管理端能配置渠道与公司号、维护员工绑定与群目标、编辑模板与渠道策略、查看发送与回调记录、一键停发。
-- 数据模型为站内通知预留收件箱与已读体系；阶段 1 只启用千树小助理，站内渠道在阶段 4 上线。
+- 管理端能配置渠道与公司号、维护员工绑定与群目标、编辑模板与渠道策略、查看发送记录、一键停发；回调引入后再提供回调记录。
+- 数据模型为站内通知预留收件箱与已读体系；阶段 1 只启用千树小助理，站内渠道在阶段 3 上线。
 - 所有外部调用可审计、可观测、可限速、可停发。
 
 ### 1.2 非目标
 
 - 阶段 1 不实现站内通知中心页面与已读体系；只落表结构，渠道默认关闭。
+- 不做员工自助绑定、绑定码或员工侧绑定入口；绑定全部由管理员完成。
 - 不做多公司号选号与故障转移；首期只有一个公司号，模型保留 `accountId`。
 - 不做图片、文件、语音、视频、群内 `@`、微信内回复指令。
 - 不提供送达回执或已读状态；GeWe 没有该能力。
@@ -51,7 +62,7 @@
 SystemNotificationService
         │  同事务写入
         ├─► notifications（逻辑通知）
-        ├─► notification_inbox_items（站内通知，阶段 4 启用）
+        ├─► notification_inbox_items（站内通知，阶段 3 启用）
         └─► assistant_deliveries（千树小助理）
                     │
                     ▼
@@ -61,7 +72,7 @@ SystemNotificationService
             ├─ GeweAssistantTransport ──► GeWe API ──► 微信
             └─ FakeAssistantTransport（仅测试）
 
-GeWe 回调 ──► AssistantCallbackController ──► 归一化 ──► 去重 ──► 账号状态 / 绑定
+GeWe 回调（可选，后续按需引入） ──► AssistantCallbackController ──► 归一化 ──► 去重 ──► 账号状态
 管理端页面 ──► 通知中心管理 API + 千树小助理管理 API
 ```
 
@@ -119,7 +130,7 @@ await this.systemNotifications.publish(
 
 ### 3.5 事件目录
 
-首批候选事件与默认渠道见 [接口契约第 2.7 节](./api.md#27-事件目录首批候选需业务确认)。事件目录是稳定契约：
+首批候选事件与默认渠道见 [接口契约第 2.7 节](./api.md#27-事件目录首批候选需业务确认)。阶段 1 只启用 `PURCHASE_REVIEW_PENDING`、`SLH_RECONCILIATION_COMPLETED`、`SHIPMENT_ARRIVED` 三个事件；其余 4 个在阶段 2 追加。事件目录是稳定契约：
 
 - 新增事件只追加。
 - 每个事件在每个启用渠道上必须有策略与模板；缺失时该渠道跳过，不影响其他渠道。
@@ -134,17 +145,16 @@ await this.systemNotifications.publish(
 | 表 | 归属 | 用途 | 关键字段 |
 | --- | --- | --- | --- |
 | `notifications` | 通知中心 | 逻辑通知 | `event_type`、`source_type`、`source_id`、`dedupe_key` 唯一、`priority`、`status`、`template_key`、`requested_channels`、`variables`、`expires_at`、`published_at`、`completed_at`、`requested_by_user_id` |
-| `notification_inbox_items` | 站内通知 | 收件箱条目 | `notification_id`、`user_id`、`template_version`、`title_snapshot`、`body_snapshot`、`link_url_snapshot`、`read_at`、`archived_at`；唯一 `(notification_id, user_id)` |
+| `notification_inbox_items` | 站内通知 | 收件箱条目（阶段 3） | `notification_id`、`user_id`、`template_version`、`title_snapshot`、`body_snapshot`、`link_url_snapshot`、`read_at`、`archived_at`；唯一 `(notification_id, user_id)` |
 | `notification_templates` | 通知中心 | 按渠道的模板 | `key`、`channel`、`name`、`title_template`、`body_template`、`link_url_template`、`variables`、`max_length`、`enabled`、`version`；唯一 `(key, channel)` |
 | `notification_channel_policies` | 通知中心 | 事件 × 渠道策略 | `event_type`、`channel`、`target_mode`、`target_config`、`template_key`、`priority`、`ttl_seconds`、`quiet_hours`、`allow_sensitive`、`enabled`、`version`；唯一 `(event_type, channel)` |
 | `notification_settings` | 通知中心 | 全局设置 | `id='default'`、`notification_retention_days`、`delivery_retention_days`、`callback_retention_days`、`version`、`updated_by_user_id` |
 | `notification_channel_settings` | 通知中心 | 渠道开关与默认值 | `channel` 主键、`enabled`、`default_quiet_hours`、`version`、`updated_by_user_id` |
 | `assistant_deliveries` | 千树小助理 | 逐人或逐群发送尝试 | `notification_id`、`recipient_user_id`、`target_id`、`account_id`、`status`、`attempt_count`、`next_attempt_at`、`template_version`、`rendered_content`、`provider_msg_id`、`provider_new_msg_id`、`failure_code`、`accepted_at` |
 | `assistant_accounts` | 千树小助理 | 公司号 | `name`、`app_id` 唯一、`wxid`、`status`、`region_id`、`proxy_ip_encrypted`、`last_online_at`、`last_login_at`、`version` |
-| `assistant_bindings` | 千树小助理 | 员工与公司号绑定 | `user_id`、`account_id`、`wxid`、`wechat_nickname`、`status`、`friend_checked_at`、`bound_at`；唯一 `(user_id, account_id)`、`(account_id, wxid)` |
-| `assistant_binding_codes` | 千树小助理 | 一次性绑定码 | `user_id`、`account_id`、`code_hash`、`expires_at`、`used_at`、`created_by_user_id` |
-| `assistant_targets` | 千树小助理 | 群目标 | `key` 唯一、`chatroom_id` 唯一、`name`、`purpose`、`member_count`、`enabled`、`last_synced_at` |
-| `assistant_callback_events` | 千树小助理 | 回调原始记录 | `app_id`、`version`、`kind`、`provider_new_msg_id`、`dedupe_key` 唯一、`raw_payload`、`process_status`、`process_error`、`received_at` |
+| `assistant_bindings` | 千树小助理 | 员工与公司号绑定 | `user_id`、`account_id`、`wxid`、`wechat_nickname`、`status`、`bound_by_user_id`、`verified_at`、`verified_by_user_id`、`friend_checked_at`、`bound_at`；唯一 `(user_id, account_id)`、`(account_id, wxid)` |
+| `assistant_targets` | 千树小助理 | 群目标 | `key` 唯一、`chatroom_id` 唯一、`name`、`purpose`、`internal_only`、`member_count`、`enabled`、`last_synced_at` |
+| `assistant_callback_events` | 千树小助理 | 回调原始记录（可选，后续） | `app_id`、`version`、`kind`、`provider_new_msg_id`、`dedupe_key` 唯一、`raw_payload`、`process_status`、`process_error`、`received_at` |
 | `assistant_dispatch_leases` | 千树小助理 | 派发器单实例租约 | `id='assistant-dispatch'`、`owner_id`、`expires_at` |
 
 设计取舍：
@@ -198,6 +208,8 @@ PENDING ──► SENDING ──► ACCEPTED
 - 外键统一 `onDelete: Restrict`；`notification → inbox/deliveries` 可在保留期清理时 `Cascade`。
 - `event_type`、`template_key` 不做外键，允许模板或策略缺失时仍写入失败记录；一致性由发布校验和管理端约束保证。
 - 渠道策略约束：`channel = 'IN_APP'` 时 `target_mode != 'GROUP'`、`ttl_seconds` 与 `quiet_hours` 必须为空；`channel = 'ASSISTANT'` 时 `GROUP` 合法且 TTL 必填。
+- 敏感内容约束：`allow_sensitive = true` 且 `target_mode = 'GROUP'` 时，只能选择 `internal_only = true` 的群；1:1 投递只发给 `verified_at` 非空的绑定。
+- 绑定唯一性：`(user_id, account_id)` 与 `(account_id, wxid)`；`verified_at` 为空表示尚未完成测试消息确认。
 - 不使用软删除；用 `status` 与时间戳表达生命周期。
 
 ### 4.4 模板与内容
@@ -209,17 +221,18 @@ PENDING ──► SENDING ──► ACCEPTED
 - 保存模板时校验：占位符必须在变量白名单中，静态长度加最大变量长度不得超过 `max_length`。
 - 发布时变量缺失：对应渠道落失败记录，`failure_code = TEMPLATE_VARIABLE_MISSING`，不抛异常；其他渠道不受影响。
 - 实际渲染超过 `max_length`：截断并追加 `…`，记录 `truncated` 标记。
-- 敏感变量（金额、客户名称、手机号等）在模板中必须标记 `sensitive`；策略未开启 `allow_sensitive` 时替换为 `***` 并返回 `SENSITIVE_VARIABLE_MASKED` 警告。
+- 敏感变量在模板中必须标记 `sensitive`；策略未开启 `allow_sensitive` 时替换为 `***` 并返回 `SENSITIVE_VARIABLE_MASKED` 警告。
+- 阶段 1 的 3 个事件在 `ASSISTANT` 渠道开启 `allow_sensitive`：金额与客户名称可以出现在 1:1 和内部群。1:1 只发给 `verified_at` 非空的绑定；群必须 `internal_only = true`。
+- 本次放行范围只有金额与客户名称；手机号、地址、证件号等其他敏感字段仍然脱敏，除非后续单独批准。
 
 ### 4.5 数据保留与清理
 
 | 数据 | 默认保留 | 说明 |
 | --- | --- | --- |
-| `assistant_callback_events` | 30 天 | 原始报文可能含消息内容，保留期最短 |
+| `assistant_callback_events` | 30 天 | 原始报文可能含消息内容，保留期最短（回调引入后） |
 | `assistant_deliveries` | 90 天 | 站外发送台账，用于排查与对账 |
 | `notifications` | 180 天 | 逻辑通知与统计 |
 | `notification_inbox_items` | 用户归档或 1 年 | 站内消息是用户资产，不随站外 TTL 删除 |
-| `assistant_binding_codes` | 过期后 7 天 | 只存哈希，不存明文 |
 
 清理由 `server/src/commands/notification-operations.ts cleanup` 执行，沿用媒体清理的 systemd timer 模式，每日一次。保留期可在 `notification_settings` 调整，但必须有下限（回调 ≥7 天、站外投递 ≥30 天）。
 
@@ -237,7 +250,7 @@ PENDING ──► SENDING ──► ACCEPTED
 6. 站外：为每个用户或群创建 `assistant_deliveries`；未绑定、停用、渠道关闭的收件人直接落 `SKIPPED`。
 7. 汇总通知状态。
 
-阶段 1 的渠道设置只启用 `ASSISTANT`；`IN_APP` 行存在但 `enabled = false`，发布时返回 `CHANNEL_DISABLED` 警告，不创建收件箱条目。阶段 4 再启用。
+阶段 1 的渠道设置只启用 `ASSISTANT`；`IN_APP` 行存在但 `enabled = false`，发布时返回 `CHANNEL_DISABLED` 警告，不创建收件箱条目。阶段 3 再启用。阶段 1 只配置 3 个事件；`PURCHASE_REVIEW_PENDING` 的 1:1 依赖管理员手动绑定。
 
 ### 5.2 派发器形态与单实例保证
 
@@ -320,6 +333,7 @@ RETURNING d.*;
 - 离线：交付保持 `PENDING` 并按离线退避；TTL 到期转 `EXPIRED`。
 - 需要重新登录：不再尝试发送，管理端显示红色状态与「重新扫码」入口。
 - 疑似封禁：连续多次登录失败或回调出现退出事件，账号置 `REQUIRES_LOGIN` 并告警；是否停用由管理员决定。
+- 阶段 1 无回调：掉线靠 `checkOnline` 每 60 秒轮询与发送失败发现，检测延迟最长约 60 秒；回调引入后改用事件驱动。
 - 账号不可用期间，通知不自动改走站内（站内渠道可能已关闭）；降级由业务侧主通道承担。
 
 ### 5.9 环境变量
@@ -328,7 +342,7 @@ RETURNING d.*;
 | --- | --- | --- |
 | `ASSISTANT_GEWE_BASE_URL` | 是 | 必须是 `https://`，默认 `https://api.geweapi.com` |
 | `ASSISTANT_GEWE_TOKEN` | 是 | 只从环境读取，不落库、不回显 |
-| `ASSISTANT_CALLBACK_SECRET` | 是 | 回调路径密钥，至少 32 字节随机值 |
+| `ASSISTANT_CALLBACK_SECRET` | 否（回调引入后必填） | 回调路径密钥，至少 32 字节随机值 |
 | `NOTIFICATION_INTERNAL_API_ENABLED` | 否 | 默认 `false` |
 | `NOTIFICATION_INTERNAL_TOKEN` | 否 | 内部 HTTP 入口令牌 |
 | `ASSISTANT_WORKER_ENABLED` | 否 | 默认 `true`；多副本时可只在一个副本开启，租约仍会兜底 |
@@ -382,9 +396,11 @@ export type AssistantTransportResult =
 
 `FakeAssistantTransport` 在测试中按脚本返回成功、超时、离线、拒绝等结果，并记录调用参数。测试环境如果误配真实 transport，启动即失败，避免 CI 触网。
 
-## 7. 回调
+## 7. 回调（可选，阶段 1 不实现）
 
-### 7.1 CSRF 例外（必须评审的关键决策）
+> 本节描述后续可选能力。阶段 1 不接回调；只有业务要求实时掉线/联系人事件时才引入，届时 7.1 的 CSRF 例外需要单独安全评审。
+
+### 7.1 CSRF 例外（引入回调时才需要评审）
 
 现状：`CsrfProtectionGuard` 是全局 Guard，对除 `GET/HEAD` 外的所有方法要求 `Origin` 等于 `APP_ORIGIN`、`X-Qianshu-CSRF: 1`、JSON Content-Type。它**明确不读取 `@Public` 等路由元数据**，因此 GeWe 的机器回调无法直接通过。
 
@@ -424,7 +440,7 @@ export type AssistantTransportResult =
 
 | 归一化事件 | 处理 |
 | --- | --- |
-| 文本消息 + 内容匹配绑定码 | 校验码、写绑定、写审计（`SYSTEM`）、可选回复确认 |
+| 文本消息 | 阶段 1 无回调；引入后只入库，不处理（绑定由管理员完成） |
 | 掉线 / 登录失败 / 退出 / 重连失败 | 更新账号状态、写审计、触发告警 |
 | 登录成功 / 重连成功 | 更新账号状态为 `ONLINE` |
 | 联系人删除 | 对应绑装置 `INVALID`，写审计 |
@@ -432,28 +448,16 @@ export type AssistantTransportResult =
 
 回调不修改任何业务单据；即使报文被伪造，影响范围也只限于账号状态与绑定，且绑定还需要一次性码。
 
-### 7.5 绑定流程
+### 7.5 绑定不由回调驱动
 
-```
-管理员或员工生成绑定码
-        │
-        ▼
-员工扫码添加公司号 → 向公司号发送「绑定 <code>」
-        │
-        ▼
-GeWe 回调 → 归一化 → 校验 code_hash、过期、未使用
-        │
-        ├─ 成功：写 assistant_bindings，标记 code used_at，审计
-        └─ 失败：记录原因，不回复或回复固定提示
-```
+绑定完全由管理员在后台完成：选择员工、从公司号好友列表选择微信、发送测试消息、员工确认后标记 `verified_at`。回调不处理绑定码，也不需要绑定码表。
 
 约束：
 
-- 绑定码 128 位随机值，展示一次，数据库只存 HMAC-SHA256。
-- 有效期 10 分钟，单次使用，同一用户每小时最多尝试 5 次。
 - 绑定键是 `(user_id, account_id, wxid)`；`wxid` 与微信号 alias 不同，必须用 `wxid`。
+- 只有 `verified_at` 非空的绑定可以接收 1:1 消息，尤其是金额与客户名称。
 - 好友关系巡检调用「检测好友关系」接口；非好友置 `INVALID`，管理端提示重新绑定。
-- 员工解绑与管理员解绑都写审计；离职停用用户时绑定自动失效。
+- 解绑、换号、离职停用都写审计；离职停用用户时绑定自动失效。
 
 ### 7.6 回调安全
 
@@ -475,18 +479,17 @@ GeWe 回调 → 归一化 → 校验 code_hash、过期、未使用
 - `notification-template.controller.ts`：模板 CRUD、预览、测试。
 - `notification-policy.controller.ts`：事件 × 渠道策略。
 - `notification-record.controller.ts`：逻辑通知列表、详情、取消。
-- `notification-inbox.controller.ts`：站内收件箱（阶段 4）。
+- `notification-inbox.controller.ts`：站内收件箱（阶段 3）。
 
 千树小助理（`server/src/modules/notifications/assistant/`）：
 
 - `assistant-channel.controller.ts`：渠道配置、测试、启停。
 - `assistant-account.controller.ts`：账号 CRUD、扫码登录、重连、退出。
-- `assistant-binding.controller.ts`：绑定列表、绑定码、解绑、巡检。
+- `assistant-binding.controller.ts`：公司号好友列表、管理员绑定、测试消息验证、解绑、巡检。
 - `assistant-target.controller.ts`：群目标同步与维护。
 - `assistant-delivery.controller.ts`：单条站外交付重试。
-- `assistant-callback-event.controller.ts`：回调记录。
-- `assistant-me.controller.ts`：员工自助。
-- `assistant-callback.controller.ts`：机器回调，排除出 OpenAPI。
+- `assistant-callback-event.controller.ts`：回调记录（可选，回调引入后）。
+- `assistant-callback.controller.ts`：机器回调（可选，回调引入后），排除出 OpenAPI。
 
 所有管理端写操作使用 `@RequirePermissions`，读操作使用对应 `:read`；审计在业务事务内写。
 
@@ -497,11 +500,11 @@ GeWe 回调 → 归一化 → 校验 code_hash、过期、未使用
 | 页签 | 内容 | 阶段 |
 | --- | --- | --- |
 | 概览 | 渠道状态、公司号在线、今日发送/失败/未读、队列积压 | 1 |
-| 站内通知 | 站内渠道配置与消息治理 | 4，阶段 1 隐藏 |
-| 千树小助理 | 渠道配置、公司号、员工绑定、群目标 | 1（绑定阶段 2） |
+| 站内通知 | 站内渠道配置与消息治理 | 3，阶段 1 隐藏 |
+| 千树小助理 | 渠道配置、公司号、管理员绑定、群目标 | 1 |
 | 通知规则 | 模板（按渠道）与事件 × 渠道策略 | 1 |
 | 发送记录 | 逻辑通知、渠道汇总、逐人交付、重试/取消 | 1 |
-| 回调记录 | 回调列表与原始报文 | 1 |
+| 回调记录 | 回调列表与原始报文 | 可选，回调引入后 |
 
 路由元数据：
 
@@ -517,14 +520,13 @@ GeWe 回调 → 归一化 → 校验 code_hash、过期、未使用
       'notification-record:read',
       'notification-template:read',
       'assistant-channel:read',
-      'assistant-callback:read',
     ],
     singleMenu: true,
   },
 }
 ```
 
-`meta.auth` 使用 any-of：只有发送记录权限的财务也能进入页面，但只看得到「发送记录」页签。页签内部再按各自权限显示。
+`meta.auth` 使用 any-of：只有发送记录权限的财务也能进入页面，但只看得到「发送记录」页签。页签内部再按各自权限显示。回调引入后再把 `assistant-callback:read` 加入 auth。
 
 图标必须新增品牌资产：`src/assets/icons/qs-notification.svg`、`brand-icons.json` 登记、重跑 `node web/scripts/generate-icon-inventory.mjs`。千树小助理页签如需图标，同时新增 `qs-assistant.svg`；导航图标不能用 `i-lucide:*`。
 
@@ -535,7 +537,7 @@ views/system/notifications/
 ├── index.vue                    # FaTabs + 页签编排 + 权限
 ├── notifications.logic.ts       # 权限动作、查询构造、状态映射、错误提取
 ├── overview-panel.vue
-├── inbox-panel.vue              # 阶段 4
+├── inbox-panel.vue              # 阶段 3
 ├── assistant-panel.vue          # 渠道、账号、绑定、群目标
 ├── rules-panel.vue              # 模板 + 事件 × 渠道策略
 ├── records-panel.vue            # 逻辑通知与逐人交付
@@ -574,12 +576,9 @@ views/system/notifications/
 ## 9. 员工侧
 
 - 员工**不需要**安装任何客户端，也不把自己的微信登录到 GeWe。
-- 阶段 4 的站内通知入口在顶栏铃铛与「站内通知」页；数据来自 `notification_inbox_items`，未读数来自 `read_at IS NULL` 的计数。
-- 千树小助理绑定入口在现有账号菜单的个人资料弹窗（`web/apps/qsmds-arco/src/components/AppAccountButton/profile.vue`）新增「微信通知」区块：
-  - 未绑定：展示公司号二维码、「生成绑定码」按钮与操作步骤。
-  - 已绑定：展示公司号名称、微信昵称、绑定时间、好友状态、解绑按钮。
-  - 失效：提示「公司号不是好友，请重新添加后绑定」。
-- 自助接口只要求登录，不要求管理权限；员工只能操作自己的绑定。
+- 员工侧**没有绑定入口**；绑定、解绑、换号全部由管理员在后台完成。员工只需要在微信里添加公司号并接收消息。
+- 新员工入职流程：管理员展示公司号二维码 → 员工扫码添加好友 → 管理员在手机端同意 → 管理员在「千树小助理 > 员工绑定」里从好友列表选择该员工 → 发送测试消息 → 员工确认后标记 `verified_at`。
+- 阶段 3 的站内通知入口在顶栏铃铛与「站内通知」页；数据来自 `notification_inbox_items`，未读数来自 `read_at IS NULL` 的计数。
 - 员工在微信里看到的发送者名称是**公司号微信自己的昵称**，不是系统里的「千树小助理」标签。上线时要把公司号昵称与头像设置为「千树小助理」，否则员工看到的是「公司号-01」。
 
 ## 10. 权限与审计
@@ -600,14 +599,14 @@ views/system/notifications/
 | `assistant-channel:update` | 修改渠道、启停、测试发送 |
 | `assistant-account:read` | 账号列表与状态 |
 | `assistant-account:operate` | 新增账号、扫码登录、重连、退出 |
-| `assistant-binding:read` | 绑定列表 |
-| `assistant-binding:manage` | 生成绑定码、解绑、好友巡检 |
+| `assistant-binding:read` | 绑定列表、公司号好友列表 |
+| `assistant-binding:manage` | 管理员绑定、测试消息验证、解绑、好友巡检 |
 | `assistant-target:read` | 群目标列表 |
 | `assistant-target:manage` | 同步群、命名、启停 |
 | `assistant-delivery:resend` | 重试单条站外交付 |
-| `assistant-callback:read` | 回调记录与报文 |
+| `assistant-callback:read` | 回调记录与报文（可选，回调引入时新增） |
 
-共 16 个。若后续认为过细，可把模板与策略合并为 `notification-config:*`，把账号与渠道合并为 `assistant-channel:*`；不建议把「取消」与「重试」并入只读权限。
+阶段 1 启用 15 个；`assistant-callback:read` 在引入回调时新增。若后续认为过细，可把模板与策略合并为 `notification-config:*`，把账号与渠道合并为 `assistant-channel:*`；不建议把「取消」与「重试」并入只读权限。
 
 权限码必须在三处同步：`permission.constants.ts`、迁移中的 `permissions` / `role_permissions` 插入、`docs/` 相关说明。缺少任一处会被现有权限一致性测试拦住。
 
@@ -623,7 +622,8 @@ views/system/notifications/
 | `ASSISTANT_ACCOUNT_LOGGED_IN` | 登录成功 | `accountId`、`wxid` 哈希 |
 | `ASSISTANT_ACCOUNT_LOGGED_OUT` | 主动退出/掉线 | `accountId`、原因码 |
 | `ASSISTANT_ACCOUNT_RECONNECTED` | 重连成功 | `accountId` |
-| `ASSISTANT_BINDING_CREATED` | 绑定成功 | `bindingId`、`userId`、`accountId` |
+| `ASSISTANT_BINDING_CREATED` | 管理员创建绑定 | `bindingId`、`userId`、`accountId`、`boundByUserId` |
+| `ASSISTANT_BINDING_VERIFIED` | 测试消息确认后置为已验证 | `bindingId`、`verifiedByUserId` |
 | `ASSISTANT_BINDING_REVOKED` | 解绑 | `bindingId`、操作者 |
 | `ASSISTANT_BINDING_INVALIDATED` | 巡检失效 | `bindingId`、原因 |
 | `ASSISTANT_DELIVERY_RESENT` | 手动重试 | `notificationId`、`deliveryId` |
@@ -633,7 +633,7 @@ views/system/notifications/
 
 - 只在已有事务内写，复用 `AuditService.record(transaction, input)`。
 - 回调驱动的事件使用 `actorType = SYSTEM`，不伪造用户身份。
-- 元数据不写消息正文、金额、客户名称、Token、绑定码、完整 `wxid`。
+- 元数据不写消息正文、金额、客户名称、Token、完整 `wxid`。
 - 长字段截断；审计失败按现有规则使事务失败，不吞异常。
 
 ## 11. 安全设计
@@ -641,8 +641,9 @@ views/system/notifications/
 - **Token**：只从环境读取；管理端只返回 `configured` 与掩码；不进日志、不进审计、不进前端产物。
 - **Base URL**：强制 HTTPS；host 白名单；拒绝私网、回环、保留地址；禁止重定向；固定 DNS 解析结果。
 - **回调**：路径密钥常量时间比较；1 MiB 上限；每分钟 60 次/IP；只接受 JSON；内容按不可信输入处理。
-- **绑定码**：128 位随机；只存 HMAC；10 分钟有效；单次使用；失败限流；日志不记录明文。
-- **内容**：模板变量白名单；敏感字段默认脱敏；不接受外部自由文本；不渲染 HTML。
+- **绑定**：仅管理员操作；绑定后发送测试消息，员工确认后才写 `verified_at`；只有已验证绑定可接收敏感内容；解绑、换号写审计。
+- **敏感内容**：仅阶段 1 的 3 个事件开启 `allow_sensitive`；1:1 只发已验证绑定；群必须 `internal_only`；手机号、地址、证件号仍脱敏。
+- **内容**：模板变量白名单；不接受外部自由文本；不渲染 HTML。
 - **日志**：统一脱敏 `token`、`secret`、`content`、`wxid`、`phone`；错误对象只保留 `ret/msg`。
 - **CSRF 例外**：只允许机器回调使用 `@MachineCallback()`，需安全评审；不得改为按路径前缀跳过。
 - **依赖**：不新增第三方 SDK；直接用 Node 内置 `fetch`/`https` 或现有 HTTP 能力，减少供应链面。
@@ -663,7 +664,7 @@ views/system/notifications/
 
 - 公司号离线超过 10 分钟。
 - 15 分钟内站外交付失败率超过 20%。
-- 账号在线但 30 分钟没有回调（可能回调配置失效）。
+- 回调引入后：账号在线但 30 分钟没有回调（可能回调配置失效）。阶段 1 无回调，账号在线靠 `checkOnline` 轮询。
 - 站外队列最老 `PENDING` 超过 10 分钟。
 - Token 无效或渠道配置缺失。
 
@@ -673,8 +674,8 @@ views/system/notifications/
 
 | 层级 | 覆盖 | 命令 |
 | --- | --- | --- |
-| 单元 | 模板渲染与校验、收件人解析、渠道策略解析、静默时段、TTL、幂等、错误分类、回调归一化、绑定码校验 | `pnpm -C server test` |
-| 集成 | 事务内发布 → 站内条目 + 站外交付 → worker → FakeTransport → 状态汇总；重复发布；离线重试；停发；过期；渠道独立失败 | `pnpm -C server test:e2e` |
+| 单元 | 模板渲染与校验、收件人解析、渠道策略解析、静默时段、TTL、幂等、错误分类、管理员绑定与验证、敏感字段策略 | `pnpm -C server test` |
+| 集成 | 事务内发布 → 站内条目 + 站外交付 → worker → FakeTransport → 状态汇总；管理员绑定后的 1:1；重复发布；离线重试；停发；过期；渠道独立失败 | `pnpm -C server test:e2e` |
 | 契约 | 管理端接口进入 OpenAPI，前端类型同步 | `pnpm contract:sync && pnpm contract:check` |
 | 前端 | API 模块、路由权限、页面源码契约、逻辑纯函数 | `pnpm -C web test:api` |
 | 浏览器 | 页面加载、页签权限、二维码弹窗、移动端卡片 | 现有浏览器测试入口（可选） |
@@ -682,40 +683,41 @@ views/system/notifications/
 测试要求：
 
 - 全部测试使用 `FakeAssistantTransport`，禁止访问真实 GeWe。
-- 回调夹具至少包含 v1 文本、v2 文本、掉线事件、重复 `newMsgId`、未知类型五类。
+- 回调引入后，夹具至少包含 v1 文本、v2 文本、掉线事件、重复 `newMsgId`、未知类型五类；阶段 1 不测回调。
 - 集成测试使用隔离 schema，沿用 `server/test/*-e2e-database.ts` 的重放模式。
 - 通知发布集成测试必须验证「业务事务回滚时通知、站内条目、站外交付都不落库」。
 - 渠道独立性测试：站外交付全部失败时，站内条目仍然存在，通知状态为 `PARTIAL`。
-- CSRF 例外必须有专门用例：回调无 `Origin` 仍可进入；其他写接口无 CSRF 仍 403。
+- 绑定测试：管理员绑定 → 测试消息 → `verified_at` → 1:1 发送；未验证绑定收到敏感事件时必须跳过。
+- 回调引入后再补 CSRF 例外用例：回调无 `Origin` 仍可进入；其他写接口无 CSRF 仍 403。
 
 ## 14. 落地顺序
 
 | 阶段 | 范围 | 出口条件 |
 | --- | --- | --- |
-| 1. 通知中心骨架 + 千树小助理 | 共享表、渠道策略、模板、站外交付、worker、群目标、发送记录、渠道停发、管理端「概览/千树小助理/通知规则/发送记录/回调记录」 | 能向内部测试群发一条文本；记录显示 `ACCEPTED`；停发立即生效；站内渠道保持关闭；无真实员工参与 |
-| 2. 绑定与 1:1 | 绑定表、绑定码、回调、好友巡检、员工自助、1:1 站外交付 | 一名测试员工完成绑定并收到 1:1 通知；解绑后落 `NOT_BOUND` |
-| 3. 内容增强 | 链接消息、摘要聚合、员工通知偏好（衔接站内） | 通知可跳回系统页面；同一员工短时间内多条待办可合并为一条摘要 |
-| 4. 站内通知中心 | 启用 `IN_APP` 渠道、收件箱页面、顶栏铃铛、已读/归档、未读计数；多公司号路由 | 站内与千树小助理共享同一发布接口；业务调用方零改动 |
+| 1. 通知中心骨架 + 千树小助理 | 共享表、3 个事件、渠道策略、模板、站外交付、进程内 worker、群目标、管理员绑定与验证、发送记录、渠道停发、管理端「概览/千树小助理/通知规则/发送记录」 | 一名测试员工完成管理员绑定并收到 1:1；内部测试群收到群通知；停发立即生效；站内渠道保持关闭；无回调 |
+| 2. 事件扩展与内容增强 | 其余 4 个事件、链接消息、摘要聚合 | 7 个事件均可配置；通知可跳回系统页面；同一员工短时间内多条待办可合并为一条摘要 |
+| 3. 站内通知中心 | 启用 `IN_APP` 渠道、收件箱页面、顶栏铃铛、已读/归档、未读计数 | 站内与千树小助理共享同一发布接口；业务调用方零改动 |
+| 4. 多公司号与可选回调 | 多账号路由；仅在需要实时掉线/联系人事件时引入回调 | 多号可切换；若引入回调，完成 CSRF 安全评审与回调测试 |
 
 阶段 1 的前置条件：
 
 - 数据库迁移与权限迁移获批。
-- 一个已完成实名的公司号，且已在线养号 3~5 天。
-- 公司号已被拉入内部测试群，微信昵称与头像设置为「千树小助理」。
-- `ASSISTANT_GEWE_TOKEN` 与 `ASSISTANT_CALLBACK_SECRET` 已配置到部署环境。
-- 管理端能访问公网回调地址；反向代理透传 `Content-Type` 与请求体。
+- 一个已完成实名的公司号，且已在线养号 3~5 天；微信昵称与头像设置为「千树小助理」。
+- 公司号已加入内部财务群与运营群；两个群都标记为 `internal_only`，成员均为有权查看金额与客户名称的内部员工。
+- `ASSISTANT_GEWE_TOKEN` 已配置到部署环境；阶段 1 不需要 `ASSISTANT_CALLBACK_SECRET`，也不开放公网回调地址。
+- 管理员可用公司号好友列表完成绑定；至少一名测试员工已添加公司号为好友。
 
 ## 15. 待确认决策
 
-1. **CSRF 例外方案**：是否接受 `@MachineCallback()` 这一受限装饰器；若不接受，是否改为独立监听端口。该决策影响安全评审与部署。
-2. **派发器形态**：首期采用「进程内循环 + 数据库租约」是否可接受；是否要求独立 systemd 服务。
-3. **事件目录**：首批 7 个事件的默认渠道、千树小助理目标、TTL、优先级是否确认。
-4. **渠道策略粒度**：是否同意按「事件 × 渠道」配置；是否需要允许策略覆盖命令目标。
-5. **敏感内容**：金额、客户名称是否默认不进微信；哪些角色可以开启 `allow_sensitive`。
-6. **静默时段**：默认 20:00–08:00 是否符合业务；哪些事件属于 `HIGH`。
-7. **数据保留**：回调 30 天、站外交付 90 天、通知 180 天、站内 1 年是否满足审计要求。
-8. **权限粒度**：16 个权限码是否过多；是否合并模板/策略或账号/渠道。
-9. **员工自助**：绑定入口放在个人资料弹窗是否合适；是否需要独立的「通知设置」页面。
-10. **链接消息**：是否在阶段 1 就支持跳回系统页面，还是延后到阶段 3。
-11. **内容留存**：站内外渲染快照是否长期保存；若含业务数据，是否只保留摘要。
-12. **回调报文**：原始 `content` 是否允许入库 30 天；是否需要更短的保留期或字段级脱敏。
+以下事项不阻塞阶段 1 开工，但需要在对应阶段前确认：
+
+1. **TTL 与静默时段**：首批 3 个事件的 TTL 是否按 24h（采购审核）与 8h（对账完成、货件到仓）执行；默认静默时段 20:00–08:00 是否符合业务。
+2. **敏感字段范围**：本次只放行金额与客户名称；手机号、地址、证件号仍脱敏。是否需要追加字段，需单独确认。
+3. **内部群成员边界**：财务群、运营群的成员清单由谁维护；群内是否可能出现外部人员；成员变动时如何复核。
+4. **数据保留**：站外交付 90 天、通知 180 天、站内 1 年是否满足审计要求；是否需要更长。
+5. **权限粒度**：阶段 1 的 15 个权限码是否过多；是否合并模板/策略或账号/渠道。
+6. **链接消息**：阶段 2 是否加入跳回系统页面的链接；链接与缩略图必须是微信端可访问的公网地址。
+7. **多公司号**：阶段 4 是按业务范围拆号，还是只做冗余；这决定后续路由与绑定迁移方式。
+8. **回调**：只有需要实时掉线/联系人事件时才引入；届时再在 `@MachineCallback()` 与独立监听端口之间选择，并完成安全评审。
+9. **内容留存**：站内外渲染快照是否长期保存；若含金额与客户名称，是否只保留摘要或缩短保留期。
+10. **绑定验证方式**：管理员发测试消息、员工线下确认后标记 `verified_at`，是否满足管理要求；是否需要双人复核。
