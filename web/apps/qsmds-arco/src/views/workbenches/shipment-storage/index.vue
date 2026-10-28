@@ -17,6 +17,9 @@ import { buildStorageQuery, canRelocate, DEFAULT_STORAGE_STATUS, locationLabel, 
 
 defineOptions({ name: 'QsOperationsShipmentStorage' })
 
+// QsGenericTable 内部使用局部 i18n 作用域；页面显式建立父级作用域，避免回退全局时告警。
+useI18n()
+
 const { auth } = useAppAuth()
 const toast = useQsToast()
 const currencyCatalog = useCurrencyCatalog()
@@ -242,270 +245,272 @@ onMounted(() => {
 </script>
 
 <template>
-  <FaPageHeader title="寄仓管理" description="内地仓与海外仓的寄仓货件、成本与位置记录。" />
-  <FaPageMain class="min-w-0">
-    <QsStatusSwitchToolbar
-      :model-value="status"
-      :items="statusTabs"
-      aria-label="寄仓状态"
-      class="mb-4"
-      @update:model-value="selectStatus($event as StorageStatusTab)"
-    />
+  <div class="min-w-0">
+    <FaPageHeader title="寄仓管理" description="内地仓与海外仓的寄仓货件、成本与位置记录。" />
+    <FaPageMain class="min-w-0">
+      <QsStatusSwitchToolbar
+        :model-value="status"
+        :items="statusTabs"
+        aria-label="寄仓状态"
+        class="mb-4"
+        @update:model-value="selectStatus($event as StorageStatusTab)"
+      />
 
-    <QsGenericTable
-      v-model:page="page"
-      v-model:page-size="pageSize"
-      v-model:search="keyword"
-      :columns="columns"
-      :data="rows"
-      :total="total"
-      :loading="loading"
-      :error="error"
-      :action-column="{ width: 100 }"
-      :addable="false"
-      :show-row-number="false"
-      row-key="id"
-      search-placeholder="货件编号、唛头、销售单、采购单或客户"
-      empty-title="暂无寄仓记录"
-      empty-description="释放货件后会在这里显示。"
-      @retry="load"
-    >
-      <template #query-leading>
-        <div class="flex flex-wrap gap-3 items-center">
-          <FaSelect
-            :model-value="scope"
-            :options="[...STORAGE_SCOPE_OPTIONS]"
-            class="w-36"
-            aria-label="位置范围"
-            @update:model-value="changeScope(String($event))"
-          />
-          <FaSelect
-            :model-value="warehouseValue"
-            :options="warehouseOptions"
-            class="w-52"
-            aria-label="仓库"
-            @update:model-value="changeWarehouse(String($event))"
-          />
-        </div>
-      </template>
-
-      <template #cell-status="{ row }">
-        <FaTag variant="outline" :class="storageStatusClass(row.original.status)" class="whitespace-nowrap">
-          {{ storageStatusLabel(row.original.status) }}
-        </FaTag>
-      </template>
-
-      <template #cell-shipmentNo="{ row }">
-        <QsCopyableText v-if="row.original.shipmentNo" label="货件编号" :text="row.original.shipmentNo" />
-        <span v-else>—</span>
-      </template>
-
-      <template #cell-createdAt="{ row }">
-        <DateTimeDisplay :value="row.original.createdAt" />
-      </template>
-
-      <template #cell-cost="{ row }">
-        <AmountDisplay :value="row.original.cost.totalCostCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
-      </template>
-
-      <template #actions="{ row }">
-        <div class="flex gap-2 items-center justify-end">
-          <FaButton variant="ghost" size="sm" @click="openDetail(row)">
-            详情
-          </FaButton>
-        </div>
-      </template>
-    </QsGenericTable>
-
-    <QsGenericDrawer
-      v-model="detailOpen"
-      title="寄仓详情"
-      :description="detail?.shipmentNo ?? ''"
-      :loading="detailLoading"
-      :error="detailError"
-      size="xl"
-    >
-      <div v-if="detail && !detailLoading && !detailError" class="pb-2 flex flex-col gap-6">
-        <section class="gap-3 grid sm:grid-cols-2">
-          <div class="p-4 border border-border rounded-lg">
-            <p class="qs-type-meta text-muted-foreground m-0">
-              货件编号
-            </p>
-            <p class="qs-type-data-emphasis mb-0 mt-1">
-              {{ detail.shipmentNo ?? '—' }}
-            </p>
+      <QsGenericTable
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        v-model:search="keyword"
+        :columns="columns"
+        :data="rows"
+        :total="total"
+        :loading="loading"
+        :error="error"
+        :action-column="{ width: 100 }"
+        :addable="false"
+        :show-row-number="false"
+        row-key="id"
+        search-placeholder="货件编号、唛头、销售单、采购单或客户"
+        empty-title="暂无寄仓记录"
+        empty-description="释放货件后会在这里显示。"
+        @retry="load"
+      >
+        <template #query-leading>
+          <div class="flex flex-wrap gap-3 items-center">
+            <FaSelect
+              :model-value="scope"
+              :options="[...STORAGE_SCOPE_OPTIONS]"
+              class="w-36"
+              aria-label="位置范围"
+              @update:model-value="changeScope(String($event))"
+            />
+            <FaSelect
+              :model-value="warehouseValue"
+              :options="warehouseOptions"
+              class="w-52"
+              aria-label="仓库"
+              @update:model-value="changeWarehouse(String($event))"
+            />
           </div>
-          <div class="p-4 border border-border rounded-lg">
-            <p class="qs-type-meta text-muted-foreground m-0">
-              唛头
-            </p>
-            <p class="qs-type-data-emphasis mb-0 mt-1 break-all">
-              {{ detail.shippingMarkText ?? '—' }}
-            </p>
-          </div>
-          <div class="p-4 border border-border rounded-lg">
-            <p class="qs-type-meta text-muted-foreground m-0">
-              来源销售单
-            </p>
-            <p class="mb-0 mt-1">
-              {{ detail.originSalesOrderNo }} · {{ detail.originCustomerName }}
-            </p>
-          </div>
-          <div class="p-4 border border-border rounded-lg">
-            <p class="qs-type-meta text-muted-foreground m-0">
-              来源采购单
-            </p>
-            <p class="mb-0 mt-1">
-              {{ detail.originPurchaseOrderNo }}
-            </p>
-          </div>
-          <div class="p-4 border border-border rounded-lg">
-            <p class="qs-type-meta text-muted-foreground m-0">
-              当前位置
-            </p>
-            <p class="mb-0 mt-1">
-              {{ locationLabel(detail) }}
-            </p>
-          </div>
-          <div class="p-4 border border-border rounded-lg">
-            <p class="qs-type-meta text-muted-foreground m-0">
-              状态
-            </p>
-            <FaTag variant="outline" :class="storageStatusClass(detail.status)" class="mt-1">
-              {{ storageStatusLabel(detail.status) }}
-            </FaTag>
-          </div>
-        </section>
+        </template>
 
-        <section>
-          <h3 class="qs-type-section-title mb-3">
-            成本快照
-          </h3>
-          <div class="gap-3 grid sm:grid-cols-3">
-            <div class="p-3 border border-border rounded-lg">
+        <template #cell-status="{ row }">
+          <FaTag variant="outline" :class="storageStatusClass(row.original.status)" class="whitespace-nowrap">
+            {{ storageStatusLabel(row.original.status) }}
+          </FaTag>
+        </template>
+
+        <template #cell-shipmentNo="{ row }">
+          <QsCopyableText v-if="row.original.shipmentNo" label="货件编号" :text="row.original.shipmentNo" />
+          <span v-else>—</span>
+        </template>
+
+        <template #cell-createdAt="{ row }">
+          <DateTimeDisplay :value="row.original.createdAt" />
+        </template>
+
+        <template #cell-cost="{ row }">
+          <AmountDisplay :value="row.original.cost.totalCostCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+        </template>
+
+        <template #actions="{ row }">
+          <div class="flex gap-2 items-center justify-end">
+            <FaButton variant="ghost" size="sm" @click="openDetail(row)">
+              详情
+            </FaButton>
+          </div>
+        </template>
+      </QsGenericTable>
+
+      <QsGenericDrawer
+        v-model="detailOpen"
+        title="寄仓详情"
+        :description="detail?.shipmentNo ?? ''"
+        :loading="detailLoading"
+        :error="detailError"
+        size="xl"
+      >
+        <div v-if="detail && !detailLoading && !detailError" class="pb-2 flex flex-col gap-6">
+          <section class="gap-3 grid sm:grid-cols-2">
+            <div class="p-4 border border-border rounded-lg">
               <p class="qs-type-meta text-muted-foreground m-0">
-                采购成本
+                货件编号
               </p>
-              <AmountDisplay :value="detail.cost.purchaseCostCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
-            </div>
-            <div class="p-3 border border-border rounded-lg">
-              <p class="qs-type-meta text-muted-foreground m-0">
-                包装成本
+              <p class="qs-type-data-emphasis mb-0 mt-1">
+                {{ detail.shipmentNo ?? '—' }}
               </p>
-              <AmountDisplay :value="detail.cost.packagingCostCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
             </div>
-            <div class="p-3 border border-border rounded-lg">
+            <div class="p-4 border border-border rounded-lg">
               <p class="qs-type-meta text-muted-foreground m-0">
-                合计
+                唛头
               </p>
-              <AmountDisplay :value="detail.cost.totalCostCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+              <p class="qs-type-data-emphasis mb-0 mt-1 break-all">
+                {{ detail.shippingMarkText ?? '—' }}
+              </p>
             </div>
-            <div class="p-3 border border-border rounded-lg">
+            <div class="p-4 border border-border rounded-lg">
               <p class="qs-type-meta text-muted-foreground m-0">
-                原出单人比例
+                来源销售单
               </p>
               <p class="mb-0 mt-1">
-                {{ detail.cost.originalShareRate }}%
+                {{ detail.originSalesOrderNo }} · {{ detail.originCustomerName }}
               </p>
             </div>
-            <div class="p-3 border border-border rounded-lg">
+            <div class="p-4 border border-border rounded-lg">
               <p class="qs-type-meta text-muted-foreground m-0">
-                个人腿
+                来源采购单
               </p>
-              <AmountDisplay :value="detail.cost.userLegCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+              <p class="mb-0 mt-1">
+                {{ detail.originPurchaseOrderNo }}
+              </p>
             </div>
-            <div class="p-3 border border-border rounded-lg">
+            <div class="p-4 border border-border rounded-lg">
               <p class="qs-type-meta text-muted-foreground m-0">
-                公司腿
+                当前位置
               </p>
-              <AmountDisplay :value="detail.cost.companyLegCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+              <p class="mb-0 mt-1">
+                {{ locationLabel(detail) }}
+              </p>
             </div>
-          </div>
-        </section>
+            <div class="p-4 border border-border rounded-lg">
+              <p class="qs-type-meta text-muted-foreground m-0">
+                状态
+              </p>
+              <FaTag variant="outline" :class="storageStatusClass(detail.status)" class="mt-1">
+                {{ storageStatusLabel(detail.status) }}
+              </FaTag>
+            </div>
+          </section>
 
-        <section>
-          <div class="mb-3 flex gap-3 items-center justify-between">
-            <h3 class="qs-type-section-title m-0">
-              位置历史
+          <section>
+            <h3 class="qs-type-section-title mb-3">
+              成本快照
             </h3>
-            <div class="flex gap-2 items-center">
-              <FaButton
-                v-if="detail.status === 'IN_STORAGE' && canClaimPermission"
-                size="sm"
-                variant="outline"
-                @click="openClaim(detail)"
-              >
-                认领给销售单
-              </FaButton>
-              <FaButton
-                v-if="canRelocate(detail, canRelocatePermission)"
-                size="sm"
-                variant="outline"
-                @click="openRelocate(detail)"
-              >
-                移动位置
-              </FaButton>
-            </div>
-          </div>
-          <div v-if="detail.locationEvents.length === 0" class="text-sm text-muted-foreground">
-            暂无移动记录。
-          </div>
-          <div v-else class="flex flex-col gap-2">
-            <div
-              v-for="event in detail.locationEvents"
-              :key="event.sequence"
-              class="p-3 border border-border rounded-lg flex flex-wrap gap-2 items-center justify-between"
-            >
-              <div>
-                <p class="m-0">
-                  {{ event.warehouseLabel ?? event.warehouseValue }}
-                </p>
+            <div class="gap-3 grid sm:grid-cols-3">
+              <div class="p-3 border border-border rounded-lg">
                 <p class="qs-type-meta text-muted-foreground m-0">
-                  {{ event.reason }}
+                  采购成本
+                </p>
+                <AmountDisplay :value="detail.cost.purchaseCostCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+              </div>
+              <div class="p-3 border border-border rounded-lg">
+                <p class="qs-type-meta text-muted-foreground m-0">
+                  包装成本
+                </p>
+                <AmountDisplay :value="detail.cost.packagingCostCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+              </div>
+              <div class="p-3 border border-border rounded-lg">
+                <p class="qs-type-meta text-muted-foreground m-0">
+                  合计
+                </p>
+                <AmountDisplay :value="detail.cost.totalCostCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+              </div>
+              <div class="p-3 border border-border rounded-lg">
+                <p class="qs-type-meta text-muted-foreground m-0">
+                  原出单人比例
+                </p>
+                <p class="mb-0 mt-1">
+                  {{ detail.cost.originalShareRate }}%
                 </p>
               </div>
-              <DateTimeDisplay :value="event.occurredAt" />
+              <div class="p-3 border border-border rounded-lg">
+                <p class="qs-type-meta text-muted-foreground m-0">
+                  个人腿
+                </p>
+                <AmountDisplay :value="detail.cost.userLegCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+              </div>
+              <div class="p-3 border border-border rounded-lg">
+                <p class="qs-type-meta text-muted-foreground m-0">
+                  公司腿
+                </p>
+                <AmountDisplay :value="detail.cost.companyLegCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+              </div>
             </div>
+          </section>
+
+          <section>
+            <div class="mb-3 flex gap-3 items-center justify-between">
+              <h3 class="qs-type-section-title m-0">
+                位置历史
+              </h3>
+              <div class="flex gap-2 items-center">
+                <FaButton
+                  v-if="detail.status === 'IN_STORAGE' && canClaimPermission"
+                  size="sm"
+                  variant="outline"
+                  @click="openClaim(detail)"
+                >
+                  认领给销售单
+                </FaButton>
+                <FaButton
+                  v-if="canRelocate(detail, canRelocatePermission)"
+                  size="sm"
+                  variant="outline"
+                  @click="openRelocate(detail)"
+                >
+                  移动位置
+                </FaButton>
+              </div>
+            </div>
+            <div v-if="detail.locationEvents.length === 0" class="text-sm text-muted-foreground">
+              暂无移动记录。
+            </div>
+            <div v-else class="flex flex-col gap-2">
+              <div
+                v-for="event in detail.locationEvents"
+                :key="event.sequence"
+                class="p-3 border border-border rounded-lg flex flex-wrap gap-2 items-center justify-between"
+              >
+                <div>
+                  <p class="m-0">
+                    {{ event.warehouseLabel ?? event.warehouseValue }}
+                  </p>
+                  <p class="qs-type-meta text-muted-foreground m-0">
+                    {{ event.reason }}
+                  </p>
+                </div>
+                <DateTimeDisplay :value="event.occurredAt" />
+              </div>
+            </div>
+          </section>
+        </div>
+      </QsGenericDrawer>
+
+      <FaModal v-model="relocateOpen" title="移动寄仓位置" size="md">
+        <div class="flex flex-col gap-4">
+          <div>
+            <p class="qs-type-meta text-muted-foreground m-0">
+              当前货件
+            </p>
+            <p class="mb-0 mt-1">
+              {{ relocateRecord?.shipmentNo ?? '—' }} · {{ relocateRecord?.warehouseLabel ?? relocateRecord?.warehouseValue }}
+            </p>
           </div>
-        </section>
-      </div>
-    </QsGenericDrawer>
-
-    <FaModal v-model="relocateOpen" title="移动寄仓位置" size="md">
-      <div class="flex flex-col gap-4">
-        <div>
-          <p class="qs-type-meta text-muted-foreground m-0">
-            当前货件
-          </p>
-          <p class="mb-0 mt-1">
-            {{ relocateRecord?.shipmentNo ?? '—' }} · {{ relocateRecord?.warehouseLabel ?? relocateRecord?.warehouseValue }}
-          </p>
+          <label class="flex flex-col gap-1">
+            <span class="text-sm">目标仓库</span>
+            <FaSelect v-model="relocateTarget" :options="relocateOptions" placeholder="选择海外仓库" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-sm">原因</span>
+            <FaInput v-model="relocateReason" maxlength="500" placeholder="例如：客户要求转运" />
+          </label>
         </div>
-        <label class="flex flex-col gap-1">
-          <span class="text-sm">目标仓库</span>
-          <FaSelect v-model="relocateTarget" :options="relocateOptions" placeholder="选择海外仓库" />
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="text-sm">原因</span>
-          <FaInput v-model="relocateReason" maxlength="500" placeholder="例如：客户要求转运" />
-        </label>
-      </div>
-      <template #footer>
-        <div class="flex gap-2 justify-end">
-          <FaButton variant="outline" :disabled="relocating" @click="relocateOpen = false">
-            取消
-          </FaButton>
-          <FaButton :loading="relocating" @click="submitRelocate">
-            确认移动
-          </FaButton>
-        </div>
-      </template>
-    </FaModal>
+        <template #footer>
+          <div class="flex gap-2 justify-end">
+            <FaButton variant="outline" :disabled="relocating" @click="relocateOpen = false">
+              取消
+            </FaButton>
+            <FaButton :loading="relocating" @click="submitRelocate">
+              确认移动
+            </FaButton>
+          </div>
+        </template>
+      </FaModal>
 
-    <ShipmentStorageClaimModal
-      v-model="claimOpen"
-      :storage-record="claimRecord"
-      @claimed="claimed"
-    />
-  </FaPageMain>
+      <ShipmentStorageClaimModal
+        v-model="claimOpen"
+        :storage-record="claimRecord"
+        @claimed="claimed"
+      />
+    </FaPageMain>
+  </div>
 </template>
