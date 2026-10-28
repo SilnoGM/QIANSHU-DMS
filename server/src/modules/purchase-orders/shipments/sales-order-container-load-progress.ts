@@ -1,6 +1,11 @@
 import { Prisma } from '../../../generated/prisma/client'
 import { AuditService } from '../../audit/audit.service'
 import { assertSalesOrderFulfillmentTransition } from '../../sales-orders/domain/sales-order-state-machine'
+import {
+  mergeClaimedCoverage,
+  readClaimedQuantitiesBySalesLine,
+} from '../../sales-orders/sales-order-claim-coverage'
+import { readSalesOrderShipmentParts } from '../../sales-orders/sales-order-owned-shipments'
 import { isSalesOrderPurchaseFullyCovered } from '../sales-order-purchase-coverage.service'
 
 /**
@@ -53,7 +58,10 @@ interface SalesOrderLoadState {
   readonly covered: boolean
 }
 
-/** 推进与回退共用的装柜聚合口径：取消采购单不参与，待审核货件与未入仓货件都算未装柜。 */
+/**
+ * 推进与回退共用的装柜聚合口径：货件集合按当前归属读取，待审核与未入仓都算未装柜。
+ * 已释放货件归属转池后不再推进原订单；认领货件按目标单的认领数量计入覆盖。
+ */
 async function readSalesOrderLoadState(
   transaction: Prisma.TransactionClient,
   salesOrderId: string,
@@ -62,36 +70,34 @@ async function readSalesOrderLoadState(
     where: { salesOrderId, removedAt: null },
     select: { id: true, quantity: true },
   })
-  const purchases = await transaction.purchaseOrder.findMany({
-    where: { salesOrderId, purchaseType: 'SALES_LINKED', orderStatus: { not: 'CANCELLED' } },
-    select: {
-      orderStatus: true,
-      parts: { select: {
-        status: true, warehouseReceivedAt: true, loadedAt: true,
-        items: { select: { quantity: true, line: { select: { sourceSalesOrderLineId: true } } } },
-      } },
-    },
-  })
-  if (purchases.length === 0) return { allLoaded: false, covered: false }
+  const parts = await readSalesOrderShipmentParts(transaction, salesOrderId)
+  if (parts.length === 0 || salesLines.length === 0) return { allLoaded: false, covered: false }
 
   let allLoaded = true
   const receivedBySource = new Map<string, number>()
-  for (const purchase of purchases) {
-    if (!['CONFIRMED', 'COMPLETED'].includes(purchase.orderStatus)) { allLoaded = false; break }
-    const active = purchase.parts.filter(part => part.status === 'ACTIVE')
-    if (active.length === 0 || purchase.parts.some(part => part.status === 'PENDING_REVIEW')) { allLoaded = false; break }
-    for (const part of active) {
-      // 装柜以到仓为前提，两侧事实都要求，历史回填数据也不会被误判。
-      if (part.loadedAt === null || part.warehouseReceivedAt === null) { allLoaded = false; break }
-      for (const item of part.items) {
-        const sourceId = item.line.sourceSalesOrderLineId
-        if (sourceId !== null) receivedBySource.set(sourceId, (receivedBySource.get(sourceId) ?? 0) + item.quantity)
-      }
+  for (const part of parts) {
+    if (part.status !== 'ACTIVE') { allLoaded = false; break }
+    // 装柜以到仓为前提，两侧事实都要求，历史回填数据也不会被误判。
+    if (part.loadedAt === null || part.warehouseReceivedAt === null) { allLoaded = false; break }
+    for (const item of part.items) {
+      const sourceId = item.line.sourceSalesOrderLineId
+      if (sourceId !== null) receivedBySource.set(sourceId, (receivedBySource.get(sourceId) ?? 0) + item.quantity)
     }
-    if (!allLoaded) break
   }
+  if (!allLoaded) return { allLoaded: false, covered: false }
+  const claimedBySalesLine = await readClaimedQuantitiesBySalesLine(
+    transaction,
+    salesOrderId,
+    salesLines.map(line => line.id),
+  )
   // 装柜后销售明细可能被追加或改量，覆盖判断必须按持锁后的现状重新计算。
-  return { allLoaded, covered: isSalesOrderPurchaseFullyCovered(salesLines, receivedBySource) }
+  return {
+    allLoaded: true,
+    covered: isSalesOrderPurchaseFullyCovered(
+      salesLines,
+      mergeClaimedCoverage(receivedBySource, claimedBySalesLine),
+    ),
+  }
 }
 
 /** 调用方须已按上锁序持有销售链条锁；判定与写入都基于持锁后重读的数据。 */
@@ -148,7 +154,11 @@ async function hasDeliveredShipment(transaction: Prisma.TransactionClient, sales
   const count = await transaction.purchaseOrderPart.count({ where: {
     status: 'ACTIVE',
     deliveredAt: { not: null },
-    purchaseOrder: { salesOrderId, purchaseType: 'SALES_LINKED', orderStatus: { not: 'CANCELLED' } },
+    ownershipCurrent: {
+      ownerType: 'SALES_ORDER',
+      ownerSalesOrderId: salesOrderId,
+      state: 'ACTIVE',
+    },
   } })
   return count > 0
 }

@@ -19,6 +19,7 @@ function setup() {
     salesOrderLine: { findMany: jest.fn() },
     salesOrderStatusHistory: { create: jest.fn().mockResolvedValue({}) },
     purchaseOrderPart: {
+      findMany: jest.fn().mockResolvedValue([]),
       findFirst: jest.fn().mockImplementation((input: { where: { shippedAt: { gt: Date } } }) => {
         const preceding = order.parts
           .filter(item => item.shippedAt !== null && item.shippedAt > input.where.shippedAt.gt)
@@ -27,6 +28,7 @@ function setup() {
       }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    shipmentClaimLine: { findMany: jest.fn() },
     purchaseOrderStatusHistory: { create: jest.fn().mockResolvedValue({}) },
     auditEvent: { findFirst: jest.fn().mockResolvedValue(null) },
   }
@@ -48,6 +50,11 @@ function setupSalesLinked() {
   fixture.tx.salesOrder.findUnique.mockResolvedValue(salesOrder)
   fixture.tx.salesOrderLine.findMany.mockResolvedValue([{ id: 'sales-line-1', quantity: 1 }])
   fixture.tx.purchaseOrder.findMany.mockResolvedValue(purchases)
+  // 归属投影会把已取消货件标为 VOIDED，聚合查询因此看不到它们。
+  fixture.tx.purchaseOrderPart.findMany.mockImplementation(() => Promise.resolve(
+    purchases.flatMap(purchase => purchase.parts).filter(part => part.status !== 'CANCELLED'),
+  ))
+  fixture.tx.shipmentClaimLine.findMany.mockResolvedValue([])
   return { ...fixture, salesOrder, receivedPart, purchases }
 }
 
@@ -79,12 +86,23 @@ describe('PurchaseOrderWarehouseReceiptService', () => {
     fixture.purchases.push({ orderStatus: 'CONFIRMED', parts: [{ ...fixture.receivedPart, warehouseReceivedAt: null }] })
     await fixture.service.receive(context, orderId, { expectedVersion: 3, partIds: [partId] })
     expect(fixture.tx.salesOrder.update).not.toHaveBeenCalled()
-    expect(fixture.tx.purchaseOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { salesOrderId, purchaseType: 'SALES_LINKED', orderStatus: { not: 'CANCELLED' } } }))
+    expect(fixture.tx.purchaseOrderPart.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        ownershipCurrent: {
+          ownerType: 'SALES_ORDER',
+          ownerSalesOrderId: salesOrderId,
+          state: 'ACTIVE',
+        },
+      },
+    }))
   })
 
   it('does not advance with another unapproved purchase', async () => {
     const fixture = setupSalesLinked()
-    fixture.purchases.push({ orderStatus: 'PENDING_REVIEW', parts: [fixture.receivedPart] })
+    fixture.purchases.push({
+      orderStatus: 'PENDING_REVIEW',
+      parts: [{ ...fixture.receivedPart, status: 'PENDING_REVIEW' }],
+    })
     await fixture.service.receive(context, orderId, { expectedVersion: 3, partIds: [partId] })
     expect(fixture.tx.salesOrder.update).not.toHaveBeenCalled()
   })

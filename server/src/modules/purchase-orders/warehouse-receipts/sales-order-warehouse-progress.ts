@@ -1,6 +1,11 @@
 import type { Prisma } from '../../../generated/prisma/client'
 import type { AuditService } from '../../audit/audit.service'
 import { assertSalesOrderFulfillmentTransition } from '../../sales-orders/domain/sales-order-state-machine'
+import {
+  mergeClaimedCoverage,
+  readClaimedQuantitiesBySalesLine,
+} from '../../sales-orders/sales-order-claim-coverage'
+import { readSalesOrderShipmentParts } from '../../sales-orders/sales-order-owned-shipments'
 import { isSalesOrderPurchaseFullyCovered } from '../sales-order-purchase-coverage.service'
 
 /**
@@ -22,32 +27,28 @@ export async function advanceSalesOrderWhenAllShipmentsReceived(
     where: { salesOrderId: input.salesOrderId, removedAt: null },
     select: { id: true, quantity: true },
   })
-  const purchases = await transaction.purchaseOrder.findMany({
-    where: { salesOrderId: input.salesOrderId, purchaseType: 'SALES_LINKED', orderStatus: { not: 'CANCELLED' } },
-    select: {
-      orderStatus: true,
-      parts: { select: {
-        status: true, shippedAt: true, warehouseReceivedAt: true,
-        items: { select: { quantity: true, line: { select: { sourceSalesOrderLineId: true } } } },
-      } },
-    },
-  })
-  if (purchases.length === 0) return
+  // 货件集合按当前归属读取：释放后转池的货件不再推进原订单，认领货件参与新订单到仓。
+  const parts = await readSalesOrderShipmentParts(transaction, input.salesOrderId)
+  if (parts.length === 0 || salesLines.length === 0) return
   const receivedBySource = new Map<string, number>()
-  for (const purchase of purchases) {
-    if (!['CONFIRMED', 'COMPLETED'].includes(purchase.orderStatus)) return
-    const active = purchase.parts.filter(part => part.status === 'ACTIVE')
-    if (active.length === 0 || purchase.parts.some(part => part.status === 'PENDING_REVIEW')) return
-    for (const part of active) {
-      if (part.shippedAt === null || part.warehouseReceivedAt === null) return
-      // 按销售明细分别累计实收数量；取消货件、其他明细的多余数量不能补足缺口。
-      for (const item of part.items) {
-        const sourceId = item.line.sourceSalesOrderLineId
-        if (sourceId !== null) receivedBySource.set(sourceId, (receivedBySource.get(sourceId) ?? 0) + item.quantity)
-      }
+  for (const part of parts) {
+    if (part.status !== 'ACTIVE') return
+    if (part.shippedAt === null || part.warehouseReceivedAt === null) return
+    // 按销售明细分别累计实收数量；取消货件、其他明细的多余数量不能补足缺口。
+    for (const item of part.items) {
+      const sourceId = item.line.sourceSalesOrderLineId
+      if (sourceId !== null) receivedBySource.set(sourceId, (receivedBySource.get(sourceId) ?? 0) + item.quantity)
     }
   }
-  if (!isSalesOrderPurchaseFullyCovered(salesLines, receivedBySource)) return
+  const claimedBySalesLine = await readClaimedQuantitiesBySalesLine(
+    transaction,
+    input.salesOrderId,
+    salesLines.map(line => line.id),
+  )
+  if (!isSalesOrderPurchaseFullyCovered(
+    salesLines,
+    mergeClaimedCoverage(receivedBySource, claimedBySalesLine),
+  )) return
 
   assertSalesOrderFulfillmentTransition('LAND_TRANSIT', 'WAREHOUSE_ARRIVED', { hasActiveDeliveryReceipt: false })
   await transaction.salesOrder.update({

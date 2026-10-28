@@ -6,6 +6,7 @@ import type { AuditService } from '../audit/audit.service'
 import { salesOrderRuleFailure } from './domain/sales-order-errors'
 import { assertSalesOrderFulfillmentTransition } from './domain/sales-order-state-machine'
 import type { SalesOrderAutomaticStateService } from './sales-order-automatic-state.service'
+import { readSalesOrderShipmentDeliveryParts } from './sales-order-owned-shipments'
 
 export interface ShipmentDeliveryContext {
   readonly actorUserId: string
@@ -37,34 +38,15 @@ export interface ShipmentDeliveryState {
 }
 
 /**
- * 有效货件的唯一口径：未取消销售关联采购单下的货件。
+ * 有效货件的唯一口径：当前归属仍为这张销售单的货件。
+ * 释放后归属转池的货件不再参与原订单签收；认领货件按新归属参与签收。
  * 待审核货件也算在集合里，因为审核通过后会变成新的有效货件，签收前必须先解决。
  */
 export async function readSalesOrderShipmentDeliveryState(
   transaction: Prisma.TransactionClient,
   salesOrderId: string,
 ): Promise<ShipmentDeliveryState> {
-  const parts = await transaction.purchaseOrderPart.findMany({
-    where: {
-      purchaseOrder: {
-        is: {
-          salesOrderId,
-          purchaseType: 'SALES_LINKED',
-          orderStatus: { not: 'CANCELLED' },
-        },
-      },
-    },
-    select: {
-      id: true,
-      purchaseOrderId: true,
-      shipmentNo: true,
-      partNumber: true,
-      status: true,
-      loadedAt: true,
-      deliveredAt: true,
-    },
-    orderBy: [{ purchaseOrderId: 'asc' }, { partNumber: 'asc' }, { id: 'asc' }],
-  })
+  const parts = await readSalesOrderShipmentDeliveryParts(transaction, salesOrderId)
   return {
     parts,
     activePartIds: parts.filter(part => part.status === 'ACTIVE').map(part => part.id),

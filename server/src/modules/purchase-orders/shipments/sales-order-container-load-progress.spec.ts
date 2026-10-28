@@ -7,30 +7,40 @@ import {
 } from './sales-order-container-load-progress'
 
 type Part = {
+  id: string
   status: string
   warehouseReceivedAt: Date | null
   loadedAt: Date | null
+  deliveredAt: Date | null
   items: Array<{ quantity: number, line: { sourceSalesOrderLineId: string | null } }>
 }
 
 function part(overrides: Partial<Part> = {}): Part {
   return {
-    status: 'ACTIVE', warehouseReceivedAt: new Date('2026-09-14T00:00:00Z'), loadedAt: new Date('2026-09-15T00:00:00Z'),
-    items: [{ quantity: 1, line: { sourceSalesOrderLineId: 'line-1' } }], ...overrides,
+    id: 'part-1',
+    status: 'ACTIVE',
+    warehouseReceivedAt: new Date('2026-09-14T00:00:00Z'),
+    loadedAt: new Date('2026-09-15T00:00:00Z'),
+    deliveredAt: null,
+    items: [{ quantity: 1, line: { sourceSalesOrderLineId: 'line-1' } }],
+    ...overrides,
   }
 }
 
-function fixture() {
+function fixture(parts: Part[] = [part()]) {
   const salesOrder = { findUnique: jest.fn(), update: jest.fn().mockResolvedValue({}) }
   const salesOrderLine = { findMany: jest.fn().mockResolvedValue([{ id: 'line-1', quantity: 1 }]) }
-  const purchaseOrder = { findMany: jest.fn().mockResolvedValue([{ orderStatus: 'CONFIRMED', parts: [part()] }]) }
+  const shipmentClaimLine = { findMany: jest.fn().mockResolvedValue([]) }
   const salesOrderStatusHistory = { create: jest.fn().mockResolvedValue({}) }
-  const purchaseOrderPart = { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) }
+  const purchaseOrderPart = {
+    findMany: jest.fn().mockResolvedValue(parts),
+    count: jest.fn().mockResolvedValue(0),
+  }
   const salesOrderDocument = { count: jest.fn().mockResolvedValue(0) }
   const audit = { record: jest.fn().mockResolvedValue(undefined) }
   const invoked: unknown[] = []
   const transaction = {
-    salesOrder, salesOrderLine, purchaseOrder, salesOrderStatusHistory, purchaseOrderPart, salesOrderDocument,
+    salesOrder, salesOrderLine, shipmentClaimLine, salesOrderStatusHistory, purchaseOrderPart, salesOrderDocument,
     $queryRaw: jest.fn((sql: unknown) => { invoked.push(sql); return Promise.resolve([]) }),
   }
   const run = (salesOrderIds: readonly string[] = ['so-1']) => advanceSalesOrdersWhenAllShipmentsLoaded(
@@ -43,15 +53,17 @@ function fixture() {
     audit,
     { actorUserId: 'actor-1', containerBatchId: 'batch-1', requestId: 'request-1', shipmentId: 'part-1', salesOrderIds },
   )
-  return { salesOrder, salesOrderLine, purchaseOrder, salesOrderStatusHistory, purchaseOrderPart, salesOrderDocument, audit, transaction, invoked, run, retreat }
+  return {
+    salesOrder, salesOrderLine, shipmentClaimLine, salesOrderStatusHistory, purchaseOrderPart,
+    salesOrderDocument, audit, transaction, invoked, run, retreat,
+  }
 }
 
 describe('advanceSalesOrdersWhenAllShipmentsLoaded', () => {
   it('advances every fully loaded order with history and container-load audit', async () => {
-    const f = fixture()
+    const f = fixture([part(), part({ id: 'part-2' })])
     f.salesOrder.findUnique.mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'WAREHOUSE_ARRIVED' })
     f.salesOrderLine.findMany.mockResolvedValue([{ id: 'line-1', quantity: 2 }])
-    f.purchaseOrder.findMany.mockResolvedValue([{ orderStatus: 'CONFIRMED', parts: [part(), part()] }])
     await f.run()
     expect(f.salesOrder.update).toHaveBeenCalledWith({
       where: { id: 'so-1' },
@@ -66,6 +78,38 @@ describe('advanceSalesOrdersWhenAllShipmentsLoaded', () => {
     }))
   })
 
+  it('reads owned shipments by current ownership instead of purchase order source', async () => {
+    const f = fixture()
+    f.salesOrder.findUnique.mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'WAREHOUSE_ARRIVED' })
+    await f.run()
+    expect(f.purchaseOrderPart.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        ownershipCurrent: {
+          ownerType: 'SALES_ORDER',
+          ownerSalesOrderId: 'so-1',
+          state: 'ACTIVE',
+        },
+      },
+    }))
+  })
+
+  it('advances a claimed shipment when claim quantities cover every sales line', async () => {
+    const f = fixture([part({ items: [] })])
+    f.salesOrder.findUnique.mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'WAREHOUSE_ARRIVED' })
+    f.shipmentClaimLine.findMany.mockResolvedValue([{ salesOrderLineId: 'line-1', quantity: 1 }])
+    await f.run()
+    expect(f.salesOrder.update).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not count purchase items of a claimed shipment as the target order coverage', async () => {
+    const f = fixture([part({
+      items: [{ quantity: 1, line: { sourceSalesOrderLineId: 'origin-line' } }],
+    })])
+    f.salesOrder.findUnique.mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'WAREHOUSE_ARRIVED' })
+    await f.run()
+    expect(f.salesOrder.update).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['非候选订单状态', { orderStatus: 'COMPLETED', fulfillmentStatus: 'WAREHOUSE_ARRIVED' }],
     ['订单尚未到仓', { orderStatus: 'CONFIRMED', fulfillmentStatus: 'LAND_TRANSIT' }],
@@ -75,39 +119,25 @@ describe('advanceSalesOrdersWhenAllShipmentsLoaded', () => {
     f.salesOrder.findUnique.mockResolvedValue(state)
     await f.run()
     expect(f.salesOrder.update).not.toHaveBeenCalled()
-    expect(f.purchaseOrder.findMany).not.toHaveBeenCalled()
+    expect(f.purchaseOrderPart.findMany).not.toHaveBeenCalled()
     expect(f.audit.record).not.toHaveBeenCalled()
   })
 
-  const blockingCases: ReadonlyArray<readonly [string, { purchases: Array<{ orderStatus: string, parts: Part[] }>, salesLines?: Array<{ id: string, quantity: number }> }]> = [
-    ['没有有效关联采购单', { purchases: [] }],
-    ['采购单尚未生效', { purchases: [{ orderStatus: 'PENDING_REVIEW', parts: [part()] }] }],
-    ['存在待审核货件', { purchases: [{ orderStatus: 'CONFIRMED', parts: [part(), part({ status: 'PENDING_REVIEW' })] }] }],
-    ['没有有效货件', { purchases: [{ orderStatus: 'CONFIRMED', parts: [part({ status: 'CANCELLED' })] }] }],
-    ['货件尚未到仓', { purchases: [{ orderStatus: 'CONFIRMED', parts: [part({ warehouseReceivedAt: null })] }] }],
-    ['货件尚未装柜', { purchases: [{ orderStatus: 'CONFIRMED', parts: [part({ loadedAt: null })] }] }],
-    ['入仓数量未覆盖销售明细', { purchases: [{ orderStatus: 'CONFIRMED', parts: [part()] }], salesLines: [{ id: 'line-1', quantity: 2 }] }],
+  const blockingCases: ReadonlyArray<readonly [string, { parts: Part[], salesLines?: Array<{ id: string, quantity: number }> }]> = [
+    ['没有归属货件', { parts: [] }],
+    ['存在待审核货件', { parts: [part(), part({ id: 'part-2', status: 'PENDING_REVIEW' })] }],
+    ['货件尚未到仓', { parts: [part({ warehouseReceivedAt: null })] }],
+    ['货件尚未装柜', { parts: [part({ loadedAt: null })] }],
+    ['入仓数量未覆盖销售明细', { parts: [part()], salesLines: [{ id: 'line-1', quantity: 2 }] }],
   ]
   it.each(blockingCases)('keeps the order unchanged when %s', async (_label, setup) => {
-    const f = fixture()
+    const f = fixture(setup.parts)
     f.salesOrder.findUnique.mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'WAREHOUSE_ARRIVED' })
-    f.purchaseOrder.findMany.mockResolvedValue(setup.purchases)
     f.salesOrderLine.findMany.mockResolvedValue(setup.salesLines ?? [{ id: 'line-1', quantity: 1 }])
     await f.run()
     expect(f.salesOrder.update).not.toHaveBeenCalled()
     expect(f.salesOrderStatusHistory.create).not.toHaveBeenCalled()
     expect(f.audit.record).not.toHaveBeenCalled()
-  })
-
-  it('excludes cancelled purchases from the query and cancelled shipments from the judgement', async () => {
-    const f = fixture()
-    f.salesOrder.findUnique.mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'WAREHOUSE_ARRIVED' })
-    f.purchaseOrder.findMany.mockResolvedValue([{ orderStatus: 'CONFIRMED', parts: [part({ status: 'CANCELLED', loadedAt: null, warehouseReceivedAt: null }), part()] }])
-    await f.run()
-    expect(f.purchaseOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ purchaseType: 'SALES_LINKED', orderStatus: { not: 'CANCELLED' } }) as unknown,
-    }))
-    expect(f.salesOrder.update).toHaveBeenCalledTimes(1)
   })
 
   it('advances only the orders whose shipments are all loaded', async () => {
@@ -123,9 +153,8 @@ describe('advanceSalesOrdersWhenAllShipmentsLoaded', () => {
 
 describe('retreatSalesOrdersWhenShipmentsUnloaded', () => {
   it('retreats a sea-transit order that no longer has every shipment loaded', async () => {
-    const f = fixture()
+    const f = fixture([part({ loadedAt: null })])
     f.salesOrder.findUnique.mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' })
-    f.purchaseOrder.findMany.mockResolvedValue([{ orderStatus: 'CONFIRMED', parts: [part({ loadedAt: null })] }])
     await f.retreat()
     expect(f.salesOrder.update).toHaveBeenCalledWith({
       where: { id: 'so-1' },
@@ -148,6 +177,13 @@ describe('retreatSalesOrdersWhenShipmentsUnloaded', () => {
     expect(f.audit.record).not.toHaveBeenCalled()
   })
 
+  it('treats a released shipment as no longer loaded', async () => {
+    const f = fixture([])
+    f.salesOrder.findUnique.mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' })
+    await f.retreat()
+    expect(f.salesOrder.update).toHaveBeenCalledTimes(1)
+  })
+
   it.each([
     ['订单已签收', { orderStatus: 'CONFIRMED', fulfillmentStatus: 'SIGNED' }],
     ['订单不是有效状态', { orderStatus: 'COMPLETED', fulfillmentStatus: 'SEA_TRANSIT' }],
@@ -157,25 +193,27 @@ describe('retreatSalesOrdersWhenShipmentsUnloaded', () => {
     f.salesOrder.findUnique.mockResolvedValue(state)
     await f.retreat()
     expect(f.salesOrder.update).not.toHaveBeenCalled()
-    expect(f.purchaseOrder.findMany).not.toHaveBeenCalled()
+    expect(f.purchaseOrderPart.findMany).not.toHaveBeenCalled()
   })
 
   it('keeps the order when a shipment of the same order is already delivered', async () => {
-    const f = fixture()
+    const f = fixture([part({ loadedAt: null })])
     f.salesOrder.findUnique.mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' })
-    f.purchaseOrder.findMany.mockResolvedValue([{ orderStatus: 'CONFIRMED', parts: [part({ loadedAt: null })] }])
     f.purchaseOrderPart.count.mockResolvedValueOnce(1)
     await f.retreat()
     expect(f.purchaseOrderPart.count).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ status: 'ACTIVE', deliveredAt: { not: null } }) as unknown,
+      where: expect.objectContaining({
+        status: 'ACTIVE',
+        deliveredAt: { not: null },
+        ownershipCurrent: expect.objectContaining({ ownerSalesOrderId: 'so-1' }) as unknown,
+      }) as unknown,
     }))
     expect(f.salesOrder.update).not.toHaveBeenCalled()
   })
 
   it('keeps the order when an active delivery receipt exists', async () => {
-    const f = fixture()
+    const f = fixture([part({ loadedAt: null })])
     f.salesOrder.findUnique.mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' })
-    f.purchaseOrder.findMany.mockResolvedValue([{ orderStatus: 'CONFIRMED', parts: [part({ loadedAt: null })] }])
     f.salesOrderDocument.count.mockResolvedValueOnce(1)
     await f.retreat()
     expect(f.salesOrderDocument.count).toHaveBeenCalledWith({
