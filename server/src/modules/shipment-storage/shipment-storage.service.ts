@@ -15,6 +15,9 @@ import {
   DictionaryLookupService,
   DictionaryValueUnavailableError,
 } from '../dictionaries/dictionary-lookup.service'
+import {
+  advanceToPreparingWhenCovered,
+} from '../purchase-orders/sales-order-purchase-coverage.service'
 import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
 import type {
   ClaimShipmentStorageRequestDto,
@@ -709,6 +712,22 @@ export class ShipmentStorageService {
           claimedQuantity,
         },
       })
+      // 认领与覆盖推进必须同一事务：状态落后会让新订单停在待采购并继续显示缺口。
+      const coverage = await advanceToPreparingWhenCovered(transaction, this.audit, {
+        actorUserId: context.actorUserId,
+        auditMetadata: {
+          salesOrderId: input.salesOrderId,
+          shipmentId: record.shipmentId,
+          storageRecordId,
+          trigger: 'SHIPMENT_CLAIM',
+        },
+        historyReason: '认领寄仓货件后已覆盖全部销售产品',
+        requestId: context.requestId,
+        salesOrderId: input.salesOrderId,
+      })
+      if (coverage.status === 'ORDER_STATE_CHANGED') {
+        storageFailure('SHIPMENT_STORAGE_STATE_CHANGED', '销售订单状态已变化，请刷新后重试', HttpStatus.CONFLICT)
+      }
     }, { timeout: 30_000 })
     return this.getById(storageRecordId)
   }

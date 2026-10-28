@@ -8,7 +8,78 @@ const ACTOR_ID = '00000000-0000-4000-8000-000000000501'
 const RECORD_ID = '00000000-0000-4000-8000-000000000502'
 const REQUEST_KEY = '00000000-0000-4000-8000-000000000503'
 const SHIPMENT_ID = '00000000-0000-4000-8000-000000000504'
+const SALES_ORDER_ID = '00000000-0000-4000-8000-000000000505'
+const SALES_LINE_ID = '00000000-0000-4000-8000-000000000506'
 const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
+
+function claimFixture(options: {
+  readonly claimedQuantity?: number
+  readonly orderStatus?: 'CONFIRMED' | 'CANCELLED'
+} = {}) {
+  const claimedQuantity = options.claimedQuantity ?? 2
+  const transaction = {
+    $queryRaw: jest.fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([{
+        fulfillmentStatus: 'PENDING',
+        id: SALES_ORDER_ID,
+        orderStatus: options.orderStatus ?? 'CONFIRMED',
+      }]),
+    purchaseOrderLine: { groupBy: jest.fn().mockResolvedValue([]) },
+    salesOrder: {
+      findUnique: jest.fn().mockResolvedValue({
+        id: SALES_ORDER_ID,
+        orderNo: 'SO/20261028-00001',
+        orderStatus: options.orderStatus ?? 'CONFIRMED',
+      }),
+      update: jest.fn().mockResolvedValue({}),
+    },
+    salesOrderLine: {
+      findMany: jest.fn().mockResolvedValue([{
+        id: SALES_LINE_ID,
+        lineNumber: 1,
+        quantity: 2,
+      }]),
+    },
+    salesOrderStatusHistory: { create: jest.fn().mockResolvedValue({}) },
+    shipmentClaimLine: {
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      findMany: jest.fn().mockResolvedValue([{
+        salesOrderLineId: SALES_LINE_ID,
+        quantity: claimedQuantity,
+      }]),
+    },
+    shipmentOwnershipCurrent: {
+      findUnique: jest.fn().mockResolvedValue({ ownerType: 'STORAGE_POOL', state: 'ACTIVE' }),
+    },
+    shipmentStorageRecord: {
+      findUnique: jest.fn().mockResolvedValue({
+        claimedBy: null,
+        claimedSalesOrderId: null,
+        id: RECORD_ID,
+        originAllocations: [{ quantity: 2 }],
+        originSalesOrderId: '00000000-0000-4000-8000-000000000507',
+        shipmentId: SHIPMENT_ID,
+        status: 'IN_STORAGE',
+      }),
+      update: jest.fn().mockResolvedValue({}),
+    },
+  } as unknown as Prisma.TransactionClient
+  const prisma = {
+    $transaction: jest.fn(async (callback: (tx: Prisma.TransactionClient) => Promise<unknown>) => callback(transaction)),
+  }
+  const audit = { record: jest.fn().mockResolvedValue({}) }
+  const ownership = { recordMany: jest.fn().mockResolvedValue(undefined) }
+  const instance = new ShipmentStorageService(
+    prisma as never,
+    audit,
+    {} as DictionaryLookupService,
+    ownership as unknown as ShipmentOwnershipService,
+  )
+  jest.spyOn(instance, 'getById').mockResolvedValue({} as never)
+  return { audit, instance, ownership, transaction }
+}
 
 function service(prisma: unknown = {}) {
   return new ShipmentStorageService(
@@ -103,6 +174,53 @@ describe('ShipmentStorageService', () => {
       { value: 'CLAIMED', count: 1 },
       { value: 'VOIDED', count: 0 },
     ])
+  })
+
+  it('advances the claiming sales order to preparing when claims cover every line', async () => {
+    const fixture = claimFixture()
+
+    await fixture.instance.claim(context, RECORD_ID, {
+      lines: [{ quantity: 2, salesOrderLineId: SALES_LINE_ID }],
+      requestKey: REQUEST_KEY,
+      salesOrderId: SALES_ORDER_ID,
+    })
+
+    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: SALES_ORDER_ID },
+      data: { fulfillmentStatus: 'PREPARING', version: { increment: 1 } },
+    })
+    expect(fixture.transaction.salesOrderStatusHistory.create).toHaveBeenCalledWith({
+      data: {
+        salesOrderId: SALES_ORDER_ID,
+        dimension: 'FULFILLMENT',
+        fromStatus: 'PENDING',
+        toStatus: 'PREPARING',
+        reason: '认领寄仓货件后已覆盖全部销售产品',
+        changedByUserId: ACTOR_ID,
+      },
+    })
+    expect(fixture.audit.record).toHaveBeenCalledWith(
+      fixture.transaction,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          storageRecordId: RECORD_ID,
+          trigger: 'SHIPMENT_CLAIM',
+        }) as unknown,
+      }),
+    )
+  })
+
+  it('keeps the claiming order pending when claims leave a line uncovered', async () => {
+    const fixture = claimFixture({ claimedQuantity: 1 })
+
+    await fixture.instance.claim(context, RECORD_ID, {
+      lines: [{ quantity: 2, salesOrderLineId: SALES_LINE_ID }],
+      requestKey: REQUEST_KEY,
+      salesOrderId: SALES_ORDER_ID,
+    })
+
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+    expect(fixture.transaction.salesOrderStatusHistory.create).not.toHaveBeenCalled()
   })
 
   it('scopes storageId to list and status counts', async () => {

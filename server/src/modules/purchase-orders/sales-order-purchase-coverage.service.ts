@@ -11,7 +11,11 @@ import {
   AuditOutcome,
 } from '../../generated/prisma/enums'
 import { ApiException } from '../../infrastructure/http/api.exception'
-import { AuditService } from '../audit/audit.service'
+import { AuditService, type AuditMetadata } from '../audit/audit.service'
+import {
+  mergeClaimedCoverage,
+  readClaimedQuantitiesBySalesLine,
+} from '../sales-orders/sales-order-claim-coverage'
 import {
   assertSalesOrderFulfillmentTransition,
 } from '../sales-orders/domain/sales-order-state-machine'
@@ -77,6 +81,122 @@ function stateChangedError(): ApiException {
   )
 }
 
+export interface AdvanceToPreparingWhenCoveredInput {
+  readonly actorUserId: string
+  readonly auditMetadata: AuditMetadata
+  readonly historyReason: string
+  readonly requestId: string
+  readonly salesOrderId: string
+}
+
+export type CoverageAdvanceResult =
+  | { readonly status: 'ADVANCED' | 'NOT_PENDING' | 'NOT_COVERED' }
+  | { readonly status: 'ORDER_STATE_CHANGED', readonly orderStatus: SalesOrderStatus | null }
+
+/**
+ * 待采购订单只剩「被覆盖后进入备货」这一个自动化出口。
+ * 采购审核与寄仓认领都走这里，保证两条货源事实共用同一套锁序、覆盖判断与审计字段。
+ * 调用方必须在写入货源事实的同一事务内调用；订单状态变化由调用方翻译成各自错误码。
+ */
+export async function advanceToPreparingWhenCovered(
+  transaction: PrismaTypes.TransactionClient,
+  audit: AuditService,
+  input: AdvanceToPreparingWhenCoveredInput,
+): Promise<CoverageAdvanceResult> {
+  const locked = await transaction.$queryRaw<LockedSalesOrder[]>(Prisma.sql`
+    SELECT
+      "id",
+      "order_status" AS "orderStatus",
+      "fulfillment_status" AS "fulfillmentStatus"
+    FROM "sales_orders"
+    WHERE "id" = CAST(${input.salesOrderId} AS uuid)
+    FOR UPDATE
+  `)
+  const order = locked[0]
+  if (locked.length !== 1 || order === undefined) {
+    return { orderStatus: null, status: 'ORDER_STATE_CHANGED' }
+  }
+  if (order.orderStatus !== 'CONFIRMED') {
+    return { orderStatus: order.orderStatus, status: 'ORDER_STATE_CHANGED' }
+  }
+  if (order.fulfillmentStatus !== 'PENDING') return { status: 'NOT_PENDING' }
+
+  const salesLines = await transaction.salesOrderLine.findMany({
+    where: { salesOrderId: input.salesOrderId, removedAt: null },
+    select: { id: true, quantity: true },
+  })
+  if (salesLines.length === 0) return { status: 'NOT_COVERED' }
+
+  const purchasedRows = await transaction.purchaseOrderLine.groupBy({
+    by: ['sourceSalesOrderLineId'],
+    where: {
+      sourceSalesOrderLineId: { in: salesLines.map(line => line.id) },
+      purchaseOrder: {
+        salesOrderId: input.salesOrderId,
+        purchaseType: 'SALES_LINKED',
+        // 待审核数量只预占可采购余额，不能推进销售履约。
+        orderStatus: { in: ['CONFIRMED', 'COMPLETED'] },
+      },
+    },
+    _sum: { quantity: true },
+  })
+  const purchasedBySource = new Map<string, number>()
+  for (const row of purchasedRows) {
+    if (row.sourceSalesOrderLineId !== null) {
+      purchasedBySource.set(
+        row.sourceSalesOrderLineId,
+        row._sum.quantity ?? 0,
+      )
+    }
+  }
+  const claimedBySalesLine = await readClaimedQuantitiesBySalesLine(
+    transaction,
+    input.salesOrderId,
+    salesLines.map(line => line.id),
+  )
+  if (!isSalesOrderPurchaseFullyCovered(
+    salesLines,
+    mergeClaimedCoverage(purchasedBySource, claimedBySalesLine),
+  )) {
+    return { status: 'NOT_COVERED' }
+  }
+
+  assertSalesOrderFulfillmentTransition('PENDING', 'PREPARING', {
+    hasActiveDeliveryReceipt: false,
+  })
+  await transaction.salesOrder.update({
+    where: { id: input.salesOrderId },
+    data: {
+      fulfillmentStatus: 'PREPARING',
+      version: { increment: 1 },
+    },
+  })
+  await transaction.salesOrderStatusHistory.create({ data: {
+    salesOrderId: input.salesOrderId,
+    dimension: 'FULFILLMENT',
+    fromStatus: 'PENDING',
+    toStatus: 'PREPARING',
+    reason: input.historyReason,
+    changedByUserId: input.actorUserId,
+  } })
+  await audit.record(transaction, {
+    eventType: AuditEventType.SALES_ORDER_FULFILLMENT_STATUS_CHANGED,
+    outcome: AuditOutcome.SUCCESS,
+    actorType: AuditActorType.USER,
+    actorUserId: input.actorUserId,
+    targetType: 'SALES_ORDER',
+    targetId: input.salesOrderId,
+    requestId: input.requestId,
+    metadata: {
+      automatic: true,
+      fromStatus: 'PENDING',
+      toStatus: 'PREPARING',
+      ...input.auditMetadata,
+    },
+  })
+  return { status: 'ADVANCED' }
+}
+
 @Injectable()
 export class SalesOrderPurchaseCoverageService {
   constructor(private readonly audit: AuditService) {}
@@ -85,89 +205,26 @@ export class SalesOrderPurchaseCoverageService {
     transaction: PrismaTypes.TransactionClient,
     input: AdvanceSalesOrderPurchaseProgressInput,
   ): Promise<void> {
-    // 本次采购可能只锁定部分销售明细。额外锁定销售订单主行，才能让同一销售
-    // 订单下、审核不同采购单的并发操作也按统一顺序完成最终覆盖判定。
-    const locked = await transaction.$queryRaw<LockedSalesOrder[]>(Prisma.sql`
-      SELECT
-        "id",
-        "order_status" AS "orderStatus",
-        "fulfillment_status" AS "fulfillmentStatus"
-      FROM "sales_orders"
-      WHERE "id" = CAST(${input.salesOrderId} AS uuid)
-      FOR UPDATE
-    `)
-    const order = locked[0]
-    if (locked.length !== 1 || order?.orderStatus !== 'CONFIRMED') {
-      throw new ApiException(HttpStatus.CONFLICT, 'PURCHASE_ORDER_STATE_CHANGED', purchaseReviewSourceBlockReason(order?.orderStatus ?? null) ?? '关联销售来源不存在，请核实来源订单')
-    }
-    // 已经进入备货或后续物流阶段时只保留现状，不允许覆盖、倒退或跳级。
-    if (order.fulfillmentStatus !== 'PENDING') return
-
-    const salesLines = await transaction.salesOrderLine.findMany({
-      where: { salesOrderId: input.salesOrderId, removedAt: null },
-      select: { id: true, quantity: true },
-    })
-    if (salesLines.length === 0) return
-
-    const purchasedRows = await transaction.purchaseOrderLine.groupBy({
-      by: ['sourceSalesOrderLineId'],
-      where: {
-        sourceSalesOrderLineId: { in: salesLines.map(line => line.id) },
-        purchaseOrder: {
-          salesOrderId: input.salesOrderId,
-          purchaseType: 'SALES_LINKED',
-          // 待审核数量只预占可采购余额，不能推进销售履约。
-          orderStatus: { in: ['CONFIRMED', 'COMPLETED'] },
-        },
-      },
-      _sum: { quantity: true },
-    })
-    const purchasedBySource = new Map<string, number>()
-    for (const row of purchasedRows) {
-      if (row.sourceSalesOrderLineId !== null) {
-        purchasedBySource.set(
-          row.sourceSalesOrderLineId,
-          row._sum.quantity ?? 0,
-        )
-      }
-    }
-    if (!isSalesOrderPurchaseFullyCovered(salesLines, purchasedBySource)) return
-
-    assertSalesOrderFulfillmentTransition('PENDING', 'PREPARING', {
-      hasActiveDeliveryReceipt: false,
-    })
-    await transaction.salesOrder.update({
-      where: { id: input.salesOrderId },
-      data: {
-        fulfillmentStatus: 'PREPARING',
-        version: { increment: 1 },
-      },
-    })
-    await transaction.salesOrderStatusHistory.create({ data: {
-      salesOrderId: input.salesOrderId,
-      dimension: 'FULFILLMENT',
-      fromStatus: 'PENDING',
-      toStatus: 'PREPARING',
-      reason: '采购订单审核通过后已覆盖全部销售产品',
-      changedByUserId: input.actorUserId,
-    } })
-    await this.audit.record(transaction, {
-      eventType: AuditEventType.SALES_ORDER_FULFILLMENT_STATUS_CHANGED,
-      outcome: AuditOutcome.SUCCESS,
-      actorType: AuditActorType.USER,
+    // 本次采购可能只锁定部分销售明细。共享推进函数会额外锁定销售订单主行，
+    // 让同一订单下、审核不同采购单与寄仓认领的并发操作按统一顺序完成覆盖判定。
+    const result = await advanceToPreparingWhenCovered(transaction, this.audit, {
       actorUserId: input.actorUserId,
-      targetType: 'SALES_ORDER',
-      targetId: input.salesOrderId,
-      requestId: input.requestId,
-      metadata: {
-        automatic: true,
-        fromStatus: 'PENDING',
+      auditMetadata: {
         purchaseOrderId: input.purchaseOrderId,
         purchaseOrderNo: input.purchaseOrderNo,
-        toStatus: 'PREPARING',
         trigger: 'PURCHASE_COVERAGE',
       },
+      historyReason: '采购订单审核通过后已覆盖全部销售产品',
+      requestId: input.requestId,
+      salesOrderId: input.salesOrderId,
     })
+    if (result.status === 'ORDER_STATE_CHANGED') {
+      throw new ApiException(
+        HttpStatus.CONFLICT,
+        'PURCHASE_ORDER_STATE_CHANGED',
+        purchaseReviewSourceBlockReason(result.orderStatus) ?? '关联销售来源不存在，请核实来源订单',
+      )
+    }
   }
 
   async recalculateAfterPurchaseCancellation(
@@ -218,9 +275,15 @@ export class SalesOrderPurchaseCoverageService {
         )
       }
     }
+    // 认领货件不随采购取消失效；只按采购重算会把仍被认领覆盖的订单错误退回待采购。
+    const claimedBySalesLine = await readClaimedQuantitiesBySalesLine(
+      transaction,
+      input.salesOrderId,
+      salesLines.map(line => line.id),
+    )
     const fullyCovered = isSalesOrderPurchaseFullyCovered(
       salesLines,
-      purchasedBySource,
+      mergeClaimedCoverage(purchasedBySource, claimedBySalesLine),
     )
     const toStatus: SalesOrderFulfillmentStatus = fullyCovered
       ? (order.fulfillmentStatus === 'PENDING' ? 'PREPARING' : order.fulfillmentStatus)
@@ -313,6 +376,11 @@ export class SalesOrderPurchaseCoverageService {
         )
       }
     }
+    const claimedBySalesLine = await readClaimedQuantitiesBySalesLine(
+      transaction,
+      input.salesOrderId,
+      salesLines.map(line => line.id),
+    )
     const activePurchaseOrders = await transaction.purchaseOrder.findMany({
       where: {
         salesOrderId: input.salesOrderId,
@@ -321,8 +389,13 @@ export class SalesOrderPurchaseCoverageService {
       },
       select: { fulfillmentStatus: true, orderStatus: true },
     })
-    const ready = isSalesOrderPurchaseFullyCovered(salesLines, purchasedBySource)
-      && activePurchaseOrders.length > 0
+    // 认领货件已经处于物流流程中，可单独构成“全部发货”；采购单仍按既有口径逐单校验。
+    const hasClaimedCoverage = claimedBySalesLine.size > 0
+    const ready = isSalesOrderPurchaseFullyCovered(
+      salesLines,
+      mergeClaimedCoverage(purchasedBySource, claimedBySalesLine),
+    )
+      && (activePurchaseOrders.length > 0 || hasClaimedCoverage)
       && activePurchaseOrders.every(purchaseOrder => (
         (purchaseOrder.orderStatus === 'CONFIRMED' || purchaseOrder.orderStatus === 'COMPLETED')
         && (
