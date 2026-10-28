@@ -139,6 +139,10 @@ export class PurchaseShipmentDeliveryService {
       if (part.loadedAt === null) {
         return notAllowed('货件尚未装柜，不能签收')
       }
+      // 寄仓中的货件归属已转出销售单，物流动作冻结到认领为止。
+      if (part.ownershipCurrent?.ownerType === 'STORAGE_POOL') {
+        return notAllowed('寄仓中的货件不能签收')
+      }
 
       if (lockedOrder !== null && salesOrderId !== null) {
         if (lockedOrder.orderStatus === 'CANCELLED') {

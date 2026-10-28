@@ -274,6 +274,19 @@ describe('PurchaseShipmentDeliveryService', () => {
     }))
   })
 
+  it('blocks signing a shipment that is currently in storage', async () => {
+    const f = fixture()
+    const stored = lockedPart({
+      ownershipCurrent: { ownerType: 'STORAGE_POOL', ownerSalesOrderId: null },
+    })
+    f.transaction.purchaseOrderPart.findFirst.mockResolvedValue(stored)
+    f.transaction.purchaseOrderPart.findUnique.mockResolvedValue(stored)
+
+    await expect(f.service.deliver(context, PART_ID, {}))
+      .rejects.toMatchObject({ code: 'PURCHASE_SHIPMENT_DELIVERY_NOT_ALLOWED' })
+    expect(f.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
+  })
+
   it('returns 404 for a shipment outside the actor scope', async () => {
     const f = fixture({ scope: 'SELF' })
     f.transaction.purchaseOrderPart.findFirst.mockResolvedValue(null)
