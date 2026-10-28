@@ -6,7 +6,7 @@
 | --- | --- |
 | 文档状态 | 设计稿，待评审；未实施 |
 | 方案定位 | 通知中心（系统通知）的统一接口；千树小助理是其中的微信出站渠道 |
-| 关联文档 | [落地设计](./design.md)、[GeWeAPI 微信通知接入评估](../../docs/技术评估/GeWeAPI微信通知接入评估.md) |
+| 关联文档 | [文档索引](./README.md)、[落地设计](./design.md)、[数据模型](./data-model.md)、[事件规格](./events.md)、[GeWeAPI 评估](../../docs/技术评估/GeWeAPI微信通知接入评估.md) |
 | 最后更新 | 2026-10-28 |
 | 关键决策 | 阶段 1 不接回调；首批 3 个事件；管理员绑定；进程内循环 + 数据库租约 |
 | 适用范围 | `server/src/modules/notifications`、`web/apps/qsmds-arco/src/api/modules/notifications.ts` |
@@ -199,7 +199,7 @@ export interface SystemNotificationPublishResult {
 | `SLH_RECONCILIATION_COMPLETED` | `SLH_RECONCILIATION_BATCH` | `IN_APP` + `ASSISTANT` | `GROUP`（`finance`） | `slh.reconciliation.completed` | NORMAL | 8h | 1 |
 | `SHIPMENT_ARRIVED` | `PURCHASE_SHIPMENT` | `IN_APP` + `ASSISTANT` | `GROUP`（`operations`） | `shipment.arrived` | NORMAL | 8h | 1 |
 
-表中「默认渠道」是阶段 3 的目标状态；阶段 1 只启用 `ASSISTANT` 与表中阶段为 1 的 3 个事件，`IN_APP` 渠道保持关闭，发布时返回 `CHANNEL_DISABLED` 警告且不创建收件箱条目。
+表中「默认渠道」是阶段 3 的目标状态；阶段 1 只启用 `ASSISTANT` 与表中阶段为 1 的 3 个事件，`IN_APP` 渠道在阶段 1 没有配置行，发布时返回 `CHANNEL_NOT_CONFIGURED` 警告且不创建收件箱条目。
 
 事件目录是稳定的对外契约：新增事件只追加，不修改既有 `eventType` 语义；删除事件需要先停止所有调用方。
 

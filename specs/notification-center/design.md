@@ -6,7 +6,7 @@
 | --- | --- |
 | 文档状态 | 设计稿，关键决策已确认，待实施 |
 | 方案定位 | 通知中心（系统通知）为统一能力；站内通知与千树小助理是两个渠道 |
-| 关联文档 | [接口契约](./api.md)、[GeWeAPI 微信通知接入评估](../../docs/技术评估/GeWeAPI微信通知接入评估.md) |
+| 关联文档 | [文档索引](./README.md)、[接口契约](./api.md)、[数据模型](./data-model.md)、[事件规格](./events.md)、[任务拆分](./tasks.md)、[运维手册](./runbook.md)、[部署清单](./deployment.md)、[GeWeAPI 评估](../../docs/技术评估/GeWeAPI微信通知接入评估.md) |
 | 适用范围 | `server/src/modules/notifications`、`web/apps/qsmds-arco` |
 | 最后更新 | 2026-10-28 |
 | 实施边界 | 本文不含迁移 SQL、接口实现与页面代码；表结构、权限与迁移需单独评审批准 |
@@ -250,7 +250,7 @@ PENDING ──► SENDING ──► ACCEPTED
 6. 站外：为每个用户或群创建 `assistant_deliveries`；未绑定、停用、渠道关闭的收件人直接落 `SKIPPED`。
 7. 汇总通知状态。
 
-阶段 1 的渠道设置只启用 `ASSISTANT`；`IN_APP` 行存在但 `enabled = false`，发布时返回 `CHANNEL_DISABLED` 警告，不创建收件箱条目。阶段 3 再启用。阶段 1 只配置 3 个事件；`PURCHASE_REVIEW_PENDING` 的 1:1 依赖管理员手动绑定。
+阶段 1 的渠道设置只插入并启用 `ASSISTANT`；`IN_APP` 行在阶段 1 不插入，发布请求 `IN_APP` 时返回 `CHANNEL_NOT_CONFIGURED`，不创建收件箱条目。阶段 3 再插入并启用。阶段 1 只配置 3 个事件；`PURCHASE_REVIEW_PENDING` 的 1:1 依赖管理员手动绑定。
 
 ### 5.2 派发器形态与单实例保证
 
