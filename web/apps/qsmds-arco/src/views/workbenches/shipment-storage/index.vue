@@ -12,6 +12,7 @@ import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
+import ShipmentStorageClaimModal from './claim-modal.vue'
 import { buildStorageQuery, canRelocate, locationLabel, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageStatusClass, storageStatusLabel } from './logic'
 
 defineOptions({ name: 'QsOperationsShipmentStorage' })
@@ -23,6 +24,7 @@ const mainlandCatalog = useDictionaryCatalog('mainland.warehouse')
 const overseasCatalog = useDictionaryCatalog('overseas.warehouse')
 const canRead = computed(() => auth('shipment-storage:read'))
 const canRelocatePermission = computed(() => auth('shipment-storage:relocate'))
+const canClaimPermission = computed(() => auth('shipment-storage:claim'))
 
 const status = ref<StorageStatusTab>('ALL')
 const scope = ref<'' | ShipmentStorageLocationScope>('')
@@ -205,6 +207,22 @@ async function submitRelocate(): Promise<void> {
   }
   finally {
     relocating.value = false
+  }
+}
+
+const claimOpen = ref(false)
+const claimRecord = ref<ShipmentStorageDetailDto | null>(null)
+
+function openClaim(record: ShipmentStorageDetailDto): void {
+  claimRecord.value = record
+  claimOpen.value = true
+}
+
+function claimed(): void {
+  claimOpen.value = false
+  void load()
+  if (detailOpen.value) {
+    reloadDetail()
   }
 }
 
@@ -407,14 +425,24 @@ onMounted(() => {
             <h3 class="qs-type-section-title m-0">
               位置历史
             </h3>
-            <FaButton
-              v-if="canRelocate(detail, canRelocatePermission)"
-              size="sm"
-              variant="outline"
-              @click="openRelocate(detail)"
-            >
-              移动位置
-            </FaButton>
+            <div class="flex gap-2 items-center">
+              <FaButton
+                v-if="detail.status === 'IN_STORAGE' && canClaimPermission"
+                size="sm"
+                variant="outline"
+                @click="openClaim(detail)"
+              >
+                认领给销售单
+              </FaButton>
+              <FaButton
+                v-if="canRelocate(detail, canRelocatePermission)"
+                size="sm"
+                variant="outline"
+                @click="openRelocate(detail)"
+              >
+                移动位置
+              </FaButton>
+            </div>
           </div>
           <div v-if="detail.locationEvents.length === 0" class="text-sm text-muted-foreground">
             暂无移动记录。
@@ -470,5 +498,11 @@ onMounted(() => {
         </div>
       </template>
     </FaModal>
+
+    <ShipmentStorageClaimModal
+      v-model="claimOpen"
+      :storage-record="claimRecord"
+      @claimed="claimed"
+    />
   </div>
 </template>

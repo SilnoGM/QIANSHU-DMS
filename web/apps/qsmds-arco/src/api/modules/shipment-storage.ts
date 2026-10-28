@@ -1,5 +1,6 @@
 import type { AxiosInstance } from 'axios'
 import type {
+  ClaimShipmentStorageRequestDto,
   ReleaseShipmentStorageRequestDto,
   RelocateShipmentStorageRequestDto,
   ShipmentStorageDetailDto,
@@ -22,6 +23,8 @@ export function createShipmentStorageApi(client: AxiosInstance) {
       client.post<ShipmentStorageDetailDto[]>('shipment-storage/releases', data, { errorPresentation: 'local', retry: false, signal }),
     relocate: (id: string, data: RelocateShipmentStorageRequestDto, signal: AbortSignal) =>
       client.post<ShipmentStorageDetailDto>(`${path(id)}/location`, data, { errorPresentation: 'local', retry: false, signal }),
+    claim: (id: string, data: ClaimShipmentStorageRequestDto, signal: AbortSignal) =>
+      client.post<ShipmentStorageDetailDto>(`${path(id)}/claim`, data, { errorPresentation: 'local', retry: false, signal }),
   }
 }
 
