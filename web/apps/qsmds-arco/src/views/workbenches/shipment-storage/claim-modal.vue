@@ -4,6 +4,8 @@ import salesOrdersApi from '@/api/modules/sales-orders'
 import shipmentStorageApi from '@/api/modules/shipment-storage'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 
+import { storageFailureMessage } from './logic'
+
 defineOptions({ name: 'ShipmentStorageClaimModal' })
 
 const props = defineProps<{
@@ -86,7 +88,7 @@ async function loadOrders(signal: AbortSignal): Promise<void> {
   }
   catch (failure) {
     if (!signal.aborted) {
-      error.value = failure instanceof Error ? failure.message : '销售订单加载失败'
+      error.value = storageFailureMessage(failure, '销售订单加载失败')
     }
   }
   finally {
@@ -115,7 +117,7 @@ async function changeOrder(value: string): Promise<void> {
   }
   catch (failure) {
     if (!request.signal.aborted) {
-      error.value = failure instanceof Error ? failure.message : '销售订单详情加载失败'
+      error.value = storageFailureMessage(failure, '销售订单详情加载失败')
     }
   }
   finally {
@@ -150,7 +152,7 @@ async function submit(): Promise<void> {
     emit('claimed')
   }
   catch (failure) {
-    error.value = failure instanceof Error ? failure.message : '认领失败'
+    error.value = storageFailureMessage(failure, '认领失败')
   }
   finally {
     submitting.value = false

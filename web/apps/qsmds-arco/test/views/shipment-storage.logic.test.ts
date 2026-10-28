@@ -2,13 +2,23 @@ import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 页面筛选项契约使用 Node.js 内置 runner。
 import test from 'node:test'
 
-import { buildStorageQuery, DEFAULT_STORAGE_STATUS, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageStatusLabel } from '../../src/views/workbenches/shipment-storage/logic'
+import { buildStorageQuery, DEFAULT_STORAGE_STATUS, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusLabel } from '../../src/views/workbenches/shipment-storage/logic'
 
 test('寄仓状态默认寄仓中，全部放在最后', () => {
   assert.equal(DEFAULT_STORAGE_STATUS, 'IN_STORAGE')
   assert.deepEqual(STORAGE_STATUS_TABS, ['IN_STORAGE', 'CLAIMED', 'VOIDED', 'ALL'])
   assert.equal(storageStatusLabel('IN_STORAGE'), '寄仓中')
   assert.equal(storageStatusLabel('CLAIMED'), '已调货')
+})
+
+test('认领失败时显示服务端文案而不是通用兜底', () => {
+  assert.equal(storageFailureMessage({
+    kind: 'http',
+    status: 422,
+    body: { code: 'SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE', message: '认领数量超过该销售行的未覆盖余量' },
+  }, '认领失败'), '认领数量超过该销售行的未覆盖余量')
+  assert.equal(storageFailureMessage(new Error('boom'), '认领失败'), 'boom')
+  assert.equal(storageFailureMessage('unknown', '认领失败'), '认领失败')
 })
 
 test('寄仓位置筛选不使用空字符串值，全部位置使用 ALL 哨兵', () => {

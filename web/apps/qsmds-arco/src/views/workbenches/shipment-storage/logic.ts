@@ -1,4 +1,14 @@
+import type { ApiClientError } from '../../../api/errors'
 import type { ShipmentStorageListItemDto } from '@/api/generated/types.gen'
+import { getApiClientErrorMessage } from '../../../api/errors'
+
+/** 接口错误经过客户端归一化，服务端文案在 body.message；普通 Error 才读 message。 */
+export function storageFailureMessage(failure: unknown, fallback: string): string {
+  if (typeof failure === 'object' && failure !== null && 'kind' in failure) {
+    return getApiClientErrorMessage(failure as ApiClientError)
+  }
+  return failure instanceof Error ? failure.message : fallback
+}
 
 export type ShipmentStorageStatus = ShipmentStorageListItemDto['status']
 export type ShipmentStorageLocationScope = ShipmentStorageListItemDto['locationScope']
