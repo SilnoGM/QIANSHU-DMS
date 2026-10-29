@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { StorageScopeFilter, StorageStatusTab } from './logic'
 import type { ShipmentStorageContainerItemDto, ShipmentStorageDetailDto, ShipmentStorageListItemDto } from '@/api/generated/types.gen'
-import type { ActionMenuItem, ActionWidthSpec } from '@/components/business/QsGenericTable/action-column-width'
+import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
+import type { StorageScopeFilter, StorageStatusTab } from '@/views/workbenches/shipment-storage/logic'
 import shipmentStorageApi from '@/api/modules/shipment-storage'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
@@ -16,25 +16,10 @@ import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
+import { buildStorageQuery, claimRequestDisabledReason, DEFAULT_STORAGE_STATUS, locationLabel, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusClass, storageStatusLabel } from '@/views/workbenches/shipment-storage/logic'
 import ShipmentProducts from '@/views/workbenches/shipments/shipment-products.vue'
-import ShipmentStorageClaimModal from './claim-modal.vue'
-import { buildStorageQuery, claimDisabledReason, claimRequestDisabledReason, DEFAULT_STORAGE_STATUS, locationLabel, relocateDisabledReason, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusClass, storageStatusLabel } from './logic'
 
-type ShipmentStoragePageMode = 'operations' | 'purchase'
-
-defineOptions({ name: 'QsOperationsShipmentStorage' })
-
-const props = withDefaults(defineProps<{
-  storageMode?: ShipmentStoragePageMode
-}>(), {
-  storageMode: 'operations',
-})
-
-const isPurchaseMode = computed(() => props.storageMode === 'purchase')
-const pageTitle = computed(() => isPurchaseMode.value ? '寄仓管理' : '货物寄仓')
-const pageDescription = computed(() => isPurchaseMode.value
-  ? '内地仓与海外仓的寄仓货件、成本与位置记录。'
-  : '查看全部寄仓货物并提交调货申请。')
+defineOptions({ name: 'QsOperationsGoodsStorage' })
 
 // QsGenericTable 内部使用局部 i18n 作用域；页面显式建立父级作用域，避免回退全局时告警。
 useI18n()
@@ -46,8 +31,6 @@ const currencyCatalog = useCurrencyCatalog()
 const mainlandCatalog = useDictionaryCatalog('mainland.warehouse')
 const overseasCatalog = useDictionaryCatalog('overseas.warehouse')
 const canRead = computed(() => auth('shipment-storage:read'))
-const canRelocatePermission = computed(() => auth('shipment-storage:relocate'))
-const canClaimPermission = computed(() => auth('shipment-storage:claim'))
 
 const UUID_PATTERN = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu
 const queryStorageId = typeof route.query.storageId === 'string' && UUID_PATTERN.test(route.query.storageId)
@@ -109,22 +92,10 @@ const columns = computed<QsGenericTableColumn<ShipmentStorageListItemDto>[]>(() 
   { id: 'createdAt', title: '转入寄仓时间', accessorKey: 'createdAt', minWidth: 190 },
 ])
 
-const actionColumnWidth = computed(() => {
-  const actions: ActionWidthSpec[] = []
-  if (isPurchaseMode.value) {
-    if (canClaimPermission.value) {
-      actions.push({ chars: 2, kind: 'text' })
-    }
-    if (canRelocatePermission.value) {
-      actions.push({ chars: 2, kind: 'text' })
-    }
-  }
-  else {
-    actions.push({ chars: 4, kind: 'text' })
-  }
-  actions.push({ kind: 'icon' })
-  return resolveActionColumnWidth(actions)
-})
+const actionColumnWidth = computed(() => resolveActionColumnWidth([
+  { chars: 4, kind: 'text' },
+  { kind: 'icon' },
+]))
 
 let controller: AbortController | null = null
 
@@ -273,122 +244,12 @@ async function openDetail(row: ShipmentStorageListItemDto): Promise<void> {
   }
 }
 
-function reloadDetail(): void {
-  const row = rows.value.find(item => item.id === detail.value?.id)
-  if (row !== undefined) {
-    void openDetail(row)
-  }
-}
-
-const actionBusyKey = ref<string | null>(null)
-const claimOpen = ref(false)
-const claimRecord = ref<ShipmentStorageDetailDto | null>(null)
-
 function openDetailFromMenu(row: ShipmentStorageListItemDto): void {
   void openDetail(row)
 }
 
 function detailMenuItems(row: ShipmentStorageListItemDto): ActionMenuItem[][] {
   return [[{ label: '详情', handle: () => openDetailFromMenu(row) }]]
-}
-
-async function loadLatestDetail(
-  row: ShipmentStorageListItemDto,
-  action: 'claim' | 'relocate',
-): Promise<ShipmentStorageDetailDto | null> {
-  const busyKey = `${row.id}:${action}`
-  if (actionBusyKey.value !== null) {
-    return null
-  }
-  actionBusyKey.value = busyKey
-  const request = new AbortController()
-  try {
-    const response = await shipmentStorageApi.detail(row.id, request.signal)
-    const latest = response.data
-    const reason = action === 'claim'
-      ? claimDisabledReason(latest, canClaimPermission.value)
-      : relocateDisabledReason(latest, canRelocatePermission.value)
-    if (reason !== null) {
-      toast.info(reason)
-      void load()
-      return null
-    }
-    return latest
-  }
-  catch (failure) {
-    toast.error(storageFailureMessage(failure, '寄仓详情加载失败'))
-    return null
-  }
-  finally {
-    actionBusyKey.value = null
-  }
-}
-
-async function openClaimFromRow(row: ShipmentStorageListItemDto): Promise<void> {
-  const latest = await loadLatestDetail(row, 'claim')
-  if (latest === null) {
-    return
-  }
-  claimRecord.value = latest
-  claimOpen.value = true
-}
-
-const relocateOpen = ref(false)
-const relocateRecord = ref<ShipmentStorageDetailDto | null>(null)
-const relocateTarget = ref('')
-const relocateReason = ref('')
-const relocating = ref(false)
-
-const relocateOptions = computed(() => overseasCatalog.selectableItems.value
-  .filter(item => item.value !== relocateRecord.value?.warehouseValue)
-  .map(item => ({ value: item.value, label: item.label })))
-
-async function openRelocateFromRow(row: ShipmentStorageListItemDto): Promise<void> {
-  const latest = await loadLatestDetail(row, 'relocate')
-  if (latest === null) {
-    return
-  }
-  relocateRecord.value = latest
-  relocateTarget.value = ''
-  relocateReason.value = ''
-  relocateOpen.value = true
-}
-
-async function submitRelocate(): Promise<void> {
-  const record = relocateRecord.value
-  if (record === null || relocateTarget.value === '' || relocateReason.value.trim() === '') {
-    toast.warning('请选择目标仓库并填写原因')
-    return
-  }
-  relocating.value = true
-  const request = new AbortController()
-  try {
-    await shipmentStorageApi.relocate(record.id, {
-      warehouseValue: relocateTarget.value,
-      reason: relocateReason.value.trim(),
-      requestKey: crypto.randomUUID(),
-    }, request.signal)
-    toast.success('寄仓位置已更新')
-    relocateOpen.value = false
-    await load()
-    if (detailOpen.value) {
-      reloadDetail()
-    }
-  }
-  catch (failure) {
-    toast.error(storageFailureMessage(failure, '位置更新失败'))
-  }
-  finally {
-    relocating.value = false
-  }
-}
-
-function claimed(): void {
-  claimOpen.value = false
-  void load()
-  if (detailOpen.value) {
-    reloadDetail()
-  }
 }
 
 onMounted(() => {
@@ -398,7 +259,7 @@ onMounted(() => {
 
 <template>
   <div class="min-w-0">
-    <FaPageHeader :title="pageTitle" :description="pageDescription" />
+    <FaPageHeader title="货物寄仓" description="查看全部寄仓货物并提交调货申请。" />
     <FaPageMain class="min-w-0">
       <div
         v-if="storageId"
@@ -551,50 +412,7 @@ onMounted(() => {
 
         <template #actions="{ row }">
           <div class="flex gap-1 items-center justify-end">
-            <template v-if="isPurchaseMode">
-              <FaTooltip
-                v-if="canClaimPermission"
-                :text="claimDisabledReason(row, canClaimPermission) ?? ''"
-                :disabled="claimDisabledReason(row, canClaimPermission) === null"
-              >
-                <span class="inline-flex" tabindex="0">
-                  <FaButton
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    class="min-h-11 sm:min-h-8"
-                    :disabled="claimDisabledReason(row, canClaimPermission) !== null || actionBusyKey !== null"
-                    :loading="actionBusyKey === `${row.id}:claim`"
-                    :aria-label="`${row.shipmentNo ?? '寄仓记录'}：调货`"
-                    @click="openClaimFromRow(row)"
-                  >
-                    调货
-                  </FaButton>
-                </span>
-              </FaTooltip>
-              <FaTooltip
-                v-if="canRelocatePermission"
-                :text="relocateDisabledReason(row, canRelocatePermission) ?? ''"
-                :disabled="relocateDisabledReason(row, canRelocatePermission) === null"
-              >
-                <span class="inline-flex" tabindex="0">
-                  <FaButton
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    class="min-h-11 sm:min-h-8"
-                    :disabled="relocateDisabledReason(row, canRelocatePermission) !== null || actionBusyKey !== null"
-                    :loading="actionBusyKey === `${row.id}:relocate`"
-                    :aria-label="`${row.shipmentNo ?? '寄仓记录'}：移仓`"
-                    @click="openRelocateFromRow(row)"
-                  >
-                    移仓
-                  </FaButton>
-                </span>
-              </FaTooltip>
-            </template>
             <FaTooltip
-              v-else
               :text="claimRequestDisabledReason(row) ?? ''"
               :disabled="claimRequestDisabledReason(row) === null"
             >
@@ -970,43 +788,6 @@ onMounted(() => {
           </div>
         </div>
       </QsGenericDrawer>
-
-      <FaModal v-model="relocateOpen" title="移动寄仓位置" size="md">
-        <div class="flex flex-col gap-4">
-          <div>
-            <p class="qs-type-meta text-muted-foreground m-0">
-              当前货件
-            </p>
-            <p class="mb-0 mt-1">
-              {{ relocateRecord?.shipmentNo ?? '—' }} · {{ relocateRecord?.warehouseLabel ?? relocateRecord?.warehouseValue }}
-            </p>
-          </div>
-          <label class="flex flex-col gap-1">
-            <span class="text-sm">目标仓库</span>
-            <FaSelect v-model="relocateTarget" :options="relocateOptions" placeholder="选择海外仓库" />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-sm">原因</span>
-            <FaInput v-model="relocateReason" maxlength="500" placeholder="例如：客户要求转运" />
-          </label>
-        </div>
-        <template #footer>
-          <div class="flex gap-2 justify-end">
-            <FaButton variant="outline" :disabled="relocating" @click="relocateOpen = false">
-              取消
-            </FaButton>
-            <FaButton :loading="relocating" @click="submitRelocate">
-              确认移动
-            </FaButton>
-          </div>
-        </template>
-      </FaModal>
-
-      <ShipmentStorageClaimModal
-        v-model="claimOpen"
-        :storage-record="claimRecord"
-        @claimed="claimed"
-      />
     </FaPageMain>
   </div>
 </template>

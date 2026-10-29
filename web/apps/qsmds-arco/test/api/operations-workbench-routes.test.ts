@@ -31,9 +31,8 @@ test('仓储运输接入到仓、海运柜次与货物寄仓业务页', () => {
   assert.equal(oceanAll?.meta?.menu, false)
   assert.equal(oceanAll?.meta?.activeMenu, '/qs-operations/warehouse-transport/ocean-containers')
   const storage = warehouseRoute?.children?.[3]
-  assert.match(String(storage?.component), /workbenches\/shipment-storage\/index\.vue/u)
+  assert.match(String(storage?.component), /operations\/goods-storage\/index\.vue/u)
   assert.equal(storage?.meta?.auth, 'shipment-storage:read')
-  assert.deepEqual(storage?.props, { storageMode: 'operations' })
 
   const canSeeOcean = (permissions: string[]) => filterAccessibleMenus(
     operationsWorkbenchRoutes,

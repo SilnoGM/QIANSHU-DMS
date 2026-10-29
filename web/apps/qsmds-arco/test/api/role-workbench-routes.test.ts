@@ -105,6 +105,7 @@ test('柜次、寄仓菜单使用独立读取权限，货件与审核菜单保�
   assert.equal(routes[1]?.meta?.auth, 'purchase-orders:read')
   assert.equal(routes[2]?.meta?.auth, 'shipment-storage:read')
   assert.equal(routes[2]?.meta?.title, '寄仓管理')
+  assert.match(String(routes[2]?.component), /workbenches\/purchase-storage\/index\.vue/u)
   assert.equal(routes[3]?.meta?.auth, 'container-batches:read')
   assert.equal(routes[3]?.meta?.title, 'workbench.containers')
   assert.equal(routes[3]?.meta?.icon, 'qs-container-management')

@@ -4,7 +4,7 @@ import salesOrdersApi from '@/api/modules/sales-orders'
 import shipmentStorageApi from '@/api/modules/shipment-storage'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 
-import { storageFailureMessage } from './logic'
+import { storageFailureMessage } from '@/views/workbenches/shipment-storage/logic'
 
 defineOptions({ name: 'ShipmentStorageClaimModal' })
 

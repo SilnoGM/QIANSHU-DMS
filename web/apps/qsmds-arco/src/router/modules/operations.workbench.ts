@@ -135,8 +135,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'goods-storage',
         name: 'qsOperationsGoodsStorage',
-        component: () => import('@/views/workbenches/shipment-storage/index.vue'),
-        props: { storageMode: 'operations' },
+        component: () => import('@/views/operations/goods-storage/index.vue'),
         meta: { title: '货物寄仓', icon: 'qs-overseas-storage', auth: 'shipment-storage:read' },
       },
     ],
