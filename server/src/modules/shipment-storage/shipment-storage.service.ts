@@ -6,6 +6,12 @@ import { Prisma } from '../../generated/prisma/client'
 import type {
   ShipmentStorageLocationScope,
 } from '../../generated/prisma/enums'
+import {
+  PERSON_REFERENCE_SELECT,
+  toPersonReference,
+  type PersonReference,
+  type PersonReferenceRow,
+} from '../../infrastructure/database/person-reference'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { hasPersistenceCode, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
@@ -181,13 +187,18 @@ function costFromSnapshot(snapshot: Prisma.JsonValue): ShipmentStorageCostDto {
     purchaseCostCny: decimalString(value.purchaseCostCny),
     packagingCostCny: decimalString(value.packagingCostCny),
     totalCostCny: decimalString(value.totalCostCny),
-    originalShareRate: decimalString(value.originalShareRate),
-    userLegCny: decimalString(value.userLegCny),
-    companyLegCny: decimalString(value.companyLegCny),
   }
 }
 
-function baseRecordDto(row: StorageRecordRow): ShipmentStorageListItemDto {
+interface StoragePersonContext {
+  readonly issuerById: ReadonlyMap<string, PersonReference>
+  readonly purchaseCreatorById: ReadonlyMap<string, PersonReference>
+}
+
+function baseRecordDto(
+  row: StorageRecordRow,
+  persons: StoragePersonContext,
+): ShipmentStorageListItemDto {
   return {
     id: row.id,
     shipmentId: row.shipmentId,
@@ -198,7 +209,9 @@ function baseRecordDto(row: StorageRecordRow): ShipmentStorageListItemDto {
     shipmentNo: row.shipmentNoSnapshot,
     shippingMarkText: row.shippingMarkSnapshot,
     originPurchaseOrderNo: row.originPurchaseOrderNoSnapshot,
+    originPurchaseCreator: persons.purchaseCreatorById.get(row.originPurchaseOrderId) ?? null,
     originSalesOrderNo: row.originSalesOrderNoSnapshot,
+    originIssuer: persons.issuerById.get(row.originIssuerUserId) ?? null,
     originCustomerName: row.originCustomerNameSnapshot,
     originSalesOrderId: row.originSalesOrderId,
     originIssuerUserId: row.originIssuerUserId,
@@ -219,9 +232,10 @@ function parseBatchIds(value: Prisma.JsonValue): string[] {
 function detailDto(
   row: StorageRecordRow,
   costTransfers: readonly ShipmentStorageCostTransferDto[],
+  persons: StoragePersonContext,
 ): ShipmentStorageDetailDto {
   return {
-    ...baseRecordDto(row),
+    ...baseRecordDto(row, persons),
     originAllocations: Array.isArray(row.originAllocations)
       ? row.originAllocations
       : [],
@@ -511,7 +525,8 @@ export class ShipmentStorageService {
         take: pageSize,
       }),
     ])
-    return { items: rows.map(baseRecordDto), page, pageSize, total }
+    const persons = await this.loadPersonContext(rows)
+    return { items: rows.map(row => baseRecordDto(row, persons)), page, pageSize, total }
   }
 
   async statusCounts(query: ShipmentStorageListQueryDto): Promise<ShipmentStorageStatusCountsDto> {
@@ -870,6 +885,32 @@ export class ShipmentStorageService {
     return this.withCostTransfers(rows)
   }
 
+  /** 来源人员不落快照：按当前用户/采购单读取，停用账号仍保留展示名与头像。 */
+  private async loadPersonContext(
+    rows: readonly StorageRecordRow[],
+  ): Promise<StoragePersonContext> {
+    const issuerIds = [...new Set(rows.map(row => row.originIssuerUserId))]
+    const purchaseOrderIds = [...new Set(rows.map(row => row.originPurchaseOrderId))]
+    const [users, orders] = await Promise.all([
+      issuerIds.length === 0
+        ? Promise.resolve([] as PersonReferenceRow[])
+        : this.prisma.user.findMany({
+            where: { id: { in: issuerIds } },
+            select: PERSON_REFERENCE_SELECT,
+          }),
+      purchaseOrderIds.length === 0
+        ? Promise.resolve([] as Array<{ id: string, createdBy: PersonReferenceRow }>)
+        : this.prisma.purchaseOrder.findMany({
+            where: { id: { in: purchaseOrderIds } },
+            select: { id: true, createdBy: { select: PERSON_REFERENCE_SELECT } },
+          }),
+    ])
+    return {
+      issuerById: new Map(users.map(user => [user.id, toPersonReference(user)])),
+      purchaseCreatorById: new Map(orders.map(order => [order.id, toPersonReference(order.createdBy)])),
+    }
+  }
+
   /** 成本转移只在发生真实动账时留事件；零成本或历史记录返回空列表。 */
   private async withCostTransfers(
     rows: readonly StorageRecordRow[],
@@ -907,7 +948,8 @@ export class ShipmentStorageService {
       })
       byRecord.set(event.storageRecordId, transfers)
     }
-    return rows.map(row => detailDto(row, byRecord.get(row.id) ?? []))
+    const persons = await this.loadPersonContext(rows)
+    return rows.map(row => detailDto(row, byRecord.get(row.id) ?? [], persons))
   }
 
   private assertReleasable(

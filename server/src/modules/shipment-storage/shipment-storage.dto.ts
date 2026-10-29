@@ -154,9 +154,12 @@ export class ShipmentStorageCostDto {
   @ApiProperty({ type: 'string' }) readonly purchaseCostCny!: string
   @ApiProperty({ type: 'string' }) readonly packagingCostCny!: string
   @ApiProperty({ type: 'string' }) readonly totalCostCny!: string
-  @ApiProperty({ type: 'string' }) readonly originalShareRate!: string
-  @ApiProperty({ type: 'string' }) readonly userLegCny!: string
-  @ApiProperty({ type: 'string' }) readonly companyLegCny!: string
+}
+
+export class ShipmentStoragePersonDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string' }) readonly displayName!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly avatarUrl!: string | null
 }
 
 export class ShipmentStorageListItemDto {
@@ -169,7 +172,9 @@ export class ShipmentStorageListItemDto {
   @ApiProperty({ type: 'string', nullable: true }) readonly shipmentNo!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly shippingMarkText!: string | null
   @ApiProperty({ type: 'string' }) readonly originPurchaseOrderNo!: string
+  @ApiProperty({ type: () => ShipmentStoragePersonDto, nullable: true }) readonly originPurchaseCreator!: ShipmentStoragePersonDto | null
   @ApiProperty({ type: 'string' }) readonly originSalesOrderNo!: string
+  @ApiProperty({ type: () => ShipmentStoragePersonDto, nullable: true }) readonly originIssuer!: ShipmentStoragePersonDto | null
   @ApiProperty({ type: 'string' }) readonly originCustomerName!: string
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly originSalesOrderId!: string
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly originIssuerUserId!: string

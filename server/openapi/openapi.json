@@ -95247,6 +95247,27 @@
           "voucher"
         ]
       },
+      "ShipmentStoragePersonDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "avatarUrl"
+        ]
+      },
       "ShipmentStorageCostDto": {
         "type": "object",
         "properties": {
@@ -95258,24 +95279,12 @@
           },
           "totalCostCny": {
             "type": "string"
-          },
-          "originalShareRate": {
-            "type": "string"
-          },
-          "userLegCny": {
-            "type": "string"
-          },
-          "companyLegCny": {
-            "type": "string"
           }
         },
         "required": [
           "purchaseCostCny",
           "packagingCostCny",
-          "totalCostCny",
-          "originalShareRate",
-          "userLegCny",
-          "companyLegCny"
+          "totalCostCny"
         ]
       },
       "ShipmentStorageListItemDto": {
@@ -95323,8 +95332,26 @@
           "originPurchaseOrderNo": {
             "type": "string"
           },
+          "originPurchaseCreator": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ShipmentStoragePersonDto"
+              }
+            ]
+          },
           "originSalesOrderNo": {
             "type": "string"
+          },
+          "originIssuer": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ShipmentStoragePersonDto"
+              }
+            ]
           },
           "originCustomerName": {
             "type": "string"
@@ -95373,7 +95400,9 @@
           "shipmentNo",
           "shippingMarkText",
           "originPurchaseOrderNo",
+          "originPurchaseCreator",
           "originSalesOrderNo",
+          "originIssuer",
           "originCustomerName",
           "originSalesOrderId",
           "originIssuerUserId",
@@ -95561,8 +95590,26 @@
           "originPurchaseOrderNo": {
             "type": "string"
           },
+          "originPurchaseCreator": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ShipmentStoragePersonDto"
+              }
+            ]
+          },
           "originSalesOrderNo": {
             "type": "string"
+          },
+          "originIssuer": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ShipmentStoragePersonDto"
+              }
+            ]
           },
           "originCustomerName": {
             "type": "string"
@@ -95635,7 +95682,9 @@
           "shipmentNo",
           "shippingMarkText",
           "originPurchaseOrderNo",
+          "originPurchaseCreator",
           "originSalesOrderNo",
+          "originIssuer",
           "originCustomerName",
           "originSalesOrderId",
           "originIssuerUserId",

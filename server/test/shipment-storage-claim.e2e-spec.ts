@@ -179,6 +179,11 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       direction: 'RELEASE',
     })
     expect(detail.costTransfers[0]?.batchNos).toHaveLength(1)
+    expect(detail.originIssuer?.id).toBe(h.fixture.actor.id)
+    expect(detail.originPurchaseCreator?.id).toBe(h.fixture.actor.id)
+    const releasedList = await storage.list({ storageId: released[0].id })
+    expect(releasedList.items[0]?.originIssuer?.id).toBe(h.fixture.actor.id)
+    expect(releasedList.items[0]?.originPurchaseCreator?.id).toBe(h.fixture.actor.id)
 
     // 到仓货件：池内货件对原出单人和管理员（带排除参数）都不可见；货件管理不带参数时仍可见。
     expect(await arrivalPartIds('SELF', h.fixture.actor.id)).not.toContain(origin.part.id)
