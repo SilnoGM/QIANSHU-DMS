@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { StorageScopeFilter, StorageStatusTab } from './logic'
-import type { ShipmentStorageDetailDto, ShipmentStorageListItemDto } from '@/api/generated/types.gen'
+import type { ShipmentStorageContainerItemDto, ShipmentStorageDetailDto, ShipmentStorageListItemDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import shipmentStorageApi from '@/api/modules/shipment-storage'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
@@ -181,12 +181,52 @@ const detailOpen = ref(false)
 const detail = ref<ShipmentStorageDetailDto | null>(null)
 const detailLoading = ref(false)
 const detailError = ref('')
+const detailView = ref<'basic' | 'container'>('basic')
+
+interface ContainerMarkGroup {
+  mark: string
+  items: ShipmentStorageContainerItemDto[]
+}
+
+const containerMarkGroups = computed<ContainerMarkGroup[]>(() => {
+  const groups = new Map<string, ContainerMarkGroup>()
+  for (const item of detail.value?.containerLoadingItems ?? []) {
+    const mark = item.oceanShippingMarkText?.trim() || '未记录装柜唛头'
+    const group = groups.get(mark) ?? { mark, items: [] }
+    group.items.push(item)
+    groups.set(mark, group)
+  }
+  return [...groups.values()]
+})
+
+const detailViewItems = computed(() => [
+  { value: 'basic', label: '基础信息' },
+  { value: 'container', label: '装柜信息', count: containerMarkGroups.value.length },
+])
+
+function containerQuantity(item: ShipmentStorageContainerItemDto): string {
+  return item.packageUnit === null
+    ? String(item.packageCount)
+    : `${item.packageCount} ${item.packageUnit}`
+}
+
+function containerDimensions(item: ShipmentStorageContainerItemDto): string {
+  const values = [item.lengthCm, item.widthCm, item.heightCm]
+  return values.every(value => value !== null)
+    ? `${values.join(' × ')} cm`
+    : '—'
+}
+
+function containerWeight(item: ShipmentStorageContainerItemDto): string {
+  return item.grossWeightKg === null ? '—' : `${item.grossWeightKg} kg`
+}
 
 async function openDetail(row: ShipmentStorageListItemDto): Promise<void> {
   detailOpen.value = true
   detail.value = null
   detailLoading.value = true
   detailError.value = ''
+  detailView.value = 'basic'
   const request = new AbortController()
   try {
     const response = await shipmentStorageApi.detail(row.id, request.signal)
@@ -454,204 +494,347 @@ onMounted(() => {
         </template>
 
         <div v-if="detail && !detailLoading && !detailError" class="pb-2 flex flex-col gap-6">
-          <section class="gap-3 grid sm:grid-cols-2">
-            <div class="p-4 border border-border rounded-lg">
-              <p class="qs-type-meta text-muted-foreground m-0">
-                货件编号
-              </p>
-              <div class="qs-type-data-emphasis mt-1">
-                <QsCopyableText label="货件编号" :text="detail.shipmentNo" />
-              </div>
-            </div>
-            <div class="p-4 border border-border rounded-lg">
-              <p class="qs-type-meta text-muted-foreground m-0">
-                货件唛头
-              </p>
-              <div class="qs-type-data-emphasis mt-1">
-                <QsCopyableText label="货件唛头" :text="detail.shippingMarkText" />
-              </div>
-            </div>
-            <div class="p-4 border border-border rounded-lg">
-              <p class="qs-type-meta text-muted-foreground m-0">
-                来源销售单
-              </p>
-              <div class="mt-1 flex flex-col gap-1 min-w-0">
-                <QsPersonDisplay
-                  v-if="detail.originIssuer"
-                  :display-name="detail.originIssuer.displayName"
-                  :avatar-url="detail.originIssuer.avatarUrl"
-                  size="sm"
-                />
-                <span v-else class="qs-type-meta text-muted-foreground">—</span>
-                <span class="qs-type-data-emphasis">
-                  <QsCopyableText label="销售单号" :text="detail.originSalesOrderNo" />
-                </span>
-              </div>
-            </div>
-            <div class="p-4 border border-border rounded-lg">
-              <p class="qs-type-meta text-muted-foreground m-0">
-                来源采购单
-              </p>
-              <div class="mt-1 flex flex-col gap-1 min-w-0">
-                <QsPersonDisplay
-                  v-if="detail.originPurchaseCreator"
-                  :display-name="detail.originPurchaseCreator.displayName"
-                  :avatar-url="detail.originPurchaseCreator.avatarUrl"
-                  size="sm"
-                />
-                <span v-else class="qs-type-meta text-muted-foreground">—</span>
-                <span class="qs-type-data-emphasis">
-                  <QsCopyableText label="采购单号" :text="detail.originPurchaseOrderNo" />
-                </span>
-              </div>
-            </div>
-            <div class="p-4 border border-border rounded-lg">
-              <p class="qs-type-meta text-muted-foreground m-0">
-                原单客户
-              </p>
-              <p class="mb-0 mt-1">
-                {{ detail.originCustomerName }}
-              </p>
-            </div>
-            <div class="p-4 border border-border rounded-lg">
-              <p class="qs-type-meta text-muted-foreground m-0">
-                寄仓位置
-              </p>
-              <p class="mb-0 mt-1">
-                {{ locationLabel(detail) }}
-              </p>
-            </div>
-          </section>
-
-          <section>
-            <h3 class="qs-type-section-title mb-3">
-              成本快照
-            </h3>
-            <div class="flex flex-col gap-3">
-              <div class="p-4 border border-primary/30 rounded-xl bg-primary/10">
+          <QsStatusSwitchToolbar
+            v-model="detailView"
+            :items="detailViewItems"
+            stretch
+            aria-label="寄仓详情视图切换"
+          />
+          <div v-if="detailView === 'basic'" class="flex flex-col gap-6">
+            <section class="gap-3 grid sm:grid-cols-2">
+              <div class="p-4 border border-border rounded-lg">
                 <p class="qs-type-meta text-muted-foreground m-0">
-                  成本合计
+                  货件编号
                 </p>
-                <AmountDisplay
-                  :value="detail.cost.totalCostCny"
-                  currency="CNY"
-                  :currencies="currencyCatalog.currencies.value"
-                  class="text-2xl text-primary font-semibold mt-1"
-                />
-              </div>
-              <div class="gap-3 grid sm:grid-cols-2">
-                <div class="p-4 border border-border rounded-xl">
-                  <p class="qs-type-meta text-muted-foreground m-0">
-                    采购成本
-                  </p>
-                  <AmountDisplay
-                    :value="detail.cost.purchaseCostCny"
-                    currency="CNY"
-                    :currencies="currencyCatalog.currencies.value"
-                    class="mt-1"
-                  />
-                </div>
-                <div class="p-4 border border-border rounded-xl">
-                  <p class="qs-type-meta text-muted-foreground m-0">
-                    包装成本
-                  </p>
-                  <AmountDisplay
-                    v-if="hasPositiveAmount(detail.cost.packagingCostCny)"
-                    :value="detail.cost.packagingCostCny"
-                    currency="CNY"
-                    :currencies="currencyCatalog.currencies.value"
-                    class="mt-1"
-                  />
-                  <p v-else class="text-muted-foreground mb-0 mt-1">
-                    -
-                  </p>
+                <div class="qs-type-data-emphasis mt-1">
+                  <QsCopyableText label="货件编号" :text="detail.shipmentNo" />
                 </div>
               </div>
-            </div>
-          </section>
+              <div class="p-4 border border-border rounded-lg">
+                <p class="qs-type-meta text-muted-foreground m-0">
+                  货件唛头
+                </p>
+                <div class="qs-type-data-emphasis mt-1">
+                  <QsCopyableText label="货件唛头" :text="detail.shippingMarkText" />
+                </div>
+              </div>
+              <div class="p-4 border border-border rounded-lg">
+                <p class="qs-type-meta text-muted-foreground m-0">
+                  来源销售单
+                </p>
+                <div class="mt-1 flex flex-col gap-1 min-w-0">
+                  <QsPersonDisplay
+                    v-if="detail.originIssuer"
+                    :display-name="detail.originIssuer.displayName"
+                    :avatar-url="detail.originIssuer.avatarUrl"
+                    size="sm"
+                  />
+                  <span v-else class="qs-type-meta text-muted-foreground">—</span>
+                  <span class="qs-type-data-emphasis">
+                    <QsCopyableText label="销售单号" :text="detail.originSalesOrderNo" />
+                  </span>
+                </div>
+              </div>
+              <div class="p-4 border border-border rounded-lg">
+                <p class="qs-type-meta text-muted-foreground m-0">
+                  来源采购单
+                </p>
+                <div class="mt-1 flex flex-col gap-1 min-w-0">
+                  <QsPersonDisplay
+                    v-if="detail.originPurchaseCreator"
+                    :display-name="detail.originPurchaseCreator.displayName"
+                    :avatar-url="detail.originPurchaseCreator.avatarUrl"
+                    size="sm"
+                  />
+                  <span v-else class="qs-type-meta text-muted-foreground">—</span>
+                  <span class="qs-type-data-emphasis">
+                    <QsCopyableText label="采购单号" :text="detail.originPurchaseOrderNo" />
+                  </span>
+                </div>
+              </div>
+              <div class="p-4 border border-border rounded-lg">
+                <p class="qs-type-meta text-muted-foreground m-0">
+                  原单客户
+                </p>
+                <p class="mb-0 mt-1">
+                  {{ detail.originCustomerName }}
+                </p>
+              </div>
+              <div class="p-4 border border-border rounded-lg">
+                <p class="qs-type-meta text-muted-foreground m-0">
+                  寄仓位置
+                </p>
+                <p class="mb-0 mt-1">
+                  {{ locationLabel(detail) }}
+                </p>
+              </div>
+            </section>
 
-          <section v-if="detail.costTransfers.length > 0">
-            <h3 class="qs-type-section-title mb-3">
-              成本转移
-            </h3>
-            <div class="flex flex-col gap-2">
-              <div
-                v-for="transfer in detail.costTransfers"
-                :key="`${transfer.direction}-${transfer.occurredAt}`"
-                class="p-3 border border-border rounded-lg flex flex-wrap gap-2 items-center justify-between"
-              >
-                <div>
-                  <p class="m-0">
-                    {{ transfer.direction === 'RELEASE' ? '释放转出' : '认领转入' }}
-                  </p>
-                  <p class="qs-type-meta text-muted-foreground m-0">
-                    {{ transfer.batchNos.length > 0 ? `资金批次 ${transfer.batchNos.join('、')}` : '未生成资金批次' }}
-                  </p>
-                </div>
-                <div class="text-right">
-                  <AmountDisplay
-                    :value="transfer.amountCny"
-                    currency="CNY"
-                    :currencies="currencyCatalog.currencies.value"
-                    :class="transfer.direction === 'RELEASE' ? 'text-primary' : 'text-destructive'"
-                  />
-                  <p class="qs-type-meta text-muted-foreground m-0">
-                    <DateTimeDisplay :value="transfer.occurredAt" />
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section>
-            <div class="mb-3 flex gap-3 items-center justify-between">
-              <h3 class="qs-type-section-title m-0">
-                位置历史
+            <section>
+              <h3 class="qs-type-section-title mb-3">
+                成本快照
               </h3>
-              <div class="flex gap-2 items-center">
-                <FaButton
-                  v-if="detail.status === 'IN_STORAGE' && canClaimPermission"
-                  size="sm"
-                  variant="outline"
-                  @click="openClaim(detail)"
-                >
-                  认领给销售单
-                </FaButton>
-                <FaButton
-                  v-if="canRelocate(detail, canRelocatePermission)"
-                  size="sm"
-                  variant="outline"
-                  @click="openRelocate(detail)"
-                >
-                  移动位置
-                </FaButton>
-              </div>
-            </div>
-            <div v-if="detail.locationEvents.length === 0" class="text-sm text-muted-foreground">
-              暂无移动记录。
-            </div>
-            <div v-else class="flex flex-col gap-2">
-              <div
-                v-for="event in detail.locationEvents"
-                :key="event.sequence"
-                class="p-3 border border-border rounded-lg flex flex-wrap gap-2 items-center justify-between"
-              >
-                <div>
-                  <p class="m-0 flex flex-wrap gap-1 items-center">
-                    <span class="text-muted-foreground">
-                      {{ event.fromWarehouseLabel ?? event.fromWarehouseValue ?? '—' }}
-                    </span>
-                    <FaIcon name="i-lucide:arrow-right" class="text-muted-foreground size-3.5" />
-                    <span>{{ event.warehouseLabel ?? event.warehouseValue }}</span>
-                  </p>
+              <div class="flex flex-col gap-3">
+                <div class="p-4 border border-primary/30 rounded-xl bg-primary/10">
                   <p class="qs-type-meta text-muted-foreground m-0">
-                    {{ event.reason }}
+                    成本合计
                   </p>
+                  <AmountDisplay
+                    :value="detail.cost.totalCostCny"
+                    currency="CNY"
+                    :currencies="currencyCatalog.currencies.value"
+                    class="text-2xl text-primary font-semibold mt-1"
+                  />
                 </div>
-                <DateTimeDisplay :value="event.occurredAt" />
+                <div class="gap-3 grid sm:grid-cols-2">
+                  <div class="p-4 border border-border rounded-xl">
+                    <p class="qs-type-meta text-muted-foreground m-0">
+                      采购成本
+                    </p>
+                    <AmountDisplay
+                      :value="detail.cost.purchaseCostCny"
+                      currency="CNY"
+                      :currencies="currencyCatalog.currencies.value"
+                      class="mt-1"
+                    />
+                  </div>
+                  <div class="p-4 border border-border rounded-xl">
+                    <p class="qs-type-meta text-muted-foreground m-0">
+                      包装成本
+                    </p>
+                    <AmountDisplay
+                      v-if="hasPositiveAmount(detail.cost.packagingCostCny)"
+                      :value="detail.cost.packagingCostCny"
+                      currency="CNY"
+                      :currencies="currencyCatalog.currencies.value"
+                      class="mt-1"
+                    />
+                    <p v-else class="text-muted-foreground mb-0 mt-1">
+                      -
+                    </p>
+                  </div>
+                </div>
               </div>
+            </section>
+
+            <section v-if="detail.costTransfers.length > 0">
+              <h3 class="qs-type-section-title mb-3">
+                成本转移
+              </h3>
+              <div class="flex flex-col gap-2">
+                <div
+                  v-for="transfer in detail.costTransfers"
+                  :key="`${transfer.direction}-${transfer.occurredAt}`"
+                  class="p-3 border border-border rounded-lg flex flex-wrap gap-2 items-center justify-between"
+                >
+                  <div>
+                    <p class="m-0">
+                      {{ transfer.direction === 'RELEASE' ? '释放转出' : '认领转入' }}
+                    </p>
+                    <p class="qs-type-meta text-muted-foreground m-0">
+                      {{ transfer.batchNos.length > 0 ? `资金批次 ${transfer.batchNos.join('、')}` : '未生成资金批次' }}
+                    </p>
+                  </div>
+                  <div class="text-right">
+                    <AmountDisplay
+                      :value="transfer.amountCny"
+                      currency="CNY"
+                      :currencies="currencyCatalog.currencies.value"
+                      :class="transfer.direction === 'RELEASE' ? 'text-primary' : 'text-destructive'"
+                    />
+                    <p class="qs-type-meta text-muted-foreground m-0">
+                      <DateTimeDisplay :value="transfer.occurredAt" />
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <div class="mb-3 flex gap-3 items-center justify-between">
+                <h3 class="qs-type-section-title m-0">
+                  位置历史
+                </h3>
+                <div class="flex gap-2 items-center">
+                  <FaButton
+                    v-if="detail.status === 'IN_STORAGE' && canClaimPermission"
+                    size="sm"
+                    variant="outline"
+                    @click="openClaim(detail)"
+                  >
+                    认领给销售单
+                  </FaButton>
+                  <FaButton
+                    v-if="canRelocate(detail, canRelocatePermission)"
+                    size="sm"
+                    variant="outline"
+                    @click="openRelocate(detail)"
+                  >
+                    移动位置
+                  </FaButton>
+                </div>
+              </div>
+              <div v-if="detail.locationEvents.length === 0" class="text-sm text-muted-foreground">
+                暂无移动记录。
+              </div>
+              <div v-else class="flex flex-col gap-2">
+                <div
+                  v-for="event in detail.locationEvents"
+                  :key="event.sequence"
+                  class="p-3 border border-border rounded-lg flex flex-wrap gap-2 items-center justify-between"
+                >
+                  <div>
+                    <p class="m-0 flex flex-wrap gap-1 items-center">
+                      <span class="text-muted-foreground">
+                        {{ event.fromWarehouseLabel ?? event.fromWarehouseValue ?? '—' }}
+                      </span>
+                      <FaIcon name="i-lucide:arrow-right" class="text-muted-foreground size-3.5" />
+                      <span>{{ event.warehouseLabel ?? event.warehouseValue }}</span>
+                    </p>
+                    <p class="qs-type-meta text-muted-foreground m-0">
+                      {{ event.reason }}
+                    </p>
+                  </div>
+                  <DateTimeDisplay :value="event.occurredAt" />
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div v-else class="flex flex-col gap-4">
+            <div v-if="containerMarkGroups.length === 0" class="text-sm text-muted-foreground">
+              当前未装柜。
             </div>
-          </section>
+            <div
+              v-else
+              class="pr-1 overscroll-contain flex flex-col gap-4 max-h-[60vh] min-h-0 overflow-y-auto"
+            >
+              <section
+                v-for="group in containerMarkGroups"
+                :key="group.mark"
+                class="p-4 border border-border rounded-xl"
+              >
+                <div class="mb-3 flex gap-3 items-start justify-between">
+                  <div class="min-w-0">
+                    <p class="qs-type-meta text-muted-foreground m-0">
+                      装柜唛头
+                    </p>
+                    <div class="mt-1 flex gap-1 min-w-0 items-start">
+                      <span class="qs-type-data-emphasis break-all">{{ group.mark }}</span>
+                      <CopyCellButton
+                        v-if="group.mark !== '未记录装柜唛头'"
+                        always-visible
+                        label="装柜唛头"
+                        :text="group.mark"
+                      />
+                    </div>
+                    <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+                      柜次：{{ group.items[0]?.containerBatch.containerBatchName }}
+                      / {{ group.items[0]?.containerBatch.containerBatchNo }}
+                      · 装柜日期 {{ group.items[0]?.containerBatch.loadingDate }}
+                    </p>
+                  </div>
+                  <span class="qs-type-meta text-muted-foreground shrink-0">
+                    {{ group.items.length }} 条明细
+                  </span>
+                </div>
+
+                <div
+                  v-for="(item, itemIndex) in group.items"
+                  :key="item.id"
+                  :class="itemIndex > 0 ? 'mt-4 pt-4 border-t border-border' : ''"
+                >
+                  <p class="font-medium mb-3">
+                    {{ item.goodsName }} · {{ containerQuantity(item) }}
+                  </p>
+                  <dl class="m-0 gap-3 grid sm:grid-cols-2">
+                    <div>
+                      <dt class="qs-type-meta text-muted-foreground">
+                        毛重
+                      </dt>
+                      <dd class="m-0 mt-1">
+                        {{ containerWeight(item) }}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="qs-type-meta text-muted-foreground">
+                        尺寸
+                      </dt>
+                      <dd class="m-0 mt-1">
+                        {{ containerDimensions(item) }}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="qs-type-meta text-muted-foreground">
+                        材积
+                      </dt>
+                      <dd class="m-0 mt-1">
+                        {{ item.volumeCai ?? '—' }}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="qs-type-meta text-muted-foreground">
+                        计费材积
+                      </dt>
+                      <dd class="m-0 mt-1">
+                        {{ item.chargeableVolumeCai ?? '—' }}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="qs-type-meta text-muted-foreground">
+                        来源材积
+                      </dt>
+                      <dd class="m-0 mt-1">
+                        {{ item.reportedVolumeCai ?? '—' }}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="qs-type-meta text-muted-foreground">
+                        入仓参考号
+                      </dt>
+                      <dd class="m-0 mt-1 break-all">
+                        {{ item.warehouseReceiptReference ?? '—' }}
+                      </dd>
+                    </div>
+                    <div class="sm:col-span-2">
+                      <dt class="qs-type-meta text-muted-foreground">
+                        收件人
+                      </dt>
+                      <dd class="m-0 mt-1">
+                        <span>{{ item.recipientName ?? '—' }}</span>
+                        <span v-if="item.recipientPhone" class="ml-2">{{ item.recipientPhone }}</span>
+                        <p v-if="item.recipientAddress" class="text-muted-foreground mb-0 mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
+                          {{ item.recipientAddress }}
+                        </p>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="qs-type-meta text-muted-foreground">
+                        代收金额
+                      </dt>
+                      <dd class="m-0 mt-1">
+                        <AmountDisplay
+                          v-if="item.codAmountTwd !== null"
+                          :value="item.codAmountTwd"
+                          currency="TWD"
+                          :currencies="currencyCatalog.currencies.value"
+                        />
+                        <span v-else>—</span>
+                      </dd>
+                    </div>
+                    <div class="sm:col-span-2">
+                      <dt class="qs-type-meta text-muted-foreground">
+                        备注
+                      </dt>
+                      <dd class="m-0 mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
+                        {{ item.remark ?? '—' }}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              </section>
+            </div>
+          </div>
         </div>
       </QsGenericDrawer>
 
