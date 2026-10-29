@@ -707,7 +707,7 @@ onMounted(() => {
             </div>
             <div
               v-else
-              class="pr-1 overscroll-contain flex flex-col gap-4 max-h-[60vh] min-h-0 overflow-y-auto"
+              class="pr-1 overscroll-contain flex flex-col gap-4 max-h-[75vh] min-h-0 overflow-y-auto"
             >
               <section
                 v-for="group in containerMarkGroups"
