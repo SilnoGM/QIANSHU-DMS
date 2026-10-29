@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { PurchaseShipmentDetailDto } from '@/api/generated/types.gen'
+import { getApiClientFailureMessage } from '@/api/errors'
 import shipmentStorageApi from '@/api/modules/shipment-storage'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
@@ -22,6 +23,8 @@ const reason = ref<'CUSTOMER_CANCEL' | 'CUSTOMER_REJECT' | 'OTHER'>('CUSTOMER_CA
 const overseasWarehouse = ref('')
 const note = ref('')
 const submitting = ref(false)
+// 同内容重试复用请求键：释放已提交但后续重算失败时，后端依赖同一键幂等重放并重试重算。
+const pendingSubmission = ref<{ key: string, signature: string } | null>(null)
 
 const loaded = computed(() => props.shipment?.loadedAt != null)
 const mainlandLabel = computed(() => props.shipment?.destinationWarehouse?.label
@@ -37,6 +40,7 @@ watch(() => props.modelValue, (open) => {
     reason.value = 'CUSTOMER_CANCEL'
     overseasWarehouse.value = ''
     note.value = ''
+    pendingSubmission.value = null
   }
 })
 
@@ -51,20 +55,26 @@ async function submit(): Promise<void> {
   }
   submitting.value = true
   const request = new AbortController()
+  const payload = {
+    shipmentIds: [shipment.id],
+    locationScope: loaded.value ? 'OVERSEAS' as const : 'MAINLAND' as const,
+    ...(loaded.value ? { overseasWarehouseValue: overseasWarehouse.value } : {}),
+    reason: reason.value,
+    note: note.value.trim() || undefined,
+  }
+  const signature = JSON.stringify(payload)
+  const requestKey = pendingSubmission.value?.signature === signature
+    ? pendingSubmission.value.key
+    : crypto.randomUUID()
+  pendingSubmission.value = { key: requestKey, signature }
   try {
-    await shipmentStorageApi.release({
-      shipmentIds: [shipment.id],
-      locationScope: loaded.value ? 'OVERSEAS' : 'MAINLAND',
-      ...(loaded.value ? { overseasWarehouseValue: overseasWarehouse.value } : {}),
-      reason: reason.value,
-      note: note.value.trim() || undefined,
-      requestKey: crypto.randomUUID(),
-    }, request.signal)
+    await shipmentStorageApi.release({ ...payload, requestKey }, request.signal)
+    pendingSubmission.value = null
     toast.success('货件已释放进寄仓池')
     emit('released')
   }
   catch (failure) {
-    toast.error(failure instanceof Error ? failure.message : '释放失败')
+    toast.error(getApiClientFailureMessage(failure, '释放失败'))
   }
   finally {
     submitting.value = false

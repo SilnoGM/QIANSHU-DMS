@@ -13,7 +13,7 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import ShipmentStorageClaimModal from './claim-modal.vue'
-import { buildStorageQuery, canRelocate, DEFAULT_STORAGE_STATUS, locationLabel, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageStatusClass, storageStatusLabel } from './logic'
+import { buildStorageQuery, canRelocate, DEFAULT_STORAGE_STATUS, locationLabel, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusClass, storageStatusLabel } from './logic'
 
 defineOptions({ name: 'QsOperationsShipmentStorage' })
 
@@ -123,7 +123,7 @@ async function load(): Promise<void> {
   }
   catch (failure) {
     if (!request.signal.aborted) {
-      error.value = failure instanceof Error ? failure.message : '寄仓记录加载失败'
+      error.value = storageFailureMessage(failure, '寄仓记录加载失败')
     }
   }
   finally {
@@ -184,7 +184,7 @@ async function openDetail(row: ShipmentStorageListItemDto): Promise<void> {
     detail.value = response.data
   }
   catch (failure) {
-    detailError.value = failure instanceof Error ? failure.message : '寄仓详情加载失败'
+    detailError.value = storageFailureMessage(failure, '寄仓详情加载失败')
   }
   finally {
     detailLoading.value = false
@@ -237,7 +237,7 @@ async function submitRelocate(): Promise<void> {
     }
   }
   catch (failure) {
-    toast.error(failure instanceof Error ? failure.message : '位置更新失败')
+    toast.error(storageFailureMessage(failure, '位置更新失败'))
   }
   finally {
     relocating.value = false

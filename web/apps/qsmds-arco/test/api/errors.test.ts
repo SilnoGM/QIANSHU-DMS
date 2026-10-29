@@ -11,6 +11,7 @@ import { AxiosError, AxiosHeaders } from 'axios'
 
 import {
   getApiClientErrorMessage,
+  getApiClientFailureMessage,
   normalizeAxiosError,
 } from '../../src/api/errors'
 
@@ -59,6 +60,39 @@ test('normalizeAxiosError 将可识别 JSON ApiError 转换为 http', async () =
     status: 422,
   })
   assert.equal(getApiClientErrorMessage(normalized), validApiError.message)
+})
+
+test('getApiClientFailureMessage 提取服务端原因，4xx 不附 requestId', () => {
+  assert.equal(getApiClientFailureMessage({
+    body: validApiError,
+    kind: 'http',
+    status: 422,
+  }, '释放失败'), validApiError.message)
+})
+
+test('getApiClientFailureMessage 在 5xx 与不可解析响应后附 requestId', () => {
+  assert.equal(getApiClientFailureMessage({
+    body: validApiError,
+    kind: 'http',
+    status: 500,
+  }, '释放失败'), `${validApiError.message}（requestId: ${validApiError.requestId}）`)
+
+  assert.equal(getApiClientFailureMessage({
+    kind: 'http-unparseable',
+    message: '服务器返回了无法识别的错误响应',
+    requestId: 'req_from_response_header',
+    status: 500,
+  }, '释放失败'), '服务器返回了无法识别的错误响应（requestId: req_from_response_header）')
+})
+
+test('getApiClientFailureMessage 兼容网络错误、普通 Error 与未知值', () => {
+  assert.equal(getApiClientFailureMessage({
+    code: 'NETWORK_ERROR',
+    kind: 'network',
+    message: '网络连接失败，请稍后重试',
+  }, '释放失败'), '网络连接失败，请稍后重试')
+  assert.equal(getApiClientFailureMessage(new Error('boom'), '释放失败'), 'boom')
+  assert.equal(getApiClientFailureMessage(null, '释放失败'), '释放失败')
 })
 
 test('normalizeAxiosError 将可识别 JSON Blob ApiError 转换为 http', async () => {
