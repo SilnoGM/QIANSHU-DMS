@@ -1,13 +1,14 @@
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import request from 'supertest'
 import { AuditService } from '../src/modules/audit/audit.service'
+import { ShipmentOwnershipService } from '../src/modules/shipment-ownership/shipment-ownership.service'
 import { markShipmentsContainerLoaded } from './fixtures/container-loaded.fixture'
 import { createPackagingCostHarness, packagingHeaders, type PackagingCostHarness } from './packaging-cost.fixture'
 import { TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
 
 describe('confirmed operations ocean changes and undo with isolated PostgreSQL', () => {
   jest.setTimeout(120_000)
-  let h: PackagingCostHarness, batchId: string, shipmentId: string, nextLine = 0
+  let h: PackagingCostHarness, batchId: string, shipmentId: string, sourceSalesOrderId: string, nextLine = 0
   let alice: Awaited<ReturnType<PackagingCostHarness['browserWithPermissions']>>, bob: typeof alice, reader: typeof alice, admin: typeof alice
   const path = (itemId: string, parentId = batchId) => `/api/operations/ocean-containers/${parentId}/items/${itemId}`
   const post = (itemId: string, input: object, browser = alice.browser) => browser.post(`${path(itemId)}/changes`).set(packagingHeaders).send(input)
@@ -38,6 +39,7 @@ describe('confirmed operations ocean changes and undo with isolated PostgreSQL',
     }
     const shipment = await h.shipment({ salesLinked: true, ownerUserId: alice.user.id })
     shipmentId = shipment.part.id
+    sourceSalesOrderId = shipment.source!.id
     batchId = (await h.prisma.$transaction(async tx => {
       const key = randomUUID(), fingerprint = 'b'.repeat(64)
       const issuance = await h.fixture.numbering.generateScopedInTransaction(tx, { ruleCode: 'CONTAINER_BATCH_NO', consumerCode: 'CONTAINER_BATCH.CREATE', idempotencyKey: key, requestFingerprint: fingerprint })
@@ -153,5 +155,70 @@ describe('confirmed operations ocean changes and undo with isolated PostgreSQL',
     } finally {
       await h.prisma.salesOrder.update({ where: { id: source.purchaseOrder.salesOrderId! }, data: { issuerUserId: alice.user.id } })
     }
+  })
+
+  it('lets the new owner change recipient and COD after a storage claim', async () => {
+    const row = await line()
+    const source = await h.prisma.salesOrder.findUniqueOrThrow({ where: { id: sourceSalesOrderId } })
+    const target = await h.prisma.salesOrder.create({
+      data: {
+        orderNo: `CLAIM-SO-${randomUUID()}`,
+        createIdempotencyKeyHash: randomBytes(32),
+        createRequestFingerprintHash: randomBytes(32),
+        orderDate: source.orderDate,
+        issuerUserId: bob.user.id,
+        currencyCode: source.currencyCode,
+        customerName: source.customerName,
+        customerPhone: source.customerPhone,
+        customerCountryRegionId: source.customerCountryRegionId,
+        customerProvinceStateId: source.customerProvinceStateId,
+        customerCityId: source.customerCityId,
+        customerCountryRegionCodeSnapshot: source.customerCountryRegionCodeSnapshot,
+        customerProvinceStateCodeSnapshot: source.customerProvinceStateCodeSnapshot,
+        customerCityCodeSnapshot: source.customerCityCodeSnapshot,
+        customerCountryRegionNameSnapshot: source.customerCountryRegionNameSnapshot,
+        customerProvinceStateNameSnapshot: source.customerProvinceStateNameSnapshot,
+        customerCityNameSnapshot: source.customerCityNameSnapshot,
+        customerAddressDetail: source.customerAddressDetail,
+        customerFullAddressSnapshot: source.customerFullAddressSnapshot,
+        lineSubtotalAmount: '10.00',
+        agreedTotalAmount: '10.00',
+        depositDueAmount: '0',
+        balanceDueAmount: '10.00',
+        orderStatus: 'CONFIRMED',
+        fulfillmentStatus: 'PENDING',
+        paymentStatus: 'UNPAID',
+        lines: { create: {
+          lineNumber: 1,
+          lineType: 'CUSTOM',
+          productNameSnapshot: 'Custom item',
+          actualUnitPriceAmount: '10.00',
+          quantity: 1,
+          lineTotalAmount: '10.00',
+        } },
+      },
+      include: { lines: true },
+    })
+    await h.prisma.$transaction(transaction => new ShipmentOwnershipService().recordMany(transaction, [{
+      actorUserId: h.fixture.actor.id,
+      ownerSalesOrderId: target.id,
+      ownerType: 'SALES_ORDER' as const,
+      reason: 'CLAIM' as const,
+      shipmentId,
+    }]))
+
+    const input = {
+      codAmountTwd: '300.00',
+      expectedVersion: 1,
+      kind: 'COD' as const,
+      notificationConfirmed: true,
+      requestKey: randomUUID(),
+    }
+    expect(errorCode(await post(row.id, input, alice.browser).expect(404))).toBe('CONTAINER_LOADING_ITEM_NOT_FOUND')
+    const changed = (await post(row.id, input, bob.browser).expect(200)).body as {
+      line: { codAmountTwd: string, salesOrderId: string }
+    }
+    expect(changed.line).toMatchObject({ codAmountTwd: '300.00', salesOrderId: target.id })
+    expect(await h.prisma.containerLoadingItemChange.count({ where: { loadingItemId: row.id } })).toBe(1)
   })
 })
