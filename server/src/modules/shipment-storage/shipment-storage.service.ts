@@ -25,6 +25,10 @@ import {
 } from '../sales-orders/sales-order-claim-coverage'
 import { advanceSalesOrderAfterClaim } from '../sales-orders/sales-order-claim-progress'
 import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
+import {
+  ShipmentStorageCostService,
+  totalCostFromSnapshot,
+} from './shipment-storage-cost.service'
 import type {
   ClaimShipmentStorageRequestDto,
   RelocateShipmentStorageRequestDto,
@@ -104,6 +108,18 @@ const RELEASE_PART_SELECT = {
 } as const satisfies Prisma.PurchaseOrderPartSelect
 
 type ReleasePart = Prisma.PurchaseOrderPartGetPayload<{ select: typeof RELEASE_PART_SELECT }>
+
+interface ShipmentCostSnapshot {
+  readonly purchaseCostCny: string
+  readonly packagingCostCny: string
+  readonly totalCostCny: string
+  readonly originalShareRate: string
+  readonly userLegCny: string
+  readonly companyLegCny: string
+  readonly purchasePaymentBatchIds: string[]
+  readonly packagingCostRequestIds: string[]
+  readonly snapshotAt: string
+}
 
 const STORAGE_RECORD_SELECT = {
   id: true,
@@ -221,6 +237,7 @@ export class ShipmentStorageService {
     private readonly audit: AuditService,
     private readonly dictionary: DictionaryLookupService,
     private readonly ownership: ShipmentOwnershipService,
+    private readonly cost: ShipmentStorageCostService,
   ) {}
 
   async release(
@@ -330,6 +347,7 @@ export class ShipmentStorageService {
       const now = new Date()
       const recordIds: string[] = []
       for (const part of parts) {
+        const costSnapshot = this.costSnapshot(part, packagingRows, payments, rateByUser, now)
         const record = await transaction.shipmentStorageRecord.create({
           data: {
             shipmentId: part.id,
@@ -355,12 +373,20 @@ export class ShipmentStorageService {
               unitPriceCny: item.line.actualPurchaseUnitPriceAmount.toFixed(2),
             })),
             containerSnapshot: this.containerSnapshot(part) ?? Prisma.DbNull,
-            costSnapshot: this.costSnapshot(part, packagingRows, payments, rateByUser, now),
+            costSnapshot: costSnapshot as unknown as Prisma.InputJsonObject,
             snapshotAt: now,
           },
           select: { id: true },
         })
         recordIds.push(record.id)
+        // 释放即按原出单人比例退款：甲 +aC、公司 +(1−a)C，资金与寄仓事实同事务提交。
+        await this.cost.transfer(transaction, context, 'RELEASE', {
+          amountCny: costSnapshot.totalCostCny,
+          shipmentId: part.id,
+          shipmentNo: part.shipmentNo,
+          storageRecordId: record.id,
+          userId: part.ownershipCurrent!.ownerSalesOrder!.issuerUserId,
+        })
       }
       await this.ownership.recordMany(transaction, parts.map(part => ({
         shipmentId: part.id,
@@ -636,6 +662,8 @@ export class ShipmentStorageService {
           originAllocations: true,
           claimedSalesOrderId: true,
           claimedBy: true,
+          costSnapshot: true,
+          shipmentNoSnapshot: true,
         },
       })
       if (record === null) {
@@ -659,7 +687,7 @@ export class ShipmentStorageService {
       }
       const order = await transaction.salesOrder.findUnique({
         where: { id: input.salesOrderId },
-        select: { id: true, orderNo: true, orderStatus: true },
+        select: { id: true, orderNo: true, orderStatus: true, issuerUserId: true },
       })
       if (order === null) {
         storageFailure('SALES_ORDER_NOT_FOUND', '目标销售订单不存在', HttpStatus.NOT_FOUND)
@@ -800,6 +828,21 @@ export class ShipmentStorageService {
       if (progress === 'ORDER_STATE_CHANGED') {
         storageFailure('SHIPMENT_STORAGE_STATE_CHANGED', '销售订单状态已变化，请刷新后重试', HttpStatus.CONFLICT)
       }
+      // 认领即按新出单人比例收回成本：乙 −bC、公司 −(1−b)C，与认领事实同事务。
+      const issuerAccount = await transaction.fundAccount.findUnique({
+        where: { userId: order.issuerUserId },
+        select: { userShareRate: true },
+      })
+      if (issuerAccount?.userShareRate === null || issuerAccount === undefined) {
+        storageFailure('SHIPMENT_STORAGE_SHARE_RATE_MISSING', '新出单人缺少资金账户比例，无法转移成本')
+      }
+      await this.cost.transfer(transaction, context, 'CLAIM', {
+        amountCny: totalCostFromSnapshot(record.costSnapshot),
+        shipmentId: record.shipmentId,
+        shipmentNo: record.shipmentNoSnapshot,
+        storageRecordId,
+        userId: order.issuerUserId,
+      })
     }, { timeout: 30_000 })
     return this.getById(storageRecordId)
   }
@@ -916,7 +959,7 @@ export class ShipmentStorageService {
     payments: readonly { purchaseOrderId: string, fundPostingBatchId: string | null }[],
     rateByUser: ReadonlyMap<string, Prisma.Decimal | null>,
     now: Date,
-  ): Prisma.InputJsonValue {
+  ): ShipmentCostSnapshot {
     const zero = new Prisma.Decimal(0)
     const purchaseCost = part.items.reduce(
       (sum, item) => sum.plus(new Prisma.Decimal(item.line.actualPurchaseUnitPriceAmount).times(item.quantity)),
@@ -936,8 +979,8 @@ export class ShipmentStorageService {
       userLegCny: userLeg.toFixed(2),
       companyLegCny: companyLeg.toFixed(2),
       purchasePaymentBatchIds: payments
-        .filter(payment => payment.purchaseOrderId === part.purchaseOrderId && payment.fundPostingBatchId !== null)
-        .map(payment => payment.fundPostingBatchId),
+        .map(payment => payment.purchaseOrderId === part.purchaseOrderId ? payment.fundPostingBatchId : null)
+        .filter((id): id is string => id !== null),
       packagingCostRequestIds: packaging.map(row => row.id),
       snapshotAt: now.toISOString(),
     }

@@ -2,6 +2,7 @@ import type { Prisma } from '../../generated/prisma/client'
 import type { AuditService } from '../audit/audit.service'
 import type { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
 import type { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
+import type { ShipmentStorageCostService } from './shipment-storage-cost.service'
 import { ShipmentStorageService } from './shipment-storage.service'
 
 const ACTOR_ID = '00000000-0000-4000-8000-000000000501'
@@ -39,9 +40,13 @@ function claimFixture(options: {
         warehouseReceivedAt: new Date('2026-10-21T00:00:00Z'),
       }]),
     },
+    fundAccount: {
+      findUnique: jest.fn().mockResolvedValue({ userShareRate: '30.00' }),
+    },
     salesOrder: {
       findUnique: jest.fn().mockResolvedValue({
         id: SALES_ORDER_ID,
+        issuerUserId: '00000000-0000-4000-8000-000000000508',
         orderNo: 'SO/20261028-00001',
         orderStatus: options.orderStatus ?? 'CONFIRMED',
       }),
@@ -74,10 +79,12 @@ function claimFixture(options: {
       findUnique: jest.fn().mockResolvedValue({
         claimedBy: null,
         claimedSalesOrderId: null,
+        costSnapshot: { totalCostCny: '100.00' },
         id: RECORD_ID,
         originAllocations: [{ quantity: 2 }],
         originSalesOrderId: '00000000-0000-4000-8000-000000000507',
         shipmentId: SHIPMENT_ID,
+        shipmentNoSnapshot: 'PKG/20261028-00001',
         status: 'IN_STORAGE',
       }),
       update: jest.fn().mockResolvedValue({}),
@@ -88,14 +95,16 @@ function claimFixture(options: {
   }
   const audit = { record: jest.fn().mockResolvedValue({}) }
   const ownership = { recordMany: jest.fn().mockResolvedValue(undefined) }
+  const cost = { transfer: jest.fn().mockResolvedValue(null) }
   const instance = new ShipmentStorageService(
     prisma as never,
     audit,
     {} as DictionaryLookupService,
     ownership as unknown as ShipmentOwnershipService,
+    cost as unknown as ShipmentStorageCostService,
   )
   jest.spyOn(instance, 'getById').mockResolvedValue({} as never)
-  return { audit, instance, ownership, transaction }
+  return { audit, cost, instance, ownership, transaction }
 }
 
 function service(prisma: unknown = {}) {
@@ -104,6 +113,7 @@ function service(prisma: unknown = {}) {
     {} as AuditService,
     {} as DictionaryLookupService,
     {} as ShipmentOwnershipService,
+    { transfer: jest.fn().mockResolvedValue(null) } as unknown as ShipmentStorageCostService,
   )
 }
 
@@ -226,6 +236,16 @@ describe('ShipmentStorageService', () => {
           trigger: 'SHIPMENT_CLAIM',
         }) as unknown,
       }),
+    )
+    expect(fixture.cost.transfer).toHaveBeenCalledWith(
+      fixture.transaction,
+      context,
+      'CLAIM',
+      expect.objectContaining({
+        amountCny: '100.00',
+        storageRecordId: RECORD_ID,
+        userId: '00000000-0000-4000-8000-000000000508',
+      }) as unknown,
     )
   })
 

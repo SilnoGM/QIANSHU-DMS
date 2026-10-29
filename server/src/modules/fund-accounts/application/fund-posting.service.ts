@@ -120,6 +120,11 @@ const SALES_RECEIPT_APPROVE_CONSUMER_CODE = 'SALES_RECEIPT.APPROVE'
 const SALES_RECEIPT_VOID_CONSUMER_CODE = 'SALES_RECEIPT.VOID'
 const PACKAGING_COST_SOURCE_CODE = 'PACKAGING_COST'
 const PACKAGING_COST_PAY_CONSUMER_CODE = 'PACKAGING_COST.PAY'
+const SHIPMENT_STORAGE_SOURCE_CODE = 'SHIPMENT_STORAGE'
+const SHIPMENT_STORAGE_RELEASE_CONSUMER_CODE = 'SHIPMENT_STORAGE.RELEASE'
+const SHIPMENT_STORAGE_CLAIM_CONSUMER_CODE = 'SHIPMENT_STORAGE.CLAIM'
+const SHIPMENT_STORAGE_RELEASE_POSTING_TYPE = 'SHIPMENT_STORAGE_RELEASE'
+const SHIPMENT_STORAGE_CLAIM_POSTING_TYPE = 'SHIPMENT_STORAGE_CLAIM'
 const ADMIN_REVERSAL_CONSUMER_CODE = 'ADMIN_REVERSAL'
 const ADMIN_ADJUSTMENT_CONSUMER_CODE = 'ADMIN_MANUAL_ADJUSTMENT'
 const ADMIN_ADJUSTMENT_SOURCE_CODE = 'ADMIN_CONSOLE'
@@ -134,6 +139,10 @@ const CONTROLLED_POSTING_TYPE_BY_SOURCE_CONSUMER: Readonly<Record<string, string
   [`${SALES_RECEIPT_SOURCE_CODE}/${SALES_RECEIPT_APPROVE_CONSUMER_CODE}`]: 'ORDER_SETTLEMENT',
   [`${SALES_RECEIPT_SOURCE_CODE}/${SALES_RECEIPT_VOID_CONSUMER_CODE}`]: 'ORDER_SETTLEMENT',
   [`${PACKAGING_COST_SOURCE_CODE}/${PACKAGING_COST_PAY_CONSUMER_CODE}`]: 'WOODEN_PACKING_COST',
+  [`${SHIPMENT_STORAGE_SOURCE_CODE}/${SHIPMENT_STORAGE_RELEASE_CONSUMER_CODE}`]:
+    SHIPMENT_STORAGE_RELEASE_POSTING_TYPE,
+  [`${SHIPMENT_STORAGE_SOURCE_CODE}/${SHIPMENT_STORAGE_CLAIM_CONSUMER_CODE}`]:
+    SHIPMENT_STORAGE_CLAIM_POSTING_TYPE,
   [`${PURCHASE_PAYMENT_FUND_SOURCE}/${PURCHASE_PAYMENT_PAY_CONSUMER}`]: PURCHASE_PAYMENT_POSTING_TYPE,
   [`${PURCHASE_PAYMENT_FUND_SOURCE}/${PURCHASE_PAYMENT_STOCK_PAY_CONSUMER}`]: PURCHASE_PAYMENT_POSTING_TYPE,
   [`${PURCHASE_PAYMENT_FUND_SOURCE}/${PURCHASE_PAYMENT_VOID_CONSUMER}`]: PURCHASE_PAYMENT_POSTING_TYPE,
@@ -530,7 +539,13 @@ export class FundPostingApplicationService extends FundPostingService {
   ): Promise<FundPostingResult> {
     const request = normalizePostBusinessEventRequest(rawContext, rawInput)
     // 受控业务必须与业务状态共用事务，不能独立动账后再补写状态。
-    if ([SALES_RECEIPT_SOURCE_CODE, PACKAGING_COST_SOURCE_CODE, PURCHASE_PAYMENT_FUND_SOURCE, INVOICE_REQUEST_FUND_SOURCE].includes(request.context.sourceCode)) {
+    if ([
+      SALES_RECEIPT_SOURCE_CODE,
+      PACKAGING_COST_SOURCE_CODE,
+      PURCHASE_PAYMENT_FUND_SOURCE,
+      INVOICE_REQUEST_FUND_SOURCE,
+      SHIPMENT_STORAGE_SOURCE_CODE,
+    ].includes(request.context.sourceCode)) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     try {
@@ -567,7 +582,10 @@ export class FundPostingApplicationService extends FundPostingService {
     // 用户提款审批：通过时从申请人账户单一扣款，不支持反向。
     const fundWithdrawal = action === 'POST' && context.sourceCode === FUND_WITHDRAWAL_FUND_SOURCE
       && context.consumerCode === FUND_WITHDRAWAL_APPROVE_CONSUMER
-    if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement && !invoiceSettlement && !fundWithdrawal) {
+    const shipmentStorage = action === 'POST' && context.sourceCode === SHIPMENT_STORAGE_SOURCE_CODE
+      && [SHIPMENT_STORAGE_RELEASE_CONSUMER_CODE, SHIPMENT_STORAGE_CLAIM_CONSUMER_CODE]
+        .includes(context.consumerCode)
+    if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement && !invoiceSettlement && !fundWithdrawal && !shipmentStorage) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     return normalizeFundAccountCommandContext({
@@ -1224,6 +1242,16 @@ export class FundPostingApplicationService extends FundPostingService {
       || plan.entries.some(entry => entry.direction !== 'DEBIT')
     )) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
+    }
+    // 寄仓成本转移两个动作方向固定：释放按原比例退款（只入账），认领按新比例收回（只出账）。
+    if (request.context.sourceCode === SHIPMENT_STORAGE_SOURCE_CODE) {
+      const release = request.context.consumerCode === SHIPMENT_STORAGE_RELEASE_CONSUMER_CODE
+      const invalid = postingType.businessCategory !== 'COST'
+        || !postingType.requiresUser
+        || !postingType.ruleVersion.legs.some(leg => leg.accountTarget === 'USER')
+        || parseFundAmountMinor(plan.businessAmount) <= 0n
+        || plan.entries.some(entry => entry.direction !== (release ? 'CREDIT' : 'DEBIT'))
+      if (invalid) throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
     }
     // 顺联航账单对账的两个动作语义固定：结算是可正可负的归属人收入（方向跟随金额符号），
     // 金流费用是恒正的归属人成本（只出账）。规则可被管理员调整，但不能改成反向或单向语义。

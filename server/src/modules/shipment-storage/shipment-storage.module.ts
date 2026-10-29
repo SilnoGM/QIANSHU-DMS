@@ -3,7 +3,9 @@ import { Module } from '@nestjs/common'
 import { PrismaModule } from '../../infrastructure/database/prisma.module'
 import { AuthModule } from '../auth/auth.module'
 import { DictionaryModule } from '../dictionaries/dictionary.module'
+import { FundAccountsModule } from '../fund-accounts/fund-accounts.module'
 import { ShipmentOwnershipModule } from '../shipment-ownership/shipment-ownership.module'
+import { ShipmentStorageCostService } from './shipment-storage-cost.service'
 import { ShipmentStorageController } from './shipment-storage.controller'
 import { ShipmentStorageService } from './shipment-storage.service'
 
@@ -12,9 +14,9 @@ import { ShipmentStorageService } from './shipment-storage.service'
  * AuditService，导致测试与审计注入指向错误实例。
  */
 @Module({
-  imports: [PrismaModule, AuthModule, DictionaryModule, ShipmentOwnershipModule],
+  imports: [PrismaModule, AuthModule, DictionaryModule, FundAccountsModule, ShipmentOwnershipModule],
   controllers: [ShipmentStorageController],
-  providers: [ShipmentStorageService],
+  providers: [ShipmentStorageService, ShipmentStorageCostService],
   exports: [ShipmentStorageService],
 })
 export class ShipmentStorageModule {}

@@ -1,7 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 
 import { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-lookup.service'
+import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
+import { FundPostingService } from '../src/modules/fund-accounts/application/fund-posting.contract'
 import { ShipmentOwnershipService } from '../src/modules/shipment-ownership/shipment-ownership.service'
+import { ShipmentStorageCostService } from '../src/modules/shipment-storage/shipment-storage-cost.service'
 import { ShipmentStorageService } from '../src/modules/shipment-storage/shipment-storage.service'
 import { createPackagingCostHarness, type PackagingCostHarness } from './packaging-cost.fixture'
 
@@ -21,6 +24,15 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       h.fixture.audit,
       new DictionaryLookupService(h.prisma),
       new ShipmentOwnershipService(),
+      new ShipmentStorageCostService(
+        h.app.get(FundPostingService),
+        h.fixture.audit,
+      ),
+    )
+    // 认领成本按新出单人比例收回，出单人必须有资金账户与比例。
+    await new FundAccountCommandService(h.prisma, h.fixture.audit).createUserAccount(
+      { actorUserId: h.fixture.actor.id, requestId: randomUUID() },
+      { userId: h.fixture.actor.id, userShareRate: '30' },
     )
   })
   afterAll(async () => { await h?.dispose() })
@@ -121,7 +133,7 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
               quantity: item.quantity,
               unitPriceCny: '10.00',
             })),
-            costSnapshot: {},
+            costSnapshot: { totalCostCny: '100.00' },
             snapshotAt: new Date(),
           },
           select: { id: true },
@@ -154,6 +166,35 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       select: { ownerType: true, ownerSalesOrderId: true },
     })
     expect(ownership).toEqual({ ownerSalesOrderId: target.id, ownerType: 'SALES_ORDER' })
+
+    const batch = await h.prisma.fundPostingBatch.findFirstOrThrow({
+      where: {
+        businessSourceCodeSnapshot: 'SHIPMENT_STORAGE',
+        consumerCode: 'SHIPMENT_STORAGE.CLAIM',
+      },
+      include: { entries: { orderBy: { lineNo: 'asc' } } },
+    })
+    expect(batch.businessAmount.toFixed(2)).toBe('100.00')
+    expect(batch.entries.map(entry => [
+      entry.accountTarget,
+      entry.direction,
+      entry.amount.toFixed(2),
+    ])).toEqual([
+      ['USER', 'DEBIT', '30.00'],
+      ['COMPANY', 'DEBIT', '70.00'],
+    ])
+    expect((await h.prisma.fundAccount.findUniqueOrThrow({
+      where: { userId: h.fixture.actor.id },
+      select: { balance: true },
+    })).balance.toFixed(2)).toBe('-30.00')
+    expect((await h.prisma.fundAccount.findFirstOrThrow({
+      where: { ownerType: 'COMPANY' },
+      select: { balance: true },
+    })).balance.toFixed(2)).toBe('-70.00')
+    expect(await h.prisma.shipmentCostEvent.findUniqueOrThrow({
+      where: { storageRecordId_direction: { direction: 'CLAIM', storageRecordId: released[0] } },
+      select: { fundPostingBatchIds: true },
+    })).toEqual({ fundPostingBatchIds: [batch.id] })
 
     await expect(storage.claim(context, released[1], {
       lines: [{ quantity: 1, salesOrderLineId: target.lines[0].id }],
