@@ -150,6 +150,40 @@ export class ShipmentStorageIdParamDto {
   storageRecordId!: string
 }
 
+export class ShipmentStorageLineImageParamDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @IsUUID('4')
+  storageRecordId!: string
+
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @IsUUID('4')
+  lineId!: string
+
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @IsUUID('4')
+  productMediaId!: string
+}
+
+export class ShipmentStorageProductImageDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string' }) readonly contentUrl!: string
+}
+
+export class ShipmentStorageProductPreviewDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly lineId!: string
+  @ApiProperty({ type: 'integer' }) readonly lineNumber!: number
+  @ApiProperty({ type: 'string', nullable: true }) readonly productNo!: string | null
+  @ApiProperty({ type: 'string' }) readonly productName!: string
+  @ApiProperty({ type: 'integer' }) readonly quantity!: number
+  @ApiProperty({ type: () => ShipmentStorageProductImageDto, nullable: true }) readonly mainImage!: ShipmentStorageProductImageDto | null
+}
+
+export class ShipmentStorageLineSummaryDto {
+  @ApiProperty({ type: 'integer' }) readonly lineCount!: number
+  @ApiProperty({ type: 'integer' }) readonly totalQuantity!: number
+  @ApiProperty({ type: () => [ShipmentStorageProductPreviewDto] }) readonly previews!: readonly ShipmentStorageProductPreviewDto[]
+}
+
 export class ShipmentStorageCostDto {
   @ApiProperty({ type: 'string' }) readonly purchaseCostCny!: string
   @ApiProperty({ type: 'string' }) readonly packagingCostCny!: string
@@ -171,6 +205,7 @@ export class ShipmentStorageListItemDto {
   @ApiProperty({ type: 'string', nullable: true }) readonly warehouseLabel!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly shipmentNo!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly shippingMarkText!: string | null
+  @ApiProperty({ type: () => ShipmentStorageLineSummaryDto }) readonly lineSummary!: ShipmentStorageLineSummaryDto
   @ApiProperty({ type: 'string' }) readonly originPurchaseOrderNo!: string
   @ApiProperty({ type: () => ShipmentStoragePersonDto, nullable: true }) readonly originPurchaseCreator!: ShipmentStoragePersonDto | null
   @ApiProperty({ type: 'string' }) readonly originSalesOrderNo!: string

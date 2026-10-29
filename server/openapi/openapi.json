@@ -48507,6 +48507,1082 @@
         }
       }
     },
+    "/api/shipment-storage/{storageRecordId}/lines/{lineId}/main-image/{productMediaId}/content": {
+      "head": {
+        "operationId": "shipment_storage_head_product_main_image",
+        "parameters": [
+          {
+            "name": "storageRecordId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "lineId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "productMediaId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^bytes="
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized shipment storage product main image.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
+                  ]
+                }
+              },
+              "Content-Disposition": {
+                "description": "Inline disposition with a sanitized ASCII filename.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "description": "Selected representation length for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                }
+              },
+              "Content-Range": {
+                "description": "Selected or unsatisfied byte range for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^bytes "
+                }
+              },
+              "Content-Type": {
+                "description": "Trusted media type derived from validated persisted metadata.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp",
+                    "video/mp4",
+                    "video/quicktime",
+                    "video/webm",
+                    "video/x-m4v"
+                  ]
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Accel-Redirect": {
+                "description": "Optional protected internal proxy location selected after authorization.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "Authorized shipment storage product main image.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
+                  ]
+                }
+              },
+              "Content-Disposition": {
+                "description": "Inline disposition with a sanitized ASCII filename.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "description": "Selected representation length for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                }
+              },
+              "Content-Range": {
+                "description": "Selected or unsatisfied byte range for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^bytes "
+                }
+              },
+              "Content-Type": {
+                "description": "Trusted media type derived from validated persisted metadata.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp",
+                    "video/mp4",
+                    "video/quicktime",
+                    "video/webm",
+                    "video/x-m4v"
+                  ]
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Accel-Redirect": {
+                "description": "Optional protected internal proxy location selected after authorization.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The current opaque ETag matches If-None-Match.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
+                  ]
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "The requested application-delivery byte range is invalid or unsatisfied.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
+                  ]
+                }
+              },
+              "Content-Range": {
+                "description": "Selected or unsatisfied byte range for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^bytes "
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "shipment-storage"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SHIPMENT_STORAGE_PRODUCT_IMAGE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "MEDIA_STORAGE_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      },
+      "get": {
+        "operationId": "shipment_storage_get_product_main_image",
+        "parameters": [
+          {
+            "name": "storageRecordId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "lineId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "productMediaId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Derived presentation variant: thumb (IMAGE only) or poster (VIDEO only). Variants are rendered on demand and cached privately by the browser.",
+            "schema": {
+              "enum": [
+                "thumb",
+                "poster"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^bytes="
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized shipment storage product main image.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
+                  ]
+                }
+              },
+              "Content-Disposition": {
+                "description": "Inline disposition with a sanitized ASCII filename.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "description": "Selected representation length for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                }
+              },
+              "Content-Range": {
+                "description": "Selected or unsatisfied byte range for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^bytes "
+                }
+              },
+              "Content-Type": {
+                "description": "Trusted media type derived from validated persisted metadata.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp",
+                    "video/mp4",
+                    "video/quicktime",
+                    "video/webm",
+                    "video/x-m4v"
+                  ]
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Accel-Redirect": {
+                "description": "Optional protected internal proxy location selected after authorization.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/quicktime": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/webm": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/x-m4v": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "Authorized shipment storage product main image.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
+                  ]
+                }
+              },
+              "Content-Disposition": {
+                "description": "Inline disposition with a sanitized ASCII filename.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "description": "Selected representation length for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                }
+              },
+              "Content-Range": {
+                "description": "Selected or unsatisfied byte range for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^bytes "
+                }
+              },
+              "Content-Type": {
+                "description": "Trusted media type derived from validated persisted metadata.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp",
+                    "video/mp4",
+                    "video/quicktime",
+                    "video/webm",
+                    "video/x-m4v"
+                  ]
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Accel-Redirect": {
+                "description": "Optional protected internal proxy location selected after authorization.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/quicktime": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/webm": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/x-m4v": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The current opaque ETag matches If-None-Match.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
+                  ]
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "The requested application-delivery byte range is invalid or unsatisfied.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode; derived variants serve complete representations only.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes",
+                    "none"
+                  ]
+                }
+              },
+              "Cache-Control": {
+                "description": "Private cache policy selected by route metadata and representation kind.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store",
+                    "private, max-age=31536000, immutable"
+                  ]
+                }
+              },
+              "Content-Range": {
+                "description": "Selected or unsatisfied byte range for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^bytes "
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "shipment-storage"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SHIPMENT_STORAGE_PRODUCT_IMAGE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "MEDIA_STORAGE_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "/api/shipment-storage/releases": {
       "post": {
         "operationId": "shipment_storage_release",
@@ -95247,6 +96323,83 @@
           "voucher"
         ]
       },
+      "ShipmentStorageProductImageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contentUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "contentUrl"
+        ]
+      },
+      "ShipmentStorageProductPreviewDto": {
+        "type": "object",
+        "properties": {
+          "lineId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lineNumber": {
+            "type": "integer"
+          },
+          "productNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "productName": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "mainImage": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ShipmentStorageProductImageDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "lineId",
+          "lineNumber",
+          "productNo",
+          "productName",
+          "quantity",
+          "mainImage"
+        ]
+      },
+      "ShipmentStorageLineSummaryDto": {
+        "type": "object",
+        "properties": {
+          "lineCount": {
+            "type": "integer"
+          },
+          "totalQuantity": {
+            "type": "integer"
+          },
+          "previews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShipmentStorageProductPreviewDto"
+            }
+          }
+        },
+        "required": [
+          "lineCount",
+          "totalQuantity",
+          "previews"
+        ]
+      },
       "ShipmentStoragePersonDto": {
         "type": "object",
         "properties": {
@@ -95329,6 +96482,9 @@
             "type": "string",
             "nullable": true
           },
+          "lineSummary": {
+            "$ref": "#/components/schemas/ShipmentStorageLineSummaryDto"
+          },
           "originPurchaseOrderNo": {
             "type": "string"
           },
@@ -95399,6 +96555,7 @@
           "warehouseLabel",
           "shipmentNo",
           "shippingMarkText",
+          "lineSummary",
           "originPurchaseOrderNo",
           "originPurchaseCreator",
           "originSalesOrderNo",
@@ -95606,6 +96763,9 @@
             "type": "string",
             "nullable": true
           },
+          "lineSummary": {
+            "$ref": "#/components/schemas/ShipmentStorageLineSummaryDto"
+          },
           "originPurchaseOrderNo": {
             "type": "string"
           },
@@ -95700,6 +96860,7 @@
           "warehouseLabel",
           "shipmentNo",
           "shippingMarkText",
+          "lineSummary",
           "originPurchaseOrderNo",
           "originPurchaseCreator",
           "originSalesOrderNo",

@@ -304,6 +304,9 @@ describe('ShipmentStorageService', () => {
   it('derives the first location event start from the release audit', async () => {
     const occurredAt = new Date('2026-10-29T01:00:00.000Z')
     const updatedAt = new Date('2026-10-29T02:00:00.000Z')
+    const purchaseLineId = '00000000-0000-4000-8000-000000000510'
+    const purchaseMediaId = '00000000-0000-4000-8000-000000000511'
+    const purchaseOrderId = '00000000-0000-4000-8000-000000000509'
     const row = {
       id: RECORD_ID,
       shipmentId: SHIPMENT_ID,
@@ -314,13 +317,19 @@ describe('ShipmentStorageService', () => {
       locationUpdatedAt: updatedAt,
       shipmentNoSnapshot: 'PKG/20261029-00001',
       shippingMarkSnapshot: 'MARK-1',
-      originPurchaseOrderId: '00000000-0000-4000-8000-000000000509',
+      originPurchaseOrderId: purchaseOrderId,
       originPurchaseOrderNoSnapshot: 'PO/20261029-00001',
       originSalesOrderId: SALES_ORDER_ID,
       originSalesOrderNoSnapshot: 'SO/20261029-00001',
       originCustomerNameSnapshot: '客户甲',
       originIssuerUserId: '00000000-0000-4000-8000-000000000508',
-      originAllocations: [],
+      originAllocations: [{
+        purchaseOrderLineId: purchaseLineId,
+        lineNumber: 2,
+        productName: '释放时产品名',
+        quantity: 2,
+        unitPriceCny: '50.00',
+      }],
       containerSnapshot: null,
       costSnapshot: { purchaseCostCny: '100.00', packagingCostCny: '0.00', totalCostCny: '100.00' },
       snapshotAt: occurredAt,
@@ -361,6 +370,16 @@ describe('ShipmentStorageService', () => {
       fundPostingBatch: { findMany: jest.fn().mockResolvedValue([]) },
       user: { findMany: jest.fn().mockResolvedValue([]) },
       purchaseOrder: { findMany: jest.fn().mockResolvedValue([]) },
+      purchaseOrderLine: {
+        findMany: jest.fn().mockResolvedValue([{
+          id: purchaseLineId,
+          purchaseOrderId,
+          lineNumber: 2,
+          productNoSnapshot: 'P-001',
+          productNameSnapshot: '当前产品名',
+          product: { media: [{ id: purchaseMediaId }] },
+        }]),
+      },
     }
     const instance = new ShipmentStorageService(
       prisma as never,
@@ -383,6 +402,21 @@ describe('ShipmentStorageService', () => {
       reason: '移仓',
       occurredAt: occurredAt.toISOString(),
     }])
+    expect(detail.lineSummary).toEqual({
+      lineCount: 1,
+      totalQuantity: 2,
+      previews: [{
+        lineId: purchaseLineId,
+        lineNumber: 2,
+        productNo: 'P-001',
+        productName: '释放时产品名',
+        quantity: 2,
+        mainImage: {
+          id: purchaseMediaId,
+          contentUrl: `/api/shipment-storage/${RECORD_ID}/lines/${purchaseLineId}/main-image/${purchaseMediaId}/content`,
+        },
+      }],
+    })
     expect(resolveStoredValues).toHaveBeenCalledWith({
       dictionaryCode: 'overseas.warehouse',
       values: ['RF_TZ'],

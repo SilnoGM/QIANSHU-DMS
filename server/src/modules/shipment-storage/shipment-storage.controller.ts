@@ -1,27 +1,52 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Req } from '@nestjs/common'
+import {
+  Body,
+  Controller,
+  Get,
+  Head,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+  StreamableFile,
+} from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 
+import { ImmutableMediaContentCache } from '../../infrastructure/http/private-no-store.interceptor'
 import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
+import { ApiProductMediaContentContract } from '../products/media/product-media-content.contract'
+import {
+  applyProductMediaContentResponse,
+  type ProductMediaContentHttpResponse,
+} from '../products/media/product-media-content.http'
 import {
   ClaimShipmentStorageRequestDto,
   RelocateShipmentStorageRequestDto,
   ReleaseShipmentStorageRequestDto,
   ShipmentStorageDetailDto,
   ShipmentStorageIdParamDto,
+  ShipmentStorageLineImageParamDto,
   ShipmentStorageListQueryDto,
   ShipmentStoragePageDto,
   ShipmentStorageStatusCountsDto,
 } from './shipment-storage.dto'
+import { ShipmentStorageImageService } from './shipment-storage-image.service'
 import { ShipmentStorageService } from './shipment-storage.service'
 
 @ApiTags('shipment-storage')
 @Controller('shipment-storage')
 export class ShipmentStorageController {
-  constructor(private readonly storage: ShipmentStorageService) {}
+  constructor(
+    private readonly storage: ShipmentStorageService,
+    private readonly images: ShipmentStorageImageService,
+  ) {}
 
   @Get()
   @RequirePermissions('shipment-storage:read')
@@ -78,6 +103,63 @@ export class ShipmentStorageController {
   })
   detail(@Param() params: ShipmentStorageIdParamDto): Promise<ShipmentStorageDetailDto> {
     return this.storage.getById(params.storageRecordId)
+  }
+
+  @Head(':storageRecordId/lines/:lineId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
+  @RequirePermissions('shipment-storage:read')
+  @ApiProductMediaContentContract('HEAD', {
+    operationId: 'shipment_storage_head_product_main_image',
+    notFoundCode: 'SHIPMENT_STORAGE_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized shipment storage product main image.',
+  })
+  async headProductMainImage(
+    @Param() params: ShipmentStorageLineImageParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<void> {
+    const result = await this.images.resolve(
+      params.storageRecordId,
+      params.lineId,
+      params.productMediaId,
+      ifNoneMatch,
+      range,
+      'HEAD',
+      variant,
+    )
+    applyProductMediaContentResponse(response, result)
+  }
+
+  @Get(':storageRecordId/lines/:lineId/main-image/:productMediaId/content')
+  @ImmutableMediaContentCache()
+  @RequirePermissions('shipment-storage:read')
+  @ApiProductMediaContentContract('GET', {
+    operationId: 'shipment_storage_get_product_main_image',
+    notFoundCode: 'SHIPMENT_STORAGE_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized shipment storage product main image.',
+  })
+  async getProductMainImage(
+    @Param() params: ShipmentStorageLineImageParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Query('variant') variant: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<StreamableFile | undefined> {
+    const result = await this.images.resolve(
+      params.storageRecordId,
+      params.lineId,
+      params.productMediaId,
+      ifNoneMatch,
+      range,
+      'GET',
+      variant,
+    )
+    applyProductMediaContentResponse(response, result)
+    return result.stream === undefined
+      ? undefined
+      : new StreamableFile(result.stream)
   }
 
   @Post('releases')

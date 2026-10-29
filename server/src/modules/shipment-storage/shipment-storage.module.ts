@@ -4,8 +4,10 @@ import { PrismaModule } from '../../infrastructure/database/prisma.module'
 import { AuthModule } from '../auth/auth.module'
 import { DictionaryModule } from '../dictionaries/dictionary.module'
 import { FundAccountsModule } from '../fund-accounts/fund-accounts.module'
+import { ProductsModule } from '../products/products.module'
 import { ShipmentOwnershipModule } from '../shipment-ownership/shipment-ownership.module'
 import { ShipmentStorageCostService } from './shipment-storage-cost.service'
+import { ShipmentStorageImageService } from './shipment-storage-image.service'
 import { ShipmentStorageController } from './shipment-storage.controller'
 import { ShipmentStorageService } from './shipment-storage.service'
 
@@ -14,9 +16,9 @@ import { ShipmentStorageService } from './shipment-storage.service'
  * AuditService，导致测试与审计注入指向错误实例。
  */
 @Module({
-  imports: [PrismaModule, AuthModule, DictionaryModule, FundAccountsModule, ShipmentOwnershipModule],
+  imports: [PrismaModule, AuthModule, DictionaryModule, FundAccountsModule, ProductsModule, ShipmentOwnershipModule],
   controllers: [ShipmentStorageController],
-  providers: [ShipmentStorageService, ShipmentStorageCostService],
+  providers: [ShipmentStorageService, ShipmentStorageCostService, ShipmentStorageImageService],
   exports: [ShipmentStorageService],
 })
 export class ShipmentStorageModule {}

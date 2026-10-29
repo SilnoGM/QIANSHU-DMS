@@ -33,6 +33,7 @@ import {
   ShipmentStorageCostService,
   totalCostFromSnapshot,
 } from './shipment-storage-cost.service'
+import { readShipmentStorageAllocations } from './shipment-storage-allocation'
 import type {
   ClaimShipmentStorageRequestDto,
   RelocateShipmentStorageRequestDto,
@@ -40,8 +41,10 @@ import type {
   ShipmentStorageCostDto,
   ShipmentStorageCostTransferDto,
   ShipmentStorageDetailDto,
+  ShipmentStorageLineSummaryDto,
   ShipmentStorageListItemDto,
   ShipmentStoragePageDto,
+  ShipmentStorageProductPreviewDto,
   ShipmentStorageStatusCountsDto,
 } from './shipment-storage.dto'
 import type { ShipmentStorageListQueryDto } from './shipment-storage.dto'
@@ -201,6 +204,10 @@ interface StorageInitialLocation {
   readonly warehouseLabel: string | null
 }
 
+function emptyLineSummary(): ShipmentStorageLineSummaryDto {
+  return { lineCount: 0, totalQuantity: 0, previews: [] }
+}
+
 /**
  * 寄仓记录只保存当前位置，释放时的初始位置留在释放审计里。
  * 位置历史需要完整展示「从哪到哪」，因此从审计元数据恢复首条事件的起点。
@@ -231,6 +238,7 @@ function readReleasedLocation(metadata: Prisma.JsonValue): {
 function baseRecordDto(
   row: StorageRecordRow,
   persons: StoragePersonContext,
+  lineSummary: ShipmentStorageLineSummaryDto,
 ): ShipmentStorageListItemDto {
   return {
     id: row.id,
@@ -241,6 +249,7 @@ function baseRecordDto(
     warehouseLabel: row.warehouseLabelSnapshot,
     shipmentNo: row.shipmentNoSnapshot,
     shippingMarkText: row.shippingMarkSnapshot,
+    lineSummary,
     originPurchaseOrderNo: row.originPurchaseOrderNoSnapshot,
     originPurchaseCreator: persons.purchaseCreatorById.get(row.originPurchaseOrderId) ?? null,
     originSalesOrderNo: row.originSalesOrderNoSnapshot,
@@ -267,10 +276,11 @@ function detailDto(
   costTransfers: readonly ShipmentStorageCostTransferDto[],
   persons: StoragePersonContext,
   initialLocation: StorageInitialLocation | null,
+  lineSummary: ShipmentStorageLineSummaryDto,
 ): ShipmentStorageDetailDto {
   let previousLocation = initialLocation
   return {
-    ...baseRecordDto(row, persons),
+    ...baseRecordDto(row, persons, lineSummary),
     originAllocations: Array.isArray(row.originAllocations)
       ? row.originAllocations
       : [],
@@ -571,8 +581,20 @@ export class ShipmentStorageService {
         take: pageSize,
       }),
     ])
-    const persons = await this.loadPersonContext(rows)
-    return { items: rows.map(row => baseRecordDto(row, persons)), page, pageSize, total }
+    const [persons, productSummaries] = await Promise.all([
+      this.loadPersonContext(rows),
+      this.loadProductSummaries(rows),
+    ])
+    return {
+      items: rows.map(row => baseRecordDto(
+        row,
+        persons,
+        productSummaries.get(row.id) ?? emptyLineSummary(),
+      )),
+      page,
+      pageSize,
+      total,
+    }
   }
 
   async statusCounts(query: ShipmentStorageListQueryDto): Promise<ShipmentStorageStatusCountsDto> {
@@ -958,6 +980,79 @@ export class ShipmentStorageService {
   }
 
   /**
+   * 产品名、数量来自释放快照；图片按采购行的当前主图解析。
+   * 一次批量查询当前页所有行，避免逐条寄仓记录 N+1。
+   */
+  private async loadProductSummaries(
+    rows: readonly StorageRecordRow[],
+  ): Promise<ReadonlyMap<string, ShipmentStorageLineSummaryDto>> {
+    if (rows.length === 0) return new Map()
+    const allocationsByRecord = new Map(rows.map(row => [
+      row.id,
+      readShipmentStorageAllocations(row.originAllocations),
+    ]))
+    const lineIds = [...new Set(
+      [...allocationsByRecord.values()].flatMap(allocations => allocations.map(allocation => allocation.lineId)),
+    )]
+    const lines = lineIds.length === 0
+      ? []
+      : await this.prisma.purchaseOrderLine.findMany({
+          where: { id: { in: lineIds } },
+          select: {
+            id: true,
+            purchaseOrderId: true,
+            lineNumber: true,
+            productNoSnapshot: true,
+            productNameSnapshot: true,
+            product: {
+              select: {
+                media: {
+                  where: {
+                    kind: 'IMAGE',
+                    isPrimary: true,
+                    detachedAt: null,
+                    mediaAsset: { is: { status: 'READY' } },
+                  },
+                  orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+                  take: 1,
+                  select: { id: true },
+                },
+              },
+            },
+          },
+        })
+    const lineById = new Map(lines.map(line => [line.id, line]))
+    const summaries = new Map<string, ShipmentStorageLineSummaryDto>()
+    for (const row of rows) {
+      const previews: ShipmentStorageProductPreviewDto[] = (allocationsByRecord.get(row.id) ?? []).map((allocation) => {
+        const line = lineById.get(allocation.lineId)
+        // 快照行必须仍属于该寄仓记录的来源采购单，避免异常数据把别的订单图片带出来。
+        const resolvedLine = line?.purchaseOrderId === row.originPurchaseOrderId ? line : undefined
+        const image = resolvedLine?.product?.media[0]
+        return {
+          lineId: allocation.lineId,
+          lineNumber: allocation.lineNumber ?? resolvedLine?.lineNumber ?? 0,
+          productNo: resolvedLine?.productNoSnapshot ?? null,
+          productName: allocation.productName ?? resolvedLine?.productNameSnapshot ?? '',
+          quantity: allocation.quantity,
+          mainImage: image === undefined
+            ? null
+            : {
+                id: image.id,
+                contentUrl: `/api/shipment-storage/${row.id}/lines/${allocation.lineId}/main-image/${image.id}/content`,
+              },
+        }
+      })
+      summaries.set(row.id, {
+        lineCount: previews.length,
+        totalQuantity: previews.reduce((total, preview) => total + preview.quantity, 0),
+        previews,
+      })
+    }
+    return summaries
+  }
+
+  /**
    * 释放时的位置没有单独的持久化列，审计事件是唯一来源。
    * 一次批量查询所有记录，再用仓库字典补齐标签，避免详情接口逐条查询。
    */
@@ -1051,15 +1146,17 @@ export class ShipmentStorageService {
       })
       byRecord.set(event.storageRecordId, transfers)
     }
-    const [persons, initialLocations] = await Promise.all([
+    const [persons, initialLocations, productSummaries] = await Promise.all([
       this.loadPersonContext(rows),
       this.loadInitialLocations(rows),
+      this.loadProductSummaries(rows),
     ])
     return rows.map(row => detailDto(
       row,
       byRecord.get(row.id) ?? [],
       persons,
       initialLocations.get(row.id) ?? null,
+      productSummaries.get(row.id) ?? emptyLineSummary(),
     ))
   }
 
