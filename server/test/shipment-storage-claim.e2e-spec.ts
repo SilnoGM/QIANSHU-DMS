@@ -3,10 +3,13 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-lookup.service'
 import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
 import { FundPostingService } from '../src/modules/fund-accounts/application/fund-posting.contract'
+import { PurchasePayableQueryService } from '../src/modules/purchase-orders/payables/purchase-payable-query.service'
 import { ShipmentOwnershipService } from '../src/modules/shipment-ownership/shipment-ownership.service'
 import { ShipmentStorageCostService } from '../src/modules/shipment-storage/shipment-storage-cost.service'
 import { ShipmentStorageService } from '../src/modules/shipment-storage/shipment-storage.service'
+import { createPaymentRecipientFixture } from './fixtures/payment-recipient.fixture'
 import { createPackagingCostHarness, type PackagingCostHarness } from './packaging-cost.fixture'
+import { createReviewMutations } from './purchase-shipping-mark-atomicity.fixture'
 
 /**
  * 认领闭环：释放进池的原单货件被新销售单整件取走后，
@@ -79,6 +82,78 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       include: { lines: true },
     })
   }
+
+  it('refunds the original issuer and company when releasing a paid shipment', async () => {
+    const origin = await h.shipment({ salesLinked: true })
+    const context = { actorUserId: h.fixture.actor.id, requestId: randomUUID() }
+    const queries = new PurchasePayableQueryService(
+      h.prisma,
+      new DictionaryLookupService(h.prisma),
+      createPaymentRecipientFixture(h.prisma),
+    )
+    const payableOrder = await queries.getOrder(origin.order.id, h.fixture.actor.id)
+    const profile = payableOrder.paymentRecipientProfile
+    if (profile === null) throw new Error('Purchase payment recipient profile is missing')
+    const mutations = createReviewMutations(h.fixture)
+    for (const payable of payableOrder.items) {
+      if (payable.status === 'PAID' || payable.remainingAmount === '0.00') continue
+      const voucher = await h.prisma.mediaAsset.create({ data: {
+        mediaType: 'IMAGE',
+        status: 'UPLOADING',
+        uploadPurpose: 'PURCHASE_PAYMENT_VOUCHER',
+        purchasePayableUploadId: payable.id,
+        objectKey: `assets/${randomUUID()}.png`,
+        originalFilename: 'payment.png',
+        mimeType: 'image/png',
+        sizeBytes: 1n,
+        checksumSha256: '0'.repeat(64),
+        width: 1,
+        height: 1,
+        createdByUserId: h.fixture.actor.id,
+        uploadExpiresAt: new Date(Date.now() + 3_600_000),
+      } })
+      await mutations.payPayable(context, payable.id, {
+        expectedVersion: payable.version,
+        paymentMethod: 'BANK_TRANSFER',
+        recipientAccountId: profile.accounts[0].id,
+        recipientProfileVersion: profile.version,
+        voucher: { mediaAssetId: voucher.id },
+      }, randomUUID())
+    }
+    expect((await h.prisma.purchaseOrder.findUniqueOrThrow({
+      where: { id: origin.order.id },
+      select: { paymentStatus: true },
+    })).paymentStatus).toBe('PAID')
+
+    const released = await storage.release(context, {
+      shipmentIds: [origin.part.id],
+      locationScope: 'MAINLAND',
+      reason: 'CUSTOMER_CANCEL',
+      requestKey: randomUUID(),
+    })
+    expect(released).toHaveLength(1)
+
+    // 采购付款先扣甲 3、公司 7；释放按 30% 原路退回，余额回到 0。
+    expect((await h.prisma.fundAccount.findUniqueOrThrow({
+      where: { userId: h.fixture.actor.id },
+      select: { balance: true },
+    })).balance.toFixed(2)).toBe('0.00')
+    expect((await h.prisma.fundAccount.findFirstOrThrow({
+      where: { ownerType: 'COMPANY' },
+      select: { balance: true },
+    })).balance.toFixed(2)).toBe('0.00')
+    expect((await h.prisma.shipmentCostEvent.findUniqueOrThrow({
+      where: { storageRecordId_direction: { direction: 'RELEASE', storageRecordId: released[0].id } },
+      select: { amountCny: true },
+    })).amountCny.toFixed(2)).toBe('10.00')
+    const detail = await storage.getById(released[0].id)
+    expect(detail.costTransfers).toHaveLength(1)
+    expect(detail.costTransfers[0]).toMatchObject({
+      amountCny: '10.00',
+      direction: 'RELEASE',
+    })
+    expect(detail.costTransfers[0]?.batchNos).toHaveLength(1)
+  })
 
   it('advances the claiming order and rejects a second claim beyond the line remaining quantity', async () => {
     const origin = await h.shipment({ partCount: 2, salesLinked: true })
@@ -195,6 +270,12 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       where: { storageRecordId_direction: { direction: 'CLAIM', storageRecordId: released[0] } },
       select: { fundPostingBatchIds: true },
     })).toEqual({ fundPostingBatchIds: [batch.id] })
+    expect((await storage.getById(released[0])).costTransfers).toEqual([{
+      amountCny: '100.00',
+      batchNos: [batch.batchNo],
+      direction: 'CLAIM',
+      occurredAt: expect.any(String) as unknown,
+    }])
 
     await expect(storage.claim(context, released[1], {
       lines: [{ quantity: 1, salesOrderLineId: target.lines[0].id }],
