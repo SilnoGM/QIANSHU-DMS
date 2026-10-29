@@ -13,6 +13,7 @@ import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
+import ShipmentProducts from '@/views/workbenches/shipments/shipment-products.vue'
 import ShipmentStorageClaimModal from './claim-modal.vue'
 import { buildStorageQuery, canRelocate, DEFAULT_STORAGE_STATUS, locationLabel, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusClass, storageStatusLabel } from './logic'
 
@@ -79,6 +80,7 @@ function hasPositiveAmount(value: string): boolean {
 
 const columns = computed<QsGenericTableColumn<ShipmentStorageListItemDto>[]>(() => [
   { id: 'shipmentNo', title: '货件编号', accessorKey: 'shipmentNo', fixed: 'left', minWidth: 177 },
+  { id: 'products', title: '产品', accessorFn: row => row.lineSummary.previews.map(item => item.productName).join('、'), minWidth: 220 },
   { id: 'mark', title: '货件唛头', accessorKey: 'shippingMarkText', minWidth: 220 },
   { id: 'salesOrder', title: '来源销售单', accessorFn: row => row.originSalesOrderNo, minWidth: 230 },
   { id: 'purchaseOrder', title: '来源采购单', accessorFn: row => row.originPurchaseOrderNo, minWidth: 230 },
@@ -340,6 +342,10 @@ onMounted(() => {
             <QsCopyableText v-if="row.original.shipmentNo" label="货件编号" :text="row.original.shipmentNo" />
             <span v-else>—</span>
           </span>
+        </template>
+
+        <template #cell-products="{ row }">
+          <ShipmentProducts :summary="row.original.lineSummary" />
         </template>
 
         <template #cell-mark="{ row }">
