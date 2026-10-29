@@ -205,6 +205,7 @@ export class ShipmentStorageListItemDto {
   @ApiProperty({ type: 'string', nullable: true }) readonly warehouseLabel!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly shipmentNo!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly shippingMarkText!: string | null
+  @ApiProperty({ type: 'array', items: { type: 'string' }, description: '当前已装柜的装柜唛头，按装柜明细顺序返回' }) readonly containerMarks!: readonly string[]
   @ApiProperty({ type: () => ShipmentStorageLineSummaryDto }) readonly lineSummary!: ShipmentStorageLineSummaryDto
   @ApiProperty({ type: 'string' }) readonly originPurchaseOrderNo!: string
   @ApiProperty({ type: () => ShipmentStoragePersonDto, nullable: true }) readonly originPurchaseCreator!: ShipmentStoragePersonDto | null

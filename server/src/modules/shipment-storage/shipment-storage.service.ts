@@ -239,6 +239,7 @@ function baseRecordDto(
   row: StorageRecordRow,
   persons: StoragePersonContext,
   lineSummary: ShipmentStorageLineSummaryDto,
+  containerMarks: readonly string[],
 ): ShipmentStorageListItemDto {
   return {
     id: row.id,
@@ -249,6 +250,7 @@ function baseRecordDto(
     warehouseLabel: row.warehouseLabelSnapshot,
     shipmentNo: row.shipmentNoSnapshot,
     shippingMarkText: row.shippingMarkSnapshot,
+    containerMarks,
     lineSummary,
     originPurchaseOrderNo: row.originPurchaseOrderNoSnapshot,
     originPurchaseCreator: persons.purchaseCreatorById.get(row.originPurchaseOrderId) ?? null,
@@ -277,10 +279,11 @@ function detailDto(
   persons: StoragePersonContext,
   initialLocation: StorageInitialLocation | null,
   lineSummary: ShipmentStorageLineSummaryDto,
+  containerMarks: readonly string[],
 ): ShipmentStorageDetailDto {
   let previousLocation = initialLocation
   return {
-    ...baseRecordDto(row, persons, lineSummary),
+    ...baseRecordDto(row, persons, lineSummary, containerMarks),
     originAllocations: Array.isArray(row.originAllocations)
       ? row.originAllocations
       : [],
@@ -581,15 +584,17 @@ export class ShipmentStorageService {
         take: pageSize,
       }),
     ])
-    const [persons, productSummaries] = await Promise.all([
+    const [persons, productSummaries, containerMarks] = await Promise.all([
       this.loadPersonContext(rows),
       this.loadProductSummaries(rows),
+      this.loadContainerMarks(rows),
     ])
     return {
       items: rows.map(row => baseRecordDto(
         row,
         persons,
         productSummaries.get(row.id) ?? emptyLineSummary(),
+        containerMarks.get(row.id) ?? [],
       )),
       page,
       pageSize,
@@ -980,6 +985,31 @@ export class ShipmentStorageService {
   }
 
   /**
+   * 装柜唛头按当前装柜明细读取：解绑后明细不再关联货件，列表也随之不再显示。
+   * 一个货件可能有多条装柜明细，因此返回数组而不是单个字符串。
+   */
+  private async loadContainerMarks(
+    rows: readonly StorageRecordRow[],
+  ): Promise<ReadonlyMap<string, readonly string[]>> {
+    const shipmentIds = [...new Set(rows.map(row => row.shipmentId))]
+    if (shipmentIds.length === 0) return new Map()
+    const items = await this.prisma.containerLoadingItem.findMany({
+      where: { shipmentId: { in: shipmentIds } },
+      select: { shipmentId: true, oceanShippingMarkText: true },
+      orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+    })
+    const marksByShipment = new Map<string, string[]>()
+    for (const item of items) {
+      const mark = item.oceanShippingMarkText?.trim()
+      if (item.shipmentId === null || mark === undefined || mark === '') continue
+      const marks = marksByShipment.get(item.shipmentId) ?? []
+      marks.push(mark)
+      marksByShipment.set(item.shipmentId, marks)
+    }
+    return new Map(rows.map(row => [row.id, marksByShipment.get(row.shipmentId) ?? []]))
+  }
+
+  /**
    * 产品名、数量来自释放快照；图片按采购行的当前主图解析。
    * 一次批量查询当前页所有行，避免逐条寄仓记录 N+1。
    */
@@ -1146,10 +1176,11 @@ export class ShipmentStorageService {
       })
       byRecord.set(event.storageRecordId, transfers)
     }
-    const [persons, initialLocations, productSummaries] = await Promise.all([
+    const [persons, initialLocations, productSummaries, containerMarks] = await Promise.all([
       this.loadPersonContext(rows),
       this.loadInitialLocations(rows),
       this.loadProductSummaries(rows),
+      this.loadContainerMarks(rows),
     ])
     return rows.map(row => detailDto(
       row,
@@ -1157,6 +1188,7 @@ export class ShipmentStorageService {
       persons,
       initialLocations.get(row.id) ?? null,
       productSummaries.get(row.id) ?? emptyLineSummary(),
+      containerMarks.get(row.id) ?? [],
     ))
   }
 

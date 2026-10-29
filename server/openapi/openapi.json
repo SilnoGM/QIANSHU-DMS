@@ -96482,6 +96482,13 @@
             "type": "string",
             "nullable": true
           },
+          "containerMarks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "当前已装柜的装柜唛头，按装柜明细顺序返回"
+          },
           "lineSummary": {
             "$ref": "#/components/schemas/ShipmentStorageLineSummaryDto"
           },
@@ -96555,6 +96562,7 @@
           "warehouseLabel",
           "shipmentNo",
           "shippingMarkText",
+          "containerMarks",
           "lineSummary",
           "originPurchaseOrderNo",
           "originPurchaseCreator",
@@ -96763,6 +96771,13 @@
             "type": "string",
             "nullable": true
           },
+          "containerMarks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "当前已装柜的装柜唛头，按装柜明细顺序返回"
+          },
           "lineSummary": {
             "$ref": "#/components/schemas/ShipmentStorageLineSummaryDto"
           },
@@ -96860,6 +96875,7 @@
           "warehouseLabel",
           "shipmentNo",
           "shippingMarkText",
+          "containerMarks",
           "lineSummary",
           "originPurchaseOrderNo",
           "originPurchaseCreator",

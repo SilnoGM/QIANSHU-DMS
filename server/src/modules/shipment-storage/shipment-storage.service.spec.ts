@@ -370,6 +370,12 @@ describe('ShipmentStorageService', () => {
       fundPostingBatch: { findMany: jest.fn().mockResolvedValue([]) },
       user: { findMany: jest.fn().mockResolvedValue([]) },
       purchaseOrder: { findMany: jest.fn().mockResolvedValue([]) },
+      containerLoadingItem: {
+        findMany: jest.fn().mockResolvedValue([
+          { shipmentId: SHIPMENT_ID, oceanShippingMarkText: 'J-030549-01' },
+          { shipmentId: SHIPMENT_ID, oceanShippingMarkText: 'J-030549-02' },
+        ]),
+      },
       purchaseOrderLine: {
         findMany: jest.fn().mockResolvedValue([{
           id: purchaseLineId,
@@ -417,6 +423,7 @@ describe('ShipmentStorageService', () => {
         },
       }],
     })
+    expect(detail.containerMarks).toEqual(['J-030549-01', 'J-030549-02'])
     expect(resolveStoredValues).toHaveBeenCalledWith({
       dictionaryCode: 'overseas.warehouse',
       values: ['RF_TZ'],
