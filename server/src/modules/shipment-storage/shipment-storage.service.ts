@@ -195,6 +195,39 @@ interface StoragePersonContext {
   readonly purchaseCreatorById: ReadonlyMap<string, PersonReference>
 }
 
+interface StorageInitialLocation {
+  readonly locationScope: ShipmentStorageLocationScope
+  readonly warehouseValue: string
+  readonly warehouseLabel: string | null
+}
+
+/**
+ * 寄仓记录只保存当前位置，释放时的初始位置留在释放审计里。
+ * 位置历史需要完整展示「从哪到哪」，因此从审计元数据恢复首条事件的起点。
+ */
+function readReleasedLocation(metadata: Prisma.JsonValue): {
+  readonly storageRecordId: string
+  readonly locationScope: ShipmentStorageLocationScope
+  readonly warehouseValue: string
+} | null {
+  if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
+    return null
+  }
+  const value = metadata as Record<string, unknown>
+  const storageRecordId = value.storageRecordId
+  const locationScope = value.locationScope
+  const warehouseValue = value.warehouseValue
+  if (
+    typeof storageRecordId !== 'string'
+    || (locationScope !== 'MAINLAND' && locationScope !== 'OVERSEAS')
+    || typeof warehouseValue !== 'string'
+    || warehouseValue.length === 0
+  ) {
+    return null
+  }
+  return { storageRecordId, locationScope, warehouseValue }
+}
+
 function baseRecordDto(
   row: StorageRecordRow,
   persons: StoragePersonContext,
@@ -233,7 +266,9 @@ function detailDto(
   row: StorageRecordRow,
   costTransfers: readonly ShipmentStorageCostTransferDto[],
   persons: StoragePersonContext,
+  initialLocation: StorageInitialLocation | null,
 ): ShipmentStorageDetailDto {
+  let previousLocation = initialLocation
   return {
     ...baseRecordDto(row, persons),
     originAllocations: Array.isArray(row.originAllocations)
@@ -241,14 +276,25 @@ function detailDto(
       : [],
     containerSnapshot: row.containerSnapshot ?? null,
     costTransfers,
-    locationEvents: row.locationEvents.map(event => ({
-      sequence: event.sequence,
-      locationScope: event.locationScope,
-      warehouseValue: event.warehouseValue,
-      warehouseLabel: event.warehouseLabelSnapshot,
-      reason: event.reason,
-      occurredAt: event.occurredAt.toISOString(),
-    })),
+    locationEvents: row.locationEvents.map(event => {
+      const locationEvent = {
+        sequence: event.sequence,
+        fromLocationScope: previousLocation?.locationScope ?? null,
+        fromWarehouseValue: previousLocation?.warehouseValue ?? null,
+        fromWarehouseLabel: previousLocation?.warehouseLabel ?? null,
+        locationScope: event.locationScope,
+        warehouseValue: event.warehouseValue,
+        warehouseLabel: event.warehouseLabelSnapshot,
+        reason: event.reason,
+        occurredAt: event.occurredAt.toISOString(),
+      }
+      previousLocation = {
+        locationScope: event.locationScope,
+        warehouseValue: event.warehouseValue,
+        warehouseLabel: event.warehouseLabelSnapshot,
+      }
+      return locationEvent
+    }),
   }
 }
 
@@ -911,6 +957,63 @@ export class ShipmentStorageService {
     }
   }
 
+  /**
+   * 释放时的位置没有单独的持久化列，审计事件是唯一来源。
+   * 一次批量查询所有记录，再用仓库字典补齐标签，避免详情接口逐条查询。
+   */
+  private async loadInitialLocations(
+    rows: readonly StorageRecordRow[],
+  ): Promise<ReadonlyMap<string, StorageInitialLocation>> {
+    if (rows.length === 0) return new Map()
+    const audits = await this.prisma.auditEvent.findMany({
+      where: {
+        eventType: 'SHIPMENT_OWNERSHIP_RELEASED',
+        targetType: 'PURCHASE_ORDER_PART',
+        OR: rows.map(row => ({
+          metadata: { path: ['storageRecordId'], equals: row.id },
+        })),
+      },
+      select: { metadata: true },
+    })
+    const released = new Map<string, Omit<StorageInitialLocation, 'warehouseLabel'>>()
+    for (const audit of audits) {
+      const location = readReleasedLocation(audit.metadata)
+      if (location !== null && !released.has(location.storageRecordId)) {
+        released.set(location.storageRecordId, {
+          locationScope: location.locationScope,
+          warehouseValue: location.warehouseValue,
+        })
+      }
+    }
+    if (released.size === 0) return new Map()
+
+    const valuesByScope = new Map<ShipmentStorageLocationScope, string[]>()
+    for (const location of released.values()) {
+      const values = valuesByScope.get(location.locationScope) ?? []
+      values.push(location.warehouseValue)
+      valuesByScope.set(location.locationScope, values)
+    }
+    const resolutions = await Promise.all([...valuesByScope].map(async ([scope, values]) => ({
+      scope,
+      items: await this.dictionary.resolveStoredValues({
+        dictionaryCode: scope === 'MAINLAND' ? 'mainland.warehouse' : 'overseas.warehouse',
+        values: [...new Set(values)],
+      }),
+    })))
+    const labelByLocation = new Map<string, string>()
+    for (const resolution of resolutions) {
+      for (const item of resolution.items) {
+        if (item.known) {
+          labelByLocation.set(`${resolution.scope}:${item.value}`, item.label)
+        }
+      }
+    }
+    return new Map([...released].map(([recordId, location]) => [recordId, {
+      ...location,
+      warehouseLabel: labelByLocation.get(`${location.locationScope}:${location.warehouseValue}`) ?? null,
+    }]))
+  }
+
   /** 成本转移只在发生真实动账时留事件；零成本或历史记录返回空列表。 */
   private async withCostTransfers(
     rows: readonly StorageRecordRow[],
@@ -948,8 +1051,16 @@ export class ShipmentStorageService {
       })
       byRecord.set(event.storageRecordId, transfers)
     }
-    const persons = await this.loadPersonContext(rows)
-    return rows.map(row => detailDto(row, byRecord.get(row.id) ?? [], persons))
+    const [persons, initialLocations] = await Promise.all([
+      this.loadPersonContext(rows),
+      this.loadInitialLocations(rows),
+    ])
+    return rows.map(row => detailDto(
+      row,
+      byRecord.get(row.id) ?? [],
+      persons,
+      initialLocations.get(row.id) ?? null,
+    ))
   }
 
   private assertReleasable(

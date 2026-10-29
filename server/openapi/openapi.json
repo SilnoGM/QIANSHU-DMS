@@ -95482,6 +95482,22 @@
           "sequence": {
             "type": "integer"
           },
+          "fromLocationScope": {
+            "type": "string",
+            "enum": [
+              "MAINLAND",
+              "OVERSEAS"
+            ],
+            "nullable": true
+          },
+          "fromWarehouseValue": {
+            "type": "string",
+            "nullable": true
+          },
+          "fromWarehouseLabel": {
+            "type": "string",
+            "nullable": true
+          },
           "locationScope": {
             "type": "string",
             "enum": [
@@ -95506,6 +95522,9 @@
         },
         "required": [
           "sequence",
+          "fromLocationScope",
+          "fromWarehouseValue",
+          "fromWarehouseLabel",
           "locationScope",
           "warehouseValue",
           "warehouseLabel",

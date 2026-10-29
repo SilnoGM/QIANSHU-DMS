@@ -300,4 +300,92 @@ describe('ShipmentStorageService', () => {
       where: expect.objectContaining({ id: RECORD_ID }) as unknown,
     }))
   })
+
+  it('derives the first location event start from the release audit', async () => {
+    const occurredAt = new Date('2026-10-29T01:00:00.000Z')
+    const updatedAt = new Date('2026-10-29T02:00:00.000Z')
+    const row = {
+      id: RECORD_ID,
+      shipmentId: SHIPMENT_ID,
+      status: 'IN_STORAGE',
+      locationScope: 'OVERSEAS',
+      warehouseValue: 'RF_LK',
+      warehouseLabelSnapshot: '瑞锋-林口仓',
+      locationUpdatedAt: updatedAt,
+      shipmentNoSnapshot: 'PKG/20261029-00001',
+      shippingMarkSnapshot: 'MARK-1',
+      originPurchaseOrderId: '00000000-0000-4000-8000-000000000509',
+      originPurchaseOrderNoSnapshot: 'PO/20261029-00001',
+      originSalesOrderId: SALES_ORDER_ID,
+      originSalesOrderNoSnapshot: 'SO/20261029-00001',
+      originCustomerNameSnapshot: '客户甲',
+      originIssuerUserId: '00000000-0000-4000-8000-000000000508',
+      originAllocations: [],
+      containerSnapshot: null,
+      costSnapshot: { purchaseCostCny: '100.00', packagingCostCny: '0.00', totalCostCny: '100.00' },
+      snapshotAt: occurredAt,
+      claimedSalesOrderId: null,
+      claimedAt: null,
+      createdAt: occurredAt,
+      locationEvents: [{
+        sequence: 1,
+        locationScope: 'OVERSEAS',
+        warehouseValue: 'RF_LK',
+        warehouseLabelSnapshot: '瑞锋-林口仓',
+        reason: '移仓',
+        occurredAt,
+      }],
+    }
+    const resolveStoredValues = jest.fn().mockResolvedValue([{
+      known: true,
+      dictionaryCode: 'overseas.warehouse',
+      value: 'RF_TZ',
+      label: '瑞锋-台中仓',
+      tone: 'neutral',
+      typeEnabled: true,
+      itemEnabled: true,
+      effectiveEnabled: true,
+    }])
+    const prisma = {
+      shipmentStorageRecord: { findUnique: jest.fn().mockResolvedValue(row) },
+      shipmentCostEvent: { findMany: jest.fn().mockResolvedValue([]) },
+      auditEvent: {
+        findMany: jest.fn().mockResolvedValue([{
+          metadata: {
+            storageRecordId: RECORD_ID,
+            locationScope: 'OVERSEAS',
+            warehouseValue: 'RF_TZ',
+          },
+        }]),
+      },
+      fundPostingBatch: { findMany: jest.fn().mockResolvedValue([]) },
+      user: { findMany: jest.fn().mockResolvedValue([]) },
+      purchaseOrder: { findMany: jest.fn().mockResolvedValue([]) },
+    }
+    const instance = new ShipmentStorageService(
+      prisma as never,
+      {} as AuditService,
+      { resolveStoredValues } as unknown as DictionaryLookupService,
+      {} as ShipmentOwnershipService,
+      { transfer: jest.fn() } as unknown as ShipmentStorageCostService,
+    )
+
+    const detail = await instance.getById(RECORD_ID)
+
+    expect(detail.locationEvents).toEqual([{
+      sequence: 1,
+      fromLocationScope: 'OVERSEAS',
+      fromWarehouseValue: 'RF_TZ',
+      fromWarehouseLabel: '瑞锋-台中仓',
+      locationScope: 'OVERSEAS',
+      warehouseValue: 'RF_LK',
+      warehouseLabel: '瑞锋-林口仓',
+      reason: '移仓',
+      occurredAt: occurredAt.toISOString(),
+    }])
+    expect(resolveStoredValues).toHaveBeenCalledWith({
+      dictionaryCode: 'overseas.warehouse',
+      values: ['RF_TZ'],
+    })
+  })
 })

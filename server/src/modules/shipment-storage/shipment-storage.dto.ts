@@ -188,6 +188,9 @@ export class ShipmentStorageListItemDto {
 
 export class ShipmentStorageLocationEventDto {
   @ApiProperty({ type: 'integer' }) readonly sequence!: number
+  @ApiProperty({ type: 'string', enum: SHIPMENT_STORAGE_LOCATION_SCOPES, nullable: true }) readonly fromLocationScope!: ShipmentStorageLocationScope | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly fromWarehouseValue!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly fromWarehouseLabel!: string | null
   @ApiProperty({ type: 'string', enum: SHIPMENT_STORAGE_LOCATION_SCOPES }) readonly locationScope!: ShipmentStorageLocationScope
   @ApiProperty({ type: 'string' }) readonly warehouseValue!: string
   @ApiProperty({ type: 'string', nullable: true }) readonly warehouseLabel!: string | null
