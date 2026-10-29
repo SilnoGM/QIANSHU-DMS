@@ -336,7 +336,14 @@ onMounted(() => {
         </template>
 
         <template #cell-shipmentNo="{ row }">
-          <QsCopyableText v-if="row.original.shipmentNo" label="货件编号" :text="row.original.shipmentNo" />
+          <span class="qs-type-data-emphasis">
+            <QsCopyableText v-if="row.original.shipmentNo" label="货件编号" :text="row.original.shipmentNo" />
+            <span v-else>—</span>
+          </span>
+        </template>
+
+        <template #cell-mark="{ row }">
+          <QsCopyableText v-if="row.original.shippingMarkText" label="货件唛头" :text="row.original.shippingMarkText" />
           <span v-else>—</span>
         </template>
 
@@ -349,7 +356,9 @@ onMounted(() => {
               size="sm"
             />
             <span v-else class="qs-type-meta text-muted-foreground">—</span>
-            <QsCopyableText label="销售单号" :text="row.original.originSalesOrderNo" />
+            <span class="qs-type-data-emphasis">
+              <QsCopyableText label="销售单号" :text="row.original.originSalesOrderNo" />
+            </span>
           </div>
         </template>
 
@@ -362,7 +371,9 @@ onMounted(() => {
               size="sm"
             />
             <span v-else class="qs-type-meta text-muted-foreground">—</span>
-            <QsCopyableText label="采购单号" :text="row.original.originPurchaseOrderNo" />
+            <span class="qs-type-data-emphasis">
+              <QsCopyableText label="采购单号" :text="row.original.originPurchaseOrderNo" />
+            </span>
           </div>
         </template>
 
@@ -410,23 +421,34 @@ onMounted(() => {
         :error="detailError"
         size="xl"
       >
+        <template #header-extra>
+          <FaTag
+            v-if="detail"
+            variant="outline"
+            :class="storageStatusClass(detail.status)"
+            class="whitespace-nowrap"
+          >
+            {{ storageStatusLabel(detail.status) }}
+          </FaTag>
+        </template>
+
         <div v-if="detail && !detailLoading && !detailError" class="pb-2 flex flex-col gap-6">
           <section class="gap-3 grid sm:grid-cols-2">
             <div class="p-4 border border-border rounded-lg">
               <p class="qs-type-meta text-muted-foreground m-0">
                 货件编号
               </p>
-              <p class="qs-type-data-emphasis mb-0 mt-1">
-                {{ detail.shipmentNo ?? '—' }}
-              </p>
+              <div class="qs-type-data-emphasis mt-1">
+                <QsCopyableText label="货件编号" :text="detail.shipmentNo" />
+              </div>
             </div>
             <div class="p-4 border border-border rounded-lg">
               <p class="qs-type-meta text-muted-foreground m-0">
                 货件唛头
               </p>
-              <p class="qs-type-data-emphasis mb-0 mt-1 break-all">
-                {{ detail.shippingMarkText ?? '—' }}
-              </p>
+              <div class="qs-type-data-emphasis mt-1">
+                <QsCopyableText label="货件唛头" :text="detail.shippingMarkText" />
+              </div>
             </div>
             <div class="p-4 border border-border rounded-lg">
               <p class="qs-type-meta text-muted-foreground m-0">
@@ -440,7 +462,9 @@ onMounted(() => {
                   size="sm"
                 />
                 <span v-else class="qs-type-meta text-muted-foreground">—</span>
-                <QsCopyableText label="销售单号" :text="detail.originSalesOrderNo" />
+                <span class="qs-type-data-emphasis">
+                  <QsCopyableText label="销售单号" :text="detail.originSalesOrderNo" />
+                </span>
               </div>
             </div>
             <div class="p-4 border border-border rounded-lg">
@@ -455,7 +479,9 @@ onMounted(() => {
                   size="sm"
                 />
                 <span v-else class="qs-type-meta text-muted-foreground">—</span>
-                <QsCopyableText label="采购单号" :text="detail.originPurchaseOrderNo" />
+                <span class="qs-type-data-emphasis">
+                  <QsCopyableText label="采购单号" :text="detail.originPurchaseOrderNo" />
+                </span>
               </div>
             </div>
             <div class="p-4 border border-border rounded-lg">
@@ -474,14 +500,6 @@ onMounted(() => {
                 {{ locationLabel(detail) }}
               </p>
             </div>
-            <div class="p-4 border border-border rounded-lg">
-              <p class="qs-type-meta text-muted-foreground m-0">
-                状态
-              </p>
-              <FaTag variant="outline" :class="storageStatusClass(detail.status)" class="mt-1">
-                {{ storageStatusLabel(detail.status) }}
-              </FaTag>
-            </div>
           </section>
 
           <section>
@@ -489,7 +507,7 @@ onMounted(() => {
               成本快照
             </h3>
             <div class="flex flex-col gap-3">
-              <div class="p-4 border border-border rounded-xl bg-muted/30">
+              <div class="p-4 border border-primary/30 rounded-xl bg-primary/10">
                 <p class="qs-type-meta text-muted-foreground m-0">
                   成本合计
                 </p>
@@ -497,7 +515,7 @@ onMounted(() => {
                   :value="detail.cost.totalCostCny"
                   currency="CNY"
                   :currencies="currencyCatalog.currencies.value"
-                  class="text-2xl font-semibold mt-1"
+                  class="text-2xl text-primary font-semibold mt-1"
                 />
               </div>
               <div class="gap-3 grid sm:grid-cols-2">
@@ -550,7 +568,12 @@ onMounted(() => {
                   </p>
                 </div>
                 <div class="text-right">
-                  <AmountDisplay :value="transfer.amountCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+                  <AmountDisplay
+                    :value="transfer.amountCny"
+                    currency="CNY"
+                    :currencies="currencyCatalog.currencies.value"
+                    :class="transfer.direction === 'RELEASE' ? 'text-primary' : 'text-destructive'"
+                  />
                   <p class="qs-type-meta text-muted-foreground m-0">
                     <DateTimeDisplay :value="transfer.occurredAt" />
                   </p>
@@ -593,8 +616,12 @@ onMounted(() => {
                 class="p-3 border border-border rounded-lg flex flex-wrap gap-2 items-center justify-between"
               >
                 <div>
-                  <p class="m-0">
-                    {{ event.warehouseLabel ?? event.warehouseValue }}
+                  <p class="m-0 flex flex-wrap gap-1 items-center">
+                    <span class="text-muted-foreground">
+                      {{ event.fromWarehouseLabel ?? event.fromWarehouseValue ?? '—' }}
+                    </span>
+                    <FaIcon name="i-lucide:arrow-right" class="text-muted-foreground size-3.5" />
+                    <span>{{ event.warehouseLabel ?? event.warehouseValue }}</span>
                   </p>
                   <p class="qs-type-meta text-muted-foreground m-0">
                     {{ event.reason }}
