@@ -95466,6 +95466,38 @@
           "occurredAt"
         ]
       },
+      "ShipmentStorageCostTransferDto": {
+        "type": "object",
+        "properties": {
+          "direction": {
+            "type": "string",
+            "enum": [
+              "RELEASE",
+              "CLAIM"
+            ]
+          },
+          "amountCny": {
+            "type": "string"
+          },
+          "batchNos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "资金动账批次号；历史或零成本可能为空"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "direction",
+          "amountCny",
+          "batchNos",
+          "occurredAt"
+        ]
+      },
       "ShipmentStorageDetailDto": {
         "type": "object",
         "properties": {
@@ -95567,6 +95599,12 @@
             "items": {
               "$ref": "#/components/schemas/ShipmentStorageLocationEventDto"
             }
+          },
+          "costTransfers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShipmentStorageCostTransferDto"
+            }
           }
         },
         "required": [
@@ -95591,7 +95629,8 @@
           "createdAt",
           "originAllocations",
           "containerSnapshot",
-          "locationEvents"
+          "locationEvents",
+          "costTransfers"
         ]
       },
       "ReleaseShipmentStorageRequestDto": {

@@ -190,10 +190,18 @@ export class ShipmentStorageLocationEventDto {
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly occurredAt!: string
 }
 
+export class ShipmentStorageCostTransferDto {
+  @ApiProperty({ type: 'string', enum: ['RELEASE', 'CLAIM'] }) readonly direction!: 'RELEASE' | 'CLAIM'
+  @ApiProperty({ type: 'string' }) readonly amountCny!: string
+  @ApiProperty({ type: 'array', items: { type: 'string' }, description: '资金动账批次号；历史或零成本可能为空' }) readonly batchNos!: readonly string[]
+  @ApiProperty({ type: 'string', format: 'date-time' }) readonly occurredAt!: string
+}
+
 export class ShipmentStorageDetailDto extends ShipmentStorageListItemDto {
   @ApiProperty({ type: 'array', items: { type: 'object', additionalProperties: true } }) readonly originAllocations!: readonly unknown[]
   @ApiProperty({ type: 'object', additionalProperties: true, nullable: true }) readonly containerSnapshot!: unknown
   @ApiProperty({ type: () => [ShipmentStorageLocationEventDto] }) readonly locationEvents!: readonly ShipmentStorageLocationEventDto[]
+  @ApiProperty({ type: () => [ShipmentStorageCostTransferDto] }) readonly costTransfers!: readonly ShipmentStorageCostTransferDto[]
 }
 
 export class ShipmentStoragePageDto {

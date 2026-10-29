@@ -34,6 +34,7 @@ import type {
   RelocateShipmentStorageRequestDto,
   ReleaseShipmentStorageRequestDto,
   ShipmentStorageCostDto,
+  ShipmentStorageCostTransferDto,
   ShipmentStorageDetailDto,
   ShipmentStorageListItemDto,
   ShipmentStoragePageDto,
@@ -212,13 +213,22 @@ function baseRecordDto(row: StorageRecordRow): ShipmentStorageListItemDto {
   }
 }
 
-function detailDto(row: StorageRecordRow): ShipmentStorageDetailDto {
+function parseBatchIds(value: Prisma.JsonValue): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((id): id is string => typeof id === 'string')
+}
+
+function detailDto(
+  row: StorageRecordRow,
+  costTransfers: readonly ShipmentStorageCostTransferDto[],
+): ShipmentStorageDetailDto {
   return {
     ...baseRecordDto(row),
     originAllocations: Array.isArray(row.originAllocations)
       ? row.originAllocations
       : [],
     containerSnapshot: row.containerSnapshot ?? null,
+    costTransfers,
     locationEvents: row.locationEvents.map(event => ({
       sequence: event.sequence,
       locationScope: event.locationScope,
@@ -454,7 +464,7 @@ export class ShipmentStorageService {
       select: STORAGE_RECORD_SELECT,
       orderBy: { createdAt: 'asc' },
     })
-    return this.finalizeRelease(records.map(detailDto), context)
+    return this.finalizeRelease(await this.withCostTransfers(records), context)
   }
 
   /**
@@ -557,7 +567,8 @@ export class ShipmentStorageService {
     if (row === null) {
       storageFailure('SHIPMENT_STORAGE_NOT_FOUND', '寄仓记录不存在', HttpStatus.NOT_FOUND)
     }
-    return detailDto(row)
+    const [detail] = await this.withCostTransfers([row])
+    return detail
   }
 
   async relocate(
@@ -853,7 +864,47 @@ export class ShipmentStorageService {
       select: STORAGE_RECORD_SELECT,
       orderBy: { createdAt: 'asc' },
     })
-    return rows.map(detailDto)
+    return this.withCostTransfers(rows)
+  }
+
+  /** 成本转移只在发生真实动账时留事件；零成本或历史记录返回空列表。 */
+  private async withCostTransfers(
+    rows: readonly StorageRecordRow[],
+  ): Promise<ShipmentStorageDetailDto[]> {
+    if (rows.length === 0) return []
+    const events = await this.prisma.shipmentCostEvent.findMany({
+      where: { storageRecordId: { in: rows.map(row => row.id) } },
+      select: {
+        storageRecordId: true,
+        direction: true,
+        amountCny: true,
+        occurredAt: true,
+        fundPostingBatchIds: true,
+      },
+      orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+    })
+    const batchIds = [...new Set(events.flatMap(event => parseBatchIds(event.fundPostingBatchIds)))]
+    const batches = batchIds.length === 0
+      ? []
+      : await this.prisma.fundPostingBatch.findMany({
+          where: { id: { in: batchIds } },
+          select: { id: true, batchNo: true },
+        })
+    const batchNoById = new Map(batches.map(batch => [batch.id, batch.batchNo]))
+    const byRecord = new Map<string, ShipmentStorageCostTransferDto[]>()
+    for (const event of events) {
+      const transfers = byRecord.get(event.storageRecordId) ?? []
+      transfers.push({
+        amountCny: event.amountCny.toFixed(2),
+        batchNos: parseBatchIds(event.fundPostingBatchIds)
+          .map(id => batchNoById.get(id))
+          .filter((batchNo): batchNo is string => batchNo !== undefined),
+        direction: event.direction,
+        occurredAt: event.occurredAt.toISOString(),
+      })
+      byRecord.set(event.storageRecordId, transfers)
+    }
+    return rows.map(row => detailDto(row, byRecord.get(row.id) ?? []))
   }
 
   private assertReleasable(

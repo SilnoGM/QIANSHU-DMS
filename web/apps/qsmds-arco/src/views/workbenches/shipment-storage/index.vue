@@ -457,6 +457,34 @@ onMounted(() => {
             </div>
           </section>
 
+          <section v-if="detail.costTransfers.length > 0">
+            <h3 class="qs-type-section-title mb-3">
+              成本转移
+            </h3>
+            <div class="flex flex-col gap-2">
+              <div
+                v-for="transfer in detail.costTransfers"
+                :key="`${transfer.direction}-${transfer.occurredAt}`"
+                class="p-3 border border-border rounded-lg flex flex-wrap gap-2 items-center justify-between"
+              >
+                <div>
+                  <p class="m-0">
+                    {{ transfer.direction === 'RELEASE' ? '释放转出' : '认领转入' }}
+                  </p>
+                  <p class="qs-type-meta text-muted-foreground m-0">
+                    {{ transfer.batchNos.length > 0 ? `资金批次 ${transfer.batchNos.join('、')}` : '未生成资金批次' }}
+                  </p>
+                </div>
+                <div class="text-right">
+                  <AmountDisplay :value="transfer.amountCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+                  <p class="qs-type-meta text-muted-foreground m-0">
+                    <DateTimeDisplay :value="transfer.occurredAt" />
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section>
             <div class="mb-3 flex gap-3 items-center justify-between">
               <h3 class="qs-type-section-title m-0">
