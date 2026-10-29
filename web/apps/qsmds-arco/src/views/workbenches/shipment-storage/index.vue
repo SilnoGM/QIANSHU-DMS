@@ -7,6 +7,7 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
+import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
@@ -81,7 +82,7 @@ function hasPositiveAmount(value: string): boolean {
 const columns = computed<QsGenericTableColumn<ShipmentStorageListItemDto>[]>(() => [
   { id: 'shipmentNo', title: '货件编号', accessorKey: 'shipmentNo', fixed: 'left', minWidth: 177 },
   { id: 'products', title: '产品', accessorFn: row => row.lineSummary.previews.map(item => item.productName).join('、'), minWidth: 220 },
-  { id: 'mark', title: '货件唛头', accessorKey: 'shippingMarkText', minWidth: 220 },
+  { id: 'mark', title: '唛头', accessorFn: row => [row.shippingMarkText, ...row.containerMarks].filter(value => Boolean(value)).join('、'), minWidth: 260 },
   { id: 'salesOrder', title: '来源销售单', accessorFn: row => row.originSalesOrderNo, minWidth: 230 },
   { id: 'purchaseOrder', title: '来源采购单', accessorFn: row => row.originPurchaseOrderNo, minWidth: 230 },
   { id: 'customer', title: '原单客户', accessorFn: row => row.originCustomerName, minWidth: 160 },
@@ -349,8 +350,22 @@ onMounted(() => {
         </template>
 
         <template #cell-mark="{ row }">
-          <QsCopyableText v-if="row.original.shippingMarkText" label="货件唛头" :text="row.original.shippingMarkText" />
-          <span v-else>—</span>
+          <div class="flex flex-col gap-1 min-w-0">
+            <div class="flex gap-1 min-w-0 items-start">
+              <span class="text-muted-foreground shrink-0">货件唛头：</span>
+              <QsCopyableText v-if="row.original.shippingMarkText" label="货件唛头" :text="row.original.shippingMarkText" />
+              <span v-else>—</span>
+            </div>
+            <div v-if="row.original.containerMarks.length > 0" class="flex gap-1 min-w-0 items-start">
+              <span class="text-muted-foreground shrink-0">装柜唛头：</span>
+              <span class="min-w-0 [overflow-wrap:anywhere]">{{ row.original.containerMarks.join('、') }}</span>
+              <CopyCellButton
+                always-visible
+                label="装柜唛头"
+                :text="row.original.containerMarks.join('、')"
+              />
+            </div>
+          </div>
         </template>
 
         <template #cell-salesOrder="{ row }">
