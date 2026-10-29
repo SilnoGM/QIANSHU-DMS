@@ -285,6 +285,17 @@ sequenceDiagram
 - 成本取释放时快照，不读实时采购金额；
 - 池账户建议用公司账户加 `purpose = SUSPENSE`，避免改“公司账户唯一”约束。
 
+**实施口径（2026-10-29 拍板）**：不建池账户，改用两个两腿批次表达同一净额：
+
+| 时点 | 批次 | 甲 | 公司 | 乙 |
+|---|---|---|---|---|
+| 原采购付款 | 采购付款 | −aC | −(1−a)C | — |
+| 释放 | `SHIPMENT_STORAGE_RELEASE`（USER_SHARE + COMPANY_REMAINDER，CREDIT） | +aC | +(1−a)C | — |
+| 认领 | `SHIPMENT_STORAGE_CLAIM`（USER_SHARE + COMPANY_REMAINDER，DEBIT） | — | −(1−b)C | −bC |
+| 最终 | — | 0 | −(1−b)C | −bC |
+
+池的 −C/+C 只是两次转账之间的责任窗口，不落资金账户；窗口内以 `shipment_cost_events` 记录成本快照。资金引擎不需要第三类账户目标，也不需要改公司账户唯一约束。
+
 ### 6.4 位置移动
 
 - 输入：寄仓记录、目标仓库、原因；
