@@ -261,8 +261,16 @@ describe('ShipmentStorageService', () => {
       lines: [{ quantity: 2, salesOrderLineId: SALES_LINE_ID }],
       requestKey: REQUEST_KEY,
       salesOrderId: SALES_ORDER_ID,
-    })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE' })
+    })).rejects.toMatchObject({
+      code: 'SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE',
+      message: expect.stringContaining('第1行') as unknown,
+    })
 
+    expect(groupBy).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        purchaseOrder: expect.objectContaining({ orderStatus: { not: 'CANCELLED' } }) as unknown,
+      }) as unknown,
+    }))
     expect(fixture.transaction.shipmentStorageRecord.update).not.toHaveBeenCalled()
     expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
   })

@@ -4,6 +4,7 @@ import { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-
 import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
 import { FundPostingService } from '../src/modules/fund-accounts/application/fund-posting.contract'
 import { PurchasePayableQueryService } from '../src/modules/purchase-orders/payables/purchase-payable-query.service'
+import { PurchaseOrderSourceQueryService } from '../src/modules/purchase-orders/purchase-order-source-query.service'
 import { PurchaseShipmentQueryService } from '../src/modules/purchase-orders/shipments/purchase-shipment-query.service'
 import { ShipmentOwnershipService } from '../src/modules/shipment-ownership/shipment-ownership.service'
 import { ShipmentStorageCostService } from '../src/modules/shipment-storage/shipment-storage-cost.service'
@@ -41,8 +42,13 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
   })
   afterAll(async () => { await h?.dispose() })
 
-  async function createTargetOrder(originId: string, issuerUserId: string = h.fixture.actor.id) {
+  async function createTargetOrder(
+    originId: string,
+    issuerUserId: string = h.fixture.actor.id,
+    lineCount = 1,
+  ) {
     const origin = await h.prisma.salesOrder.findUniqueOrThrow({ where: { id: originId } })
+    const lineAmount = String(10 * lineCount)
     return h.prisma.salesOrder.create({
       data: {
         orderNo: `CLAIM-SO-${randomUUID()}`,
@@ -64,21 +70,21 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
         customerCityNameSnapshot: origin.customerCityNameSnapshot,
         customerAddressDetail: origin.customerAddressDetail,
         customerFullAddressSnapshot: origin.customerFullAddressSnapshot,
-        lineSubtotalAmount: '10',
-        agreedTotalAmount: '10',
+        lineSubtotalAmount: lineAmount,
+        agreedTotalAmount: lineAmount,
         depositDueAmount: '0',
-        balanceDueAmount: '10',
+        balanceDueAmount: lineAmount,
         orderStatus: 'CONFIRMED',
         fulfillmentStatus: 'PENDING',
         paymentStatus: 'UNPAID',
-        lines: { create: {
-          lineNumber: 1,
-          lineType: 'CUSTOM',
-          productNameSnapshot: 'Custom item',
+        lines: { create: Array.from({ length: lineCount }, (_, index) => ({
+          lineNumber: index + 1,
+          lineType: 'CUSTOM' as const,
+          productNameSnapshot: `Custom item ${index + 1}`,
           actualUnitPriceAmount: '10',
           quantity: 1,
           lineTotalAmount: '10',
-        } },
+        })) },
       },
       include: { lines: true },
     })
@@ -191,15 +197,34 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       userId: bob.id,
       userShareRate: '30',
     })
-    const target = await createTargetOrder(origin.source!.id, bob.id)
+    const target = await createTargetOrder(origin.source!.id, bob.id, 2)
+    const targetLines = [...target.lines].sort((left, right) => left.lineNumber - right.lineNumber)
     await storage.claim(context, released[0].id, {
-      lines: [{ quantity: 1, salesOrderLineId: target.lines[0].id }],
+      lines: [{ quantity: 1, salesOrderLineId: targetLines[0].id }],
       requestKey: randomUUID(),
       salesOrderId: target.id,
     })
     expect(await arrivalPartIds('SELF', bob.id)).toContain(origin.part.id)
     expect(await arrivalPartIds('SELF', h.fixture.actor.id)).not.toContain(origin.part.id)
     expect(await arrivalPartIds('ALL', h.fixture.actor.id, true)).toContain(origin.part.id)
+
+    // 采购来源行必须把已调货数量从可采购剩余中扣除，未调货行仍可继续采购。
+    const sourceQueries = new PurchaseOrderSourceQueryService(
+      h.prisma,
+      new DictionaryLookupService(h.prisma),
+      { resolve: () => Promise.resolve('ALL') } as never,
+    )
+    const source = await sourceQueries.salesOrderLines(target.id, { productMode: 'CUSTOM' })
+    expect(source.items.find(item => item.id === targetLines[0].id)).toMatchObject({
+      claimedQuantity: 1,
+      purchasedQuantity: 0,
+      remainingQuantity: 0,
+    })
+    expect(source.items.find(item => item.id === targetLines[1].id)).toMatchObject({
+      claimedQuantity: 0,
+      purchasedQuantity: 0,
+      remainingQuantity: 1,
+    })
   })
 
   it('advances the claiming order and rejects a second claim beyond the line remaining quantity', async () => {

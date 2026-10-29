@@ -20,8 +20,6 @@ import {
 } from '../purchase-orders/sales-order-purchase-coverage.service'
 import {
   readClaimedQuantitiesBySalesLine,
-  readUnownedQuantitiesBySalesLine,
-  subtractUnownedCoverage,
 } from '../sales-orders/sales-order-claim-coverage'
 import { advanceSalesOrderAfterClaim } from '../sales-orders/sales-order-claim-progress'
 import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
@@ -742,14 +740,20 @@ export class ShipmentStorageService {
       if (shipmentQuantity <= 0 || claimedQuantity !== shipmentQuantity) {
         storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '寄仓货件必须整件认领')
       }
-      // 认领不能把销售行补成“超量”：已审核采购与既有认领之外的余量才是可认领上限。
+      // 认领与采购创建共用销售行锁，保证“采购预占 + 认领”不会并发穿透。
       const salesLineIds = lines.map(line => line.id)
+      await transaction.$queryRaw(Prisma.sql`
+        SELECT "id" FROM "sales_order_lines"
+        WHERE "id" IN (${Prisma.join(salesLineIds)})
+        ORDER BY "id" FOR UPDATE
+      `)
+      // 审核中采购同样占用销售行数量；只按已通过采购计算会允许重复备货。
       const purchasedRows = await transaction.purchaseOrderLine.groupBy({
         by: ['sourceSalesOrderLineId'],
         where: {
           sourceSalesOrderLineId: { in: salesLineIds },
           purchaseOrder: {
-            orderStatus: { in: ['CONFIRMED', 'COMPLETED'] },
+            orderStatus: { not: 'CANCELLED' },
             purchaseType: 'SALES_LINKED',
             salesOrderId: input.salesOrderId,
           },
@@ -762,10 +766,6 @@ export class ShipmentStorageService {
           purchasedBySource.set(row.sourceSalesOrderLineId, row._sum.quantity ?? 0)
         }
       }
-      const effectivePurchases = subtractUnownedCoverage(
-        purchasedBySource,
-        await readUnownedQuantitiesBySalesLine(transaction, input.salesOrderId, salesLineIds),
-      )
       const existingClaims = await readClaimedQuantitiesBySalesLine(
         transaction,
         input.salesOrderId,
@@ -774,10 +774,13 @@ export class ShipmentStorageService {
       for (const claimed of input.lines) {
         const line = lineById.get(claimed.salesOrderLineId)
         const remaining = (line?.quantity ?? 0)
-          - (effectivePurchases.get(claimed.salesOrderLineId) ?? 0)
+          - (purchasedBySource.get(claimed.salesOrderLineId) ?? 0)
           - (existingClaims.get(claimed.salesOrderLineId) ?? 0)
         if (claimed.quantity > remaining) {
-          storageFailure('SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE', '认领数量超过该销售行的未覆盖余量')
+          storageFailure(
+            'SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE',
+            `销售明细第${line?.lineNumber ?? '—'}行剩余可认领数量不足（已扣除采购预占与已有认领）`,
+          )
         }
       }
       const now = new Date()
