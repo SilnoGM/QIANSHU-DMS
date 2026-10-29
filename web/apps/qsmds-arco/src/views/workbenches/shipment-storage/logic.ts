@@ -52,6 +52,35 @@ export function canRelocate(
   return allowed && row.status === 'IN_STORAGE' && row.locationScope === 'OVERSEAS'
 }
 
+/** 返回 null 表示可执行；无权限时也返回 null，由调用方直接隐藏动作。 */
+export function claimDisabledReason(
+  row: Pick<ShipmentStorageListItemDto, 'status'>,
+  allowed: boolean,
+): string | null {
+  if (!allowed) {
+    return null
+  }
+  return row.status === 'IN_STORAGE'
+    ? null
+    : `当前状态为「${storageStatusLabel(row.status)}」，不能调货`
+}
+
+/** 返回 null 表示可执行；无权限时也返回 null，由调用方直接隐藏动作。 */
+export function relocateDisabledReason(
+  row: Pick<ShipmentStorageListItemDto, 'status' | 'locationScope'>,
+  allowed: boolean,
+): string | null {
+  if (!allowed) {
+    return null
+  }
+  if (row.status !== 'IN_STORAGE') {
+    return `当前状态为「${storageStatusLabel(row.status)}」，不能移仓`
+  }
+  return row.locationScope === 'OVERSEAS'
+    ? null
+    : '只有海外仓的寄仓货件可以移仓'
+}
+
 export function buildStorageQuery(input: {
   page: number
   pageSize: number

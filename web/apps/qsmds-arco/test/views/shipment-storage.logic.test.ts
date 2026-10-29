@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 页面筛选项契约使用 Node.js 内置 runner。
 import test from 'node:test'
 
-import { buildStorageQuery, DEFAULT_STORAGE_STATUS, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusLabel } from '../../src/views/workbenches/shipment-storage/logic'
+import { buildStorageQuery, claimDisabledReason, DEFAULT_STORAGE_STATUS, relocateDisabledReason, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusLabel } from '../../src/views/workbenches/shipment-storage/logic'
 
 test('寄仓状态默认寄仓中，全部放在最后', () => {
   assert.equal(DEFAULT_STORAGE_STATUS, 'IN_STORAGE')
@@ -81,4 +81,17 @@ test('storageId 精确过滤只在指定时进入请求', () => {
     locationScope: 'ALL',
     warehouseValue: 'ALL',
   }), false)
+})
+
+test('调货动作只有寄仓中可执行，其他状态返回禁用原因', () => {
+  assert.equal(claimDisabledReason({ status: 'IN_STORAGE' }, true), null)
+  assert.match(claimDisabledReason({ status: 'CLAIMED' }, true) ?? '', /不能调货/u)
+  assert.equal(claimDisabledReason({ status: 'CLAIMED' }, false), null)
+})
+
+test('移仓动作要求寄仓中且为海外仓', () => {
+  assert.equal(relocateDisabledReason({ status: 'IN_STORAGE', locationScope: 'OVERSEAS' }, true), null)
+  assert.match(relocateDisabledReason({ status: 'IN_STORAGE', locationScope: 'MAINLAND' }, true) ?? '', /海外仓/u)
+  assert.match(relocateDisabledReason({ status: 'CLAIMED', locationScope: 'OVERSEAS' }, true) ?? '', /不能移仓/u)
+  assert.equal(relocateDisabledReason({ status: 'IN_STORAGE', locationScope: 'MAINLAND' }, false), null)
 })

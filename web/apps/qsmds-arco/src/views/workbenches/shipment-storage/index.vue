@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import type { StorageScopeFilter, StorageStatusTab } from './logic'
 import type { ShipmentStorageContainerItemDto, ShipmentStorageDetailDto, ShipmentStorageListItemDto } from '@/api/generated/types.gen'
+import type { ActionMenuItem, ActionWidthSpec } from '@/components/business/QsGenericTable/action-column-width'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import shipmentStorageApi from '@/api/modules/shipment-storage'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
+import { resolveActionColumnWidth } from '@/components/business/QsGenericTable/action-column-width'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
@@ -16,7 +18,7 @@ import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import ShipmentProducts from '@/views/workbenches/shipments/shipment-products.vue'
 import ShipmentStorageClaimModal from './claim-modal.vue'
-import { buildStorageQuery, canRelocate, DEFAULT_STORAGE_STATUS, locationLabel, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusClass, storageStatusLabel } from './logic'
+import { buildStorageQuery, claimDisabledReason, DEFAULT_STORAGE_STATUS, locationLabel, relocateDisabledReason, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusClass, storageStatusLabel } from './logic'
 
 defineOptions({ name: 'QsOperationsShipmentStorage' })
 
@@ -92,6 +94,18 @@ const columns = computed<QsGenericTableColumn<ShipmentStorageListItemDto>[]>(() 
   { id: 'purchaseOrder', title: '来源采购单', accessorFn: row => row.originPurchaseOrderNo, minWidth: 230 },
   { id: 'createdAt', title: '转入寄仓时间', accessorKey: 'createdAt', minWidth: 190 },
 ])
+
+const actionColumnWidth = computed(() => {
+  const actions: ActionWidthSpec[] = []
+  if (canClaimPermission.value) {
+    actions.push({ chars: 2, kind: 'text' })
+  }
+  if (canRelocatePermission.value) {
+    actions.push({ chars: 2, kind: 'text' })
+  }
+  actions.push({ kind: 'icon' })
+  return resolveActionColumnWidth(actions)
+})
 
 let controller: AbortController | null = null
 
@@ -247,6 +261,59 @@ function reloadDetail(): void {
   }
 }
 
+const actionBusyKey = ref<string | null>(null)
+const claimOpen = ref(false)
+const claimRecord = ref<ShipmentStorageDetailDto | null>(null)
+
+function openDetailFromMenu(row: ShipmentStorageListItemDto): void {
+  void openDetail(row)
+}
+
+function detailMenuItems(row: ShipmentStorageListItemDto): ActionMenuItem[][] {
+  return [[{ label: '详情', handle: () => openDetailFromMenu(row) }]]
+}
+
+async function loadLatestDetail(
+  row: ShipmentStorageListItemDto,
+  action: 'claim' | 'relocate',
+): Promise<ShipmentStorageDetailDto | null> {
+  const busyKey = `${row.id}:${action}`
+  if (actionBusyKey.value !== null) {
+    return null
+  }
+  actionBusyKey.value = busyKey
+  const request = new AbortController()
+  try {
+    const response = await shipmentStorageApi.detail(row.id, request.signal)
+    const latest = response.data
+    const reason = action === 'claim'
+      ? claimDisabledReason(latest, canClaimPermission.value)
+      : relocateDisabledReason(latest, canRelocatePermission.value)
+    if (reason !== null) {
+      toast.info(reason)
+      void load()
+      return null
+    }
+    return latest
+  }
+  catch (failure) {
+    toast.error(storageFailureMessage(failure, '寄仓详情加载失败'))
+    return null
+  }
+  finally {
+    actionBusyKey.value = null
+  }
+}
+
+async function openClaimFromRow(row: ShipmentStorageListItemDto): Promise<void> {
+  const latest = await loadLatestDetail(row, 'claim')
+  if (latest === null) {
+    return
+  }
+  claimRecord.value = latest
+  claimOpen.value = true
+}
+
 const relocateOpen = ref(false)
 const relocateRecord = ref<ShipmentStorageDetailDto | null>(null)
 const relocateTarget = ref('')
@@ -257,8 +324,12 @@ const relocateOptions = computed(() => overseasCatalog.selectableItems.value
   .filter(item => item.value !== relocateRecord.value?.warehouseValue)
   .map(item => ({ value: item.value, label: item.label })))
 
-function openRelocate(row: ShipmentStorageDetailDto): void {
-  relocateRecord.value = row
+async function openRelocateFromRow(row: ShipmentStorageListItemDto): Promise<void> {
+  const latest = await loadLatestDetail(row, 'relocate')
+  if (latest === null) {
+    return
+  }
+  relocateRecord.value = latest
   relocateTarget.value = ''
   relocateReason.value = ''
   relocateOpen.value = true
@@ -291,14 +362,6 @@ async function submitRelocate(): Promise<void> {
   finally {
     relocating.value = false
   }
-}
-
-const claimOpen = ref(false)
-const claimRecord = ref<ShipmentStorageDetailDto | null>(null)
-
-function openClaim(record: ShipmentStorageDetailDto): void {
-  claimRecord.value = record
-  claimOpen.value = true
 }
 
 function claimed(): void {
@@ -344,7 +407,7 @@ onMounted(() => {
         :total="total"
         :loading="loading"
         :error="error"
-        :action-column="{ width: 100 }"
+        :action-column="{ fixed: 'right', minWidth: actionColumnWidth, title: '操作', width: actionColumnWidth }"
         :addable="false"
         :show-row-number="false"
         row-key="id"
@@ -468,10 +531,58 @@ onMounted(() => {
         </template>
 
         <template #actions="{ row }">
-          <div class="flex gap-2 items-center justify-end">
-            <FaButton variant="ghost" size="sm" @click="openDetail(row)">
-              详情
-            </FaButton>
+          <div class="flex gap-1 items-center justify-end">
+            <FaTooltip
+              v-if="canClaimPermission"
+              :text="claimDisabledReason(row, canClaimPermission) ?? ''"
+              :disabled="claimDisabledReason(row, canClaimPermission) === null"
+            >
+              <span class="inline-flex" tabindex="0">
+                <FaButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="min-h-11 sm:min-h-8"
+                  :disabled="claimDisabledReason(row, canClaimPermission) !== null || actionBusyKey !== null"
+                  :loading="actionBusyKey === `${row.id}:claim`"
+                  :aria-label="`${row.shipmentNo ?? '寄仓记录'}：调货`"
+                  @click="openClaimFromRow(row)"
+                >
+                  调货
+                </FaButton>
+              </span>
+            </FaTooltip>
+            <FaTooltip
+              v-if="canRelocatePermission"
+              :text="relocateDisabledReason(row, canRelocatePermission) ?? ''"
+              :disabled="relocateDisabledReason(row, canRelocatePermission) === null"
+            >
+              <span class="inline-flex" tabindex="0">
+                <FaButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="min-h-11 sm:min-h-8"
+                  :disabled="relocateDisabledReason(row, canRelocatePermission) !== null || actionBusyKey !== null"
+                  :loading="actionBusyKey === `${row.id}:relocate`"
+                  :aria-label="`${row.shipmentNo ?? '寄仓记录'}：移仓`"
+                  @click="openRelocateFromRow(row)"
+                >
+                  移仓
+                </FaButton>
+              </span>
+            </FaTooltip>
+            <FaDropdown :items="detailMenuItems(row)" align="end">
+              <FaButton
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                class="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8"
+                :aria-label="`${row.shipmentNo ?? '寄仓记录'}：更多操作`"
+              >
+                <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
+              </FaButton>
+            </FaDropdown>
           </div>
         </template>
       </QsGenericTable>
@@ -653,29 +764,9 @@ onMounted(() => {
             </section>
 
             <section>
-              <div class="mb-3 flex gap-3 items-center justify-between">
-                <h3 class="qs-type-section-title m-0">
-                  位置历史
-                </h3>
-                <div class="flex gap-2 items-center">
-                  <FaButton
-                    v-if="detail.status === 'IN_STORAGE' && canClaimPermission"
-                    size="sm"
-                    variant="outline"
-                    @click="openClaim(detail)"
-                  >
-                    认领给销售单
-                  </FaButton>
-                  <FaButton
-                    v-if="canRelocate(detail, canRelocatePermission)"
-                    size="sm"
-                    variant="outline"
-                    @click="openRelocate(detail)"
-                  >
-                    移动位置
-                  </FaButton>
-                </div>
-              </div>
+              <h3 class="qs-type-section-title mb-3">
+                位置历史
+              </h3>
               <div v-if="detail.locationEvents.length === 0" class="text-sm text-muted-foreground">
                 暂无移动记录。
               </div>
