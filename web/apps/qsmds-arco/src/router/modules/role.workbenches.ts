@@ -254,17 +254,6 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
       },
     },
     {
-      path: '/qs-purchase-transport/storage',
-      name: 'qsPurchaseTransportStorage',
-      component: () => import('@/views/workbenches/purchase-storage/index.vue'),
-      meta: {
-        title: '寄仓管理',
-        icon: 'qs-overseas-storage',
-        singleMenu: true,
-        auth: 'shipment-storage:read',
-      },
-    },
-    {
       path: '/qs-purchase-transport/containers',
       name: 'qsPurchaseTransportContainers',
       component: () => import('@/views/workbenches/containers/index.vue'),
@@ -299,6 +288,17 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
         menu: false,
         activeMenu: '/qs-purchase-transport/containers',
         auth: 'container-batches:update',
+      },
+    },
+    {
+      path: '/qs-purchase-transport/storage',
+      name: 'qsPurchaseTransportStorage',
+      component: () => import('@/views/workbenches/purchase-storage/index.vue'),
+      meta: {
+        title: '寄仓管理',
+        icon: 'qs-overseas-storage',
+        singleMenu: true,
+        auth: 'shipment-storage:read',
       },
     },
   ],
