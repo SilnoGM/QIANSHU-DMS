@@ -42,6 +42,12 @@ export class PurchaseShipmentFilterDto {
   @IsBoolean()
   destinationWarehouseMissing?: boolean
 
+  @ApiProperty({ type: 'boolean', required: false, description: '仅 true 时排除已释放进寄仓池的货件；到仓货件页使用，货件管理默认不传' })
+  @Transform(({ value }: { value: unknown }) => value === 'true' ? true : value === 'false' ? false : value)
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsBoolean()
+  excludeStoragePool?: boolean
+
   @ApiProperty({ enum: ['DICTIONARY', 'CUSTOM_TEXT'], required: false })
   @IsOptional() @IsIn(['DICTIONARY', 'CUSTOM_TEXT'])
   supplierSource?: 'DICTIONARY' | 'CUSTOM_TEXT'

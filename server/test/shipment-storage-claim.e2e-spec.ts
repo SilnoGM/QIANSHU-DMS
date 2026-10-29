@@ -4,6 +4,7 @@ import { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-
 import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
 import { FundPostingService } from '../src/modules/fund-accounts/application/fund-posting.contract'
 import { PurchasePayableQueryService } from '../src/modules/purchase-orders/payables/purchase-payable-query.service'
+import { PurchaseShipmentQueryService } from '../src/modules/purchase-orders/shipments/purchase-shipment-query.service'
 import { ShipmentOwnershipService } from '../src/modules/shipment-ownership/shipment-ownership.service'
 import { ShipmentStorageCostService } from '../src/modules/shipment-storage/shipment-storage-cost.service'
 import { ShipmentStorageService } from '../src/modules/shipment-storage/shipment-storage.service'
@@ -40,7 +41,7 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
   })
   afterAll(async () => { await h?.dispose() })
 
-  async function createTargetOrder(originId: string) {
+  async function createTargetOrder(originId: string, issuerUserId: string = h.fixture.actor.id) {
     const origin = await h.prisma.salesOrder.findUniqueOrThrow({ where: { id: originId } })
     return h.prisma.salesOrder.create({
       data: {
@@ -48,7 +49,7 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
         createIdempotencyKeyHash: randomBytes(32),
         createRequestFingerprintHash: randomBytes(32),
         orderDate: origin.orderDate,
-        issuerUserId: h.fixture.actor.id,
+        issuerUserId,
         currencyCode: origin.currencyCode,
         customerName: origin.customerName,
         customerPhone: origin.customerPhone,
@@ -81,6 +82,24 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       },
       include: { lines: true },
     })
+  }
+
+  async function arrivalPartIds(
+    scope: 'ALL' | 'SELF',
+    actorUserId: string,
+    excludeStoragePool = false,
+  ): Promise<string[]> {
+    const queries = new PurchaseShipmentQueryService(
+      h.prisma,
+      new DictionaryLookupService(h.prisma),
+      { resolve: () => Promise.resolve(scope) } as never,
+    )
+    const page = await queries.list({
+      pageSize: 100,
+      view: 'WAREHOUSE_RECEIVED',
+      ...(excludeStoragePool ? { excludeStoragePool: true } : {}),
+    }, actorUserId)
+    return page.items.map(item => item.id)
   }
 
   it('refunds the original issuer and company when releasing a paid shipment', async () => {
@@ -153,6 +172,34 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       direction: 'RELEASE',
     })
     expect(detail.costTransfers[0]?.batchNos).toHaveLength(1)
+
+    // 到仓货件：池内货件对原出单人和管理员（带排除参数）都不可见；货件管理不带参数时仍可见。
+    expect(await arrivalPartIds('SELF', h.fixture.actor.id)).not.toContain(origin.part.id)
+    expect(await arrivalPartIds('ALL', h.fixture.actor.id)).toContain(origin.part.id)
+    expect(await arrivalPartIds('ALL', h.fixture.actor.id, true)).not.toContain(origin.part.id)
+
+    // 认领给乙单后，新出单人能在到仓货件看到该货件；原出单人看不到。
+    const username = `bob-${randomUUID()}`
+    const bob = await h.prisma.user.create({ data: {
+      username,
+      usernameNormalized: username,
+      displayName: '乙出单人',
+      passwordHash: 'isolated-test-only',
+      passwordChangedAt: new Date(),
+    } })
+    await new FundAccountCommandService(h.prisma, h.fixture.audit).createUserAccount(context, {
+      userId: bob.id,
+      userShareRate: '30',
+    })
+    const target = await createTargetOrder(origin.source!.id, bob.id)
+    await storage.claim(context, released[0].id, {
+      lines: [{ quantity: 1, salesOrderLineId: target.lines[0].id }],
+      requestKey: randomUUID(),
+      salesOrderId: target.id,
+    })
+    expect(await arrivalPartIds('SELF', bob.id)).toContain(origin.part.id)
+    expect(await arrivalPartIds('SELF', h.fixture.actor.id)).not.toContain(origin.part.id)
+    expect(await arrivalPartIds('ALL', h.fixture.actor.id, true)).toContain(origin.part.id)
   })
 
   it('advances the claiming order and rejects a second claim beyond the line remaining quantity', async () => {
@@ -218,6 +265,15 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       return ids
     })
     expect(released).toHaveLength(2)
+    // 前一个用例已产生一次释放退款与乙单认领，本用例按增量核对，避免依赖账户初始余额。
+    const actorBalanceBefore = (await h.prisma.fundAccount.findUniqueOrThrow({
+      where: { userId: h.fixture.actor.id },
+      select: { balance: true },
+    })).balance
+    const companyBalanceBefore = (await h.prisma.fundAccount.findFirstOrThrow({
+      where: { ownerType: 'COMPANY' },
+      select: { balance: true },
+    })).balance
 
     const claimed = await storage.claim(context, released[0], {
       lines: [{ quantity: 1, salesOrderLineId: target.lines[0].id }],
@@ -244,6 +300,7 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
 
     const batch = await h.prisma.fundPostingBatch.findFirstOrThrow({
       where: {
+        businessId: released[0],
         businessSourceCodeSnapshot: 'SHIPMENT_STORAGE',
         consumerCode: 'SHIPMENT_STORAGE.CLAIM',
       },
@@ -261,11 +318,11 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
     expect((await h.prisma.fundAccount.findUniqueOrThrow({
       where: { userId: h.fixture.actor.id },
       select: { balance: true },
-    })).balance.toFixed(2)).toBe('-30.00')
+    })).balance.minus(actorBalanceBefore).toFixed(2)).toBe('-30.00')
     expect((await h.prisma.fundAccount.findFirstOrThrow({
       where: { ownerType: 'COMPANY' },
       select: { balance: true },
-    })).balance.toFixed(2)).toBe('-70.00')
+    })).balance.minus(companyBalanceBefore).toFixed(2)).toBe('-70.00')
     expect(await h.prisma.shipmentCostEvent.findUniqueOrThrow({
       where: { storageRecordId_direction: { direction: 'CLAIM', storageRecordId: released[0] } },
       select: { fundPostingBatchIds: true },

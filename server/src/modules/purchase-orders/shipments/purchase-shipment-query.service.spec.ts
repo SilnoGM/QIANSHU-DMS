@@ -316,7 +316,7 @@ describe('PurchaseShipmentQueryService', () => {
     expect(f.part.findMany).not.toHaveBeenCalled()
   })
 
-  it('keeps the SELF ownership predicate when list and counts also carry order filters', async () => {
+  it('keeps the SELF ownership predicate at the shipment level when list and counts carry order filters', async () => {
     const f = fixture('SELF')
     const filters = { purchaseType: 'SALES_LINKED' as const, keyword: '配件' }
     await f.service.list({ ...filters, view: 'WAREHOUSE_RECEIVED' }, 'actor-id')
@@ -326,10 +326,36 @@ describe('PurchaseShipmentQueryService', () => {
     const listWhere = listCall[0].where.AND[0]
     expect(countCall[0].where.AND[0]).toEqual(listWhere)
     expect(listWhere).toMatchObject({
-      purchaseOrder: { is: {
-        salesOrder: { is: { issuerUserId: 'actor-id' } },
-        purchaseType: 'SALES_LINKED',
-      } },
+      ownershipCurrent: { ownerSalesOrder: { is: { issuerUserId: 'actor-id' } } },
+      purchaseOrder: { is: { purchaseType: 'SALES_LINKED' } },
+    })
+    expect(listWhere).not.toHaveProperty('purchaseOrder.is.salesOrder')
+  })
+
+  it('excludes storage-pool shipments only when the caller asks for it', async () => {
+    const filtered = fixture('ALL')
+    await filtered.service.list({ excludeStoragePool: true, view: 'WAREHOUSE_RECEIVED' }, 'actor-id')
+    const filteredCall = filtered.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
+    expect(filteredCall[0].where.AND[0]).toMatchObject({
+      AND: [{ OR: [
+        { ownershipCurrent: { is: null } },
+        { ownershipCurrent: { ownerType: { not: 'STORAGE_POOL' } } },
+      ] }],
+    })
+
+    const unfiltered = fixture('ALL')
+    await unfiltered.service.list({ view: 'WAREHOUSE_RECEIVED' }, 'actor-id')
+    const unfilteredCall = unfiltered.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
+    expect(unfilteredCall[0].where.AND[0]).not.toHaveProperty('AND')
+  })
+
+  it('combines SELF ownership with the storage-pool exclusion for the arrival page', async () => {
+    const f = fixture('SELF')
+    await f.service.list({ excludeStoragePool: true, view: 'WAREHOUSE_RECEIVED' }, 'actor-id')
+    const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
+    expect(listCall[0].where.AND[0]).toMatchObject({
+      AND: [{ OR: expect.any(Array) as unknown }],
+      ownershipCurrent: { ownerSalesOrder: { is: { issuerUserId: 'actor-id' } } },
     })
   })
 
@@ -342,6 +368,7 @@ describe('PurchaseShipmentQueryService', () => {
     expect(countCall[0].where.AND[0]).toEqual(listCall[0].where.AND[0])
     expect(listCall[0].where.AND[0]).toMatchObject({ purchaseOrder: { is: { purchaseType: 'SALES_LINKED' } } })
     expect(listCall[0].where.AND[0]).not.toHaveProperty('purchaseOrder.is.salesOrder')
+    expect(listCall[0].where.AND[0]).not.toHaveProperty('ownershipCurrent')
   })
 
   it('returns 404 for a SELF-scoped shipment outside the sales owner chain', async () => {

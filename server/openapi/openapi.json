@@ -63826,6 +63826,15 @@
             }
           },
           {
+            "name": "excludeStoragePool",
+            "required": false,
+            "in": "query",
+            "description": "仅 true 时排除已释放进寄仓池的货件；到仓货件页使用，货件管理默认不传",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "supplierSource",
             "required": false,
             "in": "query",
@@ -64165,6 +64174,15 @@
             "required": false,
             "in": "query",
             "description": "仅 true 筛选目的地仓库未记录（null）的历史货件；false 或省略均不添加缺失条件；true 与 destinationWarehouseValue 互斥",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "excludeStoragePool",
+            "required": false,
+            "in": "query",
+            "description": "仅 true 时排除已释放进寄仓池的货件；到仓货件页使用，货件管理默认不传",
             "schema": {
               "type": "boolean"
             }

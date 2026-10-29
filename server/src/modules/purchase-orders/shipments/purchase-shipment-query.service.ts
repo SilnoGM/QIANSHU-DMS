@@ -12,7 +12,7 @@ import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.se
 import { isNormalizableDictionaryItemValue, normalizeDictionaryItemValue } from '../../dictionaries/dictionary.normalizer'
 import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
 import type { DataScope } from '../../access-control/data-scope'
-import { purchaseOrderPartScopeWhere, purchaseOrderScopeWhere } from '../purchase-order-access'
+import { purchaseOrderPartScopeWhere } from '../purchase-order-access'
 import { purchaseOrderSupplierFromSources } from '../purchase-order-query.service'
 import type { PurchaseOrderSupplierDto } from '../dto/purchase-order-response.dto'
 import { PURCHASE_SHIPMENT_VIEWS } from './purchase-shipment.dto'
@@ -102,13 +102,20 @@ function baseWhere(input: PurchaseShipmentFilterDto, scope: DataScope, actorUser
   const keyword = rawKeyword?.normalize('NFKC')
   const match = { contains: keyword, mode: 'insensitive' } as const
   return {
+    // 货件范围按当前归属判断；采购单来源只是筛选维度，不能再作为可见性真相源。
+    ...purchaseOrderPartScopeWhere(scope, actorUserId),
+    // 到仓货件页要求池内货件只去寄仓管理查看；默认不传，货件管理仍可见。
+    ...(input.excludeStoragePool === true
+      ? { AND: [{ OR: [
+          { ownershipCurrent: { is: null } },
+          { ownershipCurrent: { ownerType: { not: 'STORAGE_POOL' as const } } },
+        ] }] }
+      : {}),
     // 历史查询只匹配保存的稳定值，不以字典当前有效性排除停用或未知仓库。
     destinationWarehouseValue: input.destinationWarehouseMissing === true
       ? null
       : input.destinationWarehouseValue === undefined ? undefined : normalizeDictionaryItemValue(input.destinationWarehouseValue),
     purchaseOrder: { is: {
-      // 归属谓词必须与订单筛选写在同一个 purchaseOrder 对象里：外层再放一个同名键会把它静默覆盖。
-      ...purchaseOrderScopeWhere(scope, actorUserId),
       purchaseType: input.purchaseType,
       createdByUserId: input.createdByUserId,
       supplierValue: input.supplierValue ?? (input.supplierSource === 'CUSTOM_TEXT' ? null : input.supplierSource === 'DICTIONARY' ? { not: null } : undefined),
