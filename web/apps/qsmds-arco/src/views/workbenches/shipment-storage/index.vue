@@ -9,6 +9,7 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
@@ -72,16 +73,21 @@ const warehouseOptions = computed(() => {
   ]
 })
 
+function hasPositiveAmount(value: string): boolean {
+  return Number(value) > 0
+}
+
 const columns = computed<QsGenericTableColumn<ShipmentStorageListItemDto>[]>(() => [
   { id: 'shipmentNo', title: '货件编号', accessorKey: 'shipmentNo', fixed: 'left', minWidth: 177 },
-  { id: 'mark', title: '唛头', accessorKey: 'shippingMarkText', minWidth: 220 },
-  { id: 'salesOrder', title: '来源销售单', accessorFn: row => row.originSalesOrderNo, minWidth: 190 },
-  { id: 'purchaseOrder', title: '来源采购单', accessorFn: row => row.originPurchaseOrderNo, minWidth: 190 },
-  { id: 'customer', title: '客户', accessorFn: row => row.originCustomerName, minWidth: 160 },
-  { id: 'location', title: '位置', accessorFn: row => locationLabel(row), minWidth: 200 },
+  { id: 'mark', title: '货件唛头', accessorKey: 'shippingMarkText', minWidth: 220 },
+  { id: 'salesOrder', title: '来源销售单', accessorFn: row => row.originSalesOrderNo, minWidth: 230 },
+  { id: 'purchaseOrder', title: '来源采购单', accessorFn: row => row.originPurchaseOrderNo, minWidth: 230 },
+  { id: 'customer', title: '原单客户', accessorFn: row => row.originCustomerName, minWidth: 160 },
+  { id: 'location', title: '寄仓位置', accessorFn: row => locationLabel(row), minWidth: 200 },
   { id: 'status', title: '状态', accessorFn: row => storageStatusLabel(row.status), minWidth: 110 },
-  { id: 'createdAt', title: '入池时间', accessorKey: 'createdAt', minWidth: 190 },
-  { id: 'cost', title: '成本', accessorFn: row => row.cost.totalCostCny, minWidth: 140 },
+  { id: 'cost', title: '成本合计', accessorFn: row => row.cost.totalCostCny, minWidth: 140 },
+  { id: 'costDetail', title: '成本详情', accessorFn: row => row.cost.purchaseCostCny, minWidth: 230 },
+  { id: 'createdAt', title: '转入寄仓时间', accessorKey: 'createdAt', minWidth: 190 },
 ])
 
 let controller: AbortController | null = null
@@ -334,6 +340,51 @@ onMounted(() => {
           <span v-else>—</span>
         </template>
 
+        <template #cell-salesOrder="{ row }">
+          <div class="flex flex-col gap-1 min-w-0">
+            <QsPersonDisplay
+              v-if="row.original.originIssuer"
+              :display-name="row.original.originIssuer.displayName"
+              :avatar-url="row.original.originIssuer.avatarUrl"
+              size="sm"
+            />
+            <span v-else class="qs-type-meta text-muted-foreground">—</span>
+            <QsCopyableText label="销售单号" :text="row.original.originSalesOrderNo" />
+          </div>
+        </template>
+
+        <template #cell-purchaseOrder="{ row }">
+          <div class="flex flex-col gap-1 min-w-0">
+            <QsPersonDisplay
+              v-if="row.original.originPurchaseCreator"
+              :display-name="row.original.originPurchaseCreator.displayName"
+              :avatar-url="row.original.originPurchaseCreator.avatarUrl"
+              size="sm"
+            />
+            <span v-else class="qs-type-meta text-muted-foreground">—</span>
+            <QsCopyableText label="采购单号" :text="row.original.originPurchaseOrderNo" />
+          </div>
+        </template>
+
+        <template #cell-costDetail="{ row }">
+          <div class="flex flex-col gap-1">
+            <div class="flex gap-1 items-center">
+              <span class="qs-type-meta text-muted-foreground">采购成本：</span>
+              <AmountDisplay :value="row.original.cost.purchaseCostCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+            </div>
+            <div class="flex gap-1 items-center">
+              <span class="qs-type-meta text-muted-foreground">包装成本：</span>
+              <AmountDisplay
+                v-if="hasPositiveAmount(row.original.cost.packagingCostCny)"
+                :value="row.original.cost.packagingCostCny"
+                currency="CNY"
+                :currencies="currencyCatalog.currencies.value"
+              />
+              <span v-else>-</span>
+            </div>
+          </div>
+        </template>
+
         <template #cell-createdAt="{ row }">
           <DateTimeDisplay :value="row.original.createdAt" />
         </template>
@@ -371,7 +422,7 @@ onMounted(() => {
             </div>
             <div class="p-4 border border-border rounded-lg">
               <p class="qs-type-meta text-muted-foreground m-0">
-                唛头
+                货件唛头
               </p>
               <p class="qs-type-data-emphasis mb-0 mt-1 break-all">
                 {{ detail.shippingMarkText ?? '—' }}
@@ -381,21 +432,43 @@ onMounted(() => {
               <p class="qs-type-meta text-muted-foreground m-0">
                 来源销售单
               </p>
-              <p class="mb-0 mt-1">
-                {{ detail.originSalesOrderNo }} · {{ detail.originCustomerName }}
-              </p>
+              <div class="mt-1 flex flex-col gap-1 min-w-0">
+                <QsPersonDisplay
+                  v-if="detail.originIssuer"
+                  :display-name="detail.originIssuer.displayName"
+                  :avatar-url="detail.originIssuer.avatarUrl"
+                  size="sm"
+                />
+                <span v-else class="qs-type-meta text-muted-foreground">—</span>
+                <QsCopyableText label="销售单号" :text="detail.originSalesOrderNo" />
+              </div>
             </div>
             <div class="p-4 border border-border rounded-lg">
               <p class="qs-type-meta text-muted-foreground m-0">
                 来源采购单
               </p>
+              <div class="mt-1 flex flex-col gap-1 min-w-0">
+                <QsPersonDisplay
+                  v-if="detail.originPurchaseCreator"
+                  :display-name="detail.originPurchaseCreator.displayName"
+                  :avatar-url="detail.originPurchaseCreator.avatarUrl"
+                  size="sm"
+                />
+                <span v-else class="qs-type-meta text-muted-foreground">—</span>
+                <QsCopyableText label="采购单号" :text="detail.originPurchaseOrderNo" />
+              </div>
+            </div>
+            <div class="p-4 border border-border rounded-lg">
+              <p class="qs-type-meta text-muted-foreground m-0">
+                原单客户
+              </p>
               <p class="mb-0 mt-1">
-                {{ detail.originPurchaseOrderNo }}
+                {{ detail.originCustomerName }}
               </p>
             </div>
             <div class="p-4 border border-border rounded-lg">
               <p class="qs-type-meta text-muted-foreground m-0">
-                当前位置
+                寄仓位置
               </p>
               <p class="mb-0 mt-1">
                 {{ locationLabel(detail) }}
@@ -415,44 +488,45 @@ onMounted(() => {
             <h3 class="qs-type-section-title mb-3">
               成本快照
             </h3>
-            <div class="gap-3 grid sm:grid-cols-3">
-              <div class="p-3 border border-border rounded-lg">
+            <div class="flex flex-col gap-3">
+              <div class="p-4 border border-border rounded-xl bg-muted/30">
                 <p class="qs-type-meta text-muted-foreground m-0">
-                  采购成本
+                  成本合计
                 </p>
-                <AmountDisplay :value="detail.cost.purchaseCostCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+                <AmountDisplay
+                  :value="detail.cost.totalCostCny"
+                  currency="CNY"
+                  :currencies="currencyCatalog.currencies.value"
+                  class="text-2xl font-semibold mt-1"
+                />
               </div>
-              <div class="p-3 border border-border rounded-lg">
-                <p class="qs-type-meta text-muted-foreground m-0">
-                  包装成本
-                </p>
-                <AmountDisplay :value="detail.cost.packagingCostCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
-              </div>
-              <div class="p-3 border border-border rounded-lg">
-                <p class="qs-type-meta text-muted-foreground m-0">
-                  合计
-                </p>
-                <AmountDisplay :value="detail.cost.totalCostCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
-              </div>
-              <div class="p-3 border border-border rounded-lg">
-                <p class="qs-type-meta text-muted-foreground m-0">
-                  原出单人比例
-                </p>
-                <p class="mb-0 mt-1">
-                  {{ detail.cost.originalShareRate }}%
-                </p>
-              </div>
-              <div class="p-3 border border-border rounded-lg">
-                <p class="qs-type-meta text-muted-foreground m-0">
-                  个人腿
-                </p>
-                <AmountDisplay :value="detail.cost.userLegCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
-              </div>
-              <div class="p-3 border border-border rounded-lg">
-                <p class="qs-type-meta text-muted-foreground m-0">
-                  公司腿
-                </p>
-                <AmountDisplay :value="detail.cost.companyLegCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
+              <div class="gap-3 grid sm:grid-cols-2">
+                <div class="p-4 border border-border rounded-xl">
+                  <p class="qs-type-meta text-muted-foreground m-0">
+                    采购成本
+                  </p>
+                  <AmountDisplay
+                    :value="detail.cost.purchaseCostCny"
+                    currency="CNY"
+                    :currencies="currencyCatalog.currencies.value"
+                    class="mt-1"
+                  />
+                </div>
+                <div class="p-4 border border-border rounded-xl">
+                  <p class="qs-type-meta text-muted-foreground m-0">
+                    包装成本
+                  </p>
+                  <AmountDisplay
+                    v-if="hasPositiveAmount(detail.cost.packagingCostCny)"
+                    :value="detail.cost.packagingCostCny"
+                    currency="CNY"
+                    :currencies="currencyCatalog.currencies.value"
+                    class="mt-1"
+                  />
+                  <p v-else class="text-muted-foreground mb-0 mt-1">
+                    -
+                  </p>
+                </div>
               </div>
             </div>
           </section>
