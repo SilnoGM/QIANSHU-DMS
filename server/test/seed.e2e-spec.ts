@@ -47,7 +47,7 @@ const expectedDictionaries: ReadonlyArray<readonly [string, readonly string[]]> 
 const expectedRoles: ReadonlyArray<readonly [string, number]> = [
   ['finance_staff', 27],
   ['operations_staff', 21],
-  ['purchasing_staff', 9],
+  ['purchasing_staff', 12],
 ]
 const expectedRuleShapes: Readonly<Record<string, string>> = {
   BTJ_MARK: 'FIXED(BTJ) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
