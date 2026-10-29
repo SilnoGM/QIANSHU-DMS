@@ -31,6 +31,7 @@ function row() {
     } }],
     containerLoadingItems: [],
     storageRecords: [],
+    ownershipCurrent: null,
   }
 }
 
@@ -59,6 +60,70 @@ describe('PurchaseShipmentQueryService', () => {
       warehouseValue: 'RF_TZ',
     })
     expect(page.items[1]?.storage).toBeNull()
+  })
+
+  it('uses the current owner as sales source and falls back to purchase origin for pool-owned parts', async () => {
+    const f = fixture('ALL')
+    const origin = {
+      id: 'sales-origin',
+      issuer: { profile: { issuerPrefix: 'OLD' } },
+      customerName: '原客户',
+      orderNo: 'SO-ORIGIN',
+    }
+    const owner = {
+      id: 'sales-owner',
+      issuer: { profile: { issuerPrefix: 'NEW' } },
+      customerName: '新客户',
+      orderNo: 'SO-OWNER',
+    }
+    f.part.findMany.mockResolvedValue([
+      {
+        ...row(),
+        ownershipCurrent: {
+          ownerSalesOrder: owner,
+          ownerType: 'SALES_ORDER',
+          state: 'ACTIVE',
+        },
+        purchaseOrder: { ...row().purchaseOrder, salesOrder: origin },
+      },
+      {
+        ...row(),
+        id: 'part-2',
+        ownershipCurrent: {
+          ownerSalesOrder: null,
+          ownerType: 'STORAGE_POOL',
+          state: 'ACTIVE',
+        },
+        purchaseOrder: { ...row().purchaseOrder, salesOrder: origin },
+      },
+    ])
+
+    const page = await f.service.list({ view: 'ALL' })
+
+    expect(page.items[0]?.salesSource).toEqual({
+      id: 'sales-owner',
+      issuerPrefix: 'NEW',
+      customerName: '新客户',
+      orderNo: 'SO-OWNER',
+    })
+    expect(page.items[1]?.salesSource).toEqual({
+      id: 'sales-origin',
+      issuerPrefix: 'OLD',
+      customerName: '原客户',
+      orderNo: 'SO-ORIGIN',
+    })
+  })
+
+  it('searches claimed shipments by the current owner order and customer', async () => {
+    const f = fixture('ALL')
+    await f.service.list({ keyword: '新客户', view: 'ALL' })
+
+    const call = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
+    expect(call[0].where.AND[0]).toMatchObject({
+      OR: expect.arrayContaining([
+        { ownershipCurrent: { ownerType: 'SALES_ORDER', state: 'ACTIVE', ownerSalesOrder: { is: { customerName: { contains: '新客户', mode: 'insensitive' } } } } },
+      ]) as unknown,
+    })
   })
 
   it('preserves full-width tracking identifiers while normalizing other keyword fields for both rows and counts', async () => {

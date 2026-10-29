@@ -57,6 +57,17 @@ const PART_SELECT = {
     take: 1,
     select: { id: true, status: true, locationScope: true, warehouseValue: true },
   },
+  // 当前归属销售单才是“客户/销售来源”；采购来源只在池内/公司持有时作为历史来源回退。
+  ownershipCurrent: { select: {
+    ownerType: true,
+    state: true,
+    ownerSalesOrder: { select: {
+      id: true,
+      orderNo: true,
+      customerName: true,
+      issuer: { select: { profile: { select: { issuerPrefix: true } } } },
+    } },
+  } },
 } as const satisfies Prisma.PurchaseOrderPartSelect
 
 const DETAIL_SELECT = {
@@ -134,6 +145,9 @@ function baseWhere(input: PurchaseShipmentFilterDto, scope: DataScope, actorUser
       { purchaseOrder: { is: { customSupplierName: match } } },
       { purchaseOrder: { is: { salesOrder: { is: { orderNo: match } } } } },
       { purchaseOrder: { is: { salesOrder: { is: { customerName: match } } } } },
+      // 已认领货件按当前归属销售单搜索，不能只命中采购来源的历史单号/客户。
+      { ownershipCurrent: { ownerType: 'SALES_ORDER', state: 'ACTIVE', ownerSalesOrder: { is: { orderNo: match } } } },
+      { ownershipCurrent: { ownerType: 'SALES_ORDER', state: 'ACTIVE', ownerSalesOrder: { is: { customerName: match } } } },
       { items: { some: { line: { is: { productNameSnapshot: match } } } } },
     ] }),
   }
@@ -168,6 +182,12 @@ function shipmentOrderBy(sort: PurchaseShipmentSort = 'CREATED_DESC'): Prisma.Pu
 
 function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWarehouse: PurchaseShipmentDestinationWarehouseDto | null): PurchaseShipmentListItemDto {
   const order = row.purchaseOrder
+  // 当前归属销售单优先；货件在寄仓池或公司持有时没有销售归属，回退采购来源仅用于历史识别。
+  const ownerSalesOrder = row.ownershipCurrent?.ownerType === 'SALES_ORDER'
+    && row.ownershipCurrent.state === 'ACTIVE'
+    ? row.ownershipCurrent.ownerSalesOrder
+    : null
+  const salesSource = ownerSalesOrder ?? order.salesOrder
   return {
     id: row.id, shipmentNo: row.shipmentNo, partNumber: row.partNumber, status: row.status,
     // 状态派生统一复用 helper，导入候选与列表保持同一口径。
@@ -198,11 +218,11 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
       purchaseType: order.purchaseType, productMode: order.productMode, orderStatus: order.orderStatus,
       shippingMarkText: order.shippingMarkText, createdBy: toPersonReference(order.createdBy),
     },
-    supplier, salesSource: order.salesOrder === null ? null : {
-      id: order.salesOrder.id,
-      orderNo: order.salesOrder.orderNo,
-      customerName: order.salesOrder.customerName,
-      issuerPrefix: order.salesOrder.issuer.profile?.issuerPrefix ?? null,
+    supplier, salesSource: salesSource === null ? null : {
+      id: salesSource.id,
+      orderNo: salesSource.orderNo,
+      customerName: salesSource.customerName,
+      issuerPrefix: salesSource.issuer.profile?.issuerPrefix ?? null,
     },
     lineSummary: {
       lineCount: row.items.length, totalQuantity: row.items.reduce((total, item) => total + item.quantity, 0),

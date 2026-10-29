@@ -208,6 +208,20 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
     expect(await arrivalPartIds('SELF', bob.id)).toContain(origin.part.id)
     expect(await arrivalPartIds('SELF', h.fixture.actor.id)).not.toContain(origin.part.id)
     expect(await arrivalPartIds('ALL', h.fixture.actor.id, true)).toContain(origin.part.id)
+    const arrivalQueries = new PurchaseShipmentQueryService(
+      h.prisma,
+      new DictionaryLookupService(h.prisma),
+      { resolve: () => Promise.resolve('ALL') } as never,
+    )
+    const arrivalPage = await arrivalQueries.list({
+      pageSize: 100,
+      view: 'WAREHOUSE_RECEIVED',
+      excludeStoragePool: true,
+    }, bob.id)
+    expect(arrivalPage.items.find(item => item.id === origin.part.id)?.salesSource).toMatchObject({
+      id: target.id,
+      orderNo: target.orderNo,
+    })
 
     // 采购来源行必须把已调货数量从可采购剩余中扣除，未调货行仍可继续采购。
     const sourceQueries = new PurchaseOrderSourceQueryService(
