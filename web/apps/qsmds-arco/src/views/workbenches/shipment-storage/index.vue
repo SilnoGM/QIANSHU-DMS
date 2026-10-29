@@ -83,13 +83,13 @@ const columns = computed<QsGenericTableColumn<ShipmentStorageListItemDto>[]>(() 
   { id: 'shipmentNo', title: '货件编号', accessorKey: 'shipmentNo', fixed: 'left', minWidth: 177 },
   { id: 'products', title: '产品', accessorFn: row => row.lineSummary.previews.map(item => item.productName).join('、'), minWidth: 220 },
   { id: 'mark', title: '唛头', accessorFn: row => [row.shippingMarkText, ...row.containerMarks].filter(value => Boolean(value)).join('、'), minWidth: 260 },
-  { id: 'salesOrder', title: '来源销售单', accessorFn: row => row.originSalesOrderNo, minWidth: 230 },
-  { id: 'purchaseOrder', title: '来源采购单', accessorFn: row => row.originPurchaseOrderNo, minWidth: 230 },
   { id: 'customer', title: '原单客户', accessorFn: row => row.originCustomerName, minWidth: 160 },
   { id: 'location', title: '寄仓位置', accessorFn: row => locationLabel(row), minWidth: 200 },
   { id: 'status', title: '状态', accessorFn: row => storageStatusLabel(row.status), minWidth: 110 },
   { id: 'cost', title: '成本合计', accessorFn: row => row.cost.totalCostCny, minWidth: 140 },
   { id: 'costDetail', title: '成本详情', accessorFn: row => row.cost.purchaseCostCny, minWidth: 230 },
+  { id: 'salesOrder', title: '来源销售单', accessorFn: row => row.originSalesOrderNo, minWidth: 230 },
+  { id: 'purchaseOrder', title: '来源采购单', accessorFn: row => row.originPurchaseOrderNo, minWidth: 230 },
   { id: 'createdAt', title: '转入寄仓时间', accessorKey: 'createdAt', minWidth: 190 },
 ])
 
