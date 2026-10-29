@@ -391,13 +391,15 @@ onMounted(() => {
 
         <template #cell-mark="{ row }">
           <div class="flex flex-col gap-1 min-w-0">
-            <div class="flex gap-1 min-w-0 items-start">
-              <span class="text-muted-foreground shrink-0">货件唛头：</span>
-              <QsCopyableText v-if="row.original.shippingMarkText" label="货件唛头" :text="row.original.shippingMarkText" />
-              <span v-else>—</span>
+            <div class="flex gap-1 min-w-0 items-center">
+              <span class="qs-type-meta text-muted-foreground shrink-0">货件唛头：</span>
+              <span class="min-w-0">
+                <QsCopyableText v-if="row.original.shippingMarkText" label="货件唛头" :text="row.original.shippingMarkText" />
+                <span v-else>—</span>
+              </span>
             </div>
-            <div v-if="row.original.containerMarks.length > 0" class="flex gap-1 min-w-0 items-start">
-              <span class="text-muted-foreground shrink-0">装柜唛头：</span>
+            <div v-if="row.original.containerMarks.length > 0" class="flex gap-1 min-w-0 items-center">
+              <span class="qs-type-meta text-muted-foreground shrink-0">装柜唛头：</span>
               <span class="min-w-0 [overflow-wrap:anywhere]">{{ row.original.containerMarks.join('、') }}</span>
               <CopyCellButton
                 always-visible
