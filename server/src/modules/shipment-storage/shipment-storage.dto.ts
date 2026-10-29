@@ -184,6 +184,36 @@ export class ShipmentStorageLineSummaryDto {
   @ApiProperty({ type: () => [ShipmentStorageProductPreviewDto] }) readonly previews!: readonly ShipmentStorageProductPreviewDto[]
 }
 
+export class ShipmentStorageContainerBatchDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string' }) readonly containerBatchNo!: string
+  @ApiProperty({ type: 'string' }) readonly containerBatchName!: string
+  @ApiProperty({ type: 'string', format: 'date' }) readonly loadingDate!: string
+}
+
+export class ShipmentStorageContainerItemDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'integer' }) readonly lineNumber!: number
+  @ApiProperty({ type: 'string', nullable: true }) readonly oceanShippingMarkText!: string | null
+  @ApiProperty({ type: 'string' }) readonly goodsName!: string
+  @ApiProperty({ type: 'integer' }) readonly packageCount!: number
+  @ApiProperty({ type: 'string', nullable: true }) readonly packageUnit!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly grossWeightKg!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly lengthCm!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly widthCm!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly heightCm!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly volumeCai!: string | null
+  @ApiProperty({ type: 'integer', nullable: true }) readonly chargeableVolumeCai!: number | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly reportedVolumeCai!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly recipientName!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly recipientPhone!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly recipientAddress!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly codAmountTwd!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly warehouseReceiptReference!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly remark!: string | null
+  @ApiProperty({ type: () => ShipmentStorageContainerBatchDto }) readonly containerBatch!: ShipmentStorageContainerBatchDto
+}
+
 export class ShipmentStorageCostDto {
   @ApiProperty({ type: 'string' }) readonly purchaseCostCny!: string
   @ApiProperty({ type: 'string' }) readonly packagingCostCny!: string
@@ -244,6 +274,7 @@ export class ShipmentStorageCostTransferDto {
 export class ShipmentStorageDetailDto extends ShipmentStorageListItemDto {
   @ApiProperty({ type: 'array', items: { type: 'object', additionalProperties: true } }) readonly originAllocations!: readonly unknown[]
   @ApiProperty({ type: 'object', additionalProperties: true, nullable: true }) readonly containerSnapshot!: unknown
+  @ApiProperty({ type: () => [ShipmentStorageContainerItemDto] }) readonly containerLoadingItems!: readonly ShipmentStorageContainerItemDto[]
   @ApiProperty({ type: () => [ShipmentStorageLocationEventDto] }) readonly locationEvents!: readonly ShipmentStorageLocationEventDto[]
   @ApiProperty({ type: () => [ShipmentStorageCostTransferDto] }) readonly costTransfers!: readonly ShipmentStorageCostTransferDto[]
 }

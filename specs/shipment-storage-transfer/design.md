@@ -128,7 +128,7 @@ shipment_storage_records(
   origin_sales_order_id      uuid NOT NULL,
   origin_issuer_user_id      uuid NOT NULL,
   origin_allocations         jsonb NOT NULL,                 -- 采购行 + 数量映射
-  container_snapshot         jsonb,                          -- 柜次/装柜明细/收件人/COD/重量体积
+  container_snapshot         jsonb,                          -- v2: {format, containerBatch, items[]}；释放时冻结全部装柜明细
   cost_snapshot              jsonb NOT NULL,                 -- 成本/已付/比例/两腿金额/付款批次 id
   snapshot_at                timestamptz NOT NULL,
   claimed_sales_order_id     uuid,

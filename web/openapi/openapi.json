@@ -96641,6 +96641,134 @@
           "items"
         ]
       },
+      "ShipmentStorageContainerBatchDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "containerBatchNo": {
+            "type": "string"
+          },
+          "containerBatchName": {
+            "type": "string"
+          },
+          "loadingDate": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "id",
+          "containerBatchNo",
+          "containerBatchName",
+          "loadingDate"
+        ]
+      },
+      "ShipmentStorageContainerItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lineNumber": {
+            "type": "integer"
+          },
+          "oceanShippingMarkText": {
+            "type": "string",
+            "nullable": true
+          },
+          "goodsName": {
+            "type": "string"
+          },
+          "packageCount": {
+            "type": "integer"
+          },
+          "packageUnit": {
+            "type": "string",
+            "nullable": true
+          },
+          "grossWeightKg": {
+            "type": "string",
+            "nullable": true
+          },
+          "lengthCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "widthCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "heightCm": {
+            "type": "string",
+            "nullable": true
+          },
+          "volumeCai": {
+            "type": "string",
+            "nullable": true
+          },
+          "chargeableVolumeCai": {
+            "type": "integer",
+            "nullable": true
+          },
+          "reportedVolumeCai": {
+            "type": "string",
+            "nullable": true
+          },
+          "recipientName": {
+            "type": "string",
+            "nullable": true
+          },
+          "recipientPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "recipientAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "codAmountTwd": {
+            "type": "string",
+            "nullable": true
+          },
+          "warehouseReceiptReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true
+          },
+          "containerBatch": {
+            "$ref": "#/components/schemas/ShipmentStorageContainerBatchDto"
+          }
+        },
+        "required": [
+          "id",
+          "lineNumber",
+          "oceanShippingMarkText",
+          "goodsName",
+          "packageCount",
+          "packageUnit",
+          "grossWeightKg",
+          "lengthCm",
+          "widthCm",
+          "heightCm",
+          "volumeCai",
+          "chargeableVolumeCai",
+          "reportedVolumeCai",
+          "recipientName",
+          "recipientPhone",
+          "recipientAddress",
+          "codAmountTwd",
+          "warehouseReceiptReference",
+          "remark",
+          "containerBatch"
+        ]
+      },
       "ShipmentStorageLocationEventDto": {
         "type": "object",
         "properties": {
@@ -96853,6 +96981,12 @@
             "additionalProperties": true,
             "nullable": true
           },
+          "containerLoadingItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShipmentStorageContainerItemDto"
+            }
+          },
           "locationEvents": {
             "type": "array",
             "items": {
@@ -96892,6 +97026,7 @@
           "createdAt",
           "originAllocations",
           "containerSnapshot",
+          "containerLoadingItems",
           "locationEvents",
           "costTransfers"
         ]

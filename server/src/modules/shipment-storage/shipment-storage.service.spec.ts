@@ -372,8 +372,62 @@ describe('ShipmentStorageService', () => {
       purchaseOrder: { findMany: jest.fn().mockResolvedValue([]) },
       containerLoadingItem: {
         findMany: jest.fn().mockResolvedValue([
-          { shipmentId: SHIPMENT_ID, oceanShippingMarkText: 'J-030549-01' },
-          { shipmentId: SHIPMENT_ID, oceanShippingMarkText: 'J-030549-02' },
+          {
+            id: 'container-item-1',
+            shipmentId: SHIPMENT_ID,
+            lineNumber: 1,
+            oceanShippingMarkText: 'J-030549-01',
+            goodsName: '产品甲',
+            packageCount: 1,
+            packageUnit: '件',
+            grossWeightKg: { toFixed: () => '11' },
+            lengthCm: { toFixed: () => '37' },
+            widthCm: { toFixed: () => '34' },
+            heightCm: { toFixed: () => '35' },
+            volumeCai: { toFixed: () => '1.55' },
+            chargeableVolumeCai: 2,
+            reportedVolumeCai: null,
+            recipientName: '收件人甲',
+            recipientPhone: '0900000001',
+            recipientAddress: '地址甲',
+            codAmountTwd: { toFixed: () => '100.00' },
+            warehouseReceiptReference: 'RECEIPT-1',
+            remark: '备注甲',
+            containerBatch: {
+              id: 'batch-1',
+              containerBatchNo: 'CTN/2026-001',
+              containerBatchName: '0305柜',
+              loadingDate: new Date('2026-03-05T00:00:00.000Z'),
+            },
+          },
+          {
+            id: 'container-item-2',
+            shipmentId: SHIPMENT_ID,
+            lineNumber: 2,
+            oceanShippingMarkText: 'J-030549-02',
+            goodsName: '产品乙',
+            packageCount: 2,
+            packageUnit: null,
+            grossWeightKg: null,
+            lengthCm: null,
+            widthCm: null,
+            heightCm: null,
+            volumeCai: null,
+            chargeableVolumeCai: null,
+            reportedVolumeCai: null,
+            recipientName: null,
+            recipientPhone: null,
+            recipientAddress: null,
+            codAmountTwd: null,
+            warehouseReceiptReference: null,
+            remark: null,
+            containerBatch: {
+              id: 'batch-1',
+              containerBatchNo: 'CTN/2026-001',
+              containerBatchName: '0305柜',
+              loadingDate: new Date('2026-03-05T00:00:00.000Z'),
+            },
+          },
         ]),
       },
       purchaseOrderLine: {
@@ -424,9 +478,98 @@ describe('ShipmentStorageService', () => {
       }],
     })
     expect(detail.containerMarks).toEqual(['J-030549-01', 'J-030549-02'])
+    expect(detail.containerLoadingItems).toHaveLength(2)
+    expect(detail.containerLoadingItems[0]).toMatchObject({
+      id: 'container-item-1',
+      lineNumber: 1,
+      oceanShippingMarkText: 'J-030549-01',
+      goodsName: '产品甲',
+      grossWeightKg: '11',
+      volumeCai: '1.55',
+      codAmountTwd: '100.00',
+      containerBatch: {
+        containerBatchNo: 'CTN/2026-001',
+        loadingDate: '2026-03-05',
+      },
+    })
     expect(resolveStoredValues).toHaveBeenCalledWith({
       dictionaryCode: 'overseas.warehouse',
       values: ['RF_TZ'],
+    })
+  })
+
+  it('keeps every loading item in the versioned release snapshot', () => {
+    const snapshot = (service() as unknown as {
+      containerSnapshot(part: unknown): unknown
+    }).containerSnapshot({
+      containerLoadingItems: [
+        {
+          id: 'container-item-1',
+          lineNumber: 1,
+          oceanShippingMarkText: 'J-030549-01',
+          goodsName: '产品甲',
+          packageCount: 1,
+          packageUnit: '件',
+          grossWeightKg: null,
+          lengthCm: null,
+          widthCm: null,
+          heightCm: null,
+          volumeCai: null,
+          chargeableVolumeCai: null,
+          reportedVolumeCai: null,
+          recipientName: null,
+          recipientPhone: null,
+          recipientAddress: null,
+          codAmountTwd: null,
+          warehouseReceiptReference: null,
+          remark: null,
+          containerBatch: {
+            id: 'batch-1',
+            containerBatchNo: 'CTN/2026-001',
+            containerBatchName: '0305柜',
+            loadingDate: new Date('2026-03-05T00:00:00.000Z'),
+          },
+        },
+        {
+          id: 'container-item-2',
+          lineNumber: 2,
+          oceanShippingMarkText: 'J-030549-02',
+          goodsName: '产品乙',
+          packageCount: 1,
+          packageUnit: null,
+          grossWeightKg: null,
+          lengthCm: null,
+          widthCm: null,
+          heightCm: null,
+          volumeCai: null,
+          chargeableVolumeCai: null,
+          reportedVolumeCai: null,
+          recipientName: null,
+          recipientPhone: null,
+          recipientAddress: null,
+          codAmountTwd: null,
+          warehouseReceiptReference: null,
+          remark: null,
+          containerBatch: {
+            id: 'batch-1',
+            containerBatchNo: 'CTN/2026-001',
+            containerBatchName: '0305柜',
+            loadingDate: new Date('2026-03-05T00:00:00.000Z'),
+          },
+        },
+      ],
+    })
+
+    expect(snapshot).toMatchObject({
+      format: 'shipment-storage.container-snapshot.v2',
+      containerBatch: {
+        containerBatchNo: 'CTN/2026-001',
+        loadingDate: '2026-03-05',
+      },
+      items: [
+        { id: 'container-item-1', lineNumber: 1, oceanShippingMarkText: 'J-030549-01' },
+        { id: 'container-item-2', lineNumber: 2, oceanShippingMarkText: 'J-030549-02' },
+      ],
     })
   })
 })

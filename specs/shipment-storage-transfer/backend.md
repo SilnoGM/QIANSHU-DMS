@@ -132,7 +132,8 @@ GET /shipment-storage/:storageRecordId
 | `locationScope` / `warehouse` | 位置范围与仓库（含 label） |
 | `originPurchaseOrder` / `originSalesOrder` / `originIssuer` | 来源快照 |
 | `costSnapshot` | 成本、已付、比例、两腿金额 |
-| `containerSnapshot` | 柜次、装柜明细、收件人、COD |
+| `containerSnapshot` | v2 柜次 + 全部装柜明细（唛头、收件人、COD、重量体积）；释放时冻结，仅作历史快照 |
+| `containerLoadingItems` | 当前 `container_loading_items` 实时明细；详情「装柜信息」视图使用，解绑后为空 |
 | `claimedSalesOrder` / `claimedAt` | 认领信息 |
 | `createdAt` / `locationUpdatedAt` | 时间 |
 

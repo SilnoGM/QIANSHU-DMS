@@ -40,6 +40,7 @@ import type {
   ReleaseShipmentStorageRequestDto,
   ShipmentStorageCostDto,
   ShipmentStorageCostTransferDto,
+  ShipmentStorageContainerItemDto,
   ShipmentStorageDetailDto,
   ShipmentStorageLineSummaryDto,
   ShipmentStorageListItemDto,
@@ -53,6 +54,34 @@ export interface ShipmentStorageMutationContext {
   readonly actorUserId: string
   readonly requestId: string
 }
+
+const CONTAINER_ITEM_SELECT = {
+  id: true,
+  shipmentId: true,
+  lineNumber: true,
+  oceanShippingMarkText: true,
+  goodsName: true,
+  packageCount: true,
+  packageUnit: true,
+  grossWeightKg: true,
+  lengthCm: true,
+  widthCm: true,
+  heightCm: true,
+  volumeCai: true,
+  chargeableVolumeCai: true,
+  reportedVolumeCai: true,
+  recipientName: true,
+  recipientPhone: true,
+  recipientAddress: true,
+  codAmountTwd: true,
+  warehouseReceiptReference: true,
+  remark: true,
+  containerBatch: {
+    select: { id: true, containerBatchNo: true, containerBatchName: true, loadingDate: true },
+  },
+} as const satisfies Prisma.ContainerLoadingItemSelect
+
+type ContainerItemRow = Prisma.ContainerLoadingItemGetPayload<{ select: typeof CONTAINER_ITEM_SELECT }>
 
 const RELEASE_PART_SELECT = {
   id: true,
@@ -97,21 +126,8 @@ const RELEASE_PART_SELECT = {
     },
   },
   containerLoadingItems: {
-    take: 1,
-    select: {
-      recipientName: true,
-      recipientPhone: true,
-      recipientAddress: true,
-      codAmountTwd: true,
-      grossWeightKg: true,
-      lengthCm: true,
-      widthCm: true,
-      heightCm: true,
-      volumeCai: true,
-      containerBatch: {
-        select: { id: true, containerBatchNo: true, containerBatchName: true, loadingDate: true },
-      },
-    },
+    orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+    select: CONTAINER_ITEM_SELECT,
   },
 } as const satisfies Prisma.PurchaseOrderPartSelect
 
@@ -191,6 +207,44 @@ function costFromSnapshot(snapshot: Prisma.JsonValue): ShipmentStorageCostDto {
     packagingCostCny: decimalString(value.packagingCostCny),
     totalCostCny: decimalString(value.totalCostCny),
   }
+}
+
+function containerItemDto(row: ContainerItemRow): ShipmentStorageContainerItemDto {
+  return {
+    id: row.id,
+    lineNumber: row.lineNumber,
+    oceanShippingMarkText: row.oceanShippingMarkText,
+    goodsName: row.goodsName,
+    packageCount: row.packageCount,
+    packageUnit: row.packageUnit,
+    grossWeightKg: row.grossWeightKg?.toFixed(0) ?? null,
+    lengthCm: row.lengthCm?.toFixed(0) ?? null,
+    widthCm: row.widthCm?.toFixed(0) ?? null,
+    heightCm: row.heightCm?.toFixed(0) ?? null,
+    volumeCai: row.volumeCai?.toFixed(2) ?? null,
+    chargeableVolumeCai: row.chargeableVolumeCai,
+    reportedVolumeCai: row.reportedVolumeCai?.toFixed(2) ?? null,
+    recipientName: row.recipientName,
+    recipientPhone: row.recipientPhone,
+    recipientAddress: row.recipientAddress,
+    codAmountTwd: row.codAmountTwd?.toFixed(2) ?? null,
+    warehouseReceiptReference: row.warehouseReceiptReference,
+    remark: row.remark,
+    containerBatch: {
+      id: row.containerBatch.id,
+      containerBatchNo: row.containerBatch.containerBatchNo,
+      containerBatchName: row.containerBatch.containerBatchName,
+      loadingDate: row.containerBatch.loadingDate.toISOString().slice(0, 10),
+    },
+  }
+}
+
+function containerMarksFromItems(
+  items: readonly ShipmentStorageContainerItemDto[],
+): string[] {
+  return items.flatMap(item => item.oceanShippingMarkText?.trim()
+    ? [item.oceanShippingMarkText.trim()]
+    : [])
 }
 
 interface StoragePersonContext {
@@ -279,15 +333,17 @@ function detailDto(
   persons: StoragePersonContext,
   initialLocation: StorageInitialLocation | null,
   lineSummary: ShipmentStorageLineSummaryDto,
-  containerMarks: readonly string[],
+  containerItems: readonly ShipmentStorageContainerItemDto[],
 ): ShipmentStorageDetailDto {
   let previousLocation = initialLocation
+  const containerMarks = containerMarksFromItems(containerItems)
   return {
     ...baseRecordDto(row, persons, lineSummary, containerMarks),
     originAllocations: Array.isArray(row.originAllocations)
       ? row.originAllocations
       : [],
     containerSnapshot: row.containerSnapshot ?? null,
+    containerLoadingItems: containerItems,
     costTransfers,
     locationEvents: row.locationEvents.map(event => {
       const locationEvent = {
@@ -584,18 +640,21 @@ export class ShipmentStorageService {
         take: pageSize,
       }),
     ])
-    const [persons, productSummaries, containerMarks] = await Promise.all([
+    const [persons, productSummaries, containerItemsByRecord] = await Promise.all([
       this.loadPersonContext(rows),
       this.loadProductSummaries(rows),
-      this.loadContainerMarks(rows),
+      this.loadContainerItems(rows),
     ])
     return {
-      items: rows.map(row => baseRecordDto(
-        row,
-        persons,
-        productSummaries.get(row.id) ?? emptyLineSummary(),
-        containerMarks.get(row.id) ?? [],
-      )),
+      items: rows.map((row) => {
+        const containerItems = containerItemsByRecord.get(row.id) ?? []
+        return baseRecordDto(
+          row,
+          persons,
+          productSummaries.get(row.id) ?? emptyLineSummary(),
+          containerMarksFromItems(containerItems),
+        )
+      }),
       page,
       pageSize,
       total,
@@ -985,28 +1044,27 @@ export class ShipmentStorageService {
   }
 
   /**
-   * 装柜唛头按当前装柜明细读取：解绑后明细不再关联货件，列表也随之不再显示。
-   * 一个货件可能有多条装柜明细，因此返回数组而不是单个字符串。
+   * 当前装柜明细按 shipmentId 实时读取；解绑后不再关联，快照不参与本次详情视图。
+   * 一个货件可能有多条装柜明细，因此返回数组而不是单条记录。
    */
-  private async loadContainerMarks(
+  private async loadContainerItems(
     rows: readonly StorageRecordRow[],
-  ): Promise<ReadonlyMap<string, readonly string[]>> {
+  ): Promise<ReadonlyMap<string, readonly ShipmentStorageContainerItemDto[]>> {
     const shipmentIds = [...new Set(rows.map(row => row.shipmentId))]
     if (shipmentIds.length === 0) return new Map()
     const items = await this.prisma.containerLoadingItem.findMany({
       where: { shipmentId: { in: shipmentIds } },
-      select: { shipmentId: true, oceanShippingMarkText: true },
+      select: CONTAINER_ITEM_SELECT,
       orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
     })
-    const marksByShipment = new Map<string, string[]>()
+    const itemsByShipment = new Map<string, ShipmentStorageContainerItemDto[]>()
     for (const item of items) {
-      const mark = item.oceanShippingMarkText?.trim()
-      if (item.shipmentId === null || mark === undefined || mark === '') continue
-      const marks = marksByShipment.get(item.shipmentId) ?? []
-      marks.push(mark)
-      marksByShipment.set(item.shipmentId, marks)
+      if (item.shipmentId === null) continue
+      const containers = itemsByShipment.get(item.shipmentId) ?? []
+      containers.push(containerItemDto(item))
+      itemsByShipment.set(item.shipmentId, containers)
     }
-    return new Map(rows.map(row => [row.id, marksByShipment.get(row.shipmentId) ?? []]))
+    return new Map(rows.map(row => [row.id, itemsByShipment.get(row.shipmentId) ?? []]))
   }
 
   /**
@@ -1176,11 +1234,11 @@ export class ShipmentStorageService {
       })
       byRecord.set(event.storageRecordId, transfers)
     }
-    const [persons, initialLocations, productSummaries, containerMarks] = await Promise.all([
+    const [persons, initialLocations, productSummaries, containerItems] = await Promise.all([
       this.loadPersonContext(rows),
       this.loadInitialLocations(rows),
       this.loadProductSummaries(rows),
-      this.loadContainerMarks(rows),
+      this.loadContainerItems(rows),
     ])
     return rows.map(row => detailDto(
       row,
@@ -1188,7 +1246,7 @@ export class ShipmentStorageService {
       persons,
       initialLocations.get(row.id) ?? null,
       productSummaries.get(row.id) ?? emptyLineSummary(),
-      containerMarks.get(row.id) ?? [],
+      containerItems.get(row.id) ?? [],
     ))
   }
 
@@ -1268,24 +1326,38 @@ export class ShipmentStorageService {
   }
 
   private containerSnapshot(part: ReleasePart): Prisma.InputJsonValue | null {
-    const item = part.containerLoadingItems[0]
-    if (item === undefined) return null
+    if (part.containerLoadingItems.length === 0) return null
+    // 货件只能属于一个柜次，柜次头放在顶层；装柜明细按行完整保留，避免多唛头时丢失。
+    const containerBatch = part.containerLoadingItems[0].containerBatch
     return {
+      format: 'shipment-storage.container-snapshot.v2',
       containerBatch: {
-        id: item.containerBatch.id,
-        containerBatchNo: item.containerBatch.containerBatchNo,
-        containerBatchName: item.containerBatch.containerBatchName,
-        loadingDate: item.containerBatch.loadingDate.toISOString().slice(0, 10),
+        id: containerBatch.id,
+        containerBatchNo: containerBatch.containerBatchNo,
+        containerBatchName: containerBatch.containerBatchName,
+        loadingDate: containerBatch.loadingDate.toISOString().slice(0, 10),
       },
-      recipientName: item.recipientName,
-      recipientPhone: item.recipientPhone,
-      recipientAddress: item.recipientAddress,
-      codAmountTwd: item.codAmountTwd?.toFixed(2) ?? null,
-      grossWeightKg: item.grossWeightKg?.toFixed(0) ?? null,
-      lengthCm: item.lengthCm?.toFixed(0) ?? null,
-      widthCm: item.widthCm?.toFixed(0) ?? null,
-      heightCm: item.heightCm?.toFixed(0) ?? null,
-      volumeCai: item.volumeCai?.toFixed(2) ?? null,
+      items: part.containerLoadingItems.map(item => ({
+        id: item.id,
+        lineNumber: item.lineNumber,
+        oceanShippingMarkText: item.oceanShippingMarkText,
+        goodsName: item.goodsName,
+        packageCount: item.packageCount,
+        packageUnit: item.packageUnit,
+        recipientName: item.recipientName,
+        recipientPhone: item.recipientPhone,
+        recipientAddress: item.recipientAddress,
+        codAmountTwd: item.codAmountTwd?.toFixed(2) ?? null,
+        grossWeightKg: item.grossWeightKg?.toFixed(0) ?? null,
+        lengthCm: item.lengthCm?.toFixed(0) ?? null,
+        widthCm: item.widthCm?.toFixed(0) ?? null,
+        heightCm: item.heightCm?.toFixed(0) ?? null,
+        volumeCai: item.volumeCai?.toFixed(2) ?? null,
+        chargeableVolumeCai: item.chargeableVolumeCai,
+        reportedVolumeCai: item.reportedVolumeCai?.toFixed(2) ?? null,
+        warehouseReceiptReference: item.warehouseReceiptReference,
+        remark: item.remark,
+      })),
     }
   }
 
