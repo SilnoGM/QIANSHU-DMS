@@ -6,12 +6,13 @@ import { FundPostingService } from '../src/modules/fund-accounts/application/fun
 import { PurchasePayableQueryService } from '../src/modules/purchase-orders/payables/purchase-payable-query.service'
 import { PurchaseOrderSourceQueryService } from '../src/modules/purchase-orders/purchase-order-source-query.service'
 import { PurchaseShipmentQueryService } from '../src/modules/purchase-orders/shipments/purchase-shipment-query.service'
+import { SalesOrderQueryService } from '../src/modules/sales-orders/sales-order-query.service'
 import { ShipmentOwnershipService } from '../src/modules/shipment-ownership/shipment-ownership.service'
 import { ShipmentStorageCostService } from '../src/modules/shipment-storage/shipment-storage-cost.service'
 import { ShipmentStorageService } from '../src/modules/shipment-storage/shipment-storage.service'
 import { createPaymentRecipientFixture } from './fixtures/payment-recipient.fixture'
 import { createPackagingCostHarness, type PackagingCostHarness } from './packaging-cost.fixture'
-import { createReviewMutations } from './purchase-shipping-mark-atomicity.fixture'
+import { createCommands, createReviewMutations, customInput } from './purchase-shipping-mark-atomicity.fixture'
 
 /**
  * 认领闭环：释放进池的原单货件被新销售单整件取走后，
@@ -224,6 +225,36 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       claimedQuantity: 0,
       purchasedQuantity: 0,
       remainingQuantity: 1,
+    })
+
+    // 已认领行与审核中采购共同占满全部销售行时，列表必须进入“采购审核中”分桶。
+    const baseInput = await customInput(h.fixture)
+    await createCommands(h.fixture).create(h.fixture.context(), {
+      ...baseInput,
+      purchaseType: 'SALES_LINKED',
+      salesOrderId: target.id,
+      lines: [{
+        ...baseInput.lines[0],
+        quantity: 1,
+        sourceSalesOrderLineId: targetLines[1].id,
+      }],
+      parts: [{ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] }],
+      purchaseTotalAmount: '10',
+      depositDueAmount: '0',
+      balanceDueAmount: '10',
+    })
+    const salesQueries = new SalesOrderQueryService(
+      h.prisma,
+      { resolve: () => Promise.resolve('ALL') } as never,
+    )
+    const awaiting = await salesQueries.list({
+      page: 1,
+      pageSize: 50,
+      purchaseHold: 'AWAITING_PURCHASE_REVIEW',
+    })
+    expect(awaiting.items.find(item => item.id === target.id)?.purchaseHold).toEqual({
+      reason: 'AWAITING_PURCHASE_REVIEW',
+      pendingReviewOrderCount: 1,
     })
   })
 
