@@ -7,7 +7,7 @@ import { matchesAuthorization } from '../../src/composables/app/auth'
 import operationsWorkbenchRoutes from '../../src/router/modules/operations.workbench'
 import { filterAccessibleMenus } from '../../src/store/modules/app/menu.logic'
 
-test('仓储运输接入到仓、海运柜次与寄仓管理业务页', () => {
+test('仓储运输接入到仓、海运柜次与货物寄仓业务页', () => {
   const warehouseRoute = operationsWorkbenchRoutes.find(route => route.name === 'qsOperationsWarehouseTransport')
   assert.equal(warehouseRoute?.path, '/qs-operations/warehouse-transport')
   assert.equal(warehouseRoute?.meta?.title, '仓储运输')
@@ -17,7 +17,7 @@ test('仓储运输接入到仓、海运柜次与寄仓管理业务页', () => {
     { name: 'qsOperationsWarehouseArrivals', path: 'warehouse-arrivals', title: '到仓货件' },
     { name: 'qsOperationsOceanContainers', path: 'ocean-containers', title: '海运柜次' },
     { name: 'qsOperationsOceanContainersAll', path: 'ocean-containers/all', title: '全部海运柜次' },
-    { name: 'qsOperationsOverseasStorage', path: 'overseas-storage', title: '寄仓管理' },
+    { name: 'qsOperationsGoodsStorage', path: 'goods-storage', title: '货物寄仓' },
   ])
   const arrivals = warehouseRoute?.children?.[0]
   assert.match(String(arrivals?.component), /operations\/warehouse-arrivals\/index\.vue/u)
@@ -33,6 +33,7 @@ test('仓储运输接入到仓、海运柜次与寄仓管理业务页', () => {
   const storage = warehouseRoute?.children?.[3]
   assert.match(String(storage?.component), /workbenches\/shipment-storage\/index\.vue/u)
   assert.equal(storage?.meta?.auth, 'shipment-storage:read')
+  assert.deepEqual(storage?.props, { storageMode: 'operations' })
 
   const canSeeOcean = (permissions: string[]) => filterAccessibleMenus(
     operationsWorkbenchRoutes,

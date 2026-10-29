@@ -18,9 +18,23 @@ import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import ShipmentProducts from '@/views/workbenches/shipments/shipment-products.vue'
 import ShipmentStorageClaimModal from './claim-modal.vue'
-import { buildStorageQuery, claimDisabledReason, DEFAULT_STORAGE_STATUS, locationLabel, relocateDisabledReason, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusClass, storageStatusLabel } from './logic'
+import { buildStorageQuery, claimDisabledReason, claimRequestDisabledReason, DEFAULT_STORAGE_STATUS, locationLabel, relocateDisabledReason, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusClass, storageStatusLabel } from './logic'
+
+type ShipmentStoragePageMode = 'operations' | 'purchase'
 
 defineOptions({ name: 'QsOperationsShipmentStorage' })
+
+const props = withDefaults(defineProps<{
+  storageMode?: ShipmentStoragePageMode
+}>(), {
+  storageMode: 'operations',
+})
+
+const isPurchaseMode = computed(() => props.storageMode === 'purchase')
+const pageTitle = computed(() => isPurchaseMode.value ? '寄仓管理' : '货物寄仓')
+const pageDescription = computed(() => isPurchaseMode.value
+  ? '内地仓与海外仓的寄仓货件、成本与位置记录。'
+  : '查看全部寄仓货物并提交调货申请。')
 
 // QsGenericTable 内部使用局部 i18n 作用域；页面显式建立父级作用域，避免回退全局时告警。
 useI18n()
@@ -97,11 +111,16 @@ const columns = computed<QsGenericTableColumn<ShipmentStorageListItemDto>[]>(() 
 
 const actionColumnWidth = computed(() => {
   const actions: ActionWidthSpec[] = []
-  if (canClaimPermission.value) {
-    actions.push({ chars: 2, kind: 'text' })
+  if (isPurchaseMode.value) {
+    if (canClaimPermission.value) {
+      actions.push({ chars: 2, kind: 'text' })
+    }
+    if (canRelocatePermission.value) {
+      actions.push({ chars: 2, kind: 'text' })
+    }
   }
-  if (canRelocatePermission.value) {
-    actions.push({ chars: 2, kind: 'text' })
+  else {
+    actions.push({ chars: 4, kind: 'text' })
   }
   actions.push({ kind: 'icon' })
   return resolveActionColumnWidth(actions)
@@ -379,7 +398,7 @@ onMounted(() => {
 
 <template>
   <div class="min-w-0">
-    <FaPageHeader title="寄仓管理" description="内地仓与海外仓的寄仓货件、成本与位置记录。" />
+    <FaPageHeader :title="pageTitle" :description="pageDescription" />
     <FaPageMain class="min-w-0">
       <div
         v-if="storageId"
@@ -532,10 +551,52 @@ onMounted(() => {
 
         <template #actions="{ row }">
           <div class="flex gap-1 items-center justify-end">
+            <template v-if="isPurchaseMode">
+              <FaTooltip
+                v-if="canClaimPermission"
+                :text="claimDisabledReason(row, canClaimPermission) ?? ''"
+                :disabled="claimDisabledReason(row, canClaimPermission) === null"
+              >
+                <span class="inline-flex" tabindex="0">
+                  <FaButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="min-h-11 sm:min-h-8"
+                    :disabled="claimDisabledReason(row, canClaimPermission) !== null || actionBusyKey !== null"
+                    :loading="actionBusyKey === `${row.id}:claim`"
+                    :aria-label="`${row.shipmentNo ?? '寄仓记录'}：调货`"
+                    @click="openClaimFromRow(row)"
+                  >
+                    调货
+                  </FaButton>
+                </span>
+              </FaTooltip>
+              <FaTooltip
+                v-if="canRelocatePermission"
+                :text="relocateDisabledReason(row, canRelocatePermission) ?? ''"
+                :disabled="relocateDisabledReason(row, canRelocatePermission) === null"
+              >
+                <span class="inline-flex" tabindex="0">
+                  <FaButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="min-h-11 sm:min-h-8"
+                    :disabled="relocateDisabledReason(row, canRelocatePermission) !== null || actionBusyKey !== null"
+                    :loading="actionBusyKey === `${row.id}:relocate`"
+                    :aria-label="`${row.shipmentNo ?? '寄仓记录'}：移仓`"
+                    @click="openRelocateFromRow(row)"
+                  >
+                    移仓
+                  </FaButton>
+                </span>
+              </FaTooltip>
+            </template>
             <FaTooltip
-              v-if="canClaimPermission"
-              :text="claimDisabledReason(row, canClaimPermission) ?? ''"
-              :disabled="claimDisabledReason(row, canClaimPermission) === null"
+              v-else
+              :text="claimRequestDisabledReason(row) ?? ''"
+              :disabled="claimRequestDisabledReason(row) === null"
             >
               <span class="inline-flex" tabindex="0">
                 <FaButton
@@ -543,32 +604,11 @@ onMounted(() => {
                   variant="ghost"
                   size="sm"
                   class="min-h-11 sm:min-h-8"
-                  :disabled="claimDisabledReason(row, canClaimPermission) !== null || actionBusyKey !== null"
-                  :loading="actionBusyKey === `${row.id}:claim`"
-                  :aria-label="`${row.shipmentNo ?? '寄仓记录'}：调货`"
-                  @click="openClaimFromRow(row)"
+                  :disabled="claimRequestDisabledReason(row) !== null"
+                  :aria-label="`${row.shipmentNo ?? '寄仓记录'}：申请调货`"
+                  @click="toast.info('申请调货功能开发中')"
                 >
-                  调货
-                </FaButton>
-              </span>
-            </FaTooltip>
-            <FaTooltip
-              v-if="canRelocatePermission"
-              :text="relocateDisabledReason(row, canRelocatePermission) ?? ''"
-              :disabled="relocateDisabledReason(row, canRelocatePermission) === null"
-            >
-              <span class="inline-flex" tabindex="0">
-                <FaButton
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  class="min-h-11 sm:min-h-8"
-                  :disabled="relocateDisabledReason(row, canRelocatePermission) !== null || actionBusyKey !== null"
-                  :loading="actionBusyKey === `${row.id}:relocate`"
-                  :aria-label="`${row.shipmentNo ?? '寄仓记录'}：移仓`"
-                  @click="openRelocateFromRow(row)"
-                >
-                  移仓
+                  申请调货
                 </FaButton>
               </span>
             </FaTooltip>

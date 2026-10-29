@@ -254,6 +254,18 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
       },
     },
     {
+      path: '/qs-purchase-transport/storage',
+      name: 'qsPurchaseTransportStorage',
+      component: () => import('@/views/workbenches/shipment-storage/index.vue'),
+      props: { storageMode: 'purchase' },
+      meta: {
+        title: '寄仓管理',
+        icon: 'qs-overseas-storage',
+        singleMenu: true,
+        auth: 'shipment-storage:read',
+      },
+    },
+    {
       path: '/qs-purchase-transport/containers',
       name: 'qsPurchaseTransportContainers',
       component: () => import('@/views/workbenches/containers/index.vue'),

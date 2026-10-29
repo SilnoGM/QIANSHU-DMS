@@ -176,7 +176,7 @@ function openStorageRecord(storage: PurchaseShipmentStorageDto): void {
     return
   }
   void router.push({
-    name: 'qsOperationsOverseasStorage',
+    name: 'qsPurchaseTransportStorage',
     query: { storageId: storage.id, status: storage.status },
   })
 }

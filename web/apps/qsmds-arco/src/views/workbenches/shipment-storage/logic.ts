@@ -65,6 +65,15 @@ export function claimDisabledReason(
     : `当前状态为「${storageStatusLabel(row.status)}」，不能调货`
 }
 
+/** 运营侧只提交申请，不直接执行调货；当前仅允许寄仓中的记录申请。 */
+export function claimRequestDisabledReason(
+  row: Pick<ShipmentStorageListItemDto, 'status'>,
+): string | null {
+  return row.status === 'IN_STORAGE'
+    ? null
+    : `当前状态为「${storageStatusLabel(row.status)}」，不能申请调货`
+}
+
 /** 返回 null 表示可执行；无权限时也返回 null，由调用方直接隐藏动作。 */
 export function relocateDisabledReason(
   row: Pick<ShipmentStorageListItemDto, 'status' | 'locationScope'>,
