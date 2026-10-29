@@ -354,15 +354,31 @@ export class PurchaseOrderCreateDependencyService {
       row.sourceSalesOrderLineId,
       row._sum.quantity ?? 0,
     ]))
+    const claimedRows = await transaction.shipmentClaimLine.findMany({
+      where: {
+        salesOrderLineId: { in: [...requestedBySource.keys()] },
+        storageRecord: { status: 'CLAIMED' },
+      },
+      select: { salesOrderLineId: true, quantity: true },
+    })
+    const claimedBySource = new Map<string, number>()
+    for (const row of claimedRows) {
+      claimedBySource.set(
+        row.salesOrderLineId,
+        (claimedBySource.get(row.salesOrderLineId) ?? 0) + row.quantity,
+      )
+    }
     for (const [sourceId, requested] of requestedBySource) {
       const source = salesLinesById.get(sourceId)
       if (
         source === undefined
-        || (activeBySource.get(sourceId) ?? 0) + requested > source.quantity
+        || (activeBySource.get(sourceId) ?? 0)
+          + (claimedBySource.get(sourceId) ?? 0)
+          + requested > source.quantity
       ) {
         return purchaseDependencyFailure(
           'PURCHASE_ORDER_SOURCE_QUANTITY_EXCEEDED',
-          '采购数量超过销售明细剩余可采购数量',
+          '采购数量超过销售明细剩余可采购数量（已扣除采购预占与寄仓调货）',
         )
       }
     }

@@ -97704,6 +97704,11 @@
             "type": "integer",
             "minimum": 0
           },
+          "claimedQuantity": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "已通过寄仓调货认领覆盖的数量"
+          },
           "remainingQuantity": {
             "type": "integer",
             "minimum": 0
@@ -97726,6 +97731,7 @@
           "description",
           "quantity",
           "purchasedQuantity",
+          "claimedQuantity",
           "remainingQuantity",
           "purchasedLines"
         ]

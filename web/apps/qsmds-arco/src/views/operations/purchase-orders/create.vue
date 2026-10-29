@@ -776,12 +776,21 @@ async function synchronizeSourceProducts(): Promise<void> {
     maximumQuantityByKey.value = result.maximumQuantityByKey
     clearFeedback()
     if (result.lines.length === 0) {
-      sourceError.value = '当前供应商没有可同步的销售产品明细'
+      sourceError.value = result.readOnlyLines.length > 0
+        ? '当前销售订单没有可继续采购的明细，处理记录已在下方展示'
+        : '当前供应商没有可同步的销售产品明细'
       return
     }
-    const historyMessage = result.readOnlyLines.length === 0
+    const historyParts: string[] = []
+    if (result.purchasedHistoryCount > 0) {
+      historyParts.push(`${result.purchasedHistoryCount} 条已采购明细`)
+    }
+    if (result.claimedHistoryCount > 0) {
+      historyParts.push(`${result.claimedHistoryCount} 条已调货明细`)
+    }
+    const historyMessage = historyParts.length === 0
       ? ''
-      : `，并展示 ${result.readOnlyLines.length} 条已采购明细`
+      : `，并展示 ${historyParts.join('、')}`
     const incompatibleMessage = result.incompatibleCatalogCount === 0
       ? ''
       : `，另有 ${result.incompatibleCatalogCount} 条正式产品不属于当前供应商`

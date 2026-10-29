@@ -60,8 +60,22 @@ export class SalesOrderPendingPurchaseQueryService {
       purchasedByLine.set(purchase.sourceSalesOrderLineId,
         (purchasedByLine.get(purchase.sourceSalesOrderLineId) ?? 0) + purchase.quantity)
     }
+    const claims = lineIds.length === 0 ? [] : await this.prisma.shipmentClaimLine.findMany({
+      where: {
+        salesOrderLineId: { in: lineIds },
+        storageRecord: { status: 'CLAIMED' },
+      },
+      select: { salesOrderLineId: true, quantity: true },
+    })
+    const claimedByLine = new Map<string, number>()
+    for (const claim of claims) {
+      claimedByLine.set(claim.salesOrderLineId,
+        (claimedByLine.get(claim.salesOrderLineId) ?? 0) + claim.quantity)
+    }
     return { items: order.lines.flatMap((line) => {
-      const remainingQuantity = line.quantity - (purchasedByLine.get(line.id) ?? 0)
+      const remainingQuantity = line.quantity
+        - (purchasedByLine.get(line.id) ?? 0)
+        - (claimedByLine.get(line.id) ?? 0)
       if (remainingQuantity <= 0) return []
       const image = line.product?.media[0]
       return [{

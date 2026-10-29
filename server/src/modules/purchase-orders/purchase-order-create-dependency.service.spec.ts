@@ -99,6 +99,9 @@ function setup() {
     purchaseOrderLine: {
       groupBy: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
     },
+    shipmentClaimLine: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
+    },
   }
   const dictionaryLookup = {
     requireEffectiveValue: jest.fn<Promise<unknown>, [unknown, unknown]>()
@@ -296,6 +299,24 @@ describe('PurchaseOrderCreateDependencyService', () => {
     fixture.transaction.purchaseOrderLine.groupBy.mockResolvedValue([{
       sourceSalesOrderLineId: SOURCE_LINE_ID,
       _sum: { quantity: 2 },
+    }])
+    await expect(fixture.service.requireDependencies(
+      fixture.transaction as unknown as Prisma.TransactionClient,
+      linkedCommand(),
+      ACTOR_ID,
+      { lockSalesLines: true },
+    )).rejects.toMatchObject({ code: 'PURCHASE_ORDER_SOURCE_QUANTITY_EXCEEDED' })
+  })
+
+  it('counts claimed storage quantities together with purchase reservations', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrderLine.groupBy.mockResolvedValue([{
+      sourceSalesOrderLineId: SOURCE_LINE_ID,
+      _sum: { quantity: 1 },
+    }])
+    fixture.transaction.shipmentClaimLine.findMany.mockResolvedValue([{
+      salesOrderLineId: SOURCE_LINE_ID,
+      quantity: 1,
     }])
     await expect(fixture.service.requireDependencies(
       fixture.transaction as unknown as Prisma.TransactionClient,

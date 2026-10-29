@@ -4,10 +4,13 @@ import { SalesOrderPendingPurchaseQueryService } from './sales-order-pending-pur
 function fixture(lines: object[] = []) {
   const findUnique = jest.fn().mockResolvedValue({ id: 'order', lines })
   const findMany = jest.fn().mockResolvedValue([])
+  const claimFindMany = jest.fn().mockResolvedValue([])
   const service = new SalesOrderPendingPurchaseQueryService({
-    salesOrder: { findUnique, findFirst: findUnique }, purchaseOrderLine: { findMany },
+    salesOrder: { findUnique, findFirst: findUnique },
+    purchaseOrderLine: { findMany },
+    shipmentClaimLine: { findMany: claimFindMany },
   } as unknown as PrismaService)
-  return { service, findUnique, findMany }
+  return { claimFindMany, service, findUnique, findMany }
 }
 function line(id: string, quantity: number, lineType = 'CATALOG') {
   return { id, quantity, lineType, productId: lineType === 'CUSTOM' ? null : 'product',
@@ -35,6 +38,15 @@ describe('SalesOrderPendingPurchaseQueryService', () => {
     expect(purchaseQuery).toMatchObject({ where: {
       purchaseOrder: { is: { purchaseType: 'SALES_LINKED', salesOrderId: 'order', orderStatus: { not: 'CANCELLED' } } },
     } })
+  })
+
+  it('deducts claimed quantities from the pending purchase remaining quantity', async () => {
+    const f = fixture([line('claimed', 4), line('remaining', 3)])
+    f.claimFindMany.mockResolvedValue([{ salesOrderLineId: 'claimed', quantity: 4 }])
+
+    const result = await f.service.list('order')
+
+    expect(result.items.map(item => [item.id, item.remainingQuantity])).toEqual([['remaining', 3]])
   })
 
   it('retains custom and imageless catalog products with null previews', async () => {

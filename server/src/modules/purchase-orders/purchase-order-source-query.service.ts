@@ -178,18 +178,32 @@ function sourceSalesOrderFactsSql(input: {
         AND purchase_order."order_status" <> 'CANCELLED'::purchase_order_status
       GROUP BY purchase_line."source_sales_order_line_id"
     ),
+    claimed_by_line AS (
+      SELECT
+        claim."sales_order_line_id",
+        COALESCE(SUM(claim."quantity"), 0)::bigint AS "claimed_quantity"
+      FROM "shipment_claim_lines" AS claim
+      INNER JOIN "shipment_storage_records" AS storage
+        ON storage."id" = claim."storage_record_id"
+      WHERE storage."status" = 'CLAIMED'::shipment_storage_status
+      GROUP BY claim."sales_order_line_id"
+    ),
     target_source_sales_order_lines AS (
       SELECT
         source_line."id",
         source_line."sales_order_id",
         source_line."quantity",
         COALESCE(purchased."purchased_quantity", 0)::bigint
-          AS "purchased_quantity"
+          AS "purchased_quantity",
+        COALESCE(claimed."claimed_quantity", 0)::bigint
+          AS "claimed_quantity"
       FROM source_sales_order_lines AS source_line
       LEFT JOIN "products" AS source_product
         ON source_product."id" = source_line."product_id"
       LEFT JOIN purchased_by_line AS purchased
         ON purchased."source_sales_order_line_id" = source_line."id"
+      LEFT JOIN claimed_by_line AS claimed
+        ON claimed."sales_order_line_id" = source_line."id"
       WHERE ${targetProductFilter}
     ),
     target_remaining_lines AS (
@@ -197,10 +211,14 @@ function sourceSalesOrderFactsSql(input: {
         target_line."id",
         target_line."sales_order_id",
         (
-          target_line."quantity" - target_line."purchased_quantity"
+          target_line."quantity"
+          - target_line."purchased_quantity"
+          - target_line."claimed_quantity"
         )::bigint AS "remaining_quantity"
       FROM target_source_sales_order_lines AS target_line
-      WHERE target_line."quantity" - target_line."purchased_quantity" > 0
+      WHERE target_line."quantity"
+        - target_line."purchased_quantity"
+        - target_line."claimed_quantity" > 0
     ),
     target_facts_by_order AS (
       SELECT
@@ -233,7 +251,9 @@ function sourceSalesOrderFactsSql(input: {
         COALESCE(SUM(COALESCE(purchased."purchased_quantity", 0)), 0)::bigint
           AS "purchased_quantity",
         COALESCE(SUM(GREATEST(
-          source_line."quantity" - COALESCE(purchased."purchased_quantity", 0),
+          source_line."quantity"
+          - COALESCE(purchased."purchased_quantity", 0)
+          - COALESCE(claimed."claimed_quantity", 0),
           0
         )), 0)::bigint AS "remaining_quantity"
       FROM "sales_orders" AS source_order
@@ -243,6 +263,8 @@ function sourceSalesOrderFactsSql(input: {
         ON target_facts."sales_order_id" = source_order."id"
       LEFT JOIN purchased_by_line AS purchased
         ON purchased."source_sales_order_line_id" = source_line."id"
+      LEFT JOIN claimed_by_line AS claimed
+        ON claimed."sales_order_line_id" = source_line."id"
       LEFT JOIN active_purchase_by_order AS active_purchase
         ON active_purchase."sales_order_id" = source_order."id"
       WHERE source_order."order_status" = 'CONFIRMED'::sales_order_status
@@ -667,12 +689,29 @@ export class PurchaseOrderSourceQueryService {
       rows.push(row)
       purchasedBySource.set(row.sourceSalesOrderLineId, rows)
     }
+    const claimedRows = sourceIds.length === 0
+      ? []
+      : await this.prisma.shipmentClaimLine.findMany({
+          where: {
+            salesOrderLineId: { in: sourceIds },
+            storageRecord: { status: 'CLAIMED' },
+          },
+          select: { salesOrderLineId: true, quantity: true },
+        })
+    const claimedBySource = new Map<string, number>()
+    for (const row of claimedRows) {
+      claimedBySource.set(
+        row.salesOrderLineId,
+        (claimedBySource.get(row.salesOrderLineId) ?? 0) + row.quantity,
+      )
+    }
     const items = lines.map((line) => {
       const purchasedLines = purchasedBySource.get(line.id) ?? []
       const purchasedQuantity = purchasedLines.reduce(
         (sum, purchasedLine) => sum + purchasedLine.quantity,
         0,
       )
+      const claimedQuantity = claimedBySource.get(line.id) ?? 0
       return {
         id: line.id,
         lineNumber: line.lineNumber,
@@ -684,7 +723,8 @@ export class PurchaseOrderSourceQueryService {
         description: line.descriptionSnapshot,
         quantity: line.quantity,
         purchasedQuantity,
-        remainingQuantity: Math.max(0, line.quantity - purchasedQuantity),
+        claimedQuantity,
+        remainingQuantity: Math.max(0, line.quantity - purchasedQuantity - claimedQuantity),
         purchasedLines: purchasedLines.map(purchasedLine => ({
           id: purchasedLine.id,
           referencePurchaseUnitPriceAmount:
