@@ -6,6 +6,7 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
@@ -279,25 +280,51 @@ function claimRequested(): void {
   }
 }
 
-async function withdrawClaimRequest(row: ShipmentStorageListItemDto, requestId: string): Promise<void> {
+const withdrawConfirmOpen = ref(false)
+const withdrawTarget = ref<{ row: ShipmentStorageListItemDto, requestId: string } | null>(null)
+const withdrawSubmitting = computed(() => (
+  withdrawTarget.value !== null && claimBusyId.value === withdrawTarget.value.row.id
+))
+
+function requestWithdrawClaimRequest(row: ShipmentStorageListItemDto, requestId: string): void {
   if (row.claimRequest?.id !== requestId || claimBusyId.value !== null) {
     return
   }
-  claimBusyId.value = row.id
+  withdrawTarget.value = { row, requestId }
+  withdrawConfirmOpen.value = true
+}
+
+async function confirmWithdrawClaimRequest(): Promise<void> {
+  const target = withdrawTarget.value
+  if (
+    target === null
+    || claimBusyId.value !== null
+    || target.row.claimRequest?.id !== target.requestId
+  ) {
+    return
+  }
+  claimBusyId.value = target.row.id
   const request = new AbortController()
+  let withdrawn = false
   try {
-    await shipmentStorageApi.withdrawClaimRequest(row.id, requestId, request.signal)
-    toast.success('调货申请已撤回')
-    await load()
-    if (detailOpen.value) {
-      reloadDetail()
-    }
+    await shipmentStorageApi.withdrawClaimRequest(target.row.id, target.requestId, request.signal)
+    withdrawn = true
   }
   catch (failure) {
     toast.error(storageFailureMessage(failure, '撤回调货申请失败'))
   }
   finally {
+    // 提交期间模态框会拒绝受控关闭，必须先释放忙碌标记再收起确认框。
     claimBusyId.value = null
+    withdrawConfirmOpen.value = false
+  }
+  if (withdrawn) {
+    toast.success('调货申请已撤回')
+  }
+  // 失败多因申请已被他处处理，同样刷新列表，避免卡片停留在过期锁定态。
+  await load()
+  if (withdrawn && detailOpen.value) {
+    reloadDetail()
   }
 }
 
@@ -400,7 +427,7 @@ onMounted(() => {
               :current-user-id="appAccountStore.userId"
               @detail="openDetail(row)"
               @apply="openApplyFromRow(row)"
-              @withdraw="withdrawClaimRequest(row, $event)"
+              @withdraw="requestWithdrawClaimRequest(row, $event)"
             />
           </div>
           <nav v-if="total > 0" class="mt-5 overflow-x-auto" aria-label="寄仓记录分页">
@@ -820,6 +847,39 @@ onMounted(() => {
           </div>
         </div>
       </QsGenericDrawer>
+
+      <QsGenericModal
+        v-model="withdrawConfirmOpen"
+        title="确认撤回调货申请？"
+        description="撤回后货件解除锁定，其他运营人员可以重新提交调货申请。"
+        size="sm"
+        :dismiss-on-overlay="false"
+        :submitting="withdrawSubmitting"
+        @closed="withdrawTarget = null"
+      >
+        <dl v-if="withdrawTarget" class="m-0 gap-x-4 gap-y-2 grid grid-cols-[5.5rem_minmax(0,1fr)]">
+          <dt class="text-sm text-muted-foreground">
+            货件编号
+          </dt>
+          <dd class="text-sm font-medium m-0 break-all">
+            {{ withdrawTarget.row.shipmentNo ?? '—' }}
+          </dd>
+          <dt class="text-sm text-muted-foreground">
+            目标销售单
+          </dt>
+          <dd class="text-sm font-medium m-0 break-all">
+            {{ withdrawTarget.row.claimRequest?.targetSalesOrderNo ?? '—' }}
+          </dd>
+        </dl>
+        <template #footer>
+          <FaButton type="button" variant="outline" :disabled="withdrawSubmitting" @click="withdrawConfirmOpen = false">
+            保留申请
+          </FaButton>
+          <FaButton type="button" variant="destructive" :loading="withdrawSubmitting" :disabled="withdrawSubmitting" @click="confirmWithdrawClaimRequest">
+            确认撤回
+          </FaButton>
+        </template>
+      </QsGenericModal>
 
       <ShipmentStorageClaimModal
         v-model="claimModalOpen"

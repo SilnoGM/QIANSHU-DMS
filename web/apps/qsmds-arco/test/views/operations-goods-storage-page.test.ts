@@ -16,7 +16,7 @@ test('运营寄仓页使用卡片网格，并接入调货申请与撤回', async
   assert.match(source, /:record="row"/u)
   assert.match(source, /@detail="openDetail\(row\)"/u)
   assert.match(source, /@apply="openApplyFromRow\(row\)"/u)
-  assert.match(source, /@withdraw="withdrawClaimRequest\(row, \$event\)"/u)
+  assert.match(source, /@withdraw="requestWithdrawClaimRequest\(row, \$event\)"/u)
   assert.match(source, /ShipmentStorageClaimModal/u)
   assert.match(source, /canRequestClaim/u)
   assert.match(source, /<FaPagination/u)
@@ -26,6 +26,24 @@ test('运营寄仓页使用卡片网格，并接入调货申请与撤回', async
   assert.match(source, /grid-template-columns: minmax\(0, 1fr\);/u)
   assert.match(source, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
   assert.doesNotMatch(source, /:only-child/u)
+})
+
+test('撤销调货申请先二次确认，确认后才调用撤回接口', async () => {
+  const source = await readFile(PAGE, 'utf8')
+
+  assert.match(source, /title="确认撤回调货申请？"/u)
+  assert.match(source, /撤回后货件解除锁定，其他运营人员可以重新提交调货申请。/u)
+  assert.match(source, /保留申请/u)
+  assert.match(source, /确认撤回/u)
+  assert.match(source, /:dismiss-on-overlay="false"/u)
+  assert.match(source, /:submitting="withdrawSubmitting"/u)
+
+  const start = source.indexOf('function requestWithdrawClaimRequest')
+  const confirmStart = source.indexOf('async function confirmWithdrawClaimRequest')
+  const confirmEnd = source.indexOf('function reloadDetail')
+  assert.ok(start > 0 && confirmStart > start && confirmEnd > confirmStart)
+  assert.doesNotMatch(source.slice(start, confirmStart), /shipmentStorageApi\.withdrawClaimRequest/u)
+  assert.match(source.slice(confirmStart, confirmEnd), /shipmentStorageApi\.withdrawClaimRequest/u)
 })
 
 test('寄仓卡片是纯展示组件，操作只通过事件交给页面', async () => {
