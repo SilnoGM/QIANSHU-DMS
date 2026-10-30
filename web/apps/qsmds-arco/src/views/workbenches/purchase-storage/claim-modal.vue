@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SalesOrderDetailDto, SalesOrderListItemDto, ShipmentStorageClaimRequestDto, ShipmentStorageDetailDto } from '@/api/generated/types.gen'
+import type { ClaimShipmentStorageLineDto, SalesOrderDetailDto, SalesOrderListItemDto, ShipmentStorageClaimRequestDto, ShipmentStorageDetailDto } from '@/api/generated/types.gen'
 import salesOrdersApi from '@/api/modules/sales-orders'
 import shipmentStorageApi from '@/api/modules/shipment-storage'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
@@ -7,6 +7,7 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { storageFailureMessage } from '@/views/workbenches/shipment-storage/logic'
+import { buildClaimMapping } from './claim-mapping'
 
 defineOptions({ name: 'ShipmentStorageClaimModal' })
 
@@ -40,6 +41,9 @@ const error = ref('')
 const submitting = ref(false)
 const rejectMode = ref(false)
 const rejectReason = ref('')
+const overrideConfirmed = ref(false)
+const overrideReason = ref('')
+const manualTargets = ref<Record<string, string>>({})
 let controller: AbortController | null = null
 
 const isReview = computed(() => props.mode === 'review')
@@ -60,41 +64,70 @@ const displayOrderNo = computed(() => {
   }
   return selectedOrder.value?.orderNo ?? '—'
 })
-const totalQuantity = computed(() => (props.storageRecord?.originAllocations ?? []).reduce((sum, allocation) => {
-  if (typeof allocation !== 'object' || allocation === null) {
-    return sum
-  }
-  const quantity = (allocation as Record<string, unknown>).quantity
-  return sum + (typeof quantity === 'number' ? quantity : 0)
-}, 0))
 const reviewQuantity = computed(() => reviewAllocations.value.reduce((sum, line) => sum + line.quantity, 0))
+const reviewHasOverride = computed(() => reviewAllocations.value
+  .some(line => line.productMatchMode === 'MANUAL_OVERRIDE'))
+const reviewHasLegacyMapping = computed(() => reviewAllocations.value
+  .some(line => line.purchaseOrderLineId === null))
 
 const orderOptions = computed(() => orders.value
   .filter(order => order.id !== props.storageRecord?.originSalesOrderId)
   .map(order => ({ value: order.id, label: `${order.orderNo} · ${order.customerName}` })))
 
-const allocation = computed(() => {
-  const order = selectedOrder.value
-  if (order === null) {
-    return []
-  }
-  let remaining = totalQuantity.value
-  const lines: { productName: string, quantity: number, lineId: string }[] = []
-  for (const line of order.lines) {
-    if (remaining <= 0) {
-      break
-    }
-    const quantity = Math.min(line.quantity, remaining)
-    if (quantity > 0) {
-      lines.push({ productName: line.productName, quantity, lineId: line.id })
-      remaining -= quantity
-    }
-  }
-  return lines
+const mapping = computed(() => buildClaimMapping(
+  props.storageRecord?.lineSummary.previews ?? [],
+  selectedOrder.value?.lines ?? [],
+  manualTargets.value,
+))
+const manualTargetSources = computed(() => {
+  const unmatchedIds = new Set(mapping.value.unmatched.map(item => item.purchaseOrderLineId))
+  return (props.storageRecord?.lineSummary.previews ?? []).filter(source => (
+    source.lineType === 'CUSTOM' && unmatchedIds.has(source.lineId)
+  ))
 })
+const manualTargetOptions = computed(() => (selectedOrder.value?.lines ?? [])
+  .filter(line => line.lineType === 'CUSTOM')
+  .map(line => ({
+    value: line.id,
+    label: `第${line.lineNumber}行 · ${line.productName} · ×${line.quantity}`,
+  })))
+const unmatchedRemainingBySource = computed(() => new Map(
+  mapping.value.unmatched.map(item => [item.purchaseOrderLineId, item.remaining]),
+))
+const canSubmitMapping = computed(() => (
+  selectedOrderId.value !== ''
+  && selectedOrder.value !== null
+  && mapping.value.complete
+  && (
+    !mapping.value.requiresConfirmation
+    || (overrideConfirmed.value && overrideReason.value.trim() !== '')
+  )
+))
 
-const allocationShort = computed(() => selectedOrder.value !== null
-  && allocation.value.reduce((sum, line) => sum + line.quantity, 0) !== totalQuantity.value)
+function buildClaimLines(): ClaimShipmentStorageLineDto[] {
+  const note = overrideReason.value.trim()
+  return mapping.value.rows.map(row => ({
+    purchaseOrderLineId: row.purchaseOrderLineId,
+    salesOrderLineId: row.targetLineId,
+    quantity: row.quantity,
+    ...(row.mismatch
+      ? { productMatchOverride: true, productMatchNote: note }
+      : {}),
+  }))
+}
+
+function setManualTarget(sourceId: string, targetLineId: string): void {
+  const next = { ...manualTargets.value }
+  if (targetLineId === '') {
+    delete next[sourceId]
+  }
+  else {
+    next[sourceId] = targetLineId
+  }
+  manualTargets.value = next
+  overrideConfirmed.value = false
+  overrideReason.value = ''
+}
 
 function reset(): void {
   controller?.abort()
@@ -106,6 +139,9 @@ function reset(): void {
   submitting.value = false
   rejectMode.value = false
   rejectReason.value = ''
+  overrideConfirmed.value = false
+  overrideReason.value = ''
+  manualTargets.value = {}
 }
 
 async function loadOrders(signal: AbortSignal): Promise<void> {
@@ -140,6 +176,9 @@ async function loadOrders(signal: AbortSignal): Promise<void> {
 async function changeOrder(value: string): Promise<void> {
   selectedOrderId.value = value
   selectedOrder.value = null
+  overrideConfirmed.value = false
+  overrideReason.value = ''
+  manualTargets.value = {}
   error.value = ''
   if (value === '') {
     return
@@ -171,8 +210,13 @@ async function submitApply(): Promise<void> {
   if (record === null || selectedOrderId.value === '' || submitting.value) {
     return
   }
-  if (allocation.value.length === 0 || allocationShort.value) {
-    error.value = '目标订单行数量不足，无法整件走货'
+  if (!mapping.value.complete) {
+    error.value = '库存产品无法完整映射到目标订单行'
+    return
+  }
+  if (mapping.value.requiresConfirmation
+    && (!overrideConfirmed.value || overrideReason.value.trim() === '')) {
+    error.value = '存在自定义跨产品映射，请先确认并填写原因'
     return
   }
   submitting.value = true
@@ -181,10 +225,7 @@ async function submitApply(): Promise<void> {
   try {
     await shipmentStorageApi.createClaimRequest(record.id, {
       salesOrderId: selectedOrderId.value,
-      lines: allocation.value.map(line => ({
-        salesOrderLineId: line.lineId,
-        quantity: line.quantity,
-      })),
+      lines: buildClaimLines(),
       requestKey: crypto.randomUUID(),
     }, request.signal)
     toast.success('调货申请已提交')
@@ -203,8 +244,13 @@ async function submitDirect(): Promise<void> {
   if (record === null || selectedOrderId.value === '' || submitting.value) {
     return
   }
-  if (allocation.value.length === 0 || allocationShort.value) {
-    error.value = '目标订单行数量不足，无法整件认领'
+  if (!mapping.value.complete) {
+    error.value = '库存产品无法完整映射到目标订单行'
+    return
+  }
+  if (mapping.value.requiresConfirmation
+    && (!overrideConfirmed.value || overrideReason.value.trim() === '')) {
+    error.value = '存在自定义跨产品映射，请先确认并填写原因'
     return
   }
   submitting.value = true
@@ -213,10 +259,7 @@ async function submitDirect(): Promise<void> {
   try {
     await shipmentStorageApi.claim(record.id, {
       salesOrderId: selectedOrderId.value,
-      lines: allocation.value.map(line => ({
-        salesOrderLineId: line.lineId,
-        quantity: line.quantity,
-      })),
+      lines: buildClaimLines(),
       requestKey: crypto.randomUUID(),
     }, request.signal)
     toast.success('寄仓货件已认领')
@@ -362,13 +405,49 @@ function setVisible(value: boolean): void {
           <p class="qs-type-meta text-muted-foreground m-0">
             认领映射
           </p>
-          <div v-for="line in reviewAllocations" :key="line.salesOrderLineId" class="mt-2 flex gap-3 items-center justify-between">
-            <span class="truncate">{{ line.productName }}</span>
-            <span class="font-mono">× {{ line.quantity }}</span>
+          <div
+            v-for="(line, index) in reviewAllocations"
+            :key="`${line.purchaseOrderLineId ?? 'legacy'}-${line.salesOrderLineId}-${index}`"
+            class="mt-2 flex gap-3 items-start justify-between"
+          >
+            <div class="min-w-0">
+              <p class="mb-0 truncate">
+                {{ line.sourceProductName ?? '—' }}
+              </p>
+              <p v-if="line.sourceProductDescription" class="text-xs text-muted-foreground mb-0 truncate">
+                {{ line.sourceProductDescription }}
+              </p>
+              <p class="text-xs text-muted-foreground mb-0 truncate">
+                {{ line.purchaseOrderLineId === null
+                  ? '历史申请，缺少库存分配映射'
+                  : `→ 第${line.lineNumber}行 ${line.productName}` }}
+              </p>
+              <p v-if="line.productDescription" class="text-xs text-muted-foreground mb-0 truncate">
+                {{ line.productDescription }}
+              </p>
+              <p v-if="line.productMatchMode === 'MANUAL_OVERRIDE'" class="text-xs text-amber-600 mb-0 mt-1">
+                人工确认跨产品{{ line.productMatchNote ? `：${line.productMatchNote}` : '' }}
+              </p>
+            </div>
+            <span class="font-mono shrink-0">× {{ line.quantity }}</span>
           </div>
           <p class="qs-type-meta text-muted-foreground mb-0 mt-2">
             整件认领数量：{{ reviewQuantity }}
           </p>
+          <FaAlert
+            v-if="reviewHasOverride"
+            class="mt-2"
+            variant="destructive"
+            title="包含人工确认的跨产品映射"
+            description="请核对库存产品与目标销售行确为同一产品后再同意。"
+          />
+          <FaAlert
+            v-if="reviewHasLegacyMapping"
+            class="mt-2"
+            variant="destructive"
+            title="申请映射数据过旧"
+            description="该申请缺少库存分配映射，不能直接同意；请让申请人撤回后重新提交。"
+          />
         </div>
         <div v-if="rejectMode" class="p-3 border border-border rounded-lg flex flex-col gap-2">
           <span class="text-sm">拒绝原因 <span class="text-destructive">*</span></span>
@@ -400,15 +479,76 @@ function setVisible(value: boolean): void {
           <p class="qs-type-meta text-muted-foreground m-0">
             认领映射
           </p>
-          <div v-for="line in allocation" :key="line.lineId" class="mt-2 flex gap-3 items-center justify-between">
-            <span class="truncate">{{ line.productName }}</span>
-            <span class="font-mono">× {{ line.quantity }}</span>
+          <div
+            v-for="row in mapping.rows"
+            :key="row.key"
+            class="mt-2 flex gap-3 items-start justify-between"
+          >
+            <div class="min-w-0">
+              <p class="mb-0 truncate">
+                {{ row.sourceProductName }}
+              </p>
+              <p v-if="row.sourceProductDescription" class="text-xs text-muted-foreground mb-0 truncate">
+                {{ row.sourceProductDescription }}
+              </p>
+              <p class="text-xs text-muted-foreground mb-0 truncate">
+                → 第{{ row.targetLineNumber }}行 {{ row.targetProductName }}
+                <span v-if="row.mismatch" class="text-amber-600">（跨产品，需确认）</span>
+              </p>
+              <p v-if="row.targetProductDescription" class="text-xs text-muted-foreground mb-0 truncate">
+                {{ row.targetProductDescription }}
+              </p>
+            </div>
+            <span class="font-mono shrink-0">× {{ row.quantity }}</span>
           </div>
-          <p v-if="allocationShort" class="text-xs text-destructive mb-0 mt-2">
-            目标订单行数量不足，无法整件走货。
+          <div v-if="manualTargetSources.length > 0" class="mt-3 p-3 border border-amber-500/40 rounded-lg">
+            <p class="text-sm mb-0">
+              以下自定义库存产品没有同名目标行，请选择目标销售行：
+            </p>
+            <div
+              v-for="source in manualTargetSources"
+              :key="source.lineId"
+              class="mt-2 gap-2 grid items-center sm:grid-cols-[minmax(0,1fr)_12rem]"
+            >
+              <span class="text-sm truncate">
+                {{ source.productName }} × {{ unmatchedRemainingBySource.get(source.lineId) ?? source.quantity }}
+              </span>
+              <FaSelect
+                :model-value="manualTargets[source.lineId] ?? ''"
+                :options="manualTargetOptions"
+                :disabled="submitting"
+                placeholder="选择目标行"
+                @update:model-value="setManualTarget(source.lineId, String($event))"
+              />
+            </div>
+          </div>
+          <div v-if="mapping.unmatched.length > 0" class="mt-2 flex flex-col gap-1">
+            <p
+              v-for="item in mapping.unmatched"
+              :key="item.purchaseOrderLineId"
+              class="text-xs text-destructive mb-0"
+            >
+              {{ item.productName }} × {{ item.remaining }} 无法匹配目标订单行。
+            </p>
+          </div>
+          <div v-if="mapping.requiresConfirmation" class="mt-3 p-3 border border-amber-500/40 rounded-lg">
+            <FaCheckbox v-model="overrideConfirmed" :disabled="submitting">
+              我已核对以上跨产品为同一产品
+            </FaCheckbox>
+            <FaTextarea
+              v-model="overrideReason"
+              class="mt-2"
+              :rows="3"
+              maxlength="500"
+              placeholder="填写确认原因（必填）"
+              :disabled="submitting || !overrideConfirmed"
+            />
+          </div>
+          <p v-else-if="mapping.complete" class="qs-type-meta text-muted-foreground mb-0 mt-2">
+            首期只支持整件认领；映射按库存分配行生成，每行数量完整对应。
           </p>
-          <p v-else class="qs-type-meta text-muted-foreground mb-0 mt-2">
-            首期只支持整件认领，数量按目标销售行顺序分配。
+          <p v-else class="text-xs text-destructive mb-0 mt-2">
+            库存产品无法完整映射到目标订单行，不能整件走货。
           </p>
         </div>
       </template>
@@ -429,7 +569,7 @@ function setVisible(value: boolean): void {
             <FaButton variant="outline" :disabled="submitting || !reviewRequest" @click="rejectMode = true">
               拒绝
             </FaButton>
-            <FaButton :loading="submitting" :disabled="!reviewRequest" @click="submit">
+            <FaButton :loading="submitting" :disabled="!reviewRequest || reviewHasLegacyMapping" @click="submit">
               同意调货
             </FaButton>
           </template>
@@ -440,7 +580,7 @@ function setVisible(value: boolean): void {
           </FaButton>
           <FaButton
             :loading="submitting"
-            :disabled="selectedOrderId === '' || allocation.length === 0 || allocationShort"
+            :disabled="!canSubmitMapping"
             @click="submit"
           >
             {{ mode === 'apply' ? '提交申请' : '确认认领' }}
