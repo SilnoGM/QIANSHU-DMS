@@ -85,6 +85,53 @@ test('多明细按装柜行顺序拼接，未变化的字段和段落不输出',
   ].join('\n'))
 })
 
+test('同一柜次相同收件修改合并为一个唛头列表', () => {
+  const text = buildClaimContainerCopyText([
+    change({ lineNumber: 2, oceanShippingMarkText: 'J-030549-01', beforeCodAmountTwd: null, afterCodAmountTwd: null, codChanged: false }),
+    change({ lineNumber: 3, oceanShippingMarkText: 'J-030549-02', beforeCodAmountTwd: null, afterCodAmountTwd: null, codChanged: false }),
+    change({ lineNumber: 4, oceanShippingMarkText: 'J-030549-03', beforeCodAmountTwd: null, afterCodAmountTwd: null, codChanged: false }),
+  ])
+
+  assert.equal(text, [
+    '‼️【收件人信息修改】',
+    '柜次：测试柜',
+    '唛头：J-030549-01、J-030549-02、J-030549-03',
+    '',
+    '客户姓名改为：新收件人',
+    '客户电话改为：0922000000',
+    '收件地址改为：新地址',
+  ].join('\n'))
+})
+
+test('修改值或柜次不同的收件段落不合并', () => {
+  const differentValue = buildClaimContainerCopyText([
+    change({ lineNumber: 2, oceanShippingMarkText: 'J-1', beforeCodAmountTwd: null, afterCodAmountTwd: null, codChanged: false }),
+    change({ lineNumber: 3, oceanShippingMarkText: 'J-2', afterRecipientName: '另一个收件人', beforeCodAmountTwd: null, afterCodAmountTwd: null, codChanged: false }),
+  ])
+  assert.match(differentValue, /唛头：J-1\n/u)
+  assert.match(differentValue, /唛头：J-2\n/u)
+
+  const differentBatch = buildClaimContainerCopyText([
+    change({ lineNumber: 2, oceanShippingMarkText: 'J-1', beforeCodAmountTwd: null, afterCodAmountTwd: null, codChanged: false }),
+    change({ containerBatchId: 'batch-2', containerBatchName: '另一个柜', lineNumber: 3, oceanShippingMarkText: 'J-2', beforeCodAmountTwd: null, afterCodAmountTwd: null, codChanged: false }),
+  ])
+  assert.equal(differentBatch.match(/‼️【收件人信息修改】/gu)?.length, 2)
+})
+
+test('同一柜次相同 COD 修改也合并唛头', () => {
+  const text = buildClaimContainerCopyText([
+    change({ lineNumber: 2, oceanShippingMarkText: 'J-1', recipientChanged: false, codChanged: true }),
+    change({ lineNumber: 3, oceanShippingMarkText: 'J-2', recipientChanged: false, codChanged: true }),
+  ])
+  assert.equal(text, [
+    '‼️【代收款取消】',
+    '柜次：测试柜',
+    '唛头：J-1、J-2',
+    '',
+    '原代收：NT$ 40000，取消代收',
+  ].join('\n'))
+})
+
 test('没有实际变化时不生成文案', () => {
   assert.equal(buildClaimContainerCopyText([change({
     beforeRecipientName: '新收件人',
