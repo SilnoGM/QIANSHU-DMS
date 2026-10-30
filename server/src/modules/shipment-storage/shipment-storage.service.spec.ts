@@ -17,9 +17,12 @@ const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
 function claimFixture(options: {
   readonly claimedQuantity?: number
   readonly orderStatus?: 'CONFIRMED' | 'CANCELLED'
+  readonly containerItems?: readonly Record<string, unknown>[]
 } = {}) {
   const claimedQuantity = options.claimedQuantity ?? 2
   let claimedWritten = false
+  let containerVersion = 1
+  const containerItems = options.containerItems ?? []
   const transaction = {
     $queryRaw: jest.fn()
       .mockResolvedValueOnce([])
@@ -40,6 +43,19 @@ function claimFixture(options: {
       }]),
       groupBy: jest.fn().mockResolvedValue([]),
     },
+    containerLoadingItem: {
+      findMany: jest.fn().mockImplementation(() => Promise.resolve(containerItems)),
+      update: jest.fn().mockImplementation(() => {
+        containerVersion += 1
+        return Promise.resolve({ version: containerVersion })
+      }),
+    },
+    containerLoadingItemChange: {
+      create: jest.fn().mockImplementation(({ data }: { data: { kind: string } }) => (
+        Promise.resolve({ id: `change-${data.kind}` })
+      )),
+    },
+    containerBatch: { update: jest.fn().mockResolvedValue({}) },
     purchaseOrderPartItem: { findMany: jest.fn().mockResolvedValue([]) },
     purchaseOrderPart: {
       findMany: jest.fn().mockResolvedValue([{
@@ -372,6 +388,119 @@ describe('ShipmentStorageService', () => {
 
     expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
     expect(fixture.transaction.salesOrderStatusHistory.create).not.toHaveBeenCalled()
+  })
+
+  it('preserves an untouched zero COD and rejects an empty recipient', async () => {
+    const item = {
+      id: '00000000-0000-4000-8000-000000000711',
+      shipmentId: SHIPMENT_ID,
+      containerBatchId: '00000000-0000-4000-8000-000000000712',
+      version: 1,
+      lineNumber: 2,
+      oceanShippingMarkText: 'J-030549-02',
+      recipientName: '原收件人',
+      recipientPhone: '0911000000',
+      recipientAddress: '原地址',
+      codAmountTwd: { toFixed: () => '0.00' },
+      remark: null,
+      containerBatch: {
+        id: '00000000-0000-4000-8000-000000000712',
+        containerBatchName: '测试柜次',
+      },
+    }
+    const fixture = claimFixture({ containerItems: [item] })
+
+    const result = await fixture.instance.claim(context, RECORD_ID, {
+      lines: [{ purchaseOrderLineId: PURCHASE_LINE_ID, quantity: 2, salesOrderLineId: SALES_LINE_ID }],
+      containerChanges: [{
+        loadingItemId: item.id,
+        expectedVersion: 1,
+        recipientName: '原收件人',
+        recipientPhone: '0911000000',
+        recipientAddress: '原地址',
+        codTouched: false,
+      }],
+      requestKey: REQUEST_KEY,
+      salesOrderId: SALES_ORDER_ID,
+    })
+    expect(result.containerChanges).toEqual([])
+    expect(fixture.transaction.containerLoadingItem.update).not.toHaveBeenCalled()
+    expect(fixture.transaction.containerLoadingItemChange.create).not.toHaveBeenCalled()
+
+    const invalid = claimFixture({ containerItems: [item] })
+    await expect(invalid.instance.claim(context, RECORD_ID, {
+      lines: [{ purchaseOrderLineId: PURCHASE_LINE_ID, quantity: 2, salesOrderLineId: SALES_LINE_ID }],
+      containerChanges: [{
+        loadingItemId: item.id,
+        expectedVersion: 1,
+        recipientName: ' ',
+        recipientPhone: '0911000000',
+        recipientAddress: '原地址',
+        codTouched: false,
+      }],
+      requestKey: REQUEST_KEY,
+      salesOrderId: SALES_ORDER_ID,
+    })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_RECIPIENT_REQUIRED' })
+  })
+
+  it('applies per-item recipient and COD changes inside the claim transaction', async () => {
+    const fixture = claimFixture({
+      containerItems: [{
+        id: '00000000-0000-4000-8000-000000000701',
+        shipmentId: SHIPMENT_ID,
+        containerBatchId: '00000000-0000-4000-8000-000000000702',
+        version: 1,
+        lineNumber: 2,
+        oceanShippingMarkText: 'J-030549-01',
+        recipientName: '旧收件人',
+        recipientPhone: '0911000000',
+        recipientAddress: '旧地址',
+        codAmountTwd: { toFixed: () => '0.00' },
+        remark: null,
+        containerBatch: {
+          id: '00000000-0000-4000-8000-000000000702',
+          containerBatchName: '测试柜次',
+        },
+      }],
+    })
+
+    const result = await fixture.instance.claim(context, RECORD_ID, {
+      lines: [{ purchaseOrderLineId: PURCHASE_LINE_ID, quantity: 2, salesOrderLineId: SALES_LINE_ID }],
+      containerChanges: [{
+        loadingItemId: '00000000-0000-4000-8000-000000000701',
+        expectedVersion: 1,
+        recipientName: '新收件人',
+        recipientPhone: '0922000000',
+        recipientAddress: '新地址',
+        codTouched: true,
+        codAmountTwd: '0.00',
+      }],
+      requestKey: REQUEST_KEY,
+      salesOrderId: SALES_ORDER_ID,
+    })
+
+    expect(result.containerChanges).toEqual([expect.objectContaining({
+      afterCodAmountTwd: null,
+      afterRecipientName: '新收件人',
+      codChanged: true,
+      recipientChanged: true,
+    })])
+    expect(fixture.transaction.containerLoadingItem.update).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      data: expect.objectContaining({
+        recipientName: '新收件人',
+        recipientPhone: '0922000000',
+        recipientAddress: '新地址',
+        version: { increment: 1 },
+      }) as unknown,
+    }))
+    expect(fixture.transaction.containerLoadingItem.update).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      data: expect.objectContaining({
+        codAmountTwd: null,
+        version: { increment: 1 },
+      }) as unknown,
+    }))
+    expect(fixture.transaction.containerLoadingItemChange.create).toHaveBeenCalledTimes(2)
+    expect(fixture.transaction.containerBatch.update).toHaveBeenCalledTimes(1)
   })
 
   it('scopes storageId to list and status counts', async () => {

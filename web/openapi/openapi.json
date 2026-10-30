@@ -50383,6 +50383,7 @@
             {
               "status": 409,
               "codes": [
+                "SHIPMENT_STORAGE_CLAIM_CONTAINER_VERSION_CHANGED",
                 "SHIPMENT_STORAGE_CLAIM_REQUEST_EXISTS",
                 "SHIPMENT_STORAGE_STATE_CHANGED"
               ]
@@ -50392,10 +50393,13 @@
               "codes": [
                 "SHIPMENT_STORAGE_CLAIM_ALLOCATION_INVALID",
                 "SHIPMENT_STORAGE_CLAIM_ALLOCATION_QUANTITY_MISMATCH",
+                "SHIPMENT_STORAGE_CLAIM_COD_INVALID",
+                "SHIPMENT_STORAGE_CLAIM_CONTAINER_CHANGE_INVALID",
                 "SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE",
                 "SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED",
                 "SHIPMENT_STORAGE_CLAIM_PRODUCT_MISMATCH",
                 "SHIPMENT_STORAGE_CLAIM_PRODUCT_OVERRIDE_REASON_REQUIRED",
+                "SHIPMENT_STORAGE_CLAIM_RECIPIENT_REQUIRED",
                 "SHIPMENT_STORAGE_SHARE_RATE_MISSING",
                 "VALIDATION_FAILED"
               ]
@@ -50980,6 +50984,7 @@
             {
               "status": 409,
               "codes": [
+                "SHIPMENT_STORAGE_CLAIM_CONTAINER_VERSION_CHANGED",
                 "SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED",
                 "SHIPMENT_STORAGE_STATE_CHANGED"
               ]
@@ -50989,10 +50994,13 @@
               "codes": [
                 "SHIPMENT_STORAGE_CLAIM_ALLOCATION_INVALID",
                 "SHIPMENT_STORAGE_CLAIM_ALLOCATION_QUANTITY_MISMATCH",
+                "SHIPMENT_STORAGE_CLAIM_COD_INVALID",
+                "SHIPMENT_STORAGE_CLAIM_CONTAINER_CHANGE_INVALID",
                 "SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE",
                 "SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED",
                 "SHIPMENT_STORAGE_CLAIM_PRODUCT_MISMATCH",
                 "SHIPMENT_STORAGE_CLAIM_PRODUCT_OVERRIDE_REASON_REQUIRED",
+                "SHIPMENT_STORAGE_CLAIM_RECIPIENT_REQUIRED",
                 "SHIPMENT_STORAGE_SHARE_RATE_MISSING",
                 "VALIDATION_FAILED"
               ]
@@ -51588,6 +51596,7 @@
             {
               "status": 409,
               "codes": [
+                "SHIPMENT_STORAGE_CLAIM_CONTAINER_VERSION_CHANGED",
                 "SHIPMENT_STORAGE_CLAIM_REQUEST_PENDING",
                 "SHIPMENT_STORAGE_STATE_CHANGED"
               ]
@@ -51597,10 +51606,13 @@
               "codes": [
                 "SHIPMENT_STORAGE_CLAIM_ALLOCATION_INVALID",
                 "SHIPMENT_STORAGE_CLAIM_ALLOCATION_QUANTITY_MISMATCH",
+                "SHIPMENT_STORAGE_CLAIM_COD_INVALID",
+                "SHIPMENT_STORAGE_CLAIM_CONTAINER_CHANGE_INVALID",
                 "SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE",
                 "SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED",
                 "SHIPMENT_STORAGE_CLAIM_PRODUCT_MISMATCH",
                 "SHIPMENT_STORAGE_CLAIM_PRODUCT_OVERRIDE_REASON_REQUIRED",
+                "SHIPMENT_STORAGE_CLAIM_RECIPIENT_REQUIRED",
                 "SHIPMENT_STORAGE_SHARE_RATE_MISSING",
                 "VALIDATION_FAILED"
               ]
@@ -98175,6 +98187,85 @@
           "items"
         ]
       },
+      "ShipmentStorageClaimContainerChangeDto": {
+        "type": "object",
+        "properties": {
+          "loadingItemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "containerBatchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "containerBatchName": {
+            "type": "string"
+          },
+          "lineNumber": {
+            "type": "integer"
+          },
+          "oceanShippingMarkText": {
+            "type": "string",
+            "nullable": true
+          },
+          "expectedVersion": {
+            "type": "integer"
+          },
+          "beforeRecipientName": {
+            "type": "string",
+            "nullable": true
+          },
+          "beforeRecipientPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "beforeRecipientAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "beforeCodAmountTwd": {
+            "type": "string",
+            "nullable": true
+          },
+          "afterRecipientName": {
+            "type": "string"
+          },
+          "afterRecipientPhone": {
+            "type": "string"
+          },
+          "afterRecipientAddress": {
+            "type": "string"
+          },
+          "afterCodAmountTwd": {
+            "type": "string",
+            "nullable": true
+          },
+          "recipientChanged": {
+            "type": "boolean"
+          },
+          "codChanged": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "loadingItemId",
+          "containerBatchId",
+          "containerBatchName",
+          "lineNumber",
+          "oceanShippingMarkText",
+          "expectedVersion",
+          "beforeRecipientName",
+          "beforeRecipientPhone",
+          "beforeRecipientAddress",
+          "beforeCodAmountTwd",
+          "afterRecipientName",
+          "afterRecipientPhone",
+          "afterRecipientAddress",
+          "afterCodAmountTwd",
+          "recipientChanged",
+          "codChanged"
+        ]
+      },
       "ShipmentStorageContainerBatchDto": {
         "type": "object",
         "properties": {
@@ -98206,6 +98297,9 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "version": {
+            "type": "integer"
           },
           "lineNumber": {
             "type": "integer"
@@ -98282,6 +98376,7 @@
         },
         "required": [
           "id",
+          "version",
           "lineNumber",
           "oceanShippingMarkText",
           "goodsName",
@@ -98519,6 +98614,13 @@
               "additionalProperties": true
             }
           },
+          "containerChanges": {
+            "description": "认领/审批成功时返回实际生效的装柜修改",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShipmentStorageClaimContainerChangeDto"
+            }
+          },
           "containerSnapshot": {
             "type": "object",
             "additionalProperties": true,
@@ -98721,6 +98823,14 @@
               "$ref": "#/components/schemas/ShipmentStorageClaimRequestAllocationDto"
             }
           },
+          "containerChanges": {
+            "nullable": true,
+            "description": "历史申请可能缺少装柜修改快照",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShipmentStorageClaimContainerChangeDto"
+            }
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -98762,6 +98872,7 @@
           "targetSalesOrderId",
           "costTotalCny",
           "allocations",
+          "containerChanges",
           "status",
           "rejectReason",
           "reviewedBy",
@@ -98801,6 +98912,53 @@
           "quantity"
         ]
       },
+      "ClaimShipmentStorageContainerChangeDto": {
+        "type": "object",
+        "properties": {
+          "loadingItemId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "装柜明细 ID"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "申请/认领时看到的装柜明细版本"
+          },
+          "recipientName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "recipientPhone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "recipientAddress": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "codTouched": {
+            "type": "boolean",
+            "description": "用户是否主动编辑过 COD；未编辑时保持当前值"
+          },
+          "codAmountTwd": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 31,
+            "description": "编辑后的 COD；空值或 0 一律表示本行不涉及代收"
+          }
+        },
+        "required": [
+          "loadingItemId",
+          "expectedVersion",
+          "recipientName",
+          "recipientPhone",
+          "recipientAddress"
+        ]
+      },
       "ClaimShipmentStorageRequestDto": {
         "type": "object",
         "properties": {
@@ -98812,6 +98970,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ClaimShipmentStorageLineDto"
+            }
+          },
+          "containerChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClaimShipmentStorageContainerChangeDto"
             }
           },
           "requestKey": {

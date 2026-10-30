@@ -10,8 +10,10 @@ import { SalesOrderQueryService } from '../src/modules/sales-orders/sales-order-
 import { ShipmentOwnershipService } from '../src/modules/shipment-ownership/shipment-ownership.service'
 import { ShipmentStorageCostService } from '../src/modules/shipment-storage/shipment-storage-cost.service'
 import { ShipmentStorageService } from '../src/modules/shipment-storage/shipment-storage.service'
+import { markShipmentsContainerLoaded } from './fixtures/container-loaded.fixture'
 import { createPaymentRecipientFixture } from './fixtures/payment-recipient.fixture'
 import { createPackagingCostHarness, type PackagingCostHarness } from './packaging-cost.fixture'
+import { TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
 import { createCommands, createReviewMutations, customInput } from './purchase-shipping-mark-atomicity.fixture'
 
 /**
@@ -40,6 +42,26 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       { actorUserId: h.fixture.actor.id, requestId: randomUUID() },
       { userId: h.fixture.actor.id, userShareRate: '30' },
     )
+    const context = { actorUserId: h.fixture.actor.id, requestId: randomUUID() }
+    for (const [ruleCode, prefix] of [['CONTAINER_BATCH_NO', 'CB']] as const) {
+      const rule = await h.fixture.numberingCommands.create(context, {
+        ruleCode,
+        purpose: 'BUSINESS',
+        name: ruleCode,
+        resetPolicy: 'NEVER',
+        segments: [
+          { type: 'FIXED', value: prefix },
+          { type: 'SEQUENCE', width: 8, startValue: '1', step: '1' },
+        ],
+      })
+      const published = await h.fixture.numberingCommands.publish(context, rule.id, {
+        expectedVersion: rule.version,
+        draftRevision: 1,
+      })
+      await h.fixture.numberingCommands.enable(context, rule.id, {
+        expectedVersion: published.version,
+      })
+    }
   })
   afterAll(async () => { await h?.dispose() })
 
@@ -154,6 +176,51 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
         select: { id: true },
       })
       return record.id
+    })
+  }
+
+  async function createContainerItem(
+    shipmentId: string,
+  ): Promise<{ batchId: string, itemId: string }> {
+    await markShipmentsContainerLoaded(h.prisma, [shipmentId], h.fixture.actor.id)
+    return h.prisma.$transaction(async (transaction) => {
+      const key = randomUUID()
+      const fingerprint = 'c'.repeat(64)
+      const issuance = await h.fixture.numbering.generateScopedInTransaction(transaction, {
+        ruleCode: 'CONTAINER_BATCH_NO',
+        consumerCode: 'CONTAINER_BATCH.CREATE',
+        idempotencyKey: key,
+        requestFingerprint: fingerprint,
+      })
+      const batch = await transaction.containerBatch.create({ data: {
+        containerBatchNo: issuance.number,
+        numberingIssuanceId: issuance.issuanceId,
+        containerBatchName: '测试柜',
+        loadingDate: new Date('2026-09-20'),
+        sequenceInDay: 1,
+        warehouseValue: TEST_DESTINATION_WAREHOUSE,
+        creationRequestKey: key,
+        creationPayloadHash: fingerprint,
+        createdById: h.fixture.actor.id,
+        updatedById: h.fixture.actor.id,
+      } })
+      const item = await transaction.containerLoadingItem.create({ data: {
+        containerBatchId: batch.id,
+        shipmentId,
+        lineNumber: 1,
+        creationRequestKey: randomUUID(),
+        creationPayloadHash: 'd'.repeat(64),
+        oceanShippingMarkText: 'J-030549-01',
+        goodsName: '测试装柜货品',
+        packageCount: 1,
+        recipientName: '旧收件人',
+        recipientPhone: '0911000000',
+        recipientAddress: '旧地址',
+        codAmountTwd: '100.00',
+        createdById: h.fixture.actor.id,
+        updatedById: h.fixture.actor.id,
+      } })
+      return { batchId: batch.id, itemId: item.id }
     })
   }
 
@@ -723,5 +790,69 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       purchaseOrderLineId: sourceLineId,
       salesOrderLineId: targetLine.id,
     })
+  })
+
+  it('applies loaded container recipient/COD changes with item versions and returns the applied copy data', async () => {
+    const origin = await h.shipment({ partCount: 1, salesLinked: true })
+    const container = await createContainerItem(origin.part.id)
+    const recordId = await createStorageRecord(origin)
+    const target = await createTargetOrder(origin.source!.id)
+    const sourceLineId = await allocationLineId(recordId)
+    const targetLine = target.lines[0]
+    const context = { actorUserId: h.fixture.actor.id, requestId: randomUUID() }
+
+    const request = await storage.createClaimRequest(context, recordId, {
+      salesOrderId: target.id,
+      lines: [{
+        purchaseOrderLineId: sourceLineId,
+        quantity: 1,
+        salesOrderLineId: targetLine.id,
+      }],
+      containerChanges: [{
+        loadingItemId: container.itemId,
+        expectedVersion: 1,
+        recipientName: '新收件人',
+        recipientPhone: '0922000000',
+        recipientAddress: '新地址',
+        codTouched: true,
+        codAmountTwd: '0.00',
+      }],
+      requestKey: randomUUID(),
+    })
+    expect(request.containerChanges).toEqual([expect.objectContaining({
+      afterCodAmountTwd: null,
+      afterRecipientName: '新收件人',
+      codChanged: true,
+      expectedVersion: 1,
+      loadingItemId: container.itemId,
+      recipientChanged: true,
+    })])
+
+    const claimed = await storage.approveClaimRequest(context, recordId, request.id)
+    expect(claimed.containerChanges).toEqual([expect.objectContaining({
+      afterCodAmountTwd: null,
+      afterRecipientName: '新收件人',
+      codChanged: true,
+      recipientChanged: true,
+    })])
+    expect(await h.prisma.containerLoadingItem.findUniqueOrThrow({
+      where: { id: container.itemId },
+      select: {
+        codAmountTwd: true,
+        recipientName: true,
+        recipientPhone: true,
+        recipientAddress: true,
+        version: true,
+      },
+    })).toEqual({
+      codAmountTwd: null,
+      recipientName: '新收件人',
+      recipientPhone: '0922000000',
+      recipientAddress: '新地址',
+      version: 3,
+    })
+    expect(await h.prisma.containerLoadingItemChange.count({
+      where: { loadingItemId: container.itemId },
+    })).toBe(2)
   })
 })

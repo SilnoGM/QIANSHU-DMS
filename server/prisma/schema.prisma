@@ -1634,6 +1634,7 @@ model ShipmentStorageClaimRequest {
   salesOrderNoSnapshot String                           @map("sales_order_no_snapshot") @db.VarChar(64)
   costTotalCny       Decimal                            @map("cost_total_cny") @db.Decimal(30, 2)
   allocations        Json                               @db.JsonB
+  containerChanges   Json?                              @map("container_changes") @db.JsonB
   status             ShipmentStorageClaimRequestStatus  @default(PENDING)
   rejectReason       String?                            @map("reject_reason") @db.VarChar(500)
   reviewedByUserId   String?                            @map("reviewed_by_user_id") @db.Uuid

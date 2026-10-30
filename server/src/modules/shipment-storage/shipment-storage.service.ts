@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 
 import { HttpStatus, Injectable } from '@nestjs/common'
 
@@ -30,18 +30,27 @@ import {
 } from '../sales-orders/sales-order-claim-coverage'
 import { advanceSalesOrderAfterClaim } from '../sales-orders/sales-order-claim-progress'
 import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
-import { ShipmentStorageCostService, totalCostFromSnapshot } from './shipment-storage-cost.service'
+import {
+  ShipmentStorageCostService,
+  totalCostFromSnapshot,
+} from './shipment-storage-cost.service'
 import { readShipmentStorageAllocations } from './shipment-storage-allocation'
 import {
   claimProductAliases,
   normalizeClaimProductName,
   type ClaimProductMatchMode,
 } from './product-match'
+import {
+  normalizeOceanDecimal,
+  OceanCalculationError,
+} from '../ocean-freight-calculation/ocean-freight-calculation'
 import type {
+  ClaimShipmentStorageContainerChangeDto,
   ClaimShipmentStorageRequestDto,
   RelocateShipmentStorageRequestDto,
   ReleaseShipmentStorageRequestDto,
   RejectShipmentStorageClaimRequestDto,
+  ShipmentStorageClaimContainerChangeDto,
   ShipmentStorageClaimRequestDto,
   ShipmentStorageClaimRequestSummaryDto,
   ShipmentStorageCostDto,
@@ -64,6 +73,8 @@ export interface ShipmentStorageMutationContext {
 const CONTAINER_ITEM_SELECT = {
   id: true,
   shipmentId: true,
+  containerBatchId: true,
+  version: true,
   lineNumber: true,
   oceanShippingMarkText: true,
   goodsName: true,
@@ -218,6 +229,7 @@ function costFromSnapshot(snapshot: Prisma.JsonValue): ShipmentStorageCostDto {
 function containerItemDto(row: ContainerItemRow): ShipmentStorageContainerItemDto {
   return {
     id: row.id,
+    version: row.version,
     lineNumber: row.lineNumber,
     oceanShippingMarkText: row.oceanShippingMarkText,
     goodsName: row.goodsName,
@@ -424,6 +436,74 @@ function readClaimAllocationSnapshots(value: Prisma.JsonValue): ClaimAllocationS
         ? record.productMatchNote
         : null,
     }]
+  })
+}
+
+function readContainerChangeSnapshots(
+  value: Prisma.JsonValue,
+): ShipmentStorageClaimContainerChangeDto[] | null {
+  if (value === null) return null
+  if (!Array.isArray(value)) return null
+  const changes: ShipmentStorageClaimContainerChangeDto[] = []
+  for (const entry of value) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return null
+    const record = entry as Record<string, unknown>
+    if (
+      typeof record.loadingItemId !== 'string'
+      || typeof record.containerBatchId !== 'string'
+      || typeof record.containerBatchName !== 'string'
+      || typeof record.lineNumber !== 'number'
+      || typeof record.expectedVersion !== 'number'
+      || typeof record.afterRecipientName !== 'string'
+      || typeof record.afterRecipientPhone !== 'string'
+      || typeof record.afterRecipientAddress !== 'string'
+      || typeof record.recipientChanged !== 'boolean'
+      || typeof record.codChanged !== 'boolean'
+      || (record.oceanShippingMarkText !== null && typeof record.oceanShippingMarkText !== 'string')
+      || (record.beforeRecipientName !== null && typeof record.beforeRecipientName !== 'string')
+      || (record.beforeRecipientPhone !== null && typeof record.beforeRecipientPhone !== 'string')
+      || (record.beforeRecipientAddress !== null && typeof record.beforeRecipientAddress !== 'string')
+      || (record.beforeCodAmountTwd !== null && typeof record.beforeCodAmountTwd !== 'string')
+      || (record.afterCodAmountTwd !== null && typeof record.afterCodAmountTwd !== 'string')
+    ) {
+      return null
+    }
+    changes.push({
+      loadingItemId: record.loadingItemId,
+      containerBatchId: record.containerBatchId,
+      containerBatchName: record.containerBatchName,
+      lineNumber: record.lineNumber,
+      oceanShippingMarkText: record.oceanShippingMarkText,
+      expectedVersion: record.expectedVersion,
+      beforeRecipientName: record.beforeRecipientName,
+      beforeRecipientPhone: record.beforeRecipientPhone,
+      beforeRecipientAddress: record.beforeRecipientAddress,
+      beforeCodAmountTwd: record.beforeCodAmountTwd,
+      afterRecipientName: record.afterRecipientName,
+      afterRecipientPhone: record.afterRecipientPhone,
+      afterRecipientAddress: record.afterRecipientAddress,
+      afterCodAmountTwd: record.afterCodAmountTwd,
+      recipientChanged: record.recipientChanged,
+      codChanged: record.codChanged,
+    })
+  }
+  return changes
+}
+
+function containerChangeInputsFromSnapshots(
+  changes: readonly ShipmentStorageClaimContainerChangeDto[],
+): ClaimShipmentStorageContainerChangeDto[] {
+  return changes.map((change) => {
+    const codTouched = change.beforeCodAmountTwd !== change.afterCodAmountTwd
+    return {
+      loadingItemId: change.loadingItemId,
+      expectedVersion: change.expectedVersion,
+      recipientName: change.afterRecipientName,
+      recipientPhone: change.afterRecipientPhone,
+      recipientAddress: change.afterRecipientAddress,
+      codTouched,
+      ...(codTouched ? { codAmountTwd: change.afterCodAmountTwd } : {}),
+    }
   })
 }
 
@@ -935,6 +1015,7 @@ export class ShipmentStorageService {
     input: ClaimShipmentStorageRequestDto,
     claimRequestId?: string,
   ): Promise<ShipmentStorageDetailDto> {
+    let appliedContainerChanges: ShipmentStorageClaimContainerChangeDto[] = []
     try {
       await this.prisma.$transaction(async transaction => {
         await applyTransactionTimeouts(transaction)
@@ -1007,7 +1088,23 @@ export class ShipmentStorageService {
       }
       const prepared = await this.prepareClaimTarget(transaction, record, input)
       const { allocations, claimedQuantity, order } = prepared
+      const preparedContainerChanges = await this.prepareContainerChanges(
+        transaction,
+        record,
+        input.containerChanges,
+        true,
+      )
       const now = new Date()
+      await this.applyContainerChanges(
+        transaction,
+        storageRecordId,
+        preparedContainerChanges,
+        context,
+        claimRequestId,
+      )
+      appliedContainerChanges = preparedContainerChanges.filter(change => (
+        change.recipientChanged || change.codChanged
+      ))
       await transaction.shipmentStorageRecord.update({
         where: { id: storageRecordId },
         data: {
@@ -1056,6 +1153,7 @@ export class ShipmentStorageService {
           salesOrderNo: order.orderNo,
           claimedQuantity,
           allocationCount: allocations.length,
+          containerChangeCount: appliedContainerChanges.length,
           ...claimProductOverrideAudit(allocations),
         },
       })
@@ -1107,7 +1205,8 @@ export class ShipmentStorageService {
       }
       throw error
     }
-    return this.getById(storageRecordId)
+    const detail = await this.getById(storageRecordId)
+    return { ...detail, containerChanges: appliedContainerChanges }
   }
 
   private async prepareClaimTarget(
@@ -1380,6 +1479,313 @@ export class ShipmentStorageService {
     return { order, allocations, claimedQuantity }
   }
 
+  /** 装柜明细快照与更新共用同一套字段归一化；申请时只快照，认领时加锁后真正写入。 */
+  private async prepareContainerChanges(
+    transaction: Prisma.TransactionClient,
+    record: PreparedClaim['record'],
+    inputChanges: readonly ClaimShipmentStorageContainerChangeDto[] | undefined,
+    lock: boolean,
+  ): Promise<ShipmentStorageClaimContainerChangeDto[]> {
+    const items = await this.loadClaimContainerItems(transaction, record.shipmentId, lock)
+    if (inputChanges !== undefined && !Array.isArray(inputChanges)) {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_CONTAINER_CHANGE_INVALID', '装柜修改信息格式无效')
+    }
+    const changes = inputChanges ?? []
+    if (items.length === 0) {
+      if (changes.length > 0) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_CONTAINER_CHANGE_INVALID', '该货件没有装柜明细，不能提交装柜修改')
+      }
+      return []
+    }
+    if (changes.length !== items.length) {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_CONTAINER_CHANGE_INVALID', '必须为每条装柜明细提交完整信息')
+    }
+    const inputById = new Map<string, ClaimShipmentStorageContainerChangeDto>()
+    for (const change of changes) {
+      const raw: unknown = change
+      if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_CONTAINER_CHANGE_INVALID', '装柜修改信息格式无效')
+      }
+      const value = raw as Record<string, unknown>
+      if (
+        typeof value.loadingItemId !== 'string'
+        || !Number.isInteger(value.expectedVersion)
+        || (value.expectedVersion as number) < 1
+        || typeof value.recipientName !== 'string'
+        || typeof value.recipientPhone !== 'string'
+        || typeof value.recipientAddress !== 'string'
+        || (value.codTouched !== undefined && typeof value.codTouched !== 'boolean')
+        || (value.codAmountTwd !== undefined && value.codAmountTwd !== null && typeof value.codAmountTwd !== 'string')
+      ) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_CONTAINER_CHANGE_INVALID', '装柜修改信息格式无效')
+      }
+      if (inputById.has(value.loadingItemId)) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_CONTAINER_CHANGE_INVALID', '装柜明细不能重复提交')
+      }
+      inputById.set(value.loadingItemId, change)
+    }
+    return items.map((item) => {
+      const change = inputById.get(item.id)
+      if (change === undefined) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_CONTAINER_CHANGE_INVALID', '装柜明细已变化，请刷新后重新提交')
+      }
+      if (change.expectedVersion !== item.version) {
+        storageFailure(
+          'SHIPMENT_STORAGE_CLAIM_CONTAINER_VERSION_CHANGED',
+          '装柜明细已更新，请刷新后重新提交',
+          HttpStatus.CONFLICT,
+        )
+      }
+      const afterRecipientName = this.normalizeClaimRecipientText(change.recipientName, 128, '收件人姓名')
+      const afterRecipientPhone = this.normalizeClaimRecipientText(change.recipientPhone, 128, '收件人电话')
+      const afterRecipientAddress = this.normalizeClaimRecipientText(change.recipientAddress, 2000, '收件人地址')
+      const beforeCodAmountTwd = item.codAmountTwd?.toFixed(2) ?? null
+      const afterCodAmountTwd = change.codTouched === true
+        ? this.normalizeClaimCod(change.codAmountTwd)
+        : beforeCodAmountTwd
+      return {
+        loadingItemId: item.id,
+        containerBatchId: item.containerBatchId,
+        containerBatchName: item.containerBatch.containerBatchName,
+        lineNumber: item.lineNumber,
+        oceanShippingMarkText: item.oceanShippingMarkText,
+        expectedVersion: item.version,
+        beforeRecipientName: item.recipientName,
+        beforeRecipientPhone: item.recipientPhone,
+        beforeRecipientAddress: item.recipientAddress,
+        beforeCodAmountTwd,
+        afterRecipientName,
+        afterRecipientPhone,
+        afterRecipientAddress,
+        afterCodAmountTwd,
+        recipientChanged: item.recipientName !== afterRecipientName
+          || item.recipientPhone !== afterRecipientPhone
+          || item.recipientAddress !== afterRecipientAddress,
+        codChanged: beforeCodAmountTwd !== afterCodAmountTwd,
+      }
+    })
+  }
+
+  private async loadClaimContainerItems(
+    transaction: Prisma.TransactionClient,
+    shipmentId: string,
+    lock: boolean,
+  ): Promise<ContainerItemRow[]> {
+    if (lock) {
+      const references = await transaction.containerLoadingItem.findMany({
+        where: { shipmentId },
+        select: { id: true, containerBatchId: true },
+      })
+      if (references.length > 0) {
+        const batchIds = [...new Set(references.map(item => item.containerBatchId))].sort()
+        await transaction.$queryRaw(Prisma.sql`
+          SELECT id FROM container_batches
+          WHERE id IN (${Prisma.join(batchIds)})
+          ORDER BY id FOR UPDATE
+        `)
+        await transaction.$queryRaw(Prisma.sql`
+          SELECT id FROM container_loading_items
+          WHERE shipment_id = ${shipmentId}::uuid
+          ORDER BY id FOR UPDATE
+        `)
+      }
+    }
+    return transaction.containerLoadingItem.findMany({
+      where: { shipmentId },
+      select: CONTAINER_ITEM_SELECT,
+      orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+    })
+  }
+
+  private normalizeClaimRecipientText(value: string, maximum: number, label: string): string {
+    if (/[\p{Cc}\p{Cs}]/u.test(value.replace(/[\n\r\t]/gu, ''))) {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_RECIPIENT_REQUIRED', `${label}格式无效`)
+    }
+    const normalized = value.trim().replace(/\r\n?/gu, '\n')
+    if (normalized === '') {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_RECIPIENT_REQUIRED', `${label}不能为空`)
+    }
+    if ([...normalized].length > maximum) {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_RECIPIENT_REQUIRED', `${label}长度超出限制`)
+    }
+    return normalized
+  }
+
+  /** COD 的 0 与空值统一视为“本行不涉及代收”；只有主动编辑才写入 null。 */
+  private normalizeClaimCod(value: string | null | undefined): string | null {
+    if (value === null || value === undefined || value.trim() === '') {
+      return null
+    }
+    try {
+      const normalized = normalizeOceanDecimal(value, 30, 2, 'codAmountTwd')
+      return normalized === null || normalized === '0.00' ? null : normalized
+    }
+    catch (error) {
+      if (error instanceof OceanCalculationError) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_COD_INVALID', '代收金额须为非负金额，最多 28 位整数和 2 位小数')
+      }
+      throw error
+    }
+  }
+
+  private async applyContainerChanges(
+    transaction: Prisma.TransactionClient,
+    storageRecordId: string,
+    changes: readonly ShipmentStorageClaimContainerChangeDto[],
+    context: ShipmentStorageMutationContext,
+    claimRequestId?: string,
+  ): Promise<void> {
+    const changedItems = changes.filter(change => change.recipientChanged || change.codChanged)
+    if (changedItems.length === 0) return
+    const rows = await transaction.containerLoadingItem.findMany({
+      where: { id: { in: changedItems.map(change => change.loadingItemId) } },
+      select: {
+        id: true,
+        containerBatchId: true,
+        version: true,
+        recipientName: true,
+        recipientPhone: true,
+        recipientAddress: true,
+        codAmountTwd: true,
+        remark: true,
+      },
+    })
+    const rowById = new Map(rows.map(row => [row.id, row]))
+    for (const change of changedItems) {
+      const row = rowById.get(change.loadingItemId)
+      if (row === undefined) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_CONTAINER_CHANGE_INVALID', '装柜明细不存在或已解绑', HttpStatus.CONFLICT)
+      }
+      let currentVersion = row.version
+      if (change.recipientChanged) {
+        const updated = await transaction.containerLoadingItem.update({
+          where: { id: row.id },
+          data: {
+            recipientName: change.afterRecipientName,
+            recipientPhone: change.afterRecipientPhone,
+            recipientAddress: change.afterRecipientAddress,
+            version: { increment: 1 },
+            updatedById: context.actorUserId,
+          },
+          select: { version: true },
+        })
+        await this.recordClaimContainerChange(transaction, {
+          change,
+          kind: 'RECIPIENT',
+          containerBatchId: row.containerBatchId,
+          previousVersion: currentVersion,
+          version: updated.version,
+          beforeData: {
+            recipientName: row.recipientName,
+            recipientPhone: row.recipientPhone,
+            recipientAddress: row.recipientAddress,
+            remark: row.remark,
+          },
+          afterData: {
+            recipientName: change.afterRecipientName,
+            recipientPhone: change.afterRecipientPhone,
+            recipientAddress: change.afterRecipientAddress,
+            remark: row.remark,
+          },
+          storageRecordId,
+          claimRequestId,
+          context,
+        })
+        currentVersion = updated.version
+      }
+      if (change.codChanged) {
+        const updated = await transaction.containerLoadingItem.update({
+          where: { id: row.id },
+          data: {
+            codAmountTwd: change.afterCodAmountTwd === null
+              ? null
+              : new Prisma.Decimal(change.afterCodAmountTwd),
+            version: { increment: 1 },
+            updatedById: context.actorUserId,
+          },
+          select: { version: true },
+        })
+        await this.recordClaimContainerChange(transaction, {
+          change,
+          kind: 'COD',
+          containerBatchId: row.containerBatchId,
+          previousVersion: currentVersion,
+          version: updated.version,
+          beforeData: { codAmountTwd: change.beforeCodAmountTwd },
+          afterData: { codAmountTwd: change.afterCodAmountTwd },
+          storageRecordId,
+          claimRequestId,
+          context,
+        })
+        currentVersion = updated.version
+      }
+      await transaction.containerBatch.update({
+        where: { id: row.containerBatchId },
+        data: { version: { increment: 1 }, updatedById: context.actorUserId },
+      })
+    }
+  }
+
+  private async recordClaimContainerChange(
+    transaction: Prisma.TransactionClient,
+    input: {
+      readonly change: ShipmentStorageClaimContainerChangeDto
+      readonly kind: 'RECIPIENT' | 'COD'
+      readonly containerBatchId: string
+      readonly previousVersion: number
+      readonly version: number
+      readonly beforeData: Record<string, string | null>
+      readonly afterData: Record<string, string | null>
+      readonly storageRecordId: string
+      readonly claimRequestId?: string
+      readonly context: ShipmentStorageMutationContext
+    },
+  ): Promise<void> {
+    const requestKey = randomUUID()
+    const payloadHash = createHash('sha256')
+      .update(JSON.stringify({
+        format: 'shipment-storage.claim.container-change.v1',
+        storageRecordId: input.storageRecordId,
+        loadingItemId: input.change.loadingItemId,
+        kind: input.kind,
+        beforeData: input.beforeData,
+        afterData: input.afterData,
+      }), 'utf8')
+      .digest('hex')
+    const record = await transaction.containerLoadingItemChange.create({
+      data: {
+        loadingItemId: input.change.loadingItemId,
+        kind: input.kind,
+        beforeData: input.beforeData,
+        afterData: input.afterData,
+        previousVersion: input.previousVersion,
+        version: input.version,
+        requestKey,
+        payloadHash,
+        actorUserId: input.context.actorUserId,
+      },
+      select: { id: true },
+    })
+    await this.audit.record(transaction, {
+      eventType: 'CONTAINER_LOADING_ITEM_UPDATED',
+      outcome: 'SUCCESS',
+      actorType: 'USER',
+      actorUserId: input.context.actorUserId,
+      requestId: input.context.requestId,
+      targetType: 'CONTAINER_LOADING_ITEM',
+      targetId: input.change.loadingItemId,
+      metadata: {
+        containerBatchId: input.containerBatchId,
+        kind: input.kind,
+        previousVersion: input.previousVersion,
+        version: input.version,
+        changeId: record.id,
+        storageRecordId: input.storageRecordId,
+        ...(input.claimRequestId === undefined ? {} : { claimRequestId: input.claimRequestId }),
+      },
+    })
+  }
+
   async getClaimRequest(
     storageRecordId: string,
     requestId: string,
@@ -1429,6 +1835,12 @@ export class ShipmentStorageService {
           storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_EXISTS', '该货件已有进行中的调货申请', HttpStatus.CONFLICT)
         }
         const prepared = await this.prepareClaimTarget(transaction, record, input, context.actorUserId)
+        const preparedContainerChanges = await this.prepareContainerChanges(
+          transaction,
+          record,
+          input.containerChanges,
+          false,
+        )
         const allocations: ClaimAllocationSnapshot[] = prepared.allocations.map(allocation => ({
           purchaseOrderLineId: allocation.purchaseOrderLineId,
           salesOrderLineId: allocation.salesOrderLineId,
@@ -1450,6 +1862,7 @@ export class ShipmentStorageService {
             salesOrderNoSnapshot: prepared.order.orderNo,
             costTotalCny: totalCostFromSnapshot(record.costSnapshot),
             allocations: allocations as unknown as Prisma.InputJsonValue,
+            containerChanges: preparedContainerChanges as unknown as Prisma.InputJsonValue,
             requestKey: input.requestKey,
           },
           select: { id: true },
@@ -1468,6 +1881,9 @@ export class ShipmentStorageService {
             salesOrderNo: prepared.order.orderNo,
             claimedQuantity: prepared.claimedQuantity,
             allocationCount: prepared.allocations.length,
+            containerChangeCount: preparedContainerChanges.filter(change => (
+              change.recipientChanged || change.codChanged
+            )).length,
             ...claimProductOverrideAudit(prepared.allocations),
           },
         })
@@ -1563,6 +1979,7 @@ export class ShipmentStorageService {
         status: true,
         salesOrderId: true,
         allocations: true,
+        containerChanges: true,
         requestKey: true,
       },
     })
@@ -1570,7 +1987,11 @@ export class ShipmentStorageService {
       storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_NOT_FOUND', '调货申请不存在', HttpStatus.NOT_FOUND)
     }
     if (request.status === 'APPROVED') {
-      return this.getById(storageRecordId)
+      const detail = await this.getById(storageRecordId)
+      return {
+        ...detail,
+        containerChanges: readContainerChangeSnapshots(request.containerChanges) ?? [],
+      }
     }
     if (request.status !== 'PENDING') {
       storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED', '调货申请已处理', HttpStatus.CONFLICT)
@@ -1586,9 +2007,18 @@ export class ShipmentStorageService {
         HttpStatus.CONFLICT,
       )
     }
+    const containerChanges = readContainerChangeSnapshots(request.containerChanges)
+    if (containerChanges === null) {
+      storageFailure(
+        'SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED',
+        '历史调货申请缺少装柜修改快照，请撤回后重新提交',
+        HttpStatus.CONFLICT,
+      )
+    }
     return this.claim(context, storageRecordId, {
       salesOrderId: request.salesOrderId,
       lines: claimRequestLineInputs(allocations),
+      containerChanges: containerChangeInputsFromSnapshots(containerChanges),
       requestKey: request.requestKey,
     }, requestId)
   }
@@ -1666,6 +2096,7 @@ export class ShipmentStorageService {
         salesOrderNoSnapshot: true,
         costTotalCny: true,
         allocations: true,
+        containerChanges: true,
         status: true,
         rejectReason: true,
         reviewedByUserId: true,
@@ -1705,6 +2136,7 @@ export class ShipmentStorageService {
       targetSalesOrderNo: request.salesOrderNoSnapshot,
       costTotalCny: request.costTotalCny.toFixed(2),
       allocations: readClaimAllocationSnapshots(request.allocations),
+      containerChanges: readContainerChangeSnapshots(request.containerChanges),
       status: request.status,
       rejectReason: request.rejectReason,
       reviewedBy,

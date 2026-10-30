@@ -191,6 +191,15 @@ POST /shipment-storage/:storageRecordId/claim
     "productMatchOverride": false,
     "productMatchNote": "仅自定义产品异名时必填"
   }],
+  "containerChanges": [{
+    "loadingItemId": "装柜明细 ID",
+    "expectedVersion": 1,
+    "recipientName": "收件人",
+    "recipientPhone": "电话",
+    "recipientAddress": "地址",
+    "codTouched": false,
+    "codAmountTwd": null
+  }],
   "requestKey": "uuid"
 }
 ```
@@ -205,8 +214,11 @@ POST /shipment-storage/:storageRecordId/claim
 - 不允许同一货件被两个销售单同时认领；
 - 产品匹配：目录行按 `product_id` 严格相等；自定义行按规范化名称（采购名称、来源销售名称别名）相等；跨类型禁止；
 - 自定义行名称不一致时必须 `productMatchOverride: true` 且提供 `productMatchNote`，否则拒绝；人工确认会写入 `shipment_claim_lines` 与审计。
+- 有装柜明细时必须为每条明细提交完整的收件人/COD 信息；收件人姓名、电话、地址不允许为空；
+- COD 未主动编辑时保持当前值；主动清空或填 0 统一写为 `null`，表示本行不涉及代收；
+- 审批/直接认领按 `loadingItemId + expectedVersion` 校验并更新，版本变化则拒绝并要求重新提交；装柜更新与认领在同一事务。
 
-新增错误码：`SHIPMENT_STORAGE_CLAIM_ALLOCATION_INVALID`、`SHIPMENT_STORAGE_CLAIM_ALLOCATION_QUANTITY_MISMATCH`、`SHIPMENT_STORAGE_CLAIM_PRODUCT_MISMATCH`、`SHIPMENT_STORAGE_CLAIM_PRODUCT_OVERRIDE_REASON_REQUIRED`。
+新增错误码：`SHIPMENT_STORAGE_CLAIM_ALLOCATION_INVALID`、`SHIPMENT_STORAGE_CLAIM_ALLOCATION_QUANTITY_MISMATCH`、`SHIPMENT_STORAGE_CLAIM_PRODUCT_MISMATCH`、`SHIPMENT_STORAGE_CLAIM_PRODUCT_OVERRIDE_REASON_REQUIRED`、`SHIPMENT_STORAGE_CLAIM_CONTAINER_CHANGE_INVALID`、`SHIPMENT_STORAGE_CLAIM_CONTAINER_VERSION_CHANGED`、`SHIPMENT_STORAGE_CLAIM_RECIPIENT_REQUIRED`、`SHIPMENT_STORAGE_CLAIM_COD_INVALID`。
 
 ### 5.5 终止态
 

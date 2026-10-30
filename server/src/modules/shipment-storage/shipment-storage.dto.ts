@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import {
   ArrayMaxSize,
@@ -168,6 +168,54 @@ export class ClaimShipmentStorageLineDto {
   productMatchNote?: string
 }
 
+export class ClaimShipmentStorageContainerChangeDto {
+  @ApiProperty({ type: 'string', format: 'uuid', description: '装柜明细 ID' })
+  @IsUUID('4')
+  loadingItemId!: string
+
+  @ApiProperty({ type: 'integer', minimum: 1, description: '申请/认领时看到的装柜明细版本' })
+  @IsInt()
+  @Min(1)
+  @Max(2_147_483_647)
+  expectedVersion!: number
+
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 128 })
+  @IsString()
+  @IsUnicodeCodePointLength(1, 128)
+  recipientName!: string
+
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 128 })
+  @IsString()
+  @IsUnicodeCodePointLength(1, 128)
+  recipientPhone!: string
+
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 2000 })
+  @IsString()
+  @IsUnicodeCodePointLength(1, 2000)
+  recipientAddress!: string
+
+  @ApiProperty({
+    type: 'boolean',
+    required: false,
+    description: '用户是否主动编辑过 COD；未编辑时保持当前值',
+  })
+  @IsOptional()
+  @IsBoolean()
+  codTouched?: boolean
+
+  @ApiProperty({
+    type: 'string',
+    nullable: true,
+    required: false,
+    maxLength: 31,
+    description: '编辑后的 COD；空值或 0 一律表示本行不涉及代收',
+  })
+  @IsOptional()
+  @IsString()
+  @IsUnicodeCodePointLength(0, 31)
+  codAmountTwd?: string | null
+}
+
 export class ClaimShipmentStorageRequestDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   @IsUUID('4')
@@ -178,6 +226,12 @@ export class ClaimShipmentStorageRequestDto {
   @ArrayNotEmpty()
   @ArrayMaxSize(100)
   lines!: ClaimShipmentStorageLineDto[]
+
+  @ApiProperty({ type: () => [ClaimShipmentStorageContainerChangeDto], required: false })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  containerChanges?: ClaimShipmentStorageContainerChangeDto[]
 
   @ApiProperty({ type: 'string', format: 'uuid' })
   @IsUUID('4')
@@ -207,6 +261,25 @@ export class ShipmentStoragePersonDto {
   @ApiProperty({ type: 'string', nullable: true }) readonly avatarUrl!: string | null
 }
 
+export class ShipmentStorageClaimContainerChangeDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly loadingItemId!: string
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly containerBatchId!: string
+  @ApiProperty({ type: 'string' }) readonly containerBatchName!: string
+  @ApiProperty({ type: 'integer' }) readonly lineNumber!: number
+  @ApiProperty({ type: 'string', nullable: true }) readonly oceanShippingMarkText!: string | null
+  @ApiProperty({ type: 'integer' }) readonly expectedVersion!: number
+  @ApiProperty({ type: 'string', nullable: true }) readonly beforeRecipientName!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly beforeRecipientPhone!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly beforeRecipientAddress!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly beforeCodAmountTwd!: string | null
+  @ApiProperty({ type: 'string' }) readonly afterRecipientName!: string
+  @ApiProperty({ type: 'string' }) readonly afterRecipientPhone!: string
+  @ApiProperty({ type: 'string' }) readonly afterRecipientAddress!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly afterCodAmountTwd!: string | null
+  @ApiProperty({ type: 'boolean' }) readonly recipientChanged!: boolean
+  @ApiProperty({ type: 'boolean' }) readonly codChanged!: boolean
+}
+
 export class ShipmentStorageClaimRequestAllocationDto {
   @ApiProperty({ type: 'string', format: 'uuid', nullable: true, description: '历史申请可能缺少库存分配映射' }) readonly purchaseOrderLineId!: string | null
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly salesOrderLineId!: string
@@ -233,6 +306,11 @@ export class ShipmentStorageClaimRequestDto extends ShipmentStorageClaimRequestS
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly targetSalesOrderId!: string
   @ApiProperty({ type: 'string' }) readonly costTotalCny!: string
   @ApiProperty({ type: () => [ShipmentStorageClaimRequestAllocationDto] }) readonly allocations!: readonly ShipmentStorageClaimRequestAllocationDto[]
+  @ApiProperty({
+    type: () => [ShipmentStorageClaimContainerChangeDto],
+    nullable: true,
+    description: '历史申请可能缺少装柜修改快照',
+  }) readonly containerChanges!: readonly ShipmentStorageClaimContainerChangeDto[] | null
   @ApiProperty({ type: 'string', enum: SHIPMENT_STORAGE_CLAIM_REQUEST_STATUSES }) readonly status!: ShipmentStorageClaimRequestStatus
   @ApiProperty({ type: 'string', nullable: true }) readonly rejectReason!: string | null
   @ApiProperty({ type: () => ShipmentStoragePersonDto, nullable: true }) readonly reviewedBy!: ShipmentStoragePersonDto | null
@@ -294,6 +372,7 @@ export class ShipmentStorageContainerBatchDto {
 
 export class ShipmentStorageContainerItemDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'integer' }) readonly version!: number
   @ApiProperty({ type: 'integer' }) readonly lineNumber!: number
   @ApiProperty({ type: 'string', nullable: true }) readonly oceanShippingMarkText!: string | null
   @ApiProperty({ type: 'string' }) readonly goodsName!: string
@@ -369,6 +448,10 @@ export class ShipmentStorageCostTransferDto {
 
 export class ShipmentStorageDetailDto extends ShipmentStorageListItemDto {
   @ApiProperty({ type: 'array', items: { type: 'object', additionalProperties: true } }) readonly originAllocations!: readonly unknown[]
+  @ApiPropertyOptional({
+    type: () => [ShipmentStorageClaimContainerChangeDto],
+    description: '认领/审批成功时返回实际生效的装柜修改',
+  }) readonly containerChanges?: readonly ShipmentStorageClaimContainerChangeDto[]
   @ApiProperty({ type: 'object', additionalProperties: true, nullable: true }) readonly containerSnapshot!: unknown
   @ApiProperty({ type: () => [ShipmentStorageContainerItemDto] }) readonly containerLoadingItems!: readonly ShipmentStorageContainerItemDto[]
   @ApiProperty({ type: () => [ShipmentStorageLocationEventDto] }) readonly locationEvents!: readonly ShipmentStorageLocationEventDto[]
