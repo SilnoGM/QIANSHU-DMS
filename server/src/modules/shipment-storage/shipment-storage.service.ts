@@ -1473,7 +1473,11 @@ export class ShipmentStorageService {
       where: { userId: order.issuerUserId },
       select: { userShareRate: true },
     })
-    if (issuerAccount?.userShareRate === null || issuerAccount === undefined) {
+    if (
+      issuerAccount === null
+      || issuerAccount === undefined
+      || issuerAccount.userShareRate === null
+    ) {
       storageFailure('SHIPMENT_STORAGE_SHARE_RATE_MISSING', '新出单人缺少资金账户比例，无法转移成本')
     }
     return { order, allocations, claimedQuantity }

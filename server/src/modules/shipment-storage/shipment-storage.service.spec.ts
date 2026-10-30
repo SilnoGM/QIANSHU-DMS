@@ -390,6 +390,24 @@ describe('ShipmentStorageService', () => {
     expect(fixture.transaction.salesOrderStatusHistory.create).not.toHaveBeenCalled()
   })
 
+  it('rejects a claim when the target issuer has no fund account or share rate', async () => {
+    for (const account of [null, { userShareRate: null }]) {
+      const fixture = claimFixture()
+      const findAccount = fixture.transaction.fundAccount.findUnique as unknown as jest.Mock
+      findAccount.mockResolvedValueOnce(account)
+
+      await expect(fixture.instance.claim(context, RECORD_ID, {
+        lines: [{ purchaseOrderLineId: PURCHASE_LINE_ID, quantity: 2, salesOrderLineId: SALES_LINE_ID }],
+        requestKey: REQUEST_KEY,
+        salesOrderId: SALES_ORDER_ID,
+      })).rejects.toMatchObject({
+        code: 'SHIPMENT_STORAGE_SHARE_RATE_MISSING',
+      })
+      expect(fixture.cost.transfer).not.toHaveBeenCalled()
+      expect(fixture.transaction.shipmentStorageRecord.update).not.toHaveBeenCalled()
+    }
+  })
+
   it('preserves an untouched zero COD and rejects an empty recipient', async () => {
     const item = {
       id: '00000000-0000-4000-8000-000000000711',
