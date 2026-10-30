@@ -1217,13 +1217,22 @@ export class ShipmentStorageService {
   ): Promise<Pick<PreparedClaim, 'order' | 'allocations' | 'claimedQuantity'>> {
     const order = await transaction.salesOrder.findUnique({
       where: { id: input.salesOrderId },
-      select: { id: true, orderNo: true, orderStatus: true, issuerUserId: true },
+      select: {
+        id: true,
+        orderNo: true,
+        orderStatus: true,
+        fulfillmentStatus: true,
+        issuerUserId: true,
+      },
     })
     if (order === null) {
       storageFailure('SALES_ORDER_NOT_FOUND', '目标销售订单不存在', HttpStatus.NOT_FOUND)
     }
     if (order.orderStatus !== 'CONFIRMED') {
       storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '只有已确认的销售订单可以认领寄仓货件')
+    }
+    if (order.fulfillmentStatus !== 'PENDING') {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '只有待采购的销售订单可以认领寄仓货件')
     }
     if (input.salesOrderId === record.originSalesOrderId) {
       storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '不能把货件认领回原销售订单')

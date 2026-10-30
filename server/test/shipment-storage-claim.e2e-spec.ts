@@ -429,7 +429,7 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
     })
   })
 
-  it('advances the claiming order and rejects a second claim beyond the line remaining quantity', async () => {
+  it('advances the claiming order and rejects a second claim after it leaves pending purchase', async () => {
     const origin = await h.shipment({ partCount: 2, salesLinked: true })
     const target = await createTargetOrder(origin.source!.id)
     const context = { actorUserId: h.fixture.actor.id, requestId: randomUUID() }
@@ -573,7 +573,7 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       }],
       requestKey: randomUUID(),
       salesOrderId: target.id,
-    })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE' })
+    })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED' })
 
     expect((await h.prisma.shipmentStorageRecord.findUniqueOrThrow({
       where: { id: released[1] },

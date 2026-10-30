@@ -299,11 +299,11 @@ async function loadOrders(signal: AbortSignal): Promise<void> {
   ordersLoading.value = true
   try {
     const response = await salesOrdersApi.list({
-      view: 'all',
-      statusSelection: 'CONFIRMED',
+      view: 'pending',
+      statusSelection: 'PENDING',
       page: 1,
       pageSize: 100,
-      // 运营申请只能选择本人负责的销售订单；采运直接认领/审核仍使用全量候选。
+      // 认领只能落到待采购订单；运营申请再收窄为本人负责的销售订单。
       ...(props.mode === 'apply' && appAccountStore.userId !== ''
         ? { issuerUserId: appAccountStore.userId }
         : {}),
@@ -687,10 +687,13 @@ function setVisible(value: boolean): void {
             :model-value="selectedOrderId"
             :options="orderOptions"
             :disabled="ordersLoading || submitting"
-            :placeholder="ordersLoading ? '加载中…' : '选择已确认的销售订单'"
+            :placeholder="ordersLoading ? '加载中…' : '选择待采购的销售订单'"
             @update:model-value="changeOrder(String($event))"
           />
         </label>
+        <p v-if="!ordersLoading && orderOptions.length === 0" class="text-sm text-muted-foreground mb-0">
+          没有可选择的待采购销售订单。
+        </p>
         <div v-if="orderLoading" class="text-sm text-muted-foreground">
           正在加载销售行…
         </div>

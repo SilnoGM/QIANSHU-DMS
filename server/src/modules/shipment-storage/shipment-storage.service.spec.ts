@@ -76,6 +76,7 @@ function claimFixture(options: {
         issuerUserId: '00000000-0000-4000-8000-000000000508',
         orderNo: 'SO/20261028-00001',
         orderStatus: options.orderStatus ?? 'CONFIRMED',
+        fulfillmentStatus: 'PENDING',
       }),
       update: jest.fn().mockResolvedValue({}),
     },
@@ -388,6 +389,28 @@ describe('ShipmentStorageService', () => {
 
     expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
     expect(fixture.transaction.salesOrderStatusHistory.create).not.toHaveBeenCalled()
+  })
+
+  it('rejects a claim into an order that is no longer pending purchase', async () => {
+    const fixture = claimFixture()
+    const findOrder = fixture.transaction.salesOrder.findUnique as unknown as jest.Mock
+    findOrder.mockResolvedValueOnce({
+      fulfillmentStatus: 'PREPARING',
+      id: SALES_ORDER_ID,
+      issuerUserId: '00000000-0000-4000-8000-000000000508',
+      orderNo: 'SO/20261028-00001',
+      orderStatus: 'CONFIRMED',
+    })
+
+    await expect(fixture.instance.claim(context, RECORD_ID, {
+      lines: [{ purchaseOrderLineId: PURCHASE_LINE_ID, quantity: 2, salesOrderLineId: SALES_LINE_ID }],
+      requestKey: REQUEST_KEY,
+      salesOrderId: SALES_ORDER_ID,
+    })).rejects.toMatchObject({
+      code: 'SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED',
+      message: expect.stringContaining('待采购') as unknown,
+    })
+    expect(fixture.transaction.shipmentStorageRecord.update).not.toHaveBeenCalled()
   })
 
   it('rejects a claim when the target issuer has no fund account or share rate', async () => {

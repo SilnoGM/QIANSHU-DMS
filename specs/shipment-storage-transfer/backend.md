@@ -209,7 +209,7 @@ POST /shipment-storage/:storageRecordId/claim
 - 每条认领行必须携带 `purchaseOrderLineId`，且该行必须属于当前寄仓记录的 `originAllocations`；
 - 每条库存分配行的认领数量之和必须等于该行原数量；
 - 整件认领：`lines` 的数量之和必须等于货件全部数量；
-- 销售单必须 `CONFIRMED`；
+- 销售单必须 `CONFIRMED` 且处于待采购阶段（`fulfillmentStatus = PENDING`）；采购审核中的订单由列表分桶排除；
 - 销售行必须存在且 `removedAt` 为空；
 - 不允许同一货件被两个销售单同时认领；
 - 产品匹配：目录行按 `product_id` 严格相等；自定义行按规范化名称（采购名称、来源销售名称别名）相等；跨类型禁止；
