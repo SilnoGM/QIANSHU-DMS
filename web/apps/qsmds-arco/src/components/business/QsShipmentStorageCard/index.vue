@@ -147,68 +147,71 @@ async function copyContainerMarks(): Promise<void> {
         </section>
       </div>
 
-      <div class="qs-shipment-storage-card__info">
-        <section class="p-3 border border-border rounded-lg min-w-0" aria-label="唛头">
-          <div class="qs-shipment-storage-card__info-row">
-            <span class="text-xs text-muted-foreground">货件唛头</span>
-            <div class="flex min-w-0 items-center">
-              <span v-if="shippingMark" class="text-xs min-w-0">
-                <QsCopyableText label="货件唛头" :text="shippingMark" />
-              </span>
-              <span v-else class="text-xs">—</span>
-            </div>
-          </div>
-          <div class="qs-shipment-storage-card__info-row">
-            <span class="text-xs text-muted-foreground">装柜唛头</span>
-            <div class="flex min-w-0 items-center">
-              <FaTooltip v-if="canCopyContainerMarks" :text="containerMarks.fullText" :delay="300">
-                <button
-                  type="button"
-                  class="text-xs p-0 text-left border-0 rounded-sm bg-transparent cursor-pointer break-all [color:inherit] [font:inherit] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                  :aria-label="`复制装柜唛头：${containerMarks.fullText}`"
-                  @click="copyContainerMarks"
-                >
-                  {{ containerMarks.visibleText }}<span v-if="containerMarks.hiddenCount > 0" class="whitespace-nowrap"> +{{ containerMarks.hiddenCount }}</span>
-                </button>
-              </FaTooltip>
-              <span v-else class="text-xs">—</span>
-            </div>
-          </div>
-        </section>
-
-        <section class="p-3 border border-border rounded-lg min-w-0" aria-label="来源单据">
-          <div class="qs-shipment-storage-card__info-row">
-            <span class="text-xs text-muted-foreground">来源销售单</span>
-            <div class="flex flex-col gap-1 min-w-0">
-              <QsPersonDisplay
-                v-if="record.originIssuer"
-                :display-name="record.originIssuer.displayName"
-                :avatar-url="record.originIssuer.avatarUrl"
-                size="sm"
-              />
-              <span v-else class="text-xs text-muted-foreground">—</span>
-              <span class="text-xs font-mono min-w-0">
-                <QsCopyableText label="销售单号" :text="record.originSalesOrderNo" />
-              </span>
-            </div>
-          </div>
-          <div class="qs-shipment-storage-card__info-row">
-            <span class="text-xs text-muted-foreground">来源采购单</span>
-            <div class="flex flex-col gap-1 min-w-0">
-              <QsPersonDisplay
-                v-if="record.originPurchaseCreator"
-                :display-name="record.originPurchaseCreator.displayName"
-                :avatar-url="record.originPurchaseCreator.avatarUrl"
-                size="sm"
-              />
-              <span v-else class="text-xs text-muted-foreground">—</span>
-              <span class="text-xs font-mono min-w-0">
-                <QsCopyableText label="采购单号" :text="record.originPurchaseOrderNo" />
-              </span>
-            </div>
-          </div>
-        </section>
-      </div>
+      <dl class="qs-shipment-storage-card__facts">
+        <div class="qs-shipment-storage-card__fact">
+          <dt class="qs-shipment-storage-card__fact-label">
+            货件唛头
+          </dt>
+          <dd class="qs-shipment-storage-card__fact-value">
+            <span v-if="shippingMark" class="qs-shipment-storage-card__copyable text-xs min-w-0">
+              <QsCopyableText label="货件唛头" :text="shippingMark" />
+            </span>
+            <span v-else class="text-xs">—</span>
+          </dd>
+        </div>
+        <div class="qs-shipment-storage-card__fact">
+          <dt class="qs-shipment-storage-card__fact-label">
+            来源销售单
+          </dt>
+          <dd class="qs-shipment-storage-card__fact-value qs-shipment-storage-card__fact-value--source">
+            <QsPersonDisplay
+              v-if="record.originIssuer"
+              :display-name="record.originIssuer.displayName"
+              :avatar-url="record.originIssuer.avatarUrl"
+              size="sm"
+            />
+            <span v-else class="text-xs text-muted-foreground">—</span>
+            <span class="qs-shipment-storage-card__copyable text-xs font-mono min-w-0">
+              <QsCopyableText label="销售单号" :text="record.originSalesOrderNo" />
+            </span>
+          </dd>
+        </div>
+        <div class="qs-shipment-storage-card__fact">
+          <dt class="qs-shipment-storage-card__fact-label">
+            装柜唛头
+          </dt>
+          <dd class="qs-shipment-storage-card__fact-value">
+            <FaTooltip v-if="canCopyContainerMarks" :text="containerMarks.fullText" :delay="300">
+              <button
+                type="button"
+                class="qs-shipment-storage-card__copy-action text-xs p-0 text-left border-0 rounded-sm bg-transparent underline-offset-2 decoration-dotted cursor-pointer break-all [color:inherit] [font:inherit] hover:text-primary focus-visible:outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/40"
+                :aria-label="`复制装柜唛头：${containerMarks.fullText}`"
+                @click="copyContainerMarks"
+              >
+                {{ containerMarks.visibleText }}<span v-if="containerMarks.hiddenCount > 0" class="whitespace-nowrap"> +{{ containerMarks.hiddenCount }}</span>
+              </button>
+            </FaTooltip>
+            <span v-else class="text-xs">—</span>
+          </dd>
+        </div>
+        <div class="qs-shipment-storage-card__fact">
+          <dt class="qs-shipment-storage-card__fact-label">
+            来源采购单
+          </dt>
+          <dd class="qs-shipment-storage-card__fact-value qs-shipment-storage-card__fact-value--source">
+            <QsPersonDisplay
+              v-if="record.originPurchaseCreator"
+              :display-name="record.originPurchaseCreator.displayName"
+              :avatar-url="record.originPurchaseCreator.avatarUrl"
+              size="sm"
+            />
+            <span v-else class="text-xs text-muted-foreground">—</span>
+            <span class="qs-shipment-storage-card__copyable text-xs font-mono min-w-0">
+              <QsCopyableText label="采购单号" :text="record.originPurchaseOrderNo" />
+            </span>
+          </dd>
+        </div>
+      </dl>
     </div>
 
     <footer class="qs-shipment-storage-card__footer px-4 py-3 border-t border-border bg-muted/20 flex flex-wrap gap-2 justify-end">
@@ -289,23 +292,57 @@ async function copyContainerMarks(): Promise<void> {
   letter-spacing: var(--qs-type-tracking-tight);
 }
 
-.qs-shipment-storage-card__info {
+.qs-shipment-storage-card__facts {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1.5rem;
+  padding: 0.75rem;
+  border: 1px solid oklch(var(--border));
+  border-radius: 0.5rem;
 }
 
-.qs-shipment-storage-card__info-row {
+.qs-shipment-storage-card__fact {
   display: grid;
-  grid-template-columns: 4.5rem minmax(0, 1fr);
+  grid-template-columns: 4.25rem minmax(0, 1fr);
   gap: 0.5rem;
-  align-items: start;
+  align-items: center;
+  min-width: 0;
 }
 
-.qs-shipment-storage-card__info-row + .qs-shipment-storage-card__info-row {
-  padding-top: 0.5rem;
-  margin-top: 0.5rem;
-  border-top: 1px solid oklch(var(--border));
+.qs-shipment-storage-card__fact-label {
+  font-size: var(--qs-type-size-xs);
+  color: oklch(var(--muted-foreground));
+  white-space: nowrap;
+}
+
+.qs-shipment-storage-card__fact-value {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--qs-type-size-xs);
+}
+
+.qs-shipment-storage-card__fact-value--source {
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+}
+
+.qs-shipment-storage-card__copyable {
+  min-width: 0;
+}
+
+.qs-shipment-storage-card__copyable :deep(button) {
+  text-decoration: underline dotted transparent;
+  text-underline-offset: 0.2em;
+  transition: color 150ms ease, text-decoration-color 150ms ease;
+}
+
+.qs-shipment-storage-card__copyable :deep(button:hover),
+.qs-shipment-storage-card__copyable :deep(button:focus-visible) {
+  color: oklch(var(--primary));
+  text-decoration-color: currentcolor;
 }
 
 @container (width < 33rem) {
@@ -315,7 +352,7 @@ async function copyContainerMarks(): Promise<void> {
   }
 
   .qs-shipment-storage-card__product-cost,
-  .qs-shipment-storage-card__info {
+  .qs-shipment-storage-card__facts {
     grid-template-columns: minmax(0, 1fr);
   }
 
