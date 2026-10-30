@@ -638,7 +638,7 @@ function setVisible(value: boolean): void {
             class="mt-3 pt-3 border-t border-border first:mt-2 first:pt-0 first:border-t-0"
           >
             <div class="flex gap-2 items-baseline justify-between">
-              <span class="font-medium">第{{ change.lineNumber }}行 · {{ change.oceanShippingMarkText || '—' }}</span>
+              <span class="font-medium">{{ change.containerBatchName }} · 第{{ change.lineNumber }}行 · {{ change.oceanShippingMarkText || '—' }}</span>
               <span class="text-xs text-muted-foreground">v{{ change.expectedVersion }}</span>
             </div>
             <dl v-if="change.recipientChanged" class="text-sm mt-1 gap-x-3 gap-y-1 grid grid-cols-[4.5rem_minmax(0,1fr)]">
@@ -790,7 +790,7 @@ function setVisible(value: boolean): void {
             class="mt-3 pt-3 border-t border-border first:mt-2 first:pt-0 first:border-t-0"
           >
             <div class="flex gap-2 items-baseline justify-between">
-              <span class="font-medium">第{{ item.lineNumber }}行 · {{ item.oceanShippingMarkText || '—' }}</span>
+              <span class="font-medium">{{ item.containerBatch.containerBatchName }} · 第{{ item.lineNumber }}行 · {{ item.oceanShippingMarkText || '—' }}</span>
               <span class="text-xs text-muted-foreground">{{ item.goodsName }}</span>
             </div>
             <div class="mt-2 gap-3 grid sm:grid-cols-2">

@@ -138,4 +138,6 @@ test('调货弹窗覆盖申请、审核和直接认领三种模式', async () =>
   assert.match(source, /codTouched/u)
   assert.match(source, /buildClaimContainerCopyText/u)
   assert.match(source, /复制装柜修改信息/u)
+  assert.match(source, /item\.containerBatch\.containerBatchName \}\} · 第\{\{ item\.lineNumber \}\}行/u)
+  assert.match(source, /change\.containerBatchName \}\} · 第\{\{ change\.lineNumber \}\}行/u)
 })
