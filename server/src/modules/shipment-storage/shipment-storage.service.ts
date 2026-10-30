@@ -30,11 +30,13 @@ import {
 } from '../sales-orders/sales-order-claim-coverage'
 import { advanceSalesOrderAfterClaim } from '../sales-orders/sales-order-claim-progress'
 import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
-import {
-  ShipmentStorageCostService,
-  totalCostFromSnapshot,
-} from './shipment-storage-cost.service'
+import { ShipmentStorageCostService, totalCostFromSnapshot } from './shipment-storage-cost.service'
 import { readShipmentStorageAllocations } from './shipment-storage-allocation'
+import {
+  claimProductAliases,
+  normalizeClaimProductName,
+  type ClaimProductMatchMode,
+} from './product-match'
 import type {
   ClaimShipmentStorageRequestDto,
   RelocateShipmentStorageRequestDto,
@@ -258,10 +260,31 @@ interface StoragePersonContext {
 }
 
 interface ClaimAllocationSnapshot {
+  readonly purchaseOrderLineId: string | null
   readonly salesOrderLineId: string
   readonly lineNumber: number
   readonly productName: string
+  readonly productDescription: string | null
+  readonly sourceProductName: string | null
+  readonly sourceProductDescription: string | null
+  readonly sourceSalesProductName: string | null
   readonly quantity: number
+  readonly productMatchMode: ClaimProductMatchMode | 'UNKNOWN'
+  readonly productMatchNote: string | null
+}
+
+interface PreparedClaimAllocation {
+  readonly purchaseOrderLineId: string
+  readonly salesOrderLineId: string
+  readonly lineNumber: number
+  readonly productName: string
+  readonly productDescription: string | null
+  readonly sourceProductName: string
+  readonly sourceProductDescription: string | null
+  readonly sourceSalesProductName: string | null
+  readonly quantity: number
+  readonly productMatchMode: ClaimProductMatchMode
+  readonly productMatchNote: string | null
 }
 
 interface PreparedClaim {
@@ -279,12 +302,7 @@ interface PreparedClaim {
     readonly orderNo: string
     readonly issuerUserId: string
   }
-  readonly lines: readonly {
-    readonly id: string
-    readonly lineNumber: number
-    readonly quantity: number
-    readonly productNameSnapshot: string
-  }[]
+  readonly allocations: readonly PreparedClaimAllocation[]
   readonly claimedQuantity: number
 }
 
@@ -378,11 +396,33 @@ function readClaimAllocationSnapshots(value: Prisma.JsonValue): ClaimAllocationS
     ) {
       return []
     }
+    const productMatchMode = record.productMatchMode === 'MANUAL_OVERRIDE'
+      ? 'MANUAL_OVERRIDE'
+      : record.productMatchMode === 'AUTO' ? 'AUTO' : 'UNKNOWN'
     return [{
+      purchaseOrderLineId: typeof record.purchaseOrderLineId === 'string'
+        ? record.purchaseOrderLineId
+        : null,
       salesOrderLineId: record.salesOrderLineId,
       lineNumber: record.lineNumber,
       productName: record.productName,
+      productDescription: typeof record.productDescription === 'string'
+        ? record.productDescription
+        : null,
+      sourceProductName: typeof record.sourceProductName === 'string'
+        ? record.sourceProductName
+        : null,
+      sourceProductDescription: typeof record.sourceProductDescription === 'string'
+        ? record.sourceProductDescription
+        : null,
+      sourceSalesProductName: typeof record.sourceSalesProductName === 'string'
+        ? record.sourceSalesProductName
+        : null,
       quantity: record.quantity,
+      productMatchMode,
+      productMatchNote: typeof record.productMatchNote === 'string'
+        ? record.productMatchNote
+        : null,
     }]
   })
 }
@@ -391,9 +431,29 @@ function claimRequestLineInputs(
   allocations: readonly ClaimAllocationSnapshot[],
 ): ClaimShipmentStorageRequestDto['lines'] {
   return allocations.map(allocation => ({
+    purchaseOrderLineId: allocation.purchaseOrderLineId as string,
     salesOrderLineId: allocation.salesOrderLineId,
     quantity: allocation.quantity,
+    ...(allocation.productMatchMode === 'MANUAL_OVERRIDE'
+      ? { productMatchOverride: true, productMatchNote: allocation.productMatchNote ?? undefined }
+      : {}),
   }))
+}
+
+function claimProductOverrideAudit(
+  allocations: readonly Pick<PreparedClaimAllocation, 'productMatchMode' | 'productMatchNote'>[],
+): { productMatchOverrideCount?: number, productMatchOverrideNote?: string } {
+  const overrides = allocations.filter(allocation => allocation.productMatchMode === 'MANUAL_OVERRIDE')
+  if (overrides.length === 0) return {}
+  const notes = [...new Set(overrides.flatMap(allocation => (
+    allocation.productMatchNote === null ? [] : [allocation.productMatchNote]
+  )))]
+  return {
+    productMatchOverrideCount: overrides.length,
+    ...(notes.length === 0
+      ? {}
+      : { productMatchOverrideNote: notes.join(' | ').slice(0, 500) }),
+  }
 }
 
 function detailDto(
@@ -945,95 +1005,8 @@ export class ShipmentStorageService {
           )
         }
       }
-      const order = await transaction.salesOrder.findUnique({
-        where: { id: input.salesOrderId },
-        select: { id: true, orderNo: true, orderStatus: true, issuerUserId: true },
-      })
-      if (order === null) {
-        storageFailure('SALES_ORDER_NOT_FOUND', '目标销售订单不存在', HttpStatus.NOT_FOUND)
-      }
-      if (order.orderStatus !== 'CONFIRMED') {
-        storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '只有已确认的销售订单可以认领寄仓货件')
-      }
-      if (input.salesOrderId === record.originSalesOrderId) {
-        storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '不能把货件认领回原销售订单')
-      }
-      const requestedLineIds = input.lines.map(line => line.salesOrderLineId)
-      if (new Set(requestedLineIds).size !== requestedLineIds.length) {
-        storageFailure('VALIDATION_FAILED', '认领明细行不能重复')
-      }
-      const lines = await transaction.salesOrderLine.findMany({
-        where: {
-          id: { in: requestedLineIds },
-          salesOrderId: input.salesOrderId,
-          removedAt: null,
-        },
-        select: { id: true, lineNumber: true, quantity: true },
-      })
-      if (lines.length !== requestedLineIds.length) {
-        storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '目标销售明细行不存在或已移除')
-      }
-      const lineById = new Map(lines.map(line => [line.id, line]))
-      for (const claimed of input.lines) {
-        const line = lineById.get(claimed.salesOrderLineId)
-        if (line === undefined || claimed.quantity > line.quantity) {
-          storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '认领数量超过目标销售行数量')
-        }
-      }
-      const shipmentQuantity = Array.isArray(record.originAllocations)
-        ? record.originAllocations.reduce<number>((sum, allocation) => {
-          if (typeof allocation !== 'object' || allocation === null || Array.isArray(allocation)) return sum
-          const quantity = (allocation as Record<string, unknown>).quantity
-          return sum + (typeof quantity === 'number' ? quantity : 0)
-        }, 0)
-        : 0
-      const claimedQuantity = input.lines.reduce((sum, line) => sum + line.quantity, 0)
-      if (shipmentQuantity <= 0 || claimedQuantity !== shipmentQuantity) {
-        storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '寄仓货件必须整件认领')
-      }
-      // 认领与采购创建共用销售行锁，保证“采购预占 + 认领”不会并发穿透。
-      const salesLineIds = lines.map(line => line.id)
-      await transaction.$queryRaw(Prisma.sql`
-        SELECT "id" FROM "sales_order_lines"
-        WHERE "id" IN (${Prisma.join(salesLineIds)})
-        ORDER BY "id" FOR UPDATE
-      `)
-      // 审核中采购同样占用销售行数量；只按已通过采购计算会允许重复备货。
-      const purchasedRows = await transaction.purchaseOrderLine.groupBy({
-        by: ['sourceSalesOrderLineId'],
-        where: {
-          sourceSalesOrderLineId: { in: salesLineIds },
-          purchaseOrder: {
-            orderStatus: { not: 'CANCELLED' },
-            purchaseType: 'SALES_LINKED',
-            salesOrderId: input.salesOrderId,
-          },
-        },
-        _sum: { quantity: true },
-      })
-      const purchasedBySource = new Map<string, number>()
-      for (const row of purchasedRows) {
-        if (row.sourceSalesOrderLineId !== null) {
-          purchasedBySource.set(row.sourceSalesOrderLineId, row._sum.quantity ?? 0)
-        }
-      }
-      const existingClaims = await readClaimedQuantitiesBySalesLine(
-        transaction,
-        input.salesOrderId,
-        salesLineIds,
-      )
-      for (const claimed of input.lines) {
-        const line = lineById.get(claimed.salesOrderLineId)
-        const remaining = (line?.quantity ?? 0)
-          - (purchasedBySource.get(claimed.salesOrderLineId) ?? 0)
-          - (existingClaims.get(claimed.salesOrderLineId) ?? 0)
-        if (claimed.quantity > remaining) {
-          storageFailure(
-            'SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE',
-            `销售明细第${line?.lineNumber ?? '—'}行剩余可认领数量不足（已扣除采购预占与已有认领）`,
-          )
-        }
-      }
+      const prepared = await this.prepareClaimTarget(transaction, record, input)
+      const { allocations, claimedQuantity, order } = prepared
       const now = new Date()
       await transaction.shipmentStorageRecord.update({
         where: { id: storageRecordId },
@@ -1045,10 +1018,13 @@ export class ShipmentStorageService {
         },
       })
       await transaction.shipmentClaimLine.createMany({
-        data: input.lines.map(line => ({
+        data: allocations.map(allocation => ({
           storageRecordId,
-          salesOrderLineId: line.salesOrderLineId,
-          quantity: line.quantity,
+          purchaseOrderLineId: allocation.purchaseOrderLineId,
+          salesOrderLineId: allocation.salesOrderLineId,
+          quantity: allocation.quantity,
+          productMatchMode: allocation.productMatchMode,
+          productMatchNote: allocation.productMatchNote,
           claimedAt: now,
           claimedBy: context.actorUserId,
         })),
@@ -1079,6 +1055,8 @@ export class ShipmentStorageService {
           salesOrderId: input.salesOrderId,
           salesOrderNo: order.orderNo,
           claimedQuantity,
+          allocationCount: allocations.length,
+          ...claimProductOverrideAudit(allocations),
         },
       })
       // 认领与履约推进必须同一事务：认领的是已发货、已到仓的既有货件，
@@ -1094,13 +1072,7 @@ export class ShipmentStorageService {
         storageFailure('SHIPMENT_STORAGE_STATE_CHANGED', '销售订单状态已变化，请刷新后重试', HttpStatus.CONFLICT)
       }
       // 认领即按新出单人比例收回成本：乙 −bC、公司 −(1−b)C，与认领事实同事务。
-      const issuerAccount = await transaction.fundAccount.findUnique({
-        where: { userId: order.issuerUserId },
-        select: { userShareRate: true },
-      })
-      if (issuerAccount?.userShareRate === null || issuerAccount === undefined) {
-        storageFailure('SHIPMENT_STORAGE_SHARE_RATE_MISSING', '新出单人缺少资金账户比例，无法转移成本')
-      }
+      // 出单人资金账户比例已在 prepareClaimTarget 内校验。
       await this.cost.transfer(transaction, context, 'CLAIM', {
         amountCny: totalCostFromSnapshot(record.costSnapshot),
         shipmentId: record.shipmentId,
@@ -1143,7 +1115,7 @@ export class ShipmentStorageService {
     record: PreparedClaim['record'],
     input: ClaimShipmentStorageRequestDto,
     applicantUserId?: string,
-  ): Promise<Pick<PreparedClaim, 'order' | 'lines' | 'claimedQuantity'>> {
+  ): Promise<Pick<PreparedClaim, 'order' | 'allocations' | 'claimedQuantity'>> {
     const order = await transaction.salesOrder.findUnique({
       where: { id: input.salesOrderId },
       select: { id: true, orderNo: true, orderStatus: true, issuerUserId: true },
@@ -1164,34 +1136,117 @@ export class ShipmentStorageService {
         HttpStatus.FORBIDDEN,
       )
     }
-    const requestedLineIds = input.lines.map(line => line.salesOrderLineId)
-    if (new Set(requestedLineIds).size !== requestedLineIds.length) {
-      storageFailure('VALIDATION_FAILED', '认领明细行不能重复')
+
+    const requestedPairs = new Set<string>()
+    for (const claimed of input.lines) {
+      const pair = `${claimed.purchaseOrderLineId}:${claimed.salesOrderLineId}`
+      if (requestedPairs.has(pair)) {
+        storageFailure('VALIDATION_FAILED', '同一库存分配行与销售行的认领明细不能重复')
+      }
+      requestedPairs.add(pair)
     }
+
+    const requestedLineIds = [...new Set(input.lines.map(line => line.salesOrderLineId))]
     const lines = await transaction.salesOrderLine.findMany({
       where: {
         id: { in: requestedLineIds },
         salesOrderId: input.salesOrderId,
         removedAt: null,
       },
-      select: { id: true, lineNumber: true, quantity: true, productNameSnapshot: true },
+      select: {
+        id: true,
+        lineNumber: true,
+        lineType: true,
+        productId: true,
+        quantity: true,
+        productNameSnapshot: true,
+        descriptionSnapshot: true,
+      },
     })
     if (lines.length !== requestedLineIds.length) {
       storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '目标销售明细行不存在或已移除')
     }
     const lineById = new Map(lines.map(line => [line.id, line]))
-    for (const claimed of input.lines) {
-      const line = lineById.get(claimed.salesOrderLineId)
-      if (line === undefined || claimed.quantity > line.quantity) {
-        storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '认领数量超过目标销售行数量')
+
+    const allocationQuantityById = new Map<string, number>()
+    const allocationNameById = new Map<string, string>()
+    const sourceAllocations = readShipmentStorageAllocations(record.originAllocations)
+    if (
+      !Array.isArray(record.originAllocations)
+      || sourceAllocations.length !== record.originAllocations.length
+    ) {
+      storageFailure(
+        'SHIPMENT_STORAGE_CLAIM_ALLOCATION_INVALID',
+        '寄仓货件库存分配数据不完整，无法认领',
+      )
+    }
+    for (const allocation of sourceAllocations) {
+      allocationQuantityById.set(
+        allocation.lineId,
+        (allocationQuantityById.get(allocation.lineId) ?? 0) + allocation.quantity,
+      )
+      if (allocation.productName !== null) {
+        allocationNameById.set(allocation.lineId, allocation.productName)
       }
     }
-    const shipmentQuantity = readShipmentStorageAllocations(record.originAllocations)
-      .reduce((sum, allocation) => sum + allocation.quantity, 0)
+    if (allocationQuantityById.size === 0) {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_ALLOCATION_INVALID', '寄仓货件缺少可认领的库存分配行')
+    }
+
+    const sourceIds = [...new Set(input.lines.map(line => line.purchaseOrderLineId))]
+    const sourceLines = await transaction.purchaseOrderLine.findMany({
+      where: { id: { in: sourceIds } },
+      select: {
+        id: true,
+        lineNumber: true,
+        lineType: true,
+        productId: true,
+        productNameSnapshot: true,
+        descriptionSnapshot: true,
+        sourceSalesOrderLine: { select: { productNameSnapshot: true } },
+      },
+    })
+    if (sourceLines.length !== sourceIds.length) {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_ALLOCATION_INVALID', '库存分配行不存在或已被移除')
+    }
+    const sourceById = new Map(sourceLines.map(line => [line.id, line]))
+
+    const quantityBySource = new Map<string, number>()
+    const quantityByTargetLine = new Map<string, number>()
+    for (const claimed of input.lines) {
+      if (!allocationQuantityById.has(claimed.purchaseOrderLineId)) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_ALLOCATION_INVALID', '库存分配行不属于该寄仓货件')
+      }
+      quantityBySource.set(
+        claimed.purchaseOrderLineId,
+        (quantityBySource.get(claimed.purchaseOrderLineId) ?? 0) + claimed.quantity,
+      )
+      quantityByTargetLine.set(
+        claimed.salesOrderLineId,
+        (quantityByTargetLine.get(claimed.salesOrderLineId) ?? 0) + claimed.quantity,
+      )
+    }
+    for (const [sourceId, allocationQuantity] of allocationQuantityById) {
+      if ((quantityBySource.get(sourceId) ?? 0) !== allocationQuantity) {
+        storageFailure(
+          'SHIPMENT_STORAGE_CLAIM_ALLOCATION_QUANTITY_MISMATCH',
+          '每条库存分配行必须按原数量完整认领',
+        )
+      }
+    }
+    const shipmentQuantity = [...allocationQuantityById.values()]
+      .reduce((sum, quantity) => sum + quantity, 0)
     const claimedQuantity = input.lines.reduce((sum, line) => sum + line.quantity, 0)
     if (shipmentQuantity <= 0 || claimedQuantity !== shipmentQuantity) {
       storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '寄仓货件必须整件认领')
     }
+    for (const [targetLineId, quantity] of quantityByTargetLine) {
+      const line = lineById.get(targetLineId)
+      if (line === undefined || quantity > line.quantity) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '认领数量超过目标销售行数量')
+      }
+    }
+
     const salesLineIds = lines.map(line => line.id)
     await transaction.$queryRaw(Prisma.sql`
       SELECT "id" FROM "sales_order_lines"
@@ -1221,18 +1276,100 @@ export class ShipmentStorageService {
       input.salesOrderId,
       salesLineIds,
     )
-    for (const claimed of input.lines) {
-      const line = lineById.get(claimed.salesOrderLineId)
+    for (const [targetLineId, quantity] of quantityByTargetLine) {
+      const line = lineById.get(targetLineId)
       const remaining = (line?.quantity ?? 0)
-        - (purchasedBySource.get(claimed.salesOrderLineId) ?? 0)
-        - (existingClaims.get(claimed.salesOrderLineId) ?? 0)
-      if (claimed.quantity > remaining) {
+        - (purchasedBySource.get(targetLineId) ?? 0)
+        - (existingClaims.get(targetLineId) ?? 0)
+      if (quantity > remaining) {
         storageFailure(
           'SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE',
           `销售明细第${line?.lineNumber ?? '—'}行剩余可认领数量不足（已扣除采购预占与已有认领）`,
         )
       }
     }
+
+    const allocations: PreparedClaimAllocation[] = input.lines.map((claimed) => {
+      const source = sourceById.get(claimed.purchaseOrderLineId)
+      const target = lineById.get(claimed.salesOrderLineId)
+      if (source === undefined || target === undefined) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_ALLOCATION_INVALID', '库存分配行或销售行不存在')
+      }
+      if (source.lineType !== target.lineType) {
+        storageFailure(
+          'SHIPMENT_STORAGE_CLAIM_PRODUCT_MISMATCH',
+          `库存产品“${source.productNameSnapshot}”与销售明细第${target.lineNumber}行产品类型不一致，不能认领`,
+        )
+      }
+      if (source.lineType === 'CATALOG') {
+        if (source.productId === null || source.productId !== target.productId) {
+          storageFailure(
+            'SHIPMENT_STORAGE_CLAIM_PRODUCT_MISMATCH',
+            `库存产品“${source.productNameSnapshot}”与销售明细第${target.lineNumber}行产品不一致，不能认领`,
+          )
+        }
+        return {
+          purchaseOrderLineId: source.id,
+          salesOrderLineId: target.id,
+          lineNumber: target.lineNumber,
+          productName: target.productNameSnapshot,
+          productDescription: target.descriptionSnapshot,
+          sourceProductName: source.productNameSnapshot,
+          sourceProductDescription: source.descriptionSnapshot,
+          sourceSalesProductName: source.sourceSalesOrderLine?.productNameSnapshot ?? null,
+          quantity: claimed.quantity,
+          productMatchMode: 'AUTO',
+          productMatchNote: null,
+        }
+      }
+      const aliases = claimProductAliases([
+        source.productNameSnapshot,
+        allocationNameById.get(claimed.purchaseOrderLineId),
+        source.sourceSalesOrderLine?.productNameSnapshot,
+      ])
+      if (aliases.includes(normalizeClaimProductName(target.productNameSnapshot))) {
+        return {
+          purchaseOrderLineId: source.id,
+          salesOrderLineId: target.id,
+          lineNumber: target.lineNumber,
+          productName: target.productNameSnapshot,
+          productDescription: target.descriptionSnapshot,
+          sourceProductName: source.productNameSnapshot,
+          sourceProductDescription: source.descriptionSnapshot,
+          sourceSalesProductName: source.sourceSalesOrderLine?.productNameSnapshot ?? null,
+          quantity: claimed.quantity,
+          productMatchMode: 'AUTO',
+          productMatchNote: null,
+        }
+      }
+      if (claimed.productMatchOverride !== true) {
+        storageFailure(
+          'SHIPMENT_STORAGE_CLAIM_PRODUCT_MISMATCH',
+          `库存产品“${source.productNameSnapshot}”与销售明细第${target.lineNumber}行产品不一致；如确认是同一产品，请勾选人工确认并填写原因`,
+        )
+      }
+      const note = claimed.productMatchNote?.trim() ?? ''
+      if (note === '') {
+        storageFailure(
+          'SHIPMENT_STORAGE_CLAIM_PRODUCT_OVERRIDE_REASON_REQUIRED',
+          '跨产品认领必须填写人工确认原因',
+        )
+      }
+      return {
+        purchaseOrderLineId: source.id,
+        salesOrderLineId: target.id,
+        lineNumber: target.lineNumber,
+        productName: target.productNameSnapshot,
+        productDescription: target.descriptionSnapshot,
+        sourceProductName: source.productNameSnapshot,
+        sourceProductDescription: source.descriptionSnapshot,
+        sourceSalesProductName: source.sourceSalesOrderLine?.productNameSnapshot ?? null,
+        quantity: claimed.quantity,
+        productMatchMode: 'MANUAL_OVERRIDE',
+        productMatchNote: note.slice(0, 500),
+      }
+    })
+
     const issuerAccount = await transaction.fundAccount.findUnique({
       where: { userId: order.issuerUserId },
       select: { userShareRate: true },
@@ -1240,7 +1377,7 @@ export class ShipmentStorageService {
     if (issuerAccount?.userShareRate === null || issuerAccount === undefined) {
       storageFailure('SHIPMENT_STORAGE_SHARE_RATE_MISSING', '新出单人缺少资金账户比例，无法转移成本')
     }
-    return { order, lines, claimedQuantity }
+    return { order, allocations, claimedQuantity }
   }
 
   async getClaimRequest(
@@ -1292,12 +1429,18 @@ export class ShipmentStorageService {
           storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_EXISTS', '该货件已有进行中的调货申请', HttpStatus.CONFLICT)
         }
         const prepared = await this.prepareClaimTarget(transaction, record, input, context.actorUserId)
-        const quantityByLine = new Map(input.lines.map(line => [line.salesOrderLineId, line.quantity]))
-        const allocations: ClaimAllocationSnapshot[] = prepared.lines.map(line => ({
-          salesOrderLineId: line.id,
-          lineNumber: line.lineNumber,
-          productName: line.productNameSnapshot,
-          quantity: quantityByLine.get(line.id) ?? 0,
+        const allocations: ClaimAllocationSnapshot[] = prepared.allocations.map(allocation => ({
+          purchaseOrderLineId: allocation.purchaseOrderLineId,
+          salesOrderLineId: allocation.salesOrderLineId,
+          lineNumber: allocation.lineNumber,
+          productName: allocation.productName,
+          productDescription: allocation.productDescription,
+          sourceProductName: allocation.sourceProductName,
+          sourceProductDescription: allocation.sourceProductDescription,
+          sourceSalesProductName: allocation.sourceSalesProductName,
+          quantity: allocation.quantity,
+          productMatchMode: allocation.productMatchMode,
+          productMatchNote: allocation.productMatchNote,
         }))
         const created = await transaction.shipmentStorageClaimRequest.create({
           data: {
@@ -1324,6 +1467,8 @@ export class ShipmentStorageService {
             salesOrderId: prepared.order.id,
             salesOrderNo: prepared.order.orderNo,
             claimedQuantity: prepared.claimedQuantity,
+            allocationCount: prepared.allocations.length,
+            ...claimProductOverrideAudit(prepared.allocations),
           },
         })
         return created
@@ -1433,6 +1578,13 @@ export class ShipmentStorageService {
     const allocations = readClaimAllocationSnapshots(request.allocations)
     if (allocations.length === 0) {
       storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED', '调货申请缺少认领明细', HttpStatus.CONFLICT)
+    }
+    if (allocations.some(allocation => allocation.purchaseOrderLineId === null)) {
+      storageFailure(
+        'SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED',
+        '历史调货申请缺少库存分配映射，请撤回后重新提交',
+        HttpStatus.CONFLICT,
+      )
     }
     return this.claim(context, storageRecordId, {
       salesOrderId: request.salesOrderId,
@@ -1678,8 +1830,12 @@ export class ShipmentStorageService {
             id: true,
             purchaseOrderId: true,
             lineNumber: true,
+            lineType: true,
+            productId: true,
             productNoSnapshot: true,
             productNameSnapshot: true,
+            descriptionSnapshot: true,
+            sourceSalesOrderLine: { select: { productNameSnapshot: true } },
             product: {
               select: {
                 media: {
@@ -1705,11 +1861,20 @@ export class ShipmentStorageService {
         // 快照行必须仍属于该寄仓记录的来源采购单，避免异常数据把别的订单图片带出来。
         const resolvedLine = line?.purchaseOrderId === row.originPurchaseOrderId ? line : undefined
         const image = resolvedLine?.product?.media[0]
+        const productName = allocation.productName ?? resolvedLine?.productNameSnapshot ?? ''
+        const sourceSalesProductName = resolvedLine?.sourceSalesOrderLine?.productNameSnapshot ?? null
         return {
           lineId: allocation.lineId,
           lineNumber: allocation.lineNumber ?? resolvedLine?.lineNumber ?? 0,
+          lineType: resolvedLine?.lineType ?? 'UNRESOLVED',
+          productId: resolvedLine?.productId ?? null,
           productNo: resolvedLine?.productNoSnapshot ?? null,
-          productName: allocation.productName ?? resolvedLine?.productNameSnapshot ?? '',
+          productName,
+          productDescription: resolvedLine?.descriptionSnapshot ?? null,
+          sourceSalesProductName,
+          normalizedNames: resolvedLine?.lineType === 'CUSTOM'
+            ? claimProductAliases([productName, resolvedLine.productNameSnapshot, sourceSalesProductName])
+            : [],
           quantity: allocation.quantity,
           mainImage: image === undefined
             ? null

@@ -184,17 +184,29 @@ GET  /sales-orders/:salesOrderId/storage-claim-context
 POST /shipment-storage/:storageRecordId/claim
 {
   "salesOrderId": "...",
-  "lines": [{ "salesOrderLineId": "...", "quantity": 1 }],
+  "lines": [{
+    "purchaseOrderLineId": "库存分配行",
+    "salesOrderLineId": "...",
+    "quantity": 1,
+    "productMatchOverride": false,
+    "productMatchNote": "仅自定义产品异名时必填"
+  }],
   "requestKey": "uuid"
 }
 ```
 
 首期约束：
 
+- 每条认领行必须携带 `purchaseOrderLineId`，且该行必须属于当前寄仓记录的 `originAllocations`；
+- 每条库存分配行的认领数量之和必须等于该行原数量；
 - 整件认领：`lines` 的数量之和必须等于货件全部数量；
 - 销售单必须 `CONFIRMED`；
 - 销售行必须存在且 `removedAt` 为空；
-- 不允许同一货件被两个销售单同时认领。
+- 不允许同一货件被两个销售单同时认领；
+- 产品匹配：目录行按 `product_id` 严格相等；自定义行按规范化名称（采购名称、来源销售名称别名）相等；跨类型禁止；
+- 自定义行名称不一致时必须 `productMatchOverride: true` 且提供 `productMatchNote`，否则拒绝；人工确认会写入 `shipment_claim_lines` 与审计。
+
+新增错误码：`SHIPMENT_STORAGE_CLAIM_ALLOCATION_INVALID`、`SHIPMENT_STORAGE_CLAIM_ALLOCATION_QUANTITY_MISMATCH`、`SHIPMENT_STORAGE_CLAIM_PRODUCT_MISMATCH`、`SHIPMENT_STORAGE_CLAIM_PRODUCT_OVERRIDE_REASON_REQUIRED`。
 
 ### 5.5 终止态
 

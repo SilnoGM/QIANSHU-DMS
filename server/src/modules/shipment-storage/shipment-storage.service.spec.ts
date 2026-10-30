@@ -11,6 +11,7 @@ const REQUEST_KEY = '00000000-0000-4000-8000-000000000503'
 const SHIPMENT_ID = '00000000-0000-4000-8000-000000000504'
 const SALES_ORDER_ID = '00000000-0000-4000-8000-000000000505'
 const SALES_LINE_ID = '00000000-0000-4000-8000-000000000506'
+const PURCHASE_LINE_ID = '00000000-0000-4000-8000-000000000509'
 const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
 
 function claimFixture(options: {
@@ -28,7 +29,17 @@ function claimFixture(options: {
         id: SALES_ORDER_ID,
         orderStatus: options.orderStatus ?? 'CONFIRMED',
       }]),
-    purchaseOrderLine: { groupBy: jest.fn().mockResolvedValue([]) },
+    purchaseOrderLine: {
+      findMany: jest.fn().mockResolvedValue([{
+        id: PURCHASE_LINE_ID,
+        lineNumber: 1,
+        lineType: 'CUSTOM',
+        productId: null,
+        productNameSnapshot: 'Custom item',
+        sourceSalesOrderLine: { productNameSnapshot: 'Custom item' },
+      }]),
+      groupBy: jest.fn().mockResolvedValue([]),
+    },
     purchaseOrderPartItem: { findMany: jest.fn().mockResolvedValue([]) },
     purchaseOrderPart: {
       findMany: jest.fn().mockResolvedValue([{
@@ -56,6 +67,9 @@ function claimFixture(options: {
       findMany: jest.fn().mockResolvedValue([{
         id: SALES_LINE_ID,
         lineNumber: 1,
+        lineType: 'CUSTOM',
+        productId: null,
+        productNameSnapshot: 'Custom item',
         quantity: 2,
       }]),
     },
@@ -85,7 +99,12 @@ function claimFixture(options: {
         claimedSalesOrderId: null,
         costSnapshot: { totalCostCny: '100.00' },
         id: RECORD_ID,
-        originAllocations: [{ quantity: 2 }],
+        originAllocations: [{
+          purchaseOrderLineId: PURCHASE_LINE_ID,
+          lineNumber: 1,
+          productName: 'Custom item',
+          quantity: 2,
+        }],
         originSalesOrderId: '00000000-0000-4000-8000-000000000507',
         shipmentId: SHIPMENT_ID,
         shipmentNoSnapshot: 'PKG/20261028-00001',
@@ -211,7 +230,7 @@ describe('ShipmentStorageService', () => {
     const fixture = claimFixture()
 
     await fixture.instance.claim(context, RECORD_ID, {
-      lines: [{ quantity: 2, salesOrderLineId: SALES_LINE_ID }],
+      lines: [{ purchaseOrderLineId: PURCHASE_LINE_ID, quantity: 2, salesOrderLineId: SALES_LINE_ID }],
       requestKey: REQUEST_KEY,
       salesOrderId: SALES_ORDER_ID,
     })
@@ -253,6 +272,69 @@ describe('ShipmentStorageService', () => {
     )
   })
 
+  it('requires every storage allocation to be claimed in full', async () => {
+    const fixture = claimFixture()
+
+    await expect(fixture.instance.claim(context, RECORD_ID, {
+      lines: [{ purchaseOrderLineId: PURCHASE_LINE_ID, quantity: 1, salesOrderLineId: SALES_LINE_ID }],
+      requestKey: REQUEST_KEY,
+      salesOrderId: SALES_ORDER_ID,
+    })).rejects.toMatchObject({
+      code: 'SHIPMENT_STORAGE_CLAIM_ALLOCATION_QUANTITY_MISMATCH',
+    })
+    expect(fixture.transaction.shipmentStorageRecord.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects a source allocation that does not belong to the storage record', async () => {
+    const fixture = claimFixture()
+
+    await expect(fixture.instance.claim(context, RECORD_ID, {
+      lines: [{
+        purchaseOrderLineId: '00000000-0000-4000-8000-000000000599',
+        quantity: 2,
+        salesOrderLineId: SALES_LINE_ID,
+      }],
+      requestKey: REQUEST_KEY,
+      salesOrderId: SALES_ORDER_ID,
+    })).rejects.toMatchObject({
+      code: 'SHIPMENT_STORAGE_CLAIM_ALLOCATION_INVALID',
+    })
+    expect(fixture.transaction.shipmentStorageRecord.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects catalog products with different product ids even when names match', async () => {
+    const fixture = claimFixture()
+    const sourceFindMany = fixture.transaction.purchaseOrderLine.findMany as unknown as jest.Mock
+    sourceFindMany.mockResolvedValue([{
+      id: PURCHASE_LINE_ID,
+      lineNumber: 1,
+      lineType: 'CATALOG',
+      productId: '00000000-0000-4000-8000-000000000601',
+      productNameSnapshot: '产品甲',
+      descriptionSnapshot: null,
+      sourceSalesOrderLine: null,
+    }])
+    const targetFindMany = fixture.transaction.salesOrderLine.findMany as unknown as jest.Mock
+    targetFindMany.mockResolvedValue([{
+      id: SALES_LINE_ID,
+      lineNumber: 1,
+      lineType: 'CATALOG',
+      productId: '00000000-0000-4000-8000-000000000602',
+      productNameSnapshot: '产品甲',
+      descriptionSnapshot: null,
+      quantity: 2,
+    }])
+
+    await expect(fixture.instance.claim(context, RECORD_ID, {
+      lines: [{ purchaseOrderLineId: PURCHASE_LINE_ID, quantity: 2, salesOrderLineId: SALES_LINE_ID }],
+      requestKey: REQUEST_KEY,
+      salesOrderId: SALES_ORDER_ID,
+    })).rejects.toMatchObject({
+      code: 'SHIPMENT_STORAGE_CLAIM_PRODUCT_MISMATCH',
+    })
+    expect(fixture.transaction.shipmentStorageRecord.update).not.toHaveBeenCalled()
+  })
+
   it('rejects a claim that would push the line beyond its remaining coverage', async () => {
     const fixture = claimFixture()
     const groupBy = fixture.transaction.purchaseOrderLine.groupBy as unknown as jest.Mock
@@ -262,7 +344,7 @@ describe('ShipmentStorageService', () => {
     }])
 
     await expect(fixture.instance.claim(context, RECORD_ID, {
-      lines: [{ quantity: 2, salesOrderLineId: SALES_LINE_ID }],
+      lines: [{ purchaseOrderLineId: PURCHASE_LINE_ID, quantity: 2, salesOrderLineId: SALES_LINE_ID }],
       requestKey: REQUEST_KEY,
       salesOrderId: SALES_ORDER_ID,
     })).rejects.toMatchObject({
@@ -283,7 +365,7 @@ describe('ShipmentStorageService', () => {
     const fixture = claimFixture({ claimedQuantity: 1 })
 
     await fixture.instance.claim(context, RECORD_ID, {
-      lines: [{ quantity: 2, salesOrderLineId: SALES_LINE_ID }],
+      lines: [{ purchaseOrderLineId: PURCHASE_LINE_ID, quantity: 2, salesOrderLineId: SALES_LINE_ID }],
       requestKey: REQUEST_KEY,
       salesOrderId: SALES_ORDER_ID,
     })
@@ -473,8 +555,13 @@ describe('ShipmentStorageService', () => {
       previews: [{
         lineId: purchaseLineId,
         lineNumber: 2,
+        lineType: 'UNRESOLVED',
+        productId: null,
         productNo: 'P-001',
         productName: '释放时产品名',
+        productDescription: null,
+        sourceSalesProductName: null,
+        normalizedNames: [],
         quantity: 2,
         mainImage: {
           id: purchaseMediaId,

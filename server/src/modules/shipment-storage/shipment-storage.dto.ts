@@ -4,6 +4,7 @@ import {
   ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -119,7 +120,24 @@ export class RelocateShipmentStorageRequestDto {
   requestKey!: string
 }
 
+export const SHIPMENT_STORAGE_CLAIM_PRODUCT_MATCH_MODES = [
+  'AUTO',
+  'MANUAL_OVERRIDE',
+  'UNKNOWN',
+] as const
+
+export type ShipmentStorageClaimProductMatchMode
+  = typeof SHIPMENT_STORAGE_CLAIM_PRODUCT_MATCH_MODES[number]
+
 export class ClaimShipmentStorageLineDto {
+  @ApiProperty({
+    type: 'string',
+    format: 'uuid',
+    description: '寄仓记录中的库存分配行（来源采购行）',
+  })
+  @IsUUID('4')
+  purchaseOrderLineId!: string
+
   @ApiProperty({ type: 'string', format: 'uuid' })
   @IsUUID('4')
   salesOrderLineId!: string
@@ -128,6 +146,26 @@ export class ClaimShipmentStorageLineDto {
   @IsInt()
   @Min(1)
   quantity!: number
+
+  @ApiProperty({
+    type: 'boolean',
+    required: false,
+    description: '自定义产品名称不一致时，是否已人工确认与库存产品为同一产品',
+  })
+  @IsOptional()
+  @IsBoolean()
+  productMatchOverride?: boolean
+
+  @ApiProperty({
+    type: 'string',
+    maxLength: 500,
+    required: false,
+    description: '跨产品人工确认原因，仅在 productMatchOverride 为 true 时必填',
+  })
+  @IsOptional()
+  @IsString()
+  @IsUnicodeCodePointLength(1, 500)
+  productMatchNote?: string
 }
 
 export class ClaimShipmentStorageRequestDto {
@@ -170,10 +208,17 @@ export class ShipmentStoragePersonDto {
 }
 
 export class ShipmentStorageClaimRequestAllocationDto {
+  @ApiProperty({ type: 'string', format: 'uuid', nullable: true, description: '历史申请可能缺少库存分配映射' }) readonly purchaseOrderLineId!: string | null
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly salesOrderLineId!: string
   @ApiProperty({ type: 'integer' }) readonly lineNumber!: number
   @ApiProperty({ type: 'string' }) readonly productName!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly productDescription!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly sourceProductName!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly sourceProductDescription!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly sourceSalesProductName!: string | null
   @ApiProperty({ type: 'integer' }) readonly quantity!: number
+  @ApiProperty({ enum: SHIPMENT_STORAGE_CLAIM_PRODUCT_MATCH_MODES }) readonly productMatchMode!: ShipmentStorageClaimProductMatchMode
+  @ApiProperty({ type: 'string', nullable: true }) readonly productMatchNote!: string | null
 }
 
 export class ShipmentStorageClaimRequestSummaryDto {
@@ -223,8 +268,13 @@ export class ShipmentStorageProductImageDto {
 export class ShipmentStorageProductPreviewDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly lineId!: string
   @ApiProperty({ type: 'integer' }) readonly lineNumber!: number
+  @ApiProperty({ enum: ['CATALOG', 'CUSTOM', 'UNRESOLVED'], description: 'UNRESOLVED 表示来源采购行缺失，不能用于产品匹配' }) readonly lineType!: 'CATALOG' | 'CUSTOM' | 'UNRESOLVED'
+  @ApiProperty({ type: 'string', format: 'uuid', nullable: true }) readonly productId!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly productNo!: string | null
   @ApiProperty({ type: 'string' }) readonly productName!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly productDescription!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly sourceSalesProductName!: string | null
+  @ApiProperty({ type: 'array', items: { type: 'string' }, description: '自定义产品名称别名（已规范化）' }) readonly normalizedNames!: readonly string[]
   @ApiProperty({ type: 'integer' }) readonly quantity!: number
   @ApiProperty({ type: () => ShipmentStorageProductImageDto, nullable: true }) readonly mainImage!: ShipmentStorageProductImageDto | null
 }

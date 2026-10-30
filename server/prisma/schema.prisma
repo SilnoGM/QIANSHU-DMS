@@ -492,6 +492,13 @@ enum ShipmentStorageClaimRequestStatus {
   @@map("shipment_storage_claim_request_status")
 }
 
+enum ShipmentClaimProductMatchMode {
+  AUTO
+  MANUAL_OVERRIDE
+
+  @@map("shipment_claim_product_match_mode")
+}
+
 enum ShipmentCostDirection {
   RELEASE
   CLAIM
@@ -1388,6 +1395,7 @@ model PurchaseOrderLine {
   product              Product?       @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   sourceSalesOrderLine SalesOrderLine? @relation(fields: [sourceSalesOrderLineId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   partItems            PurchaseOrderPartItem[]
+  shipmentClaimLines   ShipmentClaimLine[]
 
   @@unique([id, purchaseOrderId], map: "purchase_order_lines_id_order_id_key")
   @@unique([purchaseOrderId, lineNumber], map: "purchase_order_lines_order_id_line_number_key")
@@ -1600,16 +1608,20 @@ model ShipmentStorageLocationEvent {
 }
 
 model ShipmentClaimLine {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  storageRecordId String   @map("storage_record_id") @db.Uuid
-  salesOrderLineId String  @map("sales_order_line_id") @db.Uuid
-  quantity        Int
-  claimedAt       DateTime @default(now()) @map("claimed_at") @db.Timestamptz(6)
-  claimedBy       String   @map("claimed_by") @db.Uuid
+  id                  String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  storageRecordId     String                        @map("storage_record_id") @db.Uuid
+  purchaseOrderLineId String?                       @map("purchase_order_line_id") @db.Uuid
+  salesOrderLineId    String                        @map("sales_order_line_id") @db.Uuid
+  quantity            Int
+  productMatchMode    ShipmentClaimProductMatchMode? @map("product_match_mode")
+  productMatchNote    String?                       @map("product_match_note") @db.VarChar(500)
+  claimedAt           DateTime                      @default(now()) @map("claimed_at") @db.Timestamptz(6)
+  claimedBy           String                        @map("claimed_by") @db.Uuid
 
-  storageRecord ShipmentStorageRecord @relation(fields: [storageRecordId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  storageRecord      ShipmentStorageRecord @relation(fields: [storageRecordId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrderLine PurchaseOrderLine?     @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
-  @@unique([storageRecordId, salesOrderLineId], map: "shipment_claim_lines_record_line_key")
+  @@unique([storageRecordId, purchaseOrderLineId, salesOrderLineId], map: "shipment_claim_lines_record_source_target_key")
   @@map("shipment_claim_lines")
 }
 

@@ -47,6 +47,7 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
     originId: string,
     issuerUserId: string = h.fixture.actor.id,
     lineCount = 1,
+    productName = 'Custom item',
   ) {
     const origin = await h.prisma.salesOrder.findUniqueOrThrow({ where: { id: originId } })
     const lineAmount = String(10 * lineCount)
@@ -81,13 +82,78 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
         lines: { create: Array.from({ length: lineCount }, (_, index) => ({
           lineNumber: index + 1,
           lineType: 'CUSTOM' as const,
-          productNameSnapshot: `Custom item ${index + 1}`,
+          productNameSnapshot: productName,
           actualUnitPriceAmount: '10',
           quantity: 1,
           lineTotalAmount: '10',
         })) },
       },
       include: { lines: true },
+    })
+  }
+
+  async function allocationLineId(recordId: string): Promise<string> {
+    const detail = await storage.getById(recordId)
+    const lineId = detail.lineSummary.previews[0]?.lineId
+    if (lineId === undefined) throw new Error('Storage allocation line is missing')
+    return lineId
+  }
+
+  async function createStorageRecord(
+    origin: Awaited<ReturnType<typeof h.shipment>>,
+  ): Promise<string> {
+    const ownershipService = new ShipmentOwnershipService()
+    return h.prisma.$transaction(async (transaction) => {
+      const batch = await transaction.shipmentReleaseBatch.create({ data: {
+        actorUserId: h.fixture.actor.id,
+        originSalesOrderId: origin.source!.id,
+        payloadHash: randomBytes(32),
+        reason: 'CUSTOMER_CANCEL',
+        requestKey: randomUUID(),
+      } })
+      const part = origin.parts[0]
+      const full = await transaction.purchaseOrderPart.findUniqueOrThrow({
+        where: { id: part.id },
+        include: { items: { include: { line: true } } },
+      })
+      await ownershipService.recordMany(transaction, [{
+        actorUserId: h.fixture.actor.id,
+        ownerSalesOrderId: null,
+        ownerType: 'STORAGE_POOL',
+        reason: 'RELEASE',
+        releaseBatchId: batch.id,
+        shipmentId: part.id,
+      }])
+      const record = await transaction.shipmentStorageRecord.create({
+        data: {
+          shipmentId: part.id,
+          releaseBatchId: batch.id,
+          status: 'IN_STORAGE',
+          locationScope: 'MAINLAND',
+          warehouseValue: 'E2E-MAINLAND',
+          warehouseLabelSnapshot: '大陆测试仓库',
+          locationUpdatedAt: new Date(),
+          shipmentNoSnapshot: part.shipmentNo,
+          shippingMarkSnapshot: full.shippingMarkText,
+          originPurchaseOrderId: full.purchaseOrderId,
+          originPurchaseOrderNoSnapshot: origin.order.orderNo,
+          originSalesOrderId: origin.source!.id,
+          originSalesOrderNoSnapshot: origin.source!.orderNo,
+          originCustomerNameSnapshot: origin.source!.customerName,
+          originIssuerUserId: origin.source!.issuerUserId,
+          originAllocations: full.items.map(item => ({
+            purchaseOrderLineId: item.purchaseOrderLineId,
+            lineNumber: item.line.lineNumber,
+            productName: item.line.productNameSnapshot,
+            quantity: item.quantity,
+            unitPriceCny: '10.00',
+          })),
+          costSnapshot: { totalCostCny: '100.00' },
+          snapshotAt: new Date(),
+        },
+        select: { id: true },
+      })
+      return record.id
     })
   }
 
@@ -205,10 +271,29 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
     })
     const target = await createTargetOrder(origin.source!.id, bob.id, 2)
     const targetLines = [...target.lines].sort((left, right) => left.lineNumber - right.lineNumber)
+    const firstSourceLineId = await allocationLineId(released[0].id)
     await storage.claim(context, released[0].id, {
-      lines: [{ quantity: 1, salesOrderLineId: targetLines[0].id }],
+      lines: [{
+        purchaseOrderLineId: firstSourceLineId,
+        quantity: 1,
+        salesOrderLineId: targetLines[0].id,
+      }],
       requestKey: randomUUID(),
       salesOrderId: target.id,
+    })
+    expect(await h.prisma.shipmentClaimLine.findFirstOrThrow({
+      where: { storageRecordId: released[0].id },
+      select: {
+        productMatchMode: true,
+        productMatchNote: true,
+        purchaseOrderLineId: true,
+        salesOrderLineId: true,
+      },
+    })).toEqual({
+      productMatchMode: 'AUTO',
+      productMatchNote: null,
+      purchaseOrderLineId: firstSourceLineId,
+      salesOrderLineId: targetLines[0].id,
     })
     expect(await arrivalPartIds('SELF', bob.id)).toContain(origin.part.id)
     expect(await arrivalPartIds('SELF', h.fixture.actor.id)).not.toContain(origin.part.id)
@@ -351,7 +436,11 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
     })).balance
 
     const claimed = await storage.claim(context, released[0], {
-      lines: [{ quantity: 1, salesOrderLineId: target.lines[0].id }],
+      lines: [{
+        purchaseOrderLineId: await allocationLineId(released[0]),
+        quantity: 1,
+        salesOrderLineId: target.lines[0].id,
+      }],
       requestKey: randomUUID(),
       salesOrderId: target.id,
     })
@@ -410,7 +499,11 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
     }])
 
     await expect(storage.claim(context, released[1], {
-      lines: [{ quantity: 1, salesOrderLineId: target.lines[0].id }],
+      lines: [{
+        purchaseOrderLineId: await allocationLineId(released[1]),
+        quantity: 1,
+        salesOrderLineId: target.lines[0].id,
+      }],
       requestKey: randomUUID(),
       salesOrderId: target.id,
     })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE' })
@@ -478,6 +571,7 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       return record.id
     })
     const targetLine = target.lines[0]
+    const sourceLineId = await allocationLineId(recordId)
     const context = { actorUserId: h.fixture.actor.id, requestId: randomUUID() }
     const foreignUsername = `foreign-${randomUUID()}`
     const foreignUser = await h.prisma.user.create({ data: {
@@ -490,13 +584,13 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
     const foreignTarget = await createTargetOrder(origin.source!.id, foreignUser.id)
     await expect(storage.createClaimRequest(context, recordId, {
       salesOrderId: foreignTarget.id,
-      lines: [{ quantity: 1, salesOrderLineId: foreignTarget.lines[0].id }],
+      lines: [{ purchaseOrderLineId: sourceLineId, quantity: 1, salesOrderLineId: foreignTarget.lines[0].id }],
       requestKey: randomUUID(),
     })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_REQUEST_SALES_ORDER_FORBIDDEN' })
 
     const request = await storage.createClaimRequest(context, recordId, {
       salesOrderId: target.id,
-      lines: [{ quantity: 1, salesOrderLineId: targetLine.id }],
+      lines: [{ purchaseOrderLineId: sourceLineId, quantity: 1, salesOrderLineId: targetLine.id }],
       requestKey: randomUUID(),
     })
     expect(request).toMatchObject({
@@ -505,6 +599,15 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       status: 'PENDING',
       targetSalesOrderId: target.id,
     })
+    expect(request.allocations).toEqual([expect.objectContaining({
+      productMatchMode: 'AUTO',
+      productMatchNote: null,
+      productName: 'Custom item',
+      purchaseOrderLineId: sourceLineId,
+      quantity: 1,
+      salesOrderLineId: targetLine.id,
+      sourceProductName: 'Custom item',
+    })])
     const listed = await storage.list({ storageId: recordId })
     expect(listed.items[0]?.claimRequest).toMatchObject({
       applicant: { id: h.fixture.actor.id },
@@ -514,7 +617,7 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
 
     await expect(storage.claim(context, recordId, {
       salesOrderId: target.id,
-      lines: [{ quantity: 1, salesOrderLineId: targetLine.id }],
+      lines: [{ purchaseOrderLineId: sourceLineId, quantity: 1, salesOrderLineId: targetLine.id }],
       requestKey: randomUUID(),
     })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_REQUEST_PENDING' })
 
@@ -528,7 +631,7 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
 
     const secondRequest = await storage.createClaimRequest(context, recordId, {
       salesOrderId: target.id,
-      lines: [{ quantity: 1, salesOrderLineId: targetLine.id }],
+      lines: [{ purchaseOrderLineId: sourceLineId, quantity: 1, salesOrderLineId: targetLine.id }],
       requestKey: randomUUID(),
     })
     // 采运同意后复检失败：申请自动转为拒绝，寄仓记录保持锁定前状态。
@@ -546,11 +649,79 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
 
     const thirdRequest = await storage.createClaimRequest(context, recordId, {
       salesOrderId: target.id,
-      lines: [{ quantity: 1, salesOrderLineId: targetLine.id }],
+      lines: [{ purchaseOrderLineId: sourceLineId, quantity: 1, salesOrderLineId: targetLine.id }],
       requestKey: randomUUID(),
     })
     const claimed = await storage.approveClaimRequest(context, recordId, thirdRequest.id)
     expect(claimed.status).toBe('CLAIMED')
     expect((await storage.getClaimRequest(recordId, thirdRequest.id)).status).toBe('APPROVED')
+  })
+
+  it('requires an explicit reason for a custom product mapping mismatch and persists it', async () => {
+    const origin = await h.shipment({ partCount: 1, salesLinked: true })
+    const target = await createTargetOrder(origin.source!.id, h.fixture.actor.id, 1, 'Different item')
+    const recordId = await createStorageRecord(origin)
+    const sourceLineId = await allocationLineId(recordId)
+    const targetLine = target.lines[0]
+    const context = { actorUserId: h.fixture.actor.id, requestId: randomUUID() }
+
+    await expect(storage.createClaimRequest(context, recordId, {
+      salesOrderId: target.id,
+      lines: [{
+        purchaseOrderLineId: sourceLineId,
+        quantity: 1,
+        salesOrderLineId: targetLine.id,
+      }],
+      requestKey: randomUUID(),
+    })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_PRODUCT_MISMATCH' })
+
+    await expect(storage.createClaimRequest(context, recordId, {
+      salesOrderId: target.id,
+      lines: [{
+        purchaseOrderLineId: sourceLineId,
+        productMatchOverride: true,
+        quantity: 1,
+        salesOrderLineId: targetLine.id,
+      }],
+      requestKey: randomUUID(),
+    })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_PRODUCT_OVERRIDE_REASON_REQUIRED' })
+
+    const request = await storage.createClaimRequest(context, recordId, {
+      salesOrderId: target.id,
+      lines: [{
+        purchaseOrderLineId: sourceLineId,
+        productMatchNote: '采购改名，实物一致',
+        productMatchOverride: true,
+        quantity: 1,
+        salesOrderLineId: targetLine.id,
+      }],
+      requestKey: randomUUID(),
+    })
+    expect(request.allocations).toEqual([expect.objectContaining({
+      productMatchMode: 'MANUAL_OVERRIDE',
+      productMatchNote: '采购改名，实物一致',
+      productName: 'Different item',
+      purchaseOrderLineId: sourceLineId,
+      quantity: 1,
+      salesOrderLineId: targetLine.id,
+      sourceProductName: 'Custom item',
+    })])
+
+    const claimed = await storage.approveClaimRequest(context, recordId, request.id)
+    expect(claimed.status).toBe('CLAIMED')
+    expect(await h.prisma.shipmentClaimLine.findFirstOrThrow({
+      where: { storageRecordId: recordId },
+      select: {
+        productMatchMode: true,
+        productMatchNote: true,
+        purchaseOrderLineId: true,
+        salesOrderLineId: true,
+      },
+    })).toEqual({
+      productMatchMode: 'MANUAL_OVERRIDE',
+      productMatchNote: '采购改名，实物一致',
+      purchaseOrderLineId: sourceLineId,
+      salesOrderLineId: targetLine.id,
+    })
   })
 })
