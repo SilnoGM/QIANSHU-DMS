@@ -1,28 +1,21 @@
 <script setup lang="ts">
 import type { ShipmentStorageContainerItemDto, ShipmentStorageDetailDto, ShipmentStorageListItemDto } from '@/api/generated/types.gen'
-import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
-import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import type { StorageScopeFilter, StorageStatusTab } from '@/views/workbenches/shipment-storage/logic'
 import shipmentStorageApi from '@/api/modules/shipment-storage'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
-import { resolveActionColumnWidth } from '@/components/business/QsGenericTable/action-column-width'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
-import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
+import QsShipmentStorageCard from '@/components/business/QsShipmentStorageCard/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import { buildStorageQuery, claimRequestDisabledReason, DEFAULT_STORAGE_STATUS, locationLabel, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusClass, storageStatusLabel } from '@/views/workbenches/shipment-storage/logic'
-import ShipmentProducts from '@/views/workbenches/shipments/shipment-products.vue'
 
 defineOptions({ name: 'QsOperationsGoodsStorage' })
-
-// QsGenericTable 内部使用局部 i18n 作用域；页面显式建立父级作用域，避免回退全局时告警。
-useI18n()
 
 const { auth } = useAppAuth()
 const route = useRoute()
@@ -77,25 +70,6 @@ const warehouseOptions = computed(() => {
 function hasPositiveAmount(value: string): boolean {
   return Number(value) > 0
 }
-
-const columns = computed<QsGenericTableColumn<ShipmentStorageListItemDto>[]>(() => [
-  { id: 'shipmentNo', title: '货件编号', accessorKey: 'shipmentNo', fixed: 'left', minWidth: 177 },
-  { id: 'products', title: '产品', accessorFn: row => row.lineSummary.previews.map(item => item.productName).join('、'), minWidth: 220 },
-  { id: 'mark', title: '唛头', accessorFn: row => [row.shippingMarkText, ...row.containerMarks].filter(value => Boolean(value)).join('、'), minWidth: 260 },
-  { id: 'customer', title: '原单客户', accessorFn: row => row.originCustomerName, minWidth: 160 },
-  { id: 'location', title: '寄仓位置', accessorFn: row => locationLabel(row), minWidth: 200 },
-  { id: 'status', title: '状态', accessorFn: row => storageStatusLabel(row.status), minWidth: 110 },
-  { id: 'cost', title: '成本合计', accessorFn: row => row.cost.totalCostCny, minWidth: 140 },
-  { id: 'costDetail', title: '成本详情', accessorFn: row => row.cost.purchaseCostCny, minWidth: 230 },
-  { id: 'salesOrder', title: '来源销售单', accessorFn: row => row.originSalesOrderNo, minWidth: 230 },
-  { id: 'purchaseOrder', title: '来源采购单', accessorFn: row => row.originPurchaseOrderNo, minWidth: 230 },
-  { id: 'createdAt', title: '转入寄仓时间', accessorKey: 'createdAt', minWidth: 190 },
-])
-
-const actionColumnWidth = computed(() => resolveActionColumnWidth([
-  { chars: 4, kind: 'text' },
-  { kind: 'icon' },
-]))
 
 let controller: AbortController | null = null
 
@@ -166,6 +140,11 @@ function changeWarehouse(value: string): void {
   storageId.value = undefined
   page.value = 1
   void load()
+}
+
+function changePageSize(size: number): void {
+  pageSize.value = size
+  page.value = 1
 }
 
 function clearStorageFilter(): void {
@@ -244,14 +223,6 @@ async function openDetail(row: ShipmentStorageListItemDto): Promise<void> {
   }
 }
 
-function openDetailFromMenu(row: ShipmentStorageListItemDto): void {
-  void openDetail(row)
-}
-
-function detailMenuItems(row: ShipmentStorageListItemDto): ActionMenuItem[][] {
-  return [[{ label: '详情', handle: () => openDetailFromMenu(row) }]]
-}
-
 onMounted(() => {
   void load()
 })
@@ -270,180 +241,94 @@ onMounted(() => {
           查看全部
         </FaButton>
       </div>
-      <QsStatusSwitchToolbar
-        :model-value="status"
-        :items="statusTabs"
-        aria-label="寄仓状态"
-        class="mb-4"
-        @update:model-value="selectStatus($event as StorageStatusTab)"
-      />
+      <div class="flex flex-col gap-4">
+        <QsStatusSwitchToolbar
+          :model-value="status"
+          :items="statusTabs"
+          aria-label="寄仓状态"
+          @update:model-value="selectStatus($event as StorageStatusTab)"
+        />
 
-      <QsGenericTable
-        v-model:page="page"
-        v-model:page-size="pageSize"
-        v-model:search="keyword"
-        :columns="columns"
-        :data="rows"
-        :total="total"
-        :loading="loading"
-        :error="error"
-        :action-column="{ fixed: 'right', minWidth: actionColumnWidth, title: '操作', width: actionColumnWidth }"
-        :addable="false"
-        :show-row-number="false"
-        row-key="id"
-        search-placeholder="货件编号、唛头、销售单、采购单或客户"
-        empty-title="暂无寄仓记录"
-        empty-description="释放货件后会在这里显示。"
-        @retry="load"
-      >
-        <template #query-leading>
-          <div class="flex flex-wrap gap-3 items-center">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
             <FaSelect
               :model-value="scope"
               :options="[...STORAGE_SCOPE_OPTIONS]"
-              class="w-36"
+              class="w-full sm:w-36"
               aria-label="位置范围"
               @update:model-value="changeScope(String($event))"
             />
             <FaSelect
               :model-value="warehouseValue"
               :options="warehouseOptions"
-              class="w-52"
+              class="w-full sm:w-52"
               aria-label="仓库"
               @update:model-value="changeWarehouse(String($event))"
             />
           </div>
-        </template>
+          <FaInput
+            v-model="keyword"
+            type="search"
+            clearable
+            class="w-full sm:w-80"
+            placeholder="货件编号、唛头、销售单、采购单或客户"
+            aria-label="搜索货件、唛头、销售单、采购单或客户"
+          >
+            <template #start>
+              <FaIcon name="i-lucide:search" />
+            </template>
+          </FaInput>
+        </div>
 
-        <template #cell-status="{ row }">
-          <FaTag variant="outline" :class="storageStatusClass(row.original.status)" class="whitespace-nowrap">
-            {{ storageStatusLabel(row.original.status) }}
-          </FaTag>
-        </template>
-
-        <template #cell-shipmentNo="{ row }">
-          <span class="qs-type-data-emphasis">
-            <QsCopyableText v-if="row.original.shipmentNo" label="货件编号" :text="row.original.shipmentNo" />
-            <span v-else>—</span>
-          </span>
-        </template>
-
-        <template #cell-products="{ row }">
-          <ShipmentProducts :summary="row.original.lineSummary" />
-        </template>
-
-        <template #cell-mark="{ row }">
-          <div class="flex flex-col gap-1 min-w-0">
-            <div class="flex gap-1 min-w-0 items-center">
-              <span class="qs-type-meta text-muted-foreground shrink-0">货件唛头：</span>
-              <span class="min-w-0">
-                <QsCopyableText v-if="row.original.shippingMarkText" label="货件唛头" :text="row.original.shippingMarkText" />
-                <span v-else>—</span>
-              </span>
-            </div>
-            <div v-if="row.original.containerMarks.length > 0" class="flex gap-1 min-w-0 items-center">
-              <span class="qs-type-meta text-muted-foreground shrink-0">装柜唛头：</span>
-              <span class="min-w-0 [overflow-wrap:anywhere]">{{ row.original.containerMarks.join('、') }}</span>
-              <CopyCellButton
-                always-visible
-                label="装柜唛头"
-                :text="row.original.containerMarks.join('、')"
-              />
-            </div>
-          </div>
-        </template>
-
-        <template #cell-salesOrder="{ row }">
-          <div class="flex flex-col gap-1 min-w-0">
-            <QsPersonDisplay
-              v-if="row.original.originIssuer"
-              :display-name="row.original.originIssuer.displayName"
-              :avatar-url="row.original.originIssuer.avatarUrl"
-              size="sm"
+        <div v-if="error" class="py-12 flex flex-col gap-4 items-center">
+          <FaEmpty icon="i-lucide:circle-alert" title="寄仓记录加载失败" :description="error" />
+          <FaButton variant="outline" @click="load">
+            重试
+          </FaButton>
+        </div>
+        <div v-else-if="loading" class="qs-storage-card-grid" aria-busy="true">
+          <div
+            v-for="index in 4"
+            :key="index"
+            aria-hidden="true"
+            class="border border-border rounded-xl bg-card h-56 motion-safe:animate-pulse"
+          />
+        </div>
+        <FaEmpty
+          v-else-if="!rows.length"
+          icon="i-lucide:package-open"
+          title="暂无寄仓记录"
+          description="释放货件后会在这里显示。"
+          class="py-12"
+        />
+        <template v-else>
+          <div class="qs-storage-card-grid" aria-live="polite">
+            <QsShipmentStorageCard
+              v-for="row in rows"
+              :key="row.id"
+              :record="row"
+              :currencies="currencyCatalog.currencies.value"
+              :status-label="storageStatusLabel(row.status)"
+              :status-class="storageStatusClass(row.status)"
+              :apply-disabled-reason="claimRequestDisabledReason(row)"
+              @detail="openDetail(row)"
+              @apply="toast.info('申请调货功能开发中')"
             />
-            <span v-else class="qs-type-meta text-muted-foreground">—</span>
-            <span class="qs-type-data-emphasis">
-              <QsCopyableText label="销售单号" :text="row.original.originSalesOrderNo" />
-            </span>
           </div>
-        </template>
-
-        <template #cell-purchaseOrder="{ row }">
-          <div class="flex flex-col gap-1 min-w-0">
-            <QsPersonDisplay
-              v-if="row.original.originPurchaseCreator"
-              :display-name="row.original.originPurchaseCreator.displayName"
-              :avatar-url="row.original.originPurchaseCreator.avatarUrl"
-              size="sm"
+          <nav v-if="total > 0" class="mt-5 overflow-x-auto" aria-label="寄仓记录分页">
+            <FaPagination
+              :page="page"
+              :size="pageSize"
+              :total="total"
+              :sizes="[20, 50, 100]"
+              layout="total, sizes, ->, pager"
+              :text-templates="{ total: value => `共 ${value} 条`, sizes: value => `${value} 条/页` }"
+              @update:page="page = $event"
+              @update:size="changePageSize"
             />
-            <span v-else class="qs-type-meta text-muted-foreground">—</span>
-            <span class="qs-type-data-emphasis">
-              <QsCopyableText label="采购单号" :text="row.original.originPurchaseOrderNo" />
-            </span>
-          </div>
+          </nav>
         </template>
-
-        <template #cell-costDetail="{ row }">
-          <div class="flex flex-col gap-1">
-            <div class="flex gap-1 items-center">
-              <span class="qs-type-meta text-muted-foreground">采购成本：</span>
-              <AmountDisplay :value="row.original.cost.purchaseCostCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
-            </div>
-            <div class="flex gap-1 items-center">
-              <span class="qs-type-meta text-muted-foreground">包装成本：</span>
-              <AmountDisplay
-                v-if="hasPositiveAmount(row.original.cost.packagingCostCny)"
-                :value="row.original.cost.packagingCostCny"
-                currency="CNY"
-                :currencies="currencyCatalog.currencies.value"
-              />
-              <span v-else>-</span>
-            </div>
-          </div>
-        </template>
-
-        <template #cell-createdAt="{ row }">
-          <DateTimeDisplay :value="row.original.createdAt" />
-        </template>
-
-        <template #cell-cost="{ row }">
-          <AmountDisplay :value="row.original.cost.totalCostCny" currency="CNY" :currencies="currencyCatalog.currencies.value" />
-        </template>
-
-        <template #actions="{ row }">
-          <div class="flex gap-1 items-center justify-end">
-            <FaTooltip
-              :text="claimRequestDisabledReason(row) ?? ''"
-              :disabled="claimRequestDisabledReason(row) === null"
-            >
-              <span class="inline-flex" tabindex="0">
-                <FaButton
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  class="min-h-11 sm:min-h-8"
-                  :disabled="claimRequestDisabledReason(row) !== null"
-                  :aria-label="`${row.shipmentNo ?? '寄仓记录'}：申请调货`"
-                  @click="toast.info('申请调货功能开发中')"
-                >
-                  申请调货
-                </FaButton>
-              </span>
-            </FaTooltip>
-            <FaDropdown :items="detailMenuItems(row)" align="end">
-              <FaButton
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                class="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8"
-                :aria-label="`${row.shipmentNo ?? '寄仓记录'}：更多操作`"
-              >
-                <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
-              </FaButton>
-            </FaDropdown>
-          </div>
-        </template>
-      </QsGenericTable>
+      </div>
 
       <QsGenericDrawer
         v-model="detailOpen"
@@ -791,3 +676,12 @@ onMounted(() => {
     </FaPageMain>
   </div>
 </template>
+
+<style scoped>
+.qs-storage-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 33rem), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+</style>
