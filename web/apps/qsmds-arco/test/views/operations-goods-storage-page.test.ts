@@ -21,6 +21,7 @@ test('运营寄仓页改为卡片网格，保留筛选、详情抽屉和申请�
   assert.match(source, /container-type: inline-size/u)
   assert.match(source, /grid-template-columns: minmax\(0, 1fr\);/u)
   assert.match(source, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
+  assert.doesNotMatch(source, /:only-child/u)
 })
 
 test('寄仓卡片是纯展示组件，操作只通过事件交给页面', async () => {
