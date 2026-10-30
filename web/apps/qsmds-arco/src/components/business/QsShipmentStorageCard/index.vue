@@ -32,6 +32,8 @@ const imagePreview = useFaImagePreview()
 
 const productSummary = computed(() => resolveStorageCardProducts(props.record.lineSummary))
 const firstProduct = computed(() => productSummary.value.product)
+const productImageFailed = ref(false)
+const productImageKey = computed(() => `${props.record.id}:${firstProduct.value?.mainImage?.contentUrl ?? ''}`)
 const location = computed(() => resolveStorageCardLocation(props.record))
 const shippingMark = computed(() => props.record.shippingMarkText?.trim() || null)
 const markItems = computed(() => props.record.containerMarks.map(mark => mark.trim()).filter(Boolean))
@@ -154,6 +156,10 @@ onBeforeUnmount(() => {
   }
 })
 
+watch(productImageKey, () => {
+  productImageFailed.value = false
+})
+
 async function copyContainerMarks(): Promise<void> {
   if (!canCopyContainerMarks.value) {
     return
@@ -171,9 +177,13 @@ async function copyContainerMarks(): Promise<void> {
   }
 }
 
+function markProductImageFailed(): void {
+  productImageFailed.value = true
+}
+
 function openProductImage(): void {
   const image = firstProduct.value?.mainImage
-  if (!image) {
+  if (!image || productImageFailed.value) {
     return
   }
   imagePreview.open(image.contentUrl, 0)
@@ -222,7 +232,7 @@ function openProductImage(): void {
         <section class="p-3 border border-border rounded-lg bg-muted/20 min-w-0" aria-label="产品">
           <div v-if="firstProduct" class="flex gap-3 min-w-0 items-center">
             <button
-              v-if="firstProduct.mainImage"
+              v-if="firstProduct.mainImage && !productImageFailed"
               type="button"
               class="p-0 border border-border rounded-lg bg-background flex-center shrink-0 size-11 cursor-zoom-in overflow-hidden focus-visible:outline-none focus-visible:ring-2 hover:ring-2 focus-visible:ring-primary/40 hover:ring-primary/30"
               :aria-label="`预览产品图片：${firstProduct.productName}`"
@@ -233,9 +243,16 @@ function openProductImage(): void {
                 :alt="firstProduct.productName"
                 class="h-full w-full object-contain"
                 loading="lazy"
+                @error="markProductImageFailed"
               >
             </button>
-            <span v-else class="border border-border rounded-lg bg-background flex-center shrink-0 size-11 overflow-hidden">
+            <span
+              v-else
+              class="border rounded-lg bg-background flex-center shrink-0 size-11 overflow-hidden"
+              :class="productImageFailed ? 'border-red-500/60 bg-red-500/10' : 'border-border'"
+              role="img"
+              :aria-label="productImageFailed ? '产品图片加载失败' : '暂无产品图片'"
+            >
               <FaIcon name="i-lucide:image-off" class="text-muted-foreground size-4" aria-hidden="true" />
             </span>
             <div class="flex flex-1 flex-col gap-1 min-w-0">

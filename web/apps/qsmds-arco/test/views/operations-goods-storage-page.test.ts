@@ -61,4 +61,6 @@ test('产品名单行省略，图片复用统一预览入口，产品与成本�
   assert.match(source, /cursor-zoom-in/u)
   assert.match(source, /block truncate/u)
   assert.match(source, /column-gap: 1rem/u)
+  assert.match(source, /markProductImageFailed/u)
+  assert.match(source, /bg-red-500\/10/u)
 })
