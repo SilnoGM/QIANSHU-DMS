@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import type { Ref } from 'vue'
 import type { QsShipmentStorageCardProps } from './types'
-import { useFaImagePreview } from '@fantastic-admin/components'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
+import QsProductThumbnail from '@/components/business/QsProductThumbnail/index.vue'
 import { resolveStorageCardLocation, resolveStorageCardMarks, resolveStorageCardProducts } from './logic'
 
 /**
@@ -28,12 +28,9 @@ const emit = defineEmits<{
 }>()
 
 const toast = useQsToast()
-const imagePreview = useFaImagePreview()
 
 const productSummary = computed(() => resolveStorageCardProducts(props.record.lineSummary))
 const firstProduct = computed(() => productSummary.value.product)
-const productImageFailed = ref(false)
-const productImageKey = computed(() => `${props.record.id}:${firstProduct.value?.mainImage?.contentUrl ?? ''}`)
 const location = computed(() => resolveStorageCardLocation(props.record))
 const shippingMark = computed(() => props.record.shippingMarkText?.trim() || null)
 const markItems = computed(() => props.record.containerMarks.map(mark => mark.trim()).filter(Boolean))
@@ -156,10 +153,6 @@ onBeforeUnmount(() => {
   }
 })
 
-watch(productImageKey, () => {
-  productImageFailed.value = false
-})
-
 async function copyContainerMarks(): Promise<void> {
   if (!canCopyContainerMarks.value) {
     return
@@ -175,18 +168,6 @@ async function copyContainerMarks(): Promise<void> {
     // 不把唛头内容或浏览器权限细节写入日志，失败只反馈当前用户。
     toast.error('装柜唛头复制失败')
   }
-}
-
-function markProductImageFailed(): void {
-  productImageFailed.value = true
-}
-
-function openProductImage(): void {
-  const image = firstProduct.value?.mainImage
-  if (!image || productImageFailed.value) {
-    return
-  }
-  imagePreview.open(image.contentUrl, 0)
 }
 </script>
 
@@ -231,30 +212,10 @@ function openProductImage(): void {
       <div class="qs-shipment-storage-card__product-cost">
         <section class="p-3 border border-border rounded-lg bg-muted/20 min-w-0" aria-label="产品">
           <div v-if="firstProduct" class="flex gap-3 min-w-0 items-center">
-            <button
-              v-if="firstProduct.mainImage && !productImageFailed"
-              type="button"
-              class="p-0 border border-border rounded-lg bg-background flex-center shrink-0 size-11 cursor-zoom-in overflow-hidden focus-visible:outline-none focus-visible:ring-2 hover:ring-2 focus-visible:ring-primary/40 hover:ring-primary/30"
-              :aria-label="`预览产品图片：${firstProduct.productName}`"
-              @click="openProductImage"
-            >
-              <img
-                :src="firstProduct.mainImage.contentUrl"
-                :alt="firstProduct.productName"
-                class="h-full w-full object-contain"
-                loading="lazy"
-                @error="markProductImageFailed"
-              >
-            </button>
-            <span
-              v-else
-              class="border rounded-lg bg-background flex-center shrink-0 size-11 overflow-hidden"
-              :class="productImageFailed ? 'border-red-500/60 bg-red-500/10' : 'border-border'"
-              role="img"
-              :aria-label="productImageFailed ? '产品图片加载失败' : '暂无产品图片'"
-            >
-              <FaIcon name="i-lucide:image-off" class="text-muted-foreground size-4" aria-hidden="true" />
-            </span>
+            <QsProductThumbnail
+              :src="firstProduct.mainImage?.contentUrl ?? null"
+              :alt="firstProduct.productName"
+            />
             <div class="flex flex-1 flex-col gap-1 min-w-0">
               <span class="text-xs text-emerald-700 font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 self-start">
                 {{ firstProduct.productNo || '自定义产品' }}

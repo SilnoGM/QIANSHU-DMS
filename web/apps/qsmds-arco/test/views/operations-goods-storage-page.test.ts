@@ -5,6 +5,7 @@ import test from 'node:test'
 
 const PAGE = new URL('../../src/views/operations/goods-storage/index.vue', import.meta.url)
 const CARD = new URL('../../src/components/business/QsShipmentStorageCard/index.vue', import.meta.url)
+const THUMB = new URL('../../src/components/business/QsProductThumbnail/index.vue', import.meta.url)
 
 test('运营寄仓页改为卡片网格，保留筛选、详情抽屉和申请调货占位', async () => {
   const source = await readFile(PAGE, 'utf8')
@@ -54,14 +55,26 @@ test('卡片按实际宽度收敛唛头数量和来源人员', async () => {
   assert.match(source, /measureSourcePair/u)
 })
 
-test('产品名单行省略，图片复用统一预览入口，产品与成本之间保留间距', async () => {
-  const source = await readFile(CARD, 'utf8')
+test('产品名单行省略，图片复用共享缩略图，产品与成本之间保留间距', async () => {
+  const [source, thumbnail] = await Promise.all([
+    readFile(CARD, 'utf8'),
+    readFile(THUMB, 'utf8'),
+  ])
 
-  assert.match(source, /useFaImagePreview/u)
-  assert.match(source, /openProductImage/u)
-  assert.match(source, /cursor-zoom-in/u)
+  assert.match(source, /QsProductThumbnail/u)
   assert.match(source, /block truncate/u)
   assert.match(source, /column-gap: 1rem/u)
-  assert.match(source, /markProductImageFailed/u)
-  assert.match(source, /bg-red-500\/10/u)
+  assert.match(thumbnail, /useFaImagePreview/u)
+  assert.match(thumbnail, /cursor-zoom-in/u)
+  assert.match(thumbnail, /markFailed/u)
+  assert.match(thumbnail, /bg-red-500\/10/u)
+})
+
+test('详情抽屉补齐完整产品、转入时间和成本合计', async () => {
+  const source = await readFile(PAGE, 'utf8')
+
+  assert.match(source, /detail\.lineSummary\.previews/u)
+  assert.match(source, /QsProductThumbnail/u)
+  assert.match(source, /转入寄仓/u)
+  assert.match(source, /成本合计/u)
 })
