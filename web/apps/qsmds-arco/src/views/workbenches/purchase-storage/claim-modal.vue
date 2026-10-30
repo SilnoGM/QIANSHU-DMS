@@ -103,6 +103,16 @@ const containerDraftsValid = computed(() => containerItems.value.every((item) =>
 const orderOptions = computed(() => orders.value
   .filter(order => order.id !== props.storageRecord?.originSalesOrderId)
   .map(order => ({ value: order.id, label: `${order.orderNo} · ${order.customerName}` })))
+const hasOrderOptions = computed(() => orderOptions.value.length > 0)
+const orderSelectPlaceholder = computed(() => {
+  if (ordersLoading.value) {
+    return '加载中…'
+  }
+  return hasOrderOptions.value ? '选择待采购的销售订单' : '暂无待采购订单'
+})
+const emptyOrderHint = computed(() => props.mode === 'apply'
+  ? '当前没有你本人负责且处于待采购阶段的销售订单。'
+  : '当前没有处于待采购阶段的销售订单。')
 
 const mapping = computed(() => buildClaimMapping(
   props.storageRecord?.lineSummary.previews ?? [],
@@ -686,14 +696,23 @@ function setVisible(value: boolean): void {
           <FaSelect
             :model-value="selectedOrderId"
             :options="orderOptions"
-            :disabled="ordersLoading || submitting"
-            :placeholder="ordersLoading ? '加载中…' : '选择待采购的销售订单'"
+            :disabled="ordersLoading || submitting || !hasOrderOptions"
+            :placeholder="orderSelectPlaceholder"
             @update:model-value="changeOrder(String($event))"
           />
         </label>
-        <p v-if="!ordersLoading && orderOptions.length === 0" class="text-sm text-muted-foreground mb-0">
-          没有可选择的待采购销售订单。
-        </p>
+        <div
+          v-if="!ordersLoading && !hasOrderOptions && !error"
+          class="p-3 border border-border rounded-lg border-dashed"
+          role="status"
+        >
+          <p class="text-sm font-medium mb-1">
+            暂无待采购销售订单
+          </p>
+          <p class="text-xs text-muted-foreground mb-0">
+            {{ emptyOrderHint }}
+          </p>
+        </div>
         <div v-if="orderLoading" class="text-sm text-muted-foreground">
           正在加载销售行…
         </div>
