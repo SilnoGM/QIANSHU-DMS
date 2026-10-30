@@ -18,7 +18,9 @@ test('运营寄仓页改为卡片网格，保留筛选、详情抽屉和申请�
   assert.match(source, /<FaPagination/u)
   assert.match(source, /<QsGenericDrawer/u)
   assert.doesNotMatch(source, /<QsGenericTable\b/u)
-  assert.match(source, /grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 33rem\), 1fr\)\);/u)
+  assert.match(source, /container-type: inline-size/u)
+  assert.match(source, /grid-template-columns: minmax\(0, 1fr\);/u)
+  assert.match(source, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
 })
 
 test('寄仓卡片是纯展示组件，操作只通过事件交给页面', async () => {
@@ -28,4 +30,15 @@ test('寄仓卡片是纯展示组件，操作只通过事件交给页面', async
   assert.match(source, /emit\('detail'\)/u)
   assert.match(source, /emit\('apply'\)/u)
   assert.doesNotMatch(source, /@\/api\/modules|useAppAuth|useRoute|shipmentStorageApi/u)
+})
+
+test('复制入口使用可点击文字，产品缺编号时回退到自定义产品', async () => {
+  const source = await readFile(CARD, 'utf8')
+
+  assert.match(source, /QsCopyableText/u)
+  assert.doesNotMatch(source, /CopyCellButton/u)
+  assert.match(source, /自定义产品/u)
+  assert.match(source, /text-primary font-medium">1 项产品/u)
+  assert.match(source, /bg-emerald-500\/10/u)
+  assert.match(source, /location\.scopeClass/u)
 })

@@ -40,6 +40,7 @@ export function resolveStorageCardMarks(
 
 export interface ShipmentStorageCardLocation {
   scope: string
+  scopeClass: string
   warehouse: string
 }
 
@@ -48,6 +49,9 @@ export function resolveStorageCardLocation(
 ): ShipmentStorageCardLocation {
   return {
     scope: record.locationScope === 'MAINLAND' ? '内地' : '海外',
+    scopeClass: record.locationScope === 'MAINLAND'
+      ? 'border-amber-500/30 bg-amber-500/10 text-amber-700'
+      : 'border-sky-500/30 bg-sky-500/10 text-sky-700',
     warehouse: record.warehouseLabel ?? record.warehouseValue,
   }
 }

@@ -2,7 +2,8 @@
 import type { QsShipmentStorageCardProps } from './types'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
-import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { resolveStorageCardLocation, resolveStorageCardMarks, resolveStorageCardProducts } from './logic'
 
@@ -24,6 +25,8 @@ const emit = defineEmits<{
   apply: []
 }>()
 
+const toast = useQsToast()
+
 const productSummary = computed(() => resolveStorageCardProducts(props.record.lineSummary))
 const firstProduct = computed(() => productSummary.value.product)
 const location = computed(() => resolveStorageCardLocation(props.record))
@@ -35,6 +38,23 @@ const shipmentCardId = computed(() => `shipment-card-${props.record.id}`)
 const shipmentLabel = computed(() => props.record.shipmentNo ?? '寄仓记录')
 const detailLabel = computed(() => `${shipmentLabel.value}：详情`)
 const applyLabel = computed(() => `${shipmentLabel.value}：申请调货`)
+
+async function copyContainerMarks(): Promise<void> {
+  if (!canCopyContainerMarks.value) {
+    return
+  }
+  try {
+    if (!navigator.clipboard?.writeText) {
+      throw new Error('Clipboard API is unavailable')
+    }
+    await navigator.clipboard.writeText(containerMarks.value.fullText)
+    toast.success('装柜唛头已复制')
+  }
+  catch {
+    // 不把唛头内容或浏览器权限细节写入日志，失败只反馈当前用户。
+    toast.error('装柜唛头复制失败')
+  }
+}
 </script>
 
 <template>
@@ -50,17 +70,12 @@ const applyLabel = computed(() => `${shipmentLabel.value}：申请调货`)
         <FaTag variant="outline" :class="statusClass" class="whitespace-nowrap">
           {{ statusLabel }}
         </FaTag>
-        <span :id="shipmentCardId" class="qs-type-data-emphasis inline-flex gap-1 min-w-0 items-center">
-          <span class="truncate">{{ shipmentLabel }}</span>
-          <CopyCellButton
-            v-if="record.shipmentNo"
-            always-visible
-            label="货件编号"
-            :text="record.shipmentNo ?? ''"
-          />
+        <span :id="shipmentCardId" class="qs-type-data-emphasis inline-flex min-w-0 items-center">
+          <QsCopyableText v-if="record.shipmentNo" label="货件编号" :text="record.shipmentNo" />
+          <span v-else>{{ shipmentLabel }}</span>
         </span>
         <span class="qs-shipment-storage-card__location text-xs text-muted-foreground flex flex-wrap gap-2 min-w-0 items-center">
-          <span class="text-muted-foreground px-1.5 py-0.5 rounded bg-muted">{{ location.scope }}</span>
+          <span class="px-1.5 py-0.5 border rounded" :class="location.scopeClass">{{ location.scope }}</span>
           <span class="inline-flex gap-1 min-w-0 items-center">
             <FaIcon name="i-lucide:map-pin" class="shrink-0 size-3.5" aria-hidden="true" />
             <span class="break-words">{{ location.warehouse }}</span>
@@ -68,11 +83,14 @@ const applyLabel = computed(() => `${shipmentLabel.value}：申请调货`)
         </span>
       </div>
       <div class="text-xs text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-1">
-        <span>
-          转入寄仓
-          <DateTimeDisplay :value="record.createdAt" class="text-foreground" />
+        <span class="qs-shipment-storage-card__meta-item">
+          <span>转入寄仓</span>
+          <DateTimeDisplay :value="record.createdAt" class="qs-shipment-storage-card__meta-value" />
         </span>
-        <span>原单客户 <span class="text-foreground">{{ record.originCustomerName }}</span></span>
+        <span class="qs-shipment-storage-card__meta-item">
+          <span>原单客户</span>
+          <span class="qs-shipment-storage-card__meta-value">{{ record.originCustomerName }}</span>
+        </span>
       </div>
     </header>
 
@@ -91,8 +109,8 @@ const applyLabel = computed(() => `${shipmentLabel.value}：申请调货`)
               <FaIcon v-else name="i-lucide:image-off" class="text-muted-foreground size-4" aria-hidden="true" />
             </span>
             <div class="flex flex-1 flex-col gap-1 min-w-0">
-              <span class="text-xs text-sky-700 font-mono px-1.5 py-0.5 rounded bg-sky-500/10 self-start">
-                {{ firstProduct.productNo || '—' }}
+              <span class="text-xs text-emerald-700 font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 self-start">
+                {{ firstProduct.productNo || '自定义产品' }}
               </span>
               <FaTooltip :text="firstProduct.productName" :delay="300">
                 <span class="qs-shipment-storage-card__product-name text-sm font-medium">
@@ -110,7 +128,7 @@ const applyLabel = computed(() => `${shipmentLabel.value}：申请调货`)
               另有 <strong class="text-foreground font-medium">{{ productSummary.extraCount }} 项产品</strong>，可在详情中查看
             </template>
             <template v-else-if="productSummary.totalCount === 1">
-              只有 <strong class="text-foreground font-medium">1 项产品</strong>，可在详情中查看
+              只有 <strong class="text-primary font-medium">1 项产品</strong>，可在详情中查看
             </template>
             <template v-else>
               本货件暂无产品
@@ -133,30 +151,27 @@ const applyLabel = computed(() => `${shipmentLabel.value}：申请调货`)
         <section class="p-3 border border-border rounded-lg min-w-0" aria-label="唛头">
           <div class="qs-shipment-storage-card__info-row">
             <span class="text-xs text-muted-foreground">货件唛头</span>
-            <div class="flex flex-nowrap gap-1 min-w-0 items-center">
-              <span v-if="shippingMark" class="text-xs break-all">{{ shippingMark }}</span>
+            <div class="flex min-w-0 items-center">
+              <span v-if="shippingMark" class="text-xs min-w-0">
+                <QsCopyableText label="货件唛头" :text="shippingMark" />
+              </span>
               <span v-else class="text-xs">—</span>
-              <CopyCellButton
-                v-if="shippingMark"
-                always-visible
-                label="货件唛头"
-                :text="shippingMark ?? ''"
-              />
             </div>
           </div>
           <div class="qs-shipment-storage-card__info-row">
             <span class="text-xs text-muted-foreground">装柜唛头</span>
-            <div class="flex flex-nowrap gap-1 min-w-0 items-center">
+            <div class="flex min-w-0 items-center">
               <FaTooltip v-if="canCopyContainerMarks" :text="containerMarks.fullText" :delay="300">
-                <span class="text-xs break-all">{{ containerMarks.visibleText }}<span v-if="containerMarks.hiddenCount > 0" class="whitespace-nowrap"> +{{ containerMarks.hiddenCount }}</span></span>
+                <button
+                  type="button"
+                  class="text-xs p-0 text-left border-0 rounded-sm bg-transparent cursor-pointer break-all [color:inherit] [font:inherit] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  :aria-label="`复制装柜唛头：${containerMarks.fullText}`"
+                  @click="copyContainerMarks"
+                >
+                  {{ containerMarks.visibleText }}<span v-if="containerMarks.hiddenCount > 0" class="whitespace-nowrap"> +{{ containerMarks.hiddenCount }}</span>
+                </button>
               </FaTooltip>
               <span v-else class="text-xs">—</span>
-              <CopyCellButton
-                v-if="canCopyContainerMarks"
-                always-visible
-                label="装柜唛头"
-                :text="containerMarks.fullText"
-              />
             </div>
           </div>
         </section>
@@ -172,9 +187,8 @@ const applyLabel = computed(() => `${shipmentLabel.value}：申请调货`)
                 size="sm"
               />
               <span v-else class="text-xs text-muted-foreground">—</span>
-              <span class="flex gap-1 min-w-0 items-center">
-                <span class="text-xs font-mono truncate">{{ record.originSalesOrderNo }}</span>
-                <CopyCellButton always-visible label="销售单号" :text="record.originSalesOrderNo" />
+              <span class="text-xs font-mono min-w-0">
+                <QsCopyableText label="销售单号" :text="record.originSalesOrderNo" />
               </span>
             </div>
           </div>
@@ -188,9 +202,8 @@ const applyLabel = computed(() => `${shipmentLabel.value}：申请调货`)
                 size="sm"
               />
               <span v-else class="text-xs text-muted-foreground">—</span>
-              <span class="flex gap-1 min-w-0 items-center">
-                <span class="text-xs font-mono truncate">{{ record.originPurchaseOrderNo }}</span>
-                <CopyCellButton always-visible label="采购单号" :text="record.originPurchaseOrderNo" />
+              <span class="text-xs font-mono min-w-0">
+                <QsCopyableText label="采购单号" :text="record.originPurchaseOrderNo" />
               </span>
             </div>
           </div>
@@ -235,6 +248,20 @@ const applyLabel = computed(() => `${shipmentLabel.value}：申请调货`)
 
 .qs-shipment-storage-card__location {
   margin-left: auto;
+}
+
+.qs-shipment-storage-card__meta-item {
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
+.qs-shipment-storage-card__meta-value {
+  font-size: inherit;
+  font-weight: var(--qs-type-weight-regular);
+  line-height: inherit;
+  color: oklch(var(--foreground));
 }
 
 .qs-shipment-storage-card__product-cost {

@@ -241,7 +241,7 @@ onMounted(() => {
           查看全部
         </FaButton>
       </div>
-      <div class="flex flex-col gap-4">
+      <div class="qs-storage-list flex flex-col gap-4">
         <QsStatusSwitchToolbar
           :model-value="status"
           :items="statusTabs"
@@ -678,10 +678,24 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.qs-storage-list {
+  container-type: inline-size;
+}
+
 .qs-storage-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 33rem), 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
+}
+
+.qs-storage-card-grid > :only-child {
+  grid-column: 1 / -1;
+}
+
+@container (min-width: 68rem) {
+  .qs-storage-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>

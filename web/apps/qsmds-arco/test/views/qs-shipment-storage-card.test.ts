@@ -67,10 +67,18 @@ test('寄仓位置按内地/海外前缀展示，仓库名缺失时回退到稳�
     locationScope: 'OVERSEAS',
     warehouseLabel: '瑞锋-林口仓',
     warehouseValue: 'RF_LK',
-  }), { scope: '海外', warehouse: '瑞锋-林口仓' })
+  }), {
+    scope: '海外',
+    scopeClass: 'border-sky-500/30 bg-sky-500/10 text-sky-700',
+    warehouse: '瑞锋-林口仓',
+  })
   assert.deepEqual(resolveStorageCardLocation({
     locationScope: 'MAINLAND',
     warehouseLabel: null,
     warehouseValue: 'SZ_B5',
-  }), { scope: '内地', warehouse: 'SZ_B5' })
+  }), {
+    scope: '内地',
+    scopeClass: 'border-amber-500/30 bg-amber-500/10 text-amber-700',
+    warehouse: 'SZ_B5',
+  })
 })
