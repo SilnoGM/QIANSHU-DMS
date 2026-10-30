@@ -362,7 +362,7 @@ onMounted(() => {
             aria-label="寄仓详情视图切换"
           />
           <div v-if="detailView === 'basic'" class="flex flex-col gap-6">
-            <section class="p-4 border border-border rounded-xl bg-muted/20 flex flex-col gap-4">
+            <section class="p-4 border border-border rounded-xl bg-muted/20">
               <dl class="m-0 gap-x-8 gap-y-3 grid sm:grid-cols-2">
                 <div>
                   <dt class="qs-type-meta text-muted-foreground">
@@ -398,18 +398,6 @@ onMounted(() => {
                   </dd>
                 </div>
               </dl>
-
-              <div class="p-3 border border-primary/30 rounded-lg bg-primary/10">
-                <p class="qs-type-meta text-muted-foreground m-0">
-                  成本合计
-                </p>
-                <AmountDisplay
-                  :value="detail.cost.totalCostCny"
-                  currency="CNY"
-                  :currencies="currencyCatalog.currencies.value"
-                  class="text-2xl text-primary font-semibold mt-1"
-                />
-              </div>
             </section>
 
             <section>
@@ -507,32 +495,45 @@ onMounted(() => {
               <h3 class="qs-type-section-title mb-3">
                 成本快照
               </h3>
-              <div class="gap-3 grid sm:grid-cols-2">
-                <div class="p-4 border border-border rounded-xl">
+              <div class="flex flex-col gap-3">
+                <div class="p-4 border border-primary/30 rounded-xl bg-primary/10">
                   <p class="qs-type-meta text-muted-foreground m-0">
-                    采购成本
+                    成本合计
                   </p>
                   <AmountDisplay
-                    :value="detail.cost.purchaseCostCny"
+                    :value="detail.cost.totalCostCny"
                     currency="CNY"
                     :currencies="currencyCatalog.currencies.value"
-                    class="mt-1"
+                    class="text-2xl text-primary font-semibold mt-1"
                   />
                 </div>
-                <div class="p-4 border border-border rounded-xl">
-                  <p class="qs-type-meta text-muted-foreground m-0">
-                    包装成本
-                  </p>
-                  <AmountDisplay
-                    v-if="hasPositiveAmount(detail.cost.packagingCostCny)"
-                    :value="detail.cost.packagingCostCny"
-                    currency="CNY"
-                    :currencies="currencyCatalog.currencies.value"
-                    class="mt-1"
-                  />
-                  <p v-else class="text-muted-foreground mb-0 mt-1">
-                    -
-                  </p>
+                <div class="gap-3 grid sm:grid-cols-2">
+                  <div class="p-4 border border-border rounded-xl">
+                    <p class="qs-type-meta text-muted-foreground m-0">
+                      采购成本
+                    </p>
+                    <AmountDisplay
+                      :value="detail.cost.purchaseCostCny"
+                      currency="CNY"
+                      :currencies="currencyCatalog.currencies.value"
+                      class="mt-1"
+                    />
+                  </div>
+                  <div class="p-4 border border-border rounded-xl">
+                    <p class="qs-type-meta text-muted-foreground m-0">
+                      包装成本
+                    </p>
+                    <AmountDisplay
+                      v-if="hasPositiveAmount(detail.cost.packagingCostCny)"
+                      :value="detail.cost.packagingCostCny"
+                      currency="CNY"
+                      :currencies="currencyCatalog.currencies.value"
+                      class="mt-1"
+                    />
+                    <p v-else class="text-muted-foreground mb-0 mt-1">
+                      -
+                    </p>
+                  </div>
                 </div>
               </div>
             </section>
