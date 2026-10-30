@@ -52,3 +52,13 @@ test('卡片按实际宽度收敛唛头数量和来源人员', async () => {
   assert.match(source, /salesPersonHidden/u)
   assert.match(source, /measureSourcePair/u)
 })
+
+test('产品名单行省略，图片复用统一预览入口，产品与成本之间保留间距', async () => {
+  const source = await readFile(CARD, 'utf8')
+
+  assert.match(source, /useFaImagePreview/u)
+  assert.match(source, /openProductImage/u)
+  assert.match(source, /cursor-zoom-in/u)
+  assert.match(source, /block truncate/u)
+  assert.match(source, /column-gap: 1rem/u)
+})

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Ref } from 'vue'
 import type { QsShipmentStorageCardProps } from './types'
+import { useFaImagePreview } from '@fantastic-admin/components'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
@@ -27,6 +28,7 @@ const emit = defineEmits<{
 }>()
 
 const toast = useQsToast()
+const imagePreview = useFaImagePreview()
 
 const productSummary = computed(() => resolveStorageCardProducts(props.record.lineSummary))
 const firstProduct = computed(() => productSummary.value.product)
@@ -168,6 +170,14 @@ async function copyContainerMarks(): Promise<void> {
     toast.error('装柜唛头复制失败')
   }
 }
+
+function openProductImage(): void {
+  const image = firstProduct.value?.mainImage
+  if (!image) {
+    return
+  }
+  imagePreview.open(image.contentUrl, 0)
+}
 </script>
 
 <template>
@@ -211,22 +221,29 @@ async function copyContainerMarks(): Promise<void> {
       <div class="qs-shipment-storage-card__product-cost">
         <section class="p-3 border border-border rounded-lg bg-muted/20 min-w-0" aria-label="产品">
           <div v-if="firstProduct" class="flex gap-3 min-w-0 items-center">
-            <span class="border border-border rounded-lg bg-background flex-center shrink-0 size-11 overflow-hidden">
+            <button
+              v-if="firstProduct.mainImage"
+              type="button"
+              class="p-0 border border-border rounded-lg bg-background flex-center shrink-0 size-11 cursor-zoom-in overflow-hidden focus-visible:outline-none focus-visible:ring-2 hover:ring-2 focus-visible:ring-primary/40 hover:ring-primary/30"
+              :aria-label="`预览产品图片：${firstProduct.productName}`"
+              @click="openProductImage"
+            >
               <img
-                v-if="firstProduct.mainImage"
                 :src="firstProduct.mainImage.contentUrl"
                 :alt="firstProduct.productName"
                 class="h-full w-full object-contain"
                 loading="lazy"
               >
-              <FaIcon v-else name="i-lucide:image-off" class="text-muted-foreground size-4" aria-hidden="true" />
+            </button>
+            <span v-else class="border border-border rounded-lg bg-background flex-center shrink-0 size-11 overflow-hidden">
+              <FaIcon name="i-lucide:image-off" class="text-muted-foreground size-4" aria-hidden="true" />
             </span>
             <div class="flex flex-1 flex-col gap-1 min-w-0">
               <span class="text-xs text-emerald-700 font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 self-start">
                 {{ firstProduct.productNo || '自定义产品' }}
               </span>
               <FaTooltip :text="firstProduct.productName" :delay="300">
-                <span class="qs-shipment-storage-card__product-name text-sm font-medium">
+                <span class="text-sm font-medium block truncate">
                   {{ firstProduct.productName }}
                 </span>
               </FaTooltip>
@@ -410,14 +427,7 @@ async function copyContainerMarks(): Promise<void> {
 .qs-shipment-storage-card__product-cost {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 14rem;
-}
-
-.qs-shipment-storage-card__product-name {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 2;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
+  column-gap: 1rem;
 }
 
 .qs-shipment-storage-card__cost-value {
