@@ -1,13 +1,24 @@
 <script setup lang="ts">
-import type { ClaimShipmentStorageLineDto, SalesOrderDetailDto, SalesOrderListItemDto, ShipmentStorageClaimRequestDto, ShipmentStorageDetailDto } from '@/api/generated/types.gen'
+import type { ClaimShipmentStorageContainerChangeDto, ClaimShipmentStorageLineDto, SalesOrderDetailDto, SalesOrderListItemDto, ShipmentStorageClaimContainerChangeDto, ShipmentStorageClaimRequestDto, ShipmentStorageDetailDto } from '@/api/generated/types.gen'
 import salesOrdersApi from '@/api/modules/sales-orders'
 import shipmentStorageApi from '@/api/modules/shipment-storage'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
+import MoneyInput from '@/components/base/MoneyInput/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { storageFailureMessage } from '@/views/workbenches/shipment-storage/logic'
+import { buildClaimContainerCopyText } from './claim-container-copy'
 import { buildClaimMapping, hasCustomTargetLine } from './claim-mapping'
+
+interface ContainerDraft {
+  recipientName: string
+  recipientPhone: string
+  recipientAddress: string
+  codAmount: string | null
+  codTouched: boolean
+}
 
 defineOptions({ name: 'ShipmentStorageClaimModal' })
 
@@ -44,6 +55,11 @@ const rejectReason = ref('')
 const overrideConfirmed = ref(false)
 const overrideReason = ref('')
 const manualTargets = ref<Record<string, string>>({})
+const containerDrafts = ref<Record<string, ContainerDraft>>({})
+const copyOpen = ref(false)
+const copyText = ref('')
+const copyError = ref('')
+const copyPending = ref(false)
 let controller: AbortController | null = null
 
 const isReview = computed(() => props.mode === 'review')
@@ -69,6 +85,20 @@ const reviewHasOverride = computed(() => reviewAllocations.value
   .some(line => line.productMatchMode === 'MANUAL_OVERRIDE'))
 const reviewHasLegacyMapping = computed(() => reviewAllocations.value
   .some(line => line.purchaseOrderLineId === null))
+const reviewContainerChanges = computed(() => (reviewRequest.value?.containerChanges ?? [])
+  .filter(change => change.recipientChanged || change.codChanged))
+const reviewHasLegacyContainerChanges = computed(() => (
+  reviewRequest.value !== null && reviewRequest.value.containerChanges === null
+))
+const containerItems = computed(() => props.storageRecord?.containerLoadingItems ?? [])
+const hasContainerItems = computed(() => containerItems.value.length > 0)
+const containerDraftsValid = computed(() => containerItems.value.every((item) => {
+  const draft = containerDrafts.value[item.id]
+  return draft !== undefined
+    && draft.recipientName.trim() !== ''
+    && draft.recipientPhone.trim() !== ''
+    && draft.recipientAddress.trim() !== ''
+}))
 
 const orderOptions = computed(() => orders.value
   .filter(order => order.id !== props.storageRecord?.originSalesOrderId)
@@ -111,6 +141,7 @@ const canSubmitMapping = computed(() => (
   selectedOrderId.value !== ''
   && selectedOrder.value !== null
   && mapping.value.complete
+  && containerDraftsValid.value
   && (
     !mapping.value.requiresConfirmation
     || (overrideConfirmed.value && overrideReason.value.trim() !== '')
@@ -142,6 +173,107 @@ function setManualTarget(sourceId: string, targetLineId: string): void {
   overrideReason.value = ''
 }
 
+function createContainerDraft(item: ShipmentStorageDetailDto['containerLoadingItems'][number]): ContainerDraft {
+  return {
+    recipientName: item.recipientName ?? '',
+    recipientPhone: item.recipientPhone ?? '',
+    recipientAddress: item.recipientAddress ?? '',
+    codAmount: item.codAmountTwd,
+    codTouched: false,
+  }
+}
+
+function resetContainerDrafts(): void {
+  containerDrafts.value = Object.fromEntries(containerItems.value.map(item => [
+    item.id,
+    createContainerDraft(item),
+  ]))
+}
+
+function syncContainerRecipients(order: SalesOrderDetailDto): void {
+  const next = { ...containerDrafts.value }
+  for (const item of containerItems.value) {
+    const draft = next[item.id] ?? createContainerDraft(item)
+    next[item.id] = {
+      ...draft,
+      recipientName: order.customer.name,
+      recipientPhone: order.customer.phone,
+      recipientAddress: order.customer.fullAddress,
+    }
+  }
+  containerDrafts.value = next
+}
+
+function updateContainerDraft(itemId: string, patch: Partial<ContainerDraft>): void {
+  const item = containerItems.value.find(candidate => candidate.id === itemId)
+  const draft = containerDrafts.value[itemId] ?? (item === undefined ? undefined : createContainerDraft(item))
+  if (draft === undefined) {
+    return
+  }
+  containerDrafts.value = {
+    ...containerDrafts.value,
+    [itemId]: { ...draft, ...patch },
+  }
+  overrideConfirmed.value = false
+  overrideReason.value = ''
+}
+
+function updateContainerCod(itemId: string, value: string | null): void {
+  updateContainerDraft(itemId, { codAmount: value, codTouched: true })
+}
+
+function buildContainerChanges(): ClaimShipmentStorageContainerChangeDto[] {
+  return containerItems.value.map((item) => {
+    const draft = containerDrafts.value[item.id]
+    return {
+      loadingItemId: item.id,
+      expectedVersion: item.version,
+      recipientName: draft?.recipientName.trim() ?? '',
+      recipientPhone: draft?.recipientPhone.trim() ?? '',
+      recipientAddress: draft?.recipientAddress.trim() ?? '',
+      codTouched: draft?.codTouched === true,
+      ...(draft?.codTouched === true ? { codAmountTwd: draft.codAmount } : {}),
+    }
+  })
+}
+
+function handleClaimSuccess(changes: readonly ShipmentStorageClaimContainerChangeDto[]): void {
+  const text = buildClaimContainerCopyText(changes)
+  if (text === '') {
+    emit('claimed')
+    return
+  }
+  copyText.value = text
+  copyError.value = ''
+  copyPending.value = true
+  copyOpen.value = true
+}
+
+function closeCopy(): void {
+  copyOpen.value = false
+  if (copyPending.value) {
+    copyPending.value = false
+    emit('claimed')
+  }
+}
+
+function setCopyVisible(value: boolean): void {
+  if (!value) {
+    closeCopy()
+  }
+}
+
+async function copyClaimText(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(copyText.value)
+    copyError.value = ''
+    toast.success('装柜修改信息已复制')
+  }
+  catch {
+    copyError.value = '复制失败，请手动选择文本复制'
+  }
+}
+
 function reset(): void {
   controller?.abort()
   controller = null
@@ -155,6 +287,12 @@ function reset(): void {
   overrideConfirmed.value = false
   overrideReason.value = ''
   manualTargets.value = {}
+  containerDrafts.value = {}
+  copyOpen.value = false
+  copyText.value = ''
+  copyError.value = ''
+  copyPending.value = false
+  resetContainerDrafts()
 }
 
 async function loadOrders(signal: AbortSignal): Promise<void> {
@@ -204,6 +342,7 @@ async function changeOrder(value: string): Promise<void> {
     const response = await salesOrdersApi.getById(value, request.signal)
     if (!request.signal.aborted) {
       selectedOrder.value = response.data
+      syncContainerRecipients(response.data)
     }
   }
   catch (failure) {
@@ -218,9 +357,20 @@ async function changeOrder(value: string): Promise<void> {
   }
 }
 
+function validateContainerDrafts(): boolean {
+  if (containerDraftsValid.value) {
+    return true
+  }
+  error.value = '请完整填写每条装柜明细的收件人姓名、电话和地址'
+  return false
+}
+
 async function submitApply(): Promise<void> {
   const record = props.storageRecord
   if (record === null || selectedOrderId.value === '' || submitting.value) {
+    return
+  }
+  if (!validateContainerDrafts()) {
     return
   }
   if (!mapping.value.complete) {
@@ -239,6 +389,7 @@ async function submitApply(): Promise<void> {
     await shipmentStorageApi.createClaimRequest(record.id, {
       salesOrderId: selectedOrderId.value,
       lines: buildClaimLines(),
+      containerChanges: buildContainerChanges(),
       requestKey: crypto.randomUUID(),
     }, request.signal)
     toast.success('调货申请已提交')
@@ -257,6 +408,9 @@ async function submitDirect(): Promise<void> {
   if (record === null || selectedOrderId.value === '' || submitting.value) {
     return
   }
+  if (!validateContainerDrafts()) {
+    return
+  }
   if (!mapping.value.complete) {
     error.value = '库存产品无法完整映射到目标订单行'
     return
@@ -270,13 +424,14 @@ async function submitDirect(): Promise<void> {
   error.value = ''
   const request = new AbortController()
   try {
-    await shipmentStorageApi.claim(record.id, {
+    const response = await shipmentStorageApi.claim(record.id, {
       salesOrderId: selectedOrderId.value,
       lines: buildClaimLines(),
+      containerChanges: buildContainerChanges(),
       requestKey: crypto.randomUUID(),
     }, request.signal)
     toast.success('寄仓货件已认领')
-    emit('claimed')
+    handleClaimSuccess(response.data.containerChanges ?? [])
   }
   catch (failure) {
     error.value = storageFailureMessage(failure, '认领失败')
@@ -292,13 +447,17 @@ async function approveRequest(): Promise<void> {
   if (record === null || request === null || submitting.value) {
     return
   }
+  if (reviewHasLegacyContainerChanges.value) {
+    error.value = '历史调货申请缺少装柜修改快照，请让申请人撤回后重新提交'
+    return
+  }
   submitting.value = true
   error.value = ''
   const controller = new AbortController()
   try {
-    await shipmentStorageApi.approveClaimRequest(record.id, request.id, controller.signal)
+    const response = await shipmentStorageApi.approveClaimRequest(record.id, request.id, controller.signal)
     toast.success('调货申请已通过')
-    emit('claimed')
+    handleClaimSuccess(response.data.containerChanges ?? [])
   }
   catch (failure) {
     error.value = storageFailureMessage(failure, '调货申请审核失败')
@@ -462,6 +621,53 @@ function setVisible(value: boolean): void {
             description="该申请缺少库存分配映射，不能直接同意；请让申请人撤回后重新提交。"
           />
         </div>
+        <div v-if="reviewHasLegacyContainerChanges" class="p-3 border border-border rounded-lg">
+          <FaAlert
+            variant="destructive"
+            title="申请缺少装柜修改快照"
+            description="该申请不能直接同意；请让申请人撤回后重新提交。"
+          />
+        </div>
+        <div v-else-if="reviewContainerChanges.length > 0" class="p-3 border border-border rounded-lg">
+          <p class="qs-type-meta text-muted-foreground m-0">
+            装柜收件信息（只读）
+          </p>
+          <div
+            v-for="change in reviewContainerChanges"
+            :key="change.loadingItemId"
+            class="mt-3 pt-3 border-t border-border first:mt-2 first:pt-0 first:border-t-0"
+          >
+            <div class="flex gap-2 items-baseline justify-between">
+              <span class="font-medium">第{{ change.lineNumber }}行 · {{ change.oceanShippingMarkText || '—' }}</span>
+              <span class="text-xs text-muted-foreground">v{{ change.expectedVersion }}</span>
+            </div>
+            <dl v-if="change.recipientChanged" class="text-sm mt-1 gap-x-3 gap-y-1 grid grid-cols-[4.5rem_minmax(0,1fr)]">
+              <dt class="text-muted-foreground">
+                姓名
+              </dt>
+              <dd class="m-0 break-words">
+                {{ change.beforeRecipientName || '—' }} → {{ change.afterRecipientName }}
+              </dd>
+              <dt class="text-muted-foreground">
+                电话
+              </dt>
+              <dd class="m-0 break-words">
+                {{ change.beforeRecipientPhone || '—' }} → {{ change.afterRecipientPhone }}
+              </dd>
+              <dt class="text-muted-foreground">
+                地址
+              </dt>
+              <dd class="m-0 break-words">
+                {{ change.beforeRecipientAddress || '—' }} → {{ change.afterRecipientAddress }}
+              </dd>
+            </dl>
+            <p v-if="change.codChanged" class="text-sm mb-0 mt-1">
+              代收：{{ change.beforeCodAmountTwd ?? '无代收' }}
+              →
+              {{ change.afterCodAmountTwd === null ? '取消代收' : change.afterCodAmountTwd }}
+            </p>
+          </div>
+        </div>
         <div v-if="rejectMode" class="p-3 border border-border rounded-lg flex flex-col gap-2">
           <span class="text-sm">拒绝原因 <span class="text-destructive">*</span></span>
           <FaTextarea
@@ -571,6 +777,69 @@ function setVisible(value: boolean): void {
             库存产品无法完整映射到目标订单行，不能整件走货。
           </p>
         </div>
+        <div v-if="selectedOrder && hasContainerItems" class="p-3 border border-border rounded-lg">
+          <p class="qs-type-meta text-muted-foreground m-0">
+            装柜收件信息
+          </p>
+          <p class="text-xs text-muted-foreground mb-0 mt-1">
+            按装柜明细逐行核对；收件人信息默认取目标订单客户，可修改。收件人姓名、电话、地址必填。
+          </p>
+          <div
+            v-for="item in containerItems"
+            :key="item.id"
+            class="mt-3 pt-3 border-t border-border first:mt-2 first:pt-0 first:border-t-0"
+          >
+            <div class="flex gap-2 items-baseline justify-between">
+              <span class="font-medium">第{{ item.lineNumber }}行 · {{ item.oceanShippingMarkText || '—' }}</span>
+              <span class="text-xs text-muted-foreground">{{ item.goodsName }}</span>
+            </div>
+            <div class="mt-2 gap-3 grid sm:grid-cols-2">
+              <label class="flex flex-col gap-1">
+                <span class="text-sm">收件人姓名 <span class="text-destructive">*</span></span>
+                <FaInput
+                  :model-value="containerDrafts[item.id]?.recipientName ?? ''"
+                  maxlength="128"
+                  :disabled="submitting"
+                  @update:model-value="updateContainerDraft(item.id, { recipientName: String($event ?? '') })"
+                />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-sm">收件人电话 <span class="text-destructive">*</span></span>
+                <FaInput
+                  :model-value="containerDrafts[item.id]?.recipientPhone ?? ''"
+                  maxlength="128"
+                  :disabled="submitting"
+                  @update:model-value="updateContainerDraft(item.id, { recipientPhone: String($event ?? '') })"
+                />
+              </label>
+              <label class="flex flex-col gap-1 sm:col-span-2">
+                <span class="text-sm">收件人地址 <span class="text-destructive">*</span></span>
+                <FaTextarea
+                  :model-value="containerDrafts[item.id]?.recipientAddress ?? ''"
+                  :rows="2"
+                  maxlength="2000"
+                  :disabled="submitting"
+                  @update:model-value="updateContainerDraft(item.id, { recipientAddress: String($event ?? '') })"
+                />
+              </label>
+              <label class="flex flex-col gap-1 sm:col-span-2">
+                <span class="text-sm">此票代收金额</span>
+                <MoneyInput
+                  :model-value="containerDrafts[item.id]?.codAmount ?? null"
+                  currency="TWD"
+                  :currencies="currencyCatalog.currencies.value"
+                  :currency-selectable="false"
+                  :disabled="submitting"
+                  min="0"
+                  @update:model-value="updateContainerCod(item.id, $event)"
+                />
+              </label>
+              <p class="text-xs text-muted-foreground mb-0 sm:col-span-2">
+                留空或填 0 表示本行不涉及代收；修改后会按「取消代收」通知。
+              </p>
+            </div>
+          </div>
+        </div>
       </template>
     </div>
 
@@ -589,7 +858,7 @@ function setVisible(value: boolean): void {
             <FaButton variant="outline" :disabled="submitting || !reviewRequest" @click="rejectMode = true">
               拒绝
             </FaButton>
-            <FaButton :loading="submitting" :disabled="!reviewRequest || reviewHasLegacyMapping" @click="submit">
+            <FaButton :loading="submitting" :disabled="!reviewRequest || reviewHasLegacyMapping || reviewHasLegacyContainerChanges" @click="submit">
               同意调货
             </FaButton>
           </template>
@@ -609,4 +878,26 @@ function setVisible(value: boolean): void {
       </div>
     </template>
   </FaModal>
+
+  <QsGenericModal
+    :model-value="copyOpen"
+    title="复制装柜修改信息"
+    description="请复制后发送给运营人员或顺联航群组。"
+    size="md"
+    :z-index="3000"
+    @update:model-value="setCopyVisible"
+  >
+    <div class="flex flex-col gap-3">
+      <FaAlert v-if="copyError" :description="copyError" variant="destructive" />
+      <pre class="text-sm font-mono m-0 p-4 border border-border rounded-lg bg-muted/30 max-h-96 whitespace-pre-wrap break-words overflow-auto">{{ copyText }}</pre>
+    </div>
+    <template #footer>
+      <FaButton type="button" variant="outline" @click="closeCopy">
+        关闭
+      </FaButton>
+      <FaButton type="button" @click="copyClaimText">
+        复制
+      </FaButton>
+    </template>
+  </QsGenericModal>
 </template>
