@@ -39,7 +39,7 @@ test('产品摘要只保留第一个产品，并同时给出总数与剩余数',
   })
 })
 
-test('装柜唛头最多展示两个，空值与空数组统一显示破折号', () => {
+test('装柜唛头按可容纳数量截取，空值与空数组统一显示破折号', () => {
   assert.deepEqual(resolveStorageCardMarks([]), {
     visibleText: '—',
     fullText: '—',
@@ -56,8 +56,18 @@ test('装柜唛头最多展示两个，空值与空数组统一显示破折号',
     hiddenCount: 0,
   })
   assert.deepEqual(resolveStorageCardMarks(['A-01', 'A-02', 'A-03', ' A-04 ']), {
+    visibleText: 'A-01、A-02、A-03、A-04',
+    fullText: 'A-01、A-02、A-03、A-04',
+    hiddenCount: 0,
+  })
+  assert.deepEqual(resolveStorageCardMarks(['A-01', 'A-02', 'A-03', ' A-04 '], 2), {
     visibleText: 'A-01、A-02',
     fullText: 'A-01、A-02、A-03、A-04',
+    hiddenCount: 2,
+  })
+  assert.deepEqual(resolveStorageCardMarks(['A-01', 'A-02', 'A-03'], 1), {
+    visibleText: 'A-01',
+    fullText: 'A-01、A-02、A-03',
     hiddenCount: 2,
   })
 })

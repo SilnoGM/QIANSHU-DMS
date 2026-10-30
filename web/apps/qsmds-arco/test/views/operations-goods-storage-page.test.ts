@@ -42,3 +42,13 @@ test('复制入口使用可点击文字，产品缺编号时回退到自定义�
   assert.match(source, /bg-emerald-500\/10/u)
   assert.match(source, /location\.scopeClass/u)
 })
+
+test('卡片按实际宽度收敛唛头数量和来源人员', async () => {
+  const source = await readFile(CARD, 'utf8')
+
+  assert.match(source, /ResizeObserver/u)
+  assert.match(source, /markVisibleCount/u)
+  assert.match(source, /markMeasureRef/u)
+  assert.match(source, /salesPersonHidden/u)
+  assert.match(source, /measureSourcePair/u)
+})

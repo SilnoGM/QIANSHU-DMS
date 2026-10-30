@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Ref } from 'vue'
 import type { QsShipmentStorageCardProps } from './types'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
@@ -31,13 +32,125 @@ const productSummary = computed(() => resolveStorageCardProducts(props.record.li
 const firstProduct = computed(() => productSummary.value.product)
 const location = computed(() => resolveStorageCardLocation(props.record))
 const shippingMark = computed(() => props.record.shippingMarkText?.trim() || null)
-const containerMarks = computed(() => resolveStorageCardMarks(props.record.containerMarks))
+const markItems = computed(() => props.record.containerMarks.map(mark => mark.trim()).filter(Boolean))
+const markVisibleCount = ref(2)
+const containerMarks = computed(() => resolveStorageCardMarks(props.record.containerMarks, markVisibleCount.value))
 const canCopyContainerMarks = computed(() => containerMarks.value.fullText !== '—')
 const applyDisabled = computed(() => props.applyDisabledReason !== null)
 const shipmentCardId = computed(() => `shipment-card-${props.record.id}`)
 const shipmentLabel = computed(() => props.record.shipmentNo ?? '寄仓记录')
 const detailLabel = computed(() => `${shipmentLabel.value}：详情`)
 const applyLabel = computed(() => `${shipmentLabel.value}：申请调货`)
+
+const factsRef = ref<HTMLElement | null>(null)
+const markValueRef = ref<HTMLElement | null>(null)
+const markMeasureRef = ref<HTMLElement | null>(null)
+const salesValueRef = ref<HTMLElement | null>(null)
+const salesMeasureRef = ref<HTMLElement | null>(null)
+const purchaseValueRef = ref<HTMLElement | null>(null)
+const purchaseMeasureRef = ref<HTMLElement | null>(null)
+const salesPersonHidden = ref(false)
+const purchasePersonHidden = ref(false)
+
+let resizeObserver: ResizeObserver | null = null
+let measureFrame: number | undefined
+let lastFactsWidth = 0
+
+function markCandidateText(count: number): string {
+  const visible = markItems.value.slice(0, count).join('、')
+  const hidden = markItems.value.length - count
+  return `${visible}${hidden > 0 ? ` +${hidden}` : ''}`
+}
+
+function measureMarkCount(): void {
+  const value = markValueRef.value
+  const measure = markMeasureRef.value
+  if (!value || !measure) {
+    return
+  }
+  if (markItems.value.length === 0) {
+    markVisibleCount.value = 0
+    return
+  }
+
+  const available = value.clientWidth
+  let chosen = 1
+  for (let count = markItems.value.length; count >= 1; count -= 1) {
+    measure.textContent = markCandidateText(count)
+    if (measure.getBoundingClientRect().width <= available + 0.5) {
+      chosen = count
+      break
+    }
+  }
+  markVisibleCount.value = chosen
+}
+
+function measureSourcePair(
+  value: HTMLElement | null,
+  measure: HTMLElement | null,
+  hidden: Ref<boolean>,
+): void {
+  if (!value || !measure) {
+    return
+  }
+  hidden.value = measure.getBoundingClientRect().width > value.clientWidth + 0.5
+}
+
+function measureContent(): void {
+  measureMarkCount()
+  measureSourcePair(salesValueRef.value, salesMeasureRef.value, salesPersonHidden)
+  measureSourcePair(purchaseValueRef.value, purchaseMeasureRef.value, purchasePersonHidden)
+}
+
+function scheduleMeasurement(): void {
+  if (measureFrame !== undefined) {
+    cancelAnimationFrame(measureFrame)
+  }
+  measureFrame = requestAnimationFrame(() => {
+    measureFrame = undefined
+    measureContent()
+  })
+}
+
+function handleFactsResize(entries: ResizeObserverEntry[]): void {
+  const width = entries[0]?.contentRect.width ?? 0
+  // 高度变化由人员收起造成；只有宽度变化才需要重新计算。
+  if (Math.abs(width - lastFactsWidth) < 0.5) {
+    return
+  }
+  lastFactsWidth = width
+  scheduleMeasurement()
+}
+
+watch(markItems, () => {
+  markVisibleCount.value = Math.min(2, markItems.value.length)
+  scheduleMeasurement()
+}, { deep: true })
+
+watch([
+  () => props.record.originIssuer,
+  () => props.record.originPurchaseCreator,
+  () => props.record.originSalesOrderNo,
+  () => props.record.originPurchaseOrderNo,
+], scheduleMeasurement, { deep: true })
+
+onMounted(() => {
+  if (typeof ResizeObserver !== 'undefined' && factsRef.value) {
+    resizeObserver = new ResizeObserver(handleFactsResize)
+    resizeObserver.observe(factsRef.value)
+    lastFactsWidth = factsRef.value.getBoundingClientRect().width
+  }
+  scheduleMeasurement()
+  document.fonts?.ready.then(scheduleMeasurement).catch(() => undefined)
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  if (measureFrame !== undefined) {
+    cancelAnimationFrame(measureFrame)
+  }
+})
 
 async function copyContainerMarks(): Promise<void> {
   if (!canCopyContainerMarks.value) {
@@ -147,7 +260,7 @@ async function copyContainerMarks(): Promise<void> {
         </section>
       </div>
 
-      <dl class="qs-shipment-storage-card__facts">
+      <dl ref="factsRef" class="qs-shipment-storage-card__facts">
         <div class="qs-shipment-storage-card__fact">
           <dt class="qs-shipment-storage-card__fact-label">
             货件唛头
@@ -163,16 +276,29 @@ async function copyContainerMarks(): Promise<void> {
           <dt class="qs-shipment-storage-card__fact-label">
             来源销售单
           </dt>
-          <dd class="qs-shipment-storage-card__fact-value qs-shipment-storage-card__fact-value--source">
+          <dd ref="salesValueRef" class="qs-shipment-storage-card__fact-value qs-shipment-storage-card__fact-value--source">
             <QsPersonDisplay
-              v-if="record.originIssuer"
+              v-if="record.originIssuer && !salesPersonHidden"
               :display-name="record.originIssuer.displayName"
               :avatar-url="record.originIssuer.avatarUrl"
               size="sm"
             />
-            <span v-else class="text-xs text-muted-foreground">—</span>
+            <span v-else-if="!record.originIssuer" class="text-xs text-muted-foreground">—</span>
             <span class="qs-shipment-storage-card__copyable text-xs font-mono min-w-0">
               <QsCopyableText label="销售单号" :text="record.originSalesOrderNo" />
+            </span>
+            <span
+              ref="salesMeasureRef"
+              class="qs-shipment-storage-card__measure flex gap-2 items-center"
+              aria-hidden="true"
+            >
+              <QsPersonDisplay
+                v-if="record.originIssuer"
+                :display-name="record.originIssuer.displayName"
+                :avatar-url="record.originIssuer.avatarUrl"
+                size="sm"
+              />
+              <span class="text-xs font-mono">{{ record.originSalesOrderNo }}</span>
             </span>
           </dd>
         </div>
@@ -180,7 +306,7 @@ async function copyContainerMarks(): Promise<void> {
           <dt class="qs-shipment-storage-card__fact-label">
             装柜唛头
           </dt>
-          <dd class="qs-shipment-storage-card__fact-value">
+          <dd ref="markValueRef" class="qs-shipment-storage-card__fact-value">
             <FaTooltip v-if="canCopyContainerMarks" :text="containerMarks.fullText" :delay="300">
               <button
                 type="button"
@@ -192,22 +318,36 @@ async function copyContainerMarks(): Promise<void> {
               </button>
             </FaTooltip>
             <span v-else class="text-xs">—</span>
+            <span ref="markMeasureRef" class="qs-shipment-storage-card__measure" aria-hidden="true" />
           </dd>
         </div>
         <div class="qs-shipment-storage-card__fact">
           <dt class="qs-shipment-storage-card__fact-label">
             来源采购单
           </dt>
-          <dd class="qs-shipment-storage-card__fact-value qs-shipment-storage-card__fact-value--source">
+          <dd ref="purchaseValueRef" class="qs-shipment-storage-card__fact-value qs-shipment-storage-card__fact-value--source">
             <QsPersonDisplay
-              v-if="record.originPurchaseCreator"
+              v-if="record.originPurchaseCreator && !purchasePersonHidden"
               :display-name="record.originPurchaseCreator.displayName"
               :avatar-url="record.originPurchaseCreator.avatarUrl"
               size="sm"
             />
-            <span v-else class="text-xs text-muted-foreground">—</span>
+            <span v-else-if="!record.originPurchaseCreator" class="text-xs text-muted-foreground">—</span>
             <span class="qs-shipment-storage-card__copyable text-xs font-mono min-w-0">
               <QsCopyableText label="采购单号" :text="record.originPurchaseOrderNo" />
+            </span>
+            <span
+              ref="purchaseMeasureRef"
+              class="qs-shipment-storage-card__measure flex gap-2 items-center"
+              aria-hidden="true"
+            >
+              <QsPersonDisplay
+                v-if="record.originPurchaseCreator"
+                :display-name="record.originPurchaseCreator.displayName"
+                :avatar-url="record.originPurchaseCreator.avatarUrl"
+                size="sm"
+              />
+              <span class="text-xs font-mono">{{ record.originPurchaseOrderNo }}</span>
             </span>
           </dd>
         </div>
@@ -316,12 +456,24 @@ async function copyContainerMarks(): Promise<void> {
 }
 
 .qs-shipment-storage-card__fact-value {
+  position: relative;
   display: flex;
   gap: 0.375rem;
   align-items: center;
   min-width: 0;
   margin: 0;
   font-size: var(--qs-type-size-xs);
+}
+
+.qs-shipment-storage-card__measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-flex;
+  visibility: hidden;
+  width: max-content;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .qs-shipment-storage-card__fact-value--source {
