@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ShipmentStorageContainerItemDto, ShipmentStorageDetailDto, ShipmentStorageListItemDto } from '@/api/generated/types.gen'
+import type { ShipmentStorageClaimRequestDto, ShipmentStorageContainerItemDto, ShipmentStorageDetailDto, ShipmentStorageListItemDto } from '@/api/generated/types.gen'
 import type { ActionMenuItem, ActionWidthSpec } from '@/components/business/QsGenericTable/action-column-width'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import type { StorageScopeFilter, StorageStatusTab } from '@/views/workbenches/shipment-storage/logic'
@@ -98,7 +98,7 @@ const columns = computed<QsGenericTableColumn<ShipmentStorageListItemDto>[]>(() 
 const actionColumnWidth = computed(() => {
   const actions: ActionWidthSpec[] = []
   if (canClaimPermission.value) {
-    actions.push({ chars: 2, kind: 'text' })
+    actions.push({ chars: 5, kind: 'text' })
   }
   if (canRelocatePermission.value) {
     actions.push({ chars: 2, kind: 'text' })
@@ -264,6 +264,8 @@ function reloadDetail(): void {
 const actionBusyKey = ref<string | null>(null)
 const claimOpen = ref(false)
 const claimRecord = ref<ShipmentStorageDetailDto | null>(null)
+const claimMode = ref<'direct' | 'review'>('direct')
+const claimRequest = ref<ShipmentStorageClaimRequestDto | null>(null)
 
 function openDetailFromMenu(row: ShipmentStorageListItemDto): void {
   void openDetail(row)
@@ -311,7 +313,35 @@ async function openClaimFromRow(row: ShipmentStorageListItemDto): Promise<void> 
     return
   }
   claimRecord.value = latest
+  claimRequest.value = null
+  claimMode.value = row.claimRequest === null ? 'direct' : 'review'
+  if (row.claimRequest !== null) {
+    const request = new AbortController()
+    try {
+      const response = await shipmentStorageApi.claimRequest(row.id, row.claimRequest.id, request.signal)
+      claimRequest.value = response.data
+    }
+    catch (failure) {
+      toast.error(storageFailureMessage(failure, '调货申请加载失败'))
+      return
+    }
+  }
   claimOpen.value = true
+}
+
+function rejectedClaimRequest(): void {
+  claimOpen.value = false
+  void load()
+  if (detailOpen.value) {
+    reloadDetail()
+  }
+}
+
+function refreshClaimRequest(): void {
+  void load()
+  if (detailOpen.value) {
+    reloadDetail()
+  }
 }
 
 const relocateOpen = ref(false)
@@ -548,7 +578,15 @@ onMounted(() => {
                   :aria-label="`${row.shipmentNo ?? '寄仓记录'}：调货`"
                   @click="openClaimFromRow(row)"
                 >
-                  调货
+                  <span class="inline-flex gap-1 items-center">
+                    调货
+                    <span
+                      v-if="row.claimRequest"
+                      class="text-[10px] text-primary leading-none px-1 py-0.5 rounded bg-primary/10"
+                    >
+                      申请
+                    </span>
+                  </span>
                 </FaButton>
               </span>
             </FaTooltip>
@@ -965,7 +1003,11 @@ onMounted(() => {
       <ShipmentStorageClaimModal
         v-model="claimOpen"
         :storage-record="claimRecord"
+        :mode="claimMode"
+        :claim-request="claimRequest"
         @claimed="claimed"
+        @rejected="rejectedClaimRequest"
+        @refresh="refreshClaimRequest"
       />
     </FaPageMain>
   </div>

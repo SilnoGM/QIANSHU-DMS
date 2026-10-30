@@ -157,6 +157,9 @@ enum AuditEventType {
   SHIPMENT_OWNERSHIP_RELEASED
   SHIPMENT_STORAGE_RECORDED
   SHIPMENT_STORAGE_LOCATION_CHANGED
+  SHIPMENT_STORAGE_CLAIM_REQUESTED
+  SHIPMENT_STORAGE_CLAIM_REQUEST_WITHDRAWN
+  SHIPMENT_STORAGE_CLAIM_REQUEST_REJECTED
   SHIPMENT_STORAGE_CLAIMED
   SHIPMENT_COST_TRANSFERRED
   PURCHASE_ORDER_REVIEW_MARKS_PREPARED
@@ -478,6 +481,15 @@ enum ShipmentStorageLocationScope {
   OVERSEAS
 
   @@map("shipment_storage_location_scope")
+}
+
+enum ShipmentStorageClaimRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+
+  @@map("shipment_storage_claim_request_status")
 }
 
 enum ShipmentCostDirection {
@@ -1559,6 +1571,7 @@ model ShipmentStorageRecord {
   locationEvents ShipmentStorageLocationEvent[]
   claimLines    ShipmentClaimLine[]
   costEvents    ShipmentCostEvent[]
+  claimRequests ShipmentStorageClaimRequest[]
 
   @@index([status, locationScope, warehouseValue], map: "shipment_storage_records_status_location_idx")
   @@index([shipmentId, createdAt(sort: Desc)], map: "shipment_storage_records_shipment_created_idx")
@@ -1598,6 +1611,31 @@ model ShipmentClaimLine {
 
   @@unique([storageRecordId, salesOrderLineId], map: "shipment_claim_lines_record_line_key")
   @@map("shipment_claim_lines")
+}
+
+/// 寄仓调货申请：同一货件只允许一条 PENDING；申请通过后仍保留历史记录。
+model ShipmentStorageClaimRequest {
+  id                 String                             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  storageRecordId    String                             @map("storage_record_id") @db.Uuid
+  applicantUserId    String                             @map("applicant_user_id") @db.Uuid
+  salesOrderId       String                             @map("sales_order_id") @db.Uuid
+  salesOrderNoSnapshot String                           @map("sales_order_no_snapshot") @db.VarChar(64)
+  costTotalCny       Decimal                            @map("cost_total_cny") @db.Decimal(30, 2)
+  allocations        Json                               @db.JsonB
+  status             ShipmentStorageClaimRequestStatus  @default(PENDING)
+  rejectReason       String?                            @map("reject_reason") @db.VarChar(500)
+  reviewedByUserId   String?                            @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt         DateTime?                          @map("reviewed_at") @db.Timestamptz(6)
+  requestKey         String                             @map("request_key") @db.Uuid
+  createdAt          DateTime                           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime                           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  storageRecord ShipmentStorageRecord @relation(fields: [storageRecordId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([applicantUserId, requestKey], map: "shipment_storage_claim_requests_applicant_request_key")
+  @@index([storageRecordId, status], map: "shipment_storage_claim_requests_record_status_idx")
+  @@index([status, createdAt(sort: Desc)], map: "shipment_storage_claim_requests_status_created_idx")
+  @@map("shipment_storage_claim_requests")
 }
 
 model ShipmentCostEvent {

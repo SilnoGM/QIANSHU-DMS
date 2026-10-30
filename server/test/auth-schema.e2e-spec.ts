@@ -85,6 +85,7 @@ const MANAGEMENT_PERMISSION_CODES = [
   'sales-receipts:review',
   'sales-receipts:void',
   'shipment-storage:claim',
+  'shipment-storage:claim-request',
   'shipment-storage:read',
   'shipment-storage:release',
   'shipment-storage:relocate',

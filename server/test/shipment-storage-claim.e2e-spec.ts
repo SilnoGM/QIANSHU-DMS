@@ -420,4 +420,122 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       select: { status: true },
     })).status).toBe('IN_STORAGE')
   })
+
+  it('creates, rejects, withdrawals and approves a claim request with a record lock', async () => {
+    const origin = await h.shipment({ partCount: 1, salesLinked: true })
+    const target = await createTargetOrder(origin.source!.id)
+    const ownershipService = new ShipmentOwnershipService()
+    const recordId = await h.prisma.$transaction(async transaction => {
+      const batch = await transaction.shipmentReleaseBatch.create({ data: {
+        actorUserId: h.fixture.actor.id,
+        originSalesOrderId: origin.source!.id,
+        payloadHash: randomBytes(32),
+        reason: 'CUSTOMER_CANCEL',
+        requestKey: randomUUID(),
+      } })
+      const part = origin.parts[0]
+      const full = await transaction.purchaseOrderPart.findUniqueOrThrow({
+        where: { id: part.id },
+        include: { items: { include: { line: true } } },
+      })
+      await ownershipService.recordMany(transaction, [{
+        actorUserId: h.fixture.actor.id,
+        ownerSalesOrderId: null,
+        ownerType: 'STORAGE_POOL',
+        reason: 'RELEASE',
+        releaseBatchId: batch.id,
+        shipmentId: part.id,
+      }])
+      const record = await transaction.shipmentStorageRecord.create({
+        data: {
+          shipmentId: part.id,
+          releaseBatchId: batch.id,
+          status: 'IN_STORAGE',
+          locationScope: 'MAINLAND',
+          warehouseValue: 'E2E-MAINLAND',
+          warehouseLabelSnapshot: '大陆测试仓库',
+          locationUpdatedAt: new Date(),
+          shipmentNoSnapshot: part.shipmentNo,
+          shippingMarkSnapshot: full.shippingMarkText,
+          originPurchaseOrderId: full.purchaseOrderId,
+          originPurchaseOrderNoSnapshot: origin.order.orderNo,
+          originSalesOrderId: origin.source!.id,
+          originSalesOrderNoSnapshot: origin.source!.orderNo,
+          originCustomerNameSnapshot: origin.source!.customerName,
+          originIssuerUserId: origin.source!.issuerUserId,
+          originAllocations: full.items.map(item => ({
+            purchaseOrderLineId: item.purchaseOrderLineId,
+            lineNumber: item.line.lineNumber,
+            productName: item.line.productNameSnapshot,
+            quantity: item.quantity,
+            unitPriceCny: '10.00',
+          })),
+          costSnapshot: { totalCostCny: '100.00' },
+          snapshotAt: new Date(),
+        },
+        select: { id: true },
+      })
+      return record.id
+    })
+    const targetLine = target.lines[0]
+    const context = { actorUserId: h.fixture.actor.id, requestId: randomUUID() }
+    const request = await storage.createClaimRequest(context, recordId, {
+      salesOrderId: target.id,
+      lines: [{ quantity: 1, salesOrderLineId: targetLine.id }],
+      requestKey: randomUUID(),
+    })
+    expect(request).toMatchObject({
+      applicant: { id: h.fixture.actor.id },
+      costTotalCny: '100.00',
+      status: 'PENDING',
+      targetSalesOrderId: target.id,
+    })
+    const listed = await storage.list({ storageId: recordId })
+    expect(listed.items[0]?.claimRequest).toMatchObject({
+      applicant: { id: h.fixture.actor.id },
+      id: request.id,
+      targetSalesOrderNo: target.orderNo,
+    })
+
+    await expect(storage.claim(context, recordId, {
+      salesOrderId: target.id,
+      lines: [{ quantity: 1, salesOrderLineId: targetLine.id }],
+      requestKey: randomUUID(),
+    })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_REQUEST_PENDING' })
+
+    const rejected = await storage.rejectClaimRequest(context, recordId, request.id, {
+      reason: '测试拒绝',
+    })
+    expect(rejected.status).toBe('REJECTED')
+    await expect(storage.withdrawClaimRequest(context, recordId, request.id))
+      .rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED' })
+    expect((await storage.list({ storageId: recordId })).items[0]?.claimRequest).toBeNull()
+
+    const secondRequest = await storage.createClaimRequest(context, recordId, {
+      salesOrderId: target.id,
+      lines: [{ quantity: 1, salesOrderLineId: targetLine.id }],
+      requestKey: randomUUID(),
+    })
+    // 采运同意后复检失败：申请自动转为拒绝，寄仓记录保持锁定前状态。
+    await h.prisma.salesOrder.update({
+      where: { id: target.id },
+      data: { orderStatus: 'CANCELLED' },
+    })
+    await expect(storage.approveClaimRequest(context, recordId, secondRequest.id))
+      .rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED' })
+    expect((await storage.getClaimRequest(recordId, secondRequest.id)).status).toBe('REJECTED')
+    await h.prisma.salesOrder.update({
+      where: { id: target.id },
+      data: { orderStatus: 'CONFIRMED' },
+    })
+
+    const thirdRequest = await storage.createClaimRequest(context, recordId, {
+      salesOrderId: target.id,
+      lines: [{ quantity: 1, salesOrderLineId: targetLine.id }],
+      requestKey: randomUUID(),
+    })
+    const claimed = await storage.approveClaimRequest(context, recordId, thirdRequest.id)
+    expect(claimed.status).toBe('CLAIMED')
+    expect((await storage.getClaimRequest(recordId, thirdRequest.id)).status).toBe('APPROVED')
+  })
 })

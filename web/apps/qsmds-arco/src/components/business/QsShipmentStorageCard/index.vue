@@ -25,6 +25,7 @@ const props = withDefaults(defineProps<QsShipmentStorageCardProps>(), {
 const emit = defineEmits<{
   detail: []
   apply: []
+  withdraw: [requestId: string]
 }>()
 
 const toast = useQsToast()
@@ -37,11 +38,23 @@ const markItems = computed(() => props.record.containerMarks.map(mark => mark.tr
 const markVisibleCount = ref(2)
 const containerMarks = computed(() => resolveStorageCardMarks(props.record.containerMarks, markVisibleCount.value))
 const canCopyContainerMarks = computed(() => containerMarks.value.fullText !== '—')
-const applyDisabled = computed(() => props.applyDisabledReason !== null)
+const claimRequest = computed(() => props.claimRequest ?? props.record.claimRequest ?? null)
+const claimRequestLocked = computed(() => claimRequest.value !== null)
+const claimApplicant = computed(() => claimRequest.value?.applicant ?? null)
+const canWithdrawClaimRequest = computed(() => (
+  claimRequestLocked.value
+  && claimApplicant.value !== null
+  && props.currentUserId !== undefined
+  && claimApplicant.value.id === props.currentUserId
+))
+const applyDisabled = computed(() => (
+  props.applyDisabledReason !== null || claimRequestLocked.value
+))
 const shipmentCardId = computed(() => `shipment-card-${props.record.id}`)
 const shipmentLabel = computed(() => props.record.shipmentNo ?? '寄仓记录')
 const detailLabel = computed(() => `${shipmentLabel.value}：详情`)
 const applyLabel = computed(() => `${shipmentLabel.value}：申请调货`)
+const claimRequestLockText = '调货申请中，已锁定'
 
 const factsRef = ref<HTMLElement | null>(null)
 const markValueRef = ref<HTMLElement | null>(null)
@@ -349,7 +362,19 @@ async function copyContainerMarks(): Promise<void> {
       </dl>
     </div>
 
-    <footer class="qs-shipment-storage-card__footer px-4 py-3 border-t border-border bg-muted/20 flex flex-wrap gap-2 justify-end">
+    <footer
+      class="qs-shipment-storage-card__footer px-4 py-3 border-t border-border bg-muted/20 flex flex-wrap gap-2"
+      :class="claimRequestLocked ? 'justify-between' : 'justify-end'"
+    >
+      <div v-if="claimRequestLocked" class="flex flex-wrap gap-2 min-w-0 items-center">
+        <QsPersonDisplay
+          v-if="claimApplicant"
+          :display-name="claimApplicant.displayName"
+          :avatar-url="claimApplicant.avatarUrl"
+          size="sm"
+        />
+        <span class="text-xs text-muted-foreground">{{ claimRequestLockText }}</span>
+      </div>
       <div class="qs-shipment-storage-card__actions flex gap-2">
         <FaButton
           variant="outline"
@@ -360,7 +385,21 @@ async function copyContainerMarks(): Promise<void> {
         >
           详情
         </FaButton>
-        <FaTooltip :text="applyDisabledReason ?? ''" :disabled="!applyDisabled">
+        <FaButton
+          v-if="claimRequestLocked && canWithdrawClaimRequest"
+          variant="outline"
+          size="sm"
+          class="min-h-11 sm:min-h-8"
+          :aria-label="`${shipmentLabel}：撤销调货申请`"
+          @click="emit('withdraw', claimRequest?.id ?? '')"
+        >
+          撤销申请
+        </FaButton>
+        <FaTooltip
+          v-else
+          :text="claimRequestLocked ? claimRequestLockText : (applyDisabledReason ?? '')"
+          :disabled="!applyDisabled"
+        >
           <span class="inline-flex" tabindex="0">
             <FaButton
               size="sm"

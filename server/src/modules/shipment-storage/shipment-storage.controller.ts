@@ -30,6 +30,9 @@ import {
   ClaimShipmentStorageRequestDto,
   RelocateShipmentStorageRequestDto,
   ReleaseShipmentStorageRequestDto,
+  RejectShipmentStorageClaimRequestDto,
+  ShipmentStorageClaimRequestDto,
+  ShipmentStorageClaimRequestParamsDto,
   ShipmentStorageDetailDto,
   ShipmentStorageIdParamDto,
   ShipmentStorageLineImageParamDto,
@@ -190,6 +193,160 @@ export class ShipmentStorageController {
     )
   }
 
+  @Get(':storageRecordId/claim-requests/:requestId')
+  @RequirePermissions('shipment-storage:read')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ShipmentStorageClaimRequestDto })
+  @ApiApplicationContract({
+    operationId: 'shipment_storage_claim_request_detail',
+    session: 'required',
+    authorization: true,
+    badRequest: true,
+    resourceLocator: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      { status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] },
+      { status: 404, codes: ['SHIPMENT_STORAGE_CLAIM_REQUEST_NOT_FOUND'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  getClaimRequest(
+    @Param() params: ShipmentStorageClaimRequestParamsDto,
+  ): Promise<ShipmentStorageClaimRequestDto> {
+    return this.storage.getClaimRequest(params.storageRecordId, params.requestId)
+  }
+
+  @Post(':storageRecordId/claim-requests')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions('shipment-storage:claim-request')
+  @ApiContractResponse({ status: HttpStatus.CREATED, type: ShipmentStorageClaimRequestDto })
+  @ApiApplicationContract({
+    operationId: 'shipment_storage_claim_request_create',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      { status: 403, codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] },
+      { status: 404, codes: ['SHIPMENT_STORAGE_NOT_FOUND', 'SALES_ORDER_NOT_FOUND'] },
+      { status: 409, codes: ['SHIPMENT_STORAGE_STATE_CHANGED', 'SHIPMENT_STORAGE_CLAIM_REQUEST_EXISTS'] },
+      { status: 422, codes: ['SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', 'SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE', 'SHIPMENT_STORAGE_SHARE_RATE_MISSING', 'VALIDATION_FAILED'] },
+    ],
+  })
+  createClaimRequest(
+    @Param() params: ShipmentStorageIdParamDto,
+    @Body() dto: ClaimShipmentStorageRequestDto,
+    @Req() request: object,
+  ): Promise<ShipmentStorageClaimRequestDto> {
+    return this.storage.createClaimRequest(
+      { actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) },
+      params.storageRecordId,
+      dto,
+    )
+  }
+
+  @Post(':storageRecordId/claim-requests/:requestId/withdraw')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('shipment-storage:claim-request')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ShipmentStorageClaimRequestDto })
+  @ApiApplicationContract({
+    operationId: 'shipment_storage_claim_request_withdraw',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      { status: 403, codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED', 'SHIPMENT_STORAGE_CLAIM_REQUEST_FORBIDDEN'] },
+      { status: 404, codes: ['SHIPMENT_STORAGE_CLAIM_REQUEST_NOT_FOUND'] },
+      { status: 409, codes: ['SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  withdrawClaimRequest(
+    @Param() params: ShipmentStorageClaimRequestParamsDto,
+    @Req() request: object,
+  ): Promise<ShipmentStorageClaimRequestDto> {
+    return this.storage.withdrawClaimRequest(
+      { actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) },
+      params.storageRecordId,
+      params.requestId,
+    )
+  }
+
+  @Post(':storageRecordId/claim-requests/:requestId/approve')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('shipment-storage:claim')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ShipmentStorageDetailDto })
+  @ApiApplicationContract({
+    operationId: 'shipment_storage_claim_request_approve',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      { status: 403, codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] },
+      { status: 404, codes: ['SHIPMENT_STORAGE_CLAIM_REQUEST_NOT_FOUND'] },
+      { status: 409, codes: ['SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED', 'SHIPMENT_STORAGE_STATE_CHANGED'] },
+      { status: 422, codes: ['SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', 'SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE', 'SHIPMENT_STORAGE_SHARE_RATE_MISSING', 'VALIDATION_FAILED'] },
+    ],
+  })
+  approveClaimRequest(
+    @Param() params: ShipmentStorageClaimRequestParamsDto,
+    @Req() request: object,
+  ): Promise<ShipmentStorageDetailDto> {
+    return this.storage.approveClaimRequest(
+      { actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) },
+      params.storageRecordId,
+      params.requestId,
+    )
+  }
+
+  @Post(':storageRecordId/claim-requests/:requestId/reject')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('shipment-storage:claim')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ShipmentStorageClaimRequestDto })
+  @ApiApplicationContract({
+    operationId: 'shipment_storage_claim_request_reject',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      { status: 403, codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] },
+      { status: 404, codes: ['SHIPMENT_STORAGE_CLAIM_REQUEST_NOT_FOUND'] },
+      { status: 409, codes: ['SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  rejectClaimRequest(
+    @Param() params: ShipmentStorageClaimRequestParamsDto,
+    @Body() dto: RejectShipmentStorageClaimRequestDto,
+    @Req() request: object,
+  ): Promise<ShipmentStorageClaimRequestDto> {
+    return this.storage.rejectClaimRequest(
+      { actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) },
+      params.storageRecordId,
+      params.requestId,
+      dto,
+    )
+  }
+
   @Post(':storageRecordId/claim')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('shipment-storage:claim')
@@ -207,7 +364,7 @@ export class ShipmentStorageController {
     errors: [
       { status: 403, codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] },
       { status: 404, codes: ['SHIPMENT_STORAGE_NOT_FOUND', 'SALES_ORDER_NOT_FOUND'] },
-      { status: 409, codes: ['SHIPMENT_STORAGE_STATE_CHANGED'] },
+      { status: 409, codes: ['SHIPMENT_STORAGE_STATE_CHANGED', 'SHIPMENT_STORAGE_CLAIM_REQUEST_PENDING'] },
       { status: 422, codes: ['SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', 'VALIDATION_FAILED'] },
     ],
   })

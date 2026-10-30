@@ -14,10 +14,12 @@ import QsShipmentStorageCard from '@/components/business/QsShipmentStorageCard/i
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
+import ShipmentStorageClaimModal from '@/views/workbenches/purchase-storage/claim-modal.vue'
 import { buildStorageQuery, claimRequestDisabledReason, DEFAULT_STORAGE_STATUS, locationLabel, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusClass, storageStatusLabel } from '@/views/workbenches/shipment-storage/logic'
 
 defineOptions({ name: 'QsOperationsGoodsStorage' })
 
+const appAccountStore = useAppAccountStore()
 const { auth } = useAppAuth()
 const route = useRoute()
 const toast = useQsToast()
@@ -25,6 +27,7 @@ const currencyCatalog = useCurrencyCatalog()
 const mainlandCatalog = useDictionaryCatalog('mainland.warehouse')
 const overseasCatalog = useDictionaryCatalog('overseas.warehouse')
 const canRead = computed(() => auth('shipment-storage:read'))
+const canRequestClaim = computed(() => auth('shipment-storage:claim-request'))
 
 const UUID_PATTERN = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu
 const queryStorageId = typeof route.query.storageId === 'string' && UUID_PATTERN.test(route.query.storageId)
@@ -229,6 +232,82 @@ async function openDetail(row: ShipmentStorageListItemDto): Promise<void> {
   }
 }
 
+const claimModalOpen = ref(false)
+const claimRecord = ref<ShipmentStorageDetailDto | null>(null)
+const claimBusyId = ref<string | null>(null)
+
+function cardApplyDisabledReason(row: ShipmentStorageListItemDto): string | null {
+  return canRequestClaim.value ? claimRequestDisabledReason(row) : '无申请调货权限'
+}
+
+async function openApplyFromRow(row: ShipmentStorageListItemDto): Promise<void> {
+  if (!canRequestClaim.value) {
+    toast.warning('无申请调货权限')
+    return
+  }
+  if (row.claimRequest !== null) {
+    toast.info('调货申请中，已锁定')
+    return
+  }
+  if (claimBusyId.value !== null) {
+    return
+  }
+  claimBusyId.value = row.id
+  const request = new AbortController()
+  try {
+    const response = await shipmentStorageApi.detail(row.id, request.signal)
+    if (response.data.status !== 'IN_STORAGE') {
+      toast.info(claimRequestDisabledReason(response.data) ?? '当前状态不能申请调货')
+      return
+    }
+    claimRecord.value = response.data
+    claimModalOpen.value = true
+  }
+  catch (failure) {
+    toast.error(storageFailureMessage(failure, '寄仓详情加载失败'))
+  }
+  finally {
+    claimBusyId.value = null
+  }
+}
+
+function claimRequested(): void {
+  claimModalOpen.value = false
+  void load()
+  if (detailOpen.value) {
+    reloadDetail()
+  }
+}
+
+async function withdrawClaimRequest(row: ShipmentStorageListItemDto, requestId: string): Promise<void> {
+  if (row.claimRequest?.id !== requestId || claimBusyId.value !== null) {
+    return
+  }
+  claimBusyId.value = row.id
+  const request = new AbortController()
+  try {
+    await shipmentStorageApi.withdrawClaimRequest(row.id, requestId, request.signal)
+    toast.success('调货申请已撤回')
+    await load()
+    if (detailOpen.value) {
+      reloadDetail()
+    }
+  }
+  catch (failure) {
+    toast.error(storageFailureMessage(failure, '撤回调货申请失败'))
+  }
+  finally {
+    claimBusyId.value = null
+  }
+}
+
+function reloadDetail(): void {
+  const row = rows.value.find(item => item.id === detail.value?.id)
+  if (row !== undefined) {
+    void openDetail(row)
+  }
+}
+
 onMounted(() => {
   void load()
 })
@@ -316,9 +395,12 @@ onMounted(() => {
               :currencies="currencyCatalog.currencies.value"
               :status-label="storageStatusLabel(row.status)"
               :status-class="storageStatusClass(row.status)"
-              :apply-disabled-reason="claimRequestDisabledReason(row)"
+              :apply-disabled-reason="cardApplyDisabledReason(row)"
+              :claim-request="row.claimRequest"
+              :current-user-id="appAccountStore.userId"
               @detail="openDetail(row)"
-              @apply="toast.info('申请调货功能开发中')"
+              @apply="openApplyFromRow(row)"
+              @withdraw="withdrawClaimRequest(row, $event)"
             />
           </div>
           <nav v-if="total > 0" class="mt-5 overflow-x-auto" aria-label="寄仓记录分页">
@@ -738,6 +820,13 @@ onMounted(() => {
           </div>
         </div>
       </QsGenericDrawer>
+
+      <ShipmentStorageClaimModal
+        v-model="claimModalOpen"
+        :storage-record="claimRecord"
+        mode="apply"
+        @requested="claimRequested"
+      />
     </FaPageMain>
   </div>
 </template>

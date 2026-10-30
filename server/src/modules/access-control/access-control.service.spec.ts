@@ -98,6 +98,7 @@ describe('permission constants', () => {
       'shipment-storage:release',
       'shipment-storage:relocate',
       'shipment-storage:claim',
+      'shipment-storage:claim-request',
       'purchase-orders:read',
       'purchase-orders:create',
       'purchase-orders:create-stock',
@@ -133,7 +134,7 @@ describe('permission constants', () => {
       'data-scope:self',
       'data-scope:all',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 101)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 102)
   })
 })
 

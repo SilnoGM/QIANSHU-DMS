@@ -5,6 +5,7 @@ import { HttpStatus, Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import type {
   ShipmentStorageLocationScope,
+  ShipmentStorageStatus,
 } from '../../generated/prisma/enums'
 import {
   PERSON_REFERENCE_SELECT,
@@ -38,6 +39,9 @@ import type {
   ClaimShipmentStorageRequestDto,
   RelocateShipmentStorageRequestDto,
   ReleaseShipmentStorageRequestDto,
+  RejectShipmentStorageClaimRequestDto,
+  ShipmentStorageClaimRequestDto,
+  ShipmentStorageClaimRequestSummaryDto,
   ShipmentStorageCostDto,
   ShipmentStorageCostTransferDto,
   ShipmentStorageContainerItemDto,
@@ -250,6 +254,38 @@ function containerMarksFromItems(
 interface StoragePersonContext {
   readonly issuerById: ReadonlyMap<string, PersonReference>
   readonly purchaseCreatorById: ReadonlyMap<string, PersonReference>
+  readonly claimRequestByStorageId: ReadonlyMap<string, ShipmentStorageClaimRequestSummaryDto>
+}
+
+interface ClaimAllocationSnapshot {
+  readonly salesOrderLineId: string
+  readonly lineNumber: number
+  readonly productName: string
+  readonly quantity: number
+}
+
+interface PreparedClaim {
+  readonly record: {
+    readonly id: string
+    readonly shipmentId: string
+    readonly status: ShipmentStorageStatus
+    readonly originSalesOrderId: string
+    readonly originAllocations: Prisma.JsonValue
+    readonly costSnapshot: Prisma.JsonValue
+    readonly shipmentNoSnapshot: string | null
+  }
+  readonly order: {
+    readonly id: string
+    readonly orderNo: string
+    readonly issuerUserId: string
+  }
+  readonly lines: readonly {
+    readonly id: string
+    readonly lineNumber: number
+    readonly quantity: number
+    readonly productNameSnapshot: string
+  }[]
+  readonly claimedQuantity: number
 }
 
 interface StorageInitialLocation {
@@ -314,6 +350,7 @@ function baseRecordDto(
     originSalesOrderId: row.originSalesOrderId,
     originIssuerUserId: row.originIssuerUserId,
     cost: costFromSnapshot(row.costSnapshot),
+    claimRequest: persons.claimRequestByStorageId.get(row.id) ?? null,
     snapshotAt: row.snapshotAt.toISOString(),
     locationUpdatedAt: row.locationUpdatedAt.toISOString(),
     claimedAt: row.claimedAt?.toISOString() ?? null,
@@ -325,6 +362,38 @@ function baseRecordDto(
 function parseBatchIds(value: Prisma.JsonValue): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((id): id is string => typeof id === 'string')
+}
+
+function readClaimAllocationSnapshots(value: Prisma.JsonValue): ClaimAllocationSnapshot[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return []
+    const record = entry as Record<string, unknown>
+    if (
+      typeof record.salesOrderLineId !== 'string'
+      || typeof record.lineNumber !== 'number'
+      || typeof record.productName !== 'string'
+      || typeof record.quantity !== 'number'
+      || record.quantity <= 0
+    ) {
+      return []
+    }
+    return [{
+      salesOrderLineId: record.salesOrderLineId,
+      lineNumber: record.lineNumber,
+      productName: record.productName,
+      quantity: record.quantity,
+    }]
+  })
+}
+
+function claimRequestLineInputs(
+  allocations: readonly ClaimAllocationSnapshot[],
+): ClaimShipmentStorageRequestDto['lines'] {
+  return allocations.map(allocation => ({
+    salesOrderLineId: allocation.salesOrderLineId,
+    quantity: allocation.quantity,
+  }))
 }
 
 function detailDto(
@@ -804,10 +873,12 @@ export class ShipmentStorageService {
     context: ShipmentStorageMutationContext,
     storageRecordId: string,
     input: ClaimShipmentStorageRequestDto,
+    claimRequestId?: string,
   ): Promise<ShipmentStorageDetailDto> {
-    await this.prisma.$transaction(async transaction => {
-      await applyTransactionTimeouts(transaction)
-      await transaction.$queryRaw(Prisma.sql`SELECT id FROM shipment_storage_records WHERE id = ${storageRecordId}::uuid FOR UPDATE`)
+    try {
+      await this.prisma.$transaction(async transaction => {
+        await applyTransactionTimeouts(transaction)
+        await transaction.$queryRaw(Prisma.sql`SELECT id FROM shipment_storage_records WHERE id = ${storageRecordId}::uuid FOR UPDATE`)
       const record = await transaction.shipmentStorageRecord.findUnique({
         where: { id: storageRecordId },
         select: {
@@ -840,6 +911,39 @@ export class ShipmentStorageService {
       })
       if (ownership?.ownerType !== 'STORAGE_POOL' || ownership.state !== 'ACTIVE') {
         storageFailure('SHIPMENT_STORAGE_STATE_CHANGED', '货件归属已变化，请刷新后重试', HttpStatus.CONFLICT)
+      }
+      if (claimRequestId === undefined) {
+        const pendingRequest = await transaction.shipmentStorageClaimRequest.findFirst({
+          where: { storageRecordId, status: 'PENDING' },
+          select: { id: true },
+        })
+        if (pendingRequest !== null) {
+          storageFailure(
+            'SHIPMENT_STORAGE_CLAIM_REQUEST_PENDING',
+            '存在进行中的调货申请，请先审核或由申请人撤回',
+            HttpStatus.CONFLICT,
+          )
+        }
+      }
+      else {
+        const claimRequest = await transaction.shipmentStorageClaimRequest.findFirst({
+          where: { id: claimRequestId, storageRecordId, status: 'PENDING' },
+          select: { id: true, salesOrderId: true },
+        })
+        if (claimRequest === null) {
+          storageFailure(
+            'SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED',
+            '调货申请已变化，请刷新后重试',
+            HttpStatus.CONFLICT,
+          )
+        }
+        if (claimRequest.salesOrderId !== input.salesOrderId) {
+          storageFailure(
+            'SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED',
+            '调货申请的目标销售订单已变化，请刷新后重试',
+            HttpStatus.CONFLICT,
+          )
+        }
       }
       const order = await transaction.salesOrder.findUnique({
         where: { id: input.salesOrderId },
@@ -1004,12 +1108,453 @@ export class ShipmentStorageService {
         storageRecordId,
         userId: order.issuerUserId,
       })
+      if (claimRequestId !== undefined) {
+        await transaction.shipmentStorageClaimRequest.update({
+          where: { id: claimRequestId },
+          data: {
+            status: 'APPROVED',
+            reviewedByUserId: context.actorUserId,
+            reviewedAt: new Date(),
+          },
+        })
+      }
     }, { timeout: 30_000 })
+    }
+    catch (error) {
+      if (
+        claimRequestId !== undefined
+        && error instanceof ApiException
+        && error.getStatus() < 500
+      ) {
+        await this.rejectClaimRequestAfterRecheck(
+          context,
+          storageRecordId,
+          claimRequestId,
+          error.publicMessage,
+        )
+      }
+      throw error
+    }
     return this.getById(storageRecordId)
   }
 
-  private async loadBatchRecords(batchId: string): Promise<readonly ShipmentStorageDetailDto[]> {
-    const rows = await this.prisma.shipmentStorageRecord.findMany({
+  private async prepareClaimTarget(
+    transaction: Prisma.TransactionClient,
+    record: PreparedClaim['record'],
+    input: ClaimShipmentStorageRequestDto,
+  ): Promise<Pick<PreparedClaim, 'order' | 'lines' | 'claimedQuantity'>> {
+    const order = await transaction.salesOrder.findUnique({
+      where: { id: input.salesOrderId },
+      select: { id: true, orderNo: true, orderStatus: true, issuerUserId: true },
+    })
+    if (order === null) {
+      storageFailure('SALES_ORDER_NOT_FOUND', '目标销售订单不存在', HttpStatus.NOT_FOUND)
+    }
+    if (order.orderStatus !== 'CONFIRMED') {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '只有已确认的销售订单可以认领寄仓货件')
+    }
+    if (input.salesOrderId === record.originSalesOrderId) {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '不能把货件认领回原销售订单')
+    }
+    const requestedLineIds = input.lines.map(line => line.salesOrderLineId)
+    if (new Set(requestedLineIds).size !== requestedLineIds.length) {
+      storageFailure('VALIDATION_FAILED', '认领明细行不能重复')
+    }
+    const lines = await transaction.salesOrderLine.findMany({
+      where: {
+        id: { in: requestedLineIds },
+        salesOrderId: input.salesOrderId,
+        removedAt: null,
+      },
+      select: { id: true, lineNumber: true, quantity: true, productNameSnapshot: true },
+    })
+    if (lines.length !== requestedLineIds.length) {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '目标销售明细行不存在或已移除')
+    }
+    const lineById = new Map(lines.map(line => [line.id, line]))
+    for (const claimed of input.lines) {
+      const line = lineById.get(claimed.salesOrderLineId)
+      if (line === undefined || claimed.quantity > line.quantity) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '认领数量超过目标销售行数量')
+      }
+    }
+    const shipmentQuantity = readShipmentStorageAllocations(record.originAllocations)
+      .reduce((sum, allocation) => sum + allocation.quantity, 0)
+    const claimedQuantity = input.lines.reduce((sum, line) => sum + line.quantity, 0)
+    if (shipmentQuantity <= 0 || claimedQuantity !== shipmentQuantity) {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '寄仓货件必须整件认领')
+    }
+    const salesLineIds = lines.map(line => line.id)
+    await transaction.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "sales_order_lines"
+      WHERE "id" IN (${Prisma.join(salesLineIds)})
+      ORDER BY "id" FOR UPDATE
+    `)
+    const purchasedRows = await transaction.purchaseOrderLine.groupBy({
+      by: ['sourceSalesOrderLineId'],
+      where: {
+        sourceSalesOrderLineId: { in: salesLineIds },
+        purchaseOrder: {
+          orderStatus: { not: 'CANCELLED' },
+          purchaseType: 'SALES_LINKED',
+          salesOrderId: input.salesOrderId,
+        },
+      },
+      _sum: { quantity: true },
+    })
+    const purchasedBySource = new Map<string, number>()
+    for (const row of purchasedRows) {
+      if (row.sourceSalesOrderLineId !== null) {
+        purchasedBySource.set(row.sourceSalesOrderLineId, row._sum.quantity ?? 0)
+      }
+    }
+    const existingClaims = await readClaimedQuantitiesBySalesLine(
+      transaction,
+      input.salesOrderId,
+      salesLineIds,
+    )
+    for (const claimed of input.lines) {
+      const line = lineById.get(claimed.salesOrderLineId)
+      const remaining = (line?.quantity ?? 0)
+        - (purchasedBySource.get(claimed.salesOrderLineId) ?? 0)
+        - (existingClaims.get(claimed.salesOrderLineId) ?? 0)
+      if (claimed.quantity > remaining) {
+        storageFailure(
+          'SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE',
+          `销售明细第${line?.lineNumber ?? '—'}行剩余可认领数量不足（已扣除采购预占与已有认领）`,
+        )
+      }
+    }
+    const issuerAccount = await transaction.fundAccount.findUnique({
+      where: { userId: order.issuerUserId },
+      select: { userShareRate: true },
+    })
+    if (issuerAccount?.userShareRate === null || issuerAccount === undefined) {
+      storageFailure('SHIPMENT_STORAGE_SHARE_RATE_MISSING', '新出单人缺少资金账户比例，无法转移成本')
+    }
+    return { order, lines, claimedQuantity }
+  }
+
+  async getClaimRequest(
+    storageRecordId: string,
+    requestId: string,
+  ): Promise<ShipmentStorageClaimRequestDto> {
+    return this.loadClaimRequestDto(storageRecordId, requestId)
+  }
+
+  async createClaimRequest(
+    context: ShipmentStorageMutationContext,
+    storageRecordId: string,
+    input: ClaimShipmentStorageRequestDto,
+  ): Promise<ShipmentStorageClaimRequestDto> {
+    try {
+      const request = await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
+        await transaction.$queryRaw(Prisma.sql`SELECT id FROM shipment_storage_records WHERE id = ${storageRecordId}::uuid FOR UPDATE`)
+        const record = await transaction.shipmentStorageRecord.findUnique({
+          where: { id: storageRecordId },
+          select: {
+            id: true,
+            shipmentId: true,
+            status: true,
+            originSalesOrderId: true,
+            originAllocations: true,
+            costSnapshot: true,
+            shipmentNoSnapshot: true,
+          },
+        })
+        if (record === null) {
+          storageFailure('SHIPMENT_STORAGE_NOT_FOUND', '寄仓记录不存在', HttpStatus.NOT_FOUND)
+        }
+        if (record.status !== 'IN_STORAGE') {
+          storageFailure('SHIPMENT_STORAGE_STATE_CHANGED', '只有寄仓中的记录可以申请调货', HttpStatus.CONFLICT)
+        }
+        const ownership = await transaction.shipmentOwnershipCurrent.findUnique({
+          where: { shipmentId: record.shipmentId },
+          select: { ownerType: true, state: true },
+        })
+        if (ownership?.ownerType !== 'STORAGE_POOL' || ownership.state !== 'ACTIVE') {
+          storageFailure('SHIPMENT_STORAGE_STATE_CHANGED', '货件归属已变化，请刷新后重试', HttpStatus.CONFLICT)
+        }
+        const pendingRequest = await transaction.shipmentStorageClaimRequest.findFirst({
+          where: { storageRecordId, status: 'PENDING' },
+          select: { id: true },
+        })
+        if (pendingRequest !== null) {
+          storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_EXISTS', '该货件已有进行中的调货申请', HttpStatus.CONFLICT)
+        }
+        const prepared = await this.prepareClaimTarget(transaction, record, input)
+        const quantityByLine = new Map(input.lines.map(line => [line.salesOrderLineId, line.quantity]))
+        const allocations: ClaimAllocationSnapshot[] = prepared.lines.map(line => ({
+          salesOrderLineId: line.id,
+          lineNumber: line.lineNumber,
+          productName: line.productNameSnapshot,
+          quantity: quantityByLine.get(line.id) ?? 0,
+        }))
+        const created = await transaction.shipmentStorageClaimRequest.create({
+          data: {
+            storageRecordId,
+            applicantUserId: context.actorUserId,
+            salesOrderId: prepared.order.id,
+            salesOrderNoSnapshot: prepared.order.orderNo,
+            costTotalCny: totalCostFromSnapshot(record.costSnapshot),
+            allocations: allocations as unknown as Prisma.InputJsonValue,
+            requestKey: input.requestKey,
+          },
+          select: { id: true },
+        })
+        await this.audit.record(transaction, {
+          eventType: 'SHIPMENT_STORAGE_CLAIM_REQUESTED',
+          outcome: 'SUCCESS',
+          actorType: 'USER',
+          actorUserId: context.actorUserId,
+          requestId: context.requestId,
+          targetType: 'SHIPMENT_STORAGE_CLAIM_REQUEST',
+          targetId: created.id,
+          metadata: {
+            storageRecordId,
+            salesOrderId: prepared.order.id,
+            salesOrderNo: prepared.order.orderNo,
+            claimedQuantity: prepared.claimedQuantity,
+          },
+        })
+        return created
+      }, { timeout: 30_000 })
+      return this.loadClaimRequestDto(storageRecordId, request.id)
+    }
+    catch (error) {
+      if (hasPersistenceCode(readPersistenceErrorFacts(error), 'P2002')) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_EXISTS', '该货件已有进行中的调货申请或重复提交', HttpStatus.CONFLICT)
+      }
+      throw error
+    }
+  }
+
+  async withdrawClaimRequest(
+    context: ShipmentStorageMutationContext,
+    storageRecordId: string,
+    requestId: string,
+  ): Promise<ShipmentStorageClaimRequestDto> {
+    await this.prisma.$transaction(async (transaction) => {
+      await applyTransactionTimeouts(transaction)
+      await transaction.$queryRaw(Prisma.sql`SELECT id FROM shipment_storage_claim_requests WHERE id = ${requestId}::uuid FOR UPDATE`)
+      const request = await transaction.shipmentStorageClaimRequest.findFirst({
+        where: { id: requestId, storageRecordId },
+        select: { id: true, status: true, applicantUserId: true },
+      })
+      if (request === null) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_NOT_FOUND', '调货申请不存在', HttpStatus.NOT_FOUND)
+      }
+      if (request.status !== 'PENDING') {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED', '调货申请已处理，无法撤回', HttpStatus.CONFLICT)
+      }
+      if (request.applicantUserId !== context.actorUserId) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_FORBIDDEN', '只有申请人可以撤回调货申请', HttpStatus.FORBIDDEN)
+      }
+      const now = new Date()
+      await transaction.shipmentStorageClaimRequest.update({
+        where: { id: requestId },
+        data: { status: 'WITHDRAWN', reviewedAt: now },
+      })
+      await this.audit.record(transaction, {
+        eventType: 'SHIPMENT_STORAGE_CLAIM_REQUEST_WITHDRAWN',
+        outcome: 'SUCCESS',
+        actorType: 'USER',
+        actorUserId: context.actorUserId,
+        requestId: context.requestId,
+        targetType: 'SHIPMENT_STORAGE_CLAIM_REQUEST',
+        targetId: requestId,
+        metadata: { storageRecordId },
+      })
+    }, { timeout: 30_000 })
+    return this.loadClaimRequestDto(storageRecordId, requestId)
+  }
+
+  async rejectClaimRequest(
+    context: ShipmentStorageMutationContext,
+    storageRecordId: string,
+    requestId: string,
+    input: RejectShipmentStorageClaimRequestDto,
+  ): Promise<ShipmentStorageClaimRequestDto> {
+    const reason = input.reason.trim()
+    if (reason === '') {
+      storageFailure('VALIDATION_FAILED', '拒绝原因不能为空')
+    }
+    await this.prisma.$transaction(async (transaction) => {
+      await applyTransactionTimeouts(transaction)
+      await transaction.$queryRaw(Prisma.sql`SELECT id FROM shipment_storage_claim_requests WHERE id = ${requestId}::uuid FOR UPDATE`)
+      const request = await transaction.shipmentStorageClaimRequest.findFirst({
+        where: { id: requestId, storageRecordId },
+        select: { id: true, status: true },
+      })
+      if (request === null) {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_NOT_FOUND', '调货申请不存在', HttpStatus.NOT_FOUND)
+      }
+      if (request.status !== 'PENDING') {
+        storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED', '调货申请已处理', HttpStatus.CONFLICT)
+      }
+      await this.rejectClaimRequestRow(transaction, context, storageRecordId, requestId, reason)
+    }, { timeout: 30_000 })
+    return this.loadClaimRequestDto(storageRecordId, requestId)
+  }
+
+  async approveClaimRequest(
+    context: ShipmentStorageMutationContext,
+    storageRecordId: string,
+    requestId: string,
+  ): Promise<ShipmentStorageDetailDto> {
+    const request = await this.prisma.shipmentStorageClaimRequest.findFirst({
+      where: { id: requestId, storageRecordId },
+      select: {
+        id: true,
+        status: true,
+        salesOrderId: true,
+        allocations: true,
+        requestKey: true,
+      },
+    })
+    if (request === null) {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_NOT_FOUND', '调货申请不存在', HttpStatus.NOT_FOUND)
+    }
+    if (request.status === 'APPROVED') {
+      return this.getById(storageRecordId)
+    }
+    if (request.status !== 'PENDING') {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED', '调货申请已处理', HttpStatus.CONFLICT)
+    }
+    const allocations = readClaimAllocationSnapshots(request.allocations)
+    if (allocations.length === 0) {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED', '调货申请缺少认领明细', HttpStatus.CONFLICT)
+    }
+    return this.claim(context, storageRecordId, {
+      salesOrderId: request.salesOrderId,
+      lines: claimRequestLineInputs(allocations),
+      requestKey: request.requestKey,
+    }, requestId)
+  }
+
+  private async rejectClaimRequestAfterRecheck(
+    context: ShipmentStorageMutationContext,
+    storageRecordId: string,
+    requestId: string,
+    reason: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (transaction) => {
+      const updated = await transaction.shipmentStorageClaimRequest.updateMany({
+        where: { id: requestId, storageRecordId, status: 'PENDING' },
+        data: {
+          status: 'REJECTED',
+          rejectReason: reason.slice(0, 500),
+          reviewedByUserId: context.actorUserId,
+          reviewedAt: new Date(),
+        },
+      })
+      if (updated.count > 0) {
+        await this.audit.record(transaction, {
+          eventType: 'SHIPMENT_STORAGE_CLAIM_REQUEST_REJECTED',
+          outcome: 'SUCCESS',
+          actorType: 'USER',
+          actorUserId: context.actorUserId,
+          requestId: context.requestId,
+          targetType: 'SHIPMENT_STORAGE_CLAIM_REQUEST',
+          targetId: requestId,
+          metadata: { storageRecordId, reason: reason.slice(0, 500) },
+        })
+      }
+    }, { timeout: 30_000 })
+  }
+
+  private async rejectClaimRequestRow(
+    transaction: Prisma.TransactionClient,
+    context: ShipmentStorageMutationContext,
+    storageRecordId: string,
+    requestId: string,
+    reason: string,
+  ): Promise<void> {
+    await transaction.shipmentStorageClaimRequest.update({
+      where: { id: requestId },
+      data: {
+        status: 'REJECTED',
+        rejectReason: reason.slice(0, 500),
+        reviewedByUserId: context.actorUserId,
+        reviewedAt: new Date(),
+      },
+    })
+    await this.audit.record(transaction, {
+      eventType: 'SHIPMENT_STORAGE_CLAIM_REQUEST_REJECTED',
+      outcome: 'SUCCESS',
+      actorType: 'USER',
+      actorUserId: context.actorUserId,
+      requestId: context.requestId,
+      targetType: 'SHIPMENT_STORAGE_CLAIM_REQUEST',
+      targetId: requestId,
+      metadata: { storageRecordId, reason: reason.slice(0, 500) },
+    })
+  }
+
+  private async loadClaimRequestDto(
+    storageRecordId: string,
+    requestId: string,
+  ): Promise<ShipmentStorageClaimRequestDto> {
+    const request = await this.prisma.shipmentStorageClaimRequest.findFirst({
+      where: { id: requestId, storageRecordId },
+      select: {
+        id: true,
+        storageRecordId: true,
+        applicantUserId: true,
+        salesOrderId: true,
+        salesOrderNoSnapshot: true,
+        costTotalCny: true,
+        allocations: true,
+        status: true,
+        rejectReason: true,
+        reviewedByUserId: true,
+        reviewedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    })
+    if (request === null) {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_NOT_FOUND', '调货申请不存在', HttpStatus.NOT_FOUND)
+    }
+    const userIds = [...new Set([request.applicantUserId, request.reviewedByUserId].filter((id): id is string => id !== null))]
+    const users = userIds.length === 0
+      ? []
+      : await this.prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: PERSON_REFERENCE_SELECT,
+        })
+    const userById = new Map(users.map(user => [user.id, toPersonReference(user)]))
+    const applicant = userById.get(request.applicantUserId) ?? {
+      id: request.applicantUserId,
+      displayName: '未知用户',
+      avatarUrl: null,
+    }
+    const reviewedBy = request.reviewedByUserId === null
+      ? null
+      : userById.get(request.reviewedByUserId) ?? {
+          id: request.reviewedByUserId,
+          displayName: '未知用户',
+          avatarUrl: null,
+        }
+    return {
+      id: request.id,
+      storageRecordId: request.storageRecordId,
+      applicant,
+      targetSalesOrderId: request.salesOrderId,
+      targetSalesOrderNo: request.salesOrderNoSnapshot,
+      costTotalCny: request.costTotalCny.toFixed(2),
+      allocations: readClaimAllocationSnapshots(request.allocations),
+      status: request.status,
+      rejectReason: request.rejectReason,
+      reviewedBy,
+      reviewedAt: request.reviewedAt?.toISOString() ?? null,
+      createdAt: request.createdAt.toISOString(),
+      updatedAt: request.updatedAt.toISOString(),
+    }
+  }
+
+  private async loadBatchRecords(batchId: string): Promise<readonly ShipmentStorageDetailDto[]> {    const rows = await this.prisma.shipmentStorageRecord.findMany({
       where: { releaseBatchId: batchId },
       select: STORAGE_RECORD_SELECT,
       orderBy: { createdAt: 'asc' },
@@ -1023,11 +1568,29 @@ export class ShipmentStorageService {
   ): Promise<StoragePersonContext> {
     const issuerIds = [...new Set(rows.map(row => row.originIssuerUserId))]
     const purchaseOrderIds = [...new Set(rows.map(row => row.originPurchaseOrderId))]
+    const storageRecordIds = rows.map(row => row.id)
+    const pendingRequests = storageRecordIds.length === 0
+      ? []
+      : await this.prisma.shipmentStorageClaimRequest.findMany({
+          where: {
+            storageRecordId: { in: storageRecordIds },
+            status: 'PENDING',
+          },
+          select: {
+            id: true,
+            storageRecordId: true,
+            applicantUserId: true,
+            salesOrderNoSnapshot: true,
+            createdAt: true,
+          },
+        })
+    const applicantIds = [...new Set(pendingRequests.map(request => request.applicantUserId))]
+    const userIds = [...new Set([...issuerIds, ...applicantIds])]
     const [users, orders] = await Promise.all([
-      issuerIds.length === 0
+      userIds.length === 0
         ? Promise.resolve([] as PersonReferenceRow[])
         : this.prisma.user.findMany({
-            where: { id: { in: issuerIds } },
+            where: { id: { in: userIds } },
             select: PERSON_REFERENCE_SELECT,
           }),
       purchaseOrderIds.length === 0
@@ -1037,9 +1600,26 @@ export class ShipmentStorageService {
             select: { id: true, createdBy: { select: PERSON_REFERENCE_SELECT } },
           }),
     ])
+    const userById = new Map(users.map(user => [user.id, toPersonReference(user)]))
     return {
-      issuerById: new Map(users.map(user => [user.id, toPersonReference(user)])),
+      issuerById: new Map(issuerIds.flatMap((id) => {
+        const person = userById.get(id)
+        return person === undefined ? [] : [[id, person]] as const
+      })),
       purchaseCreatorById: new Map(orders.map(order => [order.id, toPersonReference(order.createdBy)])),
+      claimRequestByStorageId: new Map(pendingRequests.map((request) => {
+        const applicant = userById.get(request.applicantUserId)
+        return [request.storageRecordId, {
+          id: request.id,
+          applicant: applicant ?? {
+            id: request.applicantUserId,
+            displayName: '未知用户',
+            avatarUrl: null,
+          },
+          targetSalesOrderNo: request.salesOrderNoSnapshot,
+          createdAt: request.createdAt.toISOString(),
+        }] as const
+      })),
     }
   }
 

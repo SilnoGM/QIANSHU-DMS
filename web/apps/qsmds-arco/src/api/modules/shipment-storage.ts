@@ -1,8 +1,10 @@
 import type { AxiosInstance } from 'axios'
 import type {
   ClaimShipmentStorageRequestDto,
+  RejectShipmentStorageClaimRequestDto,
   ReleaseShipmentStorageRequestDto,
   RelocateShipmentStorageRequestDto,
+  ShipmentStorageClaimRequestDto,
   ShipmentStorageDetailDto,
   ShipmentStorageListData,
   ShipmentStoragePageDto,
@@ -28,6 +30,16 @@ export function createShipmentStorageApi(client: AxiosInstance) {
       client.post<ShipmentStorageDetailDto>(`${path(id)}/location`, data, { errorPresentation: 'local', retry: false, signal }),
     claim: (id: string, data: ClaimShipmentStorageRequestDto, signal: AbortSignal) =>
       client.post<ShipmentStorageDetailDto>(`${path(id)}/claim`, data, { errorPresentation: 'local', retry: false, signal }),
+    claimRequest: (id: string, requestId: string, signal: AbortSignal) =>
+      client.get<ShipmentStorageClaimRequestDto>(`${path(id)}/claim-requests/${encodeURIComponent(requestId)}`, { errorPresentation: 'local', signal }),
+    createClaimRequest: (id: string, data: ClaimShipmentStorageRequestDto, signal: AbortSignal) =>
+      client.post<ShipmentStorageClaimRequestDto>(`${path(id)}/claim-requests`, data, { errorPresentation: 'local', retry: false, signal }),
+    withdrawClaimRequest: (id: string, requestId: string, signal: AbortSignal) =>
+      client.post<ShipmentStorageClaimRequestDto>(`${path(id)}/claim-requests/${encodeURIComponent(requestId)}/withdraw`, undefined, { errorPresentation: 'local', retry: false, signal }),
+    approveClaimRequest: (id: string, requestId: string, signal: AbortSignal) =>
+      client.post<ShipmentStorageDetailDto>(`${path(id)}/claim-requests/${encodeURIComponent(requestId)}/approve`, undefined, { errorPresentation: 'local', retry: false, signal }),
+    rejectClaimRequest: (id: string, requestId: string, data: RejectShipmentStorageClaimRequestDto, signal: AbortSignal) =>
+      client.post<ShipmentStorageClaimRequestDto>(`${path(id)}/claim-requests/${encodeURIComponent(requestId)}/reject`, data, { errorPresentation: 'local', retry: false, signal }),
   }
 }
 

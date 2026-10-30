@@ -16,6 +16,7 @@ import {
 
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
 import type {
+  ShipmentStorageClaimRequestStatus,
   ShipmentStorageLocationScope,
   ShipmentStorageStatus,
 } from '../../generated/prisma/enums'
@@ -23,6 +24,7 @@ import type {
 export const SHIPMENT_STORAGE_STATUSES = ['IN_STORAGE', 'RESERVED', 'CLAIMED', 'VOIDED'] as const
 export const SHIPMENT_STORAGE_LOCATION_SCOPES = ['MAINLAND', 'OVERSEAS'] as const
 export const SHIPMENT_STORAGE_REASONS = ['CUSTOMER_CANCEL', 'CUSTOMER_REJECT', 'OTHER'] as const
+export const SHIPMENT_STORAGE_CLAIM_REQUEST_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN'] as const
 const WAREHOUSE_VALUE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u
 
 export class ShipmentStorageListQueryDto {
@@ -144,6 +146,55 @@ export class ClaimShipmentStorageRequestDto {
   requestKey!: string
 }
 
+export class RejectShipmentStorageClaimRequestDto {
+  @ApiProperty({ type: 'string', maxLength: 500 })
+  @IsString()
+  @IsUnicodeCodePointLength(1, 500)
+  reason!: string
+}
+
+export class ShipmentStorageClaimRequestParamsDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @IsUUID('4')
+  storageRecordId!: string
+
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @IsUUID('4')
+  requestId!: string
+}
+
+export class ShipmentStoragePersonDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string' }) readonly displayName!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly avatarUrl!: string | null
+}
+
+export class ShipmentStorageClaimRequestAllocationDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly salesOrderLineId!: string
+  @ApiProperty({ type: 'integer' }) readonly lineNumber!: number
+  @ApiProperty({ type: 'string' }) readonly productName!: string
+  @ApiProperty({ type: 'integer' }) readonly quantity!: number
+}
+
+export class ShipmentStorageClaimRequestSummaryDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: () => ShipmentStoragePersonDto }) readonly applicant!: ShipmentStoragePersonDto
+  @ApiProperty({ type: 'string' }) readonly targetSalesOrderNo!: string
+  @ApiProperty({ type: 'string', format: 'date-time' }) readonly createdAt!: string
+}
+
+export class ShipmentStorageClaimRequestDto extends ShipmentStorageClaimRequestSummaryDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly storageRecordId!: string
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly targetSalesOrderId!: string
+  @ApiProperty({ type: 'string' }) readonly costTotalCny!: string
+  @ApiProperty({ type: () => [ShipmentStorageClaimRequestAllocationDto] }) readonly allocations!: readonly ShipmentStorageClaimRequestAllocationDto[]
+  @ApiProperty({ type: 'string', enum: SHIPMENT_STORAGE_CLAIM_REQUEST_STATUSES }) readonly status!: ShipmentStorageClaimRequestStatus
+  @ApiProperty({ type: 'string', nullable: true }) readonly rejectReason!: string | null
+  @ApiProperty({ type: () => ShipmentStoragePersonDto, nullable: true }) readonly reviewedBy!: ShipmentStoragePersonDto | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly reviewedAt!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time' }) readonly updatedAt!: string
+}
+
 export class ShipmentStorageIdParamDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   @IsUUID('4')
@@ -220,12 +271,6 @@ export class ShipmentStorageCostDto {
   @ApiProperty({ type: 'string' }) readonly totalCostCny!: string
 }
 
-export class ShipmentStoragePersonDto {
-  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
-  @ApiProperty({ type: 'string' }) readonly displayName!: string
-  @ApiProperty({ type: 'string', nullable: true }) readonly avatarUrl!: string | null
-}
-
 export class ShipmentStorageListItemDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly shipmentId!: string
@@ -245,6 +290,7 @@ export class ShipmentStorageListItemDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly originSalesOrderId!: string
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly originIssuerUserId!: string
   @ApiProperty({ type: () => ShipmentStorageCostDto }) readonly cost!: ShipmentStorageCostDto
+  @ApiProperty({ type: () => ShipmentStorageClaimRequestSummaryDto, nullable: true }) readonly claimRequest!: ShipmentStorageClaimRequestSummaryDto | null
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly snapshotAt!: string
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly locationUpdatedAt!: string
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly claimedAt!: string | null

@@ -72,6 +72,10 @@ function claimFixture(options: {
           : [],
       )),
     },
+    shipmentStorageClaimRequest: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      update: jest.fn().mockResolvedValue({}),
+    },
     shipmentOwnershipCurrent: {
       findUnique: jest.fn().mockResolvedValue({ ownerType: 'STORAGE_POOL', state: 'ACTIVE' }),
     },
@@ -368,6 +372,7 @@ describe('ShipmentStorageService', () => {
         }]),
       },
       fundPostingBatch: { findMany: jest.fn().mockResolvedValue([]) },
+      shipmentStorageClaimRequest: { findMany: jest.fn().mockResolvedValue([]) },
       user: { findMany: jest.fn().mockResolvedValue([]) },
       purchaseOrder: { findMany: jest.fn().mockResolvedValue([]) },
       containerLoadingItem: {

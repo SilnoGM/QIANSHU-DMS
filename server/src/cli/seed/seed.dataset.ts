@@ -165,6 +165,7 @@ export const SEED_ROLES: readonly SeedRole[] = [
       'sales-orders:read',
       'sales-orders:update',
       'sales-receipts:void',
+      'shipment-storage:claim-request',
       'shipment-storage:read',
       'workbench:operations',
     ],

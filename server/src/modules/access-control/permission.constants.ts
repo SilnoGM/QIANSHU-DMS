@@ -198,6 +198,7 @@ export const SHIPMENT_STORAGE_PERMISSION_CODES = [
   'shipment-storage:release',
   'shipment-storage:relocate',
   'shipment-storage:claim',
+  'shipment-storage:claim-request',
 ] as const
 
 /**
