@@ -30,6 +30,7 @@ const emit = defineEmits<{
 
 const toast = useQsToast()
 const currencyCatalog = useCurrencyCatalog()
+const appAccountStore = useAppAccountStore()
 const orders = ref<SalesOrderListItemDto[]>([])
 const ordersLoading = ref(false)
 const selectedOrderId = ref('')
@@ -115,6 +116,10 @@ async function loadOrders(signal: AbortSignal): Promise<void> {
       statusSelection: 'CONFIRMED',
       page: 1,
       pageSize: 100,
+      // 运营申请只能选择本人负责的销售订单；采运直接认领/审核仍使用全量候选。
+      ...(props.mode === 'apply' && appAccountStore.userId !== ''
+        ? { issuerUserId: appAccountStore.userId }
+        : {}),
     }, signal)
     if (!signal.aborted) {
       orders.value = response.data.items

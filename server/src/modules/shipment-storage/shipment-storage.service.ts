@@ -1142,6 +1142,7 @@ export class ShipmentStorageService {
     transaction: Prisma.TransactionClient,
     record: PreparedClaim['record'],
     input: ClaimShipmentStorageRequestDto,
+    applicantUserId?: string,
   ): Promise<Pick<PreparedClaim, 'order' | 'lines' | 'claimedQuantity'>> {
     const order = await transaction.salesOrder.findUnique({
       where: { id: input.salesOrderId },
@@ -1155,6 +1156,13 @@ export class ShipmentStorageService {
     }
     if (input.salesOrderId === record.originSalesOrderId) {
       storageFailure('SHIPMENT_STORAGE_CLAIM_NOT_ALLOWED', '不能把货件认领回原销售订单')
+    }
+    if (applicantUserId !== undefined && order.issuerUserId !== applicantUserId) {
+      storageFailure(
+        'SHIPMENT_STORAGE_CLAIM_REQUEST_SALES_ORDER_FORBIDDEN',
+        '只能选择本人负责的销售订单',
+        HttpStatus.FORBIDDEN,
+      )
     }
     const requestedLineIds = input.lines.map(line => line.salesOrderLineId)
     if (new Set(requestedLineIds).size !== requestedLineIds.length) {
@@ -1283,7 +1291,7 @@ export class ShipmentStorageService {
         if (pendingRequest !== null) {
           storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_EXISTS', '该货件已有进行中的调货申请', HttpStatus.CONFLICT)
         }
-        const prepared = await this.prepareClaimTarget(transaction, record, input)
+        const prepared = await this.prepareClaimTarget(transaction, record, input, context.actorUserId)
         const quantityByLine = new Map(input.lines.map(line => [line.salesOrderLineId, line.quantity]))
         const allocations: ClaimAllocationSnapshot[] = prepared.lines.map(line => ({
           salesOrderLineId: line.id,

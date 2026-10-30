@@ -479,6 +479,21 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
     })
     const targetLine = target.lines[0]
     const context = { actorUserId: h.fixture.actor.id, requestId: randomUUID() }
+    const foreignUsername = `foreign-${randomUUID()}`
+    const foreignUser = await h.prisma.user.create({ data: {
+      username: foreignUsername,
+      usernameNormalized: foreignUsername,
+      displayName: '非本人出单人',
+      passwordHash: 'isolated-test-only',
+      passwordChangedAt: new Date(),
+    } })
+    const foreignTarget = await createTargetOrder(origin.source!.id, foreignUser.id)
+    await expect(storage.createClaimRequest(context, recordId, {
+      salesOrderId: foreignTarget.id,
+      lines: [{ quantity: 1, salesOrderLineId: foreignTarget.lines[0].id }],
+      requestKey: randomUUID(),
+    })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_REQUEST_SALES_ORDER_FORBIDDEN' })
+
     const request = await storage.createClaimRequest(context, recordId, {
       salesOrderId: target.id,
       lines: [{ quantity: 1, salesOrderLineId: targetLine.id }],

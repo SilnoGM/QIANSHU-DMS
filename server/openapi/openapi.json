@@ -50369,7 +50369,8 @@
               "codes": [
                 "CSRF_REJECTED",
                 "FORBIDDEN",
-                "PASSWORD_CHANGE_REQUIRED"
+                "PASSWORD_CHANGE_REQUIRED",
+                "SHIPMENT_STORAGE_CLAIM_REQUEST_SALES_ORDER_FORBIDDEN"
               ]
             },
             {

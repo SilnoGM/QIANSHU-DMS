@@ -102,4 +102,5 @@ test('调货弹窗覆盖申请、审核和直接认领三种模式', async () =>
   assert.match(source, /rejectReason/u)
   assert.match(source, /同意调货/u)
   assert.match(source, /提交申请/u)
+  assert.match(source, /issuerUserId: appAccountStore\.userId/u)
 })
