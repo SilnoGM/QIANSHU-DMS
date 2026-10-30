@@ -7,7 +7,7 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { storageFailureMessage } from '@/views/workbenches/shipment-storage/logic'
-import { buildClaimMapping } from './claim-mapping'
+import { buildClaimMapping, hasCustomTargetLine } from './claim-mapping'
 
 defineOptions({ name: 'ShipmentStorageClaimModal' })
 
@@ -91,8 +91,21 @@ const manualTargetOptions = computed(() => (selectedOrder.value?.lines ?? [])
     value: line.id,
     label: `第${line.lineNumber}行 · ${line.productName} · ×${line.quantity}`,
   })))
+const hasCustomTargetLines = computed(() => hasCustomTargetLine(selectedOrder.value?.lines ?? []))
+const unmatchedToDisplay = computed(() => {
+  if (hasCustomTargetLines.value) {
+    return mapping.value.unmatched
+  }
+  // 没有自定义目标行时，自定义库存产品的空下拉已经由专门提示说明，不重复报错。
+  const customSourceIds = new Set(manualTargetSources.value.map(source => source.lineId))
+  return mapping.value.unmatched.filter(item => !customSourceIds.has(item.purchaseOrderLineId))
+})
 const unmatchedRemainingBySource = computed(() => new Map(
   mapping.value.unmatched.map(item => [item.purchaseOrderLineId, item.remaining]),
+))
+const missingCustomTargetMessage = computed(() => (
+  `自定义库存产品「${manualTargetSources.value.map(source => source.productName).join('、')}」`
+  + '无法映射到目录产品行；请选择包含对应自定义产品的销售订单。'
 ))
 const canSubmitMapping = computed(() => (
   selectedOrderId.value !== ''
@@ -501,7 +514,14 @@ function setVisible(value: boolean): void {
             </div>
             <span class="font-mono shrink-0">× {{ row.quantity }}</span>
           </div>
-          <div v-if="manualTargetSources.length > 0" class="mt-3 p-3 border border-amber-500/40 rounded-lg">
+          <FaAlert
+            v-if="manualTargetSources.length > 0 && !hasCustomTargetLines"
+            class="mt-3"
+            variant="destructive"
+            title="目标订单没有自定义产品行"
+            :description="missingCustomTargetMessage"
+          />
+          <div v-else-if="manualTargetSources.length > 0" class="mt-3 p-3 border border-amber-500/40 rounded-lg">
             <p class="text-sm mb-0">
               以下自定义库存产品没有同名目标行，请选择目标销售行：
             </p>
@@ -522,9 +542,9 @@ function setVisible(value: boolean): void {
               />
             </div>
           </div>
-          <div v-if="mapping.unmatched.length > 0" class="mt-2 flex flex-col gap-1">
+          <div v-if="unmatchedToDisplay.length > 0" class="mt-2 flex flex-col gap-1">
             <p
-              v-for="item in mapping.unmatched"
+              v-for="item in unmatchedToDisplay"
               :key="item.purchaseOrderLineId"
               class="text-xs text-destructive mb-0"
             >

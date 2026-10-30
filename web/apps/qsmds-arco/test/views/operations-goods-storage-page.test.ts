@@ -129,4 +129,7 @@ test('调货弹窗覆盖申请、审核和直接认领三种模式', async () =>
   assert.match(source, /manualTargetSources/u)
   assert.match(source, /setManualTarget/u)
   assert.match(source, /选择目标销售行/u)
+  assert.match(source, /目标订单没有自定义产品行/u)
+  assert.match(source, /hasCustomTargetLines/u)
+  assert.match(source, /missingCustomTargetMessage/u)
 })

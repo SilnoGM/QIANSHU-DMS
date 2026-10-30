@@ -34,6 +34,10 @@ export function normalizeClaimProductName(value: string): string {
   return value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
+export function hasCustomTargetLine(targetLines: readonly SalesOrderLineDto[]): boolean {
+  return targetLines.some(line => line.lineType === 'CUSTOM')
+}
+
 function matchesProduct(
   allocation: ShipmentStorageProductPreviewDto,
   line: SalesOrderLineDto,

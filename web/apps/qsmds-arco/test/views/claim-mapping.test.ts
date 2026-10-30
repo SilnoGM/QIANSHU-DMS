@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- Web 映射算法使用 Node.js 内置 runner 验证。
 import test from 'node:test'
 
-import { buildClaimMapping, normalizeClaimProductName } from '../../src/views/workbenches/purchase-storage/claim-mapping'
+import { buildClaimMapping, hasCustomTargetLine, normalizeClaimProductName } from '../../src/views/workbenches/purchase-storage/claim-mapping'
 
 function allocation(overrides: Partial<ShipmentStorageProductPreviewDto> = {}): ShipmentStorageProductPreviewDto {
   return {
@@ -121,4 +121,13 @@ test('来源采购行未解析时禁止自动映射', () => {
 
 test('产品名称规范化与服务端口径一致', () => {
   assert.equal(normalizeClaimProductName('  Ｃｕｓｔｏｍ   Item '), 'custom item')
+})
+
+test('目标订单只有目录行时没有自定义目标行可选', () => {
+  assert.equal(hasCustomTargetLine([targetLine({
+    lineType: 'CATALOG',
+    productId: 'product-1',
+    productName: '目录产品',
+  })]), false)
+  assert.equal(hasCustomTargetLine([targetLine()]), true)
 })
