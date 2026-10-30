@@ -34,10 +34,11 @@ export function createShipmentStorageApi(client: AxiosInstance) {
       client.get<ShipmentStorageClaimRequestDto>(`${path(id)}/claim-requests/${encodeURIComponent(requestId)}`, { errorPresentation: 'local', signal }),
     createClaimRequest: (id: string, data: ClaimShipmentStorageRequestDto, signal: AbortSignal) =>
       client.post<ShipmentStorageClaimRequestDto>(`${path(id)}/claim-requests`, data, { errorPresentation: 'local', retry: false, signal }),
+    // 无业务入参也要发送空 JSON 对象：Axios 对 undefined 不设 Content-Type，会被 CSRF 守卫拒绝。
     withdrawClaimRequest: (id: string, requestId: string, signal: AbortSignal) =>
-      client.post<ShipmentStorageClaimRequestDto>(`${path(id)}/claim-requests/${encodeURIComponent(requestId)}/withdraw`, undefined, { errorPresentation: 'local', retry: false, signal }),
+      client.post<ShipmentStorageClaimRequestDto>(`${path(id)}/claim-requests/${encodeURIComponent(requestId)}/withdraw`, {}, { errorPresentation: 'local', retry: false, signal }),
     approveClaimRequest: (id: string, requestId: string, signal: AbortSignal) =>
-      client.post<ShipmentStorageDetailDto>(`${path(id)}/claim-requests/${encodeURIComponent(requestId)}/approve`, undefined, { errorPresentation: 'local', retry: false, signal }),
+      client.post<ShipmentStorageDetailDto>(`${path(id)}/claim-requests/${encodeURIComponent(requestId)}/approve`, {}, { errorPresentation: 'local', retry: false, signal }),
     rejectClaimRequest: (id: string, requestId: string, data: RejectShipmentStorageClaimRequestDto, signal: AbortSignal) =>
       client.post<ShipmentStorageClaimRequestDto>(`${path(id)}/claim-requests/${encodeURIComponent(requestId)}/reject`, data, { errorPresentation: 'local', retry: false, signal }),
   }
