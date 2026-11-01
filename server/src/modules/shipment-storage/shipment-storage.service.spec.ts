@@ -110,6 +110,9 @@ function claimFixture(options: {
     shipmentOwnershipCurrent: {
       findUnique: jest.fn().mockResolvedValue({ ownerType: 'STORAGE_POOL', state: 'ACTIVE' }),
     },
+    slhReconciliationSettlement: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
     shipmentStorageRecord: {
       findUnique: jest.fn().mockResolvedValue({
         claimedBy: null,
@@ -241,6 +244,22 @@ describe('ShipmentStorageService', () => {
       { value: 'CLAIMED', count: 1 },
       { value: 'VOIDED', count: 0 },
     ])
+  })
+
+  it('rejects a claim when the matched bill line already has an active settlement', async () => {
+    const fixture = claimFixture()
+    jest.mocked(fixture.transaction.slhReconciliationSettlement.findFirst).mockResolvedValue({ id: 'settlement-1' } as never)
+
+    await expect(fixture.instance.claim(context, RECORD_ID, {
+      lines: [{ purchaseOrderLineId: PURCHASE_LINE_ID, quantity: 2, salesOrderLineId: SALES_LINE_ID }],
+      requestKey: REQUEST_KEY,
+      salesOrderId: SALES_ORDER_ID,
+    })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_SETTLED' })
+    expect(fixture.transaction.slhReconciliationSettlement.findFirst).toHaveBeenCalledWith({
+      where: { status: 'ACTIVE', loadingItem: { shipmentId: SHIPMENT_ID } },
+      select: { id: true },
+    })
+    expect(fixture.transaction.shipmentStorageRecord.update).not.toHaveBeenCalled()
   })
 
   it('advances the claiming sales order to the stage implied by the claimed shipment', async () => {

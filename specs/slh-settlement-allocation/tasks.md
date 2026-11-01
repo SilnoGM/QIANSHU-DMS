@@ -30,7 +30,7 @@
 - [x] server typecheck / lint / 全量单测
 - [x] `slh-reconciliation-batch.e2e-spec.ts` 全量 40 条
 - [x] `shipment-storage-claim.e2e-spec.ts` 回归（5 条）
-- [ ] 已结算后调货阻断的自动化用例：当前由代码审查 + claim e2e 回归覆盖，尚未构造真实 ACTIVE 结算夹具
+- [x] 已结算后调货阻断单测（`shipment-storage.service.spec`）
 - [x] web typecheck / lint / SLH 页面测试
 - [x] contract sync + contract check
 - [x] dev 库迁移状态
