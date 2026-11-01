@@ -189,13 +189,18 @@ function buildRecordAllocation(
       ? null
       : allocationParties.find(party => party.target === target)?.salesOrderNo ?? null
   )
+  const hasOrigin = allocationParties.some(party => party.target === 'ORIGIN_ORDER')
   const items: SlhReconciliationRecordAllocationItem[] = allocations.map((item, index) => {
     const labelKey = item.sourceType === 'BILL_CHARGE'
       ? `slhBill.chargeType.${item.chargeType ?? 'OTHER'}`
       : `slhReconciliation.settle.allocation.source${item.sourceType}`
     const targetKey = item.target === 'COMPANY'
       ? 'slhReconciliation.settle.allocation.targetCompany'
-      : `slhReconciliation.settle.allocation.target${item.target === 'ORIGIN_ORDER' ? 'Origin' : 'Current'}`
+      : item.target === 'ORIGIN_ORDER'
+        ? 'slhReconciliation.settle.allocation.targetOrigin'
+        : hasOrigin
+          ? 'slhReconciliation.settle.allocation.targetCurrentTransfer'
+          : 'slhReconciliation.settle.allocation.targetCurrent'
     const orderNo = orderNoOf(item.target)
     return {
       id: `allocation-${item.key}-${index}`,
@@ -210,7 +215,6 @@ function buildRecordAllocation(
       reason: item.reason ?? null,
     }
   })
-  const hasOrigin = allocationParties.some(party => party.target === 'ORIGIN_ORDER')
   const parties: SlhReconciliationRecordAllocationParty[] = allocationParties.map(party => {
     return {
       target: party.target,

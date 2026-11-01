@@ -986,7 +986,16 @@ test('入账分摊：目标合计方向按符号区分应入账/应转出', () =
   assert.equal(resolveSettleAllocationPartyDirection(null), 'ZERO')
 })
 
-test('入账分摊：手动改目标必须填原因，COD 固定归乙且不允许改目标', () => {
+test('入账分摊：目标文案不再使用甲/乙代称', () => {
+  assert.equal(zhCn.slhReconciliation.settle.allocation.targetOrigin, '原单 · {orderNo}')
+  assert.equal(zhCn.slhReconciliation.settle.allocation.targetCurrent, '当前销售单 · {orderNo}')
+  assert.equal(zhCn.slhReconciliation.settle.allocation.targetCurrentTransfer, '现单 · {orderNo}')
+  assert.equal(zhCn.slhReconciliation.settle.allocation.partyOriginRole, '原销售单')
+  assert.equal(zhCn.slhReconciliation.settle.allocation.partyCurrentRole, '当前销售单')
+  assert.equal(zhCn.slhReconciliation.settle.allocation.partyCurrentTransferRole, '调货后销售单')
+})
+
+test('入账分摊：手动改目标必须填原因，COD 固定归当前销售单且不允许改目标', () => {
   const changed = buildSettleAllocation(allocationMember(), '7.00', '5.00', {
     FREIGHT: { target: 'COMPANY', reason: '客户投诉，公司承担运费' },
   })
