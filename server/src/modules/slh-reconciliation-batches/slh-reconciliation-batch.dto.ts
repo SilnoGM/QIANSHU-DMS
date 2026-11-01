@@ -1,7 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min, ValidateNested } from 'class-validator'
-import { PurchaseOrderFulfillmentStatus, PurchaseOrderPaymentStatus, PurchaseOrderStatus, SalesOrderFulfillmentStatus, SalesOrderPaymentStatus, SalesOrderStatus } from '../../generated/prisma/enums'
+import {
+  PurchaseOrderFulfillmentStatus, PurchaseOrderPaymentStatus, PurchaseOrderStatus,
+  SalesOrderFulfillmentStatus, SalesOrderPaymentStatus, SalesOrderStatus,
+  ShipmentStorageClaimRequestStatus, ShipmentStorageLocationScope, ShipmentStorageStatus,
+} from '../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
 import { PurchaseOrderSupplierDto } from '../purchase-orders/dto/purchase-order-response.dto'
 import { SlhBillFindingDto, SlhBillLineDto, SlhBillListItemDto, SlhBillReconciliationStatusDto } from '../slh-bills/slh-bill.dto'
@@ -241,6 +245,61 @@ export class SlhReconciliationMatchedSalesOrderDto {
   @ApiPropertyOptional({ type: 'string', nullable: true }) issuerAvatarUrl!: string | null
 }
 
+/** 调货记录里的人员引用：页面只展示姓名与头像，不暴露账号内部字段。 */
+export class SlhReconciliationTransferPersonDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ type: 'string' }) displayName!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) avatarUrl!: string | null
+}
+
+/** 调货申请摘要：只保留翻转卡与完整记录入口需要的行数、变更计数和审批信息。 */
+export class SlhReconciliationTransferClaimRequestDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ enum: ShipmentStorageClaimRequestStatus }) status!: ShipmentStorageClaimRequestStatus
+  @ApiProperty({ type: 'string' }) targetSalesOrderNo!: string
+  @ApiPropertyOptional({ type: SlhReconciliationTransferPersonDto, nullable: true }) applicant!: SlhReconciliationTransferPersonDto | null
+  @ApiProperty({ type: 'string' }) createdAt!: string
+  @ApiPropertyOptional({ type: SlhReconciliationTransferPersonDto, nullable: true }) reviewedBy!: SlhReconciliationTransferPersonDto | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) reviewedAt!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) rejectReason!: string | null
+  @ApiProperty({ type: Number }) lineCount!: number
+  @ApiProperty({ type: Number }) totalQuantity!: number
+  @ApiProperty({ type: Number }) recipientChangeCount!: number
+  @ApiProperty({ type: Number }) codChangeCount!: number
+  @ApiProperty({ type: Number }) manualMatchCount!: number
+  @ApiProperty({ type: 'string' }) costTotalCny!: string
+}
+
+/** 调货成本摘要：卡面只显示总额，认领/释放拆分由完整记录展示。 */
+export class SlhReconciliationTransferCostDto {
+  @ApiProperty({ type: 'string' }) totalCostCny!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) claimAmountCny!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) releaseAmountCny!: string | null
+}
+
+/**
+ * 调货记录摘要：当前销售单对应的寄仓记录 + 最新已通过申请。
+ * 只在甲 ≠ 乙的成员行下发；没有寄仓记录时为 null。
+ */
+export class SlhReconciliationTransferRecordDto {
+  @ApiProperty({ format: 'uuid' }) storageRecordId!: string
+  @ApiProperty({ enum: ShipmentStorageStatus }) status!: ShipmentStorageStatus
+  @ApiProperty({ enum: ShipmentStorageLocationScope }) locationScope!: ShipmentStorageLocationScope
+  @ApiProperty({ type: 'string' }) warehouseLabel!: string
+  @ApiProperty({ type: 'string' }) warehouseValue!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) shipmentNo!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) shippingMark!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) containerBatchName!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) releasedAt!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) releaseReason!: string | null
+  @ApiPropertyOptional({ type: SlhReconciliationTransferPersonDto, nullable: true }) releasedBy!: SlhReconciliationTransferPersonDto | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) releaseNote!: string | null
+  @ApiPropertyOptional({ type: SlhReconciliationTransferClaimRequestDto, nullable: true }) claimRequest!: SlhReconciliationTransferClaimRequestDto | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) claimedAt!: string | null
+  @ApiPropertyOptional({ type: SlhReconciliationTransferPersonDto, nullable: true }) claimedBy!: SlhReconciliationTransferPersonDto | null
+  @ApiPropertyOptional({ type: SlhReconciliationTransferCostDto, nullable: true }) cost!: SlhReconciliationTransferCostDto | null
+}
+
 /** 成员行：账单明细行的全部字段 + 本批次的匹配依据、柜次侧可比字段、来源摘要与核对留痕。 */
 export class SlhReconciliationBatchMemberDto extends SlhBillLineDto {
   @ApiProperty({ format: 'uuid', description: 'Member row id inside this batch.' }) id!: string
@@ -253,6 +312,7 @@ export class SlhReconciliationBatchMemberDto extends SlhBillLineDto {
   @ApiPropertyOptional({ type: () => SlhReconciliationMatchedPurchaseOrderDto, nullable: true, description: 'Purchase source reachable from the matched container row; null only for damaged data.' }) purchaseOrder!: SlhReconciliationMatchedPurchaseOrderDto | null
   @ApiPropertyOptional({ type: () => SlhReconciliationMatchedSalesOrderDto, nullable: true, description: 'Sales source of the purchase order; null only for damaged data.' }) salesOrder!: SlhReconciliationMatchedSalesOrderDto | null
   @ApiPropertyOptional({ type: () => SlhReconciliationMatchedSalesOrderDto, nullable: true, description: 'Current owned sales order after storage claim; null when ownership is not a sales order.' }) currentSalesOrder!: SlhReconciliationMatchedSalesOrderDto | null
+  @ApiPropertyOptional({ type: () => SlhReconciliationTransferRecordDto, nullable: true, description: 'Current storage-to-claim transfer summary; null for non-transferred rows or when no storage record exists.' }) transferRecord!: SlhReconciliationTransferRecordDto | null
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Null means this batch has not reconciled the line yet.' }) reconciledAt!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) reconciledByDisplayName!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) reconciledByAvatarUrl!: string | null

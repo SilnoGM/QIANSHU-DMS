@@ -108774,6 +108774,227 @@
           "issuerDisplayName"
         ]
       },
+      "SlhReconciliationTransferPersonDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "displayName"
+        ]
+      },
+      "SlhReconciliationTransferClaimRequestDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "APPROVED",
+              "REJECTED",
+              "WITHDRAWN"
+            ]
+          },
+          "targetSalesOrderNo": {
+            "type": "string"
+          },
+          "applicant": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationTransferPersonDto"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "reviewedBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationTransferPersonDto"
+              }
+            ]
+          },
+          "reviewedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "rejectReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "lineCount": {
+            "type": "number"
+          },
+          "totalQuantity": {
+            "type": "number"
+          },
+          "recipientChangeCount": {
+            "type": "number"
+          },
+          "codChangeCount": {
+            "type": "number"
+          },
+          "manualMatchCount": {
+            "type": "number"
+          },
+          "costTotalCny": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "targetSalesOrderNo",
+          "createdAt",
+          "lineCount",
+          "totalQuantity",
+          "recipientChangeCount",
+          "codChangeCount",
+          "manualMatchCount",
+          "costTotalCny"
+        ]
+      },
+      "SlhReconciliationTransferCostDto": {
+        "type": "object",
+        "properties": {
+          "totalCostCny": {
+            "type": "string"
+          },
+          "claimAmountCny": {
+            "type": "string",
+            "nullable": true
+          },
+          "releaseAmountCny": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "totalCostCny"
+        ]
+      },
+      "SlhReconciliationTransferRecordDto": {
+        "type": "object",
+        "properties": {
+          "storageRecordId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "IN_STORAGE",
+              "RESERVED",
+              "CLAIMED",
+              "VOIDED"
+            ]
+          },
+          "locationScope": {
+            "type": "string",
+            "enum": [
+              "MAINLAND",
+              "OVERSEAS"
+            ]
+          },
+          "warehouseLabel": {
+            "type": "string"
+          },
+          "warehouseValue": {
+            "type": "string"
+          },
+          "shipmentNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "shippingMark": {
+            "type": "string",
+            "nullable": true
+          },
+          "containerBatchName": {
+            "type": "string",
+            "nullable": true
+          },
+          "releasedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "releaseReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "releasedBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationTransferPersonDto"
+              }
+            ]
+          },
+          "releaseNote": {
+            "type": "string",
+            "nullable": true
+          },
+          "claimRequest": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationTransferClaimRequestDto"
+              }
+            ]
+          },
+          "claimedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "claimedBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationTransferPersonDto"
+              }
+            ]
+          },
+          "cost": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationTransferCostDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "storageRecordId",
+          "status",
+          "locationScope",
+          "warehouseLabel",
+          "warehouseValue"
+        ]
+      },
       "SlhReconciliationBatchMemberDto": {
         "type": "object",
         "properties": {
@@ -108991,6 +109212,16 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/SlhReconciliationMatchedSalesOrderDto"
+              }
+            ]
+          },
+          "transferRecord": {
+            "nullable": true,
+            "description": "Current storage-to-claim transfer summary; null for non-transferred rows or when no storage record exists.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationTransferRecordDto"
               }
             ]
           },

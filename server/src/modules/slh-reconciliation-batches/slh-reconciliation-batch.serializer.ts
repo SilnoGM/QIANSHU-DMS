@@ -16,7 +16,7 @@ import { serializeSlhBillLine, serializeStoredFindings } from '../slh-bills/slh-
 import type { SlhBillReconciliationStatusDto } from '../slh-bills/slh-bill.dto'
 import type {
   SlhBillLineMatchSourceDto, SlhReconciliationBatchDetailDto, SlhReconciliationBatchListItemDto,
-  SlhReconciliationBatchMemberDto,
+  SlhReconciliationBatchMemberDto, SlhReconciliationTransferRecordDto,
 } from './slh-reconciliation-batch.dto'
 import { SlhReconciliationBatchStatusDto } from './slh-reconciliation-batch.dto'
 
@@ -62,6 +62,7 @@ export const slhReconciliationBatchDetailInclude = {
           // 只取对账页要展示的列，采购/销售的金额聚合口径不在这里重复实现。
           shipment: {
             select: {
+              id: true,
               shipmentNo: true,
               purchaseOrder: {
                 select: {
@@ -158,6 +159,7 @@ function serializeBatchHeader(row: BatchHeaderRow): SlhReconciliationBatchListIt
 function serializeBatchMember(
   row: BatchMemberRow,
   supplierResolutions: ReadonlyMap<string, StoredDictionaryValueResolution>,
+  transferRecord: SlhReconciliationTransferRecordDto | null,
 ): SlhReconciliationBatchMemberDto {
   const item = row.matchedLoadingItem
   const purchaseOrderRow = item.shipment?.purchaseOrder ?? null
@@ -260,6 +262,7 @@ function serializeBatchMember(
       issuerDisplayName: currentSalesOrderRow.issuer.displayName,
       issuerAvatarUrl: currentSalesOrderRow.issuer.profile?.avatarUrl ?? null,
     },
+    transferRecord,
     reconciledAt: row.reconciledAt === null ? null : iso(row.reconciledAt),
     reconciledByDisplayName: row.reconciledBy?.displayName ?? null,
     reconciledByAvatarUrl: row.reconciledBy?.profile?.avatarUrl ?? null,
@@ -273,11 +276,16 @@ export function serializeSlhReconciliationBatchListItem(row: BatchHeaderRow): Sl
 export function serializeSlhReconciliationBatchDetail(
   row: SlhReconciliationBatchDetailRow,
   supplierResolutions: ReadonlyMap<string, StoredDictionaryValueResolution> = new Map(),
+  transferRecords: ReadonlyMap<string, SlhReconciliationTransferRecordDto> = new Map(),
 ): SlhReconciliationBatchDetailDto {
   return {
     ...serializeBatchHeader(row),
     findings: serializeStoredFindings(row.bill.importFindings),
-    members: row.members.map(member => serializeBatchMember(member, supplierResolutions)),
+    members: row.members.map(member => serializeBatchMember(
+      member,
+      supplierResolutions,
+      transferRecords.get(member.id) ?? null,
+    )),
   }
 }
 
