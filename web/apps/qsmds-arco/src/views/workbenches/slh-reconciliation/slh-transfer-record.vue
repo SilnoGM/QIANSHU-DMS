@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { SlhReconciliationTransferRecordDto } from '@/api/generated/types.gen'
+import { formatCurrencyAmount } from '@/components/base/AmountDisplay/format'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 
 /**
  * 调货记录：按设计稿的「标题 + 状态/仓库 + 三段摘要」结构展示。
  *
- * 时间、申请人/审批人、释放原因等审计字段不在卡面展开，完整留痕统一走底部寄仓记录入口；
- * 卡面只保留财务核对时最常看的关系、行数、成本和变更摘要。
+ * 卡面不展开时间/申请人/审批人；认领产品和完整变更前后值通过 Tooltip 查看，
+ * 更长的完整留痕仍走底部寄仓记录入口。
  */
 defineOptions({ name: 'SlhTransferRecord' })
 
@@ -16,6 +17,10 @@ const props = defineProps<{
   readonly originOrderNo: string | null
   readonly currentOrderNo: string | null
 }>()
+
+const emit = defineEmits<{ flip: [] }>()
+
+type TransferChange = NonNullable<SlhReconciliationTransferRecordDto['claimRequest']>['changes'][number]
 
 const { t } = useI18n()
 const currencyCatalog = useCurrencyCatalog()
@@ -29,6 +34,8 @@ const routeValues = computed(() => [
   { id: 'container', value: props.transfer.containerBatchName ?? '—' },
   { id: 'mark', value: props.transfer.shippingMark ?? '—' },
 ])
+const lines = computed(() => claim.value?.lines ?? [])
+const changes = computed(() => claim.value?.changes ?? [])
 const lineSummary = computed(() => t('slhReconciliation.detail.transfer.lineSummaryValue', {
   lines: String(claim.value?.lineCount ?? 0),
   quantity: String(claim.value?.totalQuantity ?? 0),
@@ -52,6 +59,32 @@ const STORAGE_STATUS_CLASSES: Record<string, string> = {
   VOIDED: 'border-border text-muted-foreground',
 }
 const storageStatusClass = computed(() => STORAGE_STATUS_CLASSES[props.transfer.status] ?? 'border-border text-muted-foreground')
+
+function display(value: string | null | undefined): string {
+  return value ?? '—'
+}
+
+function differs(before: string | null | undefined, after: string | null | undefined): boolean {
+  return (before ?? '') !== (after ?? '')
+}
+
+function hasRecipientFieldChange(change: TransferChange): boolean {
+  return differs(change.beforeRecipientName, change.afterRecipientName)
+    || differs(change.beforeRecipientPhone, change.afterRecipientPhone)
+    || differs(change.beforeRecipientAddress, change.afterRecipientAddress)
+}
+
+function changeTitle(change: TransferChange): string {
+  return change.shippingMark ?? change.containerBatchName ?? t('slhReconciliation.detail.transfer.changeLine', {
+    line: String(change.lineNumber),
+  })
+}
+
+function codText(value: string | null | undefined): string {
+  return value === null || value === undefined
+    ? '—'
+    : formatCurrencyAmount(value, 'TWD', currencyCatalog.currencies.value)
+}
 </script>
 
 <template>
@@ -69,39 +102,46 @@ const storageStatusClass = computed(() => STORAGE_STATUS_CLASSES[props.transfer.
           {{ t(`slhReconciliation.detail.transfer.storageStatus.${transfer.status}`) }}
         </FaTag>
       </div>
-      <span class="text-sm text-indigo-700 px-3 py-1.5 border border-indigo-200 rounded-lg bg-indigo-50 inline-flex gap-1.5 max-w-full items-center dark:text-indigo-300 dark:border-indigo-500/30 dark:bg-indigo-500/10">
+      <span
+        class="text-sm text-indigo-700 px-3 py-1.5 border border-indigo-200 rounded-lg bg-indigo-50 inline-flex shrink-0 gap-1.5 max-w-full w-60 items-center dark:text-indigo-300 dark:border-indigo-500/30 dark:bg-indigo-500/10"
+        :title="`${locationLabel} · ${transfer.warehouseLabel}`"
+      >
         <FaIcon name="i-lucide:map-pin" class="shrink-0 size-4" aria-hidden="true" />
-        <span class="truncate">{{ locationLabel }} · {{ transfer.warehouseLabel }}</span>
+        <span class="min-w-0 truncate">{{ locationLabel }} · {{ transfer.warehouseLabel }}</span>
       </span>
     </div>
 
     <div class="border-t border-border" aria-hidden="true" />
 
-    <!-- 货件 / 柜号 / 唛头：三项独立白底标签，避免长字符串糊在一起。 -->
-    <div class="p-3 border border-border rounded-lg bg-muted/30 flex flex-wrap gap-3 min-w-0 items-center">
+    <!-- 货件 / 柜号 / 唛头：压成一行内联值，不再用外层容器和三个白底盒子。 -->
+    <div class="flex flex-wrap gap-x-2 gap-y-1 min-w-0 items-baseline">
       <span class="qs-type-meta text-muted-foreground shrink-0">
         {{ t('slhReconciliation.detail.transfer.route') }}
       </span>
-      <div class="flex flex-wrap gap-2 min-w-0 sm:ml-auto">
-        <span
-          v-for="item in routeValues"
-          :key="item.id"
-          class="text-sm qs-type-data px-3 py-1.5 border border-border rounded-md bg-background break-all"
-          :title="item.value"
-        >
-          {{ item.value }}
-        </span>
-      </div>
+      <template v-for="(item, index) in routeValues" :key="item.id">
+        <span class="qs-type-data break-all" :title="item.value">{{ item.value }}</span>
+        <span v-if="index < routeValues.length - 1" class="text-muted-foreground/60" aria-hidden="true">·</span>
+      </template>
     </div>
 
-    <!-- 来源单 → 当前单：中间只保留方向与「调货至」，右侧当前单用主题色强调。 -->
+    <!-- 来源单 → 当前单：来源单号可点击直接翻到背面。 -->
     <div class="p-3 border border-border rounded-lg bg-muted/30 gap-3 grid min-w-0 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-end">
       <div class="min-w-0">
         <p class="qs-type-meta text-muted-foreground m-0">
           {{ t('slhReconciliation.detail.transfer.sourceOrder') }}
         </p>
-        <p class="qs-type-data m-0 mt-1 break-all">
+        <button
+          v-if="sourceOrderNo !== '—'"
+          type="button"
+          class="qs-type-data mt-1 p-0 text-left border-0 rounded-sm bg-transparent underline-offset-4 min-w-0 cursor-pointer break-all focus-visible:outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/40"
+          :aria-label="t('slhReconciliation.detail.flip.showOrigin')"
+          :title="t('slhReconciliation.detail.flip.showOrigin')"
+          @click="emit('flip')"
+        >
           {{ sourceOrderNo }}
+        </button>
+        <p v-else class="qs-type-data m-0 mt-1 break-all">
+          —
         </p>
       </div>
       <div class="text-primary flex flex-col gap-1 items-center">
@@ -124,7 +164,25 @@ const storageStatusClass = computed(() => STORAGE_STATUS_CLASSES[props.transfer.
           {{ t('slhReconciliation.detail.transfer.lineSummary') }}
         </dt>
         <dd class="m-0 min-w-0">
-          <span class="text-sm qs-type-data px-2 py-0.5 rounded-md bg-muted inline-block">{{ lineSummary }}</span>
+          <FaTooltip>
+            <span
+              tabindex="0"
+              class="qs-type-data cursor-pointer"
+              :aria-label="t('slhReconciliation.detail.transfer.productsTooltipAria')"
+            >
+              {{ lineSummary }}
+            </span>
+            <template #content>
+              <div class="text-background flex flex-col gap-1 max-w-xs">
+                <p v-if="lines.length === 0" class="m-0">
+                  {{ t('slhReconciliation.detail.transfer.productsEmpty') }}
+                </p>
+                <p v-for="line in lines" :key="`${line.lineNumber}-${line.productName}`" class="m-0 break-words">
+                  {{ line.productName }} × {{ line.quantity }}
+                </p>
+              </div>
+            </template>
+          </FaTooltip>
         </dd>
       </div>
       <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-center">
@@ -146,8 +204,56 @@ const storageStatusClass = computed(() => STORAGE_STATUS_CLASSES[props.transfer.
         <dt class="qs-type-compact-label text-muted-foreground">
           {{ t('slhReconciliation.detail.transfer.changeSummary') }}
         </dt>
-        <dd class="qs-type-data m-0 min-w-0">
-          {{ changeSummary }}
+        <dd class="m-0 flex flex-wrap gap-x-1 gap-y-1 min-w-0 items-center">
+          <span class="qs-type-data">{{ changeSummary }}</span>
+          <FaTooltip>
+            <span
+              tabindex="0"
+              class="text-muted-foreground rounded-full inline-flex size-5 cursor-pointer items-center justify-center focus-visible:outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary/40"
+              :aria-label="t('slhReconciliation.detail.transfer.changesTooltipAria')"
+            >
+              <FaIcon name="i-lucide:info" class="size-4" aria-hidden="true" />
+            </span>
+            <template #content>
+              <div class="text-background flex flex-col gap-2 max-h-64 max-w-sm overflow-auto">
+                <p v-if="changes.length === 0" class="m-0">
+                  {{ t('slhReconciliation.detail.transfer.noChanges') }}
+                </p>
+                <div v-for="change in changes" :key="`${change.lineNumber}-${change.shippingMark ?? ''}`" class="flex flex-col gap-0.5">
+                  <p class="font-medium m-0">
+                    {{ changeTitle(change) }}
+                  </p>
+                  <p
+                    v-if="change.recipientChanged && differs(change.beforeRecipientName, change.afterRecipientName)"
+                    class="text-background/80 m-0"
+                  >
+                    {{ t('slhReconciliation.detail.transfer.changeRecipient', { before: display(change.beforeRecipientName), after: display(change.afterRecipientName) }) }}
+                  </p>
+                  <p
+                    v-if="change.recipientChanged && differs(change.beforeRecipientPhone, change.afterRecipientPhone)"
+                    class="text-background/80 m-0"
+                  >
+                    {{ t('slhReconciliation.detail.transfer.changePhone', { before: display(change.beforeRecipientPhone), after: display(change.afterRecipientPhone) }) }}
+                  </p>
+                  <p
+                    v-if="change.recipientChanged && differs(change.beforeRecipientAddress, change.afterRecipientAddress)"
+                    class="text-background/80 m-0"
+                  >
+                    {{ t('slhReconciliation.detail.transfer.changeAddress', { before: display(change.beforeRecipientAddress), after: display(change.afterRecipientAddress) }) }}
+                  </p>
+                  <p
+                    v-if="change.recipientChanged && !hasRecipientFieldChange(change)"
+                    class="text-background/80 m-0"
+                  >
+                    {{ t('slhReconciliation.detail.transfer.changeRecipientFallback') }}
+                  </p>
+                  <p v-if="change.codChanged" class="text-background/80 m-0">
+                    {{ t('slhReconciliation.detail.transfer.changeCod', { before: codText(change.beforeCodAmountTwd), after: codText(change.afterCodAmountTwd) }) }}
+                  </p>
+                </div>
+              </div>
+            </template>
+          </FaTooltip>
         </dd>
       </div>
     </dl>

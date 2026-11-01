@@ -252,6 +252,31 @@ export class SlhReconciliationTransferPersonDto {
   @ApiPropertyOptional({ type: 'string', nullable: true }) avatarUrl!: string | null
 }
 
+/** 认领产品行：仅用于「1 行 / 1 件」的工具提示，不暴露源/目标行主键。 */
+export class SlhReconciliationTransferLineDto {
+  @ApiProperty({ type: Number }) lineNumber!: number
+  @ApiProperty({ type: 'string' }) productName!: string
+  @ApiProperty({ type: Number }) quantity!: number
+  @ApiPropertyOptional({ type: 'string', nullable: true }) productMatchMode!: string | null
+}
+
+/** 单条装柜变更：变更 Tooltip 展示完整前后值（方案 B）。 */
+export class SlhReconciliationTransferChangeDto {
+  @ApiProperty({ type: Number }) lineNumber!: number
+  @ApiPropertyOptional({ type: 'string', nullable: true }) shippingMark!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) containerBatchName!: string | null
+  @ApiProperty({ type: 'boolean' }) recipientChanged!: boolean
+  @ApiProperty({ type: 'boolean' }) codChanged!: boolean
+  @ApiPropertyOptional({ type: 'string', nullable: true }) beforeRecipientName!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) afterRecipientName!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) beforeRecipientPhone!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) afterRecipientPhone!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) beforeRecipientAddress!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) afterRecipientAddress!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) beforeCodAmountTwd!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) afterCodAmountTwd!: string | null
+}
+
 /** 调货申请摘要：只保留翻转卡与完整记录入口需要的行数、变更计数和审批信息。 */
 export class SlhReconciliationTransferClaimRequestDto {
   @ApiProperty({ format: 'uuid' }) id!: string
@@ -264,6 +289,8 @@ export class SlhReconciliationTransferClaimRequestDto {
   @ApiPropertyOptional({ type: 'string', nullable: true }) rejectReason!: string | null
   @ApiProperty({ type: Number }) lineCount!: number
   @ApiProperty({ type: Number }) totalQuantity!: number
+  @ApiProperty({ type: () => [SlhReconciliationTransferLineDto] }) lines!: SlhReconciliationTransferLineDto[]
+  @ApiProperty({ type: () => [SlhReconciliationTransferChangeDto] }) changes!: SlhReconciliationTransferChangeDto[]
   @ApiProperty({ type: Number }) recipientChangeCount!: number
   @ApiProperty({ type: Number }) codChangeCount!: number
   @ApiProperty({ type: Number }) manualMatchCount!: number

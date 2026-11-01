@@ -88,6 +88,7 @@ function toggle(): void {
             :transfer="transfer"
             :origin-order-no="originOrderNo"
             :current-order-no="currentOrderNo"
+            @flip="toggle"
           />
           <p v-else class="qs-type-meta text-muted-foreground m-0 mt-3">
             {{ t('slhReconciliation.detail.transfer.noStorageRecord') }}

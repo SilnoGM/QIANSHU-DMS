@@ -1,6 +1,6 @@
 import { Prisma } from '../../generated/prisma/client'
 
-/** 调货记录里的变更计数：卡片只展示项数，完整前后值在寄仓详情页。 */
+/** 调货记录里的变更计数：卡片摘要只展示项数，完整前后值在变更 Tooltip/寄仓详情。 */
 export interface SlhTransferChangeCounts {
   readonly recipientChangeCount: number
   readonly codChangeCount: number
@@ -13,6 +13,31 @@ export interface SlhTransferAllocationSummary {
   readonly manualMatchCount: number
 }
 
+/** 认领产品行：Tooltip 展示「产品 × 数量」，不暴露行级主键。 */
+export interface SlhTransferClaimLine {
+  readonly lineNumber: number
+  readonly productName: string
+  readonly quantity: number
+  readonly productMatchMode: string | null
+}
+
+/** 单条装柜变更：完整前后值，按方案 B 展示在变更 Tooltip。 */
+export interface SlhTransferChangeItem {
+  readonly lineNumber: number
+  readonly shippingMark: string | null
+  readonly containerBatchName: string | null
+  readonly recipientChanged: boolean
+  readonly codChanged: boolean
+  readonly beforeRecipientName: string | null
+  readonly afterRecipientName: string | null
+  readonly beforeRecipientPhone: string | null
+  readonly afterRecipientPhone: string | null
+  readonly beforeRecipientAddress: string | null
+  readonly afterRecipientAddress: string | null
+  readonly beforeCodAmountTwd: string | null
+  readonly afterCodAmountTwd: string | null
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -21,6 +46,59 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function asArray(value: unknown): readonly unknown[] {
   return Array.isArray(value) ? value : []
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
+}
+
+function asNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+/** 读取申请快照里的认领产品行；没有产品名的破损项跳过，不造空行。 */
+export function readTransferClaimLines(value: Prisma.JsonValue | null): SlhTransferClaimLine[] {
+  const lines: SlhTransferClaimLine[] = []
+  for (const raw of asArray(value)) {
+    const item = asRecord(raw)
+    if (item === null) continue
+    const productName = asString(item['productName'])
+    const quantity = asNumber(item['quantity'])
+    if (productName === null || quantity === null || quantity <= 0) continue
+    lines.push({
+      lineNumber: asNumber(item['lineNumber']) ?? 0,
+      productName,
+      quantity,
+      productMatchMode: asString(item['productMatchMode']),
+    })
+  }
+  return lines
+}
+
+/** 读取改收件人/改代收的完整前后值；只保留确实变更的条目。 */
+export function readTransferChangeItems(value: Prisma.JsonValue | null): SlhTransferChangeItem[] {
+  return asArray(value).flatMap((raw) => {
+    const item = asRecord(raw)
+    if (item === null) return []
+    const recipientChanged = item['recipientChanged'] === true
+    const codChanged = item['codChanged'] === true
+    if (!recipientChanged && !codChanged) return []
+    return [{
+      lineNumber: asNumber(item['lineNumber']) ?? 0,
+      shippingMark: asString(item['oceanShippingMarkText']),
+      containerBatchName: asString(item['containerBatchName']),
+      recipientChanged,
+      codChanged,
+      beforeRecipientName: asString(item['beforeRecipientName']),
+      afterRecipientName: asString(item['afterRecipientName']),
+      beforeRecipientPhone: asString(item['beforeRecipientPhone']),
+      afterRecipientPhone: asString(item['afterRecipientPhone']),
+      beforeRecipientAddress: asString(item['beforeRecipientAddress']),
+      afterRecipientAddress: asString(item['afterRecipientAddress']),
+      beforeCodAmountTwd: asString(item['beforeCodAmountTwd']),
+      afterCodAmountTwd: asString(item['afterCodAmountTwd']),
+    }]
+  })
 }
 
 /** 统计改收件人/改代收的条目数；历史快照缺字段或形状不对时按 0 计，不回表猜测。 */

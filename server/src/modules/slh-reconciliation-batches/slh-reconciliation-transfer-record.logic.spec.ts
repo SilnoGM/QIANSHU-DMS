@@ -1,6 +1,8 @@
 import {
   readTransferAllocationSummary,
   readTransferChangeCounts,
+  readTransferChangeItems,
+  readTransferClaimLines,
   readTransferCostTotal,
   selectCurrentTransferRecord,
 } from './slh-reconciliation-transfer-record.logic'
@@ -15,6 +17,51 @@ describe('slh reconciliation transfer record logic', () => {
       'invalid',
     ])).toEqual({ recipientChangeCount: 2, codChangeCount: 1 })
     expect(readTransferChangeCounts(null)).toEqual({ recipientChangeCount: 0, codChangeCount: 0 })
+  })
+
+  it('lists claim products and full change before/after values', () => {
+    expect(readTransferClaimLines([
+      { lineNumber: 2, productName: '1号炉', quantity: 2, productMatchMode: 'AUTO' },
+      { lineNumber: 3, productName: '', quantity: 1, productMatchMode: 'MANUAL_OVERRIDE' },
+      { lineNumber: 4, productName: '2号炉', quantity: 0, productMatchMode: null },
+    ])).toEqual([
+      { lineNumber: 2, productName: '1号炉', quantity: 2, productMatchMode: 'AUTO' },
+    ])
+    expect(readTransferClaimLines(null)).toEqual([])
+
+    expect(readTransferChangeItems([
+      {
+        lineNumber: 2,
+        oceanShippingMarkText: 'J-01',
+        containerBatchName: '0305柜',
+        recipientChanged: true,
+        codChanged: true,
+        beforeRecipientName: '鄭家銘',
+        afterRecipientName: '测试AA',
+        beforeRecipientPhone: '973216146',
+        afterRecipientPhone: '222222',
+        beforeRecipientAddress: '龜山鄉',
+        afterRecipientAddress: '南投縣',
+        beforeCodAmountTwd: '40000.00',
+        afterCodAmountTwd: '41000.00',
+      },
+      { lineNumber: 3, recipientChanged: false, codChanged: false },
+    ])).toEqual([{
+      lineNumber: 2,
+      shippingMark: 'J-01',
+      containerBatchName: '0305柜',
+      recipientChanged: true,
+      codChanged: true,
+      beforeRecipientName: '鄭家銘',
+      afterRecipientName: '测试AA',
+      beforeRecipientPhone: '973216146',
+      afterRecipientPhone: '222222',
+      beforeRecipientAddress: '龜山鄉',
+      afterRecipientAddress: '南投縣',
+      beforeCodAmountTwd: '40000.00',
+      afterCodAmountTwd: '41000.00',
+    }])
+    expect(readTransferChangeItems(null)).toEqual([])
   })
 
   it('summarizes claim lines and falls back to the application allocations', () => {

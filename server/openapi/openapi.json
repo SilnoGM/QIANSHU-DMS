@@ -108794,6 +108794,88 @@
           "displayName"
         ]
       },
+      "SlhReconciliationTransferLineDto": {
+        "type": "object",
+        "properties": {
+          "lineNumber": {
+            "type": "number"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "productMatchMode": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "lineNumber",
+          "productName",
+          "quantity"
+        ]
+      },
+      "SlhReconciliationTransferChangeDto": {
+        "type": "object",
+        "properties": {
+          "lineNumber": {
+            "type": "number"
+          },
+          "shippingMark": {
+            "type": "string",
+            "nullable": true
+          },
+          "containerBatchName": {
+            "type": "string",
+            "nullable": true
+          },
+          "recipientChanged": {
+            "type": "boolean"
+          },
+          "codChanged": {
+            "type": "boolean"
+          },
+          "beforeRecipientName": {
+            "type": "string",
+            "nullable": true
+          },
+          "afterRecipientName": {
+            "type": "string",
+            "nullable": true
+          },
+          "beforeRecipientPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "afterRecipientPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "beforeRecipientAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "afterRecipientAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "beforeCodAmountTwd": {
+            "type": "string",
+            "nullable": true
+          },
+          "afterCodAmountTwd": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "lineNumber",
+          "recipientChanged",
+          "codChanged"
+        ]
+      },
       "SlhReconciliationTransferClaimRequestDto": {
         "type": "object",
         "properties": {
@@ -108848,6 +108930,18 @@
           "totalQuantity": {
             "type": "number"
           },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhReconciliationTransferLineDto"
+            }
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhReconciliationTransferChangeDto"
+            }
+          },
           "recipientChangeCount": {
             "type": "number"
           },
@@ -108868,6 +108962,8 @@
           "createdAt",
           "lineCount",
           "totalQuantity",
+          "lines",
+          "changes",
           "recipientChangeCount",
           "codChangeCount",
           "manualMatchCount",

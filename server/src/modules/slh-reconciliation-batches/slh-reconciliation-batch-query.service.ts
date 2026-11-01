@@ -18,7 +18,8 @@ import {
 } from './slh-reconciliation-batch.serializer'
 import type { SlhReconciliationBatchDetailRow } from './slh-reconciliation-batch.serializer'
 import {
-  readTransferAllocationSummary, readTransferChangeCounts, readTransferCostTotal, selectCurrentTransferRecord,
+  readTransferAllocationSummary, readTransferChangeCounts, readTransferChangeItems, readTransferClaimLines,
+  readTransferCostTotal, selectCurrentTransferRecord,
 } from './slh-reconciliation-transfer-record.logic'
 import { SlhReconciliationBatchFilterDto, SlhReconciliationBillBlockReasonDto, SlhReconciliationBillGroupDto } from './slh-reconciliation-batch.dto'
 import type {
@@ -325,6 +326,8 @@ export class SlhReconciliationBatchQueryService {
         record.claimLines,
         claim?.allocations ?? null,
       )
+      const lines = readTransferClaimLines(claim?.allocations ?? null)
+      const changes = readTransferChangeItems(claim?.containerChanges ?? null)
       const changeCounts = readTransferChangeCounts(claim?.containerChanges ?? null)
       const totalCostCny = readTransferCostTotal(record.costSnapshot)
       const claimAmountCny = record.costEvents.find(event => event.direction === 'CLAIM')?.amountCny.toFixed(2) ?? null
@@ -355,6 +358,8 @@ export class SlhReconciliationBatchQueryService {
           reviewedAt: claim.reviewedAt?.toISOString() ?? null,
           rejectReason: claim.rejectReason,
           ...allocationSummary,
+          lines,
+          changes,
           ...changeCounts,
           costTotalCny: claim.costTotalCny.toFixed(2),
         },
