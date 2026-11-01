@@ -45,6 +45,8 @@ describe('slh bill charge parser', () => {
     expect(parseSlhRemarks('补 派送费500NT').charges[0]).toMatchObject({ chargeType: 'DELIVERY', amount: '500.00' })
     expect(parseSlhRemarks('重货费100 轉派費1100NT').charges[1]).toMatchObject({ chargeType: 'TRANSFER_DELIVERY', amount: '1100.00' })
     expect(parseSlhRemarks('重货费100 二派费：1700NT').charges[1]).toMatchObject({ chargeType: 'REDELIVERY', amount: '1700.00' })
+    expect(parseSlhRemarks('港口费 300').charges[0]).toMatchObject({ chargeType: 'PORT_FEE', currencyCode: 'CNY', amount: '300.00' })
+    expect(parseSlhRemarks('港口費500NT').charges[0]).toMatchObject({ chargeType: 'PORT_FEE', currencyCode: 'TWD', amount: '500.00' })
   })
 
   it('handles a single NTD fee without any RMB surcharge', () => {

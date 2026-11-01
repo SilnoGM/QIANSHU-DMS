@@ -8,6 +8,7 @@ import { serializeSlhBillListItem, slhBillListInclude } from '../slh-bills/slh-b
 import type { SlhBillListRow } from '../slh-bills/slh-bill.serializer'
 import type { SlhBillPageDto } from '../slh-bills/slh-bill.dto'
 import { matchBillUnreconciledLines } from './slh-reconciliation-batch.matcher'
+import { readAllocationSnapshot } from './slh-reconciliation-allocation.logic'
 import { slhReconciliationBatchFailure } from './slh-reconciliation-batch.errors'
 import { slhReconciliationBatchUuid } from './slh-reconciliation-batch.normalizer'
 import {
@@ -17,7 +18,8 @@ import {
 import type { SlhReconciliationBatchDetailRow } from './slh-reconciliation-batch.serializer'
 import { SlhReconciliationBatchFilterDto, SlhReconciliationBillBlockReasonDto, SlhReconciliationBillGroupDto } from './slh-reconciliation-batch.dto'
 import type {
-  SlhBillLineUnmatchedReasonCountDto, SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchDetailDto,
+  SlhBillLineUnmatchedReasonCountDto, SlhReconciliationSettlementAllocationDto,
+  SlhReconciliationSettlementAllocationPartyDto, SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchDetailDto,
   SlhReconciliationBatchListQueryDto, SlhReconciliationBatchPageDto, SlhReconciliationBillOptionDto,
   SlhReconciliationBillOptionPageDto, SlhReconciliationBillOptionQueryDto, SlhReconciliationReconcilableCountsDto,
   SlhReconciliationReconcilableCountsRequestDto, SlhReconciliationSettlementListDto,
@@ -186,6 +188,7 @@ export class SlhReconciliationBatchQueryService {
         settlementAmountCny: true, settlementCurrency: true,
         salesAmount: true, salesCurrency: true,
         paymentFeeAmountCny: true, paymentFeeCurrency: true,
+        allocationSnapshot: true,
         slhBillNo: true, salesOrderNo: true, purchaseOrderNo: true, containerBatchNo: true,
         shipmentNo: true, warehouseReceiptReference: true, shippingMarkText: true,
         createdAt: true,
@@ -221,6 +224,8 @@ export class SlhReconciliationBatchQueryService {
         createdByDisplayName: row.createdBy.displayName,
         createdByAvatarUrl: row.createdBy.profile?.avatarUrl ?? null,
         createdAt: row.createdAt.toISOString(),
+        allocations: (readAllocationSnapshot(row.allocationSnapshot)?.items ?? []) as SlhReconciliationSettlementAllocationDto[],
+        allocationParties: (readAllocationSnapshot(row.allocationSnapshot)?.parties ?? []) as SlhReconciliationSettlementAllocationPartyDto[],
       })),
     }
   }

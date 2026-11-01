@@ -107355,6 +107355,12 @@
       "SlhBillLineChargeDto": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Stable charge row id; settlement allocation keys are derived from it. Null only for import previews, which are not persisted."
+          },
           "chargeType": {
             "type": "string",
             "enum": [
@@ -107372,7 +107378,8 @@
               "INSPECTION",
               "FORKLIFT",
               "MINIMUM_CHARGE",
-              "OTHER"
+              "OTHER",
+              "PORT_FEE"
             ]
           },
           "currencyCode": {
@@ -108977,6 +108984,16 @@
               }
             ]
           },
+          "currentSalesOrder": {
+            "nullable": true,
+            "description": "Current owned sales order after storage claim; null when ownership is not a sales order.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationMatchedSalesOrderDto"
+              }
+            ]
+          },
           "reconciledAt": {
             "type": "string",
             "nullable": true,
@@ -109142,6 +109159,33 @@
           "paymentFeeAmountCny"
         ]
       },
+      "SlhReconciliationSettlementAllocationTargetInputDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "费用项 key：CHARGE:{chargeId} / FREIGHT / COD_HANDLING / COD / PAYMENT_FEE。"
+          },
+          "target": {
+            "type": "string",
+            "enum": [
+              "ORIGIN_ORDER",
+              "CURRENT_ORDER",
+              "COMPANY"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "手动调整入账目标时的原因。"
+          }
+        },
+        "required": [
+          "key",
+          "target"
+        ]
+      },
       "SlhReconciliationSettlementCreateDto": {
         "type": "object",
         "properties": {
@@ -109170,6 +109214,13 @@
                 "$ref": "#/components/schemas/SlhReconciliationSettlementAmountsDto"
               }
             ]
+          },
+          "allocationTargets": {
+            "description": "财务逐项覆盖入账目标；未提交的项使用默认归属。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhReconciliationSettlementAllocationTargetInputDto"
+            }
           }
         },
         "required": [
@@ -109177,6 +109228,119 @@
           "rateSource",
           "rate",
           "amounts"
+        ]
+      },
+      "SlhReconciliationSettlementAllocationDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "sourceType": {
+            "type": "string",
+            "enum": [
+              "BILL_CHARGE",
+              "FREIGHT",
+              "COD_HANDLING",
+              "COD",
+              "PAYMENT_FEE"
+            ]
+          },
+          "chargeType": {
+            "type": "string",
+            "nullable": true
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "defaultTarget": {
+            "type": "string",
+            "enum": [
+              "ORIGIN_ORDER",
+              "CURRENT_ORDER",
+              "COMPANY"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "enum": [
+              "ORIGIN_ORDER",
+              "CURRENT_ORDER",
+              "COMPANY"
+            ]
+          },
+          "signedContributionCny": {
+            "type": "string"
+          },
+          "overridden": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "key",
+          "sourceType",
+          "currencyCode",
+          "amount",
+          "defaultTarget",
+          "target",
+          "signedContributionCny",
+          "overridden"
+        ]
+      },
+      "SlhReconciliationSettlementAllocationPartyDto": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "enum": [
+              "ORIGIN_ORDER",
+              "CURRENT_ORDER",
+              "COMPANY"
+            ]
+          },
+          "salesOrderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "salesOrderNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "codAmountTwd": {
+            "type": "string",
+            "nullable": true
+          },
+          "ntdSurchargeAmountTwd": {
+            "type": "string",
+            "nullable": true
+          },
+          "payableAmountCny": {
+            "type": "string",
+            "nullable": true
+          },
+          "settlementAmountCny": {
+            "type": "string",
+            "nullable": true
+          },
+          "salesAmount": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentFeeAmountCny": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "target"
         ]
       },
       "SlhReconciliationSettlementDto": {
@@ -109219,6 +109383,18 @@
           },
           "createdAt": {
             "type": "string"
+          },
+          "allocations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhReconciliationSettlementAllocationDto"
+            }
+          },
+          "allocationParties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhReconciliationSettlementAllocationPartyDto"
+            }
           }
         },
         "required": [
@@ -109229,7 +109405,9 @@
           "foreignUnitsPerCny",
           "paymentFeeRate",
           "createdByDisplayName",
-          "createdAt"
+          "createdAt",
+          "allocations",
+          "allocationParties"
         ]
       },
       "SlhReconciliationSettlementRecordDto": {
@@ -109335,6 +109513,18 @@
           },
           "createdAt": {
             "type": "string"
+          },
+          "allocations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhReconciliationSettlementAllocationDto"
+            }
+          },
+          "allocationParties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlhReconciliationSettlementAllocationPartyDto"
+            }
           }
         },
         "required": [
@@ -109363,7 +109553,9 @@
           "warehouseReceiptReference",
           "shippingMarkText",
           "createdByDisplayName",
-          "createdAt"
+          "createdAt",
+          "allocations",
+          "allocationParties"
         ]
       },
       "SlhReconciliationSettlementListDto": {

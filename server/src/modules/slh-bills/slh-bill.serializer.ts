@@ -88,6 +88,7 @@ export function serializeSlhBillLine(row: Prisma.SlhBillLineGetPayload<{ include
     remark: row.remark,
     reconciliationStatus: resolveSlhBillLineReconciliationStatus(row.reconciledAt) as SlhBillLineReconciliationStatusDto,
     charges: row.charges.map(charge => ({
+      id: charge.id,
       chargeType: charge.chargeType as SlhBillChargeTypeDto,
       currencyCode: charge.currencyCode,
       amount: charge.amount.toFixed(2),
@@ -133,6 +134,7 @@ export function serializeSlhBillPreviewLine(line: ParsedSlhBillLine, findings: r
     // 预览行尚未入库，按定义就是未对账；入库后该值改由行的对账时刻决定。
     reconciliationStatus: 'PENDING' as SlhBillLineReconciliationStatusDto,
     charges: line.charges.map(charge => ({
+      id: null,
       chargeType: charge.chargeType as SlhBillChargeTypeDto,
       currencyCode: charge.currencyCode,
       amount: charge.amount,

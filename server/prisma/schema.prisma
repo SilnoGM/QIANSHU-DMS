@@ -2458,6 +2458,7 @@ enum SlhBillChargeType {
   FORKLIFT
   MINIMUM_CHARGE
   OTHER
+  PORT_FEE
 
   @@map("slh_bill_charge_type")
 }
@@ -2727,6 +2728,7 @@ model SlhReconciliationSettlement {
   salesCurrency String @map("sales_currency") @db.Char(3)
   paymentFeeAmountCny Decimal? @map("payment_fee_amount_cny") @db.Decimal(30, 2)
   paymentFeeCurrency String @map("payment_fee_currency") @db.Char(3)
+  allocationSnapshot Json? @map("allocation_snapshot") @db.JsonB
   requestKeyHash Bytes @map("request_key_hash") @db.ByteA
   payloadHash Bytes @map("payload_hash") @db.ByteA
   createdById String @map("created_by_id") @db.Uuid

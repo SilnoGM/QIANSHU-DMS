@@ -6,6 +6,9 @@ import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { AccessControlService } from '../access-control/access-control.service'
 import { AuditService } from '../audit/audit.service'
 import {
+  SLH_BILL_COMPANY_ALLOCATION_POSTING_TYPE,
+  SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER,
+  SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE,
   SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER,
   SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER,
   SLH_BILL_FINANCE_SETTLEMENT_SOURCE,
@@ -30,10 +33,18 @@ import {
   PAYMENT_FEE_RATE, SETTLEMENT_BILL_AMOUNT_CURRENCY, SETTLEMENT_CURRENCY, SETTLEMENT_SYSTEM_RATE_CURRENCY,
   resolveSettlementAmounts,
 } from './slh-reconciliation-settlement.logic'
+import {
+  buildSlhSettlementAllocation,
+  canonicalAllocationJson,
+  readAllocationSnapshot,
+  SlhAllocationError,
+  type SlhAllocationResult,
+} from './slh-reconciliation-allocation.logic'
 import { SlhReconciliationBatchQueryService } from './slh-reconciliation-batch-query.service'
 import { SlhReconciliationSettlementRateSourceDto } from './slh-reconciliation-batch.dto'
 import type {
   SlhReconciliationBatchCreateDto, SlhReconciliationBatchDetailDto,
+  SlhReconciliationSettlementAllocationDto, SlhReconciliationSettlementAllocationPartyDto,
   SlhReconciliationSettlementCreateDto, SlhReconciliationSettlementDto,
 } from './slh-reconciliation-batch.dto'
 
@@ -44,7 +55,7 @@ const BATCH_CONSUMER = 'SLH_RECON_BATCH.CREATE'
 /** 创建语义指纹的格式标记：改口径时必须同时改版本号，避免新旧请求被当成同一个意图。 */
 const CREATE_PAYLOAD_FORMAT = 'slh-reconciliation-batch.create.v1'
 /** 结算语义指纹的格式标记：口径（含金额与汇率）变化时必须递增。 */
-const SETTLEMENT_PAYLOAD_FORMAT = 'slh-reconciliation-settlement.create.v1'
+const SETTLEMENT_PAYLOAD_FORMAT = 'slh-reconciliation-settlement.create.v2'
 /** 完成批次入账的摘要：结算与金流费用是两个独立动作、两条资金流水。 */
 const COMPLETION_SETTLEMENT_SUMMARY = '顺联航账单对账结算'
 const COMPLETION_FEE_SUMMARY = '顺联航账单全流程金流费用'
@@ -73,6 +84,7 @@ interface CompletedBatchMemberRecord {
     readonly createdAt: Date
     readonly rateSource: string
     readonly foreignUnitsPerCny: Prisma.Decimal
+    readonly allocationSnapshot: Prisma.JsonValue
   }[]
 }
 
@@ -271,6 +283,7 @@ export class SlhReconciliationBatchService {
                     id: true, salesOrderId: true, settlementAmountCny: true, paymentFeeAmountCny: true,
                     codAmountTwd: true, createdAt: true,
                     rateSource: true, foreignUnitsPerCny: true,
+                    allocationSnapshot: true,
                   },
                 },
               },
@@ -418,6 +431,37 @@ export class SlhReconciliationBatchService {
         })
       }
     }
+    // 原销售订单（甲）只承担本次分摊的费用，不改订单状态、不回填收款；已终止/取消也允许扣费，
+    // 但资金层要求出单人存在资金账户，这里先给出可理解的业务错误，避免批量入账时抛出资金层错误。
+    const originOrderIds = [...new Set(reconciled.flatMap(({ settlement }) => (
+      readAllocationSnapshot(settlement.allocationSnapshot)?.parties ?? []
+    ).filter(party => party.target === 'ORIGIN_ORDER' && party.salesOrderId !== null
+      && ((party.settlementAmountCny !== null && !new Prisma.Decimal(party.settlementAmountCny).isZero())
+        || (party.paymentFeeAmountCny !== null && new Prisma.Decimal(party.paymentFeeAmountCny).gt(0))))
+      .map(party => party.salesOrderId as string)))].filter(orderId => !orderIds.includes(orderId))
+    if (originOrderIds.length > 0) {
+      const originOrders = await tx.salesOrder.findMany({
+        where: { id: { in: originOrderIds } },
+        select: { id: true, orderNo: true, issuerUserId: true },
+      })
+      if (originOrders.length !== originOrderIds.length) {
+        return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_SOURCE_MISSING', '分摊到原销售订单的订单已不可用，暂时无法入账', 409)
+      }
+      const issuerIds = [...new Set(originOrders.map(order => order.issuerUserId))]
+      const accounts = await tx.fundAccount.findMany({
+        where: { ownerType: 'USER', userId: { in: issuerIds } },
+        select: { userId: true },
+      })
+      const withAccount = new Set(accounts.map(account => account.userId))
+      const missing = originOrders.filter(order => !withAccount.has(order.issuerUserId))
+      if (missing.length > 0) {
+        return slhReconciliationBatchFailure(
+          'SLH_RECON_SETTLEMENT_ORIGIN_ACCOUNT_MISSING',
+          `原销售订单 ${missing.map(order => order.orderNo).join('、')} 的出单人没有资金账户，无法扣费`,
+          409,
+        )
+      }
+    }
     if (overcollected.length > 0) {
       // 重置范围＝该订单在本批次的全部已核对行：金额互相牵连，只退回触发行重新核对仍可能对不上。
       const rejectedOrderIds = new Set(overcollected.map(item => item.orderId))
@@ -529,18 +573,22 @@ export class SlhReconciliationBatchService {
   }
 
   /**
-   * 逐行入账：每行的依据是它最新的有效核对（ACTIVE 结算记录），结算金额与金流费用
-   * 各成一条独立资金流水，不做同出单人合并；资金归属人取销售订单出单人（不是当前操作人）。
-   * 结算金额为空或为 0、金流费用为空或为 0 时跳过该笔；两者都跳过时这一行不产生资金流水，
-   * 因此「没有任何可入账内容」的批次完成仍然成功、只是零流水。
+   * 逐行入账：每行的依据是它最新的有效核对（ACTIVE 结算记录）。
+   *
+   * 结算金额与金流费用各成一条独立资金流水，不做同出单人合并；资金归属人取销售订单出单人
+   * （不是当前操作人）。2026-11 起结算按「结算头 + 费用分摊快照」入账：
+   * - 甲（原销售单）与乙（当前销售单）分别入到各自出单人的资金账户，公司目标只入公司账户；
+   * - 历史结算没有快照，仍按单据上的 `salesOrderId` 单笔入账，保持旧口径；
+   * - 甲的订单可以已终止/取消，资金层只要求出单人存在资金账户（完成事务里已预检）；
+   * - 代收货款恒归乙，回填收款也回到当前销售单。
    *
    * **结算与费用的记账单位不同**：结算金额是本行的钱（代收/杂费/应付），逐行各入一笔；
    * 金流费用是对**整张销售订单的销售金额**收的（销售金额 ÷ 汇率 × 费率），而一个销售单可能
    * 对应多行账单（多货件，或一个货件装柜时拆成多个唛头/装柜行），逐行入账会按行数翻倍。
-   * 因此费用按销售单去重：同一销售单只入一次，以**首次遇到的那一行**的汇率快照与费用为准，
-   * 已入过就跳过（不重算、不补差）。
+   * 因此费用按当前销售单去重：同一销售单只入一次，以**首次遇到的那一行**的汇率快照与费用为准，
+   * 入到哪一个目标也以该行分摊快照为准；已入过就跳过（不重算、不补差）。
    *
-   * 返回值同时给出「结算记录 id → RECONCILE 入账批次 id」的映射：代收回填收款要绑定它。
+   * 返回值同时给出「结算记录 id → 当前销售单 RECONCILE 入账批次 id」的映射：代收回填收款要绑定它。
    */
   private async postCompletedMembers(
     tx: Prisma.TransactionClient,
@@ -552,23 +600,52 @@ export class SlhReconciliationBatchService {
       return { postingBatchIds: [], reconcileBatchIdBySettlementId: new Map() }
     }
     const salesOrderIds = [...new Set(reconciled.map(entry => entry.settlement.salesOrderId))]
+    const allocations = new Map(reconciled.map(({ settlement }) => [
+      settlement.id,
+      readAllocationSnapshot(settlement.allocationSnapshot),
+    ]))
+    const partyOrderIds = new Set<string>()
+    for (const { settlement } of reconciled) {
+      const allocation = allocations.get(settlement.id) ?? null
+      for (const party of allocation?.parties ?? []) {
+        if (party.salesOrderId !== null) partyOrderIds.add(party.salesOrderId)
+      }
+    }
     const orders = await tx.salesOrder.findMany({
-      where: { id: { in: salesOrderIds } },
+      where: { id: { in: [...new Set([...salesOrderIds, ...partyOrderIds])] } },
       select: { id: true, orderNo: true, issuerUserId: true },
     })
     const orderById = new Map(orders.map(order => [order.id, order]))
-    // 已收过费用的销售单：按业务身份查（source + consumer + business_id = 销售单），
+    // 已收过费用的销售单：按业务身份查（source + consumer + business_id = 当前销售单），
     // 不能只靠幂等键——不同结算记录触发的费用 memo 不同，同键会被资金层判为幂等冲突而不是重放。
+    // 公司目标的费用也以当前销售单为 businessId，保证换目标后仍能识别「这一单已收过费用」。
     const charged = await tx.fundPostingBatch.findMany({
       where: {
-        businessSourceCodeSnapshot: SLH_BILL_FINANCE_SETTLEMENT_SOURCE,
-        consumerCode: SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER,
-        businessId: { in: salesOrderIds },
+        OR: [
+          {
+            businessSourceCodeSnapshot: SLH_BILL_FINANCE_SETTLEMENT_SOURCE,
+            consumerCode: SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER,
+            businessId: { in: salesOrderIds },
+          },
+          {
+            businessSourceCodeSnapshot: SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE,
+            consumerCode: SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER,
+            businessId: { in: salesOrderIds },
+          },
+        ],
       },
       select: { businessId: true },
     })
     const feeChargedOrderIds = new Set(charged.map(row => row.businessId))
-    const metadata = (memberId: string, settlementId: string, salesOrderNo: string, rateSource: string, foreignUnitsPerCny: string) => ({
+    const metadata = (
+      memberId: string,
+      settlementId: string,
+      salesOrderNo: string | null,
+      rateSource: string,
+      foreignUnitsPerCny: string,
+      allocationTarget: string,
+      allocationOrderNo: string | null,
+    ) => ({
       slhReconciliationBatchId: batch.id,
       slhReconciliationBatchNo: batch.batchNo,
       slhReconciliationBatchLineId: memberId,
@@ -577,51 +654,121 @@ export class SlhReconciliationBatchService {
       slhBillNo: batch.bill.slhBillNo,
       rateSource,
       foreignUnitsPerCny,
+      allocationTarget,
+      allocationOrderNo,
     })
     const entries: Array<{
       readonly kind: 'RECONCILE' | 'FEE'
       readonly settlementId: string | null
+      readonly target: 'ORIGIN_ORDER' | 'CURRENT_ORDER' | 'COMPANY'
       readonly context: FundBusinessTransactionContext
       readonly input: PostBusinessEventInput
     }> = []
     for (const { member, settlement } of reconciled) {
-      const order = orderById.get(settlement.salesOrderId)
-      if (order === undefined) {
+      const currentOrder = orderById.get(settlement.salesOrderId)
+      if (currentOrder === undefined) {
         return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_SOURCE_MISSING', '这一行的销售订单已不可用，暂时无法入账', 409)
       }
       const rateSource = settlement.rateSource
       const foreignUnitsPerCny = settlement.foreignUnitsPerCny.toFixed(4)
-      const settlementAmount = settlement.settlementAmountCny
-      if (settlementAmount !== null && !settlementAmount.isZero()) {
+      const allocation = allocations.get(settlement.id) ?? null
+      const parties = allocation?.parties ?? [{
+        target: 'CURRENT_ORDER' as const,
+        salesOrderId: settlement.salesOrderId,
+        settlementAmountCny: settlement.settlementAmountCny?.toFixed(2) ?? null,
+      }]
+      for (const party of parties) {
+        const settlementAmount = party.settlementAmountCny
+        if (settlementAmount === null || new Prisma.Decimal(settlementAmount).isZero()) {
+          continue
+        }
+        const target = party.target
+        const targetOrder = party.salesOrderId === null ? null : orderById.get(party.salesOrderId)
+        if (target !== 'COMPANY' && targetOrder === undefined) {
+          return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_SOURCE_MISSING', '分摊目标的销售订单已不可用，暂时无法入账', 409)
+        }
+        if (target === 'COMPANY') {
+          entries.push({
+            kind: 'RECONCILE',
+            settlementId: settlement.id,
+            target,
+            context: {
+              ...context,
+              sourceCode: SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE,
+              consumerCode: SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER,
+            },
+            input: {
+              postingTypeCode: SLH_BILL_COMPANY_ALLOCATION_POSTING_TYPE,
+              amount: settlementAmount, businessId: settlement.id, businessNo: batch.batchNo,
+              summary: COMPLETION_SETTLEMENT_SUMMARY,
+              metadata: metadata(member.id, settlement.id, null, rateSource, foreignUnitsPerCny, target, null),
+              idempotencyKey: `${settlement.id}:RECONCILE:${target}`,
+            },
+          })
+          continue
+        }
+        const order = targetOrder!
         entries.push({
           kind: 'RECONCILE',
           settlementId: settlement.id,
+          target,
           context: { ...context, sourceCode: SLH_BILL_FINANCE_SETTLEMENT_SOURCE, consumerCode: SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER },
           input: {
             postingTypeCode: SLH_BILL_SETTLEMENT_POSTING_TYPE, userId: order.issuerUserId,
-            amount: settlementAmount.toFixed(2), businessId: settlement.id, businessNo: batch.batchNo,
+            amount: settlementAmount, businessId: settlement.id, businessNo: batch.batchNo,
             summary: COMPLETION_SETTLEMENT_SUMMARY,
-            metadata: metadata(member.id, settlement.id, order.orderNo, rateSource, foreignUnitsPerCny),
-            idempotencyKey: `${settlement.id}:RECONCILE`,
+            metadata: metadata(member.id, settlement.id, order.orderNo, rateSource, foreignUnitsPerCny, target, order.orderNo),
+            // 历史结算没有快照、只有一笔当前单入账，沿用旧键避免与既有批次语义漂移。
+            idempotencyKey: allocation === null
+              ? `${settlement.id}:RECONCILE`
+              : `${settlement.id}:RECONCILE:${target}`,
           },
         })
       }
       const feeAmount = settlement.paymentFeeAmountCny
-      // 本批内同一销售单的后续行也不重复入：集合在构建过程中就地扩充。
-      if (feeAmount !== null && feeAmount.gt(0) && !feeChargedOrderIds.has(order.id)) {
-        feeChargedOrderIds.add(order.id)
-        entries.push({
-          kind: 'FEE',
-          settlementId: null,
-          context: { ...context, sourceCode: SLH_BILL_FINANCE_SETTLEMENT_SOURCE, consumerCode: SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER },
-          input: {
-            postingTypeCode: SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE, userId: order.issuerUserId,
-            amount: feeAmount.toFixed(2), businessId: order.id, businessNo: order.orderNo,
-            summary: COMPLETION_FEE_SUMMARY,
-            metadata: metadata(member.id, settlement.id, order.orderNo, rateSource, foreignUnitsPerCny),
-            idempotencyKey: `${order.id}:FEE`,
-          },
-        })
+      if (feeAmount !== null && feeAmount.gt(0) && !feeChargedOrderIds.has(currentOrder.id)) {
+        feeChargedOrderIds.add(currentOrder.id)
+        const feeTarget = allocation?.items.find(item => item.sourceType === 'PAYMENT_FEE')?.target ?? 'CURRENT_ORDER'
+        if (feeTarget === 'COMPANY') {
+          entries.push({
+            kind: 'FEE',
+            settlementId: null,
+            target: feeTarget,
+            context: {
+              ...context,
+              sourceCode: SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE,
+              consumerCode: SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER,
+            },
+            input: {
+              postingTypeCode: SLH_BILL_COMPANY_ALLOCATION_POSTING_TYPE,
+              amount: feeAmount.toFixed(2), businessId: currentOrder.id, businessNo: currentOrder.orderNo,
+              summary: COMPLETION_FEE_SUMMARY,
+              metadata: metadata(member.id, settlement.id, currentOrder.orderNo, rateSource, foreignUnitsPerCny, feeTarget, null),
+              idempotencyKey: `${currentOrder.id}:FEE`,
+            },
+          })
+        }
+        else {
+          const feeOrder = feeTarget === 'ORIGIN_ORDER'
+            ? orderById.get(allocation?.parties.find(party => party.target === 'ORIGIN_ORDER')?.salesOrderId ?? '')
+            : currentOrder
+          if (feeOrder === undefined) {
+            return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_SOURCE_MISSING', '金流费用的承担订单已不可用，暂时无法入账', 409)
+          }
+          entries.push({
+            kind: 'FEE',
+            settlementId: null,
+            target: feeTarget,
+            context: { ...context, sourceCode: SLH_BILL_FINANCE_SETTLEMENT_SOURCE, consumerCode: SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER },
+            input: {
+              postingTypeCode: SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE, userId: feeOrder.issuerUserId,
+              amount: feeAmount.toFixed(2), businessId: currentOrder.id, businessNo: currentOrder.orderNo,
+              summary: COMPLETION_FEE_SUMMARY,
+              metadata: metadata(member.id, settlement.id, currentOrder.orderNo, rateSource, foreignUnitsPerCny, feeTarget, feeOrder.orderNo),
+              idempotencyKey: `${currentOrder.id}:FEE`,
+            },
+          })
+        }
       }
     }
     if (entries.length === 0) {
@@ -636,7 +783,7 @@ export class SlhReconciliationBatchService {
       const preview = await this.funds.previewBusinessEventInTransaction(tx, entry.context, entry.input)
       const posting = await this.funds.postBusinessEventInTransaction(tx, entry.context, entry.input, preview)
       postingBatchIds.push(posting.batchId)
-      if (entry.kind === 'RECONCILE' && entry.settlementId !== null) {
+      if (entry.kind === 'RECONCILE' && entry.settlementId !== null && entry.target === 'CURRENT_ORDER') {
         reconcileBatchIdBySettlementId.set(entry.settlementId, posting.batchId)
       }
     }
@@ -665,6 +812,10 @@ export class SlhReconciliationBatchService {
       rateSource: input.rateSource,
       rate: input.rate,
       amounts: input.amounts,
+      // 手动分摊目标也是结算语义：同一提交标识换了目标必须判为冲突，不能静默复用旧结果。
+      allocationTargets: [...(input.allocationTargets ?? [])]
+        .map(target => ({ key: target.key, target: target.target, reason: target.reason ?? null }))
+        .sort((left, right) => left.key < right.key ? -1 : left.key > right.key ? 1 : 0),
     })
     const payloadBytes = Buffer.from(payloadFingerprint, 'hex')
     try {
@@ -707,7 +858,18 @@ export class SlhReconciliationBatchService {
               where: { id: batchLineId },
               select: {
                 id: true, lineId: true, reconciledAt: true,
-                line: { select: { reconciledAt: true, codAmountTwd: true, ntdSurchargeAmountTwd: true, payableAmountCny: true, warehouseReceiptReference: true, shippingMarkText: true } },
+                line: {
+                  select: {
+                    reconciledAt: true, codAmountTwd: true, ntdSurchargeAmountTwd: true,
+                    payableAmountCny: true, surchargeAmountCny: true,
+                    freightAmountCny: true, codHandlingAmountCny: true,
+                    warehouseReceiptReference: true, shippingMarkText: true,
+                    charges: {
+                      select: { id: true, chargeType: true, currencyCode: true, amount: true },
+                      orderBy: { id: 'asc' },
+                    },
+                  },
+                },
                 matchedLoadingItem: {
                   select: {
                     id: true, containerBatchId: true,
@@ -719,6 +881,14 @@ export class SlhReconciliationBatchService {
                           select: {
                             id: true, orderNo: true,
                             salesOrder: { select: { id: true, orderNo: true, currencyCode: true, agreedTotalAmount: true } },
+                          },
+                        },
+                        ownershipCurrent: {
+                          select: {
+                            ownerType: true,
+                            ownerSalesOrder: {
+                              select: { id: true, orderNo: true, currencyCode: true, agreedTotalAmount: true },
+                            },
                           },
                         },
                       },
@@ -741,6 +911,14 @@ export class SlhReconciliationBatchService {
         if (salesOrder.currencyCode !== 'TWD') {
           return slhReconciliationBatchFailure('SLH_RECON_SALES_CURRENCY_UNSUPPORTED', '销售订单不是台币，暂不支持对账', 409)
         }
+        const ownership = member.matchedLoadingItem.shipment?.ownershipCurrent ?? null
+        const currentSalesOrder = ownership?.ownerSalesOrder ?? null
+        if (currentSalesOrder === null || ownership?.ownerType !== 'SALES_ORDER') {
+          return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_SOURCE_MISSING', '这一行没有当前销售归属，暂时无法结算', 409)
+        }
+        if (currentSalesOrder.currencyCode !== 'TWD') {
+          return slhReconciliationBatchFailure('SLH_RECON_SALES_CURRENCY_UNSUPPORTED', '当前销售订单不是台币，暂不支持对账', 409)
+        }
         const rate = await this.resolveSettlementRate(tx, input.rateSource, batch.billId, batch.bill.embeddedForeignUnitsPerCny)
         if (!new Prisma.Decimal(rate).equals(new Prisma.Decimal(input.rate))) {
           return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_RATE_CHANGED', '该来源的汇率已变化，请重新打开结算弹窗', 409)
@@ -749,10 +927,53 @@ export class SlhReconciliationBatchService {
           codAmountTwd: member.line.codAmountTwd?.toFixed(2) ?? null,
           ntdSurchargeAmountTwd: member.line.ntdSurchargeAmountTwd?.toFixed(2) ?? null,
           payableAmountCny: member.line.payableAmountCny?.toFixed(2) ?? null,
-          salesAmount: salesOrder.agreedTotalAmount.toFixed(2),
+          salesAmount: currentSalesOrder.agreedTotalAmount.toFixed(2),
           rate,
           paymentFeeRate: PAYMENT_FEE_RATE,
         })
+        let allocation: SlhAllocationResult
+        try {
+          allocation = buildSlhSettlementAllocation({
+            charges: member.line.charges.map(charge => ({
+              id: charge.id,
+              chargeType: charge.chargeType,
+              currencyCode: charge.currencyCode as 'CNY' | 'TWD',
+              amount: charge.amount.toFixed(2),
+            })),
+            freightAmountCny: member.line.freightAmountCny?.toFixed(2) ?? null,
+            codHandlingAmountCny: member.line.codHandlingAmountCny?.toFixed(2) ?? null,
+            surchargeAmountCny: member.line.surchargeAmountCny?.toFixed(2) ?? null,
+            codAmountTwd: member.line.codAmountTwd?.toFixed(2) ?? null,
+            ntdSurchargeAmountTwd: member.line.ntdSurchargeAmountTwd?.toFixed(2) ?? null,
+            payableAmountCny: member.line.payableAmountCny?.toFixed(2) ?? null,
+            originSalesOrder: {
+              id: salesOrder.id,
+              orderNo: salesOrder.orderNo,
+              currencyCode: salesOrder.currencyCode,
+              agreedTotalAmount: salesOrder.agreedTotalAmount.toFixed(2),
+            },
+            currentSalesOrder: {
+              id: currentSalesOrder.id,
+              orderNo: currentSalesOrder.orderNo,
+              currencyCode: currentSalesOrder.currencyCode,
+              agreedTotalAmount: currentSalesOrder.agreedTotalAmount.toFixed(2),
+            },
+            rate,
+            paymentFeeRate: PAYMENT_FEE_RATE,
+            overrides: input.allocationTargets?.map(target => ({
+              key: target.key,
+              target: target.target,
+              reason: target.reason ?? null,
+            })),
+          })
+        }
+        catch (error) {
+          if (error instanceof SlhAllocationError) {
+            return slhReconciliationBatchFailure(error.code, error.publicMessage, 409)
+          }
+          throw error
+        }
+        const allocationSnapshot = JSON.stringify(allocation)
         const mismatched = compareSettlementAmounts(amounts, input.amounts)
         if (mismatched.length > 0) {
           return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_MISMATCH', `结算金额与重算结果不一致：${mismatched.join('、')}`, 409)
@@ -763,6 +984,7 @@ export class SlhReconciliationBatchService {
             id: true, rateSource: true, foreignUnitsPerCny: true, paymentFeeRate: true,
             codAmountTwd: true, ntdSurchargeAmountTwd: true, payableAmountCny: true,
             settlementAmountCny: true, salesAmount: true, paymentFeeAmountCny: true,
+            allocationSnapshot: true,
           },
         })
         if (active !== null && isSameSettlement({
@@ -775,7 +997,9 @@ export class SlhReconciliationBatchService {
           settlementAmountCny: active.settlementAmountCny?.toFixed(2) ?? null,
           salesAmount: active.salesAmount?.toFixed(2) ?? null,
           paymentFeeAmountCny: active.paymentFeeAmountCny?.toFixed(2) ?? null,
-        }, input.rateSource, rate, amounts)) {
+        }, input.rateSource, rate, amounts)
+          && canonicalAllocationJson(readAllocationSnapshot(active.allocationSnapshot))
+            === canonicalAllocationJson(allocation)) {
           return slhReconciliationBatchFailure('SLH_RECON_SETTLEMENT_UNCHANGED', '已有相同的结算结果，未重复记录', 409)
         }
         // 先失效旧记录再写新的有效记录：部分唯一索引保证同一行最多一条有效。
@@ -794,11 +1018,11 @@ export class SlhReconciliationBatchService {
             loadingItemId: member.matchedLoadingItem.id,
             containerBatchId: member.matchedLoadingItem.containerBatchId,
             purchaseOrderId: purchaseOrder.id,
-            salesOrderId: salesOrder.id,
+            salesOrderId: currentSalesOrder.id,
             rateSource: input.rateSource,
             foreignUnitsPerCny: rate,
             paymentFeeRate: PAYMENT_FEE_RATE,
-            salesOrderNo: salesOrder.orderNo,
+            salesOrderNo: currentSalesOrder.orderNo,
             purchaseOrderNo: purchaseOrder.orderNo,
             containerBatchNo: member.matchedLoadingItem.containerBatch.containerBatchName,
             shipmentNo: member.matchedLoadingItem.shipment?.shipmentNo ?? null,
@@ -814,9 +1038,10 @@ export class SlhReconciliationBatchService {
             settlementAmountCny: amounts.settlementAmountCny,
             settlementCurrency: SETTLEMENT_CURRENCY,
             salesAmount: amounts.salesAmount,
-            salesCurrency: salesOrder.currencyCode,
+            salesCurrency: currentSalesOrder.currencyCode,
             paymentFeeAmountCny: amounts.paymentFeeAmountCny,
             paymentFeeCurrency: SETTLEMENT_CURRENCY,
+            allocationSnapshot: JSON.parse(allocationSnapshot) as Prisma.InputJsonValue,
             requestKeyHash: digest(requestKey),
             payloadHash: payloadBytes,
             createdById: context.actorUserId,
@@ -886,7 +1111,7 @@ export class SlhReconciliationBatchService {
       where: { id },
       select: {
         id: true, batchLineId: true, status: true, rateSource: true,
-        foreignUnitsPerCny: true, paymentFeeRate: true, createdAt: true,
+        foreignUnitsPerCny: true, paymentFeeRate: true, createdAt: true, allocationSnapshot: true,
         createdBy: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
       },
     })
@@ -903,6 +1128,8 @@ export class SlhReconciliationBatchService {
       createdByDisplayName: row.createdBy.displayName,
       createdByAvatarUrl: row.createdBy.profile?.avatarUrl ?? null,
       createdAt: row.createdAt.toISOString(),
+      allocations: (readAllocationSnapshot(row.allocationSnapshot)?.items ?? []) as SlhReconciliationSettlementAllocationDto[],
+      allocationParties: (readAllocationSnapshot(row.allocationSnapshot)?.parties ?? []) as SlhReconciliationSettlementAllocationPartyDto[],
     }
   }
 }

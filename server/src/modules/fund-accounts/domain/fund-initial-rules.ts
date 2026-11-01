@@ -34,7 +34,7 @@ function splitRule(
   }
 }
 
-/** 九个初始化业务类型的首版规则，是后续 migration 种子和运行时校验的真相源。 */
+/** 十个初始化业务类型的首版规则，是后续 migration 种子和运行时校验的真相源。 */
 export const INITIAL_FUND_POSTING_RULES: readonly FundPostingRule[] = [
   splitRule(
     'ORDER_SETTLEMENT',
@@ -56,6 +56,20 @@ export const INITIAL_FUND_POSTING_RULES: readonly FundPostingRule[] = [
     }],
   },
   splitRule('PURCHASE_PAYMENT', 'COST', 'DEBIT', 'POSITIVE_ONLY'),
+  {
+    // 顺联航账单分摊中财务指定给公司的部分：没有用户归属，只入公司账户。
+    postingTypeCode: 'SLH_BILL_COMPANY_ALLOCATION',
+    businessCategory: 'REVENUE',
+    amountSignPolicy: 'NON_ZERO_SIGNED',
+    requiresUser: false,
+    inputMode: 'STANDARD',
+    legs: [{
+      position: 1,
+      accountTarget: 'COMPANY',
+      directionPolicy: 'FOLLOW_AMOUNT_SIGN',
+      amountStrategy: 'FULL_AMOUNT',
+    }],
+  },
   {
     postingTypeCode: 'RENT_UTILITIES',
     businessCategory: 'COST',

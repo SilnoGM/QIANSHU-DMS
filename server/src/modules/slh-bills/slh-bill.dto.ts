@@ -41,6 +41,7 @@ export enum SlhBillChargeTypeDto {
   REDELIVERY = 'REDELIVERY', TRANSFER_DELIVERY = 'TRANSFER_DELIVERY', REMOTE_AREA = 'REMOTE_AREA',
   UNLOADING = 'UNLOADING', STORAGE = 'STORAGE', WAITING = 'WAITING', OVERSIZE = 'OVERSIZE',
   INSPECTION = 'INSPECTION', FORKLIFT = 'FORKLIFT', MINIMUM_CHARGE = 'MINIMUM_CHARGE', OTHER = 'OTHER',
+  PORT_FEE = 'PORT_FEE',
 }
 
 const AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,27})(?:\.\d{1,2})?$/u
@@ -117,6 +118,7 @@ export class SlhBillImportCreateDto extends SlhBillMediaAssetDto {
 }
 
 export class SlhBillLineChargeDto {
+  @ApiPropertyOptional({ type: 'string', format: 'uuid', nullable: true, description: 'Stable charge row id; settlement allocation keys are derived from it. Null only for import previews, which are not persisted.' }) id!: string | null
   @ApiProperty({ enum: SlhBillChargeTypeDto }) chargeType!: SlhBillChargeTypeDto
   @ApiProperty({ enum: ['CNY', 'TWD'] }) currencyCode!: string
   @ApiProperty({ type: 'string', description: 'Amount in the charge currency.' }) amount!: string

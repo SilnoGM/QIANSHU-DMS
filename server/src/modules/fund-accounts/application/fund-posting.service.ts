@@ -79,6 +79,9 @@ import {
   PURCHASE_PAYMENT_VOID_CONSUMER,
 } from './fund-purchase-payment'
 import {
+  SLH_BILL_COMPANY_ALLOCATION_POSTING_TYPE,
+  SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER,
+  SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE,
   SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER,
   SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER,
   SLH_BILL_FINANCE_SETTLEMENT_SOURCE,
@@ -150,6 +153,8 @@ const CONTROLLED_POSTING_TYPE_BY_SOURCE_CONSUMER: Readonly<Record<string, string
     SLH_BILL_SETTLEMENT_POSTING_TYPE,
   [`${SLH_BILL_FINANCE_SETTLEMENT_SOURCE}/${SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER}`]:
     SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE,
+  [`${SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE}/${SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER}`]:
+    SLH_BILL_COMPANY_ALLOCATION_POSTING_TYPE,
   [`${INVOICE_REQUEST_FUND_SOURCE}/${INVOICE_REQUEST_SETTLE_CONSUMER}`]:
     INVOICE_REQUEST_POSTING_TYPE,
   [`${FUND_WITHDRAWAL_FUND_SOURCE}/${FUND_WITHDRAWAL_APPROVE_CONSUMER}`]:
@@ -576,6 +581,10 @@ export class FundPostingApplicationService extends FundPostingService {
     // 顺联航账单对账：完成批次时逐笔入账，结算与金流费用是两个独立 consumer（都不支持反向）。
     const billSettlement = action === 'POST' && context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_SOURCE
       && [SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER, SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER].includes(context.consumerCode)
+    // 账单分摊中财务指定给公司账户的部分：没有用户归属，只动公司账户。
+    const billCompanyAllocation = action === 'POST'
+      && context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE
+      && context.consumerCode === SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER
     // 开票申请结算：只有一个动作（服务费与邮寄费合成一笔成本），不支持反向。
     const invoiceSettlement = action === 'POST' && context.sourceCode === INVOICE_REQUEST_FUND_SOURCE
       && context.consumerCode === INVOICE_REQUEST_SETTLE_CONSUMER
@@ -585,7 +594,8 @@ export class FundPostingApplicationService extends FundPostingService {
     const shipmentStorage = action === 'POST' && context.sourceCode === SHIPMENT_STORAGE_SOURCE_CODE
       && [SHIPMENT_STORAGE_RELEASE_CONSUMER_CODE, SHIPMENT_STORAGE_CLAIM_CONSUMER_CODE]
         .includes(context.consumerCode)
-    if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement && !invoiceSettlement && !fundWithdrawal && !shipmentStorage) {
+    if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement && !billCompanyAllocation
+      && !invoiceSettlement && !fundWithdrawal && !shipmentStorage) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     return normalizeFundAccountCommandContext({
@@ -641,13 +651,19 @@ export class FundPostingApplicationService extends FundPostingService {
     this.normalizeBusinessContext(context, 'POST')
     const request = this.normalizeBusinessRequest(context, input)
     const { postingType, plan, userShareRate } = await this.prepareBusinessPlan(transaction, request)
-    if (userShareRate === undefined || plan.companyShareRate === null) {
+    if (postingType.requiresUser) {
+      if (userShareRate === undefined || plan.companyShareRate === null) {
+        throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_INVALID)
+      }
+    }
+    else if (userShareRate !== undefined) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_INVALID)
     }
+    // 不需要用户的规则（公司分摊）没有比例快照，预览用 0/100 表示「全部由公司账户承担」。
     return Object.freeze({
       ruleVersionId: postingType.ruleVersion.id,
-      userShareRate,
-      companyShareRate: plan.companyShareRate,
+      userShareRate: userShareRate ?? '0.00',
+      companyShareRate: plan.companyShareRate ?? '100.00',
       businessAmount: plan.businessAmount,
       entries: plan.entries.map(({ accountTarget, direction, amount }) => ({ accountTarget, direction, amount })),
     })
@@ -1218,11 +1234,14 @@ export class FundPostingApplicationService extends FundPostingService {
     )
 
     // 不读取或锁定任何用户账户，也不借用付款人的比例；零额 USER 分录由引擎省略。
-    const userShareRate = stockPurchase ? '0.00' : targetAccounts.USER?.userShareRate ?? undefined
+    // 不需要用户的规则（公司分摊）同样不传比例：规则引擎会拒绝非用户规则携带比例。
+    const userShareRate = postingType.requiresUser
+      ? (stockPurchase ? '0.00' : targetAccounts.USER?.userShareRate ?? undefined)
+      : undefined
     const plan = calculateFundPostingPlan({
       rule: buildRule(postingType),
       amount: request.input.amount,
-      ...(userShareRate === undefined ? {} : { userShareRate }),
+      ...(postingType.requiresUser && userShareRate !== undefined ? { userShareRate } : {}),
     })
     // 可配置的结算规则仍须满足收款语义；财务通过只能增加账户余额。
     if (request.context.sourceCode === SALES_RECEIPT_SOURCE_CODE && (
@@ -1267,6 +1286,16 @@ export class FundPostingApplicationService extends FundPostingService {
         : postingType.businessCategory !== 'REVENUE'
           || !postingType.requiresUser
           || plan.entries.some(entry => entry.direction !== (businessAmountMinor > 0n ? 'CREDIT' : 'DEBIT'))
+      if (invalid) throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
+    }
+    // 账单公司分摊语义固定：没有用户比例，只走公司账户，方向跟随金额符号。
+    if (request.context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE) {
+      const businessAmountMinor = parseFundAmountMinor(plan.businessAmount)
+      const invalid = postingType.businessCategory !== 'REVENUE'
+        || postingType.requiresUser
+        || !postingType.ruleVersion.legs.some(leg => leg.accountTarget === 'COMPANY')
+        || businessAmountMinor === 0n
+        || plan.entries.some(entry => entry.direction !== (businessAmountMinor > 0n ? 'CREDIT' : 'DEBIT'))
       if (invalid) throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
     }
     // 开票申请结算语义固定：归属人的成本支出，必须大于 0 且只出账；
@@ -1314,9 +1343,11 @@ export class FundPostingApplicationService extends FundPostingService {
     if (lockedReplay !== null) return lockedReplay
 
     // 比较的快照就是后续分录使用的快照，不能在锁外检查后再读取另一组比例。
+    // 不需要用户的规则没有比例快照；预览统一用 0.00 表示，比较时按同一口径归一。
+    const expectedUserShareRate = userShareRate ?? '0.00'
     if (business !== undefined && (
       business.expectedContext.ruleVersionId !== postingType.ruleVersion.id
-      || business.expectedContext.userShareRate !== userShareRate
+      || business.expectedContext.userShareRate !== expectedUserShareRate
     )) {
       throw postingError(FUND_POSTING_ERROR_CODES.CONCURRENT_STATE_CHANGED)
     }

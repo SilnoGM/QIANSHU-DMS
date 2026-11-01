@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import request from 'supertest'
+import { Prisma } from '../src/generated/prisma/client'
 import type { SlhBillDto } from '../src/modules/slh-bills/slh-bill.dto'
 import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
 import { PAYMENT_FEE_RATE, resolveSettlementAmounts } from '../src/modules/slh-reconciliation-batches/slh-reconciliation-settlement.logic'
@@ -1017,7 +1018,11 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
           // 金额全为 null 表示「本行不涉及」——用于零流水的完成用例；不涉及代收时也不带 NTD 杂费。
           ...(options.payableAmountCny === null ? {} : { R: options.payableAmountCny, U: options.payableAmountCny }),
           ...(options.codAmountTwd === null ? {} : { V: options.codAmountTwd, W: options.surchargeNtd ?? '6000' }),
-          X: '入账测试', Y: '测试收货人一',
+          // 账单费用明细必须能还原 NTD 杂费（结算按备注逐项分摊），所以杂费非零时备注要带同额费用。
+          X: options.codAmountTwd === null || (options.surchargeNtd ?? '6000') === '0'
+            ? '入账测试'
+            : `入账测试 偏远费${options.surchargeNtd ?? '6000'}NT`,
+          Y: '测试收货人一',
         }],
       }))
       const created = (await createBatch(bill.id, randomUUID()).expect(201)).body as BatchDetail
@@ -1342,7 +1347,7 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       const codRow = {
         B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: 'WG-0316-0001', F: marks[0],
         G: '农用四轮微耕机', H: '1', I: 'CTN',
-        R: '4555', U: '4555', V: '129000', W: '6000', X: '入账测试', Y: '测试收货人一',
+        R: '4555', U: '4555', V: '129000', W: '6000', X: '入账测试 偏远费6000NT', Y: '测试收货人一',
       }
       const plainRowOf = (mark: string, index: number) => ({
         B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: `WG-0316-000${index + 1}`, F: mark,
@@ -1611,6 +1616,169 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       await expect(h.prisma.fundPostingBatch.create({ data: { ...forged, userId: null, userShareRateSnapshot: null, companyShareRateSnapshot: null } }))
         .rejects.toThrow(/fund_posting_batches_slh_bill_settlement_shape_check/u)
       expect(await h.prisma.fundPostingBatch.count({ where: { businessSourceCodeSnapshot: 'SLH_BILL_FINANCE_SETTLEMENT', businessId: base.businessId } })).toBe(0)
+    })
+  })
+
+  describe('结算分摊：甲（原销售单）/乙（当前销售单）/公司', () => {
+    const excelSerial = (date: string) => String(Math.round((Date.parse(`${date}T00:00:00.000Z`) - Date.UTC(1899, 11, 30)) / 86_400_000))
+
+    /** 货件来源仍是甲，但当前归属改到乙：模拟寄仓调货后的账单。 */
+    async function transferToOtherSalesOrder() {
+      const originShipment = await h.shipment({ salesLinked: true })
+      const currentShipment = await h.shipment({ salesLinked: true })
+      if (originShipment.source === null || currentShipment.source === null) {
+        throw new Error('sales linked shipment must create a sales order')
+      }
+      await widenSalesTotal(currentShipment.source.id)
+      const last = await h.prisma.shipmentOwnershipEvent.findFirst({
+        where: { shipmentId: originShipment.part.id },
+        orderBy: { sequence: 'desc' },
+        select: { sequence: true },
+      })
+      await h.prisma.shipmentOwnershipEvent.create({
+        data: {
+          shipmentId: originShipment.part.id,
+          sequence: (last?.sequence ?? 0) + 1,
+          ownerType: 'SALES_ORDER',
+          ownerSalesOrderId: currentShipment.source.id,
+          reason: 'CORRECTION',
+          actorUserId: h.fixture.actor.id,
+          requestKey: randomUUID(),
+          payloadHash: Buffer.alloc(32, 7),
+        },
+      })
+      return { originSalesOrderId: originShipment.source.id, currentSalesOrderId: currentShipment.source.id, partId: originShipment.part.id }
+    }
+
+    /** 一张账单行：运费 1000 + 二派费 50，代收 52000；二派费默认归甲。 */
+    async function billWithOriginCharge(date: string, containerBatchName: string, mark: string, partId: string) {
+      await createContainer(containerBatchName, date, [{ mark, shipmentId: partId }])
+      const bill = await importBill(`分摊-${containerBatchName}`, createSlhBillFixture({
+        rows: [{
+          B: excelSerial(date), C: containerBatchName, D: '千树贸易', E: `WG-${containerBatchName}-0001`, F: mark,
+          G: '农用四轮微耕机', H: '1', I: 'CTN',
+          R: '1000', T: '50', U: '1050', V: '52000', W: '0',
+          X: '二派费50', Y: '测试收货人一',
+        }],
+      }))
+      const created = (await createBatch(bill.id, randomUUID()).expect(201)).body as BatchDetail
+      const [member] = created.members
+      if (member === undefined) throw new Error('batch has no member')
+      return { batchId: created.id, memberId: member.id, billId: bill.id }
+    }
+
+    const settleAmounts = (salesAmount: string) => resolveSettlementAmounts({
+      codAmountTwd: '52000.00', ntdSurchargeAmountTwd: '0.00', payableAmountCny: '1050.00',
+      salesAmount, rate: '5.2000', paymentFeeRate: PAYMENT_FEE_RATE,
+    })
+
+    async function settleWithTargets(batchId: string, memberId: string, salesAmount: string, allocationTargets?: unknown[]) {
+      const response = await browser.post(`${BASE}/${batchId}/settlements`).set(packagingHeaders).set('Idempotency-Key', randomUUID())
+        .send({
+          batchLineId: memberId, rateSource: 'SYSTEM', rate: '5.2000', amounts: settleAmounts(salesAmount),
+          ...(allocationTargets === undefined ? {} : { allocationTargets }),
+        }).expect(201)
+      return response.body as { id: string, allocationParties: Array<Record<string, unknown>> }
+    }
+
+    it('默认分摊：二派费归甲、正常费用归乙，代收回填只回到乙', async () => {
+      await setSystemRate('5.2000')
+      const date = '2026-03-20'
+      const containerBatchName = '0320-01柜'
+      const mark = 'M-032026'
+      const { currentSalesOrderId, partId } = await transferToOtherSalesOrder()
+      const { batchId, memberId } = await billWithOriginCharge(date, containerBatchName, mark, partId)
+      const settlement = await settleWithTargets(batchId, memberId, WIDE_SALES_TOTAL)
+
+      // 父级结算 8950 = 乙 9000 + 甲 -50；金流费按乙销售金额单列。
+      expect(settlement.allocationParties).toEqual([
+        expect.objectContaining({ target: 'ORIGIN_ORDER', settlementAmountCny: '-50.00', paymentFeeAmountCny: null }),
+        expect.objectContaining({ target: 'CURRENT_ORDER', settlementAmountCny: '9000.00', paymentFeeAmountCny: '1346.15' }),
+      ])
+      await browser.post(`${BASE}/${batchId}/complete`).set(packagingHeaders).send({}).expect(200)
+
+      const postings = await h.prisma.fundPostingBatch.findMany({
+        where: { businessId: settlement.id },
+        orderBy: { postedAt: 'asc' },
+        select: { postingTypeCodeSnapshot: true, metadata: true, businessAmount: true },
+      })
+      expect(postings.map(posting => [
+        (posting.metadata as Record<string, unknown> | null)?.allocationTarget,
+        posting.postingTypeCodeSnapshot,
+        posting.businessAmount.toFixed(2),
+      ])).toEqual([
+        ['ORIGIN_ORDER', 'ORDER_SETTLEMENT', '-50.00'],
+        ['CURRENT_ORDER', 'ORDER_SETTLEMENT', '9000.00'],
+      ])
+      const codPayments = await h.prisma.salesOrderPayment.findMany({
+        where: { origin: 'COD_SETTLEMENT', salesOrderId: currentSalesOrderId },
+        select: { salesOrderId: true, amount: true, fundPostingBatchId: true },
+      })
+      expect(codPayments).toEqual([
+        expect.objectContaining({ salesOrderId: currentSalesOrderId, amount: new Prisma.Decimal('52000.00') }),
+      ])
+      expect(codPayments[0]?.fundPostingBatchId).not.toBeNull()
+    })
+
+    it('手动改目标：运费指定公司时只动公司账户，甲/乙合计不变', async () => {
+      await setSystemRate('5.2000')
+      const date = '2026-03-21'
+      const containerBatchName = '0321-01柜'
+      const mark = 'M-032126'
+      const { partId } = await transferToOtherSalesOrder()
+      const { batchId, memberId } = await billWithOriginCharge(date, containerBatchName, mark, partId)
+      const settlement = await settleWithTargets(batchId, memberId, WIDE_SALES_TOTAL, [
+        { key: 'FREIGHT', target: 'COMPANY', reason: '客户投诉，公司承担运费' },
+      ])
+
+      expect(settlement.allocationParties).toEqual([
+        expect.objectContaining({ target: 'ORIGIN_ORDER', settlementAmountCny: '-50.00' }),
+        expect.objectContaining({ target: 'COMPANY', settlementAmountCny: '-1000.00' }),
+        expect.objectContaining({ target: 'CURRENT_ORDER', settlementAmountCny: '10000.00' }),
+      ])
+      await browser.post(`${BASE}/${batchId}/complete`).set(packagingHeaders).send({}).expect(200)
+
+      const company = await h.prisma.fundPostingBatch.findFirstOrThrow({
+        where: { businessId: settlement.id, businessSourceCodeSnapshot: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY' },
+        select: { postingTypeCodeSnapshot: true, userId: true, userShareRateSnapshot: true, companyShareRateSnapshot: true, businessAmount: true },
+      })
+      expect(company).toMatchObject({
+        postingTypeCodeSnapshot: 'SLH_BILL_COMPANY_ALLOCATION',
+        userId: null, userShareRateSnapshot: null, companyShareRateSnapshot: null,
+      })
+      expect(company.businessAmount.toFixed(2)).toBe('-1000.00')
+    })
+
+    it('甲已取消仍可扣费：完成不因原销售单状态被拒', async () => {
+      await setSystemRate('5.2000')
+      const date = '2026-03-22'
+      const containerBatchName = '0322-01柜'
+      const mark = 'M-032226'
+      const { originSalesOrderId, partId } = await transferToOtherSalesOrder()
+      const { batchId, memberId } = await billWithOriginCharge(date, containerBatchName, mark, partId)
+      await settleWithTargets(batchId, memberId, WIDE_SALES_TOTAL)
+      // 真实取消会同时终止挂靠的采购单并关闭应付；只改销售单会触发「有效采购引用已取消销售单」的数据不变量。
+      const part = await h.prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: partId }, select: { purchaseOrderId: true } })
+      await h.prisma.$transaction(async (tx) => {
+        const payables = await tx.purchaseOrderPayable.findMany({
+          where: { purchaseOrderId: part.purchaseOrderId },
+          select: { id: true },
+        })
+        for (const payable of payables) {
+          // 应付身份不可变，只允许 closed_at 与 version 成对推进。
+          await tx.purchaseOrderPayable.update({
+            where: { id: payable.id },
+            data: { closedAt: new Date(), version: { increment: 1 } },
+          })
+        }
+        await tx.purchaseOrder.update({ where: { id: part.purchaseOrderId }, data: { orderStatus: 'CANCELLED' } })
+      })
+      await h.prisma.salesOrder.update({ where: { id: originSalesOrderId }, data: { orderStatus: 'CANCELLED' } })
+
+      await browser.post(`${BASE}/${batchId}/complete`).set(packagingHeaders).send({}).expect(200)
+      expect(await h.prisma.fundPostingBatch.count({
+        where: { businessId: (await h.prisma.slhReconciliationSettlement.findFirstOrThrow({ where: { batchId }, select: { id: true } })).id },
+      })).toBe(2)
     })
   })
 
