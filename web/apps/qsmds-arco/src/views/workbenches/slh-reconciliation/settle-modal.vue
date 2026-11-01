@@ -1,14 +1,24 @@
 <script setup lang="ts">
 import type { StepsItem } from '@fantastic-admin/components'
-import type { SlhReconciliationSettleRateCard, SlhReconciliationSettleRateSource, SlhReconciliationSettleTermWidth, SlhReconciliationSettleTone } from './settle-modal.logic'
+import type {
+  SlhReconciliationSettleRateCard,
+  SlhReconciliationSettleRateSource,
+  SlhReconciliationSettleTermWidth,
+  SlhReconciliationSettleTone,
+  SlhSettleAllocationItemView,
+  SlhSettleAllocationOverride,
+  SlhSettleAllocationTarget,
+} from './settle-modal.logic'
 import type { SlhReconciliationBatchDetailDto, SlhReconciliationBatchMemberDto } from '@/api/generated/types.gen'
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import {
+  buildSettleAllocation,
   buildSettleRateCards,
   buildSettleSummary,
+  formatBareAmount,
   resolveSettleFailureKey,
 
 } from './settle-modal.logic'
@@ -67,6 +77,93 @@ const summary = computed(() => (
     ? null
     : buildSettleSummary(props.member, selectedRate.value, currencyCatalog.currencies.value, translate)
 ))
+/**
+ * 逐项入账目标：财务只改目标不改金额；未改动的项不提交，服务端按默认归属入账。
+ * COD 固定归乙，界面禁用选择而不是允许后拒绝。
+ */
+const allocationOverrides = ref<Record<string, SlhSettleAllocationOverride>>({})
+const allocation = computed(() => (
+  props.member === null
+    ? null
+    : buildSettleAllocation(
+        props.member,
+        summary.value?.payload.paymentFeeAmountCny ?? null,
+        selectedRate.value,
+        allocationOverrides.value,
+      )
+))
+const allocationBlocked = computed(() => allocation.value !== null && (
+  allocation.value.breakdownMismatch
+  || allocation.value.reasonMissing
+  || allocation.value.sourceMissing
+))
+const allocationTargetOptions = computed(() => {
+  const member = props.member
+  const origin = member?.salesOrder
+  const current = member?.currentSalesOrder
+  if (origin === null || origin === undefined || current === null || current === undefined) {
+    return []
+  }
+  const options = origin.id === current.id
+    ? []
+    : [{ label: t('slhReconciliation.settle.allocation.targetOrigin', { orderNo: origin.orderNo }), value: 'ORIGIN_ORDER' }]
+  options.push({ label: t('slhReconciliation.settle.allocation.targetCurrent', { orderNo: current.orderNo }), value: 'CURRENT_ORDER' })
+  options.push({ label: t('slhReconciliation.settle.allocation.targetCompany'), value: 'COMPANY' })
+  return options
+})
+
+function allocationItemLabel(item: SlhSettleAllocationItemView): string {
+  if (item.sourceType === 'BILL_CHARGE') {
+    return t(`slhBill.chargeType.${item.chargeType ?? 'OTHER'}`)
+  }
+  return t(`slhReconciliation.settle.allocation.source${item.sourceType}`)
+}
+
+function allocationItemAmount(item: SlhSettleAllocationItemView): string {
+  return formatBareAmount(item.amount, item.currencyCode, currencyCatalog.currencies.value)
+}
+
+function allocationPartyLabel(target: SlhSettleAllocationTarget, orderNo: string | null): string {
+  if (target === 'COMPANY') {
+    return t('slhReconciliation.settle.allocation.partyCompany')
+  }
+  const key = target === 'ORIGIN_ORDER' ? 'partyOrigin' : 'partyCurrent'
+  return t(`slhReconciliation.settle.allocation.${key}`, { orderNo: orderNo ?? '' })
+}
+
+/** 目标合计按符号着色：负红、正绿，零保持前景色。 */
+function allocationPartyTone(value: string | null): string {
+  if (value === null || value.startsWith('0') || value === '-0.00') {
+    return ''
+  }
+  return value.startsWith('-') ? 'text-destructive' : 'text-primary'
+}
+
+function changeAllocationTarget(key: string, rawTarget: unknown): void {
+  const item = allocation.value?.items.find(entry => entry.key === key)
+  const target = String(rawTarget) as SlhSettleAllocationTarget
+  if (item === undefined || item.sourceType === 'COD') {
+    return
+  }
+  if (target === item.defaultTarget) {
+    const next = { ...allocationOverrides.value }
+    delete next[key]
+    allocationOverrides.value = next
+    return
+  }
+  allocationOverrides.value = {
+    ...allocationOverrides.value,
+    [key]: { target, reason: allocationOverrides.value[key]?.reason ?? '' },
+  }
+}
+
+function changeAllocationReason(key: string, rawReason: string): void {
+  const existing = allocationOverrides.value[key]
+  if (existing === undefined) {
+    return
+  }
+  allocationOverrides.value = { ...allocationOverrides.value, [key]: { ...existing, reason: rawReason } }
+}
 /** 结果色：结算金额按符号（负红/正绿）、金流费恒红，颜色只由逻辑层给的 tone 决定。 */
 const RESULT_CARD_CLASSES: Record<SlhReconciliationSettleTone, string> = {
   danger: 'border-destructive/30 bg-destructive/10 text-destructive',
@@ -100,12 +197,13 @@ const RESULT_VALUE_SLOT_CLASS = 'min-w-[12ch]'
  */
 const DASHED_GROUP_CLASSES = 'flex flex-wrap flex-1 gap-2 min-w-0 max-w-[27.5rem] px-2 py-2 border border-dashed border-border rounded-xl items-center'
 
-/** 每次打开都重置：回到第一步、清掉上一行的选择，并换一个提交标识。 */
+/** 每次打开都重置：回到第一步、清掉上一行的选择与分摊覆盖，并换一个提交标识。 */
 watch(() => props.modelValue, (open) => {
   if (open) {
     step.value = 0
     selectedSource.value = null
     selectedRate.value = null
+    allocationOverrides.value = {}
     settlementKey.value = crypto.randomUUID()
   }
 })
@@ -126,10 +224,19 @@ function selectRate(card: SlhReconciliationSettleRateCard): void {
  */
 async function confirmSettlement(): Promise<void> {
   const current = summary.value
+  const currentAllocation = allocation.value
   const member = props.member
   const batch = props.batch
-  if (current === null || member === null || batch === null
+  if (current === null || currentAllocation === null || member === null || batch === null
     || selectedSource.value === null || selectedRate.value === null) {
+    return
+  }
+  if (currentAllocation.breakdownMismatch) {
+    toast.error(t('slhReconciliation.settle.allocation.breakdownMismatch'))
+    return
+  }
+  if (currentAllocation.reasonMissing) {
+    toast.error(t('slhReconciliation.settle.allocation.reasonRequired'))
     return
   }
   controller?.abort()
@@ -142,6 +249,7 @@ async function confirmSettlement(): Promise<void> {
       rateSource: selectedSource.value,
       rate: selectedRate.value,
       amounts: current.payload,
+      ...(currentAllocation.payload.length === 0 ? {} : { allocationTargets: [...currentAllocation.payload] }),
     }, settlementKey.value, pending.signal)
     if (pending.signal.aborted) {
       return
@@ -391,6 +499,91 @@ const canNext = computed(() => selectedRate.value !== null)
           {{ t(block.noteKey) }}
         </p>
       </article>
+
+      <!-- 入账分摊：财务逐项确认目标；甲/乙按销售订单出单人比例入账，公司目标全额由公司承担。 -->
+      <article v-if="allocation !== null" class="p-4 border border-border rounded-lg flex flex-col gap-3 min-w-0">
+        <header class="flex flex-wrap gap-x-3 gap-y-1 items-baseline justify-between">
+          <h3 class="qs-type-section-title m-0 flex gap-2 items-center">
+            <span class="rounded-full bg-primary h-4.5 w-1" aria-hidden="true" />
+            {{ t('slhReconciliation.settle.allocation.title') }}
+          </h3>
+          <p class="qs-type-meta text-muted-foreground m-0">
+            {{ t('slhReconciliation.settle.allocation.note') }}
+          </p>
+        </header>
+
+        <FaAlert
+          v-if="allocation.breakdownMismatch"
+          variant="destructive"
+          :title="t('slhReconciliation.settle.allocation.breakdownMismatch')"
+        />
+
+        <template v-else>
+          <div class="flex flex-col gap-2 min-w-0">
+            <div
+              v-for="item in allocation.items"
+              :key="item.key"
+              class="p-3 border border-border rounded-lg bg-muted/20 flex flex-col gap-2 min-w-0"
+            >
+              <div class="flex flex-wrap gap-x-3 gap-y-2 min-w-0 items-center">
+                <span class="text-sm font-medium min-w-0 truncate">{{ allocationItemLabel(item) }}</span>
+                <span class="text-sm qs-type-data text-muted-foreground tabular-nums">
+                  {{ allocationItemAmount(item) }} {{ item.currencyCode }}
+                </span>
+                <span
+                  v-if="item.sourceType === 'COD'"
+                  class="qs-type-meta text-muted-foreground ml-auto px-2 py-0.5 border border-border rounded-md"
+                >
+                  {{ t('slhReconciliation.settle.allocation.codFixed') }}
+                </span>
+                <FaSelect
+                  v-else
+                  :model-value="item.target"
+                  :options="allocationTargetOptions"
+                  class="ml-auto max-w-full w-64"
+                  @update:model-value="changeAllocationTarget(item.key, $event)"
+                />
+              </div>
+              <div v-if="item.overridden" class="flex flex-col gap-1">
+                <FaInput
+                  :model-value="item.reason"
+                  maxlength="500"
+                  :placeholder="t('slhReconciliation.settle.allocation.reasonPlaceholder')"
+                  @update:model-value="changeAllocationReason(item.key, String($event))"
+                />
+                <span v-if="item.reason === ''" class="text-xs text-destructive">
+                  {{ t('slhReconciliation.settle.allocation.reasonRequired') }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="gap-2 grid sm:grid-cols-3">
+            <div
+              v-for="party in allocation.parties"
+              :key="party.target"
+              class="px-3 py-2 border border-border rounded-lg bg-card flex flex-col gap-1 min-w-0"
+            >
+              <span class="qs-type-meta text-muted-foreground truncate" :title="allocationPartyLabel(party.target, party.salesOrderNo)">
+                {{ allocationPartyLabel(party.target, party.salesOrderNo) }}
+              </span>
+              <span class="text-base qs-type-data tabular-nums" :class="allocationPartyTone(party.settlementAmountCny)">
+                {{ party.settlementAmountCny ?? '—' }} <span class="text-xs font-normal">CNY</span>
+              </span>
+              <span v-if="party.paymentFeeAmountCny !== null" class="qs-type-meta text-destructive">
+                {{ t('slhReconciliation.settle.allocation.partyFee', { amount: party.paymentFeeAmountCny }) }}
+              </span>
+            </div>
+          </div>
+
+          <p v-if="allocation.reasonMissing" class="text-sm text-destructive m-0">
+            {{ t('slhReconciliation.settle.allocation.reasonRequired') }}
+          </p>
+          <p class="qs-type-meta text-muted-foreground m-0">
+            {{ t('slhReconciliation.settle.allocation.partyNote') }}
+          </p>
+        </template>
+      </article>
     </section>
 
     <template #footer>
@@ -419,6 +612,7 @@ const canNext = computed(() => selectedRate.value !== null)
         v-else
         type="button"
         class="px-7 min-h-11"
+        :disabled="allocationBlocked"
         @click="confirmSettlement"
       >
         {{ t('slhReconciliation.settle.confirm') }}

@@ -46,6 +46,7 @@ import {
   resolveRecordAmountTone,
 } from '../../src/views/workbenches/slh-reconciliation/records-modal.logic'
 import {
+  buildSettleAllocation,
   buildSettleRateCards,
   buildSettleSummary,
   FULL_FLOW_FEE_RATE,
@@ -902,12 +903,169 @@ test('对账信息弹窗：提交载荷是原始值（本行不涉及为 null）
   assert.equal(resolveSettleFailureKey(undefined), 'slhReconciliation.settle.errorUnknown')
 })
 
+/** 分摊测试的成员：甲（原销售单）与乙（当前销售单）不同，账单费用可完整拆分。 */
+function allocationMember(): SlhReconciliationBatchMemberDto {
+  return memberFixture({
+    salesOrder: salesOrderFixture({ id: 'so-a', orderNo: 'SO-A' }),
+    currentSalesOrder: salesOrderFixture({ id: 'so-b', orderNo: 'SO-B', agreedTotalAmount: '5000.00' }),
+    charges: [
+      { id: 'charge-redelivery', chargeType: 'REDELIVERY', currencyCode: 'CNY', amount: '50.00' },
+      { id: 'charge-storage', chargeType: 'STORAGE', currencyCode: 'TWD', amount: '100.00' },
+      { id: 'charge-other', chargeType: 'OTHER', currencyCode: 'CNY', amount: '30.00' },
+    ],
+    freightAmountCny: '200.00',
+    codHandlingAmountCny: '10.00',
+    surchargeAmountCny: '80.00',
+    codAmountTwd: '1000.00',
+    ntdSurchargeAmountTwd: '100.00',
+    payableAmountCny: '290.00',
+  })
+}
+
+test('入账分摊：甲承担二派/寄仓、乙承担其余费用，金流费单列不重复入账', () => {
+  const allocation = buildSettleAllocation(allocationMember(), '7.00', '5.00', {})
+
+  assert.deepEqual(allocation.items.map(item => [item.key, item.defaultTarget, item.target]), [
+    ['CHARGE:charge-redelivery', 'ORIGIN_ORDER', 'ORIGIN_ORDER'],
+    ['CHARGE:charge-storage', 'ORIGIN_ORDER', 'ORIGIN_ORDER'],
+    ['CHARGE:charge-other', 'CURRENT_ORDER', 'CURRENT_ORDER'],
+    ['FREIGHT', 'CURRENT_ORDER', 'CURRENT_ORDER'],
+    ['COD_HANDLING', 'CURRENT_ORDER', 'CURRENT_ORDER'],
+    ['COD', 'CURRENT_ORDER', 'CURRENT_ORDER'],
+    ['PAYMENT_FEE', 'CURRENT_ORDER', 'CURRENT_ORDER'],
+  ])
+  // 结算金额只累计本行的钱：甲 -70（二派 50 + 寄仓 100÷5），乙 -40（杂费 30 + 运费 200 + 手续费 10 − 代收 200）。
+  assert.deepEqual(allocation.parties.map(party => [party.target, party.salesOrderNo, party.settlementAmountCny, party.paymentFeeAmountCny]), [
+    ['ORIGIN_ORDER', 'SO-A', '-70.00', null],
+    ['CURRENT_ORDER', 'SO-B', '-40.00', '7.00'],
+  ])
+  assert.equal(allocation.breakdownMismatch, false)
+  assert.equal(allocation.reasonMissing, false)
+  assert.deepEqual(allocation.payload, [])
+})
+
+test('入账分摊：手动改目标必须填原因，COD 固定归乙且不允许改目标', () => {
+  const changed = buildSettleAllocation(allocationMember(), '7.00', '5.00', {
+    FREIGHT: { target: 'COMPANY', reason: '客户投诉，公司承担运费' },
+  })
+  assert.deepEqual(changed.items.find(item => item.key === 'FREIGHT')?.target, 'COMPANY')
+  assert.deepEqual(changed.items.find(item => item.key === 'FREIGHT')?.overridden, true)
+  assert.deepEqual(changed.payload, [{ key: 'FREIGHT', target: 'COMPANY', reason: '客户投诉，公司承担运费' }])
+  assert.deepEqual(changed.parties.map(party => [party.target, party.settlementAmountCny]), [
+    ['ORIGIN_ORDER', '-70.00'],
+    ['CURRENT_ORDER', '160.00'],
+    ['COMPANY', '-200.00'],
+  ])
+
+  const missingReason = buildSettleAllocation(allocationMember(), '7.00', '5.00', {
+    FREIGHT: { target: 'COMPANY', reason: '   ' },
+  })
+  assert.equal(missingReason.reasonMissing, true)
+
+  const codOverride = buildSettleAllocation(allocationMember(), '7.00', '5.00', {
+    COD: { target: 'ORIGIN_ORDER', reason: '转嫁给甲' },
+  })
+  assert.equal(codOverride.items.find(item => item.key === 'COD')?.target, 'CURRENT_ORDER')
+  assert.equal(codOverride.items.find(item => item.key === 'COD')?.overridden, false)
+  assert.deepEqual(codOverride.payload, [])
+})
+
+test('入账分摊：费用明细对不上附加费时阻断；甲就是乙时不重复生成目标', () => {
+  const mismatch = buildSettleAllocation(memberFixture({
+    salesOrder: salesOrderFixture({ id: 'so-a', orderNo: 'SO-A' }),
+    currentSalesOrder: salesOrderFixture({ id: 'so-b', orderNo: 'SO-B' }),
+    charges: [{ id: 'charge-other', chargeType: 'OTHER', currencyCode: 'CNY', amount: '30.00' }],
+    freightAmountCny: null,
+    codHandlingAmountCny: null,
+    surchargeAmountCny: '80.00',
+    codAmountTwd: null,
+    ntdSurchargeAmountTwd: null,
+    payableAmountCny: '80.00',
+  }), null, '5.00', {})
+  assert.equal(mismatch.breakdownMismatch, true)
+
+  const sameOrder = buildSettleAllocation(memberFixture({
+    salesOrder: salesOrderFixture({ id: 'so-a', orderNo: 'SO-A' }),
+    currentSalesOrder: salesOrderFixture({ id: 'so-a', orderNo: 'SO-A' }),
+    charges: [{ id: 'charge-redelivery', chargeType: 'REDELIVERY', currencyCode: 'CNY', amount: '50.00' }],
+    freightAmountCny: null,
+    codHandlingAmountCny: null,
+    surchargeAmountCny: '50.00',
+    codAmountTwd: null,
+    ntdSurchargeAmountTwd: null,
+    payableAmountCny: '50.00',
+  }), null, '5.00', {})
+  assert.deepEqual(sameOrder.parties.map(party => [party.target, party.settlementAmountCny]), [['CURRENT_ORDER', '-50.00']])
+})
+
+test('对账结算弹窗：分摊逐项选择目标、改目标必填原因、COD 只读、提交带上覆盖项', async () => {
+  const page = await readFile(new URL('../../src/views/workbenches/slh-reconciliation/settle-modal.vue', import.meta.url), 'utf8')
+  assert.match(page, /buildSettleAllocation/u)
+  assert.match(page, /:disabled="allocationBlocked"/u)
+  assert.match(page, /allocationTargets: \[\.\.\.currentAllocation\.payload\]/u)
+  assert.match(page, /item\.sourceType === 'COD'[\s\S]{0,200}?codFixed/u)
+  assert.match(page, /item\.overridden[\s\S]{0,400}?changeAllocationReason/u)
+  assert.match(page, /t\('slhReconciliation\.settle\.allocation\.breakdownMismatch'\)/u)
+})
+
 test('金流费率在两个依赖域里保持一致：后端常量与前端展示口径必须相等', async () => {
   const serverLogic = await readFile(new URL('../../../../../server/src/modules/slh-reconciliation-batches/slh-reconciliation-settlement.logic.ts', import.meta.url), 'utf8')
   const match = serverLogic.match(/export const PAYMENT_FEE_RATE = '([\d.]+)'/u)
 
   assert.notEqual(match, null)
   assert.equal(Number(match?.[1]), FULL_FLOW_FEE_RATE)
+})
+
+test('核对记录弹窗：新结算记录展示逐项分摊与目标合计，历史记录没有快照时不渲染该段', () => {
+  const record: SlhReconciliationSettlementRecordDto = {
+    id: 'settlement-allocated',
+    status: 'ACTIVE',
+    rateSource: 'EMBEDDED',
+    foreignUnitsPerCny: '5.00',
+    paymentFeeRate: '0.007000000000',
+    codAmountTwd: '1000.00',
+    codAmountCurrency: 'TWD',
+    ntdSurchargeAmountTwd: '100.00',
+    ntdSurchargeCurrency: 'TWD',
+    payableAmountCny: '290.00',
+    payableCurrency: 'CNY',
+    settlementAmountCny: '-110.00',
+    settlementCurrency: 'CNY',
+    salesAmount: '5000.0000',
+    salesCurrency: 'TWD',
+    paymentFeeAmountCny: '7.00',
+    paymentFeeCurrency: 'CNY',
+    slhBillNo: 'CBILL/202609-01',
+    salesOrderNo: 'SO-B',
+    purchaseOrderNo: 'PO-1',
+    containerBatchNo: '1211-01柜',
+    shipmentNo: null,
+    warehouseReceiptReference: 'WG-0078-0072',
+    shippingMarkText: 'J-121125',
+    createdByDisplayName: '张三',
+    createdAt: '2026-10-11T07:05:24.555Z',
+    allocations: [
+      { key: 'CHARGE:charge-redelivery', sourceType: 'BILL_CHARGE', chargeType: 'REDELIVERY', currencyCode: 'CNY', amount: '50.00', defaultTarget: 'ORIGIN_ORDER', target: 'ORIGIN_ORDER', signedContributionCny: '-50', overridden: false, reason: null },
+      { key: 'FREIGHT', sourceType: 'FREIGHT', chargeType: 'FREIGHT', currencyCode: 'CNY', amount: '200.00', defaultTarget: 'CURRENT_ORDER', target: 'COMPANY', signedContributionCny: '-200', overridden: true, reason: '公司承担' },
+    ],
+    allocationParties: [
+      { target: 'ORIGIN_ORDER', salesOrderId: 'so-a', salesOrderNo: 'SO-A', codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null, settlementAmountCny: '-70.00', salesAmount: null, paymentFeeAmountCny: null },
+      { target: 'CURRENT_ORDER', salesOrderId: 'so-b', salesOrderNo: 'SO-B', codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null, settlementAmountCny: '160.00', salesAmount: '5000.0000', paymentFeeAmountCny: '7.00' },
+      { target: 'COMPANY', salesOrderId: null, salesOrderNo: null, codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null, settlementAmountCny: '-200.00', salesAmount: null, paymentFeeAmountCny: null },
+    ],
+  }
+  const card = buildSlhReconciliationRecordCard(record, SETTLE_CURRENCIES, settleTranslate)
+  const group = card.groups.find(entry => entry.id === 'allocation')
+  assert.equal(group?.titleKey, 'slhReconciliation.records.allocationTitle')
+  assert.deepEqual(group?.rows.map(row => `${row.label}:${row.value}`), [
+    '[slhBill.chargeType.REDELIVERY]:50.00 CNY → [slhReconciliation.settle.allocation.targetOrigin:SO-A]',
+    '[slhReconciliation.settle.allocation.sourceFREIGHT]:200.00 CNY → [slhReconciliation.settle.allocation.targetCompany]',
+    '[slhReconciliation.settle.allocation.partyOrigin:SO-A]:-70.00 CNY',
+    '[slhReconciliation.settle.allocation.partyCurrent:SO-B]:160.00 CNY',
+    '[slhReconciliation.settle.allocation.partyCompany]:-200.00 CNY',
+  ])
+  const legacy = buildSlhReconciliationRecordCard({ ...record, allocations: [], allocationParties: [] }, SETTLE_CURRENCIES, settleTranslate)
+  assert.equal(legacy.groups.some(entry => entry.id === 'allocation'), false)
 })
 
 test('核对记录弹窗：卡片按「状态 / 汇率费率 / 六个金额 / 来源」摊平，金额按符号与恒红着色', () => {

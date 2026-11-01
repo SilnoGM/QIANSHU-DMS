@@ -72,7 +72,9 @@
       "INSPECTION": "验机费",
       "FORKLIFT": "堆高机",
       "MINIMUM_CHARGE": "最低消费",
-      "OTHER": "其他"
+      "OTHER": "其他",
+
+      "PORT_FEE": "港口费"
     },
     "chargesHint": "费用明细按币种与费别列在每条明细的「费用明细」列",
     "column": {
@@ -460,6 +462,26 @@
       "paymentFeeOncePerSalesOrder": "金流费用按销售单计一次：同一销售单的其他明细行不重复计入",
       "settlementTitle": "账单金额结算明细",
       "paymentFeeTitle": "全流程金流服务费",
+      "allocation": {
+        "title": "入账分摊",
+        "note": "甲/乙按销售订单出单人比例入账；公司目标全额由公司账户承担。",
+        "breakdownMismatch": "账单费用明细与附加费/NTD杂费不一致，无法拆分入账目标；请核对备注费用后重新导入账单",
+        "reasonPlaceholder": "调整入账目标的原因（必填）",
+        "reasonRequired": "手动调整入账目标时必须填写原因",
+        "codFixed": "固定归乙",
+        "targetOrigin": "甲 · {orderNo}",
+        "targetCurrent": "乙 · {orderNo}",
+        "targetCompany": "公司账户",
+        "partyOrigin": "甲 {orderNo}",
+        "partyCurrent": "乙 {orderNo}",
+        "partyCompany": "公司账户",
+        "partyFee": "金流费 {amount}",
+        "partyNote": "甲/乙金额为按出单人分摊前的订单合计；公司目标不再参与出单人比例拆分。",
+        "sourceFREIGHT": "运费",
+        "sourceCOD_HANDLING": "代收手续费",
+        "sourceCOD": "代收货款",
+        "sourcePAYMENT_FEE": "金流费"
+      },
       "previous": "上一步",
       "next": "下一步",
       "confirm": "确定结算",
@@ -474,6 +496,10 @@
       "errorBatchCompleted": "该批次已经结束，不能再确认结算",
       "errorStateChanged": "资料已变化或正在处理，请刷新后重试",
       "errorForbidden": "权限不足",
+      "errorAllocationBreakdownMismatch": "账单费用明细与附加费/NTD杂费不一致，无法拆分入账目标；请核对备注费用后重新导入账单",
+      "errorAllocationTargetInvalid": "费用项已变化或入账目标不合法，请刷新后重新确认",
+      "errorAllocationReasonRequired": "手动调整入账目标时必须填写原因",
+      "errorOriginAccountMissing": "承担费用的原销售订单出单人没有资金账户，无法扣费",
       "errorUnknown": "结算失败，请稍后重试"
     },
     "records": {
@@ -494,7 +520,8 @@
       "collapseSnapshot": "收起快照",
       "ordersTitle": "订单信息",
       "transportTitle": "运输信息",
-      "billTitle": "账单信息"
+      "billTitle": "账单信息",
+      "allocationTitle": "入账分摊"
     }
   }
 }

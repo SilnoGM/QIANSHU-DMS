@@ -130,9 +130,41 @@ function amount(value: string | null, currencyCode: string, tone: SlhReconciliat
 export function buildSlhReconciliationRecordCard(
   record: SlhReconciliationSettlementRecordDto,
   currencies: readonly CurrencyDescriptor[],
+  translate: (key: string, params?: Record<string, string>) => string = key => key,
 ): SlhReconciliationRecordCard {
   const rate = rateText(record.foreignUnitsPerCny)
   const feeRatePermille = permilleText(record.paymentFeeRate)
+  const allocationOrderNo = (target: string): string | null => (
+    target === 'COMPANY'
+      ? null
+      : (record.allocationParties ?? []).find(party => party.target === target)?.salesOrderNo ?? null
+  )
+  const allocationRows: SlhReconciliationRecordGroupRow[] = [
+    ...(record.allocations ?? []).map((item, index) => {
+      const labelKey = item.sourceType === 'BILL_CHARGE'
+        ? `slhBill.chargeType.${item.chargeType ?? 'OTHER'}`
+        : `slhReconciliation.settle.allocation.source${item.sourceType}`
+      const targetKey = item.target === 'COMPANY'
+        ? 'slhReconciliation.settle.allocation.targetCompany'
+        : `slhReconciliation.settle.allocation.target${item.target === 'ORIGIN_ORDER' ? 'Origin' : 'Current'}`
+      const orderNo = allocationOrderNo(item.target)
+      return {
+        id: `allocation-${item.key}-${index}`,
+        label: translate(labelKey),
+        value: `${item.amount} ${item.currencyCode} → ${translate(targetKey, orderNo === null ? undefined : { orderNo })}`,
+      }
+    }),
+    ...(record.allocationParties ?? []).map(party => ({
+      id: `party-${party.target}`,
+      label: translate(
+        party.target === 'COMPANY'
+          ? 'slhReconciliation.settle.allocation.partyCompany'
+          : `slhReconciliation.settle.allocation.party${party.target === 'ORIGIN_ORDER' ? 'Origin' : 'Current'}`,
+        party.salesOrderNo == null ? undefined : { orderNo: party.salesOrderNo },
+      ),
+      value: `${party.settlementAmountCny ?? MISSING} CNY`,
+    })),
+  ]
 
   return {
     id: record.id,
@@ -208,6 +240,16 @@ export function buildSlhReconciliationRecordCard(
           },
         ],
       },
+      // 历史结算没有分摊快照，只有新记录才展示这一段。
+      ...(allocationRows.length === 0
+        ? []
+        : [{
+            id: 'allocation',
+            titleKey: 'slhReconciliation.records.allocationTitle',
+            icon: 'i-lucide:split',
+            titleClass: 'text-emerald-700 dark:text-emerald-300',
+            rows: allocationRows,
+          }]),
     ],
   }
 }
@@ -216,8 +258,9 @@ export function buildSlhReconciliationRecordCard(
 export function buildSlhReconciliationRecordCards(
   records: readonly SlhReconciliationSettlementRecordDto[],
   currencies: readonly CurrencyDescriptor[],
+  translate: (key: string, params?: Record<string, string>) => string = key => key,
 ): readonly SlhReconciliationRecordCard[] {
-  return records.map(record => buildSlhReconciliationRecordCard(record, currencies))
+  return records.map(record => buildSlhReconciliationRecordCard(record, currencies, translate))
 }
 
 /** 金额着色：结算金额按符号（负红/正绿/零与空中性），金流费用恒红，其余用默认前景色。 */

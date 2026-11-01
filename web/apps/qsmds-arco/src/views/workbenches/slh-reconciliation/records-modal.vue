@@ -57,7 +57,9 @@ async function load(): Promise<void> {
     if (current.signal.aborted) {
       return
     }
-    cards.value = buildSlhReconciliationRecordCards(response.data.items, currencyCatalog.currencies.value)
+    cards.value = buildSlhReconciliationRecordCards(response.data.items, currencyCatalog.currencies.value, (key, params) => (
+      params === undefined ? t(key) : t(key, params)
+    ))
     selectedBlock.value = {}
     expandedRecords.value = {}
   }
