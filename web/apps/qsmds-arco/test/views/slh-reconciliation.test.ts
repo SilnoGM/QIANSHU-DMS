@@ -1941,11 +1941,14 @@ test('调货翻转卡：顶栏翻转、双面可访问性、成本/变更摘要�
   assert.match(transfer, /transferTo/u)
   assert.match(transfer, /sourceOrder/u)
   assert.match(transfer, /targetOrder/u)
-  assert.match(transfer, /routeValues/u)
+  assert.match(transfer, /routeShipmentNo/u)
+  assert.match(transfer, /routeContainerMark/u)
+  assert.match(transfer, /containerMarkText/u)
+  assert.doesNotMatch(transfer, /routeValues/u)
   assert.match(transfer, /warehouseLabel/u)
   assert.match(transfer, /@click="emit\('flip'\)"/u)
   assert.match(flip, /@flip="toggle"/u)
-  // 货件段压成内联一行；仓库胶囊固定宽度、超长截断。
+  // 货件/柜号/唛头改两行；仓库胶囊固定宽度、超长截断。
   assert.match(transfer, /gap-x-2 gap-y-1/u)
   assert.match(transfer, /w-60/u)
   assert.match(transfer, /truncate/u)
@@ -1964,12 +1967,15 @@ test('调货翻转卡：顶栏翻转、双面可访问性、成本/变更摘要�
   assert.match(transfer, /changeCod/u)
   assert.match(transfer, /beforeRecipientPhone/u)
   assert.match(transfer, /afterRecipientAddress/u)
-  // 成本承担人：只显示原承担人与现承担人，不展开金额/比例。
+  // 成本承担人：只显示原承担人与现承担人，不展开金额/比例；成本整体做成区块。
   assert.match(transfer, /originalBearer/u)
   assert.match(transfer, /currentBearer/u)
   assert.match(transfer, /QsPersonDisplay/u)
   assert.match(transfer, /slhReconciliation\.detail\.transfer\.originalBearer/u)
   assert.match(transfer, /slhReconciliation\.detail\.transfer\.currentBearer/u)
+  assert.match(transfer, /bg-muted\/20/u)
+  // 变更 Tooltip 不再用固定高度滚动条。
+  assert.doesNotMatch(transfer, /max-h-64|overflow-auto/u)
   assert.doesNotMatch(transfer, /releasedAt|appliedAt|reviewedAt|claimedAt/u)
   assert.doesNotMatch(transfer, /applicant|reviewedBy|DateTimeDisplay/u)
 })

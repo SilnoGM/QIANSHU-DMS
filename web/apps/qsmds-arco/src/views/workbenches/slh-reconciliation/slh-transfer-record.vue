@@ -30,11 +30,12 @@ const claim = computed(() => props.transfer.claimRequest ?? null)
 const targetOrderNo = computed(() => claim.value?.targetSalesOrderNo ?? props.currentOrderNo ?? '—')
 const sourceOrderNo = computed(() => props.originOrderNo ?? '—')
 const locationLabel = computed(() => t(`slhReconciliation.detail.transfer.locationScope.${props.transfer.locationScope}`))
-const routeValues = computed(() => [
-  { id: 'shipment', value: props.transfer.shipmentNo ?? '—' },
-  { id: 'container', value: props.transfer.containerBatchName ?? '—' },
-  { id: 'mark', value: props.transfer.shippingMark ?? '—' },
-])
+const shipmentNoText = computed(() => props.transfer.shipmentNo ?? '—')
+const containerMarkText = computed(() => {
+  const parts = [props.transfer.containerBatchName, props.transfer.shippingMark]
+    .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
+  return parts.length === 0 ? '—' : parts.join(' · ')
+})
 const lines = computed(() => claim.value?.lines ?? [])
 const changes = computed(() => claim.value?.changes ?? [])
 const lineSummary = computed(() => t('slhReconciliation.detail.transfer.lineSummaryValue', {
@@ -116,16 +117,25 @@ function codText(value: string | null | undefined): string {
 
     <div class="border-t border-border" aria-hidden="true" />
 
-    <!-- 货件 / 柜号 / 唛头：压成一行内联值，不再用外层容器和三个白底盒子。 -->
-    <div class="flex flex-wrap gap-x-2 gap-y-1 min-w-0 items-baseline">
-      <span class="qs-type-meta text-muted-foreground shrink-0">
-        {{ t('slhReconciliation.detail.transfer.route') }}
-      </span>
-      <template v-for="(item, index) in routeValues" :key="item.id">
-        <span class="qs-type-data break-all" :title="item.value">{{ item.value }}</span>
-        <span v-if="index < routeValues.length - 1" class="text-muted-foreground/60" aria-hidden="true">·</span>
-      </template>
-    </div>
+    <!-- 货件编号、柜号唛头分两行；柜号与唛头合并成一行。 -->
+    <dl class="m-0 flex flex-col gap-1 min-w-0">
+      <div class="flex flex-wrap gap-x-2 gap-y-1 min-w-0 items-baseline">
+        <dt class="qs-type-meta text-muted-foreground shrink-0">
+          {{ t('slhReconciliation.detail.transfer.routeShipmentNo') }}
+        </dt>
+        <dd class="qs-type-data m-0 min-w-0 break-all" :title="shipmentNoText">
+          {{ shipmentNoText }}
+        </dd>
+      </div>
+      <div class="flex flex-wrap gap-x-2 gap-y-1 min-w-0 items-baseline">
+        <dt class="qs-type-meta text-muted-foreground shrink-0">
+          {{ t('slhReconciliation.detail.transfer.routeContainerMark') }}
+        </dt>
+        <dd class="qs-type-data m-0 min-w-0 break-all" :title="containerMarkText">
+          {{ containerMarkText }}
+        </dd>
+      </div>
+    </dl>
 
     <!-- 来源单 → 当前单：来源单号可点击直接翻到背面。 -->
     <div class="p-3 border border-border rounded-lg bg-muted/30 gap-3 grid min-w-0 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-end">
@@ -188,11 +198,11 @@ function codText(value: string | null | undefined): string {
           </FaTooltip>
         </dd>
       </div>
-      <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-center">
+      <div class="p-3 border border-border rounded-lg bg-muted/20 gap-x-3 gap-y-2 grid grid-cols-[6.5rem_minmax(0,1fr)] min-w-0 items-center">
         <dt class="qs-type-compact-label text-muted-foreground">
           {{ t('slhReconciliation.detail.transfer.cost') }}
         </dt>
-        <dd class="m-0 flex flex-col gap-1 min-w-0">
+        <dd class="m-0 min-w-0">
           <AmountDisplay
             v-if="costTotal !== null"
             :value="costTotal"
@@ -201,35 +211,32 @@ function codText(value: string | null | undefined): string {
             class="!text-xl !font-semibold"
           />
           <span v-else class="qs-type-data">—</span>
-          <!-- 成本承担人只显示人，不展开金额与比例。 -->
-          <span
-            v-if="originalBearer !== null || currentBearer !== null"
-            class="flex flex-wrap gap-x-2 gap-y-1 min-w-0 items-center"
-          >
-            <span class="qs-type-meta text-muted-foreground">
-              {{ t('slhReconciliation.detail.transfer.originalBearer') }}
-            </span>
-            <QsPersonDisplay
-              v-if="originalBearer !== null"
-              :display-name="originalBearer.displayName"
-              :avatar-url="originalBearer.avatarUrl"
-              size="sm"
-              class="max-w-full"
-            />
-            <span v-else class="qs-type-data">—</span>
-            <FaIcon name="i-lucide:arrow-right" class="text-muted-foreground size-3.5" aria-hidden="true" />
-            <span class="qs-type-meta text-muted-foreground">
-              {{ t('slhReconciliation.detail.transfer.currentBearer') }}
-            </span>
-            <QsPersonDisplay
-              v-if="currentBearer !== null"
-              :display-name="currentBearer.displayName"
-              :avatar-url="currentBearer.avatarUrl"
-              size="sm"
-              class="max-w-full"
-            />
-            <span v-else class="qs-type-data">—</span>
-          </span>
+        </dd>
+        <dt class="qs-type-compact-label text-muted-foreground">
+          {{ t('slhReconciliation.detail.transfer.originalBearer') }}
+        </dt>
+        <dd class="m-0 min-w-0">
+          <QsPersonDisplay
+            v-if="originalBearer !== null"
+            :display-name="originalBearer.displayName"
+            :avatar-url="originalBearer.avatarUrl"
+            size="sm"
+            class="max-w-full"
+          />
+          <span v-else class="qs-type-data">—</span>
+        </dd>
+        <dt class="qs-type-compact-label text-muted-foreground">
+          {{ t('slhReconciliation.detail.transfer.currentBearer') }}
+        </dt>
+        <dd class="m-0 min-w-0">
+          <QsPersonDisplay
+            v-if="currentBearer !== null"
+            :display-name="currentBearer.displayName"
+            :avatar-url="currentBearer.avatarUrl"
+            size="sm"
+            class="max-w-full"
+          />
+          <span v-else class="qs-type-data">—</span>
         </dd>
       </div>
       <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-center">
@@ -247,7 +254,7 @@ function codText(value: string | null | undefined): string {
               <FaIcon name="i-lucide:info" class="size-4" aria-hidden="true" />
             </span>
             <template #content>
-              <div class="text-background flex flex-col gap-2 max-h-64 max-w-sm overflow-auto">
+              <div class="text-background flex flex-col gap-2 max-w-sm break-words">
                 <p v-if="changes.length === 0" class="m-0">
                   {{ t('slhReconciliation.detail.transfer.noChanges') }}
                 </p>
