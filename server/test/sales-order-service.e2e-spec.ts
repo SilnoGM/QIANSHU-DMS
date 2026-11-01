@@ -12,6 +12,7 @@ import { SalesOrderCommandService } from '../src/modules/sales-orders/sales-orde
 import { SalesOrderMutationService } from '../src/modules/sales-orders/sales-order-mutation.service'
 import { SalesOrderAutomaticStateService } from '../src/modules/sales-orders/sales-order-automatic-state.service'
 import { SalesOrderQueryService } from '../src/modules/sales-orders/sales-order-query.service'
+import type { ShipmentStorageService } from '../src/modules/shipment-storage/shipment-storage.service'
 
 function requireDatabaseUrl(): string {
   const value = process.env.DATABASE_URL
@@ -188,6 +189,7 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
       dictionaryLookup,
       query,
       new SalesOrderAutomaticStateService(new AuditService()),
+      { returnClaimedShipmentsForCancellation: jest.fn().mockResolvedValue([]) } as unknown as ShipmentStorageService,
       { now: () => new Date('2026-08-20T12:00:00.000Z') },
     )
   })

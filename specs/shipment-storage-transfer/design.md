@@ -219,7 +219,7 @@ IN_STORAGE/RESERVED --作废--> VOIDED
 ```
 
 - 首期可只实现 `IN_STORAGE → CLAIMED`；预留用于并发冲突场景；
-- 不做 `CLAIMED → IN_STORAGE` 的反向流转；新销售单取消后的回收另立规则（见缺口）。
+- 不做 `CLAIMED → IN_STORAGE` 的反向流转；新销售单取消时在取消事务内追加一条新的 `IN_STORAGE` 记录（二次寄仓），旧 `CLAIMED` 记录保留历史，归属回池并退还认领成本。
 
 ## 6. 关键流程
 

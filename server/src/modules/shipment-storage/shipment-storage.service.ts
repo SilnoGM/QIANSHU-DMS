@@ -804,6 +804,191 @@ export class ShipmentStorageService {
   }
 
   /**
+   * 销售订单取消时强制回收已认领的寄仓货件：在取消事务内追加二次寄仓记录、
+   * 把归属退回池，并退还认领时扣在乙出单人身上的成本。旧 CLAIMED 记录保留为历史。
+   */
+  async returnClaimedShipmentsForCancellation(
+    transaction: Prisma.TransactionClient,
+    context: ShipmentStorageMutationContext,
+    salesOrderId: string,
+    note: string | null,
+  ): Promise<readonly string[]> {
+    const records = await transaction.shipmentStorageRecord.findMany({
+      where: {
+        status: 'CLAIMED',
+        claimedSalesOrderId: salesOrderId,
+        shipment: {
+          ownershipCurrent: {
+            ownerType: 'SALES_ORDER',
+            ownerSalesOrderId: salesOrderId,
+            state: 'ACTIVE',
+          },
+        },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        shipmentId: true,
+        locationScope: true,
+        warehouseValue: true,
+        warehouseLabelSnapshot: true,
+        shipmentNoSnapshot: true,
+        shippingMarkSnapshot: true,
+        originPurchaseOrderId: true,
+        originPurchaseOrderNoSnapshot: true,
+        originAllocations: true,
+        containerSnapshot: true,
+        costSnapshot: true,
+      },
+    })
+    if (records.length === 0) {
+      return []
+    }
+
+    const shipmentIds = [...new Set(records.map(record => record.shipmentId))]
+    await transaction.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id IN (${Prisma.join(shipmentIds)}) FOR UPDATE`)
+    const parts = await transaction.purchaseOrderPart.findMany({
+      where: { id: { in: shipmentIds } },
+      select: RELEASE_PART_SELECT,
+    })
+    const partById = new Map(parts.map(part => [part.id, part]))
+    const order = await transaction.salesOrder.findUnique({
+      where: { id: salesOrderId },
+      select: { id: true, orderNo: true, customerName: true, issuerUserId: true },
+    })
+    if (order === null) {
+      storageFailure('SHIPMENT_STORAGE_NOT_ALLOWED', '销售订单不存在，无法回收寄仓货件')
+    }
+    const packagingPending = await transaction.packagingCostRequest.count({
+      where: { shipmentId: { in: shipmentIds }, status: 'PENDING_PAYMENT' },
+    })
+    if (packagingPending > 0) {
+      storageFailure('SHIPMENT_STORAGE_PACKAGING_UNPAID', '货件仍有待付款的包装费，无法回收寄仓')
+    }
+    for (const record of records) {
+      const part = partById.get(record.shipmentId)
+      const owner = part?.ownershipCurrent
+      if (
+        part === undefined
+        || part.status !== 'ACTIVE'
+        || part.deliveredAt !== null
+        || owner === null
+        || owner === undefined
+        || owner.ownerType !== 'SALES_ORDER'
+        || owner.ownerSalesOrderId !== salesOrderId
+        || owner.state !== 'ACTIVE'
+      ) {
+        storageFailure('SHIPMENT_STORAGE_NOT_ALLOWED', '寄仓货件已不可回收')
+      }
+    }
+
+    const batch = await transaction.shipmentReleaseBatch.create({
+      data: {
+        reason: 'CUSTOMER_CANCEL',
+        originSalesOrderId: salesOrderId,
+        actorUserId: context.actorUserId,
+        requestKey: randomUUID(),
+        payloadHash: payloadHash({
+          format: 'shipment-storage.cancel-return.v1',
+          salesOrderId,
+          storageRecordIds: records.map(record => record.id),
+        }),
+        note: note?.trim() || null,
+      },
+      select: { id: true },
+    })
+    const now = new Date()
+    const newRecordIds: string[] = []
+    for (const record of records) {
+      const part = partById.get(record.shipmentId)!
+      const newRecord = await transaction.shipmentStorageRecord.create({
+        data: {
+          shipmentId: record.shipmentId,
+          releaseBatchId: batch.id,
+          status: 'IN_STORAGE',
+          locationScope: record.locationScope,
+          warehouseValue: record.warehouseValue,
+          warehouseLabelSnapshot: record.warehouseLabelSnapshot,
+          locationUpdatedAt: now,
+          shipmentNoSnapshot: record.shipmentNoSnapshot ?? part.shipmentNo,
+          shippingMarkSnapshot: record.shippingMarkSnapshot ?? part.shippingMarkText,
+          originPurchaseOrderId: record.originPurchaseOrderId,
+          originPurchaseOrderNoSnapshot: record.originPurchaseOrderNoSnapshot,
+          originSalesOrderId: order.id,
+          originSalesOrderNoSnapshot: order.orderNo,
+          originCustomerNameSnapshot: order.customerName,
+          originIssuerUserId: order.issuerUserId,
+          originAllocations: record.originAllocations as Prisma.InputJsonValue,
+          containerSnapshot: record.containerSnapshot === null
+            ? Prisma.DbNull
+            : record.containerSnapshot as Prisma.InputJsonValue,
+          costSnapshot: record.costSnapshot as Prisma.InputJsonValue,
+          snapshotAt: now,
+        },
+        select: { id: true },
+      })
+      newRecordIds.push(newRecord.id)
+      // 二次寄仓要退还认领时从乙扣走的成本；金额与旧快照一致，避免历史成本漂移。
+      await this.cost.transfer(transaction, context, 'RELEASE', {
+        amountCny: totalCostFromSnapshot(record.costSnapshot),
+        shipmentId: record.shipmentId,
+        shipmentNo: record.shipmentNoSnapshot ?? part.shipmentNo,
+        storageRecordId: newRecord.id,
+        userId: order.issuerUserId,
+      })
+      await this.audit.record(transaction, {
+        eventType: 'SHIPMENT_OWNERSHIP_RELEASED',
+        outcome: 'SUCCESS',
+        actorType: 'USER',
+        actorUserId: context.actorUserId,
+        requestId: context.requestId,
+        targetType: 'PURCHASE_ORDER_PART',
+        targetId: record.shipmentId,
+        metadata: {
+          releaseBatchId: batch.id,
+          storageRecordId: newRecord.id,
+          sourceStorageRecordId: record.id,
+          reason: 'CUSTOMER_CANCEL',
+          locationScope: record.locationScope,
+          warehouseValue: record.warehouseValue,
+          salesOrderId,
+        },
+      })
+      await this.audit.record(transaction, {
+        eventType: 'SHIPMENT_STORAGE_RECORDED',
+        outcome: 'SUCCESS',
+        actorType: 'USER',
+        actorUserId: context.actorUserId,
+        requestId: context.requestId,
+        targetType: 'SHIPMENT_STORAGE_RECORD',
+        targetId: newRecord.id,
+        metadata: {
+          releaseBatchId: batch.id,
+          shipmentId: record.shipmentId,
+          sourceStorageRecordId: record.id,
+          salesOrderId,
+        },
+      })
+    }
+    await this.ownership.recordMany(transaction, records.map(record => ({
+      shipmentId: record.shipmentId,
+      ownerType: 'STORAGE_POOL',
+      ownerSalesOrderId: null,
+      reason: 'CUSTOMER_CANCEL',
+      actorUserId: context.actorUserId,
+      releaseBatchId: batch.id,
+      payload: {
+        format: 'shipment-ownership.cancel-return.v1',
+        shipmentId: record.shipmentId,
+        releaseBatchId: batch.id,
+        sourceStorageRecordId: record.id,
+        salesOrderId,
+      },
+    })))
+    return newRecordIds
+  }
+
+  /**
    * 释放提交后再重算原销售单覆盖。必须放在释放事务之外：释放先锁货件，
    * 销售链条的其他写入先锁销售明细/主行，放进同一事务会形成反向锁序。
    * 重算失败时释放事实已成立；同一 requestKey 重试会重放释放并再次执行重算。

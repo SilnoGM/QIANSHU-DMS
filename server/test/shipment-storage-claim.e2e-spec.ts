@@ -6,6 +6,7 @@ import { FundPostingService } from '../src/modules/fund-accounts/application/fun
 import { PurchasePayableQueryService } from '../src/modules/purchase-orders/payables/purchase-payable-query.service'
 import { PurchaseOrderSourceQueryService } from '../src/modules/purchase-orders/purchase-order-source-query.service'
 import { PurchaseShipmentQueryService } from '../src/modules/purchase-orders/shipments/purchase-shipment-query.service'
+import { SalesOrderMutationService } from '../src/modules/sales-orders/sales-order-mutation.service'
 import { SalesOrderQueryService } from '../src/modules/sales-orders/sales-order-query.service'
 import { ShipmentOwnershipService } from '../src/modules/shipment-ownership/shipment-ownership.service'
 import { ShipmentStorageCostService } from '../src/modules/shipment-storage/shipment-storage-cost.service'
@@ -427,6 +428,57 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       reason: 'AWAITING_PURCHASE_REVIEW',
       pendingReviewOrderCount: 1,
     })
+  })
+
+  it('returns claimed shipments to storage when the claiming order is cancelled', async () => {
+    const origin = await h.shipment({ salesLinked: true })
+    if (origin.source === null) throw new Error('sales linked shipment must create a sales order')
+    const storageRecordId = await createStorageRecord(origin)
+    const target = await createTargetOrder(origin.source.id, h.fixture.actor.id, 1)
+    const context = { actorUserId: h.fixture.actor.id, requestId: randomUUID() }
+    await storage.claim(context, storageRecordId, {
+      lines: [{
+        purchaseOrderLineId: await allocationLineId(storageRecordId),
+        quantity: 1,
+        salesOrderLineId: target.lines[0].id,
+      }],
+      requestKey: randomUUID(),
+      salesOrderId: target.id,
+    })
+
+    await h.app.get(SalesOrderMutationService).updateOrderStatus(context, target.id, {
+      toStatus: 'CANCELLED',
+      reason: '客户取消',
+    })
+
+    const records = await h.prisma.shipmentStorageRecord.findMany({
+      where: { shipmentId: origin.parts[0].id },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, status: true, releaseBatch: { select: { reason: true, originSalesOrderId: true } } },
+    })
+    expect(records.map(record => record.status).sort()).toEqual(['CLAIMED', 'IN_STORAGE'])
+    const returned = records.find(record => record.status === 'IN_STORAGE')
+    if (returned === undefined) throw new Error('returned storage record is missing')
+    expect(returned.releaseBatch).toMatchObject({
+      reason: 'CUSTOMER_CANCEL',
+      originSalesOrderId: target.id,
+    })
+    const ownership = await h.prisma.shipmentOwnershipCurrent.findUniqueOrThrow({
+      where: { shipmentId: origin.parts[0].id },
+      select: { ownerType: true, ownerSalesOrderId: true },
+    })
+    expect(ownership).toEqual({ ownerType: 'STORAGE_POOL', ownerSalesOrderId: null })
+    const releaseEvent = await h.prisma.shipmentCostEvent.findUniqueOrThrow({
+      where: { storageRecordId_direction: { storageRecordId: returned.id, direction: 'RELEASE' } },
+      select: { amountCny: true, actorUserId: true },
+    })
+    expect(releaseEvent.amountCny.toFixed(2)).toBe('100.00')
+    expect(releaseEvent.actorUserId).toBe(h.fixture.actor.id)
+    const cancelled = await h.prisma.salesOrder.findUniqueOrThrow({
+      where: { id: target.id },
+      select: { orderStatus: true },
+    })
+    expect(cancelled.orderStatus).toBe('CANCELLED')
   })
 
   it('advances the claiming order and rejects a second claim after it leaves pending purchase', async () => {

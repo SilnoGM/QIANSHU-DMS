@@ -36,6 +36,7 @@ import {
 } from './domain/sales-order-state-machine'
 import { isCanonicalSalesOrderActorId } from './sales-order-command.normalizer'
 import { SalesOrderAutomaticStateService } from './sales-order-automatic-state.service'
+import { ShipmentStorageService } from '../shipment-storage/shipment-storage.service'
 import {
   assertSalesOrderPurchaseFulfillment,
   lockSalesOrderPurchaseDependencies,
@@ -183,6 +184,7 @@ export class SalesOrderMutationService {
     private readonly dictionaryLookup: DictionaryLookupService,
     private readonly query: SalesOrderQueryService,
     private readonly automaticState: SalesOrderAutomaticStateService,
+    private readonly shipmentStorage: ShipmentStorageService,
     @Optional()
     @Inject(SALES_ORDER_MUTATION_DEPENDENCIES)
     dependencyOverrides: Partial<SalesOrderMutationDependencies> = {},
@@ -255,6 +257,13 @@ export class SalesOrderMutationService {
             `该销售订单下仍有 ${activePurchaseOrderCount} 张未取消的采购单，请先处理采购单后再取消订单`,
           )
         }
+        // 取消前强制回收本单已认领的寄仓货件；与取消同事务，失败则整单取消回滚。
+        await this.shipmentStorage.returnClaimedShipmentsForCancellation(
+          transaction,
+          trusted,
+          salesOrderId,
+          reason,
+        )
       }
       await transaction.salesOrder.update({
         where: { id: salesOrderId },

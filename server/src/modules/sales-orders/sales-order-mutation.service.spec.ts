@@ -3,6 +3,7 @@ import type { AuditService } from '../audit/audit.service'
 import type { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
 import type { MediaAssetService } from '../media/media-asset.service'
 import type { SalesOrderAutomaticStateService } from './sales-order-automatic-state.service'
+import type { ShipmentStorageService } from '../shipment-storage/shipment-storage.service'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
 import type { SalesOrderQueryService } from './sales-order-query.service'
 
@@ -130,6 +131,11 @@ function setup() {
       jest.fn<Promise<'NONE'>, [unknown, unknown, string, string]>()
         .mockResolvedValue('NONE'),
   }
+  const shipmentStorage = {
+    returnClaimedShipmentsForCancellation:
+      jest.fn<Promise<readonly string[]>, [unknown, unknown, string, string | null]>()
+        .mockResolvedValue([]),
+  }
   const service = new SalesOrderMutationService(
     prisma as unknown as PrismaService,
     audit as unknown as AuditService,
@@ -137,6 +143,7 @@ function setup() {
     dictionaryLookup as unknown as DictionaryLookupService,
     query as unknown as SalesOrderQueryService,
     automaticState as unknown as SalesOrderAutomaticStateService,
+    shipmentStorage as unknown as ShipmentStorageService,
     { now: () => new Date('2026-08-20T08:00:00.000Z') },
   )
   return {
@@ -148,6 +155,7 @@ function setup() {
     order,
     query,
     service,
+    shipmentStorage,
     transaction,
   }
 }
@@ -383,6 +391,8 @@ describe('SalesOrderMutationService', () => {
     expect(fixture.transaction.salesOrderStatusHistory.create)
       .not.toHaveBeenCalled()
     expect(fixture.audit.record).not.toHaveBeenCalled()
+    expect(fixture.shipmentStorage.returnClaimedShipmentsForCancellation)
+      .not.toHaveBeenCalled()
   })
 
   it('allows cancellation when every purchase order is cancelled', async () => {
@@ -394,6 +404,8 @@ describe('SalesOrderMutationService', () => {
       reason: '客户取消',
     })).resolves.toEqual(fixture.detail)
 
+    expect(fixture.shipmentStorage.returnClaimedShipmentsForCancellation)
+      .toHaveBeenCalledWith(fixture.transaction, context, ORDER_ID, '客户取消')
     expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
       where: { id: ORDER_ID },
       data: { orderStatus: 'CANCELLED', version: { increment: 1 } },
@@ -410,6 +422,20 @@ describe('SalesOrderMutationService', () => {
         },
       })
     expect(fixture.audit.record).toHaveBeenCalled()
+  })
+
+  it('rolls back cancellation when claimed shipments cannot return to storage', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.count.mockResolvedValue(0)
+    fixture.shipmentStorage.returnClaimedShipmentsForCancellation.mockRejectedValueOnce(new Error('return failed'))
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'CANCELLED',
+      reason: '客户取消',
+    })).rejects.toThrow('return failed')
+
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+    expect(fixture.transaction.salesOrderStatusHistory.create).not.toHaveBeenCalled()
   })
 
   it('blocks cancellation after signing before querying purchase orders', async () => {

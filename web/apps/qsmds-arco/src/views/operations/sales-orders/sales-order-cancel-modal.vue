@@ -122,7 +122,7 @@ onBeforeUnmount(reset)
   <QsGenericModal
     :model-value="modelValue"
     title="取消订单"
-    description="取消后订单进入终态且不能恢复；订单、明细和凭证不会被删除。"
+    description="取消后订单进入终态且不能恢复；订单、明细和凭证不会被删除。若本单已认领寄仓货件，会自动退回寄仓池。"
     size="md"
     :submitting="submitting"
     @update:model-value="setVisible"
