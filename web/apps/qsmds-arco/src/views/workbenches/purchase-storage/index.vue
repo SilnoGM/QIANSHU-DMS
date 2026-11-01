@@ -509,7 +509,7 @@ onMounted(() => {
               v-if="row.original.originIssuer"
               :display-name="row.original.originIssuer.displayName"
               :avatar-url="row.original.originIssuer.avatarUrl"
-              size="sm"
+              size="md"
             />
             <span v-else class="qs-type-meta text-muted-foreground">—</span>
             <span class="qs-type-data-emphasis">
@@ -524,7 +524,7 @@ onMounted(() => {
               v-if="row.original.originPurchaseCreator"
               :display-name="row.original.originPurchaseCreator.displayName"
               :avatar-url="row.original.originPurchaseCreator.avatarUrl"
-              size="sm"
+              size="md"
             />
             <span v-else class="qs-type-meta text-muted-foreground">—</span>
             <span class="qs-type-data-emphasis">

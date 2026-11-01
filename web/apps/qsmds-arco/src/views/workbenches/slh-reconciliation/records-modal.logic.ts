@@ -215,7 +215,7 @@ function buildRecordAllocation(
       reason: item.reason ?? null,
     }
   })
-  const parties: SlhReconciliationRecordAllocationParty[] = allocationParties.map(party => {
+  const parties: SlhReconciliationRecordAllocationParty[] = allocationParties.map((party) => {
     return {
       target: party.target,
       title: translate(
@@ -232,8 +232,8 @@ function buildRecordAllocation(
       issuerAvatarUrl: party.issuerAvatarUrl ?? null,
       shortRole: hasOrigin && party.target !== 'COMPANY'
         ? translate(party.target === 'ORIGIN_ORDER'
-          ? 'slhReconciliation.settle.allocation.partyOriginShort'
-          : 'slhReconciliation.settle.allocation.partyCurrentShort')
+            ? 'slhReconciliation.settle.allocation.partyOriginShort'
+            : 'slhReconciliation.settle.allocation.partyCurrentShort')
         : null,
       settlementAmountCny: party.settlementAmountCny ?? null,
       paymentFeeAmountCny: party.paymentFeeAmountCny ?? null,
