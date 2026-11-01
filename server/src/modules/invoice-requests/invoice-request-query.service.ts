@@ -155,7 +155,7 @@ export class InvoiceRequestQueryService {
       this.prisma.invoiceRequest.findMany({
         where,
         include: LIST_INCLUDE,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        orderBy: { invoiceNo: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),

@@ -129,7 +129,7 @@ export class FundWithdrawalQueryService {
       this.prisma.fundWithdrawalRequest.findMany({
         where: pageWhere,
         include: ROW_INCLUDE,
-        orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
+        orderBy: { withdrawalNo: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),

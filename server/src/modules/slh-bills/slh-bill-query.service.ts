@@ -20,7 +20,7 @@ export class SlhBillQueryService {
     const pageSize = query.pageSize ?? DEFAULT_PAGE_SIZE
     const where = buildSlhBillListWhere(query)
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.slhBill.findMany({ where, include: slhBillListInclude, orderBy: [{ periodStart: 'desc' }, { id: 'desc' }], skip: (page - 1) * pageSize, take: pageSize }),
+      this.prisma.slhBill.findMany({ where, include: slhBillListInclude, orderBy: { slhBillNo: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
       this.prisma.slhBill.count({ where }),
     ])
     return { items: items.map(serializeSlhBillListItem), total, page, pageSize }

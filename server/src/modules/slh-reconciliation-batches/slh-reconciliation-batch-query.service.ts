@@ -111,7 +111,7 @@ export class SlhReconciliationBatchQueryService {
     const [items, total, allCount, inProgressCount] = await this.prisma.$transaction([
       this.prisma.slhReconciliationBatch.findMany({
         where, include: slhReconciliationBatchListInclude,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * pageSize, take: pageSize,
+        orderBy: { batchNo: 'desc' }, skip: (page - 1) * pageSize, take: pageSize,
       }),
       this.prisma.slhReconciliationBatch.count({ where }),
       this.prisma.slhReconciliationBatch.count({ where: baseWhere }),
