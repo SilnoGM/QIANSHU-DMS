@@ -360,6 +360,7 @@
         "title": "Transfer record",
         "sourceOrder": "Source sales order",
         "targetOrder": "Current sales order",
+        "transferTo": "Transfer to",
         "route": "Shipment / Container / Mark",
         "warehouse": "Storage warehouse",
         "releasedAt": "Stored at",

@@ -369,6 +369,7 @@
         "title": "调货记录",
         "sourceOrder": "来源销售单",
         "targetOrder": "当前销售单",
+        "transferTo": "调货至",
         "route": "货件 / 柜号 / 唛头",
         "warehouse": "寄仓仓库",
         "releasedAt": "寄仓时间",

@@ -360,6 +360,7 @@
         "title": "調貨記錄",
         "sourceOrder": "來源銷售單",
         "targetOrder": "當前銷售單",
+        "transferTo": "調貨至",
         "route": "貨件 / 櫃號 / 嘜頭",
         "warehouse": "寄倉倉庫",
         "releasedAt": "寄倉時間",

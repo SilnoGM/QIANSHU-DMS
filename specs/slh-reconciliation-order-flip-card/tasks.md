@@ -13,7 +13,7 @@
 
 - [x] 抽出 `slh-order-section.vue`
 - [x] 新增 `slh-order-flip-card.vue`（顶栏翻转、3D、inert/aria-live、减少动效）
-- [x] 新增 `slh-transfer-record.vue`（成本、变更摘要、申请/审批/认领）
+- [x] 新增 `slh-transfer-record.vue`（按设计稿：标题+状态+仓库、货件三段、来源→当前、行数、成本、变更；移除时间/申请/审批字段）
 - [x] 详情页调货行分支；普通行保留原卡片
 - [x] 底部「查看完整寄仓记录」新标签页入口与权限禁用
 - [x] 核对焦点改为当前销售单并改标签

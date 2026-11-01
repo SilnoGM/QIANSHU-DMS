@@ -1933,14 +1933,18 @@ test('调货翻转卡：顶栏翻转、双面可访问性、成本/变更摘要�
   assert.match(flip, /storageId/u)
   assert.match(flip, /target="_blank"/u)
   assert.match(flip, /storagePermissionRequired/u)
-  // 调货记录：成本、变更摘要、认领行数、申请人/审批人和释放原因都要有。
+  // 调货记录：关系、认领行数、成本、变更摘要；时间/申请人/审批人已按设计稿移出卡面。
   assert.match(transfer, /costTotal/u)
   assert.match(transfer, /recipientChangeCount/u)
   assert.match(transfer, /codChangeCount/u)
   assert.match(transfer, /lineSummaryValue/u)
-  assert.match(transfer, /applicant/u)
-  assert.match(transfer, /reviewedBy/u)
-  assert.match(transfer, /releaseReasonValue/u)
+  assert.match(transfer, /transferTo/u)
+  assert.match(transfer, /sourceOrder/u)
+  assert.match(transfer, /targetOrder/u)
+  assert.match(transfer, /routeValues/u)
+  assert.match(transfer, /warehouseLabel/u)
+  assert.doesNotMatch(transfer, /releasedAt|appliedAt|reviewedAt|claimedAt/u)
+  assert.doesNotMatch(transfer, /applicant|reviewedBy|DateTimeDisplay|QsPersonDisplay/u)
 })
 
 test('核对焦点：空值只下发 null 与说明位，与显式 0 区分', () => {
