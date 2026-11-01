@@ -1749,6 +1749,50 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       expect(company.businessAmount.toFixed(2)).toBe('-1000.00')
     })
 
+    it('金流费改由公司承担：走成本类型单独入账，不记到乙', async () => {
+      await setSystemRate('5.2000')
+      const date = '2026-03-23'
+      const containerBatchName = '0323-01柜'
+      const mark = 'M-032326'
+      const { currentSalesOrderId, partId } = await transferToOtherSalesOrder()
+      const { batchId, memberId } = await billWithOriginCharge(date, containerBatchName, mark, partId)
+      const settlement = await settleWithTargets(batchId, memberId, WIDE_SALES_TOTAL, [
+        { key: 'PAYMENT_FEE', target: 'COMPANY', reason: '金流费由公司承担' },
+      ])
+
+      expect(settlement.allocationParties).toEqual([
+        expect.objectContaining({ target: 'ORIGIN_ORDER', settlementAmountCny: '-50.00', paymentFeeAmountCny: null }),
+        expect.objectContaining({ target: 'CURRENT_ORDER', settlementAmountCny: '9000.00', paymentFeeAmountCny: null }),
+        expect.objectContaining({ target: 'COMPANY', settlementAmountCny: '0.00', paymentFeeAmountCny: '1346.15' }),
+      ])
+      await browser.post(`${BASE}/${batchId}/complete`).set(packagingHeaders).send({}).expect(200)
+
+      const companyFee = await h.prisma.fundPostingBatch.findFirstOrThrow({
+        where: { businessSourceCodeSnapshot: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE' },
+        select: {
+          postingTypeCodeSnapshot: true, businessCategorySnapshot: true, userId: true,
+          userShareRateSnapshot: true, companyShareRateSnapshot: true,
+          businessId: true, businessAmount: true, consumerCode: true,
+        },
+      })
+      expect(companyFee).toMatchObject({
+        postingTypeCodeSnapshot: 'SLH_BILL_COMPANY_FEE_ALLOCATION',
+        businessCategorySnapshot: 'COST',
+        userId: null, userShareRateSnapshot: null, companyShareRateSnapshot: null,
+        businessId: currentSalesOrderId,
+        consumerCode: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE.FEE',
+      })
+      expect(companyFee.businessAmount.toFixed(2)).toBe('1346.15')
+      const chargedToCurrent = await h.prisma.fundPostingBatch.count({
+        where: {
+          businessSourceCodeSnapshot: 'SLH_BILL_FINANCE_SETTLEMENT',
+          consumerCode: 'SLH_BILL_FINANCE_SETTLEMENT.FEE',
+          businessId: currentSalesOrderId,
+        },
+      })
+      expect(chargedToCurrent).toBe(0)
+    })
+
     it('甲已取消仍可扣费：完成不因原销售单状态被拒', async () => {
       await setSystemRate('5.2000')
       const date = '2026-03-22'

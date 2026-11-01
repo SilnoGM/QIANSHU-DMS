@@ -833,6 +833,33 @@ describe('slh bill company allocation ports', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled()
   })
 
+  it('posts a company-borne payment fee as COST with a single DEBIT company entry', async () => {
+    const feeContext = {
+      ...context,
+      sourceCode: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE',
+      consumerCode: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE.FEE',
+    }
+    configureSuccessfulPosting(requireInitialRule('SLH_BILL_COMPANY_FEE_ALLOCATION'))
+    mockedLockSource.mockResolvedValue({ id: SOURCE_ID, code: feeContext.sourceCode, name: '顺联航账单公司金流费分摊', enabled: true })
+    const { service, transaction, prisma } = fixture()
+    const tx = transaction as unknown as Prisma.TransactionClient
+    const feeInput = { ...input(), postingTypeCode: 'SLH_BILL_COMPANY_FEE_ALLOCATION', summary: '顺联航账单公司金流费' }
+    const preview = await service.previewBusinessEventInTransaction(tx, feeContext, feeInput)
+    expect(preview).toMatchObject({
+      userShareRate: '0.00', companyShareRate: '100.00',
+      entries: [{ accountTarget: 'COMPANY', direction: 'DEBIT', amount: '100.00' }],
+    })
+    await service.postBusinessEventInTransaction(tx, feeContext, feeInput, preview)
+    expect(mockedInsertBatch).toHaveBeenCalledWith(tx, expect.objectContaining({
+      userId: null, userShareRateSnapshot: null, companyShareRateSnapshot: null,
+      postingTypeCodeSnapshot: 'SLH_BILL_COMPANY_FEE_ALLOCATION',
+      businessCategorySnapshot: 'COST',
+      businessSourceCodeSnapshot: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE',
+      consumerCode: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE.FEE',
+    }))
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
   it('rejects a user identity or a different posting type', async () => {
     const { service, transaction } = fixture()
     const tx = transaction as unknown as Prisma.TransactionClient

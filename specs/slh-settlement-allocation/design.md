@@ -4,7 +4,7 @@
 
 - 后端：`server/src/modules/slh-reconciliation-batches/`、`server/src/modules/fund-accounts/`、`server/src/modules/slh-bills/`
 - 前端：`web/apps/qsmds-arco/src/views/workbenches/slh-reconciliation/`
-- 迁移：`20261101120000_settlement_allocation_split`
+- 迁移：`20261101120000_settlement_allocation_split`、`20261101130000_company_fee_allocation`
 
 ## 2. 数据模型
 
@@ -32,13 +32,14 @@
 
 | 项 | 值 |
 | --- | --- |
-| 业务类型 | `SLH_BILL_COMPANY_ALLOCATION`（`REVENUE`，`requires_user = false`） |
-| 规则 | 单腿 `COMPANY` / `FULL_AMOUNT` / `FOLLOW_AMOUNT_SIGN` |
-| 来源 | `SLH_BILL_FINANCE_SETTLEMENT_COMPANY` |
-| consumer | `SLH_BILL_FINANCE_SETTLEMENT_COMPANY.ALLOCATION` |
-| 批次形状 | `kind = BUSINESS`、`user_id IS NULL`、两个比例快照均为 `NULL` |
+| 场景 | 业务类型 | 类别 | 规则 | 来源 / consumer |
+| --- | --- | --- | --- | --- |
+| 结算金额归公司 | `SLH_BILL_COMPANY_ALLOCATION` | `REVENUE` | 单腿 `COMPANY` / `FULL_AMOUNT` / `FOLLOW_AMOUNT_SIGN` | `SLH_BILL_FINANCE_SETTLEMENT_COMPANY` / `.ALLOCATION` |
+| 金流费归公司 | `SLH_BILL_COMPANY_FEE_ALLOCATION` | `COST` | 单腿 `COMPANY` / `FULL_AMOUNT` / `DEBIT` | `SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE` / `.FEE` |
 
-迁移同时把该类型加入 `INITIAL_FUND_POSTING_RULES`，保持「迁移种子与运行时校验同一真相源」。
+两者都是 `requires_user = false`，批次形状为 `kind = BUSINESS`、`user_id IS NULL`、两个比例快照均为 `NULL`；迁移分别加 `fund_posting_batches_company_settlement_shape_check` 与 `..._company_fee_settlement_shape_check`。金流费是成本，不能复用收入类别的公司分摊类型。
+
+迁移同时把两个类型加入 `INITIAL_FUND_POSTING_RULES`，保持「迁移种子与运行时校验同一真相源」。
 
 ## 3. 分摊算法
 
@@ -75,7 +76,7 @@
 | 甲 / 乙（结算） | `SLH_BILL_FINANCE_SETTLEMENT` / `.RECONCILE` | `ORDER_SETTLEMENT` | 目标订单出单人 | 结算记录 id | `{settlementId}:RECONCILE:{target}` |
 | 公司（结算） | `SLH_BILL_FINANCE_SETTLEMENT_COMPANY` / `.ALLOCATION` | `SLH_BILL_COMPANY_ALLOCATION` | 无 | 结算记录 id | `{settlementId}:RECONCILE:COMPANY` |
 | 金流费（甲/乙） | `SLH_BILL_FINANCE_SETTLEMENT` / `.FEE` | `FULL_FLOW_PAYMENT_FEE` | 承担订单出单人 | 当前销售单 id | `{currentOrderId}:FEE` |
-| 金流费（公司） | 公司来源 / `.ALLOCATION` | `SLH_BILL_COMPANY_ALLOCATION` | 无 | 当前销售单 id | `{currentOrderId}:FEE` |
+| 金流费（公司） | 公司费用来源 / `.FEE` | `SLH_BILL_COMPANY_FEE_ALLOCATION`（COST） | 无 | 当前销售单 id | `{currentOrderId}:FEE` |
 
 要点：
 
@@ -109,7 +110,7 @@
 
 ## 9. 迁移与运维
 
-- 新增枚举值、快照列、公司资金类型/规则/来源/形状约束；已在 dev 库应用，测试机与生产待发布。
+- 新增枚举值、快照列、两个公司资金类型/规则/来源/形状约束；已在 dev 库应用，测试机与生产待发布。
 - 迁移可重跑：枚举 `IF NOT EXISTS`、列 `IF NOT EXISTS`、规则先草稿后发布、约束先删后加。
 - 发布后旧结算仍可完成；新结算开始写快照。
 - 费用明细与账单杂费不一致的存量账单会阻断结算，需要先修正账单费用明细（不自动猜）。

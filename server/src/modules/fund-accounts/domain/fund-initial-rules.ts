@@ -34,7 +34,7 @@ function splitRule(
   }
 }
 
-/** 十个初始化业务类型的首版规则，是后续 migration 种子和运行时校验的真相源。 */
+/** 十一个初始化业务类型的首版规则，是后续 migration 种子和运行时校验的真相源。 */
 export const INITIAL_FUND_POSTING_RULES: readonly FundPostingRule[] = [
   splitRule(
     'ORDER_SETTLEMENT',
@@ -67,6 +67,20 @@ export const INITIAL_FUND_POSTING_RULES: readonly FundPostingRule[] = [
       position: 1,
       accountTarget: 'COMPANY',
       directionPolicy: 'FOLLOW_AMOUNT_SIGN',
+      amountStrategy: 'FULL_AMOUNT',
+    }],
+  },
+  {
+    // 公司承担的金流费是成本，独立类型避免把成本记成收入。
+    postingTypeCode: 'SLH_BILL_COMPANY_FEE_ALLOCATION',
+    businessCategory: 'COST',
+    amountSignPolicy: 'POSITIVE_ONLY',
+    requiresUser: false,
+    inputMode: 'STANDARD',
+    legs: [{
+      position: 1,
+      accountTarget: 'COMPANY',
+      directionPolicy: 'DEBIT',
       amountStrategy: 'FULL_AMOUNT',
     }],
   },

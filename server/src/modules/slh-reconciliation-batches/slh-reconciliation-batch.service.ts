@@ -7,7 +7,10 @@ import { AccessControlService } from '../access-control/access-control.service'
 import { AuditService } from '../audit/audit.service'
 import {
   SLH_BILL_COMPANY_ALLOCATION_POSTING_TYPE,
+  SLH_BILL_COMPANY_FEE_ALLOCATION_POSTING_TYPE,
   SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER,
+  SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_CONSUMER,
+  SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_SOURCE,
   SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE,
   SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER,
   SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER,
@@ -736,11 +739,11 @@ export class SlhReconciliationBatchService {
             target: feeTarget,
             context: {
               ...context,
-              sourceCode: SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE,
-              consumerCode: SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER,
+              sourceCode: SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_SOURCE,
+              consumerCode: SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_CONSUMER,
             },
             input: {
-              postingTypeCode: SLH_BILL_COMPANY_ALLOCATION_POSTING_TYPE,
+              postingTypeCode: SLH_BILL_COMPANY_FEE_ALLOCATION_POSTING_TYPE,
               amount: feeAmount.toFixed(2), businessId: currentOrder.id, businessNo: currentOrder.orderNo,
               summary: COMPLETION_FEE_SUMMARY,
               metadata: metadata(member.id, settlement.id, currentOrder.orderNo, rateSource, foreignUnitsPerCny, feeTarget, null),

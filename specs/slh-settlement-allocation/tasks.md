@@ -4,7 +4,7 @@
 
 - [x] `PORT_FEE` 枚举与备注解析
 - [x] `allocation_snapshot` 迁移
-- [x] 公司入账类型 / 规则 / 来源 / 形状约束
+- [x] 公司入账类型（结算 REVENUE / 金流费 COST）/ 规则 / 来源 / 形状约束
 - [x] 分摊纯函数（默认目标、贡献额、尾差、校验、快照读取、稳定序列化）
 - [x] 结算写入快照、指纹升 v2、相同结算比较改用稳定序列化
 - [x] 批次详情返回 `currentSalesOrder`
@@ -28,7 +28,7 @@
 ## 验证
 
 - [x] server typecheck / lint / 全量单测
-- [x] `slh-reconciliation-batch.e2e-spec.ts` 全量 40 条
+- [x] `slh-reconciliation-batch.e2e-spec.ts` 全量 41 条
 - [x] `shipment-storage-claim.e2e-spec.ts` 回归（5 条）
 - [x] 已结算后调货阻断单测（`shipment-storage.service.spec`）
 - [x] web typecheck / lint / SLH 页面测试

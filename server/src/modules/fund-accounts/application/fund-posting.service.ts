@@ -80,7 +80,10 @@ import {
 } from './fund-purchase-payment'
 import {
   SLH_BILL_COMPANY_ALLOCATION_POSTING_TYPE,
+  SLH_BILL_COMPANY_FEE_ALLOCATION_POSTING_TYPE,
   SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER,
+  SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_CONSUMER,
+  SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_SOURCE,
   SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE,
   SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER,
   SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER,
@@ -155,6 +158,8 @@ const CONTROLLED_POSTING_TYPE_BY_SOURCE_CONSUMER: Readonly<Record<string, string
     SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE,
   [`${SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE}/${SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER}`]:
     SLH_BILL_COMPANY_ALLOCATION_POSTING_TYPE,
+  [`${SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_SOURCE}/${SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_CONSUMER}`]:
+    SLH_BILL_COMPANY_FEE_ALLOCATION_POSTING_TYPE,
   [`${INVOICE_REQUEST_FUND_SOURCE}/${INVOICE_REQUEST_SETTLE_CONSUMER}`]:
     INVOICE_REQUEST_POSTING_TYPE,
   [`${FUND_WITHDRAWAL_FUND_SOURCE}/${FUND_WITHDRAWAL_APPROVE_CONSUMER}`]:
@@ -585,6 +590,9 @@ export class FundPostingApplicationService extends FundPostingService {
     const billCompanyAllocation = action === 'POST'
       && context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE
       && context.consumerCode === SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER
+    const billCompanyFeeAllocation = action === 'POST'
+      && context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_SOURCE
+      && context.consumerCode === SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_CONSUMER
     // 开票申请结算：只有一个动作（服务费与邮寄费合成一笔成本），不支持反向。
     const invoiceSettlement = action === 'POST' && context.sourceCode === INVOICE_REQUEST_FUND_SOURCE
       && context.consumerCode === INVOICE_REQUEST_SETTLE_CONSUMER
@@ -595,7 +603,7 @@ export class FundPostingApplicationService extends FundPostingService {
       && [SHIPMENT_STORAGE_RELEASE_CONSUMER_CODE, SHIPMENT_STORAGE_CLAIM_CONSUMER_CODE]
         .includes(context.consumerCode)
     if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement && !billCompanyAllocation
-      && !invoiceSettlement && !fundWithdrawal && !shipmentStorage) {
+      && !billCompanyFeeAllocation && !invoiceSettlement && !fundWithdrawal && !shipmentStorage) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     return normalizeFundAccountCommandContext({
@@ -1296,6 +1304,16 @@ export class FundPostingApplicationService extends FundPostingService {
         || !postingType.ruleVersion.legs.some(leg => leg.accountTarget === 'COMPANY')
         || businessAmountMinor === 0n
         || plan.entries.some(entry => entry.direction !== (businessAmountMinor > 0n ? 'CREDIT' : 'DEBIT'))
+      if (invalid) throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
+    }
+    // 公司承担金流费语义固定：成本、必须大于 0、只出账，不允许用户比例。
+    if (request.context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_SOURCE) {
+      const businessAmountMinor = parseFundAmountMinor(plan.businessAmount)
+      const invalid = postingType.businessCategory !== 'COST'
+        || postingType.requiresUser
+        || !postingType.ruleVersion.legs.some(leg => leg.accountTarget === 'COMPANY')
+        || businessAmountMinor <= 0n
+        || plan.entries.some(entry => entry.direction !== 'DEBIT')
       if (invalid) throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
     }
     // 开票申请结算语义固定：归属人的成本支出，必须大于 0 且只出账；

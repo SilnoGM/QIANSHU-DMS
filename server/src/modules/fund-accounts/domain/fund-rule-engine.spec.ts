@@ -14,8 +14,8 @@ function requireInitialRule(postingTypeCode: string) {
 }
 
 describe('fund posting rule engine', () => {
-  it('ships exactly ten valid initial posting rules', () => {
-    expect(INITIAL_FUND_POSTING_RULES).toHaveLength(10)
+  it('ships exactly eleven valid initial posting rules', () => {
+    expect(INITIAL_FUND_POSTING_RULES).toHaveLength(11)
     for (const rule of INITIAL_FUND_POSTING_RULES) {
       expect(validateFundPostingRule(rule)).toBe(rule)
     }
