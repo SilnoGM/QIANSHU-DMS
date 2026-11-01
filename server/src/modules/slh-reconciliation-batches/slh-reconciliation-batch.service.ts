@@ -1073,6 +1073,11 @@ export class SlhReconciliationBatchService {
             settlementAmountCny: amounts.settlementAmountCny,
             paymentFeeAmountCny: amounts.paymentFeeAmountCny,
             supersededSettlementId: active?.id ?? null,
+            // 分摊快照已在结算记录里留全量；审计只补几个便于检索的目标汇总。
+            allocationOverrideCount: allocation.items.filter(item => item.overridden).length,
+            allocationOriginAmountCny: allocation.parties.find(party => party.target === 'ORIGIN_ORDER')?.settlementAmountCny ?? null,
+            allocationCompanyAmountCny: allocation.parties.find(party => party.target === 'COMPANY')?.settlementAmountCny ?? null,
+            allocationFeeTarget: allocation.items.find(item => item.sourceType === 'PAYMENT_FEE')?.target ?? null,
           },
         })
         return created.id
