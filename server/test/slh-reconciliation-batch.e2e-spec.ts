@@ -317,7 +317,6 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
 
   /** 已签收订单夹具：数据库要求已签收订单下的有效货件全部有签收事实；按真实生命周期先装柜再签收。 */
   async function signOrderWithShipments(salesOrderId: string, extra: { readonly orderStatus?: 'CONFIRMED' | 'PENDING_RECONCILIATION' } = {}) {
-    const now = new Date()
     const parts = await h.prisma.purchaseOrderPart.findMany({
       where: {
         purchaseOrder: { is: { salesOrderId, purchaseType: 'SALES_LINKED', orderStatus: { not: 'CANCELLED' } } },
@@ -327,16 +326,24 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
     })
     const unloaded = parts.filter(part => part.loadedAt === null).map(part => part.id)
     if (unloaded.length > 0) {
-      await h.prisma.purchaseOrderPart.updateMany({
-        where: { id: { in: unloaded } },
-        data: { loadedAt: now, loadedById: h.fixture.actor.id, loadedRecordedAt: now },
-      })
+      // 使用数据库时钟，避免宿主/容器时钟偏差触发「签收时间不能是未来」或 delivered_at >= loaded_at。
+      await h.prisma.$executeRaw(Prisma.sql`
+        UPDATE "purchase_order_parts"
+           SET "loaded_at" = clock_timestamp(),
+               "loaded_by_id" = ${h.fixture.actor.id}::uuid,
+               "loaded_recorded_at" = clock_timestamp()
+         WHERE "id" IN (${Prisma.join(unloaded.map(id => Prisma.sql`${id}::uuid`))})
+           AND "loaded_at" IS NULL
+      `)
     }
     if (parts.length > 0) {
-      await h.prisma.purchaseOrderPart.updateMany({
-        where: { id: { in: parts.map(part => part.id) } },
-        data: { deliveredAt: now, deliveredById: h.fixture.actor.id, deliveredRecordedAt: now },
-      })
+      await h.prisma.$executeRaw(Prisma.sql`
+        UPDATE "purchase_order_parts"
+           SET "delivered_at" = GREATEST(COALESCE("loaded_at", clock_timestamp()), clock_timestamp() - interval '1 second'),
+               "delivered_by_id" = ${h.fixture.actor.id}::uuid,
+               "delivered_recorded_at" = clock_timestamp()
+         WHERE "id" IN (${Prisma.join(parts.map(part => Prisma.sql`${part.id}::uuid`))})
+      `)
     }
     await h.prisma.salesOrder.update({
       where: { id: salesOrderId },
