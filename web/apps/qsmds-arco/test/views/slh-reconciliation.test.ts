@@ -112,6 +112,12 @@ test('三语的 slhReconciliation 组文案键完全对齐', () => {
   }
 })
 
+test('调货翻转卡标题改为调货后销售单与原销售单', () => {
+  assert.equal(zhCn.slhReconciliation.detail.flip.currentTitle, '调货后销售单')
+  assert.equal(zhCn.slhReconciliation.detail.flip.originTitle, '原销售单')
+  assert.equal(zhCn.slhReconciliation.detail.transfer.targetOrder, '调货后销售单')
+})
+
 test('批次状态与「不能核对」原因的三语文案齐全', () => {
   for (const message of MESSAGES) {
     assertTranslated(message.slhReconciliation.batchStatus, BATCH_STATUSES)
@@ -1950,9 +1956,13 @@ test('调货翻转卡：顶栏翻转、双面可访问性、成本/变更摘要�
   assert.match(flip, /@flip="toggle"/u)
   // 货件/柜号/唛头改两行；仓库胶囊固定宽度、超长截断。
   assert.match(transfer, /gap-x-2 gap-y-1/u)
-  assert.match(transfer, /w-60/u)
+  assert.match(transfer, /w-52/u)
+  assert.match(transfer, /text-xs/u)
   assert.match(transfer, /truncate/u)
   assert.match(transfer, /:title=/u)
+  // 认领明细并入成本区块；承担人用「原承担人 → 现承担人」一行。
+  assert.ok(transfer.indexOf('transfer.lineSummary\'') > transfer.indexOf('bg-muted/20'))
+  assert.match(transfer, /transfer\.originalBearer'[\s\S]*?i-lucide:arrow-right[\s\S]*?transfer\.currentBearer'/u)
   // 认领明细去底色，hover/focus 展示产品 Tooltip。
   assert.match(transfer, /productsTooltipAria/u)
   assert.match(transfer, /productsEmpty/u)

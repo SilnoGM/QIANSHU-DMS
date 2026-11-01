@@ -107,10 +107,10 @@ function codText(value: string | null | undefined): string {
         </FaTag>
       </div>
       <span
-        class="text-sm text-indigo-700 px-3 py-1.5 border border-indigo-200 rounded-lg bg-indigo-50 inline-flex shrink-0 gap-1.5 max-w-full w-60 items-center dark:text-indigo-300 dark:border-indigo-500/30 dark:bg-indigo-500/10"
+        class="text-xs text-indigo-700 px-2 py-1 border border-indigo-200 rounded-md bg-indigo-50 inline-flex shrink-0 gap-1 max-w-full w-52 items-center dark:text-indigo-300 dark:border-indigo-500/30 dark:bg-indigo-500/10"
         :title="`${locationLabel} · ${transfer.warehouseLabel}`"
       >
-        <FaIcon name="i-lucide:map-pin" class="shrink-0 size-4" aria-hidden="true" />
+        <FaIcon name="i-lucide:map-pin" class="shrink-0 size-3.5" aria-hidden="true" />
         <span class="min-w-0 truncate">{{ locationLabel }} · {{ transfer.warehouseLabel }}</span>
       </span>
     </div>
@@ -171,51 +171,53 @@ function codText(value: string | null | undefined): string {
       </div>
     </div>
 
-    <dl class="m-0 flex flex-col gap-2 min-w-0">
-      <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-center">
-        <dt class="qs-type-compact-label text-muted-foreground">
-          {{ t('slhReconciliation.detail.transfer.lineSummary') }}
-        </dt>
-        <dd class="m-0 min-w-0">
-          <FaTooltip>
-            <span
-              tabindex="0"
-              class="qs-type-data cursor-pointer"
-              :aria-label="t('slhReconciliation.detail.transfer.productsTooltipAria')"
-            >
-              {{ lineSummary }}
-            </span>
-            <template #content>
-              <div class="text-background flex flex-col gap-1 max-w-xs">
-                <p v-if="lines.length === 0" class="m-0">
-                  {{ t('slhReconciliation.detail.transfer.productsEmpty') }}
-                </p>
-                <p v-for="line in lines" :key="`${line.lineNumber}-${line.productName}`" class="m-0 break-words">
-                  {{ line.productName }} × {{ line.quantity }}
-                </p>
-              </div>
-            </template>
-          </FaTooltip>
-        </dd>
-      </div>
-      <div class="p-3 border border-border rounded-lg bg-muted/20 gap-x-3 gap-y-2 grid grid-cols-[6.5rem_minmax(0,1fr)] min-w-0 items-center">
-        <dt class="qs-type-compact-label text-muted-foreground">
-          {{ t('slhReconciliation.detail.transfer.cost') }}
-        </dt>
-        <dd class="m-0 min-w-0">
-          <AmountDisplay
-            v-if="costTotal !== null"
-            :value="costTotal"
-            currency="CNY"
-            :currencies="currencyCatalog.currencies.value"
-            class="!text-xl !font-semibold"
-          />
-          <span v-else class="qs-type-data">—</span>
-        </dd>
-        <dt class="qs-type-compact-label text-muted-foreground">
-          {{ t('slhReconciliation.detail.transfer.originalBearer') }}
-        </dt>
-        <dd class="m-0 min-w-0">
+    <div class="flex flex-col gap-2 min-w-0">
+      <div class="p-3 border border-border rounded-lg bg-muted/20 flex flex-col gap-2 min-w-0">
+        <div class="flex flex-wrap gap-x-3 gap-y-1 min-w-0 items-baseline justify-between">
+          <span class="qs-type-compact-label text-muted-foreground">
+            {{ t('slhReconciliation.detail.transfer.lineSummary') }}
+          </span>
+          <span class="min-w-0">
+            <FaTooltip>
+              <span
+                tabindex="0"
+                class="qs-type-data cursor-pointer"
+                :aria-label="t('slhReconciliation.detail.transfer.productsTooltipAria')"
+              >
+                {{ lineSummary }}
+              </span>
+              <template #content>
+                <div class="text-background flex flex-col gap-1 max-w-xs">
+                  <p v-if="lines.length === 0" class="m-0">
+                    {{ t('slhReconciliation.detail.transfer.productsEmpty') }}
+                  </p>
+                  <p v-for="line in lines" :key="`${line.lineNumber}-${line.productName}`" class="m-0 break-words">
+                    {{ line.productName }} × {{ line.quantity }}
+                  </p>
+                </div>
+              </template>
+            </FaTooltip>
+          </span>
+        </div>
+        <div class="flex flex-wrap gap-x-3 gap-y-1 min-w-0 items-baseline justify-between">
+          <span class="qs-type-compact-label text-muted-foreground">
+            {{ t('slhReconciliation.detail.transfer.cost') }}
+          </span>
+          <span class="min-w-0">
+            <AmountDisplay
+              v-if="costTotal !== null"
+              :value="costTotal"
+              currency="CNY"
+              :currencies="currencyCatalog.currencies.value"
+              class="!text-xl !font-semibold"
+            />
+            <span v-else class="qs-type-data">—</span>
+          </span>
+        </div>
+        <div class="flex flex-wrap gap-x-2 gap-y-1 min-w-0 items-center">
+          <span class="qs-type-meta text-muted-foreground">
+            {{ t('slhReconciliation.detail.transfer.originalBearer') }}
+          </span>
           <QsPersonDisplay
             v-if="originalBearer !== null"
             :display-name="originalBearer.displayName"
@@ -224,11 +226,10 @@ function codText(value: string | null | undefined): string {
             class="max-w-full"
           />
           <span v-else class="qs-type-data">—</span>
-        </dd>
-        <dt class="qs-type-compact-label text-muted-foreground">
-          {{ t('slhReconciliation.detail.transfer.currentBearer') }}
-        </dt>
-        <dd class="m-0 min-w-0">
+          <FaIcon name="i-lucide:arrow-right" class="text-muted-foreground size-3.5" aria-hidden="true" />
+          <span class="qs-type-meta text-muted-foreground">
+            {{ t('slhReconciliation.detail.transfer.currentBearer') }}
+          </span>
           <QsPersonDisplay
             v-if="currentBearer !== null"
             :display-name="currentBearer.displayName"
@@ -237,13 +238,13 @@ function codText(value: string | null | undefined): string {
             class="max-w-full"
           />
           <span v-else class="qs-type-data">—</span>
-        </dd>
+        </div>
       </div>
       <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-center">
-        <dt class="qs-type-compact-label text-muted-foreground">
+        <span class="qs-type-compact-label text-muted-foreground">
           {{ t('slhReconciliation.detail.transfer.changeSummary') }}
-        </dt>
-        <dd class="m-0 flex flex-wrap gap-x-1 gap-y-1 min-w-0 items-center">
+        </span>
+        <span class="m-0 flex flex-wrap gap-x-1 gap-y-1 min-w-0 items-center">
           <span class="qs-type-data">{{ changeSummary }}</span>
           <FaTooltip>
             <span
@@ -293,8 +294,8 @@ function codText(value: string | null | undefined): string {
               </div>
             </template>
           </FaTooltip>
-        </dd>
+        </span>
       </div>
-    </dl>
+    </div>
   </section>
 </template>

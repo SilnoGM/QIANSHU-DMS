@@ -16,11 +16,12 @@
 - [x] 抽出 `slh-order-section.vue`
 - [x] 新增 `slh-order-flip-card.vue`（顶栏翻转、3D、inert/aria-live、减少动效）
 - [x] 新增 `slh-transfer-record.vue`（按设计稿：标题+状态+仓库、货件三段、来源→当前、行数、成本、变更；移除时间/申请/审批字段）
-- [x] 货件编号、柜号唛头分两行；仓库胶囊固定宽度并截断
+- [x] 货件编号、柜号唛头分两行；仓库胶囊缩小并截断
 - [x] 来源销售单可点击翻到背面（与右上角翻转共用 `toggle`）
-- [x] 「N 行 / N 件」去底色 + 产品 Tooltip
+- [x] 「N 行 / N 件」并入成本区块，去底色 + 产品 Tooltip
 - [x] 变更摘要 info 图标 + 完整前后值 Tooltip（方案 B），移除固定高度滚动
-- [x] 转移成本做成区块，内含总额与原/现承担人，只显示人
+- [x] 转移成本做成区块，内含认领明细、总额与「原承担人 → 现承担人」人员行
+- [x] 正反面标题改为「调货后销售单」「原销售单」
 - [x] 详情页调货行分支；普通行保留原卡片
 - [x] 底部「查看完整寄仓记录」新标签页入口与权限禁用
 - [x] 核对焦点改为当前销售单并改标签
@@ -30,7 +31,7 @@
 
 - [x] server 4321 单测
 - [x] `slh-reconciliation-batch.e2e-spec.ts` 41 条
-- [x] web SLH 58 条 + typecheck/lint/stylelint/build
+- [x] web SLH 59 条 + typecheck/lint/stylelint/build
 - [x] contract check
 - [x] 演示批次 `SRB/20261101-001` 数据准备
 - [x] 编译后查询服务实测 `transferRecord.lines=1`、`changes=3` 且含完整前后值

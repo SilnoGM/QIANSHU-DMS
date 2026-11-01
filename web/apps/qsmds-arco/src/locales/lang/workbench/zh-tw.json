@@ -349,17 +349,17 @@
       "focusBillCod": "帳單明細行 · 代收貨款",
       "focusEmptyNote": "本行不涉及待收",
       "flip": {
-        "currentTitle": "當前銷售單（乙）",
-        "originTitle": "原銷售單（甲）· 採購資訊",
-        "showOrigin": "查看原銷售訂單與採購資訊",
-        "backToCurrent": "返回當前銷售訂單與調貨記錄",
-        "announceCurrent": "已顯示當前銷售訂單與調貨記錄",
-        "announceOrigin": "已顯示原銷售訂單與採購資訊"
+        "currentTitle": "調貨後銷售單",
+        "originTitle": "原銷售單",
+        "showOrigin": "查看原銷售單與採購資訊",
+        "backToCurrent": "返回調貨後銷售單與調貨記錄",
+        "announceCurrent": "已顯示調貨後銷售單與調貨記錄",
+        "announceOrigin": "已顯示原銷售單與採購資訊"
       },
       "transfer": {
         "title": "調貨記錄",
         "sourceOrder": "來源銷售單",
-        "targetOrder": "當前銷售單",
+        "targetOrder": "調貨後銷售單",
         "transferTo": "調貨至",
         "routeShipmentNo": "貨件編號：",
         "routeContainerMark": "櫃號嘜頭：",

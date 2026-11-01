@@ -349,17 +349,17 @@
       "focusBillCod": "Bill line · COD",
       "focusEmptyNote": "Not applicable for this row",
       "flip": {
-        "currentTitle": "Current sales order (B)",
-        "originTitle": "Original sales order (A) · Purchase info",
+        "currentTitle": "Sales order after transfer",
+        "originTitle": "Original sales order",
         "showOrigin": "View original sales order and purchase info",
-        "backToCurrent": "Back to current sales order and transfer record",
-        "announceCurrent": "Showing the current sales order and transfer record",
+        "backToCurrent": "Back to sales order after transfer and transfer record",
+        "announceCurrent": "Showing the sales order after transfer and transfer record",
         "announceOrigin": "Showing the original sales order and purchase info"
       },
       "transfer": {
         "title": "Transfer record",
         "sourceOrder": "Source sales order",
-        "targetOrder": "Current sales order",
+        "targetOrder": "Sales order after transfer",
         "transferTo": "Transfer to",
         "routeShipmentNo": "Shipment No.: ",
         "routeContainerMark": "Container / Mark: ",

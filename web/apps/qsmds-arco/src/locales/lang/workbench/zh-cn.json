@@ -358,17 +358,17 @@
       "focusBillCod": "账单明细行 · 代收货款",
       "focusEmptyNote": "本行不涉及待收",
       "flip": {
-        "currentTitle": "当前销售单（乙）",
-        "originTitle": "原销售单（甲）· 采购信息",
-        "showOrigin": "查看原销售订单与采购信息",
-        "backToCurrent": "返回当前销售订单与调货记录",
-        "announceCurrent": "已显示当前销售订单与调货记录",
-        "announceOrigin": "已显示原销售订单与采购信息"
+        "currentTitle": "调货后销售单",
+        "originTitle": "原销售单",
+        "showOrigin": "查看原销售单与采购信息",
+        "backToCurrent": "返回调货后销售单与调货记录",
+        "announceCurrent": "已显示调货后销售单与调货记录",
+        "announceOrigin": "已显示原销售单与采购信息"
       },
       "transfer": {
         "title": "调货记录",
         "sourceOrder": "来源销售单",
-        "targetOrder": "当前销售单",
+        "targetOrder": "调货后销售单",
         "transferTo": "调货至",
         "routeShipmentNo": "货件编号：",
         "routeContainerMark": "柜号唛头：",
