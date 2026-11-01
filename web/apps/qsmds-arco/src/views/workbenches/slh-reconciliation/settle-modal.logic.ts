@@ -386,6 +386,9 @@ export interface SlhSettleAllocationPartyView {
   readonly target: SlhSettleAllocationTarget
   readonly salesOrderId: string | null
   readonly salesOrderNo: string | null
+  /** 出单人展示信息；公司目标为 null。 */
+  readonly issuerDisplayName: string | null
+  readonly issuerAvatarUrl: string | null
   readonly settlementAmountCny: string | null
   readonly paymentFeeAmountCny: string | null
 }
@@ -590,6 +593,8 @@ export function buildSettleAllocation(
         target,
         salesOrderId: order?.id ?? null,
         salesOrderNo: order?.orderNo ?? null,
+        issuerDisplayName: order?.issuerDisplayName ?? null,
+        issuerAvatarUrl: order?.issuerAvatarUrl ?? null,
         settlementAmountCny: settleMoney(groupItems
           .filter(item => item.sourceType !== 'PAYMENT_FEE')
           .reduce((sum, item) => sum.plus(item.signedContributionCny), new Decimal(0))),

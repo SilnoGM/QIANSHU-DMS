@@ -13,6 +13,7 @@ import type { SlhReconciliationBatchDetailDto, SlhReconciliationBatchMemberDto }
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import {
   buildSettleAllocation,
@@ -109,6 +110,12 @@ const allocationPartyGridClass = computed(() => {
   }
   return 'sm:grid-cols-1'
 })
+const isTransferred = computed(() => {
+  const member = props.member
+  return member?.salesOrder != null
+    && member.currentSalesOrder != null
+    && member.salesOrder.id !== member.currentSalesOrder.id
+})
 const allocationTargetOptions = computed(() => {
   const member = props.member
   const origin = member?.salesOrder
@@ -116,10 +123,17 @@ const allocationTargetOptions = computed(() => {
   if (origin === null || origin === undefined || current === null || current === undefined) {
     return []
   }
-  const options = origin.id === current.id
-    ? []
-    : [{ label: t('slhReconciliation.settle.allocation.targetOrigin', { orderNo: origin.orderNo }), value: 'ORIGIN_ORDER' }]
-  options.push({ label: t('slhReconciliation.settle.allocation.targetCurrent', { orderNo: current.orderNo }), value: 'CURRENT_ORDER' })
+  const options: Array<{ label: string, value: SlhSettleAllocationTarget }> = []
+  if (isTransferred.value) {
+    options.push({
+      label: allocationOptionLabel('ORIGIN_ORDER', origin.orderNo, origin.issuerDisplayName),
+      value: 'ORIGIN_ORDER',
+    })
+  }
+  options.push({
+    label: allocationOptionLabel('CURRENT_ORDER', current.orderNo, current.issuerDisplayName),
+    value: 'CURRENT_ORDER',
+  })
   options.push({ label: t('slhReconciliation.settle.allocation.targetCompany'), value: 'COMPANY' })
   return options
 })
@@ -135,12 +149,43 @@ function allocationItemAmount(item: SlhSettleAllocationItemView): string {
   return formatBareAmount(item.amount, item.currencyCode, currencyCatalog.currencies.value)
 }
 
-function allocationPartyTitle(target: SlhSettleAllocationTarget): string {
+function allocationOptionLabel(
+  target: SlhSettleAllocationTarget,
+  orderNo: string,
+  issuerDisplayName: string | null | undefined,
+): string {
+  const person = issuerDisplayName?.trim() ?? ''
+  if (person === '') {
+    return t('slhReconciliation.settle.allocation.optionFallback', {
+      role: allocationPartyRoleTitle(target),
+      orderNo,
+    })
+  }
+  const optionKey = target === 'ORIGIN_ORDER'
+    ? 'optionOrigin'
+    : isTransferred.value ? 'optionCurrentTransfer' : 'optionCurrent'
+  return t(`slhReconciliation.settle.allocation.${optionKey}`, { person, orderNo })
+}
+
+function allocationPartyRoleTitle(target: SlhSettleAllocationTarget): string {
   if (target === 'COMPANY') {
     return t('slhReconciliation.settle.allocation.partyCompany')
   }
-  const key = target === 'ORIGIN_ORDER' ? 'partyOriginTitle' : 'partyCurrentTitle'
-  return t(`slhReconciliation.settle.allocation.${key}`)
+  if (!isTransferred.value) {
+    return t('slhReconciliation.settle.allocation.partyCurrentRole')
+  }
+  return t(target === 'ORIGIN_ORDER'
+    ? 'slhReconciliation.settle.allocation.partyOriginRole'
+    : 'slhReconciliation.settle.allocation.partyCurrentTransferRole')
+}
+
+function allocationPartyShortRole(target: SlhSettleAllocationTarget): string | null {
+  if (target === 'COMPANY' || !isTransferred.value) {
+    return null
+  }
+  return t(target === 'ORIGIN_ORDER'
+    ? 'slhReconciliation.settle.allocation.partyOriginShort'
+    : 'slhReconciliation.settle.allocation.partyCurrentShort')
 }
 
 function allocationPartyDirectionKey(value: string | null): string | null {
@@ -573,7 +618,7 @@ const canNext = computed(() => selectedRate.value !== null)
                   v-else
                   :model-value="item.target"
                   :options="allocationTargetOptions"
-                  class="ml-auto max-w-full w-64"
+                  class="ml-auto max-w-full w-80"
                   @update:model-value="changeAllocationTarget(item.key, $event)"
                 />
               </div>
@@ -597,13 +642,28 @@ const canNext = computed(() => selectedRate.value !== null)
               :key="party.target"
               class="p-3 border border-border rounded-lg bg-card flex flex-col gap-2 min-w-0"
             >
-              <div class="min-w-0">
-                <span class="qs-type-meta text-muted-foreground block truncate">
-                  {{ allocationPartyTitle(party.target) }}
-                </span>
+              <div class="flex flex-col gap-1 min-w-0">
+                <div class="flex flex-wrap gap-2 min-w-0 items-center">
+                  <QsPersonDisplay
+                    v-if="party.issuerDisplayName !== null"
+                    :display-name="party.issuerDisplayName"
+                    :avatar-url="party.issuerAvatarUrl"
+                    size="sm"
+                    class="max-w-full"
+                  />
+                  <span v-else class="text-sm font-medium truncate">
+                    {{ allocationPartyRoleTitle(party.target) }}
+                  </span>
+                  <span
+                    v-if="allocationPartyShortRole(party.target) !== null"
+                    class="qs-type-meta text-muted-foreground px-2 py-0.5 border border-border rounded-md"
+                  >
+                    {{ allocationPartyShortRole(party.target) }}
+                  </span>
+                </div>
                 <span
                   v-if="party.salesOrderNo !== null"
-                  class="text-xs qs-type-data text-muted-foreground mt-0.5 block break-all"
+                  class="text-xs qs-type-data text-muted-foreground block break-all"
                   :title="party.salesOrderNo"
                 >
                   {{ party.salesOrderNo }}

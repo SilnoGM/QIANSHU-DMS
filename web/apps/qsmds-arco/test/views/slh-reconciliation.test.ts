@@ -963,6 +963,11 @@ test('入账分摊：甲承担二派/寄仓、乙承担其余费用，金流费�
     ['ORIGIN_ORDER', 'SO-A', '-70.00', null],
     ['CURRENT_ORDER', 'SO-B', '-40.00', '7.00'],
   ])
+  // 两个目标即使是同一出单人，也要靠单号/角色区分；人员字段由销售单出单人提供。
+  assert.deepEqual(allocation.parties.map(party => [party.target, party.issuerDisplayName, party.issuerAvatarUrl]), [
+    ['ORIGIN_ORDER', '张三', null],
+    ['CURRENT_ORDER', '张三', null],
+  ])
   assert.deepEqual(allocation.totals, {
     settlementAmountCny: '-110.00',
     paymentFeeAmountCny: '7.00',
@@ -1051,6 +1056,13 @@ test('对账结算弹窗：分摊逐项选择目标、改目标必填原因、CO
   assert.match(page, /partyOutflow/u)
   assert.match(page, /partyTotalSettlement/u)
   assert.match(page, /partyTotalMatches/u)
+  assert.match(page, /QsPersonDisplay/u)
+  assert.match(page, /optionOrigin/u)
+  assert.match(page, /optionCurrentTransfer/u)
+  assert.match(page, /partyOriginShort/u)
+  assert.match(page, /partyCurrentShort/u)
+  assert.match(page, /isTransferred/u)
+  assert.match(page, /w-80/u)
   assert.doesNotMatch(page, /gap-2 grid sm:grid-cols-3/u)
   assert.match(page, /allocationTargets: \[\.\.\.currentAllocation\.payload\]/u)
   assert.match(page, /item\.sourceType === 'COD'[\s\S]{0,200}?codFixed/u)
