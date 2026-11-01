@@ -1009,6 +1009,23 @@ export class ShipmentStorageService {
     return this.getById(storageRecordId)
   }
 
+  /**
+   * 账单已经结算的货件不能再调货：结算快照按当时的当前销售单分摊，
+   * 再改归属会让已入账的资金与货件事实不符。直接认领与审批都走 claim，申请入口也先挡住。
+   */
+  private async assertShipmentNotSettled(
+    transaction: Prisma.TransactionClient,
+    shipmentId: string,
+  ): Promise<void> {
+    const settled = await transaction.slhReconciliationSettlement.findFirst({
+      where: { status: 'ACTIVE', loadingItem: { shipmentId } },
+      select: { id: true },
+    })
+    if (settled !== null) {
+      storageFailure('SHIPMENT_STORAGE_CLAIM_SETTLED', '该货件的账单已经结算，不能再调货', HttpStatus.CONFLICT)
+    }
+  }
+
   async claim(
     context: ShipmentStorageMutationContext,
     storageRecordId: string,
@@ -1053,6 +1070,7 @@ export class ShipmentStorageService {
       if (ownership?.ownerType !== 'STORAGE_POOL' || ownership.state !== 'ACTIVE') {
         storageFailure('SHIPMENT_STORAGE_STATE_CHANGED', '货件归属已变化，请刷新后重试', HttpStatus.CONFLICT)
       }
+      await this.assertShipmentNotSettled(transaction, record.shipmentId)
       if (claimRequestId === undefined) {
         const pendingRequest = await transaction.shipmentStorageClaimRequest.findFirst({
           where: { storageRecordId, status: 'PENDING' },
@@ -1840,6 +1858,7 @@ export class ShipmentStorageService {
         if (ownership?.ownerType !== 'STORAGE_POOL' || ownership.state !== 'ACTIVE') {
           storageFailure('SHIPMENT_STORAGE_STATE_CHANGED', '货件归属已变化，请刷新后重试', HttpStatus.CONFLICT)
         }
+        await this.assertShipmentNotSettled(transaction, record.shipmentId)
         const pendingRequest = await transaction.shipmentStorageClaimRequest.findFirst({
           where: { storageRecordId, status: 'PENDING' },
           select: { id: true },

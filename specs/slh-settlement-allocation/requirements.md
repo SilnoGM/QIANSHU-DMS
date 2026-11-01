@@ -23,6 +23,7 @@
 | 甲已终止/取消 | 允许扣费；资金层要求甲出单人存在资金账户 |
 | 费用明细缺失/对不上 | 阻断结算，不猜测分摊 |
 | 甲 = 乙 | 甲的费用并入乙，不重复生成目标 |
+| 已结算后调货 | 装柜明细存在 ACTIVE 结算记录时，该货件不能再发起调货申请或直接认领；审批复用同一条校验 |
 
 ## 3. 阻断与失败
 
@@ -31,6 +32,7 @@
 - COD 改到甲或公司：`SLH_RECON_ALLOCATION_COD_TARGET_INVALID`。
 - 覆盖项 key 不存在或重复：`SLH_RECON_ALLOCATION_OVERRIDE_INVALID`。
 - 甲出单人没有资金账户：完成批次时返回 `SLH_RECON_SETTLEMENT_ORIGIN_ACCOUNT_MISSING`。
+- 货件已有 ACTIVE 结算记录时发起/审批调货：返回 `SHIPMENT_STORAGE_CLAIM_SETTLED`。
 
 ## 4. 验收
 

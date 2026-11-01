@@ -11,6 +11,7 @@
 - [x] 结算 / 核对记录返回逐项分摊与目标合计
 - [x] 资金入账按甲/乙/公司拆分，金流费按当前销售单去重
 - [x] 甲出单人资金账户预检
+- [x] 已结算后调货阻断（申请、直接认领、审批）
 - [x] 历史无快照结算保持旧口径
 - [x] 资金引擎支持公司来源（预览、入账、比例快照为 null）
 - [x] 单测与 e2e
@@ -28,6 +29,8 @@
 
 - [x] server typecheck / lint / 全量单测
 - [x] `slh-reconciliation-batch.e2e-spec.ts` 全量 40 条
+- [x] `shipment-storage-claim.e2e-spec.ts` 回归（5 条）
+- [ ] 已结算后调货阻断的自动化用例：当前由代码审查 + claim e2e 回归覆盖，尚未构造真实 ACTIVE 结算夹具
 - [x] web typecheck / lint / SLH 页面测试
 - [x] contract sync + contract check
 - [x] dev 库迁移状态
