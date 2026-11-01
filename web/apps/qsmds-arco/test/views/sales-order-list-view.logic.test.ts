@@ -117,7 +117,7 @@ test('待办视图不展示全部待办，并以待采购作为首个有效分�
   ])
 })
 
-test('全部订单视图排除草稿，并把四类正式状态映射到可信服务端查询', () => {
+test('全部订单视图排除草稿，并把五类正式状态映射到可信服务端查询', () => {
   assert.deepEqual(
     getSalesOrderStatusItems('all').map(item => [item.value, item.label]),
     [
@@ -126,6 +126,7 @@ test('全部订单视图排除草稿，并把四类正式状态映射到可信�
       ['PENDING_RECONCILIATION', '待对账'],
       ['CANCELLED', '已取消'],
       ['COMPLETED', '已完成'],
+      ['TERMINATED', '已终止'],
     ],
   )
   assert.deepEqual(resolveSalesOrderQueryTargets('all', 'ALL'), [
@@ -133,12 +134,16 @@ test('全部订单视图排除草稿，并把四类正式状态映射到可信�
     { orderStatus: 'PENDING_RECONCILIATION' },
     { orderStatus: 'CANCELLED' },
     { orderStatus: 'COMPLETED' },
+    { orderStatus: 'TERMINATED' },
   ])
   assert.deepEqual(resolveSalesOrderQueryTargets('all', 'PENDING_RECONCILIATION'), [
     { orderStatus: 'PENDING_RECONCILIATION' },
   ])
   assert.deepEqual(resolveSalesOrderQueryTargets('all', 'COMPLETED'), [
     { orderStatus: 'COMPLETED' },
+  ])
+  assert.deepEqual(resolveSalesOrderQueryTargets('all', 'TERMINATED'), [
+    { orderStatus: 'TERMINATED' },
   ])
 })
 

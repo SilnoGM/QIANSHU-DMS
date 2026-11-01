@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CalendarDateRangeValue } from '@fantastic-admin/components'
 import type { ShipmentListQuery } from './logic'
-import type { PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
+import type { PurchaseShipmentDetailDto, PurchaseShipmentListItemDto, PurchaseShipmentStorageDto } from '@/api/generated/types.gen'
 import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 import type { QsGenericTableColumn, QsGenericTableFilterDefinition, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 import { parseDate } from '@internationalized/date'
@@ -21,11 +21,12 @@ import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalo
 import PurchaseWarehouseReceiptAction from '@/views/operations/purchase-orders/purchase-warehouse-receipt-action.vue'
 import { buildWarehouseFilterOptions, warehouseFilterFromQuery, warehouseFilterToQuery } from '../../operations/warehouse-arrivals/logic'
 import { useWarehouseArrivalData } from '../../operations/warehouse-arrivals/use-warehouse-arrival-data'
-import { buildShipmentRouteQuery, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentRowAction, shipmentStatusClass } from './logic'
+import { buildShipmentRouteQuery, canOpenStorage, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentRowAction, shipmentStatusClass, storageStatusClass, storageStatusLabel } from './logic'
 import ShipmentDeliverModal from './shipment-deliver-modal.vue'
 import ShipmentDetailDrawer from './shipment-detail-drawer.vue'
 import { getShipmentSourceEmptyKey } from './shipment-detail.logic'
 import ShipmentProducts from './shipment-products.vue'
+import ShipmentStorageReleaseModal from './shipment-storage-release-modal.vue'
 
 defineOptions({ name: 'QsPurchaseTransportShipments' })
 const route = useRoute()
@@ -93,6 +94,19 @@ const deliverVisible = computed({
     }
   },
 })
+const canReleaseStorage = computed(() => auth('shipment-storage:release'))
+const storageReleaseVisible = ref(false)
+const storageReleaseShipment = shallowRef<PurchaseShipmentDetailDto | null>(null)
+
+function openStorageRelease(shipment: PurchaseShipmentDetailDto): void {
+  storageReleaseShipment.value = shipment
+  storageReleaseVisible.value = true
+}
+
+function storageReleased(): void {
+  storageReleaseVisible.value = false
+  refresh()
+}
 function navigate(next: ShipmentListQuery, replace = false): void {
   if (!enabled.value) {
     return
@@ -137,6 +151,7 @@ const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(()
   { id: 'mark', title: t('purchaseShipments.mark'), accessorKey: 'shippingMarkText', minWidth: 300 },
   { id: 'baseMark', title: t('purchaseShipments.baseMark'), accessorFn: row => row.purchaseOrder.shippingMarkText, minWidth: 245 },
   { id: 'status', title: t('purchaseShipments.status'), accessorFn: row => t(`purchaseShipments.${row.viewStatus}`), minWidth: 120 },
+  { id: 'storageStatus', title: t('purchaseShipments.storageStatus'), accessorFn: row => row.storage === null ? '—' : storageStatusLabel(row.storage.status), minWidth: 110 },
   { id: 'supplier', title: t('purchaseShipments.supplier'), accessorFn: row => row.supplier.label, minWidth: 160 },
   { id: 'source', title: t('purchaseShipments.source'), accessorFn: row => row.salesSource?.orderNo ?? t(getShipmentSourceEmptyKey(row.purchaseOrder.purchaseType)), minWidth: 250 },
   { id: 'products', title: t('purchaseShipments.products'), accessorFn: row => row.lineSummary.previews.map(item => item.productName).join('、'), minWidth: 200 },
@@ -154,6 +169,16 @@ const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(()
 function warehouseUpdated(): void {
   refresh()
   void loadDetail()
+}
+
+function openStorageRecord(storage: PurchaseShipmentStorageDto): void {
+  if (!canOpenStorage(storage.status)) {
+    return
+  }
+  void router.push({
+    name: 'qsPurchaseTransportStorage',
+    query: { storageId: storage.id, status: storage.status },
+  })
 }
 
 function shipmentBusinessActions(row: PurchaseShipmentListItemDto) {
@@ -410,6 +435,20 @@ onBeforeUnmount(() => {
               {{ t(`purchaseShipments.${row.original.viewStatus}`) }}
             </FaTag>
           </template>
+          <template #cell-storageStatus="{ row }">
+            <button
+              v-if="row.original.storage && canOpenStorage(row.original.storage.status)"
+              type="button"
+              class="p-0 border-0 bg-transparent cursor-pointer"
+              :aria-label="`查看寄仓记录：${storageStatusLabel(row.original.storage.status)}`"
+              @click="openStorageRecord(row.original.storage)"
+            >
+              <FaTag variant="outline" :class="storageStatusClass(row.original.storage.status)" class="whitespace-nowrap">
+                {{ storageStatusLabel(row.original.storage.status) }}
+              </FaTag>
+            </button>
+            <span v-else class="text-muted-foreground">—</span>
+          </template>
           <template #cell-source="{ row }">
             <QsTableStackedCell v-if="row.original.salesSource" class="group">
               <QsTableStackedLine content-class="qs-type-data-emphasis">
@@ -583,7 +622,8 @@ onBeforeUnmount(() => {
     </FaPageMain>
     <PurchaseWarehouseReceiptAction ref="warehouseActionRef" :active="enabled" @detail-updated="warehouseUpdated" />
     <ShipmentDeliverModal v-model="deliverVisible" :shipment="deliverTarget" :active="enabled" @delivered="shipmentDelivered" />
-    <ShipmentDetailDrawer v-model="shipmentVisible" :detail="detail" :loading="detailLoading" :error="detailError" @reload="loadDetail" @view-order="viewOrderFromShipment" @closed="shipmentClosed" />
+    <ShipmentDetailDrawer v-model="shipmentVisible" :detail="detail" :loading="detailLoading" :error="detailError" :can-release="canReleaseStorage" @reload="loadDetail" @release="openStorageRelease" @view-order="viewOrderFromShipment" @closed="shipmentClosed" />
+    <ShipmentStorageReleaseModal v-model="storageReleaseVisible" :shipment="storageReleaseShipment" @released="storageReleased" />
     <QsPurchaseOrderDrawer v-model="orderVisible" :order="null" :detail="orderDetail" :currencies="currencyCatalog.currencies.value" :loading="detailLoading" :error="detailError" action-error="" :busy="false" :can-attach-document="false" @reload="loadDetail" />
   </div>
 </template>

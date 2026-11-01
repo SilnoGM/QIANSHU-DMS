@@ -4,7 +4,7 @@ import { SLH_AMOUNT_PRECISION, SLH_AMOUNT_SCALE, slhNormalizeAmount } from './sl
 export type SlhChargeTypeValue =
   | 'FREIGHT' | 'COD_HANDLING' | 'HEAVY_CARGO' | 'DELIVERY' | 'REDELIVERY' | 'TRANSFER_DELIVERY'
   | 'REMOTE_AREA' | 'UNLOADING' | 'STORAGE' | 'WAITING' | 'OVERSIZE' | 'INSPECTION' | 'FORKLIFT'
-  | 'MINIMUM_CHARGE' | 'OTHER'
+  | 'MINIMUM_CHARGE' | 'OTHER' | 'PORT_FEE'
 
 export type SlhChargeCurrency = 'CNY' | 'TWD'
 
@@ -39,6 +39,7 @@ const CHARGE_KEYWORDS: ReadonlyArray<readonly [SlhChargeTypeValue, readonly stri
   ['INSPECTION', ['验机费', '驗機費']],
   ['FORKLIFT', ['堆高机费', '堆高機費', '堆高机', '堆高機']],
   ['MINIMUM_CHARGE', ['最低消费', '最低消費', '低消']],
+  ['PORT_FEE', ['港口费', '港口費']],
 ]
 
 const AMOUNT_PATTERN = /\d+(?:\.\d+)?/gu

@@ -31,6 +31,7 @@ const PART_LOCK_SELECT = {
     orderStatus: true,
     salesOrderId: true,
   } },
+  ownershipCurrent: { select: { ownerType: true, ownerSalesOrderId: true } },
 } as const satisfies Prisma.PurchaseOrderPartSelect
 
 const STOCK_SIGNED_OUTCOME: SalesOrderShipmentSignOutcome = {
@@ -92,8 +93,8 @@ export class PurchaseShipmentDeliveryService {
         )
       }
 
-      const salesOrderId = candidate.purchaseOrder.purchaseType === 'SALES_LINKED'
-        ? candidate.purchaseOrder.salesOrderId
+      const salesOrderId = candidate.ownershipCurrent?.ownerType === 'SALES_ORDER'
+        ? candidate.ownershipCurrent.ownerSalesOrderId
         : null
       let lockedOrder: {
         readonly orderStatus: string
@@ -137,6 +138,10 @@ export class PurchaseShipmentDeliveryService {
       }
       if (part.loadedAt === null) {
         return notAllowed('货件尚未装柜，不能签收')
+      }
+      // 寄仓中的货件归属已转出销售单，物流动作冻结到认领为止。
+      if (part.ownershipCurrent?.ownerType === 'STORAGE_POOL') {
+        return notAllowed('寄仓中的货件不能签收')
       }
 
       if (lockedOrder !== null && salesOrderId !== null) {

@@ -18,6 +18,7 @@ import { PurchaseShippingMarksModule } from './modules/purchase-shipping-marks/p
 import { RegionsModule } from './modules/regions/regions.module'
 import { RolesModule } from './modules/roles/roles.module'
 import { SalesOrdersModule } from './modules/sales-orders/sales-orders.module'
+import { ShipmentStorageModule } from './modules/shipment-storage/shipment-storage.module'
 import { SlhBillModule } from './modules/slh-bills/slh-bill.module'
 import { SlhReconciliationBatchModule } from './modules/slh-reconciliation-batches/slh-reconciliation-batch.module'
 import { InvoiceRequestModule } from './modules/invoice-requests/invoice-request.module'
@@ -49,4 +50,5 @@ export const HTTP_MODULES = [
   SlhBillModule,
   SlhReconciliationBatchModule,
   InvoiceRequestModule,
+  ShipmentStorageModule,
 ] as const

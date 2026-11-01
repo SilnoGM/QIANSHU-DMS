@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { PERSON_REFERENCE_SELECT, toPersonReference } from '../../infrastructure/database/person-reference'
 import { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
 import type { StoredDictionaryValueResolution } from '../dictionaries/dictionary-lookup.service'
 import { buildSlhBillListWhere, withSlhBillIncompleteReconciliation } from '../slh-bills/slh-bill-list-filter'
@@ -8,6 +9,7 @@ import { serializeSlhBillListItem, slhBillListInclude } from '../slh-bills/slh-b
 import type { SlhBillListRow } from '../slh-bills/slh-bill.serializer'
 import type { SlhBillPageDto } from '../slh-bills/slh-bill.dto'
 import { matchBillUnreconciledLines } from './slh-reconciliation-batch.matcher'
+import { readAllocationSnapshot } from './slh-reconciliation-allocation.logic'
 import { slhReconciliationBatchFailure } from './slh-reconciliation-batch.errors'
 import { slhReconciliationBatchUuid } from './slh-reconciliation-batch.normalizer'
 import {
@@ -15,13 +17,20 @@ import {
   slhReconciliationBatchDetailInclude, slhReconciliationBatchListInclude,
 } from './slh-reconciliation-batch.serializer'
 import type { SlhReconciliationBatchDetailRow } from './slh-reconciliation-batch.serializer'
+import {
+  readTransferAllocationSummary, readTransferChangeCounts, readTransferChangeItems, readTransferClaimLines,
+  readTransferCostTotal, readTransferLegUserId, selectCurrentTransferRecord,
+} from './slh-reconciliation-transfer-record.logic'
+import { loadSettlementAllocationPartyIssuers, withSettlementAllocationPartyIssuers } from './slh-reconciliation-settlement-party-issuer'
 import { SlhReconciliationBatchFilterDto, SlhReconciliationBillBlockReasonDto, SlhReconciliationBillGroupDto } from './slh-reconciliation-batch.dto'
 import type {
-  SlhBillLineUnmatchedReasonCountDto, SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchDetailDto,
+  SlhBillLineUnmatchedReasonCountDto, SlhReconciliationSettlementAllocationDto,
+  SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchDetailDto,
   SlhReconciliationBatchListQueryDto, SlhReconciliationBatchPageDto, SlhReconciliationBillOptionDto,
   SlhReconciliationBillOptionPageDto, SlhReconciliationBillOptionQueryDto, SlhReconciliationReconcilableCountsDto,
   SlhReconciliationReconcilableCountsRequestDto, SlhReconciliationSettlementListDto,
   SlhReconciliationSettlementListQueryDto, SlhReconciliationSettlementRecordDto,
+  SlhReconciliationTransferRecordDto,
 } from './slh-reconciliation-batch.dto'
 
 const DEFAULT_PAGE_SIZE = 20
@@ -153,7 +162,11 @@ export class SlhReconciliationBatchQueryService {
     if (!row) {
       slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_FOUND', '对账批次不存在', 404)
     }
-    return serializeSlhReconciliationBatchDetail(row, await this.resolveMemberSuppliers(row))
+    const [supplierResolutions, transferRecords] = await Promise.all([
+      this.resolveMemberSuppliers(row),
+      this.resolveTransferRecords(row),
+    ])
+    return serializeSlhReconciliationBatchDetail(row, supplierResolutions, transferRecords)
   }
 
   /**
@@ -186,12 +199,17 @@ export class SlhReconciliationBatchQueryService {
         settlementAmountCny: true, settlementCurrency: true,
         salesAmount: true, salesCurrency: true,
         paymentFeeAmountCny: true, paymentFeeCurrency: true,
+        allocationSnapshot: true,
         slhBillNo: true, salesOrderNo: true, purchaseOrderNo: true, containerBatchNo: true,
         shipmentNo: true, warehouseReceiptReference: true, shippingMarkText: true,
         createdAt: true,
         createdBy: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
       },
     })
+    const allocationIssuers = await loadSettlementAllocationPartyIssuers(
+      this.prisma,
+      rows.map(row => row.allocationSnapshot),
+    )
     return {
       items: rows.map(row => ({
         id: row.id,
@@ -221,6 +239,8 @@ export class SlhReconciliationBatchQueryService {
         createdByDisplayName: row.createdBy.displayName,
         createdByAvatarUrl: row.createdBy.profile?.avatarUrl ?? null,
         createdAt: row.createdAt.toISOString(),
+        allocations: (readAllocationSnapshot(row.allocationSnapshot)?.items ?? []) as SlhReconciliationSettlementAllocationDto[],
+        allocationParties: withSettlementAllocationPartyIssuers(row.allocationSnapshot, allocationIssuers),
       })),
     }
   }
@@ -229,6 +249,158 @@ export class SlhReconciliationBatchQueryService {
    * 成员采购单的供应商标签：与采购域共用同一个字典码与解析服务，
    * 保证同一供应商在对账页与采购页显示一致（未命中字典时由采购域的兜底逻辑处理）。
    */
+  /**
+   * 调货行的完整寄仓摘要：只取「当前销售单对应的 CLAIMED 记录」，避免把更早的认领/修正事件当成当前依据。
+   * 这里一次批量取货件、人员与 JSON 计数，详情接口不再为每个成员单独回表。
+   */
+  private async resolveTransferRecords(
+    row: SlhReconciliationBatchDetailRow,
+  ): Promise<ReadonlyMap<string, SlhReconciliationTransferRecordDto>> {
+    const targets = row.members.flatMap((member) => {
+      const shipment = member.matchedLoadingItem.shipment
+      const current = shipment?.ownershipCurrent?.ownerSalesOrder ?? null
+      const origin = shipment?.purchaseOrder?.salesOrder ?? null
+      if (shipment === null || shipment === undefined || current === null || origin === null || current.id === origin.id) {
+        return []
+      }
+      return [{
+        memberId: member.id,
+        shipmentId: shipment.id,
+        currentOrderId: current.id,
+        currentIssuerUserId: current.issuerUserId,
+        member,
+      }]
+    })
+    if (targets.length === 0) {
+      return new Map()
+    }
+    const records = await this.prisma.shipmentStorageRecord.findMany({
+      where: {
+        shipmentId: { in: [...new Set(targets.map(target => target.shipmentId))] },
+        status: 'CLAIMED',
+      },
+      orderBy: [{ claimedAt: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        id: true, shipmentId: true, status: true, locationScope: true,
+        warehouseValue: true, warehouseLabelSnapshot: true,
+        shipmentNoSnapshot: true, shippingMarkSnapshot: true,
+        originIssuerUserId: true,
+        claimedSalesOrderId: true, claimedAt: true, claimedBy: true,
+        createdAt: true, costSnapshot: true,
+        releaseBatch: { select: { reason: true, actorUserId: true, occurredAt: true, note: true } },
+        claimRequests: {
+          where: { status: 'APPROVED' },
+          orderBy: [{ reviewedAt: 'desc' }, { createdAt: 'desc' }],
+          take: 1,
+          select: {
+            id: true, status: true, applicantUserId: true, salesOrderNoSnapshot: true,
+            costTotalCny: true, allocations: true, containerChanges: true,
+            rejectReason: true, reviewedByUserId: true, reviewedAt: true, createdAt: true,
+          },
+        },
+        claimLines: { select: { quantity: true, productMatchMode: true } },
+        costEvents: { select: { direction: true, amountCny: true, legsSnapshot: true } },
+      },
+    })
+
+    const currentIssuerByShipmentId = new Map(targets.map(target => [target.shipmentId, target.currentIssuerUserId]))
+    const bearersByRecordId = new Map<string, { original: string, current: string | null }>()
+    const userIds = new Set<string>()
+    for (const record of records) {
+      // 成本承担人以成本事件快照为准；历史记录缺释放事件时回退到释放时冻结的原出单人。
+      const originalBearerUserId = readTransferLegUserId(
+        record.costEvents.find(event => event.direction === 'RELEASE')?.legsSnapshot ?? null,
+      ) ?? record.originIssuerUserId
+      const currentBearerUserId = readTransferLegUserId(
+        record.costEvents.find(event => event.direction === 'CLAIM')?.legsSnapshot ?? null,
+      ) ?? currentIssuerByShipmentId.get(record.shipmentId) ?? null
+      bearersByRecordId.set(record.id, { original: originalBearerUserId, current: currentBearerUserId })
+      userIds.add(originalBearerUserId)
+      if (currentBearerUserId !== null) userIds.add(currentBearerUserId)
+      if (record.claimedBy !== null) userIds.add(record.claimedBy)
+      userIds.add(record.releaseBatch.actorUserId)
+      const claim = record.claimRequests[0]
+      if (claim !== undefined) {
+        userIds.add(claim.applicantUserId)
+        if (claim.reviewedByUserId !== null) userIds.add(claim.reviewedByUserId)
+      }
+    }
+    const users = userIds.size === 0
+      ? []
+      : await this.prisma.user.findMany({
+          where: { id: { in: [...userIds] } },
+          select: PERSON_REFERENCE_SELECT,
+        })
+    const personById = new Map(users.map(user => [user.id, toPersonReference(user)]))
+
+    const result = new Map<string, SlhReconciliationTransferRecordDto>()
+    for (const target of targets) {
+      const record = selectCurrentTransferRecord(
+        records.filter(candidate => candidate.shipmentId === target.shipmentId),
+        target.currentOrderId,
+      )
+      if (record === null) continue
+      const claim = record.claimRequests[0] ?? null
+      const allocationSummary = readTransferAllocationSummary(
+        record.claimLines,
+        claim?.allocations ?? null,
+      )
+      const lines = readTransferClaimLines(claim?.allocations ?? null)
+      const changes = readTransferChangeItems(claim?.containerChanges ?? null)
+      const changeCounts = readTransferChangeCounts(claim?.containerChanges ?? null)
+      const totalCostCny = readTransferCostTotal(record.costSnapshot)
+      const claimAmountCny = record.costEvents.find(event => event.direction === 'CLAIM')?.amountCny.toFixed(2) ?? null
+      const releaseAmountCny = record.costEvents.find(event => event.direction === 'RELEASE')?.amountCny.toFixed(2) ?? null
+      const costTotal = totalCostCny ?? claimAmountCny ?? releaseAmountCny
+      const bearers = bearersByRecordId.get(record.id)
+      result.set(target.memberId, {
+        storageRecordId: record.id,
+        status: record.status,
+        locationScope: record.locationScope,
+        warehouseLabel: record.warehouseLabelSnapshot ?? record.warehouseValue,
+        warehouseValue: record.warehouseValue,
+        shipmentNo: record.shipmentNoSnapshot ?? target.member.matchedLoadingItem.shipment?.shipmentNo ?? null,
+        shippingMark: target.member.line.shippingMarkText ?? record.shippingMarkSnapshot,
+        containerBatchName: target.member.matchedLoadingItem.containerBatch.containerBatchName,
+        releasedAt: record.releaseBatch.occurredAt.toISOString(),
+        releaseReason: record.releaseBatch.reason,
+        releasedBy: personById.get(record.releaseBatch.actorUserId) ?? null,
+        releaseNote: record.releaseBatch.note,
+        claimRequest: claim === null ? null : {
+          id: claim.id,
+          status: claim.status,
+          targetSalesOrderNo: claim.salesOrderNoSnapshot,
+          applicant: personById.get(claim.applicantUserId) ?? null,
+          createdAt: claim.createdAt.toISOString(),
+          reviewedBy: claim.reviewedByUserId === null
+            ? null
+            : personById.get(claim.reviewedByUserId) ?? null,
+          reviewedAt: claim.reviewedAt?.toISOString() ?? null,
+          rejectReason: claim.rejectReason,
+          ...allocationSummary,
+          lines,
+          changes,
+          ...changeCounts,
+          costTotalCny: claim.costTotalCny.toFixed(2),
+        },
+        claimedAt: record.claimedAt?.toISOString() ?? null,
+        claimedBy: record.claimedBy === null ? null : personById.get(record.claimedBy) ?? null,
+        cost: costTotal === null
+          ? null
+          : {
+              totalCostCny: costTotal,
+              claimAmountCny,
+              releaseAmountCny,
+              originalBearer: bearers === undefined ? null : personById.get(bearers.original) ?? null,
+              currentBearer: bearers?.current === null || bearers?.current === undefined
+                ? null
+                : personById.get(bearers.current) ?? null,
+            },
+      })
+    }
+    return result
+  }
+
   private async resolveMemberSuppliers(
     row: SlhReconciliationBatchDetailRow,
   ): Promise<ReadonlyMap<string, StoredDictionaryValueResolution>> {

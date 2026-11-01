@@ -60,6 +60,7 @@ const sourceCatalogLine: PurchaseOrderSourceSalesOrderLineDto = {
   description: '销售来源说明',
   quantity: 3,
   purchasedQuantity: 1,
+  claimedQuantity: 0,
   remainingQuantity: 2,
   purchasedLines: [{
     id: '88888888-8888-4888-8888-888888888888',
@@ -283,6 +284,39 @@ test('采购产品 loader 映射 CNY 采购定价且保持分页身份', () => {
     pageSize: 20,
     total: 21,
   })
+})
+
+test('已调货数量生成只读行并且不再计入待采购数量', () => {
+  const claimed = {
+    ...sourceCatalogLine,
+    claimedQuantity: 2,
+    purchasedLines: [],
+    purchasedQuantity: 0,
+    remainingQuantity: 1,
+  }
+  const result = synchronizePurchaseOrderSourceLines({
+    productOptions: [catalogOption],
+    sourceLines: [claimed],
+  })
+
+  assert.deepEqual(result.lines.map(line => line.quantity), ['1'])
+  assert.deepEqual(result.readOnlyLines.map(line => ({
+    actual: line.actualUnitPriceAmount,
+    key: line.key,
+    quantity: line.quantity,
+    reference: line.standardUnitPriceAmount,
+    status: line.statusLabel,
+    subtotal: line.actualSubtotalAmount,
+  })), [{
+    actual: null,
+    key: `claimed-${claimed.id}`,
+    quantity: '2',
+    reference: null,
+    status: '已调货',
+    subtotal: null,
+  }])
+  assert.equal(result.claimedHistoryCount, 1)
+  assert.equal(result.purchasedHistoryCount, 0)
 })
 
 test('销售来源同步只加入当前供应商可采购的正式产品和所有临时产品', () => {

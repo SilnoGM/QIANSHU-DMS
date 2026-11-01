@@ -62,7 +62,7 @@ test('失活时不请求；列表保留仓库条件，计数请求剥离仓库�
   f.enabled.value = true
   await flush()
   assert.equal(f.listCalls[0]?.destinationWarehouseValue, 'north')
-  assert.deepEqual(f.calls.map(call => call.query), [{ keyword: '椅子' }])
+  assert.deepEqual(f.calls.map(call => call.query), [{ keyword: '椅子', excludeStoragePool: true }])
   assert.deepEqual(f.state.counts.value, counts().items)
   assert.deepEqual(f.state.warehouseCounts.value, counts().warehouseCounts)
 })

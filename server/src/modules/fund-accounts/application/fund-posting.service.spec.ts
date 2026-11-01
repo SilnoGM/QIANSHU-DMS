@@ -798,6 +798,77 @@ describe('packaging cost transaction ports', () => {
 })
 
 
+describe('slh bill company allocation ports', () => {
+  const context = {
+    ...CONTEXT,
+    sourceCode: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY',
+    consumerCode: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY.ALLOCATION',
+    actorUserId: SOURCE_ID,
+  }
+  const input = () => ({ ...businessInput('SLH_BILL_COMPANY_ALLOCATION'), userId: undefined, summary: '顺联航账单公司分摊' })
+  beforeEach(() => {
+    jest.resetAllMocks()
+    configureSuccessfulPosting(requireInitialRule('SLH_BILL_COMPANY_ALLOCATION'))
+    mockedLockSource.mockResolvedValue({ id: SOURCE_ID, code: context.sourceCode, name: '顺联航账单公司分摊', enabled: true })
+  })
+
+  it('posts signed amounts to the company account only, without any user share snapshot', async () => {
+    const { service, transaction, prisma } = fixture()
+    const tx = transaction as unknown as Prisma.TransactionClient
+    const preview = await service.previewBusinessEventInTransaction(tx, context, input())
+    expect(preview).toMatchObject({
+      ruleVersionId: RULE_ID, userShareRate: '0.00', companyShareRate: '100.00',
+      entries: [{ accountTarget: 'COMPANY', direction: 'CREDIT', amount: '100.00' }],
+    })
+    const posted = await service.postBusinessEventInTransaction(tx, context, input(), preview)
+    expect(posted.entries).toHaveLength(1)
+    expect(mockedReadIdentities).toHaveBeenCalledWith(tx, { userId: null, requireUserAccount: false, requireCompanyAccount: true })
+    expect(mockedLockAccounts).toHaveBeenCalledWith(tx, [COMPANY_ACCOUNT_ID])
+    expect(mockedInsertBatch).toHaveBeenCalledWith(tx, expect.objectContaining({
+      userId: null, userShareRateSnapshot: null, companyShareRateSnapshot: null,
+      postingTypeCodeSnapshot: 'SLH_BILL_COMPANY_ALLOCATION',
+      businessSourceCodeSnapshot: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY',
+      consumerCode: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY.ALLOCATION',
+    }))
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('posts a company-borne payment fee as COST with a single DEBIT company entry', async () => {
+    const feeContext = {
+      ...context,
+      sourceCode: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE',
+      consumerCode: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE.FEE',
+    }
+    configureSuccessfulPosting(requireInitialRule('SLH_BILL_COMPANY_FEE_ALLOCATION'))
+    mockedLockSource.mockResolvedValue({ id: SOURCE_ID, code: feeContext.sourceCode, name: '顺联航账单公司金流费分摊', enabled: true })
+    const { service, transaction, prisma } = fixture()
+    const tx = transaction as unknown as Prisma.TransactionClient
+    const feeInput = { ...input(), postingTypeCode: 'SLH_BILL_COMPANY_FEE_ALLOCATION', summary: '顺联航账单公司金流费' }
+    const preview = await service.previewBusinessEventInTransaction(tx, feeContext, feeInput)
+    expect(preview).toMatchObject({
+      userShareRate: '0.00', companyShareRate: '100.00',
+      entries: [{ accountTarget: 'COMPANY', direction: 'DEBIT', amount: '100.00' }],
+    })
+    await service.postBusinessEventInTransaction(tx, feeContext, feeInput, preview)
+    expect(mockedInsertBatch).toHaveBeenCalledWith(tx, expect.objectContaining({
+      userId: null, userShareRateSnapshot: null, companyShareRateSnapshot: null,
+      postingTypeCodeSnapshot: 'SLH_BILL_COMPANY_FEE_ALLOCATION',
+      businessCategorySnapshot: 'COST',
+      businessSourceCodeSnapshot: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE',
+      consumerCode: 'SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE.FEE',
+    }))
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects a user identity or a different posting type', async () => {
+    const { service, transaction } = fixture()
+    const tx = transaction as unknown as Prisma.TransactionClient
+    await expect(service.previewBusinessEventInTransaction(tx, context, { ...input(), userId: USER_ID })).rejects.toMatchObject({ code: 'FUND_VALIDATION_FAILED', field: 'userId' })
+    await expect(service.previewBusinessEventInTransaction(tx, context, { ...input(), postingTypeCode: 'ORDER_SETTLEMENT' })).rejects.toMatchObject({ code: 'FUND_POSTING_TYPE_NOT_ALLOWED' })
+    expect(mockedInsertBatch).not.toHaveBeenCalled()
+  })
+})
+
 describe('purchase payment transaction ports', () => {
   const context = { ...CONTEXT, sourceCode: 'PURCHASE_PAYMENT', consumerCode: 'PURCHASE_PAYMENT.PAY', actorUserId: SOURCE_ID }
   const stockContext = { ...context, consumerCode: 'PURCHASE_PAYMENT.STOCK_PAY' }

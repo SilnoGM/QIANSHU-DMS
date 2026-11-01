@@ -109,6 +109,9 @@ function setup() {
         quantity: 5,
       }]),
     },
+    shipmentClaimLine: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
+    },
     purchaseOrderLine: {
       findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
         id: 'purchase-line-id',
@@ -456,6 +459,33 @@ describe('PurchaseOrderSourceQueryService', () => {
     )
   })
 
+  it('deducts claimed storage quantities from the purchasable remaining quantity', async () => {
+    const fixture = setup()
+    fixture.prisma.shipmentClaimLine.findMany.mockResolvedValue([{
+      salesOrderLineId: 'sales-line-id',
+      quantity: 2,
+    }])
+
+    const result = await fixture.service.salesOrderLines('sales-order-id', {
+      productMode: 'CATALOG',
+      supplierValue: 'SUPPLIER_A',
+    })
+
+    expect(result.items[0]).toMatchObject({
+      claimedQuantity: 2,
+      purchasedQuantity: 2,
+      quantity: 5,
+      remainingQuantity: 1,
+    })
+    expect(fixture.prisma.shipmentClaimLine.findMany).toHaveBeenCalledWith({
+      where: {
+        salesOrderLineId: { in: ['sales-line-id'] },
+        storageRecord: { status: 'CLAIMED' },
+      },
+      select: { salesOrderLineId: true, quantity: true },
+    })
+  })
+
   it('returns source lines with remaining quantity after active purchases', async () => {
     const fixture = setup()
     await expect(fixture.service.salesOrderLines('sales-order-id', {
@@ -467,6 +497,7 @@ describe('PurchaseOrderSourceQueryService', () => {
         id: 'sales-line-id',
         quantity: 5,
         purchasedQuantity: 2,
+        claimedQuantity: 0,
         remainingQuantity: 3,
         purchasedLines: [{
           id: 'purchase-line-id',

@@ -656,19 +656,23 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
             </td>
             <td data-column="reference-unit-price" class="p-3 whitespace-nowrap">
               <AmountDisplay
+                v-if="line.standardUnitPriceAmount !== null"
                 :value="line.standardUnitPriceAmount"
                 :currency="currency"
                 :currencies="currencies"
                 class="text-muted-foreground"
               />
+              <span v-else>—</span>
             </td>
             <td class="p-3 whitespace-nowrap">
               <AmountDisplay
+                v-if="line.actualUnitPriceAmount !== null"
                 :value="line.actualUnitPriceAmount"
                 :currency="currency"
                 :currencies="currencies"
                 class="text-muted-foreground"
               />
+              <span v-else>—</span>
             </td>
             <td v-if="showDiscountRate" class="p-3 whitespace-nowrap">
               —
@@ -678,11 +682,13 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
             </td>
             <td class="p-3 whitespace-nowrap">
               <AmountDisplay
+                v-if="line.actualSubtotalAmount !== null"
                 :value="line.actualSubtotalAmount"
                 :currency="currency"
                 :currencies="currencies"
                 class="text-muted-foreground"
               />
+              <span v-else>—</span>
             </td>
             <td class="p-3">
               <FaTooltip :text="line.description" :disabled="line.description === ''">

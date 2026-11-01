@@ -11,10 +11,11 @@ interface AwaitingPurchaseReviewRow {
  * 判定口径（必须与采购覆盖推进服务 `purchase-orders/sales-order-purchase-coverage.service.ts`
  * 保持一致，否则「为什么还停在待采购」会与真实推进规则漂移）：
  * - 有效采购 = `SALES_LINKED` 且 `orderStatus != CANCELLED`，审核中数量只预占余额；
- * - 已审核采购 = `CONFIRMED/COMPLETED`，只有它才推进销售履约状态；
- * - 只有每条销售明细都被有效采购占满、且至少一条明细尚未被已审核采购覆盖，
+ * - 已认领寄仓货件与已审核采购一样，已经为销售明细提供货源；
+ * - 已审核覆盖 = `CONFIRMED/COMPLETED` 采购 + 已认领数量；未审核预占 = 有效采购 + 已认领；
+ * - 只有每条销售明细都被预占、且至少一条明细尚未被已审核采购/认领覆盖，
  *   同时存在指向这些明细的审核中采购单，才属于「采购审核中」。
- *   最后一条是兜底：已审核已全量覆盖却没推进属于历史漂移，不在界面显示停留原因。
+ *   最后一条是兜底：已审核/认领已全量覆盖却没推进属于历史漂移，不在界面显示停留原因。
  *
  * 结果只含订单 ID 与审核中采购单数量，不返回采购单标识或金额，避免读接口外泄
  * 采购域数据；调用方只用它构造 `id IN (...)` 过滤与提示文案。
@@ -58,19 +59,34 @@ export async function readAwaitingPurchaseReviewSalesOrders(
         AND purchase_order."order_status" <> CAST('CANCELLED' AS "purchase_order_status")
       GROUP BY purchase_line."source_sales_order_line_id"
     ),
+    claimed_by_line AS (
+      SELECT
+        claim."sales_order_line_id",
+        COALESCE(SUM(claim."quantity"), 0)::bigint AS "claimed_quantity"
+      FROM "shipment_claim_lines" AS claim
+      INNER JOIN "shipment_storage_records" AS storage
+        ON storage."id" = claim."storage_record_id"
+      WHERE storage."status" = CAST('CLAIMED' AS "shipment_storage_status")
+      GROUP BY claim."sales_order_line_id"
+    ),
     coverage_by_sales_order AS (
       SELECT
         source_line."sales_order_id",
         COUNT(*)::int AS "line_count",
         COUNT(*) FILTER (
-          WHERE source_line."quantity" - COALESCE(purchased."active_quantity", 0) > 0
+          WHERE source_line."quantity"
+            - COALESCE(purchased."active_quantity", 0)
+            - COALESCE(claimed."claimed_quantity", 0) > 0
         )::int AS "remaining_line_count",
         COUNT(*) FILTER (
-          WHERE COALESCE(purchased."approved_quantity", 0) >= source_line."quantity"
+          WHERE COALESCE(purchased."approved_quantity", 0)
+            + COALESCE(claimed."claimed_quantity", 0) >= source_line."quantity"
         )::int AS "approved_line_count"
       FROM source_sales_lines AS source_line
       LEFT JOIN purchased_by_line AS purchased
         ON purchased."sales_order_line_id" = source_line."id"
+      LEFT JOIN claimed_by_line AS claimed
+        ON claimed."sales_order_line_id" = source_line."id"
       GROUP BY source_line."sales_order_id"
     ),
     awaiting_by_sales_order AS (

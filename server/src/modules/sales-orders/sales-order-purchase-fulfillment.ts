@@ -1,5 +1,11 @@
 import { Prisma, type Prisma as PrismaTypes } from '../../generated/prisma/client'
 import { salesOrderRuleFailure } from './domain/sales-order-errors'
+import {
+  mergeClaimedCoverage,
+  readClaimedQuantitiesBySalesLine,
+  readUnownedQuantitiesBySalesLine,
+  subtractUnownedCoverage,
+} from './sales-order-claim-coverage'
 
 /**
  * 手工履约入口与采购审核、取消、发货共享锁顺序：销售明细 -> 采购单 -> 销售主行。
@@ -58,8 +64,19 @@ export async function assertSalesOrderPurchaseFulfillment(
         (approvedBySource.get(line.sourceSalesOrderLineId) ?? 0) + line.quantity)
     }
   }
+  const salesLineIds = salesLines.map(line => line.id)
+  const effectivePurchases = subtractUnownedCoverage(
+    approvedBySource,
+    await readUnownedQuantitiesBySalesLine(transaction, salesOrderId, salesLineIds),
+  )
+  const claimedBySalesLine = await readClaimedQuantitiesBySalesLine(
+    transaction,
+    salesOrderId,
+    salesLineIds,
+  )
+  const coverage = mergeClaimedCoverage(effectivePurchases, claimedBySalesLine)
   const fullyCovered = salesLines.length > 0 && salesLines.every(line => (
-    (approvedBySource.get(line.id) ?? 0) >= line.quantity
+    (coverage.get(line.id) ?? 0) >= line.quantity
   ))
   if (!fullyCovered) {
     return salesOrderRuleFailure(
@@ -67,6 +84,7 @@ export async function assertSalesOrderPurchaseFulfillment(
       '已审核采购数量尚未覆盖全部销售产品',
     )
   }
+  // 认领货件已处于物流流程中，本身就满足“已发货”；有采购单时仍逐单校验状态。
   if (toStatus === 'LAND_TRANSIT' && !purchases.every(purchase => (
     (purchase.orderStatus === 'CONFIRMED' || purchase.orderStatus === 'COMPLETED')
     && (purchase.fulfillmentStatus === 'SHIPPED' || purchase.fulfillmentStatus === 'SIGNED')

@@ -128,7 +128,7 @@ shipment_storage_records(
   origin_sales_order_id      uuid NOT NULL,
   origin_issuer_user_id      uuid NOT NULL,
   origin_allocations         jsonb NOT NULL,                 -- 采购行 + 数量映射
-  container_snapshot         jsonb,                          -- 柜次/装柜明细/收件人/COD/重量体积
+  container_snapshot         jsonb,                          -- v2: {format, containerBatch, items[]}；释放时冻结全部装柜明细
   cost_snapshot              jsonb NOT NULL,                 -- 成本/已付/比例/两腿金额/付款批次 id
   snapshot_at                timestamptz NOT NULL,
   claimed_sales_order_id     uuid,
@@ -219,7 +219,7 @@ IN_STORAGE/RESERVED --作废--> VOIDED
 ```
 
 - 首期可只实现 `IN_STORAGE → CLAIMED`；预留用于并发冲突场景；
-- 不做 `CLAIMED → IN_STORAGE` 的反向流转；新销售单取消后的回收另立规则（见缺口）。
+- 不做 `CLAIMED → IN_STORAGE` 的反向流转；新销售单取消时在取消事务内追加一条新的 `IN_STORAGE` 记录（二次寄仓），旧 `CLAIMED` 记录保留历史，归属回池并退还认领成本。
 
 ## 6. 关键流程
 
@@ -285,6 +285,17 @@ sequenceDiagram
 - 成本取释放时快照，不读实时采购金额；
 - 池账户建议用公司账户加 `purpose = SUSPENSE`，避免改“公司账户唯一”约束。
 
+**实施口径（2026-10-29 拍板）**：不建池账户，改用两个两腿批次表达同一净额：
+
+| 时点 | 批次 | 甲 | 公司 | 乙 |
+|---|---|---|---|---|
+| 原采购付款 | 采购付款 | −aC | −(1−a)C | — |
+| 释放 | `SHIPMENT_STORAGE_RELEASE`（USER_SHARE + COMPANY_REMAINDER，CREDIT） | +aC | +(1−a)C | — |
+| 认领 | `SHIPMENT_STORAGE_CLAIM`（USER_SHARE + COMPANY_REMAINDER，DEBIT） | — | −(1−b)C | −bC |
+| 最终 | — | 0 | −(1−b)C | −bC |
+
+池的 −C/+C 只是两次转账之间的责任窗口，不落资金账户；窗口内以 `shipment_cost_events` 记录成本快照。资金引擎不需要第三类账户目标，也不需要改公司账户唯一约束。
+
 ### 6.4 位置移动
 
 - 输入：寄仓记录、目标仓库、原因；
@@ -299,8 +310,10 @@ sequenceDiagram
 | 货件数据范围 `SELF` | `shipment_ownership_current` | 迁移期等价 |
 | 柜次“我的/全部” | 当前归属 | 池内货件从原销售“我的”消失 |
 | 装柜/到仓/签收推进履约 | 当前归属 | 池内不推进；认领后按新单推进 |
-| SLH 匹配与结算 | 当前归属 | 池内账单挂起 |
+| SLH 匹配与结算 | 当前归属 | 池内账单挂起；结算按「甲/乙/公司」逐项分摊，见 `specs/slh-settlement-allocation` |
 | 包装费提报的货件可见性 | 当前归属 | 释放后禁止新提报；费用列表仍按 `ownerUserId` |
+
+结算侧的衔接：账单行仍按装柜明细匹配采购来源（甲），但结算金额默认归当前归属（乙）；二派费、转派费、寄仓费默认回扣甲，金流费按乙的销售金额计算，COD 只回填乙。甲已终止/取消不影响扣费，只要求甲出单人存在资金账户。
 
 ## 8. 编号、唛头与物流事实边界
 

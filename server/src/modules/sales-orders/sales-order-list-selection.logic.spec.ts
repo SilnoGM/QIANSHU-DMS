@@ -33,12 +33,13 @@ describe('resolveSalesOrderQueryTargets', () => {
     ])
   })
 
-  it('全部订单覆盖四个正式状态', () => {
+  it('全部订单覆盖五个正式状态', () => {
     expect(resolveSalesOrderQueryTargets('all', 'ALL')).toEqual([
       { orderStatus: 'CONFIRMED' },
       { orderStatus: 'PENDING_RECONCILIATION' },
       { orderStatus: 'CANCELLED' },
       { orderStatus: 'COMPLETED' },
+      { orderStatus: 'TERMINATED' },
     ])
   })
 

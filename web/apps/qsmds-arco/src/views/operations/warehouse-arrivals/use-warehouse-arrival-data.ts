@@ -27,7 +27,8 @@ export function useWarehouseArrivalData(
   }
 
   const state = useShipmentData(enabled, epoch, query, onInvalidPage, {
-    list: (filters, signal) => api.list(filters, signal),
+    // 到仓货件页不展示已释放进寄仓池的货件；池内货件只从寄仓管理查看。
+    list: (filters, signal) => api.list({ ...filters, excludeStoragePool: true }, signal),
     getById: (id, signal) => api.getById(id, signal),
     statusCounts: (filters, signal) => {
       clearWarehouseCounts()
@@ -43,7 +44,7 @@ export function useWarehouseArrivalData(
       }, { once: true })
 
       // 上层总数与逐仓库计数来自同一次快照；不再按仓库数量并发 N 个计数请求。
-      const globalResponse = api.statusCounts(globalFilters, signal)
+      const globalResponse = api.statusCounts({ ...globalFilters, excludeStoragePool: true }, signal)
       void globalResponse.then((response) => {
         if (signal.aborted || !enabled.value || requestEpoch !== epoch.value || requestSequence !== sequence) {
           return

@@ -5,7 +5,7 @@ import { onScopeDispose, ref, shallowRef, watch } from 'vue'
 import purchaseOrdersApi from '../../../api/modules/purchase-orders'
 import purchaseShipmentsApi from '../../../api/modules/purchase-shipments'
 import { getPurchaseOrderApiFailure } from '../../operations/purchase-orders/purchase-order-list.logic'
-import { isShipmentPlaceholderView, shipmentCountsQuery } from './logic'
+import { shipmentCountsQuery } from './logic'
 
 /** 所有读取绑定当前视图与身份；列表、计数和详情独立取消，任一失败不遮蔽其他区域。 */
 type PurchaseShipmentReadApi = Pick<typeof purchaseShipmentsApi, 'getById' | 'list' | 'statusCounts'>
@@ -45,14 +45,6 @@ export function useShipmentData(
     }
     listController?.abort()
     const view = query.value.view
-    // 运输业务尚未开放，预留视图不能把到仓数据当作装柜记录，也不能发送服务端尚不支持的筛选。
-    if (isShipmentPlaceholderView(view)) {
-      rows.value = []
-      total.value = 0
-      loading.value = false
-      error.value = ''
-      return
-    }
     const controller = new AbortController()
     listController = controller
     const requestEpoch = epoch.value

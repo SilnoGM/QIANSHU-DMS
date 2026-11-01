@@ -154,6 +154,7 @@ describe('账单明细行与柜次行的匹配', () => {
     const mark = 'L-010229'
     const cases = [
       { items: [item('li-x', mark, { shipment: null })], reason: 'SHIPMENT_NOT_MATCHED' },
+      { items: [item('li-x', mark, { shipment: { purchaseOrderId: 'po-1', salesOrderId: null, ownerType: 'STORAGE_POOL' } })], reason: 'SHIPMENT_IN_STORAGE' },
       { items: [item('li-x', mark, { shipment: { purchaseOrderId: null, salesOrderId: 'so-1' } })], reason: 'PURCHASE_SOURCE_MISSING' },
       { items: [item('li-x', mark, { shipment: { purchaseOrderId: 'po-1', salesOrderId: null } })], reason: 'SALES_SOURCE_MISSING' },
     ] as const

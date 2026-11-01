@@ -160,6 +160,12 @@ const SETTLE_FAILURE_KEYS: Readonly<Record<string, string>> = {
   SLH_RECON_SETTLEMENT_RATE_UNAVAILABLE: 'slhReconciliation.settle.errorRateUnavailable',
   SLH_RECON_SETTLEMENT_SOURCE_MISSING: 'slhReconciliation.settle.errorSourceMissing',
   SLH_RECON_SETTLEMENT_UNCHANGED: 'slhReconciliation.settle.errorUnchanged',
+  SLH_RECON_ALLOCATION_BREAKDOWN_MISMATCH: 'slhReconciliation.settle.errorAllocationBreakdownMismatch',
+  SLH_RECON_ALLOCATION_COD_TARGET_INVALID: 'slhReconciliation.settle.errorAllocationTargetInvalid',
+  SLH_RECON_ALLOCATION_OVERRIDE_INVALID: 'slhReconciliation.settle.errorAllocationTargetInvalid',
+  SLH_RECON_ALLOCATION_RATE_INVALID: 'slhReconciliation.settle.errorRateUnavailable',
+  SLH_RECON_ALLOCATION_REASON_REQUIRED: 'slhReconciliation.settle.errorAllocationReasonRequired',
+  SLH_RECON_SETTLEMENT_ORIGIN_ACCOUNT_MISSING: 'slhReconciliation.settle.errorOriginAccountMissing',
 }
 const SETTLE_FAILURE_FALLBACK_KEY = 'slhReconciliation.settle.errorUnknown'
 
@@ -227,8 +233,10 @@ export function buildSettleSummary(
   const cod = member.codAmountTwd
   const ntdSurcharge = member.ntdSurchargeAmountTwd
   const payable = member.payableAmountCny
-  const salesAmount = member.salesOrder?.agreedTotalAmount ?? null
-  const orderCurrency = member.salesOrder?.currencyCode ?? ''
+  // 金流费按当前销售订单的约定总额计算；调货行的原销售单甲只是费用承担方，不能拿甲的总价。
+  const salesSource = member.currentSalesOrder ?? member.salesOrder ?? null
+  const salesAmount = salesSource?.agreedTotalAmount ?? null
+  const orderCurrency = salesSource?.currencyCode ?? ''
   const rateUnits = rate === null || new Decimal(rate).isZero() ? null : rate
   const rateText = trimRate(rate) ?? EMPTY_AMOUNT_TEXT
 
@@ -342,5 +350,302 @@ export function buildSettleSummary(
         noteKey: 'slhReconciliation.settle.paymentFeeOncePerSalesOrder',
       },
     ],
+  }
+}
+
+/** 财务可选的入账目标：甲＝原销售单、乙＝当前销售单、公司账户。 */
+export type SlhSettleAllocationTarget = 'ORIGIN_ORDER' | 'CURRENT_ORDER' | 'COMPANY'
+/** 费用项来源：账单备注费用、运费、代收手续费、代收货款、金流费。 */
+export type SlhSettleAllocationSource = 'BILL_CHARGE' | 'FREIGHT' | 'COD_HANDLING' | 'COD' | 'PAYMENT_FEE'
+
+/** 手动覆盖：目标 + 变更原因（目标与默认不同时原因必填）。 */
+export interface SlhSettleAllocationOverride {
+  readonly target: SlhSettleAllocationTarget
+  readonly reason: string
+}
+
+/** 分摊预览里的一个费用项：金额保持账单原币种，贡献额折算成人民币。 */
+export interface SlhSettleAllocationItemView {
+  readonly key: string
+  readonly sourceType: SlhSettleAllocationSource
+  readonly chargeType: string | null
+  readonly currencyCode: 'CNY' | 'TWD'
+  readonly amount: string
+  readonly defaultTarget: SlhSettleAllocationTarget
+  readonly target: SlhSettleAllocationTarget
+  readonly signedContributionCny: string
+  readonly overridden: boolean
+  readonly reason: string
+}
+
+/** 分摊目标方向：正数应入账、负数应转出、零不标记。 */
+export type SlhSettleAllocationPartyDirection = 'INFLOW' | 'OUTFLOW' | 'ZERO'
+
+/** 目标合计：结算金额不含金流费，金流费单列（与完成批次的两次资金动作一致）。 */
+export interface SlhSettleAllocationPartyView {
+  readonly target: SlhSettleAllocationTarget
+  readonly salesOrderId: string | null
+  readonly salesOrderNo: string | null
+  /** 出单人展示信息；公司目标为 null。 */
+  readonly issuerDisplayName: string | null
+  readonly issuerAvatarUrl: string | null
+  readonly settlementAmountCny: string | null
+  readonly paymentFeeAmountCny: string | null
+}
+
+/** 各目标合计的汇总：用于底部合计条与「是否等于顶部结算金额」校验。 */
+export interface SlhSettleAllocationTotals {
+  readonly settlementAmountCny: string
+  readonly paymentFeeAmountCny: string
+  /** 没有父结算金额或没有目标时无法比较，返回 null。 */
+  readonly matchesParent: boolean | null
+}
+
+/** 分摊预览：同时给出阻断原因，界面据此禁用确认。 */
+export interface SlhSettleAllocationPreview {
+  readonly items: readonly SlhSettleAllocationItemView[]
+  readonly parties: readonly SlhSettleAllocationPartyView[]
+  readonly totals: SlhSettleAllocationTotals
+  /** 备注费用与账单附加费/NTD 杂费对不上：无法拆分，必须阻断。 */
+  readonly breakdownMismatch: boolean
+  /** 手动改目标没填原因。 */
+  readonly reasonMissing: boolean
+  /** 原销售单或当前销售单缺失（正常不会出现，防御脏数据）。 */
+  readonly sourceMissing: boolean
+  /** 提交给服务端的覆盖项；未改动的项不提交。 */
+  readonly payload: ReadonlyArray<{ readonly key: string, readonly target: SlhSettleAllocationTarget, readonly reason: string }>
+}
+
+/** 默认归甲（原销售单）的账单费用类型；其余费用默认归乙，COD 与金流费也归乙。 */
+const SETTLE_ORIGIN_CHARGE_TYPES = new Set(['REDELIVERY', 'TRANSFER_DELIVERY', 'STORAGE'])
+
+/** 目标固定顺序：甲 → 乙 → 公司，避免按费用项插入顺序抖动。 */
+const SETTLE_ALLOCATION_TARGET_ORDER: Readonly<Record<SlhSettleAllocationTarget, number>> = {
+  ORIGIN_ORDER: 0,
+  CURRENT_ORDER: 1,
+  COMPANY: 2,
+}
+
+/** 空分摊也要有可渲染的合计；没有目标或父金额不可比时 matchesParent 为 null。 */
+const EMPTY_ALLOCATION_TOTALS: SlhSettleAllocationTotals = {
+  settlementAmountCny: '0.00',
+  paymentFeeAmountCny: '0.00',
+  matchesParent: null,
+}
+
+/** 目标合计方向：正数应入账、负数应转出、零/null 不标记。 */
+export function resolveSettleAllocationPartyDirection(
+  value: string | null,
+): SlhSettleAllocationPartyDirection {
+  if (value === null) {
+    return 'ZERO'
+  }
+  const amount = new Decimal(value)
+  if (amount.isZero()) {
+    return 'ZERO'
+  }
+  return amount.isNegative() ? 'OUTFLOW' : 'INFLOW'
+}
+
+function settleDefaultTarget(chargeType: string): SlhSettleAllocationTarget {
+  return SETTLE_ORIGIN_CHARGE_TYPES.has(chargeType) ? 'ORIGIN_ORDER' : 'CURRENT_ORDER'
+}
+
+function settleSignedContribution(
+  sourceType: SlhSettleAllocationSource,
+  currencyCode: 'CNY' | 'TWD',
+  amount: string,
+  rate: string,
+): string {
+  const value = new Decimal(amount)
+  if (sourceType === 'COD') {
+    return value.div(rate).toString()
+  }
+  if (currencyCode === 'TWD') {
+    return value.div(rate).negated().toString()
+  }
+  return value.negated().toString()
+}
+
+function settleMoney(value: Decimal | null): string | null {
+  return value === null ? null : value.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2)
+}
+
+/**
+ * 分摊预览：口径与服务端 `buildSlhSettlementAllocation` 完全一致（默认目标、贡献额、
+ * 目标合计与尾差归乙）。这里不做后端校验的替代，只把同一结果展示给财务确认。
+ */
+export function buildSettleAllocation(
+  member: SlhReconciliationBatchMemberDto,
+  paymentFeeAmountCny: string | null,
+  rate: string | null,
+  overrides: Readonly<Record<string, SlhSettleAllocationOverride>>,
+): SlhSettleAllocationPreview {
+  const origin = member.salesOrder
+  const current = member.currentSalesOrder
+  if (origin == null || current == null || rate === null) {
+    return {
+      items: [],
+      parties: [],
+      totals: EMPTY_ALLOCATION_TOTALS,
+      breakdownMismatch: false,
+      reasonMissing: false,
+      sourceMissing: origin == null || current == null,
+      payload: [],
+    }
+  }
+  const rateUnits = new Decimal(rate)
+  if (rateUnits.isZero()) {
+    return {
+      items: [],
+      parties: [],
+      totals: EMPTY_ALLOCATION_TOTALS,
+      breakdownMismatch: false,
+      reasonMissing: false,
+      sourceMissing: false,
+      payload: [],
+    }
+  }
+  const sameOrder = origin.id === current.id
+  const base: Array<Omit<SlhSettleAllocationItemView, 'defaultTarget' | 'target' | 'signedContributionCny' | 'overridden' | 'reason'>> = []
+  for (const charge of member.charges) {
+    if (charge.id == null || charge.amount.trim() === '') {
+      continue
+    }
+    base.push({
+      key: `CHARGE:${charge.id}`,
+      sourceType: 'BILL_CHARGE',
+      chargeType: charge.chargeType,
+      currencyCode: charge.currencyCode as 'CNY' | 'TWD',
+      amount: charge.amount,
+    })
+  }
+  if (member.freightAmountCny !== null) {
+    base.push({ key: 'FREIGHT', sourceType: 'FREIGHT', chargeType: 'FREIGHT', currencyCode: 'CNY', amount: member.freightAmountCny })
+  }
+  if (member.codHandlingAmountCny !== null) {
+    base.push({ key: 'COD_HANDLING', sourceType: 'COD_HANDLING', chargeType: 'COD_HANDLING', currencyCode: 'CNY', amount: member.codHandlingAmountCny })
+  }
+  if (member.codAmountTwd !== null) {
+    base.push({ key: 'COD', sourceType: 'COD', chargeType: null, currencyCode: 'TWD', amount: member.codAmountTwd })
+  }
+  if (paymentFeeAmountCny !== null) {
+    base.push({ key: 'PAYMENT_FEE', sourceType: 'PAYMENT_FEE', chargeType: null, currencyCode: 'CNY', amount: paymentFeeAmountCny })
+  }
+
+  let reasonMissing = false
+  const items: SlhSettleAllocationItemView[] = base.map((item) => {
+    const defaultTarget = item.sourceType === 'BILL_CHARGE'
+      ? settleDefaultTarget(item.chargeType ?? 'OTHER')
+      : 'CURRENT_ORDER'
+    const override = item.sourceType === 'COD' ? undefined : overrides[item.key]
+    let target = override?.target ?? defaultTarget
+    if (sameOrder && target === 'ORIGIN_ORDER') {
+      target = 'CURRENT_ORDER'
+    }
+    const overridden = override !== undefined
+      && override.target !== defaultTarget
+      && !(sameOrder && override.target === 'ORIGIN_ORDER')
+    const reason = overridden ? override.reason.trim() : ''
+    if (overridden && reason === '') {
+      reasonMissing = true
+    }
+    return {
+      ...item,
+      defaultTarget,
+      target,
+      signedContributionCny: settleSignedContribution(item.sourceType, item.currencyCode, item.amount, rate),
+      overridden,
+      reason,
+    }
+  })
+
+  const cnyCharges = items
+    .filter(item => item.sourceType === 'BILL_CHARGE' && item.currencyCode === 'CNY')
+    .reduce((sum, item) => sum.plus(item.amount), new Decimal(0))
+  const twdCharges = items
+    .filter(item => item.sourceType === 'BILL_CHARGE' && item.currencyCode === 'TWD')
+    .reduce((sum, item) => sum.plus(item.amount), new Decimal(0))
+  const cnyExpected = member.surchargeAmountCny === null ? new Decimal(0) : new Decimal(member.surchargeAmountCny)
+  const twdExpected = member.ntdSurchargeAmountTwd === null ? new Decimal(0) : new Decimal(member.ntdSurchargeAmountTwd)
+  const breakdownMismatch = !cnyCharges.equals(cnyExpected) || !twdCharges.equals(twdExpected)
+
+  const groups = new Map<SlhSettleAllocationTarget, SlhSettleAllocationItemView[]>()
+  for (const item of items) {
+    groups.set(item.target, [...(groups.get(item.target) ?? []), item])
+  }
+  const hasSettlementInput = member.codAmountTwd !== null
+    || member.ntdSurchargeAmountTwd !== null
+    || member.payableAmountCny !== null
+  const parentSettlement = hasSettlementInput
+    ? new Decimal(member.codAmountTwd ?? 0)
+        .minus(member.ntdSurchargeAmountTwd ?? 0)
+        .div(rateUnits)
+        .minus(member.payableAmountCny ?? 0)
+        .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+    : null
+  const parties: SlhSettleAllocationPartyView[] = [...groups.entries()]
+    .sort(([left], [right]) => SETTLE_ALLOCATION_TARGET_ORDER[left] - SETTLE_ALLOCATION_TARGET_ORDER[right])
+    .map(([target, groupItems]) => {
+      const order = target === 'ORIGIN_ORDER' ? origin : target === 'CURRENT_ORDER' ? current : null
+      const fee = groupItems.filter(item => item.sourceType === 'PAYMENT_FEE')
+      return {
+        target,
+        salesOrderId: order?.id ?? null,
+        salesOrderNo: order?.orderNo ?? null,
+        issuerDisplayName: order?.issuerDisplayName ?? null,
+        issuerAvatarUrl: order?.issuerAvatarUrl ?? null,
+        settlementAmountCny: settleMoney(groupItems
+          .filter(item => item.sourceType !== 'PAYMENT_FEE')
+          .reduce((sum, item) => sum.plus(item.signedContributionCny), new Decimal(0))),
+        paymentFeeAmountCny: fee.length === 0
+          ? null
+          : settleMoney(fee.reduce((sum, item) => sum.plus(item.amount), new Decimal(0))),
+      }
+    })
+  if (parentSettlement !== null && parties.length > 0) {
+    const sumParties = parties.reduce((sum, party) => sum.plus(party.settlementAmountCny ?? 0), new Decimal(0))
+    const residual = parentSettlement.minus(sumParties).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+    if (!residual.isZero()) {
+      const target = parties.find(party => party.target === 'CURRENT_ORDER') ?? parties[0]!
+      for (let index = 0; index < parties.length; index += 1) {
+        const party = parties[index]!
+        if (party.target === target.target) {
+          parties[index] = {
+            ...party,
+            settlementAmountCny: new Decimal(party.settlementAmountCny ?? 0)
+              .plus(residual)
+              .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+              .toFixed(2),
+          }
+        }
+      }
+    }
+  }
+
+  const settlementTotal = parties
+    .reduce((sum, party) => sum.plus(party.settlementAmountCny ?? 0), new Decimal(0))
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+  const paymentFeeTotal = parties
+    .reduce((sum, party) => sum.plus(party.paymentFeeAmountCny ?? 0), new Decimal(0))
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+  const totals: SlhSettleAllocationTotals = {
+    settlementAmountCny: settlementTotal.toFixed(2),
+    paymentFeeAmountCny: paymentFeeTotal.toFixed(2),
+    matchesParent: parentSettlement === null || parties.length === 0
+      ? null
+      : settlementTotal.eq(parentSettlement),
+  }
+
+  return {
+    items,
+    parties,
+    totals,
+    breakdownMismatch,
+    reasonMissing,
+    sourceMissing: false,
+    payload: items
+      .filter(item => item.overridden)
+      .map(item => ({ key: item.key, target: item.target, reason: item.reason })),
   }
 }

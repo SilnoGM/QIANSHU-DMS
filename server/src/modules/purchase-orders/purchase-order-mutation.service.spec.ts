@@ -69,7 +69,18 @@ function setup() {
       update: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
     },
     salesOrder: { findUnique: jest.fn().mockResolvedValue({ orderStatus: 'CONFIRMED' }) },
-    purchaseOrderPart: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    purchaseOrderPart: {
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      findMany: jest.fn().mockResolvedValue([{
+        id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        ownershipCurrent: { ownerType: 'SALES_ORDER', ownerSalesOrderId: order.salesOrderId },
+      }]),
+    },
+    shipmentOwnershipEvent: {
+      aggregate: jest.fn().mockResolvedValue({ _max: { sequence: 1 } }),
+      create: jest.fn().mockResolvedValue({ id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' }),
+    },
+    shipmentOwnershipCurrent: { findUnique: jest.fn(), findMany: jest.fn() },
     purchaseOrderLine: {
       findMany: jest.fn<Promise<unknown[]>, [unknown]>()
         .mockResolvedValue([{ sourceSalesOrderLineId: SOURCE_LINE_ID }]),
@@ -536,6 +547,16 @@ describe('PurchaseOrderMutationService', () => {
         reason: '不再采购',
       } })
     expect(fixture.transaction.purchaseOrderLine.findMany).toHaveBeenCalled()
+    expect(fixture.transaction.shipmentOwnershipEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        shipmentId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        sequence: 2,
+        ownerType: 'SALES_ORDER',
+        ownerSalesOrderId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+        state: 'VOIDED',
+        reason: 'ORDER_CANCELLED',
+      }) as unknown,
+    }))
     expect(fixture.audit.record).toHaveBeenCalledWith(
       fixture.transaction,
       expect.objectContaining({ eventType: 'PURCHASE_ORDER_ORDER_STATUS_CHANGED' }),

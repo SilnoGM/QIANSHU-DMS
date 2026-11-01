@@ -132,7 +132,8 @@ GET /shipment-storage/:storageRecordId
 | `locationScope` / `warehouse` | 位置范围与仓库（含 label） |
 | `originPurchaseOrder` / `originSalesOrder` / `originIssuer` | 来源快照 |
 | `costSnapshot` | 成本、已付、比例、两腿金额 |
-| `containerSnapshot` | 柜次、装柜明细、收件人、COD |
+| `containerSnapshot` | v2 柜次 + 全部装柜明细（唛头、收件人、COD、重量体积）；释放时冻结，仅作历史快照 |
+| `containerLoadingItems` | 当前 `container_loading_items` 实时明细；详情「装柜信息」视图使用，解绑后为空 |
 | `claimedSalesOrder` / `claimedAt` | 认领信息 |
 | `createdAt` / `locationUpdatedAt` | 时间 |
 
@@ -183,17 +184,41 @@ GET  /sales-orders/:salesOrderId/storage-claim-context
 POST /shipment-storage/:storageRecordId/claim
 {
   "salesOrderId": "...",
-  "lines": [{ "salesOrderLineId": "...", "quantity": 1 }],
+  "lines": [{
+    "purchaseOrderLineId": "库存分配行",
+    "salesOrderLineId": "...",
+    "quantity": 1,
+    "productMatchOverride": false,
+    "productMatchNote": "仅自定义产品异名时必填"
+  }],
+  "containerChanges": [{
+    "loadingItemId": "装柜明细 ID",
+    "expectedVersion": 1,
+    "recipientName": "收件人",
+    "recipientPhone": "电话",
+    "recipientAddress": "地址",
+    "codTouched": false,
+    "codAmountTwd": null
+  }],
   "requestKey": "uuid"
 }
 ```
 
 首期约束：
 
+- 每条认领行必须携带 `purchaseOrderLineId`，且该行必须属于当前寄仓记录的 `originAllocations`；
+- 每条库存分配行的认领数量之和必须等于该行原数量；
 - 整件认领：`lines` 的数量之和必须等于货件全部数量；
-- 销售单必须 `CONFIRMED`；
+- 销售单必须 `CONFIRMED` 且处于待采购阶段（`fulfillmentStatus = PENDING`）；采购审核中的订单由列表分桶排除；
 - 销售行必须存在且 `removedAt` 为空；
-- 不允许同一货件被两个销售单同时认领。
+- 不允许同一货件被两个销售单同时认领；
+- 产品匹配：目录行按 `product_id` 严格相等；自定义行按规范化名称（采购名称、来源销售名称别名）相等；跨类型禁止；
+- 自定义行名称不一致时必须 `productMatchOverride: true` 且提供 `productMatchNote`，否则拒绝；人工确认会写入 `shipment_claim_lines` 与审计。
+- 有装柜明细时必须为每条明细提交完整的收件人/COD 信息；收件人姓名、电话、地址不允许为空；
+- COD 未主动编辑时保持当前值；主动清空或填 0 统一写为 `null`，表示本行不涉及代收；
+- 审批/直接认领按 `loadingItemId + expectedVersion` 校验并更新，版本变化则拒绝并要求重新提交；装柜更新与认领在同一事务。
+
+新增错误码：`SHIPMENT_STORAGE_CLAIM_ALLOCATION_INVALID`、`SHIPMENT_STORAGE_CLAIM_ALLOCATION_QUANTITY_MISMATCH`、`SHIPMENT_STORAGE_CLAIM_PRODUCT_MISMATCH`、`SHIPMENT_STORAGE_CLAIM_PRODUCT_OVERRIDE_REASON_REQUIRED`、`SHIPMENT_STORAGE_CLAIM_CONTAINER_CHANGE_INVALID`、`SHIPMENT_STORAGE_CLAIM_CONTAINER_VERSION_CHANGED`、`SHIPMENT_STORAGE_CLAIM_RECIPIENT_REQUIRED`、`SHIPMENT_STORAGE_CLAIM_COD_INVALID`。
 
 ### 5.5 终止态
 

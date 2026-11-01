@@ -126,3 +126,25 @@ export async function normalizeAxiosError(
 export function getApiClientErrorMessage(error: ApiClientError): string {
   return error.kind === 'http' ? error.body.message : error.message
 }
+
+/**
+ * 轻提示/行内提示的统一错误文案。
+ * 归一化后的接口错误不是 Error 实例，直接读 failure.message 会丢掉服务端原因；
+ * 5xx 与不可解析响应额外附 requestId，便于用户把问题追到服务端日志。
+ */
+export function getApiClientFailureMessage(failure: unknown, fallback: string): string {
+  if (typeof failure === 'object' && failure !== null && 'kind' in failure) {
+    const error = failure as ApiClientError
+    const message = getApiClientErrorMessage(error)
+    const requestId = error.kind === 'http'
+      ? error.body.requestId
+      : error.kind === 'http-unparseable'
+        ? error.requestId
+        : undefined
+    const attachRequestId = error.kind === 'http'
+      ? error.status >= 500
+      : error.kind === 'http-unparseable'
+    return attachRequestId && requestId ? `${message}（requestId: ${requestId}）` : message
+  }
+  return failure instanceof Error ? failure.message : fallback
+}

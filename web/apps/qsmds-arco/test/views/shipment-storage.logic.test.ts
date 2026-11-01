@@ -1,0 +1,102 @@
+import assert from 'node:assert/strict'
+// eslint-disable-next-line test/no-import-node-test -- 页面筛选项契约使用 Node.js 内置 runner。
+import test from 'node:test'
+
+import { buildStorageQuery, claimDisabledReason, claimRequestDisabledReason, DEFAULT_STORAGE_STATUS, relocateDisabledReason, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusLabel } from '../../src/views/workbenches/shipment-storage/logic'
+
+test('寄仓状态默认寄仓中，全部放在最后', () => {
+  assert.equal(DEFAULT_STORAGE_STATUS, 'IN_STORAGE')
+  assert.deepEqual(STORAGE_STATUS_TABS, ['IN_STORAGE', 'CLAIMED', 'VOIDED', 'ALL'])
+  assert.equal(storageStatusLabel('IN_STORAGE'), '寄仓中')
+  assert.equal(storageStatusLabel('CLAIMED'), '已调货')
+})
+
+test('认领失败时显示服务端文案而不是通用兜底', () => {
+  assert.equal(storageFailureMessage({
+    kind: 'http',
+    status: 422,
+    body: { code: 'SHIPMENT_STORAGE_CLAIM_EXCEEDS_COVERAGE', message: '认领数量超过该销售行的未覆盖余量' },
+  }, '认领失败'), '认领数量超过该销售行的未覆盖余量')
+  assert.equal(storageFailureMessage(new Error('boom'), '认领失败'), 'boom')
+  assert.equal(storageFailureMessage('unknown', '认领失败'), '认领失败')
+})
+
+test('寄仓位置筛选不使用空字符串值，全部位置使用 ALL 哨兵', () => {
+  assert.ok(STORAGE_SCOPE_OPTIONS.every(option => option.value !== ''))
+  assert.equal(STORAGE_SCOPE_OPTIONS[0]?.value, 'ALL')
+})
+
+test('ALL 哨兵在请求前转换为未设置', () => {
+  assert.deepEqual(buildStorageQuery({
+    page: 1,
+    pageSize: 20,
+    keyword: ' ',
+    status: 'ALL',
+    locationScope: 'ALL',
+    warehouseValue: 'ALL',
+  }), {
+    page: 1,
+    pageSize: 20,
+    keyword: undefined,
+    status: undefined,
+    locationScope: undefined,
+    warehouseValue: undefined,
+  })
+})
+
+test('具体位置与仓库保留筛选值', () => {
+  assert.deepEqual(buildStorageQuery({
+    page: 2,
+    pageSize: 50,
+    keyword: 'PKG',
+    status: 'IN_STORAGE',
+    locationScope: 'OVERSEAS',
+    warehouseValue: 'RF_TZ',
+  }), {
+    page: 2,
+    pageSize: 50,
+    keyword: 'PKG',
+    status: 'IN_STORAGE',
+    locationScope: 'OVERSEAS',
+    warehouseValue: 'RF_TZ',
+  })
+})
+
+test('storageId 精确过滤只在指定时进入请求', () => {
+  const storageId = '00000000-0000-4000-8000-000000000601'
+  assert.equal(buildStorageQuery({
+    page: 1,
+    pageSize: 20,
+    keyword: '',
+    status: 'ALL',
+    locationScope: 'ALL',
+    warehouseValue: 'ALL',
+    storageId,
+  }).storageId, storageId)
+  assert.equal('storageId' in buildStorageQuery({
+    page: 1,
+    pageSize: 20,
+    keyword: '',
+    status: 'ALL',
+    locationScope: 'ALL',
+    warehouseValue: 'ALL',
+  }), false)
+})
+
+test('调货动作只有寄仓中可执行，其他状态返回禁用原因', () => {
+  assert.equal(claimDisabledReason({ status: 'IN_STORAGE' }, true), null)
+  assert.match(claimDisabledReason({ status: 'CLAIMED' }, true) ?? '', /不能调货/u)
+  assert.equal(claimDisabledReason({ status: 'CLAIMED' }, false), null)
+})
+
+test('运营申请调货只对寄仓中记录开放', () => {
+  assert.equal(claimRequestDisabledReason({ status: 'IN_STORAGE' }), null)
+  assert.match(claimRequestDisabledReason({ status: 'VOIDED' }) ?? '', /不能申请调货/u)
+})
+
+test('移仓动作要求寄仓中且为海外仓', () => {
+  assert.equal(relocateDisabledReason({ status: 'IN_STORAGE', locationScope: 'OVERSEAS' }, true), null)
+  assert.match(relocateDisabledReason({ status: 'IN_STORAGE', locationScope: 'MAINLAND' }, true) ?? '', /海外仓/u)
+  assert.match(relocateDisabledReason({ status: 'CLAIMED', locationScope: 'OVERSEAS' }, true) ?? '', /不能移仓/u)
+  assert.equal(relocateDisabledReason({ status: 'IN_STORAGE', locationScope: 'MAINLAND' }, false), null)
+})

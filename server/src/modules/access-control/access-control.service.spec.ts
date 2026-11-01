@@ -94,6 +94,11 @@ describe('permission constants', () => {
       'sales-receipts:read',
       'sales-receipts:review',
       'sales-receipts:void',
+      'shipment-storage:read',
+      'shipment-storage:release',
+      'shipment-storage:relocate',
+      'shipment-storage:claim',
+      'shipment-storage:claim-request',
       'purchase-orders:read',
       'purchase-orders:create',
       'purchase-orders:create-stock',
@@ -129,7 +134,7 @@ describe('permission constants', () => {
       'data-scope:self',
       'data-scope:all',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 97)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 102)
   })
 })
 

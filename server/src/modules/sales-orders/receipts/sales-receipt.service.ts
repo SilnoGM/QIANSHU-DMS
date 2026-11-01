@@ -95,6 +95,7 @@ export class SalesReceiptService {
   private assertOpen(order: { orderStatus: string }) {
     if (order.orderStatus === 'COMPLETED') receiptFailure('SALES_ORDER_COMPLETED', '已完成订单不能操作收款')
     if (order.orderStatus === 'CANCELLED') receiptFailure('SALES_ORDER_CANCELLED', '已取消订单不能操作收款')
+    if (order.orderStatus === 'TERMINATED') receiptFailure('SALES_ORDER_TERMINATED', '已终止订单不能操作收款')
   }
   private async lockRequest(tx: Tx, id: string, actorUserId: string) {
     const locator = await tx.salesReceiptRequest.findUnique({ where: { id }, select: { salesOrderId: true } })

@@ -33,9 +33,10 @@ export interface OrderProductLineReadOnlyModel {
   readonly productNo: string | null
   readonly name: string
   readonly description: string
-  readonly standardUnitPriceAmount: string
-  readonly actualUnitPriceAmount: string
-  readonly actualSubtotalAmount: string
+  /** 寄仓调货等无采购价格的历史行用 null 显示“—”，不能伪造成 0.00。 */
+  readonly standardUnitPriceAmount: string | null
+  readonly actualUnitPriceAmount: string | null
+  readonly actualSubtotalAmount: string | null
   readonly quantity: string
   readonly statusLabel: string
   readonly statusDescription: string

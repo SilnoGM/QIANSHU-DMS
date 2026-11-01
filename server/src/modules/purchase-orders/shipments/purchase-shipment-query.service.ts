@@ -12,7 +12,7 @@ import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.se
 import { isNormalizableDictionaryItemValue, normalizeDictionaryItemValue } from '../../dictionaries/dictionary.normalizer'
 import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
 import type { DataScope } from '../../access-control/data-scope'
-import { purchaseOrderPartScopeWhere, purchaseOrderScopeWhere } from '../purchase-order-access'
+import { purchaseOrderPartScopeWhere } from '../purchase-order-access'
 import { purchaseOrderSupplierFromSources } from '../purchase-order-query.service'
 import type { PurchaseOrderSupplierDto } from '../dto/purchase-order-response.dto'
 import { PURCHASE_SHIPMENT_VIEWS } from './purchase-shipment.dto'
@@ -50,6 +50,24 @@ const PART_SELECT = {
   items: { orderBy: { line: { lineNumber: 'asc' } }, select: { purchaseOrderLineId: true, quantity: true, line: { select: LINE_SELECT } } },
   // 数据库触发器保证一个货件只属于一个柜次，取首条即可；用于列表/手动匹配显示「本柜/他柜」。
   containerLoadingItems: { take: 1, select: { containerBatch: { select: { id: true, containerBatchNo: true, containerBatchName: true } } } },
+  // 寄仓状态只取当前在仓/已调货记录；作废记录不遮挡当前归属。
+  storageRecords: {
+    where: { status: { in: ['IN_STORAGE', 'CLAIMED'] } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: 1,
+    select: { id: true, status: true, locationScope: true, warehouseValue: true },
+  },
+  // 当前归属销售单才是“客户/销售来源”；采购来源只在池内/公司持有时作为历史来源回退。
+  ownershipCurrent: { select: {
+    ownerType: true,
+    state: true,
+    ownerSalesOrder: { select: {
+      id: true,
+      orderNo: true,
+      customerName: true,
+      issuer: { select: { profile: { select: { issuerPrefix: true } } } },
+    } },
+  } },
 } as const satisfies Prisma.PurchaseOrderPartSelect
 
 const DETAIL_SELECT = {
@@ -95,13 +113,20 @@ function baseWhere(input: PurchaseShipmentFilterDto, scope: DataScope, actorUser
   const keyword = rawKeyword?.normalize('NFKC')
   const match = { contains: keyword, mode: 'insensitive' } as const
   return {
+    // 货件范围按当前归属判断；采购单来源只是筛选维度，不能再作为可见性真相源。
+    ...purchaseOrderPartScopeWhere(scope, actorUserId),
+    // 到仓货件页要求池内货件只去寄仓管理查看；默认不传，货件管理仍可见。
+    ...(input.excludeStoragePool === true
+      ? { AND: [{ OR: [
+          { ownershipCurrent: { is: null } },
+          { ownershipCurrent: { ownerType: { not: 'STORAGE_POOL' as const } } },
+        ] }] }
+      : {}),
     // 历史查询只匹配保存的稳定值，不以字典当前有效性排除停用或未知仓库。
     destinationWarehouseValue: input.destinationWarehouseMissing === true
       ? null
       : input.destinationWarehouseValue === undefined ? undefined : normalizeDictionaryItemValue(input.destinationWarehouseValue),
     purchaseOrder: { is: {
-      // 归属谓词必须与订单筛选写在同一个 purchaseOrder 对象里：外层再放一个同名键会把它静默覆盖。
-      ...purchaseOrderScopeWhere(scope, actorUserId),
       purchaseType: input.purchaseType,
       createdByUserId: input.createdByUserId,
       supplierValue: input.supplierValue ?? (input.supplierSource === 'CUSTOM_TEXT' ? null : input.supplierSource === 'DICTIONARY' ? { not: null } : undefined),
@@ -120,6 +145,9 @@ function baseWhere(input: PurchaseShipmentFilterDto, scope: DataScope, actorUser
       { purchaseOrder: { is: { customSupplierName: match } } },
       { purchaseOrder: { is: { salesOrder: { is: { orderNo: match } } } } },
       { purchaseOrder: { is: { salesOrder: { is: { customerName: match } } } } },
+      // 已认领货件按当前归属销售单搜索，不能只命中采购来源的历史单号/客户。
+      { ownershipCurrent: { ownerType: 'SALES_ORDER', state: 'ACTIVE', ownerSalesOrder: { is: { orderNo: match } } } },
+      { ownershipCurrent: { ownerType: 'SALES_ORDER', state: 'ACTIVE', ownerSalesOrder: { is: { customerName: match } } } },
       { items: { some: { line: { is: { productNameSnapshot: match } } } } },
     ] }),
   }
@@ -154,6 +182,12 @@ function shipmentOrderBy(sort: PurchaseShipmentSort = 'CREATED_DESC'): Prisma.Pu
 
 function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWarehouse: PurchaseShipmentDestinationWarehouseDto | null): PurchaseShipmentListItemDto {
   const order = row.purchaseOrder
+  // 当前归属销售单优先；货件在寄仓池或公司持有时没有销售归属，回退采购来源仅用于历史识别。
+  const ownerSalesOrder = row.ownershipCurrent?.ownerType === 'SALES_ORDER'
+    && row.ownershipCurrent.state === 'ACTIVE'
+    ? row.ownershipCurrent.ownerSalesOrder
+    : null
+  const salesSource = ownerSalesOrder ?? order.salesOrder
   return {
     id: row.id, shipmentNo: row.shipmentNo, partNumber: row.partNumber, status: row.status,
     // 状态派生统一复用 helper，导入候选与列表保持同一口径。
@@ -171,16 +205,24 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
     deliveredAt: row.deliveredAt?.toISOString() ?? null, deliveredBy: toNullablePersonReference(row.deliveredBy),
     deliveredRecordedAt: row.deliveredRecordedAt?.toISOString() ?? null, deliveryRemark: row.deliveryRemark,
     containerBatch: row.containerLoadingItems[0]?.containerBatch ?? null,
+    storage: row.storageRecords[0] === undefined
+      ? null
+      : {
+          id: row.storageRecords[0].id,
+          status: row.storageRecords[0].status,
+          locationScope: row.storageRecords[0].locationScope,
+          warehouseValue: row.storageRecords[0].warehouseValue,
+        },
     purchaseOrder: {
       id: order.id, version: order.version, orderNo: order.orderNo, orderDate: order.orderDate.toISOString().slice(0, 10),
       purchaseType: order.purchaseType, productMode: order.productMode, orderStatus: order.orderStatus,
       shippingMarkText: order.shippingMarkText, createdBy: toPersonReference(order.createdBy),
     },
-    supplier, salesSource: order.salesOrder === null ? null : {
-      id: order.salesOrder.id,
-      orderNo: order.salesOrder.orderNo,
-      customerName: order.salesOrder.customerName,
-      issuerPrefix: order.salesOrder.issuer.profile?.issuerPrefix ?? null,
+    supplier, salesSource: salesSource === null ? null : {
+      id: salesSource.id,
+      orderNo: salesSource.orderNo,
+      customerName: salesSource.customerName,
+      issuerPrefix: salesSource.issuer.profile?.issuerPrefix ?? null,
     },
     lineSummary: {
       lineCount: row.items.length, totalQuantity: row.items.reduce((total, item) => total + item.quantity, 0),

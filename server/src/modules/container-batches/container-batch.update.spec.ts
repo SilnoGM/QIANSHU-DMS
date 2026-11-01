@@ -25,6 +25,7 @@ function harness() {
       count: jest.fn().mockResolvedValue(0),
     },
     salesOrderLine: { findMany: jest.fn().mockResolvedValue([{ id: 'line-1', quantity: 1 }]) },
+    shipmentClaimLine: { findMany: jest.fn().mockResolvedValue([]) },
     salesOrderDocument: { count: jest.fn().mockResolvedValue(0) },
     salesOrderStatusHistory: { create: jest.fn().mockResolvedValue({}) },
     // 销售履约推进按现状判断；默认非候选状态，仅关联货件本身不改变订单。
@@ -78,7 +79,7 @@ describe('Container maintenance commands', () => {
   })
   it('locks the sales order chain before the shipment and evaluates the advance afterwards', async () => {
     const h = harness(), shipmentId = randomUUID()
-    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ purchaseOrder: { salesOrderId: 'so-1' } }])
+    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ ownershipCurrent: { ownerSalesOrderId: 'so-1' } }])
     h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce(h.item)
     await h.service.updateItem(h.context, h.id, h.itemId, { ...fields, shipmentId })
     // 锁序必须与发货、入仓一致：销售明细 → 采购单 → 销售主行 → 货件，装柜不能反向申请。
@@ -95,7 +96,7 @@ describe('Container maintenance commands', () => {
   })
   it('clears the loading fact when the last item is unbound', async () => {
     const h = harness(), shipmentId = randomUUID(), previousLoadedAt = new Date('2026-09-19T00:00:00Z')
-    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ purchaseOrder: { salesOrderId: 'so-1' } }])
+    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ ownershipCurrent: { ownerSalesOrderId: 'so-1' } }])
     h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce({ ...h.item, shipmentId })
     h.tx.$queryRaw.mockImplementation((statement: { sql: string }) => Promise.resolve(statement.sql.includes('SET loaded_at = NULL')
       ? [{ id: shipmentId, previousLoadedAt, previousLoadedById: h.context.actorUserId }]
@@ -116,7 +117,7 @@ describe('Container maintenance commands', () => {
   })
   it('keeps the loading fact while another item of the same shipment remains', async () => {
     const h = harness(), shipmentId = randomUUID()
-    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ purchaseOrder: { salesOrderId: 'so-1' } }])
+    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ ownershipCurrent: { ownerSalesOrderId: 'so-1' } }])
     h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce({ ...h.item, shipmentId })
     h.tx.containerLoadingItem.count.mockResolvedValueOnce(1)
     await h.service.updateItem(h.context, h.id, h.itemId, fields)
@@ -127,7 +128,7 @@ describe('Container maintenance commands', () => {
   })
   it('rejects unbinding a delivered shipment before any write', async () => {
     const h = harness(), shipmentId = randomUUID()
-    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ purchaseOrder: { salesOrderId: 'so-1' } }])
+    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ ownershipCurrent: { ownerSalesOrderId: 'so-1' } }])
     h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce({ ...h.item, shipmentId })
     h.tx.purchaseOrderPart.findUnique.mockResolvedValueOnce({ status: 'ACTIVE', deliveredAt: new Date('2026-09-20T00:00:00Z'), loadedAt: new Date('2026-09-19T00:00:00Z'), warehouseReceivedAt: new Date('2026-09-18T00:00:00Z'), destinationWarehouseValue: 'B5', containerLoadingItems: [] })
     await expect(h.service.updateItem(h.context, h.id, h.itemId, fields)).rejects.toMatchObject({ code: 'CONTAINER_SHIPMENT_UNLOAD_FORBIDDEN', status: 422 })
@@ -137,7 +138,7 @@ describe('Container maintenance commands', () => {
   })
   it('clears the previous shipment and retreats its sales order when an item is rebound', async () => {
     const h = harness(), previousShipmentId = randomUUID(), nextShipmentId = randomUUID()
-    h.tx.purchaseOrderPart.findMany.mockResolvedValue([{ purchaseOrder: { salesOrderId: 'so-1' } }])
+    h.tx.purchaseOrderPart.findMany.mockResolvedValue([{ ownershipCurrent: { ownerSalesOrderId: 'so-1' } }])
     h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce({ ...h.item, shipmentId: previousShipmentId })
     h.tx.salesOrder.findUnique.mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' })
     h.tx.$queryRaw.mockImplementation((statement: { sql: string }) => Promise.resolve(statement.sql.includes('SET loaded_at = NULL')
@@ -156,7 +157,7 @@ describe('Container maintenance commands', () => {
   })
   it('keeps the sales order in sea transit when the unloaded order already has delivery facts', async () => {
     const h = harness(), shipmentId = randomUUID()
-    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ purchaseOrder: { salesOrderId: 'so-1' } }])
+    h.tx.purchaseOrderPart.findMany.mockResolvedValueOnce([{ ownershipCurrent: { ownerSalesOrderId: 'so-1' } }])
     h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce({ ...h.item, shipmentId })
     h.tx.salesOrder.findUnique.mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' })
     h.tx.purchaseOrderPart.count.mockResolvedValueOnce(1)

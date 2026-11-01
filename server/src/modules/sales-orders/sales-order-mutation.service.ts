@@ -36,6 +36,7 @@ import {
 } from './domain/sales-order-state-machine'
 import { isCanonicalSalesOrderActorId } from './sales-order-command.normalizer'
 import { SalesOrderAutomaticStateService } from './sales-order-automatic-state.service'
+import { ShipmentStorageService } from '../shipment-storage/shipment-storage.service'
 import {
   assertSalesOrderPurchaseFulfillment,
   lockSalesOrderPurchaseDependencies,
@@ -52,6 +53,7 @@ const ORDER_STATUSES = new Set<SalesOrderStatus>([
   'PENDING_RECONCILIATION',
   'COMPLETED',
   'CANCELLED',
+  'TERMINATED',
 ])
 const FULFILLMENT_STATUSES = new Set<SalesOrderFulfillmentStatus>([
   'PENDING',
@@ -182,6 +184,7 @@ export class SalesOrderMutationService {
     private readonly dictionaryLookup: DictionaryLookupService,
     private readonly query: SalesOrderQueryService,
     private readonly automaticState: SalesOrderAutomaticStateService,
+    private readonly shipmentStorage: ShipmentStorageService,
     @Optional()
     @Inject(SALES_ORDER_MUTATION_DEPENDENCIES)
     dependencyOverrides: Partial<SalesOrderMutationDependencies> = {},
@@ -216,6 +219,12 @@ export class SalesOrderMutationService {
       )
     }
     const reason = optionalText(body.reason, 'reason', 500)
+    if (toStatus === 'TERMINATED' && reason === null) {
+      return salesOrderRuleFailure(
+        'SALES_ORDER_TERMINATION_REASON_REQUIRED',
+        '终止订单必须填写原因',
+      )
+    }
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
       const order = await this.lockOrder(
@@ -224,7 +233,8 @@ export class SalesOrderMutationService {
         trusted.actorUserId,
       )
       const receivedAmount = await this.readReceivedAmount(transaction, salesOrderId)
-      if (toStatus === 'CANCELLED' && await transaction.salesReceiptRequest.count({ where: { salesOrderId, status: 'PENDING_REVIEW' } }) > 0) {
+      if ((toStatus === 'CANCELLED' || toStatus === 'TERMINATED')
+        && await transaction.salesReceiptRequest.count({ where: { salesOrderId, status: 'PENDING_REVIEW' } }) > 0) {
         receiptFailure('SALES_RECEIPT_STATE_CHANGED', '订单仍有待审核收款，请先处理申请', HttpStatus.CONFLICT)
       }
       assertSalesOrderStatusTransition(order.orderStatus, toStatus, {
@@ -247,6 +257,13 @@ export class SalesOrderMutationService {
             `该销售订单下仍有 ${activePurchaseOrderCount} 张未取消的采购单，请先处理采购单后再取消订单`,
           )
         }
+        // 取消前强制回收本单已认领的寄仓货件；与取消同事务，失败则整单取消回滚。
+        await this.shipmentStorage.returnClaimedShipmentsForCancellation(
+          transaction,
+          trusted,
+          salesOrderId,
+          reason,
+        )
       }
       await transaction.salesOrder.update({
         where: { id: salesOrderId },
@@ -261,9 +278,15 @@ export class SalesOrderMutationService {
         changedByUserId: trusted.actorUserId,
       } })
       await this.recordAudit(transaction, trusted, {
-        eventType: AuditEventType.SALES_ORDER_ORDER_STATUS_CHANGED,
+        eventType: toStatus === 'TERMINATED'
+          ? AuditEventType.SALES_ORDER_TERMINATED
+          : AuditEventType.SALES_ORDER_ORDER_STATUS_CHANGED,
         targetId: salesOrderId,
-        metadata: { fromStatus: order.orderStatus, toStatus },
+        metadata: {
+          fromStatus: order.orderStatus,
+          toStatus,
+          ...(reason === null ? {} : { reason }),
+        },
       })
     })
     return this.query.getById(salesOrderId, trusted.actorUserId)

@@ -14,6 +14,7 @@ const props = defineProps<{
   currencies: readonly CurrencyDescriptor[]
   loading: boolean
   error: string | null
+  terminationHint?: string | null
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -109,14 +110,23 @@ function onClosed() {
           </FaButton>
         </template>
       </FaAlert>
-      <FaTabs v-else-if="detail" v-model="activeTab" :list="tabs" class="drawer-tabs" list-class="rounded-none bg-background h-12 w-full sticky -top-4 z-10" content-class="mt-6 min-w-0">
-        <template #information>
-          <OrderInformation :detail="detail" :currencies="currencies" :line-previews="order?.id === detail.id ? order.lineSummary.previews : []" />
-        </template>
-        <template #changes>
-          <OrderHistory :detail="detail" :currencies="currencies" />
-        </template>
-      </FaTabs>
+      <template v-else-if="detail">
+        <FaAlert
+          v-if="terminationHint"
+          class="mb-4"
+          variant="default"
+          icon="i-lucide:circle-check"
+          :description="terminationHint"
+        />
+        <FaTabs v-model="activeTab" :list="tabs" class="drawer-tabs" list-class="rounded-none bg-background h-12 w-full sticky -top-4 z-10" content-class="mt-6 min-w-0">
+          <template #information>
+            <OrderInformation :detail="detail" :currencies="currencies" :line-previews="order?.id === detail.id ? order.lineSummary.previews : []" />
+          </template>
+          <template #changes>
+            <OrderHistory :detail="detail" :currencies="currencies" />
+          </template>
+        </FaTabs>
+      </template>
     </div>
     <template #footer>
       <div class="flex justify-end">

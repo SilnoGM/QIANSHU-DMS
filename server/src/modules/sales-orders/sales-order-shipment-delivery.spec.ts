@@ -98,6 +98,25 @@ describe('sales order shipment delivery helpers', () => {
     expect(auditMetadata).toMatchObject({ salesOrderId: ORDER_ID, partIds: ['part-1'], source: 'SALES_ORDER_SIGN' })
   })
 
+  it('reads shipments by current ownership so claimed shipments participate in signing', async () => {
+    const f = fixture([part(), part({ id: 'part-2', purchaseOrderId: 'po-2' })])
+
+    await f.deliverAll()
+
+    expect(f.transaction.purchaseOrderPart.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        ownershipCurrent: {
+          ownerType: 'SALES_ORDER',
+          ownerSalesOrderId: ORDER_ID,
+          state: 'ACTIVE',
+        },
+      },
+    }))
+    expect(f.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: { in: ['part-1', 'part-2'] } }) as unknown,
+    }))
+  })
+
   it('rejects order signing while a shipment is still pending review', async () => {
     const f = fixture([part({ status: 'PENDING_REVIEW' })])
     await expect(f.deliverAll()).rejects.toMatchObject({ code: 'SALES_ORDER_SHIPMENTS_NOT_READY' })

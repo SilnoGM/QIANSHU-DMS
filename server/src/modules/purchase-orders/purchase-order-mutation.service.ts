@@ -30,10 +30,8 @@ import {
   DictionaryValueUnavailableError,
 } from '../dictionaries/dictionary-lookup.service'
 import { normalizeDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
-import {
-  MediaAssetLifecycleError,
-  MediaAssetService,
-} from '../media/media-asset.service'
+import { MediaAssetLifecycleError, MediaAssetService } from '../media/media-asset.service'
+import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
 import {
   calculatePurchaseOrderLineTotal,
   derivePurchaseOrderPaymentStatus,
@@ -230,6 +228,7 @@ export class PurchaseOrderMutationService {
     @Inject(PURCHASE_ORDER_MUTATION_DEPENDENCIES)
     dependencyOverrides: Partial<PurchaseOrderMutationDependencies> = {},
     private readonly dataScope: DataScopeService = dataScopeFallback(),
+    private readonly shipmentOwnership: ShipmentOwnershipService = new ShipmentOwnershipService(),
   ) {
     this.dependencies = Object.freeze({
       ...DEFAULT_DEPENDENCIES,
@@ -517,10 +516,32 @@ export class PurchaseOrderMutationService {
       },
     })
     // 取消/驳回只改变可用性，原唛头与产品分配继续留存供历史追溯。
+    const partsToCancel = await transaction.purchaseOrderPart.findMany({
+      where: { purchaseOrderId: order.id, status: { not: 'CANCELLED' } },
+      select: {
+        id: true,
+        ownershipCurrent: { select: { ownerType: true, ownerSalesOrderId: true } },
+      },
+    })
     await transaction.purchaseOrderPart.updateMany({
       where: { purchaseOrderId: order.id, status: { not: 'CANCELLED' } },
       data: { status: 'CANCELLED' },
     })
+    const fallbackOwnerSalesOrderId = order.purchaseType === 'SALES_LINKED' ? order.salesOrderId : null
+    await this.shipmentOwnership.recordMany(transaction, partsToCancel.map(part => ({
+      shipmentId: part.id,
+      ownerType: part.ownershipCurrent?.ownerType
+        ?? (fallbackOwnerSalesOrderId === null ? 'COMPANY' : 'SALES_ORDER'),
+      ownerSalesOrderId: part.ownershipCurrent?.ownerSalesOrderId ?? fallbackOwnerSalesOrderId,
+      state: 'VOIDED',
+      reason: 'ORDER_CANCELLED',
+      actorUserId: trusted.actorUserId,
+      payload: {
+        format: 'shipment-ownership.cancel.v1',
+        shipmentId: part.id,
+        purchaseOrderId: order.id,
+      },
+    })))
     await this.payables.closeForCancellation(transaction, order.id)
     await this.imageDrafts.invalidateForOrder(transaction, order.id)
     await transaction.purchaseOrderStatusHistory.create({ data: {

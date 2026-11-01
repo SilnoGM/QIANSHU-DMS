@@ -48,6 +48,7 @@ import {
   PURCHASE_ORDER_NUMBERING_RULE_CODE,
 } from './purchase-order-create-fingerprint'
 import { PurchaseShipmentNumberingService } from './shipments/purchase-shipment-numbering.service'
+import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
 import { requirePurchaseShippingMark } from './purchase-order-shipping-mark'
 
 const REQUEST_ID_MAXIMUM_CODE_POINTS = 64
@@ -220,6 +221,7 @@ export class PurchaseOrderCommandService {
     @Optional()
     @Inject(PURCHASE_ORDER_COMMAND_DEPENDENCIES)
     dependencyOverrides: Partial<PurchaseOrderCommandServiceDependencies> = {},
+    private readonly shipmentOwnership: ShipmentOwnershipService = new ShipmentOwnershipService(),
   ) {
     this.dependencies = Object.freeze({
       ...DEFAULT_DEPENDENCIES,
@@ -360,6 +362,21 @@ export class PurchaseOrderCommandService {
               purchaseOrderLineId: lineIdByNumber.get(item.lineNumber)!, quantity: item.quantity,
           }))
         )) })
+        // 归属与货件同事务写入：迁移期与采购来源完全一致，后续释放/认领只追加事件。
+        const ownerSalesOrderId = command.purchaseType === 'SALES_LINKED' ? command.salesOrderId ?? null : null
+        await this.shipmentOwnership.recordMany(transaction, persistedParts.map(({ id }, index) => ({
+          shipmentId: id,
+          ownerType: ownerSalesOrderId === null ? 'COMPANY' : 'SALES_ORDER',
+          ownerSalesOrderId,
+          reason: 'PURCHASE_CREATED',
+          actorUserId: trusted.actorUserId,
+          payload: {
+            format: 'shipment-ownership.create.v1',
+            shipmentId: id,
+            purchaseOrderId: created.id,
+            partNumber: index + 1,
+          },
+        })))
         // 创建事件关联本单全部已编号货件；审核事务才派发唛头并推进销售备货。
         await this.audit.record(transaction, {
           eventType: AuditEventType.PURCHASE_ORDER_CREATED,

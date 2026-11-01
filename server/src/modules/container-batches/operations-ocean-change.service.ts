@@ -38,13 +38,16 @@ export class OperationsOceanChangeService {
     await tx.$queryRaw(Prisma.sql`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`ocean.change:${actorUserId}:${key}`}, 0))`)
     await tx.$queryRaw(Prisma.sql`SELECT id FROM container_batches WHERE id = ${id}::uuid FOR UPDATE`)
     await tx.$queryRaw(Prisma.sql`SELECT id FROM container_loading_items WHERE id = ${itemId}::uuid AND container_batch_id = ${id}::uuid FOR UPDATE`)
-    // 锁住归属关系直到提交，防止销售归属或采购来源在更新期间切换。
-    await tx.$queryRaw(Prisma.sql`SELECT sale.id FROM sales_orders sale
-      JOIN purchase_orders purchase ON purchase.sales_order_id = sale.id
-      JOIN purchase_order_parts part ON part.purchase_order_id = purchase.id
+    // 锁住当前归属直到提交，防止调货/寄仓在更新期间切换归属。不能按采购来源加锁：
+    // 认领后仍锁着原销售单，会放行已经转出的货件，也挡不住新的归属变化。
+    await tx.$queryRaw(Prisma.sql`SELECT ownership.shipment_id FROM shipment_ownership_current ownership
+      JOIN sales_orders sale ON sale.id = ownership.owner_sales_order_id
+      JOIN purchase_order_parts part ON part.id = ownership.shipment_id
       JOIN container_loading_items item ON item.shipment_id = part.id
       WHERE item.id = ${itemId}::uuid AND item.container_batch_id = ${id}::uuid
-      FOR SHARE OF sale, purchase, part`)
+        AND ownership.owner_type = 'SALES_ORDER'
+        AND ownership.state = 'ACTIVE'
+      FOR SHARE OF sale, part, ownership`)
     const row = await tx.containerLoadingItem.findFirst({ where: { id: itemId, containerBatchId: id, ...personalOceanLineWhere(actorUserId) }, select: operationsOceanLineSelect })
     // 相同响应覆盖跨柜、他人货件和不存在的行，管理员也不能绕过销售归属。
     if (!row) return fail('CONTAINER_LOADING_ITEM_NOT_FOUND', '装柜明细不存在或无权修改', 404)

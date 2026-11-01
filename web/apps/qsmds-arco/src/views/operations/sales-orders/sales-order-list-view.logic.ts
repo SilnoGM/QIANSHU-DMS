@@ -21,6 +21,7 @@ export type SalesOrderListStatusSelection
     | 'PENDING_RECONCILIATION'
     | 'PREPARING'
     | 'SEA_TRANSIT'
+    | 'TERMINATED'
     | 'WAITING_PAYMENT'
     | 'WAREHOUSE_ARRIVED'
 
@@ -81,6 +82,7 @@ const ALL_ORDER_STATUS_ITEMS: readonly QsStatusSwitchItem[] = [
   { label: '待对账', value: 'PENDING_RECONCILIATION' },
   { label: '已取消', value: 'CANCELLED' },
   { label: '已完成', value: 'COMPLETED' },
+  { label: '已终止', value: 'TERMINATED' },
 ]
 
 const PENDING_FULFILLMENT_STATUSES = [
@@ -96,6 +98,7 @@ const FORMAL_ORDER_STATUSES = [
   'PENDING_RECONCILIATION',
   'CANCELLED',
   'COMPLETED',
+  'TERMINATED',
 ] as const
 
 const PENDING_ACTION_BY_FULFILLMENT_STATUS: Partial<Record<

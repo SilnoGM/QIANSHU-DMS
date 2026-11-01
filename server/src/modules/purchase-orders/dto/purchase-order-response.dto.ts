@@ -435,6 +435,7 @@ export class PurchaseOrderSourceSalesOrderLineDto {
   @ApiProperty({ type: 'string', nullable: true }) readonly description!: string | null
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly quantity!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly purchasedQuantity!: number
+  @ApiProperty({ type: 'integer', minimum: 0, description: '已通过寄仓调货认领覆盖的数量' }) readonly claimedQuantity!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly remainingQuantity!: number
   @ApiProperty({ type: () => [PurchaseOrderSourcePurchasedLineDto] })
   readonly purchasedLines!: readonly PurchaseOrderSourcePurchasedLineDto[]

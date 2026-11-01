@@ -88,6 +88,9 @@ export interface PurchaseOrderSourceSynchronizationResult {
   readonly lines: readonly OrderProductLineModel[]
   readonly maximumQuantityByKey: Readonly<Record<string, number>>
   readonly readOnlyLines: readonly OrderProductLineReadOnlyModel[]
+  /** 只读历史行按来源区分，提示文案不能把已调货说成已采购。 */
+  readonly purchasedHistoryCount: number
+  readonly claimedHistoryCount: number
   readonly sourceSalesOrderLineIdByKey: Readonly<Record<string, string>>
 }
 
@@ -396,12 +399,15 @@ export function synchronizePurchaseOrderSourceLines(input: {
   const maximumQuantityByKey: Record<string, number> = {}
   let incompatibleCatalogCount = 0
   let exhaustedCount = 0
+  let purchasedHistoryCount = 0
+  let claimedHistoryCount = 0
 
   for (const sourceLine of input.sourceLines) {
     const option = sourceLine.productId === null
       ? undefined
       : optionByProductId.get(sourceLine.productId)
     for (const purchasedLine of sourceLine.purchasedLines) {
+      purchasedHistoryCount += 1
       // 每条有效采购明细独立展示，价格、小计和备注使用采购单保存时的快照；
       // 当前产品档案只补充可选主图，不会把历史行并入本次采购表单模型。
       readOnlyLines.push({
@@ -420,6 +426,24 @@ export function synchronizePurchaseOrderSourceLines(input: {
         statusDescription:
           `该销售订单中的本产品已经存在有效的采购单，已采购数量${purchasedLine.quantity}件`,
         statusLabel: '已采购',
+      })
+    }
+    if (sourceLine.claimedQuantity > 0) {
+      claimedHistoryCount += 1
+      readOnlyLines.push({
+        actualSubtotalAmount: null,
+        actualUnitPriceAmount: null,
+        description: '寄仓调货覆盖，无需再次采购',
+        key: `claimed-${sourceLine.id}`,
+        lineType: sourceLine.lineType,
+        mainImage: sourceLine.lineType === 'CATALOG' ? option?.mainImage ?? null : null,
+        name: sourceLine.productName,
+        productNo: sourceLine.productNo,
+        quantity: String(sourceLine.claimedQuantity),
+        standardUnitPriceAmount: null,
+        statusDescription:
+          `该销售订单中的本产品已通过寄仓调货覆盖${sourceLine.claimedQuantity}件，无需再次采购`,
+        statusLabel: '已调货',
       })
     }
     if (sourceLine.remainingQuantity <= 0) {
@@ -464,10 +488,12 @@ export function synchronizePurchaseOrderSourceLines(input: {
   }
 
   return {
+    claimedHistoryCount,
     exhaustedCount,
     incompatibleCatalogCount,
     lines,
     maximumQuantityByKey: Object.freeze(maximumQuantityByKey),
+    purchasedHistoryCount,
     readOnlyLines: Object.freeze(readOnlyLines),
     sourceSalesOrderLineIdByKey: Object.freeze(sourceSalesOrderLineIdByKey),
   }

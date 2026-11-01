@@ -27,6 +27,10 @@ const expectedDictionaries: ReadonlyArray<readonly [string, readonly string[]]> 
     'YJ.594540.DGHM.ZTBHCG.B.DXM',
     'QITA',
   ]],
+  ['overseas.warehouse', [
+    'RF_TZ',
+    'RF_LK',
+  ]],
   ['payment.method', [
     'ALIPAY',
     'WECHAT',
@@ -42,8 +46,8 @@ const expectedDictionaries: ReadonlyArray<readonly [string, readonly string[]]> 
 ]
 const expectedRoles: ReadonlyArray<readonly [string, number]> = [
   ['finance_staff', 27],
-  ['operations_staff', 20],
-  ['purchasing_staff', 9],
+  ['operations_staff', 22],
+  ['purchasing_staff', 12],
 ]
 const expectedRuleShapes: Readonly<Record<string, string>> = {
   BTJ_MARK: 'FIXED(BTJ) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',

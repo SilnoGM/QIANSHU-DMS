@@ -1,7 +1,9 @@
 import type { Prisma } from '../../generated/prisma/client'
 import type { AuditService } from '../audit/audit.service'
 import {
+  advanceToPreparingWhenCovered,
   isSalesOrderPurchaseFullyCovered,
+  recalculateAfterShipmentRelease,
   SalesOrderPurchaseCoverageService,
 } from './sales-order-purchase-coverage.service'
 
@@ -43,6 +45,14 @@ function setup(overrides: {
   readonly purchasedRows?: readonly {
     readonly sourceSalesOrderLineId: string | null
     readonly _sum: { readonly quantity: number | null }
+  }[]
+  readonly claimedRows?: readonly {
+    readonly salesOrderLineId: string
+    readonly quantity: number
+  }[]
+  readonly unownedRows?: readonly {
+    readonly quantity: number
+    readonly line: { readonly sourceSalesOrderLineId: string | null }
   }[]
   readonly salesLines?: readonly {
     readonly id: string
@@ -92,6 +102,18 @@ function setup(overrides: {
           sourceSalesOrderLineId: SALES_LINE_B_ID,
           _sum: { quantity: 1 },
         }])])
+      }),
+    },
+    shipmentClaimLine: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>(() => {
+        calls.push('claims')
+        return Promise.resolve([...(overrides.claimedRows ?? [])])
+      }),
+    },
+    purchaseOrderPartItem: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>(() => {
+        calls.push('unowned')
+        return Promise.resolve([...(overrides.unownedRows ?? [])])
       }),
     },
     purchaseOrder: {
@@ -167,7 +189,7 @@ describe('SalesOrderPurchaseCoverageService', () => {
       input(),
     )
 
-    expect(fixture.calls).toEqual(['lock', 'sales-lines', 'purchases'])
+    expect(fixture.calls).toEqual(['lock', 'sales-lines', 'purchases', 'unowned', 'claims'])
     expect(fixture.transaction.salesOrderLine.findMany).toHaveBeenCalledWith({
       where: { salesOrderId: SALES_ORDER_ID, removedAt: null },
       select: { id: true, quantity: true },
@@ -295,6 +317,23 @@ describe('SalesOrderPurchaseCoverageService', () => {
 
     expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
     expect(fixture.transaction.salesOrderStatusHistory.create).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+  })
+
+  it('does not count purchase quantities whose shipments were released to storage', async () => {
+    const fixture = setup({
+      unownedRows: [{
+        line: { sourceSalesOrderLineId: SALES_LINE_A_ID },
+        quantity: 2,
+      }],
+    })
+
+    await fixture.service.advanceWhenFullyCovered(
+      fixture.transactionClient,
+      input(),
+    )
+
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
     expect(fixture.audit.record).not.toHaveBeenCalled()
   })
 
@@ -457,6 +496,198 @@ describe('SalesOrderPurchaseCoverageService', () => {
       advancedToLandTransit: false,
       fulfillmentStatus: 'PREPARING',
     })
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+})
+
+describe('recalculateAfterShipmentRelease', () => {
+  const releaseInput = {
+    actorUserId: ACTOR_ID,
+    requestId: 'release-coverage-test',
+    salesOrderId: SALES_ORDER_ID,
+  }
+
+  it('returns a preparing order to pending when released shipments break coverage', async () => {
+    const fixture = setup({
+      fulfillmentStatus: 'PREPARING',
+      unownedRows: [{ line: { sourceSalesOrderLineId: SALES_LINE_A_ID }, quantity: 2 }],
+    })
+
+    await recalculateAfterShipmentRelease(
+      fixture.transactionClient,
+      fixture.audit as unknown as AuditService,
+      releaseInput,
+    )
+
+    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: SALES_ORDER_ID },
+      data: { fulfillmentStatus: 'PENDING', version: { increment: 1 } },
+    })
+    expect(fixture.transaction.salesOrderStatusHistory.create).toHaveBeenCalledWith({
+      data: {
+        salesOrderId: SALES_ORDER_ID,
+        dimension: 'FULFILLMENT',
+        fromStatus: 'PREPARING',
+        toStatus: 'PENDING',
+        reason: '货件释放进寄仓后重新计算销售产品采购覆盖',
+        changedByUserId: ACTOR_ID,
+      },
+    })
+    expect(fixture.audit.record).toHaveBeenCalledWith(
+      fixture.transactionClient,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          fromStatus: 'PREPARING',
+          toStatus: 'PENDING',
+          trigger: 'SHIPMENT_RELEASE',
+        }) as unknown,
+      }),
+    )
+  })
+
+  it('keeps the order preparing while the remaining shipments still cover every line', async () => {
+    const fixture = setup({ fulfillmentStatus: 'PREPARING' })
+
+    await recalculateAfterShipmentRelease(
+      fixture.transactionClient,
+      fixture.audit as unknown as AuditService,
+      releaseInput,
+    )
+
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+  })
+
+  it('never retreats an order that already left the pre-shipping stages', async () => {
+    const fixture = setup({
+      fulfillmentStatus: 'WAREHOUSE_ARRIVED',
+      unownedRows: [{ line: { sourceSalesOrderLineId: SALES_LINE_A_ID }, quantity: 2 }],
+    })
+
+    await recalculateAfterShipmentRelease(
+      fixture.transactionClient,
+      fixture.audit as unknown as AuditService,
+      releaseInput,
+    )
+
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+})
+
+describe('advanceToPreparingWhenCovered', () => {
+  it('advances a claim-only order when claimed quantities cover every sales line', async () => {
+    const fixture = setup({
+      purchasedRows: [],
+      claimedRows: [
+        { salesOrderLineId: SALES_LINE_A_ID, quantity: 2 },
+        { salesOrderLineId: SALES_LINE_B_ID, quantity: 1 },
+      ],
+    })
+
+    await expect(advanceToPreparingWhenCovered(
+      fixture.transactionClient,
+      fixture.audit as unknown as AuditService,
+      {
+        actorUserId: ACTOR_ID,
+        auditMetadata: {
+          shipmentId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+          storageRecordId: '99999999-9999-4999-8999-999999999999',
+          trigger: 'SHIPMENT_CLAIM',
+        },
+        historyReason: '认领寄仓货件后已覆盖全部销售产品',
+        requestId: 'claim-coverage-test',
+        salesOrderId: SALES_ORDER_ID,
+      },
+    )).resolves.toEqual({ status: 'ADVANCED' })
+
+    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: SALES_ORDER_ID },
+      data: { fulfillmentStatus: 'PREPARING', version: { increment: 1 } },
+    })
+    expect(fixture.transaction.salesOrderStatusHistory.create).toHaveBeenCalledWith({
+      data: {
+        salesOrderId: SALES_ORDER_ID,
+        dimension: 'FULFILLMENT',
+        fromStatus: 'PENDING',
+        toStatus: 'PREPARING',
+        reason: '认领寄仓货件后已覆盖全部销售产品',
+        changedByUserId: ACTOR_ID,
+      },
+    })
+    expect(fixture.audit.record).toHaveBeenCalledWith(
+      fixture.transactionClient,
+      expect.objectContaining({
+        metadata: {
+          automatic: true,
+          fromStatus: 'PENDING',
+          shipmentId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+          storageRecordId: '99999999-9999-4999-8999-999999999999',
+          toStatus: 'PREPARING',
+          trigger: 'SHIPMENT_CLAIM',
+        },
+      }),
+    )
+  })
+
+  it('merges approved purchase quantities with claimed quantities', async () => {
+    const fixture = setup({
+      purchasedRows: [{ sourceSalesOrderLineId: SALES_LINE_A_ID, _sum: { quantity: 1 } }],
+      claimedRows: [
+        { salesOrderLineId: SALES_LINE_A_ID, quantity: 1 },
+        { salesOrderLineId: SALES_LINE_B_ID, quantity: 1 },
+      ],
+    })
+
+    await expect(advanceToPreparingWhenCovered(
+      fixture.transactionClient,
+      fixture.audit as unknown as AuditService,
+      {
+        actorUserId: ACTOR_ID,
+        auditMetadata: { trigger: 'SHIPMENT_CLAIM' },
+        historyReason: '认领寄仓货件后已覆盖全部销售产品',
+        requestId: 'claim-coverage-merge-test',
+        salesOrderId: SALES_ORDER_ID,
+      },
+    )).resolves.toEqual({ status: 'ADVANCED' })
+  })
+
+  it('stays pending when claimed quantities leave a line uncovered', async () => {
+    const fixture = setup({
+      purchasedRows: [],
+      claimedRows: [{ salesOrderLineId: SALES_LINE_B_ID, quantity: 1 }],
+    })
+
+    await expect(advanceToPreparingWhenCovered(
+      fixture.transactionClient,
+      fixture.audit as unknown as AuditService,
+      {
+        actorUserId: ACTOR_ID,
+        auditMetadata: { trigger: 'SHIPMENT_CLAIM' },
+        historyReason: '认领寄仓货件后已覆盖全部销售产品',
+        requestId: 'claim-coverage-partial-test',
+        salesOrderId: SALES_ORDER_ID,
+      },
+    )).resolves.toEqual({ status: 'NOT_COVERED' })
+
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+  })
+
+  it('reports a state change without writing when the order is no longer confirmed', async () => {
+    const fixture = setup({ orderStatus: 'CANCELLED' })
+
+    await expect(advanceToPreparingWhenCovered(
+      fixture.transactionClient,
+      fixture.audit as unknown as AuditService,
+      {
+        actorUserId: ACTOR_ID,
+        auditMetadata: { trigger: 'SHIPMENT_CLAIM' },
+        historyReason: '认领寄仓货件后已覆盖全部销售产品',
+        requestId: 'claim-coverage-state-test',
+        salesOrderId: SALES_ORDER_ID,
+      },
+    )).resolves.toEqual({ orderStatus: 'CANCELLED', status: 'ORDER_STATE_CHANGED' })
+
     expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
   })
 })

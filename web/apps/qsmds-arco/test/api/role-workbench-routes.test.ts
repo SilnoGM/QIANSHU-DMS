@@ -31,6 +31,7 @@ test('财务和采运工作台需要准入码，组内入口再按业务权限�
   assert.deepEqual(visiblePaths([PURCHASE_TRANSPORT_WORKBENCH_PERMISSION, 'purchase-orders:review']), ['/qs-purchase-transport/reviews'])
   assert.deepEqual(visiblePaths([PURCHASE_TRANSPORT_WORKBENCH_PERMISSION, 'purchase-orders:read']), ['/qs-purchase-transport/shipments'])
   assert.deepEqual(visiblePaths([PURCHASE_TRANSPORT_WORKBENCH_PERMISSION, 'container-batches:read']), ['/qs-purchase-transport/containers'])
+  assert.deepEqual(visiblePaths([PURCHASE_TRANSPORT_WORKBENCH_PERMISSION, 'shipment-storage:read']), ['/qs-purchase-transport/storage'])
   assert.deepEqual(visiblePaths([FINANCE_WORKBENCH_PERMISSION, 'sales-receipts:read']), ['/qs-finance/realtime-payments/sales-receipts'])
   assert.deepEqual(visiblePaths([FINANCE_WORKBENCH_PERMISSION, 'packaging-costs:pay']), [])
   assert.deepEqual(visiblePaths([FINANCE_WORKBENCH_PERMISSION, 'packaging-costs:read']), ['/qs-finance/realtime-payments/packaging-payments'])
@@ -97,15 +98,20 @@ test('发票管理入口排在账单对账之后、账户管理之前，审批�
   assert.ok(leaves.every(leaf => leaf.children === undefined))
 })
 
-test('柜次菜单使用独立读取权限，货件与审核菜单保留既有授权', () => {
+test('柜次、寄仓菜单使用独立读取权限，货件与审核菜单保留既有授权', () => {
   const routes = purchaseTransportWorkbench.children
-  assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers'])
+  assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers', 'qsPurchaseTransportStorage'])
   assert.equal(purchaseTransportWorkbench.meta?.title, 'workbench.purchaseTransport')
+  const containers = routes.find(route => route.name === 'qsPurchaseTransportContainers')
+  const storage = routes.find(route => route.name === 'qsPurchaseTransportStorage')
   assert.equal(routes[1]?.meta?.auth, 'purchase-orders:read')
-  assert.equal(routes[2]?.meta?.auth, 'container-batches:read')
-  assert.equal(routes[2]?.meta?.title, 'workbench.containers')
-  assert.equal(routes[2]?.meta?.icon, 'qs-container-management')
-  assert.equal(typeof routes[2]?.component, 'function')
+  assert.equal(storage?.meta?.auth, 'shipment-storage:read')
+  assert.equal(storage?.meta?.title, '寄仓管理')
+  assert.match(String(storage?.component), /workbenches\/purchase-storage\/index\.vue/u)
+  assert.equal(containers?.meta?.auth, 'container-batches:read')
+  assert.equal(containers?.meta?.title, 'workbench.containers')
+  assert.equal(containers?.meta?.icon, 'qs-container-management')
+  assert.equal(typeof containers?.component, 'function')
   assert.equal(routes[0]?.meta?.auth, 'purchase-orders:review')
 })
 

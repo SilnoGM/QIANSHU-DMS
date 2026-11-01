@@ -17,6 +17,7 @@ export const SALES_ORDER_LIST_STATUS_SELECTIONS = [
   'PENDING_RECONCILIATION',
   'CANCELLED',
   'COMPLETED',
+  'TERMINATED',
 ] as const
 
 export type SalesOrderListStatusSelection
@@ -42,6 +43,7 @@ const FORMAL_ORDER_STATUSES = [
   'PENDING_RECONCILIATION',
   'CANCELLED',
   'COMPLETED',
+  'TERMINATED',
 ] as const
 
 /**

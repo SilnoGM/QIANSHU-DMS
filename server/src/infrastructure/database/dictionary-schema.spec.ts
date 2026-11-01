@@ -34,6 +34,7 @@ const DICTIONARY_AUDIT_EVENT_TYPES = [
 const SALES_ORDER_AUDIT_EVENT_TYPES = [
   'SALES_ORDER_CREATED',
   'SALES_ORDER_ORDER_STATUS_CHANGED',
+  'SALES_ORDER_TERMINATED',
   'SALES_ORDER_FULFILLMENT_STATUS_CHANGED',
   'SALES_ORDER_PAYMENT_TERMS_UPDATED',
   'SALES_ORDER_PAYMENT_RECORDED',
@@ -267,7 +268,7 @@ describe('dictionary management database schema', () => {
     }
     // 产品、资金、销售订单、销售加购、采购订单、开票申请与提款申请领域会在后续 append-only migration 扩展审计类型；
     // 字典测试锁定当前全量基线，同时只要求字典 migration 对自身八个类型负责。
-    expect(auditEventTypes).toHaveLength(120)
+    expect(auditEventTypes).toHaveLength(129)
     expect(auditEventTypes).toEqual(expect.arrayContaining([
       'SLH_BILL_IMPORTED',
       'SLH_RECONCILIATION_BATCH_CREATED',
@@ -282,6 +283,13 @@ describe('dictionary management database schema', () => {
     expect(auditEventTypes).toContain('PURCHASE_SHIPMENT_CONTAINER_LOADED')
     expect(auditEventTypes).toContain('PURCHASE_SHIPMENT_CONTAINER_UNLOADED')
     expect(auditEventTypes).toContain('PURCHASE_ORDER_REJECTED')
+    expect(auditEventTypes).toEqual(expect.arrayContaining([
+      'SHIPMENT_OWNERSHIP_RELEASED',
+      'SHIPMENT_STORAGE_RECORDED',
+      'SHIPMENT_STORAGE_LOCATION_CHANGED',
+      'SHIPMENT_STORAGE_CLAIMED',
+      'SHIPMENT_COST_TRANSFERRED',
+    ]))
     expect(auditEventTypes.filter(eventType => eventType.startsWith('SHIPPING_MARK_BINDING_'))).toEqual([
       'SHIPPING_MARK_BINDING_CREATED',
       'SHIPPING_MARK_BINDING_UPDATED',

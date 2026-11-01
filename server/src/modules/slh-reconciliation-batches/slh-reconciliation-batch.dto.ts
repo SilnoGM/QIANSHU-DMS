@@ -1,7 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min, ValidateNested } from 'class-validator'
-import { PurchaseOrderFulfillmentStatus, PurchaseOrderPaymentStatus, PurchaseOrderStatus, SalesOrderFulfillmentStatus, SalesOrderPaymentStatus, SalesOrderStatus } from '../../generated/prisma/enums'
+import {
+  PurchaseOrderFulfillmentStatus, PurchaseOrderPaymentStatus, PurchaseOrderStatus,
+  SalesOrderFulfillmentStatus, SalesOrderPaymentStatus, SalesOrderStatus,
+  ShipmentStorageClaimRequestStatus, ShipmentStorageLocationScope, ShipmentStorageStatus,
+} from '../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
 import { PurchaseOrderSupplierDto } from '../purchase-orders/dto/purchase-order-response.dto'
 import { SlhBillFindingDto, SlhBillLineDto, SlhBillListItemDto, SlhBillReconciliationStatusDto } from '../slh-bills/slh-bill.dto'
@@ -22,6 +26,7 @@ export enum SlhBillLineUnmatchedReasonDto {
   MARK_NOT_FOUND_IN_CONTAINER = 'MARK_NOT_FOUND_IN_CONTAINER',
   LOADING_ITEM_AMBIGUOUS = 'LOADING_ITEM_AMBIGUOUS',
   SHIPMENT_NOT_MATCHED = 'SHIPMENT_NOT_MATCHED',
+  SHIPMENT_IN_STORAGE = 'SHIPMENT_IN_STORAGE',
   PURCHASE_SOURCE_MISSING = 'PURCHASE_SOURCE_MISSING',
   SALES_SOURCE_MISSING = 'SALES_SOURCE_MISSING',
 }
@@ -240,6 +245,90 @@ export class SlhReconciliationMatchedSalesOrderDto {
   @ApiPropertyOptional({ type: 'string', nullable: true }) issuerAvatarUrl!: string | null
 }
 
+/** 调货记录里的人员引用：页面只展示姓名与头像，不暴露账号内部字段。 */
+export class SlhReconciliationTransferPersonDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ type: 'string' }) displayName!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) avatarUrl!: string | null
+}
+
+/** 认领产品行：仅用于「1 行 / 1 件」的工具提示，不暴露源/目标行主键。 */
+export class SlhReconciliationTransferLineDto {
+  @ApiProperty({ type: Number }) lineNumber!: number
+  @ApiProperty({ type: 'string' }) productName!: string
+  @ApiProperty({ type: Number }) quantity!: number
+  @ApiPropertyOptional({ type: 'string', nullable: true }) productMatchMode!: string | null
+}
+
+/** 单条装柜变更：变更 Tooltip 展示完整前后值（方案 B）。 */
+export class SlhReconciliationTransferChangeDto {
+  @ApiProperty({ type: Number }) lineNumber!: number
+  @ApiPropertyOptional({ type: 'string', nullable: true }) shippingMark!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) containerBatchName!: string | null
+  @ApiProperty({ type: 'boolean' }) recipientChanged!: boolean
+  @ApiProperty({ type: 'boolean' }) codChanged!: boolean
+  @ApiPropertyOptional({ type: 'string', nullable: true }) beforeRecipientName!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) afterRecipientName!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) beforeRecipientPhone!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) afterRecipientPhone!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) beforeRecipientAddress!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) afterRecipientAddress!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) beforeCodAmountTwd!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) afterCodAmountTwd!: string | null
+}
+
+/** 调货申请摘要：只保留翻转卡与完整记录入口需要的行数、变更计数和审批信息。 */
+export class SlhReconciliationTransferClaimRequestDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ enum: ShipmentStorageClaimRequestStatus }) status!: ShipmentStorageClaimRequestStatus
+  @ApiProperty({ type: 'string' }) targetSalesOrderNo!: string
+  @ApiPropertyOptional({ type: SlhReconciliationTransferPersonDto, nullable: true }) applicant!: SlhReconciliationTransferPersonDto | null
+  @ApiProperty({ type: 'string' }) createdAt!: string
+  @ApiPropertyOptional({ type: SlhReconciliationTransferPersonDto, nullable: true }) reviewedBy!: SlhReconciliationTransferPersonDto | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) reviewedAt!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) rejectReason!: string | null
+  @ApiProperty({ type: Number }) lineCount!: number
+  @ApiProperty({ type: Number }) totalQuantity!: number
+  @ApiProperty({ type: () => [SlhReconciliationTransferLineDto] }) lines!: SlhReconciliationTransferLineDto[]
+  @ApiProperty({ type: () => [SlhReconciliationTransferChangeDto] }) changes!: SlhReconciliationTransferChangeDto[]
+  @ApiProperty({ type: Number }) recipientChangeCount!: number
+  @ApiProperty({ type: Number }) codChangeCount!: number
+  @ApiProperty({ type: Number }) manualMatchCount!: number
+  @ApiProperty({ type: 'string' }) costTotalCny!: string
+}
+
+/** 调货成本摘要：卡面只显示总额与原/现承担人，认领/释放拆分由完整记录展示。 */
+export class SlhReconciliationTransferCostDto {
+  @ApiProperty({ type: 'string' }) totalCostCny!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) claimAmountCny!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) releaseAmountCny!: string | null
+  @ApiPropertyOptional({ type: () => SlhReconciliationTransferPersonDto, nullable: true }) originalBearer!: SlhReconciliationTransferPersonDto | null
+  @ApiPropertyOptional({ type: () => SlhReconciliationTransferPersonDto, nullable: true }) currentBearer!: SlhReconciliationTransferPersonDto | null
+}
+
+/**
+ * 调货记录摘要：当前销售单对应的寄仓记录 + 最新已通过申请。
+ * 只在甲 ≠ 乙的成员行下发；没有寄仓记录时为 null。
+ */
+export class SlhReconciliationTransferRecordDto {
+  @ApiProperty({ format: 'uuid' }) storageRecordId!: string
+  @ApiProperty({ enum: ShipmentStorageStatus }) status!: ShipmentStorageStatus
+  @ApiProperty({ enum: ShipmentStorageLocationScope }) locationScope!: ShipmentStorageLocationScope
+  @ApiProperty({ type: 'string' }) warehouseLabel!: string
+  @ApiProperty({ type: 'string' }) warehouseValue!: string
+  @ApiPropertyOptional({ type: 'string', nullable: true }) shipmentNo!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) shippingMark!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) containerBatchName!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) releasedAt!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) releaseReason!: string | null
+  @ApiPropertyOptional({ type: SlhReconciliationTransferPersonDto, nullable: true }) releasedBy!: SlhReconciliationTransferPersonDto | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) releaseNote!: string | null
+  @ApiPropertyOptional({ type: SlhReconciliationTransferClaimRequestDto, nullable: true }) claimRequest!: SlhReconciliationTransferClaimRequestDto | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) claimedAt!: string | null
+  @ApiPropertyOptional({ type: SlhReconciliationTransferPersonDto, nullable: true }) claimedBy!: SlhReconciliationTransferPersonDto | null
+  @ApiPropertyOptional({ type: SlhReconciliationTransferCostDto, nullable: true }) cost!: SlhReconciliationTransferCostDto | null
+}
+
 /** 成员行：账单明细行的全部字段 + 本批次的匹配依据、柜次侧可比字段、来源摘要与核对留痕。 */
 export class SlhReconciliationBatchMemberDto extends SlhBillLineDto {
   @ApiProperty({ format: 'uuid', description: 'Member row id inside this batch.' }) id!: string
@@ -251,6 +340,8 @@ export class SlhReconciliationBatchMemberDto extends SlhBillLineDto {
   @ApiProperty({ type: SlhReconciliationMatchedItemDto, description: 'Container row matched at creation time; the other side of every field comparison.' }) matchedLoadingItem!: SlhReconciliationMatchedItemDto
   @ApiPropertyOptional({ type: () => SlhReconciliationMatchedPurchaseOrderDto, nullable: true, description: 'Purchase source reachable from the matched container row; null only for damaged data.' }) purchaseOrder!: SlhReconciliationMatchedPurchaseOrderDto | null
   @ApiPropertyOptional({ type: () => SlhReconciliationMatchedSalesOrderDto, nullable: true, description: 'Sales source of the purchase order; null only for damaged data.' }) salesOrder!: SlhReconciliationMatchedSalesOrderDto | null
+  @ApiPropertyOptional({ type: () => SlhReconciliationMatchedSalesOrderDto, nullable: true, description: 'Current owned sales order after storage claim; null when ownership is not a sales order.' }) currentSalesOrder!: SlhReconciliationMatchedSalesOrderDto | null
+  @ApiPropertyOptional({ type: () => SlhReconciliationTransferRecordDto, nullable: true, description: 'Current storage-to-claim transfer summary; null for non-transferred rows or when no storage record exists.' }) transferRecord!: SlhReconciliationTransferRecordDto | null
   @ApiPropertyOptional({ type: 'string', nullable: true, description: 'Null means this batch has not reconciled the line yet.' }) reconciledAt!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) reconciledByDisplayName!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) reconciledByAvatarUrl!: string | null
@@ -259,6 +350,56 @@ export class SlhReconciliationBatchMemberDto extends SlhBillLineDto {
 export class SlhReconciliationBatchDetailDto extends SlhReconciliationBatchListItemDto {
   @ApiProperty({ type: [SlhReconciliationBatchMemberDto], description: 'Only the lines matched at creation time; other bill lines never appear here.' }) members!: SlhReconciliationBatchMemberDto[]
   @ApiProperty({ type: [SlhBillFindingDto], description: 'Import-time findings snapshot of the whole bill; the page keeps the ones belonging to this batch but still reports the bill-wide count.' }) findings!: SlhBillFindingDto[]
+}
+
+export enum SlhReconciliationSettlementAllocationTargetDto {
+  ORIGIN_ORDER = 'ORIGIN_ORDER',
+  CURRENT_ORDER = 'CURRENT_ORDER',
+  COMPANY = 'COMPANY',
+}
+
+export enum SlhReconciliationSettlementAllocationSourceDto {
+  BILL_CHARGE = 'BILL_CHARGE',
+  FREIGHT = 'FREIGHT',
+  COD_HANDLING = 'COD_HANDLING',
+  COD = 'COD',
+  PAYMENT_FEE = 'PAYMENT_FEE',
+}
+
+export class SlhReconciliationSettlementAllocationTargetInputDto {
+  @ApiProperty({ type: 'string', maxLength: 100, description: '费用项 key：CHARGE:{chargeId} / FREIGHT / COD_HANDLING / COD / PAYMENT_FEE。' })
+  @IsString() @IsUnicodeCodePointLength(1, 100) key!: string
+  @ApiProperty({ enum: SlhReconciliationSettlementAllocationTargetDto })
+  @IsIn(Object.values(SlhReconciliationSettlementAllocationTargetDto)) target!: SlhReconciliationSettlementAllocationTargetDto
+  @ApiPropertyOptional({ type: 'string', maxLength: 500, description: '手动调整入账目标时的原因。' })
+  @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 500) reason?: string | null
+}
+
+export class SlhReconciliationSettlementAllocationDto {
+  @ApiProperty({ type: 'string' }) key!: string
+  @ApiProperty({ enum: SlhReconciliationSettlementAllocationSourceDto }) sourceType!: SlhReconciliationSettlementAllocationSourceDto
+  @ApiPropertyOptional({ type: 'string', nullable: true }) chargeType!: string | null
+  @ApiProperty({ type: 'string' }) currencyCode!: string
+  @ApiProperty({ type: 'string' }) amount!: string
+  @ApiProperty({ enum: SlhReconciliationSettlementAllocationTargetDto }) defaultTarget!: SlhReconciliationSettlementAllocationTargetDto
+  @ApiProperty({ enum: SlhReconciliationSettlementAllocationTargetDto }) target!: SlhReconciliationSettlementAllocationTargetDto
+  @ApiProperty({ type: 'string' }) signedContributionCny!: string
+  @ApiProperty({ type: 'boolean' }) overridden!: boolean
+  @ApiPropertyOptional({ type: 'string', nullable: true }) reason!: string | null
+}
+
+export class SlhReconciliationSettlementAllocationPartyDto {
+  @ApiProperty({ enum: SlhReconciliationSettlementAllocationTargetDto }) target!: SlhReconciliationSettlementAllocationTargetDto
+  @ApiPropertyOptional({ type: 'string', format: 'uuid', nullable: true }) salesOrderId!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) salesOrderNo!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: '销售单出单人显示名；公司目标或订单缺失时为 null。' }) issuerDisplayName!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) issuerAvatarUrl!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) codAmountTwd!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) ntdSurchargeAmountTwd!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) payableAmountCny!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) settlementAmountCny!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) salesAmount!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) paymentFeeAmountCny!: string | null
 }
 
 /** 结算结果状态：有效 / 已被后续结果取代（与持久化枚举 slh_reconciliation_settlement_status 一致）。 */
@@ -311,6 +452,10 @@ export class SlhReconciliationSettlementCreateDto {
   @IsString() @Matches(SETTLEMENT_RATE_PATTERN) rate!: string
   @ApiProperty({ type: SlhReconciliationSettlementAmountsDto, description: '界面上显示的六个金额：与服务端重算结果逐项比对。' })
   @ValidateNested() @Type(() => SlhReconciliationSettlementAmountsDto) amounts!: SlhReconciliationSettlementAmountsDto
+
+  @ApiPropertyOptional({ type: () => [SlhReconciliationSettlementAllocationTargetInputDto], description: '财务逐项覆盖入账目标；未提交的项使用默认归属。' })
+  @IsOptional() @IsArray() @ArrayMaxSize(200) @ValidateNested({ each: true }) @Type(() => SlhReconciliationSettlementAllocationTargetInputDto)
+  allocationTargets?: SlhReconciliationSettlementAllocationTargetInputDto[]
 }
 
 /** 结算结果：返回写入的这条记录，供前端刷新与提示。 */
@@ -324,6 +469,8 @@ export class SlhReconciliationSettlementDto {
   @ApiProperty({ type: 'string' }) createdByDisplayName!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) createdByAvatarUrl!: string | null
   @ApiProperty({ type: 'string' }) createdAt!: string
+  @ApiProperty({ type: () => [SlhReconciliationSettlementAllocationDto] }) allocations!: SlhReconciliationSettlementAllocationDto[]
+  @ApiProperty({ type: () => [SlhReconciliationSettlementAllocationPartyDto] }) allocationParties!: SlhReconciliationSettlementAllocationPartyDto[]
 }
 
 /** 核对记录查询：按批次成员行取历史（同一行最多一条有效）。 */
@@ -363,6 +510,8 @@ export class SlhReconciliationSettlementRecordDto {
   @ApiProperty({ type: 'string' }) createdByDisplayName!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) createdByAvatarUrl!: string | null
   @ApiProperty({ type: 'string' }) createdAt!: string
+  @ApiProperty({ type: () => [SlhReconciliationSettlementAllocationDto] }) allocations!: SlhReconciliationSettlementAllocationDto[]
+  @ApiProperty({ type: () => [SlhReconciliationSettlementAllocationPartyDto] }) allocationParties!: SlhReconciliationSettlementAllocationPartyDto[]
 }
 
 /** 核对记录列表：按时间倒序，最新一条在最前。 */

@@ -46,9 +46,11 @@ import {
   resolveRecordAmountTone,
 } from '../../src/views/workbenches/slh-reconciliation/records-modal.logic'
 import {
+  buildSettleAllocation,
   buildSettleRateCards,
   buildSettleSummary,
   FULL_FLOW_FEE_RATE,
+  resolveSettleAllocationPartyDirection,
   resolveSettleFailureKey,
 } from '../../src/views/workbenches/slh-reconciliation/settle-modal.logic'
 import {
@@ -111,6 +113,12 @@ test('三语的 slhReconciliation 组文案键完全对齐', () => {
   }
 })
 
+test('调货翻转卡标题改为调货后销售单与原销售单', () => {
+  assert.equal(zhCn.slhReconciliation.detail.flip.currentTitle, '调货后销售单')
+  assert.equal(zhCn.slhReconciliation.detail.flip.originTitle, '原销售单')
+  assert.equal(zhCn.slhReconciliation.detail.transfer.targetOrder, '调货后销售单')
+})
+
 test('批次状态与「不能核对」原因的三语文案齐全', () => {
   for (const message of MESSAGES) {
     assertTranslated(message.slhReconciliation.batchStatus, BATCH_STATUSES)
@@ -155,9 +163,9 @@ test('完成批次的门禁：还有未核对行或批次已结束都挡下，�
 })
 
 test('本行核对的门禁：销售订单未取消且已签收即可核对（不再要求收齐），采购需已完成', () => {
-  type SalesStates = Pick<SlhReconciliationMatchedSalesOrderDto, 'orderStatus' | 'fulfillmentStatus' | 'paymentStatus'>
+  type SalesStates = Pick<SlhReconciliationMatchedSalesOrderDto, 'id' | 'orderStatus' | 'fulfillmentStatus' | 'paymentStatus'>
   type PurchaseStates = Pick<SlhReconciliationMatchedPurchaseOrderDto, 'orderStatus' | 'fulfillmentStatus' | 'paymentStatus'>
-  const salesReady: SalesStates = { orderStatus: 'PENDING_RECONCILIATION', fulfillmentStatus: 'SIGNED', paymentStatus: 'PAID' }
+  const salesReady: SalesStates = { id: 'so-a', orderStatus: 'PENDING_RECONCILIATION', fulfillmentStatus: 'SIGNED', paymentStatus: 'PAID' }
   const purchaseReady: PurchaseStates = { orderStatus: 'COMPLETED', fulfillmentStatus: 'SIGNED', paymentStatus: 'PAID' }
   const gate = (
     sales: SalesStates | null = salesReady,
@@ -191,6 +199,19 @@ test('本行核对的门禁：销售订单未取消且已签收即可核对（�
     gate({ ...salesReady, fulfillmentStatus: 'SEA_TRANSIT' }, { ...purchaseReady, orderStatus: 'CONFIRMED' }),
     'SALES_ORDER_NOT_SIGNED',
   )
+
+  // 调货行：甲已取消/未签收、甲的采购单已取消都不挡；只看当前乙未取消且已签收。
+  const origin = { ...salesReady, id: 'so-a', orderStatus: 'CANCELLED' as const, fulfillmentStatus: 'SEA_TRANSIT' as const }
+  const currentSigned: SalesStates = { id: 'so-b', orderStatus: 'CONFIRMED', fulfillmentStatus: 'SIGNED', paymentStatus: 'UNPAID' }
+  const claimedGate = (current: SalesStates) => resolveSlhReconciliationSettleBlockReason({
+    salesOrder: origin,
+    currentSalesOrder: current,
+    purchaseOrder: null,
+  })
+  assert.equal(claimedGate(currentSigned), null)
+  assert.equal(claimedGate({ ...currentSigned, fulfillmentStatus: 'WAREHOUSE_ARRIVED' }), 'SALES_ORDER_NOT_SIGNED')
+  assert.equal(claimedGate({ ...currentSigned, orderStatus: 'CANCELLED' }), 'SALES_ORDER_CANCELLED')
+
   // 取值到文案键的映射各有一条，且三语齐全。
   assert.equal(
     resolveSlhReconciliationSettleBlockLabelKey('SALES_ORDER_NOT_SIGNED'),
@@ -543,6 +564,7 @@ test('批次详情页：头部只给批次与账单标识、底部承接完成�
 
 test('详情页成员区：切换器独立成面板，核对焦点在下、三块分组面板在上', async () => {
   const page = await readPageSource('detail.vue')
+  const orderSection = await readPageSource('slh-order-section.vue')
   // 切换器受控接线：选中值由页面持有，状态色映射与无障碍名称都由页面给。
   assert.match(page, /<QsReconciliationLineSwitcher[\s\S]{0,400}?@update:model-value="selectLine"/u)
   assert.match(page, /:items="lineSwitcherItems"/u)
@@ -586,22 +608,22 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   // 销售/采购改成专用区块模板：单号＋状态徽章的信息块、关键字段行、金额块，两块之间一条分割线。
   assert.match(page, /v-for="\(section, sectionIndex\) in orderSections"/u)
   assert.match(page, /v-if="sectionIndex > 0"[\s\S]{0,120}?border-t border-border/u)
-  assert.match(page, /v-if="section\.states\.length > 0"/u)
-  assert.match(page, /\{\{ section\.orderNo\.value \}\}/u)
-  assert.match(page, /v-for="\(field, index\) in section\.amountFields"/u)
+  assert.match(orderSection, /v-if="section\.states\.length > 0"/u)
+  assert.match(orderSection, /\{\{ section\.orderNo\.value \}\}/u)
+  assert.match(orderSection, /v-for="\(field, index\) in section\.amountFields"/u)
   // 区块标题是项目既有的竖条范式；信息块是浅底圆角容器。
-  assert.match(page, /rounded-full bg-primary h-4\.5 w-1/u)
-  assert.match(page, /p-3 rounded-lg bg-muted\/40/u)
+  assert.match(orderSection, /rounded-full bg-primary h-4\.5 w-1/u)
+  assert.match(orderSection, /p-3 rounded-lg bg-muted\/40/u)
   // 金额块：总额行之后虚线分隔；总额大号加粗、余额非零染红由 logic 的标记驱动。
-  assert.match(page, /index === 1 \? 'pt-2 border-t border-dashed border-border' : ''/u)
-  assert.match(page, /!text-xl !font-semibold/u)
-  assert.match(page, /!text-destructive/u)
+  assert.match(orderSection, /index === 1 \? 'pt-2 border-t border-dashed border-border' : ''/u)
+  assert.match(orderSection, /!text-xl !font-semibold/u)
+  assert.match(orderSection, /!text-destructive/u)
   // 金额块整列右对齐（AmountDisplay 是 inline-flex，靠所在行的 text-align 定位）。
-  assert.match(page, /class="m-0 text-right"/u)
+  assert.match(orderSection, /class="m-0 text-right"/u)
   // 长文本行走本地截断组件：只有真被截断才挂浮层。
-  assert.match(page, /v-else-if="field\.truncate"[\s\S]{0,120}?:text="field\.value"/u)
-  assert.match(page, /<SlhReconciliationOverflowText/u)
-  assert.match(page, /field\.emphasis === 'total'/u)
+  assert.match(orderSection, /v-else-if="field\.truncate"[\s\S]{0,120}?:text="field\.value"/u)
+  assert.match(orderSection, /<SlhReconciliationOverflowText/u)
+  assert.match(orderSection, /field\.emphasis === 'total'/u)
   // 订单面板不再用分组渲染；装柜面板保持分组渲染，账单面板走独立的四段模板。
   assert.doesNotMatch(page, /orderFieldGroups|groupDividers|sectionClass/u)
   assert.match(page, /v-if="billLinePanel"/u)
@@ -621,8 +643,8 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   assert.match(page, /v-if="field\.lines && field\.lines\.length > 0"/u)
   assert.doesNotMatch(page, /field\.chip/u)
   // 金额统一走 AmountDisplay（缺失时回落占位符文本）；等宽数据字体用于所有非金额值。
-  assert.match(page, /v-if="field\.amount"[\s\S]{0,300}?:currencies="currencyCatalog\.currencies\.value"/u)
-  assert.match(page, /class="m-0 text-right"/u)
+  assert.match(orderSection, /v-if="field\.amount"[\s\S]{0,300}?:currencies="currencyCatalog\.currencies\.value"/u)
+  assert.match(orderSection, /class="m-0 text-right"/u)
   // 非金额值保持等宽数据字体，两条分支都带样式类。
   assert.match(page, /<span v-else class="qs-type-data">/u)
   // 三块的标题都来自各自面板模型（销售/采购区块、装柜面板、账单面板）。
@@ -726,19 +748,22 @@ test('核对焦点块：三处只在这三块开流光边框，参数统一且�
     ['twd', true],
   ])
 
-  // 三处模板：相对定位 + 裁剪 + 主题色单色渐变 + 2px + 8s + 错峰 + 动效偏好与无障碍。
+  // 三处模板：相对定位 + 裁剪 + 主题色单色渐变 + 2px + 5s + 错峰 + 动效偏好与无障碍。
+  // 销售段已抽到 SlhOrderSection 组件，因此合计两份源码文件。
   const page = await readPageSource('detail.vue')
-  assert.equal(page.match(/<FaBorderBeam/gu)?.length, 3)
-  assert.equal(page.match(/oklch\(var\(--primary\)\)/gu)?.length, 3)
-  assert.equal(page.match(/:duration="5000"/gu)?.length, 3)
-  assert.equal(page.match(/:border-width="2"/gu)?.length, 3)
+  const orderSection = await readPageSource('slh-order-section.vue')
+  const beamSources = `${page}\n${orderSection}`
+  assert.equal(beamSources.match(/<FaBorderBeam/gu)?.length, 3)
+  assert.equal(beamSources.match(/oklch\(var\(--primary\)\)/gu)?.length, 3)
+  assert.equal(beamSources.match(/:duration="5000"/gu)?.length, 3)
+  assert.equal(beamSources.match(/:border-width="2"/gu)?.length, 3)
   assert.deepEqual([...page.matchAll(/:delay="(\d+)"/gu)].map(match => match[1]), ['1000', '2000'])
   // 组件的 animation 简写会把 animation-delay 重置为 0，错峰靠 important 工具类兜住。
   assert.deepEqual([...page.matchAll(/after:!\[animation-delay:(\d+)ms\]/gu)].map(match => match[1]), ['1000', '2000'])
-  assert.equal(page.match(/relative overflow-hidden/gu)?.length, 3)
-  assert.equal(page.match(/motion-reduce:hidden/gu)?.length, 3)
+  assert.equal(beamSources.match(/relative overflow-hidden/gu)?.length, 3)
+  assert.equal(beamSources.match(/motion-reduce:hidden/gu)?.length, 3)
   // 逐块检查：每个光带都带 aria-hidden（懒量词跨块匹配会吞掉下一块，因此按块切开看）。
-  const beamSnippets = page.split('<FaBorderBeam').slice(1)
+  const beamSnippets = beamSources.split('<FaBorderBeam').slice(1)
   assert.equal(beamSnippets.filter(snippet => snippet.slice(0, 600).includes('aria-hidden="true"')).length, 3)
 })
 
@@ -902,12 +927,270 @@ test('对账信息弹窗：提交载荷是原始值（本行不涉及为 null）
   assert.equal(resolveSettleFailureKey(undefined), 'slhReconciliation.settle.errorUnknown')
 })
 
+/** 分摊测试的成员：甲（原销售单）与乙（当前销售单）不同，账单费用可完整拆分。 */
+function allocationMember(): SlhReconciliationBatchMemberDto {
+  return memberFixture({
+    salesOrder: salesOrderFixture({ id: 'so-a', orderNo: 'SO-A' }),
+    currentSalesOrder: salesOrderFixture({ id: 'so-b', orderNo: 'SO-B', agreedTotalAmount: '5000.00' }),
+    charges: [
+      { id: 'charge-redelivery', chargeType: 'REDELIVERY', currencyCode: 'CNY', amount: '50.00' },
+      { id: 'charge-storage', chargeType: 'STORAGE', currencyCode: 'TWD', amount: '100.00' },
+      { id: 'charge-other', chargeType: 'OTHER', currencyCode: 'CNY', amount: '30.00' },
+    ],
+    freightAmountCny: '200.00',
+    codHandlingAmountCny: '10.00',
+    surchargeAmountCny: '80.00',
+    codAmountTwd: '1000.00',
+    ntdSurchargeAmountTwd: '100.00',
+    payableAmountCny: '290.00',
+  })
+}
+
+test('入账分摊：甲承担二派/寄仓、乙承担其余费用，金流费单列不重复入账', () => {
+  const allocation = buildSettleAllocation(allocationMember(), '7.00', '5.00', {})
+
+  assert.deepEqual(allocation.items.map(item => [item.key, item.defaultTarget, item.target]), [
+    ['CHARGE:charge-redelivery', 'ORIGIN_ORDER', 'ORIGIN_ORDER'],
+    ['CHARGE:charge-storage', 'ORIGIN_ORDER', 'ORIGIN_ORDER'],
+    ['CHARGE:charge-other', 'CURRENT_ORDER', 'CURRENT_ORDER'],
+    ['FREIGHT', 'CURRENT_ORDER', 'CURRENT_ORDER'],
+    ['COD_HANDLING', 'CURRENT_ORDER', 'CURRENT_ORDER'],
+    ['COD', 'CURRENT_ORDER', 'CURRENT_ORDER'],
+    ['PAYMENT_FEE', 'CURRENT_ORDER', 'CURRENT_ORDER'],
+  ])
+  // 结算金额只累计本行的钱：甲 -70（二派 50 + 寄仓 100÷5），乙 -40（杂费 30 + 运费 200 + 手续费 10 − 代收 200）。
+  assert.deepEqual(allocation.parties.map(party => [party.target, party.salesOrderNo, party.settlementAmountCny, party.paymentFeeAmountCny]), [
+    ['ORIGIN_ORDER', 'SO-A', '-70.00', null],
+    ['CURRENT_ORDER', 'SO-B', '-40.00', '7.00'],
+  ])
+  // 两个目标即使是同一出单人，也要靠单号/角色区分；人员字段由销售单出单人提供。
+  assert.deepEqual(allocation.parties.map(party => [party.target, party.issuerDisplayName, party.issuerAvatarUrl]), [
+    ['ORIGIN_ORDER', '张三', null],
+    ['CURRENT_ORDER', '张三', null],
+  ])
+  assert.deepEqual(allocation.totals, {
+    settlementAmountCny: '-110.00',
+    paymentFeeAmountCny: '7.00',
+    matchesParent: true,
+  })
+  assert.equal(allocation.breakdownMismatch, false)
+  assert.equal(allocation.reasonMissing, false)
+  assert.deepEqual(allocation.payload, [])
+})
+
+test('入账分摊：目标合计方向按符号区分应入账/应转出', () => {
+  assert.equal(resolveSettleAllocationPartyDirection('6692.31'), 'INFLOW')
+  assert.equal(resolveSettleAllocationPartyDirection('-28.85'), 'OUTFLOW')
+  assert.equal(resolveSettleAllocationPartyDirection('0.00'), 'ZERO')
+  assert.equal(resolveSettleAllocationPartyDirection('-0.00'), 'ZERO')
+  assert.equal(resolveSettleAllocationPartyDirection(null), 'ZERO')
+})
+
+test('入账分摊：目标文案不再使用甲/乙代称', () => {
+  assert.equal(zhCn.slhReconciliation.settle.allocation.targetOrigin, '原单 · {orderNo}')
+  assert.equal(zhCn.slhReconciliation.settle.allocation.targetCurrent, '当前销售单 · {orderNo}')
+  assert.equal(zhCn.slhReconciliation.settle.allocation.targetCurrentTransfer, '现单 · {orderNo}')
+  assert.equal(zhCn.slhReconciliation.settle.allocation.partyOriginRole, '原销售单')
+  assert.equal(zhCn.slhReconciliation.settle.allocation.partyCurrentRole, '当前销售单')
+  assert.equal(zhCn.slhReconciliation.settle.allocation.partyCurrentTransferRole, '调货后销售单')
+})
+
+test('入账分摊：手动改目标必须填原因，COD 固定归当前销售单且不允许改目标', () => {
+  const changed = buildSettleAllocation(allocationMember(), '7.00', '5.00', {
+    FREIGHT: { target: 'COMPANY', reason: '客户投诉，公司承担运费' },
+  })
+  assert.deepEqual(changed.items.find(item => item.key === 'FREIGHT')?.target, 'COMPANY')
+  assert.deepEqual(changed.items.find(item => item.key === 'FREIGHT')?.overridden, true)
+  assert.deepEqual(changed.payload, [{ key: 'FREIGHT', target: 'COMPANY', reason: '客户投诉，公司承担运费' }])
+  assert.deepEqual(changed.parties.map(party => [party.target, party.settlementAmountCny]), [
+    ['ORIGIN_ORDER', '-70.00'],
+    ['CURRENT_ORDER', '160.00'],
+    ['COMPANY', '-200.00'],
+  ])
+  assert.deepEqual(changed.totals, {
+    settlementAmountCny: '-110.00',
+    paymentFeeAmountCny: '7.00',
+    matchesParent: true,
+  })
+
+  const missingReason = buildSettleAllocation(allocationMember(), '7.00', '5.00', {
+    FREIGHT: { target: 'COMPANY', reason: '   ' },
+  })
+  assert.equal(missingReason.reasonMissing, true)
+
+  const codOverride = buildSettleAllocation(allocationMember(), '7.00', '5.00', {
+    COD: { target: 'ORIGIN_ORDER', reason: '转嫁给甲' },
+  })
+  assert.equal(codOverride.items.find(item => item.key === 'COD')?.target, 'CURRENT_ORDER')
+  assert.equal(codOverride.items.find(item => item.key === 'COD')?.overridden, false)
+  assert.deepEqual(codOverride.payload, [])
+})
+
+test('入账分摊：费用明细对不上附加费时阻断；甲就是乙时不重复生成目标', () => {
+  const mismatch = buildSettleAllocation(memberFixture({
+    salesOrder: salesOrderFixture({ id: 'so-a', orderNo: 'SO-A' }),
+    currentSalesOrder: salesOrderFixture({ id: 'so-b', orderNo: 'SO-B' }),
+    charges: [{ id: 'charge-other', chargeType: 'OTHER', currencyCode: 'CNY', amount: '30.00' }],
+    freightAmountCny: null,
+    codHandlingAmountCny: null,
+    surchargeAmountCny: '80.00',
+    codAmountTwd: null,
+    ntdSurchargeAmountTwd: null,
+    payableAmountCny: '80.00',
+  }), null, '5.00', {})
+  assert.equal(mismatch.breakdownMismatch, true)
+
+  const sameOrder = buildSettleAllocation(memberFixture({
+    salesOrder: salesOrderFixture({ id: 'so-a', orderNo: 'SO-A' }),
+    currentSalesOrder: salesOrderFixture({ id: 'so-a', orderNo: 'SO-A' }),
+    charges: [{ id: 'charge-redelivery', chargeType: 'REDELIVERY', currencyCode: 'CNY', amount: '50.00' }],
+    freightAmountCny: null,
+    codHandlingAmountCny: null,
+    surchargeAmountCny: '50.00',
+    codAmountTwd: null,
+    ntdSurchargeAmountTwd: null,
+    payableAmountCny: '50.00',
+  }), null, '5.00', {})
+  assert.deepEqual(sameOrder.parties.map(party => [party.target, party.settlementAmountCny]), [['CURRENT_ORDER', '-50.00']])
+})
+
+test('对账结算弹窗：分摊逐项选择目标、改目标必填原因、COD 只读、提交带上覆盖项', async () => {
+  const page = await readFile(new URL('../../src/views/workbenches/slh-reconciliation/settle-modal.vue', import.meta.url), 'utf8')
+  assert.match(page, /buildSettleAllocation/u)
+  assert.match(page, /:disabled="allocationBlocked"/u)
+  assert.match(page, /allocation\.totals/u)
+  assert.match(page, /allocationPartyGridClass/u)
+  assert.match(page, /partySettlementLabel/u)
+  assert.match(page, /partyInflow/u)
+  assert.match(page, /partyOutflow/u)
+  assert.match(page, /partyTotalSettlement/u)
+  assert.match(page, /partyTotalMatches/u)
+  assert.match(page, /QsPersonDisplay/u)
+  assert.match(page, /optionOrigin/u)
+  assert.match(page, /optionCurrentTransfer/u)
+  assert.match(page, /partyOriginShort/u)
+  assert.match(page, /partyCurrentShort/u)
+  assert.match(page, /isTransferred/u)
+  assert.match(page, /w-80/u)
+  assert.doesNotMatch(page, /gap-2 grid sm:grid-cols-3/u)
+  assert.match(page, /allocationTargets: \[\.\.\.currentAllocation\.payload\]/u)
+  assert.match(page, /item\.sourceType === 'COD'[\s\S]{0,200}?codFixed/u)
+  assert.match(page, /item\.overridden[\s\S]{0,400}?changeAllocationReason/u)
+  assert.match(page, /t\('slhReconciliation\.settle\.allocation\.breakdownMismatch'\)/u)
+})
+
+test('结算弹窗：调货行的销售金额与金流费按当前销售订单（乙）计算', () => {
+  const member = memberFixture({
+    salesOrder: salesOrderFixture({ id: 'so-a', orderNo: 'SO-A', agreedTotalAmount: '40000.00' }),
+    currentSalesOrder: salesOrderFixture({ id: 'so-b', orderNo: 'SO-B', agreedTotalAmount: '325000.00' }),
+    codAmountTwd: '40000.00',
+    ntdSurchargeAmountTwd: '150.00',
+    payableAmountCny: '1000.00',
+  })
+  const summary = buildSettleSummary(member, '5.20', SETTLE_CURRENCIES, settleTranslate)
+
+  assert.equal(summary.payload.salesAmount, '325000.00')
+  assert.equal(summary.payload.paymentFeeAmountCny, '437.50')
+  assert.equal(summary.payload.settlementAmountCny, '6663.46')
+  const paymentFee = summary.blocks.find(block => block.id === 'paymentFee')
+  assert.equal(paymentFee?.result, '437.50')
+  assert.equal(paymentFee?.groups[0]?.terms[0]?.value, '325,000.00')
+})
+
 test('金流费率在两个依赖域里保持一致：后端常量与前端展示口径必须相等', async () => {
   const serverLogic = await readFile(new URL('../../../../../server/src/modules/slh-reconciliation-batches/slh-reconciliation-settlement.logic.ts', import.meta.url), 'utf8')
   const match = serverLogic.match(/export const PAYMENT_FEE_RATE = '([\d.]+)'/u)
 
   assert.notEqual(match, null)
   assert.equal(Number(match?.[1]), FULL_FLOW_FEE_RATE)
+})
+
+test('核对记录弹窗：新结算记录展示逐项分摊与目标合计，历史记录没有快照时不渲染该段', () => {
+  const record: SlhReconciliationSettlementRecordDto = {
+    id: 'settlement-allocated',
+    status: 'ACTIVE',
+    rateSource: 'EMBEDDED',
+    foreignUnitsPerCny: '5.00',
+    paymentFeeRate: '0.007000000000',
+    codAmountTwd: '1000.00',
+    codAmountCurrency: 'TWD',
+    ntdSurchargeAmountTwd: '100.00',
+    ntdSurchargeCurrency: 'TWD',
+    payableAmountCny: '290.00',
+    payableCurrency: 'CNY',
+    settlementAmountCny: '-110.00',
+    settlementCurrency: 'CNY',
+    salesAmount: '5000.0000',
+    salesCurrency: 'TWD',
+    paymentFeeAmountCny: '7.00',
+    paymentFeeCurrency: 'CNY',
+    slhBillNo: 'CBILL/202609-01',
+    salesOrderNo: 'SO-B',
+    purchaseOrderNo: 'PO-1',
+    containerBatchNo: '1211-01柜',
+    shipmentNo: null,
+    warehouseReceiptReference: 'WG-0078-0072',
+    shippingMarkText: 'J-121125',
+    createdByDisplayName: '张三',
+    createdAt: '2026-10-11T07:05:24.555Z',
+    allocations: [
+      { key: 'CHARGE:charge-redelivery', sourceType: 'BILL_CHARGE', chargeType: 'REDELIVERY', currencyCode: 'CNY', amount: '50.00', defaultTarget: 'ORIGIN_ORDER', target: 'ORIGIN_ORDER', signedContributionCny: '-50', overridden: false, reason: null },
+      { key: 'FREIGHT', sourceType: 'FREIGHT', chargeType: 'FREIGHT', currencyCode: 'CNY', amount: '200.00', defaultTarget: 'CURRENT_ORDER', target: 'COMPANY', signedContributionCny: '-200', overridden: true, reason: '公司承担' },
+    ],
+    allocationParties: [
+      { target: 'ORIGIN_ORDER', salesOrderId: 'so-a', salesOrderNo: 'SO-A', issuerDisplayName: '张三', issuerAvatarUrl: null, codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null, settlementAmountCny: '-70.00', salesAmount: null, paymentFeeAmountCny: null },
+      { target: 'CURRENT_ORDER', salesOrderId: 'so-b', salesOrderNo: 'SO-B', issuerDisplayName: '李四', issuerAvatarUrl: null, codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null, settlementAmountCny: '160.00', salesAmount: '5000.0000', paymentFeeAmountCny: '7.00' },
+      { target: 'COMPANY', salesOrderId: null, salesOrderNo: null, issuerDisplayName: null, issuerAvatarUrl: null, codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null, settlementAmountCny: '-200.00', salesAmount: null, paymentFeeAmountCny: null },
+    ],
+  }
+  const card = buildSlhReconciliationRecordCard(record, SETTLE_CURRENCIES, settleTranslate)
+  assert.equal(card.groups.some(entry => entry.id === 'allocation'), false)
+  const allocation = card.allocation
+  assert.ok(allocation !== null)
+  assert.deepEqual(allocation.items.map(item => [
+    item.label,
+    item.amountText,
+    item.currencyCode,
+    item.targetLabel,
+    item.overridden,
+    item.reason,
+  ]), [
+    ['[slhBill.chargeType.REDELIVERY]', '50.00', 'CNY', '[slhReconciliation.settle.allocation.targetOrigin:SO-A]', false, null],
+    ['[slhReconciliation.settle.allocation.sourceFREIGHT]', '200.00', 'CNY', '[slhReconciliation.settle.allocation.targetCompany]', true, '公司承担'],
+  ])
+  assert.deepEqual(allocation.parties.map(party => [
+    party.title,
+    party.salesOrderNo,
+    party.issuerDisplayName,
+    party.shortRole,
+    party.settlementAmountCny,
+    party.paymentFeeAmountCny,
+    party.direction,
+  ]), [
+    ['[slhReconciliation.settle.allocation.partyOriginRole]', 'SO-A', '张三', '[slhReconciliation.settle.allocation.partyOriginShort]', '-70.00', null, 'OUTFLOW'],
+    ['[slhReconciliation.settle.allocation.partyCurrentTransferRole]', 'SO-B', '李四', '[slhReconciliation.settle.allocation.partyCurrentShort]', '160.00', '7.00', 'INFLOW'],
+    ['[slhReconciliation.settle.allocation.partyCompany]', null, null, null, '-200.00', null, 'OUTFLOW'],
+  ])
+  assert.deepEqual(allocation.totals, {
+    settlementAmountCny: '-110.00',
+    paymentFeeAmountCny: '7.00',
+    matchesParent: true,
+  })
+  const legacy = buildSlhReconciliationRecordCard({ ...record, allocations: [], allocationParties: [] }, SETTLE_CURRENCIES, settleTranslate)
+  assert.equal(legacy.allocation, null)
+})
+
+test('核对记录弹窗：入账分摊独立成全宽区块', async () => {
+  const page = await readFile(new URL('../../src/views/workbenches/slh-reconciliation/records-modal.vue', import.meta.url), 'utf8')
+  assert.match(page, /card\.allocation !== null/u)
+  assert.match(page, /allocationItemsTitle/u)
+  assert.match(page, /allocationPartiesTitle/u)
+  assert.match(page, /allocationAdjusted/u)
+  assert.match(page, /QsPersonDisplay/u)
+  assert.match(page, /shortRole/u)
+  assert.match(page, /issuerDisplayName/u)
+  assert.match(page, /card\.allocation\.totals/u)
+  assert.doesNotMatch(page, /group\.id === 'allocation'/u)
 })
 
 test('核对记录弹窗：卡片按「状态 / 汇率费率 / 六个金额 / 来源」摊平，金额按符号与恒红着色', () => {
@@ -1690,6 +1973,108 @@ test('核对焦点：销售尾款币种跟随订单，代收两项恒为台币',
   assert.equal(focus[0]?.sourceLabel, '[slhReconciliation.detail.focusSourceWithCurrency:[slhReconciliation.detail.focusSalesBalance]:MYR]')
   // 身份色与金额无关，不随币种变化。
   assert.deepEqual(focus.map(item => item.accent), ['emerald', 'amber', 'blue'])
+})
+
+test('调货翻转卡：正面乙销售、背面甲销售+采购；核对焦点改当前乙', () => {
+  const member = memberFixture({
+    salesOrder: salesOrderFixture({
+      id: 'so-a',
+      orderNo: 'SO-A',
+      agreedTotalAmount: '40000.00',
+      balanceDueAmount: '40000.00',
+    }),
+    currentSalesOrder: salesOrderFixture({
+      id: 'so-b',
+      orderNo: 'SO-B',
+      agreedTotalAmount: '325000.00',
+      balanceDueAmount: '325000.00',
+    }),
+    purchaseOrder: purchaseOrderFixture(),
+  })
+
+  const originSections = buildSlhReconciliationOrderSections(member, echoKey)
+  const currentSections = buildSlhReconciliationOrderSections({ ...member, salesOrder: member.currentSalesOrder }, echoKey)
+  assert.equal(currentSections[0]?.orderNo.value, 'SO-B')
+  assert.equal(originSections[0]?.orderNo.value, 'SO-A')
+  assert.equal(originSections[1]?.id, 'purchase')
+
+  const focus = buildSlhReconciliationFocusValues(member, echoKey)
+  assert.equal(focus[0]?.value, '325000.00')
+  assert.match(focus[0]?.sourceLabel ?? '', /focusSalesBalance/u)
+})
+
+test('调货翻转卡：顶栏翻转、双面可访问性、成本/变更摘要与完整寄仓入口', async () => {
+  const page = await readPageSource('detail.vue')
+  const flip = await readPageSource('slh-order-flip-card.vue')
+  const transfer = await readPageSource('slh-transfer-record.vue')
+
+  // 只有调货行走翻转卡；普通行继续走原 orderSections。
+  assert.match(page, /<SlhOrderFlipCard/u)
+  assert.match(page, /isTransferred/u)
+  assert.match(page, /v-else class="m-0 min-w-0"/u)
+  // 顶栏翻转按钮与双面可访问性。
+  assert.match(flip, /i-mdi:flip-horizontal/u)
+  assert.match(flip, /aria-pressed/u)
+  assert.match(flip, /aria-live/u)
+  assert.match(flip, /inert/u)
+  assert.match(flip, /motion-reduce:transition-none/u)
+  // 底部入口：新标签页、storageId、无权限/无记录提示。
+  assert.match(flip, /viewFullStorageRecord/u)
+  assert.match(flip, /storageId/u)
+  assert.match(flip, /target="_blank"/u)
+  assert.match(flip, /storagePermissionRequired/u)
+  // 调货记录：关系、认领行数、成本、变更摘要；时间/申请人/审批人已按设计稿移出卡面。
+  assert.match(transfer, /costTotal/u)
+  assert.match(transfer, /recipientChangeCount/u)
+  assert.match(transfer, /codChangeCount/u)
+  assert.match(transfer, /lineSummaryValue/u)
+  assert.match(transfer, /transferTo/u)
+  assert.match(transfer, /sourceOrder/u)
+  assert.match(transfer, /targetOrder/u)
+  assert.match(transfer, /routeShipmentNo/u)
+  assert.match(transfer, /routeContainerMark/u)
+  assert.match(transfer, /containerMarkText/u)
+  assert.doesNotMatch(transfer, /routeValues/u)
+  assert.match(transfer, /warehouseLabel/u)
+  assert.match(transfer, /@click="emit\('flip'\)"/u)
+  assert.match(flip, /@flip="toggle"/u)
+  // 货件/柜号/唛头改两行；仓库胶囊固定宽度、超长截断。
+  assert.match(transfer, /gap-x-2 gap-y-1/u)
+  assert.match(transfer, /max-w-52/u)
+  assert.doesNotMatch(transfer, /(?<!max-)w-52/u)
+  assert.match(transfer, /text-xs/u)
+  assert.match(transfer, /truncate/u)
+  assert.match(transfer, /:title=/u)
+  // 认领明细并入成本区块；承担人按「标签在上、人员在下」两行排布并放大。
+  assert.ok(transfer.indexOf('transfer.lineSummary\'') > transfer.indexOf('bg-muted/20'))
+  assert.match(transfer, /transfer\.originalBearer'[\s\S]*?i-lucide:arrow-right[\s\S]*?transfer\.currentBearer'/u)
+  assert.match(transfer, /size="md"/u)
+  assert.doesNotMatch(transfer, /size="sm"/u)
+  // 认领明细去底色，hover/focus 展示产品 Tooltip。
+  assert.match(transfer, /productsTooltipAria/u)
+  assert.match(transfer, /productsEmpty/u)
+  assert.match(transfer, /line\.productName/u)
+  assert.match(transfer, /qs-type-data cursor-pointer/u)
+  // 变更摘要尾部 info 图标 + 完整前后值 Tooltip（方案 B）。
+  assert.match(transfer, /changesTooltipAria/u)
+  assert.match(transfer, /i-lucide:info/u)
+  assert.match(transfer, /changeRecipient/u)
+  assert.match(transfer, /changePhone/u)
+  assert.match(transfer, /changeAddress/u)
+  assert.match(transfer, /changeCod/u)
+  assert.match(transfer, /beforeRecipientPhone/u)
+  assert.match(transfer, /afterRecipientAddress/u)
+  // 成本承担人：只显示原承担人与现承担人，不展开金额/比例；成本整体做成区块。
+  assert.match(transfer, /originalBearer/u)
+  assert.match(transfer, /currentBearer/u)
+  assert.match(transfer, /QsPersonDisplay/u)
+  assert.match(transfer, /slhReconciliation\.detail\.transfer\.originalBearer/u)
+  assert.match(transfer, /slhReconciliation\.detail\.transfer\.currentBearer/u)
+  assert.match(transfer, /bg-muted\/20/u)
+  // 变更 Tooltip 不再用固定高度滚动条。
+  assert.doesNotMatch(transfer, /max-h-64|overflow-auto/u)
+  assert.doesNotMatch(transfer, /releasedAt|appliedAt|reviewedAt|claimedAt/u)
+  assert.doesNotMatch(transfer, /applicant|reviewedBy|DateTimeDisplay/u)
 })
 
 test('核对焦点：空值只下发 null 与说明位，与显式 0 区分', () => {

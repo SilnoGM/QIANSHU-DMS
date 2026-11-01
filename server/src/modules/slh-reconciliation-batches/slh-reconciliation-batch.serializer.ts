@@ -16,7 +16,7 @@ import { serializeSlhBillLine, serializeStoredFindings } from '../slh-bills/slh-
 import type { SlhBillReconciliationStatusDto } from '../slh-bills/slh-bill.dto'
 import type {
   SlhBillLineMatchSourceDto, SlhReconciliationBatchDetailDto, SlhReconciliationBatchListItemDto,
-  SlhReconciliationBatchMemberDto,
+  SlhReconciliationBatchMemberDto, SlhReconciliationTransferRecordDto,
 } from './slh-reconciliation-batch.dto'
 import { SlhReconciliationBatchStatusDto } from './slh-reconciliation-batch.dto'
 
@@ -50,7 +50,7 @@ export const slhReconciliationBatchDetailInclude = {
     // 保证「详情第一行」与「费用归属那一行」是同一行，展示顺序也与账单原表一致。
     orderBy: [{ line: { lineNumber: 'asc' } }, { id: 'asc' }],
     include: {
-      line: { include: { charges: true } },
+      line: { include: { charges: { orderBy: { id: 'asc' } } } },
       matchedLoadingItem: {
         select: {
           lineNumber: true, warehouseReceiptReference: true, oceanShippingMarkText: true, goodsName: true,
@@ -62,6 +62,7 @@ export const slhReconciliationBatchDetailInclude = {
           // 只取对账页要展示的列，采购/销售的金额聚合口径不在这里重复实现。
           shipment: {
             select: {
+              id: true,
               shipmentNo: true,
               purchaseOrder: {
                 select: {
@@ -81,6 +82,23 @@ export const slhReconciliationBatchDetailInclude = {
                       agreedTotalAmount: true, depositDueAmount: true, balanceDueAmount: true,
                       fulfillmentStatus: true, paymentStatus: true,
                       // 实际已收款沿用销售域的累加口径，需要未作废的收款记录。
+                      payments: { select: { amount: true, voidedAt: true } },
+                      issuer: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
+                    },
+                  },
+                },
+              },
+              ownershipCurrent: {
+                select: {
+                  ownerType: true,
+                  ownerSalesOrder: {
+                    select: {
+                      id: true, orderNo: true, orderStatus: true,
+                      currencyCode: true, customerName: true, customerPhone: true,
+                      customerFullAddressSnapshot: true,
+                      agreedTotalAmount: true, depositDueAmount: true, balanceDueAmount: true,
+                      fulfillmentStatus: true, paymentStatus: true,
+                      issuerUserId: true,
                       payments: { select: { amount: true, voidedAt: true } },
                       issuer: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
                     },
@@ -142,10 +160,12 @@ function serializeBatchHeader(row: BatchHeaderRow): SlhReconciliationBatchListIt
 function serializeBatchMember(
   row: BatchMemberRow,
   supplierResolutions: ReadonlyMap<string, StoredDictionaryValueResolution>,
+  transferRecord: SlhReconciliationTransferRecordDto | null,
 ): SlhReconciliationBatchMemberDto {
   const item = row.matchedLoadingItem
   const purchaseOrderRow = item.shipment?.purchaseOrder ?? null
   const salesOrderRow = purchaseOrderRow?.salesOrder ?? null
+  const currentSalesOrderRow = item.shipment?.ownershipCurrent?.ownerSalesOrder ?? null
   return {
     ...serializeSlhBillLine(row.line),
     id: row.id,
@@ -222,6 +242,28 @@ function serializeBatchMember(
       issuerDisplayName: salesOrderRow.issuer.displayName,
       issuerAvatarUrl: salesOrderRow.issuer.profile?.avatarUrl ?? null,
     },
+    currentSalesOrder: currentSalesOrderRow === null ? null : {
+      id: currentSalesOrderRow.id,
+      orderNo: currentSalesOrderRow.orderNo,
+      orderStatus: currentSalesOrderRow.orderStatus,
+      currencyCode: currentSalesOrderRow.currencyCode,
+      customerName: currentSalesOrderRow.customerName,
+      customerPhone: currentSalesOrderRow.customerPhone,
+      customerFullAddress: currentSalesOrderRow.customerFullAddressSnapshot,
+      agreedTotalAmount: currentSalesOrderRow.agreedTotalAmount.toFixed(2),
+      depositDueAmount: currentSalesOrderRow.depositDueAmount.toFixed(2),
+      balanceDueAmount: currentSalesOrderRow.balanceDueAmount.toFixed(2),
+      receivedAmount: formatSalesOrderAmountUnits(sumSalesOrderReceivedUnits(currentSalesOrderRow.payments)),
+      outstandingAmount: formatSalesOrderAmountUnits(
+        parseSalesOrderAmountUnits(currentSalesOrderRow.agreedTotalAmount.toFixed(2))
+        - sumSalesOrderReceivedUnits(currentSalesOrderRow.payments),
+      ),
+      fulfillmentStatus: currentSalesOrderRow.fulfillmentStatus,
+      paymentStatus: currentSalesOrderRow.paymentStatus,
+      issuerDisplayName: currentSalesOrderRow.issuer.displayName,
+      issuerAvatarUrl: currentSalesOrderRow.issuer.profile?.avatarUrl ?? null,
+    },
+    transferRecord,
     reconciledAt: row.reconciledAt === null ? null : iso(row.reconciledAt),
     reconciledByDisplayName: row.reconciledBy?.displayName ?? null,
     reconciledByAvatarUrl: row.reconciledBy?.profile?.avatarUrl ?? null,
@@ -235,11 +277,16 @@ export function serializeSlhReconciliationBatchListItem(row: BatchHeaderRow): Sl
 export function serializeSlhReconciliationBatchDetail(
   row: SlhReconciliationBatchDetailRow,
   supplierResolutions: ReadonlyMap<string, StoredDictionaryValueResolution> = new Map(),
+  transferRecords: ReadonlyMap<string, SlhReconciliationTransferRecordDto> = new Map(),
 ): SlhReconciliationBatchDetailDto {
   return {
     ...serializeBatchHeader(row),
     findings: serializeStoredFindings(row.bill.importFindings),
-    members: row.members.map(member => serializeBatchMember(member, supplierResolutions)),
+    members: row.members.map(member => serializeBatchMember(
+      member,
+      supplierResolutions,
+      transferRecords.get(member.id) ?? null,
+    )),
   }
 }
 

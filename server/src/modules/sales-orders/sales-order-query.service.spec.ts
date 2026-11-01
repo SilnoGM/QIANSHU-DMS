@@ -327,6 +327,7 @@ describe('SalesOrderQueryService list summaries', () => {
       { orderStatus: 'PENDING_RECONCILIATION' },
       { orderStatus: 'CANCELLED' },
       { orderStatus: 'COMPLETED' },
+      { orderStatus: 'TERMINATED' },
     ])
     // 单条 OR 谓词同时服务总数、当前页与汇总，不再按状态拆成多次查询。
     expect(fixture.salesOrder.count).toHaveBeenCalledTimes(1)
@@ -550,6 +551,7 @@ describe('SalesOrderQueryService status counts', () => {
         { value: 'PENDING_RECONCILIATION', count: 0 },
         { value: 'CANCELLED', count: 0 },
         { value: 'COMPLETED', count: 2 },
+        { value: 'TERMINATED', count: 0 },
       ],
     })
 
@@ -573,7 +575,7 @@ describe('SalesOrderQueryService status counts', () => {
           }),
           {
             orderStatus: {
-              in: ['CONFIRMED', 'PENDING_RECONCILIATION', 'CANCELLED', 'COMPLETED'],
+              in: ['CONFIRMED', 'PENDING_RECONCILIATION', 'CANCELLED', 'COMPLETED', 'TERMINATED'],
             },
           },
         ],

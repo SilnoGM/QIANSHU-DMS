@@ -16,14 +16,22 @@ const props = withDefaults(defineProps<{
   detail: PurchaseShipmentDetailDto | null
   loading?: boolean
   error?: string | null
-}>(), { loading: false, error: null })
+  canRelease?: boolean
+}>(), { loading: false, error: null, canRelease: false })
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   'reload': []
   'viewOrder': [orderId: string]
+  'release': [detail: PurchaseShipmentDetailDto]
   'closed': []
 }>()
+
+const canReleaseNow = computed(() => props.canRelease
+  && props.detail?.status === 'ACTIVE'
+  && props.detail.deliveredAt === null
+  && props.detail.shippedAt !== null
+  && props.detail.warehouseReceivedAt !== null)
 
 const { t } = useI18n()
 const products = computed(() => buildShipmentDetailProducts(props.detail?.items ?? []))
@@ -50,9 +58,14 @@ const hasShipmentInformation = computed(() => props.detail && (
       <FaIcon name="i-lucide:package-search" class="size-5" aria-hidden="true" />
     </template>
     <template v-if="detail && !loading && !error" #header-extra>
-      <FaTag variant="outline" :class="shipmentStatusClass(detail.viewStatus)" class="whitespace-nowrap">
-        {{ t(`purchaseShipmentDetail.statuses.${detail.viewStatus}`) }}
-      </FaTag>
+      <div class="flex gap-2 items-center">
+        <FaTag variant="outline" :class="shipmentStatusClass(detail.viewStatus)" class="whitespace-nowrap">
+          {{ t(`purchaseShipmentDetail.statuses.${detail.viewStatus}`) }}
+        </FaTag>
+        <FaButton v-if="canReleaseNow" variant="outline" size="sm" @click="emit('release', detail)">
+          释放进寄仓
+        </FaButton>
+      </div>
     </template>
     <template #error-actions>
       <FaButton variant="outline" size="sm" @click="emit('reload')">

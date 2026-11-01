@@ -3,6 +3,7 @@ import type { AuditService } from '../audit/audit.service'
 import type { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
 import type { MediaAssetService } from '../media/media-asset.service'
 import type { SalesOrderAutomaticStateService } from './sales-order-automatic-state.service'
+import type { ShipmentStorageService } from '../shipment-storage/shipment-storage.service'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
 import type { SalesOrderQueryService } from './sales-order-query.service'
 
@@ -52,6 +53,12 @@ function setup() {
         ],
       }]),
       count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(0),
+    },
+    shipmentClaimLine: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
+    },
+    purchaseOrderPartItem: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
     },
     salesReceiptRequest: { count: jest.fn().mockResolvedValue(0), aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }) },
     salesOrderPayment: {
@@ -124,6 +131,11 @@ function setup() {
       jest.fn<Promise<'NONE'>, [unknown, unknown, string, string]>()
         .mockResolvedValue('NONE'),
   }
+  const shipmentStorage = {
+    returnClaimedShipmentsForCancellation:
+      jest.fn<Promise<readonly string[]>, [unknown, unknown, string, string | null]>()
+        .mockResolvedValue([]),
+  }
   const service = new SalesOrderMutationService(
     prisma as unknown as PrismaService,
     audit as unknown as AuditService,
@@ -131,6 +143,7 @@ function setup() {
     dictionaryLookup as unknown as DictionaryLookupService,
     query as unknown as SalesOrderQueryService,
     automaticState as unknown as SalesOrderAutomaticStateService,
+    shipmentStorage as unknown as ShipmentStorageService,
     { now: () => new Date('2026-08-20T08:00:00.000Z') },
   )
   return {
@@ -142,6 +155,7 @@ function setup() {
     order,
     query,
     service,
+    shipmentStorage,
     transaction,
   }
 }
@@ -377,6 +391,8 @@ describe('SalesOrderMutationService', () => {
     expect(fixture.transaction.salesOrderStatusHistory.create)
       .not.toHaveBeenCalled()
     expect(fixture.audit.record).not.toHaveBeenCalled()
+    expect(fixture.shipmentStorage.returnClaimedShipmentsForCancellation)
+      .not.toHaveBeenCalled()
   })
 
   it('allows cancellation when every purchase order is cancelled', async () => {
@@ -388,6 +404,8 @@ describe('SalesOrderMutationService', () => {
       reason: '客户取消',
     })).resolves.toEqual(fixture.detail)
 
+    expect(fixture.shipmentStorage.returnClaimedShipmentsForCancellation)
+      .toHaveBeenCalledWith(fixture.transaction, context, ORDER_ID, '客户取消')
     expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
       where: { id: ORDER_ID },
       data: { orderStatus: 'CANCELLED', version: { increment: 1 } },
@@ -406,6 +424,20 @@ describe('SalesOrderMutationService', () => {
     expect(fixture.audit.record).toHaveBeenCalled()
   })
 
+  it('rolls back cancellation when claimed shipments cannot return to storage', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.count.mockResolvedValue(0)
+    fixture.shipmentStorage.returnClaimedShipmentsForCancellation.mockRejectedValueOnce(new Error('return failed'))
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'CANCELLED',
+      reason: '客户取消',
+    })).rejects.toThrow('return failed')
+
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+    expect(fixture.transaction.salesOrderStatusHistory.create).not.toHaveBeenCalled()
+  })
+
   it('blocks cancellation after signing before querying purchase orders', async () => {
     const fixture = setup()
     fixture.order.fulfillmentStatus = 'SIGNED'
@@ -416,6 +448,59 @@ describe('SalesOrderMutationService', () => {
     })).rejects.toMatchObject({ code: 'SALES_ORDER_CANCEL_SIGNED' })
 
     expect(fixture.transaction.purchaseOrder.count).not.toHaveBeenCalled()
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('terminates a confirmed order without cancelling purchase orders', async () => {
+    const fixture = setup()
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'TERMINATED',
+      reason: '客户取消待调货',
+    })).resolves.toEqual(fixture.detail)
+
+    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: { orderStatus: 'TERMINATED', version: { increment: 1 } },
+    })
+    expect(fixture.transaction.salesOrderStatusHistory.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        salesOrderId: ORDER_ID,
+        dimension: 'ORDER',
+        fromStatus: 'CONFIRMED',
+        toStatus: 'TERMINATED',
+        reason: '客户取消待调货',
+      }) as unknown,
+    })
+    expect(fixture.transaction.purchaseOrder.count).not.toHaveBeenCalled()
+    expect(fixture.audit.record).toHaveBeenCalledWith(
+      fixture.transaction,
+      expect.objectContaining({
+        eventType: 'SALES_ORDER_TERMINATED',
+        metadata: expect.objectContaining({ toStatus: 'TERMINATED', reason: '客户取消待调货' }) as unknown,
+      }),
+    )
+  })
+
+  it('requires a reason to terminate an order', async () => {
+    const fixture = setup()
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'TERMINATED',
+    })).rejects.toMatchObject({ code: 'SALES_ORDER_TERMINATION_REASON_REQUIRED' })
+
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('blocks termination after signing', async () => {
+    const fixture = setup()
+    fixture.order.fulfillmentStatus = 'SIGNED'
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'TERMINATED',
+      reason: '客户取消待调货',
+    })).rejects.toMatchObject({ code: 'SALES_ORDER_TERMINATE_SIGNED' })
+
     expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
   })
 

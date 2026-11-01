@@ -79,6 +79,12 @@ import {
   PURCHASE_PAYMENT_VOID_CONSUMER,
 } from './fund-purchase-payment'
 import {
+  SLH_BILL_COMPANY_ALLOCATION_POSTING_TYPE,
+  SLH_BILL_COMPANY_FEE_ALLOCATION_POSTING_TYPE,
+  SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER,
+  SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_CONSUMER,
+  SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_SOURCE,
+  SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE,
   SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER,
   SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER,
   SLH_BILL_FINANCE_SETTLEMENT_SOURCE,
@@ -120,6 +126,11 @@ const SALES_RECEIPT_APPROVE_CONSUMER_CODE = 'SALES_RECEIPT.APPROVE'
 const SALES_RECEIPT_VOID_CONSUMER_CODE = 'SALES_RECEIPT.VOID'
 const PACKAGING_COST_SOURCE_CODE = 'PACKAGING_COST'
 const PACKAGING_COST_PAY_CONSUMER_CODE = 'PACKAGING_COST.PAY'
+const SHIPMENT_STORAGE_SOURCE_CODE = 'SHIPMENT_STORAGE'
+const SHIPMENT_STORAGE_RELEASE_CONSUMER_CODE = 'SHIPMENT_STORAGE.RELEASE'
+const SHIPMENT_STORAGE_CLAIM_CONSUMER_CODE = 'SHIPMENT_STORAGE.CLAIM'
+const SHIPMENT_STORAGE_RELEASE_POSTING_TYPE = 'SHIPMENT_STORAGE_RELEASE'
+const SHIPMENT_STORAGE_CLAIM_POSTING_TYPE = 'SHIPMENT_STORAGE_CLAIM'
 const ADMIN_REVERSAL_CONSUMER_CODE = 'ADMIN_REVERSAL'
 const ADMIN_ADJUSTMENT_CONSUMER_CODE = 'ADMIN_MANUAL_ADJUSTMENT'
 const ADMIN_ADJUSTMENT_SOURCE_CODE = 'ADMIN_CONSOLE'
@@ -134,6 +145,10 @@ const CONTROLLED_POSTING_TYPE_BY_SOURCE_CONSUMER: Readonly<Record<string, string
   [`${SALES_RECEIPT_SOURCE_CODE}/${SALES_RECEIPT_APPROVE_CONSUMER_CODE}`]: 'ORDER_SETTLEMENT',
   [`${SALES_RECEIPT_SOURCE_CODE}/${SALES_RECEIPT_VOID_CONSUMER_CODE}`]: 'ORDER_SETTLEMENT',
   [`${PACKAGING_COST_SOURCE_CODE}/${PACKAGING_COST_PAY_CONSUMER_CODE}`]: 'WOODEN_PACKING_COST',
+  [`${SHIPMENT_STORAGE_SOURCE_CODE}/${SHIPMENT_STORAGE_RELEASE_CONSUMER_CODE}`]:
+    SHIPMENT_STORAGE_RELEASE_POSTING_TYPE,
+  [`${SHIPMENT_STORAGE_SOURCE_CODE}/${SHIPMENT_STORAGE_CLAIM_CONSUMER_CODE}`]:
+    SHIPMENT_STORAGE_CLAIM_POSTING_TYPE,
   [`${PURCHASE_PAYMENT_FUND_SOURCE}/${PURCHASE_PAYMENT_PAY_CONSUMER}`]: PURCHASE_PAYMENT_POSTING_TYPE,
   [`${PURCHASE_PAYMENT_FUND_SOURCE}/${PURCHASE_PAYMENT_STOCK_PAY_CONSUMER}`]: PURCHASE_PAYMENT_POSTING_TYPE,
   [`${PURCHASE_PAYMENT_FUND_SOURCE}/${PURCHASE_PAYMENT_VOID_CONSUMER}`]: PURCHASE_PAYMENT_POSTING_TYPE,
@@ -141,6 +156,10 @@ const CONTROLLED_POSTING_TYPE_BY_SOURCE_CONSUMER: Readonly<Record<string, string
     SLH_BILL_SETTLEMENT_POSTING_TYPE,
   [`${SLH_BILL_FINANCE_SETTLEMENT_SOURCE}/${SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER}`]:
     SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE,
+  [`${SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE}/${SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER}`]:
+    SLH_BILL_COMPANY_ALLOCATION_POSTING_TYPE,
+  [`${SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_SOURCE}/${SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_CONSUMER}`]:
+    SLH_BILL_COMPANY_FEE_ALLOCATION_POSTING_TYPE,
   [`${INVOICE_REQUEST_FUND_SOURCE}/${INVOICE_REQUEST_SETTLE_CONSUMER}`]:
     INVOICE_REQUEST_POSTING_TYPE,
   [`${FUND_WITHDRAWAL_FUND_SOURCE}/${FUND_WITHDRAWAL_APPROVE_CONSUMER}`]:
@@ -530,7 +549,13 @@ export class FundPostingApplicationService extends FundPostingService {
   ): Promise<FundPostingResult> {
     const request = normalizePostBusinessEventRequest(rawContext, rawInput)
     // 受控业务必须与业务状态共用事务，不能独立动账后再补写状态。
-    if ([SALES_RECEIPT_SOURCE_CODE, PACKAGING_COST_SOURCE_CODE, PURCHASE_PAYMENT_FUND_SOURCE, INVOICE_REQUEST_FUND_SOURCE].includes(request.context.sourceCode)) {
+    if ([
+      SALES_RECEIPT_SOURCE_CODE,
+      PACKAGING_COST_SOURCE_CODE,
+      PURCHASE_PAYMENT_FUND_SOURCE,
+      INVOICE_REQUEST_FUND_SOURCE,
+      SHIPMENT_STORAGE_SOURCE_CODE,
+    ].includes(request.context.sourceCode)) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     try {
@@ -561,13 +586,24 @@ export class FundPostingApplicationService extends FundPostingService {
     // 顺联航账单对账：完成批次时逐笔入账，结算与金流费用是两个独立 consumer（都不支持反向）。
     const billSettlement = action === 'POST' && context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_SOURCE
       && [SLH_BILL_FINANCE_SETTLEMENT_RECONCILE_CONSUMER, SLH_BILL_FINANCE_SETTLEMENT_FEE_CONSUMER].includes(context.consumerCode)
+    // 账单分摊中财务指定给公司账户的部分：没有用户归属，只动公司账户。
+    const billCompanyAllocation = action === 'POST'
+      && context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE
+      && context.consumerCode === SLH_BILL_FINANCE_SETTLEMENT_COMPANY_CONSUMER
+    const billCompanyFeeAllocation = action === 'POST'
+      && context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_SOURCE
+      && context.consumerCode === SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_CONSUMER
     // 开票申请结算：只有一个动作（服务费与邮寄费合成一笔成本），不支持反向。
     const invoiceSettlement = action === 'POST' && context.sourceCode === INVOICE_REQUEST_FUND_SOURCE
       && context.consumerCode === INVOICE_REQUEST_SETTLE_CONSUMER
     // 用户提款审批：通过时从申请人账户单一扣款，不支持反向。
     const fundWithdrawal = action === 'POST' && context.sourceCode === FUND_WITHDRAWAL_FUND_SOURCE
       && context.consumerCode === FUND_WITHDRAWAL_APPROVE_CONSUMER
-    if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement && !invoiceSettlement && !fundWithdrawal) {
+    const shipmentStorage = action === 'POST' && context.sourceCode === SHIPMENT_STORAGE_SOURCE_CODE
+      && [SHIPMENT_STORAGE_RELEASE_CONSUMER_CODE, SHIPMENT_STORAGE_CLAIM_CONSUMER_CODE]
+        .includes(context.consumerCode)
+    if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement && !billCompanyAllocation
+      && !billCompanyFeeAllocation && !invoiceSettlement && !fundWithdrawal && !shipmentStorage) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     return normalizeFundAccountCommandContext({
@@ -623,13 +659,19 @@ export class FundPostingApplicationService extends FundPostingService {
     this.normalizeBusinessContext(context, 'POST')
     const request = this.normalizeBusinessRequest(context, input)
     const { postingType, plan, userShareRate } = await this.prepareBusinessPlan(transaction, request)
-    if (userShareRate === undefined || plan.companyShareRate === null) {
+    if (postingType.requiresUser) {
+      if (userShareRate === undefined || plan.companyShareRate === null) {
+        throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_INVALID)
+      }
+    }
+    else if (userShareRate !== undefined) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_INVALID)
     }
+    // 不需要用户的规则（公司分摊）没有比例快照，预览用 0/100 表示「全部由公司账户承担」。
     return Object.freeze({
       ruleVersionId: postingType.ruleVersion.id,
-      userShareRate,
-      companyShareRate: plan.companyShareRate,
+      userShareRate: userShareRate ?? '0.00',
+      companyShareRate: plan.companyShareRate ?? '100.00',
       businessAmount: plan.businessAmount,
       entries: plan.entries.map(({ accountTarget, direction, amount }) => ({ accountTarget, direction, amount })),
     })
@@ -1200,11 +1242,14 @@ export class FundPostingApplicationService extends FundPostingService {
     )
 
     // 不读取或锁定任何用户账户，也不借用付款人的比例；零额 USER 分录由引擎省略。
-    const userShareRate = stockPurchase ? '0.00' : targetAccounts.USER?.userShareRate ?? undefined
+    // 不需要用户的规则（公司分摊）同样不传比例：规则引擎会拒绝非用户规则携带比例。
+    const userShareRate = postingType.requiresUser
+      ? (stockPurchase ? '0.00' : targetAccounts.USER?.userShareRate ?? undefined)
+      : undefined
     const plan = calculateFundPostingPlan({
       rule: buildRule(postingType),
       amount: request.input.amount,
-      ...(userShareRate === undefined ? {} : { userShareRate }),
+      ...(postingType.requiresUser && userShareRate !== undefined ? { userShareRate } : {}),
     })
     // 可配置的结算规则仍须满足收款语义；财务通过只能增加账户余额。
     if (request.context.sourceCode === SALES_RECEIPT_SOURCE_CODE && (
@@ -1225,6 +1270,16 @@ export class FundPostingApplicationService extends FundPostingService {
     )) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
     }
+    // 寄仓成本转移两个动作方向固定：释放按原比例退款（只入账），认领按新比例收回（只出账）。
+    if (request.context.sourceCode === SHIPMENT_STORAGE_SOURCE_CODE) {
+      const release = request.context.consumerCode === SHIPMENT_STORAGE_RELEASE_CONSUMER_CODE
+      const invalid = postingType.businessCategory !== 'COST'
+        || !postingType.requiresUser
+        || !postingType.ruleVersion.legs.some(leg => leg.accountTarget === 'USER')
+        || parseFundAmountMinor(plan.businessAmount) <= 0n
+        || plan.entries.some(entry => entry.direction !== (release ? 'CREDIT' : 'DEBIT'))
+      if (invalid) throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
+    }
     // 顺联航账单对账的两个动作语义固定：结算是可正可负的归属人收入（方向跟随金额符号），
     // 金流费用是恒正的归属人成本（只出账）。规则可被管理员调整，但不能改成反向或单向语义。
     if (request.context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_SOURCE) {
@@ -1239,6 +1294,26 @@ export class FundPostingApplicationService extends FundPostingService {
         : postingType.businessCategory !== 'REVENUE'
           || !postingType.requiresUser
           || plan.entries.some(entry => entry.direction !== (businessAmountMinor > 0n ? 'CREDIT' : 'DEBIT'))
+      if (invalid) throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
+    }
+    // 账单公司分摊语义固定：没有用户比例，只走公司账户，方向跟随金额符号。
+    if (request.context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_COMPANY_SOURCE) {
+      const businessAmountMinor = parseFundAmountMinor(plan.businessAmount)
+      const invalid = postingType.businessCategory !== 'REVENUE'
+        || postingType.requiresUser
+        || !postingType.ruleVersion.legs.some(leg => leg.accountTarget === 'COMPANY')
+        || businessAmountMinor === 0n
+        || plan.entries.some(entry => entry.direction !== (businessAmountMinor > 0n ? 'CREDIT' : 'DEBIT'))
+      if (invalid) throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
+    }
+    // 公司承担金流费语义固定：成本、必须大于 0、只出账，不允许用户比例。
+    if (request.context.sourceCode === SLH_BILL_FINANCE_SETTLEMENT_COMPANY_FEE_SOURCE) {
+      const businessAmountMinor = parseFundAmountMinor(plan.businessAmount)
+      const invalid = postingType.businessCategory !== 'COST'
+        || postingType.requiresUser
+        || !postingType.ruleVersion.legs.some(leg => leg.accountTarget === 'COMPANY')
+        || businessAmountMinor <= 0n
+        || plan.entries.some(entry => entry.direction !== 'DEBIT')
       if (invalid) throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
     }
     // 开票申请结算语义固定：归属人的成本支出，必须大于 0 且只出账；
@@ -1286,9 +1361,11 @@ export class FundPostingApplicationService extends FundPostingService {
     if (lockedReplay !== null) return lockedReplay
 
     // 比较的快照就是后续分录使用的快照，不能在锁外检查后再读取另一组比例。
+    // 不需要用户的规则没有比例快照；预览统一用 0.00 表示，比较时按同一口径归一。
+    const expectedUserShareRate = userShareRate ?? '0.00'
     if (business !== undefined && (
       business.expectedContext.ruleVersionId !== postingType.ruleVersion.id
-      || business.expectedContext.userShareRate !== userShareRate
+      || business.expectedContext.userShareRate !== expectedUserShareRate
     )) {
       throw postingError(FUND_POSTING_ERROR_CODES.CONCURRENT_STATE_CHANGED)
     }

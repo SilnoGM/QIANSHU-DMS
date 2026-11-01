@@ -10,6 +10,13 @@ import { NumberingQueryService } from '../src/modules/numbering/numbering-query.
 import { AuditService } from '../src/modules/audit/audit.service'
 import type { IsolatedNumberingDatabase } from './numbering-e2e-database'
 
+/** 依赖签收列的迁移必须整体延后；恢复时也只重放这一组，避免重放后续无关迁移。 */
+const DEFERRED_SHIPMENT_DELIVERY_MIGRATIONS = [
+  '20261021170000_purchase_shipment_delivery',
+  '20261022120000_container_loading_delivered_guard',
+  '20261027120000_purchase_shipment_container_unload',
+] as const
+
 /** 永久派发账本不能逐行清理；完整业务回归使用临时 schema，结束时整体释放。 */
 export async function createPurchaseShippingMarkDatabase(deferPartsMigration = false, deferReviewMigration = false, deferShipmentNumbers = false, deferWarehouseReceipt = false, deferPayablesMigration = false, deferShipmentDelivery = false): Promise<IsolatedNumberingDatabase & { applyPartsMigration(): Promise<void>, applyReviewMigration(): Promise<void>, applyShipmentNumbers(): Promise<void>, applyWarehouseReceipt(): Promise<void>, applyPayablesMigration(): Promise<void>, applyShipmentDeliveryMigration(): Promise<void> }> {
   const baseDatabaseUrl = process.env.DATABASE_URL
@@ -34,10 +41,8 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
     for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name)).sort()) {
       // 签收迁移、装柜签收守卫与撤销装柜迁移都依赖新增的签收列，必须一起延后；
       // 出单人前缀迁移与签收无关，提前应用才能让当前查询代码读取它。
-      if (deferShipmentDelivery && (
-        migration === '20261021170000_purchase_shipment_delivery'
-        || migration === '20261022120000_container_loading_delivered_guard'
-        || migration === '20261027120000_purchase_shipment_container_unload'
+      if (deferShipmentDelivery && DEFERRED_SHIPMENT_DELIVERY_MIGRATIONS.includes(
+        migration as (typeof DEFERRED_SHIPMENT_DELIVERY_MIGRATIONS)[number],
       )) continue
       if (deferPayablesMigration && migration >= '20260916160000_purchase_order_payables') continue
       if (deferShipmentNumbers && migration >= '20260914091234_purchase_shipment_number') continue
@@ -98,14 +103,9 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
     async applyShipmentDeliveryMigration() {
       const directory = resolve(__dirname, '../prisma/migrations')
       try {
-        for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name) && name >= '20261021170000_purchase_shipment_delivery').sort()) {
-          // 出单人前缀、采购驳回与金额修订迁移已在初始 schema 提前应用；
-          // 重放签收迁移时跳过，避免重复 ALTER 与重复追加枚举值。
-          if (
-            migration === '20261022130000_user_profile_issuer_prefix'
-            || migration === '20261025120000_purchase_order_rejection'
-            || migration === '20261026130000_purchase_order_amount_revision'
-          ) continue
+        // 只重放初始阶段确实跳过的三条签收相关迁移；后续迁移（含 2026-10-28
+        // 的归属/寄仓迁移）已在初始 schema 应用，按日期范围重放会重复建类型。
+        for (const migration of [...DEFERRED_SHIPMENT_DELIVERY_MIGRATIONS].sort()) {
           await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
         }
       }

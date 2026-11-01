@@ -7,6 +7,7 @@ export function purchaseReviewSourceBlockReason(status: SalesOrderStatus | null)
     case 'CANCELLED': return '关联销售订单已取消，不能审核该采购单；请核实销售需求并处理待审核采购单'
     case 'PENDING_RECONCILIATION': return '关联销售订单已进入待对账，不能继续审核采购；请联系销售负责人核实后续处理'
     case 'COMPLETED': return '关联销售订单已完成，不能继续审核采购；请联系销售负责人核实后续处理'
+    case 'TERMINATED': return '关联销售订单已终止，不能继续审核采购；请核实销售需求并处理待审核采购单'
     case 'DRAFT': return '关联销售订单尚未确认，请先确认销售订单后重新检查'
     case null: return '关联销售来源不存在，请核实来源订单并处理待审核采购单'
   }
