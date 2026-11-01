@@ -31,7 +31,7 @@
 
 - [x] server 4321 单测
 - [x] `slh-reconciliation-batch.e2e-spec.ts` 41 条
-- [x] web SLH 60 条 + typecheck/lint/stylelint/build
+- [x] web SLH 61 条 + typecheck/lint/stylelint/build
 - [x] contract check
 - [x] 演示批次 `SRB/20261101-001` 数据准备
 - [x] 编译后查询服务实测 `transferRecord.lines=1`、`changes=3` 且含完整前后值
