@@ -57,6 +57,19 @@ const transactionError = ref('')
 const transactions = shallowRef<FundSelfTransactionDto[]>([])
 const transactionDetailOpen = ref(false)
 const transactionDetail = shallowRef<FundSelfTransactionDto | null>(null)
+/** 输入中的关键词与已生效关键词分开：只有回车/点击才发请求。 */
+const transactionKeywordDraft = ref('')
+const transactionKeyword = ref('')
+
+function applyTransactionKeyword(): void {
+  const normalized = transactionKeywordDraft.value.trim()
+  if (normalized === transactionKeyword.value) {
+    return
+  }
+  transactionKeyword.value = normalized
+  transactionPage.value = 1
+  void loadTransactions()
+}
 
 const canRead = computed(() => auth('fund-accounts:read-self'))
 const enabled = computed(() => (
@@ -188,6 +201,9 @@ async function loadTransactions(): Promise<void> {
     const response = await fundAccountsApi.transactions.listSelf({
       page: transactionPage.value,
       pageSize: transactionPageSize.value,
+      ...(transactionKeyword.value === ''
+        ? {}
+        : { keyword: transactionKeyword.value }),
     }, request.signal)
     if (!currentTransactions(request, requestEpoch)) {
       return
@@ -362,6 +378,39 @@ onBeforeUnmount(() => {
         @view-withdrawals="viewWithdrawals"
         @retry="loadAccount"
       />
+
+      <!-- 关键词跨摘要、客户名、供应商名与单号；回车或清空才发请求，输入过程不逐键请求。 -->
+      <div class="mb-4 flex flex-wrap gap-2 items-center">
+        <FaInput
+          v-model="transactionKeywordDraft"
+          type="search"
+          clearable
+          autocomplete="off"
+          maxlength="128"
+          class="min-h-11 w-full sm:max-w-sm sm:min-h-9"
+          :placeholder="t('personalFinanceLedger.searchPlaceholder')"
+          :disabled="transactionLoading"
+          data-testid="personal-finance-ledger-search"
+          @keydown.enter.prevent="applyTransactionKeyword"
+        />
+        <FaButton
+          variant="outline"
+          class="min-h-11 sm:min-h-9"
+          :disabled="transactionLoading"
+          @click="applyTransactionKeyword"
+        >
+          {{ t('personalFinanceLedger.search') }}
+        </FaButton>
+        <FaButton
+          v-if="transactionKeyword !== ''"
+          variant="ghost"
+          class="min-h-11 sm:min-h-9"
+          :disabled="transactionLoading"
+          @click="applyTransactionKeyword"
+        >
+          {{ t('personalFinanceLedger.searchReset') }}
+        </FaButton>
+      </div>
 
       <QsGenericTable
         v-model:page="transactionPage"

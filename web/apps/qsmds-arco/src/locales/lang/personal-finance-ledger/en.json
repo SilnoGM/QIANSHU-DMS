@@ -39,6 +39,9 @@
     "businessNo": "Business no.",
     "batchNo": "Batch",
     "noBusinessNo": "No linked business",
+    "search": "Search",
+    "searchReset": "Reset",
+    "searchPlaceholder": "Search customer, supplier, summary or document no.",
     "viewDetail": "View details",
     "share": {
       "mine": "My part",

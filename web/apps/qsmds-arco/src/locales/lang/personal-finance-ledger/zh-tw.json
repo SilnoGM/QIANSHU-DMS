@@ -39,6 +39,9 @@
     "businessNo": "業務單",
     "batchNo": "批次",
     "noBusinessNo": "無關聯業務單",
+    "search": "搜尋",
+    "searchReset": "重設",
+    "searchPlaceholder": "搜尋客戶名、供應商名、摘要或單號",
     "viewDetail": "查看詳情",
     "share": {
       "mine": "我的部分",
