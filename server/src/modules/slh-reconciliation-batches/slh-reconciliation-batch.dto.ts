@@ -392,6 +392,8 @@ export class SlhReconciliationSettlementAllocationPartyDto {
   @ApiProperty({ enum: SlhReconciliationSettlementAllocationTargetDto }) target!: SlhReconciliationSettlementAllocationTargetDto
   @ApiPropertyOptional({ type: 'string', format: 'uuid', nullable: true }) salesOrderId!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) salesOrderNo!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: '销售单出单人显示名；公司目标或订单缺失时为 null。' }) issuerDisplayName!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) issuerAvatarUrl!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) codAmountTwd!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) ntdSurchargeAmountTwd!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) payableAmountCny!: string | null

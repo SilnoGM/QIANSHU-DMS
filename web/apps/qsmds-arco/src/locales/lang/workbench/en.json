@@ -529,8 +529,6 @@
         "targetCurrent": "B · {orderNo}",
         "targetCompany": "Company account",
         "partyCompany": "Company account",
-        "partyOriginTitle": "A · Original sales order",
-        "partyCurrentTitle": "B · Sales order after transfer",
         "optionOrigin": "{person} · {orderNo} (original)",
         "optionCurrentTransfer": "{person} · {orderNo} (current)",
         "optionCurrent": "{person} · {orderNo}",

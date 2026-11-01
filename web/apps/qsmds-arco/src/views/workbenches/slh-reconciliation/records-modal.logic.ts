@@ -66,8 +66,13 @@ export interface SlhReconciliationRecordAllocationItem {
 /** 目标合计卡：历史快照里的目标与金额，不重算。 */
 export interface SlhReconciliationRecordAllocationParty {
   readonly target: SlhReconciliationSettlementRecordDto['allocations'][number]['target']
+  /** 无出单人时的角色文案；公司目标即「公司账户」。 */
   readonly title: string
   readonly salesOrderNo: string | null
+  readonly issuerDisplayName: string | null
+  readonly issuerAvatarUrl: string | null
+  /** 调货行的原单/现单短标签；普通行与公司为 null。 */
+  readonly shortRole: string | null
   readonly settlementAmountCny: string | null
   readonly paymentFeeAmountCny: string | null
   readonly direction: SlhSettleAllocationPartyDirection
@@ -205,18 +210,32 @@ function buildRecordAllocation(
       reason: item.reason ?? null,
     }
   })
-  const parties: SlhReconciliationRecordAllocationParty[] = allocationParties.map(party => ({
-    target: party.target,
-    title: translate(
-      party.target === 'COMPANY'
-        ? 'slhReconciliation.settle.allocation.partyCompany'
-        : `slhReconciliation.settle.allocation.party${party.target === 'ORIGIN_ORDER' ? 'Origin' : 'Current'}Title`,
-    ),
-    salesOrderNo: party.salesOrderNo ?? null,
-    settlementAmountCny: party.settlementAmountCny ?? null,
-    paymentFeeAmountCny: party.paymentFeeAmountCny ?? null,
-    direction: resolveSettleAllocationPartyDirection(party.settlementAmountCny ?? null),
-  }))
+  const hasOrigin = allocationParties.some(party => party.target === 'ORIGIN_ORDER')
+  const parties: SlhReconciliationRecordAllocationParty[] = allocationParties.map(party => {
+    return {
+      target: party.target,
+      title: translate(
+        party.target === 'COMPANY'
+          ? 'slhReconciliation.settle.allocation.partyCompany'
+          : party.target === 'ORIGIN_ORDER'
+            ? 'slhReconciliation.settle.allocation.partyOriginRole'
+            : hasOrigin
+              ? 'slhReconciliation.settle.allocation.partyCurrentTransferRole'
+              : 'slhReconciliation.settle.allocation.partyCurrentRole',
+      ),
+      salesOrderNo: party.salesOrderNo ?? null,
+      issuerDisplayName: party.issuerDisplayName ?? null,
+      issuerAvatarUrl: party.issuerAvatarUrl ?? null,
+      shortRole: hasOrigin && party.target !== 'COMPANY'
+        ? translate(party.target === 'ORIGIN_ORDER'
+          ? 'slhReconciliation.settle.allocation.partyOriginShort'
+          : 'slhReconciliation.settle.allocation.partyCurrentShort')
+        : null,
+      settlementAmountCny: party.settlementAmountCny ?? null,
+      paymentFeeAmountCny: party.paymentFeeAmountCny ?? null,
+      direction: resolveSettleAllocationPartyDirection(party.settlementAmountCny ?? null),
+    }
+  })
   const settlementTotal = parties
     .reduce((sum, party) => sum.plus(party.settlementAmountCny ?? 0), new Decimal(0))
     .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)

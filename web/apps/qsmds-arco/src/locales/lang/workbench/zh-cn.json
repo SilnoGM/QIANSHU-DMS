@@ -538,8 +538,6 @@
         "targetCurrent": "乙 · {orderNo}",
         "targetCompany": "公司账户",
         "partyCompany": "公司账户",
-        "partyOriginTitle": "甲 · 原销售单",
-        "partyCurrentTitle": "乙 · 调货后销售单",
         "optionOrigin": "{person} · {orderNo}（原单）",
         "optionCurrentTransfer": "{person} · {orderNo}（现单）",
         "optionCurrent": "{person} · {orderNo}",

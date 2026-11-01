@@ -952,6 +952,15 @@ describe('slh reconciliation batches with isolated PostgreSQL', () => {
       })
       expect(typeof page.items[0]?.createdByDisplayName).toBe('string')
       expect(typeof page.items[0]?.createdAt).toBe('string')
+      const allocationParties = (page.items[0] as {
+        allocationParties: Array<{ target: string, issuerDisplayName: string | null }>
+      }).allocationParties
+      expect(allocationParties.length).toBeGreaterThan(0)
+      for (const party of allocationParties) {
+        if (party.target !== 'COMPANY') {
+          expect(typeof party.issuerDisplayName).toBe('string')
+        }
+      }
 
       // 还没确认过的行返回空列表；不属于该批次的成员行与未知批次都按 404 拒绝。
       const empty = (await browser.get(`${BASE}/${batchId}/settlements`).query({ batchLineId: untouched.id }).expect(200))

@@ -326,11 +326,27 @@ function selectBlock(card: SlhReconciliationRecordCard, id: SlhReconciliationRec
                       :key="party.target"
                       class="p-2.5 border border-border rounded-md bg-card flex flex-col gap-1.5 min-w-0"
                     >
-                      <div class="min-w-0">
-                        <span class="qs-type-meta text-muted-foreground block truncate">{{ party.title }}</span>
+                      <div class="flex flex-col gap-1 min-w-0">
+                        <div class="flex flex-wrap gap-2 min-w-0 items-center">
+                          <QsPersonDisplay
+                            v-if="party.issuerDisplayName !== null"
+                            :display-name="party.issuerDisplayName"
+                            :avatar-url="party.issuerAvatarUrl"
+                            size="sm"
+                            class="max-w-full"
+                          />
+                          <span v-else class="text-sm font-medium truncate">{{ party.title }}</span>
+                          <span
+                            v-if="party.shortRole !== null"
+                            class="qs-type-meta text-muted-foreground px-2 py-0.5 border border-border rounded-md"
+                          >
+                            {{ party.shortRole }}
+                          </span>
+                        </div>
                         <span
                           v-if="party.salesOrderNo !== null"
-                          class="text-xs qs-type-data text-muted-foreground mt-0.5 block break-all"
+                          class="text-xs qs-type-data text-muted-foreground block break-all"
+                          :title="party.salesOrderNo"
                         >
                           {{ party.salesOrderNo }}
                         </span>

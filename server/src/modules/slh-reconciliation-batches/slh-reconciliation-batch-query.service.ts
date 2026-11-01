@@ -21,10 +21,11 @@ import {
   readTransferAllocationSummary, readTransferChangeCounts, readTransferChangeItems, readTransferClaimLines,
   readTransferCostTotal, readTransferLegUserId, selectCurrentTransferRecord,
 } from './slh-reconciliation-transfer-record.logic'
+import { loadSettlementAllocationPartyIssuers, withSettlementAllocationPartyIssuers } from './slh-reconciliation-settlement-party-issuer'
 import { SlhReconciliationBatchFilterDto, SlhReconciliationBillBlockReasonDto, SlhReconciliationBillGroupDto } from './slh-reconciliation-batch.dto'
 import type {
   SlhBillLineUnmatchedReasonCountDto, SlhReconciliationSettlementAllocationDto,
-  SlhReconciliationSettlementAllocationPartyDto, SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchDetailDto,
+  SlhReconciliationBatchCandidateQueryDto, SlhReconciliationBatchDetailDto,
   SlhReconciliationBatchListQueryDto, SlhReconciliationBatchPageDto, SlhReconciliationBillOptionDto,
   SlhReconciliationBillOptionPageDto, SlhReconciliationBillOptionQueryDto, SlhReconciliationReconcilableCountsDto,
   SlhReconciliationReconcilableCountsRequestDto, SlhReconciliationSettlementListDto,
@@ -205,6 +206,10 @@ export class SlhReconciliationBatchQueryService {
         createdBy: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
       },
     })
+    const allocationIssuers = await loadSettlementAllocationPartyIssuers(
+      this.prisma,
+      rows.map(row => row.allocationSnapshot),
+    )
     return {
       items: rows.map(row => ({
         id: row.id,
@@ -235,7 +240,7 @@ export class SlhReconciliationBatchQueryService {
         createdByAvatarUrl: row.createdBy.profile?.avatarUrl ?? null,
         createdAt: row.createdAt.toISOString(),
         allocations: (readAllocationSnapshot(row.allocationSnapshot)?.items ?? []) as SlhReconciliationSettlementAllocationDto[],
-        allocationParties: (readAllocationSnapshot(row.allocationSnapshot)?.parties ?? []) as SlhReconciliationSettlementAllocationPartyDto[],
+        allocationParties: withSettlementAllocationPartyIssuers(row.allocationSnapshot, allocationIssuers),
       })),
     }
   }

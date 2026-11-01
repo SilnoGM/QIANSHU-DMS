@@ -45,9 +45,10 @@ import {
 } from './slh-reconciliation-allocation.logic'
 import { SlhReconciliationBatchQueryService } from './slh-reconciliation-batch-query.service'
 import { SlhReconciliationSettlementRateSourceDto } from './slh-reconciliation-batch.dto'
+import { loadSettlementAllocationPartyIssuers, withSettlementAllocationPartyIssuers } from './slh-reconciliation-settlement-party-issuer'
 import type {
   SlhReconciliationBatchCreateDto, SlhReconciliationBatchDetailDto,
-  SlhReconciliationSettlementAllocationDto, SlhReconciliationSettlementAllocationPartyDto,
+  SlhReconciliationSettlementAllocationDto,
   SlhReconciliationSettlementCreateDto, SlhReconciliationSettlementDto,
 } from './slh-reconciliation-batch.dto'
 
@@ -1126,6 +1127,7 @@ export class SlhReconciliationBatchService {
     if (row === null) {
       return slhReconciliationBatchFailure('SLH_RECON_BATCH_NOT_FOUND', '结算结果不存在', 404)
     }
+    const allocationIssuers = await loadSettlementAllocationPartyIssuers(this.prisma, [row.allocationSnapshot])
     return {
       id: row.id,
       batchLineId: row.batchLineId,
@@ -1137,7 +1139,7 @@ export class SlhReconciliationBatchService {
       createdByAvatarUrl: row.createdBy.profile?.avatarUrl ?? null,
       createdAt: row.createdAt.toISOString(),
       allocations: (readAllocationSnapshot(row.allocationSnapshot)?.items ?? []) as SlhReconciliationSettlementAllocationDto[],
-      allocationParties: (readAllocationSnapshot(row.allocationSnapshot)?.parties ?? []) as SlhReconciliationSettlementAllocationPartyDto[],
+      allocationParties: withSettlementAllocationPartyIssuers(row.allocationSnapshot, allocationIssuers),
     }
   }
 }

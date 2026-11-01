@@ -529,8 +529,6 @@
         "targetCurrent": "乙 · {orderNo}",
         "targetCompany": "公司帳戶",
         "partyCompany": "公司帳戶",
-        "partyOriginTitle": "甲 · 原銷售單",
-        "partyCurrentTitle": "乙 · 調貨後銷售單",
         "optionOrigin": "{person} · {orderNo}（原單）",
         "optionCurrentTransfer": "{person} · {orderNo}（現單）",
         "optionCurrent": "{person} · {orderNo}",

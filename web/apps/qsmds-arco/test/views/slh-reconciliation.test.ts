@@ -1129,9 +1129,9 @@ test('核对记录弹窗：新结算记录展示逐项分摊与目标合计，�
       { key: 'FREIGHT', sourceType: 'FREIGHT', chargeType: 'FREIGHT', currencyCode: 'CNY', amount: '200.00', defaultTarget: 'CURRENT_ORDER', target: 'COMPANY', signedContributionCny: '-200', overridden: true, reason: '公司承担' },
     ],
     allocationParties: [
-      { target: 'ORIGIN_ORDER', salesOrderId: 'so-a', salesOrderNo: 'SO-A', codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null, settlementAmountCny: '-70.00', salesAmount: null, paymentFeeAmountCny: null },
-      { target: 'CURRENT_ORDER', salesOrderId: 'so-b', salesOrderNo: 'SO-B', codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null, settlementAmountCny: '160.00', salesAmount: '5000.0000', paymentFeeAmountCny: '7.00' },
-      { target: 'COMPANY', salesOrderId: null, salesOrderNo: null, codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null, settlementAmountCny: '-200.00', salesAmount: null, paymentFeeAmountCny: null },
+      { target: 'ORIGIN_ORDER', salesOrderId: 'so-a', salesOrderNo: 'SO-A', issuerDisplayName: '张三', issuerAvatarUrl: null, codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null, settlementAmountCny: '-70.00', salesAmount: null, paymentFeeAmountCny: null },
+      { target: 'CURRENT_ORDER', salesOrderId: 'so-b', salesOrderNo: 'SO-B', issuerDisplayName: '李四', issuerAvatarUrl: null, codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null, settlementAmountCny: '160.00', salesAmount: '5000.0000', paymentFeeAmountCny: '7.00' },
+      { target: 'COMPANY', salesOrderId: null, salesOrderNo: null, issuerDisplayName: null, issuerAvatarUrl: null, codAmountTwd: null, ntdSurchargeAmountTwd: null, payableAmountCny: null, settlementAmountCny: '-200.00', salesAmount: null, paymentFeeAmountCny: null },
     ],
   }
   const card = buildSlhReconciliationRecordCard(record, SETTLE_CURRENCIES, settleTranslate)
@@ -1152,13 +1152,15 @@ test('核对记录弹窗：新结算记录展示逐项分摊与目标合计，�
   assert.deepEqual(allocation.parties.map(party => [
     party.title,
     party.salesOrderNo,
+    party.issuerDisplayName,
+    party.shortRole,
     party.settlementAmountCny,
     party.paymentFeeAmountCny,
     party.direction,
   ]), [
-    ['[slhReconciliation.settle.allocation.partyOriginTitle]', 'SO-A', '-70.00', null, 'OUTFLOW'],
-    ['[slhReconciliation.settle.allocation.partyCurrentTitle]', 'SO-B', '160.00', '7.00', 'INFLOW'],
-    ['[slhReconciliation.settle.allocation.partyCompany]', null, '-200.00', null, 'OUTFLOW'],
+    ['[slhReconciliation.settle.allocation.partyOriginRole]', 'SO-A', '张三', '[slhReconciliation.settle.allocation.partyOriginShort]', '-70.00', null, 'OUTFLOW'],
+    ['[slhReconciliation.settle.allocation.partyCurrentTransferRole]', 'SO-B', '李四', '[slhReconciliation.settle.allocation.partyCurrentShort]', '160.00', '7.00', 'INFLOW'],
+    ['[slhReconciliation.settle.allocation.partyCompany]', null, null, null, '-200.00', null, 'OUTFLOW'],
   ])
   assert.deepEqual(allocation.totals, {
     settlementAmountCny: '-110.00',
@@ -1175,6 +1177,9 @@ test('核对记录弹窗：入账分摊独立成全宽区块', async () => {
   assert.match(page, /allocationItemsTitle/u)
   assert.match(page, /allocationPartiesTitle/u)
   assert.match(page, /allocationAdjusted/u)
+  assert.match(page, /QsPersonDisplay/u)
+  assert.match(page, /shortRole/u)
+  assert.match(page, /issuerDisplayName/u)
   assert.match(page, /card\.allocation\.totals/u)
   assert.doesNotMatch(page, /group\.id === 'allocation'/u)
 })

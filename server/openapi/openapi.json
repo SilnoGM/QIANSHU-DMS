@@ -109659,6 +109659,15 @@
             "type": "string",
             "nullable": true
           },
+          "issuerDisplayName": {
+            "type": "string",
+            "nullable": true,
+            "description": "销售单出单人显示名；公司目标或订单缺失时为 null。"
+          },
+          "issuerAvatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "codAmountTwd": {
             "type": "string",
             "nullable": true
