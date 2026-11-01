@@ -2,6 +2,7 @@ import type { PaymentRecipientService } from '../../payment-recipients/payment-r
 import { createHash } from 'node:crypto'
 import { Prisma } from '../../../generated/prisma/client'
 import type { AccessControlService } from '../../access-control/access-control.service'
+import type { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
 import type { FundPostingService } from '../../fund-accounts/application/fund-posting.contract'
 import { FundPostingError } from '../../fund-accounts/application/fund-posting.errors'
 import { FundCalculationError } from '../../fund-accounts/domain/fund-calculation.errors'
@@ -21,7 +22,7 @@ function setup() {
   }
   const funds = { previewBusinessEventInTransaction: jest.fn().mockResolvedValue({ token: 'preview' }), postBusinessEventInTransaction: jest.fn().mockResolvedValue({ batchId: 'batch' }), reverseBusinessEventInTransaction: jest.fn().mockResolvedValue({ batchId: 'reversal' }) }
   const access = { getPermissionCodesInTransaction: jest.fn().mockResolvedValue(['purchase-orders:payment']), hasAll: jest.fn((granted: string[], required: string[]) => required.every(code => granted.includes(code))) }
-  return { tx, transaction: tx as unknown as Prisma.TransactionClient, payable, funds, access, service: new PurchasePayableService(funds as unknown as FundPostingService, access as unknown as AccessControlService, { resolveForPayment: jest.fn().mockResolvedValue({ snapshot: { id: 'recipient', paymentMethod: 'BANK_TRANSFER', recipientName: 'Supplier', bankName: 'Bank', bankAccount: '123', bankBranch: null, qrMediaAssetId: null, qrContentUrl: null }, qrMediaAssetId: null }) } as unknown as PaymentRecipientService) }
+  return { tx, transaction: tx as unknown as Prisma.TransactionClient, payable, funds, access, service: new PurchasePayableService(funds as unknown as FundPostingService, access as unknown as AccessControlService, { resolveForPayment: jest.fn().mockResolvedValue({ snapshot: { id: 'recipient', paymentMethod: 'BANK_TRANSFER', recipientName: 'Supplier', bankName: 'Bank', bankAccount: '123', bankBranch: null, qrMediaAssetId: null, qrContentUrl: null }, qrMediaAssetId: null }) } as unknown as PaymentRecipientService, { resolveStoredValuesInTransaction: jest.fn().mockResolvedValue([]) } as unknown as DictionaryLookupService) }
 }
 
 describe('PurchasePayableService', () => {

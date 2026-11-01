@@ -72,6 +72,11 @@ import {
 } from './fund-posting-batch-number'
 import { FundPostingService } from './fund-posting.contract'
 import {
+  buildFundSourceSnapshot,
+  buildManualAdjustmentSourceSnapshot,
+  resolveFundSourceKind,
+} from './fund-source-snapshot'
+import {
   PURCHASE_PAYMENT_FUND_SOURCE,
   PURCHASE_PAYMENT_PAY_CONSUMER,
   PURCHASE_PAYMENT_POSTING_TYPE,
@@ -884,6 +889,7 @@ export class FundPostingApplicationService extends FundPostingService {
       requestId: context.requestId,
       correlationId: context.correlationId ?? null,
       postedAt: asOf,
+      sourceSnapshot: buildManualAdjustmentSourceSnapshot(request.input.reason),
     })
 
     const entriesByAccountId = [...plannedEntries].sort((left, right) => (
@@ -1418,6 +1424,14 @@ export class FundPostingApplicationService extends FundPostingService {
       requestId: request.context.requestId,
       correlationId: request.context.correlationId ?? null,
       postedAt: asOf,
+      sourceSnapshot: buildFundSourceSnapshot({
+        sourceKind: resolveFundSourceKind(
+          source.code,
+          request.context.consumerCode,
+        ) ?? 'UNRESOLVED',
+        descriptor: request.input.source,
+        summary: request.input.summary,
+      }),
     })
 
     const entriesByAccountId = [...plannedEntries].sort((left, right) => (

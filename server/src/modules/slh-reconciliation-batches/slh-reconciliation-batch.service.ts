@@ -20,6 +20,7 @@ import {
 } from '../fund-accounts/application/fund-bill-settlement'
 import { FundPostingService } from '../fund-accounts/application/fund-posting.contract'
 import type { FundBusinessTransactionContext, PostBusinessEventInput } from '../fund-accounts/application/fund-posting.contract'
+import { truncateFundSourceText, type FundSourceDescriptor } from '../fund-accounts/application/fund-source-snapshot'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import {
   deriveSalesOrderPaymentStatus,
@@ -68,6 +69,40 @@ const COD_SETTLEMENT_PAYMENT_METHOD = 'BILL_COD_SETTLEMENT'
 /** 代收回填收款的固定备注。 */
 const COD_SETTLEMENT_PAYMENT_REMARK = 'COD代收货款顺联航账单结算'
 
+/**
+ * 顺联航来源说明的公共部分：结算行已冻结账单号、柜次、货件与唛头，
+ * 客户名取本次分摊目标销售单的当前名称。只服务展示，不参与幂等指纹。
+ */
+function slhSourceDescriptor(input: {
+  readonly headline: string
+  readonly customerName: string | null
+  readonly slhBillNo: string
+  readonly containerBatchNo: string
+  readonly shipmentNo: string | null
+  readonly salesOrderNo: string
+  readonly purchaseOrderNo: string
+  readonly shippingMarkText: string | null
+  readonly linkId: string
+  readonly extra: readonly { readonly label: string, readonly value: string }[]
+}): FundSourceDescriptor {
+  return {
+    headline: `${input.headline} · ${input.slhBillNo}`,
+    ...(input.customerName === null ? {} : { customerName: input.customerName }),
+    documentNo: input.slhBillNo,
+    link: { kind: 'SLH_RECONCILIATION', id: input.linkId },
+    detail: [
+      ...input.extra,
+      { label: '柜次', value: input.containerBatchNo },
+      { label: '销售单', value: input.salesOrderNo },
+      { label: '采购单', value: input.purchaseOrderNo },
+      ...(input.shipmentNo === null ? [] : [{ label: '货件', value: input.shipmentNo }]),
+      ...(input.shippingMarkText === null
+        ? []
+        : [{ label: '唛头', value: truncateFundSourceText(input.shippingMarkText) }]),
+    ],
+  }
+}
+
 export interface SlhReconciliationBatchCommandContext { actorUserId: string, requestId: string }
 
 /**
@@ -88,6 +123,13 @@ interface CompletedBatchMemberRecord {
     readonly createdAt: Date
     readonly rateSource: string
     readonly foreignUnitsPerCny: Prisma.Decimal
+    /** 来源说明所需的冻结快照：账单号、柜次、货件与唛头。 */
+    readonly slhBillNo: string
+    readonly containerBatchNo: string
+    readonly shipmentNo: string | null
+    readonly salesOrderNo: string
+    readonly purchaseOrderNo: string
+    readonly shippingMarkText: string | null
     readonly allocationSnapshot: Prisma.JsonValue
   }[]
 }
@@ -287,6 +329,9 @@ export class SlhReconciliationBatchService {
                     id: true, salesOrderId: true, settlementAmountCny: true, paymentFeeAmountCny: true,
                     codAmountTwd: true, createdAt: true,
                     rateSource: true, foreignUnitsPerCny: true,
+                    // 来源说明需要结算行上已冻结的账单/柜次/唛头，避免回查账单表。
+                    slhBillNo: true, containerBatchNo: true, shipmentNo: true,
+                    salesOrderNo: true, purchaseOrderNo: true, shippingMarkText: true,
                     allocationSnapshot: true,
                   },
                 },
@@ -617,7 +662,7 @@ export class SlhReconciliationBatchService {
     }
     const orders = await tx.salesOrder.findMany({
       where: { id: { in: [...new Set([...salesOrderIds, ...partyOrderIds])] } },
-      select: { id: true, orderNo: true, issuerUserId: true },
+      select: { id: true, orderNo: true, issuerUserId: true, customerName: true },
     })
     const orderById = new Map(orders.map(order => [order.id, order]))
     // 已收过费用的销售单：按业务身份查（source + consumer + business_id = 当前销售单），
@@ -705,6 +750,18 @@ export class SlhReconciliationBatchService {
               postingTypeCode: SLH_BILL_COMPANY_ALLOCATION_POSTING_TYPE,
               amount: settlementAmount, businessId: settlement.id, businessNo: batch.batchNo,
               summary: COMPLETION_SETTLEMENT_SUMMARY,
+              source: slhSourceDescriptor({
+                headline: COMPLETION_SETTLEMENT_SUMMARY,
+                customerName: currentOrder.customerName,
+                slhBillNo: settlement.slhBillNo,
+                containerBatchNo: settlement.containerBatchNo,
+                shipmentNo: settlement.shipmentNo,
+                salesOrderNo: settlement.salesOrderNo,
+                purchaseOrderNo: settlement.purchaseOrderNo,
+                shippingMarkText: settlement.shippingMarkText,
+                linkId: batch.id,
+                extra: [{ label: '分摊目标', value: '公司账户' }],
+              }),
               metadata: metadata(member.id, settlement.id, null, rateSource, foreignUnitsPerCny, target, null),
               idempotencyKey: `${settlement.id}:RECONCILE:${target}`,
             },
@@ -721,6 +778,21 @@ export class SlhReconciliationBatchService {
             postingTypeCode: SLH_BILL_SETTLEMENT_POSTING_TYPE, userId: order.issuerUserId,
             amount: settlementAmount, businessId: settlement.id, businessNo: batch.batchNo,
             summary: COMPLETION_SETTLEMENT_SUMMARY,
+            source: slhSourceDescriptor({
+              headline: COMPLETION_SETTLEMENT_SUMMARY,
+              customerName: order.customerName,
+              slhBillNo: settlement.slhBillNo,
+              containerBatchNo: settlement.containerBatchNo,
+              shipmentNo: settlement.shipmentNo,
+              salesOrderNo: settlement.salesOrderNo,
+              purchaseOrderNo: settlement.purchaseOrderNo,
+              shippingMarkText: settlement.shippingMarkText,
+              linkId: batch.id,
+              extra: [{
+                label: '分摊目标',
+                value: target === 'ORIGIN_ORDER' ? '原销售单出单人' : '当前销售单出单人',
+              }],
+            }),
             metadata: metadata(member.id, settlement.id, order.orderNo, rateSource, foreignUnitsPerCny, target, order.orderNo),
             // 历史结算没有快照、只有一笔当前单入账，沿用旧键避免与既有批次语义漂移。
             idempotencyKey: allocation === null
@@ -747,6 +819,18 @@ export class SlhReconciliationBatchService {
               postingTypeCode: SLH_BILL_COMPANY_FEE_ALLOCATION_POSTING_TYPE,
               amount: feeAmount.toFixed(2), businessId: currentOrder.id, businessNo: currentOrder.orderNo,
               summary: COMPLETION_FEE_SUMMARY,
+              source: slhSourceDescriptor({
+                headline: COMPLETION_FEE_SUMMARY,
+                customerName: currentOrder.customerName,
+                slhBillNo: settlement.slhBillNo,
+                containerBatchNo: settlement.containerBatchNo,
+                shipmentNo: settlement.shipmentNo,
+                salesOrderNo: settlement.salesOrderNo,
+                purchaseOrderNo: settlement.purchaseOrderNo,
+                shippingMarkText: settlement.shippingMarkText,
+                linkId: batch.id,
+                extra: [{ label: '分摊目标', value: '公司账户' }],
+              }),
               metadata: metadata(member.id, settlement.id, currentOrder.orderNo, rateSource, foreignUnitsPerCny, feeTarget, null),
               idempotencyKey: `${currentOrder.id}:FEE`,
             },
@@ -768,6 +852,21 @@ export class SlhReconciliationBatchService {
               postingTypeCode: SLH_BILL_SETTLEMENT_FEE_POSTING_TYPE, userId: feeOrder.issuerUserId,
               amount: feeAmount.toFixed(2), businessId: currentOrder.id, businessNo: currentOrder.orderNo,
               summary: COMPLETION_FEE_SUMMARY,
+              source: slhSourceDescriptor({
+                headline: COMPLETION_FEE_SUMMARY,
+                customerName: feeOrder.customerName,
+                slhBillNo: settlement.slhBillNo,
+                containerBatchNo: settlement.containerBatchNo,
+                shipmentNo: settlement.shipmentNo,
+                salesOrderNo: settlement.salesOrderNo,
+                purchaseOrderNo: settlement.purchaseOrderNo,
+                shippingMarkText: settlement.shippingMarkText,
+                linkId: batch.id,
+                extra: [{
+                  label: '分摊目标',
+                  value: feeTarget === 'ORIGIN_ORDER' ? '原销售单出单人' : '当前销售单出单人',
+                }],
+              }),
               metadata: metadata(member.id, settlement.id, currentOrder.orderNo, rateSource, foreignUnitsPerCny, feeTarget, feeOrder.orderNo),
               idempotencyKey: `${currentOrder.id}:FEE`,
             },

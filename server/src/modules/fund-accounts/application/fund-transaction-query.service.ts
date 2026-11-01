@@ -37,6 +37,14 @@ import {
   type FundTransactionView,
 } from './fund-transaction.contract'
 import { mapFundSelfTransactionView } from './fund-self.mapper'
+import {
+  FUND_SOURCE_KINDS,
+  FUND_SOURCE_LINK_KINDS,
+  FUND_SOURCE_CURRENT_RESOLVER_VERSION,
+  type FundSourceKind,
+  type FundSourceLinkKind,
+} from './fund-source-snapshot'
+import type { FundTransactionSourceView } from './fund-transaction.contract'
 import { resolveFundTransactionSummary } from './fund-summary'
 
 const UUID_V4_PATTERN =
@@ -56,6 +64,7 @@ interface NormalizedFundTransactionListQuery {
   readonly businessSourceId: string | null
   readonly direction: (typeof FUND_ENTRY_DIRECTIONS)[number] | null
   readonly businessNo: string | null
+  readonly keyword: string | null
   readonly occurredFrom: Date | null
   readonly occurredTo: Date | null
   readonly reversalStatus: FundTransactionReversalStatus | null
@@ -104,6 +113,15 @@ interface TransactionDatabaseRow {
   readonly reversalOfBatchId: unknown
   readonly reversalStatus: unknown
   readonly postedAt: unknown
+  readonly sourceKind: unknown
+  readonly sourceHeadline: unknown
+  readonly sourceCustomerName: unknown
+  readonly sourceSupplierName: unknown
+  readonly sourceDocumentNo: unknown
+  readonly sourceLinkKind: unknown
+  readonly sourceLinkId: unknown
+  readonly sourceDetail: unknown
+  readonly sourceResolverVersion: unknown
 }
 
 function validationFailed(field: FundPostingErrorField): never {
@@ -116,7 +134,7 @@ function readPlainValues(input: unknown): Readonly<Record<string, unknown>> {
   }
   const allowed = new Set([
     'page', 'pageSize', 'accountId', 'userId', 'postingTypeId',
-    'businessCategory', 'businessSourceId', 'direction', 'businessNo',
+    'businessCategory', 'businessSourceId', 'direction', 'businessNo', 'keyword',
     'occurredFrom', 'occurredTo', 'reversalStatus', 'sortBy', 'sortOrder',
   ])
   try {
@@ -163,6 +181,16 @@ function normalizeOptionalText(value: unknown): string | null {
   const normalized = value.normalize('NFC').trim().replace(/\s+/gu, ' ')
   if (normalized.length === 0 || [...normalized].length > 128) {
     return validationFailed('businessNo')
+  }
+  return normalized
+}
+
+function normalizeOptionalKeyword(value: unknown): string | null {
+  if (value === undefined) return null
+  if (typeof value !== 'string') return validationFailed('keyword')
+  const normalized = value.normalize('NFC').trim().replace(/\s+/gu, ' ')
+  if (normalized.length === 0 || [...normalized].length > 128) {
+    return validationFailed('keyword')
   }
   return normalized
 }
@@ -226,6 +254,7 @@ export function normalizeFundTransactionListQuery(
     ),
     direction: optionalEnum(values.direction, FUND_ENTRY_DIRECTIONS, 'direction'),
     businessNo: normalizeOptionalText(values.businessNo),
+    keyword: normalizeOptionalKeyword(values.keyword),
     occurredFrom,
     occurredTo,
     reversalStatus: optionalEnum(
@@ -284,6 +313,17 @@ function transactionFromWhereSql(
   if (query.businessNo !== null) {
     conditions.push(Prisma.sql`POSITION(LOWER(${query.businessNo}) IN LOWER(COALESCE(batch."business_no", ''))) > 0`)
   }
+  // 关键词跨摘要与来源快照：投影缺失时靠 COALESCE 回落到批次摘要，不会漏掉历史行。
+  if (query.keyword !== null) {
+    conditions.push(Prisma.sql`(
+      POSITION(LOWER(${query.keyword}) IN LOWER(COALESCE(batch."summary", ''))) > 0
+      OR POSITION(LOWER(${query.keyword}) IN LOWER(COALESCE(batch."business_no", ''))) > 0
+      OR POSITION(LOWER(${query.keyword}) IN LOWER(COALESCE(source."headline", ''))) > 0
+      OR POSITION(LOWER(${query.keyword}) IN LOWER(COALESCE(source."customer_name", ''))) > 0
+      OR POSITION(LOWER(${query.keyword}) IN LOWER(COALESCE(source."supplier_name", ''))) > 0
+      OR POSITION(LOWER(${query.keyword}) IN LOWER(COALESCE(source."document_no", ''))) > 0
+    )`)
+  }
   if (query.occurredFrom !== null) {
     conditions.push(Prisma.sql`batch."business_occurred_at" >= ${query.occurredFrom}`)
   }
@@ -300,6 +340,7 @@ function transactionFromWhereSql(
     INNER JOIN "fund_accounts" AS account ON account."id" = entry."account_id"
     LEFT JOIN "users" AS owner_user ON owner_user."id" = account."user_id"
     LEFT JOIN "user_profiles" AS owner_profile ON owner_profile."user_id" = owner_user."id"
+    LEFT JOIN "fund_posting_batch_sources" AS source ON source."batch_id" = batch."id"
     LEFT JOIN (
       SELECT
         reversal."reversal_of_batch_id" AS "originalBatchId",
@@ -359,6 +400,63 @@ function requiredEnum<T extends string>(value: unknown, allowed: readonly T[]): 
     throw new FundPostingError(FUND_POSTING_ERROR_CODES.INTERNAL_ERROR)
   }
   return value as T
+}
+
+/**
+ * 投影 detail 是标的数组；损坏的 JSON 直接失败关闭，
+ * 不把任意结构透给前端渲染。
+ */
+function mapSourceDetails(
+  value: unknown,
+): readonly { readonly label: string, readonly value: string }[] {
+  if (!Array.isArray(value)) {
+    throw new FundPostingError(FUND_POSTING_ERROR_CODES.INTERNAL_ERROR)
+  }
+  return Object.freeze(value.map((item: unknown) => {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      throw new FundPostingError(FUND_POSTING_ERROR_CODES.INTERNAL_ERROR)
+    }
+    const record = item as Record<string, unknown>
+    return Object.freeze({
+      label: requiredString(record.label),
+      value: requiredString(record.value),
+    })
+  }))
+}
+
+/**
+ * 投影缺失（历史批次未回填）时返回 null，由前端回退到批次摘要；
+ * 不用空对象表示，避免“有来源但全空”与“没有来源”混为一谈。
+ */
+function mapTransactionSource(
+  row: TransactionDatabaseRow,
+): FundTransactionSourceView | null {
+  // LEFT JOIN 未命中时列值为 null；历史批次回填前都走这条分支。
+  if (row.sourceKind === null || row.sourceKind === undefined) return null
+
+  const linkKind = row.sourceLinkKind === null
+    ? null
+    : requiredEnum<FundSourceLinkKind>(row.sourceLinkKind, FUND_SOURCE_LINK_KINDS)
+  const linkId = nullableString(row.sourceLinkId)
+  if ((linkKind === null) !== (linkId === null)) {
+    throw new FundPostingError(FUND_POSTING_ERROR_CODES.INTERNAL_ERROR)
+  }
+  if (typeof row.sourceResolverVersion !== 'number') {
+    throw new FundPostingError(FUND_POSTING_ERROR_CODES.INTERNAL_ERROR)
+  }
+
+  return Object.freeze({
+    kind: requiredEnum<FundSourceKind>(row.sourceKind, FUND_SOURCE_KINDS),
+    headline: requiredString(row.sourceHeadline),
+    customerName: nullableString(row.sourceCustomerName),
+    supplierName: nullableString(row.sourceSupplierName),
+    documentNo: nullableString(row.sourceDocumentNo),
+    link: linkKind === null || linkId === null
+      ? null
+      : Object.freeze({ kind: linkKind, id: linkId }),
+    details: mapSourceDetails(row.sourceDetail),
+    resolved: row.sourceResolverVersion >= FUND_SOURCE_CURRENT_RESOLVER_VERSION,
+  })
 }
 
 function mapTransactionRow(row: TransactionDatabaseRow): FundTransactionView {
@@ -434,6 +532,7 @@ function mapTransactionRow(row: TransactionDatabaseRow): FundTransactionView {
       FUND_TRANSACTION_REVERSAL_STATUSES,
     ),
     postedAt: requiredDate(row.postedAt).toISOString(),
+    source: mapTransactionSource(row),
   })
 }
 
@@ -546,7 +645,16 @@ export class FundTransactionQueryService {
               batch."adjustment_mode"::text AS "adjustmentMode",
               batch."reversal_of_batch_id" AS "reversalOfBatchId",
               ${reversalStatusSql()} AS "reversalStatus",
-              entry."posted_at" AS "postedAt"
+              entry."posted_at" AS "postedAt",
+              source."source_kind"::text AS "sourceKind",
+              source."headline" AS "sourceHeadline",
+              source."customer_name" AS "sourceCustomerName",
+              source."supplier_name" AS "sourceSupplierName",
+              source."document_no" AS "sourceDocumentNo",
+              source."link_kind" AS "sourceLinkKind",
+              source."link_id" AS "sourceLinkId",
+              source."detail" AS "sourceDetail",
+              source."resolver_version" AS "sourceResolverVersion"
             ${fromWhere}
             ORDER BY ${transactionOrderSql(query)}
             OFFSET ${query.skip}
@@ -606,6 +714,7 @@ export class FundTransactionQueryService {
                 },
               },
             },
+            sourceSnapshot: true,
           },
         })
         if (batch === null) {
@@ -705,6 +814,31 @@ export class FundTransactionQueryService {
           requestId: batch.requestId,
           correlationId: batch.correlationId,
           postedAt: batch.postedAt.toISOString(),
+          source: batch.sourceSnapshot === null || batch.sourceSnapshot === undefined
+            ? null
+            : Object.freeze({
+                kind: requiredEnum<FundSourceKind>(
+                  batch.sourceSnapshot.sourceKind,
+                  FUND_SOURCE_KINDS,
+                ),
+                headline: batch.sourceSnapshot.headline,
+                customerName: batch.sourceSnapshot.customerName,
+                supplierName: batch.sourceSnapshot.supplierName,
+                documentNo: batch.sourceSnapshot.documentNo,
+                link: batch.sourceSnapshot.linkKind === null
+                  || batch.sourceSnapshot.linkId === null
+                  ? null
+                  : Object.freeze({
+                      kind: requiredEnum<FundSourceLinkKind>(
+                        batch.sourceSnapshot.linkKind,
+                        FUND_SOURCE_LINK_KINDS,
+                      ),
+                      id: batch.sourceSnapshot.linkId,
+                    }),
+                details: mapSourceDetails(batch.sourceSnapshot.detail),
+                resolved: batch.sourceSnapshot.resolverVersion
+                  >= FUND_SOURCE_CURRENT_RESOLVER_VERSION,
+              }),
           entries: Object.freeze(entries.map(entry => Object.freeze({
             entryId: entry.id,
             lineNo: entry.lineNo,

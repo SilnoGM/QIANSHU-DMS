@@ -5,6 +5,7 @@ import type {
   FundBusinessCategory,
   FundEntryDirection,
 } from '../domain'
+import type { FundSourceDescriptor } from './fund-source-snapshot'
 
 export type FundMetadataValue = string | number | boolean | null
 export type FundMetadata = Readonly<Record<string, FundMetadataValue>>
@@ -38,6 +39,11 @@ export interface PostBusinessEventInput {
   readonly businessId: string
   readonly businessNo?: string
   readonly summary: string
+  /**
+   * 展示用的来源说明，只影响流水列表/详情，不参与幂等指纹。
+   * 分类由资金模块按 (sourceCode, consumerCode) 派生，调用方只提供内容。
+   */
+  readonly source?: FundSourceDescriptor
   readonly metadata?: FundMetadata
   readonly businessOccurredAt?: string
   readonly idempotencyKey: string

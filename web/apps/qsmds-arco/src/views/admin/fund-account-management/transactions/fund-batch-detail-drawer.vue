@@ -208,6 +208,46 @@ function reverse(): void {
         </dl>
       </section>
 
+      <!-- 来源说明：先用一句话回答“这笔钱是为什么动的”，技术字段留在下方。 -->
+      <section aria-labelledby="fund-batch-source-title" class="border border-border/70 bg-card">
+        <header class="p-4 border-b border-border/70">
+          <h2 id="fund-batch-source-title" class="text-sm font-semibold m-0">
+            来源说明
+          </h2>
+          <p class="qs-type-meta m-0 mt-1">
+            由业务侧在动账时提供；历史批次缺失时回退为批次摘要。
+          </p>
+        </header>
+        <div v-if="detail.source" class="p-4 gap-4 grid">
+          <div class="min-w-0">
+            <p class="text-base font-semibold m-0 break-words">
+              {{ detail.source.headline }}
+            </p>
+            <p class="qs-type-meta text-muted-foreground m-0 mt-1 flex flex-wrap gap-x-3 gap-y-1 items-center">
+              <span v-if="detail.source.documentNo" class="font-mono break-all">{{ detail.source.documentNo }}</span>
+              <span v-if="detail.source.customerName">客户：{{ detail.source.customerName }}</span>
+              <span v-if="detail.source.supplierName">供应商：{{ detail.source.supplierName }}</span>
+              <FaTag v-if="!detail.source.resolved" variant="outline" class="qs-type-status-tag">
+                仅摘要（待回填）
+              </FaTag>
+            </p>
+          </div>
+          <dl v-if="detail.source.details.length" class="m-0 gap-x-6 gap-y-3 grid sm:grid-cols-2">
+            <div v-for="item in detail.source.details" :key="item.label" class="min-w-0">
+              <dt class="qs-type-compact-label mb-1">
+                {{ item.label }}
+              </dt>
+              <dd class="qs-type-data m-0 break-words">
+                {{ item.value }}
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <p v-else class="qs-type-body text-muted-foreground m-0 p-4">
+          这笔流水没有来源说明（历史批次尚未回填），可参考下方业务基本信息与摘要。
+        </p>
+      </section>
+
       <section aria-labelledby="fund-batch-rule-title" class="border border-border/70 bg-card">
         <header class="p-4 border-b border-border/70">
           <h2 id="fund-batch-rule-title" class="text-sm font-semibold m-0">

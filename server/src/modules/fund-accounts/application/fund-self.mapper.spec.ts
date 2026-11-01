@@ -67,6 +67,7 @@ const TRANSACTION_VIEW: FundTransactionView = Object.freeze({
   reversalOfBatchId: null,
   reversalStatus: 'NONE',
   postedAt: '2026-10-01T08:00:01.000Z',
+  source: null,
 })
 
 describe('fund self view mappers', () => {
@@ -127,6 +128,7 @@ describe('fund self view mappers', () => {
       'postingTypeId',
       'postingTypeName',
       'reversalStatus',
+      'source',
       'summary',
       'userShareRateSnapshot',
     ])

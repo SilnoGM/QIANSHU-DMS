@@ -4,6 +4,7 @@ import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { AuditService } from '../audit/audit.service'
 import { FundPostingService } from '../fund-accounts/application/fund-posting.contract'
+import { truncateFundSourceText } from '../fund-accounts/application/fund-source-snapshot'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { resolveInvoiceRequestViewer, type InvoiceRequestViewer } from './invoice-request-access'
@@ -452,7 +453,7 @@ export class InvoiceRequestService {
           invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.RATE_CHANGED, '台币汇率已更新，请刷新后按最新汇率重新确认', 409)
         }
         const amount = calculateSettleAmountCny(row.totalAmount, rate.foreignUnitsPerCny)
-        const fundPostingBatchId = await this.postSettlement(tx, context, { applicantUserId: row.createdById, id, invoiceNo: row.invoiceNo, totalAmount: row.totalAmount, taxAmount: row.taxAmount, amount, rate })
+        const fundPostingBatchId = await this.postSettlement(tx, context, { applicantUserId: row.createdById, id, invoiceNo: row.invoiceNo, buyerName: row.buyerName, invoiceRemark: row.invoiceRemark, totalAmount: row.totalAmount, taxAmount: row.taxAmount, amount, rate })
         const settledAt = new Date()
         // 批次 id 必须与状态流转写在同一条 UPDATE 里：触发器只放行 ISSUED → SETTLED 那一次写入。
         await tx.invoiceRequest.update({
@@ -493,7 +494,7 @@ export class InvoiceRequestService {
   private async postSettlement(
     tx: Prisma.TransactionClient,
     context: InvoiceRequestCommandContext,
-    input: { readonly amount: string, readonly applicantUserId: string, readonly id: string, readonly invoiceNo: string, readonly rate: { readonly foreignUnitsPerCny: Prisma.Decimal, readonly id: string, readonly version: number }, readonly taxAmount: Prisma.Decimal, readonly totalAmount: Prisma.Decimal },
+    input: { readonly amount: string, readonly applicantUserId: string, readonly id: string, readonly invoiceNo: string, readonly buyerName: string, readonly invoiceRemark: string | null, readonly rate: { readonly foreignUnitsPerCny: Prisma.Decimal, readonly id: string, readonly version: number }, readonly taxAmount: Prisma.Decimal, readonly totalAmount: Prisma.Decimal },
   ): Promise<string> {
     // 批次归属必须是被结算单据的申请人；财务只是操作人，不能把成本记到自己名下。
     const fundContext = {
@@ -509,6 +510,18 @@ export class InvoiceRequestService {
       businessId: input.id,
       businessNo: input.invoiceNo,
       summary: '开票服务费及邮寄费',
+      source: {
+        headline: `${input.buyerName} · 开票服务费及邮寄费`,
+        customerName: input.buyerName,
+        documentNo: input.invoiceNo,
+        link: { kind: 'INVOICE_REQUEST' as const, id: input.id },
+        detail: [
+          { label: '发票金额', value: input.totalAmount.toString() },
+          ...(input.invoiceRemark === null
+            ? []
+            : [{ label: '备注', value: truncateFundSourceText(input.invoiceRemark) }]),
+        ],
+      },
       metadata: {
         invoiceRequestId: input.id,
         invoiceNo: input.invoiceNo,
@@ -591,6 +604,8 @@ export class InvoiceRequestService {
     readonly taxAmount: Prisma.Decimal
     readonly totalAmount: Prisma.Decimal
     readonly version: number
+    readonly buyerName: string
+    readonly invoiceRemark: string | null
   }> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT id FROM invoice_requests WHERE id = CAST(${id} AS uuid) FOR UPDATE`)
@@ -599,7 +614,7 @@ export class InvoiceRequestService {
     }
     const row = await tx.invoiceRequest.findUnique({
       where: { id },
-      select: { createdById: true, documentMediaAssetId: true, documentUploadedAt: true, invoiceNo: true, status: true, taxAmount: true, totalAmount: true, version: true },
+      select: { createdById: true, documentMediaAssetId: true, documentUploadedAt: true, invoiceNo: true, status: true, taxAmount: true, totalAmount: true, version: true, buyerName: true, invoiceRemark: true },
     })
     if (row === null) {
       invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.NOT_FOUND, '开票申请不存在', 404)

@@ -18,6 +18,7 @@ import {
   LEDGER_CATEGORY_META,
   LEDGER_DIRECTION_META,
   LEDGER_REVERSAL_META,
+  ledgerShareSplit,
   ledgerSignedAmount,
 } from './ledger.logic'
 
@@ -434,7 +435,9 @@ onBeforeUnmount(() => {
         <template #cell-summary="{ row }">
           <div class="min-w-0">
             <div class="flex flex-wrap gap-2 items-center">
-              <span class="qs-type-compact-title">{{ row.original.summary }}</span>
+              <span class="qs-type-compact-title break-words">
+                {{ row.original.source?.headline ?? row.original.summary }}
+              </span>
               <span
                 v-if="reversalMeta(row.original.reversalStatus)"
                 class="qs-type-tag px-2 py-0.5 border rounded-md inline-flex items-center"
@@ -446,11 +449,19 @@ onBeforeUnmount(() => {
             <div class="qs-type-meta text-muted-foreground mt-1 flex flex-wrap gap-x-4 gap-y-1 items-center">
               <span class="inline-flex gap-1 items-center">
                 <FaIcon name="i-lucide:file-text" class="shrink-0 size-3.5" aria-hidden="true" />
-                <template v-if="row.original.businessNo">
+                <template v-if="row.original.source?.documentNo ?? row.original.businessNo">
                   <span>{{ t('personalFinanceLedger.businessNo') }}:</span>
-                  <span class="font-qs-data-mono">{{ row.original.businessNo }}</span>
+                  <span class="font-qs-data-mono">{{ row.original.source?.documentNo ?? row.original.businessNo }}</span>
                 </template>
                 <span v-else>{{ t('personalFinanceLedger.noBusinessNo') }}</span>
+              </span>
+              <span v-if="row.original.source?.customerName" class="inline-flex gap-1 items-center">
+                <FaIcon name="i-lucide:user-round" class="shrink-0 size-3.5" aria-hidden="true" />
+                <span>{{ row.original.source.customerName }}</span>
+              </span>
+              <span v-if="row.original.source?.supplierName" class="inline-flex gap-1 items-center">
+                <FaIcon name="i-lucide:factory" class="shrink-0 size-3.5" aria-hidden="true" />
+                <span>{{ row.original.source.supplierName }}</span>
               </span>
               <span class="inline-flex gap-1 items-center">
                 <FaIcon name="i-lucide:layers-2" class="shrink-0 size-3.5" aria-hidden="true" />
@@ -458,6 +469,12 @@ onBeforeUnmount(() => {
                 <span class="font-qs-data-mono">{{ row.original.batchNo }}</span>
               </span>
             </div>
+            <p
+              v-if="row.original.source?.details.length"
+              class="qs-type-meta text-muted-foreground m-0 mt-1 break-words line-clamp-2"
+            >
+              {{ row.original.source.details.map(item => `${item.label}：${item.value}`).join(' · ') }}
+            </p>
           </div>
         </template>
 
@@ -473,27 +490,37 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-amount="{ row }">
-          <div class="flex gap-2 items-center justify-end">
-            <span
-              class="qs-type-tag px-2 py-0.5 rounded-md"
-              :class="directionMeta(row.original.direction).badgeClass"
-            >
-              {{ t(directionMeta(row.original.direction).labelKey) }}
-            </span>
-            <span class="inline-flex items-baseline" :class="directionMeta(row.original.direction).amountClass">
+          <div class="text-right min-w-0">
+            <div class="flex gap-2 items-center justify-end">
               <span
-                v-if="row.original.direction === 'CREDIT'"
-                class="qs-type-data-emphasis !text-base !font-semibold"
-                :class="directionMeta(row.original.direction).amountClass"
-              >+</span>
-              <AmountDisplay
-                :value="ledgerSignedAmount(row.original.direction, row.original.amount)"
-                currency="CNY"
-                :currencies="currencyCatalog.currencies.value"
-                class="!text-base !font-semibold"
-                :class="directionMeta(row.original.direction).amountClass"
-              />
-            </span>
+                class="qs-type-tag px-2 py-0.5 rounded-md"
+                :class="directionMeta(row.original.direction).badgeClass"
+              >
+                {{ t(directionMeta(row.original.direction).labelKey) }}
+              </span>
+              <span class="inline-flex items-baseline" :class="directionMeta(row.original.direction).amountClass">
+                <span
+                  v-if="row.original.direction === 'CREDIT'"
+                  class="qs-type-data-emphasis !text-base !font-semibold"
+                  :class="directionMeta(row.original.direction).amountClass"
+                >+</span>
+                <AmountDisplay
+                  :value="ledgerSignedAmount(row.original.direction, row.original.amount)"
+                  currency="CNY"
+                  :currencies="currencyCatalog.currencies.value"
+                  class="!text-base !font-semibold"
+                  :class="directionMeta(row.original.direction).amountClass"
+                />
+              </span>
+            </div>
+            <!-- 分摊只在本条分录之外还有公司部分时展示；提款等单腿规则不显示。 -->
+            <p
+              v-if="ledgerShareSplit(row.original).split"
+              class="qs-type-meta text-muted-foreground m-0 mt-1 flex flex-wrap gap-x-3 justify-end"
+            >
+              <span>{{ t('personalFinanceLedger.share.mine') }} {{ ledgerShareSplit(row.original).mine }}</span>
+              <span>{{ t('personalFinanceLedger.share.company') }} {{ ledgerShareSplit(row.original).company }}</span>
+            </p>
           </div>
         </template>
 

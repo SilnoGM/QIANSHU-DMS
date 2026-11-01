@@ -41,7 +41,7 @@ test('流水列覆盖批次、主体、业务快照、方向金额、余额、�
     '方向 / 金额',
     '动账前后余额',
     '比例快照',
-    '业务单号',
+    '业务来源',
     '发生时间',
   ]) {
     assert.match(tableSource, new RegExp(text, 'u'))
@@ -49,6 +49,9 @@ test('流水列覆盖批次、主体、业务快照、方向金额、余额、�
   assert.match(tableSource, /AmountDisplay/u)
   assert.match(tableSource, /DateTimeDisplay/u)
   assert.match(tableSource, /getFundDirectionState/u)
+  // 来源主标题优先，单号作为第二行兜底，避免只有编码时看不懂。
+  assert.match(tableSource, /transaction\.source\?\.headline/u)
+  assert.match(tableSource, /row\.original\.source\?\.documentNo/u)
 })
 
 test('桌面方向金额列加宽且方向、符号与金额保持同一行', () => {

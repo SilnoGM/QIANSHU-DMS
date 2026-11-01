@@ -11,6 +11,7 @@ import type {
   FundAccountUserView,
 } from './fund-account.contract'
 import type { FundMetadata } from './fund-posting.contract'
+import type { FundSourceKind, FundSourceLink } from './fund-source-snapshot'
 
 export const FUND_TRANSACTION_REVERSAL_STATUSES = [
   'NONE',
@@ -41,11 +42,33 @@ export interface FundTransactionListQuery {
   readonly businessSourceId?: string
   readonly direction?: FundEntryDirection
   readonly businessNo?: string
+  /** 跨字段关键词：命中摘要、客户名、供应商名、业务单号或来源单号。 */
+  readonly keyword?: string
   readonly occurredFrom?: string
   readonly occurredTo?: string
   readonly reversalStatus?: FundTransactionReversalStatus
   readonly sortBy?: FundTransactionSortField
   readonly sortOrder?: FundAccountSortOrder
+}
+
+export interface FundTransactionSourceDetailView {
+  readonly label: string
+  readonly value: string
+}
+
+/**
+ * 流水的来源说明。link 只表达“这是哪张单据”，是否渲染为可点击链接由 web 侧
+ * 结合路由与权限决定；resolved=false 表示当前只有摘要降级内容，待回填补齐。
+ */
+export interface FundTransactionSourceView {
+  readonly kind: FundSourceKind
+  readonly headline: string
+  readonly customerName: string | null
+  readonly supplierName: string | null
+  readonly documentNo: string | null
+  readonly link: FundSourceLink | null
+  readonly details: readonly FundTransactionSourceDetailView[]
+  readonly resolved: boolean
 }
 
 export interface FundTransactionAccountView {
@@ -85,6 +108,7 @@ export interface FundTransactionView {
   readonly reversalOfBatchId: string | null
   readonly reversalStatus: FundTransactionReversalStatus
   readonly postedAt: string
+  readonly source: FundTransactionSourceView | null
 }
 
 export interface FundTransactionPage {
@@ -106,6 +130,8 @@ export interface FundSelfTransactionListQuery {
   readonly occurredFrom?: string
   readonly occurredTo?: string
   readonly postingTypeId?: string
+  /** 跨字段关键词：命中摘要、客户名、供应商名、业务单号或来源单号。 */
+  readonly keyword?: string
   readonly sortBy?: FundTransactionSortField
   readonly sortOrder?: FundAccountSortOrder
 }
@@ -134,6 +160,7 @@ export interface FundSelfTransactionView {
   readonly businessOccurredAt: string
   readonly reversalStatus: FundTransactionReversalStatus
   readonly postedAt: string
+  readonly source: FundTransactionSourceView | null
 }
 
 export interface FundSelfTransactionPage {
@@ -220,4 +247,5 @@ export interface FundPostingBatchDetailView {
   readonly postedAt: string
   readonly entries: readonly FundPostingBatchEntryView[]
   readonly reversalChain: FundPostingBatchReversalChainView
+  readonly source: FundTransactionSourceView | null
 }

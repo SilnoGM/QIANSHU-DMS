@@ -25,6 +25,10 @@ import {
   FundPostingError,
   type FundPostingErrorField,
 } from './fund-posting.errors'
+import {
+  normalizeFundSourceDescriptor,
+  type FundSourceDescriptor,
+} from './fund-source-snapshot'
 
 const CANONICAL_CODE_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/u
 const CONSUMER_CODE_PATTERN = /^[A-Z][A-Z0-9._-]{0,63}$/u
@@ -46,6 +50,7 @@ const BUSINESS_INPUT_KEYS = new Set([
   'businessId',
   'businessNo',
   'summary',
+  'source',
   'metadata',
   'businessOccurredAt',
   'idempotencyKey',
@@ -74,11 +79,13 @@ export type NormalizedFundPostingContext = FundPostingContext
 export interface NormalizedPostBusinessEventInput
   extends Omit<
     PostBusinessEventInput,
-    'userId' | 'businessNo' | 'businessOccurredAt' | 'idempotencyKey' | 'metadata'
+    'userId' | 'businessNo' | 'businessOccurredAt' | 'idempotencyKey' | 'metadata' | 'source'
   > {
   readonly userId: string | null
   readonly businessNo: string | null
   readonly metadata: FundMetadata
+  /** 展示用来源说明；未提供时为 null，落库层写 UNRESOLVED 投影便于排查漏接。 */
+  readonly source: FundSourceDescriptor | null
   readonly businessOccurredAt: string | null
 }
 
@@ -327,6 +334,7 @@ export function normalizePostBusinessEventRequest(
       value => normalizeDisplayText(value, 'businessNo', 128),
     ),
     summary: normalizeDisplayText(inputRecord.summary, 'summary', 500),
+    source: normalizeFundSourceDescriptor(inputRecord.source),
     metadata: normalizeFundMetadata(inputRecord.metadata),
     businessOccurredAt: normalizeOptional(
       inputRecord.businessOccurredAt,
@@ -337,6 +345,8 @@ export function normalizePostBusinessEventRequest(
   const idempotencyKeyHash = calculateFundIdempotencyKeyHash(
     inputRecord.idempotencyKey,
   )
+  // source 只服务展示，calculateFundBusinessFingerprintHash 只读取具名字段，
+  // 因此新增展示信息不会改变 fund.business-posting.v1 的幂等语义。
   const requestFingerprintHash = calculateFundBusinessFingerprintHash({
     consumerCode: context.consumerCode,
     sourceCode: context.sourceCode,

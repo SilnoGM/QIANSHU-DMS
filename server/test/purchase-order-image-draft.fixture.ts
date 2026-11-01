@@ -61,7 +61,7 @@ export async function createPurchaseOrderImageFixture(fixture: AtomicityFixture)
   const buildMutations = (imageDrafts = drafts, audit: AuditService = fixture.audit) => new PurchaseOrderMutationService(
     fixture.prisma, audit, lookup, media, query, fixture.salesProgress, fixture.numbering, fixture.resolver,
     new PurchaseOrderWarehouseReceiptService(fixture.prisma, audit, query), imageDrafts,
-    new PurchasePayableService(new FundPostingApplicationService(fixture.prisma, audit, new NumberingGeneratorService(fixture.prisma)), fixture.access, createPaymentRecipientFixture(fixture.prisma)),
+    new PurchasePayableService(new FundPostingApplicationService(fixture.prisma, audit, new NumberingGeneratorService(fixture.prisma)), fixture.access, createPaymentRecipientFixture(fixture.prisma), { resolveStoredValuesInTransaction: () => Promise.resolve([]) } as never),
   )
   return {
     storage, media, delivery, references, retention, query, png, renderer, drafts, buildDrafts, buildMutations,

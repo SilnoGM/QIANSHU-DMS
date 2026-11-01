@@ -29,10 +29,10 @@ function fixture() {
 }
 
 function sqlText(transaction: ReturnType<typeof fixture>): string {
-  const query = transaction.queryRaw.mock.calls[0]?.[0] as {
-    strings?: readonly string[]
-  }
-  return query.strings?.join(' ') ?? ''
+  // 冲账现在写两条语句（批次 + 来源投影），断言需要覆盖全部语句。
+  return transaction.queryRaw.mock.calls
+    .map(call => (call[0] as { strings?: readonly string[] }).strings?.join(' ') ?? '')
+    .join('\n')
 }
 
 async function expectInternal(promise: Promise<unknown>): Promise<void> {
@@ -194,7 +194,10 @@ describe('fund reversal persistence', () => {
 
   it('inserts REVERSAL by copying original snapshots with INSERT SELECT', async () => {
     const transaction = fixture()
-    transaction.queryRaw.mockResolvedValue([{ id: REVERSAL_BATCH_ID }])
+    transaction.queryRaw
+      .mockResolvedValueOnce([{ id: REVERSAL_BATCH_ID }])
+      // 第二个语句写来源投影：沿用原批次快照，返回 batch_id。
+      .mockResolvedValueOnce([{ batchId: REVERSAL_BATCH_ID }])
 
     await expect(insertFundReversalBatch(transaction.client, {
       id: REVERSAL_BATCH_ID,
@@ -218,6 +221,9 @@ describe('fund reversal persistence', () => {
     expect(sql).toContain("'REVERSAL'::\"fund_posting_batch_kind\"")
     expect(sql).toContain('FROM "fund_posting_batches" AS original')
     expect(sql).not.toContain('UPDATE "fund_posting_batches"')
+    // 冲账行同样要有来源说明，否则列表里只有批次号。
+    expect(sql).toContain('INSERT INTO "fund_posting_batch_sources"')
+    expect(sql).toContain("'REVERSAL'::\"fund_posting_source_kind\"")
   })
 
   it('fails closed for malformed rows and hash lengths', async () => {

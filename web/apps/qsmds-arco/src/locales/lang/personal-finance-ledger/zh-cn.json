@@ -40,11 +40,19 @@
     "batchNo": "批次",
     "noBusinessNo": "无关联业务单",
     "viewDetail": "查看详情",
+    "share": {
+      "mine": "我的部分",
+      "company": "公司部分"
+    },
     "detail": {
       "title": "流水详情",
       "businessOccurredAt": "业务发生时间",
       "summary": "摘要",
       "reversalStatus": "冲账状态",
+      "source": "来源说明",
+      "sourcePending": "仅摘要（待回填）",
+      "customer": "客户",
+      "supplier": "供应商",
       "close": "关闭"
     }
   }

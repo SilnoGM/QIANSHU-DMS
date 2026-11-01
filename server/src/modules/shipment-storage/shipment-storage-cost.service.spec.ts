@@ -53,6 +53,8 @@ function setup() {
   } as unknown as FundPostingService
   const transaction = {
     shipmentCostEvent: { create: jest.fn().mockResolvedValue({}) },
+    // 来源说明读取寄仓记录上冻结的客户与单号快照；没有记录时仍要能入账。
+    shipmentStorageRecord: { findUnique: jest.fn().mockResolvedValue(null) },
   } as unknown as Prisma.TransactionClient
   const audit = { record: jest.fn().mockResolvedValue({}) }
   const service = new ShipmentStorageCostService(funds, audit)

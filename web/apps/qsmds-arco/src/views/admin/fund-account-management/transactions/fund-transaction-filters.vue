@@ -234,6 +234,22 @@ watch(() => props.modelValue, (value) => {
       </label>
 
       <label class="gap-1.5 grid min-w-0">
+        <span class="qs-type-compact-label">关键词</span>
+        <FaInput
+          :model-value="draft.keyword"
+          type="search"
+          clearable
+          autocomplete="off"
+          class="min-h-11 w-full sm:min-h-9"
+          maxlength="128"
+          placeholder="客户名、供应商名、摘要或单号"
+          :disabled="disabled"
+          @update:model-value="value => updateDraft('keyword', value)"
+          @keydown.enter.prevent="submit"
+        />
+      </label>
+
+      <label class="gap-1.5 grid min-w-0">
         <span class="qs-type-compact-label">业务单号</span>
         <FaInput
           :model-value="draft.businessNo"

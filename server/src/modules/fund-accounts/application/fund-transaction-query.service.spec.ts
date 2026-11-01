@@ -34,6 +34,7 @@ describe('normalizeFundTransactionListQuery', () => {
       businessSourceId: '10000000-0000-4000-8000-000000000004',
       direction: 'DEBIT',
       businessNo: 'PO-0001',
+      keyword: null,
       occurredFrom: new Date('2026-08-01T00:00:00.000Z'),
       occurredTo: new Date('2026-08-31T23:59:59.999Z'),
       reversalStatus: 'PARTIAL',

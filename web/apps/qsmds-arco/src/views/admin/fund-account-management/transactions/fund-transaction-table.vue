@@ -15,6 +15,7 @@ import {
   getFundBusinessCategoryLabel,
   getFundDirectionState,
   getFundReversalStatusLabel,
+  getFundSourceLinkTarget,
 } from './fund-transaction.logic'
 
 defineOptions({ name: 'FundTransactionTable' })
@@ -35,6 +36,24 @@ const emit = defineEmits<{
   retry: []
   sortingChange: [sorting: TableSortingState]
 }>()
+const { auth } = useAppAuth()
+const router = useRouter()
+
+/**
+ * 来源单号只有“服务端给了单据身份 + 当前角色有该详情路由权限”时才渲染成链接；
+ * 其余情况保持纯文本，避免财务点进无权限页面。
+ */
+function sourceLink(transaction: FundTransactionDto) {
+  const target = getFundSourceLinkTarget(transaction.source)
+  return target !== null && auth(target.permission) ? target : null
+}
+
+function openSourceLink(transaction: FundTransactionDto): void {
+  const target = sourceLink(transaction)
+  if (target !== null) {
+    void router.push({ name: target.name, params: { id: target.id } })
+  }
+}
 
 const page = defineModel<number>('page', { required: true })
 const pageSize = defineModel<number>('pageSize', { required: true })
@@ -103,10 +122,12 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
     title: '比例快照',
   },
   {
-    accessorFn: transaction => transaction.businessNo ?? transaction.businessId,
+    accessorFn: transaction => transaction.source?.headline
+      ?? transaction.businessNo
+      ?? transaction.businessId,
     id: 'business',
-    minWidth: 210,
-    title: '业务单号',
+    minWidth: 240,
+    title: '业务来源',
   },
   {
     accessorKey: 'businessOccurredAt',
@@ -228,10 +249,41 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
 
     <template #cell-business="{ row }">
       <div class="min-w-0">
-        <div class="qs-type-data-emphasis break-all">
-          {{ row.original.businessNo ?? '—' }}
+        <!-- 第一行：来源主标题，直接回答“这笔钱是为什么动的”。 -->
+        <button
+          v-if="sourceLink(row.original)"
+          type="button"
+          class="qs-type-data-emphasis text-left underline-offset-4 break-words focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 hover:underline"
+          @click="openSourceLink(row.original)"
+        >
+          {{ row.original.source?.headline ?? row.original.businessNo ?? '—' }}
+        </button>
+        <div v-else class="qs-type-data-emphasis break-words">
+          {{ row.original.source?.headline ?? row.original.businessNo ?? '—' }}
         </div>
-        <p class="qs-type-meta m-0 mt-1 break-words line-clamp-2">
+        <!-- 第二行：来源单号 + 客户/供应商。 -->
+        <p class="qs-type-meta text-muted-foreground m-0 mt-1 flex flex-wrap gap-x-2 items-center">
+          <span class="qs-type-data-mono break-all">
+            {{ row.original.source?.documentNo ?? row.original.businessNo ?? '—' }}
+          </span>
+          <span v-if="row.original.source?.customerName" class="break-words">
+            {{ row.original.source.customerName }}
+          </span>
+          <span v-if="row.original.source?.supplierName" class="break-words">
+            {{ row.original.source.supplierName }}
+          </span>
+        </p>
+        <!-- 第三行：结构化细节（付款阶段、分摊目标等），最多两行。 -->
+        <p
+          v-if="row.original.source?.details.length"
+          class="qs-type-meta m-0 mt-1 break-words line-clamp-2"
+        >
+          {{ row.original.source.details.map(item => `${item.label}：${item.value}`).join(' · ') }}
+        </p>
+        <p
+          v-else
+          class="qs-type-meta m-0 mt-1 break-words line-clamp-2"
+        >
           {{ row.original.summary }}
         </p>
       </div>
@@ -330,9 +382,18 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
           </div>
           <div>
             <dt class="qs-type-compact-label mb-1">
-              业务单号
-            </dt><dd class="qs-type-data-emphasis m-0 break-all">
-              {{ row.businessNo ?? '—' }}
+              业务来源
+            </dt><dd class="qs-type-data-emphasis m-0 break-words">
+              {{ row.source?.headline ?? row.businessNo ?? '—' }}
+            </dd>
+            <dd class="qs-type-meta m-0 mt-1 break-all">
+              {{ row.source?.documentNo ?? row.businessNo ?? '—' }}
+              <template v-if="row.source?.customerName">
+                · {{ row.source.customerName }}
+              </template>
+              <template v-if="row.source?.supplierName">
+                · {{ row.source.supplierName }}
+              </template>
             </dd>
           </div>
           <div>

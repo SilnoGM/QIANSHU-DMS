@@ -40,11 +40,19 @@
     "batchNo": "Batch",
     "noBusinessNo": "No linked business",
     "viewDetail": "View details",
+    "share": {
+      "mine": "My part",
+      "company": "Company part"
+    },
     "detail": {
       "title": "Ledger details",
       "businessOccurredAt": "Business occurred at",
       "summary": "Summary",
       "reversalStatus": "Reversal status",
+      "source": "Source",
+      "sourcePending": "Summary only (pending backfill)",
+      "customer": "Customer",
+      "supplier": "Supplier",
       "close": "Close"
     }
   }

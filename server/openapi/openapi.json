@@ -14104,6 +14104,16 @@
             }
           },
           {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
             "name": "occurredFrom",
             "required": false,
             "in": "query",
@@ -14420,6 +14430,16 @@
             "in": "query",
             "schema": {
               "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 128,
               "type": "string"
             }
           },
@@ -90920,6 +90940,111 @@
           "user"
         ]
       },
+      "FundTransactionSourceLinkDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "SALES_ORDER",
+              "PURCHASE_ORDER",
+              "SALES_RECEIPT",
+              "INVOICE_REQUEST",
+              "SLH_RECONCILIATION",
+              "PACKAGING_COST",
+              "SHIPMENT_STORAGE",
+              "FUND_WITHDRAWAL"
+            ]
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ]
+      },
+      "FundTransactionSourceDetailDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ]
+      },
+      "FundTransactionSourceDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "SALES_RECEIPT",
+              "PURCHASE_PAYMENT",
+              "PACKAGING_COST",
+              "INVOICE_REQUEST",
+              "SHIPMENT_STORAGE",
+              "SLH_SETTLEMENT",
+              "SLH_FEE",
+              "SLH_COMPANY_ALLOCATION",
+              "WITHDRAWAL",
+              "MANUAL_ADJUSTMENT",
+              "REVERSAL",
+              "UNRESOLVED"
+            ]
+          },
+          "headline": {
+            "type": "string"
+          },
+          "customerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "supplierName": {
+            "type": "string",
+            "nullable": true
+          },
+          "documentNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "link": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FundTransactionSourceLinkDto"
+              }
+            ]
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FundTransactionSourceDetailDto"
+            }
+          },
+          "resolved": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "headline",
+          "customerName",
+          "supplierName",
+          "documentNo",
+          "link",
+          "details",
+          "resolved"
+        ]
+      },
       "FundTransactionDto": {
         "type": "object",
         "properties": {
@@ -91065,6 +91190,15 @@
           "postedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "source": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FundTransactionSourceDto"
+              }
+            ]
           }
         },
         "required": [
@@ -91097,7 +91231,8 @@
           "adjustmentMode",
           "reversalOfBatchId",
           "reversalStatus",
-          "postedAt"
+          "postedAt",
+          "source"
         ]
       },
       "FundTransactionPageDto": {
@@ -91222,6 +91357,15 @@
           "postedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "source": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FundTransactionSourceDto"
+              }
+            ]
           }
         },
         "required": [
@@ -91243,7 +91387,8 @@
           "summary",
           "businessOccurredAt",
           "reversalStatus",
-          "postedAt"
+          "postedAt",
+          "source"
         ]
       },
       "FundSelfTransactionPageDto": {
@@ -91611,6 +91756,15 @@
           },
           "reversalChain": {
             "$ref": "#/components/schemas/FundPostingBatchReversalChainDto"
+          },
+          "source": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FundTransactionSourceDto"
+              }
+            ]
           }
         },
         "required": [
@@ -91644,7 +91798,8 @@
           "correlationId",
           "postedAt",
           "entries",
-          "reversalChain"
+          "reversalChain",
+          "source"
         ]
       },
       "CreateFundReversalRequestDto": {

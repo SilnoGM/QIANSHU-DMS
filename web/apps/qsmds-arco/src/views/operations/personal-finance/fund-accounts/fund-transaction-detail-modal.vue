@@ -9,6 +9,7 @@ import {
   LEDGER_CATEGORY_META,
   LEDGER_DIRECTION_META,
   LEDGER_REVERSAL_META,
+  ledgerShareSplit,
   ledgerSignedAmount,
 } from './ledger.logic'
 
@@ -45,6 +46,9 @@ const categoryLabelKey = computed(() => item.value === null
 const signedAmount = computed(() => item.value === null
   ? ''
   : ledgerSignedAmount(item.value.direction, item.value.amount))
+const shareSplit = computed(() => item.value === null
+  ? null
+  : ledgerShareSplit(item.value))
 const description = computed(() => item.value === null
   ? undefined
   : `#${item.value.accountSequence} · ${item.value.batchNo}`)
@@ -63,6 +67,43 @@ function close(): void {
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div v-if="item !== null" class="gap-5 grid">
+      <!-- 来源说明：一句话回答这笔钱为什么动，明细紧跟其后。 -->
+      <section class="p-4 border border-border rounded-xl bg-card sm:p-5">
+        <div class="flex flex-wrap gap-2 items-center">
+          <span class="qs-type-compact-label">
+            {{ t('personalFinanceLedger.detail.source') }}
+          </span>
+          <span
+            v-if="item.source && !item.source.resolved"
+            class="text-amber-700 qs-type-tag px-2 py-0.5 border border-amber-500/30 rounded-md bg-amber-500/10"
+          >
+            {{ t('personalFinanceLedger.detail.sourcePending') }}
+          </span>
+        </div>
+        <p class="qs-type-component-title m-0 mt-1 break-words">
+          {{ item.source?.headline ?? item.summary }}
+        </p>
+        <p class="qs-type-meta text-muted-foreground m-0 mt-1 flex flex-wrap gap-x-3 gap-y-1">
+          <span v-if="item.source?.documentNo" class="font-qs-data-mono break-all">{{ item.source.documentNo }}</span>
+          <span v-if="item.source?.customerName">
+            {{ t('personalFinanceLedger.detail.customer') }}：{{ item.source.customerName }}
+          </span>
+          <span v-if="item.source?.supplierName">
+            {{ t('personalFinanceLedger.detail.supplier') }}：{{ item.source.supplierName }}
+          </span>
+        </p>
+        <dl v-if="item.source?.details.length" class="m-0 mt-3 gap-x-6 gap-y-3 grid sm:grid-cols-2">
+          <div v-for="detail in item.source.details" :key="detail.label" class="min-w-0">
+            <dt class="qs-type-compact-label mb-1">
+              {{ detail.label }}
+            </dt>
+            <dd class="qs-type-body m-0 break-words">
+              {{ detail.value }}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
       <section class="p-4 border border-border rounded-xl bg-muted/25 sm:p-5">
         <div class="flex flex-wrap gap-2 items-center">
           <span class="qs-type-component-title">{{ item.postingTypeName }}</span>
@@ -170,6 +211,15 @@ function close(): void {
               :currencies="currencyCatalog.currencies.value"
               class="!text-base !font-semibold"
             />
+          </dd>
+        </div>
+        <!-- 只有存在公司部分时才显示分摊，单腿规则（提款）保持原样。 -->
+        <div v-if="shareSplit?.split">
+          <dt class="qs-type-compact-label">
+            {{ t('personalFinanceLedger.share.mine') }} / {{ t('personalFinanceLedger.share.company') }}
+          </dt>
+          <dd class="qs-type-body font-semibold m-0">
+            {{ shareSplit.mine }} / {{ shareSplit.company }}
           </dd>
         </div>
         <div>

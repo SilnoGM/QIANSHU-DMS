@@ -23,6 +23,7 @@ import {
 } from '../domain'
 import type { FundMetadata } from './fund-posting.contract'
 import { FUND_POSTING_ERROR_CODES, FundPostingError } from './fund-posting.errors'
+import type { FundSourceSnapshotInsert } from './fund-source-snapshot'
 
 type FundAccountOwnerType = 'USER' | 'COMPANY'
 
@@ -125,6 +126,7 @@ export interface FundPostingBatchInsert {
   readonly requestId: string
   readonly correlationId: string | null
   readonly postedAt: Date
+  readonly sourceSnapshot: FundSourceSnapshotInsert
 }
 
 export interface FundManualAdjustmentBatchInsert {
@@ -157,6 +159,7 @@ export interface FundManualAdjustmentBatchInsert {
   readonly requestId: string
   readonly correlationId: string | null
   readonly postedAt: Date
+  readonly sourceSnapshot: FundSourceSnapshotInsert
 }
 
 export interface FundPostingAccountUpdate {
@@ -249,6 +252,22 @@ interface IdempotentPostingDatabaseRow {
   readonly balanceBefore: unknown
   readonly balanceAfter: unknown
   readonly accountSequence: unknown
+}
+
+function sourceSnapshotCreate(
+  input: FundSourceSnapshotInsert,
+): Prisma.FundPostingBatchSourceCreateWithoutBatchInput {
+  return {
+    sourceKind: input.sourceKind,
+    headline: input.headline,
+    customerName: input.customerName,
+    supplierName: input.supplierName,
+    documentNo: input.documentNo,
+    linkKind: input.linkKind,
+    linkId: input.linkId,
+    detail: input.detail as unknown as Prisma.InputJsonValue,
+    resolverVersion: input.resolverVersion,
+  }
 }
 
 function persistenceInvariant(): never {
@@ -849,6 +868,7 @@ export async function insertFundPostingBatch(
       requestId: input.requestId,
       correlationId: input.correlationId,
       postedAt: input.postedAt,
+      sourceSnapshot: { create: sourceSnapshotCreate(input.sourceSnapshot) },
     },
     select: { id: true },
   })
@@ -906,6 +926,7 @@ export async function insertFundManualAdjustmentBatch(
       requestId: input.requestId,
       correlationId: input.correlationId,
       postedAt: input.postedAt,
+      sourceSnapshot: { create: sourceSnapshotCreate(input.sourceSnapshot) },
     },
     select: { id: true },
   })

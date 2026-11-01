@@ -259,6 +259,13 @@ export class FundWithdrawalService {
           businessId: id,
           businessNo: row.withdrawalNo,
           summary: FUND_WITHDRAWAL_SUMMARY,
+          // 提款没有客户/供应商，来源只有申请人自己的提款单。
+          source: {
+            headline: `${row.withdrawalNo} · 用户提款`,
+            documentNo: row.withdrawalNo,
+            link: { kind: 'FUND_WITHDRAWAL' as const, id },
+            detail: [{ label: '提款金额', value: row.amount.toFixed(2) }],
+          },
           metadata: {
             applicantUserId: row.userId,
             withdrawalRequestId: id,

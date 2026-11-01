@@ -27,6 +27,8 @@ function fixture(row: Record<string, unknown> = {}) {
     mediaAsset: { findFirst: jest.fn().mockResolvedValue({ id: batchId, objectKey: 'assets/voucher.png', sizeBytes: 3n }) },
     user: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
     packagingCostRequest: { findUnique: jest.fn().mockResolvedValue({ id, status: 'PENDING_PAYMENT', version: 1, paidByUserId: null, ownerUserId: owner, shipmentNo: 'PKG00000001', amount: new Prisma.Decimal('120.50'), ...row }), update },
+    // 来源说明要取客户名；缺失时仍然照常入账，只少一个字段。
+    salesOrder: { findUnique: jest.fn().mockResolvedValue({ customerName: '测试客户' }) },
   }
   ;(tx.packagingCostRequest as Record<string, unknown>).findFirst = tx.packagingCostRequest.findUnique
   const prisma = { $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx) } as unknown as PrismaService
@@ -43,7 +45,17 @@ describe('PackagingCostService payment', () => {
     const f = fixture()
     await f.service.pay(context, id, payment)
     const fundContext = { ...context, sourceCode: 'PACKAGING_COST', consumerCode: 'PACKAGING_COST.PAY' }
-    const input = { postingTypeCode: 'WOODEN_PACKING_COST', userId: owner, amount: '120.50', businessId: id, businessNo: 'PKG00000001', summary: '打木架费用付款', idempotencyKey: id }
+    const input = {
+      postingTypeCode: 'WOODEN_PACKING_COST', userId: owner, amount: '120.50', businessId: id, businessNo: 'PKG00000001', summary: '打木架费用付款', idempotencyKey: id,
+      // 来源说明随入账下发；只影响展示，不进入幂等指纹。
+      source: {
+        headline: 'PKG00000001 · 打木架费用',
+        customerName: '测试客户',
+        documentNo: 'PKG00000001',
+        link: { kind: 'PACKAGING_COST', id },
+        detail: [],
+      },
+    }
     expect(f.funds.previewBusinessEventInTransaction).toHaveBeenCalledWith(f.tx, fundContext, input)
     expect(f.funds.postBusinessEventInTransaction).toHaveBeenCalledWith(f.tx, fundContext, input, { ruleVersionId: 'rule-1', userShareRate: '30.00' })
     expect(f.funds.postBusinessEventInTransaction.mock.invocationCallOrder[0]).toBeLessThan(f.update.mock.invocationCallOrder[0])

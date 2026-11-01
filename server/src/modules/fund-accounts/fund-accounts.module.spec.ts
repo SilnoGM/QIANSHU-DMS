@@ -9,6 +9,7 @@ import { FundConfigurationQueryService } from './application/fund-configuration-
 import { FundPostingBatchNumberBackfillService } from './application/fund-posting-batch-number-backfill.service'
 import { FundPostingService } from './application/fund-posting.contract'
 import { FundPostingApplicationService } from './application/fund-posting.service'
+import { FundSourceBackfillService } from './application/fund-source-backfill.service'
 import { FundTransactionQueryService } from './application/fund-transaction-query.service'
 import { FundAccountsController } from './fund-accounts.controller'
 import { FundAccountsModule } from './fund-accounts.module'
@@ -37,6 +38,7 @@ describe('FundAccountsModule metadata', () => {
       FundTransactionQueryService,
       FundPostingApplicationService,
       FundPostingBatchNumberBackfillService,
+      FundSourceBackfillService,
       {
         provide: FundPostingService,
         useExisting: FundPostingApplicationService,
