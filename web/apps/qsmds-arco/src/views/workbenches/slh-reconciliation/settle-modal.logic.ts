@@ -163,7 +163,7 @@ const SETTLE_FAILURE_KEYS: Readonly<Record<string, string>> = {
   SLH_RECON_ALLOCATION_BREAKDOWN_MISMATCH: 'slhReconciliation.settle.errorAllocationBreakdownMismatch',
   SLH_RECON_ALLOCATION_COD_TARGET_INVALID: 'slhReconciliation.settle.errorAllocationTargetInvalid',
   SLH_RECON_ALLOCATION_OVERRIDE_INVALID: 'slhReconciliation.settle.errorAllocationTargetInvalid',
-  SLH_RECON_ALLOCATION_RATE_INVALID: 'slhReconciliation.settle.errorAllocationTargetInvalid',
+  SLH_RECON_ALLOCATION_RATE_INVALID: 'slhReconciliation.settle.errorRateUnavailable',
   SLH_RECON_ALLOCATION_REASON_REQUIRED: 'slhReconciliation.settle.errorAllocationReasonRequired',
   SLH_RECON_SETTLEMENT_ORIGIN_ACCOUNT_MISSING: 'slhReconciliation.settle.errorOriginAccountMissing',
 }
