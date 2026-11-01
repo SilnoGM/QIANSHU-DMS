@@ -847,7 +847,7 @@ export class SalesOrderQueryService {
         this.prisma.salesOrder.count({ where }),
         this.prisma.salesOrder.findMany({
           where,
-          orderBy: [{ orderDate: 'desc' }, { id: 'desc' }],
+          orderBy: { orderNo: 'desc' },
           skip: (page - 1) * pageSize,
           take: pageSize,
           select: SALES_ORDER_LIST_SELECT,

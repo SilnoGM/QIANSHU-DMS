@@ -294,6 +294,11 @@ describe('SalesOrderQueryService list summaries', () => {
     expect(fixture.transaction).toHaveBeenCalledTimes(1)
     // 当前页一次，TWD/MYR 标准价汇总各取一次订单 ID。
     expect(fixture.salesOrder.findMany).toHaveBeenCalledTimes(3)
+    // 列表默认按业务编号倒序；编号唯一时不需要 ID 兜底。
+    expect(fixture.salesOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      orderBy: { orderNo: 'desc' },
+      take: 20,
+    }))
     expect(fixture.salesOrder.aggregate).toHaveBeenCalledTimes(2)
     expect(fixture.salesOrderLine.findMany).not.toHaveBeenCalled()
     expect(fixture.salesOrderPayment.aggregate).toHaveBeenCalledTimes(2)

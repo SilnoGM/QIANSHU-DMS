@@ -755,7 +755,7 @@ export class PurchaseOrderQueryService {
           transaction.purchaseOrder.count({ where }),
           transaction.purchaseOrder.findMany({
             where,
-            orderBy: [{ orderDate: 'desc' }, { id: 'desc' }],
+            orderBy: { orderNo: 'desc' },
             skip: (page - 1) * pageSize,
             take: pageSize,
             select: PURCHASE_ORDER_LIST_SELECT,
