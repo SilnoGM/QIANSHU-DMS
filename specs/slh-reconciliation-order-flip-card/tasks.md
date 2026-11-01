@@ -16,7 +16,7 @@
 - [x] 抽出 `slh-order-section.vue`
 - [x] 新增 `slh-order-flip-card.vue`（顶栏翻转、3D、inert/aria-live、减少动效）
 - [x] 新增 `slh-transfer-record.vue`（按设计稿：标题+状态+仓库、货件三段、来源→当前、行数、成本、变更；移除时间/申请/审批字段）
-- [x] 货件编号、柜号唛头分两行；仓库胶囊缩小并截断
+- [x] 货件编号、柜号唛头分两行；仓库胶囊按内容宽度、最大宽度截断
 - [x] 来源销售单可点击翻到背面（与右上角翻转共用 `toggle`）
 - [x] 「N 行 / N 件」并入成本区块，去底色 + 产品 Tooltip
 - [x] 变更摘要 info 图标 + 完整前后值 Tooltip（方案 B），移除固定高度滚动

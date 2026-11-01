@@ -1956,7 +1956,8 @@ test('调货翻转卡：顶栏翻转、双面可访问性、成本/变更摘要�
   assert.match(flip, /@flip="toggle"/u)
   // 货件/柜号/唛头改两行；仓库胶囊固定宽度、超长截断。
   assert.match(transfer, /gap-x-2 gap-y-1/u)
-  assert.match(transfer, /w-52/u)
+  assert.match(transfer, /max-w-52/u)
+  assert.doesNotMatch(transfer, /(?<!max-)w-52/u)
   assert.match(transfer, /text-xs/u)
   assert.match(transfer, /truncate/u)
   assert.match(transfer, /:title=/u)

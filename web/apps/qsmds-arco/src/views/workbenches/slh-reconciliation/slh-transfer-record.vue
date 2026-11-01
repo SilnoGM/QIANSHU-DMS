@@ -107,7 +107,7 @@ function codText(value: string | null | undefined): string {
         </FaTag>
       </div>
       <span
-        class="text-xs text-indigo-700 px-2 py-1 border border-indigo-200 rounded-md bg-indigo-50 inline-flex shrink-0 gap-1 max-w-full w-52 items-center dark:text-indigo-300 dark:border-indigo-500/30 dark:bg-indigo-500/10"
+        class="text-xs text-indigo-700 px-2 py-1 border border-indigo-200 rounded-md bg-indigo-50 inline-flex shrink-0 gap-1 max-w-52 items-center dark:text-indigo-300 dark:border-indigo-500/30 dark:bg-indigo-500/10"
         :title="`${locationLabel} · ${transfer.warehouseLabel}`"
       >
         <FaIcon name="i-lucide:map-pin" class="shrink-0 size-3.5" aria-hidden="true" />
