@@ -85,7 +85,7 @@ export class ContainerBatchService {
     const search = query.search?.trim()
     const where: Prisma.ContainerBatchWhereInput = { ...(query.warehouseValue ? { warehouseValue: query.warehouseValue } : {}), ...(search ? { OR: [{ containerBatchName: { contains: search, mode: 'insensitive' } }, { containerBatchNo: { contains: search, mode: 'insensitive' } }] } : {}) }
     const [rows, total] = await this.prisma.$transaction([
-      this.prisma.containerBatch.findMany({ where, include: containerSummaryInclude, skip: (query.page - 1) * query.pageSize, take: query.pageSize, orderBy: [{ loadingDate: 'desc' }, { id: 'desc' }] }),
+      this.prisma.containerBatch.findMany({ where, include: containerSummaryInclude, skip: (query.page - 1) * query.pageSize, take: query.pageSize, orderBy: { containerBatchNo: 'desc' } }),
       this.prisma.containerBatch.count({ where }),
     ], { isolationLevel: 'RepeatableRead' })
     return { items: rows.map(serialize), total }

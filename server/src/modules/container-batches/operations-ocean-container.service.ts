@@ -76,7 +76,7 @@ export class OperationsOceanContainerService {
       ...(search ? { OR: [{ containerBatchName: { contains: search, mode: 'insensitive' } }, { containerBatchNo: { contains: search, mode: 'insensitive' } }] } : {}),
     }
     return this.prisma.$transaction(async tx => {
-      const rows = await tx.containerBatch.findMany({ where, select: overviewSelect, skip: (query.page - 1) * query.pageSize, take: query.pageSize, orderBy: [{ loadingDate: 'desc' }, { id: 'desc' }] })
+      const rows = await tx.containerBatch.findMany({ where, select: overviewSelect, skip: (query.page - 1) * query.pageSize, take: query.pageSize, orderBy: { containerBatchNo: 'desc' } })
       const total = await tx.containerBatch.count({ where })
       if (!rows.length) return { dataScope: options.dataScope, items: [], total }
       const containerBatchId = { in: rows.map(row => row.id) }
