@@ -214,30 +214,39 @@ function codText(value: string | null | undefined): string {
             <span v-else class="qs-type-data">—</span>
           </span>
         </div>
-        <div class="flex flex-wrap gap-x-2 gap-y-1 min-w-0 items-center">
-          <span class="qs-type-meta text-muted-foreground">
-            {{ t('slhReconciliation.detail.transfer.originalBearer') }}
-          </span>
-          <QsPersonDisplay
-            v-if="originalBearer !== null"
-            :display-name="originalBearer.displayName"
-            :avatar-url="originalBearer.avatarUrl"
-            size="sm"
-            class="max-w-full"
-          />
-          <span v-else class="qs-type-data">—</span>
-          <FaIcon name="i-lucide:arrow-right" class="text-muted-foreground size-3.5" aria-hidden="true" />
-          <span class="qs-type-meta text-muted-foreground">
-            {{ t('slhReconciliation.detail.transfer.currentBearer') }}
-          </span>
-          <QsPersonDisplay
-            v-if="currentBearer !== null"
-            :display-name="currentBearer.displayName"
-            :avatar-url="currentBearer.avatarUrl"
-            size="sm"
-            class="max-w-full"
-          />
-          <span v-else class="qs-type-data">—</span>
+        <div class="gap-3 grid min-w-0 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+          <div class="min-w-0">
+            <p class="qs-type-meta text-muted-foreground m-0">
+              {{ t('slhReconciliation.detail.transfer.originalBearer') }}
+            </p>
+            <QsPersonDisplay
+              v-if="originalBearer !== null"
+              :display-name="originalBearer.displayName"
+              :avatar-url="originalBearer.avatarUrl"
+              size="md"
+              class="mt-1 max-w-full"
+            />
+            <p v-else class="qs-type-data m-0 mt-1">
+              —
+            </p>
+          </div>
+          <FaIcon name="i-lucide:arrow-right" class="text-primary size-5" aria-hidden="true" />
+          <div class="min-w-0 sm:text-right">
+            <p class="qs-type-meta text-muted-foreground m-0">
+              {{ t('slhReconciliation.detail.transfer.currentBearer') }}
+            </p>
+            <div v-if="currentBearer !== null" class="mt-1 flex min-w-0 sm:justify-end">
+              <QsPersonDisplay
+                :display-name="currentBearer.displayName"
+                :avatar-url="currentBearer.avatarUrl"
+                size="md"
+                class="max-w-full"
+              />
+            </div>
+            <p v-else class="qs-type-data m-0 mt-1">
+              —
+            </p>
+          </div>
         </div>
       </div>
       <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-center">

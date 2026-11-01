@@ -1960,9 +1960,11 @@ test('调货翻转卡：顶栏翻转、双面可访问性、成本/变更摘要�
   assert.match(transfer, /text-xs/u)
   assert.match(transfer, /truncate/u)
   assert.match(transfer, /:title=/u)
-  // 认领明细并入成本区块；承担人用「原承担人 → 现承担人」一行。
+  // 认领明细并入成本区块；承担人按「标签在上、人员在下」两行排布并放大。
   assert.ok(transfer.indexOf('transfer.lineSummary\'') > transfer.indexOf('bg-muted/20'))
   assert.match(transfer, /transfer\.originalBearer'[\s\S]*?i-lucide:arrow-right[\s\S]*?transfer\.currentBearer'/u)
+  assert.match(transfer, /size="md"/u)
+  assert.doesNotMatch(transfer, /size="sm"/u)
   // 认领明细去底色，hover/focus 展示产品 Tooltip。
   assert.match(transfer, /productsTooltipAria/u)
   assert.match(transfer, /productsEmpty/u)
