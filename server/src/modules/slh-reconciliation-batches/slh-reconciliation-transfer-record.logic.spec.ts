@@ -4,6 +4,7 @@ import {
   readTransferChangeItems,
   readTransferClaimLines,
   readTransferCostTotal,
+  readTransferLegUserId,
   selectCurrentTransferRecord,
 } from './slh-reconciliation-transfer-record.logic'
 
@@ -62,6 +63,15 @@ describe('slh reconciliation transfer record logic', () => {
       afterCodAmountTwd: '41000.00',
     }])
     expect(readTransferChangeItems(null)).toEqual([])
+  })
+
+  it('reads the cost bearer from a leg snapshot without trusting malformed values', () => {
+    expect(readTransferLegUserId({ userId: '1ee3018c-5c72-4709-933a-2c052d273b05' }))
+      .toBe('1ee3018c-5c72-4709-933a-2c052d273b05')
+    expect(readTransferLegUserId({ userId: '   ' })).toBeNull()
+    expect(readTransferLegUserId({ userId: 'not-a-uuid' })).toBeNull()
+    expect(readTransferLegUserId({ entries: [] })).toBeNull()
+    expect(readTransferLegUserId(null)).toBeNull()
   })
 
   it('summarizes claim lines and falls back to the application allocations', () => {

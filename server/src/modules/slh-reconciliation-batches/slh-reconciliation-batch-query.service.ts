@@ -19,7 +19,7 @@ import {
 import type { SlhReconciliationBatchDetailRow } from './slh-reconciliation-batch.serializer'
 import {
   readTransferAllocationSummary, readTransferChangeCounts, readTransferChangeItems, readTransferClaimLines,
-  readTransferCostTotal, selectCurrentTransferRecord,
+  readTransferCostTotal, readTransferLegUserId, selectCurrentTransferRecord,
 } from './slh-reconciliation-transfer-record.logic'
 import { SlhReconciliationBatchFilterDto, SlhReconciliationBillBlockReasonDto, SlhReconciliationBillGroupDto } from './slh-reconciliation-batch.dto'
 import type {
@@ -262,6 +262,7 @@ export class SlhReconciliationBatchQueryService {
         memberId: member.id,
         shipmentId: shipment.id,
         currentOrderId: current.id,
+        currentIssuerUserId: current.issuerUserId,
         member,
       }]
     })
@@ -278,6 +279,7 @@ export class SlhReconciliationBatchQueryService {
         id: true, shipmentId: true, status: true, locationScope: true,
         warehouseValue: true, warehouseLabelSnapshot: true,
         shipmentNoSnapshot: true, shippingMarkSnapshot: true,
+        originIssuerUserId: true,
         claimedSalesOrderId: true, claimedAt: true, claimedBy: true,
         createdAt: true, costSnapshot: true,
         releaseBatch: { select: { reason: true, actorUserId: true, occurredAt: true, note: true } },
@@ -292,12 +294,24 @@ export class SlhReconciliationBatchQueryService {
           },
         },
         claimLines: { select: { quantity: true, productMatchMode: true } },
-        costEvents: { select: { direction: true, amountCny: true } },
+        costEvents: { select: { direction: true, amountCny: true, legsSnapshot: true } },
       },
     })
 
+    const currentIssuerByShipmentId = new Map(targets.map(target => [target.shipmentId, target.currentIssuerUserId]))
+    const bearersByRecordId = new Map<string, { original: string, current: string | null }>()
     const userIds = new Set<string>()
     for (const record of records) {
+      // 成本承担人以成本事件快照为准；历史记录缺释放事件时回退到释放时冻结的原出单人。
+      const originalBearerUserId = readTransferLegUserId(
+        record.costEvents.find(event => event.direction === 'RELEASE')?.legsSnapshot ?? null,
+      ) ?? record.originIssuerUserId
+      const currentBearerUserId = readTransferLegUserId(
+        record.costEvents.find(event => event.direction === 'CLAIM')?.legsSnapshot ?? null,
+      ) ?? currentIssuerByShipmentId.get(record.shipmentId) ?? null
+      bearersByRecordId.set(record.id, { original: originalBearerUserId, current: currentBearerUserId })
+      userIds.add(originalBearerUserId)
+      if (currentBearerUserId !== null) userIds.add(currentBearerUserId)
       if (record.claimedBy !== null) userIds.add(record.claimedBy)
       userIds.add(record.releaseBatch.actorUserId)
       const claim = record.claimRequests[0]
@@ -333,6 +347,7 @@ export class SlhReconciliationBatchQueryService {
       const claimAmountCny = record.costEvents.find(event => event.direction === 'CLAIM')?.amountCny.toFixed(2) ?? null
       const releaseAmountCny = record.costEvents.find(event => event.direction === 'RELEASE')?.amountCny.toFixed(2) ?? null
       const costTotal = totalCostCny ?? claimAmountCny ?? releaseAmountCny
+      const bearers = bearersByRecordId.get(record.id)
       result.set(target.memberId, {
         storageRecordId: record.id,
         status: record.status,
@@ -367,7 +382,15 @@ export class SlhReconciliationBatchQueryService {
         claimedBy: record.claimedBy === null ? null : personById.get(record.claimedBy) ?? null,
         cost: costTotal === null
           ? null
-          : { totalCostCny: costTotal, claimAmountCny, releaseAmountCny },
+          : {
+              totalCostCny: costTotal,
+              claimAmountCny,
+              releaseAmountCny,
+              originalBearer: bearers === undefined ? null : personById.get(bearers.original) ?? null,
+              currentBearer: bearers?.current === null || bearers?.current === undefined
+                ? null
+                : personById.get(bearers.current) ?? null,
+            },
       })
     }
     return result

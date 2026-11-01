@@ -56,6 +56,15 @@ function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
+
+/** 读取成本事件快照里的实际承担人；历史/破损形状返回 null，交给调用方回退。 */
+export function readTransferLegUserId(value: Prisma.JsonValue | null): string | null {
+  const record = asRecord(value)
+  const userId = record?.['userId']
+  return typeof userId === 'string' && UUID_PATTERN.test(userId) ? userId : null
+}
+
 /** 读取申请快照里的认领产品行；没有产品名的破损项跳过，不造空行。 */
 export function readTransferClaimLines(value: Prisma.JsonValue | null): SlhTransferClaimLine[] {
   const lines: SlhTransferClaimLine[] = []

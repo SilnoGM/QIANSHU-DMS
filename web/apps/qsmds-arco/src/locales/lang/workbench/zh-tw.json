@@ -373,6 +373,8 @@
         "productsTooltipAria": "查看認領產品明細",
         "productsEmpty": "暫無認領產品明細",
         "cost": "轉移成本",
+        "originalBearer": "原承擔人",
+        "currentBearer": "現承擔人",
         "changeSummary": "變更摘要",
         "changeSummaryValue": "收件人 {recipient} 項 · 代收 {cod} 項",
         "changesTooltipAria": "查看變更內容",

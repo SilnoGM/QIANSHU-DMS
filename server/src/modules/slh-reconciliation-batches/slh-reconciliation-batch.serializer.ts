@@ -98,6 +98,7 @@ export const slhReconciliationBatchDetailInclude = {
                       customerFullAddressSnapshot: true,
                       agreedTotalAmount: true, depositDueAmount: true, balanceDueAmount: true,
                       fulfillmentStatus: true, paymentStatus: true,
+                      issuerUserId: true,
                       payments: { select: { amount: true, voidedAt: true } },
                       issuer: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
                     },

@@ -108983,6 +108983,24 @@
           "releaseAmountCny": {
             "type": "string",
             "nullable": true
+          },
+          "originalBearer": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationTransferPersonDto"
+              }
+            ]
+          },
+          "currentBearer": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SlhReconciliationTransferPersonDto"
+              }
+            ]
           }
         },
         "required": [

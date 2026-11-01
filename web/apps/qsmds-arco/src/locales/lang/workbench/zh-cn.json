@@ -382,6 +382,8 @@
         "productsTooltipAria": "查看认领产品明细",
         "productsEmpty": "暂无认领产品明细",
         "cost": "转移成本",
+        "originalBearer": "原承担人",
+        "currentBearer": "现承担人",
         "changeSummary": "变更摘要",
         "changeSummaryValue": "收件人 {recipient} 项 · 代收 {cod} 项",
         "changesTooltipAria": "查看变更内容",

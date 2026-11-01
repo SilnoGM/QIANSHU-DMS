@@ -7,6 +7,7 @@
 - [x] release/claim/cost/claimLines 摘要与人员引用
 - [x] 当前乙记录选择、变更计数、认领汇总、成本读取纯函数与单测
 - [x] 认领产品行与完整变更前后值（姓名/电话/地址/COD）读取与单测
+- [x] 成本原/现承担人从 `legsSnapshot.userId` 读取并回退原出单人/当前出单人
 - [x] 序列化挂载与非调货行 null
 - [x] 契约同步
 
@@ -19,6 +20,7 @@
 - [x] 来源销售单可点击翻到背面（与右上角翻转共用 `toggle`）
 - [x] 「N 行 / N 件」去底色 + 产品 Tooltip
 - [x] 变更摘要 info 图标 + 完整前后值 Tooltip（方案 B）
+- [x] 成本行显示「原承担人 → 现承担人」，只显示人
 - [x] 详情页调货行分支；普通行保留原卡片
 - [x] 底部「查看完整寄仓记录」新标签页入口与权限禁用
 - [x] 核对焦点改为当前销售单并改标签
@@ -26,7 +28,7 @@
 
 ## 验证
 
-- [x] server 4320 单测
+- [x] server 4321 单测
 - [x] `slh-reconciliation-batch.e2e-spec.ts` 41 条
 - [x] web SLH 58 条 + typecheck/lint/stylelint/build
 - [x] contract check

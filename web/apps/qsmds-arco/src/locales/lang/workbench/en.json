@@ -373,6 +373,8 @@
         "productsTooltipAria": "View claimed product details",
         "productsEmpty": "No claimed product details",
         "cost": "Transfer cost",
+        "originalBearer": "Original bearer",
+        "currentBearer": "Current bearer",
         "changeSummary": "Change summary",
         "changeSummaryValue": "Recipient {recipient} · COD {cod}",
         "changesTooltipAria": "View change details",

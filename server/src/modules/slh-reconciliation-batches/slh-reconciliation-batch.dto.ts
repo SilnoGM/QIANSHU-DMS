@@ -297,11 +297,13 @@ export class SlhReconciliationTransferClaimRequestDto {
   @ApiProperty({ type: 'string' }) costTotalCny!: string
 }
 
-/** 调货成本摘要：卡面只显示总额，认领/释放拆分由完整记录展示。 */
+/** 调货成本摘要：卡面只显示总额与原/现承担人，认领/释放拆分由完整记录展示。 */
 export class SlhReconciliationTransferCostDto {
   @ApiProperty({ type: 'string' }) totalCostCny!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) claimAmountCny!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true }) releaseAmountCny!: string | null
+  @ApiPropertyOptional({ type: () => SlhReconciliationTransferPersonDto, nullable: true }) originalBearer!: SlhReconciliationTransferPersonDto | null
+  @ApiPropertyOptional({ type: () => SlhReconciliationTransferPersonDto, nullable: true }) currentBearer!: SlhReconciliationTransferPersonDto | null
 }
 
 /**

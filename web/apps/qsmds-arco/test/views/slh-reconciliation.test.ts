@@ -1964,8 +1964,14 @@ test('调货翻转卡：顶栏翻转、双面可访问性、成本/变更摘要�
   assert.match(transfer, /changeCod/u)
   assert.match(transfer, /beforeRecipientPhone/u)
   assert.match(transfer, /afterRecipientAddress/u)
+  // 成本承担人：只显示原承担人与现承担人，不展开金额/比例。
+  assert.match(transfer, /originalBearer/u)
+  assert.match(transfer, /currentBearer/u)
+  assert.match(transfer, /QsPersonDisplay/u)
+  assert.match(transfer, /slhReconciliation\.detail\.transfer\.originalBearer/u)
+  assert.match(transfer, /slhReconciliation\.detail\.transfer\.currentBearer/u)
   assert.doesNotMatch(transfer, /releasedAt|appliedAt|reviewedAt|claimedAt/u)
-  assert.doesNotMatch(transfer, /applicant|reviewedBy|DateTimeDisplay|QsPersonDisplay/u)
+  assert.doesNotMatch(transfer, /applicant|reviewedBy|DateTimeDisplay/u)
 })
 
 test('核对焦点：空值只下发 null 与说明位，与显式 0 区分', () => {

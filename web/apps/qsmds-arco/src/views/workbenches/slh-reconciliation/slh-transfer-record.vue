@@ -2,6 +2,7 @@
 import type { SlhReconciliationTransferRecordDto } from '@/api/generated/types.gen'
 import { formatCurrencyAmount } from '@/components/base/AmountDisplay/format'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 
 /**
@@ -51,6 +52,8 @@ const changeSummary = computed(() => {
       })
 })
 const costTotal = computed(() => props.transfer.cost?.totalCostCny ?? null)
+const originalBearer = computed(() => props.transfer.cost?.originalBearer ?? null)
+const currentBearer = computed(() => props.transfer.cost?.currentBearer ?? null)
 
 const STORAGE_STATUS_CLASSES: Record<string, string> = {
   CLAIMED: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
@@ -189,7 +192,7 @@ function codText(value: string | null | undefined): string {
         <dt class="qs-type-compact-label text-muted-foreground">
           {{ t('slhReconciliation.detail.transfer.cost') }}
         </dt>
-        <dd class="m-0 flex flex-wrap gap-x-2 min-w-0 items-baseline">
+        <dd class="m-0 flex flex-col gap-1 min-w-0">
           <AmountDisplay
             v-if="costTotal !== null"
             :value="costTotal"
@@ -198,6 +201,35 @@ function codText(value: string | null | undefined): string {
             class="!text-xl !font-semibold"
           />
           <span v-else class="qs-type-data">—</span>
+          <!-- 成本承担人只显示人，不展开金额与比例。 -->
+          <span
+            v-if="originalBearer !== null || currentBearer !== null"
+            class="flex flex-wrap gap-x-2 gap-y-1 min-w-0 items-center"
+          >
+            <span class="qs-type-meta text-muted-foreground">
+              {{ t('slhReconciliation.detail.transfer.originalBearer') }}
+            </span>
+            <QsPersonDisplay
+              v-if="originalBearer !== null"
+              :display-name="originalBearer.displayName"
+              :avatar-url="originalBearer.avatarUrl"
+              size="sm"
+              class="max-w-full"
+            />
+            <span v-else class="qs-type-data">—</span>
+            <FaIcon name="i-lucide:arrow-right" class="text-muted-foreground size-3.5" aria-hidden="true" />
+            <span class="qs-type-meta text-muted-foreground">
+              {{ t('slhReconciliation.detail.transfer.currentBearer') }}
+            </span>
+            <QsPersonDisplay
+              v-if="currentBearer !== null"
+              :display-name="currentBearer.displayName"
+              :avatar-url="currentBearer.avatarUrl"
+              size="sm"
+              class="max-w-full"
+            />
+            <span v-else class="qs-type-data">—</span>
+          </span>
         </dd>
       </div>
       <div class="gap-x-3 grid grid-cols-[6.5rem_minmax(0,1fr)] items-center">
