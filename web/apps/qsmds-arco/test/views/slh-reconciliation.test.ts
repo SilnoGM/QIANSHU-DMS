@@ -557,6 +557,7 @@ test('批次详情页：头部只给批次与账单标识、底部承接完成�
 
 test('详情页成员区：切换器独立成面板，核对焦点在下、三块分组面板在上', async () => {
   const page = await readPageSource('detail.vue')
+  const orderSection = await readPageSource('slh-order-section.vue')
   // 切换器受控接线：选中值由页面持有，状态色映射与无障碍名称都由页面给。
   assert.match(page, /<QsReconciliationLineSwitcher[\s\S]{0,400}?@update:model-value="selectLine"/u)
   assert.match(page, /:items="lineSwitcherItems"/u)
@@ -600,22 +601,22 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   // 销售/采购改成专用区块模板：单号＋状态徽章的信息块、关键字段行、金额块，两块之间一条分割线。
   assert.match(page, /v-for="\(section, sectionIndex\) in orderSections"/u)
   assert.match(page, /v-if="sectionIndex > 0"[\s\S]{0,120}?border-t border-border/u)
-  assert.match(page, /v-if="section\.states\.length > 0"/u)
-  assert.match(page, /\{\{ section\.orderNo\.value \}\}/u)
-  assert.match(page, /v-for="\(field, index\) in section\.amountFields"/u)
+  assert.match(orderSection, /v-if="section\.states\.length > 0"/u)
+  assert.match(orderSection, /\{\{ section\.orderNo\.value \}\}/u)
+  assert.match(orderSection, /v-for="\(field, index\) in section\.amountFields"/u)
   // 区块标题是项目既有的竖条范式；信息块是浅底圆角容器。
-  assert.match(page, /rounded-full bg-primary h-4\.5 w-1/u)
-  assert.match(page, /p-3 rounded-lg bg-muted\/40/u)
+  assert.match(orderSection, /rounded-full bg-primary h-4\.5 w-1/u)
+  assert.match(orderSection, /p-3 rounded-lg bg-muted\/40/u)
   // 金额块：总额行之后虚线分隔；总额大号加粗、余额非零染红由 logic 的标记驱动。
-  assert.match(page, /index === 1 \? 'pt-2 border-t border-dashed border-border' : ''/u)
-  assert.match(page, /!text-xl !font-semibold/u)
-  assert.match(page, /!text-destructive/u)
+  assert.match(orderSection, /index === 1 \? 'pt-2 border-t border-dashed border-border' : ''/u)
+  assert.match(orderSection, /!text-xl !font-semibold/u)
+  assert.match(orderSection, /!text-destructive/u)
   // 金额块整列右对齐（AmountDisplay 是 inline-flex，靠所在行的 text-align 定位）。
-  assert.match(page, /class="m-0 text-right"/u)
+  assert.match(orderSection, /class="m-0 text-right"/u)
   // 长文本行走本地截断组件：只有真被截断才挂浮层。
-  assert.match(page, /v-else-if="field\.truncate"[\s\S]{0,120}?:text="field\.value"/u)
-  assert.match(page, /<SlhReconciliationOverflowText/u)
-  assert.match(page, /field\.emphasis === 'total'/u)
+  assert.match(orderSection, /v-else-if="field\.truncate"[\s\S]{0,120}?:text="field\.value"/u)
+  assert.match(orderSection, /<SlhReconciliationOverflowText/u)
+  assert.match(orderSection, /field\.emphasis === 'total'/u)
   // 订单面板不再用分组渲染；装柜面板保持分组渲染，账单面板走独立的四段模板。
   assert.doesNotMatch(page, /orderFieldGroups|groupDividers|sectionClass/u)
   assert.match(page, /v-if="billLinePanel"/u)
@@ -635,8 +636,8 @@ test('详情页成员区：切换器独立成面板，核对焦点在下、三�
   assert.match(page, /v-if="field\.lines && field\.lines\.length > 0"/u)
   assert.doesNotMatch(page, /field\.chip/u)
   // 金额统一走 AmountDisplay（缺失时回落占位符文本）；等宽数据字体用于所有非金额值。
-  assert.match(page, /v-if="field\.amount"[\s\S]{0,300}?:currencies="currencyCatalog\.currencies\.value"/u)
-  assert.match(page, /class="m-0 text-right"/u)
+  assert.match(orderSection, /v-if="field\.amount"[\s\S]{0,300}?:currencies="currencyCatalog\.currencies\.value"/u)
+  assert.match(orderSection, /class="m-0 text-right"/u)
   // 非金额值保持等宽数据字体，两条分支都带样式类。
   assert.match(page, /<span v-else class="qs-type-data">/u)
   // 三块的标题都来自各自面板模型（销售/采购区块、装柜面板、账单面板）。
@@ -740,19 +741,22 @@ test('核对焦点块：三处只在这三块开流光边框，参数统一且�
     ['twd', true],
   ])
 
-  // 三处模板：相对定位 + 裁剪 + 主题色单色渐变 + 2px + 8s + 错峰 + 动效偏好与无障碍。
+  // 三处模板：相对定位 + 裁剪 + 主题色单色渐变 + 2px + 5s + 错峰 + 动效偏好与无障碍。
+  // 销售段已抽到 SlhOrderSection 组件，因此合计两份源码文件。
   const page = await readPageSource('detail.vue')
-  assert.equal(page.match(/<FaBorderBeam/gu)?.length, 3)
-  assert.equal(page.match(/oklch\(var\(--primary\)\)/gu)?.length, 3)
-  assert.equal(page.match(/:duration="5000"/gu)?.length, 3)
-  assert.equal(page.match(/:border-width="2"/gu)?.length, 3)
+  const orderSection = await readPageSource('slh-order-section.vue')
+  const beamSources = `${page}\n${orderSection}`
+  assert.equal(beamSources.match(/<FaBorderBeam/gu)?.length, 3)
+  assert.equal(beamSources.match(/oklch\(var\(--primary\)\)/gu)?.length, 3)
+  assert.equal(beamSources.match(/:duration="5000"/gu)?.length, 3)
+  assert.equal(beamSources.match(/:border-width="2"/gu)?.length, 3)
   assert.deepEqual([...page.matchAll(/:delay="(\d+)"/gu)].map(match => match[1]), ['1000', '2000'])
   // 组件的 animation 简写会把 animation-delay 重置为 0，错峰靠 important 工具类兜住。
   assert.deepEqual([...page.matchAll(/after:!\[animation-delay:(\d+)ms\]/gu)].map(match => match[1]), ['1000', '2000'])
-  assert.equal(page.match(/relative overflow-hidden/gu)?.length, 3)
-  assert.equal(page.match(/motion-reduce:hidden/gu)?.length, 3)
+  assert.equal(beamSources.match(/relative overflow-hidden/gu)?.length, 3)
+  assert.equal(beamSources.match(/motion-reduce:hidden/gu)?.length, 3)
   // 逐块检查：每个光带都带 aria-hidden（懒量词跨块匹配会吞掉下一块，因此按块切开看）。
-  const beamSnippets = page.split('<FaBorderBeam').slice(1)
+  const beamSnippets = beamSources.split('<FaBorderBeam').slice(1)
   assert.equal(beamSnippets.filter(snippet => snippet.slice(0, 600).includes('aria-hidden="true"')).length, 3)
 })
 
@@ -1879,6 +1883,64 @@ test('核对焦点：销售尾款币种跟随订单，代收两项恒为台币',
   assert.equal(focus[0]?.sourceLabel, '[slhReconciliation.detail.focusSourceWithCurrency:[slhReconciliation.detail.focusSalesBalance]:MYR]')
   // 身份色与金额无关，不随币种变化。
   assert.deepEqual(focus.map(item => item.accent), ['emerald', 'amber', 'blue'])
+})
+
+test('调货翻转卡：正面乙销售、背面甲销售+采购；核对焦点改当前乙', () => {
+  const member = memberFixture({
+    salesOrder: salesOrderFixture({
+      id: 'so-a',
+      orderNo: 'SO-A',
+      agreedTotalAmount: '40000.00',
+      balanceDueAmount: '40000.00',
+    }),
+    currentSalesOrder: salesOrderFixture({
+      id: 'so-b',
+      orderNo: 'SO-B',
+      agreedTotalAmount: '325000.00',
+      balanceDueAmount: '325000.00',
+    }),
+    purchaseOrder: purchaseOrderFixture(),
+  })
+
+  const originSections = buildSlhReconciliationOrderSections(member, echoKey)
+  const currentSections = buildSlhReconciliationOrderSections({ ...member, salesOrder: member.currentSalesOrder }, echoKey)
+  assert.equal(currentSections[0]?.orderNo.value, 'SO-B')
+  assert.equal(originSections[0]?.orderNo.value, 'SO-A')
+  assert.equal(originSections[1]?.id, 'purchase')
+
+  const focus = buildSlhReconciliationFocusValues(member, echoKey)
+  assert.equal(focus[0]?.value, '325000.00')
+  assert.match(focus[0]?.sourceLabel ?? '', /focusSalesBalance/u)
+})
+
+test('调货翻转卡：顶栏翻转、双面可访问性、成本/变更摘要与完整寄仓入口', async () => {
+  const page = await readPageSource('detail.vue')
+  const flip = await readPageSource('slh-order-flip-card.vue')
+  const transfer = await readPageSource('slh-transfer-record.vue')
+
+  // 只有调货行走翻转卡；普通行继续走原 orderSections。
+  assert.match(page, /<SlhOrderFlipCard/u)
+  assert.match(page, /isTransferred/u)
+  assert.match(page, /v-else class="m-0 min-w-0"/u)
+  // 顶栏翻转按钮与双面可访问性。
+  assert.match(flip, /i-mdi:flip-horizontal/u)
+  assert.match(flip, /aria-pressed/u)
+  assert.match(flip, /aria-live/u)
+  assert.match(flip, /inert/u)
+  assert.match(flip, /motion-reduce:transition-none/u)
+  // 底部入口：新标签页、storageId、无权限/无记录提示。
+  assert.match(flip, /viewFullStorageRecord/u)
+  assert.match(flip, /storageId/u)
+  assert.match(flip, /target="_blank"/u)
+  assert.match(flip, /storagePermissionRequired/u)
+  // 调货记录：成本、变更摘要、认领行数、申请人/审批人和释放原因都要有。
+  assert.match(transfer, /costTotal/u)
+  assert.match(transfer, /recipientChangeCount/u)
+  assert.match(transfer, /codChangeCount/u)
+  assert.match(transfer, /lineSummaryValue/u)
+  assert.match(transfer, /applicant/u)
+  assert.match(transfer, /reviewedBy/u)
+  assert.match(transfer, /releaseReasonValue/u)
 })
 
 test('核对焦点：空值只下发 null 与说明位，与显式 0 区分', () => {

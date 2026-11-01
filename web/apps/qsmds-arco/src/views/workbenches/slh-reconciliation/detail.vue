@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type {
   SlhReconciliationBillAmountRow,
-  SlhReconciliationLineField,
 } from './detail.logic'
 import type { SlhReconciliationBatchDetailDto } from '@/api/generated/types.gen'
 import exchangeRatesApi from '@/api/modules/exchange-rates'
@@ -10,7 +9,6 @@ import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batche
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
-import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsReconciliationLineSwitcher from '@/components/business/QsReconciliationLineSwitcher/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { resolveStatusTagToneClass } from '@/utils/status-tag-tone'
@@ -29,6 +27,8 @@ import {
 import SlhReconciliationOverflowText from './overflow-text.vue'
 import SlhReconciliationRecordsModal from './records-modal.vue'
 import SlhReconciliationSettleModal from './settle-modal.vue'
+import SlhOrderFlipCard from './slh-order-flip-card.vue'
+import SlhOrderSection from './slh-order-section.vue'
 import {
   resolveSlhReconciliationBatchLabelKey,
   resolveSlhReconciliationBatchTone,
@@ -96,6 +96,43 @@ const focusValues = computed(() => (
 const orderSections = computed(() => (
   selectedMember.value === null ? [] : buildSlhReconciliationOrderSections(selectedMember.value, translate)
 ))
+/**
+ * 调货行：当前乙销售区块单独构建，原甲销售/采购沿用 orderSections。
+ * 只有甲 ≠ 乙且乙存在时才进入翻转卡；普通行继续走原有双区块卡片。
+ */
+const currentSalesSections = computed(() => {
+  const member = selectedMember.value
+  const current = member?.currentSalesOrder ?? null
+  if (member === null || current === null || member.salesOrder === null || member.salesOrder === undefined
+    || member.salesOrder.id === current.id) {
+    return []
+  }
+  return buildSlhReconciliationOrderSections(
+    { ...member, salesOrder: current },
+    translate,
+  )
+})
+const isTransferred = computed(() => currentSalesSections.value.length > 0)
+const currentSalesSection = computed(() => currentSalesSections.value[0] ?? null)
+const originSalesSection = computed(() => {
+  const section = orderSections.value[0]
+  if (section === undefined) {
+    return null
+  }
+  // 背面是来源单，不再承担核对焦点的流光；正面当前乙才是焦点。
+  return {
+    id: section.id,
+    label: section.label,
+    orderNo: section.orderNo,
+    states: section.states,
+    fields: section.fields,
+    amountFields: section.amountFields,
+  }
+})
+const purchaseSection = computed(() => orderSections.value[1] ?? null)
+const transferRecord = computed(() => selectedMember.value?.transferRecord ?? null)
+const originOrderNo = computed(() => selectedMember.value?.salesOrder?.orderNo ?? null)
+const currentOrderNo = computed(() => selectedMember.value?.currentSalesOrder?.orderNo ?? null)
 const loadingItemPanel = computed(() => (
   selectedMember.value === null ? null : buildSlhReconciliationLoadingItemPanel(selectedMember.value, translate)
 ))
@@ -111,17 +148,6 @@ function billAmountClass(row: SlhReconciliationBillAmountRow): string {
     return '!text-xl !font-semibold !text-sky-700 dark:!text-sky-300'
   }
   return row.emphasis === 'warning' ? '!text-amber-700 dark:!text-amber-300' : ''
-}
-/** 金额块的行间距：总额行之后用一条虚线分开，其余行只靠行距区分。 */
-function amountRowClass(index: number): string {
-  return index === 1 ? 'pt-2 border-t border-dashed border-border' : ''
-}
-/** 金额块的金额样式：总额大号加粗，余额非零时染红（标记由 logic 判断后下发）。 */
-function amountClass(field: SlhReconciliationLineField): string {
-  if (field.emphasis === 'total') {
-    return '!text-xl !font-semibold'
-  }
-  return field.emphasis === 'balance' ? '!text-destructive' : ''
 }
 
 /**
@@ -433,8 +459,17 @@ onBeforeUnmount(() => {
           v-if="selectedMember"
           class="m-4 gap-4 grid lg:grid-cols-2 xl:grid-cols-3"
         >
-          <!-- 销售与采购：每个区块＝信息块（单号＋状态徽章）＋关键字段行＋金额块，区块之间用分割线隔开。 -->
-          <FaPageMain class="m-0 min-w-0">
+          <!-- 调货行：当前乙 + 调货记录 / 原甲 + 采购；普通行保留原销售+采购。 -->
+          <SlhOrderFlipCard
+            v-if="isTransferred && currentSalesSection && originSalesSection && purchaseSection"
+            :front-sales="currentSalesSection"
+            :back-sales="originSalesSection"
+            :purchase="purchaseSection"
+            :transfer="transferRecord"
+            :origin-order-no="originOrderNo"
+            :current-order-no="currentOrderNo"
+          />
+          <FaPageMain v-else class="m-0 min-w-0">
             <template v-for="(section, sectionIndex) in orderSections" :key="section.id">
               <!-- 装饰性分割线不进无障碍树。 -->
               <div
@@ -442,102 +477,7 @@ onBeforeUnmount(() => {
                 class="my-3 border-t border-border"
                 aria-hidden="true"
               />
-              <section class="min-w-0" :aria-label="section.label">
-                <!-- 区块标题：竖条沿用采购订单详情的分区标题范式（纯装饰，不进无障碍树）。 -->
-                <h2 class="qs-type-section-title m-0 flex gap-2 items-center">
-                  <span class="rounded-full bg-primary h-4.5 w-1" aria-hidden="true" />
-                  {{ section.label }}
-                </h2>
-                <!-- 信息块：单号单独一行，下面一行三个状态徽章。 -->
-                <div class="mt-3 p-3 rounded-lg bg-muted/40 flex flex-col gap-2 min-w-0">
-                  <p class="qs-type-data-emphasis m-0 break-all">
-                    {{ section.orderNo.value }}
-                  </p>
-                  <div v-if="section.states.length > 0" class="flex flex-wrap gap-1.5">
-                    <FaTag
-                      v-for="state in section.states"
-                      :key="state.dimension"
-                      variant="outline"
-                      class="qs-type-status-tag"
-                      :class="resolveStatusTagToneClass(state.tone)"
-                      :aria-label="`${state.dimension}：${state.label}`"
-                    >
-                      {{ state.label }}
-                    </FaTag>
-                  </div>
-                </div>
-                <!-- 关键字段行：客户信息（姓名 · 电话合并）、完整地址、出单人 / 供应商、采购唛头、采购人。 -->
-                <dl class="m-0 mt-3 flex flex-col gap-2">
-                  <div
-                    v-for="field in section.fields"
-                    :key="field.id"
-                    class="gap-x-3 grid grid-cols-[5rem_minmax(0,1fr)] items-baseline"
-                  >
-                    <dt class="qs-type-compact-label text-muted-foreground">
-                      {{ field.label }}
-                    </dt>
-                    <dd class="m-0 break-all">
-                      <!-- 人员行：姓名交给 QsPersonDisplay（头像位 + 单行截断 + 悬停完整名）。 -->
-                      <QsPersonDisplay
-                        v-if="field.person"
-                        :display-name="field.person"
-                        :avatar-url="field.personAvatarUrl ?? null"
-                        size="sm"
-                        class="max-w-full"
-                      />
-                      <!-- 长文本行：单行截断，只有真的截断了才给悬停提示。 -->
-                      <SlhReconciliationOverflowText
-                        v-else-if="field.truncate"
-                        :text="field.value"
-                      />
-                      <span v-else class="qs-type-data">
-                        {{ field.value }}
-                      </span>
-                    </dd>
-                  </div>
-                </dl>
-                <!-- 金额块：总额大号加粗右对齐，虚线之后是三项明细，末行余额非零时染红。 -->
-                <dl class="m-0 mt-3 p-3 border border-border rounded-lg flex flex-col gap-2 relative overflow-hidden">
-                  <!-- 核对焦点块：流光边框只作视觉重心，纯装饰不进无障碍树。 -->
-                  <FaBorderBeam
-                    v-if="section.beam"
-                    :size="200"
-                    :duration="5000"
-                    :border-width="2"
-                    color-from="oklch(var(--primary))"
-                    color-to="oklch(var(--primary) / 0.15)"
-                    class="motion-reduce:hidden"
-                    aria-hidden="true"
-                  />
-
-                  <div
-                    v-for="(field, index) in section.amountFields"
-                    :key="field.id"
-                    class="gap-x-3 grid grid-cols-[5rem_minmax(0,1fr)] items-baseline"
-                    :class="amountRowClass(index)"
-                  >
-                    <dt
-                      class="qs-type-compact-label"
-                      :class="field.emphasis === 'total' ? 'text-foreground' : 'text-muted-foreground'"
-                    >
-                      {{ field.label }}
-                    </dt>
-                    <dd class="m-0 text-right">
-                      <!-- 金额统一走 AmountDisplay（符号、千分位与币种精度）；右对齐由本行给定。 -->
-                      <AmountDisplay
-                        v-if="field.amount"
-                        :value="field.amount.value"
-                        :currency="field.amount.currency"
-                        :currencies="currencyCatalog.currencies.value"
-                        :class="amountClass(field)"
-                      />
-                      <span v-else class="qs-type-data">
-                        {{ field.value }}
-                      </span>
-                    </dd>
-                  </div>
-                </dl>
-              </section>
+              <SlhOrderSection :section="section" />
             </template>
           </FaPageMain>
           <!-- 装柜明细行：顶部信息块（入仓单号 + 匹配依据标签）＋货物明细＋代收货款块＋收货与备注。 -->

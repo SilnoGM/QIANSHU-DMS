@@ -344,10 +344,62 @@
       "salesBalance": "銷售尾款",
       "focusSourceWithCurrency": "{source}（{currency}）",
       "focusTitle": "核對焦點",
-      "focusSalesBalance": "銷售訂單 · 尾款",
+      "focusSalesBalance": "當前銷售單 · 尾款",
       "focusLoadingCod": "裝櫃明細行 · 代收貨款",
       "focusBillCod": "帳單明細行 · 代收貨款",
       "focusEmptyNote": "本行不涉及待收",
+      "flip": {
+        "currentTitle": "當前銷售單（乙）",
+        "originTitle": "原銷售單（甲）· 採購資訊",
+        "showOrigin": "查看原銷售訂單與採購資訊",
+        "backToCurrent": "返回當前銷售訂單與調貨記錄",
+        "announceCurrent": "已顯示當前銷售訂單與調貨記錄",
+        "announceOrigin": "已顯示原銷售訂單與採購資訊"
+      },
+      "transfer": {
+        "title": "調貨記錄",
+        "sourceOrder": "來源銷售單",
+        "targetOrder": "當前銷售單",
+        "route": "貨件 / 櫃號 / 嘜頭",
+        "warehouse": "寄倉倉庫",
+        "releasedAt": "寄倉時間",
+        "releaseReason": "釋放原因",
+        "appliedAt": "調貨申請",
+        "review": "審批",
+        "claimedAt": "調貨時間",
+        "lineSummary": "認領明細",
+        "lineSummaryValue": "{lines} 行 / {quantity} 件",
+        "cost": "轉移成本",
+        "changeSummary": "變更摘要",
+        "changeSummaryValue": "收件人 {recipient} 項 · 代收 {cod} 項",
+        "noChanges": "無變更",
+        "noStorageRecord": "無寄倉調貨記錄",
+        "viewFullStorageRecord": "查看完整寄倉記錄",
+        "storagePermissionRequired": "需要貨物寄倉查看權限",
+        "directClaim": "直接認領",
+        "storageStatus": {
+          "IN_STORAGE": "寄倉中",
+          "RESERVED": "已預留",
+          "CLAIMED": "已認領",
+          "VOIDED": "已作廢"
+        },
+        "locationScope": {
+          "MAINLAND": "內地",
+          "OVERSEAS": "海外"
+        },
+        "claimStatus": {
+          "PENDING": "待審批",
+          "APPROVED": "已通過",
+          "REJECTED": "已拒絕",
+          "WITHDRAWN": "已撤回"
+        },
+        "releaseReasonValue": {
+          "CUSTOMER_CANCEL": "客戶取消",
+          "CUSTOMER_REJECT": "客戶拒收",
+          "CORRECTION": "誤認領撤銷",
+          "OTHER": "其他"
+        }
+      },
       "purchaseBalance": "採購尾款",
       "purchasePaidAmount": "實際已付款",
       "purchaseOutstandingAmount": "實際未付款",

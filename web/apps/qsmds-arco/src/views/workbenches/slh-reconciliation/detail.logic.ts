@@ -703,7 +703,8 @@ export function buildSlhReconciliationFocusValues(
   member: SlhReconciliationBatchMemberDto,
   translate: SlhReconciliationTranslate,
 ): readonly SlhReconciliationFocusValue[] {
-  const sales = member.salesOrder ?? null
+  // 调货行的核对对象是当前销售单乙；甲只是来源/费用承担方，普通行两者相同。
+  const sales = member.currentSalesOrder ?? member.salesOrder ?? null
   const item = member.matchedLoadingItem
   const salesBalance = sales?.balanceDueAmount ?? null
   const loadingCod = item.codAmountTwd ?? null
