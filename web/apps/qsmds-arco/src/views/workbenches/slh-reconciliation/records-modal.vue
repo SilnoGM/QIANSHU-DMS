@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SlhReconciliationRecordAmount, SlhReconciliationRecordBlockId, SlhReconciliationRecordCard } from './records-modal.logic'
+import type { SlhReconciliationRecordAllocationParty, SlhReconciliationRecordAmount, SlhReconciliationRecordBlockId, SlhReconciliationRecordCard } from './records-modal.logic'
 import type { SlhReconciliationBatchMemberDto } from '@/api/generated/types.gen'
 import { getApiClientErrorMessage } from '@/api/errors'
 import slhReconciliationBatchesApi from '@/api/modules/slh-reconciliation-batches'
@@ -94,6 +94,26 @@ const AMOUNT_TONE_CLASSES: Record<'danger' | 'neutral' | 'success', string> = {
 }
 function amountClass(value: SlhReconciliationRecordAmount): string {
   return AMOUNT_TONE_CLASSES[resolveRecordAmountTone(value)]
+}
+
+const ALLOCATION_DIRECTION_CLASSES: Record<SlhReconciliationRecordAllocationParty['direction'], string> = {
+  INFLOW: 'text-primary border-primary/30 bg-primary/10',
+  OUTFLOW: 'text-destructive border-destructive/30 bg-destructive/10',
+  ZERO: '',
+}
+
+function allocationPartyTone(direction: SlhReconciliationRecordAllocationParty['direction']): string {
+  if (direction === 'INFLOW') {
+    return '!text-primary'
+  }
+  if (direction === 'OUTFLOW') {
+    return '!text-destructive'
+  }
+  return ''
+}
+
+function allocationPartyDirectionClass(direction: SlhReconciliationRecordAllocationParty['direction']): string {
+  return ALLOCATION_DIRECTION_CLASSES[direction]
 }
 
 /** 已被取代的记录默认折起；点一次展开完整快照，再点收起。 */
@@ -243,6 +263,145 @@ function selectBlock(card: SlhReconciliationRecordCard, id: SlhReconciliationRec
                 </dl>
               </section>
             </div>
+
+            <!-- 入账分摊：全宽只读快照；左侧逐项归属，右侧目标合计。 -->
+            <section v-if="card.allocation !== null" class="p-3 border border-border rounded-lg flex flex-col gap-3 min-w-0">
+              <header class="flex flex-wrap gap-x-3 gap-y-1 items-baseline justify-between">
+                <h4 class="text-sm font-medium m-0 flex gap-2 items-center">
+                  <FaIcon name="i-lucide:split" class="text-emerald-700 shrink-0 size-4 dark:text-emerald-300" aria-hidden="true" />
+                  {{ t('slhReconciliation.records.allocationTitle') }}
+                </h4>
+                <div class="flex flex-wrap gap-2 items-center">
+                  <span class="qs-type-meta text-muted-foreground">
+                    {{ t('slhReconciliation.records.allocationCount', { items: String(card.allocation.itemCount), parties: String(card.allocation.partyCount) }) }}
+                  </span>
+                  <span class="qs-type-meta text-muted-foreground px-2 py-0.5 border border-border rounded-md">
+                    {{ t('slhReconciliation.records.allocationReadOnly') }}
+                  </span>
+                </div>
+              </header>
+
+              <div class="gap-3 grid grid-cols-1 min-w-0 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+                <div class="p-3 border border-border rounded-lg bg-muted/20 flex flex-col gap-2 min-w-0">
+                  <h5 class="qs-type-meta text-muted-foreground m-0">
+                    {{ t('slhReconciliation.records.allocationItemsTitle') }}
+                  </h5>
+                  <div class="flex flex-col gap-2 min-w-0">
+                    <div
+                      v-for="item in card.allocation.items"
+                      :key="item.id"
+                      class="gap-x-3 gap-y-1 grid grid-cols-[minmax(0,1fr)_auto] min-w-0 items-baseline sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"
+                    >
+                      <span class="text-sm min-w-0 truncate" :title="item.label">{{ item.label }}</span>
+                      <span class="text-sm qs-type-data whitespace-nowrap tabular-nums">{{ item.amountText }} {{ item.currencyCode }}</span>
+                      <span class="flex flex-wrap gap-1 col-span-full min-w-0 items-center sm:col-span-1 sm:justify-end">
+                        <span class="qs-type-meta text-muted-foreground px-2 py-0.5 border border-border rounded-md break-all">
+                          {{ item.targetLabel }}
+                        </span>
+                        <FaTooltip v-if="item.overridden">
+                          <span tabindex="0" class="qs-type-meta text-amber-700 cursor-help dark:text-amber-300">
+                            {{ t('slhReconciliation.records.allocationAdjusted') }}
+                          </span>
+                          <template #content>
+                            <p class="m-0">
+                              {{ t('slhReconciliation.records.allocationReason', { reason: item.reason ?? '—' }) }}
+                            </p>
+                          </template>
+                        </FaTooltip>
+                      </span>
+                      <span v-if="item.contributionText !== null" class="qs-type-meta text-muted-foreground col-span-full">
+                        {{ t('slhReconciliation.records.allocationContribution', { amount: item.contributionText }) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="card.allocation.parties.length > 0" class="p-3 border border-border rounded-lg bg-muted/20 flex flex-col gap-2 min-w-0">
+                  <h5 class="qs-type-meta text-muted-foreground m-0">
+                    {{ t('slhReconciliation.records.allocationPartiesTitle') }}
+                  </h5>
+                  <div class="flex flex-col gap-2 min-w-0">
+                    <div
+                      v-for="party in card.allocation.parties"
+                      :key="party.target"
+                      class="p-2.5 border border-border rounded-md bg-card flex flex-col gap-1.5 min-w-0"
+                    >
+                      <div class="min-w-0">
+                        <span class="qs-type-meta text-muted-foreground block truncate">{{ party.title }}</span>
+                        <span
+                          v-if="party.salesOrderNo !== null"
+                          class="text-xs qs-type-data text-muted-foreground mt-0.5 block break-all"
+                        >
+                          {{ party.salesOrderNo }}
+                        </span>
+                      </div>
+                      <div class="flex flex-wrap gap-x-2 gap-y-1 items-center">
+                        <span class="qs-type-meta text-muted-foreground">
+                          {{ t('slhReconciliation.settle.allocation.partySettlementLabel') }}
+                        </span>
+                        <span class="text-base qs-type-data tabular-nums" :class="allocationPartyTone(party.direction)">
+                          {{ party.settlementAmountCny ?? '—' }}
+                          <span class="text-xs font-normal">CNY</span>
+                        </span>
+                        <span
+                          v-if="party.direction !== 'ZERO'"
+                          class="qs-type-meta px-2 py-0.5 border rounded-md"
+                          :class="allocationPartyDirectionClass(party.direction)"
+                        >
+                          {{ t(party.direction === 'OUTFLOW'
+                            ? 'slhReconciliation.settle.allocation.partyOutflow'
+                            : 'slhReconciliation.settle.allocation.partyInflow') }}
+                        </span>
+                      </div>
+                      <div class="pt-1.5 border-t border-border flex flex-wrap gap-x-2 items-baseline justify-between">
+                        <span class="qs-type-meta text-muted-foreground">
+                          {{ t('slhReconciliation.settle.allocation.partyFeeLabel') }}
+                        </span>
+                        <span
+                          class="text-sm qs-type-data tabular-nums"
+                          :class="party.paymentFeeAmountCny !== null ? 'text-destructive' : 'text-muted-foreground'"
+                        >
+                          {{ party.paymentFeeAmountCny ?? '—' }}
+                          <span v-if="party.paymentFeeAmountCny !== null" class="text-xs font-normal">CNY</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="pt-2 border-t border-border flex flex-col gap-1">
+                    <div class="flex flex-wrap gap-x-2 items-baseline justify-between">
+                      <span class="qs-type-meta text-muted-foreground">
+                        {{ t('slhReconciliation.settle.allocation.partyTotalSettlement') }}
+                      </span>
+                      <span class="text-base qs-type-data font-semibold tabular-nums">
+                        {{ card.allocation.totals.settlementAmountCny }}
+                        <span class="text-xs font-normal">CNY</span>
+                      </span>
+                    </div>
+                    <div class="flex flex-wrap gap-x-2 items-baseline justify-between">
+                      <span class="qs-type-meta text-muted-foreground">
+                        {{ t('slhReconciliation.settle.allocation.partyTotalFee') }}
+                      </span>
+                      <span
+                        class="text-sm qs-type-data tabular-nums"
+                        :class="card.allocation.totals.paymentFeeAmountCny === '0.00' ? 'text-muted-foreground' : 'text-destructive'"
+                      >
+                        {{ card.allocation.totals.paymentFeeAmountCny }}
+                        <span class="text-xs font-normal">CNY</span>
+                      </span>
+                    </div>
+                    <span
+                      v-if="card.allocation.totals.matchesParent !== null"
+                      class="qs-type-meta"
+                      :class="card.allocation.totals.matchesParent ? 'text-primary' : 'text-destructive'"
+                    >
+                      {{ t(card.allocation.totals.matchesParent
+                        ? 'slhReconciliation.settle.allocation.partyTotalMatches'
+                        : 'slhReconciliation.settle.allocation.partyTotalMismatch') }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </section>
 
             <!-- 展开过的失效记录给一个收起入口，避免长列表一直占屏。 -->
             <button

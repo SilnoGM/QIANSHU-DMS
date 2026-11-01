@@ -528,8 +528,6 @@
         "targetOrigin": "A · {orderNo}",
         "targetCurrent": "B · {orderNo}",
         "targetCompany": "Company account",
-        "partyOrigin": "A {orderNo}",
-        "partyCurrent": "B {orderNo}",
         "partyCompany": "Company account",
         "partyOriginTitle": "A · Original sales order",
         "partyCurrentTitle": "B · Sales order after transfer",
@@ -586,7 +584,14 @@
       "ordersTitle": "Order info",
       "transportTitle": "Transport info",
       "billTitle": "Bill info",
-      "allocationTitle": "Settlement allocation"
+      "allocationTitle": "Settlement allocation",
+      "allocationCount": "{items} items · {parties} targets",
+      "allocationReadOnly": "Read-only snapshot",
+      "allocationItemsTitle": "Item allocation",
+      "allocationPartiesTitle": "Target totals",
+      "allocationAdjusted": "Adjusted",
+      "allocationReason": "Reason: {reason}",
+      "allocationContribution": "Equivalent {amount}"
     }
   }
 }

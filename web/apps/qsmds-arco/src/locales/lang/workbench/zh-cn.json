@@ -537,8 +537,6 @@
         "targetOrigin": "甲 · {orderNo}",
         "targetCurrent": "乙 · {orderNo}",
         "targetCompany": "公司账户",
-        "partyOrigin": "甲 {orderNo}",
-        "partyCurrent": "乙 {orderNo}",
         "partyCompany": "公司账户",
         "partyOriginTitle": "甲 · 原销售单",
         "partyCurrentTitle": "乙 · 调货后销售单",
@@ -595,7 +593,14 @@
       "ordersTitle": "订单信息",
       "transportTitle": "运输信息",
       "billTitle": "账单信息",
-      "allocationTitle": "入账分摊"
+      "allocationTitle": "入账分摊",
+      "allocationCount": "{items} 项 · {parties} 个目标",
+      "allocationReadOnly": "只读快照",
+      "allocationItemsTitle": "逐项分摊",
+      "allocationPartiesTitle": "目标合计",
+      "allocationAdjusted": "已调整",
+      "allocationReason": "调整原因：{reason}",
+      "allocationContribution": "折合 {amount}"
     }
   }
 }

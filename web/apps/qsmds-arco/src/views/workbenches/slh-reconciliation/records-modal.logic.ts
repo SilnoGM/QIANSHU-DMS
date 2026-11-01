@@ -1,8 +1,10 @@
+import type { SlhSettleAllocationPartyDirection } from './settle-modal.logic'
 import type { SlhReconciliationSettlementRecordDto } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 import Decimal from 'decimal.js'
 // 运行时导入必须用相对路径：本文件被 node --test 从 web/ 根加载，@/ 别名解析不到。
 import { EMPTY_AMOUNT_TEXT, formatCurrencyAmount } from '../../../components/base/AmountDisplay/format'
+import { formatBareAmount, resolveSettleAllocationPartyDirection } from './settle-modal.logic'
 
 /**
  * 核对记录卡片模型：把一条结算留痕摊平成「头部 + 两个大区块 + 公式 + 三段信息」。
@@ -48,6 +50,45 @@ export interface SlhReconciliationRecordGroup {
   readonly rows: readonly SlhReconciliationRecordGroupRow[]
 }
 
+/** 逐项分摊的一行：费用项、原币金额、入账目标与手工调整留痕。 */
+export interface SlhReconciliationRecordAllocationItem {
+  readonly id: string
+  readonly label: string
+  readonly amountText: string
+  readonly currencyCode: string
+  /** 台币项折算成人民币的贡献额；人民币项不重复展示。 */
+  readonly contributionText: string | null
+  readonly targetLabel: string
+  readonly overridden: boolean
+  readonly reason: string | null
+}
+
+/** 目标合计卡：历史快照里的目标与金额，不重算。 */
+export interface SlhReconciliationRecordAllocationParty {
+  readonly target: SlhReconciliationSettlementRecordDto['allocations'][number]['target']
+  readonly title: string
+  readonly salesOrderNo: string | null
+  readonly settlementAmountCny: string | null
+  readonly paymentFeeAmountCny: string | null
+  readonly direction: SlhSettleAllocationPartyDirection
+}
+
+/** 目标合计的汇总：用于与顶部结算金额比对。 */
+export interface SlhReconciliationRecordAllocationTotals {
+  readonly settlementAmountCny: string
+  readonly paymentFeeAmountCny: string
+  readonly matchesParent: boolean | null
+}
+
+/** 一条记录的入账分摊快照；历史记录没有该段时为 null。 */
+export interface SlhReconciliationRecordAllocation {
+  readonly itemCount: number
+  readonly partyCount: number
+  readonly items: readonly SlhReconciliationRecordAllocationItem[]
+  readonly parties: readonly SlhReconciliationRecordAllocationParty[]
+  readonly totals: SlhReconciliationRecordAllocationTotals
+}
+
 /** 记录卡片：一条确认结算的完整留痕。 */
 export interface SlhReconciliationRecordCard {
   readonly id: string
@@ -73,6 +114,7 @@ export interface SlhReconciliationRecordCard {
   /** 区块级补充说明：选中的区块若在这里有键，就在计算式下面多给一句。 */
   readonly blockNoteKeys: Readonly<Partial<Record<SlhReconciliationRecordBlockId, string>>>
   readonly groups: readonly SlhReconciliationRecordGroup[]
+  readonly allocation: SlhReconciliationRecordAllocation | null
 }
 
 const MISSING = EMPTY_AMOUNT_TEXT
@@ -126,6 +168,76 @@ function amount(value: string | null, currencyCode: string, tone: SlhReconciliat
   return { value, currencyCode, tone }
 }
 
+/** 一条分配快照：逐项目标、目标合计与父结算金额比对；历史无快照返回 null。 */
+function buildRecordAllocation(
+  record: SlhReconciliationSettlementRecordDto,
+  currencies: readonly CurrencyDescriptor[],
+  translate: (key: string, params?: Record<string, string>) => string,
+): SlhReconciliationRecordAllocation | null {
+  const allocations = record.allocations ?? []
+  const allocationParties = record.allocationParties ?? []
+  if (allocations.length === 0 && allocationParties.length === 0) {
+    return null
+  }
+  const orderNoOf = (target: string): string | null => (
+    target === 'COMPANY'
+      ? null
+      : allocationParties.find(party => party.target === target)?.salesOrderNo ?? null
+  )
+  const items: SlhReconciliationRecordAllocationItem[] = allocations.map((item, index) => {
+    const labelKey = item.sourceType === 'BILL_CHARGE'
+      ? `slhBill.chargeType.${item.chargeType ?? 'OTHER'}`
+      : `slhReconciliation.settle.allocation.source${item.sourceType}`
+    const targetKey = item.target === 'COMPANY'
+      ? 'slhReconciliation.settle.allocation.targetCompany'
+      : `slhReconciliation.settle.allocation.target${item.target === 'ORIGIN_ORDER' ? 'Origin' : 'Current'}`
+    const orderNo = orderNoOf(item.target)
+    return {
+      id: `allocation-${item.key}-${index}`,
+      label: translate(labelKey),
+      amountText: formatBareAmount(item.amount, item.currencyCode, currencies),
+      currencyCode: item.currencyCode,
+      contributionText: item.currencyCode === 'CNY'
+        ? null
+        : showAmount(item.signedContributionCny, 'CNY', currencies),
+      targetLabel: translate(targetKey, orderNo === null ? undefined : { orderNo }),
+      overridden: item.overridden,
+      reason: item.reason ?? null,
+    }
+  })
+  const parties: SlhReconciliationRecordAllocationParty[] = allocationParties.map(party => ({
+    target: party.target,
+    title: translate(
+      party.target === 'COMPANY'
+        ? 'slhReconciliation.settle.allocation.partyCompany'
+        : `slhReconciliation.settle.allocation.party${party.target === 'ORIGIN_ORDER' ? 'Origin' : 'Current'}Title`,
+    ),
+    salesOrderNo: party.salesOrderNo ?? null,
+    settlementAmountCny: party.settlementAmountCny ?? null,
+    paymentFeeAmountCny: party.paymentFeeAmountCny ?? null,
+    direction: resolveSettleAllocationPartyDirection(party.settlementAmountCny ?? null),
+  }))
+  const settlementTotal = parties
+    .reduce((sum, party) => sum.plus(party.settlementAmountCny ?? 0), new Decimal(0))
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+  const paymentFeeTotal = parties
+    .reduce((sum, party) => sum.plus(party.paymentFeeAmountCny ?? 0), new Decimal(0))
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+  return {
+    itemCount: items.length,
+    partyCount: parties.length,
+    items,
+    parties,
+    totals: {
+      settlementAmountCny: settlementTotal.toFixed(2),
+      paymentFeeAmountCny: paymentFeeTotal.toFixed(2),
+      matchesParent: record.settlementAmountCny === null || parties.length === 0
+        ? null
+        : settlementTotal.eq(new Decimal(record.settlementAmountCny)),
+    },
+  }
+}
+
 /** 一条记录 → 卡片。 */
 export function buildSlhReconciliationRecordCard(
   record: SlhReconciliationSettlementRecordDto,
@@ -134,37 +246,7 @@ export function buildSlhReconciliationRecordCard(
 ): SlhReconciliationRecordCard {
   const rate = rateText(record.foreignUnitsPerCny)
   const feeRatePermille = permilleText(record.paymentFeeRate)
-  const allocationOrderNo = (target: string): string | null => (
-    target === 'COMPANY'
-      ? null
-      : (record.allocationParties ?? []).find(party => party.target === target)?.salesOrderNo ?? null
-  )
-  const allocationRows: SlhReconciliationRecordGroupRow[] = [
-    ...(record.allocations ?? []).map((item, index) => {
-      const labelKey = item.sourceType === 'BILL_CHARGE'
-        ? `slhBill.chargeType.${item.chargeType ?? 'OTHER'}`
-        : `slhReconciliation.settle.allocation.source${item.sourceType}`
-      const targetKey = item.target === 'COMPANY'
-        ? 'slhReconciliation.settle.allocation.targetCompany'
-        : `slhReconciliation.settle.allocation.target${item.target === 'ORIGIN_ORDER' ? 'Origin' : 'Current'}`
-      const orderNo = allocationOrderNo(item.target)
-      return {
-        id: `allocation-${item.key}-${index}`,
-        label: translate(labelKey),
-        value: `${item.amount} ${item.currencyCode} → ${translate(targetKey, orderNo === null ? undefined : { orderNo })}`,
-      }
-    }),
-    ...(record.allocationParties ?? []).map(party => ({
-      id: `party-${party.target}`,
-      label: translate(
-        party.target === 'COMPANY'
-          ? 'slhReconciliation.settle.allocation.partyCompany'
-          : `slhReconciliation.settle.allocation.party${party.target === 'ORIGIN_ORDER' ? 'Origin' : 'Current'}`,
-        party.salesOrderNo == null ? undefined : { orderNo: party.salesOrderNo },
-      ),
-      value: `${party.settlementAmountCny ?? MISSING} CNY`,
-    })),
-  ]
+  const allocation = buildRecordAllocation(record, currencies, translate)
 
   return {
     id: record.id,
@@ -240,17 +322,8 @@ export function buildSlhReconciliationRecordCard(
           },
         ],
       },
-      // 历史结算没有分摊快照，只有新记录才展示这一段。
-      ...(allocationRows.length === 0
-        ? []
-        : [{
-            id: 'allocation',
-            titleKey: 'slhReconciliation.records.allocationTitle',
-            icon: 'i-lucide:split',
-            titleClass: 'text-emerald-700 dark:text-emerald-300',
-            rows: allocationRows,
-          }]),
     ],
+    allocation,
   }
 }
 

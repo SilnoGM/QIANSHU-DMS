@@ -528,8 +528,6 @@
         "targetOrigin": "甲 · {orderNo}",
         "targetCurrent": "乙 · {orderNo}",
         "targetCompany": "公司帳戶",
-        "partyOrigin": "甲 {orderNo}",
-        "partyCurrent": "乙 {orderNo}",
         "partyCompany": "公司帳戶",
         "partyOriginTitle": "甲 · 原銷售單",
         "partyCurrentTitle": "乙 · 調貨後銷售單",
@@ -586,7 +584,14 @@
       "ordersTitle": "訂單資訊",
       "transportTitle": "運輸資訊",
       "billTitle": "帳單資訊",
-      "allocationTitle": "入帳分攤"
+      "allocationTitle": "入帳分攤",
+      "allocationCount": "{items} 項 · {parties} 個目標",
+      "allocationReadOnly": "只讀快照",
+      "allocationItemsTitle": "逐項分攤",
+      "allocationPartiesTitle": "目標合計",
+      "allocationAdjusted": "已調整",
+      "allocationReason": "調整原因：{reason}",
+      "allocationContribution": "折合 {amount}"
     }
   }
 }

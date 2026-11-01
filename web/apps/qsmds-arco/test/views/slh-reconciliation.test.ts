@@ -1123,17 +1123,48 @@ test('核对记录弹窗：新结算记录展示逐项分摊与目标合计，�
     ],
   }
   const card = buildSlhReconciliationRecordCard(record, SETTLE_CURRENCIES, settleTranslate)
-  const group = card.groups.find(entry => entry.id === 'allocation')
-  assert.equal(group?.titleKey, 'slhReconciliation.records.allocationTitle')
-  assert.deepEqual(group?.rows.map(row => `${row.label}:${row.value}`), [
-    '[slhBill.chargeType.REDELIVERY]:50.00 CNY → [slhReconciliation.settle.allocation.targetOrigin:SO-A]',
-    '[slhReconciliation.settle.allocation.sourceFREIGHT]:200.00 CNY → [slhReconciliation.settle.allocation.targetCompany]',
-    '[slhReconciliation.settle.allocation.partyOrigin:SO-A]:-70.00 CNY',
-    '[slhReconciliation.settle.allocation.partyCurrent:SO-B]:160.00 CNY',
-    '[slhReconciliation.settle.allocation.partyCompany]:-200.00 CNY',
+  assert.equal(card.groups.some(entry => entry.id === 'allocation'), false)
+  const allocation = card.allocation
+  assert.ok(allocation !== null)
+  assert.deepEqual(allocation.items.map(item => [
+    item.label,
+    item.amountText,
+    item.currencyCode,
+    item.targetLabel,
+    item.overridden,
+    item.reason,
+  ]), [
+    ['[slhBill.chargeType.REDELIVERY]', '50.00', 'CNY', '[slhReconciliation.settle.allocation.targetOrigin:SO-A]', false, null],
+    ['[slhReconciliation.settle.allocation.sourceFREIGHT]', '200.00', 'CNY', '[slhReconciliation.settle.allocation.targetCompany]', true, '公司承担'],
   ])
+  assert.deepEqual(allocation.parties.map(party => [
+    party.title,
+    party.salesOrderNo,
+    party.settlementAmountCny,
+    party.paymentFeeAmountCny,
+    party.direction,
+  ]), [
+    ['[slhReconciliation.settle.allocation.partyOriginTitle]', 'SO-A', '-70.00', null, 'OUTFLOW'],
+    ['[slhReconciliation.settle.allocation.partyCurrentTitle]', 'SO-B', '160.00', '7.00', 'INFLOW'],
+    ['[slhReconciliation.settle.allocation.partyCompany]', null, '-200.00', null, 'OUTFLOW'],
+  ])
+  assert.deepEqual(allocation.totals, {
+    settlementAmountCny: '-110.00',
+    paymentFeeAmountCny: '7.00',
+    matchesParent: true,
+  })
   const legacy = buildSlhReconciliationRecordCard({ ...record, allocations: [], allocationParties: [] }, SETTLE_CURRENCIES, settleTranslate)
-  assert.equal(legacy.groups.some(entry => entry.id === 'allocation'), false)
+  assert.equal(legacy.allocation, null)
+})
+
+test('核对记录弹窗：入账分摊独立成全宽区块', async () => {
+  const page = await readFile(new URL('../../src/views/workbenches/slh-reconciliation/records-modal.vue', import.meta.url), 'utf8')
+  assert.match(page, /card\.allocation !== null/u)
+  assert.match(page, /allocationItemsTitle/u)
+  assert.match(page, /allocationPartiesTitle/u)
+  assert.match(page, /allocationAdjusted/u)
+  assert.match(page, /card\.allocation\.totals/u)
+  assert.doesNotMatch(page, /group\.id === 'allocation'/u)
 })
 
 test('核对记录弹窗：卡片按「状态 / 汇率费率 / 六个金额 / 来源」摊平，金额按符号与恒红着色', () => {
