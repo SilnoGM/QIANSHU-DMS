@@ -156,9 +156,9 @@ test('完成批次的门禁：还有未核对行或批次已结束都挡下，�
 })
 
 test('本行核对的门禁：销售订单未取消且已签收即可核对（不再要求收齐），采购需已完成', () => {
-  type SalesStates = Pick<SlhReconciliationMatchedSalesOrderDto, 'orderStatus' | 'fulfillmentStatus' | 'paymentStatus'>
+  type SalesStates = Pick<SlhReconciliationMatchedSalesOrderDto, 'id' | 'orderStatus' | 'fulfillmentStatus' | 'paymentStatus'>
   type PurchaseStates = Pick<SlhReconciliationMatchedPurchaseOrderDto, 'orderStatus' | 'fulfillmentStatus' | 'paymentStatus'>
-  const salesReady: SalesStates = { orderStatus: 'PENDING_RECONCILIATION', fulfillmentStatus: 'SIGNED', paymentStatus: 'PAID' }
+  const salesReady: SalesStates = { id: 'so-a', orderStatus: 'PENDING_RECONCILIATION', fulfillmentStatus: 'SIGNED', paymentStatus: 'PAID' }
   const purchaseReady: PurchaseStates = { orderStatus: 'COMPLETED', fulfillmentStatus: 'SIGNED', paymentStatus: 'PAID' }
   const gate = (
     sales: SalesStates | null = salesReady,
@@ -192,6 +192,19 @@ test('本行核对的门禁：销售订单未取消且已签收即可核对（�
     gate({ ...salesReady, fulfillmentStatus: 'SEA_TRANSIT' }, { ...purchaseReady, orderStatus: 'CONFIRMED' }),
     'SALES_ORDER_NOT_SIGNED',
   )
+
+  // 调货行：甲已取消/未签收、甲的采购单已取消都不挡；只看当前乙未取消且已签收。
+  const origin = { ...salesReady, id: 'so-a', orderStatus: 'CANCELLED' as const, fulfillmentStatus: 'SEA_TRANSIT' as const }
+  const currentSigned: SalesStates = { id: 'so-b', orderStatus: 'CONFIRMED', fulfillmentStatus: 'SIGNED', paymentStatus: 'UNPAID' }
+  const claimedGate = (current: SalesStates) => resolveSlhReconciliationSettleBlockReason({
+    salesOrder: origin,
+    currentSalesOrder: current,
+    purchaseOrder: null,
+  })
+  assert.equal(claimedGate(currentSigned), null)
+  assert.equal(claimedGate({ ...currentSigned, fulfillmentStatus: 'WAREHOUSE_ARRIVED' }), 'SALES_ORDER_NOT_SIGNED')
+  assert.equal(claimedGate({ ...currentSigned, orderStatus: 'CANCELLED' }), 'SALES_ORDER_CANCELLED')
+
   // 取值到文案键的映射各有一条，且三语齐全。
   assert.equal(
     resolveSlhReconciliationSettleBlockLabelKey('SALES_ORDER_NOT_SIGNED'),
@@ -1006,6 +1019,24 @@ test('对账结算弹窗：分摊逐项选择目标、改目标必填原因、CO
   assert.match(page, /item\.sourceType === 'COD'[\s\S]{0,200}?codFixed/u)
   assert.match(page, /item\.overridden[\s\S]{0,400}?changeAllocationReason/u)
   assert.match(page, /t\('slhReconciliation\.settle\.allocation\.breakdownMismatch'\)/u)
+})
+
+test('结算弹窗：调货行的销售金额与金流费按当前销售订单（乙）计算', () => {
+  const member = memberFixture({
+    salesOrder: salesOrderFixture({ id: 'so-a', orderNo: 'SO-A', agreedTotalAmount: '40000.00' }),
+    currentSalesOrder: salesOrderFixture({ id: 'so-b', orderNo: 'SO-B', agreedTotalAmount: '325000.00' }),
+    codAmountTwd: '40000.00',
+    ntdSurchargeAmountTwd: '150.00',
+    payableAmountCny: '1000.00',
+  })
+  const summary = buildSettleSummary(member, '5.20', SETTLE_CURRENCIES, settleTranslate)
+
+  assert.equal(summary.payload.salesAmount, '325000.00')
+  assert.equal(summary.payload.paymentFeeAmountCny, '437.50')
+  assert.equal(summary.payload.settlementAmountCny, '6663.46')
+  const paymentFee = summary.blocks.find(block => block.id === 'paymentFee')
+  assert.equal(paymentFee?.result, '437.50')
+  assert.equal(paymentFee?.groups[0]?.terms[0]?.value, '325,000.00')
 })
 
 test('金流费率在两个依赖域里保持一致：后端常量与前端展示口径必须相等', async () => {

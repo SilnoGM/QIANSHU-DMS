@@ -79,14 +79,28 @@ const SETTLE_BLOCK_LABEL_KEYS: Readonly<Record<SlhReconciliationSettleBlockReaso
  * 收齐与金额口径仍由完成批次的超收/少收检查与回填兜底。订单来源缺失（脏数据）从紧不放行。
  * 采购侧只查订单状态：`COMPLETED` 由服务端从履约与付款事实派生，数据库还有
  * `purchase_orders_completed_requires_signed_paid_check` 兜底，其余两维无需重复校验。
+ *
+ * 调货行（甲 ≠ 乙）的结算对象是当前销售订单：甲可能已终止/取消/未签收，且甲的采购单
+ * 也可能已随终止被取消，这些都不应再挡住乙的结算；门禁只看乙未取消且已签收。
  */
 export function resolveSlhReconciliationSettleBlockReason(member: {
-  readonly salesOrder?: Pick<SlhReconciliationMatchedSalesOrderDto, 'orderStatus' | 'fulfillmentStatus'> | null
+  readonly salesOrder?: Pick<SlhReconciliationMatchedSalesOrderDto, 'id' | 'orderStatus' | 'fulfillmentStatus'> | null
+  readonly currentSalesOrder?: Pick<SlhReconciliationMatchedSalesOrderDto, 'id' | 'orderStatus' | 'fulfillmentStatus'> | null
   readonly purchaseOrder?: Pick<SlhReconciliationMatchedPurchaseOrderDto, 'orderStatus' | 'fulfillmentStatus' | 'paymentStatus'> | null
 }): SlhReconciliationSettleBlockReason | null {
   const sales = member.salesOrder ?? null
   if (sales === null) {
     return 'SALES_ORDER_SOURCE_MISSING'
+  }
+  const current = member.currentSalesOrder ?? null
+  if (current !== null && current.id !== sales.id) {
+    if (current.orderStatus === 'CANCELLED') {
+      return 'SALES_ORDER_CANCELLED'
+    }
+    if (current.fulfillmentStatus !== 'SIGNED') {
+      return 'SALES_ORDER_NOT_SIGNED'
+    }
+    return null
   }
   if (sales.orderStatus === 'CANCELLED') {
     return 'SALES_ORDER_CANCELLED'

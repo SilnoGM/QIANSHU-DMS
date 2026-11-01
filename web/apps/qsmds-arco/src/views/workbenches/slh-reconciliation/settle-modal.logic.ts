@@ -233,8 +233,10 @@ export function buildSettleSummary(
   const cod = member.codAmountTwd
   const ntdSurcharge = member.ntdSurchargeAmountTwd
   const payable = member.payableAmountCny
-  const salesAmount = member.salesOrder?.agreedTotalAmount ?? null
-  const orderCurrency = member.salesOrder?.currencyCode ?? ''
+  // 金流费按当前销售订单的约定总额计算；调货行的原销售单甲只是费用承担方，不能拿甲的总价。
+  const salesSource = member.currentSalesOrder ?? member.salesOrder ?? null
+  const salesAmount = salesSource?.agreedTotalAmount ?? null
+  const orderCurrency = salesSource?.currencyCode ?? ''
   const rateUnits = rate === null || new Decimal(rate).isZero() ? null : rate
   const rateText = trimRate(rate) ?? EMPTY_AMOUNT_TEXT
 
