@@ -50,6 +50,7 @@ import {
   buildSettleRateCards,
   buildSettleSummary,
   FULL_FLOW_FEE_RATE,
+  resolveSettleAllocationPartyDirection,
   resolveSettleFailureKey,
 } from '../../src/views/workbenches/slh-reconciliation/settle-modal.logic'
 import {
@@ -962,9 +963,22 @@ test('入账分摊：甲承担二派/寄仓、乙承担其余费用，金流费�
     ['ORIGIN_ORDER', 'SO-A', '-70.00', null],
     ['CURRENT_ORDER', 'SO-B', '-40.00', '7.00'],
   ])
+  assert.deepEqual(allocation.totals, {
+    settlementAmountCny: '-110.00',
+    paymentFeeAmountCny: '7.00',
+    matchesParent: true,
+  })
   assert.equal(allocation.breakdownMismatch, false)
   assert.equal(allocation.reasonMissing, false)
   assert.deepEqual(allocation.payload, [])
+})
+
+test('入账分摊：目标合计方向按符号区分应入账/应转出', () => {
+  assert.equal(resolveSettleAllocationPartyDirection('6692.31'), 'INFLOW')
+  assert.equal(resolveSettleAllocationPartyDirection('-28.85'), 'OUTFLOW')
+  assert.equal(resolveSettleAllocationPartyDirection('0.00'), 'ZERO')
+  assert.equal(resolveSettleAllocationPartyDirection('-0.00'), 'ZERO')
+  assert.equal(resolveSettleAllocationPartyDirection(null), 'ZERO')
 })
 
 test('入账分摊：手动改目标必须填原因，COD 固定归乙且不允许改目标', () => {
@@ -979,6 +993,11 @@ test('入账分摊：手动改目标必须填原因，COD 固定归乙且不允�
     ['CURRENT_ORDER', '160.00'],
     ['COMPANY', '-200.00'],
   ])
+  assert.deepEqual(changed.totals, {
+    settlementAmountCny: '-110.00',
+    paymentFeeAmountCny: '7.00',
+    matchesParent: true,
+  })
 
   const missingReason = buildSettleAllocation(allocationMember(), '7.00', '5.00', {
     FREIGHT: { target: 'COMPANY', reason: '   ' },
@@ -1025,6 +1044,14 @@ test('对账结算弹窗：分摊逐项选择目标、改目标必填原因、CO
   const page = await readFile(new URL('../../src/views/workbenches/slh-reconciliation/settle-modal.vue', import.meta.url), 'utf8')
   assert.match(page, /buildSettleAllocation/u)
   assert.match(page, /:disabled="allocationBlocked"/u)
+  assert.match(page, /allocation\.totals/u)
+  assert.match(page, /allocationPartyGridClass/u)
+  assert.match(page, /partySettlementLabel/u)
+  assert.match(page, /partyInflow/u)
+  assert.match(page, /partyOutflow/u)
+  assert.match(page, /partyTotalSettlement/u)
+  assert.match(page, /partyTotalMatches/u)
+  assert.doesNotMatch(page, /gap-2 grid sm:grid-cols-3/u)
   assert.match(page, /allocationTargets: \[\.\.\.currentAllocation\.payload\]/u)
   assert.match(page, /item\.sourceType === 'COD'[\s\S]{0,200}?codFixed/u)
   assert.match(page, /item\.overridden[\s\S]{0,400}?changeAllocationReason/u)

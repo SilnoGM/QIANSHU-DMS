@@ -19,6 +19,7 @@ import {
   buildSettleRateCards,
   buildSettleSummary,
   formatBareAmount,
+  resolveSettleAllocationPartyDirection,
   resolveSettleFailureKey,
 
 } from './settle-modal.logic'
@@ -97,6 +98,17 @@ const allocationBlocked = computed(() => allocation.value !== null && (
   || allocation.value.reasonMissing
   || allocation.value.sourceMissing
 ))
+/** 只有甲/乙时两列铺满，出现公司目标才切三列；不再固定三列留空。 */
+const allocationPartyGridClass = computed(() => {
+  const count = allocation.value?.parties.length ?? 0
+  if (count >= 3) {
+    return 'sm:grid-cols-3'
+  }
+  if (count === 2) {
+    return 'sm:grid-cols-2'
+  }
+  return 'sm:grid-cols-1'
+})
 const allocationTargetOptions = computed(() => {
   const member = props.member
   const origin = member?.salesOrder
@@ -123,12 +135,33 @@ function allocationItemAmount(item: SlhSettleAllocationItemView): string {
   return formatBareAmount(item.amount, item.currencyCode, currencyCatalog.currencies.value)
 }
 
-function allocationPartyLabel(target: SlhSettleAllocationTarget, orderNo: string | null): string {
+function allocationPartyTitle(target: SlhSettleAllocationTarget): string {
   if (target === 'COMPANY') {
     return t('slhReconciliation.settle.allocation.partyCompany')
   }
-  const key = target === 'ORIGIN_ORDER' ? 'partyOrigin' : 'partyCurrent'
-  return t(`slhReconciliation.settle.allocation.${key}`, { orderNo: orderNo ?? '' })
+  const key = target === 'ORIGIN_ORDER' ? 'partyOriginTitle' : 'partyCurrentTitle'
+  return t(`slhReconciliation.settle.allocation.${key}`)
+}
+
+function allocationPartyDirectionKey(value: string | null): string | null {
+  const direction = resolveSettleAllocationPartyDirection(value)
+  if (direction === 'ZERO') {
+    return null
+  }
+  return t(direction === 'OUTFLOW'
+    ? 'slhReconciliation.settle.allocation.partyOutflow'
+    : 'slhReconciliation.settle.allocation.partyInflow')
+}
+
+function allocationPartyDirectionClass(value: string | null): string {
+  const direction = resolveSettleAllocationPartyDirection(value)
+  if (direction === 'OUTFLOW') {
+    return 'text-destructive border-destructive/30 bg-destructive/10'
+  }
+  if (direction === 'INFLOW') {
+    return 'text-primary border-primary/30 bg-primary/10'
+  }
+  return ''
 }
 
 /** 目标合计按符号着色：负红、正绿，零保持前景色。 */
@@ -558,22 +591,90 @@ const canNext = computed(() => selectedRate.value !== null)
             </div>
           </div>
 
-          <div class="gap-2 grid sm:grid-cols-3">
+          <div class="gap-2 grid" :class="allocationPartyGridClass">
             <div
               v-for="party in allocation.parties"
               :key="party.target"
-              class="px-3 py-2 border border-border rounded-lg bg-card flex flex-col gap-1 min-w-0"
+              class="p-3 border border-border rounded-lg bg-card flex flex-col gap-2 min-w-0"
             >
-              <span class="qs-type-meta text-muted-foreground truncate" :title="allocationPartyLabel(party.target, party.salesOrderNo)">
-                {{ allocationPartyLabel(party.target, party.salesOrderNo) }}
-              </span>
-              <span class="text-base qs-type-data tabular-nums" :class="allocationPartyTone(party.settlementAmountCny)">
-                {{ party.settlementAmountCny ?? '—' }} <span class="text-xs font-normal">CNY</span>
-              </span>
-              <span v-if="party.paymentFeeAmountCny !== null" class="qs-type-meta text-destructive">
-                {{ t('slhReconciliation.settle.allocation.partyFee', { amount: party.paymentFeeAmountCny }) }}
-              </span>
+              <div class="min-w-0">
+                <span class="qs-type-meta text-muted-foreground block truncate">
+                  {{ allocationPartyTitle(party.target) }}
+                </span>
+                <span
+                  v-if="party.salesOrderNo !== null"
+                  class="text-xs qs-type-data text-muted-foreground mt-0.5 block break-all"
+                  :title="party.salesOrderNo"
+                >
+                  {{ party.salesOrderNo }}
+                </span>
+              </div>
+              <div class="flex flex-col gap-1">
+                <span class="qs-type-meta text-muted-foreground">
+                  {{ t('slhReconciliation.settle.allocation.partySettlementLabel') }}
+                </span>
+                <div class="flex flex-wrap gap-x-2 gap-y-1 items-center">
+                  <span class="text-lg qs-type-data tabular-nums" :class="allocationPartyTone(party.settlementAmountCny)">
+                    {{ party.settlementAmountCny ?? '—' }}
+                    <span class="text-xs font-normal">CNY</span>
+                  </span>
+                  <span
+                    v-if="allocationPartyDirectionKey(party.settlementAmountCny) !== null"
+                    class="qs-type-meta px-2 py-0.5 border rounded-md"
+                    :class="allocationPartyDirectionClass(party.settlementAmountCny)"
+                  >
+                    {{ allocationPartyDirectionKey(party.settlementAmountCny) }}
+                  </span>
+                </div>
+              </div>
+              <div class="pt-2 border-t border-border flex flex-wrap gap-x-2 items-baseline justify-between">
+                <span class="qs-type-meta text-muted-foreground">
+                  {{ t('slhReconciliation.settle.allocation.partyFeeLabel') }}
+                </span>
+                <span
+                  class="text-sm qs-type-data tabular-nums"
+                  :class="party.paymentFeeAmountCny !== null ? 'text-destructive' : 'text-muted-foreground'"
+                >
+                  {{ party.paymentFeeAmountCny ?? '—' }}
+                  <span v-if="party.paymentFeeAmountCny !== null" class="text-xs font-normal">CNY</span>
+                </span>
+              </div>
             </div>
+          </div>
+
+          <div class="pt-2 border-t border-border flex flex-wrap gap-x-4 gap-y-1 items-baseline justify-between">
+            <div class="flex flex-wrap gap-x-4 gap-y-1 items-baseline">
+              <div class="flex flex-wrap gap-x-2 items-baseline">
+                <span class="qs-type-meta text-muted-foreground">
+                  {{ t('slhReconciliation.settle.allocation.partyTotalSettlement') }}
+                </span>
+                <span class="text-lg qs-type-data font-semibold tabular-nums">
+                  {{ allocation.totals.settlementAmountCny }}
+                  <span class="text-xs font-normal">CNY</span>
+                </span>
+              </div>
+              <div class="flex flex-wrap gap-x-2 items-baseline">
+                <span class="qs-type-meta text-muted-foreground">
+                  {{ t('slhReconciliation.settle.allocation.partyTotalFee') }}
+                </span>
+                <span
+                  class="text-sm qs-type-data tabular-nums"
+                  :class="allocation.totals.paymentFeeAmountCny === '0.00' ? 'text-muted-foreground' : 'text-destructive'"
+                >
+                  {{ allocation.totals.paymentFeeAmountCny }}
+                  <span class="text-xs font-normal">CNY</span>
+                </span>
+              </div>
+            </div>
+            <span
+              v-if="allocation.totals.matchesParent !== null"
+              class="qs-type-meta"
+              :class="allocation.totals.matchesParent ? 'text-primary' : 'text-destructive'"
+            >
+              {{ t(allocation.totals.matchesParent
+                ? 'slhReconciliation.settle.allocation.partyTotalMatches'
+                : 'slhReconciliation.settle.allocation.partyTotalMismatch') }}
+            </span>
           </div>
 
           <p v-if="allocation.reasonMissing" class="text-sm text-destructive m-0">
