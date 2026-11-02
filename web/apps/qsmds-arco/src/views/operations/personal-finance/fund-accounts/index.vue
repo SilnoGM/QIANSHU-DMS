@@ -401,7 +401,7 @@ onBeforeUnmount(() => {
               clearable
               autocomplete="off"
               maxlength="128"
-              class="min-h-11 w-full sm:max-w-sm sm:min-h-9"
+              class="min-h-11 w-full sm:min-h-9 sm:w-80"
               :placeholder="t('personalFinanceLedger.searchPlaceholder')"
               :disabled="transactionLoading"
               data-testid="personal-finance-ledger-search"
