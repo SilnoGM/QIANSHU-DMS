@@ -31,6 +31,18 @@ test('金额格式化从动态描述符读取符号、精度和停用币种信�
   assert.equal(formatCurrencyAmount('864.72', 'TWD', TEST_CURRENCIES), 'NT$864.72 TWD')
 })
 
+test('币种代码默认保留，仅在显式关闭时省略', () => {
+  assert.equal(formatCurrencyAmount('864.72', 'TWD', TEST_CURRENCIES), 'NT$864.72 TWD')
+  assert.equal(
+    formatCurrencyAmount('864.72', 'TWD', TEST_CURRENCIES, undefined, { showCode: false }),
+    'NT$864.72',
+  )
+  assert.equal(
+    formatCurrencyAmount('864.72', 'TWD', TEST_CURRENCIES, undefined, {}),
+    'NT$864.72 TWD',
+  )
+})
+
 test('金额格式化按 0 到 4 位 minorUnit 执行十进制 half-up 舍入', () => {
   assert.equal(formatCurrencyAmount('12.4', 'JPY', TEST_CURRENCIES), 'JP¥12 JPY')
   assert.equal(formatCurrencyAmount('12.5', 'JPY', TEST_CURRENCIES), 'JP¥13 JPY')
@@ -73,6 +85,9 @@ test('AmountDisplay 是无业务依赖的行内展示组件', () => {
 
   assert.match(source, /defineOptions\(\{ name: 'AmountDisplay' \}\)/u)
   assert.match(source, /currencies: readonly CurrencyDescriptor\[\]/u)
+  // 缺省 Boolean prop 会被 Vue 转成 false，必须显式默认保留币种代码。
+  assert.match(source, /withDefaults\(defineProps</u)
+  assert.match(source, /showCode: true/u)
   assert.match(source, /formatCurrencyAmount/u)
   assert.match(source, /:data-currency="currency"/u)
   assert.match(source, /:data-currency-resolved=/u)
