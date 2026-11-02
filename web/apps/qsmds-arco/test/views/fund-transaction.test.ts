@@ -31,6 +31,9 @@ test('流水页面复用通用表格并按批次分组展示', () => {
   assert.match(tableSource, /:grouping="grouping"/u)
   assert.match(tableSource, /getRows: row => asGroup\(row\)\.entries/u)
   assert.match(tableSource, /#group-header/u)
+  // 分组默认全部收起：先看批次，需要时再展开分录。
+  assert.match(tableSource, /const expanded = ref<TableExpandedState>\(\{\}\)/u)
+  assert.match(tableSource, /v-model:expanded="expanded"/u)
   assert.match(pageSource, /fundAccountsApi\.transactions\.list/u)
   assert.match(pageSource, /FundTransactionTable/u)
   assert.match(tableSource, /data-testid="fund-transaction-table"/u)

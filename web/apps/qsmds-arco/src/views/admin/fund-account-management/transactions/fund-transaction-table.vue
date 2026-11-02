@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableSortingState } from '@fantastic-admin/components'
+import type { TableExpandedState, TableSortingState } from '@fantastic-admin/components'
 import type {
   FundBatchGroupDto,
   FundTransactionEntryDto,
@@ -87,6 +87,11 @@ function openSourceLink(group: FundBatchGroupDto): void {
 const page = defineModel<number>('page', { required: true })
 const pageSize = defineModel<number>('pageSize', { required: true })
 const sorting = defineModel<TableSortingState>('sorting', { required: true })
+/**
+ * 分组默认全部收起：财务先看批次列表，需要核对分录时再展开。
+ * 空对象表示没有任何组处于展开状态（组件把 true 视为「全部展开」）。
+ */
+const expanded = ref<TableExpandedState>({})
 
 const tagToneClasses = {
   blue: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:border-sky-500/30! dark:bg-sky-500/10! dark:text-sky-300',
@@ -172,6 +177,7 @@ const grouping: QsGenericTableGrouping<FundLedgerRow> = {
     v-model:page="page"
     v-model:page-size="pageSize"
     v-model:sorting="sorting"
+    v-model:expanded="expanded"
     data-testid="fund-transaction-table"
     row-key="id"
     :addable="false"
