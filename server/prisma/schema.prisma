@@ -184,6 +184,12 @@ enum AuditEventType {
   PURCHASE_ORDER_REJECTED
   /// 审核后采购金额修订事件。追加在末尾与数据库枚举顺序一致。
   PURCHASE_ORDER_AMOUNT_REVISED
+  /// 广告账户充值申请提交、付款、驳回、撤回与作废事件。
+  ADVERTISING_RECHARGE_SUBMITTED
+  ADVERTISING_RECHARGE_PAID
+  ADVERTISING_RECHARGE_REJECTED
+  ADVERTISING_RECHARGE_WITHDRAWN
+  ADVERTISING_RECHARGE_VOIDED
 
   @@map("audit_event_type")
 }
@@ -626,6 +632,7 @@ enum FundPostingSourceKind {
   SLH_FEE
   SLH_COMPANY_ALLOCATION
   WITHDRAWAL
+  ADVERTISING_RECHARGE
   MANUAL_ADJUSTMENT
   REVERSAL
   UNRESOLVED
@@ -639,6 +646,25 @@ enum FundWithdrawalStatus {
   REJECTED
 
   @@map("fund_withdrawal_status")
+}
+
+/// 广告账户类型决定是否需要申请人上传收款二维码：个人户财务扫码付款，非个人户走对公转账。
+enum AdvertisingAccountType {
+  PERSONAL
+  NON_PERSONAL
+
+  @@map("advertising_account_type")
+}
+
+/// 充值申请只允许 待付款 → 已付款/已驳回/已撤回，以及 已付款 → 已作废；终态不可再流转。
+enum AdvertisingRechargeStatus {
+  PENDING
+  PAID
+  REJECTED
+  WITHDRAWN
+  VOIDED
+
+  @@map("advertising_recharge_status")
 }
 
 model User {
@@ -705,6 +731,10 @@ model User {
   fundPostingBatchesActed     FundPostingBatch[]         @relation("FundPostingBatchActor")
   fundWithdrawalRequests      FundWithdrawalRequest[]    @relation("FundWithdrawalRequestUser")
   fundWithdrawalRequestsReviewed FundWithdrawalRequest[] @relation("FundWithdrawalRequestReviewedBy")
+  advertisingRecharges        AdvertisingRechargeRequest[] @relation("AdvertisingRechargeApplicant")
+  advertisingRechargesReviewed AdvertisingRechargeRequest[] @relation("AdvertisingRechargeReviewer")
+  advertisingRechargesPaid    AdvertisingRechargeRequest[] @relation("AdvertisingRechargePayer")
+  advertisingRechargesVoided  AdvertisingRechargeRequest[] @relation("AdvertisingRechargeVoider")
   receiptRequestsOwned SalesReceiptRequest[] @relation("ReceiptAccountOwner")
   receiptRequestsSubmitted SalesReceiptRequest[] @relation("ReceiptSubmittedBy")
   receiptRequestsReviewed SalesReceiptRequest[] @relation("ReceiptReviewedBy")
@@ -1101,6 +1131,8 @@ model MediaAsset {
   slhBillSourceFiles  SlhBill[]
   invoiceRequestDocuments InvoiceRequest[]
   fundWithdrawalProofs FundWithdrawalRequest[] @relation("FundWithdrawalPaymentProof")
+  advertisingRechargeQr AdvertisingRechargeRequest[] @relation("AdvertisingRechargeQr")
+  advertisingRechargePaymentProofs AdvertisingRechargeRequest[] @relation("AdvertisingRechargeProof")
   avatarProfile UserProfile? @relation("UserProfileAvatar")
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
@@ -1976,6 +2008,7 @@ model NumberingIssuance {
   invoiceRequest InvoiceRequest?
   fundPostingBatch FundPostingBatch?
   fundWithdrawalRequest FundWithdrawalRequest?
+  advertisingRechargeRequest AdvertisingRechargeRequest?
 
   id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   ruleId                 String   @map("rule_id") @db.Uuid
@@ -2134,6 +2167,8 @@ model FundPostingBatch {
   purchaseVoidedPayment PurchaseOrderPayment? @relation("PurchasePaymentReversalBatch")
   invoiceRequest InvoiceRequest? @relation("InvoiceRequestSettlementBatch")
   withdrawalRequest FundWithdrawalRequest? @relation("FundWithdrawalPostingBatch")
+  advertisingRecharge AdvertisingRechargeRequest? @relation("AdvertisingRechargePostingBatch")
+  advertisingRechargeReversal AdvertisingRechargeRequest? @relation("AdvertisingRechargeReversalBatch")
   id                         String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   batchNo                    String               @unique(map: "fund_posting_batches_batch_no_key") @map("batch_no") @db.VarChar(64)
   numberingIssuanceId        String?              @unique(map: "fund_posting_batches_numbering_issuance_id_key") @map("numbering_issuance_id") @db.Uuid
@@ -2278,6 +2313,59 @@ model FundWithdrawalRequest {
   @@index([status, submittedAt(sort: Desc), id(sort: Desc)], map: "fund_withdrawal_requests_status_submitted_id_idx")
   @@index([reviewedByUserId, reviewedAt(sort: Desc), id(sort: Desc)], map: "fund_withdrawal_requests_reviewer_reviewed_id_idx")
   @@map("fund_withdrawal_requests")
+}
+
+/// 广告账户充值申请：运营提交 → 财务付款并上传真实付款截图。
+/// 付款与按 ADVERTISING_FEE 规则分摊到「申请人个人账户 + 公司账户」在同一事务内完成，
+/// 因此申请单本身就是资金事实的一部分：单号、账户信息与申请金额提交后不可改，
+/// 已付款只能整单作废并由反向批次冲正，不能原地改金额重付。
+model AdvertisingRechargeRequest {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rechargeNo String @unique(map: "advertising_recharge_requests_number_key") @map("recharge_no") @db.VarChar(64)
+  numberingIssuanceId String @unique(map: "advertising_recharge_requests_issuance_key") @map("numbering_issuance_id") @db.Uuid
+  applicantUserId String @map("applicant_user_id") @db.Uuid
+  accountType AdvertisingAccountType @map("account_type")
+  adAccountName String @map("ad_account_name") @db.VarChar(128)
+  adAccountNo String @map("ad_account_no") @db.VarChar(128)
+  rechargeAmount Decimal @map("recharge_amount") @db.Decimal(30, 2)
+  rechargeCurrency String @map("recharge_currency") @db.Char(3)
+  paymentQrMediaAssetId String? @unique(map: "advertising_recharge_requests_qr_key") @map("payment_qr_media_asset_id") @db.Uuid
+  remark String? @db.VarChar(500)
+  status AdvertisingRechargeStatus @default(PENDING)
+  submittedAt DateTime @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  paymentAmountCny Decimal? @map("payment_amount_cny") @db.Decimal(30, 2)
+  paymentProofMediaAssetId String? @unique(map: "advertising_recharge_requests_proof_key") @map("payment_proof_media_asset_id") @db.Uuid
+  paidAt DateTime? @map("paid_at") @db.Timestamptz(6)
+  paidByUserId String? @map("paid_by_user_id") @db.Uuid
+  fundPostingBatchId String? @unique(map: "advertising_recharge_requests_posting_batch_key") @map("fund_posting_batch_id") @db.Uuid
+  reviewedAt DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  reviewedByUserId String? @map("reviewed_by_user_id") @db.Uuid
+  rejectReason String? @map("reject_reason") @db.VarChar(500)
+  withdrawnAt DateTime? @map("withdrawn_at") @db.Timestamptz(6)
+  voidedAt DateTime? @map("voided_at") @db.Timestamptz(6)
+  voidedByUserId String? @map("voided_by_user_id") @db.Uuid
+  voidReason String? @map("void_reason") @db.VarChar(500)
+  fundReversalBatchId String? @unique(map: "advertising_recharge_requests_reversal_batch_key") @map("fund_reversal_batch_id") @db.Uuid
+  requestKeyHash Bytes @map("request_key_hash") @db.ByteA
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  applicant User @relation("AdvertisingRechargeApplicant", fields: [applicantUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy User? @relation("AdvertisingRechargeReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  paidBy User? @relation("AdvertisingRechargePayer", fields: [paidByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  voidedBy User? @relation("AdvertisingRechargeVoider", fields: [voidedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  numberingIssuance NumberingIssuance @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  paymentQrMediaAsset MediaAsset? @relation("AdvertisingRechargeQr", fields: [paymentQrMediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  paymentProofMediaAsset MediaAsset? @relation("AdvertisingRechargeProof", fields: [paymentProofMediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fundPostingBatch FundPostingBatch? @relation("AdvertisingRechargePostingBatch", fields: [fundPostingBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fundReversalBatch FundPostingBatch? @relation("AdvertisingRechargeReversalBatch", fields: [fundReversalBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([applicantUserId, requestKeyHash], map: "advertising_recharge_requests_applicant_request_key")
+  @@index([applicantUserId, submittedAt(sort: Desc), id(sort: Desc)], map: "advertising_recharge_requests_applicant_submitted_idx")
+  @@index([status, submittedAt(sort: Desc), id(sort: Desc)], map: "advertising_recharge_requests_status_submitted_idx")
+  @@index([paidByUserId, paidAt(sort: Desc), id(sort: Desc)], map: "advertising_recharge_requests_payer_paid_idx")
+  @@map("advertising_recharge_requests")
 }
 
 /// 提交后的收款事实不可修改；正式收款和资金入账只在财务审核通过时原子生成。

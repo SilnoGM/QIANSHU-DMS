@@ -1,0 +1,10 @@
+/**
+ * 广告充值域只通过这些受控来源与 consumer 调用资金事务端口，客户端不得选择。
+ * 业务类型复用既有的 ADVERTISING_FEE（COST / DEBIT，按用户当前分成比例拆两腿），
+ * 这里只新增来源与消费码，不改已发布规则与比例。
+ */
+export const ADVERTISING_RECHARGE_FUND_SOURCE = 'ADVERTISING_RECHARGE'
+export const ADVERTISING_RECHARGE_POSTING_TYPE = 'ADVERTISING_FEE'
+export const ADVERTISING_RECHARGE_PAY_CONSUMER = 'ADVERTISING_RECHARGE.PAY'
+export const ADVERTISING_RECHARGE_VOID_CONSUMER = 'ADVERTISING_RECHARGE.VOID'
+export const ADVERTISING_RECHARGE_SUMMARY = '广告账户充值'
