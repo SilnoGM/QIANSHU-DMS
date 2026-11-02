@@ -2421,6 +2421,7 @@
       "apps/qsmds-arco/src/views/system/roles/role-editor-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-reviews/amount-revision-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue",
+      "apps/qsmds-arco/src/views/workbenches/shipments/shipment-load-group-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/slh-bill-comparison.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/slh-bill-conclusion.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/slh-bill-import-modal.vue",

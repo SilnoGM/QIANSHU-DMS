@@ -37,6 +37,7 @@ const contextLoading = ref(false)
 const contextError = ref('')
 const selectedIds = ref<string[]>([])
 const overseasWarehouseValue = ref('')
+const loadGroupHandling = ref<'REVOKE' | 'KEEP'>('REVOKE')
 let controller: AbortController | null = null
 
 const pendingShipments = computed(() => context.value?.shipments.filter(shipment => shipment.pending) ?? [])
@@ -77,7 +78,12 @@ function reset(): void {
   contextError.value = ''
   selectedIds.value = []
   overseasWarehouseValue.value = ''
+  loadGroupHandling.value = 'REVOKE'
 }
+
+watch(selectedLoaded, (loaded) => {
+  loadGroupHandling.value = loaded ? 'KEEP' : 'REVOKE'
+})
 
 async function loadContext(signal: AbortSignal): Promise<void> {
   const order = props.order
@@ -161,6 +167,7 @@ async function submit(): Promise<void> {
         reason: trimmed,
         shipmentIds: selectedIds.value,
         ...(selectedLoaded.value ? { overseasWarehouseValue: overseasWarehouseValue.value } : {}),
+        ...(pendingShipments.value.length > 0 ? { loadGroupHandling: loadGroupHandling.value } : {}),
       }, request.signal)
     }
     if (request.signal.aborted) {
@@ -306,6 +313,19 @@ onBeforeUnmount(reset)
             :disabled="submitting"
             placeholder="选择瑞锋台中仓或林口仓"
           />
+        </label>
+
+        <label v-if="pendingShipments.length > 0" class="flex flex-col gap-1">
+          <span class="text-sm">同票合并组</span>
+          <FaSelect
+            v-model="loadGroupHandling"
+            :options="[
+              { value: 'KEEP', label: '保留同票历史（寄仓快照保留装柜信息）' },
+              { value: 'REVOKE', label: '撤销合并组（成员恢复独立）' },
+            ]"
+            :disabled="submitting"
+          />
+          <span class="text-xs text-muted-foreground">仅对已合并装柜的货件生效；未合并时忽略。已装柜默认保留，未装柜默认撤销。</span>
         </label>
 
         <p v-if="pendingShipments.length > 0 && !canReleaseStorage" class="text-xs text-destructive m-0">
