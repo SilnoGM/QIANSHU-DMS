@@ -114,9 +114,6 @@ test('资金流水三语文案键完全对齐', () => {
     'personalFinanceLedger.search',
     'personalFinanceLedger.searchPlaceholder',
     'personalFinanceLedger.searchReset',
-    'personalFinanceLedger.share.company',
-    'personalFinanceLedger.share.mine',
-    'personalFinanceLedger.title',
     'personalFinanceLedger.total',
     'personalFinanceLedger.viewDetail',
   ])

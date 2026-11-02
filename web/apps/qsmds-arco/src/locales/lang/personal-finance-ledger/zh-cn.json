@@ -1,7 +1,6 @@
 {
   "personalFinanceLedger": {
     "ariaLabel": "资金流水",
-    "title": "账户流水记录",
     "empty": "暂无流水",
     "emptyHint": "账户产生动账后会在这里显示",
     "loadError": "资金流水加载失败",
@@ -43,10 +42,6 @@
     "searchReset": "重置",
     "searchPlaceholder": "搜索客户名、供应商名、摘要或单号",
     "viewDetail": "查看详情",
-    "share": {
-      "mine": "我的部分",
-      "company": "公司部分"
-    },
     "detail": {
       "title": "流水详情",
       "businessOccurredAt": "业务发生时间",

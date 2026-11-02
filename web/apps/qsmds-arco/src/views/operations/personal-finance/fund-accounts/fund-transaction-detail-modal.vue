@@ -9,7 +9,6 @@ import {
   LEDGER_CATEGORY_META,
   LEDGER_DIRECTION_META,
   LEDGER_REVERSAL_META,
-  ledgerShareSplit,
   ledgerSignedAmount,
 } from './ledger.logic'
 
@@ -46,9 +45,6 @@ const categoryLabelKey = computed(() => item.value === null
 const signedAmount = computed(() => item.value === null
   ? ''
   : ledgerSignedAmount(item.value.direction, item.value.amount))
-const shareSplit = computed(() => item.value === null
-  ? null
-  : ledgerShareSplit(item.value))
 const description = computed(() => item.value === null
   ? undefined
   : `#${item.value.accountSequence} · ${item.value.batchNo}`)
@@ -211,15 +207,6 @@ function close(): void {
               :currencies="currencyCatalog.currencies.value"
               class="!text-base !font-semibold"
             />
-          </dd>
-        </div>
-        <!-- 只有存在公司部分时才显示分摊，单腿规则（提款）保持原样。 -->
-        <div v-if="shareSplit?.split">
-          <dt class="qs-type-compact-label">
-            {{ t('personalFinanceLedger.share.mine') }} / {{ t('personalFinanceLedger.share.company') }}
-          </dt>
-          <dd class="qs-type-body font-semibold m-0">
-            {{ shareSplit.mine }} / {{ shareSplit.company }}
           </dd>
         </div>
         <div>

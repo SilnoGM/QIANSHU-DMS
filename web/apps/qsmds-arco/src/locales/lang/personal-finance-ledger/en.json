@@ -1,7 +1,6 @@
 {
   "personalFinanceLedger": {
     "ariaLabel": "Fund ledger",
-    "title": "Account ledger",
     "empty": "No ledger entries",
     "emptyHint": "Entries will appear here once the account has activity.",
     "loadError": "Failed to load the fund ledger",
@@ -43,10 +42,6 @@
     "searchReset": "Reset",
     "searchPlaceholder": "Search customer, supplier, summary or document no.",
     "viewDetail": "View details",
-    "share": {
-      "mine": "My part",
-      "company": "Company part"
-    },
     "detail": {
       "title": "Ledger details",
       "businessOccurredAt": "Business occurred at",

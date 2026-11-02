@@ -18,7 +18,6 @@ import {
   LEDGER_CATEGORY_META,
   LEDGER_DIRECTION_META,
   LEDGER_REVERSAL_META,
-  ledgerShareSplit,
   ledgerSignedAmount,
 } from './ledger.logic'
 
@@ -379,39 +378,6 @@ onBeforeUnmount(() => {
         @retry="loadAccount"
       />
 
-      <!-- 关键词跨摘要、客户名、供应商名与单号；回车或清空才发请求，输入过程不逐键请求。 -->
-      <div class="mb-4 flex flex-wrap gap-2 items-center">
-        <FaInput
-          v-model="transactionKeywordDraft"
-          type="search"
-          clearable
-          autocomplete="off"
-          maxlength="128"
-          class="min-h-11 w-full sm:max-w-sm sm:min-h-9"
-          :placeholder="t('personalFinanceLedger.searchPlaceholder')"
-          :disabled="transactionLoading"
-          data-testid="personal-finance-ledger-search"
-          @keydown.enter.prevent="applyTransactionKeyword"
-        />
-        <FaButton
-          variant="outline"
-          class="min-h-11 sm:min-h-9"
-          :disabled="transactionLoading"
-          @click="applyTransactionKeyword"
-        >
-          {{ t('personalFinanceLedger.search') }}
-        </FaButton>
-        <FaButton
-          v-if="transactionKeyword !== ''"
-          variant="ghost"
-          class="min-h-11 sm:min-h-9"
-          :disabled="transactionLoading"
-          @click="applyTransactionKeyword"
-        >
-          {{ t('personalFinanceLedger.searchReset') }}
-        </FaButton>
-      </div>
-
       <QsGenericTable
         v-model:page="transactionPage"
         v-model:page-size="transactionPageSize"
@@ -434,10 +400,39 @@ onBeforeUnmount(() => {
         @pagination-change="loadTransactions"
         @retry="loadTransactions"
       >
+        <!-- 标题位置直接放搜索：关键词跨摘要、客户名、供应商名与单号。 -->
         <template #query-leading>
-          <h2 class="qs-type-component-title m-0">
-            {{ t('personalFinanceLedger.title') }}
-          </h2>
+          <div class="flex flex-wrap gap-2 min-w-0 items-center">
+            <FaInput
+              v-model="transactionKeywordDraft"
+              type="search"
+              clearable
+              autocomplete="off"
+              maxlength="128"
+              class="min-h-11 w-full sm:max-w-sm sm:min-h-9"
+              :placeholder="t('personalFinanceLedger.searchPlaceholder')"
+              :disabled="transactionLoading"
+              data-testid="personal-finance-ledger-search"
+              @keydown.enter.prevent="applyTransactionKeyword"
+            />
+            <FaButton
+              variant="outline"
+              class="min-h-11 sm:min-h-9"
+              :disabled="transactionLoading"
+              @click="applyTransactionKeyword"
+            >
+              {{ t('personalFinanceLedger.search') }}
+            </FaButton>
+            <FaButton
+              v-if="transactionKeyword !== ''"
+              variant="ghost"
+              class="min-h-11 sm:min-h-9"
+              :disabled="transactionLoading"
+              @click="applyTransactionKeyword"
+            >
+              {{ t('personalFinanceLedger.searchReset') }}
+            </FaButton>
+          </div>
         </template>
 
         <template #cell-sequence="{ row }">
@@ -562,14 +557,6 @@ onBeforeUnmount(() => {
                 />
               </span>
             </div>
-            <!-- 分摊只在本条分录之外还有公司部分时展示；提款等单腿规则不显示。 -->
-            <p
-              v-if="ledgerShareSplit(row.original).split"
-              class="qs-type-meta text-muted-foreground m-0 mt-1 flex flex-wrap gap-x-3 justify-end"
-            >
-              <span>{{ t('personalFinanceLedger.share.mine') }} {{ ledgerShareSplit(row.original).mine }}</span>
-              <span>{{ t('personalFinanceLedger.share.company') }} {{ ledgerShareSplit(row.original).company }}</span>
-            </p>
           </div>
         </template>
 
