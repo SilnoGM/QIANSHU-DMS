@@ -320,13 +320,13 @@ const grouping: QsGenericTableGrouping<FundLedgerRow> = {
             >
               {{ secondaryDocument(groupOf(row)!) }}
             </button>
-            <span v-else class="font-qs-data-mono break-all">
+            <span v-else class="break-all font-mono!">
               {{ secondaryDocument(groupOf(row)!) }}
             </span>
             <span aria-hidden="true">·</span>
             <DateTimeDisplay :value="groupOf(row)!.businessOccurredAt" />
             <span aria-hidden="true">·</span>
-            <span class="font-qs-data-mono break-all">{{ groupOf(row)!.batchNo }}</span>
+            <span class="break-all font-mono!">{{ groupOf(row)!.batchNo }}</span>
           </div>
         </div>
 

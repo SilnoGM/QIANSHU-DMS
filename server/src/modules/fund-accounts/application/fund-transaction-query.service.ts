@@ -470,17 +470,19 @@ const TRANSACTION_ORDER_SQL: Readonly<Record<
   FundTransactionSortField,
   { readonly asc: Prisma.Sql, readonly desc: Prisma.Sql }
 >> = {
+  // 兜底键用批次号 + 行号：同一事务写入的批次共享 posted_at，
+  // 用随机 uuid 兜底会让账户流水序号看起来乱序。
   postedAt: {
-    asc: Prisma.sql`entry."posted_at" ASC, entry."id" ASC`,
-    desc: Prisma.sql`entry."posted_at" DESC, entry."id" DESC`,
+    asc: Prisma.sql`entry."posted_at" ASC, batch."batch_no" ASC, entry."line_no" ASC`,
+    desc: Prisma.sql`entry."posted_at" DESC, batch."batch_no" DESC, entry."line_no" DESC`,
   },
   businessOccurredAt: {
-    asc: Prisma.sql`batch."business_occurred_at" ASC, entry."id" ASC`,
-    desc: Prisma.sql`batch."business_occurred_at" DESC, entry."id" DESC`,
+    asc: Prisma.sql`batch."business_occurred_at" ASC, batch."batch_no" ASC, entry."line_no" ASC`,
+    desc: Prisma.sql`batch."business_occurred_at" DESC, batch."batch_no" DESC, entry."line_no" DESC`,
   },
   amount: {
-    asc: Prisma.sql`entry."amount" ASC, entry."id" ASC`,
-    desc: Prisma.sql`entry."amount" DESC, entry."id" DESC`,
+    asc: Prisma.sql`entry."amount" ASC, batch."batch_no" ASC, entry."line_no" ASC`,
+    desc: Prisma.sql`entry."amount" DESC, batch."batch_no" DESC, entry."line_no" DESC`,
   },
 }
 
@@ -492,16 +494,16 @@ const TRANSACTION_BATCH_ORDER_SQL: Readonly<Record<
   { readonly asc: Prisma.Sql, readonly desc: Prisma.Sql }
 >> = {
   postedAt: {
-    asc: Prisma.sql`batch."posted_at" ASC, batch."id" ASC`,
-    desc: Prisma.sql`batch."posted_at" DESC, batch."id" DESC`,
+    asc: Prisma.sql`batch."posted_at" ASC, batch."batch_no" ASC`,
+    desc: Prisma.sql`batch."posted_at" DESC, batch."batch_no" DESC`,
   },
   businessOccurredAt: {
-    asc: Prisma.sql`batch."business_occurred_at" ASC, batch."id" ASC`,
-    desc: Prisma.sql`batch."business_occurred_at" DESC, batch."id" DESC`,
+    asc: Prisma.sql`batch."business_occurred_at" ASC, batch."batch_no" ASC`,
+    desc: Prisma.sql`batch."business_occurred_at" DESC, batch."batch_no" DESC`,
   },
   amount: {
-    asc: Prisma.sql`ABS(batch."business_amount") ASC, batch."id" ASC`,
-    desc: Prisma.sql`ABS(batch."business_amount") DESC, batch."id" DESC`,
+    asc: Prisma.sql`ABS(batch."business_amount") ASC, batch."batch_no" ASC`,
+    desc: Prisma.sql`ABS(batch."business_amount") DESC, batch."batch_no" DESC`,
   },
 }
 

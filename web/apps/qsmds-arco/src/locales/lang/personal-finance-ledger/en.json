@@ -7,7 +7,7 @@
     "loading": "Loading fund ledger",
     "total": "{count} entries",
     "column": {
-      "sequence": "No.",
+      "number": "No.",
       "postedAt": "Posted at",
       "typeSource": "Type and source",
       "summary": "Summary and reference",

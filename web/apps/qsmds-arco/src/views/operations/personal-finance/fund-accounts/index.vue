@@ -79,19 +79,11 @@ const enabled = computed(() => (
 const refreshing = computed(() => accountLoading.value || transactionLoading.value)
 const ledgerColumns = computed<QsGenericTableColumn<FundSelfTransactionDto>[]>(() => [
   {
-    id: 'sequence',
-    accessorKey: 'accountSequence',
-    title: t('personalFinanceLedger.column.sequence'),
-    width: 64,
-    minWidth: 64,
-    maxWidth: 72,
-    fixed: 'left',
-  },
-  {
-    id: 'postedAt',
-    accessorKey: 'postedAt',
-    title: t('personalFinanceLedger.column.postedAt'),
+    id: 'batchNo',
+    accessorKey: 'batchNo',
+    title: t('personalFinanceLedger.column.number'),
     minWidth: 200,
+    fixed: 'left',
   },
   {
     id: 'typeSource',
@@ -435,18 +427,17 @@ onBeforeUnmount(() => {
           </div>
         </template>
 
-        <template #cell-sequence="{ row }">
-          <span class="qs-type-data text-muted-foreground">
-            #{{ row.original.accountSequence }}
-          </span>
-        </template>
-
-        <template #cell-postedAt="{ row }">
-          <DateTimeDisplay
-            :value="row.original.postedAt"
-            format="datetime"
-            class="qs-type-data-emphasis whitespace-nowrap"
-          />
+        <template #cell-batchNo="{ row }">
+          <div class="min-w-0">
+            <div class="qs-type-data-emphasis break-all">
+              {{ row.original.batchNo }}
+            </div>
+            <DateTimeDisplay
+              :value="row.original.postedAt"
+              format="datetime"
+              class="qs-type-meta text-muted-foreground mt-1 block whitespace-nowrap"
+            />
+          </div>
         </template>
 
         <template #cell-typeSource="{ row }">
@@ -495,7 +486,7 @@ onBeforeUnmount(() => {
                 <FaIcon name="i-lucide:file-text" class="shrink-0 size-3.5" aria-hidden="true" />
                 <template v-if="row.original.source?.documentNo ?? row.original.businessNo">
                   <span>{{ t('personalFinanceLedger.businessNo') }}:</span>
-                  <span class="font-qs-data-mono">{{ row.original.source?.documentNo ?? row.original.businessNo }}</span>
+                  <span class="font-mono!">{{ row.original.source?.documentNo ?? row.original.businessNo }}</span>
                 </template>
                 <span v-else>{{ t('personalFinanceLedger.noBusinessNo') }}</span>
               </span>
@@ -506,11 +497,6 @@ onBeforeUnmount(() => {
               <span v-if="row.original.source?.supplierName" class="inline-flex gap-1 items-center">
                 <FaIcon name="i-lucide:factory" class="shrink-0 size-3.5" aria-hidden="true" />
                 <span>{{ row.original.source.supplierName }}</span>
-              </span>
-              <span class="inline-flex gap-1 items-center">
-                <FaIcon name="i-lucide:layers-2" class="shrink-0 size-3.5" aria-hidden="true" />
-                <span>{{ t('personalFinanceLedger.batchNo') }}:</span>
-                <span class="font-qs-data-mono">{{ row.original.batchNo }}</span>
               </span>
             </div>
             <p

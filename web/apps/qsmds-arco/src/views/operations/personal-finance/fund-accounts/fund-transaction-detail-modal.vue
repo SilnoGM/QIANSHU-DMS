@@ -80,7 +80,7 @@ function close(): void {
           {{ item.source?.headline ?? item.summary }}
         </p>
         <p class="qs-type-meta text-muted-foreground m-0 mt-1 flex flex-wrap gap-x-3 gap-y-1">
-          <span v-if="item.source?.documentNo" class="font-qs-data-mono break-all">{{ item.source.documentNo }}</span>
+          <span v-if="item.source?.documentNo" class="break-all font-mono!">{{ item.source.documentNo }}</span>
           <span v-if="item.source?.customerName">
             {{ t('personalFinanceLedger.detail.customer') }}：{{ item.source.customerName }}
           </span>
@@ -221,7 +221,7 @@ function close(): void {
           <dt class="qs-type-compact-label">
             {{ t('personalFinanceLedger.businessNo') }}
           </dt>
-          <dd class="qs-type-data-mono m-0 break-all">
+          <dd class="qs-type-data-emphasis m-0 break-all">
             {{ item.businessNo ?? t('personalFinanceLedger.noBusinessNo') }}
           </dd>
         </div>
@@ -229,7 +229,7 @@ function close(): void {
           <dt class="qs-type-compact-label">
             {{ t('personalFinanceLedger.batchNo') }}
           </dt>
-          <dd class="qs-type-data-mono m-0 break-all">
+          <dd class="qs-type-data-emphasis m-0 break-all">
             {{ item.batchNo }}
           </dd>
         </div>

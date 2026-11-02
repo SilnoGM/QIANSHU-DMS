@@ -208,7 +208,8 @@ test('个人资金账户页面接入页头、账户卡片、流水表与本人�
   assert.match(source, /:account="account"/u)
   assert.match(source, /:loading="accountLoading"/u)
   assert.match(source, /@retry="loadAccount"/u)
-  assert.match(source, /personalFinanceLedger\.column\.sequence/u)
+  // 记账时间列改为编号列，序号列已移除。
+  assert.match(source, /personalFinanceLedger\.column\.number/u)
   assert.match(source, /personalFinanceLedger\.column\.amount/u)
 })
 

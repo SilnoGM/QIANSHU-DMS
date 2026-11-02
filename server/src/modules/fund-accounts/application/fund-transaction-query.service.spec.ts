@@ -167,7 +167,8 @@ describe('FundTransactionQueryService', () => {
     // 分页与排序都以批次为单位，金额维度按业务总额比较。
     const batchPageSql = queryRaw.mock.calls[2]?.[0]
     expect(batchPageSql.sql).toContain('batch."posted_at" DESC')
-    expect(batchPageSql.sql).toContain('batch."id" DESC')
+    // 兜底键用批次号，避免同一事务内批次顺序随机。
+    expect(batchPageSql.sql).toContain('batch."batch_no" DESC')
     expect(batchPageSql.sql).toContain('EXISTS')
   })
 

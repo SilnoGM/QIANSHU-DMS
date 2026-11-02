@@ -7,7 +7,7 @@
     "loading": "正在加载资金流水",
     "total": "共 {count} 条",
     "column": {
-      "sequence": "序号",
+      "number": "编号",
       "postedAt": "记账时间",
       "typeSource": "入账类型与来源",
       "summary": "摘要与关联单号",
