@@ -1,0 +1,119 @@
+{
+  "advertisingRecharge": {
+    "pageTitle": "Ad recharges",
+    "pageDescription": "Submit advertising account recharge requests and review your own records. After finance pays, the amount is split by your share rate.",
+    "financePageTitle": "Ad recharges",
+    "financePageDescription": "Review all advertising account recharge requests, record the actual CNY payment and payment screenshot. Payment is split into the applicant's and company fund accounts.",
+    "searchPlaceholder": "Search recharge no., ad account name or id",
+    "financeSearchPlaceholder": "Search recharge no., ad account or applicant",
+    "loading": "Loading",
+    "accountType": {
+      "personal": "Personal account",
+      "nonPersonal": "Non-personal account"
+    },
+    "status": {
+      "all": "All",
+      "pending": "Pending payment",
+      "paid": "Paid",
+      "rejected": "Rejected",
+      "withdrawn": "Withdrawn",
+      "voided": "Voided"
+    },
+    "field": {
+      "rechargeNo": "Recharge no.",
+      "accountType": "Account type",
+      "adAccountName": "Ad account name",
+      "adAccountNo": "Ad account id",
+      "rechargeAmount": "Recharge amount",
+      "rechargeAmountHint": "USD is the default currency; CNY is available. Finance enters the actual paid amount.",
+      "paymentQr": "Payment QR code",
+      "paymentQrHint": "Required for personal accounts: finance pays by scanning this QR code",
+      "remark": "Remark",
+      "status": "Status",
+      "paymentAmount": "Paid amount (CNY)",
+      "paymentAmountHint": "Split into the personal and company fund accounts by the applicant's current share rate",
+      "applicant": "Applicant",
+      "submittedAt": "Submitted at",
+      "paidAt": "Paid at",
+      "paidBy": "Paid by",
+      "fundBatchNo": "Fund batch no.",
+      "rejectReason": "Reject reason",
+      "voidReason": "Void reason",
+      "action": "Actions"
+    },
+    "action": {
+      "create": "New request",
+      "view": "Details",
+      "close": "Close",
+      "cancel": "Cancel",
+      "withdraw": "Withdraw",
+      "backToList": "Back to list",
+      "refresh": "Refresh",
+      "retry": "Retry",
+      "reject": "Reject",
+      "submitPayment": "Submit payment",
+      "void": "Void and reverse"
+    },
+    "empty": {
+      "own": "No recharge requests yet",
+      "ownHint": "Use “New request” in the top right to submit the first recharge request",
+      "all": "No matching requests",
+      "allHint": "Adjust the status or search conditions and try again"
+    },
+    "create": {
+      "title": "New ad recharge request",
+      "description": "Fill in the ad account. Personal accounts require a payment QR code; copy the summary and send it to finance after submitting.",
+      "required": "Account type, ad account name, ad account id and recharge amount are required; personal accounts also need a payment QR code",
+      "submit": "Submit request",
+      "cancel": "Cancel",
+      "copyTitle": "Copy recharge information",
+      "copyDescription": "Copy and send it to finance; finance opens the link to pay",
+      "copy": "Copy",
+      "close": "Close",
+      "copied": "Recharge information copied",
+      "copyFailed": "Copy failed. Select the text and copy manually."
+    },
+    "upload": {
+      "action": "Upload image",
+      "uploading": "Uploading",
+      "uploaded": "Uploaded",
+      "replace": "Replace",
+      "remove": "Remove"
+    },
+    "detail": {
+      "title": "Ad recharge details",
+      "financeTitle": "Ad recharge details",
+      "financeDescription": "Verify the request and payment QR code, then record the actual paid amount and payment screenshot",
+      "payment": "Payment",
+      "paymentProof": "Payment screenshot",
+      "paymentProofHint": "jpg, png or webp only, up to 10 MiB",
+      "paySectionTitle": "Record payment",
+      "resultTitle": "Request result",
+      "paidHint": "Payment is recorded in the fund ledger. To correct it, void the whole request with a reversal and submit a new request.",
+      "rejected": "Request rejected",
+      "voided": "Request voided",
+      "withdrawn": "Request withdrawn",
+      "rejectDescription": "Rejecting closes the request without any fund movement. Please provide a reason for the operator.",
+      "voidDescription": "Voiding reverses the personal and company fund entries for the full paid amount and keeps the request history.",
+      "noValue": "—"
+    },
+    "toast": {
+      "submitted": "Recharge request submitted",
+      "withdrawn": "Recharge request withdrawn",
+      "paid": "Payment recorded and posted",
+      "rejected": "Recharge request rejected",
+      "voided": "Recharge request voided and reversed"
+    },
+    "error": {
+      "load": "Failed to load ad recharge requests",
+      "loadDetail": "Failed to load ad recharge details",
+      "submit": "Failed to submit the ad recharge request",
+      "withdraw": "Failed to withdraw the ad recharge request",
+      "pay": "Failed to record the payment",
+      "reject": "Failed to reject the ad recharge request",
+      "void": "Failed to void the ad recharge request",
+      "noPermission": "You do not have permission to view ad recharges",
+      "noPayPermission": "This account cannot pay ad recharges"
+    }
+  }
+}

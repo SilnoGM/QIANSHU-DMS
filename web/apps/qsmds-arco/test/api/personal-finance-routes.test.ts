@@ -98,8 +98,71 @@ test('运营工作台新增个人财务分组，两个叶子各用独立权限',
   assert.match(String(fundAccounts?.component), /operations\/personal-finance\/fund-accounts\/index\.vue/u)
   assert.match(String(withdrawals?.component), /operations\/personal-finance\/withdrawals\/index\.vue/u)
   assert.ok(
-    operationsWorkbenchRoutes.at(-1) === personalFinanceGroup,
-    '个人财务分组排在运营工作台现有分组之后',
+    operationsWorkbenchRoutes.at(-2) === personalFinanceGroup,
+    '个人财务分组之后只剩网络与广告分组',
+  )
+  assert.equal(operationsWorkbenchRoutes.at(-1)?.name, 'qsOperationsNetworkAds')
+})
+
+test('运营工作台新增网络与广告分组：广告充值用本人读取码，静态节点是占位叶', () => {
+  const networkAdsGroup = operationsWorkbenchRoutes.find(
+    route => route.name === 'qsOperationsNetworkAds',
+  )
+  assert.equal(networkAdsGroup?.path, '/qs-operations/network-ads')
+  assert.equal(networkAdsGroup?.meta?.title, '网络与广告')
+  assert.equal(networkAdsGroup?.meta?.icon, 'qs-network-ads')
+  assert.deepEqual(networkAdsGroup?.meta?.auth, [
+    'network-nodes:read',
+    'advertising-recharges:read-self',
+  ])
+  assert.equal(
+    typeof networkAdsGroup?.redirect === 'object' ? networkAdsGroup.redirect.name : undefined,
+    'qsOperationsNetworkAdsAdvertisingRecharges',
+  )
+  assert.deepEqual(
+    networkAdsGroup?.children?.map(route => ({
+      auth: route.meta?.auth,
+      icon: route.meta?.icon,
+      name: route.name,
+      path: route.path,
+      title: route.meta?.title,
+    })),
+    [
+      {
+        auth: 'network-nodes:read',
+        icon: 'qs-static-node',
+        name: 'qsOperationsNetworkAdsStaticNodes',
+        path: 'static-nodes',
+        title: '静态节点',
+      },
+      {
+        auth: 'advertising-recharges:read-self',
+        icon: 'qs-advertising-recharge',
+        name: 'qsOperationsNetworkAdsAdvertisingRecharges',
+        path: 'advertising-recharges',
+        title: '广告充值',
+      },
+    ],
+  )
+  assert.match(String(networkAdsGroup?.children?.[0]?.component), /workbenches\/placeholder\.vue/u)
+  assert.match(String(networkAdsGroup?.children?.[1]?.component), /workbenches\/network-ads\/advertising-recharges\/index\.vue/u)
+
+  assert.deepEqual(
+    visibleLeafPaths(networkAdsGroup, [OPERATIONS_WORKBENCH_PERMISSION, 'advertising-recharges:read-self']),
+    ['advertising-recharges'],
+  )
+  assert.deepEqual(
+    visibleLeafPaths(networkAdsGroup, [OPERATIONS_WORKBENCH_PERMISSION, 'network-nodes:read']),
+    ['static-nodes'],
+  )
+  assert.equal(
+    canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'advertising-recharges:read-self'], '/qs-operations/network-ads/advertising-recharges'),
+    true,
+  )
+  assert.equal(
+    canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'advertising-recharges:read'], '/qs-operations/network-ads/advertising-recharges'),
+    false,
+    '财务侧全量读取码不能进入运营广告充值页',
   )
 })
 

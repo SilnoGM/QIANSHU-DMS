@@ -194,6 +194,33 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
+  {
+    // 网络与广告是新的运营业务分组：静态节点当前只有占位页，广告充值承载
+    // 「运营提交 → 财务付款」的真实链路。分组 auth 只用于菜单过滤，取组内叶子并集。
+    path: '/qs-operations/network-ads',
+    name: 'qsOperationsNetworkAds',
+    component: Layout,
+    redirect: { name: 'qsOperationsNetworkAdsAdvertisingRecharges' },
+    meta: {
+      title: '网络与广告',
+      icon: 'qs-network-ads',
+      auth: ['network-nodes:read', 'advertising-recharges:read-self'],
+    },
+    children: [
+      {
+        path: 'static-nodes',
+        name: 'qsOperationsNetworkAdsStaticNodes',
+        component: () => import('@/views/workbenches/placeholder.vue'),
+        meta: { title: '静态节点', icon: 'qs-static-node', auth: 'network-nodes:read' },
+      },
+      {
+        path: 'advertising-recharges',
+        name: 'qsOperationsNetworkAdsAdvertisingRecharges',
+        component: () => import('@/views/workbenches/network-ads/advertising-recharges/index.vue'),
+        meta: { title: '广告充值', icon: 'qs-advertising-recharge', auth: 'advertising-recharges:read-self', keepAlive: true },
+      },
+    ],
+  },
 ]
 
 export default routes

@@ -1,0 +1,119 @@
+{
+  "advertisingRecharge": {
+    "pageTitle": "廣告儲值",
+    "pageDescription": "提交廣告帳戶儲值申請並查看本人申請記錄；財務付款後按個人分成比例自動分攤",
+    "financePageTitle": "廣告儲值",
+    "financePageDescription": "查看全部廣告儲值申請，登記實際付款金額與付款截圖；付款後按申請人分成比例計入個人與公司資金帳戶",
+    "searchPlaceholder": "搜尋單號、廣告帳戶名稱或編號",
+    "financeSearchPlaceholder": "搜尋單號、廣告帳戶、申請人",
+    "loading": "載入中",
+    "accountType": {
+      "personal": "個人戶",
+      "nonPersonal": "非個人戶"
+    },
+    "status": {
+      "all": "全部",
+      "pending": "待付款",
+      "paid": "已付款",
+      "rejected": "已駁回",
+      "withdrawn": "已撤回",
+      "voided": "已作廢"
+    },
+    "field": {
+      "rechargeNo": "申請單號",
+      "accountType": "帳戶類型",
+      "adAccountName": "廣告帳戶名稱",
+      "adAccountNo": "廣告帳戶編號",
+      "rechargeAmount": "儲值金額",
+      "rechargeAmountHint": "美元為預設幣種，可切換人民幣；付款金額由財務按實際支付填寫",
+      "paymentQr": "付款二維碼",
+      "paymentQrHint": "個人戶必填：財務按此二維碼付款",
+      "remark": "備註",
+      "status": "狀態",
+      "paymentAmount": "付款金額（CNY）",
+      "paymentAmountHint": "按申請人目前分成比例分攤到個人與公司資金帳戶",
+      "applicant": "申請人",
+      "submittedAt": "提交時間",
+      "paidAt": "付款時間",
+      "paidBy": "付款人",
+      "fundBatchNo": "資金批次號",
+      "rejectReason": "駁回原因",
+      "voidReason": "作廢原因",
+      "action": "操作"
+    },
+    "action": {
+      "create": "新增申請",
+      "view": "詳情",
+      "close": "關閉",
+      "cancel": "取消",
+      "withdraw": "撤回申請",
+      "backToList": "返回列表",
+      "refresh": "重新整理",
+      "retry": "重試",
+      "reject": "駁回",
+      "submitPayment": "提交付款",
+      "void": "作廢並沖正"
+    },
+    "empty": {
+      "own": "還沒有廣告儲值申請",
+      "ownHint": "點擊右上角「新增申請」提交第一條儲值申請",
+      "all": "沒有符合條件的申請",
+      "allHint": "調整狀態或搜尋條件後重試"
+    },
+    "create": {
+      "title": "新增廣告儲值申請",
+      "description": "填寫廣告帳戶資訊；個人戶需上傳收款二維碼，提交後把複製資訊發給財務",
+      "required": "請完整填寫帳戶類型、廣告帳戶名稱與編號、儲值金額；個人戶還需上傳收款二維碼",
+      "submit": "提交申請",
+      "cancel": "取消",
+      "copyTitle": "複製儲值資訊",
+      "copyDescription": "請複製後發送給財務，財務按連結進入詳情頁付款",
+      "copy": "複製",
+      "close": "關閉",
+      "copied": "儲值資訊已複製",
+      "copyFailed": "複製失敗，請手動選取文字複製"
+    },
+    "upload": {
+      "action": "上傳圖片",
+      "uploading": "上傳中",
+      "uploaded": "已上傳",
+      "replace": "重新選擇",
+      "remove": "移除"
+    },
+    "detail": {
+      "title": "廣告儲值詳情",
+      "financeTitle": "廣告儲值詳情",
+      "financeDescription": "核對申請資訊與收款二維碼，登記實際付款金額和付款截圖",
+      "payment": "付款資訊",
+      "paymentProof": "付款截圖憑證",
+      "paymentProofHint": "僅支援 jpg、png、webp，單張不超過 10 MiB",
+      "paySectionTitle": "登記付款",
+      "resultTitle": "申請結果",
+      "paidHint": "付款已完成並記入資金流水；如需更正請整單作廢並沖正，再重新提交申請。",
+      "rejected": "申請已駁回",
+      "voided": "申請已作廢",
+      "withdrawn": "申請已撤回",
+      "rejectDescription": "駁回後申請關閉，不產生資金流水；請填寫原因供運營核對。",
+      "voidDescription": "作廢會按原付款金額整單沖正個人與公司資金帳戶，申請保留歷史記錄。",
+      "noValue": "—"
+    },
+    "toast": {
+      "submitted": "儲值申請已提交",
+      "withdrawn": "儲值申請已撤回",
+      "paid": "付款已登記並入帳",
+      "rejected": "儲值申請已駁回",
+      "voided": "儲值申請已作廢並沖正"
+    },
+    "error": {
+      "load": "載入廣告儲值申請失敗",
+      "loadDetail": "載入廣告儲值詳情失敗",
+      "submit": "提交廣告儲值申請失敗",
+      "withdraw": "撤回廣告儲值申請失敗",
+      "pay": "登記付款失敗",
+      "reject": "駁回廣告儲值申請失敗",
+      "void": "作廢廣告儲值申請失敗",
+      "noPermission": "沒有查看廣告儲值的權限",
+      "noPayPermission": "目前帳號沒有廣告儲值的付款權限"
+    }
+  }
+}

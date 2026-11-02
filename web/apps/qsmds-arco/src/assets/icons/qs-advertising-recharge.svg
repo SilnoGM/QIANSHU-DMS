@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<path d="M12 28H20L37 18V46L20 36H12Q9 36 9 33V31Q9 28 12 28Z" fill="color-mix(in srgb, oklch(var(--primary)) 18%, #F7F8F4)" stroke="#27312B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M20 36V48Q20 52 24 52H27Q30 52 30 49V40" fill="none" stroke="#27312B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="46" cy="41" r="12" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.5"/>
+<path d="M46 35V47M42 38L46 43L50 38M42 47H50" fill="none" stroke="#F7F8F4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
