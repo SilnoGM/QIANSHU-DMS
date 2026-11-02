@@ -11,6 +11,7 @@ import type {
   FundAccountUserView,
 } from './fund-account.contract'
 import type { FundMetadata } from './fund-posting.contract'
+import type { FundSourceKind, FundSourceLink } from './fund-source-snapshot'
 
 export const FUND_TRANSACTION_REVERSAL_STATUSES = [
   'NONE',
@@ -41,11 +42,37 @@ export interface FundTransactionListQuery {
   readonly businessSourceId?: string
   readonly direction?: FundEntryDirection
   readonly businessNo?: string
+  /** 跨字段关键词：命中摘要、客户名、供应商名、业务单号或来源单号。 */
+  readonly keyword?: string
   readonly occurredFrom?: string
   readonly occurredTo?: string
   readonly reversalStatus?: FundTransactionReversalStatus
   readonly sortBy?: FundTransactionSortField
   readonly sortOrder?: FundAccountSortOrder
+}
+
+export interface FundTransactionSourceDetailView {
+  readonly label: string
+  readonly value: string
+}
+
+/**
+ * 流水的来源说明。link 只表达“这是哪张单据”，是否渲染为可点击链接由 web 侧
+ * 结合路由与权限决定；resolved=false 表示当前只有摘要降级内容，待回填补齐。
+ */
+export interface FundTransactionSourceView {
+  readonly kind: FundSourceKind
+  readonly headline: string
+  /** 列表主行主体；为空时前端回退到客户/供应商/单号。 */
+  readonly subjectName: string | null
+  /** 列表主行动作短语；为空时前端回退到 headline。 */
+  readonly actionLabel: string | null
+  readonly customerName: string | null
+  readonly supplierName: string | null
+  readonly documentNo: string | null
+  readonly link: FundSourceLink | null
+  readonly details: readonly FundTransactionSourceDetailView[]
+  readonly resolved: boolean
 }
 
 export interface FundTransactionAccountView {
@@ -85,10 +112,68 @@ export interface FundTransactionView {
   readonly reversalOfBatchId: string | null
   readonly reversalStatus: FundTransactionReversalStatus
   readonly postedAt: string
+  readonly source: FundTransactionSourceView | null
+}
+
+export interface FundTransactionEntryView {
+  /** 供表格 row-key 使用：分组行用 batchId，分录行用 entryId，两者同名不同值。 */
+  readonly id: string
+  readonly entryId: string
+  readonly lineNo: number
+  readonly account: FundTransactionAccountView
+  readonly accountTarget: FundAccountTarget
+  readonly direction: FundEntryDirection
+  readonly amountStrategy: FundAmountStrategy
+  readonly amount: string
+  readonly balanceBefore: string
+  readonly balanceAfter: string
+  readonly accountSequence: string
+  readonly postedAt: string
+}
+
+/**
+ * 财务流水的分组视图：一个批次一行，展开看该批次的全部分录。
+ * 组合批次级字段是为了父行不必再发一次详情请求。
+ */
+export interface FundBatchGroupView {
+  readonly id: string
+  readonly batchId: string
+  readonly batchNo: string
+  readonly batchKind: FundPostingBatchKind
+  readonly postingTypeId: string
+  readonly postingTypeCode: string
+  readonly postingTypeName: string
+  readonly businessCategory: FundBusinessCategory
+  readonly businessSourceId: string
+  readonly businessSourceCode: string
+  readonly businessSourceName: string
+  readonly businessId: string
+  readonly businessNo: string | null
+  readonly summary: string
+  readonly businessAmount: string
+  readonly userShareRateSnapshot: string | null
+  readonly companyShareRateSnapshot: string | null
+  readonly businessOccurredAt: string
+  readonly reversalStatus: FundTransactionReversalStatus
+  readonly postedAt: string
+  readonly source: FundTransactionSourceView | null
+  readonly entries: readonly FundTransactionEntryView[]
+  readonly shares: FundTransactionSharesView
+}
+
+/** 分摊归属汇总：按批次的全部分录计算，与分录级筛选无关。 */
+export interface FundTransactionSharesView {
+  readonly hasUser: boolean
+  readonly hasCompany: boolean
+  /** 用户腿的户主；公司独担时为 null。 */
+  readonly user: {
+    readonly displayName: string
+    readonly avatarUrl: string | null
+  } | null
 }
 
 export interface FundTransactionPage {
-  readonly items: readonly FundTransactionView[]
+  readonly items: readonly FundBatchGroupView[]
   readonly page: number
   readonly pageSize: number
   readonly total: number
@@ -106,6 +191,8 @@ export interface FundSelfTransactionListQuery {
   readonly occurredFrom?: string
   readonly occurredTo?: string
   readonly postingTypeId?: string
+  /** 跨字段关键词：命中摘要、客户名、供应商名、业务单号或来源单号。 */
+  readonly keyword?: string
   readonly sortBy?: FundTransactionSortField
   readonly sortOrder?: FundAccountSortOrder
 }
@@ -134,6 +221,7 @@ export interface FundSelfTransactionView {
   readonly businessOccurredAt: string
   readonly reversalStatus: FundTransactionReversalStatus
   readonly postedAt: string
+  readonly source: FundTransactionSourceView | null
 }
 
 export interface FundSelfTransactionPage {
@@ -220,4 +308,5 @@ export interface FundPostingBatchDetailView {
   readonly postedAt: string
   readonly entries: readonly FundPostingBatchEntryView[]
   readonly reversalChain: FundPostingBatchReversalChainView
+  readonly source: FundTransactionSourceView | null
 }

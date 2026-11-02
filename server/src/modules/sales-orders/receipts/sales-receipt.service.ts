@@ -19,6 +19,7 @@ import { MediaAssetService, MediaAssetLifecycleError } from '../../media/media-a
 import { FundPostingService, type FundBusinessTransactionContext } from '../../fund-accounts/application/fund-posting.contract'
 import { FundPostingError } from '../../fund-accounts/application/fund-posting.errors'
 import { FundCalculationError } from '../../fund-accounts/domain/fund-calculation.errors'
+import { truncateFundSourceText } from '../../fund-accounts/application/fund-source-snapshot'
 import { normalizePositiveSalesOrderAmount, deriveSalesOrderPaymentStatus } from '../domain/sales-order-decimal'
 import { createSalesOrderDocumentTitle } from '../domain/sales-order-document-title'
 import { SalesOrderAutomaticStateService } from '../sales-order-automatic-state.service'
@@ -139,9 +140,40 @@ export class SalesReceiptService {
     if (!rate || rate.rate.lte(0)) return receiptFailure('SALES_RECEIPT_RATE_UNAVAILABLE', '订单币种当前缺少有效汇率')
     return rate
   }
-  private postingInput(row: { id: string, accountOwnerUserId: string, receivedAt: Date }, orderNo: string, amount: string) {
-    return { postingTypeCode: 'ORDER_SETTLEMENT', userId: row.accountOwnerUserId, amount, businessId: row.id, businessNo: orderNo,
-      summary: '销售收款审核入账', businessOccurredAt: row.receivedAt.toISOString(), idempotencyKey: row.id }
+  private postingInput(
+    row: {
+      id: string
+      accountOwnerUserId: string
+      receivedAt: Date
+      paymentType: string
+      paymentMethodNameSnapshot: string
+      remark: string | null
+    },
+    order: { id: string, orderNo: string, customerName: string },
+    amount: string,
+  ) {
+    const paymentTypeLabel = row.paymentType === 'DEPOSIT' ? '定金' : '尾款'
+    return {
+      postingTypeCode: 'ORDER_SETTLEMENT', userId: row.accountOwnerUserId, amount, businessId: row.id, businessNo: order.orderNo,
+      summary: '销售收款审核入账',
+      // 来源说明只服务展示，不参与幂等指纹；客户与订单来自本次事务内已锁定的订单行。
+      source: {
+        headline: `${order.customerName} · 销售${paymentTypeLabel}收款`,
+        subject: order.customerName,
+        action: `销售${paymentTypeLabel}收款`,
+        customerName: order.customerName,
+        documentNo: order.orderNo,
+        link: { kind: 'SALES_ORDER' as const, id: order.id },
+        detail: [
+          { label: '收款类型', value: paymentTypeLabel },
+          { label: '收款方式', value: row.paymentMethodNameSnapshot },
+          ...(row.remark
+            ? [{ label: '备注', value: truncateFundSourceText(row.remark) }]
+            : []),
+        ],
+      },
+      businessOccurredAt: row.receivedAt.toISOString(), idempotencyKey: row.id,
+    }
   }
 
   async submit(context: SalesOrderMutationContext, salesOrderId: string, input: SalesReceiptRequestCreateDto, key: unknown) {
@@ -216,7 +248,7 @@ export class SalesReceiptService {
         this.assertOpen(order)
         const rate = await this.rate(tx, row.currencyCode)
         const amount = convertReceiptToCny(row.amount.toFixed(2), rate.rate.toFixed(4))
-        const preview = await this.funds.previewBusinessEventInTransaction(tx, this.fundContext(context, 'APPROVE'), this.postingInput(row, order.orderNo, amount))
+        const preview = await this.funds.previewBusinessEventInTransaction(tx, this.fundContext(context, 'APPROVE'), this.postingInput(row, order, amount))
         return { expectedContext: { orderVersion: order.version, exchangeRateId: rate.id, exchangeRateVersion: rate.version, ruleVersionId: preview.ruleVersionId, userShareRate: preview.userShareRate ?? '0.00' },
           foreignUnitsPerCny: rate.rate.toFixed(4), businessAmount: preview.businessAmount, userShareRate: preview.userShareRate, companyShareRate: preview.companyShareRate, entries: [...preview.entries] }
       })
@@ -243,7 +275,7 @@ export class SalesReceiptService {
         if (!asset) receiptFailure('SALES_ORDER_DOCUMENT_UNAVAILABLE', '收款凭证当前不可用')
         await this.verifyVoucher(asset.objectKey!)
         const amount = convertReceiptToCny(row.amount.toFixed(2), rate.rate.toFixed(4))
-        const posting = await this.funds.postBusinessEventInTransaction(tx, this.fundContext(context, 'APPROVE'), this.postingInput(row, order.orderNo, amount), { ruleVersionId: input.expectedContext.ruleVersionId, userShareRate: input.expectedContext.userShareRate })
+        const posting = await this.funds.postBusinessEventInTransaction(tx, this.fundContext(context, 'APPROVE'), this.postingInput(row, order, amount), { ruleVersionId: input.expectedContext.ruleVersionId, userShareRate: input.expectedContext.userShareRate })
         // 统一使用应用时钟：不再把数据库读出的时间再经 Prisma 写回，避免适配器按会话时区重解释。
         const now = new Date()
         const payment = await tx.salesOrderPayment.create({ data: { salesOrderId: order.id, paymentType: row.paymentType, amount: row.amount, receivedAt: row.receivedAt, paymentMethod: row.paymentMethod, remark: row.remark, createdByUserId: context.actorUserId,

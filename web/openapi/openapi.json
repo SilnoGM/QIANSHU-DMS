@@ -14104,6 +14104,16 @@
             }
           },
           {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
             "name": "occurredFrom",
             "required": false,
             "in": "query",
@@ -14420,6 +14430,16 @@
             "in": "query",
             "schema": {
               "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 128,
               "type": "string"
             }
           },
@@ -66406,6 +66426,16 @@
             }
           },
           {
+            "name": "containerBatchId",
+            "required": false,
+            "in": "query",
+            "description": "按货件当前所在柜次筛选；用于货物对换的柜次级选择",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
             "name": "purchaseType",
             "required": false,
             "in": "query",
@@ -66753,6 +66783,16 @@
             "name": "createdByUserId",
             "required": false,
             "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "containerBatchId",
+            "required": false,
+            "in": "query",
+            "description": "按货件当前所在柜次筛选；用于货物对换的柜次级选择",
             "schema": {
               "format": "uuid",
               "type": "string"
@@ -74841,6 +74881,554 @@
               "status": 503,
               "codes": [
                 "MEDIA_STORAGE_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/container-batches/swap-context": {
+      "get": {
+        "operationId": "container_swap_context",
+        "parameters": [
+          {
+            "name": "leftShipmentId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "rightShipmentId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContainerSwapContextDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "container-batches"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": false,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "CONTAINER_SWAP_SHIPMENT_NOT_FOUND"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/container-batches/swap": {
+      "post": {
+        "operationId": "container_batch_swap",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContainerSwapRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContainerSwapResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "container-batches"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "CONTAINER_SWAP_SHIPMENT_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "CONTAINER_SWAP_IDEMPOTENCY_CONFLICT",
+                "CONTAINER_SWAP_LINE_CHANGED",
+                "CONTAINER_SWAP_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "CONTAINER_SWAP_NOT_ALLOWED",
+                "CONTAINER_SWAP_PACKAGING_UNPAID",
+                "CONTAINER_SWAP_PRODUCT_INVALID",
+                "CONTAINER_SWAP_PRODUCT_MISMATCH",
+                "CONTAINER_SWAP_RECIPIENT_INVALID",
+                "CONTAINER_SWAP_RECONCILING",
+                "CONTAINER_SWAP_SETTLED",
+                "VALIDATION_FAILED"
               ]
             }
           ]
@@ -90890,6 +91478,121 @@
           "idempotentReplay"
         ]
       },
+      "FundTransactionSourceLinkDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "SALES_ORDER",
+              "PURCHASE_ORDER",
+              "SALES_RECEIPT",
+              "INVOICE_REQUEST",
+              "SLH_RECONCILIATION",
+              "PACKAGING_COST",
+              "SHIPMENT_STORAGE",
+              "FUND_WITHDRAWAL"
+            ]
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ]
+      },
+      "FundTransactionSourceDetailDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ]
+      },
+      "FundTransactionSourceDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "SALES_RECEIPT",
+              "PURCHASE_PAYMENT",
+              "PACKAGING_COST",
+              "INVOICE_REQUEST",
+              "SHIPMENT_STORAGE",
+              "SLH_SETTLEMENT",
+              "SLH_FEE",
+              "SLH_COMPANY_ALLOCATION",
+              "WITHDRAWAL",
+              "MANUAL_ADJUSTMENT",
+              "REVERSAL",
+              "UNRESOLVED"
+            ]
+          },
+          "headline": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string",
+            "nullable": true
+          },
+          "actionLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "customerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "supplierName": {
+            "type": "string",
+            "nullable": true
+          },
+          "documentNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "link": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FundTransactionSourceLinkDto"
+              }
+            ]
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FundTransactionSourceDetailDto"
+            }
+          },
+          "resolved": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "headline",
+          "subjectName",
+          "actionLabel",
+          "customerName",
+          "supplierName",
+          "documentNo",
+          "link",
+          "details",
+          "resolved"
+        ]
+      },
       "FundTransactionAccountDto": {
         "type": "object",
         "properties": {
@@ -90920,27 +91623,20 @@
           "user"
         ]
       },
-      "FundTransactionDto": {
+      "FundTransactionEntryDto": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "entryId": {
             "type": "string",
             "format": "uuid"
           },
-          "batchId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "batchNo": {
-            "type": "string"
-          },
-          "batchKind": {
-            "type": "string",
-            "enum": [
-              "BUSINESS",
-              "MANUAL_ADJUSTMENT",
-              "REVERSAL"
-            ]
+          "lineNo": {
+            "type": "integer",
+            "minimum": 1
           },
           "account": {
             "$ref": "#/components/schemas/FundTransactionAccountDto"
@@ -90951,35 +91647,6 @@
               "USER",
               "COMPANY"
             ]
-          },
-          "postingTypeId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "postingTypeCode": {
-            "type": "string"
-          },
-          "postingTypeName": {
-            "type": "string"
-          },
-          "businessCategory": {
-            "type": "string",
-            "enum": [
-              "REVENUE",
-              "COST",
-              "NEUTRAL",
-              "ADJUSTMENT"
-            ]
-          },
-          "businessSourceId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "businessSourceCode": {
-            "type": "string"
-          },
-          "businessSourceName": {
-            "type": "string"
           },
           "direction": {
             "type": "string",
@@ -91012,6 +91679,128 @@
             "type": "string",
             "pattern": "^[1-9]\\d*$"
           },
+          "postedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "entryId",
+          "lineNo",
+          "account",
+          "accountTarget",
+          "direction",
+          "amountStrategy",
+          "amount",
+          "balanceBefore",
+          "balanceAfter",
+          "accountSequence",
+          "postedAt"
+        ]
+      },
+      "FundTransactionSharesUserDto": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "displayName",
+          "avatarUrl"
+        ]
+      },
+      "FundTransactionSharesDto": {
+        "type": "object",
+        "properties": {
+          "hasUser": {
+            "type": "boolean"
+          },
+          "hasCompany": {
+            "type": "boolean"
+          },
+          "user": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FundTransactionSharesUserDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "hasUser",
+          "hasCompany",
+          "user"
+        ]
+      },
+      "FundBatchGroupDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "batchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "batchNo": {
+            "type": "string"
+          },
+          "batchKind": {
+            "type": "string",
+            "enum": [
+              "BUSINESS",
+              "MANUAL_ADJUSTMENT",
+              "REVERSAL"
+            ]
+          },
+          "postingTypeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "postingTypeCode": {
+            "type": "string"
+          },
+          "postingTypeName": {
+            "type": "string"
+          },
+          "businessCategory": {
+            "type": "string",
+            "enum": [
+              "REVENUE",
+              "COST",
+              "NEUTRAL",
+              "ADJUSTMENT"
+            ]
+          },
+          "businessSourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "businessSourceCode": {
+            "type": "string"
+          },
+          "businessSourceName": {
+            "type": "string"
+          },
+          "businessId": {
+            "type": "string"
+          },
+          "businessNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "summary": {
+            "type": "string"
+          },
           "businessAmount": {
             "type": "string",
             "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
@@ -91026,32 +91815,9 @@
             "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$",
             "nullable": true
           },
-          "businessId": {
-            "type": "string"
-          },
-          "businessNo": {
-            "type": "string",
-            "nullable": true
-          },
-          "summary": {
-            "type": "string"
-          },
           "businessOccurredAt": {
             "type": "string",
             "format": "date-time"
-          },
-          "adjustmentMode": {
-            "type": "string",
-            "enum": [
-              "USER_ONLY",
-              "USER_AND_COMPANY_BY_SHARE"
-            ],
-            "nullable": true
-          },
-          "reversalOfBatchId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
           },
           "reversalStatus": {
             "type": "string",
@@ -91065,15 +91831,31 @@
           "postedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "source": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FundTransactionSourceDto"
+              }
+            ]
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FundTransactionEntryDto"
+            }
+          },
+          "shares": {
+            "$ref": "#/components/schemas/FundTransactionSharesDto"
           }
         },
         "required": [
-          "entryId",
+          "id",
           "batchId",
           "batchNo",
           "batchKind",
-          "account",
-          "accountTarget",
           "postingTypeId",
           "postingTypeCode",
           "postingTypeName",
@@ -91081,23 +91863,18 @@
           "businessSourceId",
           "businessSourceCode",
           "businessSourceName",
-          "direction",
-          "amountStrategy",
-          "amount",
-          "balanceBefore",
-          "balanceAfter",
-          "accountSequence",
-          "businessAmount",
-          "userShareRateSnapshot",
-          "companyShareRateSnapshot",
           "businessId",
           "businessNo",
           "summary",
+          "businessAmount",
+          "userShareRateSnapshot",
+          "companyShareRateSnapshot",
           "businessOccurredAt",
-          "adjustmentMode",
-          "reversalOfBatchId",
           "reversalStatus",
-          "postedAt"
+          "postedAt",
+          "source",
+          "entries",
+          "shares"
         ]
       },
       "FundTransactionPageDto": {
@@ -91106,7 +91883,7 @@
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/FundTransactionDto"
+              "$ref": "#/components/schemas/FundBatchGroupDto"
             }
           },
           "page": {
@@ -91222,6 +91999,15 @@
           "postedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "source": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FundTransactionSourceDto"
+              }
+            ]
           }
         },
         "required": [
@@ -91243,7 +92029,8 @@
           "summary",
           "businessOccurredAt",
           "reversalStatus",
-          "postedAt"
+          "postedAt",
+          "source"
         ]
       },
       "FundSelfTransactionPageDto": {
@@ -91611,6 +92398,15 @@
           },
           "reversalChain": {
             "$ref": "#/components/schemas/FundPostingBatchReversalChainDto"
+          },
+          "source": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FundTransactionSourceDto"
+              }
+            ]
           }
         },
         "required": [
@@ -91644,7 +92440,8 @@
           "correlationId",
           "postedAt",
           "entries",
-          "reversalChain"
+          "reversalChain",
+          "source"
         ]
       },
       "CreateFundReversalRequestDto": {
@@ -103298,6 +104095,13 @@
               }
             ]
           },
+          "containerLoadingMarks": {
+            "description": "货件当前装柜明细的海运唛头（去重）；未装柜或未填写时为空数组",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "storage": {
             "nullable": true,
             "description": "最新一条在仓或已调货的寄仓记录；无寄仓归属时为空",
@@ -103355,6 +104159,7 @@
           "deliveredRecordedAt",
           "deliveryRemark",
           "containerBatch",
+          "containerLoadingMarks",
           "storage",
           "purchaseOrder",
           "supplier",
@@ -103705,6 +104510,13 @@
               }
             ]
           },
+          "containerLoadingMarks": {
+            "description": "货件当前装柜明细的海运唛头（去重）；未装柜或未填写时为空数组",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "storage": {
             "nullable": true,
             "description": "最新一条在仓或已调货的寄仓记录；无寄仓归属时为空",
@@ -103768,6 +104580,7 @@
           "deliveredRecordedAt",
           "deliveryRemark",
           "containerBatch",
+          "containerLoadingMarks",
           "storage",
           "purchaseOrder",
           "supplier",
@@ -105561,6 +106374,319 @@
           "sourceFileId"
         ]
       },
+      "ContainerSwapItemDto": {
+        "type": "object",
+        "properties": {
+          "lineType": {
+            "type": "string",
+            "enum": [
+              "CATALOG",
+              "CUSTOM"
+            ]
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "productName": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lineType",
+          "productId",
+          "productName",
+          "quantity"
+        ]
+      },
+      "ContainerSwapLineDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "containerBatchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lineNumber": {
+            "type": "number"
+          },
+          "version": {
+            "type": "number"
+          },
+          "goodsName": {
+            "type": "string"
+          },
+          "oceanShippingMarkText": {
+            "type": "string",
+            "nullable": true
+          },
+          "recipientName": {
+            "type": "string",
+            "nullable": true
+          },
+          "recipientPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "recipientAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "codAmountTwd": {
+            "type": "string",
+            "nullable": true
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true
+          },
+          "afterRecipientName": {
+            "type": "string",
+            "nullable": true,
+            "description": "按对方货件合并/复制后的收件人；null 表示无值。"
+          },
+          "afterRecipientPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "afterRecipientAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "afterRemark": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "containerBatchId",
+          "lineNumber",
+          "version",
+          "goodsName",
+          "oceanShippingMarkText",
+          "recipientName",
+          "recipientPhone",
+          "recipientAddress",
+          "codAmountTwd",
+          "remark",
+          "afterRecipientName",
+          "afterRecipientPhone",
+          "afterRecipientAddress",
+          "afterRemark"
+        ]
+      },
+      "ContainerSwapShipmentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "shipmentNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "shippingMark": {
+            "type": "string",
+            "nullable": true
+          },
+          "purchaseOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "purchaseOrderNo": {
+            "type": "string"
+          },
+          "salesOrderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "salesOrderNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "customerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "containerBatchId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "containerBatchNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "containerBatchName": {
+            "type": "string",
+            "nullable": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerSwapItemDto"
+            }
+          },
+          "containerLoadingItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerSwapLineDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "shipmentNo",
+          "shippingMark",
+          "purchaseOrderId",
+          "purchaseOrderNo",
+          "salesOrderId",
+          "salesOrderNo",
+          "customerName",
+          "containerBatchId",
+          "containerBatchNo",
+          "containerBatchName",
+          "items",
+          "containerLoadingItems"
+        ]
+      },
+      "ContainerSwapErrorDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "ContainerSwapContextDto": {
+        "type": "object",
+        "properties": {
+          "left": {
+            "$ref": "#/components/schemas/ContainerSwapShipmentDto"
+          },
+          "right": {
+            "$ref": "#/components/schemas/ContainerSwapShipmentDto"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerSwapErrorDto"
+            }
+          },
+          "canSwap": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "left",
+          "right",
+          "errors",
+          "canSwap"
+        ]
+      },
+      "ContainerSwapLineInputDto": {
+        "type": "object",
+        "properties": {
+          "loadingItemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "codAmountTwd": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 31,
+            "description": "由采运人员逐行手工填写的代收金额；null 表示无代收。不随对方货件自动复制。"
+          }
+        },
+        "required": [
+          "loadingItemId",
+          "expectedVersion",
+          "codAmountTwd"
+        ]
+      },
+      "ContainerSwapRequestDto": {
+        "type": "object",
+        "properties": {
+          "leftShipmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "rightShipmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "leftLines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerSwapLineInputDto"
+            }
+          },
+          "rightLines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerSwapLineInputDto"
+            }
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          }
+        },
+        "required": [
+          "leftShipmentId",
+          "rightShipmentId",
+          "leftLines",
+          "rightLines"
+        ]
+      },
+      "ContainerSwapResultDto": {
+        "type": "object",
+        "properties": {
+          "leftShipmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "rightShipmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "changedLineCount": {
+            "type": "number"
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "leftShipmentId",
+          "rightShipmentId",
+          "changedLineCount",
+          "replayed"
+        ]
+      },
       "ContainerLoadingItemDto": {
         "type": "object",
         "properties": {
@@ -105587,6 +106713,21 @@
             "nullable": true
           },
           "salesOrderNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "ownerSalesOrderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "货件当前归属销售单；与采购来源销售单可能不同（货物对换/寄仓调货）"
+          },
+          "ownerSalesOrderNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "货件当前归属销售单编号；无归属时为空"
+          },
+          "ownerCustomerName": {
             "type": "string",
             "nullable": true
           },
@@ -105693,6 +106834,9 @@
           "purchaseOrderNo",
           "salesOrderId",
           "salesOrderNo",
+          "ownerSalesOrderId",
+          "ownerSalesOrderNo",
+          "ownerCustomerName",
           "recipientName",
           "recipientPhone",
           "recipientAddress",

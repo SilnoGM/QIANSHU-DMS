@@ -565,7 +565,7 @@ describe('PurchaseOrderQueryService', () => {
         { customSupplierName: { contains: 'PO', mode: 'insensitive' } },
       ],
     })
-    expect(where?.orderBy).toEqual([{ orderDate: 'desc' }, { id: 'desc' }])
+    expect(where?.orderBy).toEqual({ orderNo: 'desc' })
     expect(where?.select).toMatchObject({
       createdBy: { select: { id: true, displayName: true } },
       shippingMarkText: true,

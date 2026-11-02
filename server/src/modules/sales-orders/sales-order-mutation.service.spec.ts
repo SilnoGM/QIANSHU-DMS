@@ -96,6 +96,7 @@ function setup() {
       }]),
       updateMany: jest.fn<Promise<{ count: number }>, [unknown]>()
         .mockResolvedValue({ count: 1 }),
+      count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(0),
     },
   }
   const prisma = {
@@ -448,6 +449,31 @@ describe('SalesOrderMutationService', () => {
     })).rejects.toMatchObject({ code: 'SALES_ORDER_CANCEL_SIGNED' })
 
     expect(fixture.transaction.purchaseOrder.count).not.toHaveBeenCalled()
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('blocks cancellation when a swapped-in shipment still belongs to the order', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.count.mockResolvedValue(0)
+    fixture.transaction.purchaseOrderPart.count.mockResolvedValue(1)
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'CANCELLED',
+      reason: '客户取消',
+    })).rejects.toMatchObject({ code: 'SALES_ORDER_CANCEL_SWAP_PENDING' })
+
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('blocks termination when a swapped-in shipment still belongs to the order', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrderPart.count.mockResolvedValue(1)
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'TERMINATED',
+      reason: '客户取消待调货',
+    })).rejects.toMatchObject({ code: 'SALES_ORDER_TERMINATION_SWAP_PENDING' })
+
     expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
   })
 

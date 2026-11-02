@@ -6,12 +6,17 @@ import { EMPTY_AMOUNT_TEXT, formatCurrencyAmount } from './format'
 
 defineOptions({ name: 'AmountDisplay' })
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   currencies: readonly CurrencyDescriptor[]
   currency: string
   value: CurrencyAmountValue
   minorUnit?: CurrencyMinorUnit
-}>()
+  /** 默认带币种代码；列表里币种恒定时可关闭。 */
+  showCode?: boolean
+}>(), {
+  // Vue 会把缺省的 Boolean prop 转成 false；显式默认值才能保留“未传即带代码”。
+  showCode: true,
+})
 
 const currencyDescriptor = computed(() => findCurrencyDescriptor(
   props.currencies,
@@ -22,6 +27,7 @@ const formattedAmount = computed(() => formatCurrencyAmount(
   props.currency,
   props.currencies,
   props.minorUnit,
+  { showCode: props.showCode },
 ))
 // 未解析币种仍保留可审计的原始金额，同时通过 aria-label 明确告知辅助技术。
 const ariaLabel = computed(() => formattedAmount.value === EMPTY_AMOUNT_TEXT

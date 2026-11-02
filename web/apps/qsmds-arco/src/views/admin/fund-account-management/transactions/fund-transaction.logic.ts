@@ -1,7 +1,9 @@
 import type {
+  FundBatchGroupDto,
   FundPostingBatchDetailDto,
   FundPostingBatchEntryDto,
-  FundTransactionDto,
+  FundTransactionEntryDto,
+  FundTransactionSourceLinkDto,
 } from '@/api/generated/types.gen'
 import type { FundTransactionListQuery } from '@/api/modules/fund-accounts'
 
@@ -9,14 +11,15 @@ import Decimal from 'decimal.js'
 
 export interface FundTransactionFilterState {
   readonly accountId?: string
-  readonly businessCategory?: FundTransactionDto['businessCategory']
+  readonly businessCategory?: FundBatchGroupDto['businessCategory']
   readonly businessNo?: string
   readonly businessSourceId?: string
-  readonly direction?: FundTransactionDto['direction']
+  readonly direction?: FundTransactionEntryDto['direction']
+  readonly keyword?: string
   readonly occurredFrom?: string
   readonly occurredTo?: string
   readonly postingTypeId?: string
-  readonly reversalStatus?: FundTransactionDto['reversalStatus']
+  readonly reversalStatus?: FundBatchGroupDto['reversalStatus']
   readonly userId?: string
 }
 
@@ -95,6 +98,21 @@ function optionalBusinessNo(value: string | undefined): string | undefined {
   return normalized
 }
 
+/** 关键词跨摘要、客户名、供应商名与单号，口径与业务单号输入一致。 */
+function optionalKeyword(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  const normalized = value.normalize('NFC').trim().replace(/\s+/gu, ' ')
+  if (normalized === '') {
+    return undefined
+  }
+  if ([...normalized].length > 128 || /[\p{Cc}\p{Cf}]/u.test(normalized)) {
+    throw new RangeError('关键词不能超过 128 个字符且不能包含控制字符')
+  }
+  return normalized
+}
+
 function optionalIsoDate(value: string | undefined, field: string): string | undefined {
   if (value === undefined || value.trim() === '') {
     return undefined
@@ -129,6 +147,7 @@ export function buildFundTransactionQuery(
     '业务来源',
   )
   const businessNo = optionalBusinessNo(input.filters.businessNo)
+  const keyword = optionalKeyword(input.filters.keyword)
 
   return {
     page: positiveInteger(input.page, '页码', 1_000_000),
@@ -144,6 +163,7 @@ export function buildFundTransactionQuery(
       ? {}
       : { direction: input.filters.direction }),
     ...(businessNo === undefined ? {} : { businessNo }),
+    ...(keyword === undefined ? {} : { keyword }),
     ...(occurredFrom === undefined ? {} : { occurredFrom }),
     ...(occurredTo === undefined ? {} : { occurredTo }),
     ...(input.filters.reversalStatus === undefined
@@ -322,7 +342,7 @@ export function canReverseFundBatch(
 }
 
 export function getFundDirectionState(
-  direction: FundTransactionDto['direction'],
+  direction: FundTransactionEntryDto['direction'],
 ): FundDirectionState {
   return direction === 'CREDIT'
     ? Object.freeze({ label: '入账', sign: '+', tone: 'credit' })
@@ -330,7 +350,7 @@ export function getFundDirectionState(
 }
 
 export function getFundBusinessCategoryLabel(
-  value: FundTransactionDto['businessCategory'],
+  value: FundBatchGroupDto['businessCategory'],
 ): string {
   return {
     ADJUSTMENT: '调账',
@@ -341,7 +361,7 @@ export function getFundBusinessCategoryLabel(
 }
 
 export function getFundBatchKindLabel(
-  value: FundTransactionDto['batchKind'] | FundPostingBatchDetailDto['kind'],
+  value: FundBatchGroupDto['batchKind'] | FundPostingBatchDetailDto['kind'],
 ): string {
   return {
     BUSINESS: '业务动账',
@@ -351,7 +371,7 @@ export function getFundBatchKindLabel(
 }
 
 export function getFundReversalStatusLabel(
-  value: FundTransactionDto['reversalStatus'],
+  value: FundBatchGroupDto['reversalStatus'],
 ): string {
   return {
     FULL: '已全部冲账',
@@ -387,4 +407,70 @@ export function formatFundRateSnapshot(value: null | string): string {
   catch {
     return value
   }
+}
+
+/**
+ * 来源单号的可跳转目标。
+ *
+ * 服务端只回传“这是哪张单据”，是否可点由这里决定：既要求前端确实有对应的
+ * 详情路由，也要求当前身份持有该路由权限。没有路由的类型一律按纯文本展示，
+ * 不做“点了才提示无权限”。
+ */
+const FUND_SOURCE_LINK_ROUTES: Partial<Record<
+  FundTransactionSourceLinkDto['kind'],
+  { name: string, permission: string }
+>> = {
+  SLH_RECONCILIATION: {
+    name: 'qsFinanceBillReconciliationSlhReconciliationDetail',
+    permission: 'slh-bills:reconcile',
+  },
+}
+
+export interface FundSourceLinkTarget {
+  readonly id: string
+  readonly name: string
+  readonly permission: string
+}
+
+export function getFundSourceLinkTarget(
+  source: FundBatchGroupDto['source'] | null | undefined,
+): FundSourceLinkTarget | null {
+  const link = source?.link
+  if (!link) {
+    return null
+  }
+  const route = FUND_SOURCE_LINK_ROUTES[link.kind]
+  return route === undefined
+    ? null
+    : Object.freeze({ id: link.id, name: route.name, permission: route.permission })
+}
+
+export interface FundShareSplit {
+  /** 本人承担的分录金额。 */
+  readonly mine: string
+  /** 公司承担部分；单腿规则（如提款）为 0。 */
+  readonly company: string
+  readonly split: boolean
+}
+
+/**
+ * 一条流水分录的「我的部分 / 公司部分」。
+ *
+ * 分录金额恒为正，业务总额同样按绝对值比较：公司部分 = 业务总额 − 本人分录金额。
+ * 单腿规则（USER_WITHDRAWAL）业务总额等于本人金额，公司部分自然为 0；
+ * 不能用比例硬乘，否则提款会被算成公司也承担了分摊。
+ */
+export function splitFundLedgerShares(input: {
+  readonly amount: string
+  readonly businessAmount: string
+}): FundShareSplit {
+  const mine = parsePositiveAmount(input.amount, '动账金额')
+  const total = new FundDecimal(input.businessAmount).abs()
+  const company = total.minus(mine)
+  const companyAmount = company.isNegative() ? new FundDecimal(0) : company
+  return Object.freeze({
+    mine: mine.toFixed(2),
+    company: companyAmount.toFixed(2),
+    split: companyAmount.greaterThan(0),
+  })
 }

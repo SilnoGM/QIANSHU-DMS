@@ -29,6 +29,7 @@
     "containers:backfill-shipments": "node dist/commands/container-shipment-backfill.js",
     "containers:clear-orphan-loads": "node dist/commands/container-shipment-orphan-cleanup.js",
     "fund-batches:backfill-numbers": "node dist/commands/fund-posting-batch-number-backfill.js",
+    "fund-batches:backfill-sources": "node dist/commands/fund-source-backfill.js",
     "slh-bills:backfill-recipients": "node dist/commands/slh-bill-recipient-backfill.js",
     "slh-bills:backfill-amounts": "node dist/commands/slh-bill-amount-backfill.js",
     "auth:cleanup": "node dist/commands/auth-cleanup.js",

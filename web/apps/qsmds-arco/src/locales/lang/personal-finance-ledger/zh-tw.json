@@ -1,14 +1,13 @@
 {
   "personalFinanceLedger": {
     "ariaLabel": "資金流水",
-    "title": "帳戶流水記錄",
     "empty": "暫無流水",
     "emptyHint": "帳戶產生動帳後會在這裡顯示",
     "loadError": "資金流水載入失敗",
     "loading": "正在載入資金流水",
     "total": "共 {count} 筆",
     "column": {
-      "sequence": "序號",
+      "number": "編號",
       "postedAt": "記帳時間",
       "typeSource": "入帳類型與來源",
       "summary": "摘要與關聯單號",
@@ -39,12 +38,19 @@
     "businessNo": "業務單",
     "batchNo": "批次",
     "noBusinessNo": "無關聯業務單",
+    "search": "搜尋",
+    "searchReset": "重設",
+    "searchPlaceholder": "搜尋客戶名、供應商名、摘要或單號",
     "viewDetail": "查看詳情",
     "detail": {
       "title": "流水詳情",
       "businessOccurredAt": "業務發生時間",
       "summary": "摘要",
       "reversalStatus": "沖帳狀態",
+      "source": "來源說明",
+      "sourcePending": "僅摘要（待回填）",
+      "customer": "客戶",
+      "supplier": "供應商",
       "close": "關閉"
     }
   }

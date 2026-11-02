@@ -425,7 +425,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       new PurchasePayableService(new FundPostingApplicationService(prisma, new AuditService(), new NumberingGeneratorService(prisma)), {
         getPermissionCodesInTransaction: () => Promise.resolve(['purchase-orders:payment']),
         hasAll: (granted: readonly string[], required: readonly string[]) => required.every(code => granted.includes(code)),
-      } as unknown as AccessControlService, createPaymentRecipientFixture(prisma)),
+      } as unknown as AccessControlService, createPaymentRecipientFixture(prisma), { resolveStoredValuesInTransaction: () => Promise.resolve([]) } as never),
       { now: () => new Date('2026-08-27T12:00:00.000Z') },
     )
   })

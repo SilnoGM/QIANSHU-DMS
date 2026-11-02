@@ -48,8 +48,11 @@ const PART_SELECT = {
     },
   } },
   items: { orderBy: { line: { lineNumber: 'asc' } }, select: { purchaseOrderLineId: true, quantity: true, line: { select: LINE_SELECT } } },
-  // 数据库触发器保证一个货件只属于一个柜次，取首条即可；用于列表/手动匹配显示「本柜/他柜」。
-  containerLoadingItems: { take: 1, select: { containerBatch: { select: { id: true, containerBatchNo: true, containerBatchName: true } } } },
+  // 数据库触发器保证一个货件只属于一个柜次；保留全部明细以汇总去重后的装柜唛头。
+  containerLoadingItems: {
+    orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+    select: { oceanShippingMarkText: true, containerBatch: { select: { id: true, containerBatchNo: true, containerBatchName: true } } },
+  },
   // 寄仓状态只取当前在仓/已调货记录；作废记录不遮挡当前归属。
   storageRecords: {
     where: { status: { in: ['IN_STORAGE', 'CLAIMED'] } },
@@ -115,6 +118,9 @@ function baseWhere(input: PurchaseShipmentFilterDto, scope: DataScope, actorUser
   return {
     // 货件范围按当前归属判断；采购单来源只是筛选维度，不能再作为可见性真相源。
     ...purchaseOrderPartScopeWhere(scope, actorUserId),
+    ...(input.containerBatchId === undefined
+      ? {}
+      : { containerLoadingItems: { some: { containerBatchId: input.containerBatchId } } }),
     // 到仓货件页要求池内货件只去寄仓管理查看；默认不传，货件管理仍可见。
     ...(input.excludeStoragePool === true
       ? { AND: [{ OR: [
@@ -205,6 +211,9 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
     deliveredAt: row.deliveredAt?.toISOString() ?? null, deliveredBy: toNullablePersonReference(row.deliveredBy),
     deliveredRecordedAt: row.deliveredRecordedAt?.toISOString() ?? null, deliveryRemark: row.deliveryRemark,
     containerBatch: row.containerLoadingItems[0]?.containerBatch ?? null,
+    containerLoadingMarks: [...new Set(row.containerLoadingItems
+      .map(item => item.oceanShippingMarkText)
+      .filter((value): value is string => typeof value === 'string' && value.trim() !== ''))],
     storage: row.storageRecords[0] === undefined
       ? null
       : {

@@ -31,6 +31,7 @@ function preparedPayment(amount: string, replay = false, paymentType: PurchaseOr
   return {
     replay,
     recipientSnapshot: null, recipientQrMediaAssetId: null,    amount,
+    supplierName: '测试供应商',
     paymentId: PAYMENT_ID,
     idempotencyKeyHash: Buffer.alloc(32, 1),
     requestFingerprintHash: Buffer.alloc(32, 2),

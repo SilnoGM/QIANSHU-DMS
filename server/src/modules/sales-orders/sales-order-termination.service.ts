@@ -46,6 +46,25 @@ export class SalesOrderTerminationService {
     if (order === null) {
       terminationFailure('SALES_ORDER_NOT_FOUND', '销售订单不存在', HttpStatus.NOT_FOUND)
     }
+    // 货物对换会把其他采购单的货件转入本单；终止只遍历本单采购单，必须先阻断，避免留下孤儿归属。
+    const crossOwnedShipmentCount = await this.prisma.purchaseOrderPart.count({
+      where: {
+        status: 'ACTIVE',
+        ownershipCurrent: {
+          ownerType: 'SALES_ORDER',
+          ownerSalesOrderId: salesOrderId,
+          state: 'ACTIVE',
+        },
+        purchaseOrder: { salesOrderId: { not: salesOrderId } },
+      },
+    })
+    if (crossOwnedShipmentCount > 0) {
+      terminationFailure(
+        'SALES_ORDER_TERMINATION_SWAP_PENDING',
+        '该销售单存在货物对换转入的货件，请先处理对换货件后再终止',
+        HttpStatus.CONFLICT,
+      )
+    }
     const pendingReceiptCount = await this.prisma.salesReceiptRequest.count({
       where: { salesOrderId, status: 'PENDING_REVIEW' },
     })

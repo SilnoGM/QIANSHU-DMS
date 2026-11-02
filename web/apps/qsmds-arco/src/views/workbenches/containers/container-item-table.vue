@@ -69,7 +69,7 @@ const dimensionsText = (row: ContainerLoadingItemDto) => `${[row.lengthCm, row.w
 const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => [
   { id: 'goods', title: t('containerPage.goods'), accessorFn: row => `${row.goodsName} ${row.oceanShippingMarkText ?? ''}`, width: 240, minWidth: 240, maxWidth: 240, fixed: 'left' },
   { id: 'shipment', title: t('containerPage.shipment'), accessorFn: row => row.shippingMark || row.shipmentNo || t('containerPage.unmatched'), width: 250, minWidth: 250, maxWidth: 250 },
-  { id: 'source', title: t('containerPage.source'), accessorFn: row => [row.salesOrderNo, row.purchaseOrderNo].filter(Boolean).join(' '), width: 275, minWidth: 275, maxWidth: 275 },
+  { id: 'source', title: t('containerPage.source'), accessorFn: row => [...new Set([row.ownerSalesOrderNo, row.salesOrderNo, row.purchaseOrderNo].filter(Boolean))].join(' '), width: 275, minWidth: 275, maxWidth: 275 },
   { id: 'receipt', title: t('containerPage.receipt'), accessorKey: 'warehouseReceiptReference', width: 260, minWidth: 260, maxWidth: 260 },
   { id: 'package', title: t('containerPage.packageCount'), accessorFn: row => `${row.packageCount} ${row.packageUnit ?? ''}`, width: 100, minWidth: 100, maxWidth: 100, align: 'right', cellClass: 'qs-type-data' },
   { id: 'weightDimensions', title: t('containerPage.weightDimensions'), accessorFn: row => `${weightText(row)} ${dimensionsText(row)}`, width: 240, minWidth: 240, maxWidth: 240 },
@@ -118,6 +118,9 @@ const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => 
     </template>
     <template #cell-source="{ row }">
       <QsTableStackedCell class="max-w-full">
+        <QsTableStackedLine v-if="row.original.ownerSalesOrderNo && row.original.ownerSalesOrderNo !== row.original.salesOrderNo" :label="t('containerPage.currentSales')" content-class="qs-type-data [overflow-wrap:anywhere]">
+          {{ row.original.ownerSalesOrderNo }}
+        </QsTableStackedLine>
         <QsTableStackedLine :label="t('containerPage.sales')" content-class="qs-type-data [overflow-wrap:anywhere]">
           {{ row.original.salesOrderNo || t('containerPage.none') }}
         </QsTableStackedLine>

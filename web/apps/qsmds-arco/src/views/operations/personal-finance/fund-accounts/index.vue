@@ -56,6 +56,19 @@ const transactionError = ref('')
 const transactions = shallowRef<FundSelfTransactionDto[]>([])
 const transactionDetailOpen = ref(false)
 const transactionDetail = shallowRef<FundSelfTransactionDto | null>(null)
+/** 输入中的关键词与已生效关键词分开：只有回车/点击才发请求。 */
+const transactionKeywordDraft = ref('')
+const transactionKeyword = ref('')
+
+function applyTransactionKeyword(): void {
+  const normalized = transactionKeywordDraft.value.trim()
+  if (normalized === transactionKeyword.value) {
+    return
+  }
+  transactionKeyword.value = normalized
+  transactionPage.value = 1
+  void loadTransactions()
+}
 
 const canRead = computed(() => auth('fund-accounts:read-self'))
 const enabled = computed(() => (
@@ -66,19 +79,11 @@ const enabled = computed(() => (
 const refreshing = computed(() => accountLoading.value || transactionLoading.value)
 const ledgerColumns = computed<QsGenericTableColumn<FundSelfTransactionDto>[]>(() => [
   {
-    id: 'sequence',
-    accessorKey: 'accountSequence',
-    title: t('personalFinanceLedger.column.sequence'),
-    width: 64,
-    minWidth: 64,
-    maxWidth: 72,
-    fixed: 'left',
-  },
-  {
-    id: 'postedAt',
-    accessorKey: 'postedAt',
-    title: t('personalFinanceLedger.column.postedAt'),
+    id: 'batchNo',
+    accessorKey: 'batchNo',
+    title: t('personalFinanceLedger.column.number'),
     minWidth: 200,
+    fixed: 'left',
   },
   {
     id: 'typeSource',
@@ -187,6 +192,9 @@ async function loadTransactions(): Promise<void> {
     const response = await fundAccountsApi.transactions.listSelf({
       page: transactionPage.value,
       pageSize: transactionPageSize.value,
+      ...(transactionKeyword.value === ''
+        ? {}
+        : { keyword: transactionKeyword.value }),
     }, request.signal)
     if (!currentTransactions(request, requestEpoch)) {
       return
@@ -384,24 +392,52 @@ onBeforeUnmount(() => {
         @pagination-change="loadTransactions"
         @retry="loadTransactions"
       >
+        <!-- 标题位置直接放搜索：关键词跨摘要、客户名、供应商名与单号。 -->
         <template #query-leading>
-          <h2 class="qs-type-component-title m-0">
-            {{ t('personalFinanceLedger.title') }}
-          </h2>
+          <div class="flex flex-wrap gap-2 min-w-0 items-center">
+            <FaInput
+              v-model="transactionKeywordDraft"
+              type="search"
+              clearable
+              autocomplete="off"
+              maxlength="128"
+              class="min-h-11 w-full sm:min-h-9 sm:w-80"
+              :placeholder="t('personalFinanceLedger.searchPlaceholder')"
+              :disabled="transactionLoading"
+              data-testid="personal-finance-ledger-search"
+              @keydown.enter.prevent="applyTransactionKeyword"
+            />
+            <FaButton
+              variant="outline"
+              class="min-h-11 sm:min-h-9"
+              :disabled="transactionLoading"
+              @click="applyTransactionKeyword"
+            >
+              {{ t('personalFinanceLedger.search') }}
+            </FaButton>
+            <FaButton
+              v-if="transactionKeyword !== ''"
+              variant="ghost"
+              class="min-h-11 sm:min-h-9"
+              :disabled="transactionLoading"
+              @click="applyTransactionKeyword"
+            >
+              {{ t('personalFinanceLedger.searchReset') }}
+            </FaButton>
+          </div>
         </template>
 
-        <template #cell-sequence="{ row }">
-          <span class="qs-type-data text-muted-foreground">
-            #{{ row.original.accountSequence }}
-          </span>
-        </template>
-
-        <template #cell-postedAt="{ row }">
-          <DateTimeDisplay
-            :value="row.original.postedAt"
-            format="datetime"
-            class="qs-type-data-emphasis whitespace-nowrap"
-          />
+        <template #cell-batchNo="{ row }">
+          <div class="min-w-0">
+            <div class="qs-type-data-emphasis break-all">
+              {{ row.original.batchNo }}
+            </div>
+            <DateTimeDisplay
+              :value="row.original.postedAt"
+              format="datetime"
+              class="qs-type-meta text-muted-foreground mt-1 block whitespace-nowrap"
+            />
+          </div>
         </template>
 
         <template #cell-typeSource="{ row }">
@@ -434,7 +470,9 @@ onBeforeUnmount(() => {
         <template #cell-summary="{ row }">
           <div class="min-w-0">
             <div class="flex flex-wrap gap-2 items-center">
-              <span class="qs-type-compact-title">{{ row.original.summary }}</span>
+              <span class="qs-type-compact-title break-words">
+                {{ row.original.source?.headline ?? row.original.summary }}
+              </span>
               <span
                 v-if="reversalMeta(row.original.reversalStatus)"
                 class="qs-type-tag px-2 py-0.5 border rounded-md inline-flex items-center"
@@ -446,18 +484,27 @@ onBeforeUnmount(() => {
             <div class="qs-type-meta text-muted-foreground mt-1 flex flex-wrap gap-x-4 gap-y-1 items-center">
               <span class="inline-flex gap-1 items-center">
                 <FaIcon name="i-lucide:file-text" class="shrink-0 size-3.5" aria-hidden="true" />
-                <template v-if="row.original.businessNo">
+                <template v-if="row.original.source?.documentNo ?? row.original.businessNo">
                   <span>{{ t('personalFinanceLedger.businessNo') }}:</span>
-                  <span class="font-qs-data-mono">{{ row.original.businessNo }}</span>
+                  <span class="font-mono!">{{ row.original.source?.documentNo ?? row.original.businessNo }}</span>
                 </template>
                 <span v-else>{{ t('personalFinanceLedger.noBusinessNo') }}</span>
               </span>
-              <span class="inline-flex gap-1 items-center">
-                <FaIcon name="i-lucide:layers-2" class="shrink-0 size-3.5" aria-hidden="true" />
-                <span>{{ t('personalFinanceLedger.batchNo') }}:</span>
-                <span class="font-qs-data-mono">{{ row.original.batchNo }}</span>
+              <span v-if="row.original.source?.customerName" class="inline-flex gap-1 items-center">
+                <FaIcon name="i-lucide:user-round" class="shrink-0 size-3.5" aria-hidden="true" />
+                <span>{{ row.original.source.customerName }}</span>
+              </span>
+              <span v-if="row.original.source?.supplierName" class="inline-flex gap-1 items-center">
+                <FaIcon name="i-lucide:factory" class="shrink-0 size-3.5" aria-hidden="true" />
+                <span>{{ row.original.source.supplierName }}</span>
               </span>
             </div>
+            <p
+              v-if="row.original.source?.details.length"
+              class="qs-type-meta text-muted-foreground m-0 mt-1 break-words line-clamp-2"
+            >
+              {{ row.original.source.details.map(item => `${item.label}：${item.value}`).join(' · ') }}
+            </p>
           </div>
         </template>
 
@@ -473,27 +520,29 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-amount="{ row }">
-          <div class="flex gap-2 items-center justify-end">
-            <span
-              class="qs-type-tag px-2 py-0.5 rounded-md"
-              :class="directionMeta(row.original.direction).badgeClass"
-            >
-              {{ t(directionMeta(row.original.direction).labelKey) }}
-            </span>
-            <span class="inline-flex items-baseline" :class="directionMeta(row.original.direction).amountClass">
+          <div class="text-right min-w-0">
+            <div class="flex gap-2 items-center justify-end">
               <span
-                v-if="row.original.direction === 'CREDIT'"
-                class="qs-type-data-emphasis !text-base !font-semibold"
-                :class="directionMeta(row.original.direction).amountClass"
-              >+</span>
-              <AmountDisplay
-                :value="ledgerSignedAmount(row.original.direction, row.original.amount)"
-                currency="CNY"
-                :currencies="currencyCatalog.currencies.value"
-                class="!text-base !font-semibold"
-                :class="directionMeta(row.original.direction).amountClass"
-              />
-            </span>
+                class="qs-type-tag px-2 py-0.5 rounded-md"
+                :class="directionMeta(row.original.direction).badgeClass"
+              >
+                {{ t(directionMeta(row.original.direction).labelKey) }}
+              </span>
+              <span class="inline-flex items-baseline" :class="directionMeta(row.original.direction).amountClass">
+                <span
+                  v-if="row.original.direction === 'CREDIT'"
+                  class="qs-type-data-emphasis !text-base !font-semibold"
+                  :class="directionMeta(row.original.direction).amountClass"
+                >+</span>
+                <AmountDisplay
+                  :value="ledgerSignedAmount(row.original.direction, row.original.amount)"
+                  currency="CNY"
+                  :currencies="currencyCatalog.currencies.value"
+                  class="!text-base !font-semibold"
+                  :class="directionMeta(row.original.direction).amountClass"
+                />
+              </span>
+            </div>
           </div>
         </template>
 

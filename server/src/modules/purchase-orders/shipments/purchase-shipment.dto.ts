@@ -56,6 +56,10 @@ export class PurchaseShipmentFilterDto {
   @IsOptional() @Matches(UUID_PATTERN)
   createdByUserId?: string
 
+  @ApiProperty({ type: 'string', format: 'uuid', required: false, description: '按货件当前所在柜次筛选；用于货物对换的柜次级选择' })
+  @IsOptional() @Matches(UUID_PATTERN)
+  containerBatchId?: string
+
   @ApiProperty({ enum: PurchaseOrderType, required: false })
   @IsOptional() @IsEnum(PurchaseOrderType)
   purchaseType?: PurchaseOrderType
@@ -163,6 +167,7 @@ export class PurchaseShipmentListItemDto {
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly deliveredRecordedAt!: string | null
   @ApiProperty({ type: 'string', maxLength: 500, nullable: true }) readonly deliveryRemark!: string | null
   @ApiProperty({ type: () => PurchaseShipmentContainerBatchDto, nullable: true, description: '货件当前所在装柜柜次；未装柜或历史解绑后为空' }) readonly containerBatch!: PurchaseShipmentContainerBatchDto | null
+  @ApiProperty({ type: [String], description: '货件当前装柜明细的海运唛头（去重）；未装柜或未填写时为空数组' }) readonly containerLoadingMarks!: readonly string[]
   @ApiProperty({ type: () => PurchaseShipmentStorageDto, nullable: true, description: '最新一条在仓或已调货的寄仓记录；无寄仓归属时为空' }) readonly storage!: PurchaseShipmentStorageDto | null
   @ApiProperty({ type: () => PurchaseShipmentOrderDto }) readonly purchaseOrder!: PurchaseShipmentOrderDto
   @ApiProperty({ type: () => PurchaseOrderSupplierDto }) readonly supplier!: PurchaseOrderSupplierDto

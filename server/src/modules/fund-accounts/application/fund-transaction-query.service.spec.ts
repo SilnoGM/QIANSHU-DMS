@@ -34,6 +34,7 @@ describe('normalizeFundTransactionListQuery', () => {
       businessSourceId: '10000000-0000-4000-8000-000000000004',
       direction: 'DEBIT',
       businessNo: 'PO-0001',
+      keyword: null,
       occurredFrom: new Date('2026-08-01T00:00:00.000Z'),
       occurredTo: new Date('2026-08-31T23:59:59.999Z'),
       reversalStatus: 'PARTIAL',
@@ -63,50 +64,73 @@ describe('normalizeFundTransactionListQuery', () => {
 })
 
 describe('FundTransactionQueryService', () => {
-  it('returns one immutable ledger row with decimal and bigint strings', async () => {
+  it('returns one batch group with its entries and decimal/bigint strings', async () => {
+    const BATCH_ID = '10000000-0000-4000-8000-000000000012'
+    const ENTRY_ID = '10000000-0000-4000-8000-000000000011'
+    const entryRow = {
+      entryId: ENTRY_ID,
+      batchId: BATCH_ID,
+      lineNo: 1,
+      accountId: '10000000-0000-4000-8000-000000000013',
+      ownerType: 'USER',
+      userId: '10000000-0000-4000-8000-000000000014',
+      username: 'alice',
+      displayName: 'Alice',
+      avatarUrl: null,
+      userStatus: 'ACTIVE',
+      accountTarget: 'USER',
+      direction: 'CREDIT',
+      amountStrategy: 'USER_SHARE',
+      amount: new Prisma.Decimal('30'),
+      balanceBefore: new Prisma.Decimal('-5'),
+      balanceAfter: new Prisma.Decimal('25'),
+      accountSequence: 7n,
+      postedAt: new Date('2026-08-18T01:00:00.000Z'),
+    }
+    const groupRow = {
+      batchId: BATCH_ID,
+      batchNo: 'FUND_1',
+      batchKind: 'BUSINESS',
+      postingTypeId: '10000000-0000-4000-8000-000000000015',
+      postingTypeCode: 'ORDER_SETTLEMENT',
+      postingTypeName: '订单结算',
+      businessCategory: 'REVENUE',
+      businessSourceId: '10000000-0000-4000-8000-000000000016',
+      businessSourceCode: 'ORDER_SYSTEM',
+      businessSourceName: '订单系统',
+      businessId: 'order-1',
+      businessNo: '0000011',
+      summary: '订单结算',
+      businessAmount: new Prisma.Decimal('100'),
+      userShareRateSnapshot: new Prisma.Decimal('30'),
+      companyShareRateSnapshot: new Prisma.Decimal('70'),
+      businessOccurredAt: new Date('2026-08-18T00:00:00.000Z'),
+      reversalStatus: 'NONE',
+      postedAt: new Date('2026-08-18T01:00:00.000Z'),
+      sourceKind: null,
+      sourceHeadline: null,
+      sourceCustomerName: null,
+      sourceSupplierName: null,
+      sourceDocumentNo: null,
+      sourceLinkKind: null,
+      sourceLinkId: null,
+      sourceDetail: null,
+      sourceResolverVersion: null,
+    }
     const queryRaw: jest.MockedFunction<
       (query: { sql?: string }) => Promise<unknown>
     > = jest.fn()
+      // 第一条 SQL 是事务级 set_config，不返回业务行。
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ total: 1n }])
-      .mockResolvedValueOnce([{
-        entryId: '10000000-0000-4000-8000-000000000011',
-        batchId: '10000000-0000-4000-8000-000000000012',
-        batchNo: 'FUND_1',
-        batchKind: 'BUSINESS',
-        accountId: '10000000-0000-4000-8000-000000000013',
-        ownerType: 'USER',
-        userId: '10000000-0000-4000-8000-000000000014',
-        username: 'alice',
-        displayName: 'Alice',
-        avatarUrl: null,
-        userStatus: 'ACTIVE',
-        accountTarget: 'USER',
-        postingTypeId: '10000000-0000-4000-8000-000000000015',
-        postingTypeCode: 'ORDER_SETTLEMENT',
-        postingTypeName: '订单结算',
-        businessCategory: 'REVENUE',
-        businessSourceId: '10000000-0000-4000-8000-000000000016',
-        businessSourceCode: 'ORDER_SYSTEM',
-        businessSourceName: '订单系统',
-        direction: 'CREDIT',
-        amountStrategy: 'USER_SHARE',
-        amount: new Prisma.Decimal('30'),
-        balanceBefore: new Prisma.Decimal('-5'),
-        balanceAfter: new Prisma.Decimal('25'),
-        accountSequence: 7n,
-        businessAmount: new Prisma.Decimal('100'),
-        userShareRateSnapshot: new Prisma.Decimal('30'),
-        companyShareRateSnapshot: new Prisma.Decimal('70'),
-        businessId: 'order-1',
-        businessNo: '0000011',
-        summary: '订单结算',
-        businessOccurredAt: new Date('2026-08-18T00:00:00.000Z'),
-        adjustmentMode: null,
-        reversalOfBatchId: null,
-        reversalStatus: 'NONE',
-        postedAt: new Date('2026-08-18T01:00:00.000Z'),
-      }])
+      .mockResolvedValueOnce([{ batchId: BATCH_ID }])
+      .mockResolvedValueOnce([entryRow])
+      .mockResolvedValueOnce([groupRow])
+      // 分摊归属按批次全部分录汇总，不受分录筛选影响。
+      .mockResolvedValueOnce([
+        { batchId: BATCH_ID, accountTarget: 'USER', displayName: 'Alice', avatarUrl: null },
+        { batchId: BATCH_ID, accountTarget: 'COMPANY', displayName: null, avatarUrl: null },
+      ])
     const transaction = { $queryRaw: queryRaw }
     const prisma = {
       $transaction: jest.fn((callback: (client: typeof transaction) => unknown) => (
@@ -119,20 +143,33 @@ describe('FundTransactionQueryService', () => {
 
     await expect(service.listTransactions({})).resolves.toEqual({
       items: [expect.objectContaining({
-        amount: '30.00',
-        balanceBefore: '-5.00',
-        balanceAfter: '25.00',
-        accountSequence: '7',
+        // 分组行与分录行共用一个 row-key：父行是 batchId，子行是 entryId。
+        id: BATCH_ID,
+        batchId: BATCH_ID,
         businessAmount: '100.00',
         reversalStatus: 'NONE',
+        source: null,
+        entries: [expect.objectContaining({
+          id: ENTRY_ID,
+          entryId: ENTRY_ID,
+          lineNo: 1,
+          amount: '30.00',
+          balanceBefore: '-5.00',
+          balanceAfter: '25.00',
+          accountSequence: '7',
+        })],
+        shares: { hasUser: true, hasCompany: true, user: { displayName: 'Alice', avatarUrl: null } },
       })],
       page: 1,
       pageSize: 20,
       total: 1,
     })
-    const listSql = queryRaw.mock.calls[2]?.[0]
-    expect(listSql.sql).toContain('entry."posted_at" DESC')
-    expect(listSql.sql).toContain('entry."id" DESC')
+    // 分页与排序都以批次为单位，金额维度按业务总额比较。
+    const batchPageSql = queryRaw.mock.calls[2]?.[0]
+    expect(batchPageSql.sql).toContain('batch."posted_at" DESC')
+    // 兜底键用批次号，避免同一事务内批次顺序随机。
+    expect(batchPageSql.sql).toContain('batch."batch_no" DESC')
+    expect(batchPageSql.sql).toContain('EXISTS')
   })
 
   it('returns historical batch snapshots with a derived partial reversal chain', async () => {

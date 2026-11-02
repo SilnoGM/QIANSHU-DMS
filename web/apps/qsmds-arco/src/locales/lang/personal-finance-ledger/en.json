@@ -1,14 +1,13 @@
 {
   "personalFinanceLedger": {
     "ariaLabel": "Fund ledger",
-    "title": "Account ledger",
     "empty": "No ledger entries",
     "emptyHint": "Entries will appear here once the account has activity.",
     "loadError": "Failed to load the fund ledger",
     "loading": "Loading fund ledger",
     "total": "{count} entries",
     "column": {
-      "sequence": "No.",
+      "number": "No.",
       "postedAt": "Posted at",
       "typeSource": "Type and source",
       "summary": "Summary and reference",
@@ -39,12 +38,19 @@
     "businessNo": "Business no.",
     "batchNo": "Batch",
     "noBusinessNo": "No linked business",
+    "search": "Search",
+    "searchReset": "Reset",
+    "searchPlaceholder": "Search customer, supplier, summary or document no.",
     "viewDetail": "View details",
     "detail": {
       "title": "Ledger details",
       "businessOccurredAt": "Business occurred at",
       "summary": "Summary",
       "reversalStatus": "Reversal status",
+      "source": "Source",
+      "sourcePending": "Summary only (pending backfill)",
+      "customer": "Customer",
+      "supplier": "Supplier",
       "close": "Close"
     }
   }

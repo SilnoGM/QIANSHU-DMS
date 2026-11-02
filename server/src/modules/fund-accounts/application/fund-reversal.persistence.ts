@@ -476,4 +476,46 @@ export async function insertFundReversalBatch(
   if (rows.length !== 1 || rows[0]?.id !== input.id) {
     return persistenceInvariant()
   }
+
+  // 冲账行沿用原批次的来源内容：客户名/供应商名保持可检索，标题改为冲正口径。
+  // 原批次尚无投影（历史数据未回填）时退回批次摘要，不阻止冲账本身。
+  const sourceRows = await transaction.$queryRaw<Array<{ readonly batchId: unknown }>>(
+    Prisma.sql`
+      INSERT INTO "fund_posting_batch_sources" (
+        "batch_id",
+        "source_kind",
+        "headline",
+        "subject_name",
+        "action_label",
+        "customer_name",
+        "supplier_name",
+        "document_no",
+        "link_kind",
+        "link_id",
+        "detail",
+        "resolver_version"
+      )
+      SELECT
+        CAST(${input.id} AS uuid) AS "batch_id",
+        'REVERSAL'::"fund_posting_source_kind",
+        left('冲正 ' || COALESCE(original_source."headline", original."summary"), 200),
+        original_source."subject_name",
+        original_source."action_label",
+        original_source."customer_name",
+        original_source."supplier_name",
+        original_source."document_no",
+        original_source."link_kind",
+        original_source."link_id",
+        COALESCE(original_source."detail", '[]'::jsonb),
+        2
+      FROM "fund_posting_batches" AS original
+      LEFT JOIN "fund_posting_batch_sources" AS original_source
+        ON original_source."batch_id" = original."id"
+      WHERE original."id" = CAST(${input.originalBatchId} AS uuid)
+      RETURNING "batch_id" AS "batchId"
+    `,
+  )
+  if (sourceRows.length !== 1 || sourceRows[0]?.batchId !== input.id) {
+    return persistenceInvariant()
+  }
 }

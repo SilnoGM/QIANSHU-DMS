@@ -80,6 +80,9 @@ export class ContainerLoadingItemDto {
   @ApiProperty({ type: String, nullable: true }) purchaseOrderNo!: string | null
   @ApiProperty({ type: String, format: 'uuid', nullable: true }) salesOrderId!: string | null
   @ApiProperty({ type: String, nullable: true }) salesOrderNo!: string | null
+  @ApiProperty({ type: String, format: 'uuid', nullable: true, description: '货件当前归属销售单；与采购来源销售单可能不同（货物对换/寄仓调货）' }) ownerSalesOrderId!: string | null
+  @ApiProperty({ type: String, nullable: true, description: '货件当前归属销售单编号；无归属时为空' }) ownerSalesOrderNo!: string | null
+  @ApiProperty({ type: String, nullable: true }) ownerCustomerName!: string | null
   @ApiProperty({ type: String, nullable: true }) recipientName!: string | null
   @ApiProperty({ type: String, nullable: true }) recipientPhone!: string | null
   @ApiProperty({ type: String, nullable: true }) recipientAddress!: string | null

@@ -448,6 +448,26 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/test/api/product-taxonomies.test.ts',
   'web/apps/qsmds-arco/test/views/product-categories.test.ts',
   'web/apps/qsmds-arco/test/views/qs-sales-order-products-editor-modal.logic.test.ts',
+  // 资金流水来源投影只保存来源描述中的供应商名称快照，用于展示与关键词检索；
+  // 不新增 Supplier 主数据、关系、查询入口或写操作。
+  'server/prisma/migrations/20261101140000_fund_posting_batch_sources/migration.sql',
+  'server/src/modules/fund-accounts/application/fund-posting.persistence.spec.ts',
+  'server/src/modules/fund-accounts/application/fund-posting.persistence.ts',
+  'server/src/modules/fund-accounts/application/fund-reversal.persistence.ts',
+  'server/src/modules/fund-accounts/application/fund-source-backfill.service.ts',
+  'server/src/modules/fund-accounts/application/fund-source-snapshot.ts',
+  'server/src/modules/fund-accounts/application/fund-transaction-query.service.spec.ts',
+  'server/src/modules/fund-accounts/application/fund-transaction-query.service.ts',
+  'server/src/modules/fund-accounts/application/fund-transaction.contract.ts',
+  'server/src/modules/fund-accounts/dto/fund-transaction.dto.ts',
+  'web/apps/qsmds-arco/src/locales/lang/personal-finance-ledger/en.json',
+  'web/apps/qsmds-arco/src/locales/lang/personal-finance-ledger/zh-cn.json',
+  'web/apps/qsmds-arco/src/locales/lang/personal-finance-ledger/zh-tw.json',
+  'web/apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-batch-detail-drawer.vue',
+  'web/apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-transaction-table.vue',
+  'web/apps/qsmds-arco/src/views/operations/personal-finance/fund-accounts/fund-transaction-detail-modal.vue',
+  'web/apps/qsmds-arco/src/views/operations/personal-finance/fund-accounts/index.vue',
+  'web/apps/qsmds-arco/test/views/personal-finance-ledger.test.ts',
 ].sort())
 
 const currentGlobalDocuments = Object.freeze([

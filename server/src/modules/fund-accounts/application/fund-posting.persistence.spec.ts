@@ -386,6 +386,19 @@ describe('fund posting persistence writes', () => {
       requestId: 'request-1',
       correlationId: 'correlation-1',
       postedAt: AS_OF,
+      sourceSnapshot: {
+        sourceKind: 'UNRESOLVED',
+        headline: '订单亏损结算',
+        subjectName: null,
+        actionLabel: null,
+        customerName: null,
+        supplierName: null,
+        documentNo: null,
+        linkKind: null,
+        linkId: null,
+        detail: [],
+        resolverVersion: 1,
+      },
     })
 
     const createInput = transaction.createBatch.mock.calls[0]?.[0] as {
@@ -443,6 +456,19 @@ describe('fund posting persistence writes', () => {
       requestId: 'request-1',
       correlationId: null,
       postedAt: AS_OF,
+      sourceSnapshot: {
+        sourceKind: 'MANUAL_ADJUSTMENT',
+        headline: '修正录入金额',
+        subjectName: null,
+        actionLabel: '修正录入金额',
+        customerName: null,
+        supplierName: null,
+        documentNo: null,
+        linkKind: null,
+        linkId: null,
+        detail: [],
+        resolverVersion: 2,
+      },
     })
 
     const createInput = transaction.createBatch.mock.calls[0]?.[0] as {

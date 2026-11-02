@@ -57,7 +57,7 @@ export class PurchasePayableQueryService {
     const scope = await this.dataScope.resolve(actorUserId)
     return this.prisma.$transaction(async tx => {
       const rows = await tx.purchaseOrder.findMany({ where: { ...this.outstandingOrderWhere(scope, actorUserId), productMode: 'CATALOG', supplierValue }, include,
-        orderBy: [{ orderDate: 'desc' }, { id: 'desc' }] })
+        orderBy: { orderNo: 'desc' } })
       const supplierValues = rows.flatMap(row => row.supplierValue === null ? [] : [row.supplierValue])
       const [supplierResolutions, recipientsByOrderId] = await Promise.all([
         this.dictionary.resolveStoredValuesInTransaction(tx, {
@@ -174,7 +174,7 @@ export class PurchasePayableQueryService {
     // 按父采购单分页，再读取完整定金/尾款；同一快照内取得组数和明细，避免跨页拆单。
     return this.prisma.$transaction(async tx => {
       const [rows, total] = await Promise.all([
-        tx.purchaseOrder.findMany({ where, include, orderBy: [{ orderDate: 'desc' }, { id: 'desc' }], skip: (page - 1) * pageSize, take: pageSize }),
+        tx.purchaseOrder.findMany({ where, include, orderBy: { orderNo: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
         tx.purchaseOrder.count({ where }),
       ])
       const supplierValues = rows.flatMap(row => row.supplierValue === null ? [] : [row.supplierValue])

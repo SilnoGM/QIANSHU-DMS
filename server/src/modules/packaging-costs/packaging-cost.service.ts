@@ -10,6 +10,7 @@ import { DataScopeService, dataScopeFallback } from '../access-control/data-scop
 import { AuditService, AuditWriteFailedError } from '../audit/audit.service'
 import { DictionaryLookupService, DictionaryValueUnavailableError } from '../dictionaries/dictionary-lookup.service'
 import { FundPostingService } from '../fund-accounts/application/fund-posting.contract'
+import { truncateFundSourceText } from '../fund-accounts/application/fund-source-snapshot'
 import { FundPostingError } from '../fund-accounts/application/fund-posting.errors'
 import { FundCalculationError } from '../fund-accounts/domain/fund-calculation.errors'
 import { MediaAssetService, MediaAssetLifecycleError } from '../media/media-asset.service'
@@ -187,9 +188,35 @@ export class PackagingCostService {
         }
         await this.media.activate(tx, voucher.id)
         const fundContext = { ...context, sourceCode: 'PACKAGING_COST', consumerCode: 'PACKAGING_COST.PAY' }
+        // 提报行只存单号，客户名需要回到销售单取；单条主键读取不会改变本事务的锁序。
+        const salesOrder = await tx.salesOrder.findUnique({ where: { id: row.salesOrderId }, select: { customerName: true } })
+        const customerName = salesOrder?.customerName ?? null
         const postingInput = {
           postingTypeCode: 'WOODEN_PACKING_COST', userId: row.ownerUserId, amount: row.amount.toFixed(2),
-          businessId: row.id, businessNo: row.shipmentNo, summary: '打木架费用付款', idempotencyKey: row.id,
+          businessId: row.id, businessNo: row.shipmentNo, summary: '打木架费用付款',
+          source: {
+            headline: `${row.shipmentNo} · 打木架费用`,
+            ...(customerName === null ? {} : { subject: customerName }),
+            action: '打木架费用',
+            ...(customerName === null ? {} : { customerName }),
+            documentNo: row.shipmentNo,
+            link: { kind: 'PACKAGING_COST' as const, id: row.id },
+            detail: [
+              ...(row.packagingTypeName
+                ? [{ label: '包装类型', value: row.packagingTypeName }]
+                : []),
+              ...(row.salesOrderNo
+                ? [{ label: '销售单', value: row.salesOrderNo }]
+                : []),
+              ...(row.purchaseOrderNo
+                ? [{ label: '采购单', value: row.purchaseOrderNo }]
+                : []),
+              ...(row.shippingMarkText
+                ? [{ label: '唛头', value: truncateFundSourceText(row.shippingMarkText) }]
+                : []),
+            ],
+          },
+          idempotencyKey: row.id,
         }
         // 以提报时固定的销售出单人为资金归属，不能使用当前付款人。
         // 预览和入账共用当前事务及配置/账户锁；规则、比例、资金和付款审计任一失败均回滚。

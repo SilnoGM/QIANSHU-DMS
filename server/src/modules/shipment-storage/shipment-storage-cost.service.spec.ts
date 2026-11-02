@@ -53,6 +53,8 @@ function setup() {
   } as unknown as FundPostingService
   const transaction = {
     shipmentCostEvent: { create: jest.fn().mockResolvedValue({}) },
+    // 来源说明读取寄仓记录上冻结的客户与单号快照；没有记录时仍要能入账。
+    shipmentStorageRecord: { findUnique: jest.fn().mockResolvedValue(null) },
   } as unknown as Prisma.TransactionClient
   const audit = { record: jest.fn().mockResolvedValue({}) }
   const service = new ShipmentStorageCostService(funds, audit)
@@ -81,6 +83,11 @@ describe('ShipmentStorageCostService', () => {
         idempotencyKey: `${RECORD_ID}:CLAIM`,
         postingTypeCode: 'SHIPMENT_STORAGE_CLAIM',
         userId: USER_ID,
+        // 认领即调货：收回的是随货件转移的采购与包装成本，不叫寄仓成本。
+        summary: '调货成本转入',
+        source: expect.objectContaining({
+          headline: 'PKG/20261029-00001 · 调货成本转入',
+        }) as unknown,
       }),
     )
     expect(fixture.post).toHaveBeenCalledTimes(1)
@@ -123,6 +130,8 @@ describe('ShipmentStorageCostService', () => {
       expect.objectContaining({
         idempotencyKey: `${RECORD_ID}:RELEASE`,
         postingTypeCode: 'SHIPMENT_STORAGE_RELEASE',
+        // 转出方向由取消/拒收回收进寄仓触发，保持寄仓口径，不随调货改名。
+        summary: '寄仓成本转出',
       }),
     )
   })

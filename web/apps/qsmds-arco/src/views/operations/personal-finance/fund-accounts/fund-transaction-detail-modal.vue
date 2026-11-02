@@ -63,6 +63,43 @@ function close(): void {
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div v-if="item !== null" class="gap-5 grid">
+      <!-- 来源说明：一句话回答这笔钱为什么动，明细紧跟其后。 -->
+      <section class="p-4 border border-border rounded-xl bg-card sm:p-5">
+        <div class="flex flex-wrap gap-2 items-center">
+          <span class="qs-type-compact-label">
+            {{ t('personalFinanceLedger.detail.source') }}
+          </span>
+          <span
+            v-if="item.source && !item.source.resolved"
+            class="text-amber-700 qs-type-tag px-2 py-0.5 border border-amber-500/30 rounded-md bg-amber-500/10"
+          >
+            {{ t('personalFinanceLedger.detail.sourcePending') }}
+          </span>
+        </div>
+        <p class="qs-type-component-title m-0 mt-1 break-words">
+          {{ item.source?.headline ?? item.summary }}
+        </p>
+        <p class="qs-type-meta text-muted-foreground m-0 mt-1 flex flex-wrap gap-x-3 gap-y-1">
+          <span v-if="item.source?.documentNo" class="break-all font-mono!">{{ item.source.documentNo }}</span>
+          <span v-if="item.source?.customerName">
+            {{ t('personalFinanceLedger.detail.customer') }}：{{ item.source.customerName }}
+          </span>
+          <span v-if="item.source?.supplierName">
+            {{ t('personalFinanceLedger.detail.supplier') }}：{{ item.source.supplierName }}
+          </span>
+        </p>
+        <dl v-if="item.source?.details.length" class="m-0 mt-3 gap-x-6 gap-y-3 grid sm:grid-cols-2">
+          <div v-for="detail in item.source.details" :key="detail.label" class="min-w-0">
+            <dt class="qs-type-compact-label mb-1">
+              {{ detail.label }}
+            </dt>
+            <dd class="qs-type-body m-0 break-words">
+              {{ detail.value }}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
       <section class="p-4 border border-border rounded-xl bg-muted/25 sm:p-5">
         <div class="flex flex-wrap gap-2 items-center">
           <span class="qs-type-component-title">{{ item.postingTypeName }}</span>
@@ -184,7 +221,7 @@ function close(): void {
           <dt class="qs-type-compact-label">
             {{ t('personalFinanceLedger.businessNo') }}
           </dt>
-          <dd class="qs-type-data-mono m-0 break-all">
+          <dd class="qs-type-data-emphasis m-0 break-all">
             {{ item.businessNo ?? t('personalFinanceLedger.noBusinessNo') }}
           </dd>
         </div>
@@ -192,7 +229,7 @@ function close(): void {
           <dt class="qs-type-compact-label">
             {{ t('personalFinanceLedger.batchNo') }}
           </dt>
-          <dd class="qs-type-data-mono m-0 break-all">
+          <dd class="qs-type-data-emphasis m-0 break-all">
             {{ item.batchNo }}
           </dd>
         </div>

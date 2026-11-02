@@ -614,6 +614,25 @@ enum FundPostingBatchKind {
   @@map("fund_posting_batch_kind")
 }
 
+/// 资金来源快照的分类；由 (business_source_code, consumer_code) 决定，
+/// 不能只按 posting_type_code 判定——ORDER_SETTLEMENT 同时服务销售收款与顺联航结算。
+enum FundPostingSourceKind {
+  SALES_RECEIPT
+  PURCHASE_PAYMENT
+  PACKAGING_COST
+  INVOICE_REQUEST
+  SHIPMENT_STORAGE
+  SLH_SETTLEMENT
+  SLH_FEE
+  SLH_COMPANY_ALLOCATION
+  WITHDRAWAL
+  MANUAL_ADJUSTMENT
+  REVERSAL
+  UNRESOLVED
+
+  @@map("fund_posting_source_kind")
+}
+
 enum FundWithdrawalStatus {
   PENDING
   APPROVED
@@ -2161,6 +2180,7 @@ model FundPostingBatch {
   receiptPayment SalesOrderPayment? @relation("ReceiptPostingBatch")
   receiptVoidedPayment SalesOrderPayment? @relation("ReceiptReversalBatch")
   entries           FundLedgerEntry[]
+  sourceSnapshot    FundPostingBatchSource?
 
   @@unique([consumerCode, businessSourceId, idempotencyKeyHash], map: "fund_posting_batches_consumer_source_idempotency_key")
   @@index([postedAt(sort: Desc), id(sort: Desc)], map: "fund_posting_batches_posted_at_id_idx")
@@ -2194,6 +2214,34 @@ model FundLedgerEntry {
   @@index([accountId, postedAt(sort: Desc), id(sort: Desc)], map: "fund_ledger_entries_account_id_posted_at_id_idx")
   @@index([batchId, lineNo, id], map: "fund_ledger_entries_batch_id_line_no_id_idx")
   @@map("fund_ledger_entries")
+}
+
+/// 资金来源快照投影：与批次 1:1，只服务列表/详情展示与检索。
+/// 属可重建的派生数据，不参与资金事实的不可变边界；缺失时读取层回退到批次自身摘要，
+/// 因此历史批次可以由独立命令回填而不触碰 fund_posting_batches。
+model FundPostingBatchSource {
+  id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchId         String                @unique(map: "fund_posting_batch_sources_batch_key") @map("batch_id") @db.Uuid
+  sourceKind      FundPostingSourceKind @map("source_kind")
+  headline        String                @db.VarChar(200)
+  customerName    String?               @map("customer_name") @db.VarChar(128)
+  supplierName    String?               @map("supplier_name") @db.VarChar(128)
+  documentNo      String?               @map("document_no") @db.VarChar(128)
+  /// 列表主行的主体：客户 / 供应商 / 申请人；headline 保留为整句兜底。
+  subjectName     String?               @map("subject_name") @db.VarChar(128)
+  /// 列表主行的动作短语，例如「采购尾款付款」「调货成本转入」。
+  actionLabel     String?               @map("action_label") @db.VarChar(120)
+  /// 来源单据的可跳转目标；只在服务端已知具体单据 id 时写入。
+  linkKind        String?               @map("link_kind") @db.VarChar(32)
+  linkId          String?               @map("link_id") @db.VarChar(128)
+  detail          Json                  @default("[]") @db.JsonB
+  resolverVersion Int                   @default(1) @map("resolver_version") @db.SmallInt
+  resolvedAt      DateTime              @default(now()) @map("resolved_at") @db.Timestamptz(6)
+
+  batch FundPostingBatch @relation(fields: [batchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([sourceKind, resolvedAt(sort: Desc), batchId], map: "fund_posting_batch_sources_kind_resolved_batch_idx")
+  @@map("fund_posting_batch_sources")
 }
 
 /// 用户提款申请：运营提交 → 财务审核；通过时上传付款截图并原子扣减用户账户。

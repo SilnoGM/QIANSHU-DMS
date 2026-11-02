@@ -4,8 +4,10 @@ import { AuthModule } from '../auth/auth.module'
 import { DictionaryModule } from '../dictionaries/dictionary.module'
 import { MediaModule } from '../media/media.module'
 import { NumberingModule } from '../numbering/numbering.module'
+import { ShipmentOwnershipModule } from '../shipment-ownership/shipment-ownership.module'
 import { ContainerBatchController } from './container-batch.controller'
 import { ContainerBatchService } from './container-batch.service'
+import { ContainerSwapService } from './container-swap.service'
 import { ContainerSourceFileController } from './container-source-file.controller'
 import { ContainerSourceFileService } from './container-source-file.service'
 import { ContainerImportController } from './container-import.controller'
@@ -18,9 +20,9 @@ import { OperationsOceanChangeController } from './operations-ocean-change.contr
 import { OperationsOceanChangeService } from './operations-ocean-change.service'
 
 @Module({
-  imports: [PrismaModule, AuthModule, DictionaryModule, MediaModule, NumberingModule],
+  imports: [PrismaModule, AuthModule, DictionaryModule, MediaModule, NumberingModule, ShipmentOwnershipModule],
   controllers: [ContainerBatchController, ContainerSourceFileController, ContainerImportController, OperationsOceanContainerController, OperationsOceanChangeController],
-  providers: [ContainerBatchService, ContainerSourceFileService, ContainerImportService, ContainerShipmentBackfillService, ContainerShipmentOrphanCleanupService, OperationsOceanContainerService, OperationsOceanChangeService],
+  providers: [ContainerBatchService, ContainerSwapService, ContainerSourceFileService, ContainerImportService, ContainerShipmentBackfillService, ContainerShipmentOrphanCleanupService, OperationsOceanContainerService, OperationsOceanChangeService],
   exports: [ContainerBatchService],
 })
 export class ContainerBatchModule {}

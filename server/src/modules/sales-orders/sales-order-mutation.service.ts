@@ -264,6 +264,43 @@ export class SalesOrderMutationService {
           salesOrderId,
           reason,
         )
+        // 直接货物对换没有寄仓记录，回收逻辑看不到；任何仍归属本单、但不是本单采购来源的货件都必须阻断。
+        const crossOwnedShipmentCount = await transaction.purchaseOrderPart.count({
+          where: {
+            status: 'ACTIVE',
+            ownershipCurrent: {
+              ownerType: 'SALES_ORDER',
+              ownerSalesOrderId: salesOrderId,
+              state: 'ACTIVE',
+            },
+            purchaseOrder: { salesOrderId: { not: salesOrderId } },
+          },
+        })
+        if (crossOwnedShipmentCount > 0) {
+          return salesOrderRuleFailure(
+            'SALES_ORDER_CANCEL_SWAP_PENDING',
+            '该销售单存在货物对换转入的货件，请先处理对换货件后再取消',
+          )
+        }
+      }
+      if (toStatus === 'TERMINATED') {
+        const crossOwnedShipmentCount = await transaction.purchaseOrderPart.count({
+          where: {
+            status: 'ACTIVE',
+            ownershipCurrent: {
+              ownerType: 'SALES_ORDER',
+              ownerSalesOrderId: salesOrderId,
+              state: 'ACTIVE',
+            },
+            purchaseOrder: { salesOrderId: { not: salesOrderId } },
+          },
+        })
+        if (crossOwnedShipmentCount > 0) {
+          return salesOrderRuleFailure(
+            'SALES_ORDER_TERMINATION_SWAP_PENDING',
+            '该销售单存在货物对换转入的货件，请先处理对换货件后再终止',
+          )
+        }
       }
       await transaction.salesOrder.update({
         where: { id: salesOrderId },

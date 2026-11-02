@@ -62,6 +62,7 @@ describe('fund posting request normalization', () => {
       businessId: 'settlement-1',
       businessNo: '0000011',
       summary: '订单 亏损结算',
+      source: null,
       metadata: { retry: 1, taxable: false, warehouse: 'SZ' },
       businessOccurredAt: '2026-08-18T04:30:00.000Z',
     })

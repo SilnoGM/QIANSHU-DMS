@@ -343,11 +343,34 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
     )
     await clickVisibleButton(page, '应用筛选')
     await waitForTransactionSurface(page, profitBusinessNo)
+    // 财务流水默认按批次收起；先展开包含目标业务单号的批次再核对分录。
+    const expanded = await page.evaluate(`(() => {
+      const table = document.querySelector('[data-testid="fund-transaction-table"]')
+      const groupRow = [...(table?.querySelectorAll('tbody tr') ?? [])]
+        .find(row => row.getClientRects().length > 0
+          && row.querySelector('[data-slot="qs-generic-table-group-header"]')
+          && row.textContent?.includes(${JSON.stringify(profitBusinessNo)}))
+      const toggle = groupRow?.querySelector(
+        '[data-slot="qs-generic-table-group-header"] button[aria-expanded="false"]',
+      )
+      if (!(toggle instanceof HTMLButtonElement)) return false
+      toggle.click()
+      return true
+    })()`)
+    assert.equal(expanded, true)
+    await page.waitFor(`(() => {
+      const table = document.querySelector('[data-testid="fund-transaction-table"]')
+      return [...(table?.querySelectorAll('tbody tr') ?? [])]
+        .filter(row => row.getClientRects().length > 0
+          && !row.querySelector('[data-slot="qs-generic-table-group-header"]')
+          && row.textContent?.includes('入账'))
+        .length === 2
+    })()`)
     const filtered = await page.evaluate(`(() => {
       const table = document.querySelector('[data-testid="fund-transaction-table"]')
       const profitRow = [...(table?.querySelectorAll('tbody tr') ?? [])]
         .find(row => row.getClientRects().length > 0
-          && row.textContent?.includes(${JSON.stringify(profitBusinessNo)})
+          && !row.querySelector('[data-slot="qs-generic-table-group-header"]')
           && row.textContent?.includes('入账'))
       const amountLayout = profitRow?.querySelector('div.flex-nowrap')
       const amountParts = [...(amountLayout?.children ?? [])]
@@ -358,7 +381,8 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
         hasLoss: table?.textContent?.includes('E2E-ORDER-LOSS') ?? false,
         profitRows: [...(table?.querySelectorAll('tbody tr') ?? [])]
           .filter(row => row.getClientRects().length > 0
-            && row.textContent?.includes(${JSON.stringify(profitBusinessNo)}))
+            && !row.querySelector('[data-slot="qs-generic-table-group-header"]')
+            && row.textContent?.includes('入账'))
           .length,
       }
     })()`)

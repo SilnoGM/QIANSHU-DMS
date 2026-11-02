@@ -95,7 +95,7 @@ describe('PurchasePayableQueryService', () => {
       { id: 'balance', dueAmount: '70.00', remainingAmount: '0.00', paidAmount: '70.00', status: 'PAID', paidAt: '2026-09-16T12:00:00.000Z', paidBy: { id: 'payer', name: '财务' } },
     ] }] })
     expect(h.prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'RepeatableRead' })
-    expect(h.tx.purchaseOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 2, take: 2, where: {
+    expect(h.tx.purchaseOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 2, take: 2, orderBy: { orderNo: 'desc' }, where: {
       orderStatus: 'CONFIRMED', paymentStatus: { not: 'PAID' }, payables: { some: { closedAt: null, dueAmount: { gt: 0 } } }, OR: [
       { orderNo: { contains: 'PO/2026', mode: 'insensitive' } }, { customSupplierName: { contains: 'PO/2026', mode: 'insensitive' } }, { salesOrder: { orderNo: { contains: 'PO/2026', mode: 'insensitive' } } },
     ] }, include: expect.objectContaining({ payables: { include: expect.objectContaining({ payments: { where: { voidedAt: null }, include: { documents: { where: { detachedAt: null, documentType: 'PAYMENT_VOUCHER' }, take: 1 }, createdBy: { select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } } } }, orderBy: [{ paidAt: 'desc' }, { id: 'desc' }] } }) as unknown } }) as unknown }))

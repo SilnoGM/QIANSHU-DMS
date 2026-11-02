@@ -10,6 +10,7 @@ import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStac
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import ContainerFormModal from './container-form-modal.vue'
 import ContainerRemark from './container-remark.vue'
+import ContainerSwapModal from './container-swap-modal.vue'
 import { formatContainerMeasurement } from './display.logic'
 import { useContainerMutation } from './use-container-mutation'
 import { useContainerResource } from './use-container-resource'
@@ -27,6 +28,7 @@ const active = ref(true)
 const enabled = computed(() => active.value && route.name === 'qsPurchaseTransportContainers' && auth('container-batches:read'))
 const epoch = computed(() => account.authEpoch)
 const canCreate = computed(() => enabled.value && auth('container-batches:create'))
+const canSwap = computed(() => enabled.value && auth('container-batches:update'))
 const page = ref(1)
 const pageSize = ref(20)
 const search = ref('')
@@ -35,6 +37,7 @@ const query = computed(() => ({ page: page.value, pageSize: pageSize.value, sear
 const resource = useContainerResource(enabled, epoch, query, async signal => (await containerApi.list(query.value, signal)).data)
 const { data, loading, error } = resource
 const open = ref(false)
+const swapOpen = ref(false)
 const mutation = useContainerMutation(canCreate, epoch, async (payload: ContainerSubmission, key, signal) => {
   if (!payload.sourceFileId) {
     throw new Error(t('containerManagement.sourceRequired'))
@@ -92,6 +95,7 @@ async function create(payload: ContainerSubmission) {
 }
 watch([enabled, epoch], () => {
   open.value = false
+  swapOpen.value = false
 })
 watch(data, (result) => {
   if (result && !result.items.length && page.value > 1) {
@@ -114,9 +118,14 @@ onDeactivated(() => {
 <template>
   <div class="min-w-0">
     <FaPageHeader :title="t('containerPage.title')" :description="t('containerPage.description')">
-      <FaButton v-if="canCreate" @click="mutation.resetFeedback(); open = true">
-        <FaIcon name="i-lucide:plus" aria-hidden="true" />{{ t('containerPage.create') }}
-      </FaButton>
+      <div class="flex flex-wrap gap-2">
+        <FaButton v-if="canSwap" variant="outline" @click="swapOpen = true">
+          <FaIcon name="i-lucide:arrow-left-right" aria-hidden="true" />{{ t('containerPage.swap') }}
+        </FaButton>
+        <FaButton v-if="canCreate" @click="mutation.resetFeedback(); open = true">
+          <FaIcon name="i-lucide:plus" aria-hidden="true" />{{ t('containerPage.create') }}
+        </FaButton>
+      </div>
     </FaPageHeader>
     <FaPageMain>
       <FaEmpty v-if="!enabled" :title="t('containerPage.noAccess')" />
@@ -218,5 +227,6 @@ onDeactivated(() => {
       </template>
     </FaPageMain>
     <ContainerFormModal v-model="open" :submitting="submitting" :retry-only="retryOnly" :error="saveError" :field-errors="fieldErrors" @submit="create" />
+    <ContainerSwapModal v-model="swapOpen" @completed="resource.reload" />
   </div>
 </template>

@@ -10,6 +10,7 @@ import {
 } from '../../generated/prisma/enums'
 import { AuditService } from '../audit/audit.service'
 import { FundPostingService } from '../fund-accounts/application/fund-posting.contract'
+import { truncateFundSourceText } from '../fund-accounts/application/fund-source-snapshot'
 
 export const SHIPMENT_STORAGE_FUND_SOURCE = 'SHIPMENT_STORAGE'
 export const SHIPMENT_STORAGE_RELEASE_CONSUMER = 'SHIPMENT_STORAGE.RELEASE'
@@ -84,12 +85,51 @@ export class ShipmentStorageCostService {
       requestId: context.requestId,
       sourceCode: SHIPMENT_STORAGE_FUND_SOURCE,
     }
+    // 寄仓记录本身冻结了来源客户与单号，直接复用快照，不再回头查销售/采购单。
+    const record = await transaction.shipmentStorageRecord.findUnique({
+      where: { id: input.storageRecordId },
+      select: {
+        originCustomerNameSnapshot: true,
+        originSalesOrderNoSnapshot: true,
+        originPurchaseOrderNoSnapshot: true,
+        shippingMarkSnapshot: true,
+        shipmentNoSnapshot: true,
+      },
+    })
+    // 转入方向是随货件调拨收回的成本，业务上叫「调货成本」；转出仍叫寄仓成本转出，
+    // 因为它由取消/拒收把货件回收进寄仓触发，与调货无关。
+    const directionLabel = release ? '寄仓成本转出' : '调货成本转入'
+    const shipmentNo = input.shipmentNo ?? record?.shipmentNoSnapshot ?? null
     const postingInput = {
       amount: amount.toFixed(2),
       businessId: input.storageRecordId,
       idempotencyKey: `${input.storageRecordId}:${direction}`,
       postingTypeCode,
-      summary: release ? '寄仓成本转出' : '寄仓成本转入',
+      summary: directionLabel,
+      source: {
+        headline: `${shipmentNo ?? '寄仓记录'} · ${directionLabel}`,
+        ...(record?.originCustomerNameSnapshot === undefined
+          ? {}
+          : { subject: record.originCustomerNameSnapshot }),
+        action: directionLabel,
+        ...(record?.originCustomerNameSnapshot === undefined
+          ? {}
+          : { customerName: record.originCustomerNameSnapshot }),
+        ...(shipmentNo === null ? {} : { documentNo: shipmentNo }),
+        link: { kind: 'SHIPMENT_STORAGE' as const, id: input.storageRecordId },
+        detail: [
+          { label: '成本方向', value: release ? '转出（退还）' : '转入（收回）' },
+          ...(record === null
+            ? []
+            : [
+                { label: '原销售单', value: record.originSalesOrderNoSnapshot },
+                { label: '原采购单', value: record.originPurchaseOrderNoSnapshot },
+          ...(record.shippingMarkSnapshot
+            ? [{ label: '唛头', value: truncateFundSourceText(record.shippingMarkSnapshot) }]
+            : []),
+              ]),
+        ],
+      },
       userId: input.userId,
       ...(input.shipmentNo === null ? {} : { businessNo: input.shipmentNo }),
     }

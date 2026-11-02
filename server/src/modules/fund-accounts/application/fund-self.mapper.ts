@@ -70,5 +70,6 @@ export function mapFundSelfTransactionView(
     businessOccurredAt: view.businessOccurredAt,
     reversalStatus: view.reversalStatus,
     postedAt: view.postedAt,
+    source: view.source,
   })
 }

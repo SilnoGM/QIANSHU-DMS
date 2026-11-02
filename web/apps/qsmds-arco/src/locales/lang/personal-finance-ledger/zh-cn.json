@@ -1,14 +1,13 @@
 {
   "personalFinanceLedger": {
     "ariaLabel": "资金流水",
-    "title": "账户流水记录",
     "empty": "暂无流水",
     "emptyHint": "账户产生动账后会在这里显示",
     "loadError": "资金流水加载失败",
     "loading": "正在加载资金流水",
     "total": "共 {count} 条",
     "column": {
-      "sequence": "序号",
+      "number": "编号",
       "postedAt": "记账时间",
       "typeSource": "入账类型与来源",
       "summary": "摘要与关联单号",
@@ -39,12 +38,19 @@
     "businessNo": "业务单",
     "batchNo": "批次",
     "noBusinessNo": "无关联业务单",
+    "search": "搜索",
+    "searchReset": "重置",
+    "searchPlaceholder": "搜索客户名、供应商名、摘要或单号",
     "viewDetail": "查看详情",
     "detail": {
       "title": "流水详情",
       "businessOccurredAt": "业务发生时间",
       "summary": "摘要",
       "reversalStatus": "冲账状态",
+      "source": "来源说明",
+      "sourcePending": "仅摘要（待回填）",
+      "customer": "客户",
+      "supplier": "供应商",
       "close": "关闭"
     }
   }

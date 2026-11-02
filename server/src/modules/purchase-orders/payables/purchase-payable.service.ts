@@ -5,6 +5,7 @@ import { Injectable } from '@nestjs/common'
 import type { Prisma, PurchaseOrderPayment, PurchaseOrderPayable } from '../../../generated/prisma/client'
 import { ApiException } from '../../../infrastructure/http/api.exception'
 import { AccessControlService } from '../../access-control/access-control.service'
+import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
 import { FundPostingService } from '../../fund-accounts/application/fund-posting.contract'
 import { FundPostingError } from '../../fund-accounts/application/fund-posting.errors'
 import { FundCalculationError } from '../../fund-accounts/domain/fund-calculation.errors'
@@ -27,12 +28,15 @@ export interface PreparedPayablePayment {
   readonly paymentId: string
   readonly idempotencyKeyHash: Buffer<ArrayBuffer>
   readonly requestFingerprintHash: Buffer<ArrayBuffer>
+  /** 供应商显示名：自定义名称优先，字典类供应商取当前标签；只用于流水来源说明。 */
+  readonly supplierName: string | null
 }
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest()
+const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 
 @Injectable()
 export class PurchasePayableService {
-  constructor(private readonly funds: FundPostingService, private readonly access: AccessControlService, private readonly recipients: PaymentRecipientService) {}
+  constructor(private readonly funds: FundPostingService, private readonly access: AccessControlService, private readonly recipients: PaymentRecipientService, private readonly dictionary: DictionaryLookupService) {}
 
   async createForReview(tx: Prisma.TransactionClient, context: PurchaseOrderMutationContext, orderId: string): Promise<void> {
     const order = await tx.purchaseOrder.findUniqueOrThrow({ where: { id: orderId }, include: { salesOrder: { select: { issuerUserId: true } } } })
@@ -66,7 +70,7 @@ export class PurchasePayableService {
       if (!previous.requestFingerprintHash || !Buffer.from(previous.requestFingerprintHash).equals(requestFingerprintHash)) {
         return payableFailure('PURCHASE_PAYABLE_IDEMPOTENCY_CONFLICT', '该提交标识已用于不同的付款内容', 409)
       }
-      return { recipientSnapshot: null, recipientQrMediaAssetId: null, replay: true, payable: null, amount: previous.amount.toFixed(2), paymentId: previous.id, idempotencyKeyHash, requestFingerprintHash }
+      return { recipientSnapshot: null, recipientQrMediaAssetId: null, replay: true, payable: null, amount: previous.amount.toFixed(2), paymentId: previous.id, idempotencyKeyHash, requestFingerprintHash, supplierName: null }
     }
     if (!input.mediaAssetId) return payableFailure('PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', '请先上传付款截图')
     const payable = await tx.purchaseOrderPayable.findFirst({ where: { purchaseOrderId: orderId, paymentType: input.paymentType as 'DEPOSIT' | 'BALANCE' } })
@@ -77,9 +81,27 @@ export class PurchasePayableService {
     const summary = summarizePayable(payable.dueAmount.toFixed(2), payments.map(payment => payment.amount.toFixed(2)), false)
     if (summary.status !== 'PENDING_PAYMENT') return payableStateChanged()
     if (!confirmation && input.amount !== summary.remainingAmount) return payableFailure('PURCHASE_PAYABLE_NOT_AVAILABLE', '请按该阶段剩余应付金额一次完成付款')
-    const order = await tx.purchaseOrder.findUniqueOrThrow({ where: { id: orderId }, select: { id: true, productMode: true, supplierValue: true } })
+    const order = await tx.purchaseOrder.findUniqueOrThrow({ where: { id: orderId }, select: { id: true, productMode: true, supplierValue: true, customSupplierName: true } })
     const recipient = await this.recipients.resolveForPayment(tx, order, input)
-    return { recipientSnapshot: recipient.snapshot, recipientQrMediaAssetId: recipient.qrMediaAssetId, replay: false, payable, amount: summary.remainingAmount, paymentId: randomUUID(), idempotencyKeyHash, requestFingerprintHash }
+    return { recipientSnapshot: recipient.snapshot, recipientQrMediaAssetId: recipient.qrMediaAssetId, replay: false, payable, amount: summary.remainingAmount, paymentId: randomUUID(), idempotencyKeyHash, requestFingerprintHash,
+      supplierName: await this.resolveSupplierName(tx, order) }
+  }
+
+  /**
+   * 供应商显示名只用于流水来源说明：自定义名称优先，字典类供应商取当前标签。
+   * 字典不可用时退回空值而不是让付款失败——来源说明不能成为付款的前置条件。
+   */
+  private async resolveSupplierName(
+    tx: Prisma.TransactionClient,
+    order: { supplierValue: string | null, customSupplierName: string | null },
+  ): Promise<string | null> {
+    if (order.supplierValue === null) return order.customSupplierName
+    const [resolution] = await this.dictionary.resolveStoredValuesInTransaction(tx, {
+      dictionaryCode: SUPPLIER_DICTIONARY_CODE,
+      values: [order.supplierValue],
+    })
+    const label = resolution?.known === true ? resolution.label : null
+    return label ?? order.customSupplierName
   }
   async lockPaymentAccounts(tx: Prisma.TransactionClient, context: PurchaseOrderMutationContext, entries: readonly { prepared: PreparedPayablePayment, orderNo: string }[]) {
     try {
@@ -88,10 +110,22 @@ export class PurchasePayableService {
   }
   private paymentFundRequest(context: PurchaseOrderMutationContext, prepared: PreparedPayablePayment, orderNo: string) {
     const payable = prepared.payable!
+    const paymentTypeLabel = payable.paymentType === 'DEPOSIT' ? '定金' : '尾款'
+    const supplierName = prepared.supplierName
     return { context: { ...context, sourceCode: PURCHASE_PAYMENT_FUND_SOURCE,
       consumerCode: payable.accountOwnerType === 'COMPANY' ? PURCHASE_PAYMENT_STOCK_PAY_CONSUMER : PURCHASE_PAYMENT_PAY_CONSUMER },
     input: { postingTypeCode: PURCHASE_PAYMENT_POSTING_TYPE, ...(payable.ownerUserId ? { userId: payable.ownerUserId } : {}), amount: prepared.amount,
-      businessId: prepared.paymentId, businessNo: orderNo, summary: `采购${payable.paymentType === 'DEPOSIT' ? '定金' : '尾款'}付款`, idempotencyKey: prepared.paymentId,
+      businessId: prepared.paymentId, businessNo: orderNo, summary: `采购${paymentTypeLabel}付款`,
+      source: {
+        headline: `${supplierName ?? '未命名供应商'} · 采购${paymentTypeLabel}付款`,
+        ...(supplierName === null ? {} : { subject: supplierName }),
+        action: `采购${paymentTypeLabel}付款`,
+        ...(supplierName === null ? {} : { supplierName }),
+        documentNo: orderNo,
+        link: { kind: 'PURCHASE_ORDER' as const, id: payable.purchaseOrderId },
+        detail: [{ label: '付款阶段', value: paymentTypeLabel }],
+      },
+      idempotencyKey: prepared.paymentId,
       metadata: { purchaseOrderId: payable.purchaseOrderId, payableId: payable.id, paymentType: payable.paymentType } } }
   }
   async postPayment(tx: Prisma.TransactionClient, context: PurchaseOrderMutationContext, prepared: PreparedPayablePayment, orderNo: string) {
