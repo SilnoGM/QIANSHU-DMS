@@ -18,8 +18,6 @@ const account: QsPersonalFundAccountCardAccount = {
   id: '8f3a7c24-1b6d-4e2a-9c58-7d0e4b2a6f19',
   currency: 'CNY',
   balance: '1170.00',
-  userShareRate: '30.00',
-  shareRateUpdatedAt: '2026-09-28T01:30:00.000Z',
   createdAt: '2026-03-12T08:00:00.000Z',
   updatedAt: '2026-10-16T09:12:05.000Z',
 }

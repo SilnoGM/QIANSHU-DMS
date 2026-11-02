@@ -4,9 +4,10 @@ import type { CurrencyDescriptor } from '@/components/base/currency'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { findCurrencyDescriptor } from '@/components/base/currency'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import { serverNowEpochMs } from '@/utils/server-clock'
 import {
   formatMaskedAmount,
-  formatUserShareRate,
+  resolveOpenedDays,
   resolvePersonalFundAccountCardState,
   resolvePersonalFundAccountPanelTone,
 } from './logic'
@@ -62,7 +63,16 @@ const currencySymbol = computed(() => (
     ? findCurrencyDescriptor(props.currencies, props.account.currency)?.symbol ?? ''
     : ''
 ))
-const shareRateText = computed(() => formatUserShareRate(props.account?.userShareRate))
+/**
+ * “现在”取服务端校准时钟；computed 依赖 account，账户刷新或页面重新激活时会重算。
+ * 未开户或 createdAt 异常时回落占位符，不显示 0 天冒充真实数据。
+ */
+const openedDaysText = computed(() => {
+  const openedDays = resolveOpenedDays(props.account?.createdAt, serverNowEpochMs())
+  return openedDays === null
+    ? '—'
+    : t('qsPersonalFundAccount.openedDaysValue', { days: openedDays })
+})
 const maskedAmount = computed(() => formatMaskedAmount(currencySymbol.value))
 const balanceLabel = computed(() => t('qsPersonalFundAccount.balanceLabel', {
   currency: props.account?.currency ?? 'CNY',
@@ -214,28 +224,20 @@ const toggleLabel = computed(() => t(
         <dl class="qs-personal-fund-card__metrics">
           <div class="qs-personal-fund-card__metric">
             <span
-              class="qs-personal-fund-card__metric-icon qs-personal-fund-card__metric-icon--rate"
+              class="qs-personal-fund-card__metric-icon qs-personal-fund-card__metric-icon--accent"
               aria-hidden="true"
             >
-              <FaIcon name="i-lucide:percent" class="size-5" />
+              <FaIcon name="i-lucide:calendar-days" class="size-5" />
             </span>
             <div class="min-w-0">
               <dt class="qs-personal-fund-card__metric-label">
-                {{ t('qsPersonalFundAccount.shareRate') }}
+                {{ t('qsPersonalFundAccount.openedDays') }}
               </dt>
               <dd class="qs-personal-fund-card__metric-value">
-                {{ shareRateText }}
+                {{ openedDaysText }}
               </dd>
               <dd class="qs-personal-fund-card__metric-sub">
-                <span class="flex flex-wrap gap-x-1 items-baseline">
-                  <span>{{ t('qsPersonalFundAccount.rateEffectiveAt') }}</span>
-                  <DateTimeDisplay :value="account.shareRateUpdatedAt" format="date" />
-                  <DateTimeDisplay
-                    :value="account.shareRateUpdatedAt"
-                    format="time"
-                    class="qs-personal-fund-card__time"
-                  />
-                </span>
+                {{ t('qsPersonalFundAccount.openedDaysHint') }}
               </dd>
             </div>
           </div>
@@ -527,7 +529,7 @@ const toggleLabel = computed(() => t(
   border-radius: 0.5rem;
 }
 
-.qs-personal-fund-card__metric-icon--rate {
+.qs-personal-fund-card__metric-icon--accent {
   color: oklch(var(--primary));
   background: color-mix(in oklab, oklch(var(--primary)) 10%, transparent);
 }

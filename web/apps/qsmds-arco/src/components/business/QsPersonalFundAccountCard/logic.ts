@@ -1,25 +1,50 @@
+import type { DateTimeDisplayValue } from '../../base/DateTimeDisplay/format'
 import type { QsPersonalFundAccountCardState } from './types'
+import {
+  DEFAULT_TIME_ZONE,
+  EMPTY_DATE_TIME_TEXT,
+  formatDateTime,
+} from '../../base/DateTimeDisplay/format'
 
 /** 金额隐藏态使用固定掩码；真实余额不参与任何字符串拼接。 */
 export const PERSONAL_FUND_ACCOUNT_AMOUNT_MASK = '******'
 
+const MILLISECONDS_PER_DAY = 86_400_000
+
 /**
- * 分成比例只接受服务端输出的 0–100 两位小数字符串。
+ * 把带显式时区的时间归一到上海自然日，返回该日 00:00 的 UTC 毫秒值。
  *
- * 展示层不重新计算比例，也不接受缺小数位的输入；异常值统一回落占位符，
- * 避免把不完整的数据当成百分比展示。
+ * 复用 DateTimeDisplay 的严格校验：非法日历日期与缺少时区的字符串都视为不可用，
+ * 避免浏览器本地时区把开户日算出一天偏差。
  */
-export function formatUserShareRate(value: string | null | undefined): string {
-  if (typeof value !== 'string') {
-    return '—'
+function resolveShanghaiCalendarDay(value: DateTimeDisplayValue): number | null {
+  const dateText = formatDateTime(value, 'date', DEFAULT_TIME_ZONE)
+  if (dateText === EMPTY_DATE_TIME_TEXT) {
+    return null
   }
 
-  const normalized = value.trim()
-  if (!/^(?:0|[1-9]\d?|100)\.\d{2}$/u.test(normalized)) {
-    return '—'
+  const dayEpochMs = Date.parse(`${dateText}T00:00:00.000Z`)
+  return Number.isFinite(dayEpochMs) ? dayEpochMs : null
+}
+
+/**
+ * 开户天数按上海自然日计算，开户当天算第 1 天。
+ *
+ * 调用方传入服务端校准后的“现在”，避免浏览器时钟偏差把天数算错；
+ * 开户时间无法解析时返回 null，未来时间（时钟偏差或脏数据）收敛为第 1 天。
+ */
+export function resolveOpenedDays(
+  createdAt: string | null | undefined,
+  nowEpochMs: number,
+): number | null {
+  const openedDay = resolveShanghaiCalendarDay(createdAt)
+  const currentDay = resolveShanghaiCalendarDay(nowEpochMs)
+  if (openedDay === null || currentDay === null) {
+    return null
   }
 
-  return `${normalized}%`
+  const elapsedDays = Math.floor((currentDay - openedDay) / MILLISECONDS_PER_DAY)
+  return Math.max(1, elapsedDays + 1)
 }
 
 /** 隐藏金额只保留币种符号与固定掩码，不携带真实金额。 */
