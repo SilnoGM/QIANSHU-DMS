@@ -111,7 +111,7 @@ export interface RetreatSalesOrdersWhenUnloadedInput {
   readonly actorUserId: string
   readonly containerBatchId: string | null
   readonly requestId: string
-  readonly shipmentId: string
+  readonly shipmentIds: readonly string[]
   readonly salesOrderIds: readonly string[]
 }
 
@@ -176,7 +176,7 @@ export async function retreatSalesOrdersWhenShipmentsUnloaded(
       targetType: 'SALES_ORDER', targetId: salesOrderId,
       metadata: {
         automatic: true, fromStatus: 'SEA_TRANSIT', toStatus: 'WAREHOUSE_ARRIVED',
-        trigger: 'CONTAINER_UNLOAD', containerBatchId: input.containerBatchId, shipmentId: input.shipmentId,
+        trigger: 'CONTAINER_UNLOAD', containerBatchId: input.containerBatchId, shipmentIds: input.shipmentIds.join(','),
       },
     })
   }

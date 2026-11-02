@@ -24,6 +24,8 @@ function harness() {
       findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE', deliveredAt: null, loadedAt: null, warehouseReceivedAt: new Date('2026-09-18T00:00:00Z'), destinationWarehouseValue: 'B5', containerLoadingItems: [] }),
       count: jest.fn().mockResolvedValue(0),
     },
+    // 默认所有货件都不属于装柜合并组；组展开用例单独覆盖。
+    shipmentLoadGroupMember: { findMany: jest.fn().mockResolvedValue([]) },
     salesOrderLine: { findMany: jest.fn().mockResolvedValue([{ id: 'line-1', quantity: 1 }]) },
     shipmentClaimLine: { findMany: jest.fn().mockResolvedValue([]) },
     salesOrderDocument: { count: jest.fn().mockResolvedValue(0) },
@@ -125,6 +127,29 @@ describe('Container maintenance commands', () => {
     expect(statements.some(statement => statement.includes('SET loaded_at = NULL'))).toBe(false)
     expect(h.audit.record).toHaveBeenCalledTimes(1)
     expect(h.tx.salesOrder.update).not.toHaveBeenCalled()
+  })
+  it('clears every member when the last row of a load group is unbound', async () => {
+    const h = harness(), primary = randomUUID(), member = randomUUID()
+    const group = { id: 'group-1', primaryShipmentId: primary, members: [{ shipmentId: primary }, { shipmentId: member }] }
+    h.tx.containerLoadingItem.findFirst.mockResolvedValueOnce({ ...h.item, shipmentId: primary })
+    h.tx.shipmentLoadGroupMember.findMany.mockResolvedValueOnce([
+      { shipmentId: primary, group },
+      { shipmentId: member, group },
+    ])
+    h.tx.$queryRaw.mockImplementation((statement: { sql: string }) => Promise.resolve(statement.sql.includes('SET loaded_at = NULL')
+      ? [
+          { id: primary, previousLoadedAt: new Date('2026-09-19T00:00:00Z'), previousLoadedById: h.context.actorUserId },
+          { id: member, previousLoadedAt: new Date('2026-09-19T00:00:00Z'), previousLoadedById: h.context.actorUserId },
+        ]
+      : []))
+    await h.service.updateItem(h.context, h.id, h.itemId, fields)
+    expect(h.tx.containerLoadingItem.count).toHaveBeenCalledWith({ where: { shipmentId: primary } })
+    expect(h.tx.containerLoadingItem.count).toHaveBeenCalledWith({ where: { shipmentId: member } })
+    const unloadedIds = (h.audit.record.mock.calls as Array<[unknown, { eventType: string, targetId: string }]>)
+      .filter(call => call[1].eventType === 'PURCHASE_SHIPMENT_CONTAINER_UNLOADED')
+      .map(call => call[1].targetId)
+      .sort()
+    expect(unloadedIds).toEqual([primary, member].sort())
   })
   it('rejects unbinding a delivered shipment before any write', async () => {
     const h = harness(), shipmentId = randomUUID()

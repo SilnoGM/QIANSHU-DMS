@@ -51,7 +51,7 @@ function fixture(parts: Part[] = [part()]) {
   const retreat = (salesOrderIds: readonly string[] = ['so-1']) => retreatSalesOrdersWhenShipmentsUnloaded(
     transaction as unknown as PrismaService,
     audit,
-    { actorUserId: 'actor-1', containerBatchId: 'batch-1', requestId: 'request-1', shipmentId: 'part-1', salesOrderIds },
+    { actorUserId: 'actor-1', containerBatchId: 'batch-1', requestId: 'request-1', shipmentIds: ['part-1'], salesOrderIds },
   )
   return {
     salesOrder, salesOrderLine, shipmentClaimLine, salesOrderStatusHistory, purchaseOrderPart,
@@ -165,7 +165,7 @@ describe('retreatSalesOrdersWhenShipmentsUnloaded', () => {
     }) as unknown })
     expect(f.audit.record).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       eventType: 'SALES_ORDER_FULFILLMENT_STATUS_CHANGED', targetType: 'SALES_ORDER', targetId: 'so-1',
-      metadata: expect.objectContaining({ automatic: true, fromStatus: 'SEA_TRANSIT', toStatus: 'WAREHOUSE_ARRIVED', trigger: 'CONTAINER_UNLOAD', containerBatchId: 'batch-1', shipmentId: 'part-1' }) as unknown,
+      metadata: expect.objectContaining({ automatic: true, fromStatus: 'SEA_TRANSIT', toStatus: 'WAREHOUSE_ARRIVED', trigger: 'CONTAINER_UNLOAD', containerBatchId: 'batch-1', shipmentIds: 'part-1' }) as unknown,
     }))
   })
 

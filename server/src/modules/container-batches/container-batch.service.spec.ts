@@ -12,13 +12,24 @@ function harness(previous?: Partial<ContainerLoadingItem>) {
   const context = { actorUserId, requestId: randomUUID() }
   const tx = {
     $queryRaw: jest.fn().mockResolvedValue([]), user: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
-    containerBatch: { findUnique: jest.fn().mockResolvedValue({ version: 1 }), update: jest.fn().mockResolvedValue({}) },
+    containerBatch: { findUnique: jest.fn().mockResolvedValue({ version: 1, warehouseValue: 'B5' }), update: jest.fn().mockResolvedValue({}) },
     containerLoadingItem: {
       findUnique: jest.fn().mockResolvedValue(previous ?? null), aggregate: jest.fn().mockResolvedValue({ _max: { lineNumber: null } }),
       create: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...data, id: randomUUID(), version: 1,
         ...Object.fromEntries(['grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'reportedVolumeCai'].map(field => [field, typeof data[field] === 'string' ? new Prisma.Decimal(data[field]) : null])),
       })),
     },
+    shipmentLoadGroupMember: { findMany: jest.fn().mockResolvedValue([]) },
+    purchaseOrderPart: {
+      findMany: jest.fn().mockResolvedValue([{ ownershipCurrent: { ownerSalesOrderId: 'so-1' } }]),
+      findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE', deliveredAt: null, loadedAt: null, warehouseReceivedAt: new Date('2026-09-18T00:00:00Z'), destinationWarehouseValue: 'B5', containerLoadingItems: [] }),
+    },
+    salesOrderLine: { findMany: jest.fn().mockResolvedValue([{ id: 'line-1', quantity: 1 }]) },
+    shipmentClaimLine: { findMany: jest.fn().mockResolvedValue([]) },
+    salesOrderDocument: { count: jest.fn().mockResolvedValue(0) },
+    salesOrderStatusHistory: { create: jest.fn().mockResolvedValue({}) },
+    salesOrder: { findUnique: jest.fn().mockResolvedValue({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'LAND_TRANSIT' }), update: jest.fn().mockResolvedValue({}) },
+    purchaseOrder: { findMany: jest.fn().mockResolvedValue([]) },
   }
   const prisma = { $transaction: jest.fn((callback: (value: typeof tx) => unknown) => callback(tx)) }
   const access = { getPermissionCodesInTransaction: jest.fn().mockResolvedValue(['container-batches:update']), hasAll: jest.fn().mockReturnValue(true) }
@@ -49,6 +60,24 @@ describe('ContainerBatchService measurement calculation', () => {
     const test = harness()
     const result = await test.service.createItem(test.context, test.batchId, { goodsName: '履带', packageCount: 10, expectedVersion: 1, lengthCm: '128', widthCm: '19', heightCm: '15', reportedVolumeCai: '9999999999999999.12' }, test.key)
     expect(result.volumeDifferenceCai).toBe('-9999999999999986.24')
+  })
+
+  it('normalizes a group member to the primary shipment and validates every member', async () => {
+    const test = harness(), primary = randomUUID(), member = randomUUID()
+    test.tx.shipmentLoadGroupMember.findMany.mockResolvedValueOnce([{
+      shipmentId: member,
+      group: { id: 'group-1', primaryShipmentId: primary, members: [{ shipmentId: primary }, { shipmentId: member }] },
+    }])
+    const result = await test.service.createItem(test.context, test.batchId, { goodsName: '履带', packageCount: 1, expectedVersion: 1, shipmentId: member }, test.key)
+    expect(result).toMatchObject({ shipmentId: primary })
+    expect(test.tx.purchaseOrderPart.findUnique).toHaveBeenCalledTimes(2)
+    expect(test.tx.containerLoadingItem.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ shipmentId: primary }) as unknown,
+    }))
+    expect(test.audit.record).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      eventType: 'CONTAINER_LOADING_ITEM_CREATED',
+      metadata: expect.objectContaining({ shipmentId: primary, requestedShipmentId: member, loadGroupId: 'group-1' }) as unknown,
+    }))
   })
 
   it('replays a phase-one creation hash when new optional measurements are missing or null', async () => {

@@ -6,6 +6,17 @@ import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.
 import { PURCHASE_SHIPMENT_VIEWS, PurchaseShipmentContainerBatchDto, type PurchaseShipmentView } from '../purchase-orders/shipments/purchase-shipment.dto'
 import type { ReferenceField } from './import-matching'
 
+export class ContainerImportLoadGroupMemberDto {
+  @ApiProperty({ format: 'uuid' }) shipmentId!: string
+  @ApiProperty({ type: String, nullable: true }) shipmentNo!: string | null
+  @ApiProperty() isPrimary!: boolean
+}
+export class ContainerImportLoadGroupDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ format: 'uuid' }) primaryShipmentId!: string
+  @ApiProperty({ type: () => [ContainerImportLoadGroupMemberDto] }) members!: ContainerImportLoadGroupMemberDto[]
+}
+
 export class ContainerImportCandidateDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty({ type: String, nullable: true }) shipmentNo!: string | null
@@ -20,6 +31,7 @@ export class ContainerImportCandidateDto {
   @ApiProperty({ enum: PURCHASE_SHIPMENT_VIEWS.filter(value => value !== 'ALL') }) viewStatus!: Exclude<PurchaseShipmentView, 'ALL'>
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) warehouseReceivedAt!: string | null
   @ApiProperty({ type: () => PurchaseShipmentContainerBatchDto, nullable: true, description: '货件当前所在柜次；未装柜为空。' }) containerBatch!: PurchaseShipmentContainerBatchDto | null
+  @ApiProperty({ type: () => ContainerImportLoadGroupDto, nullable: true, description: '同票装柜合并组；导入会自动归一到主货件。' }) loadGroup!: ContainerImportLoadGroupDto | null
   @ApiProperty({ enum: ['shippingMarkText', 'trackingNo', 'shipmentNo'], isArray: true, description: '该候选命中的精确标识字段。' }) matchFields!: ReferenceField[]
   @ApiProperty() eligible!: boolean
   @ApiProperty({ type: String, nullable: true }) ineligibleReason!: string | null

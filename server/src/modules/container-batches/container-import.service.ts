@@ -11,7 +11,8 @@ import { markShipmentsContainerLoaded } from './container-load-fact'
 import { advanceSalesOrdersWhenAllShipmentsLoaded, lockSalesOrderChains, salesOrderIdsOfShipments } from '../purchase-orders/shipments/sales-order-container-load-progress'
 import type { ContainerImportConfirmDto, ContainerImportPreviewDto, ContainerImportResultDto, ContainerImportRowDto } from './container-import.dto'
 import { importHash, importRowIdentity, normalizeContainerImport, normalizeParsedFields, validateParsedRows } from './container-import.normalizer'
-import { findImportCandidates, lockImportShipments, serializeImportCandidate } from './container-import.shipments'
+import { findImportCandidates, findImportShipmentsByIds, lockImportShipments, serializeImportCandidate, type ImportShipment } from './container-import.shipments'
+import { resolveLoadGroupExpansion } from '../purchase-orders/shipments/shipment-load-group.resolver'
 import { ContainerSourceFileService } from './container-source-file.service'
 import { ContainerWorkbookParseError, parseContainerWorkbook } from './import-parser'
 import { matchContainerShipment } from './import-matching'
@@ -53,6 +54,21 @@ export class ContainerImportService {
         findImportCandidates(tx, parsedRows.map(row => row.warehouseReceiptReference)),
         tx.containerLoadingItem.findMany({ where: { containerBatchId: id }, select: { creationRequestKey: true, oceanShippingMarkText: true } }),
       ])
+      // 导入匹配先把候选按活跃装柜组归一到主货件；成员命中也落到同一票。
+      const primaryByCandidate = new Map<string, string>()
+      const candidateById = new Map<string, ImportShipment>()
+      for (const shipment of shipments) {
+        const group = shipment.loadGroupMemberships[0]?.group
+        primaryByCandidate.set(shipment.id, group?.primaryShipmentId ?? shipment.id)
+        candidateById.set(shipment.id, shipment)
+      }
+      const missingPrimaryIds = [...new Set([...primaryByCandidate.values()])].filter(primaryId => !candidateById.has(primaryId))
+      for (const primary of await findImportShipmentsByIds(tx, missingPrimaryIds)) {
+        candidateById.set(primary.id, primary)
+        primaryByCandidate.set(primary.id, primary.id)
+        const group = primary.loadGroupMemberships[0]?.group
+        for (const member of group?.members ?? []) primaryByCandidate.set(member.shipmentId, primary.id)
+      }
       const importedIdentities = new Set(existing.map(row => row.creationRequestKey))
       const existingMarks = new Set(existing.flatMap(row => row.oceanShippingMarkText ? [row.oceanShippingMarkText] : []))
       const rows: ContainerImportRowDto[] = parsedRows.map(parsed => {
@@ -64,21 +80,40 @@ export class ContainerImportService {
             matchReason: imported ? '该来源行已导入，本次跳过，已有明细保持不变' : '当前柜次已存在相同海运唛头的明细，本次跳过，已有明细保持不变' }
         }
         const match = matchContainerShipment(row.warehouseReceiptReference, shipments)
-        const candidates = shipments.filter(candidate => match.candidateIds.includes(candidate.id)).map(candidate => serializeImportCandidate(
-          candidate,
-          id,
-          batch.warehouseValue,
-          codes.includes('sales-orders:read'),
-          match.evidence.filter(evidence => evidence.shipmentId === candidate.id).map(evidence => evidence.field),
-        ))
-        const eligibleMatch = candidates.find(candidate => candidate.id === match.shipmentId && candidate.eligible)
+        const normalizedIds = [...new Set(match.candidateIds.map(candidateId => primaryByCandidate.get(candidateId) ?? candidateId))]
+        const normalizedMatchedId = match.shipmentId === null
+          ? null
+          : primaryByCandidate.get(match.shipmentId) ?? match.shipmentId
+        const candidates = normalizedIds
+          .map(candidateId => candidateById.get(candidateId))
+          .filter((candidate): candidate is ImportShipment => candidate !== undefined)
+          .map(candidate => serializeImportCandidate(
+            candidate,
+            id,
+            batch.warehouseValue,
+            codes.includes('sales-orders:read'),
+            match.evidence
+              .filter(evidence => (primaryByCandidate.get(evidence.shipmentId) ?? evidence.shipmentId) === candidate.id)
+              .map(evidence => evidence.field),
+          ))
+        const eligibleMatch = normalizedIds.length === 1
+          ? candidates[0]?.eligible === true ? candidates[0] : undefined
+          : candidates.find(candidate => candidate.id === normalizedMatchedId && candidate.eligible)
+        const mergedFromGroup = match.candidateIds.some(candidateId => primaryByCandidate.get(candidateId) !== candidateId)
+          || (match.shipmentId !== null && normalizedMatchedId !== match.shipmentId)
         const errors = [...row.errors]
         const fieldNames = { shippingMarkText: '货件唛头', trackingNo: '物流单号', shipmentNo: '货件编号' }
         // 只有全部候选都不可选时才把原因提升为行级原因；混合候选仍应提示人工核对多个命中。
         const allIneligibleReason = candidates.length > 0 && candidates.every(candidate => !candidate.eligible)
           ? candidates[0]?.ineligibleReason ?? null
           : null
-        const matchReason = eligibleMatch ? [...new Set(match.evidence.filter(evidence => evidence.shipmentId === eligibleMatch.id).map(evidence => fieldNames[evidence.field]))].join('、') + '精确匹配' : allIneligibleReason ?? match.reason
+        const matchReason = eligibleMatch
+          ? [...new Set(match.evidence
+              .filter(evidence => (primaryByCandidate.get(evidence.shipmentId) ?? evidence.shipmentId) === eligibleMatch.id)
+              .map(evidence => fieldNames[evidence.field]))].join('、')
+            + '精确匹配'
+            + (mergedFromGroup ? '（同票合并）' : '')
+          : allIneligibleReason ?? (mergedFromGroup && normalizedIds.length === 1 ? '同票合并后唯一命中' : match.reason)
         return { ...row, errors, candidates, matchedShipmentId: errors.length ? null : eligibleMatch?.id ?? null,
           matchStatus: errors.length ? 'INVALID' : eligibleMatch ? 'MATCHED' : candidates.length ? 'AMBIGUOUS' : 'UNMATCHED',
           matchReason }
@@ -127,7 +162,10 @@ export class ContainerImportService {
         if (pending.some(row => row.errors.length)) return containerFailure('CONTAINER_IMPORT_ROWS_INVALID', '来源表格存在数据异常，请修正后再导入')
         const unmatchedCount = pending.filter(row => selection.get(row.rowKey) === null).length
         if (unmatchedCount && !input.allowUnmatched) return containerFailure('CONTAINER_IMPORT_UNMATCHED', '存在未匹配货件的明细，请完成匹配或明确确认不关联货件')
-        const shipmentIds = pending.flatMap(row => selection.get(row.rowKey) ? [selection.get(row.rowKey)!] : [])
+        const requestedShipmentIds = pending.flatMap(row => selection.get(row.rowKey) ? [selection.get(row.rowKey)!] : [])
+        // 装柜组把成员展开成同一票：导入行仍只关联主货件，事实写入全部成员。
+        const expansion = await resolveLoadGroupExpansion(tx, requestedShipmentIds)
+        const shipmentIds = [...expansion.shipmentIds]
         // 销售链条先于货件加锁：批量导入可能同时推进多个销售订单，必须与发货、入仓保持同一加锁顺序。
         const salesOrderIds = await salesOrderIdsOfShipments(tx, shipmentIds)
         await lockSalesOrderChains(tx, salesOrderIds)
@@ -139,15 +177,16 @@ export class ContainerImportService {
         })
         const last = await tx.containerLoadingItem.aggregate({ where: { containerBatchId: id }, _max: { lineNumber: true } })
         for (const [index, row] of pending.entries()) {
+          const requestedShipmentId = selection.get(row.rowKey) ?? null
           const inserted = await tx.containerLoadingItem.create({ data: {
-            ...normalizeParsedFields(row), shipmentId: selection.get(row.rowKey)!, volumeCai: row.volumeCai, chargeableVolumeCai: row.chargeableVolumeCai,
+            ...normalizeParsedFields(row), shipmentId: requestedShipmentId === null ? null : expansion.primaryByShipment.get(requestedShipmentId) ?? requestedShipmentId, volumeCai: row.volumeCai, chargeableVolumeCai: row.chargeableVolumeCai,
             containerBatchId: id, lineNumber: (last._max.lineNumber ?? 0) + index + 1, creationRequestKey: importRowIdentity(source.sourceHash, row), creationPayloadHash: payloadHash,
             sourceSheetName: row.sourceSheetName, sourceRowNumber: row.sourceRowNumber,
             sourceData: { format: 'container.import.v1', sourceFileId: source.sourceFileId, sourceHash: source.sourceHash, requestKey, source: row.sourceData },
             createdById: context.actorUserId, updatedById: context.actorUserId,
           } })
           await this.audit.record(tx, { eventType: 'CONTAINER_LOADING_ITEM_CREATED', outcome: 'SUCCESS', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId,
-            targetType: 'CONTAINER_LOADING_ITEM', targetId: inserted.id, metadata: { containerBatchId: id, shipmentId: inserted.shipmentId, lineNumber: inserted.lineNumber, sourceFileId: source.sourceFileId, sourceHash: source.sourceHash, importRequestKey: requestKey } })
+            targetType: 'CONTAINER_LOADING_ITEM', targetId: inserted.id, metadata: { containerBatchId: id, shipmentId: inserted.shipmentId, requestedShipmentId, loadGroupId: requestedShipmentId === null ? null : expansion.groupByShipment.get(requestedShipmentId) ?? null, lineNumber: inserted.lineNumber, sourceFileId: source.sourceFileId, sourceHash: source.sourceHash, importRequestKey: requestKey } })
         }
         await tx.containerBatch.update({ where: { id }, data: { version: { increment: 1 }, updatedById: context.actorUserId } })
         // 整批落库后统一评估：本次涉及的全部销售订单各自判断是否需要进入海运在途。
