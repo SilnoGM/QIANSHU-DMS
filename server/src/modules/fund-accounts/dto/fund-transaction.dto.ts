@@ -443,9 +443,120 @@ export class FundTransactionDto {
   source!: FundTransactionSourceView | null
 }
 
+/** 批次内的一条分录；id 与父行的 id 共用同一个 row-key 命名空间。 */
+export class FundTransactionEntryDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  id!: string
+
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  entryId!: string
+
+  @ApiProperty({ type: 'integer', minimum: 1 })
+  lineNo!: number
+
+  @ApiProperty({ type: () => FundTransactionAccountDto })
+  account!: FundTransactionAccountDto
+
+  @ApiProperty({ type: 'string', enum: FUND_ACCOUNT_TARGETS })
+  accountTarget!: FundAccountTarget
+
+  @ApiProperty({ type: 'string', enum: FUND_ENTRY_DIRECTIONS })
+  direction!: FundEntryDirection
+
+  @ApiProperty({ type: 'string', enum: FUND_AMOUNT_STRATEGIES })
+  amountStrategy!: FundAmountStrategy
+
+  @ApiProperty({ type: 'string', pattern: FUND_DECIMAL_OUTPUT_PATTERN })
+  amount!: string
+
+  @ApiProperty({ type: 'string', pattern: FUND_DECIMAL_OUTPUT_PATTERN })
+  balanceBefore!: string
+
+  @ApiProperty({ type: 'string', pattern: FUND_DECIMAL_OUTPUT_PATTERN })
+  balanceAfter!: string
+
+  @ApiProperty({ type: 'string', pattern: '^[1-9]\\d*$' })
+  accountSequence!: string
+
+  @ApiProperty({ type: 'string', format: 'date-time' })
+  postedAt!: string
+}
+
+/**
+ * 财务流水按批次分组：一个批次一行，entries 是展开后的分录明细。
+ * 分页与 total 都以批次为单位。
+ */
+export class FundBatchGroupDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  id!: string
+
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  batchId!: string
+
+  @ApiProperty({ type: 'string' })
+  batchNo!: string
+
+  @ApiProperty({ type: 'string', enum: ['BUSINESS', 'MANUAL_ADJUSTMENT', 'REVERSAL'] })
+  batchKind!: FundPostingBatchKind
+
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  postingTypeId!: string
+
+  @ApiProperty({ type: 'string' })
+  postingTypeCode!: string
+
+  @ApiProperty({ type: 'string' })
+  postingTypeName!: string
+
+  @ApiProperty({ type: 'string', enum: FUND_BUSINESS_CATEGORIES })
+  businessCategory!: FundBusinessCategory
+
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  businessSourceId!: string
+
+  @ApiProperty({ type: 'string' })
+  businessSourceCode!: string
+
+  @ApiProperty({ type: 'string' })
+  businessSourceName!: string
+
+  @ApiProperty({ type: 'string' })
+  businessId!: string
+
+  @ApiProperty({ type: 'string', nullable: true })
+  businessNo!: string | null
+
+  @ApiProperty({ type: 'string' })
+  summary!: string
+
+  @ApiProperty({ type: 'string', pattern: FUND_DECIMAL_OUTPUT_PATTERN })
+  businessAmount!: string
+
+  @ApiProperty({ type: 'string', pattern: FUND_DECIMAL_OUTPUT_PATTERN, nullable: true })
+  userShareRateSnapshot!: string | null
+
+  @ApiProperty({ type: 'string', pattern: FUND_DECIMAL_OUTPUT_PATTERN, nullable: true })
+  companyShareRateSnapshot!: string | null
+
+  @ApiProperty({ type: 'string', format: 'date-time' })
+  businessOccurredAt!: string
+
+  @ApiProperty({ type: 'string', enum: FUND_TRANSACTION_REVERSAL_STATUSES })
+  reversalStatus!: FundTransactionReversalStatus
+
+  @ApiProperty({ type: 'string', format: 'date-time' })
+  postedAt!: string
+
+  @ApiProperty({ type: () => FundTransactionSourceDto, nullable: true })
+  source!: FundTransactionSourceView | null
+
+  @ApiProperty({ type: () => [FundTransactionEntryDto] })
+  entries!: readonly FundTransactionEntryDto[]
+}
+
 export class FundTransactionPageDto {
-  @ApiProperty({ type: () => [FundTransactionDto] })
-  items!: readonly FundTransactionDto[]
+  @ApiProperty({ type: () => [FundBatchGroupDto] })
+  items!: readonly FundBatchGroupDto[]
 
   @ApiProperty({ type: 'integer', minimum: 1 })
   page!: number

@@ -90910,36 +90910,6 @@
           "idempotentReplay"
         ]
       },
-      "FundTransactionAccountDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "ownerType": {
-            "type": "string",
-            "enum": [
-              "USER",
-              "COMPANY"
-            ]
-          },
-          "user": {
-            "nullable": true,
-            "type": "object",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/FundAccountUserDto"
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "ownerType",
-          "user"
-        ]
-      },
       "FundTransactionSourceLinkDto": {
         "type": "object",
         "properties": {
@@ -91045,27 +91015,50 @@
           "resolved"
         ]
       },
-      "FundTransactionDto": {
+      "FundTransactionAccountDto": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ownerType": {
+            "type": "string",
+            "enum": [
+              "USER",
+              "COMPANY"
+            ]
+          },
+          "user": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FundAccountUserDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ownerType",
+          "user"
+        ]
+      },
+      "FundTransactionEntryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "entryId": {
             "type": "string",
             "format": "uuid"
           },
-          "batchId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "batchNo": {
-            "type": "string"
-          },
-          "batchKind": {
-            "type": "string",
-            "enum": [
-              "BUSINESS",
-              "MANUAL_ADJUSTMENT",
-              "REVERSAL"
-            ]
+          "lineNo": {
+            "type": "integer",
+            "minimum": 1
           },
           "account": {
             "$ref": "#/components/schemas/FundTransactionAccountDto"
@@ -91076,35 +91069,6 @@
               "USER",
               "COMPANY"
             ]
-          },
-          "postingTypeId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "postingTypeCode": {
-            "type": "string"
-          },
-          "postingTypeName": {
-            "type": "string"
-          },
-          "businessCategory": {
-            "type": "string",
-            "enum": [
-              "REVENUE",
-              "COST",
-              "NEUTRAL",
-              "ADJUSTMENT"
-            ]
-          },
-          "businessSourceId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "businessSourceCode": {
-            "type": "string"
-          },
-          "businessSourceName": {
-            "type": "string"
           },
           "direction": {
             "type": "string",
@@ -91137,6 +91101,87 @@
             "type": "string",
             "pattern": "^[1-9]\\d*$"
           },
+          "postedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "entryId",
+          "lineNo",
+          "account",
+          "accountTarget",
+          "direction",
+          "amountStrategy",
+          "amount",
+          "balanceBefore",
+          "balanceAfter",
+          "accountSequence",
+          "postedAt"
+        ]
+      },
+      "FundBatchGroupDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "batchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "batchNo": {
+            "type": "string"
+          },
+          "batchKind": {
+            "type": "string",
+            "enum": [
+              "BUSINESS",
+              "MANUAL_ADJUSTMENT",
+              "REVERSAL"
+            ]
+          },
+          "postingTypeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "postingTypeCode": {
+            "type": "string"
+          },
+          "postingTypeName": {
+            "type": "string"
+          },
+          "businessCategory": {
+            "type": "string",
+            "enum": [
+              "REVENUE",
+              "COST",
+              "NEUTRAL",
+              "ADJUSTMENT"
+            ]
+          },
+          "businessSourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "businessSourceCode": {
+            "type": "string"
+          },
+          "businessSourceName": {
+            "type": "string"
+          },
+          "businessId": {
+            "type": "string"
+          },
+          "businessNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "summary": {
+            "type": "string"
+          },
           "businessAmount": {
             "type": "string",
             "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
@@ -91151,32 +91196,9 @@
             "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$",
             "nullable": true
           },
-          "businessId": {
-            "type": "string"
-          },
-          "businessNo": {
-            "type": "string",
-            "nullable": true
-          },
-          "summary": {
-            "type": "string"
-          },
           "businessOccurredAt": {
             "type": "string",
             "format": "date-time"
-          },
-          "adjustmentMode": {
-            "type": "string",
-            "enum": [
-              "USER_ONLY",
-              "USER_AND_COMPANY_BY_SHARE"
-            ],
-            "nullable": true
-          },
-          "reversalOfBatchId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
           },
           "reversalStatus": {
             "type": "string",
@@ -91199,15 +91221,19 @@
                 "$ref": "#/components/schemas/FundTransactionSourceDto"
               }
             ]
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FundTransactionEntryDto"
+            }
           }
         },
         "required": [
-          "entryId",
+          "id",
           "batchId",
           "batchNo",
           "batchKind",
-          "account",
-          "accountTarget",
           "postingTypeId",
           "postingTypeCode",
           "postingTypeName",
@@ -91215,24 +91241,17 @@
           "businessSourceId",
           "businessSourceCode",
           "businessSourceName",
-          "direction",
-          "amountStrategy",
-          "amount",
-          "balanceBefore",
-          "balanceAfter",
-          "accountSequence",
-          "businessAmount",
-          "userShareRateSnapshot",
-          "companyShareRateSnapshot",
           "businessId",
           "businessNo",
           "summary",
+          "businessAmount",
+          "userShareRateSnapshot",
+          "companyShareRateSnapshot",
           "businessOccurredAt",
-          "adjustmentMode",
-          "reversalOfBatchId",
           "reversalStatus",
           "postedAt",
-          "source"
+          "source",
+          "entries"
         ]
       },
       "FundTransactionPageDto": {
@@ -91241,7 +91260,7 @@
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/FundTransactionDto"
+              "$ref": "#/components/schemas/FundBatchGroupDto"
             }
           },
           "page": {

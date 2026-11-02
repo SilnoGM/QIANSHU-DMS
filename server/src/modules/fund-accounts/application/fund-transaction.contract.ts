@@ -111,8 +111,53 @@ export interface FundTransactionView {
   readonly source: FundTransactionSourceView | null
 }
 
+export interface FundTransactionEntryView {
+  /** 供表格 row-key 使用：分组行用 batchId，分录行用 entryId，两者同名不同值。 */
+  readonly id: string
+  readonly entryId: string
+  readonly lineNo: number
+  readonly account: FundTransactionAccountView
+  readonly accountTarget: FundAccountTarget
+  readonly direction: FundEntryDirection
+  readonly amountStrategy: FundAmountStrategy
+  readonly amount: string
+  readonly balanceBefore: string
+  readonly balanceAfter: string
+  readonly accountSequence: string
+  readonly postedAt: string
+}
+
+/**
+ * 财务流水的分组视图：一个批次一行，展开看该批次的全部分录。
+ * 组合批次级字段是为了父行不必再发一次详情请求。
+ */
+export interface FundBatchGroupView {
+  readonly id: string
+  readonly batchId: string
+  readonly batchNo: string
+  readonly batchKind: FundPostingBatchKind
+  readonly postingTypeId: string
+  readonly postingTypeCode: string
+  readonly postingTypeName: string
+  readonly businessCategory: FundBusinessCategory
+  readonly businessSourceId: string
+  readonly businessSourceCode: string
+  readonly businessSourceName: string
+  readonly businessId: string
+  readonly businessNo: string | null
+  readonly summary: string
+  readonly businessAmount: string
+  readonly userShareRateSnapshot: string | null
+  readonly companyShareRateSnapshot: string | null
+  readonly businessOccurredAt: string
+  readonly reversalStatus: FundTransactionReversalStatus
+  readonly postedAt: string
+  readonly source: FundTransactionSourceView | null
+  readonly entries: readonly FundTransactionEntryView[]
+}
+
 export interface FundTransactionPage {
-  readonly items: readonly FundTransactionView[]
+  readonly items: readonly FundBatchGroupView[]
   readonly page: number
   readonly pageSize: number
   readonly total: number

@@ -9,10 +9,10 @@ import type { FundTransactionFilterState } from './fund-transaction.logic'
 import type {
   CreateFundReversalRequestDto,
   FundAccountDto,
+  FundBatchGroupDto,
   FundBusinessSourceDto,
   FundPostingBatchDetailDto,
   FundPostingTypeDto,
-  FundTransactionDto,
 } from '@/api/generated/types.gen'
 
 import fundAccountsApi from '@/api/modules/fund-accounts'
@@ -76,7 +76,7 @@ const initialAccountId = typeof route.query.accountId === 'string'
   ? route.query.accountId
   : undefined
 
-const transactions = ref<FundTransactionDto[]>([])
+const transactions = ref<FundBatchGroupDto[]>([])
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
@@ -135,12 +135,12 @@ const accountOptions = computed<FilterOption[]>(() => uniqueOptions([
       : `${account.user?.displayName ?? '未知用户'} · ${account.user?.username ?? '—'}`,
     value: account.id,
   })),
-  ...transactions.value.map(transaction => ({
-    label: transaction.account.ownerType === 'COMPANY'
+  ...transactions.value.flatMap(group => group.entries.map(entry => ({
+    label: entry.account.ownerType === 'COMPANY'
       ? '公司资金账户'
-      : `${transaction.account.user?.displayName ?? '未知用户'} · ${transaction.account.user?.username ?? '—'}`,
-    value: transaction.account.id,
-  })),
+      : `${entry.account.user?.displayName ?? '未知用户'} · ${entry.account.user?.username ?? '—'}`,
+    value: entry.account.id,
+  }))),
 ]))
 
 const userOptions = computed<FilterOption[]>(() => uniqueOptions([
@@ -150,12 +150,12 @@ const userOptions = computed<FilterOption[]>(() => uniqueOptions([
         label: `${account.user.displayName} · ${account.user.username}`,
         value: account.user.id,
       }]),
-  ...transactions.value.flatMap(transaction => transaction.account.user === null
+  ...transactions.value.flatMap(group => group.entries.flatMap(entry => entry.account.user === null
     ? []
     : [{
-        label: `${transaction.account.user.displayName} · ${transaction.account.user.username}`,
-        value: transaction.account.user.id,
-      }]),
+        label: `${entry.account.user.displayName} · ${entry.account.user.username}`,
+        value: entry.account.user.id,
+      }])),
 ]))
 
 const postingTypeOptions = computed<FilterOption[]>(() => uniqueOptions([
@@ -163,9 +163,9 @@ const postingTypeOptions = computed<FilterOption[]>(() => uniqueOptions([
     label: type.name,
     value: type.id,
   })),
-  ...transactions.value.map(transaction => ({
-    label: transaction.postingTypeName,
-    value: transaction.postingTypeId,
+  ...transactions.value.map(group => ({
+    label: group.postingTypeName,
+    value: group.postingTypeId,
   })),
 ]))
 
@@ -174,9 +174,9 @@ const businessSourceOptions = computed<FilterOption[]>(() => uniqueOptions([
     label: source.name,
     value: source.id,
   })),
-  ...transactions.value.map(transaction => ({
-    label: transaction.businessSourceName,
-    value: transaction.businessSourceId,
+  ...transactions.value.map(group => ({
+    label: group.businessSourceName,
+    value: group.businessSourceId,
   })),
 ]))
 
@@ -301,13 +301,7 @@ async function loadTransactions(): Promise<void> {
     )) {
       return
     }
-    transactions.value = response.data.items.map(item => ({
-      ...item,
-      account: {
-        ...item.account,
-        user: item.account.user === null ? null : { ...item.account.user },
-      },
-    }))
+    transactions.value = response.data.items.map(group => ({ ...group }))
     total.value = response.data.total
     if (
       transactions.value.length === 0
@@ -532,12 +526,12 @@ async function loadBatchDetail(batchId: string): Promise<void> {
   }
 }
 
-function openBatchDetail(transaction: FundTransactionDto): void {
+function openBatchDetail(group: FundBatchGroupDto): void {
   if (!canRead.value) {
     return
   }
   detailVisible.value = true
-  void loadBatchDetail(transaction.batchId)
+  void loadBatchDetail(group.batchId)
 }
 
 function updateDetailVisible(value: boolean): void {

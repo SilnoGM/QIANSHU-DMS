@@ -23,47 +23,50 @@ const reversalSource = readSource(
   '../../src/views/admin/fund-account-management/transactions/fund-reversal-modal.vue',
 )
 
-test('流水页面复用通用表格且一行绑定一条 FundTransactionDto', () => {
+test('流水页面复用通用表格并按批次分组展示', () => {
   assert.match(tableSource, /import QsGenericTable/u)
-  assert.match(tableSource, /QsGenericTableColumn<FundTransactionDto>/u)
-  assert.match(tableSource, /row-key="entryId"/u)
+  assert.match(tableSource, /QsGenericTableColumn<FundLedgerRow>/u)
+  // 父行是批次、子行是分录，共用 id 作为 row-key。
+  assert.match(tableSource, /row-key="id"/u)
+  assert.match(tableSource, /:grouping="grouping"/u)
+  assert.match(tableSource, /getRows: row => asGroup\(row\)\.entries/u)
+  assert.match(tableSource, /#group-header/u)
   assert.match(pageSource, /fundAccountsApi\.transactions\.list/u)
   assert.match(pageSource, /FundTransactionTable/u)
   assert.match(tableSource, /data-testid="fund-transaction-table"/u)
 })
 
-test('流水列覆盖批次、主体、业务快照、方向金额、余额、比例和时间', () => {
+test('分录子行列只保留分录级字段，批次信息集中在分组行', () => {
   for (const text of [
-    '批次',
     '账户主体',
-    '类型 / 分类',
-    '业务来源',
     '方向 / 金额',
     '动账前后余额',
-    '比例快照',
-    '业务来源',
-    '发生时间',
+    '分录序号',
+    '入账时间',
   ]) {
     assert.match(tableSource, new RegExp(text, 'u'))
   }
+  // 批次级信息只出现在分组头，避免展开后重复。
+  assert.match(tableSource, /groupOf\(row\)!\.batchNo/u)
+  assert.match(tableSource, /groupOf\(row\)!\.source\?\.headline/u)
+  assert.match(tableSource, /groupOf\(row\)!\.businessAmount/u)
+  assert.doesNotMatch(tableSource, /id: 'typeCategory'/u)
   assert.match(tableSource, /AmountDisplay/u)
   assert.match(tableSource, /DateTimeDisplay/u)
   assert.match(tableSource, /getFundDirectionState/u)
-  // 来源主标题优先，单号作为第二行兜底，避免只有编码时看不懂。
-  assert.match(tableSource, /transaction\.source\?\.headline/u)
-  assert.match(tableSource, /row\.original\.source\?\.documentNo/u)
 })
 
 test('桌面方向金额列加宽且方向、符号与金额保持同一行', () => {
-  const amountColumnStart = tableSource.indexOf('accessorKey: \'amount\'')
-  const amountColumnEnd = tableSource.indexOf('accessorKey: \'balanceAfter\'')
+  const amountColumnStart = tableSource.indexOf('id: \'amount\'')
+  const amountColumnEnd = tableSource.indexOf('id: \'balance\'')
   const amountCellStart = tableSource.indexOf('<template #cell-amount')
   const amountCellEnd = tableSource.indexOf('<template #cell-balance')
 
   assert.ok(amountColumnStart >= 0 && amountColumnEnd > amountColumnStart)
   assert.ok(amountCellStart >= 0 && amountCellEnd > amountCellStart)
-  assert.match(tableSource.slice(amountColumnStart, amountColumnEnd), /minWidth: 300/u)
-  assert.match(tableSource, /table-class="min-w-\[2030px\]"/u)
+  assert.match(tableSource.slice(amountColumnStart, amountColumnEnd), /minWidth: 260/u)
+  // 分组后列变少，横向宽度只需覆盖分录列。
+  assert.match(tableSource, /table-class="min-w-\[1080px\]"/u)
   assert.match(tableSource.slice(amountCellStart, amountCellEnd), /flex-nowrap/u)
   assert.doesNotMatch(tableSource.slice(amountCellStart, amountCellEnd), /flex-wrap/u)
 })
@@ -101,9 +104,9 @@ test('异步账户目录回填后只按主体名称回显既有账户筛选', ()
 test('业务类型、业务来源与收支方向下拉只展示中文名称', () => {
   for (const labelExpression of [
     'label: type.name',
-    'label: transaction.postingTypeName',
+    'label: group.postingTypeName',
     'label: source.name',
-    'label: transaction.businessSourceName',
+    'label: group.businessSourceName',
   ]) {
     assert.ok(pageSource.includes(labelExpression))
   }

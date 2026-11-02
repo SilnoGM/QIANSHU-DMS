@@ -1,7 +1,8 @@
 import type {
+  FundBatchGroupDto,
   FundPostingBatchDetailDto,
   FundPostingBatchEntryDto,
-  FundTransactionDto,
+  FundTransactionEntryDto,
   FundTransactionSourceLinkDto,
 } from '@/api/generated/types.gen'
 import type { FundTransactionListQuery } from '@/api/modules/fund-accounts'
@@ -10,15 +11,15 @@ import Decimal from 'decimal.js'
 
 export interface FundTransactionFilterState {
   readonly accountId?: string
-  readonly businessCategory?: FundTransactionDto['businessCategory']
+  readonly businessCategory?: FundBatchGroupDto['businessCategory']
   readonly businessNo?: string
   readonly businessSourceId?: string
-  readonly direction?: FundTransactionDto['direction']
+  readonly direction?: FundTransactionEntryDto['direction']
   readonly keyword?: string
   readonly occurredFrom?: string
   readonly occurredTo?: string
   readonly postingTypeId?: string
-  readonly reversalStatus?: FundTransactionDto['reversalStatus']
+  readonly reversalStatus?: FundBatchGroupDto['reversalStatus']
   readonly userId?: string
 }
 
@@ -341,7 +342,7 @@ export function canReverseFundBatch(
 }
 
 export function getFundDirectionState(
-  direction: FundTransactionDto['direction'],
+  direction: FundTransactionEntryDto['direction'],
 ): FundDirectionState {
   return direction === 'CREDIT'
     ? Object.freeze({ label: '入账', sign: '+', tone: 'credit' })
@@ -349,7 +350,7 @@ export function getFundDirectionState(
 }
 
 export function getFundBusinessCategoryLabel(
-  value: FundTransactionDto['businessCategory'],
+  value: FundBatchGroupDto['businessCategory'],
 ): string {
   return {
     ADJUSTMENT: '调账',
@@ -360,7 +361,7 @@ export function getFundBusinessCategoryLabel(
 }
 
 export function getFundBatchKindLabel(
-  value: FundTransactionDto['batchKind'] | FundPostingBatchDetailDto['kind'],
+  value: FundBatchGroupDto['batchKind'] | FundPostingBatchDetailDto['kind'],
 ): string {
   return {
     BUSINESS: '业务动账',
@@ -370,7 +371,7 @@ export function getFundBatchKindLabel(
 }
 
 export function getFundReversalStatusLabel(
-  value: FundTransactionDto['reversalStatus'],
+  value: FundBatchGroupDto['reversalStatus'],
 ): string {
   return {
     FULL: '已全部冲账',
@@ -432,7 +433,7 @@ export interface FundSourceLinkTarget {
 }
 
 export function getFundSourceLinkTarget(
-  source: FundTransactionDto['source'] | null | undefined,
+  source: FundBatchGroupDto['source'] | null | undefined,
 ): FundSourceLinkTarget | null {
   const link = source?.link
   if (!link) {
