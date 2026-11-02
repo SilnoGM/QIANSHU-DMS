@@ -28,6 +28,7 @@ import {
 import {
   readClaimedQuantitiesBySalesLine,
 } from '../sales-orders/sales-order-claim-coverage'
+import { findActiveLoadGroupsForShipments } from '../purchase-orders/shipments/shipment-load-group.resolver'
 import { advanceSalesOrderAfterClaim } from '../sales-orders/sales-order-claim-progress'
 import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
 import {
@@ -105,6 +106,7 @@ const RELEASE_PART_SELECT = {
   status: true,
   shippedAt: true,
   warehouseReceivedAt: true,
+  loadedAt: true,
   deliveredAt: true,
   destinationWarehouseValue: true,
   shipmentNo: true,
@@ -600,14 +602,26 @@ export class ShipmentStorageService {
     if (input.locationScope === 'MAINLAND' && input.overseasWarehouseValue !== undefined) {
       storageFailure('VALIDATION_FAILED', '内地寄仓不能指定海外仓库')
     }
-    const payload = {
-      format: 'shipment-storage.release.v1',
-      shipmentIds,
-      locationScope: input.locationScope,
-      overseasWarehouseValue: input.overseasWarehouseValue ?? null,
-      reason: input.reason,
-      note: input.note ?? null,
-    }
+    // 未携带处理方式时继续使用 v1 指纹，保证旧客户端的重试仍能命中原释放结果；
+    // 明确选择 REVOKE/KEEP 时升到 v2，避免同一 requestKey 混用两种语义。
+    const payload = input.loadGroupHandling === undefined
+      ? {
+          format: 'shipment-storage.release.v1',
+          shipmentIds,
+          locationScope: input.locationScope,
+          overseasWarehouseValue: input.overseasWarehouseValue ?? null,
+          reason: input.reason,
+          note: input.note ?? null,
+        }
+      : {
+          format: 'shipment-storage.release.v2',
+          shipmentIds,
+          locationScope: input.locationScope,
+          overseasWarehouseValue: input.overseasWarehouseValue ?? null,
+          reason: input.reason,
+          note: input.note ?? null,
+          loadGroupHandling: input.loadGroupHandling,
+        }
     const hash = payloadHash(payload)
 
     const existing = await this.prisma.shipmentReleaseBatch.findFirst({
@@ -634,6 +648,21 @@ export class ShipmentStorageService {
       })
       if (parts.length !== shipmentIds.length) {
         storageFailure('SHIPMENT_STORAGE_NOT_ALLOWED', '部分货件不存在或不可见')
+      }
+      // 同票货件必须整组释放：只释放其中一个会让组关系悬空，装柜/签收/对账都无法自洽。
+      const activeGroupsByShipment = await findActiveLoadGroupsForShipments(transaction, shipmentIds)
+      const activeGroups = [...new Map([...activeGroupsByShipment.values()].map(group => [group.id, group])).values()]
+      for (const group of activeGroups) {
+        if (group.memberShipmentIds.some(memberId => !shipmentIds.includes(memberId))) {
+          storageFailure('SHIPMENT_STORAGE_LOAD_GROUP_INCOMPLETE', '同票货件必须一起释放，请勾选全部同票货件', HttpStatus.CONFLICT)
+        }
+      }
+      const partById = new Map(parts.map(part => [part.id, part]))
+      const snapshotFallbackByShipment = new Map<string, ReleasePart>()
+      for (const group of activeGroups) {
+        const primary = partById.get(group.primaryShipmentId)
+        if (primary === undefined) continue
+        for (const memberId of group.memberShipmentIds) snapshotFallbackByShipment.set(memberId, primary)
       }
       const activeStorage = await transaction.shipmentStorageRecord.findMany({
         where: {
@@ -718,7 +747,7 @@ export class ShipmentStorageService {
               quantity: item.quantity,
               unitPriceCny: item.line.actualPurchaseUnitPriceAmount.toFixed(2),
             })),
-            containerSnapshot: this.containerSnapshot(part) ?? Prisma.DbNull,
+            containerSnapshot: this.containerSnapshot(part, snapshotFallbackByShipment.get(part.id)) ?? Prisma.DbNull,
             costSnapshot: costSnapshot as unknown as Prisma.InputJsonObject,
             snapshotAt: now,
           },
@@ -776,6 +805,40 @@ export class ShipmentStorageService {
           targetType: 'SHIPMENT_STORAGE_RECORD',
           targetId: storageRecordId,
           metadata: { releaseBatchId: batch.id, shipmentId: part.id },
+        })
+      }
+      // 组释放与寄仓事实同事务：KEEP 保留历史供寄仓详情追溯，REVOKE 恢复成员独立。
+      for (const group of activeGroups) {
+        const handling = input.loadGroupHandling
+          ?? (group.memberShipmentIds.some(memberId => partById.get(memberId)?.loadedAt != null) ? 'KEEP' : 'REVOKE')
+        await transaction.shipmentLoadGroup.update({
+          where: { id: group.id },
+          data: {
+            status: handling === 'KEEP' ? 'ARCHIVED' : 'RELEASED',
+            releasedById: context.actorUserId,
+            releasedAt: now,
+            releaseReason: input.reason,
+            version: { increment: 1 },
+          },
+        })
+        await transaction.shipmentLoadGroupMember.updateMany({
+          where: { groupId: group.id, active: true },
+          data: { active: false },
+        })
+        await this.audit.record(transaction, {
+          eventType: 'PURCHASE_SHIPMENT_LOAD_GROUP_RELEASED',
+          outcome: 'SUCCESS',
+          actorType: 'USER',
+          actorUserId: context.actorUserId,
+          requestId: context.requestId,
+          targetType: 'SHIPMENT_LOAD_GROUP',
+          targetId: group.id,
+          metadata: {
+            releaseBatchId: batch.id,
+            handling,
+            shipmentIds: group.memberShipmentIds.join(','),
+            reason: input.reason,
+          },
         })
       }
       return recordIds
@@ -1202,8 +1265,18 @@ export class ShipmentStorageService {
     transaction: Prisma.TransactionClient,
     shipmentId: string,
   ): Promise<void> {
+    // 同票成员没有自己的装柜行，结算可能挂在组主货件上；成员认领也要被同一笔结算阻断。
+    const membership = await transaction.shipmentLoadGroupMember.findFirst({
+      where: { shipmentId, group: { status: { in: ['ACTIVE', 'ARCHIVED'] } } },
+      orderBy: { createdAt: 'desc' },
+      select: { group: { select: { primaryShipmentId: true } } },
+    })
+    const settlementScope: Prisma.SlhReconciliationSettlementWhereInput[] = [{ loadingItem: { shipmentId } }]
+    if (membership !== null) {
+      settlementScope.push({ loadingItem: { shipmentId: membership.group.primaryShipmentId } })
+    }
     const settled = await transaction.slhReconciliationSettlement.findFirst({
-      where: { status: 'ACTIVE', loadingItem: { shipmentId } },
+      where: { status: 'ACTIVE', OR: settlementScope },
       select: { id: true },
     })
     if (settled !== null) {
@@ -2727,10 +2800,12 @@ export class ShipmentStorageService {
     }
   }
 
-  private containerSnapshot(part: ReleasePart): Prisma.InputJsonValue | null {
-    if (part.containerLoadingItems.length === 0) return null
+  private containerSnapshot(part: ReleasePart, fallback?: ReleasePart): Prisma.InputJsonValue | null {
+    // 合并组成员没有自己的装柜行，释放时使用主货件的装柜明细回填，避免寄仓详情丢失同票信息。
+    const source = part.containerLoadingItems.length > 0 ? part : fallback
+    if (source === undefined || source.containerLoadingItems.length === 0) return null
     // 货件只能属于一个柜次，柜次头放在顶层；装柜明细按行完整保留，避免多唛头时丢失。
-    const containerBatch = part.containerLoadingItems[0].containerBatch
+    const containerBatch = source.containerLoadingItems[0].containerBatch
     return {
       format: 'shipment-storage.container-snapshot.v2',
       containerBatch: {
@@ -2739,7 +2814,7 @@ export class ShipmentStorageService {
         containerBatchName: containerBatch.containerBatchName,
         loadingDate: containerBatch.loadingDate.toISOString().slice(0, 10),
       },
-      items: part.containerLoadingItems.map(item => ({
+      items: source.containerLoadingItems.map(item => ({
         id: item.id,
         lineNumber: item.lineNumber,
         oceanShippingMarkText: item.oceanShippingMarkText,
