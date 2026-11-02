@@ -231,6 +231,17 @@ const columns: QsGenericTableColumn<FundLedgerRow>[] = [
   },
 ]
 
+/**
+ * 操作列宽度同时用于三处：表头列、子行操作单元格、分组行右侧预留块。
+ * 三者必须一致，否则「详情」会和操作列错位。
+ */
+const ACTION_COLUMN_WIDTH = 84
+const actionColumn = {
+  fixed: 'right' as const,
+  minWidth: ACTION_COLUMN_WIDTH,
+  width: ACTION_COLUMN_WIDTH,
+}
+
 /** 一个批次一行；`getRows` 直接展开该批次的分录。 */
 const grouping: QsGenericTableGrouping<FundLedgerRow> = {
   getRows: row => asGroup(row).entries,
@@ -246,6 +257,7 @@ const grouping: QsGenericTableGrouping<FundLedgerRow> = {
     v-model:expanded="expanded"
     data-testid="fund-transaction-table"
     row-key="id"
+    :action-column="actionColumn"
     :addable="false"
     :columns="columns"
     :data="items"
@@ -265,12 +277,13 @@ const grouping: QsGenericTableGrouping<FundLedgerRow> = {
     @sorting-change="emit('sortingChange', $event)"
   >
     <!--
-      分组行：主行一句话（主体 · 动作 + 分类小字），副行只放编码与时间。
-      同一事实只出现一次：客户/供应商不再重复，类型名与来源名相同时不显示。
+      分组行：左侧是「主体 · 动作 + 分类」与「单号 · 时间 · 批次号」；
+      右侧两行分别右对齐「金额 + 分录数」与「人员 + 分账」；
+      最右是与操作列等宽的视觉预留块，放「详情」。
     -->
     <template #group-header="{ row }">
-      <div v-if="groupOf(row)" class="min-w-0 w-full space-y-1.5">
-        <div class="flex flex-wrap gap-x-4 gap-y-2 items-center justify-between">
+      <div v-if="groupOf(row)" class="flex gap-4 min-w-0 w-full items-start">
+        <div class="flex-1 min-w-0 space-y-1.5">
           <div class="flex flex-wrap gap-2 min-w-0 items-center">
             <span class="text-sm/6 font-semibold break-words">{{ mainTitle(groupOf(row)!) }}</span>
             <FaTag
@@ -297,67 +310,80 @@ const grouping: QsGenericTableGrouping<FundLedgerRow> = {
               {{ getFundReversalStatusLabel(groupOf(row)!.reversalStatus) }}
             </FaTag>
           </div>
-          <div class="flex flex-col gap-1 items-end">
-            <div class="flex flex-wrap gap-3 items-center justify-end">
-              <AmountDisplay
-                :value="amountText(groupOf(row)!)"
-                currency="CNY"
-                :currencies="currencies"
-                :show-code="false"
-                class="!text-base !font-semibold"
-                :class="amountToneClass(groupOf(row)!)"
-              />
-              <span class="qs-type-meta text-muted-foreground">{{ groupOf(row)!.entries.length }} 条分录</span>
-              <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-9" @click="emit('detail', groupOf(row)!)">
-                详情
-              </FaButton>
-            </div>
-            <!-- 金额下方的分摊归属：人员 + 分账 / 公司独担 / 用户独担。 -->
-            <div
-              v-if="shareBadge(groupOf(row)!)"
-              class="flex flex-wrap gap-2 items-center justify-end"
+
+          <div class="qs-type-meta text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 items-center">
+            <button
+              v-if="sourceLink(groupOf(row)!)"
+              type="button"
+              class="text-left underline-offset-4 break-words focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 hover:underline"
+              @click="openSourceLink(groupOf(row)!)"
             >
-              <QsPersonDisplay
-                v-if="shareBadge(groupOf(row)!)!.user"
-                :display-name="shareBadge(groupOf(row)!)!.user!.displayName"
-                size="sm"
-                :avatar-url="shareBadge(groupOf(row)!)!.user!.avatarUrl"
-              />
-              <span
-                v-if="shareBadge(groupOf(row)!)!.kind === 'SPLIT'"
-                class="qs-type-meta text-amber-600 font-medium dark:text-amber-400"
-              >分账</span>
-              <span
-                v-else-if="shareBadge(groupOf(row)!)!.kind === 'COMPANY_ONLY'"
-                class="qs-type-meta text-destructive font-semibold"
-              >公司独担</span>
-              <span
-                v-else
-                class="qs-type-meta text-destructive font-semibold"
-              >用户独担</span>
-            </div>
+              {{ secondaryDocument(groupOf(row)!) }}
+            </button>
+            <span v-else class="font-qs-data-mono break-all">
+              {{ secondaryDocument(groupOf(row)!) }}
+            </span>
+            <span aria-hidden="true">·</span>
+            <DateTimeDisplay :value="groupOf(row)!.businessOccurredAt" />
+            <span aria-hidden="true">·</span>
+            <span class="font-qs-data-mono break-all">{{ groupOf(row)!.batchNo }}</span>
           </div>
         </div>
 
-        <div class="qs-type-meta text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 items-center">
-          <button
-            v-if="sourceLink(groupOf(row)!)"
-            type="button"
-            class="text-left underline-offset-4 break-words focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 hover:underline"
-            @click="openSourceLink(groupOf(row)!)"
+        <!-- 右对齐块：金额与条数在上，分摊归属在下。 -->
+        <div class="text-right flex shrink-0 flex-col gap-1 items-end">
+          <div class="flex flex-wrap gap-3 items-center justify-end">
+            <AmountDisplay
+              :value="amountText(groupOf(row)!)"
+              currency="CNY"
+              :currencies="currencies"
+              :show-code="false"
+              class="tabular-nums !text-base !font-semibold"
+              :class="amountToneClass(groupOf(row)!)"
+            />
+            <span class="qs-type-meta text-muted-foreground tabular-nums">
+              {{ groupOf(row)!.entries.length }} 条分录
+            </span>
+          </div>
+          <span
+            v-if="shareBadge(groupOf(row)!)"
+            class="inline-flex shrink-0 gap-2 whitespace-nowrap items-center"
           >
-            {{ secondaryDocument(groupOf(row)!) }}
-          </button>
-          <span v-else class="font-qs-data-mono break-all">
-            {{ secondaryDocument(groupOf(row)!) }}
+            <QsPersonDisplay
+              v-if="shareBadge(groupOf(row)!)!.user"
+              :display-name="shareBadge(groupOf(row)!)!.user!.displayName"
+              size="sm"
+              :avatar-url="shareBadge(groupOf(row)!)!.user!.avatarUrl"
+            />
+            <span
+              v-if="shareBadge(groupOf(row)!)!.kind === 'SPLIT'"
+              class="qs-type-meta text-amber-600 font-medium dark:text-amber-400"
+            >分账</span>
+            <span
+              v-else-if="shareBadge(groupOf(row)!)!.kind === 'COMPANY_ONLY'"
+              class="qs-type-meta text-destructive font-semibold"
+            >公司独担</span>
+            <span
+              v-else
+              class="qs-type-meta text-destructive font-semibold"
+            >用户独担</span>
           </span>
-          <span aria-hidden="true">·</span>
-          <DateTimeDisplay :value="groupOf(row)!.businessOccurredAt" />
-          <span aria-hidden="true">·</span>
-          <span class="font-qs-data-mono break-all">{{ groupOf(row)!.batchNo }}</span>
+        </div>
+
+        <!-- 视觉操作列：宽度与 actionColumn 保持一致。 -->
+        <div
+          class="flex shrink-0 items-start justify-end"
+          :style="{ width: `${ACTION_COLUMN_WIDTH}px` }"
+        >
+          <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-9" @click="emit('detail', groupOf(row)!)">
+            详情
+          </FaButton>
         </div>
       </div>
     </template>
+
+    <!-- 子行不重复展示详情：批次级操作已经在分组行上。 -->
+    <template #actions />
 
     <template #cell-subject="{ row }">
       <div class="flex flex-wrap gap-2 min-w-0 items-center">
@@ -383,9 +409,14 @@ const grouping: QsGenericTableGrouping<FundLedgerRow> = {
     </template>
 
     <template #cell-balance="{ row }">
-      <div class="gap-1 grid justify-items-end">
+      <!-- 余额变化压成一行：前值 → 后值；箭头颜色跟随方向，入账绿、出账红。 -->
+      <div class="flex flex-nowrap gap-2 items-center justify-end tabular-nums">
         <AmountDisplay :value="entryOf(row)!.balanceBefore" currency="CNY" :currencies="currencies" />
-        <span class="qs-type-meta">变更为</span>
+        <span
+          class="qs-type-meta font-semibold"
+          :class="entryOf(row)!.direction === 'CREDIT' ? 'text-primary' : 'text-destructive'"
+          aria-hidden="true"
+        >→</span>
         <AmountDisplay :value="entryOf(row)!.balanceAfter" currency="CNY" :currencies="currencies" />
       </div>
     </template>

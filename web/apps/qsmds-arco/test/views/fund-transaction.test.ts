@@ -66,6 +66,18 @@ test('分录子行列只保留分录级字段，批次信息集中在分组行',
   assert.match(tableSource, /用户独担/u)
   // 分类用实色标签。
   assert.match(tableSource, /categorySolidClasses/u)
+  // 详情走操作列：分组行用同宽的视觉预留块对齐。
+  assert.match(tableSource, /:action-column="actionColumn"/u)
+  assert.match(tableSource, /const ACTION_COLUMN_WIDTH = 84/u)
+  assert.ok(tableSource.includes('ACTION_COLUMN_WIDTH}px'))
+  // 金额、条数、人员与分账统一右对齐，详情独占最右预留块。
+  assert.match(tableSource, /text-right flex shrink-0 flex-col gap-1 items-end/u)
+  // 余额变化是一行，箭头按方向着色。
+  assert.match(tableSource, /entryOf\(row\)!\.direction === 'CREDIT' \? 'text-primary' : 'text-destructive'/u)
+  assert.doesNotMatch(tableSource, />\s*变更为\s*</u)
+  // 分摊徽标在主行第二行末尾，整体不拆行。
+  assert.match(tableSource, /whitespace-nowrap/u)
+  assert.ok(tableSource.includes('<template #actions />'))
   assert.doesNotMatch(tableSource, /id: 'typeCategory'/u)
   assert.match(tableSource, /AmountDisplay/u)
   assert.match(tableSource, /DateTimeDisplay/u)
