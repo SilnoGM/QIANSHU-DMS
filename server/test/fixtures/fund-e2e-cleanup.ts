@@ -111,6 +111,10 @@ export async function cleanupFundE2eData(
       await transaction.fundLedgerEntry.deleteMany({
         where: { batchId: { in: batchIds } },
       })
+      // 来源投影对批次是 RESTRICT 外键，清理夹具时必须先删投影再删批次。
+      await transaction.fundPostingBatchSource.deleteMany({
+        where: { batchId: { in: batchIds } },
+      })
       await transaction.fundPostingBatch.deleteMany({
         where: { id: { in: batchIds } },
       })

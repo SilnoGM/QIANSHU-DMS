@@ -52,6 +52,7 @@ const SELF_TRANSACTION_KEYS = [
   'postingTypeId',
   'postingTypeName',
   'reversalStatus',
+  'source',
   'summary',
   'userShareRateSnapshot',
 ] as const
