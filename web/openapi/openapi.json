@@ -91131,6 +91131,47 @@
           "postedAt"
         ]
       },
+      "FundTransactionSharesUserDto": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "displayName",
+          "avatarUrl"
+        ]
+      },
+      "FundTransactionSharesDto": {
+        "type": "object",
+        "properties": {
+          "hasUser": {
+            "type": "boolean"
+          },
+          "hasCompany": {
+            "type": "boolean"
+          },
+          "user": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FundTransactionSharesUserDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "hasUser",
+          "hasCompany",
+          "user"
+        ]
+      },
       "FundBatchGroupDto": {
         "type": "object",
         "properties": {
@@ -91237,6 +91278,9 @@
             "items": {
               "$ref": "#/components/schemas/FundTransactionEntryDto"
             }
+          },
+          "shares": {
+            "$ref": "#/components/schemas/FundTransactionSharesDto"
           }
         },
         "required": [
@@ -91261,7 +91305,8 @@
           "reversalStatus",
           "postedAt",
           "source",
-          "entries"
+          "entries",
+          "shares"
         ]
       },
       "FundTransactionPageDto": {

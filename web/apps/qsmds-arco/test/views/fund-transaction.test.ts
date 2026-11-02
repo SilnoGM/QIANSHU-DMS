@@ -59,6 +59,13 @@ test('分录子行列只保留分录级字段，批次信息集中在分组行',
   assert.match(tableSource, /secondaryDocument\(groupOf\(row\)!\)/u)
   // 常态批次不显示「业务动账」胶囊，只在非业务批次时渲染。
   assert.match(tableSource, /groupOf\(row\)!\.batchKind !== 'BUSINESS'/u)
+  // 分摊归属取自服务端全量汇总，筛选态不会把分账误报成独担。
+  assert.match(tableSource, /group\.shares/u)
+  assert.match(tableSource, /shareBadge\(groupOf\(row\)!\)/u)
+  assert.match(tableSource, /公司独担/u)
+  assert.match(tableSource, /用户独担/u)
+  // 分类用实色标签。
+  assert.match(tableSource, /categorySolidClasses/u)
   assert.doesNotMatch(tableSource, /id: 'typeCategory'/u)
   assert.match(tableSource, /AmountDisplay/u)
   assert.match(tableSource, /DateTimeDisplay/u)

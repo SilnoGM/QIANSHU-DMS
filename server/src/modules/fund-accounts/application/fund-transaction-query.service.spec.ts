@@ -126,6 +126,11 @@ describe('FundTransactionQueryService', () => {
       .mockResolvedValueOnce([{ batchId: BATCH_ID }])
       .mockResolvedValueOnce([entryRow])
       .mockResolvedValueOnce([groupRow])
+      // 分摊归属按批次全部分录汇总，不受分录筛选影响。
+      .mockResolvedValueOnce([
+        { batchId: BATCH_ID, accountTarget: 'USER', displayName: 'Alice', avatarUrl: null },
+        { batchId: BATCH_ID, accountTarget: 'COMPANY', displayName: null, avatarUrl: null },
+      ])
     const transaction = { $queryRaw: queryRaw }
     const prisma = {
       $transaction: jest.fn((callback: (client: typeof transaction) => unknown) => (
@@ -153,6 +158,7 @@ describe('FundTransactionQueryService', () => {
           balanceAfter: '25.00',
           accountSequence: '7',
         })],
+        shares: { hasUser: true, hasCompany: true, user: { displayName: 'Alice', avatarUrl: null } },
       })],
       page: 1,
       pageSize: 20,

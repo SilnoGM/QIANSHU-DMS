@@ -103,6 +103,37 @@ function mainTitle(group: FundBatchGroupDto): string {
   return group.source?.headline ?? group.businessNo ?? group.batchNo
 }
 
+interface ShareBadge {
+  readonly kind: 'COMPANY_ONLY' | 'SPLIT' | 'USER_ONLY'
+  readonly user: { readonly displayName: string, readonly avatarUrl: string | null } | null
+}
+
+/**
+ * 分摊归属：数据来自服务端的全量分录汇总，不受当前账户/方向筛选影响。
+ * 只在收益与成本类展示——提款（中性）、管理员调账（调账）与冲账批次不显示，
+ * 否则「用户独担」会被误读成成本承担方式。
+ */
+function shareBadge(group: FundBatchGroupDto): ShareBadge | null {
+  if (group.batchKind === 'REVERSAL') {
+    return null
+  }
+  if (group.businessCategory !== 'REVENUE' && group.businessCategory !== 'COST') {
+    return null
+  }
+
+  const { hasUser, hasCompany, user } = group.shares
+  if (hasUser && hasCompany) {
+    return { kind: 'SPLIT', user }
+  }
+  if (hasCompany) {
+    return { kind: 'COMPANY_ONLY', user: null }
+  }
+  if (hasUser) {
+    return { kind: 'USER_ONLY', user }
+  }
+  return null
+}
+
 /** 副行只留单号；缺失时退回业务单号与批次号。 */
 function secondaryDocument(group: FundBatchGroupDto): string {
   return group.source?.documentNo ?? group.businessNo ?? group.batchNo
@@ -137,11 +168,12 @@ const tagToneClasses = {
   slate: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:border-slate-500/30! dark:bg-slate-500/10! dark:text-slate-300',
 }
 
-const categoryToneClasses: Record<FundBatchGroupDto['businessCategory'], string> = {
-  ADJUSTMENT: 'text-violet-600 dark:text-violet-400',
-  COST: 'text-amber-600 dark:text-amber-400',
-  NEUTRAL: 'text-muted-foreground',
-  REVENUE: 'text-primary',
+/** 分类用实色标签；amber-500 配白字对比度不足，成本统一压到 600。 */
+const categorySolidClasses: Record<FundBatchGroupDto['businessCategory'], string> = {
+  ADJUSTMENT: '!bg-violet-600 !text-white',
+  COST: '!bg-amber-600 !text-white',
+  NEUTRAL: '!bg-slate-500 !text-white',
+  REVENUE: '!bg-primary !text-primary-foreground',
 }
 
 const batchKindTagClasses: Record<FundBatchGroupDto['batchKind'], string> = {
@@ -241,9 +273,13 @@ const grouping: QsGenericTableGrouping<FundLedgerRow> = {
         <div class="flex flex-wrap gap-x-4 gap-y-2 items-center justify-between">
           <div class="flex flex-wrap gap-2 min-w-0 items-center">
             <span class="text-sm/6 font-semibold break-words">{{ mainTitle(groupOf(row)!) }}</span>
-            <span class="qs-type-meta" :class="categoryToneClasses[groupOf(row)!.businessCategory]">
+            <FaTag
+              variant="default"
+              class="qs-type-status-tag border-transparent"
+              :class="categorySolidClasses[groupOf(row)!.businessCategory]"
+            >
               {{ getFundBusinessCategoryLabel(groupOf(row)!.businessCategory) }}
-            </span>
+            </FaTag>
             <FaTag
               v-if="groupOf(row)!.batchKind !== 'BUSINESS'"
               variant="outline"
@@ -261,19 +297,45 @@ const grouping: QsGenericTableGrouping<FundLedgerRow> = {
               {{ getFundReversalStatusLabel(groupOf(row)!.reversalStatus) }}
             </FaTag>
           </div>
-          <div class="flex flex-wrap gap-3 items-center">
-            <AmountDisplay
-              :value="amountText(groupOf(row)!)"
-              currency="CNY"
-              :currencies="currencies"
-              :show-code="false"
-              class="!text-base !font-semibold"
-              :class="amountToneClass(groupOf(row)!)"
-            />
-            <span class="qs-type-meta text-muted-foreground">{{ groupOf(row)!.entries.length }} 条分录</span>
-            <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-9" @click="emit('detail', groupOf(row)!)">
-              详情
-            </FaButton>
+          <div class="flex flex-col gap-1 items-end">
+            <div class="flex flex-wrap gap-3 items-center justify-end">
+              <AmountDisplay
+                :value="amountText(groupOf(row)!)"
+                currency="CNY"
+                :currencies="currencies"
+                :show-code="false"
+                class="!text-base !font-semibold"
+                :class="amountToneClass(groupOf(row)!)"
+              />
+              <span class="qs-type-meta text-muted-foreground">{{ groupOf(row)!.entries.length }} 条分录</span>
+              <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-9" @click="emit('detail', groupOf(row)!)">
+                详情
+              </FaButton>
+            </div>
+            <!-- 金额下方的分摊归属：人员 + 分账 / 公司独担 / 用户独担。 -->
+            <div
+              v-if="shareBadge(groupOf(row)!)"
+              class="flex flex-wrap gap-2 items-center justify-end"
+            >
+              <QsPersonDisplay
+                v-if="shareBadge(groupOf(row)!)!.user"
+                :display-name="shareBadge(groupOf(row)!)!.user!.displayName"
+                size="sm"
+                :avatar-url="shareBadge(groupOf(row)!)!.user!.avatarUrl"
+              />
+              <span
+                v-if="shareBadge(groupOf(row)!)!.kind === 'SPLIT'"
+                class="qs-type-meta text-amber-600 font-medium dark:text-amber-400"
+              >分账</span>
+              <span
+                v-else-if="shareBadge(groupOf(row)!)!.kind === 'COMPANY_ONLY'"
+                class="qs-type-meta text-destructive font-semibold"
+              >公司独担</span>
+              <span
+                v-else
+                class="qs-type-meta text-destructive font-semibold"
+              >用户独担</span>
+            </div>
           </div>
         </div>
 

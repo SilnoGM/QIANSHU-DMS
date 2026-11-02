@@ -35,6 +35,7 @@ import {
   type FundTransactionAccountView,
   type FundTransactionEntryView,
   type FundTransactionPage,
+  type FundTransactionSharesView,
   type FundTransactionReversalStatus,
   type FundTransactionSortField,
   type FundTransactionView,
@@ -677,6 +678,7 @@ function mapTransactionEntryRow(
 function mapBatchGroupRow(
   row: TransactionGroupDatabaseRow,
   entries: readonly FundTransactionEntryView[],
+  shares: FundTransactionSharesView,
 ): FundBatchGroupView {
   const postingTypeCode = requiredString(row.postingTypeCode)
   const businessNo = nullableString(row.businessNo)
@@ -711,6 +713,7 @@ function mapBatchGroupRow(
     postedAt: requiredDate(row.postedAt).toISOString(),
     source: mapTransactionSource(row),
     entries: Object.freeze(entries),
+    shares,
   })
 }
 
@@ -950,16 +953,59 @@ export class FundTransactionQueryService {
               AND batch."id" IN (${matchedIds})
           `,
         )
+        // 分摊归属必须按批次的全部分录判断：分录级筛选（账户/方向）会裁掉另一条腿，
+        // 用裁剪后的 entries 推断会把分账批次误报成「公司独担」。
+        const shareRows = await transaction.$queryRaw<Array<{
+          readonly batchId: unknown
+          readonly accountTarget: unknown
+          readonly displayName: unknown
+          readonly avatarUrl: unknown
+        }>>(Prisma.sql`
+          SELECT
+            entry."batch_id" AS "batchId",
+            entry."account_target"::text AS "accountTarget",
+            owner_user."display_name" AS "displayName",
+            owner_profile."avatar_url" AS "avatarUrl"
+          FROM "fund_ledger_entries" AS entry
+          INNER JOIN "fund_accounts" AS account ON account."id" = entry."account_id"
+          LEFT JOIN "users" AS owner_user ON owner_user."id" = account."user_id"
+          LEFT JOIN "user_profiles" AS owner_profile ON owner_profile."user_id" = owner_user."id"
+          WHERE entry."batch_id" IN (${matchedIds})
+          ORDER BY entry."batch_id", entry."line_no"
+        `)
+        const sharesByBatch = new Map<string, FundTransactionSharesView>()
+        for (const row of shareRows) {
+          const batchId = requiredString(row.batchId)
+          const target = requiredEnum(row.accountTarget, FUND_ACCOUNT_TARGETS)
+          const current = sharesByBatch.get(batchId) ?? {
+            hasUser: false,
+            hasCompany: false,
+            user: null,
+          }
+          const displayName = row.displayName === null ? null : requiredString(row.displayName)
+          sharesByBatch.set(batchId, Object.freeze({
+            hasUser: current.hasUser || target === 'USER',
+            hasCompany: current.hasCompany || target === 'COMPANY',
+            user: current.user ?? (target === 'USER' && displayName !== null
+              ? Object.freeze({
+                  displayName,
+                  avatarUrl: row.avatarUrl === null ? null : requiredString(row.avatarUrl),
+                })
+              : null),
+          }))
+        }
+
         const groupByBatch = new Map(
           groupRows.map(row => [requiredString(row.batchId), row] as const),
         )
         const items = batchIds.map((batchId) => {
           const group = groupByBatch.get(batchId)
           const entries = entriesByBatch.get(batchId)
-          if (group === undefined || entries === undefined) {
+          const shares = sharesByBatch.get(batchId)
+          if (group === undefined || entries === undefined || shares === undefined) {
             throw new FundPostingError(FUND_POSTING_ERROR_CODES.INTERNAL_ERROR)
           }
-          return mapBatchGroupRow(group, entries)
+          return mapBatchGroupRow(group, entries, shares)
         })
 
         return Object.freeze({

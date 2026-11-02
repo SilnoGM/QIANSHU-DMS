@@ -158,6 +158,18 @@ export interface FundBatchGroupView {
   readonly postedAt: string
   readonly source: FundTransactionSourceView | null
   readonly entries: readonly FundTransactionEntryView[]
+  readonly shares: FundTransactionSharesView
+}
+
+/** 分摊归属汇总：按批次的全部分录计算，与分录级筛选无关。 */
+export interface FundTransactionSharesView {
+  readonly hasUser: boolean
+  readonly hasCompany: boolean
+  /** 用户腿的户主；公司独担时为 null。 */
+  readonly user: {
+    readonly displayName: string
+    readonly avatarUrl: string | null
+  } | null
 }
 
 export interface FundTransactionPage {

@@ -488,6 +488,29 @@ export class FundTransactionEntryDto {
   postedAt!: string
 }
 
+export class FundTransactionSharesUserDto {
+  @ApiProperty({ type: 'string' })
+  displayName!: string
+
+  @ApiProperty({ type: 'string', nullable: true })
+  avatarUrl!: string | null
+}
+
+/**
+ * 分摊归属汇总：按批次全部分录统计，不受分录级筛选影响。
+ * hasUser/hasCompany 的组合决定列表显示「分账 / 用户独担 / 公司独担」。
+ */
+export class FundTransactionSharesDto {
+  @ApiProperty({ type: 'boolean' })
+  hasUser!: boolean
+
+  @ApiProperty({ type: 'boolean' })
+  hasCompany!: boolean
+
+  @ApiProperty({ type: () => FundTransactionSharesUserDto, nullable: true })
+  user!: FundTransactionSharesUserDto | null
+}
+
 /**
  * 财务流水按批次分组：一个批次一行，entries 是展开后的分录明细。
  * 分页与 total 都以批次为单位。
@@ -558,6 +581,9 @@ export class FundBatchGroupDto {
 
   @ApiProperty({ type: () => [FundTransactionEntryDto] })
   entries!: readonly FundTransactionEntryDto[]
+
+  @ApiProperty({ type: () => FundTransactionSharesDto })
+  shares!: FundTransactionSharesDto
 }
 
 export class FundTransactionPageDto {
