@@ -512,7 +512,7 @@ export async function insertFundReversalBatch(
       LEFT JOIN "fund_posting_batch_sources" AS original_source
         ON original_source."batch_id" = original."id"
       WHERE original."id" = CAST(${input.originalBatchId} AS uuid)
-      RETURNING "batch_id"
+      RETURNING "batch_id" AS "batchId"
     `,
   )
   if (sourceRows.length !== 1 || sourceRows[0]?.batchId !== input.id) {

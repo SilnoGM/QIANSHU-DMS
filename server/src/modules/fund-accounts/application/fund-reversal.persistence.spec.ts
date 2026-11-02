@@ -224,6 +224,8 @@ describe('fund reversal persistence', () => {
     // 冲账行同样要有来源说明，否则列表里只有批次号。
     expect(sql).toContain('INSERT INTO "fund_posting_batch_sources"')
     expect(sql).toContain("'REVERSAL'::\"fund_posting_source_kind\"")
+    // 原生 SQL 不做 camelCase 映射：返回列必须显式别名成 batchId，否则行校验恒失败。
+    expect(sql).toContain('RETURNING "batch_id" AS "batchId"')
   })
 
   it('fails closed for malformed rows and hash lengths', async () => {
