@@ -278,8 +278,9 @@ const BACKFILL_STATEMENTS: readonly BackfillStatement[] = Object.freeze([
       'SHIPMENT_STORAGE'::"fund_posting_source_kind" AS "source_kind",
       COALESCE(record."shipment_no_snapshot", '寄仓记录') || ' · '
         || CASE batch."posting_type_code_snapshot"
+             -- 与写入文案保持一致：认领（调货）收回成本叫调货成本转入，转出保持寄仓口径。
              WHEN 'SHIPMENT_STORAGE_RELEASE' THEN '寄仓成本转出'
-             ELSE '寄仓成本转入' END AS "headline",
+             ELSE '调货成本转入' END AS "headline",
       record."origin_customer_name_snapshot" AS "customer_name",
       NULL::varchar AS "supplier_name",
       record."shipment_no_snapshot" AS "document_no",

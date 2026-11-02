@@ -96,7 +96,9 @@ export class ShipmentStorageCostService {
         shipmentNoSnapshot: true,
       },
     })
-    const directionLabel = release ? '寄仓成本转出' : '寄仓成本转入'
+    // 转入方向是随货件调拨收回的成本，业务上叫「调货成本」；转出仍叫寄仓成本转出，
+    // 因为它由取消/拒收把货件回收进寄仓触发，与调货无关。
+    const directionLabel = release ? '寄仓成本转出' : '调货成本转入'
     const shipmentNo = input.shipmentNo ?? record?.shipmentNoSnapshot ?? null
     const postingInput = {
       amount: amount.toFixed(2),
