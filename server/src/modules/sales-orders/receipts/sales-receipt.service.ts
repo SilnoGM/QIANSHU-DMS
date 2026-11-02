@@ -159,6 +159,8 @@ export class SalesReceiptService {
       // 来源说明只服务展示，不参与幂等指纹；客户与订单来自本次事务内已锁定的订单行。
       source: {
         headline: `${order.customerName} · 销售${paymentTypeLabel}收款`,
+        subject: order.customerName,
+        action: `销售${paymentTypeLabel}收款`,
         customerName: order.customerName,
         documentNo: order.orderNo,
         link: { kind: 'SALES_ORDER' as const, id: order.id },

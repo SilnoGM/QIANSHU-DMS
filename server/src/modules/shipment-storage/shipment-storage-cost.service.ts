@@ -110,6 +110,10 @@ export class ShipmentStorageCostService {
         headline: `${shipmentNo ?? '寄仓记录'} · ${directionLabel}`,
         ...(record?.originCustomerNameSnapshot === undefined
           ? {}
+          : { subject: record.originCustomerNameSnapshot }),
+        action: directionLabel,
+        ...(record?.originCustomerNameSnapshot === undefined
+          ? {}
           : { customerName: record.originCustomerNameSnapshot }),
         ...(shipmentNo === null ? {} : { documentNo: shipmentNo }),
         link: { kind: 'SHIPMENT_STORAGE' as const, id: input.storageRecordId },

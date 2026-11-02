@@ -19,6 +19,8 @@ export interface FundSourceBackfillKindResult {
 export interface FundSourceBackfillResult {
   readonly applied: boolean
   readonly kinds: readonly FundSourceBackfillKindResult[]
+  /** 只补 subject_name / action_label 的行数，不重写 headline。 */
+  readonly labels: readonly FundSourceBackfillKindResult[]
   readonly unresolved: readonly FundSourceBackfillKindResult[]
   readonly skipped: number
 }
@@ -53,11 +55,21 @@ export class FundSourceBackfillService {
             : await countRows(transaction, statement.select(options.force)),
         })
       }
+      const labels: FundSourceBackfillKindResult[] = []
+      for (const statement of LABEL_BACKFILL_STATEMENTS) {
+        labels.push({
+          kind: statement.kind,
+          rows: options.apply
+            ? await transaction.$executeRaw(statement.update)
+            : await countRows(transaction, statement.select),
+        })
+      }
       const unresolved = await countUnresolved(transaction)
       const skipped = await countWeakRows(transaction)
       return Object.freeze({
         applied: options.apply,
         kinds: Object.freeze(kinds),
+        labels: Object.freeze(labels),
         unresolved: Object.freeze(unresolved),
         skipped,
       })
@@ -401,4 +413,104 @@ const BACKFILL_STATEMENTS: readonly BackfillStatement[] = Object.freeze([
     WHERE batch."kind" = 'REVERSAL'::"fund_posting_batch_kind"
       AND ${needsBackfill(force)}
   `),
+])
+
+interface LabelStatement {
+  readonly kind: string
+  readonly select: Prisma.Sql
+  readonly update: Prisma.Sql
+}
+
+/**
+ * 只补 subject_name / action_label，不重写 headline。
+ *
+ * 拆解的是**已存在**的 headline，所以历史文案原样保留（例如认领行仍是
+ * 「寄仓成本转入」），不会因为当前代码里的新叫法把旧流水刷成新名。
+ * 条件只挑两列都为空的投影行，重复执行不会覆盖后续写入的内容。
+ */
+function labelStatement(
+  kind: string,
+  condition: Prisma.Sql,
+  subject: Prisma.Sql,
+  action: Prisma.Sql,
+): LabelStatement {
+  return {
+    kind,
+    select: Prisma.sql`
+      SELECT s."batch_id"
+      FROM "fund_posting_batch_sources" AS s
+      WHERE ${condition}
+    `,
+    update: Prisma.sql`
+      UPDATE "fund_posting_batch_sources" AS s
+      SET "subject_name" = ${subject}, "action_label" = ${action}
+      WHERE ${condition}
+    `,
+  }
+}
+
+const LABEL_PENDING = Prisma.sql`
+  s."subject_name" IS NULL AND s."action_label" IS NULL
+`
+
+const LABEL_BACKFILL_STATEMENTS: readonly LabelStatement[] = Object.freeze([
+  // 「主体 · 动作」：headline 本身就是这个形状。
+  labelStatement(
+    'SUBJECT_ACTION',
+    Prisma.sql`
+      ${LABEL_PENDING}
+      AND s."source_kind" IN (
+        'SALES_RECEIPT'::"fund_posting_source_kind",
+        'PURCHASE_PAYMENT'::"fund_posting_source_kind",
+        'PACKAGING_COST'::"fund_posting_source_kind",
+        'INVOICE_REQUEST'::"fund_posting_source_kind"
+      )
+      AND position(' · ' in s."headline") > 0
+    `,
+    Prisma.sql`NULLIF(trim(split_part(s."headline", ' · ', 1)), '')`,
+    Prisma.sql`NULLIF(trim(substr(s."headline", position(' · ' in s."headline") + 3)), '')`,
+  ),
+  // 「单号 · 动作」：主体只能取寄仓记录上的客户，提款没有客户。
+  labelStatement(
+    'DOCUMENT_ACTION',
+    Prisma.sql`
+      ${LABEL_PENDING}
+      AND s."source_kind" IN (
+        'SHIPMENT_STORAGE'::"fund_posting_source_kind",
+        'WITHDRAWAL'::"fund_posting_source_kind"
+      )
+      AND position(' · ' in s."headline") > 0
+    `,
+    Prisma.sql`s."customer_name"`,
+    Prisma.sql`NULLIF(trim(substr(s."headline", position(' · ' in s."headline") + 3)), '')`,
+  ),
+  // 「动作 · 账单号」：顺联航的 headline 是动作在前，主体取客户。
+  labelStatement(
+    'ACTION_DOCUMENT',
+    Prisma.sql`
+      ${LABEL_PENDING}
+      AND s."source_kind" IN (
+        'SLH_SETTLEMENT'::"fund_posting_source_kind",
+        'SLH_FEE'::"fund_posting_source_kind",
+        'SLH_COMPANY_ALLOCATION'::"fund_posting_source_kind"
+      )
+      AND position(' · ' in s."headline") > 0
+    `,
+    Prisma.sql`s."customer_name"`,
+    Prisma.sql`NULLIF(trim(split_part(s."headline", ' · ', 1)), '')`,
+  ),
+  // 调账、冲账与未识别来源：整句就是动作，主体留空由前端回退。
+  labelStatement(
+    'WHOLE_HEADLINE',
+    Prisma.sql`
+      ${LABEL_PENDING}
+      AND s."source_kind" IN (
+        'MANUAL_ADJUSTMENT'::"fund_posting_source_kind",
+        'REVERSAL'::"fund_posting_source_kind",
+        'UNRESOLVED'::"fund_posting_source_kind"
+      )
+    `,
+    Prisma.sql`NULL::varchar`,
+    Prisma.sql`left(s."headline", 120)`,
+  ),
 ])

@@ -50,6 +50,8 @@ describe('PackagingCostService payment', () => {
       // 来源说明随入账下发；只影响展示，不进入幂等指纹。
       source: {
         headline: 'PKG00000001 · 打木架费用',
+        subject: '测试客户',
+        action: '打木架费用',
         customerName: '测试客户',
         documentNo: 'PKG00000001',
         link: { kind: 'PACKAGING_COST', id },

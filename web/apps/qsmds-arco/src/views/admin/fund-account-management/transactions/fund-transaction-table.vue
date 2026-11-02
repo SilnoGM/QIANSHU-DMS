@@ -84,6 +84,40 @@ function openSourceLink(group: FundBatchGroupDto): void {
   }
 }
 
+/**
+ * 主行标题：主体 · 动作。主体优先用结构化字段，其次客户/供应商，
+ * 都没有时退回 headline 整句，保证历史未回填行不会空白。
+ */
+function mainTitle(group: FundBatchGroupDto): string {
+  const subject = group.source?.subjectName
+    ?? group.source?.customerName
+    ?? group.source?.supplierName
+    ?? null
+  const action = group.source?.actionLabel ?? null
+  if (subject !== null && action !== null) {
+    return `${subject} · ${action}`
+  }
+  if (action !== null) {
+    return action
+  }
+  return group.source?.headline ?? group.businessNo ?? group.batchNo
+}
+
+/** 副行只留单号；缺失时退回业务单号与批次号。 */
+function secondaryDocument(group: FundBatchGroupDto): string {
+  return group.source?.documentNo ?? group.businessNo ?? group.batchNo
+}
+
+function amountToneClass(group: FundBatchGroupDto): string {
+  return group.businessAmount.trim().startsWith('-') ? 'text-destructive' : 'text-primary'
+}
+
+/** 金额固定带符号：出账为负、入账为正，与颜色一起表达方向。 */
+function amountText(group: FundBatchGroupDto): string {
+  const value = group.businessAmount.trim()
+  return value.startsWith('-') ? value : `+${value}`
+}
+
 const page = defineModel<number>('page', { required: true })
 const pageSize = defineModel<number>('pageSize', { required: true })
 const sorting = defineModel<TableSortingState>('sorting', { required: true })
@@ -103,6 +137,13 @@ const tagToneClasses = {
   slate: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:border-slate-500/30! dark:bg-slate-500/10! dark:text-slate-300',
 }
 
+const categoryToneClasses: Record<FundBatchGroupDto['businessCategory'], string> = {
+  ADJUSTMENT: 'text-violet-600 dark:text-violet-400',
+  COST: 'text-amber-600 dark:text-amber-400',
+  NEUTRAL: 'text-muted-foreground',
+  REVENUE: 'text-primary',
+}
+
 const batchKindTagClasses: Record<FundBatchGroupDto['batchKind'], string> = {
   BUSINESS: tagToneClasses.blue,
   MANUAL_ADJUSTMENT: tagToneClasses.purple,
@@ -114,13 +155,6 @@ const reversalStatusTagClasses: Record<FundBatchGroupDto['reversalStatus'], stri
   NONE: tagToneClasses.green,
   NOT_APPLICABLE: tagToneClasses.orange,
   PARTIAL: tagToneClasses.amber,
-}
-
-const businessCategoryTagClasses: Record<FundBatchGroupDto['businessCategory'], string> = {
-  ADJUSTMENT: tagToneClasses.purple,
-  COST: tagToneClasses.red,
-  NEUTRAL: tagToneClasses.slate,
-  REVENUE: tagToneClasses.green,
 }
 
 /**
@@ -198,61 +232,67 @@ const grouping: QsGenericTableGrouping<FundLedgerRow> = {
     @retry="emit('retry')"
     @sorting-change="emit('sortingChange', $event)"
   >
-    <!-- 分组行：一个批次一行，批次级操作与来源说明都在这里。 -->
+    <!--
+      分组行：主行一句话（主体 · 动作 + 分类小字），副行只放编码与时间。
+      同一事实只出现一次：客户/供应商不再重复，类型名与来源名相同时不显示。
+    -->
     <template #group-header="{ row }">
-      <div v-if="groupOf(row)" class="min-w-0 w-full space-y-2">
+      <div v-if="groupOf(row)" class="min-w-0 w-full space-y-1.5">
         <div class="flex flex-wrap gap-x-4 gap-y-2 items-center justify-between">
           <div class="flex flex-wrap gap-2 min-w-0 items-center">
-            <span class="qs-type-data-emphasis break-all">{{ groupOf(row)!.batchNo }}</span>
-            <FaTag variant="outline" class="qs-type-status-tag" :class="batchKindTagClasses[groupOf(row)!.batchKind]">
+            <span class="text-sm/6 font-semibold break-words">{{ mainTitle(groupOf(row)!) }}</span>
+            <span class="qs-type-meta" :class="categoryToneClasses[groupOf(row)!.businessCategory]">
+              {{ getFundBusinessCategoryLabel(groupOf(row)!.businessCategory) }}
+            </span>
+            <FaTag
+              v-if="groupOf(row)!.batchKind !== 'BUSINESS'"
+              variant="outline"
+              class="qs-type-status-tag"
+              :class="batchKindTagClasses[groupOf(row)!.batchKind]"
+            >
               {{ getFundBatchKindLabel(groupOf(row)!.batchKind) }}
             </FaTag>
             <FaTag
-              v-if="groupOf(row)!.reversalStatus !== 'NOT_APPLICABLE'"
+              v-if="groupOf(row)!.reversalStatus === 'PARTIAL' || groupOf(row)!.reversalStatus === 'FULL'"
               variant="outline"
               class="qs-type-status-tag"
               :class="reversalStatusTagClasses[groupOf(row)!.reversalStatus]"
             >
               {{ getFundReversalStatusLabel(groupOf(row)!.reversalStatus) }}
             </FaTag>
-            <FaTag variant="outline" class="qs-type-status-tag" :class="businessCategoryTagClasses[groupOf(row)!.businessCategory]">
-              {{ getFundBusinessCategoryLabel(groupOf(row)!.businessCategory) }}
-            </FaTag>
           </div>
-          <div class="flex flex-wrap gap-2 items-center">
-            <span class="qs-type-meta text-muted-foreground">业务金额</span>
-            <AmountDisplay :value="groupOf(row)!.businessAmount" currency="CNY" :currencies="currencies" class="!text-base !font-semibold" />
-            <span class="qs-type-meta text-muted-foreground">共 {{ groupOf(row)!.entries.length }} 条分录</span>
+          <div class="flex flex-wrap gap-3 items-center">
+            <AmountDisplay
+              :value="amountText(groupOf(row)!)"
+              currency="CNY"
+              :currencies="currencies"
+              :show-code="false"
+              class="!text-base !font-semibold"
+              :class="amountToneClass(groupOf(row)!)"
+            />
+            <span class="qs-type-meta text-muted-foreground">{{ groupOf(row)!.entries.length }} 条分录</span>
             <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-9" @click="emit('detail', groupOf(row)!)">
               详情
             </FaButton>
           </div>
         </div>
 
-        <div class="text-sm flex flex-wrap gap-x-5 gap-y-1 items-center">
+        <div class="qs-type-meta text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 items-center">
           <button
             v-if="sourceLink(groupOf(row)!)"
             type="button"
-            class="font-medium text-left underline-offset-4 break-words focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 hover:underline"
+            class="text-left underline-offset-4 break-words focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 hover:underline"
             @click="openSourceLink(groupOf(row)!)"
           >
-            {{ groupOf(row)!.source?.headline ?? groupOf(row)!.businessNo ?? '—' }}
+            {{ secondaryDocument(groupOf(row)!) }}
           </button>
-          <span v-else class="font-medium break-words">
-            {{ groupOf(row)!.source?.headline ?? groupOf(row)!.businessNo ?? '—' }}
+          <span v-else class="font-qs-data-mono break-all">
+            {{ secondaryDocument(groupOf(row)!) }}
           </span>
-          <span class="qs-type-meta text-muted-foreground break-all">
-            {{ groupOf(row)!.source?.documentNo ?? groupOf(row)!.businessNo ?? '—' }}
-          </span>
-          <span v-if="groupOf(row)!.source?.customerName" class="qs-type-meta text-muted-foreground">
-            客户：{{ groupOf(row)!.source?.customerName }}
-          </span>
-          <span v-if="groupOf(row)!.source?.supplierName" class="qs-type-meta text-muted-foreground">
-            供应商：{{ groupOf(row)!.source?.supplierName }}
-          </span>
-          <span class="qs-type-meta text-muted-foreground">{{ groupOf(row)!.postingTypeName }}</span>
-          <span class="qs-type-meta text-muted-foreground">{{ groupOf(row)!.businessSourceName }}</span>
-          <DateTimeDisplay :value="groupOf(row)!.businessOccurredAt" class="qs-type-meta text-muted-foreground" />
+          <span aria-hidden="true">·</span>
+          <DateTimeDisplay :value="groupOf(row)!.businessOccurredAt" />
+          <span aria-hidden="true">·</span>
+          <span class="font-qs-data-mono break-all">{{ groupOf(row)!.batchNo }}</span>
         </div>
       </div>
     </template>

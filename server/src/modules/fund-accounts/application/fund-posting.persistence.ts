@@ -260,6 +260,8 @@ function sourceSnapshotCreate(
   return {
     sourceKind: input.sourceKind,
     headline: input.headline,
+    subjectName: input.subjectName,
+    actionLabel: input.actionLabel,
     customerName: input.customerName,
     supplierName: input.supplierName,
     documentNo: input.documentNo,

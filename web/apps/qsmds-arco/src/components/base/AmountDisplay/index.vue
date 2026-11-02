@@ -11,6 +11,8 @@ const props = defineProps<{
   currency: string
   value: CurrencyAmountValue
   minorUnit?: CurrencyMinorUnit
+  /** 默认带币种代码；列表里币种恒定时可关闭。 */
+  showCode?: boolean
 }>()
 
 const currencyDescriptor = computed(() => findCurrencyDescriptor(
@@ -22,6 +24,7 @@ const formattedAmount = computed(() => formatCurrencyAmount(
   props.currency,
   props.currencies,
   props.minorUnit,
+  { showCode: props.showCode ?? true },
 ))
 // 未解析币种仍保留可审计的原始金额，同时通过 aria-label 明确告知辅助技术。
 const ariaLabel = computed(() => formattedAmount.value === EMPTY_AMOUNT_TEXT

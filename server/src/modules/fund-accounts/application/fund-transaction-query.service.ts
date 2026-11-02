@@ -91,6 +91,8 @@ interface FundTransactionRowPage {
 interface SourceDatabaseColumns {
   readonly sourceKind: unknown
   readonly sourceHeadline: unknown
+  readonly sourceSubjectName: unknown
+  readonly sourceActionLabel: unknown
   readonly sourceCustomerName: unknown
   readonly sourceSupplierName: unknown
   readonly sourceDocumentNo: unknown
@@ -596,6 +598,8 @@ function mapTransactionSource(
   return Object.freeze({
     kind: requiredEnum<FundSourceKind>(row.sourceKind, FUND_SOURCE_KINDS),
     headline: requiredString(row.sourceHeadline),
+    subjectName: nullableString(row.sourceSubjectName),
+    actionLabel: nullableString(row.sourceActionLabel),
     customerName: nullableString(row.sourceCustomerName),
     supplierName: nullableString(row.sourceSupplierName),
     documentNo: nullableString(row.sourceDocumentNo),
@@ -933,6 +937,8 @@ export class FundTransactionQueryService {
               batch."posted_at" AS "postedAt",
               source."source_kind"::text AS "sourceKind",
               source."headline" AS "sourceHeadline",
+              source."subject_name" AS "sourceSubjectName",
+              source."action_label" AS "sourceActionLabel",
               source."customer_name" AS "sourceCustomerName",
               source."supplier_name" AS "sourceSupplierName",
               source."document_no" AS "sourceDocumentNo",
@@ -1025,6 +1031,8 @@ export class FundTransactionQueryService {
               entry."posted_at" AS "postedAt",
               source."source_kind"::text AS "sourceKind",
               source."headline" AS "sourceHeadline",
+              source."subject_name" AS "sourceSubjectName",
+              source."action_label" AS "sourceActionLabel",
               source."customer_name" AS "sourceCustomerName",
               source."supplier_name" AS "sourceSupplierName",
               source."document_no" AS "sourceDocumentNo",
@@ -1199,6 +1207,8 @@ export class FundTransactionQueryService {
                   FUND_SOURCE_KINDS,
                 ),
                 headline: batch.sourceSnapshot.headline,
+                subjectName: batch.sourceSnapshot.subjectName,
+                actionLabel: batch.sourceSnapshot.actionLabel,
                 customerName: batch.sourceSnapshot.customerName,
                 supplierName: batch.sourceSnapshot.supplierName,
                 documentNo: batch.sourceSnapshot.documentNo,

@@ -2227,6 +2227,10 @@ model FundPostingBatchSource {
   customerName    String?               @map("customer_name") @db.VarChar(128)
   supplierName    String?               @map("supplier_name") @db.VarChar(128)
   documentNo      String?               @map("document_no") @db.VarChar(128)
+  /// 列表主行的主体：客户 / 供应商 / 申请人；headline 保留为整句兜底。
+  subjectName     String?               @map("subject_name") @db.VarChar(128)
+  /// 列表主行的动作短语，例如「采购尾款付款」「调货成本转入」。
+  actionLabel     String?               @map("action_label") @db.VarChar(120)
   /// 来源单据的可跳转目标；只在服务端已知具体单据 id 时写入。
   linkKind        String?               @map("link_kind") @db.VarChar(32)
   linkId          String?               @map("link_id") @db.VarChar(128)

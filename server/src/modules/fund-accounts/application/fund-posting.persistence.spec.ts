@@ -389,6 +389,8 @@ describe('fund posting persistence writes', () => {
       sourceSnapshot: {
         sourceKind: 'UNRESOLVED',
         headline: '订单亏损结算',
+        subjectName: null,
+        actionLabel: null,
         customerName: null,
         supplierName: null,
         documentNo: null,
@@ -457,6 +459,8 @@ describe('fund posting persistence writes', () => {
       sourceSnapshot: {
         sourceKind: 'MANUAL_ADJUSTMENT',
         headline: '修正录入金额',
+        subjectName: null,
+        actionLabel: '修正录入金额',
         customerName: null,
         supplierName: null,
         documentNo: null,

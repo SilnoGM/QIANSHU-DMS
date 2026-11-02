@@ -36,6 +36,7 @@ export const FUND_SOURCE_HEADLINE_MAXIMUM_CODE_POINTS = 200
 export const FUND_SOURCE_NAME_MAXIMUM_CODE_POINTS = 128
 export const FUND_SOURCE_DETAIL_LABEL_MAXIMUM_CODE_POINTS = 40
 export const FUND_SOURCE_DETAIL_VALUE_MAXIMUM_CODE_POINTS = 200
+export const FUND_SOURCE_ACTION_MAXIMUM_CODE_POINTS = 120
 
 export interface FundSourceDetailItem {
   readonly label: string
@@ -44,6 +45,10 @@ export interface FundSourceDetailItem {
 
 export interface FundSourceDescriptor {
   readonly headline: string
+  /** 列表主行主体：客户 / 供应商 / 申请人。 */
+  readonly subject?: string
+  /** 列表主行动作短语；缺失时前端回退到 headline。 */
+  readonly action?: string
   readonly customerName?: string
   readonly supplierName?: string
   readonly documentNo?: string
@@ -77,6 +82,8 @@ export interface FundSourceLink {
 export interface FundSourceSnapshotInsert {
   readonly sourceKind: FundSourceKind
   readonly headline: string
+  readonly subjectName: string | null
+  readonly actionLabel: string | null
   readonly customerName: string | null
   readonly supplierName: string | null
   readonly documentNo: string | null
@@ -123,6 +130,8 @@ export function resolveFundSourceKind(
 
 const DESCRIPTOR_KEYS = new Set([
   'headline',
+  'subject',
+  'action',
   'customerName',
   'supplierName',
   'documentNo',
@@ -263,9 +272,13 @@ export function normalizeFundSourceDescriptor(
   )
   const detail = normalizeDetail(record.detail)
   const link = normalizeLink(record.link)
+  const subject = normalizeOptionalText(record.subject, FUND_SOURCE_NAME_MAXIMUM_CODE_POINTS)
+  const action = normalizeOptionalText(record.action, FUND_SOURCE_ACTION_MAXIMUM_CODE_POINTS)
 
   return Object.freeze({
     headline,
+    ...(subject === undefined ? {} : { subject }),
+    ...(action === undefined ? {} : { action }),
     ...(customerName === undefined ? {} : { customerName }),
     ...(supplierName === undefined ? {} : { supplierName }),
     ...(documentNo === undefined ? {} : { documentNo }),
@@ -306,6 +319,8 @@ export function buildFundSourceSnapshot(input: {
     return Object.freeze({
       sourceKind: input.sourceKind,
       headline: truncateFundSourceHeadline(input.summary),
+      subjectName: null,
+      actionLabel: null,
       customerName: null,
       supplierName: null,
       documentNo: null,
@@ -319,6 +334,8 @@ export function buildFundSourceSnapshot(input: {
   return Object.freeze({
     sourceKind: input.sourceKind,
     headline: descriptor.headline,
+    subjectName: descriptor.subject ?? null,
+    actionLabel: descriptor.action ?? null,
     customerName: descriptor.customerName ?? null,
     supplierName: descriptor.supplierName ?? null,
     documentNo: descriptor.documentNo ?? null,
@@ -336,6 +353,8 @@ export function buildManualAdjustmentSourceSnapshot(
   return Object.freeze({
     sourceKind: 'MANUAL_ADJUSTMENT',
     headline: truncateFundSourceHeadline(reason),
+    subjectName: null,
+    actionLabel: truncateFundSourceText(reason, FUND_SOURCE_ACTION_MAXIMUM_CODE_POINTS),
     customerName: null,
     supplierName: null,
     documentNo: null,

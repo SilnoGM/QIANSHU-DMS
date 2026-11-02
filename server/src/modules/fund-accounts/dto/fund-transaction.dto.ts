@@ -325,6 +325,12 @@ export class FundTransactionSourceDto {
   headline!: string
 
   @ApiProperty({ type: 'string', nullable: true })
+  subjectName!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true })
+  actionLabel!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true })
   customerName!: string | null
 
   @ApiProperty({ type: 'string', nullable: true })

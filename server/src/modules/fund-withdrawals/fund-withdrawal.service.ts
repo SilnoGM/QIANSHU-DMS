@@ -252,6 +252,11 @@ export class FundWithdrawalService {
           requestId: context.requestId,
           sourceCode: FUND_WITHDRAWAL_FUND_SOURCE,
         }
+        // 提款行的主体是申请人本人；姓名只取当前展示名，读不到就退回单号。
+        const applicant = await transaction.user.findUnique({
+          where: { id: row.userId },
+          select: { displayName: true },
+        })
         const fundInput = {
           postingTypeCode: FUND_WITHDRAWAL_POSTING_TYPE,
           userId: row.userId,
@@ -262,6 +267,8 @@ export class FundWithdrawalService {
           // 提款没有客户/供应商，来源只有申请人自己的提款单。
           source: {
             headline: `${row.withdrawalNo} · 用户提款`,
+            ...(applicant === null ? {} : { subject: applicant.displayName }),
+            action: '用户提款',
             documentNo: row.withdrawalNo,
             link: { kind: 'FUND_WITHDRAWAL' as const, id },
             detail: [{ label: '提款金额', value: row.amount.toFixed(2) }],

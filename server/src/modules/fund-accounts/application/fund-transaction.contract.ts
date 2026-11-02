@@ -63,6 +63,10 @@ export interface FundTransactionSourceDetailView {
 export interface FundTransactionSourceView {
   readonly kind: FundSourceKind
   readonly headline: string
+  /** 列表主行主体；为空时前端回退到客户/供应商/单号。 */
+  readonly subjectName: string | null
+  /** 列表主行动作短语；为空时前端回退到 headline。 */
+  readonly actionLabel: string | null
   readonly customerName: string | null
   readonly supplierName: string | null
   readonly documentNo: string | null

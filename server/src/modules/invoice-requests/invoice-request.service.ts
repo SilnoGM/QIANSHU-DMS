@@ -512,6 +512,8 @@ export class InvoiceRequestService {
       summary: '开票服务费及邮寄费',
       source: {
         headline: `${input.buyerName} · 开票服务费及邮寄费`,
+        subject: input.buyerName,
+        action: '开票服务费及邮寄费',
         customerName: input.buyerName,
         documentNo: input.invoiceNo,
         link: { kind: 'INVOICE_REQUEST' as const, id: input.id },

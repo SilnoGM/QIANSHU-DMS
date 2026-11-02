@@ -118,6 +118,8 @@ export class PurchasePayableService {
       businessId: prepared.paymentId, businessNo: orderNo, summary: `采购${paymentTypeLabel}付款`,
       source: {
         headline: `${supplierName ?? '未命名供应商'} · 采购${paymentTypeLabel}付款`,
+        ...(supplierName === null ? {} : { subject: supplierName }),
+        action: `采购${paymentTypeLabel}付款`,
         ...(supplierName === null ? {} : { supplierName }),
         documentNo: orderNo,
         link: { kind: 'PURCHASE_ORDER' as const, id: payable.purchaseOrderId },

@@ -51,8 +51,14 @@ test('分录子行列只保留分录级字段，批次信息集中在分组行',
   }
   // 批次级信息只出现在分组头，避免展开后重复。
   assert.match(tableSource, /groupOf\(row\)!\.batchNo/u)
-  assert.match(tableSource, /groupOf\(row\)!\.source\?\.headline/u)
-  assert.match(tableSource, /groupOf\(row\)!\.businessAmount/u)
+  assert.match(tableSource, /mainTitle\(groupOf\(row\)!\)/u)
+  assert.match(tableSource, /amountText\(groupOf\(row\)!\)/u)
+  // 主行是「主体 · 动作」，副行只放单号与时间。
+  assert.match(tableSource, /subjectName/u)
+  assert.match(tableSource, /actionLabel/u)
+  assert.match(tableSource, /secondaryDocument\(groupOf\(row\)!\)/u)
+  // 常态批次不显示「业务动账」胶囊，只在非业务批次时渲染。
+  assert.match(tableSource, /groupOf\(row\)!\.batchKind !== 'BUSINESS'/u)
   assert.doesNotMatch(tableSource, /id: 'typeCategory'/u)
   assert.match(tableSource, /AmountDisplay/u)
   assert.match(tableSource, /DateTimeDisplay/u)

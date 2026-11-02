@@ -90973,6 +90973,14 @@
           "headline": {
             "type": "string"
           },
+          "subjectName": {
+            "type": "string",
+            "nullable": true
+          },
+          "actionLabel": {
+            "type": "string",
+            "nullable": true
+          },
           "customerName": {
             "type": "string",
             "nullable": true
@@ -91007,6 +91015,8 @@
         "required": [
           "kind",
           "headline",
+          "subjectName",
+          "actionLabel",
           "customerName",
           "supplierName",
           "documentNo",

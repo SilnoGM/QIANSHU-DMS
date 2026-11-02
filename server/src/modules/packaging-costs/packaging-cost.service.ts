@@ -196,6 +196,8 @@ export class PackagingCostService {
           businessId: row.id, businessNo: row.shipmentNo, summary: '打木架费用付款',
           source: {
             headline: `${row.shipmentNo} · 打木架费用`,
+            ...(customerName === null ? {} : { subject: customerName }),
+            action: '打木架费用',
             ...(customerName === null ? {} : { customerName }),
             documentNo: row.shipmentNo,
             link: { kind: 'PACKAGING_COST' as const, id: row.id },

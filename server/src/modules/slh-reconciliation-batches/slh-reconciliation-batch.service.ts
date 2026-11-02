@@ -87,6 +87,8 @@ function slhSourceDescriptor(input: {
 }): FundSourceDescriptor {
   return {
     headline: `${input.headline} · ${input.slhBillNo}`,
+    ...(input.customerName === null ? {} : { subject: input.customerName }),
+    action: input.headline,
     ...(input.customerName === null ? {} : { customerName: input.customerName }),
     documentNo: input.slhBillNo,
     link: { kind: 'SLH_RECONCILIATION', id: input.linkId },

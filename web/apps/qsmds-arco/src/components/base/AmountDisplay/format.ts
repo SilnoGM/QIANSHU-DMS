@@ -95,11 +95,17 @@ function roundToMinorUnit(
  * 已知币种按描述符的符号与 minorUnit 格式化；未知币种保留有效的原始十进制
  * 文本与代码，不猜测符号和精度，也不把可审计数据吞成空占位符。
  */
+export interface CurrencyAmountFormatOptions {
+  /** 列表里币种恒定时可以隐藏末尾的币种代码，默认保留。 */
+  readonly showCode?: boolean
+}
+
 export function formatCurrencyAmount(
   value: CurrencyAmountValue,
   currency: string,
   currencies: readonly CurrencyDescriptor[],
   minorUnit?: CurrencyMinorUnit,
+  options?: CurrencyAmountFormatOptions,
 ): string {
   const normalized = normalizeInput(value)
   const normalizedCurrency = currency.trim()
@@ -120,5 +126,6 @@ export function formatCurrencyAmount(
     ? ''
     : `.${rounded.fraction}`
 
-  return `${rounded.negative ? '-' : ''}${descriptor.symbol ?? ''}${groupedInteger}${fraction} ${descriptor.code}`
+  const codeSuffix = options?.showCode === false ? '' : ` ${descriptor.code}`
+  return `${rounded.negative ? '-' : ''}${descriptor.symbol ?? ''}${groupedInteger}${fraction}${codeSuffix}`
 }
