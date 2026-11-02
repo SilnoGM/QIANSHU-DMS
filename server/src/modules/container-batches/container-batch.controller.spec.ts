@@ -7,9 +7,10 @@ import { createOpenApiDocument } from '../../openapi/openapi-document.factory'
 import { REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
 import { ContainerBatchController } from './container-batch.controller'
 import { ContainerBatchService } from './container-batch.service'
+import { ContainerSwapService } from './container-swap.service'
 import { ContainerBatchCreateDto, ContainerBatchUpdateDto, ContainerLoadingItemCreateDto } from './container-batch.dto'
 
-@Module({ controllers: [ContainerBatchController], providers: [{ provide: ContainerBatchService, useValue: {} }] })
+@Module({ controllers: [ContainerBatchController], providers: [{ provide: ContainerBatchService, useValue: {} }, { provide: ContainerSwapService, useValue: {} }] })
 class ContractModule {}
 describe('ContainerBatchController foundation contract', () => {
   it('protects queries and commands with their dedicated permissions', () => {
@@ -17,11 +18,14 @@ describe('ContainerBatchController foundation contract', () => {
     expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, ContainerBatchController.prototype.create)).toEqual(['container-batches:create'])
     expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, ContainerBatchController.prototype.createItem)).toEqual(['container-batches:update'])
     for (const action of ['list', 'get', 'items'] as const) expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, ContainerBatchController.prototype[action])).toEqual(['container-batches:read'])
+    for (const action of ['swapContext', 'swap'] as const) expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, ContainerBatchController.prototype[action])).toEqual(['container-batches:update'])
   })
   it('publishes authenticated, idempotent foundations without physical shipment actions', async () => {
     const document = await createOpenApiDocument(ContractModule)
     const root = '/api/container-batches'
-    expect(Object.keys(document.paths)).toEqual([root, `${root}/{id}`, `${root}/{id}/items`, `${root}/{id}/items/{itemId}`])
+    expect(Object.keys(document.paths).sort()).toEqual([root, `${root}/{id}`, `${root}/{id}/items`, `${root}/{id}/items/{itemId}`, `${root}/swap`, `${root}/swap-context`].sort())
+    expect(document.paths[`${root}/swap-context`].get?.operationId).toBe('container_swap_context')
+    expect(document.paths[`${root}/swap`].post?.operationId).toBe('container_batch_swap')
     expect(document.paths[`${root}/{id}`].patch?.operationId).toBe('container_batches_update')
     expect(document.paths[`${root}/{id}/items/{itemId}`].patch?.operationId).toBe('container_loading_items_update')
     expect(document.paths[root].post).toMatchObject({ operationId: 'container_batches_create', 'x-qianshu-contract': { csrf: true }, responses: { 201: expect.any(Object) as unknown, 409: expect.any(Object) as unknown } })

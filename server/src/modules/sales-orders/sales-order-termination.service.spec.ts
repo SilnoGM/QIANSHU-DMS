@@ -53,6 +53,30 @@ function service() {
 }
 
 describe('SalesOrderTerminationService', () => {
+  it('blocks termination when a swapped-in shipment still belongs to the order', async () => {
+    const prisma = {
+      salesOrder: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: ORDER_ID,
+          orderStatus: 'CONFIRMED',
+          fulfillmentStatus: 'SEA_TRANSIT',
+        }),
+      },
+      purchaseOrderPart: { count: jest.fn().mockResolvedValue(1) },
+      salesReceiptRequest: { count: jest.fn().mockResolvedValue(0) },
+    }
+    const dataScope = { resolve: jest.fn().mockResolvedValue('ALL') }
+    const instance = new SalesOrderTerminationService(
+      prisma as never,
+      dataScope as never,
+      {} as never,
+      {} as never,
+    )
+
+    await expect(instance.getContext({ actorUserId: context.actorUserId }, ORDER_ID))
+      .rejects.toMatchObject({ code: 'SALES_ORDER_TERMINATION_SWAP_PENDING' })
+  })
+
   it('requires an overseas warehouse when releasing loaded shipments', async () => {
     const f = service()
     jest.spyOn(f.instance, 'getContext').mockResolvedValue(terminationContext({

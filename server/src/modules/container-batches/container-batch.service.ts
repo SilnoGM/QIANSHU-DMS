@@ -101,7 +101,7 @@ export class ContainerBatchService {
       { warehouseReceiptReference: { contains: search, mode: 'insensitive' } },
     ] } : {}) }
     const [rows, total] = await this.prisma.$transaction([
-      this.prisma.containerLoadingItem.findMany({ where, include: { shipment: { select: { shipmentNo: true, shippingMarkText: true, purchaseOrder: { select: { id: true, orderNo: true, salesOrder: { select: { id: true, orderNo: true } } } } } } }, skip: (query.page - 1) * query.pageSize, take: query.pageSize, orderBy: { lineNumber: 'asc' } }),
+      this.prisma.containerLoadingItem.findMany({ where, include: { shipment: { select: { shipmentNo: true, shippingMarkText: true, purchaseOrder: { select: { id: true, orderNo: true, salesOrder: { select: { id: true, orderNo: true } } } }, ownershipCurrent: { select: { ownerSalesOrder: { select: { id: true, orderNo: true, customerName: true } } } } } } }, skip: (query.page - 1) * query.pageSize, take: query.pageSize, orderBy: { lineNumber: 'asc' } }),
       this.prisma.containerLoadingItem.count({ where }),
     ], { isolationLevel: 'RepeatableRead' })
     return { items: rows.map(row => serializeItem(row, canPurchase, canSales)), total }

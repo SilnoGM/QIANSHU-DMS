@@ -6,7 +6,7 @@ import type { ContainerBatchDto, ContainerLoadingItemDto } from './container-bat
 export const containerSummaryInclude = { items: { select: { shipmentId: true, packageCount: true, grossWeightKg: true, volumeCai: true, chargeableVolumeCai: true } } } satisfies Prisma.ContainerBatchInclude
 type SummaryItem = Pick<ContainerLoadingItem, 'shipmentId' | 'packageCount' | 'grossWeightKg' | 'volumeCai' | 'chargeableVolumeCai'>
 interface ItemReferences {
-  shipment?: { shipmentNo: string | null, shippingMarkText: string | null, purchaseOrder: { id: string, orderNo: string, salesOrder?: { id: string, orderNo: string } | null } } | null
+  shipment?: { shipmentNo: string | null, shippingMarkText: string | null, purchaseOrder: { id: string, orderNo: string, salesOrder?: { id: string, orderNo: string } | null }, ownershipCurrent?: { ownerSalesOrder?: { id: string, orderNo: string, customerName: string } | null } | null } | null
 }
 function summarize(items: SummaryItem[]) {
   // 合计保留全部十进制位，且任一行缺值时不能伪装为完整合计。汇总只展示，不写回单行存储量程。
@@ -27,6 +27,9 @@ export function serializeContainerItem(row: ContainerLoadingItem & ItemReference
     shipmentNo: canPurchase ? row.shipment?.shipmentNo ?? null : null, shippingMark: canPurchase ? row.shipment?.shippingMarkText ?? null : null,
     purchaseOrderId: canPurchase ? row.shipment?.purchaseOrder.id ?? null : null, purchaseOrderNo: canPurchase ? row.shipment?.purchaseOrder.orderNo ?? null : null,
     salesOrderId: canPurchase && canSales ? row.shipment?.purchaseOrder.salesOrder?.id ?? null : null, salesOrderNo: canPurchase && canSales ? row.shipment?.purchaseOrder.salesOrder?.orderNo ?? null : null,
+    ownerSalesOrderId: canPurchase && canSales ? row.shipment?.ownershipCurrent?.ownerSalesOrder?.id ?? null : null,
+    ownerSalesOrderNo: canPurchase && canSales ? row.shipment?.ownershipCurrent?.ownerSalesOrder?.orderNo ?? null : null,
+    ownerCustomerName: canPurchase && canSales ? row.shipment?.ownershipCurrent?.ownerSalesOrder?.customerName ?? null : null,
     recipientName: row.recipientName ?? null, recipientPhone: row.recipientPhone ?? null, recipientAddress: row.recipientAddress ?? null, codAmountTwd: row.codAmountTwd?.toFixed(2) ?? null,
     id: row.id, containerBatchId: row.containerBatchId, shipmentId: row.shipmentId, lineNumber: row.lineNumber, oceanShippingMarkText: row.oceanShippingMarkText, warehouseReceiptReference: row.warehouseReceiptReference, goodsName: row.goodsName, packageCount: row.packageCount, packageUnit: row.packageUnit, remark: row.remark, version: row.version,
     grossWeightKg: row.grossWeightKg?.toFixed(0) ?? null,

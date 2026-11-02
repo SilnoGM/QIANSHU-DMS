@@ -7,7 +7,9 @@ import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
 import { ContainerBatchUpdateDto, ContainerLoadingItemUpdateDto, ContainerLoadingItemIdDto, ContainerBatchCreateDto, ContainerBatchDto, ContainerBatchIdDto, ContainerBatchListQueryDto, ContainerBatchPageDto, ContainerLoadingItemCreateDto, ContainerLoadingItemDto, ContainerLoadingItemPageDto } from './container-batch.dto'
+import { ContainerSwapContextDto, ContainerSwapContextQueryDto, ContainerSwapRequestDto, ContainerSwapResultDto } from './container-swap.dto'
 import { ContainerBatchService } from './container-batch.service'
+import { ContainerSwapService } from './container-swap.service'
 
 function contract(operationId: string, mutation = false) {
   return ApiApplicationContract({ operationId, session: 'required', authorization: true, csrf: mutation, badRequest: true, validation: true, privateNoStore: true, errors: [
@@ -20,17 +22,41 @@ function contract(operationId: string, mutation = false) {
     ] as ApiContractErrorOptions[] : []),
   ] })
 }
+const swapContract = (operationId: string, mutation = false) => ApiApplicationContract({
+  operationId,
+  session: 'required',
+  authorization: true,
+  csrf: mutation,
+  badRequest: true,
+  validation: true,
+  privateNoStore: true,
+  errors: [
+    { status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED', ...(mutation ? ['CSRF_REJECTED'] : [])] },
+    { status: 404, codes: ['CONTAINER_SWAP_SHIPMENT_NOT_FOUND'] },
+    ...(mutation ? [
+      { status: 409, codes: ['CONTAINER_SWAP_LINE_CHANGED', 'CONTAINER_SWAP_STATE_CHANGED', 'CONTAINER_SWAP_IDEMPOTENCY_CONFLICT'] },
+      { status: 422, codes: ['VALIDATION_FAILED', 'CONTAINER_SWAP_NOT_ALLOWED', 'CONTAINER_SWAP_PRODUCT_MISMATCH', 'CONTAINER_SWAP_PRODUCT_INVALID', 'CONTAINER_SWAP_RECIPIENT_INVALID', 'CONTAINER_SWAP_SETTLED', 'CONTAINER_SWAP_RECONCILING', 'CONTAINER_SWAP_PACKAGING_UNPAID'] },
+    ] as ApiContractErrorOptions[] : []),
+  ],
+})
 const keyHeader = () => ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } })
 const context = (request: object) => ({ actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) })
 
 @ApiTags('container-batches')
 @Controller('container-batches')
 export class ContainerBatchController {
-  constructor(private readonly service: ContainerBatchService) {}
+  constructor(
+    private readonly service: ContainerBatchService,
+    private readonly swaps: ContainerSwapService,
+  ) {}
   @Get() @RequirePermissions('container-batches:read') @contract('container_batches_list') @ApiContractResponse({ status: 200, type: ContainerBatchPageDto })
   list(@Query() query: ContainerBatchListQueryDto) { return this.service.list(query) }
   @Post() @HttpCode(201) @RequirePermissions('container-batches:create') @contract('container_batches_create', true) @keyHeader() @ApiContractResponse({ status: 201, type: ContainerBatchDto })
   create(@Body() input: ContainerBatchCreateDto, @Headers('idempotency-key') key: unknown, @Req() request: object) { return this.service.create(context(request), input, key) }
+  @Get('swap-context') @RequirePermissions('container-batches:update') @swapContract('container_swap_context') @ApiContractResponse({ status: 200, type: ContainerSwapContextDto })
+  swapContext(@Query() query: ContainerSwapContextQueryDto) { return this.swaps.getContext(query.leftShipmentId, query.rightShipmentId) }
+  @Post('swap') @HttpCode(200) @RequirePermissions('container-batches:update') @swapContract('container_batch_swap', true) @keyHeader() @ApiContractResponse({ status: 200, type: ContainerSwapResultDto })
+  swap(@Body() input: ContainerSwapRequestDto, @Headers('idempotency-key') key: unknown, @Req() request: object) { return this.swaps.swap(context(request), input, key) }
   @Get(':id') @RequirePermissions('container-batches:read') @contract('container_batches_get') @ApiContractResponse({ status: 200, type: ContainerBatchDto })
   get(@Param() params: ContainerBatchIdDto) { return this.service.get(params.id) }
   @Get(':id/items') @RequirePermissions('container-batches:read') @contract('container_loading_items_list') @ApiContractResponse({ status: 200, type: ContainerLoadingItemPageDto })
