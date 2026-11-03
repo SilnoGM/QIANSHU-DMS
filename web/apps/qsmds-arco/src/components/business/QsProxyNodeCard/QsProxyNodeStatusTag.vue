@@ -22,9 +22,10 @@ const statusClass = computed(() => resolveProxyNodeStatusClass(status.value))
 <template>
   <FaTag
     variant="outline"
-    class="qs-type-status-tag whitespace-nowrap"
+    class="qs-type-status-tag inline-flex gap-1.5 whitespace-nowrap items-center"
     :class="statusClass"
   >
+    <span class="rounded-full bg-current size-1.5" aria-hidden="true" />
     {{ label }}
   </FaTag>
 </template>

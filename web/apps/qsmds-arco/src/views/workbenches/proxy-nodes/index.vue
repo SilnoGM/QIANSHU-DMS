@@ -352,7 +352,7 @@ onUnmounted(() => {
           </FaButton>
         </div>
 
-        <div v-else-if="loading" class="flex flex-col gap-4" aria-busy="true">
+        <div v-else-if="loading" class="gap-4 grid xl:grid-cols-2" aria-busy="true">
           <div
             v-for="index in 4"
             :key="index"
@@ -377,7 +377,7 @@ onUnmounted(() => {
           class="py-12"
         />
 
-        <div v-else class="flex flex-col gap-4" aria-live="polite">
+        <div v-else class="gap-4 grid xl:grid-cols-2" aria-live="polite">
           <QsProxyNodeCard
             v-for="row in visibleRows"
             :key="row.id"

@@ -22,10 +22,11 @@ const tone = computed(() => resolveProxyNodeCountdownClass(
 
 <template>
   <span
-    class="text-base font-mono font-semibold whitespace-nowrap tabular-nums"
+    class="text-sm font-mono font-semibold px-2.5 py-1 border rounded-md inline-flex gap-1.5 whitespace-nowrap items-center tabular-nums"
     :class="tone"
     aria-live="off"
   >
+    <FaIcon name="i-lucide:clock" class="size-3.5" aria-hidden="true" />
     {{ text }}
   </span>
 </template>
