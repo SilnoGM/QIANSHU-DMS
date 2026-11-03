@@ -104,7 +104,7 @@ test('运营工作台新增个人财务分组，两个叶子各用独立权限',
   assert.equal(operationsWorkbenchRoutes.at(-1)?.name, 'qsOperationsNetworkAds')
 })
 
-test('运营工作台新增网络与广告分组：广告充值用本人读取码，静态节点是占位叶', () => {
+test('运营工作台网络与广告分组：广告充值用本人读取码，静态节点用 proxy-nodes:read', () => {
   const networkAdsGroup = operationsWorkbenchRoutes.find(
     route => route.name === 'qsOperationsNetworkAds',
   )
@@ -112,13 +112,11 @@ test('运营工作台新增网络与广告分组：广告充值用本人读取�
   assert.equal(networkAdsGroup?.meta?.title, '网络与广告')
   assert.equal(networkAdsGroup?.meta?.icon, 'qs-network-ads')
   assert.deepEqual(networkAdsGroup?.meta?.auth, [
-    'network-nodes:read',
+    'proxy-nodes:read',
     'advertising-recharges:read-self',
   ])
-  assert.equal(
-    typeof networkAdsGroup?.redirect === 'object' ? networkAdsGroup.redirect.name : undefined,
-    'qsOperationsNetworkAdsAdvertisingRecharges',
-  )
+  // 两个叶子权限互不覆盖，分组不设固定 redirect，交给 Route Store 回退。
+  assert.equal(networkAdsGroup?.redirect, undefined)
   assert.deepEqual(
     networkAdsGroup?.children?.map(route => ({
       auth: route.meta?.auth,
@@ -129,7 +127,7 @@ test('运营工作台新增网络与广告分组：广告充值用本人读取�
     })),
     [
       {
-        auth: 'network-nodes:read',
+        auth: 'proxy-nodes:read',
         icon: 'qs-static-node',
         name: 'qsOperationsNetworkAdsStaticNodes',
         path: 'static-nodes',
@@ -144,7 +142,7 @@ test('运营工作台新增网络与广告分组：广告充值用本人读取�
       },
     ],
   )
-  assert.match(String(networkAdsGroup?.children?.[0]?.component), /workbenches\/placeholder\.vue/u)
+  assert.match(String(networkAdsGroup?.children?.[0]?.component), /views\/operations\/network-ads\/static-nodes\/index\.vue/u)
   assert.match(String(networkAdsGroup?.children?.[1]?.component), /workbenches\/network-ads\/advertising-recharges\/index\.vue/u)
 
   assert.deepEqual(
@@ -152,12 +150,21 @@ test('运营工作台新增网络与广告分组：广告充值用本人读取�
     ['advertising-recharges'],
   )
   assert.deepEqual(
-    visibleLeafPaths(networkAdsGroup, [OPERATIONS_WORKBENCH_PERMISSION, 'network-nodes:read']),
+    visibleLeafPaths(networkAdsGroup, [OPERATIONS_WORKBENCH_PERMISSION, 'proxy-nodes:read']),
     ['static-nodes'],
   )
   assert.equal(
     canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'advertising-recharges:read-self'], '/qs-operations/network-ads/advertising-recharges'),
     true,
+  )
+  assert.equal(
+    canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'proxy-nodes:read'], '/qs-operations/network-ads/static-nodes'),
+    true,
+  )
+  assert.equal(
+    canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'network-nodes:read'], '/qs-operations/network-ads/static-nodes'),
+    false,
+    '旧的占位权限不能进入静态节点页',
   )
   assert.equal(
     canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'advertising-recharges:read'], '/qs-operations/network-ads/advertising-recharges'),

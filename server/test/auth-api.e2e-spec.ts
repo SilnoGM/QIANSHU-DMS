@@ -78,6 +78,8 @@ const MANAGEMENT_PERMISSION_CODES = [
   'products:create',
   'products:read',
   'products:update',
+  'proxy-nodes:manage',
+  'proxy-nodes:read',
   'purchase-orders:create',
   'purchase-orders:create-stock',
   'purchase-orders:document',

@@ -195,23 +195,23 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
-    // 网络与广告是新的运营业务分组：静态节点当前只有占位页，广告充值承载
-    // 「运营提交 → 财务付款」的真实链路。分组 auth 只用于菜单过滤，取组内叶子并集。
+    // 网络与广告承载两条独立链路：静态节点只读本人绑定代理，广告充值由运营提交、
+    // 财务付款。两个叶子权限互不覆盖，因此不声明固定 redirect，交给 Route Store
+    // 回退到当前角色有权限的第一个子路由。
     path: '/qs-operations/network-ads',
     name: 'qsOperationsNetworkAds',
     component: Layout,
-    redirect: { name: 'qsOperationsNetworkAdsAdvertisingRecharges' },
     meta: {
       title: '网络与广告',
       icon: 'qs-network-ads',
-      auth: ['network-nodes:read', 'advertising-recharges:read-self'],
+      auth: ['proxy-nodes:read', 'advertising-recharges:read-self'],
     },
     children: [
       {
         path: 'static-nodes',
         name: 'qsOperationsNetworkAdsStaticNodes',
-        component: () => import('@/views/workbenches/placeholder.vue'),
-        meta: { title: '静态节点', icon: 'qs-static-node', auth: 'network-nodes:read' },
+        component: () => import('@/views/operations/network-ads/static-nodes/index.vue'),
+        meta: { title: '静态节点', icon: 'qs-static-node', auth: 'proxy-nodes:read', keepAlive: true },
       },
       {
         path: 'advertising-recharges',

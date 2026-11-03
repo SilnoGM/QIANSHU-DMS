@@ -324,5 +324,16 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
         auth: 'shipment-storage:read',
       },
     },
+    {
+      path: '/qs-purchase-transport/proxy-nodes',
+      name: 'qsPurchaseTransportProxyNodes',
+      component: () => import('@/views/workbenches/proxy-nodes/index.vue'),
+      meta: {
+        title: 'IPFoxy静态节点',
+        icon: 'qs-static-node',
+        singleMenu: true,
+        auth: 'proxy-nodes:manage',
+      },
+    },
   ],
 }

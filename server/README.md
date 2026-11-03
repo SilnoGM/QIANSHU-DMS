@@ -77,6 +77,9 @@ allowBuilds:
 | `MEDIA_COS_BUCKET` | 存储桶名（含 APPID 后缀）；`cos` 驱动必填 | 模板保持为空 |
 | `MEDIA_COS_SECRET_ID` | 只授权该桶的 CAM 子账号 SecretId；`cos` 驱动必填 | 模板保持为空 |
 | `MEDIA_COS_SECRET_KEY` | 同一子账号的 SecretKey；`cos` 驱动必填，只在创建时可见 | 模板保持为空 |
+| `IPFOXY_API_ID` | IPFoxy 开放接口用户 ID；与 Token 必须同时提供 | 模板保持为空 |
+| `IPFOXY_API_TOKEN` | IPFoxy 开放接口 Token；与 ID 必须同时提供，具备购买/续费权限 | 模板保持为空 |
+| `PROXY_NODE_SECRET_KEY` | 静态节点密码 AES-256-GCM 密钥；启用 IPFoxy 时必填，32-byte canonical base64url | 模板保持为空 |
 
 三个 HMAC key 在 production 必须分别使用独立的 32-byte canonical base64url 值。具体必填条件与边界以 `.env.example` 和 `src/config/env.validation.ts` 为真相源；README 不保存真实值。
 

@@ -190,6 +190,10 @@ enum AuditEventType {
   ADVERTISING_RECHARGE_REJECTED
   ADVERTISING_RECHARGE_WITHDRAWN
   ADVERTISING_RECHARGE_VOIDED
+  /// IPFoxy 静态节点同步与用户绑定事件。
+  PROXY_NODE_SYNCED
+  PROXY_NODE_ASSIGNED
+  PROXY_NODE_RELEASED
 
   @@map("audit_event_type")
 }
@@ -761,6 +765,8 @@ model User {
   shipmentOwnershipEventsActed      ShipmentOwnershipEvent[]      @relation("ShipmentOwnershipEventActor")
   shippingMarkBindingsCreated       SupplierShippingMarkRuleBinding[] @relation("ShippingMarkBindingCreatedBy")
   shippingMarkBindingsUpdated       SupplierShippingMarkRuleBinding[] @relation("ShippingMarkBindingUpdatedBy")
+  proxyNodesAssigned                ProxyNode[]                     @relation("ProxyNodeAssignee")
+  proxyNodesAssignedBy              ProxyNode[]                     @relation("ProxyNodeAssigner")
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -1721,6 +1727,60 @@ model ShipmentCostEvent {
   @@unique([actorUserId, requestKey], map: "shipment_cost_events_actor_request_key")
   @@map("shipment_cost_events")
 }
+
+enum ProxyProtocol {
+  SOCKS5
+  HTTP
+  SSH
+
+  @@map("proxy_protocol")
+}
+
+enum ProxyIpType {
+  STATIC_DATACENTER
+  STATIC_ISP
+  STATIC_ISP_PRO
+
+  @@map("proxy_ip_type")
+}
+
+/// IPFoxy 静态代理节点。供应商是数据源，本表是绑定关系的唯一真相源。
+/// 同步只 upsert、不删除；供应商侧本次未返回的记录标记 vendorMissing。
+/// 密码以 AES-256-GCM 密文落库，接口只在本人或管理权限下返回明文。
+model ProxyNode {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerProxyId    String        @unique(map: "proxy_nodes_provider_proxy_id_key") @map("provider_proxy_id") @db.VarChar(64)
+  host               String        @db.VarChar(255)
+  publicIp           String?       @map("public_ip") @db.VarChar(64)
+  port               Int
+  protocol           ProxyProtocol
+  countryCode        String?       @map("country_code") @db.VarChar(2)
+  areaId             String?       @map("area_id") @db.VarChar(32)
+  vendorCountry      String?       @map("vendor_country") @db.VarChar(64)
+  ipType             ProxyIpType   @map("ip_type")
+  ipVersion          String        @map("ip_version") @db.VarChar(8)
+  autoExtend         Boolean       @default(false) @map("auto_extend")
+  boughtAt           DateTime?     @map("bought_at") @db.Timestamptz(6)
+  expiresAt          DateTime      @map("expires_at") @db.Timestamptz(6)
+  lastRenewedAt      DateTime?     @map("last_renewed_at") @db.Timestamptz(6)
+  username           String        @db.VarChar(128)
+  passwordCiphertext String        @map("password_ciphertext") @db.Text
+  assignedUserId     String?       @map("assigned_user_id") @db.Uuid
+  assignedAt         DateTime?     @map("assigned_at") @db.Timestamptz(6)
+  assignedByUserId   String?       @map("assigned_by_user_id") @db.Uuid
+  vendorMissing      Boolean       @default(false) @map("vendor_missing")
+  lastSyncedAt       DateTime      @map("last_synced_at") @db.Timestamptz(6)
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  assignedUser   User? @relation("ProxyNodeAssignee", fields: [assignedUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  assignedByUser User? @relation("ProxyNodeAssigner", fields: [assignedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([assignedUserId], map: "proxy_nodes_assigned_user_idx")
+  @@index([expiresAt], map: "proxy_nodes_expires_at_idx")
+  @@map("proxy_nodes")
+}
+
 
 model PurchaseOrderPayable {
   voucherUploads MediaAsset[] @relation("PurchasePayableVoucherUpload")
