@@ -72,7 +72,7 @@ const PASTE_HEADING_PATTERN = /广告|廣告|账户|帳戶|帐号|帳號|编号|
 const PASTE_NAME_MAX_LENGTH = 128
 const PASTE_NUMBER_PATTERN = /^\d{6,32}$/u
 /** 没有编号时，只有像账户编码的单行才当名称，避免误粘贴一段普通文字就填进表单。 */
-const PASTE_NAME_ONLY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u
+const PASTE_NAME_ONLY_PATTERN = /^[A-Za-z0-9][\w.-]{0,127}$/u
 
 /** 全角冒号/字母统一、清掉零宽字符与空行；粘贴内容的行结构是解析依据。 */
 function normalizePasteLines(input: string): string[] {
