@@ -9,19 +9,23 @@ ALTER TABLE "advertising_recharge_requests"
   RENAME CONSTRAINT "advertising_recharge_requests_proof_media_asset_id_fkey"
   TO "advertising_recharge_requests_payment_proof_media_asset_id_fkey";
 
+-- 隔离 schema 的测试夹具会在同一数据库内重放迁移，pg_constraint 必须限定当前 schema，
+-- 否则 public 中已改名的同名约束会让计数翻倍并误判失败。
 DO $$
 BEGIN
   IF (SELECT count(*) FROM pg_constraint
-      WHERE conname IN (
-        'advertising_recharge_requests_payment_qr_media_asset_id_fkey',
-        'advertising_recharge_requests_payment_proof_media_asset_id_fkey'
-      )) <> 2
+      WHERE connamespace = current_schema()::regnamespace
+        AND conname IN (
+          'advertising_recharge_requests_payment_qr_media_asset_id_fkey',
+          'advertising_recharge_requests_payment_proof_media_asset_id_fkey'
+        )) <> 2
     OR EXISTS (
       SELECT 1 FROM pg_constraint
-      WHERE conname IN (
-        'advertising_recharge_requests_qr_media_asset_id_fkey',
-        'advertising_recharge_requests_proof_media_asset_id_fkey'
-      )
+      WHERE connamespace = current_schema()::regnamespace
+        AND conname IN (
+          'advertising_recharge_requests_qr_media_asset_id_fkey',
+          'advertising_recharge_requests_proof_media_asset_id_fkey'
+        )
     )
   THEN
     RAISE EXCEPTION 'advertising recharge foreign key rename failed';

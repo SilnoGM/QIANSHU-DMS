@@ -124,16 +124,20 @@ BEGIN
       USING ERRCODE = '23514', CONSTRAINT = 'proxy_node_permission_check';
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1
-    FROM "role_permissions" AS role_permission
-    JOIN "roles" AS role ON role."id" = role_permission."role_id"
-    JOIN "permissions" AS permission ON permission."id" = role_permission."permission_id"
-    WHERE role."code" = 'purchasing_staff'
-      AND permission."code" = 'proxy-nodes:manage'
-  ) THEN
-    RAISE EXCEPTION 'purchasing_staff must manage proxy nodes'
-      USING ERRCODE = '23514', CONSTRAINT = 'proxy_node_role_grant_check';
+  -- 全新库在迁移阶段只有 system_admin，采运内置角色由初始化流程创建；
+  -- 角色已存在时必须已获得管理授权，角色尚未创建时由初始化按权限码补齐。
+  IF EXISTS (SELECT 1 FROM "roles" WHERE "code" = 'purchasing_staff') THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM "role_permissions" AS role_permission
+      JOIN "roles" AS role ON role."id" = role_permission."role_id"
+      JOIN "permissions" AS permission ON permission."id" = role_permission."permission_id"
+      WHERE role."code" = 'purchasing_staff'
+        AND permission."code" = 'proxy-nodes:manage'
+    ) THEN
+      RAISE EXCEPTION 'purchasing_staff must manage proxy nodes'
+        USING ERRCODE = '23514', CONSTRAINT = 'proxy_node_role_grant_check';
+    END IF;
   END IF;
 END $$;
 
