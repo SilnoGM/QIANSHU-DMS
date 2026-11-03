@@ -213,6 +213,24 @@ export const PROXY_NODE_PERMISSION_CODES = [
 ] as const
 
 /**
+ * 广告账户充值：运营提交申请与读取本人记录，财务读取全部并登记付款或作废。
+ *
+ * 本人读取与全量读取分开授予，避免运营因提交权限顺带看到他人申请与付款凭证。
+ */
+export const ADVERTISING_RECHARGE_PERMISSION_CODES = [
+  'advertising-recharges:read-self',
+  'advertising-recharges:create',
+  'advertising-recharges:read',
+  'advertising-recharges:pay',
+] as const
+
+/**
+ * 静态节点占位页遗留的只读权限。IPFoxy 静态节点落地后由 proxy-nodes:read 接管，
+ * 该权限不再参与接口授权，仅随迁移保留在权限目录中，避免已应用环境出现目录差异。
+ */
+export const NETWORK_NODES_PERMISSION_CODES = ['network-nodes:read'] as const
+
+/**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
  * 顺序与数据库 seed 一致，既便于契约审查，也避免各业务模块各自拼写字符串。
@@ -274,6 +292,8 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...WORKBENCH_ACCESS_PERMISSION_CODES,
   ...DATA_SCOPE_PERMISSION_CODES,
   ...PROXY_NODE_PERMISSION_CODES,
+  ...ADVERTISING_RECHARGE_PERMISSION_CODES,
+  ...NETWORK_NODES_PERMISSION_CODES,
 ] as const
 
 export type ManagementPermissionCode =

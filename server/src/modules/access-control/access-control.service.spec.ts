@@ -135,8 +135,13 @@ describe('permission constants', () => {
       'data-scope:all',
       'proxy-nodes:read',
       'proxy-nodes:manage',
+      'advertising-recharges:read-self',
+      'advertising-recharges:create',
+      'advertising-recharges:read',
+      'advertising-recharges:pay',
+      'network-nodes:read',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 104)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 109)
   })
 })
 

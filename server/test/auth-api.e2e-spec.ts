@@ -23,6 +23,10 @@ const CSRF_HEADERS = {
   'Sec-Fetch-Site': 'same-origin',
 } as const
 const MANAGEMENT_PERMISSION_CODES = [
+  'advertising-recharges:create',
+  'advertising-recharges:pay',
+  'advertising-recharges:read',
+  'advertising-recharges:read-self',
   'audit:read',
   'container-batches:create',
   'container-batches:read',
@@ -60,6 +64,7 @@ const MANAGEMENT_PERMISSION_CODES = [
   'invoice-requests:return',
   'invoice-requests:review',
   'invoice-requests:settle',
+  'network-nodes:read',
   'numbering-rules:create',
   'numbering-rules:disable',
   'numbering-rules:enable',
