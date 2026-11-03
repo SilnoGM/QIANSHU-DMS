@@ -10,14 +10,12 @@ import {
   isProxyNodeCredentialAvailable,
   resolveProxyNodeActionDisabledReason,
   resolveProxyNodeCountryLabel,
-  resolveProxyNodeHostLabel,
   resolveProxyNodeProtocolLabel,
   resolveProxyNodePublicIpLabel,
   resolveProxyNodeTypeLabel,
 } from './logic'
 import QsProxyNodeCountdown from './QsProxyNodeCountdown.vue'
 import QsProxyNodeStatusTag from './QsProxyNodeStatusTag.vue'
-import QsProxyNodeWarning from './QsProxyNodeWarning.vue'
 
 defineOptions({ name: 'QsProxyNodeCard' })
 
@@ -38,19 +36,16 @@ const emit = defineEmits<{
 
 const toast = useQsToast()
 const hostId = useId()
-const passwordVisible = ref(true)
 
 const countryLabel = computed(() => resolveProxyNodeCountryLabel(props.node))
 const typeLabel = computed(() => resolveProxyNodeTypeLabel(props.node.ipType))
 const typeMeta = computed(() => `${typeLabel.value} · ${props.node.ipVersion}`)
 const protocolLabel = computed(() => resolveProxyNodeProtocolLabel(props.node.protocol))
-const hostLabel = computed(() => resolveProxyNodeHostLabel(props.node))
 const publicIpLabel = computed(() => resolveProxyNodePublicIpLabel(props.node))
-const autoExtendLabel = computed(() => props.node.autoExtend ? '已开启' : '未开启')
 const isManagement = computed(() => props.mode === 'management')
 const isAssigned = computed(() => props.node.assignedUser !== null)
 const canCopy = computed(() => isProxyNodeCredentialAvailable(props.node))
-const assignLabel = computed(() => isAssigned.value ? '改绑' : '去绑定 →')
+const assignLabel = computed(() => isAssigned.value ? '改绑' : '绑定')
 const hasPurchaseMeta = computed(() => props.node.boughtAt !== null || props.node.lastRenewedAt !== null)
 const actionDisabledReason = computed(() => (
   props.disabledReason
@@ -74,40 +69,22 @@ const menuItems = computed<ActionMenuItem[][]>(() => {
   ]]
 })
 
-async function writeClipboard(text: string, successMessage: string): Promise<void> {
+async function copy(): Promise<void> {
+  if (!canCopy.value) {
+    return
+  }
+
   try {
     if (!navigator.clipboard?.writeText) {
       throw new Error('Clipboard API is unavailable')
     }
-    await navigator.clipboard.writeText(text)
-    toast.success(successMessage)
+    await navigator.clipboard.writeText(buildProxyNodeCopyText(props.node))
+    toast.success('节点配置已复制')
   }
   catch {
     // 不把凭据内容或浏览器权限细节写入日志，失败只反馈当前用户。
     toast.error('复制失败，请手动选择字段')
   }
-}
-
-function copyAddress(): void {
-  void writeClipboard(hostLabel.value, '代理地址已复制')
-}
-
-function copyUsername(): void {
-  void writeClipboard(props.node.username, '账号已复制')
-}
-
-function copyPassword(): void {
-  if (!canCopy.value) {
-    return
-  }
-  void writeClipboard(props.node.password, '密码已复制')
-}
-
-async function copy(): Promise<void> {
-  if (!canCopy.value) {
-    return
-  }
-  await writeClipboard(buildProxyNodeCopyText(props.node), '节点配置已复制')
 }
 </script>
 
@@ -128,7 +105,6 @@ async function copy(): Promise<void> {
         {{ protocolLabel }}
       </span>
       <QsProxyNodeStatusTag :expires-at="node.expiresAt" />
-      <span class="text-xs text-muted-foreground whitespace-nowrap">{{ typeMeta }}</span>
       <FaTag
         v-if="node.vendorMissing"
         variant="outline"
@@ -140,46 +116,36 @@ async function copy(): Promise<void> {
         </span>
       </FaTag>
 
-      <div class="ml-auto flex flex-wrap gap-2 items-center">
-        <div
-          v-if="isManagement"
-          class="text-xs px-2.5 py-1.5 border border-border rounded-lg bg-muted/30 inline-flex flex-wrap gap-1.5 items-center"
-        >
-          <span class="text-muted-foreground">绑定状态：</span>
-          <template v-if="node.assignedUser">
-            <span class="text-foreground">已绑定</span>
-            <QsPersonDisplay
-              :display-name="node.assignedUser.displayName"
-              :avatar-url="node.assignedUser.avatarUrl"
-              size="sm"
-            />
-          </template>
-          <span v-else class="text-foreground">未绑定</span>
+      <div
+        v-if="isManagement"
+        class="ml-auto flex flex-wrap gap-2 items-center"
+      >
+        <span v-if="isAssigned" class="text-xs text-muted-foreground">已绑定</span>
+        <QsPersonDisplay
+          v-if="node.assignedUser"
+          :display-name="node.assignedUser.displayName"
+          :avatar-url="node.assignedUser.avatarUrl"
+          size="sm"
+        />
 
-          <FaTooltip v-if="actionDisabledReason" :text="actionDisabledReason">
-            <span class="inline-flex" tabindex="0">
-              <button
-                type="button"
-                class="qs-proxy-node-card__link"
-                disabled
-              >
-                {{ assignLabel }}
-              </button>
-            </span>
-          </FaTooltip>
-          <button
-            v-else
-            type="button"
-            class="qs-proxy-node-card__link"
-            :disabled="busy"
-            @click="emit('assign')"
-          >
-            {{ assignLabel }}
-          </button>
-        </div>
+        <FaTooltip v-if="actionDisabledReason" :text="actionDisabledReason">
+          <span class="inline-flex" tabindex="0">
+            <FaButton size="sm" disabled>
+              {{ assignLabel }}
+            </FaButton>
+          </span>
+        </FaTooltip>
+        <FaButton
+          v-else
+          size="sm"
+          :disabled="busy"
+          @click="emit('assign')"
+        >
+          {{ assignLabel }}
+        </FaButton>
 
         <FaDropdown
-          v-if="isManagement && isAssigned"
+          v-if="isAssigned"
           :items="menuItems"
           align="end"
         >
@@ -191,101 +157,46 @@ async function copy(): Promise<void> {
             <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
           </FaButton>
         </FaDropdown>
-
-        <FaTooltip v-if="copyDisabledReason" :text="copyDisabledReason">
-          <span class="inline-flex" tabindex="0">
-            <FaButton size="sm" disabled>
-              <FaIcon name="i-lucide:copy" class="size-4" aria-hidden="true" />
-              复制完整配置
-            </FaButton>
-          </span>
-        </FaTooltip>
-        <FaButton
-          v-else
-          size="sm"
-          @click="copy"
-        >
-          <FaIcon name="i-lucide:copy" class="size-4" aria-hidden="true" />
-          复制完整配置
-        </FaButton>
       </div>
     </header>
 
     <div class="qs-proxy-node-card__body p-4 flex-1">
-      <div class="flex flex-col gap-1 min-w-0">
-        <span class="text-xs text-muted-foreground">代理地址 (IP:Port)</span>
+      <div class="qs-proxy-node-card__identity">
+        <span class="text-xs text-muted-foreground">代理地址(IP)</span>
         <div class="flex gap-2 min-w-0 items-center">
           <h3 :id="hostId" class="qs-proxy-node-card__host m-0">
-            {{ hostLabel }}
+            {{ node.host }}
           </h3>
+          <FaTooltip v-if="copyDisabledReason" :text="copyDisabledReason">
+            <span class="inline-flex" tabindex="0">
+              <FaButton
+                variant="ghost"
+                size="icon-sm"
+                class="text-muted-foreground shrink-0"
+                disabled
+                aria-label="复制完整配置"
+              >
+                <FaIcon name="i-lucide:copy" class="size-4" aria-hidden="true" />
+              </FaButton>
+            </span>
+          </FaTooltip>
           <FaButton
+            v-else
             variant="ghost"
             size="icon-sm"
             class="text-muted-foreground shrink-0"
-            aria-label="复制代理地址"
-            @click="copyAddress"
+            aria-label="复制完整配置"
+            @click="copy"
           >
             <FaIcon name="i-lucide:copy" class="size-4" aria-hidden="true" />
           </FaButton>
         </div>
+        <div class="text-xs text-muted-foreground">
+          {{ typeMeta }}
+        </div>
         <div v-if="publicIpLabel" class="text-xs text-muted-foreground">
           {{ publicIpLabel }}
         </div>
-      </div>
-
-      <div class="qs-proxy-node-card__credential-panel">
-        <div class="flex gap-3 min-w-0 items-center">
-          <span class="text-xs text-muted-foreground shrink-0">账号</span>
-          <div class="ml-auto flex gap-0.5 min-w-0 items-center justify-end">
-            <span class="qs-proxy-node-card__value">{{ node.username }}</span>
-            <FaButton
-              variant="ghost"
-              size="icon-sm"
-              class="text-muted-foreground shrink-0"
-              aria-label="复制账号"
-              @click="copyUsername"
-            >
-              <FaIcon name="i-lucide:copy" class="size-3.5" aria-hidden="true" />
-            </FaButton>
-          </div>
-        </div>
-
-        <div class="flex gap-3 min-w-0 items-center">
-          <span class="text-xs text-muted-foreground shrink-0">密码</span>
-          <div class="ml-auto flex gap-0.5 min-w-0 items-center justify-end">
-            <span class="qs-proxy-node-card__value">
-              {{ passwordVisible ? (node.password || '—') : '••••••••' }}
-            </span>
-            <FaButton
-              variant="ghost"
-              size="icon-sm"
-              class="text-muted-foreground shrink-0"
-              :disabled="node.credentialUnavailable"
-              :aria-label="passwordVisible ? '隐藏密码' : '显示密码'"
-              @click="passwordVisible = !passwordVisible"
-            >
-              <FaIcon
-                :name="passwordVisible ? 'i-lucide:eye-off' : 'i-lucide:eye'"
-                class="size-3.5"
-                aria-hidden="true"
-              />
-            </FaButton>
-            <FaButton
-              variant="ghost"
-              size="icon-sm"
-              class="text-muted-foreground shrink-0"
-              :disabled="!canCopy"
-              aria-label="复制密码"
-              @click="copyPassword"
-            >
-              <FaIcon name="i-lucide:copy" class="size-3.5" aria-hidden="true" />
-            </FaButton>
-          </div>
-        </div>
-
-        <p v-if="node.credentialUnavailable" class="text-xs text-destructive m-0">
-          凭证解密失败，请重新同步
-        </p>
       </div>
 
       <div class="qs-proxy-node-card__expiry">
@@ -293,16 +204,6 @@ async function copy(): Promise<void> {
         <span class="text-xs text-muted-foreground inline-flex gap-1 items-baseline">
           到期：<DateTimeDisplay :value="node.expiresAt" format="datetime" />
         </span>
-        <span class="text-xs text-muted-foreground inline-flex gap-1.5 items-center">
-          自动续费
-          <span
-            class="text-[11px] font-medium px-1.5 py-0.5 rounded"
-            :class="node.autoExtend ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'"
-          >
-            {{ autoExtendLabel }}
-          </span>
-        </span>
-        <QsProxyNodeWarning :expires-at="node.expiresAt" :mode="mode" />
       </div>
     </div>
 
@@ -342,30 +243,17 @@ async function copy(): Promise<void> {
   line-height: 1rem;
 }
 
-.qs-proxy-node-card__link {
-  padding: 0;
-  font: inherit;
-  font-weight: var(--qs-type-weight-medium, 500);
-  color: oklch(var(--primary));
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-}
-
-.qs-proxy-node-card__link:hover:not(:disabled) {
-  text-decoration: underline;
-}
-
-.qs-proxy-node-card__link:disabled {
-  color: oklch(var(--muted-foreground));
-  cursor: not-allowed;
-}
-
 .qs-proxy-node-card__body {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) 13rem;
+  display: flex;
+  flex-wrap: wrap;
   gap: 1.25rem;
-  align-items: start;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.qs-proxy-node-card__identity {
+  flex: 1 1 20rem;
+  min-width: 0;
 }
 
 .qs-proxy-node-card__host {
@@ -376,29 +264,9 @@ async function copy(): Promise<void> {
   overflow-wrap: anywhere;
 }
 
-.qs-proxy-node-card__credential-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-width: 0;
-  padding: 0.75rem;
-  background: oklch(var(--muted) / 25%);
-  border: 1px solid oklch(var(--border));
-  border-radius: 0.5rem;
-}
-
-.qs-proxy-node-card__value {
-  min-width: 0;
-  font-family: var(--qs-font-mono);
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  text-align: right;
-  overflow-wrap: anywhere;
-  user-select: all;
-}
-
 .qs-proxy-node-card__expiry {
   display: flex;
+  flex: 0 1 13rem;
   flex-direction: column;
   gap: 0.375rem;
   align-items: flex-start;
@@ -412,26 +280,9 @@ async function copy(): Promise<void> {
   }
 }
 
-@container (width < 56rem) {
-  .qs-proxy-node-card__body {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .qs-proxy-node-card__expiry {
-    flex-flow: row wrap;
-    grid-column: 1 / -1;
-    gap: 0.5rem 1rem;
-    align-items: center;
-  }
-}
-
 @container (width < 36rem) {
-  .qs-proxy-node-card__body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .qs-proxy-node-card__expiry {
-    grid-column: auto;
+    flex-basis: 100%;
   }
 }
 </style>

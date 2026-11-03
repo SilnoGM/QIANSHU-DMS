@@ -179,20 +179,12 @@ export function resolveProxyNodeProtocolLabel(
   return protocol
 }
 
-export function resolveProxyNodeHostLabel(node: ProxyNodeDto): string {
-  return `${node.host}:${node.port}`
-}
-
 export function resolveProxyNodePublicIpLabel(node: ProxyNodeDto): string | null {
   const publicIp = node.publicIp?.trim() ?? ''
   if (publicIp === '' || publicIp === node.host) {
     return null
   }
   return `出口 IP ${publicIp}`
-}
-
-export function resolveProxyNodeAutoExtendLabel(node: ProxyNodeDto): string {
-  return `自动续费：${node.autoExtend ? '开' : '关'}`
 }
 
 export function buildProxyNodeCopyText(node: ProxyNodeDto): string {
