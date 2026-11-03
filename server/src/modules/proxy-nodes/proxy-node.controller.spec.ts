@@ -16,7 +16,9 @@ function permissionsOf(
 describe('ProxyNodeController contracts', () => {
   it('separates personal reads from management mutations by permission', () => {
     expect(permissionsOf('mine')).toEqual(['proxy-nodes:read'])
+    expect(permissionsOf('mineExpirySummary')).toEqual(['proxy-nodes:read'])
     expect(permissionsOf('list')).toEqual(['proxy-nodes:manage'])
+    expect(permissionsOf('expirySummary')).toEqual(['proxy-nodes:manage'])
     expect(permissionsOf('assignableUsers')).toEqual(['proxy-nodes:manage'])
     expect(permissionsOf('sync')).toEqual(['proxy-nodes:manage'])
     expect(permissionsOf('assign')).toEqual(['proxy-nodes:manage'])

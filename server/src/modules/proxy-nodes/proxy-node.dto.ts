@@ -109,6 +109,11 @@ export class ProxyNodeListDto {
   lastSyncedAt!: string | null
 }
 
+export class ProxyNodeExpirySummaryDto {
+  @ApiProperty({ type: 'integer', minimum: 0, description: '剩余时间大于 0 且不超过 48 小时的节点数' })
+  expiring2d!: number
+}
+
 export class SyncProxyNodesResultDto {
   @ApiProperty({ type: 'integer' })
   created!: number

@@ -24,6 +24,7 @@ import {
   AssignableUsersQueryDto,
   AssignProxyNodeRequestDto,
   ProxyNodeAssignmentResultDto,
+  ProxyNodeExpirySummaryDto,
   ProxyNodeListDto,
   ProxyNodeReleaseResultDto,
   SyncProxyNodesResultDto,
@@ -79,6 +80,14 @@ export class ProxyNodeController {
     return this.queries.listMine(getRequestAuthContext(request).userId)
   }
 
+  @Get('mine/expiry-summary')
+  @RequirePermissions('proxy-nodes:read')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ProxyNodeExpirySummaryDto })
+  @contract('proxy_nodes_expiry_summary_mine')
+  mineExpirySummary(@Req() request: object): Promise<ProxyNodeExpirySummaryDto> {
+    return this.queries.expirySummaryMine(getRequestAuthContext(request).userId)
+  }
+
   @Get()
   @RequirePermissions('proxy-nodes:manage')
   @ApiContractResponse({ status: HttpStatus.OK, type: ProxyNodeListDto })
@@ -87,6 +96,14 @@ export class ProxyNodeController {
   ])
   list(): Promise<ProxyNodeListDto> {
     return this.queries.listAll()
+  }
+
+  @Get('expiry-summary')
+  @RequirePermissions('proxy-nodes:manage')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ProxyNodeExpirySummaryDto })
+  @contract('proxy_nodes_expiry_summary')
+  expirySummary(): Promise<ProxyNodeExpirySummaryDto> {
+    return this.queries.expirySummaryAll()
   }
 
   @Get('assignable-users')

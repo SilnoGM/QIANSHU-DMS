@@ -7,6 +7,7 @@ import { ApiException } from '../../infrastructure/http/api.exception'
 import type {
   AssignableUserDto,
   ProxyNodeDto,
+  ProxyNodeExpirySummaryDto,
   ProxyNodeListDto,
 } from './proxy-node.dto'
 import { resolveProxyCountryLabel } from './proxy-node.mapper'
@@ -32,6 +33,8 @@ type ProxyNodeRow = Prisma.ProxyNodeGetPayload<{
   include: typeof PROXY_NODE_INCLUDE
 }>
 
+const TWO_DAY_WINDOW_MS = 2 * 86_400_000
+
 @Injectable()
 export class ProxyNodeQueryService {
   constructor(
@@ -45,6 +48,28 @@ export class ProxyNodeQueryService {
 
   async listAll(): Promise<ProxyNodeListDto> {
     return this.list({})
+  }
+
+  async expirySummaryMine(userId: string): Promise<ProxyNodeExpirySummaryDto> {
+    return this.expirySummary({ assignedUserId: userId })
+  }
+
+  async expirySummaryAll(): Promise<ProxyNodeExpirySummaryDto> {
+    return this.expirySummary({})
+  }
+
+  private async expirySummary(
+    where: Prisma.ProxyNodeWhereInput,
+  ): Promise<ProxyNodeExpirySummaryDto> {
+    const now = new Date()
+    const threshold = new Date(now.getTime() + TWO_DAY_WINDOW_MS)
+    const expiring2d = await this.prisma.proxyNode.count({
+      where: {
+        ...where,
+        expiresAt: { gt: now, lte: threshold },
+      },
+    })
+    return { expiring2d }
   }
 
   async assignableUsers(keyword?: string): Promise<AssignableUserDto[]> {
