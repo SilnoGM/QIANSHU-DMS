@@ -121,6 +121,7 @@ declare global {
   const useId: typeof import('vue').useId
   const useLink: typeof import('vue-router').useLink
   const useModel: typeof import('vue').useModel
+  const useNowTicker: typeof import('../composables/app/use-now-ticker').useNowTicker
   const usePagination: typeof import('@fantastic-admin/composables').usePagination
   const useRoute: typeof import('vue-router').useRoute
   const useRouter: typeof import('vue-router').useRouter
