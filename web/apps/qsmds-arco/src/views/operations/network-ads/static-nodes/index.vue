@@ -11,11 +11,13 @@ import {
 import { PROXY_NODE_NOW_KEY } from '@/components/business/QsProxyNodeCard/now'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useNowTicker } from '@/composables/app/use-now-ticker'
+import { useProxyNodeBadgeStore } from '@/store/modules/app/proxy-node-badge'
 import { recordServerClockSample, serverNowEpochMs } from '@/utils/server-clock'
 
 defineOptions({ name: 'QsOperationsNetworkAdsStaticNodes' })
 
 const { auth } = useAppAuth()
+const proxyNodeBadgeStore = useProxyNodeBadgeStore()
 const canRead = computed(() => auth('proxy-nodes:read'))
 const { nowMs } = useNowTicker()
 provide(PROXY_NODE_NOW_KEY, nowMs)
@@ -60,6 +62,7 @@ async function load(): Promise<void> {
       // serverNow 比 Date 头更精确，同时用于校准后续倒计时。
       recordServerClockSample(response.data.serverNow)
       nowMs.value = serverNowEpochMs()
+      void proxyNodeBadgeStore.refreshMine()
     }
   }
   catch (failure) {

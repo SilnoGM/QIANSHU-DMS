@@ -19,12 +19,14 @@ import {
 import { PROXY_NODE_NOW_KEY } from '@/components/business/QsProxyNodeCard/now'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useNowTicker } from '@/composables/app/use-now-ticker'
+import { useProxyNodeBadgeStore } from '@/store/modules/app/proxy-node-badge'
 import { recordServerClockSample, serverNowEpochMs } from '@/utils/server-clock'
 
 defineOptions({ name: 'QsPurchaseTransportProxyNodes' })
 
 const { auth } = useAppAuth()
 const toast = useQsToast()
+const proxyNodeBadgeStore = useProxyNodeBadgeStore()
 const canManage = computed(() => auth('proxy-nodes:manage'))
 const { nowMs } = useNowTicker()
 provide(PROXY_NODE_NOW_KEY, nowMs)
@@ -100,6 +102,7 @@ async function load(): Promise<void> {
       lastSyncedAt.value = response.data.lastSyncedAt
       recordServerClockSample(response.data.serverNow)
       nowMs.value = serverNowEpochMs()
+      void proxyNodeBadgeStore.refreshAll()
     }
   }
   catch (failure) {

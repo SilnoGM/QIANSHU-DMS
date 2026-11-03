@@ -3,6 +3,7 @@ import type {
   AssignableUserDto,
   AssignProxyNodeRequestDto,
   ProxyNodeAssignmentResultDto,
+  ProxyNodeExpirySummaryDto,
   ProxyNodeListDto,
   ProxyNodeReleaseResultDto,
   SyncProxyNodesResultDto,
@@ -25,6 +26,10 @@ export function createProxyNodesApi(client: AxiosInstance) {
       client.get<ProxyNodeListDto>('proxy-nodes/mine', read(signal)),
     list: (signal: AbortSignal) =>
       client.get<ProxyNodeListDto>('proxy-nodes', read(signal)),
+    expirySummaryMine: (signal: AbortSignal) =>
+      client.get<ProxyNodeExpirySummaryDto>('proxy-nodes/mine/expiry-summary', read(signal)),
+    expirySummary: (signal: AbortSignal) =>
+      client.get<ProxyNodeExpirySummaryDto>('proxy-nodes/expiry-summary', read(signal)),
     assignableUsers: (keyword: string | undefined, signal: AbortSignal) =>
       client.get<AssignableUserDto[]>('proxy-nodes/assignable-users', {
         ...read(signal),

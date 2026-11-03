@@ -1,4 +1,5 @@
 import type { RouteRecordRaw } from 'vue-router'
+import { proxyNodeBadgeCounts } from '../../store/modules/app/proxy-node-badge-counts'
 
 function Layout() {
   return import('@/layouts/index.vue')
@@ -211,7 +212,13 @@ const routes: RouteRecordRaw[] = [
         path: 'static-nodes',
         name: 'qsOperationsNetworkAdsStaticNodes',
         component: () => import('@/views/operations/network-ads/static-nodes/index.vue'),
-        meta: { title: '静态节点', icon: 'qs-static-node', auth: 'proxy-nodes:read', keepAlive: true },
+        meta: {
+          title: '静态节点',
+          icon: 'qs-static-node',
+          auth: 'proxy-nodes:read',
+          keepAlive: true,
+          badge: [() => proxyNodeBadgeCounts.mine.value, 'destructive'],
+        },
       },
       {
         path: 'advertising-recharges',

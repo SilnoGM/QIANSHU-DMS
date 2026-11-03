@@ -1,4 +1,5 @@
 import type { RouteRecordMainRaw } from '@fantastic-admin/types'
+import { proxyNodeBadgeCounts } from '../../store/modules/app/proxy-node-badge-counts'
 import FundAccountManagement from './fund-account.management'
 import {
   FINANCE_WORKBENCH_PERMISSION,
@@ -333,6 +334,7 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
         icon: 'qs-static-node',
         singleMenu: true,
         auth: 'proxy-nodes:manage',
+        badge: [() => proxyNodeBadgeCounts.all.value, 'destructive'],
       },
     },
   ],

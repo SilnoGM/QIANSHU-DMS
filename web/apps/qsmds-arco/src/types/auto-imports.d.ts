@@ -67,6 +67,7 @@ declare global {
   const onUpdated: typeof import('vue').onUpdated
   const onWatcherCleanup: typeof import('vue').onWatcherCleanup
   const provide: typeof import('vue').provide
+  const proxyNodeBadgeCounts: typeof import('../store/modules/app/proxy-node-badge-counts').proxyNodeBadgeCounts
   const reactive: typeof import('vue').reactive
   const readonly: typeof import('vue').readonly
   const ref: typeof import('vue').ref
@@ -123,6 +124,7 @@ declare global {
   const useModel: typeof import('vue').useModel
   const useNowTicker: typeof import('../composables/app/use-now-ticker').useNowTicker
   const usePagination: typeof import('@fantastic-admin/composables').usePagination
+  const useProxyNodeBadgeStore: typeof import('../store/modules/app/proxy-node-badge').useProxyNodeBadgeStore
   const useRoute: typeof import('vue-router').useRoute
   const useRouter: typeof import('vue-router').useRouter
   const useSlots: typeof import('vue').useSlots
