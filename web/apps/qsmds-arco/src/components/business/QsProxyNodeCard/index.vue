@@ -2,6 +2,7 @@
 import type { ProxyNodeDto } from '../../../api/generated/types.gen'
 import type { ProxyNodeCardMode } from './logic'
 import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
+import { EMPTY_DATE_TIME_TEXT, formatDateTime } from '@/components/base/DateTimeDisplay/format'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
@@ -15,7 +16,6 @@ import {
   resolveProxyNodeTypeLabel,
 } from './logic'
 import QsProxyNodeCountdown from './QsProxyNodeCountdown.vue'
-import QsProxyNodeStatusTag from './QsProxyNodeStatusTag.vue'
 
 defineOptions({ name: 'QsProxyNodeCard' })
 
@@ -54,6 +54,14 @@ const actionDisabledReason = computed(() => (
 const copyDisabledReason = computed(() => (
   canCopy.value ? null : '凭证解密失败，请重新同步'
 ))
+const expiresAtLabel = computed(() => {
+  const text = formatDateTime(props.node.expiresAt, 'datetime')
+  return text === EMPTY_DATE_TIME_TEXT ? text : text.slice(0, 16)
+})
+const synchronizedAtLabel = computed(() => {
+  const text = formatDateTime(props.node.lastSyncedAt, 'datetime')
+  return text === EMPTY_DATE_TIME_TEXT ? text : text.slice(5, 16)
+})
 
 const menuItems = computed<ActionMenuItem[][]>(() => {
   if (!isManagement.value || !isAssigned.value) {
@@ -96,7 +104,7 @@ async function copy(): Promise<void> {
     class="qs-proxy-node-card py-0 rounded-xl flex flex-col gap-0 h-full shadow-sm overflow-hidden"
     content-class="p-0 flex flex-1 flex-col"
   >
-    <header class="px-4 py-3 border-b border-border flex flex-wrap gap-2 items-center">
+    <header class="px-4 py-3 flex flex-wrap gap-2 items-center">
       <span class="qs-proxy-node-card__country text-xs text-foreground font-medium px-2 py-1 border border-border rounded-md bg-muted/40 whitespace-nowrap">
         <FaIcon name="i-lucide:map-pin" class="text-primary size-3.5" aria-hidden="true" />
         {{ countryLabel }}
@@ -104,7 +112,7 @@ async function copy(): Promise<void> {
       <span class="qs-proxy-node-card__protocol text-[11px] text-sky-700 tracking-wide font-semibold px-2 py-1 border border-sky-500/20 rounded-md bg-sky-500/10 whitespace-nowrap uppercase dark:text-sky-400 dark:border-sky-400/30 dark:bg-sky-400/10">
         {{ protocolLabel }}
       </span>
-      <QsProxyNodeStatusTag :expires-at="node.expiresAt" />
+      <span class="text-xs text-muted-foreground whitespace-nowrap">{{ typeMeta }}</span>
       <FaTag
         v-if="node.vendorMissing"
         variant="outline"
@@ -130,17 +138,26 @@ async function copy(): Promise<void> {
 
         <FaTooltip v-if="actionDisabledReason" :text="actionDisabledReason">
           <span class="inline-flex" tabindex="0">
-            <FaButton size="sm" disabled>
+            <FaButton
+              variant="ghost"
+              size="sm"
+              class="qs-proxy-node-card__bind-button"
+              disabled
+            >
+              <FaIcon name="i-lucide:link" class="size-3.5" aria-hidden="true" />
               {{ assignLabel }}
             </FaButton>
           </span>
         </FaTooltip>
         <FaButton
           v-else
+          variant="ghost"
           size="sm"
+          class="qs-proxy-node-card__bind-button"
           :disabled="busy"
           @click="emit('assign')"
         >
+          <FaIcon name="i-lucide:link" class="size-3.5" aria-hidden="true" />
           {{ assignLabel }}
         </FaButton>
 
@@ -191,9 +208,6 @@ async function copy(): Promise<void> {
             <FaIcon name="i-lucide:copy" class="size-4" aria-hidden="true" />
           </FaButton>
         </div>
-        <div class="text-xs text-muted-foreground">
-          {{ typeMeta }}
-        </div>
         <div v-if="publicIpLabel" class="text-xs text-muted-foreground">
           {{ publicIpLabel }}
         </div>
@@ -202,7 +216,7 @@ async function copy(): Promise<void> {
       <div class="qs-proxy-node-card__expiry">
         <QsProxyNodeCountdown :expires-at="node.expiresAt" />
         <span class="text-xs text-muted-foreground inline-flex gap-1 items-baseline">
-          到期：<DateTimeDisplay :value="node.expiresAt" format="datetime" />
+          到期：<time :datetime="node.expiresAt" class="tabular-nums">{{ expiresAtLabel }}</time>
         </span>
       </div>
     </div>
@@ -210,16 +224,16 @@ async function copy(): Promise<void> {
     <footer class="qs-proxy-node-card__footer px-4 py-3 border-t border-border bg-muted/20 flex flex-wrap gap-x-4 gap-y-2 items-center justify-between">
       <div v-if="hasPurchaseMeta" class="text-xs text-muted-foreground inline-flex flex-wrap gap-x-2 gap-y-1 items-baseline">
         <span v-if="node.boughtAt">
-          购买时间：<DateTimeDisplay :value="node.boughtAt" format="date" />
+          购买：<DateTimeDisplay :value="node.boughtAt" format="date" />
         </span>
         <span v-if="node.boughtAt && node.lastRenewedAt" aria-hidden="true">·</span>
         <span v-if="node.lastRenewedAt">
-          最近续费：<DateTimeDisplay :value="node.lastRenewedAt" format="date" />
+          续费：<DateTimeDisplay :value="node.lastRenewedAt" format="date" />
         </span>
       </div>
       <div class="text-xs text-muted-foreground ml-auto inline-flex flex-wrap gap-1.5 items-center">
         <FaIcon name="i-lucide:refresh-cw" class="size-3.5" aria-hidden="true" />
-        最近同步：<DateTimeDisplay :value="node.lastSyncedAt" format="datetime" />
+        <time :datetime="node.lastSyncedAt" class="tabular-nums">同步于 {{ synchronizedAtLabel }}</time>
       </div>
     </footer>
   </FaCard>
@@ -241,6 +255,23 @@ async function copy(): Promise<void> {
   display: inline-flex;
   align-items: center;
   line-height: 1rem;
+}
+
+.qs-proxy-node-card__bind-button {
+  color: oklch(var(--primary));
+  background: oklch(var(--primary) / 10%);
+  border: 1px solid oklch(var(--primary) / 25%);
+}
+
+.qs-proxy-node-card__bind-button:hover:not(:disabled) {
+  color: oklch(var(--primary-foreground));
+  background: oklch(var(--primary));
+  border-color: oklch(var(--primary));
+}
+
+.qs-proxy-node-card__bind-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .qs-proxy-node-card__body {
@@ -269,8 +300,9 @@ async function copy(): Promise<void> {
   flex: 0 1 13rem;
   flex-direction: column;
   gap: 0.375rem;
-  align-items: flex-start;
+  align-items: flex-end;
   min-width: 0;
+  text-align: right;
 }
 
 @container (min-width: 56rem) {
