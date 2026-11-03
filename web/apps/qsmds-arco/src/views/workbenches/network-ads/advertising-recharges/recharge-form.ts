@@ -49,3 +49,39 @@ export function sumAdvertisingRechargeCounts(
   result.ALL = all
   return result
 }
+
+export const ADVERTISING_RECHARGE_REQUIRED_FIELDS = [
+  'adAccountName',
+  'adAccountNo',
+  'rechargeAmount',
+  'paymentQr',
+] as const
+export type AdvertisingRechargeRequiredField = (typeof ADVERTISING_RECHARGE_REQUIRED_FIELDS)[number]
+
+/**
+ * 提交前只判断「视觉上真正缺失」的字段：金额用规范化文本判断，个人户才要求二维码。
+ * 返回稳定顺序，调用方据此聚焦第一个缺失项并给出汇总提示；金额的精度等格式问题
+ * 由服务端校验兜底，避免前端复制一遍金额规则。
+ */
+export function resolveAdvertisingRechargeMissingFields(input: {
+  readonly accountType: 'PERSONAL' | 'NON_PERSONAL'
+  readonly adAccountName: string
+  readonly adAccountNo: string
+  readonly rechargeAmount: string | null
+  readonly paymentQrMediaAssetId: string | null
+}): AdvertisingRechargeRequiredField[] {
+  const missing: AdvertisingRechargeRequiredField[] = []
+  if (input.adAccountName.trim().length === 0) {
+    missing.push('adAccountName')
+  }
+  if (input.adAccountNo.trim().length === 0) {
+    missing.push('adAccountNo')
+  }
+  if (input.rechargeAmount === null || input.rechargeAmount.trim().length === 0) {
+    missing.push('rechargeAmount')
+  }
+  if (input.accountType === 'PERSONAL' && input.paymentQrMediaAssetId === null) {
+    missing.push('paymentQr')
+  }
+  return missing
+}

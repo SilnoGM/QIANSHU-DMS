@@ -1501,6 +1501,7 @@
       "apps/qsmds-arco/src/components/business/QsGenericTable/CopyCellButton.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/create-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-bill-select-modal.vue",
       "packages/components/src/pro/code/index.vue",
       "packages/components/src/pro/storage-box/index.vue"
@@ -3618,7 +3619,6 @@
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue",
-      "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/recharge-image-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-voucher-upload.vue"
     ]
   },

@@ -16,10 +16,10 @@ const props = withDefaults(defineProps<{
   width?: number
 }>(), {
   disabled: false,
-  height: 144,
+  height: 112,
   hint: undefined,
   resetKey: undefined,
-  width: 192,
+  width: 168,
 })
 
 const emit = defineEmits<{
@@ -50,21 +50,25 @@ onBeforeUnmount(() => emit('busyChange', false))
 </script>
 
 <template>
-  <div class="gap-3 grid min-w-0">
-    <div class="p-4 border border-border rounded-lg bg-background gap-4 grid min-w-0">
-      <div v-if="previewUrl" class="gap-4 grid grid-cols-[96px_minmax(0,1fr)] items-center">
-        <ImageGroup :items="[{ src: previewUrl, alt: filename, previewSrc: previewUrl }]" :size="96" :max-count="1" fit="contain" />
-        <div class="gap-2 grid min-w-0">
-          <p class="qs-type-body-medium m-0 [overflow-wrap:anywhere]">
+  <div class="gap-2 grid min-w-0">
+    <div class="p-3 border border-border rounded-lg bg-background min-w-0">
+      <!-- 已上传态压成横向一行：缩略图 + 文件名 + 单一「重新选择」入口，避免与字段标签重复。 -->
+      <div v-if="previewUrl" class="gap-3 grid grid-cols-[72px_minmax(0,1fr)] items-center">
+        <ImageGroup :items="[{ src: previewUrl, alt: filename, previewSrc: previewUrl }]" :size="72" :max-count="1" fit="cover" />
+        <div class="flex flex-col gap-1.5 min-w-0">
+          <p class="qs-type-body-medium m-0 truncate" :title="filename">
             {{ filename }}
           </p>
           <p class="qs-type-meta text-primary m-0 flex gap-1.5 items-center dark:text-emerald-300">
             <FaIcon name="i-lucide:circle-check" class="shrink-0 size-4" aria-hidden="true" />
             {{ t('advertisingRecharge.upload.uploaded') }}
           </p>
-          <p class="qs-type-meta text-muted-foreground m-0">
-            {{ label }}
-          </p>
+          <div>
+            <FaButton type="button" variant="ghost" size="sm" :disabled="disabled || uploading || !enabled" class="text-muted-foreground min-h-11 -ml-2 sm:min-h-8" @click="remove">
+              <FaIcon name="i-lucide:replace" class="size-4" aria-hidden="true" />
+              {{ t('advertisingRecharge.upload.replace') }}
+            </FaButton>
+          </div>
         </div>
       </div>
       <FaImageUpload
@@ -78,21 +82,11 @@ onBeforeUnmount(() => emit('busyChange', false))
         :http-request="requestUpload"
         :aria-label="label"
       >
-        <span class="text-muted-foreground border border-border rounded-lg border-dashed flex flex-col gap-2 size-full items-center justify-center">
-          <FaIcon :name="uploading ? 'i-lucide:loader-circle' : 'i-lucide:image-plus'" class="size-7" :class="{ 'animate-spin': uploading }" aria-hidden="true" />
+        <span class="text-muted-foreground border border-border rounded-lg border-dashed flex flex-col gap-1.5 size-full items-center justify-center">
+          <FaIcon :name="uploading ? 'i-lucide:loader-circle' : 'i-lucide:image-plus'" class="size-6" :class="{ 'animate-spin': uploading }" aria-hidden="true" />
           <span class="qs-type-meta">{{ t(uploading ? 'advertisingRecharge.upload.uploading' : 'advertisingRecharge.upload.action') }}</span>
         </span>
       </FaImageUpload>
-      <div v-if="modelValue" class="pt-3 border-t border-border flex flex-wrap gap-2 justify-end">
-        <FaButton type="button" variant="outline" size="sm" :disabled="disabled || uploading || !enabled" class="min-h-11 sm:min-h-9" @click="remove">
-          <FaIcon name="i-lucide:replace" class="size-4" aria-hidden="true" />
-          {{ t('advertisingRecharge.upload.replace') }}
-        </FaButton>
-        <FaButton type="button" variant="ghost" size="sm" :disabled="disabled || uploading || !enabled" class="text-muted-foreground min-h-11 hover:text-destructive sm:min-h-9" @click="remove">
-          <FaIcon name="i-lucide:trash-2" class="size-4" aria-hidden="true" />
-          {{ t('advertisingRecharge.upload.remove') }}
-        </FaButton>
-      </div>
     </div>
     <p v-if="uploading" role="status" class="qs-type-meta text-muted-foreground m-0">
       {{ t('advertisingRecharge.upload.uploading') }}

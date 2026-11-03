@@ -41,10 +41,15 @@ views/workbenches/advertising-recharges/
 
 ## 3. 两步弹窗
 
-1. **填写信息**：账户类型、广告账户名称/编号、金额 + 币种、个人户二维码、备注。提交按钮在必填项缺失或个人户缺二维码时禁用。
-2. **复制信息**：父组件创建成功后才切换（`created` 非空），展示复制文本与轻量摘要；点击「复制」写入剪贴板并关闭，复制失败保留弹窗并提示手动复制。
+1. **填写信息**（第 1 步 / 共 2 步）：分「广告账户」与「充值信息」两段，12 栅格布局（账户类型 4 + 名称 8，编号 12，金额 6，二维码 12，备注 12）。表单用 `FaForm` + `FaFormItem(required, :auto-bind="false")`，必填项带星号；输入框必须显式 `class="w-full"`（`FaInput` 默认 200px）。
+2. **提交校验**：按钮不因缺项置灰，只在填空缺或上传中禁用。点击提交时计算缺失项（`resolveAdvertisingRechargeMissingFields`），聚焦第一个缺失字段，在每个字段下方显示行内错误，并在页脚左侧显示「还需填写：…」；服务端错误也显示在页脚，避免滚动后看不到。
+3. **复制信息**（第 2 步 / 共 2 步）：父组件创建成功后才切换（`created` 非空），标题改为「申请已提交」，展示单号/金额摘要与带表头的复制卡片（块内复制按钮 + 成功态「已复制」）；页脚保留主「复制」（复制后关闭）。未复制直接关闭时按钮变为「确认关闭」并提示再次点击，防止丢失唯一一份文案。
 
 复制链接由 `router.resolve({ name: 'qsFinanceRealtimeAdvertisingRechargeDetail', params: { id } })` + `window.location.origin` 生成，hash / history 两种路由模式都正确。运营虽然无权限进入该页，但路由已注册，`resolve` 可用。
+
+**二维码与账户类型**：切换账户类型只 `v-show` 隐藏二维码区块，不清空已上传的媒体 id，切回个人户自动恢复；提交时按当前类型决定是否必填。
+
+**行内错误的放置约束**：字段错误节点必须放在 `FaFormItem` 外侧。`FaFormItem` 通过 `FormControl` 的 Slot 克隆首个子节点，插槽子节点数量变化会重建控件；上传组件在重建时的 `onScopeDispose` 会清空已上传的媒体 id，表现为「上传成功后又回到未上传」。
 
 ## 4. 金额与币种
 
@@ -54,7 +59,7 @@ views/workbenches/advertising-recharges/
 
 ## 5. 图片
 
-- 两个上传入口共用 `recharge-image-upload.vue`：本地 object URL 预览、上传中/失败状态、替换与移除。
+- 两个上传入口共用 `recharge-image-upload.vue`：本地 object URL 预览、上传中/失败状态；已上传态为「72px 缩略图 + 文件名 + 重新选择」的单行布局，不再重复字段标签。
 - 列表与详情用 `ImageGroup` 指向私有内容路由：运营 `/api/advertising-recharges/me/:id/...`，财务 `/api/advertising-recharges/:id/...`。
 - 上传失败使用 `getApiClientFailureMessage`，保留服务端原因与 requestId。
 
