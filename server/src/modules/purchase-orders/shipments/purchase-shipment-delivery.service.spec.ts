@@ -97,6 +97,9 @@ function fixture(options: {
     salesOrderStatusHistory: {
       create: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
     },
+    shipmentLoadGroupMember: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
+    },
   }
   const prisma = {
     $transaction: jest.fn<Promise<unknown>, [(tx: typeof transaction) => Promise<unknown>]>(callback => callback(transaction)),
@@ -141,7 +144,7 @@ describe('PurchaseShipmentDeliveryService', () => {
     })
     expect(f.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledWith({
       where: {
-        id: PART_ID,
+        id: { in: [PART_ID] },
         status: 'ACTIVE',
         loadedAt: { not: null },
         deliveredAt: null,
@@ -180,6 +183,44 @@ describe('PurchaseShipmentDeliveryService', () => {
       salesOrderReceiptRequired: false,
     })
     expect(f.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('signs every active member of a load group in one command', async () => {
+    const f = fixture({ parts: [part(), part({ id: OTHER_PART_ID, shipmentNo: 'PKG/20261021-00002', partNumber: 2 })] })
+    let signed = false
+    f.transaction.shipmentLoadGroupMember.findMany.mockResolvedValue([{
+      shipmentId: PART_ID,
+      group: {
+        id: 'group-1',
+        primaryShipmentId: PART_ID,
+        members: [{ shipmentId: PART_ID }, { shipmentId: OTHER_PART_ID }],
+      },
+    }])
+    f.transaction.purchaseOrderPart.findMany.mockImplementation((args: unknown) => {
+      const where = (args as { where?: { id?: { in?: string[] } } }).where
+      if (where?.id?.in) return Promise.resolve(where.id.in.map(id => lockedPart({ id })))
+      return Promise.resolve([
+        lockedPart({ id: PART_ID, deliveredAt: signed ? DELIVERED_AT : null }),
+        lockedPart({ id: OTHER_PART_ID, deliveredAt: signed ? DELIVERED_AT : null }),
+      ])
+    })
+    f.transaction.purchaseOrderPart.updateMany.mockImplementation((args: unknown) => {
+      const where = (args as { where: { id: { in: string[] } } }).where
+      signed = true
+      return Promise.resolve({ count: where.id.in.length })
+    })
+    await expect(f.service.deliver(context, PART_ID, {})).resolves.toMatchObject({
+      salesOrderSigned: true,
+      remainingShipmentCount: 0,
+    })
+    expect(f.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: { in: [PART_ID, OTHER_PART_ID] } }) as unknown,
+    }))
+    const deliveredTargets = (f.audit.record.mock.calls as Array<[unknown, { eventType: string, targetId: string }]>)
+      .filter(call => call[1].eventType === 'PURCHASE_SHIPMENT_DELIVERED')
+      .map(call => call[1].targetId)
+      .sort()
+    expect(deliveredTargets).toEqual([PART_ID, OTHER_PART_ID].sort())
   })
 
   it('keeps the order waiting when every shipment is delivered but the receipt is missing', async () => {

@@ -11,10 +11,12 @@ import { PurchaseShipmentController } from './purchase-shipment.controller'
 import { PurchaseShipmentDeliveryService } from './purchase-shipment-delivery.service'
 import { PurchaseShipmentQueryService } from './purchase-shipment-query.service'
 import { PurchaseShipmentFilterDto, PurchaseShipmentIdParamDto, PurchaseShipmentListQueryDto } from './purchase-shipment.dto'
+import { ShipmentLoadGroupService } from './shipment-load-group.service'
 
 @Module({ controllers: [PurchaseShipmentController], providers: [
   { provide: PurchaseShipmentQueryService, useValue: {} },
   { provide: PurchaseShipmentDeliveryService, useValue: {} },
+  { provide: ShipmentLoadGroupService, useValue: {} },
 ] })
 class ShipmentContractModule {}
 
@@ -25,12 +27,19 @@ describe('PurchaseShipmentController contract', () => {
       expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PurchaseShipmentController.prototype[method])).toEqual(['purchase-orders:read'])
     }
     expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PurchaseShipmentController.prototype.deliver)).toEqual(['purchase-orders:update'])
+    expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PurchaseShipmentController.prototype.createLoadGroup)).toEqual(['purchase-orders:update'])
+    expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PurchaseShipmentController.prototype.releaseLoadGroup)).toEqual(['purchase-orders:update'])
   })
 
-  it('delegates read operations and the delivery command', async () => {
+  it('delegates read operations, the delivery command and load group commands', async () => {
     const service = { list: jest.fn().mockResolvedValue({ items: [] }), statusCounts: jest.fn().mockResolvedValue({ items: [] }), getById: jest.fn().mockResolvedValue({ id: 'part' }) }
     const deliveries = { deliver: jest.fn().mockResolvedValue({ shipment: { id: 'part' }, salesOrderSigned: false, remainingShipmentCount: 0, salesOrderReceiptRequired: false }) }
-    const controller = new PurchaseShipmentController(service as unknown as PurchaseShipmentQueryService, deliveries as unknown as PurchaseShipmentDeliveryService)
+    const loadGroups = { create: jest.fn().mockResolvedValue({ id: 'group' }), release: jest.fn().mockResolvedValue({ id: 'group' }) }
+    const controller = new PurchaseShipmentController(
+      service as unknown as PurchaseShipmentQueryService,
+      deliveries as unknown as PurchaseShipmentDeliveryService,
+      loadGroups as unknown as ShipmentLoadGroupService,
+    )
     const request = {}
     requestIdMiddleware(request, { setHeader: jest.fn() }, () => {})
     attachRequestAuthContext(request, {
@@ -44,11 +53,16 @@ describe('PurchaseShipmentController contract', () => {
       idleExpiresAt: new Date('2026-10-22T00:00:00.000Z'),
       absoluteExpiresAt: new Date('2026-11-21T00:00:00.000Z'),
     })
+    const groupInput = { shipmentIds: ['part-a', 'part-b'], primaryShipmentId: 'part-a', requestKey: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }
     await controller.list({ view: 'ALL' }); await controller.statusCounts({ supplierSource: 'CUSTOM_TEXT' }); await controller.detail({ partId: 'part' }); await controller.deliver({ partId: 'part' }, { remark: '已签收' }, request)
+    await controller.createLoadGroup(groupInput, request)
+    await controller.releaseLoadGroup({ groupId: 'group' }, { expectedVersion: 2, reason: '客户取消' }, request)
     expect(service.list).toHaveBeenCalledWith({ view: 'ALL' }, expect.any(String))
     expect(service.statusCounts).toHaveBeenCalledWith({ supplierSource: 'CUSTOM_TEXT' }, expect.any(String))
     expect(service.getById).toHaveBeenCalledWith('part', expect.any(String))
     expect(deliveries.deliver).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }), 'part', { remark: '已签收' })
+    expect(loadGroups.create).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }), groupInput)
+    expect(loadGroups.release).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }), 'group', { expectedVersion: 2, reason: '客户取消' })
   })
 
   it.each([

@@ -27,6 +27,11 @@ const LINE_SELECT = {
   } } },
 } as const satisfies Prisma.PurchaseOrderLineSelect
 
+const CONTAINER_ITEM_SUMMARY_SELECT = {
+  oceanShippingMarkText: true,
+  containerBatch: { select: { id: true, containerBatchNo: true, containerBatchName: true } },
+} as const satisfies Prisma.ContainerLoadingItemSelect
+
 const PART_SELECT = {
   id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true, createdAt: true,
   shippedAt: true, shippedBy: { select: PERSON_REFERENCE_SELECT }, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true, destinationWarehouseValue: true,
@@ -51,7 +56,34 @@ const PART_SELECT = {
   // 数据库触发器保证一个货件只属于一个柜次；保留全部明细以汇总去重后的装柜唛头。
   containerLoadingItems: {
     orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
-    select: { oceanShippingMarkText: true, containerBatch: { select: { id: true, containerBatchNo: true, containerBatchName: true } } },
+    select: CONTAINER_ITEM_SUMMARY_SELECT,
+  },
+  // 同票成员没有自己的装柜行，列表通过组主货件的装柜明细回填柜次与唛头。
+  loadGroupMemberships: {
+    where: { active: true, group: { status: 'ACTIVE' } },
+    take: 1,
+    select: {
+      group: {
+        select: {
+          id: true,
+          primaryShipmentId: true,
+          version: true,
+          members: {
+            where: { active: true },
+            orderBy: [{ createdAt: 'asc' }, { shipmentId: 'asc' }],
+            select: { shipmentId: true, isPrimary: true, shipment: { select: { shipmentNo: true } } },
+          },
+          primaryShipment: {
+            select: {
+              containerLoadingItems: {
+                orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+                select: CONTAINER_ITEM_SUMMARY_SELECT,
+              },
+            },
+          },
+        },
+      },
+    },
   },
   // 寄仓状态只取当前在仓/已调货记录；作废记录不遮挡当前归属。
   storageRecords: {
@@ -115,19 +147,28 @@ function baseWhere(input: PurchaseShipmentFilterDto, scope: DataScope, actorUser
   const rawKeyword = input.keyword?.trim()
   const keyword = rawKeyword?.normalize('NFKC')
   const match = { contains: keyword, mode: 'insensitive' } as const
+  const and: Prisma.PurchaseOrderPartWhereInput[] = []
+  if (input.containerBatchId !== undefined) {
+    // 同票成员自身没有装柜行，按柜次筛选时必须跟随组主货件。
+    and.push({ OR: [
+      { containerLoadingItems: { some: { containerBatchId: input.containerBatchId } } },
+      { loadGroupMemberships: { some: {
+        active: true,
+        group: { status: 'ACTIVE', primaryShipment: { containerLoadingItems: { some: { containerBatchId: input.containerBatchId } } } },
+      } } },
+    ] })
+  }
+  // 到仓货件页要求池内货件只去寄仓管理查看；默认不传，货件管理仍可见。
+  if (input.excludeStoragePool === true) {
+    and.push({ OR: [
+      { ownershipCurrent: { is: null } },
+      { ownershipCurrent: { ownerType: { not: 'STORAGE_POOL' as const } } },
+    ] })
+  }
   return {
     // 货件范围按当前归属判断；采购单来源只是筛选维度，不能再作为可见性真相源。
     ...purchaseOrderPartScopeWhere(scope, actorUserId),
-    ...(input.containerBatchId === undefined
-      ? {}
-      : { containerLoadingItems: { some: { containerBatchId: input.containerBatchId } } }),
-    // 到仓货件页要求池内货件只去寄仓管理查看；默认不传，货件管理仍可见。
-    ...(input.excludeStoragePool === true
-      ? { AND: [{ OR: [
-          { ownershipCurrent: { is: null } },
-          { ownershipCurrent: { ownerType: { not: 'STORAGE_POOL' as const } } },
-        ] }] }
-      : {}),
+    ...(and.length > 0 ? { AND: and } : {}),
     // 历史查询只匹配保存的稳定值，不以字典当前有效性排除停用或未知仓库。
     destinationWarehouseValue: input.destinationWarehouseMissing === true
       ? null
@@ -194,6 +235,11 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
     ? row.ownershipCurrent.ownerSalesOrder
     : null
   const salesSource = ownerSalesOrder ?? order.salesOrder
+  const loadGroup = row.loadGroupMemberships[0]?.group ?? null
+  // 同票成员自身没有装柜行，柜次与唛头取组主货件；主货件仍优先使用自身明细。
+  const containerItems = row.containerLoadingItems.length > 0
+    ? row.containerLoadingItems
+    : loadGroup?.primaryShipment.containerLoadingItems ?? []
   return {
     id: row.id, shipmentNo: row.shipmentNo, partNumber: row.partNumber, status: row.status,
     // 状态派生统一复用 helper，导入候选与列表保持同一口径。
@@ -210,10 +256,22 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWa
     loadedRecordedAt: row.loadedRecordedAt?.toISOString() ?? null,
     deliveredAt: row.deliveredAt?.toISOString() ?? null, deliveredBy: toNullablePersonReference(row.deliveredBy),
     deliveredRecordedAt: row.deliveredRecordedAt?.toISOString() ?? null, deliveryRemark: row.deliveryRemark,
-    containerBatch: row.containerLoadingItems[0]?.containerBatch ?? null,
-    containerLoadingMarks: [...new Set(row.containerLoadingItems
+    containerBatch: containerItems[0]?.containerBatch ?? null,
+    containerLoadingMarks: [...new Set(containerItems
       .map(item => item.oceanShippingMarkText)
       .filter((value): value is string => typeof value === 'string' && value.trim() !== ''))],
+    loadGroup: loadGroup === null
+      ? null
+      : {
+          id: loadGroup.id,
+          primaryShipmentId: loadGroup.primaryShipmentId,
+          version: loadGroup.version,
+          members: loadGroup.members.map(member => ({
+            shipmentId: member.shipmentId,
+            shipmentNo: member.shipment.shipmentNo,
+            isPrimary: member.isPrimary,
+          })),
+        },
     storage: row.storageRecords[0] === undefined
       ? null
       : {

@@ -153,6 +153,8 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   INVOICE_REQUEST_DOCUMENT_UPLOADED: '发票照片已上传',
   INVOICE_REQUEST_SETTLED: '开票成本已结算入账',
   INVOICE_REQUEST_CANCELLED: '开票申请已取消',
+  PURCHASE_SHIPMENT_LOAD_GROUP_CREATED: '装柜合并组已创建',
+  PURCHASE_SHIPMENT_LOAD_GROUP_RELEASED: '装柜合并组已释放',
 }
 
 export function auditMetadataEntries(

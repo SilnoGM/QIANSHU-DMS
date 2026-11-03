@@ -38,7 +38,8 @@ const resource = useContainerResource(
   async signal => (await shipmentApi.list(query.value, signal)).data,
 )
 const { data, loading, error } = resource
-const items = computed(() => (data.value?.items ?? []).filter(item => item.id !== props.excludeShipmentId))
+const items = computed(() => (data.value?.items ?? []).filter(item => item.id !== props.excludeShipmentId
+  && (item.loadGroup === null || item.loadGroup.primaryShipmentId === item.id)))
 const total = computed(() => Math.max(0, (data.value?.total ?? 0) - (items.value.length < (data.value?.items.length ?? 0) ? 1 : 0)))
 
 function applySearch(): void {

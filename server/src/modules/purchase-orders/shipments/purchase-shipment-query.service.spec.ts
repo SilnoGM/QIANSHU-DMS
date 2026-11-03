@@ -30,12 +30,49 @@ function row() {
       lineNumber: 1, lineType: 'CUSTOM', productId: null, productNoSnapshot: null, productNameSnapshot: '无图产品', productAttributesSnapshot: [], descriptionSnapshot: '临时规格', product: null,
     } }],
     containerLoadingItems: [],
+    loadGroupMemberships: [],
     storageRecords: [],
     ownershipCurrent: null,
   }
 }
 
 describe('PurchaseShipmentQueryService', () => {
+  it('fills a load group member container facts from the primary shipment', async () => {
+    const f = fixture()
+    f.part.findMany.mockResolvedValue([{
+      ...row(),
+      loadGroupMemberships: [{
+        group: {
+          id: 'group-1',
+          primaryShipmentId: 'part-primary',
+          members: [
+            { shipmentId: 'part-primary', isPrimary: true, shipment: { shipmentNo: 'PKG/20260914-00001' } },
+            { shipmentId: 'part-1', isPrimary: false, shipment: { shipmentNo: 'PKG/20260914-00002' } },
+          ],
+          primaryShipment: {
+            containerLoadingItems: [{
+              oceanShippingMarkText: 'MARK-A',
+              containerBatch: { id: 'batch-1', containerBatchNo: 'CB-1', containerBatchName: '柜 1' },
+            }],
+          },
+        },
+      }],
+    }])
+    const page = await f.service.list({ view: 'ALL' })
+    expect(page.items[0]).toMatchObject({
+      containerBatch: { id: 'batch-1', containerBatchNo: 'CB-1' },
+      containerLoadingMarks: ['MARK-A'],
+      loadGroup: {
+        id: 'group-1',
+        primaryShipmentId: 'part-primary',
+        members: [
+          { shipmentId: 'part-primary', shipmentNo: 'PKG/20260914-00001', isPrimary: true },
+          { shipmentId: 'part-1', shipmentNo: 'PKG/20260914-00002', isPrimary: false },
+        ],
+      },
+    })
+  })
+
   it('maps the latest active storage record and keeps null without one', async () => {
     const f = fixture()
     f.part.findMany.mockResolvedValue([

@@ -16,6 +16,7 @@ import { purchaseOrderRuleFailure } from '../domain/purchase-order-errors'
 import { purchaseOrderPartScopeWhere } from '../purchase-order-access'
 import type { PurchaseShipmentDeliverRequestDto, PurchaseShipmentDeliverResultDto } from './purchase-shipment.dto'
 import { PurchaseShipmentQueryService } from './purchase-shipment-query.service'
+import { resolveLoadGroupMembership } from './shipment-load-group.resolver'
 
 const PART_LOCK_SELECT = {
   id: true,
@@ -96,6 +97,12 @@ export class PurchaseShipmentDeliveryService {
       const salesOrderId = candidate.ownershipCurrent?.ownerType === 'SALES_ORDER'
         ? candidate.ownershipCurrent.ownerSalesOrderId
         : null
+      // 签收是同票联动：先锁组头，随后按货件 ID 排序锁全部成员，避免只签主货件。
+      const loadGroup = await resolveLoadGroupMembership(transaction, partId)
+      const groupMemberIds = loadGroup === null ? [] : loadGroup.memberShipmentIds.filter(id => id !== partId)
+      if (loadGroup !== null) {
+        await transaction.$queryRaw(Prisma.sql`SELECT id FROM shipment_load_groups WHERE id = ${loadGroup.id}::uuid FOR UPDATE`)
+      }
       let lockedOrder: {
         readonly orderStatus: string
         readonly fulfillmentStatus: string
@@ -123,26 +130,49 @@ export class PurchaseShipmentDeliveryService {
 
       await transaction.$queryRaw(Prisma.sql`
         SELECT "id" FROM "purchase_order_parts"
-        WHERE "id" = CAST(${partId} AS uuid)
+        WHERE "id" IN (${Prisma.join([partId, ...groupMemberIds].map(id => Prisma.sql`${id}::uuid`))})
+        ORDER BY "id"
         FOR UPDATE
       `)
       const part = await transaction.purchaseOrderPart.findUnique({
         where: { id: partId },
         select: PART_LOCK_SELECT,
       })
-      if (part === null || part.purchaseOrder.orderStatus === 'CANCELLED') {
-        return notAllowed('已取消采购单的货件不能签收')
+      if (part === null) {
+        return notAllowed('采购货件不存在')
       }
-      if (part.status !== 'ACTIVE') {
-        return notAllowed('只有有效货件可以签收')
+      const groupParts = groupMemberIds.length === 0
+        ? []
+        : await transaction.purchaseOrderPart.findMany({
+            where: { id: { in: groupMemberIds } },
+            select: PART_LOCK_SELECT,
+          })
+      const signingParts = [part, ...groupParts]
+      for (const member of signingParts) {
+        if (member.purchaseOrder.orderStatus === 'CANCELLED') {
+          return notAllowed('已取消采购单的货件不能签收')
+        }
+        if (member.status !== 'ACTIVE') {
+          return notAllowed('只有有效货件可以签收')
+        }
+        if (member.loadedAt === null) {
+          return notAllowed('货件尚未装柜，不能签收')
+        }
+        // 寄仓中的货件归属已转出销售单，物流动作冻结到认领为止。
+        if (member.ownershipCurrent?.ownerType === 'STORAGE_POOL') {
+          return notAllowed('寄仓中的货件不能签收')
+        }
       }
-      if (part.loadedAt === null) {
-        return notAllowed('货件尚未装柜，不能签收')
+      if (
+        loadGroup !== null
+        && signingParts.some(member => member.ownershipCurrent?.ownerType !== 'SALES_ORDER'
+          || member.ownershipCurrent.ownerSalesOrderId !== salesOrderId)
+      ) {
+        return notAllowed('同票货件的销售归属已变化，请刷新后重试')
       }
-      // 寄仓中的货件归属已转出销售单，物流动作冻结到认领为止。
-      if (part.ownershipCurrent?.ownerType === 'STORAGE_POOL') {
-        return notAllowed('寄仓中的货件不能签收')
-      }
+      const undeliveredIds = signingParts
+        .filter(member => member.deliveredAt === null)
+        .map(member => member.id)
 
       if (lockedOrder !== null && salesOrderId !== null) {
         if (lockedOrder.orderStatus === 'CANCELLED') {
@@ -152,7 +182,7 @@ export class PurchaseShipmentDeliveryService {
         if (state.pendingReviewPartIds.length > 0) {
           return notAllowed('销售订单下仍有待审核货件，不能签收货件')
         }
-        if (part.deliveredAt !== null) {
+        if (undeliveredIds.length === 0) {
           // 重复签收保持幂等；顺带补齐可能缺失的订单自动签收。
           return autoSignSalesOrderWhenAllShipmentsDelivered(
             transaction,
@@ -170,14 +200,14 @@ export class PurchaseShipmentDeliveryService {
           return notAllowed('销售订单当前不处于待签收状态，不能签收货件')
         }
       }
-      else if (part.deliveredAt !== null) {
+      else if (undeliveredIds.length === 0) {
         return STOCK_SIGNED_OUTCOME
       }
 
       const recordedAt = new Date()
       const updated = await transaction.purchaseOrderPart.updateMany({
         where: {
-          id: partId,
+          id: { in: undeliveredIds },
           status: 'ACTIVE',
           loadedAt: { not: null },
           deliveredAt: null,
@@ -189,25 +219,30 @@ export class PurchaseShipmentDeliveryService {
           deliveryRemark: remark,
         },
       })
-      if (updated.count !== 1) return stateChanged()
+      if (updated.count !== undeliveredIds.length) return stateChanged()
 
-      await this.audit.record(transaction, {
-        eventType: 'PURCHASE_SHIPMENT_DELIVERED',
-        outcome: 'SUCCESS',
-        actorType: 'USER',
-        actorUserId: context.actorUserId,
-        requestId: context.requestId,
-        targetType: 'PURCHASE_ORDER_PART',
-        targetId: partId,
-        metadata: {
-          purchaseOrderId: part.purchaseOrderId,
-          salesOrderId,
-          deliveredAt: recordedAt.toISOString(),
-          recordedAt: recordedAt.toISOString(),
-          remark,
-          source: 'SHIPMENT_SIGN',
-        },
-      })
+      const signingById = new Map(signingParts.map(member => [member.id, member]))
+      for (const memberId of undeliveredIds) {
+        const member = signingById.get(memberId)!
+        await this.audit.record(transaction, {
+          eventType: 'PURCHASE_SHIPMENT_DELIVERED',
+          outcome: 'SUCCESS',
+          actorType: 'USER',
+          actorUserId: context.actorUserId,
+          requestId: context.requestId,
+          targetType: 'PURCHASE_ORDER_PART',
+          targetId: memberId,
+          metadata: {
+            purchaseOrderId: member.purchaseOrderId,
+            salesOrderId,
+            deliveredAt: recordedAt.toISOString(),
+            recordedAt: recordedAt.toISOString(),
+            remark,
+            source: 'SHIPMENT_SIGN',
+            loadGroupId: loadGroup?.id ?? null,
+          },
+        })
+      }
 
       if (salesOrderId !== null) {
         return autoSignSalesOrderWhenAllShipmentsDelivered(

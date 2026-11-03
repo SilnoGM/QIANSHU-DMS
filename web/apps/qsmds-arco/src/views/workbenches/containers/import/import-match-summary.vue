@@ -33,6 +33,9 @@ const tones = {
     <QsTableStackedLine v-if="row.selectedShipment?.shippingMarkText && row.selectedShipment.shipmentNo" tone="muted" content-class="qs-type-data [overflow-wrap:anywhere]">
       {{ row.selectedShipment.shipmentNo }}
     </QsTableStackedLine>
+    <QsTableStackedLine v-if="row.selectedShipment?.loadGroup" tone="muted" content-class="qs-type-meta [overflow-wrap:anywhere]">
+      同票：{{ row.selectedShipment.loadGroup.members.map(member => member.shipmentNo || '未编号').join('、') }}
+    </QsTableStackedLine>
     <QsTableStackedLine v-if="row.displayStatus !== 'INVALID' && (row.matchReason || row.manuallySelected)" tone="muted" content-class="qs-type-meta [overflow-wrap:anywhere]">
       {{ row.manuallySelected && row.selectedShipment ? t('containerImport.manual') : row.manuallySelected ? t('containerImport.status.UNMATCHED') : row.matchReason }}
     </QsTableStackedLine>

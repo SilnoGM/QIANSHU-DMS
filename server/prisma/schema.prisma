@@ -194,6 +194,9 @@ enum AuditEventType {
   PROXY_NODE_SYNCED
   PROXY_NODE_ASSIGNED
   PROXY_NODE_RELEASED
+  /// 装柜合并组的创建与释放。追加在末尾与数据库枚举顺序一致。
+  PURCHASE_SHIPMENT_LOAD_GROUP_CREATED
+  PURCHASE_SHIPMENT_LOAD_GROUP_RELEASED
 
   @@map("audit_event_type")
 }
@@ -767,6 +770,8 @@ model User {
   shippingMarkBindingsUpdated       SupplierShippingMarkRuleBinding[] @relation("ShippingMarkBindingUpdatedBy")
   proxyNodesAssigned                ProxyNode[]                     @relation("ProxyNodeAssignee")
   proxyNodesAssignedBy              ProxyNode[]                     @relation("ProxyNodeAssigner")
+  shipmentLoadGroupsCreated         ShipmentLoadGroup[]           @relation("ShipmentLoadGroupCreatedBy")
+  shipmentLoadGroupsReleased        ShipmentLoadGroup[]           @relation("ShipmentLoadGroupReleasedBy")
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -1235,6 +1240,7 @@ model SalesOrder {
   purchaseOrders  PurchaseOrder[]
   shipmentOwnershipEvents  ShipmentOwnershipEvent[]   @relation("ShipmentOwnershipEventSalesOrder")
   shipmentOwnershipCurrent ShipmentOwnershipCurrent[] @relation("ShipmentOwnershipCurrentSalesOrder")
+  shipmentLoadGroups       ShipmentLoadGroup[]
 
   @@index([orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_order_date_id_idx")
   @@index([orderStatus, fulfillmentStatus, paymentStatus, orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_statuses_order_date_id_idx")
@@ -1421,6 +1427,7 @@ model PurchaseOrder {
   imageDrafts  PurchaseOrderImageDraft[]
   statusHistory PurchaseOrderStatusHistory[]
   amountRevisions PurchaseOrderAmountRevision[]
+  shipmentLoadGroups ShipmentLoadGroup[]
 
   @@index([orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_order_date_id_idx")
   @@index([orderStatus, fulfillmentStatus, paymentStatus, orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_statuses_order_date_id_idx")
@@ -1513,6 +1520,8 @@ model PurchaseOrderPart {
   ownershipEvents  ShipmentOwnershipEvent[]
   ownershipCurrent ShipmentOwnershipCurrent?
   storageRecords   ShipmentStorageRecord[]
+  primaryLoadGroups ShipmentLoadGroup[] @relation("ShipmentLoadGroupPrimary")
+  loadGroupMemberships ShipmentLoadGroupMember[]
 
   @@unique([id, purchaseOrderId], map: "purchase_order_parts_id_order_id_key")
   @@unique([purchaseOrderId, key], map: "purchase_order_parts_order_id_key_key")
@@ -2606,6 +2615,63 @@ model ContainerLoadingItem {
   @@index([oceanShippingMarkText], map: "container_loading_items_ocean_mark_idx")
   reconciliationSettlements SlhReconciliationSettlement[]
   @@map("container_loading_items")
+}
+
+/// 装柜合并组：同一销售单的多个货件在装柜时视为一票。
+/// 只改变装柜、签收与释放语义，不改变货件身份、采购配置或装柜行外键。
+enum ShipmentLoadGroupStatus {
+  ACTIVE
+  RELEASED
+  ARCHIVED
+
+  @@map("shipment_load_group_status")
+}
+
+model ShipmentLoadGroup {
+  id                String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseOrderId   String                  @map("purchase_order_id") @db.Uuid
+  ownerSalesOrderId String                  @map("owner_sales_order_id") @db.Uuid
+  primaryShipmentId String                  @map("primary_shipment_id") @db.Uuid
+  status            ShipmentLoadGroupStatus @default(ACTIVE)
+  /// 成员集合在创建事务结束时封存；封存后只能整组释放，不能再增删成员。
+  sealed            Boolean                 @default(false)
+  version           Int                     @default(1)
+  requestKey        String                  @map("request_key") @db.VarChar(128)
+  payloadHash       String                  @map("payload_hash") @db.Char(64)
+  createdById       String                  @map("created_by_id") @db.Uuid
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  releasedById      String?                 @map("released_by_id") @db.Uuid
+  releasedAt        DateTime?               @map("released_at") @db.Timestamptz(6)
+  releaseReason     String?                 @map("release_reason") @db.VarChar(500)
+
+  purchaseOrder   PurchaseOrder     @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ownerSalesOrder SalesOrder        @relation(fields: [ownerSalesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  primaryShipment PurchaseOrderPart @relation("ShipmentLoadGroupPrimary", fields: [primaryShipmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy       User              @relation("ShipmentLoadGroupCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  releasedBy      User?             @relation("ShipmentLoadGroupReleasedBy", fields: [releasedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  members         ShipmentLoadGroupMember[]
+
+  @@unique([createdById, requestKey], map: "shipment_load_groups_actor_request_key")
+  @@index([purchaseOrderId], map: "shipment_load_groups_order_idx")
+  @@index([ownerSalesOrderId], map: "shipment_load_groups_sales_order_idx")
+  @@index([primaryShipmentId], map: "shipment_load_groups_primary_idx")
+  @@map("shipment_load_groups")
+}
+
+model ShipmentLoadGroupMember {
+  groupId    String   @map("group_id") @db.Uuid
+  shipmentId String   @map("shipment_id") @db.Uuid
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  group    ShipmentLoadGroup @relation(fields: [groupId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  shipment PurchaseOrderPart @relation(fields: [shipmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([groupId, shipmentId])
+  @@index([shipmentId], map: "shipment_load_group_members_shipment_idx")
+  @@index([groupId, active], map: "shipment_load_group_members_group_active_idx")
+  @@map("shipment_load_group_members")
 }
 
 enum ContainerLoadingItemChangeKind {

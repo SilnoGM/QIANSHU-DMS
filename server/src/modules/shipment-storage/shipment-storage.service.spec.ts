@@ -57,6 +57,8 @@ function claimFixture(options: {
     },
     containerBatch: { update: jest.fn().mockResolvedValue({}) },
     purchaseOrderPartItem: { findMany: jest.fn().mockResolvedValue([]) },
+    // 默认货件不属于合并组；组成员结算阻断由寄仓 e2e 覆盖。
+    shipmentLoadGroupMember: { findFirst: jest.fn().mockResolvedValue(null) },
     purchaseOrderPart: {
       findMany: jest.fn().mockResolvedValue([{
         id: SHIPMENT_ID,
@@ -256,7 +258,10 @@ describe('ShipmentStorageService', () => {
       salesOrderId: SALES_ORDER_ID,
     })).rejects.toMatchObject({ code: 'SHIPMENT_STORAGE_CLAIM_SETTLED' })
     expect(fixture.transaction.slhReconciliationSettlement.findFirst).toHaveBeenCalledWith({
-      where: { status: 'ACTIVE', loadingItem: { shipmentId: SHIPMENT_ID } },
+      where: {
+        status: 'ACTIVE',
+        OR: expect.arrayContaining([{ loadingItem: { shipmentId: SHIPMENT_ID } }]) as unknown,
+      },
       select: { id: true },
     })
     expect(fixture.transaction.shipmentStorageRecord.update).not.toHaveBeenCalled()

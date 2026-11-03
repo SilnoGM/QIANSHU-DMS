@@ -227,6 +227,7 @@ export class SalesOrderTerminationService {
         reason: releaseReason,
         note: input.reason,
         requestKey: randomUUID(),
+        loadGroupHandling: input.loadGroupHandling,
       })
     }
     if (loaded.length > 0) {
@@ -237,6 +238,7 @@ export class SalesOrderTerminationService {
         reason: releaseReason,
         note: input.reason,
         requestKey: randomUUID(),
+        loadGroupHandling: input.loadGroupHandling,
       })
     }
     try {

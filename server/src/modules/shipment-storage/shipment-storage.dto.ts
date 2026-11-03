@@ -25,6 +25,8 @@ import type {
 export const SHIPMENT_STORAGE_STATUSES = ['IN_STORAGE', 'RESERVED', 'CLAIMED', 'VOIDED'] as const
 export const SHIPMENT_STORAGE_LOCATION_SCOPES = ['MAINLAND', 'OVERSEAS'] as const
 export const SHIPMENT_STORAGE_REASONS = ['CUSTOMER_CANCEL', 'CUSTOMER_REJECT', 'OTHER'] as const
+export const SHIPMENT_LOAD_GROUP_RELEASE_HANDLINGS = ['REVOKE', 'KEEP'] as const
+export type ShipmentLoadGroupReleaseHandling = typeof SHIPMENT_LOAD_GROUP_RELEASE_HANDLINGS[number]
 export const SHIPMENT_STORAGE_CLAIM_REQUEST_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN'] as const
 const WAREHOUSE_VALUE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u
 
@@ -99,6 +101,15 @@ export class ReleaseShipmentStorageRequestDto {
   @IsString()
   @IsUnicodeCodePointLength(0, 500)
   note?: string | null
+
+  @ApiProperty({
+    enum: SHIPMENT_LOAD_GROUP_RELEASE_HANDLINGS,
+    required: false,
+    description: '同票合并组释放方式：REVOKE 撤销组、KEEP 保留历史；省略时未装柜组撤销、已装柜组保留',
+  })
+  @IsOptional()
+  @IsIn(SHIPMENT_LOAD_GROUP_RELEASE_HANDLINGS)
+  loadGroupHandling?: ShipmentLoadGroupReleaseHandling
 
   @ApiProperty({ type: 'string', format: 'uuid' })
   @IsUUID('4')

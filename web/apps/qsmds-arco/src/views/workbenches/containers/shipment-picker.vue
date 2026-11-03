@@ -53,7 +53,10 @@ const context = computed<CandidateViewContext>(() => ({
   manuallySelected: false,
   canViewSalesOrder: true,
 }))
-const cards = computed(() => (data.value?.items ?? []).map(item => buildSearchCandidateView(item, context.value)))
+// 同票成员随主货件装柜：选择器只保留组主货件，避免把成员当成独立货件再装一次。
+const cards = computed(() => (data.value?.items ?? [])
+  .filter(item => item.loadGroup === null || item.loadGroup.primaryShipmentId === item.id)
+  .map(item => buildSearchCandidateView(item, context.value)))
 const total = computed(() => data.value?.total ?? 0)
 
 const debouncedSearch = useDebounceFn(() => applySearch(), 250)
