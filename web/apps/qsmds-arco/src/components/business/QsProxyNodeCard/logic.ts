@@ -16,14 +16,6 @@ export const PROXY_NODE_STATUS_FILTERS = [
 ] as const
 export type ProxyNodeStatusFilter = (typeof PROXY_NODE_STATUS_FILTERS)[number]
 
-export const PROXY_NODE_STATUS_FILTER_OPTIONS = [
-  { value: 'ALL', label: '全部状态' },
-  { value: 'ACTIVE', label: '正常' },
-  { value: 'EXPIRING', label: '7 天内到期' },
-  { value: 'EXPIRED', label: '已过期' },
-  { value: 'UNASSIGNED', label: '未绑定' },
-] as const
-
 const DAY_MS = 86_400_000
 const EXPIRING_WINDOW_MS = 7 * DAY_MS
 const CRITICAL_WINDOW_MS = DAY_MS
@@ -275,6 +267,7 @@ export function filterProxyNodes(
 
 export interface ProxyNodeCounts {
   readonly total: number
+  readonly active: number
   readonly assigned: number
   readonly unassigned: number
   readonly expiring: number
@@ -285,6 +278,7 @@ export function countProxyNodes(
   rows: readonly ProxyNodeDto[],
   nowMs: number,
 ): ProxyNodeCounts {
+  let active = 0
   let assigned = 0
   let expiring = 0
   let expired = 0
@@ -294,6 +288,9 @@ export function countProxyNodes(
       assigned += 1
     }
     const status = resolveProxyNodeStatus(node.expiresAt, nowMs)
+    if (status === 'ACTIVE') {
+      active += 1
+    }
     if (status === 'EXPIRING_SOON' || status === 'EXPIRING_CRITICAL') {
       expiring += 1
     }
@@ -304,6 +301,7 @@ export function countProxyNodes(
 
   return {
     total: rows.length,
+    active,
     assigned,
     unassigned: rows.length - assigned,
     expiring,

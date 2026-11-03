@@ -202,6 +202,7 @@ test('counts summarise assignment and expiry for the page strip', () => {
 
   assert.deepEqual(countProxyNodes(rows, NOW), {
     total: 4,
+    active: 1,
     assigned: 1,
     unassigned: 3,
     expiring: 2,

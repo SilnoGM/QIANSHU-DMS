@@ -15,10 +15,9 @@ import QsProxyNodeCard from '@/components/business/QsProxyNodeCard/index.vue'
 import {
   countProxyNodes,
   filterProxyNodes,
-  PROXY_NODE_STATUS_FILTER_OPTIONS,
-
 } from '@/components/business/QsProxyNodeCard/logic'
 import { PROXY_NODE_NOW_KEY } from '@/components/business/QsProxyNodeCard/now'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useNowTicker } from '@/composables/app/use-now-ticker'
 import { recordServerClockSample, serverNowEpochMs } from '@/utils/server-clock'
 
@@ -57,6 +56,14 @@ const summaryItems = computed(() => [
   { label: '未绑定', value: counts.value.unassigned },
   { label: '7 天内到期', value: counts.value.expiring, tone: 'text-amber-700 dark:text-amber-400' },
   { label: '已过期', value: counts.value.expired, tone: 'text-destructive' },
+])
+
+const statusItems = computed(() => [
+  { value: 'ACTIVE', label: '正常', count: counts.value.active },
+  { value: 'EXPIRING', label: '7 天内到期', count: counts.value.expiring },
+  { value: 'EXPIRED', label: '已过期', count: counts.value.expired },
+  { value: 'UNASSIGNED', label: '未绑定', count: counts.value.unassigned },
+  { value: 'ALL', label: '全部', count: counts.value.total },
 ])
 
 const assignOpen = ref(false)
@@ -308,19 +315,18 @@ onUnmounted(() => {
           </div>
         </div>
 
+        <QsStatusSwitchToolbar
+          :model-value="statusFilter"
+          :items="statusItems"
+          aria-label="节点状态"
+          class="mb-4"
+          @update:model-value="statusFilter = String($event) as ProxyNodeStatusFilter"
+        />
+
         <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <FaSelect
-              :model-value="statusFilter"
-              :options="[...PROXY_NODE_STATUS_FILTER_OPTIONS]"
-              class="w-full sm:w-40"
-              aria-label="节点状态"
-              @update:model-value="statusFilter = String($event) as ProxyNodeStatusFilter"
-            />
-            <span class="qs-type-meta text-muted-foreground">
-              显示 {{ visibleRows.length }} / 共 {{ rows.length }}
-            </span>
-          </div>
+          <span class="qs-type-meta text-muted-foreground">
+            显示 {{ visibleRows.length }} / 共 {{ rows.length }}
+          </span>
           <FaInput
             v-model="keyword"
             type="search"
