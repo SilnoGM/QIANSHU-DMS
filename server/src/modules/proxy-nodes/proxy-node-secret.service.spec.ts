@@ -33,11 +33,13 @@ describe('ProxyNodeSecretService', () => {
     const payload = service.encrypt(['tamper', 'test'].join('-'))
     const parts = payload.split('.')
     const ciphertext = parts[3] ?? ''
+    // 翻转首字符才能保证有效位变化；末位可能落在 base64url 的填充位，改动后字节不变。
+    const first = ciphertext[0] ?? 'A'
     const tampered = [
       parts[0],
       parts[1],
       parts[2],
-      `${ciphertext.slice(0, -1)}${ciphertext.endsWith('A') ? 'B' : 'A'}`,
+      `${first === 'A' ? 'B' : 'A'}${ciphertext.slice(1)}`,
     ].join('.')
 
     expect(() => service.decrypt(tampered)).toThrow(ProxyNodeSecretInvalidError)

@@ -9,6 +9,7 @@ function read(relativePath: string): string {
 
 const schema = read('prisma/schema.prisma')
 const migration = read('prisma/migrations/20261102150000_shipment_load_groups/migration.sql')
+const repairMigration = read('prisma/migrations/20261103120000_shipment_load_group_base_mark_guard/migration.sql')
 
 describe('shipment load group schema', () => {
   it('declares the group and member models with the expected lifecycle fields', () => {
@@ -45,5 +46,16 @@ describe('shipment load group schema', () => {
     expect(migration.trimEnd()).toMatch(/COMMIT;$/u)
     expect(migration).toContain('ALTER TYPE "audit_event_type" ADD VALUE \'PURCHASE_SHIPMENT_LOAD_GROUP_CREATED\'')
     expect(migration).toContain('ALTER TYPE "audit_event_type" ADD VALUE \'PURCHASE_SHIPMENT_LOAD_GROUP_RELEASED\'')
+  })
+
+  it('ships a forward repair for environments that applied the earlier full-mark draft', () => {
+    expect(repairMigration).toContain('BEGIN;')
+    expect(repairMigration.trimEnd()).toMatch(/COMMIT;$/u)
+    expect(repairMigration).toContain('CREATE OR REPLACE FUNCTION "assert_shipment_load_group_valid"(target_group_id UUID)')
+    expect(repairMigration).toContain('CREATE OR REPLACE FUNCTION "enforce_shipment_load_group_member"()')
+    expect(repairMigration).toContain("regexp_replace(part.shipping_mark_text, '/货件-[0-9]+$', '')")
+    expect(repairMigration).toContain('base shipping mark')
+    expect(repairMigration).not.toContain('part.shipping_mark_text IS DISTINCT FROM shipment.shipping_mark_text')
+    expect(repairMigration).toContain('shipment_load_group_base_mark_repair_check')
   })
 })
