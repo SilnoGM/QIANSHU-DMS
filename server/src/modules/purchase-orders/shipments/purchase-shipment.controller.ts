@@ -10,6 +10,8 @@ import { RequirePermissions } from '../../auth/decorators/auth.decorators'
 import { PurchaseShipmentDeliverRequestDto, PurchaseShipmentDeliverResultDto, PurchaseShipmentDetailDto, PurchaseShipmentFilterDto, PurchaseShipmentIdParamDto, PurchaseShipmentListQueryDto, PurchaseShipmentPageDto, PurchaseShipmentStatusCountsDto } from './purchase-shipment.dto'
 import { PurchaseShipmentDeliveryService } from './purchase-shipment-delivery.service'
 import { PurchaseShipmentQueryService } from './purchase-shipment-query.service'
+import { CreateShipmentLoadGroupDto, ReleaseShipmentLoadGroupDto, ShipmentLoadGroupDto, ShipmentLoadGroupIdParamDto } from './shipment-load-group.dto'
+import { ShipmentLoadGroupService } from './shipment-load-group.service'
 
 @ApiTags('purchase-order-parts')
 @Controller('purchase-order-parts')
@@ -17,6 +19,7 @@ export class PurchaseShipmentController {
   constructor(
     private readonly queries: PurchaseShipmentQueryService,
     private readonly deliveries: PurchaseShipmentDeliveryService,
+    private readonly loadGroups: ShipmentLoadGroupService,
   ) {}
 
   @Get()
@@ -59,6 +62,56 @@ export class PurchaseShipmentController {
     @CurrentUserId() actorUserId: string = resolveDataScopeActor(),
   ): Promise<PurchaseShipmentDetailDto> {
     return this.queries.getById(params.partId, actorUserId)
+  }
+
+  @Post('load-groups')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('purchase-orders:update')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ShipmentLoadGroupDto })
+  @ApiApplicationContract({
+    operationId: 'shipment_load_groups_create', session: 'required', authorization: true, csrf: true, badRequest: true,
+    conflict: true, validation: true, privateNoStore: true,
+    errors: [
+      { status: 403, codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] },
+      { status: 404, codes: ['SHIPMENT_LOAD_GROUP_NOT_FOUND'] },
+      { status: 409, codes: ['SHIPMENT_LOAD_GROUP_IDEMPOTENCY_CONFLICT', 'SHIPMENT_LOAD_GROUP_MEMBER_CONFLICT', 'SHIPMENT_LOAD_GROUP_STATE_CHANGED'] },
+      { status: 422, codes: ['SHIPMENT_LOAD_GROUP_NOT_ALLOWED', 'VALIDATION_FAILED'] },
+    ],
+  })
+  createLoadGroup(
+    @Body() dto: CreateShipmentLoadGroupDto,
+    @Req() request: object,
+  ): Promise<ShipmentLoadGroupDto> {
+    return this.loadGroups.create(
+      { actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) },
+      dto,
+    )
+  }
+
+  @Post('load-groups/:groupId/release')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('purchase-orders:update')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ShipmentLoadGroupDto })
+  @ApiApplicationContract({
+    operationId: 'shipment_load_groups_release', session: 'required', authorization: true, csrf: true, badRequest: true,
+    resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
+    errors: [
+      { status: 403, codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] },
+      { status: 404, codes: ['SHIPMENT_LOAD_GROUP_NOT_FOUND'] },
+      { status: 409, codes: ['SHIPMENT_LOAD_GROUP_LOADED', 'SHIPMENT_LOAD_GROUP_STATE_CHANGED'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  releaseLoadGroup(
+    @Param() params: ShipmentLoadGroupIdParamDto,
+    @Body() dto: ReleaseShipmentLoadGroupDto,
+    @Req() request: object,
+  ): Promise<ShipmentLoadGroupDto> {
+    return this.loadGroups.release(
+      { actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) },
+      params.groupId,
+      dto,
+    )
   }
 
   @Post(':partId/deliver')

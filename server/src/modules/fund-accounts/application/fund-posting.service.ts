@@ -77,6 +77,12 @@ import {
   resolveFundSourceKind,
 } from './fund-source-snapshot'
 import {
+  ADVERTISING_RECHARGE_FUND_SOURCE,
+  ADVERTISING_RECHARGE_PAY_CONSUMER,
+  ADVERTISING_RECHARGE_POSTING_TYPE,
+  ADVERTISING_RECHARGE_VOID_CONSUMER,
+} from './fund-advertising-recharge'
+import {
   PURCHASE_PAYMENT_FUND_SOURCE,
   PURCHASE_PAYMENT_PAY_CONSUMER,
   PURCHASE_PAYMENT_POSTING_TYPE,
@@ -169,6 +175,10 @@ const CONTROLLED_POSTING_TYPE_BY_SOURCE_CONSUMER: Readonly<Record<string, string
     INVOICE_REQUEST_POSTING_TYPE,
   [`${FUND_WITHDRAWAL_FUND_SOURCE}/${FUND_WITHDRAWAL_APPROVE_CONSUMER}`]:
     FUND_WITHDRAWAL_POSTING_TYPE,
+  [`${ADVERTISING_RECHARGE_FUND_SOURCE}/${ADVERTISING_RECHARGE_PAY_CONSUMER}`]:
+    ADVERTISING_RECHARGE_POSTING_TYPE,
+  [`${ADVERTISING_RECHARGE_FUND_SOURCE}/${ADVERTISING_RECHARGE_VOID_CONSUMER}`]:
+    ADVERTISING_RECHARGE_POSTING_TYPE,
 })
 
 interface PlannedLedgerEntry {
@@ -560,6 +570,7 @@ export class FundPostingApplicationService extends FundPostingService {
       PURCHASE_PAYMENT_FUND_SOURCE,
       INVOICE_REQUEST_FUND_SOURCE,
       SHIPMENT_STORAGE_SOURCE_CODE,
+      ADVERTISING_RECHARGE_FUND_SOURCE,
     ].includes(request.context.sourceCode)) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
@@ -607,8 +618,14 @@ export class FundPostingApplicationService extends FundPostingService {
     const shipmentStorage = action === 'POST' && context.sourceCode === SHIPMENT_STORAGE_SOURCE_CODE
       && [SHIPMENT_STORAGE_RELEASE_CONSUMER_CODE, SHIPMENT_STORAGE_CLAIM_CONSUMER_CODE]
         .includes(context.consumerCode)
+    // 广告充值：付款按 ADVERTISING_FEE 拆两腿，作废整单反向冲正。
+    const advertisingRecharge = context.sourceCode === ADVERTISING_RECHARGE_FUND_SOURCE
+      && (action === 'POST'
+        ? context.consumerCode === ADVERTISING_RECHARGE_PAY_CONSUMER
+        : context.consumerCode === ADVERTISING_RECHARGE_VOID_CONSUMER)
     if (!salesReceipt && !packagingPayment && !purchasePayment && !billSettlement && !billCompanyAllocation
-      && !billCompanyFeeAllocation && !invoiceSettlement && !fundWithdrawal && !shipmentStorage) {
+      && !billCompanyFeeAllocation && !invoiceSettlement && !fundWithdrawal && !shipmentStorage
+      && !advertisingRecharge) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     return normalizeFundAccountCommandContext({

@@ -207,6 +207,7 @@ export function toImportCandidateFromSearch(
     viewStatus: item.viewStatus,
     warehouseReceivedAt: item.warehouseReceivedAt,
     containerBatch: item.containerBatch,
+    loadGroup: item.loadGroup,
     matchFields: [],
     eligible: eligibility.eligible,
     ineligibleReason: eligibility.eligible ? null : options.reasonText,

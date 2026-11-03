@@ -15,7 +15,7 @@
     "date": "装柜日期",
     "warehouse": "装柜仓库",
     "itemCount": "明细行数",
-    "shipmentCount": "关联货件",
+    "shipmentCount": "装柜票数",
     "packageCount": "包装件数",
     "weight": "整行毛重（kg）",
     "weightDimensions": "重量尺寸",

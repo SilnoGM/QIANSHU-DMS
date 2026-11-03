@@ -45,11 +45,12 @@ const expectedDictionaries: ReadonlyArray<readonly [string, readonly string[]]> 
   ['warehouse.packaging_type', ['WOODEN_BOX', 'WOODEN_FRAME']],
 ]
 const expectedRoles: ReadonlyArray<readonly [string, number]> = [
-  ['finance_staff', 27],
-  ['operations_staff', 22],
-  ['purchasing_staff', 12],
+  ['finance_staff', 29],
+  ['operations_staff', 25],
+  ['purchasing_staff', 14],
 ]
 const expectedRuleShapes: Readonly<Record<string, string>> = {
+  ADVERTISING_RECHARGE_NO: 'FIXED(AD) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
   BTJ_MARK: 'FIXED(BTJ) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
   CONTAINER_BATCH_NO: 'FIXED(CTN) SEP(/) DATE(YYYY) SEP(-) SEQ(3)',
   CTN_BILL_NO: 'FIXED(CBILL) SEP(/) DATE(YYYYMM) SEP(-) SEQ(2)',
@@ -203,8 +204,8 @@ describe('系统上线内置数据 seed', () => {
     expect(after).toEqual(before)
     const currencies = await prisma.currency.findMany({ select: { code: true, enabled: true } })
     expect(currencies.filter(currency => currency.code !== 'CNY').every(currency => !currency.enabled)).toBe(true)
-    // 资金批次与提款申请编号规则由 migration 预置（不是 seed 写入），预览只能保持这个基线。
-    expect(await prisma.numberingRule.count()).toBe(2)
+    // 资金批次、提款申请与广告充值编号规则由 migration 预置（不是 seed 写入），预览只能保持这个基线。
+    expect(await prisma.numberingRule.count()).toBe(3)
   })
 
   it('执行后六类内置数据全部就位', async () => {

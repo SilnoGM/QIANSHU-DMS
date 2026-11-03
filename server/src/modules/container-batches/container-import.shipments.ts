@@ -18,6 +18,23 @@ const shipmentSelect = {
       containerBatch: { select: { id: true, containerBatchNo: true, containerBatchName: true } },
     },
   },
+  loadGroupMemberships: {
+    where: { active: true, group: { status: 'ACTIVE' } },
+    take: 1,
+    select: {
+      group: {
+        select: {
+          id: true,
+          primaryShipmentId: true,
+          members: {
+            where: { active: true },
+            orderBy: [{ createdAt: 'asc' }, { shipmentId: 'asc' }],
+            select: { shipmentId: true, isPrimary: true, shipment: { select: { shipmentNo: true } } },
+          },
+        },
+      },
+    },
+  },
 } satisfies Prisma.PurchaseOrderPartSelect
 export type ImportShipment = Prisma.PurchaseOrderPartGetPayload<{ select: typeof shipmentSelect }>
 export function shipmentEligibility(shipment: ImportShipment, batchId: string, warehouseValue: string) {
@@ -44,6 +61,17 @@ export function serializeImportCandidate(
     warehouseReceivedAt: shipment.warehouseReceivedAt?.toISOString() ?? null,
     // 同一货件只能落在一个柜次（数据库触发器保证），取首条即可；同柜多行时柜次相同。
     containerBatch: shipment.containerLoadingItems[0]?.containerBatch ?? null,
+    loadGroup: shipment.loadGroupMemberships[0]?.group === undefined
+      ? null
+      : {
+          id: shipment.loadGroupMemberships[0].group.id,
+          primaryShipmentId: shipment.loadGroupMemberships[0].group.primaryShipmentId,
+          members: shipment.loadGroupMemberships[0].group.members.map(member => ({
+            shipmentId: member.shipmentId,
+            shipmentNo: member.shipment.shipmentNo,
+            isPrimary: member.isPrimary,
+          })),
+        },
     matchFields: [...new Set(matchFields)],
     eligible: failure === null,
     ineligibleReason: failure?.message ?? null,
@@ -61,6 +89,11 @@ export async function findImportCandidates(tx: Prisma.TransactionClient, referen
   }
   return [...found.values()]
 }
+export async function findImportShipmentsByIds(tx: Prisma.TransactionClient, ids: readonly string[]): Promise<ImportShipment[]> {
+  if (ids.length === 0) return []
+  return tx.purchaseOrderPart.findMany({ where: { id: { in: [...ids] } }, select: shipmentSelect, orderBy: { id: 'asc' } })
+}
+
 export async function lockImportShipments(tx: Prisma.TransactionClient, shipmentIds: string[], batchId: string, warehouseValue: string) {
   const ids = [...new Set(shipmentIds)].sort()
   // 同柜允许多个包装行关联同一货件；跨柜竞争统一按货件 ID 排序取锁，随后重查归属。

@@ -23,6 +23,7 @@ function shipment(overrides: Partial<ImportShipment> = {}): ImportShipment {
     },
     items: [{ line: { productNameSnapshot: '微耕机' } }, { line: { productNameSnapshot: '微耕机' } }, { line: { productNameSnapshot: '回填轮' } }],
     containerLoadingItems: [],
+    loadGroupMemberships: [],
     ...overrides,
   }
 }

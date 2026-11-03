@@ -2,6 +2,7 @@
 import { useElementSize, useScroll, useTimeoutFn } from '@vueuse/core'
 import { useHotkeyBindings } from '@/hotkeys'
 import { useSlots } from '@/slots'
+import { useProxyNodeBadgeStore } from '@/store/modules/app/proxy-node-badge'
 import { cn } from '@/utils'
 import eventBus from '@/utils/eventBus'
 import AppSetting from './components/AppSetting/index.vue'
@@ -22,7 +23,24 @@ const routeInfo = useRoute()
 
 const appSettingsStore = useAppSettingsStore()
 const appMenuStore = useAppMenuStore()
+const appAccountStore = useAppAccountStore()
+const proxyNodeBadgeStore = useProxyNodeBadgeStore()
 useAppWatermarkStore()
+
+function refreshProxyNodeBadges(): void {
+  void proxyNodeBadgeStore.refresh()
+}
+
+onMounted(() => {
+  refreshProxyNodeBadges()
+  window.addEventListener('focus', refreshProxyNodeBadges)
+})
+
+watch(
+  () => appAccountStore.permissions,
+  refreshProxyNodeBadges,
+  { deep: true },
+)
 
 const mainPage = useAppPage()
 
@@ -156,6 +174,7 @@ function handleTopbarScrollVisibility(val: boolean) {
 eventBus.on('topbar-scroll-visible-or-hidden', handleTopbarScrollVisibility)
 onBeforeUnmount(() => {
   eventBus.off('topbar-scroll-visible-or-hidden', handleTopbarScrollVisibility)
+  window.removeEventListener('focus', refreshProxyNodeBadges)
 })
 
 const enableAppSetting = import.meta.env.VITE_APP_SETTING

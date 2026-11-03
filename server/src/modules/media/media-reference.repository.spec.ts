@@ -7,8 +7,8 @@ import {
 const ASSET_ID = '00000000-0000-4000-8000-000000000321'
 
 describe('MediaAssetReferenceRepository', () => {
-  it.each(['paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'fundWithdrawalRequest', 'userProfile'])('retains a managed media asset through %s even after the referencing workflow changes', async target => {
-    const reader = Object.fromEntries(['productMedia', 'salesOrderDocument', 'purchaseOrderDocument', 'salesReceiptRequest', 'purchaseOrderImageDraft', 'packagingCostRequest', 'paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'invoiceRequest', 'fundWithdrawalRequest', 'userProfile']
+  it.each(['paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'fundWithdrawalRequest', 'userProfile', 'advertisingRechargeRequest'])('retains a managed media asset through %s even after the referencing workflow changes', async target => {
+    const reader = Object.fromEntries(['productMedia', 'salesOrderDocument', 'purchaseOrderDocument', 'salesReceiptRequest', 'purchaseOrderImageDraft', 'packagingCostRequest', 'paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'invoiceRequest', 'fundWithdrawalRequest', 'userProfile', 'advertisingRechargeRequest']
       .map(name => [name, { findFirst: jest.fn().mockResolvedValue(name === target ? { id: 'reference' } : null) }])) as unknown as Prisma.TransactionClient
     await expect(new MediaAssetReferenceRepository().hasActiveReferences(reader, ASSET_ID)).resolves.toBe(true)
   })
@@ -82,6 +82,7 @@ describe('MediaAssetReferenceRepository', () => {
       'invoice_requests',
       'fund_withdrawal_requests',
       'user_profiles',
+      'advertising_recharge_requests',
     ])
     expect(productMediaFindFirst).toHaveBeenCalledWith({
       where: {
@@ -131,10 +132,25 @@ describe('MediaAssetReferenceRepository', () => {
       invoiceRequest: { findFirst: jest.fn().mockResolvedValue(null) },
       fundWithdrawalRequest: { findFirst: jest.fn().mockResolvedValue(null) },
       userProfile: { findFirst: jest.fn().mockResolvedValue(null) },
+      advertisingRechargeRequest: { findFirst: jest.fn().mockResolvedValue(null) },
     } as unknown as Prisma.TransactionClient
 
     await expect(
       new MediaAssetReferenceRepository().hasActiveReferences(reader, ASSET_ID),
     ).resolves.toBe(false)
+  })
+
+  it.each(['paymentQrMediaAssetId', 'paymentProofMediaAssetId'])('protects advertising recharge evidence referenced as %s', field => {
+    const advertisingRecharge = jest.fn().mockImplementation(({ where }: { where: { OR: Record<string, string>[] } }) => Promise.resolve(where.OR.some(filter => filter[field] === ASSET_ID) ? { id: 'advertising-recharge' } : null))
+    const reader = {
+      productMedia: { findFirst: jest.fn().mockResolvedValue(null) }, salesOrderDocument: { findFirst: jest.fn().mockResolvedValue(null) },
+      purchaseOrderDocument: { findFirst: jest.fn().mockResolvedValue(null) }, salesReceiptRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      purchaseOrderImageDraft: { findFirst: jest.fn().mockResolvedValue(null) }, packagingCostRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      paymentRecipientAccount: { findFirst: jest.fn().mockResolvedValue(null) }, purchaseOrderPayment: { findFirst: jest.fn().mockResolvedValue(null) },
+      containerBatch: { findFirst: jest.fn().mockResolvedValue(null) }, slhBill: { findFirst: jest.fn().mockResolvedValue(null) },
+      invoiceRequest: { findFirst: jest.fn().mockResolvedValue(null) }, fundWithdrawalRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      userProfile: { findFirst: jest.fn().mockResolvedValue(null) }, advertisingRechargeRequest: { findFirst: advertisingRecharge },
+    } as unknown as Prisma.TransactionClient
+    return expect(new MediaAssetReferenceRepository().hasActiveReferences(reader, ASSET_ID)).resolves.toBe(true)
   })
 })

@@ -43,6 +43,7 @@ import { PurchaseShipmentNumberBackfillService } from './shipments/purchase-ship
 import { PurchaseShipmentController } from './shipments/purchase-shipment.controller'
 import { PurchaseShipmentDeliveryService } from './shipments/purchase-shipment-delivery.service'
 import { PurchaseShipmentQueryService } from './shipments/purchase-shipment-query.service'
+import { ShipmentLoadGroupService } from './shipments/shipment-load-group.service'
 
 import { PurchaseOrderWarehouseReceiptController } from './warehouse-receipts/purchase-order-warehouse-receipt.controller'
 import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purchase-order-warehouse-receipt.service'
@@ -96,6 +97,7 @@ import { SalesOrderWarehouseReceiptService } from './warehouse-receipts/sales-or
     PurchaseOrderProductImageService,
     PurchaseShipmentQueryService,
     PurchaseShipmentDeliveryService,
+    ShipmentLoadGroupService,
     PurchaseShipmentNumberingService,
     PurchaseShipmentNumberBackfillService,
     PurchaseOrderWarehouseReceiptService,

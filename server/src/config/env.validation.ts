@@ -251,6 +251,75 @@ function normalizeAuthHmacKeys(
 }
 
 /**
+ * IPFoxy 与静态节点凭证的启动校验。
+ *
+ * 两个 API 凭据必须同时提供；只要启用了 IPFoxy，就必须提供 32-byte 的
+ * base64url 密钥用于静态节点密码加密。错误信息只报键名和固定约束，
+ * 绝不包含 token 或密钥原值。
+ */
+function normalizeIpfoxyEnvironment(
+  input: Record<string, unknown>,
+): {
+  IPFOXY_API_ID: string | null
+  IPFOXY_API_TOKEN: string | null
+  PROXY_NODE_SECRET_KEY: string | null
+} {
+  const readOptionalSecret = (key: string, pattern: RegExp): string | null => {
+    const value = input[key]
+    if (value === undefined || value === '') {
+      return null
+    }
+    if (typeof value !== 'string' || !pattern.test(value.trim())) {
+      throw validationError(key, 'has an invalid format')
+    }
+    return value.trim()
+  }
+
+  const apiId = readOptionalSecret('IPFOXY_API_ID', /^\S{4,128}$/u)
+  const apiToken = readOptionalSecret('IPFOXY_API_TOKEN', /^\S{8,512}$/u)
+
+  if ((apiId === null) !== (apiToken === null)) {
+    throw validationError(
+      'IPFOXY_API_ID',
+      'and IPFOXY_API_TOKEN must be provided together',
+    )
+  }
+
+  const rawSecretKey = input.PROXY_NODE_SECRET_KEY
+  let secretKey: string | null = null
+  if (rawSecretKey !== undefined && rawSecretKey !== '') {
+    if (typeof rawSecretKey !== 'string') {
+      throw validationError('PROXY_NODE_SECRET_KEY', 'has an invalid format')
+    }
+    const candidate = rawSecretKey.trim()
+    const decoded = Buffer.from(candidate, 'base64url')
+    if (
+      decoded.length !== 32
+      || decoded.toString('base64url') !== candidate
+    ) {
+      throw validationError(
+        'PROXY_NODE_SECRET_KEY',
+        'must be a 32-byte canonical base64url key',
+      )
+    }
+    secretKey = candidate
+  }
+
+  if (apiId !== null && secretKey === null) {
+    throw validationError(
+      'PROXY_NODE_SECRET_KEY',
+      'is required when IPFoxy is configured',
+    )
+  }
+
+  return {
+    IPFOXY_API_ID: apiId,
+    IPFOXY_API_TOKEN: apiToken,
+    PROXY_NODE_SECRET_KEY: secretKey,
+  }
+}
+
+/**
  * 校验并规范化 Nest 配置输入。
  *
  * 保留未知键是为了让 Nest ConfigModule 仍可向后续、独立的配置命名空间传递环境变量；
@@ -276,6 +345,9 @@ export function validateEnvironment(
   MEDIA_STORAGE_ROOT: string
   MEDIA_STAGING_TTL_HOURS: number
   MEDIA_TRASH_RETENTION_DAYS: number
+  IPFOXY_API_ID: string | null
+  IPFOXY_API_TOKEN: string | null
+  PROXY_NODE_SECRET_KEY: string | null
   AUTH_USERNAME_HMAC_KEY?: string
   AUTH_USER_ID_HMAC_KEY?: string
   AUTH_IP_HMAC_KEY?: string
@@ -283,6 +355,7 @@ export function validateEnvironment(
   const nodeEnvironment = normalizeNodeEnvironment(input.NODE_ENV)
   const hmacKeys = normalizeAuthHmacKeys(input, nodeEnvironment)
   const mediaEnvironment = normalizeMediaEnvironment(input)
+  const ipfoxyEnvironment = normalizeIpfoxyEnvironment(input)
   const normalized: Record<string, unknown> & {
     NODE_ENV: NodeEnvironment
     PORT: number
@@ -301,6 +374,9 @@ export function validateEnvironment(
     MEDIA_STORAGE_ROOT: string
     MEDIA_STAGING_TTL_HOURS: number
     MEDIA_TRASH_RETENTION_DAYS: number
+    IPFOXY_API_ID: string | null
+    IPFOXY_API_TOKEN: string | null
+    PROXY_NODE_SECRET_KEY: string | null
   } = {
     ...input,
     NODE_ENV: nodeEnvironment,
@@ -329,6 +405,7 @@ export function validateEnvironment(
       MAX_ARGON2_QUEUE_LIMIT,
     ),
     ...mediaEnvironment,
+    ...ipfoxyEnvironment,
     ...hmacKeys,
   }
 

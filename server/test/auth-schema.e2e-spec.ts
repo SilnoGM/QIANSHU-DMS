@@ -3,6 +3,10 @@ import { randomUUID } from 'node:crypto'
 import { Client } from 'pg'
 
 const MANAGEMENT_PERMISSION_CODES = [
+  'advertising-recharges:create',
+  'advertising-recharges:pay',
+  'advertising-recharges:read',
+  'advertising-recharges:read-self',
   'audit:read',
   'container-batches:create',
   'container-batches:read',
@@ -40,6 +44,7 @@ const MANAGEMENT_PERMISSION_CODES = [
   'invoice-requests:return',
   'invoice-requests:review',
   'invoice-requests:settle',
+  'network-nodes:read',
   'numbering-rules:create',
   'numbering-rules:disable',
   'numbering-rules:enable',
@@ -58,6 +63,8 @@ const MANAGEMENT_PERMISSION_CODES = [
   'products:create',
   'products:read',
   'products:update',
+  'proxy-nodes:manage',
+  'proxy-nodes:read',
   'purchase-orders:create',
   'purchase-orders:create-stock',
   'purchase-orders:document',

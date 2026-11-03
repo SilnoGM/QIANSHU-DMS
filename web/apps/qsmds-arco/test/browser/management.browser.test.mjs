@@ -1684,6 +1684,10 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.ok(permissionDrawerState.optionCount > 0)
   // 可分配权限清单来自权限目录迁移，新增领域后必须同步这里（曾漏过 container-batches 与 slh-bills）。
   assert.deepEqual(permissionDrawerState.enabledPermissionCodes, [
+    'advertising-recharges:create',
+    'advertising-recharges:pay',
+    'advertising-recharges:read',
+    'advertising-recharges:read-self',
     'container-batches:create',
     'container-batches:read',
     'container-batches:update',
@@ -1720,6 +1724,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'invoice-requests:return',
     'invoice-requests:review',
     'invoice-requests:settle',
+    'network-nodes:read',
     'numbering-rules:create',
     'numbering-rules:disable',
     'numbering-rules:enable',
@@ -1738,6 +1743,8 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'products:create',
     'products:read',
     'products:update',
+    'proxy-nodes:manage',
+    'proxy-nodes:read',
     'purchase-orders:create',
     'purchase-orders:document',
     'purchase-orders:payment',

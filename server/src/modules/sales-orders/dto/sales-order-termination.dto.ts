@@ -1,7 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { IsArray, IsOptional, IsString, IsUUID, Matches } from 'class-validator'
+import { IsArray, IsIn, IsOptional, IsString, IsUUID, Matches } from 'class-validator'
 
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
+import { SHIPMENT_LOAD_GROUP_RELEASE_HANDLINGS, type ShipmentLoadGroupReleaseHandling } from '../../shipment-storage/shipment-storage.dto'
 
 const WAREHOUSE_VALUE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u
 
@@ -50,4 +51,13 @@ export class SalesOrderTerminationRequestDto {
   @IsOptional()
   @Matches(WAREHOUSE_VALUE_PATTERN)
   overseasWarehouseValue?: string
+
+  @ApiProperty({
+    enum: SHIPMENT_LOAD_GROUP_RELEASE_HANDLINGS,
+    required: false,
+    description: '同票合并组释放方式：REVOKE 撤销组、KEEP 保留历史；省略时未装柜组撤销、已装柜组保留',
+  })
+  @IsOptional()
+  @IsIn(SHIPMENT_LOAD_GROUP_RELEASE_HANDLINGS)
+  loadGroupHandling?: ShipmentLoadGroupReleaseHandling
 }

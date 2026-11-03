@@ -98,16 +98,21 @@ test('发票管理入口排在账单对账之后、账户管理之前，审批�
   assert.ok(leaves.every(leaf => leaf.children === undefined))
 })
 
-test('柜次、寄仓菜单使用独立读取权限，货件与审核菜单保留既有授权', () => {
+test('柜次、寄仓、静态节点菜单使用独立权限，货件与审核菜单保留既有授权', () => {
   const routes = purchaseTransportWorkbench.children
-  assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers', 'qsPurchaseTransportStorage'])
+  assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers', 'qsPurchaseTransportStorage', 'qsPurchaseTransportProxyNodes'])
   assert.equal(purchaseTransportWorkbench.meta?.title, 'workbench.purchaseTransport')
   const containers = routes.find(route => route.name === 'qsPurchaseTransportContainers')
   const storage = routes.find(route => route.name === 'qsPurchaseTransportStorage')
+  const proxyNodes = routes.find(route => route.name === 'qsPurchaseTransportProxyNodes')
   assert.equal(routes[1]?.meta?.auth, 'purchase-orders:read')
   assert.equal(storage?.meta?.auth, 'shipment-storage:read')
   assert.equal(storage?.meta?.title, '寄仓管理')
   assert.match(String(storage?.component), /workbenches\/purchase-storage\/index\.vue/u)
+  assert.equal(proxyNodes?.meta?.auth, 'proxy-nodes:manage')
+  assert.equal(proxyNodes?.meta?.title, 'IPFoxy静态节点')
+  assert.equal(proxyNodes?.meta?.icon, 'qs-static-node')
+  assert.match(String(proxyNodes?.component), /workbenches\/proxy-nodes\/index\.vue/u)
   assert.equal(containers?.meta?.auth, 'container-batches:read')
   assert.equal(containers?.meta?.title, 'workbench.containers')
   assert.equal(containers?.meta?.icon, 'qs-container-management')
@@ -120,8 +125,19 @@ test('财务分为实时收付、账单对账、发票管理和账户管理，�
   const routes = financeWorkbench.children.flatMap(route => route.children ?? [])
   // 账单对账分组新增导入与详情两个隐藏叶子；对账分组新增对账详情一个隐藏叶子；
   // 发票管理分组只有一个可见叶子：只读详情并入了共用抽屉，不占独立路由；
-  // 账户管理分组新增账户提款审批一个可见叶子；采购付款新增记录页隐藏叶子。
-  assert.equal(new Set(routes.map(route => route.name)).size, 17)
+  // 账户管理分组新增账户提款审批一个可见叶子；采购付款新增记录页隐藏叶子；
+  // 实收实付新增广告充值列表与隐藏详情两个叶子。
+  assert.equal(new Set(routes.map(route => route.name)).size, 19)
+  const advertisingRecharges = routes.find(route => route.name === 'qsFinanceRealtimeAdvertisingRecharges')
+  assert.equal(advertisingRecharges?.path, 'advertising-recharges')
+  assert.equal(advertisingRecharges?.meta?.auth, 'advertising-recharges:read')
+  assert.equal(advertisingRecharges?.meta?.icon, 'qs-advertising-recharge')
+  assert.equal(advertisingRecharges?.meta?.menu, undefined)
+  const advertisingRechargeDetail = routes.find(route => route.name === 'qsFinanceRealtimeAdvertisingRechargeDetail')
+  assert.equal(advertisingRechargeDetail?.path, 'advertising-recharges/:id')
+  assert.equal(advertisingRechargeDetail?.meta?.menu, false)
+  assert.equal(advertisingRechargeDetail?.meta?.auth, 'advertising-recharges:read')
+  assert.equal(advertisingRechargeDetail?.meta?.activeMenu, '/qs-finance/realtime-payments/advertising-recharges')
   const paymentRecords = routes.find(route => route.name === 'qsFinanceRealtimePurchasePaymentRecords')
   assert.equal(paymentRecords?.path, 'purchase-payment-records')
   assert.equal(paymentRecords?.meta?.menu, false)

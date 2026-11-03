@@ -132,6 +132,19 @@ export class PurchaseShipmentContainerBatchDto {
   @ApiProperty({ type: 'string' }) readonly containerBatchName!: string
 }
 
+export class PurchaseShipmentLoadGroupMemberDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly shipmentId!: string
+  @ApiProperty({ type: 'string', nullable: true, maxLength: 64 }) readonly shipmentNo!: string | null
+  @ApiProperty({ type: 'boolean' }) readonly isPrimary!: boolean
+}
+
+export class PurchaseShipmentLoadGroupDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly primaryShipmentId!: string
+  @ApiProperty({ minimum: 1 }) readonly version!: number
+  @ApiProperty({ type: () => [PurchaseShipmentLoadGroupMemberDto] }) readonly members!: readonly PurchaseShipmentLoadGroupMemberDto[]
+}
+
 export class PurchaseShipmentStorageDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ enum: ShipmentStorageStatus }) readonly status!: ShipmentStorageStatus
@@ -166,8 +179,9 @@ export class PurchaseShipmentListItemDto {
   @ApiProperty({ type: () => PurchaseOrderActorDto, nullable: true }) readonly deliveredBy!: PurchaseOrderActorDto | null
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly deliveredRecordedAt!: string | null
   @ApiProperty({ type: 'string', maxLength: 500, nullable: true }) readonly deliveryRemark!: string | null
-  @ApiProperty({ type: () => PurchaseShipmentContainerBatchDto, nullable: true, description: '货件当前所在装柜柜次；未装柜或历史解绑后为空' }) readonly containerBatch!: PurchaseShipmentContainerBatchDto | null
-  @ApiProperty({ type: [String], description: '货件当前装柜明细的海运唛头（去重）；未装柜或未填写时为空数组' }) readonly containerLoadingMarks!: readonly string[]
+  @ApiProperty({ type: () => PurchaseShipmentContainerBatchDto, nullable: true, description: '货件当前所在装柜柜次；同票成员取主货件的柜次' }) readonly containerBatch!: PurchaseShipmentContainerBatchDto | null
+  @ApiProperty({ type: [String], description: '货件当前装柜明细的海运唛头（去重）；同票成员取主货件的唛头' }) readonly containerLoadingMarks!: readonly string[]
+  @ApiProperty({ type: () => PurchaseShipmentLoadGroupDto, nullable: true, description: '装柜合并组；只有 ACTIVE 组返回' }) readonly loadGroup!: PurchaseShipmentLoadGroupDto | null
   @ApiProperty({ type: () => PurchaseShipmentStorageDto, nullable: true, description: '最新一条在仓或已调货的寄仓记录；无寄仓归属时为空' }) readonly storage!: PurchaseShipmentStorageDto | null
   @ApiProperty({ type: () => PurchaseShipmentOrderDto }) readonly purchaseOrder!: PurchaseShipmentOrderDto
   @ApiProperty({ type: () => PurchaseOrderSupplierDto }) readonly supplier!: PurchaseOrderSupplierDto

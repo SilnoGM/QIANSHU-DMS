@@ -5,6 +5,8 @@ import type { PurchaseShipmentDetailDto, PurchaseShipmentListItemDto, PurchaseSh
 import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 import type { QsGenericTableColumn, QsGenericTableFilterDefinition, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 import { parseDate } from '@internationalized/date'
+import { getApiClientFailureMessage } from '@/api/errors'
+import purchaseShipmentsApi from '@/api/modules/purchase-shipments'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDateRangeFilter from '@/components/business/QsDateRangeFilter/index.vue'
@@ -25,6 +27,7 @@ import { buildShipmentRouteQuery, canOpenStorage, formatDestinationWarehouse, fo
 import ShipmentDeliverModal from './shipment-deliver-modal.vue'
 import ShipmentDetailDrawer from './shipment-detail-drawer.vue'
 import { getShipmentSourceEmptyKey } from './shipment-detail.logic'
+import ShipmentLoadGroupModal from './shipment-load-group-modal.vue'
 import ShipmentProducts from './shipment-products.vue'
 import ShipmentStorageReleaseModal from './shipment-storage-release-modal.vue'
 
@@ -91,6 +94,26 @@ const deliverVisible = computed({
   set: (value) => {
     if (!value) {
       deliverTarget.value = null
+    }
+  },
+})
+const loadGroupTarget = shallowRef<PurchaseShipmentListItemDto | null>(null)
+const loadGroupVisible = computed({
+  get: () => loadGroupTarget.value !== null,
+  set: (value) => {
+    if (!value) {
+      loadGroupTarget.value = null
+    }
+  },
+})
+const releaseGroupTarget = shallowRef<PurchaseShipmentListItemDto | null>(null)
+const releaseGroupReason = ref('')
+const releaseGroupSubmitting = ref(false)
+const releaseGroupVisible = computed({
+  get: () => releaseGroupTarget.value !== null,
+  set: (value) => {
+    if (!value) {
+      releaseGroupTarget.value = null
     }
   },
 })
@@ -221,6 +244,12 @@ function shipmentDetailItems(
   if (includeShipment) {
     items.push({ label: '货件详情', handle: () => openShipment(row.id) })
   }
+  if (canReceive.value && row.viewStatus === 'WAREHOUSE_RECEIVED' && row.loadGroup === null) {
+    items.push({ label: '合并装柜', handle: () => openLoadGroup(row) })
+  }
+  if (canReceive.value && row.loadGroup !== null && row.loadedAt === null) {
+    items.push({ label: '撤销合并', handle: () => openReleaseLoadGroup(row) })
+  }
   items.push({ label: '采购详情', handle: () => openOrder(row.purchaseOrder.id) })
   return [items]
 }
@@ -243,6 +272,45 @@ function shipmentDelivered(): void {
   deliverTarget.value = null
   refresh()
   void loadDetail()
+}
+
+function openLoadGroup(row: PurchaseShipmentListItemDto): void {
+  loadGroupTarget.value = row
+}
+
+function loadGroupSaved(): void {
+  loadGroupTarget.value = null
+  refresh()
+  void loadDetail()
+}
+
+function openReleaseLoadGroup(row: PurchaseShipmentListItemDto): void {
+  releaseGroupTarget.value = row
+  releaseGroupReason.value = ''
+}
+
+async function releaseLoadGroup(): Promise<void> {
+  const target = releaseGroupTarget.value
+  if (target?.loadGroup === null || target?.loadGroup === undefined || releaseGroupSubmitting.value) {
+    return
+  }
+  releaseGroupSubmitting.value = true
+  try {
+    await purchaseShipmentsApi.releaseLoadGroup(target.loadGroup.id, {
+      expectedVersion: target.loadGroup.version,
+      reason: releaseGroupReason.value.trim() || null,
+    }, new AbortController().signal)
+    toast.success('已撤销装柜合并组')
+    releaseGroupTarget.value = null
+    refresh()
+    void loadDetail()
+  }
+  catch (failure) {
+    toast.error(getApiClientFailureMessage(failure, '撤销合并失败'))
+  }
+  finally {
+    releaseGroupSubmitting.value = false
+  }
 }
 
 function selectTab(value: string | number): void {
@@ -407,6 +475,9 @@ onBeforeUnmount(() => {
             <div class="qs-type-data-emphasis flex gap-2 items-center">
               <QsCopyableText v-if="row.original.shipmentNo" :text="row.original.shipmentNo" :label="t('purchaseShipments.shipmentNo')" />
               <span v-else class="text-muted-foreground whitespace-nowrap">{{ t('purchaseShipments.unnumbered') }}</span>
+              <FaTag v-if="row.original.loadGroup" variant="outline" size="sm">
+                同票 {{ row.original.loadGroup.members.length }} 件
+              </FaTag>
             </div>
           </template>
           <template #cell-part="{ row }">
@@ -622,6 +693,23 @@ onBeforeUnmount(() => {
     </FaPageMain>
     <PurchaseWarehouseReceiptAction ref="warehouseActionRef" :active="enabled" @detail-updated="warehouseUpdated" />
     <ShipmentDeliverModal v-model="deliverVisible" :shipment="deliverTarget" :active="enabled" @delivered="shipmentDelivered" />
+    <ShipmentLoadGroupModal v-model="loadGroupVisible" :shipment="loadGroupTarget" @saved="loadGroupSaved" />
+    <FaModal v-model="releaseGroupVisible" title="撤销装柜合并" size="sm">
+      <div class="flex flex-col gap-3">
+        <p class="text-sm text-muted-foreground m-0">
+          撤销后 {{ releaseGroupTarget?.loadGroup?.members.length ?? 0 }} 个货件恢复独立，可重新选择合并。已装柜的合并组不能在这里撤销。
+        </p>
+        <FaInput v-model="releaseGroupReason" maxlength="500" placeholder="撤销原因（可选）" />
+      </div>
+      <template #footer>
+        <FaButton variant="outline" :disabled="releaseGroupSubmitting" @click="releaseGroupVisible = false">
+          取消
+        </FaButton>
+        <FaButton :loading="releaseGroupSubmitting" @click="releaseLoadGroup">
+          确认撤销
+        </FaButton>
+      </template>
+    </FaModal>
     <ShipmentDetailDrawer v-model="shipmentVisible" :detail="detail" :loading="detailLoading" :error="detailError" :can-release="canReleaseStorage" @reload="loadDetail" @release="openStorageRelease" @view-order="viewOrderFromShipment" @closed="shipmentClosed" />
     <ShipmentStorageReleaseModal v-model="storageReleaseVisible" :shipment="storageReleaseShipment" @released="storageReleased" />
     <QsPurchaseOrderDrawer v-model="orderVisible" :order="null" :detail="orderDetail" :currencies="currencyCatalog.currencies.value" :loading="detailLoading" :error="detailError" action-error="" :busy="false" :can-attach-document="false" @reload="loadDetail" />

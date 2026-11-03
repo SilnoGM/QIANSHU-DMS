@@ -16,6 +16,7 @@ import { serializeContainerBatch as serialize, serializeContainerItem as seriali
 import { markShipmentsContainerLoaded } from './container-load-fact'
 import { clearShipmentsContainerLoaded } from './container-unload-fact'
 import { advanceSalesOrdersWhenAllShipmentsLoaded, lockSalesOrderChains, retreatSalesOrdersWhenShipmentsUnloaded, salesOrderIdsOfShipments } from '../purchase-orders/shipments/sales-order-container-load-progress'
+import { resolveLoadGroupExpansion, resolveLoadGroupMembership } from '../purchase-orders/shipments/shipment-load-group.resolver'
 import type { ContainerBatchDto, ContainerBatchListQueryDto, ContainerLoadingItemCreateDto, ContainerLoadingItemDto } from './container-batch.dto'
 import { containerFailure, containerUuid, deriveContainerDate, normalizeContainerCreate, normalizeLoadingItemCreate, normalizeContainerUpdate, normalizeLoadingItemUpdate, requireContainerVersion, type ContainerCommandContext } from './container-batch.normalizer'
 import { containerShipmentEligibilitySelect, resolveContainerShipmentEligibility } from './container-shipment-eligibility'
@@ -42,6 +43,36 @@ export class ContainerBatchService {
     private readonly access: AccessControlService,
     private readonly audit: AuditService,
   ) {}
+
+  /**
+   * 装柜组展开后的统一货件锁与资格校验：按货件 ID 排序取锁，逐个成员校验，
+   * 避免只校验主货件而把不可装柜的成员带进装柜事实。
+   */
+  private async lockShipments(tx: Prisma.TransactionClient, shipmentIds: readonly string[]): Promise<void> {
+    const ids = [...new Set(shipmentIds)].sort()
+    if (ids.length === 0) return
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM purchase_order_parts
+       WHERE id IN (${Prisma.join(ids.map(value => Prisma.sql`${value}::uuid`))})
+       ORDER BY id FOR UPDATE`)
+  }
+
+  private async lockEligibleShipments(
+    tx: Prisma.TransactionClient,
+    shipmentIds: readonly string[],
+    batchId: string,
+    warehouseValue: string,
+  ): Promise<void> {
+    const ids = [...new Set(shipmentIds)].sort()
+    if (ids.length === 0) return
+    await this.lockShipments(tx, ids)
+    for (const id of ids) {
+      const row = await tx.purchaseOrderPart.findUnique({ where: { id }, select: containerShipmentEligibilitySelect })
+      if (!row) return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '货件不存在或已经取消')
+      const failure = resolveContainerShipmentEligibility(row, batchId, warehouseValue)
+      if (failure) return containerFailure(failure.code, failure.message, failure.status)
+    }
+  }
 
   private async authorize(tx: Prisma.TransactionClient, actorUserId: string, permission: string) {
     containerUuid(actorUserId)
@@ -130,22 +161,24 @@ export class ContainerBatchService {
         }
         if (batch.version !== expectedVersion) return containerFailure('CONTAINER_STATE_CHANGED', '柜次已更新，请刷新后重试', 409)
         let salesOrderIds: readonly string[] = []
+        let targetShipmentId: string | null = null
+        let loadGroupId: string | null = null
         if (normalized.shipmentId) {
+          // 装柜组把成员展开成同一票：装柜行只关联主货件，事实写入全部成员。
+          const expansion = await resolveLoadGroupExpansion(tx, [normalized.shipmentId])
+          targetShipmentId = expansion.primaryByShipment.get(normalized.shipmentId) ?? normalized.shipmentId
+          loadGroupId = expansion.groupByShipment.get(normalized.shipmentId) ?? null
           // 销售链条先于货件加锁：装柜会推进销售履约，必须与发货、入仓保持同一加锁顺序。
-          salesOrderIds = await salesOrderIdsOfShipments(tx, [normalized.shipmentId])
+          salesOrderIds = await salesOrderIdsOfShipments(tx, expansion.shipmentIds)
           await lockSalesOrderChains(tx, salesOrderIds)
-          await tx.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id = ${normalized.shipmentId}::uuid FOR UPDATE`)
-          const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: normalized.shipmentId }, select: containerShipmentEligibilitySelect })
-          if (!shipment) return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '货件不存在或已经取消')
-          const failure = resolveContainerShipmentEligibility(shipment, id, batch.warehouseValue)
-          if (failure) return containerFailure(failure.code, failure.message, failure.status)
+          await this.lockEligibleShipments(tx, expansion.shipmentIds, id, batch.warehouseValue)
           // 关联即已装柜：先写一次装柜事实，再由数据库触发器保证关联前提。
-          await markShipmentsContainerLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, shipmentIds: [normalized.shipmentId], source: 'ITEM_CREATE' })
+          await markShipmentsContainerLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, shipmentIds: expansion.shipmentIds, source: 'ITEM_CREATE' })
         }
         const last = await tx.containerLoadingItem.aggregate({ where: { containerBatchId: id }, _max: { lineNumber: true } })
-        const row = await tx.containerLoadingItem.create({ data: { ...normalized, volumeCai, chargeableVolumeCai, containerBatchId: id, lineNumber: (last._max.lineNumber ?? 0) + 1, creationRequestKey, creationPayloadHash, createdById: context.actorUserId, updatedById: context.actorUserId } })
+        const row = await tx.containerLoadingItem.create({ data: { ...normalized, shipmentId: targetShipmentId, volumeCai, chargeableVolumeCai, containerBatchId: id, lineNumber: (last._max.lineNumber ?? 0) + 1, creationRequestKey, creationPayloadHash, createdById: context.actorUserId, updatedById: context.actorUserId } })
         await tx.containerBatch.update({ where: { id }, data: { version: { increment: 1 }, updatedById: context.actorUserId } })
-        await this.audit.record(tx, { eventType: 'CONTAINER_LOADING_ITEM_CREATED', outcome: 'SUCCESS', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, targetType: 'CONTAINER_LOADING_ITEM', targetId: row.id, metadata: { containerBatchId: id, shipmentId: row.shipmentId, lineNumber: row.lineNumber } })
+        await this.audit.record(tx, { eventType: 'CONTAINER_LOADING_ITEM_CREATED', outcome: 'SUCCESS', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, targetType: 'CONTAINER_LOADING_ITEM', targetId: row.id, metadata: { containerBatchId: id, shipmentId: row.shipmentId, requestedShipmentId: normalized.shipmentId, loadGroupId, lineNumber: row.lineNumber } })
         // 全部货件装柜后销售订单进入海运在途；未达标时保持现状，下次装柜再评估。
         await advanceSalesOrdersWhenAllShipmentsLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, salesOrderIds })
         return serializeItem(row)
@@ -192,45 +225,63 @@ export class ContainerBatchService {
         const previous = await tx.containerLoadingItem.findFirst({ where: { id: itemId, containerBatchId: id } })
         if (!previous) return containerFailure('CONTAINER_LOADING_ITEM_NOT_FOUND', '装柜明细不存在', 404)
         if (batch.version !== expectedVersion || previous.version !== itemExpectedVersion) return containerFailure('CONTAINER_STATE_CHANGED', '柜次或装柜明细已更新，请刷新后重试', 409)
-        const nextShipmentId = normalized.shipmentId
-        // 解绑或换绑会把旧货件移出本明细；只有它不再有任何明细时才撤销装柜事实。
-        const unloadedShipmentId = previous.shipmentId !== null && previous.shipmentId !== nextShipmentId ? previous.shipmentId : null
+        const requestedShipmentId = normalized.shipmentId
+        const previousMembership = previous.shipmentId === null
+          ? null
+          : await resolveLoadGroupMembership(tx, previous.shipmentId)
+        const nextExpansion = requestedShipmentId === null
+          ? null
+          : await resolveLoadGroupExpansion(tx, [requestedShipmentId])
+        const nextShipmentId = requestedShipmentId === null
+          ? null
+          : nextExpansion!.primaryByShipment.get(requestedShipmentId) ?? requestedShipmentId
+        const nextMemberIds = nextExpansion?.shipmentIds ?? (nextShipmentId === null ? [] : [nextShipmentId])
+        const previousMemberIds = previousMembership?.memberShipmentIds
+          ?? (previous.shipmentId === null ? [] : [previous.shipmentId])
+        const unloadedMemberIds = previousMemberIds.filter(memberId => !nextMemberIds.includes(memberId))
+        const loadGroupId = requestedShipmentId === null
+          ? null
+          : nextExpansion?.groupByShipment.get(requestedShipmentId) ?? null
+        const sameMembership = nextMemberIds.length === previousMemberIds.length
+          && nextMemberIds.every(memberId => previousMemberIds.includes(memberId))
         // 与新增同一加锁顺序：销售链条先于货件，装柜与撤销后都按现状重新评估销售履约。
-        const loadedOrderIds = nextShipmentId === null ? [] : await salesOrderIdsOfShipments(tx, [nextShipmentId])
-        const unloadedOrderIds = unloadedShipmentId === null ? [] : await salesOrderIdsOfShipments(tx, [unloadedShipmentId])
+        const loadedOrderIds = nextMemberIds.length === 0 ? [] : await salesOrderIdsOfShipments(tx, nextMemberIds)
+        const unloadedOrderIds = unloadedMemberIds.length === 0 ? [] : await salesOrderIdsOfShipments(tx, unloadedMemberIds)
         await lockSalesOrderChains(tx, [...loadedOrderIds, ...unloadedOrderIds])
+        await this.lockShipments(tx, [...nextMemberIds, ...unloadedMemberIds])
         if (nextShipmentId !== null) {
-          await tx.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id = ${nextShipmentId}::uuid FOR UPDATE`)
           // 只有真正换绑才复核资格；已有关联不因货件后续被签收/装柜而锁死其他字段的编辑。
-          if (nextShipmentId !== previous.shipmentId) {
-            const shipment = await tx.purchaseOrderPart.findUnique({ where: { id: nextShipmentId }, select: containerShipmentEligibilitySelect })
-            if (!shipment) return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '货件不存在或已经取消')
-            const failure = resolveContainerShipmentEligibility(shipment, id, batch.warehouseValue)
-            if (failure) return containerFailure(failure.code, failure.message, failure.status)
+          if (!sameMembership) {
+            await this.lockEligibleShipments(tx, nextMemberIds, id, batch.warehouseValue)
           }
-          await markShipmentsContainerLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, loadingItemId: itemId, shipmentIds: [nextShipmentId], source: 'ITEM_UPDATE' })
+          await markShipmentsContainerLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, loadingItemId: itemId, shipmentIds: nextMemberIds, source: 'ITEM_UPDATE' })
         }
-        if (unloadedShipmentId !== null) {
+        if (unloadedMemberIds.length > 0) {
           // 已签收是终态：签收 CHECK 要求装柜事实非空，这里先于任何写入拒绝解绑。
-          await tx.$queryRaw(Prisma.sql`SELECT id FROM purchase_order_parts WHERE id = ${unloadedShipmentId}::uuid FOR UPDATE`)
-          const unloading = await tx.purchaseOrderPart.findUnique({ where: { id: unloadedShipmentId }, select: { deliveredAt: true } })
-          if (!unloading) return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '货件不存在或已经取消')
-          if (unloading.deliveredAt !== null) return containerFailure('CONTAINER_SHIPMENT_UNLOAD_FORBIDDEN', '货件已签收，不能解除装柜关联')
+          for (const memberId of unloadedMemberIds) {
+            const unloading = await tx.purchaseOrderPart.findUnique({ where: { id: memberId }, select: { deliveredAt: true } })
+            if (!unloading) return containerFailure('CONTAINER_SHIPMENT_UNAVAILABLE', '货件不存在或已经取消')
+            if (unloading.deliveredAt !== null) return containerFailure('CONTAINER_SHIPMENT_UNLOAD_FORBIDDEN', '货件已签收，不能解除装柜关联')
+          }
         }
-        const row = await tx.containerLoadingItem.update({ where: { id: itemId }, data: { ...normalized, volumeCai, chargeableVolumeCai, version: { increment: 1 }, updatedById: context.actorUserId } })
+        const row = await tx.containerLoadingItem.update({ where: { id: itemId }, data: { ...normalized, shipmentId: nextShipmentId, volumeCai, chargeableVolumeCai, version: { increment: 1 }, updatedById: context.actorUserId } })
         await tx.containerBatch.update({ where: { id }, data: { version: { increment: 1 }, updatedById: context.actorUserId } })
-        await this.audit.record(tx, { eventType: 'CONTAINER_LOADING_ITEM_UPDATED', outcome: 'SUCCESS', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, targetType: 'CONTAINER_LOADING_ITEM', targetId: itemId, metadata: { containerBatchId: id, previousVersion: previous.version, version: row.version, previousShipmentId: previous.shipmentId, shipmentId: row.shipmentId } })
-        if (unloadedShipmentId !== null) {
+        await this.audit.record(tx, { eventType: 'CONTAINER_LOADING_ITEM_UPDATED', outcome: 'SUCCESS', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, targetType: 'CONTAINER_LOADING_ITEM', targetId: itemId, metadata: { containerBatchId: id, previousVersion: previous.version, version: row.version, previousShipmentId: previous.shipmentId, requestedShipmentId, shipmentId: row.shipmentId, loadGroupId, unloadedShipmentIds: unloadedMemberIds.join(',') } })
+        if (unloadedMemberIds.length > 0) {
           // 明细写完后复查：同一货件在本柜可能还有其它包装行，只要还有关联就不撤销事实。
-          const remaining = await tx.containerLoadingItem.count({ where: { shipmentId: unloadedShipmentId } })
-          if (remaining === 0) {
-            await clearShipmentsContainerLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, loadingItemId: itemId, shipmentIds: [unloadedShipmentId], source: 'ITEM_UPDATE' })
+          const clearedMemberIds: string[] = []
+          for (const memberId of unloadedMemberIds) {
+            const remaining = await tx.containerLoadingItem.count({ where: { shipmentId: memberId } })
+            if (remaining === 0) clearedMemberIds.push(memberId)
+          }
+          if (clearedMemberIds.length > 0) {
+            await clearShipmentsContainerLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, loadingItemId: itemId, shipmentIds: clearedMemberIds, source: 'ITEM_UPDATE' })
           }
         }
         // 换绑先按现状评估新货件所属销售订单；解绑/换出的旧订单随后按同一口径回退。
         await advanceSalesOrdersWhenAllShipmentsLoaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, salesOrderIds: loadedOrderIds })
-        if (unloadedShipmentId !== null) {
-          await retreatSalesOrdersWhenShipmentsUnloaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, shipmentId: unloadedShipmentId, salesOrderIds: unloadedOrderIds })
+        if (unloadedMemberIds.length > 0) {
+          await retreatSalesOrdersWhenShipmentsUnloaded(tx, this.audit, { actorUserId: context.actorUserId, requestId: context.requestId, containerBatchId: id, shipmentIds: unloadedMemberIds, salesOrderIds: unloadedOrderIds })
         }
         return serializeItem(row)
       }, { timeout: 30_000 })

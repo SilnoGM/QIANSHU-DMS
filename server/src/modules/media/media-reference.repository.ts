@@ -20,11 +20,12 @@ export const MEDIA_ASSET_REFERENCE_TABLES = Object.freeze([
   'invoice_requests',
   'fund_withdrawal_requests',
   'user_profiles',
+  'advertising_recharge_requests',
 ] as const)
 
 type MediaReferenceReader = Pick<
   Prisma.TransactionClient,
-  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest' | 'paymentRecipientAccount' | 'purchaseOrderPayment' | 'containerBatch' | 'slhBill' | 'invoiceRequest' | 'fundWithdrawalRequest' | 'userProfile'
+  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest' | 'paymentRecipientAccount' | 'purchaseOrderPayment' | 'containerBatch' | 'slhBill' | 'invoiceRequest' | 'fundWithdrawalRequest' | 'userProfile' | 'advertisingRechargeRequest'
 >
 
 /**
@@ -90,6 +91,11 @@ export class MediaAssetReferenceRepository {
     if (await reader.fundWithdrawalRequest.findFirst({ where: { paymentProofMediaAssetId: assetId }, select: { id: true } }) !== null) return true
     // 本人头像被资料引用期间不能被回收；换头像后由 Profile 事务主动置为 TRASHED。
     if (await reader.userProfile.findFirst({ where: { avatarMediaAssetId: assetId }, select: { userId: true } }) !== null) return true
+    // 广告充值的收款二维码与付款截图是申请与付款事实的证据，申请单不可删除，图片同样不可回收。
+    if (await reader.advertisingRechargeRequest.findFirst({
+      where: { OR: [{ paymentQrMediaAssetId: assetId }, { paymentProofMediaAssetId: assetId }] },
+      select: { id: true },
+    }) !== null) return true
     // 账单原件是外部凭证的唯一留痕；账单本身不可删，原件同样不可回收。
     return await reader.slhBill.findFirst({ where: { sourceFileId: assetId }, select: { id: true } }) !== null
   }

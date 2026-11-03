@@ -88,6 +88,14 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   FUND_WITHDRAWAL_SUBMITTED: '提款申请已提交',
   FUND_WITHDRAWAL_APPROVED: '提款申请已通过并扣款',
   FUND_WITHDRAWAL_REJECTED: '提款申请已拒绝',
+  ADVERTISING_RECHARGE_SUBMITTED: '广告充值申请已提交',
+  ADVERTISING_RECHARGE_PAID: '广告充值已付款并分摊入账',
+  ADVERTISING_RECHARGE_REJECTED: '广告充值申请已驳回',
+  ADVERTISING_RECHARGE_WITHDRAWN: '广告充值申请已撤回',
+  ADVERTISING_RECHARGE_VOIDED: '广告充值申请已作废并冲正',
+  PROXY_NODE_SYNCED: '静态节点已同步',
+  PROXY_NODE_ASSIGNED: '静态节点已绑定',
+  PROXY_NODE_RELEASED: '静态节点已解绑',
   SALES_RECEIPT_SUBMITTED: '销售收款申请已提交',
   SALES_RECEIPT_APPROVED: '销售收款审核已通过',
   SALES_RECEIPT_REJECTED: '销售收款申请已驳回',
@@ -145,6 +153,8 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   INVOICE_REQUEST_DOCUMENT_UPLOADED: '发票照片已上传',
   INVOICE_REQUEST_SETTLED: '开票成本已结算入账',
   INVOICE_REQUEST_CANCELLED: '开票申请已取消',
+  PURCHASE_SHIPMENT_LOAD_GROUP_CREATED: '装柜合并组已创建',
+  PURCHASE_SHIPMENT_LOAD_GROUP_RELEASED: '装柜合并组已释放',
 }
 
 export function auditMetadataEntries(

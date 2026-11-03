@@ -76,7 +76,13 @@ export class ContainerShipmentOrphanCleanupService {
     }
 
     const rows = await this.prisma.purchaseOrderPart.findMany({
-      where: { loadedAt: { not: null }, containerLoadingItems: { none: {} } },
+      // 合并组成员合法地「已装柜但没有自己的装柜行」，不能按历史孤儿清理；
+      // 只有 RELEASED 组（已撤销）才回到普通孤儿判定。
+      where: {
+        loadedAt: { not: null },
+        containerLoadingItems: { none: {} },
+        loadGroupMemberships: { none: { active: true, group: { status: { in: ['ACTIVE', 'ARCHIVED'] } } } },
+      },
       select: { id: true, shipmentNo: true, loadedAt: true, deliveredAt: true },
       orderBy: [{ id: 'asc' }],
       take: options.limit,
@@ -152,6 +158,10 @@ export class ContainerShipmentOrphanCleanupService {
       if (locked.length !== 1) return 'SKIPPED'
       const stillOrphan = await transaction.containerLoadingItem.count({ where: { shipmentId } })
       if (stillOrphan > 0) return 'SKIPPED'
+      const grouped = await transaction.shipmentLoadGroupMember.count({
+        where: { shipmentId, active: true, group: { status: { in: ['ACTIVE', 'ARCHIVED'] } } },
+      })
+      if (grouped > 0) return 'SKIPPED'
 
       const requestId = `container-orphan-cleanup:${shipmentId}`
       const cleared = await clearShipmentsContainerLoaded(transaction, this.audit, {
@@ -159,7 +169,7 @@ export class ContainerShipmentOrphanCleanupService {
       })
       if (cleared === 0) return 'SKIPPED'
       await retreatSalesOrdersWhenShipmentsUnloaded(transaction, this.audit, {
-        actorUserId, requestId, containerBatchId: null, shipmentId, salesOrderIds,
+        actorUserId, requestId, containerBatchId: null, shipmentIds: [shipmentId], salesOrderIds,
       })
       return 'CLEARED'
     })

@@ -22,6 +22,7 @@ const overseasCatalog = useDictionaryCatalog('overseas.warehouse')
 const reason = ref<'CUSTOMER_CANCEL' | 'CUSTOMER_REJECT' | 'OTHER'>('CUSTOMER_CANCEL')
 const overseasWarehouse = ref('')
 const note = ref('')
+const loadGroupHandling = ref<'REVOKE' | 'KEEP'>('KEEP')
 const submitting = ref(false)
 // 同内容重试复用请求键：释放已提交但后续重算失败时，后端依赖同一键幂等重放并重试重算。
 const pendingSubmission = ref<{ key: string, signature: string } | null>(null)
@@ -40,6 +41,7 @@ watch(() => props.modelValue, (open) => {
     reason.value = 'CUSTOMER_CANCEL'
     overseasWarehouse.value = ''
     note.value = ''
+    loadGroupHandling.value = loaded.value ? 'KEEP' : 'REVOKE'
     pendingSubmission.value = null
   }
 })
@@ -56,11 +58,15 @@ async function submit(): Promise<void> {
   submitting.value = true
   const request = new AbortController()
   const payload = {
-    shipmentIds: [shipment.id],
+    // 同票货件必须整组释放；组主货件与成员一起进入寄仓。
+    shipmentIds: shipment.loadGroup === null
+      ? [shipment.id]
+      : shipment.loadGroup.members.map(member => member.shipmentId),
     locationScope: loaded.value ? 'OVERSEAS' as const : 'MAINLAND' as const,
     ...(loaded.value ? { overseasWarehouseValue: overseasWarehouse.value } : {}),
     reason: reason.value,
     note: note.value.trim() || undefined,
+    ...(shipment.loadGroup === null ? {} : { loadGroupHandling: loadGroupHandling.value }),
   }
   const signature = JSON.stringify(payload)
   const requestKey = pendingSubmission.value?.signature === signature
@@ -119,6 +125,18 @@ async function submit(): Promise<void> {
           内地寄仓位置固定为原目的地仓库。
         </p>
       </div>
+
+      <label v-if="shipment?.loadGroup" class="flex flex-col gap-1">
+        <span class="text-sm">同票合并组</span>
+        <FaSelect
+          v-model="loadGroupHandling"
+          :options="[
+            { value: 'KEEP', label: '保留同票历史（寄仓快照保留主货件装柜信息）' },
+            { value: 'REVOKE', label: '撤销合并组（成员恢复独立）' },
+          ]"
+        />
+        <span class="qs-type-meta text-muted-foreground">释放会同时处理同票 {{ shipment.loadGroup.members.length }} 个货件。</span>
+      </label>
 
       <label class="flex flex-col gap-1">
         <span class="text-sm">原因</span>

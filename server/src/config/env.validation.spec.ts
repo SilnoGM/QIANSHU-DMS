@@ -33,6 +33,9 @@ describe('validateEnvironment', () => {
       MEDIA_STORAGE_ROOT: '/var/lib/qianshu-dms/media',
       MEDIA_STAGING_TTL_HOURS: 24,
       MEDIA_TRASH_RETENTION_DAYS: 7,
+      IPFOXY_API_ID: null,
+      IPFOXY_API_TOKEN: null,
+      PROXY_NODE_SECRET_KEY: null,
     })
   })
 
@@ -75,6 +78,9 @@ describe('validateEnvironment', () => {
       MEDIA_STORAGE_ROOT: '/srv/qianshu-media',
       MEDIA_STAGING_TTL_HOURS: 36,
       MEDIA_TRASH_RETENTION_DAYS: 14,
+      IPFOXY_API_ID: null,
+      IPFOXY_API_TOKEN: null,
+      PROXY_NODE_SECRET_KEY: null,
       CUSTOM_SETTING: 'kept',
     })
   })
