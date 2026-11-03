@@ -137,6 +137,62 @@
         "image": "生成采购单图片"
       }
     },
+    "batch": {
+      "action": "批量审核",
+      "clearSelection": "清空选择",
+      "selected": "已选 {count}/{limit} 单",
+      "title": "批量审核采购单",
+      "description": "已选 {count} 单（单次最多 {limit} 单）；生成图片会派发唛头，关闭后仍保留。",
+      "warning": "生成采购单图片会派发基础唛头；即使未确认审核，唛头也会保留。确认审核后会生成应付并推进销售单，审核后不能回到待审核。",
+      "reason": "审核说明",
+      "reasonPlaceholder": "将写入每一单的审核历史（最多 500 字）",
+      "summary": "已生成 {generated}/{total} · 失败 {failed} · 已加载 {loaded}/{total} · 已审核 {approved}",
+      "preload": "检查已有图片…",
+      "generate": "批量生成采购单（{done}/{total}）",
+      "generateProgress": "批量生成采购单（{done}/{total}）",
+      "retry": "失败重试（{failed}/{total}）",
+      "regenerate": "重新生成（{total}/{total}）",
+      "reviewProgress": "审核中（{done}/{total}）",
+      "reviewRetry": "审核失败重试（{failed}/{total}）",
+      "confirmAll": "确认全部审核（{count}）",
+      "confirmRemaining": "确认剩余审核（{count}）",
+      "close": "关闭",
+      "stop": "停止",
+      "stopping": "停止中…",
+      "busyClose": "当前批次仍在处理，请先停止并等待当前订单完成。",
+      "imagesRemaining": "还有 {count} 张图片未加载，请滚动查看全部图片后再确认。",
+      "blocked": "有 {count} 单状态已变化，已从可审核范围排除。",
+      "totalAmount": "待审核合计",
+      "retryPreview": "重新加载图片",
+      "imageLoading": "图片加载中…",
+      "imageLoadFailed": "图片加载失败，请重新加载。",
+      "imageAlt": "采购订单 {orderNo} 的采购单图片",
+      "empty": "没有可审核的采购订单",
+      "limitReached": "单次最多选择 20 单，请先取消部分选择。",
+      "filtered": "{count} 单已不在待审核状态，已从本批排除。",
+      "error": {
+        "notPending": "采购订单已不在待审核状态",
+        "approved": "采购订单已审核通过",
+        "cancelled": "采购订单已取消",
+        "needsAttention": "该项需要人工核实后再重试",
+        "stale": "采购订单内容已变化，请重新生成图片"
+      },
+      "note": {
+        "reviewed": "该订单已完成审核",
+        "cancelled": "该订单已取消"
+      },
+      "status": {
+        "idle": "待生成",
+        "needsRegenerate": "需重新生成",
+        "generating": "生成中",
+        "ready": "已生成",
+        "generateFailed": "生成失败",
+        "reviewing": "审核中",
+        "approved": "已审核",
+        "reviewFailed": "审核失败",
+        "blocked": "已失效"
+      }
+    },
     "amountRevision": {
       "title": "修改采购金额",
       "description": "只修改实际单价与定金，数量、货件和历史凭证保持不变。",

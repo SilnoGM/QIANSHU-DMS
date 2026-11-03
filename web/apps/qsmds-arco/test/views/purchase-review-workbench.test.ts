@@ -104,3 +104,38 @@ test('审核工作台提供已驳回页签、标签和独立计数', async () =>
   assert.match(source, /value === 'REJECTED'/u)
   assert.match(source, /counts\.value\[value\]/u)
 })
+
+test('审核工作台提供单次最多 20 单的批量入口、跨页选择与清空选择', async () => {
+  const source = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
+
+  assert.match(source, /PURCHASE_BATCH_REVIEW_LIMIT/u)
+  assert.match(source, /selectedOrders/u)
+  assert.match(source, /batchReviewVisible/u)
+  assert.match(source, /<PurchaseBatchReviewModal/u)
+  assert.match(source, /:selectable="canBatchReview"/u)
+  assert.match(source, /:selection-disabled="batchSelectionDisabled"/u)
+  assert.match(source, /@selection-change="handleSelectionChange"/u)
+  assert.match(source, /clearBatchSelection/u)
+  assert.match(source, /openBatchReview/u)
+  assert.match(source, /@closed="handleBatchClosed"/u)
+  assert.match(source, /purchaseReview\.batch\.action/u)
+})
+
+test('批量审核弹窗展示订单号与图片槽位，逐单生成并支持重试/重新生成/确认', async () => {
+  const source = await readFile(new URL('../../src/views/workbenches/purchase-reviews/purchase-batch-review-modal.vue', import.meta.url), 'utf8')
+  const card = await readFile(new URL('../../src/views/workbenches/purchase-reviews/purchase-batch-review-card.vue', import.meta.url), 'utf8')
+
+  assert.match(source, /PURCHASE_BATCH_REVIEW_LIMIT/u)
+  assert.match(source, /data-testid="purchase-batch-review-modal"/u)
+  assert.match(source, /data-testid="purchase-batch-generate"/u)
+  assert.match(source, /data-testid="purchase-batch-confirm"/u)
+  assert.match(card, /orderNo/u)
+  assert.match(card, /<FaImagePreview/u)
+  assert.match(source, /previewLoaded/u)
+  assert.match(source, /purchaseOrdersApi\.prepareReviewShippingMarks/u)
+  assert.match(source, /purchaseOrdersApi\.generateOrderImageDraft/u)
+  assert.match(source, /purchaseOrdersApi\.getOrderImageDraftContent/u)
+  assert.match(source, /buildPurchaseOrderReviewRequest/u)
+  assert.match(source, /purchaseOrdersApi\.review/u)
+  assert.match(source, /before-close|handleBeforeClose/u)
+})

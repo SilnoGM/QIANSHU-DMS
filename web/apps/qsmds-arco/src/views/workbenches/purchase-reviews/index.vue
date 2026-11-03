@@ -8,6 +8,7 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { formatDateTime } from '@/components/base/DateTimeDisplay/format'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import { resolveActionColumnWidth } from '@/components/business/QsGenericTable/action-column-width'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
@@ -20,14 +21,17 @@ import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getPurchaseOrderApiFailure, orderStatusLabel, orderStatusTagClass, purchaseTypeLabel } from '../../operations/purchase-orders/purchase-order-list.logic'
 import PurchaseOrderReviewModal from '../../operations/purchase-orders/purchase-order-review-modal.vue'
 import PurchaseAmountRevisionModal from './amount-revision-modal.vue'
+import { isPurchaseBatchSelectionDisabled, PURCHASE_BATCH_REVIEW_LIMIT, reconcilePurchaseBatchSelection } from './batch-review.logic'
 import PurchaseCancellationModal from './cancellation-modal.vue'
 import { buildReviewQuery, countReviewViews } from './logic'
+import PurchaseBatchReviewModal from './purchase-batch-review-modal.vue'
 
 defineOptions({ name: 'QsPurchaseTransportReviews' })
 const { t } = useI18n()
 const { auth } = useAppAuth()
 const account = useAppAccountStore()
 const currencyCatalog = useCurrencyCatalog()
+const toast = useQsToast()
 const canRead = computed(() => auth('purchase-orders:read'))
 const canReview = computed(() => auth('purchase-orders:review'))
 const status = ref<ReviewView>('PENDING_REVIEW')
@@ -42,6 +46,16 @@ const error = ref('')
 const countsError = ref(false)
 const reviewVisible = ref(false)
 const reviewId = ref<string | null>(null)
+const batchReviewVisible = ref(false)
+const selectedOrders = shallowRef<ReadonlyMap<string, PurchaseOrderListItemDto>>(new Map())
+const tableRef = ref<{ clearSelection: () => void } | null>(null)
+const selectedCount = computed(() => selectedOrders.value.size)
+const canBatchReview = computed(() => canReview.value && status.value === 'PENDING_REVIEW')
+const batchReviewOrders = computed(() => [...selectedOrders.value.values()]
+  .filter(order => order.orderStatus === 'PENDING_REVIEW')
+  .slice(0, PURCHASE_BATCH_REVIEW_LIMIT))
+const batchSelectionDisabled = computed(() => (row: PurchaseOrderListItemDto) =>
+  isPurchaseBatchSelectionDisabled(selectedOrders.value, row))
 const cancellationVisible = ref(false)
 const cancellationId = ref<string | null>(null)
 const amountRevisionVisible = ref(false)
@@ -146,12 +160,49 @@ function refresh(): void {
   void load()
   void loadCounts()
 }
+function clearBatchSelection(): void {
+  selectedOrders.value = new Map()
+  tableRef.value?.clearSelection()
+}
+function handleSelectionChange(
+  _rows: PurchaseOrderListItemDto[],
+  rowSelection: Record<string, boolean>,
+): void {
+  const result = reconcilePurchaseBatchSelection(selectedOrders.value, items.value, rowSelection)
+  if (result.limited) {
+    toast.warning(t('purchaseReview.batch.limitReached'))
+    clearBatchSelection()
+    return
+  }
+  selectedOrders.value = result.selected
+}
+function openBatchReview(): void {
+  if (!canBatchReview.value) {
+    return
+  }
+  const eligible = batchReviewOrders.value
+  const removed = selectedOrders.value.size - eligible.length
+  if (removed > 0) {
+    toast.warning(t('purchaseReview.batch.filtered', { count: removed }))
+  }
+  if (eligible.length === 0) {
+    clearBatchSelection()
+    return
+  }
+  batchReviewVisible.value = true
+}
+function handleBatchClosed(): void {
+  clearBatchSelection()
+  refresh()
+}
 function search(): void {
   page.value = 1
+  clearBatchSelection()
   refresh()
 }
 function selectTab(value: string | number): void {
   if (value === 'PENDING_REVIEW' || value === 'APPROVED' || value === 'REJECTED' || value === 'CANCELLED') {
+    clearBatchSelection()
     status.value = value
     page.value = 1
     items.value = []
@@ -235,6 +286,8 @@ watch(() => [canRead.value, canReview.value, account.authEpoch], () => {
   detailController?.abort()
   reviewVisible.value = false
   reviewId.value = null
+  batchReviewVisible.value = false
+  clearBatchSelection()
   cancellationVisible.value = false
   cancellationId.value = null
   amountRevisionVisible.value = false
@@ -251,12 +304,39 @@ onBeforeUnmount(() => {
   listController?.abort()
   countController?.abort()
   detailController?.abort()
+  batchReviewVisible.value = false
 })
 </script>
 
 <template>
   <div class="min-w-0">
-    <FaPageHeader :title="t('workbench.purchaseReviews')" :description="t('purchaseReview.intro')" />
+    <FaPageHeader :title="t('workbench.purchaseReviews')" :description="t('purchaseReview.intro')">
+      <span v-if="canBatchReview" data-testid="purchase-batch-open-wrapper" class="hidden md:inline-flex">
+        <FaButton
+          type="button"
+          variant="outline"
+          data-testid="purchase-batch-open"
+          class="min-h-11 sm:min-h-9"
+          :disabled="selectedCount === 0"
+          :aria-label="`${t('purchaseReview.batch.action')}，${t('purchaseReview.batch.selected', { count: selectedCount, limit: PURCHASE_BATCH_REVIEW_LIMIT })}`"
+          @click="openBatchReview"
+        >
+          <FaIcon name="i-lucide:list-checks" aria-hidden="true" />
+          {{ t('purchaseReview.batch.action') }}<span v-if="selectedCount > 0">（{{ selectedCount }}/{{ PURCHASE_BATCH_REVIEW_LIMIT }}）</span>
+        </FaButton>
+      </span>
+      <span v-if="canBatchReview && selectedCount > 0" class="hidden md:inline-flex">
+        <FaButton
+          type="button"
+          variant="ghost"
+          size="sm"
+          class="min-h-11 sm:min-h-9"
+          @click="clearBatchSelection"
+        >
+          {{ t('purchaseReview.batch.clearSelection') }}
+        </FaButton>
+      </span>
+    </FaPageHeader>
     <FaPageMain v-if="!canRead">
       <FaEmpty icon="i-lucide:shield-alert" :title="t('purchaseReview.noPermission')" class="py-12" />
     </FaPageMain>
@@ -268,12 +348,14 @@ onBeforeUnmount(() => {
         </FaButton>
       </p>
       <QsGenericTable
+        ref="tableRef"
         v-model:page="page" v-model:page-size="pageSize" v-model:search="keyword"
         row-key="id" :show-row-number="false" :columns="columns" :data="items"
         :loading="loading" :error="error || undefined" :total="total" :addable="false"
+        :selectable="canBatchReview" :selection-disabled="batchSelectionDisabled"
         :search-placeholder="t('purchaseReview.search')" :empty-title="t('purchaseReview.empty')"
         :page-size-options="[20, 50, 100]" :action-column="{ fixed: 'right', minWidth: actionColumnWidth, width: actionColumnWidth }"
-        @search="search" @pagination-change="load" @retry="refresh"
+        @search="search" @selection-change="handleSelectionChange" @pagination-change="load" @retry="refresh"
       >
         <template #cell-orderNo="{ row }">
           <QsTableStackedCell>
@@ -378,6 +460,12 @@ onBeforeUnmount(() => {
       </QsGenericTable>
     </FaPageMain>
     <PurchaseOrderReviewModal v-model="reviewVisible" :order-id="reviewId" :currencies="currencyCatalog.currencies.value" @detail-updated="refresh" />
+    <PurchaseBatchReviewModal
+      v-model="batchReviewVisible"
+      :orders="batchReviewOrders"
+      :currencies="currencyCatalog.currencies.value"
+      @closed="handleBatchClosed"
+    />
     <PurchaseCancellationModal v-model="cancellationVisible" :order-id="cancellationId" @cancelled="refresh" />
     <PurchaseAmountRevisionModal
       v-model="amountRevisionVisible"
