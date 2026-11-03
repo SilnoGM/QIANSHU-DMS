@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import type { ProxyNodeDto } from '@/api/generated/types.gen'
+import type { ProxyNodeStatusFilter } from '@/components/business/QsProxyNodeCard/logic'
 import { getApiClientFailureMessage } from '@/api/errors'
 import proxyNodesApi from '@/api/modules/proxy-nodes'
 import QsProxyNodeCard from '@/components/business/QsProxyNodeCard/index.vue'
-import { resolveProxyNodeStatus } from '@/components/business/QsProxyNodeCard/logic'
+import {
+  countProxyNodes,
+  filterProxyNodes,
+} from '@/components/business/QsProxyNodeCard/logic'
 import { PROXY_NODE_NOW_KEY } from '@/components/business/QsProxyNodeCard/now'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useNowTicker } from '@/composables/app/use-now-ticker'
 import { recordServerClockSample, serverNowEpochMs } from '@/utils/server-clock'
 
@@ -18,12 +23,24 @@ provide(PROXY_NODE_NOW_KEY, nowMs)
 const rows = ref<ProxyNodeDto[]>([])
 const loading = ref(false)
 const error = ref('')
+const statusFilter = ref<ProxyNodeStatusFilter>('ACTIVE')
 let controller: AbortController | null = null
 
-const expiringCount = computed(() => rows.value.filter((node) => {
-  const status = resolveProxyNodeStatus(node.expiresAt, nowMs.value)
-  return status === 'EXPIRING_SOON' || status === 'EXPIRING_CRITICAL'
-}).length)
+const counts = computed(() => countProxyNodes(rows.value, nowMs.value))
+const visibleRows = computed(() => filterProxyNodes(
+  rows.value,
+  statusFilter.value,
+  '',
+  nowMs.value,
+))
+const expiringCount = computed(() => counts.value.expiring)
+const statusItems = computed(() => [
+  { value: 'ACTIVE', label: '正常', count: counts.value.active },
+  { value: 'EXPIRING', label: '7 天内到期', count: counts.value.expiring },
+  { value: 'EXPIRING_2D', label: '2 天内到期', count: counts.value.expiring2d },
+  { value: 'EXPIRED', label: '已过期', count: counts.value.expired },
+  { value: 'ALL', label: '全部', count: counts.value.total },
+])
 
 async function load(): Promise<void> {
   if (!canRead.value) {
@@ -85,6 +102,14 @@ onUnmounted(() => controller?.abort())
           class="mb-4"
         />
 
+        <QsStatusSwitchToolbar
+          :model-value="statusFilter"
+          :items="statusItems"
+          aria-label="节点状态"
+          class="mb-4"
+          @update:model-value="statusFilter = String($event) as ProxyNodeStatusFilter"
+        />
+
         <div v-if="error" class="py-12 flex flex-col gap-4 items-center">
           <FaEmpty
             icon="i-lucide:circle-alert"
@@ -113,9 +138,17 @@ onUnmounted(() => controller?.abort())
           class="py-12"
         />
 
+        <FaEmpty
+          v-else-if="!visibleRows.length"
+          icon="i-lucide:filter-x"
+          title="当前视图没有节点"
+          description="切换状态页签查看其他节点。"
+          class="py-12"
+        />
+
         <div v-else class="gap-5 grid lg:grid-cols-2" aria-live="polite">
           <QsProxyNodeCard
-            v-for="row in rows"
+            v-for="row in visibleRows"
             :key="row.id"
             :node="row"
             mode="operations"

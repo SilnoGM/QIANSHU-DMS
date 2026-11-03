@@ -11,6 +11,7 @@ export const PROXY_NODE_STATUS_FILTERS = [
   'ALL',
   'ACTIVE',
   'EXPIRING',
+  'EXPIRING_2D',
   'EXPIRED',
   'UNASSIGNED',
 ] as const
@@ -19,6 +20,7 @@ export type ProxyNodeStatusFilter = (typeof PROXY_NODE_STATUS_FILTERS)[number]
 const DAY_MS = 86_400_000
 const EXPIRING_WINDOW_MS = 7 * DAY_MS
 const CRITICAL_WINDOW_MS = DAY_MS
+const TWO_DAY_WINDOW_MS = 2 * DAY_MS
 const COUNTRY_OVERRIDES: Readonly<Record<string, string>> = {
   TW: '中国台湾',
   HK: '中国香港',
@@ -250,6 +252,14 @@ export function filterProxyNodes(
     if (filter === 'EXPIRING') {
       return status === 'EXPIRING_SOON' || status === 'EXPIRING_CRITICAL'
     }
+    if (filter === 'EXPIRING_2D') {
+      const expiresAtMs = expiryTimestamp(node.expiresAt)
+      if (expiresAtMs === null) {
+        return false
+      }
+      const remainingMs = expiresAtMs - nowMs
+      return remainingMs > 0 && remainingMs <= TWO_DAY_WINDOW_MS
+    }
     if (filter === 'EXPIRED') {
       return status === 'EXPIRED'
     }
@@ -263,6 +273,7 @@ export interface ProxyNodeCounts {
   readonly assigned: number
   readonly unassigned: number
   readonly expiring: number
+  readonly expiring2d: number
   readonly expired: number
 }
 
@@ -273,6 +284,7 @@ export function countProxyNodes(
   let active = 0
   let assigned = 0
   let expiring = 0
+  let expiring2d = 0
   let expired = 0
 
   for (const node of rows) {
@@ -286,6 +298,13 @@ export function countProxyNodes(
     if (status === 'EXPIRING_SOON' || status === 'EXPIRING_CRITICAL') {
       expiring += 1
     }
+    const expiresAtMs = expiryTimestamp(node.expiresAt)
+    if (expiresAtMs !== null) {
+      const remainingMs = expiresAtMs - nowMs
+      if (remainingMs > 0 && remainingMs <= TWO_DAY_WINDOW_MS) {
+        expiring2d += 1
+      }
+    }
     if (status === 'EXPIRED') {
       expired += 1
     }
@@ -297,6 +316,7 @@ export function countProxyNodes(
     assigned,
     unassigned: rows.length - assigned,
     expiring,
+    expiring2d,
     expired,
   }
 }

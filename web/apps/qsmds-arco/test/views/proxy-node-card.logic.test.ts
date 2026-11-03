@@ -178,6 +178,10 @@ test('filters combine live status and keyword without mutating rows', () => {
     ['soon', 'critical'],
   )
   assert.deepEqual(
+    filterProxyNodes(rows, 'EXPIRING_2D', '', NOW).map(row => row.id),
+    ['critical'],
+  )
+  assert.deepEqual(
     filterProxyNodes(rows, 'EXPIRED', '', NOW).map(row => row.id),
     ['expired'],
   )
@@ -188,6 +192,21 @@ test('filters combine live status and keyword without mutating rows', () => {
   assert.deepEqual(
     filterProxyNodes(rows, 'ALL', '203.0.113.10', NOW).map(row => row.id),
     rows.map(row => row.id),
+  )
+})
+
+test('two-day view includes the next 48 hours and excludes expired and later nodes', () => {
+  const rows = [
+    node({ id: 'two-days', expiresAt: at(2 * DAY_MS) }),
+    node({ id: 'two-days-plus', expiresAt: at(2 * DAY_MS + 1) }),
+    node({ id: 'one-and-half', expiresAt: at(1.5 * DAY_MS) }),
+    node({ id: 'one-ms', expiresAt: at(1) }),
+    node({ id: 'expired', expiresAt: at(-1) }),
+  ]
+
+  assert.deepEqual(
+    filterProxyNodes(rows, 'EXPIRING_2D', '', NOW).map(row => row.id),
+    ['two-days', 'one-and-half', 'one-ms'],
   )
 })
 
@@ -206,6 +225,7 @@ test('counts summarise assignment and expiry for the page strip', () => {
     assigned: 1,
     unassigned: 3,
     expiring: 2,
+    expiring2d: 1,
     expired: 1,
   })
 })

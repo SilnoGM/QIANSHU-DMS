@@ -61,6 +61,7 @@ const summaryItems = computed(() => [
 const statusItems = computed(() => [
   { value: 'ACTIVE', label: '正常', count: counts.value.active },
   { value: 'EXPIRING', label: '7 天内到期', count: counts.value.expiring },
+  { value: 'EXPIRING_2D', label: '2 天内到期', count: counts.value.expiring2d },
   { value: 'EXPIRED', label: '已过期', count: counts.value.expired },
   { value: 'UNASSIGNED', label: '未绑定', count: counts.value.unassigned },
   { value: 'ALL', label: '全部', count: counts.value.total },
