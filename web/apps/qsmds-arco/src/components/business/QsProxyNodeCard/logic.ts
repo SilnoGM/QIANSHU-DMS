@@ -113,7 +113,7 @@ export function resolveProxyNodeCountdownClass(
   status: ProxyNodeCardStatus,
 ): string {
   if (status === 'ACTIVE') {
-    return 'bg-muted/30 text-muted-foreground'
+    return 'bg-primary/10 text-primary'
   }
   if (status === 'EXPIRING_SOON') {
     return 'bg-amber-500/10 text-amber-700 dark:bg-amber-400/10 dark:text-amber-400'

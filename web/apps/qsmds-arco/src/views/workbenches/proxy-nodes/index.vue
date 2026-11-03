@@ -36,7 +36,7 @@ const error = ref('')
 const syncing = ref(false)
 const syncError = ref('')
 const syncWarnings = ref<string[]>([])
-const statusFilter = ref<ProxyNodeStatusFilter>('ALL')
+const statusFilter = ref<ProxyNodeStatusFilter>('ACTIVE')
 const keyword = ref('')
 
 let controller: AbortController | null = null
