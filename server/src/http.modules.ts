@@ -1,5 +1,6 @@
 import { PackagingCostModule } from './modules/packaging-costs/packaging-cost.module'
 import { PaymentRecipientsModule } from './modules/payment-recipients/payment-recipients.module'
+import { AdvertisingRechargeModule } from './modules/advertising-recharges/advertising-recharge.module'
 import { ContainerBatchModule } from './modules/container-batches/container-batch.module'
 import { AuditModule } from './modules/audit/audit.module'
 import { AuthModule } from './modules/auth/auth.module'
@@ -51,4 +52,5 @@ export const HTTP_MODULES = [
   SlhReconciliationBatchModule,
   InvoiceRequestModule,
   ShipmentStorageModule,
+  AdvertisingRechargeModule,
 ] as const

@@ -550,5 +550,29 @@
     "usages": [
       "图标库"
     ]
+  },
+  {
+    "name": "qs-network-ads",
+    "label": "网络与广告",
+    "category": "网络与广告",
+    "usages": [
+      "运营工作台网络与广告分组"
+    ]
+  },
+  {
+    "name": "qs-static-node",
+    "label": "静态节点",
+    "category": "网络与广告",
+    "usages": [
+      "运营工作台静态节点占位页"
+    ]
+  },
+  {
+    "name": "qs-advertising-recharge",
+    "label": "广告充值",
+    "category": "网络与广告",
+    "usages": [
+      "运营工作台广告充值页 / 财务工作台实收实付广告充值页"
+    ]
   }
 ]

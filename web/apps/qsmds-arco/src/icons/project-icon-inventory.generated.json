@@ -620,6 +620,33 @@
     "source": "brand"
   },
   {
+    "name": "qs-network-ads",
+    "label": "网络与广告",
+    "category": "网络与广告",
+    "usages": [
+      "运营工作台网络与广告分组"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-static-node",
+    "label": "静态节点",
+    "category": "网络与广告",
+    "usages": [
+      "运营工作台静态节点占位页"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-advertising-recharge",
+    "label": "广告充值",
+    "category": "网络与广告",
+    "usages": [
+      "运营工作台广告充值页 / 财务工作台实收实付广告充值页"
+    ],
+    "source": "brand"
+  },
+  {
     "name": "app-toolbar-collapse",
     "label": "app-toolbar-collapse",
     "category": "通用图标",
@@ -1174,6 +1201,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/create.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/shipping-mark-bindings.vue",
+      "apps/qsmds-arco/src/views/workbenches/advertising-recharges/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/index.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue",
@@ -1473,6 +1501,7 @@
       "apps/qsmds-arco/src/components/business/QsGenericTable/CopyCellButton.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/create-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-bill-select-modal.vue",
       "packages/components/src/pro/code/index.vue",
       "packages/components/src/pro/storage-box/index.vue"
@@ -1671,6 +1700,7 @@
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/packaging-history-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/shipment-match-drawer.vue",
+      "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/recharge-image-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-form.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-voucher-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-form.vue",
@@ -1930,6 +1960,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-marks-cell.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/create-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-payment-statement-action.vue",
       "packages/components/src/pro/code/index.vue"
     ]
@@ -2368,6 +2399,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-image.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/recharge-image-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-voucher-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-voucher-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-voucher.vue"
@@ -2631,7 +2663,9 @@
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-editor-drawer.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/region-scope-tree.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/advertising-recharges/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/recharge-image-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-image-preview.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-page.vue",
@@ -3023,6 +3057,7 @@
       "apps/qsmds-arco/src/views/system/roles/index.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/index.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/index.vue"
     ]
   },
@@ -3117,6 +3152,7 @@
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
       "apps/qsmds-arco/src/views/system/roles/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/advertising-recharges/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/index.vue",
@@ -3133,6 +3169,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/recharge-image-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-voucher-upload.vue"
     ]
   },
@@ -3326,6 +3363,7 @@
       "apps/qsmds-arco/src/views/system/basic-data/numbering/shipping-mark-bindings.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/index.vue",
       "apps/qsmds-arco/src/views/system/users/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/advertising-recharges/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/index.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/records/index.vue",
@@ -3635,6 +3673,7 @@
       "apps/qsmds-arco/src/views/system/users/index.vue",
       "apps/qsmds-arco/src/views/system/users/password-reset-modal.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/advertising-recharges/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/shipment-match-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",

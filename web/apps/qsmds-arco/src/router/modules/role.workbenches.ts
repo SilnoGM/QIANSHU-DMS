@@ -30,7 +30,7 @@ export const financeWorkbench: RouteRecordMainRaw = {
       meta: {
         title: 'workbench.realtimePayments',
         icon: 'qs-realtime-payments',
-        auth: ['sales-receipts:read', 'purchase-orders:payment', 'packaging-costs:read'],
+        auth: ['sales-receipts:read', 'purchase-orders:payment', 'packaging-costs:read', 'advertising-recharges:read'],
       },
       children: [
         {
@@ -121,6 +121,29 @@ export const financeWorkbench: RouteRecordMainRaw = {
             menu: false,
             activeMenu: '/qs-finance/realtime-payments/packaging-payments',
             auth: 'packaging-costs:read',
+          },
+        },
+        {
+          path: 'advertising-recharges',
+          name: 'qsFinanceRealtimeAdvertisingRecharges',
+          component: () => import('@/views/workbenches/advertising-recharges/index.vue'),
+          meta: {
+            title: 'advertisingRecharge.financePageTitle',
+            icon: 'qs-advertising-recharge',
+            auth: 'advertising-recharges:read',
+          },
+        },
+        {
+          // 运营复制给财务的就是这条隐藏详情链接；菜单不展示，面包屑回到列表。
+          path: 'advertising-recharges/:id',
+          name: 'qsFinanceRealtimeAdvertisingRechargeDetail',
+          component: () => import('@/views/workbenches/advertising-recharges/detail.vue'),
+          meta: {
+            title: 'advertisingRecharge.detail.financeTitle',
+            icon: 'qs-advertising-recharge',
+            menu: false,
+            activeMenu: '/qs-finance/realtime-payments/advertising-recharges',
+            auth: 'advertising-recharges:read',
           },
         },
       ],

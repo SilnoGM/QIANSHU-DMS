@@ -30,6 +30,7 @@ describe('media reference extension contract', () => {
       'prisma/migrations/20260827130000_purchase_order_media_reference_extension/migration.sql',
     ), 'utf8')
     const migration = [
+      readFileSync(resolve(serverRoot, 'prisma/migrations/20261102160000_advertising_recharge/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20261020140000_user_profile_avatar_media/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20261017130000_fund_withdrawal_requests/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20261014094000_invoice_request_media_reference/migration.sql'), 'utf8'),
@@ -82,6 +83,10 @@ describe('media reference extension contract', () => {
       }
       if (table === 'user_profiles') {
         expect(migration).toContain('FROM user_profiles reference WHERE reference.avatar_media_asset_id = reference_asset_id')
+        continue
+      }
+      if (table === 'advertising_recharge_requests') {
+        expect(migration).toContain('FROM advertising_recharge_requests reference WHERE reference.payment_qr_media_asset_id = reference_asset_id OR reference.payment_proof_media_asset_id = reference_asset_id')
         continue
       }
       expect(migration).toContain(`FROM "${table}" AS reference`)
