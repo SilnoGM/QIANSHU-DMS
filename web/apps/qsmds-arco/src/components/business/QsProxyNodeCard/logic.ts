@@ -113,12 +113,12 @@ export function resolveProxyNodeCountdownClass(
   status: ProxyNodeCardStatus,
 ): string {
   if (status === 'ACTIVE') {
-    return 'border-border bg-muted/30 text-muted-foreground'
+    return 'bg-muted/30 text-muted-foreground'
   }
   if (status === 'EXPIRING_SOON') {
-    return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-400'
+    return 'bg-amber-500/10 text-amber-700 dark:bg-amber-400/10 dark:text-amber-400'
   }
-  return 'border-destructive/30 bg-destructive/10 text-destructive dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-400'
+  return 'bg-destructive/10 text-destructive dark:bg-red-400/10 dark:text-red-400'
 }
 
 export function resolveProxyNodeWarning(

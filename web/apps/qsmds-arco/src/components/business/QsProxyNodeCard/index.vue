@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import type { ProxyNodeDto } from '../../../api/generated/types.gen'
 import type { ProxyNodeCardMode } from './logic'
-import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 import { EMPTY_DATE_TIME_TEXT, formatDateTime } from '@/components/base/DateTimeDisplay/format'
-import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import {
@@ -46,6 +44,11 @@ const isManagement = computed(() => props.mode === 'management')
 const isAssigned = computed(() => props.node.assignedUser !== null)
 const canCopy = computed(() => isProxyNodeCredentialAvailable(props.node))
 const assignLabel = computed(() => isAssigned.value ? '改绑' : '绑定')
+const assignToneClass = computed(() => (
+  isAssigned.value
+    ? 'text-sky-600 dark:text-sky-400'
+    : 'text-primary'
+))
 const hasPurchaseMeta = computed(() => props.node.boughtAt !== null || props.node.lastRenewedAt !== null)
 const actionDisabledReason = computed(() => (
   props.disabledReason
@@ -62,20 +65,16 @@ const synchronizedAtLabel = computed(() => {
   const text = formatDateTime(props.node.lastSyncedAt, 'datetime')
   return text === EMPTY_DATE_TIME_TEXT ? text : text.slice(5, 16)
 })
-
-const menuItems = computed<ActionMenuItem[][]>(() => {
-  if (!isManagement.value || !isAssigned.value) {
-    return []
-  }
-  return [[
-    {
-      label: '解绑',
-      variant: 'destructive',
-      disabled: props.busy,
-      handle: () => emit('release'),
-    },
-  ]]
-})
+const boughtAtLabel = computed(() => (
+  props.node.boughtAt === null
+    ? EMPTY_DATE_TIME_TEXT
+    : formatDateTime(props.node.boughtAt, 'date')
+))
+const lastRenewedAtLabel = computed(() => (
+  props.node.lastRenewedAt === null
+    ? EMPTY_DATE_TIME_TEXT
+    : formatDateTime(props.node.lastRenewedAt, 'date')
+))
 
 async function copy(): Promise<void> {
   if (!canCopy.value) {
@@ -104,7 +103,7 @@ async function copy(): Promise<void> {
     class="qs-proxy-node-card py-0 rounded-xl flex flex-col gap-0 h-full shadow-sm overflow-hidden"
     content-class="p-0 flex flex-1 flex-col"
   >
-    <header class="px-4 py-3 flex flex-wrap gap-2 items-center">
+    <header class="px-5 py-3 flex flex-wrap gap-2 items-center">
       <span class="qs-proxy-node-card__country text-xs text-foreground font-medium px-2 py-1 border border-border rounded-md bg-muted/40 whitespace-nowrap">
         <FaIcon name="i-lucide:map-pin" class="text-primary size-3.5" aria-hidden="true" />
         {{ countryLabel }}
@@ -138,48 +137,44 @@ async function copy(): Promise<void> {
 
         <FaTooltip v-if="actionDisabledReason" :text="actionDisabledReason">
           <span class="inline-flex" tabindex="0">
-            <FaButton
-              variant="ghost"
-              size="sm"
-              class="qs-proxy-node-card__bind-button"
+            <button
+              type="button"
+              class="qs-proxy-node-card__link inline-flex gap-1 items-center"
+              :class="assignToneClass"
               disabled
             >
               <FaIcon name="i-lucide:link" class="size-3.5" aria-hidden="true" />
               {{ assignLabel }}
-            </FaButton>
+            </button>
           </span>
         </FaTooltip>
-        <FaButton
+        <button
           v-else
-          variant="ghost"
-          size="sm"
-          class="qs-proxy-node-card__bind-button"
+          type="button"
+          class="qs-proxy-node-card__link inline-flex gap-1 items-center"
+          :class="assignToneClass"
           :disabled="busy"
           @click="emit('assign')"
         >
           <FaIcon name="i-lucide:link" class="size-3.5" aria-hidden="true" />
           {{ assignLabel }}
-        </FaButton>
+        </button>
 
-        <FaDropdown
+        <button
           v-if="isAssigned"
-          :items="menuItems"
-          align="end"
+          type="button"
+          class="qs-proxy-node-card__link text-destructive inline-flex gap-1 items-center"
+          :disabled="busy"
+          @click="emit('release')"
         >
-          <FaButton
-            variant="ghost"
-            size="icon-sm"
-            aria-label="更多操作"
-          >
-            <FaIcon name="i-lucide:ellipsis-vertical" class="size-4" aria-hidden="true" />
-          </FaButton>
-        </FaDropdown>
+          <FaIcon name="i-lucide:unlink" class="size-3.5" aria-hidden="true" />
+          解绑
+        </button>
       </div>
     </header>
 
-    <div class="qs-proxy-node-card__body p-4 flex-1">
+    <div class="qs-proxy-node-card__body px-5 py-4 flex-1">
       <div class="qs-proxy-node-card__identity">
-        <span class="text-xs text-muted-foreground">代理地址(IP)</span>
         <div class="flex gap-2 min-w-0 items-center">
           <h3 :id="hostId" class="qs-proxy-node-card__host m-0">
             {{ node.host }}
@@ -216,19 +211,19 @@ async function copy(): Promise<void> {
       <div class="qs-proxy-node-card__expiry">
         <QsProxyNodeCountdown :expires-at="node.expiresAt" />
         <span class="text-xs text-muted-foreground inline-flex gap-1 items-baseline">
-          到期：<time :datetime="node.expiresAt" class="tabular-nums">{{ expiresAtLabel }}</time>
+          到期: <time :datetime="node.expiresAt" class="tabular-nums">{{ expiresAtLabel }}</time>
         </span>
       </div>
     </div>
 
-    <footer class="qs-proxy-node-card__footer px-4 py-3 border-t border-border bg-muted/20 flex flex-wrap gap-x-4 gap-y-2 items-center justify-between">
+    <footer class="qs-proxy-node-card__footer px-5 py-3 border-t border-border bg-muted/30 flex flex-wrap gap-x-4 gap-y-2 items-center justify-between">
       <div v-if="hasPurchaseMeta" class="text-xs text-muted-foreground inline-flex flex-wrap gap-x-2 gap-y-1 items-baseline">
         <span v-if="node.boughtAt">
-          购买：<DateTimeDisplay :value="node.boughtAt" format="date" />
+          购买: <time :datetime="node.boughtAt" class="tabular-nums">{{ boughtAtLabel }}</time>
         </span>
         <span v-if="node.boughtAt && node.lastRenewedAt" aria-hidden="true">·</span>
         <span v-if="node.lastRenewedAt">
-          续费：<DateTimeDisplay :value="node.lastRenewedAt" format="date" />
+          续费: <time :datetime="node.lastRenewedAt" class="tabular-nums">{{ lastRenewedAtLabel }}</time>
         </span>
       </div>
       <div class="text-xs text-muted-foreground ml-auto inline-flex flex-wrap gap-1.5 items-center">
@@ -257,28 +252,29 @@ async function copy(): Promise<void> {
   line-height: 1rem;
 }
 
-.qs-proxy-node-card__bind-button {
-  color: oklch(var(--primary));
-  background: oklch(var(--primary) / 10%);
-  border: 1px solid oklch(var(--primary) / 25%);
+.qs-proxy-node-card__link {
+  padding: 0;
+  font: inherit;
+  font-weight: var(--qs-type-weight-medium, 500);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
 }
 
-.qs-proxy-node-card__bind-button:hover:not(:disabled) {
-  color: oklch(var(--primary-foreground));
-  background: oklch(var(--primary));
-  border-color: oklch(var(--primary));
+.qs-proxy-node-card__link:hover:not(:disabled) {
+  text-decoration: underline;
 }
 
-.qs-proxy-node-card__bind-button:disabled {
+.qs-proxy-node-card__link:disabled {
+  color: oklch(var(--muted-foreground));
   cursor: not-allowed;
-  opacity: 0.55;
 }
 
 .qs-proxy-node-card__body {
   display: flex;
   flex-wrap: wrap;
   gap: 1.25rem;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
 }
 
@@ -289,9 +285,9 @@ async function copy(): Promise<void> {
 
 .qs-proxy-node-card__host {
   font-family: var(--qs-font-mono);
-  font-size: 1.375rem;
+  font-size: 1.5rem;
   font-weight: var(--qs-type-weight-bold, 700);
-  line-height: 1.75rem;
+  line-height: 2rem;
   overflow-wrap: anywhere;
 }
 
@@ -307,8 +303,8 @@ async function copy(): Promise<void> {
 
 @container (min-width: 56rem) {
   .qs-proxy-node-card__host {
-    font-size: 1.75rem;
-    line-height: 2.25rem;
+    font-size: 1.875rem;
+    line-height: 2.5rem;
   }
 }
 

@@ -22,7 +22,7 @@ const tone = computed(() => resolveProxyNodeCountdownClass(
 
 <template>
   <span
-    class="text-sm font-mono font-semibold px-2.5 py-1 border rounded-md inline-flex gap-1.5 whitespace-nowrap items-center tabular-nums"
+    class="text-sm font-mono font-semibold px-3 py-1 rounded-full inline-flex gap-1.5 whitespace-nowrap items-center tabular-nums"
     :class="tone"
     aria-live="off"
   >
