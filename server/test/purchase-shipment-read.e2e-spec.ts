@@ -20,6 +20,7 @@ import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purcha
 import { PurchaseShipmentController } from '../src/modules/purchase-orders/shipments/purchase-shipment.controller'
 import { PurchaseShipmentDeliveryService } from '../src/modules/purchase-orders/shipments/purchase-shipment-delivery.service'
 import { PurchaseShipmentQueryService } from '../src/modules/purchase-orders/shipments/purchase-shipment-query.service'
+import { ShipmentLoadGroupService } from '../src/modules/purchase-orders/shipments/shipment-load-group.service'
 import type { PurchaseShipmentDetailDto, PurchaseShipmentPageDto, PurchaseShipmentStatusCountsDto } from '../src/modules/purchase-orders/shipments/purchase-shipment.dto'
 import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
 import { atomicFacts, createAtomicityFixture, createCommands, createReviewMutations, customInput, prepareCatalog, prepareSalesSource, type AtomicityFixture } from './purchase-shipping-mark-atomicity.fixture'
@@ -87,7 +88,7 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
     } })
 
     service = new PurchaseShipmentQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma))
-    const module = await Test.createTestingModule({ controllers: [PurchaseShipmentController], providers: [{ provide: PurchaseShipmentQueryService, useValue: service }, { provide: PurchaseShipmentDeliveryService, useValue: {} }] }).compile()
+    const module = await Test.createTestingModule({ controllers: [PurchaseShipmentController], providers: [{ provide: PurchaseShipmentQueryService, useValue: service }, { provide: PurchaseShipmentDeliveryService, useValue: {} }, { provide: ShipmentLoadGroupService, useValue: {} }] }).compile()
     application = module.createNestApplication()
     configureApplication(application, { nodeEnvironment: 'test' })
     application.use((req: object, _res: object, next: () => void) => {

@@ -16,6 +16,7 @@ import { PurchaseShipmentController } from '../src/modules/purchase-orders/shipm
 import { PurchaseShipmentDeliveryService } from '../src/modules/purchase-orders/shipments/purchase-shipment-delivery.service'
 import type { PurchaseShipmentFilterDto, PurchaseShipmentPageDto, PurchaseShipmentSort, PurchaseShipmentStatusCountsDto } from '../src/modules/purchase-orders/shipments/purchase-shipment.dto'
 import { PurchaseShipmentQueryService } from '../src/modules/purchase-orders/shipments/purchase-shipment-query.service'
+import { ShipmentLoadGroupService } from '../src/modules/purchase-orders/shipments/shipment-load-group.service'
 import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
 import { destinationWarehouses, OTHER_DESTINATION_WAREHOUSE, TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
 import { createHistoricalCustomPurchase, reviewHistoricalPurchase, shipHistoricalPurchase } from './purchase-order-historical-review.fixture'
@@ -105,7 +106,7 @@ describe('arrival shipment filters and stable ordering over isolated PostgreSQL'
     })
 
     service = new PurchaseShipmentQueryService(fixture.prisma, lookup)
-    const module = await Test.createTestingModule({ controllers: [PurchaseShipmentController], providers: [{ provide: PurchaseShipmentQueryService, useValue: service }, { provide: PurchaseShipmentDeliveryService, useValue: {} }] }).compile()
+    const module = await Test.createTestingModule({ controllers: [PurchaseShipmentController], providers: [{ provide: PurchaseShipmentQueryService, useValue: service }, { provide: PurchaseShipmentDeliveryService, useValue: {} }, { provide: ShipmentLoadGroupService, useValue: {} }] }).compile()
     application = module.createNestApplication()
     configureApplication(application, { nodeEnvironment: 'test' })
     application.use((requestObject: object, _response: object, next: () => void) => {
